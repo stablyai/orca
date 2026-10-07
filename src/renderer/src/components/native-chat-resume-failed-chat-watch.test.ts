@@ -23,7 +23,6 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: mocks.rpc,
   subscribeStructuredAgentSessionStatus: mocks.subscribeStatus
 }))
-vi.mock('sonner', () => ({ toast: vi.fn() }))
 
 // When the user sends in an offered or failed chat, its status bar entry must retire without the
 // user reopening anything, and nothing may run while nothing is offered or failed.

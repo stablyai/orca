@@ -14,6 +14,11 @@ vi.mock('./codex-auth-presence', () => ({
   probeCodexAuthPresence: vi.fn(async () => 'present')
 }))
 
+// The recovery's supervised stop imports the process-table reader, which needs the real execFile.
+vi.mock('../codex/codex-state-db-backfill-recovery', () => ({
+  startCodexStateDbBackfillRecoveryInBackground: vi.fn()
+}))
+
 import { fetchCodexRateLimits } from './codex-fetcher'
 
 function parseRpcRequest(line: string): { id?: number; method?: string } {

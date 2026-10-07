@@ -26,6 +26,7 @@ import { openProfileStateDatabase } from '../persistence/profile-state/profile-s
 
 import {
   orcadLaunchCommand,
+  orcadLivenessAnswerBlocksGc,
   orcadLivenessProbeCommand,
   ORCAD_PID_FILENAME,
   ORCAD_READINESS_FILENAME,
@@ -37,6 +38,11 @@ import {
   parseOrcadStopOutcome,
   stopOrcadCommand
 } from './orcad-remote-process-control'
+import { shellEscape } from './ssh-connection-utils'
+import {
+  orcadReadinessWaitCommand,
+  parseOrcadReadinessWaitOutput
+} from './orcad-remote-readiness-wait'
 import {
   captureOrcadStateSnapshotCommand,
   compareOrcadStateSnapshotCommand,
@@ -49,11 +55,14 @@ import {
   restoreOrcadStateSnapshotCommand
 } from './orcad-state-snapshot'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
+import { ORCAD_STOP_REQUEST_FILENAME } from '../../shared/orcad-stop-request'
 
 const host = getRemoteHostPlatform('linux-x64')
 let root = ''
 let dataDir = ''
 let snapshotDir = ''
+// The ~/.orca-remote stand-in that holds the state-mutation lock.
+const baseDir = (): string => join(root, '.orca-remote')
 let versionDir = ''
 const launchedPids = new Set<number>()
 
@@ -86,20 +95,39 @@ afterEach(() => {
   rmSync(root, { recursive: true, force: true })
 })
 
-async function launchTestRuntime(legacyWrapper = false): Promise<{
+async function launchTestRuntime(
+  legacyWrapper = false,
+  stopRequests = false
+): Promise<{
   runtimePid: number
   recordedPid: number
   terminatedFile: string
 }> {
   const terminatedFile = join(versionDir, 'terminated')
+  const requestFile = join(versionDir, ORCAD_STOP_REQUEST_FILENAME)
   writeFileSync(
     join(versionDir, 'orcad.js'),
     [
+      `const fs = require('node:fs');`,
       `process.on('SIGTERM', () => {`,
-      `  require('node:fs').writeFileSync(${JSON.stringify(terminatedFile)}, 'terminated');`,
+      `  fs.writeFileSync(${JSON.stringify(terminatedFile)}, 'terminated');`,
       `  process.exit(0);`,
       `});`,
-      `console.log(JSON.stringify({type: 'orca_server_ready', health: {pid: process.pid}}));`,
+      ...(stopRequests
+        ? [
+            // Like orcad's listener: consume the slot request, then stop.
+            `setInterval(() => {`,
+            `  if (fs.existsSync(${JSON.stringify(requestFile)})) {`,
+            `    fs.unlinkSync(${JSON.stringify(requestFile)});`,
+            `    fs.writeFileSync(${JSON.stringify(terminatedFile)}, 'requested');`,
+            `    process.exit(0);`,
+            `  }`,
+            `}, 20);`
+          ]
+        : []),
+      `console.log(JSON.stringify({type: 'orca_server_ready', health: {pid: process.pid${
+        stopRequests ? ', stopRequests: 1' : ''
+      }}}));`,
       `setTimeout(() => process.exit(1), 10_000);`
     ].join('\n')
   )
@@ -109,7 +137,8 @@ async function launchTestRuntime(legacyWrapper = false): Promise<{
     fullVersion: '0.2.0+bb01',
     userDataDir: dataDir,
     bindHost: '127.0.0.1',
-    port: 0
+    port: 0,
+    activationRoot: join(dataDir, '.orcad-activation-transaction')
   })
   if (legacyWrapper) {
     // The trailing command retains the old macOS waiting-shell behavior on every POSIX shell.
@@ -151,7 +180,7 @@ function stopTestRuntime(justLaunched = false): ReturnType<typeof parseOrcadStop
 
 describe('state snapshot commands, run for real', () => {
   it('detects candidate SQLite migration without modifying current state or the snapshot', () => {
-    sh(captureOrcadStateSnapshotCommand(host, dataDir, snapshotDir))
+    sh(captureOrcadStateSnapshotCommand(host, dataDir, snapshotDir, baseDir()))
     const archive = readFileSync(join(snapshotDir, 'state.tar'))
     const compare = (): boolean =>
       orcadSnapshotIsUnchanged(sh(compareOrcadStateSnapshotCommand(host, dataDir, snapshotDir)))
@@ -180,7 +209,7 @@ describe('state snapshot commands, run for real', () => {
     expect(
       orcadSnapshotIsUnchanged(sh(compareOrcadStateSnapshotCommand(host, dataDir, snapshotDir)))
     ).toBe(false)
-    sh(captureOrcadStateSnapshotCommand(host, dataDir, snapshotDir))
+    sh(captureOrcadStateSnapshotCommand(host, dataDir, snapshotDir, baseDir()))
     writeFileSync(join(snapshotDir, 'state.tar'), 'not an archive')
     expect(
       orcadSnapshotIsUnchanged(sh(compareOrcadStateSnapshotCommand(host, dataDir, snapshotDir)))
@@ -198,7 +227,9 @@ describe('state snapshot commands, run for real', () => {
     symlinkSync(external, profile)
 
     expect(
-      parseOrcadSnapshotCapture(sh(captureOrcadStateSnapshotCommand(host, dataDir, snapshotDir)))
+      parseOrcadSnapshotCapture(
+        sh(captureOrcadStateSnapshotCommand(host, dataDir, snapshotDir, baseDir()))
+      )
     ).toBe('failed')
 
     mkdirSync(snapshotDir, { recursive: true })
@@ -212,7 +243,9 @@ describe('state snapshot commands, run for real', () => {
 
   it('captures, then restores state the newer build overwrote', () => {
     expect(
-      parseOrcadSnapshotCapture(sh(captureOrcadStateSnapshotCommand(host, dataDir, snapshotDir)))
+      parseOrcadSnapshotCapture(
+        sh(captureOrcadStateSnapshotCommand(host, dataDir, snapshotDir, baseDir()))
+      )
     ).toBe('captured')
     expect(sh(probeOrcadStateSnapshotCommand(host, snapshotDir)).trim()).toBe('PRESENT')
 
@@ -221,7 +254,9 @@ describe('state snapshot commands, run for real', () => {
     writeFileSync(join(dataDir, 'profiles', 'p1', 'new-build-only.json'), '{}')
 
     expect(
-      parseOrcadSnapshotRestore(sh(restoreOrcadStateSnapshotCommand(host, dataDir, snapshotDir)))
+      parseOrcadSnapshotRestore(
+        sh(restoreOrcadStateSnapshotCommand(host, dataDir, snapshotDir, baseDir()))
+      )
     ).toBe('restored')
     expect(readFileSync(join(dataDir, 'orca-profile-index.json'), 'utf8')).toBe('{"v":"before"}')
     // Removed before extraction, so the older build never sees a file it cannot interpret.
@@ -241,7 +276,9 @@ describe('state snapshot commands, run for real', () => {
       // the generated command reads the now-quiescent files.
       expect(existsSync(`${databasePath}-wal`)).toBe(true)
       expect(
-        parseOrcadSnapshotCapture(sh(captureOrcadStateSnapshotCommand(host, dataDir, snapshotDir)))
+        parseOrcadSnapshotCapture(
+          sh(captureOrcadStateSnapshotCommand(host, dataDir, snapshotDir, baseDir()))
+        )
       ).toBe('captured')
     } finally {
       opened.db.close()
@@ -257,7 +294,9 @@ describe('state snapshot commands, run for real', () => {
       changed.db.close()
     }
     expect(
-      parseOrcadSnapshotRestore(sh(restoreOrcadStateSnapshotCommand(host, dataDir, snapshotDir)))
+      parseOrcadSnapshotRestore(
+        sh(restoreOrcadStateSnapshotCommand(host, dataDir, snapshotDir, baseDir()))
+      )
     ).toBe('restored')
 
     const restored = openProfileStateDatabase(databasePath, 'p1')
@@ -272,11 +311,11 @@ describe('state snapshot commands, run for real', () => {
   })
 
   it('leaves the live daemon runtime dir untouched through capture and restore', () => {
-    sh(captureOrcadStateSnapshotCommand(host, dataDir, snapshotDir))
+    sh(captureOrcadStateSnapshotCommand(host, dataDir, snapshotDir, baseDir()))
     // The daemon is running across the rollback and rewrites its token; a restore that
     // reached <root>/daemon would break the fence that keeps its terminals adoptable.
     writeFileSync(join(dataDir, 'daemon', 'daemon.sock.token'), 'token-after-restart')
-    sh(restoreOrcadStateSnapshotCommand(host, dataDir, snapshotDir))
+    sh(restoreOrcadStateSnapshotCommand(host, dataDir, snapshotDir, baseDir()))
     expect(readFileSync(join(dataDir, 'daemon', 'daemon.sock.token'), 'utf8')).toBe(
       'token-after-restart'
     )
@@ -286,7 +325,9 @@ describe('state snapshot commands, run for real', () => {
     const emptyRoot = join(root, 'fresh')
     mkdirSync(emptyRoot)
     expect(
-      parseOrcadSnapshotCapture(sh(captureOrcadStateSnapshotCommand(host, emptyRoot, snapshotDir)))
+      parseOrcadSnapshotCapture(
+        sh(captureOrcadStateSnapshotCommand(host, emptyRoot, snapshotDir, baseDir()))
+      )
     ).toBe('empty')
     expect(sh(probeOrcadStateSnapshotCommand(host, snapshotDir)).trim()).toBe('ABSENT')
   })
@@ -294,7 +335,7 @@ describe('state snapshot commands, run for real', () => {
   it('reports MISSING rather than claiming a restore it did not perform', () => {
     expect(
       parseOrcadSnapshotRestore(
-        sh(restoreOrcadStateSnapshotCommand(host, dataDir, join(root, 'nope')))
+        sh(restoreOrcadStateSnapshotCommand(host, dataDir, join(root, 'nope'), baseDir()))
       )
     ).toBe('missing')
   })
@@ -310,7 +351,9 @@ describe('state snapshot commands, run for real', () => {
     mkdirSync(join(nasty, 'profiles'), { recursive: true })
     writeFileSync(join(nasty, 'orca-profile-index.json'), '{"v":"quoted"}')
     expect(
-      parseOrcadSnapshotCapture(sh(captureOrcadStateSnapshotCommand(host, nasty, snapshotDir)))
+      parseOrcadSnapshotCapture(
+        sh(captureOrcadStateSnapshotCommand(host, nasty, snapshotDir, baseDir()))
+      )
     ).toBe('captured')
     expect(
       orcadSnapshotIsUnchanged(sh(compareOrcadStateSnapshotCommand(host, nasty, snapshotDir)))
@@ -320,7 +363,9 @@ describe('state snapshot commands, run for real', () => {
       orcadSnapshotIsUnchanged(sh(compareOrcadStateSnapshotCommand(host, nasty, snapshotDir)))
     ).toBe(false)
     expect(
-      parseOrcadSnapshotRestore(sh(restoreOrcadStateSnapshotCommand(host, nasty, snapshotDir)))
+      parseOrcadSnapshotRestore(
+        sh(restoreOrcadStateSnapshotCommand(host, nasty, snapshotDir, baseDir()))
+      )
     ).toBe('restored')
     expect(readFileSync(join(nasty, 'orca-profile-index.json'), 'utf8')).toBe('{"v":"quoted"}')
   })
@@ -336,6 +381,21 @@ describe('liveness and stop commands, run for real', () => {
     expect(sh(`ps -o stat= -p ${runtimePid} || true`).trim()).toMatch(/^(?:Z.*)?$/)
     expect(existsSync(join(versionDir, ORCAD_PID_FILENAME))).toBe(true)
     expect(stopTestRuntime()).toBe('already-exited')
+  })
+
+  it('stops a build that consumes stop requests by request file, not by signal', async () => {
+    const { terminatedFile } = await launchTestRuntime(false, true)
+    expect(stopTestRuntime()).toBe('stopped')
+    expect(readFileSync(terminatedFile, 'utf8')).toBe('requested')
+    expect(existsSync(join(versionDir, ORCAD_STOP_REQUEST_FILENAME))).toBe(false)
+  })
+
+  it('clears a stop request the previous process never consumed before launching', async () => {
+    writeFileSync(join(versionDir, ORCAD_STOP_REQUEST_FILENAME), '')
+    const { runtimePid } = await launchTestRuntime(false, true)
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    expect(parseOrcadLiveness(sh(orcadLivenessProbeCommand(host, versionDir)))).toBe('LIVE')
+    expect(runtimePid).toBeGreaterThan(1)
   })
 
   it('refuses a legacy wrapper PID both before and after its shell exits', async () => {
@@ -400,13 +460,21 @@ describe('liveness and stop commands, run for real', () => {
         })}`
       )
     )
-    expect(outcome).toBe('unknown')
+    // After a delivered SIGTERM the host may still be changing, so it is not "nothing happened".
+    expect(outcome).toBe(phase === 'before' ? 'unknown' : 'unconfirmed')
     expect(orcadStopFreedTheHost(outcome)).toBe(false)
     expect(() => process.kill(runtimePid, 0)).not.toThrow()
     expect(existsSync(terminatedFile)).toBe(false)
   })
 
   it('reports UNKNOWN with no pid file, and DEAD for a pid that has exited', () => {
+    // A slot installed but never launched: only GC reads it apart from UNKNOWN.
+    rmSync(join(versionDir, ORCAD_READINESS_FILENAME), { force: true })
+    const neverLaunched = sh(orcadLivenessProbeCommand(host, versionDir))
+    expect(parseOrcadLiveness(neverLaunched)).toBe('UNKNOWN')
+    expect(orcadLivenessAnswerBlocksGc(neverLaunched)).toBe(false)
+    writeFileSync(join(versionDir, ORCAD_READINESS_FILENAME), '')
+    expect(orcadLivenessAnswerBlocksGc(sh(orcadLivenessProbeCommand(host, versionDir)))).toBe(true)
     expect(parseOrcadLiveness(sh(orcadLivenessProbeCommand(host, versionDir)))).toBe('UNKNOWN')
     writeFileSync(join(versionDir, ORCAD_PID_FILENAME), 'not-a-pid')
     expect(parseOrcadLiveness(sh(orcadLivenessProbeCommand(host, versionDir)))).toBe('UNKNOWN')
@@ -416,8 +484,42 @@ describe('liveness and stop commands, run for real', () => {
     expect(parseOrcadLiveness(sh(orcadLivenessProbeCommand(host, versionDir)))).toBe('DEAD')
   })
 
+  it('reports a permission-denied liveness probe as UNKNOWN in any locale', () => {
+    writeFileSync(join(versionDir, ORCAD_PID_FILENAME), '4242')
+    // Keep the permission branch independent of unrelated host PID reuse.
+    const matchingPs =
+      'ps() { [ "$#" = 4 ] && [ "$1" = -o ] && [ "$2" = args= ] && ' +
+      '[ "$3" = -p ] && [ "$4" = 4242 ] || return 1; ' +
+      `printf 'node %s\\n' ${shellEscape(join(versionDir, 'orcad.js'))}; };`
+    const deniedKill =
+      'kill() { if [ "$LC_ALL" = C ]; then echo "kill: Operation not permitted" >&2; ' +
+      'else echo "kill: Vorgang nicht zulässig" >&2; fi; return 1; };'
+    expect(
+      parseOrcadLiveness(
+        sh(
+          `LC_ALL=de_DE.UTF-8; ${matchingPs} ${deniedKill} ${orcadLivenessProbeCommand(host, versionDir)}`
+        )
+      )
+    ).toBe('UNKNOWN')
+  })
+
+  it('reports a reused PID running something other than this slot as DEAD', () => {
+    const stranger = spawn('/bin/sh', ['-c', 'sleep 30'], { stdio: 'ignore' })
+    try {
+      writeFileSync(join(versionDir, ORCAD_PID_FILENAME), String(stranger.pid))
+      expect(parseOrcadLiveness(sh(orcadLivenessProbeCommand(host, versionDir)))).toBe('DEAD')
+    } finally {
+      stranger.kill('SIGKILL')
+    }
+  })
+
   it('reports LIVE for a running process and stops it with SIGTERM', async () => {
-    const child = spawn('/bin/sh', ['-c', 'sleep 30'], { stdio: 'ignore' })
+    // Stands in for orcad: its command line runs this slot's orcad.js.
+    const child = spawn(
+      process.execPath,
+      ['-e', 'setTimeout(() => {}, 30000)', join(versionDir, 'orcad.js')],
+      { stdio: 'ignore' }
+    )
     try {
       writeFileSync(join(versionDir, ORCAD_PID_FILENAME), String(child.pid))
       expect(parseOrcadLiveness(sh(orcadLivenessProbeCommand(host, versionDir)))).toBe('LIVE')
@@ -475,5 +577,45 @@ describe('liveness and stop commands, run for real', () => {
         sh(stopOrcadCommand(host, versionDir, { waitSeconds: 1, nodePath: process.execPath }))
       )
     ).toBe('no-pid')
+  })
+})
+
+describe('host-side readiness wait, run for real', () => {
+  const readiness = () => join(versionDir, ORCAD_READINESS_FILENAME)
+  const line = `${JSON.stringify({ type: 'orca_server_ready', runtimeId: 'r1' })}\n`
+
+  it('returns a finished line without waiting out its bound', () => {
+    writeFileSync(readiness(), line)
+    const started = Date.now()
+    const result = parseOrcadReadinessWaitOutput(
+      host,
+      sh(orcadReadinessWaitCommand(host, versionDir, 10))
+    )
+    expect(Date.now() - started).toBeLessThan(5_000)
+    expect(result).toMatchObject({ state: 'ready', readiness: { runtimeId: 'r1' } })
+  })
+
+  it('waits for a line still being written, and answers pending when its bound ends', () => {
+    writeFileSync(readiness(), line.slice(0, 10))
+    // The writer finishes after the wait starts; the shell must pick it up mid-wait.
+    sh(
+      `(sleep 1; printf '%s\\n' ${shellEscape(line.trimEnd().slice(10))} >> ${shellEscape(readiness())}) >/dev/null 2>&1 &`
+    )
+    expect(
+      parseOrcadReadinessWaitOutput(host, sh(orcadReadinessWaitCommand(host, versionDir, 10)))
+    ).toMatchObject({ state: 'ready' })
+    writeFileSync(readiness(), '{"type":"orca_ser')
+    expect(
+      parseOrcadReadinessWaitOutput(host, sh(orcadReadinessWaitCommand(host, versionDir, 1)))
+    ).toEqual({ state: 'pending' })
+  })
+
+  it('reads a missing file as pending', () => {
+    expect(
+      parseOrcadReadinessWaitOutput(
+        host,
+        sh(orcadReadinessWaitCommand(host, `${versionDir}-none`, 0))
+      )
+    ).toEqual({ state: 'pending' })
   })
 })

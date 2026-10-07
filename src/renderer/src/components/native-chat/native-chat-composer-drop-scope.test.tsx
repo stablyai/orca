@@ -32,7 +32,7 @@ const intake = vi.hoisted(() => ({
   readFile: vi.fn(),
   upload: vi.fn()
 }))
-vi.mock('@/store', () => ({ useAppStore: { getState: () => ({}) } }))
+vi.mock('@/store', () => ({ useAppStore: { getState: () => ({ tabsByWorktree: {} }) } }))
 // Keeps the real notice strings so the silent-failure guards assert what users see.
 vi.mock('./native-chat-attachment-upload', async (importOriginal) => ({
   ...(await importOriginal<typeof AttachmentUploadModule>()),
@@ -81,6 +81,7 @@ function ComposerProbe({
     terminalTabId: pane,
     disabled: false,
     attachResolvedPaths: attachments.attachResolvedPaths,
+    pendingChips: attachments.pendingChips,
     setNotice
   })
   useNativeChatFileAttachmentActions(pane, attachExternalPaths)

@@ -127,8 +127,8 @@ export class OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs extends Or
    * binds one leaf in two tabs and orphans the PTY under the new one) and refuses the correct ones.
    * Same resolution `restoreReattachedPtyRuntime` already does for its own reattach fence.
    *
-   * Both workspace partitions are read because SSH spawns bind panes into `ssh:<target>` while
-   * reattach binds into `local`; consulting one would report "nowhere" for a pane the other holds.
+   * Both workspace partitions are read because older builds' relay reattach left SSH panes in
+   * `local`; consulting one would report "nowhere" for a pane the other holds.
    */
   protected findCurrentTerminalTabIdForLeaf(targetId: string, leafId: string): string | undefined {
     for (const leaf of this.leaves.values()) {

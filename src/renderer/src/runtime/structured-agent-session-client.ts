@@ -1,4 +1,5 @@
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
 import type {
   AgentSessionStatusEvent,
   AgentSessionSubscribeEvent,
@@ -7,6 +8,7 @@ import type {
 import { getRuntimeEnvironmentRevision } from './runtime-environment-revision'
 import type { AgentSessionConversationOutline } from '../../../shared/agent-session-conversation-outline'
 import {
+  AGENT_SESSION_ATTENTION_ACK_RUNTIME_CAPABILITY,
   AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY,
   AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY,
@@ -23,6 +25,7 @@ import {
   ensureLocalRuntimeCapabilities,
   readLocalRuntimeCapabilitiesOrUnknown
 } from './local-runtime-capabilities'
+import { subscribeRuntimeEnvironment } from './runtime-environment-pairing-refresh'
 /** Read a capability through the runtime's existing status cache. A failed/unknown
  *  probe is treated as legacy so a newer call is never made before the host has
  *  proved it understands it. */
@@ -133,7 +136,7 @@ async function subscribeStructuredAgentSessionMethod<TEvent>(
   if (target.kind === 'local') {
     return window.api.runtime.subscribe({ method, params }, onResponse)
   }
-  return window.api.runtimeEnvironments.subscribe(
+  return subscribeRuntimeEnvironment(
     {
       selector: target.environmentId,
       method,
@@ -179,8 +182,37 @@ export function subscribeStructuredAgentSessionStatus(
   )
 }
 
-/** Turns that settle from now on. The host sends no snapshot and replays nothing, so a
- *  subscriber that reconnects has missed whatever completed while it was away. */
+/** The user read this chat: the owning host withdraws the phone alerts it pushed for it. An older
+ *  host has no such method and is skipped; a failure is bookkeeping and only logged. */
+export async function acknowledgeStructuredAgentSessionAttention(
+  target: RuntimeClientTarget,
+  sessionId: string,
+  observedCursor: AgentJournalCursor
+): Promise<boolean> {
+  const capturedCursor = { ...observedCursor }
+  try {
+    if (
+      !(await structuredAgentSessionHostSupports(
+        target,
+        AGENT_SESSION_ATTENTION_ACK_RUNTIME_CAPABILITY
+      ))
+    ) {
+      return false
+    }
+    const result = await callRuntimeRpc<{ acknowledged: boolean }>(
+      target,
+      'agentSession.acknowledgeAttention',
+      { sessionId, observedCursor: capturedCursor }
+    )
+    return result.acknowledged
+  } catch (error) {
+    console.warn('[structured-session-attention] acknowledgement failed', error)
+    return false
+  }
+}
+
+/** Turns that settle, and prompts raised, from now on. The host sends no snapshot and replays
+ *  nothing, so a subscriber that reconnects has missed whatever happened while it was away. */
 export function subscribeStructuredAgentSessionTurnCompletions(
   target: RuntimeClientTarget,
   onEvent: (event: AgentSessionTurnCompletionEvent) => void,
@@ -190,7 +222,8 @@ export function subscribeStructuredAgentSessionTurnCompletions(
   return subscribeStructuredAgentSessionMethod(
     target,
     'agentSession.subscribeTurnCompletions',
-    {},
+    // An older host ignores this and sends completions only: it raises no prompt alert, as before.
+    { includePrompts: true },
     onEvent,
     onError,
     onClose

@@ -7,7 +7,6 @@ const NPM_CODEX_SHIM = 'C:\\Users\\alice\\AppData\\Roaming\\npm\\codex.cmd'
 vi.mock('../codex-cli/command', () => ({ resolveCodexCommand: () => NPM_CODEX_SHIM }))
 
 import { buildNativeHealInvocation } from './codex-session-index-heal'
-import { resolveNativeCodexTrustGrantHost } from './codex-trust-grant-host'
 import { createCodexModelCatalogProbe } from './codex-model-catalog-probe'
 
 // Why: spawnProcess resolves npm's codex.cmd past cmd.exe, but only when it is handed the shim.
@@ -31,16 +30,6 @@ describe('short-lived Codex app-server invocations on Windows', () => {
     expect(invocation.command).toBe(NPM_CODEX_SHIM)
     expect(invocation.cliPath).toBe(NPM_CODEX_SHIM)
     expect(invocation.args).toEqual([...CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS])
-  })
-
-  it('hands the hook trust grant session the shim itself', () => {
-    const request = resolveNativeCodexTrustGrantHost().buildRequest({
-      runtimeHomePath: 'C:\\homes\\a',
-      managedCommand: 'orca-hook',
-      expectedTrustKeys: []
-    })
-    expect(request.invocation.command).toBe(NPM_CODEX_SHIM)
-    expect(request.invocation.args).toEqual(['app-server'])
   })
 
   it('hands the model catalog probe session the shim itself', async () => {

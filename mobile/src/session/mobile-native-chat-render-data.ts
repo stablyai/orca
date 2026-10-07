@@ -5,6 +5,7 @@ import {
 } from '../../../src/shared/native-chat-empty-state'
 import { isRootAgentJournalItem } from '../../../src/shared/agent-session-journal-producer'
 import { stripNoiseMessages } from '../../../src/shared/native-chat-noise'
+import { isWordlessProviderFrameMessage } from '../../../src/shared/native-chat-provider-frame-summary'
 import { foldToolMessages } from '../../../src/shared/native-chat-tool-fold'
 import { isImageRefBlock, type NativeChatMessage } from '../../../src/shared/native-chat-types'
 import {
@@ -56,9 +57,17 @@ export function foldMobileNativeChatMessages(messages: NativeChatMessage[]): Nat
   // The conversation only: a subagent's rows are that subagent's, and mobile shows
   // each spawn as its roster's one line rather than the child's own rows.
   // Normalize first (desktop assembler parity): image marker turns fold into
-  // image-ref blocks instead of rendering as raw `[Image: …]` text.
+  // image-ref blocks instead of rendering as raw `[Image: …]` text. An unrecognised event
+  // with no words of its own is stored, not drawn; mobile draws no task list, so a plan update
+  // goes too, before folding, so it never splits a tool run.
   return stripNoiseMessages(
-    foldToolMessages(normalizeImageTranscriptMessages(messages.filter(isRootAgentJournalItem)))
+    foldToolMessages(
+      normalizeImageTranscriptMessages(
+        messages.filter(
+          (message) => isRootAgentJournalItem(message) && !isWordlessProviderFrameMessage(message)
+        )
+      )
+    )
   )
 }
 

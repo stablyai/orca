@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import type { RpcResponse } from '../transport/types'
+import { DISPATCH_REJECTED_CANCELLED } from '../../../src/shared/structured-agent-session-dispatch-rejection'
 import { sendMobileStructuredAgentSessionMessage } from './mobile-structured-agent-session-send'
 import { resetMobileStructuredSendOperationJournalForTests } from './mobile-structured-send-operation-journal'
 
@@ -21,6 +22,29 @@ function ok(result: unknown): RpcResponse {
   return { id: 'request-1', ok: true, result, _meta: { runtimeId: 'runtime-1' } }
 }
 
+/** Its own submission, which a Stop took back before the agent started it. */
+function stoppedAnswer(clientMessageId: string): RpcResponse {
+  return ok({
+    ok: true,
+    replayed: false,
+    fence: 3,
+    cursor: { epoch: 'epoch-1', sequence: 1 },
+    value: {
+      clientMessageId,
+      submission: {
+        clientMessageId,
+        fence: 3,
+        payloadFingerprint: 'fingerprint',
+        dispatchState: 'rejected',
+        providerItemId: null,
+        reason: DISPATCH_REJECTED_CANCELLED,
+        submittedAt: 10,
+        resolvedAt: 10
+      }
+    }
+  })
+}
+
 function queuedAnswer(clientMessageId: string, state: 'waiting' | 'withdrawn'): RpcResponse {
   return ok({
     ok: true,
@@ -31,8 +55,9 @@ function queuedAnswer(clientMessageId: string, state: 'waiting' | 'withdrawn'): 
   })
 }
 
-/** Each `agentSession.send` answered in turn: a lost answer, or a queued draft in that state. */
-function hostAnswering(answers: readonly ('lost' | 'waiting' | 'withdrawn')[]) {
+/** Each `agentSession.send` answered in turn: a lost answer, a queued draft in that state, or its
+ *  submission stopped. */
+function hostAnswering(answers: readonly ('lost' | 'waiting' | 'withdrawn' | 'stopped')[]) {
   const ids: string[] = []
   const deliveries: unknown[] = []
   const sendRequest = vi.fn<RpcClient['sendRequest']>(async (_method, params) => {
@@ -44,7 +69,7 @@ function hostAnswering(answers: readonly ('lost' | 'waiting' | 'withdrawn')[]) {
     if (answer === 'lost' || answer === undefined) {
       throw markRpcDeliveryUnknown(new Error('Connection closed'))
     }
-    return queuedAnswer(id, answer)
+    return answer === 'stopped' ? stoppedAnswer(id) : queuedAnswer(id, answer)
   })
   const client: RpcClient = {
     sendRequest,
@@ -153,5 +178,38 @@ describe('a resend past a saved record storage would not clear', () => {
     expect(onError).toHaveBeenCalledWith(
       "Sent, but this phone couldn't update its record of sent messages."
     )
+  })
+
+  // Lost first send; its withdrawn replay; the fresh resend's answer lost; the retry's withdrawn
+  // replay; then that resend's own replay withdrawn too. A resend is sent once, never again.
+  it('sends a withdrawn replay once more at most, then hands a queued draft back', async () => {
+    const { client, ids } = hostAnswering(['lost', 'withdrawn', 'lost', 'withdrawn', 'withdrawn'])
+    const onError = vi.fn()
+    expect(await sendAgain(client, onError)).toBe('unknown')
+    asyncStorage.setItem.mockRejectedValue(new Error('disk full'))
+    asyncStorage.removeItem.mockRejectedValue(new Error('disk full'))
+    expect(await sendAgain(client, onError)).toBe('unknown')
+
+    expect(await sendAgain(client, onError)).toBe('rejected')
+    expect(ids).toHaveLength(5)
+    expect(ids[4]).toBe(ids[2])
+    expect(onError).toHaveBeenCalledWith('Message not sent')
+  })
+
+  it('reads a resend a Stop took back again as sent, since the chat draws it, not as not sent', async () => {
+    const { client, ids } = hostAnswering(['lost', 'stopped', 'lost', 'stopped', 'stopped'])
+    const onError = vi.fn()
+    expect(await sendAgain(client, onError, false)).toBe('unknown')
+    asyncStorage.setItem.mockRejectedValue(new Error('disk full'))
+    asyncStorage.removeItem.mockRejectedValue(new Error('disk full'))
+    expect(await sendAgain(client, onError, false)).toBe('unknown')
+
+    expect(await sendAgain(client, onError, false)).toBe('accepted')
+    expect(ids).toHaveLength(5)
+    expect(ids[4]).toBe(ids[2])
+    // Only the storage failure is reported; nothing says the message was not sent.
+    expect(onError.mock.calls).toEqual([
+      ["Sent, but this phone couldn't update its record of sent messages."]
+    ])
   })
 })

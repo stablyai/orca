@@ -197,6 +197,12 @@ jobs:
             pnpm-lock.yaml
             mobile/pnpm-lock.yaml
 
+      - name: Set up Bun for localization checks
+        if: needs.code_paths.outputs.static_analysis == 'true'
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: config/.bun-version
+
       # Keep each check in its own log while sharing this runner.
       - name: Lint
         if: '!cancelled()'
@@ -426,6 +432,8 @@ jobs:
           PREFLIGHT_PHASE_SELECTED: ${{ needs.code_paths.outputs.typecheck == 'true' }}
           PREFLIGHT_PRIOR_SUCCESS: ${{ job.status == 'success' }}
           ORCA_UNIT_SELECTION_MODE: ${{ vars.ORCA_UNIT_SELECTION_MODE || 'shadow' }}
+          # Set the repository variable to '5' to roll back full PR shards.
+          ORCA_UNIT_FULL_SHARD_COUNT: ${{ vars.ORCA_UNIT_FULL_SHARD_COUNT || '10' }}
         run: |
           if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
           node config/scripts/ci-unit-plan.mjs
@@ -572,6 +580,35 @@ jobs:
           ORCA_CODEX_NO_DAEMON_CONTRACT_BINARY="$RUNNER_TEMP/codex-cli-no-daemon/node_modules/.bin/codex" \
             pnpm exec vitest run --config config/vitest.config.ts \
             src/main/pty/codex-no-daemon-binary-contract.test.ts
+
+      # Why both pins and latest: Orca approves its managed-home hook entry with a hash
+      # Codex computes, so a release that changes it must redden here before users
+      # meet a review screen.
+      - name: Verify Codex hook file-entry contract (pinned)
+        env:
+          ORCA_CODEX_HOOK_CONTRACT_REQUIRED: '1'
+        run: |
+          set -euo pipefail
+          for install in codex-cli:"$CODEX_CLI_VERSION" codex-cli-no-daemon:"$CODEX_NO_DAEMON_CLI_VERSION"; do
+            ORCA_CODEX_HOOK_CONTRACT_BINARY="$RUNNER_TEMP/${install%%:*}/node_modules/.bin/codex" \
+              ORCA_CODEX_HOOK_CONTRACT_VERSION="${install#*:}" \
+              pnpm exec vitest run --config config/vitest.config.ts \
+              src/main/codex/codex-hook-file-entry-binary-contract.test.ts
+          done
+
+      - name: Install latest Codex CLI
+        run: |
+          set -euo pipefail
+          npm install --no-audit --no-fund --prefix "$RUNNER_TEMP/codex-cli-latest" "@openai/codex@latest"
+
+      - name: Verify Codex hook file-entry contract (latest)
+        env:
+          ORCA_CODEX_HOOK_CONTRACT_REQUIRED: '1'
+        run: |
+          set -euo pipefail
+          ORCA_CODEX_HOOK_CONTRACT_BINARY="$RUNNER_TEMP/codex-cli-latest/node_modules/.bin/codex" \
+            pnpm exec vitest run --config config/vitest.config.ts \
+            src/main/codex/codex-hook-file-entry-binary-contract.test.ts
 
       # Why the no-daemon install: it is the newest pinned Codex, and its project
       # lookup decides whether a worktree launch stops at the trust prompt.
@@ -1032,6 +1069,7 @@ jobs:
           src/main/browser/browser-route-webrtc-egress.electron.test.ts
           src/main/browser/browser-route-h3-egress.electron.test.ts
           src/main/browser/browser-route-dns-prefetch.electron.test.ts
+          src/main/persistence/profile-state/profile-state-writer-stall.electron.test.ts
 
       # Restore independent fixtures during builds; keep native lifecycle probes serial.
       - uses: ./.github/actions/prepare-linux-package-fixture
@@ -1049,7 +1087,15 @@ jobs:
       - name: Install Linux package tooling
         id: linux-package-tools
         background: true
-        run: sudo apt-get update && sudo apt-get install -y cpio rpm
+        run: |
+          # Use the shell lane's bounded refresh; required tooling installation stays fatal.
+          sudo tee /etc/apt/apt.conf.d/99-orca-package-tools >/dev/null <<'APTCONF'
+          Acquire::http::Timeout "15";
+          Acquire::https::Timeout "15";
+          Acquire::Retries "1";
+          APTCONF
+          timeout 120 sudo apt-get update || true
+          timeout 300 sudo apt-get install -y cpio rpm
 
       - name: Build package inputs
         run: |
@@ -1203,6 +1249,7 @@ jobs:
           src/main/browser/browser-route-webrtc-egress.electron.test.ts
           src/main/browser/browser-route-h3-egress.electron.test.ts
           src/main/browser/browser-route-dns-prefetch.electron.test.ts
+          src/main/persistence/profile-state/profile-state-writer-stall.electron.test.ts
           src/main/providers/windows-conpty-wide-char-duplication.node-pty.test.ts
           src/main/providers/pty-repaint-wide-char-buffer.node-pty.test.ts
           src/shared/child-process/windows-command-line.win32.test.ts
@@ -1232,6 +1279,7 @@ jobs:
           src/main/cursor/hook-service.test.ts
           src/main/orca-profiles/profile-index-store.test.ts
           src/main/startup/windows-install-dir-acl-repair.win32.test.ts
+          src/main/startup/windows-app-data-path.test.ts
           src/main/runtime/repo-worktree-admin-fingerprint.test.ts
           src/main/runtime/worktree-scan-admin-fingerprint-gate.test.ts
           src/shared/secure-file-fsync-flags.test.ts

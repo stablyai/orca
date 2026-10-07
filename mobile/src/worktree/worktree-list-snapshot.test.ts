@@ -192,6 +192,23 @@ describe('areWorktreeListsEqual', () => {
     expect(areWorktreeListsEqual(at(1), at(1))).toBe(true)
   })
 
+  // The host drops Stopping on letting go of a session without moving any clock the row carries.
+  it("detects the host's Stopping coming and going with nothing else moved", () => {
+    const stopping = (value: boolean) => [
+      worktree({
+        agents: [
+          agent({
+            mainAgent: { state: 'working', stateStartedAt: 1, ...(value ? { stopping: true } : {}) }
+          })
+        ]
+      })
+    ]
+
+    expect(areWorktreeListsEqual(stopping(false), stopping(true))).toBe(false)
+    expect(areWorktreeListsEqual(stopping(true), stopping(false))).toBe(false)
+    expect(areWorktreeListsEqual(stopping(true), stopping(true))).toBe(true)
+  })
+
   it('detects monitoring mode changes within working', () => {
     const first = [worktree({ agents: [agent({ state: 'working' })] })]
     const second = [worktree({ agents: [agent({ state: 'working', workingMode: 'monitoring' })] })]

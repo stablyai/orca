@@ -41,20 +41,20 @@
  * session with an id identity-less.
  *
  * The handle is read from the registry at spawn time, so an in-host recovery respawn re-bakes the
- * SAME handle rather than a stale or fresh one.
+ * SAME handle rather than a stale or fresh one, and a `/clear` successor bakes its worker's.
  */
 
 import { getAppEnvironment, hasAppEnvironment } from '../../shared/app-environment'
 import { ORCA_AGENT_SESSION_ID_ENV } from '../../shared/agent-session-caller-env'
 import { ORCA_STRUCTURED_SESSION_ENV } from '../../shared/structured-session-marker'
 import { prependOrcaCliDirToChildPath } from '../cli/orca-cli-child-path'
-import { structuredWorkerIdentities } from './structured-worker-identity'
+import { resolveStructuredWorkerIdentityForSession } from './structured-worker-authority'
 
 export function structuredSessionChildIdentityEnv(
   sessionId: string,
   childEnv: Record<string, string>
 ): Record<string, string> {
-  const identity = structuredWorkerIdentities.getBySessionId(sessionId)
+  const identity = resolveStructuredWorkerIdentityForSession(sessionId, null)
   const env: Record<string, string> = {
     ...childEnv,
     ...(identity ? { ORCA_TERMINAL_HANDLE: identity.handle } : {}),

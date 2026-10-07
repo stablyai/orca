@@ -40,6 +40,7 @@ export type AgentPaneThreadsStoreData = Pick<
   | 'repos'
   | 'worktreesByRepo'
   | 'folderWorkspaces'
+  | 'floatingWorkspacePath'
   | 'detectedWorktreesByRepo'
   | 'getKnownWorktreeById'
   | 'acknowledgedAgentsByPaneKey'
@@ -125,6 +126,7 @@ export function useAgentPaneThreads(args: {
       repos: s.repos,
       worktreesByRepo: s.worktreesByRepo,
       folderWorkspaces: s.folderWorkspaces,
+      floatingWorkspacePath: s.floatingWorkspacePath,
       detectedWorktreesByRepo: s.detectedWorktreesByRepo,
       getKnownWorktreeById: s.getKnownWorktreeById,
       worktreeMap: getWorktreeMapFromState(s),

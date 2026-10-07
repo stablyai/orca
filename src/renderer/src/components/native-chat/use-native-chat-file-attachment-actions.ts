@@ -5,7 +5,7 @@ export function useNativeChatFileAttachmentActions(
   /** Pane identity published as `data-composer-scope-key` on the drop target. */
   scopeKey: string,
   attachExternalPaths: (paths: string[]) => void
-): { pickAttachment: () => void } {
+): { pickAttachments: () => void } {
   useEffect(
     () =>
       window.api.ui.onFileDrop((payload) => {
@@ -18,14 +18,11 @@ export function useNativeChatFileAttachmentActions(
     [attachExternalPaths, scopeKey]
   )
 
-  const pickAttachment = useCallback(() => {
+  const pickAttachments = useCallback(() => {
     void (async () => {
-      const filePath = await window.api.shell.pickAttachment()
-      if (filePath) {
-        attachExternalPaths([filePath])
-      }
+      attachExternalPaths(await window.api.shell.pickAttachments())
     })()
   }, [attachExternalPaths])
 
-  return { pickAttachment }
+  return { pickAttachments }
 }

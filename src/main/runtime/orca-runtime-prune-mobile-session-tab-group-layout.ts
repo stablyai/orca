@@ -25,8 +25,11 @@ import { FIRST_PANE_ID } from '../../shared/pane-key'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../shared/stable-pane-id'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { replaceConversationInSnapshot } from './structured-conversation-tab-replacement'
-import { resolveStructuredWorkerAuthority } from './structured-worker-authority'
-import { structuredWorkerAgentStatus } from './orchestration/structured-worker-group-addressing'
+import { structuredWorkerHandleAgentStatus } from './orchestration/structured-worker-group-addressing'
+import {
+  retitleStructuredConversationTab,
+  titleStructuredConversationTabs
+} from './structured-conversation-tab-title'
 
 export class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntimeWithScheduleMobileSessionTabsChanged {
   protected pruneMobileSessionTabGroupLayout(
@@ -81,7 +84,25 @@ export class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntime
     for (const replacement of getStructuredAgentSessionHost()?.conversationReplacements?.() ?? []) {
       snapshot = replaceConversationInSnapshot(snapshot, replacement)
     }
+    const host = getStructuredAgentSessionHost()
+    snapshot = titleStructuredConversationTabs(snapshot, (sessionId) => {
+      const record = host?.deps?.store?.getRecord(sessionId)
+      return record?.location.workspaceId === snapshot.worktree ? record.conversationName : null
+    })
     return projectRuntimeMobileSessionTabs(snapshot, this.getMobileSessionProjectionHost())
+  }
+
+  refreshStructuredConversationTabTitle(workspaceId: string, sessionId: string): void {
+    const snapshot = this.mobileSessionTabsByWorktree.get(workspaceId)
+    if (!snapshot) {
+      return
+    }
+    const record = getStructuredAgentSessionHost()?.deps?.store?.getRecord(sessionId)
+    const name = record?.location.workspaceId === workspaceId ? record.conversationName : null
+    const next = retitleStructuredConversationTab(snapshot, sessionId, name)
+    if (next) {
+      this.emitMobileSessionTabsSnapshot(this.storeMobileSessionSnapshot(workspaceId, next))
+    }
   }
 
   protected getMobileSessionProjectionHost(): RuntimeMobileSessionProjectionHost {
@@ -232,9 +253,9 @@ export class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntime
     // A structured worker has no pane and no title, so every PTY probe below answers null and
     // `@idle` would enumerate it and then silently drop it. Its status is the journal's, read
     // through a conversation the idle sweep may have closed.
-    const structured = resolveStructuredWorkerAuthority(handle, this._orchestrationDb)
-    if (structured) {
-      return structuredWorkerAgentStatus(structured.identity.sessionId)
+    const structured = await structuredWorkerHandleAgentStatus(handle, this._orchestrationDb)
+    if (structured !== undefined) {
+      return structured
     }
     try {
       const ptyId = this.getTerminalAgentStatusPtyId(handle)

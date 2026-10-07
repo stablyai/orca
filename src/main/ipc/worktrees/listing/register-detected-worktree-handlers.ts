@@ -61,7 +61,9 @@ export function registerDetectedWorktreeHandlers(context: WorktreeIpcContext): v
                   status: timedOut ? 'timed-out' : 'canceled'
                 })
               }
-              controller.signal.addEventListener('abort', onAbort, { once: true })
+              controller.signal.addEventListener('abort', onAbort, {
+                once: true
+              })
               removeAbortListener = () => controller.signal.removeEventListener('abort', onAbort)
             })
           : undefined

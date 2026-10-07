@@ -1,5 +1,5 @@
 /**
- * `ssh_remote_runtime_resolved` (design D6): once per host per app session, enum-only.
+ * `ssh_remote_runtime_resolved` (design D6): once per host and outcome per app session, enum-only.
  * The dedupe key is the local target id, which never leaves this process.
  */
 import type { SshRemoteRuntimeRung } from '../../shared/ssh-types'
@@ -15,9 +15,11 @@ import type { RemoteHostPlatform } from './ssh-remote-platform'
 import type { HostNodeVersion } from './ssh-remote-node-toolchain-probe'
 
 type Props = EventProps<'ssh_remote_runtime_resolved'>
+export type SshRemoteRuntimeOutcome = Props['outcome']
 
 export type SshRemoteRuntimeResolvedFacts = {
   rung: SshRemoteRuntimeRung
+  outcome: SshRemoteRuntimeOutcome
   host: RemoteHostPlatform
   facts: OrcadDeploymentTargetFacts | null
   firstRefusal: string | null
@@ -89,7 +91,8 @@ export function sshRemoteRuntimeResolvedProps(input: SshRemoteRuntimeResolvedFac
     self_test: input.selfTest,
     runtime_transfer: input.runtimeTransfer,
     ...(hostNodeMajor ? { host_node_major: hostNodeMajor } : {}),
-    duration_bucket: durationBucket(input.durationMs)
+    duration_bucket: durationBucket(input.durationMs),
+    outcome: input.outcome
   }
 }
 
@@ -97,10 +100,12 @@ export function trackSshRemoteRuntimeResolved(
   hostKey: string,
   input: SshRemoteRuntimeResolvedFacts
 ): void {
-  if (reportedHosts.has(hostKey)) {
+  // Why per outcome: an unverifiable attempt must not use up the host's later resolved report.
+  const key = `${input.outcome}:${hostKey}`
+  if (reportedHosts.has(key)) {
     return
   }
-  reportedHosts.add(hostKey)
+  reportedHosts.add(key)
   try {
     // track() applies the existing consent gate and validates against the strict schema.
     track('ssh_remote_runtime_resolved', sshRemoteRuntimeResolvedProps(input))

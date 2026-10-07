@@ -33,39 +33,38 @@ describe('daemon process inspection', () => {
     expect(runCommand).not.toHaveBeenCalled()
   })
 
-  it('asks PowerShell to report a failed CIM query instead of an absent process', async () => {
-    const runCommand = vi.fn(
-      async (_file: string, _args: string[], _timeoutMs: number) =>
-        '{"status":"present","cmd":"daemon","start":1}'
-    )
+  it('reads the Windows process from the process table, not a PowerShell spawn', async () => {
+    const runCommand = vi.fn()
+    const readProcessTable = vi.fn(async () => [
+      { pid: 42, ppid: 1, name: 'node.exe', command: 'daemon', creationTimeMs: 7 }
+    ])
 
-    await queryWindowsProcess(42, { runCommand })
-
-    const script = runCommand.mock.calls[0]?.[1].at(-1) ?? ''
-    expect(script).toContain("$ErrorActionPreference = 'Stop'")
-    expect(script).toMatch(/catch \{[^}]*query_failed/)
+    await expect(queryWindowsProcess(42, { runCommand, readProcessTable })).resolves.toEqual({
+      status: 'present',
+      commandLine: 'daemon',
+      startedAtMs: 7
+    })
+    expect(runCommand).not.toHaveBeenCalled()
   })
 
-  it('keeps a failed CIM query indeterminate instead of proving the process gone', async () => {
-    const runCommand = vi.fn(async () => '{"status":"query_failed"}')
+  it('keeps an unreadable process table indeterminate instead of proving the process gone', async () => {
+    const readProcessTable = vi.fn(async () => {
+      throw new Error('windows process table is unreadable')
+    })
 
-    await expect(queryWindowsProcess(42, { runCommand })).resolves.toEqual({
+    await expect(queryWindowsProcess(42, { readProcessTable })).resolves.toEqual({
       status: 'unavailable'
     })
   })
 
-  it('never reads a probe result without a success marker as proof of absence', async () => {
-    const runCommand = vi.fn(async () => '{"exists":false}')
+  it('reports absence only from a table that was read and lacks the PID', async () => {
+    const readProcessTable = vi.fn(async () => [
+      { pid: 7, ppid: 1, name: 'other.exe', command: '' }
+    ])
 
-    await expect(queryWindowsProcess(42, { runCommand })).resolves.toEqual({
-      status: 'unavailable'
+    await expect(queryWindowsProcess(42, { readProcessTable })).resolves.toEqual({
+      status: 'missing'
     })
-  })
-
-  it('reports absence only from a CIM query that ran and found nothing', async () => {
-    const runCommand = vi.fn(async () => '{"status":"missing"}')
-
-    await expect(queryWindowsProcess(42, { runCommand })).resolves.toEqual({ status: 'missing' })
   })
 
   it('reads the macOS start time through an async spawn', async () => {
@@ -158,14 +157,14 @@ describe('daemon process inspection', () => {
   })
 
   it.each([0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1, Number.NaN])(
-    'rejects unsafe Windows pid %s before command interpolation',
+    'rejects unsafe Windows pid %s before reading the process table',
     async (pid) => {
-      const runCommand = vi.fn()
+      const readProcessTable = vi.fn(async () => [])
 
-      await expect(queryWindowsProcess(pid, { runCommand })).resolves.toEqual({
+      await expect(queryWindowsProcess(pid, { readProcessTable })).resolves.toEqual({
         status: 'unavailable'
       })
-      expect(runCommand).not.toHaveBeenCalled()
+      expect(readProcessTable).not.toHaveBeenCalled()
     }
   )
 })

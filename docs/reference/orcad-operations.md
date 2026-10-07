@@ -66,6 +66,25 @@ the daemon shares the service cgroup and a combined-unit stop ends live terminal
 it is populated from `/proc/self/cgroup`, so it reports the isolation the daemon actually has
 rather than what the launcher intended.
 
+## `orca serve` on this machine
+
+`orca serve` runs on the local orcad slot by default. The CLI asks the app's
+`out/main/orcad/orcad-local-serve-selection-entry.js` (run as plain Node on the app's executable)
+which host to use. Any reason orcad cannot serve falls back to Electron serve with one
+`[serve] using Electron serve: <reason>` line on stderr. Those reasons are: no slot for this host,
+no template in the install, the pinned Node could not be fetched, or a failed native preflight.
+
+- `ORCA_SERVE_RUNTIME=electron` keeps Electron serve and skips the question. `orcad` (or unset) is
+  the default, and any other value falls back with a reason.
+- Packaged macOS stays on Electron: only Electron serve, supervised by the CLI, can take a remote
+  app update there, and orcad has no updater. Recipe-JSON serve has no handoff and uses orcad.
+- Windows serves on orcad too. Both hosts share `<userData>\daemon`, so the daemon pipe name
+  (hashed from that path) is the same, and the relocated Electron daemon host changes only the
+  executable, not the pipe. The `orcad-serve-mode-switch-windows` e2e job checks D7 there, in the
+  daily run and on PRs routed to it; it does not block merges.
+
+The slot and its pinned Node live under the desktop's `<userData>/orcad-artifacts`.
+
 ## Bind policy
 
 `--bind <literal-ip>`, **default `127.0.0.1`**.
@@ -83,6 +102,16 @@ nothing can reach.
 
 Under the shipping design a client reaches a remote orcad over an SSH local port-forward, so
 loopback is the correct default and the pairing credential travels over SSH.
+
+A host whose sshd refuses forwarding (`AllowTcpForwarding no`) is reached through the stdio
+bridge instead: the client keeps the same local port, and each connection to it opens one SSH
+exec channel running a small script on the host's pinned Node that dials orcad's loopback port.
+Windows hosts run it as the host script's `stdio-bridge` op and frame bytes as base64 lines,
+because a PowerShell DefaultShell re-decodes native output. Bridges are capped below OpenSSH's
+default `MaxSessions` of 10 per connection; further connections wait for a free one. The choice
+is made each time the tunnel starts (`orcad-managed-tunnel-transport.ts`), so nothing is
+recorded per host, and only a host where even the bridge cannot run keeps the relay, recorded as
+`ssh_tunnel_unavailable`.
 
 ## Data root and the instance lock
 
@@ -102,11 +131,16 @@ It refuses to start when:
 A root that is merely too permissive and that we own is tightened to `0700` rather than
 refused — orcad stores credentials there unsealed (no OS keyring on this host), so the goal
 is a private root, and refusing when we could just fix it helps nobody. We refuse when the
-permissions are not ours to fix. Windows is exempt from the owner and mode checks: ACLs are
-not expressible as a POSIX mode, and `statSync().mode` there reports a synthesized one.
+permissions are not ours to fix. Windows has no owner or mode check, because ACLs are not
+expressible as a POSIX mode and `statSync().mode` there reports a synthesized one. Instead
+orcad restricts the root's ACL to its own user with `icacls` (the same verified restriction
+`secure-file.ts` applies to credential files) and refuses with `orcad_data_root_shared` when
+that cannot be applied.
 
 A dead holder's record is reclaimed (PID plus process start time, so a recycled PID does not
-read as alive). A record belonging to a different identity is never reclaimed.
+read as alive). On Windows the start time is the kernel creation time read through the
+process-tree addon the slot stages; without the addon it is null and the PID alone fences,
+which errs toward "held". A record belonging to a different identity is never reclaimed.
 
 **The lock scopes one role — who is the runtime.** It deliberately says nothing about the
 daemon, which lives under `<data-root>/daemon` and fences its own endpoint with its own PID
@@ -150,6 +184,47 @@ An external supervisor (systemd, launchd, a process manager). orcad conforms to 
   exits with code 1 if teardown stalls. The bundled runtime also stops gracefully if its
   launcher's IPC channel closes. On POSIX, both the launcher and runtime ignore `SIGHUP`,
   so terminal hangups do not stop a headless host. Use `SIGTERM` or `SIGINT` to stop it.
+- **Stop requests.** A file stops orcad the same way `SIGTERM` does, without a PID that may
+  since have been reused by another process:
+  - `.orcad-stop-request` beside `orcad.js` in the running slot. orcad deletes it and stops.
+  - An instance-bound request in the data root, named
+    `.orcad-managed-stop-request.<sha256 of the instance lock nonce>`. orcad stops only when it
+    names this orcad's version, runtime ID, PID, start time and lock nonce, and while the
+    instance lock still holds that record. The file is kept as evidence.
+  - `orcad --complete-managed-stop '<request JSON>'` writes that request, waits for the
+    instance to exit, and prints one JSON line whose `verdict` is `live`, `unverifiable` or
+    `exited`. `exited` needs proof: no process with that PID, or a PID whose start time shows
+    it now belongs to another process. On `exited` it writes
+    `<data-root>/orcad-stop-receipts/<transactionId>.json`. It exits 0 whenever it printed a
+    verdict, 64 for a malformed invocation, and 1 for a failure before any verdict, which is
+    never evidence of exit.
+  - A request with `retireIdleDaemon: true` asks orcad to retire the terminal daemon too. This
+    is best effort and never blocks or fails the stop:
+    - The daemon is retired only when it proves it owns no live session across every
+      generation.
+    - A busy daemon (`live`) or one whose state cannot be proven (`unverifiable`) stays up with
+      its terminals, and orcad reopens new-terminal admission before exiting.
+    - The completed-stop receipt records `retirement` as `retired`, `live` or `unverifiable`.
+      If orcad exits without recording an outcome, the receipt says `unverifiable`.
+  - `orcad --cancel-managed-stop '<request JSON>'` withdraws a request orcad has not acted on.
+    orcad and the canceller each try to create `<transactionId>.decision.json` exclusively,
+    so exactly one wins. `canceled` means orcad keeps running and the request file is removed;
+    `dispatched` means orcad already began stopping, and only the completion can say how it
+    ended.
+  - A build advertises all of the above with `health.stopRequests: 1` in its readiness line.
+    Clients stop such a build through the slot request file and older builds with `SIGTERM`,
+    after corroborating the PID with readiness either way. A launch clears a slot request
+    that the previous process never consumed.
+- **Decommissioning a managed slot.** An Orca client decommissions through the same activation
+  journal and fence as deploy and rollback. It refuses while the terminal census reports live
+  or uncounted terminals, stops the instance with a managed request that also asks to retire
+  the daemon, and records that no version is active only after `exited` is proven. A stop
+  that did not finish is cancelled; if orcad already acted on it, or the host cannot answer,
+  the fence stays for recovery.
+- **Instance lock.** `<data-root>/orcad.lock` names the running orcad. A record that is
+  unreadable, malformed or over 64 KiB is never reclaimed: orcad exits 78 until an operator
+  removes it. A shutdown whose teardown failed keeps the lock until the process exits, so a
+  second orcad cannot start beside a writer that may still be running.
 - **Exit codes.**
 
   | Code | Meaning                                                      | Supervisor should    |
@@ -201,6 +276,65 @@ fell back to the service cgroup. To retire a process-scoped deployment, apply th
 above, stop orcad, then stop the daemon named by `health.terminalDaemon.pid`.
 Only report it `exited` after verification on the execution host; loss of contact is
 `unverifiable`.
+
+### Windows hosts
+
+What differs on a Windows SSH host, and what deliberately does not:
+
+- **Stop path.** A signal is TerminateProcess on Windows: no flush, no lock release. The
+  slot's `.orcad-stop-request` file (and the managed, instance-bound request) is therefore the
+  only graceful stop. A detached orcad receives no console control events, so the listener
+  (`fs.watch` plus a one-second poll) is what stops it; the packaged-slot test proves it exits
+  cleanly within the 15 s shutdown deadline on every server lane, Windows included.
+- **Exit proof.** `--complete-managed-stop` proves a reused PID by the addon's creation time.
+  Without the addon a live PID stays `live` or `unverifiable`, never `exited`.
+- **Daemon endpoint.** The terminal daemon listens on a named pipe
+  (`\\?\pipe\orca-terminal-host-v<protocol>-<suffix>`), not a socket under the data root.
+- **Leaving sshd's job.** orcad is started outside the SSH session's kill-on-close job, so the
+  daemon it forks inherits no such job and outlives the connection the same way.
+- **Per-PTY jobs.** Each ConPTY child gets its own job (`windows-pty-job.ts`), and Git Bash /
+  MSYS panes follow [`windows-msys-job-breakaway.md`](./windows-msys-job-breakaway.md)
+  unchanged. A ConPTY smoke test runs inside a process started exactly that way (breakaway,
+  no window) on the Windows server lanes.
+- **No daemon-host relocation.** The desktop copies its runtime to `%LOCALAPPDATA%` because
+  the NSIS updater deletes the install directory under a running daemon
+  ([`windows-daemon-host-relocation.md`](./windows-daemon-host-relocation.md)). orcad slots are
+  versioned directories that nothing deletes while a process runs from them: Windows refuses
+  to delete a running image, and GC treats an in-use slot as live.
+
+## Idle exit (client-managed orcad only)
+
+An orcad that a desktop client launched over SSH stops itself, like the relay, once its host has
+been unused for 15 minutes. The client's launch sets `ORCA_ORCAD_MANAGED_ACTIVATION_ROOT`; an
+orcad started by hand, by a supervisor, or as a paired server never carries it and never idles
+out.
+
+"Unused" means every one of these held on every check for the whole period:
+
+- no client socket open and no RPC request running;
+- no terminal in the PTY provider, and the daemon answered with zero live sessions (a daemon
+  that does not answer keeps orcad up);
+- no agent reporting `working`;
+- no staged migration into this server;
+- no enabled automation and no automation run still in flight (nothing on the host would start
+  orcad again for the next scheduled run, so a server with an enabled automation never idles out);
+- no activation fence on the host (an update, rollback, decommission or recovery in flight).
+
+The stop is the ordinary graceful shutdown, which disconnects from the daemon and never shuts it
+down, so it cannot kill a terminal. It then asks the daemon to retire only if the daemon itself
+proves it holds no session. Before stopping, orcad writes `<data-root>/orcad-idle-stop.json`;
+the next start reports it once as `health.previousIdleStop` and removes it, so a later crash is
+never read as an idle stop. A managed start with no record reports `previousIdleStop: null`.
+
+The client starts a stopped server again, whatever stopped it (an idle stop, a kill, a host
+reboot): on every connect, on every fresh tunnel (including after the client wakes from sleep),
+and before a call through an environment the client restored at launch. A server that does not
+answer is checked on the host; only a proven exit starts the activated slot, under the activation
+fence, and the status line shows "Starting managed server…". A daemon that survived is adopted
+with its terminals; after a reboot both start fresh. A process that is live or cannot be proven
+gone is left alone, and a start that fails keeps the host managed with the reason and orcad.log's
+tail, never as a verdict about its terminals. `ORCA_E2E_ORCAD_IDLE_TIMEOUT_MS` shortens the idle
+period for tests; the client forwards it to the servers it launches.
 
 ## Health
 

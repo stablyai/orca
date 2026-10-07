@@ -225,20 +225,13 @@ describe('useTerminalPaneGlobalEffects', () => {
     })
   })
 
-  it('keeps handling legacy terminal file drops without a terminal tab id', () => {
-    const { onFileDrop, manager, paneTransports } = useMountForFileDrop()
+  it('refuses terminal file drops without a terminal tab id even in the active tab', () => {
+    const { onFileDrop } = useMountForFileDrop()
 
     const data = { paths: ['/tmp/image.png'], target: 'terminal' }
     onFileDrop(data)
 
-    expect(mocks.handleTerminalFileDrop).toHaveBeenCalledWith({
-      manager,
-      paneTransports,
-      worktreeId: 'wt-1',
-      tabId: 'tab-1',
-      cwd: undefined,
-      data
-    })
+    expect(mocks.handleTerminalFileDrop).not.toHaveBeenCalled()
   })
 
   it('handles terminal file drops for visible unfocused split-group terminals', () => {

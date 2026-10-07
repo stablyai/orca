@@ -37,6 +37,7 @@ export type UsageScanWorkerProviderId = 'claude' | 'codex' | 'opencode' | 'muse'
 export type UsageScanWorkerRequestBody =
   | {
       providerId: 'claude'
+      profileDirs?: string[]
       worktrees: UsageScanWorktreeRef[]
       previous: ClaudeUsagePersistedFile[]
     }

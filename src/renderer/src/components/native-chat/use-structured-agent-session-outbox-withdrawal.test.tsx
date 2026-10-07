@@ -111,9 +111,18 @@ describe('a Stop withdrawing what the host does not hold', () => {
     )
     await act(async () => new Promise((resolve) => setTimeout(resolve, 50)))
 
-    // The host's answer to it, not this Stop, decides whether it comes back.
-    expect(result.current.outbox.map((candidate) => candidate.clientMessageId)).toEqual([firstId])
-    expect(readOutbox('session-1').map((candidate) => candidate.clientMessageId)).toEqual([firstId])
+    // The host's answer to it, not this Stop, decides whether it comes back. With no composer to
+    // take it, the one behind it stays as not sent, on its Retry, and never goes out by itself.
+    const states = (entries: readonly { clientMessageId: string; state: string }[]) =>
+      entries.map((candidate) => [candidate.clientMessageId === firstId, candidate.state])
+    expect(states(result.current.outbox)).toEqual([
+      [true, 'dispatching'],
+      [false, 'rejected']
+    ])
+    expect(states(readOutbox('session-1', { recoverDispatching: false }))).toEqual([
+      [true, 'dispatching'],
+      [false, 'rejected']
+    ])
     expect(sentTexts()).toEqual(['first'])
   })
 

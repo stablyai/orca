@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { dispatchTerminalNotification } from './use-notification-dispatch'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-types'
 import { buildAgentNotificationId } from '../../../../shared/agent-notification-id'
+import { makeTabGroup, makeUnifiedTab } from '../../store/slices/store-session-test-harness'
 import {
   LIVE_LEAF_ID,
   PANE_KEY,
@@ -275,6 +276,18 @@ describe('dispatchTerminalNotification', () => {
 
   it('does not mark the visible focused pane unread', () => {
     mockState.activeWorktreeId = 'wt-primary'
+    mockState.activeGroupIdByWorktree['wt-primary'] = 'group-1'
+    mockState.groupsByWorktree['wt-primary'] = [
+      makeTabGroup({
+        id: 'group-1',
+        worktreeId: 'wt-primary',
+        activeTabId: 'tab-1',
+        tabOrder: ['tab-1']
+      })
+    ]
+    mockState.unifiedTabsByWorktree['wt-primary'] = [
+      makeUnifiedTab({ id: 'tab-1', worktreeId: 'wt-primary', groupId: 'group-1' })
+    ]
     stubDocumentFocus({ visibilityState: 'visible', focused: true })
 
     dispatchTerminalNotification('wt-primary', {

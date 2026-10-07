@@ -25,3 +25,24 @@ export function setAgentSessionRecordConversationName(
   next.conversationName = normalized
   return next
 }
+
+export async function compareAndSetAgentSessionRecordName(
+  mutate: (
+    apply: (record: AgentSessionRecord) => AgentSessionRecord
+  ) => Promise<AgentSessionRecord>,
+  name: string | null,
+  expected: string | null
+): Promise<AgentSessionRecord | null> {
+  let matched = false
+  const record = await mutate((current) => {
+    matched = (current.conversationName ?? null) === expected
+    return matched ? setAgentSessionRecordConversationName(current, name, Date.now()) : current
+  })
+  return matched ? record : null
+}
+
+export type CompareAndSetConversationName = (
+  sessionId: string,
+  name: string | null,
+  expected: string | null
+) => Promise<AgentSessionRecord | null>

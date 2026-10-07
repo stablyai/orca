@@ -1,4 +1,5 @@
 import type { DiscoveredSkill } from '../../../../shared/skills'
+import { formatNativeChatFileReference } from '../../../../shared/agent-image-paste'
 import type { NativeChatAgentProfile } from '../../../../shared/native-chat-agent-profiles'
 import {
   filterSlashCommands,
@@ -43,7 +44,7 @@ type PickerAutocomplete = {
 export type ComposerAutocomplete =
   | { mode: 'none' }
   | ({ mode: 'slash' } & PickerAutocomplete)
-  | { mode: 'mention'; query: string }
+  | { mode: 'mention'; query: string; triggerKey: string }
 
 const EMPTY_DISCOVERY: NativeChatSkillDiscoverySnapshot = { status: 'ready', skills: [] }
 
@@ -83,7 +84,10 @@ export function deriveComposerAutocomplete(
   }
   const mentionMatch = before.match(/(?:^|\s)@(\S*)$/)
   if (mentionMatch) {
-    return { mode: 'mention', query: mentionMatch[1] }
+    const triggerKey = `@:${before.length - mentionMatch[1].length - 1}`
+    return dismissedTriggerKey === triggerKey
+      ? { mode: 'none' }
+      : { mode: 'mention', query: mentionMatch[1], triggerKey }
   }
   // Why: `/` is the whole composer grammar, so a mid-prompt token opens the same
   // menu a leading one does — it just cannot dispatch.
@@ -196,37 +200,6 @@ export function applyMentionSuggestion(
     return { draft, caret }
   }
   const tokenStart = before.length - match[2].length - 1
-  const nextBefore = `${before.slice(0, tokenStart)}@${path} `
-  return { draft: nextBefore + after, caret: nextBefore.length }
-}
-
-export type HistoryState = { entries: readonly string[]; index: number | null }
-export const EMPTY_HISTORY: HistoryState = { entries: [], index: null }
-
-export function pushHistory(history: HistoryState, sent: string): HistoryState {
-  if (sent.trim() === '' || history.entries.at(-1) === sent) {
-    return { entries: history.entries, index: null }
-  }
-  return { entries: [...history.entries, sent], index: null }
-}
-
-export type HistoryRecall = { history: HistoryState; draft: string | null }
-
-export function recallPrevious(history: HistoryState): HistoryRecall {
-  if (history.entries.length === 0) {
-    return { history, draft: null }
-  }
-  const index = history.index === null ? history.entries.length - 1 : Math.max(0, history.index - 1)
-  return { history: { entries: history.entries, index }, draft: history.entries[index] }
-}
-
-export function recallNext(history: HistoryState): HistoryRecall {
-  if (history.index === null) {
-    return { history, draft: null }
-  }
-  const index = history.index + 1
-  if (index >= history.entries.length) {
-    return { history: { entries: history.entries, index: null }, draft: '' }
-  }
-  return { history: { entries: history.entries, index }, draft: history.entries[index] }
+  const nextBefore = `${before.slice(0, tokenStart)}${formatNativeChatFileReference(path)} `
+  return { draft: nextBefore + after.replace(/^ /, ''), caret: nextBefore.length }
 }

@@ -1,7 +1,8 @@
 /**
  * A chat agent and a terminal agent run the same orchestration process: the same preamble, the
- * same pointer text and the same guide. The one difference is how each is named: a terminal by its
- * handle, exactly as on main, and a session by its Orca session ID. Orca absorbs everything else.
+ * same pointer text and the same guide. They differ in how each is named (a terminal by its handle,
+ * exactly as on main, a session by its Orca session ID) and in the preamble calling a chat a chat.
+ * Orca absorbs everything else.
  */
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -23,7 +24,11 @@ import {
 import { OrchestrationDb } from './db'
 import { formatMessagePointer } from './formatter'
 import { OrchestrationStructuredMailboxPointerDelivery } from './structured-mailbox-pointer-delivery'
-import { buildDispatchPreamble } from './preamble'
+import {
+  buildDispatchPreamble,
+  CHAT_REDISPATCH_PARAGRAPH as CHAT_REDISPATCH,
+  TERMINAL_REDISPATCH_PARAGRAPH as TERMINAL_REDISPATCH
+} from './preamble'
 import { ORCA_SESSION_ID_AS_ADDRESS } from '../../../shared/orca-session-id-wording-test-fixture'
 
 const sent = vi.hoisted((): { preambles: string[] } => ({ preambles: [] }))
@@ -72,14 +77,16 @@ function runtime(prompts: string[]): OrcaRuntimeService {
   const fake: Pick<
     OrcaRuntimeService,
     'getNestedWorkerMaxDepth' | 'getTerminalOrchestrationCliCommand' | 'sendTerminalAgentPrompt'
-  > = {
-    getNestedWorkerMaxDepth: () => 2,
-    getTerminalOrchestrationCliCommand: () => 'orca',
-    sendTerminalAgentPrompt: async (handle, text) => {
-      prompts.push(text)
-      return { handle, accepted: true, bytesWritten: text.length }
+  > & { orchestrationSenderNames: Pick<OrcaRuntimeService['orchestrationSenderNames'], 'nameOf'> } =
+    {
+      orchestrationSenderNames: { nameOf: () => null },
+      getNestedWorkerMaxDepth: () => 2,
+      getTerminalOrchestrationCliCommand: () => 'orca',
+      sendTerminalAgentPrompt: async (handle, text) => {
+        prompts.push(text)
+        return { handle, accepted: true, bytesWritten: text.length }
+      }
     }
-  }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: preamble delivery reads only the members the fake implements.
   return fake as OrcaRuntimeService
 }
@@ -101,6 +108,7 @@ async function renderPreamble(worker: 'chat' | 'terminal'): Promise<string> {
     terminalHandle: worker === 'chat' ? CHAT_WORKER_HANDLE : TERMINAL_HANDLE,
     dispatchId: 'ctx_1',
     dispatchDepth: 1,
+    runId: 'run_1',
     taskId: 'task_1',
     taskSpec: 'do it',
     coordinatorHandle: 'term_coord',
@@ -120,6 +128,7 @@ async function renderChatPointer(mailbox: string): Promise<string> {
     resolveStructuredTarget: () => ({ sessionId: CHAT_SESSION, dispatchId: null }),
     // The runtime's wiring of the structured lane.
     getCliCommand: localOrchestrationCliCommand,
+    senderName: () => null,
     host: {
       readSessionFacts: async () => ({ submissions: [] }),
       currentFence: () => 1,
@@ -138,15 +147,26 @@ async function renderChatPointer(mailbox: string): Promise<string> {
   return texts[0]!
 }
 
-describe('a chat agent and a terminal agent see the same text but for how each is named', () => {
-  it("teaches a chat worker a terminal worker's preamble but for its identity lines", async () => {
+describe('a chat agent and a terminal agent see the same text but for how each is named and called', () => {
+  it("teaches a chat worker a terminal worker's preamble but for its identity lines and the chat wording", async () => {
     const chat = await renderPreamble('chat')
     const terminal = await renderPreamble('terminal')
+    const withoutRedispatch = chat.replace(CHAT_REDISPATCH, TERMINAL_REDISPATCH)
 
     expect(terminal).not.toContain('Orca session ID')
     expect(chat).toContain(`Your task ID is: task_1${SELF_LINE}\n`)
     expect(chat).not.toContain(CHAT_WORKER_HANDLE)
-    expect(chat.replace(SELF_LINE, '').split(CHAT_ADDRESS).join(TERMINAL_HANDLE)).toBe(terminal)
+    expect(chat).not.toContain('this terminal')
+    expect(withoutRedispatch).not.toBe(chat)
+    expect(withoutRedispatch.split('this chat')).toHaveLength(4)
+    expect(
+      withoutRedispatch
+        .replace(SELF_LINE, '')
+        .split(CHAT_ADDRESS)
+        .join(TERMINAL_HANDLE)
+        .split('this chat')
+        .join('this terminal')
+    ).toBe(terminal)
   })
 
   it.each([

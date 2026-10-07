@@ -1,5 +1,4 @@
 import { toast } from 'sonner'
-import { getConnectionId } from '@/lib/connection-context'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
@@ -22,12 +21,11 @@ import { writeTerminalDropPathsToCapturedTarget } from './terminal-drop-path-wri
 import { resolveNativeTerminalDropPane } from './terminal-drop-pane-resolution'
 import { getTerminalPasteSshRemotePlatform } from './terminal-paste-ssh-platform'
 import { showTerminalDropWriteFailure } from './terminal-drop-write-failure'
-import { captureDirectSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
 import {
   joinRuntimeTerminalDropDir,
   resolveTerminalDropWorktreePath
 } from './terminal-drop-worktree-path'
-import { captureRuntimeTerminalDropOwner } from './terminal-drop-runtime-owner'
+import { captureTerminalDropTransportOwner } from './terminal-drop-transport-owner'
 
 export type NativeTerminalFileDropArgs = {
   manager: PaneManager
@@ -75,8 +73,13 @@ async function handleNativeTerminalFileDropWithCapturedOwner(
   const dropTarget = captureTerminalDropTarget(pane, transport)
   const state = useAppStore.getState()
   const settings = state.settings
-  const runtimeOwner = captureRuntimeTerminalDropOwner(worktreeId)
-  const worktreePath = resolveTerminalDropWorktreePath(worktreeId, cwd)
+  const owner = captureTerminalDropTransportOwner(transport)
+  const worktreePath = resolveTerminalDropWorktreePath(
+    worktreeId,
+    owner?.runtimeEnvironmentId ? undefined : cwd,
+    owner?.executionHostId,
+    owner?.runtimeEnvironmentId
+  )
   if (!worktreePath) {
     toast.error(
       translate(
@@ -87,7 +90,7 @@ async function handleNativeTerminalFileDropWithCapturedOwner(
     return
   }
 
-  if (runtimeOwner) {
+  if (owner?.runtimeEnvironmentId) {
     await uploadRuntimeDropPaths({
       dataPaths: data.paths,
       dropTarget,
@@ -98,16 +101,13 @@ async function handleNativeTerminalFileDropWithCapturedOwner(
       tabId,
       worktreeId,
       worktreePath,
-      ...runtimeOwner
+      ...owner,
+      runtimeEnvironmentId: owner.runtimeEnvironmentId
     })
     return
   }
 
-  // Why: `getConnectionId` returns `string` (SSH), `null` (local repo found),
-  // or `undefined` (store not hydrated / worktree not found). Treat
-  // `undefined` as an error — otherwise a drop during hydration would
-  // silently paste local paths into a remote shell.
-  const connectionId = getConnectionId(worktreeId)
+  const connectionId = owner?.connectionId
   if (connectionId === undefined) {
     toast.error(
       translate(
@@ -134,6 +134,7 @@ async function handleNativeTerminalFileDropWithCapturedOwner(
       manager,
       paneTransports,
       pane,
+      assertCurrent: owner?.assertCurrent,
       tabId,
       targetShell: localWslDrop ? 'posix' : targetShell,
       worktreePath
@@ -142,8 +143,8 @@ async function handleNativeTerminalFileDropWithCapturedOwner(
   }
 
   await uploadRemoteDropPaths({
+    ...owner,
     connectionId,
-    ...captureDirectSshMutationExpectation(state, connectionId),
     dataPaths: data.paths,
     dropTarget,
     manager,
@@ -278,6 +279,7 @@ async function uploadRemoteDropPaths(
 async function pasteResolvedDropPaths(
   args: NativeDropFlowArgs & { paths: string[]; targetShell: 'posix' | 'windows' }
 ): Promise<void> {
+  args.assertCurrent?.()
   // Why: pane may have unmounted during upload/resolution (tab closed,
   // worktree switched). Re-check before writing so we do not call sendInput
   // on a torn-down PTY.

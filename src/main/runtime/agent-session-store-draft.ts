@@ -7,7 +7,7 @@ import { encodeAgentSessionRecord } from '../../shared/agent-session-record-stor
 import type {
   AgentSessionStoreState,
   RetiredAgentSessionClaimKey
-} from './agent-session-record-store-file'
+} from './agent-session-store-state'
 import {
   isReadableAgentSessionStoreOperation,
   isReadableAgentSessionStoreRecord,

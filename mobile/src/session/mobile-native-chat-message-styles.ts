@@ -61,6 +61,15 @@ export const styles = StyleSheet.create({
     // The common cap for an open reasoning block (about ten lines).
     maxHeight: 240
   },
+  agentMessage: {
+    paddingLeft: spacing.md,
+    borderLeftWidth: 2,
+    borderLeftColor: colors.borderSubtle
+  },
+  agentAttribution: {
+    color: colors.textMuted,
+    fontSize: typography.metaSize
+  },
   toolRun: {
     marginTop: spacing.xs
   },

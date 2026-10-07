@@ -331,6 +331,17 @@ export class FsHandler {
 
   dispose(): void {
     this.watchRegistry.dispose()
-    void this.streamRegistry.disposeAll()
+    void this.disposeFileStreams().catch((error: unknown) => {
+      process.stderr.write(`[relay] file stream shutdown failed: ${String(error)}\n`)
+    })
+  }
+
+  disposeFileStreams = (): Promise<void> => this.streamRegistry.disposeAll()
+
+  disposeWatchers = (): Promise<void> => this.watchRegistry.disposeAndWait()
+
+  reopen(): void {
+    this.streamRegistry.reopen()
+    this.watchRegistry.reopen()
   }
 }

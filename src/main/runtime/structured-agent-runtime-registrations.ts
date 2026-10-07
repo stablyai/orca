@@ -3,6 +3,7 @@
 import { createCodexStructuredLaunchResolver } from '../codex/codex-structured-launch-resolution'
 import { supportsCodexStructuredLocation } from '../codex/codex-structured-location-support'
 import { supportsClaudeStructuredLocation } from '../claude/claude-structured-location-support'
+import { supportsSupervisedProviderChildLocation } from '../provider-process/supervised-provider-child-location'
 import { applyStructuredCodexWorkspaceTrust } from '../agent-workspace-trust-spawn'
 import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
 import { CodexStructuredSessionAdapter } from '../codex/codex-structured-session-adapter'
@@ -16,6 +17,9 @@ import type { StructuredAgentDefinition } from '../native-chat/agent-session-wir
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import { readClaudeManagedAccountGateSettings } from '../native-chat/claude-structured-managed-account-support'
 import { agentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
+import { agentSessionAttachmentStoreRoot } from '../native-chat/agent-session-attachments/agent-session-attachment-references'
+import type { JournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database'
+import { replayJournal } from '../native-chat/agent-session-journal/journal-open'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 import type { createStructuredAgentSessionDispatchFollowUps } from './structured-agent-session-dispatch-followups'
 import type { StructuredAgentSessionRuntimeDeps } from './structured-agent-session-runtime'
@@ -24,14 +28,21 @@ import { createStructuredClaudeRuntimeAdapter } from './structured-claude-runtim
 import {
   resolveStructuredClaudeAccountHomePath,
   resolveStructuredCodexAccountHomePath,
+  resolveStructuredEnvAccountHomePath,
   type StructuredClaudeAccountHomeDeps,
   type StructuredCodexAccountHomeDeps
 } from './structured-agent-account-home'
+import { ACP_LAUNCH_SPECS, type AcpLaunchSpec } from '../acp/acp-launch-specs'
+import { acpStructuredAgentDefinition } from '../acp/acp-structured-agent-definitions'
+import { createAcpAgentConnection } from '../acp/acp-agent-connection'
+import { createAcpStructuredLaunchResolver } from '../acp/acp-structured-launch-resolution'
+import { AcpStructuredSessionAdapter } from '../acp/acp-structured-session-adapter'
 
 /** What an agent's adapter is built from: the open store and the runtime around it. */
 export type StructuredAgentAdapterContext = {
   deps: StructuredAgentSessionRuntimeDeps
   store: AgentSessionRecordStore
+  journalDatabase: JournalHostDatabase
   environment: ReturnType<typeof createStructuredAgentEnvironmentResolvers>
   /** Hands the host an exit or other lifecycle event the agent observed. */
   deliverLifecycle: (event: StructuredAgentSessionLifecycleEvent) => void
@@ -85,6 +96,7 @@ function createCodexAdapter(context: StructuredAgentAdapterContext): StructuredA
       store,
       resolveWorkspacePath: deps.resolveWorkspacePath,
       resolveEnvironment: context.environment.resolveCodexEnvironment,
+      resolveLaunchArgs: () => deps.resolveLaunchArgs('codex'),
       ...(deps.resolveCodexPermissionPolicy
         ? { resolvePermissionPolicy: deps.resolveCodexPermissionPolicy }
         : {}),
@@ -118,6 +130,7 @@ function createClaudeAdapter(
     ...(deps.claudeThinkingDisplay ? { claudeThinkingDisplay: deps.claudeThinkingDisplay } : {}),
     ...(deps.resolveClaudeLaunchEnv ? { resolveClaudeLaunchEnv: deps.resolveClaudeLaunchEnv } : {}),
     resolveClaudeInheritedEnv: context.environment.resolveClaudeInheritedEnv,
+    resolveClaudeLaunchArgs: () => deps.resolveLaunchArgs('claude'),
     resolveClaudeAuthPolicy: deps.resolveClaudeAuthPolicy,
     ...(deps.resolveClaudePermissionMode
       ? { resolveClaudePermissionMode: deps.resolveClaudePermissionMode }
@@ -128,6 +141,7 @@ function createClaudeAdapter(
             readClaudeManagedAccountGateSettings(deps.getClaudeManagedAccountGateSettings!)
         }
       : {}),
+    attachmentDirectory: agentSessionAttachmentStoreRoot(deps.stateDirectory),
     onLifecycleEvent: context.deliverLifecycle,
     logger: deps.logger,
     onChildWorkEvidence: (sessionId, evidence) =>
@@ -138,6 +152,43 @@ function createClaudeAdapter(
     ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {}),
     modelCatalog: agentModelCatalogStore
   })
+}
+
+function acpRegistration(spec: AcpLaunchSpec): StructuredAgentRuntimeRegistration {
+  return {
+    definition: acpStructuredAgentDefinition(spec),
+    supportsLocation: (location) => supportsSupervisedProviderChildLocation(location),
+    resolveAccountHomePath: async ({ launchEnv }) =>
+      resolveStructuredEnvAccountHomePath({
+        launchEnv,
+        variable: spec.accountHomeVariable,
+        defaultPath: spec.defaultAccountHome
+      }),
+    createAdapter: (context) => {
+      const { deps, store, followUps } = context
+      return new AcpStructuredSessionAdapter({
+        spec,
+        resolveLaunch: createAcpStructuredLaunchResolver(spec, {
+          store,
+          readJournal: (sessionId) => replayJournal(context.journalDatabase.db, sessionId),
+          resolveWorkspacePath: deps.resolveWorkspacePath,
+          resolveEnvironment: context.environment.resolveBaseEnvironment,
+          ...(deps.resolveAgentLaunchEnv ? { resolveLaunchEnv: deps.resolveAgentLaunchEnv } : {}),
+          ...(deps.resolveAgentFullAccess ? { resolveFullAccess: deps.resolveAgentFullAccess } : {})
+        }),
+        connect: (launch, options) => createAcpAgentConnection(launch, options),
+        ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {}),
+        onDispatchSettledLate: followUps.onDispatchSettledLate,
+        logger: deps.logger,
+        // Every exit, expected or not: the host ends that child's record.
+        onEvent: (event) => {
+          if (event.type === 'ended') {
+            context.deliverLifecycle(event)
+          }
+        }
+      })
+    }
+  }
 }
 
 async function resolveCodexAccountHomePath(
@@ -177,7 +228,8 @@ export const STRUCTURED_AGENT_RUNTIME_REGISTRATIONS: readonly StructuredAgentRun
           wslDistro: location?.wslDistro ?? null,
           getClaudeConfigDirectory: services.getClaudeConfigDirectory
         })
-    }
+    },
+    ...ACP_LAUNCH_SPECS.map(acpRegistration)
   ]
 
 /** The registration of `agent`; null for an agent this runtime does not drive. */

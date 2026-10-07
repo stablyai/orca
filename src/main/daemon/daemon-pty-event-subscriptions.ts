@@ -3,7 +3,12 @@ import { removeDaemonListener } from './daemon-listener-registry'
 import { emitPtyListeners } from './daemon-pty-listener-emission'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import { DaemonPtySessionInventory } from './daemon-pty-session-inventory'
-import { CLEAN_DISCONNECT_PROTOCOL_VERSION } from './types'
+import {
+  CLEAN_DISCONNECT_PROTOCOL_VERSION,
+  type ListSessionsResult,
+  type ShutdownIfIdleResult
+} from './types'
+import type { DaemonIdleRetirementResult } from './daemon-pty-runtime-state'
 import type { PtyBackgroundStreamEvent } from '../providers/types'
 
 export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInventory {
@@ -83,6 +88,86 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
     // Why: an authenticated pair cancels the adoption watchdog and lets a never-used adapter retire its empty daemon on quit.
     await this.client.ensureConnected()
     this.recordAuthenticatedIdentity()
+  }
+
+  async requestIdleRetirement(): Promise<DaemonIdleRetirementResult> {
+    if (this.protocolVersion < CLEAN_DISCONNECT_PROTOCOL_VERSION) {
+      return { state: 'unsupported' }
+    }
+    if (this.idleRetirementState === 'retiring') {
+      return { state: 'retiring' }
+    }
+    if (this.idleRetirementPromise) {
+      return this.idleRetirementPromise
+    }
+    if (
+      this.disconnectOnlyPromise ||
+      (this.respawnAdoptionClosed && this.idleRetirementState === 'open')
+    ) {
+      return { state: 'unverifiable' }
+    }
+    this.idleRetirementAdmissionClosed = true
+    this.respawnAdoptionClosed = true
+    this.idleRetirementState = 'checking'
+    const request = this.finishIdleRetirementRequest().finally(() => {
+      if (this.idleRetirementPromise === request) {
+        this.idleRetirementPromise = null
+      }
+    })
+    this.idleRetirementPromise = request
+    return request
+  }
+
+  private async finishIdleRetirementRequest(): Promise<DaemonIdleRetirementResult> {
+    try {
+      await this.client.ensureConnected()
+    } catch {
+      // Nothing was asked of the daemon, so nothing can be retiring.
+      this.reopenAfterRefusedIdleRetirement()
+      return { state: 'unverifiable' }
+    }
+    try {
+      const result = await this.client.request<ShutdownIfIdleResult>('shutdownIfIdle', undefined)
+      if (result.retiring) {
+        this.idleRetirementState = 'retiring'
+        return { state: 'retiring' }
+      }
+      let liveSessions: number | null = null
+      try {
+        const inventory = await this.client.request<ListSessionsResult>('listSessions', undefined)
+        liveSessions = inventory.sessions.filter((session) => session.isAlive).length
+      } catch {
+        liveSessions = null
+      }
+      this.reopenAfterRefusedIdleRetirement()
+      return {
+        state: 'busy',
+        liveSessions,
+        admissionReopened: true
+      }
+    } catch {
+      // The daemon may have accepted before contact was lost; keep admission and respawn fenced.
+      this.idleRetirementState = 'unverifiable'
+      return { state: 'unverifiable' }
+    }
+  }
+
+  /** Reopens admission an idle-retirement attempt fenced without retiring the daemon. */
+  releaseIdleRetirementFence(): void {
+    // An unverifiable attempt may have been accepted, so it stays fenced like a retiring one.
+    if (
+      this.idleRetirementState !== 'retiring' &&
+      this.idleRetirementState !== 'unverifiable' &&
+      !this.idleRetirementPromise
+    ) {
+      this.reopenAfterRefusedIdleRetirement()
+    }
+  }
+
+  private reopenAfterRefusedIdleRetirement(): void {
+    this.idleRetirementState = 'open'
+    this.idleRetirementAdmissionClosed = false
+    this.respawnAdoptionClosed = false
   }
 
   // Why: unlike dispose(), leave history files unclean (no endedAt) so the next launch treats them as crash-recoverable,

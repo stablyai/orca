@@ -4,7 +4,10 @@ import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 import {
   WINDOWS_FORBIDDEN_TOOLS,
-  WINDOWS_HOST_CELL_IDS
+  WINDOWS_HOST_CELL_IDS,
+  WINDOWS_CLI_MATRIX_CELL_IDS,
+  WINDOWS_CONVERT_CELL_ID,
+  WINDOWS_ORCAD_CELL_IDS
 } from '../../src/main/ssh/ssh-windows-host-cells.ts'
 
 const projectDir = resolve(import.meta.dirname, '../..')
@@ -41,6 +44,10 @@ describe('SSH Windows-host workflow', () => {
     expect(paths.indexOf('src/main/ssh/ssh-relay-windows-host-lane.test.ts')).toBeGreaterThan(
       paths.indexOf('!src/**/*.test.ts')
     )
+    // A later glob would re-include unit tests the Windows lane never runs.
+    for (const glob of paths.slice(paths.indexOf('!src/**/*.test.ts') + 1)) {
+      expect(glob.startsWith('src/') ? glob.endsWith('.test.ts') : true, glob).toBe(true)
+    }
     expect(job.if).toContain('github.event.pull_request.draft != true')
   })
 
@@ -54,10 +61,18 @@ describe('SSH Windows-host workflow', () => {
       'x64/windows-2022/inbox',
       'x64/windows-2022/preview'
     ])
-    expect(job.env).toMatchObject({ ORCA_BACKGROUND_LAUNCH: '1', ORCA_ISOLATED_SSH_CI: '1' })
+    expect(job.env).toMatchObject({
+      ORCA_BACKGROUND_LAUNCH: '1',
+      ORCA_ISOLATED_SSH_CI: '1'
+    })
     expect(job.strategy['fail-fast']).toBe(false)
-    expect(job['timeout-minutes']).toBe(75)
-    expect(runStep['timeout-minutes']).toBe(50)
+    // The CLI matrix cells, dispatched by name only, get a longer budget.
+    expect(job['timeout-minutes']).toBe(
+      "${{ contains(github.event.inputs.cells || '', 'orcad-cli') && 160 || 75 }}"
+    )
+    expect(runStep['timeout-minutes']).toBe(
+      "${{ contains(github.event.inputs.cells || '', 'orcad-cli') && 130 || 50 }}"
+    )
   })
 
   it('overlaps only guarded ARM inbox capability preparation with the existing builds', () => {
@@ -102,7 +117,10 @@ describe('SSH Windows-host workflow', () => {
       "if('${{ matrix.server }}' -eq 'inbox' -and '${{ matrix.arch }}' -eq 'arm64'){$preparation="
     )
     expect(runStep.background).toBeUndefined()
-    expect(job.steps.at(-1)).toMatchObject({ if: 'always()', uses: 'actions/upload-artifact@v7' })
+    expect(job.steps.at(-1)).toMatchObject({
+      if: 'always()',
+      uses: 'actions/upload-artifact@v7'
+    })
   })
 
   it('shares one capability installer without bypassing native verification or private cleanup', () => {
@@ -171,14 +189,42 @@ describe('SSH Windows-host workflow', () => {
   it('defaults to every cell the TypeScript lane knows', () => {
     const defaults = /\{\$cells=@\(([^)]*)\)\}/.exec(runStep.run)?.[1]
     expect(defaults?.split(',').map((id) => id.trim().replaceAll("'", ''))).toEqual([
-      ...WINDOWS_HOST_CELL_IDS
+      ...WINDOWS_HOST_CELL_IDS,
+      ...WINDOWS_ORCAD_CELL_IDS
     ])
     const invoker = readFileSync(
       join(projectDir, 'config/ci/windows-ssh-provider/invoke-pinned-relay-cells.ps1'),
       'utf8'
     )
-    for (const id of WINDOWS_HOST_CELL_IDS) {
+    for (const id of [...WINDOWS_HOST_CELL_IDS, ...WINDOWS_ORCAD_CELL_IDS]) {
       expect(invoker).toContain(`'${id}'`)
     }
+    expect(invoker).toContain('src/main/ssh/orcad-windows-host-lane.test.ts')
+  })
+
+  it('provisions one private account for every cell, convert cell included', () => {
+    expect(runStep.run).toContain(`$cells+='${WINDOWS_CONVERT_CELL_ID}'`)
+    // Only app cells reach a managed server, through an SSH local forward; they run last.
+    const appCells = /\$appCellIds=@\(([^)]*)\)/.exec(runStep.run)?.[1]
+    expect(appCells?.split(',').map((id) => id.trim().replaceAll("'", ''))).toEqual([
+      WINDOWS_CONVERT_CELL_ID,
+      ...WINDOWS_CLI_MATRIX_CELL_IDS
+    ])
+    expect(runStep.run).toContain(
+      '$forwarding=@($cells | Where-Object {$appCellIds -contains $_}).Count'
+    )
+    expect(runStep.run).toContain('-ForwardingAccounts $forwarding')
+    // A dispatched list may name them anywhere; they still run last.
+    expect(runStep.run).toContain(
+      '$cells=@($cells | Where-Object {$appCellIds -notcontains $_})+@($cells | Where-Object {$appCellIds -contains $_})'
+    )
+    const provisioner = readFileSync(
+      join(projectDir, 'config/ci/windows-ssh-provider/preview-ssh/prove-preview-openssh.ps1'),
+      'utf8'
+    )
+    const max = Number(/\[ValidateRange\(1,(\d+)\)\]\[int\]\$Accounts/.exec(provisioner)?.[1])
+    expect(max).toBeGreaterThanOrEqual(
+      WINDOWS_HOST_CELL_IDS.length + WINDOWS_ORCAD_CELL_IDS.length + 1
+    )
   })
 })

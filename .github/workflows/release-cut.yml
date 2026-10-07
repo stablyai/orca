@@ -1212,12 +1212,25 @@ jobs:
     with:
       ref: refs/tags/${{ needs.cut.outputs.tag }}
 
+  # Compilation can overlap the release gates; signing remains behind release-preflight.
+  release-javascript:
+    needs: cut
+    if: needs.cut.outputs.should_release == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/release-javascript.yml
+    with:
+      ref: refs/tags/${{ needs.cut.outputs.tag }}
+    secrets:
+      ORCA_POSTHOG_WRITE_KEY: ${{ secrets.ORCA_POSTHOG_WRITE_KEY }}
+
   build:
     needs:
       - cut
       - create-release
       - orcad-template
       - release-preflight
+      - release-javascript
       - relay-windows-process-tree
     # Why not the implicit success(): a tag without the orcad template skips that job on purpose.
     if: >-
@@ -1226,6 +1239,7 @@ jobs:
       needs.cut.outputs.should_release == 'true' &&
       needs.create-release.result == 'success' &&
       needs.release-preflight.result == 'success' &&
+      needs.release-javascript.result == 'success' &&
       needs.relay-windows-process-tree.result == 'success' &&
       (needs.orcad-template.result == 'success' ||
         (needs.orcad-template.result == 'skipped' && needs.cut.outputs.ships_orcad_template == 'false'))
@@ -1460,26 +1474,30 @@ jobs:
           }
           cargo --version
 
-      # Why ORCA_POSTHOG_WRITE_KEY here: this is the only build that
-      # produces a published binary, so this is the only place the secret
-      # needs to be in scope. The key is a PostHog *project* API key, not
-      # a server secret — it ships in every official binary's app.asar
-      # and is therefore extractable from any release. We still keep it
-      # in GitHub Actions secrets so the literal stays out of the repo
-      # (and out of fork CI runs / log scrapers / casual greps).
-      # Why ORCA_BUILD_IDENTITY here (not in env at the job level): the
-      # value comes from the per-tag classification above and electron-vite
-      # reads it from `process.env` during `pnpm build:release` only.
-      # Why ORCA_DIAGNOSTICS_TOKEN_URL here: official builds pin crash
-      # diagnostic uploads to Orca's endpoint at compile time, matching the
-      # telemetry gate's "official binary only" behavior.
+      # Consumers verify the same official build configuration before restoring the bundle.
+      - name: Download release JavaScript
+        if: needs.release-javascript.outputs.supported == 'true'
+        uses: actions/download-artifact@v8
+        with:
+          name: release-javascript
+          path: .build/release-javascript
+
       - name: Build app
-        run: pnpm build:release
+        shell: bash
+        run: |
+          if [ "$SHARED_JAVASCRIPT" = true ]; then
+            node config/scripts/release-javascript-artifact.mjs restore
+            pnpm run build:release:host
+          else
+            pnpm run build:release
+          fi
         env:
           # Why: Vite's web build crossed Node's default old-space ceiling on
           # the macOS release runner, leaving v1.4.2-rc.8 as an incomplete draft.
           NODE_OPTIONS: --max-old-space-size=4096
           ORCA_BUILD_IDENTITY: ${{ steps.tag-classify.outputs.identity }}
+          SHARED_JAVASCRIPT: ${{ needs.release-javascript.outputs.supported }}
+          ORCA_RELEASE_JAVASCRIPT_SOURCE_SHA: ${{ needs.release-javascript.outputs.source_sha }}
           ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
           ORCA_POSTHOG_WRITE_KEY: ${{ secrets.ORCA_POSTHOG_WRITE_KEY }}
           # Fail the release rather than ship a relay that cannot launch outside
@@ -2330,6 +2348,7 @@ jobs:
       - create-release
       - orcad-template
       - release-preflight
+      - release-javascript
       # release-mac-build.yml downloads the relay addons from this run.
       - relay-windows-process-tree
     # Why not the implicit success(): a tag without the orcad template skips that job on purpose.
@@ -2339,6 +2358,7 @@ jobs:
       needs.cut.outputs.should_release == 'true' &&
       needs.create-release.result == 'success' &&
       needs.release-preflight.result == 'success' &&
+      needs.release-javascript.result == 'success' &&
       needs.relay-windows-process-tree.result == 'success' &&
       (needs.orcad-template.result == 'success' ||
         (needs.orcad-template.result == 'skipped' && needs.cut.outputs.ships_orcad_template == 'false'))
@@ -2364,6 +2384,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_MAC_BUILD_REF: ${{ github.ref_name }}
           RELEASE_MAC_BUILD_RELEASE_RUN_ID: ${{ github.run_id }}
+          RELEASE_MAC_BUILD_JAVASCRIPT_SOURCE_SHA: ${{ needs.release-javascript.outputs.supported == 'true' && needs.release-javascript.outputs.source_sha || '' }}
           RELEASE_MAC_BUILD_TAG: ${{ needs.cut.outputs.tag }}
           RELEASE_MAC_BUILD_WORKFLOW: release-mac-build.yml
 

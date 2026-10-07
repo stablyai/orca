@@ -1,6 +1,6 @@
 // Who owns an outbox entry's text when it leaves this client's queue without a
-// send answer. A Stop hands unsent text back to the composer — a local move; no
-// text crosses a wire. A host that visibly holds the entry as a queued draft
+// send answer. A Stop hands unsent text back to an empty composer — a local move; no
+// text crosses a wire. Text it cannot hand back stays here as not sent, on its Retry. A host that visibly holds the entry as a queued draft
 // (same id) owns it: those entries retire with no local restore, so the same
 // words can never come back twice.
 
@@ -40,9 +40,18 @@ export function useStructuredAgentSessionOutboxOwnership(args: {
       return
     }
     // By id: a kept entry comes back marked, as a new object.
-    const kept = new Set(next.map((entry) => entry.clientMessageId))
-    restoreWithdrawn.byStop(current.filter((entry) => !kept.has(entry.clientMessageId)))
-    commitStructuredAgentSessionOutbox(sessionId, next)
+    const kept = new Map(next.map((entry) => [entry.clientMessageId, entry]))
+    const withdrawn = current.filter((entry) => !kept.has(entry.clientMessageId))
+    // The outbox is the only copy of what the host never had, so nothing leaves it unplaced.
+    const restored = restoreWithdrawn.byStop(withdrawn)
+    commitStructuredAgentSessionOutbox(
+      sessionId,
+      restored
+        ? next
+        : current.map(
+            (entry) => kept.get(entry.clientMessageId) ?? { ...entry, state: 'rejected' as const }
+          )
+    )
   }, [inFlightIdRef, restoreWithdrawn, sessionId, submissions])
 
   // Drop host-owned entries without a restore: the published card is the text now.

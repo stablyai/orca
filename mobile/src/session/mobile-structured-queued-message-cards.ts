@@ -8,11 +8,12 @@ import { agentSessionWriteNoticeEnglish } from '../../../src/shared/agent-sessio
 import { dispatchWasWithdrawn } from '../../../src/shared/structured-agent-session-dispatch-rejection'
 import { structuredAgentSessionAttemptFailureParts } from '../../../src/shared/structured-agent-session-send-disposition'
 import {
-  QUEUED_MESSAGE_PAUSED_KEPT,
   QUEUED_MESSAGE_PAUSED_SEND_FAILED,
   type AgentSessionQueuedMessage,
   type AgentSessionQueuePause
 } from '../../../src/shared/agent-session-wire'
+import { readAgentMessageSource } from '../../../src/shared/agent-session-message-source'
+import { agentMessageAttribution } from './mobile-agent-message-attribution'
 
 export type MobileQueuedMessageCard = {
   messageId: string
@@ -24,6 +25,8 @@ export type MobileQueuedMessageCard = {
   needsAttention: boolean
   /** Status under the text; null for a card plainly waiting its turn, the paused queue's too. */
   caption: string | null
+  /** "From <name>" on another agent's card; null on the person's. */
+  attribution: string | null
 }
 
 function queuedMessageBodyText(body: AgentSessionQueuedMessage['body']): string {
@@ -49,23 +52,17 @@ function returnedCaption(
   )
 }
 
-/** One card's own hold: a failed conversion, or a send the host kept; the queue's pause is the
- *  list's first row. */
+/** One card's own hold: a failed conversion; the queue's pause is the list's first row. */
 function pausedCaption(reason: string | undefined): string {
   if (reason === QUEUED_MESSAGE_PAUSED_SEND_FAILED) {
     return "Couldn't send — tap Send to retry"
-  }
-  if (reason === QUEUED_MESSAGE_PAUSED_KEPT) {
-    return 'Not sent yet — tap Send to send it'
   }
   // Absent or unknown (newer host) marker: a plain pause, promising no release rule.
   return 'Paused'
 }
 
 const QUEUE_PAUSE_LABELS: Readonly<Record<string, string>> = {
-  stopped: 'Queue paused because you interrupted',
-  restarted: 'Queue paused because Orca restarted',
-  cleared: 'Queue paused after you cleared the conversation'
+  stopped: 'Queue paused because you interrupted'
 }
 
 /** Whether Resume would send anything: a waiting card with no hold of its own, ahead of any
@@ -136,7 +133,8 @@ export function mobileQueuedMessageCards(
       needsAttention:
         draft.state === 'returned' ||
         (paused && draft.pausedReason === QUEUED_MESSAGE_PAUSED_SEND_FAILED),
-      caption
+      caption,
+      attribution: agentMessageAttribution('From', readAgentMessageSource(draft.body.from))
     })
     if (draft.state === 'returned') {
       behindReturned = true

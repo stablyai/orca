@@ -89,7 +89,6 @@ beforeEach(async () => {
         }
       },
       dispatch,
-      awaitStarted: vi.fn(async () => undefined),
       closeSession: vi.fn(async () => true),
       releaseAcquisition: vi.fn(async () => true),
       cancelTurn: vi.fn(async () => ({ cancelled: true })),

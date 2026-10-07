@@ -74,14 +74,14 @@ describe('purge stops routing session writes to the removed runtime partition', 
     }
     const patch = { activeWorktreeIdsOnShutdown: [WT_A] } as unknown as WorkspaceSessionPatch
 
-    await patchWorkspaceSessionByHost(api, patch, store.getState() as HostPersistenceState)
+    await patchWorkspaceSessionByHost(api, patch, store.getState()).written
     const runtimeWritesBefore = api.patch.mock.calls.filter(([, hostId]) => hostId === RUNTIME_A)
     expect(runtimeWritesBefore).toHaveLength(1)
 
     store.getState().purgeStaleRuntimeHostState(['env-a'])
     api.patch.mockClear()
 
-    await patchWorkspaceSessionByHost(api, patch, store.getState() as HostPersistenceState)
+    await patchWorkspaceSessionByHost(api, patch, store.getState()).written
     const runtimeWritesAfter = api.patch.mock.calls.filter(([, hostId]) => hostId === RUNTIME_A)
     expect(runtimeWritesAfter).toHaveLength(0)
     // The local write still happens.

@@ -122,9 +122,10 @@ export function backgroundTaskStateWord(state: RunState): string {
     case 'idle':
       return translate('components.native-chat.backgroundTasks.stateIdle', 'stopped')
     case 'unverifiable':
+      // Settled unknown or out of contact: claims neither an exit nor a coming update.
       return translate(
         'components.native-chat.backgroundTasks.stateUnverifiable',
-        'no recent update'
+        'status unavailable'
       )
   }
 }
@@ -146,15 +147,52 @@ export function backgroundTaskStateReason(state: RunState): string | null {
   }
 }
 
-/** A count and its state ("2 agents waiting"); after a count, "no recent update" needs a "with". */
+/** A count and its state ("2 agents waiting"), one whole sentence per state so a language can
+ *  agree the state with the count. */
 export function backgroundTaskCountedState(counted: string | number, state: RunState): string {
-  return state === 'unverifiable'
-    ? translate(
-        'components.native-chat.backgroundTasks.stateUnverifiableCount',
-        '{{value0}} with no recent update',
+  switch (state) {
+    case 'working':
+      return translate(
+        'components.native-chat.backgroundTasks.stateWorkingCount',
+        '{{value0}} working',
         { value0: counted }
       )
-    : `${counted} ${backgroundTaskStateWord(state)}`
+    case 'monitoring':
+      return translate(
+        'components.native-chat.backgroundTasks.stateMonitoringCount',
+        '{{value0}} monitoring',
+        { value0: counted }
+      )
+    case 'waiting':
+      return translate(
+        'components.native-chat.backgroundTasks.stateWaitingCount',
+        '{{value0}} waiting',
+        { value0: counted }
+      )
+    case 'blocked':
+      return translate(
+        'components.native-chat.backgroundTasks.stateBlockedCount',
+        '{{value0}} blocked',
+        { value0: counted }
+      )
+    case 'done':
+      return translate('components.native-chat.backgroundTasks.stateDoneCount', '{{value0}} done', {
+        value0: counted
+      })
+    case 'idle':
+      return translate(
+        'components.native-chat.backgroundTasks.stateIdleCount',
+        '{{value0}} stopped',
+        { value0: counted }
+      )
+    case 'unverifiable':
+      // After a count, "status unavailable" needs a "with".
+      return translate(
+        'components.native-chat.backgroundTasks.stateUnverifiableCount',
+        '{{value0}} with status unavailable',
+        { value0: counted }
+      )
+  }
 }
 
 function tokenScaleText(value: number): string {

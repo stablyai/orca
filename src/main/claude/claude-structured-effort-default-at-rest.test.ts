@@ -25,7 +25,8 @@ import {
   PROVIDER_SESSION_ID,
   fakeClaude,
   identityFor,
-  recordingJournalSink
+  recordingJournalSink,
+  claudeStartupSettled
 } from './claude-structured-session-test-support'
 
 const SESSION = 'session-1'
@@ -120,7 +121,7 @@ async function startChild(
     events: recordingJournalSink(),
     ...(options ? { options } : {})
   })
-  await adapter.awaitStarted(SESSION)
+  await claudeStartupSettled(adapter, SESSION)
   return adapter
 }
 

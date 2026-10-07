@@ -6,10 +6,11 @@
  * window-capture interception that keeps a screenshot dropped on the feedback
  * dialog from being swallowed by that lane.
  */
-import { act } from 'react'
+import { act } from '@testing-library/react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ORCA_INTERNAL_FILE_DRAG_TYPE } from '../../../../shared/native-file-drop'
+import { installOsFileDropCancellationGuard } from '../../lib/os-file-drop-cancellation-guard'
 import { useFeedbackImageDrop } from './use-feedback-image-drop'
 
 let container: HTMLDivElement
@@ -165,6 +166,46 @@ describe('useFeedbackImageDrop', () => {
     })
 
     expect(event.defaultPrevented).toBe(false)
+  })
+
+  it('keeps a web feedback screenshot accepted with the document guard and attaches it once', async () => {
+    document.removeEventListener('drop', preloadDropListener, true)
+    const disposeGuard = installOsFileDropCancellationGuard()
+    try {
+      const onAddFiles = vi.fn()
+      await renderHarness(true, onAddFiles)
+      const image = pngFile()
+      const hover = dragEvent('dragover', [])
+      act(() => {
+        dialogChild().dispatchEvent(hover)
+      })
+      expect(hover.defaultPrevented).toBe(true)
+      expect(hover).toHaveProperty('dataTransfer.dropEffect', 'copy')
+      const drop = dragEvent('drop', [image])
+      act(() => {
+        dialogChild().dispatchEvent(drop)
+      })
+      expect(drop.defaultPrevented).toBe(true)
+      expect(onAddFiles).toHaveBeenCalledExactlyOnceWith([image])
+      expect(preloadDropSpy).not.toHaveBeenCalled()
+
+      const outside = document.createElement('div')
+      document.body.appendChild(outside)
+      const refusedHover = dragEvent('dragover', [])
+      act(() => {
+        outside.dispatchEvent(refusedHover)
+      })
+      expect(refusedHover.defaultPrevented).toBe(true)
+      expect(refusedHover).toHaveProperty('dataTransfer.dropEffect', 'none')
+      const refusedDrop = dragEvent('drop', [image])
+      act(() => {
+        outside.dispatchEvent(refusedDrop)
+      })
+      expect(refusedDrop.defaultPrevented).toBe(true)
+      expect(onAddFiles).toHaveBeenCalledOnce()
+    } finally {
+      disposeGuard()
+    }
   })
 
   it('highlights from the advertised drag types, which is all a dragenter exposes', async () => {

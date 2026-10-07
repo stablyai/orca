@@ -133,7 +133,7 @@ beforeEach(async () => {
     providerHandle: { kind: 'claude', sessionId: PROVIDER_SESSION_ID, leafUuid: null }
   })
   expect(await host.attach(CALLER, params)).toMatchObject({ ok: true })
-  await adapter.awaitStarted(SESSION)
+  await adapter['sessions'].get(SESSION)?.startup.settled
   await Promise.all(lifecycle)
 })
 
@@ -586,8 +586,7 @@ it('sends a queue-if-active message issued while the Stop ends the child directl
   const sent = host.send(CALLER, {
     envelope: envelope('agentSession.send', { body, delivery: 'queue-if-active' }, fence),
     body,
-    delivery: 'queue-if-active',
-    userSend: true
+    delivery: 'queue-if-active'
   })
   frame(connection, INTERRUPTED_RESULT)
 

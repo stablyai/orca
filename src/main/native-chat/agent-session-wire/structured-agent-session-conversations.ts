@@ -22,6 +22,8 @@ export class StructuredAgentSessionConversations extends Map<
   constructor(
     private readonly delivery: {
       deliver: (sessionId: string, journal: AgentSessionJournal) => void
+      /** A person's Stop settle opened or closed: no row, so neither a publish nor activity. */
+      deliverSettleEdge?: (sessionId: string, journal: AgentSessionJournal) => void
       logger: StructuredAgentSessionLogger
       /** A conversation became held: state that waited on it (queued drafts) re-derives. */
       onOpened?: (sessionId: string) => void
@@ -49,6 +51,22 @@ export class StructuredAgentSessionConversations extends Map<
         } catch (error) {
           this.delivery.logger.warn('delivering a journal commit failed', {
             scope: 'journal-delivery',
+            sessionId,
+            error
+          })
+        }
+      })
+    })
+    journal.stopMarks.observeSettleEdges(() => {
+      queueMicrotask(() => {
+        if (this.get(sessionId)?.journal !== journal) {
+          return
+        }
+        try {
+          this.delivery.deliverSettleEdge?.(sessionId, journal)
+        } catch (error) {
+          this.delivery.logger.warn("delivering a Stop's settle edge failed", {
+            scope: 'stop-settle-delivery',
             sessionId,
             error
           })

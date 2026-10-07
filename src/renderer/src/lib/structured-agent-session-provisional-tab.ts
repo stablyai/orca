@@ -11,10 +11,7 @@ import type {
 } from '@/lib/structured-agent-launch-settlement'
 import { useAppStore } from '@/store'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import {
-  isAgentSessionHandleProvider,
-  type AgentSessionHandleProvider
-} from '../../../shared/agent-session-provider-handle'
+import type { TuiAgent } from '../../../shared/tui-agent'
 import {
   beginPairedStructuredLaunch,
   openDeclinedStructuredLaunchTerminal,
@@ -40,7 +37,7 @@ export function openStructuredAgentSessionProvisionalTab(args: {
   /** The host the chat is created on; every later operation on the tab reads it. */
   executionHostId: ExecutionHostId
   sessionId: string
-  agent: AgentSessionHandleProvider
+  agent: TuiAgent
   targetGroupId?: string
   activate?: boolean
 }): Tab {
@@ -114,19 +111,15 @@ export function beginStructuredAgentSessionProvisionalLaunch(
   args: ProvisionalLaunchArgs
 ): StructuredAgentSessionProvisionalLaunch | null {
   const worktreeId = args.target?.worktreeId ?? args.plan.worktreeId
-  const agent = args.plan.agent
-  const paired =
-    worktreeId && isAgentSessionHandleProvider(agent)
-      ? structuredLaunchPairedOwner(args.plan, worktreeId, args.target)
-      : null
-  if (!paired || !worktreeId || !isAgentSessionHandleProvider(agent)) {
+  const paired = worktreeId ? structuredLaunchPairedOwner(args.plan, worktreeId, args.target) : null
+  if (!paired || !worktreeId) {
     return beginLocalProvisionalLaunch(args)
   }
   if (args.beforeOpen?.() === false) {
     return null
   }
   return beginPairedStructuredLaunch({
-    plan: { ...args.plan, agent },
+    plan: args.plan,
     hooks: args.hooks,
     worktreeId,
     executionHostId: paired.executionHostId,
@@ -164,8 +157,8 @@ function beginLocalProvisionalLaunch(args: ProvisionalLaunchArgs): LocalProvisio
   if (!handle) {
     return null
   }
-  if (!worktreeId || !isAgentSessionHandleProvider(args.plan.agent)) {
-    throw new Error('A provisional structured launch needs its workspace and provider.')
+  if (!worktreeId) {
+    throw new Error('A provisional structured launch needs its workspace.')
   }
   try {
     if (args.beforeOpen?.(handle.sessionId) === false) {

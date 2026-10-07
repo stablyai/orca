@@ -3,6 +3,7 @@ import { dispatchTerminalSideEffectBatch } from '@/components/terminal-pane/term
 import { emitAutomationsChangedWindowEvent } from '@/lib/automations-changed-window-event'
 import { applyNativeChatLaunchDraftResolved } from '@/runtime/native-chat-launch-draft-runtime-resolution'
 import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
+import { setRuntimeEnvironmentCatalogRefresher } from '@/runtime/runtime-environment-pairing-refresh'
 import {
   applyRuntimeEnvironmentSshStateChanged,
   hydrateRuntimeEnvironmentSshState,
@@ -164,6 +165,10 @@ export function registerRuntimeClientIpcBridge(
       })
   }
 
+  setRuntimeEnvironmentCatalogRefresher(async () => {
+    useAppStore.getState().setRuntimeEnvironments(await window.api.runtimeEnvironments.list())
+  })
+  unsubs.push(() => setRuntimeEnvironmentCatalogRefresher(null))
   const runtimeClientEventsSync = createRuntimeClientEventsSync({
     getDesiredEnvironmentIds: () => getRuntimeClientEventEnvironmentIds(useAppStore.getState()),
     getSubscriptionKey: (environmentId) => buildRuntimeClientEventEnvironmentKey([environmentId]),

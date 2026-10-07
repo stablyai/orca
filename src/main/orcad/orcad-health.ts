@@ -11,13 +11,16 @@
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import process from 'node:process'
-import { checkDaemonHealth, type DaemonHealth } from '../daemon/daemon-health'
+import { checkDaemonHealthWithCoverage, type DaemonHealth } from '../daemon/daemon-health'
+import { ptySpawnHealthPlatformCoverage } from '../daemon/daemon-health-identity'
 import {
   daemonOwnsFreshPersistentPtys,
   getDaemonEndpointFacts,
   readDaemonPidRecord
 } from '../daemon/daemon-init'
 import type { OrcadProfileStateAuthoritySelection } from './orcad-profile-state-telemetry'
+import { ORCAD_STOP_REQUESTS_CAPABILITY } from '../../shared/orcad-stop-request'
+import type { OrcadIdleStopRecord } from '../../shared/orcad-idle-exit'
 
 /**
  * How much a green self-test actually proves.
@@ -67,6 +70,16 @@ export type OrcadHealth = {
   terminalDaemon: TerminalDaemonHealth
   /** The low-cardinality profile-state authority selected during startup, when available. */
   profileStateAuthority?: OrcadProfileStateAuthoritySelection
+  /**
+   * Present when this build consumes stop-request files and answers the managed-stop commands.
+   * Absent on older builds, which a client must keep stopping with SIGTERM.
+   */
+  stopRequests?: typeof ORCAD_STOP_REQUESTS_CAPABILITY
+  /**
+   * Managed launches only: how the previous run ended if it stopped for idleness, else null
+   * (a crash, a signal, or a first start). Absent on user-started and older builds.
+   */
+  previousIdleStop?: OrcadIdleStopRecord | null
 }
 
 /**
@@ -100,14 +113,20 @@ export async function runTerminalDaemonSelfTest(
   now: () => number = () => Date.now()
 ): Promise<PtySelfTest> {
   const startedAt = now()
-  // Why: `checkPtySpawnHealth` returns immediately on win32 without spawning anything, so a
-  // green verdict there covers the handshake only. Say so instead of overclaiming.
-  const coverage: PtySelfTestCoverage = process.platform === 'win32' ? 'handshake' : 'pty-spawn'
   const facts = getDaemonEndpointFacts()
   if (!facts) {
-    return { ok: false, coverage, verdict: 'no-daemon', durationMs: now() - startedAt }
+    return {
+      ok: false,
+      coverage: ptySpawnHealthPlatformCoverage(),
+      verdict: 'no-daemon',
+      durationMs: now() - startedAt
+    }
   }
-  const verdict = await checkDaemonHealth(facts.socketPath, facts.tokenPath)
+  // The daemon reports what its probe actually did; an older daemon falls back by platform.
+  const { verdict, coverage } = await checkDaemonHealthWithCoverage(
+    facts.socketPath,
+    facts.tokenPath
+  )
   return { ok: verdict === 'healthy', coverage, verdict, durationMs: now() - startedAt }
 }
 
@@ -151,7 +170,8 @@ export async function collectTerminalDaemonHealth(): Promise<TerminalDaemonHealt
 
 export async function collectOrcadHealth(
   buildVersion: string,
-  profileStateAuthority?: OrcadProfileStateAuthoritySelection
+  profileStateAuthority?: OrcadProfileStateAuthoritySelection,
+  previousIdleStop?: OrcadIdleStopRecord | null
 ): Promise<OrcadHealth> {
   return {
     buildHash: computeOrcadBuildHash(),
@@ -162,6 +182,8 @@ export async function collectOrcadHealth(
     arch: process.arch,
     pid: process.pid,
     terminalDaemon: await collectTerminalDaemonHealth(),
-    ...(profileStateAuthority ? { profileStateAuthority } : {})
+    ...(profileStateAuthority ? { profileStateAuthority } : {}),
+    stopRequests: ORCAD_STOP_REQUESTS_CAPABILITY,
+    ...(previousIdleStop !== undefined ? { previousIdleStop } : {})
   }
 }

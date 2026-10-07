@@ -169,6 +169,21 @@ describe('unhandled provider frame journal fallback', () => {
     expect(unhandledProviderFrameJournalItem('claude', 'message:future/event', {})).not.toBeNull()
   })
 
+  it("leads with a local slash command's output, which Claude sends as the frame's content", () => {
+    expect(
+      unhandledProviderFrameJournalItem('claude', 'message:system:local_command_output', {
+        type: 'system',
+        subtype: 'local_command_output',
+        content: 'Session usage: 12% of your limit'
+      })?.body.text
+    ).toBe('Session usage: 12% of your limit')
+    // Scoped to that frame: another frame's `content` is not its sentence.
+    expect(
+      unhandledProviderFrameJournalItem('claude', 'message:future/event', { content: 'raw' })?.body
+        .text
+    ).toBe('claude \u00b7 message:future/event')
+  })
+
   it('leads with the provider sentence instead of naming the opcode', () => {
     const row = unhandledProviderFrameJournalItem('codex', 'notification:warning', {
       message: 'Your plan limit resets in 2 hours.'

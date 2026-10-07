@@ -47,7 +47,14 @@ export type HostileHostExpectation =
 export type HostileHostCellCore = {
   id: string
   expect: HostileHostExpectation
+  /** Also deploy managed orcad on a fresh host, on this runtime target. */
+  managed?: ManagedOrcadExpectation
 }
+
+export type ManagedOrcadExpectation =
+  | { outcome: 'activated'; runtime: NodeRuntimeTarget }
+  /** The candidate is refused with this deferral code, and the relay that follows settles on `relayRung`. */
+  | { outcome: 'refused'; runtime: NodeRuntimeTarget; code: string; relayRung: 'A' | 'B' }
 
 export type DockerHostileHostCell = HostileHostCellCore & {
   host?: 'docker'
@@ -177,7 +184,9 @@ export const HOSTILE_HOST_CELLS: readonly HostileHostCell[] = [
       target: 'linux-x64-glibc',
       runtime: 'linux-x64-glibc217',
       refusals: [{ step: 'A', reason: 'libc_floor' }]
-    }
+    },
+    // Managed orcad runs on the same compat runtime and slot, so an empty CentOS 7 host is managed.
+    managed: { outcome: 'activated', runtime: 'linux-x64-glibc217' }
   },
   {
     // The client uploads the runtime over SSH, so a host that cannot reach nodejs.org still runs A.

@@ -473,3 +473,32 @@ async function attemptedQueueSend() {
   mocks.call.mockImplementation(() => new Promise(() => {}))
   return view
 }
+
+// The composer moves the reader only for a message the transcript draws as a bubble.
+it.each([
+  ['a text follow-up while the agent works', QUEUEING, true, [], 'queued'],
+  ['the same follow-up when the agent is idle', QUEUEING, false, [], true],
+  ['with the queue setting off', { capability: 'supported', enabled: false }, true, [], true],
+  ['an image, which never queues', QUEUEING, true, [{ path: '/a.png', previewUri: '/a.png' }], true]
+] as const)(
+  'answers whether %s waits as a queued card',
+  (_case, queueDelivery, isWorking, images, admission) => {
+    mocks.call.mockImplementation(() => new Promise(() => {}))
+    const { result } = renderHook(() =>
+      useStructuredAgentSessionOutbox({
+        journalItems: NO_JOURNAL_ITEMS,
+        sessionId: 'session-1',
+        target: LOCAL_TARGET,
+        fence: 1,
+        submissions: [],
+        queueDelivery,
+        isWorking
+      })
+    )
+    let sent: boolean | 'queued' = false
+    act(() => {
+      sent = result.current.send('follow up', images)
+    })
+    expect(sent).toBe(admission)
+  }
+)

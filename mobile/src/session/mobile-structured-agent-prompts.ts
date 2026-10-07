@@ -151,7 +151,6 @@ export function projectStructuredPermission(
     ...(prompt.body.description ? { description: prompt.body.description } : {}),
     ...(prompt.body.decisionReason ? { decisionReason: prompt.body.decisionReason } : {}),
     ...(prompt.body.blockedPath ? { blockedPath: prompt.body.blockedPath } : {}),
-    ...(prompt.body.matchedAskRule ? { matchedAskRule: prompt.body.matchedAskRule } : {}),
     ...(prompt.body.subject ? { subject: prompt.body.subject } : {}),
     ...(prompt.body.detail ? { detail: prompt.body.detail } : {}),
     options: prompt.body.options.map((option) => ({

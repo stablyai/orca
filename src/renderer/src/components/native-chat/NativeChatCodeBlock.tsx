@@ -36,7 +36,7 @@ export function NativeChatCodeBlock({
       <pre
         data-native-chat-code-content
         className={cn(
-          'scrollbar-sleek m-0 max-h-80 max-w-full overflow-x-auto font-mono text-[12px] text-chat-code-foreground',
+          'scrollbar-sleek m-0 max-w-full overflow-x-auto font-mono text-[12px] text-chat-code-foreground',
           language ? 'px-3.5 pt-0.5 pb-3' : 'p-3 pr-10'
         )}
       >

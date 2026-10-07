@@ -1,6 +1,7 @@
 // A Stop that ends the child after its interrupt failed: its row reports on the run it stopped, so
-// one whose child end took back the send it found, with no turn running, leaves none. Its message
-// is back in the composer, and a row would sit under the turn before as if that turn were stopped.
+// one whose child end took back the send it found, with no turn running, leaves none. A client
+// draws that send where it was sent with its own row, and a second row would sit under the turn
+// before on an older client, as if that turn were stopped.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'

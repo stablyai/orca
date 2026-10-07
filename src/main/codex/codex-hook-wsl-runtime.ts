@@ -116,8 +116,7 @@ async function installManagedHooksIntoWslRuntimeExclusively(
       tomlPath: plan.tomlPath,
       managedCommand: command,
       managedEntries: trustEntries,
-      host: { kind: 'wsl', distro: plan.wslDistro, linuxRuntimeHome: plan.linuxRuntimeHome },
-      telemetryLane: 'managed'
+      host: { kind: 'wsl', distro: plan.wslDistro, linuxRuntimeHome: plan.linuxRuntimeHome }
     }
     // Why: the fallback below writes this trust back if the session fails.
     const grant = await grantManagedCodexHookTrust(grantPlan, () =>

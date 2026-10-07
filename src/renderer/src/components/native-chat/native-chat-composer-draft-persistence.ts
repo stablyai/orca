@@ -3,6 +3,7 @@
 
 import { basename } from '@/lib/path'
 import { isNativeChatKeptPastePath, isNativeChatPastedImagePath } from './native-chat-image-paste'
+import { isAgentSessionAttachmentStorePath } from '../../../../shared/agent-session-attachments'
 import {
   dirtyScopes,
   hasLocalChange,
@@ -54,11 +55,15 @@ export function isKeptLocalPaste(image: NativeChatComposerDraftImage): boolean {
 }
 
 /** What storage keeps: not an unsaved launch-seed copy, and a paste outside Orca's paste folder
- *  (over SSH, or from before it) only by name. Null when nothing is left. */
+ *  (over SSH, or from before it) only by name. A paste a paired server stored for the chat stays
+ *  whole: the server keeps it, and its claim at send refuses one it no longer has. Null when
+ *  nothing is left. */
 function savedForm(record: DraftRecord): StoredNativeChatComposerDraft | null {
   const { unsavedText, ...saved } = record
   const images = saved.images.map((image) =>
-    isNativeChatPastedImagePath(image.path) && !isKeptLocalPaste(image)
+    isNativeChatPastedImagePath(image.path) &&
+    !isKeptLocalPaste(image) &&
+    !isAgentSessionAttachmentStorePath(image.path)
       ? unavailableNativeChatComposerDraftImage(image)
       : image
   )

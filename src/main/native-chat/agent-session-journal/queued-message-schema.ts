@@ -12,8 +12,7 @@ const NULLABLE_COLUMNS: readonly (readonly [name: string, type: string])[] = [
   ['consumed_as', 'TEXT'],
   ['carried_from', 'TEXT'],
   ['queued_epoch', 'TEXT'],
-  ['queued_sequence', 'INTEGER'],
-  ['source_json', 'TEXT']
+  ['queued_sequence', 'INTEGER']
 ]
 
 /**
@@ -44,7 +43,6 @@ CREATE TABLE IF NOT EXISTS queued_messages (
   carried_from    TEXT,
   queued_epoch    TEXT,
   queued_sequence INTEGER,
-  source_json     TEXT,
   PRIMARY KEY (session_id, message_id)
 );
 `)

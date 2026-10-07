@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { AgentSessionLease } from '../../shared/agent-session-record'
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../shared/agent-session-record.test-fixture'
 
 const hostRef: { current: unknown } = { current: null }
 
@@ -18,16 +22,15 @@ const {
 
 const SESSION_ID = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'
 
-function installRecord(lease: { runtimeKind: string; claimStatus: string }): void {
+function installRecord(lease: Pick<AgentSessionLease, 'runtimeKind' | 'claimStatus'>): void {
   hostRef.current = {
     deps: {
       store: {
         getRecord: (sessionId: string) =>
-          ({
-            sessionId,
-            location: { executionHostId: 'local', wslDistro: null },
-            lease: { ...lease, runtimeFence: 1, deathEvidence: null }
-          }) as unknown as AgentSessionRecord
+          agentSessionRecordFixture(
+            agentSessionLeaseFixture({ ...lease, sessionId, runtimeFence: 1, deathEvidence: null })
+          ),
+        listRecords: () => []
       }
     },
     hasSession: () => true

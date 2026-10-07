@@ -169,6 +169,9 @@ export function createPtyShellLaunchPlan(
       if (env.CLAUDE_CONFIG_DIR) {
         addWslEnvKeys(env, ['CLAUDE_CONFIG_DIR'])
       }
+      if (env.ORCA_CLAUDE_PROFILE_POINTER) {
+        addWslEnvKeys(env, ['ORCA_CLAUDE_PROFILE_POINTER', 'ORCA_CLAUDE_INJECTED_CONFIG_DIR'])
+      }
       if (env[ORCA_HERMES_STARTUP_QUERY_ENV] !== undefined) {
         addWslEnvKeys(env, [ORCA_HERMES_STARTUP_QUERY_ENV])
       }

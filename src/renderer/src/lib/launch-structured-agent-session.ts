@@ -1,4 +1,4 @@
-import type { AgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
+import type { TuiAgent } from '../../../shared/tui-agent'
 import type {
   AgentSessionAttachResult,
   AgentSessionMutationResult
@@ -52,7 +52,7 @@ export type StructuredAgentSessionLaunchIntent = {
   executionHostId: ExecutionHostId
   /** The runtime serving `executionHostId`. */
   target: RuntimeClientTarget
-  agent: AgentSessionHandleProvider
+  agent: TuiAgent
   params: StructuredAgentSessionCreateParams
   /** The saved selection create seeds, read when the intent is built. */
   seedOptions?: Readonly<Record<string, string>>
@@ -65,7 +65,7 @@ type LaunchSeed = Readonly<Record<string, string>> | undefined
 function launchSeedOptions(
   state: ReturnType<typeof useAppStore.getState>,
   owner: Pick<StructuredAgentSessionLaunchIntent, 'target'>,
-  agent: AgentSessionHandleProvider,
+  agent: TuiAgent,
   hostSeedOptions: LaunchSeed
 ): { seedOptions?: Readonly<Record<string, string>> } {
   const seedOptions =
@@ -111,7 +111,7 @@ function definitiveStructuredAgentSessionCreateErrorCode(error: unknown): string
  *  one, or the launch is refused rather than sent to whichever host a fallback picks. */
 export function createStructuredAgentSessionLaunchIntent(
   worktreeId: string,
-  agent: AgentSessionHandleProvider,
+  agent: TuiAgent,
   executionHostId?: ExecutionHostId,
   resumeFrom?: StructuredAgentSessionResumeSource,
   hostSeedOptions?: LaunchSeed
@@ -134,7 +134,7 @@ export function createStructuredAgentSessionLaunchIntent(
 function buildStructuredAgentSessionLaunchIntent(
   worktreeId: string,
   owner: Pick<StructuredAgentSessionLaunchIntent, 'executionHostId' | 'target'>,
-  agent: AgentSessionHandleProvider,
+  agent: TuiAgent,
   sessionId: string,
   resumeFrom: StructuredAgentSessionResumeSource | undefined,
   hostSeedOptions: LaunchSeed
@@ -183,7 +183,7 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
   worktreeId: string
   executionHostId: ExecutionHostId
   sessionId: string
-  agent: AgentSessionHandleProvider
+  agent: TuiAgent
   clientOperationId: string
   payloadFingerprint: string
   expectedRuntimeFence: number | null
@@ -232,9 +232,8 @@ export function abandonStructuredAgentSessionLaunchIntent(
 }
 
 /**
- * Only the host that will execute the session can answer whether it supports creating one there —
- * on Windows that means reading the provider child's process start time, which a client cannot
- * observe. Both providers ask: the host classifies per agent, and Codex inherits the
+ * Only the host that will execute the session can answer whether it supports creating one there.
+ * Both providers ask: the host classifies per agent, and Codex inherits the
  * unresolvable-selector retry above along with the probe. The unknown branch stays on the chat for
  * reconciliation: a retry may follow a create whose reply was lost. Answers the seed create will use.
  */

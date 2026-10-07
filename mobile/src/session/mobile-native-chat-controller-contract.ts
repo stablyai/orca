@@ -48,6 +48,8 @@ export type MobileNativeChatController = {
   /** Host/workspace/tab/session scope for stateful streaming suppression. */
   nativeChatStreamScopeKey: string
   nativeChatPermission: ReturnType<typeof detectAgentPermission>
+  /** Terminal prompt occurrence; a replacement resets only the card's local submission state. */
+  nativeChatPromptKey: string | null
   nativeChatQuestion: ReturnType<typeof parseAgentQuestion>
   /** The pending ask, already null while dismissed (dismissal lives here so it
    *  survives the chat-view subtree unmounting on a view toggle). */
@@ -61,6 +63,11 @@ export type MobileNativeChatController = {
     selections: AskAnswerSelection[]
   ) => Promise<boolean>
   handleNativeChatCancelAsk: () => Promise<boolean>
+  /** Terminal lane: fold the occurrence to a strip and free Send, writing nothing. */
+  collapseNativeChatAsk: () => void
+  collapseNativeChatPrompt?: () => void
+  /** The collapsed terminal occurrence, shown as a strip above the composer. */
+  nativeChatCollapsedPrompt: { title: string; expand: () => void } | null
   handleNativeChatCancelPrompt?: (prompt?: {
     itemId: string
     expectedRevision: number

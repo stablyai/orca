@@ -8,6 +8,7 @@ import { createDefaultWorkspaceCleanupBrowseState } from '../shared/workspace-cl
 import {
   closeTestStores,
   createSqliteTestStore,
+  createStore as createFreshStore,
   readPersistedStateJson,
   testState,
   dataFile,
@@ -38,8 +39,12 @@ vi.mock('electron', () => ({
   }
 }))
 
+let hasCreatedStoreInCase = false
+
 async function createStore() {
-  vi.resetModules()
+  if (hasCreatedStoreInCase) {
+    vi.resetModules()
+  }
   const { setSecretStore } = await import('../shared/secret-store')
   setSecretStore({
     isEncryptionAvailable: () => true,
@@ -53,6 +58,10 @@ async function createStore() {
     },
     describeProtectionGap: () => null
   })
+  if (!hasCreatedStoreInCase) {
+    hasCreatedStoreInCase = true
+    return createFreshStore()
+  }
   const { Store, initDataPath } = await import('./persistence')
   // Why here: userData resolves through AppEnvironment, and this must point at this
   // file's temp dir rather than the global fake's shared one, after resetModules.
@@ -71,6 +80,7 @@ vi.mock('./telemetry/cohort-classifier', () => ({
 
 describe('Store', () => {
   beforeEach(() => {
+    hasCreatedStoreInCase = false
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
     trackMock.mockReset()
     getCohortAtEmitMock.mockReset()

@@ -132,9 +132,13 @@ function CommandInput({
 
 function CommandList({
   className,
+  animateHeight = false,
   ref,
   ...props
-}: React.ComponentProps<typeof CommandPrimitive.List>) {
+}: React.ComponentProps<typeof CommandPrimitive.List> & {
+  /** Glide to the filtered height (cmdk publishes it) instead of jumping. */
+  animateHeight?: boolean
+}) {
   const internalRef = React.useRef<HTMLDivElement>(null)
 
   // Why: Radix Dialog applies react-remove-scroll which calls preventDefault()
@@ -177,6 +181,8 @@ function CommandList({
       data-slot="command-list"
       className={cn(
         'max-h-[min(400px,60vh)] overflow-y-auto overflow-x-hidden scrollbar-sleek scroll-pb-4 scroll-pt-4',
+        animateHeight &&
+          'h-[min(var(--cmdk-list-height),400px,60vh)] transition-[height] duration-150 ease-out motion-reduce:transition-none',
         className
       )}
       {...props}

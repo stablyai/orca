@@ -124,7 +124,7 @@ export function MobileFilePreviewScreen({ route }: Props) {
         return
       }
       const loadedContent =
-        result.status === 'ready' && result.kind !== 'image'
+        result.status === 'ready' && result.kind !== 'image' && result.kind !== 'media'
           ? result.content
           : result.status === 'empty'
             ? ''

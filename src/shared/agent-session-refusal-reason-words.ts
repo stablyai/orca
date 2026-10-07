@@ -66,6 +66,7 @@ const REASON_WORDS = {
     // Settled under that id, so the control's retry goes out under a new one.
     operationRefusedEarlier: codeWords('retry'),
     journalWriteFailed: causeWords('recordFailed', 'retry'),
+    attachmentExpired: causeWords('attachmentExpired', 'actFirst', 'reattachFile'),
     conversationCleared: causeWords(
       'conversationCleared',
       'goElsewhere',
@@ -96,6 +97,9 @@ const REASON_WORDS = {
     managedAccountEnvOverride: { fact: 'managedAccountEnvOverride', action: 'actFirst' },
     accountSwitchInProgress: { fact: 'accountSwitchInProgress', action: 'wait' },
     managedAccountUnsupported: { fact: 'managedAccountUnsupported', action: 'actFirst' },
+    launchFolderMissing: { fact: 'launchFolderMissing', action: 'actFirst' },
+    historyInOtherAccount: { fact: 'historyInOtherAccount', action: 'actFirst' },
+    agentCommandNotRunnable: { fact: 'agentCommandNotRunnable', action: 'actFirst' },
     attachFailed: codeWords('retry')
   },
   agent_session_ownership_unknown: {
@@ -164,14 +168,15 @@ const REASON_WORDS = {
       history: { cause: 'chatSavedByNewerOrca', step: 'updateOrcaToOpenChat' }
     }
   },
-  // Thrown, so a client meets these only as an RPC error. The code's own words ask for an update,
-  // which only a method the host doesn't know proves; no reason here means an older Orca. An
-  // unsupported location or agent, or no chat host, is not fixed by updating, and a client missing
-  // the capability words this with its own older copy.
+  // Mostly thrown as an RPC error; `hostUnsupported` is also returned and recorded. The code's own
+  // words ask for an update, which only a method the host doesn't know proves; no reason here means
+  // an older Orca. An unsupported location or agent, or no chat host, is not fixed by updating, and
+  // a client missing the capability words this with its own older copy. Only `hostUnsupported`
+  // names its cause: this agent or location can't run as a chat.
   structured_agent_session_unsupported: {
     clientCapabilityMissing: causeWords('notAvailable', 'hostFinding'),
     hostDisabled: causeWords('notAvailable', 'hostFinding'),
-    hostUnsupported: causeWords('notAvailable', 'hostFinding')
+    hostUnsupported: causeWords('cannotRunHere', 'hostFinding')
   },
   agent_session_owner_restart_failed: {}
 } satisfies {

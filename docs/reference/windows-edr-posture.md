@@ -396,6 +396,16 @@ built without the addon or a job that refuses breakaway, and a refusal there is
 reported as `ORCA_RELAY_LAUNCH_REFUSED`. The Windows SSH-host lanes run with no
 WMI grant and assert the breakaway route.
 
+`orcad.js` exposes the same launcher (`src/shared/windows-breakaway-launcher.ts`)
+with **no** WMI fallback: a host that cannot break away refuses the orcad launch.
+Windows orcad operations start **no PowerShell**: sshd's DefaultShell runs the
+pinned `node.exe` directly with plain path arguments, against one content-addressed
+host script staged beside the slots (`src/main/ssh/orcad-windows-host-script.ts`).
+Only a `node.exe` path that itself needs quoting (a profile name with a space)
+falls back to one unencoded `powershell.exe -Command`. The launch waits for
+readiness host-side, one exec per 20 s at most, rather than re-running an exec
+every 500 ms.
+
 ## Signing is not the gate
 
 The most useful calibration in the whole incident set came from the reporter's

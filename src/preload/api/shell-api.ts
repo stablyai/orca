@@ -22,6 +22,7 @@ export type ShellApi = {
   pathsExist?: (paths: string[]) => Promise<boolean[]>
   pathExists: (path: string) => Promise<boolean>
   pickAttachment: () => Promise<string | null>
+  pickAttachments: () => Promise<string[]>
   pickImage: () => Promise<string | null>
   pickRepoIconImage: () => Promise<{
     dataUrl: string

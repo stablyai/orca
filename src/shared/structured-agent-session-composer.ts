@@ -110,6 +110,16 @@ export function isStructuredAgentSessionGoalCommand(text: string): boolean {
   return commandParts(text)?.name === 'goal'
 }
 
+/** `/clear`, `/compact` and `/goal …` change the conversation; option and picker commands do not. */
+export function structuredAgentSessionCommandChangesConversation(text: string): boolean {
+  const command = commandParts(text)
+  return (
+    command?.name === 'clear' ||
+    command?.name === 'compact' ||
+    (command?.name === 'goal' && command.argument !== '')
+  )
+}
+
 /** `/goal` with nothing after it: an entrance to goal mode, not an objective. */
 export function isBareStructuredAgentSessionGoalCommand(text: string): boolean {
   const command = commandParts(text)

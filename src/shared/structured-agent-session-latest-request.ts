@@ -18,6 +18,7 @@ import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
 import { isRootAgentJournalItem } from './agent-session-journal-producer'
 import { readAgentJournalTurn, readAgentJournalTurnOutcome } from './agent-session-turn-record'
 import { classifyDispatchRejection } from './structured-agent-session-dispatch-rejection'
+import { withoutNativeChatVisualDirectiveLines } from './native-chat-visual-directive'
 import { isUnansweredStructuredAgentSessionDispatch } from './structured-agent-session-unanswered-dispatch'
 import {
   isStructuredAgentSessionCommandEntry,
@@ -187,7 +188,8 @@ export function latestStructuredAgentSessionAssistantMessage(
       return ''
     }
     if (body?.kind === 'message' && body.role === 'assistant') {
-      const prose = messageProse(body.blocks)
+      // A visual line shows only in the transcript; every plain-text reader of this line drops it.
+      const prose = withoutNativeChatVisualDirectiveLines(messageProse(body.blocks))
       if (prose.trim()) {
         return prose
       }

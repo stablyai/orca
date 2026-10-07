@@ -10,6 +10,7 @@ import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import { renewRuntimeMobileAgentStatusFromPtyTitle } from './runtime-mobile-agent-status-projection'
 import { getDisplayPromptLifecycle } from './runtime-worktree-status-projection'
 import type { RuntimeTerminalWriteOptions } from './runtime-terminal-writer'
+import type { WriteSettlement } from '../../shared/pty-write-settlement'
 import { getRegisteredSshState } from '../ssh/ssh-target-registry'
 import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
@@ -164,7 +165,7 @@ export class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission extends O
     action: { text?: string; enter?: boolean; interrupt?: boolean },
     payload: string,
     options: RuntimeTerminalWriteOptions
-  ): Promise<void> {
+  ): Promise<WriteSettlement | undefined> {
     return this.terminalWriter.writeAction(ptyId, action, payload, options)
   }
 
@@ -172,7 +173,7 @@ export class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission extends O
     ptyId: string,
     text: string,
     options: RuntimeTerminalWriteOptions
-  ): Promise<void> {
+  ): Promise<WriteSettlement | undefined> {
     return this.terminalWriter.writeChunks(ptyId, text, options)
   }
 

@@ -46,6 +46,21 @@ export function stubTabStripDragScroll(): Record<string, unknown> {
   }
 }
 
+// Tooltip primitives render to inert descriptors so the probe never invokes a
+// hook-using provider/trigger under the headless React stub.
+export function stubTooltip(): Record<string, unknown> {
+  const passthrough = (type: string) =>
+    function TooltipPrimitiveStub(props: { children?: unknown }) {
+      return { type, props }
+    }
+  return {
+    TooltipProvider: passthrough('TooltipProvider'),
+    Tooltip: passthrough('Tooltip'),
+    TooltipTrigger: passthrough('TooltipTrigger'),
+    TooltipContent: passthrough('TooltipContent')
+  }
+}
+
 export function stubStatusDisplay(): Record<string, unknown> {
   return { buildStatusMap: () => new Map() }
 }

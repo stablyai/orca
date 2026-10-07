@@ -6,14 +6,11 @@ import { CapabilityProbeCache } from '../../shared/capability-probe-cache'
 export const CODEX_APP_SERVER_CAPABILITY_RETRY_INTERVAL_MS = 30 * 60_000
 export const CODEX_APP_SERVER_CAPABILITY_MAX_ENTRIES = 256
 
-/** Execution host that runs the codex binary. WSL distros are isolated from
- *  the native host and from each other — each can carry a different codex. */
-export type CodexAppServerHostKey = 'native' | `wsl:${string}`
+/** The WSL distro that runs the codex binary; each can carry a different codex. */
+export type CodexAppServerHostKey = `wsl:${string}`
 
-export function getCodexAppServerHostKey(
-  host: { kind: 'native' } | { kind: 'wsl'; distro: string }
-): CodexAppServerHostKey {
-  return host.kind === 'wsl' ? `wsl:${host.distro}` : 'native'
+export function getCodexAppServerHostKey(host: { distro: string }): CodexAppServerHostKey {
+  return `wsl:${host.distro}`
 }
 
 /**

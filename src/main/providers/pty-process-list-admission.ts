@@ -126,6 +126,7 @@ export class PtyProcessListAdmission {
       ...(value.worktreeId !== undefined ? { worktreeId: value.worktreeId } : {}),
       ...(value.terminalHandle !== undefined ? { terminalHandle: value.terminalHandle } : {}),
       ...(value.wslDistro !== undefined ? { wslDistro: value.wslDistro } : {}),
+      ...(value.exiting === true ? { exiting: true as const } : {}),
       ...(value.foregroundProcessEvidence !== undefined
         ? {
             foregroundProcessEvidence: cloneForegroundProcessEvidence(

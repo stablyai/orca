@@ -291,7 +291,7 @@ describe('background-task row reasons', () => {
       { id: 'a4', kind: 'agent', description: 'busy child', state: 'working' }
     ])
     expect(rows).toHaveLength(4)
-    expect(rows[0].textContent).toContain('ssh child · no recent update')
+    expect(rows[0].textContent).toContain('ssh child · status unavailable')
     expect(rows[1].textContent).toContain('flaky child · failed')
     expect(rows[2].textContent).toContain('approval child · needs approval')
     // A running row has nothing to explain.

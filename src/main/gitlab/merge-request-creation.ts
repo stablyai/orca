@@ -18,7 +18,7 @@ import { getProjectSlug } from './client'
 import {
   acquire,
   glabExecFileAsync,
-  glabHostnameArgs,
+  glabHostEnvOptions,
   glabRepoExecOptions,
   release
 } from './gl-utils'
@@ -188,8 +188,7 @@ export async function createGitLabMergeRequest(
       title,
       '--description',
       body,
-      '--yes',
-      ...glabHostnameArgs(projectRef, connectionId)
+      '--yes'
     ]
     if (head) {
       createArgs.push('--source-branch', head)
@@ -201,6 +200,7 @@ export async function createGitLabMergeRequest(
       const { stdout } = await glabExecFileAsync(createArgs, {
         ...glabRepoExecOptions(repoPath, connectionId),
         ...(connectionId ? {} : getHostedReviewLocalGitOptions(options)),
+        ...glabHostEnvOptions(projectRef, connectionId),
         timeout: 60_000,
         idempotent: false
       })
