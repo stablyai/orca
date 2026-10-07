@@ -20,8 +20,10 @@ import type {
   MobileSessionTab,
   MobileSessionTabType,
   TerminalGestureInputBucket,
+  TerminalGestureInputInFlight,
   TerminalGestureInputQueue
 } from './mobile-session-route-types'
+import { createTerminalSendSequenceState } from '../terminal/terminal-send-sequence'
 import type { MobileSessionScreenStateModel } from './use-mobile-session-screen-state'
 
 export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateModel) {
@@ -43,7 +45,10 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
   const ptyModesRef = useRef<Map<string, TerminalModes>>(new Map())
   const terminalGestureInputBucketsRef = useRef<Map<string, TerminalGestureInputBucket>>(new Map())
   const terminalGestureInputQueuesRef = useRef<Map<string, TerminalGestureInputQueue>>(new Map())
-  const terminalGestureInputInFlightRef = useRef<Set<string>>(new Set())
+  const terminalGestureInputInFlightRef = useRef<Map<string, TerminalGestureInputInFlight>>(
+    new Map()
+  )
+  const terminalSendSequenceRef = useRef(createTerminalSendSequenceState())
   const terminalCwdRef = useRef<Map<string, string>>(new Map())
   const initialModesSeenRef = useRef<Set<string>>(new Set())
   const deviceTokenRef = useRef<string | null>(clientId)
@@ -125,6 +130,7 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     liveInputTerminalHandles,
     liveInputTerminalHandlesRef,
     sendLiveTerminalInputRef,
+    terminalSendSequenceRef,
     setLiveInputCapture
   })
   const inputGate = resolveMobileTerminalInputGate({
@@ -157,6 +163,7 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     terminalGestureInputBucketsRef,
     terminalGestureInputQueuesRef,
     terminalGestureInputInFlightRef,
+    terminalSendSequenceRef,
     terminalCwdRef,
     initialModesSeenRef,
     deviceTokenRef,

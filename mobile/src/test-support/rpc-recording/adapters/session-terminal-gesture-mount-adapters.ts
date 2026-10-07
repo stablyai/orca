@@ -6,6 +6,7 @@ import type { TerminalModes } from '../../../terminal/terminal-webview-contract'
 import type {
   Terminal,
   TerminalGestureInputBucket,
+  TerminalGestureInputInFlight,
   TerminalGestureInputQueue
 } from '../../../session/mobile-session-route-types'
 
@@ -53,7 +54,15 @@ export function sessionTerminalGestureMountAdapters(
 
       const buckets = { current: new Map<string, TerminalGestureInputBucket>() }
       const queues = { current: new Map<string, TerminalGestureInputQueue>() }
-      const inFlight = { current: new Set<string>() }
+      const inFlight = { current: new Map<string, TerminalGestureInputInFlight>() }
+      const queueModule = modules.load<
+        typeof import('../../../session/terminal-gesture-input-queue')
+      >('mobile/src/session/terminal-gesture-input-queue.ts')
+      const sendSequence = modules.load<typeof import('../../../terminal/terminal-send-sequence')>(
+        'mobile/src/terminal/terminal-send-sequence.ts'
+      )
+      // The recorded host predates in-order application, so the lane stays one send at a time.
+      const terminalSendSequenceRef = { current: sendSequence.createTerminalSendSequenceState() }
       let input: ReturnType<typeof useTerminalInput> | undefined
       const screen = hookScreenMount(() => {
         input = useTerminalInput(
@@ -70,6 +79,7 @@ export function sessionTerminalGestureMountAdapters(
             terminalGestureInputBucketsRef: buckets,
             terminalGestureInputQueuesRef: queues,
             terminalGestureInputInFlightRef: inFlight,
+            terminalSendSequenceRef,
             liveInputRef: { current: null },
             liveInputFocusTimerRef: { current: null },
             terminalUnsubsRef: { current: new Map() },
@@ -97,13 +107,16 @@ export function sessionTerminalGestureMountAdapters(
           }
           throw new Error(`Unknown terminal gesture action: ${name}`)
         },
-        state: () => ({
-          queuedSequences: queues.current.get(HANDLE)?.sequenceCount ?? null,
-          queuedBytes: queues.current.get(HANDLE)?.bytes ?? null,
-          inFlight: inFlight.current.has(HANDLE),
-          bucketTokens: buckets.current.get(HANDLE)?.tokens ?? null,
-          crash: screen.crash()
-        }),
+        state: () => {
+          const queued = queues.current.get(HANDLE)
+          return {
+            queuedSequences: queued ? queueModule.queuedTerminalGestureSequenceCount(queued) : null,
+            queuedBytes: queued ? queueModule.queuedTerminalGestureBytes(queued) : null,
+            inFlight: inFlight.current.has(HANDLE),
+            bucketTokens: buckets.current.get(HANDLE)?.tokens ?? null,
+            crash: screen.crash()
+          }
+        },
         dispose: () => {
           takeover.resetWorkerTerminalTakeoverReportsForTest()
           screen.unmount()

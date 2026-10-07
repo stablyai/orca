@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, type RefObject } from 'react'
 import type { TextInput } from 'react-native'
 import type { TerminalLiveInputSender } from './terminal-live-input-sender'
+import { terminalSendWindow, type TerminalSendSequenceState } from './terminal-send-sequence'
 import { writeTerminalLiveInputText } from './terminal-live-input-text-write'
 import {
   buildTerminalLiveMirrorPayload,
@@ -20,6 +21,8 @@ type TerminalLivePendingInputFlushOptions<TTabType extends string> = {
   readonly liveInputRef: RefObject<TextInput | null>
   readonly liveInputTerminalHandlesRef: RefObject<Set<string>>
   readonly sendLiveTerminalInputRef: RefObject<TerminalLiveInputSender>
+  /** Absent means one send at a time. */
+  readonly terminalSendSequenceRef?: RefObject<TerminalSendSequenceState>
   readonly setLiveInputCapture: (text: string) => void
 }
 
@@ -51,6 +54,7 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
   liveInputRef,
   liveInputTerminalHandlesRef,
   sendLiveTerminalInputRef,
+  terminalSendSequenceRef,
   setLiveInputCapture
 }: TerminalLivePendingInputFlushOptions<TTabType>): TerminalLivePendingInputFlush {
   const heldCommitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -138,7 +142,8 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
         pendingLiveInputFlushRef.current,
         handle,
         payload,
-        sendQueuedMirrorPayload
+        sendQueuedMirrorPayload,
+        terminalSendSequenceRef ? terminalSendWindow(terminalSendSequenceRef.current) : 1
       )
     },
     [
@@ -148,6 +153,7 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
       liveInputTerminalHandlesRef,
       resetMirrorState,
       sendQueuedMirrorPayload,
+      terminalSendSequenceRef,
       waitForPendingLiveInputFlush
     ]
   )

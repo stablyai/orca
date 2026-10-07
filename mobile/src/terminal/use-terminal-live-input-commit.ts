@@ -5,6 +5,7 @@ import { getTerminalLiveSpecialKeyDecision } from './terminal-live-text-commit'
 import { sendTerminalLiveControlAfterPendingFlush } from './terminal-live-control-send-order'
 import type { TerminalLiveAccessoryInput } from './terminal-live-accessory-input'
 import type { TerminalLiveInputSender } from './terminal-live-input-sender'
+import type { TerminalSendSequenceState } from './terminal-send-sequence'
 import { normalizeTerminalTextInput } from './terminal-text-input-normalization'
 import { useTerminalLivePendingInputFlush } from './use-terminal-live-pending-input-flush'
 import {
@@ -38,6 +39,7 @@ type TerminalLiveInputCommitOptions<TTabType extends string> = {
   readonly liveInputTerminalHandles: ReadonlySet<string>
   readonly liveInputTerminalHandlesRef: RefObject<Set<string>>
   readonly sendLiveTerminalInputRef: RefObject<TerminalLiveInputSender>
+  readonly terminalSendSequenceRef?: RefObject<TerminalSendSequenceState>
   readonly setLiveInputCapture: (text: string) => void
 }
 
@@ -63,6 +65,7 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
   liveInputTerminalHandles,
   liveInputTerminalHandlesRef,
   sendLiveTerminalInputRef,
+  terminalSendSequenceRef,
   setLiveInputCapture
 }: TerminalLiveInputCommitOptions<TTabType>): TerminalLiveInputCommitHandlers {
   const liveInputInteractionGenerationRef = useRef(0)
@@ -84,6 +87,7 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
     liveInputRef,
     liveInputTerminalHandlesRef,
     sendLiveTerminalInputRef,
+    terminalSendSequenceRef,
     setLiveInputCapture
   })
 

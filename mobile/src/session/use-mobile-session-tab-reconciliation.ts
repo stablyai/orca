@@ -2,7 +2,11 @@ import { useEffect, useRef, useCallback, useMemo, useState } from 'react'
 import { startRuntimeCapabilityProbe } from '../transport/runtime-capability-probe'
 import { supportsMobileQuickCommands } from '../terminal/quick-commands'
 import { MOBILE_AI_VAULT_CAPABILITY } from '../agent-history/agent-history-capability'
-import { TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
+import {
+  TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY,
+  TERMINAL_SEND_SEQUENCE_RUNTIME_CAPABILITY
+} from '../../../src/shared/protocol-version'
+import { setHostOrdersTerminalSends } from '../terminal/terminal-send-sequence'
 import { structuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
 import { runAcceptedMobileSessionTabsEffects } from './mobile-session-tabs-accepted-effects'
 import type { SessionTabsStreamSource } from './mobile-session-tabs-stream-health'
@@ -27,6 +31,7 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
     setShowQuickCommands,
     terminalGestureInputQueuesRef,
     terminalGestureInputInFlightRef,
+    terminalSendSequenceRef,
     terminalDiagnosticsRef,
     pendingBrowserFocusPageIdRef,
     switchSessionTabRef,
@@ -154,6 +159,7 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
       setQuickCommandsSupported(null)
       setShowQuickCommands(false)
       hostQueryReplyInputSupportedRef.current = false
+      setHostOrdersTerminalSends(terminalSendSequenceRef.current, false)
       return
     }
     // Why: a client swap can keep the route connected while moving to an older
@@ -164,6 +170,7 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
     setQuickCommandsSupported(null)
     setShowQuickCommands(false)
     hostQueryReplyInputSupportedRef.current = false
+    setHostOrdersTerminalSends(terminalSendSequenceRef.current, false)
     // Why: the probe retries — a relay→direct cutover or request timeout rejects
     // status.get without changing connState, which used to latch these hidden.
     return startRuntimeCapabilityProbe(client, (capabilities) => {
@@ -175,6 +182,11 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
       // so a forwarded xterm reply would become floor-stealing shell input.
       hostQueryReplyInputSupportedRef.current = capabilities.includes(
         TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY
+      )
+      // Why: a host without this may apply overlapping sends out of order, so input stays one send at a time.
+      setHostOrdersTerminalSends(
+        terminalSendSequenceRef.current,
+        capabilities.includes(TERMINAL_SEND_SEQUENCE_RUNTIME_CAPABILITY)
       )
     })
   }, [client, connState])

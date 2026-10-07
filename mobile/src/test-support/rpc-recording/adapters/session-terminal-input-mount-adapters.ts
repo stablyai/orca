@@ -197,6 +197,10 @@ function mountTerminalInputSend(
         commandInputRef: { current: null },
         liveInputFocusTimerRef: { current: null },
         sendLiveTerminalInputRef: { current: null },
+        // The recorded host predates in-order application, so live input carries no sequence.
+        terminalSendSequenceRef: {
+          current: { hostOrdersSends: false, roundTripMs: null, streams: new Map() }
+        },
         sessionTabActionSheetKeyboardHideSubRef: { current: null },
         sessionTabActionSheetRequestSeqRef: { current: 0 },
         activeHandleRef,

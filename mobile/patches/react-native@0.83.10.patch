@@ -1,5 +1,74 @@
+diff --git a/React/CoreModules/RCTWebSocketModule.mm b/React/CoreModules/RCTWebSocketModule.mm
+index 5d95b90bca818a75a925a6a8b4b786b11d1a9355..c070881d52a10a4f20c8b445943329ac28ce9a49 100644
+--- a/React/CoreModules/RCTWebSocketModule.mm
++++ b/React/CoreModules/RCTWebSocketModule.mm
+@@ -7,7 +7,10 @@
+ 
+ #import <React/RCTWebSocketModule.h>
+ 
++#import <netinet/in.h>
++#import <netinet/tcp.h>
+ #import <objc/runtime.h>
++#import <sys/socket.h>
+ 
+ #import <FBReactNativeSpec/FBReactNativeSpec.h>
+ #import <React/RCTConvert.h>
+@@ -16,6 +19,33 @@
+ 
+ #import "CoreModulesPlugins.h"
+ 
++// Orca: SocketRocket leaves Nagle's algorithm on, which holds every small frame until the one
++// before it is acknowledged; overlapping terminal input then leaves once per round trip.
++static void RCTWebSocketDisableNagle(SRWebSocket *webSocket)
++{
++  @try {
++    // SocketRocket keeps its streams private; the output stream is the connected socket's.
++    id stream = [webSocket valueForKey:@"outputStream"];
++    if (![stream isKindOfClass:[NSOutputStream class]]) {
++      return;
++    }
++    CFDataRef handle = (CFDataRef)CFWriteStreamCopyProperty(
++        (__bridge CFWriteStreamRef)stream, kCFStreamPropertySocketNativeHandle);
++    if (handle == NULL) {
++      return;
++    }
++    if (CFDataGetLength(handle) == sizeof(CFSocketNativeHandle)) {
++      CFSocketNativeHandle socket;
++      CFDataGetBytes(handle, CFRangeMake(0, sizeof(socket)), (UInt8 *)&socket);
++      int enabled = 1;
++      setsockopt(socket, IPPROTO_TCP, TCP_NODELAY, &enabled, sizeof(enabled));
++    }
++    CFRelease(handle);
++  } @catch (NSException *exception) {
++    // A SocketRocket without that ivar keeps its default behaviour.
++  }
++}
++
+ @implementation SRWebSocket (React)
+ 
+ - (NSNumber *)reactTag
+@@ -170,6 +200,7 @@ RCT_EXPORT_METHOD(close : (double)code reason : (NSString *)reason socketID : (d
+ 
+ - (void)webSocketDidOpen:(SRWebSocket *)webSocket
+ {
++  RCTWebSocketDisableNagle(webSocket);
+   [self sendEventWithName:@"websocketOpen"
+                      body:@{@"id" : webSocket.reactTag, @"protocol" : webSocket.protocol ? webSocket.protocol : @""}];
+ }
+diff --git a/React/Fabric/Mounting/ComponentViews/Text/RCTParagraphComponentView.mm b/React/Fabric/Mounting/ComponentViews/Text/RCTParagraphComponentView.mm
+index 79ee7ffe434b80803bdb4b5b903e11dd73cb24e9..956f189a1c7359514e48dfab0175470d012557a6 100644
+--- a/React/Fabric/Mounting/ComponentViews/Text/RCTParagraphComponentView.mm
++++ b/React/Fabric/Mounting/ComponentViews/Text/RCTParagraphComponentView.mm
+@@ -137,6 +137,7 @@ using namespace facebook::react;
+ {
+   [super prepareForRecycle];
+   _textView.state = nullptr;
++  _textView.layoutMetrics = EmptyLayoutMetrics;
+   _accessibilityProvider = nil;
+ }
+ 
 diff --git a/React/Fabric/Mounting/ComponentViews/TextInput/RCTTextInputComponentView.mm b/React/Fabric/Mounting/ComponentViews/TextInput/RCTTextInputComponentView.mm
-index d02e003a439e410ddab597b2c036256c80db0395..3caff21b0d00bfbc6dea3f8470e812b8343ac3a2 100644
+index d0a5746d2c4af491ab871361d03b98f258fcd2a3..caaac92de117ba4414dcd018e9d6a1618a585c6b 100644
 --- a/React/Fabric/Mounting/ComponentViews/TextInput/RCTTextInputComponentView.mm
 +++ b/React/Fabric/Mounting/ComponentViews/TextInput/RCTTextInputComponentView.mm
 @@ -703,6 +703,7 @@ static NSSet<NSNumber *> *returnKeyTypesSet;
@@ -46,15 +115,3 @@ index a3f2e01c130c1a53aee0b39e72927d21f2a6973d..c9d34f8b42644800b5c85e5be45b6ebf
      AttributedString::Range selectionRange;
      // ScrollView-like metrics
      Size contentSize;
-diff --git a/React/Fabric/Mounting/ComponentViews/Text/RCTParagraphComponentView.mm b/React/Fabric/Mounting/ComponentViews/Text/RCTParagraphComponentView.mm
-index 79ee7ffe43..956f189a1c 100644
---- a/React/Fabric/Mounting/ComponentViews/Text/RCTParagraphComponentView.mm
-+++ b/React/Fabric/Mounting/ComponentViews/Text/RCTParagraphComponentView.mm
-@@ -136,6 +136,7 @@ using namespace facebook::react;
- - (void)prepareForRecycle
- {
-   [super prepareForRecycle];
-   _textView.state = nullptr;
-+  _textView.layoutMetrics = EmptyLayoutMetrics;
-   _accessibilityProvider = nil;
- }

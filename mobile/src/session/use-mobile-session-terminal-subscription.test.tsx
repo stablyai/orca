@@ -92,7 +92,7 @@ function subscriptionHarness(opts: {
     nativeChatStream: { notifyWebReady: vi.fn() },
     terminalGestureInputBucketsRef: { current: new Map() },
     terminalGestureInputQueuesRef: { current: new Map() },
-    terminalGestureInputInFlightRef: { current: new Set() },
+    terminalGestureInputInFlightRef: { current: new Map() },
     activeSessionTab: null,
     markdownDocs: new Map(),
     fileDocs: new Map(),

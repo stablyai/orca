@@ -15,6 +15,8 @@ export const TERMINAL_GESTURE_INPUT_REFILL_PER_SECOND = 120
 export const TERMINAL_GESTURE_INPUT_FLUSH_DELAY_MS = 16
 export const TERMINAL_GESTURE_INPUT_MAX_PENDING_SEQUENCES = 32
 export const TERMINAL_GESTURE_INPUT_MAX_QUEUE_AGE_MS = 250
+// Why: bounds how far the screen can jump when scroll reports pile up behind a slow reply.
+export const TERMINAL_GESTURE_INPUT_MAX_QUEUED_SCROLL_REPORTS = 16
 
 export function isFileExistsErrorMessage(message: string): boolean {
   const normalized = message.toLowerCase()

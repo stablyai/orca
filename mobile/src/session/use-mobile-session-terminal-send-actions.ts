@@ -11,6 +11,11 @@ import {
 import { dismissTerminalKeyboard } from '../terminal/terminal-keyboard-dismiss'
 import { terminalInputSend } from '../terminal/mobile-terminal-operations'
 import {
+  nextTerminalSendSequence,
+  noteTerminalSendRoundTrip,
+  restartTerminalSendStream
+} from '../terminal/terminal-send-sequence'
+import {
   buildTerminalSendParams,
   TERMINAL_INPUT_SEND_OPTIONS
 } from '../terminal/terminal-send-request'
@@ -39,6 +44,7 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
     commandInputRef,
     liveInputFocusTimerRef,
     sendLiveTerminalInputRef,
+    terminalSendSequenceRef,
     sessionTabActionSheetKeyboardHideSubRef,
     sessionTabActionSheetRequestSeqRef,
     activeHandleRef,
@@ -182,6 +188,7 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
       ) {
         return false
       }
+      const sentAtMs = Date.now()
       // Why: live-mirror deltas queued behind a dying send drain into the connect
       // wait and replay stale bytes after reconnect (#6713's `YZZYecho …` corruption).
       return terminalInputSend
@@ -191,19 +198,24 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
             terminal: handle,
             text,
             enter: false,
-            deviceToken: deviceTokenRef.current
+            deviceToken: deviceTokenRef.current,
+            sequence: nextTerminalSendSequence(terminalSendSequenceRef.current, 'keys', handle)
           }),
           TERMINAL_INPUT_SEND_OPTIONS
         )
         .then(
           (response) => {
+            noteTerminalSendRoundTrip(terminalSendSequenceRef.current, Date.now() - sentAtMs)
             const accepted = terminalInputSend.interpret(response) === true
             if (accepted) {
               reportWorkerTerminalUserInput(rpc, handle)
             }
             return accepted
           },
-          () => false
+          () => {
+            restartTerminalSendStream(terminalSendSequenceRef.current, 'keys', handle)
+            return false
+          }
         )
     },
     [showToast]

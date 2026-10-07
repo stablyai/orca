@@ -6,6 +6,7 @@ import { resetWorkerTerminalTakeoverReportsForTest } from '../terminal/worker-te
 import { useMobileSessionTerminalSendActions } from './use-mobile-session-terminal-send-actions'
 import { useMobileSessionTerminalInput } from './use-mobile-session-terminal-input'
 import { useMobileTerminalPaste } from './use-mobile-terminal-paste'
+import { createTerminalSendSequenceState } from '../terminal/terminal-send-sequence'
 import { useTerminalLiveInputCommit } from '../terminal/use-terminal-live-input-commit'
 import { routeDictationTranscript } from '../terminal/terminal-live-dictation-routing'
 import {
@@ -70,7 +71,8 @@ function mountSendSites(client: ReturnType<typeof clientFixture>, handle = 'term
     ptyModesRef: ref(new Map([[handle, { altScreen: true }]])),
     terminalGestureInputBucketsRef: ref(new Map()),
     terminalGestureInputQueuesRef: ref(new Map()),
-    terminalGestureInputInFlightRef: ref(new Set()),
+    terminalGestureInputInFlightRef: ref(new Map()),
+    terminalSendSequenceRef: ref(createTerminalSendSequenceState()),
     bufferedTerminalDraftState: {
       input: 'command',
       beginBufferedTerminalDraftSend: vi.fn(),

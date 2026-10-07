@@ -1,10 +1,12 @@
 import type { SendRequestOptions } from '../transport/rpc-client'
+import type { TerminalSendSequence } from './terminal-send-sequence'
 
 type TerminalSendParams = {
   readonly terminal: string
   readonly text: string
   readonly enter: boolean
   readonly client?: { readonly id: string; readonly type: 'mobile' }
+  readonly sequence?: TerminalSendSequence
 }
 
 // Why: keystroke sends must never park in the connect wait — parked sends replay into the PTY after reconnect (#6713).
@@ -16,11 +18,14 @@ export function buildTerminalSendParams(args: {
   enter: boolean
   // Why: presence-lock take-floor; marks this phone active so multi-mobile contention resolves to the last actor.
   deviceToken: string | null
+  // Why: only for a host that applies sequenced sends in order; see nextTerminalSendSequence.
+  sequence?: TerminalSendSequence
 }): TerminalSendParams {
   return {
     terminal: args.terminal,
     text: args.text,
     enter: args.enter,
-    ...(args.deviceToken ? { client: { id: args.deviceToken, type: 'mobile' as const } } : {})
+    ...(args.deviceToken ? { client: { id: args.deviceToken, type: 'mobile' as const } } : {}),
+    ...(args.sequence ? { sequence: args.sequence } : {})
   }
 }

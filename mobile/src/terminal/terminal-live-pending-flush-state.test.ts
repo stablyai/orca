@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { sendTerminalLiveControlAfterPendingFlush } from './terminal-live-control-send-order'
 import {
   cancelTerminalLivePendingFlush,
@@ -164,5 +164,97 @@ describe('terminal live mirror send queue', () => {
     await expect(Promise.all([active, pending])).resolves.toEqual([false, false])
     expect(state.current).toBeNull()
     resolveSend(true)
+  })
+
+  it('Given a host that orders sends When keys are typed during a slow round trip Then each leaves at once', async () => {
+    // Given
+    const state = createTerminalLivePendingFlushState()
+    const payloads: string[] = []
+    const acks: ((sent: boolean) => void)[] = []
+    const sender = (_handle: string, payload: string): Promise<boolean> => {
+      payloads.push(payload)
+      return new Promise<boolean>((resolve) => acks.push(resolve))
+    }
+
+    // When
+    const keys = ['a', 'b', 'c'].map((key) =>
+      queueTerminalLiveMirrorSend(state, 'terminal-1', key, sender, 3)
+    )
+
+    // Then
+    expect(payloads).toEqual(['a', 'b', 'c'])
+    acks.forEach((ack) => ack(true))
+    await expect(Promise.all(keys)).resolves.toEqual([true, true, true])
+  })
+
+  it('Given a full window When more keys are typed Then they share the send that the next reply releases', async () => {
+    // Given
+    const state = createTerminalLivePendingFlushState()
+    const payloads: string[] = []
+    const acks: ((sent: boolean) => void)[] = []
+    const sender = (_handle: string, payload: string): Promise<boolean> => {
+      payloads.push(payload)
+      return new Promise<boolean>((resolve) => acks.push(resolve))
+    }
+    const keys = ['a', 'b', 'c', 'd'].map((key) =>
+      queueTerminalLiveMirrorSend(state, 'terminal-1', key, sender, 2)
+    )
+    expect(payloads).toEqual(['a', 'b'])
+
+    // When
+    acks[0](true)
+    await keys[0]
+
+    // Then
+    expect(payloads).toEqual(['a', 'b', 'cd'])
+    acks.slice(1).forEach((ack) => ack(true))
+    await Promise.all(keys)
+  })
+
+  it('Given a send already out under one-at-a-time When the window opens Then it widens only after that send returns', async () => {
+    // Given
+    const state = createTerminalLivePendingFlushState()
+    const payloads: string[] = []
+    const acks: ((sent: boolean) => void)[] = []
+    const sender = (_handle: string, payload: string): Promise<boolean> => {
+      payloads.push(payload)
+      return new Promise<boolean>((resolve) => acks.push(resolve))
+    }
+    const first = queueTerminalLiveMirrorSend(state, 'terminal-1', 'a', sender, 1)
+
+    // When
+    const second = queueTerminalLiveMirrorSend(state, 'terminal-1', 'b', sender, 4)
+
+    // Then
+    expect(payloads).toEqual(['a'])
+    acks[0](true)
+    await first
+    expect(payloads).toEqual(['a', 'b'])
+    acks[1](true)
+    await second
+  })
+
+  it('Given several sends outstanding When control input waits Then it is held until every one has returned', async () => {
+    // Given
+    const state = createTerminalLivePendingFlushState()
+    const acks: ((sent: boolean) => void)[] = []
+    const sender = (): Promise<boolean> => new Promise<boolean>((resolve) => acks.push(resolve))
+    void queueTerminalLiveMirrorSend(state, 'terminal-1', 'a', sender, 2)
+    void queueTerminalLiveMirrorSend(state, 'terminal-1', 'b', sender, 2)
+    let released: boolean | null = null
+    void waitForTerminalLivePendingFlush(state).then((sent) => {
+      released = sent
+    })
+
+    // When
+    acks[1](true)
+    await Promise.resolve()
+    await Promise.resolve()
+
+    // Then
+    expect(released).toBeNull()
+    acks[0](false)
+    await vi.waitFor(() => expect(released).toBe(false))
+    expect(state.current).toBeNull()
   })
 })

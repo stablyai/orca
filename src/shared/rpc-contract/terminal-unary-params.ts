@@ -118,6 +118,13 @@ export const TerminalSend = TerminalHandle.extend({
   requireAgentStatus: z.enum(['sendable']).optional(),
   // Why: terminal-generated replies are valid input but must not transfer the shared terminal floor.
   inputKind: z.enum(['query-reply']).optional(),
+  // Why: lets a client keep several sends outstanding; the host applies one stream's sends in seq order. Older hosts strip it and apply sends as they are dispatched.
+  sequence: z
+    .object({
+      stream: z.string().min(1).max(64),
+      seq: z.number().int().min(1).max(Number.MAX_SAFE_INTEGER)
+    })
+    .optional(),
   // Why: identifies the caller for the driver state machine; when absent (older clients) the server falls back to the most recent mobile actor (docs/mobile-presence-lock.md).
   client: z
     .object({

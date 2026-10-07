@@ -54,7 +54,7 @@ export function sessionStartupMountAdapters(
       const appliedSnapshotMarkerRef = { current: { epoch: 'epoch-0', version: 7 } }
       const closedTabTombstonesRef = { current: new Map<string, number>() }
       const terminalGestureInputQueuesRef = { current: new Map<string, never>() }
-      const terminalGestureInputInFlightRef = { current: new Set<string>() }
+      const terminalGestureInputInFlightRef = { current: new Map<string, never>() }
       const sessionTabActionSheetRequestSeqRef = { current: 0 }
 
       const hook = hookMount(() => {

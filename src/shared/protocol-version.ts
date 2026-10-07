@@ -137,6 +137,9 @@ export const BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY =
 // floor-taking input. Mobile must not forward replies unless advertised.
 export const TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY =
   'terminal.query-reply-input.v1' as const
+// Why: hosts without this strip terminal.send's sequence and may apply overlapping sends out of
+// order, so a client must keep one send outstanding per terminal unless it is advertised.
+export const TERMINAL_SEND_SEQUENCE_RUNTIME_CAPABILITY = 'terminal.send-sequence.v1' as const
 // Why: without this, prompt request IDs and waitSubmitMs are stripped and a retry would resend raw input.
 export const TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY = 'terminal.prompt-delivery.v1' as const
 // Why: paired clients may unmount xterm only when the host can return a
@@ -372,6 +375,7 @@ export const RUNTIME_CAPABILITIES = [
   AI_VAULT_RUNTIME_CAPABILITY,
   AI_VAULT_SESSION_TITLES_RUNTIME_CAPABILITY,
   TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY,
+  TERMINAL_SEND_SEQUENCE_RUNTIME_CAPABILITY,
   TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY,
   TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY,
   TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY,

@@ -10,16 +10,34 @@ import {
   buildTerminalSendParams,
   TERMINAL_INPUT_SEND_OPTIONS
 } from '../terminal/terminal-send-request'
-import { countTerminalGestureInputSequences } from '../terminal/terminal-gesture-input'
+import {
+  splitTerminalGestureInput,
+  type TerminalGestureInputReport
+} from '../terminal/terminal-gesture-input'
+import {
+  nextTerminalSendSequence,
+  noteTerminalSendRoundTrip,
+  restartTerminalSendStream,
+  terminalSendSpacingMs,
+  terminalSendWindow
+} from '../terminal/terminal-send-sequence'
+import {
+  appendTerminalGestureInput,
+  dropStaleTerminalGestureMovement,
+  hasQueuedTerminalGestureClick,
+  queuedTerminalGestureSequenceCount,
+  takeTerminalGestureInputBatch
+} from './terminal-gesture-input-queue'
 import {
   isGestureMouseTrackingMode,
   TERMINAL_GESTURE_INPUT_BUCKET_CAPACITY,
   TERMINAL_GESTURE_INPUT_FLUSH_DELAY_MS,
   TERMINAL_GESTURE_INPUT_MAX_PENDING_SEQUENCES,
   TERMINAL_GESTURE_INPUT_MAX_QUEUE_AGE_MS,
+  TERMINAL_GESTURE_INPUT_MAX_QUEUED_SCROLL_REPORTS,
   TERMINAL_GESTURE_INPUT_REFILL_PER_SECOND
 } from './mobile-session-route-helpers'
-import type { Terminal, TerminalGestureInputQueue } from './mobile-session-route-types'
+import type { Terminal } from './mobile-session-route-types'
 import type { MobileSessionFileActionsModel } from './use-mobile-session-file-actions'
 
 export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsModel) {
@@ -32,6 +50,7 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
     terminalGestureInputBucketsRef,
     terminalGestureInputQueuesRef,
     terminalGestureInputInFlightRef,
+    terminalSendSequenceRef,
     deviceTokenRef,
     clientRef,
     connStateRef,
@@ -87,106 +106,145 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
     []
   )
 
-  const flushTerminalGestureInput = useCallback(async (handle: string) => {
-    const queued = terminalGestureInputQueuesRef.current.get(handle)
-    if (!queued) {
-      return
-    }
-    if (queued.timer) {
-      clearTimeout(queued.timer)
-      queued.timer = null
-    }
-    if (terminalGestureInputInFlightRef.current.has(handle)) {
-      return
-    }
-
-    terminalGestureInputQueuesRef.current.delete(handle)
-    const isActive =
-      handle === activeHandleRef.current && activeSessionTabTypeRef.current === 'terminal'
-    const isFresh = Date.now() - queued.lastUpdatedMs <= TERMINAL_GESTURE_INPUT_MAX_QUEUE_AGE_MS
-    const rpc = clientRef.current
-    if (!rpc || connStateRef.current !== 'connected' || !isActive || !isFresh) {
-      return
-    }
-
-    terminalGestureInputInFlightRef.current.add(handle)
-    try {
-      // Why: gesture arrows parked across a reconnect would move a TUI long after the swipe.
-      const response = await terminalInputSend.request(
-        rpc,
-        buildTerminalSendParams({
-          terminal: handle,
-          text: queued.bytes,
-          enter: false,
-          deviceToken: deviceTokenRef.current
-        }),
-        TERMINAL_INPUT_SEND_OPTIONS
-      )
-      if (terminalInputSend.interpret(response) === true) {
-        reportWorkerTerminalUserInput(rpc, handle)
+  const sendTerminalGestureInputBatch = useCallback(
+    async (handle: string, rpc: NonNullable<typeof clientRef.current>, bytes: string) => {
+      const inFlight = terminalGestureInputInFlightRef.current.get(handle) ?? {
+        count: 0,
+        window: terminalSendWindow(terminalSendSequenceRef.current),
+        lastSentAtMs: 0
       }
-    } catch {
-      // Transient failure
-    } finally {
-      terminalGestureInputInFlightRef.current.delete(handle)
-      const next = terminalGestureInputQueuesRef.current.get(handle)
-      if (next) {
-        if (Date.now() - next.lastUpdatedMs > TERMINAL_GESTURE_INPUT_MAX_QUEUE_AGE_MS) {
-          if (next.timer) {
-            clearTimeout(next.timer)
+      const sentAtMs = Date.now()
+      inFlight.count += 1
+      inFlight.lastSentAtMs = sentAtMs
+      terminalGestureInputInFlightRef.current.set(handle, inFlight)
+      try {
+        const response = await terminalInputSend.request(
+          rpc,
+          buildTerminalSendParams({
+            terminal: handle,
+            text: bytes,
+            enter: false,
+            deviceToken: deviceTokenRef.current,
+            sequence: nextTerminalSendSequence(terminalSendSequenceRef.current, 'gestures', handle)
+          }),
+          TERMINAL_INPUT_SEND_OPTIONS
+        )
+        noteTerminalSendRoundTrip(terminalSendSequenceRef.current, Date.now() - sentAtMs)
+        if (terminalInputSend.interpret(response) === true) {
+          reportWorkerTerminalUserInput(rpc, handle)
+        }
+      } catch {
+        // Transient failure
+        restartTerminalSendStream(terminalSendSequenceRef.current, 'gestures', handle)
+      } finally {
+        // Why: a reconnect or a closed tab replaces the record; its sends no longer count.
+        if (terminalGestureInputInFlightRef.current.get(handle) === inFlight) {
+          inFlight.count -= 1
+          if (inFlight.count === 0) {
+            terminalGestureInputInFlightRef.current.delete(handle)
           }
-          terminalGestureInputQueuesRef.current.delete(handle)
-        } else {
-          void flushTerminalGestureInput(handle)
         }
       }
-    }
-  }, [])
+    },
+    []
+  )
 
-  const enqueueTerminalGestureInput = useCallback(
-    (handle: string, bytes: string, sequenceCount: number) => {
-      const now = Date.now()
-      const current = terminalGestureInputQueuesRef.current.get(handle)
-      if (
-        current &&
-        current.sequenceCount + sequenceCount <= TERMINAL_GESTURE_INPUT_MAX_PENDING_SEQUENCES
-      ) {
-        current.bytes += bytes
-        current.sequenceCount += sequenceCount
-        current.lastUpdatedMs = now
+  const flushTerminalGestureInput = useCallback(
+    async (handle: string) => {
+      const queued = terminalGestureInputQueuesRef.current.get(handle)
+      if (!queued) {
+        return
+      }
+      if (queued.timer) {
+        clearTimeout(queued.timer)
+        queued.timer = null
+      }
+      const isActive =
+        handle === activeHandleRef.current && activeSessionTabTypeRef.current === 'terminal'
+      const rpc = clientRef.current
+      // Why: gesture input parked across a reconnect would move a TUI long after the swipe.
+      if (!rpc || connStateRef.current !== 'connected' || !isActive) {
+        terminalGestureInputQueuesRef.current.delete(handle)
         return
       }
 
-      if (current) {
-        if (current.timer) {
-          clearTimeout(current.timer)
+      const sends: Promise<void>[] = []
+      for (;;) {
+        dropStaleTerminalGestureMovement(
+          queued,
+          Date.now(),
+          TERMINAL_GESTURE_INPUT_MAX_QUEUE_AGE_MS
+        )
+        if (queued.runs.length === 0) {
+          terminalGestureInputQueuesRef.current.delete(handle)
+          break
         }
-        if (!terminalGestureInputInFlightRef.current.has(handle)) {
-          void flushTerminalGestureInput(handle)
-        } else {
-          // Why: cap is a soft guideline — append instead of dropping queued bytes; the in-flight flush picks up the merged queue.
-          current.bytes += bytes
-          current.sequenceCount += sequenceCount
-          current.lastUpdatedMs = now
-          current.timer = setTimeout(() => {
-            current.timer = null
+        const inFlight = terminalGestureInputInFlightRef.current.get(handle)
+        // Why: a send already out without a sequence number can be overtaken, so the window only widens once nothing is outstanding.
+        const window = inFlight?.window ?? terminalSendWindow(terminalSendSequenceRef.current)
+        // Why: a click is sent at once even past the window; the host applies it after the scroll sends ahead of it.
+        const clickWaiting = window > 1 && hasQueuedTerminalGestureClick(queued)
+        if ((inFlight?.count ?? 0) >= window && !clickWaiting) {
+          break
+        }
+        const paceMs = inFlight
+          ? inFlight.lastSentAtMs +
+            terminalSendSpacingMs(terminalSendSequenceRef.current) -
+            Date.now()
+          : 0
+        if (paceMs > 0 && !clickWaiting) {
+          queued.timer = setTimeout(() => {
+            queued.timer = null
             void flushTerminalGestureInput(handle)
-          }, TERMINAL_GESTURE_INPUT_FLUSH_DELAY_MS)
-          return
+          }, paceMs)
+          break
         }
+        const bytes = takeTerminalGestureInputBatch(
+          queued,
+          TERMINAL_GESTURE_INPUT_MAX_PENDING_SEQUENCES
+        )
+        sends.push(
+          sendTerminalGestureInputBatch(handle, rpc, bytes).then(() => {
+            if (terminalGestureInputQueuesRef.current.has(handle)) {
+              return flushTerminalGestureInput(handle)
+            }
+            return undefined
+          })
+        )
       }
+      await Promise.all(sends)
+    },
+    [sendTerminalGestureInputBatch]
+  )
 
-      const queued: TerminalGestureInputQueue = {
-        bytes,
-        sequenceCount,
-        timer: null,
-        lastUpdatedMs: now
+  const enqueueTerminalGestureInput = useCallback(
+    (handle: string, reports: readonly TerminalGestureInputReport[]) => {
+      let queued = terminalGestureInputQueuesRef.current.get(handle)
+      if (!queued) {
+        queued = { runs: [], timer: null }
+        terminalGestureInputQueuesRef.current.set(handle, queued)
       }
-      queued.timer = setTimeout(() => {
-        queued.timer = null
+      appendTerminalGestureInput(
+        queued,
+        reports,
+        Date.now(),
+        TERMINAL_GESTURE_INPUT_MAX_QUEUED_SCROLL_REPORTS
+      )
+      // Why: a click must not sit out the debounce or a pacing delay meant for scroll sends.
+      if (
+        reports.some((report) => report.kind === 'click') ||
+        queuedTerminalGestureSequenceCount(queued) >= TERMINAL_GESTURE_INPUT_MAX_PENDING_SEQUENCES
+      ) {
         void flushTerminalGestureInput(handle)
-      }, TERMINAL_GESTURE_INPUT_FLUSH_DELAY_MS)
-      terminalGestureInputQueuesRef.current.set(handle, queued)
+        return
+      }
+      if (!queued.timer) {
+        const pending = queued
+        pending.timer = setTimeout(() => {
+          pending.timer = null
+          void flushTerminalGestureInput(handle)
+        }, TERMINAL_GESTURE_INPUT_FLUSH_DELAY_MS)
+      }
     },
     [flushTerminalGestureInput]
   )
@@ -204,14 +262,14 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
       if (!modes?.altScreen && !isGestureMouseTrackingMode(modes?.mouseTrackingMode)) {
         return
       }
-      const sequenceCount = countTerminalGestureInputSequences(bytes)
-      if (sequenceCount == null) {
+      const reports = splitTerminalGestureInput(bytes)
+      if (reports == null) {
         return
       }
-      if (!allowTerminalGestureInput(handle, sequenceCount)) {
+      if (!allowTerminalGestureInput(handle, reports.length)) {
         return
       }
-      enqueueTerminalGestureInput(handle, bytes, sequenceCount)
+      enqueueTerminalGestureInput(handle, reports)
     },
     [allowTerminalGestureInput, client, connState, enqueueTerminalGestureInput]
   )

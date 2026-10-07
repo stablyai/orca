@@ -3,6 +3,7 @@ import { InvalidArgumentError, defineMethod } from '../../core'
 import { isTerminalQueryReply } from '../../../../../shared/terminal-query-reply'
 import { assertTerminalAgentSendable } from '../../terminal-agent-send-guard'
 import { TerminalSend } from './unary-schemas'
+import { applyTerminalSendInSequence } from './terminal-send-sequencer'
 import {
   assertTerminalSendExactPtyBinding,
   assertTerminalSendTextWithinLimit,
@@ -19,7 +20,7 @@ import {
   observeReplayedTerminalPrompt
 } from './terminal-prompt-receipt'
 
-export const TERMINAL_SEND_METHODS = [
+const UNORDERED_TERMINAL_SEND_METHODS = [
   defineMethod({
     name: 'terminal.send',
     params: TerminalSend,
@@ -295,3 +296,12 @@ export const TERMINAL_SEND_METHODS = [
     }
   })
 ]
+
+export const TERMINAL_SEND_METHODS = UNORDERED_TERMINAL_SEND_METHODS.map((method) =>
+  defineMethod({
+    name: method.name,
+    params: method.params,
+    handler: (params, context) =>
+      applyTerminalSendInSequence(params, context, () => method.handler(params, context))
+  })
+)
