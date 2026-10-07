@@ -20,11 +20,11 @@ import {
   EMPTY_SSH_TARGETS,
   createAddProjectScope,
   type AddProjectModalProps,
-  type AddedRepo,
   type FolderCandidate
 } from './addProjectTypes'
+import { toMobileRepo } from './addProjectTypes'
 import { useAddProjectOperationScope } from './useAddProjectOperationScope'
-import { resolveAddProjectTargetState } from './addProjectTargetState'
+import { resolveAddProjectTargetState, selectAddProjectTarget } from './addProjectTargetState'
 type AddProjectView =
   | 'start'
   | 'clone'
@@ -32,16 +32,6 @@ type AddProjectView =
   | 'addExisting'
   | 'confirmFolder'
   | 'pickDestination'
-function toMobileRepo(repo: AddedRepo): MobileWorkspaceRepo {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the receipt's looseObject keeps every member the host sent; the trio it requires is exactly what MobileWorkspaceRepo requires.
-  return repo as MobileWorkspaceRepo
-}
-/**
- * The Add project sheet from the + action sheet: the desktop Add project start steps minus
- * the SSH row, then one form per row. A successful add closes the sheet and hands the repo
- * to `onProjectAdded` — from `onAfterClose`, so the default-checkout session it opens is
- * presented only after this sheet's native window unmounted.
- */
 export function AddProjectModal({
   visible,
   client,
@@ -132,7 +122,7 @@ function AddProjectModalContent({
   const [error, setError] = useState('')
   const [sshConnectionId, setSshConnectionId] = useState<string | null>(null)
   const confirmingFolderRef = useRef(false)
-
+  const valueForSubmit = view === 'clone' ? cloneUrl : projectName
   const { sshSupported, targetOptions, activeSshConnectionId, selectedTargetAvailable } =
     resolveAddProjectTargetState(hostCapabilities, sshTargets, sshConnectionId)
   const operationScope = createAddProjectScope({
@@ -150,18 +140,15 @@ function AddProjectModalContent({
       ? { sshConnectionId: activeSshConnectionId }
       : {}
   const canSubmit =
-    (view === 'clone' ? cloneUrl : projectName).trim().length > 0 &&
-    !busy &&
-    client != null &&
-    selectedTargetAvailable
-  const selectTarget = (id: string | null) => {
-    if (id !== activeSshConnectionId) {
-      invalidate()
-      setDestinationPath('')
-    }
-    setSshConnectionId(id)
-  }
-
+    valueForSubmit.trim().length > 0 && !busy && client != null && selectedTargetAvailable
+  const selectTarget = (id: string | null) =>
+    selectAddProjectTarget(
+      id,
+      activeSshConnectionId,
+      invalidate,
+      () => setDestinationPath(''),
+      setSshConnectionId
+    )
   const submit = useCallback(() => {
     if (!canSubmit || !client) {
       return
