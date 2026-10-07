@@ -4,11 +4,13 @@ import { FolderOpen, Globe, Plus } from 'lucide-react-native'
 
 export function AddProjectStart({
   targetSelector,
+  onBeforeAction,
   onBrowse,
   onClone,
   onCreate
 }: {
   targetSelector: ReactNode
+  onBeforeAction: () => void
   onBrowse: () => void
   onClone: () => void
   onCreate: () => void
@@ -37,7 +39,13 @@ export function AddProjectStart({
             hint: 'Start from an empty folder',
             onPress: onCreate
           }
-        ]}
+        ].map((action) => ({
+          ...action,
+          onPress: () => {
+            onBeforeAction()
+            action.onPress()
+          }
+        }))}
       />
     </>
   )

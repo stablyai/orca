@@ -263,6 +263,7 @@ function AddProjectModalContent({
       return (
         <View>
           <AddProjectStart
+            onBeforeAction={() => setError('')}
             targetSelector={
               <AddProjectTargetSelectorView
                 busy={busy}
