@@ -203,7 +203,7 @@ index 28037a8973014b7892a7fe397d8136e39e18c73a..e9777c6e502768920f82ccbc71356b46
    }
  }
 diff --git a/src/ImageAddon.ts b/src/ImageAddon.ts
-index 8fd39543118cd420e36c1614c1af370b6c7bbfbb..ce8c7177d696fe2f6efe818ac34b6aa9498e3b5f 100644
+index 8fd39543118cd420e36c1614c1af370b6c7bbfbb..ff6dd36b41a5e6f927a2c4b590a01d54c7ba5622 100644
 --- a/src/ImageAddon.ts
 +++ b/src/ImageAddon.ts
 @@ -113,6 +113,7 @@ export class ImageAddon implements ITerminalAddon, IImageApi {
@@ -214,7 +214,7 @@ index 8fd39543118cd420e36c1614c1af370b6c7bbfbb..ce8c7177d696fe2f6efe818ac34b6aa9
      for (const obj of this._disposables) {
        obj.dispose();
      }
-@@ -131,8 +132,9 @@ export class ImageAddon implements ITerminalAddon, IImageApi {
+@@ -131,8 +132,10 @@ export class ImageAddon implements ITerminalAddon, IImageApi {
      this._terminal = terminal;
  
      // internal data structures
@@ -222,10 +222,11 @@ index 8fd39543118cd420e36c1614c1af370b6c7bbfbb..ce8c7177d696fe2f6efe818ac34b6aa9
 +    this._renderer = new ImageRenderer(terminal, this._opts.rasterBackend);
      this._storage = new ImageStorage(terminal, this._renderer, this._opts);
 +    this._renderer.onCollectDraws = range => this._storage?.render(range ?? { start: 0, end: terminal.rows - 1 });
++    this._renderer.onCollectHiddenGlyphColumns = row => this._storage?.getHiddenGlyphColumns(row);
      this._storage.onImageAdded = () => this._onImageAdded.fire();
  
      // enable size reports
-@@ -154,9 +156,6 @@ export class ImageAddon implements ITerminalAddon, IImageApi {
+@@ -154,9 +157,6 @@ export class ImageAddon implements ITerminalAddon, IImageApi {
        terminal.parser.registerCsiHandler({ final: 'c' }, params => this._da1(params)),
        terminal.parser.registerCsiHandler({ prefix: '?', final: 'S' }, params => this._xtermGraphicsAttributes(params)),
  
@@ -235,7 +236,7 @@ index 8fd39543118cd420e36c1614c1af370b6c7bbfbb..ce8c7177d696fe2f6efe818ac34b6aa9
        /**
         * reset handlers covered:
         * - DECSTR
-@@ -196,7 +195,7 @@ export class ImageAddon implements ITerminalAddon, IImageApi {
+@@ -196,7 +196,7 @@ export class ImageAddon implements ITerminalAddon, IImageApi {
  
      // Kitty graphics handler
      if (this._opts.kittySupport) {
@@ -289,7 +290,7 @@ index 0000000000000000000000000000000000000000..61ec2e72df783eca41ef1218edd1ec2a
 +  }
 +}
 diff --git a/src/ImageRenderer.ts b/src/ImageRenderer.ts
-index 5854efaec1fdf9dfcb886023542998a563b6d2f2..8fac3769fb1fbad21ba0a733fded84cf9ea2a186 100644
+index 5854efaec1fdf9dfcb886023542998a563b6d2f2..017f3becd57d5e9a6048b84e5b6b07831abc1ac7 100644
 --- a/src/ImageRenderer.ts
 +++ b/src/ImageRenderer.ts
 @@ -3,9 +3,12 @@
@@ -305,7 +306,7 @@ index 5854efaec1fdf9dfcb886023542998a563b6d2f2..8fac3769fb1fbad21ba0a733fded84cf
  import { Disposable, MutableDisposable, toDisposable } from 'common/Lifecycle';
  
  const enum Constants {
-@@ -22,29 +25,23 @@ const enum Constants {
+@@ -22,29 +25,24 @@ const enum Constants {
  export class ImageRenderer extends Disposable implements IDisposable {
    /** @deprecated Kept for backward compat — points to top layer canvas. */
    public get canvas(): HTMLCanvasElement | undefined { return this._layers.get('top')?.canvas; }
@@ -317,6 +318,7 @@ index 5854efaec1fdf9dfcb886023542998a563b6d2f2..8fac3769fb1fbad21ba0a733fded84cf
    private _oldOpen: ((parent: HTMLElement) => void) | undefined;
    private _renderService: IRenderService | undefined;
 +  public onCollectDraws: ((range?: { start: number, end: number }) => void) | undefined;
++  public onCollectHiddenGlyphColumns: ((bufferRow: number) => ReadonlySet<number> | undefined) | undefined;
 +  private _renderRefresh = this._register(new MutableDisposable<IDisposable>());
 +  public usesRenderPass = false;
 +  private _layersEnabled = false;
@@ -343,7 +345,7 @@ index 5854efaec1fdf9dfcb886023542998a563b6d2f2..8fac3769fb1fbad21ba0a733fded84cf
    }
  
    // drawing primitive - ImageData with optional buffer
-@@ -70,7 +67,7 @@ export class ImageRenderer extends Disposable implements IDisposable {
+@@ -70,7 +68,7 @@ export class ImageRenderer extends Disposable implements IDisposable {
    }
  
  
@@ -352,7 +354,7 @@ index 5854efaec1fdf9dfcb886023542998a563b6d2f2..8fac3769fb1fbad21ba0a733fded84cf
      super();
      this._oldOpen = this._terminal._core.open;
      this._terminal._core.open = (parent: HTMLElement): void => {
-@@ -88,6 +85,8 @@ export class ImageRenderer extends Disposable implements IDisposable {
+@@ -88,6 +86,8 @@ export class ImageRenderer extends Disposable implements IDisposable {
        }
      });
      this._register(toDisposable(() => {
@@ -361,7 +363,7 @@ index 5854efaec1fdf9dfcb886023542998a563b6d2f2..8fac3769fb1fbad21ba0a733fded84cf
        this.removeLayerFromDom();
        this.removeLayerFromDom('bottom');
        if (this._terminal._core && this._oldOpen) {
-@@ -110,6 +109,7 @@ export class ImageRenderer extends Disposable implements IDisposable {
+@@ -110,6 +110,7 @@ export class ImageRenderer extends Disposable implements IDisposable {
     * Enable the placeholder.
     */
    public showPlaceholder(value: boolean): void {
@@ -369,7 +371,7 @@ index 5854efaec1fdf9dfcb886023542998a563b6d2f2..8fac3769fb1fbad21ba0a733fded84cf
      if (value) {
        if (!this._placeholder && this.cellSize.height !== -1) {
          this._createPlaceHolder(Math.max(this.cellSize.height + 1, Constants.PLACEHOLDER_HEIGHT));
-@@ -134,12 +134,18 @@ export class ImageRenderer extends Disposable implements IDisposable {
+@@ -134,12 +135,18 @@ export class ImageRenderer extends Disposable implements IDisposable {
     * Current cell size (float).
     */
    public get cellSize(): ICellSize {
@@ -388,7 +390,7 @@ index 5854efaec1fdf9dfcb886023542998a563b6d2f2..8fac3769fb1fbad21ba0a733fded84cf
    /**
     * Clear a region of the image layer canvas.
     */
-@@ -152,6 +158,7 @@ export class ImageRenderer extends Disposable implements IDisposable {
+@@ -152,6 +159,7 @@ export class ImageRenderer extends Disposable implements IDisposable {
      }
      if (!layer || layer === 'bottom') {
        this._layers.get('bottom')?.clearRect(0, y, w, h);
@@ -396,7 +398,7 @@ index 5854efaec1fdf9dfcb886023542998a563b6d2f2..8fac3769fb1fbad21ba0a733fded84cf
      }
    }
  
-@@ -166,6 +173,8 @@ export class ImageRenderer extends Disposable implements IDisposable {
+@@ -166,6 +174,8 @@ export class ImageRenderer extends Disposable implements IDisposable {
      if (!layer || layer === 'bottom') {
        const ctx = this._layers.get('bottom');
        ctx?.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
@@ -405,7 +407,7 @@ index 5854efaec1fdf9dfcb886023542998a563b6d2f2..8fac3769fb1fbad21ba0a733fded84cf
      }
    }
  
-@@ -173,8 +182,9 @@ export class ImageRenderer extends Disposable implements IDisposable {
+@@ -173,8 +183,9 @@ export class ImageRenderer extends Disposable implements IDisposable {
     * Draw neighboring tiles on the image layer canvas.
     */
    public draw(imgSpec: IImageSpec, tileId: number, col: number, row: number, count: number = 1): void {
@@ -417,7 +419,7 @@ index 5854efaec1fdf9dfcb886023542998a563b6d2f2..8fac3769fb1fbad21ba0a733fded84cf
        return;
      }
      const { width, height } = this.cellSize;
-@@ -186,28 +196,103 @@ export class ImageRenderer extends Disposable implements IDisposable {
+@@ -186,28 +197,103 @@ export class ImageRenderer extends Disposable implements IDisposable {
  
      this._rescaleImage(imgSpec, width, height);
      const img = imgSpec.actual!;
@@ -529,7 +531,7 @@ index 5854efaec1fdf9dfcb886023542998a563b6d2f2..8fac3769fb1fbad21ba0a733fded84cf
    /**
     * Extract a single tile from an image.
     */
-@@ -219,19 +304,21 @@ export class ImageRenderer extends Disposable implements IDisposable {
+@@ -219,19 +305,21 @@ export class ImageRenderer extends Disposable implements IDisposable {
      }
      this._rescaleImage(imgSpec, width, height);
      const img = imgSpec.actual!;
@@ -559,7 +561,7 @@ index 5854efaec1fdf9dfcb886023542998a563b6d2f2..8fac3769fb1fbad21ba0a733fded84cf
        );
        return canvas;
      }
-@@ -289,6 +376,7 @@ export class ImageRenderer extends Disposable implements IDisposable {
+@@ -289,6 +377,7 @@ export class ImageRenderer extends Disposable implements IDisposable {
     * Rescale image in storage if needed.
     */
    private _rescaleImage(spec: IImageSpec, currentWidth: number, currentHeight: number): void {
@@ -567,7 +569,7 @@ index 5854efaec1fdf9dfcb886023542998a563b6d2f2..8fac3769fb1fbad21ba0a733fded84cf
      if (currentWidth === spec.actualCellSize.width && currentHeight === spec.actualCellSize.height) {
        return;
      }
-@@ -299,11 +387,16 @@ export class ImageRenderer extends Disposable implements IDisposable {
+@@ -299,11 +388,16 @@ export class ImageRenderer extends Disposable implements IDisposable {
        spec.actualCellSize.height = originalHeight;
        return;
      }
@@ -589,7 +591,7 @@ index 5854efaec1fdf9dfcb886023542998a563b6d2f2..8fac3769fb1fbad21ba0a733fded84cf
      const ctx = canvas.getContext('2d');
      if (ctx) {
        ctx.drawImage(spec.orig!, 0, 0, canvas.width, canvas.height);
-@@ -313,21 +406,57 @@ export class ImageRenderer extends Disposable implements IDisposable {
+@@ -313,21 +407,58 @@ export class ImageRenderer extends Disposable implements IDisposable {
      }
    }
  
@@ -618,13 +620,14 @@ index 5854efaec1fdf9dfcb886023542998a563b6d2f2..8fac3769fb1fbad21ba0a733fded84cf
 +    this._activeRenderer?.setImageLayerProvider?.(undefined);
 +    this._activeRenderer = renderer;
 +    this.usesRenderPass = !!renderer?.imageLayerRenderPass;
-+    renderer?.setImageLayerProvider?.(this.usesRenderPass || this._layersEnabled ? { collectDraws: () => {
++    renderer?.setImageLayerProvider?.({ collectDraws: () => {
 +      const draws: IImageDraw[] = [];
 +      this._collecting = draws;
 +      try { this.onCollectDraws?.(); }
 +      finally { this._collecting = undefined; }
 +      return draws;
-+    }, hasNegativeImages: () => this._layersEnabled } : undefined);
++    }, hasNegativeImages: () => this._layersEnabled,
++    getHiddenGlyphColumns: row => this.onCollectHiddenGlyphColumns?.(row) });
 +  }
 +
    private _open(): void {
@@ -651,7 +654,7 @@ index 5854efaec1fdf9dfcb886023542998a563b6d2f2..8fac3769fb1fbad21ba0a733fded84cf
      // make sure that the terminal is attached to a document and to DOM
      if (!this.document || !this._terminal._core.screenElement) {
        console.warn('image addon: cannot insert output canvas to DOM, missing document or screenElement');
-@@ -346,7 +475,7 @@ export class ImageRenderer extends Disposable implements IDisposable {
+@@ -346,7 +477,7 @@ export class ImageRenderer extends Disposable implements IDisposable {
      // which would conflict with integrators (e.g. VS Code) that set their
      // own z-index on the screen element.
      screenElement.style.isolation = 'isolate';
@@ -660,7 +663,7 @@ index 5854efaec1fdf9dfcb886023542998a563b6d2f2..8fac3769fb1fbad21ba0a733fded84cf
        // Use z-index:-1 so it paints behind non-positioned text elements.
        // The screen element needs to be a stacking context (via isolation)
        // to contain the negative z-index, otherwise it would go behind the
-@@ -354,10 +483,8 @@ export class ImageRenderer extends Disposable implements IDisposable {
+@@ -354,10 +485,8 @@ export class ImageRenderer extends Disposable implements IDisposable {
        canvas.style.zIndex = '-1';
        screenElement.insertBefore(canvas, screenElement.firstChild);
      } else {
@@ -673,7 +676,7 @@ index 5854efaec1fdf9dfcb886023542998a563b6d2f2..8fac3769fb1fbad21ba0a733fded84cf
        screenElement.appendChild(canvas);
      }
      const ctx = canvas.getContext('2d', { alpha: true });
-@@ -366,10 +493,11 @@ export class ImageRenderer extends Disposable implements IDisposable {
+@@ -366,10 +495,11 @@ export class ImageRenderer extends Disposable implements IDisposable {
        return;
      }
      this._layers.set(layer, ctx);
@@ -687,7 +690,7 @@ index 5854efaec1fdf9dfcb886023542998a563b6d2f2..8fac3769fb1fbad21ba0a733fded84cf
      const ctx = this._layers.get(layer);
      if (ctx) {
        ctx.canvas.remove();
-@@ -378,7 +506,7 @@ export class ImageRenderer extends Disposable implements IDisposable {
+@@ -378,7 +508,7 @@ export class ImageRenderer extends Disposable implements IDisposable {
    }
  
    public hasLayer(layer: ImageLayer): boolean {
@@ -696,7 +699,7 @@ index 5854efaec1fdf9dfcb886023542998a563b6d2f2..8fac3769fb1fbad21ba0a733fded84cf
    }
  
    private _createPlaceHolder(height: number = Constants.PLACEHOLDER_HEIGHT): void {
-@@ -415,7 +543,11 @@ export class ImageRenderer extends Disposable implements IDisposable {
+@@ -415,7 +545,11 @@ export class ImageRenderer extends Disposable implements IDisposable {
      for (let i = 0; i < width; i += bWidth) {
        ctx2.drawImage(blueprint, i, 0);
      }
@@ -898,7 +901,7 @@ index 0000000000000000000000000000000000000000..6a809ebaa64cb7c754c716dbaa6702df
 +  }
 +}
 diff --git a/src/ImageStorage.ts b/src/ImageStorage.ts
-index 322b9e02f1aed1d75feff0057ce7a9ded9094ea5..02e2cff065193c3bf28df52d0256a22f3f63b34a 100644
+index 322b9e02f1aed1d75feff0057ce7a9ded9094ea5..8bd4ba0d371b7103a20b658f2f78998ab4452f75 100644
 --- a/src/ImageStorage.ts
 +++ b/src/ImageStorage.ts
 @@ -5,10 +5,11 @@
@@ -1064,7 +1067,29 @@ index 322b9e02f1aed1d75feff0057ce7a9ded9094ea5..02e2cff065193c3bf28df52d0256a22f
      };
  
      // finally add the image
-@@ -370,6 +401,8 @@ export class ImageStorage implements IDisposable {
+@@ -352,6 +383,21 @@ export class ImageStorage implements IDisposable {
+   }
+ 
+ 
++  public getHiddenGlyphColumns(bufferRow: number): ReadonlySet<number> | undefined {
++    if (!this._images.size || !this.onRenderLine) return undefined;
++    const line = this._terminal._core.buffer.lines.get(bufferRow);
++    if (!line) return undefined;
++    const draws: IImageDrawCall[] = [];
++    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The installed buffer line retains the image addon's extended cell attributes.
++    this.onRenderLine(line as IBufferLineExt, bufferRow, this._terminal.cols, draws);
++    if (!draws.length) return undefined;
++    const columns = new Set<number>();
++    for (const draw of draws) {
++      for (let col = draw.col; col < draw.col + draw.count; ++col) columns.add(col);
++    }
++    return columns;
++  }
++
+   /**
+    * Render method. Collects buffer information and triggers
+    * canvas updates.
+@@ -370,6 +416,8 @@ export class ImageStorage implements IDisposable {
        if (hasTopImages && hasBottomImages) break;
      }
  
@@ -1073,7 +1098,7 @@ index 322b9e02f1aed1d75feff0057ce7a9ded9094ea5..02e2cff065193c3bf28df52d0256a22f
      // Lazily insert layers that are needed
      if (hasTopImages && !this._renderer.hasLayer('top')) {
        this._renderer.insertLayerToDom('top');
-@@ -423,13 +456,14 @@ export class ImageStorage implements IDisposable {
+@@ -423,13 +471,14 @@ export class ImageStorage implements IDisposable {
      this._renderer.clearLines(start, end);
  
      // Collect draw calls so we can sort by z-index (lower z drawn first).
@@ -1089,7 +1114,7 @@ index 322b9e02f1aed1d75feff0057ce7a9ded9094ea5..02e2cff065193c3bf28df52d0256a22f
        for (let col = 0; col < cols; ++col) {
          if (line.getBg(col) & BgFlags.HAS_EXTENDED) {
            let e: IExtendedAttrsImage = line._extendedAttrs[col] ?? EMPTY_ATTRS;
-@@ -472,7 +506,8 @@ export class ImageStorage implements IDisposable {
+@@ -472,7 +521,8 @@ export class ImageStorage implements IDisposable {
      }
  
      // Sort by z-index so lower z draws first (higher z renders on top)
@@ -1099,7 +1124,7 @@ index 322b9e02f1aed1d75feff0057ce7a9ded9094ea5..02e2cff065193c3bf28df52d0256a22f
  
      // Draw placeholders first (lowest priority)
      for (const call of placeholderCalls) {
-@@ -481,7 +516,12 @@ export class ImageStorage implements IDisposable {
+@@ -481,7 +531,12 @@ export class ImageStorage implements IDisposable {
  
      // Draw images in z-index order
      for (const call of drawCalls) {
@@ -1113,7 +1138,7 @@ index 322b9e02f1aed1d75feff0057ce7a9ded9094ea5..02e2cff065193c3bf28df52d0256a22f
      }
    }
  
-@@ -554,12 +594,13 @@ export class ImageStorage implements IDisposable {
+@@ -554,12 +609,13 @@ export class ImageStorage implements IDisposable {
        const e: IExtendedAttrsImage = line._extendedAttrs[x] ?? EMPTY_ATTRS;
        if (e.imageId && e.imageId !== -1) {
          const orig = this._images.get(e.imageId)?.orig;
@@ -1130,7 +1155,7 @@ index 322b9e02f1aed1d75feff0057ce7a9ded9094ea5..02e2cff065193c3bf28df52d0256a22f
        }
      }
    }
-@@ -581,20 +622,42 @@ export class ImageStorage implements IDisposable {
+@@ -581,20 +637,42 @@ export class ImageStorage implements IDisposable {
      }
    }
  
@@ -1183,7 +1208,7 @@ index 322b9e02f1aed1d75feff0057ce7a9ded9094ea5..02e2cff065193c3bf28df52d0256a22f
        }
      }
      return used - current;
-@@ -656,7 +719,7 @@ export class ImageStorage implements IDisposable {
+@@ -656,7 +734,7 @@ export class ImageStorage implements IDisposable {
      // deleted images with zero tile count
      const zero = [];
      for (const [id, spec] of this._images.entries()) {
@@ -1390,7 +1415,7 @@ index c2376a68ac773c0e657a04e733f04e8db3b7a2b7..350863c264b0876f8ef48e4ec421ee7c
      this._storage.addImage(img, this._addImageOpts);
    }
 diff --git a/src/Types.ts b/src/Types.ts
-index 53d357a973117b844ebf2e236d6892334f15c27b..6955e3e18bf4b97aaafbde26da877425b56092ff 100644
+index 53d357a973117b844ebf2e236d6892334f15c27b..b1991bb654305ac6e99fd66d00a8fd792c692078 100644
 --- a/src/Types.ts
 +++ b/src/Types.ts
 @@ -4,6 +4,8 @@
@@ -1427,7 +1452,7 @@ index 53d357a973117b844ebf2e236d6892334f15c27b..6955e3e18bf4b97aaafbde26da877425
    _coreBrowserService: ICoreBrowserService | undefined;
  }
  
-@@ -107,17 +111,41 @@ export interface IAddImageOpts {
+@@ -107,17 +111,42 @@ export interface IAddImageOpts {
    scrolling: boolean;
    layer: ImageLayer;
    zIndex: number;
@@ -1465,6 +1490,7 @@ index 53d357a973117b844ebf2e236d6892334f15c27b..6955e3e18bf4b97aaafbde26da877425
 +export interface IImageLayerProvider {
 +  collectDraws(): readonly IImageDraw[];
 +  hasNegativeImages?(): boolean;
++  getHiddenGlyphColumns?(bufferRow: number): ReadonlySet<number> | undefined;
 +}
 +
 +export interface IImageAwareRenderer extends IRenderer {

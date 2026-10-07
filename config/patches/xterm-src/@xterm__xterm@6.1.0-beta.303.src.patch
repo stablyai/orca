@@ -72,10 +72,22 @@ index 67893b7966eb095db4459b8837de9766921f36c5..0abf7ecac1aa108f7caf711d0a5c610a
      // support reading out character input which can doubling up input characters
      // Based on these event traces: https://github.com/xtermjs/xterm.js/issues/3679
 diff --git a/src/browser/Types.ts b/src/browser/Types.ts
-index 497afcf535f3eaca00889525a77e15eb633ccd96..96d499b34605f860608382114c3fbdc07dc6b07f 100644
+index 497afcf535f3eaca00889525a77e15eb633ccd96..35355e474674900053559aa29b9522eee148239d 100644
 --- a/src/browser/Types.ts
 +++ b/src/browser/Types.ts
-@@ -41,9 +41,10 @@ export interface ICompositionHelper {
+@@ -15,6 +15,11 @@ import type { IEvent } from '../common/Event';
+  */
+ type InternalPassthroughApis = Omit<ITerminalApi, 'buffer' | 'parser' | 'unicode' | 'modes' | 'writeln' | 'loadAddon'>;
+ 
++export interface IImageGlyphProvider {
++  hasNegativeImages?(): boolean;
++  getHiddenGlyphColumns?(bufferRow: number): ReadonlySet<number> | undefined;
++}
++
+ export interface ITerminal extends InternalPassthroughApis, ICoreTerminal {
+   screenElement: HTMLElement | undefined;
+   browser: IBrowser;
+@@ -41,9 +46,10 @@ export interface ICompositionHelper {
    readonly isComposing: boolean;
    compositionstart(): void;
    compositionupdate(ev: CompositionEvent): void;
@@ -1235,16 +1247,26 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..4d62369d0005f465318ec93e221fd3ee
    }
  }
 diff --git a/src/browser/renderer/dom/DomRenderer.ts b/src/browser/renderer/dom/DomRenderer.ts
-index 657217f7104c97ce54b98e88b381b325b061604c..00246e7ac935c87f37d3d227a167ba0d157eae73 100644
+index 657217f7104c97ce54b98e88b381b325b061604c..d2ed39120196bc26227936a07f412977d628783b 100644
 --- a/src/browser/renderer/dom/DomRenderer.ts
 +++ b/src/browser/renderer/dom/DomRenderer.ts
-@@ -524,6 +524,12 @@ export class DomRenderer extends Disposable implements IRenderer {
+@@ -11,7 +11,7 @@ import { createSelectionRenderModel } from '../shared/SelectionRenderModel';
+ import { TextBlinkStateManager } from '../shared/TextBlinkStateManager';
+ import { IRenderDimensions, IRenderer, IRequestRedrawEvent, ISelectionRenderModel } from '../shared/Types';
+ import { ICharSizeService, ICoreBrowserService, IThemeService } from '../../services/Services';
+-import { ILinkifier2, ILinkifierEvent, ITerminal, ReadonlyColorSet } from '../../Types';
++import { IImageGlyphProvider, ILinkifier2, ILinkifierEvent, ITerminal, ReadonlyColorSet } from '../../Types';
+ import { color } from '../../../common/Color';
+ import { Disposable, toDisposable } from '../../../common/Lifecycle';
+ import { IBufferService, ICoreService, IInstantiationService, IOptionsService } from '../../../common/services/Services';
+@@ -524,6 +524,13 @@ export class DomRenderer extends Disposable implements IRenderer {
      }
    }
  
-+  public setImageLayerProvider(provider: unknown): void {
-+    this._rowFactory.imageLayersEnabled = !!provider;
-+    this._selectionContainer.style.zIndex = provider ? '3' : '';
++  public setImageLayerProvider(provider: IImageGlyphProvider | undefined): void {
++    this._rowFactory.imageLayersEnabled = provider?.hasNegativeImages?.() ?? !!provider;
++    this._rowFactory.getHiddenGlyphColumns = provider?.getHiddenGlyphColumns?.bind(provider);
++    this._selectionContainer.style.zIndex = this._rowFactory.imageLayersEnabled ? '3' : '';
 +    this.renderRows(0, this._bufferService.rows - 1);
 +  }
 +
@@ -1252,18 +1274,66 @@ index 657217f7104c97ce54b98e88b381b325b061604c..00246e7ac935c87f37d3d227a167ba0d
      const buffer = this._bufferService.buffer;
      const cursorAbsoluteY = buffer.ybase + buffer.y;
 diff --git a/src/browser/renderer/dom/DomRendererRowFactory.ts b/src/browser/renderer/dom/DomRendererRowFactory.ts
-index 6ae089a4387de14488f39f5dab7024cffdcd9d10..af7b0846a484d1f870f8307a7e3915a46d566ebf 100644
+index 6ae089a4387de14488f39f5dab7024cffdcd9d10..84e2c3b73786a60150475c603345ccfd842e4045 100644
 --- a/src/browser/renderer/dom/DomRendererRowFactory.ts
 +++ b/src/browser/renderer/dom/DomRendererRowFactory.ts
-@@ -43,6 +43,7 @@ export class DomRendererRowFactory {
+@@ -43,6 +43,8 @@ export class DomRendererRowFactory {
    private _columnSelectMode: boolean = false;
  
    public defaultSpacing = 0;
 +  public imageLayersEnabled = false;
++  public getHiddenGlyphColumns: ((bufferRow: number) => ReadonlySet<number> | undefined) | undefined;
  
    constructor(
      private readonly _document: Document,
-@@ -488,6 +489,22 @@ export class DomRendererRowFactory {
+@@ -81,6 +83,7 @@ export class DomRendererRowFactory {
+       rowInfo.hasBlinkingCells = false;
+     }
+     const joinedRanges = this._characterJoinerService.getJoinedCharacters(row);
++    const hiddenGlyphColumns = this.getHiddenGlyphColumns?.(row);
+     const colors = this._themeService.colors;
+ 
+     let lineLength = lineData.getNoBgTrimmedLength();
+@@ -131,8 +134,10 @@ export class DomRendererRowFactory {
+         // If the ligature's selection state is not consistent, don't join it. This helps the
+         // selection render correctly regardless whether they should be joined.
+         const firstSelectionState = this._isCellInSelection(range[0], row);
++        isValidJoinRange &&= !hiddenGlyphColumns?.has(range[0]);
+         for (i = range[0] + 1; i < range[1]; i++) {
+           isValidJoinRange &&= (firstSelectionState === this._isCellInSelection(i, row));
++          isValidJoinRange &&= !hiddenGlyphColumns?.has(i);
+         }
+         // Similarly, if the cursor is in the ligature, don't join it.
+         isValidJoinRange &&= !isCursorRow || cursorX < range[0] || cursorX >= range[1];
+@@ -174,7 +179,8 @@ export class DomRendererRowFactory {
+       });
+ 
+       // get chars to render for this cell
+-      let chars = cell.getChars() || WHITESPACE_CELL_CHAR;
++      const isGlyphHidden = cell.isInvisible() || hiddenGlyphColumns?.has(x);
++      let chars = isGlyphHidden ? WHITESPACE_CELL_CHAR : cell.getChars() || WHITESPACE_CELL_CHAR;
+       if (chars === ' ' && (cell.isUnderline() || cell.isOverline())) {
+         chars = '\xa0';
+       }
+@@ -214,7 +220,7 @@ export class DomRendererRowFactory {
+           && isValidJoinRange
+         ) {
+           // no span alterations, thus only account chars skipping all code below
+-          if (cell.isInvisible()) {
++          if (isGlyphHidden) {
+             text += WHITESPACE_CELL_CHAR;
+           } else {
+             text += chars;
+@@ -299,7 +305,7 @@ export class DomRendererRowFactory {
+         classes.push(RowCss.DIM_CLASS);
+       }
+ 
+-      if (cell.isInvisible()) {
++      if (isGlyphHidden) {
+         text = WHITESPACE_CELL_CHAR;
+       } else {
+         text = cell.getChars() || WHITESPACE_CELL_CHAR;
+@@ -488,6 +494,22 @@ export class DomRendererRowFactory {
        charElement.textContent = text;
      }
  

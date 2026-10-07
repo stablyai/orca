@@ -505,7 +505,7 @@ index 4977ad741065e26bbfd35bc50e7558a033b13340..f55805ddc3f266415f7f8e81e5b8c318
  
      const powerlineGlyph = chars.length === 1 && isPowerlineGlyph(chars.charCodeAt(0));
 diff --git a/src/Types.ts b/src/Types.ts
-index bfd6fd76cebe8f55dce7bfad5406d4f7cd184320..56e481a89f8a797225b1446700ca07f107e43630 100644
+index bfd6fd76cebe8f55dce7bfad5406d4f7cd184320..ea087b896b5c5e6f3ec7b087d514caf18ba3cc00 100644
 --- a/src/Types.ts
 +++ b/src/Types.ts
 @@ -11,6 +11,7 @@ import type { IEvent } from 'common/Event';
@@ -516,7 +516,7 @@ index bfd6fd76cebe8f55dce7bfad5406d4f7cd184320..56e481a89f8a797225b1446700ca07f1
    lineLengths: Uint32Array;
    selection: ISelectionRenderModel;
    cursor?: ICursorRenderModel;
-@@ -127,3 +128,15 @@ export interface IBoundingBox {
+@@ -127,3 +128,16 @@ export interface IBoundingBox {
    right: number;
    bottom: number;
  }
@@ -531,9 +531,10 @@ index bfd6fd76cebe8f55dce7bfad5406d4f7cd184320..56e481a89f8a797225b1446700ca07f1
 +export interface IImageLayerProvider {
 +  collectDraws(): readonly IImageDraw[];
 +  hasNegativeImages?(): boolean;
++  getHiddenGlyphColumns?(bufferRow: number): ReadonlySet<number> | undefined;
 +}
 diff --git a/src/WebglRenderer.ts b/src/WebglRenderer.ts
-index a951efba5c75e82735cd39b6b22c4b5d5fad5928..260891f9074d02a90922649c41eee3912bc6827c 100644
+index a951efba5c75e82735cd39b6b22c4b5d5fad5928..11863064d7ac25e60844676ca44b934812aadea9 100644
 --- a/src/WebglRenderer.ts
 +++ b/src/WebglRenderer.ts
 @@ -4,6 +4,8 @@
@@ -574,20 +575,21 @@ index a951efba5c75e82735cd39b6b22c4b5d5fad5928..260891f9074d02a90922649c41eee391
        this._themeService.colors,
        this.dimensions.device.cell.width,
        this.dimensions.device.cell.height,
-@@ -351,6 +359,12 @@ export class WebglRenderer extends Disposable implements IRenderer {
+@@ -351,6 +359,13 @@ export class WebglRenderer extends Disposable implements IRenderer {
      this._updateCursorBlink();
    }
  
 +  public setImageLayerProvider(provider: IImageLayerProvider | undefined): void {
 +    this._imageRenderer.clear();
 +    this._imageProvider = provider;
-+
++    this._clearModel(true);
++    this._requestRedrawViewport();
 +  }
 +
    public renderRows(start: number, end: number): void {
      if (!this._isAttached) {
        if (this._core.screenElement?.isConnected && this._charSizeService.width && this._charSizeService.height) {
-@@ -371,6 +385,16 @@ export class WebglRenderer extends Disposable implements IRenderer {
+@@ -371,6 +386,16 @@ export class WebglRenderer extends Disposable implements IRenderer {
        return;
      }
  
@@ -604,7 +606,7 @@ index a951efba5c75e82735cd39b6b22c4b5d5fad5928..260891f9074d02a90922649c41eee391
      // Tell renderer the frame is beginning
      // upon a model clear also refresh the full viewport model
      // (also triggered by an atlas page merge, part of #4480)
-@@ -386,7 +410,10 @@ export class WebglRenderer extends Disposable implements IRenderer {
+@@ -386,7 +411,10 @@ export class WebglRenderer extends Disposable implements IRenderer {
      // page's version, so re-run the update and force a full texture rebind.
      let merged = false;
      let mergeRetries = 0;
@@ -616,7 +618,7 @@ index a951efba5c75e82735cd39b6b22c4b5d5fad5928..260891f9074d02a90922649c41eee391
        merged = true;
        this._clearModel(true);
        this._updateModel(0, this._terminal.rows - 1);
-@@ -396,7 +423,19 @@ export class WebglRenderer extends Disposable implements IRenderer {
+@@ -396,7 +424,19 @@ export class WebglRenderer extends Disposable implements IRenderer {
      }
  
      // Render
@@ -637,7 +639,26 @@ index a951efba5c75e82735cd39b6b22c4b5d5fad5928..260891f9074d02a90922649c41eee391
      this._glyphRenderer.value.render(this._model);
      if (!this._cursorBlinkStateManager.value || this._cursorBlinkStateManager.value.isCursorVisible) {
        this._rectangleRenderer.value.renderCursor();
-@@ -556,6 +595,7 @@ export class WebglRenderer extends Disposable implements IRenderer {
+@@ -468,6 +508,7 @@ export class WebglRenderer extends Disposable implements IRenderer {
+         continue;
+       }
+       line = bufferLine;
++      const hiddenGlyphColumns = this._imageProvider?.getHiddenGlyphColumns?.(row);
+       let rowHasBlinkingCells = false;
+       this._model.lineLengths[y] = 0;
+       isCursorRow = cursorY === row;
+@@ -499,8 +540,10 @@ export class WebglRenderer extends Disposable implements IRenderer {
+           // If the ligature's selection state is not consistent, don't join it. This helps the
+           // selection render correctly regardless whether they should be joined.
+           const firstSelectionState = this._model.selection.isCellSelected(this._terminal, range[0], row);
++          isValidJoinRange &&= !hiddenGlyphColumns?.has(range[0]);
+           for (i = range[0] + 1; i < range[1]; i++) {
+             isValidJoinRange &&= (firstSelectionState === this._model.selection.isCellSelected(this._terminal, i, row));
++            isValidJoinRange &&= !hiddenGlyphColumns?.has(i);
+           }
+           // Similarly, if the cursor is in the ligature, don't join it.
+           isValidJoinRange &&= !isCursorRow || cursorX < range[0] || cursorX >= range[1];
+@@ -556,10 +599,12 @@ export class WebglRenderer extends Disposable implements IRenderer {
                Attributes.CM_RGB | (this._themeService.colors.cursorAccent.rgba >> 8 & Attributes.RGB_MASK);
              this._cellColorResolver.result.bg =
                Attributes.CM_RGB | (this._themeService.colors.cursor.rgba >> 8 & Attributes.RGB_MASK);
@@ -645,7 +666,13 @@ index a951efba5c75e82735cd39b6b22c4b5d5fad5928..260891f9074d02a90922649c41eee391
            }
          }
  
-@@ -567,8 +607,13 @@ export class WebglRenderer extends Disposable implements IRenderer {
+-        if (this._textBlinkStateManager.isEnabled && !this._textBlinkStateManager.isBlinkOn && cell.isBlink()) {
++        if (hiddenGlyphColumns?.has(x) ||
++          (this._textBlinkStateManager.isEnabled && !this._textBlinkStateManager.isBlinkOn && cell.isBlink())) {
+           this._cellColorResolver.result.fg |= FgFlags.INVISIBLE;
+         }
+ 
+@@ -567,8 +612,13 @@ export class WebglRenderer extends Disposable implements IRenderer {
            this._model.lineLengths[y] = x + 1;
          }
  
@@ -660,7 +687,7 @@ index a951efba5c75e82735cd39b6b22c4b5d5fad5928..260891f9074d02a90922649c41eee391
              this._model.cells[i + RenderModelConstants.BG_OFFSET] === this._cellColorResolver.result.bg &&
              this._model.cells[i + RenderModelConstants.FG_OFFSET] === this._cellColorResolver.result.fg &&
              this._model.cells[i + RenderModelConstants.EXT_OFFSET] === this._cellColorResolver.result.ext) {
-@@ -600,7 +645,7 @@ export class WebglRenderer extends Disposable implements IRenderer {
+@@ -600,7 +650,7 @@ export class WebglRenderer extends Disposable implements IRenderer {
              j = ((y * terminal.cols) + x) * RenderModelConstants.INDICIES_PER_CELL;
              // Don't re-resolve the cell color since multi-colored ligature backgrounds are not
              // supported
@@ -669,7 +696,7 @@ index a951efba5c75e82735cd39b6b22c4b5d5fad5928..260891f9074d02a90922649c41eee391
            }
            x--; // Go back to the previous update cell for next iteration
          }
-@@ -608,13 +653,14 @@ export class WebglRenderer extends Disposable implements IRenderer {
+@@ -608,13 +658,14 @@ export class WebglRenderer extends Disposable implements IRenderer {
        this._setRowBlinkState(y, rowHasBlinkingCells);
      }
      if (modelUpdated) {

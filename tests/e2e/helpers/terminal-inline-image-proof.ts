@@ -158,6 +158,21 @@ export async function assertKittyPlaceholderPixels(
   screenshotPath: string
 ): Promise<void> {
   const screen = page.locator('.pane:visible .xterm-screen').first()
+  const grid = await page.evaluate(() => {
+    const tab = window.__store!.getState().activeTabId
+    const terminal = tab && window.__paneManagers?.get(tab)?.getActivePane()?.terminal
+    const cell = terminal && terminal.dimensions?.css.cell
+    if (!terminal || !cell) {
+      throw new Error('Missing placeholder proof geometry')
+    }
+    for (let row = 0; row < terminal.rows; row++) {
+      const line = terminal.buffer.active.getLine(terminal.buffer.active.viewportY + row)
+      if (line?.translateToString(true).includes('Kitty placeholders: orange')) {
+        return { row: row + 1, width: cell.width, height: cell.height }
+      }
+    }
+    throw new Error('Missing placeholder proof label in viewport')
+  })
   await expect
     .poll(
       async () => {
@@ -173,6 +188,25 @@ export async function assertKittyPlaceholderPixels(
             orangePixels++
           }
         }
+        const bounds = await screen.boundingBox()
+        if (!bounds) {
+          throw new Error('Missing placeholder proof screen bounds')
+        }
+        const cw = (grid.width * png.width) / bounds.width
+        const ch = (grid.height * png.height) / bounds.height
+        let glyphPixels = 0
+        for (let y = Math.ceil(grid.row * ch); y < (grid.row + 3) * ch; y++) {
+          for (let x = 0; x < 15 * cw; x++) {
+            const i = (y * png.width + x) * 4
+            const red = png.data[i]
+            const green = png.data[i + 1]
+            const blue = png.data[i + 2]
+            if (red < 110 && green > 120 && blue < 110 && green > red + 40 && green > blue + 40) {
+              glyphPixels++
+            }
+          }
+        }
+        expect(glyphPixels, 'Placeholder glyphs must not show through the fitted image').toBe(0)
         return orangePixels
       },
       { timeout: 30_000, message: 'Remote Kitty placeholder cells must paint the orange image' }

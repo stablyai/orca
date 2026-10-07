@@ -167,13 +167,13 @@ overrides:
 
 patchedDependencies:
   '@vscode/windows-process-tree@0.8.0': 9da74aa3d17243aa53dcdc95c9f06e97437e7fbccf098aeb017579e2d24cbac2
-  '@xterm/addon-image@0.10.0-beta.300': bbaaab9404156ca1d19c187e1c2feffd3151b7379959b4d264fb2e2051b4dcd3
+  '@xterm/addon-image@0.10.0-beta.300': 6391a0831bc361911423aa780be8f6db75519ff9df643e030827493e96a7de61
   '@xterm/addon-ligatures@0.11.0-beta.300': 47405b9994b5acf1b4e90b49250358c1ca03649854d59560e7732b72fe336920
   '@xterm/addon-search@0.17.0-beta.300': eee5338dd2621ece46e79c61ec06766cd7fadaf79ffdb24e2a8ab68e97ef31f0
   '@xterm/addon-serialize@0.15.0-beta.300': da6b7218b1d16f47404802c8a9ace816da6d5174dd7ad90364c7fc051a270229
-  '@xterm/addon-webgl@0.20.0-beta.299': e0417212d88fef35ae602ee130591011da50fd21f1284978bc230c8ed84893cd
+  '@xterm/addon-webgl@0.20.0-beta.299': 9d70db90e60cf19f860f0f12e9a15219430c3b62eed407e965c69e8c617ae828
   '@xterm/headless@6.1.0-beta.302': 91c9396fe8de89a54ac6975fa1ca2692c1be843f079eac7fc535a6d90c5a4269
-  '@xterm/xterm@6.1.0-beta.303': e2f289cc4f13bae60d39500f00b7035d793657ccdc70ddf0a1122eec1f9b50ab
+  '@xterm/xterm@6.1.0-beta.303': c558a39e47aefe5ea222ff48a87c353e315a022602849b2fdfd782d01f8fd0a6
   i18next-cli@1.74.2: 7955b89d3aa229f477408608d331f78c85148a85a85913729f89fac65ad8b207
   lint-staged@16.4.0: 7333b3837f80a7fbd045964db6d76ba4fc118e49134bdbabb00585b6b7b60673
   node-pty@1.1.0: 92c95cffab383d86b3b13a460c75a08074468ebf1f3911db8e874e083201f192
@@ -199,7 +199,7 @@ importers:
         version: 2.5.6
       '@xterm/addon-serialize':
         specifier: 0.15.0-beta.300
-        version: 0.15.0-beta.300(patch_hash=da6b7218b1d16f47404802c8a9ace816da6d5174dd7ad90364c7fc051a270229)(@xterm/xterm@6.1.0-beta.303(patch_hash=e2f289cc4f13bae60d39500f00b7035d793657ccdc70ddf0a1122eec1f9b50ab))
+        version: 0.15.0-beta.300(patch_hash=da6b7218b1d16f47404802c8a9ace816da6d5174dd7ad90364c7fc051a270229)(@xterm/xterm@6.1.0-beta.303(patch_hash=c558a39e47aefe5ea222ff48a87c353e315a022602849b2fdfd782d01f8fd0a6))
       '@xterm/headless':
         specifier: 6.1.0-beta.302
         version: 6.1.0-beta.302(patch_hash=91c9396fe8de89a54ac6975fa1ca2692c1be843f079eac7fc535a6d90c5a4269)
@@ -401,28 +401,28 @@ importers:
         version: 1.18.0
       '@xterm/addon-fit':
         specifier: 0.12.0-beta.300
-        version: 0.12.0-beta.300(@xterm/xterm@6.1.0-beta.303(patch_hash=e2f289cc4f13bae60d39500f00b7035d793657ccdc70ddf0a1122eec1f9b50ab))
+        version: 0.12.0-beta.300(@xterm/xterm@6.1.0-beta.303(patch_hash=c558a39e47aefe5ea222ff48a87c353e315a022602849b2fdfd782d01f8fd0a6))
       '@xterm/addon-image':
         specifier: 0.10.0-beta.300
-        version: 0.10.0-beta.300(patch_hash=bbaaab9404156ca1d19c187e1c2feffd3151b7379959b4d264fb2e2051b4dcd3)(@xterm/xterm@6.1.0-beta.303(patch_hash=e2f289cc4f13bae60d39500f00b7035d793657ccdc70ddf0a1122eec1f9b50ab))
+        version: 0.10.0-beta.300(patch_hash=6391a0831bc361911423aa780be8f6db75519ff9df643e030827493e96a7de61)(@xterm/xterm@6.1.0-beta.303(patch_hash=c558a39e47aefe5ea222ff48a87c353e315a022602849b2fdfd782d01f8fd0a6))
       '@xterm/addon-ligatures':
         specifier: 0.11.0-beta.300
-        version: 0.11.0-beta.300(patch_hash=47405b9994b5acf1b4e90b49250358c1ca03649854d59560e7732b72fe336920)(@xterm/xterm@6.1.0-beta.303(patch_hash=e2f289cc4f13bae60d39500f00b7035d793657ccdc70ddf0a1122eec1f9b50ab))
+        version: 0.11.0-beta.300(patch_hash=47405b9994b5acf1b4e90b49250358c1ca03649854d59560e7732b72fe336920)(@xterm/xterm@6.1.0-beta.303(patch_hash=c558a39e47aefe5ea222ff48a87c353e315a022602849b2fdfd782d01f8fd0a6))
       '@xterm/addon-search':
         specifier: 0.17.0-beta.300
-        version: 0.17.0-beta.300(patch_hash=eee5338dd2621ece46e79c61ec06766cd7fadaf79ffdb24e2a8ab68e97ef31f0)(@xterm/xterm@6.1.0-beta.303(patch_hash=e2f289cc4f13bae60d39500f00b7035d793657ccdc70ddf0a1122eec1f9b50ab))
+        version: 0.17.0-beta.300(patch_hash=eee5338dd2621ece46e79c61ec06766cd7fadaf79ffdb24e2a8ab68e97ef31f0)(@xterm/xterm@6.1.0-beta.303(patch_hash=c558a39e47aefe5ea222ff48a87c353e315a022602849b2fdfd782d01f8fd0a6))
       '@xterm/addon-unicode11':
         specifier: 0.10.0-beta.300
-        version: 0.10.0-beta.300(@xterm/xterm@6.1.0-beta.303(patch_hash=e2f289cc4f13bae60d39500f00b7035d793657ccdc70ddf0a1122eec1f9b50ab))
+        version: 0.10.0-beta.300(@xterm/xterm@6.1.0-beta.303(patch_hash=c558a39e47aefe5ea222ff48a87c353e315a022602849b2fdfd782d01f8fd0a6))
       '@xterm/addon-web-links':
         specifier: 0.13.0-beta.300
-        version: 0.13.0-beta.300(@xterm/xterm@6.1.0-beta.303(patch_hash=e2f289cc4f13bae60d39500f00b7035d793657ccdc70ddf0a1122eec1f9b50ab))
+        version: 0.13.0-beta.300(@xterm/xterm@6.1.0-beta.303(patch_hash=c558a39e47aefe5ea222ff48a87c353e315a022602849b2fdfd782d01f8fd0a6))
       '@xterm/addon-webgl':
         specifier: 0.20.0-beta.299
-        version: 0.20.0-beta.299(patch_hash=e0417212d88fef35ae602ee130591011da50fd21f1284978bc230c8ed84893cd)(@xterm/xterm@6.1.0-beta.303(patch_hash=e2f289cc4f13bae60d39500f00b7035d793657ccdc70ddf0a1122eec1f9b50ab))
+        version: 0.20.0-beta.299(patch_hash=9d70db90e60cf19f860f0f12e9a15219430c3b62eed407e965c69e8c617ae828)(@xterm/xterm@6.1.0-beta.303(patch_hash=c558a39e47aefe5ea222ff48a87c353e315a022602849b2fdfd782d01f8fd0a6))
       '@xterm/xterm':
         specifier: 6.1.0-beta.303
-        version: 6.1.0-beta.303(patch_hash=e2f289cc4f13bae60d39500f00b7035d793657ccdc70ddf0a1122eec1f9b50ab)
+        version: 6.1.0-beta.303(patch_hash=c558a39e47aefe5ea222ff48a87c353e315a022602849b2fdfd782d01f8fd0a6)
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -11052,43 +11052,43 @@ snapshots:
 
   '@xmldom/xmldom@0.8.15': {}
 
-  '@xterm/addon-fit@0.12.0-beta.300(@xterm/xterm@6.1.0-beta.303(patch_hash=e2f289cc4f13bae60d39500f00b7035d793657ccdc70ddf0a1122eec1f9b50ab))':
+  '@xterm/addon-fit@0.12.0-beta.300(@xterm/xterm@6.1.0-beta.303(patch_hash=c558a39e47aefe5ea222ff48a87c353e315a022602849b2fdfd782d01f8fd0a6))':
     dependencies:
-      '@xterm/xterm': 6.1.0-beta.303(patch_hash=e2f289cc4f13bae60d39500f00b7035d793657ccdc70ddf0a1122eec1f9b50ab)
+      '@xterm/xterm': 6.1.0-beta.303(patch_hash=c558a39e47aefe5ea222ff48a87c353e315a022602849b2fdfd782d01f8fd0a6)
 
-  '@xterm/addon-image@0.10.0-beta.300(patch_hash=bbaaab9404156ca1d19c187e1c2feffd3151b7379959b4d264fb2e2051b4dcd3)(@xterm/xterm@6.1.0-beta.303(patch_hash=e2f289cc4f13bae60d39500f00b7035d793657ccdc70ddf0a1122eec1f9b50ab))':
+  '@xterm/addon-image@0.10.0-beta.300(patch_hash=6391a0831bc361911423aa780be8f6db75519ff9df643e030827493e96a7de61)(@xterm/xterm@6.1.0-beta.303(patch_hash=c558a39e47aefe5ea222ff48a87c353e315a022602849b2fdfd782d01f8fd0a6))':
     dependencies:
-      '@xterm/xterm': 6.1.0-beta.303(patch_hash=e2f289cc4f13bae60d39500f00b7035d793657ccdc70ddf0a1122eec1f9b50ab)
+      '@xterm/xterm': 6.1.0-beta.303(patch_hash=c558a39e47aefe5ea222ff48a87c353e315a022602849b2fdfd782d01f8fd0a6)
 
-  '@xterm/addon-ligatures@0.11.0-beta.300(patch_hash=47405b9994b5acf1b4e90b49250358c1ca03649854d59560e7732b72fe336920)(@xterm/xterm@6.1.0-beta.303(patch_hash=e2f289cc4f13bae60d39500f00b7035d793657ccdc70ddf0a1122eec1f9b50ab))':
+  '@xterm/addon-ligatures@0.11.0-beta.300(patch_hash=47405b9994b5acf1b4e90b49250358c1ca03649854d59560e7732b72fe336920)(@xterm/xterm@6.1.0-beta.303(patch_hash=c558a39e47aefe5ea222ff48a87c353e315a022602849b2fdfd782d01f8fd0a6))':
     dependencies:
-      '@xterm/xterm': 6.1.0-beta.303(patch_hash=e2f289cc4f13bae60d39500f00b7035d793657ccdc70ddf0a1122eec1f9b50ab)
+      '@xterm/xterm': 6.1.0-beta.303(patch_hash=c558a39e47aefe5ea222ff48a87c353e315a022602849b2fdfd782d01f8fd0a6)
       lru-cache: 11.5.1
       opentype.js: 2.0.0
 
-  '@xterm/addon-search@0.17.0-beta.300(patch_hash=eee5338dd2621ece46e79c61ec06766cd7fadaf79ffdb24e2a8ab68e97ef31f0)(@xterm/xterm@6.1.0-beta.303(patch_hash=e2f289cc4f13bae60d39500f00b7035d793657ccdc70ddf0a1122eec1f9b50ab))':
+  '@xterm/addon-search@0.17.0-beta.300(patch_hash=eee5338dd2621ece46e79c61ec06766cd7fadaf79ffdb24e2a8ab68e97ef31f0)(@xterm/xterm@6.1.0-beta.303(patch_hash=c558a39e47aefe5ea222ff48a87c353e315a022602849b2fdfd782d01f8fd0a6))':
     dependencies:
-      '@xterm/xterm': 6.1.0-beta.303(patch_hash=e2f289cc4f13bae60d39500f00b7035d793657ccdc70ddf0a1122eec1f9b50ab)
+      '@xterm/xterm': 6.1.0-beta.303(patch_hash=c558a39e47aefe5ea222ff48a87c353e315a022602849b2fdfd782d01f8fd0a6)
 
-  '@xterm/addon-serialize@0.15.0-beta.300(patch_hash=da6b7218b1d16f47404802c8a9ace816da6d5174dd7ad90364c7fc051a270229)(@xterm/xterm@6.1.0-beta.303(patch_hash=e2f289cc4f13bae60d39500f00b7035d793657ccdc70ddf0a1122eec1f9b50ab))':
+  '@xterm/addon-serialize@0.15.0-beta.300(patch_hash=da6b7218b1d16f47404802c8a9ace816da6d5174dd7ad90364c7fc051a270229)(@xterm/xterm@6.1.0-beta.303(patch_hash=c558a39e47aefe5ea222ff48a87c353e315a022602849b2fdfd782d01f8fd0a6))':
     dependencies:
-      '@xterm/xterm': 6.1.0-beta.303(patch_hash=e2f289cc4f13bae60d39500f00b7035d793657ccdc70ddf0a1122eec1f9b50ab)
+      '@xterm/xterm': 6.1.0-beta.303(patch_hash=c558a39e47aefe5ea222ff48a87c353e315a022602849b2fdfd782d01f8fd0a6)
 
-  '@xterm/addon-unicode11@0.10.0-beta.300(@xterm/xterm@6.1.0-beta.303(patch_hash=e2f289cc4f13bae60d39500f00b7035d793657ccdc70ddf0a1122eec1f9b50ab))':
+  '@xterm/addon-unicode11@0.10.0-beta.300(@xterm/xterm@6.1.0-beta.303(patch_hash=c558a39e47aefe5ea222ff48a87c353e315a022602849b2fdfd782d01f8fd0a6))':
     dependencies:
-      '@xterm/xterm': 6.1.0-beta.303(patch_hash=e2f289cc4f13bae60d39500f00b7035d793657ccdc70ddf0a1122eec1f9b50ab)
+      '@xterm/xterm': 6.1.0-beta.303(patch_hash=c558a39e47aefe5ea222ff48a87c353e315a022602849b2fdfd782d01f8fd0a6)
 
-  '@xterm/addon-web-links@0.13.0-beta.300(@xterm/xterm@6.1.0-beta.303(patch_hash=e2f289cc4f13bae60d39500f00b7035d793657ccdc70ddf0a1122eec1f9b50ab))':
+  '@xterm/addon-web-links@0.13.0-beta.300(@xterm/xterm@6.1.0-beta.303(patch_hash=c558a39e47aefe5ea222ff48a87c353e315a022602849b2fdfd782d01f8fd0a6))':
     dependencies:
-      '@xterm/xterm': 6.1.0-beta.303(patch_hash=e2f289cc4f13bae60d39500f00b7035d793657ccdc70ddf0a1122eec1f9b50ab)
+      '@xterm/xterm': 6.1.0-beta.303(patch_hash=c558a39e47aefe5ea222ff48a87c353e315a022602849b2fdfd782d01f8fd0a6)
 
-  '@xterm/addon-webgl@0.20.0-beta.299(patch_hash=e0417212d88fef35ae602ee130591011da50fd21f1284978bc230c8ed84893cd)(@xterm/xterm@6.1.0-beta.303(patch_hash=e2f289cc4f13bae60d39500f00b7035d793657ccdc70ddf0a1122eec1f9b50ab))':
+  '@xterm/addon-webgl@0.20.0-beta.299(patch_hash=9d70db90e60cf19f860f0f12e9a15219430c3b62eed407e965c69e8c617ae828)(@xterm/xterm@6.1.0-beta.303(patch_hash=c558a39e47aefe5ea222ff48a87c353e315a022602849b2fdfd782d01f8fd0a6))':
     dependencies:
-      '@xterm/xterm': 6.1.0-beta.303(patch_hash=e2f289cc4f13bae60d39500f00b7035d793657ccdc70ddf0a1122eec1f9b50ab)
+      '@xterm/xterm': 6.1.0-beta.303(patch_hash=c558a39e47aefe5ea222ff48a87c353e315a022602849b2fdfd782d01f8fd0a6)
 
   '@xterm/headless@6.1.0-beta.302(patch_hash=91c9396fe8de89a54ac6975fa1ca2692c1be843f079eac7fc535a6d90c5a4269)': {}
 
-  '@xterm/xterm@6.1.0-beta.303(patch_hash=e2f289cc4f13bae60d39500f00b7035d793657ccdc70ddf0a1122eec1f9b50ab)': {}
+  '@xterm/xterm@6.1.0-beta.303(patch_hash=c558a39e47aefe5ea222ff48a87c353e315a022602849b2fdfd782d01f8fd0a6)': {}
 
   abbrev@4.0.0: {}
 

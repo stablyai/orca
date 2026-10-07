@@ -67,6 +67,10 @@ write. Temporary sources have one owner across transforms and stale-result clean
 placement cell metrics are copied before storage. The contract suite loads the actual
 headless terminal without DOM globals, using a fixture backend. This boundary alone
 does not provide production host codecs, file transport or graphics checkpoints.
+DOM and GPU suppress text glyphs only in cells belonging to validated live virtual
+placements. The lookup reuses the image draw runs, including named IDs, inherited
+coordinates and grid clipping; it does not rewrite buffer text or colors. Removing
+the provider invalidates the GPU model so previously hidden glyphs repaint.
 The patch also bounds decompression before joining decoded chunks, validates PNG
 dimensions before native decoding, and closes stale asynchronous image results
 after reset, disable or disposal. `config/scripts/xterm-image-lifecycle-contract.test.mjs`
