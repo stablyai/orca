@@ -26,6 +26,7 @@ import {
   firstDifferenceIndex,
   formatCheckFailure,
   normalizePnpmDiff,
+  pnpmDiffArguments,
   pnpmDiffEnvironment,
   selectPatchEntries,
   sourceHunks,
@@ -71,7 +72,7 @@ async function writeTree(root, files) {
 function diffFolders(folderA, folderB) {
   let stdout
   try {
-    stdout = execFileSync('git', [...PNPM_DIFF_FLAGS, folderA, folderB], {
+    stdout = execFileSync('git', pnpmDiffArguments(folderA, folderB), {
       encoding: 'utf8',
       env: pnpmDiffEnvironment(),
       stdio: ['ignore', 'pipe', 'pipe']
@@ -106,6 +107,7 @@ describe('source checkout reset', () => {
     await writeTree(root, { 'src/Tracked.ts': 'original\n' })
     const git = (args) => execFileSync('git', args, { cwd: root, encoding: 'utf8' })
     git(['init', '--quiet'])
+    git(['config', 'core.autocrlf', 'false'])
     git(['add', 'src/'])
     git([
       '-c',
@@ -171,6 +173,14 @@ describe('source checkout reset', () => {
 })
 
 describe('pnpm diff format', () => {
+  it('normalizes Windows paths before Git can quote their backslashes', () => {
+    expect(pnpmDiffArguments('C:\\scratch dir\\pristine', 'C:\\scratch dir\\patched')).toEqual([
+      ...PNPM_DIFF_FLAGS,
+      'C:/scratch dir/pristine',
+      'C:/scratch dir/patched'
+    ])
+  })
+
   it('matches pnpm git config isolation', () => {
     const environment = pnpmDiffEnvironment({ PATH: '/usr/bin', HOME: '/Users/someone' })
     expect(environment).toMatchObject({
@@ -269,7 +279,13 @@ describe('round-trip stability', () => {
     await writeTree(replay, PRISTINE)
     const patchFile = path.join(root, 'round-trip.patch')
     await writeFile(patchFile, patch)
-    execFileSync('git', ['apply', '-p1', '--whitespace=nowarn', patchFile], { cwd: replay })
+    execFileSync(
+      'git',
+      ['-c', 'core.autocrlf=false', 'apply', '-p1', '--whitespace=nowarn', patchFile],
+      {
+        cwd: replay
+      }
+    )
 
     expect(await readFile(path.join(replay, 'lib/widget.js'), 'utf8')).toBe(
       PATCHED['lib/widget.js']
@@ -288,7 +304,13 @@ describe('round-trip stability', () => {
 
     const replay = path.join(root, 'replay')
     await writeTree(replay, PRISTINE)
-    execFileSync('git', ['apply', '-p1', '--whitespace=nowarn', patchFile], { cwd: replay })
+    execFileSync(
+      'git',
+      ['-c', 'core.autocrlf=false', 'apply', '-p1', '--whitespace=nowarn', patchFile],
+      {
+        cwd: replay
+      }
+    )
 
     expect(await readFile(path.join(replay, 'src/Widget.ts'), 'utf8')).toBe(
       PATCHED['src/Widget.ts']
@@ -361,6 +383,24 @@ it('omits source only when a package explicitly publishes none', async () => {
   expect(() => assertPristineSourceMatches(root, root, { sourceDistribution: 'typo' })).toThrow(
     /unknown/
   )
+})
+
+it('exempts only the manifest version stamp from pristine source comparison', async () => {
+  const root = await createDirectory()
+  const pristine = path.join(root, 'pristine')
+  const upstream = path.join(root, 'upstream')
+  const entry = { packageDir: '.', versionStampFile: 'src/common/public/Version.ts' }
+  await writeTree(pristine, {
+    'src/common/public/Version.ts': 'registry version',
+    'src/Terminal.ts': 'same source'
+  })
+  await writeTree(upstream, {
+    'src/common/public/Version.ts': 'upstream version',
+    'src/Terminal.ts': 'same source'
+  })
+  expect(() => assertPristineSourceMatches(pristine, upstream, entry)).not.toThrow()
+  await writeTree(upstream, { 'src/Terminal.ts': 'unexpected source drift' })
+  expect(() => assertPristineSourceMatches(pristine, upstream, entry)).toThrow(/Terminal\.ts/)
 })
 
 it('copies headless output without introducing unpublished source or package metadata', async () => {

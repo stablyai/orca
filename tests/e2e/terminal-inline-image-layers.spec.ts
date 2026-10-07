@@ -109,32 +109,62 @@ for (const acceleration of ['off', 'on'] as const) {
         if (!decoration) {
           throw new Error('Missing decoration proof handle')
         }
-        return { cols: terminal.cols, rows: terminal.rows }
+        const cell = terminal.dimensions?.css.cell
+        if (!cell || cell.width <= 0 || cell.height <= 0) {
+          throw new Error('Missing decoration proof cell metrics')
+        }
+        return {
+          cellWidth: cell.width,
+          cellHeight: cell.height,
+          row: marker.line - terminal.buffer.active.viewportY
+        }
       })
       await expect
         .poll(async () => {
+          const screen = orcaPage.locator('.pane:visible .xterm-screen').first()
+          const bounds = await screen.boundingBox()
+          if (!bounds) {
+            throw new Error('Missing decoration proof screen bounds')
+          }
           const png = PNG.sync.read(
-            await orcaPage
-              .locator('.pane:visible .xterm-screen')
-              .first()
-              .screenshot({
-                path: testInfo.outputPath('top-decoration.png')
-              })
+            await screen.screenshot({ path: testInfo.outputPath('top-decoration.png') })
           )
-          let green = 0
-          const cw = png.width / dimensions.cols
-          const ch = png.height / dimensions.rows
-          for (let y = Math.ceil(4 * ch); y < Math.floor(5 * ch); y++) {
-            for (let x = Math.ceil(4 * cw); x < Math.floor(8 * cw); x++) {
+          const counts = { green: 0, blue: 0, red: 0, samples: 0 }
+          const cw = (dimensions.cellWidth * png.width) / bounds.width
+          const ch = (dimensions.cellHeight * png.height) / bounds.height
+          for (
+            let y = Math.ceil(dimensions.row * ch) + 1;
+            y < Math.floor((dimensions.row + 1) * ch) - 1;
+            y++
+          ) {
+            for (let x = Math.ceil(4 * cw) + 1; x < Math.floor(8 * cw) - 1; x++) {
               const i = (y * png.width + x) * 4
+              counts.samples++
               if (png.data[i] < 60 && png.data[i + 1] > 220 && png.data[i + 2] < 60) {
-                green++
+                counts.green++
+              }
+              if (png.data[i] < 60 && png.data[i + 1] < 60 && png.data[i + 2] > 220) {
+                counts.blue++
+              }
+              if (png.data[i] > 220 && png.data[i + 1] < 60 && png.data[i + 2] < 60) {
+                counts.red++
               }
             }
           }
-          return green / (cw * ch)
+          return {
+            ...counts,
+            backgroundVisible: counts.green > counts.samples / 4,
+            glyphsVisible: counts.blue > 5,
+            imageCovered: counts.red < counts.samples / 50,
+            rowSampled: counts.samples > 2 * cw * ch
+          }
         })
-        .toBeGreaterThan(2)
+        .toMatchObject({
+          backgroundVisible: true,
+          glyphsVisible: true,
+          imageCovered: true,
+          rowSampled: true
+        })
     } finally {
       await sendToTerminal(orcaPage, pty, '\x03').catch(() => undefined)
     }

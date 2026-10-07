@@ -41,6 +41,11 @@ export const CHECKOUT_DIFF_FLAGS = PNPM_DIFF_FLAGS.filter((flag) => flag !== '--
   (flag) => (flag === '--' ? ['--relative', '--'] : [flag])
 )
 
+export function pnpmDiffArguments(folderA, folderB) {
+  // Git quotes native Windows backslashes; pnpm normalizes paths before diffing.
+  return [...PNPM_DIFF_FLAGS, folderA.replace(/\\/g, '/'), folderB.replace(/\\/g, '/')]
+}
+
 /** Applies pnpm's git config isolation so local machine settings cannot change the patch. */
 export function pnpmDiffEnvironment(baseEnvironment = process.env) {
   return {

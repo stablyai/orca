@@ -19,11 +19,11 @@ import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import {
   CHECKOUT_DIFF_FLAGS,
-  PNPM_DIFF_FLAGS,
   assertSourceDerivationsAgree,
   escapeRegExp,
   formatCheckFailure,
   normalizePnpmDiff,
+  pnpmDiffArguments,
   pnpmDiffEnvironment
 } from './xterm-patch-text.mjs'
 
@@ -293,7 +293,7 @@ export function assertPristineSourceMatches(pristineDir, upstreamRoot, packageEn
   const sourceRoot = path.join(pristineDir, 'src')
   const drifted = listFilesRelative(sourceRoot)
     .map((relative) => path.join('src', relative))
-    .filter((relative) => relative !== stampFile)
+    .filter((relative) => toPosix(relative) !== stampFile)
     .filter(
       (relative) =>
         !sameBytes(
@@ -409,7 +409,7 @@ export function overlayBuildOutput(pristineDir, upstreamRoot, packageEntry, dest
 function diffFolders(folderA, folderB) {
   let stdout
   try {
-    stdout = execFileSync('git', [...PNPM_DIFF_FLAGS, folderA, folderB], {
+    stdout = execFileSync('git', pnpmDiffArguments(folderA, folderB), {
       encoding: 'utf8',
       maxBuffer: 512 * 1024 * 1024,
       env: pnpmDiffEnvironment(),

@@ -1,3 +1,5 @@
+import { writeFileSync } from 'node:fs'
+import { quotePosixShell } from '../../src/shared/wsl-login-shell-command'
 import { expect, test } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForSessionReady } from './helpers/store'
 import {
@@ -42,10 +44,15 @@ for (const runtime of ['native', 'wsl'] as const) {
         .toBe(acceleration === 'on')
       const ptyId = await waitForActivePanePtyId(orcaPage)
       const marker = 'WINDOWS_INLINE_IMAGES_DONE'
-      const payload = Buffer.from(`${inlineImagePayload(true)}${marker}\r\n`).toString('base64')
+      const bytes = Buffer.from(`${inlineImagePayload(true)}${marker}\r\n`)
+      const payload = bytes.toString('base64')
+      const fixture = testInfo.outputPath('inline-protocols.bin')
+      if (runtime === 'wsl') {
+        writeFileSync(fixture, bytes)
+      }
       const command =
         runtime === 'wsl'
-          ? `printf '%s' '${payload}' | base64 -d; printf 'WSL_IMAGE_PROTOCOL=%s\\n' "$ORCA_IMAGE_PROTOCOL"`
+          ? `cat -- "$(wslpath -u ${quotePosixShell(fixture)})"; printf 'WSL_IMAGE_PROTOCOL=%s\\n' "$ORCA_IMAGE_PROTOCOL"`
           : nodeTerminalCommand(['-e', `process.stdout.write(Buffer.from('${payload}', 'base64'))`])
       await execInTerminal(orcaPage, ptyId, command)
       await waitForTerminalOutput(orcaPage, marker, 30_000)
