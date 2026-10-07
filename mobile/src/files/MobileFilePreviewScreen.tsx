@@ -155,17 +155,17 @@ export function MobileFilePreviewScreen({ route }: Props) {
     routePreviewSourceKey
   ])
 
-  // A PDF or media file never loads a preview at all: the host refuses the binary, so the
-  // screen renders the OS handoff instead and the preview pipeline stays out of it.
+  // PDFs use the OS handoff; media uses the main preview body so playback remains in-app.
   const mediaHandoffMime =
     previewSource?.source === 'worktree' ? mediaHandoffMimeFor(previewSource.relativePath) : null
+  const isPdfHandoff = mediaHandoffMime === 'application/pdf'
 
   useEffect(() => {
-    if (mediaHandoffMime) {
+    if (isPdfHandoff) {
       return
     }
     void loadPreview()
-  }, [loadPreview, mediaHandoffMime])
+  }, [isPdfHandoff, loadPreview])
 
   const retry = useMemo(
     () =>
@@ -269,7 +269,7 @@ export function MobileFilePreviewScreen({ route }: Props) {
           ) : null}
         </View>
       </SafeAreaView>
-      {mediaHandoffMime && previewSource?.source === 'worktree' ? (
+      {isPdfHandoff && previewSource?.source === 'worktree' ? (
         <MobileFileMediaHandoff
           client={client}
           connected={connState === 'connected'}
@@ -282,6 +282,7 @@ export function MobileFilePreviewScreen({ route }: Props) {
         <MobileFilePreviewBody
           preview={preview}
           client={client}
+          connected={connState === 'connected'}
           relativePath={displayPath}
           title={title || 'File'}
           editable={isEditableTerminalArtifact}

@@ -28,6 +28,7 @@ type RecordingSink = MobileFileMediaSink & {
   appends: string[]
   opened: number
   discarded: number
+  released: number
 }
 
 function recordingSink(): RecordingSink {
@@ -35,11 +36,15 @@ function recordingSink(): RecordingSink {
     appends: [],
     opened: 0,
     discarded: 0,
+    released: 0,
     open() {
       this.opened += 1
     },
     appendBase64(base64: string) {
       this.appends.push(base64)
+    },
+    release() {
+      this.released += 1
     },
     discard() {
       this.discarded += 1
@@ -92,6 +97,7 @@ describe('downloadMobileFileMedia', () => {
     expect(sink.opened).toBe(1)
     expect(sink.appends).toEqual(['AAA=', 'QQ=='])
     expect(progress).toEqual([524288, 524304])
+    expect(sink.released).toBe(1)
   })
 
   it('keeps an empty file byte-exact with a single read', async () => {
@@ -142,6 +148,7 @@ describe('downloadMobileFileMedia', () => {
       appendBase64(base64) {
         appendedBytes += mediaHandoffBase64ByteLength(base64)
       },
+      release() {},
       discard() {}
     }
     const client = clientWithResponses(

@@ -41,6 +41,11 @@ export function mediaHandoffSinkFor(
         file.write(base64, { encoding: 'base64', append: true })
       }
     },
+    release(attempt) {
+      if (mediaHandoffOwners.get(ownerKey) === attempt) {
+        mediaHandoffOwners.delete(ownerKey)
+      }
+    },
     discard(attempt) {
       if (mediaHandoffOwners.get(ownerKey) !== attempt) {
         return

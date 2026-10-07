@@ -20,16 +20,18 @@ type Props = {
   relativePath: string
   title: string
   worktreeId: string
+  compact?: boolean
 }
 
-/** The body a PDF or media file renders: no in-phone renderer, so the bytes go to the OS. */
+/** Downloads a file for the OS share sheet; media previews can also keep this as an external action. */
 export function MobileFileMediaHandoff({
   client,
   connected,
   mimeType,
   relativePath,
   title,
-  worktreeId
+  worktreeId,
+  compact = false
 }: Props) {
   const [downloading, setDownloading] = useState(false)
   const [progressBytes, setProgressBytes] = useState(0)
@@ -65,11 +67,17 @@ export function MobileFileMediaHandoff({
     try {
       const sink = mediaHandoffSinkFor(worktreeId, relativePath)
       // Why: the download outlives the screen, so progress must not set state after unmount.
-      await downloadMobileFileMedia(client, { worktreeId, relativePath }, sink, (bytes) => {
-        if (mounted.current) {
-          setProgressBytes(bytes)
-        }
-      }, attempt)
+      await downloadMobileFileMedia(
+        client,
+        { worktreeId, relativePath },
+        sink,
+        (bytes) => {
+          if (mounted.current) {
+            setProgressBytes(bytes)
+          }
+        },
+        attempt
+      )
       // Why: navigating back mid-download must not raise the share sheet over the next screen.
       if (!mounted.current) {
         return
@@ -91,7 +99,7 @@ export function MobileFileMediaHandoff({
 
   if (!connected) {
     return (
-      <View style={styles.state}>
+      <View style={[styles.state, compact && styles.mediaHandoffState]}>
         <Text style={styles.stateText}>Waiting for desktop...</Text>
       </View>
     )
@@ -107,7 +115,7 @@ export function MobileFileMediaHandoff({
     )
   }
   return (
-    <View style={styles.state}>
+    <View style={[styles.state, compact && styles.mediaHandoffState]}>
       {message ? <Text style={styles.errorText}>{message}</Text> : null}
       <Pressable
         style={({ pressed }) => [styles.retryButton, pressed && styles.backButtonPressed]}

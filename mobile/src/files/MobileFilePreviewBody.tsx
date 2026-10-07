@@ -1,4 +1,5 @@
 import { MobileFileMediaPreview } from './MobileFileMediaPreview'
+import { MobileFileMediaHandoff } from './MobileFileMediaHandoff'
 import type { MobileFilePreviewRpcSender } from './mobile-file-preview-operations'
 import { ActivityIndicator, Image, Pressable, ScrollView, Text, View } from 'react-native'
 import { colors } from '../theme/mobile-theme'
@@ -12,6 +13,7 @@ import { filePreviewStyles as styles } from './mobile-file-preview-styles'
 type Props = {
   preview: MobileFilePreviewResult
   client?: MobileFilePreviewRpcSender | null
+  connected?: boolean
   relativePath: string
   title: string
   editable: boolean
@@ -58,11 +60,22 @@ export function MobileFilePreviewBody({ preview, ...options }: Props) {
   }
   if (preview.kind === 'media') {
     return (
-      <MobileFileMediaPreview
-        media={preview.media}
-        client={options.client ?? null}
-        title={options.title}
-      />
+      <View style={styles.container}>
+        <MobileFileMediaPreview
+          media={preview.media}
+          client={options.client ?? null}
+          title={options.title}
+        />
+        <MobileFileMediaHandoff
+          client={options.client ?? null}
+          connected={options.connected === true}
+          mimeType={preview.media.mimeType}
+          relativePath={preview.media.relativePath}
+          title={options.title}
+          worktreeId={preview.media.worktreeId}
+          compact
+        />
+      </View>
     )
   }
   if (preview.kind === 'image') {

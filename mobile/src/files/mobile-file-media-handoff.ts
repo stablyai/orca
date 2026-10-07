@@ -41,6 +41,8 @@ export type MobileFileMediaSink = {
   /** Opens the destination fresh; any earlier download of the same name is discarded. */
   open(attempt: MobileFileMediaAttempt): void
   appendBase64(base64: string, attempt: MobileFileMediaAttempt): void
+  /** Releases the active owner while retaining a completed file for sharing. */
+  release(attempt: MobileFileMediaAttempt): void
   discard(attempt: MobileFileMediaAttempt): void
 }
 
@@ -128,5 +130,6 @@ export async function downloadMobileFileMedia(
     sink.discard(attempt)
     throw error
   }
+  sink.release(attempt)
   return { byteLength }
 }

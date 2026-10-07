@@ -145,6 +145,23 @@ describe('the cache sink', () => {
     expect(doubles.deleted).toHaveLength(2)
   })
 
+  it('releases a completed owner while retaining the file for sharing', () => {
+    doubles.preexisting.clear()
+    doubles.deleted.length = 0
+    doubles.writes.clear()
+    const sink = mediaHandoffSinkFor('wt-1', 'docs/report.pdf')
+    const attempt = createMobileFileMediaAttempt()
+
+    sink.open(attempt)
+    sink.appendBase64('AAA=', attempt)
+    sink.release(attempt)
+    attempt.cancel()
+    sink.discard(attempt)
+
+    expect(doubles.preexisting.has(sink.uri)).toBe(true)
+    expect(doubles.deleted).toEqual([])
+  })
+
   it('isolates same-path sink instances so an old attempt cannot delete the new cache', () => {
     doubles.preexisting.clear()
     doubles.deleted.length = 0
