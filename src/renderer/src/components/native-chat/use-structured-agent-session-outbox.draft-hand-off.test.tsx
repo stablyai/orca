@@ -141,12 +141,12 @@ describe('an outbox entry the host handed off as a queued draft', () => {
     expect(readNativeChatDraftCache('scope')).toBe('')
   })
 
-  it('a withdrawn immediate send still comes back to the composer', async () => {
+  it('a withdrawn immediate send leaves the outbox and stays in the transcript, not the composer', async () => {
     seed('plain', false)
     const view = renderOutbox()
     view.rerender({ submissions: [submission('plain', WITHDRAWN)] })
     await waitFor(() => expect(view.result.current.outbox).toHaveLength(0))
-    expect(readNativeChatDraftCache('scope')).toBe('follow-up')
+    expect(readNativeChatDraftCache('scope')).toBe('')
   })
 
   it('a withdrawn hand-off is never restored, even one under the id of the entry', async () => {

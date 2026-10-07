@@ -297,22 +297,13 @@ export function useTerminalPaneGlobalEffects({
     return () => document.removeEventListener('dictation:insertText', onDictationInsert)
   }, [isActiveRef, managerRef, paneTransportsRef, tabId])
 
-  // Why: visible but unfocused split-group terminals can still receive native
-  // OS drops. Route tab-id-aware payloads to the dropped pane, while legacy
-  // payloads without a tab id keep the old active-terminal-only behavior.
+  // Why: visible, unfocused terminals receive drops only when the payload names their tab.
   useEffect(() => {
     if (!isActive && !isVisible) {
       return
     }
     return window.api.ui.onFileDrop((data) => {
-      if (data.target !== 'terminal') {
-        return
-      }
-      if (data.tabId) {
-        if (data.tabId !== tabId) {
-          return
-        }
-      } else if (!isActive) {
+      if (data.target !== 'terminal' || data.tabId !== tabId) {
         return
       }
       const manager = managerRef.current

@@ -119,10 +119,11 @@ export type AgentSessionLease = {
   /** True from load until the host adjudicates it; no writer is granted while set. */
   unreconciled: boolean
   /**
-   * Lowest fence a future grant may use. Set only when the records file's copy came from its backup,
-   * or sat beside a set-aside copy of the same chat: either may hide a fence already granted. The
-   * CURRENT fence is deliberately left alone: `live` means a handle proven at exactly that number,
-   * so rewriting it would invalidate the record it is trying to save.
+   * Lowest fence a future grant may use. Set only by an earlier build's import of its records file,
+   * when the copy came from its backup or sat beside a set-aside copy of the same chat: either may
+   * hide a fence already granted. The CURRENT fence is deliberately left alone: `live` means a
+   * handle proven at exactly that number, so rewriting it would invalidate the record it is trying
+   * to save.
    */
   minimumNextFence?: number
   /** Null on a released lease when nothing proved its owner gone. */
@@ -137,6 +138,9 @@ export type AgentSessionRecord = {
   provider: string
   providerHandleChain: AgentSessionProviderHandleLink[]
   accountHome: AgentSessionAccountHome
+  /** The directory the provider first launched in, in the execution host's path syntax. Floating
+   *  sessions resume here; worktree and folder ids still resolve by id to their durable place. */
+  launchDirectory?: string
   /** Provider options the user chose, replayed whenever a new owner starts the session. */
   options?: Record<string, string>
   rewind?: AgentSessionRewindRecord
@@ -354,6 +358,8 @@ export function isPersistedAgentSessionRecord(
     isAgentSessionExecutionLocation(record.location) &&
     isStructuredAgentId(record.provider) &&
     isAgentSessionAccountHome(record.accountHome) &&
+    (record.launchDirectory === undefined ||
+      isBoundedString(record.launchDirectory, MAX_PATH_LENGTH)) &&
     (record.options === undefined || isAgentSessionOptions(record.options)) &&
     (record.rewind === undefined || isAgentSessionRewindRecord(record.rewind)) &&
     (record.conversationCommand === undefined ||

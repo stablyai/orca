@@ -14,6 +14,7 @@ import { getManagedWslCliDir, getWslCliCommandName } from '../../../cli/wsl-mana
 import { stripLegacyTerminalShimEnv } from '../../../pty/legacy-terminal-shim-dir'
 import { mergePersistedWindowsPath } from '../../../pty/windows-environment-path'
 import { resolveCodexShellLaunchPreflightCommand } from '../../../pty/codex-shell-launch-preflight'
+import { scheduleCodexHookReconcile } from '../../../codex/codex-hook-reconcile'
 import { buildConfiguredProxyEnv } from '../../../../shared/network-proxy'
 import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import type { BuildPtyHostEnvOptions } from './types'
@@ -253,6 +254,11 @@ export function buildPtyHostEnv(
     delete baseEnv.ORCA_CODEX_LAUNCH_PREFLIGHT
   } else {
     delete baseEnv.ORCA_CODEX_LAUNCH_PREFLIGHT
+  }
+
+  if (!opts.isWsl) {
+    // Why each native spawn: a codex typed in the pane reads ~/.codex, and Codex may have updated since.
+    scheduleCodexHookReconcile()
   }
 
   // Why: an inherited copy (e.g. Orca launched from a WSL pane) names another launch's CLI.

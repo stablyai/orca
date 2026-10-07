@@ -2,7 +2,7 @@
 const { join } = require('node:path')
 const { tmpdir } = require('node:os')
 
-const [nodePtyDir, expectedVersion] = process.argv.slice(2)
+const [nodePtyDir, expectedVersion, ...addons] = process.argv.slice(2)
 if (!nodePtyDir || !expectedVersion) {
   throw new Error('usage: orcad-prebuild-smoke-child.cjs <node-pty dir> <expected node version>')
 }
@@ -11,6 +11,10 @@ if (process.version !== `v${expectedVersion}`) {
 }
 
 const pty = require(nodePtyDir)
+// A compat slot's own addons: loading proves their glibc and C++ runtime needs resolve here.
+for (const addon of addons) {
+  require(addon)
+}
 if (process.platform === 'win32') {
   // Loaded only by the non-DLL kill path; prove the shipped module still loads under this Node.
   const { loadNativeModule } = require(join(nodePtyDir, 'lib', 'utils'))

@@ -2,16 +2,22 @@
 
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { StructuredAgentSessionOutboxEntry } from '../../../../shared/structured-agent-session-outbox'
 import type { StructuredAgentSessionState } from '../../../../shared/structured-agent-session-reducer'
 
-const mocks = vi.hoisted(() => ({
-  call: vi.fn<(target: unknown, method: string, params: unknown) => Promise<unknown>>(),
-  hold: vi.fn<(args: { enabled?: boolean }) => void>(),
-  read: vi.fn<(args: { isVisible?: boolean }) => void>(),
-  outbox: vi.fn<(args: { fence: number | null; submissions: readonly unknown[] }) => void>(),
-  send: vi.fn<(text: string) => boolean>(),
-  retry: vi.fn<(clientMessageId: string) => void>()
-}))
+const mocks = vi.hoisted(() => {
+  const outboxEntries: StructuredAgentSessionOutboxEntry[] = []
+  return {
+    call: vi.fn<(target: unknown, method: string, params: unknown) => Promise<unknown>>(),
+    hold: vi.fn((_args: { enabled?: boolean }) => ({ error: null })),
+    read: vi.fn<(args: { isVisible?: boolean }) => void>(),
+    outbox: vi.fn<(args: { fence: number | null; submissions: readonly unknown[] }) => void>(),
+    send: vi.fn<(text: string) => boolean>(),
+    retry: vi.fn<(clientMessageId: string) => void>(),
+    withdrawUnsent: vi.fn<() => void>(),
+    outboxEntries
+  }
+})
 
 let readState: StructuredAgentSessionState
 
@@ -43,10 +49,11 @@ vi.mock('./use-structured-agent-session-outbox', () => ({
   }) => {
     mocks.outbox(args)
     return {
-      outbox: [],
+      outbox: mocks.outboxEntries,
       error: null,
       send: mocks.send,
-      retry: mocks.retry
+      retry: mocks.retry,
+      withdrawUnsent: mocks.withdrawUnsent
     }
   }
 }))
@@ -99,6 +106,7 @@ function sessionState(): StructuredAgentSessionState {
 describe('useStructuredAgentSession provisional launch gate', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.outboxEntries = []
     readState = sessionState()
     mocks.send.mockReturnValue(true)
     mocks.call.mockResolvedValue(OPTIONS)
@@ -143,6 +151,43 @@ describe('useStructuredAgentSession provisional launch gate', () => {
     })
 
     expect(methodsCalled()).toEqual(['agentSession.modelCatalog'])
+  })
+
+  it('offers Stop for a message sent while the launch is unpublished, and takes it back locally', async () => {
+    const render = () =>
+      renderHook(() =>
+        useStructuredAgentSession({
+          sessionId: 'session-1',
+          target: LOCAL_TARGET,
+          agent: 'grok',
+          isVisible: true,
+          transportEnabled: false,
+          launch: { kind: 'new', heldOptions: {} }
+        })
+      )
+    expect(render().result.current.canStop).toBe(false)
+    mocks.outboxEntries = [
+      {
+        clientMessageId: 'sent-while-starting',
+        sessionId: 'session-1',
+        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] },
+        previewUris: [],
+        state: 'queued',
+        queuedAt: 1,
+        lastAttemptAt: null,
+        retryAfterUnknownSubmittedAt: null
+      }
+    ]
+    const { result } = render()
+    expect(result.current.canStop).toBe(true)
+
+    await act(async () => {
+      await result.current.stop()
+    })
+
+    expect(mocks.withdrawUnsent).toHaveBeenCalledTimes(1)
+    // Nothing reached a host, so nothing is asked of one.
+    expect(methodsCalled().filter((method) => method === 'agentSession.cancel')).toEqual([])
   })
 
   it('shows no stored selection for a chat this view did not launch', () => {

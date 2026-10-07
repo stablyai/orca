@@ -9,9 +9,7 @@ export function useComposerExternalSync(target: ComposerTargetState): ComposerEx
   const hostRuntimeEffects = useHostRuntimeEffects({
     commitHookCheckIfCurrent: target.providerRuntimeSync.commitHookCheckIfCurrent,
     connectionId: target.workspaceIdentityState.connectionId,
-    createGateMode: target.composerTargetStore.createGateMode,
     disabledTuiAgents: target.workspaceIdentityState.disabledTuiAgents,
-    enableIssueAutomation: target.composerTargetStore.enableIssueAutomation,
     ensureDetectedAgents: target.workspaceIdentityState.ensureDetectedAgents,
     ensureRemoteDetectedAgents: target.workspaceIdentityState.ensureRemoteDetectedAgents,
     ensureRuntimeDetectedAgents: target.workspaceIdentityState.ensureRuntimeDetectedAgents,
@@ -24,12 +22,9 @@ export function useComposerExternalSync(target: ComposerTargetState): ComposerEx
     repoIdRef: target.runtimeTargetSelection.repoIdRef,
     runtimeEnvironmentId: target.workspaceIdentityState.runtimeEnvironmentId,
     selectedRepoConnectionIdRef: target.asyncComposerState.selectedRepoConnectionIdRef,
-    selectedRepoExecutionHostId: target.runtimeTargetSelection.selectedRepoExecutionHostId,
     selectedRepoHookContextKey: target.runtimeTargetSelection.selectedRepoHookContextKey,
     selectedRepoIsGit: target.runtimeTargetSelection.selectedRepoIsGit,
-    selectedRepoSettingsRef: target.asyncComposerState.selectedRepoSettingsRef,
     selectedRepoSshStatus: target.runtimeTargetSelection.selectedRepoSshStatus,
-    setLoadedIssueCommand: target.asyncComposerState.setLoadedIssueCommand,
     setTuiAgent: target.workspaceIdentityState.setTuiAgent,
     settings: target.composerTargetStore.settings,
     tuiAgent: target.workspaceIdentityState.tuiAgent

@@ -42,6 +42,8 @@ export type StructuredAgentSessionOutboxEntry = {
    *  of this id asks the same (structured-agent-session-outbox-delivery). On a request's own copy,
    *  what that request carries. */
   sentDelivery?: 'queue-if-active' | null
+  /** Sent while the chat read Stopping: until the host records it, it is drawn after that turn. */
+  sentWhileStopping?: true
   /** Why the last attempt did not go through. Lives on the message so it goes when the message
    *  is sent again or delivered, instead of outliving it as a separate error. On a `queued` entry
    *  it is also the hold (structured-agent-session-outbox-admission). */

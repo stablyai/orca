@@ -11,7 +11,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { executeAgentLaunch, type AgentLaunchExecution } from './agent-launch-executor'
 import { AgentLaunchStructuredSessionRefusedError } from './agent-launch-surface-factories'
-import type { AgentLaunchIntent } from '../../shared/agent-launch-intent'
+import type { AgentLaunchIntent, AgentLaunchResult } from '../../shared/agent-launch-intent'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 
 const STRUCTURED_PREFERENCE = {
@@ -29,6 +29,7 @@ function harness(options: {
   terminalPromptDelivered?: boolean
   /** Whether the surface reports that its typed line took the offered prompt. */
   lineCarriesPrompt?: boolean
+  onSurfacePublished?: AgentLaunchExecution['onSurfacePublished']
 }) {
   const calls: string[] = []
   const carried = (startupPrompt: string | undefined) =>
@@ -42,6 +43,7 @@ function harness(options: {
       calls.push(`createWorktree(startupAgent=${String(args.startupAgent)})`)
       return {
         worktreeId: 'wt-new',
+        connectionId: null,
         startupTerminalHandle: args.startupAgent ? 'term_agent_first' : undefined,
         ...carried(args.startupPrompt)
       }
@@ -96,7 +98,8 @@ function harness(options: {
           deliverStructuredPrompt,
           deliverTerminalPrompt
         },
-        workspaces: { createWorktree }
+        workspaces: { createWorktree },
+        ...(options.onSurfacePublished ? { onSurfacePublished: options.onSurfacePublished } : {})
       })
   }
 }
@@ -249,9 +252,20 @@ describe('a launch into a workspace that already exists', () => {
 describe('an agent with no structured session', () => {
   it('stays a terminal without asking the host', async () => {
     const h = harness({})
-    const result = await h.run({ agent: 'grok', target: { kind: 'existing', worktree: 'wt-7' } })
+    const result = await h.run({ agent: 'gemini', target: { kind: 'existing', worktree: 'wt-7' } })
     expect(h.calls).toEqual(['createTerminalAgent'])
     expect(result.receipt).toMatchObject({ reason: 'agent_without_structured_session' })
+  })
+
+  it('asks the host for an agent it registered beyond Claude and Codex', async () => {
+    const h = harness({})
+    const result = await h.run({ ...CREATE_INTENT, agent: 'grok' })
+    expect(h.calls).toEqual([
+      'createWorktree(startupAgent=undefined)',
+      'createSupport',
+      'createStructuredSession'
+    ])
+    expect(result.receipt).toMatchObject({ mode: 'structured' })
   })
 })
 
@@ -433,24 +447,21 @@ describe('delivering a launch prompt to a terminal agent', () => {
 })
 
 /**
- * The kind is read off the resolved workspace id, so a workspace with nowhere to keep a session is
- * decided here rather than offered to a host probe that cannot answer for it.
+ * The kind is read off the resolved workspace id. Every kind, the floating workspace included, now
+ * has a directory a session can run in, so none downgrades a launch on its own.
  */
 describe('a launch into an existing workspace, by workspace kind', () => {
-  it('runs the floating workspace as a terminal, never a structured session', async () => {
+  it('opens a structured session in the floating workspace', async () => {
     const h = harness({})
     const result = await h.run({
       agent: 'claude',
       target: { kind: 'existing', worktree: FLOATING_TERMINAL_WORKTREE_ID }
     })
 
-    // The invariant, not the call order: the floating sentinel has no session store to open into.
-    expect(h.createStructuredSession).not.toHaveBeenCalled()
-    expect(result.outcome).toEqual({ kind: 'terminal', handle: 'term_1' })
-    expect(result.receipt).toMatchObject({
-      mode: 'terminal',
-      reason: 'structured_unsupported_on_host'
-    })
+    // Why this changed: the floating workspace resolves to its configured directory, so a session
+    // has somewhere to run and be filed under. Kind alone no longer downgrades a launch.
+    expect(h.createStructuredSession).toHaveBeenCalled()
+    expect(result.outcome).toMatchObject({ kind: 'structured' })
   })
 
   it('still opens a structured session in a folder workspace', async () => {
@@ -507,10 +518,14 @@ describe('caller-supplied launch inputs', () => {
     expect(h.createStructuredSession).not.toHaveBeenCalled()
   })
 
-  // A custom launch command applies to terminal launches only; native chat ignores it.
+  // Command values never change the selected chat surface.
   it.each([
     ['claude', 'claude-wrapper'],
-    ['codex', 'codex-nightly']
+    ['codex', 'codex-nightly'],
+    ['claude', 'npx claude'],
+    ['codex', 'wrapper --arg'],
+    ['claude', '/missing/claude'],
+    ['codex', './codex']
   ] as const)('opens a structured %s session despite launch command %s', async (agent, command) => {
     const h = harness({
       settings: { ...STRUCTURED_PREFERENCE, agentCmdOverrides: { [agent]: command } }
@@ -590,7 +605,7 @@ describe('caller-supplied launch inputs', () => {
     const result = await h.run({ agent: 'claude', target: EXISTING, agentArgs: '--model opus' })
 
     expect(result.outcome.kind).toBe('structured')
-    expect(result.warning).toContain('does not apply launch arguments')
+    expect(result.warning).toContain('per-launch argument override was ignored')
   })
 
   it('warns when a structured session ignored an explicit "no arguments" too', async () => {
@@ -600,7 +615,7 @@ describe('caller-supplied launch inputs', () => {
     // The structured path reads the bypass-permissions bit from the user's SETTINGS default, so a
     // caller that asked for no arguments can still get a session with more permission than it asked
     // for. Staying silent about that is the failure mode worth a test.
-    expect(result.warning).toContain('does not apply launch arguments')
+    expect(result.warning).toContain('per-launch argument override was ignored')
   })
 
   it('leaves a structured launch unwarned when it carried no arguments at all', async () => {
@@ -608,5 +623,102 @@ describe('caller-supplied launch inputs', () => {
     const result = await h.run({ agent: 'claude', target: EXISTING })
 
     expect(result.warning).toBeUndefined()
+  })
+})
+
+describe('the surface is published as the launch stands, before its prompt is delivered', () => {
+  const PROMPTED_EXISTING: AgentLaunchIntent = {
+    agent: 'claude',
+    target: { kind: 'existing', worktree: 'wt-7' },
+    prompt: { text: 'fix the build', delivery: 'submit' }
+  }
+
+  function publishing(options: Parameters<typeof harness>[0]) {
+    const published: AgentLaunchResult[] = []
+    const launch = harness({
+      ...options,
+      onSurfacePublished: (surface) => {
+        launch.calls.push('published')
+        published.push(surface)
+      }
+    })
+    return { launch, published }
+  }
+
+  it('records a prompt still owed as unconfirmed, then delivers it', async () => {
+    const { launch, published } = publishing({ settings: {}, lineCarriesPrompt: false })
+
+    const result = await launch.run(PROMPTED_EXISTING)
+
+    expect(launch.calls).toEqual(['createTerminalAgent', 'published', 'deliverTerminalPrompt'])
+    expect(published).toEqual([
+      {
+        outcome: { kind: 'terminal', handle: 'term_1' },
+        worktreeId: 'wt-7',
+        receipt: result.receipt,
+        // A host that stops mid-paste cannot say whether it landed, so it must not say "not sent".
+        prompt: { delivery: 'submit', outcome: 'unconfirmed' }
+      }
+    ])
+    expect(result.prompt).toEqual({ delivery: 'submit', outcome: 'handed-to-terminal' })
+  })
+
+  it('records a draft as not delivered, since the host never delivers one', async () => {
+    const { launch, published } = publishing({ settings: {}, lineCarriesPrompt: false })
+
+    const result = await launch.run({
+      ...PROMPTED_EXISTING,
+      prompt: { text: 'fix the build', delivery: 'draft' }
+    })
+
+    expect(published[0]?.prompt).toEqual({ delivery: 'draft', outcome: 'not-delivered' })
+    expect(result.prompt).toEqual({ delivery: 'draft', outcome: 'not-delivered' })
+  })
+
+  it('records a prompt the launch command carried as already handed over', async () => {
+    const { launch, published } = publishing({ settings: {}, lineCarriesPrompt: true })
+
+    const result = await launch.run(PROMPTED_EXISTING)
+
+    expect(published[0]?.prompt).toEqual({ delivery: 'submit', outcome: 'handed-to-terminal' })
+    expect(published[0]).toEqual(result)
+    expect(launch.deliverTerminalPrompt).not.toHaveBeenCalled()
+  })
+
+  it('records a chat before its first message is committed', async () => {
+    const { launch, published } = publishing({})
+
+    const result = await launch.run(PROMPTED_EXISTING)
+
+    expect(launch.calls).toEqual([
+      'createSupport',
+      'createStructuredSession',
+      'published',
+      'deliverStructuredPrompt'
+    ])
+    expect(published[0]).toEqual({
+      ...result,
+      prompt: { delivery: 'submit', outcome: 'unconfirmed' }
+    })
+    expect(result.prompt).toEqual({ delivery: 'submit', outcome: 'journaled', messageId: 'msg-1' })
+  })
+})
+
+describe('a new local worktree whose startup terminal did not come up', () => {
+  it('opens its agent in the view a local workspace allows, as an existing one would', async () => {
+    const h = harness({
+      settings: { experimentalNativeChat: true, openAgentTabsInChatByDefault: true }
+    })
+    h.createWorktree.mockImplementationOnce(async () => ({
+      worktreeId: 'wt-new',
+      connectionId: null,
+      startupTerminalHandle: undefined
+    }))
+
+    await h.run({ ...CREATE_INTENT, agent: 'opencode' })
+
+    expect(h.createTerminalAgent).toHaveBeenCalledWith(
+      expect.objectContaining({ viewMode: 'chat' })
+    )
   })
 })

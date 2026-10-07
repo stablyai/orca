@@ -16,7 +16,7 @@ import { QUEUED_MESSAGE_PAUSED_KEPT } from '../../../shared/agent-session-queued
 import { USER_MESSAGE_SOURCE } from '../../../shared/agent-session-message-source'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
-import { structuredAgentSessionPayloadFingerprint } from '../../../shared/structured-agent-session-mutation'
+import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
 import type { AgentSessionJournal } from './journal-store'
 import type { JournalRowTransactionHook } from './journal-row-writer'
 import type { QueuedMessagePositionMove } from './queued-message-positions'
@@ -46,13 +46,27 @@ export function unsentSendKeptAsCard(
     return null
   }
   const { source } = submission
-  // Exactly 'user': never `readAgentSessionMessageSource`, whose fallback for what it cannot read
-  // is the person.
+  // Exactly 'user': never a fallback that reads a kind it does not know as the person's.
   const persons =
     source?.kind === USER_MESSAGE_SOURCE.kind ||
     // A build before `source` was recorded: `client` was only ever a person's send.
     (source === undefined && submission.origin === 'client')
   return persons ? body : null
+}
+
+/** A send handed to the agent that it has neither echoed nor refused. Handed to a child that never
+ *  answered its start, it ran nowhere. */
+export function isUnansweredHandedOverSubmission(
+  entry: Pick<
+    AgentJournalSubmission,
+    'handoverRecorded' | 'dispatchState' | 'handedOverAt' | 'recovered'
+  >
+): boolean {
+  return (
+    !isQueuedAgentJournalSubmission(entry) &&
+    (entry.dispatchState === 'pending' ||
+      (entry.dispatchState === 'unknown' && entry.recovered !== true))
+  )
 }
 
 /**
@@ -65,17 +79,25 @@ export function unsentSendKeptAsCard(
  */
 export async function holdUnsentSends(
   journal: AgentSessionJournal,
-  input: { fence: number; hostInstance: string; hold: UnsentSendHold }
+  input: {
+    fence: number
+    hostInstance: string
+    hold: UnsentSendHold
+    /** In place of the queued sends: those a child that ended before it answered its start was
+     *  handed and never echoed. It ran none, so each is unsent as surely as a queued one. */
+    unrun?: true
+  }
 ): Promise<void> {
   const { hold } = input
   const unsent = journal
     .submissions()
-    .filter(
-      (entry) =>
-        isQueuedAgentJournalSubmission(entry) &&
-        (hold.cause === 'hostRestarted'
-          ? journal.wroteBeforeOpen(entry.acceptedSequence)
-          : (hold.which?.(entry) ?? true))
+    .filter((entry) =>
+      input.unrun
+        ? isUnansweredHandedOverSubmission(entry)
+        : isQueuedAgentJournalSubmission(entry) &&
+          (hold.cause === 'hostRestarted'
+            ? journal.wroteBeforeOpen(entry.acceptedSequence)
+            : (hold.which?.(entry) ?? true))
     )
     .sort((a, b) => (a.acceptedSequence ?? 0) - (b.acceptedSequence ?? 0))
   if (unsent.length === 0) {
@@ -117,15 +139,12 @@ export async function holdUnsentSends(
                 ? {
                     messageId: clientMessageId,
                     body: card.body,
-                    fingerprint: structuredAgentSessionPayloadFingerprint({
-                      method: 'agentSession.send',
-                      sessionId: journal.queuedMessages.sessionId,
-                      fields: { body: card.body }
-                    }),
+                    fingerprint: agentSessionSendBodyFingerprint(
+                      journal.queuedMessages.sessionId,
+                      card.body
+                    ),
                     hostInstance: input.hostInstance,
                     holdReason: QUEUED_MESSAGE_PAUSED_KEPT,
-                    // Only a person's send is kept.
-                    source: USER_MESSAGE_SOURCE,
                     queuedAt: { epoch, sequence: submission.acceptedSequence ?? 0 },
                     position: card.position
                   }

@@ -1,4 +1,4 @@
-export function createPdfFindFixture(): Buffer {
+export function createPdfFindFixture({ title = 'PDF search fixture' } = {}): Buffer {
   const objects = [
     '<< /Type /Catalog /Pages 2 0 R >>',
     '<< /Type /Pages /Kids [4 0 R 6 0 R 8 0 R] /Count 3 >>',
@@ -10,7 +10,7 @@ export function createPdfFindFixture(): Buffer {
       `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents ${contentId} 0 R >>`
     )
     const lines = [
-      `PDF search fixture - page ${page + 1}`,
+      `${title} - page ${page + 1}`,
       `needle result ${page * 2 + 1}`,
       `needle result ${page * 2 + 2}`,
       page === 1 ? 'Plain text without the alternate query' : 'beacon alternate query'

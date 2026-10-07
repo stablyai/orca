@@ -1,8 +1,8 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { MOBILE_RPC_METHOD_ALLOWLIST } from './runtime-rpc/runtime-rpc-mobile-method-allowlist'
 import { ALL_RPC_METHODS } from './rpc/methods'
+import { MOBILE_RPC_METHOD_ALLOWLIST } from './runtime-rpc/runtime-rpc-mobile-method-allowlist'
 
 const MOBILE_DYNAMIC_RPC_METHODS = [
   // Why: computed sendRequest method names do not appear as literals in the
@@ -101,7 +101,7 @@ function mobileRpcMethods(): string[] {
   return [...new Set([...mobileLiteralRpcMethods(), ...MOBILE_DYNAMIC_RPC_METHODS])].sort()
 }
 
-function mobileRpcAllowlist(): Set<string> {
+function mobileRpcAllowlist(): ReadonlySet<string> {
   return MOBILE_RPC_METHOD_ALLOWLIST
 }
 
@@ -169,6 +169,7 @@ describe('mobile RPC allowlist', () => {
       'agentSession.history',
       'agentSession.subscribe',
       'agentSession.unsubscribe',
+      'agentSession.subscribeStatus',
       'agentSession.hold',
       'agentSession.release'
     ])

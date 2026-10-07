@@ -1,6 +1,5 @@
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
-import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
 import type { JiraIssue } from '../../../../shared/jira-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
@@ -17,7 +16,6 @@ export type ComposerSourceModel = {
     options?: { preserveBranchNameOverride?: boolean | undefined }
   ) => void
   applyLocalComposerDrop: (paths: string[], canApply?: () => boolean) => Promise<void>
-  applyWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => Promise<void>
   canPrefetchSelectedRepoWorkItems: boolean
   folderCreateDisabled: boolean
   handleAddAttachment: () => Promise<void>

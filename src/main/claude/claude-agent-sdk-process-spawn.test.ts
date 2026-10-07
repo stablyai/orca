@@ -87,14 +87,27 @@ describe('claude agent SDK process spawn', () => {
       expect(spawn.pid).toBe(4321)
       expect(spec.program).toBe(globalThis.process.execPath)
       expect(spec.args?.[0]).toBe('-e')
+      expect(spec.args?.slice(2)).toEqual([
+        '--',
+        '/usr/local/bin/claude',
+        '--output-format',
+        'stream-json'
+      ])
       expect(spec.detached).toBe(true)
       expect(spec.cwd).toBe('/work/repo')
       const supervisorSpec = JSON.parse(
         Buffer.from(String(spec.env?.ORCA_PROVIDER_SUPERVISOR_SPEC), 'base64').toString()
       )
+      // A gone Orca closes Claude as its own close does (stdin end and SIGTERM), not with the
+      // root-only stdin-end drain a managed provider gets by default.
+      expect(vi.mocked(createProviderSpawnSpec)).toHaveBeenLastCalledWith(
+        expect.anything(),
+        expect.anything(),
+        platform,
+        { closeRequest: 'stdin-end-and-sigterm' }
+      )
       expect(supervisorSpec).toMatchObject({
-        command: '/usr/local/bin/claude',
-        args: ['--output-format', 'stream-json'],
+        closeRequest: 'stdin-end-and-sigterm',
         cwd: '/work/repo',
         ownerPid: globalThis.process.pid
       })
@@ -132,7 +145,8 @@ describe('claude agent SDK process spawn', () => {
       const tree = {
         capture: vi.fn(async () => {}),
         reap: vi.fn(async () => 'exited' as const),
-        treeVerdict: 'exited' as const
+        treeVerdict: 'exited' as const,
+        forcedReapAttempted: false
       }
       await expect(proveClaudeChildExitWithReaper({ managed, tree }, () => tree)).resolves.toBe(
         true

@@ -1,21 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { directoryCacheFromFileList, isMobileMethodUnavailableError } from './file-list-fallback'
+import { directoryCacheFromFileList } from './file-list-fallback'
 import { getDirectoryCacheState } from './file-tree'
-
-describe('isMobileMethodUnavailableError', () => {
-  it('detects old-desktop allowlist and missing-method failures', () => {
-    expect(isMobileMethodUnavailableError('forbidden', undefined)).toBe(true)
-    expect(isMobileMethodUnavailableError('method_not_found', undefined)).toBe(true)
-    expect(
-      isMobileMethodUnavailableError(
-        'some_code',
-        "Method 'files.readDir' is not available to mobile clients"
-      )
-    ).toBe(true)
-    expect(isMobileMethodUnavailableError('internal', 'boom')).toBe(false)
-    expect(isMobileMethodUnavailableError(undefined, undefined)).toBe(false)
-  })
-})
 
 describe('directoryCacheFromFileList', () => {
   it('synthesizes every ancestor directory from flat paths', () => {

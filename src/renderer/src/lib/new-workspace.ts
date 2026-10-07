@@ -105,38 +105,6 @@ export function renderIssueCommandTemplate(
   return rendered
 }
 
-export function buildAgentPromptWithContext(
-  prompt: string,
-  attachments: string[],
-  linkedUrls: string[],
-  linkedContextBlocks: string[] = []
-): string {
-  const trimmedPrompt = prompt.trim()
-  if (attachments.length === 0 && linkedUrls.length === 0 && linkedContextBlocks.length === 0) {
-    return trimmedPrompt
-  }
-
-  const sections: string[] = []
-  if (attachments.length > 0) {
-    const attachmentBlock = attachments.map((pathValue) => `- ${pathValue}`).join('\n')
-    sections.push(`Attachments:\n${attachmentBlock}`)
-  }
-  if (linkedUrls.length > 0) {
-    const linkBlock = linkedUrls.map((url) => `- ${url}`).join('\n')
-    sections.push(`Linked work items:\n${linkBlock}`)
-  }
-  if (linkedContextBlocks.length > 0) {
-    sections.push(linkedContextBlocks.join('\n\n'))
-  }
-  // Why: the new-workspace flow launches each agent with a single plain-text
-  // startup prompt. Appending attachments and bounded linked context keeps
-  // extra data visible to Claude/Codex/OpenCode without cluttering the textarea.
-  if (!trimmedPrompt) {
-    return sections.join('\n\n')
-  }
-  return `${trimmedPrompt}\n\n${sections.join('\n\n')}`
-}
-
 export function getAttachmentLabel(pathValue: string): string {
   const segments = pathValue.split(/[/\\]/)
   return segments.at(-1) || pathValue

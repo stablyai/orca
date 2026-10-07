@@ -74,6 +74,24 @@ afterEach(() => {
 })
 
 describe('renderer web client projection', () => {
+  it('preserves existing minified bindings while producing runnable compact code', async () => {
+    const root = createRendererFixture()
+    writeFixtureFile(
+      root,
+      'out/renderer/assets/web-shared.js',
+      'const Zq = [1, 2, 3]; export function nM() { return Zq.length; }'
+    )
+    const result = await projectFixture(root)
+    expect(result.code, result.stderr).toBe(0)
+    const code = readFileSync(join(root, 'out/web/assets/web-shared.js'), 'utf8')
+    expect(code).toContain('function nM(')
+    expect(code).not.toContain('[1, 2, 3]')
+    const output = await import(
+      `data:text/javascript;base64,${Buffer.from(code).toString('base64')}`
+    )
+    expect(output.nM()).toBe(3)
+  })
+
   it('keeps the build-only manifest out of packaged apps', () => {
     const builderConfig = readFileSync(resolve('config/electron-builder.config.cjs'), 'utf8')
 

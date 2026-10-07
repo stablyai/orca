@@ -85,6 +85,7 @@ export async function launchAgentWithPrompt(args: {
     case 'unsupported':
       return { kind: 'not-started', message: AGENT_LAUNCH_UPDATE_REQUIRED_MESSAGE }
     case 'failed':
+    case 'tab-closed':
       return { kind: 'not-started', message: launched.message }
     case 'unknown':
       return { kind: 'unconfirmed', message: launched.message }

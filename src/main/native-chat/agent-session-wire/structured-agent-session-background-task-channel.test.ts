@@ -52,7 +52,7 @@ function channelOver(
   )
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the map reads only the journal's commit observer and the session's provider.
   const session = {
-    journal: { observeCommits: () => {} },
+    journal: { observeCommits: () => {}, stopMarks: { observeSettleEdges: () => {} } },
     params: { provider: 'claude' }
   } as unknown as StructuredAgentSessionHostSession
   return { sessions, republished, channel, session }

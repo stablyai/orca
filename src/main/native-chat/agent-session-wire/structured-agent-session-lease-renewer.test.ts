@@ -105,6 +105,7 @@ describe('structured agent-session lease renewal', () => {
         )
     )
     const renewer = new StructuredAgentSessionLeaseRenewer({
+      holdsLiveChild: () => false,
       logger: recordingStructuredAgentSessionLogger().logger,
       store: { listRecords: () => records, renewLeases } as unknown as AgentSessionRecordStore,
       probe: vi.fn(),
@@ -149,6 +150,7 @@ describe('structured agent-session lease renewal', () => {
     })
     const log = recordingStructuredAgentSessionLogger()
     const renewer = new StructuredAgentSessionLeaseRenewer({
+      holdsLiveChild: () => false,
       store: {
         listRecords: () => records,
         renewLeases,
@@ -178,6 +180,7 @@ describe('structured agent-session lease renewal', () => {
     const store = await liveStore()
     let now = NOW
     const renewer = new StructuredAgentSessionLeaseRenewer({
+      holdsLiveChild: () => false,
       logger: recordingStructuredAgentSessionLogger().logger,
       store,
       probe: async () => ({
@@ -208,6 +211,7 @@ describe('structured agent-session lease renewal', () => {
       releaseProbe = resolve
     })
     const renewer = new StructuredAgentSessionLeaseRenewer({
+      holdsLiveChild: () => false,
       logger: recordingStructuredAgentSessionLogger().logger,
       store,
       probe: async () => {
@@ -234,6 +238,7 @@ describe('structured agent-session lease renewal', () => {
       matchedOn: ['process-start-time' as const]
     }))
     const renewer = new StructuredAgentSessionLeaseRenewer({
+      holdsLiveChild: () => false,
       logger: recordingStructuredAgentSessionLogger().logger,
       store,
       probe,
@@ -250,6 +255,7 @@ describe('structured agent-session lease renewal', () => {
     const store = await liveStore()
     const log = recordingStructuredAgentSessionLogger()
     const renewer = new StructuredAgentSessionLeaseRenewer({
+      holdsLiveChild: () => false,
       store,
       probe: async () => ({ outcome: 'indeterminate', reason: 'probe unavailable' }),
       now: () => NOW + 10_000,
@@ -279,6 +285,7 @@ describe('structured agent-session lease renewal', () => {
       matchedOn: ['process-start-time' as const]
     }))
     const renewer = new StructuredAgentSessionLeaseRenewer({
+      holdsLiveChild: () => false,
       logger: recordingStructuredAgentSessionLogger().logger,
       store,
       probe,

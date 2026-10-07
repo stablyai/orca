@@ -84,6 +84,8 @@ export async function pasteDraftWhenAgentReady(args: {
   timeoutMs?: number
   onTimeout?: () => void
   onUnconfirmedDelivery?: () => void
+  /** Whether the paste may be written at all; readiness is observed while it is pending. */
+  sendGate?: Promise<boolean>
 }): Promise<boolean> {
   const { tabId, content, agent, submit, forcePaste, timeoutMs, onTimeout, onUnconfirmedDelivery } =
     args
@@ -102,13 +104,18 @@ export async function pasteDraftWhenAgentReady(args: {
   const readySignal = resolvePasteReadySignal(agentConfig, submit === true)
   const settings = getSettingsForAgentTabRuntimeOwner(tabId)
   const readinessTimeoutMs = resolveDraftPasteReadyTimeoutMs(agent, timeoutMs)
-  const readiness = await waitForAgentDraftInputReadyOnTab({
+  const readinessResult = waitForAgentDraftInputReadyOnTab({
     tabId,
     spawnTimeoutMs: PTY_SPAWN_TIMEOUT_MS,
     readinessTimeoutMs,
     readySignal,
     settings
   })
+  // Why: a closed gate is the caller's own outcome to report; the bounded wait above just lapses.
+  if (args.sendGate && !(await args.sendGate)) {
+    return false
+  }
+  const readiness = await readinessResult
   if (!readiness) {
     onTimeout?.()
     return false

@@ -60,6 +60,7 @@ export function structuredAgentSessionHostTeardownPhases(collaborators: {
   runtimeState: {
     stopLeaseRenewal: () => Promise<void> | void
     flushAllEventSinks: () => Promise<void>
+    acquireAborts: { abortAll: (reason: string) => void }
   }
   tasks: { drainAttaches: () => Promise<void> }
   evictOwnedSessions: () => Promise<void>
@@ -83,6 +84,11 @@ export function structuredAgentSessionHostTeardownPhases(collaborators: {
     },
     { name: 'dispose-idle-sweep', run: () => collaborators.idleSweep.dispose() },
     { name: 'stop-lease-renewal', run: () => collaborators.runtimeState.stopLeaseRenewal() },
+    // Before the drain, which would otherwise wait out a start the provider never answers.
+    {
+      name: 'abort-acquires',
+      run: () => collaborators.runtimeState.acquireAborts.abortAll('closed by quit')
+    },
     { name: 'drain-attaches', run: () => collaborators.tasks.drainAttaches() },
     {
       name: 'evict-owned-sessions',

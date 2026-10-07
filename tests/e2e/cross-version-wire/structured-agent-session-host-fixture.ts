@@ -109,7 +109,8 @@ export function installableHost(
 ): StructuredAgentSessionHost {
   const host = {
     ...hostCalls,
-    deps: { modelCatalog: { read: hostCalls.modelCatalog } },
+    // The catalog read checks the session's record for a floating chat's own folder; none here.
+    deps: { modelCatalog: { read: hostCalls.modelCatalog }, store: { getRecord: () => null } },
     restartResume: {
       list: hostCalls.restartResumableList,
       listFailures: hostCalls.restartResumableFailures,

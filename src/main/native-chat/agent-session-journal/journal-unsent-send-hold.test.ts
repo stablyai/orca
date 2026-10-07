@@ -84,7 +84,12 @@ function hold(journal: AgentSessionJournal, settle: UnsentSendHold = { cause: 'h
 /** Orchestration mail as the mailbox sends it: from another agent, naming its sender. */
 const MAIL_SOURCE: AgentMessageSource = {
   kind: 'agent',
-  senders: [{ party: { address: 'agent:coordinator', terminalHandle: null, orcaSessionId: null } }],
+  senders: [
+    {
+      party: { address: 'agent:coordinator', terminalHandle: null, orcaSessionId: null },
+      name: null
+    }
+  ],
   orchestration: { message: 'mail-notice', mailbox: 'agent:worker', dispatchId: null, messages: [] }
 }
 
@@ -237,8 +242,7 @@ describe('which sends an earlier host process left unsent are kept', () => {
           messageId: 'card',
           body: message('card text'),
           fingerprint: fingerprint(message('card text')),
-          hostInstance: 'proc-1',
-          source: USER_MESSAGE_SOURCE
+          hostInstance: 'proc-1'
         })
         await earlier.appendSubmission(
           {
@@ -338,15 +342,13 @@ describe('where kept sends go in the queue', () => {
           messageId: 'H',
           body: message('H'),
           fingerprint: fingerprint(message('H')),
-          hostInstance: 'proc-1',
-          source: USER_MESSAGE_SOURCE
+          hostInstance: 'proc-1'
         })
         await earlier.queuedMessages.insert({
           messageId: 'C',
           body: message('C'),
           fingerprint: fingerprint(message('C')),
-          hostInstance: 'proc-1',
-          source: USER_MESSAGE_SOURCE
+          hostInstance: 'proc-1'
         })
         await accept(earlier, 'A', { origin: 'client', source: USER_MESSAGE_SOURCE })
         await earlier.appendSubmission(
@@ -374,8 +376,7 @@ describe('where kept sends go in the queue', () => {
         messageId: 'C',
         body: message('C'),
         fingerprint: fingerprint(message('C')),
-        hostInstance: 'proc-1',
-        source: USER_MESSAGE_SOURCE
+        hostInstance: 'proc-1'
       })
       await accept(earlier, 'A', { origin: 'client', source: USER_MESSAGE_SOURCE })
       await accept(earlier, 'B', { origin: 'client', source: USER_MESSAGE_SOURCE })
@@ -390,7 +391,6 @@ describe('where kept sends go in the queue', () => {
             body: message('text of A'),
             fingerprint: fingerprint(message('text of A')),
             hostInstance: HOST,
-            source: USER_MESSAGE_SOURCE,
             holdReason: QUEUED_MESSAGE_PAUSED_KEPT,
             queuedAt: {
               epoch: 'epoch-1',

@@ -65,6 +65,8 @@ const SENTENCES: Record<AgentSessionWriteNoticeSentence, () => string> = {
   unsupported: () => translate('components.native-chat.writeNotice.unsupported', COPY.unsupported),
   notAvailable: () =>
     translate('components.native-chat.writeNotice.notAvailable', COPY.notAvailable),
+  cannotRunHere: () =>
+    translate('components.native-chat.writeNotice.cannotRunHere', COPY.cannotRunHere),
   unreachable: () => translate('components.native-chat.writeNotice.unreachable', COPY.unreachable),
   recordFailed: () =>
     translate('components.native-chat.writeNotice.recordFailed', COPY.recordFailed),

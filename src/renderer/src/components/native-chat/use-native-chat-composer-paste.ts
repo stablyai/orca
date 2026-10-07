@@ -2,7 +2,7 @@ import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { nativeChatAttachmentOwnerUnchanged } from './native-chat-resolved-path-ownership'
 import { assertClipboardTextWithinLimit } from '../../../../shared/clipboard-text'
 import { translate } from '@/i18n/i18n'
-import { extractIpcErrorMessage } from '@/lib/ipc-error'
+import { setNativeChatPasteFailure } from './native-chat-composer-notice'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import { NATIVE_CHAT_CONTEXT_PASTE_MAX_BYTES } from './native-chat-composer-target'
 import { nativeChatPasteUnavailableNotice } from '@/lib/native-chat-paste-request'
@@ -34,7 +34,7 @@ export type UseNativeChatComposerPasteArgs = {
   dropPendingImageAttachment: (id: string) => void
   insertTypedText: (text: string) => boolean
   setCaret: (caret: number) => void
-  setNotice: (notice: string | null) => void
+  setNotice: (notice: string | null, errorText?: string) => void
 }
 
 /** Owners whose attachment path is a file this client can write right now. */
@@ -111,11 +111,10 @@ export function useNativeChatComposerPaste({
         // A failed save must be visible: over SSH it fails whenever the
         // connection drops, and a silent no-op reads as a broken paste.
         if (canPaste()) {
-          setNotice(
-            extractIpcErrorMessage(
-              error,
-              translate('components.native-chat.composer.imagePasteFailed', 'Image paste failed.')
-            )
+          setNativeChatPasteFailure(
+            setNotice,
+            error,
+            translate('components.native-chat.composer.imagePasteFailed', 'Image paste failed.')
           )
         }
         return { status: 'failed' }
@@ -179,7 +178,7 @@ export function useNativeChatComposerPaste({
             showPasteUnavailable()
           }
         } catch (error) {
-          setNotice(extractIpcErrorMessage(error, 'Paste failed.'))
+          setNativeChatPasteFailure(setNotice, error)
         }
       }
       if (!imageFile) {
@@ -262,7 +261,7 @@ export function useNativeChatComposerPaste({
       })
       .catch((error) => {
         if (canPaste()) {
-          setNotice(extractIpcErrorMessage(error, 'Paste failed.'))
+          setNativeChatPasteFailure(setNotice, error)
         }
         return null
       })

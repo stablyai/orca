@@ -24,7 +24,6 @@ import { createStructuredAgentSessionOperationId } from '../../../../shared/stru
 import { randomUUID } from 'node:crypto'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import type { StructuredAgentSessionCaller } from '../../../native-chat/agent-session-wire/structured-agent-session-host-types'
-import { USER_MESSAGE_SOURCE } from '../../../../shared/agent-session-message-source'
 
 /**
  * The committed transcript row's id, or `null` when nothing was committed.
@@ -58,7 +57,7 @@ export async function commitStructuredAgentSessionLaunchPrompt(args: {
     const result = await args.host.send(args.caller, {
       ...structuredAgentSessionSendMutation(entry, args.fence),
       // A person's first prompt, sent for them: kept as a card if a restart or a close comes first.
-      source: USER_MESSAGE_SOURCE
+      personsMessage: true
     })
     return result.ok ? result.value.clientMessageId : null
   } catch (error) {

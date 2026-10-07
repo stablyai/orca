@@ -9,6 +9,7 @@ vi.mock('../ssh/ssh-config-host-picker', () => mocks.sshConfigHostPicker)
 vi.mock('electron', () => mocks.electron)
 vi.mock('./ssh-pty-output-intake-registry', () => mocks.sshPtyOutputIntakeRegistry)
 vi.mock('../ssh/ssh-connection-store', () => mocks.sshConnectionStore)
+vi.mock('./ssh-host-server-connect', () => mocks.hostServerConnect)
 vi.mock('../ssh/ssh-connection-manager', () => mocks.sshConnectionManager)
 vi.mock('../ssh/ssh-relay-deploy', () => mocks.sshRelayDeploy)
 vi.mock('../ssh/ssh-relay-reset', () => mocks.sshRelayReset)
@@ -26,6 +27,8 @@ import { RelayVersionMismatchError } from '../ssh/ssh-relay-version-mismatch-err
 import type { SshConnectionState, SshConnectionStatus, SshTarget } from '../../shared/ssh-types'
 import { assertSshMutationExpectation } from '../ssh/ssh-connection-generation'
 import { createSshIpcHarness } from './ssh-ipc-test-harness'
+import { decideHostServer } from './ssh-host-server-connect'
+import { beginSshHostCensus } from '../ssh/ssh-connection-attribution'
 
 const {
   mockSshStore,
@@ -373,6 +376,106 @@ describe('SSH IPC handlers', () => {
         (payload as { state?: SshConnectionState }).state?.status === 'connected'
     )
     expect(connectedBroadcasts).toEqual([])
+  })
+
+  it('holds a raw connected the server decision causes before any relay session exists', async () => {
+    const target: SshTarget = {
+      id: 'ssh-1',
+      label: 'Server',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy'
+    }
+    const conn = {}
+    mockSshStore.getTarget.mockReturnValue(target)
+    mockConnectionManager.connect.mockResolvedValue(conn)
+    mockConnectionManager.getConnection.mockReturnValue(conn)
+    let broadcastsDuringDecision: unknown[] = []
+    vi.mocked(decideHostServer).mockImplementationOnce(async () => {
+      await Promise.resolve()
+      // The census dials the shared pool before doConnect has a session.
+      const callbacks = mockConnectionManager.callbacksRef.current as {
+        onStateChange: (targetId: string, state: SshConnectionState) => void
+      }
+      callbacks.onStateChange('ssh-1', {
+        targetId: 'ssh-1',
+        status: 'connected',
+        error: null,
+        reconnectAttempt: 0
+      })
+      broadcastsDuringDecision = mockWindow.webContents.send.mock.calls
+        .filter(([channel]) => channel === 'ssh:state-changed')
+        .map(([, payload]) => payload)
+      return null
+    })
+
+    await handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' })
+    expect(broadcastsDuringDecision).not.toContainEqual(
+      expect.objectContaining({ state: expect.objectContaining({ status: 'connected' }) })
+    )
+    expect(broadcastsDuringDecision.at(-1)).toMatchObject({ state: { status: 'connecting' } })
+  })
+
+  it("never broadcasts 'connected' while a move's census runs with no relay session", async () => {
+    const target: SshTarget = {
+      id: 'ssh-1',
+      label: 'Server',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy'
+    }
+    const conn = {}
+    mockSshStore.getTarget.mockReturnValue(target)
+    mockConnectionManager.connect.mockResolvedValue(conn)
+    mockConnectionManager.getConnection.mockReturnValue(undefined)
+    harness.mockStore.getSshRemotePtyLeases.mockReturnValue([])
+    let broadcastsDuringCensus: unknown[] = []
+    vi.mocked(decideHostServer).mockImplementationOnce(async () => {
+      await Promise.resolve()
+      // The move's census is the reconnect's decision, dialing the pool before any session.
+      const callbacks = mockConnectionManager.callbacksRef.current as {
+        onStateChange: (targetId: string, state: SshConnectionState) => void
+      }
+      callbacks.onStateChange('ssh-1', {
+        targetId: 'ssh-1',
+        status: 'connected',
+        error: null,
+        reconnectAttempt: 0
+      })
+      broadcastsDuringCensus = mockWindow.webContents.send.mock.calls
+        .filter(([channel]) => channel === 'ssh:state-changed')
+        .map(([, payload]) => payload)
+      return null
+    })
+
+    await handlers.get('ssh:moveToManagedServer')!(null, { targetId: 'ssh-1' })
+    expect(vi.mocked(decideHostServer)).toHaveBeenCalled()
+    expect(broadcastsDuringCensus.length).toBeGreaterThan(0)
+    expect(broadcastsDuringCensus).not.toContainEqual(
+      expect.objectContaining({ state: expect.objectContaining({ status: 'connected' }) })
+    )
+  })
+
+  it("holds a census's raw 'connected' outside any connect", () => {
+    const end = beginSshHostCensus('ssh-1')
+    try {
+      const callbacks = mockConnectionManager.callbacksRef.current as {
+        onStateChange: (targetId: string, state: SshConnectionState) => void
+      }
+      mockWindow.webContents.send.mockClear()
+      callbacks.onStateChange('ssh-1', {
+        targetId: 'ssh-1',
+        status: 'connected',
+        error: null,
+        reconnectAttempt: 0
+      })
+      expect(mockWindow.webContents.send).toHaveBeenCalledWith(
+        'ssh:state-changed',
+        expect.objectContaining({ state: expect.objectContaining({ status: 'connecting' }) })
+      )
+    } finally {
+      end()
+    }
   })
 
   // Why: guards the fix's scope. A relay version mismatch during a relay reconnect

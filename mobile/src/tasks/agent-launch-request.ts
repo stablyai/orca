@@ -18,6 +18,7 @@
 
 import {
   withoutReservedAgentCreateFields,
+  type AgentLaunchPlacement,
   type AgentLaunchPrompt,
   type AgentLaunchResult
 } from '../../../src/shared/agent-launch-intent'
@@ -84,6 +85,7 @@ export function agentLaunchExistingParams(args: {
   launchSource?: string
   paneKey?: string
   sessionId?: string
+  placement?: AgentLaunchPlacement
 }): RpcSendParams<'agent.launchReplay'> {
   return {
     agent: args.agent,
@@ -92,7 +94,9 @@ export function agentLaunchExistingParams(args: {
     ...(args.prompt ? { prompt: args.prompt } : {}),
     ...(args.launchSource ? { launchSource: args.launchSource } : {}),
     ...(args.paneKey ? { paneKey: args.paneKey } : {}),
-    ...(args.sessionId ? { sessionId: args.sessionId } : {})
+    ...(args.sessionId ? { sessionId: args.sessionId } : {}),
+    // An older host drops it and the tab lands in its active group, as before.
+    ...(args.placement ? { placement: args.placement } : {})
   }
 }
 

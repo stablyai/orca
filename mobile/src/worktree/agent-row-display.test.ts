@@ -186,6 +186,15 @@ describe('agentDisplayLabel', () => {
     ).toBe('Monitoring background tasks')
   })
 
+  it("says Stopping while the host says a person's Stop is ending the turn", () => {
+    const stopping = row({
+      lastAssistantMessage: 'hello there',
+      mainAgent: { state: 'working', stopping: true, stateStartedAt: 0 }
+    })
+    expect(agentDisplayLabel(stopping, 0)).toBe('Stopping…')
+    expect(agentDotState(stopping, 0)).toBe('working')
+  })
+
   it('falls back to the decayed state label when stale', () => {
     expect(
       agentDisplayLabel(

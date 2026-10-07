@@ -16,13 +16,21 @@ export type AgentSessionQueuedMessagePausedReason =
   | typeof QUEUED_MESSAGE_PAUSED_KEPT
 
 /** The whole queue is paused and sends nothing on its own: 'stopped' — the user
- *  interrupted ("Queue paused because you interrupted") — 'cleared' — a /clear
- *  carried the cards into a fresh conversation — or 'restarted' — Orca restarted
- *  with cards waiting. Resume (`agentSession.queuedMessagesResume`), or the user's own next
- *  turn starting, lifts it; Send-now on one card sends that card and leaves the
+ *  interrupted ("Queue paused because you interrupted") — or 'cleared' — a /clear
+ *  carried the cards into a fresh conversation. Resume (`agentSession.queuedMessagesResume`),
+ *  or any turn starting, lifts it; Send-now on one card sends that card and leaves the
  *  rest paused until its turn starts. A client treats an unknown reason as a
  *  plain pause, so a newer host can add one. */
-export type AgentSessionQueuePause = { reason: 'stopped' | 'restarted' | 'cleared' }
+export type AgentSessionQueuePause = { reason: 'stopped' | 'cleared' }
+
+/** What rides beside a frame's `queuedMessages`, published together with the list. */
+export type AgentSessionQueuePublicationFields = {
+  /** Null when the queue sends on its own. */
+  queuePause?: AgentSessionQueuePause | null
+  /** The card the queue sends next once nothing runs, null while anything holds the queue.
+   *  Absent from an older host, read as null. */
+  nextQueuedMessageId?: string | null
+}
 
 export type AgentSessionQueuedMessagesResumeResult = {
   /** False when nothing was paused, and on a replay of an already-run Resume. */

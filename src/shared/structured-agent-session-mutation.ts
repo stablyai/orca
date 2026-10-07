@@ -1,7 +1,7 @@
 import { sha256 } from './sha256'
 import {
   isAgentSessionHandleProvider,
-  type AgentSessionHandleProvider
+  type StructuredAgentId
 } from './agent-session-provider-handle'
 
 function canonicalize(value: unknown): string {
@@ -45,7 +45,7 @@ export function structuredAgentSessionDomainFingerprint(input: {
 export function structuredAgentSessionCreateFingerprint(input: {
   sessionId: string
   worktree: string
-  agent: AgentSessionHandleProvider
+  agent: StructuredAgentId
   resumeFrom?: { providerSessionId: string }
   tabId?: string
 }): string {

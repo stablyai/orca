@@ -12,7 +12,7 @@ const sshManagerState = vi.hoisted(() => ({
   }
 }))
 
-vi.mock('../ipc/ssh', () => ({
+vi.mock('../ssh/ssh-target-registry', () => ({
   getSshConnectionManager: () => sshManagerState.manager
 }))
 

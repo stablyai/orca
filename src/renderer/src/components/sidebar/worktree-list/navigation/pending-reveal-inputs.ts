@@ -8,20 +8,11 @@ import type { Repo } from '../../../../../../shared/repo-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shared/worktree/types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host'
 import type { RenderRow } from '../listing/render-row'
-import { getHostPinnedGroupKey } from '../../host-pinned-sections'
-import { getWorktreeLineageGroupKey } from '../grouping/group-keys'
 import type { ProjectGroupingModel } from '../grouping/project-grouping'
 import type { PinnedWorktreeDisplayPolicy, WorktreeGroupBy } from '../grouping/row-types'
-import { getGroupKeysForWorktree } from '../grouping/worktree-group-keys'
-import { isPinnedSectionWorktree } from '../../pinned-section-worktrees'
-import {
-  getHostScopedWorktreeLineageInputs,
-  getWorktreeLineageAncestors
-} from '../../worktree-lineage-projection'
 import { getFolderWorkspaceRevealGroupKeys } from './folder-reveal'
-import { getPinnedWorktreeRevealCollapsedGroupKeys } from './reveal-ancestors'
+import { getWorktreeRevealCollapsedGroupKeys } from './worktree-reveal-group-keys'
 
 export const MAX_REVEAL_RETRIES = 8
 
@@ -61,6 +52,9 @@ export function expandGroupsForWorktreeReveal(
   worktreeId: string,
   executionHostId?: ExecutionHostId
 ): void {
+  const hostScopedGroups = args.renderRows.some(
+    (row) => row.type === 'host-header' || (row.type === 'header' && row.collapseKey !== undefined)
+  )
   const folderGroupKeys = getFolderWorkspaceRevealGroupKeys(
     worktreeId,
     args.folderWorkspaces,
@@ -68,7 +62,8 @@ export function expandGroupsForWorktreeReveal(
     {
       groupBy: args.groupBy,
       workspaceStatuses: args.workspaceStatuses,
-      defaultHostId: args.defaultHostId
+      defaultHostId: args.defaultHostId,
+      hostScopedGroups
     }
   )
   if (folderGroupKeys.length > 0) {
@@ -87,62 +82,12 @@ export function expandGroupsForWorktreeReveal(
   if (!targetWorktree) {
     return
   }
-  const targetRepo = args.repoMap.get(targetWorktree.repoId)
-  const targetHostId = getWorktreeExecutionHostId(targetWorktree, targetRepo, args.defaultHostId)
-  const hostGroupKey = `host:${targetHostId}`
-  if (args.collapsedGroups.has(hostGroupKey)) {
-    args.toggleGroup(hostGroupKey)
-  }
-
-  const hostLineage = getHostScopedWorktreeLineageInputs(
-    args.worktrees,
-    args.worktreeLineageById,
-    executionHostId
-  )
-  for (const parent of getWorktreeLineageAncestors(
-    targetWorktree,
-    hostLineage.lineageById,
-    hostLineage.worktreeMap
-  )) {
-    const lineageGroupKey = getWorktreeLineageGroupKey(parent)
-    if (args.collapsedGroups.has(lineageGroupKey)) {
-      args.toggleGroup(lineageGroupKey)
-    }
-  }
-
-  const groupKeys =
-    args.pinnedDisplayPolicy === 'single-location' &&
-    isPinnedSectionWorktree(
-      targetWorktree,
-      args.worktrees,
-      args.worktreeLineageById,
-      args.worktreeMap
-    )
-      ? getPinnedWorktreeRevealCollapsedGroupKeys({
-          worktree: targetWorktree,
-          groupKey: args.renderRows.some(
-            (row) =>
-              row.type === 'host-header' || (row.type === 'header' && row.collapseKey !== undefined)
-          )
-            ? getHostPinnedGroupKey(targetHostId)
-            : undefined,
-          collapsedGroups: args.collapsedGroups,
-          inPinnedSection: true
-        })
-      : getGroupKeysForWorktree(
-          args.groupBy,
-          targetWorktree,
-          args.repoMap,
-          args.prCache,
-          args.workspaceStatuses,
-          args.settings,
-          args.projectGroups,
-          args.projectGrouping
-        )
-  for (const groupKey of groupKeys) {
-    if (args.collapsedGroups.has(groupKey)) {
-      args.toggleGroup(groupKey)
-    }
+  for (const groupKey of getWorktreeRevealCollapsedGroupKeys({
+    ...args,
+    worktree: targetWorktree,
+    hostScopedGroups
+  })) {
+    args.toggleGroup(groupKey)
   }
 }
 

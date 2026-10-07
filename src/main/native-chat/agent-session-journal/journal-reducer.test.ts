@@ -11,6 +11,7 @@ import type {
   AgentJournalMessageItem
 } from '../../../shared/agent-session-journal-types'
 import { structuredAgentSessionPayloadFingerprint } from '../../../shared/structured-agent-session-mutation'
+import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
 import {
   applyJournalRow,
   createJournalReducerState,
@@ -448,6 +449,35 @@ describe('submission and dispatch state machine', () => {
 
     expect(renderJournalState(state).items).toMatchObject([
       { itemId: agentJournalSubmissionKey('early-client'), revision: 1, sequence: 1 }
+    ])
+  })
+
+  it("folds the echo of another agent's message into its bubble, which keeps the sender", () => {
+    const echoed = userText('You have 1 orchestration message.')
+    const from = {
+      kind: 'agent' as const,
+      senders: [
+        {
+          party: { address: 'term_a', terminalHandle: 'term_a', orcaSessionId: null },
+          name: 'Coder'
+        }
+      ],
+      orchestration: null
+    }
+    const state = fold([
+      {
+        kind: 'submission',
+        clientMessageId: 'agent-send',
+        // Stored as the send path stores it: the sender is outside the fingerprint.
+        payloadFingerprint: agentSessionSendBodyFingerprint('session-1', { ...echoed, from }),
+        providerHandle: { kind: 'codex', threadId: 'thread-1' },
+        body: { ...echoed, from },
+        ...base(1)
+      },
+      { kind: 'item', itemId: 'codex:thread-1:turn-1:0', revision: 1, body: echoed, ...base(2) }
+    ])
+    expect(renderJournalState(state).items).toMatchObject([
+      { itemId: agentJournalSubmissionKey('agent-send'), body: { from } }
     ])
   })
 

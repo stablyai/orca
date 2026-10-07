@@ -25,6 +25,8 @@ type Tick = {
   streamingText?: string
   streamLive?: boolean
   identity?: string
+  /** The host says a person's Stop is ending the turn. */
+  stopping?: boolean
 }
 
 function overlayElement(tick: Tick): ReturnType<typeof createElement> {
@@ -34,6 +36,11 @@ function overlayElement(tick: Tick): ReturnType<typeof createElement> {
     nativeChatSession: { messages: tick.messages ?? [], status: 'ready' },
     nativeChatAgent: 'claude',
     nativeChatAgentWorking: tick.streamLive ?? false,
+    nativeChatTurnIndicator: {
+      thinking: false,
+      activityText: null,
+      stopping: tick.stopping ?? false
+    },
     nativeChatStreamingText: tick.streamingText,
     nativeChatStreamLive: tick.streamLive ?? false,
     nativeChatStreamScopeKey: tick.identity ?? 'tab-a',
@@ -183,5 +190,30 @@ describe('MobileNativeChatOverlay streaming gate', () => {
     })
 
     expect(streaming()).toBeNull()
+  })
+})
+
+describe("MobileNativeChatOverlay while a person's Stop ends the turn", () => {
+  let renderer: ReactTestRenderer | null = null
+
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+  })
+
+  async function steerHeld(tick: Tick): Promise<unknown> {
+    await act(async () => {
+      renderer = create(overlayElement(tick))
+    })
+    const view = renderer!.root.find((node) => node.type === 'ChatView')
+    return view.props.queuedSlot?.cards?.props?.steerHeld
+  }
+
+  it("holds the queued cards' Steer while the agent works and the host says Stopping", async () => {
+    expect(await steerHeld({ streamLive: true, stopping: true })).toBe(true)
+  })
+
+  it('leaves Steer to the cards otherwise', async () => {
+    expect(await steerHeld({ streamLive: true, stopping: false })).toBe(false)
   })
 })

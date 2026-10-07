@@ -36,7 +36,12 @@ export function buildNativeChatRailItems(
 ): readonly NativeChatRailItem[] {
   const items: NativeChatRailItem[] = []
   for (const [slotIndex, slot] of slots.entries()) {
-    if (slot.kind !== 'message' || slot.message.role !== 'user') {
+    // A send a Stop took back is no tick, as the host's outline of older history leaves it out.
+    if (
+      slot.kind !== 'message' ||
+      slot.message.role !== 'user' ||
+      slot.message.stoppedBeforeStart === true
+    ) {
       continue
     }
     const preview = nativeChatUserMessagePreview(slot.message.blocks)

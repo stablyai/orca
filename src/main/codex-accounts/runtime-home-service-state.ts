@@ -92,9 +92,7 @@ export abstract class CodexRuntimeHomeState {
     account: CodexManagedAccount
   ): { kind: 'ready'; homePath: string } | { kind: 'skip' }
   abstract getRetainedHostCodexHookHomePaths(ptyIds: readonly string[]): string[]
-  abstract setRealHomeLaneGate(gate: () => boolean): void
   abstract isHostSystemDefaultRealHomeSelected(launchEnv?: NodeJS.ProcessEnv): boolean
-  abstract isHostSystemDefaultRealHome(launchEnv?: NodeJS.ProcessEnv): boolean
   abstract reconcileLegacySharedHomeForRetainedPanes(): void
   abstract syncActiveWslSelectionsBeforeRestart(): Promise<void>
 

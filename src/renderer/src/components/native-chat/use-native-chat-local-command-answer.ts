@@ -79,11 +79,12 @@ export function answerNativeChatCommandInComposer(args: {
   answerCommandLocally?: NativeChatLocalCommandAnswer
   sessionOptionsSurface: NativeChatPtySessionOptionsSurface | null
   onSlashCommand?: (command: string, output?: string) => void
+  onSubmitted?: () => void
   setHistory: Dispatch<SetStateAction<HistoryState>>
   setDraft: (value: string) => void
   setCaret: Dispatch<SetStateAction<number>>
   clearSkillOrigin: () => void
-  setNotice: Dispatch<SetStateAction<string | null>>
+  setNotice: (notice: string | null) => void
 }): boolean {
   const command = args.draft.trim()
   const answer =
@@ -95,6 +96,7 @@ export function answerNativeChatCommandInComposer(args: {
     return false
   }
   args.onSlashCommand?.(command, answer)
+  args.onSubmitted?.()
   args.setHistory((previous) => pushHistory(previous, args.draft))
   args.setDraft('')
   args.setCaret(0)

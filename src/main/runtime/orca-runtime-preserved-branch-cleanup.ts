@@ -1,5 +1,6 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithTerminalDrivers } from './orca-runtime-terminal-drivers'
+import { confirmRunTerminalShellAlone, readRunTerminalClientUse } from './run-terminal-client-use'
 import { ALL_EXECUTION_HOSTS_SCOPE, type ExecutionHostScope } from '../../shared/execution-host'
 import { RuntimePreservedBranchCleanup } from './runtime-preserved-branch-cleanup'
 import type { IPtyProvider } from '../providers/types'
@@ -10,6 +11,7 @@ import type {
   RuntimeTerminalAgentStatusEvent
 } from './runtime-terminal-contracts'
 import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-facts'
+import type { ClaudeTerminalEvidence } from '../../shared/claude-terminal-interrupt'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import type { StructuredAgentSessionStatusSink } from '../native-chat/agent-session-wire/structured-agent-session-status-feed'
 import type { ObservedAgentStatusPaneIdentity } from '../ipc/agent-status-ipc-boundary'
@@ -62,6 +64,10 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
 
   protected readonly onTerminalSideEffects: ((batch: TerminalSideEffectBatch) => void) | null
 
+  protected readonly onClaudeTerminalEvidence:
+    | ((paneKey: string, evidence: ClaudeTerminalEvidence) => void)
+    | null
+
   protected terminalSideEffectLocalConsumerAvailable = false
 
   protected terminalSideEffectConsumerAvailable = false
@@ -79,6 +85,25 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
   protected readonly getAgentProviderSessionRowsForPaneFn:
     | ((paneKey: string) => AgentStatusIpcPayload[])
     | null
+
+  /** See run-terminal-client-use.ts. */
+  readTerminalClientUse(ptyId: string): 'used' | 'unused' | 'unknown' {
+    return readRunTerminalClientUse(this, ptyId)
+  }
+
+  confirmTerminalShellAlone(ptyId: string): Promise<boolean> {
+    return confirmRunTerminalShellAlone(this.ptyController, ptyId)
+  }
+
+  /** The PTY a terminal handle drives now; a restarted pane answers with its new PTY. */
+  getTerminalPtyIdForHandle(handle: string): string | null {
+    return this.getLivePtyForHandle(handle)?.pty.ptyId ?? null
+  }
+
+  /** Agent status rows this host holds for a pane, from hooks, OSC and titles alike. */
+  getAgentStatusRowsForPane(paneKey: string): AgentStatusIpcPayload[] {
+    return this.getAgentProviderSessionRowsForPaneFn?.(paneKey) ?? []
+  }
 
   protected readonly attestAgentHookCompatibilityAuthorityFn:
     | ((candidate: {

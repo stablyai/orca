@@ -113,6 +113,17 @@ export function getDismissHandler(): (event: unknown, ...args: unknown[]) => unk
   ) => unknown
 }
 
+export function getSettleStructuredPromptsHandler(): (
+  event: unknown,
+  ...args: unknown[]
+) => unknown {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: selected by its exact channel; the handler takes (event, scope, sessionId).
+  return findRegisteredHandler('notifications:settleStructuredPrompts') as (
+    event: unknown,
+    ...args: unknown[]
+  ) => unknown
+}
+
 export function getOpenSystemSettingsHandler(): (event: unknown) => unknown {
   return findRegisteredHandler('notifications:openSystemSettings') as (event: unknown) => unknown
 }

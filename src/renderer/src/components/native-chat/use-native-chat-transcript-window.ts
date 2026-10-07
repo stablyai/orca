@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { elementScroll, useVirtualizer, type VirtualItem } from '@tanstack/react-virtual'
 import { createProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
+import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
 import { NATIVE_CHAT_ROW_GAP_PX } from './native-chat-row-height-estimate'
 import { nativeChatPinnedRowIndexes, nativeChatTranscriptRange } from './native-chat-pinned-rows'
 import { nativeChatSlotKey, type NativeChatTranscriptSlot } from './native-chat-transcript-slots'
@@ -93,6 +94,7 @@ export function useNativeChatTranscriptWindow({
   const readerTakeoverFrameRef = useRef<number | null>(null)
   const previousMeasurementKeysRef = useRef<ReadonlySet<string> | null>(null)
   const retiredMeasurementCountRef = useRef(0)
+  const alignBehavior = usePrefersReducedMotion() ? 'auto' : 'smooth'
   const pinned = useMemo(
     () => nativeChatPinnedRowIndexes({ count: slots.length, revealIndex }),
     [slots.length, revealIndex]
@@ -256,17 +258,17 @@ export function useNativeChatTranscriptWindow({
       // Through the virtualizer so a scroll it is still reconciling — the jump
       // that mounted this row in the first place — is replaced rather than raced.
       if (virtualizer.scrollElement) {
-        virtualizer.scrollToOffset(top, { align: 'start', behavior: 'smooth' })
+        virtualizer.scrollToOffset(top, { align: 'start', behavior: alignBehavior })
       } else {
         const max = Math.max(0, container.scrollHeight - container.clientHeight)
         const landing = Math.max(0, Math.min(top, max))
         if (container.scrollTop !== landing) {
           programmaticScrollMarks.mark(landing)
         }
-        container.scrollTo({ top, behavior: 'smooth' })
+        container.scrollTo({ top, behavior: alignBehavior })
       }
     },
-    [finishReaderTakeover, programmaticScrollMarks, scrollRef, virtualizer]
+    [alignBehavior, finishReaderTakeover, programmaticScrollMarks, scrollRef, virtualizer]
   )
 
   const scrollToEnd = useCallback(() => {

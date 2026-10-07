@@ -9,6 +9,8 @@ import {
 } from '../../../shared/cross-platform-path'
 import { getGitCloneFailureMessage } from '../../../shared/git-clone-failure-message'
 import { deriveCloneRepoNameFromUrl } from '../../git/repo-clone-path'
+import { reuseSavedCloneTarget } from '../../git/saved-clone-target'
+import { getRepoSshConnectionId, toSshExecutionHostId } from '../../../shared/execution-host'
 import { getSshGitProvider } from '../../providers/ssh-git-dispatch'
 import { getSshFilesystemProvider } from '../../providers/ssh-filesystem-dispatch'
 import { joinRemotePath } from '../../ssh/ssh-remote-platform'
@@ -57,16 +59,13 @@ export async function cloneRemoteRepo(
     throw new Error('Clone path must be inside the destination directory')
   }
   const clonePathKey = normalizeRuntimePathForComparison(clonePath)
-  const existing = store.getRepos().find((repo) => {
-    return (
-      repo.connectionId === args.connectionId &&
-      normalizeRuntimePathForComparison(repo.path) === clonePathKey
-    )
-  })
-  if (existing && !isFolderRepo(existing)) {
-    emitRepoAdded('clone_url', true)
-    return existing
-  }
+  const findSaved = (): Repo | undefined =>
+    store.getRepos().find((repo) => {
+      return (
+        getRepoSshConnectionId(repo) === args.connectionId &&
+        normalizeRuntimePathForComparison(repo.path) === clonePathKey
+      )
+    })
 
   const remoteCloneKey = `${args.connectionId}:${clonePathKey}`
   if (remoteCloneInFlightByPath.has(remoteCloneKey)) {
@@ -81,6 +80,17 @@ export async function cloneRemoteRepo(
   activeRemoteClone = metadata
   remoteCloneInFlightByPath.add(remoteCloneKey)
   try {
+    // Why: after the in-flight guard, so a retry never inspects a clone that is still running.
+    const reused = await reuseSavedCloneTarget(
+      findSaved,
+      args.url.trim(),
+      toSshExecutionHostId(args.connectionId),
+      controller.signal
+    )
+    if (reused) {
+      emitRepoAdded('clone_url', true)
+      return reused
+    }
     // Why: match local clone by creating the parent first, or a fresh remote parent surfaces as spawn ENOENT.
     await fsProvider.createDir(trimmedDestination)
     // Why: the SSH relay runs git argv, not a shell; use the repo folder name so git creates it under the chosen parent.
@@ -112,17 +122,28 @@ export async function cloneRemoteRepo(
     }
     remoteCloneInFlightByPath.delete(remoteCloneKey)
   }
-  if (existing && isFolderRepo(existing)) {
-    const updated = store.updateRepo(existing.id, {
-      kind: 'git',
-      projectHostSetupMethod: 'cloned'
-    })
-    if (updated) {
-      emitRepoAdded('clone_url', false)
+  const existing = findSaved()
+  if (existing) {
+    if (isFolderRepo(existing)) {
+      const updated = store.updateRepo(existing.id, {
+        kind: 'git',
+        projectHostSetupMethod: 'cloned'
+      })
+      if (updated) {
+        emitRepoAdded('clone_url', false)
+        getActiveMultiplexer(args.connectionId)?.notify('session.registerRoot', {
+          rootPath: clonePath
+        })
+        return updated
+      }
+    } else {
+      // Why: git re-created this project's folder, and `addRemoteRepoFromPath` returns an existing
+      // project without registering the root, so the relay would never learn the path came back.
       getActiveMultiplexer(args.connectionId)?.notify('session.registerRoot', {
         rootPath: clonePath
       })
-      return updated
+      emitRepoAdded('clone_url', true)
+      return existing
     }
   }
   const result = await addRemoteRepoFromPath(store, {

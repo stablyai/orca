@@ -5,6 +5,7 @@ import type { TerminalSlice } from '../terminals/terminal-state'
 export type { TerminalSlice } from '../terminals/terminal-state'
 import { createTerminalEphemeralActions } from '../terminals/terminal-ephemeral-state'
 import { createTerminalTabCreationActions } from '../terminals/terminal-tab-creation'
+import { createTerminalTabAgentLaunchPaneActions } from '../terminals/terminal-tab-agent-launch-pane'
 import { createActiveWorkspaceTerminalActions } from '../terminals/terminal-active-workspace-creation'
 import { createTerminalTabCloseActions } from '../terminals/terminal-tab-close'
 import { createTerminalTabNavigationActions } from '../terminals/terminal-tab-navigation'
@@ -78,6 +79,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   recentQuickCommandIdByGroup: {},
   ...createTerminalEphemeralActions(set, get),
   ...createTerminalTabCreationActions(set, get),
+  ...createTerminalTabAgentLaunchPaneActions(set),
   ...createActiveWorkspaceTerminalActions(set, get),
   ...createTerminalTabCloseActions(set, get),
   ...createTerminalTabNavigationActions(set, get),

@@ -8,10 +8,10 @@ import {
 import type { NativeChatSettledTurns } from '../../../src/shared/native-chat-turn-status'
 import {
   isNativeChatRowInLiveWorkingTurn,
-  nativeChatMessagesWaitingBehindLiveTurn,
   nativeChatTurnMembership,
   type NativeChatTurnJournal
 } from '../../../src/shared/native-chat-turn-membership'
+import { nativeChatMessagesWaitingBehindLiveTurn } from '../../../src/shared/native-chat-messages-waiting-behind-live-turn'
 import {
   nativeChatRowsInDrawOrder,
   nativeChatTurnBarRows
@@ -82,6 +82,7 @@ export function useMobileNativeChatTurnDisclosure({
   turnJournal = null,
   thinking = false,
   activityText = null,
+  stopping = false,
   lineYields = false,
   scopeKey
 }: {
@@ -97,6 +98,8 @@ export function useMobileNativeChatTurnDisclosure({
   thinking?: boolean
   /** What the provider says the live turn is doing; outranks the other labels. */
   activityText?: string | null
+  /** A person's Stop is ending the live turn: the sends the host holds draw after its status. */
+  stopping?: boolean
   /** A prompt the reader must answer replaces the live activity line. */
   lineYields?: boolean
   /** Host/worktree/tab identity for timing and disclosure isolation. */
@@ -131,7 +134,14 @@ export function useMobileNativeChatTurnDisclosure({
   }, [enabled, messages, turnJournal])
   // A message waiting behind the live turn draws after that turn's live status, not in the list.
   const waiting = useMemo(() => {
-    const ids = enabled ? nativeChatMessagesWaitingBehindLiveTurn(rows, turnJournal?.items) : null
+    const ids = enabled
+      ? nativeChatMessagesWaitingBehindLiveTurn(
+          rows,
+          turnJournal?.items,
+          stopping,
+          turnJournal?.submissions
+        )
+      : null
     if (!ids?.size) {
       return { listMessages: rows, waitingRows: [], indexById: null }
     }
@@ -140,7 +150,7 @@ export function useMobileNativeChatTurnDisclosure({
       waitingRows: rows.flatMap((item, index) => (ids.has(item.id) ? [{ item, index }] : [])),
       indexById: new Map(rows.map((message, index) => [message.id, index]))
     }
-  }, [enabled, rows, turnJournal])
+  }, [enabled, rows, stopping, turnJournal])
   const turnStatuses = useMobileNativeChatTurnStatus({
     turnKeys,
     liveTurnKey,
@@ -167,11 +177,12 @@ export function useMobileNativeChatTurnDisclosure({
       nativeChatLiveLine({
         draws: enabled && isWorking && !lineYields && active !== null,
         thinking: active?.thinking === true,
+        stopping,
         activityText: activeActivityText,
         messages: rows,
         inLiveWorkingTurn
       }),
-    [active, activeActivityText, enabled, inLiveWorkingTurn, isWorking, lineYields, rows]
+    [active, activeActivityText, enabled, inLiveWorkingTurn, isWorking, lineYields, rows, stopping]
   )
   const liveReasoningId = line?.reasoning?.message.id
   const liveLine = useMemo<MobileNativeChatLiveLine | null>(

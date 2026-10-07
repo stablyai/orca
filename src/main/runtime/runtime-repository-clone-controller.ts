@@ -2,7 +2,11 @@ import { randomUUID } from 'node:crypto'
 import { mkdir } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
+import {
+  getRepoSshConnectionId,
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../shared/execution-host'
 import { resolveDefaultCloneDestination } from '../../shared/git/repo-default-locations'
 import type { Repo } from '../../shared/repo-types'
 import { getGitCloneFailureMessage } from '../../shared/git-clone-failure-message'
@@ -13,6 +17,7 @@ import {
   getClonePathComparisonKey
 } from '../git/repo-clone-path'
 import { gitSpawnAfterWindowsEnvironmentReady, promptGuardGitEnv } from '../git/runner'
+import { reuseSavedCloneTarget } from '../git/saved-clone-target'
 import { runWithGitReadCacheInvalidation } from '../git/status'
 import { invalidateAuthorizedRootsCache } from '../ipc/filesystem-auth'
 import { isFolderRepo } from '../../shared/repo-kind'
@@ -110,14 +115,18 @@ export class RuntimeRepositoryCloneController {
     if (!store) {
       throw new Error('runtime_unavailable')
     }
-    const existingBeforeClone = store.getRepos().find((repo) => {
-      return (
-        getClonePathComparisonKey(repo.path) === clonePathKey &&
-        runtimeRepoMatchesExecutionHost(repo, executionHostId)
-      )
-    })
-    if (existingBeforeClone && !isFolderRepo(existingBeforeClone)) {
-      return existingBeforeClone
+    // Why: git runs in this process, so an SSH project at the same path string is another machine's.
+    const findSaved = (): Repo | undefined =>
+      store.getRepos().find((repo) => {
+        return (
+          getClonePathComparisonKey(repo.path) === clonePathKey &&
+          runtimeRepoMatchesExecutionHost(repo, executionHostId) &&
+          !getRepoSshConnectionId(repo)
+        )
+      })
+    const reused = await reuseSavedCloneTarget(findSaved, trimmedUrl, LOCAL_EXECUTION_HOST_ID)
+    if (reused) {
+      return reused
     }
 
     await mkdir(trimmedDestination, { recursive: true })
@@ -166,12 +175,7 @@ export class RuntimeRepositoryCloneController {
       proc.on('close', (code, signal) => void finish(code, signal))
     })
 
-    const existing = store.getRepos().find((repo) => {
-      return (
-        getClonePathComparisonKey(repo.path) === clonePathKey &&
-        runtimeRepoMatchesExecutionHost(repo, executionHostId)
-      )
-    })
+    const existing = findSaved()
     if (existing) {
       if (isFolderRepo(existing)) {
         const updated = store.updateRepo(existing.id, { kind: 'git' })
@@ -182,6 +186,11 @@ export class RuntimeRepositoryCloneController {
           return updated
         }
       }
+      // Why: git re-created this project's folder, so its worktree root is gone with it and the
+      // authorized-roots cache still holds the answers from before the folder came back.
+      await prepareLocalWorktreeRootForRepo(store, existing)
+      invalidateAuthorizedRootsCache()
+      this.invalidate(existing.id)
       return existing
     }
     // `cloneRepo` ran `git clone` in this process (see `assertCloneHostIsSupported`), so the

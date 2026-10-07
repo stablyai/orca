@@ -24,6 +24,7 @@ import type { ClaudeThinkingDisplaySupport } from '../claude/claude-thinking-dis
 export type StructuredClaudeRuntimeAdapterDeps = {
   store: AgentSessionRecordStore
   resolveWorkspacePath: (workspaceId: string) => Promise<string>
+  resolveClaudeLaunchArgs: () => Promise<string[]> | string[]
   resolveClaudeCommand?: () => string
   /** Whether a Claude CLI takes the thinking-display flag; absent never passes it. */
   claudeThinkingDisplay?: ClaudeThinkingDisplaySupport
@@ -50,7 +51,7 @@ export type StructuredClaudeRuntimeAdapterDeps = {
 export function structuredClaudeLifecycleEvent(
   event: ClaudeStructuredSessionEvent
 ): StructuredAgentSessionLifecycleEvent | null {
-  if (event.type === 'started') {
+  if (event.type === 'started' || event.type === 'options-skipped') {
     return event
   }
   // Every exit of a child with an identity, expected or not: the host ends that child's record.
@@ -70,7 +71,8 @@ export function structuredClaudeLifecycleEvent(
       acquisitionGeneration: event.acquisitionGeneration,
       // The instant the translator ended the open turn at; the host reads the exit's turn by it.
       ...(event.observedAt === undefined ? {} : { observedAt: event.observedAt }),
-      ...(event.startupUnproven ? { startupUnproven: event.startupUnproven } : {})
+      ...(event.startupUnproven ? { startupUnproven: event.startupUnproven } : {}),
+      ...(event.startupUnanswered ? { startupUnanswered: event.startupUnanswered } : {})
     }
   }
   return null
@@ -87,6 +89,7 @@ export function createStructuredClaudeRuntimeAdapter(
     resolveLaunch: createClaudeStructuredLaunchResolver({
       store,
       resolveWorkspacePath: deps.resolveWorkspacePath,
+      resolveLaunchArgs: deps.resolveClaudeLaunchArgs,
       resolveCommand: deps.resolveClaudeCommand ?? resolveClaudeCommand,
       ...(deps.resolveClaudeLaunchEnv ? { resolveEnv: deps.resolveClaudeLaunchEnv } : {}),
       ...(deps.resolveClaudeInheritedEnv

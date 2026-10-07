@@ -1,5 +1,5 @@
 // The agent-session store's rows in the host's chat journal database: every row loaded once at open,
-// exactly the rows a transaction changed written back, and the one-time copy of the records file.
+// and exactly the rows a transaction changed written back.
 //
 // A record row this build cannot read is derived as unreadable at each load and never rewritten: a
 // write only touches changed rows, and every mutation of an unreadable id is refused.
@@ -12,10 +12,7 @@ import {
 import { decodePersistedAgentSessionRecord } from '../../shared/agent-session-record-stored-form'
 import type Database from '../sqlite/sync-database'
 import type { SqliteRow } from '../sqlite/sqlite-statement'
-import {
-  AGENT_SESSION_STORE_SCHEMA_VERSION,
-  type AgentSessionStoreState
-} from './agent-session-record-store-file'
+import type { AgentSessionStoreState } from './agent-session-store-state'
 import type { AgentSessionStoreRowWrites } from './agent-session-store-draft'
 import {
   isReadableAgentSessionStoreOperation,
@@ -81,13 +78,8 @@ function unreadableRecordReason(value: unknown): string {
  * be alive, so nothing persisted grants a writer until this host adjudicates it. Operation, key and
  * tab rows this build cannot read are skipped, as a record row it cannot read is set aside.
  */
-export function loadAgentSessionStoreRows(
-  db: Database.Database,
-  hostId: string
-): AgentSessionStoreState {
+export function loadAgentSessionStoreRows(db: Database.Database): AgentSessionStoreState {
   const state: AgentSessionStoreState = {
-    schemaVersion: AGENT_SESSION_STORE_SCHEMA_VERSION,
-    hostId,
     records: new Map(),
     operations: new Map(),
     retiredClaimKeys: [],
@@ -163,8 +155,6 @@ export function loadAgentSessionStoreRows(
   }
   if (recorded) {
     state.sessionTabs = table
-  } else if (table.sessionIds().length > 0) {
-    state.unrecordedSessionTabs = table
   }
   return state
 }
@@ -222,58 +212,5 @@ export function writeAgentSessionStoreRows(
   }
   if (writes.sessionTabs) {
     writeTabIndex(db, writes.sessionTabs)
-  }
-}
-
-/** What the one-time import copies in, each row already serialized. */
-export type AgentSessionStoreImportRows = {
-  records: [sessionId: string, json: string][]
-  operations: [key: string, json: string][]
-  retiredClaimKeys: { keyId: string; retiredAt: number }[]
-  /** Null when the file never recorded a tab index. */
-  sessionTabs: PersistedAgentSessionTab[] | null
-}
-
-/** Inserts each row whose key the database does not hold yet: a chat created while the import was
- *  owed keeps its own rows, and ids never collide with the file's. */
-export function insertAgentSessionStoreRowsIfAbsent(
-  db: Database.Database,
-  rows: AgentSessionStoreImportRows
-): void {
-  const insertRecord = db.prepare(
-    'INSERT OR IGNORE INTO agent_session_records (session_id, record_json) VALUES (?, ?)'
-  )
-  for (const [sessionId, json] of rows.records) {
-    insertRecord.run(sessionId, json)
-  }
-  const insertOperation = db.prepare(
-    'INSERT OR IGNORE INTO agent_session_operations (operation_key, row_json) VALUES (?, ?)'
-  )
-  for (const [key, json] of rows.operations) {
-    insertOperation.run(key, json)
-  }
-  const insertKey = db.prepare(
-    'INSERT OR IGNORE INTO agent_session_retired_claim_keys (key_id, retired_at) VALUES (?, ?)'
-  )
-  for (const { keyId, retiredAt } of rows.retiredClaimKeys) {
-    insertKey.run(keyId, retiredAt)
-  }
-  const tabs = rows.sessionTabs
-  if (tabs) {
-    const insertTab = db.prepare(
-      'INSERT OR IGNORE INTO agent_session_tabs (tab_id, session_id, position) VALUES (?, ?, ?)'
-    )
-    // Ahead of any tab a chat created while the import was owed recorded: these were open first.
-    tabs.forEach(({ tabId, sessionId }, position) =>
-      insertTab.run(tabId, sessionId, position - tabs.length)
-    )
-    db.prepare('INSERT OR IGNORE INTO agent_session_store_meta (key, value) VALUES (?, ?)').run(
-      SESSION_TABS_RECORDED,
-      '1'
-    )
-  } else {
-    // An index a chat created while the import was owed recorded holds none of the file's chats:
-    // "never recorded" sends restore to the profile's tabs, with that chat's tab row beside them.
-    db.prepare('DELETE FROM agent_session_store_meta WHERE key = ?').run(SESSION_TABS_RECORDED)
   }
 }

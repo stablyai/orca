@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
-import { renderHook } from '@testing-library/react'
+import { cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react'
+import type { KeyboardEventHandler } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import {
   applyPickerSuggestion,
@@ -35,8 +36,18 @@ function picker(items = [COMMAND]): Extract<ComposerAutocomplete, { mode: 'slash
   }
 }
 
-function setup(autocomplete: ComposerAutocomplete = picker(), composing = false, draft = '/') {
+function setup(
+  autocomplete: ComposerAutocomplete = picker(),
+  composing = false,
+  draft = '/',
+  {
+    files = [],
+    activeSuggestion = 0,
+    loading = false
+  }: { files?: readonly string[]; activeSuggestion?: number; loading?: boolean } = {}
+) {
   const callbacks = {
+    completeMention: vi.fn(),
     completePickerItem: vi.fn(),
     dispatchPickerCommand: vi.fn(),
     dismissPicker: vi.fn(),
@@ -50,7 +61,8 @@ function setup(autocomplete: ComposerAutocomplete = picker(), composing = false,
   const hook = renderHook(() =>
     useNativeChatComposerKeyDown({
       autocomplete,
-      activeSuggestion: 0,
+      mentionFiles: { files, loading, failed: false },
+      activeSuggestion,
       draft,
       history: EMPTY_HISTORY,
       isComposing: () => composing,
@@ -71,6 +83,59 @@ function keyEvent(key: string, isComposing = false) {
 }
 
 describe('useNativeChatComposerKeyDown', () => {
+  const mention: ComposerAutocomplete = { mode: 'mention', query: 'app', triggerKey: '@:5' }
+
+  const setupMention = (options?: Parameters<typeof setup>[3]) =>
+    setup(mention, false, 'open @app', options)
+
+  function press(handler: KeyboardEventHandler<HTMLElement>, key: string, shiftKey = false): void {
+    render(<div data-testid="composer" onKeyDown={handler} />)
+    fireEvent.keyDown(screen.getByTestId('composer'), { key, shiftKey })
+    cleanup()
+  }
+
+  it.each(['Enter', 'Tab'])('leaves Shift+%s alone while a menu is open', (key) => {
+    const files = setupMention({ files: ['src/app.ts'] })
+    press(files.handler, key, true)
+    expect(files.callbacks.completeMention).not.toHaveBeenCalled()
+
+    const commands = setup()
+    press(commands.handler, key, true)
+    expect(commands.callbacks.completePickerItem).not.toHaveBeenCalled()
+    expect(commands.callbacks.dispatchPickerCommand).not.toHaveBeenCalled()
+  })
+
+  it('inserts the highlighted file on Enter instead of sending', () => {
+    const { handler, callbacks } = setupMention({
+      files: ['src/app.ts', 'app.css'],
+      activeSuggestion: 1
+    })
+    press(handler, 'Enter')
+    expect(callbacks.completeMention).toHaveBeenCalledWith('app.css')
+    expect(callbacks.send).not.toHaveBeenCalled()
+  })
+
+  it('holds Enter while the files are still loading instead of sending a half-typed message', () => {
+    const { handler, callbacks } = setupMention({ loading: true })
+    press(handler, 'Enter')
+    expect(callbacks.send).not.toHaveBeenCalled()
+    expect(callbacks.completeMention).not.toHaveBeenCalled()
+  })
+
+  it('sends on Enter once the file menu has settled with nothing to insert', () => {
+    const { handler, callbacks } = setupMention()
+    press(handler, 'Enter')
+    expect(callbacks.completeMention).not.toHaveBeenCalled()
+    expect(callbacks.send).toHaveBeenCalled()
+  })
+
+  it('closes the file menu on Escape without interrupting the agent', () => {
+    const { handler, callbacks } = setupMention({ files: ['src/app.ts'] })
+    press(handler, 'Escape')
+    expect(callbacks.dismissPicker).toHaveBeenCalledWith('@:5')
+    expect(callbacks.interrupt).not.toHaveBeenCalled()
+  })
+
   it('dispatches command Enter but completes command Tab', () => {
     const enter = setup()
     enter.handler(keyEvent('Enter') as never)

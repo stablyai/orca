@@ -1,4 +1,5 @@
 import type { DiscoveredSkill } from '../../../../shared/skills'
+import { formatNativeChatFileReference } from '../../../../shared/agent-image-paste'
 import type { NativeChatAgentProfile } from '../../../../shared/native-chat-agent-profiles'
 import {
   filterSlashCommands,
@@ -43,7 +44,7 @@ type PickerAutocomplete = {
 export type ComposerAutocomplete =
   | { mode: 'none' }
   | ({ mode: 'slash' } & PickerAutocomplete)
-  | { mode: 'mention'; query: string }
+  | { mode: 'mention'; query: string; triggerKey: string }
 
 const EMPTY_DISCOVERY: NativeChatSkillDiscoverySnapshot = { status: 'ready', skills: [] }
 
@@ -83,7 +84,10 @@ export function deriveComposerAutocomplete(
   }
   const mentionMatch = before.match(/(?:^|\s)@(\S*)$/)
   if (mentionMatch) {
-    return { mode: 'mention', query: mentionMatch[1] }
+    const triggerKey = `@:${before.length - mentionMatch[1].length - 1}`
+    return dismissedTriggerKey === triggerKey
+      ? { mode: 'none' }
+      : { mode: 'mention', query: mentionMatch[1], triggerKey }
   }
   // Why: `/` is the whole composer grammar, so a mid-prompt token opens the same
   // menu a leading one does — it just cannot dispatch.
@@ -196,8 +200,8 @@ export function applyMentionSuggestion(
     return { draft, caret }
   }
   const tokenStart = before.length - match[2].length - 1
-  const nextBefore = `${before.slice(0, tokenStart)}@${path} `
-  return { draft: nextBefore + after, caret: nextBefore.length }
+  const nextBefore = `${before.slice(0, tokenStart)}${formatNativeChatFileReference(path)} `
+  return { draft: nextBefore + after.replace(/^ /, ''), caret: nextBefore.length }
 }
 
 export type HistoryState = { entries: readonly string[]; index: number | null }

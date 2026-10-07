@@ -16,6 +16,11 @@ import {
   type ReactElementLike
 } from './floating-terminal-panel-render-probe'
 
+vi.mock('zustand/react/shallow', () => ({
+  // Why: zustand resolves the real react (unmocked in node_modules); the memo wrapper is inert here.
+  useShallow: (selector: unknown) => selector
+}))
+
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
   const { createReactHookOverrides } = await import('./floating-terminal-panel-test-module-mocks')
@@ -270,6 +275,33 @@ describe('FloatingTerminalPanel close behavior', () => {
     )
     expect(collectPropValues(element, 'data-contextual-tour-target')).not.toContain(
       'floating-workspace-new-markdown'
+    )
+  })
+
+  it('keeps the split surface mounted when its focused group has no tabs', async () => {
+    setFloatingTabs([makeTab({ id: 'tab-1' })])
+    const state = storeBox.state as FloatingPanelStoreState
+    state.groupsByWorktree[FLOATING_TERMINAL_WORKTREE_ID].push({
+      id: 'empty-group',
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      activeTabId: null,
+      tabOrder: []
+    })
+    state.activeGroupIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID] = 'empty-group'
+    state.layoutByWorktree[FLOATING_TERMINAL_WORKTREE_ID] = {
+      type: 'split',
+      direction: 'horizontal',
+      first: { type: 'leaf', groupId: 'floating-group' },
+      second: { type: 'leaf', groupId: 'empty-group' }
+    }
+
+    const element = await renderPanel(true)
+
+    expect(() => findByTypeName(element, 'FloatingTerminalEmptyState')).toThrow(
+      'FloatingTerminalEmptyState not found'
+    )
+    expect(findByTypeName(element, 'TabGroupSplitNodeTree').props.focusedGroupId).toBe(
+      'empty-group'
     )
   })
 

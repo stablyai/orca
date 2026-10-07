@@ -184,14 +184,14 @@ setTimeout(() => { db.exec('COMMIT'); db.close() }, 200)`,
     vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     const stopFailing = failCommits(connection)
 
-    // A first-use copy's batch, under the unsynced level. Its caller gets the COMMIT's own error.
+    // Its caller gets the COMMIT's own error.
     expect(() =>
-      database.unsyncedTransaction((db) =>
+      database.transaction((db) =>
         db
           .prepare(
             'INSERT INTO journal_rows (session_id, epoch, seq, ts, row_json) VALUES (?, ?, ?, ?, ?)'
           )
-          .run('copying', 'epoch-copying', 1, 1, '{}')
+          .run('unknown', 'epoch-unknown', 1, 1, '{}')
       )
     ).toThrow('FOREIGN KEY constraint failed')
     expect(connection.isTransaction).toBe(true)
@@ -210,8 +210,6 @@ setTimeout(() => { db.exec('COMMIT'); db.close() }, 200)`,
     rollbackFails = false
     expect(database.db.isTransaction).toBe(false)
     stopFailing()
-    // Restored with the ROLLBACK: no later commit runs at the copy's unsynced level.
-    expect(Number(connection.pragma('synchronous', { simple: true }))).toBe(2)
     await expect(
       other.appendItem(item(1), text('served'), { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE })
     ).resolves.toBeDefined()

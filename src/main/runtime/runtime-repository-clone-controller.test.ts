@@ -1,9 +1,15 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { Repo } from '../../shared/repo-types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type { RuntimeStore } from './runtime-store-contract'
+
+// These cases pin destination derivation; saved-clone verification has its own integration tests.
+vi.mock('../git/saved-clone-target', () => ({
+  reuseSavedCloneTarget: async (findSaved: () => Repo | undefined) => findSaved()
+}))
+
 import { RuntimeRepositoryCloneController } from './runtime-repository-clone-controller'
 
 const repoAt = (path: string): Repo => ({

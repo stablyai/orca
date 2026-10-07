@@ -1,13 +1,11 @@
 import { useMemo } from 'react'
-import type {
-  AgentJournalMessageItem,
-  AgentJournalSubmission
-} from '../../../../shared/agent-session-journal-types'
-import { dispatchWasWithdrawn } from '../../../../shared/structured-agent-session-dispatch-rejection'
+import type { AgentJournalMessageItem } from '../../../../shared/agent-session-journal-types'
 import type { StructuredAgentSessionOutboxEntry } from '../../../../shared/structured-agent-session-outbox'
-import { appendNativeChatDraftCache } from './native-chat-draft-cache'
-import { getStructuredAgentSessionOutbox } from './structured-agent-session-outbox-storage'
-import { appendNativeChatAttachmentCache } from './use-native-chat-composer-attachments'
+import { appendNativeChatDraftCache, readNativeChatDraftCache } from './native-chat-draft-cache'
+import {
+  appendNativeChatAttachmentCache,
+  readNativeChatAttachmentCache
+} from './use-native-chat-composer-attachments'
 
 /** Puts a message's text and images into a composer, after whatever is there. */
 export function returnMessageToComposer(
@@ -31,69 +29,42 @@ export function returnMessageToComposer(
 }
 
 /**
- * Gives the sender back what a Stop withdrew: its text and images go into this pane's composer,
- * after whatever is there. Called before the entries leave storage, so a failure between the two
- * repeats the text rather than losing it. Only this client's outbox holds them, so no other viewer
- * gets them.
+ * Gives the sender back what its own Stop took out of the outbox before the host held it, into
+ * an empty composer only: the host never had it, so the transcript cannot show it. Returns whether
+ * they went in; a composer holding text or images keeps what is there, and the caller keeps the
+ * entries. What the host withdrew stays in the transcript.
  */
-function restoreWithdrawnMessages(
-  sessionId: string,
+function restoreUnsentMessages(
   composerScopeKey: string | undefined,
   withdrawn: readonly StructuredAgentSessionOutboxEntry[]
-): void {
-  if (!composerScopeKey || withdrawn.length === 0) {
-    return
+): boolean {
+  if (
+    !composerScopeKey ||
+    readNativeChatDraftCache(composerScopeKey) !== '' ||
+    readNativeChatAttachmentCache(composerScopeKey).length > 0
+  ) {
+    return false
   }
-  // What the outbox no longer holds was already given back by whichever view dropped it first.
-  const held = new Set(
-    getStructuredAgentSessionOutbox(sessionId).map((entry) => entry.clientMessageId)
-  )
   for (const entry of withdrawn) {
-    if (!held.has(entry.clientMessageId)) {
-      continue
-    }
     returnMessageToComposer(
       composerScopeKey,
       `withdrawn-${entry.clientMessageId}`,
       entry.body.blocks
     )
   }
+  return true
 }
 
 export function useStructuredAgentSessionWithdrawnRestore(
-  sessionId: string,
-  /** Absent where no composer shows this session; the entries are then only dropped. */
+  /** Absent where no composer shows this session; the caller then keeps the entries. */
   composerScopeKey: string | undefined
 ): {
-  /** The entries the host settled as withdrawn by a Stop. */
-  byHost: (
-    entries: readonly StructuredAgentSessionOutboxEntry[],
-    submissions: readonly AgentJournalSubmission[]
-  ) => void
-  /** Entries a Stop took out of the outbox here, before the host held them. */
-  byStop: (entries: readonly StructuredAgentSessionOutboxEntry[]) => void
+  /** Entries a Stop took out of the outbox here, before the host held them; false when the
+   *  composer could not take them. */
+  byStop: (entries: readonly StructuredAgentSessionOutboxEntry[]) => boolean
 } {
   return useMemo(
-    () => ({
-      byHost: (entries, submissions) => {
-        // A hand-off of a queued draft is never restored: the Stop that withdrew it put the draft
-        // back as a card, which carries the text.
-        const withdrawn = new Set(
-          submissions
-            .filter(
-              (submission) =>
-                dispatchWasWithdrawn(submission) && submission.queuedMessageId === undefined
-            )
-            .map((submission) => submission.clientMessageId)
-        )
-        restoreWithdrawnMessages(
-          sessionId,
-          composerScopeKey,
-          entries.filter((entry) => withdrawn.has(entry.clientMessageId))
-        )
-      },
-      byStop: (entries) => restoreWithdrawnMessages(sessionId, composerScopeKey, entries)
-    }),
-    [composerScopeKey, sessionId]
+    () => ({ byStop: (entries) => restoreUnsentMessages(composerScopeKey, entries) }),
+    [composerScopeKey]
   )
 }

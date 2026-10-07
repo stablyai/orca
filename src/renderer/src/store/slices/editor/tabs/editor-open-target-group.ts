@@ -1,7 +1,7 @@
 import type { AppState } from '../../../types'
 import type { Tab, TabGroup, WorkspaceVisibleTabType } from '../../../../../../shared/tab-types'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
 import { isEditorTabContentType } from './editor-tab-content-type'
+import { ownsGlobalSelection } from '../../../global-selection-owner'
 
 export function getGroupActiveTab(group: TabGroup, tabsById: Map<string, Tab>): Tab | null {
   return group.activeTabId ? (tabsById.get(group.activeTabId) ?? null) : null
@@ -91,9 +91,9 @@ export function buildEditorActiveResult(
 } {
   return {
     // Why: only the on-screen worktree owns the main editor; a background or floating open updates only the per-worktree maps.
-    ...(worktreeId === FLOATING_TERMINAL_WORKTREE_ID || worktreeId !== state.activeWorktreeId
-      ? {}
-      : { activeFileId: fileId, activeTabType: 'editor' as const }),
+    ...(ownsGlobalSelection(state, worktreeId)
+      ? { activeFileId: fileId, activeTabType: 'editor' as const }
+      : {}),
     activeFileIdByWorktree: { ...state.activeFileIdByWorktree, [worktreeId]: fileId },
     activeTabTypeByWorktree: { ...state.activeTabTypeByWorktree, [worktreeId]: 'editor' }
   }

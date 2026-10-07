@@ -106,6 +106,7 @@ export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithReso
       afterWrite?: (ptyId: string) => void | Promise<void>
       suffixFailureError?: string
       inputKind: TerminalInputKind
+      requireWriteSettlement?: true
     }
   ): Promise<RuntimeTerminalSend> {
     const pty = this.getLivePtyForHandle(handle)
@@ -118,11 +119,20 @@ export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithReso
         throw new Error('invalid_terminal_send')
       }
       await assertTerminalInputWithinLimitWithYield(action.text)
-      await this.writeTerminalAction(pty.pty.ptyId, action, payload, options)
+      const writeSettlement = await this.writeTerminalAction(
+        pty.pty.ptyId,
+        action,
+        payload,
+        options
+      )
       return {
         handle,
-        accepted: true,
-        bytesWritten: Buffer.byteLength(payload, 'utf8')
+        accepted: !writeSettlement || writeSettlement.outcome === 'accepted',
+        ...(writeSettlement ? { writeSettlement } : {}),
+        bytesWritten:
+          !writeSettlement || writeSettlement.outcome === 'accepted'
+            ? Buffer.byteLength(payload, 'utf8')
+            : 0
       }
     }
 
@@ -143,12 +153,16 @@ export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithReso
       throw new Error('terminal_not_writable')
     }
 
-    await this.writeTerminalAction(leaf.ptyId, action, payload, options)
+    const writeSettlement = await this.writeTerminalAction(leaf.ptyId, action, payload, options)
 
     return {
       handle,
-      accepted: true,
-      bytesWritten: Buffer.byteLength(payload, 'utf8')
+      accepted: !writeSettlement || writeSettlement.outcome === 'accepted',
+      ...(writeSettlement ? { writeSettlement } : {}),
+      bytesWritten:
+        !writeSettlement || writeSettlement.outcome === 'accepted'
+          ? Buffer.byteLength(payload, 'utf8')
+          : 0
     }
   }
 

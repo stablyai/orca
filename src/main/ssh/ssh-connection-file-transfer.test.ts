@@ -182,11 +182,6 @@ describe('SshConnection', () => {
     await expect(
       uploadSession.uploadFile('/tmp/late.txt', '/remote/late.txt')
     ).rejects.toMatchObject({ name: 'AbortError' })
-    expect(uploadFileViaSystemSsh).toHaveBeenCalledWith(
-      expect.anything(),
-      '/tmp/late.txt',
-      '/remote/late.txt',
-      expect.objectContaining({ signal: expect.objectContaining({ aborted: true }) })
-    )
+    expect(uploadFileViaSystemSsh).not.toHaveBeenCalled()
   })
 })

@@ -3,6 +3,7 @@ import '@testing-library/jest-dom/vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DeleteNestedWorktreesDialog } from './DeleteNestedWorktreesDialog'
+import { toast } from 'sonner'
 
 const mocks = vi.hoisted(() => ({
   preview: vi.fn(),
@@ -25,6 +26,7 @@ vi.mock('@/store/selectors', () => ({ getWorktreeOnHostFromState: () => null }))
 vi.mock('./active-worktree-focus-after-delete', () => ({
   prepareActiveWorktreeFocusAfterDelete: () => mocks.commitFocus
 }))
+vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 
 const target = { id: 'repo::/workspaces/parent', executionHostId: 'local' as const }
 const plan = [
@@ -91,21 +93,65 @@ describe('nested deletion confirmation', () => {
     expect(onDeleted).toHaveBeenCalledOnce()
   })
 
-  it('refreshes partial deletions and requires a fresh review after failure', async () => {
-    mocks.remove.mockResolvedValue({ ok: false, error: 'Child archive hook failed' })
+  it('closes immediately while deletion is pending and prevents a second submission', async () => {
+    let finish: (value: { ok: boolean }) => void = () => {}
+    mocks.remove.mockReturnValue(
+      new Promise<{ ok: boolean }>((resolve) => {
+        finish = resolve
+      })
+    )
+    const dismissToast = vi.fn()
+    const onDeleted = vi.fn()
     render(
-      <DeleteNestedWorktreesDialog target={target} worktreeName="parent" dismissToast={vi.fn()} />
+      <DeleteNestedWorktreesDialog
+        target={target}
+        worktreeName="parent"
+        dismissToast={dismissToast}
+        onDeleted={onDeleted}
+      />
     )
     await review()
     fireEvent.click(screen.getByRole('button', { name: 'Delete all listed worktrees' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent('Child archive hook failed')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Deleting…' })).toBeDisabled()
+    expect(mocks.refresh).not.toHaveBeenCalled()
+    expect(onDeleted).not.toHaveBeenCalled()
+    await act(async () => {
+      finish({ ok: true })
+    })
+    expect(mocks.remove).toHaveBeenCalledOnce()
     expect(mocks.refresh).toHaveBeenCalledOnce()
-    expect(
-      screen.queryByRole('button', { name: 'Delete all listed worktrees' })
-    ).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Review again' }))
-    await vi.waitFor(() => expect(mocks.preview).toHaveBeenCalledTimes(2))
+    expect(onDeleted).toHaveBeenCalledOnce()
+    expect(dismissToast).toHaveBeenCalledOnce()
   })
+
+  it.each(['refused', 'rejected'])(
+    'reports a %s deletion in a toast and requires a fresh review',
+    async (outcome) => {
+      if (outcome === 'refused') {
+        mocks.remove.mockResolvedValue({ ok: false, error: 'Child archive hook failed' })
+      } else {
+        mocks.remove.mockRejectedValue(new Error('Child archive hook failed'))
+      }
+      render(
+        <DeleteNestedWorktreesDialog target={target} worktreeName="parent" dismissToast={vi.fn()} />
+      )
+      await review()
+      fireEvent.click(screen.getByRole('button', { name: 'Delete all listed worktrees' }))
+      await vi.waitFor(() =>
+        expect(toast.error).toHaveBeenCalledWith('Failed to delete workspace', {
+          description: 'Child archive hook failed'
+        })
+      )
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+      expect(mocks.refresh).toHaveBeenCalledOnce()
+      expect(
+        screen.queryByRole('button', { name: 'Delete all listed worktrees' })
+      ).not.toBeInTheDocument()
+      await review()
+      await vi.waitFor(() => expect(mocks.preview).toHaveBeenCalledTimes(2))
+    }
+  )
 
   it('ignores a late preview after cancellation', async () => {
     let finish: (value: typeof plan) => void = () => {}

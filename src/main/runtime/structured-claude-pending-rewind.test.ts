@@ -117,6 +117,7 @@ beforeEach(async () => {
     store,
     resolveWorkspacePath: async (id) => `/repos/${id}`,
     resolveClaudeCommand: () => '/usr/local/bin/claude',
+    resolveClaudeLaunchArgs: () => [],
     resolveClaudeAuthPolicy: () => ({ stripAuthEnv: false }),
     openClaudeConnection: claude.openConnection,
     readProcessStartTime: async () => HOST_TEST_NOW,

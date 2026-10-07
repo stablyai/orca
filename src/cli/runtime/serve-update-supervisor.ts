@@ -1,4 +1,4 @@
-import type { ChildProcess, SpawnOptions, spawn } from 'node:child_process'
+import type { ChildProcess, SpawnOptions } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { readFile, rename, unlink, writeFile } from 'node:fs/promises'
 import {
@@ -27,7 +27,7 @@ type ServeSupervisorArgs = {
   executable: string
   childArgs: string[]
   spawnOptions: SpawnOptions
-  spawnChild: typeof spawn
+  spawnChild: (program: string, args: string[], options: SpawnOptions) => ChildProcess
   handoffPath: string | null
 }
 

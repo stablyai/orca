@@ -43,8 +43,6 @@ export type StructuredAgentSessionConversationOpenDeps = {
  *  what the gone generation left running itself, from what it read before. */
 export type StructuredAgentSessionConversationOpenOptions = {
   acquisition?: boolean
-  /** A restore's open, which copies no per-chat file: see `AgentSessionJournal.whenImported`. */
-  deferPerSessionImport?: boolean
 }
 
 export type StructuredAgentSessionConversationOpenContext = {
@@ -90,11 +88,7 @@ export async function openStructuredAgentSessionConversationJournal(
     expectedRuntimeFence: fence
   })
   const identity = journalIdentityFor(record, params)
-  const journal = await openAgentSessionJournal({
-    identity,
-    database: deps.journalDatabase,
-    deferPerSessionImport: options.deferPerSessionImport
-  })
+  const journal = await openAgentSessionJournal({ identity, database: deps.journalDatabase })
   try {
     // A handed-over row found here is only doubt, which provider history decides under a won lease.
     await journal.markPendingSubmissionsUnknown(fence)

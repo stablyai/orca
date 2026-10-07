@@ -1,11 +1,7 @@
 import type { SshConnectionStore } from './ssh-connection-store'
 import type { SshChannelMultiplexer } from './ssh-channel-multiplexer'
-import type { SshConnection } from './ssh-connection'
+import type { SshConnectionManager } from './ssh-connection-manager'
 import type { SshConnectionState, SshTarget } from '../../shared/ssh-types'
-
-type SshConnectionManagerLike = {
-  getConnection: (targetId: string) => SshConnection | undefined
-}
 
 /**
  * The SSH target/state registry, split out of `ipc/ssh.ts`.
@@ -93,10 +89,11 @@ export function getActiveMultiplexer(connectionId: string): SshChannelMultiplexe
   return registeredGetActiveMultiplexer(connectionId)
 }
 
-let registeredGetSshConnectionManager: (() => SshConnectionManagerLike | null) | null = null
+let registeredGetSshConnectionManager: (() => SshConnectionManager | null) | null = null
+let registeredHasDirectSshAuthority: ((targetId: string) => boolean) | null = null
 
 export function setSshConnectionManagerResolver(
-  resolve: (() => SshConnectionManagerLike | null) | null
+  resolve: (() => SshConnectionManager | null) | null
 ): void {
   registeredGetSshConnectionManager = resolve
 }
@@ -109,6 +106,17 @@ export function setSshConnectionManagerResolver(
  * Why a resolver rather than the manager itself: `registerSshHandlers` may re-run and
  * replace the instance, so callers must resolve the current generation.
  */
-export function getSshConnectionManager(): SshConnectionManagerLike | null {
+export function getSshConnectionManager(): SshConnectionManager | null {
   return registeredGetSshConnectionManager?.() ?? null
+}
+
+export function setDirectSshAuthorityResolver(
+  resolve: ((targetId: string) => boolean) | null
+): void {
+  registeredHasDirectSshAuthority = resolve
+}
+
+/** Whether this process currently holds the target's relay session; false when unregistered. */
+export function hasRegisteredDirectSshAuthority(targetId: string): boolean {
+  return registeredHasDirectSshAuthority?.(targetId) ?? false
 }

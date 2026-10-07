@@ -1,4 +1,4 @@
-import { MOBILE_AGENT_SESSION_RPC_METHODS } from './runtime-rpc-mobile-method-allowlist-agent-session'
+import { MOBILE_AGENT_SESSION_RPC_METHODS } from './runtime-rpc-mobile-agent-session-methods'
 
 export const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'accounts.list',

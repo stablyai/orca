@@ -16,6 +16,8 @@ type CloneStepProps = {
   runtimeEnvironmentId?: string | null
   sshTargetId?: string | null
   cloneTargetLabel?: string | null
+  /** No host resolved yet (its server is still coming up): never clone onto this computer. */
+  submitDisabled?: boolean
   onUrlChange: (value: string) => void
   onDestChange: (value: string) => void
   onPickDestination: () => void
@@ -35,7 +37,8 @@ export function CloneStep({
   onUrlChange,
   onDestChange,
   onPickDestination,
-  onClone
+  onClone,
+  submitDisabled = false
 }: CloneStepProps): React.JSX.Element {
   const [browsingDestination, setBrowsingDestination] = useState(false)
   const isRemoteClone = Boolean(runtimeEnvironmentId || sshTargetId)
@@ -189,7 +192,7 @@ export function CloneStep({
 
         <Button
           onClick={onClone}
-          disabled={!cloneUrl.trim() || !cloneDestination.trim() || isCloning}
+          disabled={!cloneUrl.trim() || !cloneDestination.trim() || isCloning || submitDisabled}
           className="w-full"
         >
           {isCloning
