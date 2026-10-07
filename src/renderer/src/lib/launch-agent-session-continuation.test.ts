@@ -1,17 +1,27 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+const activateWorkspaceTabPaletteResult = vi.hoisted(() => vi.fn())
 const launchAgentInNewTab = vi.hoisted(() => vi.fn())
 const writeClipboardText = vi.hoisted(() => vi.fn(async () => undefined))
 const connectionId = vi.hoisted(() => ({ value: null as string | null }))
 const runtimeEnvironmentId = vi.hoisted(() => ({ value: null as string | null }))
 const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn(), warning: vi.fn() }))
-const store = vi.hoisted(() => ({
-  settings: { disabledTuiAgents: [] as string[] },
-  ensureDetectedAgents: vi.fn(async () => ['claude', 'codex']),
-  ensureRemoteDetectedAgents: vi.fn(async () => ['claude', 'codex']),
-  ensureRuntimeDetectedAgents: vi.fn(async () => ['claude', 'codex'])
-}))
+const store = vi.hoisted(() => {
+  const unifiedTabsByWorktree: Record<
+    string,
+    { id: string; entityId: string; contentType: 'terminal'; groupId: string; worktreeId: string }[]
+  > = {}
+  return {
+    getKnownWorktreeById: vi.fn(() => ({ hostId: 'local' })),
+    unifiedTabsByWorktree,
+    settings: { disabledTuiAgents: [] as string[] },
+    ensureDetectedAgents: vi.fn(async () => ['claude', 'codex']),
+    ensureRemoteDetectedAgents: vi.fn(async () => ['claude', 'codex']),
+    ensureRuntimeDetectedAgents: vi.fn(async () => ['claude', 'codex'])
+  }
+})
 
+vi.mock('@/lib/workspace-tab-palette-activation', () => ({ activateWorkspaceTabPaletteResult }))
 vi.mock('@/store', () => ({ useAppStore: { getState: () => store } }))
 vi.mock('@/lib/launch-agent-in-new-tab', () => ({ launchAgentInNewTab }))
 vi.mock('@/lib/agent-catalog', () => ({
@@ -35,6 +45,8 @@ vi.mock('@/i18n/i18n', () => ({
 describe('launchAgentSessionContinuation', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    store.unifiedTabsByWorktree = {}
+    store.getKnownWorktreeById.mockReturnValue({ hostId: 'local' })
     connectionId.value = null
     runtimeEnvironmentId.value = null
     store.settings.disabledTuiAgents = []
@@ -78,6 +90,150 @@ describe('launchAgentSessionContinuation', () => {
         promptDelivery: 'draft'
       })
     )
+  })
+
+  it.each(['claude', 'codex'] as const)(
+    'describes confirmed %s continuation delivery accurately',
+    async (agent) => {
+      const { launchAgentSessionContinuation } = await import('./launch-agent-session-continuation')
+      await launchAgentSessionContinuation({
+        agent,
+        prompt: 'continue',
+        worktreeId: 'wt-1',
+        launchSource: 'sidebar'
+      })
+      launchAgentInNewTab.mock.calls[0][0].onPromptDelivered()
+      await Promise.resolve()
+      expect(toast.success).toHaveBeenCalledWith(
+        agent === 'claude'
+          ? 'Session context loaded as a draft in the new Claude session. Review it and press Enter to continue.'
+          : 'Session context sent to Codex in a new session.',
+        expect.objectContaining({ action: expect.objectContaining({ label: 'Open session' }) })
+      )
+    }
+  )
+
+  it.each(['wt-1', 'folder:folder-1'])(
+    'opens the exact new session in %s after a synchronous delivery callback',
+    async (worktreeId) => {
+      store.getKnownWorktreeById.mockReturnValue({ hostId: 'ssh-host' })
+      launchAgentInNewTab.mockImplementation((args) => {
+        args.onCreatedTab('tab-new')
+        args.onPromptDelivered()
+        return { surface: { kind: 'local-terminal', tabId: 'tab-new' } }
+      })
+      const { launchAgentSessionContinuation } = await import('./launch-agent-session-continuation')
+      await launchAgentSessionContinuation({
+        agent: 'claude',
+        prompt: 'continue',
+        worktreeId,
+        launchSource: 'sidebar'
+      })
+      store.unifiedTabsByWorktree[worktreeId] = [
+        {
+          id: 'unified-new',
+          entityId: 'tab-new',
+          contentType: 'terminal',
+          groupId: 'moved-group',
+          worktreeId
+        }
+      ]
+      toast.success.mock.calls[0][1].action.onClick()
+      expect(activateWorkspaceTabPaletteResult).toHaveBeenCalledWith({
+        id: 'unified-new',
+        tabId: 'unified-new',
+        entityId: 'tab-new',
+        contentType: 'terminal',
+        groupId: 'moved-group',
+        worktreeId,
+        executionHostId: 'ssh-host'
+      })
+      store.unifiedTabsByWorktree[worktreeId] = []
+      toast.success.mock.calls[0][1].action.onClick()
+      expect(activateWorkspaceTabPaletteResult).toHaveBeenCalledOnce()
+    }
+  )
+
+  it('uses the host-returned tab identity for a paired continuation', async () => {
+    launchAgentInNewTab.mockImplementation((args) => {
+      args.onCreatedTab('web-terminal-host-new')
+      args.onPromptDelivered()
+      return { surface: { kind: 'host-published' } }
+    })
+    const { launchAgentSessionContinuation } = await import('./launch-agent-session-continuation')
+    await launchAgentSessionContinuation({
+      agent: 'claude',
+      prompt: 'continue',
+      worktreeId: 'wt-1',
+      launchSource: 'sidebar'
+    })
+    store.unifiedTabsByWorktree['wt-1'] = [
+      {
+        id: 'web-terminal-host-new',
+        entityId: 'web-terminal-host-new',
+        contentType: 'terminal',
+        groupId: 'host-group',
+        worktreeId: 'wt-1'
+      }
+    ]
+    toast.success.mock.calls[0][1].action.onClick()
+    expect(activateWorkspaceTabPaletteResult).toHaveBeenCalledWith(
+      expect.objectContaining({ tabId: 'web-terminal-host-new', groupId: 'host-group' })
+    )
+  })
+
+  it('omits the navigation action when an older paired host supplies no tab identity', async () => {
+    launchAgentInNewTab.mockImplementation((args) => {
+      args.onPromptDelivered()
+      return { surface: { kind: 'host-published' } }
+    })
+    const { launchAgentSessionContinuation } = await import('./launch-agent-session-continuation')
+    await launchAgentSessionContinuation({
+      agent: 'claude',
+      prompt: 'continue',
+      worktreeId: 'wt-1',
+      launchSource: 'sidebar'
+    })
+    expect(toast.success.mock.calls[0][1]).toBeUndefined()
+  })
+
+  it('does not show a success action when the launch fails after a synchronous callback', async () => {
+    launchAgentInNewTab.mockImplementation((args) => {
+      args.onPromptDelivered()
+      return null
+    })
+    const { launchAgentSessionContinuation } = await import('./launch-agent-session-continuation')
+    await expect(
+      launchAgentSessionContinuation({
+        agent: 'claude',
+        prompt: 'continue',
+        worktreeId: 'wt-1',
+        launchSource: 'sidebar'
+      })
+    ).resolves.toBe(false)
+    expect(toast.success).not.toHaveBeenCalled()
+    expect(toast.error).toHaveBeenCalled()
+  })
+
+  it('does not report success or throw from a queued delivery when the launcher throws', async () => {
+    const queued: (() => void)[] = []
+    vi.stubGlobal('queueMicrotask', (callback: () => void) => queued.push(callback))
+    launchAgentInNewTab.mockImplementation((args) => {
+      args.onPromptDelivered()
+      throw new Error('launch failed after delivery callback')
+    })
+    const { launchAgentSessionContinuation } = await import('./launch-agent-session-continuation')
+    await expect(
+      launchAgentSessionContinuation({
+        agent: 'claude',
+        prompt: 'continue',
+        worktreeId: 'wt-1',
+        launchSource: 'sidebar'
+      })
+    ).rejects.toThrow('launch failed after delivery callback')
+    expect(queued).toHaveLength(1)
+    expect(() => queued[0]()).not.toThrow()
+    expect(toast.success).not.toHaveBeenCalled()
   })
 
   it('detects the target Agent on the SSH host that owns the workspace', async () => {
@@ -192,7 +348,10 @@ describe('launchAgentSessionContinuation', () => {
       launchSource: 'sidebar'
     })
 
-    expect(toast.success).toHaveBeenCalledWith('Session context sent to Codex in a new session.')
+    expect(toast.success).toHaveBeenCalledWith(
+      'Session context sent to Codex in a new session.',
+      expect.objectContaining({ action: expect.objectContaining({ label: 'Open session' }) })
+    )
     expect(toast.warning).not.toHaveBeenCalled()
   })
 })

@@ -561,18 +561,21 @@ describe('createWebRuntimeSessionTerminal', () => {
       api: { runtimeEnvironments: { call: runtimeCall } }
     })
 
+    const onCreatedTab = vi.fn()
     await expect(
       createWebRuntimeAgentSessionTerminal({
         worktreeId: WORKTREE_ID,
         agentSessionKind: 'fresh',
         agent: 'claude',
         command: 'claude',
+        onCreatedTab,
         promptAfterReady: 'continue the unfinished task',
         submitPrompt: true,
         forcePromptPaste: true
       })
     ).resolves.toEqual({ outcome: { status: 'created' }, promptDelivered: true })
 
+    expect(onCreatedTab).toHaveBeenCalledExactlyOnceWith('web-terminal-host-tab-2')
     const createRequest = runtimeCall.mock.calls.find(
       ([request]) => request.method === 'terminal.createAgentSession'
     )?.[0]

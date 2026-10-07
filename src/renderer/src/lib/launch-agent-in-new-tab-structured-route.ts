@@ -1,3 +1,5 @@
+import { useAppStore } from '@/store'
+import { findStructuredAgentSessionTab } from './structured-agent-session-tab-activation'
 import {
   adoptAgentSessionLaunchVerdict,
   type AgentSessionLaunchPlan
@@ -27,6 +29,7 @@ export function launchStructuredAgentFromNewTab(args: {
   plan: AgentSessionLaunchPlan
   worktreeId: string
   groupId?: string
+  onCreatedTab?: (tabId: string) => void
   beforeSurfaceOpen?: LaunchAgentInNewTabArgs['beforeSurfaceOpen']
   openTerminal: (terminalPlan: AgentSessionLaunchPlan) => {
     promptDeliveryResult?: Promise<StructuredPromptDeliveryResult>
@@ -66,7 +69,17 @@ export function launchStructuredAgentFromNewTab(args: {
   }
   const launch = beginStructuredAgentSessionProvisionalLaunch({
     plan,
-    hooks: {},
+    hooks: {
+      onStructuredReady: (sessionId) => {
+        const tab = findStructuredAgentSessionTab(useAppStore.getState().unifiedTabsByWorktree, {
+          workspaceId: args.worktreeId,
+          sessionId
+        })
+        if (tab) {
+          args.onCreatedTab?.(tab.id)
+        }
+      }
+    },
     target: { worktreeId: args.worktreeId, executionHostId: paired.executionHostId },
     ...(args.groupId ? { targetGroupId: args.groupId } : {}),
     onHostDeclined: () => {

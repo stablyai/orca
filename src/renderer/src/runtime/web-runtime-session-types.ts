@@ -40,6 +40,7 @@ export type CreateWebRuntimeSessionTerminalArgs = {
   viewMode?: 'terminal' | 'chat'
   activate?: boolean
   selectWorktree?: boolean
+  onCreatedTab?: (tabId: string) => void
 }
 
 export type CreatedWebRuntimeSessionTerminal = {

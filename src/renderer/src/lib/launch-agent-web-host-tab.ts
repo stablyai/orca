@@ -46,6 +46,7 @@ export function launchAgentInWebHostTab(args: {
   agentArgs?: string | null
   viewMode?: Tab['viewMode']
   onPromptDelivered?: () => void
+  onCreatedTab?: (tabId: string) => void
 }): Promise<{ delivered: boolean; failureNotified: boolean }> {
   const {
     agent,
@@ -72,6 +73,7 @@ export function launchAgentInWebHostTab(args: {
     environmentId,
     targetGroupId: groupId,
     activate: true,
+    ...(args.onCreatedTab ? { onCreatedTab: args.onCreatedTab } : {}),
     ...(cwd?.trim() ? { cwd } : {}),
     ...(viewMode ? { viewMode } : {}),
     agentSessionKind: 'fresh',

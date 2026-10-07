@@ -1,3 +1,4 @@
+import { activateStructuredAgentSessionTab } from './structured-agent-session-tab-activation'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import {
@@ -30,8 +31,11 @@ export type WorkspaceTabPaletteActivationResult =
 // Why: callers outside Cmd+J hold only the identifiers, not a full search result.
 export type WorkspaceTabPaletteActivationTarget = Pick<
   WorkspaceTabPaletteSearchResult,
-  'contentType' | 'entityId' | 'groupId' | 'tabId' | 'worktreeId'
-> & { executionHostId?: ExecutionHostId }
+  'entityId' | 'groupId' | 'tabId' | 'worktreeId'
+> & {
+  contentType: WorkspaceTabPaletteSearchResult['contentType'] | 'agent-session'
+  executionHostId?: ExecutionHostId
+}
 
 type WorkspaceTabPaletteActivationState = Pick<
   AppState,
@@ -80,7 +84,7 @@ function validateTarget(
   if (tabs.length !== 1 || !tab) {
     return 'missing-tab'
   }
-  if (result.contentType !== 'terminal') {
+  if (result.contentType !== 'terminal' && result.contentType !== 'agent-session') {
     const files = state.openFiles.filter((file) => file.id === result.entityId)
     if (files.length !== 1 || files[0].worktreeId !== result.worktreeId) {
       return 'missing-file'
@@ -121,6 +125,11 @@ export function activateWorkspaceTabPaletteResult(
   }
 
   const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, result.worktreeId)
+  if (result.contentType === 'agent-session') {
+    return activateStructuredAgentSessionTab({ worktreeId: result.worktreeId, tabId: result.tabId })
+      ? { status: 'activated' }
+      : { status: 'failed', reason: 'missing-tab' }
+  }
   state.focusGroup(result.worktreeId, result.groupId)
   state.activateTab(result.tabId, { worktreeId: result.worktreeId })
 

@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WorkspaceTabPaletteSearchResult } from './workspace-tab-palette-search'
 
+const activateStructuredAgentSessionTab = vi.hoisted(() => vi.fn(() => true))
+vi.mock('./structured-agent-session-tab-activation', () => ({ activateStructuredAgentSessionTab }))
+
 const mocks = vi.hoisted(() => {
   type MockStore = {
     worktreesByRepo: Record<string, { id: string; repoId: string; path: string }[]>
@@ -172,6 +175,34 @@ describe('activateWorkspaceTabPaletteResult', () => {
     mocks.activateAndRevealWorktree.mockReturnValue(true)
     mocks.getRuntimeEnvironmentIdForWorktree.mockReturnValue('runtime-1')
     mocks.isWebRuntimeSessionActive.mockReturnValue(false)
+  })
+
+  it('reveals and activates structured sessions through the host-aware session activation path', () => {
+    mocks.store.unifiedTabsByWorktree['wt-1'][0] = {
+      ...mocks.store.unifiedTabsByWorktree['wt-1'][0],
+      contentType: 'agent-session',
+      entityId: 'session-1'
+    }
+    const target = {
+      worktreeId: 'wt-1',
+      groupId: 'group-1',
+      tabId: 'unified-terminal-1',
+      entityId: 'session-1',
+      contentType: 'agent-session' as const
+    }
+    expect(activateWorkspaceTabPaletteResult(target)).toEqual({ status: 'activated' })
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalled()
+    expect(activateStructuredAgentSessionTab).toHaveBeenCalledExactlyOnceWith({
+      worktreeId: 'wt-1',
+      tabId: 'unified-terminal-1'
+    })
+    expect(mocks.store.setActiveFile).not.toHaveBeenCalled()
+    mocks.store.unifiedTabsByWorktree['wt-1'] = []
+    expect(activateWorkspaceTabPaletteResult(target)).toEqual({
+      status: 'failed',
+      reason: 'missing-tab'
+    })
+    expect(activateStructuredAgentSessionTab).toHaveBeenCalledOnce()
   })
 
   it('activates terminal tabs and focuses the terminal surface', () => {

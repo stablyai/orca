@@ -1,6 +1,7 @@
 import { toast } from 'sonner'
 import { getAgentLabel } from '@/lib/agent-catalog'
 import { getConnectionIdFromState } from '@/lib/connection-context'
+import { activateWorkspaceTabPaletteResult } from '@/lib/workspace-tab-palette-activation'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
@@ -83,16 +84,23 @@ export async function launchAgentSessionContinuation({
   // Why: the paste helper writes blind when the agent's composer was never observed, so a
   // written prompt is not a delivered one. Claiming success there is how the whole handoff
   // could vanish silently (#22479).
+  const promptDelivery = agent === 'claude' ? 'draft' : 'submit-after-ready'
   let deliveryUnconfirmed = false
-  const result = launchAgentInNewTab({
+  let createdTabId: string | undefined
+  const executionHostId = useAppStore.getState().getKnownWorktreeById(worktreeId)?.hostId
+  let result: ReturnType<typeof launchAgentInNewTab> = null
+  result = launchAgentInNewTab({
     requestId: newAgentLaunchRequestId(),
     agent,
     worktreeId,
     ...(groupId ? { groupId } : {}),
     prompt,
-    promptDelivery: agent === 'claude' ? 'draft' : 'submit-after-ready',
+    promptDelivery,
     launchSource,
     ...(initialCwd ? { initialCwd } : {}),
+    onCreatedTab: (tabId) => {
+      createdTabId = tabId
+    },
     onPromptDeliveryUnconfirmed: () => {
       deliveryUnconfirmed = true
     },
@@ -101,13 +109,56 @@ export async function launchAgentSessionContinuation({
         notifyDeliveryUnconfirmed(label, prompt)
         return
       }
-      toast.success(
-        translate(
-          'components.agentSessionContinuation.sent',
-          'Session context sent to {{agent}} in a new session.',
-          { agent: label }
+      // The launcher may report delivery before returning its tab identity.
+      queueMicrotask(() => {
+        if (!result) {
+          return
+        }
+        const tabId =
+          createdTabId ??
+          (result.surface.kind !== 'host-published' ? result.surface.tabId : undefined)
+        toast.success(
+          translate(
+            promptDelivery === 'draft'
+              ? 'components.agentSessionContinuation.draftLoaded'
+              : 'components.agentSessionContinuation.sent',
+            promptDelivery === 'draft'
+              ? 'Session context loaded as a draft in the new {{agent}} session. Review it and press Enter to continue.'
+              : 'Session context sent to {{agent}} in a new session.',
+            { agent: label }
+          ),
+          tabId
+            ? {
+                action: {
+                  label: translate(
+                    'components.agentSessionContinuation.openSession',
+                    'Open session'
+                  ),
+                  onClick: () => {
+                    const tab = (
+                      useAppStore.getState().unifiedTabsByWorktree[worktreeId] ?? []
+                    ).find(
+                      (candidate) =>
+                        candidate.id === tabId ||
+                        (candidate.contentType === 'terminal' && candidate.entityId === tabId)
+                    )
+                    if (
+                      tab &&
+                      (tab.contentType === 'terminal' || tab.contentType === 'agent-session')
+                    ) {
+                      activateWorkspaceTabPaletteResult({
+                        ...tab,
+                        tabId: tab.id,
+                        contentType: tab.contentType,
+                        executionHostId
+                      })
+                    }
+                  }
+                }
+              }
+            : undefined
         )
-      )
+      })
     }
   })
   if (!result) {
