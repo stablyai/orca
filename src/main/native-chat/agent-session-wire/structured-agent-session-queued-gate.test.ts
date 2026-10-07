@@ -241,8 +241,7 @@ describe('the hand-off link on answers', () => {
         clientOperationId
       ),
       body,
-      delivery: 'queue-if-active' as const,
-      userSend: true as const
+      delivery: 'queue-if-active' as const
     }
     await host.send(CALLER, params)
     await settleAccepted(working, 'a')

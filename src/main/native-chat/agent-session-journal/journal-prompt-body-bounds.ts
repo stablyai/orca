@@ -36,10 +36,6 @@ export function cancelledJournalPromptBody(
   }
 }
 
-export function boundJournalStatusText(text: string): string {
-  return boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text
-}
-
 export function boundJournalPromptBody(body: AgentJournalApprovalItem): AgentJournalApprovalItem
 export function boundJournalPromptBody(body: AgentJournalQuestionItem): AgentJournalQuestionItem
 export function boundJournalPromptBody(

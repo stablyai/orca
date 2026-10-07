@@ -160,6 +160,34 @@ describe('LocalPtyProvider', () => {
   })
 
   describe('spawn', () => {
+    it('passes the guest Claude pointer and injected-home marker through WSLENV', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      provider.configure({
+        buildSpawnEnv: (_id, env) => ({
+          ...env,
+          CLAUDE_CONFIG_DIR: '/home/fake/.local/share/orca/claude-profiles/a/home',
+          ORCA_CLAUDE_INJECTED_CONFIG_DIR: '/home/fake/.local/share/orca/claude-profiles/a/home',
+          ORCA_CLAUDE_PROFILE_POINTER: '~/.local/share/orca/claude-profiles/selected-wsl-orca'
+        })
+      })
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: '\\\\wsl.localhost\\Ubuntu\\home\\fake\\repo'
+      })
+      const env = spawnMock.mock.calls.at(-1)?.[2].env
+      expect(env.WSLENV.split(':')).toEqual(
+        expect.arrayContaining([
+          'CLAUDE_CONFIG_DIR',
+          'ORCA_CLAUDE_PROFILE_POINTER',
+          'ORCA_CLAUDE_INJECTED_CONFIG_DIR'
+        ])
+      )
+      expect(env.ORCA_CLAUDE_PROFILE_POINTER).toBe(
+        '~/.local/share/orca/claude-profiles/selected-wsl-orca'
+      )
+    })
+
     it('does not pass a Windows Codex home into WSL terminals', async () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
       provider.configure({

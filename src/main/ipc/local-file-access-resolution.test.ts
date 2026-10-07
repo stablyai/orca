@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, realpath, rm, stat, symlink, writeFile } from 'node:fs/
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import type { Store } from '../persistence'
 import type * as RepoWorktrees from '../repo-worktrees'
 import { resolveAuthorizedPath } from './filesystem-auth'
@@ -67,6 +68,8 @@ let project: string
 let outside: string
 
 beforeEach(async () => {
+  // The floating folder resolves through the app environment, as the headless runtime does too.
+  installFakeAppEnvironment({ getPath: () => userData.path })
   invalidateAuthorizedRootsCache()
   base = await mkdtemp(join(await realpath(tmpdir()), 'orca-file-access-'))
   project = join(base, 'project')

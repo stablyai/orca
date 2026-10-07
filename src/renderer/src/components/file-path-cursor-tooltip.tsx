@@ -32,6 +32,21 @@ export function splitTrailingSegment(path: string): { directory: string; filenam
     : { directory: path.slice(0, separatorIndex + 1), filename: path.slice(separatorIndex + 1) }
 }
 
+export function FilenameFirstPath({ path }: { path: string }): React.JSX.Element {
+  const { directory, filename } = splitTrailingSegment(path)
+
+  return (
+    <span className="flex min-w-0 flex-1 items-center gap-1">
+      {/* shrink-0 + max-w-full: the directory gives up all of its width before
+          the filename loses a character. */}
+      <span className="min-w-0 max-w-full shrink-0 truncate">{filename}</span>
+      {directory ? (
+        <span className="min-w-0 truncate text-muted-foreground/70">{directory}</span>
+      ) : null}
+    </span>
+  )
+}
+
 /**
  * Wraps a single result row so its full path appears in a system-styled tooltip
  * anchored under the cursor. The child is the trigger; it receives a ref and a

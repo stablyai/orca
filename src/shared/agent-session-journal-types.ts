@@ -17,6 +17,7 @@ import type { NativeChatToolMetadata } from './native-chat-tool-identity'
 import type { AgentSessionContextUsage } from './agent-session-context-usage'
 import type { AgentSessionProviderHandle } from './agent-session-provider-handle'
 import type { NativeChatBlock, NativeChatRole } from './native-chat-types'
+import type { AgentMessageSource } from './agent-session-message-source'
 
 export { type AgentType }
 
@@ -115,6 +116,9 @@ export type AgentJournalMessageItem = {
   /** Present on a conversation command the user sent, such as `/compact`. The text is what the
    *  user typed; this names the command so no reader parses it. Open like `sentAs`. */
   command?: { name: string }
+  /** Present on a message another agent sent through Orca; absent, the person's. Host-written,
+   *  outside every fingerprint, never sent to the provider. */
+  from?: AgentMessageSource
   /** Written on reasoning rows. ABSENT MEANS UNKNOWN — an older host, or a row from before the
    *  field — and never reads as live. The row's `observedAt` is when it started. */
   state?: AgentJournalMessageState
@@ -487,8 +491,8 @@ export type AgentJournalSubmission = {
    *  a draft id compared with `clientMessageId`. */
   queuedMessageId?: string
   /** Host-only: who asked for this turn — a person over the client send RPC, or Orca itself.
-   *  A person's turn is what ends a Stop's queue pause. The snapshot still carries it; no released
-   *  client reads it. */
+   *  A restart or a close keeps only a person's Send cut short as a card. The snapshot still
+   *  carries it; no released client reads it. */
   origin?: 'client' | 'host'
   /** Who it is from: the kind of its `AgentSessionMessageSource` ('user' or 'agent'), so a restart
    *  or a close keeps only a person's unsent send as a card. Only the kind: the senders stay on the

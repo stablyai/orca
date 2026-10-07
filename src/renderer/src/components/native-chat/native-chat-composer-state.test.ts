@@ -83,6 +83,13 @@ describe('deriveComposerAutocomplete — mention', () => {
     expect(result.query).toBe('src/ind')
   })
 
+  it('stays closed for a dismissed `@` token until a new one starts', () => {
+    const closed = deriveComposerAutocomplete('a @foo', 6, COMMANDS, [], null, undefined, '@:2')
+    expect(closed.mode).toBe('none')
+    const next = deriveComposerAutocomplete('a @foo @b', 9, COMMANDS, [], null, undefined, '@:2')
+    expect(next.mode).toBe('mention')
+  })
+
   it('fires at the start of input too', () => {
     const result = deriveComposerAutocomplete('@foo', 4, COMMANDS)
     expect(result.mode).toBe('mention')
@@ -193,8 +200,13 @@ describe('apply suggestions', () => {
 
   it('applyMentionSuggestion replaces the active @token at the caret', () => {
     const result = applyMentionSuggestion('open @sr more', 8, 'src/app.ts')
-    expect(result.draft).toBe('open @src/app.ts  more')
+    expect(result.draft).toBe('open @src/app.ts more')
     expect(result.caret).toBe('open @src/app.ts '.length)
+  })
+
+  it('applyMentionSuggestion quotes a path the agent would otherwise split', () => {
+    const result = applyMentionSuggestion('@my', 3, 'docs/my notes.md')
+    expect(result.draft).toBe('@"docs/my notes.md" ')
   })
 
   it('applyPickerSuggestion swaps the typed /token for the agent-native token', () => {

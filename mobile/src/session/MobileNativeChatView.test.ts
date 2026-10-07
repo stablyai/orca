@@ -151,6 +151,55 @@ describe('MobileNativeChatView', () => {
     })
   }
 
+  it("holds Stop and says Stopping while this phone's own Stop request is in flight", async () => {
+    await render({
+      structuredActivityUi: true,
+      agentWorking: true,
+      canStop: true,
+      turnIndicator: {
+        thinking: false,
+        activityText: null,
+        stopping: true,
+        stopRequestInFlight: true
+      }
+    })
+    const stop = renderer!.root.find(
+      (node) => node.type === 'Pressable' && node.props.accessibilityLabel === 'Stopping…'
+    )
+    expect(stop.props.disabled).toBe(true)
+  })
+
+  it.each([
+    ['queue', 'Queue a message to run after the stop'],
+    ['send', 'Send a message to run after the stop']
+  ] as const)(
+    'tells the composer a message sent now runs after the stop (%s)',
+    async (afterStop, placeholder) => {
+      await render({
+        structuredActivityUi: true,
+        agentWorking: true,
+        canStop: true,
+        turnIndicator: { thinking: false, activityText: null, stopping: true, afterStop }
+      })
+      const composer = renderer!.root.find((node) => node.type === 'Composer')
+      expect(composer.props.placeholder).toBe(placeholder)
+    }
+  )
+
+  // A Stop the provider took and never answered ends only at a repeat Stop.
+  it('keeps Stop for the repeat that escalates while the host alone says Stopping', async () => {
+    await render({
+      structuredActivityUi: true,
+      agentWorking: true,
+      canStop: true,
+      turnIndicator: { thinking: false, activityText: null, stopping: true }
+    })
+    const stop = renderer!.root.find(
+      (node) => node.type === 'Pressable' && node.props.accessibilityLabel === 'Stop the agent'
+    )
+    expect(stop.props.disabled).toBe(false)
+  })
+
   /** Ids of the rows the list is currently rendering. */
   it('keeps Stop hidden during a structured dispatch until a provider turn can be cancelled', async () => {
     const props = { structuredActivityUi: true, agentWorking: true, canStop: false }
@@ -722,5 +771,37 @@ describe('MobileNativeChatView', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+  // Why: a terminal-backed send types into the agent's prompt and could answer it; drafting cannot.
+  describe('a prompt card owns Send in terminal-backed chat', () => {
+    const permission = { title: 'Approve?', options: [{ label: 'Allow', send: '1' }] }
+
+    it('blocks only Send while the card shows, and frees it when the card clears', async () => {
+      await render({ permission })
+      expect(composer().props.sendDisabled).toBe(true)
+      expect(composer().props.disabled).toBe(false)
+      expect(composer().props.placeholder).toBe('Message, @files, /commands')
+
+      await update({ permission: null })
+      expect(composer().props.sendDisabled).toBe(false)
+    })
+
+    it('blocks Send for an ask and a heuristic question too', async () => {
+      await render({
+        ask: {
+          questions: [{ question: 'Tabs?', multiSelect: false, options: [{ label: 'Tabs' }] }]
+        }
+      })
+      expect(composer().props.sendDisabled).toBe(true)
+      await update({
+        question: { question: 'Name?', options: [], multiSelect: false, optionTokens: [] }
+      })
+      expect(composer().props.sendDisabled).toBe(true)
+    })
+
+    it('leaves a structured chat composer open: its host queues the send behind the prompt', async () => {
+      await render({ permission, structuredActivityUi: true })
+      expect(composer().props.sendDisabled).toBe(false)
+    })
   })
 })

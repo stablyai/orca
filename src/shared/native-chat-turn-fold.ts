@@ -17,6 +17,9 @@ export type NativeChatTurnFoldRow = {
   role: NativeChatRole
   /** Whether the row draws prose — the only thing that can be an answer. */
   rendersProse: boolean
+  /** Whether the row draws anything when unfolded. One that draws nothing hides nothing, so it
+   *  never makes its turn offer the disclosure. */
+  draws: boolean
   /** Whether the row carries work that outlives the turn that started it: a
    *  spawn roster or a background task. That row is the durable report of how
    *  the work ended — often the only one — so it never folds. */
@@ -88,6 +91,7 @@ export function nativeChatTurnFold({
     if (
       turnKey === undefined ||
       row.role === 'user' ||
+      !row.draws ||
       row.outlivesTurn ||
       row.reportsCompaction ||
       !settledTurnKeys.has(turnKey)

@@ -8,6 +8,7 @@ import {
 import type { ExecutionHostRegistryEntry } from '../../../shared/execution-host-registry'
 import { isHostLocalProjectId } from '../../../shared/project-host-setup-projection'
 import { isEphemeralVmRuntimeEnvironment } from '../../../shared/runtime-environments'
+import { isMergedAwayExecutionHost } from '../../../shared/managed-orcad-execution-host'
 import {
   PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
   WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY
@@ -172,7 +173,10 @@ function buildNeedsSetupOptions({
       (host) =>
         !readySetupByHost.has(host.id) &&
         !isEphemeralVmProjectHost(host) &&
-        !isRuntimeOwnedSshSetupHost(host.id)
+        !isRuntimeOwnedSshSetupHost(host.id) &&
+        !isMergedAwayExecutionHost(host) &&
+        // Why: a machine whose other id already holds the project shows that ready row only.
+        !host.aliasHostIds?.some((aliasHostId) => readySetupByHost.has(aliasHostId))
     )
     .map((host) => {
       const pendingSetup = pendingSetupByHost.get(host.id)

@@ -1,6 +1,5 @@
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree, type ActivateAndRevealResult } from '@/lib/worktree-activation'
-import { isAgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
 import { adoptAgentSessionLaunchVerdict } from '@/lib/agent-session-launch-plan'
 import type { AgentLaunchRoute } from '@/lib/agent-launch-routing'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
@@ -49,7 +48,8 @@ export async function launchStructuredWorktreeSession(
   let { activation, primaryTabId } = args
   const settled = { accepted: true, cancelled: false }
   const { agent } = args.request
-  if (!isAgentSessionHandleProvider(agent)) {
+  // The composer's route already asked the host whether it runs this agent as a chat.
+  if (!agent || args.agentLaunchRoute !== 'structured-native-chat') {
     return { ...settled, activation, primaryTabId }
   }
   const isCancelled = (): boolean =>

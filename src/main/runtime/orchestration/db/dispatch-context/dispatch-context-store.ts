@@ -66,7 +66,10 @@ export function createDispatchContext(
       launchTokenHash: launchTokenHash ?? null,
       assigneeHandle,
       assigneePaneKey: assigneePaneKey ?? null,
-      assigneeOrcaSessionId: dispatchAssigneeOrcaSessionId(processIncarnation),
+      assigneeOrcaSessionId: dispatchAssigneeOrcaSessionId({
+        handle: assigneeHandle,
+        processIncarnation
+      }),
       processIncarnation: processIncarnation ?? null,
       creatorDispatchId,
       ...recordedCreatorIdentity(params.creator),

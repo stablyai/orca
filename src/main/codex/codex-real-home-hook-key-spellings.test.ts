@@ -11,44 +11,30 @@ import {
 import type * as NodeOs from 'node:os'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { CodexManagedTrustGrantPlan } from './codex-hook-trust-grant'
 import {
   computeTrustKey,
   getCodexExplicitHomeHookSourcePath,
   normalizeCodexHookSourcePath,
-  normalizeHookTrustKeyForLookup,
   readHookTrustEntries,
   upsertHookTrustEntries,
   type CodexTrustEntry
 } from './config-toml-trust'
+import type { CodexHookHashes } from './codex-hook-trust-derivation'
 
-const { homedirMock, grantMock, findCurrentMock } = vi.hoisted(() => ({
-  homedirMock: vi.fn<() => string>(),
-  grantMock: vi.fn(),
-  findCurrentMock: vi.fn()
-}))
+const { homedirMock } = vi.hoisted(() => ({ homedirMock: vi.fn<() => string>() }))
 
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof NodeOs>('node:os')
   return { ...actual, homedir: homedirMock }
 })
 
-vi.mock('./codex-hook-trust-grant', () => ({
-  CODEX_TRUST_GRANT_TRANSIENT_RETRY_INTERVAL_MS: 300_000,
-  findCurrentManagedCodexHookTrust: findCurrentMock,
-  grantManagedCodexHookTrust: grantMock
-}))
-
 import {
-  ensureRealHomeCodexHookState,
-  removeRealHomeCodexHookForOptOut,
-  _internals
+  reconcileRealHomeCodexHookEntries,
+  removeRealHomeCodexHookForOptOut
 } from './codex-real-home-hook-install'
 import { getRealHomeHookKeySourcePaths } from './codex-real-home-hooks-json'
 import { cleanupLegacyManagedHookRepresentations } from './codex-hook-legacy-cleanup'
-import { getCodexHookTrustSignature } from './codex-hook-identity'
 import { getCodexManagedHookInstallMaterial } from './hook-service'
-import { writeCodexTrustGrantLedgerHome } from './codex-trust-grant-ledger'
 
 // Why this file: Codex keys ~/.codex/hooks.json as spelled on its default home
 // and resolved when CODEX_HOME names it, so a symlinked home has two keys.
@@ -61,7 +47,7 @@ let previousUserDataPath: string | undefined
 const codexHome = (): string => join(home, '.codex')
 const hooksPath = (): string => join(codexHome(), 'hooks.json')
 const tomlPath = (): string => join(codexHome(), 'config.toml')
-const codexHash = (entry: CodexTrustEntry): string => `sha256:codex-${entry.eventLabel}`
+const CODEX_HASHES: CodexHookHashes = { stop: 'sha256:codex-stop' }
 
 function stopEntry(sourcePath: string, groupIndex = 0): CodexTrustEntry {
   return {
@@ -74,34 +60,12 @@ function stopEntry(sourcePath: string, groupIndex = 0): CodexTrustEntry {
   }
 }
 
-/** Stands in for Codex: approves the spelled keys it was asked about, and records the ledger. */
-function grantLikeCodex(): void {
-  grantMock.mockImplementation((plan: CodexManagedTrustGrantPlan) => {
-    const entries = plan.managedEntries.map((entry) => ({
-      ...entry,
-      trustedHash: codexHash(entry)
-    }))
-    upsertHookTrustEntries(plan.tomlPath, entries)
-    writeCodexTrustGrantLedgerHome(plan.runtimeHomePath, {
-      binary: null,
-      entries: Object.fromEntries(
-        entries.map((entry) => [
-          normalizeHookTrustKeyForLookup(computeTrustKey(entry)),
-          { signature: getCodexHookTrustSignature(entry), trustedHash: entry.trustedHash }
-        ])
-      )
-    })
-    return { lane: 'rpc', entries }
+async function reconcile(): Promise<void> {
+  await reconcileRealHomeCodexHookEntries({
+    hashes: CODEX_HASHES,
+    isEnabled: () => true,
+    convertOlderForms: true
   })
-}
-
-async function ensureSettled(): Promise<string> {
-  await ensureRealHomeCodexHookState({
-    hooksEnabled: true,
-    userDataPath: userDataDir,
-    writePolicy: 'add-missing-only'
-  })
-  return _internals.settledVerdictForTesting()
 }
 
 function linkCodexHomeToDotfiles(): string {
@@ -112,9 +76,6 @@ function linkCodexHomeToDotfiles(): string {
 }
 
 beforeEach(() => {
-  grantMock.mockReset()
-  findCurrentMock.mockReset()
-  findCurrentMock.mockResolvedValue(null)
   // Why realpath: the temp dir itself may sit under a symlink (macOS /var), which
   // would give every home in this file a second spelling.
   root = realpathSync.native(mkdtempSync(join(tmpdir(), 'orca-real-home-spellings-')))
@@ -125,7 +86,6 @@ beforeEach(() => {
   previousUserDataPath = process.env.ORCA_USER_DATA_PATH
   process.env.ORCA_USER_DATA_PATH = userDataDir
   homedirMock.mockReturnValue(home)
-  _internals.resetForTesting('pending')
 })
 
 afterEach(() => {
@@ -136,6 +96,7 @@ afterEach(() => {
     process.env.ORCA_USER_DATA_PATH = previousUserDataPath
   }
   vi.clearAllMocks()
+  vi.restoreAllMocks()
 })
 
 describe('both spellings of a symlinked ~/.codex', () => {
@@ -159,43 +120,67 @@ describe('both spellings of a symlinked ~/.codex', () => {
     )
   })
 
-  it("copies Codex's approval to the resolved key, and the opt-out removes both", async () => {
+  it("approves under both keys, and the opt-out removes both by Codex's hash", async () => {
     const resolvedHooks = linkCodexHomeToDotfiles()
-    grantLikeCodex()
 
-    expect(await ensureSettled()).toBe('installed')
+    await reconcile()
 
     const spelled = stopEntry(hooksPath())
     const resolved = stopEntry(resolvedHooks)
     const trust = readHookTrustEntries(tomlPath())
-    expect(trust.get(computeTrustKey(spelled))?.trustedHash).toBe(codexHash(spelled))
-    expect(trust.get(computeTrustKey(resolved))?.trustedHash).toBe(codexHash(spelled))
+    expect(trust.get(computeTrustKey(spelled))).toEqual({
+      trustedHash: CODEX_HASHES.stop,
+      enabled: true
+    })
+    expect(trust.get(computeTrustKey(resolved))).toEqual({
+      trustedHash: CODEX_HASHES.stop,
+      enabled: true
+    })
+    const approved = readFileSync(tomlPath(), 'utf-8')
+    await reconcile()
+    expect(readFileSync(tomlPath(), 'utf-8')).toBe(approved)
 
-    expect(await removeRealHomeCodexHookForOptOut()).toBe('removed')
+    expect(await removeRealHomeCodexHookForOptOut([CODEX_HASHES])).toBe('removed')
 
     const after = readHookTrustEntries(tomlPath())
     expect(after.get(computeTrustKey(spelled))).toBeUndefined()
     expect(after.get(computeTrustKey(resolved))).toBeUndefined()
   })
 
-  it('copies the approval when an earlier grant is still current, with no session', async () => {
+  it("moves user approvals under both keys when Orca's copy leaves a user group", async () => {
     const resolvedHooks = linkCodexHomeToDotfiles()
-    findCurrentMock.mockImplementation(async (plan: CodexManagedTrustGrantPlan) =>
-      plan.managedEntries.map((entry) => ({ ...entry, trustedHash: codexHash(entry) }))
+    const orca = { type: 'command', command: getCodexManagedHookInstallMaterial().command }
+    const userGroup = { hooks: [orca, { type: 'command', command: 'after.sh' }] }
+    writeFileSync(hooksPath(), `${JSON.stringify({ hooks: { Stop: [userGroup] } }, null, 2)}\n`)
+    const afterAt = (sourcePath: string, handlerIndex: number): CodexTrustEntry => ({
+      sourcePath,
+      eventLabel: 'stop',
+      groupIndex: 0,
+      handlerIndex,
+      command: 'after.sh'
+    })
+    upsertHookTrustEntries(tomlPath(), [
+      { ...afterAt(hooksPath(), 1), trustedHash: 'sha256:user-spelled' },
+      { ...afterAt(resolvedHooks, 1), trustedHash: 'sha256:user-resolved' }
+    ])
+
+    await reconcile()
+
+    const trust = readHookTrustEntries(tomlPath())
+    expect(trust.get(computeTrustKey(afterAt(hooksPath(), 0)))?.trustedHash).toBe(
+      'sha256:user-spelled'
     )
-
-    expect(await ensureSettled()).toBe('installed')
-
-    expect(grantMock).not.toHaveBeenCalled()
-    expect(
-      readHookTrustEntries(tomlPath()).get(computeTrustKey(stopEntry(resolvedHooks)))?.trustedHash
-    ).toBe(codexHash(stopEntry(resolvedHooks)))
+    expect(trust.get(computeTrustKey(afterAt(resolvedHooks, 0)))?.trustedHash).toBe(
+      'sha256:user-resolved'
+    )
+    expect(trust.get(computeTrustKey(stopEntry(resolvedHooks, 1)))?.trustedHash).toBe(
+      CODEX_HASHES.stop
+    )
   })
 
   it('moves a user approval under both keys when the opt-out shifts the hook', async () => {
     const resolvedHooks = linkCodexHomeToDotfiles()
-    grantLikeCodex()
-    await ensureSettled()
+    await reconcile()
     const installed = JSON.parse(readFileSync(hooksPath(), 'utf-8'))
     installed.hooks.Stop.push({ hooks: [{ type: 'command', command: 'after.sh' }] })
     writeFileSync(hooksPath(), `${JSON.stringify(installed, null, 2)}\n`)
@@ -211,7 +196,7 @@ describe('both spellings of a symlinked ~/.codex', () => {
       { ...afterAt(resolvedHooks, 1), trustedHash: 'sha256:user-resolved' }
     ])
 
-    expect(await removeRealHomeCodexHookForOptOut()).toBe('removed')
+    expect(await removeRealHomeCodexHookForOptOut([])).toBe('removed')
 
     const trust = readHookTrustEntries(tomlPath())
     expect(trust.get(computeTrustKey(afterAt(hooksPath(), 0)))?.trustedHash).toBe(
@@ -246,24 +231,18 @@ describe('both spellings of a symlinked ~/.codex', () => {
     expect(trust.get(computeTrustKey(retiredAt(resolvedHooks)))).toBeUndefined()
   })
 
-  it('keeps the lane and the file when the copy would break config.toml', async () => {
+  it('keeps both files when an approval would break config.toml', async () => {
     linkCodexHomeToDotfiles()
-    // Why no write: Codex keeps its own approval in this inline form, which an
-    // appended [hooks.state."k"] table would turn into a file Codex cannot load.
+    writeFileSync(hooksPath(), `${JSON.stringify({ hooks: {} }, null, 2)}\n`)
+    // Why no write: an appended [hooks.state."k"] table would turn this inline
+    // form into a file Codex cannot load.
     const original = 'model = "m"\nhooks = { state = {} }\n'
     writeFileSync(tomlPath(), original)
-    grantMock.mockImplementation((plan: CodexManagedTrustGrantPlan) => ({
-      lane: 'rpc',
-      entries: plan.managedEntries.map((entry) => ({ ...entry, trustedHash: codexHash(entry) }))
-    }))
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
 
-    expect(await ensureSettled()).toBe('installed')
+    await reconcile()
 
     expect(readFileSync(tomlPath(), 'utf-8')).toBe(original)
-    expect(warn).toHaveBeenCalledWith(
-      '[codex-real-home-hooks] could not approve the resolved ~/.codex key:',
-      expect.objectContaining({ name: 'CodexConfigTomlRefusedError' })
-    )
+    expect(JSON.parse(readFileSync(hooksPath(), 'utf-8'))).toEqual({ hooks: {} })
   })
 })

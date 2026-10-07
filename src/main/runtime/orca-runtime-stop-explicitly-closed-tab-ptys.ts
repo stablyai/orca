@@ -130,7 +130,7 @@ export class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithF
           if (!(error instanceof Error) || error.message !== 'workspace_session_unavailable') {
             throw error
           }
-          this.notifier.closeTerminal?.(tabId)
+          this.notifyRendererOfHeadlessTerminalClose(tabId)
         }
         const stop = await this.stopExplicitlyClosedTabPtys(ptyIdsToKill, pty.pty.ptyId)
         return this.describeTerminalClose(handle, tabId, pty.pty.ptyId, stop)
@@ -147,17 +147,35 @@ export class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithF
             throw error
           }
           const stop = await this.stopExplicitlyClosedTabPtys([pty.pty.ptyId], pty.pty.ptyId)
-          this.notifier?.closeTerminal(tabId)
+          this.notifyRendererOfHeadlessTerminalClose(tabId)
           return this.describeTerminalClose(handle, tabId, pty.pty.ptyId, stop)
         }
         const stop = await this.stopExplicitlyClosedTabPtys([pty.pty.ptyId], pty.pty.ptyId)
         return this.describeTerminalClose(handle, tabId, pty.pty.ptyId, stop)
       }
-      if (closesTab && !surface && pty.pty.tabId && this.notifier?.closeTerminalTab) {
+      // Why the tabs guard: a headless host has no renderer tab to close through the notifier.
+      if (
+        closesTab &&
+        !surface &&
+        pty.pty.tabId &&
+        this.tabs.has(tabId) &&
+        this.notifier?.closeTerminalTab
+      ) {
         const ptyIdsToKill = this.getPtyIdsForExplicitTabClose(pty.pty.worktreeId, tabId)
-        await this.notifier.closeTerminalTab(tabId, { localPtyTeardownOwnedExternally: true })
-        const stop = await this.stopExplicitlyClosedTabPtys(ptyIdsToKill, pty.pty.ptyId)
-        return this.describeTerminalClose(handle, tabId, pty.pty.ptyId, stop)
+        let tabClosed = true
+        try {
+          await this.notifier.closeTerminalTab(tabId, { localPtyTeardownOwnedExternally: true })
+        } catch (error) {
+          // The tab went away concurrently; fall through and close the PTY alone.
+          if (!(error instanceof Error) || error.message !== 'tab_not_found') {
+            throw error
+          }
+          tabClosed = false
+        }
+        if (tabClosed) {
+          const stop = await this.stopExplicitlyClosedTabPtys(ptyIdsToKill, pty.pty.ptyId)
+          return this.describeTerminalClose(handle, tabId, pty.pty.ptyId, stop)
+        }
       }
       const stop = await this.stopExplicitlyClosedTabPtys([pty.pty.ptyId], pty.pty.ptyId)
       if (!closesTab) {
@@ -176,10 +194,10 @@ export class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithF
           if (!(error instanceof Error) || error.message !== 'workspace_session_unavailable') {
             throw error
           }
-          this.notifier?.closeTerminal(tabId)
+          this.notifyRendererOfHeadlessTerminalClose(tabId)
         }
       } else {
-        this.notifier?.closeTerminal(tabId)
+        this.notifyRendererOfHeadlessTerminalClose(tabId)
       }
       return this.describeTerminalClose(handle, tabId, pty.pty.ptyId, stop)
     }

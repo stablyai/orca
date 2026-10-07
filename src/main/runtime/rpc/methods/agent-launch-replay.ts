@@ -16,43 +16,31 @@
  */
 
 import { deriveAgentLaunchChildOperationId } from '../../../../shared/agent-launch-operation'
+import {
+  AGENT_LAUNCH_PROMPT_UNCONFIRMED_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_TAB_CLOSED_CLIENT_CAPABILITY
+} from '../../../../shared/agent-launch-runtime-capability'
+import { AGENT_LAUNCH_TAB_CLOSED_CODE } from '../../../../shared/agent-launch-tab-closed'
 import { isAgentLaunchResult, type AgentLaunchResult } from '../../../../shared/agent-launch-intent'
 import type {
   AgentSessionOperationOutcome,
+  AgentSessionOperationOwnedPane,
   AgentSessionOperationRefusalCode
 } from '../../../../shared/agent-session-operation-ledger'
 import { resolveAgentSessionReplayOutcome } from '../../../native-chat/agent-session-wire/structured-agent-session-replay-outcome'
-import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
-import type { AgentSessionRecordStore } from '../../agent-session-record-store'
 import type { RpcContext } from '../core'
+import { rpcCallerOperationKey } from '../rpc-caller-identity'
 import type { AgentLaunchParams } from './agent-launch-schemas'
 
-/** Remote replay needs the paired-device subject because its bearer credential can rotate. */
-export function agentLaunchOperationCallerKey(
-  context: Pick<RpcContext, 'pairedDeviceId' | 'clientKind'>
-): string {
-  if (context.clientKind === undefined) {
-    return 'trusted-local:runtime'
-  }
-  const pairedDeviceId = context.pairedDeviceId?.trim()
-  if (!pairedDeviceId) {
+/**
+ * The ledger namespace of whoever the transport says is calling. A transport that could not name its
+ * caller gets no replay safety at all, rather than a namespace shared with strangers.
+ */
+export function agentLaunchOperationCallerKey(context: Pick<RpcContext, 'caller'>): string {
+  if (!context.caller) {
     throw new Error('agent_session_identity_required')
   }
-  return pairedDeviceId
-}
-
-/**
- * The store is owned by the structured session host, so reaching it installs that host — already
- * true of any structured launch, which installs it to attach. The change is that a terminal-bound
- * launch now opens the record store too, when and only when its caller asked for replay safety.
- */
-async function requireLaunchOperationStore(context: RpcContext): Promise<AgentSessionRecordStore> {
-  await context.runtime.ensureStructuredAgentSessionHost()
-  const host = getStructuredAgentSessionHost()
-  if (!host) {
-    throw new Error('structured_agent_session_unsupported')
-  }
-  return host.deps.store
+  return rpcCallerOperationKey(context.caller)
 }
 
 /**
@@ -67,6 +55,9 @@ export type AgentLaunchAdmission =
   /** This caller owns the operation. It alone runs the effect, and it must settle the row. */
   | {
       decision: 'execute'
+      /** The surface exists: records the launch as it stands, so a restart before `settle` replays
+       *  the running agent instead of refusing an unknown outcome. */
+      record: (provisional: AgentLaunchResult) => Promise<void>
       settle: (result: AgentLaunchResult) => Promise<void>
       fail: (code: string) => Promise<void>
       /** Distinct from the launch id: the inner attach reserves in this same ledger. */
@@ -115,6 +106,83 @@ function answerFromRecordedRow(
     : { decision: 'refuse', refusal: replay.refusal }
 }
 
+/** A launch whose tab the user closed answers with its own word only to a caller that reads it. */
+export function readsAgentLaunchTabClosed(
+  context: Pick<RpcContext, 'clientKind' | 'clientCapabilities'>
+): boolean {
+  return (
+    context.clientKind === undefined ||
+    context.clientCapabilities?.includes(AGENT_LAUNCH_TAB_CLOSED_CLIENT_CAPABILITY) === true
+  )
+}
+
+/** The CLI (no declared client) ships with this host; any other caller must say it reads the word. */
+function readsUnconfirmedLaunchPrompt(
+  context: Pick<RpcContext, 'clientKind' | 'clientCapabilities'>
+): boolean {
+  return (
+    context.clientKind === undefined ||
+    context.clientCapabilities?.includes(AGENT_LAUNCH_PROMPT_UNCONFIRMED_RUNTIME_CAPABILITY) ===
+      true
+  )
+}
+
+/**
+ * The handle this runtime uses for the recorded pane now. Usually that is the recorded handle: the
+ * daemon and the SSH relay keep each PTY's handle, and a restarted runtime re-adopts it. It does not
+ * when the PTY's incarnation changed, when it already issued that pane another handle before reading
+ * the inventory, or when the PTY stored none; the pane key, the durable name, finds it then. A pane
+ * this runtime no longer knows keeps the recorded handle, which reads as an exited terminal — the
+ * truth about one that is gone. The handle stays because shipped clients require one.
+ */
+function withLiveTerminalHandle(
+  recorded: AgentLaunchResult,
+  runtime: Pick<RpcContext['runtime'], 'getTerminalHandleForPaneKey'>
+): AgentLaunchResult {
+  const { outcome } = recorded
+  if (outcome.kind !== 'terminal' || !outcome.paneKey) {
+    return recorded
+  }
+  const handle = runtime.getTerminalHandleForPaneKey(outcome.paneKey)
+  return handle && handle !== outcome.handle
+    ? { ...recorded, outcome: { ...outcome, handle } }
+    : recorded
+}
+
+/**
+ * A recorded answer as this caller may read it now. A prompt the host stopped delivering is
+ * `unconfirmed` only to a caller that reads the word; every other caller gets the refusal it got
+ * before the first write existed, never a `not-delivered` that invites a duplicate turn.
+ */
+function presentRecordedAnswer(
+  context: RpcContext,
+  operationId: string,
+  answer: AgentLaunchAdmission
+): AgentLaunchAdmission {
+  if (
+    answer.decision === 'refuse' &&
+    answer.refusal.code === AGENT_LAUNCH_TAB_CLOSED_CODE &&
+    !readsAgentLaunchTabClosed(context)
+  ) {
+    return refusal(
+      operationId,
+      'agent_session_operation_unknown',
+      'was stopped; its tab was closed'
+    )
+  }
+  if (answer.decision !== 'replay') {
+    return answer
+  }
+  if (answer.result.prompt?.outcome === 'unconfirmed' && !readsUnconfirmedLaunchPrompt(context)) {
+    return refusal(
+      operationId,
+      'agent_session_operation_unknown',
+      'started its agent, but whether its prompt arrived is unknown'
+    )
+  }
+  return { decision: 'replay', result: withLiveTerminalHandle(answer.result, context.runtime) }
+}
+
 /**
  * Admit, then claim, in one durable transaction so a launch writes the ledger once before its effect.
  *
@@ -127,17 +195,21 @@ export async function admitAgentLaunchOperation(
   context: RpcContext,
   params: AgentLaunchParams & { operationId: string },
   fingerprint: string,
-  now: number = Date.now()
+  now: number = Date.now(),
+  // The pane the window already shows for this launch: the record names it so the pane can read
+  // how the launch ended, across a restart too. Written only if this request wins the claim.
+  ownedPane?: AgentSessionOperationOwnedPane
 ): Promise<AgentLaunchAdmission> {
   const operationId = params.operationId
   const attachOperationId = deriveAgentLaunchChildOperationId(operationId)
   if (!attachOperationId) {
     return refusal(operationId, 'agent_session_operation_invalid', 'is not a durable operation id')
   }
-  const store = await requireLaunchOperationStore(context)
   const callerKey = agentLaunchOperationCallerKey(context)
+  // The ledger alone: admitting a terminal launch has no use for the chat host.
+  const store = await context.runtime.openAgentSessionRecordStore()
   const { decision: admitted, claim } = await store.admitAndClaimOperation(
-    { callerKey, operationId, fingerprint, now },
+    { callerKey, operationId, fingerprint, now, ...(ownedPane ? { ownedPane } : {}) },
     // A fresh row, or a replayed one no one has answered yet, leaves the right to run open.
     (decision) =>
       decision.decision === 'admit' ||
@@ -150,7 +222,7 @@ export async function admitAgentLaunchOperation(
   if (admitted.decision === 'replay') {
     const answer = answerFromRecordedRow(operationId, admitted.row.outcome)
     if (answer) {
-      return answer
+      return presentRecordedAnswer(context, operationId, answer)
     }
   }
   // Unreachable with both steps in one transaction; answered as uncertain rather than run twice.
@@ -164,26 +236,29 @@ export async function admitAgentLaunchOperation(
   if (claim.claim === 'lost') {
     // The handler joins same-process retries before admission. Reaching a claimed row here means
     // this runtime did not start it, so treating it as restart uncertainty is the safe answer.
-    return (
-      answerFromRecordedRow(operationId, claim.row.outcome) ??
-      refusal(operationId, 'agent_session_operation_unknown', 'is claimed but unsettled')
-    )
+    const answer = answerFromRecordedRow(operationId, claim.row.outcome)
+    return answer
+      ? presentRecordedAnswer(context, operationId, answer)
+      : refusal(operationId, 'agent_session_operation_unknown', 'is claimed but unsettled')
   }
+  const succeeded = (result: AgentLaunchResult) =>
+    store.recordOperationOutcome({
+      callerKey,
+      operationId,
+      outcome: {
+        status: 'succeeded',
+        // A terminal surface has a handle, not a session id; `launch` carries whichever it is.
+        sessionId: result.outcome.kind === 'structured' ? result.outcome.sessionId : '',
+        launch: result
+      }
+    })
   return {
     decision: 'execute',
     attachOperationId,
     callerKey,
-    settle: (result) =>
-      store.recordOperationOutcome({
-        callerKey,
-        operationId,
-        outcome: {
-          status: 'succeeded',
-          // A terminal surface has a handle, not a session id; `launch` carries whichever it is.
-          sessionId: result.outcome.kind === 'structured' ? result.outcome.sessionId : '',
-          launch: result
-        }
-      }),
+    // The same row shape twice: a build that predates the first write reads either one.
+    record: succeeded,
+    settle: succeeded,
     fail: (code) =>
       store.recordOperationOutcome({
         callerKey,

@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -22,7 +22,12 @@ it.each([
   'empty-selection'
 ])('preserves complete shard coverage with %s planning evidence', async (kind) => {
   root = mkdtempSync(join(tmpdir(), 'unit-sequencer-'))
-  const files = ['src/a.test.ts', 'src/b.test.ts', 'src/c.test.ts', 'src/d.test.ts']
+  const files = [
+    'src/main/foreign-sqlite-readers/foreign-sqlite-reader-event-loop.test.ts',
+    'src/b.test.ts',
+    'src/c.test.ts',
+    'src/d.test.ts'
+  ]
   const plan = {
     version: 1,
     sourceSha: kind === 'stale' ? 'old' : 'current',
@@ -44,8 +49,19 @@ it.each([
   const assigned = []
   for (const index of [1, 2]) {
     const sequencer = new TimingSequencer({ config: { root, shard: { index, count: 2 } } })
-    const specs = files.map((file) => ({ moduleId: join(root, file) }))
+    const specs = files.map((file, position) => ({
+      moduleId: join(root, file),
+      project: {
+        name: position === 0 ? 'node-measurement' : position % 2 ? 'bun' : 'node-runtime',
+        config: { sequence: { groupOrder: position === 0 ? 2 : 1 }, isolate: true }
+      }
+    }))
     assigned.push(...(await sequencer.shard(specs)).map((spec) => spec.moduleId))
+    const manifest = JSON.parse(readFileSync(join(root, 'assignment.json'), 'utf8'))
+    expect(manifest.selectedShard).toBe(index)
+    expect(manifest.shards.flatMap((shard) => shard.files).sort()).toEqual(
+      (kind === 'valid' ? files.slice(0, 2) : files).toSorted()
+    )
   }
   expect(assigned.sort()).toEqual(
     (kind === 'valid' ? files.slice(0, 2) : files).map((file) => join(root, file)).sort()

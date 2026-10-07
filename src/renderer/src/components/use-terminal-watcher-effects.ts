@@ -13,9 +13,8 @@ import { useAppStore } from '@/store'
 import { isTerminalWorkspaceEmptiedOnPurpose } from '../../../shared/closed-terminal-tab-tombstones'
 import { gateWorktreeAgentActivation } from '@/lib/worktree-agent-activation-gate'
 import { createWorkspaceTerminalHostAuthoritySelector } from '@/lib/workspace-terminal-host-authority'
-import { getStructuredAgentLaunchStatus } from '@/lib/structured-agent-session-launch'
+import { hasStructuredAgentLaunchInWorktree } from '@/lib/structured-agent-session-launch'
 import { isEmptyWorkspaceDefaultSurfacePending } from '@/lib/empty-workspace-default-surface-claims'
-import { AGENT_SESSION_PROVIDER_HANDLE_PROVIDERS } from '../../../shared/agent-session-provider-handle'
 import type { TerminalColdActivationController } from './terminal-cold-activation'
 import { selectParkedEquivalentMountTabIds } from './terminal/startup-terminal-tab-hold'
 
@@ -236,11 +235,7 @@ export function useTerminalWatcherEffects(controller: TerminalWatcherController)
         return
       }
       // A pending or unanswered chat create owns the surface even before its tab is published.
-      if (
-        AGENT_SESSION_PROVIDER_HANDLE_PROVIDERS.some(
-          (agent) => getStructuredAgentLaunchStatus(activeWorktreeId, agent) !== 'idle'
-        )
-      ) {
+      if (hasStructuredAgentLaunchInWorktree(activeWorktreeId)) {
         return
       }
       // Why: the activation gate reconciles durable/live agent state first; only an actually empty, never-visited workspace receives a default shell.

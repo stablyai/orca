@@ -9,7 +9,11 @@ import type {
   AgentJournalItemIdentity
 } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import { openJournalOwingImport } from '../agent-session-journal/journal-owed-import-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
+import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
 import {
   createDeferredStructuredAgentSessionEventSink,
   type StructuredAgentSessionEventTarget,
@@ -37,10 +41,8 @@ let journal: AgentSessionJournal
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-resolved-append-'))
-  // Its copy owed, so every write handed over waits in the queue: a resolver that read at submit
-  // would read the row before the revisions ahead of it had landed.
-  ;({ journal } = await openJournalOwingImport({
-    stateDirectory: root,
+  journal = await openAgentSessionJournal({
+    database: openTestJournalHostDatabase(root),
     identity: {
       sessionId: 'session-1',
       workspaceId: 'workspace-1',
@@ -48,11 +50,12 @@ beforeEach(async () => {
       agent: 'codex',
       providerHandle: codexProviderHandle('thread-1')
     }
-  }))
+  })
 })
 
 afterEach(async () => {
   await journal.close()
+  closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
 
@@ -90,7 +93,9 @@ describe('resolved revisions', () => {
     }
     // Three revisions of one row stay three operations; none replaces another.
     expect(deferred.state().queuedOperations).toBe(3)
-    deferred.bind(journalTarget())
+    // Bound from inside a running read, so every revision waits in line: one resolved at
+    // handover would read the row before the revisions ahead of it had landed.
+    await journal.readInOrder(() => deferred.bind(journalTarget()))
     await expect(deferred.drained()).resolves.toEqual({ ok: true })
     expect(rowText()).toBe('abc')
   })

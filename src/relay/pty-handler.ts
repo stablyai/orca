@@ -4,6 +4,7 @@ import { resolveSynchronizedOutputSafeSplit } from '../shared/terminal-synchroni
 import { restoreManagedDataAccountEnvironment } from '../shared/managed-data-account-environment'
 import { createTerminalTitleTracker } from '../shared/terminal-output-side-effects'
 import { getDecorativeTitleGateKey } from '../shared/agent-decorative-title-signature'
+import type { ClaudeTerminalEvidence } from '../shared/claude-terminal-interrupt'
 import { FreebuffStatusProjection } from './freebuff-status-projection'
 import { probeOpenCodeLaunchCapabilities } from '../main/opencode/opencode-launch-capabilities'
 import type { OpenCodeCliCapabilities } from '../shared/opencode-cli-version'
@@ -762,6 +763,16 @@ export class PtyHandler {
     this.agentPresenceTrigger = listener
   }
 
+  private claudeTerminalEvidenceListener:
+    | ((paneKey: string, evidence: ClaudeTerminalEvidence) => void)
+    | null = null
+
+  setClaudeTerminalEvidenceListener(
+    listener: ((paneKey: string, evidence: ClaudeTerminalEvidence) => void) | null
+  ): void {
+    this.claudeTerminalEvidenceListener = listener
+  }
+
   /** Subscribe to PTY-exit events (relay-hook server uses this to evict per-paneKey caches). */
   setExitListener(listener: PtyExitListener | null): void {
     this.exitListener = listener
@@ -1119,6 +1130,9 @@ export class PtyHandler {
     let lastTitleGateKey: string | null = null
     const presenceTriggers = createTerminalTitleTracker({
       onTitle: (normalizedTitle, rawTitle, meta) => {
+        if (managed.paneKey && !meta?.staleWorkingTitleClear) {
+          this.claudeTerminalEvidenceListener?.(managed.paneKey, { kind: 'title', title: rawTitle })
+        }
         // Why: spinner frames arrive several times a second; only a real title change re-checks.
         const gateKey = getDecorativeTitleGateKey(rawTitle, normalizedTitle)
         if (gateKey !== lastTitleGateKey && !meta?.staleWorkingTitleClear) {
@@ -1152,6 +1166,9 @@ export class PtyHandler {
     })
     managed.pty.onExit(({ exitCode }: { exitCode: number }) => {
       presenceTriggers.dispose()
+      if (managed.paneKey) {
+        this.claudeTerminalEvidenceListener?.(managed.paneKey, { kind: 'reset' })
+      }
       managed.physicalExit?.markExited()
       if (managed.disposed) {
         return
@@ -2423,6 +2440,9 @@ export class PtyHandler {
         return
       }
       managed.pty.write(data)
+      if (managed.paneKey) {
+        this.claudeTerminalEvidenceListener?.(managed.paneKey, { kind: 'input', data })
+      }
     }
   }
 

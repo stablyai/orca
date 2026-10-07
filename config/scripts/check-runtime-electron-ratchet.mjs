@@ -113,11 +113,20 @@ const externalNativeAddons = {
 // Why `plugins`: lets a test add an Electron import to a real file in memory, never on disk.
 export async function collectElectronImporters(entryPoints, { plugins = [] } = {}) {
   const result = await build({
-    entryPoints,
+    // Export every entry through one bundle so shared dependencies are emitted once.
+    stdin: {
+      contents: entryPoints
+        .map(
+          (entry, index) =>
+            `export * as entry_${index} from ${JSON.stringify(path.resolve(ROOT, entry))}`
+        )
+        .join('\n'),
+      resolveDir: ROOT,
+      loader: 'ts',
+      sourcefile: 'runtime-electron-ratchet-entry.ts'
+    },
     bundle: true,
     write: false,
-    // Why outdir with write:false: esbuild refuses multiple entry points without one,
-    // even though nothing is emitted — the metafile is all this reads.
     outdir: path.join(ROOT, 'runtime-electron-ratchet-metafile-only'),
     platform: 'node',
     target: 'node20',

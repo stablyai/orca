@@ -14,7 +14,7 @@ vi.mock('./NativeChatComposerActions', () => ({
 }))
 
 vi.mock('./NativeChatAutocompleteMenus', () => ({
-  NativeChatMentionHint: () => null,
+  NativeChatMentionMenu: () => null,
   NativeChatPickerMenu: () => null
 }))
 
@@ -44,7 +44,7 @@ function fieldProps(overrides: Partial<TestFieldProps> = {}): TestFieldProps {
     canSend: true,
     autocomplete: { mode: 'none' },
     activeSuggestion: 0,
-    notice: null,
+    notices: [],
     imageAttachments: [],
     sendButtonDisabled: false,
     isWorking: false,
@@ -60,7 +60,8 @@ function fieldProps(overrides: Partial<TestFieldProps> = {}): TestFieldProps {
     pickerListboxId: 'picker',
     onChoosePickerItem: vi.fn(),
     onRetrySkills: vi.fn(),
-    onAcceptMention: vi.fn(),
+    onChooseMentionFile: vi.fn(),
+    mentionFiles: { files: [], loading: false, failed: false },
     onRemoveImageAttachment: vi.fn(),
     onAttach: vi.fn(),
     onDictationToggle: vi.fn(),

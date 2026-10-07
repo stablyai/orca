@@ -16,8 +16,7 @@ import type { ProjectGroupingModel } from '../grouping/project-grouping'
 import type { PinnedWorktreeDisplayPolicy, Row, WorktreeGroupBy } from '../grouping/row-types'
 import { getLogicalRepoOrderRankById } from '../../project-header-drop'
 import { getEmptyProjectPlaceholderRepoIds } from '../../empty-project-placeholder-repos'
-import { PINNED_GROUP_KEY } from '../grouping/group-keys'
-import { scopePinnedSectionCollapse } from '../../host-pinned-sections'
+import { deferHostSectionCollapse, scopeHostSectionCollapse } from '../../host-section-collapse'
 import { addHostSectionRows } from '../../host-section-rows'
 import { orderHostSectionOptions } from '../../host-section-order'
 import { buildSidebarHostOptions } from '../../sidebar-host-options'
@@ -143,17 +142,16 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
     [hostOptions]
   )
 
-  const hostScopedPinnedGroups =
+  const hostScopedGroups =
     args.workspaceHostScope !== 'all' || args.visibleWorkspaceHostIds !== null
-  // Host sections apply pinned collapse after splitting the rows by owner.
-  const rowCollapsedGroups = useMemo(() => {
-    if (!hostScopedPinnedGroups || !effectiveCollapsedGroups.has(PINNED_GROUP_KEY)) {
-      return effectiveCollapsedGroups
-    }
-    const next = new Set(effectiveCollapsedGroups)
-    next.delete(PINNED_GROUP_KEY)
-    return next
-  }, [effectiveCollapsedGroups, hostScopedPinnedGroups])
+  // Host sections apply lane collapse after splitting the rows by owner.
+  const rowCollapsedGroups = useMemo(
+    () =>
+      hostScopedGroups
+        ? deferHostSectionCollapse(effectiveCollapsedGroups)
+        : effectiveCollapsedGroups,
+    [effectiveCollapsedGroups, hostScopedGroups]
+  )
 
   const rows: Row[] = useMemo(
     () =>
@@ -241,11 +239,10 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
       // Why: projects/workspaces are the primary sidebar object; host sections are only an explicit host-filter view.
       preferProjectGrouping: true
     })
-    return hostScopedPinnedGroups
-      ? scopePinnedSectionCollapse({
+    return hostScopedGroups
+      ? scopeHostSectionCollapse({
           rows: sectioned,
-          collapsedGroups: effectiveCollapsedGroups,
-          defaultHostId
+          collapsedGroups: effectiveCollapsedGroups
         })
       : sectioned
   }, [
@@ -254,7 +251,7 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
     defaultHostId,
     effectiveCollapsedGroups,
     hostDragActive,
-    hostScopedPinnedGroups,
+    hostScopedGroups,
     orderedHostOptions,
     rows
   ])

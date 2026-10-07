@@ -3,7 +3,12 @@ import { chmodSync, cpSync, existsSync, mkdirSync, rmSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { NODE_RUNTIME_PIN } from '../../src/shared/node-runtime-pin.ts'
-import { findSlotProblems, readManifest } from './orcad-prebuild-slot-contents.mjs'
+import {
+  COMPAT_SLOT_ADDONS,
+  findSlotProblems,
+  isCompatSlot,
+  readManifest
+} from './orcad-prebuild-slot-contents.mjs'
 import { ensurePinnedNodeExecutable } from './pinned-node-downloads.mjs'
 import { runProcessSync } from './script-child-process.mjs'
 
@@ -28,6 +33,15 @@ export function stageSmokeNodePty({ slotDir, stageDir }) {
   return nodePtyDir
 }
 
+/** stageSmokeNodePty copies the whole slot into build/Release, compat addons included. */
+function compatAddonPaths(slot, nodePtyDir) {
+  return isCompatSlot(slot)
+    ? Object.keys(COMPAT_SLOT_ADDONS).map((file) =>
+        join(nodePtyDir, 'build', 'Release', ...file.split('/'))
+      )
+    : []
+}
+
 export async function runOrcadPrebuildSmoke({ slot, prebuildsDir }) {
   const problems = findSlotProblems(readManifest(prebuildsDir), prebuildsDir, [slot])
   if (problems.length > 0) {
@@ -43,7 +57,8 @@ export async function runOrcadPrebuildSmoke({ slot, prebuildsDir }) {
     args: [
       join(import.meta.dirname, 'orcad-prebuild-smoke-child.cjs'),
       nodePtyDir,
-      NODE_RUNTIME_PIN.version
+      NODE_RUNTIME_PIN.version,
+      ...compatAddonPaths(slot, nodePtyDir)
     ],
     timeoutMs: 60_000
   })

@@ -40,6 +40,8 @@ export type BuildPtyHostEnvOptions = {
 
 export type CodexHomeLaunchContext = {
   unavailableManagedHomePath?: string
+  /** An Orca-launched Codex, which may wait briefly for its status hook; other spawns never do. */
+  launchesCodex?: boolean
 }
 
 // Why (#16441): Codex launch prep grants hook trust through a codex app-server

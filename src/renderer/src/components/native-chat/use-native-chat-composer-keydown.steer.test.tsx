@@ -34,6 +34,8 @@ function setup(
   const hook = renderHook(() =>
     useNativeChatComposerKeyDown({
       autocomplete: { mode: 'none' as const },
+      mentionFiles: { files: [], loading: false, failed: false },
+      completeMention: vi.fn(),
       activeSuggestion: 0,
       draft: composer.draft ?? '',
       hasAttachments: composer.hasAttachments ?? false,

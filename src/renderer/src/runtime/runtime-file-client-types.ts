@@ -2,6 +2,7 @@ import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { LocalFileAccess } from '../../../shared/local-file-access'
 
 export type RuntimeReadableFileContent = {
+  mediaUrl?: string
   content: string
   isBinary: boolean
   isImage?: boolean

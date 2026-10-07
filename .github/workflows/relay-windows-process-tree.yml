@@ -60,6 +60,23 @@ jobs:
           node config/scripts/build-windows-process-tree-relay-addon.mjs --arch=x64
           node config/scripts/build-windows-process-tree-relay-addon.mjs --arch=arm64
 
+      # orcad's instance lock and stop proof read one PID's creation time through this addon on
+      # Windows SSH hosts; prove the x64 binary this runner can load answers it, and answers
+      # nothing for a PID that does not exist rather than a stale or zero time.
+      - name: Assert the addon reads process creation time
+        shell: bash
+        run: |
+          node -e "
+          const { assertWindowsProcessTreeCreationTime } = require('./config/scripts/windows-process-tree-creation-time.cjs')
+          const addon = require('./.build/windows-process-tree/x64/windows-process-tree.node')
+          assertWindowsProcessTreeCreationTime({ module: addon })
+          const own = addon.getProcessCreationTime(process.pid)
+          const started = Date.now() - process.uptime() * 1000
+          if (typeof own !== 'number' || Math.abs(own - started) > 5000) throw new Error('creation time ' + own + ' vs ' + started)
+          if (addon.getProcessCreationTime(0x7ffffff0) !== undefined) throw new Error('a missing PID must read undefined')
+          console.log('creation time ok:', own)
+          "
+
       - name: Upload relay addons
         uses: actions/upload-artifact@v7
         with:

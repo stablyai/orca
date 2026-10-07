@@ -1,12 +1,5 @@
 import { useQuickOpenInteraction } from './use-quick-open-interaction'
-import React, {
-  useCallback,
-  useDeferredValue,
-  useEffect,
-  useMemo,
-  useState,
-  useSyncExternalStore
-} from 'react'
+import React, { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
 import { useActiveWorktree } from '@/store/selectors'
 import { getFileTypeIcon } from '@/lib/file-type-icons'
@@ -24,11 +17,7 @@ import {
 } from '../../../shared/quick-open-query-target'
 import { openQuickOpenFile } from './quick-open-file-navigation'
 import { rankQuickOpenFilesWithHistory } from './quick-open-history-ranking'
-import {
-  quickOpenHistoryScope,
-  readQuickOpenHistory,
-  subscribeQuickOpenHistory
-} from '@/lib/quick-open-file-history'
+import { useQuickOpenHistory } from '@/lib/quick-open-file-history'
 import { useRuntimeFileListForWorktree } from '@/components/quick-open-file-list'
 import { useModalReturnFocus } from '@/hooks/useModalReturnFocus'
 import { translate } from '@/i18n/i18n'
@@ -79,11 +68,7 @@ function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element 
   const { opening, invalidate, begin } = useQuickOpenInteraction(activeWorktreeId)
   const [selectedPath, setSelectedPath] = useState('')
   const worktreePath = activeWorktree?.path ?? null
-  const scope =
-    activeWorktreeId && worktreePath
-      ? quickOpenHistoryScope(useAppStore.getState(), activeWorktreeId, worktreePath)
-      : null
-  const history = useSyncExternalStore(subscribeQuickOpenHistory, () => readQuickOpenHistory(scope))
+  const history = useQuickOpenHistory(activeWorktreeId, worktreePath)
   const { files, loading, loadError, truncated, recentError } = useRuntimeFileListForWorktree({
     enabled: visible && !absoluteQuery,
     worktreeId: activeWorktreeId,

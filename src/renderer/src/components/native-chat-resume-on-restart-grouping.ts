@@ -4,6 +4,7 @@ import type { ExecutionHostId } from '../../../shared/execution-host'
 import { projectGroupIdFromRepoId } from '../../../shared/folder-workspace-worktree'
 import type { RepoIcon } from '../../../shared/repo-icon'
 import type { AgentSessionRestartActivity } from '../../../shared/agent-session-restart-activity'
+import type { StructuredAgentId } from '../../../shared/agent-session-provider-handle'
 
 /**
  * The offered chats, arranged the way the sidebar arranges workspaces: project/repo, then workspace,
@@ -16,7 +17,9 @@ import type { AgentSessionRestartActivity } from '../../../shared/agent-session-
 export type ResumeCandidate = {
   sessionId: string
   workspaceId: string
-  agent: 'claude' | 'codex'
+  /** Any agent the host registered; a client without the registered-agents capability gets
+   *  only Claude's and Codex's offers. */
+  agent: StructuredAgentId
   trigger: 'quit' | 'update'
   latestPrompt: string
   recordedAt: number
@@ -33,7 +36,8 @@ export type ResumeCandidate = {
 export type ResumeFailure = ResumeCandidate & {
   failedAt: number
   outcome: 'refused' | 'unconfirmed'
-  /** The host's or provider's refusal code, verbatim. */
+  /** The host's or provider's refusal code, verbatim; or, for a resume request lost before the
+   *  host reserved anything, this side's own `agent_session_restart_request_failed`. */
   reason: string
   /** Whether a retry would run at all; an older host omits it and the reason decides alone. */
   retryable?: boolean

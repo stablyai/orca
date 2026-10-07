@@ -3,7 +3,8 @@
  * Build one node-pty prebuilt for the CURRENT platform/arch/libc and file it in orcad's
  * prebuilds matrix, so a deployment target needs no C/C++ toolchain.
  *
- * node-pty is the only ABI-sensitive native module orcad requires. It is also PATCHED in
+ * node-pty is the only ABI-sensitive native module every slot builds; a compat slot also
+ * builds the addons in COMPAT_SLOT_ADDONS (orcad-prebuild-compat-addons.mjs). node-pty is PATCHED in
  * this repo (config/patches/node-pty@1.1.0.patch), and that patch is the glibc-floor fix:
  * `.symver` pins on openpty/forkpty/pthread_sigmask plus the `--no-as-needed` ldflags that
  * keep libutil/libpthread in DT_NEEDED. An upstream prebuilt has none of it and reproduces
@@ -40,13 +41,14 @@ import {
   highestGlibcNeed,
   isCompatSlot,
   mergeManifest,
-  prebuildCompileGypi,
   readManifest,
   sha256Of,
   slotGlibcFloor,
   slotSourceFiles,
   SLOT_NAPI_VERSION
 } from './orcad-prebuild-slot-contents.mjs'
+import { compileCompatAddons } from './orcad-prebuild-compat-addons.mjs'
+import { nodeGypRebuild, stageNodeAddonApi } from './orcad-prebuild-node-gyp.mjs'
 import { ensurePinnedNodeExecutable, preparePinnedNodeDir } from './pinned-node-downloads.mjs'
 
 export { readManifest }
@@ -203,44 +205,23 @@ async function compileNodePty(sourceDir, slot) {
   )
   const ptySourcePath = join(stagedDir, 'src', 'unix', 'pty.cc')
   writeFileSync(ptySourcePath, ptySourceForLibc(readFileSync(ptySourcePath, 'utf8'), libc))
-  const addonApiDir = dirname(
-    require.resolve('node-addon-api/package.json', { paths: [sourceDir] })
-  )
-  cpSync(addonApiDir, join(stagedDir, 'node_modules', 'node-addon-api'), {
-    recursive: true,
-    dereference: true
-  })
+  stageNodeAddonApi(sourceDir, stagedDir)
   if (process.platform === 'win32') {
     require('./node-pty-job-ownership.cjs').assertNodePtySourceDeniesMsysBreakaway({
       nodePtyDir: stagedDir
     })
   }
-  const compileGypi = join(workDir, 'prebuild-compile.gypi')
-  writeFileSync(compileGypi, prebuildCompileGypi({ staticCxxRuntime: isCompatSlot(slot) }))
   const nodeDir = await preparePinnedNodeDir({ target: slot, workDir: join(workDir, 'nodedir') })
 
   console.log(
     `[orcad-prebuilds] compiling patched node-pty for ${slot} against Node ${NODE_RUNTIME_PIN.version} headers, N-API ${SLOT_NAPI_VERSION} ...`
   )
-  const { runProcessSync } = await import('./script-child-process.mjs')
-  const result = runProcessSync({
-    program: process.execPath,
-    args: [
-      join(ROOT, 'node_modules', 'node-gyp', 'bin', 'node-gyp.js'),
-      'rebuild',
-      `--nodedir=${nodeDir}`,
-      '--',
-      '-I',
-      compileGypi
-    ],
-    cwd: stagedDir,
-    stdio: 'inherit',
-    timeoutMs: null
+  const buildDir = await nodeGypRebuild({
+    stagedDir,
+    workDir,
+    nodeDir,
+    staticCxxRuntime: isCompatSlot(slot)
   })
-  if (result.code !== 0) {
-    throw new Error(`[orcad-prebuilds] node-gyp rebuild failed (status ${result.code})`)
-  }
-  const buildDir = join(stagedDir, 'build', 'Release')
   if (process.platform === 'win32') {
     require('./node-pty-job-ownership.cjs').assertRebuiltConptyDeniesMsysBreakaway({
       nodePtyDir: stagedDir,
@@ -248,7 +229,7 @@ async function compileNodePty(sourceDir, slot) {
       crossHost: false
     })
   }
-  return buildDir
+  return { buildDir, nodeDir }
 }
 
 function requireSlots(slots) {
@@ -310,16 +291,22 @@ async function build() {
   const slot = slotName()
   assertCompatSlotHost(slot, { platform: process.platform, arch: process.arch, libc: detectLibc() })
   const slotDir = join(PREBUILDS_DIR, slot)
-  const buildDir = await compileNodePty(sourceDir, slot)
+  const { buildDir, nodeDir } = await compileNodePty(sourceDir, slot)
+  const compatAddons = isCompatSlot(slot)
+    ? await compileCompatAddons({ slot, workDir: join(WORK_DIR, slot), nodeDir })
+    : []
 
   rmSync(slotDir, { recursive: true, force: true })
   const files = {}
-  for (const [relative, source] of slotSourceFiles({
-    platform: process.platform,
-    arch: process.arch,
-    buildDir,
-    nodePtyDir: sourceDir
-  })) {
+  for (const [relative, source] of [
+    ...slotSourceFiles({
+      platform: process.platform,
+      arch: process.arch,
+      buildDir,
+      nodePtyDir: sourceDir
+    }),
+    ...compatAddons
+  ]) {
     if (!existsSync(source)) {
       throw new Error(`[orcad-prebuilds] ${slot} needs ${relative}, but ${source} is missing`)
     }

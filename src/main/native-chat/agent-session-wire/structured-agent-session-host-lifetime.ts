@@ -114,6 +114,7 @@ export async function stopStructuredAgentSessionAgentUnderSerialize(
       : Promise.resolve(null)
     child.close = {
       cause,
+      ...('quit' in ending && ending.quit ? { quit: true as const } : {}),
       reason: ('reason' in ending ? ending.reason : undefined) ?? null,
       recorded,
       requestedAt: session.journal.cursor()

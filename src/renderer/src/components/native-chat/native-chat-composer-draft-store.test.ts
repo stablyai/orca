@@ -2,7 +2,6 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as DraftStore from './native-chat-composer-draft-store'
 import type * as DraftCache from './native-chat-draft-cache'
-import type * as ComposerAttachments from './use-native-chat-composer-attachments'
 import { MAX_PROMPT_BYTES } from '../../../../shared/rpc-contract/structured-agent-session-params'
 import {
   createMemoryNativeChatComposerDraftStorage,
@@ -11,7 +10,7 @@ import {
 
 type DraftModules = {
   drafts: typeof DraftCache
-  attachments: typeof ComposerAttachments
+  attachments: typeof DraftCache
   store: typeof DraftStore
 }
 
@@ -27,7 +26,7 @@ async function reload(
   storageModule.setNativeChatComposerDraftStorageForTests(options.using ?? storage)
   const modules = {
     drafts: await import('./native-chat-draft-cache'),
-    attachments: await import('./use-native-chat-composer-attachments'),
+    attachments: await import('./native-chat-draft-cache'),
     store: await import('./native-chat-composer-draft-store')
   }
   loaded.push(modules)
@@ -53,7 +52,7 @@ const SKILL_DOCUMENT = {
 
 let modules: DraftModules
 
-// The attachment module's import graph is slow to transform cold; later reloads reuse it.
+// Warm the same draft modules the reload cases exercise.
 beforeAll(async () => {
   storage = createMemoryNativeChatComposerDraftStorage()
   await reload()

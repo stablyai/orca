@@ -27,6 +27,7 @@ export { getTerminalViewerColors, setPairedViewerColors } from './terminal-view-
 export { normalizeColorQueryReplyColors } from '../../shared/pty-owner-color-query-colors'
 export type { RuntimePtyController } from './runtime-pty-controller-contract'
 export { getRuntimeDesktopSurface } from './runtime-desktop-surface'
+export { runtimeNewTabPlacement } from './runtime-terminal-spawn-placement'
 export type { IpcMainEvent } from 'electron'
 
 // Why initiallyHidden: no renderer pane exists yet, so main must answer startup queries — Muse

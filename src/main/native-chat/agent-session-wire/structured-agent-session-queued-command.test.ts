@@ -160,8 +160,7 @@ describe('/clear', () => {
     expect(
       await rig.host.send(CALLER, {
         envelope: rig.envelope(fields, 'agentSession.send', sentId, replacementId),
-        ...fields,
-        userSend: true
+        ...fields
       })
     ).toMatchObject({ ok: true, value: { submission: expect.anything() } })
     await eventually(() =>

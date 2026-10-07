@@ -13,6 +13,11 @@
 //
 //   accepted/pending — the send happened. The id is spent; a later identical
 //     message is a new message and must carry a new id.
+//   withdrawn — a submission a Stop took back before the agent started it is
+//     drawn in the chat with its stop row, so it spends the id and goes back to no
+//     draft. Answering a first send, it is that message: sent, then stopped. As a
+//     retained replay it cannot be told from a new send of the same text, and it
+//     provably never ran, so the caller sends it again under a fresh id.
 //   rejected — a terminal refusal or rejected submission spends a fresh id. A
 //     pending-admission refusal, or any refusal after earlier transport doubt,
 //     keeps it because neither proves a retained delivery did not happen. Two
@@ -31,6 +36,7 @@ import type { AgentSessionSendResult } from '../../../src/shared/agent-session-w
 import { agentSessionRefusalOperationState } from '../../../src/shared/agent-session-refusal-retry'
 import { agentSessionWriteNoticeEnglish } from '../../../src/shared/agent-session-refusal-notice'
 import { structuredAgentSessionRejectionNotice } from '../../../src/shared/structured-agent-session-send-disposition'
+import { dispatchWasWithdrawn } from '../../../src/shared/structured-agent-session-dispatch-rejection'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import type { StructuredAgentSessionMutationCallResult } from './mobile-structured-agent-session-rpc'
 
@@ -40,6 +46,21 @@ export type MobileStructuredSendDelivery = {
   operationIdSpent: boolean
   /** Copy for the user, or null when the outcome needs none. */
   error: string | null
+}
+
+/** Whether a send answer is its own submission, which a Stop took back before the agent started it. */
+export function mobileStructuredSendWithdrawnBeforeStart(
+  result: StructuredAgentSessionMutationCallResult<AgentSessionSendResult>
+): boolean {
+  if (result.status !== 'accepted' || !('submission' in result.value)) {
+    return false
+  }
+  const { submission } = result.value
+  return (
+    submission.queuedMessageId === undefined &&
+    submission.dispatchState === 'rejected' &&
+    dispatchWasWithdrawn(submission)
+  )
 }
 
 export function mobileStructuredSendDelivery(
@@ -101,6 +122,11 @@ export function mobileStructuredSendDelivery(
     // The host kept it as a card, which holds the text: no error, and nothing handed back to the
     // composer, so the words never show twice.
     return { outcome: 'queued', operationIdSpent: true, error: null }
+  }
+  if (mobileStructuredSendWithdrawnBeforeStart(result)) {
+    // The chat draws it with its stop row, so it is never handed back to the composer as well. A
+    // retained replay is resent by the caller.
+    return { outcome: retained ? 'rejected' : 'accepted', operationIdSpent: true, error: null }
   }
   if (submission.dispatchState === 'rejected') {
     return {

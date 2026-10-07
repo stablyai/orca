@@ -4,7 +4,7 @@
 // submission may not claim it), so it is read here, from the row itself.
 
 import type { AgentJournalItemBody } from '../../../shared/agent-session-journal-types'
-import { structuredAgentSessionPayloadFingerprint } from '../../../shared/structured-agent-session-mutation'
+import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
 import {
   isProviderUserMessageEcho,
   journalEchoClaimant,
@@ -107,11 +107,7 @@ function echoProvesDelivered(
 ): boolean {
   return (
     sequence > spent.since &&
-    structuredAgentSessionPayloadFingerprint({
-      method: 'agentSession.send',
-      sessionId: state.sessionId,
-      fields: { body }
-    }) === spent.draft.fingerprint
+    agentSessionSendBodyFingerprint(state.sessionId, body) === spent.draft.fingerprint
   )
 }
 

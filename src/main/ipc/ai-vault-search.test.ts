@@ -32,6 +32,9 @@ import {
   searchHit,
   searchResults
 } from '../../shared/ai-vault-search-test-fixture'
+import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 beforeEach(() => {
   handlers.clear()
   sshSearch.mockReset()
@@ -43,7 +46,10 @@ beforeEach(() => {
     callRuntimeSearch: runtimeSearch
   })
 })
-afterEach(() => setSessionSearchService(null))
+afterEach(() => {
+  setSessionSearchService(null)
+  setStructuredAgentSessionHost(null)
+})
 
 describe('desktop IPC and preload search boundary', () => {
   it('round-trips local results and separate status through the actual preload', async () => {
@@ -271,5 +277,50 @@ describe('desktop IPC and preload search boundary', () => {
     handlers.clear()
     registerAiVaultSearchHandlers()
     await expect(aiVaultApi.setSearchEnabled('runtime:env-1', true)).rejects.toThrow('host-too-old')
+  })
+})
+
+describe('local search hits owned by a native chat', () => {
+  function installChatHost(): { sessionId: string; workspaceId: string } {
+    const record = {
+      ...agentSessionRecordFixture(),
+      provider: 'codex' as const,
+      conversationName: 'Login repair'
+    }
+    record.providerHandleChain = [
+      { ...record.providerHandleChain[0]!, handle: codexProviderHandle('host-session') }
+    ]
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: ownership projection only reads this record-list member.
+    setStructuredAgentSessionHost({ deps: { store: { listRecords: () => [record] } } } as never)
+    return { sessionId: record.sessionId, workspaceId: record.location.workspaceId }
+  }
+
+  it('names and owns a hit after installing the chat host', async () => {
+    setSessionSearchService(fakeSearchService())
+    let owner: { sessionId: string; workspaceId: string } | null = null
+    registerAiVaultSearchHandlers({
+      ensureStructuredSessionOwnership: async () => {
+        owner = installChatHost()
+      }
+    })
+    const result = await aiVaultApi.searchSessions({ query: 'needle' })
+    expect(result).toMatchObject({
+      hits: [{ title: 'Login repair', structuredSession: owner! }]
+    })
+  })
+
+  it('still answers with plain hits when the chat host will not install', async () => {
+    setSessionSearchService(fakeSearchService())
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    registerAiVaultSearchHandlers({
+      ensureStructuredSessionOwnership: async () => {
+        throw new Error('chat journal unavailable')
+      }
+    })
+    const result = await aiVaultApi.searchSessions({ query: 'needle' })
+    expect(result).toMatchObject({ hits: [{ title: 'Indexed conversation' }] })
+    expect(JSON.stringify(result)).not.toContain('structuredSession')
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
   })
 })

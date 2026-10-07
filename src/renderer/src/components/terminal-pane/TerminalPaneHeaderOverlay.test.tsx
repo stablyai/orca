@@ -1,13 +1,17 @@
 /**
  * @vitest-environment happy-dom
  */
-import { act, createRef, type ReactNode, type RefObject } from 'react'
+import { act, createRef, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import path from 'node:path'
+import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport'
 import TerminalPaneHeaderOverlay from './TerminalPaneHeaderOverlay'
+import { handleTerminalFileDrop } from './terminal-drop-handler'
+import { resolveNativeFileDropPath } from '../../../../shared/native-file-drop'
+import { encodeWorkspaceFilePaths, WORKSPACE_FILE_PATHS_MIME } from '@/lib/workspace-file-drag'
 
 vi.mock('@/components/ui/tooltip', () => ({
   Tooltip: ({ children }: { children?: ReactNode }) => children,
@@ -22,17 +26,35 @@ vi.mock('@/i18n/i18n', () => ({
       fallback
     )
 }))
+vi.mock('@/store', () => ({
+  useAppStore: {
+    getState: () => ({
+      settings: { activeRuntimeEnvironmentId: null },
+      repos: [{ id: 'repo1', connectionId: null, executionHostId: 'local' }],
+      worktreesByRepo: { repo1: [{ id: 'wt-1', repoId: 'repo1', hostId: 'local', path: '/repo' }] },
+      detectedWorktreesByRepo: {},
+      folderWorkspaces: [],
+      sshConnectionStates: new Map()
+    })
+  }
+}))
+vi.mock('./terminal-input-activity', () => ({ recordTerminalUserInputForLeaf: vi.fn() }))
+
 const mounted: { container: HTMLDivElement; root: Root }[] = []
 
 function makePane(id: number): ManagedPane {
-  const leafId = `leaf-${id}` as ManagedPane['leafId']
+  const leafId = `00000000-0000-4000-8000-00000000000${id}`
+  if (!isTerminalLeafId(leafId)) {
+    throw new Error('Invalid test leaf')
+  }
   return {
     id,
     leafId,
     stablePaneId: leafId,
     container: document.createElement('div'),
     linkTooltip: document.createElement('div'),
-    terminal: {} as ManagedPane['terminal'],
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Drops only call focus on the test terminal.
+    terminal: { focus: vi.fn() } as unknown as ManagedPane['terminal'],
     fitAddon: {} as ManagedPane['fitAddon'],
     searchAddon: {} as ManagedPane['searchAddon'],
     serializeAddon: {} as ManagedPane['serializeAddon']
@@ -51,7 +73,8 @@ function renderOverlay({
   canContinueAgentSessionInNewSession = false,
   onContinueAgentSessionInNewSession = vi.fn(),
   renameValue = '',
-  renamingPaneId = null
+  renamingPaneId = null,
+  dropSetup
 }: {
   paneTitles: Record<number, string>
   paneCount?: number
@@ -65,13 +88,19 @@ function renderOverlay({
   onContinueAgentSessionInNewSession?: ReturnType<typeof vi.fn>
   renameValue?: string
   renamingPaneId?: number | null
+  dropSetup?: {
+    panes: ManagedPane[]
+    manager: PaneManager
+    transports: Map<number, PtyTransport>
+    activate: (id: number) => void
+  }
 }): {
   container: HTMLDivElement
   onClosePane: ReturnType<typeof vi.fn>
   onRemoveTitle: ReturnType<typeof vi.fn>
   onRenameSubmit: ReturnType<typeof vi.fn>
 } {
-  const panes = [makePane(1), makePane(2)].slice(0, paneCount)
+  const panes = dropSetup?.panes ?? [makePane(1), makePane(2)].slice(0, paneCount)
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
@@ -99,15 +128,15 @@ function renderOverlay({
         paneTitleBackground="transparent"
         terminalContentVisible
         hiddenStartupStyle={{}}
-        managerRef={{ current: null } as RefObject<PaneManager | null>}
-        paneTransportsRef={{ current: new Map() } as RefObject<Map<number, PtyTransport>>}
+        managerRef={{ current: dropSetup?.manager ?? null }}
+        paneTransportsRef={{ current: dropSetup?.transports ?? new Map<number, PtyTransport>() }}
         canContinueAgentSessionInNewSession={canContinueAgentSessionInNewSession}
         onContinueAgentSessionInNewSession={
           onContinueAgentSessionInNewSession as (pane: ManagedPane) => void
         }
         onSplitPane={vi.fn()}
         onBeginPaneDrag={vi.fn()}
-        onActivatePaneTitleInteraction={vi.fn()}
+        onActivatePaneTitleInteraction={dropSetup?.activate ?? vi.fn()}
         onPaneTitleContextMenu={vi.fn()}
         onStartRename={vi.fn()}
         onRemoveTitle={onRemoveTitle as (paneId: number) => void}
@@ -271,4 +300,101 @@ describe('TerminalPaneHeaderOverlay', () => {
       expect.objectContaining({ id: 1 })
     )
   })
+})
+
+function dispatchFileDrag(target: Element, type: 'dragover' | 'drop', internal: boolean): void {
+  const event = new Event(type, { bubbles: true, cancelable: true })
+  Object.defineProperty(event, 'dataTransfer', {
+    value: {
+      types: internal ? [WORKSPACE_FILE_PATHS_MIME] : ['Files'],
+      getData: () => encodeWorkspaceFilePaths(['/repo/file.txt']),
+      dropEffect: 'none'
+    }
+  })
+  target.dispatchEvent(event)
+}
+
+describe('terminal title drop ownership', () => {
+  it.each([
+    { internal: true, dragover: true },
+    { internal: true, dragover: false },
+    { internal: false, dragover: true },
+    { internal: false, dragover: false }
+  ])(
+    'delivers to pane A while B stays active (internal=$internal, dragover=$dragover)',
+    async ({ internal, dragover }) => {
+      const panes = [makePane(1), makePane(2)]
+      let active = panes[1]
+      const activate = vi.fn((id: number) => {
+        active = panes.find((pane) => pane.id === id) ?? active
+      })
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The drop handler only reads panes and the active pane from this manager.
+      const manager = { getPanes: () => panes, getActivePane: () => active } as PaneManager
+      const sends = [vi.fn(() => true), vi.fn(() => true)]
+      const transports = new Map<number, PtyTransport>()
+      panes.forEach((pane, index) => {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This fixture supplies every transport method used by local file drops.
+        const transport = {
+          sendInput: sends[index],
+          getPtyId: () => `pty-${pane.id}`,
+          isConnected: () => true,
+          getExecutionHostId: () => 'local'
+        } as unknown as PtyTransport
+        transports.set(pane.id, transport)
+      })
+      const { container } = renderOverlay({
+        paneTitles: { 1: 'A', 2: 'B' },
+        dropSetup: { panes, manager, transports, activate }
+      })
+      const title = container.querySelector('.pane-title-bar')
+      if (!title) {
+        throw new Error('Title A did not render')
+      }
+      const deliveries: Promise<void>[] = []
+      const legacyCapture = (event: Event): void => {
+        if (internal) {
+          return
+        }
+        event.preventDefault()
+        event.stopPropagation()
+        const entries = event
+          .composedPath()
+          .filter((entry): entry is HTMLElement => entry instanceof HTMLElement)
+          .map((entry) => ({
+            nativeFileDropTarget: entry.dataset.nativeFileDropTarget,
+            terminalTabId: entry.dataset.terminalTabId,
+            terminalPaneLeafId: entry.dataset.terminalPaneLeafId
+          }))
+        const resolution = resolveNativeFileDropPath(entries)
+        if (resolution?.target === 'terminal') {
+          deliveries.push(
+            handleTerminalFileDrop({
+              manager,
+              paneTransports: transports,
+              worktreeId: 'wt-1',
+              tabId: 'tab-1',
+              cwd: '/repo',
+              data: { paths: ['/repo/file.txt'], ...resolution }
+            })
+          )
+        }
+      }
+      document.addEventListener('drop', legacyCapture, true)
+      try {
+        await act(async () => {
+          if (dragover) {
+            dispatchFileDrag(title, 'dragover', internal)
+          }
+          dispatchFileDrag(title, 'drop', internal)
+          await Promise.all(deliveries)
+        })
+      } finally {
+        document.removeEventListener('drop', legacyCapture, true)
+      }
+      expect(sends[0]).toHaveBeenCalledExactlyOnceWith('/repo/file.txt ', 'driving')
+      expect(sends[1]).not.toHaveBeenCalled()
+      expect(activate).not.toHaveBeenCalled()
+      expect(manager.getActivePane()).toBe(panes[1])
+    }
+  )
 })

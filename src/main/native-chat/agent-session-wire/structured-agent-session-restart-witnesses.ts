@@ -33,6 +33,7 @@ export function createStructuredAgentSessionRestartWitnesses(deps: {
   sessions: ReadonlyMap<string, NonNullable<WorkingAtStopInput['session']>>
   getRecord: (sessionId: string) => AgentSessionRecord | null
   childWork: WorkingAtStopInput['childWork']
+  startAnswered: NonNullable<WorkingAtStopInput['startAnswered']>
   capsule?: Pick<AgentSessionRecoveryCapsule, 'record'>
   teardownId: string
   now: () => number
@@ -72,6 +73,7 @@ export function createStructuredAgentSessionRestartWitnesses(deps: {
         session: deps.sessions.get(sessionId),
         getRecord: deps.getRecord,
         childWork: deps.childWork,
+        startAnswered: deps.startAnswered,
         trigger,
         teardownId: deps.teardownId,
         now: deps.now()

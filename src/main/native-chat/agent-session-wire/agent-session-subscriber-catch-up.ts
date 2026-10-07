@@ -93,6 +93,7 @@ export function deliverToSubscriber(
           submissions: page.submissions
         },
         fence: subscriber.fence,
+        ...(page.latestTurn !== undefined ? { latestTurn: page.latestTurn } : {}),
         ...shared
       },
       // On a multi-page catch-up the draft list rides only the final page, or a

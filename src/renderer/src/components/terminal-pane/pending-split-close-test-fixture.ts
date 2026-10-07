@@ -16,6 +16,7 @@ const store = vi.hoisted((): { current: AppState | null } => ({ current: null })
 vi.mock('../../store', () => ({ useAppStore: { getState: () => store.current } }))
 vi.mock('react', () => ({
   useCallback: (fn: unknown) => fn,
+  useEffect: () => {},
   useImperativeHandle: () => {},
   useRef: (current: unknown) => ({ current })
 }))
@@ -147,7 +148,6 @@ export async function preparePendingSplitClose(
     expandedStyleSnapshotRef: { current: new Map() },
     containerRef: { current: null },
     pendingPaneSizeRefreshFrameIdsRef: { current: [] },
-    ref: { current: null },
     clearSessionRestoredBannerForPane: vi.fn(),
     persistLayoutSnapshot: vi.fn(),
     setPendingCloseConfirmation: vi.fn(),

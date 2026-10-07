@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { AgentSessionBackgroundTask } from '../../../../shared/agent-session-wire'
 import { backgroundTasksHeaderContent } from './background-task-header-content'
 import {
+  backgroundTaskCountedState,
   buildBackgroundTaskGroups,
   formatBackgroundTaskTokens,
   resolveBackgroundTaskName
@@ -77,7 +78,7 @@ describe('backgroundTasksHeaderContent', () => {
     expect(
       header([agent('a', { state: 'unverifiable' }), agent('b', { state: 'unverifiable' })])
     ).toEqual({
-      segments: [{ text: '2 agents with no recent update', kind: 'agent' }],
+      segments: [{ text: '2 agents with status unavailable', kind: 'agent' }],
       detail: null
     })
   })
@@ -181,6 +182,18 @@ describe('buildBackgroundTaskGroups', () => {
     expect(built[0].tasks[0].state).toBe('working')
     const monitor = buildBackgroundTaskGroups([{ id: 'm', kind: 'monitor' }], [])
     expect(monitor[0].tasks[0].state).toBe('monitoring')
+  })
+})
+
+describe('backgroundTaskCountedState', () => {
+  it('words a count with each state as one sentence', () => {
+    expect(backgroundTaskCountedState('2 agents', 'working')).toBe('2 agents working')
+    expect(backgroundTaskCountedState('2 agents', 'monitoring')).toBe('2 agents monitoring')
+    expect(backgroundTaskCountedState('2 agents', 'waiting')).toBe('2 agents waiting')
+    expect(backgroundTaskCountedState('2 agents', 'blocked')).toBe('2 agents blocked')
+    expect(backgroundTaskCountedState('2 agents', 'done')).toBe('2 agents done')
+    expect(backgroundTaskCountedState(3, 'idle')).toBe('3 stopped')
+    expect(backgroundTaskCountedState(3, 'unverifiable')).toBe('3 with status unavailable')
   })
 })
 

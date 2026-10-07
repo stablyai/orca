@@ -4,7 +4,6 @@
 // no DDL: a database written by a newer schema must be left byte-identical, and
 // `journal_mode = WAL` writes the file header.
 
-import { existsSync } from 'node:fs'
 import Database from '../../sqlite/sync-database'
 import { hardenSqliteDatabaseFiles } from '../../sqlite/harden-database-files'
 import {
@@ -19,62 +18,21 @@ import { ensureQueuedMessagesTable } from './queued-message-schema'
 export const JOURNAL_BUSY_TIMEOUT_MS = 5000
 /** Bounds the WAL a checkpoint leaves behind; SQLite truncates it back to this after a reset. */
 export const JOURNAL_SIZE_LIMIT_BYTES = 32 * 1024 * 1024
-/** Every commit but a first-use copy's batches, which no reader follows until a synced commit. */
-export const JOURNAL_SYNCHRONOUS = 'FULL'
+/** Every commit is fsynced before its caller continues. */
+const JOURNAL_SYNCHRONOUS = 'FULL'
 
 export type OpenJournalDatabase = {
   db: Database.Database
   /** A newer `user_version` was met: this build reads and never writes. */
   readOnly: boolean
-  /** The chat records file could not be read this launch: version 4's copy of it is still owed. */
-  legacyRecordImportOwed: boolean
-}
-
-/**
- * What version 4's migration copies in from the chat records file that preceded it, read before
- * the open so no transaction waits on a file read. `owed` is a read that can clear: the tables are
- * made, and the copy and the version bump wait for a launch whose read succeeds.
- */
-export type JournalLegacyRecordImport =
-  | { owed: true }
-  | { owed: false; write: (db: Database.Database) => void }
-
-export const NO_LEGACY_JOURNAL_RECORDS: JournalLegacyRecordImport = {
-  owed: false,
-  write: () => undefined
 }
 
 export function journalPragmaNumber(db: Database.Database, name: string): number {
   return Number(db.pragma(name, { simple: true }) ?? 0)
 }
 
-/** Whether an open of a database at `stored` runs version 4's migration, and so reads the records
- *  file first. */
-export function journalDatabaseMigratesRecords(stored: number): boolean {
-  return (
-    stored === 0 ||
-    (stored >= JOURNAL_DB_OLDEST_RELEASED_VERSION && stored < JOURNAL_DB_SCHEMA_VERSION)
-  )
-}
-
-/** 0 for a database not created yet: the probe never creates the file. */
-export function readJournalDatabaseVersion(dbPath: string): number {
-  if (!existsSync(dbPath)) {
-    return 0
-  }
-  const probe = new Database(dbPath)
-  try {
-    return journalPragmaNumber(probe, 'user_version')
-  } finally {
-    probe.close()
-  }
-}
-
-/**
- * Whether the database holds any chat record or tab, read-only. `undefined` while version 4's copy
- * of the records file is still owed, so the file answers for the chats it holds.
- */
-export function journalDatabaseHoldsAgentSessions(dbPath: string): boolean | undefined {
+/** Whether the database holds any chat record or tab, read-only. */
+export function journalDatabaseHoldsAgentSessions(dbPath: string): boolean {
   const db = new Database(dbPath, { readonly: true, fileMustExist: true })
   try {
     const tables = new Set(
@@ -83,23 +41,16 @@ export function journalDatabaseHoldsAgentSessions(dbPath: string): boolean | und
         .all()
         .map(({ name }) => name)
     )
-    const holds = ['agent_session_records', 'agent_session_tabs'].some(
+    return ['agent_session_records', 'agent_session_tabs'].some(
       (table) =>
         tables.has(table) && db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get() !== undefined
     )
-    if (holds || journalPragmaNumber(db, 'user_version') >= JOURNAL_DB_SCHEMA_VERSION) {
-      return holds
-    }
-    return undefined
   } finally {
     db.close()
   }
 }
 
-export function openJournalDatabase(
-  dbPath: string,
-  legacyRecords: JournalLegacyRecordImport
-): OpenJournalDatabase {
+export function openJournalDatabase(dbPath: string): OpenJournalDatabase {
   const probe = new Database(dbPath)
   let stored: number
   try {
@@ -112,8 +63,7 @@ export function openJournalDatabase(
     probe.close()
     return {
       db: new Database(dbPath, { readonly: true, fileMustExist: true }),
-      readOnly: true,
-      legacyRecordImportOwed: false
+      readOnly: true
     }
   }
   let transferred = false
@@ -125,14 +75,14 @@ export function openJournalDatabase(
       )
     }
     configureJournalPragmas(probe, stored)
-    const legacyRecordImportOwed = migrateJournalSchema(probe, stored, legacyRecords)
+    migrateJournalSchema(probe, stored)
     // Outside `migrateJournalSchema` on purpose: its early return skips a db
     // already at the current version, and this table must exist at EVERY
     // writable open with no `user_version` bump (see `ensureQueuedMessagesTable`).
     ensureQueuedMessagesTable(probe)
     hardenSqliteDatabaseFiles(dbPath)
     transferred = true
-    return { db: probe, readOnly: false, legacyRecordImportOwed }
+    return { db: probe, readOnly: false }
   } finally {
     if (!transferred) {
       probe.close()
@@ -159,35 +109,20 @@ function configureJournalPragmas(db: Database.Database, stored: number): void {
 }
 
 /**
- * Table creation, the records copy and the `user_version` bump are ONE transaction. Creating the
- * tables first left a shaped database still reporting version 0, which an older build does not
- * latch read-only; and "copied" is `user_version >= 4`, so no other marker can disagree with it.
- * Returns whether the copy is still owed.
+ * Table creation and the `user_version` bump are ONE transaction: creating the tables first left a
+ * shaped database still reporting version 0, which an older build does not latch read-only.
  */
-function migrateJournalSchema(
-  db: Database.Database,
-  stored: number,
-  legacyRecords: JournalLegacyRecordImport
-): boolean {
+function migrateJournalSchema(db: Database.Database, stored: number): void {
   if (stored >= JOURNAL_DB_SCHEMA_VERSION) {
-    return false
+    return
   }
   runJournalTransaction(db, () => {
     if (stored === 0) {
       db.exec(createJournalTablesSql())
     }
     db.exec(createAgentSessionRecordTablesSql())
-    if (legacyRecords.owed) {
-      // A fresh file still takes a released version, so an older build opens it as one.
-      if (stored === 0) {
-        db.pragma(`user_version = ${JOURNAL_DB_OLDEST_RELEASED_VERSION}`)
-      }
-      return
-    }
-    legacyRecords.write(db)
     db.pragma(`user_version = ${JOURNAL_DB_SCHEMA_VERSION}`)
   })
-  return legacyRecords.owed
 }
 
 /**

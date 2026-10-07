@@ -86,14 +86,19 @@ function createFakeSocket(): FakeSocket {
 }
 
 function createFakeServer() {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fields are assigned on the next lines, before the server is returned.
   const server = new EventEmitter() as EventEmitter & {
     listen: ReturnType<typeof vi.fn>
     close: ReturnType<typeof vi.fn>
+    address: ReturnType<typeof vi.fn>
   }
-  server.listen = vi.fn().mockImplementation(() => {
+  let boundPort = 0
+  server.listen = vi.fn().mockImplementation((port: number) => {
+    boundPort = port === 0 ? 49800 : port
     queueMicrotask(() => server.emit('listening'))
     return server
   })
+  server.address = vi.fn(() => ({ address: '127.0.0.1', port: boundPort }))
   server.close = vi.fn().mockImplementation((cb?: () => void) => cb?.())
   return server
 }
@@ -234,6 +239,15 @@ describe('system SSH forward process', () => {
 
     expect(spawnMock).toHaveBeenCalled()
     expect(forward.process).toBe(child)
+  })
+
+  it('resolves port 0 to a free port first, since OpenSSH never reports the one it bound', async () => {
+    spawnMock.mockReturnValue(createFakeProcess())
+
+    const forward = await startSystemSshPortForwardProcess(createTarget(), 0, '127.0.0.1', 3000)
+
+    expect(forward.localPort).toBe(49800)
+    expect(spawnMock.mock.calls[0][1]).toContain('127.0.0.1:49800:127.0.0.1:3000')
   })
 
   it('rejects startup when ssh exits early with stderr', async () => {

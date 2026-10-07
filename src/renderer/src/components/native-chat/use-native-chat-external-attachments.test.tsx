@@ -5,6 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import type * as AttachmentUploadModule from './native-chat-attachment-upload'
 
 const mocks = vi.hoisted(() => ({
+  storeState: { tabsByWorktree: { 'worktree-1': [{ id: 'tab-1' }] } },
   stat: vi.fn(),
   resolveNativeChatAttachmentOwner: vi.fn(),
   resolveNativeChatAttachmentOwnerForWorktree: vi.fn(),
@@ -12,7 +13,7 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('@/store', () => ({
-  useAppStore: { getState: () => ({}) }
+  useAppStore: { getState: () => mocks.storeState }
 }))
 
 // Real notice strings, so the tests below assert what a user would actually read
@@ -60,6 +61,9 @@ function Probe({
   )
   return null
 }
+
+// One past NATIVE_FILE_DROP_MAX_PATHS.
+const pathsOverDropLimit = Array.from({ length: 257 }, (_, index) => `/external/${index}.png`)
 
 let root: Root | null = null
 
@@ -137,8 +141,35 @@ describe('useNativeChatExternalAttachments', () => {
       filePath: '/local/a.txt',
       access: { kind: 'user-file' }
     })
-    expect(attachResolvedPaths).toHaveBeenCalledWith(['/local/a.txt'])
+    expect(attachResolvedPaths).toHaveBeenCalledWith(['/local/a.txt'], undefined, {
+      destinationIsCurrent: expect.any(Function)
+    })
     expect(mocks.uploadNativeChatAttachmentPaths).not.toHaveBeenCalled()
+  })
+
+  it('rejects a whole batch over the drop path limit, like a drop does', async () => {
+    mocks.resolveNativeChatAttachmentOwner.mockReturnValue({ kind: 'local' })
+    const attachResolvedPaths = vi.fn()
+    const setNotice = vi.fn()
+    const probe = await renderProbe({ attachResolvedPaths, setNotice })
+    await act(async () => {
+      probe.latest().attachExternalPaths(pathsOverDropLimit)
+    })
+    expect(setNotice).toHaveBeenCalledExactlyOnceWith('Attach 256 or fewer files at a time.')
+    expect(mocks.stat).not.toHaveBeenCalled()
+    expect(attachResolvedPaths).not.toHaveBeenCalled()
+  })
+
+  it('reports a remote runtime before the path limit, since trimming would not help', async () => {
+    mocks.resolveNativeChatAttachmentOwner.mockReturnValue({ kind: 'runtime' })
+    const setNotice = vi.fn()
+    const probe = await renderProbe({ attachResolvedPaths: vi.fn(), setNotice })
+    await act(async () => {
+      probe.latest().attachExternalPaths(pathsOverDropLimit)
+    })
+    expect(setNotice).toHaveBeenCalledExactlyOnceWith(
+      'Local attachments are not available for remote sessions.'
+    )
   })
 
   it('waits for the local file check and skips rejected paths without blocking other files', async () => {
@@ -153,10 +184,11 @@ describe('useNativeChatExternalAttachments', () => {
     expect(attachResolvedPaths).not.toHaveBeenCalled()
     expect(mocks.stat).toHaveBeenCalledTimes(1)
     await act(async () => fileCheck.resolve())
-    expect(attachResolvedPaths).toHaveBeenCalledExactlyOnceWith([
-      '/external/a.png',
-      '/external/c.png'
-    ])
+    expect(attachResolvedPaths).toHaveBeenCalledExactlyOnceWith(
+      ['/external/a.png', '/external/c.png'],
+      undefined,
+      { destinationIsCurrent: expect.any(Function) }
+    )
     expect(mocks.stat).toHaveBeenCalledTimes(3)
   })
 
@@ -301,7 +333,9 @@ describe('useNativeChatExternalAttachments', () => {
       expectedSshTargetId: 'conn-1',
       expectedSshConnectionGeneration: 4
     })
-    expect(attachResolvedPaths).toHaveBeenCalledWith(['/remote/wt/.orca/drops/a.txt'], 'conn-1')
+    expect(attachResolvedPaths).toHaveBeenCalledWith(['/remote/wt/.orca/drops/a.txt'], 'conn-1', {
+      destinationIsCurrent: expect.any(Function)
+    })
     expect(mocks.stat).not.toHaveBeenCalled()
   })
 
@@ -334,8 +368,12 @@ describe('useNativeChatExternalAttachments', () => {
     })
 
     expect(attachResolvedPaths.mock.calls).toEqual([
-      [['/remote/wt/.orca/drops/b.txt', '/remote/wt/.orca/drops/b.txt'], 'conn-1'],
-      [['/remote/wt/.orca/drops/a.txt'], 'conn-1']
+      [
+        ['/remote/wt/.orca/drops/b.txt', '/remote/wt/.orca/drops/b.txt'],
+        'conn-1',
+        { destinationIsCurrent: expect.any(Function) }
+      ],
+      [['/remote/wt/.orca/drops/a.txt'], 'conn-1', { destinationIsCurrent: expect.any(Function) }]
     ])
   })
 

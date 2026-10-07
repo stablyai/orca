@@ -10,7 +10,8 @@ import {
   fakeClaude,
   identityFor,
   PROVIDER_SESSION_ID,
-  tick
+  tick,
+  claudeStartupSettled
 } from './claude-structured-session-test-support'
 import { invokeCanUseTool } from './claude-can-use-tool-test-support'
 import {
@@ -349,7 +350,7 @@ describe('ClaudeStructuredSessionAdapter close and exit recovery', () => {
       spawnToken: 'spawn-9',
       events: journalSink
     })
-    await adapter.awaitStarted('session-1')
+    await claudeStartupSettled(adapter, 'session-1')
     const first = claude.connections[0]
     const oldPrompt = invokeCanUseTool(first, 'Bash', 'permission-retained', 'tool-retained')
     const oldSession = (

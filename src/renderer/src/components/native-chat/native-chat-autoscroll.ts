@@ -52,21 +52,58 @@ export type FollowIntent = {
   previousDistanceFromEnd: number
 }
 
-/** Whether the transcript should still follow the end after this offset.
- *
- *  Application writes preserve intent even when their delayed events arrive
- *  after the end moved. Reader events detach away from the end and reattach on
- *  arriving at it — against the re-arm band, never the wider near-bottom one.
- *  Arriving takes closing on the end: a smooth scroll leaving the end marks only
- *  its landing, and its first unmarked frames still sit inside the band. Measured
- *  against the end, not the offset, so content shrinking under a detached reader
- *  and clamping them onto the end still reattaches. */
+/** Passive offsets preserve following; detached views rearm only while closing on the actual tail. */
 export function nextFollowingEnd(intent: FollowIntent): boolean {
-  if (intent.programmatic) {
+  if (intent.following || intent.programmatic) {
     return intent.following
   }
-  if (!intent.following && distanceFromBottom(intent.geometry) > intent.previousDistanceFromEnd) {
+  if (distanceFromBottom(intent.geometry) > intent.previousDistanceFromEnd) {
     return false
   }
   return isNearBottom(intent.geometry, NATIVE_CHAT_FOLLOW_REARM_PX)
+}
+
+/** A reader input that can move the transcript, reduced to what decides following. */
+export type ReaderGesture =
+  | { kind: 'wheel'; deltaY: number; zoom: boolean }
+  | { kind: 'touch-drag' }
+  | { kind: 'scrollbar-press' }
+  | { kind: 'content-press' }
+  | { kind: 'key'; key: string; shift?: boolean }
+
+const KEYS_AWAY_FROM_END = new Set(['PageUp', 'Home', 'ArrowUp'])
+const KEYS_TOWARD_END = new Set(['PageDown', 'End', 'ArrowDown'])
+
+/** The direction a gesture scrolls: -1 up, 1 down, 0 when it does not scroll. */
+export function readerGestureDirection(gesture: ReaderGesture): -1 | 0 | 1 {
+  if (gesture.kind === 'wheel') {
+    return gesture.zoom || gesture.deltaY === 0 ? 0 : gesture.deltaY < 0 ? -1 : 1
+  }
+  if (gesture.kind === 'key') {
+    if (gesture.key === ' ') {
+      return gesture.shift ? -1 : 1
+    }
+    return KEYS_AWAY_FROM_END.has(gesture.key) ? -1 : KEYS_TOWARD_END.has(gesture.key) ? 1 : 0
+  }
+  return 0
+}
+
+/** Gestures that cannot leave the tail must not strand a following view without a scroll event. */
+export function readerGestureLeavesEnd(gesture: ReaderGesture, geometry: ScrollGeometry): boolean {
+  const contentAbove = geometry.scrollTop > 0
+  const awayFromEnd = !isNearBottom(geometry, NATIVE_CHAT_FOLLOW_REARM_PX)
+  switch (gesture.kind) {
+    case 'wheel':
+      return readerGestureDirection(gesture) < 0 && contentAbove
+    case 'scrollbar-press':
+      return contentAbove
+    // A touch's direction is not observable; it leaves once its drag has carried the view away.
+    case 'touch-drag':
+    case 'content-press':
+      return awayFromEnd
+    case 'key': {
+      const direction = readerGestureDirection(gesture)
+      return direction < 0 ? contentAbove : direction > 0 && awayFromEnd
+    }
+  }
 }

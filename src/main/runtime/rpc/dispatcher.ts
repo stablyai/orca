@@ -24,6 +24,7 @@ import { mapDispatcherError } from './dispatcher-error-response'
 import { parseRpcRequestParams } from './dispatcher-request-parsing'
 import { RpcStreamingDispatcher } from './rpc-streaming-dispatcher'
 import { invokeDispatcherUnaryMethod } from './dispatcher-unary-method-invocation'
+import { resolveRpcCallerIdentity } from './rpc-caller-identity'
 import {
   needsOrchestrationCallerResolution,
   resolveOrchestrationSessionCaller,
@@ -116,6 +117,7 @@ export class RpcDispatcher {
             : undefined,
           requestId: request.id,
           clientId: options?.clientId,
+          caller: resolveRpcCallerIdentity(options),
           clientKind: options?.clientKind,
           clientCapabilities: options?.clientCapabilities,
           updateClientCapabilities: options?.updateClientCapabilities,

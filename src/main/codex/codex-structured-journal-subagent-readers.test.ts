@@ -163,7 +163,7 @@ describe("a Codex subagent's rows on the parent's surfaces", () => {
       summary: ['Reading the diff']
     })
 
-    expect(isStructuredAgentSessionThinking(await items())).toBe(false)
+    expect(isStructuredAgentSessionThinking({ items: await items() })).toBe(false)
   })
 
   it("does not show the child's compaction as the parent's activity line", async () => {

@@ -16,8 +16,10 @@ import { NativeChatToolRun } from './NativeChatToolRun'
 import { NativeChatReasoningRow } from './NativeChatReasoningRow'
 import { NativeChatCodeBlock } from './NativeChatCodeBlock'
 import { NativeChatNoticeRow } from './NativeChatNoticeRow'
+import { nativeChatBlocksInOwnWords } from './native-chat-stopped-before-start-row'
 import { NativeChatCopyButton } from './NativeChatCopyButton'
 import { NativeChatMessageTimestamp } from './NativeChatMessageTimestamp'
+import { NativeChatAgentMessageSenders } from './NativeChatAgentMessageSenders'
 import {
   NativeChatAgentControls,
   NativeChatImageAttachments,
@@ -29,6 +31,7 @@ import type {
   NativeChatSubagentRosterState
 } from './native-chat-subagent-sections'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
+import { useNativeChatWorkRun } from './use-native-chat-work-run'
 
 /** What a user message says about its delivery: that nothing has confirmed it yet, quietly in
  *  place of its time, or that it did not go through, with its own Retry when the surface can send
@@ -76,29 +79,7 @@ function UserMessageMeta({
   )
 }
 
-/** One message: its prose first, then a collapsible run folding all of the
- *  turn's tool activity. Monochrome per STYLEGUIDE: user prompts read as a
- *  lifted card, assistant prose as body copy, reasoning de-emphasized.
- *  Memoized: a stream frame republishes the whole transcript, but settled rows
- *  keep their block identity, so only the changed row re-renders. */
-export const MessageRow = memo(function MessageRow({
-  message,
-  previousTodoWrite,
-  previousUpdatePlan,
-  revealedDiff,
-  expandSignal,
-  activeTurnIsWorking,
-  trailingRun,
-  onScrollMessageToTop,
-  onLinkClick,
-  allowFileUriLinks = false,
-  deliveryNotice,
-  subagentRoster,
-  subagentDisclosure,
-  inSubagentSection = false,
-  runtimeContext,
-  rewind
-}: {
+type MessageRowProps = {
   message: NativeChatMessage
   previousTodoWrite?: NativeChatToolCallBlock
   previousUpdatePlan?: NativeChatToolCallBlock
@@ -120,16 +101,51 @@ export const MessageRow = memo(function MessageRow({
   runtimeContext?: RuntimeFileOperationArgs | null
   /** On a user row: discards it and everything after it. */
   rewind?: NativeChatRewindSurface
-}): React.JSX.Element | null {
+  /** This row draws a run of tool calls and thoughts: every message in it, `message` first.
+   *  The same row either way, so a row becoming a run keeps everything it has mounted. */
+  workRun?: readonly NativeChatMessage[]
+}
+
+/** One message: its prose first, then a collapsible run folding all of the
+ *  turn's tool activity. Monochrome per STYLEGUIDE: user prompts read as a
+ *  lifted card, assistant prose as body copy, reasoning de-emphasized.
+ *  Memoized: a stream frame republishes the whole transcript, but settled rows
+ *  keep their block identity, so only the changed row re-renders. */
+export const MessageRow = memo(function MessageRow({
+  message,
+  previousTodoWrite,
+  previousUpdatePlan,
+  revealedDiff,
+  expandSignal,
+  activeTurnIsWorking,
+  trailingRun,
+  onScrollMessageToTop,
+  onLinkClick,
+  allowFileUriLinks = false,
+  deliveryNotice,
+  subagentRoster,
+  subagentDisclosure,
+  inSubagentSection = false,
+  runtimeContext,
+  rewind,
+  workRun
+}: MessageRowProps): React.JSX.Element | null {
   const rowRef = useRef<HTMLDivElement | null>(null)
+  const blocks = nativeChatBlocksInOwnWords(message.blocks)
   // One pass per block set, shared with the list that decides whether this row
   // occupies a slot — so "draws nothing" means the same thing to both.
   const { backgroundTasks, hasImages, markdown, prose, subagentGroups, tools } =
-    deriveNativeChatRowContent(message.blocks)
+    deriveNativeChatRowContent(blocks)
   const isUser = message.role === 'user'
   const isReasoning = message.role === 'reasoning'
   const isSystem = message.role === 'system'
-  const providerFrame = message.blocks.find((block) => block.type === 'text' && block.providerFrame)
+  const providerFrame = blocks.find((block) => block.type === 'text' && block.providerFrame)
+  const run = useNativeChatWorkRun(workRun, {
+    revealedDiff,
+    activeTurnIsWorking,
+    onLinkClick,
+    allowFileUriLinks
+  })
 
   const scrollToTop = useCallback(() => {
     if (rowRef.current) {
@@ -141,6 +157,7 @@ export const MessageRow = memo(function MessageRow({
   // bubble.
   // After all hooks, so hook order stays unconditional.
   if (
+    run === undefined &&
     markdown.length === 0 &&
     !hasImages &&
     tools.length === 0 &&
@@ -151,7 +168,7 @@ export const MessageRow = memo(function MessageRow({
   }
 
   const notice = isSystem
-    ? message.blocks.find(
+    ? blocks.find(
         (block) =>
           block.type === 'text' && (block.presentation !== undefined || block.tone !== undefined)
       )
@@ -177,10 +194,29 @@ export const MessageRow = memo(function MessageRow({
   }
 
   if (isUser) {
+    // Another agent's message is the agent's turn input too, but is not the person's: it reads
+    // left-aligned under its sender rather than as their bubble.
+    const from = message.from
     return (
-      <div ref={rowRef} className="group relative flex flex-col items-end gap-0.5">
+      <div
+        ref={rowRef}
+        className={cn('group relative flex flex-col gap-0.5', from ? 'items-start' : 'items-end')}
+      >
+        {from ? (
+          <NativeChatAgentMessageSenders
+            from={from}
+            chatWorktreeId={runtimeContext?.worktreeId ?? null}
+          />
+        ) : null}
         {/* A distinct surface separates the user's prompt from the assistant's prose. */}
-        <div className="max-w-[80%] rounded-xl border border-chat-user-border bg-chat-user-surface px-3.5 py-2.5 text-sm native-chat-message-text text-chat-foreground-strong">
+        <div
+          className={cn(
+            'max-w-[80%] text-sm native-chat-message-text',
+            from
+              ? 'select-text border-l-2 border-border/60 pl-3 text-chat-foreground'
+              : 'rounded-xl border border-chat-user-border bg-chat-user-surface px-3.5 py-2.5 text-chat-foreground-strong'
+          )}
+        >
           {markdown ? (
             <>
               <NativeChatImageAttachments
@@ -240,7 +276,7 @@ export const MessageRow = memo(function MessageRow({
     )
   }
 
-  if (isReasoning) {
+  if (isReasoning && run === undefined) {
     return (
       <div ref={rowRef}>
         <NativeChatReasoningRow
@@ -254,18 +290,18 @@ export const MessageRow = memo(function MessageRow({
     )
   }
 
+  // A thought heading a run reads inside it, so the row has no words of its own.
+  const words = isReasoning ? '' : markdown
   // Assistant controls reveal on hover and keyboard focus; system asides stay chrome-free.
-  const showControls = !isSystem && markdown.length > 0
+  const showControls = !isSystem && words.length > 0
 
   return (
     <div
       ref={rowRef}
-      data-native-chat-message-tone={isReasoning || isSystem ? 'faint' : undefined}
+      data-native-chat-message-tone={isSystem ? 'faint' : undefined}
       className={cn(
         'group relative max-w-full select-text text-sm leading-relaxed text-chat-foreground',
         !isSystem && 'native-chat-message-text',
-        // Reasoning stays quieter while keeping the same upright text as prose.
-        isReasoning && 'border-l-2 border-border/60 pl-3 text-chat-foreground-faint',
         isSystem && 'text-xs text-chat-foreground-faint'
       )}
     >
@@ -274,9 +310,9 @@ export const MessageRow = memo(function MessageRow({
         runtimeContext={runtimeContext}
         enablePreview={runtimeContext !== undefined}
       />
-      {markdown ? (
+      {words ? (
         <NativeChatMarkdown
-          content={markdown}
+          content={words}
           variant="document"
           className="text-sm native-chat-message-text"
           renderCodeBlock={NativeChatCodeBlock}
@@ -285,12 +321,12 @@ export const MessageRow = memo(function MessageRow({
           linkifyFilePaths={onLinkClick !== undefined}
         />
       ) : null}
-      {tools.length > 0 || subagentGroups.length > 0 || backgroundTasks.length > 0 ? (
+      {run || tools.length > 0 || subagentGroups.length > 0 || backgroundTasks.length > 0 ? (
         <NativeChatToolRun
-          blocks={tools}
+          blocks={run?.blocks ?? tools}
           previousTodoWrite={previousTodoWrite}
           previousUpdatePlan={previousUpdatePlan}
-          revealedDiff={revealedDiff}
+          revealedDiff={run ? run.revealedDiff : revealedDiff}
           onRevealDiff={onScrollMessageToTop}
           onLinkClick={onLinkClick}
           subagentGroups={subagentGroups}
@@ -301,11 +337,12 @@ export const MessageRow = memo(function MessageRow({
           activeTurnIsWorking={activeTurnIsWorking}
           trailing={trailingRun}
           disclosureId={message.id}
+          asides={run?.asides}
         />
       ) : null}
       {showControls ? (
         <NativeChatAgentControls
-          markdown={markdown}
+          markdown={words}
           timestamp={message.timestamp}
           onScrollToTop={scrollToTop}
           className={cn(
@@ -317,4 +354,19 @@ export const MessageRow = memo(function MessageRow({
       ) : null}
     </div>
   )
-})
+}, sameMessageRowProps)
+
+/** A rebuilt transcript hands every run a fresh member list; same messages, same row. */
+function sameMessageRowProps(previous: MessageRowProps, next: MessageRowProps): boolean {
+  const { workRun: previousRun, ...previousRest } = previous
+  const { workRun: nextRun, ...nextRest } = next
+  const nextProps = new Map(Object.entries(nextRest))
+  return (
+    Object.keys(previousRest).length === nextProps.size &&
+    Object.entries(previousRest).every(
+      ([key, value]) => nextProps.has(key) && Object.is(value, nextProps.get(key))
+    ) &&
+    previousRun?.length === nextRun?.length &&
+    (previousRun ?? []).every((member, index) => member === nextRun?.[index])
+  )
+}

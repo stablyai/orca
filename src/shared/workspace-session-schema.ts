@@ -11,6 +11,7 @@
  * survives, because one bad tab record must not cost every worktree its state.
  * Only a payload that is not a session at all falls back to defaults.
  */
+import { agentLaunchPaneOnTabSchema } from './agent-launch-pane-verdict'
 import { z } from 'zod'
 import { closedTerminalTabTombstoneSchema } from './closed-terminal-tab-tombstones'
 import type { WorkspaceKey } from './folder-workspace-types'
@@ -118,7 +119,9 @@ const terminalTabSchema = z.object({
   launchAgent: z
     .custom<TuiAgent>((v) => isTuiAgent(v))
     .optional()
-    .catch(undefined)
+    .catch(undefined),
+  // Why: survives a restart so a restored launch pane reads its fate before it spawns.
+  agentLaunchPane: agentLaunchPaneOnTabSchema
 })
 
 // ─── Unified tab model ──────────────────────────────────────────────

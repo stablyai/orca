@@ -48,7 +48,8 @@ vi.mock('./migrate-restored-editor-file-owner', () => ({
 }))
 
 vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getExecutionHostIdForWorktree: vi.fn(() => 'local')
+  getExecutionHostIdForWorktree: vi.fn(() => 'local'),
+  getExplicitRuntimeEnvironmentIdForWorktree: vi.fn(() => null)
 }))
 
 vi.mock('@/store', () => ({ useAppStore: { getState: mocks.getState } }))

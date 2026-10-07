@@ -8,6 +8,11 @@ import type { StructuredAgentSessionLogger } from './structured-agent-session-lo
 
 const RENEW_INTERVAL_MS = Math.floor(AGENT_SESSION_LEASE_TTL_MS / 3)
 
+const HELD_CHILD: AgentSessionOwnerProbe = {
+  outcome: 'identity-matched',
+  matchedOn: ['held-child']
+}
+
 export class StructuredAgentSessionLeaseRenewer {
   private timer: ReturnType<typeof setInterval> | null = null
   private running = false
@@ -22,6 +27,8 @@ export class StructuredAgentSessionLeaseRenewer {
       probeMany?: (
         records: readonly AgentSessionRecord[]
       ) => Promise<Map<string, AgentSessionOwnerProbe>>
+      /** Whether this runtime holds the session's child at `fence` and has not seen it exit. */
+      holdsLiveChild: (sessionId: string, fence: number) => boolean
       now: () => number
       logger: StructuredAgentSessionLogger
       intervalMs?: number
@@ -72,7 +79,20 @@ export class StructuredAgentSessionLeaseRenewer {
         // keeps an orphan pid's lease reading as a healthy owner.
         record.lease.handoffStage !== 'recovering'
     )
-    const probes = await this.probe(records)
+    // A child this runtime holds proves itself; a PID probe can be indeterminate for it (no start
+    // time, no token echo), which would freeze the lease at its last proof.
+    const holds = (record: AgentSessionRecord): boolean =>
+      this.input.holdsLiveChild(record.sessionId, record.lease.runtimeFence)
+    const held = records.filter(holds)
+    const unheld = records.filter((record) => !held.includes(record))
+    const probes =
+      unheld.length > 0 ? await this.probe(unheld) : new Map<string, AgentSessionOwnerProbe>()
+    for (const record of held) {
+      // Re-read after the probes: an exit received meanwhile ends the child's proof.
+      if (holds(record)) {
+        probes.set(record.sessionId, HELD_CHILD)
+      }
+    }
     const renewals: {
       sessionId: string
       fence: number

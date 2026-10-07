@@ -32,6 +32,8 @@ export class RelayRuntimeServices {
   readonly fsHandler: FsHandler
   readonly gitHandler: GitHandler
   readonly skillInstallHandler: SkillInstallHandler
+  readonly agentExecHandler: AgentExecHandler
+  private readonly responseStreams: GitResponseStreamRegistry
   private readonly aiVaultService: ReturnType<typeof createRelayAiVaultService> | null
   private readonly sessionSearch: { dispose(): void } | null
   private readonly registeredHandlers: readonly unknown[]
@@ -66,6 +68,7 @@ export class RelayRuntimeServices {
     // so two registries would hand out the same id, and only GitHandler routes the `git.responseAck`
     // credit every pump waits on. A second registry is not an option — see git-response-stream.ts.
     const responseStreams = new GitResponseStreamRegistry()
+    this.responseStreams = responseStreams
     this.fsHandler = new FsHandler(dispatcher, context, undefined, responseStreams)
     const watchRegistry = this.fsHandler.getWatchRegistry()
     this.ptyHandler.setWorktreeRemovalCoordinator(watchRegistry)
@@ -77,7 +80,7 @@ export class RelayRuntimeServices {
     this.skillInstallHandler = new SkillInstallHandler(dispatcher)
     const externalAutomationsHandler = new ExternalAutomationsHandler(dispatcher)
     const portScanHandler = new PortScanHandler(dispatcher)
-    const agentExecHandler = new AgentExecHandler(dispatcher)
+    this.agentExecHandler = new AgentExecHandler(dispatcher)
     const workspaceSessionHandler = new WorkspaceSessionHandler(dispatcher)
     const relayPlatform = parseUnameToRelayPlatform(process.platform, process.arch)
     const hostPlatform = relayPlatform ? getRemoteHostPlatform(relayPlatform) : undefined
@@ -103,7 +106,7 @@ export class RelayRuntimeServices {
       this.skillInstallHandler,
       externalAutomationsHandler,
       portScanHandler,
-      agentExecHandler,
+      this.agentExecHandler,
       workspaceSessionHandler,
       new AiVaultHandler(dispatcher, {
         hostPlatform,
@@ -119,7 +122,29 @@ export class RelayRuntimeServices {
     this.registerRemoteCliRoutes()
   }
 
+  // Why: answering a stream's request does not prove its detached pumps, descriptors or children
+  // are gone; only these registry drains do.
   async disposeOwnedProcesses(): Promise<void> {
+    const owned = await Promise.allSettled([
+      this.agentExecHandler.dispose(),
+      this.responseStreams.disposeAllAndWait(),
+      this.fsHandler.disposeFileStreams(),
+      this.fsHandler.disposeWatchers()
+    ])
+    const failures = owned.flatMap((result) =>
+      result.status === 'rejected' ? [result.reason] : []
+    )
+    // Why: an unclosed fd, watcher child or agent child defers shutdown so the next attempt retries it.
+    if (failures.length > 0) {
+      throw new AggregateError(failures, 'relay_owned_process_shutdown_incomplete')
+    }
+  }
+
+  /**
+   * One-way disposals, so they run only once shutdown can no longer defer; a deferred relay keeps
+   * serving reconnecting clients. Log-and-continue: they never hold the exit.
+   */
+  async disposeExitOnlyServices(): Promise<void> {
     await this.skillInstallHandler.dispose().catch((error) => {
       relayLogLine(
         `[relay] Skill upload cleanup failed: ${error instanceof Error ? error.message : String(error)}`
@@ -130,6 +155,12 @@ export class RelayRuntimeServices {
         `[relay] AI Vault sidecar shutdown failed: ${error instanceof Error ? error.message : String(error)}`
       )
     })
+  }
+
+  reopenOwnedProcesses(): void {
+    this.agentExecHandler.reopen()
+    this.responseStreams.reopen()
+    this.fsHandler.reopen()
   }
 
   disposeHandlers(): void {

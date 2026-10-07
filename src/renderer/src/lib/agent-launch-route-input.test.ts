@@ -226,14 +226,17 @@ describe('buildAgentLaunchRouteInput', () => {
       workspace: { kind: 'floating', worktreeId: FLOATING_TERMINAL_WORKTREE_ID }
     })
     expect(input.workspaceKind).toBe('floating')
+    // Still skipped: floating has no project row, so there is no local runtime preference to read.
     expect(input.projectRuntime).toBeUndefined()
     expect(mocks.getLocalProjectExecutionRuntimeContext).not.toHaveBeenCalled()
+    // Feasible now: the workspace resolves to its configured directory, so a session can be
+    // filed under it. Skipping the project runtime is about the missing repo row, not a refusal.
     expect(
       structuredFeasibleFor(store(), {
         agent: 'codex',
         workspace: { kind: 'floating', worktreeId: FLOATING_TERMINAL_WORKTREE_ID }
       })
-    ).toBe(false)
+    ).toBe(true)
   })
 
   it('passes a draft prompt through and never turns it into a blocker', () => {
@@ -257,10 +260,14 @@ describe('buildAgentLaunchRouteInput', () => {
     expect(input.startsOutsideWorkspaceRoot).toBe(true)
   })
 
-  // A custom launch command applies to terminal launches only; native chat ignores it.
+  // Command values never change the selected chat surface.
   it.each([
     ['claude', 'claude-wrapper'],
-    ['codex', 'codex-nightly']
+    ['codex', 'codex-nightly'],
+    ['claude', 'npx claude'],
+    ['codex', 'wrapper --arg'],
+    ['claude', '/missing/claude'],
+    ['codex', './codex']
   ] as const)('keeps %s structured with launch command %s', (agent, command) => {
     const appStore = store({ ...STRUCTURED_SETTINGS, agentCmdOverrides: { [agent]: command } })
     const args = {
@@ -408,7 +415,7 @@ describe('buildAgentLaunchRouteInput', () => {
       }
     })
 
-    // A launch command override applies to terminal launches only, here or on the server.
+    // A launch command override never decides the surface, here or on the server.
     it("does not route on this machine's launch command override for the server", () => {
       const settings = { ...STRUCTURED_SETTINGS, agentCmdOverrides: { claude: 'claude-wrapper' } }
       expect(

@@ -87,6 +87,16 @@ describe('describeNativeChatActiveTurnLabel', () => {
       key: 'working'
     })
   })
+
+  it("says Stopping over the provider's activity once a person's Stop is ending the turn", () => {
+    expect(
+      describeNativeChatActiveTurnLabel({
+        activityText: 'Running pnpm test',
+        thinking: true,
+        stopping: true
+      })
+    ).toEqual({ source: 'status', key: 'stopping' })
+  })
 })
 
 describe('formatNativeChatActiveTurnLabel', () => {
@@ -96,6 +106,7 @@ describe('formatNativeChatActiveTurnLabel', () => {
     ).toBe('Running pnpm test')
     expect(formatNativeChatActiveTurnLabel({ thinking: true })).toBe('Thinking')
     expect(formatNativeChatActiveTurnLabel({ thinking: false })).toBe('Working…')
+    expect(formatNativeChatActiveTurnLabel({ thinking: false, stopping: true })).toBe('Stopping…')
   })
 })
 

@@ -11,6 +11,10 @@ export type AcpRequestPresentation = {
   reply(response: AgentSessionPromptResponse | null): unknown
 }
 
+/** A request the client answers at once, asking no one: the reply, and a plan it carried for the
+ *  chat's existing plan row. */
+export type AcpRequestSettlement = { reply: unknown; plan?: string }
+
 export type AcpBackgroundTaskUpdate = Pick<NativeChatBackgroundTaskBlock, 'taskId' | 'state'> &
   Partial<Omit<NativeChatBackgroundTaskBlock, 'type' | 'taskId' | 'state'>> & {
     /** Used only until a provider description is known. */
@@ -45,6 +49,8 @@ export type AcpDialect = {
   notification?(method: string, params: unknown, at: number): AcpDialectNotification | undefined
   contextWindow?(models: unknown): number | undefined
   request?(method: string, params: unknown): AcpRequestPresentation | undefined
+  /** Requests answered at once instead of shown to the person. */
+  settleRequest?(method: string, params: unknown): AcpRequestSettlement | undefined
   /** The provider's words in a `session/prompt` error answer, when its message is generic. */
   promptErrorDetail?(error: AcpAgentError): string | undefined
   /** The row for a failed turn the provider gave no words for. */

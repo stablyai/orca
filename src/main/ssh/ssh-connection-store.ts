@@ -3,6 +3,7 @@ import type { SshRepoReadoption, SshTarget } from '../../shared/ssh-types'
 import { RUNTIME_OWNED_SSH_TARGET_ID_PREFIX } from '../../shared/execution-host'
 import { normalizeSshConfigAlias } from '../../shared/ssh-config-alias'
 import { loadUserSshConfig, sshConfigHostsToTargets } from './ssh-config-parser'
+import { SshTargetOrcadClaims } from './ssh-target-orcad-claims'
 import {
   buildRemovedSshTargetTombstone,
   readoptOrphanedWorkspacesForTarget
@@ -84,6 +85,16 @@ export class SshConnectionStore {
     return next
   }
 
+  /** Exclusive managed-orcad ownership of a target; see ssh-target-orcad-claims. */
+  getOrcadRuntimeClaims(): SshTargetOrcadClaims {
+    return new SshTargetOrcadClaims(this.store)
+  }
+
+  /** The profile reads and scrollback reservations a migration exports from. */
+  getOrcadMigrationSource(): Store {
+    return this.store
+  }
+
   updateTarget(id: string, updates: Partial<Omit<SshTarget, 'id'>>): SshTarget | null {
     const existing = this.store.getSshTarget(id)
     // Why: a new runtime choice or endpoint must re-run the ladder, not replay the old rung.
@@ -161,6 +172,8 @@ export class SshConnectionStore {
       const alias = normalizeSshConfigAlias(existing.configHost ?? existing.label)
       if (
         existing.source === 'manual' ||
+        isRuntimeOwnedSshTarget(existing) ||
+        isManagedOrcadSshTarget(existing) ||
         (existing.source === undefined && !isLegacyConfigImportTarget(existing))
       ) {
         manualAliases.add(alias)
@@ -252,8 +265,25 @@ export function getRuntimeOwnedSshTargetId(runtimeId: string): string {
   return `${RUNTIME_OWNED_SSH_TARGET_ID_PREFIX}${runtimeId}`
 }
 
+/** Ephemeral runtime targets, hidden from SSH-host surfaces. */
 export function isRuntimeOwnedSshTarget(target: SshTarget): boolean {
-  return target.owner?.type === 'on-demand-runtime'
+  return target.owner !== undefined
+}
+
+/** A host serving (or being set up for) a managed Orca server: visible, but never a direct relay. */
+export function isManagedOrcadSshTarget(target: SshTarget): boolean {
+  return target.orcadFence !== undefined || target.orcadProvisioning !== undefined
+}
+
+/**
+ * Whether a direct relay may serve this host. A managed host may not, unless an older build
+ * changed its retained projects: then it stays on the relay until it is moved again.
+ */
+export function allowsDirectSshRelay(target: SshTarget): boolean {
+  if (target.orcadProvisioning) {
+    return false
+  }
+  return !target.orcadFence || target.orcadFence.sourceChangedAt !== undefined
 }
 
 function isLegacyConfigImportTarget(target: SshTarget): boolean {

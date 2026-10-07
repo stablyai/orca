@@ -10,6 +10,7 @@ import { getConnectionIdFromState } from '@/lib/connection-context'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import type { AppState } from '@/store/types'
 import { reportTerminalDropUploadSkipsAndFailures } from '../terminal-pane/terminal-drop-upload-report'
+import { NATIVE_FILE_DROP_MAX_PATHS } from '../../../../shared/native-file-drop'
 import {
   findTerminalTabWorktreeId,
   resolveNativeChatFileLinkContext
@@ -46,7 +47,7 @@ type NativeChatAttachmentOwnerState = Pick<
   | 'sshConnectionStates'
   | 'tabsByWorktree'
   | 'worktreesByRepo'
->
+> & { floatingWorkspacePath?: AppState['floatingWorkspacePath'] }
 
 /** Resolve who owns the composer's backing worktree at attach time. Mirrors the
  *  terminal drop resolver's order: runtime owner first, then SSH vs local. */
@@ -114,6 +115,14 @@ export function nativeChatAttachmentUnreadableNotice(): string {
   return translate(
     'components.native-chat.composer.attachmentUnreadable',
     "Couldn't read the dropped files."
+  )
+}
+
+export function nativeChatTooManyAttachmentsNotice(): string {
+  return translate(
+    'components.native-chat.composer.tooManyAttachments',
+    'Attach {{value0}} or fewer files at a time.',
+    { value0: NATIVE_FILE_DROP_MAX_PATHS }
   )
 }
 

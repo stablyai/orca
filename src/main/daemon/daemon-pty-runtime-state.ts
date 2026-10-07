@@ -71,6 +71,12 @@ export type DaemonIdentityChangeEvent = {
   current: DaemonEndpointIdentity
 }
 
+export type DaemonIdleRetirementResult =
+  | { state: 'retiring' }
+  | { state: 'busy'; liveSessions: number | null; admissionReopened?: true }
+  | { state: 'unsupported' }
+  | { state: 'unverifiable' }
+
 export abstract class DaemonPtyRuntimeState {
   readonly protocolVersion: number
   protected socketPath: string
@@ -92,6 +98,9 @@ export abstract class DaemonPtyRuntimeState {
   protected packagedAppVersion: string | null
   protected pendingRespawnAdoptionRelease: (() => void) | null = null
   protected respawnAdoptionClosed = false
+  protected idleRetirementAdmissionClosed = false
+  protected idleRetirementState: 'open' | 'checking' | 'retiring' | 'unverifiable' = 'open'
+  protected idleRetirementPromise: Promise<DaemonIdleRetirementResult> | null = null
   protected respawnPromise: Promise<void> | null = null
   protected staleBundleReplacementPromise: Promise<void> | null = null
   protected writeRecoveryPromise: Promise<void> | null = null
