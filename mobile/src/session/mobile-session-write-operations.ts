@@ -151,9 +151,9 @@ export const sessionTabActivate = bindDeferredRpcOperation(
 )
 
 /**
- * Sharing a tab's terminal/chat view with the host and its paired clients. The reply body is
- * unread: the caller's optimistic local override already stands, and a refusal leaves the next
- * host snapshot to correct the view. Sent only to a host advertising the shared-view capability.
+ * Sharing a tab's terminal/chat view with the host and its paired clients. The caller reads the
+ * acceptance and publication marker so refused writes reject and accepted writes settle on a
+ * matching host snapshot. Sent only to a host advertising the shared-view capability.
  */
 export const sessionTabSetProps = bindDeferredRpcOperation(
   defineRpcOperation({
