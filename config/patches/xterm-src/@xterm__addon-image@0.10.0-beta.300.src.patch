@@ -1,16 +1,146 @@
+diff --git a/src/Base64UploadCheckpoint.ts b/src/Base64UploadCheckpoint.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..c33775e908c37b5347e717179658b76f7bd2aba7
+--- /dev/null
++++ b/src/Base64UploadCheckpoint.ts
+@@ -0,0 +1,118 @@
++/**
++ * Copyright (c) 2026 The xterm.js authors. All rights reserved.
++ * @license MIT
++ */
++
++import Base64Decoder from 'xterm-wasm-parts/lib/base64/Base64Decoder.wasm';
++import Base64Encoder from 'xterm-wasm-parts/lib/base64/Base64Encoder.wasm';
++import { ImageCheckpointResources, CHECKPOINT_CHUNK_BYTES, CHECKPOINT_LEASE_BYTES } from './ImageCheckpointResources';
++
++export interface IBase64UploadCheckpoint {
++  readonly resourceId: number;
++  readonly decodedByteLength: number;
++  readonly tailByteLength: number;
++  readonly encodedByteLength: number;
++  readonly byteLength: number;
++}
++
++export interface IBase64UploadPlan extends Omit<IBase64UploadCheckpoint, 'resourceId'> {
++  readonly decoded: Uint8Array;
++  readonly tail: Uint8Array;
++  readonly carrySource?: Uint8Array;
++}
++
++function decoderArrays(value: unknown): { data: Uint8Array; states: Uint32Array } {
++  if (!value || typeof value !== 'object'
++    || !('_d' in value) || !(value._d instanceof Uint8Array)
++    || !('_m32' in value) || !(value._m32 instanceof Uint32Array)
++    || !('_ended' in value) || value._ended !== false
++    || value._d.buffer !== value._m32.buffer || value._d.byteOffset !== 5152
++    || value._m32.byteOffset !== 0 || value._m32.length < 1283) {
++    throw new Error('Unsupported pending Base64 decoder layout');
++  }
++  return { data: value._d, states: value._m32 };
++}
++
++export function planBase64UploadCheckpoint(decoder: Base64Decoder, encodedByteLength: number): IBase64UploadPlan {
++  // The pinned decoder mixes a decoded prefix and lazy ASCII tail in one WASM allocation.
++  const { data, states } = decoderArrays(decoder);
++  const loaded = states[1280];
++  const processed = states[1281];
++  const decoded = states[1282];
++  if (!Number.isSafeInteger(encodedByteLength) || encodedByteLength < 0 || encodedByteLength > loaded
++    || loaded !== decoder.loadedBytes || loaded > decoder.maxBytes || loaded > data.byteLength
++    || processed > loaded || processed % 4 !== 0 || decoded * 4 !== processed * 3
++    || decoded !== decoder.data8.byteLength || loaded - processed > 131075) {
++    throw new Error('Invalid pending Base64 decoder state');
++  }
++  const decodedByteLength = encodedByteLength < processed ? Math.floor(encodedByteLength / 4) * 3 : decoded;
++  const tailByteLength = encodedByteLength < processed ? encodedByteLength % 4 : encodedByteLength - processed;
++  return {
++    decodedByteLength, tailByteLength, encodedByteLength, byteLength: decodedByteLength + tailByteLength,
++    decoded: data.subarray(0, decodedByteLength),
++    tail: encodedByteLength < processed ? data.subarray(0, 0) : data.subarray(processed, encodedByteLength),
++    carrySource: encodedByteLength < processed && tailByteLength ? data.subarray(decodedByteLength, decodedByteLength + 3) : undefined
++  };
++}
++
++export function copyBase64UploadCheckpoint(plan: IBase64UploadPlan): Uint8Array {
++  const bytes = new Uint8Array(plan.byteLength);
++  bytes.set(plan.decoded);
++  if (plan.carrySource) {
++    const encoder = new Base64Encoder(0);
++    try {
++      bytes.set(encoder.encode(plan.carrySource).subarray(0, plan.tailByteLength), plan.decodedByteLength);
++    } finally {
++      encoder.release();
++    }
++  } else {
++    bytes.set(plan.tail, plan.decodedByteLength);
++  }
++  return bytes;
++}
++
++export function validateBase64UploadCheckpoint<T>(
++  lease: ImageCheckpointResources<T>, metadata: IBase64UploadCheckpoint, maxEncodedBytes: number
++): void {
++  if (lease.isDisposed) throw new Error('Image checkpoint lease is disposed');
++  const { decodedByteLength, tailByteLength, encodedByteLength, byteLength } = metadata;
++  if (![decodedByteLength, tailByteLength, encodedByteLength, byteLength].every(n => Number.isSafeInteger(n) && n >= 0)
++    || decodedByteLength % 3 !== 0 || tailByteLength > 131075
++    || encodedByteLength !== decodedByteLength / 3 * 4 + tailByteLength
++    || encodedByteLength > maxEncodedBytes || byteLength !== decodedByteLength + tailByteLength
++    || byteLength > CHECKPOINT_LEASE_BYTES || lease.getResourceByteLength(metadata.resourceId) !== byteLength) {
++    throw new RangeError('Pending image checkpoint exceeds payload limit or has invalid lengths');
++  }
++}
++
++export function restoreBase64UploadCheckpoint<T>(
++  lease: ImageCheckpointResources<T>, metadata: IBase64UploadCheckpoint, decoder: Base64Decoder
++): void {
++  validateBase64UploadCheckpoint(lease, metadata, decoder.maxBytes);
++  const encoder = new Base64Encoder(0);
++  try {
++    decoder.init();
++    const decodedChunk = Math.floor(CHECKPOINT_CHUNK_BYTES / 4) * 3;
++    for (let offset = 0; offset < metadata.decodedByteLength; offset += decodedChunk) {
++      const bytes = lease.readResource(metadata.resourceId, offset, Math.min(decodedChunk, metadata.decodedByteLength - offset));
++      if (Number(decoder.put(encoder.encode(bytes))) !== 0) throw new Error('Invalid restored Base64 prefix');
++    }
++    for (let offset = 0; offset < metadata.tailByteLength; offset += CHECKPOINT_CHUNK_BYTES) {
++      const bytes = lease.readResource(metadata.resourceId, metadata.decodedByteLength + offset,
++        Math.min(CHECKPOINT_CHUNK_BYTES, metadata.tailByteLength - offset));
++      if (Number(decoder.put(bytes)) !== 0) throw new Error('Invalid restored Base64 tail');
++    }
++    if (lease.isDisposed || decoder.loadedBytes !== metadata.encodedByteLength) throw new Error('Pending image checkpoint changed during restoration');
++  } catch (error) {
++    decoder.release();
++    throw error;
++  } finally {
++    encoder.release();
++  }
++}
++
++export function checkUploadCheckpointBudget(maxBytes: number, byteLength: number): void {
++  if (!Number.isSafeInteger(maxBytes) || maxBytes < 0 || maxBytes > CHECKPOINT_LEASE_BYTES || byteLength > maxBytes) {
++    throw new RangeError('Pending image checkpoint exceeds byte budget');
++  }
++}
 diff --git a/src/IIPHandler.ts b/src/IIPHandler.ts
-index 559b907416eb38318f439d060d7f89311ed34c7e..9ad2b346b094e42b15fd5c694c24c4b0f175cba2 100644
+index 559b907416eb38318f439d060d7f89311ed34c7e..f96f5022838552adee5b1159881914340db1222d 100644
 --- a/src/IIPHandler.ts
 +++ b/src/IIPHandler.ts
-@@ -4,6 +4,7 @@
+@@ -2,19 +2,24 @@
+  * Copyright (c) 2023 The xterm.js authors. All rights reserved.
+  * @license MIT
   */
++import { IDisposable } from '@xterm/xterm';
  import { IImageAddonOptions, IOscHandler, IResetHandler, ITerminalExt } from './Types';
  import { ImageRenderer } from './ImageRenderer';
 +import { ImageSourceOperations, ImageSourceOwner, mapImageOperation, type ImageOperation, type IImageSource } from './ImageSource';
  import { IIPImageStorage } from './IIPImageStorage';
  import { CELL_SIZE_DEFAULT } from './ImageStorage';
  import Base64Decoder from 'xterm-wasm-parts/lib/base64/Base64Decoder.wasm';
-@@ -13,8 +14,10 @@ import { imageType, UNSUPPORTED_TYPE } from './IIPMetrics';
+ import QoiDecoder from 'xterm-wasm-parts/lib/qoi/QoiDecoder.wasm';
+ import { HeaderParser, IHeaderFields, HeaderState, SequenceType } from './IIPHeaderParser';
+ import { imageType, UNSUPPORTED_TYPE } from './IIPMetrics';
++import { IIPUploadCheckpoint, captureIIPUploadCheckpoint, prepareIIPUploadCheckpoint } from './IIPUploadCheckpoint';
  
  // Local const enum mirror - esbuild can't inline const enums from external packages
  const enum DecoderConst {
@@ -23,31 +153,40 @@ index 559b907416eb38318f439d060d7f89311ed34c7e..9ad2b346b094e42b15fd5c694c24c4b0
    // Initial buffer allocation for the decoder.
    INITIAL_DATA = 1048576,
    // Local mirror of const enum (esbuild can't inline const enums from external packages)
-@@ -34,6 +37,7 @@ const DEFAULT_HEADER: IHeaderFields = {
+@@ -33,14 +38,20 @@ const DEFAULT_HEADER: IHeaderFields = {
+ };
  
  
- export class IIPHandler implements IOscHandler, IResetHandler {
+-export class IIPHandler implements IOscHandler, IResetHandler {
++export class IIPHandler implements IOscHandler, IResetHandler, IDisposable {
 +  private _generation = 0;
    private _aborted = false;
++  private _disposed = false;
    private _hp = new HeaderParser();
    private _header: IHeaderFields = DEFAULT_HEADER;
-@@ -41,6 +45,7 @@ export class IIPHandler implements IOscHandler, IResetHandler {
+   private _dec: Base64Decoder;
    private _qoiDec: QoiDecoder;
    private _isMultipart = false;
    private _abortMulti = false;
++  private _multipartEncodedSize = 0;
++  private readonly _maxEncodedBytes: number;
++  private readonly _initialEncodedBytes: number;
 +  private readonly _sources: ImageSourceOperations;
  
    constructor(
      private readonly _opts: IImageAddonOptions,
-@@ -48,6 +53,7 @@ export class IIPHandler implements IOscHandler, IResetHandler {
+@@ -48,18 +59,55 @@ export class IIPHandler implements IOscHandler, IResetHandler {
      private readonly _storage: IIPImageStorage,
      private readonly _coreTerminal: ITerminalExt
    ) {
+-    const maxEncodedBytes = Math.ceil(this._opts.iipSizeLimit * 4 / 3);
+-    const initialBytes = Math.min(DecoderConst.INITIAL_DATA, maxEncodedBytes);
+-    this._dec = new Base64Decoder(DecoderConst.KEEP_DATA, maxEncodedBytes, initialBytes);
 +    this._sources = new ImageSourceOperations(this._opts.pixelLimit, this._opts.rasterBackend);
-     const maxEncodedBytes = Math.ceil(this._opts.iipSizeLimit * 4 / 3);
-     const initialBytes = Math.min(DecoderConst.INITIAL_DATA, maxEncodedBytes);
-     this._dec = new Base64Decoder(DecoderConst.KEEP_DATA, maxEncodedBytes, initialBytes);
-@@ -55,6 +61,11 @@ export class IIPHandler implements IOscHandler, IResetHandler {
++    this._maxEncodedBytes = Math.ceil(this._opts.iipSizeLimit * 4 / 3);
++    this._initialEncodedBytes = Math.min(DecoderConst.INITIAL_DATA, this._maxEncodedBytes);
++    this._dec = new Base64Decoder(DecoderConst.KEEP_DATA, this._maxEncodedBytes, this._initialEncodedBytes);
+     this._qoiDec = new QoiDecoder(DecoderConst.KEEP_DATA);
    }
  
    public reset(): void {
@@ -55,11 +194,47 @@ index 559b907416eb38318f439d060d7f89311ed34c7e..9ad2b346b094e42b15fd5c694c24c4b0
 +    this._aborted = true;
 +    this._isMultipart = false;
 +    this._abortMulti = false;
++    this._multipartEncodedSize = 0;
 +    this._header = DEFAULT_HEADER;
      this._hp.reset();
      this._dec.release();
      this._qoiDec.release();
-@@ -70,8 +81,7 @@ export class IIPHandler implements IOscHandler, IResetHandler {
+   }
+ 
++  public dispose(): void {
++    this._disposed = true;
++    this.reset();
++  }
++
++  public capturePendingCheckpoint(maxBytes: number): IIPUploadCheckpoint {
++    if (this._disposed) throw new Error('IIP handler is disposed');
++    return captureIIPUploadCheckpoint(this._isMultipart ? this._header : undefined,
++      this._abortMulti, this._dec, this._multipartEncodedSize, maxBytes);
++  }
++
++  public restorePendingCheckpoint(checkpoint: IIPUploadCheckpoint): void {
++    if (this._disposed) throw new Error('IIP handler is disposed');
++    const generation = this._generation;
++    const decoder = prepareIIPUploadCheckpoint(checkpoint, this._maxEncodedBytes, this._initialEncodedBytes);
++    if (this._disposed || generation !== this._generation || checkpoint.isDisposed) {
++      decoder?.release();
++      throw new Error('IIP handler changed during checkpoint preparation');
++    }
++    this.reset();
++    const multipart = checkpoint.metadata.multipart;
++    if (multipart) {
++      this._header = { ...multipart.header };
++      this._isMultipart = true;
++      this._abortMulti = multipart.aborted;
++      this._multipartEncodedSize = multipart.base64?.encodedByteLength ?? 0;
++    }
++    if (decoder) this._dec = decoder;
++  }
++
+   public start(): void {
+     this._aborted = false;
+     this._hp.reset();
+@@ -70,8 +118,7 @@ export class IIPHandler implements IOscHandler, IResetHandler {
  
      if (this._hp.state === HeaderState.END) {
        if ((this._dec.put(data.subarray(start, end)) as number) !== DecoderConst.OK) {
@@ -69,7 +244,7 @@ index 559b907416eb38318f439d060d7f89311ed34c7e..9ad2b346b094e42b15fd5c694c24c4b0
        }
      } else {
        const dataPos = this._hp.parse(data, start, end);
-@@ -92,15 +102,16 @@ export class IIPHandler implements IOscHandler, IResetHandler {
+@@ -92,15 +139,16 @@ export class IIPHandler implements IOscHandler, IResetHandler {
              this._aborted = true;
              return;
            }
@@ -90,7 +265,7 @@ index 559b907416eb38318f439d060d7f89311ed34c7e..9ad2b346b094e42b15fd5c694c24c4b0
          }
        }
      }
-@@ -113,13 +124,18 @@ export class IIPHandler implements IOscHandler, IResetHandler {
+@@ -113,13 +161,21 @@ export class IIPHandler implements IOscHandler, IResetHandler {
        if (this._hp.end()) return true;
      }
      const seqType = this._hp.fields.type;
@@ -99,7 +274,11 @@ index 559b907416eb38318f439d060d7f89311ed34c7e..9ad2b346b094e42b15fd5c694c24c4b0
 +      return true;
 +    }
  
-     if (seqType === SequenceType.FILEPART) return true;
+-    if (seqType === SequenceType.FILEPART) return true;
++    if (seqType === SequenceType.FILEPART) {
++      if (this._isMultipart && !this._abortMulti) this._multipartEncodedSize = this._dec.loadedBytes;
++      return true;
++    }
  
      if (seqType === SequenceType.REPORTCELLSIZE) {
        // OSC 1337 ; ReportCellSize=[height];[width];[scale] ST
@@ -111,9 +290,11 @@ index 559b907416eb38318f439d060d7f89311ed34c7e..9ad2b346b094e42b15fd5c694c24c4b0
        if (this._renderer.dimensions) {
          w = this._renderer.dimensions.css.canvas.width / this._coreTerminal.cols;
          h = this._renderer.dimensions.css.canvas.height / this._coreTerminal.rows;
-@@ -135,7 +151,9 @@ export class IIPHandler implements IOscHandler, IResetHandler {
+@@ -134,8 +190,11 @@ export class IIPHandler implements IOscHandler, IResetHandler {
+       this._header = Object.assign({}, DEFAULT_HEADER, this._hp.fields);
        this._isMultipart = true;
        this._abortMulti = false;
++      this._multipartEncodedSize = 0;
        this._dec.release();
 -      this._dec.init();
 +      if (!this._initDecoder()) {
@@ -122,7 +303,7 @@ index 559b907416eb38318f439d060d7f89311ed34c7e..9ad2b346b094e42b15fd5c694c24c4b0
        return true;
      }
  
-@@ -177,41 +195,66 @@ export class IIPHandler implements IOscHandler, IResetHandler {
+@@ -177,41 +236,66 @@ export class IIPHandler implements IOscHandler, IResetHandler {
        return true;
      }
  
@@ -300,8 +481,63 @@ index 217a7fc93d5dca938dd086509027919f2f1c7902..a93ca203fbb8ea22310ec23d21179777
  function jpgSize(d: Uint8Array): [number, number] {
    const len = d.length;
    let i = 4;
+diff --git a/src/IIPUploadCheckpoint.ts b/src/IIPUploadCheckpoint.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..1038c4f5ddc447c5a704ec1fcd61cb88417b12aa
+--- /dev/null
++++ b/src/IIPUploadCheckpoint.ts
+@@ -0,0 +1,49 @@
++/**
++ * Copyright (c) 2026 The xterm.js authors. All rights reserved.
++ * @license MIT
++ */
++
++import Base64Decoder from 'xterm-wasm-parts/lib/base64/Base64Decoder.wasm';
++import { ImageCheckpointResources, type ICheckpointResource } from './ImageCheckpointResources';
++import { planBase64UploadCheckpoint, copyBase64UploadCheckpoint, restoreBase64UploadCheckpoint,
++  checkUploadCheckpointBudget, type IBase64UploadCheckpoint } from './Base64UploadCheckpoint';
++import type { IHeaderFields } from './IIPHeaderParser';
++
++export interface IIIPUploadCheckpointMetadata {
++  readonly multipart?: Readonly<{ header: Readonly<IHeaderFields>; aborted: boolean; base64?: IBase64UploadCheckpoint }>;
++  readonly byteLength: number;
++  readonly resources: readonly ICheckpointResource[];
++}
++
++export class IIPUploadCheckpoint extends ImageCheckpointResources<IIIPUploadCheckpointMetadata> {}
++
++export function captureIIPUploadCheckpoint(
++  header: IHeaderFields | undefined, aborted: boolean, decoder: Base64Decoder, encodedByteLength: number, maxBytes: number
++): IIPUploadCheckpoint {
++  checkUploadCheckpointBudget(maxBytes, 0);
++  const resources = new Map<number, Uint8Array>();
++  const plan = header && !aborted ? planBase64UploadCheckpoint(decoder, encodedByteLength) : undefined;
++  const byteLength = plan?.byteLength ?? 0;
++  checkUploadCheckpointBudget(maxBytes, byteLength);
++  if (plan) resources.set(1, copyBase64UploadCheckpoint(plan));
++  const base64 = plan ? Object.freeze({ resourceId: 1, decodedByteLength: plan.decodedByteLength,
++    tailByteLength: plan.tailByteLength, encodedByteLength: plan.encodedByteLength, byteLength: plan.byteLength }) : undefined;
++  const copiedHeader = header ? Object.freeze({ type: header.type, name: header.name, size: header.size,
++    width: header.width, height: header.height, preserveAspectRatio: header.preserveAspectRatio, inline: header.inline }) : undefined;
++  return new IIPUploadCheckpoint(Object.freeze({
++    multipart: copiedHeader ? Object.freeze({ header: copiedHeader, aborted, base64 }) : undefined,
++    byteLength, resources: Object.freeze([...resources].map(([id, bytes]) => Object.freeze({ id, byteLength: bytes.byteLength })))
++  }), resources);
++}
++
++export function prepareIIPUploadCheckpoint(
++  checkpoint: IIPUploadCheckpoint, maxEncodedBytes: number, initialBytes: number
++): Base64Decoder | undefined {
++  if (checkpoint.isDisposed) throw new Error('Pending IIP checkpoint lease is disposed');
++  const multipart = checkpoint.metadata.multipart;
++  if (!multipart || multipart.aborted) return undefined;
++  if (!multipart.base64) throw new Error('Pending IIP checkpoint has no decoder resource');
++  const decoder = new Base64Decoder(0, maxEncodedBytes, initialBytes);
++  restoreBase64UploadCheckpoint(checkpoint, multipart.base64, decoder);
++  return decoder;
++}
 diff --git a/src/ImageAddon.ts b/src/ImageAddon.ts
-index 8fd39543118cd420e36c1614c1af370b6c7bbfbb..ff6dd36b41a5e6f927a2c4b590a01d54c7ba5622 100644
+index 8fd39543118cd420e36c1614c1af370b6c7bbfbb..18143ac00353add2c64d981ccea2401dc1941912 100644
 --- a/src/ImageAddon.ts
 +++ b/src/ImageAddon.ts
 @@ -113,6 +113,7 @@ export class ImageAddon implements ITerminalAddon, IImageApi {
@@ -334,7 +570,14 @@ index 8fd39543118cd420e36c1614c1af370b6c7bbfbb..ff6dd36b41a5e6f927a2c4b590a01d54
        /**
         * reset handlers covered:
         * - DECSTR
-@@ -196,7 +196,7 @@ export class ImageAddon implements ITerminalAddon, IImageApi {
+@@ -190,13 +190,14 @@ export class ImageAddon implements ITerminalAddon, IImageApi {
+       const iipHandler = new IIPHandler(this._opts, this._renderer!, iipStorage, terminal);
+       this._handlers.set('iip', iipHandler);
+       this._disposeLater(
++        iipHandler,
+         terminal._core._inputHandler._parser.registerOscHandler(1337, iipHandler)
+       );
+     }
  
      // Kitty graphics handler
      if (this._opts.kittySupport) {
@@ -345,10 +588,10 @@ index 8fd39543118cd420e36c1614c1af370b6c7bbfbb..ff6dd36b41a5e6f927a2c4b590a01d54
        this._disposeLater(
 diff --git a/src/ImageCheckpointResources.ts b/src/ImageCheckpointResources.ts
 new file mode 100644
-index 0000000000000000000000000000000000000000..756015835a844580e18585439c96ae2f3144b8f2
+index 0000000000000000000000000000000000000000..b5434b43982c5119533c5ab056b05abcfb61a692
 --- /dev/null
 +++ b/src/ImageCheckpointResources.ts
-@@ -0,0 +1,52 @@
+@@ -0,0 +1,59 @@
 +/**
 + * Copyright (c) 2026 The xterm.js authors. All rights reserved.
 + * @license MIT
@@ -371,6 +614,13 @@ index 0000000000000000000000000000000000000000..756015835a844580e18585439c96ae2f
 +  ) {}
 +
 +  public get isDisposed(): boolean { return this._disposed; }
++
++  public getResourceByteLength(id: number): number {
++    if (this._disposed) throw new Error('Image checkpoint lease is disposed');
++    const bytes = this._resources.get(id);
++    if (!bytes) throw new RangeError('Invalid image checkpoint resource');
++    return bytes.byteLength;
++  }
 +
 +  public readResource(id: number, offset: number, length: number): Uint8Array {
 +    if (this._disposed) throw new Error('Image checkpoint lease is disposed');
@@ -2013,10 +2263,10 @@ index 53d357a973117b844ebf2e236d6892334f15c27b..b1991bb654305ac6e99fd66d00a8fd79
 +  setImageLayerProvider?(provider: IImageLayerProvider | undefined): void;
  }
 diff --git a/src/kitty/KittyGraphicsHandler.ts b/src/kitty/KittyGraphicsHandler.ts
-index de889dfff75d9ecc8ab47a025e6989ffe75bb202..16f00adee74823532477ed955578a6dd6f28beb6 100644
+index de889dfff75d9ecc8ab47a025e6989ffe75bb202..f15c3f60b169cf26dfa424396ca1641c11a0e899 100644
 --- a/src/kitty/KittyGraphicsHandler.ts
 +++ b/src/kitty/KittyGraphicsHandler.ts
-@@ -6,7 +6,9 @@
+@@ -6,9 +6,12 @@
  import { IDisposable } from '@xterm/xterm';
  import { IApcHandler, IImageAddonOptions, IResetHandler, ITerminalExt, ImageLayer } from '../Types';
  import { ImageRenderer } from '../ImageRenderer';
@@ -2025,16 +2275,20 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..16f00adee74823532477ed955578a6dd
 +import { imageType } from '../IIPMetrics';
  import { KittyImageStorage } from './KittyImageStorage';
  import Base64Decoder, { type DecodeStatus } from 'xterm-wasm-parts/lib/base64/Base64Decoder.wasm';
++import { KittyUploadCheckpoint, captureKittyUploadCheckpoint, prepareKittyUploadCheckpoint } from './KittyUploadCheckpoint';
  import {
-@@ -37,6 +39,7 @@ const DECODER_OK = Constants.DECODER_OK as unknown as DecodeStatus.OK;
+   KittyAction,
+   KittyFormat,
+@@ -37,6 +40,8 @@ const DECODER_OK = Constants.DECODER_OK as unknown as DecodeStatus.OK;
  // Kitty graphics protocol handler with streaming base64 decoding.
  export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDisposable {
    private _aborted = false;
++  private _disposed = false;
 +  private _generation = 0;
    private _decodeError = false;
  
    private _activeDecoder: Base64Decoder | null = null;
-@@ -66,6 +69,7 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+@@ -66,6 +71,7 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
    // Per spec, subsequent chunks only need m= (and optionally q=), without i=.
    // When a chunk arrives with no i=, this key is used to find the pending upload.
    private _lastPendingKey: number | undefined;
@@ -2042,7 +2296,7 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..16f00adee74823532477ed955578a6dd
  
    constructor(
      private readonly _opts: IImageAddonOptions,
-@@ -73,6 +77,7 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+@@ -73,6 +79,7 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
      private readonly _kittyStorage: KittyImageStorage,
      private readonly _coreTerminal: ITerminalExt
    ) {
@@ -2050,7 +2304,7 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..16f00adee74823532477ed955578a6dd
      // Convert decoded size limit -> max encoded bytes.
      this._maxEncodedBytes = Math.ceil(this._opts.kittySizeLimit * 4 / 3);
      // ensure we preallocate more than configured limit while using 4mb initial size.
-@@ -80,6 +85,8 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+@@ -80,6 +87,8 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
    }
  
    public reset(): void {
@@ -2059,7 +2313,40 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..16f00adee74823532477ed955578a6dd
      this._cleanupAllPending();
      if (this._activeDecoder) {
        this._activeDecoder.release();
-@@ -200,8 +207,38 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+@@ -89,9 +98,32 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+   }
+ 
+   public dispose(): void {
++    this._disposed = true;
+     this.reset();
+   }
+ 
++  public capturePendingCheckpoint(maxBytes: number): KittyUploadCheckpoint {
++    if (this._disposed) throw new Error('Kitty handler is disposed');
++    return captureKittyUploadCheckpoint(this._pendingTransmissions, this._lastPendingKey, maxBytes);
++  }
++
++  public restorePendingCheckpoint(checkpoint: KittyUploadCheckpoint): void {
++    if (this._disposed) throw new Error('Kitty handler is disposed');
++    const generation = this._generation;
++    const pending = prepareKittyUploadCheckpoint(checkpoint, this._maxEncodedBytes, this._initialEncodedBytes, this._opts.storageLimit * 1000000);
++    if (this._disposed || generation !== this._generation || checkpoint.isDisposed) {
++      for (const entry of pending.values()) entry.decoder.release();
++      throw new Error('Kitty handler changed during checkpoint preparation');
++    }
++    this._generation++;
++    this._aborted = true;
++    this._cleanupAllPending();
++    this._activeDecoder?.release();
++    this._activeDecoder = null;
++    for (const [key, entry] of pending) this._pendingTransmissions.set(key, entry);
++    this._lastPendingKey = checkpoint.metadata.lastPendingKey;
++  }
++
+   private _removePendingEntry(key: number): void {
+     this._pendingTransmissions.delete(key);
+     if (this._lastPendingKey === key) {
+@@ -200,8 +232,38 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
        this._activeDecoder = pending.decoder;
      }
      if (!this._activeDecoder) {
@@ -2100,7 +2387,7 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..16f00adee74823532477ed955578a6dd
      }
  
      if (this._activeDecoder.put(data.subarray(start, end)) !== DECODER_OK) {
-@@ -217,6 +254,9 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+@@ -217,6 +279,9 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
    public end(success: boolean): boolean | Promise<boolean> {
      if (this._aborted || !success) {
        if (this._activeDecoder) {
@@ -2110,7 +2397,7 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..16f00adee74823532477ed955578a6dd
          this._activeDecoder.release();
          this._activeDecoder = null;
        }
-@@ -285,9 +325,7 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+@@ -285,9 +350,7 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
      }
      this._activeDecoder = null;
  
@@ -2121,7 +2408,7 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..16f00adee74823532477ed955578a6dd
      const result = this._handleCommandWithBytesAndCmd(finalCmd, imageBytes, decodeError);
      if (decoder) {
        decoder.release();
-@@ -382,8 +420,10 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+@@ -382,8 +445,10 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
        this._sendResponse(id, 'ENOENT:image not found', cmd.quiet ?? 0, cmd.placementId);
        return true;
      }
@@ -2134,7 +2421,7 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..16f00adee74823532477ed955578a6dd
        this._sendResponse(id, success ? 'OK' : 'EINVAL:image rendering failed', cmd.quiet ?? 0, cmd.placementId);
        return true;
      });
-@@ -411,7 +451,7 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+@@ -411,7 +476,7 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
      if (decodeError || bytes.length === 0) return true;
  
      this._kittyStorage.storeImage(cmd.id, {
@@ -2143,7 +2430,7 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..16f00adee74823532477ed955578a6dd
        width: cmd.width ?? 0,
        height: cmd.height ?? 0,
        format: (cmd.format ?? KittyFormat.RGBA) as 24 | 32 | 100,
-@@ -433,14 +473,16 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+@@ -433,14 +498,16 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
      const id = cmd.id ?? this._kittyStorage.lastImageId;
      const image = this._kittyStorage.getImage(id);
      if (image) {
@@ -2163,7 +2450,7 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..16f00adee74823532477ed955578a6dd
      }
      return true;
    }
-@@ -500,28 +542,25 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+@@ -500,28 +567,25 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
      // Per spec: default delete selector is 'a' (delete all visible placements)
      const selector = cmd.deleteSelector ?? 'a';
  
@@ -2202,7 +2489,7 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..16f00adee74823532477ed955578a6dd
          }
          break;
        default:
-@@ -543,183 +582,154 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+@@ -543,183 +607,154 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
  
    // Image display
  
@@ -2435,13 +2722,13 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..16f00adee74823532477ed955578a6dd
 +  private _placementGrid(bitmap: IImageSource, cmd: IKittyCommand, cw: number, ch: number): { cols: number; rows: number } {
 +    if (cmd.columns !== undefined && cmd.rows !== undefined) {
 +      return { cols: cmd.columns, rows: cmd.rows };
-+    }
+     }
 +    if (cmd.columns !== undefined) {
 +      return { cols: cmd.columns, rows: Math.max(1, Math.ceil((bitmap.height / bitmap.width) * (cmd.columns * cw) / ch)) };
 +    }
 +    if (cmd.rows !== undefined) {
 +      return { cols: Math.max(1, Math.ceil((bitmap.width / bitmap.height) * (cmd.rows * ch) / cw)), rows: cmd.rows };
-     }
++    }
 +    return { cols: Math.ceil(bitmap.width / cw), rows: Math.ceil(bitmap.height / ch) };
    }
  
@@ -2507,7 +2794,7 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..16f00adee74823532477ed955578a6dd
      }
  
      const bytesPerPixel = image.format === KittyFormat.RGBA ? KittyPixelConstants.BYTES_PER_PIXEL_RGBA : KittyPixelConstants.BYTES_PER_PIXEL_RGB;
-@@ -733,7 +743,7 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+@@ -733,7 +768,7 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
  
      if (image.format === KittyFormat.RGBA) {
        // RGBA: use bytes directly — no copy needed
@@ -2516,7 +2803,7 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..16f00adee74823532477ed955578a6dd
      }
  
      // RGB→RGBA: interleave alpha using uint32 block processing (4 pixels per iteration).
-@@ -769,33 +779,59 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+@@ -769,33 +804,59 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
        dstByte += KittyPixelConstants.BYTES_PER_PIXEL_RGBA;
      }
  
@@ -3220,4 +3507,88 @@ index 0000000000000000000000000000000000000000..8d07d0c0a4e9e10dc9dfa2e22a0f6448
 +    });
 +  }
 +  return images;
++}
+diff --git a/src/kitty/KittyUploadCheckpoint.ts b/src/kitty/KittyUploadCheckpoint.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..2896fca0d2c9265747893b06c56337d1af2adfac
+--- /dev/null
++++ b/src/kitty/KittyUploadCheckpoint.ts
+@@ -0,0 +1,78 @@
++/**
++ * Copyright (c) 2026 The xterm.js authors. All rights reserved.
++ * @license MIT
++ */
++
++import Base64Decoder from 'xterm-wasm-parts/lib/base64/Base64Decoder.wasm';
++import { ImageCheckpointResources, type ICheckpointResource } from '../ImageCheckpointResources';
++import { planBase64UploadCheckpoint, copyBase64UploadCheckpoint, validateBase64UploadCheckpoint,
++  restoreBase64UploadCheckpoint, checkUploadCheckpointBudget, type IBase64UploadCheckpoint } from '../Base64UploadCheckpoint';
++import type { IKittyCommand, IPendingTransmission } from './KittyGraphicsTypes';
++
++export interface IKittyPendingUploadCheckpoint extends IBase64UploadCheckpoint {
++  readonly key: number;
++  readonly command: Readonly<IKittyCommand>;
++}
++
++export interface IKittyUploadCheckpointMetadata {
++  readonly pending: readonly IKittyPendingUploadCheckpoint[];
++  readonly lastPendingKey?: number;
++  readonly byteLength: number;
++  readonly resources: readonly ICheckpointResource[];
++}
++
++export class KittyUploadCheckpoint extends ImageCheckpointResources<IKittyUploadCheckpointMetadata> {}
++
++export function captureKittyUploadCheckpoint(
++  pending: ReadonlyMap<number, IPendingTransmission>, lastPendingKey: number | undefined, maxBytes: number
++): KittyUploadCheckpoint {
++  checkUploadCheckpointBudget(maxBytes, 0);
++  if (pending.size > 256) throw new RangeError('Pending Kitty checkpoint exceeds object limit');
++  const plans = [...pending].map(([key, entry]) => {
++    if (entry.decodeError) throw new Error('Pending Kitty upload has failed decoding');
++    return { key, command: Object.freeze({ ...entry.cmd }), plan: planBase64UploadCheckpoint(entry.decoder, entry.totalEncodedSize) };
++  });
++  const byteLength = plans.reduce((sum, entry) => sum + entry.plan.byteLength, 0);
++  checkUploadCheckpointBudget(maxBytes, byteLength);
++  const resources = new Map<number, Uint8Array>();
++  const entries = plans.map(({ key, command, plan }, index) => {
++    const resourceId = index + 1;
++    resources.set(resourceId, copyBase64UploadCheckpoint(plan));
++    return Object.freeze({ key, command, resourceId, decodedByteLength: plan.decodedByteLength,
++      tailByteLength: plan.tailByteLength, encodedByteLength: plan.encodedByteLength, byteLength: plan.byteLength });
++  });
++  return new KittyUploadCheckpoint(Object.freeze({
++    pending: Object.freeze(entries), lastPendingKey, byteLength,
++    resources: Object.freeze([...resources].map(([id, bytes]) => Object.freeze({ id, byteLength: bytes.byteLength })))
++  }), resources);
++}
++
++export function prepareKittyUploadCheckpoint(
++  checkpoint: KittyUploadCheckpoint, maxEncodedBytes: number, initialBytes: number, storageBytes: number
++): Map<number, IPendingTransmission> {
++  if (checkpoint.isDisposed) throw new Error('Pending Kitty checkpoint lease is disposed');
++  const entries = checkpoint.metadata.pending;
++  const capacity = maxEncodedBytes + 131072;
++  if (entries.length > 256 || entries.length * capacity > storageBytes) throw new RangeError('Pending Kitty checkpoint exceeds decoder capacity budget');
++  if (checkpoint.metadata.lastPendingKey !== undefined && !entries.some(entry => entry.key === checkpoint.metadata.lastPendingKey)) {
++    throw new Error('Pending Kitty checkpoint has an invalid continuation key');
++  }
++  const used = new Set<number>();
++  for (const entry of entries) {
++    if (!Number.isSafeInteger(entry.key) || used.has(entry.key)) throw new Error('Pending Kitty checkpoint repeats an upload key');
++    used.add(entry.key);
++    validateBase64UploadCheckpoint(checkpoint, entry, maxEncodedBytes);
++  }
++  const pending = new Map<number, IPendingTransmission>();
++  try {
++    for (const entry of entries) {
++      const decoder = new Base64Decoder(0, maxEncodedBytes, initialBytes);
++      restoreBase64UploadCheckpoint(checkpoint, entry, decoder);
++      pending.set(entry.key, { cmd: { ...entry.command }, decoder, totalEncodedSize: entry.encodedByteLength, decodeError: false });
++    }
++    return pending;
++  } catch (error) {
++    for (const entry of pending.values()) entry.decoder.release();
++    throw error;
++  }
 +}

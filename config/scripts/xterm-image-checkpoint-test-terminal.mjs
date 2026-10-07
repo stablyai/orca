@@ -6,7 +6,7 @@ const { Terminal } = require('@xterm/headless')
 const { ImageAddon } = require('@xterm/addon-image')
 const { SerializeAddon } = require('@xterm/addon-serialize')
 
-export function terminal(browser = false) {
+export function terminal(browser = false, options = {}) {
   const core = new Terminal({
     cols: 20,
     rows: 10,
@@ -29,7 +29,8 @@ export function terminal(browser = false) {
     enableSizeReports: false,
     kittySizeLimit: 8 * 1024 * 1024,
     iipSizeLimit: 8 * 1024 * 1024,
-    sixelSizeLimit: 8 * 1024 * 1024
+    sixelSizeLimit: 8 * 1024 * 1024,
+    ...options
   })
   const serializer = new SerializeAddon()
   core.loadAddon(addon)
