@@ -109,6 +109,16 @@ async function flushUpdates(): Promise<void> {
   })
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (cause: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  return { promise, resolve, reject }
+}
+
 describe('AddProjectModal', () => {
   let renderer: ReactTestRenderer
   const onClose = vi.fn()
@@ -502,5 +512,173 @@ describe('AddProjectModal', () => {
     expect(submit.props.disabled).toBe(true)
     act(() => textInputs(tree)[0]!.props.onChangeText('https://example.com/orca.git'))
     expect(button(tree, 'Clone repository').props.disabled).toBe(false)
+  })
+
+  it('keeps one operation busy across metadata array refreshes', async () => {
+    const pending = deferred<ReturnType<typeof listing>>()
+    const sendRequest = vi.fn().mockReturnValue(pending.promise)
+    const tree = render(sendRequest)
+    act(() =>
+      startActions(tree)
+        .find((a) => a.label === 'Clone from URL')!
+        .onPress()
+    )
+    act(() => textInputs(tree)[0]!.props.onChangeText('https://example.com/orca.git'))
+    act(() => button(tree, 'Clone repository').props.onPress())
+
+    const client = tree.root.findByType(AddProjectModal).props.client
+    act(() =>
+      renderer.update(
+        createElement(AddProjectModal, {
+          visible: true,
+          client,
+          onProjectAdded,
+          onClose,
+          hostCapabilities: [],
+          sshTargets: []
+        })
+      )
+    )
+    expect(button(tree, 'Clone repository').props.disabled).toBe(true)
+    act(() => button(tree, 'Clone repository').props.onPress())
+    expect(sendRequest).toHaveBeenCalledTimes(1)
+
+    pending.resolve({ ok: true, result: { repo: repoRow }, _meta: { runtimeId: 'r' } } as never)
+    await flushUpdates()
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('blocks submit when the selected SSH target disappears instead of falling back local', () => {
+    const sendRequest = vi.fn()
+    const tree = render(
+      sendRequest,
+      true,
+      [REPO_ADD_PROJECT_SSH_MOBILE_RUNTIME_CAPABILITY],
+      [{ id: 'ssh-vm', label: 'Build VM' }]
+    )
+    act(() => button(tree, 'Run on This host').props.onPress())
+    act(() => button(tree, 'Select Build VM').props.onPress())
+    act(() =>
+      startActions(tree)
+        .find((a) => a.label === 'Clone from URL')!
+        .onPress()
+    )
+    act(() => button(tree, 'Select folder').props.onPress())
+
+    const client = tree.root.findByType(AddProjectModal).props.client
+    act(() =>
+      renderer.update(
+        createElement(AddProjectModal, {
+          visible: true,
+          client,
+          onProjectAdded,
+          onClose,
+          hostCapabilities: [REPO_ADD_PROJECT_SSH_MOBILE_RUNTIME_CAPABILITY],
+          sshTargets: []
+        })
+      )
+    )
+    act(() => textInputs(tree)[0]!.props.onChangeText('https://example.com/orca.git'))
+    expect(button(tree, 'Clone repository').props.disabled).toBe(true)
+    expect(sendRequest).toHaveBeenCalledTimes(1)
+    expect(sendRequest).toHaveBeenLastCalledWith('files.browseServerDir', {
+      path: '~',
+      sshConnectionId: 'ssh-vm'
+    })
+  })
+
+  it('ignores a reply retained through close and reopen', async () => {
+    const pending = deferred<unknown>()
+    const sendRequest = vi.fn().mockReturnValue(pending.promise)
+    const tree = render(sendRequest)
+    act(() =>
+      startActions(tree)
+        .find((a) => a.label === 'Clone from URL')!
+        .onPress()
+    )
+    act(() => textInputs(tree)[0]!.props.onChangeText('https://example.com/orca.git'))
+    act(() => button(tree, 'Clone repository').props.onPress())
+    const client = tree.root.findByType(AddProjectModal).props.client
+    const oldDrawer = drawer(tree)
+    const afterClose = oldDrawer.props.onAfterClose
+    act(() =>
+      renderer.update(
+        createElement(AddProjectModal, { visible: false, client, onProjectAdded, onClose })
+      )
+    )
+    act(() =>
+      renderer.update(
+        createElement(AddProjectModal, { visible: true, client, onProjectAdded, onClose })
+      )
+    )
+    pending.resolve({ ok: true, result: { repo: repoRow }, _meta: { runtimeId: 'r' } })
+    await flushUpdates()
+    act(() => afterClose())
+    expect(onProjectAdded).not.toHaveBeenCalled()
+  })
+
+  it('lets a new client submit while the old client settles without clearing it', async () => {
+    const oldPending = deferred<unknown>()
+    const newPending = deferred<unknown>()
+    const oldSend = vi.fn().mockReturnValue(oldPending.promise)
+    const newSend = vi.fn().mockReturnValue(newPending.promise)
+    const tree = render(oldSend)
+    act(() =>
+      startActions(tree)
+        .find((a) => a.label === 'Clone from URL')!
+        .onPress()
+    )
+    act(() => textInputs(tree)[0]!.props.onChangeText('https://example.com/orca.git'))
+    act(() => button(tree, 'Clone repository').props.onPress())
+    const oldClient = tree.root.findByType(AddProjectModal).props.client
+    const newClient = { sendRequest: newSend } as unknown as RpcClient
+    act(() =>
+      renderer.update(
+        createElement(AddProjectModal, {
+          visible: true,
+          client: newClient,
+          onProjectAdded,
+          onClose
+        })
+      )
+    )
+    act(() => button(tree, 'Clone repository').props.onPress())
+    expect(newSend).toHaveBeenCalledTimes(1)
+    oldPending.reject(new Error('old client failed'))
+    await flushUpdates()
+    expect(button(tree, 'Clone repository').props.disabled).toBe(true)
+    newPending.resolve({ ok: true, result: { repo: repoRow }, _meta: { runtimeId: 'r' } })
+    await flushUpdates()
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(oldClient).not.toBe(newClient)
+  })
+
+  it('does not hand off after a successful add when the client changes during close', async () => {
+    const sendRequest = vi
+      .fn()
+      .mockResolvedValue({ ok: true, result: { repo: repoRow }, _meta: { runtimeId: 'r' } })
+    const tree = render(sendRequest)
+    act(() =>
+      startActions(tree)
+        .find((a) => a.label === 'Clone from URL')!
+        .onPress()
+    )
+    act(() => textInputs(tree)[0]!.props.onChangeText('https://example.com/orca.git'))
+    act(() => button(tree, 'Clone repository').props.onPress())
+    await flushUpdates()
+    const oldDrawer = drawer(tree)
+    const newClient = { sendRequest: vi.fn() } as unknown as RpcClient
+    act(() =>
+      renderer.update(
+        createElement(AddProjectModal, {
+          visible: false,
+          client: newClient,
+          onProjectAdded,
+          onClose
+        })
+      )
+    )
+    act(() => oldDrawer.props.onAfterClose())
+    expect(onProjectAdded).not.toHaveBeenCalled()
   })
 })

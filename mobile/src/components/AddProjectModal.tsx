@@ -1,7 +1,6 @@
-/* oxlint-disable max-lines -- Why: the add-project sheet keeps its native drawer lifecycle, target selection, folder confirmation, and repository forms in one stateful flow. */
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
-import { ChevronLeft, FolderOpen, Globe, Plus } from 'lucide-react-native'
+import { useCallback, useRef, useState } from 'react'
+import { View } from 'react-native'
+import { FolderOpen, Globe, Plus } from 'lucide-react-native'
 import { REPO_ADD_PROJECT_SSH_MOBILE_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
 import {
   repoAddExistingRun,
@@ -10,15 +9,14 @@ import {
 } from '../tasks/repo-add-project-operations'
 import { REPO_CLONE_TIMEOUT_MS } from '../tasks/workspace-create-timeout'
 import type { RpcClient } from '../transport/rpc-client'
-import { colors, spacing, typography } from '../theme/mobile-theme'
 import { ActionSheetContent } from './ActionSheetModal'
 import { AddProjectFolderBrowser } from './AddProjectFolderBrowser'
 import { AddProjectTargetSelector, type AddProjectTarget } from './AddProjectTargetSelector'
 import { BottomDrawer } from './BottomDrawer'
 import { ConfirmContent } from './ConfirmModal'
-import { newWorktreeFormStyles as formStyles } from './new-worktree-form-styles'
+import { AddProjectForm } from './AddProjectForm'
 import type { MobileWorkspaceRepo } from './new-worktree-modal-types'
-
+import { useAddProjectOperationScope } from './useAddProjectOperationScope'
 type AddProjectView =
   | 'start'
   | 'clone'
@@ -26,7 +24,6 @@ type AddProjectView =
   | 'addExisting'
   | 'confirmFolder'
   | 'pickDestination'
-
 const NOT_A_GIT_REPOSITORY = 'Not a valid git repository'
 const EMPTY_HOST_CAPABILITIES: readonly string[] = []
 const EMPTY_SSH_TARGETS: readonly {
@@ -35,7 +32,6 @@ const EMPTY_SSH_TARGETS: readonly {
   connected?: boolean
   connectionStatus?: string
 }[] = []
-
 type AddProjectModalProps = {
   visible: boolean
   client: RpcClient | null
@@ -112,6 +108,7 @@ export function AddProjectModal({
     <AddProjectModalContent
       key={session.openEpoch}
       visible={visible}
+      openEpoch={session.openEpoch}
       client={client}
       onClose={onClose}
       onAfterClose={fireHandoff}
@@ -127,6 +124,7 @@ export function AddProjectModal({
 
 function AddProjectModalContent({
   visible,
+  openEpoch,
   client,
   onAdded,
   onClose,
@@ -135,6 +133,7 @@ function AddProjectModalContent({
   sshTargets
 }: {
   visible: boolean
+  openEpoch: number
   client: RpcClient | null
   onAdded: (repo: MobileWorkspaceRepo) => void
   onClose: () => void
@@ -153,29 +152,11 @@ function AddProjectModalContent({
   const [folderCandidate, setFolderCandidate] = useState<FolderCandidate | null>(null)
   const [destinationPath, setDestinationPath] = useState('')
   const [destinationKind, setDestinationKind] = useState<'clone' | 'create' | null>(null)
-  const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const mountedRef = useRef(true)
-  const busyRef = useRef(false)
-  const operationGenerationRef = useRef(0)
-  const latestClientRef = useRef(client)
-  latestClientRef.current = client
   const [sshConnectionId, setSshConnectionId] = useState<string | null>(null)
   const confirmingFolderRef = useRef(false)
 
-  const invalidateOperations = useCallback(() => {
-    operationGenerationRef.current += 1
-    busyRef.current = false
-    // oxlint-disable-next-line react-doctor/no-adjust-state-on-prop-change -- SAFETY: invalidating an in-flight RPC must clear the visible busy state when its client or target scope changes.
-    setBusy(false)
-  }, [])
-
-  useEffect(() => {
-    invalidateOperations()
-  }, [client, invalidateOperations, visible, hostCapabilities, sshTargets])
-
   const value = view === 'clone' ? cloneUrl : projectName
-  const canSubmit = value.trim().length > 0 && !busy && client != null
   const sshSupported = hostCapabilities.includes(REPO_ADD_PROJECT_SSH_MOBILE_RUNTIME_CAPABILITY)
   const targetOptions: AddProjectTarget[] = hostCapabilities.includes(
     REPO_ADD_PROJECT_SSH_MOBILE_RUNTIME_CAPABILITY
@@ -186,30 +167,38 @@ function AddProjectModalContent({
     sshSupported && targetOptions.some((target) => target.id === sshConnectionId)
       ? sshConnectionId
       : null
-  const requestTarget = activeSshConnectionId ? { sshConnectionId: activeSshConnectionId } : {}
+  const selectedTargetAvailable = sshConnectionId === null || activeSshConnectionId !== null
+  const operationScope = {
+    client,
+    visible,
+    openEpoch,
+    selectedTargetId: sshConnectionId,
+    sshCapability: sshSupported,
+    selectedTargetAvailable
+  }
+  const { busy, busyRef, begin, current, finish, invalidate } =
+    useAddProjectOperationScope(operationScope)
+  const requestTarget =
+    activeSshConnectionId && selectedTargetAvailable
+      ? { sshConnectionId: activeSshConnectionId }
+      : {}
+  const canSubmit = value.trim().length > 0 && !busy && client != null && selectedTargetAvailable
   const selectTarget = (id: string | null) => {
     if (id !== activeSshConnectionId) {
-      invalidateOperations()
+      invalidate()
       setDestinationPath('')
     }
     setSshConnectionId(id)
   }
 
-  useEffect(
-    () => () => {
-      mountedRef.current = false
-    },
-    []
-  )
-
   const submit = useCallback(() => {
-    if (!canSubmit || !client || busyRef.current) {
+    if (!canSubmit || !client) {
       return
     }
-    const operationGeneration = operationGenerationRef.current + 1
-    operationGenerationRef.current = operationGeneration
-    busyRef.current = true
-    setBusy(true)
+    const operation = begin()
+    if (!operation) {
+      return
+    }
     setError('')
     const run = async (): Promise<MobileWorkspaceRepo> => {
       if (view === 'clone') {
@@ -244,79 +233,65 @@ function AddProjectModalContent({
       }
       throw new Error('Unsupported add project step')
     }
-    const current = () =>
-      mountedRef.current &&
-      visible &&
-      operationGenerationRef.current === operationGeneration &&
-      latestClientRef.current === client
     run()
       .then((repo) => {
-        if (current()) {
+        if (current(operation)) {
           onAdded(repo)
         }
       })
       .catch((cause: unknown) => {
-        if (current()) {
+        if (current(operation)) {
           setError(cause instanceof Error ? cause.message : String(cause))
         }
       })
       .finally(() => {
-        if (current()) {
-          busyRef.current = false
-          setBusy(false)
-        }
+        finish(operation)
       })
-  }, [canSubmit, client, cloneUrl, onAdded, projectName, requestTarget, view])
+  }, [
+    begin,
+    canSubmit,
+    client,
+    cloneUrl,
+    current,
+    finish,
+    onAdded,
+    projectName,
+    requestTarget,
+    view
+  ])
 
   const addFolder = useCallback(
     async (path: string, kind: 'git' | 'folder'): Promise<void> => {
-      if (!client || busy || busyRef.current) {
+      if (!client || busy || busyRef.current || !selectedTargetAvailable) {
         return
       }
-      const operationGeneration = operationGenerationRef.current + 1
-      operationGenerationRef.current = operationGeneration
-      busyRef.current = true
-      setBusy(true)
+      const operation = begin()
+      if (!operation) {
+        return
+      }
       setError('')
       try {
         const reply = repoAddExistingRun.interpret(
           await repoAddExistingRun.request(client, { path, kind, ...requestTarget })
         )
-        if (
-          mountedRef.current &&
-          visible &&
-          operationGenerationRef.current === operationGeneration &&
-          latestClientRef.current === client
-        ) {
+        if (current(operation)) {
           onAdded(toMobileRepo(reply.repo))
         }
       } catch (cause) {
         const message = cause instanceof Error ? cause.message : String(cause)
-        const current =
-          mountedRef.current &&
-          visible &&
-          operationGenerationRef.current === operationGeneration &&
-          latestClientRef.current === client
-        if (current && kind === 'git' && message.includes(NOT_A_GIT_REPOSITORY)) {
+        const isCurrent = current(operation)
+        if (isCurrent && kind === 'git' && message.includes(NOT_A_GIT_REPOSITORY)) {
           setFolderCandidate({ path, sshConnectionId: activeSshConnectionId, client })
           setView('confirmFolder')
-        } else if (current) {
+        } else if (isCurrent) {
           setError(message)
           setView('addExisting')
         }
       } finally {
-        if (
-          mountedRef.current &&
-          visible &&
-          operationGenerationRef.current === operationGeneration &&
-          latestClientRef.current === client
-        ) {
-          busyRef.current = false
-          setBusy(false)
-        }
+        finish(operation)
       }
     },
-    [busy, client, onAdded, requestTarget, visible]
+    [begin, busy, busyRef, client, current, finish, onAdded, requestTarget, selectedTargetAvailable]
   )
 
   const targetSelector = (
@@ -328,6 +303,16 @@ function AddProjectModalContent({
     />
   )
 
+  const invalidTargetMessage = !selectedTargetAvailable
+    ? 'Choose a valid SSH target before submitting.'
+    : ''
+  const formHint = activeSshConnectionId
+    ? view === 'clone'
+      ? 'Choose a destination folder on the selected host. Large repositories can take a few minutes.'
+      : 'Choose a parent folder on the selected host for the new project.'
+    : view === 'clone'
+      ? "Cloned into the host's default projects folder. Large repositories can take a few minutes."
+      : "An empty git repository with an initial commit, created in the host's default projects folder."
   const content = (() => {
     if (view === 'start') {
       return (
@@ -435,76 +420,20 @@ function AddProjectModalContent({
       )
     }
 
-    const copy = {
-      clone: {
-        title: 'Clone from URL',
-        label: 'Repository URL',
-        placeholder: 'https://github.com/owner/repo',
-        hint: activeSshConnectionId
-          ? 'Choose a destination folder on the selected host. Large repositories can take a few minutes.'
-          : "Cloned into the host's default projects folder. Large repositories can take a few minutes.",
-        button: 'Clone repository'
-      },
-      create: {
-        title: 'Create new project',
-        label: 'Project name',
-        placeholder: 'my-project',
-        hint: activeSshConnectionId
-          ? 'Choose a parent folder on the selected host for the new project.'
-          : "An empty git repository with an initial commit, created in the host's default projects folder.",
-        button: 'Create project'
-      }
-    }[view]
-
     return (
       <View>
         {targetSelector}
-        <View style={styles.headerRow}>
-          <Pressable
-            style={styles.backButton}
-            onPress={() => setView('start')}
-            disabled={busy}
-            accessibilityRole="button"
-            accessibilityLabel="Back to Add project"
-          >
-            <ChevronLeft size={18} color={colors.textSecondary} />
-          </Pressable>
-          <Text style={formStyles.title}>{copy.title}</Text>
-        </View>
-
-        <View style={formStyles.field}>
-          <Text style={formStyles.label}>{copy.label}</Text>
-          <TextInput
-            style={formStyles.input}
-            value={value}
-            onChangeText={view === 'clone' ? setCloneUrl : setProjectName}
-            placeholder={copy.placeholder}
-            placeholderTextColor={colors.textMuted}
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType={view === 'clone' ? 'url' : 'default'}
-            editable={!busy}
-            accessibilityLabel={copy.label}
-          />
-          <Text style={styles.hint}>{copy.hint}</Text>
-        </View>
-
-        {error ? <Text style={formStyles.error}>{error}</Text> : null}
-        <View style={formStyles.actions}>
-          <Pressable
-            style={[formStyles.createButton, !canSubmit && formStyles.createButtonDisabled]}
-            disabled={!canSubmit}
-            onPress={submit}
-            accessibilityRole="button"
-            accessibilityLabel={copy.button}
-          >
-            {busy ? (
-              <ActivityIndicator size="small" color={colors.bgBase} />
-            ) : (
-              <Text style={formStyles.createText}>{copy.button}</Text>
-            )}
-          </Pressable>
-        </View>
+        <AddProjectForm
+          mode={view}
+          value={value}
+          busy={busy}
+          error={error}
+          invalidTargetMessage={invalidTargetMessage}
+          hint={formHint}
+          onChangeText={view === 'clone' ? setCloneUrl : setProjectName}
+          onBack={() => setView('start')}
+          onSubmit={submit}
+        />
       </View>
     )
   })()
@@ -520,18 +449,3 @@ function AddProjectModalContent({
     </BottomDrawer>
   )
 }
-
-const styles = StyleSheet.create({
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    marginBottom: spacing.md
-  },
-  backButton: {
-    marginLeft: -spacing.xs,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.xs
-  },
-  hint: { marginTop: spacing.xs, fontSize: typography.metaSize, color: colors.textMuted }
-})
