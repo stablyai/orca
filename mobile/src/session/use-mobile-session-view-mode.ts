@@ -69,6 +69,7 @@ export function useMobileSessionViewMode(args: {
   useEffect(() => {
     const pending = pendingHostViewWritesRef.current
     const bridge = sessionTabViewModeRef.current
+    let cleared = false
     for (const [tabId, write] of pending) {
       if (
         write.hostId !== hostId ||
@@ -76,6 +77,7 @@ export function useMobileSessionViewMode(args: {
         write.source !== bridge?.hostViewSource
       ) {
         pending.delete(tabId)
+        cleared = true
       }
     }
     if (!bridge?.writeHostViewMode) {
@@ -93,7 +95,11 @@ export function useMobileSessionViewMode(args: {
         )
       ) {
         pending.delete(tabId)
+        cleared = true
       }
+    }
+    if (cleared) {
+      setPendingVersion((version) => version + 1)
     }
   })
   useEffect(() => {

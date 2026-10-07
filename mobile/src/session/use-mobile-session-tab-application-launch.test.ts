@@ -119,6 +119,25 @@ function activations(sendRequest: ReturnType<typeof scope>['sendRequest']): unkn
 }
 
 describe('landing on a launched tab', () => {
+  it('publishes a new tabs reference for a newer marker with the same terminal payload', () => {
+    const { state } = scope(null)
+    let renderedTabs: MobileSessionTab[] = []
+    state.setSessionTabs = vi.fn((update) => {
+      renderedTabs = typeof update === 'function' ? update(renderedTabs) : update
+    })
+    const apply = mount(state)
+    const terminal = terminalTab('tab-old', 'term_old', true)
+
+    const firstSnapshot = snapshot([terminal])
+    apply(firstSnapshot)
+    const firstRender = renderedTabs
+    apply(firstSnapshot)
+    expect(renderedTabs).toBe(firstRender)
+
+    apply({ ...firstSnapshot, snapshotVersion: firstSnapshot.snapshotVersion + 1 })
+    expect(renderedTabs).not.toBe(firstRender)
+  })
+
   it('records a launched terminal as this device’s pick on the host once its tab arrives', () => {
     const { state, sendRequest } = scope(launchedSelection('l1', { handle: 'term_new' }))
     const apply = mount(state)
