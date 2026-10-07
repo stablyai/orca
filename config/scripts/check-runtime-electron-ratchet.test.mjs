@@ -94,21 +94,61 @@ describe('structured chat coverage', () => {
     }
   )
 
-  it('finds Electron through a package imported by each unwired future lane', async () => {
+  it.each([true, false])(
+    'finds Electron through an unwired lane package (sideEffects=%s)',
+    async (sideEffects) => {
+      const root = fixture({
+        ...requiredLanes,
+        'src/main/acp/adapter.ts': "import 'acp-desktop-package'",
+        'src/main/provider-process/worker.ts': "import 'provider-desktop-package'",
+        'node_modules/acp-desktop-package/package.json': JSON.stringify({
+          main: 'index.js',
+          sideEffects
+        }),
+        'node_modules/acp-desktop-package/index.js': "require('electron')",
+        'node_modules/provider-desktop-package/package.json': JSON.stringify({
+          main: 'index.js',
+          sideEffects
+        }),
+        'node_modules/provider-desktop-package/index.js': "require('electron')"
+      })
+      const current = await collectElectronImporters(collectStructuredChatEntryPoints(root))
+      expect(current.map((file) => file.split('/node_modules/').pop())).toEqual([
+        'acp-desktop-package/index.js',
+        'provider-desktop-package/index.js'
+      ])
+    }
+  )
+
+  it('bounds shared dependency output without dropping any entry point', async () => {
+    const entries = Array.from({ length: 40 }, (_, index) => `entry-${index}.ts`)
     const root = fixture({
-      ...requiredLanes,
-      'src/main/acp/adapter.ts': "import 'acp-desktop-package'",
-      'src/main/provider-process/worker.ts': "import 'provider-desktop-package'",
-      'node_modules/acp-desktop-package/package.json': '{"main":"index.js"}',
-      'node_modules/acp-desktop-package/index.js': "require('electron')",
-      'node_modules/provider-desktop-package/package.json': '{"main":"index.js"}',
-      'node_modules/provider-desktop-package/index.js': "require('electron')"
+      'shared.ts': `export const payload = ${JSON.stringify('x'.repeat(64 * 1024))}`,
+      ...Object.fromEntries(
+        entries.map((file) => [file, "import 'electron'; export { payload } from './shared'"])
+      )
     })
-    const current = await collectElectronImporters(collectStructuredChatEntryPoints(root))
-    expect(current.map((file) => file.split('/node_modules/').pop())).toEqual([
-      'acp-desktop-package/index.js',
-      'provider-desktop-package/index.js'
-    ])
+    let emittedBytes = 0
+    const current = await collectElectronImporters(
+      entries.map((file) => path.join(root, file)),
+      {
+        plugins: [
+          {
+            name: 'measure-audit-output',
+            setup(builder) {
+              builder.onEnd((result) => {
+                emittedBytes = result.outputFiles.reduce(
+                  (bytes, file) => bytes + file.contents.byteLength,
+                  0
+                )
+              })
+            }
+          }
+        ]
+      }
+    )
+    expect(current.map((file) => path.basename(file)).sort()).toEqual(entries.sort())
+    expect(emittedBytes).toBeLessThan(128 * 1024)
   })
 })
 
