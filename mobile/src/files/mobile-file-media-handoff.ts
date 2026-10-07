@@ -3,10 +3,7 @@ import type { RpcFailure } from '../transport/types'
 import type { MobileFilePreviewRpcSender } from './mobile-file-preview-operations'
 import { fileMediaChunkRead } from './mobile-file-preview-operations'
 
-// The phone renders text, markdown, HTML and images itself; it has no PDF or video
-// renderer, and the host refuses those binaries (`binary_file`). What the OS does
-// open, this flow downloads chunk-by-chunk into the cache and hands off with the
-// system share sheet — the mobile counterpart of the desktop's "open externally".
+// Supported external media downloads use chunked host reads and hand the cache to the OS share sheet.
 
 /** Documents and media Android/iOS can open from another app. */
 export const MEDIA_HANDOFF_MIME_TYPES: Record<string, string> = {
