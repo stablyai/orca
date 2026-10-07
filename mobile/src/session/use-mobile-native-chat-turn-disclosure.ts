@@ -129,7 +129,7 @@ export function useMobileNativeChatTurnDisclosure({
         reportsFailure: message.blocks.some(
           (block) => block.type === 'text' && block.tone === 'error'
         ),
-        reportsCompaction: message.blocks.some(
+        explainsTurn: message.blocks.some(
           (block) => block.type === 'text' && block.presentation === 'compaction'
         )
       }
