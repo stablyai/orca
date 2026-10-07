@@ -25,14 +25,18 @@ const WINDOWS_CIM_MAX_OUTPUT_BYTES = 8 * 1024 * 1024
 
 // Why JSON and not the `Key=Value` list form: CommandLine can itself contain
 // CR/LF, so an argument could otherwise masquerade as another row's field.
+// Why CreationTimeMs: PID-reuse-safe identities need it without the addon, in the
+// same floor-ms conversion the retired per-PID query used, so recorded identities match.
 const POWERSHELL_PROCESS_QUERY =
   '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; ' +
-  'Get-CimInstance -ClassName Win32_Process -Property CommandLine,Name,ParentProcessId,ProcessId | ' +
-  'Select-Object CommandLine,Name,ParentProcessId,ProcessId | ' +
+  'Get-CimInstance -ClassName Win32_Process -Property CommandLine,CreationDate,Name,ParentProcessId,ProcessId | ' +
+  'Select-Object CommandLine,Name,ParentProcessId,ProcessId,' +
+  "@{Name='CreationTimeMs';Expression={if ($_.CreationDate) { [long]([DateTimeOffset]$_.CreationDate).ToUnixTimeMilliseconds() } else { $null }}} | " +
   'ConvertTo-Json -Compress'
 
 type CimProcessRow = {
   CommandLine?: unknown
+  CreationTimeMs?: unknown
   Name?: unknown
   ParentProcessId?: unknown
   ProcessId?: unknown
@@ -75,9 +79,18 @@ export function parseWindowsCimProcessRows(stdout: string): WindowsProcessRow[] 
       return []
     }
     const name = fieldAsString(row.Name)
+    const creationTimeMs = fieldAsNumber(row.CreationTimeMs)
     // No working set: Win32_Process reports one, but nothing reads memory off
     // this table and asking widens an already costly scan.
-    return [{ pid, ppid, name, command: fieldAsString(row.CommandLine) || name }]
+    return [
+      {
+        pid,
+        ppid,
+        name,
+        ...(Number.isSafeInteger(creationTimeMs) && creationTimeMs > 0 ? { creationTimeMs } : {}),
+        command: fieldAsString(row.CommandLine) || name
+      }
+    ]
   })
 }
 

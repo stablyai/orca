@@ -3,6 +3,8 @@ import { randomUUID } from 'node:crypto'
 import { link, lstat, mkdir, readFile, readlink, unlink, writeFile } from 'node:fs/promises'
 import { join, win32 } from 'node:path'
 import { promisify } from 'node:util'
+import { readWindowsProcessCreationTime } from '../windows/windows-process-table'
+import { readWindowsProcess } from '../windows/windows-process-lookup'
 
 const runtimeHostIdentity = `runtime:${randomUUID()}`
 const runtimeProcessIdentity = `runtime:${randomUUID()}`
@@ -10,18 +12,6 @@ let hostIdentityPromise: Promise<string> | undefined
 let bootIdentityPromise: Promise<string | undefined> | undefined
 let selfProcessIdentityPromise: Promise<string | null | undefined> | undefined
 const HOST_TOKEN_PATTERN = /^[\da-f]{8}-[\da-f]{4}-4[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/i
-const WINDOWS_PROCESS_IDENTITY_TIMEOUT_MS = 5_000
-
-function getWindowsPowerShellPath(): string {
-  return win32.join(
-    process.env.SystemRoot ?? 'C:\\Windows',
-    'System32',
-    'WindowsPowerShell',
-    'v1.0',
-    'powershell.exe'
-  )
-}
-
 function getWindowsRegistryPath(): string {
   return win32.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'reg.exe')
 }
@@ -199,6 +189,43 @@ export async function readManagedHookProcessIdentity(
   return await readProcessIdentity(pid)
 }
 
+// Same millisecond value the former per-PID CIM CreationDate query produced (all
+// three sources floor the kernel creation FILETIME), so older builds' identities match.
+async function readWindowsProcessIdentity(pid: number): Promise<string | null | undefined> {
+  // Why the one-handle read first: lock waiters re-read the owner every 20ms. The
+  // table covers hosts without the addon (SSH relays built off Windows).
+  const nativeStartedAt = readWindowsProcessCreationTime(pid)
+  if (nativeStartedAt !== null) {
+    // An exited process still has a creation time while any handle holds it open.
+    return pid !== process.pid && isWindowsProcessExited(pid)
+      ? null
+      : `win32:${pid}:${nativeStartedAt}`
+  }
+  const lookup = await readWindowsProcess(pid)
+  if (lookup.status === 'missing') {
+    return null
+  }
+  if (lookup.status === 'present' && lookup.startedAtMs !== null) {
+    return `win32:${pid}:${lookup.startedAtMs}`
+  }
+  try {
+    process.kill(pid, 0)
+    return pid === process.pid ? runtimeProcessIdentity : undefined
+  } catch (error) {
+    return hasCode(error, 'ESRCH') ? null : undefined
+  }
+}
+
+/** libuv answers signal 0 with ESRCH once the process has an exit code. */
+function isWindowsProcessExited(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return false
+  } catch (error) {
+    return hasCode(error, 'ESRCH')
+  }
+}
+
 async function readProcessIdentity(pid: number): Promise<string | null | undefined> {
   if (process.platform === 'linux') {
     try {
@@ -220,30 +247,7 @@ async function readProcessIdentity(pid: number): Promise<string | null | undefin
   }
 
   if (process.platform === 'win32') {
-    try {
-      const { stdout } = await promisify(execFile)(
-        getWindowsPowerShellPath(),
-        [
-          '-NoProfile',
-          '-NonInteractive',
-          '-Command',
-          `$ErrorActionPreference = 'Stop'; ` +
-            `$p = Get-CimInstance Win32_Process -Filter "ProcessId = ${pid}"; ` +
-            `if (!$p) { 'missing'; exit 0 }; ` +
-            `[string]([DateTimeOffset]$p.CreationDate).ToUnixTimeMilliseconds()`
-        ],
-        { encoding: 'utf8', timeout: WINDOWS_PROCESS_IDENTITY_TIMEOUT_MS, windowsHide: true }
-      )
-      const startedAt = stdout.trim()
-      return startedAt === 'missing' ? null : startedAt ? `win32:${pid}:${startedAt}` : undefined
-    } catch {
-      try {
-        process.kill(pid, 0)
-        return pid === process.pid ? runtimeProcessIdentity : undefined
-      } catch (error) {
-        return hasCode(error, 'ESRCH') ? null : undefined
-      }
-    }
+    return await readWindowsProcessIdentity(pid)
   }
 
   bootIdentityPromise ??= readBootIdentity()
