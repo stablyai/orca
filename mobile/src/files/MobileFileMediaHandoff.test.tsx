@@ -191,10 +191,12 @@ describe('a PDF the phone hands to the OS', () => {
   it('downloads it chunk-by-chunk and hands the cached file to the share sheet', async () => {
     doubles.shared.length = 0
     doubles.shareRejects = false
+    const firstChunk = Buffer.alloc(524288, 0xa5).toString('base64')
+    const finalChunk = Buffer.alloc(16, 0x5a).toString('base64')
     const client = clientWithResponses(
       [
-        { contentBase64: 'AAA=', bytesRead: 524288, eof: false },
-        { contentBase64: 'QQ==', bytesRead: 16, eof: true }
+        { contentBase64: firstChunk, bytesRead: 524288, eof: false },
+        { contentBase64: finalChunk, bytesRead: 16, eof: true }
       ].map(ok)
     )
     const tree = render({ client })
@@ -203,12 +205,16 @@ describe('a PDF the phone hands to the OS', () => {
       openButton(tree)?.props.onPress()
     })
 
-    expect(client.sendRequest).toHaveBeenCalledWith('files.readChunk', {
-      worktree: 'id:wt-1',
-      relativePath: 'docs/report.pdf',
-      offset: 0,
-      length: 524288
-    })
+    expect(client.sendRequest).toHaveBeenCalledWith(
+      'files.readChunk',
+      {
+        worktree: 'id:wt-1',
+        relativePath: 'docs/report.pdf',
+        offset: 0,
+        length: 524288
+      },
+      { failWhenDisconnected: true, timeoutMs: 30_000 }
+    )
     expect(doubles.shared).toEqual([
       {
         uri: `file:///cache/${mediaHandoffCacheName('wt-1', 'docs/report.pdf')}`,
@@ -228,7 +234,7 @@ describe('a PDF the phone hands to the OS', () => {
       openButton(tree)?.props.onPress()
     })
     await act(async () => {
-      resolvers[0]?.(ok({ contentBase64: 'AAA=', bytesRead: 3, eof: false }))
+      resolvers[0]?.(ok({ contentBase64: 'YWJj', bytesRead: 3, eof: false }))
       await Promise.resolve()
     })
 
@@ -252,6 +258,42 @@ describe('a PDF the phone hands to the OS', () => {
       openButton(tree)?.props.onPress()
     })
     act(() => tree.unmount())
+    await act(async () => {
+      release?.(ok({ contentBase64: 'QQ==', bytesRead: 1, eof: true }))
+      await Promise.resolve()
+    })
+
+    expect(doubles.shared).toEqual([])
+  })
+
+  it('does not share an old attempt after the file identity changes', async () => {
+    doubles.shared.length = 0
+    let release: ((response: RpcResponse) => void) | undefined
+    const client = {
+      sendRequest: vi.fn(
+        () =>
+          new Promise<RpcResponse>((resolve) => {
+            release = resolve
+          })
+      )
+    }
+    const tree = render({ client })
+
+    await act(async () => {
+      openButton(tree)?.props.onPress()
+    })
+    act(() => {
+      tree.update(
+        createElement(MobileFileMediaHandoff, {
+          client,
+          connected: true,
+          mimeType: 'application/pdf',
+          relativePath: 'docs/other.pdf',
+          title: 'other.pdf',
+          worktreeId: 'wt-1'
+        })
+      )
+    })
     await act(async () => {
       release?.(ok({ contentBase64: 'QQ==', bytesRead: 1, eof: true }))
       await Promise.resolve()

@@ -4,7 +4,6 @@ import {
   downloadMobileFileMedia,
   createMobileFileMediaAttempt,
   MEDIA_HANDOFF_CHUNK_BYTES,
-  MEDIA_HANDOFF_MAX_BYTES,
   mediaHandoffBase64ByteLength,
   mediaHandoffMimeFor,
   type MobileFileMediaSink
@@ -66,9 +65,11 @@ describe('mediaHandoffMimeFor', () => {
 
 describe('downloadMobileFileMedia', () => {
   it('downloads in host-capped chunks until eof and appends each one', async () => {
+    const firstChunk = Buffer.alloc(MEDIA_HANDOFF_CHUNK_BYTES, 0xa5).toString('base64')
+    const finalChunk = Buffer.alloc(16, 0x5a).toString('base64')
     const client = clientWithResponses([
-      ok({ contentBase64: 'AAA=', bytesRead: 524288, eof: false }),
-      ok({ contentBase64: 'QQ==', bytesRead: 16, eof: true })
+      ok({ contentBase64: firstChunk, bytesRead: MEDIA_HANDOFF_CHUNK_BYTES, eof: false }),
+      ok({ contentBase64: finalChunk, bytesRead: 16, eof: true })
     ])
     const sink = recordingSink()
     const progress: number[] = []
@@ -80,28 +81,36 @@ describe('downloadMobileFileMedia', () => {
         sink,
         (byteLength) => progress.push(byteLength)
       )
-    ).resolves.toEqual({ byteLength: 524304 })
+    ).resolves.toEqual({ byteLength: MEDIA_HANDOFF_CHUNK_BYTES + 16 })
 
-    expect(client.sendRequest).toHaveBeenCalledWith('files.readChunk', {
-      worktree: 'id:wt-1',
-      relativePath: 'docs/report.pdf',
-      offset: 0,
-      length: MEDIA_HANDOFF_CHUNK_BYTES
-    })
-    expect(client.sendRequest).toHaveBeenLastCalledWith('files.readChunk', {
-      worktree: 'id:wt-1',
-      relativePath: 'docs/report.pdf',
-      offset: 524288,
-      length: MEDIA_HANDOFF_CHUNK_BYTES
-    })
+    expect(client.sendRequest).toHaveBeenCalledWith(
+      'files.readChunk',
+      {
+        worktree: 'id:wt-1',
+        relativePath: 'docs/report.pdf',
+        offset: 0,
+        length: MEDIA_HANDOFF_CHUNK_BYTES
+      },
+      { failWhenDisconnected: true, timeoutMs: 30_000 }
+    )
+    expect(client.sendRequest).toHaveBeenLastCalledWith(
+      'files.readChunk',
+      {
+        worktree: 'id:wt-1',
+        relativePath: 'docs/report.pdf',
+        offset: MEDIA_HANDOFF_CHUNK_BYTES,
+        length: MEDIA_HANDOFF_CHUNK_BYTES
+      },
+      { failWhenDisconnected: true, timeoutMs: 30_000 }
+    )
     expect(sink.opened).toBe(1)
-    expect(sink.appends).toEqual(['AAA=', 'QQ=='])
-    expect(progress).toEqual([524288, 524304])
+    expect(sink.appends).toEqual([firstChunk, finalChunk])
+    expect(progress).toEqual([MEDIA_HANDOFF_CHUNK_BYTES, MEDIA_HANDOFF_CHUNK_BYTES + 16])
     expect(sink.released).toBe(1)
   })
 
   it('keeps an empty file byte-exact with a single read', async () => {
-    const client = clientWithResponses([ok({ contentBase64: '', bytesRead: 0, eof: false })])
+    const client = clientWithResponses([ok({ contentBase64: '', bytesRead: 0, eof: true })])
     const sink = recordingSink()
 
     await expect(
@@ -112,8 +121,9 @@ describe('downloadMobileFileMedia', () => {
   })
 
   it('surfaces a refused read and discards the partial download', async () => {
+    const firstChunk = Buffer.alloc(MEDIA_HANDOFF_CHUNK_BYTES, 0xa5).toString('base64')
     const client = clientWithResponses([
-      ok({ contentBase64: 'AAA=', bytesRead: 524288, eof: false }),
+      ok({ contentBase64: firstChunk, bytesRead: MEDIA_HANDOFF_CHUNK_BYTES, eof: false }),
       fail('File is binary', 'binary_file')
     ])
     const sink = recordingSink()
@@ -122,7 +132,7 @@ describe('downloadMobileFileMedia', () => {
       downloadMobileFileMedia(client, { worktreeId: 'wt-1', relativePath: 'a.pdf' }, sink)
     ).rejects.toThrow('File is binary')
     expect(sink.discarded).toBe(1)
-    expect(sink.appends).toEqual(['AAA='])
+    expect(sink.appends).toEqual([firstChunk])
   })
 
   it('falls back to the refusal code when the host sends no message', async () => {
@@ -137,9 +147,7 @@ describe('downloadMobileFileMedia', () => {
     ).rejects.toThrow('forbidden')
   })
 
-  it('caps the bytes it appends, so a host under-reporting bytesRead cannot slip past it', async () => {
-    // A 4 MiB payload repeated: 33 of them cross the 128 MiB cap. bytesRead is reported as 1
-    // each, so a cap read off the host's number would never trip.
+  it('rejects a payload whose decoded bytes disagree with bytesRead before appending it', async () => {
     const chunk = 'A'.repeat(4 * 1024 * 1024)
     const chunkBytes = mediaHandoffBase64ByteLength(chunk)
     let appendedBytes = 0
@@ -157,11 +165,23 @@ describe('downloadMobileFileMedia', () => {
 
     await expect(
       downloadMobileFileMedia(client, { worktreeId: 'wt-1', relativePath: 'big.mp4' }, sink)
-    ).rejects.toThrow('File too large to open on this device')
+    ).rejects.toThrow('File changed during download')
 
     expect(chunkBytes).toBe(3 * 1024 * 1024)
-    expect(appendedBytes).toBeLessThanOrEqual(MEDIA_HANDOFF_MAX_BYTES)
-    expect(appendedBytes).toBe(42 * chunkBytes)
+    expect(appendedBytes).toBe(0)
+  })
+
+  it('rejects a zero-byte non-EOF chunk and discards the partial download', async () => {
+    const sink = recordingSink()
+    await expect(
+      downloadMobileFileMedia(
+        clientWithResponses([ok({ contentBase64: '', bytesRead: 0, eof: false })]),
+        { worktreeId: 'wt-1', relativePath: 'stalled.mp4' },
+        sink
+      )
+    ).rejects.toThrow('File changed during download')
+    expect(sink.appends).toEqual([])
+    expect(sink.discarded).toBe(1)
   })
 
   it('stops an unmounted attempt before appending the next reply', async () => {

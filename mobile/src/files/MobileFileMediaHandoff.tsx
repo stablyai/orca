@@ -23,7 +23,7 @@ type Props = {
   compact?: boolean
 }
 
-/** Downloads a file for the OS share sheet; media previews can also keep this as an external action. */
+/** Downloads a file for the OS share sheet. */
 export function MobileFileMediaHandoff({
   client,
   connected,
@@ -78,8 +78,8 @@ export function MobileFileMediaHandoff({
         },
         attempt
       )
-      // Why: navigating back mid-download must not raise the share sheet over the next screen.
-      if (!mounted.current) {
+      // Why: navigation or file identity changes must not share an old attempt's cache.
+      if (!mounted.current || activeAttempt.current !== attempt || attempt.cancelled) {
         return
       }
       await Sharing.shareAsync(sink.uri, { mimeType, dialogTitle: `Open ${title}` })

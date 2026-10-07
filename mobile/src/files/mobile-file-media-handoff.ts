@@ -1,3 +1,4 @@
+import { Buffer } from 'buffer/index.js'
 import type { RpcFailure } from '../transport/types'
 import type { MobileFilePreviewRpcSender } from './mobile-file-preview-operations'
 import { fileMediaChunkRead } from './mobile-file-preview-operations'
@@ -84,17 +85,23 @@ export async function downloadMobileFileMedia(
   let offset = 0
   let byteLength = 0
   let appendedBytes = 0
+  const requestOptions = { failWhenDisconnected: true, timeoutMs: 30_000 }
   try {
     for (;;) {
       if (attempt.cancelled) {
         throw new Error('Media download cancelled')
       }
-      const reply = await fileMediaChunkRead.request(client, {
-        worktree: `id:${args.worktreeId}`,
-        relativePath: args.relativePath,
-        offset,
-        length: MEDIA_HANDOFF_CHUNK_BYTES
-      })
+      const length = MEDIA_HANDOFF_CHUNK_BYTES
+      const reply = await fileMediaChunkRead.request(
+        client,
+        {
+          worktree: `id:${args.worktreeId}`,
+          relativePath: args.relativePath,
+          offset,
+          length
+        },
+        requestOptions
+      )
       if (attempt.cancelled) {
         throw new Error('Media download cancelled')
       }
@@ -105,6 +112,15 @@ export async function downloadMobileFileMedia(
         throw new Error(refusal.message || refusal.code || 'Unable to open file')
       }
       const chunk = verdict.value
+      const bytes = Buffer.from(chunk.contentBase64, 'base64')
+      if (
+        bytes.toString('base64') !== chunk.contentBase64 ||
+        bytes.byteLength !== chunk.bytesRead ||
+        chunk.bytesRead > length ||
+        (chunk.bytesRead === 0 && !chunk.eof)
+      ) {
+        throw new Error('File changed during download. Retry the preview')
+      }
       if (chunk.bytesRead === 0) {
         break
       }
