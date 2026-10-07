@@ -30,6 +30,7 @@ export function useMobileSessionNativeChatDictation(
     client,
     connState,
     sessionTabs,
+    appliedSnapshotMarkerRef,
     sessionTabsViewModeSupported,
     agentSessionHostSupport,
     setInput,
@@ -71,6 +72,10 @@ export function useMobileSessionNativeChatDictation(
   const sessionTabViewMode = useMemo<MobileSessionTabViewModeBridge>(
     () => ({
       hostViewSource: client ?? undefined,
+      readHostViewPublication: () => ({
+        epoch: appliedSnapshotMarkerRef.current.epoch,
+        version: appliedSnapshotMarkerRef.current.version
+      }),
       readHostViewMode: (tabId) => {
         const tab = sessionTabs.find((candidate) => candidate.id === tabId)
         return tab?.type === 'terminal' ? tab.viewMode : undefined
@@ -88,7 +93,14 @@ export function useMobileSessionNativeChatDictation(
         showToast('Could not switch view mode')
       }
     }),
-    [client, sessionTabs, sessionTabsViewModeSupported, showToast, worktreeId]
+    [
+      appliedSnapshotMarkerRef,
+      client,
+      sessionTabs,
+      sessionTabsViewModeSupported,
+      showToast,
+      worktreeId
+    ]
   )
   const nativeChatController = useMobileNativeChatController({
     client,

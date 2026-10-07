@@ -36,3 +36,13 @@ export function mergeOverrides(
   }
   return merged
 }
+
+export function isNewerPublication(
+  current: { epoch: string | null; version: number } | undefined,
+  previous: { epoch: string | null; version: number }
+): boolean {
+  return (
+    current !== undefined &&
+    (current.epoch !== previous.epoch || current.version > previous.version)
+  )
+}

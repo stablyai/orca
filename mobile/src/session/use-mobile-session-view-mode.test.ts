@@ -390,6 +390,7 @@ describe('useMobileSessionViewMode', () => {
     hostViews: Map<string, MobileSessionView>
     writeHostViewMode: ((tabId: string, view: MobileSessionView) => Promise<void>) | null
     hostViewSource?: object
+    hostPublication?: { epoch: string | null; version: number }
     onHostViewModeWriteError?: (error: unknown) => void
   }): Promise<void> {
     vi.mocked(loadDefaultSessionView).mockResolvedValue(args.defaultView)
@@ -399,6 +400,7 @@ describe('useMobileSessionViewMode', () => {
     })
     const bridge: MobileSessionTabViewModeBridge = {
       hostViewSource: args.hostViewSource,
+      readHostViewPublication: () => args.hostPublication ?? { epoch: 'host', version: 1 },
       readHostViewMode: (tabId) => args.hostViews.get(tabId),
       writeHostViewMode: args.writeHostViewMode,
       ...(args.onHostViewModeWriteError
@@ -494,6 +496,42 @@ describe('useMobileSessionViewMode', () => {
       await Promise.resolve()
       await Promise.resolve()
     })
+  })
+
+  it('waits for a post-acceptance publication revision before clearing pending state', async () => {
+    const hostWrite = deferred<void>()
+    const hostViews = new Map<string, MobileSessionView>([['t1', 'terminal']])
+    const hostPublication = { epoch: 'host', version: 10 }
+    await mountShared({
+      defaultView: 'terminal',
+      hostViews,
+      hostPublication,
+      writeHostViewMode: () => hostWrite.promise
+    })
+
+    await act(async () => {
+      controller?.toggleTabChatView('t1')
+      await Promise.resolve()
+    })
+    hostWrite.resolve()
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+      await Promise.resolve()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    // This is the pre-write snapshot: matching value alone must not acknowledge the write.
+    hostViews.set('t1', 'chat')
+    rerenderShared?.()
+    expect(controller?.isTabChatView('t1')).toBe(true)
+
+    hostViews.set('t1', 'terminal')
+    rerenderShared?.()
+    // The matching value was from the same pre-ack publication, so a peer update in that
+    // publication must still be hidden by the pending write rather than being treated as ack.
+    expect(controller?.isTabChatView('t1')).toBe(true)
   })
 
   it('flips a second tap from the queued view rather than the host echo it outranks', async () => {
