@@ -219,9 +219,9 @@ describe('folder parent actions', () => {
       }
       return implementation?.(...args)
     })
-    await fixture.store
-      .getState()
-      .attachWorktreeToFolderWorkspace(fixture.context, fixture.folder.id)
+    await expect(
+      fixture.store.getState().attachWorktreeToFolderWorkspace(fixture.context, fixture.folder.id)
+    ).rejects.toMatchObject({ outcome: 'acknowledged' })
     expect(fixture.store.getState().workspaceLineageByChildKey).toEqual({})
   })
   it('refuses to overwrite a same-ID parent owned by another instance', async () => {
@@ -298,7 +298,7 @@ describe('folder parent actions', () => {
     ).rejects.toMatchObject({ outcome: 'acknowledged' })
     expect(fixture.store.getState().workspaceLineageByChildKey).toEqual({})
   })
-  it('reconciles unknown outcomes before a repeat and never automatically resends', async () => {
+  it('reconciles a late write on the next read without automatically resending', async () => {
     const fixture = setup()
     const implementation = rpc.getMockImplementation()
     rpc.mockImplementation(async (...args) => {
@@ -310,15 +310,94 @@ describe('folder parent actions', () => {
     await expect(
       fixture.store.getState().attachWorktreeToFolderWorkspace(fixture.context, fixture.folder.id)
     ).rejects.toBeInstanceOf(FolderParentMutationError)
-    await expect(
-      fixture.store.getState().attachWorktreeToFolderWorkspace(fixture.context, fixture.folder.id)
-    ).rejects.toMatchObject({ outcome: 'unknown' })
+    await fixture.store.getState().loadFolderParentCatalog(fixture.context)
     expect(mutationCalls()).toHaveLength(1)
     fixture.markApplied()
     await fixture.store.getState().loadFolderParentCatalog(fixture.context)
     await fixture.store
       .getState()
       .attachWorktreeToFolderWorkspace(fixture.context, fixture.folder.id)
+    expect(mutationCalls()).toHaveLength(1)
+  })
+  it('unblocks an explicit retry after a confirmed empty recovery read', async () => {
+    const fixture = setup()
+    const implementation = rpc.getMockImplementation()
+    // Fail only the write; recovery still reads the owning host.
+    rpc.mockImplementation(async (...args) => {
+      if (args[1] === 'worktree.set') {
+        throw new Error('Timed out')
+      }
+      return implementation?.(...args)
+    })
+    await expect(
+      fixture.store.getState().attachWorktreeToFolderWorkspace(fixture.context, fixture.folder.id)
+    ).rejects.toMatchObject({ outcome: 'unknown' })
+    rpc.mockImplementation(implementation!)
+    await fixture.store.getState().loadFolderParentCatalog(fixture.context)
+    expect(mutationCalls()).toHaveLength(1)
+    await fixture.store
+      .getState()
+      .attachWorktreeToFolderWorkspace(fixture.context, fixture.folder.id)
+    expect(mutationCalls()).toHaveLength(2)
+  })
+  it('does not let an older recovery read clear a newer uncertain write', async () => {
+    const fixture = setup()
+    const implementation = rpc.getMockImplementation()
+    const actions = fixture.store.getState()
+    rpc.mockImplementation(async (...args) => {
+      if (args[1] === 'worktree.set') {
+        throw new Error('Timed out')
+      }
+      return implementation?.(...args)
+    })
+    await expect(
+      actions.attachWorktreeToFolderWorkspace(fixture.context, fixture.folder.id)
+    ).rejects.toThrow()
+    let release: (() => void) | undefined
+    let started: (() => void) | undefined
+    const ready = new Promise<void>((resolve) => {
+      started = resolve
+    })
+    const hold = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    groups.mockImplementationOnce(async () => {
+      started?.()
+      await hold
+      return { projectGroups: [], hostId: 'local' }
+    })
+    const olderRead = actions.loadFolderParentCatalog(fixture.context)
+    await ready
+    await actions.loadFolderParentCatalog(fixture.context)
+    await expect(
+      actions.attachWorktreeToFolderWorkspace(fixture.context, fixture.folder.id)
+    ).rejects.toThrow()
+    release?.()
+    await olderRead
+    await expect(
+      actions.updateWorktreeLineage(fixture.child.id, { noParent: true })
+    ).rejects.toThrow('already in progress')
+    expect(mutationCalls()).toHaveLength(2)
+  })
+  it('keeps actions guarded when the recovery read itself fails', async () => {
+    const fixture = setup()
+    const implementation = rpc.getMockImplementation()
+    rpc.mockImplementation(async (...args) => {
+      if (args[1] === 'worktree.set') {
+        throw new Error('Timed out')
+      }
+      return implementation?.(...args)
+    })
+    await expect(
+      fixture.store.getState().attachWorktreeToFolderWorkspace(fixture.context, fixture.folder.id)
+    ).rejects.toMatchObject({ outcome: 'unknown' })
+    rpc.mockRejectedValue(new Error('Host unavailable'))
+    await expect(
+      fixture.store.getState().loadFolderParentCatalog(fixture.context)
+    ).rejects.toThrow()
+    await expect(
+      fixture.store.getState().updateWorktreeLineage(fixture.child.id, { noParent: true })
+    ).rejects.toThrow('already in progress')
     expect(mutationCalls()).toHaveLength(1)
   })
 })

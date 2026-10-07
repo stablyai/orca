@@ -28,7 +28,10 @@ import { appendProjectGroupSections } from './project-group-sections'
 import { getPinnedSectionWorktrees } from '../../pinned-section-worktrees'
 import { emitPinnedGroup } from './pinned-group-rows'
 import { appendWorktreeRows, buildPendingCreationRow } from './row-builders'
-import { getAttachedWorktreesByFolderWorkspaceId } from './folder-workspace-attached'
+import {
+  getAttachedWorktreesByFolderWorkspaceIdentity,
+  getFolderWorkspaceAttachmentIdentity
+} from './folder-workspace-attached'
 import { appendFolderWorkspaceRows } from './folder-workspace-rows'
 import {
   compareFolderWorkspacesForDisplay,
@@ -113,13 +116,16 @@ export function buildRows(
   // worktree lineage. A folder that is not rendered (host filter) keeps its
   // children visible as ordinary rows rather than hiding them.
   const renderableFolderIds = new Set(
-    renderableFolderWorkspaces.map((pair) => pair.folderWorkspace.id)
+    renderableFolderWorkspaces.map((pair) =>
+      getFolderWorkspaceAttachmentIdentity(pair, defaultHostId)
+    )
   )
   const attachedByFolderId = new Map(
     [
-      ...getAttachedWorktreesByFolderWorkspaceId(
+      ...getAttachedWorktreesByFolderWorkspaceIdentity(
         worktreesOutsidePinnedSection,
-        workspaceLineageByChildKey
+        workspaceLineageByChildKey,
+        defaultHostId
       )
     ].filter(([folderId]) => renderableFolderIds.has(folderId))
   )
@@ -216,6 +222,7 @@ export function buildRows(
           ),
           0,
           {
+            defaultHostId,
             attachedByFolderId,
             repoMap,
             lineageById,

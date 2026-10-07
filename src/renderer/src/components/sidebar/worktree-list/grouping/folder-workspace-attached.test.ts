@@ -3,7 +3,7 @@ import type { WorkspaceLineage } from '../../../../../../shared/worktree/lineage
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { worktree } from '../../worktree-list-groups-test-fixtures'
-import { getAttachedWorktreesByFolderWorkspaceId } from './folder-workspace-attached'
+import { getAttachedWorktreesByFolderWorkspaceIdentity } from './folder-workspace-attached'
 
 function attachedTo(
   worktreeId: string,
@@ -24,11 +24,11 @@ function lineageFor(worktreeId: string, overrides: Partial<WorkspaceLineage> = {
 }
 
 function attachedNames(worktrees: readonly Worktree[], lineage: Record<string, WorkspaceLineage>) {
-  const attached = getAttachedWorktreesByFolderWorkspaceId(worktrees, lineage)
-  return (attached.get('fw-1') ?? []).map((entry) => entry.displayName)
+  const attached = getAttachedWorktreesByFolderWorkspaceIdentity(worktrees, lineage)
+  return [...attached.values()].flat().map((entry) => entry.displayName)
 }
 
-describe('getAttachedWorktreesByFolderWorkspaceId', () => {
+describe('getAttachedWorktreesByFolderWorkspaceIdentity', () => {
   it('nests the only worktree carrying the id on a single host', () => {
     const names = attachedNames([worktree], lineageFor(worktree.id))
 
@@ -84,6 +84,6 @@ describe('getAttachedWorktreesByFolderWorkspaceId', () => {
       parentWorkspaceKey: worktreeWorkspaceKey('wt-parent')
     })
 
-    expect(getAttachedWorktreesByFolderWorkspaceId([worktree], lineage).size).toBe(0)
+    expect(getAttachedWorktreesByFolderWorkspaceIdentity([worktree], lineage).size).toBe(0)
   })
 })

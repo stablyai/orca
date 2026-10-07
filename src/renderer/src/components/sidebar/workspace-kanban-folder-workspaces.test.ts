@@ -85,7 +85,7 @@ describe('buildWorkspaceBoardWorktrees', () => {
         worktree('repo-a::/alpha', { hostId: 'local', instanceId: 'local-1' }),
         worktree('repo-a::/alpha', { hostId: 'ssh:build-box', instanceId: 'remote-1' })
       ],
-      folderWorkspaces: [folderWorkspace()],
+      folderWorkspaces: [folderWorkspace({ executionHostId: 'ssh:build-box' })],
       workspaceLineageByChildKey: {
         [worktreeWorkspaceKey('repo-a::/alpha')]: attached('fw-1', 'repo-a::/alpha', 'remote-1')
       }

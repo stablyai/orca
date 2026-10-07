@@ -120,7 +120,7 @@ describe('folder workspaces render under every Group by mode', () => {
 
   it('does not duplicate the row under repo grouping', () => {
     const rows = buildSidebarRows({ groupBy: 'repo' })
-    expect(folderRows(rows).map((row) => row.key)).toEqual(['folder-workspace:fw-1'])
+    expect(folderRows(rows).map((row) => row.key)).toEqual(['folder-workspace:local|fw-1'])
   })
 })
 
@@ -142,13 +142,13 @@ describe('worktrees attached to a folder workspace', () => {
       expect(otherItems).toHaveLength(0)
       expect(folderRow).toMatchObject({
         attachedChildCount: 1,
-        attachedGroupKey: getFolderWorkspaceAttachedGroupKey('fw-1'),
+        attachedGroupKey: getFolderWorkspaceAttachedGroupKey('local|fw-1'),
         attachedCollapsed: false
       })
       expect(rows.indexOf(childRow)).toBe(rows.indexOf(folderRow) + 1)
       expect(childRow).toMatchObject({
         worktree: attachedChild,
-        sectionKey: folderWorkspaceKey('fw-1'),
+        sectionKey: 'folder:local|fw-1',
         depth: 1
       })
       expect(rows.some((row) => row.type === 'header' && row.key === 'workspace-status:todo')).toBe(
@@ -162,7 +162,7 @@ describe('worktrees attached to a folder workspace', () => {
       groupBy: 'workspace-status',
       worktrees: [attachedChild],
       workspaceLineageByChildKey: lineage,
-      collapsedGroups: new Set([getFolderWorkspaceAttachedGroupKey('fw-1')])
+      collapsedGroups: new Set([getFolderWorkspaceAttachedGroupKey('local|fw-1')])
     })
 
     expect(itemRows(rows)).toHaveLength(0)

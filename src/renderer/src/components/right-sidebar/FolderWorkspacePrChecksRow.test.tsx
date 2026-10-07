@@ -45,6 +45,7 @@ vi.mock('./checks-panel/checks-list', () => ({
 }))
 
 import { FolderWorkspacePrChecksRow } from './FolderWorkspacePrChecksRow'
+import { openHttpLink } from '@/lib/http-link-routing'
 
 let container: HTMLDivElement
 let root: Root
@@ -145,6 +146,38 @@ describe('FolderWorkspacePrChecksRow', () => {
   afterEach(() => {
     act(() => root.unmount())
     container.remove()
+  })
+
+  it('uses sibling native buttons with independent open, expand and external-link actions', () => {
+    const onOpen = vi.fn()
+    const onToggle = vi.fn()
+    act(() =>
+      root.render(
+        <FolderWorkspacePrChecksRow
+          row={makeRow()}
+          expanded={false}
+          onOpen={onOpen}
+          onToggle={onToggle}
+          onLoadCheckDetails={vi.fn(async () => null)}
+        />
+      )
+    )
+    expect(container.querySelector('button button, [role="button"] button')).toBeNull()
+    const buttons = container.querySelectorAll('button')
+    expect(buttons).toHaveLength(3)
+    const [toggle, open, external] = [...buttons]
+    expect(open.getAttribute('aria-label')).toContain('Checks tab')
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    act(() => toggle.click())
+    expect(onToggle).toHaveBeenCalledTimes(1)
+    expect(onOpen).not.toHaveBeenCalled()
+    act(() => open.click())
+    expect(onOpen).toHaveBeenCalledTimes(1)
+    act(() => external.click())
+    expect(openHttpLink).toHaveBeenCalledWith('https://example.test/pr/12')
+    expect(onOpen).toHaveBeenCalledTimes(1)
+    open.focus()
+    expect(document.activeElement).toBe(open)
   })
 
   it.each([

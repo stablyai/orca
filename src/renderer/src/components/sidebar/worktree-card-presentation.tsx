@@ -108,7 +108,7 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
     showHostContextBadge ||
     folderMetaRowContent ||
     showBranch ||
-    showIdentityInNewCard ||
+    (showIdentityInNewCard && !showRepoOrigin) ||
     showDetachedHeadInMetaRow ||
     showConflictOperationBadge ||
     cacheStartedAt != null ||

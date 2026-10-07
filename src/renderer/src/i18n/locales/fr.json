@@ -1,20 +1,4 @@
 {
-  "worktree": {
-    "nestedRemoval": {
-      "refreshFailed": "Impossible d'actualiser la liste des espaces de travail",
-      "review": "Supprimer avec les arbres de travail imbriqués…",
-      "title": "Supprimer l'espace de travail et les arbres de travail imbriqués ?",
-      "description": "Cette action supprime définitivement \"{{name}}\", tous les arbres de travail imbriqués ci-dessous et tous leurs fichiers, y compris les modifications non validées. Leurs terminaux et agents seront arrêtés.",
-      "detached": "HEAD détachée",
-      "loading": "Vérification des arbres de travail imbriqués…",
-      "order": "Les arbres de travail imbriqués sont supprimés en premier. Si une suppression échoue, le processus s'arrête et le parent est conservé. Les branches suivent vos paramètres de suppression existants.",
-      "cancel": "Annuler",
-      "retry": "Examiner à nouveau",
-      "deleting": "Suppression…",
-      "confirm": "Supprimer tous les arbres de travail listés",
-      "preservedBranches": "Certaines branches des arbres de travail imbriqués ont été conservées"
-    }
-  },
   "repoScan": {
     "importGroup": "Importer le dossier comme groupe",
     "importGroupDescription": "Rechercher des dépôts dans un dossier parent",

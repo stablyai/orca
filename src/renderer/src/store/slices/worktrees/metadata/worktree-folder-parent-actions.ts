@@ -49,7 +49,7 @@ const validationCodes = new Set([
 ])
 
 export function createFolderParentActions(set: WorktreeSliceSet, get: WorktreeSliceGet) {
-  const unverified = new Map<string, string>()
+  const unverified = new Map<string, { folderId: string }>()
   const assertContext = (context: FolderParentContext): Worktree => {
     const current = findCapturedFolderParentChild(get(), context)
     if (
@@ -85,6 +85,8 @@ export function createFolderParentActions(set: WorktreeSliceSet, get: WorktreeSl
   }
   const loadCatalog = async (context: FolderParentContext): Promise<FolderParentPickerData> => {
     assertContext(context)
+    const wanted = unverified.get(context.mutationKey)
+    const baseline = get()
     const groups = await fetchProjectGroupCatalogForTarget(context.target)
     assertContext(context)
     const folders = await fetchFolderWorkspaceCatalogForTarget(context.target, groups.projectGroups)
@@ -96,21 +98,24 @@ export function createFolderParentActions(set: WorktreeSliceSet, get: WorktreeSl
       rpcOptions(context)
     )
     const snapshot = await readLineage(context)
-    const wanted = unverified.get(context.mutationKey)
-    if (wanted) {
+    if (wanted && unverified.get(context.mutationKey) === wanted) {
       const current = assertContext(context)
       const edge = snapshot.workspaceLineageByChildKey[worktreeWorkspaceKey(current.id)]
       if (
-        edge?.childInstanceId !== context.instanceId ||
-        edge.parentWorkspaceKey !== folderWorkspaceKey(wanted)
+        edge?.childInstanceId === context.instanceId &&
+        edge.parentWorkspaceKey === folderWorkspaceKey(wanted.folderId)
       ) {
-        throw new FolderParentMutationError(
-          'unknown',
-          'Previous parent update has not been verified.'
-        )
+        let applied = false
+        set((state) => {
+          const projected = projectConfirmedFolderParent(state, context, edge, baseline)
+          applied = projected !== null
+          return projected ?? state
+        })
+        if (!applied) {
+          throw new FolderParentMutationError('acknowledged', 'Parent view could not be refreshed.')
+        }
       }
-      const baseline = get()
-      set((state) => projectConfirmedFolderParent(state, context, edge, baseline) ?? state)
+      // A fresh host snapshot permits an explicit retry; it never resends the timed-out write.
       unverified.delete(context.mutationKey)
       clearWorktreeParentMutationUncertain(context.mutationKey)
     }
@@ -184,15 +189,15 @@ export function createFolderParentActions(set: WorktreeSliceSet, get: WorktreeSl
           applied = projected !== null
           return projected ?? state
         })
-        if (!applied && !findCapturedFolderParentChild(get(), context)) {
-          throw new Error('Checkout changed before the view could be refreshed.')
+        if (!applied) {
+          throw new Error('Parent view changed before the confirmed update could be projected.')
         }
       } catch (error) {
         const rejected =
           !sent ||
           (!acknowledged && error instanceof RuntimeRpcCallError && validationCodes.has(error.code))
         if (!rejected) {
-          unverified.set(context.mutationKey, folderId)
+          unverified.set(context.mutationKey, { folderId })
           markWorktreeParentMutationUncertain(context.mutationKey)
         }
         throw new FolderParentMutationError(

@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
+import { makeWorkspaceLineage, makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import type { WorkspaceKey } from '../../../../shared/folder-workspace-types'
 import {
   canShowFolderParentAttachment,
   hasFolderWorkspaceParentLink,
+  hasWorktreeParentLink,
   isFolderParentAttachmentDisabled
 } from './worktree-context-menu-policy'
 
@@ -40,12 +43,17 @@ describe('folder attachment menu policy', () => {
     expect(isFolderParentAttachmentDisabled({ isDeleting: false, pending: false })).toBe(false)
   })
   it('detects only folder-workspace parents for the removal label', () => {
-    const child = { id: 'repo::/child' }
-    const edge = (parentWorkspaceKey: string): Record<string, { parentWorkspaceKey: string }> => ({
-      'worktree:repo::/child': { parentWorkspaceKey }
+    const child = { id: 'repo::/child', instanceId: 'current' }
+    const edge = (parentWorkspaceKey: WorkspaceKey, childInstanceId?: string) => ({
+      'worktree:repo::/child': makeWorkspaceLineage({ parentWorkspaceKey, childInstanceId })
     })
     expect(hasFolderWorkspaceParentLink(child, edge('folder:ticket'))).toBe(true)
     expect(hasFolderWorkspaceParentLink(child, edge('worktree:repo::/parent'))).toBe(false)
     expect(hasFolderWorkspaceParentLink(child, {})).toBe(false)
+    expect(hasFolderWorkspaceParentLink(child, edge('folder:ticket', 'current'))).toBe(true)
+    expect(hasFolderWorkspaceParentLink(child, edge('folder:ticket', 'old-checkout'))).toBe(false)
+    const fullChild = makeWorktree({ ...child, repoId: 'repo' })
+    expect(hasWorktreeParentLink(fullChild, {}, edge('folder:ticket', 'old-checkout'))).toBe(false)
+    expect(hasWorktreeParentLink(fullChild, {}, edge('folder:ticket', 'current'))).toBe(true)
   })
 })

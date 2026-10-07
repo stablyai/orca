@@ -174,18 +174,12 @@ test.describe('Folder setup', () => {
         Buffer.from(before.data, 'base64')
       )
       await composer.getByRole('button', { name: /^Create/ }).click()
-      await expect
-        .poll(() =>
-          orcaPage.evaluate(() => {
-            const state = window.__store!.getState()
-            const folder = state.folderWorkspaces.find(
-              (entry) => entry.name === 'attachment-test-ticket'
-            )
-            return folder ? state.activeWorktreeId === `folder:${folder.id}` : false
-          })
-        )
-        .toBe(true)
       await expect(composer).toHaveCount(0)
+      const createdRow = orcaPage
+        .locator('[data-worktree-sidebar] [data-worktree-card-surface]')
+        .filter({ hasText: 'attachment-test-ticket' })
+      await expect(createdRow).toBeVisible()
+      await expect(createdRow).toHaveAttribute('data-worktree-card-active', /.+/)
       const after = await cdp.send('Page.captureScreenshot')
       writeFileSync(
         testInfo.outputPath('folder-workspace-created.png'),

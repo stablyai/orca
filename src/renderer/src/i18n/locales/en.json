@@ -1,20 +1,4 @@
 {
-  "worktree": {
-    "nestedRemoval": {
-      "refreshFailed": "Could not refresh the workspace list",
-      "review": "Delete with nested worktrees…",
-      "title": "Delete workspace and nested worktrees?",
-      "description": "This permanently deletes \"{{name}}\", every nested worktree listed below, and all files inside them, including uncommitted changes. Their terminals and agents will be stopped.",
-      "detached": "Detached HEAD",
-      "loading": "Checking nested worktrees…",
-      "order": "Nested worktrees are deleted first. If one fails, deletion stops and the parent is kept. Branches follow your existing deletion settings.",
-      "cancel": "Cancel",
-      "retry": "Review again",
-      "deleting": "Deleting…",
-      "confirm": "Delete all listed worktrees",
-      "preservedBranches": "Some nested worktree branches were kept"
-    }
-  },
   "repoScan": {
     "importGroup": "Import folder as group",
     "importGroupDescription": "Find repositories inside a parent folder",

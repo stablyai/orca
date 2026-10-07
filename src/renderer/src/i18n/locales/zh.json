@@ -1,20 +1,4 @@
 {
-  "worktree": {
-    "nestedRemoval": {
-      "refreshFailed": "无法刷新工作区列表",
-      "review": "连同嵌套工作树一起删除…",
-      "title": "删除工作区及嵌套工作树？",
-      "description": "这将永久删除“{{name}}”、下方列出的所有嵌套工作树及其全部文件，包括未提交的更改。它们的终端和代理将停止。",
-      "detached": "分离的 HEAD",
-      "loading": "正在检查嵌套工作树…",
-      "order": "先删除嵌套工作树。如果其中一个删除失败，将停止删除并保留父级。分支按现有删除设置处理。",
-      "cancel": "取消",
-      "retry": "重新检查",
-      "deleting": "正在删除…",
-      "confirm": "删除列出的所有工作树",
-      "preservedBranches": "已保留部分嵌套工作树分支"
-    }
-  },
   "repoScan": {
     "importGroup": "将文件夹导入为分组",
     "importGroupDescription": "查找父文件夹内的仓库",

@@ -86,8 +86,9 @@ export function NestedRepoScanExplanations({
             {translate('repoScan.showDetails', 'Show scan details')}
           </summary>
           <ul className="mt-2 max-h-48 space-y-2 overflow-y-auto scrollbar-sleek">
-            {diagnostics.details.map((detail) => (
-              <li key={detail.path} className="space-y-1 break-all">
+            {diagnostics.details.map((detail, index) => (
+              // oxlint-disable-next-line react-doctor/no-array-index-as-key -- Read-only snapshot rows have no state; shortened paths can collide.
+              <li key={`${index}:${detail.path}`} className="space-y-1 break-all">
                 <code>{detail.path}</code>
                 <p>
                   {reasonLabel(detail.reason)}

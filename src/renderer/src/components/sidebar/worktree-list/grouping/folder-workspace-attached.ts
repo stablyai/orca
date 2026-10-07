@@ -1,16 +1,37 @@
 import type { WorkspaceLineage } from '../../../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
-import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
+import {
+  composeWorktreeHostIdentity,
+  getWorktreeHostIdentity
+} from '../../../../../../shared/worktree/host-qualified-identity'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../../shared/execution-host'
+import type { RenderableFolderWorkspace } from './folder-workspace-lanes'
+import { getFolderWorkspaceHostId } from '../../folder-workspace-host-id'
+
+export function getFolderWorkspaceAttachmentIdentity(
+  pair: RenderableFolderWorkspace,
+  defaultHostId: ExecutionHostId = LOCAL_EXECUTION_HOST_ID
+): string {
+  const hostId =
+    parseExecutionHostId(pair.folderWorkspace.executionHostId)?.id ??
+    getFolderWorkspaceHostId(pair.folderWorkspace, pair.projectGroup, defaultHostId)
+  return composeWorktreeHostIdentity(hostId, pair.folderWorkspace.id)
+}
 
 /**
  * Worktrees attached to a folder workspace by workspace lineage, keyed by folder
- * workspace id. Children keep the order of `worktrees` so a folder's nested rows
+ * host-qualified workspace identity. Children keep the order of `worktrees` so a folder's nested rows
  * sort the same way the surrounding lane does.
  */
-export function getAttachedWorktreesByFolderWorkspaceId(
+export function getAttachedWorktreesByFolderWorkspaceIdentity(
   worktrees: readonly Worktree[],
-  workspaceLineageByChildKey: Record<string, WorkspaceLineage>
+  workspaceLineageByChildKey: Record<string, WorkspaceLineage>,
+  defaultHostId: ExecutionHostId = LOCAL_EXECUTION_HOST_ID
 ): Map<string, Worktree[]> {
   const attached = new Map<string, Worktree[]>()
   if (Object.keys(workspaceLineageByChildKey).length === 0) {
@@ -37,9 +58,13 @@ export function getAttachedWorktreesByFolderWorkspaceId(
     ) {
       continue
     }
-    const children = attached.get(parentScope.folderWorkspaceId) ?? []
+    const parentIdentity = composeWorktreeHostIdentity(
+      worktree.hostId ?? defaultHostId,
+      parentScope.folderWorkspaceId
+    )
+    const children = attached.get(parentIdentity) ?? []
     children.push(worktree)
-    attached.set(parentScope.folderWorkspaceId, children)
+    attached.set(parentIdentity, children)
   }
   return attached
 }

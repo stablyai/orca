@@ -1,20 +1,4 @@
 {
-  "worktree": {
-    "nestedRemoval": {
-      "refreshFailed": "No se pudo actualizar la lista de espacios de trabajo",
-      "review": "Eliminar con árboles de trabajo anidados…",
-      "title": "¿Eliminar el espacio de trabajo y los árboles de trabajo anidados?",
-      "description": "Esto elimina permanentemente \"{{name}}\", todos los árboles de trabajo anidados que aparecen a continuación y todos sus archivos, incluidos los cambios sin confirmar. Sus terminales y agentes se detendrán.",
-      "detached": "HEAD desacoplado",
-      "loading": "Comprobando árboles de trabajo anidados…",
-      "order": "Los árboles de trabajo anidados se eliminan primero. Si uno falla, la eliminación se detiene y se conserva el padre. Las ramas siguen la configuración de eliminación existente.",
-      "cancel": "Cancelar",
-      "retry": "Revisar de nuevo",
-      "deleting": "Eliminando…",
-      "confirm": "Eliminar todos los árboles de trabajo indicados",
-      "preservedBranches": "Se conservaron algunas ramas de los árboles de trabajo anidados"
-    }
-  },
   "repoScan": {
     "importGroup": "Importar carpeta como grupo",
     "importGroupDescription": "Buscar repositorios dentro de una carpeta principal",

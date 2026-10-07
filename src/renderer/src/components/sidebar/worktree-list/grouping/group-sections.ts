@@ -50,7 +50,7 @@ export type SectionAppendContext = {
   worktreeMap: Map<string, Worktree>
   nestLineage: boolean
   cyclicLineageIds: ReadonlySet<string>
-  /** Worktrees nested beneath each folder workspace row, keyed by folder id. */
+  /** Worktrees nested beneath each folder row, keyed by host-qualified folder identity. */
   attachedByFolderId: ReadonlyMap<string, Worktree[]>
 }
 
@@ -213,6 +213,7 @@ export function appendOrderedGroups(
         cyclicLineageIds
       })
       appendFolderWorkspaceRows(result, folderPairs, projectGroupDepth, {
+        defaultHostId,
         attachedByFolderId: ctx.attachedByFolderId,
         repoMap,
         lineageById,

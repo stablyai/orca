@@ -1,20 +1,4 @@
 {
-  "worktree": {
-    "nestedRemoval": {
-      "refreshFailed": "워크스페이스 목록을 새로 고칠 수 없습니다",
-      "review": "중첩 워크트리와 함께 삭제…",
-      "title": "워크스페이스와 중첩 워크트리를 삭제할까요?",
-      "description": "\"{{name}}\", 아래에 나열된 모든 중첩 워크트리 및 커밋하지 않은 변경 사항을 포함한 모든 파일을 영구적으로 삭제합니다. 해당 터미널과 에이전트가 중지됩니다.",
-      "detached": "분리된 HEAD",
-      "loading": "중첩 워크트리 확인 중…",
-      "order": "중첩 워크트리를 먼저 삭제합니다. 하나라도 실패하면 삭제를 중지하고 상위 항목을 유지합니다. 브랜치는 기존 삭제 설정을 따릅니다.",
-      "cancel": "취소",
-      "retry": "다시 검토",
-      "deleting": "삭제 중…",
-      "confirm": "나열된 모든 워크트리 삭제",
-      "preservedBranches": "일부 중첩 워크트리 브랜치를 유지했습니다"
-    }
-  },
   "repoScan": {
     "importGroup": "폴더를 그룹으로 가져오기",
     "importGroupDescription": "상위 폴더 안에서 저장소 찾기",

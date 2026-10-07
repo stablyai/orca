@@ -117,6 +117,7 @@ export function appendProjectGroupSections(
         folderWorkspacesByProjectGroupId.get(projectGroup.id) ?? [],
         depth + 1,
         {
+          defaultHostId: ctx.defaultHostId,
           attachedByFolderId: ctx.attachedByFolderId,
           repoMap: ctx.repoMap,
           lineageById: ctx.lineageById,

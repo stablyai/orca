@@ -56,18 +56,23 @@ export function hasWorktreeParentLink(
   lineageById: AppState['worktreeLineageById'],
   workspaceLineageByChildKey: AppState['workspaceLineageByChildKey']
 ): boolean {
+  const edge = workspaceLineageByChildKey[worktreeWorkspaceKey(worktree.id)]
   return Boolean(
     getProjectedWorktreeLineage(worktree, lineageById) ||
-    workspaceLineageByChildKey[worktreeWorkspaceKey(worktree.id)]
+    (edge && (!edge.childInstanceId || edge.childInstanceId === worktree.instanceId))
   )
 }
 
 export function hasFolderWorkspaceParentLink(
-  worktree: Pick<Worktree, 'id'>,
-  workspaceLineageByChildKey: Record<string, { parentWorkspaceKey: string }>
+  worktree: Pick<Worktree, 'id' | 'instanceId'>,
+  workspaceLineageByChildKey: AppState['workspaceLineageByChildKey']
 ): boolean {
   const edge = workspaceLineageByChildKey[worktreeWorkspaceKey(worktree.id)]
-  return edge ? parseWorkspaceKey(edge.parentWorkspaceKey)?.type === 'folder' : false
+  return Boolean(
+    edge &&
+    (!edge.childInstanceId || edge.childInstanceId === worktree.instanceId) &&
+    parseWorkspaceKey(edge.parentWorkspaceKey)?.type === 'folder'
+  )
 }
 
 export function shouldUseNativeContextMenu(target: EventTarget | null): boolean {

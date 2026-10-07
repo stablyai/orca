@@ -1,6 +1,8 @@
 // @vitest-environment happy-dom
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import { act } from 'react'
+import { createRoot } from 'react-dom/client'
 import type { NestedRepoScanResult } from '../../../../shared/project-group-types'
 import { normalizeNestedRepoScanResult } from '@/store/project-groups/nested-repository-operations'
 import { NestedRepoScanExplanations } from './NestedRepoScanExplanations'
@@ -21,6 +23,35 @@ const render = (value: NestedRepoScanResult) =>
   renderToStaticMarkup(<NestedRepoScanExplanations scan={value} />)
 
 describe('scan explanations', () => {
+  it('renders same-path diagnostic rows without duplicate React keys', () => {
+    const container = document.createElement('div')
+    const root = createRoot(container)
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      act(() =>
+        root.render(
+          <NestedRepoScanExplanations
+            scan={{
+              ...scan,
+              diagnostics: {
+                counts: {},
+                omittedDetails: 0,
+                details: [
+                  { path: '/shortened/path…', reason: 'hidden' },
+                  { path: '/shortened/path…', reason: 'unreadable' }
+                ]
+              }
+            }}
+          />
+        )
+      )
+      expect(container.querySelectorAll('li')).toHaveLength(2)
+      expect(errors.mock.calls.flat().join(' ')).not.toContain('same key')
+    } finally {
+      act(() => root.unmount())
+      errors.mockRestore()
+    }
+  })
   it('accepts legacy responses without claiming verified zero exclusions', () => {
     const legacy = normalizeNestedRepoScanResult(JSON.parse(JSON.stringify(scan)))
     expect(legacy.diagnostics).toBeUndefined()

@@ -1,9 +1,12 @@
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-worktree'
-import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
+import {
+  composeWorktreeHostIdentity,
+  getWorktreeHostIdentity
+} from '../../../../shared/worktree/host-qualified-identity'
 import type { WorkspaceLineage } from '../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { getAttachedWorktreesByFolderWorkspaceId } from './worktree-list/grouping/folder-workspace-attached'
+import { getAttachedWorktreesByFolderWorkspaceIdentity } from './worktree-list/grouping/folder-workspace-attached'
 
 /**
  * The worktree-shaped rows the Workspace Board lays out: every git worktree
@@ -18,7 +21,7 @@ export function buildWorkspaceBoardWorktrees(args: {
   workspaceLineageByChildKey: Record<string, WorkspaceLineage>
 }): Worktree[] {
   const folderWorkspaces = args.folderWorkspaces.filter((workspace) => !workspace.isArchived)
-  const attachedByFolderId = getAttachedWorktreesByFolderWorkspaceId(
+  const attachedByFolderId = getAttachedWorktreesByFolderWorkspaceIdentity(
     args.worktrees,
     args.workspaceLineageByChildKey
   )
@@ -27,7 +30,11 @@ export function buildWorkspaceBoardWorktrees(args: {
   // was attached; the grouping already returns the host-specific child, so key on its identity.
   const attachedIdentities = new Set(
     folderWorkspaces.flatMap((workspace) =>
-      (attachedByFolderId.get(workspace.id) ?? []).map(getWorktreeHostIdentity)
+      (
+        attachedByFolderId.get(
+          composeWorktreeHostIdentity(folderWorkspaceToWorktree(workspace).hostId, workspace.id)
+        ) ?? []
+      ).map(getWorktreeHostIdentity)
     )
   )
   return [

@@ -63,57 +63,47 @@ export function FolderWorkspacePrChecksRow({
         expanded ? 'border-border bg-card' : 'hover:bg-accent'
       )}
     >
-      <div
-        role="button"
-        tabIndex={0}
-        className="flex w-full min-w-0 items-start gap-2 rounded-md px-2 py-2 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-        onClick={onOpen}
-        onKeyDown={(event) => {
-          if (event.key !== 'Enter' && event.key !== ' ') {
-            return
-          }
-          event.preventDefault()
-          onOpen()
-        }}
-        aria-label={openChecksLabel}
-      >
+      <div className="flex w-full min-w-0 items-start gap-2 rounded-md px-2 py-2">
         <button
           type="button"
           className="mt-0.5 shrink-0 rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           aria-expanded={expanded}
           aria-label={toggleDetailsLabel}
-          onClick={(event) => {
-            event.stopPropagation()
-            onToggle()
-          }}
-          onKeyDown={(event) => event.stopPropagation()}
+          onClick={onToggle}
         >
           <ChevronRight className={cn('size-3 transition-transform', expanded && 'rotate-90')} />
         </button>
-        <ReviewIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-        <div className="min-w-0 flex-1">
-          <PrChecksRowHeader row={row} />
-          <div className="mt-1 truncate text-[12px] text-foreground/90">{row.title}</div>
-          <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
-            {showStatusIcon ? (
-              <StatusIcon
-                className={cn(
-                  'size-3 shrink-0',
-                  CHECK_COLOR[row.checkTone],
-                  animateStatusIcon && 'animate-spin'
-                )}
-              />
+        <button
+          type="button"
+          className="flex min-w-0 flex-1 items-start gap-2 rounded text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          onClick={onOpen}
+          aria-label={openChecksLabel}
+        >
+          <ReviewIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+          <span className="min-w-0 flex-1">
+            <PrChecksRowHeader row={row} />
+            <span className="mt-1 block truncate text-[12px] text-foreground/90">{row.title}</span>
+            <span className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
+              {showStatusIcon ? (
+                <StatusIcon
+                  className={cn(
+                    'size-3 shrink-0',
+                    CHECK_COLOR[row.checkTone],
+                    animateStatusIcon && 'animate-spin'
+                  )}
+                />
+              ) : null}
+              <span className="truncate">{row.summary}</span>
+              {row.repo ? <span className="shrink-0">· {row.repo.displayName}</span> : null}
+              {row.branch ? <span className="truncate">· {row.branch}</span> : null}
+            </span>
+            {row.detailNames.length > 0 ? (
+              <span className="mt-1 block truncate text-[11px] text-muted-foreground">
+                {row.detailNames.join(', ')}
+              </span>
             ) : null}
-            <span className="truncate">{row.summary}</span>
-            {row.repo ? <span className="shrink-0">· {row.repo.displayName}</span> : null}
-            {row.branch ? <span className="truncate">· {row.branch}</span> : null}
-          </div>
-          {row.detailNames.length > 0 ? (
-            <div className="mt-1 truncate text-[11px] text-muted-foreground">
-              {row.detailNames.join(', ')}
-            </div>
-          ) : null}
-        </div>
+          </span>
+        </button>
         {row.reviewUrl ? (
           <Tooltip>
             <TooltipTrigger asChild>
@@ -121,11 +111,7 @@ export function FolderWorkspacePrChecksRow({
                 type="button"
                 className="rounded p-1 text-muted-foreground opacity-80 hover:bg-accent hover:text-foreground group-hover:opacity-100"
                 aria-label={openExternalLabel}
-                onClick={(event) => {
-                  event.stopPropagation()
-                  void openHttpLink(row.reviewUrl!)
-                }}
-                onKeyDown={(event) => event.stopPropagation()}
+                onClick={() => void openHttpLink(row.reviewUrl!)}
               >
                 <ExternalLink className="size-3.5" />
               </button>
@@ -153,7 +139,7 @@ export function FolderWorkspacePrChecksRow({
 
 function PrChecksRowHeader({ row }: { row: ParentPrChecksRow }): React.JSX.Element {
   return (
-    <div className="flex min-w-0 items-center gap-1.5">
+    <span className="flex min-w-0 items-center gap-1.5">
       <span className="truncate text-[13px] font-medium text-foreground">
         {row.worktree.displayName}
       </span>
@@ -172,6 +158,6 @@ function PrChecksRowHeader({ row }: { row: ParentPrChecksRow }): React.JSX.Eleme
           {row.reviewState}
         </span>
       ) : null}
-    </div>
+    </span>
   )
 }
