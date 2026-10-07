@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { open, realpath, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, relative, sep } from 'node:path'
@@ -116,6 +117,7 @@ async function readSkillSummary(skillFilePath: string): Promise<{
   name: string | null
   description: string | null
   updatedAt: number | null
+  contentHash: string | null
 } | null> {
   try {
     const fileStat = await stat(skillFilePath)
@@ -130,14 +132,23 @@ async function readSkillSummary(skillFilePath: string): Promise<{
     }
     return {
       ...summarizeSkillMarkdown(content),
-      updatedAt: fileStat.mtimeMs
+      updatedAt: fileStat.mtimeMs,
+      contentHash:
+        fileStat.size <= MAX_MARKDOWN_BYTES
+          ? createHash('sha256').update(content).digest('hex')
+          : null
     }
   } catch {
     return null
   }
 }
 
-type ScannedSkill = DiscoveredSkill & { canonicalSkillFilePath: string }
+type ScannedSkill = DiscoveredSkill & {
+  canonicalSkillFilePath: string
+  contentHash: string | null
+}
+
+const CLAUDE_DEFAULT_SKILL_NAMES = new Set(['docs', 'docx', 'pdf', 'pptx', 'xlsx'])
 
 async function scanRoot(root: SkillScanRoot, signal: AbortSignal): Promise<ScannedSkill[]> {
   const maxDepth = skillDirectoryMaxDepth(root.sourceKind)
@@ -173,6 +184,7 @@ async function scanRoot(root: SkillScanRoot, signal: AbortSignal): Promise<Scann
         skillFilePath,
         installed: true,
         updatedAt: summary.updatedAt,
+        contentHash: summary.contentHash,
         canonicalSkillFilePath
       } satisfies ScannedSkill
     })
@@ -226,21 +238,51 @@ async function scanRootShared(
   }
 }
 
-function mergeScannedSkill(seen: Map<string, DiscoveredSkill>, skill: ScannedSkill): void {
+function mergeScannedSkill(
+  seen: Map<string, DiscoveredSkill>,
+  logicalClaudeDefaults: Map<string, DiscoveredSkill>,
+  skill: ScannedSkill
+): void {
   // Why: overlapping repo/cwd roots and symlinked provider homes can reach
   // the same file. Keep the first source's higher-level scope identity, but
   // record every contributing root so per-agent visibility survives dedup.
-  const existing = seen.get(skill.canonicalSkillFilePath)
+  const logicalKey = `${skill.providers.includes('claude') ? skill.name.trim().toLowerCase() : ''}\0${skill.contentHash ?? ''}`
+  const canonicalExisting = seen.get(skill.canonicalSkillFilePath)
+  const logicalExisting =
+    skill.providers.includes('claude') &&
+    skill.contentHash !== null &&
+    CLAUDE_DEFAULT_SKILL_NAMES.has(skill.name.trim().toLowerCase())
+      ? logicalClaudeDefaults.get(logicalKey)
+      : undefined
+  const existing =
+    canonicalExisting ??
+    (logicalExisting && (logicalExisting.alternateSkillFiles?.length ?? 0) < 64
+      ? logicalExisting
+      : undefined)
   if (!existing) {
-    const { canonicalSkillFilePath, ...publicSkill } = skill
+    const { canonicalSkillFilePath, contentHash: _contentHash, ...publicSkill } = skill
     // Copy: a shared root scan hands the same skill object to every caller, so the
     // result each one owns must not alias the cached arrays.
-    seen.set(canonicalSkillFilePath, {
+    const result = {
       ...publicSkill,
       providers: [...publicSkill.providers],
       rootPaths: [skill.rootPath]
-    })
+    }
+    seen.set(canonicalSkillFilePath, result)
+    if (
+      skill.providers.includes('claude') &&
+      skill.contentHash !== null &&
+      CLAUDE_DEFAULT_SKILL_NAMES.has(skill.name.trim().toLowerCase())
+    ) {
+      logicalClaudeDefaults.set(logicalKey, result)
+    }
     return
+  }
+  if (existing.skillFilePath !== skill.skillFilePath) {
+    const alternate = (existing.alternateSkillFiles ??= [])
+    if (!alternate.some((file) => file.path === skill.skillFilePath)) {
+      alternate.push({ path: skill.skillFilePath, updatedAt: skill.updatedAt })
+    }
   }
   if (existing.rootPaths && !existing.rootPaths.includes(skill.rootPath)) {
     existing.rootPaths.push(skill.rootPath)
@@ -296,6 +338,7 @@ export async function discoverSkills(args: {
   const normalizedNames = args.names?.map((name) => name.trim().toLowerCase()).filter(Boolean)
   const expectedNames = normalizedNames?.length ? new Set(normalizedNames) : undefined
   const seen = new Map<string, DiscoveredSkill>()
+  const logicalClaudeDefaults = new Map<string, DiscoveredSkill>()
   for (const { value } of scans) {
     for (const skill of value.skills) {
       if (args.sourceKinds?.length && !args.sourceKinds.includes(skill.sourceKind)) {
@@ -308,7 +351,7 @@ export async function discoverSkills(args: {
       ) {
         continue
       }
-      mergeScannedSkill(seen, skill)
+      mergeScannedSkill(seen, logicalClaudeDefaults, skill)
     }
   }
   const skills = sortDiscoveredSkills(Array.from(seen.values()))

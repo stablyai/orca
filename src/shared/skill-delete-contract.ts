@@ -30,6 +30,10 @@ const SkillDeleteTargetSkillSchema = z
     id: z.string().min(1).max(128),
     directoryPath: SkillPathSchema,
     skillFilePath: SkillPathSchema,
+    alternateSkillFiles: z
+      .array(z.object({ path: SkillPathSchema, updatedAt: z.number().nullable() }))
+      .max(64)
+      .optional(),
     name: z.string().min(1).max(256),
     /** `stat(skillFilePath).mtimeMs` as displayed; null fails the guard closed. */
     updatedAt: z.number().nullable()
