@@ -1,3 +1,7 @@
+import {
+  ClaudeSessionContinuationTracker,
+  resolvePaneClaudeContinuation
+} from '../../../shared/agent-hook-listener/claude-session-continuation'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import {
   isSameAgentProcess,
@@ -11,6 +15,7 @@ export abstract class AgentHookServerAgentPresence extends AgentHookServerLifecy
     AgentHookEventPayload,
     Promise<AgentProcessVerdict | null>
   >()
+  private readonly claudeContinuations = new ClaudeSessionContinuationTracker()
 
   /** A live hook proves its own process alive; only another process's hook casts doubt on the owner. */
   checkAgentPresenceAfterHook(event: AgentHookEventPayload, row: AgentHookEventPayload): void {
@@ -31,6 +36,7 @@ export abstract class AgentHookServerAgentPresence extends AgentHookServerLifecy
 
   checkAgentPresence(paneKey: string): Promise<AgentProcessVerdict | null> {
     const resolved = this.resolvePaneKeyAlias(paneKey)
+    this.followClaudeSessionContinuation(resolved)
     const row = this.state.lastStatusByPaneKey.get(resolved)
     // Why: an ended owner already published its exit, and an owner no hook identified cannot be checked.
     if (!row?.agentPresence?.process || row.agentPresence.ended) {
@@ -67,5 +73,33 @@ export abstract class AgentHookServerAgentPresence extends AgentHookServerLifecy
       })
     this.presenceChecks.set(row, check)
     return check
+  }
+
+  /** A Claude session forked into a daemon job keeps running in this pane, but #15304 declines
+   *  the job's hooks; the pane's own transcript names the fork, so rebind the row to it. */
+  private followClaudeSessionContinuation(paneKey: string): void {
+    const row = this.state.lastStatusByPaneKey.get(paneKey)
+    if (!row || row.connectionId !== null) {
+      return
+    }
+    const next = resolvePaneClaudeContinuation(
+      this.claudeContinuations,
+      this.state.lastStatusByPaneKey,
+      paneKey
+    )
+    if (next) {
+      this.applyNormalizedStatus(
+        {
+          ...row,
+          providerSession: next,
+          // Why: only the identity moved; the state is unchanged, so keep its evidence clock.
+          isReplay: true,
+          hookEventName: undefined,
+          hasExplicitPrompt: undefined
+        },
+        undefined,
+        'process'
+      )
+    }
   }
 }
