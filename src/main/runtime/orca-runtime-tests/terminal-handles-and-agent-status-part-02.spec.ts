@@ -304,7 +304,7 @@ describe('OrcaRuntimeService', () => {
     expect(getForegroundProcess).toHaveBeenCalledTimes(1)
   })
 
-  it.each(['claude', 'codex'] as const)(
+  it.each(['claude', 'codex', 'omp'] as const)(
     'authorizes settled CLI prompts only after positive %s foreground identity',
     async (agent) => {
       const runtime = new OrcaRuntimeService(store)
@@ -334,23 +334,26 @@ describe('OrcaRuntimeService', () => {
     await expect(runtime.isTerminalRunningSettledPromptAgent(terminal.handle)).resolves.toBe(false)
   })
 
-  it('keeps stale Codex launch identity on legacy delivery after the shell returns', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => 'zsh'
-    })
-    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
-      command: 'codex',
-      title: 'Codex working',
-      launchAgent: 'codex'
-    })
+  it.each(['codex', 'omp'] as const)(
+    'keeps stale %s launch identity on legacy delivery after the shell returns',
+    async (agent) => {
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => 'zsh'
+      })
+      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+        command: agent,
+        title: agent === 'omp' ? 'OMP > session' : 'codex working',
+        launchAgent: agent
+      })
 
-    await expect(runtime.isTerminalRunningAgent(handle)).resolves.toBe(true)
-    await expect(runtime.isTerminalRunningSettledPromptAgent(handle)).resolves.toBe(false)
-  })
+      await expect(runtime.isTerminalRunningAgent(handle)).resolves.toBe(true)
+      await expect(runtime.isTerminalRunningSettledPromptAgent(handle)).resolves.toBe(false)
+    }
+  )
 
   it('waits for delayed wrapper foreground cache enrichment', async () => {
     const getForegroundProcess = vi.fn(async () => (Date.now() >= 4_000 ? 'codex' : 'node'))
