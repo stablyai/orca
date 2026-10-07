@@ -54,6 +54,8 @@ export function useHostWorktreeCatalog(args: {
     worktreeCatalogRef
   } = state
   const fetchWorktreesRef = useRef<FetchWorktrees | null>(null)
+  const hostIdRef = useRef(hostId)
+  hostIdRef.current = hostId
 
   const fetchWorktrees = useCallback(
     async (options: WorktreeFetchOptions = {}): Promise<Worktree[] | undefined> => {
@@ -86,7 +88,7 @@ export function useHostWorktreeCatalog(args: {
       const request = (async (): Promise<Worktree[] | undefined> => {
         try {
           const fetched = await worktreeCatalogRef.current.fetch(requestClient, requestHostId)
-          if (clientRef.current !== requestClient || hostId !== requestHostId) {
+          if (clientRef.current !== requestClient || hostIdRef.current !== requestHostId) {
             return undefined
           }
           if (!options.allowDuringModal && newWorktreeModalVisibleRef.current) {
@@ -145,7 +147,7 @@ export function useHostWorktreeCatalog(args: {
           return confirmed
         } catch (error) {
           // Will retry on reconnect
-          if (clientRef.current === requestClient && hostId === requestHostId) {
+          if (clientRef.current === requestClient && hostIdRef.current === requestHostId) {
             // Why the branch: this code is printed to the user verbatim, and a reply the reader
             // refused is a host-payload defect, not a connectivity one (STA-3123).
             setCatalogError(

@@ -111,6 +111,47 @@ describe('a catalog the host confirmed', () => {
 })
 
 describe('the fetch a handoff awaits', () => {
+  it('drops an old request after a same-client host switch', async () => {
+    const releasers: Array<() => void> = []
+    const catalogFetch = () =>
+      new Promise((resolve) => {
+        releasers.push(() =>
+          resolve({ kind: 'response', pending: { admission: { kind: 'valid' } } })
+        )
+      })
+    const actionErrors: string[] = []
+    const catalogErrors: (string | null)[] = []
+    const args = catalogHook(
+      { kind: 'response', pending: { admission: { kind: 'valid' } } },
+      actionErrors,
+      catalogErrors,
+      catalogFetch
+    ) as unknown as Parameters<typeof useHostWorktreeCatalog>[0]
+    const held: {
+      fetchWorktrees: ((options?: { allowDuringModal?: boolean }) => Promise<unknown>) | null
+    } = { fetchWorktrees: null }
+    let renderer: ReturnType<typeof create> | null = null
+    function Probe(): null {
+      held.fetchWorktrees = useHostWorktreeCatalog(args).fetchWorktrees
+      return null
+    }
+    await act(async () => {
+      renderer = create(createElement(Probe))
+    })
+    const oldRequest = held.fetchWorktrees?.({ allowDuringModal: true })
+    expect(releasers).toHaveLength(1)
+
+    args.hostId = 'host-2'
+    await act(async () => {
+      renderer?.update(createElement(Probe))
+    })
+    releasers[0]?.()
+
+    await expect(oldRequest).resolves.toBeUndefined()
+    expect(actionErrors).toEqual([])
+    expect(catalogErrors).toEqual([])
+  })
+
   it('returns the confirmed list, so callers needing the refreshed rows get them', async () => {
     const actionErrors: string[] = []
     const catalogErrors: (string | null)[] = []
