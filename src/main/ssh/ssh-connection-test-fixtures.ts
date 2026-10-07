@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { vi } from 'vitest'
 import type { Mock } from 'vitest'
+import type { AnyAuthMethod, AuthenticationType } from 'ssh2'
 import type { SshConnectionCallbacks } from './ssh-connection'
 import type { SshResolvedConfig } from './ssh-config-parser'
 import type { SshTarget } from '../../shared/ssh-types'
@@ -14,6 +15,40 @@ export function createTarget(overrides?: Partial<SshTarget>): SshTarget {
     username: 'deploy',
     ...overrides
   }
+}
+
+/** Walks an attempt's initial auth ladder against a host that keeps listing `hostMethods`. */
+export function walkInitialAuthLadder(
+  config: unknown,
+  hostMethods: AuthenticationType[]
+): string[] {
+  const authHandler =
+    typeof config === 'object' && config !== null && 'authHandler' in config
+      ? config.authHandler
+      : undefined
+  if (typeof authHandler !== 'function') {
+    throw new Error('connect config has no auth handler')
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: ssh2 calls the handler with null authsLeft first and passes false to next() once exhausted; its typings omit both.
+  const handler = authHandler as (
+    authsLeft: AuthenticationType[] | null,
+    partialSuccess: boolean,
+    next: (attempt: AuthenticationType | AnyAuthMethod | false) => void
+  ) => void
+  const walked: (AuthenticationType | AnyAuthMethod)[] = []
+  let exhausted = false
+  let firstCall = true
+  while (!exhausted) {
+    handler(firstCall ? null : hostMethods, false, (attempt) => {
+      if (attempt === false) {
+        exhausted = true
+      } else {
+        walked.push(attempt)
+      }
+    })
+    firstCall = false
+  }
+  return walked.map((attempt) => (typeof attempt === 'string' ? attempt : attempt.type))
 }
 
 export function createResolvedConfig(overrides?: Partial<SshResolvedConfig>): SshResolvedConfig {

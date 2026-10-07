@@ -3,6 +3,7 @@ import type { SshTarget, SshConnectionState } from '../../shared/ssh-types'
 import type { SshResolvedConfig } from './ssh-config-parser'
 import {
   findEncryptedPrivateKeyPath,
+  isUnencryptedPrivateKey,
   resolveAgentConfigValue,
   resolveAgentSocket,
   resolvePrivateKeys,
@@ -179,7 +180,7 @@ export function createSshOperationAbortError(): Error & { name: string } {
   return error
 }
 
-type BuildConnectConfigOptions = {
+export type BuildConnectConfigOptions = {
   includeAgent?: boolean
   includePrivateKey?: boolean
 }
@@ -223,14 +224,25 @@ export function buildConnectConfig(
     config.agentForward = true
   }
 
+  const availableKeys = resolvePrivateKeys(target, resolved)
   const keys =
     (options.includePrivateKey ?? !agent)
-      ? resolvePrivateKeys(target, resolved)
+      ? availableKeys
       : resolveUnencryptedExplicitPrivateKeys(target, resolved)
   configurePrivateKeyAuthentication(
     config as ConnectConfig,
     keys,
-    findEncryptedPrivateKeyPath(keys)
+    findEncryptedPrivateKeyPath(keys),
+    {
+      // Why: SshConnection retries with the deferred keys only after an attempt that carried none,
+      // so only that attempt holds the host's password challenge back for them. An encrypted key
+      // would swap that dialog for a passphrase one, and a file that is no usable private key
+      // aborts the retry before any auth, so hold it back only if no deferred key needs input.
+      deferKeyboardInteractive:
+        keys.length === 0 &&
+        availableKeys.length > 0 &&
+        availableKeys.every((key) => isUnencryptedPrivateKey(key.contents))
+    }
   )
 
   return config as ConnectConfig

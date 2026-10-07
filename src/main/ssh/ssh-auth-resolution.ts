@@ -157,7 +157,7 @@ export function resolvePrivateKeys(
   return defaultKey ? [defaultKey] : []
 }
 
-function isUnencryptedPrivateKey(contents: Buffer): boolean {
+export function isUnencryptedPrivateKey(contents: Buffer): boolean {
   const parsed = utils.parseKey(contents) as ParsedKey | ParsedKey[] | Error
   if (parsed instanceof Error) {
     return false

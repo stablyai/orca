@@ -42,7 +42,8 @@ function buildAuthQueue(
 export function configurePrivateKeyAuthentication(
   config: ConnectConfig,
   keys: PrivateKeyFile[],
-  passphraseKeyPath?: string
+  passphraseKeyPath?: string,
+  options: { deferKeyboardInteractive?: boolean } = {}
 ): void {
   const firstKey = keys[0]
   if (firstKey) {
@@ -74,7 +75,22 @@ export function configurePrivateKeyAuthentication(
         return method !== 'none' && offered.includes(method)
       })
     }
-    const attempt = queue.shift()
+    let attempt = queue.shift()
+    // Why: a deferring attempt must not show the host's password challenge before its deferred keys
+    // are tried. A host that lists keyboard-interactive offers it as a first factor, so skip it while
+    // publickey is listed too (otherwise the deferred key cannot help); an unlisted one can only be a
+    // second factor after an agent key partially succeeded, which ssh2 reports with the stale
+    // pre-agent method list instead of partialSuccess.
+    if (
+      attempt === 'keyboard-interactive' &&
+      options.deferKeyboardInteractive &&
+      partialSuccessStagesLeft === MAX_PARTIAL_SUCCESS_STAGES &&
+      Array.isArray(authsLeft) &&
+      authsLeft.includes('keyboard-interactive') &&
+      authsLeft.includes('publickey')
+    ) {
+      attempt = queue.shift()
+    }
     next((attempt ?? false) as Parameters<NextAuthHandler>[0])
   }
 }
