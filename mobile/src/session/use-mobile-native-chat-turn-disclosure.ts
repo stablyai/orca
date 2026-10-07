@@ -29,6 +29,11 @@ import type {
   MobileNativeChatTurnRow
 } from './mobile-native-chat-turn-disclosure-types'
 
+export type {
+  MobileNativeChatLiveLine,
+  MobileNativeChatTurnRow
+} from './mobile-native-chat-turn-disclosure-types'
+
 const NO_TURN_KEYS: readonly undefined[] = []
 export function useMobileNativeChatTurnDisclosure({
   messages,
