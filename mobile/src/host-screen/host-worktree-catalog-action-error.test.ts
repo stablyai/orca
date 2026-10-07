@@ -121,6 +121,7 @@ describe('the fetch a handoff awaits', () => {
       })
     const actionErrors: string[] = []
     const catalogErrors: (string | null)[] = []
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: same reachable surface as fetchWith above.
     const args = catalogHook(
       { kind: 'response', pending: { admission: { kind: 'valid' } } },
       actionErrors,
