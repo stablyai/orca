@@ -21,7 +21,7 @@ import {
   nativeChatComposerPrimaryAction,
   type NativeChatComposerPrimaryAction
 } from '../../../renderer/src/components/native-chat/native-chat-composer-primary-action'
-import { JournalQueuedMessages } from '../agent-session-journal/journal-queued-messages'
+import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
   readQueuePublication,
   structuredQueueSendGate
@@ -512,11 +512,17 @@ describe("the queue's next card on a history page", () => {
     const card = await queuedDraft('held, then released')
     await rig.stop()
     await rig.settleAccepted(working, 'stopped')
-    // The Resume row is written; its adoption, and so the drain behind it, waits.
+    // The Resume row is written; the Resume itself, and so the drain behind it, waits.
     let release: () => void = () => undefined
-    const adopt = vi
-      .spyOn(JournalQueuedMessages.prototype, 'adopt')
-      .mockImplementationOnce(() => new Promise((resolve) => (release = () => resolve(false))))
+    const held = new Promise<void>((resolve) => (release = resolve))
+    const write = AgentSessionJournal.prototype.appendQueueResume
+    const resume = vi
+      .spyOn(AgentSessionJournal.prototype, 'appendQueueResume')
+      .mockImplementationOnce(async function (this: AgentSessionJournal, fence: number) {
+        const cursor = await write.call(this, fence)
+        await held
+        return cursor
+      })
     const resumed = rig.resume()
     try {
       await eventually(async () => {
@@ -525,7 +531,7 @@ describe("the queue's next card on a history page", () => {
       })
     } finally {
       release()
-      adopt.mockRestore()
+      resume.mockRestore()
     }
     expect(await resumed).toMatchObject({ ok: true, value: { resumed: true } })
   })

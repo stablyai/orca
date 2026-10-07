@@ -41,6 +41,9 @@ vi.mock('@/components/ui/tooltip', () => {
 vi.mock('@/components/tab-bar/TabWorkspaceLayoutMenuSection', () => ({
   TabWorkspaceLayoutMenuSection: () => null
 }))
+vi.mock('@/components/tab-bar/tab-move-to-pane-column', () => ({
+  canMoveTabToNewPaneColumn: () => false
+}))
 vi.mock('@/store', () => ({
   useAppStore: (select: (state: { keybindings: object }) => unknown) => select({ keybindings: {} })
 }))
@@ -71,6 +74,7 @@ function StructuredChatTab(): ReactNode {
     isVisible: true,
     rootRef: createRef<HTMLDivElement>(),
     composerRef: createRef<NativeChatComposerHandle>(),
+    questionAnswerInputRef: createRef<HTMLInputElement>(),
     sessionId: SESSION,
     target: TARGET
   })

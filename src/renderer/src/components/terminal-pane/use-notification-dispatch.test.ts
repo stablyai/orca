@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { dispatchTerminalNotification } from './use-notification-dispatch'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-types'
 import { buildAgentNotificationId } from '../../../../shared/agent-notification-id'
-import { makeTabGroup, makeUnifiedTab } from '@/store/slices/store-test-helpers'
+import { makeTabGroup, makeUnifiedTab } from '../../store/slices/store-session-test-harness'
 import {
   LIVE_LEAF_ID,
   PANE_KEY,

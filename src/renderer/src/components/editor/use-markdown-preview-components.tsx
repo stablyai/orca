@@ -22,6 +22,8 @@ import type { MarkdownPreviewReviewActions } from './use-markdown-preview-review
 import type { MarkdownPreviewViewport } from './use-markdown-preview-viewport'
 import { useLocalImageSrc } from './useLocalImageSrc'
 import { documentResourceAccess } from '@/lib/local-file-access'
+import { MarkdownGitHubCallout } from '@/components/markdown-github-callout'
+import { readGitHubCalloutKind } from '@/lib/remark-github-callouts'
 
 export function useMarkdownPreviewComponents({
   foundation,
@@ -187,12 +189,18 @@ export function useMarkdownPreviewComponents({
       },
       p: ({ node, children, ...props }) =>
         wrapAnnotatedBlock('p', node as MarkdownPreviewPositionNode, <p {...props}>{children}</p>),
-      blockquote: ({ node, children, ...props }) =>
-        wrapAnnotatedBlock(
+      blockquote: ({ node, children, ...props }) => {
+        const calloutKind = readGitHubCalloutKind(node?.properties.dataCallout)
+        return wrapAnnotatedBlock(
           'blockquote',
           node as MarkdownPreviewPositionNode,
-          <blockquote {...props}>{children}</blockquote>
-        ),
+          calloutKind ? (
+            <MarkdownGitHubCallout kind={calloutKind}>{children}</MarkdownGitHubCallout>
+          ) : (
+            <blockquote {...props}>{children}</blockquote>
+          )
+        )
+      },
       table: ({ node, children, ...props }) =>
         wrapAnnotatedBlock(
           'table',

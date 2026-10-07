@@ -70,6 +70,10 @@ const SENTENCES: Record<AgentSessionWriteNoticeSentence, () => string> = {
   unreachable: () => translate('components.native-chat.writeNotice.unreachable', COPY.unreachable),
   recordFailed: () =>
     translate('components.native-chat.writeNotice.recordFailed', COPY.recordFailed),
+  attachmentExpired: () =>
+    translate('components.native-chat.writeNotice.attachmentExpired', COPY.attachmentExpired),
+  reattachFile: () =>
+    translate('components.native-chat.writeNotice.reattachFile', COPY.reattachFile),
   conversationCleared: () =>
     translate('components.native-chat.writeNotice.conversationCleared', COPY.conversationCleared),
   openCurrentConversation: () =>

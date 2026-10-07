@@ -8,7 +8,6 @@ import {
 } from '../../../../shared/structured-agent-session-composer'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import { dispatchNativeChatStructuredComposerText } from './native-chat-structured-composer-dispatch'
-import { pushHistory, type HistoryState } from './native-chat-composer-state'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
 import { nativeChatAttachImagesAgainReason } from './native-chat-image-reattach'
@@ -29,7 +28,6 @@ export type UseNativeChatStructuredComposerSendArgs = {
   structuredTransport?: NativeChatStructuredComposerTransport
   isComposing: () => boolean
   clearSkillOrigin: () => void
-  setHistory: (updater: (previous: HistoryState) => HistoryState) => void
   setDraft: (value: string) => void
   setCaret: (caret: number) => void
 }
@@ -63,13 +61,13 @@ export function useNativeChatStructuredComposerSend({
   structuredTransport,
   isComposing,
   clearSkillOrigin,
-  setHistory,
   setDraft,
   setCaret
 }: UseNativeChatStructuredComposerSendArgs): NativeChatStructuredComposerSend {
   return useCallback<NativeChatStructuredComposerSend>(
     async (text, attachments = imageAttachments, sentFrom): Promise<void> => {
-      if (!structuredTransport) {
+      // A picked command is held like Send: it would carry attachments still uploading, pathless.
+      if (!structuredTransport || attachments.some((attachment) => attachment.pending)) {
         return
       }
       const hostCommand = isNativeChatStructuredHostCommand(text, agent, structuredTransport)
@@ -110,7 +108,6 @@ export function useNativeChatStructuredComposerSend({
             structuredTransport.sessionId,
             structuredTransport.runtimeEnvironmentId
           )
-          setHistory((previous) => pushHistory(previous, text))
           // Why: the send settles after a round trip, while this or another composer of the same
           // conversation may have changed the draft; only what was sent leaves it.
           const left = nativeChatComposerDraftLeftAfterSend(
@@ -143,7 +140,6 @@ export function useNativeChatStructuredComposerSend({
       isComposing,
       setCaret,
       setDraft,
-      setHistory,
       structuredTransport
     ]
   )

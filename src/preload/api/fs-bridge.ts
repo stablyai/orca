@@ -7,6 +7,10 @@ import type {
 import type { SshMutationExpectation } from '../../shared/ssh-types'
 import type { LocalFileAccess } from '../../shared/local-file-access'
 import type { RuntimeUploadFileStreamRequest } from '../../shared/runtime-upload-staging-contract'
+import type {
+  AgentSessionAttachmentPathUploadResult,
+  AgentSessionAttachmentUploadTarget
+} from '../../shared/agent-session-attachments'
 import type { SearchResult } from '../../shared/code-search-types'
 import type { FsChangedPayload } from '../../shared/filesystem-entry-types'
 import type {
@@ -211,6 +215,10 @@ export const fsApi = {
     } & SshMutationExpectation
   ): Promise<ResolveDroppedPathsResult> =>
     ipcRenderer.invoke('fs:resolveDroppedPathsForAgent', args),
+  uploadPathsToAgentSessionAttachments: (
+    args: AgentSessionAttachmentUploadTarget & { paths: string[] }
+  ): Promise<AgentSessionAttachmentPathUploadResult> =>
+    ipcRenderer.invoke('fs:uploadPathsToAgentSessionAttachments', args),
   watchWorktree: (args: { worktreePath: string; connectionId?: string }): Promise<void> =>
     ipcRenderer.invoke('fs:watchWorktree', args),
   unwatchWorktree: (args: { worktreePath: string; connectionId?: string }): Promise<void> =>

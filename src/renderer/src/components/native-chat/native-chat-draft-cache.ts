@@ -12,6 +12,7 @@ import {
   readNativeChatComposerDraft,
   updateNativeChatComposerDraft
 } from './native-chat-composer-draft-store'
+import { clearNativeChatPendingAttachmentsForTests } from './native-chat-pending-attachment-cache'
 
 export function readNativeChatDraftCache(scopeKey: string): string {
   return readNativeChatComposerDraft(scopeKey).text
@@ -119,4 +120,5 @@ export function appendNativeChatAttachmentCache(
 
 export function clearNativeChatAttachmentCacheForTests(): void {
   clearNativeChatComposerDraftsForTests()
+  clearNativeChatPendingAttachmentsForTests()
 }

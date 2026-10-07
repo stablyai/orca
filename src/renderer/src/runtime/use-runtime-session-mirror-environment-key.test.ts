@@ -7,7 +7,7 @@ import { getDefaultSettings } from '../../../shared/constants'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { Repo } from '../../../shared/repo-types'
 import type * as RuntimeSessionMirrorTargetsModule from '@/lib/runtime-session-mirror-targets'
-import { makeWorktree } from '@/store/slices/store-test-helpers'
+import { makeWorktree } from '../store/slices/worktrees-slice-test-fixtures'
 
 const { getMirrorTargets } = vi.hoisted(() => ({ getMirrorTargets: vi.fn() }))
 

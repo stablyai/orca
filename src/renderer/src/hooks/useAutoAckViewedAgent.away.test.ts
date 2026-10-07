@@ -3,7 +3,7 @@ import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAutoAckViewedAgent } from './useAutoAckViewedAgent'
 import { useAppStore } from '../store'
-import { makeTab, makeTabGroup, makeUnifiedTab } from '../store/slices/store-test-helpers'
+import { makeTab, makeTabGroup, makeUnifiedTab } from '../store/slices/store-session-test-harness'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { createNotificationsApi } from '../web/preload-api/web-notifications-api'
 

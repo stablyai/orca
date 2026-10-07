@@ -82,6 +82,7 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
     // and the main-side guard short-circuits.
     tabId: session.deps.tabId,
     leafId: session.pane.leafId,
+    ...(session.deps.placement ? { placement: session.deps.placement } : {}),
     activate: session.deps.isActiveRef.current && session.deps.isVisibleRef.current,
     ...(session.shellOverride ? { shellOverride: session.shellOverride } : {}),
     ...(session.projectRuntime ? { projectRuntime: session.projectRuntime } : {}),

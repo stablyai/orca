@@ -28,14 +28,21 @@ export class JournalHostDatabase {
   /** A failed transaction's ROLLBACK failed too, so the transaction may still be open. */
   private stranded = false
 
-  private constructor(opened: OpenJournalDatabase) {
+  private constructor(
+    opened: OpenJournalDatabase,
+    /** Where the database lives; per-runtime end records sit beside it. */
+    readonly stateDirectory: string
+  ) {
     this.connection = opened.db
     this.readOnly = opened.readOnly
   }
 
   static open(stateDirectory: string): JournalHostDatabase {
     mkdirSync(stateDirectory, { recursive: true })
-    return new JournalHostDatabase(openJournalDatabase(journalDatabasePath(stateDirectory)))
+    return new JournalHostDatabase(
+      openJournalDatabase(journalDatabasePath(stateDirectory)),
+      stateDirectory
+    )
   }
 
   get isClosed(): boolean {

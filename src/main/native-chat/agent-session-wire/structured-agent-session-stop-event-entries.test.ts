@@ -251,7 +251,9 @@ describe('every Stop entry writes its event, with its reason, before it ends the
       await rig.host.close(HOST_TEST_SESSION, 'evict')
 
       expect(atClose.events?.map((event) => event.reason)).toEqual(['user-stop'])
-      expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
+      // The close hides the row, as every close of a chat does; the Stop still pauses.
+      expect(await rig.queuePause()).toBeNull()
+      expect(structuredQueuePauses(journal()).map((pause) => pause.reason)).toContain('stopped')
     },
     20_000
   )

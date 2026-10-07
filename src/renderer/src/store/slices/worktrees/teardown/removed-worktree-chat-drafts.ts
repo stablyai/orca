@@ -7,6 +7,11 @@ import {
   deleteNativeChatComposerDraftsOwnedBy,
   structuredAgentSessionDraftScopeKey
 } from '@/components/native-chat/native-chat-composer-draft-store'
+import {
+  clearNativeChatPendingAttachments,
+  dropNativeChatPendingAttachmentsForTab,
+  dropNativeChatPendingAttachmentsOwnedBy
+} from '@/components/native-chat/native-chat-pending-attachment-cache'
 
 /** Which unsent chat drafts a workspace owns: every draft that recorded it as its owner, open and
  *  closed chats alike, plus its open tabs' conversation keys and terminal tab ids (each tab's pane
@@ -47,15 +52,19 @@ export function captureWorkspaceChatDraftKeys(
   return { owners, conversations, terminalTabIds }
 }
 
-/** Only after the delete succeeded: a refused or failed one keeps the drafts. */
+/** Only after the delete succeeded: a refused or failed one keeps the drafts. Chips still on their
+ *  way go too, or one settling later would write a draft back that nothing could delete. */
 export function deleteWorkspaceChatDrafts(keys: WorkspaceChatDraftKeys): void {
   for (const owner of keys.owners) {
     deleteNativeChatComposerDraftsOwnedBy(owner)
+    dropNativeChatPendingAttachmentsOwnedBy(owner)
   }
   for (const key of keys.conversations) {
     deleteNativeChatComposerDraft(key)
+    clearNativeChatPendingAttachments(key)
   }
   for (const tabId of keys.terminalTabIds) {
     deleteNativeChatComposerDraftsForTab(tabId)
+    dropNativeChatPendingAttachmentsForTab(tabId)
   }
 }

@@ -158,7 +158,6 @@ function composer(
       structuredTransport: transport,
       isComposing: () => false,
       clearSkillOrigin: () => {},
-      setHistory: () => {},
       setDraft,
       setCaret
     })
@@ -444,8 +443,12 @@ describe('native-chat composer draft lifecycle', () => {
         { scopeKey: 'tab-1:pane' }
       )
     )
-    expect(second.api?.attachments.imageAttachments.map(({ path }) => path)).toEqual([
-      '/repo/x.png'
+    // The paste still on its way comes back pending, so Send waits for it.
+    expect(
+      second.api?.attachments.imageAttachments.map(({ path, pending }) => ({ path, pending }))
+    ).toEqual([
+      { path: '/repo/x.png', pending: undefined },
+      { path: '', pending: true }
     ])
     await act(async () => second.api?.attachments.clearImageAttachments())
     await unmount()
@@ -558,6 +561,30 @@ describe('native-chat composer draft lifecycle', () => {
       { id: 'b', path: '/repo/here.png' },
       { id: 'c', path: '/Users/me/Desktop/elsewhere.png' }
     ])
+  })
+
+  it('leaves a restored image a paired server stored to that server to check', async () => {
+    // Not on this machine's disk, so a local check could only call it gone.
+    const pathExists = vi.fn(async () => false)
+    vi.stubGlobal('api', { fs: { pathExists } })
+    const stored = { id: 'a', path: '/srv/orca/agent-session-attachments/0f6c/shot.png' }
+    storage.drafts.set('agent-session:s1', { text: 'see this', images: [stored], savedAt: 1 })
+    const hooks = await loadHooks()
+    const seen: { api?: ComposerApi } = {}
+    try {
+      await mount(
+        createElement(
+          composer(hooks, (next) => (seen.api = next)),
+          { scopeKey: 'agent-session:s1' }
+        )
+      )
+      await act(async () => {})
+    } finally {
+      vi.unstubAllGlobals()
+    }
+
+    expect(pathExists).not.toHaveBeenCalled()
+    expect(seen.api?.attachments.imageAttachments).toEqual([stored])
   })
 
   it('shows a restored paste from Orca’s paste folder once main confirms it is kept, and marks the rest', async () => {

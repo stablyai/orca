@@ -44,7 +44,6 @@ function send(
       sessionOptionsSurface: null,
       terminalTabId: 'tab',
       trackPendingSend: vi.fn(),
-      setHistory: vi.fn(),
       setDraft: vi.fn(),
       setCaret: vi.fn(),
       clearSkillOrigin: vi.fn(),

@@ -1,4 +1,9 @@
-import { closeTestStores, createSqliteTestStore } from './persistence-test-harness'
+import {
+  closeTestStores,
+  createSqliteTestStore,
+  createStore as createFreshStore,
+  testState
+} from './persistence-test-harness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -10,8 +15,9 @@ import type { SshTarget } from '../shared/ssh-types'
 import { MAX_RETIREMENT_NAMESPACES } from './worktree-retirement-namespace'
 import { getRuntimeOwnedSshTargetId } from './ssh/ssh-connection-store'
 import { installFakeAppEnvironment } from '../../config/scripts/vitest-host-ports-setup'
+import { resetRetirementCollisionKeyCacheForTests } from './worktree-name-retirement'
 
-const testState = { dir: '' }
+let hasCreatedStoreInCase = false
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
@@ -61,10 +67,16 @@ async function createStore(persisted: Record<string, unknown> = {}) {
     JSON.stringify({ ...getDefaultPersistedState(testState.dir), ...persisted }),
     'utf-8'
   )
+  if (!hasCreatedStoreInCase) {
+    hasCreatedStoreInCase = true
+    return createFreshStore()
+  }
   return reloadStore()
 }
 
 beforeEach(() => {
+  hasCreatedStoreInCase = false
+  resetRetirementCollisionKeyCacheForTests()
   testState.dir = mkdtempSync(join(tmpdir(), 'orca-worktree-name-retirement-'))
 })
 

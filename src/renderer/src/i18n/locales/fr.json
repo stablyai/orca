@@ -17757,6 +17757,8 @@
         "cannotRunHere": "Orca ne peut pas exécuter cet agent dans un chat ici.",
         "unreachable": "Orca n'a pas pu joindre l'agent.",
         "recordFailed": "Orca n'a pas pu enregistrer ceci dans l'historique du chat.",
+        "attachmentExpired": "Cette pièce jointe a expiré.",
+        "reattachFile": "Retirez-la et joignez-la à nouveau.",
         "conversationCleared": "Cette conversation a été effacée.",
         "openCurrentConversation": "Ouvrez la conversation actuelle pour continuer.",
         "clearUnfinished": "Le dernier /clear ne s'est pas terminé.",
@@ -17815,6 +17817,9 @@
         "skillScopeBuiltIn": "Intégrée",
         "skillScopePlugin": "Plugin",
         "localAttachmentUnsupported": "Les pièces jointes locales ne sont pas disponibles pour les sessions distantes.",
+        "attachFailed": "Impossible de joindre {{files}}.",
+        "attachFailedBecause": "Impossible de joindre {{files}}. {{reason}}",
+        "uploadingFile": "Envoi de {{name}}…",
         "removeAttachment": "Retirer la pièce jointe",
         "pastedImageLabel": "Image collée",
         "draftNotSaved": "Ce brouillon n'a pas encore pu être enregistré. Orca continue d'essayer.",
@@ -18220,10 +18225,8 @@
         "turnOffQueueing": "Désactiver la file d'attente",
         "withdrawnHold": "Arrêté avant l'envoi",
         "pausedSendFailed": "Envoi impossible. Appuyez sur Envoyer pour réessayer.",
-        "pausedKept": "Pas encore envoyé. Appuyez sur Envoyer pour l'envoyer.",
         "paused": "En pause",
         "queuePausedStopped": "File d'attente en pause, car vous avez interrompu",
-        "queuePausedCleared": "File d'attente en pause après l'effacement de la conversation",
         "queuePaused": "File d'attente en pause",
         "resume": "Reprendre",
         "sendConfirmTitle": "Envoyer le message ?",
@@ -18636,6 +18639,13 @@
       "label": "Assigné",
       "automatic": "Automatique",
       "assignToMe": "M'assigner ({{name}})"
+    },
+    "markdown-callout": {
+      "note": "Remarque",
+      "tip": "Conseil",
+      "important": "Important",
+      "warning": "Avertissement",
+      "caution": "Attention"
     }
   },
   "dashboardPopout": {

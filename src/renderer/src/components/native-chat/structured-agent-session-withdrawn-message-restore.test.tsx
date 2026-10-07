@@ -530,3 +530,47 @@ describe('an open composer', () => {
     ])
   })
 })
+
+describe('a message the host refused for an attachment it no longer stores', () => {
+  const STORED = '/srv/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c01/shot.png'
+
+  function refuseSendsAsExpired(): void {
+    mocks.call.mockImplementation(async (_target, method) =>
+      method === 'agentSession.send'
+        ? {
+            ok: false,
+            refusal: {
+              code: 'agent_session_operation_invalid',
+              message: 'not stored',
+              details: { reason: 'attachmentExpired' }
+            }
+          }
+        : null
+    )
+  }
+
+  it('comes back to the composer with its images, saying why, instead of waiting on a Retry', async () => {
+    refuseSendsAsExpired()
+    const { result } = renderOutbox()
+    act(() =>
+      expect(result.current.send('look at this', [{ path: STORED, previewUri: STORED }])).toBe(true)
+    )
+
+    await waitFor(() => expect(result.current.outbox).toEqual([]))
+    expect(readOutbox(SESSION)).toEqual([])
+    expect(readNativeChatDraftCache(PANE)).toBe('look at this')
+    expect(readNativeChatAttachmentCache(PANE)).toEqual([{ id: expect.any(String), path: STORED }])
+    expect(result.current.error).toBe(
+      'This attachment expired. Your message was not sent. Remove it and attach it again.'
+    )
+  })
+
+  it('stays on its Retry where no composer shows the chat, so nothing is lost', async () => {
+    refuseSendsAsExpired()
+    const { result } = renderOutbox(null)
+    act(() => expect(result.current.send('look at this')).toBe(true))
+
+    await waitFor(() => expect(result.current.outbox[0]?.lastFailure).toBeDefined())
+    expect(result.current.outbox).toHaveLength(1)
+  })
+})

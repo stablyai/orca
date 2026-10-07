@@ -13,6 +13,7 @@ import type { EventProps } from '../../../../shared/telemetry-events'
 import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
 import type { TerminalOscColorQueryReplyColors } from '../../../../shared/terminal-osc-color-reply'
 import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TerminalPanePlacement } from '../../../../shared/terminal-pane-placement'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { PtyDataMeta } from './pty-dispatcher'
 import type { RemoteRuntimeSnapshotOutcome } from '../../runtime/remote-runtime-terminal-multiplexer'
@@ -280,6 +281,8 @@ export type IpcPtyTransportOptions = {
   worktreeId?: string
   tabId?: string
   leafId?: string
+  /** Sent on fresh spawns only; a reattach names a PTY whose leaf main already knows. */
+  placement?: TerminalPanePlacement
   activate?: boolean
   shellOverride?: string
   projectRuntime?: ProjectExecutionRuntimeResolution

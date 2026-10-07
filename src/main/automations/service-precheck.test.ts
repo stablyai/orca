@@ -2,8 +2,11 @@ import {
   closeTestStores,
   createSqliteTestStore,
   readPersistedStateJson,
-  writePersistedStateJson
+  writePersistedStateJson,
+  createStore as createFreshStore,
+  testState
 } from '../persistence-test-harness'
+import { resetRetirementCollisionKeyCacheForTests } from '../worktree-name-retirement'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
@@ -15,7 +18,7 @@ import { createAutomationRunWriter } from './automation-run-writer'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 
 const runAutomationPrecheckMock = vi.hoisted(() => vi.fn())
-const testState = { dir: '' }
+let hasCreatedStoreInCase = false
 
 vi.mock('electron', () => ({
   app: {
@@ -33,6 +36,10 @@ vi.mock('./precheck-runner', () => ({
 }))
 
 async function createStore() {
+  if (!hasCreatedStoreInCase) {
+    hasCreatedStoreInCase = true
+    return createFreshStore()
+  }
   vi.resetModules()
   installFakeAppEnvironment({ getPath: () => testState.dir })
   const { Store, initDataPath } = await import('../persistence')
@@ -64,6 +71,8 @@ function mutateDataFile(
 
 describe('AutomationService prechecks', () => {
   beforeEach(() => {
+    hasCreatedStoreInCase = false
+    resetRetirementCollisionKeyCacheForTests()
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-automations-test-'))
     runAutomationPrecheckMock.mockReset()
     vi.useFakeTimers()

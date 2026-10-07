@@ -26,6 +26,8 @@ export const AGENT_SESSION_REFUSAL_REASONS = {
     'messageIdReused',
     'operationRefusedEarlier',
     'journalWriteFailed',
+    /** The message names a chat attachment the host no longer stores. */
+    'attachmentExpired',
     // The conversation's state
     'conversationCleared',
     /** Older hosts only: a /clear that never committed; its replacement may not exist. */

@@ -432,6 +432,8 @@ jobs:
           PREFLIGHT_PHASE_SELECTED: ${{ needs.code_paths.outputs.typecheck == 'true' }}
           PREFLIGHT_PRIOR_SUCCESS: ${{ job.status == 'success' }}
           ORCA_UNIT_SELECTION_MODE: ${{ vars.ORCA_UNIT_SELECTION_MODE || 'shadow' }}
+          # Set the repository variable to '5' to roll back full PR shards.
+          ORCA_UNIT_FULL_SHARD_COUNT: ${{ vars.ORCA_UNIT_FULL_SHARD_COUNT || '10' }}
         run: |
           if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
           node config/scripts/ci-unit-plan.mjs
@@ -1085,7 +1087,15 @@ jobs:
       - name: Install Linux package tooling
         id: linux-package-tools
         background: true
-        run: sudo apt-get update && sudo apt-get install -y cpio rpm
+        run: |
+          # Use the shell lane's bounded refresh; required tooling installation stays fatal.
+          sudo tee /etc/apt/apt.conf.d/99-orca-package-tools >/dev/null <<'APTCONF'
+          Acquire::http::Timeout "15";
+          Acquire::https::Timeout "15";
+          Acquire::Retries "1";
+          APTCONF
+          timeout 120 sudo apt-get update || true
+          timeout 300 sudo apt-get install -y cpio rpm
 
       - name: Build package inputs
         run: |

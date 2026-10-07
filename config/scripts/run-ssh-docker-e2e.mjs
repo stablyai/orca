@@ -73,6 +73,7 @@ const result = spawnSync(
     'tests/e2e/ssh-lost-kill-tab-resurrection.spec.ts',
     'tests/e2e/ssh-pi-compatible-agent-title.spec.ts',
     'tests/e2e/ssh-port-forward-lifecycle.spec.ts',
+    'tests/e2e/ssh-reattach-home-partition.spec.ts',
     'tests/e2e/ssh-reconnect-tab-destruction.spec.ts',
     'tests/e2e/ssh-restart-tab-accumulation.spec.ts',
     'tests/e2e/ssh-skill-installation.spec.ts',

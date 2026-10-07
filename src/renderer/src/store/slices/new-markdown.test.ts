@@ -4,7 +4,7 @@ import { createEditorSlice } from './editor'
 import type { AppState } from '../types'
 import type { BrowserTab } from '../../../../shared/browser-workspace-types'
 import type { Tab, TabContentType, TabGroup } from '../../../../shared/tab-types'
-import { makeTab } from './store-test-helpers'
+import { makeTab } from './store-session-test-harness'
 
 function createEditorStore(overrides?: Partial<AppState>): StoreApi<AppState> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

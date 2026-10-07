@@ -81,6 +81,7 @@ function ComposerProbe({
     terminalTabId: pane,
     disabled: false,
     attachResolvedPaths: attachments.attachResolvedPaths,
+    pendingChips: attachments.pendingChips,
     setNotice
   })
   useNativeChatFileAttachmentActions(pane, attachExternalPaths)

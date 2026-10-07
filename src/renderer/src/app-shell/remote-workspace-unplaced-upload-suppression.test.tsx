@@ -21,7 +21,8 @@ import type {
 import type { DirectSshAuthority, SshProviderEpoch } from '../../../shared/ssh-types'
 import type { DirectSshPreparationInput } from '../hooks/direct-ssh-reconnect-coordinator'
 import { createRemoteWorkspaceTargetSync } from '../hooks/remote-workspace-target-sync'
-import { makeWorktree } from '../store/slices/store-test-helpers'
+import { isDirectSshRemoteWorkspaceApplyInProgress } from '../hooks/remote-workspace-snapshot-apply'
+import { makeWorktree } from '../store/slices/worktrees-slice-test-fixtures'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/lib/agent-status', async (importOriginal) => {
@@ -31,6 +32,7 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 
 import { useAppStore } from '@/store'
 import { useAppSessionPersistence } from './use-app-session-persistence'
+import * as workspaceSessionHostPersistence from '../lib/workspace-session-host-persistence'
 
 const TARGET_ID = 'target-a'
 const REPO_ROOT = '/srv/proj'
@@ -111,6 +113,7 @@ function installWindowApi(sessionPatch = vi.fn(async () => {})): void {
 
 function seedStore(withHostCatalog: boolean): void {
   useAppStore.setState({
+    ...useAppStore.getInitialState(),
     workspaceSessionReady: true,
     hydrationSucceeded: true,
     repos: [
@@ -199,6 +202,30 @@ function createSync(
   })
 }
 
+// The initial full write must settle before measured upload responses are installed.
+async function renderSettledPersistence() {
+  const pendingWrites: Promise<void>[] = []
+  const persistByHost = workspaceSessionHostPersistence.patchWorkspaceSessionByHost
+  const observeWrite = vi.spyOn(workspaceSessionHostPersistence, 'patchWorkspaceSessionByHost')
+  observeWrite.mockImplementation((...args) => {
+    const result = persistByHost(...args)
+    pendingWrites.push(result.written)
+    return result
+  })
+  try {
+    installWindowApi()
+    const persistence = renderHook(() => useAppSessionPersistence())
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
+    expect(pendingWrites).toHaveLength(1)
+    await Promise.all(pendingWrites)
+    expect(uploads).not.toHaveBeenCalled()
+    return persistence
+  } finally {
+    await Promise.allSettled(pendingWrites)
+    observeWrite.mockRestore()
+  }
+}
+
 /** A local edit the persistence subscriber must want to write, then let it settle. */
 async function touchSessionAndSettle(marker: string): Promise<void> {
   await vi.advanceTimersByTimeAsync(WRITE_SUPPRESSION_MS)
@@ -230,16 +257,25 @@ function authorizeUploadsAtRevision(revision: number): void {
   })
 }
 
+let nextCaseTime = Date.now()
+
 beforeEach(() => {
-  vi.useFakeTimers()
+  vi.useFakeTimers({ now: nextCaseTime })
   uploads.mockReset()
   uploads.mockResolvedValue([])
   installWindowApi()
 })
 
-afterEach(() => {
-  cleanup()
-  vi.useRealTimers()
+afterEach(async () => {
+  try {
+    cleanup()
+    await vi.advanceTimersByTimeAsync(WRITE_SUPPRESSION_MS)
+    expect(isDirectSshRemoteWorkspaceApplyInProgress()).toBe(false)
+  } finally {
+    // The shared apply deadline must not outlive a rollback of this fixture's clock.
+    nextCaseTime = Date.now()
+    vi.useRealTimers()
+  }
 })
 
 describe('uploads from a client that could not place the host tabs', () => {
@@ -363,6 +399,7 @@ describe('uploads from a client that could not place the host tabs', () => {
 
   it('keeps a later same-lineage upload after the earlier result advances the revision', async () => {
     seedStore(true)
+    const persistence = await renderSettledPersistence()
     authorizeUploadsAtRevision(7)
     const secondLocalWrite = deferred<void>()
     let localWriteCount = 0
@@ -379,7 +416,6 @@ describe('uploads from a client that could not place the host tabs', () => {
       }
     ])
     installWindowApi(sessionPatch)
-    const persistence = renderHook(() => useAppSessionPersistence())
 
     await vi.advanceTimersByTimeAsync(WRITE_SUPPRESSION_MS)
     useAppStore.setState({ activeTabId: 'first-local-write' })
@@ -423,6 +459,7 @@ describe('uploads from a client that could not place the host tabs', () => {
 
   it('retains transient upload authority so the next local edit retries', async () => {
     seedStore(true)
+    const persistence = await renderSettledPersistence()
     authorizeUploadsAtRevision(7)
     uploads.mockResolvedValueOnce([
       {
@@ -436,7 +473,6 @@ describe('uploads from a client that could not place the host tabs', () => {
         result: { ok: true, snapshot: snapshot(8, 'observation-7') }
       }
     ])
-    const persistence = renderHook(() => useAppSessionPersistence())
 
     await touchSessionAndSettle('transient-failure')
     await flushMicrotasks()

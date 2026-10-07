@@ -17,6 +17,7 @@ import type { StructuredAgentDefinition } from '../native-chat/agent-session-wir
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import { readClaudeManagedAccountGateSettings } from '../native-chat/claude-structured-managed-account-support'
 import { agentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
+import { agentSessionAttachmentStoreRoot } from '../native-chat/agent-session-attachments/agent-session-attachment-references'
 import type { JournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database'
 import { replayJournal } from '../native-chat/agent-session-journal/journal-open'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
@@ -140,6 +141,7 @@ function createClaudeAdapter(
             readClaudeManagedAccountGateSettings(deps.getClaudeManagedAccountGateSettings!)
         }
       : {}),
+    attachmentDirectory: agentSessionAttachmentStoreRoot(deps.stateDirectory),
     onLifecycleEvent: context.deliverLifecycle,
     logger: deps.logger,
     onChildWorkEvidence: (sessionId, evidence) =>

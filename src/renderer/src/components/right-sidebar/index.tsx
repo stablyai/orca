@@ -12,8 +12,10 @@ import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import {
   RIGHT_SIDEBAR_MIN_WIDTH,
   clampRightSidebarPanelWidth,
-  computeMaxRightSidebarPanelWidth
+  computeMaxRightSidebarPanelWidth,
+  rightSidebarVisualWidth
 } from './right-sidebar-width'
+import { selectVisibleRightSidebarVisual } from '@/store/slices/editor/actions/right-sidebar-state'
 import { translate } from '@/i18n/i18n'
 import { RightSidebarPanelContent } from './right-sidebar-panel-content'
 import { useMeasuredWidth } from './right-sidebar-measured-width'
@@ -39,6 +41,8 @@ function RightSidebarInner(): React.JSX.Element {
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const rightSidebarWidth = useAppStore((s) => s.rightSidebarWidth)
   const setRightSidebarWidth = useAppStore((s) => s.setRightSidebarWidth)
+  const visual = useAppStore(selectVisibleRightSidebarVisual)
+  const setRightSidebarVisualWidth = useAppStore((s) => s.setRightSidebarVisualWidth)
   const toggleRightSidebar = useAppStore((s) => s.toggleRightSidebar)
   const checksStatus = useAppStore((s) => (s.rightSidebarOpen ? getActiveChecksStatus(s) : null))
   const activityBarPosition = useAppStore((s) => s.activityBarPosition)
@@ -62,8 +66,10 @@ function RightSidebarInner(): React.JSX.Element {
   const activityBarSideWidth = activityBarPosition === 'side' ? ACTIVITY_BAR_SIDE_WIDTH : 0
   const windowWidth = useWindowWidth()
   const maxWidth = computeMaxRightSidebarPanelWidth(windowWidth, activityBarSideWidth)
+  // Why a separate width: widening for a visual must not persist or reach other clients, and
+  // closing the visual has to land back on the width the user chose.
   const renderedRightSidebarWidth = clampRightSidebarPanelWidth(
-    rightSidebarWidth,
+    visual ? rightSidebarVisualWidth(rightSidebarWidth, visual.width) : rightSidebarWidth,
     windowWidth,
     activityBarSideWidth
   )
@@ -74,7 +80,7 @@ function RightSidebarInner(): React.JSX.Element {
     maxWidth,
     deltaSign: -1,
     renderedExtraWidth: activityBarSideWidth,
-    setWidth: setRightSidebarWidth
+    setWidth: visual ? setRightSidebarVisualWidth : setRightSidebarWidth
   })
   const topActivityStripRef = useMeasuredWidth(setTopActivityStripWidth)
 
@@ -91,7 +97,11 @@ function RightSidebarInner(): React.JSX.Element {
           property) rather than in a bottom-docked dashboard panel that
           competed with file Explorer/Search for vertical space. The right
           sidebar is back to tab-only content. */}
-      <RightSidebarPanelContent effectiveTab={effectiveTab} rightSidebarOpen={rightSidebarOpen} />
+      <RightSidebarPanelContent
+        effectiveTab={effectiveTab}
+        rightSidebarOpen={rightSidebarOpen}
+        visual={visual}
+      />
     </div>
   ) : null
 

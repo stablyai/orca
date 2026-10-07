@@ -9,6 +9,7 @@ import type { WebglAddon } from '@xterm/addon-webgl'
 import type { SerializeAddon } from '@xterm/addon-serialize'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
+import type { TerminalPanePlacement } from '../../../../shared/terminal-pane-placement'
 import type { PaneLayoutEditIntent } from '../../../../shared/rpc-contract/session-tabs-schemas-params'
 import type { TerminalWebglAutoDecision } from './terminal-webgl-auto-policy'
 
@@ -26,9 +27,11 @@ export type PaneSpawnHints = {
   cwd?: string
   cwdPromise?: Promise<string>
   ptyId?: string
+  /** Where the pane's leaf sits; main reads it only for a leaf it does not know yet. */
+  placement?: TerminalPanePlacement
 }
 
-export type PaneSplitOptions = PaneSpawnHints & {
+export type PaneSplitOptions = Omit<PaneSpawnHints, 'placement'> & {
   ratio?: number
   leafId?: string
 }

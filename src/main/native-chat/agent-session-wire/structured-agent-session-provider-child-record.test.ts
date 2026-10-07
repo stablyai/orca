@@ -29,6 +29,7 @@ import { ensureStructuredAgentSessionAgent } from './structured-agent-session-ag
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { stopStructuredAgentSessionAgentUnderSerialize } from './structured-agent-session-host-lifetime'
 import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
+import { structuredQueuePauses } from './structured-agent-session-queued-pause'
 import {
   HOST_TEST_LOCATION,
   HOST_TEST_NOW as NOW,
@@ -773,7 +774,7 @@ describe('how a stopped child ends the start its loop was waiting on', () => {
     expect(await statusRows()).toEqual([])
   })
 
-  it('keeps a person’s message the user closed as a held card, and starts no child for it', async () => {
+  it('keeps a person’s message the user closed as a waiting card, and starts no child for it', async () => {
     const start = deferred<void>()
     adapterExtras = { closeSession: vi.fn(async () => true) }
     await restartHost()
@@ -797,6 +798,15 @@ describe('how a stopped child ends the start its loop was waiting on', () => {
     expect(page.ok && page.page.queuedMessages?.map((card) => card.messageId)).toEqual([first])
     expect(acquire).toHaveBeenCalledTimes(starts)
     expect(dispatch).not.toHaveBeenCalled()
+    // The close stopped the chat running: the card waits for its next turn, by a mark the
+    // re-check wrote once, when it kept the card.
+    const journal = conversation()!.journal
+    expect(structuredQueuePauses(journal).map((pause) => pause.reason)).toEqual(['restarted'])
+    const marks = vi.spyOn(journal, 'appendQueueReopen')
+    await accept('second', { person: true })
+    await settleLoop()
+    // A later send's re-check settles nothing, so it marks nothing past that send.
+    expect(marks).not.toHaveBeenCalled()
   })
 
   it('starts no child when closing what was queued fails, and closes it on the next wake', async () => {

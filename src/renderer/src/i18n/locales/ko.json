@@ -17691,6 +17691,8 @@
         "cannotRunHere": "Orca는 여기에서 이 에이전트를 채팅으로 실행할 수 없습니다.",
         "unreachable": "Orca가 에이전트에 연결하지 못했습니다.",
         "recordFailed": "Orca가 이 내용을 채팅 기록에 저장하지 못했습니다.",
+        "attachmentExpired": "이 첨부 파일이 만료되었습니다.",
+        "reattachFile": "제거한 후 다시 첨부하세요.",
         "conversationCleared": "이 대화는 지워졌습니다.",
         "openCurrentConversation": "계속하려면 현재 대화를 여세요.",
         "clearUnfinished": "마지막 /clear가 완료되지 않았습니다.",
@@ -17734,6 +17736,9 @@
         "stopDictation": "받아쓰기 중지",
         "noSkills": "어울리는 스킬 없음",
         "localAttachmentUnsupported": "원격 세션에는 로컬 첨부 파일을 사용할 수 없습니다.",
+        "attachFailed": "{{files}}을(를) 첨부할 수 없습니다.",
+        "attachFailedBecause": "{{files}}을(를) 첨부할 수 없습니다. {{reason}}",
+        "uploadingFile": "{{name}} 업로드 중…",
         "removeAttachment": "첨부파일 삭제",
         "pastedImageLabel": "붙여넣은 이미지",
         "draftNotSaved": "이 초안을 아직 저장하지 못했습니다. Orca가 계속 다시 시도합니다.",
@@ -18154,10 +18159,8 @@
         "turnOffQueueing": "대기열 사용 안 함",
         "withdrawnHold": "전송 전에 중지됨",
         "pausedSendFailed": "보낼 수 없습니다. 보내기를 눌러 다시 시도하세요.",
-        "pausedKept": "아직 보내지 않았습니다. 보내기를 눌러 보내세요.",
         "paused": "일시 중지됨",
         "queuePausedStopped": "중단했기 때문에 대기열이 일시 중지되었습니다",
-        "queuePausedCleared": "대화를 지워서 대기열이 일시 중지되었습니다",
         "queuePaused": "대기열이 일시 중지되었습니다",
         "resume": "재개",
         "sendConfirmTitle": "메시지를 보낼까요?",
@@ -18535,6 +18538,13 @@
       "label": "담당자",
       "automatic": "자동",
       "assignToMe": "나에게 할당 ({{name}})"
+    },
+    "markdown-callout": {
+      "note": "참고",
+      "tip": "팁",
+      "important": "중요",
+      "warning": "경고",
+      "caution": "주의"
     }
   },
   "dashboardPopout": {

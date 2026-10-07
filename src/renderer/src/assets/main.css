@@ -121,6 +121,8 @@
   --color-status-warning: var(--status-warning);
   --color-status-warning-background: var(--status-warning-background);
   --color-status-warning-border: var(--status-warning-border);
+  --color-callout-note: var(--callout-note);
+  --color-callout-important: var(--callout-important);
   --color-workspace-status-done: var(--workspace-status-done);
   --color-workspace-status-review: var(--workspace-status-review);
   --color-workspace-status-progress: var(--workspace-status-progress);
@@ -393,6 +395,9 @@
   --status-warning: #ca8a04;
   --status-warning-background: color-mix(in srgb, var(--status-warning) 10%, transparent);
   --status-warning-border: color-mix(in srgb, var(--status-warning) 25%, transparent);
+  /* GitHub's own hues for the two callout kinds no status token covers. */
+  --callout-note: #0969da;
+  --callout-important: #8250df;
   --git-decoration-added: #587c0c;
   --git-decoration-modified: #895503;
   --git-decoration-deleted: #ad0707;
@@ -416,6 +421,8 @@
   --status-warning: #eab308;
   --status-warning-background: color-mix(in srgb, var(--status-warning) 10%, transparent);
   --status-warning-border: color-mix(in srgb, var(--status-warning) 25%, transparent);
+  --callout-note: #4493f8;
+  --callout-important: #ab7df8;
   --git-decoration-added: #81b88b;
   --git-decoration-modified: #e2c08d;
   --git-decoration-deleted: #c74e39;

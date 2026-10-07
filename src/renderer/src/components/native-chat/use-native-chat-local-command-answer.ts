@@ -4,7 +4,6 @@ import { getNativeChatCommandReply } from '../../../../shared/native-chat-agent-
 import { deriveNativeChatContextUsage } from '../../../../shared/native-chat-context-usage'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { ompModelSelector } from '../../../../shared/omp-model-list-probe'
-import { pushHistory, type HistoryState } from './native-chat-composer-state'
 import {
   formatNativeChatContextUsageAnswer,
   formatNativeChatContextUsageUnreported
@@ -80,7 +79,6 @@ export function answerNativeChatCommandInComposer(args: {
   sessionOptionsSurface: NativeChatPtySessionOptionsSurface | null
   onSlashCommand?: (command: string, output?: string) => void
   onSubmitted?: () => void
-  setHistory: Dispatch<SetStateAction<HistoryState>>
   setDraft: (value: string) => void
   setCaret: Dispatch<SetStateAction<number>>
   clearSkillOrigin: () => void
@@ -97,7 +95,6 @@ export function answerNativeChatCommandInComposer(args: {
   }
   args.onSlashCommand?.(command, answer)
   args.onSubmitted?.()
-  args.setHistory((previous) => pushHistory(previous, args.draft))
   args.setDraft('')
   args.setCaret(0)
   args.clearSkillOrigin()

@@ -1,7 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { translate } from '@/i18n/i18n'
 import { applyPickerSuggestion, type NativeChatPickerItem } from './native-chat-picker-items'
-import { pushHistory, type HistoryState } from './native-chat-composer-state'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
 import { nativeChatImagesHoldSend } from './native-chat-image-reattach'
@@ -42,10 +41,9 @@ export function useNativeChatComposerSubmit(args: {
   sendStructured: (text: string, attachments: readonly NativeChatComposerImageAttachment[]) => void
   setDraft: (value: string) => void
   setCaret: (caret: number) => void
-  setHistory: (updater: (previous: HistoryState) => HistoryState) => void
 }): { send: () => void; goalMode: NativeChatComposerGoalMode } {
   const { caret, disabled, draft, draftScopeKey, imageAttachments, sendPty, sendStructured } = args
-  const { setCaret, setDraft, setHistory, structuredTransport } = args
+  const { setCaret, setDraft, structuredTransport } = args
   const threadGoal = structuredTransport?.threadGoal
   const [entered, setEntered] = useState(false)
   const active = entered && threadGoal !== undefined
@@ -92,22 +90,13 @@ export function useNativeChatComposerSubmit(args: {
         return
       }
       structuredTransport.onError(null)
-      setHistory((previous) => pushHistory(previous, draft))
       if (!clearNativeChatComposerDraftIfUnchanged(draftScopeKey, submitted)) {
         return
       }
       setCaret(0)
       setEntered(false)
     })
-  }, [
-    draft,
-    draftScopeKey,
-    imageAttachments.length,
-    setCaret,
-    setHistory,
-    structuredTransport,
-    threadGoal
-  ])
+  }, [draft, draftScopeKey, imageAttachments.length, setCaret, structuredTransport, threadGoal])
 
   const send = useCallback(() => {
     if (nativeChatImagesHoldSend(imageAttachments)) {

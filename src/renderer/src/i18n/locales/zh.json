@@ -17656,6 +17656,8 @@
         "cannotRunHere": "Orca 无法在此处以聊天方式运行此智能体。",
         "unreachable": "Orca 无法连接到智能体。",
         "recordFailed": "Orca 无法将此内容保存到聊天历史记录中。",
+        "attachmentExpired": "此附件已过期。",
+        "reattachFile": "请将其移除后重新附加。",
         "conversationCleared": "此对话已被清除。",
         "openCurrentConversation": "请打开当前对话以继续。",
         "clearUnfinished": "上一次 /clear 未完成。",
@@ -17699,6 +17701,9 @@
         "stopDictation": "停止听写",
         "noSkills": "没有匹配的技能",
         "localAttachmentUnsupported": "远程会话不支持本地附件。",
+        "attachFailed": "无法附加 {{files}}。",
+        "attachFailedBecause": "无法附加 {{files}}。{{reason}}",
+        "uploadingFile": "正在上传 {{name}}…",
         "removeAttachment": "移除附件",
         "pastedImageLabel": "粘贴的图片",
         "draftNotSaved": "此草稿尚未保存成功。Orca 会继续尝试。",
@@ -18119,10 +18124,8 @@
         "turnOffQueueing": "关闭排队",
         "withdrawnHold": "在发送前已停止",
         "pausedSendFailed": "无法发送。点按发送以重试。",
-        "pausedKept": "尚未发送。点按发送即可发送。",
         "paused": "已暂停",
         "queuePausedStopped": "因你中断了操作，队列已暂停",
-        "queuePausedCleared": "清除对话后，队列已暂停",
         "queuePaused": "队列已暂停",
         "resume": "继续",
         "sendConfirmTitle": "发送消息？",
@@ -18535,6 +18538,13 @@
       "label": "负责人",
       "automatic": "自动",
       "assignToMe": "分配给我（{{name}}）"
+    },
+    "markdown-callout": {
+      "note": "备注",
+      "tip": "提示",
+      "important": "重要",
+      "warning": "警告",
+      "caution": "注意"
     }
   },
   "dashboardPopout": {

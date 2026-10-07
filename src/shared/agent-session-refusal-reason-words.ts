@@ -66,6 +66,7 @@ const REASON_WORDS = {
     // Settled under that id, so the control's retry goes out under a new one.
     operationRefusedEarlier: codeWords('retry'),
     journalWriteFailed: causeWords('recordFailed', 'retry'),
+    attachmentExpired: causeWords('attachmentExpired', 'actFirst', 'reattachFile'),
     conversationCleared: causeWords(
       'conversationCleared',
       'goElsewhere',

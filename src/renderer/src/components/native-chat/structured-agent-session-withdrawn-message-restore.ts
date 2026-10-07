@@ -6,6 +6,22 @@ import {
   appendNativeChatAttachmentCache,
   readNativeChatAttachmentCache
 } from './use-native-chat-composer-attachments'
+import type { StructuredAgentSessionSendDisposition } from '../../../../shared/structured-agent-session-send-disposition'
+import type { AgentSessionWriteRefusal } from '../../../../shared/agent-session-write-failure'
+import { agentSessionWriteNoticeParts } from '../../../../shared/agent-session-refusal-notice'
+
+/** The host refused the message for an attachment it no longer stores: sending the same message
+ *  again can never succeed, so only the sender can fix it. */
+function attachmentExpiredRefusal(
+  entry: StructuredAgentSessionOutboxEntry
+): AgentSessionWriteRefusal | null {
+  const failure = entry.lastFailure
+  return failure?.kind === 'refused' &&
+    failure.code === 'agent_session_operation_invalid' &&
+    failure.details?.reason === 'attachmentExpired'
+    ? failure
+    : null
+}
 
 /** Puts a message's text and images into a composer, after whatever is there. */
 export function returnMessageToComposer(
@@ -62,9 +78,38 @@ export function useStructuredAgentSessionWithdrawnRestore(
   /** Entries a Stop took out of the outbox here, before the host held them; false when the
    *  composer could not take them. */
   byStop: (entries: readonly StructuredAgentSessionOutboxEntry[]) => boolean
+  /** A send's outcome, with any message refused for an expired attachment taken back out and
+   *  returned to the composer, where the attachment can be removed, instead of held for a Retry
+   *  that cannot succeed. Kept for Retry where no composer shows this session. */
+  byRefusal: (
+    disposition: StructuredAgentSessionSendDisposition
+  ) => StructuredAgentSessionSendDisposition
 } {
   return useMemo(
-    () => ({ byStop: (entries) => restoreUnsentMessages(composerScopeKey, entries) }),
+    () => ({
+      byStop: (entries) => restoreUnsentMessages(composerScopeKey, entries),
+      byRefusal: (disposition) => {
+        const returned = disposition.entries.filter(
+          (entry) => attachmentExpiredRefusal(entry) !== null
+        )
+        const refusal = returned[0] && attachmentExpiredRefusal(returned[0])
+        if (!composerScopeKey || !refusal) {
+          return disposition
+        }
+        // Only the send's own view applies its outcome, so nothing else gives these back.
+        for (const entry of returned) {
+          returnMessageToComposer(
+            composerScopeKey,
+            `withdrawn-${entry.clientMessageId}`,
+            entry.body.blocks
+          )
+        }
+        return {
+          entries: disposition.entries.filter((entry) => !returned.includes(entry)),
+          error: agentSessionWriteNoticeParts(refusal, 'send')
+        }
+      }
+    }),
     [composerScopeKey]
   )
 }

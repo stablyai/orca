@@ -24,8 +24,7 @@ function renderDispatch(agent: 'codex' | 'claude' | 'openclaude', onSubmitted = 
       agent,
       onSubmitted,
       disabled: false,
-      resolveTarget: () => ({ settings: {}, ptyId: 'pty-1' }),
-      setHistory: vi.fn()
+      resolveTarget: () => ({ settings: {}, ptyId: 'pty-1' })
     })
   )
 }

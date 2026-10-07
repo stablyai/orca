@@ -13,6 +13,7 @@ import type { NativeChatLaunchDraft } from '@/lib/native-chat-launch-prompt'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
 import type { NativeChatAfterStopSend } from './native-chat-composer-target'
 import type { NativeChatLocalCommandAnswer } from './use-native-chat-local-command-answer'
+import type { NativeChatRecallSource } from './native-chat-sent-prompt-history'
 
 export type NativeChatOptionPickerRequest = {
   id: string
@@ -120,6 +121,8 @@ export type NativeChatComposerProps = {
   steerQueued?: () => boolean
   /** The chat's own notices, shown in the composer's notice card above its input. */
   notices?: readonly NativeChatComposerNotice[]
+  /** The conversation Up/Down recalls prompts from. */
+  recallSource?: NativeChatRecallSource
 }
 
 /** Launch context prefilled into the TUI input as an unsent draft, plus the two

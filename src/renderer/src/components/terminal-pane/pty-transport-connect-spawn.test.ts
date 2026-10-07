@@ -306,6 +306,26 @@ describe('createIpcPtyTransport', () => {
     transport.disconnect()
   })
 
+  it('sends placement on a fresh spawn but not on a session reattach', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+    const placement = {
+      kind: 'split',
+      parentLeafId: '11111111-1111-4111-8111-111111111111',
+      direction: 'horizontal'
+    } as const
+
+    const fresh = createIpcPtyTransport({ placement })
+    await fresh.connect({ url: '', callbacks: {} })
+    expect(spawn).toHaveBeenLastCalledWith(expect.objectContaining({ placement }))
+    fresh.disconnect()
+
+    const reattach = createIpcPtyTransport({ placement })
+    await reattach.connect({ url: '', callbacks: {}, sessionId: 'session-1' })
+    expect(spawn).toHaveBeenLastCalledWith(expect.not.objectContaining({ placement }))
+    reattach.disconnect()
+  })
+
   it('returns startup cwd fallback metadata to the connection layer', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>

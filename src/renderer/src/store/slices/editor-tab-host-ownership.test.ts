@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createEditorTabsStore } from './editor-slice-test-harness'
-import { makeWorktree, TEST_REPO } from './store-test-helpers'
+import { makeWorktree, TEST_REPO } from './worktrees-slice-test-fixtures'
 import { getDefaultSettings } from '../../../../shared/constants'
 import {
   assertEditorFileOperationCurrent,
