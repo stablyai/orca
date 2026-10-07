@@ -79,12 +79,7 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     }
     // Scheduled messages ride the same edges; they gate liveness themselves.
     for (const leaf of this.getLeavesForPty(ptyId)) {
-      this.emitAgentIdleEdge({
-        ptyId,
-        worktreeId: leaf.worktreeId,
-        leafId: leaf.leafId,
-        tabId: leaf.tabId
-      })
+      this.emitAgentIdleEdge(leaf)
     }
   }
 
