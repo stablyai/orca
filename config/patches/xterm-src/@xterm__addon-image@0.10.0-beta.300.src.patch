@@ -313,7 +313,7 @@ index 5854efaec1fdf9dfcb886023542998a563b6d2f2..f3aba13205873b62bfbebbb60a5d72af
  
    public get document(): Document | undefined {
 diff --git a/src/ImageStorage.ts b/src/ImageStorage.ts
-index 322b9e02f1aed1d75feff0057ce7a9ded9094ea5..73632de868a8951b5e2545e9792f3c8814ac0057 100644
+index 322b9e02f1aed1d75feff0057ce7a9ded9094ea5..8309d80965e90bbc711f74da251ebbfd7865e2d2 100644
 --- a/src/ImageStorage.ts
 +++ b/src/ImageStorage.ts
 @@ -54,7 +54,7 @@ class ExtendedAttrsImage implements IExtendedAttrsImage {
@@ -335,12 +335,27 @@ index 322b9e02f1aed1d75feff0057ce7a9ded9094ea5..73632de868a8951b5e2545e9792f3c88
    }
  }
  const EMPTY_ATTRS = new ExtendedAttrsImage();
-@@ -130,6 +131,8 @@ export class ImageStorage implements IDisposable {
+@@ -114,12 +115,11 @@ const EMPTY_ATTRS = new ExtendedAttrsImage();
+  * TODO: image composition for overwrites
+  */
+ export class ImageStorage implements IDisposable {
++  private static readonly _maxImages = 4096;
+   // storage
+   private _images: Map<number, IImageSpec> = new Map();
+   // last used id
+   private _lastId = 0;
+-  // last evicted id
+-  private _lowestId = 0;
+   // whether a full clear happened before
+   private _fullyCleared = false;
+   // whether render should do a full clear
+@@ -130,6 +130,9 @@ export class ImageStorage implements IDisposable {
    private _viewportMetrics: { cols: number, rows: number };
    public onImageAdded: (() => void) | undefined;
    public onImageDeleted: ((storageId: number) => void) | undefined;
 +  // Placeholder cells carry image references in text and colors, not tile attributes.
 +  public onRenderLine: ((line: IBufferLineExt, row: number, cols: number) => void) | undefined;
++  public onCollectVisibleImageIds: ((line: IBufferLineExt, cols: number, ids: Set<number>) => void) | undefined;
  
    constructor(
      private _terminal: ITerminalExt,
@@ -359,6 +374,15 @@ index 322b9e02f1aed1d75feff0057ce7a9ded9094ea5..73632de868a8951b5e2545e9792f3c88
      this._renderer.clearAll();
    }
  
+@@ -173,7 +173,7 @@ export class ImageStorage implements IDisposable {
+       throw RangeError('invalid storageLimit, should be at least 0.5 MB and not exceed 1G');
+     }
+     this._pixelLimit = (value / 4 * 1000000) >>> 0;
+-    this._evictOldest(0);
++    this._evictImages(0, 0);
+   }
+ 
+   public getUsage(): number {
 @@ -202,6 +202,7 @@ export class ImageStorage implements IDisposable {
        spec.orig.close();
      }
@@ -373,7 +397,7 @@ index 322b9e02f1aed1d75feff0057ce7a9ded9094ea5..73632de868a8951b5e2545e9792f3c88
  
 +  public addUnplacedImage(img: HTMLCanvasElement | ImageBitmap, opts: IAddImageOpts): number {
 +    // never allow storage to exceed memory limit
-+    this._evictOldest(img.width * img.height);
++    this._evictImages(img.width * img.height);
 +
 +    let cellSize = this._renderer.cellSize;
 +    if (cellSize.width === -1 || cellSize.height === -1) {
@@ -404,6 +428,15 @@ index 322b9e02f1aed1d75feff0057ce7a9ded9094ea5..73632de868a8951b5e2545e9792f3c88
    /**
     * Method to add an image to the storage.
     * @param img - The image to add (canvas or bitmap).
+@@ -249,7 +280,7 @@ export class ImageStorage implements IDisposable {
+    */
+   public addImage(img: HTMLCanvasElement | ImageBitmap, opts: IAddImageOpts): number {
+     // never allow storage to exceed memory limit
+-    this._evictOldest(img.width * img.height);
++    this._evictImages(img.width * img.height);
+ 
+     // calc rows x cols needed to display the image
+     let cellSize = this._renderer.cellSize;
 @@ -307,7 +338,7 @@ export class ImageStorage implements IDisposable {
      // deleted images with zero tile count
      const zero = [];
@@ -421,7 +454,60 @@ index 322b9e02f1aed1d75feff0057ce7a9ded9094ea5..73632de868a8951b5e2545e9792f3c88
        for (let col = 0; col < cols; ++col) {
          if (line.getBg(col) & BgFlags.HAS_EXTENDED) {
            let e: IExtendedAttrsImage = line._extendedAttrs[col] ?? EMPTY_ATTRS;
-@@ -656,7 +688,7 @@ export class ImageStorage implements IDisposable {
+@@ -581,20 +613,42 @@ export class ImageStorage implements IDisposable {
+     }
+   }
+ 
+-  // TODO: Do we need some blob offloading tricks here to avoid early eviction?
+-  // also see https://stackoverflow.com/questions/28307789/is-there-any-limitation-on-javascript-max-blob-size
+-  private _evictOldest(room: number): number {
++  public getVisibleImageIds(): Set<number> {
++    const ids = new Set<number>();
++    const buffer = this._terminal._core.buffer;
++    for (let row = 0; row < this._terminal.rows; ++row) {
++      const line = buffer.lines.get(buffer.ydisp + row) as IBufferLineExt | undefined;
++      if (!line) continue;
++      this.onCollectVisibleImageIds?.(line, this._terminal.cols, ids);
++      for (let col = 0; col < this._terminal.cols; ++col) {
++        if (!(line.getBg(col) & BgFlags.HAS_EXTENDED)) continue;
++        const attrs = line._extendedAttrs[col];
++        if (attrs?.imageId !== undefined && attrs.tileId !== -1 && this._images.has(attrs.imageId)) {
++          ids.add(attrs.imageId);
++        }
++      }
++    }
++    return ids;
++  }
++
++  private _evictImages(room: number, incoming = 1): number {
+     const used = this._getStoredPixels();
++    if (used + room <= this._pixelLimit && this._images.size + incoming <= ImageStorage._maxImages) return 0;
++    // Buffer cells, rather than markers, account for partial visibility and erased tiles.
++    const visible = this.getVisibleImageIds();
+     let current = used;
+-    while (this._pixelLimit < current + room && this._images.size) {
+-      const spec = this._images.get(++this._lowestId);
+-      if (spec && spec.orig) {
+-        current -= spec.orig.width * spec.orig.height;
+-        if (spec.actual && spec.orig !== spec.actual) {
+-          current -= spec.actual.width * spec.actual.height;
++    for (const evictVisible of [false, true]) {
++      for (const [id, spec] of this._images) {
++        if (current + room <= this._pixelLimit && this._images.size + incoming <= ImageStorage._maxImages) return used - current;
++        if (visible.has(id) !== evictVisible) continue;
++        if (spec.orig) {
++          current -= spec.orig.width * spec.orig.height;
++          if (spec.actual && spec.orig !== spec.actual) {
++            current -= spec.actual.width * spec.actual.height;
++          }
+         }
+         spec.marker?.dispose();
+-        this._delImg(this._lowestId);
++        this._delImg(id);
+       }
+     }
+     return used - current;
+@@ -656,7 +710,7 @@ export class ImageStorage implements IDisposable {
      // deleted images with zero tile count
      const zero = [];
      for (const [id, spec] of this._images.entries()) {
@@ -1045,7 +1131,7 @@ index 4288dd0a4180eca8f3ae28ec0805f834b2a0a629..158df006abdd348ca35cb1134eb3923b
 +  return location;
 +}
 diff --git a/src/kitty/KittyImageStorage.ts b/src/kitty/KittyImageStorage.ts
-index 1f5c09ec9e2700f8f6dbd8436a1802217dfc99ef..51871e5656e419529bc647c88bc1b3f7331b5c60 100644
+index 1f5c09ec9e2700f8f6dbd8436a1802217dfc99ef..3212029bcdb7dfbbe7c2c779f7e748b8ef773839 100644
 --- a/src/kitty/KittyImageStorage.ts
 +++ b/src/kitty/KittyImageStorage.ts
 @@ -4,15 +4,23 @@
@@ -1119,15 +1205,16 @@ index 1f5c09ec9e2700f8f6dbd8436a1802217dfc99ef..51871e5656e419529bc647c88bc1b3f7
    ) {
      this._previousOnImageDeleted = this._storage.onImageDeleted;
      this._wrappedOnImageDeleted = (storageId: number) => {
-@@ -53,6 +62,7 @@ export class KittyImageStorage implements IDisposable {
+@@ -53,6 +62,8 @@ export class KittyImageStorage implements IDisposable {
        this._handleStorageImageDeleted(storageId);
      };
      this._storage.onImageDeleted = this._wrappedOnImageDeleted;
 +    this._storage.onRenderLine = this._renderPlaceholderLine;
++    this._storage.onCollectVisibleImageIds = this._collectVisibleImageIds;
    }
  
    public reset(): void {
-@@ -60,6 +70,8 @@ export class KittyImageStorage implements IDisposable {
+@@ -60,6 +71,8 @@ export class KittyImageStorage implements IDisposable {
      this._images.clear();
      this._kittyIdToStorageId.clear();
      this._storageIdToKittyId.clear();
@@ -1136,12 +1223,15 @@ index 1f5c09ec9e2700f8f6dbd8436a1802217dfc99ef..51871e5656e419529bc647c88bc1b3f7
    }
  
    public dispose(): void {
-@@ -67,11 +79,15 @@ export class KittyImageStorage implements IDisposable {
+@@ -67,11 +80,18 @@ export class KittyImageStorage implements IDisposable {
      if (this._storage.onImageDeleted === this._wrappedOnImageDeleted) {
        this._storage.onImageDeleted = this._previousOnImageDeleted;
      }
 +    if (this._storage.onRenderLine === this._renderPlaceholderLine) {
 +      this._storage.onRenderLine = undefined;
++    }
++    if (this._storage.onCollectVisibleImageIds === this._collectVisibleImageIds) {
++      this._storage.onCollectVisibleImageIds = undefined;
 +    }
    }
  
@@ -1152,33 +1242,33 @@ index 1f5c09ec9e2700f8f6dbd8436a1802217dfc99ef..51871e5656e419529bc647c88bc1b3f7
      const oldStorageId = this._kittyIdToStorageId.get(imageId);
      if (oldStorageId !== undefined) {
        this._storage.deleteImage(oldStorageId);
-@@ -83,6 +99,25 @@ export class KittyImageStorage implements IDisposable {
-       this._evictUndisplayedImages();
+@@ -79,8 +99,23 @@ export class KittyImageStorage implements IDisposable {
+       this._storageIdToKittyId.delete(oldStorageId);
      }
  
-+    // Encoded images awaiting placement are outside ImageStorage's pixel budget.
-+    // Unplaced payloads are evicted first so a new upload cannot erase a visible
-+    // image while abandoned blobs still hold budget; placed ones go only when
-+    // that is not enough, because the byte cap is a hard bound. The new image is
-+    // always stored, so an oversized one overshoots by at most one payload
-+    // (itself bounded by kittySizeLimit) rather than being dropped after an OK ack.
+-    if (!this._images.has(imageId) && this._images.size >= KittyImageStorage._maxStoredImages) {
+-      this._evictUndisplayedImages();
 +    const byteLimit = this._storage.getLimit() * 1000000;
 +    this._images.delete(imageId);
 +    let retainedBytes = 0;
 +    for (const image of this._images.values()) retainedBytes += image.data.size;
-+    for (const evictPlaced of [false, true]) {
++    const needsEviction = (): boolean => retainedBytes + imageData.data.size > byteLimit
++      || this._images.size >= KittyImageStorage._maxStoredImages;
++    // Source eviction must not free a bitmap still owned by a decoded placement.
++    const visible = needsEviction() ? this._visibleKittyIds() : new Set<number>();
++    for (const rank of [0, 1, 2]) {
 +      for (const [oldestId, image] of this._images) {
-+        if (retainedBytes + imageData.data.size <= byteLimit) break;
-+        if ((this._kittyIdToStorageId.has(oldestId) || this._virtualPlacements.has(oldestId)) !== evictPlaced) continue;
++        if (!needsEviction()) break;
++        const imageRank = visible.has(oldestId) ? 2
++          : this._kittyIdToStorageId.has(oldestId) || this._virtualPlacements.has(oldestId) ? 1 : 0;
++        if (imageRank !== rank) continue;
 +        retainedBytes -= image.data.size;
-+        this.deleteById(oldestId);
++        this._images.delete(oldestId);
 +      }
-+    }
-+
+     }
+ 
      this._images.set(imageId, {
-       ...imageData,
-       id: imageId
-@@ -111,23 +146,67 @@ export class KittyImageStorage implements IDisposable {
+@@ -111,23 +146,68 @@ export class KittyImageStorage implements IDisposable {
      return this._images.get(kittyId);
    }
  
@@ -1248,26 +1338,54 @@ index 1f5c09ec9e2700f8f6dbd8436a1802217dfc99ef..51871e5656e419529bc647c88bc1b3f7
 +
 +  public deleteAll(preserveVirtual = false): void {
 +    if (preserveVirtual) this.deletePhysicalPlacements();
-+    for (const kittyId of [...this._images.keys()]) {
++    const ids = new Set([...this._images.keys(), ...this._kittyIdToStorageId.keys(), ...this._virtualPlacements.keys()]);
++    for (const kittyId of ids) {
 +      if (!preserveVirtual || !this._virtualPlacements.has(kittyId)) this.deleteById(kittyId);
 +    }
    }
  
    public get images(): ReadonlyMap<number, IKittyImageData> {
-@@ -147,9 +226,96 @@ export class KittyImageStorage implements IDisposable {
-       if (this._images.size <= KittyImageStorage._maxStoredImages / 2) {
-         break;
-       }
--      if (!this._kittyIdToStorageId.has(kittyId)) {
-+      if (!this._kittyIdToStorageId.has(kittyId) && !this._virtualPlacements.has(kittyId)) {
-         this._images.delete(kittyId);
-+        this._virtualPlacements.delete(kittyId);
-       }
-     }
+@@ -142,14 +222,111 @@ export class KittyImageStorage implements IDisposable {
+     return this._nextImageId - 1;
    }
+ 
+-  private _evictUndisplayedImages(): void {
+-    for (const [kittyId] of this._images) {
+-      if (this._images.size <= KittyImageStorage._maxStoredImages / 2) {
+-        break;
+-      }
+-      if (!this._kittyIdToStorageId.has(kittyId)) {
+-        this._images.delete(kittyId);
++  private _visibleKittyIds(): Set<number> {
++    const ids = new Set<number>();
++    for (const storageId of this._storage.getVisibleImageIds()) {
++      const kittyId = this._virtualStorageIds.get(storageId)?.kittyId ?? this._storageIdToKittyId.get(storageId);
++      if (kittyId !== undefined) ids.add(kittyId);
++    }
++    return ids;
++  }
 +
 +  // Omitted diacritics inherit only from a consecutive matching placeholder.
 +  private readonly _renderPlaceholderLine = (line: IBufferLineExt, row: number, cols: number): void => {
++    this._visitPlaceholderRuns(line, cols, (cell, start, count) => {
++      const placement = this._placementForRun(cell, count);
++      const spec = placement && this._storage.getImageSpec(placement.storageId);
++      if (!placement || !spec) return;
++      const gridCol = cell.location.column - count;
++      this._renderer.drawCellImage(spec, placement.cols, placement.rows, cell.location.row - 1, gridCol,
++        Math.min(count, placement.cols - gridCol), start, row);
++    });
++  };
++
++  private readonly _collectVisibleImageIds = (line: IBufferLineExt, cols: number, ids: Set<number>): void => {
++    this._visitPlaceholderRuns(line, cols, (cell, _start, count) => {
++      const placement = this._placementForRun(cell, count);
++      if (placement) ids.add(placement.storageId);
++    });
++  };
++
++  private _visitPlaceholderRuns(line: IBufferLineExt, cols: number,
++    visit: (cell: IPlaceholderCell, start: number, count: number) => void): void {
 +    if (this._virtualPlacements.size === 0) {
 +      return;
 +    }
@@ -1287,7 +1405,7 @@ index 1f5c09ec9e2700f8f6dbd8436a1802217dfc99ef..51871e5656e419529bc647c88bc1b3f7
 +        cell.location.highByte = Math.max(previous.location.highByte, 1);
 +      } else {
 +        if (runLength > 0 && previous !== undefined) {
-+          this._drawPlaceholderRun(previous, col - runLength, runLength, row);
++          visit(previous, col - runLength, runLength);
 +        }
 +        runLength = 0;
 +        if (cell !== undefined) {
@@ -1296,10 +1414,10 @@ index 1f5c09ec9e2700f8f6dbd8436a1802217dfc99ef..51871e5656e419529bc647c88bc1b3f7
 +          if (!cell.location.column) cell.location.column = 1;
 +          if (!cell.location.highByte) cell.location.highByte = 1;
 +        }
-+      }
+       }
 +      previous = cell ?? previous;
 +    }
-+  };
++  }
 +
 +  private _placeholderCell(line: IBufferLineExt, col: number): IPlaceholderCell | undefined {
 +    if (!line.isCombined(col) && line.getCodePoint(col) !== PLACEHOLDER_CHAR) {
@@ -1334,21 +1452,15 @@ index 1f5c09ec9e2700f8f6dbd8436a1802217dfc99ef..51871e5656e419529bc647c88bc1b3f7
 +    return { imageId, placementId, location };
 +  }
 +
-+  private _drawPlaceholderRun(cell: IPlaceholderCell, startCol: number, count: number, row: number): void {
++  private _placementForRun(cell: IPlaceholderCell, count: number): IVirtualPlacement | undefined {
 +    const imageId = (cell.imageId | ((cell.location.highByte - 1) << 24)) >>> 0;
 +    const placement = this._virtualPlacementFor(imageId, cell.placementId);
-+    const spec = placement && this._storage.getImageSpec(placement.storageId);
 +    // `column` is 1-based and holds the last cell of the run.
 +    const gridRow = cell.location.row - 1;
 +    const gridCol = cell.location.column - count;
-+    if (!placement || !spec || gridRow < 0 || gridRow >= placement.rows || gridCol < 0) {
-+      return;
-+    }
-+    // Cells past the placement's box show nothing.
-+    const tiles = Math.min(count, placement.cols - gridCol);
-+    if (tiles <= 0) {
-+      return;
-+    }
-+    this._renderer.drawCellImage(spec, placement.cols, placement.rows, gridRow, gridCol, tiles, startCol, row);
-+  }
++    if (!placement || gridRow < 0 || gridRow >= placement.rows || gridCol < 0 || gridCol >= placement.cols) {
++      return undefined;
+     }
++    return placement;
+   }
  }
