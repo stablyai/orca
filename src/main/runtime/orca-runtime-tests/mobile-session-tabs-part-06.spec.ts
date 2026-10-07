@@ -419,6 +419,12 @@ describe('OrcaRuntimeService', () => {
       publicationEpoch: expect.any(String),
       snapshotVersion: expect.any(Number)
     })
+    const published = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+    expect(reply.publicationEpoch).toBe(published.publicationEpoch)
+    expect(reply.snapshotVersion).toBe(published.snapshotVersion)
+    expect(published.tabs).toEqual(
+      expect.arrayContaining([expect.objectContaining({ viewMode: 'chat' })])
+    )
 
     const persisted = getSession().tabsByWorktree[TEST_WORKTREE_ID]!.find(
       (tab) => tab.id === 'host-tab'

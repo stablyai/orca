@@ -19,6 +19,7 @@ import { useMobileBridgeChatPromptWrites } from './use-mobile-bridge-chat-prompt
 import { useMobileNativeChatActiveResolution } from './use-mobile-native-chat-active-resolution'
 import { useMobileNativeChatPromptCards } from './use-mobile-native-chat-prompt-cards'
 import { mobileNativeChatScopeKey } from './mobile-native-chat-scope-key'
+import type { MobileSessionTabViewModeBridge } from './use-mobile-session-view-mode'
 
 export type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
 
@@ -32,6 +33,7 @@ export function useMobileNativeChatController(args: {
   worktreeId: string
   activeSessionTab: MobileNativeChatTab | null
   activeSessionTabId: string | null
+  sessionTabViewMode?: MobileSessionTabViewModeBridge
   activeHandleRef: MutableRefObject<string | null>
   deviceTokenRef: MutableRefObject<string | null>
   nativeChatTranscriptIsLocalReadable: boolean
@@ -51,6 +53,7 @@ export function useMobileNativeChatController(args: {
     worktreeId,
     activeSessionTab,
     activeSessionTabId,
+    sessionTabViewMode,
     activeHandleRef,
     deviceTokenRef,
     nativeChatTranscriptIsLocalReadable,
@@ -81,7 +84,8 @@ export function useMobileNativeChatController(args: {
     activeSessionTab,
     activeSessionTabId,
     activeHandleRef,
-    nativeChatTranscriptIsLocalReadable
+    nativeChatTranscriptIsLocalReadable,
+    sessionTabViewMode
   })
 
   // The lane runs before the drafts hook (fixed hook order); Edit's composer
@@ -332,6 +336,7 @@ export function useMobileNativeChatController(args: {
       ? structuredNativeChatSend.sendWithOutcome
       : handleNativeChatSendWithOutcome,
     readSeededLaunchDraft,
-    nativeChatSessionOptions
+    nativeChatSessionOptions,
+    chatProviderSessions: structuredNativeChat.providerSessions
   }
 }

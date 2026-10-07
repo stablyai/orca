@@ -216,7 +216,6 @@ export function useMobileSessionViewMode(args: {
                 pending.accepted = true
                 // Why: newer hosts identify the exact publication; older hosts retain matching
                 // echo reconciliation below, including snapshots received before this ACK.
-                pending.acceptedPublication = bridge.readHostViewPublication?.()
                 if (ack?.publicationEpoch && typeof ack.snapshotVersion === 'number') {
                   pending.acknowledgedPublication = {
                     epoch: ack.publicationEpoch,

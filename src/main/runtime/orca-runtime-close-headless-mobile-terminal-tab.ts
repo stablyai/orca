@@ -258,7 +258,11 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
           : {})
       }
     }
-    const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+    let snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+    if (!snapshot) {
+      this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
+      snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+    }
     const hostTabId = snapshot
       ? (this.resolveMobileSessionHostTabId(snapshot, args.tabId) ?? args.tabId)
       : args.tabId

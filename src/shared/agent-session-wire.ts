@@ -181,6 +181,8 @@ export type AgentSessionSubscribeEvent =
       sessionId: string
       page: AgentSessionHistoryPage
       fence: number
+      /** Current provider resume identity when the host can resolve it at subscribe time. */
+      providerSession?: AgentProviderSessionMetadata
       backgroundTasks?: AgentSessionBackgroundTaskState | null
       /** Whole-list draft publication; omitted when unchanged since the last frame sent. */
       queuedMessages?: AgentSessionQueuedMessage[] | null
