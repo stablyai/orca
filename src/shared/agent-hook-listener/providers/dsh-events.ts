@@ -13,17 +13,10 @@ import { extractToolFields, isNewTurnEvent } from '../provider-event-routing'
 import { readString } from '../tool-input-preview'
 
 /**
- * DeepSeek Harness reaches Orca through its own `@deepseek-ai/dsh-hooks-claude-code`
- * bridge, so the payloads are Claude-shaped (`session_id`, `tool_name`, `tool_input`,
- * `tool_use_id`, `prompt`) and the event names are a strict subset of Claude's:
- * SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop, SubagentStart and
- * SubagentStop. There is no Notification and no PermissionRequest.
- *
- * That missing pair is why the waiting state is read from the tool instead: DSH asks the
- * user through `ask_user_question` (`@deepseek-ai/dsh-tool-ask-user`), whose PreToolUse
- * fires while the question card owns the screen and whose PostToolUse only lands once the
- * user answers. An approval pause has no hook of its own and reads as `working`, which is
- * the honest answer — the harness is mid-tool, not idle.
+ * Normalize root metadata from Orca's native DSH plugin and older Claude-compatible
+ * bridge events. Legacy Stop precedes finalization and cannot prove readiness.
+ * Native lifecycle HTTP reports are metadata only; readiness uses ordered PTY frames.
+ * ask_user_question marks the tool-owned question until its result arrives.
  */
 export function normalizeDshEvent(
   state: HookListenerState,
@@ -49,13 +42,15 @@ export function normalizeDshEvent(
   switch (eventName) {
     case 'UserPromptSubmit':
     case 'PostToolUse':
+    case 'NativeRunning':
+    case 'Stop':
       stateName = 'working'
       break
     case 'PreToolUse':
       stateName = isAskUserQuestionTool(toolName) ? 'waiting' : 'working'
       break
     case 'SessionStart':
-    case 'Stop':
+    case 'NativeIdle':
       stateName = 'done'
       break
     default:
@@ -71,6 +66,8 @@ export function normalizeDshEvent(
 
   return normalizeAgentStatusPayload({
     state: stateName,
+    // SessionStart precedes the composer; native idle follows finalization, unlike Stop.
+    sessionBoundary: eventName === 'SessionStart' ? true : undefined,
     prompt: resolvePrompt(state, paneKey, promptText, {
       resetOnNewTurn: isNewTurnEvent('dsh', eventName)
     }),

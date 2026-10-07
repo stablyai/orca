@@ -14,13 +14,24 @@ configuration dumps. Custom profile names remain eligible because profiles are
 user configurable. Only launcher arguments are inspected; app prompts, resume IDs,
 and patch filenames cannot change the selected profile's identity.
 
-Status hooks use the official `@deepseek-ai/dsh-hooks-claude-code` plugin, installed
-as an owned block in `$DSH_HOME/cordis.patch.yml`. User entries outside the block are
-preserved. Local installation respects `DSH_HOME`; the existing SSH installer uses
-the execution host's default `~/.dsh` because SFTP cannot read its environment.
-Hooks report session start, prompt submission, tool start/end, and stopping through
-Orca's host status store. Approval has no dedicated hook; it is not inferred from
-an uncaptured screen. Subagent lifecycle events are ignored for parent-pane status.
+Status hooks install an Orca-owned native lifecycle plugin in
+`$DSH_HOME/cordis.patch.yml`. User entries outside the block are preserved. Local
+installation respects `DSH_HOME`; the existing SSH installer uses the execution
+host's default `~/.dsh` because SFTP cannot read its environment.
+
+The plugin observes only the root agent. Prompt/tool metadata travels through the
+existing managed HTTP hook transport. Readiness uses synchronous OSC 9999 frames
+on the existing PTY carrier: `agent/status` running emits working; finalized idle
+with no inbox work emits done. Frames require a TTY and Orca pane identity in the environment,
+so unrelated SDK/headless output remains untouched. SessionStart is a boundary,
+not a completed turn. The Claude-compatible Stop callback runs before finalization
+and may steer another step, so legacy Stop remains working. HTTP status stays
+identity-only and cannot settle worker readiness after delayed delivery.
+
+Hook upgrades take effect when a new DSH process loads the home patch. Existing
+DSH sessions keep their loaded plugin and must not be interrupted to apply this change.
+Approval has no dedicated hook and remains governed by Orca's existing visible
+prompt arbitration. Descendant agent events never produce parent-pane idle.
 
 DSH 0.2 still emits an empty `transcript_path` in Claude-compatible hooks. Its
 session persistence defaults to compressed JSONL under `$DSH_HOME/sessions`.

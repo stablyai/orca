@@ -59,6 +59,10 @@ export function getDshManagedScriptPath(): string {
   return getSharedManagedScriptPath(getDshManagedScriptFileName())
 }
 
+export function getDshStatusPluginPath(): string {
+  return getSharedManagedScriptPath('dsh-status.mjs')
+}
+
 export function getDshManagedHooksPath(): string {
   return getSharedManagedScriptPath(DSH_MANAGED_HOOKS_FILE_NAME)
 }
