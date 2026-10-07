@@ -22,6 +22,7 @@ import {
 } from '../../../src/shared/native-chat-turn-membership'
 import { nativeChatMessagesWaitingBehindLiveTurn } from '../../../src/shared/native-chat-messages-waiting-behind-live-turn'
 import { nativeChatRowsInDrawOrder } from '../../../src/shared/native-chat-turn-grouping'
+import { isStoppedBeforeStartBlock } from '../../../src/shared/native-chat-stopped-before-start'
 import { useMobileNativeChatScopedOpenKeys } from './use-mobile-native-chat-scoped-open-keys'
 import { useMobileNativeChatTurnStatus } from './use-mobile-native-chat-turn-status'
 import type {
@@ -120,7 +121,10 @@ export function useMobileNativeChatTurnDisclosure({
         rendersProse: content.markdown.length > 0 || content.hasImages,
         draws: nativeChatRowRendersContent(message.blocks),
         outlivesTurn: message.blocks.some(
-          (block) => isSubagentGroupBlock(block) || isBackgroundTaskBlock(block)
+          (block) =>
+            isSubagentGroupBlock(block) ||
+            isBackgroundTaskBlock(block) ||
+            isStoppedBeforeStartBlock(block)
         ),
         reportsFailure: message.blocks.some(
           (block) => block.type === 'text' && block.tone === 'error'

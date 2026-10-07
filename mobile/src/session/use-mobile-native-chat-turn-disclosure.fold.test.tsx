@@ -241,9 +241,11 @@ describe('useMobileNativeChatTurnDisclosure settled folding', () => {
     act(() => {
       renderer!.update(createElement(Harness, { messages, turnJournal, toolsExpanded: true }))
     })
-    expect(renderer!.root.findByType(Host).props.disclosure.listMessages.map(
-      (item: NativeChatMessage) => item.id
-    )).toEqual(['u1', 'tool'])
+    expect(
+      renderer!.root
+        .findByType(Host)
+        .props.disclosure.listMessages.map((item: NativeChatMessage) => item.id)
+    ).toEqual(['u1', 'tool'])
   })
 
   it('keeps a hidden carrier and caret for a settled history turn without its user row', () => {
@@ -326,5 +328,29 @@ describe('useMobileNativeChatTurnDisclosure settled folding', () => {
     })
     const disclosure = renderer!.root.findByType(Host).props.disclosure
     expect(disclosure.listMessages[0].blocks).toEqual(outlive.blocks)
+  })
+
+  it('keeps a stopped-before-start row in a settled turn', () => {
+    const stopped = message('stopped', 'system', [
+      {
+        type: 'text',
+        text: 'Stopped before the agent started',
+        presentation: 'stopped-before-start'
+      }
+    ])
+    const messages = [message('u1', 'user', [{ type: 'text', text: 'go' }]), stopped]
+    const turnJournal = journal([
+      ['u1', said('user'), null],
+      ['t1', turn('t1', 'u1'), null],
+      ['stopped', said('system'), 't1']
+    ])
+    act(() => {
+      renderer = create(createElement(Harness, { messages, turnJournal, settledKey: 'u1' }))
+    })
+    const disclosure = renderer!.root.findByType(Host).props.disclosure
+    expect(disclosure.listMessages.map((item: NativeChatMessage) => item.id)).toEqual([
+      'u1',
+      'stopped'
+    ])
   })
 })
