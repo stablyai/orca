@@ -6,10 +6,16 @@ import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shared/worktree/types'
 import { cloneDefaultWorkspaceStatuses } from '../../../../../../shared/workspace-statuses'
 import type { AppState } from '../../../../store/types'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
+import {
+  getWorktreeExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../../../../../shared/execution-host'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
-import { getCyclicProjectedWorktreeLineageIds } from '../../worktree-lineage-projection'
+import {
+  getCyclicProjectedWorktreeLineageIds,
+  getLineageRenderInfo
+} from '../../worktree-lineage-projection'
 import { ALL_GROUP_KEY, ALL_GROUP_META } from './group-keys'
 import { appendOrderedGroups } from './group-sections'
 import type { SectionAppendContext } from './group-sections'
@@ -43,6 +49,8 @@ import type {
   WorktreeGroupBy
 } from './row-types'
 import { getRenderedNaturalAnchorRepoIds, withRepoSectionDisplayLabels } from './section-order'
+import { resolveDelegatedWorktreeNesting } from './delegated-worktree-nesting'
+import type { DelegatedWorktreeEdge } from '../../../../../../shared/worktree/delegated-worktree-edge'
 import { buildOrderedGroups } from './worktree-grouping'
 
 export function buildRows(
@@ -70,7 +78,8 @@ export function buildRows(
   folderWorkspaces: readonly FolderWorkspace[] = [],
   hostLabelById?: ReadonlyMap<string, string>,
   defaultHostId: ExecutionHostId = LOCAL_EXECUTION_HOST_ID,
-  pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy = getPinnedWorktreeDisplayPolicy(settings)
+  pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy = getPinnedWorktreeDisplayPolicy(settings),
+  delegatedWorktreeEdges: readonly DelegatedWorktreeEdge[] = []
 ): Row[] {
   const result: Row[] = []
   const projectIndex = buildProjectGroupingIndex(projectGrouping)
@@ -80,6 +89,27 @@ export function buildRows(
   const cyclicLineageIds = nestLineage
     ? getCyclicProjectedWorktreeLineageIds(lineageById, worktreeMap)
     : new Set<string>()
+  // Sections are per repo and repo ids are per host, so a delegated child is
+  // rendered in its coordinator's section; anywhere else there is no parent row
+  // to nest under. Status and PR lanes keep lane membership, as lineage does.
+  const delegatedNesting =
+    nestLineage && delegatedWorktreeEdges.length > 0
+      ? resolveDelegatedWorktreeNesting({
+          worktrees,
+          edges: delegatedWorktreeEdges,
+          // Not defaultHostId: the edges arrive on this window's own graph sync, so their
+          // coordinator is always a local row, while the focused host follows the host filter.
+          homeHostId: LOCAL_EXECUTION_HOST_ID,
+          getLineageParentIdentity: (worktree) => {
+            const info = getLineageRenderInfo(worktree, lineageById, worktreeMap, cyclicLineageIds)
+            return info.state === 'valid' ? getWorktreeHostIdentity(info.parent) : undefined
+          },
+          resolveHostId: (worktree) =>
+            getWorktreeExecutionHostId(worktree, repoMap.get(worktree.repoId))
+        })
+      : undefined
+  const sectionAnchorByChildIdentity =
+    groupBy === 'repo' ? delegatedNesting?.sectionAnchorByChildIdentity : undefined
 
   const pendingByRepo = new Map<string, PendingCreationRef[]>()
   for (const creation of pendingCreations) {
@@ -183,7 +213,8 @@ export function buildRows(
           groupDepth: 0,
           sectionKey: ALL_GROUP_KEY,
           hostContextLabelByWorktreeIdentity: mixedWorktreeHostContextLabels,
-          cyclicLineageIds
+          cyclicLineageIds,
+          delegatedParentIdentityByChildIdentity: delegatedNesting?.parentIdentityByChildIdentity
         })
         for (const pair of [...renderableFolderWorkspaces].sort((left, right) =>
           compareFolderWorkspacesForDisplay(left.folderWorkspace, right.folderWorkspace)
@@ -209,7 +240,8 @@ export function buildRows(
     pendingByRepo,
     repoOrder,
     projectOrderBy,
-    folderWorkspaces: renderableFolderWorkspaces
+    folderWorkspaces: renderableFolderWorkspaces,
+    sectionAnchorByChildIdentity
   })
 
   const sectionContext: SectionAppendContext = {
@@ -229,7 +261,8 @@ export function buildRows(
     lineageById,
     worktreeMap,
     nestLineage,
-    cyclicLineageIds
+    cyclicLineageIds,
+    delegatedParentIdentityByChildIdentity: delegatedNesting?.parentIdentityByChildIdentity
   }
 
   if (groupBy !== 'repo' || projectGroups.length === 0) {

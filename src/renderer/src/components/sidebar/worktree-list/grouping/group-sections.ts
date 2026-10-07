@@ -14,6 +14,7 @@ import {
   getLaneHostWorktreeIds,
   getMixedHostContextLabels
 } from './host-labels'
+import { getRenderedRepoIds } from './project-grouping'
 import type { OrderedGroupEntry, ProjectGroupingIndex } from './project-grouping'
 import {
   appendWorktreeRows,
@@ -50,6 +51,7 @@ export type SectionAppendContext = {
   worktreeMap: Map<string, Worktree>
   nestLineage: boolean
   cyclicLineageIds: ReadonlySet<string>
+  delegatedParentIdentityByChildIdentity?: ReadonlyMap<string, string>
 }
 
 export function appendOrderedGroups(
@@ -150,9 +152,10 @@ export function appendOrderedGroups(
     result.push(header)
     if (!isCollapsed) {
       if (groupBy === 'repo') {
+        const renderedRepoIds = getRenderedRepoIds(group)
         const repoIds =
-          group.repoIds.size > 0
-            ? [...group.repoIds]
+          renderedRepoIds.length > 0
+            ? renderedRepoIds
             : repo
               ? [repo.id]
               : key.startsWith('repo:')
@@ -208,7 +211,8 @@ export function appendOrderedGroups(
         sectionKey: key,
         hostContextLabelByRepoId,
         hostContextLabelByWorktreeIdentity,
-        cyclicLineageIds
+        cyclicLineageIds,
+        delegatedParentIdentityByChildIdentity: ctx.delegatedParentIdentityByChildIdentity
       })
       for (const pair of folderPairs) {
         result.push(buildFolderWorkspaceRow(pair, projectGroupDepth))

@@ -111,6 +111,7 @@ export function appendWorktreeRows(
     hostContextLabelByRepoId?: ReadonlyMap<string, string>
     hostContextLabelByWorktreeIdentity?: ReadonlyMap<string, string>
     cyclicLineageIds: ReadonlySet<string>
+    delegatedParentIdentityByChildIdentity?: ReadonlyMap<string, string>
   }
 ): void {
   const {
@@ -120,7 +121,8 @@ export function appendWorktreeRows(
     sectionKey,
     hostContextLabelByRepoId,
     hostContextLabelByWorktreeIdentity,
-    cyclicLineageIds
+    cyclicLineageIds,
+    delegatedParentIdentityByChildIdentity
   } = options
   if (!nestLineage) {
     for (const worktree of worktrees) {
@@ -148,7 +150,22 @@ export function appendWorktreeRows(
   )
   const childrenByParentIdentity = new Map<string, Worktree[]>()
   const childIdentities = new Set<string>()
+  const attachChild = (worktree: Worktree, parentIdentity: string): void => {
+    childIdentities.add(getWorktreeHostIdentity(worktree))
+    const children = childrenByParentIdentity.get(parentIdentity) ?? []
+    children.push(worktree)
+    childrenByParentIdentity.set(parentIdentity, children)
+  }
   for (const worktree of worktrees) {
+    // A worker on another server has no recordable git lineage, so its edge
+    // comes from the coordinator's dispatch records instead.
+    const delegatedParentIdentity = delegatedParentIdentityByChildIdentity?.get(
+      getWorktreeHostIdentity(worktree)
+    )
+    if (delegatedParentIdentity && visibleByIdentity.has(delegatedParentIdentity)) {
+      attachChild(worktree, delegatedParentIdentity)
+      continue
+    }
     const projectedLineage = getProjectedWorktreeLineage(worktree, lineageById)
     const inlineLineage = (worktree as Worktree & { lineage?: WorktreeLineage | null }).lineage
     const lineage =
@@ -166,11 +183,7 @@ export function appendWorktreeRows(
     if (!parent || !isValidResolvedWorktreeLineageEdge(worktree, parent, lineage)) {
       continue
     }
-    const childIdentity = getWorktreeHostIdentity(worktree)
-    childIdentities.add(childIdentity)
-    const children = childrenByParentIdentity.get(parentIdentity) ?? []
-    children.push(worktree)
-    childrenByParentIdentity.set(parentIdentity, children)
+    attachChild(worktree, parentIdentity)
   }
 
   const emitted = new Set<string>()
