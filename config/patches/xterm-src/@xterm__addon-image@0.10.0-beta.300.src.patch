@@ -218,10 +218,10 @@ index 0000000000000000000000000000000000000000..f5190509c4ccd13b563b139a306ed1b2
 +  return { state, parser, header, decoder };
 +}
 diff --git a/src/IIPHandler.ts b/src/IIPHandler.ts
-index 559b907416eb38318f439d060d7f89311ed34c7e..a270014664b939a299d191b0990339ee3f3130bb 100644
+index 559b907416eb38318f439d060d7f89311ed34c7e..b7041733274110aaa4ddc72e40e11ffb4398065e 100644
 --- a/src/IIPHandler.ts
 +++ b/src/IIPHandler.ts
-@@ -2,19 +2,26 @@
+@@ -2,19 +2,27 @@
   * Copyright (c) 2023 The xterm.js authors. All rights reserved.
   * @license MIT
   */
@@ -234,6 +234,7 @@ index 559b907416eb38318f439d060d7f89311ed34c7e..a270014664b939a299d191b0990339ee
  import Base64Decoder from 'xterm-wasm-parts/lib/base64/Base64Decoder.wasm';
  import QoiDecoder from 'xterm-wasm-parts/lib/qoi/QoiDecoder.wasm';
  import { HeaderParser, IHeaderFields, HeaderState, SequenceType } from './IIPHeaderParser';
++import { prepareFileHeader } from './IIPHeaderCheckpoint';
  import { imageType, UNSUPPORTED_TYPE } from './IIPMetrics';
 +import { IIPActiveCheckpoint, captureIIPActiveCheckpoint, prepareIIPActiveCheckpoint } from './IIPActiveCheckpoint';
 +import { requireImageParserState, startImageCheckpointParser } from './ImageParserCheckpoint';
@@ -250,7 +251,7 @@ index 559b907416eb38318f439d060d7f89311ed34c7e..a270014664b939a299d191b0990339ee
    // Initial buffer allocation for the decoder.
    INITIAL_DATA = 1048576,
    // Local mirror of const enum (esbuild can't inline const enums from external packages)
-@@ -33,14 +40,21 @@ const DEFAULT_HEADER: IHeaderFields = {
+@@ -33,14 +41,21 @@ const DEFAULT_HEADER: IHeaderFields = {
  };
  
  
@@ -273,7 +274,7 @@ index 559b907416eb38318f439d060d7f89311ed34c7e..a270014664b939a299d191b0990339ee
  
    constructor(
      private readonly _opts: IImageAddonOptions,
-@@ -48,19 +62,93 @@ export class IIPHandler implements IOscHandler, IResetHandler {
+@@ -48,19 +63,94 @@ export class IIPHandler implements IOscHandler, IResetHandler {
      private readonly _storage: IIPImageStorage,
      private readonly _coreTerminal: ITerminalExt
    ) {
@@ -313,6 +314,7 @@ index 559b907416eb38318f439d060d7f89311ed34c7e..a270014664b939a299d191b0990339ee
 +  public restorePendingCheckpoint(checkpoint: IIPUploadCheckpoint): void {
 +    if (this._disposed) throw new Error('IIP handler is disposed');
 +    const generation = this._generation;
++    const header = checkpoint.metadata.multipart ? prepareFileHeader(checkpoint.metadata.multipart.header) : undefined;
 +    const decoder = prepareIIPUploadCheckpoint(checkpoint, this._maxEncodedBytes, this._initialEncodedBytes);
 +    if (this._disposed || generation !== this._generation || checkpoint.isDisposed) {
 +      decoder?.release();
@@ -320,8 +322,8 @@ index 559b907416eb38318f439d060d7f89311ed34c7e..a270014664b939a299d191b0990339ee
 +    }
 +    this.reset();
 +    const multipart = checkpoint.metadata.multipart;
-+    if (multipart) {
-+      this._header = { ...multipart.header };
++    if (multipart && header) {
++      this._header = header;
 +      this._isMultipart = true;
 +      this._abortMulti = multipart.aborted;
 +      this._multipartEncodedSize = multipart.base64?.encodedByteLength ?? 0;
@@ -370,7 +372,7 @@ index 559b907416eb38318f439d060d7f89311ed34c7e..a270014664b939a299d191b0990339ee
      this._aborted = false;
      this._hp.reset();
    }
-@@ -70,8 +158,7 @@ export class IIPHandler implements IOscHandler, IResetHandler {
+@@ -70,8 +160,7 @@ export class IIPHandler implements IOscHandler, IResetHandler {
  
      if (this._hp.state === HeaderState.END) {
        if ((this._dec.put(data.subarray(start, end)) as number) !== DecoderConst.OK) {
@@ -380,7 +382,7 @@ index 559b907416eb38318f439d060d7f89311ed34c7e..a270014664b939a299d191b0990339ee
        }
      } else {
        const dataPos = this._hp.parse(data, start, end);
-@@ -92,34 +179,44 @@ export class IIPHandler implements IOscHandler, IResetHandler {
+@@ -92,34 +181,44 @@ export class IIPHandler implements IOscHandler, IResetHandler {
              this._aborted = true;
              return;
            }
@@ -432,7 +434,7 @@ index 559b907416eb38318f439d060d7f89311ed34c7e..a270014664b939a299d191b0990339ee
        if (this._renderer.dimensions) {
          w = this._renderer.dimensions.css.canvas.width / this._coreTerminal.cols;
          h = this._renderer.dimensions.css.canvas.height / this._coreTerminal.rows;
-@@ -134,8 +231,11 @@ export class IIPHandler implements IOscHandler, IResetHandler {
+@@ -134,8 +233,11 @@ export class IIPHandler implements IOscHandler, IResetHandler {
        this._header = Object.assign({}, DEFAULT_HEADER, this._hp.fields);
        this._isMultipart = true;
        this._abortMulti = false;
@@ -445,7 +447,7 @@ index 559b907416eb38318f439d060d7f89311ed34c7e..a270014664b939a299d191b0990339ee
        return true;
      }
  
-@@ -177,41 +277,66 @@ export class IIPHandler implements IOscHandler, IResetHandler {
+@@ -177,41 +279,66 @@ export class IIPHandler implements IOscHandler, IResetHandler {
        return true;
      }
  
@@ -543,15 +545,16 @@ index 559b907416eb38318f439d060d7f89311ed34c7e..a270014664b939a299d191b0990339ee
  
 diff --git a/src/IIPHeaderCheckpoint.ts b/src/IIPHeaderCheckpoint.ts
 new file mode 100644
-index 0000000000000000000000000000000000000000..7de82ea741eea1e6e066365bb6e864447223e35f
+index 0000000000000000000000000000000000000000..f3b55fabfbd08fe57560cf78eaf57ed9b1c4ae60
 --- /dev/null
 +++ b/src/IIPHeaderCheckpoint.ts
-@@ -0,0 +1,135 @@
+@@ -0,0 +1,130 @@
 +/**
 + * Copyright (c) 2026 The xterm.js authors. All rights reserved.
 + * @license MIT
 + */
 +
++import { checkpointNumberText, restoreCheckpointNumber } from './ImageCheckpointNumber';
 +import type { HeaderState, IHeaderFields, SequenceType } from './IIPHeaderParser';
 +
 +export const IIP_HEADER_CHECKPOINT_BYTES = 65536;
@@ -575,9 +578,6 @@ index 0000000000000000000000000000000000000000..7de82ea741eea1e6e066365bb6e86444
 +  readonly byteLength: number;
 +}
 +
-+function numberText(value: number): string {
-+  return Object.is(value, -0) ? '-0' : String(value);
-+}
 +function checkedString(value: string): number {
 +  if (typeof value !== 'string' || value.length > MAX_CHARS) throw new Error('Invalid IIP checkpoint string');
 +  return value.length * 4;
@@ -590,13 +590,13 @@ index 0000000000000000000000000000000000000000..7de82ea741eea1e6e066365bb6e86444
 +}
 +function valueBytes(value: HeaderValue): number {
 +  if (typeof value === 'string') return checkedString(value);
-+  if (typeof value === 'number') return numberText(value).length * 4;
++  if (typeof value === 'number') return checkpointNumberText(value).length * 4;
 +  if (value instanceof Uint32Array) return checkedPoints(value);
 +  if (value === null || value === undefined) return 4;
 +  throw new Error('Unsupported IIP checkpoint field');
 +}
 +function copyValue(value: HeaderValue): IHeaderCheckpointValue {
-+  if (typeof value === 'number') return Object.freeze({ kind: 'number', text: numberText(value) });
++  if (typeof value === 'number') return Object.freeze({ kind: 'number', text: checkpointNumberText(value) });
 +  if (typeof value === 'string') return Object.freeze({ kind: 'string', text: value });
 +  if (value instanceof Uint32Array) return Object.freeze({ kind: 'codepoints', points: Object.freeze(Array.from(value)) });
 +  return Object.freeze({ kind: value === null ? 'null' : 'undefined' });
@@ -627,10 +627,7 @@ index 0000000000000000000000000000000000000000..7de82ea741eea1e6e066365bb6e86444
 +    let value: HeaderValue;
 +    switch (v.kind) {
 +      case 'number':
-+        if (typeof v.text !== 'string' || v.text.length > 32 || numberText(Number(v.text)) !== v.text) {
-+          throw new Error('Invalid IIP checkpoint numeric field');
-+        }
-+        value = Number(v.text);
++        value = restoreCheckpointNumber(v.text);
 +        break;
 +      case 'string': value = v.text; break;
 +      case 'codepoints':
@@ -800,10 +797,10 @@ index 217a7fc93d5dca938dd086509027919f2f1c7902..a93ca203fbb8ea22310ec23d21179777
    let i = 4;
 diff --git a/src/IIPUploadCheckpoint.ts b/src/IIPUploadCheckpoint.ts
 new file mode 100644
-index 0000000000000000000000000000000000000000..1038c4f5ddc447c5a704ec1fcd61cb88417b12aa
+index 0000000000000000000000000000000000000000..254062d8af2156a3e40f6c758721601d0c313060
 --- /dev/null
 +++ b/src/IIPUploadCheckpoint.ts
-@@ -0,0 +1,49 @@
+@@ -0,0 +1,52 @@
 +/**
 + * Copyright (c) 2026 The xterm.js authors. All rights reserved.
 + * @license MIT
@@ -813,10 +810,11 @@ index 0000000000000000000000000000000000000000..1038c4f5ddc447c5a704ec1fcd61cb88
 +import { ImageCheckpointResources, type ICheckpointResource } from './ImageCheckpointResources';
 +import { planBase64UploadCheckpoint, copyBase64UploadCheckpoint, restoreBase64UploadCheckpoint,
 +  checkUploadCheckpointBudget, type IBase64UploadCheckpoint } from './Base64UploadCheckpoint';
++import { captureHeaderFields, prepareFileHeader, type IHeaderFieldsCheckpoint } from './IIPHeaderCheckpoint';
 +import type { IHeaderFields } from './IIPHeaderParser';
 +
 +export interface IIIPUploadCheckpointMetadata {
-+  readonly multipart?: Readonly<{ header: Readonly<IHeaderFields>; aborted: boolean; base64?: IBase64UploadCheckpoint }>;
++  readonly multipart?: Readonly<{ header: IHeaderFieldsCheckpoint; aborted: boolean; base64?: IBase64UploadCheckpoint }>;
 +  readonly byteLength: number;
 +  readonly resources: readonly ICheckpointResource[];
 +}
@@ -834,7 +832,7 @@ index 0000000000000000000000000000000000000000..1038c4f5ddc447c5a704ec1fcd61cb88
 +  if (plan) resources.set(1, copyBase64UploadCheckpoint(plan));
 +  const base64 = plan ? Object.freeze({ resourceId: 1, decodedByteLength: plan.decodedByteLength,
 +    tailByteLength: plan.tailByteLength, encodedByteLength: plan.encodedByteLength, byteLength: plan.byteLength }) : undefined;
-+  const copiedHeader = header ? Object.freeze({ type: header.type, name: header.name, size: header.size,
++  const copiedHeader = header ? captureHeaderFields({ type: header.type, name: header.name, size: header.size,
 +    width: header.width, height: header.height, preserveAspectRatio: header.preserveAspectRatio, inline: header.inline }) : undefined;
 +  return new IIPUploadCheckpoint(Object.freeze({
 +    multipart: copiedHeader ? Object.freeze({ header: copiedHeader, aborted, base64 }) : undefined,
@@ -847,25 +845,105 @@ index 0000000000000000000000000000000000000000..1038c4f5ddc447c5a704ec1fcd61cb88
 +): Base64Decoder | undefined {
 +  if (checkpoint.isDisposed) throw new Error('Pending IIP checkpoint lease is disposed');
 +  const multipart = checkpoint.metadata.multipart;
-+  if (!multipart || multipart.aborted) return undefined;
++  if (!multipart) return undefined;
++  prepareFileHeader(multipart.header);
++  if (multipart.aborted) return undefined;
 +  if (!multipart.base64) throw new Error('Pending IIP checkpoint has no decoder resource');
 +  const decoder = new Base64Decoder(0, maxEncodedBytes, initialBytes);
 +  restoreBase64UploadCheckpoint(checkpoint, multipart.base64, decoder);
 +  return decoder;
 +}
 diff --git a/src/ImageAddon.ts b/src/ImageAddon.ts
-index 8fd39543118cd420e36c1614c1af370b6c7bbfbb..c508007a7955725697977780a98fdac71467ae97 100644
+index 8fd39543118cd420e36c1614c1af370b6c7bbfbb..32df7021443abb9808ba6ec09ee523a851c54754 100644
 --- a/src/ImageAddon.ts
 +++ b/src/ImageAddon.ts
-@@ -113,6 +113,7 @@ export class ImageAddon implements ITerminalAddon, IImageApi {
+@@ -5,6 +5,9 @@
+ 
+ import type { ITerminalAddon, IDisposable } from '@xterm/xterm';
+ import type { ImageAddon as IImageApi } from '@xterm/addon-image';
++import { ImageAddonCheckpoint, captureImageAddonCheckpoint, type IImageCheckpointPart } from './ImageAddonCheckpoint';
++import { restoreImageAddonCheckpoint } from './ImageAddonCheckpointRestore';
++import { checkUploadCheckpointBudget } from './Base64UploadCheckpoint';
+ import { Emitter, type IEvent } from 'common/Event';
+ import { IIPHandler } from './IIPHandler';
+ import { ImageRenderer } from './ImageRenderer';
+@@ -99,6 +102,7 @@ const enum GaStatus {
+ export class ImageAddon implements ITerminalAddon, IImageApi {
+   private _opts: IImageAddonOptions;
+   private _defaultOpts: IImageAddonOptions;
++  private _checkpointGeneration = 0;
+   private _storage: ImageStorage | undefined;
+   private _renderer: ImageRenderer | undefined;
+   private _disposables: IDisposable[] = [];
+@@ -113,6 +117,8 @@ export class ImageAddon implements ITerminalAddon, IImageApi {
    }
  
    public dispose(): void {
++    this._checkpointGeneration++;
 +    for (const handler of this._handlers.values()) handler.reset();
      for (const obj of this._disposables) {
        obj.dispose();
      }
-@@ -131,8 +132,10 @@ export class ImageAddon implements ITerminalAddon, IImageApi {
+@@ -121,6 +127,58 @@ export class ImageAddon implements ITerminalAddon, IImageApi {
+     this._onImageAdded.dispose();
+   }
+ 
++  public captureCheckpoint(maxBytes: number): ImageAddonCheckpoint {
++    checkUploadCheckpointBudget(maxBytes, 0);
++    const storage = this._storage;
++    const terminal = this._terminal;
++    if (!storage || storage.isDisposed || !terminal) throw new Error('Image addon is not active');
++    const kitty = this._handlers.get('kitty');
++    const iip = this._handlers.get('iip');
++    const sixel = this._handlers.get('sixel');
++    let active: IImageCheckpointPart | undefined;
++    const captures: ((remaining: number) => IImageCheckpointPart)[] = [
++      remaining => ({ kind: 'decoded', checkpoint: storage.captureCheckpoint(remaining) })
++    ];
++    try {
++      if (kitty instanceof KittyGraphicsHandler) {
++        const part = kitty.captureActiveCheckpoint(maxBytes);
++        if (part) active = { kind: 'kitty-active', checkpoint: part };
++        captures.push(remaining => ({ kind: 'kitty-sources', checkpoint: kitty.captureStorageCheckpoint(remaining) }),
++          remaining => ({ kind: 'kitty-pending', checkpoint: kitty.capturePendingCheckpoint(remaining) }));
++      }
++      if (iip instanceof IIPHandler) {
++        const part = iip.captureActiveCheckpoint(maxBytes);
++        if (part) {
++          if (active) { part.dispose(); throw new Error('Multiple active image commands'); }
++          active = { kind: 'iip-active', checkpoint: part };
++        } else captures.push(remaining => ({ kind: 'iip-pending', checkpoint: iip.capturePendingCheckpoint(remaining) }));
++      }
++      if (sixel instanceof SixelHandler) {
++        const part = sixel.captureActiveCheckpoint(maxBytes);
++        if (part) {
++          if (active) { part.dispose(); throw new Error('Multiple active image commands'); }
++          active = { kind: 'sixel-active', checkpoint: part };
++        } else captures.push(remaining => ({ kind: 'sixel-state', checkpoint: sixel.captureStateCheckpoint(remaining) }));
++      }
++      return captureImageAddonCheckpoint(terminal.buffer.active.type, maxBytes, captures, active);
++    } catch (error) { active?.checkpoint.dispose(); throw error; }
++  }
++
++  public async restoreCheckpoint(checkpoint: ImageAddonCheckpoint): Promise<void> {
++    const storage = this._storage;
++    const terminal = this._terminal;
++    if (!storage || storage.isDisposed || !terminal) throw new Error('Image addon is not active');
++    const generation = ++this._checkpointGeneration;
++    const kitty = this._handlers.get('kitty');
++    const iip = this._handlers.get('iip');
++    const sixel = this._handlers.get('sixel');
++    await restoreImageAddonCheckpoint(checkpoint, { storage, terminal,
++      kitty: kitty instanceof KittyGraphicsHandler ? kitty : undefined,
++      iip: iip instanceof IIPHandler ? iip : undefined,
++      sixel: sixel instanceof SixelHandler ? sixel : undefined,
++      isCurrent: () => generation === this._checkpointGeneration });
++  }
++
+   private _disposeLater(...args: IDisposable[]): void {
+     for (const obj of args) {
+       this._disposables.push(obj);
+@@ -131,8 +189,10 @@ export class ImageAddon implements ITerminalAddon, IImageApi {
      this._terminal = terminal;
  
      // internal data structures
@@ -877,7 +955,7 @@ index 8fd39543118cd420e36c1614c1af370b6c7bbfbb..c508007a7955725697977780a98fdac7
      this._storage.onImageAdded = () => this._onImageAdded.fire();
  
      // enable size reports
-@@ -154,9 +157,6 @@ export class ImageAddon implements ITerminalAddon, IImageApi {
+@@ -154,9 +214,6 @@ export class ImageAddon implements ITerminalAddon, IImageApi {
        terminal.parser.registerCsiHandler({ final: 'c' }, params => this._da1(params)),
        terminal.parser.registerCsiHandler({ prefix: '?', final: 'S' }, params => this._xtermGraphicsAttributes(params)),
  
@@ -887,7 +965,7 @@ index 8fd39543118cd420e36c1614c1af370b6c7bbfbb..c508007a7955725697977780a98fdac7
        /**
         * reset handlers covered:
         * - DECSTR
-@@ -180,6 +180,7 @@ export class ImageAddon implements ITerminalAddon, IImageApi {
+@@ -180,6 +237,7 @@ export class ImageAddon implements ITerminalAddon, IImageApi {
        const sixelHandler = new SixelHandler(this._opts, sixelStorage, terminal);
        this._handlers.set('sixel', sixelHandler);
        this._disposeLater(
@@ -895,7 +973,7 @@ index 8fd39543118cd420e36c1614c1af370b6c7bbfbb..c508007a7955725697977780a98fdac7
          terminal._core._inputHandler._parser.registerDcsHandler({ final: 'q' }, sixelHandler)
        );
      }
-@@ -190,13 +191,14 @@ export class ImageAddon implements ITerminalAddon, IImageApi {
+@@ -190,13 +248,14 @@ export class ImageAddon implements ITerminalAddon, IImageApi {
        const iipHandler = new IIPHandler(this._opts, this._renderer!, iipStorage, terminal);
        this._handlers.set('iip', iipHandler);
        this._disposeLater(
@@ -911,12 +989,366 @@ index 8fd39543118cd420e36c1614c1af370b6c7bbfbb..c508007a7955725697977780a98fdac7
        const kittyHandler = new KittyGraphicsHandler(this._opts, this._renderer!, kittyStorage, terminal);
        this._handlers.set('kitty', kittyHandler);
        this._disposeLater(
+@@ -209,6 +268,7 @@ export class ImageAddon implements ITerminalAddon, IImageApi {
+ 
+   // Note: storageLimit is skipped here to not intoduce a surprising side effect.
+   public reset(): boolean {
++    this._checkpointGeneration++;
+     // reset options customizable by sequences to defaults
+     this._opts.sixelScrolling = this._defaultOpts.sixelScrolling;
+     this._opts.sixelPaletteLimit = this._defaultOpts.sixelPaletteLimit;
+diff --git a/src/ImageAddonCheckpoint.ts b/src/ImageAddonCheckpoint.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..1d54d2dfb552447ea605e7b08232424ec47f5e91
+--- /dev/null
++++ b/src/ImageAddonCheckpoint.ts
+@@ -0,0 +1,197 @@
++/**
++ * Copyright (c) 2026 The xterm.js authors. All rights reserved.
++ * @license MIT
++ */
++
++import { ImageStorageCheckpoint } from './ImageStorageCheckpoint';
++import { KittyStorageCheckpoint } from './kitty/KittyStorageCheckpoint';
++import { KittyUploadCheckpoint } from './kitty/KittyUploadCheckpoint';
++import { IIPUploadCheckpoint } from './IIPUploadCheckpoint';
++import { SixelStateCheckpoint } from './SixelStateCheckpoint';
++import { KittyActiveCheckpoint } from './kitty/KittyActiveCheckpoint';
++import { IIPActiveCheckpoint } from './IIPActiveCheckpoint';
++import { SixelActiveCheckpoint } from './SixelActiveCheckpoint';
++import { ImageCheckpointResources, CHECKPOINT_LEASE_BYTES, type ICheckpointResource } from './ImageCheckpointResources';
++import { checkUploadCheckpointBudget } from './Base64UploadCheckpoint';
++import { imageCheckpointMetadataBytes, ownImageCheckpointMetadata } from './ImageCheckpointMetadata';
++
++interface ICheckpointKinds {
++  'decoded': ImageStorageCheckpoint;
++  'kitty-sources': KittyStorageCheckpoint;
++  'kitty-pending': KittyUploadCheckpoint;
++  'iip-pending': IIPUploadCheckpoint;
++  'sixel-state': SixelStateCheckpoint;
++  'kitty-active': KittyActiveCheckpoint;
++  'iip-active': IIPActiveCheckpoint;
++  'sixel-active': SixelActiveCheckpoint;
++}
++export type IImageCheckpointPart = {
++  [K in keyof ICheckpointKinds]: { kind: K; checkpoint: ICheckpointKinds[K] }
++}[keyof ICheckpointKinds];
++export type IImageCheckpointComponent = {
++  [K in keyof ICheckpointKinds]: { readonly kind: K; readonly metadata: ICheckpointKinds[K]['metadata']; readonly resourceIds: readonly number[] }
++}[keyof ICheckpointKinds];
++export interface IImageAddonCheckpointMetadata {
++  readonly version: 1;
++  readonly activeBuffer: 'normal' | 'alternate';
++  readonly components: readonly IImageCheckpointComponent[];
++  readonly resources: readonly ICheckpointResource[];
++  readonly resourceByteLength: number;
++  readonly metadataByteLength: number;
++  readonly byteLength: number;
++}
++
++declare module '@xterm/addon-image' {
++  interface ImageAddon {
++    captureCheckpoint(maxBytes: number): ImageAddonCheckpoint;
++    /** Apply only to an unpublished replacement with its text buffers restored. */
++    restoreCheckpoint(checkpoint: ImageAddonCheckpoint): Promise<void>;
++  }
++}
++
++function component(part: IImageCheckpointPart, resourceIds: readonly number[]): IImageCheckpointComponent {
++  switch (part.kind) {
++    case 'decoded': return Object.freeze({ kind: part.kind, metadata: part.checkpoint.metadata, resourceIds });
++    case 'kitty-sources': return Object.freeze({ kind: part.kind, metadata: part.checkpoint.metadata, resourceIds });
++    case 'kitty-pending': return Object.freeze({ kind: part.kind, metadata: part.checkpoint.metadata, resourceIds });
++    case 'iip-pending': return Object.freeze({ kind: part.kind, metadata: part.checkpoint.metadata, resourceIds });
++    case 'sixel-state': return Object.freeze({ kind: part.kind, metadata: part.checkpoint.metadata, resourceIds });
++    case 'kitty-active': return Object.freeze({ kind: part.kind, metadata: part.checkpoint.metadata, resourceIds });
++    case 'iip-active': return Object.freeze({ kind: part.kind, metadata: part.checkpoint.metadata, resourceIds });
++    case 'sixel-active': return Object.freeze({ kind: part.kind, metadata: part.checkpoint.metadata, resourceIds });
++  }
++}
++
++export class ImageAddonCheckpoint extends ImageCheckpointResources<IImageAddonCheckpointMetadata> {
++  private readonly _borrowedResources = new Set<Map<number, Uint8Array>>();
++
++  public override dispose(): void {
++    for (const resources of this._borrowedResources) resources.clear();
++    this._borrowedResources.clear();
++    super.dispose();
++  }
++
++  public openComponent(entry: IImageCheckpointComponent): IImageCheckpointPart {
++    if (this.isDisposed) throw new Error('Image checkpoint lease is disposed');
++    const resources = new Map<number, Uint8Array>();
++    for (let i = 0; i < entry.metadata.resources.length; i++) {
++      const bytes = this._resources.get(entry.resourceIds[i]);
++      if (!bytes) throw new Error('Missing image checkpoint resource');
++      resources.set(entry.metadata.resources[i].id, bytes);
++    }
++    switch (entry.kind) {
++      case 'decoded': return this._bindPart({ kind: entry.kind, checkpoint: new ImageStorageCheckpoint(entry.metadata, resources) }, entry, resources);
++      case 'kitty-sources': return this._bindPart({ kind: entry.kind, checkpoint: new KittyStorageCheckpoint(entry.metadata, resources) }, entry, resources);
++      case 'kitty-pending': return this._bindPart({ kind: entry.kind, checkpoint: new KittyUploadCheckpoint(entry.metadata, resources) }, entry, resources);
++      case 'iip-pending': return this._bindPart({ kind: entry.kind, checkpoint: new IIPUploadCheckpoint(entry.metadata, resources) }, entry, resources);
++      case 'sixel-state': return this._bindPart({ kind: entry.kind, checkpoint: new SixelStateCheckpoint(entry.metadata, resources) }, entry, resources);
++      case 'kitty-active': return this._bindPart({ kind: entry.kind, checkpoint: new KittyActiveCheckpoint(entry.metadata, resources) }, entry, resources);
++      case 'iip-active': return this._bindPart({ kind: entry.kind, checkpoint: new IIPActiveCheckpoint(entry.metadata, resources) }, entry, resources);
++      case 'sixel-active': return this._bindPart({ kind: entry.kind, checkpoint: new SixelActiveCheckpoint(entry.metadata, resources) }, entry, resources);
++    }
++  }
++
++  private _bindPart<T extends IImageCheckpointPart>(part: T, entry: IImageCheckpointComponent, resources: Map<number, Uint8Array>): T {
++    this._borrowedResources.add(resources);
++    let disposed = false;
++    const view = part.checkpoint;
++    const globalId = (id: number): number => {
++      if (disposed || this.isDisposed) throw new Error('Image checkpoint lease is disposed');
++      const index = entry.metadata.resources.findIndex(r => r.id === id);
++      if (index < 0) throw new Error('Invalid image checkpoint resource');
++      return entry.resourceIds[index];
++    };
++    Object.defineProperty(view, 'isDisposed', { get: () => disposed || this.isDisposed });
++    view.dispose = () => { disposed = true; resources.clear(); this._borrowedResources.delete(resources); };
++    view.takeResources = () => { throw new Error('Borrowed image checkpoint resources cannot be moved'); };
++    view.getResourceByteLength = id => this.getResourceByteLength(globalId(id));
++    view.readResource = (id, offset, length) => this.readResource(globalId(id), offset, length);
++    return part;
++  }
++}
++
++export function captureImageAddonCheckpoint(
++  activeBuffer: 'normal' | 'alternate', maxBytes: number,
++  captures: readonly ((remaining: number) => IImageCheckpointPart)[], active?: IImageCheckpointPart
++): ImageAddonCheckpoint {
++  checkUploadCheckpointBudget(maxBytes, 0);
++  const resources = new Map<number, Uint8Array>();
++  const components: IImageCheckpointComponent[] = [];
++  let resourceByteLength = 0;
++  function append(part: IImageCheckpointPart): void {
++    const resourceIds: number[] = [];
++    try {
++      const moved = part.checkpoint.takeResources();
++      for (const local of part.checkpoint.metadata.resources) {
++        const bytes = moved.get(local.id);
++        if (!bytes || bytes.byteLength !== local.byteLength) throw new Error('Invalid captured image resource');
++        const id = resources.size + 1;
++        resources.set(id, bytes);
++        resourceIds.push(id);
++        resourceByteLength += bytes.byteLength;
++      }
++      checkUploadCheckpointBudget(maxBytes, resourceByteLength);
++      components.push(component(part, Object.freeze(resourceIds)));
++    } finally { part.checkpoint.dispose(); }
++  }
++  try {
++    const reserved = active?.checkpoint.metadata.byteLength ?? 0;
++    for (const capture of captures) append(capture(maxBytes - resourceByteLength - reserved));
++    if (active) append(active);
++    const header = { version: 1 as const, activeBuffer, components: Object.freeze(components),
++      resources: Object.freeze([...resources].map(([id, bytes]) => Object.freeze({ id, byteLength: bytes.byteLength }))),
++      resourceByteLength, metadataByteLength: 0, byteLength: 0 };
++    const metadataByteLength = imageCheckpointMetadataBytes(header);
++    const byteLength = resourceByteLength + metadataByteLength;
++    checkUploadCheckpointBudget(maxBytes, byteLength);
++    return new ImageAddonCheckpoint(ownImageCheckpointMetadata({ ...header, metadataByteLength, byteLength }), resources);
++  } catch (error) { resources.clear(); active?.checkpoint.dispose(); throw error; }
++}
++
++const COMPONENT_ORDER = ['decoded', 'kitty-sources', 'kitty-pending', 'iip-pending', 'sixel-state', 'kitty-active', 'iip-active', 'sixel-active'];
++
++export function validateImageAddonCheckpoint(checkpoint: ImageAddonCheckpoint): IImageAddonCheckpointMetadata {
++  if (checkpoint.isDisposed) throw new Error('Image checkpoint lease is disposed');
++  const header = ownImageCheckpointMetadata(checkpoint.metadata);
++  if (header.version !== 1 || (header.activeBuffer !== 'normal' && header.activeBuffer !== 'alternate')
++    || !Array.isArray(header.components) || header.components.length < 1 || header.components.length > 8
++    || !Array.isArray(header.resources) || header.resources.length > 8192
++    || header.metadataByteLength !== imageCheckpointMetadataBytes(header)) throw new Error('Invalid image checkpoint header');
++  const descriptors = new Map<number, number>();
++  let resourceBytes = 0;
++  for (const resource of header.resources) {
++    if (!Number.isSafeInteger(resource.id) || resource.id < 1 || descriptors.has(resource.id)
++      || !Number.isSafeInteger(resource.byteLength) || resource.byteLength < 0
++      || checkpoint.getResourceByteLength(resource.id) !== resource.byteLength) throw new Error('Invalid image checkpoint resource');
++    descriptors.set(resource.id, resource.byteLength);
++    resourceBytes += resource.byteLength;
++  }
++  const used = new Set<number>();
++  const kinds = new Set<string>();
++  let prior = -1;
++  for (const entry of header.components) {
++    const index = COMPONENT_ORDER.indexOf(entry.kind);
++    if (index <= prior || !Array.isArray(entry.resourceIds) || !Array.isArray(entry.metadata.resources)
++      || entry.resourceIds.length !== entry.metadata.resources.length) throw new Error('Invalid image checkpoint component order');
++    prior = index;
++    kinds.add(entry.kind);
++    const localIds = new Set<number>();
++    let bytes = 0;
++    entry.metadata.resources.forEach((local: ICheckpointResource, i: number) => {
++      const id = entry.resourceIds[i];
++      if (!Number.isSafeInteger(local.id) || local.id < 1 || localIds.has(local.id) || used.has(id)
++        || !descriptors.has(id) || descriptors.get(id) !== local.byteLength) throw new Error('Invalid image checkpoint component resource');
++      localIds.add(local.id); used.add(id); bytes += local.byteLength;
++    });
++    if (bytes !== entry.metadata.byteLength) throw new Error('Invalid image checkpoint component byte length');
++  }
++  const active = ['kitty-active', 'iip-active', 'sixel-active'].filter(kind => kinds.has(kind));
++  if (!kinds.has('decoded') || kinds.has('kitty-sources') !== kinds.has('kitty-pending')
++    || (kinds.has('kitty-active') && !kinds.has('kitty-pending'))
++    || (kinds.has('iip-active') && kinds.has('iip-pending')) || (kinds.has('sixel-active') && kinds.has('sixel-state'))
++    || active.length > 1 || used.size !== descriptors.size || resourceBytes !== header.resourceByteLength
++    || header.byteLength !== resourceBytes + header.metadataByteLength || header.byteLength > CHECKPOINT_LEASE_BYTES) {
++    throw new Error('Invalid image checkpoint ownership');
++  }
++  return header;
++}
+diff --git a/src/ImageAddonCheckpointRestore.ts b/src/ImageAddonCheckpointRestore.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..c99fcf0dea4fa9700c19e0d7ad30a3a51df3eeb1
+--- /dev/null
++++ b/src/ImageAddonCheckpointRestore.ts
+@@ -0,0 +1,52 @@
++/**
++ * Copyright (c) 2026 The xterm.js authors. All rights reserved.
++ * @license MIT
++ */
++
++import type { ITerminalExt } from './Types';
++import type { ImageStorage } from './ImageStorage';
++import type { KittyGraphicsHandler } from './kitty/KittyGraphicsHandler';
++import type { IIPHandler } from './IIPHandler';
++import type { SixelHandler } from './SixelHandler';
++import { requireImageParserState } from './ImageParserCheckpoint';
++import { ImageAddonCheckpoint, validateImageAddonCheckpoint } from './ImageAddonCheckpoint';
++
++interface IImageCheckpointTarget {
++  terminal: ITerminalExt;
++  storage: ImageStorage;
++  kitty?: KittyGraphicsHandler;
++  iip?: IIPHandler;
++  sixel?: SixelHandler;
++  isCurrent: () => boolean;
++}
++
++export async function restoreImageAddonCheckpoint(checkpoint: ImageAddonCheckpoint, target: IImageCheckpointTarget): Promise<void> {
++  const header = validateImageAddonCheckpoint(checkpoint);
++  requireImageParserState(target.terminal, 0);
++  if (target.terminal.buffer.active.type !== header.activeBuffer) throw new Error('Image checkpoint text buffer mismatch');
++  for (const entry of header.components) {
++    if ((entry.kind.startsWith('kitty-') && !target.kitty) || (entry.kind.startsWith('iip-') && !target.iip)
++      || (entry.kind.startsWith('sixel-') && !target.sixel)) throw new Error('Image checkpoint protocol is disabled');
++  }
++  function checkCurrent(): void {
++    if (checkpoint.isDisposed || target.storage.isDisposed || !target.isCurrent()) throw new Error('Image checkpoint restore is stale');
++  }
++  // The whole-model owner publishes this replacement only after every component succeeds.
++  for (const entry of header.components) {
++    checkCurrent();
++    const part = checkpoint.openComponent(entry);
++    try {
++      switch (part.kind) {
++        case 'decoded': await target.storage.restoreCheckpoint(part.checkpoint); break;
++        case 'kitty-sources': target.kitty?.restoreStorageCheckpoint(part.checkpoint); break;
++        case 'kitty-pending': target.kitty?.restorePendingCheckpoint(part.checkpoint); break;
++        case 'kitty-active': target.kitty?.restoreActiveCheckpoint(part.checkpoint); break;
++        case 'iip-pending': target.iip?.restorePendingCheckpoint(part.checkpoint); break;
++        case 'iip-active': target.iip?.restoreActiveCheckpoint(part.checkpoint); break;
++        case 'sixel-state': target.sixel?.restoreStateCheckpoint(part.checkpoint); break;
++        case 'sixel-active': target.sixel?.restoreActiveCheckpoint(part.checkpoint); break;
++      }
++      checkCurrent();
++    } finally { part.checkpoint.dispose(); }
++  }
++}
+diff --git a/src/ImageCheckpointMetadata.ts b/src/ImageCheckpointMetadata.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..cf2b90910317c145514be3c730790af44c8013c8
+--- /dev/null
++++ b/src/ImageCheckpointMetadata.ts
+@@ -0,0 +1,58 @@
++/**
++ * Copyright (c) 2026 The xterm.js authors. All rights reserved.
++ * @license MIT
++ */
++
++export const IMAGE_CHECKPOINT_METADATA_BYTES = 8 * 1024 * 1024;
++
++export function imageCheckpointMetadataBytes(value: unknown): number {
++  let bytes = 0;
++  let nodes = 0;
++  const ancestors = new Set<object>();
++  function charge(n: number): void {
++    bytes += n;
++    if (bytes > IMAGE_CHECKPOINT_METADATA_BYTES) throw new RangeError('Image checkpoint metadata exceeds budget');
++  }
++  function visit(item: unknown, depth: number): void {
++    if (++nodes > 262144 || depth > 64) throw new RangeError('Image checkpoint metadata exceeds structural limits');
++    if (item === null || typeof item === 'boolean') { charge(8); return; }
++    if (typeof item === 'number') { charge(24); return; }
++    if (typeof item === 'string') { charge(item.length * 6 + 2); return; }
++    if (!item || typeof item !== 'object') throw new Error('Unsupported image checkpoint metadata value');
++    if (ancestors.has(item)) throw new Error('Cyclic image checkpoint metadata');
++    const array = Array.isArray(item);
++    if (!array && Object.getPrototypeOf(item) !== Object.prototype && Object.getPrototypeOf(item) !== null) {
++      throw new Error('Unsupported image checkpoint metadata object');
++    }
++    if (Array.isArray(item) && item.length > 8192) throw new RangeError('Image checkpoint metadata exceeds array limit');
++    const keys = Object.keys(item);
++    if (Array.isArray(item) && (keys.length !== item.length || keys.some((key, i) => key !== String(i)))) {
++      throw new Error('Image checkpoint metadata requires dense arrays');
++    }
++    if ((array && keys.length > 8192) || (!array && keys.length > 64)) throw new RangeError('Image checkpoint metadata exceeds object limits');
++    charge(16);
++    ancestors.add(item);
++    for (const key of keys) {
++      const descriptor = Object.getOwnPropertyDescriptor(item, key);
++      if (!descriptor || !('value' in descriptor)) throw new Error('Image checkpoint metadata cannot contain accessors');
++      if (descriptor.value === undefined && !array) continue;
++      charge(array ? 8 : key.length * 6 + 4);
++      visit(descriptor.value, depth + 1);
++    }
++    ancestors.delete(item);
++  }
++  visit(value, 0);
++  return bytes;
++}
++
++export function ownImageCheckpointMetadata<T>(value: T): T {
++  imageCheckpointMetadataBytes(value);
++  const clone: T = structuredClone(value);
++  function freeze(item: unknown): void {
++    if (!item || typeof item !== 'object') return;
++    for (const value of Object.values(item)) freeze(value);
++    Object.freeze(item);
++  }
++  freeze(clone);
++  return clone;
++}
+diff --git a/src/ImageCheckpointNumber.ts b/src/ImageCheckpointNumber.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..cf61908319d7d2464aa5cbb8bcec9871668f9b20
+--- /dev/null
++++ b/src/ImageCheckpointNumber.ts
+@@ -0,0 +1,15 @@
++/**
++ * Copyright (c) 2026 The xterm.js authors. All rights reserved.
++ * @license MIT
++ */
++
++export function checkpointNumberText(value: number): string {
++  return Object.is(value, -0) ? '-0' : String(value);
++}
++
++export function restoreCheckpointNumber(text: string): number {
++  if (typeof text !== 'string' || text.length > 32 || checkpointNumberText(Number(text)) !== text) {
++    throw new Error('Invalid image checkpoint numeric field');
++  }
++  return Number(text);
++}
 diff --git a/src/ImageCheckpointResources.ts b/src/ImageCheckpointResources.ts
 new file mode 100644
-index 0000000000000000000000000000000000000000..b5434b43982c5119533c5ab056b05abcfb61a692
+index 0000000000000000000000000000000000000000..36c8d42ed22fceac9afe76acf14a4058c26d9938
 --- /dev/null
 +++ b/src/ImageCheckpointResources.ts
-@@ -0,0 +1,59 @@
+@@ -0,0 +1,66 @@
 +/**
 + * Copyright (c) 2026 The xterm.js authors. All rights reserved.
 + * @license MIT
@@ -969,6 +1401,13 @@ index 0000000000000000000000000000000000000000..b5434b43982c5119533c5ab056b05abc
 +    }
 +    if (this.isDisposed) throw new Error('Image checkpoint lease is disposed');
 +    return bytes;
++  }
++
++  public takeResources(): Map<number, Uint8Array> {
++    if (this.isDisposed) throw new Error('Image checkpoint lease is disposed');
++    const resources = new Map(this._resources);
++    this.dispose();
++    return resources;
 +  }
 +
 +  public dispose(): void {
@@ -1674,7 +2113,7 @@ index 0000000000000000000000000000000000000000..ac5c3557b998ca129a3b6b445b64c92c
 +  }
 +}
 diff --git a/src/ImageStorage.ts b/src/ImageStorage.ts
-index 322b9e02f1aed1d75feff0057ce7a9ded9094ea5..fe61679719649d9a6a6932c5be7174b4e4947fd5 100644
+index 322b9e02f1aed1d75feff0057ce7a9ded9094ea5..d8c4a30250cf71e30a62297a669a30260baca11c 100644
 --- a/src/ImageStorage.ts
 +++ b/src/ImageStorage.ts
 @@ -5,10 +5,14 @@
@@ -1738,7 +2177,7 @@ index 322b9e02f1aed1d75feff0057ce7a9ded9094ea5..fe61679719649d9a6a6932c5be7174b4
  
    constructor(
      private _terminal: ITerminalExt,
-@@ -151,19 +160,79 @@ export class ImageStorage implements IDisposable {
+@@ -151,19 +160,81 @@ export class ImageStorage implements IDisposable {
    }
  
    public dispose(): void {
@@ -1759,6 +2198,8 @@ index 322b9e02f1aed1d75feff0057ce7a9ded9094ea5..fe61679719649d9a6a6932c5be7174b4
      this._renderer.clearAll();
    }
  
++  public get isDisposed(): boolean { return this._disposed; }
++
 +  public captureCheckpoint(maxBytes: number): ImageStorageCheckpoint {
 +    if (this._disposed) throw new Error('Image storage is disposed');
 +    return captureImageStorageCheckpoint(this._terminal, this._images, this._lastId, maxBytes);
@@ -1823,7 +2264,7 @@ index 322b9e02f1aed1d75feff0057ce7a9ded9094ea5..fe61679719649d9a6a6932c5be7174b4
    public getLimit(): number {
      return this._pixelLimit * 4 / 1000000;
    }
-@@ -172,8 +241,9 @@ export class ImageStorage implements IDisposable {
+@@ -172,8 +243,9 @@ export class ImageStorage implements IDisposable {
      if (value < 0.5 || value > 1000) {
        throw RangeError('invalid storageLimit, should be at least 0.5 MB and not exceed 1G');
      }
@@ -1834,7 +2275,7 @@ index 322b9e02f1aed1d75feff0057ce7a9ded9094ea5..fe61679719649d9a6a6932c5be7174b4
    }
  
    public getUsage(): number {
-@@ -196,18 +266,18 @@ export class ImageStorage implements IDisposable {
+@@ -196,18 +268,18 @@ export class ImageStorage implements IDisposable {
    private _delImg(id: number): void {
      const spec = this._images.get(id);
      if (!spec) return;
@@ -1857,7 +2298,7 @@ index 322b9e02f1aed1d75feff0057ce7a9ded9094ea5..fe61679719649d9a6a6932c5be7174b4
      // remove all alternate tagged images
      const zero = [];
      for (const [id, spec] of this._images.entries()) {
-@@ -236,6 +306,38 @@ export class ImageStorage implements IDisposable {
+@@ -236,6 +308,38 @@ export class ImageStorage implements IDisposable {
      }
    }
  
@@ -1896,7 +2337,7 @@ index 322b9e02f1aed1d75feff0057ce7a9ded9094ea5..fe61679719649d9a6a6932c5be7174b4
    /**
     * Method to add an image to the storage.
     * @param img - The image to add (canvas or bitmap).
-@@ -247,9 +349,10 @@ export class ImageStorage implements IDisposable {
+@@ -247,9 +351,10 @@ export class ImageStorage implements IDisposable {
     *   - cursorPos:  'vt340' for bottom-left, 'iip' for bottom.right.
     * @returns The internal image ID assigned to the stored image.
     */
@@ -1909,7 +2350,7 @@ index 322b9e02f1aed1d75feff0057ce7a9ded9094ea5..fe61679719649d9a6a6932c5be7174b4
  
      // calc rows x cols needed to display the image
      let cellSize = this._renderer.cellSize;
-@@ -307,7 +410,7 @@ export class ImageStorage implements IDisposable {
+@@ -307,7 +412,7 @@ export class ImageStorage implements IDisposable {
      // deleted images with zero tile count
      const zero = [];
      for (const [id, spec] of this._images.entries()) {
@@ -1918,7 +2359,7 @@ index 322b9e02f1aed1d75feff0057ce7a9ded9094ea5..fe61679719649d9a6a6932c5be7174b4
          spec.marker?.dispose();
          zero.push(id);
        }
-@@ -342,7 +445,8 @@ export class ImageStorage implements IDisposable {
+@@ -342,7 +447,8 @@ export class ImageStorage implements IDisposable {
        tileCount,
        bufferType: this._terminal.buffer.active.type,
        layer: opts.layer,
@@ -1928,7 +2369,7 @@ index 322b9e02f1aed1d75feff0057ce7a9ded9094ea5..fe61679719649d9a6a6932c5be7174b4
      };
  
      // finally add the image
-@@ -352,6 +456,21 @@ export class ImageStorage implements IDisposable {
+@@ -352,6 +458,21 @@ export class ImageStorage implements IDisposable {
    }
  
  
@@ -1950,7 +2391,7 @@ index 322b9e02f1aed1d75feff0057ce7a9ded9094ea5..fe61679719649d9a6a6932c5be7174b4
    /**
     * Render method. Collects buffer information and triggers
     * canvas updates.
-@@ -370,6 +489,8 @@ export class ImageStorage implements IDisposable {
+@@ -370,6 +491,8 @@ export class ImageStorage implements IDisposable {
        if (hasTopImages && hasBottomImages) break;
      }
  
@@ -1959,7 +2400,7 @@ index 322b9e02f1aed1d75feff0057ce7a9ded9094ea5..fe61679719649d9a6a6932c5be7174b4
      // Lazily insert layers that are needed
      if (hasTopImages && !this._renderer.hasLayer('top')) {
        this._renderer.insertLayerToDom('top');
-@@ -423,13 +544,14 @@ export class ImageStorage implements IDisposable {
+@@ -423,13 +546,14 @@ export class ImageStorage implements IDisposable {
      this._renderer.clearLines(start, end);
  
      // Collect draw calls so we can sort by z-index (lower z drawn first).
@@ -1975,7 +2416,7 @@ index 322b9e02f1aed1d75feff0057ce7a9ded9094ea5..fe61679719649d9a6a6932c5be7174b4
        for (let col = 0; col < cols; ++col) {
          if (line.getBg(col) & BgFlags.HAS_EXTENDED) {
            let e: IExtendedAttrsImage = line._extendedAttrs[col] ?? EMPTY_ATTRS;
-@@ -472,7 +594,8 @@ export class ImageStorage implements IDisposable {
+@@ -472,7 +596,8 @@ export class ImageStorage implements IDisposable {
      }
  
      // Sort by z-index so lower z draws first (higher z renders on top)
@@ -1985,7 +2426,7 @@ index 322b9e02f1aed1d75feff0057ce7a9ded9094ea5..fe61679719649d9a6a6932c5be7174b4
  
      // Draw placeholders first (lowest priority)
      for (const call of placeholderCalls) {
-@@ -481,11 +604,17 @@ export class ImageStorage implements IDisposable {
+@@ -481,11 +606,17 @@ export class ImageStorage implements IDisposable {
  
      // Draw images in z-index order
      for (const call of drawCalls) {
@@ -2004,7 +2445,7 @@ index 322b9e02f1aed1d75feff0057ce7a9ded9094ea5..fe61679719649d9a6a6932c5be7174b4
      // exit early if we have nothing in storage
      if (!this._images.size) {
        this._viewportMetrics = metrics;
-@@ -554,12 +683,13 @@ export class ImageStorage implements IDisposable {
+@@ -554,12 +685,13 @@ export class ImageStorage implements IDisposable {
        const e: IExtendedAttrsImage = line._extendedAttrs[x] ?? EMPTY_ATTRS;
        if (e.imageId && e.imageId !== -1) {
          const orig = this._images.get(e.imageId)?.orig;
@@ -2021,7 +2462,7 @@ index 322b9e02f1aed1d75feff0057ce7a9ded9094ea5..fe61679719649d9a6a6932c5be7174b4
        }
      }
    }
-@@ -581,20 +711,42 @@ export class ImageStorage implements IDisposable {
+@@ -581,20 +713,42 @@ export class ImageStorage implements IDisposable {
      }
    }
  
@@ -2074,7 +2515,7 @@ index 322b9e02f1aed1d75feff0057ce7a9ded9094ea5..fe61679719649d9a6a6932c5be7174b4
        }
      }
      return used - current;
-@@ -656,7 +808,7 @@ export class ImageStorage implements IDisposable {
+@@ -656,7 +810,7 @@ export class ImageStorage implements IDisposable {
      // deleted images with zero tile count
      const zero = [];
      for (const [id, spec] of this._images.entries()) {
@@ -3185,11 +3626,96 @@ index 0000000000000000000000000000000000000000..c788ce5267c089713273350a7b8940c4
 +  if (decoder && meta.base64) restoreBase64UploadCheckpoint(checkpoint, meta.base64, decoder);
 +  return { state: meta, command, decoder, alias };
 +}
+diff --git a/src/kitty/KittyCommandCheckpoint.ts b/src/kitty/KittyCommandCheckpoint.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..c6b5ad9dc0ade23346aefe923db1957c10bbfff4
+--- /dev/null
++++ b/src/kitty/KittyCommandCheckpoint.ts
+@@ -0,0 +1,79 @@
++/**
++ * Copyright (c) 2026 The xterm.js authors. All rights reserved.
++ * @license MIT
++ */
++
++import type { IKittyCommand } from './KittyGraphicsTypes';
++import { checkpointNumberText, restoreCheckpointNumber } from '../ImageCheckpointNumber';
++
++type NumericField = 'format' | 'id' | 'imageNumber' | 'width' | 'height' | 'x' | 'y' | 'sourceWidth' | 'sourceHeight' | 'xOffset' | 'yOffset' | 'columns' | 'rows' | 'more' | 'quiet' | 'cursorMovement' | 'zIndex' | 'placementId' | 'unicodePlaceholder';
++export type IKittyCommandCheckpoint = Readonly<Omit<IKittyCommand, NumericField> & Partial<Record<NumericField, string>>>;
++
++function captureNumber(value: number | undefined): string | undefined {
++  return value === undefined ? undefined : checkpointNumberText(value);
++}
++function restoreNumber(value: string | undefined): number | undefined {
++  return value === undefined ? undefined : restoreCheckpointNumber(value);
++}
++function restoreString(value: string | undefined): string | undefined {
++  if (value !== undefined && (typeof value !== 'string' || value.length > 512)) throw new Error('Invalid Kitty checkpoint string');
++  return value;
++}
++
++export function captureKittyCommand(command: IKittyCommand): IKittyCommandCheckpoint {
++  return Object.freeze({
++    format: captureNumber(command.format),
++    id: captureNumber(command.id),
++    imageNumber: captureNumber(command.imageNumber),
++    width: captureNumber(command.width),
++    height: captureNumber(command.height),
++    x: captureNumber(command.x),
++    y: captureNumber(command.y),
++    sourceWidth: captureNumber(command.sourceWidth),
++    sourceHeight: captureNumber(command.sourceHeight),
++    xOffset: captureNumber(command.xOffset),
++    yOffset: captureNumber(command.yOffset),
++    columns: captureNumber(command.columns),
++    rows: captureNumber(command.rows),
++    more: captureNumber(command.more),
++    quiet: captureNumber(command.quiet),
++    cursorMovement: captureNumber(command.cursorMovement),
++    zIndex: captureNumber(command.zIndex),
++    placementId: captureNumber(command.placementId),
++    unicodePlaceholder: captureNumber(command.unicodePlaceholder),
++    action: restoreString(command.action),
++    transmission: restoreString(command.transmission),
++    deleteSelector: restoreString(command.deleteSelector),
++    compression: restoreString(command.compression),
++    payload: restoreString(command.payload),
++  });
++}
++
++export function restoreKittyCommand(command: IKittyCommandCheckpoint): IKittyCommand {
++  return {
++    format: restoreNumber(command.format),
++    id: restoreNumber(command.id),
++    imageNumber: restoreNumber(command.imageNumber),
++    width: restoreNumber(command.width),
++    height: restoreNumber(command.height),
++    x: restoreNumber(command.x),
++    y: restoreNumber(command.y),
++    sourceWidth: restoreNumber(command.sourceWidth),
++    sourceHeight: restoreNumber(command.sourceHeight),
++    xOffset: restoreNumber(command.xOffset),
++    yOffset: restoreNumber(command.yOffset),
++    columns: restoreNumber(command.columns),
++    rows: restoreNumber(command.rows),
++    more: restoreNumber(command.more),
++    quiet: restoreNumber(command.quiet),
++    cursorMovement: restoreNumber(command.cursorMovement),
++    zIndex: restoreNumber(command.zIndex),
++    placementId: restoreNumber(command.placementId),
++    unicodePlaceholder: restoreNumber(command.unicodePlaceholder),
++    action: restoreString(command.action),
++    transmission: restoreString(command.transmission),
++    deleteSelector: restoreString(command.deleteSelector),
++    compression: restoreString(command.compression),
++    payload: restoreString(command.payload),
++  };
++}
 diff --git a/src/kitty/KittyGraphicsHandler.ts b/src/kitty/KittyGraphicsHandler.ts
-index de889dfff75d9ecc8ab47a025e6989ffe75bb202..d41e6dbb8ed98afd612e7f94947553c86ff6dd00 100644
+index de889dfff75d9ecc8ab47a025e6989ffe75bb202..0e5fd62371edec88f77b152bd840065e5a90a351 100644
 --- a/src/kitty/KittyGraphicsHandler.ts
 +++ b/src/kitty/KittyGraphicsHandler.ts
-@@ -6,9 +6,14 @@
+@@ -6,9 +6,15 @@
  import { IDisposable } from '@xterm/xterm';
  import { IApcHandler, IImageAddonOptions, IResetHandler, ITerminalExt, ImageLayer } from '../Types';
  import { ImageRenderer } from '../ImageRenderer';
@@ -3199,12 +3725,13 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..d41e6dbb8ed98afd612e7f94947553c8
  import { KittyImageStorage } from './KittyImageStorage';
  import Base64Decoder, { type DecodeStatus } from 'xterm-wasm-parts/lib/base64/Base64Decoder.wasm';
 +import { KittyUploadCheckpoint, captureKittyUploadCheckpoint, prepareKittyUploadCheckpoint } from './KittyUploadCheckpoint';
++import { KittyStorageCheckpoint } from './KittyStorageCheckpoint';
 +import { KittyActiveCheckpoint, captureKittyActiveCheckpoint, prepareKittyActiveCheckpoint } from './KittyActiveCheckpoint';
 +import { requireImageParserState, startImageCheckpointParser } from '../ImageParserCheckpoint';
  import {
    KittyAction,
    KittyFormat,
-@@ -37,6 +42,9 @@ const DECODER_OK = Constants.DECODER_OK as unknown as DecodeStatus.OK;
+@@ -37,6 +43,9 @@ const DECODER_OK = Constants.DECODER_OK as unknown as DecodeStatus.OK;
  // Kitty graphics protocol handler with streaming base64 decoding.
  export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDisposable {
    private _aborted = false;
@@ -3214,7 +3741,7 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..d41e6dbb8ed98afd612e7f94947553c8
    private _decodeError = false;
  
    private _activeDecoder: Base64Decoder | null = null;
-@@ -66,6 +74,7 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+@@ -66,6 +75,7 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
    // Per spec, subsequent chunks only need m= (and optionally q=), without i=.
    // When a chunk arrives with no i=, this key is used to find the pending upload.
    private _lastPendingKey: number | undefined;
@@ -3222,7 +3749,7 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..d41e6dbb8ed98afd612e7f94947553c8
  
    constructor(
      private readonly _opts: IImageAddonOptions,
-@@ -73,6 +82,7 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+@@ -73,6 +83,7 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
      private readonly _kittyStorage: KittyImageStorage,
      private readonly _coreTerminal: ITerminalExt
    ) {
@@ -3230,7 +3757,7 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..d41e6dbb8ed98afd612e7f94947553c8
      // Convert decoded size limit -> max encoded bytes.
      this._maxEncodedBytes = Math.ceil(this._opts.kittySizeLimit * 4 / 3);
      // ensure we preallocate more than configured limit while using 4mb initial size.
-@@ -80,6 +90,8 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+@@ -80,6 +91,8 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
    }
  
    public reset(): void {
@@ -3239,7 +3766,7 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..d41e6dbb8ed98afd612e7f94947553c8
      this._cleanupAllPending();
      if (this._activeDecoder) {
        this._activeDecoder.release();
-@@ -89,9 +101,79 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+@@ -89,9 +102,89 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
    }
  
    public dispose(): void {
@@ -3247,6 +3774,16 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..d41e6dbb8ed98afd612e7f94947553c8
      this.reset();
    }
  
++  public captureStorageCheckpoint(maxBytes: number): KittyStorageCheckpoint {
++    if (this._disposed) throw new Error('Kitty handler is disposed');
++    return this._kittyStorage.captureCheckpoint(maxBytes);
++  }
++
++  public restoreStorageCheckpoint(checkpoint: KittyStorageCheckpoint): void {
++    if (this._disposed) throw new Error('Kitty handler is disposed');
++    this._kittyStorage.restoreCheckpoint(checkpoint, this._maxEncodedBytes);
++  }
++
 +  public capturePendingCheckpoint(maxBytes: number): KittyUploadCheckpoint {
 +    if (this._disposed) throw new Error('Kitty handler is disposed');
 +    return captureKittyUploadCheckpoint(this._pendingTransmissions, this._lastPendingKey, maxBytes);
@@ -3319,7 +3856,7 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..d41e6dbb8ed98afd612e7f94947553c8
    private _removePendingEntry(key: number): void {
      this._pendingTransmissions.delete(key);
      if (this._lastPendingKey === key) {
-@@ -108,6 +190,8 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+@@ -108,6 +201,8 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
    }
  
    public start(): void {
@@ -3328,7 +3865,7 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..d41e6dbb8ed98afd612e7f94947553c8
      this._aborted = false;
      this._decodeError = false;
      this._inControlData = true;
-@@ -200,8 +284,38 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+@@ -200,8 +295,38 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
        this._activeDecoder = pending.decoder;
      }
      if (!this._activeDecoder) {
@@ -3369,7 +3906,7 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..d41e6dbb8ed98afd612e7f94947553c8
      }
  
      if (this._activeDecoder.put(data.subarray(start, end)) !== DECODER_OK) {
-@@ -215,8 +329,12 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+@@ -215,8 +340,12 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
    }
  
    public end(success: boolean): boolean | Promise<boolean> {
@@ -3382,7 +3919,7 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..d41e6dbb8ed98afd612e7f94947553c8
          this._activeDecoder.release();
          this._activeDecoder = null;
        }
-@@ -285,9 +403,7 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+@@ -285,9 +414,7 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
      }
      this._activeDecoder = null;
  
@@ -3393,7 +3930,7 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..d41e6dbb8ed98afd612e7f94947553c8
      const result = this._handleCommandWithBytesAndCmd(finalCmd, imageBytes, decodeError);
      if (decoder) {
        decoder.release();
-@@ -382,8 +498,10 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+@@ -382,8 +509,10 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
        this._sendResponse(id, 'ENOENT:image not found', cmd.quiet ?? 0, cmd.placementId);
        return true;
      }
@@ -3406,7 +3943,7 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..d41e6dbb8ed98afd612e7f94947553c8
        this._sendResponse(id, success ? 'OK' : 'EINVAL:image rendering failed', cmd.quiet ?? 0, cmd.placementId);
        return true;
      });
-@@ -411,7 +529,7 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+@@ -411,7 +540,7 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
      if (decodeError || bytes.length === 0) return true;
  
      this._kittyStorage.storeImage(cmd.id, {
@@ -3415,7 +3952,7 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..d41e6dbb8ed98afd612e7f94947553c8
        width: cmd.width ?? 0,
        height: cmd.height ?? 0,
        format: (cmd.format ?? KittyFormat.RGBA) as 24 | 32 | 100,
-@@ -433,14 +551,16 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+@@ -433,14 +562,16 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
      const id = cmd.id ?? this._kittyStorage.lastImageId;
      const image = this._kittyStorage.getImage(id);
      if (image) {
@@ -3435,7 +3972,7 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..d41e6dbb8ed98afd612e7f94947553c8
      }
      return true;
    }
-@@ -500,28 +620,25 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+@@ -500,28 +631,25 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
      // Per spec: default delete selector is 'a' (delete all visible placements)
      const selector = cmd.deleteSelector ?? 'a';
  
@@ -3474,7 +4011,7 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..d41e6dbb8ed98afd612e7f94947553c8
          }
          break;
        default:
-@@ -543,183 +660,154 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+@@ -543,183 +671,154 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
  
    // Image display
  
@@ -3699,10 +4236,13 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..d41e6dbb8ed98afd612e7f94947553c8
 +
 +    if (cropX !== 0 || cropY !== 0 || finalCropW !== bitmap.width || finalCropH !== bitmap.height) {
 +      return this._sources.crop(bitmap, cropX, cropY, finalCropW, finalCropH);
-+    }
+     }
 +    return bitmap;
-+  }
-+
+   }
+ 
+-  // Create ImageBitmap from already-decoded image data.
+-  private async _createBitmap(image: IKittyImageData): Promise<ImageBitmap> {
+-    let bytes: Uint8Array = new Uint8Array(await image.data.arrayBuffer());
 +  // An omitted grid dimension follows the source aspect ratio.
 +  private _placementGrid(bitmap: IImageSource, cmd: IKittyCommand, cw: number, ch: number): { cols: number; rows: number } {
 +    if (cmd.columns !== undefined && cmd.rows !== undefined) {
@@ -3710,16 +4250,13 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..d41e6dbb8ed98afd612e7f94947553c8
 +    }
 +    if (cmd.columns !== undefined) {
 +      return { cols: cmd.columns, rows: Math.max(1, Math.ceil((bitmap.height / bitmap.width) * (cmd.columns * cw) / ch)) };
-     }
++    }
 +    if (cmd.rows !== undefined) {
 +      return { cols: Math.max(1, Math.ceil((bitmap.width / bitmap.height) * (cmd.rows * ch) / cw)), rows: cmd.rows };
 +    }
 +    return { cols: Math.ceil(bitmap.width / cw), rows: Math.ceil(bitmap.height / ch) };
-   }
- 
--  // Create ImageBitmap from already-decoded image data.
--  private async _createBitmap(image: IKittyImageData): Promise<ImageBitmap> {
--    let bytes: Uint8Array = new Uint8Array(await image.data.arrayBuffer());
++  }
++
 +  private _placeVirtual(image: IKittyImageData, cmd: IKittyCommand): ImageOperation<boolean> {
 +    return this._renderPlacement(image, cmd, true);
 +  }
@@ -3779,7 +4316,7 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..d41e6dbb8ed98afd612e7f94947553c8
      }
  
      const bytesPerPixel = image.format === KittyFormat.RGBA ? KittyPixelConstants.BYTES_PER_PIXEL_RGBA : KittyPixelConstants.BYTES_PER_PIXEL_RGB;
-@@ -733,7 +821,7 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+@@ -733,7 +832,7 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
  
      if (image.format === KittyFormat.RGBA) {
        // RGBA: use bytes directly — no copy needed
@@ -3788,23 +4325,23 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..d41e6dbb8ed98afd612e7f94947553c8
      }
  
      // RGB→RGBA: interleave alpha using uint32 block processing (4 pixels per iteration).
-@@ -769,33 +857,59 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+@@ -769,33 +868,59 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
        dstByte += KittyPixelConstants.BYTES_PER_PIXEL_RGBA;
      }
  
 -    return createImageBitmap(new ImageData(data, width, height));
 +    return this._sources.fromRgba(data, width, height, true);
-+  }
-+
+   }
+ 
+-  private async _decompressZlib(compressed: Uint8Array): Promise<Uint8Array> {
 +  private _decompressZlib(compressed: Uint8Array): ImageOperation<Uint8Array> {
 +    if (!this._opts.rasterBackend) return this._decompressBrowserZlib(compressed);
 +    const limit = Math.min(this._opts.kittySizeLimit, this._opts.pixelLimit * 4, this._opts.storageLimit * 1000000);
 +    const bytes = this._opts.rasterBackend.inflate(compressed, limit);
 +    if (bytes.byteLength > limit) throw new RangeError('decompressed image exceeds byte limit');
 +    return bytes;
-   }
- 
--  private async _decompressZlib(compressed: Uint8Array): Promise<Uint8Array> {
++  }
++
 +  private async _decompressBrowserZlib(compressed: Uint8Array): Promise<Uint8Array> {
      try {
        return await this._decompress(compressed, 'deflate');
@@ -4495,10 +5032,10 @@ index 0000000000000000000000000000000000000000..8d07d0c0a4e9e10dc9dfa2e22a0f6448
 +}
 diff --git a/src/kitty/KittyUploadCheckpoint.ts b/src/kitty/KittyUploadCheckpoint.ts
 new file mode 100644
-index 0000000000000000000000000000000000000000..2896fca0d2c9265747893b06c56337d1af2adfac
+index 0000000000000000000000000000000000000000..b879cedb1c93bd494519825daf0ed61021ad11a0
 --- /dev/null
 +++ b/src/kitty/KittyUploadCheckpoint.ts
-@@ -0,0 +1,78 @@
+@@ -0,0 +1,80 @@
 +/**
 + * Copyright (c) 2026 The xterm.js authors. All rights reserved.
 + * @license MIT
@@ -4508,11 +5045,12 @@ index 0000000000000000000000000000000000000000..2896fca0d2c9265747893b06c56337d1
 +import { ImageCheckpointResources, type ICheckpointResource } from '../ImageCheckpointResources';
 +import { planBase64UploadCheckpoint, copyBase64UploadCheckpoint, validateBase64UploadCheckpoint,
 +  restoreBase64UploadCheckpoint, checkUploadCheckpointBudget, type IBase64UploadCheckpoint } from '../Base64UploadCheckpoint';
-+import type { IKittyCommand, IPendingTransmission } from './KittyGraphicsTypes';
++import { captureKittyCommand, restoreKittyCommand, type IKittyCommandCheckpoint } from './KittyCommandCheckpoint';
++import type { IPendingTransmission } from './KittyGraphicsTypes';
 +
 +export interface IKittyPendingUploadCheckpoint extends IBase64UploadCheckpoint {
 +  readonly key: number;
-+  readonly command: Readonly<IKittyCommand>;
++  readonly command: IKittyCommandCheckpoint;
 +}
 +
 +export interface IKittyUploadCheckpointMetadata {
@@ -4531,7 +5069,7 @@ index 0000000000000000000000000000000000000000..2896fca0d2c9265747893b06c56337d1
 +  if (pending.size > 256) throw new RangeError('Pending Kitty checkpoint exceeds object limit');
 +  const plans = [...pending].map(([key, entry]) => {
 +    if (entry.decodeError) throw new Error('Pending Kitty upload has failed decoding');
-+    return { key, command: Object.freeze({ ...entry.cmd }), plan: planBase64UploadCheckpoint(entry.decoder, entry.totalEncodedSize) };
++    return { key, command: captureKittyCommand(entry.cmd), plan: planBase64UploadCheckpoint(entry.decoder, entry.totalEncodedSize) };
 +  });
 +  const byteLength = plans.reduce((sum, entry) => sum + entry.plan.byteLength, 0);
 +  checkUploadCheckpointBudget(maxBytes, byteLength);
@@ -4562,6 +5100,7 @@ index 0000000000000000000000000000000000000000..2896fca0d2c9265747893b06c56337d1
 +  for (const entry of entries) {
 +    if (!Number.isSafeInteger(entry.key) || used.has(entry.key)) throw new Error('Pending Kitty checkpoint repeats an upload key');
 +    used.add(entry.key);
++    restoreKittyCommand(entry.command);
 +    validateBase64UploadCheckpoint(checkpoint, entry, maxEncodedBytes);
 +  }
 +  const pending = new Map<number, IPendingTransmission>();
@@ -4569,7 +5108,7 @@ index 0000000000000000000000000000000000000000..2896fca0d2c9265747893b06c56337d1
 +    for (const entry of entries) {
 +      const decoder = new Base64Decoder(0, maxEncodedBytes, initialBytes);
 +      restoreBase64UploadCheckpoint(checkpoint, entry, decoder);
-+      pending.set(entry.key, { cmd: { ...entry.command }, decoder, totalEncodedSize: entry.encodedByteLength, decodeError: false });
++      pending.set(entry.key, { cmd: restoreKittyCommand(entry.command), decoder, totalEncodedSize: entry.encodedByteLength, decodeError: false });
 +    }
 +    return pending;
 +  } catch (error) {
