@@ -115,6 +115,32 @@ describe('useRemoteRepo default-checkout handoff', () => {
     })
   })
 
+  it('reviews explicit group-import Git roots without adding to another host', async () => {
+    const scan = { selectedPath: '/srv/repo', selectedPathKind: 'git_repo', repos: [] }
+    const review = vi.fn()
+    const { useRemoteRepo } = await import('./AddRepoSteps')
+    const result = useRemoteRepo(
+      mocks.fetchWorktrees,
+      vi.fn(),
+      vi.fn(),
+      mocks.onGitRepoReady,
+      vi.fn().mockResolvedValue(scan),
+      review,
+      vi.fn(),
+      () => true
+    )
+    await result.handleAddRemoteRepo()
+    expect(review).toHaveBeenCalledWith(
+      scan,
+      '/srv/repo',
+      'ssh-1',
+      expect.any(String),
+      false,
+      expect.any(String)
+    )
+    expect(mocks.addRemote).not.toHaveBeenCalled()
+  })
+
   it('requests an authoritative worktree refresh before handoff', async () => {
     const repo = makeRepo()
     mocks.addRemote.mockResolvedValue({ repo })

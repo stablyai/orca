@@ -8,7 +8,7 @@ import type {
 import { getProjectedWorktreeLineage } from './worktree-lineage-projection'
 import { getWorkspaceStatus } from './workspace-status'
 import { translate } from '@/i18n/i18n'
-import { worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
+import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
 
 export const WORKTREE_CONTEXT_MENU_SCOPE_ATTR = 'data-worktree-context-menu-scope'
 export const WORKTREE_NATIVE_CONTEXT_MENU_ATTR = 'data-worktree-native-context-menu'
@@ -62,6 +62,14 @@ export function hasWorktreeParentLink(
   )
 }
 
+export function hasFolderWorkspaceParentLink(
+  worktree: Pick<Worktree, 'id'>,
+  workspaceLineageByChildKey: Record<string, { parentWorkspaceKey: string }>
+): boolean {
+  const edge = workspaceLineageByChildKey[worktreeWorkspaceKey(worktree.id)]
+  return edge ? parseWorkspaceKey(edge.parentWorkspaceKey)?.type === 'folder' : false
+}
+
 export function shouldUseNativeContextMenu(target: EventTarget | null): boolean {
   const maybeElement = target as {
     closest?: (selector: string) => Element | null
@@ -100,8 +108,11 @@ export function shouldSuppressContextMenuFollowUpClick(
   )
 }
 
-export function getWorktreeParentPickerLabel(validParentWorktreeId: string | null): string {
-  return validParentWorktreeId
+export function getWorktreeParentPickerLabel(
+  validParentWorktreeId: string | null,
+  parentIsFolderWorkspace = false
+): string {
+  return validParentWorktreeId || parentIsFolderWorkspace
     ? translate(
         'auto.components.sidebar.WorktreeContextMenu.changeParentWorkspace',
         'Change Parent Worktree...'
@@ -110,6 +121,25 @@ export function getWorktreeParentPickerLabel(validParentWorktreeId: string | nul
         'auto.components.sidebar.WorktreeContextMenu.setParentWorkspace',
         'Set Parent Worktree...'
       )
+}
+
+export function canShowFolderParentAttachment(args: {
+  worktreeId: string
+  repoKind?: Repo['kind']
+  isMultiContext: boolean
+}): boolean {
+  return (
+    !args.isMultiContext &&
+    args.repoKind !== 'folder' &&
+    parseWorkspaceKey(args.worktreeId)?.type !== 'folder'
+  )
+}
+
+export function isFolderParentAttachmentDisabled(args: {
+  isDeleting: boolean
+  pending: boolean
+}): boolean {
+  return args.isDeleting || args.pending
 }
 
 export function isWorktreeParentPickerDisabled(args: {

@@ -22,13 +22,19 @@ import {
   EMPTY_TABS_BY_WORKTREE,
   EMPTY_WORKSPACE_LINEAGE_BY_CHILD_KEY,
   EMPTY_WORKTREE_LINEAGE_BY_ID,
+  hasFolderWorkspaceParentLink,
   hasWorktreeParentLink,
   isContextWorktreeDeletable,
   selectMenuScopedMap,
   shouldRemoveProjectFromContextMenu
 } from './worktree-context-menu-policy'
 import { useWorktreeContextMenuCommands } from './use-worktree-context-menu-commands'
-import { useWorktreeParentPickerTransition } from './use-worktree-parent-picker-transition'
+import {
+  useWorktreeParentPickerTransition,
+  type PendingParentPicker
+} from './use-worktree-parent-picker-transition'
+import { captureFolderParentContext } from './folder-workspace-parent-candidates'
+import { useWorktreeParentMutationPending } from '@/store/slices/worktrees/metadata/worktree-parent-mutation-guard'
 import { useWorktreeContextMenuSecondaryActions } from './use-worktree-context-menu-secondary-actions'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
 
@@ -78,15 +84,9 @@ export function useWorktreeContextMenuModel({
   )
   const [createGroupDialogOpen, setCreateGroupDialogOpen] = useState(false)
   const createGroupDialogActiveRef = useRef(false)
-  const [parentPicker, setParentPicker] = useState<{
-    childWorktreeId: string
-    anchorElement: HTMLElement
-  } | null>(null)
+  const [parentPicker, setParentPicker] = useState<PendingParentPicker | null>(null)
   const [parentPickerOpen, setParentPickerOpen] = useState(false)
-  const pendingParentPickerRef = useRef<{
-    childWorktreeId: string
-    anchorElement: HTMLElement
-  } | null>(null)
+  const pendingParentPickerRef = useRef<PendingParentPicker | null>(null)
   const parentPickerFallbackTimerRef = useRef<number | null>(null)
   const parentPickerUnmountTimerRef = useRef<number | null>(null)
   const lifecycleStartedRef = useRef(false)
@@ -111,6 +111,11 @@ export function useWorktreeContextMenuModel({
     )
   )
   const updateWorktreeLineage = useAppStore((s) => s.updateWorktreeLineage)
+  const parentMutationKey = useAppStore((s) =>
+    menuOpen ? (captureFolderParentContext(s, worktree)?.mutationKey ?? null) : null
+  )
+  const parentMutationPending = useWorktreeParentMutationPending(parentMutationKey)
+  const parentMutationBlocked = useWorktreeParentMutationPending(parentMutationKey, true)
   const tabsByWorktree = useAppStore((s) =>
     selectMenuScopedMap(menuOpen, s.tabsByWorktree, EMPTY_TABS_BY_WORKTREE)
   )
@@ -193,6 +198,7 @@ export function useWorktreeContextMenuModel({
     worktreeLineageById,
     workspaceLineageByChildKey
   )
+  const parentIsFolderWorkspace = hasFolderWorkspaceParentLink(worktree, workspaceLineageByChildKey)
   const cyclicLineageIds = useMemo(
     () =>
       menuOpen
@@ -304,17 +310,22 @@ export function useWorktreeContextMenuModel({
     worktree,
     workspaceStatuses
   })
-  const { handleOpenParentPicker, handleParentPickerOpenChange, openPendingParentPicker } =
-    useWorktreeParentPickerTransition({
-      fallbackTimerRef: parentPickerFallbackTimerRef,
-      pendingRef: pendingParentPickerRef,
-      scopeRef,
-      setMenuOpenState,
-      setParentPicker,
-      setParentPickerOpen,
-      unmountTimerRef: parentPickerUnmountTimerRef,
-      worktreeId: worktree.id
-    })
+  const {
+    handleOpenParentPicker,
+    handleOpenFolderParentPicker,
+    handleParentPickerOpenChange,
+    openPendingParentPicker
+  } = useWorktreeParentPickerTransition({
+    fallbackTimerRef: parentPickerFallbackTimerRef,
+    pendingRef: pendingParentPickerRef,
+    scopeRef,
+    setMenuOpenState,
+    setParentPicker,
+    setParentPickerOpen,
+    unmountTimerRef: parentPickerUnmountTimerRef,
+    worktreeId: worktree.id,
+    captureFolderContext: () => captureFolderParentContext(useAppStore.getState(), worktree)
+  })
   const { handleRemoveParentLink, suppressOpeningPointerEvent } =
     useWorktreeContextMenuSecondaryActions({
       activeContextWorktrees,
@@ -363,10 +374,12 @@ export function useWorktreeContextMenuModel({
     folderWorkspaceId,
     handleCloseAutoFocus,
     handleOpenParentPicker,
+    handleOpenFolderParentPicker,
     handleParentPickerOpenChange,
     handleRemoveParentLink,
     hasAnyContextLineage,
     hasParentLink,
+    parentIsFolderWorkspace,
     isDeleting,
     isMultiContext,
     lineageDescendantCount,
@@ -375,6 +388,8 @@ export function useWorktreeContextMenuModel({
     onContextMenuSelect,
     parentPicker,
     parentPickerOpen,
+    parentMutationPending,
+    parentMutationBlocked,
     projectGroups,
     ptyIdsByTabId,
     removesProject,

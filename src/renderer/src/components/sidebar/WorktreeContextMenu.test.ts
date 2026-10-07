@@ -220,6 +220,7 @@ describe('parent picker context menu affordance', () => {
   it('uses set/change labels based on valid parent presence', () => {
     expect(getWorktreeParentPickerLabel(null)).toBe('Set Parent Worktree...')
     expect(getWorktreeParentPickerLabel('parent-1')).toBe('Change Parent Worktree...')
+    expect(getWorktreeParentPickerLabel(null, true)).toBe('Change Parent Worktree...')
   })
 
   it('disables the parent picker while deleting or without candidates', () => {

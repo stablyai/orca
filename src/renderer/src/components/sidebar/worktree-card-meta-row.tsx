@@ -22,6 +22,7 @@ export function WorktreeCardMetaRow({
   const {
     worktree,
     repo,
+    repoOriginLabel,
     hostContextLabel,
     identityDisplay,
     isFolder,
@@ -58,7 +59,7 @@ export function WorktreeCardMetaRow({
 
         {showHostContextBadge && <WorktreeHostContextBadge label={hostContextLabel!} />}
 
-        {showIdentityInNewCard ? (
+        {repoOriginLabel ? null : showIdentityInNewCard ? (
           <TruncatedSidebarLabel
             text={identityDisplay!}
             className="text-[11px] text-muted-foreground leading-none"
@@ -86,6 +87,15 @@ export function WorktreeCardMetaRow({
             className="h-[16px]"
           />
         ) : null}
+
+        {repoOriginLabel && showDetachedHeadInMetaRow && detachedHeadDisplay && (
+          <DetachedHeadBadge
+            display={detachedHeadDisplay}
+            label="sidebar"
+            side="right"
+            className="h-[16px]"
+          />
+        )}
 
         {showConflictOperationBadge && (
           <Badge

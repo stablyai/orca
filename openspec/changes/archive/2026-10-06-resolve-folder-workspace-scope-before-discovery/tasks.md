@@ -1,0 +1,18 @@
+# Tasks
+
+## 1. Canonical scope guidance
+
+- [x] 1.1 Add `Resolve workspace scope before filesystem discovery` to `skill-guides/orca-cli.md` before the Worktrees common-command examples. Include native folder/group context fields, host-correct `repo list --json`, exact direct-member `projectGroupId` matching, and existing folder parent preservation. Verify the written recipe selects only the two matching records in the supplied session example and does not require a new command, helper, or dependency.
+- [x] 1.2 Document clarification before mutations for missing/conflicting context, unmatched or incomplete catalogs, unresolved host ownership, and descendant groups; state that failed `worktree current` and directory contents cannot expand scope. Verify every failure scenario in `specs/orca-cli-workspace-scope/spec.md` is covered and explicit outside-group repository requests remain allowed.
+
+## 2. Generated guide and contract check
+
+- [x] 2.1 Add one focused contract test in `config/scripts/generate-bundled-skill-guides.test.mjs` for the scope section, named context fields, direct-member matching, parent preservation, no filesystem/global-list-only fallback, and ask-before-mutation rule in the normal and full guide, before scoped Worktrees creation examples. Verify with `ORCA_BACKGROUND_LAUNCH=1 pnpm test config/scripts/generate-bundled-skill-guides.test.mjs`; do not claim this content check proves LLM compliance.
+- [x] 2.2 Run `pnpm run generate:bundled-skill-guides` to update tracked generator outputs without hand-editing generated constants. Verify `pnpm run verify:bundled-skill-guides` and the focused generator test pass; inspect the diff for only intended guide/test/generated changes and leave installed user skill copies untouched.
+
+## 3. Acceptance validation
+
+- [x] 3.1 Rebuild the intended CLI with `ORCA_BACKGROUND_LAUNCH=1 pnpm run build:cli`, load its `skills get orca-cli --json` and `--full` using the executable resolved by the skill stub, and verify both served guides contain the new rule. Use a fresh agent session so stale guide context cannot mask the change; record the executable and runtime identity used.
+- [x] 3.2 In an isolated disposable folder with fourteen Git repositories and only two direct Orca group members, submit exactly `Create one worktree in each repository in this folder workspace.` Capture the agent's discovery and creation calls. Verify exactly two children target the matching repository IDs and existing folder parent; other twelve directories remain unregistered and untouched. Separate lineage/scope validation from visual nesting, which requires PR #18199; do not alter the user's real repositories to set up this check.
+- [x] 3.3 In fresh acceptance sessions, cover unrelated registered groups, failed `worktree current` with valid folder/group context, missing or conflicting group context, and zero matches. Verify valid direct scope still resolves despite the worktree lookup failure, while unresolved cases ask before any creation/registration and never scan for replacement membership. For remote or descendant-group context without authoritative membership, verify the same clarification behavior rather than local/path fallback. Keep agent-launched apps hidden with `ORCA_BACKGROUND_LAUNCH=1`; use Electron/CDP only if rendered checks are needed.
+- [x] 3.4 Record focused automated results and observed agent outcomes separately. Verify `git diff --check` and `pnpm run verify:bundled-skill-guides` pass; report any unavailable acceptance environment as a remaining blocker rather than marking its task complete. Do not clean up worktrees from the original incident without separate user authorization.

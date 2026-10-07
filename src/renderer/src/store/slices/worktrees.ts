@@ -11,6 +11,7 @@ import {
   createUpdateWorktreeLineage
 } from './worktrees/metadata/worktree-lineage-actions'
 import { createUpdateWorktreeGitIdentity } from './worktrees/metadata/worktree-git-identity-update'
+import { createFolderParentActions } from './worktrees/metadata/worktree-folder-parent-actions'
 import {
   createUpdateWorktreeBaseStatus,
   createUpdateWorktreeRemoteBranchConflict
@@ -76,6 +77,7 @@ export { acquireDirectSshDetectedWorktreeRefresh } from './worktrees/listing/kno
 
 export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> = (set, get) => ({
   ...worktreeSliceInitialState,
+  ...createFolderParentActions(set, get),
   fetchDetectedWorktrees: createFetchDetectedWorktrees(set, get),
   fetchWorktrees: createFetchWorktrees(set, get),
   fetchAllWorktrees: createFetchAllWorktrees(set, get),

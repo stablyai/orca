@@ -1,9 +1,10 @@
 import type { ComponentType } from 'react'
-import { FolderOpen, Globe, Monitor, Plus } from 'lucide-react'
+import { FolderOpen, FolderTree, Globe, Monitor, Plus } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 
 export type AddRepoLocalStartActionHandlers = {
   onBrowse: () => void
+  onImportGroup?: () => void
   onOpenCloneStep: () => void
   onOpenRemoteStep: () => void
   onOpenCreateStep: () => void
@@ -13,7 +14,7 @@ export type AddRepoLocalStartActionHandlers = {
 }
 
 export type AddRepoLocalStartAction = {
-  kind: 'browse' | 'clone' | 'remote' | 'create'
+  kind: 'browse' | 'group' | 'clone' | 'remote' | 'create'
   icon: ComponentType<{ className?: string }>
   title: string
   description: string
@@ -24,6 +25,7 @@ export type AddRepoLocalStartAction = {
 export function getAddRepoLocalStartActions({
   isSshLikely,
   onBrowse,
+  onImportGroup,
   onOpenCloneStep,
   onOpenRemoteStep,
   onOpenCreateStep,
@@ -60,7 +62,7 @@ export function getAddRepoLocalStartActions({
             )
           : translate(
               'auto.components.sidebar.add.repo.local.start.actions.fb4fc5380e',
-              'Local project, Git repo, or folder with many repos'
+              'Open a local project or Git repository'
             ),
     onClick: onBrowse
   }
@@ -111,11 +113,23 @@ export function getAddRepoLocalStartActions({
     onClick: onOpenCreateStep
   }
 
-  const secondaryActions = showRemoteAction
+  const secondaryActions: AddRepoLocalStartAction[] = showRemoteAction
     ? isSshLikely
       ? [remote, clone, create]
       : [clone, remote, create]
     : [clone, create]
 
+  if (onImportGroup) {
+    secondaryActions.unshift({
+      kind: 'group',
+      icon: FolderTree,
+      title: translate('repoScan.importGroup', 'Import folder as group'),
+      description: translate(
+        'repoScan.importGroupDescription',
+        'Find repositories inside a parent folder'
+      ),
+      onClick: onImportGroup
+    })
+  }
   return { primaryAction, secondaryActions }
 }

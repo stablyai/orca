@@ -1,4 +1,6 @@
 import type { CreateWorktreeCallOptions } from './worktrees/create/worktree-create-payload'
+import type { FolderParentContext } from '@/components/sidebar/folder-workspace-parent-candidates'
+import type { FolderParentPickerData } from './worktrees/metadata/worktree-folder-parent-actions'
 import type { WorktreeCatalogVersion } from '../../../../shared/worktree/catalog-version'
 import type { WorkspaceKey } from '../../../../shared/folder-workspace-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -185,6 +187,11 @@ export type WorktreeSlice = {
     args: { parentWorktreeId?: string; noParent?: boolean }
   ) => Promise<void>
   assignWorktreeParent: (worktreeId: string, args: { parentWorktreeId: string }) => Promise<void>
+  loadFolderParentCatalog: (context: FolderParentContext) => Promise<FolderParentPickerData>
+  attachWorktreeToFolderWorkspace: (
+    context: FolderParentContext,
+    folderWorkspaceId: string
+  ) => Promise<void>
   createWorktree: (
     repoId: string,
     name: string,

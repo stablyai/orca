@@ -55,6 +55,49 @@ describe('projectGroups IPC validation', () => {
     registerRepoHandlers(mockWindow as never, mockStore as never, {} as never)
   })
 
+  it('returns SSH exclusion evidence through final and progress IPC responses', async () => {
+    mockGitProvider.isGitRepoAsync.mockResolvedValue({ isRepo: false, rootPath: null })
+    mockFilesystemProvider.readDir.mockResolvedValue([
+      { name: '.gitignore', isDirectory: false },
+      { name: 'ignored', isDirectory: true },
+      { name: 'api', isDirectory: true }
+    ])
+    mockFilesystemProvider.readFile.mockResolvedValue({ content: '/ignored/' })
+    mockFilesystemProvider.stat.mockImplementation(async (path: string) => {
+      if (path === '/srv/platform/api/.git') {
+        return { type: 'directory', size: 0, mtime: 0 }
+      }
+      throw new Error('not found')
+    })
+    const event = { sender: { send: vi.fn() } }
+    const result = await handlers.get('projectGroups:scanNested')!(event, {
+      path: '/srv/platform',
+      connectionId: 'conn-1',
+      scanId: 'diagnostics-ssh'
+    })
+    expect(result).toMatchObject({
+      diagnostics: {
+        counts: { gitignore: 1 },
+        details: [
+          {
+            path: '/srv/platform/ignored',
+            reason: 'gitignore',
+            ignoreFile: '/srv/platform/.gitignore',
+            rule: '/ignored/',
+            line: 1
+          }
+        ]
+      }
+    })
+    expect(event.sender.send).toHaveBeenCalledWith(
+      'projectGroups:scanNestedProgress',
+      expect.objectContaining({
+        scan: expect.objectContaining({ diagnostics: expect.any(Object) })
+      })
+    )
+    expect(mockFilesystemProvider.stat).not.toHaveBeenCalledWith('/srv/platform/ignored/.git')
+  })
+
   it('scans nested repositories over a connected SSH filesystem', async () => {
     mockGitProvider.isGitRepoAsync.mockImplementation(async (path: string) => ({
       isRepo: path === '/srv/platform/api',

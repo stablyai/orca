@@ -11,20 +11,10 @@ import type { AddRepoExistingWorkspaceSource } from '../../../../shared/telemetr
 import type { NestedRepoScanResult } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorktreeFetchOptions } from '@/store/slices/worktree-helpers'
-import { createNestedRepoScanId } from './add-repo-dialog-types'
+import { createNestedRepoScanId, type ShowNestedRepoReview } from './add-repo-dialog-types'
+import { shouldReviewNestedRepoScan } from './nested-repo-scan-review'
 import { worktreeRefreshOptions } from './add-repo-runtime-owner'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-
-type ShowNestedRepoReview = (args: {
-  scan: NestedRepoScanResult
-  selectedPath: string
-  connectionId: string | null
-  attemptId: string
-  runtimeKind: NestedRepoTelemetryRuntimeKind
-  inProgress: boolean
-  scanId: string | null
-  runtimeEnvironmentId?: string | null
-}) => void
 
 export function useAddRepoServerPathFlow({
   addRepoPath,
@@ -36,6 +26,7 @@ export function useAddRepoServerPathFlow({
   setActiveNestedScanId,
   setNestedScanInProgress,
   showNestedRepoReview,
+  reviewScan = shouldReviewNestedRepoScan,
   onGitRepoReady,
   setAddProjectBusyLabel
 }: {
@@ -60,6 +51,7 @@ export function useAddRepoServerPathFlow({
   setActiveNestedScanId: (scanId: string | null, runtimeEnvironmentId?: string | null) => void
   setNestedScanInProgress: (inProgress: boolean) => void
   showNestedRepoReview: ShowNestedRepoReview
+  reviewScan?: (scan: NestedRepoScanResult) => boolean
   onGitRepoReady: (
     repoId: string,
     source: AddRepoExistingWorkspaceSource,
@@ -143,7 +135,7 @@ export function useAddRepoServerPathFlow({
               scan
             })
           )
-          if (scan?.selectedPathKind === 'non_git_folder' && scan.repos.length > 0) {
+          if (scan && reviewScan(scan)) {
             showNestedRepoReview({
               scan,
               selectedPath: path,
@@ -200,7 +192,8 @@ export function useAddRepoServerPathFlow({
       setActiveNestedScanId,
       setAddProjectBusyLabel,
       setNestedScanInProgress,
-      showNestedRepoReview
+      showNestedRepoReview,
+      reviewScan
     ]
   )
 

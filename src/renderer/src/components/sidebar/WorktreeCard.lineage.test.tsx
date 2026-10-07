@@ -121,6 +121,39 @@ describe('WorktreeCard lineage indicators', () => {
   )
 
   it(
+    'prefixes a folder child title with its source repo and omits the metadata line',
+    async () => {
+      const { default: WorktreeCard } = await import('./WorktreeCard')
+      const markup = renderToStaticMarkup(
+        <WorktreeCard
+          worktree={makeWorktree()}
+          repo={makeRepo()}
+          isActive={false}
+          hideRepoBadge
+          repoOriginLabel="orca"
+        />
+      )
+      expect(markup).toContain('orca/')
+      expect(markup).not.toContain('data-worktree-card-meta-row=""')
+      expect(markup).not.toContain('>orca</span>')
+      expect(markup).not.toContain('>child-workspace</span>')
+    },
+    WORKTREE_CARD_IMPORT_TIMEOUT_MS
+  )
+
+  it(
+    'keeps branch metadata on ordinary worktree cards',
+    async () => {
+      const { default: WorktreeCard } = await import('./WorktreeCard')
+      const markup = renderToStaticMarkup(
+        <WorktreeCard worktree={makeWorktree()} repo={makeRepo()} isActive={false} hideRepoBadge />
+      )
+      expect(markup).toContain('>child-workspace</span>')
+    },
+    WORKTREE_CARD_IMPORT_TIMEOUT_MS
+  )
+
+  it(
     'keeps the child workspace toggle chip',
     async () => {
       const { default: WorktreeCard } = await import('./WorktreeCard')

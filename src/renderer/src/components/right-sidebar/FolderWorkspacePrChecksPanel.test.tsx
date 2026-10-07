@@ -31,15 +31,24 @@ type MockStoreState = {
   fetchPRCheckDetails: ReturnType<typeof vi.fn>
   setActiveWorktree: ReturnType<typeof vi.fn>
   setRightSidebarTab: ReturnType<typeof vi.fn>
+  setRightSidebarOpen: ReturnType<typeof vi.fn>
 }
 
 const mockState = vi.hoisted(() => ({
   store: {} as MockStoreState,
-  openedLinks: [] as string[]
+  openedLinks: new Array<string>(),
+  activations: new Array<unknown[]>()
 }))
 
 vi.mock('@/store', () => ({
-  useAppStore: <T,>(selector: (state: MockStoreState) => T): T => selector(mockState.store)
+  useAppStore: Object.assign(
+    <T,>(selector: (state: MockStoreState) => T): T => selector(mockState.store),
+    { getState: () => mockState.store }
+  )
+}))
+
+vi.mock('@/lib/worktree-activation', () => ({
+  activateAndRevealWorktree: (...args: unknown[]) => mockState.activations.push(args) > 0
 }))
 
 vi.mock('@/i18n/i18n', () => ({
@@ -195,6 +204,7 @@ describe('FolderWorkspacePrChecksPanel', () => {
     const repo = makeRepo()
     const worktree = makeWorktree()
     mockState.openedLinks = []
+    mockState.activations = []
     mockState.store = {
       activeWorktreeId: folderWorkspaceKey('folder-1'),
       activeWorkspaceKey: folderWorkspaceKey('folder-1'),
@@ -232,7 +242,8 @@ describe('FolderWorkspacePrChecksPanel', () => {
       fetchPRChecks: vi.fn(async () => [makeCheck()]),
       fetchPRCheckDetails: vi.fn(async () => null),
       setActiveWorktree: vi.fn(),
-      setRightSidebarTab: vi.fn()
+      setRightSidebarTab: vi.fn(),
+      setRightSidebarOpen: vi.fn()
     }
   })
 
@@ -262,6 +273,21 @@ describe('FolderWorkspacePrChecksPanel', () => {
     expect(container.textContent).toContain('verify')
     expect(mockState.store.setActiveWorktree).not.toHaveBeenCalled()
     expect(mockState.store.setRightSidebarTab).not.toHaveBeenCalled()
+  })
+
+  it('opens the attached worktree and its Checks tab when the row is clicked', () => {
+    renderPanel()
+
+    act(() => {
+      container.querySelector<HTMLElement>('[aria-label="Open Child worktree Checks tab"]')?.click()
+    })
+
+    const worktreeId = mockState.store.worktreesByRepo[mockState.store.repos[0].id][0].id
+    expect(mockState.activations).toHaveLength(1)
+    expect(mockState.activations[0][0]).toBe(worktreeId)
+    expect(mockState.store.setRightSidebarOpen).toHaveBeenCalledWith(true)
+    expect(mockState.store.setRightSidebarTab).toHaveBeenCalledWith('checks')
+    expect(container.querySelector('[data-testid="checks-list"]')).toBeNull()
   })
 
   it('shows a compact clean-state header summary without noisy aggregate counts', () => {

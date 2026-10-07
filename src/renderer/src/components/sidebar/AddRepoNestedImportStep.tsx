@@ -8,6 +8,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { NestedRepoChecklist } from '@/components/repo/NestedRepoChecklist'
 import type { NestedRepoScanResult } from '../../../../shared/project-group-types'
 import { NestedRepoScanLimitNotice } from '../repo/NestedRepoScanLimitNotice'
+import { NestedRepoScanExplanations } from '../repo/NestedRepoScanExplanations'
 import { getRuntimePathBasename } from '../../../../shared/cross-platform-path'
 import { translate } from '@/i18n/i18n'
 
@@ -77,6 +78,22 @@ export function AddRepoNestedImportStep({
     }
   )
 
+  if (scan.selectedPathKind === 'git_repo') {
+    return (
+      <>
+        <DialogHeader>
+          <DialogTitle>{translate('repoScan.importGroup', 'Import folder as group')}</DialogTitle>
+          <DialogDescription className="break-all">{scan.selectedPath}</DialogDescription>
+        </DialogHeader>
+        <NestedRepoScanExplanations scan={scan} />
+        <Button onClick={handleOpenAsFolder} disabled={isAdding}>
+          {showOpenAsFolderSpinner ? <Loader2 className="size-3.5 animate-spin" /> : null}
+          {translate('repoScan.openProject', 'Open project')}
+        </Button>
+      </>
+    )
+  }
+
   return (
     <>
       <DialogHeader>
@@ -101,6 +118,7 @@ export function AddRepoNestedImportStep({
       </DialogHeader>
 
       <div className="flex min-h-0 min-w-0 max-w-full flex-col gap-3 overflow-hidden pt-1">
+        <NestedRepoScanExplanations scan={scan} />
         <NestedRepoChecklist
           scan={scan}
           selectedPaths={selectedPaths}

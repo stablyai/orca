@@ -63,6 +63,7 @@ function sections(
       repoMap,
       worktreeMap: new Map(worktrees.map((worktree) => [worktree.id, worktree])),
       worktreeLineageById: lineageById,
+      workspaceLineageByChildKey: {},
       prCache: null,
       settings,
       workspaceStatuses,

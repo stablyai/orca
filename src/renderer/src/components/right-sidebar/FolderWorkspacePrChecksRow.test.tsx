@@ -122,6 +122,7 @@ function renderRow(row: ParentPrChecksRow): void {
         row={row}
         expanded={false}
         onToggle={vi.fn()}
+        onOpen={vi.fn()}
         onLoadCheckDetails={vi.fn(async () => null)}
       />
     )

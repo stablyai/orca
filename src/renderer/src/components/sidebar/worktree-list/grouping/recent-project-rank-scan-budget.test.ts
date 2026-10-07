@@ -83,7 +83,8 @@ describe('recent project rank scan budget', () => {
       lineageById: {},
       worktreeMap: new Map(),
       nestLineage: false,
-      cyclicLineageIds: new Set()
+      cyclicLineageIds: new Set(),
+      attachedByFolderId: new Map()
     }
     appendProjectGroupSections(ctx, {
       orderedGroups: grouped,

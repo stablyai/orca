@@ -29,6 +29,23 @@ export type NestedRepoCandidate = {
   depth: number
 }
 
+export type NestedRepoScanDiagnostic = {
+  path: string
+  // Open on the wire: older readers can still show unfamiliar host reasons.
+  reason: string
+  ignoreFile?: string
+  rule?: string
+  line?: number
+  errorCode?: string
+  shortened?: boolean
+}
+
+export type NestedRepoScanDiagnostics = {
+  counts: Record<string, number>
+  details: NestedRepoScanDiagnostic[]
+  omittedDetails: number
+}
+
 export type NestedRepoScanResult = {
   selectedPath: string
   selectedPathKind: 'git_repo' | 'non_git_folder'
@@ -40,6 +57,7 @@ export type NestedRepoScanResult = {
   maxDepth: number
   maxRepos: number
   timeoutMs: number | null
+  diagnostics?: NestedRepoScanDiagnostics
 }
 
 export type ProjectGroupImportMode = 'group' | 'separate'

@@ -1,4 +1,43 @@
 {
+  "worktree": {
+    "nestedRemoval": {
+      "refreshFailed": "Impossible d'actualiser la liste des espaces de travail",
+      "review": "Supprimer avec les arbres de travail imbriqués…",
+      "title": "Supprimer l'espace de travail et les arbres de travail imbriqués ?",
+      "description": "Cette action supprime définitivement \"{{name}}\", tous les arbres de travail imbriqués ci-dessous et tous leurs fichiers, y compris les modifications non validées. Leurs terminaux et agents seront arrêtés.",
+      "detached": "HEAD détachée",
+      "loading": "Vérification des arbres de travail imbriqués…",
+      "order": "Les arbres de travail imbriqués sont supprimés en premier. Si une suppression échoue, le processus s'arrête et le parent est conservé. Les branches suivent vos paramètres de suppression existants.",
+      "cancel": "Annuler",
+      "retry": "Examiner à nouveau",
+      "deleting": "Suppression…",
+      "confirm": "Supprimer tous les arbres de travail listés",
+      "preservedBranches": "Certaines branches des arbres de travail imbriqués ont été conservées"
+    }
+  },
+  "repoScan": {
+    "importGroup": "Importer le dossier comme groupe",
+    "importGroupDescription": "Rechercher des dépôts dans un dossier parent",
+    "openProject": "Ouvrir le projet",
+    "gitRoot": "Ce chemin est un dépôt Git. La recherche de dépôts imbriqués a été ignorée ; cette sélection ne peut donc pas être importée comme groupe.",
+    "stopped": "Recherche arrêtée sur demande. Affichage des dépôts trouvés jusqu'ici.",
+    "timedOut": "La recherche a atteint sa limite de temps. Certains dossiers n'ont pas été vérifiés.",
+    "repoLimit": "La recherche a atteint sa limite de dépôts. Certains dossiers n'ont pas été vérifiés.",
+    "folderCount": "Dossiers : {{count}}. {{reason}}",
+    "linkCount": "Liens : {{count}}. {{reason}}",
+    "showDetails": "Afficher les détails de recherche",
+    "shortened": "Le texte d'un chemin ou d'une règle trop longue a été raccourci.",
+    "omitted": "{{count}} détails supplémentaires omis.",
+    "reason": {
+      "gitignore": "Exclu par .gitignore",
+      "builtin": "Exclu par la politique de répertoires intégrée",
+      "hidden": "Exclu par la politique des dossiers cachés",
+      "symlink": "Lien symbolique non suivi",
+      "depth": "Le contenu au-delà de la profondeur de recherche n'a pas été vérifié",
+      "unreadable": "Impossible de lire le dossier ; son contenu n'a pas été vérifié",
+      "unknown": "Détails d'exclusion indisponibles"
+    }
+  },
   "app": {
     "recoverableError": {
       "rootTitle": "Orca a rencontré une erreur de rendu.",
@@ -5780,6 +5819,8 @@
           "fed49903c9": "{{value0}} {{value1}} actif(s)"
         },
         "WorktreeContextMenu": {
+          "removeFromFolderWorkspace": "Retirer de l’espace de travail de dossier",
+          "attachFolderWorkspace": "Attacher à un espace de travail de dossier…",
           "c39c37676a": "Créez un groupe et déplacez-y ce projet.",
           "6664418e98": "Nouveau groupe de projets",
           "e091caab15": "Le projet est introuvable",
@@ -6234,6 +6275,19 @@
           "c7d8e9f0a1": "{{value0}} mis à jour",
           "d8e9f0a1b2": "{{value0}} ignoré",
           "e9f0a1b2c3": "{{value0}} a échoué"
+        },
+        "FolderParentPicker": {
+          "ownerUnavailable": "Le propriétaire de l’espace de travail est indisponible. Actualisez ses métadonnées et réessayez.",
+          "loadFailed": "Impossible de charger les espaces de travail de dossier de cet hôte d’exécution.",
+          "unknownOutcome": "Le résultat du changement de parent est inconnu. Actualisez pour le vérifier avant de réessayer.",
+          "refreshUnverified": "Le changement de parent a été confirmé, mais la vue n’a pas pu être actualisée. Actualisez pour vérifier.",
+          "attachFailed": "Impossible d’attacher le worktree à l’espace de travail de dossier.",
+          "attachFor": "Attacher à un espace de travail de dossier",
+          "search": "Rechercher des espaces de travail de dossier…",
+          "refresh": "Actualiser",
+          "attaching": "Attachement…",
+          "loading": "Chargement des espaces de travail de dossier…",
+          "empty": "Aucun espace de travail de dossier éligible ne correspond sur cet hôte d’exécution."
         },
         "WorktreeParentPickerPopover": {
           "failedSetParent": "Échec de la définition du worktree parent",

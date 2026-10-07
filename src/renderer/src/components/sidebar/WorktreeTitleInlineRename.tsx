@@ -30,6 +30,8 @@ export function isWorktreeTitleTruncated(
 
 type WorktreeTitleInlineRenameProps = {
   displayName: string
+  // Why: read-only context shown before the name; rename edits and saves only displayName.
+  displayPrefix?: string
   disabled?: boolean
   showUnreadEmphasis?: boolean
   dimReadTitle?: boolean
@@ -50,6 +52,7 @@ type WorktreeTitleInlineRenameProps = {
 
 export function WorktreeTitleInlineRename({
   displayName,
+  displayPrefix = '',
   disabled = false,
   showUnreadEmphasis = false,
   dimReadTitle = false,
@@ -125,7 +128,7 @@ export function WorktreeTitleInlineRename({
 
   // Why: remounts the rendered title so truncation is measured again. The editor must
   // not share it — an unread flip would remount the input and reselect what was typed.
-  const titleElementKey = `${displayName}:${showUnreadEmphasis ? 'unread' : 'read'}`
+  const titleElementKey = `${displayPrefix}${displayName}:${showUnreadEmphasis ? 'unread' : 'read'}`
   // Why: the sidebar row needs a text-only editor to avoid layout jumps; the
   // hovercard can use a compact field that reads more like native rename UI.
   const editingInputClassName =
@@ -362,6 +365,7 @@ export function WorktreeTitleInlineRename({
           {translate('auto.components.sidebar.WorktreeTitleInlineRename.2f42ae024f', 'Unread:')}
         </span>
       )}
+      {displayPrefix}
       {displayName}
     </span>
   )
@@ -378,6 +382,7 @@ export function WorktreeTitleInlineRename({
     <Tooltip>
       <TooltipTrigger asChild>{title}</TooltipTrigger>
       <TooltipContent side="right" sideOffset={8}>
+        {displayPrefix}
         {displayName}
       </TooltipContent>
     </Tooltip>

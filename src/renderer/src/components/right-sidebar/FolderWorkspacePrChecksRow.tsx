@@ -17,6 +17,7 @@ type FolderWorkspacePrChecksRowProps = {
   row: ParentPrChecksRow
   expanded: boolean
   onToggle: () => void
+  onOpen: () => void
   onLoadCheckDetails: (check: PRCheckDetail) => Promise<PRCheckRunDetails | null>
 }
 
@@ -24,6 +25,7 @@ export function FolderWorkspacePrChecksRow({
   row,
   expanded,
   onToggle,
+  onOpen,
   onLoadCheckDetails
 }: FolderWorkspacePrChecksRowProps): React.JSX.Element {
   const ReviewIcon = row.provider === 'gitlab' ? GitMerge : PullRequestIcon
@@ -44,6 +46,11 @@ export function FolderWorkspacePrChecksRow({
         'Show {{value0}} PR check details',
         { value0: row.worktree.displayName }
       )
+  const openChecksLabel = translate(
+    'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.openChecksTab',
+    'Open {{value0}} Checks tab',
+    { value0: row.worktree.displayName }
+  )
   const openExternalLabel = translate(
     'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.openReviewExternally',
     'Open {{value0}} externally',
@@ -60,23 +67,29 @@ export function FolderWorkspacePrChecksRow({
         role="button"
         tabIndex={0}
         className="flex w-full min-w-0 items-start gap-2 rounded-md px-2 py-2 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-        onClick={onToggle}
+        onClick={onOpen}
         onKeyDown={(event) => {
           if (event.key !== 'Enter' && event.key !== ' ') {
             return
           }
           event.preventDefault()
-          onToggle()
+          onOpen()
         }}
-        aria-expanded={expanded}
-        aria-label={toggleDetailsLabel}
+        aria-label={openChecksLabel}
       >
-        <ChevronRight
-          className={cn(
-            'mt-0.5 size-3 shrink-0 text-muted-foreground transition-transform',
-            expanded && 'rotate-90'
-          )}
-        />
+        <button
+          type="button"
+          className="mt-0.5 shrink-0 rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          aria-expanded={expanded}
+          aria-label={toggleDetailsLabel}
+          onClick={(event) => {
+            event.stopPropagation()
+            onToggle()
+          }}
+          onKeyDown={(event) => event.stopPropagation()}
+        >
+          <ChevronRight className={cn('size-3 transition-transform', expanded && 'rotate-90')} />
+        </button>
         <ReviewIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
         <div className="min-w-0 flex-1">
           <PrChecksRowHeader row={row} />

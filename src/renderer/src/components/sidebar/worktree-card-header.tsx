@@ -54,6 +54,7 @@ export function WorktreeCardHeader({
   const {
     worktree,
     repo,
+    repoOriginLabel,
     affiliateListMode,
     renameRowKey,
     compactCards,
@@ -169,6 +170,7 @@ export function WorktreeCardHeader({
         {/* Why: unread alert lives in the left status lane; title-row contrast comes from weight and dimmed read titles. */}
         <WorktreeTitleInlineRename
           displayName={visibleCardTitle}
+          displayPrefix={repoOriginLabel ? `${repoOriginLabel}/` : undefined}
           disabled={isDeleting || affiliateListMode}
           showUnreadEmphasis={showUnreadEmphasis}
           dimReadTitle={newCardStyle}

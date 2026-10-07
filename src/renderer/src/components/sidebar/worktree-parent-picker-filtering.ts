@@ -11,7 +11,8 @@ export function getWorktreeParentPickerItemValue(candidate: Worktree): string {
 // mounts, scores and DOM-reorders every registered item on each keystroke.
 export function filterWorktreeParentCandidates(
   candidates: readonly Worktree[],
-  search: string
+  search: string,
+  getItemValue: (candidate: Worktree) => string = getWorktreeParentPickerItemValue
 ): Worktree[] {
   const query = search.trim()
   if (!query) {
@@ -20,7 +21,7 @@ export function filterWorktreeParentCandidates(
   return candidates
     .map((candidate) => ({
       candidate,
-      score: defaultFilter(getWorktreeParentPickerItemValue(candidate), query, [])
+      score: defaultFilter(getItemValue(candidate), query, [])
     }))
     .filter((scored) => scored.score > 0)
     .sort((a, b) => b.score - a.score)

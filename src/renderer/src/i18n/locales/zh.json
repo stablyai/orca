@@ -1,4 +1,43 @@
 {
+  "worktree": {
+    "nestedRemoval": {
+      "refreshFailed": "无法刷新工作区列表",
+      "review": "连同嵌套工作树一起删除…",
+      "title": "删除工作区及嵌套工作树？",
+      "description": "这将永久删除“{{name}}”、下方列出的所有嵌套工作树及其全部文件，包括未提交的更改。它们的终端和代理将停止。",
+      "detached": "分离的 HEAD",
+      "loading": "正在检查嵌套工作树…",
+      "order": "先删除嵌套工作树。如果其中一个删除失败，将停止删除并保留父级。分支按现有删除设置处理。",
+      "cancel": "取消",
+      "retry": "重新检查",
+      "deleting": "正在删除…",
+      "confirm": "删除列出的所有工作树",
+      "preservedBranches": "已保留部分嵌套工作树分支"
+    }
+  },
+  "repoScan": {
+    "importGroup": "将文件夹导入为分组",
+    "importGroupDescription": "查找父文件夹内的仓库",
+    "openProject": "打开项目",
+    "gitRoot": "此路径是 Git 仓库。已跳过嵌套仓库扫描，因此无法将所选路径导入为分组。",
+    "stopped": "已按请求停止扫描。显示目前找到的仓库。",
+    "timedOut": "扫描已达到时间限制。部分文件夹尚未检查。",
+    "repoLimit": "扫描已达到仓库数量限制。部分文件夹尚未检查。",
+    "folderCount": "文件夹：{{count}}。{{reason}}",
+    "linkCount": "链接：{{count}}。{{reason}}",
+    "showDetails": "显示扫描详情",
+    "shortened": "过长的路径或规则文本已缩短。",
+    "omitted": "已省略另外 {{count}} 条详情。",
+    "reason": {
+      "gitignore": "被 .gitignore 排除",
+      "builtin": "被内置目录策略排除",
+      "hidden": "被隐藏文件夹策略排除",
+      "symlink": "未跟随符号链接",
+      "depth": "未检查超出扫描深度的内容",
+      "unreadable": "无法读取文件夹，未检查其内容",
+      "unknown": "排除详情不可用"
+    }
+  },
   "app": {
     "recoverableError": {
       "rootTitle": "Orca 遇到渲染器错误。",
@@ -5633,6 +5672,8 @@
           "fed49903c9": "{{value0}} 直播 {{value1}}"
         },
         "WorktreeContextMenu": {
+          "removeFromFolderWorkspace": "从文件夹工作区移除",
+          "attachFolderWorkspace": "附加到文件夹工作区…",
           "c39c37676a": "创建一个组并将该项目移入其中。",
           "6664418e98": "新项目组",
           "e091caab15": "找不到该项目",
@@ -6155,6 +6196,19 @@
           "c7d8e9f0a1": "已更新 {{value0}} 个",
           "d8e9f0a1b2": "已跳过 {{value0}} 个",
           "e9f0a1b2c3": "失败 {{value0}} 个"
+        },
+        "FolderParentPicker": {
+          "ownerUnavailable": "无法确认工作区归属。请刷新工作区元数据后重试。",
+          "loadFailed": "无法加载此执行主机的文件夹工作区。",
+          "unknownOutcome": "无法确认父级更新结果。请刷新验证后再重试。",
+          "refreshUnverified": "父级更新已确认，但无法刷新视图。请刷新验证。",
+          "attachFailed": "无法将工作树附加到文件夹工作区。",
+          "attachFor": "附加到文件夹工作区",
+          "search": "搜索文件夹工作区…",
+          "refresh": "刷新",
+          "attaching": "正在附加…",
+          "loading": "正在加载文件夹工作区…",
+          "empty": "此执行主机上没有匹配的可用文件夹工作区。"
         },
         "WorktreeParentPickerPopover": {
           "failedSetParent": "无法设置父工作树",

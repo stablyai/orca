@@ -1,4 +1,43 @@
 {
+  "worktree": {
+    "nestedRemoval": {
+      "refreshFailed": "Could not refresh the workspace list",
+      "review": "Delete with nested worktrees…",
+      "title": "Delete workspace and nested worktrees?",
+      "description": "This permanently deletes \"{{name}}\", every nested worktree listed below, and all files inside them, including uncommitted changes. Their terminals and agents will be stopped.",
+      "detached": "Detached HEAD",
+      "loading": "Checking nested worktrees…",
+      "order": "Nested worktrees are deleted first. If one fails, deletion stops and the parent is kept. Branches follow your existing deletion settings.",
+      "cancel": "Cancel",
+      "retry": "Review again",
+      "deleting": "Deleting…",
+      "confirm": "Delete all listed worktrees",
+      "preservedBranches": "Some nested worktree branches were kept"
+    }
+  },
+  "repoScan": {
+    "importGroup": "Import folder as group",
+    "importGroupDescription": "Find repositories inside a parent folder",
+    "openProject": "Open project",
+    "gitRoot": "This path is a Git repository. Nested repository scanning was skipped, so group import is not available for this selection.",
+    "stopped": "Scan stopped by request. Showing repositories found so far.",
+    "timedOut": "Scan reached its time limit. Some folders were not checked.",
+    "repoLimit": "Scan reached its repository limit. Some folders were not checked.",
+    "folderCount": "Folders: {{count}}. {{reason}}",
+    "linkCount": "Links: {{count}}. {{reason}}",
+    "showDetails": "Show scan details",
+    "shortened": "Long path or rule text was shortened.",
+    "omitted": "{{count}} additional details omitted.",
+    "reason": {
+      "gitignore": "Excluded by .gitignore",
+      "builtin": "Excluded by built-in directory policy",
+      "hidden": "Excluded by hidden-folder policy",
+      "symlink": "Symbolic link not followed",
+      "depth": "Contents below scan depth were not checked",
+      "unreadable": "Folder could not be read; contents were not checked",
+      "unknown": "Exclusion details unavailable"
+    }
+  },
   "csv": {
     "detectingDelimiter": "Detecting delimiter…",
     "indexProgress": "Indexing CSV… {{percent}}%",
@@ -5894,6 +5933,8 @@
           "fed49903c9": "{{value0}} live {{value1}}"
         },
         "WorktreeContextMenu": {
+          "removeFromFolderWorkspace": "Remove from Folder Workspace",
+          "attachFolderWorkspace": "Attach to Folder Workspace…",
           "c39c37676a": "Create a group and move this project into it.",
           "6664418e98": "New Project Group",
           "e091caab15": "The project could not be found",
@@ -6078,7 +6119,7 @@
                   "a6c20dca96": "Open a project from an SSH target",
                   "sshCreateUnavailable": "Not available for SSH hosts yet",
                   "3d162cc76f": "Project on SSH host",
-                  "fb4fc5380e": "Local project, Git repo, or folder with many repos",
+                  "fb4fc5380e": "Open a local project or Git repository",
                   "2281fdc8c7": "Browse folder",
                   "sshBrowseTitle": "Open project on SSH host",
                   "sshBrowseDescription": "Existing Git repository or folder on this SSH host",
@@ -6348,6 +6389,19 @@
           "c7d8e9f0a1": "{{value0}} updated",
           "d8e9f0a1b2": "{{value0}} skipped",
           "e9f0a1b2c3": "{{value0}} failed"
+        },
+        "FolderParentPicker": {
+          "ownerUnavailable": "Workspace ownership is unavailable. Refresh workspace metadata and retry.",
+          "loadFailed": "Could not load folder workspaces for this execution host.",
+          "unknownOutcome": "Parent update outcome is unknown. Refresh to verify before trying again.",
+          "refreshUnverified": "Parent update was acknowledged, but the view could not be refreshed. Refresh to verify.",
+          "attachFailed": "Could not attach worktree to folder workspace.",
+          "attachFor": "Attach to Folder Workspace",
+          "search": "Search folder workspaces…",
+          "refresh": "Refresh",
+          "attaching": "Attaching…",
+          "loading": "Loading folder workspaces…",
+          "empty": "No matching eligible folder workspaces on this execution host."
         },
         "WorktreeParentPickerPopover": {
           "failedSetParent": "Failed to set parent worktree",

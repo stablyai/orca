@@ -1,9 +1,14 @@
 import { readFile, readdir, stat } from 'node:fs/promises'
 import { basename, join } from 'node:path'
-import type { NestedRepoCandidate, NestedRepoScanResult } from '../../shared/project-group-types'
+import type {
+  NestedRepoCandidate,
+  NestedRepoScanDiagnostic,
+  NestedRepoScanDiagnostics,
+  NestedRepoScanResult
+} from '../../shared/project-group-types'
 import { isGitRepo } from '../git/repo'
 import {
-  isIgnoredNestedRepoDirectory,
+  getNestedRepoDirectoryExclusion,
   normalizeNestedRepoScanOptions,
   readNestedRepoGitignoreRules,
   type NestedRepoDirectoryEntry,
@@ -49,6 +54,29 @@ export async function scanNestedRepos(args: {
   const startedAt = Date.now()
   const options = normalizeNestedRepoScanOptions(args.options)
   const repos: NestedRepoCandidate[] = []
+  const diagnostics: NestedRepoScanDiagnostics = { counts: {}, details: [], omittedDetails: 0 }
+  const record = (detail: NestedRepoScanDiagnostic): void => {
+    diagnostics.counts[detail.reason] = (diagnostics.counts[detail.reason] ?? 0) + 1
+    if (diagnostics.details.length >= 100) {
+      diagnostics.omittedDetails++
+      return
+    }
+    const shorten = (value: string, limit: number): string => {
+      if (value.length <= limit) {
+        return value
+      }
+      detail.shortened = true
+      return `${value.slice(0, limit)}…`
+    }
+    diagnostics.details.push({
+      ...detail,
+      path: shorten(detail.path, 2048),
+      ...(detail.ignoreFile ? { ignoreFile: shorten(detail.ignoreFile, 2048) } : {}),
+      ...(detail.rule ? { rule: shorten(detail.rule, 1024) } : {}),
+      ...(detail.errorCode ? { errorCode: shorten(detail.errorCode, 64) } : {}),
+      ...(detail.shortened ? { shortened: true } : {})
+    })
+  }
   let truncated = false
   let timedOut = false
   let stopped = false
@@ -70,7 +98,12 @@ export async function scanNestedRepos(args: {
     durationMs: Date.now() - startedAt,
     maxDepth: options.maxDepth,
     maxRepos: options.maxRepos,
-    timeoutMs: options.timeoutMs
+    timeoutMs: options.timeoutMs,
+    diagnostics: {
+      counts: { ...diagnostics.counts },
+      details: [...diagnostics.details],
+      omittedDetails: diagnostics.omittedDetails
+    }
   })
   const noteAbort = (): boolean => {
     if (!args.signal?.aborted) {
@@ -121,7 +154,14 @@ export async function scanNestedRepos(args: {
     let entries: NestedRepoDirectoryEntry[]
     try {
       entries = await filesystem.readDirectory(currentFolder.path)
-    } catch {
+    } catch (error) {
+      record({
+        path: currentFolder.path,
+        reason: 'unreadable',
+        ...(error && typeof error === 'object' && 'code' in error && typeof error.code === 'string'
+          ? { errorCode: error.code }
+          : {})
+      })
       continue
     }
     if (noteAbort()) {
@@ -138,7 +178,12 @@ export async function scanNestedRepos(args: {
     ]
 
     const dirs = entries
-      .filter((entry) => entry.isDirectory && !entry.isSymlink)
+      .filter((entry) => {
+        if (entry.isSymlink) {
+          record({ path: filesystem.joinPath(currentFolder.path, entry.name), reason: 'symlink' })
+        }
+        return entry.isDirectory && !entry.isSymlink
+      })
       .sort((left, right) => left.name.localeCompare(right.name))
     for (const entry of dirs) {
       const name = entry.name
@@ -154,10 +199,12 @@ export async function scanNestedRepos(args: {
         break
       }
       const childSegments = [...currentFolder.segments, name]
-      if (isIgnoredNestedRepoDirectory(name, childSegments, currentIgnoreRules)) {
+      const childPath = filesystem.joinPath(currentFolder.path, name)
+      const exclusion = getNestedRepoDirectoryExclusion(name, childSegments, currentIgnoreRules)
+      if (exclusion) {
+        record({ path: childPath, ...exclusion })
         continue
       }
-      const childPath = filesystem.joinPath(currentFolder.path, name)
       // Why: broad scans should use cheap filesystem markers instead of
       // spawning Git for every candidate directory, especially over SSH.
       const childHasGitMarker = await filesystem.hasGitMarker(childPath)
@@ -184,6 +231,8 @@ export async function scanNestedRepos(args: {
           segments: childSegments,
           ignoreRules: currentIgnoreRules
         })
+      } else {
+        record({ path: childPath, reason: 'depth-limit' })
       }
     }
   }

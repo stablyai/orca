@@ -23,6 +23,7 @@ export type WorktreeCardProps = {
   revealHighlightTone?: 'default' | 'ai'
   selectedWorktrees?: readonly Worktree[]
   hideRepoBadge?: boolean
+  repoOriginLabel?: string
   hostContextLabel?: string
   inPinnedSection?: boolean
   activationRowKey?: string
@@ -108,7 +109,7 @@ export function formatSparseDirectoryPreview(directories: string[]): string {
 }
 
 export function isWebClient(): boolean {
-  return Boolean((window as unknown as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__)
+  return '__ORCA_WEB_CLIENT__' in window && Boolean(window.__ORCA_WEB_CLIENT__)
 }
 
 export function getDirectoryName(folderPath: string): string {
