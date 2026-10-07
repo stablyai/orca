@@ -1,4 +1,6 @@
 import type { DeviceEntry, DeviceRegistry, DeviceScope } from '../device-registry'
+import type { RpcContext } from '../rpc/core'
+import { toRuntimeAccessGrant } from '../runtime-access-grants'
 import type { E2EEKeypair } from '../e2ee-keypair'
 import type { MobileSocketWiring } from '../rpc/mobile-socket-wiring'
 import type {
@@ -21,6 +23,34 @@ import {
 } from './runtime-rpc-pairing-types'
 
 export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
+  protected override readonly runtimeAccess: RpcContext['runtimeAccess'] = {
+    list: () => {
+      if (!this.deviceRegistry || this.deviceRegistry.hasLoadError) {
+        throw Object.assign(
+          new Error('Device registry unavailable or unreadable; grants unknown'),
+          {
+            code: 'runtime_access_unavailable'
+          }
+        )
+      }
+      return this.deviceRegistry
+        .listDevices()
+        .filter((device) => device.scope === 'runtime')
+        .sort((a, b) => b.pairedAt - a.pairedAt)
+        .map(toRuntimeAccessGrant)
+    },
+    revoke: (deviceId) => {
+      if (!this.deviceRegistry || this.deviceRegistry.hasLoadError) {
+        throw Object.assign(
+          new Error(
+            'Device registry unavailable or unreadable; grants unknown, revocation not confirmed'
+          ),
+          { code: 'runtime_access_unavailable' }
+        )
+      }
+      return this.revokeRuntimeAccess(deviceId)
+    }
+  }
   private onPushUnregisterQueued?: () => void
 
   getDeviceRegistry(): DeviceRegistry | null {

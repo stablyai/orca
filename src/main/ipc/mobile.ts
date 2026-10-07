@@ -1,9 +1,8 @@
 import { app, ipcMain, shell, type IpcMainInvokeEvent } from 'electron'
-import type { RuntimeAccessGrant } from '../../shared/runtime-access-grants'
+import { toRuntimeAccessGrant } from '../runtime/runtime-access-grants'
 import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
 import { classifyRemotePairingHostname } from '../../shared/remote-pairing-address'
 import type { RuntimePairingReach } from '../../shared/runtime-pairing-reach'
-import type { DeviceEntry } from '../runtime/device-registry'
 import { NETWORK_EXPOSURE_FAILED_GUIDANCE } from '../runtime/network-exposure-guidance'
 import {
   getDefaultPairingAddress,
@@ -33,15 +32,6 @@ function servesThisComputerOnly(reach: RuntimePairingReach | undefined, address:
   }
   const hostname = resolveAdvertisedPairingHostname(address)
   return hostname !== null && classifyRemotePairingHostname(hostname) === 'loopback'
-}
-
-function toRuntimeAccessGrant(device: DeviceEntry): RuntimeAccessGrant {
-  return {
-    deviceId: device.deviceId,
-    name: device.name,
-    createdAt: device.pairedAt,
-    lastSeenAt: device.lastSeenAt > 0 ? device.lastSeenAt : null
-  }
 }
 
 // Why: the mobile IPC handlers provide the renderer with QR code pairing data,

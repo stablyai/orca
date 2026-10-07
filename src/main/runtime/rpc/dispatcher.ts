@@ -3,6 +3,7 @@ import {
   isRegistrationFencedUnsubscribe,
   isStreamingMethod,
   type RpcAnyMethodDeclaration,
+  type RpcContext,
   type RpcEnvelopeMeta,
   type RpcRegistry,
   type RpcRequest,
@@ -36,7 +37,7 @@ export type DispatcherOptions = {
   methods?: readonly RpcAnyMethodDeclaration[]
 }
 
-type DispatchCallOptions = RpcDispatchStreamingOptions
+type DispatchCallOptions = RpcDispatchStreamingOptions & Pick<RpcContext, 'runtimeAccess'>
 
 export class RpcDispatcher {
   private readonly runtime: OrcaRuntimeService
@@ -109,6 +110,7 @@ export class RpcDispatcher {
         params: parsedParams.value,
         context: {
           runtime: this.runtime,
+          runtimeAccess: options?.runtimeAccess,
           signal: options?.signal,
           connectionId: options?.connectionId,
           // Session tabs always need this fence. COMPAT(terminal request-addressed unsubscribe): terminal only for phones without `requestId`.
