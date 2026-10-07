@@ -50,17 +50,22 @@ export function useAddProjectOperationScope(scope: AddProjectOperationScope) {
     scope.selectedTargetAvailable
   ])
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
       mountedRef.current = false
       tokenRef.current += 1
       busyRef.current = false
-    },
-    []
-  )
+    }
+  }, [])
 
-  const begin = useCallback((): Operation | null => {
-    if (busyRef.current || !scopeRef.current.client || !scopeRef.current.visible) {
+  const begin = useCallback((expectedScope: AddProjectOperationScope): Operation | null => {
+    if (
+      busyRef.current ||
+      !scopeRef.current.client ||
+      !scopeRef.current.visible ||
+      !sameScope(scopeRef.current, expectedScope)
+    ) {
       return null
     }
     const operation = { token: tokenRef.current + 1, scope: scopeRef.current }

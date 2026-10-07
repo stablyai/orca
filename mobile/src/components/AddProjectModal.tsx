@@ -8,12 +8,14 @@ import {
 import { REPO_CLONE_TIMEOUT_MS } from '../tasks/workspace-create-timeout'
 import type { RpcClient } from '../transport/rpc-client'
 import { AddProjectStart } from './AddProjectStart'
-import { AddProjectFolderBrowser } from './AddProjectFolderBrowser'
+import { AddProjectTargetRecovery } from './AddProjectTargetRecovery'
+import { AddProjectFolderView } from './AddProjectFolderView'
 import { AddProjectTargetSelector } from './AddProjectTargetSelector'
 import { BottomDrawer } from './BottomDrawer'
-import { ConfirmContent } from './ConfirmModal'
+import { AddProjectFolderConfirmation } from './AddProjectFolderConfirmation'
 import { AddProjectForm } from './AddProjectForm'
 import type { MobileWorkspaceRepo } from './new-worktree-modal-types'
+import type { AddedRepo, FolderCandidate } from './addProjectTypes'
 import { useAddProjectOperationScope } from './useAddProjectOperationScope'
 import { resolveAddProjectTargetState } from './addProjectTargetState'
 type AddProjectView =
@@ -23,7 +25,6 @@ type AddProjectView =
   | 'addExisting'
   | 'confirmFolder'
   | 'pickDestination'
-const NOT_A_GIT_REPOSITORY = 'Not a valid git repository'
 const EMPTY_HOST_CAPABILITIES: readonly string[] = []
 const EMPTY_SSH_TARGETS: readonly {
   id: string
@@ -44,16 +45,6 @@ type AddProjectModalProps = {
     connectionStatus?: string
   }[]
 }
-
-type AddedRepo = {
-  id: string
-  path: string
-  displayName: string
-  connectionId?: string | null
-  executionHostId?: string | null
-}
-type FolderCandidate = { path: string; sshConnectionId: string | null; client: RpcClient }
-
 function toMobileRepo(repo: AddedRepo): MobileWorkspaceRepo {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the receipt's looseObject keeps every member the host sent; the trio it requires is exactly what MobileWorkspaceRepo requires.
   return repo as MobileWorkspaceRepo
@@ -91,17 +82,21 @@ export function AddProjectModal({
     latestClientRef.current = client
     handoffRef.current = null
   }
+  const latestSessionRef = useRef(session)
+  latestSessionRef.current = session
   const fireHandoff = useCallback(() => {
     const handoff = handoffRef.current
     handoffRef.current = null
+    const latestSession = latestSessionRef.current
     if (
       handoff &&
-      handoff.openEpoch === session.openEpoch &&
+      latestSession.visible === false &&
+      handoff.openEpoch === latestSession.openEpoch &&
       handoff.client === latestClientRef.current
     ) {
       onProjectAdded(handoff.repo)
     }
-  }, [onProjectAdded, session.openEpoch])
+  }, [onProjectAdded])
 
   return (
     <AddProjectModalContent
@@ -185,7 +180,7 @@ function AddProjectModalContent({
     if (!canSubmit || !client) {
       return
     }
-    const operation = begin()
+    const operation = begin(operationScope)
     if (!operation) {
       return
     }
@@ -245,6 +240,7 @@ function AddProjectModalContent({
     current,
     finish,
     onAdded,
+    operationScope,
     projectName,
     requestTarget,
     view
@@ -255,7 +251,7 @@ function AddProjectModalContent({
       if (!client || busy || busyRef.current || !selectedTargetAvailable) {
         return
       }
-      const operation = begin()
+      const operation = begin(operationScope)
       if (!operation) {
         return
       }
@@ -270,7 +266,7 @@ function AddProjectModalContent({
       } catch (cause) {
         const message = cause instanceof Error ? cause.message : String(cause)
         const isCurrent = current(operation)
-        if (isCurrent && kind === 'git' && message.includes(NOT_A_GIT_REPOSITORY)) {
+        if (isCurrent && kind === 'git' && message.includes('Not a valid git repository')) {
           setFolderCandidate({ path, sshConnectionId: activeSshConnectionId, client })
           setView('confirmFolder')
         } else if (isCurrent) {
@@ -281,7 +277,18 @@ function AddProjectModalContent({
         finish(operation)
       }
     },
-    [begin, busy, busyRef, client, current, finish, onAdded, requestTarget, selectedTargetAvailable]
+    [
+      begin,
+      busy,
+      busyRef,
+      client,
+      current,
+      finish,
+      onAdded,
+      operationScope,
+      requestTarget,
+      selectedTargetAvailable
+    ]
   )
 
   const targetSelector = (
@@ -327,49 +334,53 @@ function AddProjectModalContent({
       )
     }
 
-    if (view === 'addExisting') {
+    if ((view === 'addExisting' || view === 'pickDestination') && !selectedTargetAvailable) {
       return (
         <View>
-          {targetSelector}
-          <AddProjectFolderBrowser
-            client={client}
-            sshConnectionId={activeSshConnectionId}
-            busy={busy}
-            error={error}
-            onBack={() => setView('start')}
-            onPick={(path) => void addFolder(path, 'git')}
-          />
-        </View>
-      )
-    }
-
-    if (view === 'pickDestination') {
-      return (
-        <View>
-          <AddProjectFolderBrowser
-            client={client}
-            sshConnectionId={activeSshConnectionId}
-            busy={busy}
-            error={error}
-            pickLabel="Select folder"
-            onBack={() => setView(destinationKind ?? 'start')}
-            onPick={(path) => {
-              setDestinationPath(path)
-              setView(destinationKind ?? 'start')
+          <AddProjectTargetRecovery
+            onChooseThisHost={() => {
+              setSshConnectionId(null)
+              setDestinationPath('')
+              setFolderCandidate(null)
+              setView('start')
             }}
           />
         </View>
       )
     }
 
+    if (view === 'addExisting' || view === 'pickDestination') {
+      return (
+        <AddProjectFolderView
+          targetSelector={targetSelector}
+          destination={view === 'pickDestination'}
+          client={client}
+          sshConnectionId={activeSshConnectionId}
+          busy={busy}
+          error={error}
+          onBack={() =>
+            setView(view === 'pickDestination' ? (destinationKind ?? 'start') : 'start')
+          }
+          onPick={(path) => {
+            if (view === 'pickDestination') {
+              setDestinationPath(path)
+              setView(destinationKind ?? 'start')
+            } else {
+              void addFolder(path, 'git')
+            }
+          }}
+        />
+      )
+    }
+
     if (view === 'confirmFolder') {
       return (
-        <ConfirmContent
-          title="Add as a folder project?"
-          message={`${folderCandidate?.path ?? ''} is not a Git repository. Folder projects have no worktrees, source control, pull requests, or checks.`}
-          confirmLabel="Add folder"
-          onConfirm={() => {
-            confirmingFolderRef.current = true
+        <AddProjectFolderConfirmation
+          path={folderCandidate?.path ?? ''}
+          client={folderCandidate?.client ?? null}
+          sshConnectionId={folderCandidate ? folderCandidate.sshConnectionId : undefined}
+          confirmingRef={confirmingFolderRef}
+          onConfirmFolder={() => {
             if (
               !folderCandidate ||
               folderCandidate.client !== client ||
@@ -381,6 +392,10 @@ function AddProjectModalContent({
               return
             }
             void addFolder(folderCandidate.path, 'folder')
+          }}
+          onChanged={() => {
+            setError('The host or SSH target changed. Choose the folder again.')
+            setView('addExisting')
           }}
           onCancel={() => {
             if (!confirmingFolderRef.current) {

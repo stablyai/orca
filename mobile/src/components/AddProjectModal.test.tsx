@@ -681,4 +681,68 @@ describe('AddProjectModal', () => {
     act(() => oldDrawer.props.onAfterClose())
     expect(onProjectAdded).not.toHaveBeenCalled()
   })
+
+  it('rejects a captured submit handler after its SSH target changes', () => {
+    const sendRequest = vi.fn()
+    const tree = render(
+      sendRequest,
+      true,
+      [REPO_ADD_PROJECT_SSH_MOBILE_RUNTIME_CAPABILITY],
+      [
+        { id: 'ssh-a', label: 'A' },
+        { id: 'ssh-b', label: 'B' }
+      ]
+    )
+    act(() => button(tree, 'Run on This host').props.onPress())
+    act(() => button(tree, 'Select A').props.onPress())
+    act(() =>
+      startActions(tree)
+        .find((a) => a.label === 'Clone from URL')!
+        .onPress()
+    )
+    act(() => button(tree, 'Select folder').props.onPress())
+    act(() => textInputs(tree)[0]!.props.onChangeText('https://example.com/orca.git'))
+    const oldSubmit = button(tree, 'Clone repository').props.onPress
+    act(() => button(tree, 'Back to Add project').props.onPress())
+    act(() => button(tree, 'Run on A').props.onPress())
+    act(() => button(tree, 'Select B').props.onPress())
+    sendRequest.mockClear()
+    act(() => oldSubmit())
+    expect(sendRequest).not.toHaveBeenCalled()
+  })
+
+  it('rejects a captured folder pick after its SSH target disappears', async () => {
+    const sendRequest = vi.fn().mockResolvedValue(listing('/home/remote', ['projects']))
+    const tree = render(
+      sendRequest,
+      true,
+      [REPO_ADD_PROJECT_SSH_MOBILE_RUNTIME_CAPABILITY],
+      [{ id: 'ssh-a', label: 'A' }]
+    )
+    act(() => button(tree, 'Run on This host').props.onPress())
+    act(() => button(tree, 'Select A').props.onPress())
+    act(() =>
+      startActions(tree)
+        .find((a) => a.label === 'Browse folder')!
+        .onPress()
+    )
+    await flushUpdates()
+    const oldPick = tree.root.findByType(AddProjectFolderBrowser).props.onPick
+    const client = tree.root.findByType(AddProjectModal).props.client
+    act(() =>
+      renderer.update(
+        createElement(AddProjectModal, {
+          visible: true,
+          client,
+          onProjectAdded,
+          onClose,
+          hostCapabilities: [REPO_ADD_PROJECT_SSH_MOBILE_RUNTIME_CAPABILITY],
+          sshTargets: []
+        })
+      )
+    )
+    act(() => oldPick('/home/remote'))
+    expect(sendRequest).toHaveBeenCalledTimes(1)
+    expect(sendRequest).not.toHaveBeenCalledWith('repo.add', expect.anything())
+  })
 })
