@@ -15,7 +15,13 @@ import { BottomDrawer } from './BottomDrawer'
 import { AddProjectFolderConfirmation } from './AddProjectFolderConfirmation'
 import { AddProjectForm } from './AddProjectForm'
 import type { MobileWorkspaceRepo } from './new-worktree-modal-types'
-import type { AddedRepo, FolderCandidate } from './addProjectTypes'
+import {
+  EMPTY_HOST_CAPABILITIES,
+  EMPTY_SSH_TARGETS,
+  type AddProjectModalProps,
+  type AddedRepo,
+  type FolderCandidate
+} from './addProjectTypes'
 import { useAddProjectOperationScope } from './useAddProjectOperationScope'
 import { resolveAddProjectTargetState } from './addProjectTargetState'
 type AddProjectView =
@@ -25,26 +31,6 @@ type AddProjectView =
   | 'addExisting'
   | 'confirmFolder'
   | 'pickDestination'
-const EMPTY_HOST_CAPABILITIES: readonly string[] = []
-const EMPTY_SSH_TARGETS: readonly {
-  id: string
-  label: string
-  connected?: boolean
-  connectionStatus?: string
-}[] = []
-type AddProjectModalProps = {
-  visible: boolean
-  client: RpcClient | null
-  onProjectAdded: (repo: MobileWorkspaceRepo) => void
-  onClose: () => void
-  hostCapabilities?: readonly string[]
-  sshTargets?: readonly {
-    id: string
-    label: string
-    connected?: boolean
-    connectionStatus?: string
-  }[]
-}
 function toMobileRepo(repo: AddedRepo): MobileWorkspaceRepo {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the receipt's looseObject keeps every member the host sent; the trio it requires is exactly what MobileWorkspaceRepo requires.
   return repo as MobileWorkspaceRepo
