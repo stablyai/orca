@@ -18911,6 +18911,20 @@
           }
         }
       },
+      "TerminalRendering": {
+        "imePreeditInGrid": "Draw IME Composition in Terminal Cells",
+        "imePreeditInGridDescription": "Render text being composed with an input method (Korean, Japanese, Chinese) as terminal cells at the cursor. Turn off to use the floating overlay instead.",
+        "search": {
+          "ime": "ime",
+          "inputMethod": "input method",
+          "composition": "composition",
+          "preedit": "preedit",
+          "korean": "korean",
+          "japanese": "japanese",
+          "chinese": "chinese",
+          "overlay": "overlay"
+        }
+      },
       "nativeChat": {
         "queueFollowUpsTitle": "Queue follow-ups",
         "queueFollowUpsCopy": "Messages you send while the agent is working wait as cards you can steer, edit, or delete. Messages with images send right away.",

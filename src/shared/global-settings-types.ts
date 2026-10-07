@@ -131,6 +131,9 @@ export type GlobalSettings = NativeChatGlobalSettings & {
   /** One-shot migration guard for moving inherited cursor defaults to block. */
   terminalCursorStyleDefaultedToBlock?: boolean
   terminalCursorBlink: boolean
+  /** Draw the IME preedit as terminal cells instead of xterm's DOM overlay; undefined means on.
+   *  Off restores the overlay path, kept as the instant fallback. */
+  terminalImePreeditInGrid?: boolean
   terminalThemeDark: string
   terminalCustomThemes?: TerminalCustomTheme[]
   terminalDividerColorDark: string

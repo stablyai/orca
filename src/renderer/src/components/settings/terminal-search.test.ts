@@ -6,6 +6,7 @@ import {
   getWorkspaceCardLayoutEntry
 } from './appearance-sidebar-search'
 import { matchesSettingsSearch } from './settings-search'
+import { getTerminalRenderingSearchEntries } from './terminal-typography-search'
 
 describe('getTerminalPaneSearchEntries', () => {
   it('includes the Windows right-click setting on Windows', () => {
@@ -94,6 +95,13 @@ describe('getTerminalPaneSearchEntries', () => {
     expect(shellEntry).toBeDefined()
     expect(matchesSettingsSearch('rcfile', [shellEntry!])).toBe(true)
     expect(windowsEntries.some((entry) => entry.title === 'Terminal shell')).toBe(false)
+  })
+
+  it('finds the in-grid IME composition setting by input-method terms', () => {
+    const entries = getTerminalRenderingSearchEntries()
+    for (const query of ['ime', 'preedit', 'hangul', 'input method', 'Draw IME Composition']) {
+      expect(matchesSettingsSearch(query, entries), query).toBe(true)
+    }
   })
 
   it('includes the OSC 52 clipboard setting on all platforms', () => {

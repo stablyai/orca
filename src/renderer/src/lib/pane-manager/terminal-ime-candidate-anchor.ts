@@ -1,5 +1,9 @@
 import type { Terminal } from '@xterm/xterm'
 import { resolveCursorAgentImeAnchor, type TerminalImeAnchor } from './terminal-ime-anchor'
+import {
+  isTerminalImePreeditInGrid,
+  setTerminalImePreeditAnchor
+} from './terminal-ime-grid-preedit'
 
 type ImeAnchorCellMetrics = {
   cellWidth: number
@@ -129,6 +133,13 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
   }
 
   const handler = (event?: Event): void => {
+    if (isTerminalImePreeditInGrid(terminal)) {
+      // Why: xterm anchors the textarea to the preedit it draws, so only a relocated input row
+      // needs forwarding; writing styles here would fight that on every render.
+      const { anchor, isCursorAgent } = resolveAnchor()
+      setTerminalImePreeditAnchor(terminal, isCursorAgent ? anchor : null)
+      return
+    }
     if (!screenElement) {
       return
     }

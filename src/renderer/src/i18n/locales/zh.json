@@ -18522,6 +18522,20 @@
           }
         }
       },
+      "TerminalRendering": {
+        "imePreeditInGrid": "在终端单元格中绘制输入法组字",
+        "imePreeditInGridDescription": "将使用输入法（韩语、日语、中文）正在组字的文本渲染为光标处的终端单元格。关闭后改用浮动叠加层。",
+        "search": {
+          "ime": "输入法",
+          "inputMethod": "输入方式",
+          "composition": "组字",
+          "preedit": "预编辑",
+          "korean": "韩语",
+          "japanese": "日语",
+          "chinese": "中文",
+          "overlay": "叠加层"
+        }
+      },
       "nativeChat": {
         "queueFollowUpsTitle": "将后续消息加入队列",
         "queueFollowUpsCopy": "Agent 工作时发送的消息会以卡片形式等待，你可以立即发送、编辑或删除。带图片的消息会立即发送。",

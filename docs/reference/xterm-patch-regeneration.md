@@ -2,17 +2,37 @@
 
 ## Scope
 
-Orca ships `@xterm/xterm` with four source changes it needs and upstream has
-not taken: the IME composition hooks, the `xterm-composition-*` custom events
-they raise, the `ICompositionHelper` surface those hooks widen, and a `SortedList`
-fix. pnpm applies them through `config/patches/@xterm__xterm@<version>.patch`.
+Orca ships `@xterm/xterm` with source changes it needs and upstream has not
+taken: the IME composition hooks, the `xterm-composition-*` custom events they
+raise, the `ICompositionHelper` surface those hooks widen, the in-grid IME
+preedit, and a `SortedList` fix. pnpm applies them through `config/patches/@xterm__xterm@<version>.patch`.
 
-That patch touches eight files. Four are hand-authored source
-(`src/browser/CoreBrowserTerminal.ts`, `src/browser/Types.ts`,
-`src/browser/input/CompositionHelper.ts`, `src/common/SortedList.ts`) and four
-are the build output those sources produce (`lib/xterm.js`, `lib/xterm.mjs`,
-and both sourcemaps). The bundle half is 7.3 MB of minified code. It is
-generated, and this document exists so nobody edits it by hand.
+That patch touches thirteen files. Nine are hand-authored source and four are
+the build output those sources produce (`lib/xterm.js`, `lib/xterm.mjs`, and
+both sourcemaps). The bundle half is 7.5 MB of minified code. It is generated,
+and this document exists so nobody edits it by hand. The source files are:
+
+- `src/browser/input/CompositionHelper.ts`: the composition hooks, events and
+  both preedit paths (overlay and in-grid).
+- `src/browser/CoreBrowserTerminal.ts` and `src/browser/Types.ts`: wiring and the
+  `ICompositionHelper` / `ITerminal.imePreedit` surfaces.
+- `src/browser/renderer/dom/DomRenderer.ts` and
+  `src/browser/renderer/dom/DomRendererRowFactory.ts`: the DOM renderer draws the
+  in-grid preedit row and cursor.
+- `src/browser/renderer/dom/WidthCache.ts`: exports the font-variant canvas the
+  overlay's preedit cell measurement reuses.
+- `src/common/services/OptionsService.ts` and `src/common/services/Services.ts`:
+  the `imePreeditInGrid` option.
+- `src/common/SortedList.ts`: the `SortedList` fix.
+
+Update this list whenever the source patch gains or drops a file.
+
+The core patch also carries the in-grid IME preedit (`imePreeditInGrid`, the
+`IImePreedit` surface on `ITerminal`, and its use in the DOM renderer). The
+WebGL addon reads that surface too, but each package is built from a checkout
+with only its own source patch applied, so the addon declares the shape it reads
+locally instead of importing the core type; importing it fails the addon build.
+New files are not picked up either: the checkout diff only sees tracked files.
 
 The two halves are the same edits diffed two ways, so the generator requires
 them to match byte for byte on every source file. A hunk the shipped patch
@@ -271,7 +291,7 @@ rerun. The bundle hunks need no attention at any point.
 A vendored `@xterm/xterm` fork removes the patch entirely, but it moves Orca off
 the published package, so every upstream beta becomes a merge rather than a
 version bump, and Orca inherits responsibility for building and publishing a
-package it does not own. The patch is four small source hunks against a commit
+package it does not own. The patch is a bounded set of source hunks against a commit
 that reproduces byte for byte; a fork is a much larger standing cost for the
 same result.
 

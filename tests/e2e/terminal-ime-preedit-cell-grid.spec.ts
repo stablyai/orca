@@ -1,5 +1,9 @@
 import { expect, test } from './helpers/orca-app'
-import { closeTerminalImePaneArena, openTerminalImePaneArena } from './terminal-ime-pane-arena'
+import {
+  closeTerminalImePaneArena,
+  openTerminalImePaneArena,
+  useTerminalImePreeditOverlay
+} from './terminal-ime-pane-arena'
 import { setImeComposition } from './terminal-ime-cdp-composition'
 import {
   sampleMidlinePreeditOcclusion,
@@ -19,6 +23,8 @@ for (const dpr of [1, 1.25, 2]) {
           BrowserWindow.getAllWindows()[0].setSize(1920, 1080)
         })
         const arena = await openTerminalImePaneArena(orcaPage)
+        // Asserts on the overlay itself; the in-grid default is covered by terminal-ime-grid-preedit.spec.ts.
+        await useTerminalImePreeditOverlay(orcaPage)
         let completed = false
         try {
           for (const options of [
@@ -184,6 +190,8 @@ test('preserves native shaping for mixed text, complex scripts, and emoji', asyn
   orcaPage
 }, testInfo) => {
   const arena = await openTerminalImePaneArena(orcaPage)
+  // Asserts on the overlay itself; the in-grid default is covered by terminal-ime-grid-preedit.spec.ts.
+  await useTerminalImePreeditOverlay(orcaPage)
   let completed = false
   try {
     await orcaPage.evaluate(() => {

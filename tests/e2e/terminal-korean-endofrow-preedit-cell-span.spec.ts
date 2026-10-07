@@ -20,7 +20,11 @@
  */
 import type { Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
-import { closeTerminalImePaneArena, openTerminalImePaneArena } from './terminal-ime-pane-arena'
+import {
+  closeTerminalImePaneArena,
+  openTerminalImePaneArena,
+  useTerminalImePreeditOverlay
+} from './terminal-ime-pane-arena'
 import { setImeComposition } from './terminal-ime-cdp-composition'
 import {
   sampleMidlinePreeditOcclusion,
@@ -58,6 +62,8 @@ function describeSpan(sample: MidlinePreeditOcclusionSample): string {
 test.describe('Terminal end-of-row Korean preedit cell span', () => {
   test('keeps the preedit caret inside the final terminal cell', async ({ orcaPage }, testInfo) => {
     const arena = await openTerminalImePaneArena(orcaPage)
+    // Asserts on the overlay itself; the in-grid default is covered by terminal-ime-grid-preedit.spec.ts.
+    await useTerminalImePreeditOverlay(orcaPage)
     let completed = false
     try {
       // CHA clamps to the last column; xterm's wrap-pending cursor is the final-cell shape the
@@ -127,6 +133,8 @@ test.describe('Terminal end-of-row Korean preedit cell span', () => {
     orcaPage
   }, testInfo) => {
     const arena = await openTerminalImePaneArena(orcaPage)
+    // Asserts on the overlay itself; the in-grid default is covered by terminal-ime-grid-preedit.spec.ts.
+    await useTerminalImePreeditOverlay(orcaPage)
     let completed = false
     try {
       // 안녕하세요 is ten cells, so the cursor lands at the end of the row with nothing after it —

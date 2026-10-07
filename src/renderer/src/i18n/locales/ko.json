@@ -18522,6 +18522,20 @@
           }
         }
       },
+      "TerminalRendering": {
+        "imePreeditInGrid": "IME 조합 중인 글자를 터미널 셀에 그리기",
+        "imePreeditInGridDescription": "입력기(한국어, 일본어, 중국어)로 조합 중인 글자를 커서 위치의 터미널 셀로 렌더링합니다. 끄면 떠 있는 오버레이를 사용합니다.",
+        "search": {
+          "ime": "입력기",
+          "inputMethod": "입력 방식",
+          "composition": "조합",
+          "preedit": "조합 중인 글자",
+          "korean": "한국어",
+          "japanese": "일본어",
+          "chinese": "중국어",
+          "overlay": "오버레이"
+        }
+      },
       "nativeChat": {
         "queueFollowUpsTitle": "후속 메시지 대기열에 추가",
         "queueFollowUpsCopy": "Agent가 작업하는 동안 보낸 메시지는 지금 보내기, 편집, 삭제할 수 있는 카드로 대기합니다. 이미지가 포함된 메시지는 바로 전송됩니다.",

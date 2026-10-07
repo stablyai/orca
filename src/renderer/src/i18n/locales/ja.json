@@ -18522,6 +18522,20 @@
           }
         }
       },
+      "TerminalRendering": {
+        "imePreeditInGrid": "IME の変換中テキストをターミナルのセルに描画",
+        "imePreeditInGridDescription": "入力メソッド（韓国語、日本語、中国語）で変換中のテキストを、カーソル位置のターミナルのセルとして描画します。オフにするとフローティングオーバーレイを使用します。",
+        "search": {
+          "ime": "IME",
+          "inputMethod": "入力メソッド",
+          "composition": "変換",
+          "preedit": "未確定文字",
+          "korean": "韓国語",
+          "japanese": "日本語",
+          "chinese": "中国語",
+          "overlay": "オーバーレイ"
+        }
+      },
       "nativeChat": {
         "queueFollowUpsTitle": "フォローアップをキューに入れる",
         "queueFollowUpsCopy": "Agent の作業中に送信したメッセージは、今すぐ送信・編集・削除できるカードとして待機します。画像付きのメッセージはすぐに送信されます。",

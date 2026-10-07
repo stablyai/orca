@@ -1,6 +1,7 @@
 import type { IDisposable, Terminal } from '@xterm/xterm'
 import { hasTerminalComposerPlaceholder } from '../../../../shared/terminal-composer-draft'
 import { readTerminalCursorLineContext } from '../../../../shared/terminal-cursor-line-context'
+import { setTerminalImePreeditHidesTail } from '@/lib/pane-manager/terminal-ime-grid-preedit'
 import {
   XTERM_COMPOSITION_SESSION_END_EVENT,
   XTERM_COMPOSITION_SESSION_START_EVENT
@@ -30,6 +31,8 @@ export function installTerminalImeComposerPlaceholderMask(terminal: Terminal): I
       activeSessionId !== null &&
       hasTerminalComposerPlaceholder(readTerminalCursorLineContext(terminal, terminal.rows))
     element.classList.toggle(TERMINAL_IME_COMPOSER_PLACEHOLDER_CLASS, ownsPlaceholder)
+    // The class hides the overlay's copy of the tail; the in-grid preedit hides the cells.
+    setTerminalImePreeditHidesTail(terminal, ownsPlaceholder)
   }
   const handleSessionStart = (event: Event): void => {
     const id = compositionSessionId(event)
@@ -67,6 +70,7 @@ export function installTerminalImeComposerPlaceholderMask(terminal: Terminal): I
     dispose: () => {
       activeSessionId = null
       element.classList.remove(TERMINAL_IME_COMPOSER_PLACEHOLDER_CLASS)
+      setTerminalImePreeditHidesTail(terminal, false)
       element.removeEventListener(XTERM_COMPOSITION_SESSION_START_EVENT, handleSessionStart)
       element.removeEventListener(XTERM_COMPOSITION_SESSION_END_EVENT, handleSessionEnd)
       element.removeEventListener('blur', handleBlur, true)

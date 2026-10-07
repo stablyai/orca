@@ -18623,6 +18623,20 @@
           }
         }
       },
+      "TerminalRendering": {
+        "imePreeditInGrid": "Afficher la composition IME dans les cellules du terminal",
+        "imePreeditInGridDescription": "Affiche le texte en cours de composition avec une méthode de saisie (coréen, japonais, chinois) sous forme de cellules du terminal au curseur. Désactivez pour utiliser la superposition flottante.",
+        "search": {
+          "ime": "ime",
+          "inputMethod": "méthode de saisie",
+          "composition": "composition",
+          "preedit": "pré-édition",
+          "korean": "coréen",
+          "japanese": "japonais",
+          "chinese": "chinois",
+          "overlay": "superposition"
+        }
+      },
       "nativeChat": {
         "queueFollowUpsTitle": "Mettre les messages en file d’attente",
         "queueFollowUpsCopy": "Les messages envoyés pendant que l'agent travaille attendent sous forme de cartes que vous pouvez envoyer maintenant, modifier ou supprimer. Les messages avec des images sont envoyés immédiatement.",

@@ -114,10 +114,38 @@ index 4977ad741065e26bbfd35bc50e7558a033b13340..f55805ddc3f266415f7f8e81e5b8c318
  
      const powerlineGlyph = chars.length === 1 && isPowerlineGlyph(chars.charCodeAt(0));
 diff --git a/src/WebglRenderer.ts b/src/WebglRenderer.ts
-index a951efba5c75e82735cd39b6b22c4b5d5fad5928..e7f80c3a8c14dd65a16a97f1d17e3da1d65ed8bf 100644
+index a951efba5c75e82735cd39b6b22c4b5d5fad5928..8afe44b7f81d5ec0cfabc756c8ef9286062852d0 100644
 --- a/src/WebglRenderer.ts
 +++ b/src/WebglRenderer.ts
-@@ -386,7 +386,10 @@ export class WebglRenderer extends Disposable implements IRenderer {
+@@ -32,6 +32,18 @@ const enum Constants {
+   MERGE_RETRY_LIMIT = 32
+ }
+ 
++/**
++ * The in-grid IME preedit a patched core exposes (browser/Types `IImePreedit`). Declared here
++ * because the addon builds against stock core types; an unpatched core simply never sets it.
++ */
++interface IImePreeditTerminal {
++  readonly imePreedit?: {
++    readonly row: number;
++    readonly cursorX: number;
++    composeLine(line: IBufferLine): IBufferLine;
++  };
++}
++
+ export class WebglRenderer extends Disposable implements IRenderer {
+   private _renderLayers: IRenderLayer[];
+   private _cursorBlinkStateManager: MutableDisposable<CursorBlinkStateManager> = this._register(new MutableDisposable());
+@@ -55,7 +67,7 @@ export class WebglRenderer extends Disposable implements IRenderer {
+ 
+   public readonly dimensions: IRenderDimensions;
+ 
+-  private _core: ITerminal;
++  private _core: ITerminal & IImePreeditTerminal;
+   private _isAttached: boolean;
+   private _contextRestorationTimeout: number | undefined;
+ 
+@@ -386,7 +398,10 @@ export class WebglRenderer extends Disposable implements IRenderer {
      // page's version, so re-run the update and force a full texture rebind.
      let merged = false;
      let mergeRetries = 0;
@@ -129,3 +157,40 @@ index a951efba5c75e82735cd39b6b22c4b5d5fad5928..e7f80c3a8c14dd65a16a97f1d17e3da1
        merged = true;
        this._clearModel(true);
        this._updateModel(0, this._terminal.rows - 1);
+@@ -442,10 +457,17 @@ export class WebglRenderer extends Disposable implements IRenderer {
+     end = clamp(end, terminal.rows - 1, 0);
+     const cursorStyle = this._coreService.decPrivateModes.cursorStyle ?? terminal.options.cursorStyle ?? 'block';
+ 
+-    const cursorY = this._terminal.buffer.active.baseY + this._terminal.buffer.active.cursorY;
++    // An in-grid IME preedit is drawn into its row, and the cursor moves to its caret.
++    const preedit = this._core.imePreedit;
++    const cursorY = preedit?.row ?? this._terminal.buffer.active.baseY + this._terminal.buffer.active.cursorY;
+     const viewportRelativeCursorY = cursorY - terminal.buffer.ydisp;
+     // in case cursor.x == cols adjust visual cursor to cols - 1
+-    const cursorX = Math.min(this._terminal.buffer.active.cursorX, terminal.cols - 1);
++    const cursorX = preedit?.cursorX ?? Math.min(this._terminal.buffer.active.cursorX, terminal.cols - 1);
++    // The cursor model is rebuilt on every pass, so a pass must include the row that draws it.
++    if (preedit && viewportRelativeCursorY >= 0 && viewportRelativeCursorY < terminal.rows) {
++      start = Math.min(start, viewportRelativeCursorY);
++      end = Math.max(end, viewportRelativeCursorY);
++    }
+     let lastCursorX = -1;
+     const isCursorVisible =
+       this._coreService.isCursorInitialized &&
+@@ -467,12 +489,14 @@ export class WebglRenderer extends Disposable implements IRenderer {
+         this._setRowBlinkState(y, false);
+         continue;
+       }
+-      line = bufferLine;
++      const isPreeditRow = preedit?.row === row;
++      line = isPreeditRow ? preedit.composeLine(bufferLine) : bufferLine;
+       let rowHasBlinkingCells = false;
+       this._model.lineLengths[y] = 0;
+       isCursorRow = cursorY === row;
+       skipJoinedCheckUntilX = 0;
+-      joinedRanges = this._characterJoinerService.getJoinedCharacters(row);
++      // Joins are computed from the buffer, whose columns a composed-in preedit has shifted.
++      joinedRanges = isPreeditRow ? [] : this._characterJoinerService.getJoinedCharacters(row);
+       for (x = 0; x < terminal.cols; x++) {
+         lastBg = this._cellColorResolver.result.bg;
+         line.loadCell(x, cell);
