@@ -243,6 +243,51 @@ describe('a PDF the phone hands to the OS', () => {
     expect(doubles.shared).toEqual([])
   })
 
+  it('keeps an unmounted attempt from deleting a remounted same-URI cache', async () => {
+    doubles.shared.length = 0
+    doubles.deleted.length = 0
+    doubles.writes.clear()
+    const resolvers: ((response: RpcResponse) => void)[] = []
+    const client = {
+      sendRequest: vi.fn(() => new Promise<RpcResponse>((resolve) => resolvers.push(resolve)))
+    }
+    const firstTree = render({ client })
+
+    await act(async () => {
+      openButton(firstTree)?.props.onPress()
+      resolvers[0]?.(ok({ contentBase64: 'T0xE', bytesRead: 3, eof: false }))
+      await Promise.resolve()
+    })
+    const uri = `file:///cache/${mediaHandoffCacheName('wt-1', 'docs/report.pdf')}`
+    expect(doubles.writes.get(uri)).toEqual([
+      { content: 'T0xE', options: { encoding: 'base64', append: true } }
+    ])
+    act(() => firstTree.unmount())
+
+    const secondTree = render({ client })
+    await act(async () => {
+      openButton(secondTree)?.props.onPress()
+      await Promise.resolve()
+    })
+    // The old request resolves after the remount. Its cancelled attempt must not discard the
+    // cache now owned by the second component.
+    await act(async () => {
+      resolvers[1]?.(ok({ contentBase64: 'T0xE', bytesRead: 3, eof: true }))
+      await Promise.resolve()
+    })
+    await act(async () => {
+      resolvers[2]?.(ok({ contentBase64: 'TkVX', bytesRead: 3, eof: true }))
+      await Promise.resolve()
+    })
+
+    expect(doubles.deleted).toEqual([uri])
+    expect(doubles.writes.get(uri)).toEqual([
+      { content: 'T0xE', options: { encoding: 'base64', append: true } },
+      { content: 'TkVX', options: { encoding: 'base64', append: true } }
+    ])
+    expect(doubles.shared).toHaveLength(1)
+  })
+
   it('shows the refusal copy and keeps the Open button after a failed read', async () => {
     doubles.shared.length = 0
     const client = clientWithResponses([fail('File is binary', 'binary_file')])
