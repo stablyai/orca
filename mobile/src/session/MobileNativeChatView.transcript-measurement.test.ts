@@ -22,8 +22,8 @@ vi.mock('react-native', async () => {
         const { onContentSizeChange } = props
         React.useImperativeHandle(ref, () => ({ scrollToOffset }), [])
         React.useEffect(() => {
-          if (measuredHeight.value !== null) {
-            onContentSizeChange?.(320, measuredHeight.value)
+          if (measuredHeight.value !== null && typeof onContentSizeChange === 'function') {
+            onContentSizeChange(320, measuredHeight.value)
           }
         }, [onContentSizeChange])
         return React.createElement('FlatList', { ...props, testID: 'mobile-chat-list' })
