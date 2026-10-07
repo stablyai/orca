@@ -22159,6 +22159,106 @@
         "Collect cross-platform and provider soak evidence with no weakened identity, transaction or bounded-work assertions."
       ],
       "demotionRule": "Keep experimental until soak and platform evidence; investigate failures without weakening ownership, late recovery, or zero-write retry evidence."
+    },
+    {
+      "id": "terminal.macos-tcc-update-identity",
+      "title": "Protected terminal reads survive macOS app-bundle replacement",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-runtime",
+      "layer": "daemon-native-signing-and-provider-contract",
+      "surfaces": [
+        "packaged macOS daemon launch",
+        "signed bundle retirement",
+        "Full Disk Access status"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime", "mobile"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["daemon"],
+      "coverageNotes": "Signed arm64 macOS evidence; other platforms and hosts keep the existing launcher. See docs/reference/macos-daemon-tcc-attribution.md.",
+      "motivatingLinks": ["https://github.com/stablyai/orca/issues/13921"],
+      "invariant": "A packaged macOS daemon runs from a verified signed bundle copy the updater never touches, and the fork fallback still fits the startup gate. Unverified observations never delete code or replace live sessions.",
+      "oracle": "Deterministic launch, fallback-deadline, retirement and status tests, plus the signed launcher validation recorded in #25848.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/daemon",
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/daemon/macos-daemon-bundle.test.ts src/main/daemon/macos-daemon-launchd.test.ts src/main/daemon/daemon-init-macos-stable-launch-fallback.test.ts src/main/daemon/macos-daemon-job-state.test.ts src/main/daemon/macos-daemon-bundle-retirement.test.ts src/main/daemon/daemon-full-disk-access-status.test.ts src/main/daemon/daemon-pty-adapter-full-disk-access.test.ts config/scripts/macos-folder-usage-descriptions.test.mjs src/renderer/src/components/settings/DeveloperPermissionsPane.test.tsx"
+      ],
+      "testFiles": [
+        "src/main/daemon/macos-daemon-bundle.test.ts",
+        "src/main/daemon/macos-daemon-launchd.test.ts",
+        "src/main/daemon/daemon-init-macos-stable-launch-fallback.test.ts",
+        "src/main/daemon/macos-daemon-job-state.test.ts",
+        "src/main/daemon/macos-daemon-bundle-retirement.test.ts",
+        "src/main/daemon/daemon-full-disk-access-status.test.ts",
+        "src/main/daemon/daemon-pty-adapter-full-disk-access.test.ts",
+        "config/scripts/macos-folder-usage-descriptions.test.mjs",
+        "src/renderer/src/components/settings/DeveloperPermissionsPane.test.tsx"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/daemon/macos-daemon-launchd.test.ts",
+          "assertions": [
+            "rejects a foreign endpoint and stops only the job it created",
+            "does not submit a job whose own readiness wait would overrun the deadline"
+          ]
+        },
+        {
+          "file": "src/main/daemon/daemon-init-macos-stable-launch-fallback.test.ts",
+          "assertions": [
+            "hands off to the fork early enough for its readiness wait and adapter to fit the gate"
+          ]
+        },
+        {
+          "file": "src/main/daemon/macos-daemon-bundle-retirement.test.ts",
+          "assertions": [
+            "retires a never-submitted copy once its producer exited and its job is absent"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-10-06",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/daemon",
+          "result": "failed",
+          "durationSeconds": 24.35,
+          "summary": "2417 of 2434 passed (15 skipped). The 2 failures are real-PTY #13767 repro tests that fail identically on the merge-base main checkout on this Mac."
+        },
+        {
+          "date": "2026-10-06",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/daemon/macos-daemon-bundle.test.ts src/main/daemon/macos-daemon-launchd.test.ts src/main/daemon/daemon-init-macos-stable-launch-fallback.test.ts src/main/daemon/macos-daemon-job-state.test.ts src/main/daemon/macos-daemon-bundle-retirement.test.ts src/main/daemon/daemon-full-disk-access-status.test.ts src/main/daemon/daemon-pty-adapter-full-disk-access.test.ts config/scripts/macos-folder-usage-descriptions.test.mjs src/renderer/src/components/settings/DeveloperPermissionsPane.test.tsx",
+          "result": "passed",
+          "durationSeconds": 6.06,
+          "summary": "All 71 focused launch, fallback-deadline, retirement, status and packaging tests passed."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 60,
+        "scope": "Deterministic focused tests."
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Local deterministic tests only."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Signed native experiment reproduced the update-gap denial and its absence under the stable copy (#25848)."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Adoption skips copying; a new GUI daemon clones once and verifies before bootstrap; retirement runs once per launch in the background."
+      },
+      "knownGaps": [
+        "x64, older macOS, real ShipIt relaunch, notarized release and non-APFS copies are untested."
+      ],
+      "promotionCriteria": [
+        "Signed release journeys on supported macOS versions with soak history."
+      ],
+      "demotionRule": "Keep experimental until release and soak evidence; retain code on unexplained inspection failures."
     }
   ]
 }
