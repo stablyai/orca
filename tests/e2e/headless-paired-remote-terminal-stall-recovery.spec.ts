@@ -145,10 +145,13 @@ test('recovers an ACK-starved stream from an isolated headless Orca host @headfu
       }
       gate.hold([target])
     }, terminal)
-    const textarea = client.page.locator('.xterm-helper-textarea:visible').first()
-    await textarea.focus()
-    await client.page.keyboard.type('GO')
-    await client.page.keyboard.press('Enter')
+    // Start the fault without arming the client's command-response recovery.
+    await callRuntime(client.page, 'terminal.send', {
+      terminal,
+      text: 'GO',
+      enter: true,
+      client: { id: 'headless-stalled-stream-e2e', type: 'desktop' }
+    })
     await expect
       .poll(
         () =>

@@ -31,7 +31,6 @@ type TitleProbeSample = {
 
 type BrowserTitleProbe = TitleProbeSample & {
   lastTitles: Record<string, string | null>
-  responseCount: number
   subscription: null | { unsubscribe: () => void }
   unsubscribeStore: null | (() => void)
 }
@@ -56,7 +55,18 @@ export async function verifyPairedTerminalTitleFanout(
   const tokens = targets.map((_, index) => `TITLE_FANOUT_${index}_${Date.now()}`)
   await installTitleProbe(page, targets)
   try {
-    await expect.poll(() => readProbeResponseCount(page), { timeout: 30_000 }).toBeGreaterThan(0)
+    // The initial inventory can arrive in several batches before title measurement starts.
+    await expect
+      .poll(
+        async () => {
+          const sample = await readTitleProbe(page)
+          return targets.every((target) =>
+            sample.transportEvents.some((event) => event.worktreeId === target.worktreeId)
+          )
+        },
+        { timeout: 30_000 }
+      )
+      .toBe(true)
     await resetTitleProbe(page, targets)
 
     await Promise.all(
@@ -107,7 +117,6 @@ async function installTitleProbe(page: Page, targets: TitleTarget[]): Promise<vo
         state.tabsByWorktree[target.worktreeId]?.find((tab) => tab.id === target.tabId)?.title ??
         null
       const probe = {
-        responseCount: 0,
         storeChanges: [] as TitleStoreChange[],
         transportEvents: [] as TitleTransportEvent[],
         lastTitles: Object.fromEntries(
@@ -130,7 +139,6 @@ async function installTitleProbe(page: Page, targets: TitleTarget[]): Promise<vo
         { selector: environmentId, method: 'session.tabs.subscribeAll', params: {} },
         {
           onResponse: (response) => {
-            probe.responseCount += 1
             if (!response.ok) {
               return
             }
@@ -193,18 +201,6 @@ async function resetTitleProbe(page: Page, targets: TitleTarget[]): Promise<void
         null
     }
   }, targets)
-}
-
-async function readProbeResponseCount(page: Page): Promise<number> {
-  return page.evaluate(() => {
-    const probe = (
-      globalThis as typeof globalThis & { __pairedTitleFanoutProbe?: BrowserTitleProbe }
-    ).__pairedTitleFanoutProbe
-    if (!probe) {
-      throw new Error('Paired title fanout probe is unavailable')
-    }
-    return probe.responseCount
-  })
 }
 
 async function readTitleProbe(page: Page): Promise<TitleProbeSample> {

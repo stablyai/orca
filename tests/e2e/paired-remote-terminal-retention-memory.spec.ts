@@ -5,6 +5,9 @@ import {
 } from './helpers/paired-electron-client'
 import { runPairedTerminalParkingOracle } from './helpers/paired-terminal-parking-oracle'
 
+// Heap comparisons need fresh values rather than Chromium's cached estimates.
+test.use({ orcaAppExtraArgs: ['--enable-precise-memory-info'] })
+
 test('ordinary-parks paired terminals and restores authoritative host scrollback @headful', async ({
   electronApp,
   orcaPage

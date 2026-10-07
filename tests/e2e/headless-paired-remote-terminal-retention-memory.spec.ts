@@ -8,7 +8,9 @@ test('ordinary-parks paired terminals against an isolated headless Orca host', a
   testRepoPath
 }) => {
   test.setTimeout(240_000)
-  const host = await launchHeadlessPairedRuntimeHost()
+  const host = await launchHeadlessPairedRuntimeHost({
+    extraArgs: ['--enable-precise-memory-info']
+  })
   let client: PairedWebClient | null = null
   try {
     await host.client.call('repo.add', { path: testRepoPath, kind: 'git' })
