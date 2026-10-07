@@ -8,6 +8,7 @@ import type {
   RuntimeRpcResponse
 } from '../../shared/runtime-rpc-envelope'
 import type { RuntimeStatus } from '../../shared/runtime-types'
+import { isRuntimeHostStatusBlocked } from '../../shared/runtime-host-status'
 import {
   subscribeRemoteRuntimeRequest,
   type RemoteRuntimeSubscription
@@ -61,6 +62,20 @@ export async function getRuntimeEnvironmentStatus(
     withTailscaleHintForResponse(response, getPreferredPairingOffer(environment).endpoint),
     environment.id
   )
+}
+
+/** Probe live placement state, retrying once when the first status attempt is transient. */
+export async function getRuntimeEnvironmentStatusForBrowserPlacement(
+  userDataPath: string,
+  selector: string
+): Promise<RuntimeRpcResponse<RuntimeStatus>> {
+  const response = await getRuntimeEnvironmentStatus(userDataPath, selector, undefined, {
+    observeOnly: true
+  })
+  if (response.ok || isRuntimeHostStatusBlocked(response)) {
+    return response
+  }
+  return getRuntimeEnvironmentStatus(userDataPath, selector, undefined, { reconnect: true })
 }
 
 export async function callRuntimeEnvironment(
