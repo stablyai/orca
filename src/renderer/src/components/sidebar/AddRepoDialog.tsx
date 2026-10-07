@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react'
+import React, { useCallback, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { useRemoteRepo } from './AddRepoSteps'
 import { useCreateRepo } from './useCreateRepo'
@@ -19,6 +19,8 @@ import {
   type AddRepoDialogHostedController
 } from './use-add-repo-hosted-controller'
 import { routeAddRepoBrowse } from './add-repo-browse-authority'
+import { shouldReviewNestedRepoScan } from './nested-repo-scan-review'
+import type { NestedRepoScanResult } from '../../../../shared/project-group-types'
 
 export default React.memo(function AddRepoDialog({
   hosted
@@ -42,6 +44,11 @@ export default React.memo(function AddRepoDialog({
   const { closeModal, closeForFolderHandoff, finishProjectAdd, handleOpenSshSettings } =
     useAddRepoHostedController(hosted)
   const [step, setStep] = useState<AddRepoDialogStep>('add')
+  const groupImportIntent = useRef(false)
+  const reviewScan = useCallback(
+    (scan: NestedRepoScanResult) => shouldReviewNestedRepoScan(scan, groupImportIntent.current),
+    []
+  )
   const [isAdding, setIsAdding] = useState(false)
   const [addProjectBusyLabel, setAddProjectBusyLabel] = useState<string | null>(null)
   const completeGitRepoAdd = useCompleteGitRepoAdd({
@@ -108,7 +115,8 @@ export default React.memo(function AddRepoDialog({
     (repoId, executionHostId) => completeGitRepoAdd(repoId, 'ssh_remote_path', executionHostId),
     scanNestedRepos,
     showRemoteNestedRepoReview,
-    trackRemoteNestedScanResult
+    trackRemoteNestedScanResult,
+    reviewScan
   )
   const {
     createName,
@@ -183,6 +191,7 @@ export default React.memo(function AddRepoDialog({
     setActiveNestedScanId,
     setNestedScanInProgress,
     showNestedRepoReview,
+    reviewScan,
     onGitRepoReady: completeGitRepoAdd,
     setIsAdding,
     setAddProjectBusyLabel
@@ -204,6 +213,7 @@ export default React.memo(function AddRepoDialog({
     setActiveNestedScanId,
     setNestedScanInProgress,
     showNestedRepoReview,
+    reviewScan,
     onGitRepoReady: completeGitRepoAdd,
     setAddProjectBusyLabel
   })
@@ -213,6 +223,7 @@ export default React.memo(function AddRepoDialog({
     // or closing the dialog doesn't leave a clone running on disk.
     void window.api.repos.cloneAbort()
     resetLocalFolderFlow()
+    groupImportIntent.current = false
     setStep('add')
     setIsAdding(false)
     setAddProjectBusyLabel(null)
@@ -234,29 +245,11 @@ export default React.memo(function AddRepoDialog({
     resetCreateState
   ])
 
-  const resetHostScopedState = useCallback(() => {
-    setIsAdding(false)
-    setAddProjectBusyLabel(null)
-    resetLocalFolderFlow()
-    resetServerPathFlow()
-    resetCloneFlow()
-    resetCreateDefaultState()
-    resetCreateState()
-    resetRemoteState()
-  }, [
-    resetCloneFlow,
-    resetCreateDefaultState,
-    resetCreateState,
-    resetRemoteState,
-    resetLocalFolderFlow,
-    resetServerPathFlow
-  ])
-
   useAddRepoHostChangeReset({
     isOpen,
     selectedHostId: hostSelection.selectedHostId,
     onResetClosed: resetState,
-    onResetHostScopedState: resetHostScopedState
+    onResetHostScopedState: resetState
   })
 
   const handleBack = useCallback(() => {
@@ -278,6 +271,15 @@ export default React.memo(function AddRepoDialog({
     },
     [closeModal, isAdding, resetState, step, trackNestedBackAction]
   )
+
+  const browse = (group = false): void => {
+    groupImportIntent.current = group
+    routeAddRepoBrowse(hostSelection.selectedParsedHost, {
+      browseLocal: () => void handleBrowse(),
+      browseRuntime: () => setStep('server-path'),
+      browseSsh: (targetId) => void handleOpenRemoteStep(targetId)
+    })
+  }
 
   return (
     <AddRepoDialogChrome
@@ -334,13 +336,8 @@ export default React.memo(function AddRepoDialog({
         createRuntimeParentStatus={createRuntimeParentStatus}
         createParentDefaultPending={createParentDefaultPending}
         manualCreateParentEntry={isRuntimeEnvironmentActive || selectedHostKind === 'ssh'}
-        onBrowse={() =>
-          routeAddRepoBrowse(hostSelection.selectedParsedHost, {
-            browseLocal: () => void handleBrowse(),
-            browseRuntime: () => setStep('server-path'),
-            browseSsh: (targetId) => void handleOpenRemoteStep(targetId)
-          })
-        }
+        onBrowse={() => browse()}
+        onImportGroup={() => browse(true)}
         onOpenCloneStep={() => {
           if (!hostSelection.selectedHostId) {
             return

@@ -12,6 +12,7 @@ const openModal = vi.fn()
 const updateWorktreeMeta = vi.fn()
 
 let worktreeCardProperties: WorktreeCardProperty[] = []
+let newCardStyle = false
 const WORKTREE_CARD_IMPORT_TIMEOUT_MS = 15_000
 
 vi.mock('@/store', () => ({
@@ -28,7 +29,7 @@ vi.mock('@/store', () => ({
       openModal,
       projectGroups: [],
       remoteBranchConflictByWorktreeId: {},
-      settings: null,
+      settings: { experimentalNewWorktreeCardStyle: newCardStyle },
       sshConnectionStates: new Map(),
       sshTargetLabels: new Map(),
       updateWorktreeMeta,
@@ -100,6 +101,7 @@ describe('WorktreeCard lineage indicators', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     worktreeCardProperties = []
+    newCardStyle = false
   })
 
   it(
@@ -116,6 +118,60 @@ describe('WorktreeCard lineage indicators', () => {
       expect(markup).not.toContain('from master')
       expect(markup).not.toContain('Missing parent')
       expect(markup).toContain('overflow-hidden')
+    },
+    WORKTREE_CARD_IMPORT_TIMEOUT_MS
+  )
+
+  it(
+    'prefixes a folder child title with its source repo and omits the metadata line',
+    async () => {
+      const { default: WorktreeCard } = await import('./WorktreeCard')
+      const markup = renderToStaticMarkup(
+        <WorktreeCard
+          worktree={makeWorktree()}
+          repo={makeRepo()}
+          isActive={false}
+          hideRepoBadge
+          repoOriginLabel="orca"
+        />
+      )
+      expect(markup).toContain('orca/')
+      expect(markup).not.toContain('data-worktree-card-meta-row=""')
+      expect(markup).not.toContain('>orca</span>')
+      expect(markup).not.toContain('>child-workspace</span>')
+    },
+    WORKTREE_CARD_IMPORT_TIMEOUT_MS
+  )
+
+  it(
+    'does not reserve an empty metadata row for new-style attached children with branch enabled',
+    async () => {
+      newCardStyle = true
+      worktreeCardProperties = ['branch']
+      const { default: WorktreeCard } = await import('./WorktreeCard')
+      const markup = renderToStaticMarkup(
+        <WorktreeCard
+          worktree={makeWorktree()}
+          repo={makeRepo()}
+          isActive={false}
+          hideRepoBadge
+          repoOriginLabel="orca"
+        />
+      )
+      expect(markup).toContain('orca/')
+      expect(markup).not.toContain('data-worktree-card-meta-row=""')
+    },
+    WORKTREE_CARD_IMPORT_TIMEOUT_MS
+  )
+
+  it(
+    'keeps branch metadata on ordinary worktree cards',
+    async () => {
+      const { default: WorktreeCard } = await import('./WorktreeCard')
+      const markup = renderToStaticMarkup(
+        <WorktreeCard worktree={makeWorktree()} repo={makeRepo()} isActive={false} hideRepoBadge />
+      )
+      expect(markup).toContain('>child-workspace</span>')
     },
     WORKTREE_CARD_IMPORT_TIMEOUT_MS
   )

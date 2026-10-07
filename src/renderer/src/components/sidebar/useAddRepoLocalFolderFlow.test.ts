@@ -83,6 +83,64 @@ describe('useAddRepoLocalFolderFlow', () => {
     onGitRepoReady.mockResolvedValue(undefined)
   })
 
+  it.each([false, true])('gates Git-root review on group intent=%s', async (groupIntent) => {
+    pickFolders.mockResolvedValue(['/projects/repo'])
+    const { useAddRepoLocalFolderFlow } = await import('./useAddRepoLocalFolderFlow')
+    const { shouldReviewNestedRepoScan } = await import('./nested-repo-scan-review')
+    const { handleBrowse } = useAddRepoLocalFolderFlow({
+      isOpen: true,
+      droppedLocalPath: '',
+      activeRuntimeEnvironmentId: null,
+      addRepoPath,
+      closeModal,
+      fetchWorktrees,
+      scanNestedRepos,
+      setActiveNestedScanId,
+      setNestedScanInProgress,
+      showNestedRepoReview,
+      onGitRepoReady,
+      setIsAdding,
+      setAddProjectBusyLabel,
+      reviewScan: (scan) => shouldReviewNestedRepoScan(scan, groupIntent)
+    })
+    await handleBrowse()
+    expect(showNestedRepoReview).toHaveBeenCalledTimes(groupIntent ? 1 : 0)
+    expect(addRepoPath).toHaveBeenCalledTimes(groupIntent ? 0 : 1)
+  })
+
+  it('reviews fully ignored folders without opening them automatically', async () => {
+    pickFolders.mockResolvedValue(['/projects/parent'])
+    scanNestedRepos.mockResolvedValue(
+      makeScan('/projects/parent', {
+        selectedPathKind: 'non_git_folder',
+        diagnostics: { counts: { gitignore: 1 }, details: [], omittedDetails: 0 }
+      })
+    )
+    const { useAddRepoLocalFolderFlow } = await import('./useAddRepoLocalFolderFlow')
+    const { handleBrowse } = useAddRepoLocalFolderFlow({
+      isOpen: true,
+      droppedLocalPath: '',
+      activeRuntimeEnvironmentId: null,
+      addRepoPath,
+      closeModal,
+      fetchWorktrees,
+      scanNestedRepos,
+      setActiveNestedScanId,
+      setNestedScanInProgress,
+      showNestedRepoReview,
+      onGitRepoReady,
+      setIsAdding,
+      setAddProjectBusyLabel
+    })
+    await handleBrowse()
+    expect(showNestedRepoReview).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scan: expect.objectContaining({ repos: [], diagnostics: expect.any(Object) })
+      })
+    )
+    expect(addRepoPath).not.toHaveBeenCalled()
+  })
+
   it('adds every selected local folder and completes one default-checkout handoff', async () => {
     pickFolders.mockResolvedValue(['/projects/alpha', '/projects/beta'])
     const { useAddRepoLocalFolderFlow } = await import('./useAddRepoLocalFolderFlow')

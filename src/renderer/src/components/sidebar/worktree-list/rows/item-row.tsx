@@ -3,6 +3,7 @@ import { cn } from '@/lib/utils'
 import type { AppState } from '@/store/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { Worktree } from '../../../../../../shared/worktree/types'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import {
   composeWorktreeHostIdentity,
   getWorktreeHostIdentity
@@ -213,6 +214,11 @@ export function renderWorktreeItemRow(
         onCardDragStart={ctx.onCardDragStart}
         onCardDragEnd={ctx.onCardDragEnd}
         hideRepoBadge={ctx.groupBy === 'repo'}
+        repoOriginLabel={
+          parseWorkspaceKey(itemRow.sectionKey)?.type === 'folder'
+            ? itemRow.repo?.displayName
+            : undefined
+        }
         // Why: pinned worktrees mix repos in one section, so only it needs the leading repo identity chip.
         hostContextLabel={itemRow.hostContextLabel}
         inPinnedSection={itemRow.sectionKey === PINNED_GROUP_KEY}

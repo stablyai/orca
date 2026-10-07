@@ -15,16 +15,13 @@ import {
   Copy,
   Bell,
   BellOff,
-  CircleX,
   Pencil,
   Pin,
   PinOff,
   Trash2,
   Unlink,
-  Workflow,
   FolderInput,
-  FolderPlus,
-  FolderTree
+  FolderPlus
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { WorktreeOpenInSubMenu } from './WorktreeOpenInMenu'
@@ -36,10 +33,9 @@ import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import type { WorktreeContextMenuModel } from './use-worktree-context-menu-model'
 import { WorktreeStatusMenuItems } from './WorktreeStatusMenuItems'
 import { WorktreeContextMenuOverlays } from './WorktreeContextMenuOverlays'
+import { WorktreeParentMenuItems } from './WorktreeParentMenuItems'
 import {
   WORKTREE_CONTEXT_MENU_SCOPE_ATTR,
-  getWorktreeParentPickerLabel,
-  isWorktreeParentPickerDisabled,
   shouldIgnoreNestedWorktreeContextMenuScope,
   shouldRevealWorktreeDeveloperMenu,
   shouldUseNativeContextMenu
@@ -58,7 +54,6 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
     deletingContext,
     deletingSubtree,
     developerMenuRevealed,
-    eligibleParentCount,
     effectiveSelectedWorktrees,
     folderWorkspaceId,
     handleAssignWorkspaceStatus,
@@ -69,16 +64,12 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
     handleCreateGroupFromRepo,
     handleDelete,
     handleMoveProjectToGroup,
-    handleOpenParent,
-    handleOpenParentPicker,
     handleRemoveParentLink,
-    handleRemoveProjectFromGroup,
     handleRename,
     handleSleepSubtree,
     handleTogglePin,
     handleToggleRead,
     hasAnyContextLineage,
-    hasParentLink,
     isDeleting,
     isMultiContext,
     lineageDescendantCount,
@@ -97,7 +88,6 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
     sleepableWorktrees,
     subtreeSleepableWorktrees,
     suppressOpeningPointerEvent,
-    validParentWorktreeId,
     worktree,
     workspaceStatuses
   } = model
@@ -241,48 +231,9 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
                       </DropdownMenuSubContent>
                     </DropdownMenuSub>
                   ) : null}
-                  {repo.projectGroupId ? (
-                    <DropdownMenuItem onSelect={handleRemoveProjectFromGroup} disabled={isDeleting}>
-                      <CircleX className="size-3.5" />
-                      {translate(
-                        'auto.components.sidebar.WorktreeContextMenu.d35dfeae58',
-                        'Remove from group'
-                      )}
-                    </DropdownMenuItem>
-                  ) : null}
                 </>
               ) : null}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onSelect={handleOpenParentPicker}
-                disabled={isWorktreeParentPickerDisabled({ isDeleting, eligibleParentCount })}
-              >
-                <FolderTree className="size-3.5" />
-                {getWorktreeParentPickerLabel(validParentWorktreeId)}
-              </DropdownMenuItem>
-              {(validParentWorktreeId || hasParentLink) && (
-                <>
-                  {validParentWorktreeId && (
-                    <DropdownMenuItem onSelect={handleOpenParent} disabled={isDeleting}>
-                      <Workflow className="size-3.5" />
-                      {translate(
-                        'auto.components.sidebar.WorktreeContextMenu.8d9cd19d09',
-                        'Open Parent Worktree'
-                      )}
-                    </DropdownMenuItem>
-                  )}
-                  {hasParentLink && (
-                    <DropdownMenuItem onSelect={handleRemoveParentLink} disabled={isDeleting}>
-                      <Unlink className="size-3.5" />
-                      {translate(
-                        'auto.components.sidebar.WorktreeContextMenu.579b1a8e61',
-                        'Remove from Parent'
-                      )}
-                    </DropdownMenuItem>
-                  )}
-                  <DropdownMenuSeparator />
-                </>
-              )}
+              <WorktreeParentMenuItems model={model} />
             </>
           )}
           {isMultiContext && hasAnyContextLineage ? (

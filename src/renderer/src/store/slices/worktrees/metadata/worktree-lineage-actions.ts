@@ -8,6 +8,9 @@ import {
   setWorktreeLineageForRuntime
 } from './worktree-lineage-refresh'
 import { settingsForWorktreeOwner } from '../listing/worktree-owner-settings'
+import { getActiveRuntimeTarget } from '../../../../runtime/runtime-rpc-client'
+import { captureFolderParentContext } from '@/components/sidebar/folder-workspace-parent-candidates'
+import { withWorktreeParentMutation } from './worktree-parent-mutation-guard'
 
 // Why: this runs inside a catch, so letting the refresh reject would replace the failure it recovers from.
 async function refreshWorktreeLineageBestEffort(
@@ -51,45 +54,55 @@ export function createFetchWorktreeLineage(
   }
 }
 
+function createGuardedParentMutation(
+  set: WorktreeSliceSet,
+  get: WorktreeSliceGet,
+  errorLabel: string
+): WorktreeSlice['updateWorktreeLineage'] {
+  return async (worktreeId, args) => {
+    const state = get()
+    const ownerSettings = settingsForWorktreeOwner(state, worktreeId)
+    const target = getActiveRuntimeTarget(ownerSettings)
+    const contexts = Object.values(state.worktreesByRepo)
+      .flat()
+      .filter((row) => row.id === worktreeId)
+      .map((row) => captureFolderParentContext(state, row))
+      .filter(
+        (context) =>
+          context &&
+          context.runtimeEnvironmentId ===
+            (target.kind === 'environment' ? target.environmentId : null)
+      )
+    if (contexts.length > 1) {
+      throw new Error('Workspace identity is ambiguous.')
+    }
+    const key = contexts[0]?.mutationKey ?? JSON.stringify([target, worktreeId])
+    return withWorktreeParentMutation(key, async () => {
+      try {
+        applyWorktreeLineageUpdate(
+          set,
+          worktreeId,
+          await setWorktreeLineageForRuntime(ownerSettings, worktreeId, args)
+        )
+      } catch (error) {
+        console.error(errorLabel, error)
+        await refreshWorktreeLineageBestEffort(ownerSettings, set, get)
+        throw error
+      }
+    })
+  }
+}
+
 export function createUpdateWorktreeLineage(
   set: WorktreeSliceSet,
   get: WorktreeSliceGet
 ): WorktreeSlice['updateWorktreeLineage'] {
-  return async (worktreeId, args) => {
-    // Why: an unresolvable owner route (ambiguous or missing) rejects rather than skipping — this is a
-    // user-initiated action, and both callers toast the failure. Don't swallow it into a silent no-op.
-    const ownerSettings = settingsForWorktreeOwner(get(), worktreeId)
-    try {
-      applyWorktreeLineageUpdate(
-        set,
-        worktreeId,
-        await setWorktreeLineageForRuntime(ownerSettings, worktreeId, args)
-      )
-    } catch (err) {
-      console.error('Failed to update worktree lineage:', err)
-      await refreshWorktreeLineageBestEffort(ownerSettings, set, get)
-      throw err
-    }
-  }
+  return createGuardedParentMutation(set, get, 'Failed to update worktree lineage:')
 }
 
 export function createAssignWorktreeParent(
   set: WorktreeSliceSet,
   get: WorktreeSliceGet
 ): WorktreeSlice['assignWorktreeParent'] {
-  return async (worktreeId, args) => {
-    const ownerSettings = settingsForWorktreeOwner(get(), worktreeId)
-    try {
-      applyWorktreeLineageUpdate(
-        set,
-        worktreeId,
-        await setWorktreeLineageForRuntime(ownerSettings, worktreeId, args)
-      )
-    } catch (err) {
-      console.error('Failed to assign worktree parent:', err)
-      // Unlike the update path this rethrows, so the recovery refresh must not mask the original cause.
-      await refreshWorktreeLineageBestEffort(ownerSettings, set, get)
-      throw err
-    }
-  }
+  return createGuardedParentMutation(set, get, 'Failed to assign worktree parent:')
 }

@@ -37,6 +37,34 @@ function captureLineageAtRequestStart(
   }
 }
 
+export type LineageListResponse = {
+  lineage?: Record<string, WorktreeLineage>
+  workspaceLineage?: Record<string, WorkspaceLineage>
+}
+
+function isWrappedLineageResponse(
+  value: Record<string, WorktreeLineage> | LineageListResponse
+): value is LineageListResponse {
+  return Object.hasOwn(value, 'lineage') || Object.hasOwn(value, 'workspaceLineage')
+}
+
+export function normalizeLineageResponse(
+  value: Record<string, WorktreeLineage> | LineageListResponse
+) {
+  if (isWrappedLineageResponse(value)) {
+    return {
+      worktreeLineageById: value.lineage ?? {},
+      workspaceLineageByChildKey: value.workspaceLineage ?? {},
+      workspaceLineageAvailable: value.workspaceLineage != null
+    }
+  }
+  return {
+    worktreeLineageById: value,
+    workspaceLineageByChildKey: {},
+    workspaceLineageAvailable: false
+  }
+}
+
 export async function listWorktreeLineageForRuntime(
   settings: AppState['settings'],
   options: BackgroundRuntimeRefreshOptions = {}
@@ -45,34 +73,18 @@ export async function listWorktreeLineageForRuntime(
   workspaceLineageByChildKey: Readonly<Record<string, WorkspaceLineage>>
 }> {
   const target = getActiveRuntimeTarget(settings)
-  type LineageListResponse = {
-    lineage?: Record<string, WorktreeLineage>
-    workspaceLineage?: Record<string, WorkspaceLineage>
+  const response =
+    target.kind === 'local'
+      ? await window.api.worktrees.listLineage()
+      : await callRuntimeRpc<LineageListResponse>(target, 'worktree.lineageList', undefined, {
+          timeoutMs: 15_000,
+          reuseRecentCompatibilityFailure: options.reuseRecentCompatibilityFailure
+        })
+  const normalized = normalizeLineageResponse(response)
+  return {
+    worktreeLineageById: normalized.worktreeLineageById,
+    workspaceLineageByChildKey: normalized.workspaceLineageByChildKey
   }
-  const normalizeLineageResponse = (
-    value: Record<string, WorktreeLineage> | LineageListResponse
-  ) =>
-    Object.hasOwn(value, 'lineage') || Object.hasOwn(value, 'workspaceLineage')
-      ? {
-          worktreeLineageById: (value as LineageListResponse).lineage ?? {},
-          workspaceLineageByChildKey: (value as LineageListResponse).workspaceLineage ?? {}
-        }
-      : {
-          worktreeLineageById: value as Record<string, WorktreeLineage>,
-          workspaceLineageByChildKey: {}
-        }
-  if (target.kind === 'local') {
-    return normalizeLineageResponse(await window.api.worktrees.listLineage())
-  }
-  return normalizeLineageResponse(
-    await callRuntimeRpc<{
-      lineage: Record<string, WorktreeLineage>
-      workspaceLineage?: Record<string, WorkspaceLineage>
-    }>(target, 'worktree.lineageList', undefined, {
-      timeoutMs: 15_000,
-      reuseRecentCompatibilityFailure: options.reuseRecentCompatibilityFailure
-    })
-  )
 }
 
 export function projectWorktreeLineageToWorkspaceLineage(

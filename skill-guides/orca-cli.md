@@ -67,6 +67,22 @@ An Orca worktree is Orca's tracked view of a repo checkout, its metadata, termin
 
 Its id is a two-part address, `<repoId>::<worktreePath>`, such as `repo-123::/Users/me/orca/fix-login`. Copy the whole `id` field from `ORCA worktree create --json` or `ORCA worktree list --json`. `repo-123` alone names only the repo.
 
+### Resolve workspace scope before filesystem discovery
+
+“Folder workspace” means native Orca context, not every repository beneath its directory. Resolve current folder identity and repository membership through Orca before creating worktrees. Never infer membership from filesystem scanning or a global repo list alone.
+
+For “each repository in this folder workspace”:
+
+1. Read Orca-provided `ORCA_WORKSPACE_ID` and `ORCA_WORKTREE_ID` for the current `folder:<folderId>` identity, and `ORCA_PROJECT_GROUP_ID` for its group. If both identity fields are present, they must agree. `ORCA_WORKSPACE_ROOT` locates files; it does not define membership.
+2. Run `ORCA repo list --json` using the same resolved executable and runtime routing. Select direct members whose `projectGroupId` exactly matches `ORCA_PROJECT_GROUP_ID`, within the folder's execution host. Use the returned repository `id` values, not directory names. Do not join a remote folder identity to a local catalog or scan local equivalents of remote paths; retain Orca's existing runtime-local and SSH host semantics.
+3. Create one child per resolved member with `--repo id:<repoId>` and `--parent-worktree folder:<folderId>`. Preserve the existing folder as parent and its execution host. Do not create a replacement folder, register extra repositories, or change group membership to satisfy this request.
+
+If identity/group context conflicts or is missing, the catalog fails or is incomplete, no eligible members match, or host ownership is unresolved, ask before creating or registering anything. Exact group matching establishes direct membership only; if descendant-group scope is requested or cannot be verified, ask for the intended repository set rather than guessing from paths.
+
+`ORCA worktree current --json` resolves Git worktrees and can return `selector_not_found` in a valid folder context. That failure does not discard the Orca-provided folder identity or permit filesystem discovery as a fallback. Continue with known folder/group context and registered records; if membership cannot be queried, ask before mutation.
+
+For example, if the directory contains 14 Git repositories but only 2 records match the current group and host, create only those 2 children. Leave the other 12 untouched. An explicit user request for a repository outside this group remains valid; this rule scopes implicit workspace requests, not all worktree creation.
+
 Common commands:
 
 ```text
@@ -87,6 +103,7 @@ ORCA worktree create --name child-task --agent codex --prompt "hi" --json
 ORCA worktree create --name independent-task --no-parent --json
 ORCA worktree set --worktree id:<repoId>::<worktreePath> --display-name "My Task" --json
 ORCA worktree set --worktree active --comment "reproduced bug; testing fix" --json
+ORCA worktree set --worktree id:<repoId>::<worktreePath> --parent-worktree folder:<folderId> --json
 ORCA worktree set --worktree active --workspace-status in-review --json
 ORCA worktree set --worktree active --unread --json
 ORCA worktree create --repo id:<repoId> --name review-task --pr 123 --json
@@ -104,7 +121,7 @@ Selectors:
 - `id:<repoId>::<worktreePath>`, `name:<displayName>`, `path:<absolutePath>`, `branch:<branchName>`, `issue:<number>`
 - The full id is the exact `<repo-id>::<path>` value returned by `ORCA worktree create --json` or `ORCA worktree list --json`; a bare repo id is not a worktree id.
 - `active` / `current` for the enclosing Orca-managed worktree from the shell cwd
-- For `worktree create --parent-worktree` only, folder/worktree parent context keys are also valid: `folder:<folderId>`, `worktree:<repoId>::<worktreePath>`, `id:folder:<folderId>`, `id:worktree:<repoId>::<worktreePath>`
+- For `worktree create --parent-worktree` and `worktree set --parent-worktree`, folder/worktree parent context keys are also valid: `folder:<folderId>`, `worktree:<repoId>::<worktreePath>`, `id:folder:<folderId>`, `id:worktree:<repoId>::<worktreePath>`
 
 Lineage rules:
 

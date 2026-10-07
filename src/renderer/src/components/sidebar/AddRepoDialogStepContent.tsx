@@ -54,6 +54,7 @@ type AddRepoDialogStepContentProps = {
   createRuntimeParentStatus: 'idle' | 'checking' | 'failed'
   createParentDefaultPending: boolean
   onBrowse: () => void
+  onImportGroup?: () => void
   onOpenCloneStep: () => void
   onOpenCreateStep: () => void
   onOpenRemoteStep: (targetId?: string | null) => void
@@ -124,6 +125,7 @@ export function AddRepoDialogStepContent({
   createRuntimeParentStatus,
   createParentDefaultPending,
   onBrowse,
+  onImportGroup,
   onOpenCloneStep,
   onOpenCreateStep,
   onOpenRemoteStep,
@@ -164,6 +166,7 @@ export function AddRepoDialogStepContent({
         actionsDisabled={actionsDisabled}
         browseHostKind={browseHostKind}
         onBrowse={onBrowse}
+        onImportGroup={onImportGroup}
         onOpenCloneStep={onOpenCloneStep}
         onOpenRemoteStep={onOpenRemoteStep}
         onOpenCreateStep={onOpenCreateStep}

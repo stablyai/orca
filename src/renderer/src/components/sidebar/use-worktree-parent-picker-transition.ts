@@ -4,7 +4,13 @@ import {
   PARENT_PICKER_EXIT_ANIMATION_MS
 } from './worktree-context-menu-policy'
 
-type PendingParentPicker = { childWorktreeId: string; anchorElement: HTMLElement }
+import type { FolderParentContext } from './folder-workspace-parent-candidates'
+
+export type PendingParentPicker = {
+  childWorktreeId: string
+  anchorElement: HTMLElement
+  folderContext?: FolderParentContext | null
+}
 
 export function useWorktreeParentPickerTransition(args: {
   fallbackTimerRef: React.MutableRefObject<number | null>
@@ -15,6 +21,7 @@ export function useWorktreeParentPickerTransition(args: {
   setParentPickerOpen: (open: boolean) => void
   unmountTimerRef: React.MutableRefObject<number | null>
   worktreeId: string
+  captureFolderContext?: () => FolderParentContext | null
 }) {
   const openPendingParentPicker = useCallback(() => {
     const pending = args.pendingRef.current
@@ -47,17 +54,31 @@ export function useWorktreeParentPickerTransition(args: {
     [args]
   )
   const handleOpenParentPicker = useCallback(
-    (event?: { preventDefault: () => void }) => {
+    (event?: { preventDefault: () => void }, folderContext?: FolderParentContext | null) => {
       event?.preventDefault()
       const anchorElement = getWorktreeParentPickerAnchor(args.scopeRef.current, args.worktreeId)
       if (!anchorElement) {
         return
       }
-      args.pendingRef.current = { childWorktreeId: args.worktreeId, anchorElement }
+      args.pendingRef.current = {
+        childWorktreeId: args.worktreeId,
+        anchorElement,
+        ...(folderContext !== undefined ? { folderContext } : {})
+      }
       args.setMenuOpenState(false)
       args.fallbackTimerRef.current = window.setTimeout(openPendingParentPicker, 50)
     },
     [args, openPendingParentPicker]
   )
-  return { handleOpenParentPicker, handleParentPickerOpenChange, openPendingParentPicker }
+  const handleOpenFolderParentPicker = useCallback(
+    (event?: { preventDefault: () => void }) =>
+      handleOpenParentPicker(event, args.captureFolderContext?.() ?? null),
+    [args, handleOpenParentPicker]
+  )
+  return {
+    handleOpenParentPicker,
+    handleOpenFolderParentPicker,
+    handleParentPickerOpenChange,
+    openPendingParentPicker
+  }
 }

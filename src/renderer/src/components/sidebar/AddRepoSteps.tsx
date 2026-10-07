@@ -9,6 +9,7 @@ import { translate } from '@/i18n/i18n'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { upsertAddedRepoWithProjectHostSetup } from './add-repo-store-upsert'
 import { worktreeRefreshOptions } from './add-repo-runtime-owner'
+import { shouldReviewNestedRepoScan } from './nested-repo-scan-review'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 // ── SSH host project hook ───────────────────────────────────────────
@@ -38,7 +39,8 @@ export function useRemoteRepo(
     inProgress: boolean,
     scanId: string | null
   ) => void,
-  onNestedScanResult?: (scan: NestedRepoScanResult | null, attemptId: string) => void
+  onNestedScanResult?: (scan: NestedRepoScanResult | null, attemptId: string) => void,
+  reviewScan: (scan: NestedRepoScanResult) => boolean = shouldReviewNestedRepoScan
 ) {
   const [sshTargets, setSshTargets] = useState<(SshTarget & { state?: SshConnectionState })[]>([])
   const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null)
@@ -176,7 +178,7 @@ export function useRemoteRepo(
         return
       }
       onNestedScanResult?.(scan ?? null, attemptId)
-      if (scan?.selectedPathKind === 'non_git_folder' && scan.repos.length > 0) {
+      if (scan && reviewScan(scan)) {
         showNestedRepoReview?.(scan, trimmedRemotePath, selectedTargetId, attemptId, false, scanId)
         setRemoteNestedScanId(null)
         return
@@ -240,6 +242,7 @@ export function useRemoteRepo(
     scanNestedRepos,
     showNestedRepoReview,
     onNestedScanResult,
+    reviewScan,
     fetchWorktrees,
     mountedRef,
     closeModal,

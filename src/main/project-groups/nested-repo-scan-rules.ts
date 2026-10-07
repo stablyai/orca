@@ -1,4 +1,7 @@
-import type { NestedRepoScanOptions } from '../../shared/project-group-types'
+import type {
+  NestedRepoScanDiagnostic,
+  NestedRepoScanOptions
+} from '../../shared/project-group-types'
 
 export type NestedRepoDirectoryEntry = {
   name: string
@@ -16,6 +19,9 @@ export type NestedRepoScanFilesystem = {
 }
 
 type IgnoreRule = {
+  sourceFile: string
+  sourceRule: string
+  line: number
   pattern: string
   segmentPatterns: GlobSegment[]
   memoizePathWalk: boolean
@@ -187,12 +193,16 @@ function compilePathSegments(pattern: string): GlobSegment[] {
   return segments
 }
 
-function parseGitignoreRules(content: string, baseSegments: string[]): IgnoreRule[] {
+function parseGitignoreRules(
+  content: string,
+  baseSegments: string[],
+  sourceFile: string
+): IgnoreRule[] {
   return content
     .split(/\r?\n/)
-    .map((rawLine) => rawLine.trim())
-    .filter((line) => line.length > 0 && !line.startsWith('#'))
-    .map((line) => {
+    .map((rawLine, index) => ({ line: rawLine.trim(), lineNumber: index + 1 }))
+    .filter(({ line }) => line.length > 0 && !line.startsWith('#'))
+    .map(({ line, lineNumber }) => {
       const negate = line.startsWith('!')
       const unprefixed = negate ? line.slice(1) : line
       const anchored = unprefixed.startsWith('/')
@@ -202,6 +212,9 @@ function parseGitignoreRules(content: string, baseSegments: string[]): IgnoreRul
         ? [compileGlobSegment(pattern)]
         : compilePathSegments(pattern)
       return {
+        sourceFile,
+        sourceRule: line,
+        line: lineNumber,
         pattern,
         segmentPatterns,
         // One `**` walks the candidate segments once; two or more reach the same (pattern,
@@ -215,12 +228,12 @@ function parseGitignoreRules(content: string, baseSegments: string[]): IgnoreRul
     .filter((rule) => rule.pattern.length > 0)
 }
 
-export function isIgnoredNestedRepoDirectory(
+export function getNestedRepoDirectoryExclusion(
   name: string,
   segments: string[],
   rules: IgnoreRule[]
-): boolean {
-  let ignored = false
+): Omit<NestedRepoScanDiagnostic, 'path'> | null {
+  let excludingRule: IgnoreRule | null = null
   for (const rule of rules) {
     if (segments.length <= rule.baseSegments.length) {
       continue
@@ -230,10 +243,29 @@ export function isIgnoredNestedRepoDirectory(
       ? relativeSegments.some((segment) => globSegmentMatches(rule.segmentPatterns[0], segment))
       : pathSegmentsMatch(rule.segmentPatterns, relativeSegments, rule.memoizePathWalk)
     if (matches) {
-      ignored = !rule.negate
+      excludingRule = rule.negate ? null : rule
     }
   }
-  return ignored || shouldSkipDirectory(name, segments.length - 1)
+  if (excludingRule) {
+    return {
+      reason: 'gitignore',
+      ignoreFile: excludingRule.sourceFile,
+      rule: excludingRule.sourceRule,
+      line: excludingRule.line
+    }
+  }
+  if (shouldSkipDirectory(name, segments.length - 1)) {
+    return { reason: VCS_METADATA_DIRS.has(name) || SKIPPED_DIRS.has(name) ? 'builtin' : 'hidden' }
+  }
+  return null
+}
+
+export function isIgnoredNestedRepoDirectory(
+  name: string,
+  segments: string[],
+  rules: IgnoreRule[]
+): boolean {
+  return getNestedRepoDirectoryExclusion(name, segments, rules) !== null
 }
 
 export async function readNestedRepoGitignoreRules(args: {
@@ -249,7 +281,11 @@ export async function readNestedRepoGitignoreRules(args: {
     const content = await args.filesystem.readTextFile(
       args.filesystem.joinPath(args.folderPath, '.gitignore')
     )
-    return parseGitignoreRules(content, args.baseSegments)
+    return parseGitignoreRules(
+      content,
+      args.baseSegments,
+      args.filesystem.joinPath(args.folderPath, '.gitignore')
+    )
   } catch {
     return []
   }

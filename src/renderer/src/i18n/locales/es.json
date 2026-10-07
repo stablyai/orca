@@ -1,4 +1,27 @@
 {
+  "repoScan": {
+    "importGroup": "Importar carpeta como grupo",
+    "importGroupDescription": "Buscar repositorios dentro de una carpeta principal",
+    "openProject": "Abrir proyecto",
+    "gitRoot": "Esta ruta es un repositorio Git. Se omitió la búsqueda de repositorios anidados, por lo que no se puede importar esta selección como grupo.",
+    "stopped": "Búsqueda detenida por solicitud. Se muestran los repositorios encontrados hasta ahora.",
+    "timedOut": "La búsqueda alcanzó su límite de tiempo. Algunas carpetas no se comprobaron.",
+    "repoLimit": "La búsqueda alcanzó su límite de repositorios. Algunas carpetas no se comprobaron.",
+    "folderCount": "Carpetas: {{count}}. {{reason}}",
+    "linkCount": "Enlaces: {{count}}. {{reason}}",
+    "showDetails": "Mostrar detalles de búsqueda",
+    "shortened": "Se acortó el texto de una ruta o regla larga.",
+    "omitted": "Se omitieron {{count}} detalles adicionales.",
+    "reason": {
+      "gitignore": "Excluida por .gitignore",
+      "builtin": "Excluida por la política de directorios integrada",
+      "hidden": "Excluida por la política de carpetas ocultas",
+      "symlink": "No se siguió el enlace simbólico",
+      "depth": "No se comprobó el contenido por debajo de la profundidad de búsqueda",
+      "unreadable": "No se pudo leer la carpeta; no se comprobó su contenido",
+      "unknown": "Detalles de exclusión no disponibles"
+    }
+  },
   "app": {
     "recoverableError": {
       "rootTitle": "Orca tuvo un error de renderizado.",
@@ -5651,6 +5674,8 @@
           "fed49903c9": "{{value0}} en vivo {{value1}}"
         },
         "WorktreeContextMenu": {
+          "removeFromFolderWorkspace": "Quitar del espacio de trabajo de carpeta",
+          "attachFolderWorkspace": "Adjuntar a un espacio de trabajo de carpeta…",
           "c39c37676a": "Crea un grupo y mueve este proyecto a él.",
           "6664418e98": "Nuevo grupo de proyecto",
           "e091caab15": "No se pudo encontrar el proyecto.",
@@ -6154,6 +6179,19 @@
           "c7d8e9f0a1": "{{value0}} actualizado",
           "d8e9f0a1b2": "{{value0}} omitido",
           "e9f0a1b2c3": "{{value0}} falló"
+        },
+        "FolderParentPicker": {
+          "ownerUnavailable": "No se puede determinar el propietario del espacio de trabajo. Actualiza sus metadatos e inténtalo de nuevo.",
+          "loadFailed": "No se pudieron cargar los espacios de trabajo de carpeta de este host de ejecución.",
+          "unknownOutcome": "Se desconoce el resultado de la actualización del padre. Actualiza para verificarlo antes de reintentar.",
+          "refreshUnverified": "Se confirmó la actualización del padre, pero no se pudo actualizar la vista. Actualiza para verificarla.",
+          "attachFailed": "No se pudo adjuntar el worktree al espacio de trabajo de carpeta.",
+          "attachFor": "Adjuntar a un espacio de trabajo de carpeta",
+          "search": "Buscar espacios de trabajo de carpeta…",
+          "refresh": "Actualizar",
+          "attaching": "Adjuntando…",
+          "loading": "Cargando espacios de trabajo de carpeta…",
+          "empty": "No hay espacios de trabajo de carpeta elegibles que coincidan en este host de ejecución."
         },
         "WorktreeParentPickerPopover": {
           "failedSetParent": "No se pudo establecer el worktree padre",

@@ -1,4 +1,27 @@
 {
+  "repoScan": {
+    "importGroup": "폴더를 그룹으로 가져오기",
+    "importGroupDescription": "상위 폴더 안에서 저장소 찾기",
+    "openProject": "프로젝트 열기",
+    "gitRoot": "이 경로는 Git 저장소입니다. 중첩 저장소 검색을 건너뛰었으므로 이 선택 항목을 그룹으로 가져올 수 없습니다.",
+    "stopped": "요청에 따라 검색을 중지했습니다. 지금까지 찾은 저장소를 표시합니다.",
+    "timedOut": "검색 시간 제한에 도달했습니다. 일부 폴더는 확인하지 않았습니다.",
+    "repoLimit": "검색 저장소 수 제한에 도달했습니다. 일부 폴더는 확인하지 않았습니다.",
+    "folderCount": "폴더: {{count}}. {{reason}}",
+    "linkCount": "링크: {{count}}. {{reason}}",
+    "showDetails": "검색 세부 정보 표시",
+    "shortened": "긴 경로 또는 규칙 텍스트를 줄였습니다.",
+    "omitted": "추가 세부 정보 {{count}}개를 생략했습니다.",
+    "reason": {
+      "gitignore": ".gitignore에 의해 제외됨",
+      "builtin": "기본 디렉터리 정책에 의해 제외됨",
+      "hidden": "숨김 폴더 정책에 의해 제외됨",
+      "symlink": "심볼릭 링크를 따라가지 않음",
+      "depth": "검색 깊이 아래의 내용은 확인하지 않음",
+      "unreadable": "폴더를 읽을 수 없어 내용을 확인하지 않음",
+      "unknown": "제외 세부 정보를 사용할 수 없음"
+    }
+  },
   "app": {
     "recoverableError": {
       "rootTitle": "Orca에 렌더러 오류가 발생했습니다.",
@@ -5633,6 +5656,8 @@
           "fed49903c9": "{{value0}} 실시간 {{value1}}"
         },
         "WorktreeContextMenu": {
+          "removeFromFolderWorkspace": "폴더 작업 공간에서 제거",
+          "attachFolderWorkspace": "폴더 작업 공간에 연결…",
           "c39c37676a": "그룹을 만들고 이 프로젝트를 그룹으로 이동하세요.",
           "6664418e98": "새로운 프로젝트 그룹",
           "e091caab15": "프로젝트를 찾을 수 없습니다.",
@@ -6155,6 +6180,19 @@
           "c7d8e9f0a1": "{{value0}}개 업데이트됨",
           "d8e9f0a1b2": "{{value0}}개 건너뜀",
           "e9f0a1b2c3": "{{value0}}개 실패"
+        },
+        "FolderParentPicker": {
+          "ownerUnavailable": "작업 공간의 소유자를 확인할 수 없습니다. 메타데이터를 새로 고친 후 다시 시도하세요.",
+          "loadFailed": "이 실행 호스트의 폴더 작업 공간을 불러올 수 없습니다.",
+          "unknownOutcome": "부모 업데이트 결과를 확인할 수 없습니다. 다시 시도하기 전에 새로 고쳐 확인하세요.",
+          "refreshUnverified": "부모 업데이트가 확인되었지만 화면을 새로 고치지 못했습니다. 새로 고쳐 확인하세요.",
+          "attachFailed": "워크트리를 폴더 작업 공간에 연결할 수 없습니다.",
+          "attachFor": "폴더 작업 공간에 연결",
+          "search": "폴더 작업 공간 검색…",
+          "refresh": "새로 고침",
+          "attaching": "연결 중…",
+          "loading": "폴더 작업 공간 불러오는 중…",
+          "empty": "이 실행 호스트에 일치하는 연결 가능한 폴더 작업 공간이 없습니다."
         },
         "WorktreeParentPickerPopover": {
           "failedSetParent": "상위 워크트리를 설정하지 못했습니다",

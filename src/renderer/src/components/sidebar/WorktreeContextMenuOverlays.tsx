@@ -27,6 +27,7 @@ export function WorktreeContextMenuOverlays({ model }: { model: WorktreeContextM
           childWorktreeId={model.parentPicker.childWorktreeId}
           anchorElement={model.parentPicker.anchorElement}
           onOpenChange={model.handleParentPickerOpenChange}
+          folderContext={model.parentPicker.folderContext}
         />
       ) : null}
     </>

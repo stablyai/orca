@@ -90,11 +90,6 @@ export function useWorktreeContextMenuCommands(args: {
     },
     [args]
   )
-  const handleRemoveProjectFromGroup = useCallback(() => {
-    if (args.repo) {
-      void args.moveProjectToGroup(args.repo.id, null)
-    }
-  }, [args])
   const handleAssignWorkspaceStatus = useCallback(
     (status: string) => {
       args.setMenuOpenState(false)
@@ -177,7 +172,6 @@ export function useWorktreeContextMenuCommands(args: {
     handleDelete,
     handleMoveProjectToGroup,
     handleOpenParent,
-    handleRemoveProjectFromGroup,
     handleRename,
     handleSleepSubtree,
     handleSubmitNewProjectGroup,

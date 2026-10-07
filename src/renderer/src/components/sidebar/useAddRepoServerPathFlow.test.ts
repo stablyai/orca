@@ -69,6 +69,38 @@ describe('useAddRepoServerPathFlow', () => {
     mocks.stateValues = ['/server/docs', false]
   })
 
+  it('reviews explicit group-import Git roots on the selected paired host', async () => {
+    mocks.getNestedRepoRuntimeKind.mockReturnValue('runtime')
+    mocks.scanNestedRepos.mockResolvedValue({
+      selectedPath: '/server/docs',
+      selectedPathKind: 'git_repo',
+      repos: []
+    })
+    const { useAddRepoServerPathFlow } = await import('./useAddRepoServerPathFlow')
+    const result = useAddRepoServerPathFlow({
+      addRepoPath: mocks.addRepoPath,
+      activeRuntimeEnvironmentId: 'box1-environment-id',
+      closeModal: mocks.closeModal,
+      fetchWorktrees: mocks.fetchWorktrees,
+      getNestedRepoRuntimeKind: mocks.getNestedRepoRuntimeKind,
+      scanNestedRepos: mocks.scanNestedRepos,
+      setActiveNestedScanId: mocks.setActiveNestedScanId,
+      setNestedScanInProgress: mocks.setNestedScanInProgress,
+      showNestedRepoReview: mocks.showNestedRepoReview,
+      onGitRepoReady: mocks.onGitRepoReady,
+      setAddProjectBusyLabel: mocks.setAddProjectBusyLabel,
+      reviewScan: () => true
+    })
+    await result.handleAddServerPath('git')
+    expect(mocks.showNestedRepoReview).toHaveBeenCalledWith(
+      expect.objectContaining({
+        runtimeEnvironmentId: 'box1-environment-id',
+        scan: expect.objectContaining({ selectedPathKind: 'git_repo' })
+      })
+    )
+    expect(mocks.addRepoPath).not.toHaveBeenCalled()
+  })
+
   it('marks onboarding folder progress before closing server folder adds', async () => {
     const repo = makeRepo()
     mocks.addRepoPath.mockResolvedValue(repo)

@@ -1,4 +1,27 @@
 {
+  "repoScan": {
+    "importGroup": "フォルダーをグループとしてインポート",
+    "importGroupDescription": "親フォルダー内のリポジトリを検索",
+    "openProject": "プロジェクトを開く",
+    "gitRoot": "このパスは Git リポジトリです。入れ子のリポジトリの検索は省略されたため、この選択をグループとしてインポートできません。",
+    "stopped": "要求により検索を停止しました。これまでに見つかったリポジトリを表示します。",
+    "timedOut": "検索の制限時間に達しました。一部のフォルダーは確認されていません。",
+    "repoLimit": "検索のリポジトリ数の上限に達しました。一部のフォルダーは確認されていません。",
+    "folderCount": "フォルダー数: {{count}}。{{reason}}",
+    "linkCount": "リンク数: {{count}}。{{reason}}",
+    "showDetails": "検索の詳細を表示",
+    "shortened": "長いパスまたはルールのテキストを省略しました。",
+    "omitted": "追加の詳細 {{count}} 件を省略しました。",
+    "reason": {
+      "gitignore": ".gitignore により除外",
+      "builtin": "組み込みのディレクトリポリシーにより除外",
+      "hidden": "隠しフォルダーのポリシーにより除外",
+      "symlink": "シンボリックリンクを辿りませんでした",
+      "depth": "検索の深さを超える内容は確認されていません",
+      "unreadable": "フォルダーを読み取れず、内容は確認されていません",
+      "unknown": "除外の詳細を取得できません"
+    }
+  },
   "app": {
     "recoverableError": {
       "rootTitle": "Orca でレンダラーエラーが発生しました。",
@@ -5633,6 +5656,8 @@
           "fed49903c9": "{{value0}} ライブ {{value1}}"
         },
         "WorktreeContextMenu": {
+          "removeFromFolderWorkspace": "フォルダーワークスペースから削除",
+          "attachFolderWorkspace": "フォルダーワークスペースに関連付け…",
           "c39c37676a": "グループを作成し、このプロジェクトをそのグループに移動します。",
           "6664418e98": "新規プロジェクトグループ",
           "e091caab15": "プロジェクトが見つかりませんでした",
@@ -6155,6 +6180,19 @@
           "c7d8e9f0a1": "{{value0}} 件更新",
           "d8e9f0a1b2": "{{value0}} 件スキップ",
           "e9f0a1b2c3": "{{value0}} 件失敗"
+        },
+        "FolderParentPicker": {
+          "ownerUnavailable": "ワークスペースの所有元を確認できません。メタデータを更新して再試行してください。",
+          "loadFailed": "この実行ホストのフォルダーワークスペースを読み込めませんでした。",
+          "unknownOutcome": "親の更新結果を確認できません。再試行する前に更新して確認してください。",
+          "refreshUnverified": "親の更新は確認されましたが、表示を更新できませんでした。更新して確認してください。",
+          "attachFailed": "ワークツリーをフォルダーワークスペースに関連付けできませんでした。",
+          "attachFor": "フォルダーワークスペースに関連付け",
+          "search": "フォルダーワークスペースを検索…",
+          "refresh": "更新",
+          "attaching": "関連付け中…",
+          "loading": "フォルダーワークスペースを読み込み中…",
+          "empty": "この実行ホストに一致する関連付け可能なフォルダーワークスペースはありません。"
         },
         "WorktreeParentPickerPopover": {
           "failedSetParent": "親ワークツリーを設定できませんでした",

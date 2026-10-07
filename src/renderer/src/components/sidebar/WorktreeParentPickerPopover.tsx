@@ -14,7 +14,17 @@ import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { useAppStore } from '@/store'
 import { useAllWorktrees, useRepoMap, useWorktreeMap } from '@/store/selectors'
 import { cn } from '@/lib/utils'
-import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
+import {
+  getWorktreeParentPickerFocusRestoreTarget,
+  handleWorktreeParentPickerKeyDown,
+  selectWorktreeParent
+} from './worktree-parent-picker-interaction'
+import { useFolderWorkspaceParentPicker } from './use-folder-workspace-parent-picker'
+import {
+  captureFolderParentContext,
+  type FolderParentContext
+} from './folder-workspace-parent-candidates'
+import { Button } from '@/components/ui/button'
 import { useWorktreeActivityStatuses } from './use-worktree-activity-statuses'
 import { WorktreeParentPickerRow } from './WorktreeParentPickerRow'
 import { getEligibleWorktreeParents } from './worktree-parent-candidates'
@@ -37,105 +47,32 @@ type WorktreeParentPickerPopoverProps = {
   childWorktreeId: string | null
   anchorElement: HTMLElement | null
   onOpenChange: (open: boolean) => void
+  folderContext?: FolderParentContext | null
 }
 
 type AnchorRect = Pick<DOMRect, 'height' | 'left' | 'top' | 'width'>
-
-type SelectParentArgs = {
-  childWorktreeId: string | null
-  parentWorktreeId: string
-  assignWorktreeParent: (worktreeId: string, args: { parentWorktreeId: string }) => Promise<void>
-  close: () => void
-  showError: (message: string) => void
-}
-
-type WorktreeParentPickerKeyboardArgs = {
-  event: React.KeyboardEvent<HTMLInputElement>
-  candidates: readonly { id: string }[]
-  activeIndex: number
-  moveHighlight: (index: number) => void
-  selectParent: (worktreeId: string) => void
-}
 
 function getAnchorRect(anchorElement: HTMLElement | null): AnchorRect | null {
   return anchorElement?.getBoundingClientRect() ?? null
 }
 
-const FOCUSABLE_ANCHOR_SELECTOR =
-  'a[href],button,input,select,textarea,[tabindex]:not([tabindex="-1"])'
-
-// Why: the anchor is a non-focusable `role="option"` row, so closing focus has
-// to land on its nearest focusable container (the sidebar listbox).
-export function getWorktreeParentPickerFocusRestoreTarget(
-  anchorElement: HTMLElement | null
-): HTMLElement | null {
-  if (!anchorElement?.isConnected) {
-    return null
-  }
-  return anchorElement.closest<HTMLElement>(FOCUSABLE_ANCHOR_SELECTOR)
-}
-
-export function selectWorktreeParent({
-  childWorktreeId,
-  parentWorktreeId,
-  assignWorktreeParent,
-  close,
-  showError
-}: SelectParentArgs): void {
-  if (!childWorktreeId) {
-    return
-  }
-  close()
-  void assignWorktreeParent(childWorktreeId, { parentWorktreeId }).catch((error) => {
-    console.error('Failed to set parent worktree:', error)
-    showError(
-      translate(
-        'auto.components.sidebar.WorktreeParentPickerPopover.failedSetParent',
-        'Failed to set parent worktree'
-      )
-    )
-  })
-}
-
-export function handleWorktreeParentPickerKeyDown({
-  event,
-  candidates,
-  activeIndex,
-  moveHighlight,
-  selectParent
-}: WorktreeParentPickerKeyboardArgs): void {
-  if (isImeCompositionKeyDown(event) || candidates.length === 0) {
-    return
-  }
-  const navigate = (nextIndex: number): void => {
-    event.preventDefault()
-    event.stopPropagation()
-    moveHighlight(clampWorktreeParentPickerIndex(nextIndex, candidates.length))
-  }
-  if (event.key === 'ArrowDown') {
-    navigate(activeIndex + 1)
-  } else if (event.key === 'ArrowUp') {
-    navigate(activeIndex - 1)
-  } else if (event.key === 'Home') {
-    navigate(0)
-  } else if (event.key === 'End') {
-    navigate(candidates.length - 1)
-  } else if (event.key === 'Enter') {
-    const candidate = candidates[activeIndex]
-    if (candidate) {
-      event.preventDefault()
-      event.stopPropagation()
-      selectParent(candidate.id)
-    }
-  }
-}
+export {
+  getWorktreeParentPickerFocusRestoreTarget,
+  handleWorktreeParentPickerKeyDown,
+  selectWorktreeParent
+} from './worktree-parent-picker-interaction'
 
 export function WorktreeParentPickerPopover({
   open,
   childWorktreeId,
   anchorElement,
-  onOpenChange
+  onOpenChange,
+  folderContext
 }: WorktreeParentPickerPopoverProps): React.JSX.Element | null {
+  const folderMode = folderContext !== undefined
+  const folderPicker = useFolderWorkspaceParentPicker(folderContext, open, () =>
+    onOpenChange(false)
+  )
   const worktrees = useAllWorktrees()
   const worktreeMap = useWorktreeMap()
   const repoMap = useRepoMap()
@@ -152,19 +89,29 @@ export function WorktreeParentPickerPopover({
     getAnchorRect(anchorElement)
   )
   const [viewportHeight, setViewportHeight] = useState(() => window.innerHeight)
-  const child = childWorktreeId ? worktreeMap.get(childWorktreeId) : undefined
+  const child = folderContext
+    ? worktrees.find(
+        (row) =>
+          captureFolderParentContext(useAppStore.getState(), row)?.mutationKey ===
+          folderContext.mutationKey
+      )
+    : childWorktreeId
+      ? worktreeMap.get(childWorktreeId)
+      : undefined
   const candidates = useMemo(
     () =>
-      child
-        ? getEligibleWorktreeParents({
-            child,
-            worktrees,
-            lineageById,
-            worktreeMap,
-            repoMap
-          })
-        : [],
-    [child, lineageById, repoMap, worktreeMap, worktrees]
+      folderMode
+        ? folderPicker.candidates
+        : child
+          ? getEligibleWorktreeParents({
+              child,
+              worktrees,
+              lineageById,
+              worktreeMap,
+              repoMap
+            })
+          : [],
+    [child, folderMode, folderPicker.candidates, lineageById, repoMap, worktreeMap, worktrees]
   )
 
   useLayoutEffect(() => {
@@ -198,8 +145,13 @@ export function WorktreeParentPickerPopover({
     return () => window.clearTimeout(timerId)
   }, [open])
 
+  const selectFolderParent = folderPicker.select
   const handleSelect = useCallback(
     (parentWorktreeId: string) => {
+      if (folderMode) {
+        void selectFolderParent(parentWorktreeId)
+        return
+      }
       selectWorktreeParent({
         childWorktreeId,
         parentWorktreeId,
@@ -208,7 +160,7 @@ export function WorktreeParentPickerPopover({
         showError: toast.error
       })
     },
-    [assignWorktreeParent, childWorktreeId, onOpenChange]
+    [assignWorktreeParent, childWorktreeId, folderMode, selectFolderParent, onOpenChange]
   )
 
   // Why: a `position: fixed` anchor element would be laid out against the
@@ -231,8 +183,15 @@ export function WorktreeParentPickerPopover({
   }, [anchorRect, candidates.length, viewportHeight])
 
   const filtered = useMemo(
-    () => filterWorktreeParentCandidates(candidates, search),
-    [candidates, search]
+    () =>
+      filterWorktreeParentCandidates(
+        candidates,
+        search,
+        folderMode
+          ? (candidate) => folderPicker.byId.get(candidate.id)?.searchText ?? candidate.path
+          : undefined
+      ),
+    [candidates, folderMode, folderPicker.byId, search]
   )
   const activeIndex = clampWorktreeParentPickerIndex(highlightedIndex, filtered.length)
 
@@ -308,7 +267,7 @@ export function WorktreeParentPickerPopover({
     }
   })
 
-  if (!child || !anchorRect) {
+  if ((!child && !folderMode) || !anchorRect) {
     return null
   }
 
@@ -317,6 +276,7 @@ export function WorktreeParentPickerPopover({
     <Popover modal open={open} onOpenChange={onOpenChange}>
       <PopoverAnchor virtualRef={virtualAnchorRef} />
       <PopoverContent
+        data-folder-parent-picker={folderMode ? '' : undefined}
         align="start"
         side="right"
         sideOffset={8}
@@ -331,7 +291,11 @@ export function WorktreeParentPickerPopover({
         // the detached input (i.e. document.body).
         onCloseAutoFocus={(event) => {
           event.preventDefault()
-          getWorktreeParentPickerFocusRestoreTarget(anchorElement)?.focus()
+          const target =
+            getWorktreeParentPickerFocusRestoreTarget(anchorElement) ??
+            document.querySelector<HTMLElement>('[data-worktree-sidebar] [role="listbox"]') ??
+            document.querySelector<HTMLElement>('[data-worktree-sidebar]')
+          target?.focus({ preventScroll: true })
         }}
         onInteractOutside={(event) => {
           if (suppressInitialOutsideCloseRef.current) {
@@ -341,12 +305,17 @@ export function WorktreeParentPickerPopover({
       >
         <div className="flex min-w-0 shrink-0 items-center gap-1.5 border-b border-border bg-muted/30 px-3 py-2 text-[11px] leading-none text-muted-foreground">
           <span className="shrink-0">
-            {translate(
-              'auto.components.sidebar.WorktreeParentPickerPopover.setParentFor',
-              'Set parent for'
-            )}
+            {folderMode
+              ? translate(
+                  'auto.components.sidebar.FolderParentPicker.attachFor',
+                  'Attach to Folder Workspace'
+                )
+              : translate(
+                  'auto.components.sidebar.WorktreeParentPickerPopover.setParentFor',
+                  'Set parent for'
+                )}
           </span>
-          <span className="truncate font-medium text-foreground">{child.displayName}</span>
+          <span className="truncate font-medium text-foreground">{child?.displayName}</span>
         </div>
         <Command shouldFilter={false} className="min-h-0">
           <CommandInput
@@ -355,18 +324,52 @@ export function WorktreeParentPickerPopover({
             onValueChange={handleSearchChange}
             onKeyDown={handleKeyDown}
             wrapperClassName="shrink-0"
-            placeholder={translate(
-              'auto.components.sidebar.WorktreeParentPickerPopover.searchPlaceholder',
-              'Search worktrees...'
-            )}
+            disabled={folderMode && folderPicker.pending}
+            placeholder={
+              folderMode
+                ? translate(
+                    'auto.components.sidebar.FolderParentPicker.search',
+                    'Search folder workspaces…'
+                  )
+                : translate(
+                    'auto.components.sidebar.WorktreeParentPickerPopover.searchPlaceholder',
+                    'Search worktrees...'
+                  )
+            }
           />
           <CommandList ref={listRef} className="max-h-72 min-h-0 flex-1">
-            {filtered.length === 0 ? (
+            {folderMode && folderPicker.error ? (
+              <div className="space-y-2 px-3 py-4 text-sm text-muted-foreground" role="alert">
+                <p>{folderPicker.error}</p>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={folderPicker.reload}
+                  disabled={folderPicker.pending}
+                >
+                  {translate('auto.components.sidebar.FolderParentPicker.refresh', 'Refresh')}
+                </Button>
+              </div>
+            ) : folderMode && (folderPicker.loading || folderPicker.pending) ? (
+              <div className="py-6 text-center text-sm text-muted-foreground" role="status">
+                {folderPicker.pending
+                  ? translate('auto.components.sidebar.FolderParentPicker.attaching', 'Attaching…')
+                  : translate(
+                      'auto.components.sidebar.FolderParentPicker.loading',
+                      'Loading folder workspaces…'
+                    )}
+              </div>
+            ) : filtered.length === 0 ? (
               <div className="py-6 text-center text-sm text-muted-foreground">
-                {translate(
-                  'auto.components.sidebar.WorktreeParentPickerPopover.empty',
-                  'No matching eligible worktrees.'
-                )}
+                {folderMode
+                  ? translate(
+                      'auto.components.sidebar.FolderParentPicker.empty',
+                      'No matching eligible folder workspaces on this execution host.'
+                    )
+                  : translate(
+                      'auto.components.sidebar.WorktreeParentPickerPopover.empty',
+                      'No matching eligible worktrees.'
+                    )}
               </div>
             ) : (
               <div className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
@@ -398,7 +401,14 @@ export function WorktreeParentPickerPopover({
                         candidate={candidate}
                         repo={repoMap.get(candidate.repoId)}
                         status={statuses.get(candidate.id) ?? 'inactive'}
-                        isCurrent={activeWorktreeId === candidate.id}
+                        isCurrent={
+                          folderMode
+                            ? (folderPicker.byId.get(candidate.id)?.isCurrent ?? false)
+                            : activeWorktreeId === candidate.id
+                        }
+                        folderGroupName={
+                          folderMode ? folderPicker.byId.get(candidate.id)?.groupName : undefined
+                        }
                       />
                     </div>
                   )

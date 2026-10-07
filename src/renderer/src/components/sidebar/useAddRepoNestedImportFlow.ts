@@ -275,10 +275,14 @@ export function useAddRepoNestedImportFlow({
       owner: nestedRuntimeEnvironmentId,
       ...(displayName ? { displayName } : {}),
       closeModal,
-      setIsAdding
+      setIsAdding,
+      fetchWorktrees,
+      onGitRepoReady
     })
   }, [
     closeModal,
+    fetchWorktrees,
+    onGitRepoReady,
     getNestedRepoRuntimeKind,
     nestedAttemptId,
     nestedConnectionId,

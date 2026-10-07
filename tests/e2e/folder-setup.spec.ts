@@ -1,4 +1,7 @@
-import { openSidebarProjectDialog } from './helpers/sidebar-project-dialog'
+import {
+  openSidebarProjectDialog,
+  openSidebarWorkspaceComposer
+} from './helpers/sidebar-project-dialog'
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { mkdtemp } from 'node:fs/promises'
@@ -115,6 +118,78 @@ function getImportAsGroupButton(importDialog: Locator): Locator {
 }
 
 test.describe('Folder setup', () => {
+  test('creates a folder workspace by choosing the imported group in the composer', async ({
+    electronApp,
+    orcaPage
+  }, testInfo) => {
+    await waitForSessionReady(orcaPage)
+    const fixture = await createNestedRepoFixture()
+    await chooseFolderInNativeDialog(electronApp, fixture.parentPath)
+    await orcaPage.evaluate(() => {
+      const store = window.__store!
+      const state = store.getState()
+      store.setState({ settings: { ...state.settings!, defaultTuiAgent: 'blank' } })
+    })
+
+    await openSidebarProjectDialog(orcaPage)
+    await orcaPage
+      .getByRole('dialog', { name: /Add a project/i })
+      .getByRole('button', { name: /Browse folder/i })
+      .click()
+    const importDialog = orcaPage.getByRole('dialog', {
+      name: /Import repositories from folder/i
+    })
+    await expect(getImportAsGroupButton(importDialog)).toBeEnabled()
+    await getImportAsGroupButton(importDialog).click()
+    await expect
+      .poll(() =>
+        orcaPage.evaluate(
+          (parentPath) =>
+            window
+              .__store!.getState()
+              .projectGroups.some((group) => group.parentPath === parentPath),
+          fixture.parentPath
+        )
+      )
+      .toBe(true)
+    await orcaPage.evaluate(() => window.__store!.getState().closeModal())
+
+    await openSidebarWorkspaceComposer(orcaPage)
+    const composer = orcaPage.getByRole('dialog', {
+      name: /Create (Folder )?(Workspace|Worktree)/i
+    })
+    await composer.getByRole('combobox', { name: 'Project', exact: true }).fill(fixture.groupName)
+    const groupOption = orcaPage.getByRole('option').filter({ hasText: fixture.groupName })
+    await expect(groupOption).toHaveCount(1)
+    await groupOption.click()
+    await expect(
+      composer.getByRole('heading', { name: 'Create Folder Workspace', exact: true })
+    ).toBeVisible()
+    await composer.locator('[data-workspace-name-input="true"]').fill('attachment-test-ticket')
+    const cdp = await orcaPage.context().newCDPSession(orcaPage)
+    try {
+      const before = await cdp.send('Page.captureScreenshot')
+      writeFileSync(
+        testInfo.outputPath('folder-workspace-composer.png'),
+        Buffer.from(before.data, 'base64')
+      )
+      await composer.getByRole('button', { name: /^Create/ }).click()
+      await expect(composer).toHaveCount(0)
+      const createdRow = orcaPage
+        .locator('[data-worktree-sidebar] [data-worktree-card-surface]')
+        .filter({ hasText: 'attachment-test-ticket' })
+      await expect(createdRow).toBeVisible()
+      await expect(createdRow).toHaveAttribute('data-worktree-card-active', /.+/)
+      const after = await cdp.send('Page.captureScreenshot')
+      writeFileSync(
+        testInfo.outputPath('folder-workspace-created.png'),
+        Buffer.from(after.data, 'base64')
+      )
+    } finally {
+      await cdp.detach()
+    }
+  })
+
   test('imports nested repositories from the add-project dialog as a project group', async ({
     electronApp,
     orcaPage

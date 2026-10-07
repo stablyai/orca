@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  getNestedRepoDirectoryExclusion,
   isIgnoredNestedRepoDirectory,
   readNestedRepoGitignoreRules
 } from './nested-repo-scan-rules'
@@ -21,6 +22,33 @@ async function readRules(content: string, baseSegments: string[] = []) {
 }
 
 describe('nested repository ignore rules', () => {
+  it('reports only the effective positive rule with its original line and scope', async () => {
+    const rules = await readRules('# ignored comment\ncache*\n!cache-keep\n/cache-other/', [
+      'parent'
+    ])
+    expect(
+      getNestedRepoDirectoryExclusion('cache-keep', ['parent', 'cache-keep'], rules)
+    ).toBeNull()
+    expect(
+      getNestedRepoDirectoryExclusion('cache-other', ['parent', 'cache-other'], rules)
+    ).toEqual({
+      reason: 'gitignore',
+      ignoreFile: '/workspace/.gitignore',
+      rule: '/cache-other/',
+      line: 4
+    })
+    expect(
+      getNestedRepoDirectoryExclusion(
+        'node_modules',
+        ['parent', 'node_modules'],
+        await readRules('*\n!*')
+      )
+    ).toEqual({ reason: 'builtin' })
+    expect(getNestedRepoDirectoryExclusion('.hidden', ['parent', '.hidden'], [])).toEqual({
+      reason: 'hidden'
+    })
+  })
+
   it.each([
     ['cache*', ['parent', 'cache-data', 'child'], true],
     ['cache*\n!cache-keep', ['parent', 'cache-keep'], false],
