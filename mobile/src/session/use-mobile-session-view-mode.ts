@@ -9,8 +9,7 @@ import {
 import {
   isOverrideScope,
   mergeOverrides,
-  isNewerPublication,
-  reachesPublication,
+  isPendingHostViewWriteSettled,
   createViewOverridesRuntime,
   type MobileSessionTabViewModeBridge,
   type PendingHostViewWrite,
@@ -39,6 +38,8 @@ export function useMobileSessionViewMode(args: {
   const viewOverridesStateRef = useRef(viewOverridesState)
   viewOverridesStateRef.current = viewOverridesState
   const viewOverridesRuntimeRef = useRef<ViewOverridesRuntime | null>(null)
+  // Why: a host write settles only after acceptance and an authoritative echo; the optimistic
+  // view must survive stale snapshots and the RPC's asynchronous settlement window.
   const pendingHostViewWritesRef = useRef(new Map<string, PendingHostViewWrite>())
   const nextHostViewWriteTokenRef = useRef(0)
   const [, setPendingVersion] = useState(0)
@@ -85,13 +86,11 @@ export function useMobileSessionViewMode(args: {
         write.hostId === hostId &&
         write.worktreeId === worktreeId &&
         write.source === bridge.hostViewSource &&
-        write.accepted &&
-        ((write.acknowledgedPublication &&
-          reachesPublication(bridge.readHostViewPublication?.(), write.acknowledgedPublication)) ||
-          (!write.acknowledgedPublication &&
-            write.acceptedPublication &&
-            isNewerPublication(bridge.readHostViewPublication?.(), write.acceptedPublication) &&
-            bridge.readHostViewMode(tabId) === write.viewMode))
+        isPendingHostViewWriteSettled(
+          write,
+          bridge.readHostViewPublication?.(),
+          bridge.readHostViewMode(tabId)
+        )
       ) {
         pending.delete(tabId)
       }
@@ -215,6 +214,8 @@ export function useMobileSessionViewMode(args: {
                 pending.source === bridge.hostViewSource
               ) {
                 pending.accepted = true
+                // Why: newer hosts identify the exact publication; older hosts retain matching
+                // echo reconciliation below, including snapshots received before this ACK.
                 pending.acceptedPublication = bridge.readHostViewPublication?.()
                 if (ack?.publicationEpoch && typeof ack.snapshotVersion === 'number') {
                   pending.acknowledgedPublication = {

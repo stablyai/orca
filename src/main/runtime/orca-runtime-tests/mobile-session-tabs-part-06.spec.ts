@@ -409,9 +409,15 @@ describe('OrcaRuntimeService', () => {
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
-    await runtime.setMobileSessionTabProps(`id:${TEST_WORKTREE_ID}`, {
+    const reply = await runtime.setMobileSessionTabProps(`id:${TEST_WORKTREE_ID}`, {
       tabId: 'host-tab',
       viewMode: 'chat'
+    })
+
+    expect(reply).toMatchObject({
+      updated: true,
+      publicationEpoch: expect.any(String),
+      snapshotVersion: expect.any(Number)
     })
 
     const persisted = getSession().tabsByWorktree[TEST_WORKTREE_ID]!.find(
@@ -438,7 +444,33 @@ describe('OrcaRuntimeService', () => {
     const session = makeWorkspaceSessionWithHeadlessTerminal()
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
     const runtime = new OrcaRuntimeService(runtimeStore as never)
-    const setSessionTabProps = vi.fn()
+    const setSessionTabProps = vi.fn(async () => {
+      runtime.syncWindowGraph(0, {
+        tabs: [],
+        leaves: [],
+        mobileSessionTabs: [
+          {
+            worktree: TEST_WORKTREE_ID,
+            publicationEpoch: 'renderer:updated',
+            snapshotVersion: 2,
+            activeGroupId: null,
+            activeTabId: 'host-tab::leaf:1',
+            activeTabType: 'terminal',
+            tabs: [
+              {
+                type: 'terminal',
+                id: 'host-tab::leaf:1',
+                parentTabId: 'host-tab',
+                leafId: 'leaf:1',
+                title: 'Terminal',
+                isActive: true,
+                viewMode: 'chat'
+              }
+            ]
+          }
+        ]
+      })
+    })
     runtime.setNotifier({
       worktreesChanged: vi.fn(),
       reposChanged: vi.fn(),
@@ -479,11 +511,17 @@ describe('OrcaRuntimeService', () => {
     })
     Object.defineProperty(runtime, 'getAvailableAuthoritativeWindow', { value: () => ({}) })
 
-    await runtime.setMobileSessionTabProps(`id:${TEST_WORKTREE_ID}`, {
+    const reply = await runtime.setMobileSessionTabProps(`id:${TEST_WORKTREE_ID}`, {
       tabId: 'host-tab::leaf:1',
       color: 'blue',
       isPinned: true,
       viewMode: 'chat'
+    })
+
+    expect(reply).toEqual({
+      updated: true,
+      publicationEpoch: 'renderer:updated',
+      snapshotVersion: 2
     })
 
     expect(setSessionTabProps).toHaveBeenCalledWith(TEST_WORKTREE_ID, 'host-tab', {

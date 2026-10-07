@@ -503,7 +503,7 @@ describe('useMobileSessionViewMode', () => {
     })
   })
 
-  it('waits for a post-acceptance publication revision before clearing pending state', async () => {
+  it('clears a matching legacy echo without a publication marker', async () => {
     const hostWrite = deferred<void>()
     const hostViews = new Map<string, MobileSessionView>([['t1', 'terminal']])
     const hostPublication = { epoch: 'host', version: 10 }
@@ -527,16 +527,14 @@ describe('useMobileSessionViewMode', () => {
       await Promise.resolve()
     })
 
-    // This is the pre-write snapshot: matching value alone must not acknowledge the write.
+    // Legacy hosts do not return a publication marker, so the accepted matching echo settles it.
     hostViews.set('t1', 'chat')
     rerenderShared?.()
     expect(controller?.isTabChatView('t1')).toBe(true)
 
     hostViews.set('t1', 'terminal')
     rerenderShared?.()
-    // The matching value was from the same pre-ack publication, so a peer update in that
-    // publication must still be hidden by the pending write rather than being treated as ack.
-    expect(controller?.isTabChatView('t1')).toBe(true)
+    expect(controller?.isTabChatView('t1')).toBe(false)
   })
 
   it('clears on the acknowledged publication even when the peer changed the view', async () => {
@@ -597,6 +595,29 @@ describe('useMobileSessionViewMode', () => {
     hostViews.set('t1', 'chat')
     rerenderShared?.()
     expect(controller?.isTabChatView('t1')).toBe(true)
+  })
+
+  it('clears a legacy write when its matching snapshot arrived before the ACK', async () => {
+    const hostViews = new Map<string, MobileSessionView>([['t1', 'terminal']])
+    const write = deferred<void>()
+    await mountShared({
+      defaultView: 'terminal',
+      hostViews,
+      hostViewSource: {},
+      writeHostViewMode: async () => write.promise
+    })
+    act(() => controller?.toggleTabChatView('t1'))
+    hostViews.set('t1', 'chat')
+    rerenderShared?.()
+    await act(async () => {
+      write.resolve()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(controller?.isTabChatView('t1')).toBe(true)
+    hostViews.set('t1', 'terminal')
+    rerenderShared?.()
+    expect(controller?.isTabChatView('t1')).toBe(false)
   })
 
   it('flips a second tap from the queued view rather than the host echo it outranks', async () => {

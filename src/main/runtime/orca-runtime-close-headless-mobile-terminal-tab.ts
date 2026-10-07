@@ -187,7 +187,7 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
       chatLeafId?: string | null
       titlesByLeafId?: Record<string, string>
     }
-  ): Promise<{ updated: true; publicationEpoch?: string; snapshotVersion?: number }> {
+  ): Promise<{ updated: true }> {
     const explicitWorktreeId = this.getValidatedExplicitWorktreeIdSelector(worktreeSelector)
     const worktreeId =
       explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
@@ -195,16 +195,7 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
     // control), it owns pane geometry and republishes it — a headless write here
     // would be overwritten and could fight the renderer. Persist only headlessly.
     if (this.getAvailableAuthoritativeWindow()) {
-      const published = this.mobileSessionTabsByWorktree.get(worktreeId)
-      return {
-        updated: true,
-        ...(published
-          ? {
-              publicationEpoch: published.publicationEpoch,
-              snapshotVersion: published.snapshotVersion
-            }
-          : {})
-      }
+      return { updated: true }
     }
     // Why: resolve to the host tab id (older/raw-id clients) so the persisted
     // layout entry matches, matching setMobileSessionTabProps.
@@ -223,16 +214,7 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
         ...(acceptedLayout.titlesByLeafId ? { titlesByLeafId: acceptedLayout.titlesByLeafId } : {})
       })
     }
-    const published = this.mobileSessionTabsByWorktree.get(worktreeId)
-    return {
-      updated: true,
-      ...(published
-        ? {
-            publicationEpoch: published.publicationEpoch,
-            snapshotVersion: published.snapshotVersion
-          }
-        : {})
-    }
+    return { updated: true }
   }
 
   // Why: tab color/pin are host-authoritative for remote-server tabs but had no
@@ -246,7 +228,7 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
       isPinned?: boolean
       viewMode?: 'terminal' | 'chat'
     }
-  ): Promise<{ updated: true }> {
+  ): Promise<{ updated: true; publicationEpoch?: string; snapshotVersion?: number }> {
     const explicitWorktreeId = this.getValidatedExplicitWorktreeIdSelector(worktreeSelector)
     const worktreeId =
       explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
@@ -265,7 +247,16 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
         ...(args.isPinned !== undefined ? { isPinned: args.isPinned } : {}),
         ...(args.viewMode !== undefined ? { viewMode: args.viewMode } : {})
       })
-      return { updated: true }
+      const published = this.mobileSessionTabsByWorktree.get(worktreeId)
+      return {
+        updated: true,
+        ...(published
+          ? {
+              publicationEpoch: published.publicationEpoch,
+              snapshotVersion: published.snapshotVersion
+            }
+          : {})
+      }
     }
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
     const hostTabId = snapshot
@@ -273,6 +264,15 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
       : args.tabId
     this.persistHeadlessSessionTabProps(worktreeId, hostTabId, args)
     this.applyHeadlessSessionTabPropsToSnapshot(worktreeId, hostTabId, args)
-    return { updated: true }
+    const published = this.mobileSessionTabsByWorktree.get(worktreeId)
+    return {
+      updated: true,
+      ...(published
+        ? {
+            publicationEpoch: published.publicationEpoch,
+            snapshotVersion: published.snapshotVersion
+          }
+        : {})
+    }
   }
 }

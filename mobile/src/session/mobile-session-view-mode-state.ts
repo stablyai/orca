@@ -98,3 +98,16 @@ export function reachesPublication(
     current !== undefined && (current.epoch !== target.epoch || current.version >= target.version)
   )
 }
+
+export function isPendingHostViewWriteSettled(
+  write: PendingHostViewWrite,
+  currentPublication: { epoch: string | null; version: number } | undefined,
+  currentView: MobileSessionView | undefined
+): boolean {
+  return (
+    write.accepted &&
+    ((write.acknowledgedPublication &&
+      reachesPublication(currentPublication, write.acknowledgedPublication)) ||
+      (!write.acknowledgedPublication && currentView === write.viewMode))
+  )
+}
