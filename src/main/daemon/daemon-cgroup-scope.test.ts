@@ -1,8 +1,9 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer, type Server } from 'node:net'
 import { tmpdir } from 'node:os'
+import type * as Os from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   buildLegacyScopeMigrationCommand,
   buildDurableDaemonScopeCommand,
@@ -12,6 +13,28 @@ import {
   migrateLegacyDaemonScope,
   readLegacyDaemonScopeProcesses
 } from './daemon-cgroup-scope'
+
+// The suite names its own user, so no fixture needs the host's passwd database (a UID without an
+// entry is common in containers). `null` stands for "this UID has no passwd entry".
+const SUITE_USER = 'orca-test'
+const fakeUser = vi.hoisted(() => ({ name: null as string | null }))
+
+vi.mock('node:os', async (importOriginal) => {
+  const actual = await importOriginal<typeof Os>()
+  return {
+    ...actual,
+    userInfo: () => {
+      if (fakeUser.name === null) {
+        throw new Error('ENOENT: no passwd entry')
+      }
+      return { uid: -1, gid: -1, username: fakeUser.name, homedir: actual.tmpdir(), shell: null }
+    }
+  }
+})
+
+beforeEach(() => {
+  fakeUser.name = SUITE_USER
+})
 
 describe('daemonScopeUnitName', () => {
   it('prefixes the launch nonce so the unit is traceable back to a launch', () => {
@@ -33,6 +56,7 @@ describe('daemonScopeUnitName', () => {
 const fakeBusServers: Server[] = []
 const fakeBusDirs: string[] = []
 const fakeSystemdBootDirs: string[] = []
+const fakeUserManagerDirs: string[] = []
 
 function fakeRuntimeDirWithBus(): string {
   const dir = mkdtempSync(join(tmpdir(), 'xdg-runtime-with-bus-'))
@@ -57,7 +81,36 @@ function fakeSystemdBootPath(): string {
   return dir
 }
 
+// logind's record of `loginctl enable-linger <user>`: one file per lingering user, named by
+// systemd's cescape() of the user name (a plain ASCII name is its own record name).
+function fakeLingerDir({
+  lingering,
+  record = SUITE_USER
+}: {
+  lingering: boolean
+  record?: string
+}): string {
+  const dir = mkdtempSync(join(tmpdir(), 'systemd-linger-'))
+  if (lingering) {
+    writeFileSync(join(dir, record), '')
+  }
+  fakeUserManagerDirs.push(dir)
+  return dir
+}
+
+// Stands in for the launcher's own /proc/self/cgroup.
+function fakeOwnCgroup(cgroupPath: string): string {
+  const dir = mkdtempSync(join(tmpdir(), 'own-cgroup-'))
+  const path = join(dir, 'cgroup')
+  writeFileSync(path, `0::${cgroupPath}\n`)
+  fakeUserManagerDirs.push(dir)
+  return path
+}
+
+const SYSTEM_SERVICE_CGROUP = '/system.slice/orca-serve.service'
+
 afterEach(() => {
+  vi.restoreAllMocks()
   for (const server of fakeBusServers.splice(0)) {
     server.close()
   }
@@ -65,6 +118,9 @@ afterEach(() => {
     rmSync(dir, { recursive: true, force: true })
   }
   for (const dir of fakeSystemdBootDirs.splice(0)) {
+    rmSync(dir, { recursive: true, force: true })
+  }
+  for (const dir of fakeUserManagerDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true })
   }
 })
@@ -153,7 +209,9 @@ describe('isDurableDaemonScopeSupported', () => {
         'linux',
         realPerUidDir,
         fakeSystemdBootPath(),
-        () => ({ code: 0, timedOut: false })
+        () => ({ code: 0, timedOut: false }),
+        fakeLingerDir({ lingering: true }),
+        fakeOwnCgroup(SYSTEM_SERVICE_CGROUP)
       )
     ).toBe(true)
   })
@@ -166,7 +224,9 @@ describe('isDurableDaemonScopeSupported', () => {
         'linux',
         perUidDir,
         fakeSystemdBootPath(),
-        () => ({ code: 0, timedOut: false })
+        () => ({ code: 0, timedOut: false }),
+        fakeLingerDir({ lingering: true }),
+        fakeOwnCgroup(SYSTEM_SERVICE_CGROUP)
       )
     ).toBe(true)
   })
@@ -182,10 +242,256 @@ describe('isDurableDaemonScopeSupported', () => {
         'linux',
         canonicalWithoutBus,
         fakeSystemdBootPath(),
-        () => ({ code: 0, timedOut: false })
+        () => ({ code: 0, timedOut: false }),
+        fakeLingerDir({ lingering: true }),
+        fakeOwnCgroup(SYSTEM_SERVICE_CGROUP)
       )
     ).toBe(true)
   })
+
+  it('is false when the user manager stops at the last logout: no lingering, launched outside it', () => {
+    // A system unit with User=<account> while that account happens to have an SSH login open:
+    // the bus exists only for as long as that login does.
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const perUidDir = fakeRuntimeDirWithBus()
+    const bootPath = fakeSystemdBootPath()
+    const notLingering = fakeLingerDir({ lingering: false })
+    for (const ownCgroup of [
+      SYSTEM_SERVICE_CGROUP,
+      `/user.slice/user-${process.getuid?.() ?? 1000}.slice/session-4.scope`
+    ]) {
+      expect(
+        isDurableDaemonScopeSupported(
+          { XDG_RUNTIME_DIR: perUidDir },
+          'linux',
+          perUidDir,
+          bootPath,
+          () => ({ code: 0, timedOut: false }),
+          notLingering,
+          fakeOwnCgroup(ownCgroup)
+        )
+      ).toBe(false)
+    }
+  })
+
+  it('is true for a service outside the user manager when lingering keeps that manager alive', () => {
+    const perUidDir = fakeRuntimeDirWithBus()
+    expect(
+      isDurableDaemonScopeSupported(
+        { XDG_RUNTIME_DIR: perUidDir },
+        'linux',
+        perUidDir,
+        fakeSystemdBootPath(),
+        () => ({ code: 0, timedOut: false }),
+        fakeLingerDir({ lingering: true }),
+        fakeOwnCgroup(SYSTEM_SERVICE_CGROUP)
+      )
+    ).toBe(true)
+  })
+
+  it.skipIf(typeof process.getuid !== 'function')(
+    "is true without lingering when the launcher already runs under this user's manager",
+    () => {
+      // A `systemctl --user` unit (or an `app-*.scope`) under user@<uid>.service: the daemon's
+      // scope can lose that manager no sooner than its launcher does. Another user's manager does
+      // not count.
+      vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const uid = process.getuid!()
+      const perUidDir = fakeRuntimeDirWithBus()
+      const bootPath = fakeSystemdBootPath()
+      const notLingering = fakeLingerDir({ lingering: false })
+      const probe = (ownCgroup: string): boolean =>
+        isDurableDaemonScopeSupported(
+          { XDG_RUNTIME_DIR: perUidDir },
+          'linux',
+          perUidDir,
+          bootPath,
+          () => ({ code: 0, timedOut: false }),
+          notLingering,
+          fakeOwnCgroup(ownCgroup)
+        )
+      expect(
+        probe(`/user.slice/user-${uid}.slice/user@${uid}.service/app.slice/orca-serve.service`)
+      ).toBe(true)
+      expect(
+        probe(`/user.slice/user-${uid + 1}.slice/user@${uid + 1}.service/app.slice/x.scope`)
+      ).toBe(false)
+    }
+  )
+
+  it('names loginctl enable-linger once per process when lingering is what blocks the scope', async () => {
+    vi.resetModules()
+    const fresh = await import('./daemon-cgroup-scope')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const perUidDir = fakeRuntimeDirWithBus()
+    const bootPath = fakeSystemdBootPath()
+    const ownCgroup = fakeOwnCgroup(SYSTEM_SERVICE_CGROUP)
+    const probe = (lingerDir: string): boolean =>
+      fresh.isDurableDaemonScopeSupported(
+        { XDG_RUNTIME_DIR: perUidDir },
+        'linux',
+        perUidDir,
+        bootPath,
+        () => ({ code: 0, timedOut: false }),
+        lingerDir,
+        ownCgroup
+      )
+
+    expect(probe(fakeLingerDir({ lingering: true }))).toBe(true)
+    expect(warn).not.toHaveBeenCalled()
+
+    const notLingering = fakeLingerDir({ lingering: false })
+    expect(probe(notLingering)).toBe(false)
+    expect(probe(notLingering)).toBe(false)
+    expect(warn).toHaveBeenCalledOnce()
+    const message = String(warn.mock.calls[0]?.[0])
+    expect(message).toContain(`lingering is off for ${SUITE_USER}`)
+    expect(message).toContain(`loginctl enable-linger ${SUITE_USER}`)
+    expect(message).toContain('docs/reference/headless-linux-server.md')
+    expect(message).not.toContain('\n')
+  })
+
+  it('does not name enable-linger when an earlier gate already rules the scope out', async () => {
+    // macOS, Windows, containers and hosts without a user bus or systemd-run would not get a
+    // durable scope from lingering either, so the hint would send the user the wrong way.
+    vi.resetModules()
+    const fresh = await import('./daemon-cgroup-scope')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const perUidDir = fakeRuntimeDirWithBus()
+    const bootPath = fakeSystemdBootPath()
+    const notLingering = fakeLingerDir({ lingering: false })
+    const ownCgroup = fakeOwnCgroup(SYSTEM_SERVICE_CGROUP)
+    const probe = (
+      platform: NodeJS.Platform,
+      runtimeDir: string,
+      systemdBootPath: string,
+      code: number
+    ): boolean =>
+      fresh.isDurableDaemonScopeSupported(
+        { XDG_RUNTIME_DIR: runtimeDir },
+        platform,
+        runtimeDir,
+        systemdBootPath,
+        () => ({ code, timedOut: false }),
+        notLingering,
+        ownCgroup
+      )
+
+    expect(probe('darwin', perUidDir, bootPath, 0)).toBe(false)
+    expect(probe('linux', perUidDir, '/definitely/not/systemd-boot', 0)).toBe(false)
+    expect(probe('linux', fakeRuntimeDirWithoutBus(), bootPath, 0)).toBe(false)
+    expect(probe('linux', perUidDir, bootPath, 1)).toBe(false)
+    expect(warn).not.toHaveBeenCalled()
+  })
+
+  it('fails closed when its own cgroup file cannot be read and lingering is off', () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const perUidDir = fakeRuntimeDirWithBus()
+    const notLingering = fakeLingerDir({ lingering: false })
+    expect(
+      isDurableDaemonScopeSupported(
+        { XDG_RUNTIME_DIR: perUidDir },
+        'linux',
+        perUidDir,
+        fakeSystemdBootPath(),
+        () => ({ code: 0, timedOut: false }),
+        notLingering,
+        join(notLingering, 'no-such-cgroup-file')
+      )
+    ).toBe(false)
+  })
+
+  // logind names the record by systemd's cescape() of the user name (src/login/logind-dbus.c,
+  // src/basic/escape.c), so a raw-name lookup misses every name it escapes.
+  for (const [name, record] of [
+    ['DOMAIN\\orca', 'DOMAIN\\\\orca'],
+    ['josé', 'jos\\303\\251'],
+    ["o'brien", "o\\'brien"],
+    ['tab\there"\x7f', 'tab\\there\\"\\177']
+  ] as const) {
+    it(`finds logind's escaped linger record for ${JSON.stringify(name)}, not a raw-name file`, () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {})
+      fakeUser.name = name
+      const perUidDir = fakeRuntimeDirWithBus()
+      const bootPath = fakeSystemdBootPath()
+      const ownCgroup = fakeOwnCgroup(SYSTEM_SERVICE_CGROUP)
+      const probe = (lingerDir: string): boolean =>
+        isDurableDaemonScopeSupported(
+          { XDG_RUNTIME_DIR: perUidDir },
+          'linux',
+          perUidDir,
+          bootPath,
+          () => ({ code: 0, timedOut: false }),
+          lingerDir,
+          ownCgroup
+        )
+      expect(probe(fakeLingerDir({ lingering: true, record }))).toBe(true)
+      expect(probe(fakeLingerDir({ lingering: true, record: name }))).toBe(false)
+    })
+  }
+
+  it('fails closed when this UID has no passwd entry, whoever else is lingering, and says it cannot tell', async () => {
+    // Common in containers: without a name there is no linger record to match, so no guess, and
+    // no claim that lingering is off.
+    vi.resetModules()
+    const fresh = await import('./daemon-cgroup-scope')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    fakeUser.name = null
+    const perUidDir = fakeRuntimeDirWithBus()
+    const lingerDir = fakeLingerDir({ lingering: true })
+    for (const name of ['root', 'orca', process.env.USER, process.env.LOGNAME]) {
+      if (name) {
+        writeFileSync(join(lingerDir, name), '')
+      }
+    }
+    expect(
+      fresh.isDurableDaemonScopeSupported(
+        { XDG_RUNTIME_DIR: perUidDir },
+        'linux',
+        perUidDir,
+        fakeSystemdBootPath(),
+        () => ({ code: 0, timedOut: false }),
+        lingerDir,
+        fakeOwnCgroup(SYSTEM_SERVICE_CGROUP)
+      )
+    ).toBe(false)
+    expect(warn).toHaveBeenCalledOnce()
+    const message = String(warn.mock.calls[0]?.[0])
+    expect(message).toContain('cannot tell whether lingering is on')
+    expect(message).not.toContain('lingering is off')
+    expect(message).not.toContain('\n')
+  })
+
+  it.skipIf(process.getuid?.() === 0)(
+    'fails closed and says it cannot tell when the linger dir cannot be read',
+    async () => {
+      vi.resetModules()
+      const fresh = await import('./daemon-cgroup-scope')
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const perUidDir = fakeRuntimeDirWithBus()
+      const lingerDir = fakeLingerDir({ lingering: true })
+      chmodSync(lingerDir, 0o000)
+      try {
+        expect(
+          fresh.isDurableDaemonScopeSupported(
+            { XDG_RUNTIME_DIR: perUidDir },
+            'linux',
+            perUidDir,
+            fakeSystemdBootPath(),
+            () => ({ code: 0, timedOut: false }),
+            lingerDir,
+            fakeOwnCgroup(SYSTEM_SERVICE_CGROUP)
+          )
+        ).toBe(false)
+      } finally {
+        chmodSync(lingerDir, 0o700)
+      }
+      expect(warn).toHaveBeenCalledOnce()
+      const message = String(warn.mock.calls[0]?.[0])
+      expect(message).toContain(`cannot tell whether lingering is on for ${SUITE_USER}`)
+      expect(message).not.toContain('lingering is off')
+    }
+  )
 })
 
 describe('buildDurableDaemonScopeCommand', () => {
@@ -382,7 +688,9 @@ describe('legacy daemon scope migration', () => {
       () => ({ unit: 'app-orca-1420296.scope', pids: [321, 400] }),
       fakeSystemdBootPath(),
       () => ({ code: 0, timedOut: false }),
-      runMigration
+      runMigration,
+      fakeLingerDir({ lingering: true }),
+      fakeOwnCgroup(SYSTEM_SERVICE_CGROUP)
     )
     expect(migrated).toBe(true)
     expect(runMigration).toHaveBeenCalledOnce()
@@ -396,7 +704,9 @@ describe('legacy daemon scope migration', () => {
         () => ({ unit: 'app-orca-1420296.scope', pids: [321, 400] }),
         fakeSystemdBootPath(),
         () => ({ code: 0, timedOut: false }),
-        () => ({ code: 1, timedOut: false })
+        () => ({ code: 1, timedOut: false }),
+        fakeLingerDir({ lingering: true }),
+        fakeOwnCgroup(SYSTEM_SERVICE_CGROUP)
       )
     ).toBe(false)
   })

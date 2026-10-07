@@ -53,11 +53,19 @@ The scope is requested only where it can work. All of these must hold:
 
 - **Linux with systemd as PID 1** (`/run/systemd/system` exists).
 - **A reachable user bus** — a connectable `bus` socket in the per-UID runtime dir
-  (`/run/user/<uid>`, or whatever `XDG_RUNTIME_DIR` points at). For a service account that is
-  not otherwise logged in, that means `loginctl enable-linger <user>`; a unit whose
+  (`/run/user/<uid>`, or whatever `XDG_RUNTIME_DIR` points at). A unit whose
   `RuntimeDirectory=` hardening moves `XDG_RUNTIME_DIR` off the per-UID path is handled, because
   the real per-UID path is probed first.
 - **`systemd-run` on `PATH`** and answering `--version`.
+- **A user manager that outlives the login sessions** — lingering is on for the user
+  (`loginctl enable-linger <user>`, recorded as a file in `/var/lib/systemd/linger/` named after
+  the C-escaped user name, as logind writes it), or the launcher itself runs under that user's
+  `user@<uid>.service` (an `app-*.scope` under `user@<uid>.service` or a `systemctl --user` unit;
+  a plain `session-N.scope` login does not count). An open login session alone is not enough:
+  without lingering, the user manager stops a few seconds after the last session closes and takes
+  every scope it owns with it. When this is the only condition missing, the launcher logs one
+  line, once per process: a `loginctl enable-linger <user>` hint, or, when the UID has no passwd
+  entry or the linger dir cannot be read, that it cannot tell whether lingering is on.
 
 Any of those missing, or a `StartTransientUnit` call that fails anyway, falls back to the
 direct launch — and in that unscoped fallback case the paragraph above still describes reality:

@@ -12,31 +12,38 @@
  * manager and execs the command into it, so the daemon's cgroup becomes a *sibling* of the
  * unit's that no unit-scoped kill reaches; `--collect` drops the unit once it exits.
  *
- * That needs systemd as PID 1 and a reachable `--user` manager (a login session, or
- * `loginctl enable-linger <user>` for a service account). Everywhere else keeps the direct-fork
- * launch, so this module fails closed to "not supported" rather than guessing.
+ * That needs systemd as PID 1 and a reachable `--user` manager that outlives the current login
+ * sessions (`loginctl enable-linger <user>` for a service account). Everywhere else keeps the
+ * direct-fork launch, so this module fails closed to "not supported" rather than guessing.
  */
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { runProcessSync, type ProcessResult } from '../../shared/child-process/run-process'
+import { currentUsername, isLingering } from './systemd-linger-record'
 
 const SYSTEMD_RUN_BINARY = 'systemd-run'
 const UNIT_NAME_PREFIX = 'orca-daemon-'
 /** The marker that distinguishes "booted under systemd" from a plain container. A test seam so
  *  the capability tests stay hermetic off a systemd host. */
 const SYSTEMD_BOOT_PATH = '/run/systemd/system'
+/** Where logind records `loginctl enable-linger <user>`: one file per lingering user, named by
+ *  the C-escaped user name (see `isLingering`). */
+const SYSTEMD_LINGER_DIR = '/var/lib/systemd/linger'
+const OWN_CGROUP_PATH = '/proc/self/cgroup'
 /** Long enough for a local binary to print its version, short enough that a wedged systemd
  *  cannot stall the launch lane. */
 const SYSTEMD_RUN_PROBE_TIMEOUT_MS = 2_000
 const SYSTEMD_SCOPE_MIGRATION_TIMEOUT_MS = 5_000
 const LEGACY_SCOPE_PREFIX = 'app-orca-'
 
+const OWN_UID = typeof process.getuid === 'function' ? process.getuid() : null
 /** The conventional per-UID runtime dir every login session (and `loginctl enable-linger`)
  *  provisions, from `getuid()` rather than from the environment. The exported functions'
  *  `canonicalRuntimeDir` parameters default to this so production uses the real path; tests
  *  inject a fake one. */
-const CANONICAL_USER_RUNTIME_DIR =
-  typeof process.getuid === 'function' ? `/run/user/${process.getuid()}` : null
+const CANONICAL_USER_RUNTIME_DIR = OWN_UID === null ? null : `/run/user/${OWN_UID}`
+
+let lingerHintLogged = false
 
 /** systemd unit names are restricted to `[A-Za-z0-9:_.\-@]`; sanitize defensively even though
  *  `launchNonce` is already a UUID (hyphens and hex digits only). */
@@ -75,18 +82,61 @@ function resolveUserRuntimeDir(env: NodeJS.ProcessEnv, canonicalDir: string | nu
   return null
 }
 
+/** An `app-*.scope` under `user@<uid>.service` or a `systemctl --user` unit: the launcher already
+ *  lives under this user's manager, so the daemon's scope can lose that manager no sooner than the
+ *  launcher does. A plain `session-N.scope` login does not count: it is a sibling of
+ *  `user@<uid>.service`, not under it. */
+function runsUnderOwnUserManager(ownCgroupPath: string): boolean {
+  try {
+    const path = cgroupPathFromProc(readFileSync(ownCgroupPath, 'utf8'))
+    return OWN_UID !== null && path?.split('/').includes(`user@${OWN_UID}.service`) === true
+  } catch {
+    return false
+  }
+}
+
+/** Without lingering, logind stops `user@<uid>.service`, and every scope it owns, seconds after
+ *  the last logout. A system unit that found the bus only because someone was logged in would
+ *  put the daemon in a scope that dies sooner than the direct-fork fallback. */
+function userManagerOutlivesSessions(lingerDir: string, ownCgroupPath: string): boolean {
+  if (runsUnderOwnUserManager(ownCgroupPath)) {
+    return true
+  }
+  const username = currentUsername()
+  const lingering = username === null ? null : isLingering(lingerDir, username)
+  if (lingering) {
+    return true
+  }
+  if (!lingerHintLogged) {
+    lingerHintLogged = true
+    // Only a missing record is "lingering is off"; without a name or a readable dir, say so.
+    const reason =
+      lingering === false
+        ? `lingering is off for ${username}, so its user manager stops at the last logout. Run \`loginctl enable-linger ${username}\` so terminals survive a service restart`
+        : username === null
+          ? `cannot tell whether lingering is on: UID ${OWN_UID} has no passwd entry, so there is no user name to find its linger record by`
+          : `cannot tell whether lingering is on for ${username}: ${lingerDir} could not be read`
+    console.warn(
+      `[daemon] Not placing the terminal daemon in a durable systemd scope: ${reason}; see docs/reference/headless-linux-server.md.`
+    )
+  }
+  return false
+}
+
 /**
- * Best-effort, side-effect-free capability probe. Never throws; any uncertainty resolves to
- * "not supported" so the caller falls back to the existing, already-proven direct-fork launch.
+ * Best-effort, read-only capability probe that logs at most one hint per process. Never throws;
+ * any uncertainty resolves to "not supported" so the caller falls back to the existing,
+ * already-proven direct-fork launch.
  *
  * Stays synchronous: `launchDaemonChild` attaches the readiness listener in the same tick it is
  * called, and an await here would move the spawn past that tick. The child-process chokepoint
  * covers this shape with `runProcessSync` (as `isPwshAvailable` does) so the probe still gets
  * the shared spawn decisions instead of re-deciding them with `execFileSync`.
  *
- * `systemdBootPath` and `runVersionProbe` are test seams: they default to the real boot marker
- * and `systemd-run --version` probe, and a test injects fakes so the capability probe never
- * consults the host's own systemd.
+ * `systemdBootPath`, `runVersionProbe`, `lingerDir` and `ownCgroupPath` are test seams: they
+ * default to the real boot marker, `systemd-run --version` probe, logind linger dir and
+ * `/proc/self/cgroup`, and a test injects fakes so the capability probe never consults the host's
+ * own systemd.
  */
 
 /** The slice of `ProcessResult` the capability probe consumes; narrow so a test stub carries no
@@ -119,7 +169,9 @@ export function isDurableDaemonScopeSupported(
   platform: NodeJS.Platform = process.platform,
   canonicalRuntimeDir: string | null = CANONICAL_USER_RUNTIME_DIR,
   systemdBootPath: string = SYSTEMD_BOOT_PATH,
-  runVersionProbe: SystemdRunVersionProbe = runSystemdRunVersionProbe
+  runVersionProbe: SystemdRunVersionProbe = runSystemdRunVersionProbe,
+  lingerDir: string = SYSTEMD_LINGER_DIR,
+  ownCgroupPath: string = OWN_CGROUP_PATH
 ): boolean {
   if (platform !== 'linux') {
     return false
@@ -138,11 +190,15 @@ export function isDurableDaemonScopeSupported(
     const probe = runVersionProbe(SYSTEMD_RUN_BINARY, SYSTEMD_RUN_PROBE_TIMEOUT_MS)
     // A non-zero exit is data here rather than a throw, and a timeout kill leaves an exit behind
     // that answers nothing — both mean "cannot be trusted to place the daemon in a scope".
-    return probe.code === 0 && !probe.timedOut
+    if (probe.code !== 0 || probe.timedOut) {
+      return false
+    }
   } catch {
     // Throws only when the binary could not be started at all.
     return false
   }
+  // Last, so the enable-linger hint is only logged when lingering is the one thing missing.
+  return userManagerOutlivesSessions(lingerDir, ownCgroupPath)
 }
 
 export type DurableDaemonScopeCommand = {
@@ -260,7 +316,9 @@ export function migrateLegacyDaemonScope(
       env: command.env,
       timeoutMs,
       stdio: 'ignore'
-    })
+    }),
+  lingerDir: string = SYSTEMD_LINGER_DIR,
+  ownCgroupPath: string = OWN_CGROUP_PATH
 ): boolean {
   if (
     platform !== 'linux' ||
@@ -269,7 +327,9 @@ export function migrateLegacyDaemonScope(
       platform,
       canonicalRuntimeDir,
       systemdBootPath,
-      runVersionProbe
+      runVersionProbe,
+      lingerDir,
+      ownCgroupPath
     )
   ) {
     return false
