@@ -99,6 +99,32 @@ describe('setWebRuntimeTabProps', () => {
     })
   })
 
+  it('pushes a custom title and clear signal to the host', async () => {
+    vi.stubGlobal('__ORCA_WEB_CLIENT__', false)
+    mocks.getRuntimeEnvironmentIdForWorktree.mockReturnValue(ENVIRONMENT_ID)
+    mocks.getState.mockReturnValue({})
+    const runtimeCall = vi.fn().mockResolvedValue({ id: 'p', ok: true, result: { updated: true } })
+    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+
+    setWebRuntimeTabProps({
+      worktreeId: WORKTREE_ID,
+      tabId: 'web-terminal-host-tab-1',
+      customTitle: 'Shared build'
+    })
+    await vi.waitFor(() => expect(runtimeCall).toHaveBeenCalledTimes(1))
+    setWebRuntimeTabProps({
+      worktreeId: WORKTREE_ID,
+      tabId: 'web-terminal-host-tab-1',
+      customTitle: null
+    })
+
+    await vi.waitFor(() => expect(runtimeCall).toHaveBeenCalledTimes(2))
+    expect(runtimeCall.mock.calls.map(([call]) => call.params.customTitle)).toEqual([
+      'Shared build',
+      null
+    ])
+  })
+
   it('maps mirrored browser/editor unified ids before setting host tab props', async () => {
     vi.stubGlobal('__ORCA_WEB_CLIENT__', false)
     mocks.getRuntimeEnvironmentIdForWorktree.mockReturnValue(ENVIRONMENT_ID)

@@ -25,6 +25,7 @@ import { useTabStripSlotProps } from './use-tab-strip-slot-props'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 import { TabCloseTooltip } from './TabCloseTooltip'
 import { TerminalTabLeadingIcon } from './TerminalTabLeadingIcon'
+import { CUSTOM_TAB_TITLE_MAX_LENGTH } from '../../../../shared/custom-tab-title'
 import {
   isTerminalTabActivityLive,
   resolveTerminalTabActivityStatus,
@@ -243,6 +244,7 @@ export default function SortableTab({
           ref={setRenameInputElement}
           data-tab-rename-input="true"
           value={renameValue}
+          maxLength={CUSTOM_TAB_TITLE_MAX_LENGTH}
           aria-label={translate(
             'auto.components.tab.bar.SortableTab.ab19f603eb',
             'Rename tab {{value0}}',

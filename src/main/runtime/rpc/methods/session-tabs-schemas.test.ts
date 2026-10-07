@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { ActivateTab, CloseLifecycleTab, CloseTab, UpdatePaneLayout } from './session-tabs-schemas'
+import {
+  ActivateTab,
+  CloseLifecycleTab,
+  CloseTab,
+  SetTabProps,
+  UpdatePaneLayout
+} from './session-tabs-schemas'
+import { CUSTOM_TAB_TITLE_MAX_LENGTH } from '../../../../shared/custom-tab-title'
 
 const WT = 'id:wt'
 
@@ -68,6 +75,35 @@ describe('CloseLifecycleTab (session.tabs.closeLifecycle params)', () => {
         reason: 'user',
         publicationEpoch: 'epoch-1',
         terminal: 'term-1'
+      }).success
+    ).toBe(false)
+  })
+})
+
+describe('SetTabProps.customTitle', () => {
+  it('distinguishes a title update, clear, and unchanged payload', () => {
+    expect(
+      SetTabProps.parse({ worktree: WT, tabId: 'tab', customTitle: 'Build shell' })
+    ).toMatchObject({ customTitle: 'Build shell' })
+    expect(
+      SetTabProps.parse({ worktree: WT, tabId: 'tab', customTitle: null }).customTitle
+    ).toBeNull()
+    expect(SetTabProps.parse({ worktree: WT, tabId: 'tab' }).customTitle).toBeUndefined()
+  })
+
+  it('bounds untrusted titles before they reach persisted session state', () => {
+    expect(
+      SetTabProps.safeParse({
+        worktree: WT,
+        tabId: 'tab',
+        customTitle: 'x'.repeat(CUSTOM_TAB_TITLE_MAX_LENGTH)
+      }).success
+    ).toBe(true)
+    expect(
+      SetTabProps.safeParse({
+        worktree: WT,
+        tabId: 'tab',
+        customTitle: 'x'.repeat(CUSTOM_TAB_TITLE_MAX_LENGTH + 1)
       }).success
     ).toBe(false)
   })
