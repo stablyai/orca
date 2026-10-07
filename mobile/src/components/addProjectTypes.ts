@@ -17,6 +17,11 @@ export type AddProjectView =
   | 'addExisting'
   | 'confirmFolder'
   | 'pickDestination'
+export type AddProjectHandoff = {
+  repo: MobileWorkspaceRepo
+  client: RpcClient | null
+  openEpoch: number
+}
 
 export function toMobileRepo(repo: AddedRepo): MobileWorkspaceRepo {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the host receipt supplies the required mobile repo fields.

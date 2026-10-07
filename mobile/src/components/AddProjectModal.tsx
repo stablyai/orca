@@ -21,6 +21,7 @@ import {
   createAddProjectScope,
   type AddProjectModalProps,
   type AddProjectView,
+  type AddProjectHandoff,
   type FolderCandidate
 } from './addProjectTypes'
 import { toMobileRepo } from './addProjectTypes'
@@ -41,11 +42,7 @@ export function AddProjectModal({
       visible
     })
   }
-  const handoffRef = useRef<{
-    repo: MobileWorkspaceRepo
-    client: RpcClient | null
-    openEpoch: number
-  } | null>(null)
+  const handoffRef = useRef<AddProjectHandoff | null>(null)
   const latestClientRef = useRef(client)
   if (latestClientRef.current !== client) {
     latestClientRef.current = client
