@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { Tab, TabGroup } from '../../../../shared/tab-types'
 import {
   detachTerminalPaneToTab,
+  resolveTerminalPaneDetachSlotAfterSource,
   resolveTerminalTabStripDropTarget,
   type TerminalPaneTabDetachStore
 } from './terminal-pane-tab-detach'
@@ -264,6 +266,71 @@ describe('resolveTerminalTabStripDropTarget', () => {
         groupsByWorktree: {
           [WORKTREE_ID]: [{ id: TARGET_GROUP_ID } as AppState['groupsByWorktree'][string][number]]
         },
+        worktreeId: WORKTREE_ID
+      })
+    ).toBeNull()
+  })
+})
+
+describe('resolveTerminalPaneDetachSlotAfterSource', () => {
+  const UNIFIED_SOURCE_ID = 'unified-source'
+  const group = (tabOrder: string[]): TabGroup => ({
+    id: TARGET_GROUP_ID,
+    worktreeId: WORKTREE_ID,
+    activeTabId: tabOrder[0] ?? null,
+    tabOrder
+  })
+  const unifiedSource: Tab = {
+    id: UNIFIED_SOURCE_ID,
+    entityId: SOURCE_TAB_ID,
+    groupId: TARGET_GROUP_ID,
+    worktreeId: WORKTREE_ID,
+    contentType: 'terminal',
+    label: 'Terminal 1',
+    customLabel: null,
+    color: null,
+    sortOrder: 0,
+    createdAt: 1
+  }
+
+  it('places the new tab directly after the source tab in its group', () => {
+    expect(
+      resolveTerminalPaneDetachSlotAfterSource({
+        groupsByWorktree: {
+          [WORKTREE_ID]: [group([EXISTING_TAB_1, UNIFIED_SOURCE_ID, EXISTING_TAB_2])]
+        },
+        unifiedTabsByWorktree: { [WORKTREE_ID]: [unifiedSource] },
+        sourceTabId: SOURCE_TAB_ID,
+        worktreeId: WORKTREE_ID
+      })
+    ).toEqual({ groupId: TARGET_GROUP_ID, index: 2 })
+  })
+
+  it('appends after a source tab that is last in its group', () => {
+    expect(
+      resolveTerminalPaneDetachSlotAfterSource({
+        groupsByWorktree: { [WORKTREE_ID]: [group([EXISTING_TAB_1, UNIFIED_SOURCE_ID])] },
+        unifiedTabsByWorktree: { [WORKTREE_ID]: [unifiedSource] },
+        sourceTabId: SOURCE_TAB_ID,
+        worktreeId: WORKTREE_ID
+      })
+    ).toEqual({ groupId: TARGET_GROUP_ID, index: 2 })
+  })
+
+  it('returns null when the source tab has no unified tab or group', () => {
+    expect(
+      resolveTerminalPaneDetachSlotAfterSource({
+        groupsByWorktree: { [WORKTREE_ID]: [group([EXISTING_TAB_1])] },
+        unifiedTabsByWorktree: { [WORKTREE_ID]: [] },
+        sourceTabId: SOURCE_TAB_ID,
+        worktreeId: WORKTREE_ID
+      })
+    ).toBeNull()
+    expect(
+      resolveTerminalPaneDetachSlotAfterSource({
+        groupsByWorktree: { [WORKTREE_ID]: [] },
+        unifiedTabsByWorktree: { [WORKTREE_ID]: [unifiedSource] },
+        sourceTabId: SOURCE_TAB_ID,
         worktreeId: WORKTREE_ID
       })
     ).toBeNull()

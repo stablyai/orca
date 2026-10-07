@@ -13,6 +13,7 @@ import {
   PanelRightClose,
   Pencil,
   RotateCcw,
+  SquareArrowOutUpRight,
   SquareTerminal,
   TextSelect,
   X
@@ -71,6 +72,8 @@ type TerminalContextMenuProps = {
   onQuickCommand: (command: TerminalQuickCommand, historyId: string) => void
   onAddQuickCommand: (hostId: ExecutionHostId) => void
   onToggleExpand: () => void
+  canMovePaneToNewTab: boolean
+  onMovePaneToNewTab: () => void
   onSetTitle: () => void
   onClearPaneTitle: () => void
   canClearPaneTitle: boolean
@@ -161,6 +164,8 @@ function TerminalContextMenuItems({
   onQuickCommand,
   onAddQuickCommand,
   onToggleExpand,
+  canMovePaneToNewTab,
+  onMovePaneToNewTab,
   onSetTitle,
   onClearPaneTitle,
   canClearPaneTitle,
@@ -286,6 +291,15 @@ function TerminalContextMenuItems({
                 'Expand Pane'
               )}
           <DropdownMenuShortcut>{shortcuts.expand}</DropdownMenuShortcut>
+        </DropdownMenuItem>
+      )}
+      {canMovePaneToNewTab && (
+        <DropdownMenuItem onSelect={onMovePaneToNewTab}>
+          <SquareArrowOutUpRight />
+          {translate(
+            'components.terminalPane.TerminalContextMenu.movePaneToNewTab',
+            'Move Pane to New Tab'
+          )}
         </DropdownMenuItem>
       )}
       <DropdownMenuSeparator />

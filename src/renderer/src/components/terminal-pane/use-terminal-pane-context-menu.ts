@@ -38,6 +38,7 @@ type UseTerminalPaneContextMenuDeps = {
   groupId: string | null
   fallbackCwd: string
   toggleExpandPane: (paneId: number) => void
+  onMovePaneToNewTab: (paneId: number) => void
   onRequestClosePane: (paneId: number) => void
   onClearPaneScrollback: (pane: ManagedPane) => void
   onSetTitle: (paneId: number) => void
@@ -75,6 +76,7 @@ type TerminalMenuState = {
   onCopyAgentSessionContext: () => Promise<void>
   onQuickCommand: (command: TerminalQuickCommand, historyId: string) => void
   onToggleExpand: () => void
+  onMovePaneToNewTab: () => void
   onSetTitle: () => void
   onClearPaneTitle: () => void
   runForPane: <Result>(paneId: number, action: () => Result) => Result
@@ -90,6 +92,7 @@ export function useTerminalPaneContextMenu({
   groupId,
   fallbackCwd,
   toggleExpandPane,
+  onMovePaneToNewTab,
   onRequestClosePane,
   onClearPaneScrollback,
   onSetTitle,
@@ -252,6 +255,13 @@ export function useTerminalPaneContextMenu({
     }
   }
 
+  const handleMovePaneToNewTab = (): void => {
+    const pane = resolveMenuPane()
+    if (pane) {
+      onMovePaneToNewTab(pane.id)
+    }
+  }
+
   /** Routes title edits through the resolved menu pane instead of active pane. */
   const handleSetTitle = (): void => {
     const pane = resolveMenuPane()
@@ -310,6 +320,7 @@ export function useTerminalPaneContextMenu({
     onCopyAgentSessionContext,
     onQuickCommand,
     onToggleExpand,
+    onMovePaneToNewTab: handleMovePaneToNewTab,
     onSetTitle: handleSetTitle,
     onClearPaneTitle: handleClearPaneTitle,
     runForPane

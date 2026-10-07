@@ -47,6 +47,8 @@ export function TerminalPaneNativeChatPortal({
     canExpandPane: managedPanes.length > 1,
     isPaneExpanded: expandedPaneId === chatPane.id,
     onToggleExpand: () => contextMenu.runForPane(chatPane.id, contextMenu.onToggleExpand),
+    canMovePaneToNewTab: managedPanes.length > 1,
+    onMovePaneToNewTab: () => contextMenu.runForPane(chatPane.id, contextMenu.onMovePaneToNewTab),
     canContinueAgentSessionInNewSession: canContinueAgentSessionInNewSession(
       resolveAgentForLeaf(chatPane.leafId)
     ),

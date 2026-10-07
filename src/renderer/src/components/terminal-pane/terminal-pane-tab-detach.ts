@@ -2,6 +2,7 @@ import type { AppState } from '@/store'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { PaneCwdEntry } from './resolve-split-cwd'
 import { detachTerminalLayoutLeaf } from './terminal-layout-leaf-detach'
+import { getCachedUnifiedTerminalTabForWorktree } from './terminal-unified-tab-lookup'
 export {
   isTerminalTabStripDropTarget,
   resolveTerminalTabStripDropTarget
@@ -74,6 +75,33 @@ function moveCreatedTabToIndex(args: {
   const nextOrder = [...orderWithoutCreatedTab]
   nextOrder.splice(insertionIndex, 0, args.tabId)
   args.store.reorderUnifiedTabs(args.groupId, nextOrder, { recordInteraction: false })
+}
+
+/** The tab-strip slot directly after the source terminal tab, in the source tab's group. */
+export function resolveTerminalPaneDetachSlotAfterSource(args: {
+  groupsByWorktree: AppState['groupsByWorktree']
+  unifiedTabsByWorktree: AppState['unifiedTabsByWorktree']
+  sourceTabId: string
+  worktreeId: string
+}): { groupId: string; index: number } | null {
+  const sourceTab = getCachedUnifiedTerminalTabForWorktree(
+    args.unifiedTabsByWorktree,
+    args.worktreeId,
+    args.sourceTabId
+  )
+  const group = sourceTab
+    ? args.groupsByWorktree[args.worktreeId]?.find(
+        (candidate) => candidate.id === sourceTab.groupId
+      )
+    : undefined
+  if (!sourceTab || !group) {
+    return null
+  }
+  const sourceIndex = group.tabOrder.indexOf(sourceTab.id)
+  return {
+    groupId: group.id,
+    index: sourceIndex === -1 ? group.tabOrder.length : sourceIndex + 1
+  }
 }
 
 export function detachTerminalPaneToTab(args: {

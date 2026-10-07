@@ -18688,7 +18688,8 @@
       "TerminalContextMenu": {
         "copySessionId": "Copy Session ID",
         "copySessionIdSuccess": "Session ID copied",
-        "copySessionIdError": "Unable to copy session ID"
+        "copySessionIdError": "Unable to copy session ID",
+        "movePaneToNewTab": "Move Pane to New Tab"
       }
     },
     "settings": {

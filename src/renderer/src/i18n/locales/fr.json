@@ -18576,7 +18576,8 @@
       "TerminalContextMenu": {
         "copySessionId": "Copier l'ID de session",
         "copySessionIdSuccess": "ID de session copié",
-        "copySessionIdError": "Impossible de copier l'ID de session"
+        "copySessionIdError": "Impossible de copier l'ID de session",
+        "movePaneToNewTab": "Déplacer le volet vers un nouvel onglet"
       }
     },
     "settings": {

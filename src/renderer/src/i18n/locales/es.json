@@ -18420,7 +18420,8 @@
       "TerminalContextMenu": {
         "copySessionId": "Copiar ID de sesión",
         "copySessionIdSuccess": "ID de sesión copiado",
-        "copySessionIdError": "No se pudo copiar el ID de sesión"
+        "copySessionIdError": "No se pudo copiar el ID de sesión",
+        "movePaneToNewTab": "Mover panel a una pestaña nueva"
       }
     },
     "agentChildRow": {

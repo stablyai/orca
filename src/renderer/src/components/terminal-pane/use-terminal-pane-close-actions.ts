@@ -11,6 +11,7 @@ import { probePtyRunningWork } from '../terminal/pty-running-work-probe'
 import {
   detachTerminalPaneToTab,
   isTerminalTabStripDropTarget,
+  resolveTerminalPaneDetachSlotAfterSource,
   resolveTerminalTabStripDropTarget
 } from './terminal-pane-tab-detach'
 import { clearPaneTerminalError } from './terminal-error-accumulation'
@@ -226,11 +227,8 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
     [worktreeId]
   )
-  const handleExternalPaneDrop = useCallback(
-    (sourcePaneId: number, target: PaneExternalDropTarget): boolean => {
-      if (!isTerminalTabStripDropTarget(target)) {
-        return false
-      }
+  const detachPaneToTab = useCallback(
+    (sourcePaneId: number, targetGroupId: string, targetIndex: number | undefined): boolean => {
       const fallbackPtyId = paneTransportsRef.current.get(sourcePaneId)?.getPtyId() ?? null
       const sourcePaneCwd = paneCwdRef.current.get(sourcePaneId)
       return (
@@ -242,14 +240,35 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
           sourcePaneId,
           ...(sourcePaneCwd ? { sourcePaneCwd } : {}),
           sourceTabId: tabId,
-          targetGroupId: target.groupId,
-          targetIndex: target.insertionIndex,
+          targetGroupId,
+          targetIndex,
           worktreeId
         }) !== null
       )
     },
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
     [persistLayoutSnapshot, tabId, worktreeId]
+  )
+  const handleExternalPaneDrop = useCallback(
+    (sourcePaneId: number, target: PaneExternalDropTarget): boolean =>
+      isTerminalTabStripDropTarget(target) &&
+      detachPaneToTab(sourcePaneId, target.groupId, target.insertionIndex),
+    [detachPaneToTab]
+  )
+  const handleMovePaneToNewTab = useCallback(
+    (paneId: number): void => {
+      const { groupsByWorktree, unifiedTabsByWorktree } = useAppStore.getState()
+      const slot = resolveTerminalPaneDetachSlotAfterSource({
+        groupsByWorktree,
+        unifiedTabsByWorktree,
+        sourceTabId: tabId,
+        worktreeId
+      })
+      if (slot) {
+        detachPaneToTab(paneId, slot.groupId, slot.index)
+      }
+    },
+    [detachPaneToTab, tabId, worktreeId]
   )
 
   return {
@@ -260,7 +279,8 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
     handleConfirmClose,
     handleCancelClose,
     resolveExternalPaneDropTarget,
-    handleExternalPaneDrop
+    handleExternalPaneDrop,
+    handleMovePaneToNewTab
   }
 }
 

@@ -50,6 +50,7 @@ vi.mock('lucide-react', () => {
     PanelsTopLeft: Icon,
     PanelRightClose: Icon,
     Pencil: Icon,
+    SquareArrowOutUpRight: Icon,
     SquareTerminal: Icon,
     X: Icon
   }
@@ -100,12 +101,14 @@ function Harness({
   onSwitchToTerminal,
   structured = false,
   enabled = true,
-  orcaSessionId
+  orcaSessionId,
+  actionOverrides
 }: {
   onSwitchToTerminal?: () => void
   structured?: boolean
   enabled?: boolean
   orcaSessionId?: string
+  actionOverrides?: Partial<NativeChatContextMenuActions>
 }) {
   const rootRef = createRef<HTMLDivElement>()
   const { menu } = useNativeChatContextMenu({
@@ -117,7 +120,8 @@ function Harness({
     resolveOrcaSessionId: orcaSessionId === undefined ? undefined : async () => orcaSessionId,
     actions: {
       ...emptyNativeChatContextMenuActions,
-      onPaste: vi.fn()
+      onPaste: vi.fn(),
+      ...actionOverrides
     } satisfies NativeChatContextMenuActions
   })
   return menu
@@ -351,6 +355,21 @@ describe('useNativeChatContextMenu', () => {
     expect(
       items.list.some((candidate) => childrenText(candidate.children) === 'Switch to terminal view')
     ).toBe(false)
+  })
+
+  it('offers Move Pane to New Tab only when the pane shares its tab', () => {
+    const onMovePaneToNewTab = vi.fn()
+    renderToStaticMarkup(
+      <Harness actionOverrides={{ canMovePaneToNewTab: true, onMovePaneToNewTab }} />
+    )
+    const item = items.list.find(
+      (candidate) => childrenText(candidate.children) === 'Move Pane to New Tab'
+    )
+    item?.onSelect?.()
+    expect(onMovePaneToNewTab).toHaveBeenCalledTimes(1)
+
+    items.list = []
+    expect(renderToStaticMarkup(<Harness />)).not.toContain('Move Pane to New Tab')
   })
 
   it('reuses workspace layout actions without terminal-only pane commands', () => {

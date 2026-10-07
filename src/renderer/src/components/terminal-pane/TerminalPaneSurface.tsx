@@ -262,6 +262,8 @@ export function TerminalPaneSurface({
             : openQuickCommandEditor({ type: 'global' }, hostId)
         }
         onToggleExpand={contextMenu.onToggleExpand}
+        canMovePaneToNewTab={contextMenu.paneCount > 1}
+        onMovePaneToNewTab={contextMenu.onMovePaneToNewTab}
         onSetTitle={contextMenu.onSetTitle}
         onClearPaneTitle={contextMenu.onClearPaneTitle}
         canClearPaneTitle={menuPaneHasCustomTitle}

@@ -95,6 +95,8 @@ function renderMenu(overrides: Record<string, unknown> = {}): string {
     onQuickCommand: vi.fn(),
     onAddQuickCommand: vi.fn(),
     onToggleExpand: vi.fn(),
+    canMovePaneToNewTab: true,
+    onMovePaneToNewTab: vi.fn(),
     onSetTitle: vi.fn(),
     onClearPaneTitle: vi.fn(),
     canClearPaneTitle: false,
@@ -127,6 +129,22 @@ describe('TerminalContextMenu', () => {
     renderMenu()
     expect(translate).toHaveBeenCalled()
     expect(items.list.length).toBeGreaterThan(0)
+  })
+
+  it('offers Move Pane to New Tab right after Expand Pane only for split tabs', () => {
+    const onMovePaneToNewTab = vi.fn()
+    renderMenu({ onMovePaneToNewTab })
+    const labels = items.list.map((item) => childrenText(item.children))
+    const moveIndex = labels.indexOf('Move Pane to New Tab')
+    expect(moveIndex).toBe(labels.findIndex((label) => label.startsWith('Expand Pane')) + 1)
+    items.list[moveIndex]?.onSelect?.()
+    expect(onMovePaneToNewTab).toHaveBeenCalledTimes(1)
+
+    items.list = []
+    renderMenu({ canMovePaneToNewTab: false })
+    expect(items.list.map((item) => childrenText(item.children))).not.toContain(
+      'Move Pane to New Tab'
+    )
   })
 
   // Why: revealing a terminal file link lives in its click popover, not the right-click menu.
