@@ -10,6 +10,11 @@ export type ViewOverridesState = {
   loaded: boolean
 }
 
+export type MobileSessionViewModeController = {
+  isTabChatView: (tabId: string) => boolean
+  toggleTabChatView: (tabId: string) => void
+}
+
 export type ViewOverridesRuntime = {
   hostId: string
   worktreeId: string
