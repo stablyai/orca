@@ -166,7 +166,10 @@ const WINDOWS_SHIM_COMMANDS = new Set(['npm', 'npx', 'pnpm', 'yarn'])
 
 function run(command, args, options = {}) {
   const shim = process.platform === 'win32' && WINDOWS_SHIM_COMMANDS.has(command)
-  return execFileSync(shim ? `${command}.cmd` : command, args, {
+  // Patched source and sourcemap bytes must not inherit host Git line endings.
+  const argv =
+    command === 'git' ? ['-c', 'core.autocrlf=false', '-c', 'core.eol=lf', ...args] : args
+  return execFileSync(shim ? `${command}.cmd` : command, argv, {
     encoding: 'utf8',
     maxBuffer: 256 * 1024 * 1024,
     stdio: ['ignore', 'pipe', 'inherit'],
@@ -203,7 +206,7 @@ function fetchPristinePackage(packageEntry, workDir) {
     cwd: workDir
   })
   const tarball = path.join(target, output.trim().split('\n').at(-1).trim())
-  run('tar', ['xzf', tarball, '-C', target])
+  run('tar', ['xzf', path.basename(tarball)], { cwd: target })
   return path.join(target, 'package')
 }
 
@@ -232,6 +235,9 @@ function ensureUpstreamCheckout(manifest, workDir) {
 }
 
 export function resetCheckoutSource(root, commit) {
+  run('git', ['reset', '--quiet', '--hard', commit], { cwd: root })
+  // Clear cached checkout stats so every registry source is written with LF.
+  run('git', ['read-tree', '--empty'], { cwd: root })
   run('git', ['reset', '--quiet', '--hard', commit], { cwd: root })
   // New source files from a previous package must not enter the pristine build.
   run('git', ['clean', '-fd', '--', 'src/', ':(glob)addons/*/src/**'], { cwd: root })
@@ -308,6 +314,32 @@ export function assertPristineSourceMatches(pristineDir, upstreamRoot, packageEn
   }
 }
 
+export function adaptAddonBuildCommandsForWindows(packageRoot, platform = process.platform) {
+  if (platform !== 'win32') {
+    return
+  }
+  const file = path.join(packageRoot, 'package.json')
+  const metadata = JSON.parse(readFileSync(file, 'utf8'))
+  let changed = false
+  for (const name of ['build', 'prepackage', 'package']) {
+    const command = metadata.scripts?.[name]
+    if (typeof command !== 'string') {
+      continue
+    }
+    const portable = command.replace(
+      /^\.\.\/\.\.\/node_modules\/\.bin\/(tsgo|webpack)(?=\s|$)/,
+      '$1'
+    )
+    if (portable !== command) {
+      metadata.scripts[name] = portable
+      changed = true
+    }
+  }
+  if (changed) {
+    writeFileSync(file, `${JSON.stringify(metadata, null, 2)}\n`)
+  }
+}
+
 function buildPackage(upstreamRoot, packageEntry, manifest) {
   const packageRoot = path.join(upstreamRoot, packageEntry.packageDir)
   for (const directory of ['lib', 'out', 'out-esbuild']) {
@@ -325,6 +357,7 @@ function buildPackage(upstreamRoot, packageEntry, manifest) {
     )
   }
   assertBuildStepsAllowed(manifest)
+  adaptAddonBuildCommandsForWindows(packageRoot)
   for (const step of packageEntry.build) {
     run(step.command, step.args, { cwd: path.join(packageRoot, step.cwd), stdio: 'inherit' })
   }

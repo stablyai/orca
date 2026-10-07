@@ -1,9 +1,9 @@
+import { createPatchTestDirectory, writePatchTestTree } from './xterm-patch-test-files.mjs'
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { readFile, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
   assertBuildStepsAllowed,
   assertPublishedCommit,
@@ -44,30 +44,6 @@ function generatedHunks(patchText, generatedPaths) {
 
 const REPO_ROOT = path.resolve(import.meta.dirname, '..', '..')
 const MANIFEST_PATH = path.join(REPO_ROOT, 'config', 'patches', 'xterm-upstream.json')
-const temporaryDirectories = []
-
-afterEach(async () => {
-  await Promise.all(
-    temporaryDirectories
-      .splice(0)
-      .map((directory) => rm(directory, { recursive: true, force: true }))
-  )
-})
-
-async function createDirectory() {
-  const directory = await mkdtemp(path.join(tmpdir(), 'orca-xterm-patch-'))
-  temporaryDirectories.push(directory)
-  return directory
-}
-
-async function writeTree(root, files) {
-  for (const [relative, contents] of Object.entries(files)) {
-    const target = path.join(root, relative)
-    await mkdir(path.dirname(target), { recursive: true })
-    await writeFile(target, contents)
-  }
-}
-
 /** The three exported diff pieces, composed the way the generator composes them. */
 function diffFolders(folderA, folderB) {
   let stdout
@@ -103,8 +79,8 @@ const PATCHED = {
 
 describe('source checkout reset', () => {
   it('removes new source files between packages while retaining build dependencies', async () => {
-    const root = await createDirectory()
-    await writeTree(root, { 'src/Tracked.ts': 'original\n' })
+    const root = await createPatchTestDirectory()
+    await writePatchTestTree(root, { 'src/Tracked.ts': 'original\n' })
     const git = (args) => execFileSync('git', args, { cwd: root, encoding: 'utf8' })
     git(['init', '--quiet'])
     git(['config', 'core.autocrlf', 'false'])
@@ -122,7 +98,7 @@ describe('source checkout reset', () => {
       'pristine'
     ])
     const commit = git(['rev-parse', 'HEAD']).trim()
-    await writeTree(root, {
+    await writePatchTestTree(root, {
       'src/Tracked.ts': 'modified\n',
       'src/NewCore.ts': 'new core\n',
       'addons/addon-webgl/src/NewRenderer.ts': 'new renderer\n',
@@ -144,12 +120,15 @@ describe('source checkout reset', () => {
   })
 
   it('ships a newly added source module while excluding upstream test files', async () => {
-    const root = await createDirectory()
+    const root = await createPatchTestDirectory()
     const pristine = path.join(root, 'pristine')
     const upstream = path.join(root, 'upstream')
     const patched = path.join(root, 'patched')
-    await writeTree(pristine, { 'src/Tracked.ts': 'original\n', 'package.json': '{"name":"test"}' })
-    await writeTree(upstream, {
+    await writePatchTestTree(pristine, {
+      'src/Tracked.ts': 'original\n',
+      'package.json': '{"name":"test"}'
+    })
+    await writePatchTestTree(upstream, {
       'src/Tracked.ts': 'modified\n',
       'src/new/Renderer.ts': 'new renderer\n',
       'src/new/Renderer name.ts': 'new renderer with space\n',
@@ -192,11 +171,11 @@ describe('pnpm diff format', () => {
   })
 
   it('strips both scratch folder prefixes from headers and index lines', async () => {
-    const root = await createDirectory()
+    const root = await createPatchTestDirectory()
     const folderA = path.join(root, 'pristine')
     const folderB = path.join(root, 'patched')
-    await writeTree(folderA, PRISTINE)
-    await writeTree(folderB, PATCHED)
+    await writePatchTestTree(folderA, PRISTINE)
+    await writePatchTestTree(folderB, PATCHED)
 
     const patch = diffFolders(folderA, folderB)
 
@@ -227,11 +206,11 @@ describe('pnpm diff format', () => {
 
 describe('patch entry splitting', () => {
   it('separates hand-edited source hunks from generated bundle hunks', async () => {
-    const root = await createDirectory()
+    const root = await createPatchTestDirectory()
     const folderA = path.join(root, 'pristine')
     const folderB = path.join(root, 'patched')
-    await writeTree(folderA, PRISTINE)
-    await writeTree(folderB, PATCHED)
+    await writePatchTestTree(folderA, PRISTINE)
+    await writePatchTestTree(folderB, PATCHED)
     const patch = diffFolders(folderA, folderB)
 
     expect(splitPatchEntries(patch).map((entry) => entry.path)).toEqual([
@@ -255,11 +234,11 @@ describe('patch entry splitting', () => {
   })
 
   it('concatenating the two halves reproduces the whole patch', async () => {
-    const root = await createDirectory()
+    const root = await createPatchTestDirectory()
     const folderA = path.join(root, 'pristine')
     const folderB = path.join(root, 'patched')
-    await writeTree(folderA, PRISTINE)
-    await writeTree(folderB, PATCHED)
+    await writePatchTestTree(folderA, PRISTINE)
+    await writePatchTestTree(folderB, PATCHED)
     const patch = diffFolders(folderA, folderB)
 
     expect(generatedHunks(patch, ['lib/']) + sourceHunks(patch)).toBe(patch)
@@ -268,15 +247,15 @@ describe('patch entry splitting', () => {
 
 describe('round-trip stability', () => {
   it('re-diffing an applied patch yields the identical patch', async () => {
-    const root = await createDirectory()
+    const root = await createPatchTestDirectory()
     const folderA = path.join(root, 'pristine')
     const folderB = path.join(root, 'patched')
-    await writeTree(folderA, PRISTINE)
-    await writeTree(folderB, PATCHED)
+    await writePatchTestTree(folderA, PRISTINE)
+    await writePatchTestTree(folderB, PATCHED)
     const patch = diffFolders(folderA, folderB)
 
     const replay = path.join(root, 'replay')
-    await writeTree(replay, PRISTINE)
+    await writePatchTestTree(replay, PRISTINE)
     const patchFile = path.join(root, 'round-trip.patch')
     await writeFile(patchFile, patch)
     execFileSync(
@@ -294,16 +273,16 @@ describe('round-trip stability', () => {
   })
 
   it('applying only the source half leaves the bundle untouched', async () => {
-    const root = await createDirectory()
+    const root = await createPatchTestDirectory()
     const folderA = path.join(root, 'pristine')
     const folderB = path.join(root, 'patched')
-    await writeTree(folderA, PRISTINE)
-    await writeTree(folderB, PATCHED)
+    await writePatchTestTree(folderA, PRISTINE)
+    await writePatchTestTree(folderB, PATCHED)
     const patchFile = path.join(root, 'src.patch')
     await writeFile(patchFile, sourceHunks(diffFolders(folderA, folderB)))
 
     const replay = path.join(root, 'replay')
-    await writeTree(replay, PRISTINE)
+    await writePatchTestTree(replay, PRISTINE)
     execFileSync(
       'git',
       ['-c', 'core.autocrlf=false', 'apply', '-p1', '--whitespace=nowarn', patchFile],
@@ -374,11 +353,11 @@ describe('source derivation agreement', () => {
 })
 
 it('omits source only when a package explicitly publishes none', async () => {
-  const root = await createDirectory()
+  const root = await createPatchTestDirectory()
   const entry = { name: '@xterm/headless', sourceDistribution: 'omitted' }
   expect(() => assertPristineSourceMatches(root, root, entry)).not.toThrow()
   expect(() => assertPristineSourceMatches(root, root, { name: '@xterm/headless' })).toThrow()
-  await writeTree(root, { 'src/Terminal.ts': 'published source' })
+  await writePatchTestTree(root, { 'src/Terminal.ts': 'published source' })
   expect(() => assertPristineSourceMatches(root, root, entry)).toThrow(/omits published source/)
   expect(() => assertPristineSourceMatches(root, root, { sourceDistribution: 'typo' })).toThrow(
     /unknown/
@@ -386,34 +365,34 @@ it('omits source only when a package explicitly publishes none', async () => {
 })
 
 it('exempts only the manifest version stamp from pristine source comparison', async () => {
-  const root = await createDirectory()
+  const root = await createPatchTestDirectory()
   const pristine = path.join(root, 'pristine')
   const upstream = path.join(root, 'upstream')
   const entry = { packageDir: '.', versionStampFile: 'src/common/public/Version.ts' }
-  await writeTree(pristine, {
+  await writePatchTestTree(pristine, {
     'src/common/public/Version.ts': 'registry version',
     'src/Terminal.ts': 'same source'
   })
-  await writeTree(upstream, {
+  await writePatchTestTree(upstream, {
     'src/common/public/Version.ts': 'upstream version',
     'src/Terminal.ts': 'same source'
   })
   expect(() => assertPristineSourceMatches(pristine, upstream, entry)).not.toThrow()
-  await writeTree(upstream, { 'src/Terminal.ts': 'unexpected source drift' })
+  await writePatchTestTree(upstream, { 'src/Terminal.ts': 'unexpected source drift' })
   expect(() => assertPristineSourceMatches(pristine, upstream, entry)).toThrow(/Terminal\.ts/)
 })
 
 it('copies headless output without introducing unpublished source or package metadata', async () => {
-  const root = await createDirectory()
+  const root = await createPatchTestDirectory()
   const pristine = path.join(root, 'pristine')
   const upstream = path.join(root, 'upstream')
   const target = path.join(root, 'patched')
-  await writeTree(pristine, {
+  await writePatchTestTree(pristine, {
     'lib-headless/xterm-headless.js': 'before',
     'typings/xterm-headless.d.ts': 'before types',
     'package.json': 'registry'
   })
-  await writeTree(upstream, {
+  await writePatchTestTree(upstream, {
     'headless/lib-headless/xterm-headless.js': 'after',
     'typings/xterm-headless.d.ts': 'after types',
     'src/Terminal.ts': 'unpublished source'
@@ -435,7 +414,9 @@ it('copies headless output without introducing unpublished source or package met
   )
   await expect(readFile(path.join(target, 'src/Terminal.ts'), 'utf8')).rejects.toThrow()
   await rm(path.join(upstream, 'headless/lib-headless/xterm-headless.js'))
-  await writeTree(upstream, { 'lib-headless/xterm-headless.js': 'stale output in wrong directory' })
+  await writePatchTestTree(upstream, {
+    'lib-headless/xterm-headless.js': 'stale output in wrong directory'
+  })
   expect(() =>
     overlayBuildOutput(
       pristine,

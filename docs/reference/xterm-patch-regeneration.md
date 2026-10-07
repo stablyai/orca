@@ -156,6 +156,12 @@ Run the checkout outside this repository. A build tree underneath it makes
 `tsgo` walk up into Orca's own `node_modules` and fail with `TS2300: Duplicate
 identifier`, which is a symptom of where the tree sits and not of the patch.
 
+On Windows, the generator extracts each tarball from its own directory so GNU
+tar cannot interpret the drive letter as a remote host. It rewrites its owned
+checkout with LF regardless of the user's Git settings and uses npm's command
+lookup for the addon's compiler and bundler. Published package metadata still
+comes from the pristine tarball.
+
 ## How the Commit Is Known
 
 Upstream `bin/publish.js` sets `packageJson.commit` before `npm publish`, so
