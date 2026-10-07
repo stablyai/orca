@@ -1,4 +1,8 @@
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { DeviceRegistry } from '../device-registry'
 import type { MobilePairingConnectionContext } from '../runtime-rpc'
 import { DesktopRelayService, pairingAuthorizationForContext } from './desktop-relay-service'
 
@@ -102,26 +106,56 @@ describe('liveness safety net lifecycle', () => {
   })
 })
 
-describe('local-only mobile pairing', () => {
-  it('refuses endpoint discovery and provisioning without opening Relay demand', async () => {
-    const registry = {
-      getDevice: () => ({ deviceId: 'device-1', scope: 'mobile' }),
-      getMobilePairingConnectionMode: () => 'local-only'
+describe('relay-disabled device grants', () => {
+  const userDataPaths: string[] = []
+
+  afterEach(() => {
+    for (const path of userDataPaths.splice(0)) {
+      rmSync(path, { recursive: true, force: true })
     }
+  })
+
+  function serviceFor(registry: DeviceRegistry): DesktopRelayService {
     const service = Object.create(DesktopRelayService.prototype) as DesktopRelayService
     Object.defineProperty(service, 'runtimeRpc', {
       value: { getDeviceRegistry: () => registry }
     })
+    return service
+  }
 
-    await expect(service.getEndpoints(context({ transport: 'direct' }), {})).resolves.toEqual({
-      v: 1,
-      relay: null
-    })
+  function createRegistry(): DeviceRegistry {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-relay-disabled-'))
+    userDataPaths.push(userDataPath)
+    return new DeviceRegistry(userDataPath)
+  }
+
+  async function expectRelayRefused(service: DesktopRelayService, deviceId: string) {
+    const directContext = {
+      deviceId,
+      connectionId: 'e2ee-connection-1',
+      transport: { transport: 'direct' as const }
+    }
+    await expect(service.getEndpoints(directContext, {})).resolves.toEqual({ v: 1, relay: null })
     await expect(
-      service.provisionRelay(context({ transport: 'direct' }), {
+      service.provisionRelay(directContext, {
         reqId: 'install-1',
         newResumeTokenHash: 'A'.repeat(43)
       })
     ).rejects.toThrow('relay_disabled_for_device')
+  }
+
+  it('refuses endpoint discovery and provisioning for a local-only mobile grant', async () => {
+    const registry = createRegistry()
+    const device = registry.addDevice('Phone', 'mobile')
+    registry.setMobilePairingConnectionMode(device.deviceId, 'local-only')
+
+    await expectRelayRefused(serviceFor(registry), device.deviceId)
+  })
+
+  it('refuses endpoint discovery and provisioning for a direct-only runtime grant', async () => {
+    const registry = createRegistry()
+    const device = registry.addDevice('Laptop', 'runtime')
+
+    await expectRelayRefused(serviceFor(registry), device.deviceId)
   })
 })

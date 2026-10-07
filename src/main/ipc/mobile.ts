@@ -12,6 +12,7 @@ import {
   type NetworkInterface
 } from '../runtime/pairing-network-interfaces'
 import { resolveAdvertisedPairingHostname } from '../runtime/pairing-endpoint'
+import { createRuntimeRelayPairingUrl } from './runtime-relay-share'
 import type { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
 import type { MobileRelayStatusDetail } from '../../shared/mobile-relay-status'
 import { encodeMobilePairingQr, type MobilePairingQrResult } from '../runtime/mobile-pairing-qr'
@@ -200,6 +201,10 @@ export function registerMobileHandlers(
         deviceId: offer.deviceId
       }
     }
+  )
+
+  ipcMain.handle('mobile:getRuntimeRelayPairingUrl', () =>
+    createRuntimeRelayPairingUrl(rpcServer, getDefaultRouteInterfaceNames)
   )
 
   ipcMain.handle('mobile:listDevices', () => {

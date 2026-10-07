@@ -757,7 +757,8 @@
         "tailscale": "Tailscale address",
         "lan": "Private LAN address",
         "public": "Public address",
-        "custom": "Custom hostname"
+        "custom": "Custom hostname",
+        "relay": "Orca Relay"
       },
       "ensure": {
         "simulator": {
@@ -8432,6 +8433,10 @@
           "3f67e8078a": "Use this computer by default. Choose a saved server only when you want supported projects, files, terminals, provider checks, and browser/mobile handoff to run through that server.",
           "2c85efb3e8": "Selecting a saved server makes this browser use that paired Orca runtime as its default Host.",
           "serverConnected": "Connected",
+          "routeRelay": "Orca Relay",
+          "routeDirectTailscale": "Direct · Tailscale",
+          "routeDirectLan": "Direct · LAN",
+          "routeDirect": "Direct",
           "serverWorkspaceWindowClosed": "Workspace window closed",
           "serverRuntimeUnavailable": "Orca unavailable",
           "serverRuntimeUnavailableDescription": "SSH transport is connected, but the Orca runtime did not answer. The host may still be running.",
@@ -8479,6 +8484,7 @@
         },
         "RuntimePairingUrlGenerator": {
           "849825e829": "Paste this pairing URL into another Orca client.",
+          "relayLinkHelp": "Paste this pairing URL into Orca on the other computer before {{time}}. It works once.",
           "2e5c4e3c93": "Pair another Orca client",
           "f7cafdc9f3": "Browser link unavailable in this build. The pairing URL still works for Orca clients.",
           "6b9ca3e69b": "Open in browser",
@@ -8519,12 +8525,22 @@
           "localOnlyHelp": "A browser or Orca client on this computer",
           "customAddress": "Custom address",
           "customAddressHelp": "SSH tunnel, reverse proxy, or custom hostname",
+          "anyNetwork": "Any network",
+          "anyNetworkHelp": "Through Orca Relay when there is no direct path",
           "recommended": "Recommended",
           "localLink": "Local-only link",
           "localLinkHelp": "This link only works in a browser or Orca client running on this computer.",
           "noExternalAddress": "No address for another device was found. Connect this computer to a LAN or Tailscale, refresh, or choose Custom address.",
           "staleAddress": "The connection address changed. Generate a new link for {{address}}.",
           "customInvalid": "Enter a valid host, host:port, IPv6 address, or ws(s):// URL."
+        },
+        "RuntimeRelaySharePanel": {
+          "title": "Orca Relay",
+          "unavailable": "Orca Relay isn’t available in this build. Share over LAN, Tailscale, or a custom address.",
+          "ready": "The other Orca tries this computer’s LAN or Tailscale address first, then Orca Relay. Traffic stays end-to-end encrypted.",
+          "signInRequired": "Sign in to an Orca account to share through Orca Relay.",
+          "signInAgain": "Sign in again for Relay",
+          "signIn": "Sign in for Relay"
         },
         "Settings": {
           "3bf149e873": "Project Settings > {{value0}}",

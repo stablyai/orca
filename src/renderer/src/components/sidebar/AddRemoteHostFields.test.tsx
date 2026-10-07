@@ -14,6 +14,26 @@ function loopbackAccessLink(): string {
   })
 }
 
+function relayLoopbackAccessLink(): string {
+  return encodePairingOffer({
+    v: PAIRING_OFFER_VERSION,
+    endpoint: 'ws://127.0.0.1:6768',
+    deviceToken: 'token',
+    publicKeyB64: Buffer.from(new Uint8Array(32).fill(7)).toString('base64'),
+    scope: 'runtime',
+    relay: {
+      v: 1,
+      directorUrl: 'https://relay.onorca.dev',
+      cellUrl: 'https://relay-c1.onorca.dev',
+      assignmentEpoch: 1,
+      relayHostId: 'AbCdEf0123_-xyZ9',
+      inviteToken: 'A'.repeat(43),
+      inviteExpiresAt: Date.now() + 60_000,
+      e2eeFraming: 2
+    }
+  })
+}
+
 describe('RemoteServerFields', () => {
   it('associates blocked loopback guidance with the access-link input', () => {
     const pairingCode = loopbackAccessLink()
@@ -34,5 +54,26 @@ describe('RemoteServerFields', () => {
     expect(markup).toContain('aria-invalid="true"')
     expect(markup).toContain('aria-describedby="add-server-loopback-blocked"')
     expect(markup).toContain('id="add-server-loopback-blocked"')
+  })
+
+  it('accepts a Relay link to a loopback endpoint and labels the Relay route', () => {
+    const pairingCode = relayLoopbackAccessLink()
+    const markup = renderToStaticMarkup(
+      <RemoteServerFields
+        name="Remote workstation"
+        pairingCode={pairingCode}
+        parsedLink={parseHostAccessLink(pairingCode)}
+        disabled={false}
+        onNameChange={vi.fn()}
+        onPairingCodeChange={vi.fn()}
+        allowLoopback={false}
+        onAllowLoopbackChange={vi.fn()}
+        onSubmit={vi.fn()}
+      />
+    )
+
+    expect(markup).not.toContain('id="add-server-loopback-blocked"')
+    expect(markup).not.toContain('aria-invalid="true"')
+    expect(markup).toContain('Orca Relay')
   })
 })

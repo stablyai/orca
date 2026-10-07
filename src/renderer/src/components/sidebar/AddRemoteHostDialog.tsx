@@ -5,7 +5,10 @@ import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { EMPTY_FORM, type EditingTarget } from '../settings/ssh-target-draft'
 import type { SshConfigHostSummary } from '../../../../shared/ssh-types'
-import { parseHostAccessLink } from '../../../../shared/remote-pairing-address'
+import {
+  hostAccessLinkNeedsTunnel,
+  parseHostAccessLink
+} from '../../../../shared/remote-pairing-address'
 import {
   translateHostAccessLinkError,
   translateRemotePairingFailureDescription
@@ -64,7 +67,7 @@ export function AddRemoteHostDialog({
   const serverFormCanSubmit =
     serverName.trim() !== '' &&
     parsedServerLink.ok &&
-    (parsedServerLink.value.endpointKind !== 'loopback' || allowLoopback)
+    (!hostAccessLinkNeedsTunnel(parsedServerLink.value) || allowLoopback)
   const setSshTargetsMetadata = useAppStore((s) => s.setSshTargetsMetadata)
   const recordSshRepoReadoptions = useAppStore((s) => s.recordSshRepoReadoptions)
   const setRuntimeEnvironments = useAppStore((s) => s.setRuntimeEnvironments)
@@ -253,7 +256,7 @@ export function AddRemoteHostDialog({
       toast.error(translateHostAccessLinkError(parsedServerLink.kind))
       return
     }
-    if (parsedServerLink.value.endpointKind === 'loopback' && !allowLoopback) {
+    if (hostAccessLinkNeedsTunnel(parsedServerLink.value) && !allowLoopback) {
       toast.error(
         translate(
           'auto.components.sidebar.AddRemoteHostDialog.loopbackBlocked',

@@ -3,6 +3,10 @@ import type { OrcadHealth } from '../orcad/orcad-health'
 
 export type ServePairingUnavailableReason = PairingOfferUnavailableReason | 'disabled_by_operator'
 
+export type ServeRelayPairingReadiness =
+  | { available: true; url: string; inviteExpiresAt: number }
+  | { available: false; code: string; guidance: string }
+
 export type ServePairingReadiness =
   | {
       available: true
@@ -12,6 +16,8 @@ export type ServePairingReadiness =
       webClientUrl: string | null
       scope: 'runtime' | 'mobile'
       qr: string | null
+      /** Present only under `--relay`; `url` stays the direct link older clients can parse. */
+      relay?: ServeRelayPairingReadiness
     }
   | {
       available: false
@@ -119,6 +125,16 @@ function renderHumanReadiness(readiness: ServeReadiness): string {
       lines.push(`Mobile pairing QR:\n${readiness.pairing.qr}`)
     }
     lines.push(`Pairing URL: ${readiness.pairing.url}`)
+    const relay = readiness.pairing.relay
+    if (relay?.available) {
+      lines.push(`Relay pairing URL: ${relay.url}`)
+      lines.push(
+        `Relay invite expires: ${new Date(relay.inviteExpiresAt).toISOString()} (restart to mint a new one)`
+      )
+    } else if (relay) {
+      lines.push(`Relay unavailable: ${relay.code}`)
+      lines.push(`Relay guidance: ${relay.guidance}`)
+    }
   } else {
     lines.push(`Pairing unavailable: ${readiness.pairing.reason}`)
     lines.push(`Pairing guidance: ${readiness.pairing.guidance}`)

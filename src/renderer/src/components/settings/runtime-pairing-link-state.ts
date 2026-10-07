@@ -2,7 +2,7 @@ import type { RuntimePairingReach } from '../../../../shared/runtime-pairing-rea
 
 export const RUNTIME_PAIRING_LOOPBACK_ADDRESS = '127.0.0.1'
 
-export type RuntimePairingIntent = 'another' | 'local' | 'custom'
+export type RuntimePairingIntent = 'another' | 'local' | 'custom' | 'relay'
 
 // Why: only "This computer only" declines off-host reach. Custom is the SSH-tunnel/reverse-proxy field, so
 // even a loopback-looking custom address (`127.0.0.1:8443`) needs the listener open behind the tunnel.
@@ -26,6 +26,8 @@ export const runtimePairingLinkCache: {
   runtimePairingUrl: string | null
   webClientUrl: string | null
   runtimePairingDeviceId: string | null
+  /** Set only for a link that carries an Orca Relay invite. */
+  relayInviteExpiresAt: number | null
 } = {
   selectedAddress: '',
   customAddress: '',
@@ -33,7 +35,8 @@ export const runtimePairingLinkCache: {
   generatedAddress: null,
   runtimePairingUrl: null,
   webClientUrl: null,
-  runtimePairingDeviceId: null
+  runtimePairingDeviceId: null,
+  relayInviteExpiresAt: null
 }
 
 export function clearGeneratedRuntimePairingLink(): void {
@@ -41,18 +44,21 @@ export function clearGeneratedRuntimePairingLink(): void {
   runtimePairingLinkCache.webClientUrl = null
   runtimePairingLinkCache.runtimePairingDeviceId = null
   runtimePairingLinkCache.generatedAddress = null
+  runtimePairingLinkCache.relayInviteExpiresAt = null
 }
 
-export function cacheGeneratedRuntimePairingLink(args: {
+function cacheGeneratedRuntimePairingLink(args: {
   address: string
   pairingUrl: string
   webClientUrl: string | null
   deviceId: string
+  relayInviteExpiresAt: number | null
 }): void {
   runtimePairingLinkCache.runtimePairingUrl = args.pairingUrl
   runtimePairingLinkCache.webClientUrl = args.webClientUrl
   runtimePairingLinkCache.runtimePairingDeviceId = args.deviceId
   runtimePairingLinkCache.generatedAddress = args.address
+  runtimePairingLinkCache.relayInviteExpiresAt = args.relayInviteExpiresAt
 }
 
 export function selectRuntimePairingIntent(
@@ -64,9 +70,58 @@ export function selectRuntimePairingIntent(
   const selectedAddress =
     intent === 'local'
       ? RUNTIME_PAIRING_LOOPBACK_ADDRESS
-      : intent === 'another'
+      : intent === 'another' || intent === 'relay'
         ? (networkInterfaces[0]?.address ?? '')
         : customAddress
   runtimePairingLinkCache.selectedAddress = selectedAddress
   return selectedAddress
+}
+
+export type RuntimePairingLinkResult =
+  | {
+      available: true
+      pairingUrl: string
+      webClientUrl: string | null
+      deviceId: string
+      relayInviteExpiresAt: number | null
+    }
+  | { available: false; guidance?: string }
+
+/** Mints a fresh link for the chosen intent and remembers it for the next settings visit. */
+export async function requestRuntimePairingLink(
+  intent: RuntimePairingIntent,
+  address: string
+): Promise<RuntimePairingLinkResult> {
+  const result = await requestRuntimePairingLinkForIntent(intent, address)
+  if (result.available) {
+    cacheGeneratedRuntimePairingLink({ ...result, address })
+  }
+  return result
+}
+
+async function requestRuntimePairingLinkForIntent(
+  intent: RuntimePairingIntent,
+  address: string
+): Promise<RuntimePairingLinkResult> {
+  if (intent === 'relay') {
+    // Why: main picks the direct address itself; a Relay link must work without one.
+    const result = await window.api.mobile.getRuntimeRelayPairingUrl()
+    return result.available
+      ? {
+          available: true,
+          pairingUrl: result.pairingUrl,
+          webClientUrl: null,
+          deviceId: result.deviceId,
+          relayInviteExpiresAt: result.inviteExpiresAt
+        }
+      : result
+  }
+  const result = await window.api.mobile.getRuntimePairingUrl({
+    address,
+    rotate: true,
+    // Why: main gates the one-way network widen on this, so the declared choice must travel with the
+    // address — the address alone cannot tell "This computer only" from a loopback tunnel front-end.
+    reach: runtimePairingReachForIntent(intent)
+  })
+  return result.available ? { ...result, relayInviteExpiresAt: null } : result
 }

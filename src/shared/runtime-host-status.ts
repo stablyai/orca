@@ -15,6 +15,8 @@ export type RuntimeHostStatusSnapshot = {
   transport: 'unknown' | 'connecting' | 'ready' | 'disconnected'
   remoteControl?: RemoteRuntimeSharedConnectionDiagnostics | null
   retired?: true
+  /** How the latest connection reached the host; absent until one has been made. */
+  route?: 'direct' | 'relay'
 }
 
 /**

@@ -1,6 +1,9 @@
 import { ChevronDown, Loader2, Plus } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { parseHostAccessLink } from '../../../../shared/remote-pairing-address'
+import {
+  hostAccessLinkNeedsTunnel,
+  parseHostAccessLink
+} from '../../../../shared/remote-pairing-address'
 import type { RemotePairingFailureKind } from '../../../../shared/remote-pairing-verification'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
@@ -11,7 +14,8 @@ import { translate } from '@/i18n/i18n'
 import {
   translateHostAccessLinkError,
   translateRemotePairingEndpointKind,
-  translateRemotePairingFailureDescription
+  translateRemotePairingFailureDescription,
+  translateRemotePairingRelayRoute
 } from '@/lib/remote-pairing-copy'
 
 export type RuntimeHostAccessFailure = {
@@ -42,10 +46,9 @@ export function RuntimeHostAccessForm({
 }: RuntimeHostAccessFormProps): React.JSX.Element {
   const [allowLoopback, setAllowLoopback] = useState(false)
   const parsed = useMemo(() => parseHostAccessLink(accessLink), [accessLink])
-  const tunnelOverrideEnabled =
-    allowLoopback && parsed.ok && parsed.value.endpointKind === 'loopback'
-  const loopbackBlocked =
-    parsed.ok && parsed.value.endpointKind === 'loopback' && !tunnelOverrideEnabled
+  const needsTunnel = parsed.ok && hostAccessLinkNeedsTunnel(parsed.value)
+  const tunnelOverrideEnabled = allowLoopback && needsTunnel
+  const loopbackBlocked = needsTunnel && !tunnelOverrideEnabled
   const inputError = accessLink.trim() !== '' && !parsed.ok
   const describedBy = failure
     ? 'runtime-server-verification-error'
@@ -161,9 +164,14 @@ export function RuntimeHostAccessForm({
                 'Link destination'
               )}
             </span>
-            <Badge variant="outline">
-              {translateRemotePairingEndpointKind(parsed.value.endpointKind)}
-            </Badge>
+            {needsTunnel || parsed.value.endpointKind !== 'loopback' ? (
+              <Badge variant="outline">
+                {translateRemotePairingEndpointKind(parsed.value.endpointKind)}
+              </Badge>
+            ) : null}
+            {parsed.value.viaRelay ? (
+              <Badge variant="outline">{translateRemotePairingRelayRoute()}</Badge>
+            ) : null}
           </div>
           <div className="font-mono text-sm" aria-live="polite">
             {parsed.value.displayEndpoint}
@@ -290,7 +298,7 @@ export function RuntimeHostAccessForm({
           {translate('auto.components.settings.RuntimeHostAccessForm.advanced', 'Advanced')}
           <ChevronDown className="size-3.5 transition-transform group-open:rotate-180" />
         </summary>
-        {parsed.ok && parsed.value.endpointKind === 'loopback' ? (
+        {needsTunnel ? (
           <label className="mt-3 flex items-start gap-2 rounded-md border border-border/60 p-3">
             <Checkbox
               checked={allowLoopback}

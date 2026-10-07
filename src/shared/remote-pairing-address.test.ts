@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { encodePairingOffer, PAIRING_OFFER_VERSION } from './pairing'
-import { classifyRemotePairingHostname, parseHostAccessLink } from './remote-pairing-address'
+import {
+  classifyRemotePairingHostname,
+  hostAccessLinkNeedsTunnel,
+  parseHostAccessLink
+} from './remote-pairing-address'
 
 function accessLink(endpoint: string): string {
   return encodePairingOffer({
@@ -42,7 +46,8 @@ describe('remote pairing address', () => {
       value: {
         pairing: expect.objectContaining({ endpoint: 'wss://orca.example.com/runtime' }),
         displayEndpoint: 'orca.example.com',
-        endpointKind: 'public'
+        endpointKind: 'public',
+        viaRelay: false
       }
     })
   })
@@ -84,6 +89,35 @@ describe('remote pairing address', () => {
       ok: true,
       value: { endpointKind: 'loopback' }
     })
+  })
+
+  it('lets a Relay link reach a loopback endpoint without an SSH tunnel', () => {
+    const link = encodePairingOffer({
+      v: PAIRING_OFFER_VERSION,
+      endpoint: 'ws://127.0.0.1:6768',
+      deviceToken: 'token',
+      publicKeyB64: Buffer.from(new Uint8Array(32).fill(7)).toString('base64'),
+      scope: 'runtime',
+      relay: {
+        v: 1,
+        directorUrl: 'https://relay.onorca.dev',
+        cellUrl: 'https://relay-c1.onorca.dev',
+        assignmentEpoch: 1,
+        relayHostId: 'AbCdEf0123_-xyZ9',
+        inviteToken: 'A'.repeat(43),
+        inviteExpiresAt: Date.now() + 60_000,
+        e2eeFraming: 2
+      }
+    })
+    const relayLink = parseHostAccessLink(link)
+    const directLink = parseHostAccessLink(accessLink('ws://127.0.0.1:6768'))
+    if (!relayLink.ok || !directLink.ok) {
+      throw new Error('expected both access links to parse')
+    }
+
+    expect(relayLink.value).toMatchObject({ endpointKind: 'loopback', viaRelay: true })
+    expect(hostAccessLinkNeedsTunnel(relayLink.value)).toBe(false)
+    expect(hostAccessLinkNeedsTunnel(directLink.value)).toBe(true)
   })
 
   it('rejects mobile-only access grants', () => {

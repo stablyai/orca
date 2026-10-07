@@ -6,20 +6,22 @@ import {
 } from './serve-readiness'
 import type { OrcadHealth } from '../orcad/orcad-health'
 
+const availablePairing = {
+  available: true as const,
+  url: 'orca://pair?code=secret',
+  endpoint: 'wss://orca.example.test/runtime',
+  deviceId: 'device-1',
+  webClientUrl: 'https://orca.example.test/runtime/web-index.html#pairing=secret',
+  scope: 'runtime' as const,
+  qr: null
+}
+
 const ready: ServeReadiness = {
   runtimeId: 'runtime-1',
   boundEndpoint: 'ws://0.0.0.0:6768',
   advertisedEndpoint: 'wss://orca.example.test/runtime',
   managedWslCliReconciliation: 'settled',
-  pairing: {
-    available: true,
-    url: 'orca://pair?code=secret',
-    endpoint: 'wss://orca.example.test/runtime',
-    deviceId: 'device-1',
-    webClientUrl: 'https://orca.example.test/runtime/web-index.html#pairing=secret',
-    scope: 'runtime',
-    qr: null
-  }
+  pairing: availablePairing
 }
 
 const health: OrcadHealth = {
@@ -71,6 +73,45 @@ describe('ServeReadinessPublisher', () => {
       managedWslCliReconciliation: 'settled',
       pairing: ready.pairing
     })
+  })
+
+  it('prints the Relay link beside the unchanged direct link and keeps url direct in JSON', () => {
+    const relayReady: ServeReadiness = {
+      ...ready,
+      pairing: {
+        ...availablePairing,
+        url: 'orca://pair?code=direct',
+        relay: {
+          available: true,
+          url: 'orca://pair?code=relay',
+          inviteExpiresAt: Date.UTC(2026, 9, 5, 12, 10)
+        }
+      }
+    }
+
+    const human = renderServeReadiness(relayReady, { mode: 'human' })
+    expect(human).toContain('Pairing URL: orca://pair?code=direct\n')
+    expect(human).toContain('Relay pairing URL: orca://pair?code=relay\n')
+    expect(human).toContain('Relay invite expires: 2026-10-05T12:10:00.000Z')
+    expect(JSON.parse(renderServeReadiness(relayReady, { mode: 'json' })).pairing).toMatchObject({
+      url: 'orca://pair?code=direct',
+      relay: { available: true, url: 'orca://pair?code=relay' }
+    })
+  })
+
+  it('names the missing Relay account step without hiding the direct link', () => {
+    const human = renderServeReadiness(
+      {
+        ...ready,
+        pairing: {
+          ...availablePairing,
+          relay: { available: false, code: 'relay_sign_in_required', guidance: 'Sign in.' }
+        }
+      },
+      { mode: 'human' }
+    )
+    expect(human).toContain('Pairing URL: orca://pair?code=secret')
+    expect(human).toContain('Relay unavailable: relay_sign_in_required\nRelay guidance: Sign in.')
   })
 
   it('reports unavailable pairing as an explicit machine-readable object', () => {

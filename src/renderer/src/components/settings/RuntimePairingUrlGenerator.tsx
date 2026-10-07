@@ -8,10 +8,9 @@ import { translate } from '@/i18n/i18n'
 import { RuntimePairingGeneratorForm } from './RuntimePairingGeneratorForm'
 import {
   RUNTIME_PAIRING_LOOPBACK_ADDRESS,
-  cacheGeneratedRuntimePairingLink,
   clearGeneratedRuntimePairingLink,
+  requestRuntimePairingLink,
   runtimePairingLinkCache,
-  runtimePairingReachForIntent,
   selectRuntimePairingIntent,
   type RuntimePairingIntent,
   type RuntimePairingUrlGeneratorProps
@@ -38,6 +37,9 @@ export function RuntimePairingUrlGenerator({
   )
   const [runtimePairingDeviceId, setRuntimePairingDeviceId] = useState<string | null>(
     runtimePairingLinkCache.runtimePairingDeviceId
+  )
+  const [relayInviteExpiresAt, setRelayInviteExpiresAt] = useState<number | null>(
+    runtimePairingLinkCache.relayInviteExpiresAt
   )
   const [runtimeAccessGrants, setRuntimeAccessGrants] = useState<RuntimeAccessGrant[]>([])
   const [isLoadingAccessGrants, setIsLoadingAccessGrants] = useState(false)
@@ -174,6 +176,7 @@ export function RuntimePairingUrlGenerator({
       setWebClientUrl(null)
       setRuntimePairingDeviceId(null)
       setGeneratedAddress(null)
+      setRelayInviteExpiresAt(null)
     }
   }
 
@@ -186,13 +189,7 @@ export function RuntimePairingUrlGenerator({
     }
     setIsGeneratingPairing(true)
     try {
-      const result = await window.api.mobile.getRuntimePairingUrl({
-        address,
-        rotate: true,
-        // Why: main gates the one-way network widen on this, so the declared choice must travel with the
-        // address — the address alone cannot tell "This computer only" from a loopback tunnel front-end.
-        reach: runtimePairingReachForIntent(intent)
-      })
+      const result = await requestRuntimePairingLink(intent, address)
       if (!result.available) {
         clearGeneratedUrls()
         if (mountedRef.current) {
@@ -208,17 +205,12 @@ export function RuntimePairingUrlGenerator({
         }
         return
       }
-      cacheGeneratedRuntimePairingLink({
-        address,
-        pairingUrl: result.pairingUrl,
-        webClientUrl: result.webClientUrl,
-        deviceId: result.deviceId
-      })
       if (mountedRef.current) {
         setRuntimePairingUrl(result.pairingUrl)
         setWebClientUrl(result.webClientUrl)
         setRuntimePairingDeviceId(result.deviceId)
         setGeneratedAddress(address)
+        setRelayInviteExpiresAt(result.relayInviteExpiresAt)
       }
       await loadRuntimeAccessGrants()
       if (mountedRef.current) {
@@ -401,6 +393,7 @@ export function RuntimePairingUrlGenerator({
           runtimePairingUrl={runtimePairingUrl}
           copiedTarget={copiedTarget}
           generatedAddress={generatedAddress}
+          relayInviteExpiresAt={relayInviteExpiresAt}
           onIntentChange={updateIntent}
           onSelectedAddressChange={updateSelectedAddress}
           onRefreshNetworkInterfaces={() => void loadNetworkInterfaces({ showToastOnError: true })}

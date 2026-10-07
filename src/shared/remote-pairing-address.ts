@@ -7,6 +7,8 @@ export type ParsedHostAccessLink = {
   pairing: PairingOffer
   displayEndpoint: string
   endpointKind: RemotePairingEndpointKind
+  /** The link can also reach its server through Orca Relay (desktop clients only). */
+  viaRelay: boolean
 }
 
 export type HostAccessLinkErrorKind =
@@ -141,7 +143,13 @@ export function parseHostAccessLink(input: string): ParseHostAccessLinkResult {
     value: {
       pairing,
       displayEndpoint: endpoint.host,
-      endpointKind: classifyRemotePairingHostname(endpoint.hostname)
+      endpointKind: classifyRemotePairingHostname(endpoint.hostname),
+      viaRelay: pairing.relay !== undefined
     }
   }
+}
+
+// Why: `orca serve --relay` advertises loopback by default; Relay, not a tunnel, reaches it.
+export function hostAccessLinkNeedsTunnel(link: ParsedHostAccessLink): boolean {
+  return link.endpointKind === 'loopback' && !link.viaRelay
 }

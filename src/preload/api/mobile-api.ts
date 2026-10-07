@@ -2,7 +2,10 @@ import type { MobileRelayStatusDetail } from '../../shared/mobile-relay-status'
 import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
 import type { RuntimePairingReach } from '../../shared/runtime-pairing-reach'
 import type { MobileRelayMintFailure } from '../../shared/mobile-relay-mint-failure'
-import type { RuntimeAccessGrant } from '../../shared/runtime-access-grants'
+import type {
+  RuntimeAccessGrant,
+  RuntimeRelayPairingUrlResult
+} from '../../shared/runtime-access-grants'
 
 export type MobileApi = {
   listNetworkInterfaces: () => Promise<{
@@ -67,6 +70,7 @@ export type MobileApi = {
         deviceId: string
       }
   >
+  getRuntimeRelayPairingUrl: () => Promise<RuntimeRelayPairingUrlResult>
   listDevices: () => Promise<{
     devices: {
       deviceId: string

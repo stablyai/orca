@@ -160,11 +160,8 @@ export class DesktopRelayService {
     context: MobilePairingConnectionContext,
     params: PairingGetEndpointsParams
   ): Promise<PairingGetEndpointsResult> {
-    this.requireMobileDevice(context.deviceId)
-    if (
-      this.runtimeRpc.getDeviceRegistry()?.getMobilePairingConnectionMode(context.deviceId) ===
-      'local-only'
-    ) {
+    this.requireRelayDevice(context.deviceId)
+    if (!this.runtimeRpc.getDeviceRegistry()?.isRelayEnabled(context.deviceId)) {
       return { v: 1, relay: null }
     }
     return await this.withTransientDemand(`endpoints:${context.deviceId}`, async () => {
@@ -200,11 +197,8 @@ export class DesktopRelayService {
     context: MobilePairingConnectionContext,
     params: PairingProvisionRelayParams
   ): Promise<DeviceCredentialInstalled> {
-    this.requireMobileDevice(context.deviceId)
-    if (
-      this.runtimeRpc.getDeviceRegistry()?.getMobilePairingConnectionMode(context.deviceId) ===
-      'local-only'
-    ) {
+    this.requireRelayDevice(context.deviceId)
+    if (!this.runtimeRpc.getDeviceRegistry()?.isRelayEnabled(context.deviceId)) {
       throw new Error('relay_disabled_for_device')
     }
     return await this.withTransientDemand(`provision:${context.deviceId}`, async () => {
@@ -220,7 +214,7 @@ export class DesktopRelayService {
         throw new Error('relay_provision_authorization_unavailable')
       }
       if (
-        !this.runtimeRpc.setMobileRelayBinding(context.deviceId, {
+        !this.runtimeRpc.setDeviceRelayBinding(context.deviceId, {
           relayHostId: broker.hostId,
           relayDeviceId: context.deviceId,
           ownerIdentityKey: broker.ownerIdentityKey
@@ -256,8 +250,9 @@ export class DesktopRelayService {
     }
   }
 
-  private requireMobileDevice(deviceId: string): void {
-    if (this.runtimeRpc.getDeviceRegistry()?.getDevice(deviceId)?.scope !== 'mobile') {
+  private requireRelayDevice(deviceId: string): void {
+    // Why: phones read this code over the wire, so it keeps its mobile-era name.
+    if (!this.runtimeRpc.getDeviceRegistry()?.getDevice(deviceId)) {
       throw new Error('mobile_device_not_found')
     }
   }

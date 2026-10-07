@@ -51,11 +51,12 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
     return this.pushUnregisterOutbox
   }
 
-  setMobileRelayBinding(deviceId: string, binding: RelayDeviceBinding): boolean {
+  setDeviceRelayBinding(deviceId: string, binding: RelayDeviceBinding): boolean {
     const current = this.deviceRegistry?.getDevice(deviceId)
     if (
-      current?.scope !== 'mobile' ||
-      this.deviceRegistry?.getMobilePairingConnectionMode(deviceId) === 'local-only'
+      !current ||
+      (current.scope === 'mobile' &&
+        this.deviceRegistry?.getMobilePairingConnectionMode(deviceId) === 'local-only')
     ) {
       return false
     }
@@ -109,8 +110,17 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
 
   revokeRuntimeAccess(deviceId: string): boolean {
     const device = this.deviceRegistry?.getDevice(deviceId)
-    if (device?.scope !== 'runtime' || !this.deviceRegistry?.removeDevice(deviceId)) {
+    if (device?.scope !== 'runtime') {
       return false
+    }
+    if (device.relayBinding && !this.queueRelayDeviceRevoke(device.relayBinding)) {
+      return false
+    }
+    if (!this.deviceRegistry?.removeDevice(deviceId)) {
+      return false
+    }
+    if (device.relayBinding) {
+      this.mobileRelayPairingProvider?.onDemandStateChanged?.()
     }
     this.runtime.forgetClientNavigationState(deviceId)
     this.mobileSocketWiring?.terminateDeviceConnections(device.token)
@@ -164,6 +174,14 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
     const endpoint = advertised.endpoint
     const deviceName = args.name ?? `CLI ${new Date().toLocaleDateString()}`
     const scope = args.scope ?? 'runtime'
+    // Why: rotation drops the never-used grant, so its Relay invite must not outlive it (mobile queues its own).
+    const rotatedRelayBinding =
+      args.rotate && scope === 'runtime'
+        ? this.deviceRegistry.getPendingDevice(scope)?.relayBinding
+        : undefined
+    if (rotatedRelayBinding && !this.queueRelayDeviceRevoke(rotatedRelayBinding)) {
+      return pairingUnavailable('device_registry_unavailable', DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE)
+    }
     let device: DeviceEntry
     try {
       const reach = args.reach ?? 'network'
@@ -173,6 +191,9 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
     } catch (error) {
       console.error('[runtime] Failed to persist pairing credential:', error)
       return pairingUnavailable('device_registry_unavailable', DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE)
+    }
+    if (rotatedRelayBinding) {
+      this.mobileRelayPairingProvider?.onDemandStateChanged?.()
     }
     const pairingUrl = encodePairingOffer({
       v: PAIRING_OFFER_VERSION,

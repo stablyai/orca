@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { MobileRelayEndpointSchema } from './mobile-relay-credential-contract'
 import { PAIRING_OFFER_VERSION, type PairingOffer } from './pairing'
 
 export const RuntimeAccessEndpointSchema = z.object({
@@ -17,6 +18,19 @@ export const PublicRuntimeAccessEndpointSchema = RuntimeAccessEndpointSchema.omi
 
 export type PublicRuntimeAccessEndpoint = z.infer<typeof PublicRuntimeAccessEndpointSchema>
 
+// Why: the resume token is a bearer for the Relay leg only; E2EE still authenticates the device token.
+export const RuntimeEnvironmentRelayRouteSchema = z.object({
+  // Why strip: a newer build may persist more endpoint fields; that must not invalidate the store.
+  endpoint: MobileRelayEndpointSchema.strip(),
+  credential: z.object({
+    token: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
+    version: z.number().int().positive(),
+    expiresAt: z.number().int().nonnegative()
+  })
+})
+
+export type RuntimeEnvironmentRelayRoute = z.infer<typeof RuntimeEnvironmentRelayRouteSchema>
+
 export const RuntimeEnvironmentSourceSchema = z.enum(['manual', 'ephemeral-vm'])
 export type RuntimeEnvironmentSource = z.infer<typeof RuntimeEnvironmentSourceSchema>
 
@@ -32,20 +46,23 @@ export const KnownRuntimeEnvironmentSchema = z.object({
   source: RuntimeEnvironmentSourceSchema.optional(),
   connectionDependency: z.literal('ssh-tunnel').optional(),
   endpoints: z.array(RuntimeAccessEndpointSchema).min(1),
-  preferredEndpointId: z.string().min(1)
+  preferredEndpointId: z.string().min(1),
+  // Why optional: builds that predate runtime Relay strip it and keep the direct endpoint working.
+  relay: RuntimeEnvironmentRelayRouteSchema.optional()
 })
 
 export type KnownRuntimeEnvironment = z.infer<typeof KnownRuntimeEnvironmentSchema>
 
-export type PublicKnownRuntimeEnvironment = Omit<KnownRuntimeEnvironment, 'endpoints'> & {
+export type PublicKnownRuntimeEnvironment = Omit<KnownRuntimeEnvironment, 'endpoints' | 'relay'> & {
   endpoints: PublicRuntimeAccessEndpoint[]
 }
 
 export function redactRuntimeEnvironment(
   environment: KnownRuntimeEnvironment
 ): PublicKnownRuntimeEnvironment {
+  const { relay: _relay, ...rest } = environment
   return {
-    ...environment,
+    ...rest,
     endpoints: environment.endpoints.map(
       ({ deviceToken: _deviceToken, publicKeyB64: _key, ...rest }) => rest
     )
@@ -67,6 +84,7 @@ export function createEnvironmentFromPairingOffer(args: {
   runtimeId?: string | null
   source?: RuntimeEnvironmentSource
   connectionDependency?: 'ssh-tunnel'
+  relay?: RuntimeEnvironmentRelayRoute
 }): KnownRuntimeEnvironment {
   const endpointId = `ws-${args.id}`
   return KnownRuntimeEnvironmentSchema.parse({
@@ -90,7 +108,8 @@ export function createEnvironmentFromPairingOffer(args: {
         publicKeyB64: args.offer.publicKeyB64
       }
     ],
-    preferredEndpointId: endpointId
+    preferredEndpointId: endpointId,
+    ...(args.relay ? { relay: args.relay } : {})
   })
 }
 

@@ -1,10 +1,30 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
+import type { OrcaProfileAuthStatus } from '../../../../shared/orca-profiles'
 import { TooltipProvider } from '../ui/tooltip'
 import {
   RuntimePairingGeneratorForm,
   type RuntimePairingIntent
 } from './RuntimePairingGeneratorForm'
+
+type StoreState = {
+  orcaProfileAuthStatus: OrcaProfileAuthStatus | null
+  connectCurrentOrcaProfile: () => Promise<null>
+  fetchOrcaProfileAuthStatus: () => Promise<null>
+}
+
+const store = vi.hoisted(() => {
+  const state: StoreState = {
+    orcaProfileAuthStatus: null,
+    connectCurrentOrcaProfile: () => Promise.resolve(null),
+    fetchOrcaProfileAuthStatus: () => Promise.resolve(null)
+  }
+  return { state }
+})
+
+vi.mock('../../store', () => ({
+  useAppStore: (selector: (state: StoreState) => unknown) => selector(store.state)
+}))
 
 function renderForm(
   intent: RuntimePairingIntent,
@@ -12,7 +32,8 @@ function renderForm(
   generated?: {
     address: string
     runtimePairingUrl: string
-    webClientUrl: string
+    webClientUrl: string | null
+    relayInviteExpiresAt?: number
   }
 ): string {
   return renderToStaticMarkup(
@@ -28,6 +49,7 @@ function renderForm(
         runtimePairingUrl={generated?.runtimePairingUrl ?? null}
         copiedTarget={null}
         generatedAddress={generated?.address ?? null}
+        relayInviteExpiresAt={generated?.relayInviteExpiresAt ?? null}
         onIntentChange={vi.fn()}
         onSelectedAddressChange={vi.fn()}
         onRefreshNetworkInterfaces={vi.fn()}
@@ -64,5 +86,47 @@ describe('RuntimePairingGeneratorForm', () => {
 
     expect(markup).toContain('The connection address changed.')
     expect(markup).not.toContain('stale-secret')
+  })
+
+  it('keeps Relay and direct links apart when the choice changes', () => {
+    const relayLink = {
+      address: '100.76.32.125',
+      runtimePairingUrl: 'orca://pair?code=relay-secret',
+      webClientUrl: null,
+      relayInviteExpiresAt: Date.now() + 600_000
+    }
+
+    const underRelay = renderForm('relay', '100.76.32.125', relayLink)
+    expect(underRelay).toContain('relay-secret')
+    expect(underRelay).toContain('It works once.')
+    expect(underRelay).not.toContain('Open in browser')
+
+    const underDirect = renderForm('another', '100.76.32.125', relayLink)
+    expect(underDirect).not.toContain('relay-secret')
+    expect(underDirect).not.toContain('The connection address changed.')
+
+    const directUnderRelay = renderForm('relay', '100.76.32.125', {
+      address: '100.76.32.125',
+      runtimePairingUrl: 'orca://pair?code=direct-secret',
+      webClientUrl: 'https://example.test/?pair=direct-secret'
+    })
+    expect(directUnderRelay).not.toContain('direct-secret')
+  })
+
+  it('asks for an Orca sign-in before a Relay link can be generated', () => {
+    store.state.orcaProfileAuthStatus = null
+    const signedOut = renderForm('relay', '100.76.32.125')
+    expect(signedOut).toContain('Sign in for Relay')
+    expect(signedOut).toContain('disabled=""')
+
+    store.state.orcaProfileAuthStatus = {
+      activeProfileId: 'default',
+      configured: true,
+      state: 'connected',
+      persistence: 'encrypted'
+    }
+    const signedIn = renderForm('relay', '100.76.32.125')
+    expect(signedIn).not.toContain('Sign in for Relay')
+    expect(signedIn).not.toContain('disabled=""')
   })
 })

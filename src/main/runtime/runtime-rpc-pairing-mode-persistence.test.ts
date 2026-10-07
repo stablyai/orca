@@ -62,7 +62,7 @@ describe('OrcaRuntimeRpcServer', () => {
         'local-only'
       )
       expect(
-        server.setMobileRelayBinding(offer.deviceId, {
+        server.setDeviceRelayBinding(offer.deviceId, {
           relayHostId: 'AbCdEf0123_-xyZ9',
           relayDeviceId: offer.deviceId,
           ownerIdentityKey: 'user\0profile\0org'

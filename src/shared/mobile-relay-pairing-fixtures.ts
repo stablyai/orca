@@ -54,8 +54,27 @@ export function createMobileRelayPairingFixtures(now: number): PairingFixture[] 
       expected: directOffer
     },
     {
-      name: 'runtime relay is invalid',
+      name: 'relay offer with runtime scope',
       payload: { ...directOffer, scope: 'runtime', relay },
+      expected: { ...directOffer, scope: 'runtime', relay }
+    },
+    {
+      name: 'runtime relay offer public key must be canonical 32-byte base64',
+      payload: { ...directOffer, scope: 'runtime', publicKeyB64: 'legacy-nonempty-key', relay },
+      expected: null
+    },
+    {
+      name: 'runtime relay offer with non-HTTPS director is invalid',
+      payload: {
+        ...directOffer,
+        scope: 'runtime',
+        relay: { ...relay, directorUrl: 'http://relay.onorca.dev' }
+      },
+      expected: null
+    },
+    {
+      name: 'runtime relay offer with unsupported E2EE framing is invalid',
+      payload: { ...directOffer, scope: 'runtime', relay: { ...relay, e2eeFraming: 1 } },
       expected: null
     },
     {

@@ -1,20 +1,16 @@
 import type { MobilePairingConnectionMode } from '../../../shared/mobile-pairing-connection-mode'
-import {
-  mobileRelayMintFailureFromUnknown,
-  type MobileRelayMintFailure
-} from '../../../shared/mobile-relay-mint-failure'
+import type { MobileRelayMintFailure } from '../../../shared/mobile-relay-mint-failure'
 import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../../shared/pairing'
 import { NETWORK_EXPOSURE_FAILED_GUIDANCE } from '../network-exposure-guidance'
-import { RuntimeRpcPairing } from './runtime-rpc-pairing'
+import { RuntimeRpcRelayPairing } from './runtime-rpc-relay-pairing'
 import {
   DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE,
   pairingUnavailable,
   type MobilePairingOffer,
-  type MobileRelayPairingProvider,
   type PairingOfferUnavailable
 } from './runtime-rpc-pairing-types'
 
-export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
+export class RuntimeRpcMobilePairing extends RuntimeRpcRelayPairing {
   async createMobilePairingOffer(args: {
     address?: string | null
     connectionMode?: MobilePairingConnectionMode
@@ -145,67 +141,20 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
         relayFailure
       }
     }
-    const relayProvider = this.mobileRelayPairingProvider
-    if (!relayProvider) {
-      return refuseAutomaticWithoutRelay({
-        code: 'relay_provider_unavailable',
-        stage: 'provider_missing',
-        message: 'Orca Relay is not available on this desktop'
-      })
-    }
-    const device = this.deviceRegistry?.getDevice(direct.deviceId)
-    const publicKeyB64 = this.getE2EEPublicKey()
-    if (!device || !publicKeyB64) {
-      return refuseAutomaticWithoutRelay({
-        code: 'e2ee_key_unavailable',
-        stage: 'e2ee_missing',
-        message: 'E2EE public key unavailable for Relay pairing'
-      })
-    }
-    let relayPairing: Awaited<ReturnType<MobileRelayPairingProvider['createPairingRelay']>>
-    try {
-      relayPairing = await relayProvider.createPairingRelay(device.deviceId)
-    } catch (error) {
-      // Why: the raw provider error can carry request metadata or credentials — log only the validated code.
-      const relayFailure = mobileRelayMintFailureFromUnknown({
-        stage: 'create_pairing_relay',
-        error,
-        fallbackCode: 'relay_mint_failed',
-        fallbackMessage: 'Relay pairing invite request failed'
-      })
-      console.warn(`[runtime] Failed to create Relay pairing invite: ${relayFailure.code}`)
-      return refuseAutomaticWithoutRelay(relayFailure)
-    }
-    const currentDevice = this.deviceRegistry?.getDevice(device.deviceId)
-    if (
-      generation !== this.mobilePairingOfferGeneration ||
-      relayProvider !== this.mobileRelayPairingProvider ||
-      currentDevice?.token !== device.token ||
-      this.deviceRegistry?.getMobilePairingConnectionMode(device.deviceId) !== 'automatic'
-    ) {
-      this.queueOrRetainRelayDeviceRevoke(device.deviceId, relayPairing.binding)
+    const minted = await this.mintPairingRelay(
+      direct.deviceId,
+      () =>
+        generation === this.mobilePairingOfferGeneration &&
+        this.deviceRegistry?.getMobilePairingConnectionMode(direct.deviceId) === 'automatic'
+    )
+    if (minted.kind === 'superseded') {
       if (createdNewPendingDevice) {
         this.discardPendingMobilePairingDevice(direct.deviceId)
       }
       return this.relayPairingRequestSuperseded()
     }
-    try {
-      if (!this.setMobileRelayBinding(device.deviceId, relayPairing.binding)) {
-        this.queueOrRetainRelayDeviceRevoke(device.deviceId, relayPairing.binding)
-        return refuseAutomaticWithoutRelay({
-          code: 'relay_binding_failed',
-          stage: 'binding_failed',
-          message: 'Could not store Relay binding for the pairing device'
-        })
-      }
-    } catch (error) {
-      console.warn('[runtime] Failed to persist Relay pairing binding:', error)
-      this.queueOrRetainRelayDeviceRevoke(device.deviceId, relayPairing.binding)
-      return refuseAutomaticWithoutRelay({
-        code: 'relay_binding_failed',
-        stage: 'binding_failed',
-        message: 'Could not store Relay binding for the pairing device'
-      })
+    if (minted.kind === 'failed') {
+      return refuseAutomaticWithoutRelay(minted.failure)
     }
     return {
       ...direct,
@@ -213,11 +162,11 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
       pairingUrl: encodePairingOffer({
         v: PAIRING_OFFER_VERSION,
         endpoint: direct.endpoint,
-        deviceToken: device.token,
-        publicKeyB64,
-        pairedDeviceId: device.deviceId,
+        deviceToken: minted.deviceToken,
+        publicKeyB64: minted.publicKeyB64,
+        pairedDeviceId: direct.deviceId,
         scope: 'mobile',
-        relay: relayPairing.relay
+        relay: minted.relay
       })
     }
   }

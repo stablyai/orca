@@ -11,6 +11,12 @@ export function createWebMobileApi(): Partial<PreloadApi> {
       repairWindowsFirewall: () => Promise.resolve({ ok: false, reason: 'unsupported' }),
       openWindowsNetworkSettings: () => Promise.resolve(false),
       getRuntimePairingUrl: () => Promise.resolve({ available: false }),
+      getRuntimeRelayPairingUrl: () =>
+        Promise.resolve({
+          available: false,
+          reason: 'unsupported',
+          guidance: 'Share this server from the Orca desktop app.'
+        }),
       listDevices: () => Promise.resolve({ devices: [] }),
       revokeDevice: () => Promise.resolve({ revoked: false }),
       listRuntimeAccessGrants: () => Promise.resolve({ grants: [] }),

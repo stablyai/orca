@@ -83,6 +83,14 @@ describe('RelayDemandLedger', () => {
     expect(ledger.hasDemand(ownerIdentityKey)).toBe(true)
   })
 
+  it('keeps a provisioned runtime grant reachable through Relay', () => {
+    const { deviceRegistry, ledger } = fixture(5_000)
+    const server = deviceRegistry.addDevice('Remote desktop client', 'runtime')
+    deviceRegistry.setRelayBinding(server.deviceId, binding(server.deviceId))
+    deviceRegistry.updateLastSeen(server.deviceId)
+    expect(ledger.hasDemand(ownerIdentityKey)).toBe(true)
+  })
+
   it('does not activate another signed-in identity or relay host', () => {
     const { deviceRegistry, ledger } = fixture(1_000)
     const pending = deviceRegistry.addDevice('Other phone')

@@ -80,15 +80,6 @@ export function createPairingOfferSchema(now: () => number = () => Date.now()) {
       relay: relaySchema.optional()
     })
     .superRefine((offer, ctx) => {
-      if (offer.relay && offer.scope === 'runtime') {
-        // Why: relay v1 is mobile-only; accepting it on runtime offers would
-        // imply routing and credential support that client does not have.
-        ctx.addIssue({
-          code: 'custom',
-          path: ['relay'],
-          message: 'Relay is invalid for runtime scope'
-        })
-      }
       if (offer.relay && !isCanonicalBase64Key(offer.publicKeyB64)) {
         // Why: relayHostId is derived from the decoded key bytes, so relay
         // offers cannot tolerate the permissive legacy base64 aliases.

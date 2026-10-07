@@ -18,6 +18,7 @@ import {
   getRuntimeServerConnectionLabel,
   getRuntimeServerConnectionState,
   getRuntimeServerDotClass,
+  getRuntimeServerRouteLabel,
   isRuntimeServerTransportConnected,
   type RuntimeHostDetails
 } from './runtime-environment-host-details'
@@ -103,6 +104,12 @@ export function RuntimeServerRow({
     platform: descriptorStatus?.hostPlatform
   })
   const hostDescriptorText = hostDisplay.descriptorLine
+  const routeLabel = isReachable
+    ? getRuntimeServerRouteLabel(
+        runtimeStatusEntry?.snapshot?.route,
+        environment.endpoints[0]?.endpoint
+      )
+    : null
 
   return (
     <div data-settings-section={environment.id} className="flex items-center gap-3 px-4 py-3">
@@ -118,6 +125,7 @@ export function RuntimeServerRow({
           />
           <span className="text-[11px] text-muted-foreground">
             {getRuntimeServerConnectionLabel(connectionState)}
+            {routeLabel ? ` · ${routeLabel}` : null}
           </span>
           {effectiveDetails?.compatibility?.kind === 'blocked' ? (
             <AlertTriangle className="size-3.5 shrink-0 text-destructive" />

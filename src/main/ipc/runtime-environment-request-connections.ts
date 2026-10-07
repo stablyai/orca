@@ -1,6 +1,9 @@
 import type { PairingOffer } from '../../shared/pairing'
 import { resolveEnvironment } from '../../shared/runtime-environment-store'
-import { getPreferredPairingOffer } from '../../shared/runtime-environments'
+import {
+  getRuntimeEnvironmentConnectPairing,
+  withRuntimeEnvironmentRoute
+} from './runtime-environment-relay-route'
 import type { RuntimeHostStatusOwner } from '../../shared/runtime-host-status-owner'
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import { createRuntimeEnvironmentStatusOwner } from './runtime-environment-status-owner'
@@ -42,7 +45,7 @@ export function getRuntimeEnvironmentStatusOwner(
   selector: string
 ): RuntimeHostStatusOwner {
   const environment = resolveEnvironment(userDataPath, selector)
-  const pairing = getPreferredPairingOffer(environment)
+  const pairing = getRuntimeEnvironmentConnectPairing(userDataPath, environment)
   const key = `${userDataPath}\0${environment.pairingRevision ?? environment.createdAt}\0${getPairingKey(pairing)}`
   let cached = statusOwners.get(environment.id)
   if (!cached || cached.key !== key || cached.owner.read().retired) {
@@ -83,7 +86,7 @@ export function resetRuntimeEnvironmentStatusOwners(): void {
 }
 
 export function getRuntimeEnvironmentStatusSnapshots() {
-  return [...statusOwners.values()].map(({ owner }) => owner.read())
+  return [...statusOwners.values()].map(({ owner }) => withRuntimeEnvironmentRoute(owner.read()))
 }
 
 export function sendRemoteRuntimeConnectionRequest<TResult>(

@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, truncateSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, truncateSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -10,8 +10,11 @@ import {
   listEnvironments,
   MAX_RUNTIME_ENVIRONMENT_STORE_FILE_BYTES,
   markEnvironmentUsed,
-  updateEnvironmentFromPairingCode
+  resolveEnvironment,
+  updateEnvironmentFromPairingCode,
+  updateEnvironmentRelayRoute
 } from './runtime-environment-store'
+import { redactRuntimeEnvironment, type RuntimeEnvironmentRelayRoute } from './runtime-environments'
 
 function pairingCode(endpoint = 'ws://127.0.0.1:6768', pairedDeviceId?: string): string {
   return encodePairingOffer({
@@ -175,6 +178,63 @@ describe('runtime environment store', () => {
       pairedDeviceId: 'device-from-status',
       lastUsedAt: 2_000
     })
+  })
+
+  it('keeps a Relay route private and updates it without a pairing revision', () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-env-store-'))
+    tempDirs.push(userDataPath)
+    const relay: RuntimeEnvironmentRelayRoute = {
+      endpoint: {
+        v: 1,
+        directorUrl: 'https://relay.onorca.dev',
+        cellUrl: 'https://relay-c1.onorca.dev',
+        assignmentEpoch: 3,
+        relayHostId: 'AbCdEf0123_-xyZ9',
+        e2eeFraming: 2
+      },
+      credential: { token: 'T'.repeat(43), version: 1, expiresAt: 1_000 }
+    }
+    const added = addEnvironmentFromPairingCode(userDataPath, {
+      name: 'relay-server',
+      pairingCode: pairingCode(),
+      now: 100,
+      relay
+    })
+
+    expect(redactRuntimeEnvironment(added)).not.toHaveProperty('relay')
+    const moved = { ...relay.endpoint, cellUrl: 'https://relay-c2.onorca.dev', assignmentEpoch: 4 }
+    updateEnvironmentRelayRoute(userDataPath, added.id, (route) => ({ ...route, endpoint: moved }))
+    const stored = resolveEnvironment(userDataPath, added.id)
+    expect(stored.relay?.endpoint).toEqual(moved)
+    expect(stored.pairingRevision).toBe(added.pairingRevision)
+  })
+
+  it('reads a Relay route that a newer build extended with unknown fields', () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-env-store-'))
+    tempDirs.push(userDataPath)
+    const added = addEnvironmentFromPairingCode(userDataPath, {
+      name: 'relay-server',
+      pairingCode: pairingCode(),
+      relay: {
+        endpoint: {
+          v: 1,
+          directorUrl: 'https://relay.onorca.dev',
+          cellUrl: 'https://relay-c1.onorca.dev',
+          assignmentEpoch: 3,
+          relayHostId: 'AbCdEf0123_-xyZ9',
+          e2eeFraming: 2
+        },
+        credential: { token: 'T'.repeat(43), version: 1, expiresAt: 1_000 }
+      }
+    })
+    const path = getEnvironmentStorePath(userDataPath)
+    const store = JSON.parse(readFileSync(path, 'utf8'))
+    store.environments[0].relay.endpoint.futureField = true
+    writeFileSync(path, JSON.stringify(store))
+
+    expect(resolveEnvironment(userDataPath, added.id).relay?.endpoint).not.toHaveProperty(
+      'futureField'
+    )
   })
 
   it('rejects an oversized sparse environment store before parsing it', () => {

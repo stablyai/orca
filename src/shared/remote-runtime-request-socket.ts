@@ -31,6 +31,7 @@ import {
   takeRemoteRuntimePreparedRequest
 } from './remote-runtime-prepared-request-admission'
 import { RemoteRuntimeRequestResponseRouter } from './remote-runtime-request-response-router'
+import { withRemoteRuntimeSocketConnector } from './remote-runtime-socket-connector'
 import type { RuntimeOrchestrationEnvelope, RuntimeRpcResponse } from './runtime-rpc-envelope'
 import type { RuntimeStatus } from './runtime-types'
 import { isSafeTimerDelayMs, MAX_TIMER_DELAY_MS } from './timer-delay'
@@ -190,7 +191,10 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
       const connectOptions = remoteRuntimeConnectOptions({
         maxPayload: REMOTE_RUNTIME_MAX_WEBSOCKET_FRAME_BYTES
       })
-      ws = new WebSocket(pairing.endpoint, connectOptions)
+      ws = new WebSocket(
+        pairing.endpoint,
+        withRemoteRuntimeSocketConnector(pairing.endpoint, connectOptions)
+      )
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       finishError(

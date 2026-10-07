@@ -14,6 +14,7 @@ import {
 } from '../../shared/remote-runtime-client'
 import { withRemoteRuntimeTailscaleHint } from '../../shared/remote-runtime-tailscale-hint'
 import { enqueueRuntimeCall } from './runtime-environment-call-queue'
+import { getRuntimeEnvironmentConnectPairing } from './runtime-environment-relay-route'
 import { getRuntimeEnvironmentStatusOwner } from './runtime-environment-request-connections'
 import {
   sendRemoteRuntimeConnectionRequestAbortable,
@@ -104,8 +105,8 @@ export async function callRuntimeEnvironment(
         if (revisionFailure) {
           return revisionFailure
         }
-        const pairing = getPreferredPairingOffer(currentEnvironment)
-        endpoint = pairing.endpoint
+        const pairing = getRuntimeEnvironmentConnectPairing(userDataPath, currentEnvironment)
+        endpoint = getPreferredPairingOffer(currentEnvironment).endpoint
         const effectiveTimeoutMs = timeoutMs ?? DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS
         const sharedControlEnvelope = shouldUseSharedControlEnvelope(method, params, envelope)
         if (envelope && !sharedControlEnvelope) {
@@ -189,7 +190,8 @@ export async function subscribeRuntimeEnvironment(
   signal?: AbortSignal
 ): Promise<RemoteRuntimeSubscription> {
   const environment = resolveEnvironment(userDataPath, selector)
-  const pairing = getPreferredPairingOffer(environment)
+  const pairing = getRuntimeEnvironmentConnectPairing(userDataPath, environment)
+  const hintEndpoint = getPreferredPairingOffer(environment).endpoint
   const effectiveTimeoutMs = timeoutMs ?? DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS
   let markedUsed = false
   const markUsedOnce = (runtimeId: string): void => {
@@ -212,7 +214,7 @@ export async function subscribeRuntimeEnvironment(
       callbacks.onEvent({
         type: 'error' as const,
         code: error.code,
-        message: withRemoteRuntimeTailscaleHint(error.message, pairing.endpoint)
+        message: withRemoteRuntimeTailscaleHint(error.message, hintEndpoint)
       }),
     onClose: () => {
       callbacks.onEvent({ type: 'close' as const })
@@ -244,7 +246,7 @@ export async function subscribeRuntimeEnvironment(
     )
   } catch (error) {
     if (error instanceof Error) {
-      error.message = withRemoteRuntimeTailscaleHint(error.message, pairing.endpoint)
+      error.message = withRemoteRuntimeTailscaleHint(error.message, hintEndpoint)
     }
     throw error
   }

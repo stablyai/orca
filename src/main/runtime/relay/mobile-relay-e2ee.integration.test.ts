@@ -8,7 +8,7 @@ import { DeviceRegistry } from '../device-registry'
 import { MobileSocketWiring } from '../rpc/mobile-socket-wiring'
 import { CloudRelayTransport } from '../rpc/relay-transport'
 import { deriveRelayHostId } from './relay-http-client'
-import { SimulatedMobileE2EEV2Peer } from './simulated-mobile-e2ee-v2-peer'
+import { RelayE2EEV2ClientSession } from './relay-e2ee-v2-client-session'
 
 function deferred<T>() {
   let resolve!: (value: T) => void
@@ -183,27 +183,14 @@ describe('desktop relay E2EE integration', () => {
 
     const authenticated = deferred<void>()
     const phoneText = deferred<string>()
-    const phoneSession = new SimulatedMobileE2EEV2Peer(
-      nacl.box.keyPair(),
-      desktopKeys.publicKey,
-      relayHostId
-    )
+    const phoneSession = new RelayE2EEV2ClientSession(desktopKeys.publicKey, relayHostId)
     let phoneState: 'awaiting-ready' | 'awaiting-authenticated' | 'ready' = 'awaiting-ready'
     phone.on('message', (raw, isBinary) => {
       if (phoneState === 'awaiting-ready') {
         expect(isBinary).toBe(false)
         expect(phoneSession.acceptReady(JSON.parse(raw.toString()))).toBe(true)
         phoneState = 'awaiting-authenticated'
-        phone.send(
-          phoneSession.sealText(
-            JSON.stringify({
-              type: 'e2ee_auth',
-              v: 2,
-              transcriptHashB64: phoneSession.transcriptHashB64,
-              deviceToken: device.token
-            })
-          )
-        )
+        phone.send(phoneSession.authFrame(device.token))
         return
       }
       const plaintext = isBinary
@@ -211,11 +198,9 @@ describe('desktop relay E2EE integration', () => {
         : phoneSession.openText(raw.toString())
       expect(plaintext).not.toBeNull()
       if (phoneState === 'awaiting-authenticated') {
-        expect(JSON.parse(plaintext as string)).toEqual({
-          type: 'e2ee_authenticated',
-          v: 2,
-          transcriptHashB64: phoneSession.transcriptHashB64
-        })
+        expect(typeof plaintext === 'string' && phoneSession.readAuthentication(plaintext)).toBe(
+          'authenticated'
+        )
         phoneState = 'ready'
         authenticated.resolve()
       } else if (typeof plaintext === 'string') {

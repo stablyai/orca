@@ -151,6 +151,7 @@ describe('serve-mode-argv', () => {
       '100.64.1.20',
       '--serve-no-pairing',
       '--serve-mobile-pairing',
+      '--serve-relay',
       '--serve-recipe-json',
       '--serve-project-root',
       '/srv/repo'

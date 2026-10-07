@@ -1,5 +1,6 @@
 import {
   addEnvironmentFromPairingCode,
+  listEnvironments,
   RuntimeEnvironmentStoreError
 } from '../../shared/runtime-environment-store'
 import { parseHostAccessLink } from '../../shared/remote-pairing-address'
@@ -12,6 +13,7 @@ import { sendRemoteRuntimeRequest } from '../../shared/remote-runtime-client'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
 import { redactRuntimeEnvironment } from '../../shared/runtime-environments'
 import type { RuntimeStatus } from '../../shared/runtime-types'
+import { pairRuntimeEnvironmentThroughRelay } from './runtime-environment-relay-pairing'
 
 type VerifyAndAddRuntimeEnvironmentArgs = {
   name: string
@@ -26,6 +28,25 @@ export async function verifyAndAddRuntimeEnvironmentFromPairingCode(
   const parsed = parseHostAccessLink(args.pairingCode)
   if (!parsed.ok) {
     return { ok: false, kind: 'access-link-invalid', message: parsed.message }
+  }
+  const relay = parsed.value.pairing.relay
+  if (relay) {
+    // Why first: a name clash after install would strand a cloud credential nobody holds.
+    if (listEnvironments(userDataPath).some((environment) => environment.name === args.name)) {
+      return {
+        ok: false,
+        kind: 'environment-save-failed',
+        message: `A server named "${args.name}" already exists.`
+      }
+    }
+    const paired = await pairRuntimeEnvironmentThroughRelay(parsed.value.pairing, relay)
+    return paired.ok
+      ? saveVerifiedEnvironment(
+          userDataPath,
+          { ...args, relay: paired.route },
+          paired.runtimeStatus
+        )
+      : paired
   }
   if (parsed.value.endpointKind === 'loopback' && !args.allowLoopback) {
     return {
@@ -63,12 +84,21 @@ export async function verifyAndAddRuntimeEnvironmentFromPairingCode(
   }
 
   const usesSshTunnel = parsed.value.endpointKind === 'loopback' && args.allowLoopback === true
+  return saveVerifiedEnvironment(
+    userDataPath,
+    { ...args, ...(usesSshTunnel ? { connectionDependency: 'ssh-tunnel' as const } : {}) },
+    runtimeStatus
+  )
+}
+
+function saveVerifiedEnvironment(
+  userDataPath: string,
+  args: Parameters<typeof addEnvironmentFromPairingCode>[1],
+  runtimeStatus: RuntimeStatus
+): VerifyAndAddRuntimeEnvironmentResult {
   let environment: ReturnType<typeof addEnvironmentFromPairingCode>
   try {
-    environment = addEnvironmentFromPairingCode(userDataPath, {
-      ...args,
-      ...(usesSshTunnel ? { connectionDependency: 'ssh-tunnel' as const } : {})
-    })
+    environment = addEnvironmentFromPairingCode(userDataPath, args)
   } catch (error) {
     return {
       ok: false,

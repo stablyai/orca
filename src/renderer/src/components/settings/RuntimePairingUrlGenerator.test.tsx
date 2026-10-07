@@ -8,16 +8,25 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   listNetworkInterfaces: vi.fn(),
   listRuntimeAccessGrants: vi.fn(),
-  getRuntimePairingUrl: vi.fn()
+  getRuntimePairingUrl: vi.fn(),
+  getRuntimeRelayPairingUrl: vi.fn()
 }))
 
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
 vi.mock('./RuntimeAccessGrantList', () => ({ RuntimeAccessGrantList: () => null }))
 vi.mock('./RuntimePairingGeneratorForm', () => ({
-  RuntimePairingGeneratorForm: (props: { selectedAddress: string; onGenerate: () => void }) => (
+  RuntimePairingGeneratorForm: (props: {
+    selectedAddress: string
+    runtimePairingUrl: string | null
+    relayInviteExpiresAt: number | null
+    onGenerate: () => void
+  }) => (
     <div>
       <div data-testid="selected-address">{props.selectedAddress}</div>
+      <div data-testid="generated-link">
+        {props.runtimePairingUrl} {props.relayInviteExpiresAt}
+      </div>
       <button type="button" onClick={props.onGenerate}>
         Generate
       </button>
@@ -37,6 +46,7 @@ describe('RuntimePairingUrlGenerator', () => {
     runtimePairingLinkCache.runtimePairingUrl = null
     runtimePairingLinkCache.webClientUrl = null
     runtimePairingLinkCache.runtimePairingDeviceId = null
+    runtimePairingLinkCache.relayInviteExpiresAt = null
     mocks.listNetworkInterfaces.mockReset()
     mocks.listRuntimeAccessGrants.mockReset().mockResolvedValue({ grants: [] })
     mocks.getRuntimePairingUrl.mockReset().mockResolvedValue({
@@ -52,7 +62,8 @@ describe('RuntimePairingUrlGenerator', () => {
         mobile: {
           listNetworkInterfaces: mocks.listNetworkInterfaces,
           listRuntimeAccessGrants: mocks.listRuntimeAccessGrants,
-          getRuntimePairingUrl: mocks.getRuntimePairingUrl
+          getRuntimePairingUrl: mocks.getRuntimePairingUrl,
+          getRuntimeRelayPairingUrl: mocks.getRuntimeRelayPairingUrl
         }
       }
     })
@@ -104,5 +115,31 @@ describe('RuntimePairingUrlGenerator', () => {
     await waitFor(() =>
       expect(mocks.getRuntimePairingUrl).toHaveBeenCalledWith({ address, rotate: true, reach })
     )
+  })
+
+  it('asks main for a Relay link under the Any network choice and keeps its expiry', async () => {
+    runtimePairingLinkCache.intent = 'relay'
+    mocks.listNetworkInterfaces.mockResolvedValue({ interfaces: [] })
+    mocks.getRuntimeRelayPairingUrl.mockResolvedValue({
+      available: true,
+      pairingUrl: 'orca://pair#relay',
+      inviteExpiresAt: 1234,
+      deviceId: 'runtime-relay'
+    })
+
+    render(<RuntimePairingUrlGenerator />)
+    screen.getByRole('button', { name: 'Generate' }).click()
+
+    await waitFor(() =>
+      expect(screen.getByTestId('generated-link')).toHaveTextContent('orca://pair#relay 1234')
+    )
+    expect(mocks.getRuntimeRelayPairingUrl).toHaveBeenCalledOnce()
+    expect(mocks.getRuntimePairingUrl).not.toHaveBeenCalled()
+    expect(runtimePairingLinkCache).toMatchObject({
+      runtimePairingUrl: 'orca://pair#relay',
+      webClientUrl: null,
+      runtimePairingDeviceId: 'runtime-relay',
+      relayInviteExpiresAt: 1234
+    })
   })
 })

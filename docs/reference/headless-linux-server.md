@@ -178,6 +178,36 @@ because its contract requires a pairing URL. Stop a foreground server with
 `device_registry_unavailable`, `e2ee_key_unavailable`, and
 `invalid_advertised_endpoint`.
 
+### Pairing through Orca Relay
+
+`--relay` additionally prints a runtime pairing link that reaches this server
+through Orca Relay, so a desktop client can connect without an inbound port,
+LAN, or Tailnet:
+
+```text
+Pairing URL: orca://pair?code=...
+Relay pairing URL: orca://pair?code=...
+Relay invite expires: 2026-10-05T12:10:00.000Z (restart to mint a new one)
+```
+
+`Pairing URL` stays the direct link, unchanged, so clients that predate runtime
+Relay keep pairing as before. Paste the Relay link into **Add Remote Orca
+Server** on a current desktop client; it installs its own Relay credential, then
+tries the advertised endpoint first and falls back to Relay when that endpoint
+is unreachable. Traffic stays end-to-end encrypted to this server's key, and
+revoking the grant also revokes its Relay credential. In JSON output the link is
+`pairing.relay.url`; when Relay is unavailable, `pairing.relay` carries
+`available:false` with a `code` and `guidance` instead.
+
+Relay needs this server's Orca profile to be signed in to an Orca account with
+Relay access, for example by signing in from the Orca desktop app with the same
+profile. There is no headless sign-in yet, and where Electron cannot encrypt
+the session with the OS keyring it is kept in memory only, so Relay stops after
+a restart until the profile signs in again.
+The invite in a Relay link expires after ten minutes; restart `orca serve
+--relay` to print a new one. `--relay` cannot be combined with
+`--mobile-pairing`, `--no-pairing`, or `--recipe-json`.
+
 ## Systemd Service
 
 Create a dedicated service user and install directory. Run the service as this

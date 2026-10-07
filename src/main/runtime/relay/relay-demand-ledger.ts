@@ -44,7 +44,6 @@ export class RelayDemandLedger {
     return this.options.deviceRegistry.listDevices().some((device) => {
       const binding = device.relayBinding
       if (
-        device.scope !== 'mobile' ||
         !binding ||
         binding.ownerIdentityKey !== ownerIdentityKey ||
         binding.relayHostId !== this.options.relayHostId

@@ -12,6 +12,7 @@ import {
   WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
+import { classifyRemotePairingHostname } from '../../../../shared/remote-pairing-address'
 import {
   isConnectedRuntimeHostState,
   runtimeHostConnectionState,
@@ -239,6 +240,38 @@ export function getRuntimeServerConnectionLabel(state: RuntimeServerConnectionSt
         'Disconnected'
       )
   }
+}
+
+/** Mirrors the phone's path label: Relay, or direct by the kind of address it dialed. */
+export function getRuntimeServerRouteLabel(
+  route: 'direct' | 'relay' | undefined,
+  endpoint: string | undefined
+): string | null {
+  if (route === 'relay') {
+    return translate('auto.components.settings.RuntimeEnvironmentsPane.routeRelay', 'Orca Relay')
+  }
+  if (route !== 'direct') {
+    return null
+  }
+  let kind: ReturnType<typeof classifyRemotePairingHostname> | null = null
+  try {
+    kind = endpoint ? classifyRemotePairingHostname(new URL(endpoint).hostname) : null
+  } catch {
+    kind = null
+  }
+  if (kind === 'tailscale') {
+    return translate(
+      'auto.components.settings.RuntimeEnvironmentsPane.routeDirectTailscale',
+      'Direct · Tailscale'
+    )
+  }
+  if (kind === 'lan') {
+    return translate(
+      'auto.components.settings.RuntimeEnvironmentsPane.routeDirectLan',
+      'Direct · LAN'
+    )
+  }
+  return translate('auto.components.settings.RuntimeEnvironmentsPane.routeDirect', 'Direct')
 }
 
 export function getRuntimeServerDotClass(state: RuntimeServerConnectionState): string {

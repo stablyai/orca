@@ -9,22 +9,30 @@ import {
   openMobileE2EEV2Frame,
   sealMobileE2EEV2Frame
 } from '../../../shared/mobile-e2ee-v2-framing'
+import { parseRemoteRuntimeJsonText } from '../../../shared/remote-runtime-request-frames'
 import { deriveSharedKey } from '../rpc/e2ee-crypto'
-import { deriveMobileE2EEV2KeySchedule } from '../rpc/mobile-e2ee-v2-key-schedule'
+import {
+  deriveMobileE2EEV2KeySchedule,
+  type MobileE2EEV2KeySchedule
+} from '../rpc/mobile-e2ee-v2-key-schedule'
 
-// Why: the relay integration test needs an independent mobile-side wire peer
-// without importing Expo modules into the desktop Node TypeScript project.
-export class SimulatedMobileE2EEV2Peer {
+export type RelayE2EEV2Authentication = 'authenticated' | 'unauthorized' | 'invalid'
+
+/**
+ * Client half of E2EE v2 over Relay. The wire names its initiator `mobile`;
+ * a Relay-routed desktop runtime client speaks the identical protocol.
+ */
+export class RelayE2EEV2ClientSession {
   readonly hello: MobileE2EEV2Hello
   private inboundCounter = 0n
   private outboundCounter = 0n
-  private schedule: ReturnType<typeof deriveMobileE2EEV2KeySchedule> | null = null
+  private schedule: MobileE2EEV2KeySchedule | null = null
 
   constructor(
-    private readonly clientKeys: nacl.BoxKeyPair,
     private readonly desktopPublicKey: Uint8Array,
     relayHostId: string,
-    clientNonce = nacl.randomBytes(32)
+    private readonly clientKeys: nacl.BoxKeyPair = nacl.box.keyPair(),
+    clientNonce: Uint8Array = nacl.randomBytes(32)
   ) {
     this.hello = {
       type: 'e2ee_hello',
@@ -42,6 +50,7 @@ export class SimulatedMobileE2EEV2Peer {
     }
   }
 
+  /** Pins the host key from the pairing offer; any other responder fails here. */
   acceptReady(value: unknown): boolean {
     const handshake = validateMobileE2EEV2Handshake(this.hello, value)
     if (!handshake || !nacl.verify(handshake.desktopPublicKey, this.desktopPublicKey)) {
@@ -58,6 +67,46 @@ export class SimulatedMobileE2EEV2Peer {
 
   get transcriptHashB64(): string {
     return Buffer.from(this.requireSchedule().transcriptHash).toString('base64')
+  }
+
+  authFrame(deviceToken: string): string {
+    return this.sealText(
+      JSON.stringify({
+        type: 'e2ee_auth',
+        v: 2,
+        transcriptHashB64: this.transcriptHashB64,
+        deviceToken
+      })
+    )
+  }
+
+  readAuthentication(plaintext: string): RelayE2EEV2Authentication {
+    let message: unknown
+    try {
+      message = parseRemoteRuntimeJsonText(plaintext)
+    } catch {
+      return 'invalid'
+    }
+    if (typeof message !== 'object' || message === null || !('type' in message)) {
+      return 'invalid'
+    }
+    if (
+      message.type === 'e2ee_authenticated' &&
+      'v' in message &&
+      message.v === 2 &&
+      'transcriptHashB64' in message &&
+      message.transcriptHashB64 === this.transcriptHashB64
+    ) {
+      return 'authenticated'
+    }
+    const error = 'error' in message ? message.error : null
+    return message.type === 'e2ee_error' &&
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      error.code === 'unauthorized'
+      ? 'unauthorized'
+      : 'invalid'
   }
 
   sealText(plaintext: string): string {
@@ -107,9 +156,9 @@ export class SimulatedMobileE2EEV2Peer {
     return plaintext
   }
 
-  private requireSchedule(): ReturnType<typeof deriveMobileE2EEV2KeySchedule> {
+  private requireSchedule(): MobileE2EEV2KeySchedule {
     if (!this.schedule) {
-      throw new Error('Simulated mobile peer has not accepted E2EE ready')
+      throw new Error('Relay E2EE session has not accepted e2ee_ready')
     }
     return this.schedule
   }

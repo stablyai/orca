@@ -237,6 +237,16 @@ export class DeviceRegistry {
     return device.mobilePairingConnectionMode === 'local-only' ? 'local-only' : 'automatic'
   }
 
+  // Why: a runtime grant reaches Relay only when its offer was minted with Relay, so a
+  // direct-only grant cannot provision a cloud credential the operator never opted into.
+  isRelayEnabled(deviceId: string): boolean {
+    const device = this.getDevice(deviceId)
+    if (device?.scope === 'runtime') {
+      return device.relayBinding !== undefined
+    }
+    return device !== null && this.getMobilePairingConnectionMode(deviceId) === 'automatic'
+  }
+
   listDevices(): readonly DeviceEntry[] {
     return this.devices
   }

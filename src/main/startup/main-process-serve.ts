@@ -4,6 +4,7 @@ import { app } from 'electron'
 import { resolveAdvertisedPairingEndpoint } from '../runtime/pairing-endpoint'
 import { notifyServeSupervisorReady } from '../serve-update-handoff'
 import { mainProcessState as state } from './main-process-state'
+import { createServeRelayPairingOffer } from './serve-relay-pairing'
 import { getServeOptions, type ServeOptions } from './serve-options'
 
 export { getServeOptions, type ServeOptions }
@@ -54,17 +55,26 @@ export async function printServeReady(options: ServeOptions): Promise<void> {
   const advertised = boundEndpoint
     ? resolveAdvertisedPairingEndpoint(boundEndpoint, options.pairingAddress)
     : null
+  const pairingName = `${options.mobilePairing ? 'Mobile' : 'CLI'} ${new Date().toLocaleDateString()}`
+  const relayOffer =
+    options.relay && !options.noPairing
+      ? await createServeRelayPairingOffer(runtimeRpc, {
+          address: options.pairingAddress,
+          name: pairingName
+        })
+      : null
   const pairing = options.noPairing
     ? ({
         available: false,
         reason: 'disabled_by_operator',
         guidance: 'Restart without --no-pairing to create a client pairing offer.'
       } as const)
-    : runtimeRpc.createPairingOffer({
+    : (relayOffer ??
+      runtimeRpc.createPairingOffer({
         address: options.pairingAddress,
-        name: `${options.mobilePairing ? 'Mobile' : 'CLI'} ${new Date().toLocaleDateString()}`,
+        name: pairingName,
         scope: options.mobilePairing ? 'mobile' : 'runtime'
-      })
+      }))
   const pairingQr =
     pairing.available && options.mobilePairing
       ? await renderTerminalPairingQr(pairing.pairingUrl)
@@ -84,7 +94,8 @@ export async function printServeReady(options: ServeOptions): Promise<void> {
             deviceId: pairing.deviceId,
             webClientUrl: pairing.webClientUrl,
             scope: options.mobilePairing ? 'mobile' : 'runtime',
-            qr: pairingQr
+            qr: pairingQr,
+            ...(relayOffer?.available ? { relay: relayOffer.relay } : {})
           }
         : pairing
     },

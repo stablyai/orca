@@ -87,6 +87,20 @@ export type MobilePairingOfferAvailable = {
 
 export type MobilePairingOffer = PairingOfferUnavailable | MobilePairingOfferAvailable
 
+export type RuntimeRelayPairing =
+  | { available: true; pairingUrl: string; inviteExpiresAt: number }
+  | { available: false; failure: MobileRelayMintFailure }
+
+export type RuntimeRelayPairingOffer = {
+  available: true
+  /** Direct-only link, unchanged so clients that predate runtime Relay keep pairing. */
+  pairingUrl: string
+  endpoint: string
+  deviceId: string
+  webClientUrl: string | null
+  relay: RuntimeRelayPairing
+}
+
 export type PairingIdentityInitialization =
   | { ok: true; deviceRegistry: DeviceRegistry; e2eeKeypair: E2EEKeypair }
   | { ok: false; failure: PairingOfferUnavailable }

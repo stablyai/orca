@@ -15,6 +15,7 @@ import {
   invalidRemoteRuntimeResponseError,
   remoteRuntimeUnavailableError
 } from './remote-runtime-request-frames'
+import { withRemoteRuntimeSocketConnector } from './remote-runtime-socket-connector'
 
 export type RemoteRuntimeWebSocket = {
   ws: WebSocket
@@ -129,7 +130,13 @@ function createSocket(
   try {
     return {
       ok: true,
-      ws: new WebSocket(pairing.endpoint, remoteRuntimeConnectOptions(undefined, connectTimeoutMs)),
+      ws: new WebSocket(
+        pairing.endpoint,
+        withRemoteRuntimeSocketConnector(
+          pairing.endpoint,
+          remoteRuntimeConnectOptions(undefined, connectTimeoutMs)
+        )
+      ),
       keyPair
     }
   } catch (error) {

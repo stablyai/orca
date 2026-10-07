@@ -2,10 +2,11 @@ import { BrowserWindow } from 'electron'
 import { sendRemoteRuntimeRequest } from '../../shared/remote-runtime-client'
 import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../shared/protocol-version'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
+import type { KnownRuntimeEnvironment } from '../../shared/runtime-environments'
 import {
-  getPreferredPairingOffer,
-  type KnownRuntimeEnvironment
-} from '../../shared/runtime-environments'
+  getRuntimeEnvironmentConnectPairing,
+  withRuntimeEnvironmentRoute
+} from './runtime-environment-relay-route'
 import { recordRuntimeEnvironmentUsage } from './runtime-environment-usage-record'
 import { RuntimeHostStatusOwner } from '../../shared/runtime-host-status-owner'
 import {
@@ -29,7 +30,7 @@ export function createRuntimeEnvironmentStatusOwner(
     pause: () => void
   }
 ): RuntimeHostStatusOwner {
-  const pairing = getPreferredPairingOffer(environment)
+  const pairing = getRuntimeEnvironmentConnectPairing(userDataPath, environment)
   let evidence = captureRuntimeEnvironmentCapabilityEvidence(environment.id, pairing)
   return new RuntimeHostStatusOwner({
     environmentId: environment.id,
@@ -77,7 +78,10 @@ export function createRuntimeEnvironmentStatusOwner(
           continue
         }
         try {
-          window.webContents.send(RUNTIME_HOST_STATUS_CHANNEL, snapshot)
+          window.webContents.send(
+            RUNTIME_HOST_STATUS_CHANNEL,
+            withRuntimeEnvironmentRoute(snapshot)
+          )
         } catch {
           /* A renderer can close during publication. */
         }

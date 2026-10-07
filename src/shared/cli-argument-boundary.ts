@@ -39,6 +39,7 @@ export const CLI_BOOLEAN_FLAGS = new Set([
   'ready',
   'recipe-json',
   'references',
+  'relay',
   'relations',
   'reinstall',
   'restore-window',

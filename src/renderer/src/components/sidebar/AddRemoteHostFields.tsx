@@ -6,9 +6,13 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { translate } from '@/i18n/i18n'
 import {
   translateHostAccessLinkError,
-  translateRemotePairingEndpointKind
+  translateRemotePairingEndpointKind,
+  translateRemotePairingRelayRoute
 } from '@/lib/remote-pairing-copy'
-import type { ParseHostAccessLinkResult } from '../../../../shared/remote-pairing-address'
+import {
+  hostAccessLinkNeedsTunnel,
+  type ParseHostAccessLinkResult
+} from '../../../../shared/remote-pairing-address'
 import { applyParsedSshHostInput, type EditingTarget } from '../settings/ssh-target-draft'
 import { SshHostAdvancedFields } from '../settings/SshHostAdvancedFields'
 
@@ -162,7 +166,7 @@ export function RemoteServerFields({
 }) {
   const inputError = pairingCode.trim() !== '' && !parsedLink.ok
   const loopbackBlocked =
-    parsedLink.ok && parsedLink.value.endpointKind === 'loopback' && !allowLoopback
+    parsedLink.ok && hostAccessLinkNeedsTunnel(parsedLink.value) && !allowLoopback
   const pairingCodeDescriptionId = inputError
     ? 'add-server-pairing-code-error'
     : loopbackBlocked
@@ -228,12 +232,18 @@ export function RemoteServerFields({
               'auto.components.sidebar.AddRemoteHostDialog.linkDestination',
               'Link destination'
             )}
-            <Badge variant="outline">
-              {translateRemotePairingEndpointKind(parsedLink.value.endpointKind)}
-            </Badge>
+            {hostAccessLinkNeedsTunnel(parsedLink.value) ||
+            parsedLink.value.endpointKind !== 'loopback' ? (
+              <Badge variant="outline">
+                {translateRemotePairingEndpointKind(parsedLink.value.endpointKind)}
+              </Badge>
+            ) : null}
+            {parsedLink.value.viaRelay ? (
+              <Badge variant="outline">{translateRemotePairingRelayRoute()}</Badge>
+            ) : null}
           </div>
           <div className="font-mono text-sm">{parsedLink.value.displayEndpoint}</div>
-          {parsedLink.value.endpointKind === 'loopback' ? (
+          {hostAccessLinkNeedsTunnel(parsedLink.value) ? (
             <label className="mt-2 flex items-start gap-2 text-xs">
               <Checkbox
                 checked={allowLoopback}
