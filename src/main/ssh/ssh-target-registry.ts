@@ -1,10 +1,10 @@
 import type { SshConnectionStore } from './ssh-connection-store'
 import type { SshChannelMultiplexer } from './ssh-channel-multiplexer'
+import type { SshConnection } from './ssh-connection'
 import type { SshConnectionState, SshTarget } from '../../shared/ssh-types'
-import type { SshBrowseConnection } from './ssh-directory-browse'
 
 type SshConnectionManagerLike = {
-  getConnection: (targetId: string) => SshBrowseConnection | undefined
+  getConnection: (targetId: string) => SshConnection | undefined
 }
 
 /**

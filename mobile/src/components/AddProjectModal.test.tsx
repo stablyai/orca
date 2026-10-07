@@ -2,6 +2,7 @@ import { createElement, type ElementType, type ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
+import type { RpcSuccess } from '../transport/types'
 
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
@@ -56,6 +57,8 @@ const repoRow = {
   badgeColor: '#aabbcc',
   kind: 'git'
 }
+
+type PendingRpcReply = Pick<RpcSuccess, 'ok' | 'result' | '_meta'>
 
 /** A files.browseServerDir reply: `dirs` list as directories, `files` as plain files. */
 function listing(resolvedPath: string, dirs: string[], files: string[] = []) {
@@ -515,7 +518,7 @@ describe('AddProjectModal', () => {
   })
 
   it('keeps one operation busy across metadata array refreshes', async () => {
-    const pending = deferred<ReturnType<typeof listing>>()
+    const pending = deferred<PendingRpcReply>()
     const sendRequest = vi.fn().mockReturnValue(pending.promise)
     const tree = render(sendRequest)
     act(() =>
@@ -588,7 +591,7 @@ describe('AddProjectModal', () => {
   })
 
   it('ignores a reply retained through close and reopen', async () => {
-    const pending = deferred<unknown>()
+    const pending = deferred<PendingRpcReply>()
     const sendRequest = vi.fn().mockReturnValue(pending.promise)
     const tree = render(sendRequest)
     act(() =>
