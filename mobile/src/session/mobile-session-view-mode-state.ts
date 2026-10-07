@@ -95,7 +95,7 @@ export function reachesPublication(
   target: { epoch: string; version: number }
 ): boolean {
   return (
-    current !== undefined && (current.epoch !== target.epoch || current.version >= target.version)
+    current !== undefined && current.epoch === target.epoch && current.version >= target.version
   )
 }
 

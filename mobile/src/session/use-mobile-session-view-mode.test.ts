@@ -557,6 +557,29 @@ describe('useMobileSessionViewMode', () => {
     expect(controller?.isTabChatView('t1')).toBe(false)
   })
 
+  it('waits for the acknowledged publication epoch before clearing', async () => {
+    const hostViews = new Map<string, MobileSessionView>([['t1', 'terminal']])
+    const publication = { epoch: 'old', version: 10 }
+    const write = deferred<{ publicationEpoch: string; snapshotVersion: number }>()
+    await mountShared({
+      defaultView: 'terminal',
+      hostViews,
+      hostPublication: publication,
+      writeHostViewMode: async () => write.promise
+    })
+    act(() => controller?.toggleTabChatView('t1'))
+    await act(async () => {
+      write.resolve({ publicationEpoch: 'new', snapshotVersion: 1 })
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(controller?.isTabChatView('t1')).toBe(true)
+    publication.epoch = 'new'
+    publication.version = 1
+    rerenderShared?.()
+    expect(controller?.isTabChatView('t1')).toBe(false)
+  })
+
   it('clears when the acknowledged snapshot arrived before the RPC reply', async () => {
     const hostViews = new Map<string, MobileSessionView>([['t1', 'terminal']])
     const publication = { epoch: 'host', version: 10 }
