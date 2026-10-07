@@ -55,6 +55,15 @@ async function turnRow(turnId: string, state: 'running' | 'interrupted') {
   )
 }
 
+/** Held by the one Stop once its turn ends, then sent by Resume. */
+async function expectReleasedByResume(draftId: string): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 250))
+  expect(await rig.handoff(draftId)).toBeUndefined()
+  expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
+  expect(await rig.resume()).toMatchObject({ ok: true, value: { resumed: true } })
+  await eventually(async () => expect(await rig.handoff(draftId)).toBeDefined())
+}
+
 function withdraw(clientMessageId: string) {
   return rig.host.settleLateDispatch({
     sessionId: HOST_TEST_SESSION,
@@ -169,7 +178,7 @@ describe("a Stop's event", () => {
     ])
   })
 
-  it('a second press while the first interrupt lands writes nothing: a card queued between them sends normally', async () => {
+  it('a second press while the first interrupt lands writes nothing: a card queued between them waits as after one Stop', async () => {
     rig = await createQueuedMessageTestRig()
     const working = await rig.workingSend()
     expect(await rig.stop()).toMatchObject({ ok: true, value: { cancelled: true } })
@@ -177,10 +186,10 @@ describe("a Stop's event", () => {
     expect(await rig.stop()).toMatchObject({ ok: true })
     expect(stopEvents()).toHaveLength(1)
     await rig.settleAccepted(working, 'stopped')
-    await eventually(async () => expect(await rig.handoff(between)).toBeDefined())
+    await expectReleasedByResume(between)
   })
 
-  it('a second press once the turn shows, after a first before it did, writes nothing: a card queued between sends', async () => {
+  it('a second press once the turn shows, after a first before it did, writes nothing: a card queued between waits', async () => {
     rig = await createQueuedMessageTestRig()
     const working = await rig.workingSend()
     await rig.stop()
@@ -190,7 +199,7 @@ describe("a Stop's event", () => {
     expect(stopEvents()).toHaveLength(1)
     await rig.settleAccepted(working, 'stopped')
     await turnRow('turn-1', 'interrupted')
-    await eventually(async () => expect(await rig.handoff(between)).toBeDefined())
+    await expectReleasedByResume(between)
   })
 
   it('a second press after a card sent into the turn settled unknown writes again', async () => {

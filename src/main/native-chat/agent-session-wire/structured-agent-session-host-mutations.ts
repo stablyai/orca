@@ -22,8 +22,11 @@ import type { AgentSessionPromptRequest } from './structured-agent-session-turns
 import { threadGoalPlan } from './structured-agent-session-thread-goal'
 import {
   mutateStructuredAgentSession,
+  mutateStructuredAgentSessionOffLane,
   type StructuredAgentSessionMutationContext
 } from './structured-agent-session-mutation-context'
+import { queuedMessageBodyIsTextOnly } from './structured-agent-session-queued-messages'
+import { AgentSessionJournalError } from '../agent-session-journal/journal-write-guards'
 import {
   openForProviderWrite,
   openWithAgent,
@@ -36,7 +39,10 @@ import {
   sendPlan,
   setOptionPlan
 } from './structured-agent-session-mutation-plans'
-import { runQueueableStructuredAgentSessionSend } from './structured-agent-session-queued-send'
+import {
+  queueStructuredAgentSessionSendAfterStop,
+  runQueueableStructuredAgentSessionSend
+} from './structured-agent-session-queued-send'
 import { cancelStructuredAgentSessionPrompt } from './structured-agent-session-prompt-cancel'
 import { mutateWithChatStop } from './structured-agent-session-chat-stop'
 export type { StructuredAgentSessionMutationContext } from './structured-agent-session-mutation-context'
@@ -68,6 +74,21 @@ export function sendStructuredAgentSessionTurn(
   arrival?: Parameters<typeof sendPreparation>[2]
 ): Promise<AgentSessionMutationResult<AgentSessionSendResult>> {
   const plan = sendPlan(params)
+  if (sendQueuesAfterStop(context, params, arrival)) {
+    // A person's Stop holds the lane until its provider answers; this send is only a card write,
+    // ordered with the Stop's own writes by the journal's writer, so it is a card at once.
+    return mutateStructuredAgentSessionOffLane(context, caller, params.envelope, {
+      ...plan,
+      run: (ctx) => {
+        if (context.sessions.get(ctx.sessionId)?.journal !== ctx.journal) {
+          // Closed or reopened since admission: nothing is written, so the operation stays
+          // pending and a resend runs it afresh.
+          throw new AgentSessionJournalError('journal_closed', 'the conversation was replaced')
+        }
+        return queueStructuredAgentSessionSendAfterStop(context, ctx, params)
+      }
+    })
+  }
   return mutateStructuredAgentSession(
     context,
     caller,
@@ -85,6 +106,25 @@ export function sendStructuredAgentSessionTurn(
         )
     },
     sendPreparation(context, params.envelope, arrival)
+  )
+}
+
+/** A text send asking to be queued while the host reads that a person's Stop is ending the work,
+ *  with nothing the lane would answer first: a /clear in flight, a rewind it recovers or refuses,
+ *  or a check made at acceptance. */
+function sendQueuesAfterStop(
+  context: StructuredAgentSessionMutationContext,
+  params: Parameters<typeof sendStructuredAgentSessionTurn>[2],
+  arrival: Parameters<typeof sendPreparation>[2]
+): boolean {
+  const { sessionId } = params.envelope
+  return (
+    params.delivery === 'queue-if-active' &&
+    queuedMessageBodyIsTextOnly(params.body) &&
+    !params.beforeRun &&
+    !arrival?.clearInFlight &&
+    context.readStopping?.(sessionId) === true &&
+    structuredAgentSessionSendBlock(context.deps.store.getRecord(sessionId)) === null
   )
 }
 

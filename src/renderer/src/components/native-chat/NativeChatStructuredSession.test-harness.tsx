@@ -260,9 +260,9 @@ export function createStructuredSessionMocks() {
             epoch: 'epoch-1',
             rewind: { surface: undefined },
             canStop: mocks.canStop ?? mocks.turnId !== null,
-            queueSendsNext: mocks.queueSendsNext,
             stopPressed: mocks.stopPressed,
             sendsQueue: mocks.sendsQueue,
+            queueSendsNext: mocks.queueSendsNext,
             stop: mocks.stop,
             queuedMessages: {
               cards: mocks.queuedCards,

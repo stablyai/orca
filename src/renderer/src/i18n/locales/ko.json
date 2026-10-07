@@ -17893,7 +17893,6 @@
         "responding": "Agent이 응답 중입니다.",
         "working": "작업 중…",
         "stopping": "중지하는 중…",
-        "queueAfterStop": "중지 후에 실행할 메시지를 대기열에 추가",
         "sendAfterStop": "중지 후에 실행할 메시지 보내기",
         "thinking": "생각",
         "workingFor": "{{value0}} 작업 중",

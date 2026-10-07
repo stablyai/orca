@@ -649,7 +649,8 @@ describe('/clear', () => {
     const working = await workingSend()
     await send('pointer', 'queue-if-active', { internal: true, from }).result
     await send('typed', 'queue-if-active').result
-    await stop()
+    // A restart holds both: mail waits on no person's Stop.
+    await rig.restartHostProcess()
     await settleAccepted(working, 'a')
     const cleared = await clear(hostTestOperationId())
     const replacementId = cleared.ok ? cleared.value.replacementSessionId : undefined

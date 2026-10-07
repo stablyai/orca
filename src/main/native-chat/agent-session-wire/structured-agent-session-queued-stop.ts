@@ -61,7 +61,7 @@ export async function runRecordedStop<TValue>(
  * What a Stop reaching a running agent stops: work no Stop event records yet (`unrecorded`), or
  * only what the Stop still in force already records, which it repeats with nothing sent since, on
  * the same turn or one that opened after a Stop pressed before any turn showed (`repeat`): a card
- * queued between the presses then sends normally, as after one Stop. `late`: it names a turn
+ * queued between the presses then waits under that one Stop. `late`: it names a turn
  * already over, as a late Stop from a phone can.
  */
 export function stopReachesUnrecordedWork(

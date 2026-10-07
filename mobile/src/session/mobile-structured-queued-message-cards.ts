@@ -10,6 +10,7 @@ import { structuredAgentSessionAttemptFailureParts } from '../../../src/shared/s
 import {
   QUEUED_MESSAGE_PAUSED_KEPT,
   QUEUED_MESSAGE_PAUSED_SEND_FAILED,
+  queuePauseHoldsCard,
   type AgentSessionQueuedMessage,
   type AgentSessionQueuePause
 } from '../../../src/shared/agent-session-wire'
@@ -99,7 +100,7 @@ export function mobileQueuePauseLabel(pause: Pick<AgentSessionQueuePause, 'reaso
 export function mobileQueuedMessageCards(
   queuedMessages: readonly AgentSessionQueuedMessage[] | null,
   submissions: readonly Pick<AgentJournalSubmission, 'queuedMessageId' | 'dispatchState'>[],
-  facts: { pendingPrompt: boolean; queuePaused?: boolean }
+  facts: { pendingPrompt: boolean; queuePause?: AgentSessionQueuePause | null }
 ): MobileQueuedMessageCard[] {
   if (!queuedMessages || queuedMessages.length === 0) {
     return []
@@ -125,7 +126,7 @@ export function mobileQueuedMessageCards(
           ? pausedCaption(draft.pausedReason)
           : behindReturned
             ? 'Waiting — a message ahead needs attention'
-            : facts.queuePaused
+            : queuePauseHoldsCard(facts.queuePause, draft)
               ? // The pause row says why and offers Resume; the card promises no send time.
                 null
               : facts.pendingPrompt

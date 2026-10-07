@@ -2,7 +2,8 @@
 // nothing has to retire them. Each holds its own cards (`queuePauseHolding`). In force when:
 //   - 'stopped': the latest Stop event is a person's (reason `user-stop`), with no later Resume row
 //     and no turn sent after it and accepted. A later Stop of any reason supersedes it; only a
-//     person's pauses.
+//     person's pauses. It holds every card but orchestration mail, which never waits on a
+//     person's Resume: it runs past the cards this pause holds, and its turn lifts the pause.
 //   - 'cleared': a card /clear carried into this conversation waits, and no turn or Resume has
 //     happened here since.
 //   - 'restarted': a waiting card with no hold of its own was written by another host process,
@@ -14,6 +15,7 @@
 
 import type {
   AgentJournalCursor,
+  AgentJournalMessageItem,
   AgentJournalSubmission
 } from '../../../shared/agent-session-journal-types'
 import type { JournalStopEvent, JournalTombstoneRow } from './journal-row-schema'
@@ -42,7 +44,7 @@ export type JournalQueuePauseMarks = {
 
 export type DerivedQueuePause = {
   reason: QueuePauseReason
-  /** Where a Stop's pause began: a card queued at or after it is newer. Null for the others. */
+  /** Where a Stop's pause began: only a turn sent after it lifts it. Null for the others. */
   since: AgentJournalCursor | null
 }
 
@@ -51,7 +53,7 @@ type QueueCard = {
   holdReason: string | null
   hostInstance: string
   carriedFrom: string | null
-  queuedAt: AgentJournalCursor | null
+  body: Pick<AgentJournalMessageItem, 'from'>
 }
 
 export function createJournalQueuePauseMarks(): JournalQueuePauseMarks {
@@ -153,20 +155,22 @@ export function deriveQueuePauses(input: {
   return pauses
 }
 
-/** Queued before the pause began: for /clear, a card it carried; for a restart, every card. For a
- *  Stop, a card queued before its row; one from another epoch (before a rewind) or from a build
- *  that recorded no position counts as before. A withdrawn steer keeps its position, so is held. */
-function queuedBeforePause(pause: DerivedQueuePause, card: QueueCard): boolean {
-  if (pause.reason === 'cleared') {
-    return card.carriedFrom !== null
+/** Another agent's message names its sender on its body; a client's send cannot set it. */
+function isOrchestrationMail(card: QueueCard): boolean {
+  return card.body.from !== undefined
+}
+
+/** A person's Stop holds every card but mail, one sent while it winds down too; /clear the cards
+ *  it carried; a restart every card. */
+function pauseHolds(pause: DerivedQueuePause, card: QueueCard): boolean {
+  switch (pause.reason) {
+    case 'stopped':
+      return !isOrchestrationMail(card)
+    case 'cleared':
+      return card.carriedFrom !== null
+    case 'restarted':
+      return true
   }
-  const { since } = pause
-  return (
-    since === null ||
-    card.queuedAt === null ||
-    card.queuedAt.epoch !== since.epoch ||
-    card.queuedAt.sequence < since.sequence
-  )
 }
 
 /** THE rule for which cards are held: by ANY pause in force, named by the first that holds it, so
@@ -179,27 +183,38 @@ export function queuePauseHolding(
   if (card.state !== 'waiting' || card.holdReason !== null) {
     return undefined
   }
-  // A card queued AFTER a Stop is a new instruction and is not held; it still waits behind a held one.
-  return pauses.find((pause) => queuedBeforePause(pause, card))
+  return pauses.find((pause) => pauseHolds(pause, card))
 }
 
 /** The card the queue sends next: the oldest waiting one with no hold of its own, unless a
- *  returned card or one a pause holds comes first. The queue never reorders, so a newer card never
- *  overtakes one a pause holds; a card held on its own is passed over. The drain's pick and its
- *  consume both read this. */
+ *  returned card or one a pause holds comes first. The queue never reorders, with one exception:
+ *  mail passes cards held only by a person's Stop, which it lifts once its turn is accepted. A
+ *  card held on its own is passed over. The drain's pick, its consume and admission all read this. */
 export function nextSendableQueuedCard<T extends QueueCard>(
   pauses: readonly DerivedQueuePause[],
   cards: readonly T[]
 ): T | null {
+  let pastStopHeld = false
   for (const card of cards) {
-    if (card.state === 'returned' || queuePauseHolding(pauses, card)) {
+    if (card.state === 'returned') {
       return null
     }
+    if (queuePauseHolding(pauses, card)) {
+      if (!heldOnlyByStop(pauses, card)) {
+        return null
+      }
+      pastStopHeld = true
+      continue
+    }
     if (card.state === 'waiting' && card.holdReason === null) {
-      return card
+      return !pastStopHeld || isOrchestrationMail(card) ? card : null
     }
   }
   return null
+}
+
+function heldOnlyByStop(pauses: readonly DerivedQueuePause[], card: QueueCard): boolean {
+  return pauses.every((pause) => pause.reason === 'stopped' || !pauseHolds(pause, card))
 }
 
 /** The pause to PUBLISH: the one holding the first card Resume would send, not behind a returned

@@ -3,9 +3,10 @@
 
 import type { UnreadAgentSessionFailureFact } from '../../../../shared/agent-session-failure'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
-import type {
-  AgentSessionQueuedMessage,
-  AgentSessionQueuePause
+import {
+  queuePauseHoldsCard,
+  type AgentSessionQueuedMessage,
+  type AgentSessionQueuePause
 } from '../../../../shared/agent-session-wire'
 import {
   readAgentMessageSource,
@@ -62,7 +63,7 @@ function queuedMessageCardText(body: AgentSessionQueuedMessage['body']): string 
 export function projectQueuedMessageCards(
   queuedMessages: readonly AgentSessionQueuedMessage[] | null | undefined,
   submissions: readonly AgentJournalSubmission[],
-  session: { hasPendingPrompt: boolean; queuePaused?: boolean }
+  session: { hasPendingPrompt: boolean; queuePause?: AgentSessionQueuePause | null }
 ): QueuedMessageCard[] {
   const handedOff = handedOffQueuedMessageIds(
     submissions.filter((submission) => submission.dispatchState !== 'rejected')
@@ -79,7 +80,7 @@ export function projectQueuedMessageCards(
           ? 'paused'
           : behindReturned
             ? 'behind-returned'
-            : session.queuePaused
+            : queuePauseHoldsCard(session.queuePause, message)
               ? 'queue-paused'
               : session.hasPendingPrompt
                 ? 'awaiting-answer'

@@ -236,7 +236,9 @@ export const AGENT_SESSION_SEND_ANSWERS_PROOF_RUNTIME_CAPABILITY =
 // v1 includes `submission.queuedMessageId` on every draft hand-off: a client reads that link and
 // never compares a draft id with a submission id. It also publishes the queue's pause once, as
 // `queuePause` beside the list, lifted by `agentSession.queuedMessagesResume` or any turn sent
-// after it starting; while it is set every waiting card waits. `nextQueuedMessageId` beside the list
+// after it starting; while it is set every waiting card waits, but under a person's Stop another
+// agent's mail, which runs as the stop lands (its body names its sender, `from`, so a client
+// labels it). `nextQueuedMessageId` beside the list
 // names the card the queue sends next once nothing runs, null while anything holds it; absent (an
 // older host) reads as null. A card carries a hold of its own when its conversion failed
 // (`send_failed`) or the host kept it unsent (`kept`). The host mechanism lands first; the constant

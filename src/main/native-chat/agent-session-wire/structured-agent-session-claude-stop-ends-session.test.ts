@@ -150,7 +150,7 @@ function eventually<T>(assertion: () => T | Promise<T>): Promise<T> {
 }
 
 function envelope(
-  method: 'agentSession.send' | 'agentSession.cancel',
+  method: 'agentSession.send' | 'agentSession.cancel' | 'agentSession.queuedMessagesResume',
   fields: Record<string, unknown>,
   fence = store.getRecord(SESSION)!.lease.runtimeFence
 ) {
@@ -568,17 +568,10 @@ it('delivers a send issued with the pre-Stop fence during the Stop to the resume
   expect((await statusTexts()).filter((text) => text !== 'Cancellation requested.')).toEqual([])
 })
 
-it('sends a queue-if-active message issued while the Stop ends the child directly to the resumed child', async () => {
+it('holds a queue-if-active message issued while the Stop ends the child as a card; Resume sends it to the resumed child', async () => {
   const connection = claude.connections[0]!
   await openTurn(connection)
   const fence = store.getRecord(SESSION)!.lease.runtimeFence
-  let childrenWhenClosed: number | undefined
-  const close = connection.close
-  connection.close = async () => {
-    const proven = await close()
-    childrenWhenClosed = claude.connections.length
-    return proven
-  }
 
   await expect(stop()).resolves.toMatchObject({ ok: true, value: { cancelled: true } })
   // Issued while the Stop's second step waits for the stopped turn, with the fence it moves.
@@ -590,15 +583,23 @@ it('sends a queue-if-active message issued while the Stop ends the child directl
   })
   frame(connection, INTERRUPTED_RESULT)
 
-  // Nothing runs after the rest, so it goes out as a direct submission, not a queued card.
-  expect(await sent).toMatchObject({ ok: true, value: { submission: expect.any(Object) } })
+  // Sent while Stopping, it is a card the Stop holds: the stop landing runs nothing.
+  expect(await sent).toMatchObject({ ok: true, value: { queued: { state: 'waiting' } } })
+  await eventually(() => expect(connection.closed).toBe(true))
+  await laneDrained()
+  expect(claude.connections).toHaveLength(1)
+  expect(wrote(connection, 'Queued during the Stop.')).toBe(false)
+
+  expect(
+    await host.queuedMessagesResume(CALLER, {
+      envelope: envelope('agentSession.queuedMessagesResume', {})
+    })
+  ).toMatchObject({ ok: true, value: { resumed: true } })
   await eventually(() => {
     const started = claude.connections.at(-1)!
     expect(started).not.toBe(connection)
     expect(wrote(started, 'Queued during the Stop.')).toBe(true)
   })
-  expect(childrenWhenClosed).toBe(1)
-  expect(wrote(connection, 'Queued during the Stop.')).toBe(false)
 })
 
 it("runs nothing queued during the Stop's first step before the child's end", async () => {

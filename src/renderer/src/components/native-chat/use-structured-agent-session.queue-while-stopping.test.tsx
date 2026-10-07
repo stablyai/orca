@@ -1,8 +1,9 @@
 // @vitest-environment happy-dom
 
-// A message sent while the chat reads Stopping, through the chat's own send and its real outbox:
-// where the host does not queue sends, it goes out plain, for the host to hold until the stop lands,
-// and is marked as sent while stopping, so it draws after the Stopping line.
+// A message sent while the chat reads Stopping, through the chat's own send and its real outbox.
+// With queueing on, where the host queues sends, it asks to be queued and draws no bubble: the host
+// makes it a card the Stop holds. Otherwise it goes out plain, for the host to hold until the stop
+// lands, and is marked as sent while stopping, so it draws after the Stopping line.
 
 import { cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -28,7 +29,10 @@ vi.mock('./use-structured-agent-session-read', () => ({
   })
 }))
 
-import { AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import {
+  AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY,
+  AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY
+} from '../../../../shared/protocol-version'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { clearNativeChatDraftCacheForTests } from './native-chat-draft-cache'
 import { useStructuredAgentSession } from './use-structured-agent-session'
@@ -63,7 +67,7 @@ afterEach(() => {
   mocks.call.mockReset()
 })
 
-function renderStopping() {
+function renderStopping(queueFollowUps = false) {
   return renderHook(() =>
     useStructuredAgentSession({
       sessionId: 'session-1',
@@ -71,11 +75,47 @@ function renderStopping() {
       target: { kind: 'local' },
       isVisible: true,
       composerScopeKey: 'scope-1',
-      queueFollowUps: false,
+      queueFollowUps,
       hostStopping: true
     })
   )
 }
+
+function expectPlainSentWhileStopping(
+  messages: ReturnType<typeof renderStopping>['result']['current']['messages']
+) {
+  expect(sends()[0]).not.toHaveProperty('delivery')
+  expect(
+    messages.find((message) => JSON.stringify(message.blocks).includes('run this after the stop'))
+  ).toMatchObject({ role: 'user', sentWhileStopping: true })
+}
+
+it('with queueing on, asks a queueing host to queue it, and draws no bubble', async () => {
+  setLocalRuntimeCapabilitiesForTests([
+    AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY,
+    AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY
+  ])
+  const { result } = renderStopping(true)
+
+  expect(result.current.send('run this after the stop')).toBe('queued')
+
+  await waitFor(() => expect(sends()).toHaveLength(1))
+  expect(sends()[0]?.delivery).toBe('queue-if-active')
+  expect(JSON.stringify(result.current.messages)).not.toContain('run this after the stop')
+})
+
+it('with queueing off, sends plain to a queueing host, marked as sent while stopping', async () => {
+  setLocalRuntimeCapabilitiesForTests([
+    AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY,
+    AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY
+  ])
+  const { result } = renderStopping(false)
+
+  expect(result.current.send('run this after the stop')).toBe(true)
+
+  await waitFor(() => expect(sends()).toHaveLength(1))
+  expectPlainSentWhileStopping(result.current.messages)
+})
 
 it('sends plain where the host does not queue sends, marked as sent while stopping', async () => {
   const { result } = renderStopping()
@@ -83,12 +123,7 @@ it('sends plain where the host does not queue sends, marked as sent while stoppi
   expect(result.current.send('run this after the stop')).toBe(true)
 
   await waitFor(() => expect(sends()).toHaveLength(1))
-  expect(sends()[0]).not.toHaveProperty('delivery')
-  expect(
-    result.current.messages.find((message) =>
-      JSON.stringify(message.blocks).includes('run this after the stop')
-    )
-  ).toMatchObject({ role: 'user', sentWhileStopping: true })
+  expectPlainSentWhileStopping(result.current.messages)
 })
 
 // Sent before the Stop, the host steers it into the turn: it is not one held behind the Stop.

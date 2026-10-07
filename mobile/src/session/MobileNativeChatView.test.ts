@@ -170,10 +170,10 @@ describe('MobileNativeChatView', () => {
   })
 
   it.each([
-    ['queue', 'Queue a message to run after the stop'],
+    ['queue', 'Message, @files, /commands'],
     ['send', 'Send a message to run after the stop']
   ] as const)(
-    'tells the composer a message sent now runs after the stop (%s)',
+    'tells the composer whether a message sent now runs after the stop (%s)',
     async (afterStop, placeholder) => {
       await render({
         structuredActivityUi: true,

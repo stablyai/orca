@@ -73,7 +73,7 @@ export function useMobileStructuredQueuedMessageControls(args: {
     () =>
       mobileQueuedMessageCards(queuedMessages, submissions, {
         pendingPrompt,
-        queuePaused: queuePause !== null
+        queuePause
       }),
     [pendingPrompt, queuePause, queuedMessages, submissions]
   )

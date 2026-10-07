@@ -10,9 +10,8 @@ export const NATIVE_CHAT_TURN_STATUS_COPY = {
   thinking: 'Thinking',
   working: 'Working…',
   stopping: 'Stopping…',
-  /** The composer's placeholder while the chat reads Stopping, where the host queues sends. */
-  queueAfterStop: 'Queue a message to run after the stop',
-  /** The same where it does not: the host holds the send until the stop lands. */
+  /** The composer's placeholder while the chat reads Stopping and a send is not queued: the host
+   *  holds it until the stop lands. */
   sendAfterStop: 'Send a message to run after the stop',
   workingFor: 'Working for {{value0}}',
   workedFor: 'Worked for {{value0}}',

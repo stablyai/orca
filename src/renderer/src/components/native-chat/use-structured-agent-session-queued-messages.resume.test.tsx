@@ -142,11 +142,13 @@ describe('whether Resume is offered', () => {
 })
 
 describe('while a turn runs over held cards', () => {
-  it('the header row still names the pause and offers Resume; the composer does not', () => {
+  it('the header row still names the pause and offers Resume; the composer offers neither it nor "Send message?"', () => {
     // `isWorking` counts the queue's coming send, which the host names.
     const { result } = renderController({ isWorking: true })
     expect(result.current.pause).toEqual({ reason: 'stopped' })
     expect(result.current.queueResume).toBeUndefined()
+    // Stopping reads as working: a message sent then joins the queue, with no dialog.
+    expect(result.current.queueHold).toBeUndefined()
   })
 })
 

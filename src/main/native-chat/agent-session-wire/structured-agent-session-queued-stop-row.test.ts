@@ -1,10 +1,11 @@
 // Stop writes one event row before it interrupts, and the queue's pause is derived from it:
-// through the real host, the cards queued before a Stop wait, a card queued after it sends
-// normally but never ahead of them, a withdrawn card comes back under it, a crash keeps it, any
-// turn sent after it ends it, and no stored pause is ever written.
+// through the real host, every card waits under a person's Stop, one queued while it winds down
+// too, a withdrawn card comes back under it, a crash keeps it, any turn sent after it ends it, and
+// no stored pause is ever written.
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
+import type { AgentMessageSource } from '../../../shared/agent-session-message-source'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import Database from '../../sqlite/sync-database'
 import { journalDatabasePath } from '../agent-session-journal/journal-host-database'
@@ -22,6 +23,12 @@ import {
 import { structuredQueuePauses } from './structured-agent-session-queued-pause'
 
 let rig: QueuedMessageTestRig
+
+const RIG_MAIL: AgentMessageSource = {
+  kind: 'agent',
+  senders: [],
+  orchestration: { message: 'mail-notice', mailbox: 'run:r1', dispatchId: null, messages: [] }
+}
 
 beforeEach(async () => {
   rig = await createQueuedMessageTestRig({ restartable: true })
@@ -94,7 +101,7 @@ describe("Stop's event", () => {
     expect(pausedAtInterrupt).toBe('stopped')
   })
 
-  it('over an EMPTY queue holds nothing: a card queued during a later mail turn sends normally', async () => {
+  it('over an EMPTY queue, a later mail turn ends it: a card queued during that turn sends after it', async () => {
     const working = await rig.workingSend()
     await rig.stop()
     await rig.settleAccepted(working, 'stopped')
@@ -105,13 +112,13 @@ describe("Stop's event", () => {
     await eventually(async () => expect(await rig.handoff(typed)).toBeDefined())
   })
 
-  it('a card queued after the Stop waits behind the cards it holds, then all send in order', async () => {
+  it('holds a card queued after the Stop at the end, behind the cards before it; Resume sends all in order', async () => {
     const working = await rig.workingSend()
     const held = await queuedDraft('queued before the stop')
     await rig.stop()
     const later = await queuedDraft('typed while the stopped turn winds down')
     await rig.settleAccepted(working, 'stopped')
-    // The queue never reorders: the newer card waits behind the held one, with no caption of its own.
+    // Both held, the newer one at the end, with no caption of its own.
     await expectHeld('stopped', held, later)
     expect(await rig.drafts()).toEqual([
       { messageId: held, state: 'waiting' },
@@ -188,16 +195,24 @@ describe("Stop's event", () => {
 })
 
 describe("a restart's hold over a card queued after a Stop", () => {
-  it('a card queued after a Stop over an empty queue, before a restart, waits unshown', async () => {
+  // Mail, which a person's Stop never holds: only the restart can hold it.
+  it('mail queued after a Stop over an empty queue, before a restart, waits unshown', async () => {
     const working = await rig.workingSend()
     await rig.stop()
     await rig.settleAccepted(working, 'stopped')
     const mail = await mailTurn()
-    const typed = await queuedDraft('typed during the mail turn')
+    const queued = await rig.send('mail queued during the mail turn', 'queue-if-active', {
+      internal: true,
+      from: RIG_MAIL
+    }).result
+    if (!queued.ok || !('queued' in queued.value)) {
+      throw new Error('expected a queued receipt')
+    }
+    const typed = queued.value.queued.messageId
     // The process dies with no close: a quit writes no Stop event, so only a turn ends the pauses.
     rig.crashRestartHostProcess()
     await rig.settleAccepted(mail, 'mail')
-    // The new host opens the conversation for its first reader. The card came after the Stop, so
+    // The new host opens the conversation for its first reader. The Stop's pause passes mail, so
     // only the restart holds it, and a restart's hold is never published.
     await rig.queuePause()
     expect(structuredQueuePauses(journal()).map((pause) => pause.reason)).toEqual([
@@ -207,17 +222,23 @@ describe("a restart's hold over a card queued after a Stop", () => {
     await expectHeld(null, typed)
   })
 
-  it("a card queued during the queue's own send after a Stop, before a restart, waits unshown", async () => {
+  // Queued mail is the queue's one send a person's Stop does not hold: it runs as the stop lands.
+  it("a card queued during the queue's own send of mail after a Stop, before a restart, waits unshown", async () => {
     const working = await rig.workingSend()
     await rig.stop()
-    const correction = await queuedDraft('typed while the interrupt lands')
+    const mail = await rig.send('mail sent while the interrupt lands', 'queue-if-active', {
+      internal: true,
+      from: RIG_MAIL
+    }).result
+    if (!mail.ok || !('queued' in mail.value)) {
+      throw new Error('expected a queued receipt')
+    }
+    const mailId = mail.value.queued.messageId
     await rig.settleAccepted(working, 'stopped')
-    await eventually(async () =>
-      expect((await rig.handoff(correction))?.handedOverAt).toBeDefined()
-    )
+    await eventually(async () => expect((await rig.handoff(mailId))?.handedOverAt).toBeDefined())
     const typed = await queuedDraft('typed during that send')
     rig.crashRestartHostProcess()
-    await rig.settleAccepted(await rig.handoffId(correction), 'correction')
+    await rig.settleAccepted(await rig.handoffId(mailId), 'mail')
     await rig.queuePause()
     expect(structuredQueuePauses(journal()).map((pause) => pause.reason)).toEqual(['restarted'])
     await expectHeld(null, typed)

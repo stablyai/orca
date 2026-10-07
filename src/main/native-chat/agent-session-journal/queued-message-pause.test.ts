@@ -31,6 +31,7 @@ import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import { QUEUED_MESSAGE_PAUSED_KEPT } from '../../../shared/agent-session-queued-message-wire'
 import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import type { AgentMessageSource } from '../../../shared/agent-session-message-source'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-p',
@@ -58,10 +59,22 @@ function open(): Promise<AgentSessionJournal> {
   })
 }
 
-function queueDraft(journal: AgentSessionJournal, messageId: string, carriedFrom?: string) {
+/** Orchestration mail's sender, as another agent's message names it on its body. */
+const MAIL: AgentMessageSource = {
+  kind: 'agent',
+  senders: [],
+  orchestration: { message: 'mail-notice', mailbox: 'inbox', dispatchId: null, messages: [] }
+}
+
+function queueDraft(
+  journal: AgentSessionJournal,
+  messageId: string,
+  carriedFrom?: string,
+  from?: AgentMessageSource
+) {
   return journal.queuedMessages.insert({
     messageId,
-    body: message(messageId),
+    body: { ...message(messageId), ...(from ? { from } : {}) },
     fingerprint: `fp-${messageId}`,
     hostInstance: HOST,
     ...(carriedFrom ? { carriedFrom } : {})
@@ -397,21 +410,57 @@ describe("the queue's pause, derived from the journal", () => {
 })
 
 describe('which cards a pause holds', () => {
-  it('only cards queued before the Stop event: one queued after it is a new instruction', async () => {
+  // Sent while the stopped turn winds down, a card waits with the rest for Resume or a new turn.
+  it("a person's Stop holds every card, one queued after it too, across a reopen", async () => {
     let journal = await open()
     await queueDraft(journal, 'before')
     await userStop(journal)
     await queueDraft(journal, 'after')
     expect(held(journal)).toEqual([
       ['before', true],
-      ['after', false]
+      ['after', true]
     ])
     await journal.close()
     journal = await open()
     expect(held(journal)).toEqual([
       ['before', true],
-      ['after', false]
+      ['after', true]
     ])
+  })
+
+  it('holds a lone card queued after it, and publishes its pause over it', async () => {
+    const journal = await open()
+    await userStop(journal)
+    await queueDraft(journal, 'alone')
+    const pauses = journal.queuedMessages.pauses(HOST)
+    const cards = journal.queuedMessages.list()
+    expect(held(journal)).toEqual([['alone', true]])
+    expect(nextSendableQueuedCard(pauses, cards)).toBeNull()
+    expect(resumableQueuePause(pauses, cards)?.reason).toBe('stopped')
+  })
+
+  // Mail never waits on a person's Resume: it runs past the cards the Stop holds, and its turn,
+  // once accepted, lifts the pause for them.
+  it('holds no mail, queued before the Stop or after, and mail passes the cards it holds', async () => {
+    const journal = await open()
+    await queueDraft(journal, 'mail-before', undefined, MAIL)
+    await queueDraft(journal, 'person')
+    await userStop(journal)
+    await queueDraft(journal, 'mail-after', undefined, MAIL)
+    expect(held(journal)).toEqual([
+      ['mail-before', false],
+      ['person', true],
+      ['mail-after', false]
+    ])
+    const next = () =>
+      nextSendableQueuedCard(journal.queuedMessages.pauses(HOST), journal.queuedMessages.list())
+    expect(next()?.messageId).toBe('mail-before')
+    await journal.queuedMessages.withdraw({ messageIds: ['mail-before'], settledByOp: 'op-1' })
+    expect(next()?.messageId).toBe('mail-after')
+    expect(
+      resumableQueuePause(journal.queuedMessages.pauses(HOST), journal.queuedMessages.list())
+        ?.reason
+    ).toBe('stopped')
   })
 
   it('a steer the Stop withdrew comes back in its own place, and is held', async () => {
@@ -437,7 +486,7 @@ describe('which cards a pause holds', () => {
     })
     expect(held(journal)).toEqual([
       ['steered', true],
-      ['after', false]
+      ['after', true]
     ])
   })
 
@@ -465,6 +514,31 @@ describe('which cards a pause holds', () => {
       )
     ).rejects.toBeInstanceOf(QueuedMessageNotConsumableError)
     expect(journal.queuedMessages.get('newer')?.state).toBe('waiting')
+  })
+
+  it("the queue's own consume takes mail past the cards a person's Stop holds", async () => {
+    const journal = await open()
+    await queueDraft(journal, 'held')
+    await userStop(journal)
+    await queueDraft(journal, 'mail', undefined, MAIL)
+    await journal.appendSubmission(
+      {
+        clientMessageId: 'drain-mail',
+        payloadFingerprint: 'fp-mail',
+        body: message('mail'),
+        fence: 0,
+        handoverRecorded: true
+      },
+      {
+        messageId: 'mail',
+        expect: 'waiting',
+        settledByOp: null,
+        hostInstance: HOST,
+        yieldsToPause: { hostInstance: HOST }
+      }
+    )
+    expect(journal.queuedMessages.get('mail')?.state).toBe('dispatched')
+    expect(journal.queuedMessages.get('held')?.state).toBe('waiting')
   })
 
   it("'cleared' holds the carried cards, not one typed after them", async () => {
@@ -540,10 +614,19 @@ describe('which cards the pauses in force hold', () => {
   type Card = Parameters<typeof queuePauseHolding>[1] & { messageId: string }
   const DEAD = 'proc-0'
 
-  function card(messageId: string, queuedAfter: number, fields: Partial<Card> = {}): Card {
-    const queuedAt = { epoch: 'epoch-1', sequence: queuedAfter + 1 }
-    const base = { state: 'waiting', holdReason: null, hostInstance: HOST, carriedFrom: null }
-    return { messageId, ...base, queuedAt, ...fields }
+  function card(messageId: string, fields: Partial<Card> = {}): Card {
+    const base = {
+      state: 'waiting',
+      holdReason: null,
+      hostInstance: HOST,
+      carriedFrom: null,
+      body: {}
+    }
+    return { messageId, ...base, ...fields }
+  }
+
+  function mail(messageId: string, fields: Partial<Card> = {}): Card {
+    return card(messageId, { body: { from: MAIL }, ...fields })
   }
 
   /** A Stop at sequence 5 unless `stopped` is 0; no turn or Resume since. */
@@ -566,55 +649,54 @@ describe('which cards the pauses in force hold', () => {
     return cards.map((each) => [each.messageId, queuePauseHolding(pauses, each)?.reason ?? null])
   }
 
-  it('a Stop holds a card with no recorded position, and one queued before a rewind', () => {
-    const cards = [
-      card('unrecorded', 5, { queuedAt: null }),
-      // Later in its own epoch than the Stop is in this one: only the epoch says it came first.
-      card('before-rewind', 5, { queuedAt: { epoch: 'epoch-0', sequence: 9 } }),
-      card('after', 5)
-    ]
-    expect(holding(cards)).toEqual([
-      ['unrecorded', 'stopped'],
-      ['before-rewind', 'stopped'],
-      ['after', null]
-    ])
-  })
-
-  it("a Stop that holds nothing never hides a restart's: a dead process's card queued after it waits", () => {
-    const after = card('after', 5, { hostInstance: DEAD })
-    expect(pausesOver([after]).map((pause) => pause.reason)).toEqual(['stopped', 'restarted'])
-    expect(holding([after])).toEqual([['after', 'restarted']])
-    expect(nextSendableQueuedCard(pausesOver([after]), [after])).toBeNull()
-    expect(resumableQueuePause(pausesOver([after]), [after])?.reason).toBe('restarted')
-    // Written by this process, nothing holds it: a card queued after a Stop sends normally.
-    const live = card('after', 5)
+  it("a Stop that holds no mail never hides a restart's: a dead process's mail waits", () => {
+    const deadMail = mail('mail', { hostInstance: DEAD })
+    expect(pausesOver([deadMail]).map((pause) => pause.reason)).toEqual(['stopped', 'restarted'])
+    expect(holding([deadMail])).toEqual([['mail', 'restarted']])
+    expect(nextSendableQueuedCard(pausesOver([deadMail]), [deadMail])).toBeNull()
+    expect(resumableQueuePause(pausesOver([deadMail]), [deadMail])?.reason).toBe('restarted')
+    // Written by this process, nothing holds it: mail runs as the stop lands.
+    const live = mail('mail')
     expect(nextSendableQueuedCard(pausesOver([live]), [live])).toBe(live)
   })
 
   it("a card names the first pause holding it, and the header names the first held card's", () => {
-    const cards = [
-      card('before', 3, { hostInstance: DEAD }),
-      card('after', 5, { hostInstance: DEAD })
-    ]
+    const cards = [card('person', { hostInstance: DEAD }), mail('mail', { hostInstance: DEAD })]
     expect(holding(cards)).toEqual([
-      ['before', 'stopped'],
-      ['after', 'restarted']
+      ['person', 'stopped'],
+      ['mail', 'restarted']
     ])
     expect(resumableQueuePause(pausesOver(cards), cards)?.reason).toBe('stopped')
+  })
+
+  // Mail passes only the cards a person's Stop alone holds: never a returned card, and never one
+  // another pause holds too.
+  it("mail passes the cards held only by a person's Stop, and nothing else", () => {
+    const passing = [card('person-1'), card('person-2'), mail('mail'), card('person-3')]
+    expect(nextSendableQueuedCard(pausesOver(passing), passing)?.messageId).toBe('mail')
+    expect(nextSendableQueuedCard(pausesOver(passing, 0), passing)?.messageId).toBe('person-1')
+    const returned = [card('refused', { state: 'returned' }), mail('mail')]
+    expect(nextSendableQueuedCard(pausesOver(returned), returned)).toBeNull()
+    const carried = [card('carried', { carriedFrom: 'source-session' }), mail('mail')]
+    expect(holding(carried)).toEqual([
+      ['carried', 'stopped'],
+      ['mail', null]
+    ])
+    expect(nextSendableQueuedCard(pausesOver(carried), carried)).toBeNull()
   })
 
   // Held on its own, as a card whose send failed: the queue goes past it, and Resume is offered
   // over the cards a pause holds behind it.
   it('a kept card is skipped like a send_failed one; the cards behind it still send', () => {
-    const behind = card('behind', 2)
-    const kept = [card('kept', 1, { holdReason: QUEUED_MESSAGE_PAUSED_KEPT }), behind]
+    const behind = card('behind')
+    const kept = [card('kept', { holdReason: QUEUED_MESSAGE_PAUSED_KEPT }), behind]
     expect(holding(kept, 0)).toEqual([
       ['kept', null],
       ['behind', null]
     ])
     expect(nextSendableQueuedCard(pausesOver(kept, 0), kept)).toBe(behind)
     expect(resumableQueuePause(pausesOver(kept, 0), kept)).toBeNull()
-    const restarted = [kept[0]!, card('dead', 2, { hostInstance: DEAD })]
+    const restarted = [kept[0]!, card('dead', { hostInstance: DEAD })]
     expect(nextSendableQueuedCard(pausesOver(restarted, 0), restarted)).toBeNull()
     expect(resumableQueuePause(pausesOver(restarted, 0), restarted)?.reason).toBe('restarted')
   })
@@ -622,7 +704,7 @@ describe('which cards the pauses in force hold', () => {
   // A dead process's card held on its own waits for its own Send, so it pauses no other card.
   it('a card held on its own from a dead process starts no restart pause', () => {
     for (const holdReason of [QUEUED_MESSAGE_PAUSED_KEPT, 'send_failed']) {
-      const cards = [card('held', 1, { hostInstance: DEAD, holdReason }), card('live', 2)]
+      const cards = [card('held', { hostInstance: DEAD, holdReason }), card('live')]
       expect(pausesOver(cards, 0)).toEqual([])
       expect(nextSendableQueuedCard(pausesOver(cards, 0), cards)?.messageId).toBe('live')
     }
@@ -630,8 +712,8 @@ describe('which cards the pauses in force hold', () => {
 
   it("a /clear's pause that holds nothing never hides a restart's", () => {
     const cards = [
-      card('carried', 1, { carriedFrom: 'source-session', holdReason: 'send_failed' }),
-      card('typed', 2, { hostInstance: DEAD })
+      card('carried', { carriedFrom: 'source-session', holdReason: 'send_failed' }),
+      card('typed', { hostInstance: DEAD })
     ]
     expect(pausesOver(cards, 0).map((pause) => pause.reason)).toEqual(['cleared', 'restarted'])
     expect(holding(cards, 0)).toEqual([

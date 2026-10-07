@@ -2856,7 +2856,6 @@
       "status": {
         "failedAfter": "Failed after {{value0}}",
         "interruptedAfter": "Interrupted after {{value0}}",
-        "queueAfterStop": "Queue a message to run after the stop",
         "responding": "Agent is responding",
         "sendAfterStop": "Send a message to run after the stop",
         "toggleDetails": "Toggle turn details",

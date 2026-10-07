@@ -7,6 +7,7 @@ import {
   QUEUED_MESSAGE_PAUSED_SEND_FAILED
 } from '../../../src/shared/agent-session-wire'
 import type { AgentSessionQueuedMessage } from '../../../src/shared/agent-session-wire'
+import type { AgentMessageSource } from '../../../src/shared/agent-session-message-source'
 import {
   mobileQueueHasResumableCard,
   mobileQueuePauseLabel,
@@ -19,6 +20,15 @@ function returnedAs(fact: Parameters<typeof agentSessionFailureWords>[0]) {
   return { state: 'returned' as const, returnedReason: reason, returnedRejection: rejection }
 }
 
+/** Another agent's message, which names its sender on its body. */
+const AGENT_FROM: AgentMessageSource = {
+  kind: 'agent',
+  senders: [],
+  orchestration: { message: 'mail-notice', mailbox: 'run:r1', dispatchId: null, messages: [] }
+}
+
+const STOPPED = { reason: 'stopped' } as const
+
 function draft(overrides: Partial<AgentSessionQueuedMessage> & { messageId: string }) {
   return {
     position: 1,
@@ -30,6 +40,11 @@ function draft(overrides: Partial<AgentSessionQueuedMessage> & { messageId: stri
     state: 'waiting' as const,
     ...overrides
   }
+}
+
+function mailDraft(messageId: string, position: number) {
+  const base = draft({ messageId, position })
+  return { ...base, body: { ...base.body, from: AGENT_FROM } }
 }
 
 describe('mobileQueuedMessageCards', () => {
@@ -63,11 +78,21 @@ describe('mobileQueuedMessageCards', () => {
   it('captions nothing on a waiting card of a paused queue; its pause row explains', () => {
     const [card] = mobileQueuedMessageCards([draft({ messageId: 'a' })], [], {
       pendingPrompt: false,
-      queuePaused: true
+      queuePause: STOPPED
     })
     expect(card?.caption).toBeNull()
     expect(card?.paused).toBe(false)
     expect(card?.needsAttention).toBe(false)
+  })
+
+  // Another agent's mail runs when the stop lands: only a person's card waits on the Stop's pause.
+  it("captions mail as an ordinary waiting card under a person's Stop", () => {
+    const cards = mobileQueuedMessageCards(
+      [draft({ messageId: 'typed' }), mailDraft('mail', 2)],
+      [],
+      { pendingPrompt: true, queuePause: STOPPED }
+    )
+    expect(cards.map((card) => card.caption)).toEqual([null, 'Waiting for your answer'])
   })
 
   it("keeps a card's own failed send and reads a prompt's wait as queued under a paused queue", () => {
@@ -77,7 +102,7 @@ describe('mobileQueuedMessageCards', () => {
         draft({ messageId: 'b', position: 2 })
       ],
       [],
-      { pendingPrompt: true, queuePaused: true }
+      { pendingPrompt: true, queuePause: STOPPED }
     )
     expect(cards.map((card) => card.caption)).toEqual(["Couldn't send — tap Send to retry", null])
     expect(cards[0]?.paused).toBe(true)
@@ -86,7 +111,7 @@ describe('mobileQueuedMessageCards', () => {
   it('finds something for Resume to send only in a waiting card with no hold, ahead of a returned one', () => {
     const resumable = (drafts: AgentSessionQueuedMessage[]) =>
       mobileQueueHasResumableCard(
-        mobileQueuedMessageCards(drafts, [], { pendingPrompt: false, queuePaused: true })
+        mobileQueuedMessageCards(drafts, [], { pendingPrompt: false, queuePause: STOPPED })
       )
     const returned = draft({
       messageId: 'r',

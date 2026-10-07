@@ -15,9 +15,10 @@ export type AgentSessionQueuedMessagePausedReason =
   | typeof QUEUED_MESSAGE_PAUSED_SEND_FAILED
   | typeof QUEUED_MESSAGE_PAUSED_KEPT
 
-/** The whole queue is paused and sends nothing on its own: 'stopped' — the user
- *  interrupted ("Queue paused because you interrupted") — or 'cleared' — a /clear
- *  carried the cards into a fresh conversation. Resume (`agentSession.queuedMessagesResume`),
+/** The queue is paused and sends nothing on its own: 'stopped' — the user
+ *  interrupted ("Queue paused because you interrupted"); it holds every card but
+ *  orchestration mail — or 'cleared' — a /clear carried the cards into a fresh
+ *  conversation. Resume (`agentSession.queuedMessagesResume`),
  *  or any turn starting, lifts it; Send-now on one card sends that card and leaves the
  *  rest paused until its turn starts. A client treats an unknown reason as a
  *  plain pause, so a newer host can add one. */
@@ -57,6 +58,20 @@ export type AgentSessionQueuedMessage = {
    *  `classifyDispatchRejection({ reason: returnedReason, rejection: returnedRejection })`. */
   returnedReason?: string | null
   returnedRejection?: UnreadAgentSessionFailureFact
+}
+
+/** Whether the queue's pause holds this card: a person's Stop holds every card but another
+ *  agent's mail, which runs when the stop lands; any other pause, an unknown one too, holds all.
+ *  Mail is a body naming its sender (`from`), whatever its shape, as the host reads it; a client's
+ *  own send cannot set it. */
+export function queuePauseHoldsCard(
+  pause: AgentSessionQueuePause | null | undefined,
+  card: Pick<AgentSessionQueuedMessage, 'body'>
+): boolean {
+  if (!pause) {
+    return false
+  }
+  return pause.reason !== 'stopped' || card.body.from === undefined
 }
 
 /** No body: the card leaving the published list IS the outcome, so a lost

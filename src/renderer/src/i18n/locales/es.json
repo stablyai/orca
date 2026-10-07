@@ -17857,7 +17857,6 @@
       "status": {
         "responding": "El agente está respondiendo",
         "stopping": "Deteniendo…",
-        "queueAfterStop": "Pon en cola un mensaje para que se ejecute después de detenerse",
         "sendAfterStop": "Envía un mensaje para que se ejecute después de detenerse",
         "interruptedAfter": "Interrumpido tras {{value0}}",
         "failedAfter": "Falló tras {{value0}}",

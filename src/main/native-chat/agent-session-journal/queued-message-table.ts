@@ -63,8 +63,8 @@ export type QueuedMessageRow = {
   /** The conversation /clear carried this card from; null for a card written here. What the
    *  replacement's 'cleared' pause is derived from. */
   carriedFrom: string | null
-  /** Where the journal stood when it was queued: a Stop's pause holds only cards queued before
-   *  it. Null on rows from builds before it was recorded, which read as queued before any Stop. */
+  /** Where the journal stood when it was queued. Still written for older builds, whose Stop pause
+   *  holds only cards queued before it; null on rows from builds before it was recorded. */
   queuedAt: AgentJournalCursor | null
 }
 

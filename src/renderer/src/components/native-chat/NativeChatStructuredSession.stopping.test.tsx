@@ -93,7 +93,7 @@ describe("the chat pane while a person's Stop ends the turn", () => {
     expect(mocks.stop).toHaveBeenCalledOnce()
   })
 
-  it('says a message is queued to run after the stop only where the host queues sends', async () => {
+  it('tells the composer a send while Stopping becomes a card where the host queues sends', async () => {
     mocks.turnId = 'turn-1'
     mocks.sendsQueue = true
     renderPane()

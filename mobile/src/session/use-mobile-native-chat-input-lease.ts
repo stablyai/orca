@@ -95,7 +95,8 @@ export function useSettledMobileNativeChatInputLock(
 }
 
 /** What the composer says while the input lease blocks it, else that a message sent now runs
- *  after a Stop the chat reads as stopping, else its normal prompt. */
+ *  after a Stop the chat reads as stopping, else its normal prompt. A queued one is a card the
+ *  Stop holds until Resume, so it gets the normal prompt. */
 export function mobileNativeChatComposerPlaceholder(
   lockReason: MobileNativeChatInputLockReason | null,
   /** While stopping: whether a message sent now is queued, or sent for the host to hold. */
@@ -107,10 +108,8 @@ export function mobileNativeChatComposerPlaceholder(
   if (lockReason === 'waiting') {
     return 'Waiting for terminal…'
   }
-  if (afterStop) {
-    return afterStop === 'queue'
-      ? NATIVE_CHAT_TURN_STATUS_COPY.queueAfterStop
-      : NATIVE_CHAT_TURN_STATUS_COPY.sendAfterStop
+  if (afterStop === 'send') {
+    return NATIVE_CHAT_TURN_STATUS_COPY.sendAfterStop
   }
   return 'Message, @files, /commands'
 }

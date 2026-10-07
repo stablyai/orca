@@ -1,6 +1,7 @@
-// Mid-turn queueing: the accept decision that turns a send into a host-held
-// draft, the serialized drain that converts one draft into an ordinary
-// submission when the session stops owing work, and the published draft list.
+// Mid-turn queueing: the accept gate that turns a send into a host-held draft
+// (written by `structured-agent-session-queued-send.ts`), the serialized drain that
+// converts one draft into an ordinary submission when the session stops owing
+// work, and the published draft list.
 //
 // Drafts are never owed work: they feed no reducer, no working status, no
 // teardown and no idle sweep. The drain re-reads every gate inside its own
@@ -10,18 +11,14 @@ import { randomUUID } from 'node:crypto'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
 import {
   QUEUED_MESSAGE_PAUSED_SEND_FAILED,
-  type AgentSessionSendResult,
   type AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire'
 import { createStructuredAgentSessionOperationId } from '../../../shared/structured-agent-session-mutation'
-import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
-import { queuedSendAnswer } from './structured-agent-session-queued-send-answer'
 import { structuredAgentSessionSendBlock } from './structured-agent-session-send-preparation'
 import { isUnsettledQueuedMessage } from '../agent-session-journal/queued-message-table'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import { isStructuredAgentSessionMainAgentWorking } from '../../../shared/structured-agent-session-main-agent-working'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import type { AgentSessionTurnContext } from './structured-agent-session-turns'
 import { QueuedMessageNotConsumableError } from '../agent-session-journal/journal-queued-messages'
 import type { QueuedMessageRow } from '../agent-session-journal/queued-message-table'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
@@ -59,8 +56,9 @@ export function pendingPromptExists(journal: Pick<AgentSessionJournal, 'visitIte
 }
 
 /** Waiting, not held on its own, and not positioned behind a returned card or a
- *  card the queue's pause holds: the queue never reorders. The admission rule
- *  (§accept) and the drain's selection both read it. */
+ *  card the queue's pause holds. Mail is the one card that passes cards a person's
+ *  Stop holds; nothing else reorders. The admission rule (§accept) and the drain's
+ *  selection both read it. */
 function oldestActionableQueuedMessage(
   journal: Pick<AgentSessionJournal, 'queuedMessages'>
 ): QueuedMessageRow | null {
@@ -183,75 +181,6 @@ export function queuedMessageBudgetRefusal(
     }
   }
   return null
-}
-
-/**
- * The accept branch: a capable send while the session is working (or behind an
- * actionable backlog) becomes a draft instead of a submission. Returns null for
- * the immediate path — an incapable client, an image body (text-only v1), a
- * replayed id the journal already answers, or an idle session.
- */
-export async function maybeQueueStructuredAgentSessionSend(
-  context: {
-    deps: { store: { getRecord: (sessionId: string) => AgentSessionRecord | null } }
-  },
-  ctx: Pick<AgentSessionTurnContext, 'sessionId' | 'journal' | 'fence' | 'operationReceipt'>,
-  params: {
-    envelope: { clientOperationId: string }
-    body: AgentJournalMessageItem
-    delivery?: 'queue-if-active'
-  }
-): Promise<
-  | { ok: true; value: AgentSessionSendResult }
-  | { ok: false; refusal: AgentSessionWireRefusal }
-  | null
-> {
-  const clientMessageId = params.envelope.clientOperationId
-  if (params.delivery !== 'queue-if-active' || !queuedMessageBodyIsTextOnly(params.body)) {
-    return null
-  }
-  // Asked again with no ledger answer: a send this host queued answers as its replay would —
-  // its hand-off goes out under a fresh id, so no submission under this id guards it.
-  const queuedBefore = queuedSendAnswer(ctx.journal, clientMessageId)
-  if (queuedBefore) {
-    return { ok: true, value: queuedBefore }
-  }
-  // A recorded direct submission under this id replays through today's path.
-  if (ctx.journal.submissions().some((entry) => entry.clientMessageId === clientMessageId)) {
-    return null
-  }
-  if (
-    !shouldQueueStructuredAgentSessionSend({
-      journal: ctx.journal,
-      record: context.deps.store.getRecord(ctx.sessionId),
-      fence: ctx.fence
-    })
-  ) {
-    return null
-  }
-  const refusal = queuedMessageBudgetRefusal(ctx.journal, params.body)
-  if (refusal) {
-    return { ok: false, refusal }
-  }
-  // The insert notifies through the journal's commit listener: publication and
-  // the drain re-derive with no call here to forget.
-  const row = await ctx.journal.queuedMessages.insert(
-    {
-      messageId: clientMessageId,
-      body: params.body,
-      // In the session that will send it: the reducer aliases the provider's echo by exactly this.
-      fingerprint: agentSessionSendBodyFingerprint(ctx.sessionId, params.body),
-      hostInstance: structuredAgentSessionHostInstance()
-    },
-    ctx.operationReceipt
-  )
-  return {
-    ok: true,
-    value: {
-      clientMessageId,
-      queued: { messageId: row.messageId, position: row.position, state: row.state }
-    }
-  }
 }
 
 export type QueuedMessageDrainDeps = {

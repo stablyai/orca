@@ -30,12 +30,7 @@ export function nativeChatComposerPlaceholder(
   if (!canSend) {
     return translate('components.native-chat.composer.locked', 'Input is held by another device.')
   }
-  if (afterStop === 'queue') {
-    return translate(
-      'components.native-chat.status.queueAfterStop',
-      NATIVE_CHAT_TURN_STATUS_COPY.queueAfterStop
-    )
-  }
+  // A queued one is a card the Stop holds until Resume, so it gets the normal prompt.
   if (afterStop === 'send') {
     return translate(
       'components.native-chat.status.sendAfterStop',
