@@ -31,46 +31,73 @@ export class OrcaRuntimeWithSerializeHeadlessTerminalBuffer extends OrcaRuntimeW
     if (!state) {
       return null
     }
-    await state.writeChain
-    await state.ownership.settle()
-    // Why: normal history is separated from an active alternate frame, so the
-    // caller's scrollback policy can be honored without painting it into alt.
-    const scrollbackRows = opts.scrollbackRows ?? 0
-    const snapshot = state.emulator.getSnapshot({ scrollbackRows })
-    const terminalOwner = state.ownership.owner
-    const data = snapshot.rehydrateSequences + snapshot.snapshotAnsi
-    return data.length > 0 || opts.includeEmpty === true
-      ? this.preferTrackedLastTitle(ptyId, {
-          data,
-          frameRestoreAnsi: snapshot.frameRestoreAnsi,
-          cols: snapshot.cols,
-          rows: snapshot.rows,
-          cwd: snapshot.cwd ?? this.terminalCwdByPtyId.get(ptyId),
-          lastTitle: snapshot.lastTitle,
-          seq: state.outputSequence,
-          source: 'headless' as const,
-          oscLinks: snapshot.oscLinks,
-          scrollbackAnsi: snapshot.scrollbackAnsi,
-          // Why beside outputSequence and never re-read later: the flags must
-          // describe the same stream position as the image, or replay would
-          // apply push/pop transitions twice or out of order.
-          ...(parseTerminalKittyKeyboardFlags(snapshot.modes?.kittyKeyboardFlags) !== undefined
-            ? { kittyKeyboardFlags: snapshot.modes.kittyKeyboardFlags }
-            : {}),
-          ...(snapshot.pendingEscapeTailAnsi
-            ? { pendingEscapeTailAnsi: snapshot.pendingEscapeTailAnsi }
-            : {}),
-          ...(terminalOwner ? { terminalOwner } : {}),
-          // Why: lets the renderer skip the destructive scrollback clear when
-          // restoring an alt-screen snapshot — clearing wipes xterm's own
-          // history that the TUI relies on for scroll-up after a tab return.
-          alternateScreen: snapshot.modes?.alternateScreen ?? state.emulator.isAlternateScreen,
-          // Why NOT folded into data: the renderer writes its post-replay
-          // reset after data, and any ESC after a dangling partial aborts it.
-          // The restorer writes this last (Bug E fix).
-          pendingEscapeTailAnsi: snapshot.pendingEscapeTailAnsi
-        })
-      : null
+    const emulator = state.emulator
+    const generation = this.getPtyLifecycleGeneration(ptyId)
+    const incarnation = this.ptysById.get(ptyId)?.incarnationId
+    const isCurrent = (): boolean =>
+      this.headlessTerminals.get(ptyId) === state &&
+      state.emulator === emulator &&
+      this.getPtyLifecycleGeneration(ptyId) === generation &&
+      this.ptysById.get(ptyId)?.incarnationId === incarnation
+    // Arrival-time metadata can advance while later bytes remain queued.
+    const fallback = this.preferTrackedLastTitle(ptyId, {
+      cwd: this.terminalCwdByPtyId.get(ptyId),
+      lastTitle: undefined
+    })
+    // Reserve the same queue as output and resize, including ownership settlement.
+    const completion = state.writeChain.then(async () => {
+      if (!isCurrent()) {
+        return null
+      }
+      await state.ownership.settle()
+      if (!isCurrent()) {
+        return null
+      }
+      // Why: normal history is separated from an active alternate frame, so the
+      // caller's scrollback policy can be honored without painting it into alt.
+      const scrollbackRows = opts.scrollbackRows ?? 0
+      const snapshot = state.emulator.getSnapshot({ scrollbackRows })
+      const terminalOwner = state.ownership.owner
+      const data = snapshot.rehydrateSequences + snapshot.snapshotAnsi
+      return data.length > 0 || opts.includeEmpty === true
+        ? {
+            data,
+            frameRestoreAnsi: snapshot.frameRestoreAnsi,
+            cols: snapshot.cols,
+            rows: snapshot.rows,
+            cwd: snapshot.cwd ?? fallback.cwd,
+            lastTitle: fallback.lastTitle ?? snapshot.lastTitle,
+            seq: state.outputSequence,
+            source: 'headless' as const,
+            oscLinks: snapshot.oscLinks,
+            scrollbackAnsi: snapshot.scrollbackAnsi,
+            // Why beside outputSequence and never re-read later: the flags must
+            // describe the same stream position as the image, or replay would
+            // apply push/pop transitions twice or out of order.
+            ...(parseTerminalKittyKeyboardFlags(snapshot.modes?.kittyKeyboardFlags) !== undefined
+              ? { kittyKeyboardFlags: snapshot.modes.kittyKeyboardFlags }
+              : {}),
+            ...(snapshot.pendingEscapeTailAnsi
+              ? { pendingEscapeTailAnsi: snapshot.pendingEscapeTailAnsi }
+              : {}),
+            ...(terminalOwner ? { terminalOwner } : {}),
+            // Why: lets the renderer skip the destructive scrollback clear when
+            // restoring an alt-screen snapshot — clearing wipes xterm's own
+            // history that the TUI relies on for scroll-up after a tab return.
+            alternateScreen: snapshot.modes?.alternateScreen ?? state.emulator.isAlternateScreen,
+            // Why NOT folded into data: the renderer writes its post-replay
+            // reset after data, and any ESC after a dangling partial aborts it.
+            // The restorer writes this last (Bug E fix).
+            pendingEscapeTailAnsi: snapshot.pendingEscapeTailAnsi
+          }
+        : null
+    })
+    // Return capture errors to the caller while keeping later stream work runnable.
+    state.writeChain = completion.then(
+      () => {},
+      () => {}
+    )
+    return completion
   }
 
   protected disposeHeadlessTerminal(ptyId: string): void {
