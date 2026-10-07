@@ -47,11 +47,13 @@ export class RuntimeRepositoryCloneController {
     sshConnectionId?: string
   ): Promise<Repo> {
     if (sshConnectionId) {
-      return await cloneRemoteRepo(this.requireStore(), null, {
+      const repo = await cloneRemoteRepo(this.requireStore(), null, {
         connectionId: sshConnectionId,
         url,
         destination: destination ?? ''
       })
+      this.invalidate(repo.id)
+      return repo
     }
     const store = this.deps.getStore()
     if (!store) {

@@ -9,8 +9,12 @@ import type { RuntimeStore } from './runtime-store-contract'
 vi.mock('../git/saved-clone-target', () => ({
   reuseSavedCloneTarget: async (findSaved: () => Repo | undefined) => findSaved()
 }))
+vi.mock('../ipc/repos/remote-repo-clone', () => ({
+  cloneRemoteRepo: vi.fn()
+}))
 
 import { RuntimeRepositoryCloneController } from './runtime-repository-clone-controller'
+import { cloneRemoteRepo } from '../ipc/repos/remote-repo-clone'
 
 const repoAt = (path: string): Repo => ({
   id: `repo-${path}`,
@@ -104,5 +108,33 @@ describe('RuntimeRepositoryCloneController default destination', () => {
     await expect(
       controller.clone('https://github.com/example/example-repo.git', '/srv/custom')
     ).resolves.toBe(explicitRow)
+  })
+})
+
+describe('RuntimeRepositoryCloneController SSH clone', () => {
+  it('invalidates runtime repo state after the remote clone is registered', async () => {
+    const repo = repoAt('/home/remote/projects/example-repo')
+    vi.mocked(cloneRemoteRepo).mockResolvedValueOnce(repo)
+    const invalidateResolvedWorktrees = vi.fn()
+    const invalidateWorktreeScan = vi.fn()
+    const notifyReposChanged = vi.fn()
+    const controller = new RuntimeRepositoryCloneController({
+      getStore: () => makeStore([], '/home/local/projects'),
+      invalidateResolvedWorktrees,
+      invalidateWorktreeScan,
+      notifyReposChanged
+    })
+
+    await expect(
+      controller.clone(
+        'https://github.com/example/example-repo.git',
+        '/home/remote/projects',
+        null,
+        'ssh-remote'
+      )
+    ).resolves.toBe(repo)
+    expect(invalidateResolvedWorktrees).toHaveBeenCalledOnce()
+    expect(invalidateWorktreeScan).toHaveBeenCalledWith(repo.id)
+    expect(notifyReposChanged).toHaveBeenCalledOnce()
   })
 })
