@@ -32,8 +32,8 @@ const emptyRows: Row[] = []
 let tail: MobileNativeChatTailFollow<Row> | null = null
 
 /** Mirrors the view's wiring: the list ref, and `onContentSizeChange` → the resize pin. */
-function Harness({ hasItems }: { hasItems: boolean }): ReturnType<typeof createElement> {
-  tail = useMobileNativeChatTailFollow<Row>({ hasItems })
+function Harness({ hasItems, sendSurfaceId }: { hasItems: boolean; sendSurfaceId: string }): ReturnType<typeof createElement> {
+  tail = useMobileNativeChatTailFollow<Row>({ hasItems, sendSurfaceId })
   // A variable, not an inline literal: `createElement` types `ref` out of the literal's props.
   const listProps = {
     data: emptyRows,
@@ -69,9 +69,9 @@ describe('useMobileNativeChatTailFollow', () => {
     scrollToOffset.mockReset()
   })
 
-  function render(hasItems = true): void {
+  function render(hasItems = true, sendSurfaceId = 'tab-a'): void {
     act(() => {
-      renderer = create(createElement(Harness, { hasItems }))
+      renderer = create(createElement(Harness, { hasItems, sendSurfaceId }))
     })
   }
 
@@ -79,9 +79,9 @@ describe('useMobileNativeChatTailFollow', () => {
     act(() => list(renderer).props.onContentSizeChange(width, height))
   }
 
-  function rerender(hasItems: boolean): void {
+  function rerender(hasItems: boolean, sendSurfaceId = 'tab-a'): void {
     act(() => {
-      renderer?.update(createElement(Harness, { hasItems }))
+      renderer?.update(createElement(Harness, { hasItems, sendSurfaceId }))
     })
   }
 
@@ -146,6 +146,17 @@ describe('useMobileNativeChatTailFollow', () => {
     // The list empties and comes back: the height measured for the old transcript must not pin.
     rerender(false)
     rerender(true)
+    act(() => hook().pinToTail())
+
+    expect(scrollToOffset).not.toHaveBeenCalled()
+  })
+
+  it('forgets the previous transcript height on a direct non-empty switch', () => {
+    render(true, 'tab-a')
+    contentResized(320, 900)
+    scrollToOffset.mockReset()
+
+    rerender(true, 'tab-b')
     act(() => hook().pinToTail())
 
     expect(scrollToOffset).not.toHaveBeenCalled()

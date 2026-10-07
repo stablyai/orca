@@ -50,8 +50,10 @@ export type MobileNativeChatTailFollow<TItem> = {
 export function useMobileNativeChatTailFollow<TItem>(args: {
   /** Guards the tail pin against an empty list. */
   hasItems: boolean
+  /** Identifies the transcript whose measurements belong to this list instance. */
+  sendSurfaceId: string
 }): MobileNativeChatTailFollow<TItem> {
-  const { hasItems } = args
+  const { hasItems, sendSurfaceId } = args
   const listRef = useRef<FlatList<TItem> | null>(null)
   const [following, setFollowingFlag] = useState(true)
   const [atTail, setAtTailFlag] = useState(true)
@@ -62,6 +64,14 @@ export function useMobileNativeChatTailFollow<TItem>(args: {
   const userScrollSettleFrameRef = useRef<number | null>(null)
   // Last measured content height; the only offset the tail pin may scroll to.
   const lastContentHeightRef = useRef(0)
+  const measuredSurfaceIdRef = useRef(sendSurfaceId)
+
+  // A routed session can switch directly from one non-empty transcript to another. Clear the
+  // old geometry during render so an immediate pin cannot use the previous transcript's height.
+  if (measuredSurfaceIdRef.current !== sendSurfaceId) {
+    measuredSurfaceIdRef.current = sendSurfaceId
+    lastContentHeightRef.current = 0
+  }
 
   // Why: an emptied list, or a transcript switch reusing this instance, must not pin to a height
   // measured for content that is gone.
