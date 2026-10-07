@@ -1,4 +1,3 @@
-/* oxlint-disable max-lines -- Why: PluginService is the one chokepoint that binds host services to plugin identity; commands.invokeOwn needs it to pass its own invokeCommand, and splitting the class would scatter that binding. */
 import type { PluginEventName } from '../../shared/plugins/plugin-manifest'
 import {
   capabilityKinds,
@@ -130,11 +129,14 @@ export class PluginService {
     const enabled = this.options.isPluginSystemEnabled()
     const devPaths = this.options.getDevPluginPaths()
     const consentLists = snapshotPluginConsentLists(this.options)
-    const refresh = this.refreshChain.then(() =>
-      this.performRefresh(enabled, devPaths, consentLists)
-    )
-    this.refreshChain = refresh.catch(() => undefined)
-    return refresh
+    return this.enqueue(() => this.performRefresh(enabled, devPaths, consentLists))
+  }
+
+  /** Serializes refresh, removal and reconciliation; a failed task does not block later ones. */
+  private enqueue(task: () => Promise<void>): Promise<void> {
+    const queued = this.refreshChain.then(task)
+    this.refreshChain = queued.catch(() => undefined)
+    return queued
   }
 
   private async performRefresh(
@@ -299,9 +301,7 @@ export class PluginService {
   }
 
   removePlugin(pluginKey: string, remove: () => Promise<void>): Promise<void> {
-    const removal = this.refreshChain.then(() => this.installed.remove(pluginKey, remove))
-    this.refreshChain = removal.catch(() => undefined)
-    return removal
+    return this.enqueue(() => this.installed.remove(pluginKey, remove))
   }
 
   async deactivatePlugin(pluginKey: string): Promise<void> {
@@ -312,9 +312,7 @@ export class PluginService {
   /** Reconciles live workers and client projections after consent or
    * enablement changes without re-reading plugin files or starting workers. */
   async reconcileActivationState(): Promise<void> {
-    const reconcile = this.refreshChain.then(() => this.performActivationStateReconciliation())
-    this.refreshChain = reconcile.catch(() => undefined)
-    return reconcile
+    return this.enqueue(() => this.performActivationStateReconciliation())
   }
 
   private async performActivationStateReconciliation(): Promise<void> {
