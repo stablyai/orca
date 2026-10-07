@@ -96,7 +96,6 @@ export function useMobileSessionViewMode(args: {
   // its identity stays stable and it never captures a stale default.
   const defaultViewRef = useRef(defaultView)
   defaultViewRef.current = defaultView
-
   // A completed RPC only means the host accepted the write. Keep the optimistic value until a
   // session-tabs snapshot echoes it, otherwise that snapshot can briefly resurrect the old view.
   useEffect(() => {
@@ -126,7 +125,6 @@ export function useMobileSessionViewMode(args: {
       }
     }
   })
-
   useEffect(() => {
     let active = true
     const runtime = ensureViewOverridesRuntime(hostId, worktreeId)
@@ -267,7 +265,9 @@ export function useMobileSessionViewMode(args: {
                 pending.source === bridge.hostViewSource
               ) {
                 pending.accepted = true
-                setPendingVersion((version) => version + 1)
+                if (mountedRef.current) {
+                  setPendingVersion((version) => version + 1)
+                }
               }
             },
             (error) => {
@@ -345,6 +345,5 @@ export function useMobileSessionViewMode(args: {
     },
     [ensureViewOverridesRuntime, hostId, worktreeId]
   )
-
   return { isTabChatView, toggleTabChatView }
 }
