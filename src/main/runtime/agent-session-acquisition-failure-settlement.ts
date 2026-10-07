@@ -9,7 +9,7 @@ import type {
   AgentSessionRecord
 } from '../../shared/agent-session-record'
 import { assertFence, withLease } from './agent-session-lease-transitions'
-import type { AgentSessionStoreState } from './agent-session-record-store-file'
+import type { AgentSessionStoreState } from './agent-session-store-state'
 
 /**
  * How the failed attempt's provider process was accounted for.

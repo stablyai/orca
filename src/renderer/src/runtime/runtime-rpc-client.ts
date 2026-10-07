@@ -105,8 +105,7 @@ export async function ensureRuntimeEnvironmentCompatible(
 ): Promise<void> {
   const cached = getCachedRuntimeCompatibilityCheck(environmentId, options)
   if (cached) {
-    await cached.check
-    return
+    return cached.check
   }
   const entry: RuntimeCompatibilityCacheEntry = {
     check: Promise.resolve(),
@@ -116,9 +115,10 @@ export async function ensureRuntimeEnvironmentCompatible(
     statusCheckedAt: null
   }
   const check = (async () => {
-    const response = await window.api.runtimeEnvironments.call({
-      selector: environmentId,
+    const response = await callRuntimeEnvironmentWithRevision({
+      environmentId,
       method: 'status.get',
+      params: undefined,
       timeoutMs: options.timeoutMs,
       expectedEnvironmentPairingRevision: options.expectedEnvironmentPairingRevision
     })

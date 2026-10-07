@@ -17,7 +17,6 @@ import { getWorktreeLineageGroupKey, PINNED_GROUP_KEY } from '../grouping/group-
 import type { ProjectGroupingModel } from '../grouping/project-grouping'
 import type { PinnedWorktreeDisplayPolicy, WorktreeGroupBy } from '../grouping/row-types'
 import { getGroupKeysForWorktree } from '../grouping/worktree-group-keys'
-import { getPinnedWorktreeRevealCollapsedGroupKeys } from './reveal-ancestors'
 
 export function getWorktreeRevealCollapsedGroupKeys(args: {
   worktree: Worktree
@@ -65,14 +64,7 @@ export function getWorktreeRevealCollapsedGroupKeys(args: {
       hostLineage.worktreeMap
     )
   ) {
-    keys.push(
-      ...getPinnedWorktreeRevealCollapsedGroupKeys({
-        worktree: args.worktree,
-        groupKey: sectionKey(PINNED_GROUP_KEY),
-        collapsedGroups: args.collapsedGroups,
-        inPinnedSection: true
-      })
-    )
+    keys.push(sectionKey(PINNED_GROUP_KEY))
   } else {
     keys.push(
       ...getGroupKeysForWorktree(

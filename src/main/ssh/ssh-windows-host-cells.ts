@@ -30,6 +30,10 @@ export type WindowsHostCell = HostileHostCellCore & {
 export const WINDOWS_HOST_CELL_IDS = ['pinned-cmd', 'pinned-powershell', 'legacy-opt-out'] as const
 export type WindowsHostCellId = (typeof WINDOWS_HOST_CELL_IDS)[number]
 
+export function isWindowsHostCellId(id: string): id is WindowsHostCellId {
+  return WINDOWS_HOST_CELL_IDS.some((candidate) => candidate === id)
+}
+
 export function windowsHostCell(
   id: WindowsHostCellId,
   target: WindowsServerTarget
@@ -37,9 +41,19 @@ export function windowsHostCell(
   const launched = { outcome: 'launched', rung: 'A', target } as const
   switch (id) {
     case 'pinned-cmd':
-      return { id, defaultShell: 'cmd', remoteRuntime: 'pinned-node', expect: launched }
+      return {
+        id,
+        defaultShell: 'cmd',
+        remoteRuntime: 'pinned-node',
+        expect: launched
+      }
     case 'pinned-powershell':
-      return { id, defaultShell: 'powershell', remoteRuntime: 'pinned-node', expect: launched }
+      return {
+        id,
+        defaultShell: 'powershell',
+        remoteRuntime: 'pinned-node',
+        expect: launched
+      }
     case 'legacy-opt-out':
       return {
         id,
@@ -50,9 +64,36 @@ export function windowsHostCell(
   }
 }
 
+/** Managed orcad on the pinned node.exe, per DefaultShell: deploy, readiness, stop request, exit. */
+export const WINDOWS_ORCAD_CELL_IDS = ['orcad-cmd', 'orcad-powershell'] as const
+export type WindowsOrcadCellId = (typeof WINDOWS_ORCAD_CELL_IDS)[number]
+
+export function isWindowsOrcadCellId(id: string): id is WindowsOrcadCellId {
+  return WINDOWS_ORCAD_CELL_IDS.some((candidate) => candidate === id)
+}
+
+export function windowsOrcadCellShell(id: WindowsOrcadCellId): WindowsSshDefaultShell {
+  return id === 'orcad-cmd' ? 'cmd' : 'powershell'
+}
+
+/** The app connects a relay-era host and converts it to managed orcad (tests/e2e). */
+export const WINDOWS_CONVERT_CELL_ID = 'orcad-convert'
+
+/** The bundled CLI against a managed host (tests/e2e/ssh-orcad-windows-cli-matrix.spec.ts). */
+export const WINDOWS_CLI_MATRIX_CELL_IDS = [
+  'orcad-cli-managed',
+  'orcad-cli-convert',
+  'orcad-cli-relay-kept'
+] as const
+export type WindowsCliMatrixCellId = (typeof WINDOWS_CLI_MATRIX_CELL_IDS)[number]
+
 /** Written by config/ci/windows-ssh-provider/invoke-pinned-relay-cells.ps1, one per run. */
 export type WindowsHostCellDescriptor = {
-  cell: WindowsHostCellId
+  cell:
+    | WindowsHostCellId
+    | WindowsOrcadCellId
+    | typeof WINDOWS_CONVERT_CELL_ID
+    | WindowsCliMatrixCellId
   target: WindowsServerTarget
   host: string
   port: number
@@ -78,7 +119,11 @@ export function parseWindowsHostCellDescriptor(text: string): WindowsHostCellDes
     throw new Error('Windows host cell descriptor must be a JSON object')
   }
   const record = Object.fromEntries(Object.entries(parsed))
-  const cell = WINDOWS_HOST_CELL_IDS.find((id) => id === record.cell)
+  const cell =
+    WINDOWS_HOST_CELL_IDS.find((id) => id === record.cell) ??
+    WINDOWS_ORCAD_CELL_IDS.find((id) => id === record.cell) ??
+    WINDOWS_CLI_MATRIX_CELL_IDS.find((id) => id === record.cell) ??
+    (record.cell === WINDOWS_CONVERT_CELL_ID ? WINDOWS_CONVERT_CELL_ID : undefined)
   if (!cell) {
     throw new Error(`Unknown Windows host cell: ${String(record.cell)}`)
   }
@@ -109,7 +154,7 @@ export function readWindowsHostCellDescriptor(path: string): WindowsHostCellDesc
 
 export function windowsHostSshTarget(
   descriptor: WindowsHostCellDescriptor,
-  cell: WindowsHostCell,
+  cell: Pick<WindowsHostCell, 'id' | 'remoteRuntime'>,
   runId: string
 ): SshTarget {
   return {

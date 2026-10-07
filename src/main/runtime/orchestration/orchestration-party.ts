@@ -9,7 +9,7 @@ import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../shar
 import {
   isRecordedStructuredWorkerSession,
   resolveStructuredWorkerIdentity,
-  resolveStructuredWorkerIdentityForSession
+  resolveStructuredWorkerIdentityForRoot
 } from '../structured-worker-authority'
 import { canonicalOrcaSessionId } from './canonical-orca-session-id'
 import type { OrchestrationDb } from './db'
@@ -34,7 +34,8 @@ export const ORCHESTRATION_TARGET_PARAM: Readonly<
   'orchestration.dispatch': 'to',
   'orchestration.inbox': 'terminal',
   'orchestration.sessionAddress': 'sessionId',
-  'orchestration.partyLocation': 'address'
+  'orchestration.partyLocation': 'address',
+  'orchestration.workerStart': 'terminal'
 }
 
 /** The party an Orca session id names. Throws when it is a worker this host lost the identity of. */
@@ -43,7 +44,7 @@ export function resolveOrcaSessionParty(
   db: OrchestrationDb | null | undefined
 ): OrchestrationSessionParty {
   const id = canonicalOrcaSessionId(orcaSessionId)
-  const worker = resolveStructuredWorkerIdentityForSession(id, db)
+  const worker = resolveStructuredWorkerIdentityForRoot(id, db)
   if (!worker && db && isRecordedStructuredWorkerSession(id, db)) {
     // Why: handle-less, it would split one worker into two parties and bind like a chat.
     throw new OrchestrationError(
@@ -104,18 +105,13 @@ export function resolveDeclaredCallerParty(
   return party
 }
 
-/** A Dispatch assignee: a terminal or a structured worker, never a chat yet. */
+/**
+ * A Dispatch assignee: a terminal, a structured worker, or a chat named by its Orca session ID. A
+ * chat's party is its `/clear` root address, which its own session id resolves to when it reports.
+ */
 export function resolveDispatchAssigneeParty(
   address: string,
   db: OrchestrationDb | null | undefined
 ): OrchestrationParty {
-  const party = resolveOrchestrationParty(address, db)
-  if (party.terminalHandle === null) {
-    throw new OrchestrationError(
-      CODES.chatNotDispatchable,
-      `Agent session ${party.orcaSessionId} is a chat, and a chat can't receive a dispatch yet. Start a worker with worker-start instead. No effects were applied.`,
-      NO_EFFECTS
-    )
-  }
-  return party
+  return resolveOrchestrationParty(address, db)
 }

@@ -248,6 +248,81 @@ describe('OrcaRuntimeService', () => {
     expect(spawn).toHaveBeenCalledTimes(1)
   })
 
+  it('skips with a warning a setup hook only the new branch adds when an ask repo got no decision', async () => {
+    const metaById: Record<string, WorktreeMeta> = {}
+    const runtimeStore = {
+      ...store,
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+        metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+        return metaById[worktreeId]
+      }
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    const worktreesChanged = vi.fn()
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-branch-added-setup' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.setNotifier({
+      worktreesChanged,
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      revealTerminalSession: vi.fn().mockResolvedValue({ tabId: 'tab-branch-added-setup' }),
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+    runtime.attachWindow(1)
+
+    computeWorktreePathMock.mockReturnValue('/tmp/workspaces/runtime-branch-added-setup')
+    ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/runtime-branch-added-setup')
+    // The main checkout has no setup hook; only the new worktree's orca.yaml does.
+    vi.mocked(getEffectiveHooks).mockImplementation((_repo, worktreePath) =>
+      worktreePath ? { scripts: { setup: 'pnpm worktree:setup' } } : null
+    )
+    // An `ask` repo: an undecided create throws, as the real policy check does.
+    vi.mocked(shouldRunSetupForCreate).mockImplementation((_repo, decision) => {
+      if (decision === 'run' || decision === 'skip') {
+        return decision === 'run'
+      }
+      throw new Error('Setup decision required for this repository')
+    })
+    vi.mocked(listWorktrees).mockResolvedValue([
+      {
+        path: '/tmp/workspaces/runtime-branch-added-setup',
+        head: 'def',
+        branch: 'runtime-branch-added-setup',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    const result = await runtime.createManagedWorktree({
+      repoSelector: 'id:repo-1',
+      name: 'runtime-branch-added-setup',
+      setupDecision: 'inherit',
+      awaitTerminalProvisioning: true
+    })
+
+    expect(worktreesChanged).toHaveBeenCalledWith(TEST_REPO_ID)
+    expect(result.setupReceipt).toMatchObject({
+      requested: 'inherit',
+      hookFound: true,
+      state: 'skipped'
+    })
+    expect(result.warning).toContain('orca.yaml setup hook skipped')
+    expect(createSetupRunnerScript).not.toHaveBeenCalled()
+  })
+
   it('materializes default tabs for inactive local managed worktree creates', async () => {
     const metaById: Record<string, WorktreeMeta> = {}
     const runtimeStore = {

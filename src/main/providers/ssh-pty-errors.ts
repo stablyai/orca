@@ -8,6 +8,9 @@ export const SSH_PTY_IDENTITY_MISMATCH_ERROR = 'SSH_PTY_IDENTITY_MISMATCH'
  * reply is host evidence of the opposite).
  */
 export const SSH_PTY_SOURCE_RESTORE_REQUIRED_ERROR = 'SSH_PTY_SOURCE_RESTORE_REQUIRED'
+/** The id is unknown to this relay while an older build's relay for the target is still live.
+ *  Deliberately not `SSH_SESSION_EXPIRED`, so the pane keeps its binding instead of respawning. */
+export const SSH_PTY_HELD_BY_PREVIOUS_RELAY_ERROR = 'SSH_PTY_HELD_BY_PREVIOUS_RELAY'
 
 export function isSshPtyNotFoundError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error)
@@ -64,4 +67,13 @@ export class SshPtyProvenExitedOnRelayError extends SshPtyAbsentFromRelayError {
 
 export function isSshPtyProvenExitedOnRelayError(error: unknown): boolean {
   return error instanceof SshPtyProvenExitedOnRelayError
+}
+
+/** Raised in place of {@link SshPtyAbsentFromRelayError} while an older build's relay for the
+ *  target may still run the PTY, so neither the lease nor the pane binding is retired. */
+export class SshPtyHeldByPreviousRelayError extends Error {
+  constructor(relayPtyId: string) {
+    super(`${SSH_PTY_HELD_BY_PREVIOUS_RELAY_ERROR}: ${relayPtyId}`)
+    this.name = 'SshPtyHeldByPreviousRelayError'
+  }
 }

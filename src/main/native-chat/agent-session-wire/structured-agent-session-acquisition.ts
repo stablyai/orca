@@ -29,6 +29,8 @@ export async function acquireOwner(
   try {
     try {
       await input.onAcquiring?.()
+      // A close or Stop that landed while the attach was still reconciling launches nothing.
+      input.acquireSignal?.throwIfAborted()
     } catch (error) {
       throw new AgentSessionPreSpawnError(error)
     }
@@ -40,6 +42,7 @@ export async function acquireOwner(
       ...(record.options ? { options: record.options } : {}),
       ...(input.eventSink ? { events: input.eventSink } : {}),
       ...(input.recordPhase ? { recordPhase: input.recordPhase } : {}),
+      ...(input.acquireSignal ? { signal: input.acquireSignal } : {}),
       onSpawned: async (process) => {
         record = await input.store.commitProcessIdentity({
           sessionId: record.sessionId,

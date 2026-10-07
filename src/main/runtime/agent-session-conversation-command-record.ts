@@ -1,5 +1,5 @@
 import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
-import type { AgentSessionStoreState } from './agent-session-record-store-file'
+import type { AgentSessionStoreState } from './agent-session-store-state'
 import { AgentSessionTabTable } from './agent-session-tab-table'
 import { foundAgentSessionRecord } from './agent-session-record-founding'
 import type { AgentSessionConversationCommandRecord } from '../../shared/agent-session-conversation-command'

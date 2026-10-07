@@ -204,23 +204,26 @@ export function isStructuredAgentSessionThinking({ items, latestTurn }: HostTurn
 export function statusStructuredAgentSessionToolCall(
   items: readonly AgentJournalRenderItem[]
 ): NativeChatToolCallBlock | null {
-  let newest: StructuredAgentSessionToolAction | null = null
-  let running: StructuredAgentSessionToolAction | null = null
+  let newest: { action: StructuredAgentSessionToolAction; itemId: string } | null = null
+  let running: { action: StructuredAgentSessionToolAction; itemId: string } | null = null
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const item = items[index]
-    const body = item?.body
+    if (!item) {
+      continue
+    }
+    const body = item.body
     const turn = readAgentJournalTurn(body)
     if (turn) {
       const named = turn.state === 'running' ? (running ?? newest) : null
       // Built only for the winner: the host re-projects this on every journal change.
-      return named ? structuredAgentSessionToolCallBlock(named) : null
+      return named ? structuredAgentSessionToolCallBlock(named.action, named.itemId) : null
     }
     if (running || !isStructuredAgentSessionToolAction(body) || !isRootAgentJournalItem(item)) {
       continue
     }
-    newest ??= body
+    newest ??= { action: body, itemId: item.itemId }
     if (isRunningStructuredAgentSessionToolAction(body)) {
-      running = body
+      running = { action: body, itemId: item.itemId }
     }
   }
   return null

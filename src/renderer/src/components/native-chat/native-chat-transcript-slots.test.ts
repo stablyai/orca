@@ -76,7 +76,8 @@ describe('transcript slots', () => {
         .map((slot) => slot.message.id)
 
     expect(trailing([text('u', 'go', 'user'), toolRun('a'), text('b', 'Done.')])).toEqual(['b'])
-    expect(trailing([text('u', 'go', 'user'), toolRun('a'), toolRun('b')])).toEqual(['b'])
+    // Two runs in a row draw as one, headed by the first.
+    expect(trailing([text('u', 'go', 'user'), toolRun('a'), toolRun('b')])).toEqual(['a'])
     expect(
       trailing([text('u', 'go', 'user'), toolRun('a'), text('r', 'hmm', 'reasoning')])
     ).toEqual(['a'])
@@ -500,15 +501,8 @@ describe('turn-owned grouping', () => {
       turnStatuses: { active: null, completedByTurn: { A: settled } },
       expandedTurnKeys: new Set(['A'])
     })
-    expect(slots.map((slot) => slot.message.id)).toEqual([
-      'A',
-      't1',
-      'B',
-      't2',
-      't3',
-      't4',
-      'answer'
-    ])
+    expect(slots.map((slot) => slot.message.id)).toEqual(['A', 't1', 'B', 't2', 'answer'])
+    expect(slots[3]?.workRun?.map((message) => message.id)).toEqual(['t2', 't3', 't4'])
   })
 
   it("anchors a provider-opened turn's bar above its first row", () => {

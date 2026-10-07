@@ -45,6 +45,9 @@ export type AgentLaunchTarget =
       /** The workspace root the host resolved for that selector. Host-set, never accepted from a
        *  caller: it decides whether a requested `cwd` names the root or somewhere else. */
       workspacePath?: string
+      /** The workspace's SSH connection, `null` when local. Host-set, like `workspacePath`: it
+       *  decides whether the window can read the agent's transcript, so which view the tab opens in. */
+      connectionId?: string | null
     }
   /** A worktree this launch creates. `create` is the `worktree.create` request minus its agent
    *  fields — the launch owns those, so a caller cannot set a startup agent behind the router. */
@@ -93,6 +96,23 @@ export type AgentLaunchIntent = {
   /** The caller-minted id of the chat session a structured launch creates. Not a route input;
    *  refused when that session already exists. */
   sessionId?: string
+}
+
+/**
+ * Where in the workspace's tab layout a new tab goes: a group, the tab it follows (a host tab id; a
+ * terminal's tab is the tab half of its pane key), or both. Never fails a launch: a group that is
+ * gone falls back to the anchor's group, then to the active one.
+ */
+export type AgentLaunchPlacement = { groupId?: string; afterTabId?: string }
+
+/** Whether the caller's own view moves to the new tab. Never names another viewer's screen. */
+export type AgentLaunchPresentation = 'focused' | 'background'
+
+/** Where the tab landed, as the window that owns the layout reported it. */
+export type AgentLaunchPlacementReceipt = {
+  groupId: string
+  /** Present when the requested group was not used: the anchor tab's group, or the active one. */
+  fallback?: 'anchor-group' | 'active-group'
 }
 
 /** The surface the host actually created. */
@@ -182,6 +202,9 @@ export type AgentLaunchResult = {
   /** Why the outcome is what it is — always populated, so a downgrade is never silent. */
   receipt: AgentLaunchModeReceipt
   prompt?: AgentLaunchPromptReceipt
+  /** Absent when no window placed the tab: an older host, no requested placement, or a host with no
+   *  window owning the layout. */
+  placement?: AgentLaunchPlacementReceipt
 }
 
 export type AgentLaunchMode = 'structured' | 'terminal'
@@ -232,7 +255,21 @@ export function isAgentLaunchResult(value: unknown): value is AgentLaunchResult 
     typeof result.worktreeId === 'string' &&
     isAgentLaunchModeReceipt(result.receipt) &&
     (result.warning === undefined || typeof result.warning === 'string') &&
-    (result.prompt === undefined || isAgentLaunchPromptReceipt(result.prompt))
+    (result.prompt === undefined || isAgentLaunchPromptReceipt(result.prompt)) &&
+    (result.placement === undefined || isAgentLaunchPlacementReceipt(result.placement))
+  )
+}
+
+function isAgentLaunchPlacementReceipt(value: unknown): value is AgentLaunchPlacementReceipt {
+  if (typeof value !== 'object' || value === null) {
+    return false
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: narrowing an unknown for field-by-field validation; every field read below is checked before use.
+  const placement = value as Partial<AgentLaunchPlacementReceipt>
+  // A fallback word this build does not know still reads: placement is a report, not a gate.
+  return (
+    typeof placement.groupId === 'string' &&
+    (placement.fallback === undefined || typeof placement.fallback === 'string')
   )
 }
 

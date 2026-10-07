@@ -312,7 +312,11 @@ export type WorktreeSlice = {
   setActiveWorktree: (
     worktreeId: string | null,
     executionHostId?: ExecutionHostId,
-    options?: { stateTransition?: ActiveWorktreeStateTransition }
+    options?: {
+      stateTransition?: ActiveWorktreeStateTransition
+      /** Tabs the caller just created there: their first spawn is new work, not a wake. */
+      createdTabIds?: readonly string[]
+    }
   ) => boolean
   /**
    * Health-driven remount of one terminal tab: bumps the tab's generation so

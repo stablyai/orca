@@ -6,7 +6,9 @@ import { handedOffQueuedMessageIds } from './structured-agent-session-draft-hand
 /** Whether only the user's Retry sends this entry again: a rejected one, one whose send failed or
  *  was refused, one a Stop outlived, or one in doubt the unconfirmed probe leaves alone.
  *  `NativeChatDeliveryRetry` offers it. */
-function awaitsStructuredAgentSessionRetry(entry: StructuredAgentSessionOutboxEntry): boolean {
+export function awaitsStructuredAgentSessionRetry(
+  entry: StructuredAgentSessionOutboxEntry
+): boolean {
   return (
     entry.state === 'rejected' ||
     structuredAgentSessionEntryHeldForRetry(entry) ||

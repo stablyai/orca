@@ -178,7 +178,7 @@ for (const hostId of ['local', 'ssh:builder', 'runtime:builder'] as const) {
   })
 }
 
-it('opens a filtered parent chain and owning lane, then restores the saved set on close', () => {
+it.each([true, false])('reveals ancestors with pinned parent visible=%s', (visible) => {
   const { local, remote, repoMap } = setup('ssh:builder')
   const root = { ...remote, instanceId: 'root-instance', isPinned: true }
   const parent = { ...remote, id: 'parent', instanceId: 'parent-instance', isPinned: false }
@@ -213,7 +213,7 @@ it('opens a filtered parent chain and owning lane, then restores the saved set o
         groupBy: 'none',
         pinnedDisplayPolicy: 'single-location',
         worktrees,
-        visibleWorktrees: [local, child],
+        visibleWorktrees: visible ? worktrees : [local, child],
         repoMap,
         worktreeMap: new Map(worktrees.map((worktree) => [worktree.id, worktree])),
         worktreeLineageById: {
@@ -230,12 +230,14 @@ it('opens a filtered parent chain and owning lane, then restores the saved set o
       }),
     { initialProps }
   )
-  expect([...result.current]).toEqual([
-    'all',
-    'pinned:host:ssh:builder',
-    'host:local',
-    'lineage:local|parent'
-  ])
+  expect([...result.current].sort()).toEqual(
+    [
+      visible ? 'all:host:ssh:builder' : 'pinned:host:ssh:builder',
+      'all',
+      'host:local',
+      'lineage:local|parent'
+    ].sort()
+  )
   expect(collapsedGroups.size).toBe(8)
   rerender({ targetId: null })
   expect(result.current).toBe(collapsedGroups)

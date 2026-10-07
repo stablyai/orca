@@ -13,10 +13,8 @@ import { describe, expect, it } from 'vitest'
 import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session-wire'
 import { withNativeChatCutTurnNotices } from '../../../src/shared/native-chat-cut-turn-notice'
 import { nativeChatRowsInDrawOrder } from '../../../src/shared/native-chat-turn-grouping'
-import {
-  nativeChatMessagesWaitingBehindLiveTurn,
-  nativeChatTurnMembership
-} from '../../../src/shared/native-chat-turn-membership'
+import { nativeChatTurnMembership } from '../../../src/shared/native-chat-turn-membership'
+import { nativeChatMessagesWaitingBehindLiveTurn } from '../../../src/shared/native-chat-messages-waiting-behind-live-turn'
 import { activeStructuredAgentSessionTurnId } from '../../../src/shared/structured-agent-session-live-turn'
 import { isStructuredAgentSessionMainAgentWorking } from '../../../src/shared/structured-agent-session-main-agent-working'
 import { projectStructuredAgentSessionMessages } from '../../../src/shared/structured-agent-session-message-projection'

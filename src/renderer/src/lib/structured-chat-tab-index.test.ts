@@ -30,15 +30,30 @@ describe('structured chat tab index', () => {
         return Reflect.get(target, property)
       }
     })
-    expect(structuredChatTabById(tabs, 'chat')).toBe(structured)
+    expect(structuredChatTabById({ workspace: tabs }, 'workspace', 'chat')).toBe(structured)
     const initialReads = reads
     expect(initialReads).toBeGreaterThan(0)
-    expect(structuredChatTabBySessionId(tabs, 'session-chat')).toBe(structured)
-    expect(structuredChatTabById(tabs, 'terminal')).toBeUndefined()
-    expect(structuredChatTabById(tabs, 'missing')).toBeUndefined()
+    expect(structuredChatTabBySessionId({ workspace: tabs }, 'workspace', 'session-chat')).toBe(
+      structured
+    )
+    expect(structuredChatTabById({ workspace: tabs }, 'workspace', 'terminal')).toBeUndefined()
+    expect(structuredChatTabById({ workspace: tabs }, 'workspace', 'missing')).toBeUndefined()
     expect(reads).toBe(initialReads)
     const renamed = { ...structured, customLabel: 'Manual name' }
-    expect(structuredChatTabBySessionId([renamed], 'session-chat')).toBe(renamed)
-    expect(structuredChatTabById(undefined, 'chat')).toBeUndefined()
+    expect(
+      structuredChatTabBySessionId({ workspace: [renamed] }, 'workspace', 'session-chat')
+    ).toBe(renamed)
+    expect(structuredChatTabById(undefined, 'workspace', 'chat')).toBeUndefined()
   })
+
+  it.each(['constructor', '__proto__', 'toString', 'hasOwnProperty'])(
+    'finds nothing for a workspace id named after an object member (%s)',
+    (workspaceId) => {
+      const tabsByWorkspace: Record<string, readonly Tab[]> = { workspace: [tab('chat')] }
+      expect(structuredChatTabBySessionId(tabsByWorkspace, workspaceId, 'session-chat')).toBe(
+        undefined
+      )
+      expect(structuredChatTabById(tabsByWorkspace, workspaceId, 'chat')).toBeUndefined()
+    }
+  )
 })

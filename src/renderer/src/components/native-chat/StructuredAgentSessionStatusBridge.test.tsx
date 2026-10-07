@@ -702,10 +702,25 @@ describe('StructuredAgentSessionStatusBridge', () => {
     expect(feed().target).toEqual({ kind: 'environment', environmentId: 'server-1' })
   })
 
-  it('does not project an unknown provider as Codex', async () => {
+  // Hosts publish chat tabs only of agents they registered; each projects as itself.
+  it("projects a host-registered agent's status as that agent, never as Codex", async () => {
     mocks.store?.setState({
       unifiedTabsByWorktree: {
-        'wt-1': [{ ...structuredTab, agentSessionAgent: 'gemini' }]
+        'wt-1': [{ ...structuredTab, agentSessionAgent: 'grok' }]
+      }
+    })
+    render(<StructuredAgentSessionStatusBridge />)
+    await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
+
+    act(() => feed().emit({ type: 'snapshot', sessions: [summary()] }))
+
+    expect(statuses()).toEqual([expect.objectContaining({ agentType: 'grok' })])
+  })
+
+  it('does not project a tab naming no agent', async () => {
+    mocks.store?.setState({
+      unifiedTabsByWorktree: {
+        'wt-1': [{ ...structuredTab, agentSessionAgent: undefined }]
       }
     })
     render(<StructuredAgentSessionStatusBridge />)

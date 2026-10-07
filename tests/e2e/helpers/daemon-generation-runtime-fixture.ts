@@ -78,7 +78,7 @@ function assertDisposableRoot(rootDir: string): void {
   }
 }
 
-function resolveElectronExecutable(repoRoot: string): string {
+export function resolveElectronExecutable(repoRoot: string): string {
   const relativePath = readFileSync(
     path.join(repoRoot, 'node_modules', 'electron', 'path.txt'),
     'utf8'

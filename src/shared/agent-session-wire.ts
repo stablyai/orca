@@ -7,7 +7,8 @@ import type { AgentSessionWireRefusal } from './agent-session-wire-refusals'
 import type { AgentChildWorkView } from './agent-status-child-work-view'
 import type {
   AgentSessionQueuedMessage,
-  AgentSessionQueuePause
+  AgentSessionQueuePause,
+  AgentSessionQueuePublicationFields
 } from './agent-session-queued-message-wire'
 
 export * from './agent-session-wire-refusals'
@@ -135,6 +136,9 @@ export type AgentSessionHistoryPage = {
   /** The queue's pause, published with the list: present whenever `queuedMessages` is, null
    *  when the queue sends on its own. */
   queuePause?: AgentSessionQueuePause | null
+  /** Rides with `queuedMessages`: the card the queue sends next as soon as nothing runs, null
+   *  while anything holds the queue. Absent from an older host, read as null. */
+  nextQueuedMessageId?: string | null
   /** Host wall clock (ms epoch) when the page was read, so a client attaching mid-turn
    *  can anchor a live counter on the real start. Absent from older hosts. */
   hostNow?: number
@@ -167,8 +171,9 @@ export type AgentSessionJournalBatch = {
   submissions: AgentJournalSubmission[]
 }
 
-/** Host wall clock (ms epoch) stamped once per published frame; see `AgentSessionHistoryPage`. */
-type AgentSessionHostClockField = { hostNow?: number }
+/** Every published frame: the host wall clock (ms epoch, see `AgentSessionHistoryPage`), and what
+ *  rides beside its `queuedMessages`. */
+type AgentSessionFrameFields = { hostNow?: number } & AgentSessionQueuePublicationFields
 
 export type AgentSessionSubscribeEvent =
   | ({
@@ -179,13 +184,11 @@ export type AgentSessionSubscribeEvent =
       backgroundTasks?: AgentSessionBackgroundTaskState | null
       /** Whole-list draft publication; omitted when unchanged since the last frame sent. */
       queuedMessages?: AgentSessionQueuedMessage[] | null
-      /** Rides with `queuedMessages`; null when the queue sends on its own. */
-      queuePause?: AgentSessionQueuePause | null
       /** Omitted when unchanged; null clears a previous provider catalog. */
       commands?: AgentSessionSlashCommand[] | null
       /** Latest provider-authored turn activity; optional for mixed-version hosts. */
       activity?: AgentSessionTurnActivity | null
-    } & AgentSessionHostClockField)
+    } & AgentSessionFrameFields)
   | ({
       type: 'batch'
       sessionId: string
@@ -196,8 +199,6 @@ export type AgentSessionSubscribeEvent =
       /** Whole-list draft publication. On a multi-page catch-up it rides only the
        *  final page, so a consumed card never vanishes before its bubble arrives. */
       queuedMessages?: AgentSessionQueuedMessage[] | null
-      /** Rides with `queuedMessages`; null when the queue sends on its own. */
-      queuePause?: AgentSessionQueuePause | null
       /** Omitted when unchanged; null clears a previous provider catalog. */
       commands?: AgentSessionSlashCommand[] | null
       /** Additive ephemeral state; it never creates or advances journal rows. */
@@ -205,7 +206,7 @@ export type AgentSessionSubscribeEvent =
       /** Rides every batch that carries rows, removals or submissions, so absent there means an
        *  older host; absent on one that carries none, which changes no turn. */
       latestTurn?: AgentSessionLatestTurn | null
-    } & AgentSessionHostClockField)
+    } & AgentSessionFrameFields)
   | ({
       type: 'reset'
       sessionId: string
@@ -215,12 +216,10 @@ export type AgentSessionSubscribeEvent =
       backgroundTasks?: AgentSessionBackgroundTaskState | null
       /** Whole-list draft publication; a reset re-hydrates it with the page. */
       queuedMessages?: AgentSessionQueuedMessage[] | null
-      /** Rides with `queuedMessages`; null when the queue sends on its own. */
-      queuePause?: AgentSessionQueuePause | null
       /** Omitted when unchanged; null clears a previous provider catalog. */
       commands?: AgentSessionSlashCommand[] | null
       activity?: AgentSessionTurnActivity | null
-    } & AgentSessionHostClockField)
+    } & AgentSessionFrameFields)
   | { type: 'end' }
 
 // ─── Status feed ────────────────────────────────────────────────────────────
@@ -271,6 +270,9 @@ export type AgentSessionStatusSummary = {
    *  the background-task channel. */
   children?: AgentChildWorkView[]
   providerSession?: AgentProviderSessionMetadata
+  /** The record's saved conversation name; absent while unnamed and from older hosts. Rides this
+   *  feed because a retained summary outlives the chat's tab, so a closed chat keeps its name. */
+  conversationName?: string
   /** Host-path directory the session is held to regardless of its workspace's current directory
    *  (a floating chat's pinned folder). Absent means resolve the workspace id; older hosts omit it. */
   launchDirectory?: string

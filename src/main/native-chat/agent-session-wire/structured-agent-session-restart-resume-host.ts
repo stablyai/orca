@@ -104,6 +104,7 @@ export function createStructuredAgentSessionRestartResume(
     sessions,
     getRecord: deps.store.getRecord,
     childWork: surfaces.readChildWork,
+    startAnswered: (sessionId) => deps.adapter.startAnswered?.(sessionId),
     ...(deps.recoveryCapsule ? { capsule: deps.recoveryCapsule } : {}),
     teardownId: randomUUID(),
     now: surfaces.now,

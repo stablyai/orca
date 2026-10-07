@@ -1,15 +1,9 @@
-import type { Tab } from './tab-types'
-
-export function structuredChatRowName(
-  tab: Pick<Tab, 'customLabel' | 'label' | 'agentSessionAgent'> | undefined
-): string | null {
-  if (!tab) {
-    return null
-  }
-  const custom = tab.customLabel?.trim()
-  if (custom) {
-    return custom
-  }
-  const label = tab.label.trim()
-  return label || null
+/** A native chat's shown name: the user's tab alias, then the host's saved name, then the host's
+ *  own label for the row. Every surface that names a native chat uses this one order. */
+export function structuredChatDisplayName(
+  customLabel: string | null | undefined,
+  conversationName: string | null | undefined,
+  fallback: string
+): string {
+  return customLabel?.trim() || conversationName || fallback.trim()
 }

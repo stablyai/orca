@@ -224,7 +224,7 @@ export function sendQueuedStructuredAgentMessage(
         await ctx.journal.appendSubmission(
           {
             clientMessageId: submissionId,
-            // The person asked for this turn, so it ends a Stop's pause once it starts.
+            // The person asked for this turn: a restart or a close keeps it as a card.
             origin: 'client',
             payloadFingerprint: row.fingerprint,
             body: row.body,

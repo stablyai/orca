@@ -30,15 +30,9 @@ export type JournalStoreHost = {
    *  same way they learn of a row. */
   notifyCommitted: () => void
   identity: AgentSessionJournalIdentity
-  /** Where the chat's per-chat history lived, for the importer and the format-remnant notice. */
-  legacyDirectory: string
   now: () => number
   mintEpoch: () => string
   serialize: <T>(run: JournalWriteBody<T>) => Promise<T>
-  /** Leave a chat still in its per-chat file uncopied until its first use. */
-  deferPerSessionImport: boolean
-  /** Work the chat's next write waits for. */
-  owe: (work: () => Promise<void>) => void
   database: () => JournalHostDatabase
   state: () => JournalReducerState
   readOnly: () => boolean
@@ -75,7 +69,7 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
     queuePauseRestatement: () =>
       journalQueuePauseRestatement(
         host.state().queuePauseMarks,
-        host.state().latestPersonTurnSequence
+        host.state().latestAcceptedTurnSequence
       ),
     cursor: host.cursor,
     adopt: host.adopt

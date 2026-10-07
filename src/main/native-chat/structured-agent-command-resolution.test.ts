@@ -5,6 +5,11 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { resolveStructuredAgentCommand } from './structured-agent-command-resolution'
 import { resolveCliCommand } from '../../shared/node-cli-command-resolution'
 
+const NOT_RUNNABLE = expect.objectContaining({
+  name: 'AgentSessionPreSpawnError',
+  reason: 'agentCommandNotRunnable'
+})
+
 const scratch: string[] = []
 afterEach(() => {
   for (const dir of scratch.splice(0)) {
@@ -62,7 +67,12 @@ describe('structured agent executable resolution', () => {
     expect(resolveStructuredAgentCommand('claude', settings)).toBe(second.command)
   })
 
-  it('uses the stock executable for missing files, directories, relative paths and shell lines', () => {
+  it.each(['', '   ', undefined])('uses the stock executable when the Command is %j', (command) => {
+    const settings = command === undefined ? {} : { agentCmdOverrides: { claude: command } }
+    expect(resolveStructuredAgentCommand('claude', settings)).toBe(resolveCliCommand('claude'))
+  })
+
+  it('refuses missing files, directories, relative paths and command lines instead of the stock executable', () => {
     const { directory } = executable()
     const folder = join(directory, 'folder')
     mkdirSync(folder)
@@ -71,18 +81,89 @@ describe('structured agent executable resolution', () => {
       folder,
       './claude',
       'npx claude',
-      'wrapper --flag'
+      'wrapper --flag',
+      'FOO=1 claude',
+      '$HOME/bin/claude'
     ]) {
       const settings = { agentCmdOverrides: { claude: command } }
-      expect(resolveStructuredAgentCommand('claude', settings)).toBe(resolveCliCommand('claude'))
+      expect(() => resolveStructuredAgentCommand('claude', settings)).toThrow(NOT_RUNNABLE)
     }
   })
 
   it.skipIf(process.platform === 'win32')('requires executable permission on Unix', () => {
     const { command } = executable()
     chmodSync(command, 0o644)
-    expect(
+    expect(() =>
       resolveStructuredAgentCommand('claude', { agentCmdOverrides: { claude: `"${command}"` } })
-    ).toBe(resolveCliCommand('claude'))
+    ).toThrow(NOT_RUNNABLE)
+  })
+
+  it('keeps the saved value out of the refusal, since a command line can carry a secret', () => {
+    expect(() =>
+      resolveStructuredAgentCommand('codex', {
+        agentCmdOverrides: { codex: 'TOKEN=sk-secret codex' }
+      })
+    ).toThrow(expect.not.objectContaining({ message: expect.stringContaining('sk-secret') }))
+  })
+
+  describe('on Windows', () => {
+    function fileIn(directory: string, name: string): string {
+      const file = join(directory, name)
+      writeFileSync(file, '')
+      return file
+    }
+
+    it('refuses an extensionless path, which Windows cannot spawn', () => {
+      const { directory } = executable()
+      const command = fileIn(directory, 'claude')
+      fileIn(directory, 'claude.cmd')
+      expect(() =>
+        resolveStructuredAgentCommand(
+          'claude',
+          { agentCmdOverrides: { claude: command } },
+          { platform: 'win32' }
+        )
+      ).toThrow(NOT_RUNNABLE)
+    })
+
+    it('refuses a name whose only match on PATH is extensionless', () => {
+      const { directory } = executable()
+      fileIn(directory, 'my-claude')
+      expect(() =>
+        resolveStructuredAgentCommand(
+          'claude',
+          { agentCmdOverrides: { claude: 'my-claude' } },
+          { platform: 'win32', pathEnv: directory, homePath: directory }
+        )
+      ).toThrow(NOT_RUNNABLE)
+    })
+
+    it.each(['claude.exe', 'claude.com', 'claude.cmd', 'claude.bat'])(
+      'runs an explicit %s path',
+      (name) => {
+        const { directory } = executable()
+        const command = fileIn(directory, name)
+        expect(
+          resolveStructuredAgentCommand(
+            'claude',
+            { agentCmdOverrides: { claude: `"${command}"` } },
+            { platform: 'win32' }
+          )
+        ).toBe(command)
+      }
+    )
+
+    it('finds the .cmd shim for a bare name, as the stock lookup does', () => {
+      const { directory } = executable()
+      fileIn(directory, 'my-claude')
+      const shim = fileIn(directory, 'my-claude.cmd')
+      expect(
+        resolveStructuredAgentCommand(
+          'claude',
+          { agentCmdOverrides: { claude: 'my-claude' } },
+          { platform: 'win32', pathEnv: directory, homePath: directory }
+        )
+      ).toBe(shim)
+    })
   })
 })

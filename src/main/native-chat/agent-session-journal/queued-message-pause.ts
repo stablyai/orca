@@ -1,17 +1,21 @@
 // The queue's pauses: a pure function of the journal fold and the cards, never a stored flag, so
 // nothing has to retire them. Each holds its own cards (`queuePauseHolding`). In force when:
 //   - 'stopped': the latest Stop event is a person's (reason `user-stop`), with no later Resume row
-//     and no turn a person asked for sent after it and accepted. A later Stop of any reason
-//     supersedes it; only a person's pauses.
-//   - 'cleared': a card /clear carried into this conversation waits, and no person's turn or
-//     Resume has happened here since.
-//   - 'restarted': a waiting card with no hold of its own was written by another host process, and
-//     no person's turn has started since this conversation opened.
+//     and no turn sent after it and accepted. A later Stop of any reason supersedes it; only a
+//     person's pauses.
+//   - 'cleared': a card /clear carried into this conversation waits, and no turn or Resume has
+//     happened here since.
+//   - 'restarted': a waiting card with no hold of its own was written by another host process,
+//     and no turn has started since this conversation opened. Never published: after a restart
+//     nothing sends by itself, and the next turn (the carry-on or the person's own message) runs
+//     first.
+// Any accepted turn lifts them, whoever sent it: a person, Orca's own messages, or the queue.
 // A card held on its own (`hold_reason`) is outside every pause: only an action on it releases it.
-// A person's turn is an accepted submission of origin `client`. Orchestration mail, a restart
-// continuation, a launch prompt and the queue's own drain are `host` and never lift it.
 
-import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
+import type {
+  AgentJournalCursor,
+  AgentJournalSubmission
+} from '../../../shared/agent-session-journal-types'
 import type { JournalStopEvent, JournalTombstoneRow } from './journal-row-schema'
 
 export type QueuePauseReason = 'stopped' | 'cleared' | 'restarted'
@@ -78,28 +82,28 @@ export function foldJournalQueuePauseMark(
   }
 }
 
-/** A person's Stop still pauses: it is the latest Stop, and nothing a person did since, and no
+/** A person's Stop still pauses: it is the latest Stop, and no turn accepted since, and no
  *  Resume, ended it. A later Stop for any other reason ends it without pausing itself. */
 export function journalQueueStopHolds(
   marks: JournalQueuePauseMarks,
-  latestPersonTurnSequence: number
+  latestAcceptedTurnSequence: number
 ): boolean {
   return (
     marks.latestStop?.event.reason === 'user-stop' &&
-    marks.latestStop.sequence > Math.max(latestPersonTurnSequence, marks.resumedSequence)
+    marks.latestStop.sequence > Math.max(latestAcceptedTurnSequence, marks.resumedSequence)
   )
 }
 
 /** The latest person's Stop while it still pauses, with where it was written; else null. */
 export function journalUserStopInForce(
   marks: JournalQueuePauseMarks,
-  latestPersonTurnSequence: number
+  latestAcceptedTurnSequence: number
 ): JournalQueuePauseMarks['latestStop'] {
-  return journalQueueStopHolds(marks, latestPersonTurnSequence) ? marks.latestStop : null
+  return journalQueueStopHolds(marks, latestAcceptedTurnSequence) ? marks.latestStop : null
 }
 
 /** What a rewind's new epoch restates so its pauses read as they did: a lift of /clear's pause (a
- *  person's turn or a Resume happened), then the Stop still in force, in that order so the lift
+ *  turn or a Resume happened), then the Stop still in force, in that order so the lift
  *  never ends the Stop. */
 export type JournalQueuePauseRestatement = {
   lifted: boolean
@@ -108,11 +112,11 @@ export type JournalQueuePauseRestatement = {
 
 export function journalQueuePauseRestatement(
   marks: JournalQueuePauseMarks,
-  latestPersonTurnSequence: number
+  latestAcceptedTurnSequence: number
 ): JournalQueuePauseRestatement {
   return {
-    lifted: latestPersonTurnSequence > 0 || marks.resumedSequence > 0,
-    liveStop: journalUserStopInForce(marks, latestPersonTurnSequence)?.event ?? null
+    lifted: latestAcceptedTurnSequence > 0 || marks.resumedSequence > 0,
+    liveStop: journalUserStopInForce(marks, latestAcceptedTurnSequence)?.event ?? null
   }
 }
 
@@ -121,21 +125,21 @@ export function deriveQueuePauses(input: {
   /** The journal's epoch: sequences compare only within one. */
   epoch: string
   marks: JournalQueuePauseMarks
-  latestPersonTurnSequence: number
+  latestAcceptedTurnSequence: number
   cards: readonly QueueCard[]
   hostInstance: string
-  /** A person's turn started since this conversation opened. */
+  /** A turn started since this conversation opened. */
   restartEnded: boolean
 }): DerivedQueuePause[] {
-  const { epoch, marks, latestPersonTurnSequence } = input
+  const { epoch, marks, latestAcceptedTurnSequence } = input
   const pauses: DerivedQueuePause[] = []
-  const stop = journalUserStopInForce(marks, latestPersonTurnSequence)
+  const stop = journalUserStopInForce(marks, latestAcceptedTurnSequence)
   if (stop) {
     pauses.push({ reason: 'stopped', since: { epoch, sequence: stop.sequence } })
   }
   const waiting = input.cards.filter((card) => card.state === 'waiting')
   const carried = waiting.filter((card) => card.carriedFrom !== null)
-  if (carried.length > 0 && latestPersonTurnSequence === 0 && marks.resumedSequence === 0) {
+  if (carried.length > 0 && latestAcceptedTurnSequence === 0 && marks.resumedSequence === 0) {
     pauses.push({ reason: 'cleared', since: null })
   }
   // A card held on its own waits for its own Send whoever wrote it, so it pauses nothing else.
@@ -165,11 +169,6 @@ function queuedBeforePause(pause: DerivedQueuePause, card: QueueCard): boolean {
   )
 }
 
-// Product decision: a card queued AFTER a Stop is a new instruction and is not held; only cards
-// queued before it, and a steer it withdrew, wait. It still never jumps ahead of one a pause holds:
-// the drain stops at the first one. true instead holds every waiting card, whenever it was queued.
-const PAUSE_HOLDS_CARDS_QUEUED_AFTER_IT = false
-
 /** THE rule for which cards are held: by ANY pause in force, named by the first that holds it, so
  *  a Stop's that holds nothing never hides a restart's. The drain, its consume, and publication
  *  all read it. */
@@ -180,7 +179,8 @@ export function queuePauseHolding(
   if (card.state !== 'waiting' || card.holdReason !== null) {
     return undefined
   }
-  return pauses.find((pause) => PAUSE_HOLDS_CARDS_QUEUED_AFTER_IT || queuedBeforePause(pause, card))
+  // A card queued AFTER a Stop is a new instruction and is not held; it still waits behind a held one.
+  return pauses.find((pause) => queuedBeforePause(pause, card))
 }
 
 /** The card the queue sends next: the oldest waiting one with no hold of its own, unless a
@@ -219,4 +219,18 @@ export function resumableQueuePause(
     }
   }
   return null
+}
+
+/** A turn sent after `pause` began that the agent has not answered yet: its acceptance lifts the
+ *  pause, whoever sent it, so the pause is not shown meanwhile; a refusal shows it again. A send
+ *  made before a Stop lifts nothing, so it never counts. */
+export function queuePauseLiftOnItsWay(
+  pause: DerivedQueuePause,
+  submissions: readonly Pick<AgentJournalSubmission, 'dispatchState' | 'acceptedSequence'>[]
+): boolean {
+  const anchor = pause.since?.sequence ?? 0
+  return submissions.some(
+    (submission) =>
+      submission.dispatchState === 'pending' && (submission.acceptedSequence ?? 0) > anchor
+  )
 }

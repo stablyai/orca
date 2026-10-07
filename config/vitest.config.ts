@@ -7,6 +7,7 @@ import { NODE_RUNTIME_INCLUDE } from './scripts/vitest-node-runtime-files.mjs'
 import { nodeRuntimePool } from './scripts/vitest-node-runtime-pool'
 
 const balancedShards = process.env.ORCA_BALANCE_UNIT_SHARDS === '1'
+const measurementFile = 'src/main/foreign-sqlite-readers/foreign-sqlite-reader-event-loop.test.ts'
 const transforms = {
   define: { ORCA_FEATURE_WALL_ENABLED: 'true' },
   resolve: {
@@ -22,6 +23,7 @@ const transforms = {
 const testOptions = {
   environment: 'node',
   clearMocks: false,
+  fsModuleCache: true,
   env: { ORCA_VITEST_RUNTIME: 'node' },
   server: { deps: { inline: ['zod'] } },
   // Node's storage globals and V8 retention checks require the existing child flags.
@@ -39,28 +41,49 @@ const testOptions = {
   hookTimeout: 60_000,
   testTimeout: 30_000
 }
+const nodeProject = {
+  extends: false,
+  ...transforms,
+  test: {
+    ...testOptions,
+    name: process.versions.bun ? 'node-runtime' : 'node',
+    env: { ORCA_VITEST_RUNTIME: process.versions.bun ? 'node-runtime' : 'node' },
+    include: process.versions.bun ? NODE_RUNTIME_INCLUDE : UNIT_INCLUDE,
+    exclude: [...testOptions.exclude, measurementFile],
+    sequence: { groupOrder: 1 },
+    ...(process.versions.bun
+      ? { pool: 'node-runtime', poolRunner: nodeRuntimePool }
+      : { pool: 'forks' })
+  }
+}
 const projects = [
+  ...(process.versions.bun
+    ? [
+        {
+          extends: false,
+          ...transforms,
+          test: {
+            ...testOptions,
+            name: 'bun',
+            env: { ORCA_VITEST_RUNTIME: 'bun' },
+            pool: 'forks',
+            exclude: [...testOptions.exclude, ...NODE_RUNTIME_INCLUDE, measurementFile],
+            sequence: { groupOrder: 1 }
+          }
+        }
+      ]
+    : []),
+  nodeProject,
+  // Keep the event-loop measurement free of other suites without weakening its limits.
   {
-    extends: false,
-    ...transforms,
+    ...nodeProject,
     test: {
-      ...testOptions,
-      name: 'bun',
-      env: { ORCA_VITEST_RUNTIME: 'bun' },
-      pool: 'forks',
-      exclude: [...testOptions.exclude, ...NODE_RUNTIME_INCLUDE]
-    }
-  },
-  {
-    extends: false,
-    ...transforms,
-    test: {
-      ...testOptions,
-      name: 'node-runtime',
-      env: { ORCA_VITEST_RUNTIME: 'node-runtime' },
-      include: NODE_RUNTIME_INCLUDE,
-      pool: 'node-runtime',
-      poolRunner: nodeRuntimePool
+      ...nodeProject.test,
+      name: 'node-measurement',
+      include: [measurementFile],
+      exclude: testOptions.exclude,
+      maxWorkers: 1,
+      sequence: { groupOrder: 2 }
     }
   }
 ]
@@ -75,7 +98,7 @@ export default defineConfig({
           reporters: ['default', resolve('config/scripts/ci-unit-timing-reporter.mjs')]
         }
       : {}),
-    ...(process.versions.bun ? { projects } : {}),
+    projects,
     ...(process.platform === 'win32' ? { maxWorkers: 4 } : {})
   }
 })

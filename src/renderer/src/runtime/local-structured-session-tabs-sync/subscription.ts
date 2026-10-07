@@ -1,4 +1,3 @@
-import { recoverAiVaultStructuredTitles } from '@/components/right-sidebar/ai-vault-structured-title-recovery'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
@@ -106,10 +105,6 @@ export async function startLocalStructuredSessionTabsSync(args: {
           })
           // Each subscription opens with one census: the host is reachable again.
           recheckUnconfirmedStructuredAgentLaunches(LOCAL_EXECUTION_HOST_ID)
-          void recoverAiVaultStructuredTitles(
-            LOCAL_EXECUTION_HOST_ID,
-            () => isCurrent() && generation === subscriptionGeneration
-          )
         } else if (event.type === 'snapshot' || event.type === 'updated') {
           applyStructuredSessionTabSnapshots([event], undefined, REPAIR_DROPPED_EPOCHS)
         } else if (event.type === 'end' && generation === subscriptionGeneration) {

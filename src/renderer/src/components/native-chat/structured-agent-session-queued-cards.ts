@@ -3,7 +3,10 @@
 
 import type { UnreadAgentSessionFailureFact } from '../../../../shared/agent-session-failure'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
-import type { AgentSessionQueuedMessage } from '../../../../shared/agent-session-wire'
+import type {
+  AgentSessionQueuedMessage,
+  AgentSessionQueuePause
+} from '../../../../shared/agent-session-wire'
 import {
   readAgentMessageSource,
   type AgentMessageSource
@@ -97,6 +100,21 @@ export function projectQueuedMessageCards(
       ...(from ? { from } : {})
     }
   })
+}
+
+/** The pause the header row names, while it holds a card. A pause over cards Resume would not
+ *  send (returned, held on their own, or behind a returned one) offers nothing to press. */
+export function queuedMessagesQueuePause(
+  cards: readonly QueuedMessageCard[],
+  queuePause: AgentSessionQueuePause | null
+): AgentSessionQueuePause | null {
+  return cards.some((card) => card.hold === 'queue-paused') ? queuePause : null
+}
+
+/** Steer names the mid-turn jump, also while the whole queue is paused; a card held on its own or
+ *  returned is not waiting on the turn, so its action is plainly Send. */
+export function queuedMessageCardSteers(card: QueuedMessageCard): boolean {
+  return card.hold !== 'paused' && card.hold !== 'returned'
 }
 
 /** The card Cmd/Ctrl+Enter steers: the newest one; every shown card takes Send-now. */

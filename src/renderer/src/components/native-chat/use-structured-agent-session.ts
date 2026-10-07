@@ -14,7 +14,7 @@ import {
   supportsStructuredAgentSessionQuestionAnswers
 } from '@/runtime/structured-agent-session-client'
 import { useStructuredAgentSessionHostQueuesMessagesState } from '@/runtime/structured-agent-session-host-capability'
-import { hasUnsentStructuredAgentSessionOutboxEntry } from '../../../../shared/structured-agent-session-outbox-stop-withdrawal'
+import { structuredAgentSessionStopControl } from './structured-agent-session-stop-control'
 import {
   legacyAgentSessionSelectedOptionId,
   type AgentSessionPromptResponse
@@ -118,7 +118,6 @@ export function useStructuredAgentSession(args: {
   })
   // Only a capable host may see `delivery`; a card any host publishes shows, with its actions.
   const queueCapability = useStructuredAgentSessionHostQueuesMessagesState(target)
-  const queueCapable = queueCapability === 'supported'
   const queuedMessageIds = useMemo(
     () => (transportState.queuedMessages ?? []).map((message) => message.messageId),
     [transportState.queuedMessages]
@@ -148,6 +147,7 @@ export function useStructuredAgentSession(args: {
     composerScopeKey,
     queueDelivery,
     queuedMessageIds,
+    isWorking: transportState.isWorking,
     stopping: stopControl.stopping
   })
 
@@ -187,13 +187,8 @@ export function useStructuredAgentSession(args: {
     blocked: conversationBusy || commandPending.current || queuedMessageIds.length > 0,
     write
   })
-  const canStop =
-    transportState.turnId !== null ||
-    (stopControl.stopsConversation &&
-      (transportState.isWorking ||
-        hasUnsentStructuredAgentSessionOutboxEntry(outbox, transportState.submissions)))
   // A queued send is a card, never a transcript bubble.
-  const isWorking = transportState.isWorking
+  const isWorking = transportState.isWorking || transportState.queueSendsNext
   const transcriptOutbox = useMemo(
     () => outboxOutsideQueuedCards(outbox, queuedMessageIds, isWorking, queueDelivery),
     [isWorking, outbox, queueDelivery, queuedMessageIds]
@@ -212,11 +207,11 @@ export function useStructuredAgentSession(args: {
     transportState.submissions
   )
   const queuedController = useStructuredAgentSessionQueuedMessages({
-    enabled: queueCapable && transportState.fence !== null,
-    queuedMessages: transportState.queuedMessages,
-    queuePause: transportState.queuePause,
-    submissions: transportState.submissions,
+    // Its published list, pause and submissions; the rest is named below.
+    ...transportState,
+    enabled: queueCapability === 'supported' && transportState.fence !== null,
     hasPendingPrompt: prompts.length > 0,
+    isWorking,
     composerScopeKey,
     mutate
   })
@@ -265,15 +260,20 @@ export function useStructuredAgentSession(args: {
       rewind.admitsSend() &&
       outboxController.send(...input),
     retry: rewind.unlessBlocked(outboxController.retry),
-    isWorking: transportState.isWorking,
+    isWorking,
+    queueSendsNext: transportState.queueSendsNext,
     workingStartedAt: transportState.turnTiming.workingStartedAt,
     settledTurns: transportState.turnTiming.settledTurns,
     turnActivity: transportState.turnActivity,
     backgroundTasks: transportState.backgroundTasks,
     turnId: transportState.turnId,
-    canStop,
+    ...structuredAgentSessionStopControl({
+      published: transportEnabled,
+      host: stopControl,
+      transportState,
+      outbox: outboxController
+    }),
     stopPressed: stopControl.pressed,
-    stop: () => stopControl.stop(transportState.turnId, outboxController.withdrawUnsent),
     queuedMessages: queuedController,
     /** A send made now while the agent works is held as a queued card: the host queues, and this
      *  send asks it to (the setting is on and no pending prompt blocks the queue). */

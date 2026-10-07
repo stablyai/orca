@@ -119,6 +119,21 @@ describe("opening a message's sender", () => {
     expect(mocks.focusRuntime).not.toHaveBeenCalled()
   })
 
+  it("opens a task's coordinator by its address alone: a task carries no mail", async () => {
+    mocks.callRuntimeRpc.mockResolvedValue({ location: { kind: 'terminal', handle: 'term_now' } })
+    mocks.focusRenderer.mockReturnValue(true)
+    const source: AgentMessageSource = {
+      kind: 'agent',
+      senders: [{ party: terminal, name: 'Coordinator' }],
+      orchestration: { message: 'task', runId: 'r1', taskId: 't1', dispatchId: 'd1' }
+    }
+    await openAgentMessageSender(source, source.senders[0]!, 'wt-chat')
+    expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(HOST, 'orchestration.partyLocation', {
+      address: 'term_a'
+    })
+    expect(mocks.focusRenderer).toHaveBeenCalledWith('term_now', 'env-host')
+  })
+
   it('says the pane is gone only when the terminal answer proves it', async () => {
     mocks.callRuntimeRpc.mockResolvedValue({ location: { kind: 'terminal', handle: 'term_a' } })
     mocks.focusRenderer.mockReturnValue(false)

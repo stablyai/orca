@@ -67,13 +67,7 @@ export const AiVaultSessionTitlesParams = z.object({
       z.object({
         agent: z.enum(['claude', 'codex']),
         sessionId: z.string().min(1).max(512),
-        transcriptPath: z.string().min(1).max(32_768).optional(),
-        structuredSession: z
-          .object({
-            workspaceId: z.string().min(1).max(4096),
-            sessionId: z.string().min(1).max(512)
-          })
-          .optional()
+        transcriptPath: z.string().min(1).max(32_768).optional()
       })
     )
     .max(AI_VAULT_SESSION_TITLE_REQUEST_MAX_COUNT)

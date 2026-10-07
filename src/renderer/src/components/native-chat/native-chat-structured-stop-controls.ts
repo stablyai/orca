@@ -4,7 +4,7 @@ import type { NativeChatAfterStopSend } from './native-chat-composer-target'
 
 type StopController = Pick<
   ReturnType<typeof useStructuredAgentSession>,
-  'canStop' | 'stopPressed' | 'stop' | 'queuedMessages' | 'sendsQueue'
+  'canStop' | 'stopPressed' | 'stop' | 'queuedMessages' | 'sendsQueue' | 'queueSendsNext'
 >
 
 /**
@@ -19,8 +19,9 @@ export function nativeChatStructuredStopControls(
 ): {
   stopping: boolean
   composer: {
+    isWorking: boolean
     isStopping: boolean
-    onStop: () => void
+    onStop: (() => void) | undefined
     steerQueued: (() => boolean) | undefined
     afterStop: NativeChatAfterStopSend | undefined
   }
@@ -35,8 +36,10 @@ export function nativeChatStructuredStopControls(
   return {
     stopping,
     composer: {
+      // Stop is offered whenever the chat looks busy, live only once a turn can be stopped.
+      isWorking: controller.canStop || controller.queueSendsNext,
       isStopping: stopInFlight,
-      onStop: () => void (stopInFlight || controller.stop()),
+      onStop: controller.canStop ? () => void (stopInFlight || controller.stop()) : undefined,
       steerQueued: stopping ? undefined : controller.queuedMessages.steerNewest,
       afterStop: stopping ? (controller.sendsQueue ? 'queue' : 'send') : undefined
     }

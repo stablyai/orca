@@ -40,6 +40,7 @@ describe('NativeChatComposerActions', () => {
     const props = {
       attachDisabled: false,
       dictationDisabled: false,
+      primaryAction: 'stop' as const,
       isWorking: true,
       isDictating: false,
       isDictationHoldMode: false,
@@ -65,6 +66,7 @@ describe('NativeChatComposerActions', () => {
         attachDisabled={false}
         dictationDisabled={false}
         sendDisabled={false}
+        primaryAction="send"
         isWorking={false}
         isDictating={false}
         isDictationHoldMode={false}
@@ -89,6 +91,7 @@ describe('NativeChatComposerActions', () => {
         attachDisabled={false}
         dictationDisabled={false}
         sendDisabled={false}
+        primaryAction="stop"
         isWorking
         isDictating={false}
         isDictationHoldMode={false}
@@ -118,6 +121,7 @@ describe('NativeChatComposerActions', () => {
         attachDisabled={false}
         dictationDisabled={false}
         sendDisabled={false}
+        primaryAction="stop"
         isWorking
         isDictating={false}
         isDictationHoldMode={false}
@@ -144,6 +148,7 @@ describe('NativeChatComposerActions', () => {
         attachDisabled={false}
         dictationDisabled={false}
         sendDisabled
+        primaryAction="send"
         sendBlockedReason="An image couldn't be brought back. Remove it to send."
         isWorking={false}
         isDictating={false}
@@ -169,6 +174,7 @@ describe('NativeChatComposerActions', () => {
       attachDisabled: false,
       dictationDisabled: false,
       sendDisabled: false,
+      primaryAction: 'send' as const,
       isWorking: false,
       isDictating: false,
       isDictationHoldMode: false,
@@ -187,5 +193,54 @@ describe('NativeChatComposerActions', () => {
     rerender(<NativeChatComposerActions {...props} draftNotSaved />)
     expect(screen.getByRole('img', { name: explanation })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Send' }).hasAttribute('disabled')).toBe(false)
+  })
+
+  describe('Resume of a held queue', () => {
+    function renderPrimary(isWorking: boolean, onResume: (() => void) | undefined) {
+      const callbacks = { onSend: vi.fn(), onStop: vi.fn() }
+      render(
+        <NativeChatComposerActions
+          attachDisabled={false}
+          dictationDisabled={false}
+          sendDisabled={false}
+          primaryAction={isWorking ? 'stop' : onResume ? 'resume' : 'send'}
+          isWorking={isWorking}
+          isDictating={false}
+          isDictationHoldMode={false}
+          onAttach={vi.fn()}
+          onDictationToggle={vi.fn()}
+          onDictationHoldStart={vi.fn()}
+          onDictationHoldEnd={vi.fn()}
+          {...callbacks}
+          {...(onResume ? { onResume } : {})}
+          sessionOptionsSurface={null}
+          sessionOptionsSnapshot={[]}
+        />
+      )
+      return callbacks
+    }
+
+    it("takes Send's place: one press resumes, never sends", () => {
+      const onResume = vi.fn()
+      const { onSend } = renderPrimary(false, onResume)
+      expect(screen.queryByRole('button', { name: 'Send' })).toBeNull()
+      const resume = screen.getByRole('button', { name: 'Resume' })
+      fireEvent.click(resume, { detail: 1 })
+      fireEvent.click(resume, { detail: 2 })
+      expect(onResume).toHaveBeenCalledTimes(1)
+      expect(onSend).not.toHaveBeenCalled()
+    })
+
+    it('is Send without it, and Stop while a turn runs', () => {
+      renderPrimary(false, undefined)
+      expect(screen.getByRole('button', { name: 'Send' })).toBeTruthy()
+      cleanup()
+      const onResume = vi.fn()
+      const { onStop } = renderPrimary(true, onResume)
+      expect(screen.queryByRole('button', { name: 'Resume' })).toBeNull()
+      fireEvent.click(screen.getByRole('button', { name: 'Stop the agent' }), { detail: 1 })
+      expect(onStop).toHaveBeenCalledTimes(1)
+      expect(onResume).not.toHaveBeenCalled()
+    })
   })
 })

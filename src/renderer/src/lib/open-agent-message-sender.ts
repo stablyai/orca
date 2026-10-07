@@ -73,8 +73,10 @@ async function openSender(
   chatWorktreeId: string
 ): Promise<void> {
   const environmentId = getRuntimeEnvironmentIdForWorktree(useAppStore.getState(), chatWorktreeId)
-  // The mail it carried from this sender, whose pane outlives a handle from an earlier run.
-  const messageIds = (source.orchestration?.messages ?? [])
+  // The mail it carried from this sender, whose pane outlives a handle from an earlier run. A task
+  // carries no mail, so its coordinator is found by address alone.
+  const mail = source.orchestration?.message === 'mail-notice' ? source.orchestration.messages : []
+  const messageIds = mail
     .filter((message) => message.from === party.address)
     .map((message) => message.messageId)
   const found = await lookUpSender(

@@ -10,12 +10,14 @@ const CHECKOUT_PROCESS_TIMEOUT_MS = 45_000
 const CHECKOUT_MAX_OUTPUT_BYTES = 1024 * 1024
 
 // Why: the wire endpoints only need the runtime RPC host, the renderer client, and
-// the shared codec. Skipping cli/relay keeps a cold CI extraction a few seconds.
+// the shared codec, plus the relay an app update leaves running. Skipping cli keeps a cold CI
+// extraction a few seconds.
 // The phone's `worktree ps` row reader is one self-contained file, so it rides along alone.
 const ARCHIVE_PATHS = [
   'src/main',
   'src/shared',
   'src/preload',
+  'src/relay',
   'src/renderer',
   'src/types',
   'mobile/src/worktree/agent-row-display.ts'

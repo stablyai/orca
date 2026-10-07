@@ -1,4 +1,4 @@
-import type { AgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
+import type { TuiAgent } from '../../../shared/tui-agent'
 import { isDefinitiveAgentSessionCreateRefusal } from '../../../shared/agent-session-definitive-refusal'
 import { parseStructuredLaunchSeedOptions } from '../../../shared/native-chat-session-option-defaults'
 import { hasRuntimeRpcErrorCode } from '../../../shared/runtime-rpc-error-code'
@@ -46,7 +46,7 @@ export type HostCreateSupport =
 export async function askHostCreateSupport(
   target: RuntimeClientTarget,
   worktree: string,
-  agent: AgentSessionHandleProvider
+  agent: TuiAgent
 ): Promise<HostCreateSupport> {
   for (let attempt = 0; ; attempt += 1) {
     try {
@@ -84,7 +84,7 @@ export async function askHostCreateSupport(
 export async function admitStructuredLaunchOnHost(
   target: RuntimeClientTarget,
   worktree: string,
-  agent: AgentSessionHandleProvider
+  agent: TuiAgent
 ): Promise<StructuredLaunchAdmission> {
   const support = await askHostCreateSupport(target, worktree, agent)
   return support.kind === 'unreachable' ? { kind: 'unreachable' } : support

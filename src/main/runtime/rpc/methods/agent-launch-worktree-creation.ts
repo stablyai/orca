@@ -23,6 +23,7 @@ import { resolveRpcWorkspaceCreatorProvenance } from '../workspace-creator-conte
 import { buildManagedWorktreeCreateArgs } from './worktree-create-args'
 import { toAgentLaunchPreferences } from '../../../../shared/agent-launch-preferences'
 import type { AgentLaunchParams } from './agent-launch-schemas'
+import { agentLaunchMovesHostWindow } from './agent-launch-tab-publication'
 
 type WorktreeCreateParams = Extract<
   AgentLaunchParams['target'],
@@ -63,7 +64,7 @@ export function agentLaunchWorkspaceFactory(
         const result = await runtime.createManagedWorktree({
           ...buildManagedWorktreeCreateArgs(
             {
-              ...params,
+              ...(agentLaunchMovesHostWindow(context) ? params : withoutHostActivation(params)),
               ...(startupAgent ? { startupAgent } : {}),
               // Only ever set alongside `startupAgent`, which is what the create requires; the
               // executor offers it only to an agent that takes its prompt on argv, and it rides only
@@ -107,6 +108,7 @@ export function agentLaunchWorkspaceFactory(
         finishAutomationWorkspaceProvenanceRequest(params.automationProvenanceRequest)
         return {
           worktreeId: result.worktree.id,
+          connectionId: repo.connectionId ?? null,
           startupTerminalHandle: result.startupTerminal?.handle,
           ...(promptRodeLaunchCommand ? { promptRodeLaunchCommand } : {}),
           ...(result.startupTerminal?.paneKey
@@ -121,6 +123,21 @@ export function agentLaunchWorkspaceFactory(
         throw error
       }
     }
+  }
+}
+
+/**
+ * A paired device's create leaves the host window where it is, as the rest of its launch does:
+ * activating would switch the desktop to the new workspace and reveal the startup terminal there.
+ * Without it, setup and default tabs are provisioned in the background instead. `runHooks` means
+ * "run setup, and activate", so only its setup half is kept.
+ */
+function withoutHostActivation(params: WorktreeCreateParams): WorktreeCreateParams {
+  return {
+    ...params,
+    activate: false,
+    runHooks: false,
+    ...(params.runHooks === true ? { setupDecision: 'run' as const } : {})
   }
 }
 

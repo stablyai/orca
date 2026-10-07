@@ -47,6 +47,8 @@ class FakeWatcherPool {
   readonly installed: InstalledWatch[] = []
   readonly dispose = vi.fn()
   readonly forgetRoot = vi.fn()
+  readonly disposeAndWait = vi.fn(async () => {})
+  readonly reopen = vi.fn()
 
   async subscribe(
     rootPath: string,

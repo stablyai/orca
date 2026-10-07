@@ -1,4 +1,5 @@
 import type { NativeChatComposerInput } from './native-chat-composer-input'
+import { appendNativeChatAttachmentCache } from './native-chat-draft-cache'
 import {
   useCallback,
   useEffect,
@@ -15,8 +16,6 @@ import {
 } from './native-chat-composer-target'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
 import {
-  appendToNativeChatComposerDraft,
-  clearNativeChatComposerDraftsForTests,
   isKeptLocalPaste,
   readNativeChatComposerDraft,
   subscribeToNativeChatComposerDraft,
@@ -28,6 +27,8 @@ import { useNativeChatResolvedPathAttachments } from './use-native-chat-resolved
 
 export type UseNativeChatComposerAttachmentsArgs = {
   attachmentScopeKey: string
+  /** False when the agent takes no image input; see `useNativeChatResolvedPathAttachments`. */
+  acceptsImages?: boolean
   allowWithoutTarget?: boolean
   caret: number
   disabled: boolean
@@ -41,6 +42,7 @@ export type UseNativeChatComposerAttachmentsArgs = {
 
 export function useNativeChatComposerAttachments({
   attachmentScopeKey,
+  acceptsImages = true,
   allowWithoutTarget = false,
   caret,
   disabled,
@@ -158,6 +160,7 @@ export function useNativeChatComposerAttachments({
 
   const { attachResolvedPaths, disabledRef, flushPendingAttachments } =
     useNativeChatResolvedPathAttachments({
+      acceptsImages,
       appendImageAttachments,
       attachmentTargetBlocked,
       caret,
@@ -174,7 +177,8 @@ export function useNativeChatComposerAttachments({
   // takes a beat to save (or upload over SSH) never reads as a dropped paste.
   const beginPendingImageAttachment = useCallback(
     (previewUrl?: string): string | null => {
-      if (disabledRef.current) {
+      // Without image input the saved paste is attached by path once it lands, so no image chip.
+      if (disabledRef.current || !acceptsImages) {
         return null
       }
       if (attachmentTargetBlocked()) {
@@ -190,6 +194,7 @@ export function useNativeChatComposerAttachments({
       return id
     },
     [
+      acceptsImages,
       attachmentTargetBlocked,
       disabledRef,
       nextAttachmentId,
@@ -287,34 +292,8 @@ function releasePreviewUrl(previewUrl: string | undefined): void {
   }
 }
 
-export function readNativeChatAttachmentCache(
-  scopeKey: string
-): NativeChatComposerImageAttachment[] {
-  return readNativeChatComposerDraft(scopeKey).images.map((image) => ({ ...image }))
-}
-
-/** Adds settled images after the ones the draft holds now, durably at once: when Stop gives images
- *  back, the copy they came from goes right after this. Only an image the user attaches
- *  (`fromUser`) takes the place of a placeholder with its file name, as a re-pick does. */
-export function appendNativeChatAttachmentCache(
-  scopeKey: string,
-  appended: readonly NativeChatComposerImageAttachment[],
-  options?: { fromUser?: boolean }
-): void {
-  if (appended.length === 0) {
-    return
-  }
-  // Preview URLs can retain the full clipboard Blob, so only the path is kept.
-  appendToNativeChatComposerDraft(scopeKey, {
-    images: appended.map(({ id, path, connectionId }) => ({
-      id,
-      path,
-      ...(connectionId ? { connectionId } : {})
-    })),
-    ...(options?.fromUser ? { fromUser: true } : {})
-  })
-}
-
-export function clearNativeChatAttachmentCacheForTests(): void {
-  clearNativeChatComposerDraftsForTests()
-}
+export {
+  readNativeChatAttachmentCache,
+  appendNativeChatAttachmentCache,
+  clearNativeChatAttachmentCacheForTests
+} from './native-chat-draft-cache'

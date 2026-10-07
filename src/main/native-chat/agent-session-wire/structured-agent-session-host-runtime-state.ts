@@ -6,6 +6,7 @@ import {
   type StructuredAgentSessionSinkBarrier
 } from './structured-agent-session-event-sink'
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host'
+import { StructuredAgentSessionAcquireAborts } from './structured-agent-session-acquire-aborts'
 import { StructuredAgentSessionLeaseRenewer } from './structured-agent-session-lease-renewer'
 import {
   heldProviderChildReader,
@@ -15,6 +16,7 @@ import { resolveStructuredSessionRecovery } from './structured-agent-session-rec
 
 export class StructuredAgentSessionHostRuntimeState {
   private readonly eventSinks = new Map<string, DeferredStructuredAgentSessionEventSink>()
+  readonly acquireAborts = new StructuredAgentSessionAcquireAborts()
   private readonly leaseRenewer: StructuredAgentSessionLeaseRenewer
   private readonly onEventSinkFailure?: (sessionId: string, error: unknown) => void
 

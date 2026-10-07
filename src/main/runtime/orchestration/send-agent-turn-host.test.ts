@@ -14,6 +14,7 @@ import {
   hostTestMessage,
   hostTestOperationId
 } from '../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
+import { openRigTurnFor } from '../../native-chat/agent-session-wire/structured-agent-session-queued-rig-turn.test-fixture'
 import {
   sendAgentTurn,
   type AgentTurnDelivery,
@@ -175,7 +176,7 @@ describe('sendAgentTurn through the real host', () => {
   })
 
   it('has a `now` send join the running turn, never the queue', async () => {
-    await rig.workingSend()
+    await openRigTurnFor(rig, await rig.workingSend())
     await expect(sendTurnAccepted('now')).resolves.toMatchObject({
       kind: 'sent',
       submission: { dispatchState: 'accepted' }

@@ -57,6 +57,7 @@ export function structuredAgentSessionStatusSummary({
     ...childWork,
     ...(providerSession ? { providerSession } : {}),
     ...(launchDirectory ? { launchDirectory } : {}),
+    ...(record?.conversationName ? { conversationName: record.conversationName } : {}),
     updatedAt: journal.lastActivityAt() || now()
   }
 }

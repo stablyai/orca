@@ -11,13 +11,13 @@ import {
 } from './codex-app-server-connection'
 import { isCodexAppServerUnsupportedError } from './codex-app-server-session'
 import type { CodexDispatchEchoes } from './codex-structured-dispatch-echo'
-import { codexTurnLifecycleIdentity } from './codex-structured-journal-translation-turns'
 import { readCodexTurnId } from './codex-structured-thread-facts'
 import {
   codexRunningOrOpeningTurn,
   type CodexTurnOpenWaits
 } from './codex-structured-turn-open-wait'
 import {
+  codexAnsweredTurn,
   codexDispatchRejection,
   codexTurnEndRejection
 } from './codex-structured-turn-end-settlement'
@@ -234,10 +234,7 @@ export async function dispatchCodexTurn(
   return rejection && answer.turnId
     ? {
         state: 'rejected',
-        answeredInTurn: {
-          turn: codexTurnLifecycleIdentity(input.sessionId, answer.turnId),
-          via: answer.via
-        },
+        ...codexAnsweredTurn(session, input.sessionId, answer.turnId, answer.via),
         ...rejection
       }
     : { state: 'admitted' }

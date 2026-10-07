@@ -163,7 +163,8 @@ export class OrchestrationStructuredMailboxPointerDelivery<
   private async deliver(
     mailboxHandle: string,
     target: StructuredPointerTarget,
-    reservedTypes?: ReadonlySet<string>
+    reservedTypes?: ReadonlySet<string>,
+    attemptedSessions = new Set<string>()
   ): Promise<void> {
     const db = this.deps.getDb()
     if (!db || this.inFlight.has(mailboxHandle)) {
@@ -191,7 +192,33 @@ export class OrchestrationStructuredMailboxPointerDelivery<
       await this.attempt(db, mailboxHandle, target, unread, reservedTypes)
     } finally {
       this.inFlight.delete(mailboxHandle)
+      // A thrown attempt follows too; its own failure is what still propagates.
+      await this.followMovedTarget(mailboxHandle, target, reservedTypes, attemptedSessions).catch(
+        () => undefined
+      )
     }
+  }
+
+  /**
+   * A `/clear` while the attempt was in flight moved the mailbox to a successor, whose idle edge
+   * found it in flight and was dropped; nothing else retries it. Only an actual move retries, so
+   * an unchanged rejected or unknown send keeps its suppression, and each session is tried once.
+   */
+  private async followMovedTarget(
+    mailboxHandle: string,
+    attempted: StructuredPointerTarget,
+    reservedTypes: ReadonlySet<string> | undefined,
+    attemptedSessions: Set<string>
+  ): Promise<void> {
+    attemptedSessions.add(attempted.sessionId)
+    const current = this.deps.resolveStructuredTarget(mailboxHandle)
+    if (!current || attemptedSessions.has(current.sessionId)) {
+      return
+    }
+    if (this.parkedUntilJournalEdge.get(mailboxHandle)?.sessionId === attempted.sessionId) {
+      this.parkedUntilJournalEdge.delete(mailboxHandle)
+    }
+    await this.deliver(mailboxHandle, current, reservedTypes, attemptedSessions)
   }
 
   // A session whose agent is not running needs nothing first: an accepted send starts it.

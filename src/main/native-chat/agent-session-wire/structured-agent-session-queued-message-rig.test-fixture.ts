@@ -13,6 +13,7 @@ import type { AgentSessionQueuePause } from '../../../shared/agent-session-wire'
 import type { AgentMessageSource } from '../../../shared/agent-session-message-source'
 import { agentSessionMessagePayload } from '../../../shared/structured-agent-session-send-mutation'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
+import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { rotateStructuredAgentSessionHostInstanceForTests } from './structured-agent-session-queued-pause'
 import {
@@ -45,13 +46,15 @@ export async function createQueuedMessageTestRig(
   options: QueuedRigProviderOptions & {
     /** Lets a test sweep idle chats on its own `tick`. */
     idleSweep?: { idleMs: number; intervalMs: number }
+    /** Teardown records its restart offers, which `restartOffers` lists. */
+    recoveryCapsule?: true
   } = {}
 ) {
   const root = await mkdtemp(join(tmpdir(), 'orca-queued-messages-'))
   resetHostTestOperationIds()
   const store = await openTestAgentSessionRecordStore(root)
   const provider = createQueuedRigProvider(store, options)
-  const { dispatch, awaitStarted, compact, cancelTurn, closeSession } = provider
+  const { dispatch, compact, cancelTurn, closeSession } = provider
   const makeHost = () =>
     new StructuredAgentSessionHost({
       agents: claudeAndCodexDeclared(),
@@ -62,7 +65,8 @@ export async function createQueuedMessageTestRig(
       claimKeyId: 'key-1',
       mintSpawnToken: () => 'spawn-1',
       now: () => NOW,
-      ...(options.idleSweep ? { idleSweep: options.idleSweep } : {})
+      ...(options.idleSweep ? { idleSweep: options.idleSweep } : {}),
+      ...(options.recoveryCapsule ? { recoveryCapsule: new AgentSessionRecoveryCapsule(root) } : {})
     })
   let host = makeHost()
   expect(await host.attach(QUEUED_RIG_CALLER, hostTestAttachParams(null))).toMatchObject({
@@ -229,6 +233,11 @@ export async function createQueuedMessageTestRig(
     return page.page.queuePause ?? null
   }
 
+  /** The restart offers this host lists for the chats an earlier one stopped. */
+  async function restartOffers() {
+    return (await host.restartResume.list()).map(({ sessionId, work }) => ({ sessionId, work }))
+  }
+
   function resume(clientOperationId = hostTestOperationId()) {
     return host.queuedMessagesResume(QUEUED_RIG_CALLER, {
       envelope: envelope({}, 'agentSession.queuedMessagesResume', clientOperationId)
@@ -249,8 +258,9 @@ export async function createQueuedMessageTestRig(
     dispatch,
     cancelTurn,
     closeSession,
-    awaitStarted,
     compact,
+    starts: provider.starts,
+    holdNextStart: provider.holdNextStart,
     finishCompact: provider.finishCompact,
     providerEvents: provider.providerEvents,
     envelope,
@@ -269,6 +279,7 @@ export async function createQueuedMessageTestRig(
     crashRestartHostProcess,
     quitRestartHostProcess,
     queuePause,
+    restartOffers,
     resume,
     dispose
   }

@@ -491,8 +491,8 @@ export type AgentJournalSubmission = {
    *  a draft id compared with `clientMessageId`. */
   queuedMessageId?: string
   /** Host-only: who asked for this turn — a person over the client send RPC, or Orca itself.
-   *  A person's turn is what ends a Stop's queue pause. The snapshot still carries it; no released
-   *  client reads it. */
+   *  A restart or a close keeps only a person's Send cut short as a card. The snapshot still
+   *  carries it; no released client reads it. */
   origin?: 'client' | 'host'
   /** Who it is from: the kind of its `AgentSessionMessageSource` ('user' or 'agent'), so a restart
    *  or a close keeps only a person's unsent send as a card. Only the kind: the senders stay on the

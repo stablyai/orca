@@ -34,6 +34,7 @@ import {
 } from './codex-structured-provider-events'
 import {
   codexDispatchRejection,
+  noteCodexTurnOpened,
   settleCodexSendsInEndedTurn
 } from './codex-structured-turn-end-settlement'
 import { createCodexStructuredNotificationRetry } from './codex-structured-notification-retry'
@@ -123,6 +124,9 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
   ): CodexJournalTranslationAdmission {
     if (event.type === 'notification' && !session.backgroundTasks.canObserve(event)) {
       return { accepted: false, reason: 'failed' }
+    }
+    if (event.type === 'notification') {
+      noteCodexTurnOpened(session, event.method, event.params)
     }
     const admission = session.translator?.handle(event) ?? { accepted: true }
     if (!admission.accepted) {

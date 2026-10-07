@@ -1,5 +1,5 @@
+import { getClaudeProfileRouter } from '../claude-accounts/claude-profile-installed-router'
 import { createHash } from 'node:crypto'
-import { join } from 'node:path'
 import type {
   Options as ClaudeAgentSdkOptions,
   PermissionMode
@@ -11,12 +11,10 @@ import {
 } from '../../shared/agent-session-provider-handle'
 import { claudeProviderHandleLeafUuid } from '../../shared/agent-session-provider-handle-encoding'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
-import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
 import { structuredSessionChildIdentityEnv } from '../runtime/structured-session-child-identity-env'
 import {
   CLAUDE_AUTH_ENV_CONFLICT_MESSAGE,
   CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE,
-  applyClaudeEnvPatch,
   hasClaudeAuthEnvConflict
 } from '../claude-accounts/environment'
 import type { ClaudeStructuredAuthPolicy } from '../claude-accounts/claude-structured-auth-policy'
@@ -30,10 +28,18 @@ import {
   structuredClaudeMatchesActiveManagedAccount,
   type ClaudeManagedAccountGateSettings
 } from '../native-chat/claude-structured-managed-account-support'
-import { resolveClaudeCommand } from '../codex-cli/command'
-import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
-import { withoutInheritedClaudeConfigDir } from './claude-config-dir-pin'
+import {
+  claudeChildEnv,
+  claudeProbeEnv,
+  resolveClaudeChildEnvSources,
+  type ClaudeChildEnvSources,
+  type ClaudeEnvDeps
+} from './claude-structured-child-env'
 import { claudeStructuredLaunchArgs } from './claude-structured-launch-args'
+import {
+  claudeLaunchResumesTranscript,
+  resolveClaudeStructuredLaunchHome
+} from './claude-structured-launch-home'
 import type { ClaudeThinkingDisplaySupport } from './claude-thinking-display-support'
 import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
 import { resolveAgentSessionLaunchDirectory } from '../runtime/agent-session-launch-directory'
@@ -54,6 +60,7 @@ export type ClaudeStructuredSdkOptions = Pick<
   | 'effort'
   | 'permissionMode'
   | 'allowDangerouslySkipPermissions'
+  | 'settings'
   | 'sessionId'
   | 'resume'
 >
@@ -73,16 +80,6 @@ export const CLAUDE_STRUCTURED_BASE_OPTIONS: ClaudeStructuredSdkOptions = {
   settingSources: [...CLAUDE_DEFAULT_SETTING_SOURCES],
   supportedDialogKinds: [],
   extraArgs: { 'replay-user-messages': null }
-}
-
-function cloneDefinedEnv(env: NodeJS.ProcessEnv | Record<string, string>): Record<string, string> {
-  const next: Record<string, string> = {}
-  for (const [key, value] of Object.entries(env)) {
-    if (value !== undefined) {
-      next[key] = value
-    }
-  }
-  return next
 }
 
 /**
@@ -147,78 +144,7 @@ export type ClaudeStructuredLaunchResolverDeps = {
   }) => Promise<boolean>
 }
 
-async function claudeTranscriptExists(input: {
-  providerSessionId: string
-  claudeConfigDir: string
-}): Promise<boolean> {
-  const path = await resolveSessionFilePath('claude', input.providerSessionId, {
-    claudeProjectsDir: join(input.claudeConfigDir, 'projects')
-  })
-  return path !== null
-}
-
 export type ClaudeStructuredInvocation = { command: string; env: Record<string, string> }
-
-type ClaudeEnvDeps = Pick<
-  ClaudeStructuredLaunchResolverDeps,
-  'resolveCommand' | 'resolveEnv' | 'resolveInheritedEnv'
->
-
-/** What a child's env is built from, before any auth policy applies to it. */
-export type ClaudeChildEnvSources = {
-  command: string
-  overlay: Record<string, string> | undefined
-  inheritedEnv: Record<string, string>
-}
-
-export async function resolveClaudeChildEnvSources(
-  deps: ClaudeEnvDeps
-): Promise<ClaudeChildEnvSources> {
-  const command = (deps.resolveCommand ?? resolveClaudeCommand)()
-  const overlay = await deps.resolveEnv?.()
-  const inheritedEnv = deps.resolveInheritedEnv
-    ? await deps.resolveInheritedEnv()
-    : cloneDefinedEnv(process.env)
-  return { command, overlay: overlay ? cloneDefinedEnv(overlay) : undefined, inheritedEnv }
-}
-
-// Why the overlay merges onto the inherited env rather than replacing it: the child
-// still needs PATH and the rest of the shell environment, and withCliRuntimeOnPath
-// derives PATH from what it is handed. Ambient Anthropic auth is stripped from the
-// inherited half only when a managed account owns the credential; a system-auth
-// user's own key is their sign-in and must reach the child.
-function claudeChildEnv(
-  sources: ClaudeChildEnvSources,
-  stripAuthEnv: boolean,
-  decorateEnv: (env: Record<string, string>) => Record<string, string> = (env) => env
-): Record<string, string> {
-  return withCliRuntimeOnPath(
-    sources.command,
-    decorateEnv({
-      ...applyClaudeEnvPatch(
-        withoutInheritedClaudeConfigDir(sources.inheritedEnv, process.platform),
-        {},
-        { stripAuthEnv, platform: process.platform }
-      ),
-      ...sources.overlay
-    }),
-    { platform: process.platform }
-  )
-}
-
-/** The env a `--version` probe runs with: the launch's own env, PATH and shims included, minus the
- *  Claude auth variables, auth-like custom headers and an inherited CLAUDE_CONFIG_DIR, which asking
- *  a version needs none of. Everything else is what this same binary receives at launch anyway. */
-export function claudeProbeEnv(sources: ClaudeChildEnvSources): Record<string, string> {
-  return applyClaudeEnvPatch(
-    claudeChildEnv(sources, true),
-    {},
-    {
-      stripAuthEnv: true,
-      platform: process.platform
-    }
-  )
-}
 
 /**
  * The one place a structured Claude child's binary and environment are
@@ -307,7 +233,8 @@ export function createClaudeStructuredLaunchResolver(
     // Every acquisition, not just the first: the account state can change under a live session, and
     // a reacquire after an unexpected exit would otherwise spawn under whatever it has become.
     // Codex has no gate here — it resolves its account on a different path.
-    const gate = deps.readManagedAccountGate?.()
+    const router = getClaudeProfileRouter()
+    const gate = router ? undefined : deps.readManagedAccountGate?.()
     if (gate !== undefined && !structuredClaudeMatchesActiveManagedAccount(gate)) {
       // Unreadable account state names no situation a person can act on, so only the log reads it.
       throw new AgentSessionPreSpawnError(
@@ -337,21 +264,26 @@ export function createClaudeStructuredLaunchResolver(
       cwd,
       env: claudeProbeEnv(sources)
     })
-    // A start that failed before its first turn wrote no transcript, and `--resume` of an absent
-    // one exits; launch that id fresh instead. With a transcript, `--session-id` would collide.
-    const resumesTranscript =
-      head !== null &&
-      (claudeProviderHandleLeafUuid(head) !== null ||
-        (await (deps.hasTranscript ?? claudeTranscriptExists)({
-          providerSessionId,
-          claudeConfigDir: record.accountHome.path
-        })))
     const configured = claudeStructuredLaunchArgs(await deps.resolveLaunchArgs())
     const { additionalDirectories } = configured
     const permission = claudeStructuredPermissionOptions(
       (await deps.resolvePermissionMode?.()) ?? 'default'
     )
     const thinkingDisplayArgs = (await thinkingDisplay) ?? {}
+    // A start that failed before its first turn wrote no transcript, and `--resume` of an absent
+    // one exits; launch that id fresh instead. With a transcript, `--session-id` would collide.
+    const leafUuid = head ? claudeProviderHandleLeafUuid(head) : null
+    const resumes = async (claudeConfigDir: string): Promise<boolean> =>
+      head !== null &&
+      (await claudeLaunchResumesTranscript({
+        router,
+        leafUuid,
+        providerSessionId,
+        claudeConfigDir,
+        hasTranscript: deps.hasTranscript
+      }))
+    // Why: without a router the home is fixed, so check it before the recheck that must stay last.
+    const resumedWithoutRouter = router ? undefined : await resumes(record.accountHome.path)
     // Last: it rechecks the account switch, which may have begun during any await above.
     const { command, env } = await resolveClaudeStructuredInvocation(
       deps,
@@ -364,6 +296,8 @@ export function createClaudeStructuredLaunchResolver(
         }),
       sources
     )
+    const launchHome = await resolveClaudeStructuredLaunchHome(router, env, record.accountHome.path)
+    const resumesTranscript = resumedWithoutRouter ?? (await resumes(launchHome))
     return {
       pathToClaudeCodeExecutable: command,
       options: {
@@ -381,9 +315,9 @@ export function createClaudeStructuredLaunchResolver(
       },
       cwd,
       env,
-      claudeConfigDir: record.accountHome.path,
+      claudeConfigDir: launchHome,
       providerSessionId,
-      resumeLeafUuid: resumesTranscript && head ? claudeProviderHandleLeafUuid(head) : null,
+      resumeLeafUuid: resumesTranscript ? leafUuid : null,
       resumesTranscript,
       continuesChain
     }

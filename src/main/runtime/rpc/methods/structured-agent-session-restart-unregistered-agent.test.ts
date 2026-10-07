@@ -31,9 +31,12 @@ import { call, clearStructuredHostStub } from './structured-agent-session-rpc.te
 const NOW = 1_800_000_000_000
 const FAILED = 'saved-grok-failure'
 const PENDING = 'saved-grok-offer'
+// A desktop from before registered agents: today's list without that one capability.
 const OLD_CLIENT = {
   clientKind: 'runtime' as const,
-  clientCapabilities: [...DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES]
+  clientCapabilities: DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES.filter(
+    (capability) => capability !== STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
+  )
 }
 const NEW_CLIENT = {
   ...OLD_CLIENT,

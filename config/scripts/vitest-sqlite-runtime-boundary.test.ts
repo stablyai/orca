@@ -19,6 +19,52 @@ const sqliteModules = new Set([
   resolve('src/main/runtime/agent-session-record-store-slot')
 ])
 
+/** Type-only names do not erase a default binding or an empty import's side effects. */
+function importsSqliteRuntime(file: string, source: string): boolean {
+  const module = ts.createSourceFile(file, source, ts.ScriptTarget.Latest)
+  return module.statements.some((statement) => {
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) {
+      return false
+    }
+    const clause = statement.importClause
+    const bindings = clause?.namedBindings
+    if (
+      clause?.isTypeOnly ||
+      (!clause?.name &&
+        bindings &&
+        ts.isNamedImports(bindings) &&
+        bindings.elements.length > 0 &&
+        bindings.elements.every((name) => name.isTypeOnly))
+    ) {
+      return false
+    }
+    return (
+      sqliteHarnesses.has(
+        basename(statement.moduleSpecifier.text).replace(/\.[cm]?[jt]sx?$/, '')
+      ) ||
+      sqliteModules.has(
+        resolve(
+          dirname(resolve(file)),
+          statement.moduleSpecifier.text.replace(/\.[cm]?[jt]sx?$/, '')
+        )
+      )
+    )
+  })
+}
+
+it.each([
+  ['import Database, { type Options } from "./sync-database"', true],
+  ['import {} from "./sync-database"', true],
+  ['import "./sync-database"', true],
+  ['import { Database } from "./sync-database"', true],
+  ['import * as Database from "./sync-database"', true],
+  ['import type Database from "./sync-database"', false],
+  ['import type { Options } from "./sync-database"', false],
+  ['import { type Options } from "./sync-database"', false]
+])('classifies the runtime dependency in %s', (source, runtime) => {
+  expect(importsSqliteRuntime('src/main/sqlite/example.test.ts', source)).toBe(runtime)
+})
+
 it('keeps real SQLite fixtures and database consumers in the Node runtime project', () => {
   const root = process.cwd()
   const nodeFiles = new Set(globSync(NODE_RUNTIME_INCLUDE).map((file) => resolve(root, file)))
@@ -35,36 +81,8 @@ it('keeps real SQLite fixtures and database consumers in the Node runtime projec
     ) {
       continue
     }
-    const module = ts.createSourceFile(file, source, ts.ScriptTarget.Latest)
-    for (const statement of module.statements) {
-      const bindings = ts.isImportDeclaration(statement)
-        ? statement.importClause?.namedBindings
-        : undefined
-      if (
-        bindings &&
-        ts.isNamedImports(bindings) &&
-        bindings.elements.every((name) => name.isTypeOnly)
-      ) {
-        continue
-      }
-      if (
-        ts.isImportDeclaration(statement) &&
-        ts.isStringLiteral(statement.moduleSpecifier) &&
-        !statement.importClause?.isTypeOnly &&
-        (sqliteHarnesses.has(
-          basename(statement.moduleSpecifier.text).replace(/\.[cm]?[jt]sx?$/, '')
-        ) ||
-          sqliteModules.has(
-            resolve(
-              dirname(resolve(root, file)),
-              statement.moduleSpecifier.text.replace(/\.[cm]?[jt]sx?$/, '')
-            )
-          )) &&
-        !nodeFiles.has(resolve(root, file))
-      ) {
-        missing.push(file)
-        break
-      }
+    if (importsSqliteRuntime(file, source) && !nodeFiles.has(resolve(root, file))) {
+      missing.push(file)
     }
   }
   expect(missing).toEqual([])

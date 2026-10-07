@@ -111,10 +111,28 @@ describe('planAgentSessionLaunch', () => {
     )
   })
 
-  it('returns null for an agent that cannot hold a structured session even on the structured route', async () => {
+  // The route is the one gate: it admits only an agent the host registered as structured.
+  it('launches any agent the structured route admitted', async () => {
     const plan = planAgentSessionLaunch(store, {
       requestId: 'request-4',
-      agent: 'gemini',
+      agent: 'grok',
+      workspace: { kind: 'git-worktree', worktreeId: 'wt-1' }
+    })
+
+    await expect(plan.launch(hooks)).resolves.toEqual(STRUCTURED)
+    expect(mocks.beginStructuredAgentLaunchSettlement).toHaveBeenCalledWith(
+      'wt-1',
+      'grok',
+      { requestId: 'request-4', executionHostId: 'local' },
+      hooks
+    )
+  })
+
+  it('opens nothing structured on a route that is not', async () => {
+    mocks.resolveAgentLaunchRoute.mockReturnValue('legacy-native-chat')
+    const plan = planAgentSessionLaunch(store, {
+      requestId: 'request-4b',
+      agent: 'grok',
       workspace: { kind: 'git-worktree', worktreeId: 'wt-1' }
     })
 

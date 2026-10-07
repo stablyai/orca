@@ -111,6 +111,21 @@ export function nativeChatRowContentMetrics(
   return metrics
 }
 
+/** A collapsed work run: a lead head's own words over one tool-run header. Its thoughts draw
+ *  only once it opens, which remeasures it. */
+export function nativeChatWorkRunContentMetrics(
+  head: NativeChatRowContentMetrics,
+  headIsLead: boolean
+): NativeChatRowContentMetrics {
+  return {
+    role: 'assistant',
+    textLines: headIsLead ? head.textLines : 0,
+    imageCount: headIsLead ? head.imageCount : 0,
+    toolCount: 1,
+    subagentGroupCount: 0
+  }
+}
+
 /** The trigger's headline is chat text, so it grows with the chat size above its `min-h-6` floor. */
 function collapsedReasoningHeight(typography: NativeChatRowTypography): number {
   return Math.max(

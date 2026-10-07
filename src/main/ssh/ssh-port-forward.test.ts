@@ -53,10 +53,11 @@ function createSystemSshConn() {
   }
 }
 
-function createFakeSystemSshForward() {
+function createFakeSystemSshForward(localPort = 3000) {
   const process = Object.assign(new EventEmitter(), { stderr: new EventEmitter() })
   return {
     process,
+    localPort,
     waitForStartup: vi.fn().mockResolvedValue(undefined),
     close: vi.fn().mockResolvedValue(undefined),
     dispose: vi.fn()
@@ -91,10 +92,13 @@ vi.mock('net', () => {
   return {
     createServer: vi.fn().mockImplementation((connectionHandler) => {
       const listeners = new Map<string, (...args: unknown[]) => void>()
+      let boundPort = 0
       const server = {
-        listen: vi.fn().mockImplementation(() => {
+        listen: vi.fn().mockImplementation((port: number) => {
+          boundPort = port === 0 ? 43210 : port
           listeners.get('listening')?.()
         }),
+        address: vi.fn().mockImplementation(() => ({ address: '127.0.0.1', port: boundPort })),
         close: vi.fn().mockImplementation((cb?: () => void) => cb?.()),
         once: vi.fn().mockImplementation((event: string, handler: (...args: unknown[]) => void) => {
           listeners.set(event, handler)
@@ -117,6 +121,14 @@ describe('SshPortForwardManager', () => {
   beforeEach(() => {
     manager = new SshPortForwardManager()
     startSystemSshPortForwardProcessMock.mockReset()
+  })
+
+  it('reports the port the OS bound when an ssh2 forward asks for port 0', async () => {
+    const conn = createMockConn()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mock implements the getClient/usesSystemSshTransport surface the ssh2 provider reads.
+    const entry = await manager.addForward('conn-1', conn as never, 0, '127.0.0.1', 6768)
+
+    expect(entry.localPort).toBe(43210)
   })
 
   it('adds an ssh2 port forward and returns entry', async () => {
@@ -164,6 +176,16 @@ describe('SshPortForwardManager', () => {
       remotePort: 8080
     })
     expect(manager.listForwards('conn-1')).toHaveLength(1)
+  })
+
+  it('reports the port a system SSH forward resolved when asked for port 0', async () => {
+    startSystemSshPortForwardProcessMock.mockReturnValue(createFakeSystemSshForward(49800))
+    const conn = createSystemSshConn()
+
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mock implements the system-SSH surface the provider reads.
+    const entry = await manager.addForward('conn-1', conn as never, 0, '127.0.0.1', 6768)
+
+    expect(entry.localPort).toBe(49800)
   })
 
   it('passes resolved OpenSSH config to system SSH port forwards', async () => {
@@ -331,6 +353,19 @@ describe('SshPortForwardManager', () => {
     server?._connectionHandler(socket)
     socket.emit('error', new Error('client reset'))
 
+    expect(socket.destroy).toHaveBeenCalled()
+  })
+
+  it('drops a local connection instead of throwing when the ssh2 client already disconnected', async () => {
+    const conn = createMockConn()
+    conn.mockClient.forwardOut.mockImplementation(() => {
+      throw new Error('Not connected')
+    })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mock implements the getClient/usesSystemSshTransport surface the ssh2 provider reads.
+    await manager.addForward('conn-1', conn as never, 3000, 'localhost', 8080)
+    const socket = createFakeSocket()
+
+    expect(() => getLastMockServer()?._connectionHandler(socket)).not.toThrow()
     expect(socket.destroy).toHaveBeenCalled()
   })
 

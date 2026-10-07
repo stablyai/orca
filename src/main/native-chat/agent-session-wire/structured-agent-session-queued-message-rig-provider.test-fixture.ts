@@ -20,6 +20,8 @@ export type QueuedRigProviderOptions = {
   starting?: true
   /** The provider's Stop ends its child, as Claude's does. */
   stopEndsSession?: true
+  /** Its child never answers its start, so it runs nothing it is handed. */
+  startUnanswered?: true
 }
 
 export function createQueuedRigProvider(
@@ -31,9 +33,9 @@ export function createQueuedRigProvider(
   const dispatch: Mock<StructuredAgentSessionAdapter['dispatch']> = vi.fn(async () => ({
     state: 'admitted' as const
   }))
-  const awaitStarted: Mock<NonNullable<StructuredAgentSessionAdapter['awaitStarted']>> = vi.fn(
-    async () => undefined
-  )
+  // Every start the host asks for; one `holdNextStart` holds stays in its spawn until released.
+  const starts: Mock<() => void> = vi.fn()
+  let startHold: Promise<void> | null = null
   // The provider's receipt of a /compact; its end arrives later, as `finishCompact` writes it.
   const compact: Mock<NonNullable<StructuredAgentSessionAdapter['compact']>> = vi.fn(async () => ({
     state: 'accepted' as const,
@@ -49,6 +51,10 @@ export function createQueuedRigProvider(
 
   const adapter: StructuredAgentSessionAdapter = {
     acquire: async ({ identity, fence, spawnToken, events: sink }) => {
+      starts()
+      const hold = startHold
+      startHold = null
+      await hold
       events = sink
       const resumes =
         options.restartable === true &&
@@ -72,12 +78,12 @@ export function createQueuedRigProvider(
       }
     },
     dispatch,
-    awaitStarted,
     closeSession,
     releaseAcquisition: vi.fn(async () => true),
     compact,
     cancelTurn,
     ...(options.stopEndsSession ? { stopEndsSession: () => true } : {}),
+    ...(options.startUnanswered ? { startAnswered: () => false } : {}),
     answerPrompt: vi.fn(async () => undefined),
     setOption: vi.fn(async () => undefined)
   }
@@ -99,6 +105,13 @@ export function createQueuedRigProvider(
     )
   }
 
+  /** Holds the next start in its spawn, with what it was asked for still queued, until released. */
+  function holdNextStart(): () => void {
+    let release = (): void => {}
+    startHold = new Promise<void>((resolve) => (release = resolve))
+    return () => release()
+  }
+
   /** The event sink the provider writes through. */
   function providerEvents(): StructuredAgentSessionEventSink {
     if (!events) {
@@ -110,7 +123,8 @@ export function createQueuedRigProvider(
   return {
     adapter,
     dispatch,
-    awaitStarted,
+    starts,
+    holdNextStart,
     compact,
     cancelTurn,
     closeSession,

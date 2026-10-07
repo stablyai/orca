@@ -16,10 +16,15 @@
  */
 
 import { deriveAgentLaunchChildOperationId } from '../../../../shared/agent-launch-operation'
-import { AGENT_LAUNCH_PROMPT_UNCONFIRMED_RUNTIME_CAPABILITY } from '../../../../shared/agent-launch-runtime-capability'
+import {
+  AGENT_LAUNCH_PROMPT_UNCONFIRMED_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_TAB_CLOSED_CLIENT_CAPABILITY
+} from '../../../../shared/agent-launch-runtime-capability'
+import { AGENT_LAUNCH_TAB_CLOSED_CODE } from '../../../../shared/agent-launch-tab-closed'
 import { isAgentLaunchResult, type AgentLaunchResult } from '../../../../shared/agent-launch-intent'
 import type {
   AgentSessionOperationOutcome,
+  AgentSessionOperationOwnedPane,
   AgentSessionOperationRefusalCode
 } from '../../../../shared/agent-session-operation-ledger'
 import { resolveAgentSessionReplayOutcome } from '../../../native-chat/agent-session-wire/structured-agent-session-replay-outcome'
@@ -101,6 +106,16 @@ function answerFromRecordedRow(
     : { decision: 'refuse', refusal: replay.refusal }
 }
 
+/** A launch whose tab the user closed answers with its own word only to a caller that reads it. */
+export function readsAgentLaunchTabClosed(
+  context: Pick<RpcContext, 'clientKind' | 'clientCapabilities'>
+): boolean {
+  return (
+    context.clientKind === undefined ||
+    context.clientCapabilities?.includes(AGENT_LAUNCH_TAB_CLOSED_CLIENT_CAPABILITY) === true
+  )
+}
+
 /** The CLI (no declared client) ships with this host; any other caller must say it reads the word. */
 function readsUnconfirmedLaunchPrompt(
   context: Pick<RpcContext, 'clientKind' | 'clientCapabilities'>
@@ -144,6 +159,17 @@ function presentRecordedAnswer(
   operationId: string,
   answer: AgentLaunchAdmission
 ): AgentLaunchAdmission {
+  if (
+    answer.decision === 'refuse' &&
+    answer.refusal.code === AGENT_LAUNCH_TAB_CLOSED_CODE &&
+    !readsAgentLaunchTabClosed(context)
+  ) {
+    return refusal(
+      operationId,
+      'agent_session_operation_unknown',
+      'was stopped; its tab was closed'
+    )
+  }
   if (answer.decision !== 'replay') {
     return answer
   }
@@ -169,7 +195,10 @@ export async function admitAgentLaunchOperation(
   context: RpcContext,
   params: AgentLaunchParams & { operationId: string },
   fingerprint: string,
-  now: number = Date.now()
+  now: number = Date.now(),
+  // The pane the window already shows for this launch: the record names it so the pane can read
+  // how the launch ended, across a restart too. Written only if this request wins the claim.
+  ownedPane?: AgentSessionOperationOwnedPane
 ): Promise<AgentLaunchAdmission> {
   const operationId = params.operationId
   const attachOperationId = deriveAgentLaunchChildOperationId(operationId)
@@ -180,7 +209,7 @@ export async function admitAgentLaunchOperation(
   // The ledger alone: admitting a terminal launch has no use for the chat host.
   const store = await context.runtime.openAgentSessionRecordStore()
   const { decision: admitted, claim } = await store.admitAndClaimOperation(
-    { callerKey, operationId, fingerprint, now },
+    { callerKey, operationId, fingerprint, now, ...(ownedPane ? { ownedPane } : {}) },
     // A fresh row, or a replayed one no one has answered yet, leaves the right to run open.
     (decision) =>
       decision.decision === 'admit' ||

@@ -97,13 +97,11 @@ describe('production Relay capacity cell admission', () => {
   it('admits the same-cap Asia and migration-only cells only under the same-cap allowlist', () => {
     for (const cellId of [
       'production-gce-c27', 'production-gce-c28', 'production-gce-c29', 'production-gce-c30',
-      'production-gce-c31',
+      'production-gce-c31', 'production-gce-c34',
       // Migration-only canaries: the US-only capacity rollout never touches them either.
       'production-gce-c17', 'production-gce-c18',
       // US cells at the Asia shape: the 1,000-cap capacity rollout never touches them.
-      'production-gce-c32', 'production-gce-c33',
-      // The migration-only Asia spare.
-      'production-gce-c34'
+      'production-gce-c32', 'production-gce-c33'
     ]) {
       const hostname = cellId.slice('production-gce-'.length)
       assert.deepEqual(parseProductionCapacityCellArguments([

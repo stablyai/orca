@@ -18,7 +18,7 @@ import {
 import { claudeConfigDirEnvPatch } from './claude-config-dir-pin'
 import { CLAUDE_SPAWN_TOKEN_ENV, claudeProcessIdentity } from './claude-structured-owner-identity'
 import { ClaudePromptRegistry } from './claude-structured-prompt-replies'
-import { restoredClaudeStructuredSessionOptions } from './claude-structured-options'
+import { adoptClaudeStructuredSpawnOptions } from './claude-structured-spawn-options'
 import { createClaudeSessionJournalTranslator } from './claude-structured-journal-translation'
 import { observeClaudeFastModeFacts } from './claude-structured-session-options'
 import {
@@ -91,10 +91,10 @@ export async function acquireClaudeSession({
   const onMessage = (message: Record<string, unknown>): void => {
     const init = readClaudeInit(message)
     if (readClaudeFrameString(message, 'session_id') !== expectedProviderSessionId) {
-      // An init proof for another (or unnamed) provider must fail acquisition
+      // An init proof for another (or unnamed) provider must fail the start or end the session
       // promptly, while ordinary foreign frames stay quarantined silently.
       if (init || (message.type === 'system' && message.subtype === 'init')) {
-        initProof.reject(new Error('claude provider session expected'))
+        initProof.refuse()
       }
       return
     }
@@ -251,12 +251,13 @@ export async function acquireClaudeSession({
       ...(unbindReadingControl ? { unbindReadingControl } : {}),
       process,
       acquisitionGeneration: mintClaudeAcquisitionGeneration(deps),
-      options: restoredClaudeStructuredSessionOptions(input.options),
+      options: launch.savedOptions.options,
       ...(deps.mintLinkId ? { linkId: deps.mintLinkId() } : {}),
       observedAt: deps.now?.() ?? Date.now()
     })
     const session = publication.session
     liveSession = session
+    adoptClaudeStructuredSpawnOptions(session, launch.savedOptions)
     const catalogAccess = claudeAcquireCatalogAccess(deps.modelCatalog, launch.claudeConfigDir)
     if (catalogAccess) {
       session.catalogAccess = catalogAccess
@@ -279,21 +280,19 @@ export async function acquireClaudeSession({
           initProof,
           sessionId,
           providerSessionId: launch.providerSessionId,
+          startup: session.startup,
           resumesTranscript: launch.resumesTranscript,
-          inputOptions: input.options,
           requestTimeoutMs: deps.requestTimeoutMs,
           emit
         }),
         isCurrent: () => sessions.get(sessionId) === session,
-        requestTimeoutMs: deps.requestTimeoutMs,
         fault: (error) => callbacks.handleExit(sessionId, attempt, error),
-        onStarted: (options) =>
+        report: (event) =>
           emit({
-            type: 'started',
+            ...event,
             sessionId,
             fence: input.fence,
-            acquisitionGeneration: session.acquisitionGeneration,
-            ...options
+            acquisitionGeneration: session.acquisitionGeneration
           })
       })
     ])
@@ -304,8 +303,8 @@ export async function acquireClaudeSession({
         exits.get(sessionId)?.error ?? new Error('claude session ended before acquisition returned')
       )
     }
-    // The start applies its facts and restores saved options only after publish, so the child
-    // is `starting` until `started` says otherwise.
+    // The start reads its facts only after publish, so the child is `starting` until `started`
+    // says otherwise; it already takes input.
     return { ...publication.acquisition, providerChildPhase: 'starting' }
   } catch (error) {
     unbindReadingControl?.()

@@ -10,6 +10,15 @@ function bypassCoalescing(event: AgentSessionSubscribeEvent): boolean {
   )
 }
 
+/** The list and what rides with it. */
+function queuePublicationOf(event: Extract<AgentSessionSubscribeEvent, { type: 'batch' }>) {
+  return {
+    queuedMessages: event.queuedMessages,
+    queuePause: event.queuePause ?? null,
+    nextQueuedMessageId: event.nextQueuedMessageId ?? null
+  }
+}
+
 function mergeBatch(
   left: Extract<AgentSessionSubscribeEvent, { type: 'batch' }>,
   right: Extract<AgentSessionSubscribeEvent, { type: 'batch' }>
@@ -34,9 +43,9 @@ function mergeBatch(
     // Whole-list publication, latest wins: dropping it here would lose a draft
     // update that rode a coalesced token frame. The pause rides with its list.
     ...(right.queuedMessages !== undefined
-      ? { queuedMessages: right.queuedMessages, queuePause: right.queuePause ?? null }
+      ? queuePublicationOf(right)
       : left.queuedMessages !== undefined
-        ? { queuedMessages: left.queuedMessages, queuePause: left.queuePause ?? null }
+        ? queuePublicationOf(left)
         : {}),
     sessionId: right.sessionId,
     batch: {

@@ -5,6 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import type * as AttachmentUploadModule from './native-chat-attachment-upload'
 
 const mocks = vi.hoisted(() => ({
+  storeState: { tabsByWorktree: { 'worktree-1': [{ id: 'tab-1' }] } },
   stat: vi.fn(),
   resolveNativeChatAttachmentOwner: vi.fn(),
   resolveNativeChatAttachmentOwnerForWorktree: vi.fn(),
@@ -12,7 +13,7 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('@/store', () => ({
-  useAppStore: { getState: () => ({}) }
+  useAppStore: { getState: () => mocks.storeState }
 }))
 
 // Real notice strings, so the tests below assert what a user would actually read
@@ -140,7 +141,9 @@ describe('useNativeChatExternalAttachments', () => {
       filePath: '/local/a.txt',
       access: { kind: 'user-file' }
     })
-    expect(attachResolvedPaths).toHaveBeenCalledWith(['/local/a.txt'])
+    expect(attachResolvedPaths).toHaveBeenCalledWith(['/local/a.txt'], undefined, {
+      destinationIsCurrent: expect.any(Function)
+    })
     expect(mocks.uploadNativeChatAttachmentPaths).not.toHaveBeenCalled()
   })
 
@@ -181,10 +184,11 @@ describe('useNativeChatExternalAttachments', () => {
     expect(attachResolvedPaths).not.toHaveBeenCalled()
     expect(mocks.stat).toHaveBeenCalledTimes(1)
     await act(async () => fileCheck.resolve())
-    expect(attachResolvedPaths).toHaveBeenCalledExactlyOnceWith([
-      '/external/a.png',
-      '/external/c.png'
-    ])
+    expect(attachResolvedPaths).toHaveBeenCalledExactlyOnceWith(
+      ['/external/a.png', '/external/c.png'],
+      undefined,
+      { destinationIsCurrent: expect.any(Function) }
+    )
     expect(mocks.stat).toHaveBeenCalledTimes(3)
   })
 
@@ -329,7 +333,9 @@ describe('useNativeChatExternalAttachments', () => {
       expectedSshTargetId: 'conn-1',
       expectedSshConnectionGeneration: 4
     })
-    expect(attachResolvedPaths).toHaveBeenCalledWith(['/remote/wt/.orca/drops/a.txt'], 'conn-1')
+    expect(attachResolvedPaths).toHaveBeenCalledWith(['/remote/wt/.orca/drops/a.txt'], 'conn-1', {
+      destinationIsCurrent: expect.any(Function)
+    })
     expect(mocks.stat).not.toHaveBeenCalled()
   })
 
@@ -362,8 +368,12 @@ describe('useNativeChatExternalAttachments', () => {
     })
 
     expect(attachResolvedPaths.mock.calls).toEqual([
-      [['/remote/wt/.orca/drops/b.txt', '/remote/wt/.orca/drops/b.txt'], 'conn-1'],
-      [['/remote/wt/.orca/drops/a.txt'], 'conn-1']
+      [
+        ['/remote/wt/.orca/drops/b.txt', '/remote/wt/.orca/drops/b.txt'],
+        'conn-1',
+        { destinationIsCurrent: expect.any(Function) }
+      ],
+      [['/remote/wt/.orca/drops/a.txt'], 'conn-1', { destinationIsCurrent: expect.any(Function) }]
     ])
   })
 

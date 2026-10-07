@@ -87,7 +87,7 @@ describe('a structured default this dispatch cannot honour', () => {
     expect(decide({ params: { agent: 'codex', worktree: 'current' } }).mode).toBe('structured')
   })
 
-  // A custom launch command applies to terminal launches only; native chat ignores it.
+  // A custom launch command never decides the surface; native chat runs it as the program.
   it.each([
     ['claude', 'claude-wrapper'],
     ['codex', 'codex-nightly']

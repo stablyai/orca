@@ -110,6 +110,10 @@ export const TerminalPaneLayoutNodeSchema = z
     })
   )
 
+const PaneLayoutEditIntentSchema = z.literal('gesture')
+
+export type PaneLayoutEditIntent = z.infer<typeof PaneLayoutEditIntentSchema>
+
 export const UpdatePaneLayout = WorktreeTabSelector.extend({
   tabId: z
     .unknown()
@@ -118,7 +122,9 @@ export const UpdatePaneLayout = WorktreeTabSelector.extend({
   root: z.union([z.null(), TerminalPaneLayoutNodeSchema]),
   expandedLeafId: z.string().max(128).nullable().optional(),
   chatLeafId: z.string().max(128).nullable().optional(),
-  titlesByLeafId: z.record(z.string(), z.string()).optional()
+  titlesByLeafId: z.record(z.string(), z.string()).optional(),
+  // Why: marks a user's layout gesture; .catch keeps a newer client's unknown intent from failing the edit.
+  intent: PaneLayoutEditIntentSchema.optional().catch(undefined)
 })
 
 export const SetTabProps = WorktreeTabSelector.extend({

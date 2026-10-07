@@ -1,7 +1,8 @@
 import { writeFile } from 'node:fs/promises'
 import { test, expect } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
-import { waitForActivePaneHookDescriptor, waitForActiveTerminalManager } from './helpers/terminal'
+import { showActivePaneAsNativeChat } from './helpers/native-chat-view'
+import { waitForActiveTerminalManager } from './helpers/terminal'
 
 const PNG =
   'iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAIAAAAlC+aJAAAAYUlEQVR4nO3PIREAIBAAMFqhMWgyUYMun4QQaBQZEO92twIrZ/RUde1URUBAQEBAQEBAQEBAQEBAQEBAQEBAQEDgO9BiprrRUgkICAgICAgICAgICAgICAgICAgICAgIfHuebLmH1pKnMwAAAABJRU5ErkJggg=='
@@ -14,34 +15,13 @@ test('OMP composer accepts an image clipboard event', async ({
   await waitForActiveWorktree(orcaPage)
   await ensureTerminalVisible(orcaPage)
   await waitForActiveTerminalManager(orcaPage)
-  const descriptor = await waitForActivePaneHookDescriptor(orcaPage)
   const imagePath = testInfo.outputPath('omp-image-proof.png')
   await writeFile(imagePath, Buffer.from(PNG, 'base64'))
-  await orcaPage.evaluate(async ({ paneKey, worktreeId }) => {
-    const settings = await window.api.settings.set({ experimentalNativeChat: true })
-    const store = window.__store
-    if (!store) {
-      throw new Error('Store unavailable')
-    }
-    store.setState({ settings })
-    const state = store.getState()
-    state.setAgentStatus(
-      paneKey,
-      { state: 'idle', agentType: 'omp', prompt: '' },
-      'OMP',
-      undefined,
-      { worktreeId }
-    )
-    const [tabId] = paneKey.split(':')
-    const tab = (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
-      (candidate) => candidate.contentType === 'terminal' && candidate.entityId === tabId
-    )
-    if (!tab) {
-      throw new Error('Terminal tab unavailable')
-    }
-    state.toggleTabViewMode(tab.id)
-  }, descriptor)
-  const composer = orcaPage.getByRole('textbox', { name: 'Send a message…', exact: true })
+  await showActivePaneAsNativeChat(orcaPage, 'omp', 'OMP')
+  const composer = orcaPage.getByRole('textbox', {
+    name: 'Ask anything, @ to mention files, / for commands',
+    exact: true
+  })
   await expect(composer).toBeVisible()
   // Substitute only clipboard persistence; never overwrite the user's system clipboard.
   await electronApp.evaluate(

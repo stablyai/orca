@@ -208,6 +208,14 @@
     {
       "file": "src/app-update/use-wall-app-update.web.ts",
       "reason": "The update checker runs in the app, not the page. The native file hands the compatibility wall the release that check found; this one offers none, so the wall inside the page keeps its store or releases link and the page bundle never carries the checker."
+    },
+    {
+      "file": "src/files/MobileMediaPlayback.web.tsx",
+      "reason": "The browser and hybrid shell play cached Blob URLs with HTML media controls. The native sibling uses the existing WebView to play its private cache file."
+    },
+    {
+      "file": "src/files/mobile-media-preview-cache.web.ts",
+      "reason": "The page has no native filesystem. This cache creates a temporary Blob URL from bounded chunks and revokes it when the preview closes; native builds write the chunks to a cache file."
     }
   ]
 }

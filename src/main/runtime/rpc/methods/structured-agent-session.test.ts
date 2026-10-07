@@ -82,7 +82,7 @@ describe('agentSession.reveal', () => {
   })
 
   it('publishes the tab even when the journal could not be read', async () => {
-    // A pre-SQLite chat restores to nothing, but attach still recovers it, so the tab is worth
+    // An unreadable chat restores to nothing, but attach still recovers it, so the tab is worth
     // publishing and the pane's hold finishes the job. Refusing here would strand it forever.
     hostCalls.revealSession.mockResolvedValueOnce({
       sessionId: SESSION,
@@ -175,7 +175,7 @@ describe('capability gating', () => {
     }
     // Bump deliberately: the whole agentSession.* surface is behind the structured capability,
     // so an additive method is invisible to old clients and needs no protocol bump.
-    expect(STRUCTURED_AGENT_SESSION_METHODS).toHaveLength(32)
+    expect(STRUCTURED_AGENT_SESSION_METHODS).toHaveLength(33)
   })
 
   it('hides the surface from a declared client that did not advertise it', async () => {

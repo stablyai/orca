@@ -7,6 +7,9 @@ import { balanceFiles } from './ci-shard-assignment.mjs'
 import { discoverE2eFiles, planE2e } from './ci-e2e-shard-plan.mjs'
 import { parseTimingLog } from './ci-shard-timing-import.mjs'
 import TimingSequencer from './ci-unit-sequencer.mjs'
+import { UNIT_INCLUDE, UNIT_EXCLUDE } from './ci-unit-files.mjs'
+import { NODE_RUNTIME_INCLUDE } from './vitest-node-runtime-files.mjs'
+import { nodeRuntimePool } from './vitest-node-runtime-pool'
 
 const directories = []
 afterEach(() => {
@@ -60,10 +63,61 @@ describe('timing-weighted shard selection', () => {
     expect(new Set(selected)).toEqual(new Set(specs))
   })
 
-  it('wires a constructor into the opt-in Vitest config', async () => {
+  it('keeps global sharding and runs the Node measurement after ordinary projects', async () => {
     vi.stubEnv('ORCA_BALANCE_UNIT_SHARDS', '1')
     const { default: config } = await import('../vitest.config')
     expect(config.test.sequence.sequencer).toBe(TimingSequencer)
+    expect(config.test.maxWorkers).toBe(process.platform === 'win32' ? 4 : undefined)
+    const measurementFile =
+      'src/main/foreign-sqlite-readers/foreign-sqlite-reader-event-loop.test.ts'
+    const projects = config.test.projects
+    const measurement = projects.filter((project) => project.test.name === 'node-measurement')
+    const ordinary = projects.filter((project) => project.test.name !== 'node-measurement')
+    expect(measurement).toHaveLength(1)
+    expect(ordinary).toHaveLength(process.versions.bun ? 2 : 1)
+    expect(measurement[0].test).toMatchObject({
+      include: [measurementFile],
+      exclude: UNIT_EXCLUDE,
+      maxWorkers: 1,
+      sequence: { groupOrder: 2 },
+      env: { ORCA_VITEST_RUNTIME: process.versions.bun ? 'node-runtime' : 'node' },
+      pool: process.versions.bun ? 'node-runtime' : 'forks'
+    })
+    expect(measurement[0].test.poolRunner).toBe(process.versions.bun ? nodeRuntimePool : undefined)
+    for (const project of ordinary) {
+      expect(project.test.sequence.groupOrder).toBe(1)
+      expect(project.test.exclude).toContain(measurementFile)
+    }
+    const ordinaryNode = ordinary.find((project) => project.test.name !== 'bun')
+    expect(ordinaryNode.test.include).toEqual(
+      process.versions.bun ? NODE_RUNTIME_INCLUDE : UNIT_INCLUDE
+    )
+    const ordinaryBun = ordinary.find((project) => project.test.name === 'bun')
+    if (process.versions.bun) {
+      expect(ordinaryBun.test.exclude).toEqual(
+        expect.arrayContaining([...NODE_RUNTIME_INCLUDE, measurementFile])
+      )
+    }
+    for (const project of projects) {
+      expect(project.extends).toBe(false)
+      expect(project.define).toEqual(config.define)
+      expect(project.resolve).toEqual(config.resolve)
+      expect(project.test.execArgv).toEqual(['--no-experimental-webstorage', '--expose-gc'])
+      expect(project.test.setupFiles).toEqual([
+        resolve('config/scripts/vitest-real-agent-home-write-guard.ts'),
+        resolve('config/scripts/vitest-bun-node-builtins.ts'),
+        resolve('config/scripts/happy-dom-offscreen-canvas.ts'),
+        resolve('config/scripts/happy-dom-mutation-observer-retention.ts'),
+        resolve('config/scripts/vitest-host-ports-setup.ts'),
+        resolve('config/scripts/vitest-caller-identity-env-setup.ts')
+      ])
+      expect(project.test).toMatchObject({
+        environment: 'node',
+        server: { deps: { inline: ['zod'] } },
+        hookTimeout: 60_000,
+        testTimeout: 30_000
+      })
+    }
   })
 
   it('keeps nested/serial E2E files atomic and fails closed on discovery errors', () => {

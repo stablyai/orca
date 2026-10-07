@@ -261,12 +261,6 @@ export type RuntimeMobileSessionTabsResult = {
   tabGroupLayout?: TabGroupLayoutNode | null
   retiredTerminalSurfaces?: RuntimeMobileSessionRetiredTerminalSurface[]
   tabs: RuntimeMobileSessionClientTab[]
-  /** Saved host title publication, including for a conversation whose tab has closed. */
-  structuredConversationTitle?: {
-    sessionId: string
-    agent: 'claude' | 'codex'
-    title: string
-  }
   /**
    * Set while a freshly started runtime has not yet taken back the client-hosted pages its paired
    * hosts are still holding. Such a snapshot is authoritative about terminals, which it rehydrated

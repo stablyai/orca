@@ -1,5 +1,5 @@
-import type { AgentJournalTurnOutcome } from './agent-session-journal-types'
-import { agentSessionScopeKey, type AgentSessionExecutionLocation } from './agent-session-record'
+import type { AgentJournalCursor, AgentJournalTurnOutcome } from './agent-session-journal-types'
+import type { AgentSessionExecutionLocation } from './agent-session-record'
 
 // Turn completion feed: the per-turn EDGE beside the status feed's STATE.
 
@@ -19,6 +19,7 @@ import { agentSessionScopeKey, type AgentSessionExecutionLocation } from './agen
  * at all, because absent means UNKNOWN, not success.
  */
 export type AgentSessionTurnCompletion = {
+  journalCursor?: AgentJournalCursor
   /** Host-and-workspace scope; a bare provider turn id is not globally unique. */
   scope: AgentSessionExecutionLocation
   sessionId: string
@@ -33,17 +34,27 @@ export type AgentSessionTurnCompletion = {
 }
 
 /**
+ * An approval or question newly waiting on the user, derived by the EXECUTION HOST at journal
+ * commit. It usually lands mid-turn, where no completion fires. One event per prompt: a revision
+ * of a still-pending prompt keeps its id and stays silent.
+ */
+export type AgentSessionPromptAttention = {
+  journalCursor?: AgentJournalCursor
+  scope: AgentSessionExecutionLocation
+  sessionId: string
+  /** The prompt's journal item id. */
+  promptId: string
+  /** Execution host's clock at journal commit. */
+  raisedAt: number
+}
+
+/**
  * LIVE-ONLY: there is no snapshot arm and no replay arm, by decision. A subscriber is told what
- * completes while it is subscribed and nothing else; completions that land while it is away are
+ * completes or asks while it is subscribed and nothing else; edges that land while it is away are
  * dropped rather than queued, so nothing durable can strand. On reconnect the client baselines.
  */
 export type AgentSessionTurnCompletionEvent =
   | { type: 'completion'; completion: AgentSessionTurnCompletion }
+  /** Sent only to a subscriber that asked with `includePrompts`, so an older client never sees it. */
+  | { type: 'prompt'; prompt: AgentSessionPromptAttention }
   | { type: 'end' }
-
-/** Delivery dedupe address. Unread is idempotent and does not need it; mobile fanout does. */
-export function agentSessionTurnCompletionKey(completion: AgentSessionTurnCompletion): string {
-  return [agentSessionScopeKey(completion.scope), completion.sessionId, completion.turnId].join(
-    '\u0000'
-  )
-}

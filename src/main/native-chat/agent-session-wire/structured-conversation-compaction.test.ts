@@ -371,23 +371,26 @@ it('refuses the command for an agent that does not declare compaction, whatever 
 it('refuses the command at handover when the provider opened a turn meanwhile (B3)', async () => {
   await attach()
   const events = state.acquire.mock.calls.at(-1)?.[0].events
-  // The provider starts a turn of its own after acceptance, before the command is handed over.
-  Object.assign(state.host.deps.adapter, {
-    awaitStarted: vi.fn(async () => {
-      events?.appendItem(
-        { provider: 'codex', threadId: THREAD, turnId: 'provider-turn', ordinal: 0 },
-        { kind: 'turn', turnId: 'provider-turn', state: 'running' },
-        { turnScope: AGENT_JOURNAL_THREAD_SCOPE, lifecycle: true }
-      )
-    })
-  })
   const params = compactParams()
+  // Held, the command is accepted, then the provider starts a turn of its own, both ahead of the
+  // handover the acceptance asks for.
+  const held = Promise.withResolvers<void>()
+  void state.host['tasks'].serialize(SESSION, () => held.promise)
+  const commanded = state.host.conversationCommand(CALLER, params)
+  void state.host['tasks'].serialize(SESSION, async () => {
+    events?.appendItem(
+      { provider: 'codex', threadId: THREAD, turnId: 'provider-turn', ordinal: 0 },
+      { kind: 'turn', turnId: 'provider-turn', state: 'running' },
+      { turnScope: AGENT_JOURNAL_THREAD_SCOPE, lifecycle: true }
+    )
+  })
+  held.resolve()
 
   const refused = {
     kind: 'commandRefused',
     refusal: { code: 'agent_session_operation_invalid', details: { reason: 'turnActive' } }
   }
-  await expect(state.host.conversationCommand(CALLER, params)).resolves.toMatchObject({
+  await expect(commanded).resolves.toMatchObject({
     ok: true,
     value: { state: 'completed', error: "This command didn't run. Try it again.", failure: refused }
   })

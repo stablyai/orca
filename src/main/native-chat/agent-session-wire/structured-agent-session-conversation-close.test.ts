@@ -2,7 +2,6 @@
 // list and a send each see only the one that happened. Ticks are driven by hand.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
 import { readStructuredSessionGateFacts } from '../../runtime/orchestration/structured-mailbox-pointer-host'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
@@ -222,38 +221,22 @@ describe('the sweep and the lease (P2-20)', () => {
 })
 
 describe('a start that never finishes (P2-15)', () => {
-  it('is stopped by the sweep, and the delivery loop alone writes its one row and rejection', async () => {
+  it('is stopped by the sweep, and the message it was handed carries its one row and rejection', async () => {
     const stopReason = 'Codex never finished starting, so Orca stopped it.'
-    const order: string[] = []
-    const started = Promise.withResolvers<void>()
-    rig.adapter.closeSession.mockImplementation(async () => {
-      order.push('stopped')
-      started.resolve()
-      return true
-    })
     const spawn = rig.adapter.acquire.getMockImplementation()!
     rig.adapter.acquire.mockImplementationOnce(async (input) => ({
       ...(await spawn(input)),
       providerChildPhase: 'starting' as const
     }))
-    Object.assign(rig.host.deps.adapter, { awaitStarted: () => started.promise })
-    // The loop rejects the queued messages in the same append as its row.
-    const append = AgentSessionJournal.prototype.appendLifecycleBatch
-    vi.spyOn(AgentSessionJournal.prototype, 'appendLifecycleBatch').mockImplementation(function (
-      this: AgentSessionJournal,
-      ...args
-    ) {
-      if (args[0].rejectsQueued) {
-        order.push(`rejected: ${args[0].rejectsQueued.reason}`)
-      }
-      return append.apply(this, args)
-    })
+    // Written to the starting child at once; it never answers.
+    rig.adapter.dispatch.mockResolvedValueOnce({ state: 'admitted' })
     const reader = collectSubscriber()
     const attached = await rig.host.attach(CALLER, hostTestAttachParams(null))
     expect(attached.ok).toBe(true)
     await rig.host.subscribe({ id: 'reader', sessionId: SESSION, emit: reader.emit })
     const sent = await rig.host.send(CALLER, restTestSend('stuck behind the start', fence()))
     expect(sent.ok).toBe(true)
+    await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledOnce())
     rig.clock.now += IDLE_MS + 1
 
     await sweepOnce(rig.host)
@@ -263,8 +246,6 @@ describe('a start that never finishes (P2-15)', () => {
         expect.objectContaining({ dispatchState: 'rejected', reason: stopReason })
       )
     )
-    // One rejection, written after the stop by the loop, with the stop's own words.
-    expect(order).toEqual(['stopped', `rejected: ${stopReason}`])
     const errorRows = reader.events.flatMap((event) =>
       event.type === 'batch'
         ? event.batch.items.filter(
@@ -275,11 +256,10 @@ describe('a start that never finishes (P2-15)', () => {
     expect(errorRows.map((item) => (item.body.kind === 'status' ? item.body.text : null))).toEqual([
       stopReason
     ])
-    expect(rig.adapter.dispatch).not.toHaveBeenCalled()
 
     const again = await rig.host.send(CALLER, restTestSend('try again', fence()))
     expect(again.ok).toBe(true)
-    await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledOnce(), COLD_START)
+    await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledTimes(2), COLD_START)
     await expect(sweepOnce(rig.host)).resolves.toBeUndefined()
   })
 })

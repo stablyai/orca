@@ -4,6 +4,7 @@ import type {
   ManagedPaneInternal,
   PaneStyleOptions
 } from './pane-manager-types'
+import type { PaneLayoutEditIntent } from '../../../../shared/rpc-contract/session-tabs-schemas-params'
 import { createDivider, disposeDivider } from './pane-divider'
 import { disposeWebgl, attachWebgl } from './pane-webgl-renderer'
 import { safeFit } from './pane-fit'
@@ -26,7 +27,7 @@ type TreeOpsCallbacks = {
   getStyleOptions: () => PaneStyleOptions
   safeFit: (pane: ManagedPane) => void
   refitPanesUnder: (el: HTMLElement) => void
-  onLayoutChanged?: () => void
+  onLayoutChanged?: (intent?: PaneLayoutEditIntent) => void
   onDragActiveChange?: (active: boolean) => void
   isDestroyed?: () => boolean
   requestPaneReparentFrame?: (callback: FrameRequestCallback) => void

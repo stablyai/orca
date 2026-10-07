@@ -1,7 +1,5 @@
 import type { AppState } from '../../store'
 import { useAppStore } from '../../store'
-import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
-import { publishAiVaultSavedTitle } from '@/components/right-sidebar/ai-vault-session-result-cache'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import { pickParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
 import { normalizeTurnCompletedAtField } from '../../../../shared/agent-status-field-normalization'
@@ -162,11 +160,6 @@ export function applyWebSessionTabsStorePatch(
 
   const settleHostMirror = createHostSessionMirrorSettle(hostMirrorVerdict)
   try {
-    for (const frame of hostMirrorVerdict.frames) {
-      if (frame.decision.apply && frame.snapshot?.structuredConversationTitle) {
-        publishAiVaultSavedTitle(frame.snapshot, toRuntimeExecutionHostId(frame.environmentId))
-      }
-    }
     if (mirroredAgentStatusChanged) {
       useAppStore.getState().scheduleAgentStatusFreshness()
     }

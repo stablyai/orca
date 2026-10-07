@@ -24,6 +24,10 @@ export function useStructuredAgentSessionTransportState(
   const turnId = runningStructuredAgentSessionTurnId({ items: journalItems, latestTurn })
   // The rule the host projects every session list's Working from, so this chat cannot disagree.
   const isWorking = isStructuredAgentSessionMainAgentWorking(turnId, submissions, fence)
+  const nextQueuedMessageId = (enabled ? state.nextQueuedMessageId : null) ?? null
+  // The host names the card its queue sends next. That send lands in a later update than a turn's
+  // end or a Resume, so until then the chat still reads as working and nothing flips in between.
+  const queueSendsNext = nextQueuedMessageId !== null && !isWorking
   const turnActivity = useMemo(
     () => selectStructuredAgentTurnActivity(journalItems, turnId, enabled ? state.activity : null),
     [enabled, journalItems, state.activity, turnId]
@@ -50,6 +54,8 @@ export function useStructuredAgentSessionTransportState(
     // null = no drafts or no claim; the projection treats both as an empty list.
     queuedMessages: (enabled ? state.queuedMessages : null) ?? null,
     queuePause: (enabled ? state.queuePause : null) ?? null,
+    /** Working only because the queue is about to send: nothing is in flight to stop yet. */
+    queueSendsNext,
     backgroundTasks: structuredSessionBackgroundTasksView(
       enabled ? state.backgroundTasks : null,
       turnId

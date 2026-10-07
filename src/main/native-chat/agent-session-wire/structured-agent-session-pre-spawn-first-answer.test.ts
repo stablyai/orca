@@ -164,6 +164,18 @@ describe('a create that fails before any process spawns', () => {
       'The folder this chat ran in no longer exists. Restore it to continue this chat.'
     ],
     [
+      'a resume whose transcript is in another Claude account',
+      'claude transcript is not in the selected account',
+      'historyInOtherAccount',
+      "This chat's history is in another Claude account. Switch back to that account to continue it."
+    ],
+    [
+      'a Command setting that names no runnable program',
+      'the claude Command setting is not a runnable program',
+      'agentCommandNotRunnable',
+      "Claude's Command in Settings → Agents must be a program path or name Orca can find, with no arguments or variables. Change it or reset it."
+    ],
+    [
       "Orca's own reason",
       'claude sessions pin CLAUDE_CONFIG_DIR, not CODEX_HOME',
       undefined,

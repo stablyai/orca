@@ -60,9 +60,9 @@ export type JournalReducerState = {
   appliedSettlementIds: Set<string>
   /** Scope for rows stored without one; rebuilt by replay, never persisted. */
   derivedTurnScope: JournalDerivedTurnScope
-  /** The submission row of the latest turn a person asked for (`origin: 'client'`) that the
-   *  provider accepted; 0 when none. Kept as it folds so the queue's pause reads it in O(1). */
-  latestPersonTurnSequence: number
+  /** The submission row of the latest turn the provider accepted, whoever sent it; 0 when none.
+   *  Kept as it folds so the queue's pause reads it in O(1). */
+  latestAcceptedTurnSequence: number
   /** The latest person's Stop event and Resume, what the queue's pause is derived from. */
   queuePauseMarks: JournalQueuePauseMarks
 }
@@ -83,7 +83,7 @@ export function createJournalReducerState(sessionId: string, epoch: string): Jou
     aliases: new Map(),
     appliedSettlementIds: new Set(),
     derivedTurnScope: new JournalDerivedTurnScope(),
-    latestPersonTurnSequence: 0,
+    latestAcceptedTurnSequence: 0,
     queuePauseMarks: createJournalQueuePauseMarks()
   }
 }

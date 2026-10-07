@@ -66,6 +66,28 @@ describe('createIpcPtyTransport', () => {
     transport.disconnect()
   })
 
+  // A pane drag waits out a spawn whose result would bind the leaf to its old tab.
+  it('reports a connect as pending only until its PTY id arrives', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    let resolveSpawn!: (value: { id: string }) => void
+    vi.mocked(window.api.pty.spawn).mockReturnValue(
+      new Promise((resolve) => {
+        resolveSpawn = resolve
+      })
+    )
+    const transport = createIpcPtyTransport({})
+    expect(transport.isConnectPending?.()).toBe(false)
+
+    const connecting = transport.connect({ url: '', callbacks: {} })
+    expect(transport.isConnectPending?.()).toBe(true)
+    resolveSpawn({ id: 'pty-late' })
+    await connecting
+
+    expect(transport.getPtyId()).toBe('pty-late')
+    expect(transport.isConnectPending?.()).toBe(false)
+    transport.disconnect()
+  })
+
   it('does not create a PTY when the pane generation is stale', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
@@ -75,6 +97,34 @@ describe('createIpcPtyTransport', () => {
       transport.connect({ url: '', shouldContinue: () => false, callbacks: {} })
     ).resolves.toBeUndefined()
 
+    expect(spawn).not.toHaveBeenCalled()
+  })
+
+  it("spawns a launch pane this window made only once the host has taken it, and never once it's gone", async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const { holdAgentLaunchPaneSpawn, releaseAgentLaunchPaneSpawn } =
+      await import('@/lib/agent-launch-pane-spawn-hold')
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+    const pane = { worktreeId: 'wt', tabId: 'tab-held', leafId: 'leaf-held' }
+
+    holdAgentLaunchPaneSpawn(pane.tabId, pane.leafId)
+    const transport = createIpcPtyTransport(pane)
+    const connecting = transport.connect({ url: '', callbacks: {} })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(spawn).not.toHaveBeenCalled()
+
+    releaseAgentLaunchPaneSpawn(pane.tabId, pane.leafId)
+    await connecting
+    expect(spawn).toHaveBeenCalledWith(expect.objectContaining({ tabId: 'tab-held' }))
+    transport.disconnect()
+
+    spawn.mockClear()
+    const release = holdAgentLaunchPaneSpawn(pane.tabId, pane.leafId)
+    const closed = createIpcPtyTransport(pane)
+    const abandoned = closed.connect({ url: '', callbacks: {} })
+    closed.destroy?.()
+    release()
+    await expect(abandoned).resolves.toBeUndefined()
     expect(spawn).not.toHaveBeenCalled()
   })
 

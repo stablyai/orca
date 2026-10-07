@@ -1,3 +1,4 @@
+import { claudeProfileHistoryDirs } from '../claude-accounts/claude-profile-installed-router'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { resolveOmpSessionsDir } from './omp-session-root'
@@ -12,10 +13,13 @@ const CLAUDE_PROJECTS_DIR = join(homedir(), '.claude', 'projects')
 export function claudeProjectsRootDirs(args: {
   claudeProjectsDir?: string
   wslHomeDirs?: readonly string[]
+  /** Passed in by a scan worker, which has no account router of its own. */
+  claudeProfileProjectsDirs?: readonly string[]
 }): string[] {
   return [
     args.claudeProjectsDir ?? CLAUDE_PROJECTS_DIR,
-    ...(args.wslHomeDirs ?? []).map((homeDir) => join(homeDir, '.claude', 'projects'))
+    ...(args.wslHomeDirs ?? []).map((homeDir) => join(homeDir, '.claude', 'projects')),
+    ...(args.claudeProfileProjectsDirs ?? claudeProfileHistoryDirs('projects'))
   ]
 }
 

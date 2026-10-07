@@ -6,6 +6,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
 import { useAppStore } from '@/store'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import {
   claudeGroupedQuestionPromptItems,
   legacySingleQuestionPromptItems
@@ -31,6 +32,7 @@ vi.mock('./NativeChatQuestionCard', () => moduleFactories.nativeChatQuestionCard
 
 import { NativeChatStructuredSession } from './NativeChatStructuredSession'
 import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
+import { seededEntry, seedOutbox } from './NativeChatStructuredSession.test-harness'
 import { structuredAgentSessionDraftScopeKey } from './native-chat-composer-draft-store'
 
 describe('NativeChatStructuredSession', () => {
@@ -370,7 +372,7 @@ describe('NativeChatStructuredSession', () => {
     expect(mocks.composerProps?.isWorking).toBe(true)
   })
 
-  it('suppresses live turn activity for a pending approval but keeps background work visible', () => {
+  it('suppresses live turn activity for a pending approval but keeps background work visible', async () => {
     const approvalItems: AgentJournalRenderItem[] = [
       {
         itemId: 'approval-item',
@@ -428,6 +430,7 @@ describe('NativeChatStructuredSession', () => {
       kind: 'option',
       optionId: 'allow'
     })
+    await waitFor(() => expect(mocks.revealLatest).toHaveBeenCalledOnce())
     expect(mocks.messageListProps?.awaitingInput).toBe('shown')
 
     act(() => mocks.approvalCardProps?.onCancel?.())
@@ -508,6 +511,24 @@ describe('NativeChatStructuredSession', () => {
     act(() => mocks.composerProps?.onStop?.())
     expect(mocks.stop).toHaveBeenCalledOnce()
     expect(mocks.cancel).not.toHaveBeenCalled()
+  })
+
+  it("shows the queue's coming send as a Stop that is not live until a turn can be stopped", () => {
+    mocks.queueSendsNext = true
+    render(claudeSessionView('structured-tab-sends-next', 'session-sends-next'))
+    expect(mocks.composerProps?.isWorking).toBe(true)
+    expect(mocks.composerProps?.onStop).toBeUndefined()
+  })
+
+  it('hands the composer Resume, on its transport, only while the queue controller offers it', () => {
+    const { rerender } = render(claudeSessionView('structured-tab-resume', 'session-resume'))
+    expect(mocks.composerProps?.structuredTransport?.queueResume).toBeUndefined()
+    mocks.queuedResumable = true
+    rerender(claudeSessionView('structured-tab-resume', 'session-resume'))
+    act(() => {
+      mocks.composerProps?.structuredTransport?.queueResume?.resume()
+    })
+    expect(mocks.queuedResume).toHaveBeenCalledOnce()
   })
 
   it('keeps the strip mounted through a running turn, with the turn owning the voice', () => {
@@ -723,5 +744,103 @@ describe('NativeChatStructuredSession', () => {
       kind: 'answers',
       answers: [{ questionId: 'q1', optionIds: [], other: 'Svelte' }]
     })
+  })
+
+  // The reader may have scrolled far up; what they just did has to come into view.
+  it('brings the latest into view at the press for the submits this pane makes', async () => {
+    mocks.promptItems = legacySingleQuestionPromptItems
+    const { rerender } = render(
+      <NativeChatStructuredSession
+        isVisible
+        isFocusedGroup
+        tabId="structured-tab-reveal"
+        sessionId="session-reveal"
+        target={{ kind: 'local' }}
+        agent="claude"
+      />
+    )
+    // An answer reveals as it is pressed, before the host decides on it.
+    mocks.respond.mockReturnValueOnce(new Promise(() => {}))
+    mocks.questionCardProps?.onAnswer([{ indices: [1], other: '' }])
+    expect(mocks.respond).toHaveBeenCalledOnce()
+    expect(mocks.revealLatest).toHaveBeenCalledOnce()
+
+    mocks.promptItems = []
+    rerender(
+      <NativeChatStructuredSession
+        isVisible
+        isFocusedGroup
+        tabId="structured-tab-reveal"
+        sessionId="session-reveal"
+        target={{ kind: 'local' }}
+        agent="claude"
+      />
+    )
+    const steerQueued = mocks.composerProps?.steerQueued
+    const onSubmitted = mocks.composerProps?.structuredTransport?.onSubmitted
+    if (!steerQueued || typeof onSubmitted !== 'function') {
+      throw new Error('Structured composer was not wired')
+    }
+    mocks.revealLatest.mockClear()
+
+    // Refused: nothing was steered, so nothing moves.
+    expect(steerQueued()).toBe(false)
+    expect(mocks.revealLatest).not.toHaveBeenCalled()
+
+    // The composer's sends reveal through its transport.
+    onSubmitted()
+    expect(mocks.revealLatest).toHaveBeenCalledOnce()
+    mocks.queuedSteerNewest.mockReturnValue(true)
+    expect(steerQueued()).toBe(true)
+    expect(mocks.revealLatest).toHaveBeenCalledTimes(2)
+  })
+
+  it('reveals the latest when a delivery notice retries its message', async () => {
+    mocks.mode = 'outbox'
+    mocks.call.mockResolvedValue({
+      ok: true,
+      value: { submission: { clientMessageId: 'op-head', dispatchState: 'accepted' } }
+    })
+    seedOutbox('session-retry-reveal', [
+      seededEntry('session-retry-reveal', 'op-head', 'first', 'unconfirmed')
+    ])
+    render(
+      <NativeChatStructuredSession
+        isVisible
+        isFocusedGroup
+        tabId="structured-tab-retry-reveal"
+        sessionId="session-retry-reveal"
+        target={{ kind: 'local' }}
+        agent="codex"
+      />
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: /Retry/ }))
+
+    expect(mocks.revealLatest).toHaveBeenCalledOnce()
+    await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
+  })
+
+  it("brings the latest into view when a queued card's Steer sends it now", () => {
+    mocks.queuedCards = [
+      { messageId: 'draft-1', position: 1, text: 'Also check SSH', state: 'waiting', hold: 'turn' }
+    ]
+    render(
+      <TooltipProvider>
+        <NativeChatStructuredSession
+          isVisible
+          isFocusedGroup
+          tabId="structured-tab-queue"
+          sessionId="session-queue"
+          target={{ kind: 'local' }}
+          agent="claude"
+        />
+      </TooltipProvider>
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /Steer/ }))
+
+    expect(mocks.queuedSteer).toHaveBeenCalledWith('draft-1')
+    expect(mocks.revealLatest).toHaveBeenCalledOnce()
   })
 })

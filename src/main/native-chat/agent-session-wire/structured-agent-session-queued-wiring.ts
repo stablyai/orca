@@ -40,7 +40,7 @@ export function wireStructuredAgentSessionQueuedMessages(
     drain,
     /** Every journal publish: turn, submission, prompt, command and Stop
      *  settlements are all commits, and each re-derives the drain's gates —
-     *  and adopts a restart's cards once a person's turn started. */
+     *  and adopts a restart's cards once a turn started. */
     onJournalActivity: (sessionId: string) => {
       sessions.touch(sessionId)
       const journal = sessions.get(sessionId)?.journal

@@ -435,6 +435,7 @@ describe('jumping from the rail while following the end', () => {
     await settle(10)
     // A reader parked above the end, so the button shows.
     act(() => {
+      fireEvent.wheel(scroller(), { deltaY: -100 })
       scroller().scrollTop = 200
     })
     await settle(2)
@@ -449,6 +450,29 @@ describe('jumping from the rail while following the end', () => {
     expect(pages.asked()).toBe(1)
     expect(screen.queryByText('prompt-5')).toBeNull()
     expect(distanceFromBottom()).toBe(0)
+  })
+
+  it('jumps to a message without animating when the reader asks for reduced motion', async () => {
+    vi.spyOn(window, 'matchMedia').mockImplementation((query: string) => ({
+      matches: query === '(prefers-reduced-motion: reduce)',
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false
+    }))
+    render(<PagedTranscript />)
+    await settle(10)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Your messages' }))
+    await frame()
+    fireEvent.click(screen.getByRole('button', { name: 'prompt-45' }))
+    await frame()
+
+    // A smooth scroll would still be easing in here, a few pixels from where it started.
+    expect(Math.abs(rowOffsetFromViewportTop('prompt-45'))).toBeLessThanOrEqual(2)
   })
 })
 

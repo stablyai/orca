@@ -58,7 +58,7 @@ export function createActivityThreadActions({
    *  badge-coherent set (child-filter only), not the search/scope-narrowed one,
    *  so Mark all read always drives the Agents badge to zero. */
   getMarkAllReadThreads: () => AgentPaneThread[]
-  acknowledgeAgents: (paneKeys: string[]) => void
+  acknowledgeAgents: (paneKeys: string[], reads?: undefined, intent?: 'explicit') => void
   unacknowledgeAgents: (paneKeys: string[]) => void
   setSelectedPaneKey: (paneKey: string | null) => void
 }): {
@@ -71,7 +71,11 @@ export function createActivityThreadActions({
   markAllThreadsRead: () => void
 } {
   const markThreadsRead = (threads: readonly AgentPaneThread[]): void => {
-    acknowledgeAgents(threads.map((thread) => thread.paneKey))
+    acknowledgeAgents(
+      threads.map((thread) => thread.paneKey),
+      undefined,
+      'explicit'
+    )
   }
 
   const markThreadsUnread = (threads: readonly AgentPaneThread[]): void => {
@@ -151,7 +155,7 @@ export function createActivityThreadActions({
     if (unreadKeys.length === 0) {
       return
     }
-    acknowledgeAgents(unreadKeys)
+    acknowledgeAgents(unreadKeys, undefined, 'explicit')
   }
 
   return {

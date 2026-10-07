@@ -415,7 +415,7 @@ describe('buildAgentLaunchRouteInput', () => {
       }
     })
 
-    // A launch command override applies to terminal launches only, here or on the server.
+    // A launch command override never decides the surface, here or on the server.
     it("does not route on this machine's launch command override for the server", () => {
       const settings = { ...STRUCTURED_SETTINGS, agentCmdOverrides: { claude: 'claude-wrapper' } }
       expect(

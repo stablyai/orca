@@ -1,8 +1,5 @@
 import { getAttachmentLabel } from '@/lib/new-workspace'
-import {
-  getFullComposerCreateDisabled,
-  getQuickComposerCreateDisabled
-} from '@/lib/new-workspace-create-gates'
+import { getQuickComposerCreateDisabled } from '@/lib/new-workspace-create-gates'
 import type { ComposerModel } from './composer-model'
 import type { ComposerCardActionProps, ComposerCardSourceProps } from './composer-card-contract'
 
@@ -14,7 +11,6 @@ export function buildComposerCardProps(state: ComposerModel) {
     baseBranch,
     branchNameOverride,
     parentWorktreeId,
-    createGateMode,
     createError,
     createMultiple,
     creating,
@@ -89,7 +85,6 @@ export function buildComposerCardProps(state: ComposerModel) {
     selectedRepoIsGit,
     selectedRepoProjectId,
     selectedRepoRequiresConnection,
-    shouldWaitForIssueAutomationCheck,
     sourceIntentBlocksCreate,
     sparseError,
     selectedRepoSshStatus,
@@ -116,26 +111,19 @@ export function buildComposerCardProps(state: ComposerModel) {
     sparsePresets,
     sparseSelectedPresetId,
     startFromResetHint,
-    submit,
     tuiAgent
   } = state
 
-  const createGateInput = {
+  const repoCreateDisabled = getQuickComposerCreateDisabled({
     repoId,
     workspaceSeedName,
     creating,
-    shouldWaitForSetupCheck,
-    shouldWaitForIssueAutomationCheck,
     sourceIntentBlocksCreate,
     requiresExplicitSetupChoice,
     hasSetupDecision: Boolean(setupDecision),
     selectedRepoRequiresConnection,
     sparseError
-  }
-  const repoCreateDisabled =
-    createGateMode === 'quick'
-      ? getQuickComposerCreateDisabled(createGateInput)
-      : getFullComposerCreateDisabled(createGateInput)
+  })
   const createDisabled = isProjectGroupTarget ? folderCreateDisabled : repoCreateDisabled
   const cardProps: ComposerCardSourceProps & ComposerCardActionProps = {
     eligibleRepos: isProjectGroupTarget ? folderSourceRepos : eligibleRepos,
@@ -216,7 +204,6 @@ export function buildComposerCardProps(state: ComposerModel) {
     createDisabled,
     projectError: isProjectGroupTarget ? pathStatusProjectError : projectError,
     creating,
-    onCreate: () => void submit(),
     baseBranch: isProjectGroupTarget ? undefined : baseBranch,
     onBaseBranchChange: isProjectGroupTarget ? () => {} : handleBaseBranchChange,
     onBaseBranchPrSelect: isProjectGroupTarget ? () => {} : handleBaseBranchPrSelect,

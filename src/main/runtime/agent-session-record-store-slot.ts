@@ -27,8 +27,14 @@ export type OpenedAgentSessionRecordStore = {
   store: AgentSessionRecordStore
 }
 
-let opening: { stateDirectory: string; opened: Promise<OpenedAgentSessionRecordStore> } | null =
-  null
+type RecordStoreSlot = {
+  stateDirectory: string
+  opened: Promise<OpenedAgentSessionRecordStore>
+  /** Set once `opened` resolves, so a reader that must not wait can ask without awaiting. */
+  store?: AgentSessionRecordStore
+}
+
+let opening: RecordStoreSlot | null = null
 
 export function openAgentSessionRecordStoreOnce(
   location: AgentSessionRecordStoreLocation
@@ -40,24 +46,35 @@ export function openAgentSessionRecordStoreOnce(
     }
     return opening.opened
   }
-  const slot = {
+  const slot: RecordStoreSlot = {
     stateDirectory: location.stateDirectory,
-    opened: openRecordStore(location).catch((error: unknown) => {
-      // A failed open must not poison the slot: the next caller retries.
-      if (opening === slot) {
-        opening = null
+    opened: openRecordStore(location).then(
+      (opened) => {
+        slot.store = opened.store
+        return opened
+      },
+      (error: unknown) => {
+        // A failed open must not poison the slot: the next caller retries.
+        if (opening === slot) {
+          opening = null
+        }
+        throw error
       }
-      throw error
-    })
+    )
   }
   opening = slot
   return slot.opened
 }
 
+/** The store when it is already open; null while it opens or before anything asked for it. */
+export function peekOpenedAgentSessionRecordStore(): AgentSessionRecordStore | null {
+  return opening?.store ?? null
+}
+
 async function openRecordStore(
   location: AgentSessionRecordStoreLocation
 ): Promise<OpenedAgentSessionRecordStore> {
-  const journalDatabase = await openStructuredAgentSessionJournalDatabase(location)
+  const journalDatabase = openStructuredAgentSessionJournalDatabase(location)
   try {
     return {
       journalDatabase,

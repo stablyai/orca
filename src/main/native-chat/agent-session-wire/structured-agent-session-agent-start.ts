@@ -50,6 +50,8 @@ export type StructuredAgentSessionResumeOutcome =
       /** What the provider said about the failed start, for the chat's own record; host-side
        *  only, never on the refusal. */
       diagnostic?: ProviderDiagnostic
+      /** The host's own close, Stop or quit aborted the start, so it failed nothing it was for. */
+      aborted?: true
       argumentProblem?: AgentSessionArgumentProblem
     }
 
@@ -165,11 +167,15 @@ async function startStructuredAgentSessionAgent(
   }
   let attached: AgentSessionMutationResult<AgentSessionAttachResult>
   let acquisitionError: unknown
+  let aborted = false
   try {
     attached = await attachStructuredAgentSessionUnderSerialize(context, callerKey, params, {
       ...(startedFor === undefined ? {} : { startedFor }),
       onAcquisitionFailed: (error) => {
         acquisitionError = error
+      },
+      onAborted: () => {
+        aborted = true
       }
     })
   } catch (error) {
@@ -184,16 +190,17 @@ async function startStructuredAgentSessionAgent(
       error
     )
     if (settled) {
-      return withDiagnostic(settled.refusal, error)
+      return withDiagnostic(settled.refusal, error, aborted)
     }
     throw error
   }
-  return attached.ok ? { ok: true } : withDiagnostic(attached.refusal, acquisitionError)
+  return attached.ok ? { ok: true } : withDiagnostic(attached.refusal, acquisitionError, aborted)
 }
 
 function withDiagnostic(
   refusal: AgentSessionWireRefusal,
-  error: unknown
+  error: unknown,
+  aborted: boolean
 ): StructuredAgentSessionResumeOutcome {
   const diagnostic = providerDiagnosticOf(error)
   const argumentProblem = argumentProblemOf(error)
@@ -201,6 +208,7 @@ function withDiagnostic(
     ok: false,
     refusal,
     ...(diagnostic ? { diagnostic } : {}),
+    ...(aborted ? { aborted: true as const } : {}),
     ...(argumentProblem ? { argumentProblem } : {})
   }
 }

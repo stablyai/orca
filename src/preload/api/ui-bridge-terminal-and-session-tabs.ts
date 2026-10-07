@@ -2,6 +2,11 @@ import { ipcRenderer } from 'electron'
 import type { TerminalPaneSplitSource } from '../../shared/feature-education-telemetry'
 import type { TerminalTabCreateReply } from '../../shared/terminal-reveal-identity'
 import type {
+  AgentLaunchTabPublishReply,
+  AgentLaunchTabPublishRequest
+} from '../../shared/agent-launch-tab-publication'
+import type { AgentLaunchPaneVerdictEvent } from '../../shared/agent-launch-pane-verdict'
+import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
 } from '../../shared/agent-session-resume'
@@ -91,6 +96,25 @@ export const uiTerminalAndSessionTabsApi = {
   },
   replyTerminalCreate: (reply: TerminalTabCreateReply): void => {
     ipcRenderer.send('terminal:tabCreateReply', reply)
+  },
+  onPublishAgentLaunchTab: (
+    callback: (data: AgentLaunchTabPublishRequest) => void
+  ): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: AgentLaunchTabPublishRequest) =>
+      callback(data)
+    ipcRenderer.on('ui:publishAgentLaunchTab', listener)
+    return () => ipcRenderer.removeListener('ui:publishAgentLaunchTab', listener)
+  },
+  replyAgentLaunchTabPublish: (reply: AgentLaunchTabPublishReply): void => {
+    ipcRenderer.send('agentLaunch:tabPublishReply', reply)
+  },
+  onAgentLaunchPaneVerdict: (
+    callback: (data: AgentLaunchPaneVerdictEvent) => void
+  ): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: AgentLaunchPaneVerdictEvent) =>
+      callback(data)
+    ipcRenderer.on('ui:agentLaunchPaneVerdict', listener)
+    return () => ipcRenderer.removeListener('ui:agentLaunchPaneVerdict', listener)
   },
   onSplitTerminal: (
     callback: (data: {

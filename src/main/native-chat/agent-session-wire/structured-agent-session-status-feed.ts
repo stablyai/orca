@@ -27,10 +27,7 @@ import {
   type StructuredAgentSessionJournalProjection
 } from './structured-agent-session-status-journal-projection'
 import { structuredStatusSummariesEqual } from './structured-agent-session-status-summary-equality'
-import {
-  deferredStructuredAgentSessionLogger,
-  type StructuredAgentSessionLogger
-} from './structured-agent-session-logger'
+import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 import {
   StructuredAgentSessionStatusOwnership,
   type StructuredAgentSessionStatusSink
@@ -72,40 +69,12 @@ export type StructuredAgentSessionStatusFeedDeps = {
   onAgentStarted?: (sessionId: string) => void
 }
 
-/** Wire the host's own deps into a feed; keeps the host at one call site.
- *  `deps` is a thunk because the host builds the feed in a field initializer,
- *  before its constructor parameters are assigned. */
-export function createStructuredAgentSessionHostStatusFeed(args: {
-  sessions: StructuredAgentSessionStatusFeedDeps['sessions']
-  now: () => number
-  deps: () => {
-    store: { getRecord: (sessionId: string) => AgentSessionRecord | null }
-    logger: StructuredAgentSessionLogger
-    onSessionStatusChanged?: StructuredAgentSessionStatusFeedDeps['onStatusChanged']
-    statusSink?: StructuredAgentSessionStatusSink
-  }
-  onAgentStarted?: (sessionId: string) => void
-  onChildWorkChanged?: (sessionId: string) => void
-}): StructuredAgentSessionStatusFeed {
-  return new StructuredAgentSessionStatusFeed({
-    sessions: args.sessions,
-    getRecord: (sessionId) => args.deps().store.getRecord(sessionId),
-    now: args.now,
-    logger: deferredStructuredAgentSessionLogger(() => args.deps().logger),
-    onStatusChanged: (summary, options) => args.deps().onSessionStatusChanged?.(summary, options),
-    // Resolved per call for the same reason the other deps are: the host builds this feed in a
-    // field initializer, before its constructor parameters are assigned.
-    statusSink: () => args.deps().statusSink,
-    ...(args.onAgentStarted ? { onAgentStarted: args.onAgentStarted } : {}),
-    ...(args.onChildWorkChanged ? { onChildWorkChanged: args.onChildWorkChanged } : {})
-  })
-}
-
 export class StructuredAgentSessionStatusFeed {
   private readonly ownership = new StructuredAgentSessionStatusOwnership(() =>
     this.deps.statusSink?.()
   )
   private readonly subscribers = new Map<string, StructuredAgentSessionStatusSubscriber>()
+  // Never evicted: chats are named only while in here, and AI Vault reads closed ones' names here.
   private readonly published = new Map<
     string,
     {
@@ -207,6 +176,28 @@ export class StructuredAgentSessionStatusFeed {
       session: retained
     })
   }
+
+  /** The record's name changed outside the journal. A closed chat's retained row follows it too,
+   *  so every list still showing that conversation learns the name without a tab. */
+  publishConversationName(sessionId: string): void {
+    if (this.deps.sessions.has(sessionId)) {
+      this.publish(sessionId)
+      return
+    }
+    const publication = this.published.get(sessionId)
+    const name = this.deps.getRecord(sessionId)?.conversationName
+    if (!publication || publication.summary.conversationName === name) {
+      return
+    }
+    const { conversationName: _previous, ...rest } = publication.summary
+    const summary = name ? { ...rest, conversationName: name } : rest
+    this.published.set(sessionId, { ...publication, summary })
+    this.broadcast({ type: 'status', session: summary })
+  }
+
+  /** The summary last published for the session, as every status subscriber last saw it. */
+  readPublished = (sessionId: string): AgentSessionStatusSummary | undefined =>
+    this.published.get(sessionId)?.summary
 
   /** The projection behind the session's row, cached per commit: the latest request it read, so
    *  the completion feed follows it without snapshotting the journal again, and its `stopping`,

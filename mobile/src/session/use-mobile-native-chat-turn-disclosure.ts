@@ -8,10 +8,10 @@ import {
 import type { NativeChatSettledTurns } from '../../../src/shared/native-chat-turn-status'
 import {
   isNativeChatRowInLiveWorkingTurn,
-  nativeChatMessagesWaitingBehindLiveTurn,
   nativeChatTurnMembership,
   type NativeChatTurnJournal
 } from '../../../src/shared/native-chat-turn-membership'
+import { nativeChatMessagesWaitingBehindLiveTurn } from '../../../src/shared/native-chat-messages-waiting-behind-live-turn'
 import {
   nativeChatRowsInDrawOrder,
   nativeChatTurnBarRows
@@ -135,7 +135,12 @@ export function useMobileNativeChatTurnDisclosure({
   // A message waiting behind the live turn draws after that turn's live status, not in the list.
   const waiting = useMemo(() => {
     const ids = enabled
-      ? nativeChatMessagesWaitingBehindLiveTurn(rows, turnJournal?.items, stopping)
+      ? nativeChatMessagesWaitingBehindLiveTurn(
+          rows,
+          turnJournal?.items,
+          stopping,
+          turnJournal?.submissions
+        )
       : null
     if (!ids?.size) {
       return { listMessages: rows, waitingRows: [], indexById: null }

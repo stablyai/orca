@@ -282,7 +282,6 @@ describe('MobileNativeChatQueuedMessages', () => {
     it('heads the box with why the queue is paused, for each reason', async () => {
       const rows: readonly [AgentSessionQueuePause['reason'], string][] = [
         ['stopped', 'Queue paused because you interrupted'],
-        ['restarted', 'Queue paused because Orca restarted'],
         ['cleared', 'Queue paused after you cleared the conversation']
       ]
       for (const [reason, label] of rows) {
@@ -318,7 +317,7 @@ describe('MobileNativeChatQueuedMessages', () => {
     it('Resume asks the host to lift the pause once, however fast it is tapped twice', async () => {
       let answer: (resumed: boolean) => void = () => undefined
       const onResume = vi.fn(() => new Promise<boolean>((resolve) => (answer = resolve)))
-      const mounted = await mountPaused({ pause: { reason: 'restarted' }, onResume })
+      const mounted = await mountPaused({ pause: { reason: 'stopped' }, onResume })
       // Both taps land in one frame, before the disabled state can render.
       await act(async () => {
         resumeButton(mounted).props.onPress()

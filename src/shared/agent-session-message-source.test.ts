@@ -38,8 +38,16 @@ describe("a message's sender, read through its one reader", () => {
     expect(readAgentMessageSource(structuredClone(FROM))).toEqual(FROM)
   })
 
+  it("reads a Dispatch's task back whole", () => {
+    const task: AgentMessageSource = {
+      ...FROM,
+      orchestration: { message: 'task', runId: 'r1', taskId: 't1', dispatchId: 'ctx_1' }
+    }
+    expect(readAgentMessageSource(structuredClone(task))).toEqual(task)
+  })
+
   it('keeps an agent an agent when its orchestration kind is newer than this build', () => {
-    const newer = { ...FROM, orchestration: { message: 'task', taskId: 't1' } }
+    const newer = { ...FROM, orchestration: { message: 'review', dispatchId: 'ctx_1' } }
     expect(readAgentMessageSource(newer)).toEqual({ ...FROM, orchestration: null })
     // A newer sender kind is still not the person.
     expect(readAgentMessageSource({ ...FROM, kind: 'automation' })).toMatchObject({

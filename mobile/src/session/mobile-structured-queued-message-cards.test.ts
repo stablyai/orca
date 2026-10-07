@@ -129,9 +129,6 @@ describe('mobileQueuedMessageCards', () => {
     expect(mobileQueuePauseLabel({ reason: 'stopped' })).toBe(
       'Queue paused because you interrupted'
     )
-    expect(mobileQueuePauseLabel({ reason: 'restarted' })).toBe(
-      'Queue paused because Orca restarted'
-    )
     expect(mobileQueuePauseLabel({ reason: 'cleared' })).toBe(
       'Queue paused after you cleared the conversation'
     )

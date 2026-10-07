@@ -3,6 +3,10 @@ import type { ProjectExecutionRuntimeResolution } from '../../shared/project-exe
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import type { TerminalInputKind } from '../../shared/terminal-input-kind'
 import type {
+  TerminalLeafMoveRequest,
+  TerminalLeafMoveResult
+} from '../../shared/terminal-leaf-move'
+import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
 } from '../../shared/agent-session-resume'
@@ -16,6 +20,7 @@ import type { TerminalViewAttributes } from '../../shared/terminal-view-attribut
 import type { PtyMainDeliveryDiagnostics } from '../../shared/pty-delivery-diagnostics'
 import type { AgentKind, LaunchSource, RequestKind } from '../../shared/telemetry-events'
 import type { PreloadApi } from '../api-types'
+import type { TerminalPanePlacement } from '../../shared/terminal-pane-placement'
 
 export const ptySessionControlApi = {
   spawn: (opts: {
@@ -46,6 +51,8 @@ export const ptySessionControlApi = {
     leafId?: string
     // Why: a pane with a live owner is otherwise reattached; a restart names the PTY main must stop first.
     replacesPtyId?: string
+    // Which tab and leaf a fresh PTY joins; older mains ignore it.
+    placement?: TerminalPanePlacement
     // Why: loose typing on purpose — renderer owns launch metadata, main owns whether the launch happened and validates (telemetry-plan.md §Agent launch semantics).
     telemetry?: { agent_kind: AgentKind; launch_source: LaunchSource; request_kind: RequestKind }
   }): Promise<{
@@ -160,6 +167,8 @@ export const ptySessionControlApi = {
   ): Promise<{ id: string; authoritative: boolean | null }[]> =>
     ipcRenderer.invoke('pty:getAuthoritativeBufferSnapshotCapabilities', { ids }),
   hasPty: (id: string): Promise<boolean | null> => ipcRenderer.invoke('pty:hasPty', { id }),
+  moveLeafToNewTab: (request: TerminalLeafMoveRequest): Promise<TerminalLeafMoveResult> =>
+    ipcRenderer.invoke('pty:moveLeafToNewTab', request),
   getMainBufferSnapshot: (
     id: string,
     opts?: { scrollbackRows?: number }

@@ -13,8 +13,8 @@ const MODEL_ROW = {
 }
 
 describe('codex model catalog probe', () => {
-  it.each([`"${process.execPath}"`, 'npx codex', '/missing/codex', './codex'])(
-    'lists with the session executable for Command %s',
+  it.each([`"${process.execPath}"`, ''])(
+    'lists with the session executable for Command %j',
     async (command) => {
       // The env a user's shell/config resolves for sessions, PATH included.
       const resolveEnvironment = async (): Promise<NodeJS.ProcessEnv> => ({
@@ -111,4 +111,23 @@ describe('codex model catalog probe', () => {
     })
     await expect(probe('/homes/a')).rejects.toThrow(/listed no models/)
   })
+
+  it.each(['npx codex', 'codex --profile work', '/missing/codex', './codex'])(
+    'lists nothing, and never probes the stock CLI, for Command %s',
+    async (command) => {
+      const runSession = vi.fn()
+      const probe = createCodexModelCatalogProbe({
+        resolveEnvironment: async () => ({ PATH: '/bin' }),
+        resolveCommand: (options) =>
+          resolveStructuredAgentCommand(
+            'codex',
+            { agentCmdOverrides: { codex: command } },
+            options
+          ),
+        runSession
+      })
+      await expect(probe('/homes/a')).rejects.toMatchObject({ reason: 'agentCommandNotRunnable' })
+      expect(runSession).not.toHaveBeenCalled()
+    }
+  )
 })

@@ -1,6 +1,7 @@
 import type { StoreRuntimeState } from './store-runtime-state'
 import type { PrimaryStateWriteOperations } from './primary-state-writes'
 import { enqueueWrite } from './primary-state-writes'
+import { notifyWorkspaceSessionWritten } from './workspace-session-write-listeners'
 
 const SAVE_DEBOUNCE_MS = 1_000
 const SAVE_MAX_WAIT_MS = 5_000
@@ -17,6 +18,7 @@ type WriteSchedulingOperationsRuntime = Pick<
   | 'writeGeneration'
   | 'writeTimer'
   | 'writesFrozen'
+  | 'workspaceSessionWriteListeners'
 >
 
 const writeSchedulingOperationsContext = Symbol('WriteSchedulingOperations')
@@ -36,6 +38,15 @@ export class WriteSchedulingOperations {
     const { runtime } = this[writeSchedulingOperationsContext]
     await Promise.all([runtime.pendingWrite, runtime.activeViewPreference.waitForPendingWrite()])
   }
+
+  /** Called after each in-memory workspace-session write; listeners must not throw or block. */
+  onWorkspaceSessionWritten(listener: () => void): () => void {
+    const { runtime } = this[writeSchedulingOperationsContext]
+    runtime.workspaceSessionWriteListeners.add(listener)
+    return () => {
+      runtime.workspaceSessionWriteListeners.delete(listener)
+    }
+  }
 }
 
 export function scheduleSave(
@@ -43,6 +54,7 @@ export function scheduleSave(
   dirtyDomains?: readonly string[]
 ): void {
   const { runtime, writes } = owner[writeSchedulingOperationsContext]
+  notifyWorkspaceSessionWritten(runtime, dirtyDomains)
   runtime.automationListProjectionCache = null
   const trackedDomains = runtime.dirtyProfileStateDomains
   if (dirtyDomains === undefined) {

@@ -15,7 +15,7 @@ import {
   applyAgentSessionReservation,
   type AgentSessionReserveRequest
 } from './agent-session-reservation-admission'
-import type { AgentSessionStoreState } from './agent-session-record-store-file'
+import type { AgentSessionStoreState } from './agent-session-store-state'
 import {
   claudeProviderHandle,
   codexProviderHandle
@@ -67,8 +67,6 @@ function reserveRequest(
 
 function storeState(records: readonly AgentSessionRecord[] = []): AgentSessionStoreState {
   return {
-    schemaVersion: 2,
-    hostId: 'local',
     records: new Map(records.map((record) => [record.sessionId, record])),
     operations: new Map(),
     retiredClaimKeys: [],

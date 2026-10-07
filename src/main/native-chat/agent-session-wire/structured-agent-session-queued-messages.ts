@@ -120,6 +120,27 @@ export function structuredQueueHold(input: {
   return null
 }
 
+/** The card the drain sends next, or null while anything holds the queue: the drain's own pick
+ *  through the one gate, so a client told this reads what the drain acts on. Live facts only; the
+ *  backlog is never a gate, so a lone draft drains. */
+export function nextStructuredQueuedMessage(input: {
+  journal: AgentSessionJournal
+  record: AgentSessionRecord | null
+  fence: number
+}): QueuedMessageRow | null {
+  const next = oldestActionableQueuedMessage(input.journal)
+  const { journal, fence } = input
+  // The gate's cheap `working` first: publication asks on every streamed frame, and the gate's
+  // prompt check walks the whole fold.
+  if (
+    next === null ||
+    isStructuredAgentSessionMainAgentWorking(journal.activeTurnId(), journal.submissions(), fence)
+  ) {
+    return null
+  }
+  return structuredQueueHold(input) === null ? next : null
+}
+
 /**
  * Whether a `queue-if-active` send becomes a draft: any queue hold short of
  * `blocked`, or an actionable draft already exists (FIFO backlog — an
@@ -263,7 +284,7 @@ export class StructuredAgentSessionQueuedMessageDrain {
   }
 
   schedule(sessionId: string): void {
-    const journal = this.deps.sessions.get(sessionId)?.journal
+    const journal = this.disposed ? undefined : this.deps.sessions.get(sessionId)?.journal
     if (!journal) {
       return
     }
@@ -321,16 +342,11 @@ export class StructuredAgentSessionQueuedMessageDrain {
         })
       })
     }
-    const next = oldestActionableQueuedMessage(journal)
-    if (!next) {
-      return
-    }
-    const record = this.deps.getRecord(sessionId)
     const fence = this.deps.conversationFence(sessionId)
-    // Live facts only, through the one gate; the backlog is never a gate, so a
-    // lone draft drains. Whatever clears a hold publishes or commits, which
-    // re-derives this step.
-    if (this.disposed || structuredQueueHold({ journal, record, fence }) !== null) {
+    // Whatever clears a hold publishes or commits, which re-derives this step.
+    const record = this.deps.getRecord(sessionId)
+    const next = nextStructuredQueuedMessage({ journal, record, fence })
+    if (this.disposed || !next) {
       return
     }
     // Always a fresh id: the submission names its draft by `queuedMessageId`, never by id equality.
@@ -339,7 +355,7 @@ export class StructuredAgentSessionQueuedMessageDrain {
       await journal.appendSubmission(
         {
           clientMessageId: submissionId,
-          // The queue's own automatic send: it never ends a pause.
+          // The queue's own automatic send, never kept as a card by a restart or a close.
           origin: 'host',
           payloadFingerprint: next.fingerprint,
           body: next.body,

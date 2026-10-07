@@ -8,7 +8,8 @@ import type * as TextGeneration from '../text-generation/commit-message-text-gen
 
 const mocks = vi.hoisted(() => ({
   generate: vi.fn(async () => ({ success: true as const, name: 'Login repair' })),
-  target: vi.fn(async (cwd: string) => ({ kind: 'local' as const, cwd }))
+  target: vi.fn(async (cwd: string) => ({ kind: 'local' as const, cwd })),
+  publishConversationName: vi.fn<(sessionId: string) => void>()
 }))
 
 vi.mock('../text-generation/commit-message-text-generation', async (importOriginal) => {
@@ -17,6 +18,11 @@ vi.mock('../text-generation/commit-message-text-generation', async (importOrigin
 })
 vi.mock('../agent-hooks/first-work-generation-target', () => ({
   resolveGenerationTarget: mocks.target
+}))
+vi.mock('../native-chat/agent-session-wire/structured-agent-session-registry', () => ({
+  getStructuredAgentSessionHost: () => ({
+    publishConversationName: mocks.publishConversationName
+  })
 }))
 
 beforeEach(() => vi.clearAllMocks())
@@ -32,7 +38,7 @@ function rig() {
     })),
     getAgentEnvResolvers: vi.fn(() => undefined),
     hasOpenDispatch: vi.fn(() => false),
-    onNamed: vi.fn()
+    retitleOpenTab: vi.fn()
   }
   const logger = { warn: vi.fn(), error: vi.fn() }
   return {
@@ -111,6 +117,26 @@ describe('structured chat naming runtime', () => {
     )
     expect(mocks.target).not.toHaveBeenCalled()
     expect(mocks.generate).not.toHaveBeenCalled()
+  })
+
+  it('publishes a new name to the host feed and retitles the open tab', () => {
+    const state = rig()
+    state.deps.onNamed('workspace-1', 'session-1')
+    expect(mocks.publishConversationName).toHaveBeenCalledWith('session-1')
+    expect(state.runtime.retitleOpenTab).toHaveBeenCalledWith('workspace-1', 'session-1')
+  })
+
+  it('still retitles the open tab when the feed publication fails', () => {
+    const state = rig()
+    mocks.publishConversationName.mockImplementationOnce(() => {
+      throw new Error('journal unreadable')
+    })
+    state.deps.onNamed('workspace-1', 'session-1')
+    expect(state.runtime.retitleOpenTab).toHaveBeenCalledWith('workspace-1', 'session-1')
+    expect(state.logger.warn).toHaveBeenCalledWith(
+      'Chat name publication failed',
+      expect.objectContaining({ sessionId: 'session-1' })
+    )
   })
 
   it('declines invalid agent configuration without launching anything', async () => {

@@ -56,16 +56,7 @@ export function useStructuredAgentSessionDeliveryNotices(args: {
         commandItemIds,
         loadedItems
       ),
-    [
-      outbox,
-      agentName,
-      retry,
-      journalRows,
-      startFailures,
-      failedHere,
-      commandItemIds,
-      loadedItems
-    ]
+    [outbox, agentName, retry, journalRows, startFailures, failedHere, commandItemIds, loadedItems]
   )
   // A submission batch rebuilds the map; one that says the same keeps the old, so no row re-renders.
   const previousRef = useRef(notices)

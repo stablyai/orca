@@ -20,6 +20,7 @@ import {
   createTrackedJournalOpener,
   openTestJournalHostDatabase
 } from '../agent-session-journal/journal-host-database-test-support'
+import { StructuredAgentSessionAcquireAborts } from './structured-agent-session-acquire-aborts'
 import { attachStructuredAgentSession } from './structured-agent-session-attach-orchestration'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
@@ -189,7 +190,8 @@ function attachContext(
       mintEventSink: () => eventSink,
       adoptEventSink: () => undefined,
       probeOwner: async () => ({ outcome: 'pid-absent' }),
-      discardEventSink: () => undefined
+      discardEventSink: () => undefined,
+      acquireAborts: new StructuredAgentSessionAcquireAborts()
     },
     sessions,
     subscribers: { snapshot: () => undefined, publish: () => undefined },

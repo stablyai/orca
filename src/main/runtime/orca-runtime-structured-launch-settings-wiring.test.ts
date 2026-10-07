@@ -37,9 +37,13 @@ describe('execution host structured launch settings wiring', () => {
     settings.agentDefaultArgs = { claude: '--model second', codex: '' }
     expect(await deps?.resolveLaunchArgs?.('claude')).toEqual(['--model', 'second'])
     expect(await deps?.resolveLaunchArgs?.('codex')).toEqual([])
+    const notRunnable = expect.objectContaining({ reason: 'agentCommandNotRunnable' })
     settings.agentCmdOverrides = { claude: 'wrapper --arg' }
-    expect(deps?.resolveClaudeCommand?.()).toBe(resolveCliCommand('claude'))
+    expect(() => deps?.resolveClaudeCommand?.()).toThrow(notRunnable)
     settings.agentCmdOverrides = { codex: '/missing/codex' }
+    expect(() => deps?.resolveCodexCommand?.()).toThrow(notRunnable)
+    settings.agentCmdOverrides = {}
+    expect(deps?.resolveClaudeCommand?.()).toBe(resolveCliCommand('claude'))
     expect(deps?.resolveCodexCommand?.()).toBe(resolveCliCommand('codex'))
   })
 })

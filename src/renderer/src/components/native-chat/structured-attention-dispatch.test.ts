@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { AgentSessionTurnCompletion } from '../../../../shared/agent-session-wire'
+import { agentSessionAttentionKey } from '../../../../shared/agent-session-attention'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session-journal-item-key'
 import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
 import {
@@ -36,7 +37,7 @@ vi.mock('@/lib/blocked-notification-fallback', () => ({
 const store = createTestStore()
 
 const dispatched: NotificationDispatchRequest[] = []
-const dismissed: string[][] = []
+const dismissed: { ids: string[]; paneKeys?: string[] }[] = []
 
 const { dispatchStructuredTurnCompletionAttention } =
   await import('./structured-attention-dispatch')
@@ -176,8 +177,8 @@ describe('dispatchStructuredTurnCompletionAttention', () => {
             dispatched.push(request)
             return { delivered: true }
           },
-          dismiss: async (ids: string[]) => {
-            dismissed.push(ids)
+          dismiss: async (ids: string[], paneKeys?: string[]) => {
+            dismissed.push({ ids, paneKeys })
             return { dismissed: ids.length }
           }
         }
@@ -188,6 +189,19 @@ describe('dispatchStructuredTurnCompletionAttention', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals()
+  })
+
+  it('leaves the phone to a local host, which pushed it already, and relays for a remote one', () => {
+    dispatchStructuredTurnCompletionAttention(structuredTab(), completion(), { kind: 'local' })
+    dispatchStructuredTurnCompletionAttention(structuredTab(), completion({ turnId: 'turn-2' }), {
+      kind: 'environment',
+      environmentId: 'env-1'
+    })
+    expect(dispatched.map((request) => request.mobileDeliveredByHost)).toEqual([true, undefined])
+    expect(dispatched.map((request) => request.attentionKey)).toEqual([
+      agentSessionAttentionKey({ type: 'completion', completion: completion() }),
+      agentSessionAttentionKey({ type: 'completion', completion: completion({ turnId: 'turn-2' }) })
+    ])
   })
 
   it('uses the receiving paired subscription over the tab’s execution host', () => {
@@ -354,7 +368,7 @@ describe('dispatchStructuredTurnCompletionAttention', () => {
     expect(onlyDispatch()).toMatchObject({ agentState: 'done', agentTurnOutcome: 'success' })
   })
 
-  it('delivers an id the acknowledgement round trip dismisses when the user reads the chat', () => {
+  it('delivers the edge identity as its id, retired by subject when the user reads the chat', () => {
     const paneKey = structuredAgentSessionPaneKey(CHAT_TAB, SESSION)
     store.setState({
       agentStatusByPaneKey: {
@@ -371,11 +385,14 @@ describe('dispatchStructuredTurnCompletionAttention', () => {
       }
     })
     dispatchStructuredTurnCompletionAttention(structuredTab(), completion())
-    const deliveredId = onlyDispatch().notificationId
-    expect(deliveredId).toBeTruthy()
+    // The same id the host's phone push carries, so retiring it here retires the phone's too.
+    expect(onlyDispatch().notificationId).toBe(
+      agentSessionAttentionKey({ type: 'completion', completion: completion() })
+    )
 
     store.getState().acknowledgeAgents([paneKey])
-    expect(dismissed).toEqual([[deliveredId]])
+    // Main keeps the ids it announced per pane; the subject is what retires this one.
+    expect(dismissed.flatMap((call) => call.paneKeys ?? [])).toContain(paneKey)
   })
 
   it('rejects a completion for a session this tab does not own', () => {

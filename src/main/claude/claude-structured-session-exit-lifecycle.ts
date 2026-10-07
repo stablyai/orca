@@ -106,7 +106,8 @@ export function settleClaudeUnexpectedExit(
       fence: exit.session.fence,
       acquisitionGeneration: exit.session.acquisitionGeneration,
       observedAt: deps.now?.() ?? Date.now(),
-      ...(exit.session.startup.state === 'proven' ? {} : { startupUnproven: true })
+      ...(exit.session.startup.state === 'proven' ? {} : { startupUnproven: true }),
+      ...(exit.session.startup.answered ? {} : { startupUnanswered: true })
     }
     try {
       lifecycle.emit(exit.session, ended)

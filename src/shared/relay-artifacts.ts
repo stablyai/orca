@@ -48,6 +48,8 @@ export type RelayArtifact = {
 /** The bare Windows process-table addon; see docs/reference/windows-process-enumeration.md. */
 export const RELAY_WINDOWS_PROCESS_TREE_FILENAME = 'windows-process-tree.node'
 export const RELAY_OPENCODE_SQLITE_READER_FILENAME = 'opencode-sqlite-reader.cjs'
+/** Built into the WSL-only bundle dir (out/relay/wsl), never into an SSH relay dir. */
+export const WSL_CLAUDE_PROFILE_HELPER_FILENAME = 'claude-profile-wsl.cjs'
 
 export const RELAY_ARTIFACTS: readonly RelayArtifact[] = [
   { filename: 'relay.js' },

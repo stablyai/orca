@@ -59,8 +59,8 @@ function listedResult(): DiscoverResult {
 }
 
 describe('claude model catalog probe', () => {
-  it.each([`"${process.execPath}"`, 'npx claude', '/missing/claude', './claude'])(
-    'lists with the session executable for Command %s',
+  it.each([`"${process.execPath}"`, ''])(
+    'lists with the session executable for Command %j',
     async (command) => {
       const deps = probeDeps(command)
       const captured: DiscoverInput[] = []
@@ -133,6 +133,16 @@ describe('claude model catalog probe', () => {
     })
     await expect(probe('/homes/a')).rejects.toThrow(/listed no models/)
   })
+
+  it.each(['npx claude', 'claude --verbose', '/missing/claude', './claude'])(
+    'lists nothing, and never probes the stock CLI, for Command %s',
+    async (command) => {
+      const discover = vi.fn()
+      const probe = createClaudeModelCatalogProbe({ ...probeDeps(command), discover })
+      await expect(probe('/homes/a')).rejects.toMatchObject({ reason: 'agentCommandNotRunnable' })
+      expect(discover).not.toHaveBeenCalled()
+    }
+  )
 
   it.runIf(process.platform !== 'win32')(
     'lists through a supervised one-shot that answers after its input ends',

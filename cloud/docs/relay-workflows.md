@@ -221,18 +221,12 @@ list because their pool is the US default of 10.
 
 C34 is a sixth Asia cell at the C31 shape in `asia-east2-c`, so the six Asia cells spread 2/2/2. It
 was its own topology wave, registered alone as migration-only, and the director was configured with
-`cell-ids` set to C34, all on 2026-10-05. It launched as a migration-only spare and now has a
-promotion wave of its own, with the same five-minute canary C30 and C31 ran. The canary lands on
-C34 because it is the emptiest general Asia cell once promoted. Promotion compares the director's
-serving digest and C34's runtime digest with the one `image-digest` input, so C34 must first be
-rolled to the director's image. That roll is a same-cap wave that enters and leaves
-migration-only, so it moves nobody. C34 stays in the same-cap migration-only list until its promotion
-succeeds, because a same-cap job reads a cell's class from that list, not from the selector. It
-then moves to the general list and the fleet pool list together, as its own reviewed change,
-before any same-cap wave names C34 again. Between promotion and that change, do not run a same-cap
-wave on C34; a rollback there would demote it. Do not name it in the multi-target
-`promote-general-cell` or `retire-migration-cell` modes, which accept any migration-only cell. It
-is a declared rehome source.
+`cell-ids` set to C34, all on 2026-10-05. It launched as a migration-only spare and has a promotion
+wave of its own, with the same five-minute canary C30 and C31 ran. Promotion compares the
+director's serving digest and C34's runtime digest with the one `image-digest` input, so C34 was
+first rolled to the director's image as a migration-only same-cap wave. Once its canary promoted
+it, it moved to the same-cap general list and the fleet pool list together, so the same-cap job now
+rolls it as a general cell and a rollback restores it general. It is a declared rehome source.
 Rollback returns
 Asia cells to migration-only; it does not destroy the network or use
 existing-only. The production topology dispatch remains unavailable until the

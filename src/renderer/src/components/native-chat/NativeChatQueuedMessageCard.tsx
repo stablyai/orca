@@ -26,7 +26,10 @@ import {
   QUEUED_MESSAGE_PAUSED_SEND_FAILED
 } from '../../../../shared/agent-session-wire'
 import { isMacPlatform } from './native-chat-shortcut'
-import type { QueuedMessageCard } from './structured-agent-session-queued-cards'
+import {
+  queuedMessageCardSteers,
+  type QueuedMessageCard
+} from './structured-agent-session-queued-cards'
 import { queuedCardSenderLine } from './native-chat-agent-message-sender-label'
 
 /** The visible caption under the text; the default waiting hold needs none. */
@@ -88,15 +91,14 @@ export function queuedMessageCardCaption(card: QueuedMessageCard): string | null
   }
 }
 
-/** Steer names the mid-turn jump, also while the whole queue is paused; a card held on its own
- *  or returned is not waiting on the turn, so its action and tooltip are plainly Send. */
+/** Steer's or Send's label and tooltip (`queuedMessageCardSteers`). */
 export function queuedMessageCardSendNow(card: QueuedMessageCard): {
   /** Steer's ↳, or Send's paper plane. */
   steers: boolean
   label: string
   hint: string
 } {
-  if (card.hold === 'paused' || card.hold === 'returned') {
+  if (!queuedMessageCardSteers(card)) {
     return {
       steers: false,
       label: translate('components.native-chat.queuedMessages.send', 'Send'),

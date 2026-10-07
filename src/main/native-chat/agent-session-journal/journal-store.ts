@@ -107,12 +107,9 @@ export class AgentSessionJournal {
     this.queue = new JournalWriteQueue(options.identity.sessionId)
     const collaborators = createJournalStoreCollaborators({
       identity: this.identity,
-      legacyDirectory: this.database.legacyDirectoryFor(this.identity),
       now: this.now,
       mintEpoch: this.mintEpoch,
       serialize: (run) => this.queue.serialize(run),
-      deferPerSessionImport: options.deferPerSessionImport === true,
-      owe: (work) => this.queue.owe(work),
       database: () => this.database,
       state: () => this.state,
       // A newer Orca's database: nothing it holds opens, and every write is refused.
@@ -175,20 +172,6 @@ export class AgentSessionJournal {
    *  without its writer saying so. One listener: a later call replaces it. It must not throw. */
   observeCommits(listener: () => void): void {
     this.onCommitted = listener
-  }
-
-  /**
-   * Resolves once the chat's rows are in the host's database. A restore's open serves a chat still
-   * in its per-chat file from a read-only fold of it; the copy runs before the chat's first write.
-   * A reader that needs rows (forward pages, catch-up) and every mutation's open await it here, so
-   * each reads the fold after every earlier write.
-   */
-  whenImported(): Promise<void> {
-    return this.queue.serialize(() => undefined)
-  }
-
-  get importPending(): boolean {
-    return this.queue.owing
   }
 
   cursor = (): AgentJournalCursor => ({
@@ -264,7 +247,7 @@ export class AgentSessionJournal {
   canonicalItemId = (itemId: string): string => resolveJournalItemId(this.state, itemId)
 
   /** Reads the fold with every write issued before this call committed, and none issued after: at
-   *  once unless writes still wait behind an owed import or a running write. */
+   *  once unless a write is running or writes wait in line. */
   readInOrder<T>(read: () => T): Promise<T> {
     return this.queue.readInOrder(read)
   }
@@ -338,7 +321,7 @@ export class AgentSessionJournal {
     return markJournalPendingSubmissionsUnknown(this, fence, reason)
   }
 
-  /** Reject unanswered sends after an owner that never proved its start ended: none was written. */
+  /** Reject sends a child that ended in its start was handed and never echoed: none ran. */
   async rejectPendingSubmissions(
     fence: number,
     rejection: AgentJournalDispatchRejection

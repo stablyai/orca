@@ -31,6 +31,7 @@ import {
   type WindowsSessionCommandAudit
 } from './ssh-session-command-audit'
 import {
+  isWindowsHostCellId,
   readWindowsHostCellDescriptor,
   windowsHostCell,
   windowsHostSshTarget
@@ -54,6 +55,9 @@ describe.runIf(RUN)('SSH relay on a Windows OpenSSH host', () => {
     'lands the cell the descriptor names',
     async () => {
       const descriptor = readWindowsHostCellDescriptor(process.env.ORCA_SSH_WINDOWS_HOST_CELL ?? '')
+      if (!isWindowsHostCellId(descriptor.cell)) {
+        throw new Error(`${descriptor.cell} does not run in the relay lane`)
+      }
       const cell = windowsHostCell(descriptor.cell, descriptor.target)
       const observer = localHostObserver(descriptor.forbiddenToolLog)
       const sshTarget = windowsHostSshTarget(descriptor, cell, randomUUID())
@@ -64,7 +68,11 @@ describe.runIf(RUN)('SSH relay on a Windows OpenSSH host', () => {
         const violations = windowsSessionCommandViolations(audit, { uploaded })
         expect(violations, `${cell.id}: ${violations.join('; ')}`).toEqual([])
       }
-      const receipt: Record<string, unknown> = { cell: cell.id, target: descriptor.target, audits }
+      const receipt: Record<string, unknown> = {
+        cell: cell.id,
+        target: descriptor.target,
+        audits
+      }
       // The deploy logs each relay launch; the cell reads them to prove which route ran.
       const launches: unknown[] = []
       const logSpy = vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {

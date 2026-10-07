@@ -164,7 +164,7 @@ export class JournalQueuedMessages {
   /** The person's Stop still pausing the queue, if any (`journalUserStopInForce`). */
   userStopInForce(): JournalQueuePauseMarks['latestStop'] {
     const state = this.deps.state()
-    return journalUserStopInForce(state.queuePauseMarks, state.latestPersonTurnSequence)
+    return journalUserStopInForce(state.queuePauseMarks, state.latestAcceptedTurnSequence)
   }
 
   private derivePauses(
@@ -175,16 +175,16 @@ export class JournalQueuedMessages {
     return deriveQueuePauses({
       epoch: state.epoch,
       marks: state.queuePauseMarks,
-      latestPersonTurnSequence: state.latestPersonTurnSequence,
+      latestAcceptedTurnSequence: state.latestAcceptedTurnSequence,
       cards,
       hostInstance,
       restartEnded: this.restartEnded()
     })
   }
 
-  /** A person's turn started since this handle opened, which ends a restart's pause. */
+  /** A turn started since this handle opened, which ends a restart's pause. */
   restartEnded(): boolean {
-    const latest = this.deps.state().latestPersonTurnSequence
+    const latest = this.deps.state().latestAcceptedTurnSequence
     return latest > 0 && !this.deps.wroteBeforeOpen(latest)
   }
 
@@ -344,7 +344,7 @@ export class JournalQueuedMessages {
    * no hook), then retention runs.
    */
   repairAndPrune(): Promise<void> {
-    // No draft, no work, and no write: a chat whose first-use copy is still owed stays uncopied.
+    // No draft, no work, and no write.
     if (this.deps.readOnly() || this.list().length === 0) {
       return Promise.resolve()
     }

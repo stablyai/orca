@@ -1,7 +1,10 @@
 import { useCallback, useLayoutEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { NATIVE_FILE_DROP_MAX_PATHS } from '../../../../shared/native-file-drop'
-import { nativeChatAttachmentOwnerUnchanged } from './native-chat-resolved-path-ownership'
+import {
+  nativeChatAttachmentOwnerUnchanged,
+  type NativeChatResolvedPathOptions
+} from './native-chat-resolved-path-ownership'
 import {
   nativeChatAttachmentOwnerChangedNotice,
   nativeChatAttachmentUnreadableNotice,
@@ -14,6 +17,7 @@ import {
   type NativeChatAttachmentOwner
 } from './native-chat-attachment-upload'
 import { userNamedFileAccess } from '@/lib/local-file-access'
+import { findTerminalTabWorktreeId } from './native-chat-file-link'
 
 export type UseNativeChatExternalAttachmentsArgs = {
   terminalTabId: string
@@ -21,7 +25,11 @@ export type UseNativeChatExternalAttachmentsArgs = {
   /** Live composer-disabled state; read at await-resume via a ref so a flip
    *  mid-upload doesn't attach into a guarded composer. */
   disabled: boolean
-  attachResolvedPaths: (paths: string[], connectionId?: string | null) => void
+  attachResolvedPaths: (
+    paths: string[],
+    connectionId?: string | null,
+    options?: NativeChatResolvedPathOptions
+  ) => void
   setNotice: (notice: string | null) => void
 }
 
@@ -95,10 +103,18 @@ export function useNativeChatExternalAttachments({
       // the silent-failure complaint in #15782. Only a disabled composer stays
       // quiet — it is being torn down or guarded, and has no notice surface.
       const capturedWorkspace = workspaceRef.current
+      const currentWorktreeId = (): string | null =>
+        workspaceRef.current.structuredWorktreeId ??
+        findTerminalTabWorktreeId(
+          useAppStore.getState().tabsByWorktree,
+          workspaceRef.current.terminalTabId
+        )
+      const capturedWorktreeId = currentWorktreeId()
       // Both halves matter: a moved tab can land on a workspace that reports the
       // same owner kind, and the owner alone would call that unchanged.
       const ownerStillCurrent = (): boolean =>
         isSameComposerWorkspace(capturedWorkspace, workspaceRef.current) &&
+        capturedWorktreeId === currentWorktreeId() &&
         nativeChatAttachmentOwnerUnchanged(owner, resolveAttachmentOwner())
       if (owner.kind !== 'ssh') {
         void (async () => {
@@ -129,7 +145,7 @@ export function useNativeChatExternalAttachments({
             setNotice(nativeChatAttachmentUnreadableNotice())
             return
           }
-          attachResolvedPaths(readablePaths)
+          attachResolvedPaths(readablePaths, undefined, { destinationIsCurrent: ownerStillCurrent })
         })()
         return
       }
@@ -148,7 +164,9 @@ export function useNativeChatExternalAttachments({
           setNotice(nativeChatAttachmentOwnerChangedNotice())
           return
         }
-        attachResolvedPaths(remotePaths, owner.connectionId)
+        attachResolvedPaths(remotePaths, owner.connectionId, {
+          destinationIsCurrent: ownerStillCurrent
+        })
       })()
     },
     [attachResolvedPaths, resolveAttachmentOwner, setNotice]

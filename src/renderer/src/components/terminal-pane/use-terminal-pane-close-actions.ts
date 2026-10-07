@@ -18,6 +18,7 @@ import type { TerminalPaneBindingController } from './use-terminal-pane-layout-b
 import { retireUnboundIpcTerminalPane } from './retire-unbound-ipc-terminal-pane'
 import { capturePendingTerminalPaneClose } from './terminal-pane-close-admission'
 import { commitTerminalSurfaceClose } from '@/store/terminals/terminal-surface-close-intent'
+import { noteAgentLaunchPaneClosedByUser } from '@/lib/agent-launch-pane-closes'
 
 export function useTerminalPaneCloseActions(controller: TerminalPaneBindingController) {
   const confirmedCloseRef = useRef<(() => void) | null>(null)
@@ -51,6 +52,13 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
         clearSessionRestoredBannerForPane(paneId)
         const leafId = manager.getLeafId(paneId)
         if (leafId) {
+          const launchPane = useAppStore
+            .getState()
+            .tabsByWorktree[worktreeId]?.find((tab) => tab.id === tabId)?.agentLaunchPane
+          if (launchPane?.leafId === leafId && !launchPane.outcome) {
+            // The user closed a launch pane whose agent is still starting; main stops that launch.
+            noteAgentLaunchPaneClosedByUser(tabId, leafId)
+          }
           commitTerminalSurfaceClose(worktreeId, { kind: 'pane', tabId, leafId })
           retireUnboundIpcTerminalPane({
             getState: useAppStore.getState,
@@ -231,22 +239,23 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
       if (!isTerminalTabStripDropTarget(target)) {
         return false
       }
-      const fallbackPtyId = paneTransportsRef.current.get(sourcePaneId)?.getPtyId() ?? null
+      const sourceTransport = paneTransportsRef.current.get(sourcePaneId)
+      const livePtyId = sourceTransport?.getPtyId() ?? null
       const sourcePaneCwd = paneCwdRef.current.get(sourcePaneId)
-      return (
-        detachTerminalPaneToTab({
-          fallbackPtyId,
-          getStore: useAppStore.getState,
-          manager: managerRef.current,
-          persistLayoutSnapshot,
-          sourcePaneId,
-          ...(sourcePaneCwd ? { sourcePaneCwd } : {}),
-          sourceTabId: tabId,
-          targetGroupId: target.groupId,
-          targetIndex: target.insertionIndex,
-          worktreeId
-        }) !== null
-      )
+      void detachTerminalPaneToTab({
+        livePtyId,
+        getStore: useAppStore.getState,
+        manager: managerRef.current,
+        persistLayoutSnapshot,
+        sourcePaneId,
+        ...(sourcePaneCwd ? { sourcePaneCwd } : {}),
+        sourceConnectPending: sourceTransport?.isConnectPending?.() ?? false,
+        sourceTabId: tabId,
+        targetGroupId: target.groupId,
+        targetIndex: target.insertionIndex,
+        worktreeId
+      }).catch((error) => console.warn('[terminal-pane-detach] move failed', error))
+      return true
     },
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
     [persistLayoutSnapshot, tabId, worktreeId]

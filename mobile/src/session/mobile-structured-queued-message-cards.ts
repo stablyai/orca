@@ -68,7 +68,6 @@ function pausedCaption(reason: string | undefined): string {
 
 const QUEUE_PAUSE_LABELS: Readonly<Record<string, string>> = {
   stopped: 'Queue paused because you interrupted',
-  restarted: 'Queue paused because Orca restarted',
   cleared: 'Queue paused after you cleared the conversation'
 }
 

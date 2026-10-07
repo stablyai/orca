@@ -9,8 +9,10 @@ import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire
 import {
   assertLegacyAiVaultResumeAllowed,
   assertLegacyAiVaultResumeCommandAllowed,
+  projectStructuredAiVaultSearchResponse,
   projectStructuredAiVaultSessions
 } from './structured-session-ownership'
+import type { AiVaultSearchHit } from '../../shared/ai-vault-search-types'
 import {
   claudeProviderHandle,
   codexProviderHandle
@@ -41,6 +43,39 @@ describe('structured AI Vault ownership', () => {
     )
     expect(projected.sessions[0]?.title).toBe('auth/login')
     expect(projected.sessions[1]).toBe(unowned)
+  })
+
+  it('names and owns an indexed search hit as its list row is, leaving other hits alone', () => {
+    installOwnership({ conversationName: 'auth/login' })
+    const hit: AiVaultSearchHit = {
+      agent: 'codex',
+      sessionId: PROVIDER_SESSION,
+      title: 'First prompt',
+      cwd: '/repo',
+      branch: null,
+      updatedAt: null,
+      messageCount: 1,
+      score: 1,
+      source: { presence: 'present' },
+      evidence: null
+    }
+    const other = { ...hit, sessionId: 'different-session', title: 'Original' }
+    const response = projectStructuredAiVaultSearchResponse({
+      kind: 'results',
+      hits: [hit, other],
+      page: { cursor: null, hasMore: false },
+      generation: 1,
+      truncated: { candidates: false, snippets: 0, query: false, freshness: false },
+      durationMs: 1
+    })
+    expect(response.kind === 'results' && response.hits).toEqual([
+      {
+        ...hit,
+        title: 'auth/login',
+        structuredSession: { sessionId: 'session-alpha', workspaceId: 'workspace-1' }
+      },
+      other
+    ])
   })
 
   it.each(['claude', 'codex'] as const)(

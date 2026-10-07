@@ -181,6 +181,63 @@ describe('the live turn', () => {
     expect(liveTurnKey(items)).toBe('u1')
   })
 
+  const PROVIDER_KEY = 'codex:thread:t1:0'
+  /** A send handed over (echoed under the turn's provider key, or not yet), or still queued. */
+  const sent = (
+    clientMessageId: string,
+    state: 'echoed' | 'unechoed' | 'queued'
+  ): AgentJournalSubmission => ({
+    clientMessageId,
+    fence: 1,
+    payloadFingerprint: clientMessageId,
+    dispatchState: state === 'echoed' ? 'accepted' : 'pending',
+    providerItemId: state === 'echoed' ? PROVIDER_KEY : null,
+    reason: null,
+    submittedAt: 1,
+    resolvedAt: state === 'echoed' ? 2 : null,
+    handoverRecorded: true,
+    ...(state === 'queued' ? {} : { handedOverAt: 1 })
+  })
+  const opener = agentJournalSubmissionKey('first')
+  const second = agentJournalSubmissionKey('second')
+
+  function expectOpenedBy(
+    items: readonly AgentJournalRenderItem[],
+    submissions: readonly AgentJournalSubmission[]
+  ): void {
+    expect(structuredAgentTurnAnchors(items, submissions).get('t1')).toBe(opener)
+    const membership = nativeChatTurnMembership(rows(items), { items, submissions })
+    expect(membership.liveTurnKey).toBe(opener)
+    expect(membership.turnKeys[rows(items).findIndex((row) => row.id === opener)]).toBe(opener)
+  }
+
+  // Codex can echo a steer before the send that opened the turn, under the turn's one provider key.
+  it('stays on the send that opened the running turn when a steer into it is echoed first', () => {
+    const items = [
+      user(opener),
+      turn('t1', PROVIDER_KEY, THREAD, 'running'),
+      user(second, inTurn('t1'))
+    ]
+    expectOpenedBy(items, [sent('first', 'unechoed'), sent('second', 'echoed')])
+    expect(keys(items, [sent('first', 'unechoed'), sent('second', 'echoed')])).toEqual([
+      opener,
+      opener
+    ])
+  })
+
+  // Accepted above the send's handover (queued behind /compact), and not handed over at the record.
+  it('stays on the send that opened the running turn, not a message still queued above it', () => {
+    const items = [user(second), user(opener), turn('t1', PROVIDER_KEY, THREAD, 'running')]
+    expectOpenedBy(items, [sent('first', 'unechoed'), sent('second', 'queued')])
+    expectOpenedBy(items, [sent('first', 'echoed'), sent('second', 'queued')])
+  })
+
+  // A host that hands both over before the turn opens: the echoed send, not the one still unechoed.
+  it('stays on the echoed send that opened it, not a later send handed over before the record', () => {
+    const items = [user(opener), user(second), turn('t1', PROVIDER_KEY, THREAD, 'running')]
+    expectOpenedBy(items, [sent('first', 'echoed'), sent('second', 'unechoed')])
+  })
+
   it('is the newest user row while its send has not opened a turn', () => {
     const items = [user('u1'), turn('t1', 'u1'), assistant('a1', inTurn('t1')), user('u2')]
     expect(liveTurnKey(items)).toBe('u2')

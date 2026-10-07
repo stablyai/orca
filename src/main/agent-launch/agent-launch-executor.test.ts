@@ -43,6 +43,7 @@ function harness(options: {
       calls.push(`createWorktree(startupAgent=${String(args.startupAgent)})`)
       return {
         worktreeId: 'wt-new',
+        connectionId: null,
         startupTerminalHandle: args.startupAgent ? 'term_agent_first' : undefined,
         ...carried(args.startupPrompt)
       }
@@ -251,9 +252,20 @@ describe('a launch into a workspace that already exists', () => {
 describe('an agent with no structured session', () => {
   it('stays a terminal without asking the host', async () => {
     const h = harness({})
-    const result = await h.run({ agent: 'grok', target: { kind: 'existing', worktree: 'wt-7' } })
+    const result = await h.run({ agent: 'gemini', target: { kind: 'existing', worktree: 'wt-7' } })
     expect(h.calls).toEqual(['createTerminalAgent'])
     expect(result.receipt).toMatchObject({ reason: 'agent_without_structured_session' })
+  })
+
+  it('asks the host for an agent it registered beyond Claude and Codex', async () => {
+    const h = harness({})
+    const result = await h.run({ ...CREATE_INTENT, agent: 'grok' })
+    expect(h.calls).toEqual([
+      'createWorktree(startupAgent=undefined)',
+      'createSupport',
+      'createStructuredSession'
+    ])
+    expect(result.receipt).toMatchObject({ mode: 'structured' })
   })
 })
 
@@ -689,5 +701,24 @@ describe('the surface is published as the launch stands, before its prompt is de
       prompt: { delivery: 'submit', outcome: 'unconfirmed' }
     })
     expect(result.prompt).toEqual({ delivery: 'submit', outcome: 'journaled', messageId: 'msg-1' })
+  })
+})
+
+describe('a new local worktree whose startup terminal did not come up', () => {
+  it('opens its agent in the view a local workspace allows, as an existing one would', async () => {
+    const h = harness({
+      settings: { experimentalNativeChat: true, openAgentTabsInChatByDefault: true }
+    })
+    h.createWorktree.mockImplementationOnce(async () => ({
+      worktreeId: 'wt-new',
+      connectionId: null,
+      startupTerminalHandle: undefined
+    }))
+
+    await h.run({ ...CREATE_INTENT, agent: 'opencode' })
+
+    expect(h.createTerminalAgent).toHaveBeenCalledWith(
+      expect.objectContaining({ viewMode: 'chat' })
+    )
   })
 })

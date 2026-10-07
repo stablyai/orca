@@ -1,4 +1,3 @@
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status'
 import { probeHostLiveTerminals } from '../host-live-terminal-probe'
 import {
@@ -16,7 +15,6 @@ export type HostSessionMirrorPatchFrame = {
   environmentId: string
   worktreeId: string
   decision: WebSessionTabsSnapshotDecision
-  snapshot?: RuntimeMobileSessionTabsResult
   expectedEnvironmentConnectionGeneration?: number
   expectedEnvironmentPairingRevision?: number
   expectedTrackingGeneration?: number

@@ -42,7 +42,10 @@ export function nativeChatComposerPlaceholder(
       NATIVE_CHAT_TURN_STATUS_COPY.sendAfterStop
     )
   }
-  return translate('components.native-chat.composer.placeholder', 'Send a message…')
+  return translate(
+    'components.native-chat.composer.placeholder',
+    'Ask anything, @ to mention files, / for commands'
+  )
 }
 
 export function nativeChatComposerTargetIsRemote(ptyId: string | null): boolean {

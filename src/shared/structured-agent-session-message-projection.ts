@@ -13,6 +13,7 @@ import { dispatchWasWithdrawn } from './structured-agent-session-dispatch-reject
 import type { StructuredAgentSessionOutboxEntry } from './structured-agent-session-outbox'
 import { structuredAgentSessionEntryHeldForRetry } from './structured-agent-session-outbox-admission'
 import { reconcileStructuredAgentSessionOutboxWithQueue } from './structured-agent-session-draft-hand-off'
+import { awaitsStructuredAgentSessionRetry } from './structured-agent-session-outbox-stop-withdrawal'
 import { projectStructuredItemsToNativeChat } from './structured-agent-session-projection'
 
 export type StructuredAgentSessionMessageProjectionOptions = {
@@ -181,7 +182,8 @@ export function projectStructuredAgentSessionMessages(
           ? { unsent: true as const }
           : entry.sentWhileStopping
             ? { sentWhileStopping: true as const }
-            : {})
+            : {}),
+        ...(awaitsStructuredAgentSessionRetry(entry) ? { awaitsRetry: true as const } : {})
       }))
   ]
 }

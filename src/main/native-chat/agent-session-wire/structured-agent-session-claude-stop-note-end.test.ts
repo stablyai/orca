@@ -12,6 +12,7 @@ import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-a
 import { claudeUnwrittenUserMessageError } from '../../claude/claude-agent-sdk-user-message-queue'
 import { ClaudeStructuredSessionAdapter } from '../../claude/claude-structured-session-adapter'
 import {
+  claudeStartupSettled,
   fakeClaude,
   PROVIDER_SESSION_ID,
   type FakeConnection
@@ -22,6 +23,7 @@ import { structuredClaudeLifecycleEvent } from '../../runtime/structured-claude-
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
+import { createStoppedClaudeDeadline } from './structured-agent-session-stop-deadline.test-fixture'
 import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
 import {
   HOST_TEST_NOW as NOW,
@@ -107,7 +109,7 @@ beforeEach(async () => {
     providerHandle: { kind: 'claude', sessionId: PROVIDER_SESSION_ID, leafUuid: null }
   })
   expect(await host.attach(CALLER, params)).toMatchObject({ ok: true })
-  await adapter.awaitStarted(SESSION)
+  await claudeStartupSettled(adapter, SESSION)
   await Promise.all(lifecycle)
   await host.subscribe({
     id: 'stop-note-live',
@@ -206,6 +208,15 @@ function laneDrained(): Promise<void> {
   return host['tasks'].serialize(SESSION, async () => {})
 }
 
+const stopAcrossGrace = createStoppedClaudeDeadline({
+  host: () => host,
+  adapter: () => adapter,
+  claude: () => claude,
+  sessionId: SESSION,
+  stop,
+  laneDrained
+})
+
 /** As the real connection: once a close begins it refuses every write, proven or not. */
 function closeUnprovenFor(connection: FakeConnection, failures: number): void {
   const close = connection.close
@@ -253,7 +264,7 @@ async function unconfirmedStop(): Promise<FakeConnection> {
   const connection = claude.connections[0]!
   await openTurn(connection)
   closeUnprovenFor(connection, 1)
-  await expect(stop()).resolves.toMatchObject({ ok: true })
+  await expect(stopAcrossGrace(connection, 'request-end')).resolves.toMatchObject({ ok: true })
   await eventually(async () => {
     const { notes, turn } = await notesAndTurn()
     expect(notes).toHaveLength(1)

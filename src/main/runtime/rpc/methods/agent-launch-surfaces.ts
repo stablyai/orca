@@ -36,6 +36,11 @@ import {
   trackTerminalSpawnDispatch,
   type TerminalSpawnDispatch
 } from '../../../agent-launch/agent-launch-not-started'
+import { AgentLaunchTabClosedError } from '../../../../shared/agent-launch-tab-closed'
+import {
+  agentLaunchMovesHostWindow,
+  type EarlyAgentLaunchTab
+} from './agent-launch-tab-publication'
 
 /** Replay-safe launches keep the nested attach in the same stable caller namespace as the launch. */
 export function agentLaunchSurfaceFactory(
@@ -44,8 +49,12 @@ export function agentLaunchSurfaceFactory(
   operationCallerKey?: string,
   // True when the launch shows its surface to the paired caller itself rather than to everyone.
   callerPresentsSurface = false,
-  terminalSpawn: TerminalSpawnDispatch = trackTerminalSpawnDispatch()
+  terminalSpawn: TerminalSpawnDispatch = trackTerminalSpawnDispatch(),
+  // The tab shown before the launch ran; asked at spawn, since the window's answer and the user's
+  // close can both land after admission.
+  earlyTab: Pick<EarlyAgentLaunchTab, 'windowShowsTab' | 'closedByUser'> | null = null
 ): AgentLaunchSurfaceFactory {
+  const movesHostWindow = agentLaunchMovesHostWindow(context)
   return {
     createStructuredSession: async ({
       worktreeId,
@@ -118,10 +127,15 @@ export function agentLaunchSurfaceFactory(
       cwd,
       launchSource,
       paneKey,
-      options
+      options,
+      viewMode
     }) => {
       const launchPreferences = toAgentLaunchPreferences(options)
       let promptRodeLaunchCommand = false
+      if (earlyTab?.closedByUser()) {
+        // The user closed its tab while it waited: nothing is spawned, and that is the answer.
+        terminalSpawn.rethrow(new AgentLaunchTabClosedError())
+      }
       const created = context.runtime.createTerminal(`id:${worktreeId}`, {
         // The agent id is not a shell command — `cursor` is the desktop app, its CLI is
         // `cursor-agent` — so the runtime builds the configured launcher.
@@ -143,9 +157,17 @@ export function agentLaunchSurfaceFactory(
         // A live reserved pane would be attached, not launched into, so the runtime refuses it.
         ...(paneKey ? { ...paneIdentity(paneKey), requireFreshPane: true } : {}),
         ...(launchSource ? { launchSource } : {}),
+        ...(viewMode ? { viewMode } : {}),
+        ...(earlyTab?.windowShowsTab() || !movesHostWindow ? { surfaceOwner: false as const } : {}),
         onPtySpawnDispatched: terminalSpawn.onPtySpawnDispatched
       })
       const terminal = await created.catch(terminalSpawn.rethrow)
+      if (earlyTab?.closedByUser()) {
+        // Closed while its terminal was being created: stopped before any prompt is pasted. A prompt
+        // that rode the command line reached the agent, which is stopped a moment after it starts.
+        await context.runtime.closeTerminal(terminal.handle).catch(() => {})
+        throw new AgentLaunchTabClosedError()
+      }
       return {
         handle: terminal.handle,
         // The runtime already minted this pane and baked it into the PTY's env and its own reveal;

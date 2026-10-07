@@ -26,6 +26,13 @@ vi.mock('@/store', () => ({
     } as unknown as AppState)
 }))
 
+// The host's saved names by chat id, as the status feed would publish them.
+const savedNames = vi.hoisted(() => new Map<string, string>())
+vi.mock('@/runtime/structured-conversation-name', () => ({
+  useStructuredChatTabConversationName: (tab: { entityId: string } | undefined) =>
+    (tab && savedNames.get(tab.entityId)) ?? null
+}))
+
 function makeAgent(overrides: Partial<DashboardAgentRow> = {}): DashboardAgentRow {
   return {
     paneKey: 'tab-1:leaf-1',
@@ -40,6 +47,7 @@ function makeAgent(overrides: Partial<DashboardAgentRow> = {}): DashboardAgentRo
 
 beforeEach(() => {
   storeState.current = { settings: {}, tabsByWorktree: {} }
+  savedNames.clear()
 })
 
 describe('useAgentRowConversationName', () => {
@@ -97,6 +105,26 @@ describe('useAgentRowConversationName', () => {
       }
     ]
     expect(useAgentRowConversationName(agent)).toBe('Claude Chat')
+  })
+
+  it('reads the host-published name ahead of the tab label, under a manual rename', () => {
+    const tab: { customLabel: string | null } & Record<string, unknown> = {
+      id: 'tab-1',
+      entityId: 'native-session',
+      contentType: 'agent-session',
+      agentSessionAgent: 'claude',
+      label: 'Claude Chat',
+      customLabel: null
+    }
+    storeState.current = {
+      settings: {},
+      tabsByWorktree: {},
+      unifiedTabsByWorktree: { 'wt-1': [tab] }
+    }
+    savedNames.set('native-session', 'Explain the parser')
+    expect(useAgentRowConversationName(makeAgent())).toBe('Explain the parser')
+    tab.customLabel = 'Manual name'
+    expect(useAgentRowConversationName(makeAgent())).toBe('Manual name')
   })
 
   it('ignores a retired stored opt-out value', () => {

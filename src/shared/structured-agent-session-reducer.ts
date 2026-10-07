@@ -25,6 +25,7 @@ import {
 } from './structured-agent-session-item-retention'
 import { compareAgentJournalItems } from './agent-session-journal-position'
 import { readAgentJournalTurn } from './agent-session-turn-record'
+import { queuePublicationField } from './structured-agent-session-queue-publication-field'
 import { latestTurnAfterStructuredAgentSessionBatch } from './structured-agent-session-live-turn'
 import {
   foldStructuredAgentSubagentRoster,
@@ -62,6 +63,8 @@ export type StructuredAgentSessionState = {
   queuedMessages?: AgentSessionQueuedMessage[] | null
   /** The queue's pause, published with the list; null when it sends on its own. */
   queuePause?: AgentSessionQueuePause | null
+  /** Published with the list: the card the queue sends next once nothing runs, else null. */
+  nextQueuedMessageId?: string | null
   commands?: AgentSessionSlashCommand[] | null
   activity?: AgentSessionTurnActivity | null
   /** Absent until a frame from a host that stamps `hostNow` has been applied. */
@@ -106,19 +109,6 @@ function hostClockField(
 ): { hostClock?: StructuredAgentHostClock } {
   const hostClock = hostNow !== undefined ? { hostNow, receivedAt } : previous
   return hostClock ? { hostClock } : {}
-}
-
-type QueuePublication = Pick<StructuredAgentSessionState, 'queuedMessages' | 'queuePause'>
-
-/** First claim with a list wins, and its pause rides with it; no claim at all leaves both absent
- *  (older host). */
-function queuePublicationField(...claims: QueuePublication[]): QueuePublication {
-  for (const claim of claims) {
-    if (claim.queuedMessages !== undefined) {
-      return { queuedMessages: claim.queuedMessages, queuePause: claim.queuePause ?? null }
-    }
-  }
-  return {}
 }
 
 function replacePage(
@@ -282,6 +272,8 @@ export function reduceStructuredAgentSession(
     (event.commands === undefined || event.commands === state.commands) &&
     (event.queuedMessages === undefined || event.queuedMessages === state.queuedMessages) &&
     (event.queuePause === undefined || event.queuePause === state.queuePause) &&
+    (event.nextQueuedMessageId === undefined ||
+      event.nextQueuedMessageId === state.nextQueuedMessageId) &&
     backgroundTaskStatesEqual(backgroundTasks, state.backgroundTasks) &&
     activity?.turnId === state.activity?.turnId &&
     activity?.text === state.activity?.text &&

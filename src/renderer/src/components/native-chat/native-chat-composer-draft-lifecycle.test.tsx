@@ -162,7 +162,8 @@ function composer(
       setDraft,
       setCaret
     })
-    onRender({ draft, setDraft, attachments, send })
+    // The composer fires a send and moves on; each test settles it through the transport.
+    onRender({ draft, setDraft, attachments, send: (text) => void send(text) })
     return null
   }
 }

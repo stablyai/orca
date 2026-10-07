@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => ({
 }))
 let items: AgentJournalRenderItem[] = []
 let queuedMessages: AgentSessionQueuedMessage[] | undefined
+let nextQueuedMessageId: string | null = null
 let outboxEntries: StructuredAgentSessionOutboxEntry[] = []
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
@@ -39,7 +40,7 @@ vi.mock('./use-structured-agent-session-read', () => ({
       status: 'ready',
       error: null,
       hasOlder: false,
-      ...(queuedMessages !== undefined ? { queuedMessages } : {})
+      ...(queuedMessages !== undefined ? { queuedMessages, nextQueuedMessageId } : {})
     },
     loadingOlder: false,
     loadOlder: vi.fn()
@@ -150,6 +151,7 @@ beforeEach(() => {
   )
   items = [RUNNING_TURN]
   queuedMessages = undefined
+  nextQueuedMessageId = null
   outboxEntries = []
   localStorage.clear()
   clearNativeChatDraftCacheForTests()
@@ -332,6 +334,20 @@ describe('against a capable host', () => {
     queuedMessages = undefined
     const idleUnheld = render()
     expect(JSON.stringify(idleUnheld.result.current.messages)).toContain('awaiting the answer')
+  })
+
+  it('reads as working while the host names the card its queue sends next, with nothing to stop yet', () => {
+    // A turn just ended; the queue's send of `draft-1` is the host's next update.
+    items = []
+    queuedMessages = [draft('draft-1')]
+    nextQueuedMessageId = 'draft-1'
+    const { result } = render()
+    expect(result.current).toMatchObject({ isWorking: true, queueSendsNext: true, canStop: false })
+    expect(result.current.queuedMessages.cards.map((card) => card.hold)).toEqual(['turn'])
+    // Where the host would refuse that send, it names none: the chat reads idle.
+    nextQueuedMessageId = null
+    const refused = render()
+    expect(refused.result.current).toMatchObject({ isWorking: false, queueSendsNext: false })
   })
 
   it('shows host-held drafts as cards, never as transcript bubbles', () => {

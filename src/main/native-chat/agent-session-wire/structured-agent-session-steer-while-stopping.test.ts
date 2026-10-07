@@ -15,6 +15,7 @@ import {
   eventually,
   type QueuedMessageTestRig
 } from './structured-agent-session-queued-message-rig.test-fixture'
+import { holdDelivery } from './structured-agent-session-delivery-hold.test-fixture'
 
 let rig: QueuedMessageTestRig
 
@@ -115,9 +116,10 @@ describe("a message sent while a person's Stop ends the turn", () => {
     await eventually(() => expect(rig.dispatch.mock.calls.length).toBe(dispatched + 1))
   })
 
-  // A Stop pressed before the turn showed holds a later send only while it settles; settling
-  // having stopped nothing hands it over, and the turn that then opens is not the Stop's.
-  it('hands over a send made after a Stop that stopped nothing, with no Stopping flip', async () => {
+  // A Stop pressed before the turn showed holds a later send only while it settles. Settling
+  // having stopped nothing, the send still waits for the first send's turn to open, then joins it;
+  // that turn is not the Stop's.
+  it('hands over a send made after a Stop that stopped nothing once the turn opens, with no Stopping flip', async () => {
     rig = await createQueuedMessageTestRig()
     const first = await rig.workingSend()
     const seen: (true | undefined)[] = []
@@ -140,10 +142,13 @@ describe("a message sent while a person's Stop ends the turn", () => {
     answer.resolve({ cancelled: false })
     expect(await stopped).toMatchObject({ ok: true })
     expect(await later.result).toMatchObject({ ok: true })
+    const { loop } = rig.host.collaboratorsForTests().conversationDelivery
+    await eventually(() => expect(loop.isRunning(HOST_TEST_SESSION)).toBe(false))
+    expect((await rig.submission(later.id))?.handedOverAt).toBeUndefined()
 
-    await eventually(() => expect(rig.dispatch.mock.calls.length).toBe(dispatched + 1))
     await rig.settleAccepted(first, 'first')
     await turn('turn-1', first, 'running')
+    await eventually(() => expect(rig.dispatch.mock.calls.length).toBe(dispatched + 1))
     await laneDrained()
     expect(seen.at(-1)).toBeUndefined()
     // Once Stopping ended it never came back.
@@ -153,7 +158,8 @@ describe("a message sent while a person's Stop ends the turn", () => {
   // A settle edge writes no row, so nothing else wakes the handover once it closes.
   it('hands a held send over when the Stop settles with no row after it', async () => {
     rig = await createQueuedMessageTestRig()
-    await rig.workingSend()
+    // Working: its turn is open, so the held send is held only by the Stop's settle.
+    await turn('turn-1', await rig.workingSend(), 'running')
     await journal().appendStopEvent({ reason: 'user-stop' }, 1)
     const settle = journal().stopMarks.beginSettle()
     const later = rig.send('sent while the Stop settles')
@@ -167,27 +173,27 @@ describe("a message sent while a person's Stop ends the turn", () => {
     await eventually(() => expect(rig.dispatch.mock.calls.length).toBe(dispatched + 1))
   })
 
-  // The delivery step that judged the send waits on the child's start outside the session's lane.
-  it('holds a send that a Stop overtook while its delivery step waited on the agent', async () => {
+  // The delivery step that judged the send and its handover are two turns of the session's lane.
+  it('holds a send that a Stop overtook between its delivery step and the handover', async () => {
     rig = await createQueuedMessageTestRig()
     const sent = await rig.workingSend()
     await rig.settleAccepted(sent, 'sent')
     await turn('turn-1', sent, 'running')
+    await laneDrained()
     const status = watchStatus()
-    const started = Promise.withResolvers<undefined>()
-    const awaited = rig.awaitStarted.mock.calls.length
-    rig.awaitStarted.mockImplementationOnce(() => started.promise)
+    const step = holdDelivery()
     const first = rig.send('steer this in')
     expect(await first.result).toMatchObject({ ok: true })
-    await eventually(() => expect(rig.awaitStarted.mock.calls.length).toBe(awaited + 1))
+    await step.held
     const dispatched = rig.dispatch.mock.calls.length
 
-    // The Stop withdraws the first send; a second one arrives before the step resumes.
-    expect(await rig.stop()).toMatchObject({ ok: true })
-    await eventually(() => expect(status()).toMatchObject({ stopping: true }))
+    // The Stop withdraws the first send; a second one arrives before the handover.
+    const stopped = rig.stop()
     const second = rig.send('and this one')
+    step.release()
+    expect(await stopped).toMatchObject({ ok: true })
     expect(await second.result).toMatchObject({ ok: true })
-    started.resolve(undefined)
+    await eventually(() => expect(status()).toMatchObject({ stopping: true }))
     await laneDrained()
 
     expect(rig.dispatch.mock.calls.length).toBe(dispatched)

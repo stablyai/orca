@@ -26,16 +26,30 @@ function indexTabs(tabs: readonly Tab[] | undefined): StructuredTabIndex | undef
   return index
 }
 
+type TabsByWorkspace = Readonly<Record<string, readonly Tab[] | undefined>> | undefined
+
+/** Own entries only: a paired host's workspace id can name an `Object.prototype` member. */
+function workspaceTabs(
+  tabsByWorkspace: TabsByWorkspace,
+  workspaceId: string
+): readonly Tab[] | undefined {
+  return tabsByWorkspace && Object.hasOwn(tabsByWorkspace, workspaceId)
+    ? tabsByWorkspace[workspaceId]
+    : undefined
+}
+
 export function structuredChatTabById(
-  tabs: readonly Tab[] | undefined,
+  tabsByWorkspace: TabsByWorkspace,
+  workspaceId: string,
   id: string
 ): Tab | undefined {
-  return indexTabs(tabs)?.byId.get(id)
+  return indexTabs(workspaceTabs(tabsByWorkspace, workspaceId))?.byId.get(id)
 }
 
 export function structuredChatTabBySessionId(
-  tabs: readonly Tab[] | undefined,
+  tabsByWorkspace: TabsByWorkspace,
+  workspaceId: string,
   sessionId: string
 ): Tab | undefined {
-  return indexTabs(tabs)?.bySessionId.get(sessionId)
+  return indexTabs(workspaceTabs(tabsByWorkspace, workspaceId))?.bySessionId.get(sessionId)
 }

@@ -11,6 +11,7 @@
 
 import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
 import { isRootAgentJournalItem } from './agent-session-journal-producer'
+import { isQueuedAgentJournalSubmission } from './agent-session-queued-submission'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission,
@@ -25,13 +26,10 @@ import {
   type NativeChatOpensTurn
 } from './native-chat-turn-grouping'
 import type { NativeChatRole } from './native-chat-types'
-import { isStructuredAgentSessionCommandTurn } from './structured-agent-session-command-entry'
 import { dispatchWasWithdrawn } from './structured-agent-session-dispatch-rejection'
 import { inSendOrder } from './native-chat-send-order'
-import {
-  liveStructuredAgentSessionTurnScope,
-  runningStructuredAgentSessionTurnScope
-} from './structured-agent-session-live-turn'
+import { runningStructuredAgentSessionTurnScope } from './structured-agent-session-live-turn'
+import { nativeChatOpeningTurnKey } from './native-chat-messages-waiting-behind-live-turn'
 import type { AgentSessionLatestTurn } from './agent-session-wire'
 
 /** Whether the host writing this journal states each row's turn. Only a host that runs `/compact`
@@ -55,7 +53,9 @@ export type NativeChatTurnJournal = {
  * falls back to the nearest user entry before it, which only older hosts write. A key nothing
  * resolves yet is the send still in flight ahead of the record — Codex reports a turn open before
  * it echoes the send — or one a Stop took back before that echo, which the host names as answered
- * into the turn; with none, the turn anchors on its own record.
+ * into the turn; with none, the turn anchors on its own record. A steer Codex echoes before the
+ * send that opened its turn names that turn's key first, yet the send still in flight ahead of the
+ * record opened it.
  */
 export function structuredAgentTurnAnchors(
   items: readonly AgentJournalRenderItem[],
@@ -68,6 +68,13 @@ export function structuredAgentTurnAnchors(
       item.body.kind === 'message' && item.body.role === 'user' ? [item.itemId] : []
     )
   )
+  const steeredInto = new Map(
+    items.flatMap((item) =>
+      item.turnScope?.kind === 'turn' && userItemIds.has(item.itemId)
+        ? [[item.itemId, item.turnScope.turnItemId] as const]
+        : []
+    )
+  )
   const aliases = new Map<string, string>()
   // Codex folds a send issued mid-turn into the running turn under the SAME provider key, so the
   // earliest submission that names a key is the prompt that opened the turn.
@@ -76,9 +83,15 @@ export function structuredAgentTurnAnchors(
       aliases.set(submission.providerItemId, agentJournalSubmissionKey(submission.clientMessageId))
     }
   }
+  // Handed over and not echoed yet; a send still queued opens nothing ahead of a turn record.
   const inFlight = new Set(
     submissions
-      .filter((submission) => submission.dispatchState === 'pending' && !submission.providerItemId)
+      .filter(
+        (submission) =>
+          submission.dispatchState === 'pending' &&
+          !submission.providerItemId &&
+          !isQueuedAgentJournalSubmission(submission)
+      )
       .map((submission) => agentJournalSubmissionKey(submission.clientMessageId))
   )
   // A send a Stop took back after its turn opened but before the provider echoed it: the record
@@ -124,6 +137,7 @@ export function structuredAgentTurnAnchors(
       turn,
       userItemIds,
       aliases,
+      steeredInto,
       precedingUserItemId,
       inFlightSinceLastTurn
     )
@@ -153,7 +167,7 @@ export function structuredAgentTurnAnchors(
   if (latestTurn?.turn.state === 'running' && !anchors.has(latestTurn.itemId)) {
     anchors.set(
       latestTurn.itemId,
-      anchorOf(latestTurn.itemId, latestTurn.turn, userItemIds, aliases, null, null)
+      anchorOf(latestTurn.itemId, latestTurn.turn, userItemIds, aliases, steeredInto, null, null)
     )
   }
   return anchors
@@ -199,6 +213,7 @@ function anchorOf(
   turn: AgentJournalTurnLifecycle,
   userItemIds: ReadonlySet<string>,
   aliases: ReadonlyMap<string, string>,
+  steeredInto: ReadonlyMap<string, string>,
   precedingUserItemId: string | null,
   inFlightUserItemId: string | null
 ): string {
@@ -210,9 +225,12 @@ function anchorOf(
     return key
   }
   const aliased = aliases.get(key)
-  return aliased !== undefined && userItemIds.has(aliased)
-    ? aliased
-    : (inFlightUserItemId ?? turnItemId)
+  if (aliased === undefined || !userItemIds.has(aliased)) {
+    return inFlightUserItemId ?? turnItemId
+  }
+  return inFlightUserItemId !== null && steeredInto.get(aliased) === turnItemId
+    ? inFlightUserItemId
+    : aliased
 }
 
 export type NativeChatTurnMembership = {
@@ -264,7 +282,10 @@ export function nativeChatTurnMembership(
     const runningNamed = running.kind === 'turn' ? recordKeys.get(running.turnItemId) : null
     return {
       turnKeys,
-      liveTurnKey: runningNamed ?? newestUserTurnKey(messages, turnKeys),
+      liveTurnKey:
+        runningNamed ??
+        nativeChatOpeningTurnKey(messages, turnKeys, journal) ??
+        newestUserTurnKey(messages, turnKeys),
       drawOrder: nativeChatTurnDrawOrder(messages, turnKeys, anchoringUserItems(recordKeys))
     }
   }
@@ -286,7 +307,10 @@ export function nativeChatTurnMembership(
   })
   return {
     turnKeys,
-    liveTurnKey: runningKey ?? newestUserTurnKey(messages, turnKeys),
+    liveTurnKey:
+      runningKey ??
+      nativeChatOpeningTurnKey(messages, turnKeys, journal) ??
+      newestUserTurnKey(messages, turnKeys),
     drawOrder: nativeChatTurnDrawOrder(messages, turnKeys, anchoring),
     ...(runningKey !== undefined && !runningRecordLoaded ? { partialTurnKey: runningKey } : {})
   }
@@ -327,29 +351,6 @@ function anchoringUserItems(recordKeys: ReadonlyMap<string, string | null>): Rea
   return new Set([...recordKeys.values()].filter((key) => key !== null))
 }
 
-/**
- * The rows accepted but not yet handed over while a conversation command's turn runs, as a message
- * sent during `/compact` is: the host hands nothing over until the command ends, so they draw after
- * that turn's live activity. Any other running turn takes a send within moments, so it stays put,
- * unless a person's Stop is ending it (`stopping`): the host holds a send made then until it ends,
- * so those, and this client's own sends made then that it has not recorded yet, draw after the
- * live activity too. A send made before the Stop stays where it is.
- */
-export function nativeChatMessagesWaitingBehindLiveTurn(
-  messages: readonly { id: string; queued?: true; sentWhileStopping?: true }[],
-  items: readonly AgentJournalRenderItem[] | null | undefined,
-  stopping = false
-): ReadonlySet<string> {
-  const waits = (message: (typeof messages)[number]): boolean =>
-    message.queued === true || (stopping && message.sentWhileStopping === true)
-  const waiting = messages.filter(waits)
-  return new Set(
-    waiting.length > 0 && items && (stopping || commandTurnRunning(items))
-      ? waiting.map((message) => message.id)
-      : []
-  )
-}
-
 /** Whether a row belongs to the turn running now. Liveness is the owning turn's, not the newest
  *  prompt's: a running turn's rows stay live while a newer message waits behind it. */
 export function isNativeChatRowInLiveWorkingTurn(
@@ -358,15 +359,6 @@ export function isNativeChatRowInLiveWorkingTurn(
   working: boolean
 ): boolean {
   return working && (liveTurnKey ? turnKey === liveTurnKey : turnKey === undefined)
-}
-
-function commandTurnRunning(items: readonly AgentJournalRenderItem[]): boolean {
-  const running = liveStructuredAgentSessionTurnScope(items)
-  const bodyOf = (itemId: string) => items.find((item) => item.itemId === itemId)?.body
-  return (
-    running.kind === 'turn' &&
-    isStructuredAgentSessionCommandTurn(readAgentJournalTurn(bodyOf(running.turnItemId)), bodyOf)
-  )
 }
 
 function newestUserTurnKey(

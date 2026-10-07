@@ -25,6 +25,7 @@ function startedSession(): StructuredAgentSessionChildExitSession & {
     journal: {
       cursor: () => ({ epoch: 'epoch-1', sequence: 0 }),
       itemBody: () => null,
+      itemFence: () => undefined,
       // Nothing ran: the start failed before any response or acknowledged prompt.
       snapshot: () => ({ items: [] }),
       appendLifecycleBatch: vi.fn(async () => ({ epoch: 'epoch-1', sequence: 1 })),

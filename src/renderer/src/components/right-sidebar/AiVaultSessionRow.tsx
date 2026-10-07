@@ -27,8 +27,7 @@ import {
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import type { AiVaultSearchHit } from '../../../../shared/ai-vault-search-types'
 import { AiVaultSearchEvidence } from './AiVaultSearchEvidence'
-import { useAppStore } from '@/store'
-import { aiVaultSessionDisplayTitle } from './ai-vault-structured-title-projection'
+import { useAiVaultSessionDisplayTitle } from './use-ai-vault-session-display-title'
 
 export function VaultSessionRow({
   session,
@@ -95,9 +94,7 @@ export function VaultSessionRow({
     ? translate('aiVault.continueInCli', 'Continue in CLI')
     : defaultResumeLabel
   const updatedAt = session.updatedAt ?? session.modifiedAt
-  const title = useAppStore((state) =>
-    aiVaultSessionDisplayTitle(session, state.unifiedTabsByWorktree)
-  )
+  const title = useAiVaultSessionDisplayTitle(session)
   const detailsId = getSessionDetailsId(session.id)
   const latestTurn = latestSessionConversationTurn(session)
   // Computed once so the dropdown menu and the context menu never disagree.

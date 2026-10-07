@@ -49,6 +49,8 @@ export type StructuredAgentSessionAttachOptions = {
   onAcquisitionFailed?: AttachFlowInput['onAcquisitionFailed']
   /** The queued message a start is for; see `StructuredAgentSessionProviderChild.startedFor`. */
   startedFor?: string
+  /** A close, an admitted Stop or quit aborted this attach: its refusal is that abort's. */
+  onAborted?: () => void
 }
 
 /**
@@ -105,6 +107,25 @@ async function runAttach(
   callerKey: string,
   params: AgentSessionAttachParams,
   options: StructuredAgentSessionAttachOptions
+): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
+  // Begun first, so a close or Stop during any phase below still stops the start.
+  const acquire = context.runtimeState.acquireAborts.begin(params.envelope.sessionId)
+  try {
+    return await runAttachUnderAbort(context, callerKey, params, options, acquire.signal)
+  } finally {
+    acquire.end()
+    if (acquire.signal.aborted) {
+      options.onAborted?.()
+    }
+  }
+}
+
+async function runAttachUnderAbort(
+  context: StructuredAgentSessionAttachContext,
+  callerKey: string,
+  params: AgentSessionAttachParams,
+  options: StructuredAgentSessionAttachOptions,
+  acquireSignal: AbortSignal
 ): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
   const sessionId = params.envelope.sessionId
   const recordPhase = options.recordPhase
@@ -171,6 +192,7 @@ async function runAttach(
       params,
       now: () => context.now(),
       recordPhase,
+      acquireSignal,
       ...(options.onAcquisitionFailed ? { onAcquisitionFailed: options.onAcquisitionFailed } : {}),
       openConversation: async (record) => {
         const conversation = await context.openConversation(record.sessionId, {

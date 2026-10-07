@@ -26,7 +26,8 @@ export function useStructuredAgentSessionTransport(args: {
   const read = useStructuredAgentSessionRead({
     sessionId,
     target,
-    isVisible: providerVisible || (enabled && hasUndelivered)
+    isVisible: providerVisible || (enabled && hasUndelivered),
+    isViewed: providerVisible
   })
   const stateRef = useRef(read.state)
   const mutation = useStructuredAgentSessionMutate({

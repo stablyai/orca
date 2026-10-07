@@ -98,7 +98,7 @@ export type CodexStructuredSessionAdapterDeps = {
       | { providerIdentity: AgentJournalItemIdentity }
       | ({
           state: 'rejected'
-          answeredInTurn: AgentJournalAnsweredTurnIdentity
+          answeredInTurn?: AgentJournalAnsweredTurnIdentity
         } & AgentJournalDispatchRejection)
     )
   ) => void

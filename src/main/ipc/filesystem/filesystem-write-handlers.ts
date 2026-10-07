@@ -35,8 +35,10 @@ export function registerFilesystemWriteHandlers(context: FilesystemHandlerContex
         args.expectedExecutionHostId
       )
       if (args.connectionId) {
-        const provider = requireSshFilesystemProvider(args.connectionId)
-        return provider.writeFile(args.filePath, args.content)
+        return requireSshFilesystemProvider(args.connectionId).writeFile(
+          args.filePath,
+          args.content
+        )
       }
       const filePath = await resolveLocalWriteRequestPath(args.filePath, args.access, store)
       try {
@@ -71,8 +73,10 @@ export function registerFilesystemWriteHandlers(context: FilesystemHandlerContex
         args.expectedExecutionHostId
       )
       if (args.connectionId) {
-        const provider = requireSshFilesystemProvider(args.connectionId)
-        return provider.deletePath(args.targetPath, args.recursive)
+        return requireSshFilesystemProvider(args.connectionId).deletePath(
+          args.targetPath,
+          args.recursive
+        )
       }
       // Why: preserve the symlink so we delete the link, not its target (realpath would trash the real file, possibly outside all roots).
       const targetPath = await resolveDesktopAuthorizedPath(args.targetPath, store, {

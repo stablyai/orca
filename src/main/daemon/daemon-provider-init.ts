@@ -19,7 +19,8 @@ import {
 } from './daemon-launch-paths'
 import {
   attributeNextDaemonReplacement,
-  createOutOfProcessLauncher
+  createOutOfProcessLauncher,
+  type DaemonLaunchPolicy
 } from './daemon-out-of-process-launcher'
 import type { DaemonProvider } from './daemon-provider-routing'
 import { installDaemonProvider } from './daemon-provider-state'
@@ -46,7 +47,7 @@ function logDaemonMilestone(event: string, details: Record<string, unknown> = {}
 
 export async function initDaemonPtyProvider(
   signal?: AbortSignal,
-  options: { macosLoginSessionWatch?: boolean } = {}
+  options: DaemonLaunchPolicy = {}
 ): Promise<void> {
   logDaemonMilestone('daemon-init-start')
   // Why: e2e coverage for the startup PTY gate (#5232) needs a daemon init that deterministically outlasts the first-window timeout.
@@ -58,7 +59,7 @@ export async function initDaemonPtyProvider(
 
   const newSpawner = new DaemonSpawner({
     runtimeDir,
-    launcher: createOutOfProcessLauncher(runtimeDir, options.macosLoginSessionWatch ?? false)
+    launcher: createOutOfProcessLauncher(runtimeDir, options)
   })
 
   // Why: assign the module-level spawner/adapter only after both succeed, so a failed ensureRunning() leaves no stale spawner.

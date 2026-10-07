@@ -27,8 +27,17 @@ export class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHand
     isWsl?: boolean
   ): void {
     this.assertPtyDidNotExitBeforeRegistration(ptyId, binding?.incarnationId)
-    this.invalidatePtyControllerInventoryForLifecycle(ptyId, connectionId)
     const existingPty = this.ptysById.get(ptyId)
+    // Why: a relay reattach can finish registering after a stop recorded that incarnation's exit.
+    if (
+      binding?.incarnationId !== undefined &&
+      existingPty?.incarnationId === binding.incarnationId &&
+      !existingPty.connected &&
+      this.getPtyLivenessVerdict(ptyId)?.status === 'exited'
+    ) {
+      return
+    }
+    this.invalidatePtyControllerInventoryForLifecycle(ptyId, connectionId)
     const replacementHandle = binding?.terminalHandle?.trim()
     const pendingReplacement = this.pendingPtyHandleReplacementFences.get(ptyId)
     const pendingReplacementMatches =

@@ -95,7 +95,7 @@ describe('ssh folder workspace partition ownership', () => {
       },
       { tabsByWorktree: { [FOLDER_KEY]: [tab('tab-desktop', FOLDER_KEY)] } },
       state
-    )
+    ).written
 
     // Main applies a patch field-wise ({ ...current, ...patch }), so a `tabsByWorktree` written to
     // `ssh:<targetId>` WITHOUT the folder row replaces the row main put there.
@@ -313,7 +313,7 @@ describe('a bare workspace id two partitions both hold', () => {
         contestedHostWorkspaceSessions: read.contestedHostWorkspaceSessions,
         contestedPrimaryHostBySessionKey: read.contestedPrimaryHostBySessionKey
       }
-    )
+    ).written
 
     // Main applies a patch field-wise, so an `ssh:<targetId>` write carrying only the sibling would
     // erase the declined row from the one partition that still holds it. Declining to show a row

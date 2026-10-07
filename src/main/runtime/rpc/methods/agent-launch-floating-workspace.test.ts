@@ -128,7 +128,14 @@ describe('agent.launch with the real floating workspace resolver', () => {
         expect(structuredHost).not.toHaveBeenCalled()
         expect(createTerminal).toHaveBeenCalledExactlyOnceWith(
           `id:${FLOATING_TERMINAL_WORKTREE_ID}`,
-          { startupAgent: 'codex', onPtySpawnDispatched: expect.any(Function) }
+          {
+            startupAgent: 'codex',
+            // Derived on the host by the window's rule, from the same chat-view setting.
+            viewMode: 'terminal',
+            // A paired device's launch never moves the desktop window.
+            surfaceOwner: false,
+            onPtySpawnDispatched: expect.any(Function)
+          }
         )
         expect(result).toMatchObject({
           worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
