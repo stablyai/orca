@@ -3,7 +3,7 @@ import { NodeTerminalRasterBackend } from '../../src/shared/node-terminal-raster
 
 const require = createRequire(import.meta.url)
 const { Terminal } = require('@xterm/headless')
-const { ImageAddon } = require('@xterm/addon-image')
+const { ImageAddon } = require(process.env.ORCA_IMAGE_CHECKPOINT_ADDON ?? '@xterm/addon-image')
 const { SerializeAddon } = require('@xterm/addon-serialize')
 
 export function terminal(browser = false, options = {}) {

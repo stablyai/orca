@@ -156,7 +156,7 @@ describe('image storage checkpoint preparation and disposal', () => {
     }
   })
 
-  it('preserves dangling tile references after source eviction', async () => {
+  it('omits dangling tile references after source eviction', async () => {
     const source = terminal()
     const target = terminal()
     let checkpoint
@@ -165,10 +165,12 @@ describe('image storage checkpoint preparation and disposal', () => {
       source.storage.deleteImage(1)
       checkpoint = source.storage.captureCheckpoint(1024)
       expect(checkpoint.metadata.images).toHaveLength(0)
-      expect(checkpoint.metadata.byteLength).toBe(32)
+      expect(checkpoint.metadata.byteLength).toBe(0)
       await target.storage.restoreCheckpoint(checkpoint)
       expect(target.storage._images.size).toBe(0)
-      expect(target.core._core.buffers.normal.lines.get(0)._extendedAttrs[0].imageId).toBe(1)
+      expect(target.core._core.buffers.normal.lines.get(0)._extendedAttrs[0]?.imageId ?? -1).toBe(
+        -1
+      )
     } finally {
       checkpoint?.dispose()
       source.core.dispose()
