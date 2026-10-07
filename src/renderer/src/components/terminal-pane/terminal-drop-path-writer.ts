@@ -78,13 +78,15 @@ export async function writeTerminalDropPathsToCapturedTarget({
       canPasteImageDropPathRaw(nextPath, targetShell)
     const needsSeparatorAfterImage =
       nextPath !== undefined && !(pathIsRawPasteImage && nextPathIsRawPasteImage)
-    const payload =
+    const pathPayload =
       imagePasteText !== null
         ? separateImagePasteFromFollowingText(
             wrapTerminalBracketedPasteText(imagePasteText),
             needsSeparatorAfterImage
           )
         : `${shellEscapePath(path, targetShell)} `
+    // Why: always separate the first path from a draft; keep the space outside the image paste.
+    const payload = index === 0 ? ` ${pathPayload}` : pathPayload
     const writeResult = await runTerminalPasteOperationWithTimeout(
       () => writeTerminalPastePtyInput(liveTransport, payload, 'driving'),
       operationTimeoutMs
