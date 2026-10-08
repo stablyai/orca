@@ -7,6 +7,10 @@ import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../../shared/pairi
 import type { RuntimePairingReach } from '../../../shared/runtime-pairing-reach'
 import { resolveAdvertisedPairingEndpoint } from '../pairing-endpoint'
 import { RuntimeRpcNetworkExposure } from './runtime-rpc-network-exposure'
+import { MobileDesktopRelay } from '../mobile-desktop-relay/mobile-desktop-relay'
+import type { MobileDesktopRelayHosts } from '../mobile-desktop-relay/mobile-desktop-relay-hosts'
+import { DELEGATED_PHONE_NAME_MAX_CHARS } from '../../../shared/delegated-mobile-device-contract'
+import { allocateTerminalSubscriptionStreamId } from '../rpc/methods/terminal/terminal-subscription-stream-id'
 import {
   createWebClientUrl,
   DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE,
@@ -77,6 +81,32 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
 
   setMobileRelayPairingProvider(provider: MobileRelayPairingProvider | null): void {
     this.mobileRelayPairingProvider = provider
+  }
+
+  setMobileDesktopRelayHosts(hosts: MobileDesktopRelayHosts | null): void {
+    this.mobileDesktopRelay?.dispose()
+    this.mobileDesktopRelay = hosts
+      ? new MobileDesktopRelay({
+          hosts,
+          listPhones: () => this.listRelayedPhones(),
+          // Why: one allocator with local streams, so relayed ids never collide on the phone's socket.
+          allocateStreamId: allocateTerminalSubscriptionStreamId
+        })
+      : null
+  }
+
+  private listRelayedPhones(): { phoneKey: string; name: string }[] {
+    const computerName = this.runtime.readMachineName()
+    return (this.deviceRegistry?.listDevices() ?? [])
+      .filter(
+        // Why: phones another desktop relays here are that desktop's to relay, not ours.
+        (device) =>
+          device.scope === 'mobile' && device.lastSeenAt > 0 && device.parentDeviceId === undefined
+      )
+      .map((device) => ({
+        phoneKey: device.deviceId,
+        name: `${device.name} via ${computerName}`.slice(0, DELEGATED_PHONE_NAME_MAX_CHARS)
+      }))
   }
 
   getWebSocketEndpoint(): string | null {

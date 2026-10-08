@@ -56,6 +56,8 @@ export type RpcRequest = {
   orchestrationRequestId?: string
   compatibilityInvocationId?: string
   orchestrationCompatibilityEvidence?: OrchestrationCompatibilityEvidence
+  // Why unknown: phone-supplied routing target (`runtime:<env>`), validated where it is read.
+  executionHost?: unknown
 }
 
 export type LegacyCoordinatorAuthorityProof = Readonly<{

@@ -10,7 +10,11 @@ export class RuntimeRpcMobileDevices extends RuntimeRpcRequestAdmission {
   private onPushUnregisterQueued?: () => void
 
   async revokeMobileDevice(deviceId: string): Promise<boolean> {
-    return this.revokeMobileDeviceNow(deviceId)
+    const revoked = this.revokeMobileDeviceNow(deviceId)
+    if (revoked) {
+      this.mobileDesktopRelay?.phonesChanged()
+    }
+    return revoked
   }
 
   private revokeMobileDeviceNow(deviceId: string): boolean {

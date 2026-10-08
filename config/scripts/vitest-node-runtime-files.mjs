@@ -73,6 +73,8 @@ export const NODE_RUNTIME_INCLUDE = [
   'src/main/runtime/rpc/ws-transport.test.ts',
   'src/shared/remote-runtime-client.test.ts',
   'src/shared/remote-runtime-connect-bound.test.ts',
+  // Bun's built-in ws client ignores maxPayload; the product opener only runs on Node.
+  'src/shared/remote-runtime-request-websocket.test.ts',
   'src/shared/remote-runtime-subscription-connect-bound.test.ts',
   'src/main/codex/codex-shared-server-probe.test.ts',
   'src/main/opencode/opencode-launch-model-context-supervision.test.ts',

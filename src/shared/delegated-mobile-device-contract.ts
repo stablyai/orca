@@ -7,11 +7,12 @@ export const DELEGATED_MOBILE_DEVICE_SYNC_METHOD = 'pairing.delegatedMobileDevic
 export const DELEGATED_MOBILE_DEVICES_RUNTIME_CAPABILITY =
   'pairing.delegated-mobile-devices.v1' satisfies (typeof RUNTIME_CAPABILITIES)[number]
 export const DELEGATED_MOBILE_DEVICE_SYNC_MAX_PHONES = 32
+export const DELEGATED_PHONE_NAME_MAX_CHARS = 128
 
 const DelegatedPhoneSchema = z
   .object({
     phoneKey: z.string().min(1).max(128),
-    name: z.string().min(1).max(128)
+    name: z.string().min(1).max(DELEGATED_PHONE_NAME_MAX_CHARS)
   })
   .strict()
 
