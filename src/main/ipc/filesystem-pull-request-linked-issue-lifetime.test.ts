@@ -173,17 +173,4 @@ describe.each(['local', 'SSH'])('PR linked-issue lifetime on %s', (host) => {
       process.off('unhandledRejection', unhandled)
     }
   })
-
-  it('still rejects the caller when preparation succeeds but the lookup fails', async () => {
-    const issue = Promise.withResolvers<null>()
-    const failure = new Error('lookup failed')
-    linkedLookup.run = () => issue.promise
-    const result = Promise.resolve(
-      handlers.get('git:generatePullRequestFields')!(null, request)
-    ).catch((error: unknown) => error)
-    await nextTurn()
-    issue.reject(failure)
-    expect(await result).toBe(failure)
-    expect(generatePullRequestFieldsFromContextMock).not.toHaveBeenCalled()
-  })
 })

@@ -4,6 +4,10 @@ import {
   scanMode2031ReplyDecision,
   type Mode2031ReplyScanState
 } from '../../../../shared/terminal-color-scheme-protocol'
+import {
+  INITIAL_SYNCHRONIZED_OUTPUT_LATCH_STATE,
+  advanceDroppedSynchronizedOutputLatch
+} from '../../../../shared/terminal-synchronized-output-scan'
 import { redactPtyIdForDiagnostics } from '../../../../shared/pty-delivery-diagnostics'
 import { recordCrashBreadcrumb } from '../../../crash-reporting/crash-breadcrumb-store'
 import { terminalOutputBacklogCapChars } from '../../../../shared/terminal-scrollback-policy'
@@ -50,6 +54,13 @@ export function getDroppedMode2031RendererData(pending: PendingPtyData): string 
   }
   const pendingSubscribe = state.pendingSubscribe ? '\x1b[?2031h' : ''
   return (pending.droppedMode2031Data ?? '') + pendingSubscribe + state.tail
+}
+
+/** Releases xterm's DEC 2026 render hold when the dropped span left a frame open.
+ *  Without it the pane freezes on its last painted frame until xterm's 1000ms
+ *  forced flush. */
+export function getDroppedSynchronizedOutputRendererData(pending: PendingPtyData): string {
+  return pending.droppedSynchronizedOutputState?.active === true ? '\x1b[?2026l' : ''
 }
 
 export function pendingProjectionAdmissionOptions(session: PtyIpcSession) {
@@ -117,12 +128,17 @@ export function dropOversizedPendingPtyData(
     session.sshOutputIntake?.transferProjections(pending.projectionAdmissionIds, 'pending-cap')
   }
   const mode2031 = scanDroppedMode2031Data(pending.data, INITIAL_MODE_2031_REPLY_SCAN_STATE)
+  const synchronizedOutput = advanceDroppedSynchronizedOutputLatch(
+    pending.data,
+    INITIAL_SYNCHRONIZED_OUTPUT_LATCH_STATE
+  )
   // Why no trimmed content tail: a mid-stream gap would corrupt the pane; the droppedOutput sentinel repaints from the snapshot and realigns by sequence (only query bytes ride along).
   return {
     data: extractDroppedPtyQueryBytes(pending.data).slice(0, DROPPED_QUERY_SALVAGE_MAX_CHARS),
     droppedOutput: true,
     droppedMode2031Data: mode2031.data,
-    droppedMode2031ScanState: mode2031.state
+    droppedMode2031ScanState: mode2031.state,
+    droppedSynchronizedOutputState: synchronizedOutput.state
   }
 }
 
@@ -147,6 +163,10 @@ export function appendPendingPtyData(
       data,
       existing.droppedMode2031ScanState ?? INITIAL_MODE_2031_REPLY_SCAN_STATE
     )
+    const synchronizedOutput = advanceDroppedSynchronizedOutputLatch(
+      data,
+      existing.droppedSynchronizedOutputState ?? INITIAL_SYNCHRONIZED_OUTPUT_LATCH_STATE
+    )
     const remainingQueryCapacity = Math.max(
       0,
       DROPPED_QUERY_SALVAGE_MAX_CHARS - existing.data.length
@@ -156,7 +176,8 @@ export function appendPendingPtyData(
       ...existing,
       data: existing.data + salvaged,
       droppedMode2031Data: mode2031.data || existing.droppedMode2031Data,
-      droppedMode2031ScanState: mode2031.state
+      droppedMode2031ScanState: mode2031.state,
+      droppedSynchronizedOutputState: synchronizedOutput.state
     }
   }
   const projectionState = compactPendingProjectionState(

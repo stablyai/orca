@@ -75,6 +75,27 @@ function tabExists(store: LiveSurfaceAdoptionStore, tabId: string): boolean {
   return Object.values(store.tabsByWorktree).some((tabs) => tabs.some((tab) => tab.id === tabId))
 }
 
+/**
+ * Rebind a PTY the host found unowned to the pane its record names, but only while this renderer
+ * still holds that pane free: the host's graph omits unmounted panes, so its verdict cannot tell a
+ * closed pane from one that merely lost its binding, and minting forks the PTY onto a second tab.
+ */
+function bindToRecordedSurface(
+  store: LiveSurfaceAdoptionStore,
+  worktreeId: string,
+  recorded: LiveTerminalSurfaceOwner
+): boolean {
+  const pane = parsePaneKey(recorded.paneKey)
+  if (!pane || !tabExists(store, recorded.tabId)) {
+    return false
+  }
+  const heldPtyId = store.terminalLayoutsByTabId[recorded.tabId]?.ptyIdsByLeafId?.[pane.leafId]
+  if (heldPtyId && heldPtyId !== recorded.ptyId) {
+    return false
+  }
+  return bindLivePtyToExactSurface(store, worktreeId, recorded)
+}
+
 /** Bind one host-owned PTY to the surface the host names for it; false when none could be named. */
 function adoptHostOwnedSurface(
   getState: () => LiveSurfaceAdoptionStore,
@@ -155,7 +176,13 @@ export async function adoptLiveWorkspacePtySurfaces(
       continue
     }
     const owner = surfaceOwners?.get(ptyId)
-    if (owner && owner !== 'unowned') {
+    // Why: only the execution host can prove a live PTY is unowned, and minting
+    // on anything weaker forks a running agent onto a second empty surface.
+    if (!owner) {
+      declinedPtyIds.push(ptyId)
+      continue
+    }
+    if (!('unowned' in owner)) {
       if (adoptHostOwnedSurface(getState, worktreeId, owner, materializedTabIds)) {
         surfaced = true
       } else {
@@ -163,10 +190,8 @@ export async function adoptLiveWorkspacePtySurfaces(
       }
       continue
     }
-    // Why: only the execution host can prove a live PTY is unowned, and minting
-    // on anything weaker forks a running agent onto a second empty surface.
-    if (owner !== 'unowned') {
-      declinedPtyIds.push(ptyId)
+    surfaced = true
+    if (owner.recorded && bindToRecordedSurface(getState(), worktreeId, owner.recorded)) {
       continue
     }
     getState().createTab(worktreeId, undefined, undefined, {
@@ -174,7 +199,6 @@ export async function adoptLiveWorkspacePtySurfaces(
       activate: false,
       recordInteraction: false
     })
-    surfaced = true
   }
   return { surfaced, declinedPtyIds }
 }

@@ -16,10 +16,10 @@ import {
   appendAgentSessionProviderHandleLink,
   type AgentSessionProviderHandleLink
 } from '../../shared/agent-session-provider-handle'
+import { agentSessionProviderHandleBelongsTo } from '../../shared/agent-session-provider-handle-encoding'
 import { nextAgentSessionFence } from '../../shared/agent-session-next-fence'
 import type {
   AgentSessionDeathEvidence,
-  AgentSessionJournalCheckpoint,
   AgentSessionLease,
   AgentSessionProcessIdentity,
   AgentSessionRecord
@@ -146,7 +146,7 @@ export function proveAgentSessionOwner(args: {
       reason: 'spawnIdentityMismatch'
     })
   }
-  if (args.link.handle.provider !== record.provider) {
+  if (!agentSessionProviderHandleBelongsTo(args.link.handle, record.provider)) {
     throw new Error('agent_session_provider_handle_provider_mismatch')
   }
   if (args.link.mintedAtFence !== args.fence) {
@@ -178,8 +178,9 @@ export function proveAgentSessionOwner(args: {
 
 /**
  * A renewal asserts two things at once: the host is running its loop, and the child still matches
- * the recorded identity. A host that cannot re-verify the child stops renewing rather than
- * extending a lease it can no longer vouch for.
+ * the recorded identity — re-proven by a PID probe, or held by this runtime with no exit seen. A
+ * host that cannot re-verify the child stops renewing rather than extending a lease it can no
+ * longer vouch for.
  */
 export function renewAgentSessionLease(args: {
   record: AgentSessionRecord
@@ -268,28 +269,5 @@ function releasedAgentSessionLease(
     lastRenewedAt: now,
     handoffOperationId: null,
     deathEvidence
-  })
-}
-
-export function setAgentSessionJournalCheckpoint(args: {
-  record: AgentSessionRecord
-  fence: number
-  checkpoint: AgentSessionJournalCheckpoint
-  now: number
-}): AgentSessionRecord {
-  const { record } = args
-  assertFence(record.lease, args.fence)
-  const current = record.lease.journalCheckpoint
-  if (
-    current &&
-    (current.epoch > args.checkpoint.epoch ||
-      (current.epoch === args.checkpoint.epoch && current.sequence > args.checkpoint.sequence))
-  ) {
-    throw new Error('agent_session_checkpoint_stale')
-  }
-  return withLease(record, {
-    ...record.lease,
-    journalCheckpoint: args.checkpoint,
-    lastRenewedAt: args.now
   })
 }

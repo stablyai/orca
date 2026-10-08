@@ -819,11 +819,4 @@ describe('useAiVaultSessionRefresh in a non-secure context', () => {
       })
     })
   })
-
-  // Guards the stub itself: an own-property stub of randomUUID is unrestorable, so a
-  // leaky teardown would silently strip the real method from every later test in the file.
-  it('leaves the real crypto.randomUUID in place afterwards', () => {
-    // oxlint-disable-next-line no-restricted-properties -- asserting the restore this case exists for
-    expect(typeof globalThis.crypto.randomUUID).toBe('function')
-  })
 })

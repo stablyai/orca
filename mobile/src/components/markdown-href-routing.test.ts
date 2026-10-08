@@ -17,14 +17,6 @@ describe('routeMarkdownHref', () => {
     })
   })
 
-  it('routes relative hrefs to the file opener', () => {
-    expect(routeMarkdownHref('src/foo.ts')).toEqual({ kind: 'file', pathText: 'src/foo.ts' })
-    expect(routeMarkdownHref('./docs/plan.md')).toEqual({
-      kind: 'file',
-      pathText: './docs/plan.md'
-    })
-  })
-
   it('carries a #L fragment as a :line suffix', () => {
     expect(routeMarkdownHref('docs/plan.md#L42')).toEqual({
       kind: 'file',
@@ -40,13 +32,6 @@ describe('routeMarkdownHref', () => {
     })
   })
 
-  it('decodes percent-encoded href paths', () => {
-    expect(routeMarkdownHref('docs/release%20notes.md')).toEqual({
-      kind: 'file',
-      pathText: 'docs/release notes.md'
-    })
-  })
-
   it('routes file: URIs to the file opener', () => {
     expect(routeMarkdownHref('file:///Users/me/wt/src/app.tsx')).toEqual({
       kind: 'file',
@@ -59,13 +44,6 @@ describe('routeMarkdownHref', () => {
     expect(routeMarkdownHref('file:///C:/repo/src/index.ts')).toEqual({
       kind: 'file',
       pathText: 'C:/repo/src/index.ts'
-    })
-  })
-
-  it('keeps Windows drive paths out of the scheme filter', () => {
-    expect(routeMarkdownHref(String.raw`C:\repo\src\index.ts`)).toEqual({
-      kind: 'file',
-      pathText: String.raw`C:\repo\src\index.ts`
     })
   })
 

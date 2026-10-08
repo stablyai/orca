@@ -326,7 +326,14 @@ export async function resolveLocalGitUsernameDetailed(
   }
   if (await localRepoHasEffectiveGitHubRemote(repoPath)) {
     const outcome = await getGhLoginOutcome()
-    return { username: outcome.login, authoritative: !outcome.timedOut }
+    if (outcome.login || outcome.timedOut) {
+      return { username: outcome.login, authoritative: !outcome.timedOut }
+    }
+  }
+  // Author names become prefixes only when they already form a safe branch component.
+  const authorName = (await readGitStdout(repoPath, ['config', '--get', 'user.name'])).trim()
+  if (isBranchSafeHostedLogin(authorName)) {
+    return { username: authorName, authoritative: true }
   }
   return { username: '', authoritative: true }
 }

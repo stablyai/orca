@@ -1,23 +1,70 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect } from 'react'
 import type React from 'react'
 import type { VirtualItem } from '@tanstack/react-virtual'
 import { useAppStore } from '@/store'
-import { rightSidebarShowsPullRequestData } from '@/lib/right-sidebar-visibility'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { WorktreeGroupBy } from '../grouping/row-types'
 import type { RenderRow } from '../listing/render-row'
 import type { WorktreeItemRow } from '../listing/renderable-rows'
+import { getMountedWorktreeOptions } from '../rows/option-dom'
 
 export function installWorktreeVisibleRefreshVisibilityListener(onChange: () => void): () => void {
   document.addEventListener('visibilitychange', onChange)
   return () => document.removeEventListener('visibilitychange', onChange)
 }
 
-const DOCUMENT_HIDDEN_KEY = '__document_hidden__'
-const NOTHING_TO_TRACK_KEY = '__hidden__'
+export function installVisibleReviewCardScrollListener(
+  scroll: Pick<HTMLElement, 'addEventListener' | 'removeEventListener'>,
+  update: () => void
+): () => void {
+  let frame: number | null = null
+  const onScroll = (): void => {
+    if (frame !== null) {
+      return
+    }
+    frame = requestAnimationFrame(() => {
+      frame = null
+      update()
+    })
+  }
+  scroll.addEventListener('scroll', onScroll, { passive: true })
+  return () => {
+    scroll.removeEventListener('scroll', onScroll)
+    if (frame !== null) {
+      cancelAnimationFrame(frame)
+    }
+  }
+}
 
-// Reports which sidebar rows are on screen so the GitHub PR/CI coordinator can refresh
-// exactly those, and no more.
+export function visibleReviewCardIds(args: {
+  enabled: boolean
+  renderRows: RenderRow[]
+  virtualItems: readonly VirtualItem[]
+  viewportTop: number
+  viewportHeight: number
+  isOnScreen?: (id: string) => boolean
+}): string[] {
+  if (!args.enabled) {
+    return []
+  }
+  const bottom = args.viewportTop + args.viewportHeight
+  return args.virtualItems
+    .filter((item) => item.start < bottom && item.end > args.viewportTop)
+    .map((item) => args.renderRows[item.index])
+    .flatMap((row): WorktreeItemRow[] =>
+      row?.type === 'lineage-group' ? row.rows : row?.type === 'item' ? [row] : []
+    )
+    .filter(
+      (row) =>
+        (row.repo?.kind ?? 'git') === 'git' &&
+        !row.worktree.isBare &&
+        !row.worktree.isArchived &&
+        Boolean(row.worktree.branch)
+    )
+    .map((row) => row.worktree.id)
+    .filter((id) => args.isOnScreen?.(id) ?? true)
+}
+
 export function useVisiblePrRefreshReporting(args: {
   currentWorktreeId: string | null
   worktreeMap: Map<string, Worktree>
@@ -27,108 +74,50 @@ export function useVisiblePrRefreshReporting(args: {
   virtualItems: readonly VirtualItem[]
   scrollRef: React.RefObject<HTMLDivElement | null>
 }): void {
-  const {
-    currentWorktreeId,
-    worktreeMap,
-    groupBy,
-    newCardStyle,
-    renderRows,
-    virtualItems,
-    scrollRef
-  } = args
-  const [documentVisibilityRevision, setDocumentVisibilityRevision] = useState(0)
-  const lastVisibleRefreshKeyRef = useRef('')
-  const reportVisibleGitHubPRRefreshCandidates = useAppStore(
-    (s) => s.reportVisibleGitHubPRRefreshCandidates
-  )
+  const publish = useAppStore((s) => s.setVisibleReviewCardWorktreeIds)
   const cardProps = useAppStore((s) => s.worktreeCardProperties)
-  const rightSidebarShowsPR = useAppStore((s) => rightSidebarShowsPullRequestData(s))
-  const sshConnectedGeneration = useAppStore((s) => s.sshConnectedGeneration)
-  const prVisibleRefreshGeneration = useAppStore((s) => s.prVisibleRefreshGeneration)
-
-  useEffect(
-    () =>
-      installWorktreeVisibleRefreshVisibilityListener(() => {
-        if (document.visibilityState !== 'visible') {
-          // Why: row identity may be unchanged after a hidden window; reset the key so PR/CI rows refresh.
-          lastVisibleRefreshKeyRef.current = DOCUMENT_HIDDEN_KEY
-          return
-        }
-        setDocumentVisibilityRevision((revision) => revision + 1)
-      }),
-    []
-  )
+  const enabled =
+    args.groupBy === 'pr-status' ||
+    (args.newCardStyle
+      ? cardProps.includes('status')
+      : cardProps.includes('pr') || cardProps.includes('ci'))
 
   useEffect(() => {
-    if (document.visibilityState !== 'visible') {
-      lastVisibleRefreshKeyRef.current = DOCUMENT_HIDDEN_KEY
-      return
+    const update = (): void => {
+      const scroll = args.scrollRef.current
+      const viewport = scroll?.getBoundingClientRect()
+      publish(
+        scroll && document.visibilityState === 'visible'
+          ? visibleReviewCardIds({
+              enabled,
+              renderRows: args.renderRows,
+              virtualItems: args.virtualItems,
+              viewportTop: scroll.scrollTop,
+              viewportHeight: scroll.clientHeight,
+              isOnScreen: (id) =>
+                getMountedWorktreeOptions(id, scroll).some((option) => {
+                  const surface = option.querySelector('[data-worktree-card-surface]')
+                  const bounds = (surface?.firstElementChild ?? option).getBoundingClientRect()
+                  return (
+                    viewport !== undefined &&
+                    bounds.height > 0 &&
+                    bounds.top < viewport.bottom &&
+                    bounds.bottom > viewport.top
+                  )
+                })
+            })
+          : []
+      )
     }
-    const currentWorktree = currentWorktreeId ? (worktreeMap.get(currentWorktreeId) ?? null) : null
-    // Why: this reporter feeds the GitHub coordinator; GitLab-only MR panels refresh via hosted-review paths.
-    const sidebarWorktreeHasGitHubReview =
-      currentWorktree !== null &&
-      ((currentWorktree.linkedGitLabMR ?? null) === null ||
-        (currentWorktree.linkedPR ?? null) !== null)
-    const shouldTrackSidebarWorktree = rightSidebarShowsPR && sidebarWorktreeHasGitHubReview
-    const shouldTrackVisibleRows =
-      groupBy === 'pr-status' ||
-      (newCardStyle
-        ? cardProps.includes('status')
-        : cardProps.includes('pr') || cardProps.includes('ci'))
-    if (!shouldTrackVisibleRows && !shouldTrackSidebarWorktree) {
-      if (lastVisibleRefreshKeyRef.current !== NOTHING_TO_TRACK_KEY) {
-        lastVisibleRefreshKeyRef.current = NOTHING_TO_TRACK_KEY
-        reportVisibleGitHubPRRefreshCandidates([], Date.now())
-      }
-      return
+    update()
+    const stopVisibility = installWorktreeVisibleRefreshVisibilityListener(update)
+    const scroll = args.scrollRef.current
+    const stopScroll = scroll ? installVisibleReviewCardScrollListener(scroll, update) : () => {}
+    return () => {
+      stopVisibility()
+      stopScroll()
     }
-    const scrollEl = scrollRef.current
-    if (!scrollEl) {
-      return
-    }
-    const viewportTop = scrollEl.scrollTop
-    const viewportBottom = viewportTop + scrollEl.clientHeight
-    const visibleRows = virtualItems
-      .filter((item) => item.start < viewportBottom && item.end > viewportTop)
-      .map((item) => renderRows[item.index])
-      .filter((row): row is WorktreeItemRow => row?.type === 'item')
-      .filter((row) => row.repo?.kind === 'git' && !row.worktree.isBare && row.worktree.branch)
-    const visibleWorktreeIds = new Set(visibleRows.map((row) => row.worktree.id))
-    if (
-      shouldTrackSidebarWorktree &&
-      currentWorktree &&
-      !currentWorktree.isBare &&
-      currentWorktree.branch
-    ) {
-      visibleWorktreeIds.add(currentWorktree.id)
-    }
-    const visibleIdentity = visibleRows
-      .map((row) => `${row.worktree.id}:${row.worktree.branch}:${row.worktree.linkedPR ?? ''}`)
-      .join('|')
-    const sidebarIdentity =
-      shouldTrackSidebarWorktree && currentWorktree
-        ? `${currentWorktree.id}:${currentWorktree.branch}:${currentWorktree.linkedPR ?? ''}`
-        : ''
-    const key = `${visibleIdentity}:${sidebarIdentity}:${sshConnectedGeneration}:${prVisibleRefreshGeneration}:${cardProps.join(',')}`
-    if (!key || key === lastVisibleRefreshKeyRef.current) {
-      return
-    }
-    lastVisibleRefreshKeyRef.current = key
-    reportVisibleGitHubPRRefreshCandidates(Array.from(visibleWorktreeIds), Date.now())
-  }, [
-    cardProps,
-    currentWorktreeId,
-    documentVisibilityRevision,
-    groupBy,
-    renderRows,
-    reportVisibleGitHubPRRefreshCandidates,
-    prVisibleRefreshGeneration,
-    rightSidebarShowsPR,
-    scrollRef,
-    sshConnectedGeneration,
-    newCardStyle,
-    virtualItems,
-    worktreeMap
-  ])
+  }, [enabled, args.renderRows, args.virtualItems, args.scrollRef, publish])
+
+  useEffect(() => () => publish([]), [publish])
 }

@@ -17,7 +17,7 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['orchestration', 'run-use'],
-    summary: 'Bind this coordinator terminal to an existing Run',
+    summary: 'Bind this coordinator to an existing Run',
     usage:
       'orca orchestration run-use --id <run_id> [--from <handle>] [--takeover-legacy] [--retry-request <id>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'id', 'from', 'takeover-legacy', 'retry-request'],
@@ -28,7 +28,7 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['orchestration', 'run-current'],
-    summary: 'Show the Run bound to this coordinator terminal',
+    summary: 'Show the Run bound to this coordinator',
     usage: 'orca orchestration run-current [--from <handle>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'from'],
     identityFlagRoles: { from: 'caller' }
@@ -87,7 +87,7 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['orchestration', 'check'],
-    summary: 'Check messages for a terminal',
+    summary: "Check this agent's messages",
     usage:
       'orca orchestration check [--terminal <handle>] [--run <run_id>] [--ack <delivery_id>] [--unread | --peek | --all] [--types <type,...>] [--format] [--wait] [--timeout-ms <n>] [--retry-request <id>] [--json]\n' +
       "  default: return the bound Run's oldest unacknowledged FIFO batch.\n" +
@@ -167,10 +167,13 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     path: ['orchestration', 'task-update'],
     summary: 'Update a task status',
     usage:
-      'orca orchestration task-update --id <task_id> --status <status> [--result <json>] [--run <run_id>] [--from <handle>] [--retry-request <id>] [--json]',
+      'orca orchestration task-update --id <task_id> --status <status> [--result <text>] [--run <run_id>] [--from <handle>] [--retry-request <id>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'id', 'status', 'result', 'run', 'from', 'retry-request'],
     identityFlagRoles: { from: 'caller' },
-    notes: ['Valid --status values: pending, ready, dispatched, completed, failed, blocked.']
+    notes: [
+      'Valid --status values: pending, ready, dispatched, completed, failed, blocked.',
+      'To cancel a Task, stop or abandon its worker, then set --status failed --result cancelled; a later worker-start --retry-of reopens it.'
+    ]
   },
   ...ORCHESTRATION_WORKER_COMMAND_SPECS,
   {

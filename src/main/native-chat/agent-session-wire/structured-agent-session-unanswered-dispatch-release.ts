@@ -3,7 +3,7 @@ import type { StructuredAgentSessionHostDeps } from './structured-agent-session-
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
 
 /**
- * Releases sends the provider can no longer be holding.
+ * Releases doubted sends once the provider reports it has stopped running.
  *
  * A dispatch whose RPC timed out is recorded `unknown` — doubt, never proof of
  * non-delivery — and a live `unknown` reads as work still owed, so the session

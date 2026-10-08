@@ -17,6 +17,10 @@ import {
 } from './store-domain-composition'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { scheduleSave } from './write-scheduling'
+import {
+  migrateLegacyOpenCodeGoApiKey,
+  type OpenCodeGoApiKeyTarget
+} from './legacy-opencode-go-api-key-migration'
 import { enqueuePrimaryStateOperation, writeToDiskAsync } from './primary-state-writes'
 import type { ProfileStateDatabaseQuarantine } from '../profile-state/profile-state-database-quarantine'
 import { writeVersionedProfileStateExport } from '../profile-state/legacy-json/profile-state-versioned-export'
@@ -151,6 +155,13 @@ export class Store {
     }
   }
 
+  /** Moves the #22551 settings-slot OpenCode Go key into `target`; it stays on disk until that succeeds. */
+  migrateLegacyOpenCodeGoApiKey(target: OpenCodeGoApiKeyTarget): void {
+    if (migrateLegacyOpenCodeGoApiKey(this.runtime.protectedSecrets, target)) {
+      scheduleSave(this.domains.scheduling)
+    }
+  }
+
   getProfileStorageDirectory(): string {
     return dirname(this.runtime.dataFile)
   }
@@ -208,35 +219,12 @@ export class Store {
     return writeVersionedProfileStateExport(this.runtime.dataFile, writeExport)
   }
 
-  /** Publish recovery and canonical JSON checkpoints for older builds. */
-  writeLatestProfileStateJsonCompatibilityExport(): number | undefined {
-    const authority = this.runtime.profileStateAuthority
-    if (authority?.asynchronous) {
-      throw new Error('Live profile exports require an awaited export')
-    }
-    if (!authority?.writeJsonCompatibilityExport) {
-      return undefined
-    }
-    this.runtime.dirtyProfileStateDomains = null
-    this.flushOrThrow()
-    return authority.writeJsonCompatibilityExport(this.runtime.dataFile)
-  }
-
   writeLatestProfileStateJsonExportAsync(): Promise<number | undefined> {
     if (!this.runtime.profileStateAuthority?.asynchronous) {
       return Promise.resolve(this.writeLatestProfileStateJsonExport())
     }
     return this.enqueueProfileExport((authority) =>
       authority.writeLatestJsonExport(this.runtime.dataFile)
-    )
-  }
-
-  writeLatestProfileStateJsonCompatibilityExportAsync(): Promise<number | undefined> {
-    if (!this.runtime.profileStateAuthority?.asynchronous) {
-      return Promise.resolve(this.writeLatestProfileStateJsonCompatibilityExport())
-    }
-    return this.enqueueProfileExport((authority) =>
-      authority.writeJsonCompatibilityExport(this.runtime.dataFile)
     )
   }
 

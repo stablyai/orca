@@ -3,9 +3,8 @@
 
 import { expect, it, vi } from 'vitest'
 import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
-import { rename, writeFile, rm } from 'node:fs/promises'
 import { interruptedRestart } from './structured-agent-session-restart-interruption-test-harness'
-import { journalDirectoryFor } from '../agent-session-journal/journal-paths'
+import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { CALLER, envelope } from './structured-agent-session-host-test-harness'
 import {
   HOST_TEST_NOW as NOW,
@@ -36,24 +35,16 @@ it('deletes the offer once the user sends their own message in that chat', async
 
 // A journal this host cannot read decides nothing, so it must not end the offer.
 it('keeps the offer when the chat cannot be read on this host', async () => {
-  const { host, root, store } = await interruptedRestart('submission')
+  const { host, root } = await interruptedRestart('submission')
   const capsule = new AgentSessionRecoveryCapsule(root)
-  const location = store.getRecord(SESSION)?.location
-  if (!location) {
-    throw new Error('missing session record')
-  }
-  // A file where the journal directory belongs: this host cannot open the conversation at all.
-  const journalDir = journalDirectoryFor(root, {
-    workspaceId: location.workspaceId,
-    sessionId: SESSION
-  })
-  await rename(journalDir, `${journalDir}.aside`)
-  await writeFile(journalDir, 'not a journal')
+  // This host cannot open the conversation at all.
+  const open = vi
+    .spyOn(AgentSessionJournal.prototype, 'open')
+    .mockRejectedValue(Object.assign(new Error('disk I/O error'), { code: 'ERR_SQLITE_ERROR' }))
   try {
     expect(await host.restartResume.list()).toMatchObject([{ sessionId: SESSION }])
   } finally {
-    await rm(journalDir)
-    await rename(`${journalDir}.aside`, journalDir)
+    open.mockRestore()
   }
   expect(await capsule.list(NOW)).toHaveLength(1)
   expect(await host.restartResume.list()).toMatchObject([{ sessionId: SESSION }])

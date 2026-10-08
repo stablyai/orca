@@ -1,42 +1,62 @@
 name: Warm shared CI caches
 
 on:
+  # Cache-input pushes seed immediately; this schedule repairs eviction and image changes.
   schedule:
-    - cron: '41 * * * *'
+    - cron: '41 */6 * * *'
   workflow_dispatch:
   push:
     branches: [main]
     paths:
       - '.github/workflows/ci-cache-warmup.yml'
       - '.github/actions/install-node-dependencies/**'
+      - '.github/actions/restore-pnpm-verification/**'
+      - '.github/actions/prepare-native-runtime/**'
       - '.github/actions/prepare-git-compatibility/**'
+      - '.github/actions/prepare-headless-compiler/**'
+      - 'config/scripts/headless-detector-compiler-cache.mjs'
       - '.github/actions/prepare-linux-package-fixture/**'
       - 'config/docker/headless-serve-shutdown/**'
       - 'config/docker/cli-launch-contract/**'
+      - 'config/docker/daemon-shutdown-descendants/**'
       - 'package.json'
       - 'pnpm-lock.yaml'
       - 'pnpm-workspace.yaml'
+      - '.npmrc'
+      - '.pnpmfile.cjs'
       - 'config/tsconfig*.json'
       - 'config/scripts/ensure-native-runtime.mjs'
       - 'config/scripts/rebuild-native-deps.mjs'
-      - 'config/patches/node-pty@1.1.0.patch'
-      - 'config/patches/@vscode__windows-process-tree@0.8.0.patch'
+      - 'config/scripts/node-pty-job-ownership.cjs'
+      - 'config/scripts/windows-pe-machine.cjs'
+      - 'config/scripts/windows-process-tree-gyp-rebuild.mjs'
+      - 'config/scripts/windows-process-tree-creation-time.cjs'
+      - 'config/scripts/install-electron-package-binary.mjs'
+      - 'config/scripts/electron-platform-path.mjs'
+      - 'config/scripts/zip-extractor-command.mjs'
+      - 'src/shared/zip-extractor-command.ts'
+      - 'config/scripts/shared-electron-dist-cache.mjs'
+      - 'config/scripts/space-sharing-copy.mjs'
+      - 'config/patches/**'
       - 'native/windows-registry/**'
   pull_request:
     paths:
       - '.github/workflows/ci-cache-warmup.yml'
       - '.github/actions/prepare-git-compatibility/**'
+      - '.github/actions/prepare-headless-compiler/**'
+      - 'config/scripts/headless-detector-compiler-cache.mjs'
       - '.github/actions/prepare-linux-package-fixture/**'
       - 'config/docker/headless-serve-shutdown/**'
       - 'config/docker/cli-launch-contract/**'
-      - 'config/scripts/ci-cache-warmup-workflow.test.mjs'
+      - 'config/docker/daemon-shutdown-descendants/**'
 
 permissions:
   contents: read
 
 concurrency:
   group: ci-cache-warmup-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # Scheduled retries must let an active warmer finish publishing its caches.
+  cancel-in-progress: ${{ github.event_name != 'schedule' }}
 
 jobs:
   warm:
@@ -55,6 +75,11 @@ jobs:
           native-runtime: node
           node-version: '24'
           cache-electron-package: 'true'
+          cache-pnpm-store-lookup-only: 'true'
+
+      - uses: ./.github/actions/prepare-headless-compiler
+        with:
+          seed: 'true'
 
       - name: Populate shared Electron archive
         run: node config/scripts/install-electron-package-binary.mjs
@@ -88,6 +113,7 @@ jobs:
           native-runtime: node
           node-version: '24'
           cache-electron-package: 'true'
+          cache-pnpm-store-lookup-only: 'true'
       - name: Populate shared Electron archive
         run: node config/scripts/install-electron-package-binary.mjs
       - name: Verify native cache is usable
@@ -109,6 +135,7 @@ jobs:
       - uses: ./.github/actions/install-node-dependencies
         with:
           native-runtime: node
+          cache-pnpm-store-lookup-only: 'true'
       - name: Verify native cache is usable
         run: node config/scripts/ensure-native-runtime.mjs --check-only
 
@@ -121,6 +148,10 @@ jobs:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
+      - uses: ./.github/actions/prepare-linux-package-fixture
+        with:
+          fixture: daemon-shutdown-descendants
+          save-cache: ${{ github.event_name != 'pull_request' }}
       - uses: ./.github/actions/prepare-linux-package-fixture
         with:
           fixture: headless-serve-shutdown

@@ -31,6 +31,8 @@ describe('relay watch-root capacity', () => {
     handler = new FsHandler(dispatcher as unknown as RelayDispatcher, new RelayContext(), {
       dispose: vi.fn(),
       forgetRoot: vi.fn(),
+      disposeAndWait: vi.fn(async () => {}),
+      reopen: vi.fn(),
       subscribe: subscribeWithInProcessWatcher
     })
   })

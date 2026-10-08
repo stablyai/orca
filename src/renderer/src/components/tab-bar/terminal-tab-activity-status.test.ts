@@ -152,12 +152,32 @@ describe('resolveTerminalTabActivityStatus', () => {
     ).toBe('done')
   })
 
-  it('reports an interrupted done as interrupted, matching the worktree card', () => {
-    const interrupted = entry(FIRST_LEAF_ID, 'done', { interrupted: true })
+  it.each([
+    ['success', 'done'],
+    ['failure', 'failed'],
+    // A user's Stop reads interrupted; a turn anything else cut short is a fault, like a failure.
+    ['cancellation', 'interrupted'],
+    ['interruption', 'failed'],
+    ['unconfirmed', 'unconfirmed']
+  ] as const)('reports a %s done as %s, matching the worktree card', (outcome, status) => {
+    const ended = entry(FIRST_LEAF_ID, 'done', {
+      mainAgent: { state: 'done', outcome, stateStartedAt: NOW }
+    })
     expect(
       resolveTerminalTabActivityStatus({
         tab: TAB,
-        agentStatusByPaneKey: { [interrupted.paneKey]: interrupted },
+        agentStatusByPaneKey: { [ended.paneKey]: ended },
+        ptyIdsByTabId: LIVE_PTY
+      })
+    ).toBe(status)
+  })
+
+  it("reads an old host's user-stop flag as interrupted", () => {
+    const stopped = entry(FIRST_LEAF_ID, 'done', { interrupted: true })
+    expect(
+      resolveTerminalTabActivityStatus({
+        tab: TAB,
+        agentStatusByPaneKey: { [stopped.paneKey]: stopped },
         ptyIdsByTabId: LIVE_PTY
       })
     ).toBe('interrupted')
@@ -196,8 +216,10 @@ describe('resolveTerminalTabActivityStatus', () => {
     expect(status('cancellation')).toBe('working')
   })
 
-  it('does not let a finished sibling mask an interrupted outcome', () => {
-    const interrupted = entry(FIRST_LEAF_ID, 'done', { interrupted: true })
+  it("does not let a finished sibling mask a user's Stop", () => {
+    const interrupted = entry(FIRST_LEAF_ID, 'done', {
+      mainAgent: { state: 'done', outcome: 'cancellation', stateStartedAt: NOW }
+    })
     const finished = entry(SECOND_LEAF_ID, 'done')
     expect(
       resolveTerminalTabActivityStatus({

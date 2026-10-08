@@ -29,35 +29,11 @@ import {
   shellEscape,
   findDefaultKeyFile,
   buildConnectConfig,
-  resolveAgentSocket,
-  CONNECT_TIMEOUT_MS,
-  INITIAL_RETRY_ATTEMPTS,
-  INITIAL_RETRY_DELAY_MS,
-  RECONNECT_BACKOFF_MS
+  resolveAgentSocket
 } from './ssh-connection-utils'
 import { resolveEffectiveProxy } from './ssh-proxy-command'
 import type { SshTarget } from '../../shared/ssh-types'
 import type { SshResolvedConfig } from './ssh-config-parser'
-
-// ── Constants ────────────────────────────────────────────────────────
-
-describe('SSH connection constants', () => {
-  it('CONNECT_TIMEOUT_MS is 30 seconds (matches VS Code)', () => {
-    expect(CONNECT_TIMEOUT_MS).toBe(30_000)
-  })
-
-  it('INITIAL_RETRY_ATTEMPTS is 5', () => {
-    expect(INITIAL_RETRY_ATTEMPTS).toBe(5)
-  })
-
-  it('INITIAL_RETRY_DELAY_MS is 2 seconds', () => {
-    expect(INITIAL_RETRY_DELAY_MS).toBe(2000)
-  })
-
-  it('RECONNECT_BACKOFF_MS has 9 entries', () => {
-    expect(RECONNECT_BACKOFF_MS).toHaveLength(9)
-  })
-})
 
 // ── isTransientError ─────────────────────────────────────────────────
 

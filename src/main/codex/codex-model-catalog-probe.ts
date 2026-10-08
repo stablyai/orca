@@ -1,4 +1,3 @@
-import { getSpawnArgsForWindows } from '../win32-utils'
 import { CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS } from '../codex-cli/codex-read-only-app-server-args'
 import { runCodexAppServerSession } from './codex-app-server-session'
 import { fetchCodexModelCatalogListing } from './codex-structured-model-catalog'
@@ -11,8 +10,8 @@ import type {
   AgentModelCatalogSuccess
 } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 
-// Why 15s: the whole probe session is SIGKILLed at the deadline, and a cold
-// `model/list` may pay one network /models fetch behind provider auth.
+// Why 15s: the whole probe session is stopped at the deadline (on POSIX its supervisor then gets
+// up to PROVIDER_SUPERVISOR_MAX_STOP_MS), and a cold `model/list` may pay one /models fetch.
 const CODEX_MODEL_CATALOG_PROBE_TIMEOUT_MS = 15_000
 
 export type CodexModelCatalogProbeDeps = Pick<
@@ -44,14 +43,11 @@ export function createCodexModelCatalogProbe(
 ): AgentModelCatalogProbe {
   return async (accountHomePath: string): Promise<AgentModelCatalogSuccess> => {
     const { command, environment } = await resolveCodexStructuredInvocation(deps)
-    const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(command, [
-      ...CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS
-    ])
     const run = deps.runSession ?? runCodexAppServerSession
     const listing = await run(
       {
-        command: spawnCmd,
-        args: spawnArgs,
+        command,
+        args: [...CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS],
         cliPath: command,
         env: { ...definedEnv(environment), CODEX_HOME: accountHomePath },
         timeoutMs: CODEX_MODEL_CATALOG_PROBE_TIMEOUT_MS

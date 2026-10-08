@@ -4,6 +4,7 @@ import type {
   AgentSessionOptionsResult
 } from '../../shared/agent-session-wire'
 import type { CodexAppServerConnection } from './codex-app-server-connection'
+import { structuredAgentSessionOptionModels } from '../native-chat/agent-session-wire/structured-agent-session-option-models'
 import { codexFastModeSupport, readCodexFastModeTier } from './codex-structured-fast-mode'
 import {
   applyCodexConfiguredLaunchDefaults,
@@ -95,7 +96,19 @@ export type CodexModelCatalogListing = {
 export async function fetchCodexModelCatalogListing(input: {
   connection: Pick<CodexAppServerConnection, 'request'>
   timeoutMs?: number
+  deadlineMs?: number
 }): Promise<CodexModelCatalogListing> {
+  const deadline = input.deadlineMs === undefined ? null : Date.now() + input.deadlineMs
+  const remainingTimeout = (): number | undefined => {
+    if (deadline === null) {
+      return input.timeoutMs
+    }
+    const remaining = deadline - Date.now()
+    if (remaining <= 0) {
+      throw new Error('codex model listing deadline exceeded')
+    }
+    return Math.min(remaining, input.timeoutMs ?? remaining)
+  }
   const parsedModels: ParsedCodexModelOption[] = []
   let cursor: string | null = null
   for (let page = 0; page < MAX_MODEL_PAGES; page += 1) {
@@ -103,7 +116,7 @@ export async function fetchCodexModelCatalogListing(input: {
       await input.connection.request(
         'model/list',
         { limit: MODEL_PAGE_LIMIT, includeHidden: false, ...(cursor ? { cursor } : {}) },
-        { timeoutMs: input.timeoutMs }
+        { timeoutMs: remainingTimeout() }
       )
     )
     const rows = Array.isArray(response?.data) ? response.data : []
@@ -118,7 +131,7 @@ export async function fetchCodexModelCatalogListing(input: {
       break
     }
   }
-  const configured = await readCodexConfiguredLaunchDefaults(input.connection)
+  const configured = await readCodexConfiguredLaunchDefaults(input.connection, remainingTimeout())
   return {
     models: applyCodexConfiguredLaunchDefaults(
       parsedModels.map((entry) => entry.option),
@@ -141,15 +154,11 @@ export function composeCodexSessionOptionCatalog(
     reportedServiceTierKnown?: boolean
   }
 ): CodexSessionOptionCatalog {
-  const models = listing.models.map((entry) => ({ ...entry }))
-  if (input.current.model && !models.some((model) => model.id === input.current.model)) {
-    models.push({
-      id: input.current.model,
-      label: input.current.model,
-      isDefault: false,
-      efforts: []
-    })
-  }
+  const models = structuredAgentSessionOptionModels(
+    listing.models.map((entry) => ({ ...entry })),
+    input.current.model,
+    (row) => row
+  )
   const model = input.current.model ?? models.find((entry) => entry.isDefault)?.id ?? models[0]?.id
   if (!model) {
     throw new Error('codex app-server returned no available models')

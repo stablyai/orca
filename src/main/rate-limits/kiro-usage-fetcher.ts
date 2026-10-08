@@ -1,8 +1,7 @@
-import { execFile } from 'node:child_process'
+import { runProcess } from '../../shared/child-process/run-process'
 import { stripAnsiEscapeSequences } from '../../shared/ansi-escape-sequences'
 import { resolveCliCommand, withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
 import type { ProviderRateLimits, RateLimitWindow } from '../../shared/rate-limit-types'
-import { getSpawnArgsForWindows } from '../win32-utils'
 
 const CLI_TIMEOUT_MS = 20_000
 const MONTHLY_WINDOW_MINUTES = 43_200
@@ -51,25 +50,20 @@ export function resolveKiroCommand(
   return resolveCliCommand('kiro-cli', options)
 }
 
-const runCommand: CommandRunner = (command, args, signal) =>
-  new Promise((resolve, reject) => {
-    // Why: execFile cannot launch configured .cmd/.bat shims directly on
-    // Windows; route them through cmd.exe like the other usage fetchers.
-    const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(command, args)
-    const env = withCliRuntimeOnPath(command, { ...process.env })
-    execFile(
-      spawnCmd,
-      spawnArgs,
-      { encoding: 'utf8', timeout: CLI_TIMEOUT_MS, maxBuffer: 1024 * 1024, signal, env },
-      (error, stdout, stderr) => {
-        if (error) {
-          reject(error)
-          return
-        }
-        resolve({ stdout, stderr })
-      }
-    )
+const runCommand: CommandRunner = async (command, args, signal) => {
+  const result = await runProcess({
+    program: command,
+    args,
+    env: withCliRuntimeOnPath(command, { ...process.env }),
+    timeoutMs: CLI_TIMEOUT_MS,
+    maxOutputBytes: 1024 * 1024,
+    signal
   })
+  if (result.code !== 0 || result.timedOut || result.signal !== null) {
+    throw new Error('Kiro usage command failed')
+  }
+  return { stdout: result.stdout, stderr: result.stderr }
+}
 
 export function parseKiroUsageOutput(output: string): ProviderRateLimits {
   const readable = stripAnsiEscapeSequences(output).replace(/\r/g, '')

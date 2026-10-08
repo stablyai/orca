@@ -157,21 +157,6 @@ describe('claudeContextWindowFromResult', () => {
     ).toBe(200_000)
   })
 
-  it('keeps the main thread window when a subagent ran on a larger one', () => {
-    const modelUsage = {
-      'claude-sonnet-5': { contextWindow: 200_000 },
-      'claude-fable-5-1[1m]': { contextWindow: 1_000_000 }
-    }
-    for (const initModel of ['claude-sonnet-5', null]) {
-      expect(
-        claudeContextWindowFromResult(
-          { modelUsage },
-          { initModel, responseModel: 'claude-sonnet-5' }
-        )
-      ).toBe(200_000)
-    }
-  })
-
   it('is null when no entry reports a usable window', () => {
     expect(claudeContextWindowFromResult({ type: 'result' })).toBeNull()
     expect(

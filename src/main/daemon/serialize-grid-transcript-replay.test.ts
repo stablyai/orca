@@ -35,6 +35,20 @@ const KNOWN_PREEXISTING_I2_FAILURES: Record<string, number> = {
   less: 6,
   nano: 2,
   opencode: 5,
+  // Captured boots expose the existing background/cursor restore loss; serializer code is unchanged.
+  'opencode-1-18-32-timed-boot-hidden-pane': 16,
+  'opencode-1-18-32-timed-boot-slow': 16,
+  'opencode-1-18-32-timed-first-launch': 16,
+  'opencode-2-0-18-timed-boot-hidden-pane': 14,
+  // STA-9359 OpenCode 2 captures, serializer untouched: every background diff is the live pen's
+  // panel colour on restored cells, plus the rows kept below the source after a shrink.
+  'opencode-2-0-14-timed-cold-standalone': 4,
+  'opencode-2-0-21-timed-cold-standalone': 36,
+  'opencode-2-0-21-timed-cold-standalone-hidden-pane': 6,
+  'opencode-2-0-21-timed-natural-load-enter-dropped': 12,
+  'opencode-cmd-2-0-21-timed-warm-server': 21,
+  // The same, plus the cursor one column short after a shrink and the pen's bold bit on a glyph.
+  'opencode-2-0-21-timed-narrow-pane': 8,
   // Shrink leaves the cursor one column short; also present in the pre-Qoder serializer.
   'qoder-no-account': 2,
   'qoder-ready': 2,
@@ -43,13 +57,73 @@ const KNOWN_PREEXISTING_I2_FAILURES: Record<string, number> = {
   'codex-0157-effort-override-embedded-warning': 4,
   'codex-0157-no-daemon-effort-override': 16,
   'codex-0157-plain-ready': 18,
+  // Fresh-home 0.157/0.158 captures: the live pen's true-colour fg/bg leaks onto restored cells.
+  'codex-0157-fresh-home-daemon-install': 48,
+  'codex-0158-fresh-home-greeting': 9,
+  'codex-0158-model-announcement-dialog': 8,
+  // Codex 0.157/0.158 startup-dialog captures: the same live-pen true-colour leak onto restored cells.
+  'codex-0157-update-available-dialog': 26,
+  'codex-0158-update-available-dialog': 8,
+  'codex-0157-hooks-review-dialog': 24,
+  'codex-0158-hooks-review-dialog': 8,
+  'codex-0157-model-retired-dialog': 22,
+  'codex-0158-model-retired-dialog': 6,
+  // Same extra dim bit on the 0.157/0.158 header row (STA-8834 fixtures).
+  'codex-0-157-1-update-dialog': 16,
+  'codex-0-157-1-timed-sleep-turn': 6,
+  'codex-0-158-0-approval': 12,
+  'codex-0-158-0-timed-turn': 20,
+  'codex-0-158-0-trustprompt': 36,
+  // Fullscreen startup captures diverge identically with the base b58f8197dc36 serializer.
+  'codex-fullscreen-custom-footer': 18,
+  'codex-fullscreen-early-input': 4,
+  'codex-fullscreen-multiline-early-input': 10,
+  'codex-fullscreen-startup': 14,
   'claude-dialog-trust-workspace-answered': 13,
   // DSH-TUI's whale intro paints whole rows of 24-bit background, and every one of this
   // transcript's divergences is the same shape: `visible-grid row=0`, a true-colour
   // background that the round trip does not restore to default. Verified as upstream, not a
   // regression, by replaying it against the previous build
   // (`build-serialize-addon-at-ref.mjs --ref origin/main`): I1 and I3 both hold.
-  'dsh-tui-ready-no-key': 10
+  'dsh-tui-ready-no-key': 10,
+  // Hermes banner cells restore with an extra bold bit under the jitter schedule.
+  'hermes-tui-ready': 2,
+  // STA-8741 agy/Cline/Prime captures, serializer untouched: the same true-colour background
+  // left on restored cells as DSH, plus Prime's cursor row after its alternate-screen repaints.
+  'antigravity-1-2-14-busy-thinking': 2,
+  'antigravity-1-2-14-command-palette': 4,
+  'antigravity-1-2-14-draft': 4,
+  'antigravity-1-2-14-model-picker': 2,
+  'antigravity-1-2-14-picker-dismissed': 2,
+  'antigravity-1-2-14-ready': 12,
+  'antigravity-1-2-14-ready-80x24': 2,
+  'antigravity-1-2-14-ready-accept-edits': 4,
+  'antigravity-1-2-14-ready-plan': 4,
+  'antigravity-1-2-14-trust-dialog': 26,
+  'cline-3-0-66-busy-streaming': 6,
+  'cline-3-0-66-draft': 6,
+  'cline-3-0-66-permission': 6,
+  'cline-3-0-66-promo': 15,
+  'cline-3-0-66-ready': 11,
+  'cline-3-0-66-ready-80x24': 2,
+  'cline-3-0-66-slash-menu': 6,
+  'cline-3-0-66-turn-ended': 10,
+  'prime-agent-0-9-5-ready': 18,
+  'prime-agent-0-9-5-turn': 4,
+  'prime-agent-0-9-8-busy-streaming': 16,
+  'prime-agent-0-9-8-draft': 10,
+  'prime-agent-0-9-8-ready': 22,
+  'prime-agent-0-9-8-ready-80x24': 16,
+  'prime-agent-0-9-8-ready-after-question': 2,
+  'prime-agent-0-9-8-slash-menu': 34,
+  'prime-agent-0-9-8-tool-turn': 40,
+  'prime-agent-0-9-8-trace-question': 4,
+  'prime-agent-0-9-8-turn-ended': 24,
+  // OMP 18.4.5 captures, serializer untouched: after a shrink the restored cursor sits one column
+  // short, as for Qoder. The unscrubbed captures diverge identically, so the scrub is not the cause.
+  'omp-18-composer': 2,
+  'omp-18-composer-narrow': 7,
+  'omp-18-setup': 6
 }
 
 // Exact resize checkpoints and full GridDiff hashes from base 6835b9b4e3ea, not this branch.
@@ -187,7 +261,19 @@ describe('serialize round trip over captured PTY transcripts', () => {
         console.log(`${transcript.name} ${JSON.stringify(counts)}`)
       }
       expect(blocking).toEqual([])
-      if (SEEDS === 2 && transcript.name.startsWith('freebuff-')) {
+      if (SEEDS === 2 && transcript.name === 'hermes-tui-ready') {
+        expect(failureSignatures).toEqual([
+          'jitter/false/2/34:0db2561506ff28d2e83276b07bc8684541957f61e488b6f8081627e8cad80c63',
+          'jitter/true/2/34:0db2561506ff28d2e83276b07bc8684541957f61e488b6f8081627e8cad80c63'
+        ])
+      }
+      // The pre-#22586 serializer has these same row-1 bold diffs on the untouched capture.
+      if (SEEDS === 2 && transcript.name === 'dsb-6-9-0-folder') {
+        expect(failureSignatures).toEqual([
+          'jitter/false/2/19:2050835176269320209c56be5ae9e525424635dfca511d44d3911d3a22ba9d27',
+          'jitter/true/2/19:2050835176269320209c56be5ae9e525424635dfca511d44d3911d3a22ba9d27'
+        ])
+      } else if (SEEDS === 2 && transcript.name.startsWith('freebuff-')) {
         expect(failureSignatures).toEqual(FREEBUFF_BASELINE[transcript.name] ?? [])
       } else if (!OLD_ADDON_PATH && SEEDS === 2) {
         expect(counts['new-fail'] ?? 0).toBe(KNOWN_PREEXISTING_I2_FAILURES[transcript.name] ?? 0)

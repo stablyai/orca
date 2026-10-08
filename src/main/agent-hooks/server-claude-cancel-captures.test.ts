@@ -9,6 +9,7 @@
 // closes the /btw composer) and infers a cancel only from Ctrl+C, so each `cancel` record is
 // replayed as the Ctrl+C inference the renderer would have sent.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { CLAUDE_OWED_TASK_NOTIFICATION_LEASE_MS } from '../../shared/claude-owed-task-notifications'
 import { AgentHookServer, _internals } from './server'
 import { buildBody, PANE, postHookEvent } from './server.test-fixtures'
 import {
@@ -329,6 +330,11 @@ describe('a Claude cancel with a live subagent (captured)', () => {
   })
 
   it('settles the drained row as a stopped turn, never a completed one', async () => {
+    // Why shouldAdvanceTime: the hooks are real loopback POSTs, which need the clock to move.
+    vi.useFakeTimers({
+      shouldAdvanceTime: true,
+      toFake: ['setTimeout', 'clearTimeout', 'Date', 'performance']
+    })
     const server = await startServer()
     try {
       for (const index of [0, 1, 2, 3, 4, 5, 6, 7, 8]) {
@@ -346,6 +352,15 @@ describe('a Claude cancel with a live subagent (captured)', () => {
           payload: { ...hookAt(records, index).payload, hook_event_name: 'SubagentStop' }
         })
       }
+      // Claude owes the main agent a task notification for the launched child, so the drained row
+      // is held, unstamped, until it arrives or stops being waited for.
+      expect(row(server)).toMatchObject({
+        state: 'working',
+        mainAgent: { state: 'done', outcome: 'cancellation' }
+      })
+      expect(row(server).turnCompletedAt).toBeUndefined()
+
+      vi.advanceTimersByTime(CLAUDE_OWED_TASK_NOTIFICATION_LEASE_MS)
       expect(row(server)).toMatchObject({
         state: 'done',
         interrupted: true,
@@ -354,6 +369,7 @@ describe('a Claude cancel with a live subagent (captured)', () => {
       expect(row(server).turnCompletedAt).toBeUndefined()
     } finally {
       server.stop()
+      vi.useRealTimers()
     }
   })
 })

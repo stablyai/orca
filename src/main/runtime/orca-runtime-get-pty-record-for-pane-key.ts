@@ -4,9 +4,20 @@ import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-term
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../shared/stable-pane-id'
 import { detectAgentStatusFromTitle, isClaudeManagementTitle } from '../../shared/agent-detection'
 import { recognizeAgentProcess } from '../../shared/agent-process-recognition'
-import { resolveStructuredWorkerAuthority } from './structured-worker-authority'
-import { structuredWorkerIdentities } from './structured-worker-identity'
+import {
+  resolveStructuredWorkerAuthority,
+  resolveStructuredWorkerIdentityForSession
+} from './structured-worker-authority'
 import type { StructuredPointerTarget } from './orchestration/structured-mailbox-pointer-delivery'
+import {
+  chatDispatchMailTarget,
+  handleLessCoordinatorSessionId,
+  structuredSessionAddressTarget,
+  structuredSessionMailTarget,
+  structuredSessionIdleEdgeMailboxes
+} from './orchestration/structured-session-mail-target'
+import { exitedChatDispatchesForSession } from './orchestration/chat-assignee'
+import { OPERATOR_CLOSE_EXIT_CAUSE } from '../../shared/terminal-exit-cause'
 import {
   resolveTerminalIdentityFromProbes,
   type RuntimeTerminalIdentity
@@ -172,7 +183,7 @@ export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneM
    * — so it must never travel to a renderer to be echoed back.
    */
   getStructuredWorkerPaneKeyForSession(sessionId: string): string | null {
-    const identity = structuredWorkerIdentities.getBySessionId(sessionId)
+    const identity = resolveStructuredWorkerIdentityForSession(sessionId, this._orchestrationDb)
     return identity && resolveStructuredWorkerAuthority(identity.handle, this._orchestrationDb)
       ? identity.paneKey
       : null
@@ -185,6 +196,50 @@ export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneM
   /** The structured idle edge: any journal movement is a chance to redrive parked mail. */
   notifyStructuredSessionJournalActivity(sessionId: string): void {
     this.orchestrationStructuredMailboxPointerDelivery.onJournalActivity(sessionId)
+  }
+
+  /**
+   * Every structured session's status change reaches here. At its idle edge, retry what is parked
+   * on it and re-derive the mailboxes it owns, so mail it could not take earlier (mid-turn, closed)
+   * is pointed again. Workers and chats alike: this is not per-dispatch.
+   */
+  onStructuredSessionStatusForMail(summary: {
+    sessionId: string
+    status: 'working' | 'attention' | 'idle' | null
+  }): void {
+    if (summary.status === 'working' || summary.status === 'attention') {
+      return
+    }
+    // Logged, never thrown: the same status callback goes on to the first-turn workspace rename.
+    try {
+      this.notifyStructuredSessionJournalActivity(summary.sessionId)
+      const openDb = () => this.getExistingOrchestrationDb()
+      const deliver = (mailbox: string) => this.deliverPendingMessagesForHandle(mailbox)
+      structuredSessionIdleEdgeMailboxes(summary.sessionId, openDb).forEach(deliver)
+    } catch (error) {
+      console.warn('[orchestration] structured session mail redrive failed', {
+        sessionId: summary.sessionId,
+        error: error instanceof Error ? error.message : String(error)
+      })
+    }
+  }
+
+  /**
+   * A chat tab left the screen. If that chat worked a Dispatch and has now ended, the Dispatch
+   * settles as a terminal the operator closed does; a /clear moves the tab, so its successor keeps
+   * the work.
+   */
+  onStructuredSessionTabHidden(sessionId: string): void {
+    try {
+      const db = this.getExistingOrchestrationDb()
+      for (const dispatch of db ? exitedChatDispatchesForSession(sessionId, db) : []) {
+        this.failActiveDispatchOnExit(dispatch.assignee_handle, null, 0, OPERATOR_CLOSE_EXIT_CAUSE)
+      }
+    } catch (error) {
+      console.warn('[orchestration] settling a closed chat worker failed', {
+        error: error instanceof Error ? error.message : String(error)
+      })
+    }
   }
 
   /** Settlement drops anything parked for the session; nothing will ever redrive it again. */
@@ -205,16 +260,25 @@ export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneM
     if (mailboxHandle.startsWith('run:')) {
       return this.resolveStructuredCoordinatorMailboxTarget(mailboxHandle.slice('run:'.length))
     }
+    const addressed = structuredSessionAddressTarget(mailboxHandle, this._orchestrationDb)
+    if (addressed !== undefined) {
+      return addressed
+    }
     if (!mailboxHandle.startsWith('dispatch:')) {
       return this.resolveStructuredWorkerDirectMailboxTarget(mailboxHandle)
     }
     const dispatchId = mailboxHandle.slice('dispatch:'.length)
-    const assignee = this._orchestrationDb?.getDispatchContextById?.(dispatchId)?.assignee_handle
+    const dispatch = this._orchestrationDb?.getDispatchContextById?.(dispatchId)
+    const assignee = dispatch?.assignee_handle
     if (!assignee) {
       return null
     }
-    const identity = resolveStructuredWorkerAuthority(assignee, this._orchestrationDb)?.identity
-    return identity ? { sessionId: identity.sessionId, dispatchId } : null
+    const chat = chatDispatchMailTarget(dispatch, this._orchestrationDb)
+    if (chat !== undefined) {
+      return chat
+    }
+    const sessionId = this.liveStructuredWorkerSessionId(assignee)
+    return sessionId ? { sessionId, dispatchId } : null
   }
 
   /**
@@ -228,12 +292,17 @@ export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneM
   protected resolveStructuredCoordinatorMailboxTarget(
     runId: string
   ): StructuredPointerTarget | null {
-    const coordinator = this._orchestrationDb?.getRun?.(runId)?.coordinator_handle
+    const run = this._orchestrationDb?.getRun?.(runId)
+    const sessionId = run ? handleLessCoordinatorSessionId(run) : null
+    if (sessionId) {
+      return structuredSessionMailTarget(sessionId, this._orchestrationDb)
+    }
+    const coordinator = run?.coordinator_handle
     if (!coordinator) {
       return null
     }
-    const identity = resolveStructuredWorkerAuthority(coordinator, this._orchestrationDb)?.identity
-    return identity ? { sessionId: identity.sessionId, dispatchId: null } : null
+    const workerSessionId = this.liveStructuredWorkerSessionId(coordinator)
+    return workerSessionId ? { sessionId: workerSessionId, dispatchId: null } : null
   }
 
   /**
@@ -254,12 +323,20 @@ export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneM
     const db = this._orchestrationDb
     // Answers null for anything that is not a live structured worker of THIS runtime, so `run:`
     // and PTY handles fall through to the PTY lane exactly as before.
-    const identity = resolveStructuredWorkerAuthority(handle, db)?.identity
-    if (!identity) {
+    const authority = resolveStructuredWorkerAuthority(handle, db)
+    if (!authority) {
       return null
     }
-    const dispatchId = db?.findActiveDispatchForAssignee?.(handle, identity.paneKey)?.id ?? null
-    return { sessionId: identity.sessionId, dispatchId }
+    const dispatchId =
+      db?.findActiveDispatchForAssignee?.(handle, authority.identity.paneKey)?.id ?? null
+    return { sessionId: authority.running.sessionId, dispatchId }
+  }
+
+  /** The session running a structured worker of this runtime: its `/clear` successor, if any. */
+  private liveStructuredWorkerSessionId(handle: string): string | null {
+    return (
+      resolveStructuredWorkerAuthority(handle, this._orchestrationDb)?.running.sessionId ?? null
+    )
   }
 
   protected scheduleRestoredMessageRepoints(): void {

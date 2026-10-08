@@ -46,6 +46,11 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
       return
     }
     const currentPtyId = session.transport.getPtyId()
+    // Protocol replies keep the TUI responsive while an account notice blocks typing.
+    if (isTerminalQueryReply(data)) {
+      session.sendDesktopQueryReplyImmediate(data)
+      return
+    }
     // Why: after a Codex account switch, the runtime auth has already moved to
     // the newly selected account. Stale panes must not keep sending input until
     // they restart, or work can execute under the wrong account while the UI
@@ -76,19 +81,6 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
     ) {
       // Why: Codex can leave focus reporting armed after a Windows turn, but
       // disabling the mode would permanently silence focus events on resume.
-      return
-    }
-    // Why: xterm answers CPR/DSR/DA queries natively through this same onData
-    // stream (mixed with keystrokes). Those replies are latency-critical — a
-    // querying program reads them in raw mode with a short timeout — so send
-    // them immediately, skipping the remote input debounce that would corrupt
-    // them (#7329). They are not user input, so they bypass intent inference and
-    // activity recording below. No pending-intent guard: the only intents are
-    // plain-escape (`\x1b`) and ctrl-c (`\x03`), neither of which can satisfy
-    // isTerminalQueryReply (it requires length >= 3 and a full reply grammar),
-    // so a real keystroke never reaches this branch.
-    if (isTerminalQueryReply(data)) {
-      session.sendDesktopQueryReplyImmediate(data)
       return
     }
     // Why after the query-reply branch: device replies are not user input and

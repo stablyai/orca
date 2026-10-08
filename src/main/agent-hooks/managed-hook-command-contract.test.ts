@@ -24,6 +24,7 @@ import { getGrokManagedCommand } from '../grok/grok-hook-script'
 import { getMuseManagedCommand, getMuseRemoteManagedCommand } from '../muse/hook-settings'
 import { getDshManagedCommand, getDshRemoteManagedCommand } from '../dsh/hook-settings'
 import { getZCodeManagedCommand, getZCodeRemoteManagedCommand } from '../zcode/hook-settings'
+import { getJcodeManagedCommand, getJcodeRemoteManagedCommand } from '../jcode/hook-settings'
 import {
   wrapPosixHookCommand,
   wrapWindowsCmdHookCommand,
@@ -67,11 +68,7 @@ const buildersByAgent = new Map<string, CommandBuilders>([
   [
     'claude',
     {
-      local: (path) =>
-        [true, false].map(
-          (gitBashAvailable) =>
-            getManagedLifecycleHook(path, CLAUDE_HOOK_SETTINGS, { gitBashAvailable }).command
-        ),
+      local: (path) => [getManagedLifecycleHook(path, CLAUDE_HOOK_SETTINGS).command],
       remote: (path) => [getClaudeRemoteCommand(path)]
     }
   ],
@@ -89,6 +86,34 @@ const buildersByAgent = new Map<string, CommandBuilders>([
         getManagedLifecycleHook(path, {
           configDirName: '.qoder',
           scriptBaseName: 'qoder-hook',
+          usesWindowsCompatLauncher: true,
+          windowsHookShell: 'powershell'
+        }).command
+      ],
+      remote: (path) => [getClaudeRemoteCommand(path)]
+    }
+  ],
+  [
+    'qoder-cn',
+    {
+      local: (path) => [
+        getManagedLifecycleHook(path, {
+          configDirName: '.qoder-cn',
+          scriptBaseName: 'qoder-cn-hook',
+          usesWindowsCompatLauncher: true,
+          windowsHookShell: 'powershell'
+        }).command
+      ],
+      remote: (path) => [getClaudeRemoteCommand(path)]
+    }
+  ],
+  [
+    'qwen-code',
+    {
+      local: (path) => [
+        getManagedLifecycleHook(path, {
+          configDirName: '.qwen',
+          scriptBaseName: 'qwen-code-hook',
           usesWindowsCompatLauncher: true,
           windowsHookShell: 'powershell'
         }).command
@@ -193,6 +218,15 @@ const buildersByAgent = new Map<string, CommandBuilders>([
       local: (path) => [getZCodeManagedCommand(path)],
       remote: (path) => [getZCodeRemoteManagedCommand(path)]
     }
+  ],
+  [
+    // Why bare: jcode parses the hook command line shell-style but executes it
+    // directly, so a `sh -c`/`if [ -f … ]` wrapper would be run as the program name.
+    'jcode',
+    {
+      local: (path) => [getJcodeManagedCommand(path)],
+      remote: (path) => [getJcodeRemoteManagedCommand(path)]
+    }
   ]
 ])
 
@@ -237,9 +271,11 @@ describe('managed hook command contract', () => {
         // Native PowerShell hooks evaluate these variables without Grok's dollar-byte scanner.
         const scannedCommand =
           platform === 'win32' &&
-          ((agent === 'codex' && command.startsWith('if (Test-Path')) ||
-            ((agent === 'qoder' || agent === 'codebuddy') &&
-              command.startsWith('$scriptPath = Join-Path')))
+          (agent === 'qoder' ||
+            agent === 'qoder-cn' ||
+            agent === 'qwen-code' ||
+            agent === 'codebuddy') &&
+          command.startsWith('$scriptPath = Join-Path')
             ? command
                 .replaceAll('$LASTEXITCODE', '')
                 .replaceAll('$env:', '')

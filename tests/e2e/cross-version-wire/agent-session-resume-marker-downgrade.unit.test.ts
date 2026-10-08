@@ -25,7 +25,7 @@ test('an older build reads the restart offer this build records at quit', async 
       sessionId: SESSION,
       session: { journal: journal([turnItem('turn-1', 'running')]), child: { fence: 1 } },
       getRecord: () => record(),
-      backgroundTasks: () => undefined,
+      childWork: () => undefined,
       trigger: 'quit',
       teardownId: TEARDOWN_CURRENT,
       now: NOW

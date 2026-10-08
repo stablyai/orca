@@ -55,6 +55,11 @@ export class RuntimeAutomationController {
     this.service = service
   }
 
+  /** Completed automation run terminals no client used, closed before an update; 0 off-headless. */
+  releaseFinishedRunTerminals(): Promise<number> {
+    return this.service?.releaseFinishedRunTerminals?.() ?? Promise.resolve(0)
+  }
+
   /** Keep runtime-owned automation work ahead of queued external probes. */
   withExternalProbePriority<T>(run: () => T): T {
     const wrap = this.service?.externalProbePriority

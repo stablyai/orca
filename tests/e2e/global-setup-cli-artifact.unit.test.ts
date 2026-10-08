@@ -17,7 +17,7 @@ vi.mock('node:fs', () => ({
 }))
 vi.mock('./helpers/docker-ssh-relay-image', () => ({ prepareDockerSshRelayImage: vi.fn() }))
 
-import globalSetup from './global-setup'
+import globalSetup, { workerTestRepositoryPathFile } from './global-setup'
 
 beforeEach(() => {
   vi.resetAllMocks()
@@ -42,6 +42,18 @@ function commands(): string[] {
 }
 
 describe('E2E shared CLI artifact', () => {
+  it('keeps worker publications separate from the run seed and from other workers', () => {
+    const runPath = path.join('temporary', 'run.txt')
+    expect(workerTestRepositoryPathFile(runPath)).toBe(runPath)
+    expect(workerTestRepositoryPathFile(runPath, '0')).not.toBe(runPath)
+    expect(workerTestRepositoryPathFile(runPath, '0')).not.toBe(
+      workerTestRepositoryPathFile(runPath, '1')
+    )
+    expect(() => workerTestRepositoryPathFile(runPath, '../other')).toThrow(
+      'Invalid Playwright worker index'
+    )
+  })
+
   it('repairs downloaded permissions and installs the local launcher without recompiling', () => {
     vi.stubEnv('SKIP_BUILD', '1')
     globalSetup()

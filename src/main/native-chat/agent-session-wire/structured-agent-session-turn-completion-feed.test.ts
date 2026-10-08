@@ -13,6 +13,7 @@ import {
   DISPATCH_REJECTED_PROVIDER_CLOSED
 } from '../../../shared/structured-agent-session-dispatch-rejection'
 import { projectStructuredAgentSessionStatusState } from '../../../shared/structured-agent-session-projection'
+import type { StructuredAttentionState } from '../../../shared/agent-session-attention'
 import { StructuredAgentSessionTurnCompletionFeed } from './structured-agent-session-turn-completion-feed'
 
 const LOCATION = {
@@ -88,7 +89,9 @@ function harness(): {
   outcomes: () => [string, string][]
   /** Whether each completion said the user is being asked something. */
   awaitingUser: () => boolean[]
-  listen: () => () => void
+  /** The prompt ids announced, in order. */
+  prompts: () => string[]
+  listen: (options?: { includePrompts?: boolean }) => () => void
 } {
   let items: AgentJournalRenderItem[] = []
   let submissions: AgentJournalSubmission[] = []
@@ -128,7 +131,14 @@ function harness(): {
       events.flatMap((event) =>
         event.type === 'completion' ? [event.completion.awaitingUser === true] : []
       ),
-    listen: () => feed.subscribe({ id: 'sub', emit: (event) => events.push(event) })
+    prompts: () =>
+      events.flatMap((event) => (event.type === 'prompt' ? [event.prompt.promptId] : [])),
+    listen: (options) =>
+      feed.subscribe({
+        id: 'sub',
+        emit: (event) => events.push(event),
+        ...(options?.includePrompts ? { includePrompts: true } : {})
+      })
   }
 }
 
@@ -151,7 +161,8 @@ describe('StructuredAgentSessionTurnCompletionFeed', () => {
           sessionId: 'session-1',
           turnId: 'turn-1',
           outcome: 'success',
-          completedAt: 1_700
+          completedAt: 1_700,
+          journalCursor: { epoch: 'epoch-1', sequence: 2 }
         }
       }
     ])
@@ -344,6 +355,39 @@ describe('StructuredAgentSessionTurnCompletionFeed', () => {
     h.feed.observe('session-unknown')
     expect(emit).not.toHaveBeenCalled()
   })
+
+  it('announces no /compact turn and keeps its mark on the last real turn (B6)', () => {
+    const h = harness()
+    h.listen()
+    const real = [userEntry('m1', 1), turnItem(turn('t1', 'completed', 'success'), 2)]
+    const accepted = sent('m1', { dispatchState: 'accepted' })
+    h.setJournal(real, [accepted])
+    h.observe()
+    const command: AgentJournalRenderItem = {
+      ...userEntry('c1', 3),
+      body: {
+        kind: 'message',
+        role: 'user',
+        blocks: [{ type: 'text', text: '/compact' }],
+        command: { name: 'compact' }
+      }
+    }
+    const commandTurn = (lifecycle: AgentJournalTurnLifecycle): AgentJournalRenderItem => ({
+      ...turnItem({ ...lifecycle, userItemId: command.itemId }, 4),
+      itemId: 'orca:command-turn:c1'
+    })
+    h.setJournal(
+      [...real, command, commandTurn(turn('compact:c1', 'running'))],
+      [accepted, pending('c1')]
+    )
+    h.observe()
+    h.setJournal(
+      [...real, command, commandTurn(turn('compact:c1', 'completed', 'success'))],
+      [accepted, sent('c1', { dispatchState: 'accepted' })]
+    )
+    h.observe()
+    expect(h.events).toEqual([])
+  })
 })
 
 describe('a request the agent or its start refused', () => {
@@ -381,7 +425,8 @@ describe('a request the agent or its start refused', () => {
           sessionId: 'session-1',
           turnId: M1,
           outcome: 'failure',
-          completedAt: 1_700
+          completedAt: 1_700,
+          journalCursor: { epoch: 'epoch-1', sequence: 2 }
         }
       }
     ])
@@ -613,16 +658,27 @@ describe('a request that settles while the user is asked something', () => {
     expect(h.outcomes()).toEqual([[M1, 'failure']])
   })
 
-  it('sends nothing while the main turn asks for permission, and one event when it settles', () => {
+  it('announces the main turn asking for permission once, and the settle once', () => {
     const h = harness()
-    h.listen()
+    h.listen({ includePrompts: true })
     const user = userEntry('m1', 1)
     const accepted = [sent('m1', { dispatchState: 'accepted' })]
     h.setJournal([user, turnItem(turn('t1', 'running'), 2)], accepted)
     h.observe()
     h.setJournal([user, turnItem(turn('t1', 'running'), 2), approval('a1', 3, 'pending')], accepted)
     h.observe()
-    expect(h.events).toEqual([])
+    expect(h.events).toEqual([
+      {
+        type: 'prompt',
+        prompt: {
+          scope: LOCATION,
+          sessionId: 'session-1',
+          promptId: 'a1',
+          raisedAt: 1_700,
+          journalCursor: { epoch: 'epoch-1', sequence: 2 }
+        }
+      }
+    ])
     h.setJournal(
       [user, turnItem(turn('t1', 'running'), 2), approval('a1', 3, 'resolved')],
       accepted
@@ -658,5 +714,144 @@ describe('a request that settles while the user is asked something', () => {
     )
     h.observe()
     expect(h.events).toEqual([])
+  })
+  describe('a prompt raised mid-turn', () => {
+    const user = userEntry('m1', 1)
+    const accepted = [sent('m1', { dispatchState: 'accepted' })]
+    const running = turnItem(turn('t1', 'running'), 2)
+
+    it('reaches only a subscriber that asked for prompts', () => {
+      const h = harness()
+      h.listen()
+      h.setJournal([user, running], accepted)
+      h.observe()
+      h.setJournal([user, running, approval('a1', 3, 'pending')], accepted)
+      h.observe()
+      expect(h.events).toEqual([])
+    })
+
+    it('announces each prompt once, and a new one after the last was answered', () => {
+      const h = harness()
+      h.listen({ includePrompts: true })
+      h.setJournal([user, running], accepted)
+      h.observe()
+      const asked = approval('a1', 3, 'pending')
+      h.setJournal([user, running, asked], accepted)
+      h.observe()
+      // A revision of the still-pending prompt keeps its id.
+      h.setJournal([user, running, { ...asked, revision: 2 }], accepted)
+      h.observe()
+      h.setJournal([user, running, approval('a1', 3, 'resolved')], accepted)
+      h.observe()
+      h.setJournal(
+        [user, running, approval('a1', 3, 'resolved'), approval('a2', 4, 'pending')],
+        accepted
+      )
+      h.observe()
+      expect(h.prompts()).toEqual(['a1', 'a2'])
+    })
+
+    it('announces a subagent prompt raised beside a pending one', () => {
+      const h = harness()
+      h.listen({ includePrompts: true })
+      h.setJournal([user, running, approval('a1', 3, 'pending')], accepted)
+      h.observe()
+      h.setJournal(
+        [user, running, approval('a1', 3, 'pending'), approval('a2', 4, 'pending', 'child-1')],
+        accepted
+      )
+      h.observe()
+      expect(h.prompts()).toEqual(['a2'])
+    })
+
+    it('treats a prompt already pending at the first observation, or after a rewind, as history', () => {
+      const h = harness()
+      h.listen({ includePrompts: true })
+      h.setJournal([user, running, approval('a1', 3, 'pending')], accepted)
+      h.observe()
+      h.setCursor({ epoch: 'epoch-2', sequence: 1 })
+      h.setJournal([user, running, approval('b1', 3, 'pending')], accepted)
+      h.observe()
+      expect(h.events).toEqual([])
+    })
+
+    it('tells a prompt-aware subscriber once when a settle only restates the announced prompt', () => {
+      const legacy: AgentSessionTurnCompletionEvent[] = []
+      const h = harness()
+      h.listen({ includePrompts: true })
+      h.feed.subscribe({ id: 'legacy', emit: (event) => legacy.push(event) })
+      const asked = approval('a1', 3, 'pending', 'child-1')
+      h.setJournal([user, running], accepted)
+      h.observe()
+      h.setJournal([user, running, asked], accepted)
+      h.observe()
+      h.setJournal([user, turnItem(turn('t1', 'completed', 'success'), 2), asked], accepted)
+      h.observe()
+      expect(h.events.map((event) => event.type)).toEqual(['prompt'])
+      // A completion-only client never saw the prompt, so the settle still tells it.
+      expect(legacy).toEqual([
+        expect.objectContaining({
+          type: 'completion',
+          completion: expect.objectContaining({ turnId: 't1', awaitingUser: true })
+        })
+      ])
+    })
+
+    it('still tells a prompt-aware subscriber about a refused send while an announced prompt waits', () => {
+      const h = harness()
+      h.listen({ includePrompts: true })
+      const asked = approval('a1', 1, 'pending', 'child-1')
+      h.setJournal([userEntry('m1', 2)], [pending('m1')])
+      h.observe()
+      h.setJournal([asked, userEntry('m1', 2)], [pending('m1')])
+      h.observe()
+      h.setJournal([asked, userEntry('m1', 2)], [refused('m1')])
+      h.observe()
+      // The failure is distinct news, not a restatement of the prompt already announced.
+      expect(h.events.map((event) => event.type)).toEqual(['prompt', 'completion'])
+      expect(h.outcomes()).toEqual([[agentJournalSubmissionKey('m1'), 'failure']])
+    })
+
+    it('publishes pending state on baseline, when a prompt ends, and on historical returns only', () => {
+      const states: StructuredAttentionState[] = []
+      const h = harness()
+      h.feed.subscribe({ id: 'host', emit: () => {}, onState: (state) => states.push(state) })
+      h.setJournal([user, running, approval('a1', 3, 'pending')], accepted)
+      h.observe()
+      // Streaming commits that leave the pending set alone cost no reconciliation.
+      h.observe()
+      h.setJournal(
+        [user, running, approval('a1', 3, 'pending'), approval('a2', 4, 'pending')],
+        accepted
+      )
+      h.observe()
+      h.setJournal(
+        [user, running, approval('a1', 3, 'resolved'), approval('a2', 4, 'pending')],
+        accepted
+      )
+      h.observe()
+      h.feed.observe('session-1', undefined, { historical: true })
+      expect(states.map((state) => state.pendingPromptIds)).toEqual([['a1'], ['a2'], ['a2']])
+      expect(states.every((state) => state.sessionId === 'session-1')).toBe(true)
+      expect(h.events).toEqual([])
+    })
+
+    it('announces a prompt under its own identity when the turn settles beside it', () => {
+      const h = harness()
+      h.listen({ includePrompts: true })
+      h.setJournal([user, running], accepted)
+      h.observe()
+      h.setJournal(
+        [
+          user,
+          turnItem(turn('t1', 'completed', 'success'), 2),
+          approval('a1', 3, 'pending', 'child-1')
+        ],
+        accepted
+      )
+      h.observe()
+      expect(h.prompts()).toEqual(['a1'])
+      expect(h.outcomes()).toEqual([])
+    })
   })
 })

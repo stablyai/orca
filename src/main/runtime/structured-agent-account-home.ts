@@ -1,6 +1,8 @@
+import { getClaudeProfileRouter } from '../claude-accounts/claude-profile-installed-router'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { getSystemCodexHomePath } from '../codex/codex-home-paths'
+import { resolveAbsoluteDirOverride } from '../../shared/absolute-dir-override'
 
 // The one resolver for "which account home would a structured launch pin right
 // now". The create path fills `record.accountHome` with it, and the model
@@ -18,6 +20,11 @@ export type StructuredClaudeAccountHomeDeps = {
 export function resolveStructuredClaudeAccountHomePath(
   deps: StructuredClaudeAccountHomeDeps
 ): string {
+  // Why only an account: System default keeps the launch-env and configured homes below.
+  const accountHome = deps.wslDistro ? null : getClaudeProfileRouter()?.selectedHome()
+  if (accountHome) {
+    return accountHome
+  }
   return (
     deps.launchEnv.CLAUDE_CONFIG_DIR?.trim() ||
     deps
@@ -38,27 +45,34 @@ export type StructuredCodexAccountHomeDeps = {
    * null → system-home mapping below, so the two paths cannot drift.
    */
   resolveLaunchHome:
-    | ((input: {
-        workspacePath: string
-        launchEnv: NodeJS.ProcessEnv
-      }) => string | null | Promise<string | null>)
+    | ((input: { launchEnv: NodeJS.ProcessEnv }) => string | null | Promise<string | null>)
     | null
-  /** Empty for a record-less read; only launch preparation consumes it. */
-  workspacePath: string
 }
 
 export async function resolveStructuredCodexAccountHomePath(
   deps: StructuredCodexAccountHomeDeps
 ): Promise<string> {
   // A create has no process yet, so the current selection is what it must follow.
-  const resolvedHome = await deps.resolveLaunchHome?.({
-    workspacePath: deps.workspacePath,
-    launchEnv: deps.launchEnv
-  })
+  const resolvedHome = await deps.resolveLaunchHome?.({ launchEnv: deps.launchEnv })
   const configuredHome = deps.launchEnv.CODEX_HOME
   return (
     resolvedHome?.trim() ||
     (deps.resolveLaunchHome ? getSystemCodexHomePath() : configuredHome?.trim()) ||
     getSystemCodexHomePath()
+  )
+}
+
+/** An agent whose config directory is one environment variable with a default under the user's
+ *  home: the launch's own value, then this runtime's, then the default. */
+export function resolveStructuredEnvAccountHomePath(input: {
+  launchEnv: NodeJS.ProcessEnv
+  variable: string
+  defaultPath: (homePath: string) => string
+  processEnv?: NodeJS.ProcessEnv
+  homePath?: string
+}): string {
+  return resolveAbsoluteDirOverride(
+    input.launchEnv[input.variable] ?? (input.processEnv ?? process.env)[input.variable],
+    input.defaultPath(input.homePath ?? homedir())
   )
 }

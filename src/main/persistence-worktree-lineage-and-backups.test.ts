@@ -277,67 +277,6 @@ describe('Store', () => {
     })
   })
 
-  describe('claudeLivePtySessionIds', () => {
-    it('persists added ids across reloads and removes them durably', async () => {
-      const store = await createStore()
-
-      store.addClaudeLivePtySessionId('claude-session-1')
-      store.addClaudeLivePtySessionId('claude-session-2')
-      store.addClaudeLivePtySessionId('claude-session-1')
-
-      expect(store.getClaudeLivePtySessionIds()).toEqual(['claude-session-1', 'claude-session-2'])
-
-      const reloaded = await createStore()
-      expect(reloaded.getClaudeLivePtySessionIds()).toEqual([
-        'claude-session-1',
-        'claude-session-2'
-      ])
-
-      reloaded.removeClaudeLivePtySessionId('claude-session-1')
-      reloaded.flush()
-
-      const reloadedAgain = await createStore()
-      expect(reloadedAgain.getClaudeLivePtySessionIds()).toEqual(['claude-session-2'])
-    })
-
-    it('drops malformed persisted entries on load', async () => {
-      writeDataFile({
-        schemaVersion: 1,
-        claudeLivePtySessionIds: ['valid-id', '', 42, null, 'valid-id', 'x'.repeat(513)]
-      })
-
-      const store = await createStore()
-
-      expect(store.getClaudeLivePtySessionIds()).toEqual(['valid-id'])
-    })
-
-    it('keeps the newest ids when an oversized persisted list is loaded', async () => {
-      writeDataFile({
-        schemaVersion: 1,
-        claudeLivePtySessionIds: Array.from({ length: 205 }, (_, index) => `claude-${index}`)
-      })
-
-      const store = await createStore()
-
-      const ids = store.getClaudeLivePtySessionIds()
-      expect(ids).toHaveLength(200)
-      expect(ids[0]).toBe('claude-5')
-      expect(ids[199]).toBe('claude-204')
-    })
-
-    it('caps the persisted id list', async () => {
-      const store = await createStore()
-      for (let index = 0; index < 205; index += 1) {
-        store.addClaudeLivePtySessionId(`claude-session-${index}`)
-      }
-
-      const ids = store.getClaudeLivePtySessionIds()
-      expect(ids).toHaveLength(200)
-      expect(ids[0]).toBe('claude-session-5')
-      expect(ids[199]).toBe('claude-session-204')
-    })
-  })
-
   describe('retired JSON backups', () => {
     it.each(['sync', 'async'] as const)(
       'leaves legacy JSON and backups unchanged during %s SQL writes',

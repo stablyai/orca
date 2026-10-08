@@ -1,17 +1,8 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "session.native-chat-page",
   "family": "session.native-chat-page",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "ccdb324b63e4942891942edde1216586a51774bd",
-  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
-  "recorderSha256": "0317fe2aebe4743ce5e7ae194531aa91b4fe0a84df457640851fe6dfdb9362af",
-  "adapterSha256": "60ce67f66134d6385aa7fb47f2135436a7b3ce0221e3b2514bea65e06dba5518",
-  "scenarioSha256": "674cab85ed9896dae311bfc0acfb1d1d1a2a7f25b7546b4714edbb0a585e6178",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "08ef53d83e8c": {
       "name": "nativeChat.readSession#1",
@@ -31,20 +22,20 @@
       "status": "ready",
       "transcriptLoading": false
     },
-    "09f715780ff1": {
+    "3e14b1ec5bde": {
+      "name": "nativeChat.unsubscribe#2",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"nativeChat.unsubscribe\",\"params\":{\"subscriptionId\":\"claude:session-1:00000000-0000-4000-8000-000000000001\"}}"
+    },
+    "456781b97acc": {
       "name": "nativeChat.subscribe#1",
       "ordinal": 1,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"nativeChat.subscribe\",\"params\":{\"agent\":\"claude\",\"sessionId\":\"session-1\",\"limit\":40,\"subscriptionId\":\"claude:session-1\",\"capabilities\":{\"transcriptPending\":1},\"transcriptPath\":\"/work/feature/.claude/session-1.jsonl\"}}"
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"nativeChat.subscribe\",\"params\":{\"agent\":\"claude\",\"sessionId\":\"session-1\",\"limit\":40,\"subscriptionId\":\"claude:session-1:00000000-0000-4000-8000-000000000001\",\"capabilities\":{\"transcriptPending\":1},\"transcriptPath\":\"/work/feature/.claude/session-1.jsonl\"}}"
     },
-    "1c6ad14c561f": {
-      "name": "nativeChat.unsubscribe#1",
-      "ordinal": 5,
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"nativeChat.unsubscribe\",\"params\":{\"subscriptionId\":\"claude:session-1\"}}"
-    },
-    "459bc33ee698": {
+    "663babae1f1d": {
       "name": "nativeChat.subscribe#2",
       "ordinal": 4,
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"nativeChat.subscribe\",\"params\":{\"agent\":\"claude\",\"sessionId\":\"session-1\",\"limit\":40,\"subscriptionId\":\"claude:session-1\",\"capabilities\":{\"transcriptPending\":1},\"transcriptPath\":\"/work/feature/.claude/session-1.jsonl\"}}"
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"nativeChat.subscribe\",\"params\":{\"agent\":\"claude\",\"sessionId\":\"session-1\",\"limit\":40,\"subscriptionId\":\"claude:session-1:00000000-0000-4000-8000-000000000001\",\"capabilities\":{\"transcriptPending\":1},\"transcriptPath\":\"/work/feature/.claude/session-1.jsonl\"}}"
     },
     "7b237e9824c8": {
       "crash": {
@@ -71,6 +62,11 @@
       "messageIds": ["m-3", "m-4"],
       "status": "ready",
       "transcriptLoading": false
+    },
+    "7eedfcf76fd3": {
+      "name": "nativeChat.unsubscribe#1",
+      "ordinal": 5,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"nativeChat.unsubscribe\",\"params\":{\"subscriptionId\":\"claude:session-1:00000000-0000-4000-8000-000000000001\"}}"
     },
     "8f91342d7840": {
       "crash": {
@@ -180,11 +176,6 @@
         "startedAt": 0
       }
     },
-    "e488a88a0a50": {
-      "name": "nativeChat.unsubscribe#2",
-      "ordinal": 6,
-      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"nativeChat.unsubscribe\",\"params\":{\"subscriptionId\":\"claude:session-1\"}}"
-    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -214,7 +205,7 @@
         "id": "subscribed",
         "observation": {
           "sender": [],
-          "payloads": ["09f715780ff1"],
+          "payloads": ["456781b97acc"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -226,7 +217,7 @@
         "id": "snapshot",
         "observation": {
           "sender": [],
-          "payloads": ["09f715780ff1"],
+          "payloads": ["456781b97acc"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -238,7 +229,7 @@
         "id": "paging",
         "observation": {
           "sender": ["dadae0a56731"],
-          "payloads": ["09f715780ff1", "08ef53d83e8c"],
+          "payloads": ["456781b97acc", "08ef53d83e8c"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "page": "eb79a9b3682a"
@@ -251,7 +242,7 @@
         "id": "paged",
         "observation": {
           "sender": ["d83fbb18104a"],
-          "payloads": ["09f715780ff1", "08ef53d83e8c"],
+          "payloads": ["456781b97acc", "08ef53d83e8c"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "page": "eb79a9b3682a"
@@ -264,7 +255,7 @@
         "id": "re-subscribed",
         "observation": {
           "sender": ["d83fbb18104a"],
-          "payloads": ["09f715780ff1", "08ef53d83e8c", "459bc33ee698", "1c6ad14c561f"],
+          "payloads": ["456781b97acc", "08ef53d83e8c", "663babae1f1d", "7eedfcf76fd3"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "page": "eb79a9b3682a",
@@ -278,7 +269,7 @@
         "id": "replayed",
         "observation": {
           "sender": ["d83fbb18104a"],
-          "payloads": ["09f715780ff1", "08ef53d83e8c", "459bc33ee698", "1c6ad14c561f"],
+          "payloads": ["456781b97acc", "08ef53d83e8c", "663babae1f1d", "7eedfcf76fd3"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "page": "eb79a9b3682a",
@@ -293,11 +284,11 @@
         "observation": {
           "sender": ["d83fbb18104a"],
           "payloads": [
-            "09f715780ff1",
+            "456781b97acc",
             "08ef53d83e8c",
-            "459bc33ee698",
-            "1c6ad14c561f",
-            "e488a88a0a50"
+            "663babae1f1d",
+            "7eedfcf76fd3",
+            "3e14b1ec5bde"
           ],
           "settlements": {
             "mount": "eb79a9b3682a",

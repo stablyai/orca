@@ -91,7 +91,8 @@ function makeController(
   const chatPane = {
     id: 1,
     leafId: '11111111-1111-4111-8111-111111111111',
-    container: portalContainer
+    container: portalContainer,
+    terminal: { element: document.createElement('div'), focus: vi.fn() }
   }
   return {
     chatPane,

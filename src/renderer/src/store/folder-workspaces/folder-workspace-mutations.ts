@@ -1,3 +1,5 @@
+import { assertWorkspaceAttachmentWriteCapability } from '../../runtime/runtime-workspace-attachment-capabilities'
+import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
@@ -28,6 +30,10 @@ import {
   getFolderWorkspaceUpdateIdentity,
   reconcileFailedFolderWorkspaceUpdate
 } from './folder-workspace-catalog'
+import {
+  captureWorkspaceChatDraftKeys,
+  deleteWorkspaceChatDrafts
+} from '../slices/worktrees/teardown/removed-worktree-chat-drafts'
 
 export type FolderWorkspaceUpdateField = keyof FolderWorkspaceUpdates
 
@@ -64,6 +70,7 @@ export function createFolderWorkspaceMutationActions(
         const target = getActiveRuntimeTarget(
           getFolderWorkspacePathStatusRouteSettings(options, get().settings)
         )
+        await assertWorkspaceAttachmentWriteCapability(target, args)
         if (
           target.kind === 'environment' &&
           (args.linkedTask?.provider === 'jira' ||
@@ -111,7 +118,8 @@ export function createFolderWorkspaceMutationActions(
         (state.activeWorktreeId === folderWorkspaceKey(folderWorkspaceId)
           ? (state.activeWorkspaceExecutionHostId ?? undefined)
           : undefined)
-      if (!findFolderWorkspaceOwner(state, folderWorkspaceId, executionHostId)) {
+      const existingWorkspace = findFolderWorkspaceOwner(state, folderWorkspaceId, executionHostId)
+      if (!existingWorkspace) {
         return false
       }
       const runtimeEnvironmentId = getRuntimeEnvironmentIdForFolderWorkspace(
@@ -122,7 +130,29 @@ export function createFolderWorkspaceMutationActions(
       // Why: owner-scoped mutations must not follow whichever runtime happens to be focused.
       const target = getActiveRuntimeTarget({ activeRuntimeEnvironmentId: runtimeEnvironmentId })
       const ownerHostId = executionHostId ?? getRuntimeTargetHostId(target)
+      const sourceWorkspace = state.folderWorkspaces.find(
+        (workspace) =>
+          workspace.id === folderWorkspaceId &&
+          getFolderWorkspaceHostId(workspace, state.projectGroups) === ownerHostId
+      )
+      if (
+        updates.linkedItems !== undefined &&
+        updates.linkedItemsBase === undefined &&
+        sourceWorkspace
+      ) {
+        updates = {
+          ...updates,
+          linkedItemsBase: getWorkspaceAttachments({
+            linkedItems: sourceWorkspace.linkedItems,
+            linkedWorkItem: sourceWorkspace.linkedTask,
+            linkedTaskSourceContext: sourceWorkspace.linkedTaskSourceContext
+          })
+        }
+      }
       const updateIdentity = getFolderWorkspaceUpdateIdentity(ownerHostId, folderWorkspaceId)
+      if (target.kind === 'environment' && updates.linkedItems !== undefined) {
+        await assertWorkspaceAttachmentWriteCapability(target, updates)
+      }
       // Why: same gate as folderWorkspace.create — an older paired runtime would drop the Jira link silently.
       if (
         target.kind === 'environment' &&
@@ -164,8 +194,11 @@ export function createFolderWorkspaceMutationActions(
           })
           return false
         }
-        if (updates.diffComments !== undefined && updated.diffComments === undefined) {
-          // Why: older paired runtimes strip this optional field; reconcile instead of showing an unsaved note.
+        if (
+          (updates.diffComments !== undefined && updated.diffComments === undefined) ||
+          (updates.linkedItems !== undefined && updated.linkedItems === undefined)
+        ) {
+          // Older hosts can strip optional fields; reconcile instead of reporting an unsaved edit.
           await reconcileFailedFolderWorkspaceUpdate({
             target,
             folderWorkspaceId,
@@ -230,6 +263,11 @@ export function createFolderWorkspaceMutationActions(
         folderWorkspaceId,
         executionHostId
       )
+      const workspaceKey = folderWorkspaceKey(folderWorkspaceId)
+      // Why before the host call: its announcement can start a refresh that drops these tabs.
+      const chatDraftKeys = captureWorkspaceChatDraftKeys(state, [
+        { workspaceId: workspaceKey, executionHostId: ownerHostId }
+      ])
       try {
         // Why: deletion targets the folder's owner; focus may be on a different host.
         const target = getActiveRuntimeTarget({ activeRuntimeEnvironmentId: runtimeEnvironmentId })
@@ -247,7 +285,6 @@ export function createFolderWorkspaceMutationActions(
         if (!deleted) {
           return false
         }
-        const workspaceKey = folderWorkspaceKey(folderWorkspaceId)
         set((s) => ({
           folderWorkspaces: s.folderWorkspaces.filter(
             (workspace) =>
@@ -261,6 +298,7 @@ export function createFolderWorkspaceMutationActions(
           // tear down Chromium guests before purging the remaining renderer state.
           await get().shutdownWorktreeBrowsers(workspaceKey)
           get().purgeWorktreeTerminalState([workspaceKey])
+          deleteWorkspaceChatDrafts(chatDraftKeys)
         }
         return true
       } catch (err) {

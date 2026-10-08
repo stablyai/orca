@@ -3,6 +3,29 @@ import { getRepoExecutionHostId } from '../../shared/execution-host'
 import type { Repo } from '../../shared/repo-types'
 import { hasRemoteFilesystemOwner } from './remote-filesystem-owner'
 
+export type RegisteredOwner = {
+  repoId: string
+  listed: Set<string> | null
+  /** The WSL distro whose Git produced `listed`; undefined is host Git. */
+  listedWslDistro: string | undefined
+  recovered: Set<string>
+  aliases: Set<string>
+  revision: number
+  dirty: boolean
+}
+
+export function createRegisteredOwner(repoId: string, revision: number): RegisteredOwner {
+  return {
+    repoId,
+    listed: null,
+    listedWslDistro: undefined,
+    recovered: new Set(),
+    aliases: new Set(),
+    revision,
+    dirty: true
+  }
+}
+
 export function getWorktreeRootOwnerKey(repo: Repo): string {
   return JSON.stringify([repo.id, resolve(repo.path), getRepoExecutionHostId(repo)])
 }

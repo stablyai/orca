@@ -222,7 +222,7 @@ describe('useNativeChatLaunchDraftAdoption', () => {
     const { setDraft, setCaret } = setup({ launchDraft: entry })
 
     expect(mocks.markNativeChatLaunchDraftAdopted).toHaveBeenCalledWith('tab-1')
-    expect(setDraft).toHaveBeenCalledWith(entry.text)
+    expect(setDraft).toHaveBeenCalledWith(entry.text, { unsaved: true })
     expect(setCaret).toHaveBeenCalledWith(entry.text.length)
     expect(mocks.clearNativeChatLaunchDraft).not.toHaveBeenCalled()
   })
@@ -353,7 +353,7 @@ describe('launch draft adoption across a split', () => {
   it('still mirrors the launch draft into the owning pane composer', () => {
     const { setDraft } = renderPaneComposer({ ownsTabWideLaunchDraft: true })
 
-    expect(setDraft).toHaveBeenCalledWith(SEED_TEXT)
+    expect(setDraft).toHaveBeenCalledWith(SEED_TEXT, { unsaved: true })
   })
 
   it('clears the adopted copy after a split once the transcript resolves the seed', () => {

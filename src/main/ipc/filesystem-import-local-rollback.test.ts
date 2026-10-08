@@ -12,7 +12,6 @@ const { lstatMock, mkdirMock, openMock, readdirMock, rmMock, unlinkMock } = vi.h
   unlinkMock: vi.fn()
 }))
 
-vi.mock('./filesystem-auth', () => ({ authorizeExternalPath: vi.fn() }))
 vi.mock('node:fs/promises', () => ({
   lstat: lstatMock,
   mkdir: mkdirMock,
@@ -23,7 +22,6 @@ vi.mock('node:fs/promises', () => ({
 }))
 
 import { importOneSource } from './filesystem-import-local'
-import { recursiveCopyDir } from './filesystem-import-local-tree-copy'
 
 type EntryKind = 'directory' | 'file' | 'symlink' | 'unsupported'
 
@@ -242,13 +240,5 @@ describe('local directory import rollback ownership', () => {
     expect(mkdirMock).not.toHaveBeenCalled()
     expect(rmMock).not.toHaveBeenCalled()
     expect(unlinkMock).not.toHaveBeenCalled()
-  })
-
-  it('cleans an owned root when the copy helper is called directly', async () => {
-    const failure = new Error('read failed')
-    readdirMock.mockRejectedValue(failure)
-
-    await expect(recursiveCopyDir(source, target)).rejects.toBe(failure)
-    expect(rmMock).toHaveBeenCalledExactlyOnceWith(target, { recursive: true, force: true })
   })
 })

@@ -63,6 +63,7 @@ export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspecti
             ...(worktreeId ? { worktreeId } : {}),
             ...(session.terminalHandle ? { terminalHandle: session.terminalHandle } : {}),
             ...(session.wslDistro !== undefined ? { wslDistro: session.wslDistro } : {}),
+            ...(session.state === 'exiting' ? { exiting: true as const } : {}),
             ...this.validatedAgentSessionOwners(session.agentSessionOwners)
           })
         )

@@ -1,12 +1,9 @@
 import type { PluginSources } from '../../relay/plugin-overlay'
-import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
-import { isAgentStatusHooksEnabled } from './managed-agent-hook-controls'
+import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-status-hooks-setting'
 import type { ManagedHookDetectionSettings } from './managed-hook-detection-commands'
 
 function enabled(settings: ManagedHookDetectionSettings, agent: 'opencode' | 'opencode2'): boolean {
-  return (
-    isAgentStatusHooksEnabled(settings) && isTuiAgentEnabled(agent, settings?.disabledTuiAgents)
-  )
+  return isAgentStatusHooksEnabledForAgent(settings, agent)
 }
 
 export function openCodePluginSettingsKey(settings: ManagedHookDetectionSettings): string {

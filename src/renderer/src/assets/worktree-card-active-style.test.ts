@@ -43,6 +43,20 @@ describe('worktree card active styling', () => {
     expect(darkSecondary).toContain('var(--sidebar-ring) 18%')
   })
 
+  it('styles multi-selected cards through one rule that skips the active card', () => {
+    const selected = getCssRuleBody(
+      '[data-worktree-card-surface][data-worktree-card-selected]:not([data-worktree-card-active])'
+    )
+
+    expect(selected).toContain('var(--worktree-sidebar-ring) 35%')
+    expect(selected).toContain('var(--worktree-sidebar-accent) 70%')
+    expect(selected).toContain('var(--worktree-sidebar-ring) 30%')
+    // Why after hover: equal-specificity dark hover must not repaint a selected card.
+    expect(mainCss.indexOf('[data-worktree-card-selected]')).toBeGreaterThan(
+      mainCss.indexOf('.dark .worktree-sidebar-card-hover:hover')
+    )
+  })
+
   it('dims sleeping cards through theme tokens so the cue survives any surface', () => {
     const sleeping = getCssRuleBody('[data-worktree-sleeping-dim]')
 

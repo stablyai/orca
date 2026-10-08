@@ -45,6 +45,7 @@ describe('sendMobileNativeChatPermissionResponse', () => {
         terminal: 'terminal',
         text: '1',
         enter: false,
+        requireWriteSettlement: true,
         client: { id: 'phone', type: 'mobile' }
       },
       { timeoutMs: MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS, budgetSpansConnect: true }

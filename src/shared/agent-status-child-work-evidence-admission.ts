@@ -8,6 +8,7 @@ import type {
 import type {
   AgentChildWorkOperation,
   AgentChildWorkOutcome,
+  AgentChildWorkOutcomeBasis,
   AgentChildWorkRecord
 } from './agent-status-child-work'
 import type { AgentChildWorkLiveObservation } from './agent-status-child-work-evidence'
@@ -198,7 +199,11 @@ export function settleAgentChildWork(
   existing: AgentChildWorkRecord,
   outcome: AgentChildWorkOutcome,
   observedAt: number,
-  reported: { lastMessage?: string; totalTokens?: number } = {}
+  reported: {
+    lastMessage?: string
+    totalTokens?: number
+    basis?: AgentChildWorkOutcomeBasis
+  } = {}
 ): void {
   const current = currentAgentChildWorkAliases(ctx, existing)
   const handleId = current.stableId ?? existing.childWorkId
@@ -212,6 +217,7 @@ export function settleAgentChildWork(
     state: 'done',
     membership: 'settled',
     outcome,
+    ...(reported.basis !== undefined ? { outcomeBasis: reported.basis } : {}),
     ...(reported.totalTokens !== undefined ? { totalTokens: reported.totalTokens } : {}),
     ...(reported.lastMessage !== undefined ? { lastMessage: reported.lastMessage } : {}),
     observedAt: Math.max(observedAt, existing.observedAt),

@@ -142,12 +142,12 @@ describe('a relayed Claude cancel with a live subagent (captured)', () => {
       mainAgent: { state: 'done', outcome: 'cancellation' }
     })
 
-    // Both children finish on the remote; with nothing left running the cancelled row settles.
+    // Both children finish on the remote. Claude still owes the main agent a task notification
+    // for the launched one, so the relay holds the row and the desktop keeps its cancel over it.
     await pane.post(subagentStop(4))
     await pane.post(subagentStop(9))
     expect(row(pane.desktop)).toMatchObject({
-      state: 'done',
-      interrupted: true,
+      state: 'working',
       mainAgent: { state: 'done', outcome: 'cancellation' }
     })
     expect(row(pane.desktop).subagents).toBeUndefined()
@@ -185,10 +185,10 @@ describe('a relayed Claude cancel with a live subagent (captured)', () => {
       mainAgent: { state: 'done', outcome: 'cancellation' }
     })
 
+    // The child's end takes its card down; its owed task notification holds the cancelled row.
     await pane.post(subagentStop(4))
     expect(row(pane.desktop)).toMatchObject({
-      state: 'done',
-      interrupted: true,
+      state: 'working',
       mainAgent: { state: 'done', outcome: 'cancellation' }
     })
   })
@@ -270,8 +270,15 @@ describe('a relayed Claude cancel with a live subagent (captured)', () => {
     // Hydration seeds the desktop's own roster from the saved row, relayed or not.
     expect(desktop._getStateForTests().claudeSubagentRosterByPaneKey.has(PANE)).toBe(true)
 
-    // The child finishes on the remote, then a new turn starts and is cancelled.
+    // The child finishes on the remote and Claude tells the main agent, which ends that turn;
+    // then a new turn starts and is cancelled.
     await pane.post(subagentStop(4))
+    expect(row(desktop)).toMatchObject({ state: 'working' })
+    await pane.post({
+      hook_event_name: 'UserPromptSubmit',
+      prompt: `<task-notification>\n<task-id>${String(hookAt(records, 4).payload.agent_id)}</task-id>\n<status>completed</status>`
+    })
+    await pane.post({ hook_event_name: 'Stop', background_tasks: [] })
     expect(row(desktop)).toMatchObject({ state: 'done' })
     await pane.post(hookAt(records, 7).payload)
     expect(row(desktop)).toMatchObject({ state: 'working', mainAgent: { state: 'working' } })

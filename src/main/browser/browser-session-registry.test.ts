@@ -556,7 +556,7 @@ describe('BrowserSessionRegistry', () => {
         { webRequest: { onBeforeSendHeaders } } as never,
         (request) =>
           request.currentUserAgent === googleAuthUserAgent()
-            ? { userAgent: googleAuthUserAgent() }
+            ? { kind: 'google-auth', userAgent: googleAuthUserAgent() }
             : undefined
       )
       expect(onBeforeSendHeaders).toHaveBeenCalledWith(

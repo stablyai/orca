@@ -47,6 +47,27 @@ describe('electron-builder config', () => {
     )
   })
 
+  it('keeps release build staging out of app.asar while preserving runtime output', () => {
+    const matcher = new FileMatcher('/app', '/dest', (value) => value, electronBuilderConfig.files)
+    matcher.prependPattern('**/*')
+    const isPacked = matcher.createFilter()
+    expect(isPacked(join('/app', '.build'), { isDirectory: () => true })).toBe(false)
+    for (const stagingPath of [
+      '.build/release-javascript/release-javascript.tar.gz',
+      '.build/release-javascript/manifest.json',
+      '.build/release-javascript-123/out/main/index.js'
+    ]) {
+      expect(isPacked(join('/app', stagingPath), { isDirectory: () => false })).toBe(false)
+    }
+    for (const runtimePath of [
+      'out/main/index.js',
+      'out/cli/index.js',
+      'out/renderer/index.html'
+    ]) {
+      expect(isPacked(join('/app', runtimePath), { isDirectory: () => false })).toBe(true)
+    }
+  })
+
   it('keeps local agent tooling out of app.asar', () => {
     const matcher = new FileMatcher('/app', '/dest', (value) => value, electronBuilderConfig.files)
     matcher.prependPattern('**/*')
@@ -162,6 +183,32 @@ describe('electron-builder config', () => {
     expect(packs('out/renderer/index.html')).toBe(true)
   })
 
+  // Why: an AV verdict on the bundled relay.js used to take app.asar with it as a
+  // compound object, gutting the install (#20966). resources/relay is the only copy
+  // a packaged build resolves, so the asar copy was 14MB of pure blast radius.
+  it('keeps the relay bundles out of app.asar and ships them only through extraResources', () => {
+    const matcher = new FileMatcher('/app', '/dest', (value) => value, electronBuilderConfig.files)
+    matcher.prependPattern('**/*')
+    const isPacked = matcher.createFilter()
+    const packs = (repoPath) => isPacked(join('/app', repoPath), { isDirectory: () => false })
+
+    for (const relayPath of [
+      'out/relay/linux-x64/relay.js',
+      'out/relay/win32-x64/relay.js',
+      'out/relay/darwin-arm64/relay-watcher.js',
+      'out/relay/wsl/wsl-agent-hook-relay.js'
+    ]) {
+      expect(packs(relayPath)).toBe(false)
+    }
+
+    for (const platform of ['mac', 'linux', 'win']) {
+      expect(electronBuilderConfig[platform].extraResources).toContainEqual({
+        from: 'out/relay',
+        to: 'relay'
+      })
+    }
+  })
+
   it('keeps runtime resources available through extraResources', () => {
     const bundledPluginResources = expect.objectContaining({
       from: 'resources/plugins/launch',
@@ -214,6 +261,23 @@ describe('electron-builder config', () => {
     expect(serveSimResources).toEqual([
       expect.objectContaining({ to: join('node_modules', 'serve-sim') })
     ])
+  })
+
+  // Why: serve-sim's addon is a Mach-O, and Windows signing rejects every *.node that is not PE.
+  it('keeps serve-sim out of the Windows and Linux runtime closures', () => {
+    const {
+      PACKAGED_RUNTIME_PACKAGE_ROOTS,
+      createPackagedRuntimeNodeModuleResources
+    } = require('../packaged-runtime-node-modules.cjs')
+    expect(PACKAGED_RUNTIME_PACKAGE_ROOTS).not.toContain('serve-sim')
+    const serveSimTarget = join('node_modules', 'serve-sim')
+    expect(createPackagedRuntimeNodeModuleResources('linux').map((r) => r.to)).not.toContain(
+      serveSimTarget
+    )
+    expect(electronBuilderConfig.linux.extraResources.map((r) => r.to)).not.toContain(
+      serveSimTarget
+    )
+    expect(electronBuilderConfig.win.extraResources.map((r) => r.to)).not.toContain(serveSimTarget)
   })
 
   // Why: the Windows CLI shim is delivered only via extraResources to
@@ -297,12 +361,14 @@ describe('electron-builder config', () => {
   // invisible to it and a packed worker entry fails closed — dropping every
   // OpenCode session in packaged builds while dev stays green. Three legs must
   // agree on the filename, so all three are read rather than hardcoded.
-  it('unpacks the OpenCode SQLite worker entry the scanner service forks', async () => {
-    const spawnSource = await readFile(
-      join(SRC_MAIN_DIR, 'ai-vault', 'session-scanner-opencode-sqlite-worker-spawn.ts'),
+  it('unpacks the foreign SQLite reader entry the scanner service runs OpenCode reads on', async () => {
+    const entryPathSource = await readFile(
+      join(SRC_MAIN_DIR, 'foreign-sqlite-readers', 'foreign-sqlite-reader-entry-path.ts'),
       'utf8'
     )
-    const entryFilename = spawnSource.match(/WORKER_ENTRY_FILENAME = '([^']+)'/)?.[1]
+    const entryFilename = entryPathSource.match(
+      /FOREIGN_SQLITE_READER_ENTRY_FILENAME = '([^']+)'/
+    )?.[1]
 
     expect(entryFilename).toBeDefined()
     expect(electronBuilderConfig.asarUnpack).toContain(`out/main/${entryFilename}`)

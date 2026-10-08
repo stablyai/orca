@@ -13,13 +13,16 @@ const directory =
   process.env.RPC_FOUNDATION_GOLDENS ?? resolve(root, 'mobile/rpc-foundation/goldens')
 
 describe('derived goldens', () => {
-  // Fails closed both ways: a golden the derivation dropped stays frozen with nothing certifying or
-  // digesting it, and one it derives with no file on disk was never recorded.
+  // Fails closed both ways: a golden the derivation dropped stays on disk with nothing replaying it,
+  // and one it derives with no file on disk was never recorded.
   it('derives exactly the goldens on disk', () => {
     const derived = derivedGoldens(input.scenarios).map((golden) => golden.id)
     const onDisk = readdirSync(directory)
       .filter((file) => file.endsWith('.json'))
       .map((file) => file.replace(/\.json$/, ''))
-    expect(derived.sort()).toEqual(onDisk.sort())
+    expect(
+      derived.sort(),
+      'Record new goldens with `pnpm --dir mobile rpc:record`; delete ones the manifest no longer derives with `pnpm --dir mobile rpc:record --prune`'
+    ).toEqual(onDisk.sort())
   })
 })

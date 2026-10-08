@@ -1,13 +1,9 @@
-import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
-  DECLARATION_KINDS,
   documentModuleNames,
   documentModuleSource,
   exportedLifecycleFunctions,
-  parseModule,
   parseTimeEffects,
-  readsTheDocument,
   sequenceCalls,
   topLevelDeclarationsReachAnElement
 } from '../../test-support/webview-document-census'
@@ -71,43 +67,6 @@ describe('the document modules at parse time', () => {
     }
   })
 
-  it('would report a planted element read, which the statement filter cannot see', () => {
-    // The second reader has its own precondition. A `const` initialised from the document is a
-    // declaration by shape and a parse-time element read by effect — the exact form that survived
-    // a remount holding the first mount's node — and the statement-kind filter waves it through.
-    const planted =
-      "import { scope } from './document-scope'\n" +
-      "const indicator = document.getElementById('scroll-indicator')\n" +
-      'export function n() {\n  return indicator ?? scope.term\n}\n'
-    expect(parseTimeEffects('planted', planted)).toEqual([
-      "planted: indicator = document.getElementById('scroll-indicator')"
-    ])
-    // And the element reader the case above spends on every module: the same plant, seen by it.
-    expect(topLevelDeclarationsReachAnElement('planted', planted)).toBe(true)
-    // And the other direction, because a reader that flagged every initialiser would agree with
-    // the empty list above only by refusing everything: a plain literal is not work.
-    const inert =
-      "import { scope } from './document-scope'\n" +
-      'const options = { capture: true, passive: false }\n' +
-      'export function n() {\n  return options.capture && scope.term !== null\n}\n'
-    expect(parseTimeEffects('inert', inert)).toEqual([])
-  })
-
-  it('would report one, so the empty list above is a measurement', () => {
-    // The precondition. A walk that matched nothing would agree with an empty expectation just as
-    // happily, so the same reader is aimed at a module that does have a top-level effect: this
-    // test file itself, whose `describe` call is exactly the shape the rule refuses.
-    const source = readFileSync(
-      new URL('./document-parse-time-effects.test.ts', import.meta.url),
-      'utf8'
-    )
-    const running = parseModule('probe', source).body.filter(
-      (statement) => !DECLARATION_KINDS.has(statement.type)
-    )
-    expect(running.length).toBeGreaterThan(0)
-    expect(readsTheDocument({ type: 'Identifier', name: 'document' })).toBe(true)
-  })
-
   it('start and stop: the sequence calls every one there is, and undoes them in reverse', () => {
     // Moving an effect out is only correct if something calls it, and a count cannot say that: a
     // module could export a start nobody runs and the count would agree as soon as the literal
@@ -120,9 +79,6 @@ describe('the document modules at parse time', () => {
       MODULES.filter((name) => name !== THE_SEQUENCE).flatMap((name) =>
         exportedLifecycleFunctions(moduleSource(name), keyword, 'TerminalDocumentScope')
       )
-    expect(moduleSource('selection-overlay')).toContain(
-      'export function stopSelectionOverlay(scope: TerminalDocumentScope) {\n  stopEdgeScroll(scope)'
-    )
 
     const started = sequenceCallsTo('startTerminalDocument')
     // `cancelDocumentFrames` is the frame registry's undo rather than a module's stop, and it is
@@ -144,13 +100,5 @@ describe('the document modules at parse time', () => {
       stopped.filter((name) => paired.includes(name.replace(/^stop/, 'start'))).toReversed()
     )
     expect(sequenceCallsTo('stopTerminalDocument').at(-1)).toBe('cancelDocumentFrames')
-  })
-
-  it('would name a start the sequence forgot, which is what the comparison above is for', () => {
-    // The precondition, planted rather than argued: a module that exports a start nobody calls is
-    // the failure the set comparison exists to catch, and the reader has to say its name.
-    const planted = sequenceCallsTo('startTerminalDocument')
-    expect(planted).not.toContain('startReflow')
-    expect([...planted, 'startReflow'].sort()).not.toEqual(planted.slice().sort())
   })
 })

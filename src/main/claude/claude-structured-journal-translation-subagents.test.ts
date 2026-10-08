@@ -471,18 +471,6 @@ describe('claude journal translation — which agent produced a row', () => {
     })
   })
 
-  it('stamps a spawn call a release never announces with the call\u2019s own id', () => {
-    // Older releases name nothing they spawn. The spawn call is still in the
-    // transcript, so its id is a real handle — and stamping it keeps the child's
-    // prose off the parent, which reading these rows as root would not.
-    const { translator, linkageOfProse } = harness()
-    translator.handle(userTurn('user-1'))
-    translator.handle(spawnCall('assistant-1', 'toolu_1'))
-    translator.handle(childProse('child-1', 'toolu_1', 'unannounced release'))
-
-    expect(linkageOfProse('unannounced release')).toMatchObject({ agentId: 'toolu_1' })
-  })
-
   it('never reads a row naming a parent as the session\u2019s own, whatever the release', () => {
     // The hardest case for attribution: a sidechain id no spawn call forwarded,
     // on a release that has announced nothing, so no announcement is coming and
@@ -529,7 +517,9 @@ describe('claude journal translation — which agent produced a row', () => {
       (entry) => orcaClientMessageId(entry.identity) === 'claude-tool:claude-session:toolu_bash'
     )
     expect(row?.body).toMatchObject({ kind: 'tool-call', state: 'completed' })
-    expect(row?.options).toEqual({})
+    expect(row?.options).toEqual({
+      turnScope: { kind: 'turn', turnItemId: expect.any(String) }
+    })
   })
 
   /** One streamed text block, as the SDK sends it: a message start, then deltas.

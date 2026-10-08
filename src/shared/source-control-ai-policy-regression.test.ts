@@ -21,7 +21,7 @@ describe('source-control AI policy regressions', () => {
 
     expect(result).toMatchObject({
       ok: true,
-      value: { params: { agentId: 'codex', model: 'gpt-5.5' } }
+      value: { params: { agentId: 'codex', model: 'gpt-5.6-terra' } }
     })
   })
 

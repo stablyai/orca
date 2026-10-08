@@ -1,8 +1,8 @@
 // Coordinates the single main->renderer window-close-request subscription (owned
 // by the always-mounted App root) with the rich close-confirmation handler in
-// Terminal, which only mounts once a workspace exists. Without this, quitting on
-// the no-workspace landing page — where Terminal (and its listener) is not
-// mounted — sends 'window:close-requested' to a renderer with no handler, so
+// Terminal, which mounts once any workspace — the floating panel included — holds
+// tabs. Without this, quitting on the landing page with no tabs anywhere — where
+// Terminal (and its listener) is not mounted — sends 'window:close-requested' to a renderer with no handler, so
 // confirmWindowClose() is never called and the window never closes (#5144).
 //
 // It also runs pre-close guards: surfaces with unsaved work (e.g. the Settings

@@ -1,3 +1,4 @@
+import { pendingSelectionHandle, pendingSelectionWantsHandle } from './pending-session-selection'
 import { useEffect, useCallback } from 'react'
 import type { TerminalWebViewHandle } from '../terminal/terminal-webview-contract'
 import type { TerminalFrame } from '../terminal/terminal-webview-messages'
@@ -16,7 +17,7 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
     terminalDiagnosticsRef,
     webReadyHandlesRef,
     activeHandleRef,
-    pendingActiveTerminalHandleRef,
+    pendingSelectionRef,
     activeSessionTab,
     unsubscribeTerminal,
     subscribeToTerminal,
@@ -65,7 +66,8 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
       }
       // Why: a just-created tab can lose activeHandleRef to a lagging snapshot; honor the pending marker so its web-ready subscribe still fires.
       const isIntendedActive =
-        handle === activeHandleRef.current || handle === pendingActiveTerminalHandleRef.current
+        handle === activeHandleRef.current ||
+        pendingSelectionWantsHandle(pendingSelectionRef.current, handle)
       // Why: web-ready carried the cell box xterm laid out, so subscribeToTerminal sizes this subscribe.
       if (isIntendedActive && !terminalUnsubsRef.current.has(handle)) {
         subscribeToTerminal(handle)
@@ -75,11 +77,11 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
   )
 
   const subscribeIntendedActiveTerminal = useCallback(() => {
-    const handle = pendingActiveTerminalHandleRef.current ?? activeHandleRef.current
+    const handle = pendingSelectionHandle(pendingSelectionRef.current) ?? activeHandleRef.current
     if (handle && !terminalUnsubsRef.current.has(handle)) {
       subscribeToTerminal(handle)
     }
-  }, [activeHandleRef, pendingActiveTerminalHandleRef, subscribeToTerminal, terminalUnsubsRef])
+  }, [activeHandleRef, pendingSelectionRef, subscribeToTerminal, terminalUnsubsRef])
 
   /** The terminal frame React Native laid out: kept in the one frame ref, then what it changed. */
   const notifyTerminalFrame = useCallback(

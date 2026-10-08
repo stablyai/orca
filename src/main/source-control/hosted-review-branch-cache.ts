@@ -25,6 +25,7 @@ import {
 import {
   __resetHostedReviewScopeGenerationsForTests,
   bumpScopeGeneration,
+  hostedReviewRepoScope,
   scopeGeneration
 } from './hosted-review-scope-generations'
 import {
@@ -91,18 +92,12 @@ export type HostedReviewBranchCacheOptions = {
   headOid: string | null
   /** Set by surfaces that only ever render the selected worktree. */
   active?: boolean
-}
-
-/** Repo-scoped prefix so a single repo's entries can be dropped without a full flush.
- *  Keyed on the resolved host, not a raw connection id: two rows at one path on different hosts
- *  are different repositories, and collapsing them serves one host's answer for the other. */
-function repoScope(repoPath: string, executionHostId: ExecutionHostId): string {
-  return `${executionHostId}${KEY_SEPARATOR}${repoPath}`
+  force?: boolean
 }
 
 export function hostedReviewBranchCacheKey(identity: HostedReviewBranchCacheIdentity): string {
   return [
-    repoScope(identity.repoPath, identity.executionHostId),
+    hostedReviewRepoScope(identity.repoPath, identity.executionHostId),
     identity.branch,
     // Each linked id selects a different lookup, so it belongs in the identity.
     identity.linkedGitHubPR ?? '',
@@ -159,7 +154,7 @@ export function invalidateHostedReviewBranchCache(
   repoPath: string,
   executionHostId: ExecutionHostId
 ): void {
-  const scope = repoScope(repoPath, executionHostId)
+  const scope = hostedReviewRepoScope(repoPath, executionHostId)
   bumpScopeGeneration(scope)
   const prefix = `${scope}${KEY_SEPARATOR}`
   for (const key of entries.keys()) {
@@ -360,7 +355,7 @@ export async function withHostedReviewBranchCache(
   const active = isActiveBranch(key)
 
   const cached = entries.get(key)
-  if (cached && isFresh(cached, headOid, active)) {
+  if (!options.force && cached && isFresh(cached, headOid, active)) {
     return cached.review
   }
 
@@ -379,5 +374,10 @@ export async function withHostedReviewBranchCache(
     throw new Error(unavailable)
   }
 
-  return startLookup(key, repoScope(identity.repoPath, identity.executionHostId), headOid, lookup)
+  return startLookup(
+    key,
+    hostedReviewRepoScope(identity.repoPath, identity.executionHostId),
+    headOid,
+    lookup
+  )
 }

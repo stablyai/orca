@@ -140,7 +140,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     agentSendPopoverTargetMode?.sendingPaneKey,
     agentSendPopoverTargetMode?.status,
     isAgentSendTargetModeActive,
-    // sendTargetInputs: stable empty when inactive, shallow bundle of the five maps when active — one ref covers all five deps.
+    // sendTargetInputs: stable empty when inactive, shallow bundle of the target maps when active — one ref covers them all.
     sendTargetInputs,
     worktreeId
   ])

@@ -9,7 +9,7 @@ import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { getDefaultWorkspaceSession } from '../shared/constants'
-import { findTerminalTabIdForLeaf } from './runtime/workspace-session-terminal-membership-authority'
+import { findTerminalTabIdForLeaf } from './persistence/terminal-topology/terminal-topology-membership'
 
 import { TEST_LEAF_1, TEST_LEAF_2 } from './persistence-session-fixtures'
 

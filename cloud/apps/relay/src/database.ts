@@ -8,6 +8,7 @@ import {
   emptyPostgresPoolPressureCounts,
   isPostgresPoolConnectFailure,
   PostgresPoolPressure,
+  type PostgresPoolLane,
   type PostgresPoolPressureCounts
 } from './postgres-pool-pressure.js'
 import { applyPostgresSchema } from './postgres-schema-startup.js'
@@ -71,6 +72,9 @@ export type RelayTransactionOptions = { reportRetries?: boolean }
 export interface RelayDatabase {
   readonly dialect?: 'sqlite' | 'postgres'
   query(sql: string, params?: unknown[]): Promise<SqlRow[]>
+  // Ahead of every queued query() for the next free connection; see
+  // PostgresPoolPressure. Absent means plain query().
+  queryPriority?(sql: string, params?: unknown[]): Promise<SqlRow[]>
   queryLocked(
     sql: string,
     params?: unknown[],
@@ -80,7 +84,21 @@ export interface RelayDatabase {
     operation: (transaction: RelayDatabase) => Promise<T>,
     options?: RelayTransactionOptions
   ): Promise<T>
+  // Only on a PostgreSQL transaction handle; see commitWithFinalWrite.
+  commitWithFinal?(sql: string, params?: unknown[]): Promise<boolean>
   close(): Promise<void>
+}
+
+// Runs a single-row write with RETURNING as the transaction's last statement and reports
+// whether it changed a row. On PostgreSQL the write and COMMIT go as one message, so the
+// row lock is held for no round trip; a false result has already rolled the transaction back.
+export async function commitWithFinalWrite(
+  database: RelayDatabase,
+  sql: string,
+  params: unknown[] = []
+): Promise<boolean> {
+  if (database.commitWithFinal) return await database.commitWithFinal(sql, params)
+  return (await database.query(sql, params)).length > 0
 }
 
 // RULE - no new index and no new column on `relay_control_connection_reservations`,
@@ -94,6 +112,10 @@ export interface RelayDatabase {
 // Constraint swaps are matched by NAME in pg_constraint, never by body, because the CHECK list is
 // generated from REGION_LIST. Changing a constraint's definition under the same name therefore does
 // nothing on boot: an operator drops it, and the next boot adds the current definition back.
+// relay_confirmable_splices, relay_cell_drain_attempts and relay_migration_leases are no longer
+// created; nothing ever wrote them. Databases that have them keep them empty until a drop is safe:
+// an older image still creates them at boot, and a drop racing that CREATE can fail its schema step.
+// Account erasure in orca-cloud must be deployed with retired-table support (orca-cloud#493) first.
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS relay_invites (
   user_id TEXT NOT NULL,
@@ -152,19 +174,6 @@ CREATE TABLE IF NOT EXISTS relay_install_results (
   result_json TEXT NOT NULL,
   committed_at BIGINT NOT NULL,
   PRIMARY KEY (user_id, relay_host_id, relay_device_id, req_id)
-);
-
-CREATE TABLE IF NOT EXISTS relay_confirmable_splices (
-  basis_conn_id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL,
-  relay_host_id TEXT NOT NULL,
-  owning_control_generation BIGINT NOT NULL,
-  relay_device_id TEXT NOT NULL,
-  accepted_credential_version BIGINT NOT NULL,
-  accepted_as TEXT NOT NULL,
-  confirm_deadline BIGINT NOT NULL,
-  active BIGINT NOT NULL,
-  created_at BIGINT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS relay_connection_bases (
@@ -507,15 +516,6 @@ CREATE TABLE IF NOT EXISTS relay_cell_fence_apply_invocations (
 CREATE INDEX IF NOT EXISTS relay_cell_fence_apply_invocations_attempt
   ON relay_cell_fence_apply_invocations(attempt_id, started_at);
 
-CREATE TABLE IF NOT EXISTS relay_cell_drain_attempts (
-  cell_id TEXT PRIMARY KEY,
-  cell_incarnation TEXT NOT NULL,
-  planned_grace_ms BIGINT NOT NULL,
-  attempted_at BIGINT NOT NULL,
-  retry_after BIGINT NOT NULL,
-  recover_forward_attempted_at BIGINT
-);
-
 CREATE TABLE IF NOT EXISTS relay_cell_drain_attempt_states (
   attempt_id TEXT PRIMARY KEY,
   cell_id TEXT NOT NULL,
@@ -604,17 +604,6 @@ CREATE TABLE IF NOT EXISTS relay_rate_windows (
 -- cannot use it and seq-scans instead.
 CREATE INDEX IF NOT EXISTS relay_rate_windows_started
   ON relay_rate_windows(window_started_at);
-
-CREATE TABLE IF NOT EXISTS relay_migration_leases (
-  user_id TEXT NOT NULL,
-  relay_host_id TEXT NOT NULL,
-  source_cell_id TEXT NOT NULL,
-  target_cell_id TEXT NOT NULL,
-  assignment_epoch BIGINT NOT NULL,
-  expires_at BIGINT NOT NULL,
-  completed_at BIGINT,
-  PRIMARY KEY (user_id, relay_host_id, assignment_epoch)
-);
 
 CREATE TABLE IF NOT EXISTS relay_assignment_migrations (
   user_id TEXT NOT NULL,
@@ -741,7 +730,6 @@ const POSTGRES_TRANSACTION_PHASES = [
   ['relay_region_rehome_', 'regional-rehome'],
   ['relay_assignment_activity_leases', 'activity-lease'],
   ['relay_assignment_migration', 'migration'],
-  ['relay_migration_leases', 'migration'],
   ['relay_post_drain_migration_pins', 'migration'],
   ['relay_cell_connection_runtime', 'cell-runtime'],
   ['relay_cell_connection_snapshots', 'cell-runtime'],
@@ -753,7 +741,6 @@ const POSTGRES_TRANSACTION_PHASES = [
   ['relay_admission_selector', 'admission'],
   ['relay_cell_admission', 'admission'],
   ['relay_control_connection_reservations', 'connection'],
-  ['relay_confirmable_splices', 'connection'],
   ['relay_connection_bases', 'connection'],
   ['relay_direct_authorizations', 'connection'],
   ['relay_confirm_results', 'connection'],
@@ -875,13 +862,61 @@ class SqliteDatabase extends SqliteTransaction {
   }
 }
 
+// Literals for a simple-query message, which carries no bind parameters. Only safe
+// integers and strings: anything else is a caller bug, not something to stringify.
+function inlinePostgresParameters(sql: string, params: unknown[], client: pg.PoolClient): string {
+  let index = 0
+  const inlined = sql.replace(/\?/g, () => {
+    const value = params[index++]
+    if (typeof value === 'number' && Number.isSafeInteger(value)) return String(value)
+    if (typeof value === 'string') return client.escapeLiteral(value)
+    throw new Error('unsupported_inline_parameter')
+  })
+  if (index !== params.length) throw new Error('inline_parameter_count_mismatch')
+  return inlined
+}
+
 class PostgresTransaction implements RelayDatabase {
   readonly dialect = 'postgres' as const
   private held: { fromMs: number; site: CellLockHoldSite } | undefined
   private lockUnavailable = 0
   private lockTimeouts = 0
+  private state: 'open' | 'committed' | 'rolled-back' = 'open'
 
   constructor(protected readonly client: pg.PoolClient) {}
+
+  get open(): boolean {
+    return this.state === 'open'
+  }
+
+  async commitWithFinal(sql: string, params: unknown[] = []): Promise<boolean> {
+    this.assertNotCommitted()
+    // Zero rows divides by zero, so the message stops before COMMIT exactly when the write missed.
+    const message =
+      `WITH final_write AS (${inlinePostgresParameters(sql, params, this.client)}) ` +
+      'SELECT 1 / (SELECT count(*)::int FROM final_write); COMMIT'
+    try {
+      await this.client.query(message)
+    } catch (error) {
+      // Simple query stops at the first error, so any server error means COMMIT never ran:
+      // retryable codes take the caller's normal rollback-and-retry path. A lost connection
+      // leaves the outcome unknown, and nothing retries it.
+      if (String((error as { code?: unknown }).code) !== '22012') {
+        rememberPostgresTransactionPhase(error, sql)
+        throw error
+      }
+      await this.client.query('ROLLBACK')
+      this.state = 'rolled-back'
+      return false
+    }
+    this.state = 'committed'
+    return true
+  }
+
+  private assertNotCommitted(): void {
+    // A later statement would run in autocommit, outside the work it belongs to.
+    if (this.state === 'committed') throw new Error('postgres_transaction_already_committed')
+  }
 
   consumeHold(): MeasuredHold | undefined {
     if (this.held === undefined) return undefined
@@ -905,6 +940,7 @@ class PostgresTransaction implements RelayDatabase {
   }
 
   async query(sql: string, params: unknown[] = []): Promise<SqlRow[]> {
+    this.assertNotCommitted()
     try {
       const result = await this.client.query(postgresSql(sql), params)
       return returnsRows(sql) ? (result.rows as SqlRow[]) : [{ changes: result.rowCount ?? 0 }]
@@ -1026,11 +1062,23 @@ export class PostgresDatabase implements RelayDatabase {
   }
 
   async query(sql: string, params: unknown[] = []): Promise<SqlRow[]> {
+    return await this.queryOnLane('general', sql, params)
+  }
+
+  async queryPriority(sql: string, params: unknown[] = []): Promise<SqlRow[]> {
+    return await this.queryOnLane('priority', sql, params)
+  }
+
+  private async queryOnLane(
+    lane: PostgresPoolLane,
+    sql: string,
+    params: unknown[]
+  ): Promise<SqlRow[]> {
     const startedAt = performance.now()
     let phase: 'acquire' | 'execute' = 'acquire'
     let client: pg.PoolClient | undefined
     try {
-      client = await this.pressure.connect()
+      client = await this.pressure.connect(lane)
       phase = 'execute'
       const result = await client.query(postgresSql(sql), params)
       return returnsRows(sql) ? (result.rows as SqlRow[]) : [{ changes: result.rowCount ?? 0 }]
@@ -1082,16 +1130,22 @@ export class PostgresDatabase implements RelayDatabase {
       try {
         await client.query('BEGIN')
         const result = await operation(transaction)
-        await client.query('COMMIT')
+        if (transaction.open) await client.query('COMMIT')
         recordMeasuredHold(this.holds, transaction)
         this.holds.recordUnavailable(transaction.consumeLockUnavailable())
         this.holds.recordLockTimeout(transaction.consumeLockTimeouts())
         return result
       } catch (error) {
-        await client.query('ROLLBACK').catch(() => undefined)
+        const open = transaction.open
+        if (open) await client.query('ROLLBACK').catch(() => undefined)
         this.holds.recordUnavailable(transaction.consumeLockUnavailable())
         this.holds.recordLockTimeout(transaction.consumeLockTimeouts())
-        if (!retryablePostgresTransactionError(error) || attempt === POSTGRES_TRANSACTION_ATTEMPTS) {
+        // Once the fused commit has ended the transaction, a retry would apply the work twice.
+        if (
+          !open ||
+          !retryablePostgresTransactionError(error) ||
+          attempt === POSTGRES_TRANSACTION_ATTEMPTS
+        ) {
           if (retryablePostgresTransactionError(error) && options.reportRetries !== false) {
             console.warn(
               JSON.stringify({
@@ -1135,6 +1189,10 @@ export class PostgresDatabase implements RelayDatabase {
   peekPoolPressure(): PostgresPoolPressureCounts {
     return this.pressure.peekCounts()
   }
+
+  poolOldestWaitMs(): number {
+    return this.pressure.oldestWaitMs()
+  }
 }
 
 export function consumeRelayDatabasePoolPressure(
@@ -1158,6 +1216,11 @@ export function readRelayDatabasePoolPressure(
   return database instanceof PostgresDatabase
     ? database.peekPoolPressure()
     : emptyPostgresPoolPressureCounts()
+}
+
+// How long the longest-waiting pooled query has queued so far; 0 when none waits.
+export function readRelayDatabasePoolOldestWaitMs(database: RelayDatabase): number {
+  return database instanceof PostgresDatabase ? database.poolOldestWaitMs() : 0
 }
 
 export function absorbPostgresIdleClientErrors(pool: Pick<pg.Pool, 'on'>): void {
@@ -1235,12 +1298,19 @@ export type RelayDatabaseOpenInput = {
   poolMax?: number
   applicationName?: string
   statementTimeoutMs?: number
+  // Directors own the PostgreSQL schema. A cell skips it and never touches the database
+  // at boot, so it starts listening while the database is down and stays unready until
+  // its first successful query.
+  appliesPostgresSchema?: boolean
 }
 
 export async function openRelayDatabase(input: RelayDatabaseOpenInput): Promise<RelayDatabase> {
   let database: RelayDatabase
+  const appliesPostgresSchema = input.appliesPostgresSchema !== false
   if (input.databaseUrl) {
-    await applySchemaOnUntimedPool(input.databaseUrl, input.applicationName)
+    if (appliesPostgresSchema) {
+      await applySchemaOnUntimedPool(input.databaseUrl, input.applicationName)
+    }
     const pool = new pg.Pool({
       connectionString: input.databaseUrl,
       max: input.poolMax ?? 10,
@@ -1260,7 +1330,7 @@ export async function openRelayDatabase(input: RelayDatabaseOpenInput): Promise<
   }
   try {
     if (!input.databaseUrl) await applySchema(database)
-    await backfillRelayCellRegions(database)
+    if (!input.databaseUrl || appliesPostgresSchema) await backfillRelayCellRegions(database)
     return database
   } catch (error) {
     await database.close().catch(() => undefined)

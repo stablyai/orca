@@ -1,9 +1,10 @@
 #!/usr/bin/env node
-// Ship Bun with orcad; keep module loading compatible with legacy Node launchers.
+// Package the server separately from its compatibility launcher.
 import { fork, spawnSync } from 'node:child_process'
 import { build } from 'esbuild'
 import {
   buildOrcadEntry,
+  buildOrcadLauncher,
   externalNativeAddons,
   ORCAD_EXTERNAL_MODULES,
   ORCAD_CHILD_ENTRY_POINTS
@@ -23,19 +24,28 @@ import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import process from 'node:process'
 import { smokeProfileStateWorkers } from './profile-state-worker-smoke.mjs'
+import { smokeForeignSqliteReaderWorker } from './foreign-sqlite-reader-worker-smoke.mjs'
 import { materializeWatcherPackage } from './orcad-watcher-package.mjs'
 import { stageOrcadWindowsProcessTree } from './orcad-windows-process-tree.mjs'
 import {
-  ORCAD_BUILD_TARGET_FILENAME,
   ORCAD_EMOJI_SHORTCODE_DATASET,
-  orcadBunRuntimeFilename,
+  ORCAD_FOREIGN_SQLITE_READER_ENTRY,
+  ORCAD_PORT_SCAN_COMMAND_WORKER_ENTRY,
+  ORCAD_LAUNCHER_FILENAME,
+  ORCAD_SERVER_ENTRY_FILENAME,
+  ORCAD_NODE_PTY_DIR,
+  ORCAD_NODE_PTY_JS_ARTIFACTS,
+  ORCAD_NODE_RUNTIME_MARKER_FILENAME,
   ORCAD_PARCEL_WATCHER_ENTRY,
   ORCAD_PARCEL_WATCHER_NATIVE,
+  ORCAD_SERVER_TARGET_FILENAME,
   ORCAD_VERSION_FILENAME,
-  ORCAD_RIPGREP_ARTIFACTS
+  orcadNodePtySlotFiles,
+  orcadRipgrepArtifact
 } from '../../src/shared/orcad-artifacts.ts'
 import { computeOrcadFullVersion } from './orcad-artifact-version.mjs'
-import { ORCAD_BUN_VERSION } from '../../src/shared/orcad-bun-runtime.ts'
+import { NODE_RUNTIME_ASSETS, NODE_RUNTIME_PIN } from '../../src/shared/node-runtime-pin.ts'
+import { findSlotProblems, readManifest } from './orcad-prebuild-slot-contents.mjs'
 import { orcadAgentBrowserNativeName } from '../../src/shared/orcad-agent-browser-name.ts'
 
 const ROOT = join(import.meta.dirname, '..', '..')
@@ -52,16 +62,32 @@ const WATCHER_OUT_FILE = join(OUT_DIR, 'parcel-watcher-process-entry.js')
 // orcad restart would SIGKILL every running terminal.
 const DAEMON_ENTRY = join(ROOT, ORCAD_CHILD_ENTRY_POINTS.daemon)
 const DAEMON_OUT_FILE = join(OUT_DIR, 'daemon-entry.js')
-const PTY_GATE_ENTRY = join(ROOT, ORCAD_CHILD_ENTRY_POINTS.ptyGate)
-const PTY_GATE_OUT_FILE = join(OUT_DIR, 'windows-bun-pty-gate-entry.js')
-const OUT_FILE = join(OUT_DIR, 'orcad.js')
+// Why beside orcad.js: the hook server's OpenCode binder and the OpenCode history scanner
+// start this worker from the module dir, since orcad has no Electron resources tree.
+const FOREIGN_SQLITE_READER_ENTRY = join(ROOT, ORCAD_CHILD_ENTRY_POINTS.foreignSqliteReader)
+const FOREIGN_SQLITE_READER_OUT_FILE = join(OUT_DIR, ORCAD_FOREIGN_SQLITE_READER_ENTRY)
+// Why beside orcad.js: workspace port detection runs its probe commands on this worker thread,
+// and `resolveWorkerEntryPath` looks for it next to the running bundle.
+const PORT_SCAN_WORKER_ENTRY = join(ROOT, ORCAD_CHILD_ENTRY_POINTS.portScanCommandWorker)
+const PORT_SCAN_WORKER_OUT_FILE = join(OUT_DIR, ORCAD_PORT_SCAN_COMMAND_WORKER_ENTRY)
+const OUT_FILE = join(OUT_DIR, ORCAD_LAUNCHER_FILENAME)
+const SERVER_OUT_FILE = join(OUT_DIR, ORCAD_SERVER_ENTRY_FILENAME)
 const BUILD_TARGET = process.env.ORCAD_BUILD_TARGET
 if (!BUILD_TARGET) {
   throw new Error('ORCAD_BUILD_TARGET is required; run `pnpm build:orcad`')
 }
 const [targetPlatform, targetArch] = BUILD_TARGET.split('-')
 const targetIsWindows = targetPlatform === 'win32'
-const targetIsCurrent = process.env.ORCAD_BUILD_TARGET_IS_CURRENT === '1'
+const runtimeAsset = NODE_RUNTIME_ASSETS[BUILD_TARGET]
+if (!runtimeAsset) {
+  throw new Error(`Unsupported ORCAD_BUILD_TARGET: ${BUILD_TARGET}`)
+}
+// Set only when the build host can run this target's runtime.
+const nodeRuntimePath = process.env.ORCAD_NODE_RUNTIME_PATH || null
+const PREBUILDS_DIR = process.env.ORCAD_PREBUILDS_DIR
+if (!PREBUILDS_DIR) {
+  throw new Error('ORCAD_PREBUILDS_DIR is required; run `pnpm build:orcad`')
+}
 const AGENT_BROWSER_NAME = orcadAgentBrowserNativeName(
   targetPlatform,
   targetArch,
@@ -99,26 +125,43 @@ async function stageParcelWatcher(target) {
   copyFileSync(nativeSource, join(OUT_DIR, ORCAD_PARCEL_WATCHER_NATIVE))
 }
 
-rmSync(OUT_DIR, { recursive: true, force: true })
-mkdirSync(OUT_DIR, { recursive: true })
-const bunRuntimeSource = process.env.ORCAD_BUN_RUNTIME_PATH
-if (!bunRuntimeSource) {
-  throw new Error('ORCAD_BUN_RUNTIME_PATH is required; run `pnpm build:orcad`')
-}
-if (targetIsCurrent) {
-  const version = spawnSync(bunRuntimeSource, ['--version'], { encoding: 'utf8' })
-  if (version.status !== 0 || version.stdout.trim() !== ORCAD_BUN_VERSION) {
+/** node-pty's JS plus only this target's prebuild slot, laid out the way node-pty's loader looks. */
+function stageNodePty(target) {
+  const problems = findSlotProblems(readManifest(PREBUILDS_DIR), PREBUILDS_DIR, [target])
+  if (problems.length > 0) {
+    throw new Error(`[build-orcad] node-pty prebuild for ${target}: ${problems.join('; ')}`)
+  }
+  const slotFiles = Object.keys(readManifest(PREBUILDS_DIR).slots[target].files).sort()
+  const expected = orcadNodePtySlotFiles(target).sort()
+  if (slotFiles.join('\0') !== expected.join('\0')) {
     throw new Error(
-      `ORCAD_BUN_RUNTIME_PATH must be Bun ${ORCAD_BUN_VERSION}; got ${version.stdout.trim() || version.stderr.trim()}`
+      `[build-orcad] ${target} prebuild ships ${slotFiles.join(', ')}; orcad-artifacts.ts expects ${expected.join(', ')}`
     )
   }
+  const sourceDir = dirname(createRequire(import.meta.url).resolve('node-pty/package.json'))
+  for (const artifact of ORCAD_NODE_PTY_JS_ARTIFACTS) {
+    const destination = join(OUT_DIR, artifact)
+    mkdirSync(dirname(destination), { recursive: true })
+    copyFileSync(join(sourceDir, artifact.slice(ORCAD_NODE_PTY_DIR.length + 1)), destination)
+  }
+  for (const file of expected) {
+    const destination = join(OUT_DIR, ORCAD_NODE_PTY_DIR, 'build', 'Release', ...file.split('/'))
+    mkdirSync(dirname(destination), { recursive: true })
+    copyFileSync(join(PREBUILDS_DIR, target, ...file.split('/')), destination)
+    if (file === 'spawn-helper') {
+      chmodSync(destination, 0o755)
+    }
+  }
 }
-const bunRuntimeOutput = join(OUT_DIR, orcadBunRuntimeFilename(BUILD_TARGET))
-copyFileSync(bunRuntimeSource, bunRuntimeOutput)
-writeFileSync(join(OUT_DIR, ORCAD_BUILD_TARGET_FILENAME), `${BUILD_TARGET}\n`)
-if (!targetIsWindows) {
-  chmodSync(bunRuntimeOutput, 0o755)
-}
+
+rmSync(OUT_DIR, { recursive: true, force: true })
+mkdirSync(OUT_DIR, { recursive: true })
+writeFileSync(join(OUT_DIR, ORCAD_SERVER_TARGET_FILENAME), `${BUILD_TARGET}\n`)
+writeFileSync(
+  join(OUT_DIR, ORCAD_NODE_RUNTIME_MARKER_FILENAME),
+  `${runtimeAsset.executableSha256}\n`
+)
+stageNodePty(BUILD_TARGET)
 await stageParcelWatcher(BUILD_TARGET)
 stageOrcadWindowsProcessTree(ROOT, OUT_DIR, BUILD_TARGET)
 const emojiDatasetOutput = join(OUT_DIR, ORCAD_EMOJI_SHORTCODE_DATASET)
@@ -127,15 +170,15 @@ copyFileSync(
   createRequire(import.meta.url).resolve('emojibase-data/en/shortcodes/emojibase.json'),
   emojiDatasetOutput
 )
-if (existsSync(AGENT_BROWSER_SOURCE)) {
+// The desktop template omits it: ~10 MB per target, and orcad already treats it as optional.
+if (existsSync(AGENT_BROWSER_SOURCE) && process.env.ORCAD_OMIT_AGENT_BROWSER !== '1') {
   copyFileSync(AGENT_BROWSER_SOURCE, AGENT_BROWSER_OUTPUT)
   if (!targetIsWindows) {
     chmodSync(AGENT_BROWSER_OUTPUT, 0o755)
   }
 }
-// Why every platform: an SSH deployment can target a different host than the build machine.
-for (const artifact of ORCAD_RIPGREP_ARTIFACTS) {
-  const [, ripgrepPlatform, ripgrepName] = artifact.split('/')
+{
+  const [, ripgrepPlatform, ripgrepName] = orcadRipgrepArtifact(BUILD_TARGET).split('/')
   const outputDir = join(OUT_DIR, 'ripgrep', ripgrepPlatform)
   mkdirSync(outputDir, { recursive: true })
   const outputPath = join(outputDir, ripgrepName)
@@ -143,11 +186,14 @@ for (const artifact of ORCAD_RIPGREP_ARTIFACTS) {
     join(ROOT, 'node_modules', '@vscode', 'ripgrep-universal', 'bin', ripgrepPlatform, ripgrepName),
     outputPath
   )
-  if (!ripgrepPlatform.startsWith('win32-')) {
+  if (!targetIsWindows) {
     chmodSync(outputPath, 0o755)
   }
 }
 cpSync(join(ROOT, 'resources', 'licenses', 'ripgrep'), join(OUT_DIR, 'ripgrep', 'licenses'), {
+  recursive: true
+})
+cpSync(join(ROOT, 'resources', 'native-chat-visuals'), join(OUT_DIR, 'native-chat-visuals'), {
   recursive: true
 })
 
@@ -177,7 +223,8 @@ function buildForkedChild(entryPoint, outfile) {
 const childResults = await Promise.all([
   buildForkedChild(WATCHER_ENTRY, WATCHER_OUT_FILE),
   buildForkedChild(DAEMON_ENTRY, DAEMON_OUT_FILE),
-  buildForkedChild(PTY_GATE_ENTRY, PTY_GATE_OUT_FILE),
+  buildForkedChild(FOREIGN_SQLITE_READER_ENTRY, FOREIGN_SQLITE_READER_OUT_FILE),
+  buildForkedChild(PORT_SCAN_WORKER_ENTRY, PORT_SCAN_WORKER_OUT_FILE),
   ...['writer', 'backup'].map((role) =>
     buildForkedChild(
       join(ROOT, ORCAD_CHILD_ENTRY_POINTS[role]),
@@ -186,7 +233,8 @@ const childResults = await Promise.all([
   )
 ])
 
-const result = await buildOrcadEntry(OUT_FILE)
+const result = await buildOrcadEntry(SERVER_OUT_FILE)
+const launcherResult = await buildOrcadLauncher(OUT_FILE)
 
 const output = Object.values(result.metafile.outputs).find(
   (o) => o.entryPoint === 'src/main/orcad/main.ts'
@@ -211,7 +259,11 @@ function collectImporters(metafiles, matches) {
   return importers
 }
 
-const metafiles = [result.metafile, ...childResults.map((child) => child.metafile)]
+const metafiles = [
+  launcherResult.metafile,
+  result.metafile,
+  ...childResults.map((child) => child.metafile)
+]
 const electronImporters = collectImporters(
   metafiles,
   (specifier) => specifier === 'electron' || specifier.startsWith('electron/')
@@ -251,7 +303,7 @@ if (graphErrors.length > 0) {
   // Node's uncaught-exception report echoes that whole line — which contains every string
   // literal in the bundle. A crash therefore "matches" any expected message, and a textual
   // assertion passes against a bundle that never loaded.
-  const smoke = spawnSync(process.execPath, [OUT_FILE, '--orcad-smoke-load-check'], {
+  const smoke = spawnSync(process.execPath, [SERVER_OUT_FILE, '--orcad-smoke-load-check'], {
     encoding: 'utf8',
     timeout: 60_000
   })
@@ -294,7 +346,7 @@ if (graphErrors.length > 0) {
     )
     process.exitCode = 1
   }
-  const watcherFailure = targetIsCurrent ? await smokeLoadWatcherChild(bunRuntimeOutput) : null
+  const watcherFailure = nodeRuntimePath ? await smokeLoadWatcherChild(nodeRuntimePath) : null
   if (watcherFailure) {
     console.error(
       `[build-orcad] the watcher child failed under the bundled runtime.\n${watcherFailure}`
@@ -305,11 +357,21 @@ if (graphErrors.length > 0) {
 
 try {
   await smokeProfileStateWorkers(OUT_DIR)
-  if (targetIsCurrent) {
-    await smokeProfileStateWorkers(OUT_DIR, { runtimePath: bunRuntimeOutput })
+  if (nodeRuntimePath) {
+    await smokeProfileStateWorkers(OUT_DIR, { runtimePath: nodeRuntimePath })
   }
 } catch (error) {
   console.error('[build-orcad] profile state worker check failed:', error)
+  process.exitCode = 1
+}
+
+try {
+  smokeForeignSqliteReaderWorker(OUT_DIR)
+  if (nodeRuntimePath) {
+    smokeForeignSqliteReaderWorker(OUT_DIR, { runtimePath: nodeRuntimePath })
+  }
+} catch (error) {
+  console.error('[build-orcad] foreign SQLite reader worker check failed:', error)
   process.exitCode = 1
 }
 
@@ -324,7 +386,7 @@ if (process.exitCode !== 1) {
   })
   writeFileSync(join(OUT_DIR, ORCAD_VERSION_FILENAME), fullVersion)
   console.log(
-    `[build-orcad] ok — ${fullVersion}, ${(output.bytes / 1024 / 1024).toFixed(2)} MB, ${Object.keys(output.inputs).length} modules, zero electron and node:sqlite imports, Bun ${ORCAD_BUN_VERSION} included.`
+    `[build-orcad] ok — ${fullVersion}, ${(output.bytes / 1024 / 1024).toFixed(2)} MB, ${Object.keys(output.inputs).length} modules, zero electron and node:sqlite imports, Node ${NODE_RUNTIME_PIN.version} referenced.`
   )
 }
 

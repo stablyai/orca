@@ -5,7 +5,7 @@
 import { existsSync, statSync } from 'node:fs'
 import { stat } from 'node:fs/promises'
 import { release } from 'node:os'
-import { isWslUncPath, parseWslUncPath } from '../../shared/wsl-paths'
+import { isWslUncPath, uncRouteKey } from '../../shared/wsl-paths'
 import { wslUncDirectoryExists, wslUncDirectoryExistsAsync } from '../wsl'
 import { PrioritySemaphore } from '../../shared/priority-semaphore'
 
@@ -24,22 +24,7 @@ type UncRouteLane = {
 
 const uncRouteLanes = new Map<string, UncRouteLane>()
 
-/**
- * Groups paths by the host that must answer for them, so many dead
- * subdirectories of one share share a lane. Returns null for local-disk paths,
- * which never block long enough to be worth queueing.
- */
-export function uncRouteKey(cwd: string): string | null {
-  if (!cwd.startsWith('\\\\')) {
-    return null
-  }
-  const wslInfo = parseWslUncPath(cwd)
-  if (wslInfo) {
-    return `wsl:${wslInfo.distro.trim().toLowerCase()}`
-  }
-  const server = cwd.slice(2).split(/[\\/]/, 1)[0]
-  return `unc:${server.toLowerCase()}`
-}
+export { uncRouteKey } from '../../shared/wsl-paths'
 
 async function withUncRouteLane<T>(cwd: string, run: () => Promise<T>): Promise<T> {
   const key = uncRouteKey(cwd)

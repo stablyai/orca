@@ -5,11 +5,20 @@ on:
   # change is worth a real ibus session. A pull_request trigger here would run it on every PR.
   workflow_call:
   workflow_dispatch:
+    inputs:
+      diagnose_wayland_input:
+        description: Capture passive Wayland input diagnostics while running both native lanes
+        required: false
+        type: boolean
+        default: false
   schedule:
     - cron: '30 9 * * *'
 
 permissions:
   contents: read
+
+env:
+  ORCA_BACKGROUND_LAUNCH: '1'
 
 jobs:
   linux-x11:
@@ -98,6 +107,7 @@ jobs:
       - name: Run native Wayland Hangul terminating digit
         env:
           SKIP_BUILD: '1'
+          ORCA_E2E_WAYLAND_INPUT_DIAGNOSTICS: ${{ inputs.diagnose_wayland_input && '1' || '' }}
         run: node config/scripts/run-terminal-ibus-hangul-e2e.mjs --nested-wayland
       - name: Upload Wayland terminal IME evidence
         if: always()

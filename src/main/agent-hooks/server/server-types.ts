@@ -19,6 +19,9 @@ export type EnrichedAgentHookEventPayload = AgentHookEventPayload & {
    *  main restart; absent means "never separately observed" and consumers use `receivedAt`. */
   evidenceObservedAt?: number
   stateStartedAt: number
+  /** When the main agent's current turn began, on this server's clock. Stamped only here, from the
+   *  main agent's own turn-opening event; absent when no such event was seen. */
+  turnStartedAt?: number
   /** Provenance/ordering stamped by this server as the pane authority (STA-4293). Read by nothing yet. */
   observation?: AgentStatusObservation
   /** Stamped at hydrate for nonterminal states; never persisted (hydrate re-stamps) and cleared by any accepted live event replacing the entry. */
@@ -28,12 +31,13 @@ export type EnrichedAgentHookEventPayload = AgentHookEventPayload & {
 }
 
 // `claudeRunningNonAgentTask` is persisted on purpose: it is the one child-work fact the row's
-// `mainAgent` cannot express (a shell beside the agents), and hydration reads it to decide whether a
+// `mainAgent` cannot express (a shell, a cron or an owed task notification beside the agents), and hydration reads it to decide whether a
 // settled main agent may be seeded. It replaced the derived `claudeLeadBoundaryChildOnly` flag.
 export type PersistedAgentHookEventPayload = Omit<
   EnrichedAgentHookEventPayload,
   | 'authorityRestartId'
   | 'launchToken'
+  | 'hostTurnRevision'
   | 'promptInteractionKey'
   | 'restoredUnconfirmed'
   // Why: revision counters are in-memory and the authority id is regenerated per process, so

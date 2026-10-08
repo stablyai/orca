@@ -7,11 +7,6 @@
 // writes through stay owned by the translator.
 
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
-import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
-import {
-  boundInlineText,
-  DEFAULT_JOURNAL_PAYLOAD_LIMITS
-} from '../native-chat/agent-session-journal/journal-payload-bounds'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { ClaudeBackgroundTaskRows } from './claude-background-task-rows'
 import type { ClaudeToolOriginRegistry } from './claude-tool-origin-registry'
@@ -20,8 +15,6 @@ import {
   claudeMessageBody,
   claudeMessageIdentity,
   claudeOutputEnvelope,
-  claudeThinkingIdentity,
-  claudeThinkingText,
   claudeToolBody,
   claudeToolIdentity,
   claudeToolResults,
@@ -35,6 +28,7 @@ import {
 } from './claude-structured-provider-fallback'
 import type { createClaudeStreamedBlockRegistry } from './claude-streamed-block-identity'
 import type { createClaudeStreamedTextCheckpoints } from './claude-streamed-text-checkpoints'
+import type { ClaudeStreamedThinking } from './claude-streamed-thinking'
 import type { ClaudeProvisionalRowCorrections } from './claude-provisional-row-corrections'
 import type { ClaudeSubagentRoster } from './claude-subagent-roster'
 import { claudeTurnOpenedBySendEcho, type ClaudeTurnSource } from './claude-turn-opening'
@@ -45,6 +39,7 @@ export type ClaudeMessageJournalContext = {
   tools: Map<string, ClaudeToolUse>
   streamedBlocks: ReturnType<typeof createClaudeStreamedBlockRegistry>
   streamedText: ReturnType<typeof createClaudeStreamedTextCheckpoints>
+  streamedThinking: ClaudeStreamedThinking
   subagents: ClaudeSubagentRoster
   toolOrigins: ClaudeToolOriginRegistry
   backgroundTasks: ClaudeBackgroundTaskRows
@@ -97,10 +92,11 @@ export function journalClaudeMessage(
   const outputEnvelope = claudeOutputEnvelope(envelope)
   const body = claudeMessageBody(outputEnvelope)
   const identity =
-    (body && envelope.role === 'assistant' ? ctx.streamedBlocks.reconcile(envelope) : null) ??
-    claudeMessageIdentity(envelope)
+    (body && envelope.role === 'assistant'
+      ? ctx.streamedBlocks.reconcile(envelope)?.identity
+      : null) ?? claudeMessageIdentity(envelope)
   ctx.streamedText.forget(agentJournalItemKey(identity))
-  const thinking = claudeThinkingText(outputEnvelope)
+  const thinking = ctx.streamedThinking.finalize(outputEnvelope, observedAt)
   const source: ClaudeTurnSource = {
     sessionId: envelope.sessionId,
     uuid: envelope.uuid,
@@ -155,15 +151,12 @@ export function journalClaudeMessage(
   }
   if (thinking) {
     ctx.turn.ensureOpen(message, source, observedAt)
-    const thinkingIdentity = claudeThinkingIdentity(envelope.sessionId, envelope.uuid)
-    const thinkingBody: AgentJournalItemBody = {
-      kind: 'message',
-      role: 'reasoning',
-      blocks: [
-        { type: 'text', text: boundInlineText(thinking, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text }
-      ]
-    }
-    ctx.sink.appendItem(thinkingIdentity, thinkingBody, stamp(thinkingIdentity, thinkingBody))
+    // The write that ends the row: shed under pressure, the row would read open for good.
+    ctx.sink.appendItem(thinking.identity, thinking.body, {
+      ...stamp(thinking.identity, thinking.body),
+      ...(thinking.startedAt === undefined ? {} : { observedAt: thinking.startedAt }),
+      lifecycle: true
+    })
     changed = true
   }
   changed =

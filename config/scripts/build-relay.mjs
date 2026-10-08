@@ -9,6 +9,7 @@
  * gracefully degraded.
  */
 import { build } from 'esbuild'
+import { JSONC_PARSER_ESM_ALIAS } from '../build-plugins/jsonc-parser-esm.ts'
 import { createHash } from 'node:crypto'
 import {
   copyFileSync,
@@ -23,12 +24,16 @@ import { join } from 'node:path'
 import {
   RELAY_BUILD_PLATFORMS,
   RELAY_VERSION_FILENAME,
-  RELAY_WINDOWS_PROCESS_TREE_FILENAME,
   RELAY_OPENCODE_SQLITE_READER_FILENAME,
+  WSL_CLAUDE_PROFILE_HELPER_FILENAME,
   relayOptionalArtifactFilenames,
   isWindowsRelayPlatform,
   relayArtifactFilenames
 } from '../../src/shared/relay-artifacts.ts'
+import {
+  parseRequiredRelayAddonArches,
+  stageRelayWindowsProcessTreeAddon
+} from './relay-windows-process-tree-staging.mjs'
 
 const __dirname = import.meta.dirname
 // Why: the script lives under config/scripts, so go two levels up to reach the repo root.
@@ -57,7 +62,6 @@ const MANAGED_HOOK_RUNTIME_ENTRY = join(
   'agent-hooks',
   'managed-hook-runtime.ts'
 )
-const JSONC_PARSER_ESM_ENTRY = join(ROOT, 'node_modules', 'jsonc-parser', 'lib', 'esm', 'main.js')
 const NODE_PTY_CONSOLE_LIST_PATCH_FILENAME = 'node-pty-1.1.0-console-list-agent-patch.cjs'
 const NODE_PTY_CONSOLE_LIST_PATCH_SOURCE = join(
   ROOT,
@@ -79,38 +83,16 @@ const NODE_PTY_MASTER_CLOEXEC_PATCH_SOURCE = join(
   'relay-assets',
   NODE_PTY_MASTER_CLOEXEC_PATCH_FILENAME
 )
-// Written by build-windows-process-tree-relay-addon.mjs, which only runs on a
-// Windows machine.
+// Written by build-windows-process-tree-relay-addon.mjs on Windows, or downloaded
+// from CI's relay-windows-process-tree artifact on other OSes.
 const WINDOWS_PROCESS_TREE_BUILD_DIR = join(ROOT, '.build', 'windows-process-tree')
 
-// Which Windows arches must have the addon, as a comma-separated list ('all' for
-// every arch). Per-arch rather than a flag because arm64 needs the MSVC ARM64
-// cross toolset, an optional VS component: where it is absent that relay should
-// fall back to the scan, not fail the release the x64 relay is riding on.
-const REQUIRED_ADDON_ARCHES = (process.env.ORCA_REQUIRE_RELAY_NATIVE_ADDONS ?? '')
-  .split(',')
-  .map((value) => value.trim())
-  .filter(Boolean)
-
-function stageWindowsProcessTreeAddon(platform, outDir) {
-  if (!isWindowsRelayPlatform(platform)) {
-    return
-  }
-  const arch = platform.slice('win32-'.length)
-  const source = join(WINDOWS_PROCESS_TREE_BUILD_DIR, arch, RELAY_WINDOWS_PROCESS_TREE_FILENAME)
-  if (!existsSync(source)) {
-    if (REQUIRED_ADDON_ARCHES.includes(arch) || REQUIRED_ADDON_ARCHES.includes('all')) {
-      throw new Error(
-        `Relay ${platform} needs ${source}. Run: node config/scripts/build-windows-process-tree-relay-addon.mjs --arch=${arch} (Windows only).`
-      )
-    }
-    console.log(
-      `Relay ${platform}: no ${RELAY_WINDOWS_PROCESS_TREE_FILENAME}; relay will use the PowerShell scan.`
-    )
-    return
-  }
-  copyFileSync(source, join(outDir, RELAY_WINDOWS_PROCESS_TREE_FILENAME))
-}
+// Per-arch rather than a flag because arm64 needs the MSVC ARM64 cross toolset,
+// an optional VS component: where it is absent that relay should fall back to
+// the scan, not fail the release the x64 relay is riding on.
+const REQUIRED_ADDON_ARCHES = parseRequiredRelayAddonArches(
+  process.env.ORCA_REQUIRE_RELAY_NATIVE_ADDONS
+)
 
 // Why: lets the packaging contract test build into a temp tree instead of
 // clobbering a developer's out/relay or racing tests that read it.
@@ -121,6 +103,7 @@ const RELAY_VERSION = '0.1.0'
 async function buildRelayBundles(outDir) {
   await build({
     entryPoints: [RELAY_ENTRY],
+    alias: JSONC_PARSER_ESM_ALIAS,
     bundle: true,
     platform: 'node',
     target: 'node18',
@@ -173,7 +156,7 @@ async function buildRelayBundles(outDir) {
     target: 'node18',
     format: 'cjs',
     outfile: join(outDir, RELAY_OPENCODE_SQLITE_READER_FILENAME),
-    external: ['electron', 'bun:sqlite'],
+    external: ['electron'],
     sourcemap: false,
     minify: true,
     define: { 'process.env.NODE_ENV': '"production"' }
@@ -205,7 +188,7 @@ async function buildRelayBundles(outDir) {
     outfile: join(outDir, 'managed-hook-runtime.js'),
     // Why: jsonc-parser's default UMD build keeps relative dynamic requires
     // that break after bundling; its ESM entry is equivalent and self-contained.
-    alias: { 'jsonc-parser': JSONC_PARSER_ESM_ENTRY },
+    alias: JSONC_PARSER_ESM_ALIAS,
     sourcemap: false,
     minify: true,
     define: {
@@ -249,7 +232,12 @@ for (const platform of RELAY_BUILD_PLATFORMS) {
     NODE_PTY_MASTER_CLOEXEC_PATCH_SOURCE,
     join(outDir, NODE_PTY_MASTER_CLOEXEC_PATCH_FILENAME)
   )
-  stageWindowsProcessTreeAddon(platform, outDir)
+  stageRelayWindowsProcessTreeAddon({
+    platform,
+    outDir,
+    buildDir: WINDOWS_PROCESS_TREE_BUILD_DIR,
+    requiredArches: REQUIRED_ADDON_ARCHES
+  })
 
   // Why: include a content hash so the deploy check detects code changes even
   // when RELAY_VERSION hasn't been bumped. Hashing the whole manifest means a
@@ -307,6 +295,7 @@ for (const platform of RELAY_BUILD_PLATFORMS) {
   mkdirSync(outDir, { recursive: true })
   await build({
     entryPoints: [wslHookEntry],
+    alias: JSONC_PARSER_ESM_ALIAS,
     bundle: true,
     platform: 'node',
     target: 'node18',
@@ -343,6 +332,18 @@ for (const platform of RELAY_BUILD_PLATFORMS) {
     .slice(0, 12)
   writeFileSync(join(outDir, '.browser-network-version'), `${RELAY_VERSION}+${browserNetworkHash}`)
   console.log(`Built WSL browser network relay → ${outDir}/wsl-browser-network-relay.js`)
+
+  // Why here, not the relay dirs: only the desktop runs it, inside WSL; SSH hosts never upload it.
+  await build({
+    entryPoints: [join(ROOT, 'src/main/claude-accounts/claude-profile-wsl-entry.ts')],
+    bundle: true,
+    platform: 'node',
+    target: 'node18',
+    format: 'cjs',
+    outfile: join(outDir, WSL_CLAUDE_PROFILE_HELPER_FILENAME),
+    minify: true,
+    define: { 'process.env.NODE_ENV': '"production"' }
+  })
 }
 
 console.log('Relay build complete.')

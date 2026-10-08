@@ -1,3 +1,5 @@
+import { killSpawnedRipgrepProcess } from '../shared/ripgrep-process-availability'
+import { FileInventoryBudget, FileInventoryCapacityError } from '../shared/file-inventory-budget'
 /**
  * Git-based fallbacks for file listing and text search.
  *
@@ -37,6 +39,7 @@ export function listFilesWithGit(
   if (signal?.aborted) {
     return Promise.reject(fileListingCancellationError(signal))
   }
+  const inventoryBudget = new FileInventoryBudget()
   const gitPaths = new Set<string>()
   const directoryPaths = new Set<string>()
   const directFileCandidates = new Set<string>()
@@ -56,6 +59,9 @@ export function listFilesWithGit(
       const processPath = (path: string): boolean => {
         if (!path) {
           return false
+        }
+        if (!gitPaths.has(path) && !directoryPaths.has(path)) {
+          inventoryBudget.record(path)
         }
         if (path.endsWith('/')) {
           directoryPaths.add(path)
@@ -126,7 +132,18 @@ export function listFilesWithGit(
         let start = 0
         let idx = buf.indexOf('\0', start)
         while (idx !== -1) {
-          if (processPath(buf.substring(start, idx))) {
+          let atLimit: boolean
+          try {
+            atLimit = processPath(buf.substring(start, idx))
+          } catch (error) {
+            killSpawnedRipgrepProcess(child)
+            rejectPass(error instanceof Error ? error : new FileInventoryCapacityError())
+            killSurvivors('git file inventory capacity exceeded')
+            gitPaths.clear()
+            directoryPaths.clear()
+            return
+          }
+          if (atLimit) {
             buf = ''
             finishAtLimit()
             return
@@ -216,6 +233,9 @@ export function listFilesWithGit(
     // Why: ignored files are supplementary — a failed or timed-out ignored
     // pass must not discard the primary listing the user actually needs.
     runGitLsFiles(ignoredPass).catch((err: Error) => {
+      if (err instanceof FileInventoryCapacityError) {
+        throw err
+      }
       if (!signal?.aborted) {
         console.warn(
           '[relay quick-open] git ignored-file pass failed; keeping primary results:',
@@ -242,6 +262,12 @@ export function listFilesWithGit(
       })
       // Why: directory placeholders are expanded after Git exits; restore
       // Git's path order for empty queries and fuzzy-score ties over SSH.
+      if (maxResults === undefined) {
+        const outputBudget = new FileInventoryBudget()
+        for (const path of files) {
+          outputBudget.record(path)
+        }
+      }
       return files.sort().slice(0, maxResults)
     })
     .catch((err) => {

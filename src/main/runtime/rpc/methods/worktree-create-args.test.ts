@@ -54,4 +54,28 @@ describe('buildManagedWorktreeCreateArgs', () => {
       }).lineage
     ).toMatchObject({ parentWorkspaceOrigin: 'manual' })
   })
+
+  it('lets a person-driven create fall back to a local base, but not an automation run', () => {
+    expect(build({ repo: 'id:repo-1', name: 'feature' })).toMatchObject({
+      allowLocalBaseFallback: true
+    })
+    const automationRun = buildManagedWorktreeCreateArgs(
+      WorktreeCreate.parse({ repo: 'id:repo-1', name: 'nightly' }),
+      {
+        ...PROVENANCE,
+        automationProvenance: {
+          kind: 'created-by-automation',
+          automationId: 'automation-1',
+          automationNameSnapshot: 'Nightly',
+          automationRunId: 'run-1',
+          automationRunTitleSnapshot: 'Nightly run',
+          createdAt: 1,
+          executionTargetType: 'local',
+          executionTargetId: 'local',
+          projectId: 'repo-1'
+        }
+      }
+    )
+    expect(automationRun).not.toHaveProperty('allowLocalBaseFallback')
+  })
 })

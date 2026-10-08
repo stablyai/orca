@@ -7,6 +7,7 @@ import {
 import { attachEditorAutosaveController } from '../components/editor/editor-autosave-controller'
 import { registerPendingEditorFlush } from '../components/editor/editor-pending-flush'
 import { useAppStore } from '../store'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { attachMobileMarkdownBridge } from './mobile-markdown-bridge'
 import {
   cleanupMobileMarkdownBridgeHarness,
@@ -59,6 +60,56 @@ describe('mobile markdown bridge', () => {
       })
     } finally {
       unregisterFlush()
+      detach()
+    }
+  })
+
+  it('reads a restored floating-workspace tab for a paired client as user-named', async () => {
+    useAppStore.getState().openFile({
+      filePath: '/Users/me/notes.md',
+      relativePath: 'notes.md',
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      language: 'markdown',
+      mode: 'edit'
+    })
+    const tabId = useAppStore.getState().openFiles[0]?.id ?? ''
+    const readFile = vi.fn().mockResolvedValue({ content: '# notes', isBinary: false })
+    setupWindow({ readFile })
+    const detach = attachMobileMarkdownBridge()
+
+    try {
+      const response = await sendRequest({
+        id: 'read-floating',
+        operation: 'read',
+        worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+        tabId
+      })
+
+      expect(response).toMatchObject({ ok: true, result: { content: '# notes', source: 'file' } })
+      expect(readFile).toHaveBeenCalledWith(
+        expect.objectContaining({ filePath: '/Users/me/notes.md', access: { kind: 'user-file' } })
+      )
+    } finally {
+      detach()
+    }
+  })
+
+  it('reads a project tab for a paired client inside its root', async () => {
+    openMarkdownFile()
+    const readFile = vi.fn().mockResolvedValue({ content: 'disk', isBinary: false })
+    setupWindow({ readFile })
+    const detach = attachMobileMarkdownBridge()
+
+    try {
+      await sendRequest({
+        id: 'read-project',
+        operation: 'read',
+        worktreeId: 'wt-1',
+        tabId: 'tab-md'
+      })
+
+      expect(readFile.mock.calls[0]?.[0]).not.toHaveProperty('access')
+    } finally {
       detach()
     }
   })

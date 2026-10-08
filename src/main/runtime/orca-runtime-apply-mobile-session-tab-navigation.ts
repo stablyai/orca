@@ -40,7 +40,7 @@ export class OrcaRuntimeWithApplyMobileSessionTabNavigation extends OrcaRuntimeW
       }
       for (const id of ids) {
         const projected = this.clientSessionTabSelections.activate(
-          this.withClientHostedPagesHold(snapshot, id),
+          this.withSessionTabsHolds(snapshot, id),
           id,
           activeTabId
         )
@@ -52,7 +52,7 @@ export class OrcaRuntimeWithApplyMobileSessionTabNavigation extends OrcaRuntimeW
     } else if (clientNavigationId) {
       // Why: follow-host still starts as caller navigation; the host is an additional target, not a replacement owner.
       callerSnapshot = this.clientSessionTabSelections.activate(
-        this.withClientHostedPagesHold(snapshot, clientNavigationId),
+        this.withSessionTabsHolds(snapshot, clientNavigationId),
         clientNavigationId,
         activeTabId
       )

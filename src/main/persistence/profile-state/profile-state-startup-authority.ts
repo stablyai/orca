@@ -23,7 +23,7 @@ export class ProfileStateStartupAuthorityError extends Error {
 
   constructor() {
     super(
-      'orcad requires SQLite database and backup support. Launch through its bundled Bun runtime.'
+      'orcad requires SQLite database and backup support. Launch it through its pinned Node runtime.'
     )
     this.name = 'ProfileStateStartupAuthorityError'
   }

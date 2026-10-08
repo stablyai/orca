@@ -3,6 +3,7 @@ import type { OnMount } from '@monaco-editor/react'
 import { useAppStore } from '@/store'
 import { registerFileSearchSelectedTextProvider } from '@/lib/file-search-selection'
 import { syncContentOnMount } from './monaco-content-sync'
+import { toEditorModelUri } from './editor-model-uri'
 import {
   beginProgrammaticContentSync,
   endProgrammaticContentSync
@@ -24,6 +25,7 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
   const {
     fileId,
     filePath,
+    modelOwnerKey,
     viewStateKey,
     viewStateId,
     worktreeId,
@@ -103,7 +105,8 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
       updateMarkdownCompletionDocuments()
 
       // Why: see contentRef — reconcile the retained model to the current prop before user interaction (surfaces edits made while unmounted).
-      beginProgrammaticContentSync(filePath)
+      const modelKey = toEditorModelUri(filePath, modelOwnerKey)
+      beginProgrammaticContentSync(modelKey)
       isApplyingProgrammaticContentRef.current = true
       try {
         const didSyncOnMount = syncContentOnMount(
@@ -116,7 +119,7 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
         }
       } finally {
         isApplyingProgrammaticContentRef.current = false
-        endProgrammaticContentSync(filePath)
+        endProgrammaticContentSync(modelKey)
       }
 
       setupCopy(editorInstance, monaco, filePath, propsRef)
@@ -219,6 +222,7 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
       setupCopy,
       fileId,
       filePath,
+      modelOwnerKey,
       setEditorCursorLine,
       updateMarkdownCompletionDocuments,
       viewStateKey,

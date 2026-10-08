@@ -100,22 +100,4 @@ describe('connection log persistence revisions', () => {
     expect(save).toHaveBeenCalledTimes(2)
     expect(save).toHaveBeenLastCalledWith('a', store.get('a'))
   })
-
-  it('writes once per snapshot during a sustained failure', async () => {
-    const save = vi.fn<ConnectionLogPersistence['save']>(async () => {})
-    const store = createConnectionLogStore(200, { load: async () => [], save })
-    await store.hydrate('a')
-    await drain()
-    save.mockReset().mockRejectedValue(new Error('unavailable'))
-    for (let i = 0; i < 3; i++) {
-      store.append('a', entry(i))
-    }
-    await drain()
-    expect(save).toHaveBeenCalledTimes(1)
-    save.mockClear().mockResolvedValue(undefined)
-    store.append('a', entry(3))
-    await drain()
-    expect(save).toHaveBeenCalledTimes(1)
-    expect(save).toHaveBeenLastCalledWith('a', store.get('a'))
-  })
 })

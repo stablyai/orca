@@ -1,5 +1,6 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithResolveTerminalPane } from './orca-runtime-resolve-terminal-pane'
+import { wrapTerminalBracketedPasteText } from '../../shared/terminal-bracketed-paste-text'
 import { PROVEN_ABSENT_LEAF_PTY_TTL_MS } from './orca-runtime-core'
 import { pruneExpiredProvenAbsentLeafPtyVerdicts } from './proven-absent-leaf-pty-verdicts'
 import type { RuntimeTerminalSend } from '../../shared/runtime-types'
@@ -105,6 +106,7 @@ export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithReso
       afterWrite?: (ptyId: string) => void | Promise<void>
       suffixFailureError?: string
       inputKind: TerminalInputKind
+      requireWriteSettlement?: true
     }
   ): Promise<RuntimeTerminalSend> {
     const pty = this.getLivePtyForHandle(handle)
@@ -117,11 +119,20 @@ export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithReso
         throw new Error('invalid_terminal_send')
       }
       await assertTerminalInputWithinLimitWithYield(action.text)
-      await this.writeTerminalAction(pty.pty.ptyId, action, payload, options)
+      const writeSettlement = await this.writeTerminalAction(
+        pty.pty.ptyId,
+        action,
+        payload,
+        options
+      )
       return {
         handle,
-        accepted: true,
-        bytesWritten: Buffer.byteLength(payload, 'utf8')
+        accepted: !writeSettlement || writeSettlement.outcome === 'accepted',
+        ...(writeSettlement ? { writeSettlement } : {}),
+        bytesWritten:
+          !writeSettlement || writeSettlement.outcome === 'accepted'
+            ? Buffer.byteLength(payload, 'utf8')
+            : 0
       }
     }
 
@@ -142,12 +153,16 @@ export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithReso
       throw new Error('terminal_not_writable')
     }
 
-    await this.writeTerminalAction(leaf.ptyId, action, payload, options)
+    const writeSettlement = await this.writeTerminalAction(leaf.ptyId, action, payload, options)
 
     return {
       handle,
-      accepted: true,
-      bytesWritten: Buffer.byteLength(payload, 'utf8')
+      accepted: !writeSettlement || writeSettlement.outcome === 'accepted',
+      ...(writeSettlement ? { writeSettlement } : {}),
+      bytesWritten:
+        !writeSettlement || writeSettlement.outcome === 'accepted'
+          ? Buffer.byteLength(payload, 'utf8')
+          : 0
     }
   }
 
@@ -158,6 +173,10 @@ export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithReso
   ): Promise<RuntimeTerminalSend> {
     // Why the consuming agent: the foreground process reads the bytes; launchAgent covers startup.
     const payloadFor = (ptyId: string): string => {
+      // Why: a launch prompt replaced the desktop's draft paste, so it sends that paste's bytes.
+      if (options.inputKind === 'launch') {
+        return wrapTerminalBracketedPasteText(prompt)
+      }
       const pty = this.ptysById.get(ptyId)
       const agent = pty?.foregroundAgent ?? pty?.launchAgent
       return buildAgentPromptPasteBytes(

@@ -131,6 +131,7 @@ export function useHostScreenController({
     search: state.search,
     groupMode: state.groupMode,
     pinnedIds: state.pinnedIds,
+    showPinnedInGroups: state.showPinnedInGroups,
     repoIdsByName: state.repoIdsByName,
     repoColorsByName: state.repoColorsByName,
     collapsedGroups: state.collapsedGroups,

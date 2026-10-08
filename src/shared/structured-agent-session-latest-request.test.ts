@@ -24,13 +24,21 @@ import { projectStructuredAgentSessionStatusSummary } from './structured-agent-s
 
 const START_FAILURE = 'Claude is not signed in.'
 
-function userEntry(clientMessageId: string, sequence: number): AgentJournalRenderItem {
+/** `intoTurn` names the turn the message's handover delivered it into — a steer. */
+function userEntry(
+  clientMessageId: string,
+  sequence: number,
+  intoTurn?: string
+): AgentJournalRenderItem {
   return {
     itemId: agentJournalSubmissionKey(clientMessageId),
     revision: 0,
     sequence,
     observedAt: sequence,
-    body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: clientMessageId }] }
+    body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: clientMessageId }] },
+    turnScope: intoTurn
+      ? { kind: 'turn', turnItemId: `codex:turn:${intoTurn}` }
+      : { kind: 'thread' }
   }
 }
 
@@ -183,7 +191,7 @@ const ROWS: Row[] = [
     items: [
       userEntry('m1', 1),
       turn('t1', 2, { state: 'completed', outcome: 'success', completedAt: 50 }),
-      userEntry('steer', 3)
+      userEntry('steer', 3, 't1')
     ],
     submissions: [
       sent('m1', { dispatchState: 'accepted' }),
@@ -310,4 +318,38 @@ describe('the sidebar verdict agrees with the rejection classifier', () => {
       expect(latestStructuredAgentSessionRequest([userEntry('m1', 1)], [submission])).toBeNull()
     }
   )
+})
+
+describe('the assistant line plain-text surfaces show', () => {
+  function message(
+    itemId: string,
+    sequence: number,
+    role: 'user' | 'assistant',
+    text: string
+  ): AgentJournalRenderItem {
+    return {
+      itemId,
+      revision: 0,
+      sequence,
+      observedAt: sequence,
+      body: { kind: 'message', role, blocks: [{ type: 'text', text }] }
+    }
+  }
+
+  it('keeps a visual line out of the preview every status reader shows', () => {
+    const items = [
+      message('ask', 1, 'user', 'chart it'),
+      message(
+        'said',
+        2,
+        'assistant',
+        'p95 is highest in ap-south.\n\n::orca-visual{file="latency.html" title="p95"}'
+      ),
+      message('only-visual', 3, 'assistant', '::orca-visual{file="table.html"}')
+    ]
+    // A reply that is nothing but a visual leaves the turn's earlier prose as the preview.
+    expect(projectStructuredAgentSessionStatusSummary(items).lastAssistantMessage).toBe(
+      'p95 is highest in ap-south.'
+    )
+  })
 })

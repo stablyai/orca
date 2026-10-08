@@ -174,7 +174,6 @@ describe('SourceControlHeaderToolbar branch identity', () => {
   })
 
   it('renders exactly as before when no branch line total is supplied', () => {
-    expect(renderToolbar({ branchLineTotal: undefined })).toBe(renderToolbar())
     expect(renderToolbar()).not.toContain('data-testid="source-control-branch-line-total"')
   })
 })

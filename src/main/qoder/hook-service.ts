@@ -36,3 +36,16 @@ export const qoderHookService = new ClaudeHookService({
   },
   hookPlan: QODER_MANAGED_HOOK_PLAN
 })
+
+export const qoderCnHookService = new ClaudeHookService({
+  agent: 'qoder-cn',
+  source: 'qoder-cn',
+  displayName: 'Qoder CLI China',
+  settings: {
+    configDirName: '.qoder-cn',
+    scriptBaseName: 'qoder-cn-hook',
+    usesWindowsCompatLauncher: true,
+    windowsHookShell: 'powershell'
+  },
+  hookPlan: QODER_MANAGED_HOOK_PLAN
+})

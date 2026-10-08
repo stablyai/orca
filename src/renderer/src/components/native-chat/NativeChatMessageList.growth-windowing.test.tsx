@@ -107,7 +107,6 @@ describe('transcript follow ownership across growth and appends', () => {
         session={session(transcriptAt(step))}
         isWorking
         expandSignal={false}
-        fontScale={1}
         workingStartedAt={TURN_STARTED_AT}
       />
     )
@@ -454,6 +453,7 @@ describe('transcript follow ownership across growth and appends', () => {
     const scheduleSpy = vi.spyOn(window, 'requestAnimationFrame')
     const scrollToSpy = vi.spyOn(scroller, 'scrollTo')
     const readingAt = 2000
+    fireEvent.wheel(scroller, { deltaY: -100 })
     scroller.scrollTop = readingAt
     fireEvent.scroll(scroller)
     expect(scrollToSpy).toHaveBeenLastCalledWith({ behavior: 'auto', top: readingAt })

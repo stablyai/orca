@@ -83,8 +83,20 @@ beforeEach(() => {
   fake.cursorUsage = { updatedAt: 0 }
   Object.assign(window, {
     api: {
+      opencodeGoCredentials: {
+        getStatus: vi.fn(async () => ({ apiKeyConfigured: false })),
+        saveApiKey: vi.fn(async () => ({ apiKeyConfigured: true })),
+        clearApiKey: vi.fn(async () => ({ apiKeyConfigured: false }))
+      },
       minimaxCredentials: {
         getStatus: vi.fn(async () => ({ cookieConfigured: false, apiKeyConfigured: false }))
+      },
+      zcodePlanCredentials: {
+        getStatus: vi.fn(async () => ({
+          apiKeyConfigured: false,
+          zcodeCliConfigured: false,
+          apiKeyProtection: null
+        }))
       },
       codexConfigSync: {
         status: vi.fn(async () => ({

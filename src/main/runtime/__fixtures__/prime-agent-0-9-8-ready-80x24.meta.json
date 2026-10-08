@@ -1,0 +1,15 @@
+{
+  "capturedAt": "2026-09-30T19:18:39.983Z",
+  "platform": "darwin",
+  "command": [
+    "prime-agent",
+    "--provider",
+    "openrouter",
+    "--model",
+    "inclusionai/ling-3.0-flash-sante:free"
+  ],
+  "cols": 80,
+  "rows": 24,
+  "note": "prime-agent 0.9.8, macOS, OpenRouter inclusionai/ling-3.0-flash-sante:free, isolated HOME, later launch at 80x24, settled empty composer",
+  "exitCode": 129
+}

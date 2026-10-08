@@ -53,6 +53,7 @@ async function execute(request: RelayAiVaultServiceRequest): Promise<void> {
       hostPlatform: init.hostPlatform,
       limit: request.params.limit,
       unlimited: request.params.unlimited,
+      includeAntigravityIdeSessions: request.params.includeAntigravityIdeSessions,
       scopePaths: request.params.scopePaths,
       signal: controller.signal
     })
@@ -98,6 +99,9 @@ process.on('message', (raw: RelayAiVaultServiceParentMessage) => {
     return
   }
   if (raw?.type === 'cancel') {
+    if (!pending.has(raw.id)) {
+      return
+    }
     cancelled.add(raw.id)
     controllers.get(raw.id)?.abort()
     return

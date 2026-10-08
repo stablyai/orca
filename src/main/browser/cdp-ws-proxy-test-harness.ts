@@ -25,6 +25,7 @@ export type MockWebContents = {
   webContents: {
     debugger: MockDebugger
     isDestroyed: () => boolean
+    isCrashed: () => boolean
     focus: Mock<() => void>
     printToPDF: Mock<() => Promise<Buffer>>
     reload: Mock<() => void>
@@ -72,6 +73,7 @@ export function createMockWebContents(): MockWebContents {
     webContents: {
       debugger: debuggerObj,
       isDestroyed: () => destroyed,
+      isCrashed: () => false,
       focus: vi.fn(),
       printToPDF: vi.fn(async () => Buffer.from('%PDF-test')),
       reload: vi.fn(),

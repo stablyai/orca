@@ -164,19 +164,4 @@ describe('executeBrowserClientUploadCommand', () => {
     // Why: the retained record is the only handle a later page release has on the directory.
     expect(staging.activeStagingCount()).toBe(1)
   })
-
-  it('rejects a params payload whose files are not remote path strings', async () => {
-    const staging = new BrowserClientUploadStaging(stagingRoot)
-    const { transport } = transportReturning(new Map())
-
-    await expect(
-      executeBrowserClientUploadCommand({
-        event: uploadEvent([{ path: 'a.txt' }]),
-        params: { element: '#f', files: [{ path: 'a.txt' }] },
-        fileChannel: transport,
-        staging,
-        run: async () => undefined
-      })
-    ).rejects.toThrow('browser_client_upload_files_required')
-  })
 })

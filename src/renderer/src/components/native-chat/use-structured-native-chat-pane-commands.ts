@@ -1,7 +1,10 @@
-import { useCallback, type KeyboardEventHandler, type RefObject } from 'react'
+import { useCallback, useMemo, type KeyboardEventHandler, type RefObject } from 'react'
 import { useAppStore } from '@/store'
 import { formatShortcutLabel } from '@/hooks/useShortcutLabel'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { isOrcaSessionId } from '../../../../shared/orca-session-address'
+import { resolveStructuredSessionOrcaSessionId } from '../../runtime/structured-session-orca-session-id'
+import type { RuntimeClientTarget } from '../../runtime/runtime-rpc-client'
 import type { NativeChatComposerHandle } from './NativeChatComposer'
 import { useNativeChatPasteBridge } from './use-native-chat-paste-bridge'
 import {
@@ -18,17 +21,34 @@ export function useStructuredNativeChatPaneCommands({
   isVisible,
   rootRef,
   composerRef,
-  terminalPaneActions
+  questionAnswerInputRef,
+  terminalPaneActions,
+  sessionId,
+  target
 }: {
   tabId: string
   groupId?: string
   isVisible: boolean
   rootRef: RefObject<HTMLDivElement | null>
   composerRef: RefObject<NativeChatComposerHandle | null>
+  questionAnswerInputRef: RefObject<HTMLInputElement | null>
   terminalPaneActions?: Omit<NativeChatContextMenuActions, 'onPaste'>
+  sessionId: string
+  target: RuntimeClientTarget
 }) {
   const keybindings = useAppStore((state) => state.keybindings)
-  const pasteClipboardIntoComposer = useNativeChatPasteBridge({ rootRef, composerRef })
+  const resolveOrcaSessionId = useMemo(
+    () =>
+      isOrcaSessionId(sessionId)
+        ? () => resolveStructuredSessionOrcaSessionId(target, sessionId)
+        : undefined,
+    [sessionId, target]
+  )
+  const pasteClipboardIntoComposer = useNativeChatPasteBridge({
+    rootRef,
+    composerRef,
+    questionAnswerInputRef
+  })
   const contextMenu = useNativeChatContextMenu({
     rootRef,
     actions: {
@@ -37,6 +57,8 @@ export function useStructuredNativeChatPaneCommands({
       onPaste: pasteClipboardIntoComposer
     },
     enabled: isVisible,
+    resolveOrcaSessionId,
+    composerRef,
     showTerminalPaneActions: terminalPaneActions !== undefined,
     splitShortcutLabels: {
       right: formatShortcutLabel('terminal.splitRight', keybindings),
