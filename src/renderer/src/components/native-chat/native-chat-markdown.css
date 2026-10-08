@@ -52,3 +52,22 @@
   :is(h1, h2, h3, h4, h5, h6, [role='heading'], strong, a, code, pre) {
   color: inherit;
 }
+
+/* Why: tables, code, and diagrams in assistant replies may grow past the prose
+   column up to the transcript width (the @container around the column), centered
+   on the column; blocks that fit keep the column width. */
+.native-chat-markdown-wide-blocks
+  > :is(div:has(> table), [data-native-chat-code-block], div:has(> .mermaid-block)) {
+  position: relative;
+  left: 50%;
+  width: max-content;
+  min-width: 100%;
+  max-width: calc(100cqw - 2rem);
+  translate: -50% 0;
+}
+
+/* Why: `anywhere` lets table layout squeeze short cells ("JavaScript", "1995")
+   into one-letter columns once the table has room to grow; whole words win. */
+.native-chat-markdown-wide-blocks table {
+  overflow-wrap: break-word;
+}

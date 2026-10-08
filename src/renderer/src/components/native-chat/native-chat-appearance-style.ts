@@ -9,7 +9,8 @@ import { getSystemPrefersDark, isTerminalBackgroundLight } from '@/lib/terminal-
 import { useSystemPrefersDark } from '../terminal-pane/use-system-prefers-dark'
 
 export const NATIVE_CHAT_APPEARANCE_ROOT_CLASS = 'native-chat-appearance bg-chat-canvas'
-export const NATIVE_CHAT_TRANSCRIPT_OUTER_CLASS = 'px-3 pt-10 pb-4 sm:px-4'
+// Why: a query container so wide markdown blocks can size against the whole transcript.
+export const NATIVE_CHAT_TRANSCRIPT_OUTER_CLASS = '@container px-3 pt-10 pb-4 sm:px-4'
 export const NATIVE_CHAT_TRANSCRIPT_COLUMN_CLASS =
   'mx-auto flex w-full max-w-(--chat-content-max-width) flex-col gap-5 px-[5px]'
 
