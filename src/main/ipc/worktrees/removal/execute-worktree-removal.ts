@@ -3,6 +3,10 @@ import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import { assertRemovalHostMatchesRepoRow } from '../repo-host-ownership'
 import { isFolderRepo } from '../../../../shared/repo-kind'
+import {
+  isPerforceCopyWorktreeIdForRepo,
+  PERFORCE_COPY_GENERIC_REMOVAL_MESSAGE
+} from '../../../../shared/worktree/perforce-copy-worktree'
 import { assertWorktreeUnlockedForRemoval } from '../../../../shared/worktree/removal'
 import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
 import { getLocalProjectWorktreeGitOptions } from '../../../project-runtime-git-options'
@@ -46,6 +50,9 @@ export async function executeWorktreeRemoval(
   removalHostId: ExecutionHostId
 ): Promise<RemoveWorktreeResult> {
   const { mainWindow, store, runtime } = context
+  if (isFolderRepo(repo) && isPerforceCopyWorktreeIdForRepo(repo, args.worktreeId)) {
+    throw new Error(PERFORCE_COPY_GENERIC_REMOVAL_MESSAGE)
+  }
   if (isFolderRepo(repo)) {
     return removeFolderWorkspace(context, args, repo, repoId, removalHostId)
   }

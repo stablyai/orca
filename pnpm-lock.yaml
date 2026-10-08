@@ -166,7 +166,7 @@ overrides:
   monaco-editor>dompurify: 3.4.16
 
 patchedDependencies:
-  '@vscode/windows-process-tree@0.8.0': 9da74aa3d17243aa53dcdc95c9f06e97437e7fbccf098aeb017579e2d24cbac2
+  '@vscode/windows-process-tree@0.8.0': 16ad3c26e6d18d4b4a3a430b6210c076936e1f12c7d8bce92b51a671c8cc7883
   '@xterm/addon-image@0.10.0-beta.300': e5254a46d6f57bef4a8a19683bfa685afa0ca0127545aea53b54a48104ca3562
   '@xterm/addon-ligatures@0.11.0-beta.300': 47405b9994b5acf1b4e90b49250358c1ca03649854d59560e7732b72fe336920
   '@xterm/addon-search@0.17.0-beta.300': eee5338dd2621ece46e79c61ec06766cd7fadaf79ffdb24e2a8ab68e97ef31f0
@@ -623,7 +623,7 @@ importers:
         version: link:native/windows-registry
       '@vscode/windows-process-tree':
         specifier: 0.8.0
-        version: 0.8.0(patch_hash=9da74aa3d17243aa53dcdc95c9f06e97437e7fbccf098aeb017579e2d24cbac2)
+        version: 0.8.0(patch_hash=16ad3c26e6d18d4b4a3a430b6210c076936e1f12c7d8bce92b51a671c8cc7883)
       sherpa-onnx-darwin-arm64:
         specifier: 1.12.37
         version: 1.12.37
@@ -11044,7 +11044,7 @@ snapshots:
 
   '@vscode/ripgrep-universal@1.18.0': {}
 
-  '@vscode/windows-process-tree@0.8.0(patch_hash=9da74aa3d17243aa53dcdc95c9f06e97437e7fbccf098aeb017579e2d24cbac2)':
+  '@vscode/windows-process-tree@0.8.0(patch_hash=16ad3c26e6d18d4b4a3a430b6210c076936e1f12c7d8bce92b51a671c8cc7883)':
     dependencies:
       node-addon-api: 7.1.0
     optional: true

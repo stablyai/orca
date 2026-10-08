@@ -14,6 +14,16 @@ import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import type { LocalFileAccess } from '../../../shared/local-file-access'
 import { localAccess } from './runtime-file-read-client'
 
+// Why: loaded lazily because editor store slices import this client, and the checkout reads
+// '@/store'; a static import makes `createEditorSlice` undefined when a slice loads first.
+async function checkoutPerforceFileBeforeWrite(
+  context: RuntimeFileOperationArgs,
+  filePath: string
+): Promise<void> {
+  const checkout = await import('@/lib/perforce-checkout-before-write')
+  await checkout.checkoutPerforceFileBeforeWrite(context, filePath)
+}
+
 export async function readRuntimeDirectory(
   context: RuntimeFileOperationArgs,
   dirPath: string,
@@ -41,6 +51,7 @@ export async function writeRuntimeFile(
   const remoteArgs = getRemoteFileArgs(context, filePath)
   if (!remoteArgs) {
     assertLocalFilesystemFallbackAllowed(context)
+    await checkoutPerforceFileBeforeWrite(context, filePath)
     await window.api.fs.writeFile(
       withSshMutationExpectation(context, {
         filePath,
@@ -51,6 +62,7 @@ export async function writeRuntimeFile(
     )
     return
   }
+  await checkoutPerforceFileBeforeWrite(context, filePath)
   await callRuntimeFileMutation(
     remoteArgs.target,
     'files.write',

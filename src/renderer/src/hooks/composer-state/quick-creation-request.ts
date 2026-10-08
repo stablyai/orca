@@ -17,6 +17,8 @@ export type QuickCreationRequestInput = {
   workspaceRunContext: WorktreeCreationRequest['workspaceRunContext']
   workspaceName: string
   nameWasGenerated: boolean
+  /** Set only for folder projects whose "Use worktree" option is on. */
+  perforceCopy?: WorktreeCreationRequest['perforceCopy']
   displayName: string | undefined
   displayNameKind?: 'generated' | 'user'
   selectedRepoIsGit: boolean
@@ -66,6 +68,7 @@ export function buildQuickCreationRequest(
     ...(input.workspaceRunContext ? { workspaceRunContext: input.workspaceRunContext } : {}),
     name: input.workspaceName,
     ...(input.nameWasGenerated ? { nameWasGenerated: true } : {}),
+    ...(!input.selectedRepoIsGit && input.perforceCopy ? { perforceCopy: input.perforceCopy } : {}),
     ...(input.displayName ? { displayName: input.displayName } : {}),
     ...(input.displayNameKind ? { displayNameKind: input.displayNameKind } : {}),
     ...(input.selectedRepoIsGit && input.baseBranch ? { baseBranch: input.baseBranch } : {}),

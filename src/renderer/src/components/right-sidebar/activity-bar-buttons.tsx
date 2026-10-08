@@ -21,6 +21,8 @@ export type ActivityBarItem = {
   shortcut: string
   /** When true, hidden for non-git (folder-mode) repos. */
   gitOnly?: boolean
+  /** When true, stays visible for folder repos that are Perforce workspaces. */
+  perforceCapable?: boolean
   /** When true, shown only for folder workspaces. */
   folderOnly?: boolean
   /** When true, shown only for worktrees that belong to an SSH repo. */

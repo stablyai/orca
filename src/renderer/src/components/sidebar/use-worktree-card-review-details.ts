@@ -6,6 +6,7 @@ import { getHostedReviewCacheKey } from '@/store/slices/hosted-review-cache-iden
 import { hostedReviewInfoFromGitHubPRInfo } from '../../../../shared/hosted-review-github'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import { isFolderRepo } from '../../../../shared/repo-kind'
+import { streamShortName } from '../../../../shared/perforce/workspace-copy/workspace-copy-name-rules'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
   getWorktreeCardPrDisplay,
@@ -35,13 +36,17 @@ export function useWorktreeCardReviewDetails({
   // Why: project groups gate folder workspaces, so folder paths stay hidden from identity surfaces until that capability exists.
   const hasProjectGroups = projectGroups.length > 0
   const branchIdentityDisplay = !isFolder && branch.length > 0 ? branch : undefined
+  // A Perforce copy's stream is its branch; it stays out of `branch` so no PR lookup runs for it.
+  const perforceStreamIdentityDisplay =
+    isFolder && worktree.perforceStream ? streamShortName(worktree.perforceStream) : undefined
   const folderPathIdentityDisplay =
     isFolder && hasProjectGroups && worktree.path.trim().length > 0 ? worktree.path : undefined
-  const identityDisplay = branchIdentityDisplay ?? folderPathIdentityDisplay
+  const identityDisplay =
+    branchIdentityDisplay ?? perforceStreamIdentityDisplay ?? folderPathIdentityDisplay
   const hasPathIdentityEnabled = cardProps.includes('branch')
   const showIdentityInNewCard = newCardStyle && hasPathIdentityEnabled && Boolean(identityDisplay)
   const folderMetaRowContent = newCardStyle
-    ? hasPathIdentityEnabled && Boolean(folderPathIdentityDisplay)
+    ? hasPathIdentityEnabled && Boolean(perforceStreamIdentityDisplay ?? folderPathIdentityDisplay)
     : isFolder
   const hostedReviewCacheKey =
     repo && branch

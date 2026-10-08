@@ -24,6 +24,7 @@ import {
 } from './settings-setup-workflow-section-renderers'
 import {
   renderGitSettingsSection,
+  renderPerforceSettingsSection,
   renderTasksSettingsSection
 } from './settings-git-task-section-renderers'
 import {
@@ -131,6 +132,7 @@ export function renderSettingsPage(context: SettingsRenderContext): React.JSX.El
                 {renderShareSkillsSettingsSection(context)}
                 {renderSessionHistorySettingsSection(context)}
                 {renderGitSettingsSection(context)}
+                {renderPerforceSettingsSection(context)}
                 {renderTasksSettingsSection(context)}
                 {renderTerminalSettingsSection(context)}
                 {renderQuickCommandsSettingsSection(context)}

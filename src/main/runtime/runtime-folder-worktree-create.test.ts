@@ -4,6 +4,29 @@ import { describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../shared/repo-types'
 import { createRuntimeFolderWorktree } from './runtime-folder-worktree-create'
 
+const perforceCopies = vi.hoisted(() => {
+  const summary = {
+    name: 'task',
+    copyRoot: '/folder.wt/task',
+    stream: '//g/dev_wt_task',
+    streamChoice: 'child',
+    space: { copiedBytes: 0, usedBytes: 0, cloned: true, freeBytesAfter: 0 },
+    warnings: [],
+    unityVersionControlBinding: null
+  }
+  return {
+    summary,
+    createRuntimePerforceCopy: vi.fn(async () => ({
+      worktreeId: 'repo-1::/folder.wt/task',
+      summary
+    }))
+  }
+})
+
+vi.mock('./runtime-perforce-copy-commands', () => ({
+  createRuntimePerforceCopy: perforceCopies.createRuntimePerforceCopy
+}))
+
 type CreateArgs = Parameters<typeof createRuntimeFolderWorktree>[0]
 
 const repo: Repo = {
@@ -80,5 +103,38 @@ describe('a folder workspace create with a startup agent', () => {
     const options = await startupTerminalOptions()
     expect(options).not.toHaveProperty('tabId')
     expect(options).not.toHaveProperty('leafId')
+  })
+})
+
+describe('a workspace create in a Perforce project', () => {
+  it('becomes a copy on its own stream instead of sharing the project folder', async () => {
+    const { deps } = createDeps()
+    const result = await createRuntimeFolderWorktree({
+      request: {
+        repoSelector: `id:${repo.id}`,
+        name: 'task',
+        perforceCopy: { stream: { kind: 'child' }, settings: { copyMinFreeSpaceGb: 4 } }
+      },
+      repo,
+      deps
+    })
+    expect(perforceCopies.createRuntimePerforceCopy).toHaveBeenCalledWith(
+      repo,
+      { workspaceName: 'task', stream: { kind: 'child' }, settings: { copyMinFreeSpaceGb: 4 } },
+      { workspaceDir: '/ws', nestWorkspaces: false }
+    )
+    expect(result.worktree.id).toBe('repo-1::/folder.wt/task')
+    expect(result.perforceCopy).toBe(perforceCopies.summary)
+  })
+
+  it('shares the project folder when no copy was asked for', async () => {
+    perforceCopies.createRuntimePerforceCopy.mockClear()
+    const { deps } = createDeps()
+    await createRuntimeFolderWorktree({
+      request: { repoSelector: `id:${repo.id}`, name: 'task' },
+      repo,
+      deps
+    })
+    expect(perforceCopies.createRuntimePerforceCopy).not.toHaveBeenCalled()
   })
 })

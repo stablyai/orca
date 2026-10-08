@@ -24,6 +24,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
+import { PerforceCopyMenuItems } from '@/components/perforce-copies/PerforceCopyMenuItems'
 import { translate } from '@/i18n/i18n'
 import { getRepositoryIconSectionId } from '@/components/settings/repository-settings-targets'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
@@ -165,6 +166,7 @@ export function RepoHeaderProjectActionsMenu({
             {translate('auto.components.sidebar.WorktreeList.64e55f7f01', 'Remove from group')}
           </DropdownMenuItem>
         ) : null}
+        <PerforceCopyMenuItems repo={repo} />
         <DropdownMenuSeparator />
         <DropdownMenuItem variant="destructive" onSelect={() => actions.onRemoveProject(repo)}>
           <Trash2 className="size-3.5" />

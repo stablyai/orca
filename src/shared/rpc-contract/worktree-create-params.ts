@@ -56,6 +56,10 @@ export const WorktreeCreate = z
       .optional(),
     workspaceStatus: OptionalString,
     manualOrder: OptionalFiniteNumber,
+    /** For a Perforce project: the new workspace is a copy on the chosen stream; the host validates it. */
+    perforceCopy: z
+      .object({ stream: z.unknown().optional(), settings: z.unknown().optional() })
+      .optional(),
     sparseCheckout: z
       .object({
         directories: z.array(z.string()),

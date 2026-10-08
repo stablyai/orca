@@ -1,3 +1,4 @@
+import { DEFAULT_PERFORCE_SETTINGS } from './perforce/perforce-settings'
 import type { GlobalSettings } from './global-settings-types'
 import type { NotificationSettings } from './notification-settings-types'
 import type { VoiceSettings } from './speech-types'
@@ -146,6 +147,7 @@ export function buildDefaultSettings(args: {
     followSymlinkedDirectories: false,
     sourceControlViewMode: 'list',
     sourceControlGroupOrder: DEFAULT_SOURCE_CONTROL_GROUP_ORDER,
+    perforce: DEFAULT_PERFORCE_SETTINGS,
     sourceControlCompareAgainstUpstream: false,
     showTitlebarAppName: true,
     showTasksButton: true,

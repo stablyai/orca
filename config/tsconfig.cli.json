@@ -103,6 +103,7 @@
     "../src/main/windows-pty-root-identity.ts",
     "../src/main/windows/windows-process-table-cim-scan.ts",
     "../src/main/windows/windows-process-table-timeout-error.ts",
+    "../src/main/windows/windows-process-tree-unpatched-addon.ts",
     "../src/main/daemon/daemon-process-start-time.ts",
     "../src/main/daemon/daemon-process-identity-query.ts",
     "../src/main/startup/startup-diagnostics.ts",

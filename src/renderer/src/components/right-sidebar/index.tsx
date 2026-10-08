@@ -53,7 +53,8 @@ function RightSidebarInner(): React.JSX.Element {
     activeFolderWorkspaceKey,
     pluginSystemEnabled,
     pluginFetchStatus,
-    installedPluginTabKeys
+    installedPluginTabKeys,
+    redetectPerforce
   } = useRightSidebarActivityItems({ rightSidebarOpen })
   const { effectiveTab, selectActivityTab } = useRightSidebarTabRouting({
     visibleItems,
@@ -177,6 +178,7 @@ function RightSidebarInner(): React.JSX.Element {
             closeButton={closeButton}
             activityBarPosition={activityBarPosition}
             onChangeActivityBarPosition={setActivityBarPosition}
+            onDetectPerforce={redetectPerforce}
           />
         ) : (
           /* ── Side layout: static title header ── */
@@ -216,6 +218,7 @@ function RightSidebarInner(): React.JSX.Element {
           <ActivityBarPositionMenu
             currentPosition={activityBarPosition}
             onChangePosition={setActivityBarPosition}
+            onDetectPerforce={redetectPerforce}
           />
         </ContextMenu>
       )}

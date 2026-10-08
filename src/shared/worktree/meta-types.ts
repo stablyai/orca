@@ -77,6 +77,8 @@ export type WorktreeMeta = {
   /** Explicit marker stamped when Orca creates the worktree. */
   orcaCreatedAt?: number
   orcaCreationSource?: 'desktop' | 'runtime' | 'cli' | 'ssh'
+  /** Stream of a Perforce copy; shown where Git worktrees show their branch. */
+  perforceStream?: string
   /** Workspace layout active when Orca created the worktree. */
   orcaCreationWorkspaceLayout?: OrcaWorkspaceLayout
   /** User-assigned workspace board status for manual sidebar organization. */

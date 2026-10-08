@@ -12,6 +12,8 @@ import {
   mergeRuntimeFolderWorkspace
 } from './runtime-folder-workspace'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
+import { createRuntimePerforceCopy } from './runtime-perforce-copy-commands'
+import { invalidateAuthorizedRootsCache } from '../ipc/filesystem-auth'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { TerminalCreateOptions } from './runtime-terminal-contracts'
 import type {
@@ -58,7 +60,15 @@ export async function createRuntimeFolderWorktree(args: {
   const now = Date.now()
   const settings = deps.store.getSettings()
   const instanceId = randomUUID()
-  const worktreeId = getRuntimeFolderWorkspaceInstanceId(repo, instanceId)
+  // "Create workspace" in a Perforce project makes a copy on its own stream instead of sharing the folder.
+  const copy = request.perforceCopy
+    ? await createRuntimePerforceCopy(
+        repo,
+        { workspaceName: request.name, ...request.perforceCopy },
+        deps.store.getSettings()
+      )
+    : null
+  const worktreeId = copy?.worktreeId ?? getRuntimeFolderWorkspaceInstanceId(repo, instanceId)
   const displayNameRequest = resolveWorktreeCreateDisplayNameRequest(
     request.displayName,
     request.displayNameKind,
@@ -114,8 +124,13 @@ export async function createRuntimeFolderWorktree(args: {
     ...(args.createdWithAgent ? { createdWithAgent: args.createdWithAgent } : {}),
     ...(request.comment !== undefined ? { comment: request.comment } : {}),
     ...(request.manualOrder !== undefined ? { manualOrder: request.manualOrder } : {}),
-    ...(request.workspaceStatus !== undefined ? { workspaceStatus: request.workspaceStatus } : {})
+    ...(request.workspaceStatus !== undefined ? { workspaceStatus: request.workspaceStatus } : {}),
+    ...(copy ? { perforceStream: copy.summary.stream } : {})
   })
+  if (copy) {
+    // Why after the meta write: a copy's folder is an authorized root only once it is recorded.
+    invalidateAuthorizedRootsCache()
+  }
   const worktree = mergeRuntimeFolderWorkspace(repo, worktreeId, meta)
   deps.invalidateResolvedWorktrees()
   deps.notifyWorktreesChanged(repo.id)
@@ -204,6 +219,7 @@ export async function createRuntimeFolderWorktree(args: {
       }
     },
     ...(startupTerminal ? { startupTerminal } : {}),
-    ...(warning ? { warning } : {})
+    ...(warning ? { warning } : {}),
+    ...(copy ? { perforceCopy: copy.summary } : {})
   }
 }

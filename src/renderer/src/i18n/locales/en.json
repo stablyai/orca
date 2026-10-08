@@ -13567,7 +13567,8 @@
             "fc3095d2ed": "explorer",
             "aiVaultSessionHistory": "Agents",
             "folderWorkspaces": "Attached worktrees",
-            "parentPrChecks": "PR Checks"
+            "parentPrChecks": "PR Checks",
+            "detectPerforce": "Detect Perforce workspace"
           },
           "right": {
             "panel": {
@@ -19506,5 +19507,284 @@
     "unavailable": "Unable to play this media file. The file may be unavailable or use an unsupported codec.",
     "openFailed": "Could not open this file in the default app.",
     "openDefault": "Open in Default App"
+  },
+  "perforce": {
+    "ui": {
+      "changelistNumber": "Changelist {{id}}",
+      "editDescription": "Edit description",
+      "shelveFiles": "Shelve files",
+      "unshelveFiles": "Unshelve files",
+      "revertShelvedFiles": "Revert shelved files",
+      "deleteEmptyChangelist": "Delete empty changelist",
+      "revertTheShelvedFilesFirstPerforce": "Revert the shelved files first: Perforce cannot submit a changelist with both opened and shelved files",
+      "submitTheShelvedFiles": "Submit the shelved files",
+      "submitChange": "Submit change",
+      "copyChangelistNumber": "Copy changelist number",
+      "deleteChangelist": "Delete changelist",
+      "generate": "Generate",
+      "cancel": "Cancel",
+      "save": "Save",
+      "shelvedOpenedCounts": "Shelved: {{shelved}} · Opened: {{opened}}",
+      "moveToNewChangelist": "Move to new changelist",
+      "newChangelistEmptyDescription": "An empty changelist will be created with this description.",
+      "newChangelistMoveOneDescription": "1 file will be moved into a new changelist with this description.",
+      "newChangelistMoveManyDescription": "{{total}} files will be moved into a new changelist with this description.",
+      "changelistDescription": "Changelist description",
+      "generating": "Generating…",
+      "generateWithAi": "Generate with AI",
+      "createChangelist": "Create changelist",
+      "unshelveChangelist": "Unshelve changelist",
+      "restoreTheShelvedFilesOfAny": "Restore the shelved files of any changelist, including one shelved by another user.",
+      "shelvedChangelistNumber": "Shelved changelist number",
+      "eG12345": "e.g. 12345",
+      "into": "Into",
+      "defaultChangelist": "Default changelist",
+      "newChangelist": "New changelist",
+      "unshelve": "Unshelve",
+      "markForAdd": "Mark for add",
+      "openForEdit": "Open for edit",
+      "revertChanges": "Revert changes",
+      "openedForEdit": "Opened for edit: {{path}}",
+      "perforceCommandFailed": "Perforce command failed",
+      "noChangesToRevert": "No changes to revert in {{path}}",
+      "revertFileConfirm": "Revert changes to {{path}}? This cannot be undone.",
+      "saveNeedsOpenForEdit": "{{path}} is not opened for edit in Perforce. Open it for edit and save?",
+      "openForEditBeforeSaveTitle": "Open for edit in Perforce?",
+      "revertedFile": "Reverted: {{path}}",
+      "oneFile": "file",
+      "manyFiles": "{{total}} files",
+      "moveToExistingChangelist": "Move to existing changelist",
+      "shelveChanges": "Shelve changes",
+      "unshelveAChangelist": "Unshelve a changelist…",
+      "refresh": "Refresh",
+      "getLatestRevisionsP4Sync": "Get latest revisions (p4 sync)",
+      "loadingPerforceWorkspace": "Loading Perforce workspace…",
+      "createAnEmptyChangelistUsesThe": "Create an empty changelist (uses the description above)",
+      "moveToANewChangelistUses": "Move to a new changelist (uses the description above)",
+      "modifiedNotOpened": "Modified, not opened",
+      "openAll": "Open all",
+      "newFiles": "New files",
+      "addAll": "Add all",
+      "submitChange2": "Submit Change",
+      "generateDescriptionWithAi": "Generate description with AI",
+      "noPendingChanges": "No pending changes",
+      "openShelvedFile": "Open shelved file",
+      "unshelveFile": "Unshelve file",
+      "openFilesInThisChangelistFirst": "Open files in this changelist first.",
+      "shelfBackupDescription": "Shelf backup of changelist {{id}}",
+      "moveFilesToNewChangelist": "Move {{noun}} to new changelist…",
+      "openFile": "Open file"
+    },
+    "settings": {
+      "test-connection": {
+        "button": "Test connection",
+        "noWorkspace": "Open a workspace to test its connection.",
+        "title": "Test Connection",
+        "description": "Run p4 info for the current workspace to check the server, user, and client."
+      },
+      "new": {
+        "template": "Description template",
+        "templatePlaceholder": "Description template, e.g. [{user}] ",
+        "moveSelected": "Move selected files",
+        "empty": "Start empty"
+      },
+      "ai": {
+        "instructions": "Instructions",
+        "instructionsPlaceholder": "Extra instructions for the description, e.g. \"Start with the ticket id.\"",
+        "agent": "Agent",
+        "agentDescription": "Runs independently of the Git commit-message agent.",
+        "defaultAgent": "App default agent",
+        "customCommand": "Custom command",
+        "model": "Model",
+        "defaultModel": "Default model",
+        "thinking": "Thinking level",
+        "defaultThinking": "Default",
+        "command": "Command",
+        "args": "Extra CLI arguments",
+        "modelDescription": "Model id passed to the agent. Leave empty for its default.",
+        "commandDescription": "Shell command that reads the prompt and prints the description."
+      },
+      "navTitle": "Perforce",
+      "navDescription": "Connection, Source Control behavior, changelists, and shelves.",
+      "timeouts": {
+        "command": "Command timeout",
+        "commandDescription": "Applies to ordinary p4 commands.",
+        "scan": "Workspace scan timeout",
+        "title": "Command Timeouts",
+        "description": "How long ordinary p4 commands and the workspace scan behind Source Control may run before Orca gives up.",
+        "scanDescription": "Applies to the reconcile scan that finds unopened changes."
+      },
+      "group-order": {
+        "defaultFirst": "Default first",
+        "numberedFirst": "Numbered first",
+        "unopenedFirst": "Unopened first",
+        "title": "Source Control Group Order",
+        "description": "Choose which Perforce section appears first: default changelist, numbered changelists, or unopened files."
+      },
+      "unopened": {
+        "modified": "Show \"Modified, not opened\"",
+        "new": "Show \"New files\"",
+        "newDescription": "Files on disk that are not in the depot.",
+        "modifiedDescription": "Files changed or deleted on disk that are not opened for edit."
+      },
+      "compare": {
+        "have": "Synced (#have)",
+        "head": "Depot head (#head)"
+      },
+      "save": {
+        "ask": "Ask",
+        "auto": "Open automatically",
+        "never": "Never"
+      },
+      "submit": {
+        "confirm": "Confirm before submitting",
+        "confirmShelved": "Confirm before submitting shelved files"
+      },
+      "shelf": {
+        "delete": "Delete shelf",
+        "keepCopy": "Keep a copy"
+      },
+      "p4-path": {
+        "title": "p4 Executable",
+        "description": "Path to the p4 command-line client. Leave empty to find it automatically."
+      },
+      "p4-environment": {
+        "title": "Connection Overrides",
+        "description": "Set P4PORT, P4USER, P4CLIENT, or P4CONFIG when they are not provided by p4 set or a P4CONFIG file. Empty fields are left alone. Applies to local and SSH workspaces."
+      },
+      "p4-ignore": {
+        "title": "Ignore File",
+        "description": "Use an ignore file (P4IGNORE) so ignored files do not appear under New files."
+      },
+      "unopened-sections": {
+        "title": "Unopened File Sections",
+        "description": "Show files modified on disk but not opened, and new files. Turning both off skips the slow reconcile scan."
+      },
+      "refresh-interval": {
+        "title": "Auto-refresh",
+        "description": "How often Source Control and tab markers re-read the workspace. The scan for unopened files then rests three times as long as it took, so a large workspace is scanned less often. Turn off to refresh manually."
+      },
+      "compare-against": {
+        "title": "Compare Against",
+        "description": "Diff files against the revision you last synced (#have) or the latest depot revision (#head)."
+      },
+      "save-read-only": {
+        "title": "Saving Files Not Opened for Edit",
+        "description": "What happens when you save a read-only workspace file: ask first, open it for edit automatically, or never."
+      },
+      "edited-tab-prefix": {
+        "title": "Edited Tab Marker",
+        "description": "Show an E before the name of editor tabs for files opened for edit."
+      },
+      "new-changelist": {
+        "title": "New Changelists",
+        "description": "Description template for new changelists ({user} and {client} are replaced), and whether a new changelist starts empty or takes the selected files."
+      },
+      "submit-confirmation": {
+        "title": "Submit Confirmation",
+        "description": "Ask before submitting a changelist. Submitting a shelved-only changelist unshelves it first, so that has its own prompt."
+      },
+      "destructive-confirmation": {
+        "title": "Confirm Destructive Actions",
+        "description": "Ask before reverting files, reverting shelved files, or deleting a changelist."
+      },
+      "shelf-after-submit": {
+        "title": "Shelf After Submit",
+        "description": "Perforce cannot submit a changelist that still has a shelf. Choose whether the shelf is deleted or first copied into a new shelved changelist."
+      },
+      "ai-description": {
+        "title": "AI Changelist Descriptions",
+        "description": "Show a button that drafts a changelist description from its diff, with its own agent, model, and instructions (separate from Git)."
+      },
+      "workspace-copies": {
+        "title": "Workspace Copies",
+        "description": "Copies of a stream workspace that Create workspace makes in a Perforce project; they need Windows 11 24H2 or later with the workspace on a Dev Drive. What a copy leaves out and how much free space to keep."
+      }
+    },
+    "copies": {
+      "blockClonedCost": "Block-cloned {{copied}} of files using {{used}} of disk.",
+      "usedCost": "Used {{used}} of disk.",
+      "createdWhere": "{{folder}} on {{stream}} ({{reason}}).",
+      "ready": "Perforce copy {{name}} is ready",
+      "copyUnityLine": "Copy Unity line",
+      "keepsSource": "Your workspace {{folder}}, its client and its checked-out files are not touched.",
+      "deletesFolder": "The folder {{folder}} and everything in it.",
+      "deletesOpenFiles": "The changes in {{files}} checked-out file(s): they are reverted, then deleted with the folder.",
+      "deletesPending": "Pending changelist {{change}}{{description}}.",
+      "deletesShelved": "Changelist {{change}}{{description}} and its {{files}} shelved file(s).",
+      "deletesClient": "The Perforce client {{client}} on the server.",
+      "deletesStream": "The copy's own stream {{stream}} (nothing was submitted to it).",
+      "keepsStream": "The stream {{stream}}: it has submitted work. Bring it into {{parent}} with p4 copy -S {{stream}}, then delete the stream.",
+      "itsParent": "its parent",
+      "deletesMarker": "The copy's marker file {{file}}.",
+      "onlyMarkerLeft": "Only the marker file is left",
+      "folderMissing": "Folder missing; client still on the server",
+      "clientDeleted": "Client deleted on the server; folder left behind",
+      "title": "Perforce copies",
+      "listDescription": "Copies of {{client}} in {{folder}}, including any made outside Orca in the same layout.",
+      "listDescriptionPending": "Copies of this workspace, including any made outside Orca in the same layout.",
+      "serverUnreachable": "The Perforce server could not be asked ({{error}}); showing what is on disk.",
+      "reading": "Reading copies from disk and the Perforce server…",
+      "none": "No copies yet. Each workspace you create in this project gets its own copy.",
+      "statusReady": "Ready",
+      "streamUnknown": "stream unknown",
+      "deleteEllipsis": "Delete…",
+      "refresh": "Refresh",
+      "close": "Close",
+      "checkingDrive": "Checking the drive and Perforce…",
+      "sharesFolderInstead": "This workspace will share the project folder instead of getting its own copy.",
+      "blockCloningVerified": "Block cloning verified",
+      "freeOnDrive": "{{size}} free",
+      "copiesGoIn": "copies go in {{folder}}",
+      "createFrom": "Create from",
+      "deleteTitle": "Delete Perforce copy “{{name}}”?",
+      "deleteDescription": "This deletes the copy on this computer, its client on the Perforce server and its own stream if nothing was submitted to it. It cannot be undone.",
+      "checkingCopy": "Checking the copy for checked-out files, changelists and shelves…",
+      "clientGone": "The client {{client}} is no longer on the server; only files on this computer are left to delete.",
+      "revertOptIn": "Revert them and lose their changes",
+      "openFilesWarning": "{{files}} file(s) are checked out in this copy. Submit or shelve anything you want to keep first.",
+      "shelvesOptIn": "Delete the shelved files too",
+      "shelvesWarning": "{{changes}} shelved file(s). Anyone who has not unshelved them yet loses them.",
+      "changelistHas": "Changelist {{change}} has {{files}}",
+      "closePrograms": "Close these programs first; Windows will not delete a folder they have open: {{programs}}.",
+      "deletedHeading": "Deleted",
+      "keptHeading": "Kept",
+      "cancel": "Cancel",
+      "deleteCopy": "Delete copy",
+      "andMore": "and {{more}} more",
+      "deleted": "Deleted Perforce copy {{name}}",
+      "manage": "Manage Perforce copies…",
+      "directlyOnStream": "{{stream}} directly (no new stream)",
+      "newStreamFrom": "New stream from {{stream}}",
+      "searchStreams": "Search streams…",
+      "noMatchingStream": "No matching stream.",
+      "loadingStreams": "Loading streams…",
+      "newStreamFromHeading": "New stream from",
+      "thisWorkspace": "this workspace",
+      "directlyHeading": "Work directly on",
+      "minFreeSpace": "Minimum free space",
+      "minFreeSpaceDescription": "Refuse to make a copy when the drive has less free space than this. A new copy takes about 1 GB, but opening it in Unity writes several GB more.",
+      "skipPackageCache": "Leave out Unity's package cache",
+      "skipPackageCacheDescription": "Skips each Unity project's Library/PackageCache; Unity refills it on first open. On a Dev Drive copying it is cheaper and opens faster, so this is off by default.",
+      "excludedFolders": "Folders to leave out",
+      "excludedFoldersDescription": "Workspace-relative folders a copy does not take, one per line (for example a tool’s local state folder). Files Perforce tracks in them come back from the depot.",
+      "excludedFoldersAria": "Folders to leave out of copies",
+      "excludedFoldersPlaceholder": ".cache",
+      "deleteOneAtATime": "Delete Perforce copies one at a time",
+      "deleteOneAtATimeDescription": "Each one shows what it removes from this computer and from Perforce first.",
+      "endHoldersOptIn": "End these programs (anything unsaved in them is lost)",
+      "holdersWarning": "These programs have this copy open, and Windows will not delete a folder in use. Close them yourself and check again, or end them here.",
+      "programPid": "{{name}} (pid {{pid}})",
+      "checkAgain": "Check again",
+      "endsPrograms": "Ends {{programs}} first; anything unsaved in them is lost.",
+      "holderHasRoot": "Has the copy’s folder open",
+      "holderHasFolder": "Has {{folder}} open",
+      "holderStarted": "Started from it: {{programs}}",
+      "holderExplorer": "Close the Explorer window showing this folder; Orca does not end Explorer.",
+      "holderCannotEnd": "Orca cannot end this program; close it yourself.",
+      "requirement": "Perforce copies need Windows 11 24H2 or later, with the workspace on a Dev Drive: each copy block-clones the workspace, so it takes almost no extra space. Elsewhere a new workspace shares the project folder.",
+      "unavailableHere": "Perforce copies need Windows 11 24H2 or later, with the workspace on a Dev Drive, so this workspace will share the project folder instead of getting its own copy.",
+      "setUpDevDrive": "Set up a Dev Drive"
+    }
   }
 }

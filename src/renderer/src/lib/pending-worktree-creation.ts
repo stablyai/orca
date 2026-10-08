@@ -4,6 +4,7 @@ import type { TuiAgent } from '../../../shared/tui-agent'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../shared/workspace-source'
 import type {
   CreateSparseCheckoutRequest,
+  CreateWorktreeArgs,
   SetupDecision
 } from '../../../shared/worktree/create-types'
 import type { WorktreeStartupLaunch } from '../../../shared/worktree/launch-types'
@@ -67,6 +68,8 @@ export type WorktreeCreationRequest = {
   nameWasGenerated?: boolean
   displayName?: string
   displayNameKind?: 'generated' | 'user'
+  /** "Use worktree" in a Perforce folder project: make the workspace a Perforce copy. */
+  perforceCopy?: CreateWorktreeArgs['perforceCopy']
   baseBranch?: string
   compareBaseRef?: string
   setupDecision: SetupDecision
@@ -147,6 +150,8 @@ export type PendingWorktreeCreation = {
   loaderVisible: boolean
   error?: string
   provisioningLog?: string
+  /** A step within the current phase reported by main (a Perforce copy's stages). */
+  progressDetail?: string
   request: WorktreeCreationRequest
 }
 
@@ -177,10 +182,13 @@ export function findPendingLinkedWorkItemCreationId(
  *  loader and the sidebar row so the two never drift. Caller handles the error
  *  case; this only covers the in-progress states. */
 export function getCreationProgressLabel(
-  entry: Pick<PendingWorktreeCreation, 'phase' | 'indeterminate' | 'request'>
+  entry: Pick<PendingWorktreeCreation, 'phase' | 'indeterminate' | 'request' | 'progressDetail'>
 ): string {
   if (entry.phase === 'provisioning-vm') {
     return 'Provisioning VM…'
+  }
+  if (entry.progressDetail && entry.phase === 'creating') {
+    return entry.progressDetail
   }
   if (entry.indeterminate) {
     return 'Setting up your workspace…'

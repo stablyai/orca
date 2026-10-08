@@ -69,7 +69,11 @@ export type WorktreeApi = {
   /** Two-phase progress for a background `create`, correlated by `creationId`. The remote/runtime
    *  create path emits nothing, so the surface falls back to an indeterminate spinner. */
   onCreateProgress: (
-    callback: (data: { creationId?: string; phase: 'fetching' | 'creating' }) => void
+    callback: (data: {
+      creationId?: string
+      phase: 'fetching' | 'creating'
+      detail?: string
+    }) => void
   ) => () => void
   prefetchCreateBase: (args: { repoId: string; baseBranch?: string }) => Promise<void>
   resolvePrBase: (args: {

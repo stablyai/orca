@@ -138,4 +138,15 @@ describe('quick composer creation request', () => {
     expect(request).not.toHaveProperty('linkedGitLabMR')
     expect(request).not.toHaveProperty('linkedGitLabIssue')
   })
+
+  it('carries the Perforce copy choice for folder projects only', () => {
+    const perforceCopy = { stream: { kind: 'child' as const } }
+    expect(
+      buildQuickCreationRequest(createInput({ selectedRepoIsGit: false, perforceCopy }))
+        .perforceCopy
+    ).toEqual(perforceCopy)
+    expect(
+      buildQuickCreationRequest(createInput({ selectedRepoIsGit: true, perforceCopy })).perforceCopy
+    ).toBeUndefined()
+  })
 })

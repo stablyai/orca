@@ -34,6 +34,10 @@ vi.mock('@/runtime/runtime-git-client', () => ({
   getRuntimeGitDiff: mocks.getRuntimeGitDiff,
   getRuntimeGitScope: vi.fn(() => null)
 }))
+// The diff loader routes working diffs through Perforce or Git; these suites cover Git.
+vi.mock('@/runtime/runtime-worktree-file-diff', () => ({
+  getRuntimeWorktreeFileDiff: mocks.getRuntimeGitDiff
+}))
 
 vi.mock('@/lib/connection-context', () => ({
   getConnectionId: mocks.getConnectionId,

@@ -149,6 +149,8 @@ export type Worktree = {
   /** The host is deleting this checkout in the background; Git lists it until that finishes.
    *  Sent only to clients that advertise `worktree.background-removal.v1`. */
   removing?: true
+  /** Stream of a Perforce copy; shown where Git worktrees show their branch. */
+  perforceStream?: string
 } & GitWorktreeInfo
 
 /** Provenance for workspaces created through `orca worktree create`. Absent on

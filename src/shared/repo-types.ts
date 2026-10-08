@@ -10,6 +10,9 @@ import type { RepoProjectHostSetupMethod } from './project-types'
 // ─── Repo ────────────────────────────────────────────────────────────
 export type RepoKind = 'git' | 'folder'
 
+/** Version control of a folder project; Git projects use `kind: 'git'` instead. */
+export type RepoVcs = 'perforce'
+
 /**
  * Per-repo user choice for where issues are fetched and filed.
  *
@@ -62,6 +65,10 @@ export type Repo = {
   upstream?: GitHubRepositoryIdentity | null
   addedAt: number
   kind?: RepoKind
+  /** 'perforce' makes a folder project a Perforce project: its workspaces are Perforce copies on
+   *  their own streams. Kept on a folder project so Orca builds without Perforce support still treat
+   *  it as a plain folder rather than as Git. */
+  vcs?: RepoVcs
   /** Git root proven during folder upgrade; keeps the original checkout locator stable. */
   folderUpgradeGitRootPath?: string
   gitUsername?: string

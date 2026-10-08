@@ -6,9 +6,9 @@ import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import {
   getRuntimeGitBranchDiff,
   getRuntimeGitCommitDiff,
-  getRuntimeGitDiff,
   getRuntimeGitScope
 } from '@/runtime/runtime-git-client'
+import { getRuntimeWorktreeFileDiff } from '@/runtime/runtime-worktree-file-diff'
 import type { DiffContent, InFlightContentRead } from './editor-panel-content-types'
 import { canUseChangesModeForFile } from './editor-panel-file-mode'
 import type { EditorPanelContentLoadOptions } from './useEditorPanelExternalContentEvents'
@@ -92,7 +92,7 @@ export function useEditorPanelDiffContentLoader({
         }
         let pending = inFlightDiffReads.get(key)
         if (!pending) {
-          const promise = (
+          const promise =
             effectiveDiffSource === 'commit'
               ? commitCompare
                 ? getRuntimeGitCommitDiff(
@@ -129,7 +129,7 @@ export function useEditorPanelDiffContentLoader({
                       oldPath: file.branchOldPath
                     }
                   )
-                : getRuntimeGitDiff(
+                : getRuntimeWorktreeFileDiff(
                     {
                       settings: fileSettings,
                       worktreeId: file.worktreeId,
@@ -142,7 +142,6 @@ export function useEditorPanelDiffContentLoader({
                       compareAgainstHead
                     }
                   )
-          ) as Promise<DiffContent>
           pending = { externalEventGeneration: options?.externalEventGeneration, promise }
           inFlightDiffReads.set(key, pending)
           queueMicrotask(() => {

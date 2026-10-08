@@ -1714,10 +1714,16 @@ export function notifyWorktreeHeadIdentitiesChanged(
 export function emitCreateWorktreeProgress(
   mainWindow: BrowserWindow,
   phase: 'fetching' | 'creating',
-  creationId?: string
+  creationId?: string,
+  /** A step within the phase, shown instead of the phase label (Perforce copies report several). */
+  detail?: string
 ): void {
   if (!mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('createWorktree:progress', { creationId, phase })
+    mainWindow.webContents.send('createWorktree:progress', {
+      creationId,
+      phase,
+      ...(detail ? { detail } : {})
+    })
   }
 }
 

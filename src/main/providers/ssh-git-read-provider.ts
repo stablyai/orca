@@ -35,6 +35,15 @@ export class SshGitReadProvider {
     return this.hostPlatform
   }
 
+  /** Non-git relay calls (Perforce) share this provider's connection. */
+  requestRelay(
+    method: string,
+    params: Record<string, unknown>,
+    options?: { timeoutMs?: number }
+  ): Promise<unknown> {
+    return this.mux.request(method, params, options)
+  }
+
   protected async runWithGitReadInvalidation<T>(run: () => Promise<T>): Promise<T> {
     this.invalidateGitReads()
     try {

@@ -31,11 +31,15 @@ export const worktreesApi = {
   adoptProvisionedRoot: (args) => ipcRenderer.invoke('worktrees:adoptProvisionedRoot', args),
 
   onCreateProgress: (
-    callback: (data: { creationId?: string; phase: 'fetching' | 'creating' }) => void
+    callback: (data: {
+      creationId?: string
+      phase: 'fetching' | 'creating'
+      detail?: string
+    }) => void
   ): (() => void) => {
     const listener = (
       _event: Electron.IpcRendererEvent,
-      data: { creationId?: string; phase: 'fetching' | 'creating' }
+      data: { creationId?: string; phase: 'fetching' | 'creating'; detail?: string }
     ) => callback(data)
     ipcRenderer.on('createWorktree:progress', listener)
     return () => ipcRenderer.removeListener('createWorktree:progress', listener)

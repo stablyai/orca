@@ -16,6 +16,11 @@ import {
   getActiveRuntimeTarget
 } from '../../../../runtime/runtime-rpc-client'
 import { WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY } from '../../../../../../shared/protocol-version'
+import { PERFORCE_COPY_REQUEST_TIMEOUT_MS } from '../../../../../../shared/perforce/workspace-copy/workspace-copy-operations'
+import {
+  assertPerforceRuntime,
+  remotePerforceSettings
+} from '../../../../runtime/runtime-perforce-client'
 import { showLocalBaseRefUpdateSuggestionToast } from '@/components/sidebar/local-base-ref-suggestion-toast'
 import { requestWorktreeBaseFallbackNotice } from '@/components/worktree-base-fallback-notice'
 import { showLocalBaseRefRefreshToast } from './local-base-ref-refresh-toast'
@@ -65,7 +70,11 @@ async function runCreateAttempt(
             target,
             'worktree.create',
             buildRuntimeWorktreeCreateParams(request, { ...attempt, parentWorkspace }),
-            { timeoutMs: 10 * 60_000 }
+            {
+              timeoutMs: request.options?.perforceCopy
+                ? PERFORCE_COPY_REQUEST_TIMEOUT_MS
+                : 10 * 60_000
+            }
           )
   try {
     return { result: await create(attempt.parentWorkspace), droppedParent: false }
@@ -154,7 +163,8 @@ export function createCreateWorktree(
       linkedAzureDevOpsPR,
       linkedGiteaPR,
       compareBaseRef,
-      options
+      options,
+      ...(options?.perforceCopy ? { perforceSettings: remotePerforceSettings(get().settings) } : {})
     }
     try {
       // Why outside the retry loop: a branch-name conflict retry must not re-warn about the same dropped pick.
@@ -191,6 +201,9 @@ export function createCreateWorktree(
           WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY,
           'Update the remote runtime to link Jira'
         )
+      }
+      if (target.kind === 'environment' && options?.perforceCopy) {
+        await assertPerforceRuntime(target)
       }
       if (options?.provisionedRoot && target.kind !== 'local') {
         throw new Error('Provisioned-root recipes currently require a direct SSH connection.')

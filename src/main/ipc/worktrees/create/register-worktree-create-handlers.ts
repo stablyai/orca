@@ -29,6 +29,7 @@ import { adoptProvisionedRootSshCheckout } from '../../../provisioned-root-ssh-a
 import { normalizeLinkedWorkItemFields } from '../ipc-context-schemas'
 import type { CreateWorktreeArgsWithSystemProvenance } from '../ipc-context-schemas'
 import { createFolderWorkspace } from './folder-workspace-creation'
+import { createPerforceCopyWorkspace } from '../perforce-copies/perforce-copy-workspace-creation'
 import { findExactRepoOwner, isCapturedRepoCurrent } from '../listing/worktree-host-ownership'
 import { requireWorktreeCreateRoute } from '../../../worktree-create-execution-host-route'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
@@ -72,7 +73,9 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
           // Why: wrap only the helpers; the pre-validation throws above are IPC-shape bugs, not the git/filesystem failures the funnel tracks.
           if (isFolderRepo(repo)) {
             // A folder workspace is a registration, not a filesystem create, so it is host-agnostic.
-            result = createFolderWorkspace(createArgs, repo, store)
+            result = createArgs.perforceCopy
+              ? await createPerforceCopyWorkspace(createArgs, repo, store, mainWindow)
+              : createFolderWorkspace(createArgs, repo, store)
           } else {
             // Resolve the host rather than reading the raw field: an `executionHostId: 'ssh:*'`-only
             // row read as local here and ran `git worktree add` on the client against a remote path,

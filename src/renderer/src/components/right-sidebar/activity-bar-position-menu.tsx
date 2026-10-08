@@ -2,7 +2,9 @@ import React from 'react'
 import type { ActivityBarPosition } from '@/store/slices/editor'
 import {
   ContextMenuContent,
+  ContextMenuItem,
   ContextMenuLabel,
+  ContextMenuSeparator,
   ContextMenuRadioGroup,
   ContextMenuRadioItem
 } from '@/components/ui/context-menu'
@@ -11,10 +13,12 @@ import { translate } from '@/i18n/i18n'
 // ─── Context Menu for Activity Bar Position ───────────
 export function ActivityBarPositionMenu({
   currentPosition,
-  onChangePosition
+  onChangePosition,
+  onDetectPerforce
 }: {
   currentPosition: ActivityBarPosition
   onChangePosition: (pos: ActivityBarPosition) => void
+  onDetectPerforce?: () => void
 }): React.JSX.Element {
   return (
     <ContextMenuContent>
@@ -32,6 +36,17 @@ export function ActivityBarPositionMenu({
           {translate('auto.components.right.sidebar.index.70893f017b', 'Side')}
         </ContextMenuRadioItem>
       </ContextMenuRadioGroup>
+      {onDetectPerforce && (
+        <>
+          <ContextMenuSeparator />
+          <ContextMenuItem onSelect={onDetectPerforce}>
+            {translate(
+              'auto.components.right.sidebar.index.detectPerforce',
+              'Detect Perforce workspace'
+            )}
+          </ContextMenuItem>
+        </>
+      )}
     </ContextMenuContent>
   )
 }

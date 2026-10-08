@@ -103,6 +103,8 @@ export type RuntimeStore = {
     defaultTaskViewPreset?: GlobalSettings['defaultTaskViewPreset']
     visibleTaskProviders?: GlobalSettings['visibleTaskProviders']
     defaultRepoSelection?: GlobalSettings['defaultRepoSelection']
+    // The server's own Settings > Perforce: its p4 path and client, and defaults for clients that send none.
+    perforce?: GlobalSettings['perforce']
     defaultLinearTeamSelection?: GlobalSettings['defaultLinearTeamSelection']
     githubProjects?: GlobalSettings['githubProjects']
     experimentalNewWorktreeCardStyle?: GlobalSettings['experimentalNewWorktreeCardStyle']

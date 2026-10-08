@@ -7,6 +7,7 @@ import type { Store } from '../persistence'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { isFolderRepo } from '../../shared/repo-kind'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../shared/worktree/id'
+import { isPerforceCopyWorktreeIdForRepo } from '../../shared/worktree/perforce-copy-worktree'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { isWslUncPath } from '../../shared/wsl-paths'
 import { getGitRepoRoot, isGitRepo } from '../git/repo'
@@ -68,7 +69,9 @@ function isUpgradeCandidate(repo: Repo): boolean {
  */
 function hasExtraFolderWorkspaces(store: Store, repo: Repo): boolean {
   const prefix = `${repo.id}::${repo.path}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}`
-  return Object.keys(store.getAllWorktreeMeta()).some((key) => key.startsWith(prefix))
+  return Object.keys(store.getAllWorktreeMeta()).some(
+    (key) => key.startsWith(prefix) || isPerforceCopyWorktreeIdForRepo(repo, key)
+  )
 }
 
 /** Identity of the `.git` entry, or null when there is none. */

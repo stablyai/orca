@@ -1,10 +1,13 @@
-import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { createProcessTableSnapshotReader } from '../../shared/process-table-snapshot-reader'
 import { RELAY_WINDOWS_PROCESS_TREE_FILENAME } from '../../shared/relay-artifacts'
 import { reportWindowsCommandLineRecoveryHealth } from './windows-command-line-recovery-health'
 import { readWindowsProcessRowsWithCim } from './windows-process-table-cim-scan'
 import { WindowsProcessTableTimeoutError } from './windows-process-table-timeout-error'
+import {
+  FLAGGED_ADDON_IMPORT,
+  stagedRelayAddonIsUnpatched
+} from './windows-process-tree-unpatched-addon'
 
 /**
  * The only place Orca reads the Windows process table.
@@ -71,6 +74,9 @@ type NativeProcessInfo = {
   creationTimeMs?: number
 }
 
+/** Pids with a handle open on each path; null where a path could not be queried. */
+type PathUsersQuery = (paths: string[]) => Promise<(number[] | null)[]>
+
 type WindowsProcessTreeModule = {
   ProcessDataFlag: {
     None: number
@@ -85,6 +91,7 @@ type WindowsProcessTreeModule = {
    */
   supportedProcessDataFlags?: number
   getProcessCreationTime?: (pid: number) => number | undefined
+  getProcessIdsUsingPaths?: PathUsersQuery
   getAllProcesses: (
     callback: (processes: NativeProcessInfo[] | undefined) => void,
     flags?: number
@@ -116,6 +123,7 @@ let requireNative: NativeRequire = requireFromMain
  */
 type WindowsProcessTreeAddon = {
   getProcessCreationTime?: (pid: number) => number | undefined
+  getProcessIdsUsingPaths?: PathUsersQuery
   getProcessList: (
     callback: (processes: NativeProcessInfo[] | undefined) => void,
     flags: number
@@ -136,42 +144,6 @@ const PROCESS_DATA_FLAG = { None: 0, Memory: 1, CommandLine: 2, CreationTime: 4 
 /** Staged beside the relay bundle by build-relay; see RELAY_ARTIFACTS. */
 const RELAY_ADDON_FILENAME = `./${RELAY_WINDOWS_PROCESS_TREE_FILENAME}`
 
-/** The import whose absence tells the patched binary from the published prebuilt. */
-const FLAGGED_ADDON_IMPORT = 'ReadProcessMemory'
-
-/**
- * Refuse a staged relay addon built from unpatched source.
- *
- * The build asserts this on the artifact it produces, but a relay bundle and the
- * addon beside it are redeployed independently: a host that has not taken a new
- * bundle keeps whatever `.node` is already there, and the published prebuilt is
- * node-addon-api, so it binds cleanly and then opens every process with
- * `PROCESS_VM_READ` to walk its PEB -- the primitive MDE scores as credential
- * dumping. Nothing checked that at load until here.
- *
- * Same predicate as `inspectWindowsProcessTreeAddon` in
- * `config/scripts/windows-process-tree-gyp-rebuild.mjs`, which cannot be
- * imported here: it is install-time tooling that pulls in node-gyp and
- * `child_process`, and this module is bundled into the app and the relay.
- *
- * Falling back to the CIM scan is the correct loss: it is slower, and it is not
- * the thing an EDR quarantines the host for.
- */
-function stagedRelayAddonIsUnpatched(): boolean {
-  // No resolver means an injected test double, so there is no file to inspect.
-  // Production always has one, and a require that just succeeded proves the
-  // path is readable -- "cannot tell" here is never a real deployment.
-  const addonPath = requireNative.resolve?.(RELAY_ADDON_FILENAME)
-  if (!addonPath) {
-    return false
-  }
-  try {
-    return readFileSync(addonPath).includes(FLAGGED_ADDON_IMPORT)
-  } catch {
-    return false
-  }
-}
-
 /**
  * Once per process, for the main and relay processes whose console is real. The
  * daemon's stderr is destroyed once it reports ready, so it logs this capability
@@ -189,6 +161,7 @@ function adaptAddon(addon: WindowsProcessTreeAddon): WindowsProcessTreeModule {
     ProcessDataFlag: PROCESS_DATA_FLAG,
     supportedProcessDataFlags: addon.supportedProcessDataFlags,
     getProcessCreationTime: addon.getProcessCreationTime,
+    getProcessIdsUsingPaths: addon.getProcessIdsUsingPaths,
     getAllProcesses: (callback, flags) => addon.getProcessList(callback, flags ?? 0)
   }
 }
@@ -230,7 +203,7 @@ function loadWindowsProcessTree(): WindowsProcessTreeModule | null {
       cachedModule = null
       return cachedModule
     }
-    if (stagedRelayAddonIsUnpatched()) {
+    if (stagedRelayAddonIsUnpatched(requireNative.resolve?.(RELAY_ADDON_FILENAME))) {
       console.warn(
         `[windows-process-table] the addon staged beside the relay bundle still imports ` +
           `${FLAGGED_ADDON_IMPORT}, so it was built from unpatched source and reads every ` +
@@ -559,6 +532,15 @@ export function readWindowsProcessCreationTime(pid: number): number | null {
   } catch {
     return null
   }
+}
+
+/**
+ * The pids with a handle open on each path, from the kernel's per-file list; opens only the paths,
+ * never another process. Null when this host's addon predates the query (rebuild with pnpm install).
+ */
+export function readProcessIdsUsingPaths(paths: string[]): ReturnType<PathUsersQuery> | null {
+  const query = process.platform === 'win32' ? moduleLoader()?.getProcessIdsUsingPaths : undefined
+  return query ? query(paths) : null
 }
 
 function resetSnapshotReaders(): void {

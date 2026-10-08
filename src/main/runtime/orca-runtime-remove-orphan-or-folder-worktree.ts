@@ -4,6 +4,10 @@ import { parseExecutionHostId } from '../../shared/execution-host'
 import { deleteRemoteWorktreeHistory } from '../remote-worktree-history-cleanup'
 import { invalidateAuthorizedRootsCache } from '../ipc/filesystem-auth'
 import { isFolderRepo } from '../../shared/repo-kind'
+import {
+  isPerforceCopyWorktreeIdForRepo,
+  PERFORCE_COPY_GENERIC_REMOVAL_MESSAGE
+} from '../../shared/worktree/perforce-copy-worktree'
 import { getRuntimeFolderWorkspaceRootId } from './runtime-folder-workspace'
 import { killAllProcessesForWorktree } from './worktree-teardown'
 import { teardownFolderWorkspacePtys } from './folder-workspace-pty-teardown'
@@ -93,6 +97,9 @@ export async function removeOrphanOrFolderWorktree({
   }
   if (removalTarget.id === getRuntimeFolderWorkspaceRootId(repo)) {
     throw new Error('Cannot delete the project root workspace. Remove the folder project instead.')
+  }
+  if (isPerforceCopyWorktreeIdForRepo(repo, removalTarget.id)) {
+    throw new Error(PERFORCE_COPY_GENERIC_REMOVAL_MESSAGE)
   }
   // Resolved, not raw: a folder repo naming its owner only as `executionHostId: 'ssh:*'` used to
   // tear down its PTYs and history on the client. A `runtime:` host answers null — its nested

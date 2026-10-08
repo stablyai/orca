@@ -22,7 +22,7 @@ import {
   buildDisconnectedDetectedWorktrees,
   buildFolderDetectedWorktrees
 } from './folder-workspace-catalog'
-import { isFolderWorkspaceIdForRepo } from '../folder-workspace-model'
+import { isFolderRepoWorktreeIdForRepo } from '../folder-workspace-model'
 import {
   createSshWorktreeMetaIndexForRepo,
   listDisconnectedSshWorktrees
@@ -72,7 +72,7 @@ export function registerHostCatalogHandlers(context: WorktreeIpcContext): void {
       // Why: folder workspace ids carry an instance suffix the git-worktree synthesizer would read as a directory; build them the way every other listing does.
       if (isFolderRepo(repo)) {
         const folderWorkspaceIds = Object.keys(store.getAllWorktreeMeta()).filter((worktreeId) =>
-          isFolderWorkspaceIdForRepo(repo, worktreeId)
+          isFolderRepoWorktreeIdForRepo(repo, worktreeId)
         )
         return hasConflictingStoredWorktreeOwner(store, repo, folderWorkspaceIds)
           ? rejected()
