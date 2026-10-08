@@ -152,6 +152,22 @@ describe('pet RPC methods', () => {
     expect(runtime.updateUIState).not.toHaveBeenCalled()
   })
 
+  it('deletes the copied bundle when the pet list cannot be read', async () => {
+    const { dispatcher, runtime } = setup({ customPets: [] })
+    importPetBundleFromPathMock.mockResolvedValue(LEONARDO)
+    runtime.getUIState.mockImplementationOnce(() => {
+      throw new Error('runtime_unavailable')
+    })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('pet.importBundle', { path: '/pets/leonardo' })
+    )
+
+    expect(response).toMatchObject({ ok: false })
+    expect(removePetFilesMock).toHaveBeenCalledWith(LEONARDO.id, 'spritesheet.webp', 'bundle')
+    expect(runtime.updateUIState).not.toHaveBeenCalled()
+  })
+
   it('refuses to import on a host without the desktop app', async () => {
     setRuntimeDesktopSurface(null)
     const { dispatcher, runtime } = setup({ customPets: [] })
@@ -225,7 +241,25 @@ describe('pet RPC methods', () => {
     await dispatcher.dispatch(makeRequest('pet.remove', { pet: 'Leonardo da Vinci' }))
 
     expect(ui()).toMatchObject({ customPets: [CAT], petId: 'claude-the-mage' })
-    expect(removePetFilesMock).toHaveBeenCalledWith(LEONARDO.id, 'spritesheet.webp', 'bundle')
+    expect(removePetFilesMock).toHaveBeenCalledWith(LEONARDO.id, 'spritesheet.webp', 'bundle', {
+      throwOnError: true
+    })
+  })
+
+  it('reports files it could not delete after taking the pet off the list', async () => {
+    const { dispatcher, ui } = setup({ customPets: [LEONARDO, CAT] })
+    removePetFilesMock.mockRejectedValue(new Error('EBUSY: resource busy'))
+
+    const response = await dispatcher.dispatch(makeRequest('pet.remove', { pet: LEONARDO.id }))
+
+    expect(response).toMatchObject({
+      ok: false,
+      error: {
+        message:
+          'Removed Leonardo da Vinci from the pet list, but could not delete its files: EBUSY: resource busy'
+      }
+    })
+    expect(ui().customPets).toEqual([CAT])
   })
 
   it('keeps the active pet when removing a different one', async () => {

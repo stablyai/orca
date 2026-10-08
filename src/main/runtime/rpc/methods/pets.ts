@@ -37,8 +37,15 @@ export const PET_METHODS = [
       }
       const imported = await importPetBundle(params.path)
       const pet = params.name ? { ...imported, label: params.name } : imported
-      // Why read after the copy: the renderer may have changed customPets while the bundle was copying.
-      const customPets = readCustomPets(runtime.getUIState())
+      let customPets: CustomPet[]
+      try {
+        // Why read after the copy: the renderer may have changed customPets while the bundle was copying.
+        customPets = readCustomPets(runtime.getUIState())
+      } catch (error) {
+        // Why only here: once updateUIState runs the pet may already be referenced, so its files must stay.
+        await removePetFiles(imported.id, imported.fileName, imported.kind ?? 'bundle')
+        throw error
+      }
       // Why select + un-hide: matches the pet menu, where an imported pet becomes the visible one.
       const ui = runtime.updateUIState({
         customPets: [...customPets, pet],
@@ -83,7 +90,16 @@ export const PET_METHODS = [
         customPets: customPets.filter((pet) => pet.id !== target.id),
         ...(wasActive ? { petId: DEFAULT_PET_ID } : {})
       })
-      await removePetFiles(target.id, target.fileName, target.kind ?? 'image')
+      // Why after the update: a failed state write must not leave the list pointing at deleted files.
+      try {
+        await removePetFiles(target.id, target.fileName, target.kind ?? 'image', {
+          throwOnError: true
+        })
+      } catch (error) {
+        throw new Error(
+          `Removed ${target.label} from the pet list, but could not delete its files: ${error instanceof Error ? error.message : String(error)}`
+        )
+      }
       return { pet: summarizePet(target), library: describePetLibrary(ui) }
     }
   })

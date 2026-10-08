@@ -6,7 +6,9 @@ import { getPetsDir, isSafeId, resolvePetFile } from './pet-storage-paths'
 export async function removePetFiles(
   id: string,
   fileName: string,
-  kind: 'image' | 'bundle'
+  kind: 'image' | 'bundle',
+  // Why opt-in: the menu's delete is best-effort, but a CLI caller must not be told it succeeded.
+  options: { throwOnError?: boolean } = {}
 ): Promise<void> {
   if (!isSafeId(id)) {
     return
@@ -22,6 +24,9 @@ export async function removePetFiles(
       await rm(target, { recursive: true, force: true })
     } catch (error) {
       console.warn('[pet-overlay] pet:delete (bundle) failed', error)
+      if (options.throwOnError) {
+        throw error
+      }
     }
     return
   }
@@ -33,5 +38,8 @@ export async function removePetFiles(
     await rm(filePath, { force: true })
   } catch (error) {
     console.warn('[pet-overlay] pet:delete failed', error)
+    if (options.throwOnError) {
+      throw error
+    }
   }
 }

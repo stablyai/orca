@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { parseArgs, validateCommandAndFlags } from '../args'
 import { dispatch } from '../dispatch'
@@ -53,7 +54,8 @@ describe('pet commands', () => {
     await run(['import', '--path', 'leonardo', '--name', 'Da Vinci', '--json'])
 
     expect(client.call).toHaveBeenCalledExactlyOnceWith('pet.importBundle', {
-      path: '/home/me/pets/leonardo',
+      // Why path.resolve: the handler resolves with the host's path rules, which differ on Windows.
+      path: path.resolve('/home/me/pets', 'leonardo'),
       name: 'Da Vinci'
     })
   })
