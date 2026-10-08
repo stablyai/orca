@@ -2141,7 +2141,8 @@
         "collapseNode": "Collapse {{value0}}",
         "expandNode": "Expand {{value0}}",
         "selectMachine": "Select all chats on {{value0}}",
-        "sshHost": "SSH"
+        "sshHost": "SSH",
+        "done": "Done"
       },
       "StarNagCard": {
         "92b0f9d921": "is authenticated and try again.",
@@ -4316,11 +4317,9 @@
             "checkAriaOne": "1 chat to check after resuming. Click for details.",
             "checkAria": "{{value0}} chats to check after resuming. Click for details.",
             "checkTooltip": "Chats Orca couldn’t resume, or couldn’t confirm it resumed, after the restart. Click for details.",
-            "resumingLabelOne": "Resuming 1 chat",
-            "resumingLabel": "Resuming {{value0}} chats",
-            "resumingAriaOne": "Resuming 1 chat. Click to open details.",
-            "resumingAria": "Resuming {{value0}} chats. Click to open details.",
-            "resumingTooltip": "Restoring interrupted chats and asking them to carry on…"
+            "resumingTooltip": "Restoring interrupted chats and asking them to carry on…",
+            "resumingProgressLabel": "Resuming chats {{value0}}/{{value1}}",
+            "resumingProgressAria": "Resuming chats, {{value0}} of {{value1}} done. Click to open details."
           }
         }
       },
@@ -17844,6 +17843,32 @@
             "hostOnly": "Cursor sign-in details are only readable on the computer running Orca."
           }
         }
+      },
+      "NativeChatResumeRunPanel": {
+        "resumedTitle": "Resumed {{value0}} of {{value1}} chats",
+        "resumingTitleOne": "Resuming 1 chat",
+        "resumingTitle": "Resuming {{value0}} chats",
+        "description": "Each chat is restored with its full context and asked to check where it stopped. You can close this; the status bar keeps track.",
+        "resumedTitleOne": "Resumed {{value0}} of 1 chat"
+      },
+      "NativeChatResumeRunStatusIcon": {
+        "waitingForReply": "Waiting for a reply",
+        "starting": "Starting",
+        "waitingToStart": "Waiting to start",
+        "inFlight": "{{value0}} · {{value1}}",
+        "resumed": "Resumed"
+      },
+      "NativeChatResumeRunSummary": {
+        "done": "{{value0}} of {{value1}} done",
+        "starting": "{{value0}} starting",
+        "waitingForReply": "{{value0}} waiting for a reply",
+        "waitingToStart": "{{value0}} waiting to start",
+        "all": "All",
+        "inProgress": "In progress",
+        "resumed": "Resumed",
+        "attention": "Need you",
+        "running": "Running {{value0}}",
+        "filter": "Show chats"
       }
     },
     "i18n": {
@@ -18077,7 +18102,7 @@
         "notDoneCommand": "The command didn't run.",
         "notDoneGoal": "The goal wasn't changed.",
         "restartFailed": "The agent couldn't restart.",
-        "capacity": "Orca has received too many requests in the last day.",
+        "capacity": "Orca on the computer running this chat has hit a request limit. Update Orca there, then try again.",
         "outcomeUnknown": "Orca couldn't confirm what happened. Check the chat.",
         "sendOutcomeLost": "Orca couldn't confirm your message reached the agent. Check the chat, then send it again if needed.",
         "questionChanged": "This question was already answered or has changed.",
@@ -18110,6 +18135,8 @@
         "waitForBackgroundTasks": "Wait for the background tasks to finish.",
         "messagesUnsettled": "A message you sent earlier isn't confirmed yet.",
         "settleEarlierMessage": "Wait for your earlier message to go through, or retry it.",
+        "queueTooLarge": "Too much text is waiting in the queue.",
+        "shrinkQueue": "Delete a queued message, or wait for one to go through, then try again.",
         "optionRejected": "The agent didn't accept this setting.",
         "goalsUnsupported": "This agent doesn't support goals.",
         "agentRefused": "The agent turned this down.",
@@ -18905,8 +18932,8 @@
       }
     },
     "agentSessionContinuation": {
-      "continueInNewSession": "Continue in New Session…",
-      "dialogTitle": "Continue in New Session",
+      "handOffToAnotherAgent": "Hand Off to Another Agent",
+      "dialogTitle": "Hand Off to Another Agent",
       "dialogDescription": "Start a fresh Agent session from this stopping point. The original session stays unchanged.",
       "untitledSession": "Current session",
       "originalAgent": "Original Agent: {{agent}}",

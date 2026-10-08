@@ -250,7 +250,8 @@ export function createCompactCommentMarkdownComponents(
 
 export function createDocumentCommentMarkdownComponents(
   onLinkClick?: CommentMarkdownLinkClickHandler,
-  renderCodeBlock?: DocumentCodeBlockRenderer
+  renderCodeBlock?: DocumentCodeBlockRenderer,
+  renderMermaid = true
 ): Components {
   return {
     p: ({ children }) => <p className="my-2 first:mt-0 last:mb-0">{children}</p>,
@@ -272,7 +273,7 @@ export function createDocumentCommentMarkdownComponents(
         </a>
       ),
     code: ({ className, children }) =>
-      isMermaidFence(className) ? (
+      renderMermaid && isMermaidFence(className) ? (
         renderMermaidFence(
           children,
           'my-3 min-w-0 max-w-full overflow-x-auto rounded-md border border-border/60 p-3 [&_.mermaid-block]:min-w-0 [&_.mermaid-block_pre]:my-0 [&_.mermaid-block_pre]:max-h-80 [&_.mermaid-block_pre]:max-w-full [&_.mermaid-block_pre]:overflow-x-auto [&_.mermaid-block_pre]:rounded-md [&_.mermaid-block_pre]:bg-accent [&_.mermaid-block_pre]:p-3 [&_.mermaid-block_pre]:font-mono [&_.mermaid-block_pre]:text-[12px]'
@@ -284,7 +285,7 @@ export function createDocumentCommentMarkdownComponents(
       ),
     // Mermaid fences render a <div>, which is invalid inside <pre>, so unwrap them.
     pre: ({ children }) =>
-      isMermaidPre(children) ? (
+      renderMermaid && isMermaidPre(children) ? (
         <>{children}</>
       ) : renderCodeBlock ? (
         renderCodeBlock({ children, language: extractCodeFenceLanguage(children) })

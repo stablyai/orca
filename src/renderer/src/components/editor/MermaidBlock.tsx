@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useRef, useState } from 'react'
+import React, { useEffect, useId, useState } from 'react'
 import type mermaidNamespace from 'mermaid'
 import DOMPurify from 'dompurify'
 import { getMermaidConfig } from './mermaid-config'
@@ -29,18 +29,21 @@ type MermaidBlockProps = {
 // where one render can clobber another's temporary DOM node. Serializing all
 // render calls through a single promise chain avoids this.
 //
-// The queue is replaced with a fresh promise after each render completes so
-// that old .then() closures (which capture containerRef, content, and id)
+// The queue is replaced with a fresh promise once all waiting renders complete so
+// that old .then() closures (which capture content and id)
 // become unreachable and can be GC'd. Without this, the chain grows with
 // every MermaidBlock mount/unmount cycle for the lifetime of the renderer.
 let renderQueue: Promise<void> = Promise.resolve()
 
 function enqueueRender(fn: () => Promise<void>): void {
-  renderQueue = renderQueue.then(fn, fn).then(() => {
+  const tail = renderQueue.then(fn, fn).then(() => {
     // Why: collapse the chain back to a single resolved promise so previous
     // closures do not remain reachable through a growing .then() chain.
-    renderQueue = Promise.resolve()
+    if (renderQueue === tail) {
+      renderQueue = Promise.resolve()
+    }
   })
+  renderQueue = tail
 }
 
 /**
@@ -53,8 +56,7 @@ export default function MermaidBlock({
   htmlLabels = false
 }: MermaidBlockProps): React.JSX.Element {
   const id = useId().replace(/:/g, '_')
-  const containerRef = useRef<HTMLDivElement>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [result, setResult] = useState<{ svg: string } | { error: string } | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -72,18 +74,17 @@ export default function MermaidBlock({
         // broken foreignObject label path again.
         mermaid.initialize(getMermaidConfig(isDark, htmlLabels))
         const { svg } = await mermaid.render(`mermaid-${id}`, content)
-        if (!cancelled && containerRef.current) {
+        if (!cancelled) {
           // Why: although mermaid uses DOMPurify internally, we add an explicit
           // sanitization pass as defense-in-depth against XSS in case upstream
           // behaviour changes or a mermaid version ships without sanitization.
-          containerRef.current.innerHTML = DOMPurify.sanitize(svg, {
-            USE_PROFILES: { svg: true }
+          setResult({
+            svg: DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true } })
           })
-          setError(null)
         }
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Invalid mermaid syntax')
+          setResult({ error: err instanceof Error ? err.message : 'Invalid mermaid syntax' })
           // Mermaid leaves an error element in the DOM on failure — clean it up.
           const errorEl = document.getElementById(`d${`mermaid-${id}`}`)
           errorEl?.remove()
@@ -99,11 +100,12 @@ export default function MermaidBlock({
     }
   }, [content, htmlLabels, isDark, id])
 
-  if (error) {
+  if (result && 'error' in result) {
     return (
       <div className="mermaid-block">
         <div className="mermaid-error">
-          {translate('auto.components.editor.MermaidBlock.dcc132e691', 'Diagram error:')} {error}
+          {translate('auto.components.editor.MermaidBlock.dcc132e691', 'Diagram error:')}{' '}
+          {result.error}
         </div>
         <pre>
           <code>{content}</code>
@@ -112,5 +114,10 @@ export default function MermaidBlock({
     )
   }
 
-  return <div className="mermaid-block" ref={containerRef} />
+  return (
+    <div
+      className="mermaid-block"
+      dangerouslySetInnerHTML={result ? { __html: result.svg } : undefined}
+    />
+  )
 }

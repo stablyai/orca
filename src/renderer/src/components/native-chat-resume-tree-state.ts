@@ -43,6 +43,9 @@ export const ResumeTreeDepthContext = createContext(0)
 export type FailureProps = {
   failureFor?: (sessionId: string) => ResumeFailure | undefined
   onFailureAction?: (action: ResumeFailureAction, sessionId: string) => void
+  renderStatus?: (sessionId: string, title: string) => React.ReactNode
+  /** Current offer membership excludes completed run history from group selection. */
+  selectableIds?: ReadonlySet<string>
 }
 
 /** What every node needs from the tree as a whole. */
@@ -69,8 +72,12 @@ export function chatState(candidate: ResumeCandidate, tree: TreeProps) {
     checked: tree.selected.has(key),
     onCheckedChange: (checked: boolean) => tree.onToggle(key, checked),
     failure,
+    renderStatus: tree.renderStatus
+      ? (_sessionId: string, title: string) => tree.renderStatus?.(key, title)
+      : undefined,
     // A group checkbox never ticks a failure a retry cannot fix.
-    selectable: !failure || resumeFailureSelectable(failure)
+    selectable:
+      (tree.selectableIds?.has(key) ?? true) && (!failure || resumeFailureSelectable(failure))
   }
 }
 

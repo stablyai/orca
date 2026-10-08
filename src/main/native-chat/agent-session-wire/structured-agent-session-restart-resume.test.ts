@@ -5,6 +5,7 @@
 // finished; missing one is an annoyance. Each test removes exactly one input from an otherwise
 // resumable session, so deleting the matching guard turns that test red.
 
+import { availableParallelism } from 'node:os'
 import { describe, expect, it, vi } from 'vitest'
 import { structuredAgentSessionResumableSet } from './structured-agent-session-restart-resume-set'
 import {
@@ -558,14 +559,19 @@ describe('the resumable set', () => {
 })
 
 describe('spending a marker', () => {
-  function runner(overrides: { resume?: () => Promise<void>; concurrency?: number } = {}) {
+  function runner(
+    overrides: {
+      resume?: () => Promise<void>
+      admission?: StructuredAgentSessionResumeAdmission
+    } = {}
+  ) {
     const consumed = new Set<string>()
     const resume = overrides.resume ?? vi.fn(async () => {})
     return {
       resume,
       consumed,
       deps: {
-        admission: new StructuredAgentSessionResumeAdmission(),
+        admission: overrides.admission ?? new StructuredAgentSessionResumeAdmission(),
         // Stands in for the durable store: the first caller spends it, later ones find it gone.
         consumeMarker: async (sessionId: string) => {
           if (consumed.has(sessionId)) {
@@ -574,8 +580,7 @@ describe('spending a marker', () => {
           consumed.add(sessionId)
           return true
         },
-        resume,
-        ...(overrides.concurrency === undefined ? {} : { concurrency: overrides.concurrency })
+        resume
       }
     }
   }
@@ -670,6 +675,7 @@ describe('spending a marker', () => {
     let live = 0
     let peak = 0
     const { deps } = runner({
+      admission: new StructuredAgentSessionResumeAdmission(3),
       resume: async () => {
         live += 1
         peak = Math.max(peak, live)
@@ -684,7 +690,39 @@ describe('spending a marker', () => {
     const outcomes = await resumeStructuredAgentSessionsFromRestart(deps, candidates, 'banner')
 
     // Unbounded fan-out would peak at all 12 — which is the spawn storm this exists to prevent.
-    expect(peak).toBe(STRUCTURED_AGENT_SESSION_RESUME_CONCURRENCY)
+    expect(peak).toBe(3)
     expect(outcomes).toHaveLength(candidates.length)
+  })
+
+  // Different callers share one host-wide start limit.
+  it('shares the start limit across separate resume requests', async () => {
+    let live = 0
+    let peak = 0
+    const { deps } = runner({
+      admission: new StructuredAgentSessionResumeAdmission(3),
+      resume: async () => {
+        live += 1
+        peak = Math.max(peak, live)
+        await new Promise((resolve) => setTimeout(resolve, 5))
+        live -= 1
+      }
+    })
+
+    const outcomes = await Promise.all(
+      Array.from({ length: 10 }, (_, index) =>
+        resumeStructuredAgentSessionsFromRestart(
+          deps,
+          [candidate(`session-separate-${index}`)],
+          'modal'
+        )
+      )
+    )
+
+    expect(peak).toBe(3)
+    expect(outcomes.flat().every((outcome) => outcome.outcome === 'resumed')).toBe(true)
+  })
+
+  it('sizes the default start limit to this machine', () => {
+    expect(STRUCTURED_AGENT_SESSION_RESUME_CONCURRENCY).toBe(Math.max(1, availableParallelism()))
   })
 })

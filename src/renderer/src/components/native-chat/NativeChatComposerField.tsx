@@ -100,8 +100,6 @@ export type NativeChatComposerImageAttachment = {
   pending?: boolean
   /** The file's name while it uploads: a dropped or picked file, not a pasted image. */
   pendingName?: string
-  /** Owed to the message but not shown yet: a rich-text paste's image while its server is asked. */
-  hidden?: true
   /** Set on an image the draft names but can't send: the file to attach again. */
   unavailableName?: string
 }
@@ -174,7 +172,6 @@ export function NativeChatComposerField({
   sessionOptionsPickerRequest,
   goalMode
 }: NativeChatComposerFieldProps): React.JSX.Element {
-  const shownAttachments = imageAttachments.filter((attachment) => !attachment.hidden)
   const draftNotSaved = useNativeChatComposerDraftUnsaved(draftScopeKey)
   const optionCount =
     autocomplete.mode === 'slash'
@@ -282,9 +279,9 @@ export function NativeChatComposerField({
               '[contain:paint]'
             )}
           >
-            {shownAttachments.length > 0 ? (
+            {imageAttachments.length > 0 ? (
               <div className="mb-2 flex flex-wrap gap-2 px-1 pt-1.5">
-                {shownAttachments.map((attachment) => (
+                {imageAttachments.map((attachment) => (
                   <NativeChatImageAttachmentPreview
                     key={attachment.id}
                     attachment={attachment}

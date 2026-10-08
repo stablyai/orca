@@ -189,7 +189,7 @@ function withAddition<T extends NativeChatComposerDraft>(
   options: { once?: boolean } = {}
 ): T {
   const next = withNativeChatComposerDraftAddition(draft, addition, options)
-  return { ...draft, ...next, ...(next.text === draft.text ? {} : { document: undefined }) }
+  return { ...draft, ...next }
 }
 
 /**
@@ -206,13 +206,13 @@ export function appendToNativeChatComposerDraft(
 ): boolean {
   const before = records.get(scopeKey)
   const current = readNativeChatComposerDraft(scopeKey)
-  const { text, images } = withAddition(current, addition)
+  const { text, images, document } = withAddition(current, addition)
   updateNativeChatComposerDraft(
     scopeKey,
     {
       text,
       images,
-      ...(text === current.text ? {} : { document: undefined }),
+      document,
       ...(owner ? { owner } : {})
     },
     'immediate',

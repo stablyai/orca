@@ -224,7 +224,11 @@ function acpRegistration(spec: AcpLaunchSpec): StructuredAgentRuntimeRegistratio
           ...(deps.resolveAgentCommandSettings
             ? { resolveCommandSettings: deps.resolveAgentCommandSettings }
             : {}),
-          ...(deps.resolveAgentFullAccess ? { resolveFullAccess: deps.resolveAgentFullAccess } : {})
+          ...(deps.resolveAgentFullAccess
+            ? { resolveFullAccess: deps.resolveAgentFullAccess }
+            : {}),
+          ...nativeChatVisualsFor(deps),
+          logger: deps.logger
         }),
         connect: (launch, options) => createAcpAgentConnection(launch, options),
         ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {}),

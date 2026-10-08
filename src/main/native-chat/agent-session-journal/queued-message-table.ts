@@ -26,7 +26,7 @@ export type QueuedMessageState = 'waiting' | 'dispatched' | 'returned' | 'withdr
  *  (`QUEUED_MESSAGE_RETIRED_HOLD_REASONS`) as none. */
 export type QueuedMessageHoldReason = typeof QUEUED_MESSAGE_PAUSED_SEND_FAILED
 
-/** Definitively unsettled: what Stop, /clear, Edit and the budget count, and
+/** Definitively unsettled: what Stop, /clear, Edit and the published-bytes bound count, and
  *  what the published list shows. Pending/unknown/accepted deliveries and
  *  tombstones stay outside it. */
 export function isUnsettledQueuedMessage(row: Pick<QueuedMessageRow, 'state'>): boolean {

@@ -27,6 +27,7 @@ export function NativeChatMarkdown({
         extension && streaming ? withoutPendingNativeChatVisualDirectiveTail(content) : content
       }
       extension={extension}
+      renderMermaid={!streaming}
       className={cn('native-chat-markdown', className)}
     />
   )

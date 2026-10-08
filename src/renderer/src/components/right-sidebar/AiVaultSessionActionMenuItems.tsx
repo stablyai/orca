@@ -64,6 +64,15 @@ export function SessionActionMenuItems({
   const Item = menuKind === 'context' ? ContextMenuItem : DropdownMenuItem
   const Separator = menuKind === 'context' ? ContextMenuSeparator : DropdownMenuSeparator
   const hasLocalPathActions = Boolean(onOpenLog || onRevealLog || onOpenCwd)
+  // Why: Jump/Resume items act on this conversation; the hand-off starts a new one, so it sits apart.
+  const hasItemsAboveHandOff = Boolean(
+    onJumpToOriginalPane ||
+    showJumpToWorktree ||
+    !resumeHidden ||
+    onResumeInNewChat ||
+    onResumeInNewCli ||
+    onCopyResume
+  )
   const deleteLabel = translate('auto.components.right.sidebar.AiVaultSessionRow.delete', 'Delete')
   const deleteItem = (
     <Item
@@ -130,15 +139,6 @@ export function SessionActionMenuItems({
           </TooltipContent>
         </Tooltip>
       ) : null}
-      {onContinueInNewSession ? (
-        <Item onSelect={onContinueInNewSession}>
-          <MessageSquarePlus className="size-3.5" />
-          {translate(
-            'components.agentSessionContinuation.continueInNewSession',
-            'Continue in New Session…'
-          )}
-        </Item>
-      ) : null}
       {onCopyResume ? (
         <Item onSelect={onCopyResume}>
           <Copy className="size-3.5" />
@@ -147,6 +147,18 @@ export function SessionActionMenuItems({
             'Copy Resume Command'
           )}
         </Item>
+      ) : null}
+      {onContinueInNewSession ? (
+        <>
+          {hasItemsAboveHandOff ? <Separator /> : null}
+          <Item onSelect={onContinueInNewSession}>
+            <MessageSquarePlus className="size-3.5" />
+            {translate(
+              'components.agentSessionContinuation.handOffToAnotherAgent',
+              'Hand Off to Another Agent'
+            )}
+          </Item>
+        </>
       ) : null}
       {hasLocalPathActions ? (
         <>

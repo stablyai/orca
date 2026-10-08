@@ -197,6 +197,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
     })
 
     const handlePasteEvent = useNativeChatComposerHandle(ref, {
+      attachmentScopeKey: draftScopeKey,
       textareaRef,
       caret,
       draft,

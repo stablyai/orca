@@ -4056,16 +4056,14 @@
             "checkAriaOne": "1 chat por revisar tras la reanudación. Haz clic para ver los detalles.",
             "checkAria": "{{value0}} chats por revisar tras la reanudación. Haz clic para ver los detalles.",
             "checkTooltip": "Chats que Orca no pudo reanudar, o no pudo confirmar que reanudó, tras el reinicio. Haz clic para ver los detalles.",
-            "resumingLabelOne": "Reanudando 1 chat",
-            "resumingLabel": "Reanudando {{value0}} chats",
-            "resumingAriaOne": "Reanudando 1 chat. Haz clic para ver los detalles.",
-            "resumingAria": "Reanudando {{value0}} chats. Haz clic para ver los detalles.",
             "resumingTooltip": "Restaurando los chats interrumpidos y pidiéndoles que continúen…",
             "labelOne": "1 chat para reanudar",
             "label": "{{value0}} chats para reanudar",
             "ariaLabelOne": "1 chat disponible para reanudar",
             "ariaLabel": "{{value0}} chats disponibles para reanudar",
-            "tooltip": "Abrir chats interrumpidos disponibles para reanudar"
+            "tooltip": "Abrir chats interrumpidos disponibles para reanudar",
+            "resumingProgressLabel": "Reanudando chats {{value0}}/{{value1}}",
+            "resumingProgressAria": "Reanudando chats, {{value0}} de {{value1}} listos. Haz clic para ver los detalles."
           },
           "RuntimeHostStatusRow": {
             "previous_connection_closed": "La conexión anterior cerrada.",
@@ -17550,7 +17548,8 @@
         "collapseNode": "Contraer {{value0}}",
         "expandNode": "Expandir {{value0}}",
         "selectMachine": "Seleccionar todos los chats en {{value0}}",
-        "sshHost": "SSH"
+        "sshHost": "SSH",
+        "done": "Listo"
       },
       "NativeChatResumeOutcomeRow": {
         "openChat": "Abrir chat",
@@ -17650,6 +17649,32 @@
       "HostedReviewUnlinkMenuItem": {
         "label": "Desvincular {{value0}} del espacio de trabajo",
         "description": "Orca ocultará los detalles de {{value0}} {{value1}} en este espacio de trabajo. El {{value0}} y la rama en {{value2}} no se modificarán."
+      },
+      "NativeChatResumeRunPanel": {
+        "resumedTitle": "Se reanudaron {{value0}} de {{value1}} chats",
+        "resumedTitleOne": "{{value0}} de 1 chat reanudado",
+        "resumingTitleOne": "Reanudando 1 chat",
+        "resumingTitle": "Reanudando {{value0}} chats",
+        "description": "Cada chat se restaura con todo su contexto y se le pide que revise dónde se detuvo. Puedes cerrar esto; la barra de estado sigue el progreso."
+      },
+      "NativeChatResumeRunStatusIcon": {
+        "waitingForReply": "Esperando respuesta",
+        "starting": "Iniciando",
+        "waitingToStart": "Esperando para iniciar",
+        "inFlight": "{{value0}} · {{value1}}",
+        "resumed": "Reanudado"
+      },
+      "NativeChatResumeRunSummary": {
+        "done": "{{value0}} de {{value1}} listos",
+        "starting": "{{value0}} iniciando",
+        "waitingForReply": "{{value0}} esperando respuesta",
+        "waitingToStart": "{{value0}} esperando para iniciar",
+        "all": "Todos",
+        "inProgress": "En curso",
+        "resumed": "Reanudados",
+        "attention": "Requieren tu atención",
+        "running": "En curso desde hace {{value0}}",
+        "filter": "Mostrar chats"
       }
     },
     "i18n": {
@@ -17844,7 +17869,7 @@
         "notDoneCommand": "El comando no se ejecutó.",
         "notDoneGoal": "El objetivo no se cambió.",
         "restartFailed": "El agente no pudo reiniciarse.",
-        "capacity": "Orca ha recibido demasiadas solicitudes en el último día.",
+        "capacity": "Orca en el equipo que ejecuta este chat alcanzó un límite de solicitudes. Actualice Orca en ese equipo y vuelva a intentarlo.",
         "outcomeUnknown": "Orca no pudo confirmar qué pasó. Revise el chat.",
         "sendOutcomeLost": "Orca no pudo confirmar que su mensaje llegó al agente. Revise el chat y vuelva a enviarlo si es necesario.",
         "questionChanged": "Esta pregunta ya se respondió o ha cambiado.",
@@ -17877,6 +17902,8 @@
         "waitForBackgroundTasks": "Espere a que terminen las tareas en segundo plano.",
         "messagesUnsettled": "Un mensaje que envió antes todavía no está confirmado.",
         "settleEarlierMessage": "Espere a que se entregue su mensaje anterior o vuelva a intentarlo.",
+        "queueTooLarge": "Hay demasiado texto esperando en la cola.",
+        "shrinkQueue": "Elimine un mensaje de la cola o espere a que se entregue uno y vuelva a intentarlo.",
         "optionRejected": "El agente no aceptó este ajuste.",
         "goalsUnsupported": "Este agente no admite objetivos.",
         "agentRefused": "El agente lo rechazó.",
@@ -18663,8 +18690,8 @@
       }
     },
     "agentSessionContinuation": {
-      "continueInNewSession": "Continuar en una sesión nueva…",
-      "dialogTitle": "Continuar en una sesión nueva",
+      "handOffToAnotherAgent": "Pasar a otro agente",
+      "dialogTitle": "Pasar a otro agente",
       "dialogDescription": "Inicia una sesión nueva del agente desde este punto. La sesión original no cambia.",
       "untitledSession": "Sesión actual",
       "originalAgent": "Agente original: {{agent}}",

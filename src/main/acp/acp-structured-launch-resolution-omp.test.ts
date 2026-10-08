@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
+import { NATIVE_CHAT_VISUALS_DIR_ENV } from '../native-chat/native-chat-visuals-delivery'
 import { createProviderSpawnSpec } from '../provider-process/provider-process-supervisor'
 import { ACP_CHILD_ENV_TO_DELETE, acpLaunchSpecFor } from './acp-launch-specs'
 import {
@@ -64,7 +65,8 @@ describe('OMP ACP launch resolution', () => {
       ANTHROPIC_API_KEY: 'sk-test'
     }
     const launch = await resolver(ompRecord(), { launchEnv: userEnv })({ identity })
-    expect(launch.envToDelete).toEqual([])
+    // Only an inherited visuals folder: this chat has none.
+    expect(launch.envToDelete).toEqual([NATIVE_CHAT_VISUALS_DIR_ENV])
     const child = createProviderSpawnSpec(
       {
         command: launch.command,

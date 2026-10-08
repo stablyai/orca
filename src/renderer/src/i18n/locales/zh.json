@@ -4073,11 +4073,9 @@
             "checkAriaOne": "恢复后有 1 个待检查的聊天。点击查看详情。",
             "checkAria": "恢复后有 {{value0}} 个待检查的聊天。点击查看详情。",
             "checkTooltip": "重启后 Orca 未能恢复或未能确认已恢复的聊天。点击查看详情。",
-            "resumingLabelOne": "正在恢复 1 个聊天",
-            "resumingLabel": "正在恢复 {{value0}} 个聊天",
-            "resumingAriaOne": "正在恢复 1 个聊天。点击查看详情。",
-            "resumingAria": "正在恢复 {{value0}} 个聊天。点击查看详情。",
-            "resumingTooltip": "正在恢复中断的聊天并请它们继续…"
+            "resumingTooltip": "正在恢复中断的聊天并请它们继续…",
+            "resumingProgressLabel": "正在恢复聊天 {{value0}}/{{value1}}",
+            "resumingProgressAria": "正在恢复聊天，已完成 {{value0}}/{{value1}}。点击查看详情。"
           },
           "provider": {
             "extra": {
@@ -17554,7 +17552,8 @@
         "collapseNode": "折叠 {{value0}}",
         "expandNode": "展开 {{value0}}",
         "selectMachine": "选择 {{value0}} 上的全部聊天",
-        "sshHost": "SSH"
+        "sshHost": "SSH",
+        "done": "完成"
       },
       "linear-issue-attribute-filter-coverage-notice": {
         "statusPartialTeamCoverage": "过滤 {{value1}} 团队状态中的 {{value0}} — 不包括其余团队的问题。",
@@ -17650,6 +17649,32 @@
             "hostOnly": "Cursor 登录详情仅可在运行 Orca 的电脑上读取。"
           }
         }
+      },
+      "NativeChatResumeRunPanel": {
+        "resumedTitle": "已恢复 {{value0}}/{{value1}} 个聊天",
+        "resumedTitleOne": "已恢复 {{value0}}/1 个聊天",
+        "resumingTitleOne": "正在恢复 1 个聊天",
+        "resumingTitle": "正在恢复 {{value0}} 个聊天",
+        "description": "每个聊天都会带着完整上下文恢复，并被要求检查它停在了哪里。你可以关闭此窗口，状态栏会继续显示进度。"
+      },
+      "NativeChatResumeRunStatusIcon": {
+        "waitingForReply": "等待回复",
+        "starting": "正在启动",
+        "waitingToStart": "等待启动",
+        "inFlight": "{{value0}} · {{value1}}",
+        "resumed": "已恢复"
+      },
+      "NativeChatResumeRunSummary": {
+        "done": "已完成 {{value0}}/{{value1}}",
+        "starting": "{{value0}} 个正在启动",
+        "waitingForReply": "{{value0}} 个等待回复",
+        "waitingToStart": "{{value0}} 个等待启动",
+        "all": "全部",
+        "inProgress": "进行中",
+        "resumed": "已恢复",
+        "attention": "需要处理",
+        "running": "已运行 {{value0}}",
+        "filter": "显示聊天"
       }
     },
     "i18n": {
@@ -17844,7 +17869,7 @@
         "notDoneCommand": "命令未运行。",
         "notDoneGoal": "目标未更改。",
         "restartFailed": "智能体无法重新启动。",
-        "capacity": "Orca 在过去一天内收到的请求过多。",
+        "capacity": "运行此聊天的计算机上的 Orca 已达到请求上限。请在那台计算机上更新 Orca，然后重试。",
         "outcomeUnknown": "Orca 无法确认发生了什么。请查看聊天。",
         "sendOutcomeLost": "Orca 无法确认你的消息已送达智能体。请查看聊天，如有需要请重新发送。",
         "questionChanged": "此问题已被回答或已更改。",
@@ -17877,6 +17902,8 @@
         "waitForBackgroundTasks": "请等待后台任务完成。",
         "messagesUnsettled": "您之前发送的一条消息尚未确认。",
         "settleEarlierMessage": "请等待之前的消息送达，或重试该消息。",
+        "queueTooLarge": "队列中等待的文本过多。",
+        "shrinkQueue": "请删除一条排队的消息，或等待其送达，然后重试。",
         "optionRejected": "智能体未接受此设置。",
         "goalsUnsupported": "此智能体不支持目标。",
         "agentRefused": "智能体拒绝了此请求。",
@@ -18663,8 +18690,8 @@
       }
     },
     "agentSessionContinuation": {
-      "continueInNewSession": "在新会话中继续…",
-      "dialogTitle": "在新会话中继续",
+      "handOffToAnotherAgent": "移交给另一个智能体",
+      "dialogTitle": "移交给另一个智能体",
       "dialogDescription": "从当前进度启动一个新的智能体会话，原会话保持不变。",
       "untitledSession": "当前会话",
       "originalAgent": "原智能体：{{agent}}",

@@ -4178,11 +4178,9 @@
             "checkAriaOne": "1 chat à vérifier après la reprise. Cliquez pour plus de détails.",
             "checkAria": "{{value0}} chats à vérifier après la reprise. Cliquez pour plus de détails.",
             "checkTooltip": "Chats qu'Orca n'a pas pu reprendre, ou dont il n'a pas pu confirmer la reprise, après le redémarrage. Cliquez pour plus de détails.",
-            "resumingLabelOne": "Reprise d’1 conversation",
-            "resumingLabel": "Reprise de {{value0}} conversations",
-            "resumingAriaOne": "Reprise d’1 conversation. Cliquez pour voir les détails.",
-            "resumingAria": "Reprise de {{value0}} conversations. Cliquez pour voir les détails.",
-            "resumingTooltip": "Restauration des conversations interrompues et demande de poursuite…"
+            "resumingTooltip": "Restauration des conversations interrompues et demande de poursuite…",
+            "resumingProgressLabel": "Reprise des discussions {{value0}}/{{value1}}",
+            "resumingProgressAria": "Reprise des discussions, {{value0}} sur {{value1}} terminées. Cliquez pour voir les détails."
           },
           "provider": {
             "extra": {
@@ -17670,7 +17668,8 @@
         "collapseNode": "Réduire {{value0}}",
         "expandNode": "Développer {{value0}}",
         "selectMachine": "Sélectionner toutes les discussions sur {{value0}}",
-        "sshHost": "SSH"
+        "sshHost": "SSH",
+        "done": "Terminé"
       },
       "linear-issue-attribute-filter-coverage-notice": {
         "statusPartialTeamCoverage": "Filtrage des statuts des équipes {{value0}} sur {{value1}} : les problèmes des équipes restantes ne sont pas inclus.",
@@ -17751,6 +17750,32 @@
             "hostOnly": "Les détails de connexion Cursor ne sont lisibles que sur l'ordinateur qui exécute Orca."
           }
         }
+      },
+      "NativeChatResumeRunPanel": {
+        "resumedTitle": "{{value0}} discussions sur {{value1}} reprises",
+        "resumedTitleOne": "{{value0}} discussion sur 1 reprise",
+        "resumingTitleOne": "Reprise d’une discussion",
+        "resumingTitle": "Reprise de {{value0}} discussions",
+        "description": "Chaque discussion est restaurée avec tout son contexte, et l’agent vérifie où il s’était arrêté. Vous pouvez fermer cette fenêtre ; la barre d’état suit la progression."
+      },
+      "NativeChatResumeRunStatusIcon": {
+        "waitingForReply": "En attente de réponse",
+        "starting": "Démarrage",
+        "waitingToStart": "En attente de démarrage",
+        "inFlight": "{{value0}} · {{value1}}",
+        "resumed": "Reprise"
+      },
+      "NativeChatResumeRunSummary": {
+        "done": "{{value0}} sur {{value1}} terminées",
+        "starting": "{{value0}} en démarrage",
+        "waitingForReply": "{{value0}} en attente de réponse",
+        "waitingToStart": "{{value0}} en attente de démarrage",
+        "all": "Toutes",
+        "inProgress": "En cours",
+        "resumed": "Reprises",
+        "attention": "À traiter",
+        "running": "En cours depuis {{value0}}",
+        "filter": "Afficher les discussions"
       }
     },
     "i18n": {
@@ -17945,7 +17970,7 @@
         "notDoneCommand": "La commande n'a pas été exécutée.",
         "notDoneGoal": "L'objectif n'a pas été modifié.",
         "restartFailed": "L'agent n'a pas pu redémarrer.",
-        "capacity": "Orca a reçu trop de requêtes au cours de la dernière journée.",
+        "capacity": "Orca sur l'ordinateur qui exécute ce chat a atteint une limite de requêtes. Mettez à jour Orca sur cet ordinateur, puis réessayez.",
         "outcomeUnknown": "Orca n'a pas pu confirmer ce qui s'est passé. Vérifiez le chat.",
         "sendOutcomeLost": "Orca n'a pas pu confirmer que votre message est parvenu à l'agent. Vérifiez le chat, puis renvoyez-le si nécessaire.",
         "questionChanged": "Cette question a déjà reçu une réponse ou a changé.",
@@ -17978,6 +18003,8 @@
         "waitForBackgroundTasks": "Attendez la fin des tâches en arrière-plan.",
         "messagesUnsettled": "Un message que vous avez envoyé plus tôt n'est pas encore confirmé.",
         "settleEarlierMessage": "Attendez que votre message précédent soit transmis, ou renvoyez-le.",
+        "queueTooLarge": "Trop de texte est en attente dans la file.",
+        "shrinkQueue": "Supprimez un message de la file, ou attendez qu'un message soit transmis, puis réessayez.",
         "optionRejected": "L'agent n'a pas accepté ce réglage.",
         "goalsUnsupported": "Cet agent ne prend pas en charge les objectifs.",
         "agentRefused": "L'agent l'a refusé.",
@@ -18764,8 +18791,8 @@
       }
     },
     "agentSessionContinuation": {
-      "continueInNewSession": "Continuer dans une nouvelle session…",
-      "dialogTitle": "Continuer dans une nouvelle session",
+      "handOffToAnotherAgent": "Transférer à un autre Agent",
+      "dialogTitle": "Transférer à un autre Agent",
       "dialogDescription": "Démarrez une nouvelle session d'Agent depuis ce point d'arrêt. La session d'origine reste inchangée.",
       "untitledSession": "Session actuelle",
       "originalAgent": "Agent d'origine : {{agent}}",

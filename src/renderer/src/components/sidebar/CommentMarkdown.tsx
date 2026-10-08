@@ -220,6 +220,7 @@ type CommentMarkdownProps = React.ComponentPropsWithoutRef<'div'> & {
   linkifyFilePaths?: boolean
   expandImages?: boolean
   renderCodeBlock?: DocumentCodeBlockRenderer
+  renderMermaid?: boolean
   extension?: CommentMarkdownExtension
 }
 
@@ -238,6 +239,7 @@ const CommentMarkdown = React.memo(
       linkifyFilePaths = false,
       expandImages = false,
       renderCodeBlock,
+      renderMermaid = true,
       extension,
       ...rest
     },
@@ -246,17 +248,17 @@ const CommentMarkdown = React.memo(
     const baseComponents = React.useMemo(() => {
       if (!onLinkClick) {
         return variant === 'document'
-          ? renderCodeBlock
-            ? createDocumentCommentMarkdownComponents(undefined, renderCodeBlock)
+          ? renderCodeBlock || !renderMermaid
+            ? createDocumentCommentMarkdownComponents(undefined, renderCodeBlock, renderMermaid)
             : documentCommentMarkdownComponents
           : expandImages
             ? createCompactCommentMarkdownComponents(undefined, true)
             : compactCommentMarkdownComponents
       }
       return variant === 'document'
-        ? createDocumentCommentMarkdownComponents(onLinkClick, renderCodeBlock)
+        ? createDocumentCommentMarkdownComponents(onLinkClick, renderCodeBlock, renderMermaid)
         : createCompactCommentMarkdownComponents(onLinkClick, expandImages)
-    }, [expandImages, renderCodeBlock, variant, onLinkClick])
+    }, [expandImages, renderCodeBlock, renderMermaid, variant, onLinkClick])
     const components = React.useMemo(
       () => (extension ? { ...baseComponents, ...extension.components } : baseComponents),
       [baseComponents, extension]

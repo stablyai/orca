@@ -110,6 +110,9 @@ const SENTENCES: Record<AgentSessionWriteNoticeSentence, () => string> = {
     translate('components.native-chat.writeNotice.messagesUnsettled', COPY.messagesUnsettled),
   settleEarlierMessage: () =>
     translate('components.native-chat.writeNotice.settleEarlierMessage', COPY.settleEarlierMessage),
+  queueTooLarge: () =>
+    translate('components.native-chat.writeNotice.queueTooLarge', COPY.queueTooLarge),
+  shrinkQueue: () => translate('components.native-chat.writeNotice.shrinkQueue', COPY.shrinkQueue),
   optionRejected: () =>
     translate('components.native-chat.writeNotice.optionRejected', COPY.optionRejected),
   goalsUnsupported: () =>

@@ -41,6 +41,8 @@ export const AGENT_SESSION_REFUSAL_REASONS = {
     'promptPending',
     'backgroundTasksRunning',
     'messagesUnsettled',
+    /** The chat's queued messages hold too much text to show on every client. */
+    'queueTooLarge',
     'rewindRefused',
     'rewindUnconfirmed',
     // A prompt card or an option

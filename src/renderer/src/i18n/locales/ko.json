@@ -4073,11 +4073,9 @@
             "checkAriaOne": "재개한 후 확인할 채팅 1개. 자세히 보려면 클릭하세요.",
             "checkAria": "재개한 후 확인할 채팅 {{value0}}개. 자세히 보려면 클릭하세요.",
             "checkTooltip": "다시 시작한 후 Orca가 재개하지 못했거나 재개했는지 확인하지 못한 채팅. 자세히 보려면 클릭하세요.",
-            "resumingLabelOne": "채팅 1개 재개 중",
-            "resumingLabel": "채팅 {{value0}}개 재개 중",
-            "resumingAriaOne": "채팅 1개 재개 중. 자세히 보려면 클릭하세요.",
-            "resumingAria": "채팅 {{value0}}개 재개 중. 자세히 보려면 클릭하세요.",
-            "resumingTooltip": "중단된 채팅을 복원하고 계속하도록 요청하는 중…"
+            "resumingTooltip": "중단된 채팅을 복원하고 계속하도록 요청하는 중…",
+            "resumingProgressLabel": "채팅 재개 중 {{value0}}/{{value1}}",
+            "resumingProgressAria": "채팅 재개 중, {{value1}}개 중 {{value0}}개 완료. 자세히 보려면 클릭하세요."
           },
           "provider": {
             "extra": {
@@ -17554,7 +17552,8 @@
         "collapseNode": "{{value0}} 접기",
         "expandNode": "{{value0}} 확장",
         "selectMachine": "{{value0}}의 채팅 모두 선택",
-        "sshHost": "SSH"
+        "sshHost": "SSH",
+        "done": "완료"
       },
       "linear-issue-attribute-filter-coverage-notice": {
         "statusPartialTeamCoverage": "{{value1}} 팀 상태 중 {{value0}} 필터링 중 - 나머지 팀의 문제는 포함되지 않습니다.",
@@ -17650,6 +17649,32 @@
             "hostOnly": "Cursor 로그인 정보는 Orca가 실행 중인 컴퓨터에서만 읽을 수 있습니다."
           }
         }
+      },
+      "NativeChatResumeRunPanel": {
+        "resumedTitle": "채팅 {{value1}}개 중 {{value0}}개를 재개했습니다",
+        "resumedTitleOne": "채팅 1개 중 {{value0}}개를 재개했습니다",
+        "resumingTitleOne": "채팅 1개 재개 중",
+        "resumingTitle": "채팅 {{value0}}개 재개 중",
+        "description": "각 채팅은 전체 컨텍스트와 함께 복원되며, 멈춘 지점을 확인하도록 요청됩니다. 이 창을 닫아도 상태 표시줄에서 진행 상황을 계속 볼 수 있습니다."
+      },
+      "NativeChatResumeRunStatusIcon": {
+        "waitingForReply": "응답 대기 중",
+        "starting": "시작 중",
+        "waitingToStart": "시작 대기 중",
+        "inFlight": "{{value0}} · {{value1}}",
+        "resumed": "재개됨"
+      },
+      "NativeChatResumeRunSummary": {
+        "done": "{{value1}}개 중 {{value0}}개 완료",
+        "starting": "{{value0}}개 시작 중",
+        "waitingForReply": "{{value0}}개 응답 대기 중",
+        "waitingToStart": "{{value0}}개 시작 대기 중",
+        "all": "전체",
+        "inProgress": "진행 중",
+        "resumed": "재개됨",
+        "attention": "확인 필요",
+        "running": "경과 {{value0}}",
+        "filter": "표시할 채팅"
       }
     },
     "i18n": {
@@ -17879,7 +17904,7 @@
         "notDoneCommand": "명령이 실행되지 않았습니다.",
         "notDoneGoal": "목표가 변경되지 않았습니다.",
         "restartFailed": "에이전트를 다시 시작하지 못했습니다.",
-        "capacity": "Orca가 지난 하루 동안 너무 많은 요청을 받았습니다.",
+        "capacity": "이 채팅을 실행하는 컴퓨터의 Orca가 요청 한도에 도달했습니다. 해당 컴퓨터에서 Orca를 업데이트한 다음 다시 시도하세요.",
         "outcomeUnknown": "Orca가 무슨 일이 있었는지 확인하지 못했습니다. 채팅을 확인하세요.",
         "sendOutcomeLost": "Orca가 메시지가 에이전트에 전달되었는지 확인하지 못했습니다. 채팅을 확인하고 필요하면 다시 보내세요.",
         "questionChanged": "이 질문은 이미 답변되었거나 변경되었습니다.",
@@ -17912,6 +17937,8 @@
         "waitForBackgroundTasks": "백그라운드 작업이 끝날 때까지 기다리세요.",
         "messagesUnsettled": "앞서 보낸 메시지가 아직 확인되지 않았습니다.",
         "settleEarlierMessage": "앞서 보낸 메시지가 전달될 때까지 기다리거나 다시 시도하세요.",
+        "queueTooLarge": "대기열에 기다리는 텍스트가 너무 많습니다.",
+        "shrinkQueue": "대기 중인 메시지를 삭제하거나 전달될 때까지 기다린 후 다시 시도하세요.",
         "optionRejected": "에이전트가 이 설정을 받아들이지 않았습니다.",
         "goalsUnsupported": "이 에이전트는 목표를 지원하지 않습니다.",
         "agentRefused": "에이전트가 이를 거부했습니다.",
@@ -18698,8 +18725,8 @@
       }
     },
     "agentSessionContinuation": {
-      "continueInNewSession": "새 세션에서 계속…",
-      "dialogTitle": "새 세션에서 계속",
+      "handOffToAnotherAgent": "다른 에이전트에게 인계",
+      "dialogTitle": "다른 에이전트에게 인계",
       "dialogDescription": "이 지점부터 새 에이전트 세션을 시작합니다. 원래 세션은 변경되지 않습니다.",
       "untitledSession": "현재 세션",
       "originalAgent": "원래 에이전트: {{agent}}",

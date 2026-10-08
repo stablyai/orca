@@ -53,7 +53,7 @@ const HOST_TEXT = 'Expected runtime fence 1; the session is at 3.'
 const CAUSES: Partial<Record<AgentSessionWireRefusalCode, AgentSessionWriteNoticeSentence>> = {
   // Only send preparation, when the owner it restarted for this send failed to start.
   agent_session_owner_restart_failed: 'restartFailed',
-  // Only the ledger, when a day's retained operation ids fill a client's or the host's quota.
+  // Only an older host's ledger, when a day's retained operation ids filled its quota.
   agent_session_operation_capacity: 'capacity',
   // A replayed operation with no recorded outcome, or a send behind a rewind whose outcome is
   // unrecorded: either way Orca cannot say what happened.
@@ -162,7 +162,9 @@ describe('the notice for every failure and write', () => {
       const phoneResend = write === 'composer-send' && RESEND_CAN_WORK.has(codeOf(failure))
       expect(parts.includes('tryAgainComposerSend'), cell).toBe(phoneResend)
       expect(/again/i.test(english), cell).toBe(
-        phoneResend || codeOf(failure) === 'structured_agent_session_unsupported'
+        phoneResend ||
+          codeOf(failure) === 'structured_agent_session_unsupported' ||
+          codeOf(failure) === 'agent_session_operation_capacity'
       )
     }
     for (const reason of [null, DISPATCH_REJECTED_WRITE_FAILED, DISPATCH_REJECTED_QUEUE_FULL]) {
