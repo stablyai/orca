@@ -5,6 +5,7 @@ import {
   flushTerminalOutput
 } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { bindWritePtyOutputToXterm } from './write-pty-output-to-xterm'
+import { bindFreshSpawnFollowReset } from './fresh-spawn-follow-reset'
 
 const terminals: Terminal[] = []
 
@@ -25,7 +26,12 @@ function createSession(foreground = false) {
   terminals.push(terminal)
   const session = {
     disposed: false,
-    deps: { isVisibleRef: { current: foreground } },
+    deps: {
+      isVisibleRef: { current: foreground },
+      replayingPanesRef: { current: new Map<number, number>() },
+      tabId: 'review-tab',
+      worktreeId: 'review-worktree'
+    },
     kittyKeyboardModes: { scan: () => {} },
     resetHiddenOutputRestoreIfPtyChanged: () => {},
     transport: { getPtyId: () => 'pty-review-fixture' },
@@ -39,10 +45,14 @@ function createSession(foreground = false) {
     markHiddenOutputRestoreNeeded: () => {},
     writePtyOutputToXterm: (_data: string, _foreground: boolean): void => {},
     queueAgentIdleTerminalModeReset: (): void => {},
-    pane: { terminal }
+    writeReplayData: (_data: string): void => {},
+    writeReplayDataAsync: async (_data: string): Promise<void> => {},
+    pane: { id: 1, terminal }
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture supplies this binding's fields and uses the real scheduler and xterm parser.
   bindWritePtyOutputToXterm(session as never)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: replay uses this fixture's real terminal and replay-guard map.
+  bindFreshSpawnFollowReset(session as never)
   return session
 }
 
@@ -158,4 +168,59 @@ describe('idle cursor reset with the real output scheduler', () => {
     await settledText(terminal)
     expect(cursorCommands).toEqual([[0]])
   })
+
+  it.each([
+    ['\x1b]0;', '\x07'],
+    ['\x1bP', '\x1b\\']
+  ])('preserves a reset appended to a discarded terminating batch in %j', async (prefix, end) => {
+    vi.stubGlobal('window', globalThis)
+    const session = createSession()
+    const terminal = session.pane.terminal
+    const cursorCommands: (number | number[])[][] = []
+    terminal.parser.registerCsiHandler({ intermediates: ' ', final: 'q' }, (params) => {
+      cursorCommands.push(params)
+      return false
+    })
+    session.writePtyOutputToXterm(prefix, false)
+    session.queueAgentIdleTerminalModeReset()
+    session.writePtyOutputToXterm(`${'x'.repeat(3 * 1024 * 1024)}${end}`, false)
+    flushTerminalOutput(terminal)
+    expect(await settledText(terminal)).toContain('Orca skipped hidden terminal output')
+    expect(cursorCommands).toEqual([[0]])
+  })
+
+  it.each(['live', 'replay', 'async replay'])(
+    'does not reissue a parsed reset after later backlog loss (%s)',
+    async (mode) => {
+      vi.stubGlobal('window', globalThis)
+      const session = createSession()
+      const terminal = session.pane.terminal
+      const cursorCommands: (number | number[])[][] = []
+      terminal.parser.registerCsiHandler({ intermediates: ' ', final: 'q' }, (params) => {
+        cursorCommands.push(params)
+        return false
+      })
+      if (mode === 'live') {
+        session.queueAgentIdleTerminalModeReset()
+        flushTerminalOutput(terminal)
+      } else {
+        session.writePtyOutputToXterm('\x1b]0;', false)
+        session.queueAgentIdleTerminalModeReset()
+        if (mode === 'replay') {
+          session.writeReplayData('\x07')
+        } else {
+          await session.writeReplayDataAsync('\x07')
+        }
+      }
+      await settledText(terminal)
+      expect(cursorCommands).toEqual([[0]])
+      cursorCommands.length = 0
+
+      session.writePtyOutputToXterm('\x1bP', false)
+      session.writePtyOutputToXterm('x'.repeat(3 * 1024 * 1024), false)
+      flushTerminalOutput(terminal)
+      expect(await settledText(terminal)).toContain('Orca skipped hidden terminal output')
+      expect(cursorCommands).toEqual([])
+    }
+  )
 })

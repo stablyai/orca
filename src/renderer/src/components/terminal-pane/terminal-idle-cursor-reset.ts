@@ -5,6 +5,7 @@ import { RESET_TERMINAL_CURSOR_STYLE } from '../../../../shared/terminal-mode-re
 export class TerminalIdleCursorReset {
   private escapeState = ''
   private pending = false
+  private resetParsed: (() => void) | undefined
 
   request(): string {
     this.pending = true
@@ -19,7 +20,12 @@ export class TerminalIdleCursorReset {
 
   cancelSequence(): string {
     this.escapeState = ''
+    this.pending ||= this.resetParsed !== undefined
     return this.takeReadyReset()
+  }
+
+  getResetParsedCallback(): (() => void) | undefined {
+    return this.resetParsed
   }
 
   private takeReadyReset(): string {
@@ -27,6 +33,13 @@ export class TerminalIdleCursorReset {
       return ''
     }
     this.pending = false
+    const resetParsed = (): void => {
+      // Why: an older completion must not clear a replacement reset's delivery intent.
+      if (this.resetParsed === resetParsed) {
+        this.resetParsed = undefined
+      }
+    }
+    this.resetParsed = resetParsed
     return RESET_TERMINAL_CURSOR_STYLE
   }
 }

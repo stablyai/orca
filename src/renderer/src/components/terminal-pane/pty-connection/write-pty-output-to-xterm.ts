@@ -33,6 +33,7 @@ export function bindWritePtyOutputToXterm(session: ConnectPanePtySession): void 
     opts?: { hiddenStartupRendererQuery?: boolean; liveStartupBatch?: boolean }
   ): void {
     data = idleCursorReset.processOutput(data)
+    const resetParsed = idleCursorReset.getResetParsedCallback()
     // Why: every application byte funnels through here, so it's the one place the kitty keyboard mirror observes the pane's protocol negotiation.
     session.kittyKeyboardModes.scan(data)
     if (foreground) {
@@ -104,6 +105,13 @@ export function bindWritePtyOutputToXterm(session: ConnectPanePtySession): void 
           forceFullViewportPresent(session.pane.terminal)
         }
       : startupWrite?.onParsed
+    const outputParsed =
+      resetParsed && onParsed
+        ? () => {
+            resetParsed()
+            onParsed()
+          }
+        : (resetParsed ?? onParsed)
     writeTerminalOutput(session.pane.terminal, data, {
       foreground: foregroundOutput,
       beforeWrite: startupWrite
@@ -112,7 +120,7 @@ export function bindWritePtyOutputToXterm(session: ConnectPanePtySession): void 
             startupWrite.beforeWrite()
           }
         : session.beforeTerminalOutputWrite,
-      ...(onParsed ? { onParsed } : {}),
+      ...(outputParsed ? { onParsed: outputParsed } : {}),
       // Why: every scheduler write claims one child so a split delivery is credited only after all children parse or discard.
       ackCredit: takeCurrentTerminalDeliveryCredit() ?? undefined,
       onBackgroundBacklogDropped: session.markHiddenOutputRestoreNeeded,

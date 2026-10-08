@@ -29,6 +29,7 @@ type ReplayTerminalOptions = {
   shouldRefreshViewportSynchronously?: () => boolean
   shouldReleaseRenderPause?: () => boolean
   stallCheckMs?: number
+  onParsed?: () => void
 }
 
 type ReplayGuardBreadcrumbData = {
@@ -197,7 +198,10 @@ export function replayIntoTerminal(
     followupViewportRefresh: true,
     shouldRefreshViewportSynchronously: options.shouldRefreshViewportSynchronously,
     shouldReleaseRenderPause: options.shouldReleaseRenderPause,
-    onParsed: guardCallbacks.onParsed,
+    onParsed: () => {
+      guardCallbacks.onParsed()
+      options.onParsed?.()
+    },
     onWriteFailure: guardCallbacks.onWriteFailure
   })
 }
@@ -231,7 +235,10 @@ export function replayIntoTerminalAsync(
       followupViewportRefresh: true,
       shouldRefreshViewportSynchronously: options.shouldRefreshViewportSynchronously,
       shouldReleaseRenderPause: options.shouldReleaseRenderPause,
-      onParsed: guardCallbacks.onParsed,
+      onParsed: () => {
+        guardCallbacks.onParsed()
+        options.onParsed?.()
+      },
       onWriteFailure: guardCallbacks.onWriteFailure
     })
   })

@@ -106,8 +106,10 @@ export function bindFreshSpawnFollowReset(session: ConnectPanePtySession): void 
     // Why: drain any queued background bytes BEFORE the replay paint, so the
     // scheduler's deferred drain cannot land older bytes on top of the replay.
     flushTerminalOutput(session.pane.terminal)
+    const originalData = data
     data = idleCursorReset.processOutput(data)
     replayIntoTerminal(session.pane, session.deps.replayingPanesRef, data, {
+      onParsed: data === originalData ? undefined : idleCursorReset.getResetParsedCallback(),
       breadcrumbIdentity: {
         tabId: session.deps.tabId,
         worktreeId: session.deps.worktreeId,
@@ -122,8 +124,10 @@ export function bindFreshSpawnFollowReset(session: ConnectPanePtySession): void 
     // Why: WebGL must be rebuilt after xterm has parsed replay bytes, not
     // merely after the write was queued.
     flushTerminalOutput(session.pane.terminal)
+    const originalData = data
     data = idleCursorReset.processOutput(data)
     return replayIntoTerminalAsync(session.pane, session.deps.replayingPanesRef, data, {
+      onParsed: data === originalData ? undefined : idleCursorReset.getResetParsedCallback(),
       breadcrumbIdentity: {
         tabId: session.deps.tabId,
         worktreeId: session.deps.worktreeId,
