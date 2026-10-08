@@ -30,8 +30,10 @@ import {
 import {
   consumeNativeChatResumeOnRestartDialogRequest,
   getNativeChatResumeOnRestartDialogRequest,
+  NATIVE_CHAT_RESUME_DIALOG_TOKEN,
   subscribeNativeChatResumeOnRestartDialog
 } from './native-chat-resume-on-restart-dialog'
+import { DialogEntryScope, useAutomaticDialogEntry } from '@/lib/dialog-registry-entry'
 import {
   continueNativeChatRestartOffer,
   dismissNativeChatRestartOffer,
@@ -122,7 +124,9 @@ function moveInTree(event: React.KeyboardEvent<HTMLElement>): void {
 
 export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
   const offerEnabled = useNativeChatRestartOfferEnabled()
-  const { candidates, failed, listedAt } = useNativeChatRestartOffer(offerEnabled)
+  const { candidates, failed, listedAt } = useNativeChatRestartOffer(offerEnabled, {
+    ownsStartupDiscovery: true
+  })
   const rows = useMemo<ResumeCandidate[]>(() => [...candidates, ...failed], [candidates, failed])
   const failureBySession = useMemo(
     () => new Map(failed.map((failure) => [failure.sessionId, failure])),
@@ -130,11 +134,23 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
   )
   // Open is an external one-shot request, never mirrored into local state: the launch load and the
   // status-bar entry both raise it, and a copy here would go stale against whichever raised it last.
-  const open = useSyncExternalStore(
+  const request = useSyncExternalStore(
     subscribeNativeChatResumeOnRestartDialog,
     getNativeChatResumeOnRestartDialogRequest,
     getNativeChatResumeOnRestartDialogRequest
   )
+  // Raised by the launch, it waits its turn among the dialogs that open by themselves; asked for by
+  // the user, it opens at once. Only one it can draw holds a place, so a hidden one holds nothing.
+  const phase = useAutomaticDialogEntry(
+    NATIVE_CHAT_RESUME_DIALOG_TOKEN,
+    'native-chat-resume',
+    !offerEnabled || rows.length === 0 || request === null
+      ? null
+      : request === 'user'
+        ? 'user'
+        : 'automatic'
+  )
+  const open = phase !== null && phase !== 'queued'
   const updateSettings = useAppStore((store) => store.updateSettings)
   const [dontAskAgain, setDontAskAgain] = useState(false)
   const resumeButtonRef = useRef<HTMLButtonElement>(null)
@@ -147,10 +163,12 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
   const [overrides, setOverrides] = useState<ReadonlyMap<string, boolean>>(() => new Map())
   // Each opening starts from the rows' defaults. This component never unmounts, so an untick made
   // before a close would otherwise greet a reopen, e.g. as "Resume 0 chats" over what a run left.
-  const [openedWith, setOpenedWith] = useState(open)
-  if (openedWith !== open) {
-    setOpenedWith(open)
-    if (open) {
+  // Keyed on the request, not the turn, so waiting for its turn never resets the ticks.
+  const requested = request !== null
+  const [openedWith, setOpenedWith] = useState(requested)
+  if (openedWith !== requested) {
+    setOpenedWith(requested)
+    if (requested) {
       setOverrides(new Map())
     }
   }
@@ -245,9 +263,9 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
     'Select all'
   )
 
-  return (
+  const dialog = (
     <Dialog
-      open
+      open={phase !== 'closing'}
       onOpenChange={(next) => {
         if (!next) {
           snooze()
@@ -402,4 +420,5 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
       </DialogContent>
     </Dialog>
   )
+  return <DialogEntryScope token={NATIVE_CHAT_RESUME_DIALOG_TOKEN}>{dialog}</DialogEntryScope>
 }

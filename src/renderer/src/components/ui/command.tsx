@@ -9,6 +9,7 @@ import * as DialogPrimitive from 'radix-ui/dialog'
 import { cn } from '@/lib/utils'
 import { handleImeOverlayEscape } from '@/lib/ime-overlay-escape'
 import { useImeTextFieldProps } from '@/lib/ime-text-field'
+import { DialogEntryContent } from '@/lib/dialog-registry-entry'
 
 const commandSurfaceVariants = cva('', {
   variants: {
@@ -87,20 +88,22 @@ function CommandDialog({
           onOpenAutoFocus={onOpenAutoFocus}
           onCloseAutoFocus={onCloseAutoFocus}
         >
-          <DialogPrimitive.Title className="sr-only">{title}</DialogPrimitive.Title>
-          <DialogPrimitive.Description className="sr-only">
-            {description}
-          </DialogPrimitive.Description>
-          <Command
-            shouldFilter={shouldFilter}
-            className={cn(
-              '[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3',
-              commandClassName
-            )}
-            {...commandRootProps}
-          >
-            {children}
-          </Command>
+          <DialogEntryContent>
+            <DialogPrimitive.Title className="sr-only">{title}</DialogPrimitive.Title>
+            <DialogPrimitive.Description className="sr-only">
+              {description}
+            </DialogPrimitive.Description>
+            <Command
+              shouldFilter={shouldFilter}
+              className={cn(
+                '[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3',
+                commandClassName
+              )}
+              {...commandRootProps}
+            >
+              {children}
+            </Command>
+          </DialogEntryContent>
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>

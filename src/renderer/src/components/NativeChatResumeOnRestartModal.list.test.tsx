@@ -18,9 +18,10 @@ import {
   offered
 } from './native-chat-resume-on-restart-modal.test-support'
 import {
-  consumeNativeChatResumeOnRestartDialogRequest,
+  _resetNativeChatResumeOnRestartDialog,
   requestNativeChatResumeOnRestartDialog
 } from './native-chat-resume-on-restart-dialog'
+import { resetDialogRegistryForTests } from '../store/dialog-registry-test-state'
 import { _resetNativeChatRestartOffer } from './native-chat-resume-on-restart-store'
 
 const rpc = vi.hoisted(() => vi.fn())
@@ -45,7 +46,9 @@ async function mount(node: React.ReactNode): Promise<void> {
 beforeEach(() => {
   rpc.mockReset()
   _resetNativeChatRestartOffer()
-  consumeNativeChatResumeOnRestartDialogRequest()
+  _resetNativeChatResumeOnRestartDialog()
+  // These cases are the offer alone, past the startup checks that go before it.
+  resetDialogRegistryForTests({ startupSettled: true })
   useAppStore.setState(useAppStore.getInitialState(), true)
   useAppStore.setState({
     settings: { ...getDefaultSettings(''), experimentalStructuredNativeChat: true }
@@ -60,7 +63,7 @@ afterEach(() => {
   container.remove()
   useAppStore.setState(useAppStore.getInitialState(), true)
   _resetNativeChatRestartOffer()
-  consumeNativeChatResumeOnRestartDialogRequest()
+  _resetNativeChatResumeOnRestartDialog()
 })
 
 // Left to the dialog, focus lands on the scrollable list and draws a ring around it.
@@ -127,7 +130,7 @@ it('folds the focused node with Left and opens it with Right, keeping focus and 
 it('keeps initial focus inside the dialog with no resumable chats', async () => {
   rpc.mockResolvedValue({ sessions: [], failed: [failure('b')] })
   await mount(<NativeChatResumeOnRestartModal />)
-  await act(async () => requestNativeChatResumeOnRestartDialog())
+  await act(async () => requestNativeChatResumeOnRestartDialog('user'))
   const dialog = document.querySelector('[role="dialog"]')
   expect(button('Resume 0 chats').disabled).toBe(true)
   expect(dialog).not.toBeNull()
@@ -189,7 +192,7 @@ it('starts the list with a tri-state Select all that counts the selection', asyn
 it('leaves a failure a retry cannot fix out of Select all', async () => {
   rpc.mockResolvedValue({ sessions: [offered[0]], failed: [{ ...failure('b'), retryable: false }] })
   await mount(<NativeChatResumeOnRestartModal />)
-  await act(async () => requestNativeChatResumeOnRestartDialog())
+  await act(async () => requestNativeChatResumeOnRestartDialog('user'))
   const selectAll = namedBox('Select all chats')
   expect(selectAll.closest('label')?.textContent).toContain('1 of 1 selected')
 

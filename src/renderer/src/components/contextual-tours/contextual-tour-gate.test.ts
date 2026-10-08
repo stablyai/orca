@@ -7,32 +7,19 @@ import {
   getMeasurableContextualTourTarget,
   getNextVisibleContextualTourStepIndex,
   getPreviousVisibleContextualTourStepIndex,
-  getVisibleContextualTourStepIndexes,
-  isContextualTourAllowedForModal
+  getVisibleContextualTourStepIndexes
 } from './contextual-tour-gate'
 
 describe('contextual tour gate', () => {
-  it('allows only workspace creation over its workspace composer modal', () => {
-    const workspaceCreation = getContextualTour('workspace-creation')
-    const tasks = getContextualTour('tasks')
-
-    expect(isContextualTourAllowedForModal(workspaceCreation, 'new-workspace-composer')).toBe(true)
-    expect(isContextualTourAllowedForModal(workspaceCreation, 'add-repo')).toBe(false)
-    expect(isContextualTourAllowedForModal(tasks, 'none')).toBe(true)
-    expect(isContextualTourAllowedForModal(tasks, 'new-workspace-composer')).toBe(false)
-    expect(isContextualTourAllowedForModal(tasks, 'add-repo')).toBe(false)
-  })
-
   it('does not start when the required first target is missing', () => {
     const decision = getContextualTourRequestDecision({
       tour: getContextualTour('tasks'),
       persistedUIReady: true,
       autoEligible: true,
-      onboardingVisible: false,
+
       seenIds: [],
       sessionConsumed: false,
       activeTourId: null,
-      activeModal: 'none',
       blockingSurfaceVisible: false,
       targetExists: () => false
     })
@@ -48,11 +35,10 @@ describe('contextual tour gate', () => {
       tour,
       persistedUIReady: true,
       autoEligible: true,
-      onboardingVisible: false,
+
       seenIds: [],
       sessionConsumed: false,
       activeTourId: null,
-      activeModal: 'none',
       blockingSurfaceVisible: false,
       targetExists: (selector) => selector === fallbackSelector
     })
@@ -215,11 +201,10 @@ describe('contextual tour gate', () => {
         tour,
         persistedUIReady: true,
         autoEligible: true,
-        onboardingVisible: false,
+
         seenIds: [],
         sessionConsumed: false,
         activeTourId: null,
-        activeModal: 'none',
         blockingSurfaceVisible: false,
         targetExists: hasFirstTarget
       })
@@ -230,11 +215,10 @@ describe('contextual tour gate', () => {
         tour,
         persistedUIReady: false,
         autoEligible: true,
-        onboardingVisible: false,
+
         seenIds: [],
         sessionConsumed: false,
         activeTourId: null,
-        activeModal: 'none',
         blockingSurfaceVisible: false,
         targetExists: hasFirstTarget
       })
@@ -245,11 +229,10 @@ describe('contextual tour gate', () => {
         tour,
         persistedUIReady: true,
         autoEligible: false,
-        onboardingVisible: false,
+
         seenIds: [],
         sessionConsumed: false,
         activeTourId: null,
-        activeModal: 'none',
         blockingSurfaceVisible: false,
         targetExists: hasFirstTarget
       })
@@ -260,26 +243,23 @@ describe('contextual tour gate', () => {
         tour,
         persistedUIReady: true,
         autoEligible: true,
-        onboardingVisible: true,
         seenIds: [],
         sessionConsumed: false,
         activeTourId: null,
-        activeModal: 'none',
-        blockingSurfaceVisible: false,
+        blockingSurfaceVisible: true,
         targetExists: hasFirstTarget
       })
-    ).toEqual({ kind: 'blocked', reason: 'onboarding' })
+    ).toEqual({ kind: 'blocked', reason: 'blocking-surface' })
 
     expect(
       getContextualTourRequestDecision({
         tour,
         persistedUIReady: true,
         autoEligible: true,
-        onboardingVisible: false,
+
         seenIds: ['tasks'],
         sessionConsumed: false,
         activeTourId: null,
-        activeModal: 'none',
         blockingSurfaceVisible: false,
         targetExists: hasFirstTarget
       })
@@ -290,11 +270,10 @@ describe('contextual tour gate', () => {
         tour,
         persistedUIReady: true,
         autoEligible: true,
-        onboardingVisible: false,
+
         seenIds: [],
         sessionConsumed: false,
         activeTourId: null,
-        activeModal: 'none',
         blockingSurfaceVisible: true,
         targetExists: hasFirstTarget
       })

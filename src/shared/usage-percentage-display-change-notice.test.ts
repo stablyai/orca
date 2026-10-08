@@ -61,7 +61,8 @@ describe('shouldShowUsagePercentageDisplayChangeNotice', () => {
         usagePercentageDisplayChangeNoticeDismissed: false,
         statusBarVisible: true,
         hasVisibleUsageMeters: true,
-        activeModal: 'none'
+        activeModal: 'none',
+        dialogOnScreen: false
       })
     ).toBe(true)
 
@@ -71,7 +72,8 @@ describe('shouldShowUsagePercentageDisplayChangeNotice', () => {
         usagePercentageDisplayChangeNoticeDismissed: false,
         statusBarVisible: true,
         hasVisibleUsageMeters: true,
-        activeModal: 'none'
+        activeModal: 'none',
+        dialogOnScreen: false
       })
     ).toBe(false)
 
@@ -81,7 +83,8 @@ describe('shouldShowUsagePercentageDisplayChangeNotice', () => {
         usagePercentageDisplayChangeNoticeDismissed: true,
         statusBarVisible: true,
         hasVisibleUsageMeters: true,
-        activeModal: 'none'
+        activeModal: 'none',
+        dialogOnScreen: false
       })
     ).toBe(false)
 
@@ -91,7 +94,8 @@ describe('shouldShowUsagePercentageDisplayChangeNotice', () => {
         usagePercentageDisplayChangeNoticeDismissed: false,
         statusBarVisible: false,
         hasVisibleUsageMeters: true,
-        activeModal: 'none'
+        activeModal: 'none',
+        dialogOnScreen: false
       })
     ).toBe(false)
 
@@ -101,7 +105,8 @@ describe('shouldShowUsagePercentageDisplayChangeNotice', () => {
         usagePercentageDisplayChangeNoticeDismissed: false,
         statusBarVisible: true,
         hasVisibleUsageMeters: false,
-        activeModal: 'none'
+        activeModal: 'none',
+        dialogOnScreen: false
       })
     ).toBe(false)
 
@@ -111,7 +116,20 @@ describe('shouldShowUsagePercentageDisplayChangeNotice', () => {
         usagePercentageDisplayChangeNoticeDismissed: false,
         statusBarVisible: true,
         hasVisibleUsageMeters: true,
-        activeModal: 'feature-tips'
+        activeModal: 'add-repo',
+        dialogOnScreen: false
+      })
+    ).toBe(false)
+
+    // A dialog outside the modal slot, such as the tip the app shows at launch, holds it too.
+    expect(
+      shouldShowUsagePercentageDisplayChangeNotice({
+        persistedUIReady: true,
+        usagePercentageDisplayChangeNoticeDismissed: false,
+        statusBarVisible: true,
+        hasVisibleUsageMeters: true,
+        activeModal: 'none',
+        dialogOnScreen: true
       })
     ).toBe(false)
   })

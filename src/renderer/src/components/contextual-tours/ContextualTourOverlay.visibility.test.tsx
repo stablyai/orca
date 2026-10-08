@@ -78,8 +78,7 @@ describe('ContextualTourOverlay full-pass interval visibility gate', () => {
       activeContextualTourId: 'workspace-agent-sessions',
       activeContextualTourStepIndex: 1,
       activeModal: 'none',
-      contextualToursOnboardingVisible: false,
-      contextualToursBlockingSurfaceVisible: false,
+
       activeContextualTourSuppressed: false
     })
     await act(async () => {

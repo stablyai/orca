@@ -1,20 +1,26 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { useShallow } from 'zustand/react/shallow'
+import { useCallback, useEffect, useLayoutEffect, useState } from 'react'
+import { readStartupDiscovery } from '../startup/startup-discovery-read'
+import { useDialogDisposal } from '../lib/dialog-registry-entry'
 import { onOnboardingReopened } from '../components/onboarding/show-onboarding-event'
 import { shouldShowOnboarding } from '../components/onboarding/should-show-onboarding'
 import {
+  APP_OPEN_FEATURE_TIP_TOKEN,
   getFeatureTipsAppOpenDecision,
   isCliFeatureTipCompleted
 } from '../components/feature-tips/feature-tip-startup-gate'
-import {
-  trackCmdJPaletteFeatureTipShown,
-  trackOrcaCliFeatureTipShown
-} from '../components/feature-tips/feature-tip-telemetry'
 import { useAppStore } from '../store'
+import { useDialogRegistry } from '../store/dialog-registry'
 import { isWebClientLocation } from '../lib/web-client-location'
 import type { OnboardingState } from '../../../shared/onboarding-state-types'
+import type { FeatureTipId } from '../../../shared/feature-tips'
 
 export type OnboardingGate = ReturnType<typeof useOnboardingAndFeatureTips>
+
+function disposeTip(): void {
+  const registry = useDialogRegistry.getState()
+  registry.endDialog(APP_OPEN_FEATURE_TIP_TOKEN)
+  registry.settleStartupSource('feature-tip', 'unavailable')
+}
 
 /**
  * Owns first-run education: the onboarding flow's visibility plus the one-per-session
@@ -24,22 +30,24 @@ export function useOnboardingAndFeatureTips() {
   const [onboarding, setOnboarding] = useState<OnboardingState | null>(null)
   const [onboardingLoaded, setOnboardingLoaded] = useState(false)
   const [featureTipCliInstalled, setFeatureTipCliInstalled] = useState<boolean | null>(null)
-  const promptedThisSessionRef = useRef(false)
-  const suppressedByOnboardingThisSessionRef = useRef(false)
+  const [appOpenTipId, setAppOpenTipId] = useState<FeatureTipId | null>(null)
+  // Read early by startup for the tip check, before startup shows onboarding itself.
+  const [tipCheckOnboarding, setTipCheckOnboarding] = useState<OnboardingState | null>(null)
 
-  const activeModal = useAppStore((s) => s.activeModal)
+  const tipSource = useDialogRegistry((s) => s.startupSources['feature-tip'])
+  const abandonTip = useCallback(() => {
+    useDialogRegistry.getState().settleStartupSource('feature-tip', 'unavailable')
+  }, [])
+  useDialogDisposal(APP_OPEN_FEATURE_TIP_TOKEN, disposeTip)
+
   const settings = useAppStore((s) => s.settings)
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
   const featureTipsSeenIds = useAppStore((s) => s.featureTipsSeenIds)
   const featureInteractions = useAppStore((s) => s.featureInteractions)
   const contextualToursAutoEligible = useAppStore((s) => s.contextualToursAutoEligible)
-  const actions = useAppStore(
-    useShallow((s) => ({
-      openModal: s.openModal,
-      markFeatureTipsSeen: s.markFeatureTipsSeen,
-      setContextualToursAutoEligible: s.setContextualToursAutoEligible,
-      setContextualToursOnboardingVisible: s.setContextualToursOnboardingVisible
-    }))
+  const setContextualToursAutoEligible = useAppStore((s) => s.setContextualToursAutoEligible)
+  const setContextualToursAwaitingOnboarding = useAppStore(
+    (s) => s.setContextualToursAwaitingOnboarding
   )
 
   const applyStartupOnboardingState = useCallback((state: OnboardingState): void => {
@@ -47,23 +55,40 @@ export function useOnboardingAndFeatureTips() {
     setOnboardingLoaded(true)
   }, [])
 
+  const applyStartupTipCheckInputs = useCallback((state: OnboardingState | null): void => {
+    if (useDialogRegistry.getState().startupSources['feature-tip'] !== 'pending') {
+      return
+    }
+    if (state === null) {
+      // Settings or onboarding could not be read: no tip this launch, and nothing waits on one.
+      useDialogRegistry.getState().settleStartupSource('feature-tip', 'unavailable')
+      return
+    }
+    setTipCheckOnboarding(state)
+  }, [])
+
   useEffect(() => {
     return onOnboardingReopened(setOnboarding)
   }, [])
 
-  useEffect(() => {
-    // Why: suppress tours until onboarding state is known (null = loading) so a first-run user can't mark a tour seen before onboarding appears.
-    const suppressTours = !onboardingLoaded || shouldShowOnboarding(onboarding)
-    actions.setContextualToursOnboardingVisible(suppressTours)
-  }, [actions, onboarding, onboardingLoaded])
+  useLayoutEffect(() => {
+    // First-run policy applies before lazy onboarding has any committed content.
+    setContextualToursAwaitingOnboarding(!onboardingLoaded || shouldShowOnboarding(onboarding))
+  }, [onboarding, onboardingLoaded, setContextualToursAwaitingOnboarding])
 
   useEffect(() => {
     if (!persistedUIReady || !onboardingLoaded || contextualToursAutoEligible !== null) {
       return
     }
     // Why: rollout targets first-run onboarding users; existing profiles are classified once and never auto-toured.
-    actions.setContextualToursAutoEligible(shouldShowOnboarding(onboarding))
-  }, [actions, contextualToursAutoEligible, onboarding, onboardingLoaded, persistedUIReady])
+    setContextualToursAutoEligible(shouldShowOnboarding(onboarding))
+  }, [
+    contextualToursAutoEligible,
+    onboarding,
+    onboardingLoaded,
+    persistedUIReady,
+    setContextualToursAutoEligible
+  ])
 
   useEffect(() => {
     if (!persistedUIReady) {
@@ -71,74 +96,65 @@ export function useOnboardingAndFeatureTips() {
     }
 
     let cancelled = false
-    void window.api.cli
-      .getInstallStatus()
-      .then((status) => {
-        if (cancelled) {
-          return
-        }
+    void readStartupDiscovery(window.api.cli.getInstallStatus()).then((status) => {
+      if (cancelled) {
+        return
+      }
+      if (status === null) {
+        abandonTip()
+      } else {
         setFeatureTipCliInstalled(isCliFeatureTipCompleted(status))
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setFeatureTipCliInstalled(true)
-        }
-      })
+      }
+    })
 
     return () => {
       cancelled = true
     }
-  }, [persistedUIReady])
+  }, [abandonTip, persistedUIReady])
 
   useEffect(() => {
+    if (tipSource !== 'pending') {
+      return
+    }
     const featureTipsDecision = getFeatureTipsAppOpenDecision({
-      activeModal,
       cliInstalled: featureTipCliInstalled,
       featureTipsSeenIds,
       featureInteractions,
-      onboarding,
+      onboarding: onboarding ?? tipCheckOnboarding,
       persistedUIReady,
-      promptedThisSession: promptedThisSessionRef.current,
       settings,
-      suppressedByOnboardingThisSession: suppressedByOnboardingThisSessionRef.current,
       webClient: isWebClientLocation()
     })
 
-    if (featureTipsDecision.kind === 'suppress-for-onboarding') {
-      // Why: first-run users should finish onboarding without a second education modal in the same session.
-      suppressedByOnboardingThisSessionRef.current = true
+    if (featureTipsDecision.kind === 'pending') {
       return
     }
 
     if (featureTipsDecision.kind !== 'open') {
+      useDialogRegistry.getState().settleStartupSource('feature-tip', 'none')
       return
     }
 
-    promptedThisSessionRef.current = true
-    if (featureTipsDecision.tipId === 'orca-cli') {
-      trackOrcaCliFeatureTipShown('app_open')
-    } else if (featureTipsDecision.tipId === 'cmd-j-palette') {
-      trackCmdJPaletteFeatureTipShown('app_open')
-    }
-    // Why: mark seen on show so a quit/crash before dismiss doesn't reappear it next launch.
-    actions.markFeatureTipsSeen([featureTipsDecision.tipId])
-    actions.openModal('feature-tips', {
-      source: 'app_open',
-      tipId: featureTipsDecision.tipId
-    })
+    // The owner queues its tip with the answer, even before its lazy host mounts.
+    useDialogRegistry
+      .getState()
+      .settleStartupSource('feature-tip', 'ready', APP_OPEN_FEATURE_TIP_TOKEN)
+    setAppOpenTipId(featureTipsDecision.tipId)
   }, [
-    activeModal,
-    actions,
     featureTipCliInstalled,
     featureInteractions,
     featureTipsSeenIds,
     onboarding,
     persistedUIReady,
-    settings
+    settings,
+    tipCheckOnboarding,
+    tipSource
   ])
 
   return {
     applyStartupOnboardingState,
+    applyStartupTipCheckInputs,
+    appOpenTipId,
     onboarding,
     setOnboarding,
     shouldRender: onboarding !== null && shouldShowOnboarding(onboarding)

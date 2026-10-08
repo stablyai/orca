@@ -11,7 +11,6 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { translate } from '@/i18n/i18n'
-import { useAppStore } from '@/store'
 import type {
   BrowserWebAuthnAccount,
   BrowserWebAuthnAccountRequest
@@ -34,9 +33,6 @@ export function BrowserWebAuthnAccountDialog(): React.JSX.Element {
   const [respondingRequestId, setRespondingRequestId] = useState<string | null>(null)
   const requestsRef = useRef(requests)
   const firstAccountRef = useRef<HTMLButtonElement | null>(null)
-  const setContextualToursBlockingSurfaceVisible = useAppStore(
-    (state) => state.setContextualToursBlockingSurfaceVisible
-  )
   const activeRequest = requests[0] ?? null
   const lastRequestRef = useRef(activeRequest)
   const displayedRequest = activeRequest ?? lastRequestRef.current
@@ -73,11 +69,6 @@ export function BrowserWebAuthnAccountDialog(): React.JSX.Element {
       }
     }
   }, [removeRequest])
-
-  useEffect(() => {
-    setContextualToursBlockingSurfaceVisible(activeRequest !== null)
-    return () => setContextualToursBlockingSurfaceVisible(false)
-  }, [activeRequest, setContextualToursBlockingSurfaceVisible])
 
   useEffect(() => {
     if (!activeRequest) {

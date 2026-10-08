@@ -11,10 +11,14 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { OnboardingState } from '../../../../shared/onboarding-state-types'
 import { shouldShowOnboarding } from '../onboarding/should-show-onboarding'
 
+export const APP_OPEN_FEATURE_TIP_TOKEN = 'feature-tip:app-open'
+
 export type FeatureTipsAppOpenDecision =
   | { kind: 'open'; tipId: FeatureTipId }
   | { kind: 'skip' }
   | { kind: 'suppress-for-onboarding' }
+  /** Something it depends on has not loaded yet. */
+  | { kind: 'pending' }
 
 export function isCliFeatureTipCompleted(status: CliInstallStatus): boolean {
   // Why: unsupported launch modes cannot complete setup, but an installed
@@ -55,40 +59,33 @@ export function getPendingFeatureTips(args: {
 }
 
 export function getFeatureTipsAppOpenDecision(args: {
-  activeModal: string
   cliInstalled: boolean | null
   featureTipsSeenIds: readonly FeatureTipId[]
   featureInteractions: FeatureInteractionState
   onboarding: OnboardingState | null
   persistedUIReady: boolean
-  promptedThisSession: boolean
   settings: FeatureTipSettings | null | undefined
-  suppressedByOnboardingThisSession: boolean
   webClient: boolean
 }): FeatureTipsAppOpenDecision {
   if (args.onboarding !== null && shouldShowOnboarding(args.onboarding)) {
     return { kind: 'suppress-for-onboarding' }
   }
 
-  if (
-    args.promptedThisSession ||
-    args.suppressedByOnboardingThisSession ||
-    !args.persistedUIReady ||
-    !args.settings ||
-    args.onboarding === null ||
-    args.activeModal !== 'none' ||
-    args.cliInstalled === null ||
-    shouldShowOnboarding(args.onboarding)
-  ) {
-    return { kind: 'skip' }
+  if (!args.persistedUIReady || !args.settings || args.onboarding === null) {
+    return { kind: 'pending' }
   }
 
+  // Without the CLI status, assume its tip is still open: if even then nothing is pending, the
+  // answer is known without waiting for that probe.
   const nextTip = getPendingFeatureTips({
     seenTipIds: args.featureTipsSeenIds,
-    cliInstalled: args.cliInstalled,
+    cliInstalled: args.cliInstalled ?? false,
     featureInteractions: args.featureInteractions,
     settings: args.settings,
     webClient: args.webClient
   })[0]
-  return nextTip ? { kind: 'open', tipId: nextTip.id } : { kind: 'skip' }
+  if (!nextTip) {
+    return { kind: 'skip' }
+  }
+  return args.cliInstalled === null ? { kind: 'pending' } : { kind: 'open', tipId: nextTip.id }
 }

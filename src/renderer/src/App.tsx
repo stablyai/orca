@@ -42,7 +42,10 @@ function App(): React.JSX.Element {
   useAppShellServices()
   // Why before the startup chain: its effect runs first, and no startup step can skip the load.
   useEffect(startNativeChatDraftLoad, [])
-  useAppStartupHydration(onboardingGate.applyStartupOnboardingState)
+  useAppStartupHydration(
+    onboardingGate.applyStartupOnboardingState,
+    onboardingGate.applyStartupTipCheckInputs
+  )
   useAppSessionPersistence()
   useRuntimeGraphSync()
   usePersistedUIWriter()

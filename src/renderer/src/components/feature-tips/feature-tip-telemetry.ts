@@ -5,10 +5,6 @@ export type OrcaCliFeatureTipSource = EventProps<'orca_cli_feature_tip_shown'>['
 export type OrcaCliFeatureTipSetupResult = EventProps<'orca_cli_feature_tip_setup_result'>['result']
 export type CmdJPaletteFeatureTipSource = EventProps<'cmd_j_palette_feature_tip_shown'>['source']
 
-export function getOrcaCliFeatureTipTelemetrySource(value: unknown): OrcaCliFeatureTipSource {
-  return value === 'app_open' ? 'app_open' : 'manual'
-}
-
 export function trackOrcaCliFeatureTipShown(source: OrcaCliFeatureTipSource): void {
   track('orca_cli_feature_tip_shown', { source })
 }

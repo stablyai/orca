@@ -12,6 +12,8 @@ import { translate } from '@/i18n/i18n'
 import type { GitHubTaskKind } from '@/components/task-page-localized-options'
 import { getTaskPresetQuery } from '../../../shared/task-preset-query'
 import { shouldSuppressEnterSubmit } from '@/lib/new-workspace-enter-guard'
+import { useDialogRegistry } from '@/store/dialog-registry'
+import { selectDialogOnScreen } from '@/store/dialog-registry-state'
 export function useTaskPageSearchActions(model: TaskPageGitHubQuietRefreshModel) {
   const {
     setTaskResumeState,
@@ -180,6 +182,7 @@ export function useTaskPageSearchActions(model: TaskPageGitHubQuietRefreshModel)
     },
     [handleApplyTaskSearch]
   )
+  const dialogOnScreen = useDialogRegistry(selectDialogOnScreen)
   useEffect(() => {
     if (
       taskSource !== 'github' ||
@@ -189,7 +192,8 @@ export function useTaskPageSearchActions(model: TaskPageGitHubQuietRefreshModel)
       newLinearProjectOpen ||
       newLinearIssueOpen ||
       newJiraIssueOpen ||
-      activeModal !== 'none'
+      activeModal !== 'none' ||
+      dialogOnScreen
     ) {
       return
     }
@@ -227,6 +231,7 @@ export function useTaskPageSearchActions(model: TaskPageGitHubQuietRefreshModel)
       })
   }, [
     activeModal,
+    dialogOnScreen,
     dialogWorkItem,
     githubMode,
     newIssueOpen,

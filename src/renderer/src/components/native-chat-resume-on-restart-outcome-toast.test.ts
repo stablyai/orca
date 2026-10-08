@@ -145,5 +145,5 @@ it('opens nothing from Show once the host no longer lists the chat', async () =>
   await new Promise((resolve) => setTimeout(resolve, 0))
   expect(rpc.mock.calls.at(-1)?.[1]).toBe('agentSession.restartResumable')
   expect(getNativeChatRestartOffer().failed).toEqual([])
-  expect(getNativeChatResumeOnRestartDialogRequest()).toBe(false)
+  expect(getNativeChatResumeOnRestartDialogRequest()).toBeNull()
 })

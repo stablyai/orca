@@ -1,8 +1,10 @@
+import { readStartupDiscovery } from '../startup/startup-discovery-read'
 import { useEffect, useRef } from 'react'
 import { restoreLocalStructuredChatsAtStartup } from '@/runtime/local-structured-chats'
 import { syncZoomCSSVar } from '@/lib/ui-zoom'
 import { installCodexDetachedPaneRestartExecutor } from '@/components/terminal-pane/codex-detached-pane-restart-scheduler'
 import { useAppStore } from '../store'
+import { useDialogRegistry } from '../store/dialog-registry'
 import { reconcileHydratedWorkspaceTabModels } from './reconcile-hydrated-workspace-tab-models'
 import { useStartupActions } from './use-app-startup-actions'
 import { waitForNativeChatDraftsAtStartup } from './native-chat-draft-startup'
@@ -20,6 +22,7 @@ import {
   timeRendererStartupSyncStep
 } from '../startup/startup-diagnostics'
 import { recoverFromDegradedStartup } from '../startup/startup-degraded-recovery'
+import { refreshDeferredStartupCatalog } from '../startup/startup-deferred-catalog-refresh'
 import { restoreSshConnectionsForStartup } from '../startup/startup-ssh-connection-restore'
 import { collectActiveWorkspaceSshTargetIds } from '../startup/active-workspace-ssh-targets'
 import { publishTerminalViewAttributesAtAppStart } from '../components/terminal-pane/terminal-appearance'
@@ -31,39 +34,33 @@ import {
 import {
   getRepoExecutionHostId,
   isRuntimeOwnedSshTargetId,
-  parseExecutionHostId,
-  toRuntimeExecutionHostId,
-  type ExecutionHostId
+  parseExecutionHostId
 } from '../../../shared/execution-host'
 import { mapWithConcurrency } from '../../../shared/map-with-concurrency'
 import type { OnboardingState } from '../../../shared/onboarding-state-types'
 import { ensureLocalRuntimeCapabilities } from '../runtime/local-runtime-capabilities'
-
-async function listRuntimeSessionHostIdsForStartup(): Promise<ExecutionHostId[]> {
-  try {
-    return (await window.api.runtimeEnvironments.list()).map((environment) =>
-      toRuntimeExecutionHostId(environment.id)
-    )
-  } catch (err) {
-    console.warn('Failed to list runtime session hosts for startup:', err)
-    return []
-  }
-}
+import { listRuntimeSessionHostIdsForStartup } from '../startup/startup-runtime-session-hosts'
 
 /**
  * Runs the renderer's one-shot boot chain: settings, persisted UI, the local repo catalog,
  * the workspace session, SSH reconnect, and terminal restoration — then unlocks the session
  * writer. A failure anywhere leaves disk state untouched and boots in degraded no-save mode.
  */
-export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingState) => void): void {
+export function useAppStartupHydration(
+  onOnboardingLoaded: (state: OnboardingState) => void,
+  /** Once known: onboarding for the feature-tip check, or null when no tip can be decided. */
+  onTipCheckInputs: (onboarding: OnboardingState | null) => void
+): void {
   const actions = useStartupActions()
   // Why a ref: the boot chain must not restart if a caller passes a new callback identity.
   // Synced in an effect (declared before the chain below, so it lands first on mount) because
   // a render-phase write can leak from a render React discards.
   const onOnboardingLoadedRef = useRef(onOnboardingLoaded)
+  const onTipCheckInputsRef = useRef(onTipCheckInputs)
   useEffect(() => {
     onOnboardingLoadedRef.current = onOnboardingLoaded
-  }, [onOnboardingLoaded])
+    onTipCheckInputsRef.current = onTipCheckInputs
+  }, [onOnboardingLoaded, onTipCheckInputs])
 
   useEffect(() => installCodexDetachedPaneRestartExecutor(), [])
 
@@ -90,9 +87,16 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
         // Why: nothing in the hydration chain reads profile state synchronously, so don't let it add a serial IPC round-trip before fetchSettings.
         void actions.fetchOrcaProfiles()
         // Why: publish local settings before persisted UI/catalog work; a saved remote owner's defaults can spend the full connect timeout.
-        await timeRendererStartupStep('fetch-settings', () =>
+        const settingsRead = timeRendererStartupStep('fetch-settings', () =>
           actions.fetchSettings({ deferOwnerWorktreeVisibilityDefaults: true })
         )
+        void readStartupDiscovery(settingsRead.then(() => true)).then((read) => {
+          if (!cancelled && (read === null || useAppStore.getState().settings === null)) {
+            onTipCheckInputsRef.current(null)
+            useDialogRegistry.getState().settleStartupSource('native-chat-resume', 'unavailable')
+          }
+        })
+        await settingsRead
         // Why: hidden-at-launch PTYs can query before any pane mounts; publish view attributes as soon as settings exist so every PTY owner answers from the composed theme.
         publishTerminalViewAttributesAtAppStart(
           useAppStore.getState().settings,
@@ -107,9 +111,21 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
         const onboardingPromise = timeRendererStartupStep('onboarding-get', () =>
           window.api.onboarding.get()
         )
-        onboardingPromise.catch(() => {})
+        void readStartupDiscovery(onboardingPromise).then((onboarding) => {
+          if (!cancelled) {
+            onTipCheckInputsRef.current(
+              useAppStore.getState().settings === null ? null : onboarding
+            )
+          }
+        })
         // Why: await ui.get() (not overlap) so persisted view settings hydrate before the local catalog/session steps and first paint reflects them.
-        const persistedUI = await timeRendererStartupStep('ui-get', () => window.api.ui.get())
+        const uiRead = timeRendererStartupStep('ui-get', () => window.api.ui.get())
+        void readStartupDiscovery(uiRead).then((read) => {
+          if (read === null && !cancelled) {
+            onTipCheckInputsRef.current(null)
+          }
+        })
+        const persistedUI = await uiRead
         uiHydrated = timeRendererStartupSyncStep('hydrate-persisted-ui', () =>
           hydratePersistedUIAfterStartupRead({
             persistedUI,
@@ -309,44 +325,12 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
           logRendererStartupDiagnostic('startup-hydration-done', {
             durationMs: Math.round(performance.now() - startupStartedAt)
           })
-          void (async () => {
-            try {
-              try {
-                // Why: remote rows must not render under a fallback visibility while their owner default is still loading.
-                await timeRendererStartupStep('owner-visibility-defaults', () =>
-                  actions.awaitOwnerWorktreeVisibilityDefaultsHydration()
-                )
-                await timeRendererStartupStep('remote-catalog-refresh', async () => {
-                  await actions.fetchReposForAllHosts()
-                  await actions.fetchProjectGroupsForAllHosts()
-                  await actions.fetchFolderWorkspacesForAllHosts()
-                })
-              } catch (err) {
-                console.warn('Remote startup catalog refresh failed:', err)
-              }
-              if (!cancelled) {
-                try {
-                  await timeRendererStartupStep('remote-worktree-refresh', async () => {
-                    // Why: the full scan is not required for session recovery, so keep it off the startup-critical path.
-                    await actions.fetchAllWorktrees()
-                    // Why: the startup prune only saw session-referenced repos; use the deferred scan's
-                    // authoritative results to drop deleted-worktree visit timestamps that would
-                    // otherwise accumulate unbounded (disconnected SSH stays non-authoritative and is kept).
-                    actions.pruneLastVisitedTimestamps()
-                    await actions.fetchWorktreeLineage()
-                  })
-                } catch (err) {
-                  console.warn('Deferred startup worktree refresh failed:', err)
-                }
-              }
-            } finally {
-              if (!cancelled) {
-                useAppStore.setState({ startupWorktreeRefreshCompleted: true })
-              }
-            }
-          })()
+          void refreshDeferredStartupCatalog(actions, () => cancelled)
         }
       } catch (error) {
+        if (!cancelled && useAppStore.getState().settings === null) {
+          useDialogRegistry.getState().settleStartupSource('native-chat-resume', 'unavailable')
+        }
         await recoverFromDegradedStartup({
           error,
           uiHydrated,
@@ -356,6 +340,10 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
           reconnectPersistedTerminals: actions.reconnectPersistedTerminals,
           abortSignal: abortController.signal
         })
+        // Startup failed, possibly before onboarding was read: a tip check still open never answers.
+        if (!cancelled) {
+          onTipCheckInputsRef.current(null)
+        }
       }
       void actions.initGitHubCache()
     })()

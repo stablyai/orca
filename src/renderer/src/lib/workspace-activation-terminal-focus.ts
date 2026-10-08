@@ -1,5 +1,7 @@
 import { shouldPreserveEditableFocus } from '@/components/terminal-pane/pane-helpers'
 import { useAppStore } from '@/store'
+import { useDialogRegistry } from '@/store/dialog-registry'
+import { selectDialogOnScreen } from '@/store/dialog-registry-state'
 import { focusRuntimeTerminalSurface } from '@/runtime/sync-runtime-graph'
 import type { ActivateAndRevealResult } from '@/lib/worktree-activation'
 
@@ -51,10 +53,13 @@ export function queueWorkspaceActivationTerminalFocus(
       state.activeWorkspaceExecutionHostId !== executionHostId ||
       state.activeView !== 'terminal' ||
       state.activeTabType !== 'terminal' ||
-      (tabId !== null && state.activeTabId !== tabId) ||
-      state.activeModal !== 'none'
+      (tabId !== null && state.activeTabId !== tabId)
     ) {
       cancel()
+      return
+    }
+    // The selecting palette can still be finishing its exit animation; keep this action pending.
+    if (state.activeModal !== 'none' || selectDialogOnScreen(useDialogRegistry.getState())) {
       return
     }
     tabId ??= state.activeTabId

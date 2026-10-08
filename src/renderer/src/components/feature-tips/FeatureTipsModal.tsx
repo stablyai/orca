@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type JSX } from 'react'
 import { toast } from 'sonner'
 import { getDefaultVoiceSettings } from '../../../../shared/constants'
+import { FEATURE_TIPS, type FeatureTipId } from '../../../../shared/feature-tips'
 import {
   ORCHESTRATION_ENABLED_STORAGE_KEY,
   ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY,
@@ -10,76 +11,57 @@ import { useAppStore } from '@/store'
 import { CliSetupTipDialog } from './CliSetupTipDialog'
 import { CmdJPaletteTipDialog } from './CmdJPaletteTipDialog'
 import { installCliFromFeatureTip } from './feature-tip-cli-install-action'
-import { getFeatureTipForModal } from './feature-tip-modal-state'
 import {
-  getOrcaCliFeatureTipTelemetrySource,
   trackCmdJPaletteFeatureTipAcknowledged,
   trackOrcaCliFeatureTipSetupClicked,
   trackOrcaCliFeatureTipSetupResult
 } from './feature-tip-telemetry'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { isWebClientLocation } from '@/lib/web-client-location'
 import { translate } from '@/i18n/i18n'
 import { SessionSearchTipDialog } from './SessionSearchTipDialog'
 import { useSessionSearchTipSetup } from './use-session-search-tip-setup'
 import { VoiceDictationTipDialog } from './VoiceDictationTipDialog'
 
-export default function FeatureTipsModal(): JSX.Element | null {
-  const activeModal = useAppStore((s) => s.activeModal)
-  const closeModal = useAppStore((s) => s.closeModal)
+/** The tip the app offers at launch, controlled by its host (AppOpenFeatureTip). */
+export function FeatureTipDialogs({
+  open: isOpen,
+  tipId,
+  onClose: closeModal
+}: {
+  open: boolean
+  tipId: FeatureTipId
+  onClose: () => void
+}): JSX.Element | null {
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
-  const seenTipIds = useAppStore((s) => s.featureTipsSeenIds)
-  const featureInteractions = useAppStore((s) => s.featureInteractions)
-  const markFeatureTipsSeen = useAppStore((s) => s.markFeatureTipsSeen)
-  const modalData = useAppStore((s) => s.modalData)
   const showAiVaultSearch = useAppStore((s) => s.showAiVaultSearch)
   const mountedRef = useMountedRef()
-  const activeModalRef = useRef(activeModal)
+  const openRef = useRef(isOpen)
   const setupRequestIdRef = useRef(0)
   const [primaryBusy, setPrimaryBusy] = useState(false)
   const [skillTerminalOpen, setSkillTerminalOpen] = useState(false)
-  const isOpen = activeModal === 'feature-tips'
-  const currentTip = getFeatureTipForModal({
-    cliInstalled: true,
-    modalData,
-    seenTipIds,
-    featureInteractions,
-    settings,
-    webClient: isWebClientLocation()
-  })
+  const currentTip = FEATURE_TIPS.find((tip) => tip.id === tipId)
   const sessionSearchSetup = useSessionSearchTipSetup({
     dialogOpen: isOpen && currentTip?.id === 'agent-session-search'
   })
 
   useEffect(() => {
-    activeModalRef.current = activeModal
-  }, [activeModal])
+    openRef.current = isOpen
+  }, [isOpen])
 
-  const markCurrentTipSeen = (): void => {
-    if (currentTip) {
-      markFeatureTipsSeen([currentTip.id])
-    }
+  const handleSkip = (): void => {
+    setupRequestIdRef.current += 1
+    setSkillTerminalOpen(false)
+    setPrimaryBusy(false)
+    closeModal()
   }
 
   const handleOpenChange = (open: boolean): void => {
     if (!open) {
-      setupRequestIdRef.current += 1
-      markCurrentTipSeen()
-      setSkillTerminalOpen(false)
-      setPrimaryBusy(false)
-      closeModal()
+      handleSkip()
     }
-  }
-
-  const handleSkip = (): void => {
-    setupRequestIdRef.current += 1
-    markCurrentTipSeen()
-    setSkillTerminalOpen(false)
-    setPrimaryBusy(false)
-    closeModal()
   }
 
   const openCliSettings = (): void => {
@@ -91,21 +73,18 @@ export default function FeatureTipsModal(): JSX.Element | null {
     // Why: dismiss the tip when navigating away — the tip's job is done once
     // the user clicks through to rebind, and leaving it mounted behind the
     // settings page would re-appear on close.
-    markCurrentTipSeen()
     closeModal()
     openSettingsTarget({ pane: 'shortcuts', repoId: null })
     openSettingsPage()
   }
 
   const openVoiceSettings = (): void => {
-    markCurrentTipSeen()
     closeModal()
     openSettingsTarget({ pane: 'voice', repoId: null })
     openSettingsPage()
   }
 
   const openSessionSearchSettings = (): void => {
-    markCurrentTipSeen()
     closeModal()
     openSettingsTarget({ pane: 'session-history', repoId: null })
     openSettingsPage()
@@ -122,14 +101,11 @@ export default function FeatureTipsModal(): JSX.Element | null {
       return
     }
 
-    markFeatureTipsSeen([currentTip.id])
     switch (currentTip.action) {
       case 'learn-cmd-j-palette': {
         // Why: passive education tip — acknowledging just dismisses; the rebind
         // path lives in Settings and is reachable from the palette itself.
-        trackCmdJPaletteFeatureTipAcknowledged(
-          getOrcaCliFeatureTipTelemetrySource(modalData.source)
-        )
+        trackCmdJPaletteFeatureTipAcknowledged('app_open')
         closeModal()
         break
       }
@@ -166,16 +142,13 @@ export default function FeatureTipsModal(): JSX.Element | null {
         // Why: this modal is lazily mounted; closing it does not unmount the
         // component, so async install results must not reopen UI after dismissal.
         const canApplySetupResult = (): boolean =>
-          mountedRef.current &&
-          activeModalRef.current === 'feature-tips' &&
-          setupRequestIdRef.current === setupRequestId
-        const telemetrySource = getOrcaCliFeatureTipTelemetrySource(modalData.source)
-        trackOrcaCliFeatureTipSetupClicked(telemetrySource)
+          mountedRef.current && openRef.current && setupRequestIdRef.current === setupRequestId
+        trackOrcaCliFeatureTipSetupClicked('app_open')
         setPrimaryBusy(true)
         try {
           const result = await installCliFromFeatureTip(() => window.api.cli.install())
           if (result.kind === 'installed') {
-            trackOrcaCliFeatureTipSetupResult(telemetrySource, 'installed')
+            trackOrcaCliFeatureTipSetupResult('app_open', 'installed')
             if (!canApplySetupResult()) {
               return
             }
@@ -190,7 +163,7 @@ export default function FeatureTipsModal(): JSX.Element | null {
             return
           }
 
-          trackOrcaCliFeatureTipSetupResult(telemetrySource, 'needs_attention')
+          trackOrcaCliFeatureTipSetupResult('app_open', 'needs_attention')
           if (!canApplySetupResult()) {
             return
           }
@@ -216,7 +189,7 @@ export default function FeatureTipsModal(): JSX.Element | null {
             import.meta.env.DEV &&
             message.includes('Development mode uses a generated launcher for validation only')
           ) {
-            trackOrcaCliFeatureTipSetupResult(telemetrySource, 'dev_preview')
+            trackOrcaCliFeatureTipSetupResult('app_open', 'dev_preview')
             if (!canApplySetupResult()) {
               return
             }
@@ -231,7 +204,7 @@ export default function FeatureTipsModal(): JSX.Element | null {
             return
           }
 
-          trackOrcaCliFeatureTipSetupResult(telemetrySource, 'failed')
+          trackOrcaCliFeatureTipSetupResult('app_open', 'failed')
           if (canApplySetupResult()) {
             toast.error(message)
           }
@@ -244,7 +217,7 @@ export default function FeatureTipsModal(): JSX.Element | null {
     }
   }
 
-  if (!isOpen || !currentTip) {
+  if (!currentTip) {
     return null
   }
 
@@ -292,7 +265,7 @@ export default function FeatureTipsModal(): JSX.Element | null {
   }
 
   if (currentTip.action !== 'enable-voice') {
-    currentTip.action satisfies never
+    currentTip satisfies never
     return null
   }
 

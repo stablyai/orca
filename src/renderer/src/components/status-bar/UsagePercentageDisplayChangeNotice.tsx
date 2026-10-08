@@ -4,6 +4,8 @@ import { BarChart3, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
+import { useDialogRegistry } from '@/store/dialog-registry'
+import { selectDialogOnScreen } from '@/store/dialog-registry-state'
 import { shouldShowUsagePercentageDisplayChangeNotice } from '../../../../shared/usage-percentage-display-change-notice'
 import { USAGE_PERCENTAGE_DISPLAY_SETTING_ID } from '../settings/appearance-usage-percentage-search'
 
@@ -62,6 +64,7 @@ export function UsagePercentageDisplayChangeNotice({
   const dismiss = useAppStore((s) => s.dismissUsagePercentageDisplayChangeNotice)
   const statusBarVisible = useAppStore((s) => s.statusBarVisible)
   const activeModal = useAppStore((s) => s.activeModal)
+  const dialogOnScreen = useDialogRegistry(selectDialogOnScreen)
   const [delayElapsed, setDelayElapsed] = useState(false)
   const anchorRef = useRef<HTMLDivElement>(null)
   const [anchorPosition, setAnchorPosition] = useState<AnchorPosition | null>(null)
@@ -71,7 +74,8 @@ export function UsagePercentageDisplayChangeNotice({
     usagePercentageDisplayChangeNoticeDismissed: dismissed,
     statusBarVisible,
     hasVisibleUsageMeters,
-    activeModal
+    activeModal,
+    dialogOnScreen
   })
 
   useEffect(() => {

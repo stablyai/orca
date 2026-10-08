@@ -1,5 +1,7 @@
 import type { TaskPageJiraIssueCreationModel } from './use-task-page-jira-issue-creation'
 import { useEffect } from 'react'
+import { useDialogRegistry } from '@/store/dialog-registry'
+import { selectDialogOnScreen } from '@/store/dialog-registry-state'
 export function useTaskPageGlobalEffects(model: TaskPageJiraIssueCreationModel) {
   const {
     closeTaskPage,
@@ -27,6 +29,8 @@ export function useTaskPageGlobalEffects(model: TaskPageJiraIssueCreationModel) 
     newJiraIssueOpen
   } = model
   const githubTasksBusy = tasksLoading || tasksRefreshing || tasksFiltering
+  // Dialogs outside the modal slot too, such as the tip the app shows at launch.
+  const dialogOnScreen = useDialogRegistry(selectDialogOnScreen)
   useEffect(() => {
     // Why: when a modal is open, let it own Esc dismissal.
     if (
@@ -36,7 +40,8 @@ export function useTaskPageGlobalEffects(model: TaskPageJiraIssueCreationModel) 
       newIssueOpen ||
       newLinearIssueOpen ||
       newJiraIssueOpen ||
-      activeModal !== 'none'
+      activeModal !== 'none' ||
+      dialogOnScreen
     ) {
       return
     }
@@ -82,6 +87,7 @@ export function useTaskPageGlobalEffects(model: TaskPageJiraIssueCreationModel) 
   }, [
     activeModal,
     closeTaskPage,
+    dialogOnScreen,
     dialogWorkItem,
     newIssueOpen,
     newLinearIssueOpen,

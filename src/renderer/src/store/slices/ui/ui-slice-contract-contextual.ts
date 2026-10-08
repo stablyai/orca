@@ -31,7 +31,6 @@ export type UISliceContextual = {
   clearAppearanceAccordionDeepLink: () => void
   activeModal:
     | 'none'
-    | 'create-worktree'
     | 'edit-meta'
     | 'delete-worktree'
     | 'preserved-branch-review'
@@ -43,11 +42,9 @@ export type UISliceContextual = {
     | 'quick-open'
     | 'worktree-palette'
     | 'workspace-cleanup'
-    | 'project-added'
     | 'worktree-visibility'
     | 'setup-guide'
     | 'feature-wall'
-    | 'feature-tips'
     | 'new-workspace-composer'
     | 'confirm-orca-yaml-hooks'
   modalData: Record<string, unknown>
@@ -59,6 +56,7 @@ export type UISliceContextual = {
   recordFeatureInteraction: (id: FeatureInteractionId) => Promise<void>
   contextualToursSeenIds: ContextualTourId[]
   contextualToursAutoEligible: boolean | null
+  contextualToursAwaitingOnboarding: boolean
   activeContextualTourId: ContextualTourId | null
   activeContextualTourStepIndex: number
   activeContextualTourSource: string | null
@@ -67,12 +65,9 @@ export type UISliceContextual = {
   contextualTourNavigationInteractionSnapshot: Partial<Record<ContextualTourId, boolean>>
   activeContextualTourSuppressed: boolean
   contextualTourShownThisSession: boolean
-  contextualToursOnboardingVisible: boolean
-  contextualToursBlockingSurfaceVisible: boolean
   lastCompletedContextualTourId: ContextualTourId | null
   setContextualToursAutoEligible: (eligible: boolean) => void
-  setContextualToursOnboardingVisible: (visible: boolean) => void
-  setContextualToursBlockingSurfaceVisible: (visible: boolean) => void
+  setContextualToursAwaitingOnboarding: (awaiting: boolean) => void
   requestContextualTour: (
     id: ContextualTourId,
     source: string,

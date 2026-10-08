@@ -1,4 +1,6 @@
 import { useAppStore } from '@/store'
+import { useDialogRegistry } from '@/store/dialog-registry'
+import { selectDialogOnScreen } from '@/store/dialog-registry-state'
 import { getAllWorktreesFromState } from '@/store/selectors'
 import type { AppState } from '@/store/types'
 import { isEditableTarget } from '@/lib/editable-target'
@@ -59,7 +61,11 @@ export function resolveHoveredWorkspaceDeleteTarget(
   state: HoveredWorkspaceDeleteState,
   doc: HoveredWorkspaceDocument = document
 ): HoveredWorkspaceDeleteTarget | null {
-  if (state.activeModal !== 'none' || (doc.activeElement && isEditableTarget(doc.activeElement))) {
+  if (
+    state.activeModal !== 'none' ||
+    selectDialogOnScreen(useDialogRegistry.getState()) ||
+    (doc.activeElement && isEditableTarget(doc.activeElement))
+  ) {
     return null
   }
   const hovered = getHoveredWorkspaceIdentity(doc)

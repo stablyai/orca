@@ -1,10 +1,13 @@
-import { useEffect, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useSyncExternalStore } from 'react'
+import { readLocalStructuredAgentSessionsHeld } from '@/runtime/local-structured-chats'
+import { readStartupDiscovery } from '@/startup/startup-discovery-read'
+import { useDialogDisposal } from '@/lib/dialog-registry-entry'
+import { useDialogRegistry } from '@/store/dialog-registry'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import {
-  getStructuredAgentSessionStatusFeed,
-  type StructuredAgentSessionStatusFeedOwner
-} from '@/runtime/structured-agent-session-status-feed'
-import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
+  releaseNativeChatResumeOfferActivity,
+  syncNativeChatResumeOfferActivity
+} from './native-chat-resume-offer-activity-watch'
 import { useAppStore } from '../store'
 import { markNativeChatLaunchResumeDecided } from './native-chat-launch-resume-decision'
 import {
@@ -23,6 +26,8 @@ import {
 } from './native-chat-resume-unsent-requests'
 import {
   consumeNativeChatResumeOnRestartDialogRequest,
+  getNativeChatResumeOnRestartDialogRequest,
+  NATIVE_CHAT_RESUME_DIALOG_TOKEN,
   requestNativeChatResumeOnRestartDialog
 } from './native-chat-resume-on-restart-dialog'
 
@@ -76,7 +81,7 @@ function emit(): void {
  *  actually moves the offer. */
 function publish(next: NativeChatRestartOffer): void {
   offer = next
-  syncOfferedChatWatch()
+  syncNativeChatResumeOfferActivity(getNativeChatRestartOffer, refreshAfterOfferedChatActivity)
   emit()
 }
 
@@ -95,103 +100,11 @@ function syncResuming(): void {
   emit()
 }
 
-/**
- * Re-reads the host once an offered or failed chat shows new activity, so a message the user sent
- * there, or its agent starting, retires its entry here too. The host stays the judge; this only
- * asks again.
- *
- * Held only while something is offered or failed. Keyed on status and prompt rather than every
- * summary, so an agent streaming in such a chat costs one re-read, not one per tool call.
- */
-const OFFERED_CHAT_REFRESH_DELAY_MS = 500
-let offeredChatWatch: {
-  feed: StructuredAgentSessionStatusFeedOwner
-  seen: Map<string, string>
-  release: () => void
-} | null = null
-let offeredChatRefresh: ReturnType<typeof setTimeout> | null = null
-
-function offeredChatIds(): Set<string> {
-  return new Set([...offer.candidates, ...offer.failed].map((entry) => entry.sessionId))
-}
-
-function offeredChatActivityKey(summary: AgentSessionStatusSummary): string {
-  return `${summary.status ?? ''}\u0000${summary.latestPrompt}`
-}
-
-function syncOfferedChatWatch(): void {
-  const offeredIds = offeredChatIds()
-  if (offeredIds.size === 0) {
-    releaseOfferedChatWatch()
-    return
+function refreshAfterOfferedChatActivity(): void {
+  if (actionsBegun === actionsSettled) {
+    const issued = actionsBegun
+    void readNativeChatRestartOffer(() => actionsBegun === issued)
   }
-  if (!offeredChatWatch) {
-    const feed = getStructuredAgentSessionStatusFeed(LOCAL)
-    const unsubscribe = feed.subscribe(noticeOfferedChatActivity)
-    const deactivate = feed.activate()
-    offeredChatWatch = {
-      feed,
-      seen: new Map(),
-      release: () => {
-        unsubscribe()
-        deactivate()
-      }
-    }
-  }
-  const { feed, seen } = offeredChatWatch
-  for (const sessionId of seen.keys()) {
-    if (!offeredIds.has(sessionId)) {
-      seen.delete(sessionId)
-    }
-  }
-  // What the feed already holds is what this listing answered.
-  for (const sessionId of offeredIds) {
-    const summary = feed.getSnapshot().get(sessionId)
-    if (summary && !seen.has(sessionId)) {
-      seen.set(sessionId, offeredChatActivityKey(summary))
-    }
-  }
-}
-
-function noticeOfferedChatActivity(): void {
-  if (!offeredChatWatch) {
-    return
-  }
-  const { feed, seen } = offeredChatWatch
-  const snapshot = feed.getSnapshot()
-  let changed = false
-  for (const sessionId of offeredChatIds()) {
-    const summary = snapshot.get(sessionId)
-    if (!summary) {
-      continue
-    }
-    const key = offeredChatActivityKey(summary)
-    const previous = seen.get(sessionId)
-    if (previous !== key) {
-      seen.set(sessionId, key)
-      // A first sighting is news only if newer than the list; a change to a known chat always is,
-      // since the host may have answered the list just before the change was delivered here.
-      changed ||= previous !== undefined || summary.updatedAt > offer.listedAt
-    }
-  }
-  if (changed && offeredChatRefresh === null) {
-    offeredChatRefresh = setTimeout(() => {
-      offeredChatRefresh = null
-      if (actionsBegun === actionsSettled) {
-        const issued = actionsBegun
-        void readNativeChatRestartOffer(() => actionsBegun === issued)
-      }
-    }, OFFERED_CHAT_REFRESH_DELAY_MS)
-  }
-}
-
-function releaseOfferedChatWatch(): void {
-  if (offeredChatRefresh !== null) {
-    clearTimeout(offeredChatRefresh)
-    offeredChatRefresh = null
-  }
-  offeredChatWatch?.release()
-  offeredChatWatch = null
 }
 
 export function getNativeChatRestartOffer(): NativeChatRestartOffer {
@@ -267,7 +180,7 @@ export async function reopenNativeChatRestartOffer(): Promise<void> {
     await readNativeChatRestartOffer()
   }
   if (resuming.length > 0 || offer.candidates.length > 0 || offer.failed.length > 0) {
-    requestNativeChatResumeOnRestartDialog()
+    requestNativeChatResumeOnRestartDialog('user')
   }
 }
 
@@ -388,10 +301,11 @@ async function loadLaunchOffer(): Promise<void> {
     return
   }
   if (!autoResume) {
-    requestNativeChatResumeOnRestartDialog()
+    requestNativeChatResumeOnRestartDialog('launch')
     return
   }
-  await continueNativeChatRestartOffer(undefined, allResumeSessionIds(offered))
+  // Not awaited: nothing will ask, so other launch prompts need not wait for the resume to settle.
+  void continueNativeChatRestartOffer(undefined, allResumeSessionIds(offered))
 }
 
 /**
@@ -400,13 +314,55 @@ async function loadLaunchOffer(): Promise<void> {
  * `enabled` is a gate, not a trigger: settings arrive after the first render, so the fetch waits
  * for the flag rather than being lost when it was still undefined.
  */
-export function useNativeChatRestartOffer(enabled: boolean): NativeChatRestartOffer {
-  useEffect(() => {
-    if (enabled) {
-      // Fetched after mount, never awaited by startup: the workspace is usable first.
-      launch ??= loadLaunchOffer().finally(markNativeChatLaunchResumeDecided)
+export function useNativeChatRestartOffer(
+  enabled: boolean,
+  options?: { ownsStartupDiscovery: boolean }
+): NativeChatRestartOffer {
+  const ownsStartupDiscovery = options?.ownsStartupDiscovery === true
+  const settingsLoaded = useAppStore((store) => store.settings !== null)
+  const persistedUIReady = useAppStore((store) => store.persistedUIReady)
+  const abandonDiscovery = useCallback(() => {
+    if (ownsStartupDiscovery) {
+      useDialogRegistry.getState().settleStartupSource('native-chat-resume', 'unavailable')
     }
-  }, [enabled])
+  }, [ownsStartupDiscovery])
+  useDialogDisposal('native-chat-resume-discovery', abandonDiscovery)
+  useEffect(() => {
+    const launchRead = enabled
+      ? (launch ??= loadLaunchOffer().finally(markNativeChatLaunchResumeDecided))
+      : null
+    if (!ownsStartupDiscovery) {
+      return
+    }
+    if (!settingsLoaded) {
+      if (persistedUIReady) {
+        abandonDiscovery()
+      }
+      return
+    }
+    let cancelled = false
+    const read = launchRead ? launchRead.then(() => true) : readLocalStructuredAgentSessionsHeld()
+    void readStartupDiscovery(read).then((holds) => {
+      if (cancelled) {
+        return
+      }
+      if (holds === null) {
+        abandonDiscovery()
+      } else if (enabled || !holds) {
+        const asked = getNativeChatResumeOnRestartDialogRequest() !== null
+        useDialogRegistry
+          .getState()
+          .settleStartupSource(
+            'native-chat-resume',
+            asked ? 'ready' : 'none',
+            asked ? NATIVE_CHAT_RESUME_DIALOG_TOKEN : undefined
+          )
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [abandonDiscovery, enabled, ownsStartupDiscovery, persistedUIReady, settingsLoaded])
   return useSyncExternalStore(subscribe, getNativeChatRestartOffer, getNativeChatRestartOffer)
 }
 
@@ -417,7 +373,7 @@ export function useNativeChatRestartResuming(): readonly string[] {
 
 /** @internal - tests need a clean module between cases. */
 export function _resetNativeChatRestartOffer(): void {
-  releaseOfferedChatWatch()
+  releaseNativeChatResumeOfferActivity()
   offer = EMPTY
   forgetUnsentResumes(undefined)
   resumeBatches.clear()

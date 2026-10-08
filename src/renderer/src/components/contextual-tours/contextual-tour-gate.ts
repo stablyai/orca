@@ -12,11 +12,9 @@ export type ContextualTourRequestDecision =
       reason:
         | 'persisted-ui-not-ready'
         | 'auto-disabled'
-        | 'onboarding'
         | 'seen'
         | 'session-consumed'
         | 'active-tour'
-        | 'modal'
         | 'blocking-surface'
         | 'missing-start-target'
     }
@@ -25,16 +23,6 @@ const PANEL_HOST_SELECTOR = '[data-slot="dialog-content"], [data-slot="sheet-con
 
 export function getContextualTourPanelHost(targetElement: Element): HTMLElement | null {
   return targetElement.closest<HTMLElement>(PANEL_HOST_SELECTOR)
-}
-
-export function isContextualTourAllowedForModal(
-  tour: ContextualTour,
-  activeModal: string
-): boolean {
-  if (activeModal === 'none') {
-    return true
-  }
-  return tour.allowedActiveModals?.includes(activeModal) === true
 }
 
 export function getMeasurableContextualTourTarget(
@@ -128,11 +116,9 @@ export function getContextualTourRequestDecision(args: {
   tour: ContextualTour
   persistedUIReady: boolean
   autoEligible: boolean
-  onboardingVisible: boolean
   seenIds: readonly string[]
   sessionConsumed: boolean
   activeTourId: string | null
-  activeModal: string
   blockingSurfaceVisible: boolean
   targetExists: (selector: string) => boolean
 }): ContextualTourRequestDecision {
@@ -142,9 +128,6 @@ export function getContextualTourRequestDecision(args: {
   if (!args.autoEligible) {
     return { kind: 'blocked', reason: 'auto-disabled' }
   }
-  if (args.onboardingVisible) {
-    return { kind: 'blocked', reason: 'onboarding' }
-  }
   if (args.seenIds.includes(args.tour.id)) {
     return { kind: 'blocked', reason: 'seen' }
   }
@@ -153,9 +136,6 @@ export function getContextualTourRequestDecision(args: {
   }
   if (args.activeTourId !== null) {
     return { kind: 'blocked', reason: 'active-tour' }
-  }
-  if (!isContextualTourAllowedForModal(args.tour, args.activeModal)) {
-    return { kind: 'blocked', reason: 'modal' }
   }
   if (args.blockingSurfaceVisible) {
     return { kind: 'blocked', reason: 'blocking-surface' }

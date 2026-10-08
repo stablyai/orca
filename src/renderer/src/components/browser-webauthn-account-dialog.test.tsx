@@ -6,16 +6,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { BrowserWebAuthnAccountRequest } from '../../../shared/browser-webauthn-account'
 
-const { respondMock, setBlockingSurfaceMock } = vi.hoisted(() => ({
-  respondMock: vi.fn(),
-  setBlockingSurfaceMock: vi.fn()
+const { respondMock } = vi.hoisted(() => ({
+  respondMock: vi.fn()
 }))
 
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
-vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: unknown) => unknown) =>
-    selector({ setContextualToursBlockingSurfaceVisible: setBlockingSurfaceMock })
-}))
 
 import { BrowserWebAuthnAccountDialog } from './browser-webauthn-account-dialog'
 
@@ -27,7 +22,6 @@ describe('BrowserWebAuthnAccountDialog', () => {
 
   beforeEach(() => {
     respondMock.mockReset().mockResolvedValue(true)
-    setBlockingSurfaceMock.mockReset()
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: {

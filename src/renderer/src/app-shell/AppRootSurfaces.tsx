@@ -18,6 +18,7 @@ import { shouldRenderPetOverlay } from '../components/pet/pet-overlay-visibility
 import { useAppStore } from '../store'
 import type { UpdateStatus } from '../../../shared/update-status-types'
 import { useLazyModalMounts } from './use-lazy-modal-mounts'
+import { AppOpenFeatureTip } from '../components/feature-tips/AppOpenFeatureTip'
 import {
   selectAppRootSurfacePetEnabled,
   selectAppRootSurfaceTelemetryOptedIn,
@@ -26,6 +27,7 @@ import {
 import type { FloatingWorkspacePanelState } from './use-floating-workspace-panel'
 import type { OnboardingGate } from './use-onboarding-and-feature-tips'
 
+const OnboardingFlow = lazy(() => import('../components/onboarding/OnboardingFlow'))
 const QuickOpen = lazy(() => import('../components/QuickOpen'))
 const WorktreeJumpPalette = lazy(() => import('../components/WorktreeJumpPalette'))
 const WorkspaceCleanupDialog = lazy(
@@ -36,13 +38,11 @@ const StatusBar = lazy(() =>
 )
 const SetupGuideModal = lazy(() => import('../components/setup-guide/SetupGuideModal'))
 const FeatureWallModal = lazy(() => import('../components/feature-wall/FeatureWallModal'))
-const FeatureTipsModal = lazy(() => import('../components/feature-tips/FeatureTipsModal'))
 const AddRepoDialog = lazy(() => import('../components/sidebar/AddRepoDialog'))
 const NonGitFolderDialog = lazy(() => import('../components/sidebar/NonGitFolderDialog'))
 const AddProjectFromFolderDialog = lazy(
   () => import('../components/sidebar/AddProjectFromFolderDialog')
 )
-const ProjectAddedDialog = lazy(() => import('../components/sidebar/ProjectAddedDialog'))
 const DeleteWorktreeDialog = lazy(() => import('../components/sidebar/DeleteWorktreeDialog'))
 const PreservedBranchBatchReviewModal = lazy(
   () => import('../components/sidebar/PreservedBranchBatchReviewModal')
@@ -85,8 +85,6 @@ const FloatingTerminalPanel = lazy(() =>
 )
 // Why: lazy so the WebP asset + overlay module aren't fetched unless the experimental flag is on.
 const PetOverlay = lazy(() => import('../components/pet/PetOverlay'))
-// Why: lazy so onboarding's step modules + assets aren't fetched for users past first-launch.
-const OnboardingFlow = lazy(() => import('../components/onboarding/OnboardingFlow'))
 
 type BoundaryProps = {
   boundaryId: string
@@ -146,7 +144,6 @@ export function AppRootSurfaces(props: {
   const updateStatus = useAppStore((s) => s.updateStatus)
   const activeContextualTourId = useAppStore((s) => s.activeContextualTourId)
   const hasSshCredentialRequest = useAppStore((s) => s.sshCredentialQueue.length > 0)
-
   const shouldMountSetupGuideTelemetryObserver = persistedUIReady
   const shouldMountUpdateCard = shouldMountUpdateCardForStatus(updateStatus)
   const shouldMountDictationController = voiceEnabled || dictationState !== 'idle'
@@ -215,11 +212,6 @@ export function AppRootSurfaces(props: {
             <AddProjectFromFolderDialog />
           </ModalBoundary>
         ) : null}
-        {activeModal === 'project-added' ? (
-          <ModalBoundary boundaryId="modal.project-added" resetKey>
-            <ProjectAddedDialog />
-          </ModalBoundary>
-        ) : null}
       </Suspense>
       {/* Why: root overlays can render Radix <Tooltip>s; keep inside the shared provider so lazy surfaces mount from any entry point. */}
       <Suspense fallback={null}>
@@ -254,11 +246,6 @@ export function AppRootSurfaces(props: {
         {mountedLazyModalIds.has('feature-wall') ? (
           <ModalBoundary boundaryId="modal.feature-wall" resetKey={activeModal === 'feature-wall'}>
             <FeatureWallModal />
-          </ModalBoundary>
-        ) : null}
-        {mountedLazyModalIds.has('feature-tips') ? (
-          <ModalBoundary boundaryId="modal.feature-tips" resetKey={activeModal === 'feature-tips'}>
-            <FeatureTipsModal />
           </ModalBoundary>
         ) : null}
       </Suspense>
@@ -364,6 +351,9 @@ export function AppRootSurfaces(props: {
             />
           </RecoverableRenderErrorBoundary>
         </Suspense>
+      ) : null}
+      {onboardingGate.appOpenTipId ? (
+        <AppOpenFeatureTip tipId={onboardingGate.appOpenTipId} />
       ) : null}
       {shouldMountDictationController ? (
         <Suspense fallback={null}>

@@ -21,7 +21,8 @@ type BuildReportArgsInput = {
 const reportedRendererErrorKeys: string[] = []
 const reportedRendererErrorKeySet = new Set<string>()
 const MAX_REPORTED_RENDERER_ERROR_KEYS = 50
-let pendingReactErrorBoundaryReport: CrashReportRecord | null = null
+// Every report not yet taken: two boundaries failing before the dialog listens are two reports.
+let pendingReactErrorBoundaryReports: CrashReportRecord[] = []
 
 export const REACT_ERROR_BOUNDARY_REPORT_AVAILABLE_EVENT =
   'orca:react-error-boundary-report-available'
@@ -113,14 +114,14 @@ function getRendererErrorKey(args: ReactErrorBoundaryReportArgs): string {
   })
 }
 
-export function takePendingReactErrorBoundaryReport(): CrashReportRecord | null {
-  const report = pendingReactErrorBoundaryReport
-  pendingReactErrorBoundaryReport = null
-  return report
+export function takePendingReactErrorBoundaryReports(): CrashReportRecord[] {
+  const reports = pendingReactErrorBoundaryReports
+  pendingReactErrorBoundaryReports = []
+  return reports
 }
 
 function notifyReactErrorBoundaryReportAvailable(report: CrashReportRecord): void {
-  pendingReactErrorBoundaryReport = report
+  pendingReactErrorBoundaryReports.push(report)
   window.dispatchEvent(new CustomEvent(REACT_ERROR_BOUNDARY_REPORT_AVAILABLE_EVENT))
 }
 
@@ -150,5 +151,5 @@ export async function reportReactErrorBoundaryCrash(
 export function clearReactErrorBoundaryReportingForTest(): void {
   reportedRendererErrorKeys.length = 0
   reportedRendererErrorKeySet.clear()
-  pendingReactErrorBoundaryReport = null
+  pendingReactErrorBoundaryReports = []
 }

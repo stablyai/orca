@@ -19,6 +19,7 @@ type Props = {
   className?: string
   compact?: boolean
   reportAsCrash?: boolean
+  onError?: () => void
   resetKey?: string | number | boolean | null
   title?: string
   description?: string
@@ -45,6 +46,7 @@ export class RecoverableRenderErrorBoundary extends React.Component<Props, State
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
+    this.props.onError?.()
     console.error(`[${this.props.boundaryId}] render crash contained by boundary`, error, errorInfo)
     if (this.props.reportAsCrash === false) {
       return
@@ -69,9 +71,12 @@ export class RecoverableRenderErrorBoundary extends React.Component<Props, State
     if (!this.state.error) {
       return this.props.children
     }
+    return this.renderFallback(this.state.error)
+  }
 
+  private renderFallback(error: Error): React.ReactNode {
     if (this.props.fallback) {
-      return this.props.fallback({ error: this.state.error, reset: this.handleReset })
+      return this.props.fallback({ error, reset: this.handleReset })
     }
 
     return (

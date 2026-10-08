@@ -18,17 +18,18 @@ import {
   isReactErrorBoundaryReport,
   MAX_USER_NOTES_LENGTH,
   type CrashReportDiagnosticBundle,
-  type CrashReportRecord
+  type CrashReportRecord,
+  type CrashReportSubmitResult
 } from '../../../../shared/crash-reporting'
 import type { GitHubViewer } from '../../../../shared/github/pull-request-types'
 import { translate } from '@/i18n/i18n'
 import {
   CRASH_REPORT_SUBMIT_FAILURE_TOAST_ID,
   getCrashReportCopySubmissionFailure,
-  getCrashReportSubmitFailureNotice,
-  getCrashReportSubmitWarningNotice
+  getCrashReportSubmitFailureNotice
 } from './crash-report-submit-notice'
 import { useCrashReportCopy } from './use-crash-report-copy'
+import type { CrashReportSendRequest } from './use-crash-report-sends'
 
 function formatSummary(report: CrashReportRecord): string {
   if (isReactErrorBoundaryReport(report)) {
@@ -73,6 +74,10 @@ type CrashReportDialogSurfaceProps = {
   loading: boolean
   onOpenChange: (open: boolean) => void
   onReportChange: (report: CrashReportRecord | null) => void
+  /** This report's send is in flight, wherever it was started. */
+  submitting: boolean
+  /** Sends through the owner, which settles the report even if this dialog is gone by then. */
+  onSubmit: (request: CrashReportSendRequest) => Promise<CrashReportSubmitResult>
 }
 
 export function CrashReportDialogSurface({
@@ -80,12 +85,13 @@ export function CrashReportDialogSurface({
   report,
   loading,
   onOpenChange,
-  onReportChange
+  onReportChange,
+  submitting,
+  onSubmit
 }: CrashReportDialogSurfaceProps): React.JSX.Element {
   const mountedRef = useMountedRef()
   const [notes, setNotes] = useState('')
   const [includeDiagnosticLogs, setIncludeDiagnosticLogs] = useState(true)
-  const [submitting, setSubmitting] = useState(false)
   const [viewer, setViewer] = useState<GitHubViewer | null>(null)
   // Why: account lookup can resolve after the dialog closes or reopens.
   // Sequence the request so a stale viewer is never used for submission.
@@ -161,18 +167,17 @@ export function CrashReportDialogSurface({
     }
   }
 
-  const handleDismiss = async (): Promise<void> => {
-    await dismissReportIfNeeded()
-    if (mountedRef.current) {
-      onOpenChange(false)
-    }
+  // Bookkeeping never holds a closing dialog open: it closes whatever the dismissal answers.
+  const closeAndDismiss = (): void => {
+    void dismissReportIfNeeded().catch((error) => {
+      console.error('Failed to dismiss crash report:', error)
+    })
+    onOpenChange(false)
   }
 
   const handleSubmit = async (): Promise<void> => {
-    setSubmitting(true)
     try {
-      const result = await window.api.crashReports.submit({
-        ...(report ? { reportId: report.id } : {}),
+      const result = await onSubmit({
         notes,
         includeDiagnosticLogs,
         // Why: crash reporting must degrade to anonymous if gh is unavailable;
@@ -186,31 +191,12 @@ export function CrashReportDialogSurface({
         console.error('Failed to submit crash report:', result.error)
         return
       }
-      if (!mountedRef.current) {
-        return
+      if (mountedRef.current) {
+        setNotes('')
       }
-      onReportChange(result.report)
-      setNotes('')
-      toast.dismiss(CRASH_REPORT_SUBMIT_FAILURE_TOAST_ID)
-      const warningNotice = getCrashReportSubmitWarningNotice(result, includeDiagnosticLogs)
-      if (warningNotice) {
-        toast.warning(warningNotice.title, { description: warningNotice.description })
-      } else {
-        toast.success(
-          translate(
-            'auto.components.crash.report.CrashReportDialog.8e24fe4f75',
-            'Crash report sent.'
-          )
-        )
-      }
-      onOpenChange(false)
     } catch (error) {
       showSubmitFailure(error)
       console.error('Failed to submit crash report:', error)
-    } finally {
-      if (mountedRef.current) {
-        setSubmitting(false)
-      }
     }
   }
 
@@ -223,11 +209,7 @@ export function CrashReportDialogSurface({
         }
         if (!nextOpen) {
           clearViewer()
-          void dismissReportIfNeeded().finally(() => {
-            if (mountedRef.current) {
-              onOpenChange(false)
-            }
-          })
+          closeAndDismiss()
           return
         }
         onOpenChange(true)
@@ -335,7 +317,7 @@ export function CrashReportDialogSurface({
             type="button"
             variant="ghost"
             size="sm"
-            onClick={handleDismiss}
+            onClick={closeAndDismiss}
             disabled={submitting}
           >
             {translate('auto.components.crash.report.CrashReportDialog.88fea8e84e', "Don't Send")}

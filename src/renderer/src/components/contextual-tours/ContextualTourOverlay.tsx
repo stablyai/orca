@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type JSX } from 'react'
 import { useAppStore } from '@/store'
+import { useDialogRegistry } from '@/store/dialog-registry'
+import { selectTourInterrupted, selectTourParentToken } from '@/store/dialog-registry-state'
 import {
   getContextualTour,
   type ContextualTourId,
@@ -10,7 +12,7 @@ import {
   trackContextualTourOutcome,
   trackContextualTourShown
 } from '@/lib/feature-education-telemetry'
-import { isContextualTourAllowedForModal } from './contextual-tour-gate'
+import { DialogEntryContent } from '@/lib/dialog-registry-entry'
 import {
   areContextualTourRenderStatesEqual,
   getContextualTourCleanupOutcome,
@@ -37,10 +39,17 @@ export function ContextualTourOverlay(): JSX.Element | null {
   const wasFeaturePreviouslyInteracted = useAppStore(
     (s) => s.activeContextualTourWasFeaturePreviouslyInteracted
   )
-  const activeModal = useAppStore((s) => s.activeModal)
-  const onboardingVisible = useAppStore((s) => s.contextualToursOnboardingVisible)
-  const blockingSurfaceVisible = useAppStore((s) => s.contextualToursBlockingSurfaceVisible)
+  const blockingSurfaceVisible = useDialogRegistry((s) =>
+    selectTourInterrupted(
+      s,
+      selectTourParentToken(
+        s,
+        activeTourId ? getContextualTour(activeTourId).allowedActiveModals : undefined
+      )
+    )
+  )
   const activeTourSuppressed = useAppStore((s) => s.activeContextualTourSuppressed)
+  const awaitingOnboarding = useAppStore((s) => s.contextualToursAwaitingOnboarding)
   const keybindings = useAppStore((s) => s.keybindings)
   const activeTabId = useAppStore((s) => s.activeTabId)
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
@@ -123,24 +132,18 @@ export function ContextualTourOverlay(): JSX.Element | null {
     if (!activeTour || !activeTourId) {
       return
     }
-    if (
-      onboardingVisible ||
-      blockingSurfaceVisible ||
-      activeTourSuppressed ||
-      !isContextualTourAllowedForModal(activeTour, activeModal)
-    ) {
+    if (awaitingOnboarding || blockingSurfaceVisible || activeTourSuppressed) {
       emitContextualTourOutcome('cancelled')
       cancelContextualTour(activeTourId)
     }
   }, [
-    activeModal,
     activeTourSuppressed,
     activeTour,
     activeTourId,
+    awaitingOnboarding,
     blockingSurfaceVisible,
     cancelContextualTour,
-    emitContextualTourOutcome,
-    onboardingVisible
+    emitContextualTourOutcome
   ])
 
   const measureTourOverlay = useCallback((): void => {
@@ -386,26 +389,28 @@ export function ContextualTourOverlay(): JSX.Element | null {
   }
 
   return (
-    <ContextualTourOverlaySurface
-      activeTourId={activeTourId}
-      renderState={renderState}
-      panelRef={panelRef}
-      panelHost={renderState.panelHost}
-      onSkip={(id) => {
-        emitContextualTourOutcome('skipped')
-        dismissContextualTour(id)
-      }}
-      onBack={regressContextualTour}
-      onNext={() => {
-        if (renderState.isLastStep) {
-          finishTour()
-        } else {
-          advanceContextualTour()
-        }
-      }}
-      onStepAction={handleStepAction}
-      onOverlayKeyDownCapture={handleContextualTourOverlayKeyDown}
-    />
+    <DialogEntryContent kind="tour" origin="tour">
+      <ContextualTourOverlaySurface
+        activeTourId={activeTourId}
+        renderState={renderState}
+        panelRef={panelRef}
+        panelHost={renderState.panelHost}
+        onSkip={(id) => {
+          emitContextualTourOutcome('skipped')
+          dismissContextualTour(id)
+        }}
+        onBack={regressContextualTour}
+        onNext={() => {
+          if (renderState.isLastStep) {
+            finishTour()
+          } else {
+            advanceContextualTour()
+          }
+        }}
+        onStepAction={handleStepAction}
+        onOverlayKeyDownCapture={handleContextualTourOverlayKeyDown}
+      />
+    </DialogEntryContent>
   )
 }
 

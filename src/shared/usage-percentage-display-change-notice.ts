@@ -34,12 +34,15 @@ export function shouldShowUsagePercentageDisplayChangeNotice(args: {
   statusBarVisible: boolean
   hasVisibleUsageMeters: boolean
   activeModal: string
+  /** Any dialog up, including the ones the app opens by itself outside the modal slot. */
+  dialogOnScreen: boolean
 }): boolean {
   return (
     args.persistedUIReady &&
     !args.usagePercentageDisplayChangeNoticeDismissed &&
     args.statusBarVisible &&
     args.hasVisibleUsageMeters &&
-    args.activeModal === 'none'
+    args.activeModal === 'none' &&
+    !args.dialogOnScreen
   )
 }

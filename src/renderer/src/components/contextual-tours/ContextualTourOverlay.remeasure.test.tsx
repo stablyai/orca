@@ -88,8 +88,7 @@ describe('ContextualTourOverlay re-measure triggers', () => {
       activeContextualTourId: 'workspace-agent-sessions',
       activeContextualTourStepIndex: 1,
       activeModal: 'none',
-      contextualToursOnboardingVisible: false,
-      contextualToursBlockingSurfaceVisible: false,
+
       activeContextualTourSuppressed: false
     })
     await mountOverlay()
@@ -114,8 +113,7 @@ describe('ContextualTourOverlay re-measure triggers', () => {
       activeContextualTourId: 'workspace-agent-sessions',
       activeContextualTourStepIndex: 1,
       activeModal: 'none',
-      contextualToursOnboardingVisible: false,
-      contextualToursBlockingSurfaceVisible: false,
+
       activeContextualTourSuppressed: false
     })
     await mountOverlay()

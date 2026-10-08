@@ -1,3 +1,5 @@
+import { useDialogRegistry } from '@/store/dialog-registry'
+import { resetDialogRegistryForTests } from '@/store/dialog-registry-test-state'
 // @vitest-environment happy-dom
 import type { AppState } from '@/store/types'
 import { act, createElement } from 'react'
@@ -41,6 +43,7 @@ function flushFrame(): void {
 }
 
 beforeEach(() => {
+  resetDialogRegistryForTests({ startupSettled: true })
   vi.clearAllMocks()
   vi.useFakeTimers()
   frame = null
@@ -126,8 +129,7 @@ describe('workspace activation focus', () => {
     { activeWorkspaceExecutionHostId: 'ssh:second-host' },
     { activeView: 'settings' },
     { activeTabType: 'browser' },
-    { activeTabId: 'tab-2' },
-    { activeModal: 'worktree-palette' }
+    { activeTabId: 'tab-2' }
   ] as const)('cancels when selection changes to %j during restoration', (change) => {
     queueWorkspaceActivationTerminalFocus('wt-1', { primaryTabId: 'tab-1' })
     flushFrame()
@@ -232,4 +234,31 @@ describe('workspace activation focus', () => {
     expect(queueWorkspaceActivationTerminalFocus('wt-1', false)).toBe(false)
     expect(mocks.subscribe).not.toHaveBeenCalled()
   })
+})
+
+it('a closing palette keeps its selected terminal focus request until content leaves', () => {
+  const registry = useDialogRegistry.getState()
+  registry.dialogContentMounted('palette')
+  registry.closeDialog('palette')
+  queueWorkspaceActivationTerminalFocus('wt-1', { primaryTabId: 'tab-1' })
+  flushFrame()
+  expect(mocks.focus).not.toHaveBeenCalled()
+  expect(unsubscribe).not.toHaveBeenCalled()
+  registry.dialogContentUnmounted('palette')
+  mocks.focus.mockReturnValue(true)
+  notifyMount()
+  flushFrame()
+  expect(mocks.focus).toHaveBeenCalledWith('tab-1', null, 'wt-1')
+})
+
+it('a live dialog prevents terminal focus while preserving the request', () => {
+  useDialogRegistry.getState().dialogContentMounted('tip')
+  queueWorkspaceActivationTerminalFocus('wt-1', { primaryTabId: 'tab-1' })
+  flushFrame()
+  expect(mocks.focus).not.toHaveBeenCalled()
+  document.dispatchEvent(new Event('pointerdown'))
+  useDialogRegistry.getState().dialogContentUnmounted('tip')
+  notifyMount()
+  flushFrame()
+  expect(mocks.focus).not.toHaveBeenCalled()
 })

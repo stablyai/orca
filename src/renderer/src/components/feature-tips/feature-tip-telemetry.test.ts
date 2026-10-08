@@ -7,7 +7,6 @@ vi.mock('@/lib/telemetry', () => ({
 }))
 
 import {
-  getOrcaCliFeatureTipTelemetrySource,
   trackCmdJPaletteFeatureTipAcknowledged,
   trackCmdJPaletteFeatureTipShown,
   trackOrcaCliFeatureTipSetupClicked,
@@ -18,12 +17,6 @@ import {
 describe('feature tip telemetry', () => {
   beforeEach(() => {
     trackMock.mockClear()
-  })
-
-  it('keeps feature tip sources low-cardinality', () => {
-    expect(getOrcaCliFeatureTipTelemetrySource('app_open')).toBe('app_open')
-    expect(getOrcaCliFeatureTipTelemetrySource('settings')).toBe('manual')
-    expect(getOrcaCliFeatureTipTelemetrySource(undefined)).toBe('manual')
   })
 
   it('tracks CLI tip exposure once per explicit call', () => {

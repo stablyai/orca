@@ -1,3 +1,4 @@
+import { DialogEntryContent } from '@/lib/dialog-registry-entry'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { isEditableTarget } from '@/lib/editable-target'
@@ -224,6 +225,7 @@ export default function OnboardingFlow({
             'max-w-[1100px]'
           )}
         >
+          <DialogEntryContent kind="onboarding" />
           <div className="relative flex h-full min-h-0 flex-col px-6 pb-6 pt-8 sm:px-8 sm:pb-8 sm:pt-9">
             <div className="flex items-center gap-3 text-base font-semibold tracking-tight">
               <img

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import type { ReactNode } from 'react'
-import { cleanup, render, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CrashReportRecord } from '../../../../shared/crash-reporting'
 import { CrashReportDialogSurface } from './CrashReportDialogSurface'
@@ -65,6 +65,8 @@ describe('CrashReportDialogSurface overflow containment', () => {
         loading={false}
         onOpenChange={() => {}}
         onReportChange={() => {}}
+        submitting={false}
+        onSubmit={async () => ({ ok: true, report: null })}
       />
     )
     await waitFor(() => expect(viewer).toHaveBeenCalledOnce())
@@ -82,3 +84,31 @@ describe('CrashReportDialogSurface overflow containment', () => {
     expect(output?.parentElement?.className).toContain('min-w-0')
   })
 })
+
+it.each(['pending', 'rejected'] as const)(
+  "Don't Send closes immediately while dismissal is %s",
+  async (outcome) => {
+    const pending = Promise.withResolvers<void>()
+    Object.assign(window.api, { crashReports: { dismiss: () => pending.promise } })
+    const onOpenChange = vi.fn()
+    const silent = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const screen = render(
+      <CrashReportDialogSurface
+        open
+        report={crashReport('error')}
+        loading={false}
+        onOpenChange={onOpenChange}
+        onReportChange={() => {}}
+        submitting={false}
+        onSubmit={async () => ({ ok: true, report: null })}
+      />
+    )
+    fireEvent.click(screen.getByText("Don't Send"))
+    expect(onOpenChange).toHaveBeenCalledWith(false)
+    if (outcome === 'rejected') {
+      pending.reject(new Error('write failed'))
+      await waitFor(() => expect(silent).toHaveBeenCalled())
+    }
+    silent.mockRestore()
+  }
+)

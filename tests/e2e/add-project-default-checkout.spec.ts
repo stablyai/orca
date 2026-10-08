@@ -120,8 +120,7 @@ test.describe('Add project default checkout', () => {
             return {
               activeCheckoutIsDefault: state.activeWorktreeId === defaultCheckout?.id,
               defaultCheckoutLooksCloned:
-                normalizedDefaultCheckoutPath?.endsWith(`/clones/${cloneName}`) ?? false,
-              oldSetupModalOpen: state.activeModal === 'project-added'
+                normalizedDefaultCheckoutPath?.endsWith(`/clones/${cloneName}`) ?? false
             }
           }, path.basename(fixture.sourcePath)),
         {
@@ -131,8 +130,7 @@ test.describe('Add project default checkout', () => {
       )
       .toEqual({
         activeCheckoutIsDefault: true,
-        defaultCheckoutLooksCloned: true,
-        oldSetupModalOpen: false
+        defaultCheckoutLooksCloned: true
       })
   })
 

@@ -84,6 +84,7 @@ function ComposerModalBody({
   return (
     <Dialog open onOpenChange={(open) => !open && handleDismiss()}>
       <DialogContent
+        dialogKind="new-workspace-composer"
         ref={dialogRef}
         className="flex max-h-[calc(100vh-2rem)] flex-col overflow-hidden sm:max-w-lg"
         onEscapeKeyDown={(event) => {

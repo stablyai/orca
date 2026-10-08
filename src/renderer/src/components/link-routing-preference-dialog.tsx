@@ -12,7 +12,6 @@ import {
 } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
-import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 
 type LinkRoutingPreferenceDialogOptions = {
@@ -56,9 +55,6 @@ export function LinkRoutingPreferenceDialogProvider({
   const [queue, setQueue] = useState<LinkRoutingPreferenceDialogRequest[]>([])
   const activeRequest = queue[0] ?? null
   const activeRequestRef = useRef<LinkRoutingPreferenceDialogRequest | null>(activeRequest)
-  const setContextualToursBlockingSurfaceVisible = useAppStore(
-    (s) => s.setContextualToursBlockingSurfaceVisible
-  )
   const lastDisplayedRequestRef = useRef<LinkRoutingPreferenceDialogRequest | null>(activeRequest)
   activeRequestRef.current = activeRequest
   if (activeRequest) {
@@ -70,11 +66,6 @@ export function LinkRoutingPreferenceDialogProvider({
   const openLinksInAppDefault = displayedRequest?.options.openLinksInAppDefault === true
   const isMac = navigator.userAgent.includes('Mac')
   const systemBrowserShortcutKeys = isMac ? ['⇧', '⌘'] : ['Shift', 'Ctrl']
-
-  useEffect(() => {
-    setContextualToursBlockingSurfaceVisible(activeRequest !== null)
-    return () => setContextualToursBlockingSurfaceVisible(false)
-  }, [activeRequest, setContextualToursBlockingSurfaceVisible])
 
   const requestPreference = useCallback<LinkRoutingPreferenceDialogContextValue>((options = {}) => {
     return new Promise((resolve) => {
