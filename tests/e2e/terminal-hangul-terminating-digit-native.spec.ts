@@ -236,7 +236,7 @@ test.describe('Hangul terminating digit @headful', () => {
         }
         const expectedLine = `${EXPECTED_LINE}\n`
         let accepted = 0
-        let lastAcceptedTrace: TerminalImeBoundaryTrace = { dom: [], onData: [] }
+        let trace: TerminalImeBoundaryTrace = { dom: [], onData: [] }
         for (let attempt = 0; attempt < MAX_ATTEMPTS && accepted < REPETITIONS; attempt += 1) {
           await installTerminalImeBoundaryProbe(page)
           injectKeys(KEY_TOKENS)
@@ -244,14 +244,14 @@ test.describe('Hangul terminating digit @headful', () => {
           receivedBytes = await waitForTerminalImeBytes(page, reader, 10_000, lineIndex + 1).catch(
             () => receivedBytes
           )
-          const trace = await readTerminalImeBoundaryTrace(page)
-          const domDelivered = readImeDomDeliveredText(trace)
+          const attemptTrace = await readTerminalImeBoundaryTrace(page)
+          const domDelivered = readImeDomDeliveredText(attemptTrace)
           const lineHex = receivedBytes[lineIndex]
           const line = lineHex === undefined ? null : Buffer.from(lineHex, 'hex').toString('utf8')
-          attempts.push({ line, domDelivered, trace })
+          attempts.push({ line, domDelivered, trace: attemptTrace })
           if (line === expectedLine) {
             accepted += 1
-            lastAcceptedTrace = trace
+            trace = attemptTrace
             continue
           }
           // Why: whenever the page received every key the pty line must match; only input the
@@ -270,7 +270,7 @@ test.describe('Hangul terminating digit @headful', () => {
         }
         const summary = attempts.map(({ line, domDelivered }) => ({ line, domDelivered }))
         expect(accepted, `attempts: ${JSON.stringify(summary)}`).toBe(REPETITIONS)
-        appendImeEngagementReceipt(testInfo.title, lastAcceptedTrace)
+        appendImeEngagementReceipt(testInfo.title, trace)
         completed = true
       } finally {
         await writeEvidence(page, testInfo, 'hangul-terminating-digit', {
