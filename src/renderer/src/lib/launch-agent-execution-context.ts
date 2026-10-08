@@ -4,6 +4,8 @@ import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { getAgentLaunchPlatformForRepo } from '@/lib/agent-launch-platform'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
+import { getProbedLocalGitBashAvailability } from '@/lib/windows-terminal-capabilities'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import type { useAppStore } from '@/store'
 
 /** Where a new-tab agent launch runs, and the quoting rules that follow from it. */
@@ -48,7 +50,10 @@ export function resolveAgentLaunchExecutionContext(
     queuedShell: resolveLocalWindowsAgentStartupShell({
       platform: resolvedLaunchPlatform,
       isRemote,
-      terminalWindowsShell: store.settings?.terminalWindowsShell
+      terminalWindowsShell: store.settings?.terminalWindowsShell,
+      gitBashAvailable: getProbedLocalGitBashAvailability(
+        getRuntimeEnvironmentIdForWorktree(store, args.worktreeId)
+      )
     })
   }
 }

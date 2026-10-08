@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { resetWindowsTerminalCapabilityReprobeForTests } from './windows-terminal-capability-reprobe'
 import {
   getCachedWindowsTerminalCapabilities,
+  getProbedLocalGitBashAvailability,
   getWindowsTerminalCapabilityOwnerKey,
   hasCachedWindowsTerminalCapabilities,
   isWindowsTerminalCapabilityHost,
@@ -150,6 +151,32 @@ describe('windows terminal capabilities', () => {
     expect(pwshIsAvailable).toHaveBeenCalledTimes(1)
     expect(isGitBashAvailable).toHaveBeenCalledTimes(1)
     expect(runtimeGetStatus).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports local Git Bash availability only once probed and only without a runtime host', async () => {
+    stubTerminalCapabilityApi({
+      wslAvailable: false,
+      pwshAvailable: false,
+      gitBashAvailable: false
+    })
+
+    expect(getProbedLocalGitBashAvailability()).toBeUndefined()
+    await loadWindowsTerminalCapabilities()
+    expect(getProbedLocalGitBashAvailability()).toBe(false)
+    expect(getProbedLocalGitBashAvailability(null)).toBe(false)
+    expect(getProbedLocalGitBashAvailability('runtime-1')).toBeUndefined()
+  })
+
+  it('does not trust a Git Bash probe made over a web client connection', async () => {
+    stubTerminalCapabilityApi({
+      wslAvailable: false,
+      pwshAvailable: false,
+      gitBashAvailable: false
+    })
+    await loadWindowsTerminalCapabilities()
+    vi.stubGlobal('window', { ...window, __ORCA_WEB_CLIENT__: true })
+
+    expect(getProbedLocalGitBashAvailability()).toBeUndefined()
   })
 
   it('keeps WSL available when the PowerShell version probe fails', async () => {

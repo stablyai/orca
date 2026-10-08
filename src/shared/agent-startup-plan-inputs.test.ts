@@ -91,6 +91,25 @@ describe('resolveAgentStartupPlanInputs', () => {
     expect(inputs.shell).toBe('cmd')
   })
 
+  it('starts a fresh OMP with the PowerShell guard when the configured Git Bash is missing', () => {
+    const inputs = resolveAgentStartupPlanInputs({
+      agent: 'omp',
+      settings: { terminalWindowsShell: 'git-bash' },
+      platform: 'win32',
+      isRemote: false,
+      gitBashAvailable: false
+    })
+    const command = buildAgentStartupPlan({
+      ...inputs,
+      prompt: '',
+      allowEmptyPromptLaunch: true
+    })?.launchCommand
+
+    expect(inputs.shell).toBe('powershell')
+    expect(command).toMatch(/^if \("\$env:ORCA_OMP_FRESH_CONFIG" -and \(Test-Path /)
+    expect(command).not.toContain('printenv')
+  })
+
   it('ties sessionOptionsOverrideAgentArgs to whether options were actually picked', () => {
     const base = {
       agent: 'codex' as const,

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { startWindowsTerminalCapabilityReprobe } from './windows-terminal-capability-reprobe'
+import { isWebClientLocation } from './web-client-location'
 import {
   readWindowsTerminalCapabilities,
   type WindowsTerminalCapabilityLoadTarget
@@ -119,6 +120,21 @@ export function getCachedWindowsTerminalCapabilities(
 
 export function hasCachedWindowsTerminalCapabilities(ownerKey = 'local'): boolean {
   return cachedCapabilitiesByOwnerKey.has(ownerKey)
+}
+
+/** This machine's probed Git Bash availability for local launches; undefined when unknown. */
+export function getProbedLocalGitBashAvailability(
+  activeRuntimeEnvironmentId?: string | null
+): boolean | undefined {
+  // Why: a failed remote or web-client probe caches `false`, which must not reclassify a working Git Bash.
+  if (
+    activeRuntimeEnvironmentId?.trim() ||
+    isWebClientLocation() ||
+    !hasCachedWindowsTerminalCapabilities()
+  ) {
+    return undefined
+  }
+  return getCachedWindowsTerminalCapabilities().gitBashAvailable
 }
 
 export function loadWindowsTerminalCapabilities(

@@ -30,6 +30,7 @@ import {
 } from '@/runtime/runtime-terminal-stream'
 import { isMainTerminalSideEffectAuthorityForPty } from '@/components/terminal-pane/terminal-side-effect-facts-handler'
 import { resolveLocalWindowsAgentStartupShell } from '../../../shared/windows-terminal-shell'
+import { getProbedLocalGitBashAvailability } from '@/lib/windows-terminal-capabilities'
 import { runBestEffortAgentBackgroundCleanups } from '@/lib/agent-background-session-cleanup'
 import type { bindAutomationTerminal } from '@/lib/automation-terminal-ownership'
 import {
@@ -65,7 +66,10 @@ export async function launchAgentBackgroundSession(
   const startupShell = resolveLocalWindowsAgentStartupShell({
     platform: launchPlatform,
     isRemote,
-    terminalWindowsShell: store.settings?.terminalWindowsShell
+    terminalWindowsShell: store.settings?.terminalWindowsShell,
+    gitBashAvailable: getProbedLocalGitBashAvailability(
+      getSettingsForWorktreeRuntimeOwner(store, worktreeId).activeRuntimeEnvironmentId
+    )
   })
   const trimmedPrompt = prompt?.trim() ?? ''
   const hasPrompt = trimmedPrompt.length > 0

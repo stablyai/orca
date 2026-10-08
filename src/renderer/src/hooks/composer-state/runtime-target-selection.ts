@@ -2,7 +2,11 @@ import type { ComposerRuntimeTargetSelectionInput } from './composer-target-inpu
 
 import { useEffect, useMemo, useRef } from 'react'
 import { getFolderSourceRepos } from '@/components/sidebar/folder-workspace-composer-helpers'
-import { parseExecutionHostId, getRepoExecutionHostId } from '../../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId,
+  getRepoExecutionHostId
+} from '../../../../shared/execution-host'
 import { getSelectedRepoSshGate } from '@/lib/new-workspace-ssh-gate'
 import { useFolderWorkspaceComposerPathStatus } from '@/components/sidebar/folder-workspace-composer-path-status'
 import { useDetectedAgents } from '@/hooks/useDetectedAgents'
@@ -14,6 +18,7 @@ import { getLocalRepoProjectExecutionRuntimeContext } from '@/lib/local-prefligh
 import { getAgentLaunchPlatformForRepo } from '@/lib/agent-launch-platform'
 import { repoIsRemote } from '../../../../shared/agent-launch-remote'
 import { resolveLocalWindowsAgentStartupShell } from '../../../../shared/windows-terminal-shell'
+import { getProbedLocalGitBashAvailability } from '@/lib/windows-terminal-capabilities'
 import { buildProjectHostSetupOptions } from '@/lib/project-host-setup-options'
 import { buildNewWorkspaceCreateTargetOptions } from '@/lib/new-workspace-project-options'
 import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
@@ -154,7 +159,11 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
   const selectedRepoStartupShell = resolveLocalWindowsAgentStartupShell({
     platform: selectedRepoAgentLaunchPlatform,
     isRemote: selectedRepoIsRemote,
-    terminalWindowsShell: settings?.terminalWindowsShell
+    terminalWindowsShell: settings?.terminalWindowsShell,
+    gitBashAvailable:
+      selectedRepoExecutionHostId === LOCAL_EXECUTION_HOST_ID
+        ? getProbedLocalGitBashAvailability(settings?.activeRuntimeEnvironmentId)
+        : undefined
   })
 
   const selectedRepoProjectId =

@@ -46,11 +46,20 @@ export function resolveLocalWindowsAgentStartupShell(args: {
   platform: NodeJS.Platform
   isRemote: boolean
   terminalWindowsShell?: string | null
+  /** The launch host's Git Bash probe; omit when unknown. */
+  gitBashAvailable?: boolean
 }): AgentStartupShell | undefined {
   // Why: terminalWindowsShell describes the local host shell; SSH/remote
   // targets need their own shell signal before we can safely override quoting.
   if (args.platform !== 'win32' || args.isRemote) {
     return undefined
+  }
+  // Why: the PTY spawns Windows PowerShell when a configured Git Bash is missing (#22664).
+  if (
+    args.gitBashAvailable === false &&
+    args.terminalWindowsShell?.trim() === WINDOWS_GIT_BASH_SHELL
+  ) {
+    return 'powershell'
   }
   return resolveWindowsShellStartupFamily(args.terminalWindowsShell)
 }

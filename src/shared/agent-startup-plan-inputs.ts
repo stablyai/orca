@@ -45,6 +45,8 @@ export function resolveAgentStartupPlanInputs(args: {
   agentArgs?: string | null
   /** A requested shell is the one this PTY will be, so it owns the quoting family. */
   windowsShellOverride?: string | null
+  /** The launch host's Git Bash probe; omit when unknown. */
+  gitBashAvailable?: boolean
   sessionOptions?: Record<string, SessionOptionValue> | undefined
 }): AgentStartupPlanInputs {
   const { agent, settings, platform, isRemote, sessionOptions } = args
@@ -62,7 +64,8 @@ export function resolveAgentStartupPlanInputs(args: {
     shell: resolveLocalWindowsAgentStartupShell({
       platform,
       isRemote,
-      terminalWindowsShell: args.windowsShellOverride ?? settings.terminalWindowsShell
+      terminalWindowsShell: args.windowsShellOverride ?? settings.terminalWindowsShell,
+      gitBashAvailable: args.gitBashAvailable
     }),
     isRemote,
     ...(sessionOptions ? { sessionOptions } : {}),

@@ -12,6 +12,7 @@ import {
 } from './agent-launch-typed-line-shell'
 import { resolveTerminalStartupCwd } from '../../shared/terminal-startup-cwd'
 import { resolveAgentStartupPlanInputs } from '../../shared/agent-startup-plan-inputs'
+import { isGitBashAvailable } from '../git-bash'
 import { agentStartedTelemetry } from '../agent-launch/agent-started-telemetry'
 
 export async function buildRuntimeAgentTerminalStartupOptions(
@@ -54,6 +55,7 @@ export async function buildRuntimeAgentTerminalStartupOptions(
       ...(opts.agentArgs !== undefined ? { agentArgs: opts.agentArgs } : {}),
       // A requested shell is the one this PTY will actually be, so it owns the quoting family.
       windowsShellOverride: opts.shellOverride,
+      gitBashAvailable: isGitBashAvailable(),
       sessionOptions: sessionOptions
     }),
     prompt: opts.startupPrompt ?? '',

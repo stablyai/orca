@@ -3,6 +3,7 @@ import {
   canonicalizeWindowsShellOverride,
   isSupportedWindowsShellOverride,
   listSupportedWindowsShellOverrides,
+  resolveLocalWindowsAgentStartupShell,
   resolveWindowsShellStartupFamily
 } from './windows-terminal-shell'
 
@@ -36,6 +37,64 @@ describe('resolveWindowsShellStartupFamily', () => {
     expect(resolveWindowsShellStartupFamily('bash')).toBe('posix')
     expect(resolveWindowsShellStartupFamily('wsl')).toBe('posix')
     expect(resolveWindowsShellStartupFamily('C:\\Program Files\\Git\\bin\\bash')).toBe('posix')
+  })
+})
+
+describe('resolveLocalWindowsAgentStartupShell', () => {
+  const local = { platform: 'win32' as const, isRemote: false }
+
+  it('quotes for PowerShell when the configured Git Bash is missing, as the PTY falls back to it', () => {
+    expect(
+      resolveLocalWindowsAgentStartupShell({
+        ...local,
+        terminalWindowsShell: 'git-bash',
+        gitBashAvailable: false
+      })
+    ).toBe('powershell')
+  })
+
+  it('keeps POSIX quoting for Git Bash when it is found or not yet probed', () => {
+    for (const gitBashAvailable of [true, undefined]) {
+      expect(
+        resolveLocalWindowsAgentStartupShell({
+          ...local,
+          terminalWindowsShell: 'git-bash',
+          gitBashAvailable
+        })
+      ).toBe('posix')
+    }
+  })
+
+  it('leaves every other shell on its own family whatever Git Bash probes', () => {
+    const cases = [
+      ['powershell.exe', 'powershell'],
+      ['C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe', 'powershell'],
+      ['pwsh.exe', 'powershell'],
+      ['C:\\Program Files\\PowerShell\\7\\pwsh.exe', 'powershell'],
+      ['cmd.exe', 'cmd'],
+      ['wsl.exe', 'posix'],
+      // An unresolved bare bash spawns that bash, not PowerShell.
+      ['bash.exe', 'posix']
+    ] as const
+    for (const [terminalWindowsShell, family] of cases) {
+      expect(
+        resolveLocalWindowsAgentStartupShell({
+          ...local,
+          terminalWindowsShell,
+          gitBashAvailable: false
+        })
+      ).toBe(family)
+    }
+  })
+
+  it('does not classify remote or non-Windows launches', () => {
+    const missingGitBash = { terminalWindowsShell: 'git-bash', gitBashAvailable: false }
+    expect(
+      resolveLocalWindowsAgentStartupShell({ ...local, isRemote: true, ...missingGitBash })
+    ).toBeUndefined()
+    expect(
+      resolveLocalWindowsAgentStartupShell({ ...local, platform: 'linux', ...missingGitBash })
+    ).toBeUndefined()
   })
 })
 

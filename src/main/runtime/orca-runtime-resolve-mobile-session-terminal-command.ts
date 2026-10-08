@@ -7,6 +7,7 @@ import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resum
 import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
 import { buildAgentStartupPlan } from '../../shared/tui-agent-startup'
 import { resolveAgentStartupPlanInputs } from '../../shared/agent-startup-plan-inputs'
+import { isGitBashAvailable } from '../git-bash'
 
 export class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends OrcaRuntimeWithRunCreateMobileSessionTerminal {
   protected async resolveMobileSessionTerminalCommand(
@@ -53,7 +54,8 @@ export class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends OrcaRunt
         // Why: mobile may be iOS while the shell host is Windows/macOS/Linux or SSH Linux; quote for the host shell.
         platform: this.getAgentLaunchPlatformForWorkspace(workspace),
         // Why: SSH runs the CLI through the relay shim (plain `orca`), so the Linux-only `orca-ide` rename must not apply.
-        isRemote: Boolean(workspace.connectionId)
+        isRemote: Boolean(workspace.connectionId),
+        gitBashAvailable: isGitBashAvailable()
       }),
       prompt: opts.agentPrompt ?? '',
       allowEmptyPromptLaunch: true

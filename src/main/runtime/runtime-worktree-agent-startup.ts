@@ -8,6 +8,7 @@ import { getRepoSshConnectionId } from '../../shared/execution-host'
 import { isTuiAgent } from '../../shared/tui-agent-config'
 import { isTuiAgentEnabled, pickTuiAgent } from '../../shared/tui-agent-selection'
 import { resolveAgentStartupPlanInputs } from '../../shared/agent-startup-plan-inputs'
+import { isGitBashAvailable } from '../git-bash'
 import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '../../shared/tui-agent-startup'
 import { planStartupWithPromptCandidate } from '../../shared/startup-line-prompt-carry'
 import {
@@ -84,6 +85,7 @@ export async function buildWorktreeStartupForDraft(
     settings,
     platform: environment.getLaunchPlatform(),
     isRemote: repoIsRemote(repo),
+    gitBashAvailable: isGitBashAvailable(),
     ...(environment.agentArgs !== undefined ? { agentArgs: environment.agentArgs } : {})
   })
   const telemetry = agentStartedTelemetry(agent, environment.launchSource)
@@ -151,6 +153,7 @@ export function buildWorktreeStartupForAgent(
     settings,
     platform: environment.getLaunchPlatform(),
     isRemote: repoIsRemote(repo),
+    gitBashAvailable: isGitBashAvailable(),
     ...(environment.agentArgs !== undefined ? { agentArgs: environment.agentArgs } : {}),
     sessionOptions: environment.toSessionOptions(environment.launchPreferences)
   })

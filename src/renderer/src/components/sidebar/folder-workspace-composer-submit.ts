@@ -9,6 +9,7 @@ import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { resolveLocalWindowsAgentStartupShell } from '../../../../shared/windows-terminal-shell'
+import { getProbedLocalGitBashAvailability } from '@/lib/windows-terminal-capabilities'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 import type { SessionOptionValue } from '../../../../shared/native-chat-session-options'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
@@ -97,7 +98,8 @@ export async function submitFolderWorkspaceCreate({
   const launchShell = resolveLocalWindowsAgentStartupShell({
     platform: launchPlatform,
     isRemote: launchIsRemote,
-    terminalWindowsShell
+    terminalWindowsShell,
+    gitBashAvailable: getProbedLocalGitBashAvailability(runtimeEnvironmentId)
   })
   const startupPlan =
     quickAgent && linkedWorkItem
