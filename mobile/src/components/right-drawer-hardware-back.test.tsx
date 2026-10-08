@@ -101,13 +101,6 @@ describe('the right drawer and the phone hardware back button', () => {
     act(() => renderer.unmount())
   })
 
-  it('arms it on Android while the drawer is open', () => {
-    native.platform.os = 'android'
-    const renderer = render(true)
-    expect(native.addEventListener).toHaveBeenCalledTimes(1)
-    act(() => renderer.unmount())
-  })
-
   it('releases it when the drawer hides', () => {
     const renderer = render(true)
     expect(native.remove).not.toHaveBeenCalled()

@@ -28,16 +28,22 @@ import {
   createRuntimeTokenVerifier
 } from './admin-token-verifier.js'
 import {
+  RelayAssignmentRowBusyError,
   RelayHomeCellUnavailableError,
   type CellFenceAttemptEvidence,
   type RelayAssignment,
-  type RelayAssignmentStore
+  type RelayAssignmentStore,
+  type ResolvedRelayAssignment
 } from './assignment-store.js'
 import { AssignmentRejectionLogWindow } from './assignment-rejection-log-window.js'
 import { CELL_ADMISSION_STATES } from './cell-admission-selector.js'
 import { RELAY_MAX_CELL_CAPACITY_REQUESTS, type RelayConfig } from './config.js'
 import type { RelayCredentialStore } from './credential-store.js'
 import { isRelayDatabaseTransientError } from './database.js'
+import {
+  DRAIN_RETURN_MIN_RETRY_AFTER_SECONDS,
+  RelayDrainReturnAdmission
+} from './drain-return-admission.js'
 import { googleMetadataIdentityToken } from './google-metadata-identity-token.js'
 import {
   RelayPublicAssignmentAdmission,
@@ -45,7 +51,13 @@ import {
 } from './public-assignment-admission.js'
 import { relayHostLogDigest } from './relay-host-log-digest.js'
 import type { RelayReadinessDependency } from './relay-readiness.js'
-import type { RegionalRehomeSafetySnapshot, RelayRuntimeCounts } from './relay-observability.js'
+import type {
+  AssignmentAdmissionLane,
+  AssignmentAdmissionOutcome,
+  AssignmentUnavailableCause,
+  RegionalRehomeSafetySnapshot,
+  RelayRuntimeCounts
+} from './relay-observability.js'
 import {
   isRegionalRehomeTrustProbe,
   probeRegionalRehomeTrust
@@ -58,16 +70,20 @@ const RelayCellConnectionHardCapSchema = z.custom<RelayCellConnectionHardCap>(
 )
 
 const ASSIGNMENT_REJECTION_LOG_WINDOW_MS = 10_000
+// A release holds the row for about one lock timeout, so one second is enough.
+const ASSIGNMENT_ROW_BUSY_RETRY_AFTER_SECONDS = 1
 const REGION_CATALOG_CACHE_MS = 30_000
-// A drain that outlives the roll step it belongs to is an outage, not a pacing win.
-const DRAIN_PACE_WINDOW_MAX_MS = 5 * 60 * 1_000
+// A drain that outlives the roll step it belongs to is an outage, not a pacing win. The roll
+// step's timeout scales with the window, up to the same-cap wave's slowest pace.
+const DRAIN_PACE_WINDOW_MAX_MS = 20 * 60 * 1_000
 
 type AdmissionRejectionLogEntry = {
   route: 'assign' | 'resolve'
-  lane: 'sticky' | 'placement'
+  lane: AssignmentAdmissionLane
   hinted: boolean
   relayHostId: string
   reason: AssignmentAdmissionRejection
+  retryAfterSeconds?: number
 }
 
 export function createRelayApp(
@@ -101,13 +117,14 @@ export function createRelayApp(
     runtimeCounts?: () => RelayRuntimeCounts
     ready: () => Promise<boolean>
     readinessDegradation?: () => RelayReadinessDependency[]
-    recordAssignmentAdmission?: (
-      outcome: 'sticky' | 'sticky-rejected' | 'placement' | 'placement-rejected'
-    ) => void
+    recordAssignmentAdmission?: (outcome: AssignmentAdmissionOutcome) => void
     recordAssignmentRejectionReason?: (
-      lane: 'sticky' | 'placement',
+      lane: AssignmentAdmissionLane,
       reason: AssignmentAdmissionRejection
     ) => void
+    recordDrainReturnRetryAfter?: (seconds: number) => void
+    recordAdmissionServiceMs?: (lane: 'sticky' | 'drain-return', durationMs: number) => void
+    recordAssignmentUnavailable?: (cause: AssignmentUnavailableCause) => void
     recordRegionRequest?: (region: RelayRegion | undefined) => void
     recordRegionSelection?: (input: {
       targetRegion: RelayRegion
@@ -151,12 +168,22 @@ export function createRelayApp(
   const regionalRehomeIdentityToken =
     operations.regionalRehomeIdentityToken ??
     ((audience: string) => googleMetadataIdentityToken(audience, regionalRehomeFetch))
+  // Drain returns borrow placement permits and always leave placement one, so
+  // placement + sticky still bounds the director's database pool.
+  const drainReturnConcurrency = Math.min(
+    config.drainReturnConcurrency ?? 1,
+    config.publicAssignmentConcurrency - 1
+  )
   const publicAssignmentAdmission = new RelayPublicAssignmentAdmission({
     maxConcurrent: config.publicAssignmentConcurrency,
     maxQueued: config.publicAssignmentQueueMax,
     waitMs: config.publicAssignmentWaitMs,
     maxReservedConcurrent: config.publicResolveConcurrency,
     reservedWaitMs: config.publicResolveWaitMs,
+    maxDrainReturnConcurrent: drainReturnConcurrency,
+    maxDrainReturnQueued: config.drainReturnQueueMax ?? 4,
+    drainReturnWaitMs: config.drainReturnWaitMs ?? 3_000,
+    drainReturnMinIntervalMs: DRAIN_RETURN_MIN_RETRY_AFTER_SECONDS * 1_000,
     minIntervalMs: config.publicAssignmentRetryAfterSeconds * 1_000,
     onRejected: (reason) => operations.recordAssignmentRejectionReason?.('placement', reason)
   })
@@ -177,6 +204,30 @@ export function createRelayApp(
   })
   const rejectStickyAssignment = (context: Context): Response => {
     context.header('Retry-After', String(stickyRetryAfterSeconds))
+    return context.json({ error: 'assignments_temporarily_unavailable' }, 503)
+  }
+  // The slot's hold, not the request's latency: herd recovery is slots / this.
+  const timeStickySlot = (lease: { release(): void }): { release(): void } => {
+    const startedAt = performance.now()
+    let released = false
+    return {
+      release: () => {
+        if (released) return
+        released = true
+        operations.recordAdmissionServiceMs?.('sticky', performance.now() - startedAt)
+        lease.release()
+      }
+    }
+  }
+  // Classified server-side from the host's own assignment row, never from a
+  // client claim: only a host whose home is roll-isolated reaches this lane.
+  const drainReturnAdmission = new RelayDrainReturnAdmission(publicAssignmentAdmission, {
+    maxConcurrent: Math.max(1, drainReturnConcurrency),
+    maxRetryAfterSeconds: config.drainReturnMaxRetryAfterSeconds ?? 300,
+    onServiceMs: (durationMs) => operations.recordAdmissionServiceMs?.('drain-return', durationMs)
+  })
+  const deferDrainReturn = (context: Context, retryAfterSeconds: number): Response => {
+    context.header('Retry-After', String(retryAfterSeconds))
     return context.json({ error: 'assignments_temporarily_unavailable' }, 503)
   }
   // An admin route that collapses every failure into one status cannot tell a
@@ -203,10 +254,11 @@ export function createRelayApp(
   })
   const logAdmissionRejection = (input: {
     route: 'assign' | 'resolve'
-    lane: 'sticky' | 'placement'
+    lane: AssignmentAdmissionLane
     hinted: boolean
     relayHostId: string
     reason: AssignmentAdmissionRejection | undefined
+    retryAfterSeconds?: number
   }): void => {
     if (!input.reason) return
     const entry: AdmissionRejectionLogEntry = { ...input, reason: input.reason }
@@ -229,8 +281,14 @@ export function createRelayApp(
   })
 
   // Not /healthz: Google Front End reserves that path before the container.
+  // The drain pace cap is read before a roll isolates a cell, so a slower pace than the cell
+  // accepts stops with the cell untouched.
   app.get('/health', (context) =>
-    context.json({ ok: true, connectionCapacityProtocol: 2 })
+    context.json({
+      ok: true,
+      connectionCapacityProtocol: 2,
+      drainPaceWindowMaxMs: DRAIN_PACE_WINDOW_MAX_MS
+    })
   )
   app.get('/ready', async (context) => {
     if (!(await operations.ready())) return context.json({ error: 'dependency_unavailable' }, 503)
@@ -253,7 +311,10 @@ export function createRelayApp(
   })
   app.post('/v1/assign', async (context) => {
     if (config.role === 'cell') return context.json({ error: 'director_only' }, 404)
-    if (!config.publicAssignmentsEnabled) return rejectPublicAssignment(context)
+    if (!config.publicAssignmentsEnabled) {
+      operations.recordAssignmentUnavailable?.('disabled')
+      return rejectPublicAssignment(context)
+    }
     const bearer = readBearer(context.req.header('authorization'))
     if (!bearer) return context.json({ error: 'invalid_token' }, 401)
     const claims = await verifyRelayToken(bearer)
@@ -275,14 +336,15 @@ export function createRelayApp(
         : RELAY_DEFAULT_REGION
     operations.recordRegionRequest?.(requestedRegion)
     let admission: { release(): void } | null = null
-    let lane: 'sticky' | 'placement' = 'placement'
+    let lane: AssignmentAdmissionLane = 'placement'
     if (body.data.reconnect) {
       let rejection: AssignmentAdmissionRejection | undefined
-      const fastLane = await stickyAssignmentAdmission.acquire(claims.relayHostId, (reason) => {
+      const stickySlot = await stickyAssignmentAdmission.acquire(claims.relayHostId, (reason) => {
         rejection = reason
       })
-      if (!fastLane) {
+      if (!stickySlot) {
         operations.recordAssignmentAdmission?.('sticky-rejected')
+        operations.recordAssignmentUnavailable?.('sticky-lane')
         logAdmissionRejection({
           route: 'assign',
           lane: 'sticky',
@@ -292,9 +354,12 @@ export function createRelayApp(
         })
         return rejectStickyAssignment(context)
       }
-      let verified = false
+      const fastLane = timeStickySlot(stickySlot)
+      let verified: ResolvedRelayAssignment | null = null
       try {
-        verified = (await operations.assignments.resolve(identity)) !== null
+        verified = await operations.assignments.resolve(identity, {
+          classifyHomeRollIsolation: true
+        })
       } catch (error) {
         fastLane.release()
         operations.recordAssignmentAdmission?.('sticky-rejected')
@@ -306,11 +371,35 @@ export function createRelayApp(
             relayHostId: claims.relayHostId,
             reason: operationError(error)
           })
+          operations.recordAssignmentUnavailable?.('sticky-verify-database')
           return rejectStickyAssignment(context)
         }
         throw error
       }
-      if (verified) {
+      if (verified?.homeCellRollIsolated && drainReturnConcurrency > 0) {
+        // The sticky slot covered only the verification read; the re-placement
+        // that follows is the drain lane's work, not the sticky lane's.
+        fastLane.release()
+        lane = 'drain-return'
+        const drainReturn = await drainReturnAdmission.acquire(claims.relayHostId)
+        if (drainReturn.kind === 'deferred') {
+          operations.recordAssignmentAdmission?.('drain-return-deferred')
+          operations.recordAssignmentRejectionReason?.('drain-return', drainReturn.reason)
+          operations.recordDrainReturnRetryAfter?.(drainReturn.retryAfterSeconds)
+          operations.recordAssignmentUnavailable?.('drain-return-deferred')
+          logAdmissionRejection({
+            route: 'assign',
+            lane,
+            hinted: true,
+            relayHostId: claims.relayHostId,
+            reason: drainReturn.reason,
+            retryAfterSeconds: drainReturn.retryAfterSeconds
+          })
+          return deferDrainReturn(context, drainReturn.retryAfterSeconds)
+        }
+        admission = drainReturn.lease
+        operations.recordAssignmentAdmission?.('drain-return')
+      } else if (verified) {
         lane = 'sticky'
         admission = fastLane
         operations.recordAssignmentAdmission?.('sticky')
@@ -333,6 +422,7 @@ export function createRelayApp(
           relayHostId: claims.relayHostId,
           reason: rejection
         })
+        operations.recordAssignmentUnavailable?.('placement-lane')
         return rejectPublicAssignment(context)
       }
     }
@@ -362,6 +452,19 @@ export function createRelayApp(
         }
       }
     } catch (error) {
+      if (error instanceof RelayAssignmentRowBusyError) {
+        logAssignmentRejection({
+          route: 'assign',
+          lane,
+          hinted: Boolean(body.data.reconnect),
+          relayHostId: claims.relayHostId,
+          reason: operationError(error)
+        })
+        // The host's own release is settling; its next dial finds the row free.
+        context.header('Retry-After', String(ASSIGNMENT_ROW_BUSY_RETRY_AFTER_SECONDS))
+        operations.recordAssignmentUnavailable?.('relay_assignment_row_busy')
+        return context.json({ error: 'assignment_row_busy' }, 503)
+      }
       if (isRelayAssignmentUnavailableError(error) || isRelayDatabaseTransientError(error)) {
         logAssignmentRejection({
           route: 'assign',
@@ -372,14 +475,19 @@ export function createRelayApp(
           ...homeCellRejectionDetail(error)
         })
       }
-      if (isRelayAssignmentUnavailableError(error)) {
+      const unavailable = assignmentUnavailableCause(error)
+      if (unavailable) {
         if (lane === 'placement') {
           operations.recordRegionSelection?.({ targetRegion, fallback: false })
         }
+        operations.recordAssignmentUnavailable?.(unavailable)
         return context.json({ error: operationError(error) }, 503)
       }
       if (isRelayDatabaseTransientError(error)) {
-        return lane === 'sticky' ? rejectStickyAssignment(context) : rejectPublicAssignment(context)
+        operations.recordAssignmentUnavailable?.('database')
+        return lane === 'placement'
+          ? rejectPublicAssignment(context)
+          : rejectStickyAssignment(context)
       }
       throw error
     } finally {
@@ -481,6 +589,9 @@ export function createRelayApp(
         })
       }
       if (isRelayAssignmentUnavailableError(error)) {
+        if (error instanceof RelayAssignmentRowBusyError) {
+          context.header('Retry-After', String(ASSIGNMENT_ROW_BUSY_RETRY_AFTER_SECONDS))
+        }
         return context.json({ error: operationError(error) }, 503)
       }
       if (isRelayDatabaseTransientError(error)) return rejectPublicAssignment(context)
@@ -1957,18 +2068,20 @@ export { relayHostLogDigest }
 // that line stands for beyond the one already logged when the window opened.
 function logAssignmentRejection(input: {
   route: 'assign' | 'assign-verify' | 'resolve'
-  lane: 'sticky' | 'placement' | 'none'
+  lane: AssignmentAdmissionLane | 'none'
   hinted: boolean
   relayHostId: string
   reason: string
   cause?: string
   cell?: string
   suppressed?: number
+  retryAfterSeconds?: number
 }): void {
   console.warn(
     `[orca-relay] assignment rejected route=${input.route} lane=${input.lane}` +
       ` hinted=${input.hinted} reason=${input.reason}` +
       ` host=${relayHostLogDigest(input.relayHostId)}` +
+      (input.retryAfterSeconds === undefined ? '' : ` retryAfter=${input.retryAfterSeconds}`) +
       (input.cause === undefined ? '' : ` cause=${input.cause}`) +
       (input.cell === undefined ? '' : ` cell=${input.cell}`) +
       (input.suppressed === undefined ? '' : ` suppressed=${input.suppressed}`)
@@ -1977,15 +2090,22 @@ function logAssignmentRejection(input: {
 
 // The home-cell reason is not capacity, but it is the same answer to the client:
 // retry, the director cannot place you right now.
+const RELAY_ASSIGNMENT_UNAVAILABLE_ERRORS = [
+  'relay_capacity_exhausted',
+  'relay_connection_headroom_exhausted',
+  'relay_home_cell_unavailable',
+  'relay_assignment_row_busy'
+] as const satisfies readonly AssignmentUnavailableCause[]
+
+function assignmentUnavailableCause(
+  error: unknown
+): (typeof RELAY_ASSIGNMENT_UNAVAILABLE_ERRORS)[number] | undefined {
+  if (!(error instanceof Error)) return undefined
+  return RELAY_ASSIGNMENT_UNAVAILABLE_ERRORS.find((message) => message === error.message)
+}
+
 function isRelayAssignmentUnavailableError(error: unknown): boolean {
-  return (
-    error instanceof Error &&
-    [
-      'relay_capacity_exhausted',
-      'relay_connection_headroom_exhausted',
-      'relay_home_cell_unavailable'
-    ].includes(error.message)
-  )
+  return assignmentUnavailableCause(error) !== undefined
 }
 
 function homeCellRejectionDetail(

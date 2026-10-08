@@ -7,16 +7,18 @@
 // as the command that produced it. Pairing lets the call own its output, so the
 // run reads as the work it did.
 //
-// Pairing is positional, the same FIFO rule `dropUnattributableToolResults`
-// already uses to decide a result is attributable at all: a result answers the
-// oldest call that has not been answered yet.
+// A result that names its call answers that call, and no other: one naming a call
+// that is not waiting (outside a bounded window, say) stays unpaired. One that names
+// none is paired positionally, the same FIFO rule `dropUnattributableToolResults`
+// already uses to decide a result is attributable at all: it answers the oldest call
+// that has not been answered yet. Position alone misattributes every later result once
+// one call finishes with no output, which is why a producer that knows the call names it.
 
-import {
-  isToolCallBlock,
-  isToolResultBlock,
-  type NativeChatBlock,
-  type NativeChatToolCallBlock,
-  type NativeChatToolResultBlock
+import { pairToolBlocks } from './native-chat-tool-fold'
+import type {
+  NativeChatBlock,
+  NativeChatToolCallBlock,
+  NativeChatToolResultBlock
 } from './native-chat-types'
 
 export type NativeChatToolPairing = {
@@ -26,35 +28,17 @@ export type NativeChatToolPairing = {
   pairedResults: ReadonlySet<NativeChatBlock>
 }
 
-export const NO_NATIVE_CHAT_TOOL_PAIRING: NativeChatToolPairing = {
-  resultByCall: new Map(),
-  pairedResults: new Set()
-}
-
+/** The desktop run's view of `pairToolBlocks`, so every reader of a run pairs with one loop. */
 export function pairNativeChatToolResults(
   blocks: readonly NativeChatBlock[]
 ): NativeChatToolPairing {
   const resultByCall = new Map<NativeChatToolCallBlock, NativeChatToolResultBlock>()
   const pairedResults = new Set<NativeChatBlock>()
-  const unanswered: NativeChatToolCallBlock[] = []
-  let answered = 0
-  for (const block of blocks) {
-    if (isToolCallBlock(block)) {
-      unanswered.push(block)
-      continue
+  for (const { call, result } of pairToolBlocks(blocks)) {
+    if (call && result) {
+      resultByCall.set(call, result)
+      pairedResults.add(result)
     }
-    if (!isToolResultBlock(block)) {
-      continue
-    }
-    // Results carry no call id, so the journal's FIFO order is the only stable
-    // attribution available when calls are interleaved.
-    const call = unanswered[answered]
-    if (call === undefined) {
-      continue
-    }
-    answered += 1
-    resultByCall.set(call, block)
-    pairedResults.add(block)
   }
   return { resultByCall, pairedResults }
 }

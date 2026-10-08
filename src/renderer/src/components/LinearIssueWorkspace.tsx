@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo } from 'react'
-import { VisuallyHidden } from 'radix-ui'
+import * as VisuallyHidden from 'radix-ui/visually-hidden'
 
 import { LinearIssueTextEditor } from '@/components/LinearIssueTextEditor'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'

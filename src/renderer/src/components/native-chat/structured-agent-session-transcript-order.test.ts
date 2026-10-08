@@ -6,12 +6,24 @@ import type {
 } from '../../../../shared/agent-session-journal-types'
 import { projectAgentSessionConversationOutline } from '../../../../shared/agent-session-conversation-outline'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session-journal-item-key'
-import {
-  createStructuredAgentSessionOutboxEntry,
-  type StructuredAgentSessionOutboxEntry
-} from '../../../../shared/structured-agent-session-outbox'
+import type { StructuredAgentSessionOptimisticMessage } from '../../../../shared/structured-agent-session-message-projection'
+import { structuredAgentSessionSendBody } from '../../../../shared/structured-agent-session-send-mutation'
 import { createNativeChatMessageListProjection } from './native-chat-message-list-projection'
 import { projectStructuredAgentSessionMessages } from './structured-agent-session-message-projection'
+
+function optimisticMessage(args: {
+  clientMessageId: string
+  sessionId?: string
+  text: string
+  attachments: readonly { path: string; previewUri: string }[]
+  queuedAt: number
+}): StructuredAgentSessionOptimisticMessage {
+  return {
+    clientMessageId: args.clientMessageId,
+    body: structuredAgentSessionSendBody(args.text, args.attachments),
+    queuedAt: args.queuedAt
+  }
+}
 
 function journalItem(
   itemId: string,
@@ -39,16 +51,16 @@ function answered(question: string): AgentJournalItemBody {
 /** The ids the desktop transcript list draws, top to bottom. */
 function drawn(
   items: AgentJournalRenderItem[],
-  outbox: StructuredAgentSessionOutboxEntry[] = [],
+  outbox: StructuredAgentSessionOptimisticMessage[] = [],
   submissions: AgentJournalSubmission[] = []
 ): string[] {
   return createNativeChatMessageListProjection()(
     projectStructuredAgentSessionMessages(items, outbox, submissions)
-  ).map(({ id }) => id)
+  ).conversation.map(({ id }) => id)
 }
 
 function queued(clientMessageId: string, text: string, queuedAt: number) {
-  return createStructuredAgentSessionOutboxEntry({
+  return optimisticMessage({
     clientMessageId,
     sessionId: 'session',
     text,

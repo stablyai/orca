@@ -39,6 +39,21 @@ describe('describeNativeChatTurnStatus', () => {
     })
   })
 
+  it.each([
+    ['cancellation', 'interruptedAfter'],
+    ['superseded', 'interruptedAfter'],
+    ['failure', 'failedAfter'],
+    // A crash or restart cut it off: the turn reads finished and the chat's notice row says why.
+    ['interruption', 'workedFor'],
+    ['success', 'workedFor'],
+    ['unconfirmed', 'workedFor'],
+    [undefined, 'workedFor']
+  ] as const)('heads a settled %s turn with %s', (verdict, key) => {
+    expect(describeNativeChatTurnStatus({ workedSeconds: 12, elapsedSeconds: 0, verdict })).toEqual(
+      { key, duration: '12s' }
+    )
+  })
+
   it('counts from the first second of the turn', () => {
     expect(describeNativeChatTurnStatus({ workedSeconds: null, elapsedSeconds: 0 })).toEqual({
       key: 'workingFor',
@@ -72,6 +87,16 @@ describe('describeNativeChatActiveTurnLabel', () => {
       key: 'working'
     })
   })
+
+  it("says Stopping over the provider's activity once a person's Stop is ending the turn", () => {
+    expect(
+      describeNativeChatActiveTurnLabel({
+        activityText: 'Running pnpm test',
+        thinking: true,
+        stopping: true
+      })
+    ).toEqual({ source: 'status', key: 'stopping' })
+  })
 })
 
 describe('formatNativeChatActiveTurnLabel', () => {
@@ -81,6 +106,7 @@ describe('formatNativeChatActiveTurnLabel', () => {
     ).toBe('Running pnpm test')
     expect(formatNativeChatActiveTurnLabel({ thinking: true })).toBe('Thinking')
     expect(formatNativeChatActiveTurnLabel({ thinking: false })).toBe('Working…')
+    expect(formatNativeChatActiveTurnLabel({ thinking: false, stopping: true })).toBe('Stopping…')
   })
 })
 
@@ -92,6 +118,24 @@ describe('formatNativeChatTurnStatusLabel', () => {
     expect(formatNativeChatTurnStatusLabel({ workedSeconds: 184, elapsedSeconds: 0 })).toBe(
       'Worked for 3m 4s'
     )
+  })
+
+  // The phone's turn bar renders through this function, so it reads the same as desktop.
+  it('reads a crash-cut turn as worked and a Stop as interrupted in English', () => {
+    expect(
+      formatNativeChatTurnStatusLabel({
+        workedSeconds: 222,
+        elapsedSeconds: 0,
+        verdict: 'interruption'
+      })
+    ).toBe('Worked for 3m 42s')
+    expect(
+      formatNativeChatTurnStatusLabel({
+        workedSeconds: 222,
+        elapsedSeconds: 0,
+        verdict: 'cancellation'
+      })
+    ).toBe('Interrupted after 3m 42s')
   })
 })
 

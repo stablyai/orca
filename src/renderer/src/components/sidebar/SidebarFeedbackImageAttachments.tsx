@@ -11,8 +11,13 @@ import {
   type FeedbackImageDraft
 } from '@/lib/feedback-image-attachments'
 
+// Why: an image that needs no shrink reads in a few ms, which would only flash the hint.
+const PREPARING_HINT_DELAY_MS = 250
+
 type SidebarFeedbackImageAttachmentsProps = {
   images: FeedbackImageDraft[]
+  /** Files picked but not yet read; a shrink keeps them pending long enough to show. */
+  pendingCount: number
   disabled: boolean
   isDragActive: boolean
   onAddFiles: (files: readonly File[]) => void
@@ -21,6 +26,7 @@ type SidebarFeedbackImageAttachmentsProps = {
 
 export function SidebarFeedbackImageAttachments({
   images,
+  pendingCount,
   disabled,
   isDragActive,
   onAddFiles,
@@ -33,6 +39,17 @@ export function SidebarFeedbackImageAttachments({
   const attachedBytes = images.reduce((total, image) => total + image.bytes, 0)
   const atCapacity =
     images.length >= MAX_FEEDBACK_IMAGE_COUNT || attachedBytes >= MAX_FEEDBACK_IMAGE_TOTAL_BYTES
+  const hasPendingReads = pendingCount > 0
+  const [showPreparing, setShowPreparing] = React.useState(false)
+  React.useEffect(() => {
+    if (!hasPendingReads) {
+      setShowPreparing(false)
+      return
+    }
+    const timer = window.setTimeout(() => setShowPreparing(true), PREPARING_HINT_DELAY_MS)
+    return () => window.clearTimeout(timer)
+  }, [hasPendingReads])
+  const isPreparing = hasPendingReads && showPreparing
 
   return (
     <div
@@ -43,14 +60,21 @@ export function SidebarFeedbackImageAttachments({
     >
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs text-muted-foreground">
-          {translate(
-            'auto.components.sidebar.SidebarFeedbackImageAttachments.screenshotsHint',
-            'Attach up to {{count}} screenshots, {{maxSize}} total',
-            {
-              count: MAX_FEEDBACK_IMAGE_COUNT,
-              maxSize: formatFeedbackImageSize(MAX_FEEDBACK_IMAGE_TOTAL_BYTES)
-            }
-          )}
+          {/* Why: shrinking an oversized screenshot is slow enough that a silent gap
+              between the pick and the thumbnail reads as a dropped attachment. */}
+          {isPreparing
+            ? translate(
+                'auto.components.sidebar.SidebarFeedbackImageAttachments.preparing',
+                'Preparing attachments…'
+              )
+            : translate(
+                'auto.components.sidebar.SidebarFeedbackImageAttachments.screenshotsHint',
+                'Attach up to {{count}} screenshots, {{maxSize}} total',
+                {
+                  count: MAX_FEEDBACK_IMAGE_COUNT,
+                  maxSize: formatFeedbackImageSize(MAX_FEEDBACK_IMAGE_TOTAL_BYTES)
+                }
+              )}
         </span>
         <Button
           type="button"

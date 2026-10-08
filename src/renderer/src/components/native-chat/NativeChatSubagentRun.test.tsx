@@ -2,12 +2,11 @@
 
 import '@testing-library/jest-dom/vitest'
 
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import type {
   NativeChatSubagentEntry,
-  NativeChatSubagentGroupBlock,
-  NativeChatSubagentState
+  NativeChatSubagentGroupBlock
 } from '../../../../shared/native-chat-types'
 import { NativeChatSubagentRun } from './NativeChatSubagentRun'
 import { NativeChatToolRun } from './NativeChatToolRun'
@@ -95,38 +94,6 @@ describe('NativeChatSubagentRun', () => {
     expect(container.querySelector('.bg-destructive')).toBeNull()
   })
 
-  // The QA defect: a mid-turn correction opened a new turn while three real
-  // children were still running, and the row relabelled every one of them
-  // `unverifiable` and flipped its headline to `Ran`. The children completed
-  // 57-87s later. A turn boundary says nothing about a child.
-  it('keeps a working child working once its turn is no longer the current one', () => {
-    render(<NativeChatSubagentRun block={group([{ id: 'a', label: 'read', state: 'working' }])} />)
-
-    const row = screen.getByRole('button')
-    expect(row).toHaveTextContent('working')
-    expect(row).not.toHaveTextContent('unverifiable')
-    expect(screen.getByText('Kicked off 1 subagent')).toBeInTheDocument()
-  })
-
-  it('reports the verdict a child lands after its turn ended', () => {
-    render(
-      <NativeChatSubagentRun block={group([{ id: 'a', label: 'read', state: 'completed' }])} />
-    )
-
-    expect(screen.getByText('Ran 1 subagent')).toBeInTheDocument()
-    expect(screen.getByRole('button')).toHaveTextContent('completed')
-  })
-
-  // Only the writing host may claim loss of contact, and it writes that verdict
-  // into the row itself. The renderer draws it, and never infers it.
-  it('draws the unverifiable verdict the host recorded', () => {
-    render(
-      <NativeChatSubagentRun block={group([{ id: 'a', label: 'read', state: 'unverifiable' }])} />
-    )
-
-    expect(screen.getByRole('button')).toHaveTextContent('unverifiable')
-  })
-
   it('leads with the bot glyph, decorative beside the word that names the group', () => {
     const { container } = render(
       <NativeChatSubagentRun block={group([{ id: 'a', label: 'read', state: 'working' }])} />
@@ -137,28 +104,6 @@ describe('NativeChatSubagentRun', () => {
     expect(glyph).toHaveAttribute('aria-hidden', 'true')
     // Never icon-only: the word is what carries the accessible name.
     expect(screen.getByRole('button')).toHaveAccessibleName(/Kicked off 1 subagent/)
-  })
-
-  it('keeps the same glyph in every state, so a settling row never changes identity', () => {
-    const states: NativeChatSubagentState[] = [
-      'working',
-      'idle',
-      'completed',
-      'failed',
-      'stopped',
-      'unverifiable'
-    ]
-
-    for (const state of states) {
-      const { container } = render(
-        <NativeChatSubagentRun block={group([{ id: 'a', label: 'read', state }])} />
-      )
-
-      expect(container.querySelectorAll('.lucide-bot')).toHaveLength(1)
-      expect(container.querySelector('.lucide-check')).toBeNull()
-      expect(container.querySelector('.lucide-users')).toBeNull()
-      cleanup()
-    }
   })
 
   // The only aria-hidden span carrying text is the elapsed-clock wrapper: the
@@ -198,6 +143,23 @@ describe('NativeChatSubagentRun', () => {
     expect(screen.getByRole('button')).toHaveTextContent('4s')
   })
 
+  // A resumed child reopens in its original row with a fresh start; the idle
+  // time since its sibling stopped is not run time.
+  it('reads a child resumed after a long gap as its runs, not the gap', () => {
+    render(
+      <NativeChatSubagentRun
+        block={group([
+          { id: 'a', label: 'read', state: 'completed', startedAt: 1_000, settledAt: 6_000 },
+          { id: 'b', label: 'search', state: 'completed', startedAt: 300_000, settledAt: 305_000 }
+        ])}
+      />
+    )
+
+    const row = screen.getByRole('button')
+    expect(row).toHaveTextContent('· 10s')
+    expect(row.textContent).not.toContain('5m')
+  })
+
   it('shows no duration for a child whose run length was never recorded', () => {
     render(
       <NativeChatSubagentRun
@@ -206,7 +168,7 @@ describe('NativeChatSubagentRun', () => {
     )
 
     const row = screen.getByRole('button')
-    expect(row).toHaveTextContent('unverifiable')
+    expect(row).toHaveTextContent('status unavailable')
     // `unverifiable` with no terminal timestamp has no known run length, so the
     // clock would measure to `now` and report the time since we lost sight of
     // the child as how long it ran — on a row that is not even counting.
@@ -227,7 +189,23 @@ describe('NativeChatSubagentRun', () => {
     )
 
     const row = screen.getByRole('button')
-    expect(row).toHaveTextContent('unverifiable')
+    expect(row).toHaveTextContent('1 with status unavailable')
+    expect(row.textContent).not.toContain('·')
+  })
+
+  // The provider can still say how a child whose host died ended, but not when.
+  it('shows no duration when a verdict reached a child with no recorded stop time', () => {
+    render(
+      <NativeChatSubagentRun
+        block={group([
+          { id: 'a', label: 'read', state: 'completed', startedAt: 1_000, settledAt: 5_000 },
+          { id: 'b', label: 'search', state: 'stopped', startedAt: 1_000 }
+        ])}
+      />
+    )
+
+    const row = screen.getByRole('button')
+    expect(row).toHaveTextContent('stopped')
     expect(row.textContent).not.toContain('·')
   })
 })
@@ -256,7 +234,6 @@ describe('NativeChatToolRun with a spawn group', () => {
         blocks={[]}
         subagentGroups={[group([{ id: 'a', label: 'read', state: 'completed' }])]}
         expandSignal={false}
-        expandOverride={false}
         activeTurnIsWorking={false}
       />
     )
@@ -264,7 +241,7 @@ describe('NativeChatToolRun with a spawn group', () => {
     expect(screen.getByText('Ran 1 subagent')).toBeInTheDocument()
   })
 
-  // The roster-only branch returns a `mt-3` wrapper whenever it has rows, so a
+  // The roster-only branch returns a spacing wrapper whenever it has rows, so a
   // group that draws nothing must not count as one — that wrapper would be the
   // empty bubble with a margin that the message row refuses to emit.
   it('draws nothing at all for a spawn group that carries no children', () => {
@@ -273,30 +250,11 @@ describe('NativeChatToolRun with a spawn group', () => {
         blocks={[]}
         subagentGroups={[group([])]}
         expandSignal={false}
-        expandOverride={false}
         activeTurnIsWorking={false}
       />
     )
 
     expect(container).toBeEmptyDOMElement()
-  })
-
-  // The roster-only escape above is keyed on `blocks.length === 0`, so a group
-  // sharing its message with tool calls falls through to the settled-turn guard
-  // — which returned bare null and took the roster with it.
-  it('keeps a roster that shares its message with tool calls on a collapsed turn', () => {
-    render(
-      <NativeChatToolRun
-        blocks={[{ type: 'tool-call', name: 'shell', input: { command: 'ls' } }]}
-        subagentGroups={[group([{ id: 'a', label: 'read', state: 'completed' }])]}
-        expandSignal={false}
-        expandOverride={false}
-        activeTurnIsWorking={false}
-      />
-    )
-
-    expect(screen.getByText('Ran 1 subagent')).toBeInTheDocument()
-    expect(screen.queryByText('shell')).toBeNull()
   })
 
   it('renders the roster alongside the tool activity of its turn', () => {
@@ -311,5 +269,49 @@ describe('NativeChatToolRun with a spawn group', () => {
 
     expect(screen.getByText('Ran 1 subagent')).toBeInTheDocument()
     expect(screen.getByText('ls').closest('button')).toHaveTextContent('ls')
+  })
+
+  it('lists every child as a plain line when none has rows of its own', () => {
+    const agents = [
+      { id: 'a', label: 'read', state: 'completed' as const },
+      { id: 'b', label: 'search', state: 'completed' as const },
+      { id: 'c', label: 'list', state: 'completed' as const }
+    ]
+    render(<NativeChatSubagentRun block={group(agents)} />)
+    fireEvent.click(screen.getByRole('button', { name: /Ran 3 subagents/ }))
+
+    expect(screen.getAllByRole('listitem').map((item) => item.textContent)).toEqual([
+      'readcompleted',
+      'searchcompleted',
+      'listcompleted'
+    ])
+    expect(screen.getAllByRole('button')).toHaveLength(1)
+  })
+
+  it('draws its entries through the first open one, whose rows the transcript draws next', () => {
+    const agents = [
+      { id: 'a', label: 'read', state: 'completed' as const },
+      { id: 'b', label: 'search', state: 'completed' as const },
+      { id: 'c', label: 'list', state: 'completed' as const }
+    ]
+    render(
+      <NativeChatSubagentRun
+        block={group(agents)}
+        open
+        sections={
+          new Map([
+            ['a', false],
+            ['b', true],
+            ['c', false]
+          ])
+        }
+      />
+    )
+
+    expect(screen.getAllByRole('listitem').map((item) => item.textContent)).toEqual([
+      'readcompleted',
+      'searchcompleted'
+    ])
+    expect(screen.getByRole('button', { name: /search/, expanded: true })).toBeInTheDocument()
   })
 })

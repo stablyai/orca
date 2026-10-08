@@ -120,7 +120,8 @@ export class PushDispatcher {
     event: MobileNotificationEvent
   ): { targets: PushTarget[]; notification: PushSendNotification } | null {
     if (event.type === 'dismiss') {
-      if (event.notificationSeq === undefined || !event.notificationEpoch) {
+      const target = event.dismissedDelivery ?? event
+      if (target.notificationSeq === undefined || !target.notificationEpoch) {
         return null
       }
       const targets = this.registry
@@ -133,9 +134,9 @@ export class PushDispatcher {
         notification: {
           kind: 'dismiss',
           expiresAt: Date.now() + 300_000,
-          notificationId: event.notificationId,
-          notificationSeq: event.notificationSeq,
-          notificationEpoch: event.notificationEpoch,
+          notificationId: target.notificationId,
+          notificationSeq: target.notificationSeq,
+          notificationEpoch: target.notificationEpoch,
           source: 'agent-task-complete',
           agentState: null,
           title: 'Orca',
@@ -165,7 +166,8 @@ export class PushDispatcher {
         event.emittedAt !== undefined &&
         !reserveNotificationCooldown(
           this.recentNotifications,
-          JSON.stringify([device.deviceId, event.worktreeId ?? 'global']),
+          // Keyed news is announced once by its producer, so only its own repeat may collapse it.
+          JSON.stringify([device.deviceId, event.attentionKey ?? event.worktreeId ?? 'global']),
           event.emittedAt
         )
       ) {

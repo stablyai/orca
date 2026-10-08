@@ -3,7 +3,8 @@
  * `ORCA_AGENT_SESSION_ID` names the caller, and nothing resolves or guesses a terminal for it.
  *
  * One rule for every verb that names a caller: a caller flag may restate the session, but a flag
- * naming anyone else is refused before any request — never silently dropped, never allowed to win.
+ * naming anyone else is refused — never silently dropped, never allowed to win. A session address
+ * the CLI cannot place is left to the host, whose `/clear` lineage decides.
  * The #21097 accident was a chat that named a sibling's terminal and consumed that sibling's mail.
  *
  * The session env here is the hardest case, a chat that inherited a pane's `ORCA_TERMINAL_HANDLE`
@@ -29,6 +30,8 @@ import { formatCliError, reportCliError } from './cli-error'
 import { RuntimeRpcFailureError } from './runtime/types'
 
 const SESSION = 'f7a1c0de-1111-4222-8333-444455556666'
+/** The session a `/clear` continued as SESSION: the chat's orchestration address stays this one's. */
+const ROOT = '0b5e2d7c-9a41-4c3e-8f62-7d1a3e5b9c08'
 const IDENTITY_ENV = [
   'ORCA_AGENT_SESSION_ID',
   'ORCA_TERMINAL_HANDLE',
@@ -304,7 +307,7 @@ describe.each(CALLER_VERBS)('orchestration $command run as an agent session', (v
     }
   )
 
-  it.runIf(verb.callerFlag !== undefined).each([`session:${SESSION}`, SESSION])(
+  it.runIf(verb.callerFlag !== undefined).each([`orca_session_id:${SESSION}`, SESSION])(
     'accepts a caller flag that restates the session (%s)',
     async (restated) => {
       await invoke(verb.command, flagMap({ ...verb.flags, [verb.callerFlag ?? 'from']: restated }))
@@ -315,6 +318,28 @@ describe.each(CALLER_VERBS)('orchestration $command run as an agent session', (v
     }
   )
 })
+
+describe.each(CALLER_VERBS.filter((verb) => verb.callerFlag !== undefined))(
+  'orchestration $command run by a /clear-ed chat',
+  (verb) => {
+    beforeEach(asSessionWithInheritedPane)
+
+    it('sends the address it had before the clear for the host to place, instead of refusing it', async () => {
+      // The chat's address is its lineage root's, which only the host's session records know.
+      const flags = flagMap({
+        ...verb.flags,
+        [verb.callerFlag ?? 'from']: `orca_session_id:${ROOT}`
+      })
+      await invoke(verb.command, flags)
+
+      const [params] = callsTo(verb.method)
+      expect(params?.[verb.callerParam]).toBe(`orca_session_id:${ROOT}`)
+      expect(params?.terminalPaneKey).toBeUndefined()
+      expect(params?.senderPaneKey).toBeUndefined()
+      expect(getTerminalHandleMock).not.toHaveBeenCalled()
+    })
+  }
+)
 
 describe.each([
   { command: 'gate-list', method: 'gateList', callerParam: 'from' },
@@ -335,9 +360,19 @@ describe.each([
   })
 
   it('accepts a --from that restates the session', async () => {
-    await invoke(command, flagMap({ run: 'run_1', from: `session:${SESSION}` }))
+    await invoke(command, flagMap({ run: 'run_1', from: `orca_session_id:${SESSION}` }))
     expect(callsTo(method)[0]?.[callerParam]).toBeUndefined()
   })
+
+  it.each([`orca_session_id:${ROOT}`, 'orca_session_id:9d4c1b2a-3e5f-4a6b-8c7d-0e1f2a3b4c5d'])(
+    'sends a session address it cannot place (%s) for the host to check, never dropping it',
+    async (declared) => {
+      // A /clear-ed chat's root is accepted by the host; anyone else is refused there, before any
+      // effect. Dropped here, a conflicting caller would pass unchecked.
+      await invoke(command, flagMap({ run: 'run_1', from: declared }))
+      expect(callsTo(method)[0]).toMatchObject({ run: 'run_1', [callerParam]: declared })
+    }
+  )
 })
 
 describe('the identity a session presents', () => {
@@ -409,7 +444,7 @@ describe('the identity a session presents', () => {
       return callsTo('dispatchShow')[0]?.from
     }
     asSessionWithInheritedPane()
-    expect(await preview({})).toBe(`session:${SESSION}`)
+    expect(await preview({})).toBe(`orca_session_id:${SESSION}`)
     // Not a caller flag: it names the text to preview, so it is never fenced.
     expect(await preview({ from: 'term_sibling' })).toBe('term_sibling')
     setEnv({ ORCA_AGENT_SESSION_ID: SESSION, ORCA_TERMINAL_HANDLE: 'structworker_self' })

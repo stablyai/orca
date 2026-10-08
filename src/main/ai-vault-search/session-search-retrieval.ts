@@ -25,6 +25,27 @@ const FULL_WEIGHTS = '3.0, 2.0, 1.0, 1.0'
 // Tool and identifier columns do not contribute to conversation ranking.
 const CONVERSATION_WEIGHTS = '3.0, 2.0, 0.0, 0.0'
 
+// Explicit columns let the existing statement cache reuse these reads; tests pin every schema field.
+const SESSION_COLUMN_LIST = (
+  [
+    'id',
+    'agent',
+    'session_id',
+    'file_path',
+    'codex_home',
+    'title',
+    'cwd',
+    'cwd_key',
+    'branch',
+    'created_at',
+    'updated_at',
+    'message_count',
+    'resume_command',
+    'content_hash',
+    'content_hash_count'
+  ] as const satisfies readonly (keyof SessionRow | 'cwd_key' | 'created_at')[]
+).join(', ')
+
 export type RetrievalScope = {
   scope: SessionSearchScope
   sort: 'relevance' | 'newest'
@@ -128,7 +149,7 @@ export class SessionSearchRetrieval {
     const { conditions, values } = scope.filter
     const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
     const page = this.db.prepare(
-      `SELECT * FROM sessions ${where}
+      `SELECT ${SESSION_COLUMN_LIST} FROM sessions ${where}
        ORDER BY updated_at DESC, id DESC LIMIT ? OFFSET ?`
     )
     const ceiling = scope.candidateLimit * RECENT_SCAN_FACTOR
@@ -165,11 +186,11 @@ export class SessionSearchRetrieval {
     for (let start = 0; start < ids.length; start += SESSION_ID_BATCH) {
       const batch = ids.slice(start, start + SESSION_ID_BATCH)
       const conditions = [`id IN (${batch.map(() => '?').join(',')})`, ...scope.filter.conditions]
-      rows.push(
-        ...(this.db
-          .prepare(`SELECT * FROM sessions WHERE ${conditions.join(' AND ')}`)
-          .all(...batch, ...scope.filter.values) as SessionRow[])
-      )
+      const sessionRows = this.db
+        .prepare(`SELECT ${SESSION_COLUMN_LIST} FROM sessions WHERE ${conditions.join(' AND ')}`)
+        .all(...batch, ...scope.filter.values)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The private sessions schema defines SessionRow; tests compare every projected column and value with that schema.
+      rows.push(...(sessionRows as SessionRow[]))
     }
     return rows.filter((row) => scope.matchesOperators(row))
   }

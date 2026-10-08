@@ -1,5 +1,19 @@
-import { FreebuffStatusProjection } from './freebuff-status-projection'
+import type { TmuxManagedPty } from '../shared/tmux-agent-hook-owner'
 /* oxlint-disable max-lines */
+import { resolveSynchronizedOutputSafeSplit } from '../shared/terminal-synchronized-output-scan'
+import { restoreManagedDataAccountEnvironment } from '../shared/managed-data-account-environment'
+import { createTerminalTitleTracker } from '../shared/terminal-output-side-effects'
+import { getDecorativeTitleGateKey } from '../shared/agent-decorative-title-signature'
+import type { ClaudeTerminalEvidence } from '../shared/claude-terminal-interrupt'
+import { FreebuffStatusProjection } from './freebuff-status-projection'
+import { probeOpenCodeLaunchCapabilities } from '../main/opencode/opencode-launch-capabilities'
+import type { OpenCodeCliCapabilities } from '../shared/opencode-cli-version'
+import {
+  applyOpenCodePluginSelection,
+  restoreOpenCodeCapabilities
+} from './opencode-plugin-selection'
+import { resolveCommandPathForRelay } from './preflight-handler'
+import { applyRelayAgentWorkspaceTrust } from './agent-workspace-trust-spawn'
 import type { IPty } from 'node-pty'
 import { killWithDescendantSweep } from '../main/pty-descendant-termination'
 import type * as NodePty from 'node-pty'
@@ -22,6 +36,13 @@ import { RetiredPaneSurfaceRegistry } from './retired-pane-surfaces'
 import { applyScrubSafeAgentEnvAliases } from '../shared/agent-hook-scrub-safe-env'
 import { addWslEnvKeys } from '../shared/wsl-env'
 import {
+  OPENCODE_STARTUP_PROMPT_SHA256_ENV,
+  OPENCODE_STARTUP_PROMPT_NONCE_ENV,
+  OPENCODE_STARTUP_PROMPT_ENDPOINT_ENV,
+  OPENCODE_STARTUP_PROMPT_BODY_ENV,
+  OPENCODE_STARTUP_PROMPT_SHELL_ENV
+} from '../shared/opencode-startup-prompt'
+import {
   ORCA_IMAGE_PROTOCOL_ENV,
   ORCA_IMAGE_PROTOCOL_VALUE
 } from '../shared/terminal-image-protocol'
@@ -29,6 +50,12 @@ import { SHELL_STARTUP_FEATURE_ENV } from '../main/shell-startup-features'
 import { DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
 import { shouldUseShellReadyStartupDelivery } from '../shared/codex-startup-delivery'
 import { buildStartupCommandSubmission } from '../shared/startup-command-submission'
+import {
+  discardStagedStartupCommand,
+  stageStartupCommand,
+  startupStagingFailureNotice,
+  type StartupCommandStaging
+} from '../shared/startup-command-staging'
 import { resolveSetupAgentSequenceLaunchCommand } from '../shared/setup-agent-sequencing'
 import {
   isPathInsideOrEqual,
@@ -77,6 +104,7 @@ import {
   type PtyIngressEmission
 } from '../shared/pty-startup-ingress'
 import { resolvePtyOwnerBackend, type PtyOwnerBackend } from '../shared/pty-owner-backend'
+import { setPtyOwnerHostColors } from '../shared/pty-owner-color-query-colors'
 import { RecentPtyOutputBuffer } from '../main/runtime/recent-pty-output-buffer'
 import { TerminalShellRecoveryBarrier } from '../main/daemon/terminal-shell-recovery-barrier'
 import { confirmPtyShellForeground } from '../main/daemon/pty-subprocess/pty-shell-foreground-confirmation'
@@ -123,7 +151,12 @@ import {
   injectRelayHistoryEnv
 } from './terminal-history'
 import { isFlattenedNodePtyLoaderMessage } from '../main/orcad/node-pty-loader-diagnosis'
-import { collectNodePtyUnavailableDiagnosis } from './node-pty-binding-survey'
+import {
+  collectNodePtyUnavailableDiagnosis,
+  resolveNodePtyInstallDir
+} from './node-pty-binding-survey'
+import { describeRelayRuntime } from './relay-runtime-identity'
+import { relayConptyDllSpawnOptions } from './relay-windows-conpty'
 import {
   formatNodePtyUnavailableMessage,
   toTerminalUnavailableCause
@@ -206,6 +239,7 @@ function parseSourceRecoveryRequest(value: unknown): PtySourceRecoveryRequest | 
 }
 
 type ManagedPty = {
+  openCodeCapabilities?: OpenCodeCliCapabilities
   freebuffStatus?: FreebuffStatusProjection
   id: string
   incarnationId: string
@@ -238,10 +272,13 @@ type ManagedPty = {
   wslDistro?: string
   shellCwd?: string
   shellPathEnv?: string
+  agentLaunchToken?: string
   envToDelete: string[]
   gitCredentialPromptGuarded: boolean
   historyIsolationEnabled?: boolean
   startupCommand?: ManagedStartupCommand
+  /** Kept past delivery: the typed line may never run if the shell dies first. */
+  stagedStartupCommand?: StartupCommandStaging
   /** Whether this host armed the shell-ready marker for a renderer-delivered startup command.
    *  Kept off `startupCommand`, which is dropped once delivered; the client reads it from the
    *  spawn reply to skip waiting for a marker that will never come (fish, sh, Windows). */
@@ -265,6 +302,7 @@ type ManagedPty = {
 }
 
 type RelayAgentSessionCreateResult = {
+  openCodeCapabilities?: OpenCodeCliCapabilities
   id: string
   incarnationId: string
   replay?: string
@@ -321,6 +359,7 @@ function disposeManagedPty(managed: ManagedPty): void {
     return
   }
   managed.disposed = true
+  discardStagedStartupCommand(managed.stagedStartupCommand)
   // Why: clear the SIGKILL fallback timer so it can't fire pty.kill on an already-disposed instance.
   if (managed.killTimer) {
     clearTimeout(managed.killTimer)
@@ -436,6 +475,7 @@ type PtyProcessSummary = {
 }
 
 type SerializedPtyEntry = {
+  openCodeCapabilities?: OpenCodeCliCapabilities
   id: string
   pid: number
   cols: number
@@ -639,6 +679,10 @@ export class PtyHandler {
     }
   }
 
+  private conptyDllSpawnOptions(): { useConptyDll: true } | Record<string, never> {
+    return relayConptyDllSpawnOptions(this.relayNodePtyDir(), describeRelayRuntime().kind)
+  }
+
   /** Where the relay's own node-pty lives — the deployed bundle dir, never cwd. */
   private relayNodePtyDir(): string {
     // Packaged relays live under Resources/relay while runtime dependencies are
@@ -659,9 +703,10 @@ export class PtyHandler {
    * healthy relay never pays for them.
    */
   private async nodePtyUnavailableError(spawnError?: unknown): Promise<Error> {
-    const nodePtyDir = this.relayNodePtyDir()
+    // Why: diagnose the install the bare import loaded; the bundle's own dir is only the fallback.
+    const nodePtyDir = resolveNodePtyInstallDir(__dirname) ?? this.relayNodePtyDir()
     const diagnosis = await collectNodePtyUnavailableDiagnosis({
-      nodePtyDir: existsSync(nodePtyDir) ? nodePtyDir : null,
+      nodePtyDir,
       error: spawnError ?? this.lastPtyLoadError
     })
     return Object.assign(new Error(formatNodePtyUnavailableMessage(diagnosis)), {
@@ -712,6 +757,22 @@ export class PtyHandler {
     return this.graceTimeMs
   }
 
+  private agentPresenceTrigger: ((paneKey: string) => void) | null = null
+
+  setAgentPresenceTrigger(listener: ((paneKey: string) => void) | null): void {
+    this.agentPresenceTrigger = listener
+  }
+
+  private claudeTerminalEvidenceListener:
+    | ((paneKey: string, evidence: ClaudeTerminalEvidence) => void)
+    | null = null
+
+  setClaudeTerminalEvidenceListener(
+    listener: ((paneKey: string, evidence: ClaudeTerminalEvidence) => void) | null
+  ): void {
+    this.claudeTerminalEvidenceListener = listener
+  }
+
   /** Subscribe to PTY-exit events (relay-hook server uses this to evict per-paneKey caches). */
   setExitListener(listener: PtyExitListener | null): void {
     this.exitListener = listener
@@ -728,6 +789,39 @@ export class PtyHandler {
    *  paneKey since. Nothing this pane emits can belong to a surface any client still owns. */
   isPaneSurfaceRetired(paneKey: string): boolean {
     return this.retiredPaneSurfaces.isRetired(paneKey)
+  }
+
+  getTmuxManagedPty(paneKey: string): TmuxManagedPty | null {
+    if (process.platform === 'win32' || this.isPaneSurfaceRetired(paneKey)) {
+      return null
+    }
+    const root = this.getCurrentManagedPty(paneKey)
+    if (!root?.worktreeId || !root.pty.pid) {
+      return null
+    }
+    return {
+      pid: root.pty.pid,
+      incarnation: root.incarnationId,
+      scope: {
+        executionHostId: 'local',
+        wslDistro: null,
+        workspaceId: root.worktreeId,
+        workspaceKind: root.worktreeId.startsWith('folder:') ? 'folder' : 'git-worktree'
+      }
+    }
+  }
+
+  getAgentLaunchToken(paneKey: string): string | undefined {
+    return this.isPaneSurfaceRetired(paneKey)
+      ? undefined
+      : this.getCurrentManagedPty(paneKey)?.agentLaunchToken
+  }
+
+  private getCurrentManagedPty(paneKey: string): ManagedPty | undefined {
+    const candidates = [...this.ptys.values()].filter(
+      (pty) => !pty.disposed && (pty.paneKey ?? pty.attachIdentity?.paneKey) === paneKey
+    )
+    return candidates.length === 1 ? candidates[0] : undefined
   }
 
   /** Notified when the last PTY leaves the pool, so the relay can re-arm its idle grace. */
@@ -801,9 +895,13 @@ export class PtyHandler {
     },
     envToDelete: readonly string[] = []
   ): Promise<Record<string, string>> {
-    const baseEnv = mergeGitConfigEnvProtocol(
+    const inheritedEnv = stripInheritedBuildModeEnv(process.env)
+    restoreManagedDataAccountEnvironment(inheritedEnv)
+    const explicitEnv = { ...rendererEnv }
+    restoreManagedDataAccountEnvironment(explicitEnv, false)
+    const mergedEnv = mergeGitConfigEnvProtocol(
       {
-        ...stripInheritedBuildModeEnv(process.env),
+        ...inheritedEnv,
         TERM: 'xterm-256color',
         COLORTERM: 'truecolor',
         TERM_PROGRAM: 'Orca',
@@ -811,8 +909,13 @@ export class PtyHandler {
           rendererEnv?.ORCA_APP_VERSION || process.env.ORCA_APP_VERSION || '0.0.0-dev',
         FORCE_HYPERLINK: '1'
       },
-      rendererEnv
-    ) as Record<string, string>
+      explicitEnv
+    )
+    const baseEnv: Record<string, string> = Object.fromEntries(
+      Object.entries(mergedEnv).filter(
+        (entry): entry is [string, string] => typeof entry[1] === 'string'
+      )
+    )
     const augmented: Record<string, string> = {}
     for (const augmenter of this.envAugmenters) {
       try {
@@ -823,7 +926,11 @@ export class PtyHandler {
         )
       }
     }
-    const result = mergeGitConfigEnvProtocol(baseEnv, augmented) as Record<string, string>
+    const result: Record<string, string> = Object.fromEntries(
+      Object.entries(mergeGitConfigEnvProtocol(baseEnv, augmented)).filter(
+        (entry): entry is [string, string] => typeof entry[1] === 'string'
+      )
+    )
     result[ORCA_IMAGE_PROTOCOL_ENV] = ORCA_IMAGE_PROTOCOL_VALUE
     // Why: an older client may not ask a newly upgraded relay to delete inherited shim state.
     stripLegacyTerminalShimEnv(result, process.platform)
@@ -845,6 +952,8 @@ export class PtyHandler {
     // pane to another worktree's history file — and wrapping a zsh pane that
     // nothing asked to wrap, since `history` is selected on its presence.
     delete result.ORCA_HISTFILE
+    // Why: the codex wrapper runs this path as hook prep, and a relay pane never gets one of its own.
+    delete result.ORCA_CODEX_LAUNCH_PREFLIGHT
     // Why: match local/daemon precedence so defaults/augmenters can't resurrect explicitly-removed values.
     for (const key of envToDelete) {
       delete result[key]
@@ -936,12 +1045,11 @@ export class PtyHandler {
     if (heldBytes) {
       managed.startupIngress?.accept(heldBytes)
     }
-    const submit = process.platform === 'win32' ? '\r' : '\n'
     // Why: only the shell-ready wrapper arms bracketed-paste; other shells use raw submit so ESC[200~ markers aren't echoed.
-    const payload = buildStartupCommandSubmission(startup.command, {
-      submit,
-      bracketedPasteSafe: startup.waitForShellReady
-    })
+    const payload = buildStartupCommandSubmission(
+      managed.stagedStartupCommand?.command ?? startup.command,
+      { bracketedPasteSafe: startup.waitForShellReady }
+    )
     managed.startupCommand = undefined
     managed.pty.write(payload)
   }
@@ -1014,7 +1122,28 @@ export class PtyHandler {
         }
       })
     }
+    const recheckAgentPresence = (): void => {
+      if (managed.paneKey) {
+        this.agentPresenceTrigger?.(managed.paneKey)
+      }
+    }
+    let lastTitleGateKey: string | null = null
+    const presenceTriggers = createTerminalTitleTracker({
+      onTitle: (normalizedTitle, rawTitle, meta) => {
+        if (managed.paneKey && !meta?.staleWorkingTitleClear) {
+          this.claudeTerminalEvidenceListener?.(managed.paneKey, { kind: 'title', title: rawTitle })
+        }
+        // Why: spinner frames arrive several times a second; only a real title change re-checks.
+        const gateKey = getDecorativeTitleGateKey(rawTitle, normalizedTitle)
+        if (gateKey !== lastTitleGateKey && !meta?.staleWorkingTitleClear) {
+          recheckAgentPresence()
+        }
+        lastTitleGateKey = gateKey
+      },
+      onCommandFinished: recheckAgentPresence
+    })
     managed.pty.onData((data: string) => {
+      presenceTriggers.handleChunk(data)
       const startup = managed.startupCommand
       if (startup?.waitForShellReady && startup.outputScanState && !startup.delivered) {
         const scanned = scanShellStartupOutput(startup.outputScanState, data)
@@ -1036,6 +1165,10 @@ export class PtyHandler {
       }
     })
     managed.pty.onExit(({ exitCode }: { exitCode: number }) => {
+      presenceTriggers.dispose()
+      if (managed.paneKey) {
+        this.claudeTerminalEvidenceListener?.(managed.paneKey, { kind: 'reset' })
+      }
       managed.physicalExit?.markExited()
       if (managed.disposed) {
         return
@@ -1148,6 +1281,10 @@ export class PtyHandler {
 
     this.dispatcher.onNotification('pty.data', (p) => this.writeData(p))
     this.dispatcher.onNotification('pty.resize', (p) => this.resize(p))
+    // A notification, so a client newer than this relay is ignored rather than refused.
+    this.dispatcher.onNotification('pty.setColorQueryReplyColors', (p) =>
+      setPtyOwnerHostColors(p.colors)
+    )
   }
 
   private isLikelyInteractiveRedraw(data: string): boolean {
@@ -1340,6 +1477,19 @@ export class PtyHandler {
         ? desiredChars
         : (this.dispatcher.maxLegacyPtyDataChars?.(paramsWithoutData, pending.data, desiredChars) ??
           desiredChars)
+    // Why before the surrogate guard: splitting inside an open DEC 2026 frame
+    // strands the closing \x1b[?2026l in the remainder, and xterm stops repainting
+    // until it arrives or its 1000ms timeout fires. The surrogate guard keeps the
+    // final say so a frame boundary can never sever a pair.
+    if (!pending.transformed && !pending.sourceChunk && chunkChars > 0) {
+      const frameAligned = resolveSynchronizedOutputSafeSplit(pending.data, chunkChars)
+      // Why the floor of 2: the surrogate guard below can decrement by one, and
+      // a chunkChars of 0 takes the pause-and-retry path. Never let frame
+      // alignment walk a healthy slice into that.
+      if (frameAligned >= 2) {
+        chunkChars = frameAligned
+      }
+    }
     if (
       chunkChars > 0 &&
       chunkChars < pending.data.length &&
@@ -1846,6 +1996,9 @@ export class PtyHandler {
         id: managed.id,
         incarnationId: managed.incarnationId,
         agentSessionEnsure: result,
+        ...(result.disposition === 'created' && managed.openCodeCapabilities
+          ? { openCodeCapabilities: managed.openCodeCapabilities }
+          : {}),
         ...(sourceActivation ? { sourceActivation } : {}),
         ...(adoptedReplay ? { replay: adoptedReplay } : {}),
         ...(managed.shellReadyArmed !== undefined
@@ -1874,6 +2027,7 @@ export class PtyHandler {
     incarnationId: string
     sourceActivation?: PtySourceReceivingActivation
     shellReadyArmed?: boolean
+    openCodeCapabilities?: OpenCodeCliCapabilities
   }> {
     const pty = await this.loadPty()
     if (!pty) {
@@ -1920,6 +2074,35 @@ export class PtyHandler {
       { id, paneKey, shell, command, launchAgent },
       envToDelete
     )
+    delete spawnEnv.ORCA_OPENCODE_PLUGIN_API
+    // Relay input streams lack driving-input provenance, so native intent is unavailable.
+    for (const key of [
+      OPENCODE_STARTUP_PROMPT_SHA256_ENV,
+      OPENCODE_STARTUP_PROMPT_NONCE_ENV,
+      OPENCODE_STARTUP_PROMPT_ENDPOINT_ENV,
+      OPENCODE_STARTUP_PROMPT_BODY_ENV,
+      OPENCODE_STARTUP_PROMPT_SHELL_ENV
+    ]) {
+      delete spawnEnv[key]
+    }
+    const openCodeCapabilities = await probeOpenCodeLaunchCapabilities({
+      command,
+      agent: launchAgent,
+      env: spawnEnv,
+      cwd,
+      hostIdentity: `relay:${process.platform}`,
+      resolveExecutable: (executable) => resolveCommandPathForRelay(executable, { env: spawnEnv }),
+      ...(isRelayWslShell(shell) ? { wsl: { distro: terminalWindowsWslDistro ?? undefined } } : {})
+    })
+    applyOpenCodePluginSelection(
+      spawnEnv,
+      envToDelete,
+      openCodeCapabilities,
+      isRelayWslShell(shell)
+    )
+    await applyRelayAgentWorkspaceTrust(params.agentWorkspaceTrust, launchAgent, spawnEnv, {
+      wslShell: isRelayWslShell(shell)
+    })
     const worktreeId =
       typeof params.worktreeId === 'string' ? params.worktreeId : env?.ORCA_WORKTREE_ID
     const historyIsolationEnabled = params.historyIsolationEnabled === true
@@ -1977,6 +2160,11 @@ export class PtyHandler {
     // includes Homebrew, nvm, and user-installed CLIs (claude, codex, gh).
     // When overlays are injected, the launch wrapper keeps those paths after
     // user startup files re-export their defaults.
+    const ptyEnv: Record<string, string> = {
+      ...spawnEnv,
+      [SHELL_STARTUP_FEATURE_ENV]: '',
+      ...shellLaunch.env
+    }
     let term: IPty
     try {
       term = pty.spawn(shell, shellLaunch.args, {
@@ -1987,11 +2175,8 @@ export class PtyHandler {
         cwd,
         // Why the empty default: relay shells inherit process.env, and the launch
         // config is the only thing allowed to name features for this shell.
-        env: {
-          ...spawnEnv,
-          [SHELL_STARTUP_FEATURE_ENV]: '',
-          ...shellLaunch.env
-        }
+        env: ptyEnv,
+        ...this.conptyDllSpawnOptions()
       })
     } catch (error) {
       // Why: Windows loads conpty.node only on first spawn, so handle that late binding failure here.
@@ -2016,6 +2201,7 @@ export class PtyHandler {
     const ownerClientInstanceId =
       context === undefined ? null : (this.consumerIdentityResolver?.(context.clientId) ?? null)
     const managed: ManagedPty = {
+      ...(openCodeCapabilities ? { openCodeCapabilities } : {}),
       ...(launchAgent === 'freebuff'
         ? { freebuffStatus: new FreebuffStatusProjection(cols, rows) }
         : {}),
@@ -2044,6 +2230,7 @@ export class PtyHandler {
       ...(terminalWindowsWslDistro ? { wslDistro: terminalWindowsWslDistro } : {}),
       shellCwd: cwd,
       shellPathEnv: spawnEnv.PATH,
+      agentLaunchToken: ptyEnv.ORCA_AGENT_LAUNCH_TOKEN?.trim() || undefined,
       ownerBackend: resolvePtyOwnerBackend({
         platform: process.platform,
         shellPath: shell,
@@ -2069,11 +2256,28 @@ export class PtyHandler {
           }
         : {})
     }
+    if (managed.startupCommand?.providerDelivery && managed.startupCommand.command) {
+      managed.stagedStartupCommand = stageStartupCommand({
+        command: managed.startupCommand.command,
+        shellPath: shell,
+        orcaBuiltLine: launchAgent !== undefined
+      })
+      if (managed.stagedStartupCommand.failure) {
+        process.stderr.write(
+          `[pty-handler] Could not stage startup command for ${id}; typing it in full: ${managed.stagedStartupCommand.failure}\n`
+        )
+      }
+    }
     this.retiredIncarnations.delete(id)
     this.sourcePublication?.activate(id, managed.incarnationId, context)
     const sourceActivation =
       context && this.sourcePublication?.receivingActivation?.(id, context.clientId)
     this.wireAndStore(managed)
+    const stagingNotice =
+      managed.stagedStartupCommand && startupStagingFailureNotice(managed.stagedStartupCommand)
+    if (stagingNotice) {
+      managed.startupIngress?.accept(stagingNotice)
+    }
     if (context?.isStale() && !params.agentSessionEnsure && !params.agentSessionCreateOperationId) {
       // Why: if the client reconnected while pty.spawn was in flight, the
       // response is discarded and no renderer can own this PTY. Shut it down
@@ -2094,7 +2298,8 @@ export class PtyHandler {
       id,
       incarnationId: managed.incarnationId,
       ...(sourceActivation ? { sourceActivation } : {}),
-      shellReadyArmed: rendererShellReadySupported
+      shellReadyArmed: rendererShellReadySupported,
+      ...(openCodeCapabilities ? { openCodeCapabilities } : {})
     }
   }
 
@@ -2235,6 +2440,9 @@ export class PtyHandler {
         return
       }
       managed.pty.write(data)
+      if (managed.paneKey) {
+        this.claudeTerminalEvidenceListener?.(managed.paneKey, { kind: 'input', data })
+      }
     }
   }
 
@@ -2941,12 +3149,14 @@ export class PtyHandler {
               }
             )
           : undefined
+      const hostAgeMs = Math.max(0, Date.now() - managed.createdAt)
+      const agentSessionOwners = this.agentSessionOwners.listForPty(id)
       results.push({
         id,
         incarnationId: managed.incarnationId,
         cwd: managed.initialCwd,
         title,
-        hostAgeMs: Math.max(0, Date.now() - managed.createdAt),
+        hostAgeMs,
         paneBound: Boolean(managed.paneKey ?? managed.attachIdentity?.paneKey),
         ...(managed.ownerClientInstanceId
           ? { ownerClientInstanceId: managed.ownerClientInstanceId }
@@ -2954,9 +3164,7 @@ export class PtyHandler {
         ...(managed.worktreeId ? { worktreeId: managed.worktreeId } : {}),
         ...(managed.terminalHandle ? { terminalHandle: managed.terminalHandle } : {}),
         ...(foregroundProcessEvidence ? { foregroundProcessEvidence } : {}),
-        ...(this.agentSessionOwners.listForPty(id).length
-          ? { agentSessionOwners: this.agentSessionOwners.listForPty(id) }
-          : {})
+        ...(agentSessionOwners.length ? { agentSessionOwners } : {})
       })
     }
     return results
@@ -2983,6 +3191,9 @@ export class PtyHandler {
         worktreeId: managed.worktreeId,
         ...(managed.explicitTerm !== undefined ? { explicitTerm: managed.explicitTerm } : {}),
         envToDelete: managed.envToDelete,
+        ...(managed.openCodeCapabilities
+          ? { openCodeCapabilities: managed.openCodeCapabilities }
+          : {}),
         gitCredentialPromptGuarded: managed.gitCredentialPromptGuarded,
         ...(managed.historyIsolationEnabled ? { historyIsolationEnabled: true } : {}),
         // Why serialized: revive re-spawns the shell, and without these a WSL
@@ -3077,6 +3288,8 @@ export class PtyHandler {
       { id: entry.id, paneKey: entry.paneKey, shell },
       envToDelete
     )
+    const openCodeCapabilities = restoreOpenCodeCapabilities(entry.openCodeCapabilities)
+    applyOpenCodePluginSelection(spawnEnv, envToDelete, openCodeCapabilities, wslShell)
     if (
       historyIsolationEnabled &&
       entry.worktreeId &&
@@ -3103,6 +3316,11 @@ export class PtyHandler {
     const shellLaunch = getRelayShellLaunchConfig(shell, spawnEnv, process.platform, {
       terminalWindowsWslDistro
     })
+    const ptyEnv: Record<string, string> = {
+      ...spawnEnv,
+      [SHELL_STARTUP_FEATURE_ENV]: '',
+      ...shellLaunch.env
+    }
     let term: IPty
     try {
       term = ptyMod.spawn(shell, shellLaunch.args, {
@@ -3111,11 +3329,8 @@ export class PtyHandler {
         rows: entry.rows,
         cwd: entry.cwd,
         // Why: no provider-delivered command is waiting for a ready marker.
-        env: {
-          ...spawnEnv,
-          [SHELL_STARTUP_FEATURE_ENV]: '',
-          ...shellLaunch.env
-        }
+        env: ptyEnv,
+        ...this.conptyDllSpawnOptions()
       })
     } catch (error) {
       // Why skip rather than retry the host default shell: the stored override
@@ -3145,12 +3360,14 @@ export class PtyHandler {
         limit: REPLAY_BUFFER_MAX
       }),
       paneKey: entry.paneKey,
+      agentLaunchToken: ptyEnv.ORCA_AGENT_LAUNCH_TOKEN?.trim() || undefined,
       tabId: entry.tabId,
       attachIdentity: entry.attachIdentity,
       worktreeId: entry.worktreeId,
       ...(explicitTerm !== undefined ? { explicitTerm } : {}),
       envToDelete,
       gitCredentialPromptGuarded,
+      ...(openCodeCapabilities ? { openCodeCapabilities } : {}),
       ...(historyIsolationEnabled ? { historyIsolationEnabled: true } : {}),
       shellPath: shell,
       // Why re-stored: a revived pane can be serialized again, and losing the

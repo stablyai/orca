@@ -47,7 +47,7 @@ const ENGINES = [
 const PAGE_ENTRY = `
 import { createElement as h } from 'react'
 import { createRoot } from 'react-dom/client'
-const { StyleSheet, TextInput, View } = require('react-native')
+const { Modal, StyleSheet, Text, TextInput, View } = require('react-native')
 const styles = StyleSheet.create({
   separatorBox: { paddingTop: 10.1, width: 12, backgroundColor: '#ffffff' },
   separator: { height: StyleSheet.hairlineWidth, backgroundColor: '#000000' },
@@ -55,7 +55,7 @@ const styles = StyleSheet.create({
   input: { height: 40 }
 })
 createRoot(document.getElementById('root')).render(
-  h(View, null, h(View, { testID: 'separator-box', style: styles.separatorBox }, h(View, { style: styles.separator })), h(View, { testID: 'hairline', style: styles.hairline }), h(TextInput, { testID: 'input', style: styles.input }))
+  h(View, null, h(View, { testID: 'separator-box', style: styles.separatorBox }, h(View, { style: styles.separator })), h(View, { testID: 'hairline', style: styles.hairline }), h(TextInput, { testID: 'input', style: styles.input }), h(Text, { testID: 'plain-text' }, 'row'), h(Text, { testID: 'selectable-text', selectable: true }, 'message'), location.hash === '#modal' ? h(Modal, { visible: true, transparent: true }, h(View, null, h(Text, { testID: 'modal-text' }, 'sheet row'), h(TextInput, { testID: 'modal-input', style: styles.input }))) : null)
 )
 `
 
@@ -111,9 +111,9 @@ afterAll(async () => {
   }
 })
 
-async function openPage(engine) {
+async function openPage(engine, hash = '') {
   const page = await browsers.get(engine.name).newPage(engine.pageOptions)
-  await page.goto(`${origin}/`, { waitUntil: 'domcontentloaded' })
+  await page.goto(`${origin}/${hash}`, { waitUntil: 'domcontentloaded' })
   await page.waitForSelector('[data-testid="input"]')
   return page
 }
@@ -164,6 +164,83 @@ describeParity.each(ENGINES)('the page against native, at a phone density, in $n
         return { focused: document.activeElement === input, style: style.outlineStyle }
       })
       expect(outline).toEqual({ focused: true, style: 'none' })
+    } finally {
+      await page.close()
+    }
+  })
+
+  it('leaves only selectable text and editable fields selectable, as native does', async () => {
+    // The iOS shell keeps WebKit text interaction on so fields take text, and a hold on plain text
+    // would otherwise raise WebKit's selection over the page's own long press.
+    const page = await openPage(engine)
+    try {
+      await page.type('[data-testid="input"]', 'typed')
+      const measured = await page.evaluate(() => {
+        const select = (id) => getComputedStyle(document.querySelector(`[data-testid="${id}"]`))
+        const read = (id) => select(id).webkitUserSelect || select(id).userSelect
+        return {
+          plain: read('plain-text'),
+          selectable: read('selectable-text'),
+          input: read('input'),
+          value: document.querySelector('[data-testid="input"]').value
+        }
+      })
+      expect(measured).toEqual({ plain: 'none', selectable: 'text', input: 'text', value: 'typed' })
+    } finally {
+      await page.close()
+    }
+  })
+
+  it("selects through the browser's own gesture only what native lets the user select", async () => {
+    // A double-click, not a Range: a script can select text a user cannot.
+    const page = await openPage(engine)
+    try {
+      const selectedBy = async (testId) => {
+        await page.evaluate(() => window.getSelection()?.removeAllRanges())
+        await page.dblclick(`[data-testid="${testId}"]`)
+        return page.evaluate(() => window.getSelection()?.toString() ?? '')
+      }
+      expect(await selectedBy('plain-text')).toBe('')
+      // react-native-web's Text/index.js:115 adds `styles.selectable` (`userSelect: 'text'`).
+      expect(await selectedBy('selectable-text')).not.toBe('')
+
+      await page.type('[data-testid="input"]', 'hello world')
+      await page.dblclick('[data-testid="input"]')
+      const selectedInField = await page.evaluate(() => {
+        const input = document.querySelector('[data-testid="input"]')
+        return input.selectionEnd - input.selectionStart
+      })
+      expect(selectedInField).toBeGreaterThan(0)
+    } finally {
+      await page.close()
+    }
+  })
+
+  it('applies the same to text a modal portals outside #root, and keeps its fields selectable', async () => {
+    // react-native-web's Modal appends to document.body, so a rule on #root would miss sheets.
+    // The fields' callout exemption goes unmeasured: desktop WebKit lacks the property.
+    const page = await openPage(engine, '#modal')
+    try {
+      await page.waitForSelector('[data-testid="modal-text"]')
+      const measured = await page.evaluate(() => {
+        const text = document.querySelector('[data-testid="modal-text"]')
+        const input = document.querySelector('[data-testid="modal-input"]')
+        const read = (node) =>
+          getComputedStyle(node).webkitUserSelect || getComputedStyle(node).userSelect
+        return {
+          outsideRoot: !document.getElementById('root').contains(text),
+          text: read(text),
+          input: read(input)
+        }
+      })
+      expect(measured).toEqual({
+        outsideRoot: true,
+        text: 'none',
+        input: 'text'
+      })
+      await page.evaluate(() => window.getSelection()?.removeAllRanges())
+      await page.dblclick('[data-testid="modal-text"]')
+      expect(await page.evaluate(() => window.getSelection()?.toString() ?? '')).toBe('')
     } finally {
       await page.close()
     }

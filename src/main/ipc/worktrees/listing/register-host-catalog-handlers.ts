@@ -14,6 +14,7 @@ import type { DetectedWorktree } from '../../../../shared/worktree/types'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { projectResolvedWorktreeLineage } from '../../../../shared/resolved-worktree-lineage'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
+import { agentHookServer } from '../../../agent-hooks/server'
 import { pruneWorkspaceCleanupScanSnapshots } from '../../../workspace-cleanup-scan-snapshot'
 import { pruneWorkspaceSpaceAnalysisSnapshots } from '../../../workspace-space-analysis-snapshot'
 import { findExactRepoOwner, hasConflictingStoredWorktreeOwner } from './worktree-host-ownership'
@@ -144,6 +145,10 @@ export function registerHostCatalogHandlers(context: WorktreeIpcContext): void {
           continue
         }
         store.removeWorktreeMeta(worktreeId, requestedExecutionHostId)
+        // Why here too: a scan the host answered is positive evidence of removal, and this is the only
+        // path that ever retires an off-host row — so it owes the status store the same drop the
+        // in-Orca delete does, or the SSH rows stay stranded in `last-status.json`.
+        agentHookServer.dropStatusEntriesForRemovedWorktree(worktreeId, parsedHost.id)
         forgottenWorktreeIds.push(worktreeId)
       }
       if (forgottenWorktreeIds.length > 0) {

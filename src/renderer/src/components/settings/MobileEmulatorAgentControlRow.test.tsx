@@ -2,10 +2,17 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { MobileEmulatorAgentControlRow } from './MobileEmulatorAgentControlRow'
 
-const mocks = vi.hoisted(() => ({
-  canUseLocalSkillFreshness: true,
-  freshnessSkillName: undefined as string | undefined
-}))
+const mocks = vi.hoisted(
+  (): {
+    canUseLocalSkillFreshness: boolean
+    freshnessSkillName: string | undefined
+    panelProps: Record<string, unknown>
+  } => ({
+    canUseLocalSkillFreshness: true,
+    freshnessSkillName: undefined,
+    panelProps: {}
+  })
+)
 
 vi.mock('@/hooks/useActiveProjectSkillRuntime', () => ({
   useActiveProjectSkillRuntime: () => ({
@@ -16,30 +23,25 @@ vi.mock('@/hooks/useActiveProjectSkillRuntime', () => ({
 
 vi.mock('../emulator-pane/use-mobile-emulator-agent-setup-state', () => ({
   useMobileEmulatorAgentSetupState: () => ({
-    cliActionLabel: 'Enable',
-    cliBusy: false,
-    cliEnabled: true,
-    cliInstallStatus: null,
-    cliLoading: false,
     cliSkillError: null,
     cliSkillInstalled: true,
     cliSkillLoading: false,
-    cliSupported: true,
-    completedCount: 2,
-    handleEnableCli: vi.fn(),
+    recheckSetup: vi.fn(),
     refreshCliSkill: vi.fn(),
-    step2Blocked: false
+    setupComplete: true,
+    setupRechecking: false,
+    statusReady: true
   })
 }))
 
 vi.mock('./AgentSkillSetupPanel', () => ({
-  AgentSkillSetupPanel: ({ freshnessSkillName }: { freshnessSkillName?: string }) => {
-    mocks.freshnessSkillName = freshnessSkillName
+  AgentSkillSetupPanel: (props: Record<string, unknown> & { freshnessSkillName?: string }) => {
+    mocks.freshnessSkillName = props.freshnessSkillName
+    mocks.panelProps = props
     return null
   }
 }))
 
-vi.mock('./SetupStepBadge', () => ({ StepBadge: () => null }))
 vi.mock('./MobileEmulatorExamples', () => ({ MobileEmulatorExamples: () => null }))
 
 describe('MobileEmulatorAgentControlRow freshness authority', () => {
@@ -55,5 +57,12 @@ describe('MobileEmulatorAgentControlRow freshness authority', () => {
     mocks.canUseLocalSkillFreshness = false
     renderToStaticMarkup(<MobileEmulatorAgentControlRow />)
     expect(mocks.freshnessSkillName).toBeUndefined()
+  })
+
+  it('installs the skill without registering the CLI first', () => {
+    renderToStaticMarkup(<MobileEmulatorAgentControlRow />)
+    expect(mocks.panelProps.onBeforeOpenTerminal).toBeUndefined()
+    expect(mocks.panelProps.preInstallNotice).toBeUndefined()
+    expect(mocks.panelProps.installDisabled).toBeUndefined()
   })
 })

@@ -6,6 +6,7 @@ import {
   closeLocalWatcherForWorktreePathMock,
   computeWorktreePathMock,
   deleteWorktreeHistoryDirMock,
+  describeCreatedWorktree,
   ensurePathWithinWorkspaceMock,
   findExistingWorktreeSymlinkPathsMock,
   forgetLocalWatcherRemovalSnapshotMock,
@@ -35,6 +36,7 @@ import {
 } from '../orca-runtime-test-fixtures.spec'
 import { createWorktreeRemovalRuntime } from '../orca-runtime-test-scenario-builders.spec'
 import { getLocalWorktreeScanGeneration } from '../../local-worktree-scan-generation'
+import { makeAgentStatusStoreWiring } from '../agent-status-store-wiring.test-fixture'
 
 describe('OrcaRuntimeService', () => {
   it('creates the first terminal by id when duplicate repo entries expose the same path', async () => {
@@ -330,10 +332,10 @@ describe('OrcaRuntimeService', () => {
     }
     computeWorktreePathMock.mockReturnValue(createdWorktree.path)
     ensurePathWithinWorkspaceMock.mockReturnValue(createdWorktree.path)
-    vi.mocked(listWorktrees).mockResolvedValue([createdWorktree])
+    vi.mocked(describeCreatedWorktree).mockResolvedValue(createdWorktree)
     const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
-      if (args[0] === 'symbolic-ref') {
-        return { stdout: 'refs/remotes/origin/main\n', stderr: '' }
+      if (args[0] === 'for-each-ref' && args.includes('--format=%(refname)%00%(symref)')) {
+        return { stdout: 'refs/remotes/origin/HEAD\0refs/remotes/origin/main\n', stderr: '' }
       }
       if (args[0] === 'rev-parse' && args.includes('refs/heads/runtime-wsl^{commit}')) {
         throw new Error('missing local branch')
@@ -353,6 +355,7 @@ describe('OrcaRuntimeService', () => {
       return { stdout: '', stderr: '' }
     })
 
+    const inventoryCallsBefore = vi.mocked(listWorktrees).mock.calls.length
     try {
       const result = await runtime.createManagedWorktree({
         repoSelector: 'id:repo-1',
@@ -368,11 +371,18 @@ describe('OrcaRuntimeService', () => {
         path: createdWorktree.path,
         branch: 'refs/heads/runtime-wsl'
       })
-      expect(gitSpy).toHaveBeenCalledWith(['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'], {
-        cwd: TEST_REPO_PATH,
-        timeout: 15_000,
-        wslDistro: 'Ubuntu'
-      })
+      expect(gitSpy).toHaveBeenCalledWith(
+        [
+          'for-each-ref',
+          '--format=%(refname)%00%(symref)',
+          'refs/remotes/origin/HEA[D]',
+          'refs/remotes/origin/mai[n]',
+          'refs/remotes/origin/maste[r]',
+          'refs/heads/mai[n]',
+          'refs/heads/maste[r]'
+        ],
+        { cwd: TEST_REPO_PATH, timeout: 15_000, wslDistro: 'Ubuntu' }
+      )
       expect(getBranchConflictKind).toHaveBeenCalledWith(
         TEST_REPO_PATH,
         'runtime-wsl',
@@ -446,7 +456,13 @@ describe('OrcaRuntimeService', () => {
         branchName: 'contributor/runtime-wsl',
         remoteUrl: 'git@github.com:contributor/orca.git'
       })
-      expect(listWorktrees).toHaveBeenCalledWith(TEST_REPO_PATH, { wslDistro: 'Ubuntu' })
+      expect(describeCreatedWorktree).toHaveBeenCalledWith(
+        TEST_REPO_PATH,
+        createdWorktree.path,
+        'runtime-wsl',
+        { wslDistro: 'Ubuntu' }
+      )
+      expect(listWorktrees).toHaveBeenCalledTimes(inventoryCallsBefore)
     } finally {
       gitSpy.mockRestore()
     }
@@ -476,6 +492,48 @@ describe('OrcaRuntimeService', () => {
     expect(result.warning).toBe(
       `orca.yaml archive hook skipped for ${TEST_WORKTREE_PATH}; pass --run-hooks to run it.`
     )
+  })
+
+  it('retires the removed worktree agent status rows from the host store', async () => {
+    const statusWiring = makeAgentStatusStoreWiring()
+    const runtime = createWorktreeRemovalRuntime(store, statusWiring.deps)
+    statusWiring.statusStore.ingestTerminalStatus({
+      paneKey: 'tab-removed:11111111-1111-4111-8111-111111111111',
+      tabId: 'tab-removed',
+      worktreeId: TEST_WORKTREE_ID,
+      connectionId: null,
+      payload: { state: 'working', prompt: 'stranded', agentType: 'codex' }
+    })
+    vi.mocked(removeWorktree).mockResolvedValue({})
+
+    await runtime.removeManagedWorktree(TEST_WORKTREE_ID)
+
+    expect(statusWiring.statusStore.getStatusSnapshot()).toEqual([])
+    statusWiring.statusStore.stop()
+  })
+
+  it('retires a deleted SSH folder workspace agent status rows', async () => {
+    const statusWiring = makeAgentStatusStoreWiring()
+    const folderStore = {
+      ...store,
+      getFolderWorkspaces: () => [{ id: 'ws-1', folderPath: '/srv/app', connectionId: 'user@box' }],
+      removeFolderWorkspace: () => true
+    }
+    const runtime = createWorktreeRemovalRuntime(folderStore, statusWiring.deps)
+    statusWiring.statusStore.ingestRemote(
+      {
+        paneKey: 'tab-folder:11111111-1111-4111-8111-111111111111',
+        tabId: 'tab-folder',
+        worktreeId: 'folder:ws-1',
+        payload: { state: 'working', prompt: 'stranded', agentType: 'codex' }
+      },
+      'user@box'
+    )
+
+    await runtime.deleteFolderWorkspace('ws-1')
+
+    expect(statusWiring.statusStore.getStatusSnapshot()).toEqual([])
+    statusWiring.statusStore.stop()
   })
 
   it('passes project shared links through the runtime removal preflight and cleanup', async () => {

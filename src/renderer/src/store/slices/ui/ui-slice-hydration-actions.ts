@@ -55,7 +55,7 @@ import {
   preserveStringArrayIdentity,
   sanitizeHydratedActiveView,
   sanitizePersistedRepoIds,
-  sanitizeShowDotfilesByWorktree,
+  sanitizeExplorerPreferences,
   sanitizeWorkspaceCleanupDismissals,
   sanitizePersistedSidebarWidth,
   hydratedUIPartialMatchesState,
@@ -66,8 +66,10 @@ import { hydrateStatusBarItems } from './ui-slice-hydration-status-bar-items'
 
 const MAX_LEFT_SIDEBAR_WIDTH = 500
 const MAX_RIGHT_SIDEBAR_WIDTH = 4000
+/** Builds hydration actions that reconcile authoritative UI state without discarding pending local edits. */
 export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Partial<UISlice> {
   return {
+    /** Captures the incoming write baseline before overlaying dirty or in-flight local fields. */
     hydratePersistedUI: (ui, source = 'sync') =>
       set((s) => {
         const manualRepoOrder = normalizeManualRepoOrder(ui.manualRepoOrder)
@@ -86,10 +88,6 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
         // Migration: one-shot old-'recent'→'smart' runs in main (_sortBySmartMigrated), not here, so a deliberate 'recent' choice survives restart.
         const sortBy = ui.sortBy
         const statusBarItemsWithGrok = hydrateStatusBarItems(ui)
-        const rightSidebarRoute = normalizeRightSidebarRoute(
-          ui.rightSidebarTab,
-          ui.rightSidebarExplorerView
-        )
         const hydrated = {
           // Why: persisted widths may be stale/corrupt/hand-edited; clamp during hydration so invalid values can't break layout.
           sidebarWidth: sanitizePersistedSidebarWidth(
@@ -112,9 +110,9 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
             undefined,
             s.combinedDiffFileTreeWidth
           ),
+          sidebarOpen: typeof ui.sidebarOpen === 'boolean' ? ui.sidebarOpen : true,
           rightSidebarOpen: typeof ui.rightSidebarOpen === 'boolean' ? ui.rightSidebarOpen : true,
-          rightSidebarTab: rightSidebarRoute.rightSidebarTab,
-          rightSidebarExplorerView: rightSidebarRoute.rightSidebarExplorerView,
+          ...normalizeRightSidebarRoute(ui.rightSidebarTab, ui.rightSidebarExplorerView),
           groupBy: (ui.groupBy as UISlice['groupBy'] | 'parent') === 'parent' ? 'repo' : ui.groupBy,
           sortBy,
           // Why: main-process getUI() already normalized this (defaulting to 'manual'); read it through without migrating.
@@ -139,7 +137,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           // Why !== false: profiles written before #8873 have no key, and they are
           // precisely the ones showing the bug, so absence must mean "exempt".
           alwaysShowDefaultBranchWorkspace: ui.alwaysShowDefaultBranchWorkspace !== false,
-          showDotfilesByWorktree: sanitizeShowDotfilesByWorktree(ui.showDotfilesByWorktree),
+          ...sanitizeExplorerPreferences(ui),
           // Why: startup hydrates UI before repo catalogs, so defer repo-filter validation to the all-host refresh.
           filterRepoIds:
             validRepoIds.size === 0
@@ -155,6 +153,10 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
               ? persistedAgentsFilterRepoIds
               : persistedAgentsFilterRepoIds.filter((repoId) => validRepoIds.has(repoId))
           ),
+          agentsHideWorkspacesFromOtherDevices: ui.agentsHideWorkspacesFromOtherDevices === true,
+          agentsHideAutomationGeneratedWorkspaces:
+            ui.agentsHideAutomationGeneratedWorkspaces === true,
+          agentsHideCliCreatedWorkspaces: ui.agentsHideCliCreatedWorkspaces === true,
           agentsShowChildAgents: ui.agentsShowChildAgents === true,
           agentsCompactMode: ui.agentsCompactMode !== false,
           agentsShowSearch: ui.agentsShowSearch !== false,
@@ -240,6 +242,9 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
             ui.usagePercentageDisplayChangeNoticeDismissed === true,
           // Why: default false so existing users still see the CTA; only explicit dismissal persists true.
           usageEmptyStateDismissed: ui.usageEmptyStateDismissed === true,
+          codexTerminalServerIsolationNoticeSeen:
+            ui.codexTerminalServerIsolationNoticeSeen === true,
+          codexSharedSettingsNoticeSeen: ui.codexSharedSettingsNoticeSeen === true,
           ...hydrateAgentReadState(ui),
           workspaceCleanupDismissals: sanitizeWorkspaceCleanupDismissals(
             ui.workspaceCleanup?.dismissals

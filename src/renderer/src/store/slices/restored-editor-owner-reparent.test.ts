@@ -5,11 +5,9 @@ import { act, createElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import { useAppStore } from '@/store'
 import { buildEditorSessionData } from '@/lib/workspace-session'
-import {
-  createExternalWatchEventHandler,
-  getEditorExternalWatchTargets,
-  useEditorExternalWatch
-} from '@/hooks/useEditorExternalWatch'
+import { useEditorExternalWatch } from '@/hooks/useEditorExternalWatch'
+import { buildEditorExternalWatchEventHandler as createExternalWatchEventHandler } from '@/hooks/editor-external-watch-event-reconciliation'
+import { selectEditorExternalWatchTargets as getEditorExternalWatchTargets } from '@/hooks/editor-external-watch-targets'
 import {
   captureEditorFileOperationProvenance,
   getEditorFileOperationContext

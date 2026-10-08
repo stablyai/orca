@@ -18,12 +18,7 @@ import {
   variantTrailingBackgroundRows
 } from './serialize-grid-variant-scope'
 import type { GridDiff } from './serialize-grid-cell-descriptors'
-import {
-  bufferRows,
-  cellDescriptor,
-  CLIPPED,
-  compareRowSets
-} from './serialize-grid-cell-descriptors'
+import { cellDescriptor, CLIPPED, compareBufferRows } from './serialize-grid-cell-descriptors'
 
 export type NamedSerializer = { name: string; create: () => SerializeAddon }
 
@@ -156,15 +151,25 @@ async function compareReplay(
       (src.type === dst.type
         ? null
         : { stage: 'active-buffer', expected: src.type, actual: dst.type }) ??
-      compareRowSets(
+      compareBufferRows(
         'visible-grid',
-        bufferRows(src, src.baseY, src.baseY + rows, cols),
-        bufferRows(dst, dst.baseY, dst.baseY + rows, cols)
+        src,
+        src.baseY,
+        src.baseY + rows,
+        dst,
+        dst.baseY,
+        dst.baseY + rows,
+        cols
       ) ??
-      compareRowSets(
+      compareBufferRows(
         'normal-buffer',
-        bufferRows(source.buffer.normal, normalStart, source.buffer.normal.length, cols),
-        bufferRows(replay.buffer.normal, 0, replay.buffer.normal.length, cols)
+        source.buffer.normal,
+        normalStart,
+        source.buffer.normal.length,
+        replay.buffer.normal,
+        0,
+        replay.buffer.normal.length,
+        cols
       ) ??
       (src.cursorX === dst.cursorX && src.cursorY === dst.cursorY
         ? null
@@ -194,9 +199,10 @@ async function compareReplay(
 
 function countClippedWideCells(terminal: Terminal): number {
   const buffer = terminal.buffer.active
+  const scratch = buffer.getNullCell()
   let count = 0
   for (let y = 0; y < buffer.length; y++) {
-    if (cellDescriptor(buffer.getLine(y), terminal.cols - 1, terminal.cols) === CLIPPED) {
+    if (cellDescriptor(buffer.getLine(y), terminal.cols - 1, terminal.cols, scratch) === CLIPPED) {
       count++
     }
   }

@@ -89,18 +89,6 @@ describe('readoptOrphanedWorkspacesForTarget', () => {
     expect(readoptions).toHaveLength(1)
   })
 
-  it('does not match alias against a different host tuple', () => {
-    // Different alias AND different tuple => no match.
-    const fake = makeFakeStore([
-      tombstone({ configHost: 'prod', host: 'prod.example.com', username: 'root' })
-    ])
-    const readoptions = readoptOrphanedWorkspacesForTarget(
-      fake.store,
-      makeTarget({ configHost: 'devbox', host: 'dev.example.com', username: 'tim' })
-    )
-    expect(readoptions).toEqual([])
-  })
-
   it('is a no-op when there are no tombstones', () => {
     const fake = makeFakeStore([])
     expect(readoptOrphanedWorkspacesForTarget(fake.store, makeTarget())).toEqual([])

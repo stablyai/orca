@@ -7,9 +7,7 @@ import SyncDatabase from './sync-database'
 
 const WRITER_SOURCE = `
   const { parentPort, workerData } = require('node:worker_threads')
-  const Database = process.versions.bun
-    ? require('bun:sqlite').Database
-    : require('node:sqlite').DatabaseSync
+  const Database = require('node:sqlite').DatabaseSync
   const db = new Database(workerData.path)
   db.exec('PRAGMA busy_timeout=5000; PRAGMA synchronous=FULL')
   const count = new Int32Array(workerData.count)

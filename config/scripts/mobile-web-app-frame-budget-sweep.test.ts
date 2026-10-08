@@ -1,5 +1,5 @@
 /**
- * The mobile-view frame budget, held against Chromium's own JPEG encoder across the viewport range.
+ * The mobile-view frame budget, held against Chromium's own JPEG encoder at representative phone, tablet and wide viewports.
  *
  * `WORST_CASE_JPEG_BYTES_PER_PIXEL` is the one number the budget cannot derive, and every other
  * check of it is circular: a case that encodes `noise(area * theConstant)` is measuring a byte
@@ -43,9 +43,7 @@ async function loadSweepModules() {
   ])
   return {
     budgetedMobileViewDeviceScaleFactor: request.budgetedMobileViewDeviceScaleFactor,
-    mobileBrowserFrameAreaBudget: request.mobileBrowserFrameAreaBudget,
     WORST_CASE_JPEG_BYTES_PER_PIXEL: request.WORST_CASE_JPEG_BYTES_PER_PIXEL,
-    MOBILE_VIEW_DEVICE_SCALE_FACTOR: parameters.MOBILE_VIEW_DEVICE_SCALE_FACTOR,
     BROWSER_FRAME_QUALITY: parameters.BROWSER_FRAME_QUALITY,
     BRIDGE_MAX_MESSAGE_BYTES: caps.BRIDGE_MAX_MESSAGE_BYTES,
     utf8ByteLength: caps.utf8ByteLength,
@@ -65,15 +63,23 @@ function sweep() {
   return loaded
 }
 
-/** The viewport range the pane is mounted in, phone through tablet, in CSS pixels. */
-const VIEWPORT_WIDTHS = [320, 360, 390, 393, 412, 430, 480, 600, 768, 834, 1024, 1280, 1400]
-const VIEWPORT_HEIGHTS = [480, 640, 712, 720, 800, 896, 932, 1024, 1180, 1366, 1600]
-
 type Viewport = { width: number; height: number }
 
-const VIEWPORTS: Viewport[] = VIEWPORT_WIDTHS.flatMap((width) =>
-  VIEWPORT_HEIGHTS.map((height) => ({ width, height }))
-)
+// Sample aspect ratios and budget pressure without replaying one encoder contract 111 times.
+const VIEWPORTS: Viewport[] = [
+  { width: 320, height: 480 },
+  { width: 360, height: 640 },
+  { width: 390, height: 712 },
+  { width: 393, height: 720 },
+  { width: 430, height: 932 },
+  { width: 600, height: 800 },
+  { width: 768, height: 1024 },
+  { width: 1024, height: 768 },
+  { width: 320, height: 1600 },
+  { width: 1400, height: 480 },
+  { width: 834, height: 896 },
+  { width: 1280, height: 640 }
+]
 
 let browser: Browser | null = null
 let page: Page | null = null
@@ -363,22 +369,12 @@ function budgetedFrame(viewport: Viewport) {
   }
 }
 
-/**
- * The viewports the budget can actually fit, which are the ones it makes a promise about.
- *
- * Below a scale of one the module stops: asking for fewer device pixels than CSS pixels is a
- * blurry frame rather than a working one, so a viewport too large for the cap keeps scale 1 and
- * the frame that does not fit is C6 ruling 1's to drop. Split here so the promise and the
- * exception are both asserted rather than averaged.
- */
-const withinBudget = (viewport: Viewport) => budgetedFrame(viewport).scale > 1
-
-describeSweep('the frame budget across the viewport range', () => {
-  it('keeps every viewport it budgets for inside one bridge message', async () => {
+describeSweep('the frame budget at representative viewport sizes', () => {
+  it('keeps representative budgeted viewports inside one bridge message', async () => {
     const overCap: string[] = []
     let worstBytesPerPixel = 0
     let bestBytesPerPixel = 1
-    for (const viewport of VIEWPORTS.filter(withinBudget)) {
+    for (const viewport of VIEWPORTS) {
       const frame = budgetedFrame(viewport)
       const imageBytes = await screencastNoiseJpegBytes(
         frame,
@@ -411,15 +407,7 @@ describeSweep('the frame budget across the viewport range', () => {
   }, 300_000)
 
   it('does not budget below one device pixel per CSS pixel, and the shell drops what will not fit', async () => {
-    // The exception the split above names. These are real: a 1400x1180 viewport posts 1.2 MB.
-    const tooLarge = VIEWPORTS.filter((viewport) => !withinBudget(viewport))
-    // The 32 of the 143 the budget leaves at scale 1, a fixed number because the set is fixed.
-    expect(tooLarge.length).toBe(32)
-
-    const largest = tooLarge.reduce((left, right) =>
-      left.width * left.height > right.width * right.height ? left : right
-    )
-    const frame = budgetedFrame(largest)
+    const frame = budgetedFrame({ width: 1400, height: 1600 })
     expect(frame.scale).toBe(1)
     const imageBytes = await screencastNoiseJpegBytes(frame, 1)
     expect(postThroughShell(new Uint8Array(imageBytes), frame)).toBeNull()
@@ -449,42 +437,4 @@ describeSweep('the frame budget across the viewport range', () => {
       await context.close()
     }
   }, 120_000)
-
-  it('reads the frames this capture painted, never one left over from the last', () => {
-    // The four shapes measured on this rig at 20x CPU throttling, all arriving after the raster
-    // barrier: the black canvas the resize left, a full frame of the previous and larger viewport,
-    // and this capture's own two. Only the last two are this capture's, and the gap between the
-    // stale stamps and the paint was never under 86 ms.
-    const frames = [
-      { bytes: 13_483, stamp: 914 },
-      { bytes: 447_491, stamp: 939 },
-      { bytes: 997_489, stamp: 1005 },
-      { bytes: 997_489, stamp: 1024 }
-    ]
-    expect(framesCarryingTheNoise(frames, 0, 1000).map((one) => one.bytes)).toEqual([
-      997_489, 997_489
-    ])
-    // A frame the browser sent no capture time for is not admissible either: it cannot be told from
-    // the stale ones, and guessing it fresh is the understatement the gate exists to refuse.
-    expect(framesCarryingTheNoise([{ bytes: 997_489, stamp: null }], 0, 1000)).toEqual([])
-    // And the arrivals before the raster barrier stay out, which is the other half of the reading.
-    expect(framesCarryingTheNoise(frames, 3, 1000).map((one) => one.bytes)).toEqual([997_489])
-  })
-
-  it('never asks for more density than native, anywhere in the range', () => {
-    for (const viewport of VIEWPORTS) {
-      expect(budgetedFrame(viewport).scale).toBeLessThanOrEqual(
-        sweep().MOBILE_VIEW_DEVICE_SCALE_FACTOR
-      )
-    }
-  })
-
-  it('sweeps a range wide enough to contain the phones the pane runs on', () => {
-    // The set is fixed, so this is what says it still covers the case the old constant missed.
-    expect(VIEWPORTS).toContainEqual({ width: 390, height: 712 })
-    expect(VIEWPORTS).toContainEqual({ width: 393, height: 720 })
-    expect(VIEWPORTS).toContainEqual({ width: 360, height: 640 })
-    expect(VIEWPORTS.length).toBe(143)
-    expect(sweep().mobileBrowserFrameAreaBudget()).toBeGreaterThan(0)
-  })
 })

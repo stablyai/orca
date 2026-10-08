@@ -2,6 +2,7 @@ import React from 'react'
 import { Activity } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { AgentQuestionIcon } from '@/components/AgentQuestionIcon'
+import { AgentStateDot } from '@/components/AgentStateDot'
 import { AgentWorkingSpinner } from '@/components/AgentWorkingSpinner'
 import {
   StateIndicatorTooltip,
@@ -27,6 +28,7 @@ const AGENT_STATUS_TOOLTIP_STATUSES = new Set<Status>([
   'permission',
   'failed',
   'interrupted',
+  'unconfirmed',
   'done'
 ])
 
@@ -59,13 +61,33 @@ const StatusIndicator = React.memo(function StatusIndicator({
         <Activity className="size-3 text-yellow-500" aria-hidden="true" />
       </span>
     )
-  } else if (status === 'failed' || status === 'interrupted') {
+  } else if (status === 'failed') {
     indicator = (
       <span
         className={cn('inline-flex h-3 w-3 shrink-0 items-center justify-center', className)}
         {...rest}
       >
         <span className="block size-1.5 rounded-full bg-red-500" />
+      </span>
+    )
+  } else if (status === 'interrupted') {
+    // Why: a user's Stop is not news; muted, never the fault red or the finished green.
+    indicator = (
+      <span
+        className={cn('inline-flex h-3 w-3 shrink-0 items-center justify-center', className)}
+        {...rest}
+      >
+        <span className="block size-1.5 rounded-full bg-muted-foreground" />
+      </span>
+    )
+  } else if (status === 'unconfirmed') {
+    // Why: AgentStateDot owns the missing-evidence glyph and tone; the tooltip stays this one's.
+    indicator = (
+      <span
+        className={cn('inline-flex h-3 w-3 shrink-0 items-center justify-center', className)}
+        {...rest}
+      >
+        <AgentStateDot state="unconfirmed" size="md" title={null} />
       </span>
     )
   } else if (status === 'permission') {

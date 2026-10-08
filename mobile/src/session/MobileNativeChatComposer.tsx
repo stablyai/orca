@@ -11,7 +11,6 @@ import {
 } from 'react-native'
 import { ArrowUp, ImagePlus, Mic, Square, X } from 'lucide-react-native'
 import { colors, radii, spacing } from '../theme/mobile-theme'
-import { getVerifiedNativeChatCommands } from '../../../src/shared/native-chat-agent-profiles'
 import { structuredSlashCommands } from '../../../src/shared/structured-agent-session-composer'
 import type { AgentSessionConversationCommand } from '../../../src/shared/agent-session-conversation-command'
 import {
@@ -31,11 +30,15 @@ import {
 } from './MobileNativeChatSessionOptionPickers'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
 import { mobileNativeChatInputStyles } from './mobile-native-chat-input-styles'
+import { getMobileNativeChatCommands } from './mobile-native-chat-send-classification'
+import { keepHeldPressThroughLongPress } from './held-press-long-press'
 
 const NO_FILE_PATHS: string[] = []
 const NO_ATTACHMENTS: PendingNativeChatImage[] = []
 
 type Props = {
+  /** Lets the owner focus the field, e.g. after Edit moves a queued message into it. */
+  inputRef?: React.Ref<TextInput>
   structuredCommands?: readonly AgentSessionConversationCommand[]
   /** Controlled composer text — owned by the parent so dictation can write to it. */
   value: string
@@ -65,12 +68,15 @@ type Props = {
   onMicPressIn?: () => void
   onMicPressOut?: () => void
   disabled?: boolean
+  /** Only Send is unavailable; typing, dictation and attachments still edit the draft. */
+  sendDisabled?: boolean
   placeholder?: string
   filePaths?: string[]
   onNeedFiles?: (query: string) => void
 }
 
 export function MobileNativeChatComposer({
+  inputRef,
   value,
   onChangeText,
   onSend,
@@ -90,6 +96,7 @@ export function MobileNativeChatComposer({
   onMicPressIn,
   onMicPressOut,
   disabled = false,
+  sendDisabled = false,
   placeholder = 'Message, @files, /commands',
   filePaths = NO_FILE_PATHS,
   onNeedFiles
@@ -119,6 +126,7 @@ export function MobileNativeChatComposer({
   const canSend =
     (trimmed.length > 0 || attachments.length > 0) &&
     !disabled &&
+    !sendDisabled &&
     !sending &&
     !isAttaching &&
     !sessionOptionDispatching
@@ -133,7 +141,7 @@ export function MobileNativeChatComposer({
         structuredCommands !== undefined
           ? structuredSlashCommands(structuredCommands, agent)
           : agent
-            ? getVerifiedNativeChatCommands(agent)
+            ? getMobileNativeChatCommands(agent)
             : []
       // Why: Codex's catalog is 45 commands and this list is a plain ScrollView
       // (~5 rows visible), so an uncapped `/` would mount every row and
@@ -249,6 +257,7 @@ export function MobileNativeChatComposer({
       <View style={styles.composerInset} testID="native-chat-composer-inset">
         <View style={styles.bar} testID="native-chat-composer">
           <TextInput
+            ref={inputRef}
             style={mobileNativeChatInputStyles.input}
             value={value}
             onChangeText={handleChange}
@@ -297,17 +306,26 @@ export function MobileNativeChatComposer({
                 onPress={dictationMode === 'hold' ? undefined : onMicPress}
                 onPressIn={dictationMode === 'hold' ? onMicPressIn : undefined}
                 onPressOut={dictationMode === 'hold' ? onMicPressOut : undefined}
-                disabled={disabled}
+                onLongPress={dictationMode === 'hold' ? keepHeldPressThroughLongPress : undefined}
+                disabled={disabled && !micActive}
               >
+                {/* The icon swaps on press; as the page's touch target, its removal would send
+                    touchend to a detached node and lose the release. */}
                 {micActive ? (
                   <Square
+                    pointerEvents="none"
                     size={18}
                     color={colors.statusRed}
                     strokeWidth={2.4}
                     fill={colors.statusRed}
                   />
                 ) : (
-                  <Mic size={20} color={colors.textSecondary} strokeWidth={2} />
+                  <Mic
+                    pointerEvents="none"
+                    size={20}
+                    color={colors.textSecondary}
+                    strokeWidth={2}
+                  />
                 )}
               </Pressable>
             ) : null}

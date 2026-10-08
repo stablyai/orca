@@ -20,7 +20,8 @@ export type TuiAgentRestSignal = 'hook-done' | 'synthetic-title' | 'title' | 're
 const IDENTITY_REST_SIGNALS: Partial<Record<TuiAgent, TuiAgentRestSignal>> = {
   dsh: 'hook-done',
   muse: 'ready-body',
-  qoder: 'ready-body'
+  qoder: 'ready-body',
+  'qoder-cn': 'ready-body'
 }
 
 // Why derived, not declared per agent: the title tables are the evidence, so a second

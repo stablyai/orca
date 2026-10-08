@@ -1,8 +1,9 @@
 import * as React from 'react'
 import { CheckIcon, ChevronRightIcon, CircleIcon } from 'lucide-react'
-import { DropdownMenu as DropdownMenuPrimitive } from 'radix-ui'
+import * as DropdownMenuPrimitive from 'radix-ui/dropdown-menu'
 
 import { cn } from '@/lib/utils'
+import { handleImeOverlayEscape } from '@/lib/ime-overlay-escape'
 
 function DropdownMenu({ ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.Root>) {
   return <DropdownMenuPrimitive.Root data-slot="dropdown-menu" {...props} />
@@ -40,6 +41,7 @@ function DropdownMenuContent({
         // dropdown menus that visually overlap the titlebar are unclickable.
         style={{ ...style, WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         {...props}
+        onEscapeKeyDown={(event) => handleImeOverlayEscape(event, props.onEscapeKeyDown)}
       />
     </DropdownMenuPrimitive.Portal>
   )
@@ -218,6 +220,7 @@ function DropdownMenuSubContent({
         // would otherwise capture clicks when submenu overlaps it.
         style={{ ...style, WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         {...props}
+        onEscapeKeyDown={(event) => handleImeOverlayEscape(event, props.onEscapeKeyDown)}
       />
     </DropdownMenuPrimitive.Portal>
   )

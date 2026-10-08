@@ -222,6 +222,17 @@ export function lockedStructuredAgentSessionOptionSnapshot(
   }))
 }
 
+/** While the host runs its first model listing, nothing is picked from the stand-in list. */
+export function pendingModelListStructuredAgentSessionOptionSnapshot(
+  snapshot: readonly SessionOptionDescriptor[]
+): SessionOptionDescriptor[] {
+  return snapshot.map((descriptor) =>
+    descriptor.category === 'model'
+      ? { ...descriptor, settable: false, choicesPending: true }
+      : descriptor
+  )
+}
+
 export function canSetStructuredAgentSessionOption(
   state: StructuredAgentSessionOptionState,
   id: string,

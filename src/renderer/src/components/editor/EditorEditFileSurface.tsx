@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import { getConnectionIdForFile } from '@/lib/connection-context'
 import type { MarkdownViewMode, OpenFile, PendingEditorReveal } from '@/store/slices/editor'
 import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
 import type { GitStatusEntry } from '../../../../shared/git-status-types'
@@ -6,10 +7,12 @@ import { ChangesModeView } from './ChangesModeView'
 import { ConflictBanner, ConflictPlaceholderView } from './ConflictComponents'
 import {
   CsvViewer,
+  CsvPagedViewer,
   ImageViewer,
   IpynbViewer,
   MermaidViewer,
-  MonacoEditor
+  MonacoEditor,
+  MediaViewer
 } from './editor-lazy-views'
 import type { EditorConflictNavigation } from './useEditorConflictNavigation'
 import { EditorFileLoadErrorView } from './EditorFileLoadErrorView'
@@ -100,6 +103,17 @@ export function EditorEditFileSurface({
       </div>
     )
   }
+  if (fileContent.csvPreview) {
+    return (
+      <CsvPagedViewer
+        key={activeFile.id}
+        file={fileContent.csvPreview}
+        preferenceKey={pdfPreferenceKey}
+        filePath={activeFile.filePath}
+        onReload={() => reloadContent(activeFile)}
+      />
+    )
+  }
   if (fileContent.loadError) {
     return (
       <EditorFileLoadErrorView
@@ -110,6 +124,21 @@ export function EditorEditFileSurface({
     )
   }
   if (fileContent.isBinary) {
+    if (fileContent.mediaUrl) {
+      return (
+        <MediaViewer
+          key={fileContent.mediaUrl}
+          src={fileContent.mediaUrl}
+          mimeType={fileContent.mimeType ?? 'video/mp4'}
+          filePath={activeFile.filePath}
+          canOpenLocally={
+            !activeFile.externalSshTargetId &&
+            !activeFile.runtimeEnvironmentId &&
+            getConnectionIdForFile(activeFile.worktreeId, activeFile.filePath) === null
+          }
+        />
+      )
+    }
     if (fileContent.isImage) {
       return (
         <ImageViewer
@@ -243,7 +272,19 @@ export function EditorEditFileSurface({
   ) : isMermaid && mdViewMode === 'rich' ? (
     <MermaidViewer key={activeFile.id} content={currentContent} filePath={activeFile.filePath} />
   ) : isCsv && mdViewMode === 'rich' ? (
-    <CsvViewer key={activeFile.id} content={currentContent} filePath={activeFile.filePath} />
+    <CsvViewer
+      key={activeFile.id}
+      content={currentContent}
+      filePath={activeFile.filePath}
+      worktreeId={activeFile.worktreeId}
+      runtimeEnvironmentId={activeFile.runtimeEnvironmentId}
+      preferenceKey={pdfPreferenceKey}
+      fileId={activeFile.id}
+      isDirty={activeFile.isDirty}
+      onDirtyStateHint={activeFile.readOnly ? undefined : handleDirtyStateHint}
+      onContentChange={activeFile.readOnly ? undefined : handleContentChange}
+      onSave={activeFile.readOnly ? undefined : handleSave}
+    />
   ) : isNotebook && mdViewMode === 'rich' ? (
     <IpynbViewer
       key={activeFile.id}

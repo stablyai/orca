@@ -76,6 +76,22 @@ export function buildStreamUnsubscribe(
   return null
 }
 
+/** Direct-connection unsubscribe for the stream opened by `requestId`, or null when none is required. */
+export function buildRequestStreamUnsubscribe(
+  method: string | undefined,
+  params: unknown,
+  requestId: string
+): { method: string; params: Record<string, unknown> } | null {
+  if (method !== 'terminal.subscribe') {
+    return buildStreamUnsubscribe(method, params, requestId)
+  }
+  const unsubscribeParams = buildTerminalUnsubscribeParams(params)
+  // Why: `requestId` names this exact request; hosts that predate it strip it and use the slot.
+  return unsubscribeParams
+    ? { method: 'terminal.unsubscribe', params: { ...unsubscribeParams, requestId } }
+    : null
+}
+
 export function buildTerminalUnsubscribeParams(
   params: unknown
 ): { subscriptionId: string; client?: { id: string } } | null {

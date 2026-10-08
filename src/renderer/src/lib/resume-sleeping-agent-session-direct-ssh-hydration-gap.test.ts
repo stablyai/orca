@@ -13,7 +13,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import { useAppStore } from '@/store'
-import { makeWorktree } from '@/store/slices/store-test-helpers'
+import { makeWorktree } from '../store/slices/worktrees-slice-test-fixtures'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
 
 const initialAppStoreState = useAppStore.getState()
@@ -115,6 +115,21 @@ describe('sleeping-agent resume across the direct-SSH hydration gap', () => {
     const state = useAppStore.getState()
     expect(state.tabsByWorktree[WORKTREE_ID]?.[0]?.launchAgent).toBe('claude')
     expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
+  })
+
+  it.each([
+    ['wakes it when the host named tabs only on another path', '/srv/proj/another-machines', 1],
+    ['keeps waiting when the host named tabs here it could not place', PATH, 0]
+  ])('after a snapshot that could not place every tab, %s', (_label, unplacedPath, expected) => {
+    seedColdDirectSshStart()
+    useAppStore.getState().setRemoteWorkspaceSyncStatus(TARGET_ID, {
+      phase: 'conflict',
+      direction: 'pull',
+      unplacedTabWorktreePaths: [unplacedPath]
+    })
+
+    expect(resumeSleepingAgentSessionsForWorktree(WORKTREE_ID)).toBe(expected)
+    expect(resumedTabCount(WORKTREE_ID)).toBe(expected)
   })
 
   it('leaves a purely local workspace resuming with no added latency', () => {

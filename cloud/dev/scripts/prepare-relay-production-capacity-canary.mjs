@@ -36,7 +36,10 @@ function cellOrigin(cellId) {
 const APPROVED_CELL_LISTS = { 'same-cap': SAME_CAP_CELLS }
 
 // Matches the cell's own cap on /v1/admin/drain.
-const MAX_PACE_WINDOW_MS = 5 * 60 * 1_000
+const MAX_PACE_WINDOW_MS = 20 * 60 * 1_000
+// Every paced image before the cap rose rejects a longer window with the same 400 an unpaced
+// image gives, and an unpaced drain is the opposite of what a slower window asked for.
+const LEGACY_MAX_PACE_WINDOW_MS = 5 * 60 * 1_000
 
 export function parseProductionCapacityCellArguments(argv) {
   const values = {}
@@ -46,8 +49,8 @@ export function parseProductionCapacityCellArguments(argv) {
     if (!key?.startsWith('--') || value === undefined) throw new Error('invalid arguments')
     values[key.slice(2)] = value
   }
-  if (!['isolate', 'drain', 'activate'].includes(values.mode)) {
-    throw new Error('--mode must be isolate, drain, or activate')
+  if (!['pace-check', 'isolate', 'drain', 'activate'].includes(values.mode)) {
+    throw new Error('--mode must be pace-check, isolate, drain, or activate')
   }
   const approvedList = values['approved-cells']
   if (approvedList !== undefined && !APPROVED_CELL_LISTS[approvedList]) {
@@ -75,7 +78,7 @@ export function parseProductionCapacityCellArguments(argv) {
     paceWindowMs < 0 ||
     paceWindowMs > MAX_PACE_WINDOW_MS
   ) {
-    throw new Error('--pace-window-ms must be an integer between 0 and 300000')
+    throw new Error('--pace-window-ms must be an integer between 0 and 1200000')
   }
   return {
     directorOrigin: DIRECTOR_ORIGIN,
@@ -92,8 +95,29 @@ async function responseJson(response, label) {
   return body
 }
 
+// Read-only, and run before the isolate: an image that does not advertise its cap has the
+// legacy one, so a slower pace stops here with the cell untouched instead of isolated.
+async function checkDrainPace(fetchImpl, config, wait) {
+  const health = await responseJson(
+    await fetchAdminOnceMore(fetchImpl, `${config.cellOrigin}/health`, {}, { wait }),
+    'cell health'
+  )
+  if (health.ok !== true) throw new Error('cell health is not ok')
+  const maxPaceWindowMs = Number.isSafeInteger(health.drainPaceWindowMaxMs)
+    ? health.drainPaceWindowMaxMs
+    : LEGACY_MAX_PACE_WINDOW_MS
+  if (config.paceWindowMs > maxPaceWindowMs) {
+    throw new Error(
+      `cell accepts drain paces up to ${maxPaceWindowMs} ms, not ${config.paceWindowMs} ms; ` +
+      'it was not isolated'
+    )
+  }
+  return { paceWindowMs: config.paceWindowMs, maxPaceWindowMs }
+}
+
 export async function prepareProductionCapacityCell(config, overrides = {}) {
   const fetchImpl = overrides.fetch ?? fetch
+  if (config.mode === 'pace-check') return await checkDrainPace(fetchImpl, config, overrides.wait)
   const token = overrides.token ?? process.env.ORCA_RELAY_ADMIN_ID_TOKEN
   if (!token || token.length > 8_192) throw new Error('admin identity token is unavailable')
   const postRaw = async (origin, path, body) =>
@@ -126,6 +150,11 @@ export async function prepareProductionCapacityCell(config, overrides = {}) {
       // An unpaced drain is the behaviour that cell already has, so fall back to it.
       if (paced.status !== 400) throw new Error(`/v1/admin/drain returned ${paced.status}`)
       await paced.json().catch(() => ({}))
+      if (paceWindowMs > LEGACY_MAX_PACE_WINDOW_MS) {
+        throw new Error(
+          `cell rejected a ${paceWindowMs} ms drain pace; refusing to drain faster than asked`
+        )
+      }
     }
     await postAt(config.cellOrigin, '/v1/admin/drain', { v: 1, graceMs: 0 })
     return { changed: false, drained: true, paceWindowMs: 0 }

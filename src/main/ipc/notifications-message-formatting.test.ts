@@ -319,6 +319,10 @@ describe('registerNotificationHandlers', () => {
   it.each([
     { agentTurnOutcome: 'cancellation', word: 'stopped' },
     { agentTurnOutcome: 'failure', word: 'failed' },
+    // A turn cut short by anything but the user is a fault, worded as one.
+    { agentTurnOutcome: 'interruption', word: 'failed' },
+    { agentTurnOutcome: 'unconfirmed', word: 'stopped' },
+    { agentTurnOutcome: 'superseded', word: 'stopped' },
     { agentTurnOutcome: 'success', word: 'finished' },
     { agentTurnOutcome: undefined, word: 'finished' }
   ] as const)('words a $agentTurnOutcome finish as $word', async ({ agentTurnOutcome, word }) => {

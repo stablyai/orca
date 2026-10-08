@@ -88,5 +88,6 @@ export function resetGraphQLRateLimitGuardMocks(mocks: GitHubClientMocks): void 
   mocks.acquireMock.mockResolvedValue(undefined)
   _resetOwnerRepoCache()
   _resetMergeQueueCacheForTests()
+  _resetPRStackSummaryCacheForTests()
   __resetPRConflictSummaryCachesForTests()
 }

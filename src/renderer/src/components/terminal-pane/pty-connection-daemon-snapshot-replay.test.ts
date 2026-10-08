@@ -4,7 +4,8 @@ import {
   POST_REPLAY_DEAD_TUI_RESET,
   POST_REPLAY_MODE_RESET,
   POST_REPLAY_REATTACH_RESET,
-  RESET_GRAPHIC_RENDITION
+  RESET_GRAPHIC_RENDITION,
+  RELEASE_SYNCHRONIZED_OUTPUT
 } from '../../../../shared/terminal-mode-reset-profiles'
 import { replayEpilogue } from './pty-connection-test-replay-epilogue'
 import { Terminal } from '@xterm/headless'
@@ -139,14 +140,14 @@ function createDeps(overrides: Record<string, unknown> = {}) {
 }
 
 describe('connectPanePty', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetModules()
     vi.clearAllMocks()
     transportFactoryQueue = []
     createdTransportOptions = []
     storeSubscribers = []
     mockStoreState = createInitialStoreState(() => mockStoreState)
-    installTerminalTestGlobals()
+    await installTerminalTestGlobals()
   })
 
   afterEach(async () => {
@@ -185,7 +186,7 @@ describe('connectPanePty', () => {
     await flushAsyncTicks(20)
 
     expect(pane.terminal.write).toHaveBeenCalledWith(
-      `${RESET_GRAPHIC_RENDITION}\x1b[2J\x1b[3J\x1b[H`,
+      `${RELEASE_SYNCHRONIZED_OUTPUT}${RESET_GRAPHIC_RENDITION}\x1b[2J\x1b[3J\x1b[H`,
       expect.any(Function)
     )
     expect(pane.terminal.write).toHaveBeenCalledWith(
@@ -769,7 +770,7 @@ describe('connectPanePty', () => {
     await flushAsyncTicks(8)
     replayCallback.current?.('blocking replay')
     await flushAsyncTicks(12)
-    expect(writes).toEqual(['\x1b[2J\x1b[3J\x1b[H'])
+    expect(writes).toEqual(['\x1b[?2026l\x1b[2J\x1b[3J\x1b[H'])
     reattachResult.resolve({ id: 'tab-pty', snapshot: 'stale authoritative snapshot' })
     await flushAsyncTicks(12)
     const resizeCallsBeforeReplacement = transport.resize.mock.calls.length

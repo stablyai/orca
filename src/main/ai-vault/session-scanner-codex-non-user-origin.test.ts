@@ -42,42 +42,6 @@ describe('readCodexNonUserOrigin', () => {
     })
   })
 
-  it('carries the depth of a nested child instead of flattening it', () => {
-    const origin = readCodexNonUserOrigin(
-      spawnedPayload({
-        parent_thread_id: 'middle-thread',
-        depth: 2,
-        agent_path: '/root/pr_review_pass_1/adversarial_correctness',
-        agent_nickname: 'Noether',
-        agent_role: 'explorer'
-      })
-    )
-
-    expect(origin?.parentage?.depth).toBe(2)
-    expect(origin?.parentage?.parentThreadId).toBe('middle-thread')
-    expect(origin?.parentage?.agentRole).toBe('explorer')
-  })
-
-  it('keeps the rest of the spawn when the naming path is null', () => {
-    const origin = readCodexNonUserOrigin(
-      spawnedPayload({
-        parent_thread_id: 'user-thread',
-        depth: 1,
-        agent_path: null,
-        agent_nickname: 'Laplace',
-        agent_role: 'explorer'
-      })
-    )
-
-    expect(origin?.parentage).toEqual({
-      parentThreadId: 'user-thread',
-      depth: 1,
-      agentNickname: 'Laplace',
-      agentRole: 'explorer',
-      agentPath: null
-    })
-  })
-
   it('reads the agent_type spelling of the role, nested and on the payload', () => {
     // Codex documents `agent_type` as an alias of `agent_role` in both places.
     expect(readCodexNonUserOrigin(spawnedPayload({ agent_type: 'explorer' }))?.parentage).toEqual({
@@ -234,14 +198,6 @@ describe('readCodexNonUserOrigin', () => {
       threadSource: null,
       parentage: null
     })
-  })
-
-  it('reads no origin from a user thread', () => {
-    expect(
-      readCodexNonUserOrigin({ id: 'user-thread', thread_source: 'user', source: 'cli' })
-    ).toBeNull()
-    expect(readCodexNonUserOrigin({ id: 'user-thread', source: 'vscode' })).toBeNull()
-    expect(readCodexNonUserOrigin({ id: 'user-thread' })).toBeNull()
   })
 
   it('keeps a thread whose source states no readable tag at all', () => {

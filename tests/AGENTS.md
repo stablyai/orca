@@ -36,4 +36,16 @@ Keep `ORCA_BACKGROUND_LAUNCH=1`: the application must still suppress automatic r
 `isWindowlessLaunch` describes that automatic launch policy, not the window's current visibility.
 This exception belongs only to this benchmark fixture; do not generalize it to local or self-hosted
 runs, paired-client helpers, native-focus tests, or production window policy. Background terminal
-panes remain hidden. Evidence: `docs/reference/terminal-perf-latency-investigation.md`.
+panes remain hidden.
+
+## Isolated native IBus presentation
+
+The native IBus fixtures start with `ORCA_BACKGROUND_LAUNCH=1`, then present only their owned
+page's window on the runner's fresh Xvfb display. A window mapped with X11 alone remains hidden
+to Electron and cannot receive native keyboard events.
+
+`terminal-native-ibus-window.ts` requires Linux, hosted GitHub Actions, a numeric `DISPLAY`,
+`ORCA_E2E_NATIVE_IBUS_HANGUL=1`, and `ORCA_E2E_NATIVE_IBUS_XVFB=1` before presentation. The native
+runner sets the last marker inside its isolated display session. These guards run again inside
+Electron before `showInactive()`. Native focus stays confined to that display; this fixture does
+not relax automatic launch policy or permit presentation on the user's desktop.

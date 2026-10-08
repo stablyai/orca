@@ -21,6 +21,9 @@ export function getStatusPluginRuntimeStateSource(): string[] {
     'let busyRecoveryUsed = false;',
     'let busyRecoveryEndpointKey = "";',
     'let stateArrivalRevision = 0;',
+    '// Recognized OpenCode 2 contexts bypass the legacy binder.',
+    'let reportingOpenCodeMajor = 0;',
+    'let reportingOpenCodeTui = false;',
     '// Why: OpenCode can create directory-scoped factories and concurrent root',
     '// sessions in one pane; module ownership lets waiting/busy aggregate safely.',
     'let nextFactoryID = 0;',
@@ -52,6 +55,26 @@ export function getStatusPluginRuntimeStateSource(): string[] {
     'let assistantPartFlushTimer = null;',
     'let messagePartPostInFlight = null;',
     'let deliveredMessagePartFactoryID = null;',
-    'let lastAssistantPartPostAt = 0;'
+    'let lastAssistantPartPostAt = 0;',
+    ...getRunProcessSource()
   ]
+}
+
+// Mirrors isOpenCodeRunCommand (src/shared/opencode-headless-command.ts) over this process's argv.
+function getRunProcessSource(): string[] {
+  return String.raw`
+function isOpenCodeCommandProcess(command) {
+  // Why drop a leading path: a compiled binary reports its embedded entry script as argv[1].
+  const args = process.argv.slice(1);
+  if (args.length > 0 && /[\\/]/.test(args[0])) args.shift();
+  for (let index = 0; index < args.length; index += 1) {
+    if (args[index] === "--") return false;
+    if (!args[index].startsWith("-")) return args[index] === command;
+    if (args[index] === "--log-level") index += 1;
+  }
+  return false;
+}
+function isOpenCodeRunProcess() {
+  return isOpenCodeCommandProcess("run");
+}`.split('\n')
 }

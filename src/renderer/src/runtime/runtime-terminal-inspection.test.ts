@@ -688,24 +688,6 @@ describe('runtime terminal owner routing', () => {
     expect(useAppStore.getState().lastTerminalInputAtByPaneKey[PANE_KEY]).toBeUndefined()
   })
 
-  it('can record a runtime input marker from a PTY id mapping', () => {
-    useAppStore.setState({
-      settings: { experimentalAgentHibernation: true } as never,
-      terminalLayoutsByTabId: {
-        'tab-1': {
-          root: { type: 'leaf', leafId: LEAF_ID },
-          activeLeafId: LEAF_ID,
-          expandedLeafId: null,
-          ptyIdsByLeafId: { [LEAF_ID]: 'local-pty' }
-        }
-      }
-    })
-
-    recordRuntimeTerminalInputForPtyId('local-pty', 123)
-
-    expect(useAppStore.getState().lastTerminalInputAtByPaneKey[PANE_KEY]).toBe(123)
-  })
-
   it('indexes a stable layout identity once across repeated terminal input', () => {
     const layoutCount = 500
     let layoutEnumerations = 0

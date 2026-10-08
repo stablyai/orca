@@ -4,7 +4,8 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session-wire'
-import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import {
@@ -14,6 +15,10 @@ import {
   hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
+import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const CALLER = { callerKey: 'client-claude' }
 const CLAUDE_SESSION = '019fd532-7c11-7a90-b6de-4e1a2c3d5f61'
@@ -52,7 +57,7 @@ function adapter(): StructuredAgentSessionAdapter {
       process: { hostId: 'local', pid: 4200, processStartTimeMs: NOW, spawnToken },
       link: {
         linkId: `claude-native-${fence}`,
-        handle: { provider: 'claude', sessionId: CLAUDE_SESSION, leafUuid: 'native-leaf' },
+        handle: claudeProviderHandle(CLAUDE_SESSION, 'native-leaf'),
         origin: acquire.mock.calls.length === 1 ? 'created' : 'resumed',
         mintedAtFence: fence,
         observedAt: NOW
@@ -79,11 +84,13 @@ beforeEach(async () => {
   resetHostTestOperationIds()
   activeModel = DEFAULT_MODEL
   optionWritable = Promise.resolve()
-  store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
+  store = await openTestAgentSessionRecordStore(root)
   host = new StructuredAgentSessionHost({
+    agents: NO_STRUCTURED_AGENTS,
+    logger: createStructuredAgentSessionLogger(),
     store,
     adapter: adapter(),
-    journalRoot: root,
+    journalDatabase: openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-claude',
     now: () => NOW

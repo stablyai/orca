@@ -90,10 +90,13 @@ describe('serveOrcaApp', () => {
     spawnMock.mockReset()
     spawnSyncMock.mockReset()
     process.env.ORCA_APP_EXECUTABLE = '/Applications/Orca.app/Contents/MacOS/Orca'
+    // These cover Electron serve itself; the orcad default is in launch-serve-runtime.test.ts.
+    process.env.ORCA_SERVE_RUNTIME = 'electron'
   })
 
   afterEach(() => {
     vi.restoreAllMocks()
+    delete process.env.ORCA_SERVE_RUNTIME
     delete process.env.ORCA_APP_EXECUTABLE
     delete process.env.ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT
     delete process.env.ORCA_USER_DATA_PATH

@@ -14,7 +14,6 @@ vi.mock('@/store', () => ({
 vi.mock('@/runtime/runtime-file-client', () => ({
   importExternalPathsToRuntime: (...args: unknown[]) => mocks.importExternalPaths(...args)
 }))
-vi.mock('./composer-drop-listener', () => ({ useComposerDropListener: vi.fn() }))
 
 import { useAttachmentDropState } from './attachment-drop-state'
 
@@ -31,7 +30,6 @@ function installFsApi(): void {
   Object.assign(window, {
     api: {
       fs: {
-        authorizeExternalPath: vi.fn(async () => {}),
         stat: vi.fn(async ({ filePath }: { filePath: string }) => {
           if (FAILING_PATHS.has(filePath)) {
             throw new Error(

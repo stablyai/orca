@@ -137,7 +137,7 @@ describe('OrcaRuntimeService', () => {
 
     expect(listWorktrees).not.toHaveBeenCalled()
     expect(gitProvider.listWorktrees).toHaveBeenCalledWith('//Server/Share/Repo')
-    expect(fsProvider.readDir).toHaveBeenCalledWith('\\\\Server\\Share\\Repo\\src')
+    expect(fsProvider.readDir).toHaveBeenCalledWith('\\\\Server\\Share\\Repo\\src', {})
     expect(gitProvider.getStatus).toHaveBeenCalledWith('//Server/Share/Repo')
   })
 
@@ -204,7 +204,7 @@ describe('OrcaRuntimeService', () => {
     }
 
     expect(fsProvider.stat).toHaveBeenCalledWith(folderPath)
-    expect(fsProvider.readDir).toHaveBeenCalledWith('/srv/platform/src')
+    expect(fsProvider.readDir).toHaveBeenCalledWith('/srv/platform/src', {})
     expect(fsProvider.stat).toHaveBeenCalledWith('/srv/platform/src/app.ts')
     expect(fsProvider.readFile).toHaveBeenCalledWith('/srv/platform/src/app.ts', {
       maxBinaryBytes: 10 * 1024 * 1024,

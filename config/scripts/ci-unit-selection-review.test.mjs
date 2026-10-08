@@ -53,3 +53,19 @@ it('does not call incomplete, duplicate, interrupted or selected evidence a full
     expect(reviewUnitSelection(rows).every((row) => !row.completeFullRun)).toBe(true)
   }
 })
+
+it('requires all ten full assignments exactly once for complete evidence', () => {
+  const files = Array.from({ length: 10 }, (_, index) => `retained-${index}.test.ts`)
+  const tenPlan = { ...plan, files, candidateFiles: files }
+  const records = files.map((file, index) => {
+    const row = record(index + 1, file, 'passed')
+    return {
+      ...row,
+      plan: tenPlan,
+      timing: { ...row.timing, shard: { index: index + 1, count: 10 } }
+    }
+  })
+  expect(reviewUnitSelection(records)[0].completeFullRun).toBe(true)
+  expect(reviewUnitSelection(records.slice(0, -1))[0].completeFullRun).toBe(false)
+  expect(reviewUnitSelection([...records.slice(0, -1), records[0]])[0].completeFullRun).toBe(false)
+})

@@ -5,6 +5,7 @@ import { monaco } from '@/lib/monaco-setup'
 import { computeEditorFontSize, resolveEditorFontStack } from '@/lib/editor-font-zoom'
 import { useAppStore } from '@/store'
 import { installMonacoEditorFindShortcut } from './editor-shortcuts'
+import { syncContentUpdate } from './monaco-content-sync'
 import {
   IPYNB_CODE_CELL_PREVIEW_MAX_LINES,
   getIpynbCodeCellPreviewLines
@@ -12,7 +13,7 @@ import {
 import type { IpynbCell } from './ipynb-parse'
 import { MarkdownPreviewBody } from './MarkdownPreviewBody'
 import { useMonacoColorizedLines } from './MonacoCodeExcerpt'
-import { useDocumentDarkTheme } from './use-document-dark-theme'
+import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 
 const NO_MARKDOWN_COMPONENTS: Components = {}
 // Box metrics the preview and the live editor share, so activating a cell never shifts it.
@@ -155,18 +156,21 @@ function IpynbSourceEditor({
   const fontSize = computeEditorFontSize(settings?.terminalFontSize ?? 13, editorFontZoomLevel)
   const containerRef = useRef<HTMLDivElement>(null)
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
+  const callbacksRef = useRef({ onChange, onDeactivate })
+  const syncingSourceRef = useRef(false)
+  const fitHeightRef = useRef<(() => void) | null>(null)
+
+  useLayoutEffect(() => {
+    callbacksRef.current = { onChange, onDeactivate }
+  }, [onChange, onDeactivate])
 
   useLayoutEffect(() => {
     monaco.editor.setTheme(isDark ? 'vs-dark' : 'vs')
   }, [isDark])
 
-  useLayoutEffect(() => {
-    editorRef.current?.updateOptions({ fontFamily, fontSize })
-  }, [fontFamily, fontSize])
-
   // Why: created synchronously before paint (not via @monaco-editor/react's async loader), so the
   // swap from the preview never shows a placeholder, an unlaid-out editor or a guessed caret.
-  // Mount-once: the props it reads cannot change while the cell is being edited.
+  // Keep the model and undo history while external reloads update the cell below.
   useLayoutEffect(() => {
     const container = containerRef.current
     if (!container) {
@@ -175,6 +179,7 @@ function IpynbSourceEditor({
     const { lineHeight, paddingX, paddingY } = CODE_LAYOUT
     const model = monaco.editor.createModel(source, cell.language)
     const editorInstance = monaco.editor.create(container, {
+      dropIntoEditor: { enabled: false },
       model,
       automaticLayout: true,
       fontFamily,
@@ -206,6 +211,7 @@ function IpynbSourceEditor({
       container.style.height = `${Math.min(editorInstance.getContentHeight(), maxHeight)}px`
       editorInstance.layout()
     }
+    fitHeightRef.current = fitHeight
     fitHeight()
     editorInstance.onDidContentSizeChange(fitHeight)
     // Why: restoring a view state marks the visible lines stable, so Monaco tokenizes them now
@@ -217,12 +223,16 @@ function IpynbSourceEditor({
       editorInstance.setPosition(target.position)
     }
     editorInstance.focus()
-    model.onDidChangeContent(() => onChange(model.getValue()))
-    editorInstance.onDidBlurEditorWidget(onDeactivate)
+    model.onDidChangeContent(() => {
+      if (!syncingSourceRef.current) {
+        callbacksRef.current.onChange(model.getValue())
+      }
+    })
+    editorInstance.onDidBlurEditorWidget(() => callbacksRef.current.onDeactivate())
     // Escape closes an open widget first; only a bare Escape leaves the cell.
     editorInstance.addCommand(
       monaco.KeyCode.Escape,
-      onDeactivate,
+      () => callbacksRef.current.onDeactivate(),
       '!suggestWidgetVisible && !findWidgetVisible && !parameterHintsVisible'
     )
     const cleanupFindShortcut = installMonacoEditorFindShortcut(editorInstance)
@@ -231,9 +241,33 @@ function IpynbSourceEditor({
       editorInstance.dispose()
       model.dispose()
       editorRef.current = null
+      fitHeightRef.current = null
     }
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- mount-once; see the Why above.
   }, [])
+
+  useLayoutEffect(() => {
+    const editorInstance = editorRef.current
+    const model = editorInstance?.getModel()
+    if (!editorInstance || !model) {
+      return
+    }
+    if (model.getLanguageId() !== cell.language) {
+      monaco.editor.setModelLanguage(model, cell.language)
+    }
+    editorInstance.updateOptions({
+      fontFamily,
+      fontSize,
+      wordWrap: cell.kind === 'code' ? 'off' : 'on'
+    })
+    syncingSourceRef.current = true
+    try {
+      syncContentUpdate(editorInstance, source)
+    } finally {
+      syncingSourceRef.current = false
+    }
+    fitHeightRef.current?.()
+  }, [source, cell.language, cell.kind, fontFamily, fontSize])
 
   return <div ref={containerRef} />
 }

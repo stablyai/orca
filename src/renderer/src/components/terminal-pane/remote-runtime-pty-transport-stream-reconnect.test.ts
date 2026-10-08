@@ -596,7 +596,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     rejectReconnect(new Error('reconnect failed'))
 
     await expect(accepted).resolves.toBe(false)
-    expect(onError).toHaveBeenCalledWith('reconnect failed')
+    await vi.waitFor(() => expect(onError).toHaveBeenCalledWith('reconnect failed'))
   })
 
   it('releases pending claimed input when the remote terminal ends', async () => {

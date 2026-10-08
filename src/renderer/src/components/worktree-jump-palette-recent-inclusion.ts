@@ -47,5 +47,11 @@ export function shouldIncludeOpenTabInRecentSection({
     })
   })
   // Why: a settled outcome on the tab you are on is not news; a failure ranks like a completion.
-  return badge != null && badge !== 'done' && badge !== 'failed' && badge !== 'interrupted'
+  return (
+    badge != null &&
+    badge !== 'done' &&
+    badge !== 'failed' &&
+    badge !== 'interrupted' &&
+    badge !== 'unconfirmed'
+  )
 }

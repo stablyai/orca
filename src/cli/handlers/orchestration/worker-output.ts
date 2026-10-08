@@ -1,6 +1,6 @@
 import type { RuntimeTerminalRead } from '../../../shared/runtime-types'
 import type { OrchestrationWorkerReadResult } from '../../../shared/orchestration-worker-output'
-import { formatWorkerTranscriptMessages } from '../../../shared/worker-transcript-text'
+import { formatWorkerTranscriptMessage } from '../../../shared/worker-transcript-text'
 
 export type LegacyWorkerReadResult = {
   dispatchId: string
@@ -57,7 +57,7 @@ export function formatWorkerRead(
   const output =
     value.source === 'terminal'
       ? value.terminal.tail.join('\n')
-      : formatWorkerTranscriptMessages(value.transcript.messages).join('\n\n')
+      : value.transcript.messages.map(formatWorkerTranscriptMessage).join('\n\n')
   if (output) {
     return `${details}\n\n${output}`
   }

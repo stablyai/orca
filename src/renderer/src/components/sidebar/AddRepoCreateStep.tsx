@@ -32,6 +32,8 @@ type CreateStepProps = {
   manualParentEntry?: boolean
   runtimeEnvironmentId?: string | null
   sshTargetId?: string | null
+  /** No host resolved yet (its server is still coming up): never create on this computer. */
+  submitDisabled?: boolean
   onNameChange: (value: string) => void
   onParentChange: (value: string) => void
   onPickParent: () => void
@@ -50,6 +52,7 @@ export function CreateStep({
   manualParentEntry = false,
   runtimeEnvironmentId,
   sshTargetId,
+  submitDisabled = false,
   onNameChange,
   onParentChange,
   onPickParent,
@@ -68,7 +71,8 @@ export function CreateStep({
     gitAvailability !== 'checking' &&
     gitAvailability !== 'unavailable' &&
     !parentDefaultPending &&
-    !isCreating
+    !isCreating &&
+    !submitDisabled
   const missingLocationLabel = translate(
     'auto.components.sidebar.AddRepoCreateStep.3a13f6e88b',
     'location not selected'

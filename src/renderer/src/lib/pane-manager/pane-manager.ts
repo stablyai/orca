@@ -57,6 +57,7 @@ import {
   refreshAllPaneTerminals
 } from './pane-manager-layout-sweeps'
 import { collectPaneRenderingDiagnostics } from './pane-rendering-diagnostics'
+import { applyPaneLayoutGeometry, type TerminalPaneLayoutNode } from './pane-layout-geometry-apply'
 import { FIRST_PANE_ID } from '../../../../shared/pane-key'
 
 export type {
@@ -108,15 +109,11 @@ export class PaneManager {
       publishPaneCreated: (pane, spawnHints) =>
         publishManagedPaneCreated(this.host, pane, spawnHints),
       getDragCallbacks: () => createPaneDragCallbacks(this.host),
-      setActivePane: (paneId, opts) => {
-        this.setActivePane(paneId, opts)
-      },
+      setActivePane: (paneId, opts) => this.setActivePane(paneId, opts),
       setActivePaneId: (paneId) => {
         this.activePaneId = paneId
       },
-      requestPaneReparentFrame: (callback) => {
-        this.reparentFrames.request(callback)
-      }
+      requestPaneReparentFrame: (callback) => this.reparentFrames.request(callback)
     }
     // Why: atlas recovery must reach every live manager — see
     // resetAndRefreshAllTerminalWebglAtlases for the shared-atlas rationale.
@@ -186,6 +183,12 @@ export class PaneManager {
 
   equalizePaneSizes(): void {
     equalizeManagedPaneSizes(this.panes, this.root, this.options.onLayoutChanged)
+  }
+
+  /** Applies a host layout's split orientation and ratios to mounted panes in place.
+   *  Why no onLayoutChanged: an applied host geometry must never persist or push back. */
+  applyLayoutGeometry(layout: TerminalPaneLayoutNode): boolean {
+    return applyPaneLayoutGeometry(this.host, layout)
   }
 
   getActivePane(): ManagedPane | null {
@@ -303,13 +306,13 @@ export class PaneManager {
     // Why: the settled-frame callback can fire after hide/destroy; repainting
     // hidden or disposed panes can revive WebGL contexts and latch attach
     // backoff, downgrading unrelated new panes to the DOM renderer.
-    schedulePaneRevealRepaint(() => (this.isVisibleForAtlasRecovery() ? this.panes.values() : []))
+    schedulePaneRevealRepaint(this, this.panes)
   }
 
   scheduleRevealPresent(): void {
     // Why: ordinary reveal keeps the coherent canvas until DEC 2026 releases;
     // skip the delayed present if the surface was hidden again meanwhile.
-    schedulePaneRevealPresent(() => (this.isVisibleForAtlasRecovery() ? this.panes.values() : []))
+    schedulePaneRevealPresent(this, this.panes)
   }
 
   suspendRendering(): void {

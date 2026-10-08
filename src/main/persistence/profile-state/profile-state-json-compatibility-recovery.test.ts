@@ -2,7 +2,6 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import * as durableFiles from '../../durable-file-write'
 import { openProfileStateDatabase } from './profile-state-database'
 import {
   hashProfileStateJson,
@@ -78,10 +77,6 @@ function fixture() {
     retainedJson,
     withDatabase,
     acceptance: () => withDatabase(readProfileStateJsonAcceptance),
-    publish: async (mode: 'sync' | 'async') =>
-      mode === 'sync'
-        ? authority.writeJsonCompatibilityExport(paths.dataFile)
-        : authority.writeJsonCompatibilityExportAsync(paths.dataFile),
     reopen: () => {
       const result = createProfileStateStore({ ...paths })
       try {
@@ -94,124 +89,40 @@ function fixture() {
   }
 }
 
-describe.each(['sync', 'async'] as const)('%s compatibility export recovery', (mode) => {
-  it.each(['staging', 'publication', 'promotion'] as const)(
-    'reopens SQLite and permits a later export after failed %s',
-    async (phase) => {
+describe('acceptance of snapshots left by earlier builds', () => {
+  it.each(['retained', 'pending', 'promoted'] as const)(
+    'opens SQLite with the %s JSON from a historical compatibility export',
+    (phase) => {
       const state = fixture()
-      if (phase === 'publication') {
-        if (mode === 'sync') {
-          const write = durableFiles.writeFileDurableSync
-          vi.spyOn(durableFiles, 'writeFileDurableSync').mockImplementation((...args) => {
-            if (args[1] === state.paths.dataFile) {
-              throw new Error('injected publication failure')
-            }
-            write(...args)
-          })
-        } else {
-          vi.spyOn(durableFiles, 'writeFileDurable').mockRejectedValueOnce(
-            new Error('injected publication failure')
-          )
-        }
-      } else {
-        state.withDatabase((db) =>
-          db.exec(
-            `CREATE TRIGGER reject_acceptance BEFORE INSERT ON profile_state_meta
-           WHEN NEW.key = 'legacy_json_acceptance'
-           ${phase === 'promotion' ? "AND json_type(NEW.value, '$.pending') IS NULL" : ''}
-           BEGIN SELECT RAISE(ABORT, 'injected acceptance failure'); END`
-          )
+      const exportedJson = '{"settings":{"theme":"dark"}}'
+      const next = { jsonHash: hashProfileStateJson(exportedJson), acceptedRevision: 2 }
+      state.withDatabase((db) =>
+        db.prepare('UPDATE profile_state_meta SET value = ? WHERE key = ?').run(
+          JSON.stringify(
+            phase === 'promoted'
+              ? next
+              : {
+                  jsonHash: hashProfileStateJson(state.retainedJson),
+                  acceptedRevision: 1,
+                  pending: next
+                }
+          ),
+          'legacy_json_acceptance'
         )
+      )
+      if (phase !== 'retained') {
+        writeFileSync(state.paths.dataFile, exportedJson)
       }
-
-      await expect(state.publish(mode)).rejects.toThrow('injected')
-
-      const published = readFileSync(state.paths.dataFile, 'utf8')
-      expect(JSON.parse(published).settings.theme).toBe(phase === 'promotion' ? 'dark' : 'light')
-      expect(state.reopen()).toBe('dark')
-      if (phase !== 'staging') {
-        expect(state.acceptance()?.pending).toEqual({
-          jsonHash: hashProfileStateJson('{"settings":{"theme":"dark"}}'),
-          acceptedRevision: 2
-        })
-      }
-      vi.restoreAllMocks()
-      state.withDatabase((db) => db.exec('DROP TRIGGER IF EXISTS reject_acceptance'))
       state.authority.writeSerializedState(Buffer.from('{"settings":{"theme":"system"}}'))
-
-      await state.publish(mode)
+      const original = readFileSync(state.paths.dataFile, 'utf8')
 
       expect(state.reopen()).toBe('system')
-      expect(state.acceptance()).toEqual({
-        jsonHash: hashProfileStateJson(readFileSync(state.paths.dataFile, 'utf8')),
-        acceptedRevision: 3
-      })
+      expect(readFileSync(state.paths.dataFile, 'utf8')).toBe(original)
+
+      writeFileSync(state.paths.dataFile, '{"settings":{"theme":"light"},"externalEdit":true}')
+      expect(state.reopen).toThrow('without a matching acceptance marker')
     }
   )
-
-  it('keeps the published JSON accepted when a concurrent commit prevents promotion', async () => {
-    const state = fixture()
-    const compete = () => {
-      const other = new ProfileStateSqliteAuthority(state.paths.databaseFile, state.paths.profileId)
-      try {
-        other.readSerializedState()
-        other.writeSerializedState(Buffer.from('{"settings":{"theme":"system"}}'))
-      } finally {
-        other.close()
-      }
-    }
-    if (mode === 'sync') {
-      const write = durableFiles.writeFileDurableSync
-      vi.spyOn(durableFiles, 'writeFileDurableSync').mockImplementation((...args) => {
-        write(...args)
-        if (args[1] === state.paths.dataFile) {
-          compete()
-        }
-      })
-    } else {
-      const write = durableFiles.writeFileDurable
-      vi.spyOn(durableFiles, 'writeFileDurable').mockImplementationOnce(async (...args) => {
-        await write(...args)
-        compete()
-      })
-    }
-
-    await expect(state.publish(mode)).rejects.toMatchObject({
-      code: 'profile-state-revision-conflict'
-    })
-
-    expect(JSON.parse(readFileSync(state.paths.dataFile, 'utf8')).settings.theme).toBe('dark')
-    expect(state.reopen()).toBe('system')
-    expect(state.acceptance()?.pending?.acceptedRevision).toBe(2)
-  })
-
-  it('refuses an unrelated edit even while a previous export remains staged', async () => {
-    const state = fixture()
-    if (mode === 'sync') {
-      const write = durableFiles.writeFileDurableSync
-      vi.spyOn(durableFiles, 'writeFileDurableSync').mockImplementation((...args) => {
-        if (args[1] === state.paths.dataFile) {
-          throw new Error('injected publication failure')
-        }
-        write(...args)
-      })
-    } else {
-      vi.spyOn(durableFiles, 'writeFileDurable').mockRejectedValueOnce(
-        new Error('injected publication failure')
-      )
-    }
-    await expect(state.publish(mode)).rejects.toThrow('injected')
-    expect(state.acceptance()?.pending).toEqual({
-      jsonHash: hashProfileStateJson('{"settings":{"theme":"dark"}}'),
-      acceptedRevision: 2
-    })
-    const unrelatedJson = '{"settings":{"theme":"system"},"unrelatedEdit":true}'
-    writeFileSync(state.paths.dataFile, unrelatedJson)
-
-    expect(state.reopen).toThrow('without a matching acceptance marker')
-    await expect(state.publish(mode)).rejects.toThrow('Compatibility JSON changed before export')
-    expect(readFileSync(state.paths.dataFile, 'utf8')).toBe(unrelatedJson)
-  })
 })
 
 it.each([
@@ -234,6 +145,5 @@ it.each([
     )
   )
   expect(state.reopen).toThrow()
-  expect(() => state.authority.writeJsonCompatibilityExport(state.paths.dataFile)).toThrow()
   expect(readFileSync(state.paths.dataFile, 'utf8')).toBe(state.retainedJson)
 })

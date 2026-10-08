@@ -1,11 +1,6 @@
-// DeepSeek Harness ships one binary, `dsh`, and boots a *profile* with it. Only the
-// `dsh-tui` profile paints an interactive composer; `web` serves HTTP, `headless` answers
-// one task and exits, `sdk`/`sdk-minimal`/`acp` speak JSON-RPC on stdio, and `plugin` is
-// package management. All five are `dsh` in the process table, so foreground recognition
-// has to read the profile to tell an agent pane from a server or a one-shot.
-//
-// `dsh-tui` (and its `dst` alias) forward straight to `dsh --profile dsh-tui`, so they are
-// always interactive and never reach this matcher.
+import { findInterpreterEntrypointToken } from './agent-command-line-entrypoint'
+
+// DSH 0.2 accepts positional profiles; community dsh-tui/dst choose their own TUI profile.
 
 /** Profiles that boot something other than the interactive terminal UI. */
 const NON_INTERACTIVE_PROFILES = new Set([
@@ -17,9 +12,8 @@ const NON_INTERACTIVE_PROFILES = new Set([
   'desktop'
 ])
 
-/** Bare-word subcommands the launcher accepts: `plugin` boots no profile at all, and `web`
- *  is the documented alias for `--profile web`. Neither hosts an interactive pane. */
-const SUBCOMMANDS = new Set(['plugin', 'web'])
+/** Plugin management never boots an interactive pane. */
+const SUBCOMMANDS = new Set(['plugin'])
 
 /** Launcher flags that print a composed config and exit. */
 const DUMP_FLAGS = new Set(['--dump-config', '--dump-default-config', '--dump-config-schema'])
@@ -69,30 +63,21 @@ function isLauncherToken(token: string): boolean {
  * and a prompt or session id is free text that must never be read as a launcher flag.
  */
 export function isDshNonInteractiveCommand(tokens: readonly string[]): boolean {
-  // Why first: `dsh-tui`/`dst` have already chosen the interactive profile, and everything
-  // after them is the TERMINAL APP's argv — a `--resume` id or a workspace target. A
-  // workspace folder named `web` or `plugin` is an ordinary directory name, and reading it
-  // as a `dsh` subcommand would mark a live agent pane non-interactive, costing it status
-  // hooks and prompt delivery. Index 1 as well as 0 because a node shim puts the launcher
-  // script path there.
-  if (
-    TUI_LAUNCHER_NAMES.has(programBasename(tokens[0])) ||
-    TUI_LAUNCHER_NAMES.has(programBasename(tokens[1]))
-  ) {
+  const firstProgram = programBasename(tokens[0])
+  const entrypoint = findInterpreterEntrypointToken([...tokens], firstProgram)
+  const programIndex = entrypoint === null ? 0 : tokens.indexOf(entrypoint)
+  if (TUI_LAUNCHER_NAMES.has(programBasename(tokens[programIndex]))) {
     return false
   }
+  const indexOfArgs = programIndex + 1
+  let index = indexOfArgs
   let profile: string | null = null
-  let index = 1
-  // Skip the leading non-flag tokens: an interpreter invocation puts the script path here.
-  while (index < tokens.length && !isLauncherToken(tokens[index])) {
-    const token = tokens[index]
-    if (SUBCOMMANDS.has(token)) {
+  const first = tokens[index]
+  if (first !== undefined && !first.startsWith('-')) {
+    if (SUBCOMMANDS.has(first)) {
       return true
     }
-    if (!token.startsWith('-') && index > 1) {
-      // A bare word that is neither a subcommand nor a flag: the app's arguments start here.
-      return false
-    }
+    profile = first
     index += 1
   }
   for (; index < tokens.length; index += 1) {

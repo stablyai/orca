@@ -1,3 +1,4 @@
+import { writeNativeChatFontSize } from '@/components/native-chat/native-chat-font-size-write'
 import { applyUIZoom } from '@/lib/ui-zoom'
 import { computeEditorFontSize, nextEditorFontZoomLevel } from '@/lib/editor-font-zoom'
 import { zoomLevelToPercent } from '@/components/settings/SettingsConstants'
@@ -18,6 +19,12 @@ export function registerZoomIpcBridge(unsubs: (() => void)[]): void {
         activeTabType,
         activeElement: document.activeElement
       })
+      if (target === 'chat') {
+        void writeNativeChatFontSize(
+          direction === 'in' ? 'increase' : direction === 'out' ? 'decrease' : 'reset'
+        )
+        return
+      }
       if (target === 'terminal') {
         return
       }

@@ -86,6 +86,10 @@ export class GrowingByteBuffer {
     return this.storage.toString(encoding, this.start, this.start + this.length)
   }
 
+  toBuffer(): Buffer {
+    return Buffer.from(this.storage.subarray(this.start, this.start + this.length))
+  }
+
   takeString(encoding: BufferEncoding = 'utf8'): string {
     const value = this.toString(encoding)
     this.clear()

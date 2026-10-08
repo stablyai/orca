@@ -4,7 +4,6 @@ import { getConnectionId } from '@/lib/connection-context'
 import { detectLanguage } from '@/lib/language-detect'
 import { canShowWorkspaceFileBrowserAction, openFilePreviewToSide } from '@/lib/file-preview'
 import { getEditorHeaderCopyState } from './editor-header'
-import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import { exportActiveMarkdownToPdf } from './export-active-markdown'
 import type { EditorToggleValue } from './EditorViewToggle'
@@ -25,6 +24,7 @@ import {
 import { createEditorPanelDraftSelector } from './editor-panel-draft-selector'
 import { createCurrentMarkdownArtifactRequest } from './markdown-artifact-upload'
 import { useEditorPanelSave } from './useEditorPanelSave'
+import { isMarkdownReviewNotesEnabled } from '@/lib/markdown-review-notes-setting'
 
 function EditorPanelInner({
   activeFileId: activeFileIdProp,
@@ -80,6 +80,7 @@ function EditorPanelInner({
   )
   const editorDrafts = useAppStore(editorDraftSelector)
   const settings = useAppStore((s) => s.settings)
+  const markdownReviewNotesEnabled = isMarkdownReviewNotesEnabled(settings)
   const panelRef = useRef<HTMLDivElement>(null)
   const [copiedPathToast, setCopiedPathToast] = useState<{ fileId: string; token: number } | null>(
     null
@@ -276,21 +277,6 @@ function EditorPanelInner({
       { sourceFileId: activeFile.id }
     )
   }
-  const handleOpenContainingFolder = (): void => {
-    // Why: virtual editor tabs use synthetic ids instead of on-disk paths.
-    if (activeFile.mode === 'check-details') {
-      return
-    }
-    if (
-      isLocalPathOpenBlocked(settingsForRuntimeOwner(settings, activeFile.runtimeEnvironmentId), {
-        connectionId: getConnectionId(activeFile.worktreeId)
-      })
-    ) {
-      showLocalPathOpenBlockedToast()
-      return
-    }
-    window.api.shell.openPath(activeFile.filePath)
-  }
   const disableRenameBrowse = Boolean(
     settingsForRuntimeOwner(
       settings,
@@ -355,7 +341,6 @@ function EditorPanelInner({
         onOpenDiffTargetFile={handleOpenDiffTargetFile}
         onOpenPreviewToSide={handleOpenPreviewToSide}
         onOpenMarkdownPreview={handleOpenMarkdownPreview}
-        onOpenContainingFolder={handleOpenContainingFolder}
         onToggleSideBySide={() => setSideBySide((prev) => !prev)}
         onEditorToggleChange={handleEditorToggleChange}
         onToggleMarkdownTableOfContents={() =>
@@ -384,7 +369,7 @@ function EditorPanelInner({
         }
         onCloseRenameDialog={closeRenameDialog}
         onRenameConfirm={handleRenameConfirm}
-        markdownAnnotationsEnabled={markdownAnnotationsEnabled}
+        markdownAnnotationsEnabled={markdownAnnotationsEnabled && markdownReviewNotesEnabled}
       />
     </DiffNavigationProvider>
   )

@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { AgentSessionConversationCommand } from '../../../../shared/agent-session-conversation-command'
 import type { AgentSessionOptionsResult } from '../../../../shared/agent-session-wire'
+import type { AgentSessionRewindSupport } from '../../../../shared/agent-session-rewind'
 import type { AgentType } from '../../../../shared/agent-status-types'
-import {
-  getAgentSessionOptionCatalog,
-  type AgentSessionOptionCatalog
-} from '../../../../shared/agent-session-option-catalog'
+import type { AgentSessionOptionCatalog } from '../../../../shared/agent-session-option-catalog'
+import { structuredAgentSessionSeedCatalog } from './structured-agent-session-seed-catalog'
 import {
   applyStructuredAgentSessionOptions,
   createStructuredAgentSessionOptionState,
@@ -49,6 +48,9 @@ export function useStructuredAgentSessionOptionState(args: {
     commands: readonly AgentSessionConversationCommand[]
     threadGoal: AgentSessionOptionsResult['threadGoal']
     contextUsage: AgentSessionOptionsResult['contextUsage']
+    rewind: AgentSessionRewindSupport
+    /** The fence the read answered for; rewind support is only that runtime's. */
+    fence: number | null
   } | null>(null)
   // A revision the loaded window dropped can move the host's whole-journal context facts.
   const contextRefresh = conversationSupport?.contextUsage ? (args.unloadedTurnRevisions ?? 0) : 0
@@ -76,7 +78,7 @@ export function useStructuredAgentSessionOptionState(args: {
     optionIdentityRef.current = identity
     const seeded = createStructuredAgentSessionOptionState(
       agent,
-      getAgentSessionOptionCatalog(agent)
+      structuredAgentSessionSeedCatalog(agent)
     )
     // A host catalog is the account's, not the fence's: keep it rather than blank the default.
     const next =
@@ -110,7 +112,10 @@ export function useStructuredAgentSessionOptionState(args: {
           sessionId,
           commands: result.conversationCommands ?? [],
           threadGoal: result.threadGoal,
-          contextUsage: result.contextUsage
+          contextUsage: result.contextUsage,
+          // A host that predates rewind does not name it.
+          rewind: result.rewind ?? { supported: false, reason: 'unsupported' },
+          fence
         })
         updateOptionState((current) =>
           current.record === activeOptionRecordRef.current

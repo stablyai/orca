@@ -22,6 +22,7 @@ import type {
   AgentSessionSurfaceBinding
 } from '../../shared/agent-session-host-authority'
 import type * as HistorySeedProtocol from './terminal-history-seed-transfer-protocol'
+import type * as PtyOwnerQueryProtocol from './daemon-pty-owner-query-protocol'
 export type { TerminalModes } from './terminal-modes'
 import type { TerminalSnapshot } from './terminal-snapshot'
 export type { TerminalSnapshot } from './terminal-snapshot'
@@ -97,12 +98,6 @@ export type CreateOrAttachRequest = {
       surface: AgentSessionSurfaceBinding
     }
   }
-}
-
-export type CloseStartupQueryAuthorityRequest = {
-  id: string
-  type: 'closeStartupQueryAuthority'
-  payload: { sessionId: string }
 }
 
 export type CancelCreateOrAttachRequest = {
@@ -330,7 +325,8 @@ export type DaemonRequest =
   | GetSnapshotRequest
   | GetSizeRequest
   | TakePendingOutputRequest
-  | CloseStartupQueryAuthorityRequest
+  | PtyOwnerQueryProtocol.CloseStartupQueryAuthorityRequest
+  | PtyOwnerQueryProtocol.SetColorQueryReplyColorsRequest
 
 // ─── RPC Responses (Daemon → Client, on control socket) ────────────
 

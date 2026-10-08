@@ -2,8 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { TerminalPasteSource } from './terminal-paste-coordinator'
 import { copyTerminalSelection } from './terminal-selection-copy'
-
-const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
+import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
 
 type UseTerminalContextMenuTriggerDeps = {
   managerRef: React.RefObject<PaneManager | null>

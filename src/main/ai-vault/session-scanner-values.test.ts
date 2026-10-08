@@ -24,6 +24,24 @@ describe('AI Vault session scanner text values', () => {
     expect(normalizeTitleText('<INSTRUCTIONS>Use this repo guidance')).toBeNull()
   })
 
+  it("drops a reply's visual lines from its preview, but not a user's", () => {
+    const line = '::orca-visual{file="latency.html" title="p95"}'
+    expect(normalizePreviewText(`p95 is highest.\n\n${line}\n\nDone.`, 'assistant')).toBe(
+      'p95 is highest. Done.'
+    )
+    expect(normalizePreviewText(line, 'assistant')).toBeNull()
+    expect(normalizePreviewText(line, 'user')).toBe(line)
+    // Provider content (Claude/Codex message parts) folds lines; the visual line goes first.
+    expect(
+      extractPreviewContentText(
+        [{ type: 'text', text: `Here it is.\n\n${line}\n\nDone.` }],
+        'assistant'
+      )
+    ).toBe('Here it is. Done.')
+    expect(extractPreviewContentText(`Here it is.\n${line}`, 'assistant')).toBe('Here it is.')
+    expect(extractPreviewContentText([{ type: 'text', text: line }], 'user')).toBe(line)
+  })
+
   it('folds large preview text directly without full-string replacement', () => {
     const replaceSpy = vi.spyOn(String.prototype, 'replace')
     const hiddenContext = `<codex_internal_context source="goal">${'SECRET\n'.repeat(10_000)}</codex_internal_context>`

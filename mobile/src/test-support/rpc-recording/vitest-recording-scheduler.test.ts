@@ -24,7 +24,6 @@ function scenario(id: string, flushFirst: boolean): RecordingScenario {
   return {
     id,
     operation: 'scheduler-determinism',
-    version: 1,
     family: 'scheduler-determinism',
     sites: [],
     schedules: [],

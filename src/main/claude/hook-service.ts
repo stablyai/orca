@@ -16,9 +16,15 @@ import {
 } from '../agent-hooks/installer-utils-remote'
 import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-script-refresh'
 import { getManagedScript } from './hook-script'
+import {
+  getWindowsClaudeHookFileStatus,
+  installWindowsClaudeHookFiles,
+  refreshWindowsClaudeHookFiles
+} from './windows-hook-files'
 
 export { getManagedScript }
 import { getManagedStatusLineScript } from './statusline-script'
+import { refuseProfileAtDefaultHome } from './claude-profile-hook-target'
 import {
   applyManagedHooks,
   applyManagedStatusLine,
@@ -59,6 +65,11 @@ type ClaudeHookInstallOptions = {
   claudeVersion?: string
 }
 
+type ClaudeHookTargetOptions = ClaudeHookInstallOptions & {
+  /** An account profile on this host; omitted for the default home. */
+  configDir?: string
+}
+
 const DEFAULT_CLAUDE_HOOK_SERVICE_OPTIONS: ClaudeHookServiceOptions = {
   agent: 'claude',
   displayName: 'Claude',
@@ -72,6 +83,18 @@ export class ClaudeHookService {
     this.options = options
   }
 
+  private get usesWindowsEntry(): boolean {
+    return process.platform === 'win32' && this.options.agent === 'claude'
+  }
+
+  private managedScript(target: 'local' | 'posix' = 'local'): string {
+    return getManagedScript(target, {
+      source: this.options.source,
+      skipWhenDevinImportsClaude: this.options.agent === 'claude',
+      skipWhenGrokImportsClaude: this.options.agent === 'claude'
+    })
+  }
+
   // Why: Claude's settings loader rejects events newer than the running CLI, so its plan follows the
   // resolved version; OpenClaude and Qoder read their own settings files.
   private managedHookPlan(options: ClaudeHookInstallOptions): ClaudeManagedHookPlan {
@@ -80,8 +103,12 @@ export class ClaudeHookService {
       : (this.options.hookPlan ?? OPENCLAUDE_MANAGED_HOOK_PLAN)
   }
 
-  getStatus(options: ClaudeHookInstallOptions = {}): AgentHookInstallStatus {
-    const configPath = getConfigPath(this.options.settings)
+  getStatus(options: ClaudeHookTargetOptions = {}): AgentHookInstallStatus {
+    const refused = refuseProfileAtDefaultHome(this.options, options.configDir)
+    if (refused) {
+      return refused
+    }
+    const configPath = getConfigPath(this.options.settings, options.configDir)
     const scriptPath = getManagedScriptPath(this.options.settings)
     const config = readHooksJson(configPath)
     if (!config) {
@@ -124,18 +151,16 @@ export class ClaudeHookService {
       state = 'partial'
       detail = `Managed hook missing for events: ${missing.join(', ')}`
     }
-    return { agent: this.options.agent, state, configPath, managedHooksPresent, detail }
+    const status = { agent: this.options.agent, state, configPath, managedHooksPresent, detail }
+    return this.usesWindowsEntry ? getWindowsClaudeHookFileStatus(status, scriptPath) : status
   }
 
   async refreshManagedScripts(): Promise<void> {
-    await refreshManagedScriptIfPresent(
-      getManagedScriptPath(this.options.settings),
-      getManagedScript('local', {
-        source: this.options.source,
-        skipWhenDevinImportsClaude: this.options.agent === 'claude',
-        skipWhenGrokImportsClaude: this.options.agent === 'claude'
-      })
-    )
+    const scriptPath = getManagedScriptPath(this.options.settings)
+    const payload = this.managedScript()
+    await (this.usesWindowsEntry
+      ? refreshWindowsClaudeHookFiles(scriptPath, payload)
+      : refreshManagedScriptIfPresent(scriptPath, payload))
     // Why: no agent gate — the statusline script only ever exists for claude, so presence is the gate.
     await refreshManagedScriptIfPresent(
       getStatusLineScriptPath(this.options.settings),
@@ -143,8 +168,12 @@ export class ClaudeHookService {
     )
   }
 
-  install(options: ClaudeHookInstallOptions = {}): AgentHookInstallStatus {
-    const configPath = getConfigPath(this.options.settings)
+  install(options: ClaudeHookTargetOptions = {}): AgentHookInstallStatus {
+    const refused = refuseProfileAtDefaultHome(this.options, options.configDir)
+    if (refused) {
+      return refused
+    }
+    const configPath = getConfigPath(this.options.settings, options.configDir)
     const scriptPath = getManagedScriptPath(this.options.settings)
     const config = readHooksJson(configPath)
     if (!config) {
@@ -165,17 +194,16 @@ export class ClaudeHookService {
       getManagedScriptFileName(this.options.settings),
       plan
     )
-    writeManagedScript(
-      scriptPath,
-      getManagedScript('local', {
-        source: this.options.source,
-        skipWhenDevinImportsClaude: this.options.agent === 'claude',
-        skipWhenGrokImportsClaude: this.options.agent === 'claude'
-      })
-    )
-    if (plan.statusLine === 'install') {
+    const payload = this.managedScript()
+    if (this.usesWindowsEntry) {
+      installWindowsClaudeHookFiles(scriptPath, payload)
+    } else {
+      writeManagedScript(scriptPath, payload)
+    }
+    // Why: a profile's statusLine arrives with the settings merge from the default home.
+    if (options.configDir === undefined && plan.statusLine === 'install') {
       nextConfig = this.installManagedStatusLine(nextConfig)
-    } else if (plan.statusLine === 'retire') {
+    } else if (options.configDir === undefined && plan.statusLine === 'retire') {
       nextConfig = this.retireManagedStatusLine(nextConfig)
     }
     writeHooksJson(configPath, nextConfig)
@@ -257,15 +285,7 @@ export class ClaudeHookService {
 
       // Why: write scripts before settings to avoid settings pointing to missing scripts.
       // Why: SSH scripts always use POSIX .sh paths, regardless of the local OS.
-      await writeManagedScriptRemote(
-        sftp,
-        remoteScriptPath,
-        getManagedScript('posix', {
-          source: this.options.source,
-          skipWhenDevinImportsClaude: this.options.agent === 'claude',
-          skipWhenGrokImportsClaude: this.options.agent === 'claude'
-        })
-      )
+      await writeManagedScriptRemote(sftp, remoteScriptPath, this.managedScript('posix'))
       // Why: no statusline install here — this path serves SSH remotes and WSL guests, whose relay hook
       // listener doesn't route /statusline/claude, and an SSH box's Claude login can be a different
       // account than the locally selected one, so its usage must not feed the local bar (live feed is host-local only).

@@ -16,8 +16,8 @@ import {
  * download from a host that fails every launch, while the file stays a few kilobytes.
  */
 export const MAX_UPDATE_FAILURES_PER_HOST = 5
-/** A ceiling across hosts too, because hosts are not otherwise bounded: four hosts' worth. */
-export const MAX_UPDATE_FAILURES = 20
+/** A ceiling across hosts too, because hosts are not otherwise bounded: six cached hosts' worth. */
+export const MAX_UPDATE_FAILURES = 30
 
 const UPDATE_FAILURE_LOG_FILE_NAME = 'update-failures.json'
 

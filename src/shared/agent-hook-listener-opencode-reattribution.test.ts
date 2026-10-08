@@ -25,7 +25,7 @@ function opencodeBusy(
   )
 }
 
-describe('opencode shared-server reattribution (#21359)', () => {
+describe('OpenCode 1 shared-server reattribution (#21359)', () => {
   it('reattributes a bound session to its real pane', () => {
     const state = createHookListenerState()
     bindOpenCodeSession(state, 'ses_1', {
@@ -62,6 +62,28 @@ describe('opencode shared-server reattribution (#21359)', () => {
     const result = opencodeBusy(state, PANE_A, 'ses_1')
     expect(result?.paneKey).toBe(PANE_B)
     expect(result?.launchToken).toBe('token-b-live')
+  })
+
+  it('leaves an OpenCode 2 post on the pane it names', () => {
+    const state = createHookListenerState()
+    bindOpenCodeSession(state, 'ses_1', {
+      paneKey: PANE_B,
+      boundAt: 1,
+      basis: 'argv'
+    })
+    const result = normalizeHookPayload(
+      state,
+      'opencode',
+      {
+        paneKey: PANE_A,
+        launchToken: 'token-a',
+        opencodeMajor: 2,
+        payload: { hook_event_name: 'SessionBusy', sessionID: 'ses_1' }
+      },
+      'production'
+    )
+    expect(result?.paneKey).toBe(PANE_A)
+    expect(result?.launchToken).toBe('token-a')
   })
 
   it('leaves other sources untouched', () => {

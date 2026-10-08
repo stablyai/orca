@@ -155,6 +155,9 @@ describe('environment-prefixed commands with real child processes', () => {
   it('discovers models through the same override environment', async () => {
     await expect(
       discoverCommitMessageModelsLocal('opencode', target.env, override, { cwd: folder })
-    ).resolves.toMatchObject({ success: true, models: [{ id: 'anthropic/claude-sonnet-4' }] })
+    ).resolves.toMatchObject({
+      success: true,
+      models: [{ id: 'default' }, { id: 'anthropic/claude-sonnet-4' }]
+    })
   })
 })

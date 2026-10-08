@@ -115,6 +115,7 @@ export const SettingsUpdate = z
     minimaxGroupId: z.string().optional(),
     minimaxUsageModels: z.string().optional(),
     minimaxEndpoint: z.enum(['overseas', 'cn']).optional(),
+    zcodePlanSite: z.enum(['zai', 'bigmodel']).optional(),
     githubProjects: GitHubProjectSettings.optional(),
     prBotAuthorOverrides: z
       .unknown()

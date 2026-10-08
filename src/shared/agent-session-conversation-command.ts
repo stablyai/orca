@@ -3,6 +3,9 @@ import type { AgentSessionFailureSentence } from './agent-session-failure-words'
 
 export type AgentSessionConversationCommand = 'clear' | 'compact'
 
+/** How long a client waits for a conversation command: the host may first start an agent at rest. */
+export const AGENT_SESSION_CONVERSATION_COMMAND_TIMEOUT_MS = 195_000
+
 export type AgentSessionConversationCommandResult = {
   command: AgentSessionConversationCommand
   state: 'completed' | 'unknown'
@@ -23,6 +26,13 @@ export type AgentSessionConversationCommandRecord = AgentSessionConversationComm
   phase: 'prepared' | 'committed'
 }
 
+/** A newer host may answer with a command this build doesn't know. */
+export function isAgentSessionConversationCommand(
+  value: unknown
+): value is AgentSessionConversationCommand {
+  return value === 'clear' || value === 'compact'
+}
+
 export function isAgentSessionConversationCommandResult(
   value: unknown
 ): value is AgentSessionConversationCommandResult {
@@ -31,7 +41,7 @@ export function isAgentSessionConversationCommandResult(
   }
   const row = value as AgentSessionConversationCommandResult
   return (
-    (row.command === 'clear' || row.command === 'compact') &&
+    isAgentSessionConversationCommand(row.command) &&
     (row.state === 'completed' || row.state === 'unknown') &&
     (row.replacementSessionId === undefined ||
       (typeof row.replacementSessionId === 'string' &&

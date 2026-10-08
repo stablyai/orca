@@ -86,7 +86,9 @@ export function useCreateRepo(
   const handleCreate = useCallback(async () => {
     const name = createName.trim()
     const parentPath = createParent.trim()
-    if (!name || !parentPath) {
+    // Why: null means the chosen host is unresolved (e.g. its server is coming up); without a
+    // host id the request below would run on this computer.
+    if (!name || !parentPath || options.hostId === null) {
       return
     }
     const requestHostToken = hostTokenRef.current
@@ -249,6 +251,7 @@ export function useCreateRepo(
     mountedRef,
     closeModal,
     onGitRepoReady,
+    options.hostId,
     options.runtimeEnvironmentId,
     options.sshTargetId
   ])

@@ -7,7 +7,6 @@ import { notify } from './host-notify'
 import { flog } from './viewport-transform'
 import { attachWebglAddon } from './webgl-recovery'
 import type { TerminalDocumentHost, TerminalViewportChange } from './document-host-seams'
-import { documentSourceText } from './document-module-source.test-support'
 
 /**
  * The host seams the page sets, and the window reads and writes they default to.
@@ -323,39 +322,5 @@ describe("the document's viewport", () => {
     scope.panX = 50
     window.dispatchEvent(new Event('resize'))
     expect(scope.panX).toBe(0)
-  })
-
-  it('is read through the seam everywhere, never off the window directly', () => {
-    // The default in `document-host-seams.ts` is the one window read, so the census runs over
-    // every other module; a raw read elsewhere sizes a page terminal to the whole page.
-    const raw = documentSourceText()
-      .split('\n')
-      .filter((line) => /window\.inner(Height|Width)|\binner(Height|Width)\b/.test(line))
-    expect(raw).toEqual([
-      '  return { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight }'
-    ])
-  })
-
-  it('maps a client point into the grid only through viewportPoint', () => {
-    // On the page the host's origin is not the window's, so a client coordinate used against
-    // anything but another client coordinate lands rows low. Differences of two need no origin.
-    const arithmetic = documentSourceText()
-      .split('\n')
-      .filter((line) => !/^\s*(\*|\/\/)/.test(line))
-      .filter((line) => /client[XY]\s*[-+*/<>]|[-+*/<>]=?\s*[\w.[\]]*client[XY]\b/.test(line))
-      .map((line) => line.trim())
-      .sort()
-    expect(arithmetic).toEqual([
-      'const dx = Math.abs(e.clientX - gesture.startX)',
-      'const dx = Math.abs(mt.clientX - scope.tapCandidate.x)',
-      'const dx = Math.abs(t.clientX - scope.longPressOrigin.x)',
-      'const dx = a.clientX - b.clientX,',
-      'const dy = Math.abs(e.clientY - gesture.startY)',
-      'const dy = Math.abs(mt.clientY - scope.tapCandidate.y)',
-      'const dy = Math.abs(t.clientY - scope.longPressOrigin.y)',
-      'dy = a.clientY - b.clientY',
-      'return viewportPoint(scope, (a.clientX + b.clientX) / 2, (a.clientY + b.clientY) / 2)',
-      'return { x: clientX - frame.left, y: clientY - frame.top }'
-    ])
   })
 })

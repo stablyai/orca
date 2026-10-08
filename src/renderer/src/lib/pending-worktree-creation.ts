@@ -1,3 +1,5 @@
+import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { FolderWorkspaceLinkedTask } from '../../../shared/folder-workspace-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../shared/workspace-source'
 import type {
@@ -24,15 +26,12 @@ export type WorktreeCreationPhase = 'preparing' | 'provisioning-vm' | 'fetching'
 
 export type WorktreeCreationProgressMode = 'stepped' | 'indeterminate'
 
-/**
- * Everything needed to run a worktree create in the background and reproduce it
- * verbatim on retry. Captured at the composer's submit cut point — after all
- * interactive preflight (trust/setup decisions) has resolved — so the modal can
- * close immediately and the work outlives it. Must stay plain-serializable
- * (no closures/refs) so a pending entry can hold it for the panel's Retry.
- */
+/** Serializable creation intent, including any script checks deferred until
+ * after the composer closes. Retained by the pending panel for Retry. */
 export type WorktreeCreationRequest = {
   repoId: string
+  /** Execution owner retained after script preparation, including retries. */
+  executionHostId?: ExecutionHostId
   /** Source host/account that produced the linked task. Kept separate from the
    *  run context so Retry does not infer provider ownership from the run host. */
   taskSourceContext?: TaskSourceContext | null
@@ -71,6 +70,16 @@ export type WorktreeCreationRequest = {
   baseBranch?: string
   compareBaseRef?: string
   setupDecision: SetupDecision
+  /** Inspect and confirm scripts on the captured host after the composer closes. */
+  hookPreparation?: {
+    executionHostId?: ExecutionHostId
+    confirmVmRecipe?: boolean
+    issueCommand?: {
+      provider: FolderWorkspaceLinkedTask['provider'] | null
+      issueNumber: number
+      artifactUrl: string | null
+    }
+  }
   sparseCheckout?: CreateSparseCheckoutRequest
   telemetrySource?: WorkspaceCreateTelemetrySource
   linkedIssue?: number

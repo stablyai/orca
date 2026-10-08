@@ -1,4 +1,5 @@
 import type { ManagedPaneInternal } from './pane-manager-types'
+import type { PaneLayoutEditIntent } from '../../../../shared/rpc-contract/session-tabs-schemas-params'
 import { equalizePaneSplitSizes } from './pane-tree-ops'
 import { fitRevealedPane } from './pane-reveal-fit'
 
@@ -25,7 +26,7 @@ export function refreshAllPaneTerminals(panes: Map<number, ManagedPaneInternal>)
 export function equalizeManagedPaneSizes(
   panes: Map<number, ManagedPaneInternal>,
   root: HTMLElement,
-  onLayoutChanged?: () => void
+  onLayoutChanged?: (intent?: PaneLayoutEditIntent) => void
 ): void {
   if (panes.size < 2) {
     return
@@ -38,5 +39,5 @@ export function equalizeManagedPaneSizes(
     return
   }
 
-  onLayoutChanged?.()
+  onLayoutChanged?.('gesture')
 }

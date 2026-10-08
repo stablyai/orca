@@ -7,6 +7,7 @@ import type { WorkspaceLineage, WorktreeLineage } from '../../../../shared/workt
 import { readRetiredNameRegistryForRepo } from '../../../../shared/worktree/retired-name-cache'
 import { EMPTY_RETIRED_NAME_REGISTRY } from '../../../../shared/worktree/retired-name-registry'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { worktreeRemovalReplyTimeoutMs } from '../../../../shared/worktree/archive-hook-removal-gate'
 import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
 import {
   callRuntimeResult,
@@ -129,15 +130,20 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
       }),
     remove: async ({ worktreeId, hostId, force, allowUnverifiedPtyStop, skipArchive }) => {
       invalidateRuntimeWorktreeCaches()
-      return callRuntimeResult<RemoveWorktreeResult>('worktree.rm', {
-        worktree: toRuntimeWorktreeSelector(worktreeId),
-        ...(hostId ? { hostId } : {}),
-        force,
-        // Why (#11960): the web client renders the same Force Delete affordances, so
-        // dropping this field here would leave paired clients permanently wedged.
-        allowUnverifiedPtyStop,
-        runHooks: skipArchive !== true
-      })
+      return callRuntimeResult<RemoveWorktreeResult>(
+        'worktree.rm',
+        {
+          worktree: toRuntimeWorktreeSelector(worktreeId),
+          ...(hostId ? { hostId } : {}),
+          force,
+          // Why (#11960): the web client renders the same Force Delete affordances, so
+          // dropping this field here would leave paired clients permanently wedged.
+          allowUnverifiedPtyStop,
+          runHooks: skipArchive !== true
+        },
+        // Why: the host replies once Git has deleted the checkout, past the default 30 s budget.
+        worktreeRemovalReplyTimeoutMs(skipArchive !== true)
+      )
     },
     // Why: forget-locally clears a desktop workspace pinned to a dead SSH host; a paired web client has no such ghost state.
     forgetLocal: () => {

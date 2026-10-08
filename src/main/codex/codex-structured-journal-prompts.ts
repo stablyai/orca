@@ -20,7 +20,7 @@ import {
 } from './codex-structured-journal-sink'
 import type { CodexPendingJournalPrompt } from './codex-structured-journal-settlement'
 import { readCodexTurnId } from './codex-structured-thread-facts'
-import type { CodexRowLinkage } from './codex-subagent-linkage'
+import type { CodexRowAttribution } from './codex-subagent-linkage'
 import { journalLifecycleItemMutation } from '../native-chat/agent-session-journal/journal-row-builders'
 
 type CodexGroupedPendingJournalPrompt = CodexPendingJournalPrompt & { promptKey: string }
@@ -30,7 +30,7 @@ export class CodexJournalPrompts {
 
   constructor(
     private readonly deps: Pick<CodexJournalTranslatorDeps, 'sink' | 'bindPromptItemId'> & {
-      linkageFor: CodexRowLinkage
+      attributionFor: CodexRowAttribution
     },
     private readonly detailFor: (threadId: string, itemId: string) => string | null,
     private readonly activeTurn: (threadId: string) => string | null
@@ -118,7 +118,7 @@ export class CodexJournalPrompts {
     )
     const mutations = group.flatMap(([, prompt]) => {
       const body = cancelledJournalPromptBody(prompt.body)
-      const producer = this.deps.linkageFor(prompt.threadId, prompt.turnId)
+      const producer = this.deps.attributionFor(prompt.threadId, prompt.turnId)
       return body ? [journalLifecycleItemMutation(producer, prompt.identity, body)] : []
     })
     const admission = appendCodexLifecycleMutations(
@@ -152,7 +152,7 @@ export class CodexJournalPrompts {
       )}:${encodeURIComponent(event.promptKey)}`,
       items,
       // A child's approval arrives on the child's own thread, so it names the asker.
-      this.deps.linkageFor(event.threadId, turnId)
+      this.deps.attributionFor(event.threadId, turnId)
     )
   }
 
@@ -170,7 +170,7 @@ export class CodexJournalPrompts {
             this.deps.sink,
             evicted.identity,
             cancelled,
-            this.deps.linkageFor(evicted.threadId, evicted.turnId)
+            this.deps.attributionFor(evicted.threadId, evicted.turnId)
           )
           if (!admission.accepted) {
             return admission

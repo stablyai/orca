@@ -180,7 +180,7 @@ export class OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity extends Orc
     }
     const reveal = await this.notifier.revealTerminalSession(candidate.worktreeId, {
       ptyId: candidate.ptyId,
-      title: getLatestPtyTitle(pty) ?? pty.controllerTitle,
+      title: getLatestPtyTitle(this.getPtyDisplayRecord(pty)) ?? pty.controllerTitle,
       activate: false,
       presentation: 'background',
       tabId: candidate.tabId,
@@ -203,6 +203,10 @@ export class OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity extends Orc
 
   setAutomationService(service: AutomationService): void {
     this.automation.setService(service)
+  }
+
+  releaseFinishedAutomationRunTerminals(): Promise<number> {
+    return this.automation.releaseFinishedRunTerminals()
   }
 
   setArtifactService(service: ArtifactCloudService): void {

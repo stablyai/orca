@@ -8,13 +8,22 @@ import { DashboardAgentRowMessage } from './DashboardAgentRowMessage'
 import { DashboardAgentRowTrailingControls } from './DashboardAgentRowTrailingControls'
 import { DashboardAgentRowToolStep } from './DashboardAgentRowToolStep'
 import { showsAgentToolPreview } from '@/lib/agent-row-tool-preview'
+import { agentRowStoppingLabel } from '@/lib/agent-row-stopping-label'
 import { agentNoUpdateLabel, formatCompactDuration } from '@/lib/agent-row-decay-state'
-import { agentRowDotState as asDotState } from '@/lib/agent-row-dot-state'
-import { agentVerdictDisplayMark } from '../../../../shared/agent-main-agent-verdict'
+import { agentRowDisplayDotState, agentRowDotState as asDotState } from '@/lib/agent-row-dot-state'
+import {
+  agentMainAgentVerdict,
+  agentVerdictDisplayMark
+} from '../../../../shared/agent-main-agent-verdict'
+import { agentVerdictStatusLine } from '@/lib/agent-verdict-status-line'
 import type { DashboardAgentRow as DashboardAgentRowData } from './useDashboardData'
 import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
 import { useAgentRowConversationName } from './use-agent-row-conversation-name'
 import { lastEnteredDoneAt } from './agent-finished-timestamp'
+import {
+  agentChildRowMessageLine,
+  agentChildRowNoUpdateLabel
+} from '@/components/agent-child-row-text'
 
 function formatTimeAgo(ts: number, now: number): string {
   const delta = now - ts
@@ -24,19 +33,24 @@ function formatTimeAgo(ts: number, now: number): string {
   return `${formatCompactDuration(delta)} ago`
 }
 
+// A child row's silence is the model's, on the clock its compact row and the strip read.
+function rowNoUpdateLabel(agent: DashboardAgentRowData, now: number): string {
+  return agent.childRow
+    ? agentChildRowNoUpdateLabel(agent.childRow, now)
+    : agentNoUpdateLabel(agent.entry, now)
+}
+
 function stateDotTooltipLabel(
   agent: DashboardAgentRowData,
   dotState: AgentDotState,
   now: number
 ): string {
   if (dotState === 'interrupted') {
-    return 'Interrupted by user'
+    return agentVerdictStatusLine(agent.entry) ?? agentStateLabel(dotState)
   }
   // Why: report the observation, not a verdict on the agent — the elapsed gap is what
   // lets the user apply context Orca has no way to know (a long build, a slow download).
-  return dotState === 'unverifiable'
-    ? agentNoUpdateLabel(agent.entry, now)
-    : agentStateLabel(dotState)
+  return dotState === 'unverifiable' ? rowNoUpdateLabel(agent, now) : agentStateLabel(dotState)
 }
 
 type Props = {
@@ -127,19 +141,26 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const conversationName = useAgentRowConversationName(agent)
   const prompt = conversationName ?? getAgentRowPrimaryText(agent.entry)
   // Why: prompt is '' when unknown, so fall back to the state label to keep the row labeled.
-  const displayLabel = prompt || agentStateLabel(asDotState(agent.state, agent.entry.workingMode))
+  const displayLabel =
+    prompt ||
+    agentStateLabel(
+      agent.childRow?.displayState ?? asDotState(agent.state, agent.entry.workingMode)
+    )
   const model = agent.entry.model?.trim() ?? ''
   const isMonitoring = agent.state === 'working' && agent.entry.workingMode === 'monitoring'
   const isWorking = agent.state === 'working' && !isMonitoring
   // Why: 'working' names the running tool and 'waiting' names what an approval is blocked on;
   // anywhere else a leftover tool line reads as still-running. See showsAgentToolPreview.
   // Monitoring is excluded too: the lead turn is over, so its last tool line is stale.
-  const showsTool = showsAgentToolPreview(agent.state) && !isMonitoring
+  const stoppingLabel = agentRowStoppingLabel(agent.entry, agent.state)
+  const showsTool = showsAgentToolPreview(agent.state) && !isMonitoring && stoppingLabel === null
   const toolName = showsTool ? (agent.entry.toolName?.trim() ?? '') : ''
   const toolInput = showsTool ? (agent.entry.toolInput?.trim() ?? '') : ''
-  const lastAssistantMessage = agent.entry.lastAssistantMessage?.trim() ?? ''
-  const verdictDotState = agentVerdictDisplayMark(agent.entry)
-  const isInterrupted = verdictDotState === 'interrupted'
+  // Why: a child row's message line is the model's, so a child that ended without an outcome says so.
+  const lastAssistantMessage = agent.childRow
+    ? agentChildRowMessageLine(agent.childRow)
+    : (agent.entry.lastAssistantMessage?.trim() ?? '')
+  const isInterrupted = agentVerdictDisplayMark(agent.entry) === 'interrupted'
   const lineage = agent.lineage
   const isLineageChild = lineage?.depth === 1
   const lineageChildCount = lineage?.childCount ?? 0
@@ -152,12 +173,11 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
       : [formatAgentTypeLabel(agent.agentType), model].filter(Boolean).join(' · ')
   // Why: a stop or a failure is a terminal outcome, so surface it in the leading state dot; a
   // failure does so even while subagents still run.
-  const dotState: AgentDotState =
-    verdictDotState ?? asDotState(agent.state, agent.entry.workingMode)
+  const dotState: AgentDotState = agentRowDisplayDotState(agent)
   const dotTooltipLabel = stateDotTooltipLabel(agent, dotState, now)
   // Why: the elapsed gap is the whole content of an `unverifiable` row, so it rides the
   // row's own timestamp slot rather than hiding in a hover tooltip.
-  const noUpdateLabel = dotState === 'unverifiable' ? agentNoUpdateLabel(agent.entry, now) : null
+  const noUpdateLabel = dotState === 'unverifiable' ? rowNoUpdateLabel(agent, now) : null
 
   // Why: always show the chevron so the row's right edge doesn't flicker as content grows/shrinks.
 
@@ -296,10 +316,12 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
         reservesHeight={isWorking}
         toolName={toolName}
         toolInput={toolInput}
+        statusLabel={stoppingLabel}
       />
       <DashboardAgentRowMessage
         expanded={expanded}
         isInterrupted={isInterrupted}
+        stoppedByUser={agentMainAgentVerdict(agent.entry) === 'cancellation'}
         lastAssistantMessage={lastAssistantMessage}
       />
     </div>

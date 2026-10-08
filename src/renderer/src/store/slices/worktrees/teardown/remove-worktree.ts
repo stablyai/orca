@@ -41,6 +41,7 @@ import { recordRemovedWorktreeSnapshotPrune } from './removed-worktree-snapshot-
 import { clearSessionCommitDraftForWorktree } from '@/lib/source-control-commit-draft-session'
 import { dispatchWorktreeRemoval } from './dispatch-worktree-removal'
 import { tearDownRemovedWorktreeRendererState } from './removed-worktree-renderer-teardown'
+import { captureWorktreeStateBeforeRemoval } from './worktree-state-before-removal'
 
 export function createRemoveWorktree(
   set: WorktreeSliceSet,
@@ -92,10 +93,11 @@ export function createRemoveWorktree(
 
     try {
       // Why: forget-local touches no remote, so there's no archive hook to run or trust prompt needed.
+      // Why `get`: same-repo local deletes start together, and one approval must cover the rest.
       const skipArchive = forgetLocalOnly
         ? true
         : (await ensureHooksConfirmed(
-            get(),
+            get,
             getRepoIdFromWorktreeId(worktreeId),
             'archive',
             hostId,
@@ -107,9 +109,7 @@ export function createRemoveWorktree(
         worktreeId,
         requiredExecutionHostId
       )
-      const terminalPtyIdsBeforeRemoval = (get().tabsByWorktree[worktreeId] ?? []).flatMap(
-        (tab) => get().ptyIdsByTabId[tab.id] ?? []
-      )
+      const beforeRemoval = captureWorktreeStateBeforeRemoval(get(), worktreeId, hostId)
       if (!forgetLocalOnly) {
         removalGenerationGuard?.assertCurrent()
       }
@@ -135,7 +135,7 @@ export function createRemoveWorktree(
           hostId,
           force,
           skipArchive,
-          forgetLocalOnly,
+          get,
           target,
           options,
           assertCurrent: () => removalGenerationGuard?.assertCurrent()
@@ -251,7 +251,7 @@ export function createRemoveWorktree(
         worktreeId,
         hostId,
         requiredExecutionHostId,
-        terminalPtyIdsBeforeRemoval,
+        beforeRemoval,
         catalogVersion: removalResult?.catalogVersion
       })
       // Why: Source Control may be unmounted during deletion, so it can't be the only stale-draft cleanup path.

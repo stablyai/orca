@@ -232,7 +232,8 @@ export class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecution
         if (ptyRecord) {
           ptyRecord.lastExplicitAgentStatus = {
             state: latestAgentStatus.state,
-            updatedAt: Date.now()
+            updatedAt: Date.now(),
+            sessionBoundary: latestAgentStatus.sessionBoundary
           }
         }
       }

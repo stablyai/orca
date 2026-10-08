@@ -96,6 +96,13 @@ import {
   setupScriptPromptShownSchema,
   workspaceCreateFailedSchema
 } from './telemetry-repository-event-schemas'
+import { sshRemoteRuntimeResolvedSchema } from './telemetry-ssh-runtime-event-schemas'
+import {
+  sshHostServerConversionSchema,
+  sshHostServerDecidedSchema,
+  sshHostServerDeployFailedSchema,
+  sshHostServerMoveSchema
+} from './telemetry-ssh-host-server-event-schemas'
 
 // ── Event registry: the one record the validator consumes ───────────────
 // Versioning: breaking changes (rename/re-mean/remove a key) need a new event name; in-place edits blend pre/post rows unmixably. Additive-optional fields are safe.
@@ -197,6 +204,11 @@ export const eventSchemas = {
   editor_external_change_conflict_action: editorExternalChangeConflictActionSchema,
 
   direct_ssh_reconnect_operation: directSshReconnectOperationSchema,
+  ssh_remote_runtime_resolved: sshRemoteRuntimeResolvedSchema,
+  ssh_host_server_decided: sshHostServerDecidedSchema,
+  ssh_host_server_conversion: sshHostServerConversionSchema,
+  ssh_host_server_deploy_failed: sshHostServerDeployFailedSchema,
+  ssh_host_server_move: sshHostServerMoveSchema,
 
   smart_sort_class_distribution: smartSortClassDistributionSchema,
   smart_sort_class_1_promotion: smartSortClass1PromotionSchema,

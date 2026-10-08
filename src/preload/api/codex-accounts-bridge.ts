@@ -30,7 +30,6 @@ export const codexAccountsApi = {
       ptyId: string
       launchAccountId: string | null
       activeAccountId: string | null
-      reason?: 'account-change' | 'home-route-change'
     }[]
   > => ipcRenderer.invoke('codexAccounts:listStalePanes', args),
   listRecordedPaneLanes: (args: { ptyIds: string[] }): Promise<Record<string, string>> =>

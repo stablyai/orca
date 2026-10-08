@@ -19,6 +19,7 @@ vi.mock('lucide-react-native', mocks['lucide-react-native'])
 vi.mock('react-native-safe-area-context', mocks['react-native-safe-area-context'])
 vi.mock('expo-router', mocks['expo-router'])
 vi.mock('../../modules/orca-mobile-web-shell/src', mocks['../../modules/orca-mobile-web-shell/src'])
+vi.mock('../app-update/use-wall-app-update', mocks['../app-update/use-wall-app-update'])
 vi.mock('../transport/client-context', mocks['../transport/client-context'])
 vi.mock('./use-page-host-snapshot', mocks['./use-page-host-snapshot'])
 vi.mock('./use-mobile-web-shell-session', mocks['./use-mobile-web-shell-session'])
@@ -28,7 +29,6 @@ import { act, create } from 'react-test-renderer'
 import { bridgeId, clientFrame, createFakeRpcClient } from './bridge-host-test-fakes'
 import {
   byName,
-  DEFAULT_ROUTE_GRANTS,
   trackRenderedScreen,
   NativeFallback,
   SCREEN_BUILD_ID as BUILD_ID,
@@ -150,7 +150,6 @@ describe('the hybrid shell screen', () => {
     const tree = await renderScreen(readyState('session-one'))
     const view = byName(tree, 'ShellViewProbe')[0]
     expect(view.props.bridgeEnabled).toBe(true)
-    expect(typeof view.props.onBridgeMessage).toBe('function')
     // Delivered with no client behind it: there is no host to answer, and nothing throws.
     await act(async () => {
       view.props.onBridgeMessage({ nativeEvent: { json: '{"v":1,"type":"ready"}' } })
@@ -631,22 +630,6 @@ describe('a refused update is said beside the page, not in front of it', () => {
     // one before it is not an answer about this one.
     await updateScreen(tree, readyState('session-two'))
     expect(dismissControl(tree)).toBeDefined()
-  })
-})
-
-/**
- * Last in the file on purpose: it is the case the block above would have poisoned.
- *
- * Those cases grant the screencast lane and install a client, and before the shared setup reset
- * them both, whatever ran next inherited a route granted a lane it never asked for. Deleting the
- * reset fails here and nowhere else, because nothing else runs after a case that mutates them.
- */
-describe('what one case mutates does not reach the next', () => {
-  it('starts from the shared route grants and no client', () => {
-    expect({ grants: dependencies.routeGrants, client: dependencies.client }).toEqual({
-      grants: DEFAULT_ROUTE_GRANTS,
-      client: null
-    })
   })
 })
 

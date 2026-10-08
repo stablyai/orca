@@ -1,6 +1,7 @@
 import { useAppStore } from '@/store'
 import { reconcileTabOrder } from '@/components/tab-bar/reconcile-order'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
+import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import {
   flattenTerminalQuickCommand,
   isTerminalAgentQuickCommand,
@@ -65,6 +66,7 @@ export function runQuickCommandInNewTab({
       return null
     }
     const result = launchAgentInNewTab({
+      requestId: newAgentLaunchRequestId(),
       agent: command.agent,
       prompt: command.prompt,
       worktreeId,
@@ -75,10 +77,7 @@ export function runQuickCommandInNewTab({
       launchSource: 'quick_command',
       quickCommandLabel: command.label
     })
-    if (
-      result?.surface.kind === 'local-terminal' ||
-      result?.surface.kind === 'local-agent-session'
-    ) {
+    if (result?.surface.kind === 'local-terminal') {
       const launchedGroupId = resolveQuickCommandGroupId(worktreeId, result.surface.tabId, groupId)
       if (launchedGroupId) {
         useAppStore.getState().setRecentQuickCommandForGroup(launchedGroupId, historyId)

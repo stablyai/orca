@@ -108,6 +108,8 @@ export function useVirtualizedScrollAnchor<
     })
     return indexByKey
   }, [getRowKey, providedRowIndexByKey, rows])
+  // Keep the source-row anchor until rendered geometry confirms restoration.
+  const pendingRestoreRef = useRef(false)
 
   const recordVirtualScrollAnchor = useCallback(
     (scrollTop: number) => {
@@ -123,6 +125,9 @@ export function useVirtualizedScrollAnchor<
 
   const recordScrollAnchor = useCallback(
     (scrollTop: number) => {
+      if (pendingRestoreRef.current) {
+        return
+      }
       const scrollElement = scrollElementRef.current
       if (scrollElement && itemElementSelector && getItemElementKey) {
         const domAnchor = findVirtualizedDomScrollAnchor<TItemElement>({
@@ -171,10 +176,6 @@ export function useVirtualizedScrollAnchor<
   const programmaticScrollMarksRef = useRef(programmaticScrollMarks)
   programmaticScrollMarksRef.current = programmaticScrollMarks
   const prevRestoreSignalRef = useRef<string | undefined>(undefined)
-  // Why: true while a restore has written toward the anchor but the anchored
-  // row's position is not yet confirmed; re-arms the restore effect across
-  // totalSize ticks until it converges or the user scrolls.
-  const pendingRestoreRef = useRef(false)
 
   useLayoutEffect(() => {
     const el = scrollElementRef.current
@@ -211,7 +212,7 @@ export function useVirtualizedScrollAnchor<
       scrollOffsetRef.current = el.scrollTop
       recordScrollAnchorRef.current(el.scrollTop)
     }
-    const onScroll = createVirtualizedScrollAnchorListener({
+    const { onScroll, cancelMountRestore } = createVirtualizedScrollAnchorListener({
       el,
       getHasDirectScrollInput: () => hasDirectScrollInputRef.current,
       getMarks: () => programmaticScrollMarksRef.current,
@@ -236,16 +237,21 @@ export function useVirtualizedScrollAnchor<
       targetOffset: scrollOffsetRef.current,
       scrollOffsetRef
     })
+    const recordRequestedAnchor = (): void => {
+      cancelMountRestore()
+      pendingRestoreRef.current = false
+      recordCurrentAnchor()
+    }
 
     el.addEventListener('scroll', onScroll, { passive: true })
-    el.addEventListener(VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT, recordCurrentAnchor)
+    el.addEventListener(VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT, recordRequestedAnchor)
     return () => {
       cancelScheduledRecord()
       if (recordAnchorOnCleanupRef.current) {
         scrollOffsetRef.current = el.scrollTop
         recordScrollAnchorRef.current(el.scrollTop)
       }
-      el.removeEventListener(VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT, recordCurrentAnchor)
+      el.removeEventListener(VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT, recordRequestedAnchor)
       el.removeEventListener('scroll', onScroll)
     }
     // Why: only stable refs may appear here; row-derived values would rerun
@@ -255,12 +261,14 @@ export function useVirtualizedScrollAnchor<
   useLayoutEffect(() => {
     const anchor = anchorRef.current
     const el = scrollElementRef.current
+    const signalChanged = prevRestoreSignalRef.current !== restoreSignal
+    if (el && restoreSignal !== undefined) {
+      prevRestoreSignalRef.current = restoreSignal
+    }
     if (!anchor || !el) {
       return
     }
     if (restoreSignal !== undefined) {
-      const signalChanged = prevRestoreSignalRef.current !== restoreSignal
-      prevRestoreSignalRef.current = restoreSignal
       if (!signalChanged && !pendingRestoreRef.current) {
         // Why: no structural row change and no restore mid-convergence. Pure
         // measurement churn is compensated by the virtualizer's own scroll
@@ -272,7 +280,11 @@ export function useVirtualizedScrollAnchor<
         const maxScrollTop = Math.max(0, el.scrollHeight - el.clientHeight)
         const clampExplained =
           anchor.scrollTop > maxScrollTop + 1 && el.scrollTop >= maxScrollTop - 2
-        if (Math.abs(el.scrollTop - anchor.scrollTop) > 1 && !clampExplained) {
+        const marked = programmaticScrollMarksRef.current?.hasPendingScrollOffset(
+          el.scrollTop,
+          maxScrollTop
+        )
+        if (Math.abs(el.scrollTop - anchor.scrollTop) > 1 && !clampExplained && !marked) {
           // Why: the viewport moved after this anchor was recorded and no
           // browser clamp explains it — the user scrolled. Their position
           // wins; restoring would undo their input.

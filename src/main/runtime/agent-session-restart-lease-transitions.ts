@@ -52,10 +52,13 @@ export function applyAgentSessionRestartAdjudication(args: {
       deathEvidence: adjudication.evidence
     })
   }
-  return withLease(record, {
-    ...record.lease,
-    handoffStage: adjudication.stage,
-    unreconciled: false,
-    lastRenewedAt: args.now
-  })
+  // Parking in recovery proves nothing alive, so `lastRenewedAt` keeps the pre-crash proof.
+  return {
+    ...withLease(record, {
+      ...record.lease,
+      handoffStage: adjudication.stage,
+      unreconciled: false
+    }),
+    updatedAt: args.now
+  }
 }

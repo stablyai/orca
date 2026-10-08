@@ -1,3 +1,4 @@
+import { pollCodexTranscriptStatus } from '../shared/agent-hook-listener/providers/codex-transcript-poll'
 // Deferred re-normalization timers for late-arriving agent results: the transcript hadn't caught up
 // when the hook fired, so re-read the same body on a timer and re-apply only if it changed. Both
 // timer families live in one owner so pane teardown and server stop tear both down in one ordered
@@ -12,9 +13,11 @@ import type { HookListenerState } from '../shared/agent-hook-listener/listener-s
 import type { AgentHookSource } from '../shared/agent-hook-relay'
 import {
   shouldPollHookTranscript,
+  hookTranscriptWatchPath,
   transcriptPollUpdate
 } from '../shared/agent-hook-listener/transcript-poll-policy'
-import { CodexSubagentPollScheduler } from '../shared/codex-subagent-poll-scheduler'
+import { AgentTranscriptPollScheduler } from '../shared/agent-transcript-poll-scheduler'
+import { ClaudeOwedNotificationExpiryTimers } from '../shared/claude-owed-notification-expiry-timers'
 
 const ASSISTANT_MESSAGE_RETRY_ATTEMPTS = 5
 const ASSISTANT_MESSAGE_RETRY_MS = 50
@@ -43,12 +46,14 @@ export type AgentHookResultRetryHost = {
 
 export class AgentHookResultRetryScheduler {
   private assistantMessageRetryTimers = new Map<string, ReturnType<typeof setTimeout>>()
-  private transcriptPollScheduler: CodexSubagentPollScheduler<TranscriptPoll>
+  private transcriptPollScheduler: AgentTranscriptPollScheduler<TranscriptPoll>
   private host: AgentHookResultRetryHost
+  private claudeOwedNotificationExpiry: ClaudeOwedNotificationExpiryTimers
 
   constructor(host: AgentHookResultRetryHost) {
     this.host = host
-    this.transcriptPollScheduler = new CodexSubagentPollScheduler(
+    this.claudeOwedNotificationExpiry = new ClaudeOwedNotificationExpiryTimers(host.state)
+    this.transcriptPollScheduler = new AgentTranscriptPollScheduler(
       CODEX_SUBAGENT_POLL_MS,
       (paneKey, poll) => this.runTranscriptPoll(paneKey, poll)
     )
@@ -60,6 +65,21 @@ export class AgentHookResultRetryScheduler {
     }
     this.assistantMessageRetryTimers.clear()
     this.transcriptPollScheduler.clearAll()
+    this.claudeOwedNotificationExpiry.clearAll()
+  }
+
+  /** No hook fires when Claude never sends an owed task notification; restate the row ourselves. */
+  armClaudeOwedNotificationExpiry(
+    source: AgentHookSource,
+    paneKey: string,
+    env?: string,
+    version?: string
+  ): void {
+    this.claudeOwedNotificationExpiry.arm(paneKey, (row) => {
+      if (this.host.isListening()) {
+        this.host.applyEvent(row, source, env, version)
+      }
+    })
   }
 
   clearAssistantMessageRetry(paneKey: string): void {
@@ -86,17 +106,21 @@ export class AgentHookResultRetryScheduler {
     if (source !== 'codex' && source !== 'muse') {
       return
     }
-    this.transcriptPollScheduler.clear(original.paneKey)
     if (!shouldPollHookTranscript(this.host.state, source, original)) {
+      this.transcriptPollScheduler.clear(original.paneKey)
       return
     }
-    this.transcriptPollScheduler.schedule(original.paneKey, {
-      source,
-      body,
-      original,
-      env,
-      version
-    })
+    this.transcriptPollScheduler.schedule(
+      original.paneKey,
+      {
+        source,
+        body,
+        original,
+        env,
+        version
+      },
+      hookTranscriptWatchPath(this.host.state, source, original.paneKey)
+    )
   }
 
   private runTranscriptPoll(paneKey: string, poll: TranscriptPoll): void {
@@ -110,7 +134,10 @@ export class AgentHookResultRetryScheduler {
     ) {
       return
     }
-    const event = normalizeHookPayload(this.host.state, source, body, this.host.env)
+    const event =
+      source === 'codex'
+        ? pollCodexTranscriptStatus(this.host.state, original)
+        : normalizeHookPayload(this.host.state, source, body, this.host.env)
     if (!event) {
       return
     }

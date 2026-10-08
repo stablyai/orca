@@ -42,6 +42,10 @@ function makeScope(overrides: Partial<ActivityScopeFilter> = {}): ActivityScopeF
     visibleHostIds: null,
     filterRepoIds: [],
     defaultHostId: LOCAL_EXECUTION_HOST_ID,
+    hideWorkspacesFromOtherDevices: false,
+    pairedDeviceIdsByEnvironment: new Map(),
+    hideAutomationGeneratedWorkspaces: false,
+    hideCliCreatedWorkspaces: false,
     ...overrides
   }
 }
@@ -72,6 +76,67 @@ describe('threadMatchesActivityScope', () => {
       threadMatchesActivityScope(makeThread({ repo: { ...makeRepo(), id: 'repo-2' } }), scope)
     ).toBe(false)
     expect(threadMatchesActivityScope(makeThread({ repo: null }), scope)).toBe(false)
+  })
+})
+
+describe('threadMatchesActivityScope workspace-origin toggles', () => {
+  const cliThread = makeThread({
+    worktree: { ...makeWorktree(), cliProvenance: { kind: 'created-by-cli', createdAt: 1 } }
+  })
+  const otherDeviceThread = makeThread({
+    worktree: {
+      ...makeWorktree(),
+      runtimeOwnerEnvironmentId: 'env-1',
+      creatorProvenance: { kind: 'paired-device', deviceId: 'phone' }
+    }
+  })
+  const ownDeviceThread = makeThread({
+    worktree: {
+      ...makeWorktree(),
+      runtimeOwnerEnvironmentId: 'env-1',
+      creatorProvenance: { kind: 'paired-device', deviceId: 'this-desktop' }
+    }
+  })
+  const pairedDeviceIdsByEnvironment = new Map([['env-1', 'this-desktop']])
+
+  it('hides CLI-created workspaces only when that toggle is on', () => {
+    expect(threadMatchesActivityScope(cliThread, makeScope())).toBe(true)
+    expect(
+      threadMatchesActivityScope(cliThread, makeScope({ hideCliCreatedWorkspaces: true }))
+    ).toBe(false)
+    expect(
+      threadMatchesActivityScope(cliThread, makeScope({ hideAutomationGeneratedWorkspaces: true }))
+    ).toBe(true)
+  })
+
+  it('hides workspaces created from another client of the same runtime', () => {
+    const scope = makeScope({ hideWorkspacesFromOtherDevices: true, pairedDeviceIdsByEnvironment })
+    expect(threadMatchesActivityScope(otherDeviceThread, scope)).toBe(false)
+    expect(threadMatchesActivityScope(ownDeviceThread, scope)).toBe(true)
+  })
+
+  it('never hides provenance-less threads such as floating terminals', () => {
+    const floating = makeThread({ repo: null })
+    const scope = makeScope({
+      hideWorkspacesFromOtherDevices: true,
+      pairedDeviceIdsByEnvironment,
+      hideAutomationGeneratedWorkspaces: true,
+      hideCliCreatedWorkspaces: true
+    })
+    expect(threadMatchesActivityScope(floating, scope)).toBe(true)
+  })
+
+  it('keeps the exempt pane visible and counts the rest as hidden', () => {
+    const plain = makeThread({ paneKey: 'pane-plain' })
+    const exemptCli = { ...cliThread, paneKey: 'pane-exempt' }
+    const result = filterThreadsByActivityScope({
+      threads: [plain, cliThread, exemptCli],
+      scope: makeScope({ hideCliCreatedWorkspaces: true }),
+      exemptPaneKey: 'pane-exempt'
+    })
+    expect(result.threads).toEqual([plain, exemptCli])
+    expect(result.matchingThreads).toEqual([plain])
+    expect(result.hiddenCount).toBe(1)
   })
 })
 

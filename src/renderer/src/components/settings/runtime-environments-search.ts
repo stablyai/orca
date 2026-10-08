@@ -59,6 +59,11 @@ export const getRuntimeEnvironmentsSearchEntry = createLocalizedCatalog(
         'auto.components.settings.runtime.environments.search.c6e5a03aa0',
         'dev box'
       ),
+      ...translateSearchKeyword(
+        'auto.components.settings.managedServers.search.title',
+        'Managed servers'
+      ),
+      ...translateSearchKeyword('auto.components.settings.managedServers.search.keywordSsh', 'ssh'),
       // Why: Share this host mounts the machine name field, so its keywords open this pane.
       ...getMachineNameSearchKeywords()
     ]

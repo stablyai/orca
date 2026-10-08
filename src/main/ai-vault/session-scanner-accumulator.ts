@@ -161,6 +161,9 @@ export function finalizeSession(
     totalTokens: accumulator.totalTokens,
     previewMessages: accumulator.previewMessages,
     ...(accumulator.previewMessagesTruncated ? { previewMessagesTruncated: true } : {}),
+    ...(accumulator.antigravityOpeningPrompt
+      ? { antigravityOpeningPrompt: accumulator.antigravityOpeningPrompt }
+      : {}),
     ...(accumulator.firstUserPrompt ? { firstUserPrompt: accumulator.firstUserPrompt } : {}),
     ...(accumulator.lastUserPrompt ? { lastUserPrompt: accumulator.lastUserPrompt } : {}),
     queuedMessageCount: accumulator.queuedMessageCount,
@@ -227,7 +230,7 @@ export function addPreviewMessage(
     () => (args.text ? normalizeFullFirstUserPromptText(args.text) : null),
     args.seedFirstUserPrompt
   )
-  const text = normalizePreviewText(args.text ?? '')
+  const text = normalizePreviewText(args.text ?? '', args.role)
   if (!text) {
     return
   }
@@ -264,7 +267,7 @@ export function addPreviewContent(
   }
   addPreviewMessage(accumulator, {
     role,
-    text: extractPreviewContentText(content),
+    text: extractPreviewContentText(content, role),
     timestamp,
     // Content path already seeded above when capture is enabled.
     seedFirstUserPrompt: false,

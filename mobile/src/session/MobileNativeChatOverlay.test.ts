@@ -11,6 +11,11 @@ vi.mock('react-native', () => ({
 }))
 
 vi.mock('./MobileNativeChatView', () => ({ MobileNativeChatView: 'ChatView' }))
+vi.mock('./MobileNativeChatQueuedMessages', () => ({ MobileNativeChatQueuedMessages: 'Queued' }))
+vi.mock('./MobileNativeChatBackgroundTasks', () => ({
+  MobileNativeChatBackgroundTasks: 'BackgroundTasks'
+}))
+vi.mock('./MobileNativeChatVisual', () => ({ useMobileNativeChatVisualRenderer: () => null }))
 
 function assistantTurn(id: string, text: string): NativeChatMessage {
   return { id, role: 'assistant', blocks: [{ type: 'text', text }], timestamp: 0, source: 'hook' }
@@ -24,21 +29,38 @@ type Tick = {
   streamingText?: string
   streamLive?: boolean
   identity?: string
+  /** The host says a person's Stop is ending the turn. */
+  stopping?: boolean
 }
 
 function overlayElement(tick: Tick): ReturnType<typeof createElement> {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the overlay reads only these controller members; the rest of the controller is unreachable from it.
   const controller = {
     showNativeChat: tick.show ?? true,
     nativeChatSession: { messages: tick.messages ?? [], status: 'ready' },
     nativeChatAgent: 'claude',
     nativeChatAgentWorking: tick.streamLive ?? false,
+    nativeChatTurnIndicator: {
+      thinking: false,
+      activityText: null,
+      stopping: tick.stopping ?? false
+    },
     nativeChatStreamingText: tick.streamingText,
     nativeChatStreamLive: tick.streamLive ?? false,
     nativeChatStreamScopeKey: tick.identity ?? 'tab-a',
     chatPending: [],
     chatImagePreviewsByMessageId: {},
     chatComposerText: '',
-    setChatComposerText: vi.fn()
+    setChatComposerText: vi.fn(),
+    nativeChatQueued: {
+      cards: [],
+      send: vi.fn(),
+      delete: vi.fn(),
+      edit: vi.fn(),
+      pause: null,
+      resume: vi.fn(),
+      sessionKey: 'session-a'
+    }
   } as unknown as MobileNativeChatController
   return createElement(MobileNativeChatOverlay, {
     controller,
@@ -172,5 +194,31 @@ describe('MobileNativeChatOverlay streaming gate', () => {
     })
 
     expect(streaming()).toBeNull()
+  })
+})
+
+describe("MobileNativeChatOverlay while a person's Stop ends the turn", () => {
+  let renderer: ReactTestRenderer | null = null
+
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+  })
+
+  async function steerHeld(tick: Tick): Promise<unknown> {
+    await act(async () => {
+      renderer = create(overlayElement(tick))
+    })
+    const view = renderer!.root.find((node) => node.type === 'ChatView')
+    // The tray's second child is the queued box; the first is the child-work strip.
+    return view.props.composerTray?.content?.props?.children?.[1]?.props?.steerHeld
+  }
+
+  it("holds the queued cards' Steer while the agent works and the host says Stopping", async () => {
+    expect(await steerHeld({ streamLive: true, stopping: true })).toBe(true)
+  })
+
+  it('leaves Steer to the cards otherwise', async () => {
+    expect(await steerHeld({ streamLive: true, stopping: false })).toBe(false)
   })
 })

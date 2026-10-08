@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { pasteDraftToAgentPtyWhenReady } from './agent-paste-draft'
+import { pasteDraftToAgentPtyWhenReady, pasteDraftWhenAgentReady } from './agent-paste-draft'
 
 const testState = vi.hoisted(() => ({
   waitForReady: vi.fn(),
@@ -9,7 +9,8 @@ const testState = vi.hoisted(() => ({
 
 vi.mock('@/store', () => ({
   useAppStore: {
-    getState: () => ({ settings: {}, tabsByWorktree: {} })
+    getState: () => ({ settings: {}, tabsByWorktree: {}, ptyIdsByTabId: { 'tab-1': ['pty-1'] } }),
+    subscribe: () => () => {}
   }
 }))
 
@@ -93,6 +94,45 @@ describe('pty-bound agent draft readiness budget', () => {
     )
     expect(testState.sendInput).toHaveBeenCalledTimes(1)
     expect(onUnconfirmedDelivery).not.toHaveBeenCalled()
+  })
+
+  it.each(['opencode', 'opencode2'] as const)(
+    'waits for the %s agent row only when Enter follows the paste',
+    async (agent) => {
+      const promise = pasteDraftToAgentPtyWhenReady({
+        tabId: 'tab-1',
+        ptyId: 'pty-1',
+        content: 'task',
+        agent,
+        submit: true,
+        forcePaste: true
+      })
+
+      await vi.advanceTimersByTimeAsync(12_000)
+
+      await expect(promise).resolves.toBe(true)
+      expect(testState.waitForReady).toHaveBeenCalledWith('pty-1', 20_000, 'opencode-agent-row', {})
+    }
+  )
+
+  it.each([
+    ['opencode', true, 'opencode-agent-row'],
+    ['opencode2', true, 'opencode-agent-row'],
+    ['opencode', false, 'render-cursor-after-bracketed-paste'],
+    ['opencode2', false, 'render-cursor-after-bracketed-paste']
+  ] as const)('a tab-bound %s paste with submit %s waits on %s', async (agent, submit, signal) => {
+    const promise = pasteDraftWhenAgentReady({
+      tabId: 'tab-1',
+      content: 'task',
+      agent,
+      submit,
+      forcePaste: true
+    })
+
+    await vi.advanceTimersByTimeAsync(12_000)
+
+    await expect(promise).resolves.toBe(true)
+    expect(testState.waitForReady).toHaveBeenCalledWith('pty-1', 20_000, signal, {})
   })
 
   it('flags a blind paste when only the opencode process, not its composer, was seen', async () => {

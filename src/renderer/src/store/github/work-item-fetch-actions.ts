@@ -204,7 +204,7 @@ export const createWorkItemFetchActions = (
             fellBackUnchanged
           ) {
             previousEntry.fetchedAt = Date.now()
-            return {}
+            return s
           }
           const previousSources = previousEntry?.sources
           const previousError = previousEntry?.error

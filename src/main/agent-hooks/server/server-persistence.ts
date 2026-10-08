@@ -43,6 +43,7 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
         // A terminal handle belongs to the runtime that issued it; a hydrated one could only
         // rejoin a row to somebody else's terminal.
         terminalHandle: _terminalHandle,
+        hostTurnRevision: _hostTurnRevision,
         launchToken,
         ...persistedPayload
       } = enrichedPayload
@@ -51,8 +52,11 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
         : this.hydratedLaunchTokenHashByPaneKey.get(paneKey)
       // `payload.mainAgent` rides inside the payload; the legacy `claudeLeadBoundaryChildOnly` flag it
       // replaced is read at hydrate and never written again.
+      const { claudeTaskWakeupPending: _pendingWakeup, ...persistedStatus } =
+        persistedPayload.payload
       entries[paneKey] = {
         ...persistedPayload,
+        payload: persistedStatus,
         ...(launchTokenHash ? { launchTokenHash } : {})
       }
       const commitment = this.toAuthorityEvidence(payload, launchTokenHash)

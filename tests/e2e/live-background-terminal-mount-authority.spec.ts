@@ -27,6 +27,7 @@ import {
   buildFakeAgentCommandOverride,
   FAKE_AGENT_WINDOWS_SHELL
 } from './helpers/fake-agent-command-override'
+import { FAKE_CODEX_LAUNCH_PROBES_SOURCE } from './helpers/fake-codex-launch-probes'
 
 type SpawnEvent = { args: string[]; pid: number }
 type TerminalIdentity = Pick<
@@ -44,10 +45,7 @@ const signalLedgerPath = path.join(fakeCliDir, 'terminal-signals.jsonl')
 const fakeCodexSource = `
 const { appendFileSync } = require('node:fs')
 const args = process.argv.slice(2)
-if (args.includes('app-server')) {
-  process.stderr.write("error: unrecognized subcommand 'app-server'\\n")
-  process.exit(2)
-}
+${FAKE_CODEX_LAUNCH_PROBES_SOURCE}
 appendFileSync(process.env.ORCA_E2E_CODEX_SPAWN_LEDGER, JSON.stringify({ args, pid: process.pid }) + '\\n')
 process.stdout.write('LIVE_AGENT_READY:' + process.pid + '\\n')
 let inputBuffer = ''
@@ -614,6 +612,9 @@ test('adopts runtime-owned agent and Setup PTYs on first mount', async ({
   expect(agent).toBeTruthy()
   expect(setup).toBeTruthy()
   expect(canary).toBeTruthy()
+  if (!agent?.ptyId || !setup?.ptyId || !canary?.ptyId) {
+    throw new Error('Agent, Setup, and canary terminals must have live PTY identities')
+  }
   await expect.poll(readSpawnLedger).toHaveLength(1)
   await expect.poll(() => readJsonLines<{ pid: number }>(setupLedgerPath)).toHaveLength(1)
   await expect.poll(() => readJsonLines<{ pid: number }>(canaryLedgerPath)).toHaveLength(1)
@@ -773,7 +774,7 @@ test('adopts runtime-owned agent and Setup PTYs on first mount', async ({
   const remountAgentAcceptedMarker = `AGENT_ACCEPTED_${randomUUID()}`
   expect(
     await orcaPage.evaluate(
-      ({ marker, ptyId }) => window.api.pty.writeAccepted(ptyId, `${marker}\r`),
+      ({ marker, ptyId }) => window.api.pty.writeAccepted(ptyId, `${marker}\r`, 'driving'),
       { marker: remountAgentAcceptedMarker, ptyId: agent!.ptyId }
     )
   ).toBe(true)

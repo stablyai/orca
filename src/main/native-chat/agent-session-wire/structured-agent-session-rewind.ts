@@ -1,4 +1,5 @@
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
+import { agentJournalLinkageFields } from '../../../shared/agent-session-journal-producer'
 import {
   agentJournalItemKey,
   agentJournalSubmissionKey,
@@ -11,6 +12,7 @@ import type {
   AgentSessionRewindResult
 } from '../../../shared/agent-session-rewind'
 import type { AgentSessionMutationResult } from '../../../shared/agent-session-wire'
+import type { AgentJournalItemBody } from '../../../shared/agent-session-journal-types'
 import { AGENT_SESSION_HISTORY_MAX_PAGE_BYTES } from './agent-session-history-page-bounds'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
 import { openWithAgent } from './structured-agent-session-send-preparation'
@@ -34,13 +36,14 @@ export async function rewindStructuredAgentSession(
     const result = await admitAndRunAgentSessionMutation<AgentSessionRewindResult>({
       store,
       adapter: context.deps.adapter,
+      agents: context.deps.agents,
+      logger: context.deps.logger,
       callerKey: caller.callerKey,
       envelope: params.envelope,
       // Only the provider can do this, so an agent at rest is started first.
       prepareSession: openWithAgent(context, params.envelope),
       journal: () => context.sessions.get(sessionId)?.journal,
       publish: (journal) => context.publish(sessionId, journal),
-      flushStreamedEvents: context.flushStreamedEvents,
       now: context.now,
       plan: {
         method: 'agentSession.rewind',
@@ -62,7 +65,7 @@ export async function rewindStructuredAgentSession(
         run: async (ctx) => {
           await attachContext.runtimeState.flushEventSink(sessionId)
           const record = store.getRecord(sessionId)!
-          const support = ctx.adapter.rewindSupport?.(sessionId)
+          const support = ctx.adapter.rewindSupport?.(sessionId, ctx.agent)
           if (!support?.supported) {
             return rewindRefusal(support?.reason ?? 'unsupported')
           }
@@ -72,11 +75,8 @@ export async function rewindStructuredAgentSession(
           ) {
             return rewindRefusal('outcome-unknown')
           }
-          if (conversationCommandBlocked(ctx, record)) {
+          if (conversationCommandBlocked(ctx, record, context.readChildWork(sessionId))) {
             return rewindRefusal('busy')
-          }
-          if (ctx.journal.isReadOnly) {
-            return rewindRefusal('unsupported')
           }
           const snapshot = ctx.journal.snapshot()
           const providerKeys = new Map(
@@ -97,13 +97,14 @@ export async function rewindStructuredAgentSession(
           }
           const selected = snapshot.items.findIndex((item) => item.itemId === params.itemId)
           const key = selected === -1 ? null : parseAgentJournalItemKey(providerKey(params.itemId))
+          // The head belongs to the record's provider: the record store refuses any other.
           const head = agentSessionProviderHandleChainHead(record.providerHandleChain)?.handle
-          if (!key || !head || key.provider !== head.provider) {
+          if (!key || !head || key.provider !== record.provider) {
             return rewindRefusal('invalid-target')
           }
           let boundary = selected
-          if (key.provider === 'codex' && head.provider === 'codex') {
-            if (key.threadId !== head.threadId) {
+          if (key.provider === 'codex') {
+            if (key.threadId !== head.nativeId) {
               return rewindRefusal('invalid-target')
             }
             boundary = snapshot.items.findIndex((item) => {
@@ -120,11 +121,19 @@ export async function rewindStructuredAgentSession(
           }
           const retained = snapshot.items
             .slice(0, boundary)
-            .map(({ itemId, body, observedAt }) => ({
-              itemId: providerKey(itemId),
-              body,
-              observedAt
-            }))
+            .map(({ itemId, observedAt, turnScope, ...linkage }) => {
+              const body = ctx.journal.itemBody(itemId)
+              if (!body) {
+                throw new Error('agent_session_rewind:missing-retained-item')
+              }
+              return {
+                itemId: providerKey(itemId),
+                body: withRenamedTurnOpener(body, providerKey),
+                observedAt,
+                ...(turnScope ? { turnScope } : {}),
+                ...agentJournalLinkageFields(linkage)
+              }
+            })
           if (
             retained.length > 10_000 ||
             Buffer.byteLength(JSON.stringify(retained), 'utf8') >
@@ -165,12 +174,6 @@ export async function rewindStructuredAgentSession(
               }
               prepared = { ...prepared, retained }
               await persistRewindRecord(store, sessionId, ctx.fence, prepared)
-            },
-            onReverted: async () => {
-              await persistRewindRecord(store, sessionId, ctx.fence, {
-                ...prepared,
-                providerApplied: true
-              })
             }
           })
           const fence = store.getRecord(sessionId)!.lease.runtimeFence
@@ -214,7 +217,7 @@ export async function rewindStructuredAgentSession(
           })
           const journal = context.sessions.get(sessionId)!.journal
           await attachContext.runtimeState.flushEventSink(sessionId)
-          await recoverStructuredRewind(store, sessionId, journal, fence)
+          await recoverStructuredRewind(context.deps, sessionId, journal, fence)
           context.publish(sessionId, journal)
           return { ok: true, value: { itemId: params.itemId, epoch: journal.cursor().epoch } }
         }
@@ -228,4 +231,19 @@ export async function rewindStructuredAgentSession(
         }
       : result
   })
+}
+
+/** The new epoch keeps no submissions, so a sent message survives only under its provider key; the
+ *  turn it opened must name it by that key too, or the turn anchors on nothing. */
+function withRenamedTurnOpener(
+  body: AgentJournalItemBody,
+  rename: (itemId: string) => string
+): AgentJournalItemBody {
+  if (body.kind === 'turn' && body.userItemId !== undefined) {
+    return { ...body, userItemId: rename(body.userItemId) }
+  }
+  const lifecycle = body.kind === 'status' ? body.turnLifecycle : undefined
+  return body.kind === 'status' && lifecycle?.userItemId !== undefined
+    ? { ...body, turnLifecycle: { ...lifecycle, userItemId: rename(lifecycle.userItemId) } }
+    : body
 }

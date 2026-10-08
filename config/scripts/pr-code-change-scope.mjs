@@ -38,6 +38,8 @@ const ALWAYS_ON_CODE_JOBS = new Set(['static_analysis', 'typecheck', 'test'])
 const GLOBAL_FORCE_PREFIXES = [
   '.github/workflows/pr.yml',
   '.github/actions/install-node-dependencies/',
+  '.github/actions/restore-pnpm-verification/',
+  '.github/actions/prepare-native-runtime/',
   'config/scripts/pr-code-change-scope'
 ]
 
@@ -47,21 +49,52 @@ const GIT_COMPAT_PREFIXES = [
   '.github/actions/prepare-git-compatibility/',
   'src/shared/git-',
   'src/shared/review-head-tracking-ref',
+  'src/shared/worktree/local-base-branch-fast-forward',
   'src/main/git/',
   'src/relay/git-',
   'config/scripts/git-binary-compatibility'
 ]
 
 // Why narrow: the contract pins Codex's read-repair, so it runs when the heal that
-// depends on it, its app-server transport, or the contract itself changes.
+// depends on it, its app-server transport, or the contract itself changes. The same
+// job pins --no-daemon for Orca's codex shell wrapper, the project-trust key, and the
+// approval Orca writes for its hook entry in managed Codex homes and ~/.codex.
 const CODEX_INDEX_HEAL_CONTRACT_PREFIXES = [
+  'src/main/codex/codex-hook-file-entry-binary-contract',
+  'src/main/codex/codex-hook-trust-',
+  'src/main/codex/codex-hook-approval-first-write',
+  'src/main/codex/codex-hook-hash-lookup',
+  'src/main/codex/codex-hook-orca-approvals',
+  'src/main/codex/codex-hook-reconcile',
+  'src/main/codex/codex-hook-local-install',
+  'src/main/codex/codex-hook-user-mirroring',
+  'src/main/codex/codex-real-home-hook-',
+  'src/main/codex/codex-real-home-hooks-json',
+  'src/main/codex/codex-user-hook-trust-moves',
+  'src/main/codex/codex-hook-definition',
+  'src/main/codex/codex-hook-command-form',
+  'src/main/codex/codex-hook-identity',
+  'src/main/codex/codex-app-server-client',
+  'src/main/codex/codex-trust-identity',
+  'src/main/codex/config-toml-hook-trust-',
+  'src/main/codex/config-toml-key-path',
+  'src/main/agent-hooks/posix-hook-command',
+  'src/main/agent-hooks/hook-post-command',
+  'src/main/codex-cli/codex-read-only-app-server-args',
+  'src/main/agent-trust-presets',
+  'src/main/codex/config-toml-trust',
+  'src/main/pty/codex-no-daemon-binary-contract',
+  'src/main/pty/codex-shell-launch-preflight',
+  'src/shared/codex-shell-function',
   'src/main/codex/codex-index-heal-binary-contract',
   'src/main/codex/codex-session-index-heal',
   'src/main/codex/codex-app-server-session',
   'src/main/codex/codex-state-db',
   'src/main/sqlite/sync-database',
   'src/main/codex/codex-app-server-capability-signal',
-  'src/main/codex/codex-process-exit-deadline',
+  'src/main/provider-process/provider-process-exit-deadline',
+  'src/main/provider-process/provider-process-launch',
+  'src/main/provider-process/provider-record-reader',
   'src/main/codex/codex-session-backfill',
   'src/main/codex/codex-session-index-heal-state',
   'src/main/codex-cli/command',
@@ -91,6 +124,9 @@ const SHELL_PREFIXES = [
   'src/main/shell-wrapper-',
   'src/main/terminal-history-fish',
   'src/main/zsh-',
+  'src/main/runtime/structured-session-cli-login-shell',
+  'src/main/runtime/structured-session-login-shell-test-harness',
+  'src/main/runtime/structured-session-child-identity-env',
   'src/renderer/src/components/terminal-pane/fish-color-scheme',
   'src/shared/fish-',
   'src/shared/pty-reply-echo-shapes',
@@ -137,6 +173,13 @@ function changesMobileWebApp(changedFiles) {
 
 const CROSS_VERSION_WIRE_PREFIXES = [
   'tests/e2e/cross-version-wire/',
+  'config/scripts/stable-release-tags',
+  // The R1 daemon protocol crossing gate runs in this job.
+  'config/scripts/daemon-protocol-facts',
+  'config/scripts/check-daemon-protocol-crossing',
+  // R3 runtime launcher protocol ratchet; a bump always routes here via the protocol file.
+  'config/scripts/check-runtime-launcher-protocol-ratchet',
+  'src/main/daemon/daemon-protocol-version.ts',
   'src/shared/protocol-version',
   'src/shared/terminal-stream-protocol',
   'src/shared/browser-client-host-protocol',
@@ -146,7 +189,12 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/shared/rpc-contract/agent-launch-params',
   'src/shared/agent-session-wire',
   'src/shared/agent-session-mutation-envelope',
+  // The send a client builds (the agent-session suite sends it to the release host) and the
+  // fingerprint the host's ledger and journal re-derive.
+  'src/shared/structured-agent-session-mutation.ts',
+  'src/shared/structured-agent-session-send-mutation.ts',
   'src/shared/agent-session-record',
+  'src/shared/agent-session-provider-handle',
   'src/shared/agent-session-journal-',
   'src/main/ai-vault/structured-session-ownership.ts',
   'src/main/native-chat/agent-session-journal/',
@@ -155,6 +203,15 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/main/runtime/agent-session-recovery-capsule',
   'src/shared/agent-session-resume-marker',
   'src/main/runtime/rpc/dispatcher',
+  // Run on every request the suites dispatch, whatever its method.
+  'src/main/runtime/rpc/core.ts',
+  'src/main/runtime/rpc/errors.ts',
+  'src/main/runtime/rpc/rpc-streaming-dispatcher.ts',
+  'src/main/runtime/rpc/orchestration-contract-fence.ts',
+  'src/main/runtime/rpc/orchestration-session-caller.ts',
+  'src/main/runtime/rpc/orchestration-legacy-compatibility.ts',
+  'src/main/runtime/rpc/orchestration-mutation-executor.ts',
+  'src/shared/orchestration-rpc-contract.ts',
   'src/main/runtime/rpc/methods/agent-launch',
   'src/main/runtime/rpc/methods/ai-vault.ts',
   'src/main/runtime/rpc/methods/browser-tab-create-schema',
@@ -164,7 +221,25 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/main/runtime/runtime-worktree-agent-',
   'src/main/runtime/runtime-worktree-pty-agent-sources',
   'src/shared/runtime-worktree-contracts',
-  'src/renderer/src/runtime/remote-runtime-terminal-multiplexer'
+  'src/renderer/src/runtime/remote-runtime-terminal-multiplexer',
+  // Turn-end status a newer host publishes and an older desktop reads (cross-version-host-observed-turn-end).
+  'src/shared/agent-turn-outcome',
+  'src/shared/agent-status-types',
+  'src/shared/agent-lead-status-fold',
+  'src/shared/agent-session-turn-record',
+  'src/shared/structured-agent-session-agent-status',
+  'src/shared/structured-agent-session-projection',
+  'src/shared/workspace-session-sleeping-agents',
+  // A current desktop's launch route against a released server's capabilities (cross-version-paired-structured-launch).
+  'src/shared/structured-native-chat-launch-route.ts',
+  'src/renderer/src/lib/agent-launch-routing.ts',
+  'src/renderer/src/runtime/paired-host-client-capabilities.ts',
+  'src/shared/electron-remote-runtime-client-capabilities.ts',
+  'src/shared/remote-runtime-client-capabilities.ts',
+  // An older app opening a newer orchestration database (orchestration-delivery-downgrade).
+  'src/main/runtime/orchestration/db.ts',
+  'src/main/runtime/orchestration/db/',
+  'src/main/runtime/orchestration/orchestration-schema-version-skew'
 ]
 
 const MANAGED_HOOK_PREFIXES = [
@@ -193,8 +268,26 @@ const NATIVE_CACHE_FILES = new Set([
   'package.json',
   'pnpm-lock.yaml',
   '.github/actions/install-node-dependencies/action.yml',
+  '.github/actions/prepare-native-runtime/action.yml',
+  'pnpm-workspace.yaml',
+  '.npmrc',
+  '.pnpmfile.cjs',
   'config/scripts/ensure-native-runtime.mjs',
-  'config/scripts/rebuild-native-deps.mjs'
+  'config/scripts/rebuild-native-deps.mjs',
+  'config/scripts/node-pty-job-ownership.cjs',
+  'config/scripts/windows-pe-machine.cjs',
+  'config/scripts/windows-process-tree-gyp-rebuild.mjs',
+  'config/scripts/windows-process-tree-creation-time.cjs',
+  'config/scripts/install-electron-package-binary.mjs',
+  'config/scripts/electron-platform-path.mjs',
+  'config/scripts/zip-extractor-command.mjs',
+  'src/shared/zip-extractor-command.ts',
+  'config/scripts/shared-electron-dist-cache.mjs',
+  'config/scripts/space-sharing-copy.mjs',
+  'native/windows-registry/src/addon.cc',
+  'native/windows-registry/binding.gyp',
+  'native/windows-registry/package.json',
+  'native/windows-registry/index.js'
 ])
 
 const NATIVE_CACHE_PREFIXES = [
@@ -277,9 +370,11 @@ const WINDOWS_PACKAGE_TESTS = [
   'src/shared/child-process/windows-cmd-shim-resolution.test.ts',
   'src/shared/child-process/windows-cmd-shim-resolution.win32.test.ts',
   'src/main/agent-hooks/windows-hook-payload-delivery.test.ts',
+  'src/main/jcode/hook-gate-script.test.ts',
   'src/main/agent-hooks/windows-direct-cmd-hook-command.test.ts',
   'src/main/codex/windows-hook-command.test.ts',
   'src/main/codex/windows-hook-upgrade.test.ts',
+  'src/main/codex/hook-service-managed-install.test.ts',
   'src/main/windows/windows-pty-job.win32.test.ts',
   'src/main/windows/windows-msys-job.win32.test.ts',
   'src/main/providers/agent-foreground-process-git-bash.win32.test.ts',
@@ -290,7 +385,6 @@ const WINDOWS_PACKAGE_TESTS = [
   'src/main/windows-live-tree-kill.win32.test.ts',
   'src/main/wsl/wsl-runner.test.ts',
   'src/main/wsl/wsl-guest-environment.test.ts',
-  'src/main/wsl/wsl-invocation-boundary.test.ts',
   'src/main/wsl/wsl-executable-path.win32.test.ts',
   'src/main/wsl/wsl-w1-w3-contract.test.ts',
   'src/shared/source-scan/source-tree-scan.test.ts',
@@ -306,7 +400,11 @@ const WINDOWS_PACKAGE_TESTS = [
   'src/main/runtime/unreadable-secret-store-preservation.win32.test.ts',
   'src/main/ipc/pty-codex-account-attribution.test.ts',
   'src/main/ipc/pty-spawn-env-codex-resume-provenance.test.ts',
-  'src/relay/windows-port-scan.win32.test.ts'
+  'src/main/ipc/preflight-provider-command-selection.test.ts',
+  'src/main/ipc/preflight-runnable-local-cli.test.ts',
+  'src/relay/windows-port-scan.win32.test.ts',
+  'src/main/ssh/ssh-relay-upload-stage-windows-identity.test.ts',
+  'src/main/ssh/remote-node-runtime-store-windows.test.ts'
 ]
 
 const DESKTOP_IRRELEVANT_PREFIXES = [

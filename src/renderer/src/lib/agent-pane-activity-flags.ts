@@ -8,6 +8,7 @@ export type AgentPaneActivityFlags = {
   hasLiveMonitoring: boolean
   hasFailed: boolean
   hasInterrupted: boolean
+  hasUnconfirmed: boolean
   hasLiveDone: boolean
 }
 
@@ -22,11 +23,20 @@ export function applyAgentPaneActivityFlags(
   }
   // Why: a failed main agent outranks the live work its subagents hold, and it still counts
   // beside a subagent's question so the failure shows once that is answered.
-  if (mark === 'failed') {
-    flags.hasFailed = true
-  } else if (mark === 'interrupted') {
-    flags.hasInterrupted = true
-  } else if (entry.state === 'working') {
+  switch (mark) {
+    case 'failed':
+      flags.hasFailed = true
+      return
+    case 'interrupted':
+      flags.hasInterrupted = true
+      return
+    case 'unconfirmed':
+      flags.hasUnconfirmed = true
+      return
+    case null:
+      break
+  }
+  if (entry.state === 'working') {
     if (entry.workingMode === 'monitoring') {
       flags.hasLiveMonitoring = true
     } else {

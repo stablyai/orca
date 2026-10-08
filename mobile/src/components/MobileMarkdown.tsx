@@ -1,5 +1,6 @@
 import { openExternalLink } from '../platform/external-link'
 import { createMarkdownInlineMatcher, type MarkdownInlineMatch } from './markdown-inline-matcher'
+import { INLINE_TEXT_SELECTION } from './inline-text-selection'
 import { MobileSelectableText } from './MobileSelectableText'
 import {
   Fragment,
@@ -12,7 +13,6 @@ import {
   type ReactNode
 } from 'react'
 import { Pressable, ScrollView, Text as NativeText, View, type TextProps } from 'react-native'
-import { normalizeMobileMarkdownPreviewHtml } from './mobile-markdown-preview-html'
 import { styles } from './mobile-markdown-styles'
 import {
   detectFilePathSegments,
@@ -25,7 +25,8 @@ import {
   trimAutolinkTrailingPunctuation
 } from './markdown-inline-token-rules'
 import { isMobileMermaidLanguage } from './mobile-mermaid-language'
-import { parseMobileMarkdown } from './mobile-markdown-parser'
+import { useMobileMarkdownBlocks } from './use-mobile-markdown-blocks'
+import type { NativeChatVisualDirective } from '../../../src/shared/native-chat-visual-directive'
 import { MermaidDiagram } from './pr-sidebar/MermaidDiagram'
 
 type Props = {
@@ -33,6 +34,8 @@ type Props = {
   fallback?: string
   /** Enables iOS range selection for native-chat transcript prose. */
   rangeSelectable?: boolean
+  /** Forward long presses from interactive Android transcript spans to the message. */
+  onLongPress?: () => void
   /** Multiplier for prose font size (paragraphs, lists, quotes). Defaults to 1;
    *  the chat view passes >1 so agent prose reads larger than the compact base. */
   textScale?: number
@@ -41,17 +44,37 @@ type Props = {
    *  optional :line(:col) suffix). Omitted on screens with no file viewer, where
    *  paths render as plain text (no behavior change). */
   onOpenFile?: (pathText: string) => void
+  /** Native-chat assistant prose only: renders `::orca-visual{...}` directive lines. Without it,
+   *  a directive line is ordinary text. Must be referentially stable (this component is memoized). */
+  renderVisual?: (directive: NativeChatVisualDirective, index: number) => ReactNode
 }
 
 const MAX_TABLE_ROWS = 40
 const MAX_TABLE_COLUMNS = 8
 /** Prose base size — passed to MermaidDiagram fallback mono text. */
 const MERMAID_BASE = 13
-const MarkdownTextContext = createContext<ComponentType<TextProps>>(NativeText)
+type MarkdownTextSetup = {
+  TextComponent: ComponentType<TextProps>
+  /** Disable native selection only within the Android transcript. */
+  androidTranscript: boolean
+  onLongPress?: () => void
+}
+const MarkdownTextContext = createContext<MarkdownTextSetup>({
+  TextComponent: NativeText,
+  androidTranscript: false
+})
 
 function MarkdownText(props: TextProps): React.JSX.Element {
-  const TextComponent = useContext(MarkdownTextContext)
-  return createElement(TextComponent, props)
+  const { TextComponent, androidTranscript, onLongPress } = useContext(MarkdownTextContext)
+  if (!androidTranscript) {
+    return createElement(TextComponent, props)
+  }
+  // Override selection without changing the nested spans' inherited behavior.
+  return createElement(TextComponent, {
+    ...props,
+    ...(props.selectable === true ? { selectable: false } : {}),
+    ...(onLongPress && props.onPress ? { onLongPress } : {})
+  })
 }
 
 // Web/mail hrefs open the system handler; file-target hrefs (file: URIs and
@@ -213,11 +236,14 @@ function MobileMarkdownContent({
   fallback = '',
   rangeSelectable = false,
   textScale = 1,
-  onOpenFile
+  onOpenFile,
+  renderVisual
 }: Props) {
+  // Interactive children own their touches and must forward the row action.
+  const setup = useContext(MarkdownTextContext)
+  const rowLongPress = setup.androidTranscript ? setup.onLongPress : undefined
   const text = content?.trim() ?? ''
-  const previewText = useMemo(() => normalizeMobileMarkdownPreviewHtml(text), [text])
-  const blocks = useMemo(() => parseMobileMarkdown(previewText), [previewText])
+  const { blocks, directives } = useMobileMarkdownBlocks(text, renderVisual !== undefined)
   // Scale prose sizes; inline spans inherit fontSize from the wrapping Text.
   const scaled = (size: number): { fontSize: number; lineHeight: number } | null =>
     textScale !== 1 ? { fontSize: size * textScale, lineHeight: (size + 6) * textScale } : null
@@ -236,6 +262,14 @@ function MobileMarkdownContent({
   return (
     <View style={styles.root}>
       {blocks.map((block, index) => {
+        if (block.type === 'visual') {
+          const directive = directives[block.index]
+          return directive && renderVisual ? (
+            <Fragment key={`visual:${block.index}:${directive.file}`}>
+              {renderVisual(directive, block.index)}
+            </Fragment>
+          ) : null
+        }
         if (block.type === 'heading') {
           return (
             <MarkdownText
@@ -288,6 +322,7 @@ function MobileMarkdownContent({
               key={index}
               style={styles.imageFrame}
               onPress={() => openMarkdownHref(block.url, onOpenFile)}
+              onLongPress={rowLongPress}
             >
               <NativeText style={styles.link}>{block.alt || 'Open image'}</NativeText>
               <NativeText style={styles.imageCaption} numberOfLines={1}>
@@ -380,9 +415,19 @@ function MobileMarkdownContent({
 }
 
 function MobileMarkdownInner(props: Props): React.JSX.Element | null {
-  const TextComponent = props.rangeSelectable ? MobileSelectableText : NativeText
+  const { rangeSelectable = false, onLongPress } = props
+  // Other Markdown surfaces retain their existing selection behavior.
+  const androidTranscript = rangeSelectable && !INLINE_TEXT_SELECTION
+  const setup = useMemo<MarkdownTextSetup>(
+    () => ({
+      TextComponent: rangeSelectable && !androidTranscript ? MobileSelectableText : NativeText,
+      androidTranscript,
+      ...(onLongPress ? { onLongPress } : {})
+    }),
+    [rangeSelectable, androidTranscript, onLongPress]
+  )
   return (
-    <MarkdownTextContext.Provider value={TextComponent}>
+    <MarkdownTextContext.Provider value={setup}>
       <MobileMarkdownContent {...props} />
     </MarkdownTextContext.Provider>
   )

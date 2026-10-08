@@ -1,5 +1,8 @@
-import { orcadBunRuntimeFilename } from '../../shared/orcad-artifacts'
+import { randomUUID } from 'node:crypto'
+import { orcadNodePtyNativeArtifacts, orcadRipgrepArtifact } from '../../shared/orcad-artifacts'
 import { orcadAgentBrowserNativeName } from '../../shared/orcad-agent-browser-name'
+import type { NodeRuntimeTarget } from '../../shared/node-runtime-pin'
+import { ensureRemoteOrcadNodeRuntime } from './orcad-remote-node-runtime'
 import { execCommand } from './ssh-relay-deploy-helpers'
 import { isUnconfirmedSshCommandTermination } from './ssh-relay-exec-command'
 import { shellEscape } from './ssh-connection-utils'
@@ -7,6 +10,10 @@ import type { SshConnection } from './ssh-connection'
 import { joinRemotePath, type RemoteHostPlatform } from './ssh-remote-platform'
 import { ORCAD_INSTALL_MODEL } from './remote-install-model'
 import { acquireInstallLock } from './ssh-relay-install-lock'
+import { ORCAD_FENCE_OWNER_FILENAME } from './orcad-activation-fence-scope'
+import { forgetHeldOrcadFence, rememberHeldOrcadFence } from './orcad-held-fence-tokens'
+import { exitedOwnLockProof } from './orcad-exited-own-lock'
+import { orcadWindowsBaseDir } from './orcad-remote-windows-node'
 import { uploadRelayDirectory, writeRelayFile } from './ssh-relay-install-transfers'
 import {
   abandonInstall,
@@ -20,11 +27,23 @@ export async function installOrcadBundle(
     conn: SshConnection
     host: RemoteHostPlatform
     localOrcadDir: string
+    target: NodeRuntimeTarget
+    /** The locally verified pinned Node archive, fetched only when the host lacks the runtime. */
+    nodeRuntimeArchive: () => Promise<string>
     signal?: AbortSignal
   },
   fullVersion: string,
   remoteDir: string
 ): Promise<void> {
+  // Why before the slot probe: an installed slot is unlaunchable without the runtime it names.
+  await ensureRemoteOrcadNodeRuntime({
+    conn: options.conn,
+    host: options.host,
+    slotDir: remoteDir,
+    target: options.target,
+    archivePath: options.nodeRuntimeArchive,
+    signal: options.signal
+  })
   if (
     await isRemoteInstallComplete(options.conn, ORCAD_INSTALL_MODEL, remoteDir, options.host, {
       signal: options.signal
@@ -32,7 +51,25 @@ export async function installOrcadBundle(
   ) {
     return
   }
-  await acquireInstallLock(options.conn, remoteDir, options.host, { signal: options.signal })
+  // Its token lets a relaunch prove a lock its own quit left mid-upload (BUG-23).
+  const token = randomUUID()
+  rememberHeldOrcadFence(token)
+  try {
+    await acquireInstallLock(options.conn, remoteDir, options.host, {
+      signal: options.signal,
+      owner: { fileName: ORCAD_FENCE_OWNER_FILENAME, token },
+      // Nothing keeps writing once its client exited: uploads are SFTP and chmod is immediate.
+      exitedOwner: exitedOwnLockProof(options, {
+        baseDir: orcadWindowsBaseDir(options.host, remoteDir),
+        guardsStateMutation: false
+      })
+    })
+  } catch (error) {
+    if (!isUnconfirmedSshCommandTermination(error)) {
+      forgetHeldOrcadFence(token)
+    }
+    throw error
+  }
   let preserveInstallLock = false
   try {
     // Re-probe under the lock: a sibling deploy may have finished while we waited.
@@ -47,10 +84,14 @@ export async function installOrcadBundle(
       signal: options.signal
     })
     if (options.host.os !== 'win32') {
-      await execCommand(options.conn, executablePermissionsCommand(options.host, remoteDir), {
-        wrapCommand: options.host.commandDialect !== 'powershell',
-        signal: options.signal
-      })
+      await execCommand(
+        options.conn,
+        executablePermissionsCommand(options.host, remoteDir, options.target),
+        {
+          wrapCommand: options.host.commandDialect !== 'powershell',
+          signal: options.signal
+        }
+      )
     }
     await writeRelayFile(
       options.conn,
@@ -68,16 +109,22 @@ export async function installOrcadBundle(
     throw error
   } finally {
     if (!preserveInstallLock) {
-      await abandonInstall(options.conn, remoteDir, options.host)
+      // A removal a quit cut short keeps the token, so the relaunch can prove the lock its own.
+      if (await abandonInstall(options.conn, remoteDir, options.host)) {
+        forgetHeldOrcadFence(token)
+      }
     }
   }
 }
 
-function executablePermissionsCommand(host: RemoteHostPlatform, directory: string): string {
-  const required = [
-    joinRemotePath(host, directory, orcadBunRuntimeFilename(host.os)),
-    joinRemotePath(host, directory, 'ripgrep', host.relayPlatform, 'rg')
-  ]
+function executablePermissionsCommand(
+  host: RemoteHostPlatform,
+  directory: string,
+  target: NodeRuntimeTarget
+): string {
+  const required = [orcadRipgrepArtifact(target), ...orcadNodePtyNativeArtifacts(target)]
+    .filter((artifact) => /\/(?:rg|spawn-helper)$/.test(artifact))
+    .map((artifact) => joinRemotePath(host, directory, ...artifact.split('/')))
   const browsers = new Set(
     (['glibc', 'musl'] as const).map((libc) =>
       shellEscape(

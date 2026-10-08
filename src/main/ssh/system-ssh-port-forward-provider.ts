@@ -42,7 +42,7 @@ export class SystemSshPortForwardProvider implements SshPortForwardProvider {
     const entry = {
       id: options.id,
       connectionId: options.connectionId,
-      localPort: options.localPort,
+      localPort: forward.localPort,
       remoteHost: options.remoteHost,
       remotePort: options.remotePort,
       label: options.label

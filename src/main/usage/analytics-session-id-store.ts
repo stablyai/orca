@@ -25,25 +25,31 @@ export class AnalyticsSessionIdStore {
 
   constructor(private readonly file: string) {}
 
-  /** Resolves only after persistence succeeds, so an uploaded ID survives a restart. */
-  async getOrCreate(providerSessionId: string): Promise<AnalyticsSessionId> {
-    if (!providerSessionIdSchema.safeParse(providerSessionId).success) {
+  /** IDs in input order; resolves only after persistence succeeds, so an uploaded ID survives a restart. */
+  async getOrCreate(providerSessionIds: readonly string[]): Promise<AnalyticsSessionId[]> {
+    if (providerSessionIds.some((id) => !providerSessionIdSchema.safeParse(id).success)) {
       throw new Error('Invalid provider session ID')
+    }
+    if (providerSessionIds.length === 0) {
+      return []
     }
     // Serialize reads as well as writes so no caller sees an ID before it is durable.
     const operation = this.pending.then(async () => {
       const identities = this.identities ?? (await this.load())
       this.identities = identities
-      const existing = identities.get(providerSessionId)
-      if (existing) {
-        return existing
+      const updated = new Map(identities)
+      const ids = providerSessionIds.map((providerSessionId) => {
+        const id = updated.get(providerSessionId) ?? analyticsSessionIdSchema.parse(randomUUID())
+        updated.set(providerSessionId, id)
+        return id
+      })
+      // One durable write per batch: a first scan of N sessions must not rewrite the file N times.
+      if (updated.size > identities.size) {
+        this.writer ??= new UsageCacheSnapshotWriter('[analytics-session-id]', () => this.file)
+        await this.writer.write(() => JSON.stringify({ schemaVersion: 1, entries: [...updated] }))
+        this.identities = updated
       }
-      const id = analyticsSessionIdSchema.parse(randomUUID())
-      const updated = new Map(identities).set(providerSessionId, id)
-      this.writer ??= new UsageCacheSnapshotWriter('[analytics-session-id]', () => this.file)
-      await this.writer.write(() => JSON.stringify({ schemaVersion: 1, entries: [...updated] }))
-      this.identities = updated
-      return id
+      return ids
     })
     this.pending = operation.then(
       () => {},

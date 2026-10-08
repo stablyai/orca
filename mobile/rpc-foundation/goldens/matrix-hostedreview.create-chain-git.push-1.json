@@ -1,17 +1,8 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "source-control.hosted-review-create",
   "family": "hostedReview.create-chain",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "ccdb324b63e4942891942edde1216586a51774bd",
-  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
-  "recorderSha256": "0317fe2aebe4743ce5e7ae194531aa91b4fe0a84df457640851fe6dfdb9362af",
-  "adapterSha256": "c582ce355b0704b38d7e84cbce352630096c91231bf09aecd1f6dbb409fed17f",
-  "scenarioSha256": "fcf5cdc7388457156dd81fe28a470f42fbabac7435ec5572cb19e209f410ca84",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "0122a4affef8": {
       "name": "hostedReview.create#1",

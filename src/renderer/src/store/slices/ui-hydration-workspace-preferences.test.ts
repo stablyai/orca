@@ -561,11 +561,32 @@ describe('createUISlice hydratePersistedUI', () => {
 
     expect(store.getState().agentsVisibleHostIds).toBeNull()
     expect(store.getState().agentsFilterRepoIds).toEqual([])
+    expect(store.getState().agentsHideWorkspacesFromOtherDevices).toBe(false)
+    expect(store.getState().agentsHideAutomationGeneratedWorkspaces).toBe(false)
+    expect(store.getState().agentsHideCliCreatedWorkspaces).toBe(false)
     expect(store.getState().agentsShowChildAgents).toBe(false)
     expect(store.getState().agentsCompactMode).toBe(true)
     expect(store.getState().agentsShowSearch).toBe(true)
     expect(store.getState().agentsReadFilter).toBe('all')
     expect(store.getState().agentsGroupBy).toBe('status')
+  })
+
+  it('restores the agents workspace-origin filters independently of the workspace-nav ones', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        agentsHideWorkspacesFromOtherDevices: true,
+        agentsHideAutomationGeneratedWorkspaces: true,
+        agentsHideCliCreatedWorkspaces: true,
+        hideCliCreatedWorkspaces: false
+      })
+    )
+
+    expect(store.getState().agentsHideWorkspacesFromOtherDevices).toBe(true)
+    expect(store.getState().agentsHideAutomationGeneratedWorkspaces).toBe(true)
+    expect(store.getState().agentsHideCliCreatedWorkspaces).toBe(true)
+    expect(store.getState().hideCliCreatedWorkspaces).toBe(false)
   })
 
   it('restores a hidden agents search field', () => {

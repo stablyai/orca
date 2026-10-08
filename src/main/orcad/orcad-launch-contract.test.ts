@@ -2,6 +2,9 @@
  * The two things a supervisor reads off a launch: what the arguments mean, and what an exit
  * code means. Both are part of the ops contract in docs/reference/orcad-operations.md.
  */
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import {
   ORCAD_EXIT_CONFIGURATION,
@@ -10,6 +13,10 @@ import {
   resolveOrcadExitCode
 } from './orcad-entry'
 import { startOrcadWithLifecycle } from './orcad-lifecycle'
+import {
+  beginAgentSessionRuntimeRecord,
+  readAgentSessionRuntimeEnds
+} from '../runtime/agent-session-runtime-end-record'
 import { OrcadBindAddressError } from './orcad-bind-address'
 import { OrcadInstanceLockError } from './orcad-instance-lock'
 import { ProfileStateAccessError } from '../persistence/profile-state/profile-state-access'
@@ -24,6 +31,25 @@ describe('parseArgs', () => {
       bind: '10.0.0.5',
       json: true
     })
+  })
+
+  it('takes the desktop serve flags orca serve forwards', () => {
+    expect(
+      parseArgs([
+        '--mobile-pairing',
+        '--recipe-json',
+        '--project-root',
+        '/work/app',
+        '--no-pairing'
+      ])
+    ).toEqual({
+      mobilePairing: true,
+      recipeJson: true,
+      projectRoot: '/work/app',
+      noPairing: true
+    })
+    expect(() => parseArgs(['--recipe-json'])).toThrow('--recipe-json requires --project-root')
+    expect(() => parseArgs(['--project-root'])).toThrow('--project-root expects a value')
   })
 
   it('rejects --bind with no value rather than silently binding the default', () => {
@@ -103,6 +129,30 @@ describe('orcad lifecycle cleanup', () => {
 
     expect(cleanupRuntime).toHaveBeenCalledOnce()
     expect(cleanupHost).toHaveBeenCalledOnce()
+  })
+
+  it("records the runtime's end before its stop waits on anything", async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'orcad-runtime-end-'))
+    try {
+      beginAgentSessionRuntimeRecord(directory, 'orcad-runtime', 1)
+      let endSeenByCleanup: string | undefined
+      const handle = await startOrcadWithLifecycle(
+        async (registerCleanup) => {
+          registerCleanup(async () => {
+            endSeenByCleanup = readAgentSessionRuntimeEnds(directory)?.get('orcad-runtime')
+          })
+          return {}
+        },
+        vi.fn(async () => {})
+      )
+
+      await handle.stop()
+
+      // A chat whose agent dies with this stop reads as a restart, not a crash.
+      expect(endSeenByCleanup).toBe('quit')
+    } finally {
+      await rm(directory, { recursive: true, force: true })
+    }
   })
 
   it('keeps the host aware of failed runtime teardown so it cannot release profile admission', async () => {

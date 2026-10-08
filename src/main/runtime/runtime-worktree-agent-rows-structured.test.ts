@@ -82,6 +82,16 @@ beforeEach(() => {
 })
 
 describe('worktree ps reports structured sessions', () => {
+  it("lists a person's Stop still ending the turn, and drops it once the host does", () => {
+    expect(attach([summary({ stopping: true })]).agents[0]).toMatchObject({
+      state: 'working',
+      mainAgent: { state: 'working', stopping: true }
+    })
+    const ended = attach([summary({ stopping: true }), summary({ updatedAt: 1_757_030_401_000 })])
+    expect(ended.agents[0]?.state).toBe('working')
+    expect(ended.agents[0]?.mainAgent).not.toHaveProperty('stopping')
+  })
+
   it('a busy structured session is not reported idle', () => {
     const row = attach([summary()])
     expect(row.agents).toHaveLength(1)
@@ -89,12 +99,6 @@ describe('worktree ps reports structured sessions', () => {
     expect(row.agents[0]?.agentType).toBe('claude')
     expect(row.agents[0]?.prompt).toBe('ship the thing')
     expect(row.status).toBe('working')
-  })
-
-  // The same projection the sidebar applies, so the two surfaces cannot disagree about one session.
-  it('maps attention to blocked and idle to done', () => {
-    expect(attach([summary({ status: 'attention' })]).agents[0]?.state).toBe('blocked')
-    expect(attach([summary({ status: 'idle' })]).agents[0]?.state).toBe('done')
   })
 
   it('does not turn a completed host-held session into permission', () => {

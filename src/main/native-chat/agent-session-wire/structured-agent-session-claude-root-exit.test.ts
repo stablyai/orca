@@ -8,12 +8,18 @@ import {
   fakeClaude,
   identityFor
 } from '../../claude/claude-structured-session-test-support'
-import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
+import {
+  createTrackedJournalOpener,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
 import { stopStructuredAgentSessionAgentUnderSerialize } from './structured-agent-session-host-lifetime'
+import { endExitedStructuredAgentSessionChildUnderSerialize } from './structured-agent-session-child-exit'
 import { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const NOW = 1_788_727_031_330
 const roots: string[] = []
@@ -28,7 +34,8 @@ describe('Claude root-exit stop', () => {
   it('releases a captured live claim after the provider root exits', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-claude-root-exit-'))
     roots.push(root)
-    const store = await AgentSessionRecordStore.open({ directory: root, hostId: 'local' })
+    const stateDirectory = join(root, 'journal')
+    const store = await openTestAgentSessionRecordStore(stateDirectory)
     const claude = fakeClaude({
       unprovenCloseVerdict: { root: 'exited', tree: 'unverifiable' }
     })
@@ -75,7 +82,7 @@ describe('Claude root-exit stop', () => {
     })
     const journal = await journals.open({
       identity: { ...identityFor(), hostId: 'local', workspaceId: 'folder-1' },
-      journalDir: join(root, 'journal')
+      stateDirectory
     })
     const close = vi.spyOn(journal, 'close')
     const publishStatus = vi.fn()
@@ -112,8 +119,16 @@ describe('Claude root-exit stop', () => {
         }
       ]
     ])
-    const deps = { store, adapter, journalRoot: root, claimKeyId: 'key-1' }
-    const runtimeState = new StructuredAgentSessionHostRuntimeState(deps)
+    const deps = {
+      store,
+      adapter,
+      agents: NO_STRUCTURED_AGENTS,
+      // The one database the store and the journal share, as the runtime installs them.
+      journalDatabase: openTestJournalHostDatabase(stateDirectory),
+      claimKeyId: 'key-1',
+      logger: createStructuredAgentSessionLogger()
+    }
+    const runtimeState = new StructuredAgentSessionHostRuntimeState(deps, new Map())
 
     claude.connections[0]!.handlers.onExit?.(new Error('provider exited'))
     await expect(
@@ -123,9 +138,26 @@ describe('Claude root-exit stop', () => {
           runtimeState,
           sessions,
           now: () => NOW + 30 * 60_000,
-          publishStatus
+          publishStatus,
+          endExitedChild: (sessionId, child, exit) =>
+            endExitedStructuredAgentSessionChildUnderSerialize(
+              {
+                store,
+                sessions,
+                flushLifecycle: (id) => runtimeState.lifecycleBarrier(id),
+                publishFence: () => undefined,
+                publishStatus,
+                serialize: (_sessionId, task) => task(),
+                now: () => NOW + 30 * 60_000,
+                logger: deps.logger
+              },
+              sessionId,
+              child,
+              exit
+            )
         },
-        'session-1'
+        'session-1',
+        { cause: 'evict' }
       )
     ).resolves.toBeUndefined()
 

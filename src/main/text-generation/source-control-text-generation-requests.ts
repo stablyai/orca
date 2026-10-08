@@ -14,7 +14,12 @@ import {
   sanitizeBranchSlug,
   type BranchNameWorkContext
 } from '../../shared/branch-name-from-work'
-import type { CommandTemplateBackslash } from '../../shared/commit-message-prompt'
+import {
+  cleanGeneratedCommitMessage,
+  stripPrefilledReasoningPreamble,
+  type CommandTemplateBackslash
+} from '../../shared/commit-message-prompt'
+import { isCustomAgentId } from '../../shared/commit-message-agent-spec'
 import {
   planCommitMessageGeneration,
   type CommitMessagePlan
@@ -23,6 +28,7 @@ import type { ResolvedSourceControlAiGenerationParams } from '../../shared/sourc
 import { formatLinkedIssueTemplateValue } from '../../shared/source-control-ai-action-variables'
 import { renderSourceControlActionCommandTemplate } from '../../shared/source-control-ai-actions'
 import { captureAgentGenerationFailureOutput } from './agent-failure-output'
+import { openCodeVariantRetryPlan } from '../../shared/opencode-generation-command'
 import { runLocalPlanForAgent } from './source-control-local-generation'
 import { runRemoteSourceControlPlan } from './source-control-remote-generation'
 import type {
@@ -48,7 +54,7 @@ export function commandBackslashMode(
   return platform === 'win32' && target.kind === 'local' && !target.wslDistro ? 'literal' : 'escape'
 }
 
-async function executeGenerationPlan(input: {
+export async function executeGenerationPlan(input: {
   params: GenerateParams
   plan: CommitMessagePlan
   target: CommitMessageGenerationTarget
@@ -56,21 +62,47 @@ async function executeGenerationPlan(input: {
   operation: TextGenerationOperation
   spawnAgent: SpawnSourceControlAgent
 }): Promise<InternalTextGenerationResult> {
-  return input.target.kind === 'remote'
-    ? runRemoteSourceControlPlan({
-        plan: input.plan,
-        target: input.target,
-        emptyResultName: input.emptyResultName,
-        operation: input.operation
-      })
-    : runLocalPlanForAgent({
-        agentId: input.params.agentId,
-        plan: input.plan,
-        target: input.target,
-        emptyResultName: input.emptyResultName,
-        operation: input.operation,
-        spawnAgent: input.spawnAgent
-      })
+  const execute = (plan: CommitMessagePlan): Promise<InternalTextGenerationResult> =>
+    input.target.kind === 'remote'
+      ? runRemoteSourceControlPlan({
+          plan,
+          target: input.target,
+          emptyResultName: input.emptyResultName,
+          operation: input.operation
+        })
+      : runLocalPlanForAgent({
+          agentId: input.params.agentId,
+          plan,
+          target: input.target,
+          emptyResultName: input.emptyResultName,
+          operation: input.operation,
+          spawnAgent: input.spawnAgent
+        })
+  let result = await execute(input.plan)
+  if (!result.success && input.params.agentId === 'opencode') {
+    const retry = openCodeVariantRetryPlan(input.plan, result.failureOutput?.stderr ?? '')
+    if (retry) {
+      result = await execute(retry)
+    }
+  }
+  // Why: only a custom command runs a raw model whose chat template can swallow
+  // the opening think tag; a built-in agent's message may just mention the tag.
+  // PR fields are JSON, so they strip only when parsing fails instead.
+  if (
+    !result.success ||
+    !isCustomAgentId(input.params.agentId) ||
+    input.operation === 'pull-request-fields'
+  ) {
+    return result
+  }
+  const answer = stripPrefilledReasoningPreamble(result.rawOutput)
+  if (answer === result.rawOutput) {
+    return result
+  }
+  const rawOutput = cleanGeneratedCommitMessage(answer)
+  return rawOutput
+    ? { ...result, rawOutput }
+    : { success: false, error: `${input.plan.label} returned an empty ${input.emptyResultName}.` }
 }
 
 export async function generateCommitMessage(input: {
@@ -168,7 +200,7 @@ export async function generatePullRequestFields(input: {
   try {
     return {
       success: true,
-      fields: parseGeneratedPullRequestFields(result.rawOutput, context),
+      fields: parsePullRequestFieldsOutput(result.rawOutput, context, params.agentId),
       agentLabel: result.agentLabel,
       branchChangedByPreparation: context.branchChangedByPreparation
     }
@@ -178,6 +210,24 @@ export async function generatePullRequestFields(input: {
       error: 'Generated pull request details could not be parsed.',
       branchChangedByPreparation: context.branchChangedByPreparation
     }
+  }
+}
+
+// Why: a body may quote a lone closing tag inside valid JSON, so reasoning is
+// stripped only when the untouched output does not parse.
+function parsePullRequestFieldsOutput(
+  raw: string,
+  context: PullRequestDraftContext,
+  agentId: GenerateParams['agentId']
+): GeneratedPullRequestFields {
+  try {
+    return parseGeneratedPullRequestFields(raw, context)
+  } catch (error) {
+    const answer = isCustomAgentId(agentId) ? stripPrefilledReasoningPreamble(raw) : raw
+    if (answer === raw) {
+      throw error
+    }
+    return parseGeneratedPullRequestFields(cleanGeneratedCommitMessage(answer), context)
   }
 }
 

@@ -17,6 +17,8 @@ import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
+import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 describe('structured session runtime provider-exit wiring', () => {
   let root: string | null = null
@@ -80,10 +82,12 @@ describe('structured session runtime provider-exit wiring', () => {
       return connection
     }) as typeof openCodexAppServerConnection
     const host = await ensureStructuredAgentSessionHost({
+      logger: createStructuredAgentSessionLogger(),
       stateDirectory: root,
       hostId: 'local',
       claimKeyId: 'key-1',
       resolveWorkspacePath: async () => root!,
+      resolveLaunchArgs: () => [],
       resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
       resolveCodexCommand: () => 'codex',
       resolveEnvironment: async () => ({ PATH: process.env.PATH }),
@@ -184,10 +188,12 @@ describe('structured session runtime provider-exit wiring', () => {
       return connection
     }) as typeof openCodexAppServerConnection
     const host = await ensureStructuredAgentSessionHost({
+      logger: createStructuredAgentSessionLogger(),
       stateDirectory: root,
       hostId: 'local',
       claimKeyId: 'key-1',
       resolveWorkspacePath: async () => root!,
+      resolveLaunchArgs: () => [],
       resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
       resolveCodexCommand: () => 'codex',
       resolveEnvironment: async () => ({ PATH: process.env.PATH }),
@@ -214,10 +220,12 @@ describe('structured session runtime provider-exit wiring', () => {
     })
 
     const restarted = await ensureStructuredAgentSessionHost({
+      logger: createStructuredAgentSessionLogger(),
       stateDirectory: root,
       hostId: 'local',
       claimKeyId: 'key-1',
       resolveWorkspacePath: async () => root!,
+      resolveLaunchArgs: () => [],
       resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
       resolveCodexCommand: () => 'codex',
       resolveEnvironment: async () => ({ PATH: process.env.PATH }),
@@ -227,10 +235,9 @@ describe('structured session runtime provider-exit wiring', () => {
     await restarted.restoreReadableSessions()
     const history = await restarted.history({ sessionId: SESSION, direction: 'tail' })
     expect(history.ok && history.page.items.some((item) => item.body.kind === 'status')).toBe(false)
-    expect(restarted.deps.store.getRecord(SESSION)?.providerHandleChain.at(-1)?.handle).toEqual({
-      provider: 'codex',
-      threadId: 'thread-runtime-close'
-    })
+    expect(restarted.deps.store.getRecord(SESSION)?.providerHandleChain.at(-1)?.handle).toEqual(
+      codexProviderHandle('thread-runtime-close')
+    )
   })
 
   it('waits for a start a send began before tearing down the runtime', async () => {
@@ -288,10 +295,12 @@ describe('structured session runtime provider-exit wiring', () => {
       return connection
     }) as typeof openCodexAppServerConnection
     const host = await ensureStructuredAgentSessionHost({
+      logger: createStructuredAgentSessionLogger(),
       stateDirectory: root,
       hostId: 'local',
       claimKeyId: 'key-1',
       resolveWorkspacePath: async () => root!,
+      resolveLaunchArgs: () => [],
       resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
       resolveCodexCommand: () => 'codex',
       resolveEnvironment: async () => ({ PATH: process.env.PATH }),
@@ -394,10 +403,12 @@ describe('structured session runtime provider-exit wiring', () => {
       return connection
     }
     const host = await ensureStructuredAgentSessionHost({
+      logger: createStructuredAgentSessionLogger(),
       stateDirectory: root,
       hostId: 'local',
       claimKeyId: 'key-1',
       resolveWorkspacePath: async () => root!,
+      resolveLaunchArgs: () => [],
       resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
       resolveCodexCommand: () => 'codex',
       resolveEnvironment: async () => ({ PATH: process.env.PATH }),

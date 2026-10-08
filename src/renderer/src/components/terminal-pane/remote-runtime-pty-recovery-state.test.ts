@@ -216,6 +216,19 @@ describe('RemoteRuntimePtyRecoveryState', () => {
     state.dispose()
   })
 
+  it('fires a parked retry while still recovering, in the same epoch', () => {
+    const state = new RemoteRuntimePtyRecoveryState()
+    const retry = vi.fn()
+    const epoch = state.begin()
+    expect(state.parkRetryForExternalTrigger(epoch, retry)).toBe(true)
+
+    expect(retryAllRemoteRuntimePtyRecoveriesNow()).toBe(1)
+    expect(retry).toHaveBeenCalledWith(epoch)
+    expect(state.currentPhase).toBe('recovering')
+    expect(state.retryNow()).toBe(false)
+    state.dispose()
+  })
+
   it('refuses to park over an armed backoff or a stale epoch', () => {
     vi.useFakeTimers()
     const state = new RemoteRuntimePtyRecoveryState()

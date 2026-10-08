@@ -128,6 +128,7 @@ export const UiUpdateFields = z
     // Why: sync hydration ignores this persisted startup view, so paired windows stay put.
     activeView: TopLevelViewSchema.optional(),
     sidebarWidth: z.number().finite().optional(),
+    sidebarOpen: z.boolean().optional(),
     rightSidebarOpen: z.boolean().optional(),
     rightSidebarTab: RightSidebarTabParam.optional(),
     rightSidebarExplorerView: z.enum(['files', 'search']).optional(),
@@ -146,6 +147,9 @@ export const UiUpdateFields = z
     visibleWorkspaceHostIds: z.array(z.string()).nullable().optional(),
     agentsVisibleHostIds: z.array(z.string()).nullable().optional(),
     agentsFilterRepoIds: StringArray.optional(),
+    agentsHideWorkspacesFromOtherDevices: z.boolean().optional(),
+    agentsHideAutomationGeneratedWorkspaces: z.boolean().optional(),
+    agentsHideCliCreatedWorkspaces: z.boolean().optional(),
     agentsShowChildAgents: z.boolean().optional(),
     agentsCompactMode: z.boolean().optional(),
     agentsShowSearch: z.boolean().optional(),
@@ -164,6 +168,7 @@ export const UiUpdateFields = z
     ...ClientUiWorkspaceFilterFields,
     // Why: rides App.tsx's debounced writer, so omitting it rejected that entire
     // payload (sidebar widths, filters, agent acks) for every paired client.
+    explorerDisplayRootByWorktree: z.record(z.string(), z.string()).optional(),
     showDotfilesByWorktree: z.record(z.string(), z.boolean()).optional(),
     collapsedGroups: StringArray.optional(),
     uiZoomLevel: z.number().finite().optional(),
@@ -239,6 +244,8 @@ export const UiUpdateFields = z
     projectOrderManualDefaultNoticeDismissed: z.boolean().optional(),
     usagePercentageDisplayChangeNoticeDismissed: z.boolean().optional(),
     usageEmptyStateDismissed: z.boolean().optional(),
+    codexTerminalServerIsolationNoticeSeen: z.boolean().optional(),
+    codexSharedSettingsNoticeSeen: z.boolean().optional(),
     petVisible: z.boolean().optional(),
     petId: z.string().optional(),
     customPets: UnknownRecordArray.optional(),

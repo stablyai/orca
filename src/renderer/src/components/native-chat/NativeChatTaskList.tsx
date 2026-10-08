@@ -165,7 +165,7 @@ export function NativeChatTaskList({
               <ChevronRight aria-hidden className="size-3.5 group-data-[state=open]:rotate-90" />
               {translate('components.native-chat.taskList.showAll', 'Full task list')}
             </CollapsibleTrigger>
-            <CollapsibleContent>
+            <CollapsibleContent animation="height" data-native-chat-member-detail>
               <Checklist list={list} />
             </CollapsibleContent>
           </Collapsible>

@@ -25,6 +25,8 @@ import {
   CODEX_USER_INPUT_METHOD
 } from './codex-structured-prompt-replies'
 import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
+import { withJournalQueueMembers } from '../native-chat/agent-session-wire/structured-agent-session-journal-double-test-support'
+import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 
 const SESSION_ID = 'session-1'
 const THREAD_ID = 'thread-abc'
@@ -104,7 +106,8 @@ function deferredTarget(
 ): StructuredAgentSessionEventTarget {
   return {
     fence: 7,
-    journal: {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a double for the journal members this path calls; the helper adds the in-order ones.
+    journal: withJournalQueueMembers({
       appendItem: vi.fn(async (_identity: AgentJournalItemIdentity, body: AgentJournalItemBody) => {
         log.push(body)
         return { cursor: { epoch: 'e', sequence: log.length } }
@@ -120,7 +123,7 @@ function deferredTarget(
           return { epoch: 'e', sequence: log.length }
         }
       )
-    } as unknown as StructuredAgentSessionEventTarget['journal'],
+    }) as unknown as StructuredAgentSessionEventTarget['journal'],
     publish: vi.fn(() => {
       publishes.push('publish')
     })
@@ -129,6 +132,7 @@ function deferredTarget(
 
 function hardWatermarkDeferred() {
   return createDeferredStructuredAgentSessionEventSink({
+    ...testEventSinkLogging(),
     watermarks: {
       pauseQueuedBytes: 1,
       maxQueuedBytes: 1,
@@ -332,8 +336,13 @@ describe('codex journal translation', () => {
     const mutations = batches.at(-1)?.mutations ?? []
     expect(mutations).toEqual(
       expect.arrayContaining([
+        // The host saw the child go, so the call it was running was cut short.
         expect.objectContaining({
-          body: expect.objectContaining({ kind: 'tool-call', state: 'failed' })
+          body: expect.objectContaining({
+            kind: 'tool-call',
+            state: 'failed',
+            endedAs: 'interrupted'
+          })
         }),
         expect.objectContaining({
           body: expect.objectContaining({
@@ -551,10 +560,42 @@ describe('codex journal translation', () => {
               userItemId: `codex:${THREAD_ID}:${TURN_ID}:0`,
               startedAt: expect.any(Number),
               completedAt: expect.any(Number)
-            }
+            },
+            turnScope: { kind: 'thread' }
           }
         ]
       }
+    ])
+    // A completed turn proves no interruption.
+    expect(batches[0]?.mutations[0]).not.toHaveProperty('body.endedAs')
+  })
+
+  it('cuts short an active tool when Codex reports its turn interrupted', () => {
+    const tap = recorder()
+    const bodies: unknown[] = []
+    tap.sink.appendLifecycleBatch = (_settlementId, mutations) => {
+      bodies.push(
+        ...mutations.flatMap((mutation) => (mutation.kind === 'item' ? [mutation.body] : []))
+      )
+    }
+    const translator = createCodexJournalTranslator({
+      sink: tap.sink,
+      primaryThreadId: () => THREAD_ID
+    })
+
+    translator.handle(TURN_STARTED)
+    translator.handle(
+      notification('item/started', {
+        item: { type: 'commandExecution', id: 'exec-active', command: 'run', status: 'inProgress' }
+      })
+    )
+    translator.handle(
+      notification('turn/completed', { turn: { id: TURN_ID, status: 'interrupted' } })
+    )
+
+    expect(bodies).toEqual([
+      expect.objectContaining({ kind: 'tool-call', state: 'failed', endedAs: 'interrupted' }),
+      expect.objectContaining({ kind: 'turn', turnId: TURN_ID, state: 'interrupted' })
     ])
   })
 
@@ -793,7 +834,8 @@ describe('codex journal translation', () => {
     expect(reduced.get('orca:codex-item%3Athread-abc%3Ar-1')).toEqual({
       kind: 'message',
       role: 'reasoning',
-      blocks: [{ type: 'text', text: 'thinking' }]
+      blocks: [{ type: 'text', text: 'thinking' }],
+      state: 'running'
     })
     expect(reduced.get('orca:codex-item%3Athread-abc%3Apatch-1')).toMatchObject({
       kind: 'diff',

@@ -257,6 +257,8 @@ export function buildPRRefreshCandidate(
     cacheKey,
     worktreeId: worktree.id,
     currentHeadOid: worktree.head ?? null,
+    cachedHeadOid: state.prCache[cacheKey]?.fetchedHeadOid ?? cachedPR?.headSha ?? null,
+    isSelected: state.activeWorktreeId === worktree.id,
     // Why: persisted linked PR metadata is exact; PR cache numbers are only fallback hints after branch-lookup misses.
     linkedPRNumber: worktree.linkedPR ?? null,
     fallbackPRNumber,

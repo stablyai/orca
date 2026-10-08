@@ -27,12 +27,30 @@ describe('isStructuredAgentSessionThinking', () => {
     })
 
   it('is true while reasoning is the newest thing the turn produced', () => {
-    expect(isStructuredAgentSessionThinking([turnStart, reasoning(2)])).toBe(true)
+    expect(isStructuredAgentSessionThinking({ items: [turnStart, reasoning(2)] })).toBe(true)
+  })
+
+  it("reads a reasoning row's own state when its host keeps one", () => {
+    const withState = (state: 'running' | 'completed'): AgentJournalRenderItem =>
+      item('reasoning-state', 2, {
+        kind: 'message',
+        role: 'reasoning',
+        blocks: [{ type: 'text', text: 'Weighing two approaches' }],
+        state,
+        ...(state === 'completed' ? { completedAt: 3 } : {})
+      })
+    expect(isStructuredAgentSessionThinking({ items: [turnStart, withState('running')] })).toBe(
+      true
+    )
+    // Ended reasoning stays the newest row while Claude streams a tool's input after it.
+    expect(isStructuredAgentSessionThinking({ items: [turnStart, withState('completed')] })).toBe(
+      false
+    )
   })
 
   it('is false once a tool call, a message or a diff lands after the reasoning', () => {
     const after = (body: AgentJournalRenderItem['body']): boolean =>
-      isStructuredAgentSessionThinking([turnStart, reasoning(2), item('after', 3, body)])
+      isStructuredAgentSessionThinking({ items: [turnStart, reasoning(2), item('after', 3, body)] })
     expect(after({ kind: 'tool-call', name: 'shell', input: null, state: 'running' })).toBe(false)
     expect(
       after({ kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Here you go' }] })
@@ -47,8 +65,8 @@ describe('isStructuredAgentSessionThinking', () => {
   })
 
   it('is false when a turn produced no reasoning at all', () => {
-    expect(isStructuredAgentSessionThinking([turnStart])).toBe(false)
-    expect(isStructuredAgentSessionThinking([])).toBe(false)
+    expect(isStructuredAgentSessionThinking({ items: [turnStart] })).toBe(false)
+    expect(isStructuredAgentSessionThinking({ items: [] })).toBe(false)
   })
 
   it('does not read an earlier turn as this one reasoning', () => {
@@ -59,7 +77,7 @@ describe('isStructuredAgentSessionThinking', () => {
       text: 'Working',
       turnLifecycle: { turnId: 'turn-2', state: 'running' }
     })
-    expect(isStructuredAgentSessionThinking([reasoning(1), newTurn])).toBe(false)
+    expect(isStructuredAgentSessionThinking({ items: [reasoning(1), newTurn] })).toBe(false)
   })
 
   it('does not read a completed turn as reasoning during the next pending dispatch', () => {
@@ -68,20 +86,47 @@ describe('isStructuredAgentSessionThinking', () => {
       turnId: 'turn-1',
       state: 'completed'
     })
-    expect(isStructuredAgentSessionThinking([completedTurn, reasoning(2)])).toBe(false)
+    expect(isStructuredAgentSessionThinking({ items: [completedTurn, reasoning(2)] })).toBe(false)
   })
 
   it('stops at a typed turn item, the carrier this host writes', () => {
     const typedTurn = (sequence: number, turnId: string): AgentJournalRenderItem =>
       item(`turn-${turnId}`, sequence, { kind: 'turn', turnId, state: 'running' })
-    expect(isStructuredAgentSessionThinking([typedTurn(1, 'turn-1'), reasoning(2)])).toBe(true)
-    expect(isStructuredAgentSessionThinking([reasoning(1), typedTurn(2, 'turn-2')])).toBe(false)
+    expect(
+      isStructuredAgentSessionThinking({ items: [typedTurn(1, 'turn-1'), reasoning(2)] })
+    ).toBe(true)
+    expect(
+      isStructuredAgentSessionThinking({ items: [reasoning(1), typedTurn(2, 'turn-2')] })
+    ).toBe(false)
+  })
+
+  it("reads the host's running turn when the turn's record is above the loaded rows", () => {
+    const hostTurn = (state: 'running' | 'completed') => ({
+      itemId: 'turn-start',
+      observedAt: 1,
+      turn: { turnId: 'turn-1', state }
+    })
+    expect(
+      isStructuredAgentSessionThinking({ items: [reasoning(2)], latestTurn: hostTurn('running') })
+    ).toBe(true)
+    expect(
+      isStructuredAgentSessionThinking({ items: [reasoning(2)], latestTurn: hostTurn('completed') })
+    ).toBe(false)
+    // An older host states nothing, and the loaded rows alone name no turn.
+    expect(isStructuredAgentSessionThinking({ items: [reasoning(2)] })).toBe(false)
+    // The host's answer outranks a loaded record whose ending revision is off the window.
+    expect(
+      isStructuredAgentSessionThinking({
+        items: [turnStart, reasoning(2)],
+        latestTurn: hostTurn('completed')
+      })
+    ).toBe(false)
   })
 
   it('lets an unmarked status stay transparent to the latest reasoning state', () => {
     const plan = item('plan', 3, { kind: 'status', text: 'Step 1. Read the file' })
-    expect(isStructuredAgentSessionThinking([turnStart, plan])).toBe(false)
-    expect(isStructuredAgentSessionThinking([turnStart, reasoning(2), plan])).toBe(true)
+    expect(isStructuredAgentSessionThinking({ items: [turnStart, plan] })).toBe(false)
+    expect(isStructuredAgentSessionThinking({ items: [turnStart, reasoning(2), plan] })).toBe(true)
   })
 
   it.each([
@@ -110,7 +155,9 @@ describe('isStructuredAgentSessionThinking', () => {
     }
   ])('stops thinking when the turn is waiting on a $kind', (prompt) => {
     expect(
-      isStructuredAgentSessionThinking([turnStart, reasoning(2), item('prompt', 3, prompt)])
+      isStructuredAgentSessionThinking({
+        items: [turnStart, reasoning(2), item('prompt', 3, prompt)]
+      })
     ).toBe(false)
   })
 })
@@ -140,7 +187,9 @@ describe("the live-turn readers answer for the session's own agent", () => {
       role: 'reasoning',
       blocks: [{ type: 'text', text: 'Weighing two approaches' }]
     })
-    expect(isStructuredAgentSessionThinking([turnStart, spawnCall, childReasoning])).toBe(false)
+    expect(
+      isStructuredAgentSessionThinking({ items: [turnStart, spawnCall, childReasoning] })
+    ).toBe(false)
   })
 
   it('still reports the parent as thinking when the parent itself is reasoning', () => {
@@ -149,7 +198,9 @@ describe("the live-turn readers answer for the session's own agent", () => {
       role: 'reasoning',
       blocks: [{ type: 'text', text: 'Weighing two approaches' }]
     })
-    expect(isStructuredAgentSessionThinking([turnStart, spawnCall, ownReasoning])).toBe(true)
+    expect(isStructuredAgentSessionThinking({ items: [turnStart, spawnCall, ownReasoning] })).toBe(
+      true
+    )
   })
 
   it("reports the parent's own running call while a subagent runs its own", () => {

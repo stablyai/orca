@@ -1,3 +1,6 @@
+import { runCoalescedProbe, type CoalescedProbes } from '../../../git/coalesced-probe'
+import { getSshGitProviderGeneration } from '../../../providers/ssh-git-dispatch'
+import { githubReadExecutionScope } from '../../github-read-execution-scope'
 import type { PRCheckDetail } from '../../../../shared/github/check-types'
 import { GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE } from '../../../../shared/work-items'
 import { ghExecFileAsync, acquire, release, type LocalGitExecOptions } from '../../gh-utils'
@@ -120,7 +123,7 @@ export async function getPRChecksViaRestFallback(
  * Uses GitHub's combined GraphQL rollup so check runs and legacy commit statuses
  * arrive in one cached request; suite-only approval blockers are included too.
  */
-export async function getPRChecks(
+async function readPRChecks(
   repoPath: string,
   prNumber: number,
   headSha?: string,
@@ -230,4 +233,30 @@ export async function getPRChecks(
     console.warn('getPRChecks failed:', err)
     throw err
   }
+}
+
+const checksReads: CoalescedProbes<PRCheckDetail[]> = new Map()
+
+export function getPRChecks(
+  repoPath: string,
+  prNumber: number,
+  headSha?: string,
+  prRepo?: GitHubApiRepository | null,
+  options?: { noCache?: boolean },
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
+): Promise<PRCheckDetail[]> {
+  const key = JSON.stringify([
+    repoPath,
+    prNumber,
+    headSha ?? null,
+    prRepo ?? null,
+    Boolean(options?.noCache),
+    connectionId ?? null,
+    connectionId ? getSshGitProviderGeneration(connectionId) : null,
+    githubReadExecutionScope(localGitOptions)
+  ])
+  return runCoalescedProbe(checksReads, key, () =>
+    readPRChecks(repoPath, prNumber, headSha, prRepo, options, connectionId, localGitOptions)
+  )
 }

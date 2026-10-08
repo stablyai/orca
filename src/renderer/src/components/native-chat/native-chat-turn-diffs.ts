@@ -5,6 +5,8 @@ export type NativeChatDiffTarget = {
   messageId: string
   editKey: string
   fileIndex: number
+  /** The subagent sections the row sits in, outermost first, which a reveal opens. */
+  subagentSections?: readonly string[]
 }
 
 export type NativeChatDiffReveal = NativeChatDiffTarget & { requestId: number }
@@ -27,14 +29,18 @@ export type NativeChatTurnDiff = {
 /** Recorded edit totals, grouped by the transcript's already-resolved turn boundaries. */
 export function nativeChatTurnDiffs(
   messages: readonly NativeChatMessage[],
-  turnKeys: readonly (string | undefined)[]
+  turnKeys: readonly (string | undefined)[],
+  subagentSectionsOf?: ReadonlyMap<string, readonly string[]>,
+  /** A turn only partly loaded, whose totals would read as the whole turn's. */
+  partialTurnKey?: string
 ): Map<string, NativeChatTurnDiff> {
   const turns = new Map<string, Map<string, NativeChatTurnDiffFile>>()
   for (const [index, message] of messages.entries()) {
     const turnKey = turnKeys[index]
-    if (!turnKey) {
+    if (!turnKey || turnKey === partialTurnKey) {
       continue
     }
+    const sections = subagentSectionsOf?.get(message.id)
     for (const edit of buildDiffSummaries(message.blocks).values()) {
       let files = turns.get(turnKey)
       if (!files) {
@@ -54,7 +60,12 @@ export function nativeChatTurnDiffs(
           removed: file.removed + (previous?.removed ?? 0) + (renamed?.removed ?? 0),
           truncated:
             file.truncated || (previous?.truncated ?? false) || (renamed?.truncated ?? false),
-          target: { messageId: message.id, editKey: edit.key, fileIndex }
+          target: {
+            messageId: message.id,
+            editKey: edit.key,
+            fileIndex,
+            ...(sections === undefined ? {} : { subagentSections: sections })
+          }
         })
       }
     }

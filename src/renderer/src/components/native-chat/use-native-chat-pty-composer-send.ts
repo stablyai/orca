@@ -13,11 +13,15 @@ import { sendNativeChatMessageWithImageAttachments } from './native-chat-runtime
 import { resolveNativeChatLaunchDraftSend } from './native-chat-launch-draft-send'
 import { nativeChatComposerTargetIsRemote } from './native-chat-composer-target'
 import type { NativeChatResolvedTarget } from './native-chat-composer-target'
-import { pushHistory, type HistoryState } from './native-chat-composer-state'
 import { isSlashCommandDraft } from '../../../../shared/native-chat-slash-commands'
 import type { NativeChatPickerState } from './use-native-chat-picker-state'
 import type { NativeChatSendLifecycle } from './use-native-chat-send-lifecycle'
 import type { NativeChatPtySessionOptionsSurface } from './native-chat-pty-session-options'
+import type { NativeChatOptimisticSendOutcome } from './native-chat-composer-types'
+import {
+  answerNativeChatCommandInComposer,
+  type NativeChatLocalCommandAnswer
+} from './use-native-chat-local-command-answer'
 
 export function useNativeChatPtyComposerSend(args: {
   agent: AgentType
@@ -31,16 +35,18 @@ export function useNativeChatPtyComposerSend(args: {
   resolveTarget: () => NativeChatResolvedTarget | null
   classifySend: NativeChatPickerState['classifySend']
   onOptimisticSend?: (text: string, imagePaths?: string[]) => string | undefined
-  onSlashCommand?: (command: string) => void
+  optimisticSendOutcome?: NativeChatOptimisticSendOutcome
+  onSlashCommand?: (command: string, output?: string) => void
+  answerCommandLocally?: NativeChatLocalCommandAnswer
+  onSubmitted?: () => void
   sessionOptionsSurface: NativeChatPtySessionOptionsSurface | null
   terminalTabId: string
   trackPendingSend: NativeChatSendLifecycle['trackPendingSend']
-  setHistory: Dispatch<SetStateAction<HistoryState>>
   setDraft: (value: string) => void
   setCaret: Dispatch<SetStateAction<number>>
   clearSkillOrigin: () => void
   clearImageAttachments: () => void
-  setNotice: Dispatch<SetStateAction<string | null>>
+  setNotice: (notice: string | null) => void
 }): () => void {
   return useCallback(() => {
     const text = args.draft
@@ -57,12 +63,32 @@ export function useNativeChatPtyComposerSend(args: {
       return
     }
     const classification = args.classifySend(text)
-    const { sendOptions } = resolveNativeChatLaunchDraftSend({
+    if (classification === 'command' && answerNativeChatCommandInComposer(args)) {
+      return
+    }
+    const { sendOptions: launchSendOptions } = resolveNativeChatLaunchDraftSend({
       launchDraft: args.launchDraft,
       launchDraftResolved: args.launchDraftResolved,
       agent: args.agent,
       readScreen: () => args.readTerminalScreen?.()
     })
+    let pendingId: string | undefined
+    const sendOptions =
+      args.agent === 'claude' && classification === 'chat'
+        ? {
+            ...launchSendOptions,
+            onWriteRejected: () => {
+              if (pendingId) {
+                args.optimisticSendOutcome?.reject(pendingId)
+              }
+            },
+            onWriteUnconfirmed: () => {
+              if (pendingId) {
+                args.optimisticSendOutcome?.holdUnconfirmed(pendingId)
+              }
+            }
+          }
+        : launchSendOptions
     let pendingHandle: NativeChatSendHandle | null = null
     // Why: slash-like text must not silently drop its attached images.
     if (classification !== 'chat' && imagePaths.length === 0) {
@@ -93,7 +119,7 @@ export function useNativeChatPtyComposerSend(args: {
         args.sessionOptionsSurface?.recordOutgoingCommand(text.trim())
       }
     } else {
-      const pendingId = args.onOptimisticSend?.(text, imagePaths)
+      pendingId = args.onOptimisticSend?.(text, imagePaths)
       if (pendingHandle) {
         args.trackPendingSend(pendingHandle, pendingId)
       }
@@ -102,7 +128,7 @@ export function useNativeChatPtyComposerSend(args: {
       agent: args.agent,
       runtime: nativeChatComposerTargetIsRemote(target.ptyId) ? 'remote' : 'local'
     })
-    args.setHistory((previous) => pushHistory(previous, text))
+    args.onSubmitted?.()
     args.setDraft('')
     args.setCaret(0)
     args.clearSkillOrigin()

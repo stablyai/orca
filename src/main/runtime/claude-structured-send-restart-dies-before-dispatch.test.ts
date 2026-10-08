@@ -1,6 +1,6 @@
-// A send is accepted into a chat whose Claude child is gone, and its delivery restarts the child.
-// When that child dies before it proves its start, the message was never handed to it — delivery
-// waits for the start — so the send settles `rejected` with the child's own diagnostic, never as a
+// A send is accepted into a chat whose Claude child is gone, and its delivery restarts the child
+// and writes the message to it at once. When that child dies before it proves its start, it never
+// ran the message, so the send settles `rejected` with the child's own diagnostic, never as a
 // delivery nobody can confirm, and a client that was subscribed the whole time receives the
 // failure row and the rejected submission over the wire. Against the production runtime, adapter,
 // record store and host, with only the CLI scripted.
@@ -75,7 +75,7 @@ async function send(host: StructuredAgentSessionHost, text: string): Promise<str
     body
   })
   expect(sent, JSON.stringify(sent)).toMatchObject({ ok: true, replayed: false })
-  if (sent.ok) {
+  if (sent.ok && 'submission' in sent.value) {
     answered.set(clientOperationId, sent.value.submission.dispatchState)
   }
   return clientOperationId
@@ -140,6 +140,8 @@ describe('a send whose restarted Claude child dies before it proves its start', 
     const sent = await send(host, 'hello?')
     // Accepted: the answer comes before the restart it needs.
     expect(answered.get(sent)).toBe('pending')
+    await eventually(() => expect(claude.children(SESSION)).toHaveLength(2))
+    await eventually(() => expect(claude.child(SESSION).calls).toContain('send'))
     await failLatestStart(host, 2)
 
     // Provably not delivered, with the cause; not "unconfirmed".
@@ -154,7 +156,6 @@ describe('a send whose restarted Claude child dies before it proves its start', 
     expect(await statusRows(host)).toEqual([STARTUP_TEXT, STARTUP_TEXT])
     expect(fence(host)).toBe(releasedFence + 2)
     expect(claude.children(SESSION)).toHaveLength(2)
-    expect(claude.child(SESSION).calls).not.toContain('send')
 
     // Retry under a new id: one restart, and once the CLI is healthy the message is written.
     claude.behave(SESSION, {})

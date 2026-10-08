@@ -227,7 +227,8 @@ export function createAgentStatusEventApplicator(args: {
         ...(data.evidenceObservedAt !== undefined
           ? { evidenceObservedAt: data.evidenceObservedAt }
           : {}),
-        stateStartedAt: data.stateStartedAt
+        stateStartedAt: data.stateStartedAt,
+        ...(Number.isFinite(data.turnStartedAt) ? { turnStartedAt: data.turnStartedAt } : {})
       },
       routing: {
         tabId: ownerTabId,

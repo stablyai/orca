@@ -1,20 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../shared/repo-types'
+import { tuiAgentToAgentKind } from '../../shared/agent-kind'
 
 const mocks = vi.hoisted(() => ({
-  markAntigravityWorkspaceTrusted: vi.fn(),
-  markCodexProjectTrusted: vi.fn(),
-  markCopilotFolderTrusted: vi.fn(),
-  markCursorWorkspaceTrusted: vi.fn(),
   detectRemoteAgents: vi.fn(),
   detectInstalledAgentsWithShellPathHydration: vi.fn()
-}))
-
-vi.mock('../agent-trust-presets', () => ({
-  markAntigravityWorkspaceTrusted: mocks.markAntigravityWorkspaceTrusted,
-  markCodexProjectTrusted: mocks.markCodexProjectTrusted,
-  markCopilotFolderTrusted: mocks.markCopilotFolderTrusted,
-  markCursorWorkspaceTrusted: mocks.markCursorWorkspaceTrusted
 }))
 
 vi.mock('../preflight/agent-detection', () => ({
@@ -22,11 +12,9 @@ vi.mock('../preflight/agent-detection', () => ({
   detectInstalledAgentsWithShellPathHydration: mocks.detectInstalledAgentsWithShellPathHydration
 }))
 
-import { AGENT_TRUST_WRITE_DEADLINE_MS } from '../agent-trust-write-deadline'
 import {
   buildWorktreeStartupForAgent,
-  buildWorktreeStartupForDraft,
-  markLocalWorktreeTrusted
+  buildWorktreeStartupForDraft
 } from './runtime-worktree-agent-startup'
 
 function makeRepo(fields: Partial<Repo>): Repo {
@@ -102,6 +90,57 @@ describe('buildWorktreeStartupForAgent host resolution', () => {
       request_kind: 'new'
     })
   })
+
+  it('attributes a startup agent whose caller named no surface as unknown', () => {
+    const result = buildWorktreeStartupForAgent({
+      repo: makeRepo({}),
+      settings,
+      agent: 'claude',
+      getLaunchPlatform: () => 'linux',
+      toSessionOptions: () => undefined
+    })
+
+    expect(result.startup.telemetry).toEqual({
+      agent_kind: 'claude-code',
+      launch_source: 'unknown',
+      request_kind: 'new'
+    })
+  })
+})
+
+describe('buildWorktreeStartupForAgent prompt carry', () => {
+  const build = (onPromptCarry?: (carried: boolean) => void, terminalDefaultShell = '/bin/bash') =>
+    buildWorktreeStartupForAgent({
+      repo: makeRepo({}),
+      settings: Object.assign({}, settings, { terminalDefaultShell }),
+      agent: 'claude',
+      prompt: 'summarize the diff\nthen list the risks',
+      getLaunchPlatform: () => 'linux',
+      toSessionOptions: () => undefined,
+      ...(onPromptCarry ? { onPromptCarry } : {})
+    })
+
+  it('starts clean and reports it when a caller that pastes offers a prompt the line cannot carry', () => {
+    const onPromptCarry = vi.fn()
+    const result = build(onPromptCarry)
+
+    expect(result.startup.command).not.toContain('summarize')
+    expect(result.followup).toBeUndefined()
+    expect(onPromptCarry).toHaveBeenCalledWith(false)
+  })
+
+  it('carries a short-lined multi-line prompt on a local zsh line, as main typed it', () => {
+    const onPromptCarry = vi.fn()
+    const result = build(onPromptCarry, '/bin/zsh')
+
+    expect(result.startup.command).toContain('summarize the diff\nthen list the risks')
+    expect(onPromptCarry).toHaveBeenCalledWith(true)
+  })
+
+  it('keeps folding the prompt for a caller that delivers nothing afterwards', () => {
+    // `orca worktree create --prompt` has no post-start paste of its own for an argv agent.
+    expect(build().startup.command).toContain('summarize the diff')
+  })
 })
 
 describe('buildWorktreeStartupForDraft agent detection', () => {
@@ -135,93 +174,32 @@ describe('buildWorktreeStartupForDraft agent detection', () => {
     expect(mocks.detectRemoteAgents).not.toHaveBeenCalled()
     expect(result?.agent).toBe('claude')
   })
-})
 
-describe('markLocalWorktreeTrusted', () => {
-  it('waits for the Codex trust write before resolving', async () => {
-    let finish!: () => void
-    mocks.markCodexProjectTrusted.mockReturnValue(
-      new Promise<void>((resolve) => {
-        finish = resolve
+  // The host picks and launches this agent itself, so it is attributed like any other it builds,
+  // whether the draft rides the launch command or is pasted once the agent is up.
+  it.each([
+    ['claude', 'cli', 'cli', false],
+    ['claude', undefined, 'unknown', false],
+    ['claude-agent-teams', 'orchestration', 'orchestration', true],
+    ['claude-agent-teams', undefined, 'unknown', true]
+  ] as const)(
+    'attributes a %s draft launch named %s as %s',
+    async (agent, launchSource, expected, pasted) => {
+      const result = await buildWorktreeStartupForDraft({
+        repo: makeRepo({}),
+        settings,
+        draft: 'ship it',
+        requestedAgent: agent,
+        getLaunchPlatform: () => 'linux',
+        ...(launchSource ? { launchSource } : {})
       })
-    )
-    let settled = false
-    const marking = markLocalWorktreeTrusted('codex', '/workspace/app').then(() => {
-      settled = true
-    })
 
-    await Promise.resolve()
-    expect(settled).toBe(false)
-    finish()
-    await marking
-    expect(mocks.markCodexProjectTrusted).toHaveBeenCalledWith('/workspace/app')
-  })
-
-  it('contains a rejected Codex trust write', async () => {
-    mocks.markCodexProjectTrusted.mockRejectedValueOnce(new Error('write failed'))
-
-    await expect(markLocalWorktreeTrusted('codex', '/workspace/app')).resolves.toBeUndefined()
-  })
-
-  /**
-   * Why this test exists: Orca has two trust dispatch chains — the renderer's
-   * preflightAgentTrust (via the agentTrust:markTrusted IPC) and this main-process
-   * one, which is the only path `orchestration worker-start` takes. Adding
-   * `preflightTrust: 'antigravity'` to TUI_AGENT_CONFIG clears the `!preset` guard
-   * here but matched none of the cursor/copilot/codex branches, so every supervised
-   * agy worker still failed at agent_readiness with 'agent-trust-workspace' while
-   * the renderer-side unit tests passed. Verified live: with the branch added, the
-   * worktree is appended to ~/.gemini/antigravity-cli/settings.json and the dispatch
-   * reaches worker_done.
-   */
-  it('writes the agy workspace trust artifact on the orchestration path', async () => {
-    await markLocalWorktreeTrusted('antigravity', '/workspace/app')
-
-    expect(mocks.markAntigravityWorkspaceTrusted).toHaveBeenCalledWith('/workspace/app')
-  })
-
-  it('contains a throwing agy trust write', async () => {
-    mocks.markAntigravityWorkspaceTrusted.mockImplementationOnce(() => {
-      throw new Error('write failed')
-    })
-
-    await expect(markLocalWorktreeTrusted('antigravity', '/workspace/app')).resolves.toBeUndefined()
-  })
-
-  it('bounds a never-settling Codex trust write instead of holding the launch open', async () => {
-    vi.useFakeTimers()
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    let release!: () => void
-    const write = new Promise<void>((resolve) => {
-      release = resolve
-    })
-    mocks.markCodexProjectTrusted.mockClear()
-    mocks.markCursorWorkspaceTrusted.mockClear()
-    mocks.markCopilotFolderTrusted.mockClear()
-    mocks.markAntigravityWorkspaceTrusted.mockClear()
-    mocks.markCodexProjectTrusted.mockReturnValueOnce(write)
-    let settled = false
-    const marking = markLocalWorktreeTrusted('codex', '/workspace/app').then(() => {
-      settled = true
-    })
-    try {
-      await vi.advanceTimersByTimeAsync(AGENT_TRUST_WRITE_DEADLINE_MS - 1)
-      expect(settled).toBe(false)
-      await vi.advanceTimersByTimeAsync(2)
-      await marking
-      expect(settled).toBe(true)
-      expect(String(warn.mock.calls[0]?.[0])).toContain('did not settle')
-      expect(vi.getTimerCount()).toBe(0)
-      // Fails closed: giving up writes nothing, retries nothing and never
-      // substitutes another preset's artifact, so Codex still prompts.
-      expect(mocks.markCodexProjectTrusted).toHaveBeenCalledTimes(1)
-      expect(mocks.markCursorWorkspaceTrusted).not.toHaveBeenCalled()
-      expect(mocks.markCopilotFolderTrusted).not.toHaveBeenCalled()
-      expect(mocks.markAntigravityWorkspaceTrusted).not.toHaveBeenCalled()
-    } finally {
-      warn.mockRestore()
-      release()
-      vi.useRealTimers()
+      expect(result?.draftPaste !== undefined).toBe(pasted)
+      expect(result?.startup.telemetry).toEqual({
+        agent_kind: tuiAgentToAgentKind(agent),
+        launch_source: expected,
+        request_kind: 'new'
+      })
     }
-  })
+  )
 })

@@ -63,6 +63,44 @@ async function flushRuntimeSearchMicrotasks(): Promise<void> {
 describe('RuntimeFileCommands', () => {
   useRuntimeFileCommandsLifecycle()
 
+  it('forwards cancellation across a nested SSH route', async () => {
+    const controller = new AbortController()
+    const search = vi.fn().mockResolvedValue({ files: [], totalMatches: 0, truncated: false })
+    getSshFilesystemProviderMock.mockReturnValue({ search })
+    const { commands } = createRuntimeFileCommands({ hostId: 'ssh:ssh-1' })
+    await commands.searchRuntimeFiles('id:wt-1', { query: 'needle' }, { signal: controller.signal })
+    expect(search).toHaveBeenCalledWith(
+      { rootPath: '/repo', query: 'needle' },
+      { signal: controller.signal }
+    )
+  })
+
+  it('keeps concurrent runtime clients on the same root independent during cancellation', async () => {
+    const { commands } = createRuntimeFileCommands()
+    const firstChild = createRuntimeSearchChild()
+    const secondChild = createRuntimeSearchChild()
+    resolveAuthorizedPathMock.mockResolvedValue('/repo')
+    wslAwareSpawnMock.mockImplementation((_command, args: string[]) =>
+      args.includes('first') ? firstChild : secondChild
+    )
+    const controller = new AbortController()
+    const first = commands.searchRuntimeFiles(
+      'id:wt-1',
+      { query: 'first' },
+      { signal: controller.signal }
+    )
+    const firstRejected = expect(first).rejects.toMatchObject({ name: 'AbortError' })
+    const second = commands.searchRuntimeFiles('id:wt-1', { query: 'second' })
+    await vi.waitFor(() => expect(wslAwareSpawnMock).toHaveBeenCalledTimes(2))
+    expect(firstChild.kill).not.toHaveBeenCalled()
+    controller.abort()
+    await firstRejected
+    expect(firstChild.kill).toHaveBeenCalledOnce()
+    expect(secondChild.kill).not.toHaveBeenCalled()
+    secondChild.emit('close', 1, null)
+    await expect(second).resolves.toMatchObject({ totalMatches: 0, truncated: false })
+  })
+
   it('rejects a synchronous launch failure without invoking child cleanup', async () => {
     const { commands } = createRuntimeFileCommands({
       resolveRuntimeFileTarget: vi.fn(async () => ({
@@ -76,6 +114,36 @@ describe('RuntimeFileCommands', () => {
     })
     await expect(commands.searchRuntimeFiles('id:wt-1', { query: 'needle' })).rejects.toThrow(
       'EMFILE'
+    )
+  })
+
+  it('keeps runtime result paths canonical when its authorized root differs from the workspace path', async () => {
+    const { commands } = createRuntimeFileCommands()
+    const child = createRuntimeSearchChild()
+    resolveAuthorizedPathMock.mockResolvedValue('/canonical/repo')
+    wslAwareSpawnMock.mockReturnValue(child)
+    const pending = commands.searchRuntimeFiles('id:wt-1', { query: 'needle' })
+    await flushRuntimeSearchMicrotasks()
+    child.stdout.emit(
+      'data',
+      JSON.stringify({
+        type: 'match',
+        data: {
+          path: { text: './example.txt' },
+          lines: { text: 'needle\n' },
+          line_number: 1,
+          submatches: [{ match: { text: 'needle' }, start: 0, end: 6 }]
+        }
+      })
+    )
+    child.emit('close', 0, null)
+    await expect(pending).resolves.toMatchObject({
+      files: [{ filePath: '/canonical/repo/example.txt', relativePath: 'example.txt' }]
+    })
+    expect(wslAwareSpawnMock).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(Array),
+      expect.objectContaining({ cwd: '/canonical/repo' })
     )
   })
 

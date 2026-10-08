@@ -1,17 +1,8 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "worktree.retired-names",
   "family": "worktree.retired-names",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "ccdb324b63e4942891942edde1216586a51774bd",
-  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
-  "recorderSha256": "0317fe2aebe4743ce5e7ae194531aa91b4fe0a84df457640851fe6dfdb9362af",
-  "adapterSha256": "4e942ddfbaa0ba6bfc2993969276987f6528ac53765d125e99a830e261f93a8e",
-  "scenarioSha256": "2faa07ee5f12b3ed584117359d3b7aeb9c78a04e8fc49e753372f8c3927a3740",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "3a6762b141aa": {
       "name": "worktree.listRetiredNames#1",

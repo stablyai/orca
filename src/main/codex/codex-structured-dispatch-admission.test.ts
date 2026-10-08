@@ -7,6 +7,7 @@ import {
   acquiredCodexAdapter,
   echoUserMessage,
   fakeCodexAppServer,
+  openAfterTurnStarts,
   startTurn,
   CODEX_TEST_THREAD_ID,
   CODEX_TEST_USER_MESSAGE,
@@ -44,11 +45,10 @@ function lifecycleRecorder(): {
 
 describe('codex dispatch admission', () => {
   it('admits a send queued behind a running turn and settles it when Codex echoes it', async () => {
-    // Measured on codex-cli 0.153.4: a `turn/start` issued while a turn runs is
-    // COALESCED into it -- same turn id back, no second `turn/started`, and the
-    // user message echoed only once the running turn reaches it.
+    // A send while a turn runs is steered into it: that turn's id back, no second
+    // `turn/started`, and the user message echoed only once the running turn reaches it.
     const codex = fakeCodexAppServer({
-      'turn/start': () => ({ turn: { id: 'turn-1', status: 'inProgress' } })
+      'turn/steer': () => ({ turnId: 'turn-1' })
     })
     const settlements: LateSettlement[] = []
     const adapter = await acquiredCodexAdapter({ codex, settlements })
@@ -81,7 +81,7 @@ describe('codex dispatch admission', () => {
   })
 
   it('correlates each send by client message id, not queue order', async () => {
-    const codex = fakeCodexAppServer({ 'turn/start': () => ({ turn: { id: 'turn-1' } }) })
+    const codex = fakeCodexAppServer({ 'turn/steer': () => ({ turnId: 'turn-1' }) })
     const settlements: LateSettlement[] = []
     const adapter = await acquiredCodexAdapter({ codex, settlements })
     const connection = codex.connections[0]!
@@ -121,7 +121,7 @@ describe('codex dispatch admission', () => {
   })
 
   it('settles nothing for a user message this session never sent', async () => {
-    const codex = fakeCodexAppServer({ 'turn/start': () => ({ turn: { id: 'turn-1' } }) })
+    const codex = fakeCodexAppServer({ 'turn/steer': () => ({ turnId: 'turn-1' }) })
     const settlements: LateSettlement[] = []
     const adapter = await acquiredCodexAdapter({ codex, settlements })
     const connection = codex.connections[0]!
@@ -151,7 +151,6 @@ describe('codex dispatch admission', () => {
     const settlements: LateSettlement[] = []
     const adapter = await acquiredCodexAdapter({ codex, settlements })
     const connection = codex.connections[0]!
-    startTurn(connection, 'turn-1')
 
     // Codex's own words reach the sentence and the fact; Orca's prefix reaches neither.
     expect(await send(adapter, 'client-1')).toEqual({
@@ -164,6 +163,7 @@ describe('codex dispatch admission', () => {
     })
 
     // A refused write is disarmed, so a later echo of that id settles nothing.
+    startTurn(connection, 'turn-1')
     echoUserMessage(connection, { turnId: 'turn-1', itemId: 'item-u1', clientId: 'client-1' })
     expect(settlements).toEqual([])
   })
@@ -177,9 +177,9 @@ describe('codex dispatch admission', () => {
     const settlements: LateSettlement[] = []
     const adapter = await acquiredCodexAdapter({ codex, settlements })
     const connection = codex.connections[0]!
-    startTurn(connection, 'turn-1')
 
     await expect(send(adapter, 'client-1')).rejects.toThrow('request timed out after write')
+    startTurn(connection, 'turn-1')
     echoUserMessage(connection, { turnId: 'turn-1', itemId: 'item-u1', clientId: 'client-1' })
 
     expect(settlements).toEqual([
@@ -215,8 +215,9 @@ describe('codex dispatch admission', () => {
     await expect(send(adapter, 'client-unknown', 1_700_000_000_100)).rejects.toThrow(
       'request timed out after write'
     )
-    await send(adapter, 'client-later', 1_700_000_000_400)
-    startTurn(connection, 'turn-later')
+    const later = send(adapter, 'client-later', 1_700_000_000_400)
+    await openAfterTurnStarts(connection, 2, () => startTurn(connection, 'turn-later'))
+    await later
     echoUserMessage(connection, {
       turnId: 'turn-later',
       itemId: 'item-later',
@@ -248,7 +249,7 @@ describe('codex dispatch admission', () => {
 
   it('does not attribute a send armed after an autonomous turn started', async () => {
     const codex = fakeCodexAppServer({
-      'turn/start': () => ({ turn: { id: 'turn-resumed', status: 'inProgress' } })
+      'turn/steer': () => ({ turnId: 'turn-resumed' })
     })
     const settlements: LateSettlement[] = []
     const recorded = lifecycleRecorder()
@@ -272,16 +273,18 @@ describe('codex dispatch admission', () => {
 
   it('keeps the earliest dispatched origin across out-of-order echoes and a clock step', async () => {
     const codex = fakeCodexAppServer({
-      'turn/start': () => ({ turn: { id: 'turn-1', status: 'inProgress' } })
+      'turn/start': () => ({ turn: { id: 'turn-1', status: 'inProgress' } }),
+      'turn/steer': () => ({ turnId: 'turn-1' })
     })
     const settlements: LateSettlement[] = []
     const recorded = lifecycleRecorder()
     const adapter = await acquiredCodexAdapter({ codex, settlements, sink: recorded.sink })
     const connection = codex.connections[0]!
 
-    await send(adapter, 'client-opening', 1_700_000_000_600)
-    await send(adapter, 'client-queued', 1_700_000_000_200)
-    startTurn(connection, 'turn-1')
+    const opening = send(adapter, 'client-opening', 1_700_000_000_600)
+    const queued = send(adapter, 'client-queued', 1_700_000_000_200)
+    await openAfterTurnStarts(connection, 2, () => startTurn(connection, 'turn-1'))
+    await Promise.all([opening, queued])
     await send(adapter, 'client-mid-turn', 1_700_000_000_100)
 
     echoUserMessage(connection, {
@@ -325,8 +328,9 @@ describe('codex dispatch admission', () => {
     const adapter = await acquiredCodexAdapter({ codex, settlements, sink: recorded.sink })
     const connection = codex.connections[0]!
 
-    await send(adapter, 'client-late-echo', 1_700_000_000_100)
-    startTurn(connection, 'turn-1')
+    const sending = send(adapter, 'client-late-echo', 1_700_000_000_100)
+    await openAfterTurnStarts(connection, 1, () => startTurn(connection, 'turn-1'))
+    await sending
     connection.handlers.onNotification?.('turn/completed', {
       threadId: CODEX_TEST_THREAD_ID,
       turn: { id: 'turn-1' }
@@ -346,7 +350,7 @@ describe('codex dispatch admission', () => {
   })
 
   it('refuses overflow without discarding an older accepted send', async () => {
-    const codex = fakeCodexAppServer({ 'turn/start': () => ({ turn: { id: 'turn-1' } }) })
+    const codex = fakeCodexAppServer({ 'turn/steer': () => ({ turnId: 'turn-1' }) })
     const settlements: LateSettlement[] = []
     const adapter = await acquiredCodexAdapter({ codex, settlements })
     const connection = codex.connections[0]!
@@ -366,7 +370,7 @@ describe('codex dispatch admission', () => {
   })
 
   it('leaves no waiter behind when the session closes', async () => {
-    const codex = fakeCodexAppServer({ 'turn/start': () => ({ turn: { id: 'turn-1' } }) })
+    const codex = fakeCodexAppServer({ 'turn/steer': () => ({ turnId: 'turn-1' }) })
     const settlements: LateSettlement[] = []
     const adapter = await acquiredCodexAdapter({ codex, settlements })
     const connection = codex.connections[0]!
@@ -380,7 +384,7 @@ describe('codex dispatch admission', () => {
   })
 
   it('leaves no waiter behind when the child exits', async () => {
-    const codex = fakeCodexAppServer({ 'turn/start': () => ({ turn: { id: 'turn-1' } }) })
+    const codex = fakeCodexAppServer({ 'turn/steer': () => ({ turnId: 'turn-1' }) })
     const settlements: LateSettlement[] = []
     const adapter = await acquiredCodexAdapter({ codex, settlements })
     const connection = codex.connections[0]!

@@ -12,21 +12,42 @@ import {
   SETTINGS_TARGET_HIGHLIGHT_MS
 } from './settings-navigation-foundations'
 
-export function useSettingsInteractionController(model: SettingsStoreModel) {
+export type SettingsInteractionModel = Pick<
+  SettingsStoreModel,
+  | 'closeSettingsPage'
+  | 'confirm'
+  | 'hasUnsavedBranchPromptChanges'
+  | 'hasUnsavedChatPromptChanges'
+  | 'hasUnsavedCommitPromptChanges'
+  | 'highlightedSettingsTargetId'
+  | 'setFontSuggestions'
+  | 'setHasUnsavedBranchPromptChanges'
+  | 'setHasUnsavedChatPromptChanges'
+  | 'setHasUnsavedCommitPromptChanges'
+  | 'setHighlightedSettingsTargetId'
+  | 'setSettingsSearchQuery'
+  | 'setSourceControlAiPromptDiscardSignal'
+  | 'settings'
+  | 'updateSettingsOrThrow'
+>
+
+export function useSettingsInteractionController(model: SettingsInteractionModel) {
   const {
     closeSettingsPage,
     confirm,
     hasUnsavedBranchPromptChanges,
+    hasUnsavedChatPromptChanges,
     hasUnsavedCommitPromptChanges,
     highlightedSettingsTargetId,
     setFontSuggestions,
     setHasUnsavedBranchPromptChanges,
+    setHasUnsavedChatPromptChanges,
     setHasUnsavedCommitPromptChanges,
     setHighlightedSettingsTargetId,
     setSettingsSearchQuery,
     setSourceControlAiPromptDiscardSignal,
     settings,
-    updateSettings
+    updateSettingsOrThrow
   } = model
   const contentScrollRef = useRef<HTMLDivElement | null>(null)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
@@ -43,12 +64,12 @@ export function useSettingsInteractionController(model: SettingsStoreModel) {
   sourceControlAiWriteQueueRef.current ??= Promise.resolve()
 
   const hasUnsavedSourceControlAiPromptChanges =
-    hasUnsavedCommitPromptChanges || hasUnsavedBranchPromptChanges
+    hasUnsavedCommitPromptChanges || hasUnsavedBranchPromptChanges || hasUnsavedChatPromptChanges
   // Why: the close guard registers once, so it reads latest dirty state from a ref instead of a lagging closure.
   const hasUnsavedSourceControlAiPromptChangesRef = useRef(hasUnsavedSourceControlAiPromptChanges)
   hasUnsavedSourceControlAiPromptChangesRef.current = hasUnsavedSourceControlAiPromptChanges
 
-  const writeSourceControlAiSettings = useCallback(
+  const writeSourceControlAiSettingsOrThrow = useCallback(
     (patch: SourceControlAiSettingsPatch): Promise<void> => {
       const next = sourceControlAiWriteQueueRef.current
         .catch(() => undefined)
@@ -60,12 +81,20 @@ export function useSettingsInteractionController(model: SettingsStoreModel) {
 
           const latestConfig = readSourceControlAiSettings(latestSettings)
           const resolvedPatch = typeof patch === 'function' ? patch(latestConfig) : patch
-          await updateSettings({ sourceControlAi: { ...latestConfig, ...resolvedPatch } })
+          await updateSettingsOrThrow({ sourceControlAi: { ...latestConfig, ...resolvedPatch } })
         })
       sourceControlAiWriteQueueRef.current = next
       return next
     },
-    [settings, updateSettings]
+    [settings, updateSettingsOrThrow]
+  )
+
+  const writeSourceControlAiSettings = useCallback(
+    (patch: SourceControlAiSettingsPatch): Promise<void> =>
+      writeSourceControlAiSettingsOrThrow(patch).catch((error: unknown) => {
+        console.error('Failed to update settings:', error)
+      }),
+    [writeSourceControlAiSettingsOrThrow]
   )
 
   const setSettingsRootNode = useCallback(
@@ -139,11 +168,11 @@ export function useSettingsInteractionController(model: SettingsStoreModel) {
     return confirm({
       title: translate(
         'auto.components.settings.Settings.17bdee4ff1',
-        'Discard unsaved Git AI Author changes?'
+        'Discard unsaved AI settings?'
       ),
       description: translate(
         'auto.components.settings.Settings.43b68e10f0',
-        'You have unsaved Git AI Author changes. Leaving will discard them.'
+        'You have unsaved AI settings. Leaving will discard them.'
       ),
       confirmLabel: translate('auto.components.settings.Settings.65358016ea', 'Discard'),
       confirmVariant: 'destructive'
@@ -159,6 +188,7 @@ export function useSettingsInteractionController(model: SettingsStoreModel) {
       setSourceControlAiPromptDiscardSignal((signal) => signal + 1)
       setHasUnsavedCommitPromptChanges(false)
       setHasUnsavedBranchPromptChanges(false)
+      setHasUnsavedChatPromptChanges(false)
     }
     return shouldDiscard
   }, [
@@ -166,7 +196,8 @@ export function useSettingsInteractionController(model: SettingsStoreModel) {
     hasUnsavedSourceControlAiPromptChanges,
     setSourceControlAiPromptDiscardSignal,
     setHasUnsavedCommitPromptChanges,
-    setHasUnsavedBranchPromptChanges
+    setHasUnsavedBranchPromptChanges,
+    setHasUnsavedChatPromptChanges
   ])
 
   const closeSettingsPageWithPromptGuard = useCallback(async (): Promise<void> => {
@@ -188,6 +219,7 @@ export function useSettingsInteractionController(model: SettingsStoreModel) {
     hasUnsavedSourceControlAiPromptChanges,
     hasUnsavedSourceControlAiPromptChangesRef,
     writeSourceControlAiSettings,
+    writeSourceControlAiSettingsOrThrow,
     setSettingsRootNode,
     setContentScrollNode,
     requestFontSuggestions,

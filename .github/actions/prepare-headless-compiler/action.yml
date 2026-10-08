@@ -1,0 +1,45 @@
+name: Prepare headless detector compiler
+description: Reuse the policy-checked compiler from main; callers install normally on a miss.
+inputs:
+  seed:
+    description: Pack an already installed compiler instead of activating a cached compiler.
+    default: 'false'
+outputs:
+  available:
+    description: Whether the cached compiler was validated and activated.
+    value: ${{ steps.activate.outputs.available }}
+runs:
+  using: composite
+  steps:
+    - id: identity
+      shell: bash
+      env:
+        COMPILER_POLICY_HASH: ${{ hashFiles('package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', '.npmrc', '.pnpmfile.cjs', 'config/patches/**', '.github/actions/install-node-dependencies/**', '.github/actions/restore-pnpm-verification/**', 'config/scripts/headless-detector-compiler-cache.mjs', '.github/actions/prepare-headless-compiler/action.yml') }}
+      run: node config/scripts/headless-detector-compiler-cache.mjs identity
+    - id: cache
+      uses: actions/cache/restore@v5
+      continue-on-error: true
+      with:
+        path: ${{ steps.identity.outputs.path }}
+        key: ${{ steps.identity.outputs.key }}
+    - id: activate
+      if: inputs.seed != 'true' && steps.cache.outputs.cache-hit == 'true'
+      shell: bash
+      env:
+        COMPILER_CACHE_KEY: ${{ steps.identity.outputs.key }}
+        COMPILER_CACHE_PATH: ${{ steps.identity.outputs.path }}
+      run: node config/scripts/headless-detector-compiler-cache.mjs activate
+    - name: Pack installed compiler
+      if: inputs.seed == 'true' && steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        COMPILER_CACHE_KEY: ${{ steps.identity.outputs.key }}
+        COMPILER_CACHE_PATH: ${{ steps.identity.outputs.path }}
+      run: node config/scripts/headless-detector-compiler-cache.mjs pack
+    - name: Save compiler only from main
+      if: inputs.seed == 'true' && steps.cache.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+      uses: actions/cache/save@v5
+      continue-on-error: true
+      with:
+        path: ${{ steps.identity.outputs.path }}
+        key: ${{ steps.identity.outputs.key }}

@@ -15,12 +15,17 @@ import {
 import { quotePowerShellLiteral } from '../../shared/powershell-native-argument'
 import { wrapRuntimeHomeHookCommand } from '../agent-hooks/runtime-home-hook-command'
 import { wrapWindowsDirectCmdHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
-import { isGitBashAvailable } from '../git-bash'
 import type { ClaudeManagedHookPlan } from './claude-managed-hook-events'
 
 export type ClaudeCompatibleHookSettings = {
-  configDirName: '.claude' | '.openclaude' | '.qoder' | '.codebuddy'
-  scriptBaseName: 'claude-hook' | 'openclaude-hook' | 'qoder-hook' | 'codebuddy-hook'
+  configDirName: '.claude' | '.openclaude' | '.qoder' | '.qoder-cn' | '.qwen' | '.codebuddy'
+  scriptBaseName:
+    | 'claude-hook'
+    | 'openclaude-hook'
+    | 'qoder-hook'
+    | 'qoder-cn-hook'
+    | 'qwen-code-hook'
+    | 'codebuddy-hook'
   usesWindowsCompatLauncher: boolean
   windowsHookShell?: 'powershell'
 }
@@ -37,8 +42,8 @@ export const OPENCLAUDE_HOOK_SETTINGS: ClaudeCompatibleHookSettings = {
   usesWindowsCompatLauncher: false
 }
 
-export function getConfigPath(settings = CLAUDE_HOOK_SETTINGS): string {
-  return join(homedir(), settings.configDirName, 'settings.json')
+export function getConfigPath(settings = CLAUDE_HOOK_SETTINGS, configDir?: string): string {
+  return join(configDir ?? join(homedir(), settings.configDirName), 'settings.json')
 }
 
 export function getStatusLineScriptBaseName(settings = CLAUDE_HOOK_SETTINGS): string {
@@ -91,8 +96,7 @@ export function getManagedCommand(
 
 export function getManagedLifecycleHook(
   scriptPath: string,
-  settings = CLAUDE_HOOK_SETTINGS,
-  options: WindowsManagedLifecycleHookOptions = {}
+  settings = CLAUDE_HOOK_SETTINGS
 ): HookCommandConfig {
   if (process.platform !== 'win32' || !settings.usesWindowsCompatLauncher) {
     return buildManagedCommandHook(getManagedCommand(scriptPath, { neutralJsonWhenMissing: true }))
@@ -105,22 +109,12 @@ export function getManagedLifecycleHook(
       timeout: MANAGED_HOOK_TIMEOUT_SECONDS
     }
   }
-  return getWindowsManagedLifecycleHook(scriptPath, options)
+  return getWindowsManagedLifecycleHook(scriptPath)
 }
 
-export type WindowsManagedLifecycleHookOptions = { gitBashAvailable?: boolean }
-
-// Why: some Claude-compatible consumers ignore `args`, so the invocation must be self-contained.
-export function getWindowsManagedLifecycleHook(
-  scriptPath: string,
-  options: WindowsManagedLifecycleHookOptions = {}
-): HookCommandConfig {
-  // Why (#18875): the encoded launcher cost a PowerShell start-up per hook event. Take the direct
-  // path only where the host can parse `||` — Git Bash can, Windows PowerShell 5.1 cannot.
-  const directCommand =
-    (options.gitBashAvailable ?? isGitBashAvailable())
-      ? wrapWindowsDirectCmdHookCommand(scriptPath)
-      : null
+// Some compatible consumers ignore args, so keep the invocation self-contained.
+export function getWindowsManagedLifecycleHook(scriptPath: string): HookCommandConfig {
+  const directCommand = wrapWindowsDirectCmdHookCommand(scriptPath)
   if (directCommand) {
     return { type: 'command', command: directCommand, timeout: MANAGED_HOOK_TIMEOUT_SECONDS }
   }

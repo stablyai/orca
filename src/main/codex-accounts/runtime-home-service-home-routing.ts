@@ -16,10 +16,8 @@ import {
 import { hasCustomCodexHomeOverrideForLaunch } from '../codex/codex-real-home-path'
 import {
   hasRecordedLegacySharedCodexPane,
-  getCodexPaneAccount,
-  type CodexPaneHomeRoute
+  getCodexPaneAccount
 } from '../codex/codex-pane-account-registry'
-import { isShellStartupEnvProbeSupported } from '../pty/shell-startup-env'
 import { ManagedCodexHomeTemporarilyUnavailableError } from './host-codex-managed-home-ownership'
 import { syncLegacySharedCodexConfigForRetainedPanes } from './legacy-shared-config-compatibility'
 import type { CodexManagedAccount } from '../../shared/managed-account-types'
@@ -29,7 +27,7 @@ import { CodexRuntimeHomeManagedHome } from './runtime-home-service-managed-home
 export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHome {
   getHostCodexHomePathsForSessionDiscovery(): string[] {
     const homes = [this.getRuntimeHomePath()]
-    if (this.isHostSystemDefaultRealHome() || this.getSelfContainedManagedHostAccount()) {
+    if (this.isHostSystemDefaultRealHomeSelected() || this.getSelfContainedManagedHostAccount()) {
       // Why: nested Orca processes can retain an ambient managed CODEX_HOME.
       // Per-account lanes no longer bridge real-home history into the shared
       // mirror, so include the real root for both directly-routed host lanes.
@@ -93,13 +91,6 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
       : { kind: 'skip' }
   }
 
-  getSelectedHostCodexHomeRoute(): CodexPaneHomeRoute {
-    if (this.getSelfContainedManagedHostAccount()) {
-      return 'account-home'
-    }
-    return this.isHostSystemDefaultRealHome() ? 'real-home' : 'shared-home'
-  }
-
   getRetainedHostCodexHookHomePaths(ptyIds: readonly string[]): string[] {
     const settings = this.store.getSettings()
     const homes = new Map<string, string>()
@@ -108,11 +99,7 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
       if (!record || record.selectionKey !== 'host') {
         continue
       }
-      if (
-        record.homeRoute === undefined ||
-        record.homeRoute === 'shared-home' ||
-        record.homeRoute === 'custom-home'
-      ) {
+      if (record.homeRoute === undefined || record.homeRoute === 'shared-home') {
         const homePath = this.getRuntimeHomePath()
         homes.set(normalizeRuntimePathForComparison(homePath), homePath)
         continue
@@ -134,51 +121,51 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
     return [...homes.values()]
   }
 
-  // Why: the real-home hook installer flips this gate off when the trust-grant
-  // client reports the host incapable, keeping that host byte-identical to the
-  // managed lane instead of shipping status-blind panes.
-  protected realHomeLaneGate: () => boolean = () => true
-
-  setRealHomeLaneGate(gate: () => boolean): void {
-    this.realHomeLaneGate = gate
-  }
-
   // Why: real-home routing applies only to the host system-default selection.
-  // Managed accounts run in their own homes; Windows (no shell-startup probe)
-  // and custom CODEX_HOMEs stay on the mirror until cleanup can be tracked
-  // across old homes.
+  // Managed accounts run in their own homes; custom CODEX_HOMEs stay on the
+  // mirror until cleanup can be tracked across old homes.
   isHostSystemDefaultRealHomeSelected(launchEnv?: NodeJS.ProcessEnv): boolean {
-    const settings = this.store.getSettings()
-    if (
-      normalizeCodexRuntimeSelection(settings).host !== null ||
-      !isShellStartupEnvProbeSupported()
-    ) {
-      return false
-    }
-    return !hasCustomCodexHomeOverrideForLaunch(launchEnv)
-  }
-
-  isHostSystemDefaultRealHome(launchEnv?: NodeJS.ProcessEnv): boolean {
-    return this.isHostSystemDefaultRealHomeSelected(launchEnv) && this.realHomeLaneGate()
-  }
-
-  // Why: launch prep evaluates the real-home lane AFTER clearing an unusable
-  // managed selection; read-only siblings need that same verdict with the
-  // selection ignored rather than cleared.
-  protected wouldSystemDefaultRouteToRealHome(launchEnv?: NodeJS.ProcessEnv): boolean {
     return (
-      isShellStartupEnvProbeSupported() &&
-      !hasCustomCodexHomeOverrideForLaunch(launchEnv) &&
-      this.realHomeLaneGate()
+      normalizeCodexRuntimeSelection(this.store.getSettings()).host === null &&
+      !hasCustomCodexHomeOverrideForLaunch(launchEnv)
     )
   }
 
   reconcileLegacySharedHomeForRetainedPanes(): void {
-    if (!this.isHostSystemDefaultRealHome() || !hasRecordedLegacySharedCodexPane()) {
+    if (!this.isHostSystemDefaultRealHomeSelected() || !hasRecordedLegacySharedCodexPane()) {
       return
     }
     this.syncLegacySharedSystemDefaultAuthForRetainedPanes()
     syncLegacySharedCodexConfigForRetainedPanes()
+  }
+
+  // Why: copies only while the recorded baseline is null (Orca's copy's login never
+  // came from ~/.codex); recording it as the baseline, copied or not, ends that.
+  protected copyMirrorLoginIntoEmptySystemHome(): void {
+    if (process.platform !== 'win32') {
+      return
+    }
+    try {
+      const provenance = this.resolveSharedRuntimeAuthProvenanceStatus()
+      const runtimeAuth = this.readRuntimeAuthForProvenance()
+      if (
+        provenance.kind !== 'committed' ||
+        provenance.provenance.owner !== 'system-default' ||
+        provenance.provenance.authJson !== null ||
+        runtimeAuth === null
+      ) {
+        return
+      }
+      const copied = this.writeSystemDefaultAuth(runtimeAuth, { expectedContents: null })
+      // Why even when declined: a null baseline would let a later ~/.codex logout
+      // pull this stale login in; it also keeps retained panes in step (#5370).
+      this.persistSharedRuntimeAuthProvenance({ owner: 'system-default', authJson: runtimeAuth })
+      if (copied) {
+        this.captureSystemDefaultSnapshot({ force: true })
+      }
+    } catch (error) {
+      console.warn('[codex-runtime-home] Failed to copy the mirror login into ~/.codex:', error)
+    }
   }
 
   /** Preserve refreshed auth from retained legacy WSL panes before restart. */
@@ -290,14 +277,15 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
       }
       this.clearSelfContainedManagedSelection(selfContainedAccount)
     }
-    if (this.isHostSystemDefaultRealHome()) {
+    if (this.isHostSystemDefaultRealHomeSelected()) {
+      this.copyMirrorLoginIntoEmptySystemHome()
+      if (hasRecordedLegacySharedCodexPane()) {
+        this.syncLegacySharedSystemDefaultAuthForRetainedPanes()
+      }
       // Why: null lets the fetcher fall back to the main process's inherited
       // CODEX_HOME before ~/.codex. Nested Orca launches can inherit the
       // managed home, restarting the background OAuth conflict (#5370), so
       // pin this non-interactive lane to the native home explicitly.
-      if (hasRecordedLegacySharedCodexPane()) {
-        this.syncLegacySharedSystemDefaultAuthForRetainedPanes()
-      }
       return { kind: 'ready', codexHomePath: getSystemCodexHomePath() }
     }
     this.syncForCurrentSelection()

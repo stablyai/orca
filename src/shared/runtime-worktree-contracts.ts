@@ -70,12 +70,21 @@ export type RuntimeWorktreePsSummary = {
   unread: boolean
   liveTerminalCount: number
   hasAttachedPty: boolean
+  /**
+   * Terminals whose host lost contact; they are not in `liveTerminalCount`, and not exited either.
+   * Always sent by current hosts, 0 included; absent only from hosts that predate the field.
+   */
+  unverifiableTerminalCount?: number
   lastOutputAt: number | null
   preview: string
   status: RuntimeWorktreeStatus
   /** Optional discriminator for a working workspace; older clients fall back to ordinary working. */
   workingMode?: AgentWorkingMode
   agents: RuntimeWorktreeAgentRow[]
+  /** See `Worktree.removing`; sent only to clients that advertise background removal. */
+  removing?: true
+  /** See `GitWorktreeInfo.removalError`. */
+  removalError?: string
 }
 
 export type RuntimeGitLocalBranches = {

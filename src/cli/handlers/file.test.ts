@@ -82,7 +82,8 @@ describe('orca file CLI handlers', () => {
     expect(callMock).toHaveBeenNthCalledWith(1, 'worktree.list', { limit: 10_000 })
     expect(callMock).toHaveBeenNthCalledWith(2, 'files.open', {
       worktree: 'id:repo::/tmp/repo',
-      relativePath: 'src/App.tsx'
+      relativePath: 'src/App.tsx',
+      navigation: 'caller'
     })
     expect(vi.mocked(console.log).mock.calls[0][0]).toBe('Opened src/App.tsx.')
   })
@@ -107,11 +108,12 @@ describe('orca file CLI handlers', () => {
     expect(callMock).toHaveBeenCalledWith('files.openDiff', {
       worktree: 'id:wt-1',
       relativePath: 'src/App.tsx',
-      staged: true
+      staged: true,
+      navigation: 'caller'
     })
   })
 
-  it('reports unopened direct diffs instead of formatting them as opened', async () => {
+  it('fails an unopened direct diff instead of exiting 0', async () => {
     queueFixtures(
       callMock,
       okFixture('req_diff', {
@@ -127,11 +129,39 @@ describe('orca file CLI handlers', () => {
     expect(callMock).toHaveBeenCalledWith('files.openDiff', {
       worktree: 'id:wt-1',
       relativePath: 'assets/logo.png',
-      staged: false
+      staged: false,
+      navigation: 'caller'
     })
-    expect(vi.mocked(console.log).mock.calls[0][0]).toBe(
-      'Did not open diff for assets/logo.png: binary file.'
+    expect(console.log).not.toHaveBeenCalled()
+    expect(vi.mocked(console.error).mock.calls[0][0]).toContain(
+      'Did not open diff for assets/logo.png: the Orca app declined this binary file.'
     )
+    expect(process.exitCode).toBe(1)
+    process.exitCode = undefined
+  })
+
+  // Why: an older host still answers a PDF with opened:false (STA-9113); that must not read as success.
+  it('fails an unopened file open with ok:false in --json mode', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_open', {
+        worktree: 'wt-1',
+        relativePath: 'docs/example.pdf',
+        kind: 'binary',
+        opened: false
+      })
+    )
+
+    await main(
+      ['file', 'open', '--path', 'docs/example.pdf', '--worktree', 'id:wt-1', '--json'],
+      '/tmp/repo'
+    )
+
+    const output = JSON.parse(vi.mocked(console.log).mock.calls[0][0])
+    expect(output).toMatchObject({ ok: false })
+    expect(output.error.message).toContain('Did not open docs/example.pdf')
+    expect(process.exitCode).toBe(1)
+    process.exitCode = undefined
   })
 
   it('rejects --worktree without a value before cwd inference or RPC calls', async () => {
@@ -186,17 +216,20 @@ describe('orca file CLI handlers', () => {
     expect(callMock).toHaveBeenNthCalledWith(3, 'files.openDiff', {
       worktree: 'id:repo::/tmp/repo',
       relativePath: 'src/App.tsx',
-      staged: false
+      staged: false,
+      navigation: 'caller'
     })
     expect(callMock).toHaveBeenNthCalledWith(4, 'files.openDiff', {
       worktree: 'id:repo::/tmp/repo',
       relativePath: 'package.json',
-      staged: true
+      staged: true,
+      navigation: 'caller'
     })
     expect(callMock).toHaveBeenNthCalledWith(5, 'files.openDiff', {
       worktree: 'id:repo::/tmp/repo',
       relativePath: 'docs/new.md',
-      staged: false
+      staged: false,
+      navigation: 'caller'
     })
     expect(vi.mocked(console.log).mock.calls[0][0]).toBe('Opened 3 changed file targets.')
   })
@@ -263,7 +296,8 @@ describe('orca file CLI handlers', () => {
     expect(callMock).toHaveBeenNthCalledWith(2, 'files.openDiff', {
       worktree: 'id:wt-1',
       relativePath: 'src/App.tsx',
-      staged: true
+      staged: true,
+      navigation: 'caller'
     })
     const output = vi.mocked(console.log).mock.calls[0][0]
     expect(output).toContain('Opened 1 changed file targets.')
@@ -317,26 +351,161 @@ describe('orca file CLI handlers', () => {
     expect(callMock).toHaveBeenNthCalledWith(1, 'git.status', { worktree: 'id:wt-1' })
     expect(callMock).toHaveBeenNthCalledWith(2, 'files.open', {
       worktree: 'id:wt-1',
-      relativePath: 'src/App.tsx'
+      relativePath: 'src/App.tsx',
+      navigation: 'caller'
     })
     expect(callMock).toHaveBeenNthCalledWith(3, 'files.openDiff', {
       worktree: 'id:wt-1',
       relativePath: 'src/App.tsx',
-      staged: false
+      staged: false,
+      navigation: 'caller'
     })
     expect(callMock).toHaveBeenNthCalledWith(4, 'files.openDiff', {
       worktree: 'id:wt-1',
       relativePath: 'src/App.tsx',
-      staged: true
+      staged: true,
+      navigation: 'caller'
     })
     expect(callMock).toHaveBeenNthCalledWith(5, 'files.openDiff', {
       worktree: 'id:wt-1',
       relativePath: 'docs/old.md',
-      staged: false
+      staged: false,
+      navigation: 'caller'
     })
     const output = vi.mocked(console.log).mock.calls[0][0]
     expect(output).toContain('Opened 4 changed file targets.')
     expect(output).toContain('docs/old.md: deleted file has no edit target')
+  })
+
+  it('asks the host to move its view only when --focus is passed', async () => {
+    const opened = { worktree: 'wt-1', relativePath: 'src/App.tsx', kind: 'text', opened: true }
+    queueFixtures(
+      callMock,
+      okFixture('req_open', opened),
+      okFixture('req_open_focus', opened),
+      okFixture('req_diff', opened),
+      okFixture('req_diff_focus', opened)
+    )
+
+    await main(['file', 'open', 'src/App.tsx', '--worktree', 'id:wt-1'], '/tmp/elsewhere')
+    await main(
+      ['file', 'open', 'src/App.tsx', '--worktree', 'id:wt-1', '--focus'],
+      '/tmp/elsewhere'
+    )
+    await main(['file', 'diff', 'src/App.tsx', '--worktree', 'id:wt-1'], '/tmp/elsewhere')
+    await main(
+      ['file', 'diff', 'src/App.tsx', '--worktree', 'id:wt-1', '--focus'],
+      '/tmp/elsewhere'
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(1, 'files.open', {
+      worktree: 'id:wt-1',
+      relativePath: 'src/App.tsx',
+      navigation: 'caller'
+    })
+    expect(callMock).toHaveBeenNthCalledWith(2, 'files.open', {
+      worktree: 'id:wt-1',
+      relativePath: 'src/App.tsx',
+      navigation: 'all'
+    })
+    expect(callMock).toHaveBeenNthCalledWith(3, 'files.openDiff', {
+      worktree: 'id:wt-1',
+      relativePath: 'src/App.tsx',
+      staged: false,
+      navigation: 'caller'
+    })
+    expect(callMock).toHaveBeenNthCalledWith(4, 'files.openDiff', {
+      worktree: 'id:wt-1',
+      relativePath: 'src/App.tsx',
+      staged: false,
+      navigation: 'all'
+    })
+  })
+
+  it('sends caller to a paired remote server, and all with --focus', async () => {
+    const opened = { worktree: 'wt-1', relativePath: 'src/App.tsx', kind: 'text', opened: true }
+    queueFixtures(callMock, okFixture('req_open', opened), okFixture('req_open_focus', opened))
+    const remote = ['--worktree', 'id:wt-1', '--pairing-code', 'remote-runtime']
+
+    await main(['file', 'open', 'src/App.tsx', ...remote], '/tmp/elsewhere')
+    await main(['file', 'open', 'src/App.tsx', ...remote, '--focus'], '/tmp/elsewhere')
+
+    expect(callMock).toHaveBeenNthCalledWith(1, 'files.open', {
+      worktree: 'id:wt-1',
+      relativePath: 'src/App.tsx',
+      navigation: 'caller'
+    })
+    expect(callMock).toHaveBeenNthCalledWith(2, 'files.open', {
+      worktree: 'id:wt-1',
+      relativePath: 'src/App.tsx',
+      navigation: 'all'
+    })
+  })
+
+  it('moves the view once for open-changed --focus, on the first tab that opens', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_status', {
+        entries: [
+          { path: 'assets/logo.png', status: 'modified', area: 'unstaged' },
+          { path: 'src/App.tsx', status: 'modified', area: 'unstaged' }
+        ],
+        conflictOperation: 'unknown'
+      }),
+      okFixture('req_open_binary', {
+        worktree: 'wt-1',
+        relativePath: 'assets/logo.png',
+        kind: 'binary',
+        opened: false
+      }),
+      okFixture('req_diff_1', {
+        worktree: 'wt-1',
+        relativePath: 'assets/logo.png',
+        kind: 'binary',
+        opened: true
+      }),
+      okFixture('req_open', {
+        worktree: 'wt-1',
+        relativePath: 'src/App.tsx',
+        kind: 'text',
+        opened: true
+      }),
+      okFixture('req_diff_2', {
+        worktree: 'wt-1',
+        relativePath: 'src/App.tsx',
+        kind: 'text',
+        opened: true
+      })
+    )
+
+    await main(
+      ['file', 'open-changed', '--mode', 'both', '--worktree', 'id:wt-1', '--focus'],
+      '/tmp/elsewhere'
+    )
+
+    // Why: an older host answers a binary edit open with opened:false, so focus carries to the next open.
+    expect(callMock).toHaveBeenNthCalledWith(2, 'files.open', {
+      worktree: 'id:wt-1',
+      relativePath: 'assets/logo.png',
+      navigation: 'all'
+    })
+    expect(callMock).toHaveBeenNthCalledWith(3, 'files.openDiff', {
+      worktree: 'id:wt-1',
+      relativePath: 'assets/logo.png',
+      staged: false,
+      navigation: 'all'
+    })
+    expect(callMock).toHaveBeenNthCalledWith(4, 'files.open', {
+      worktree: 'id:wt-1',
+      relativePath: 'src/App.tsx',
+      navigation: 'caller'
+    })
+    expect(callMock).toHaveBeenNthCalledWith(5, 'files.openDiff', {
+      worktree: 'id:wt-1',
+      relativePath: 'src/App.tsx',
+      staged: false,
+      navigation: 'caller'
+    })
   })
 
   it('requires an explicit worktree for remote file commands', async () => {

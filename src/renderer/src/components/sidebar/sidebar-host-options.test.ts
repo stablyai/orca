@@ -5,8 +5,14 @@ import {
   buildSidebarHostScopeOptions,
   getSidebarHostVisibilityLabel,
   getSidebarHostHealthLabel,
-  shouldShowHostScopeControls
+  shouldShowHostScopeControls,
+  toggleVisibleHostRow,
+  type SidebarHostOption
 } from './sidebar-host-options'
+import { filterFolderWorkspacesForVisibleHosts } from './worktree-list/listing/host-filtering'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { ProjectGroup } from '../../../../shared/project-group-types'
+import type { SshConnectionState } from '../../../../shared/ssh-types'
 
 const LOCAL_HOST_LABEL = getExecutionHostLabel('local')
 
@@ -213,4 +219,111 @@ describe('sidebar host options', () => {
     expect(getSidebarHostHealthLabel('blocked')).toBe('Update needed')
     expect(getSidebarHostHealthLabel('error')).toBe('Needs attention')
   })
+
+  it('names a host scope saved under either merged id after the merged host', () => {
+    const hosts = mergedHosts()
+
+    expect(hosts.map((host) => host.id)).toEqual([
+      'local',
+      'runtime:omarchy-server',
+      'ssh:omarchy-target'
+    ])
+    expect(getSidebarHostVisibilityLabel(['ssh:omarchy-target'], hosts)).toBe('Omarchy')
+    expect(getSidebarHostVisibilityLabel(['runtime:omarchy-server'], hosts)).toBe('Omarchy')
+    expect(buildSidebarHostScopeOptions(hosts).map((option) => option.id)).toEqual([
+      'all',
+      'local',
+      'runtime:omarchy-server'
+    ])
+  })
+
+  it('keeps folder-only workspaces of the merged-away id when the merged host is chosen', () => {
+    const hosts = mergedHosts({ kind: 'relay', reason: 'source_changed' })
+    const shown = hosts.find((host) => host.id === 'ssh:omarchy-target')
+    expect(shown?.aliasHostIds).toEqual(['runtime:omarchy-server'])
+
+    const visible = toggleVisibleHostRow(hosts, null, shown!)
+    const group = projectGroup('runtime:omarchy-server')
+
+    expect(new Set(visible)).toEqual(new Set(['ssh:omarchy-target', 'runtime:omarchy-server']))
+    expect(
+      filterFolderWorkspacesForVisibleHosts(
+        [folderWorkspace(group.id)],
+        [group],
+        new Set(visible),
+        'local'
+      )
+    ).toHaveLength(1)
+    // Unchecking the row removes both ids, and all rows checked collapses to every host.
+    expect(toggleVisibleHostRow(hosts, ['local', ...visible!], shown!)).toEqual(['local'])
+    expect(toggleVisibleHostRow(hosts, ['local'], shown!)).toBeNull()
+  })
 })
+
+function mergedHosts(managedServer?: SshConnectionState['managedServer']): SidebarHostOption[] {
+  return buildSidebarHostOptions({
+    repos: [],
+    sshTargetLabels: new Map([['omarchy-target', 'Omarchy']]),
+    sshConnectionStates: managedServer
+      ? new Map([
+          [
+            'omarchy-target',
+            {
+              targetId: 'omarchy-target',
+              status: 'connected',
+              error: null,
+              reconnectAttempt: 0,
+              managedServer
+            }
+          ]
+        ])
+      : undefined,
+    settings: null,
+    runtimeEnvironments: [
+      {
+        id: 'omarchy-server',
+        name: 'Omarchy',
+        orcadDeployment: {
+          sshTargetId: 'omarchy-target',
+          sshTargetGeneration: 1,
+          localPort: 7001,
+          remotePort: 7002
+        }
+      }
+    ]
+  })
+}
+
+function projectGroup(executionHostId: string): ProjectGroup {
+  return {
+    id: 'group-1',
+    name: 'Notes',
+    parentPath: null,
+    executionHostId,
+    parentGroupId: null,
+    createdFrom: 'manual',
+    tabOrder: 0,
+    isCollapsed: false,
+    color: null,
+    createdAt: 1,
+    updatedAt: 1
+  }
+}
+
+function folderWorkspace(projectGroupId: string): FolderWorkspace {
+  return {
+    id: 'folder-1',
+    projectGroupId,
+    name: 'notes',
+    folderPath: '/notes',
+    linkedTask: null,
+    comment: '',
+    isArchived: false,
+    isUnread: false,
+    isPinned: false,
+    sortOrder: 0,
+    lastActivityAt: 1,
+    createdAt: 1,
+    updatedAt: 1
+  }
+}

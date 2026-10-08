@@ -1,3 +1,4 @@
+import { DEDICATED_E2E_SPECS } from './ci-e2e-job-selection.mjs'
 import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { parse } from 'yaml'
@@ -22,7 +23,8 @@ it('routes SSH browser specs to a lane that enables their opt-ins', () => {
     expect(runner).toContain(`'${spec}'`)
     expect(runner).toContain(`${flag}: '1'`)
     expect(workflow.jobs['ssh-docker-watcher-isolation'].if).toContain(spec)
-    expect(changedRun.run).toContain(`. != "${spec}"`)
+    expect(DEDICATED_E2E_SPECS).toContain(spec)
+    expect(changedRun.run).toContain('node config/scripts/ci-e2e-job-selection.mjs')
   }
 })
 
@@ -42,9 +44,7 @@ it('executes both Docker network routes in a Node job with their opt-in enabled'
   expect(run.env.ORCA_RUN_DOCKER_SSH_BROWSER_E2E).toBe('1')
   expect(run.run).toContain(`vitest run --config config/vitest.config.ts ${spec}`)
   expect(run['continue-on-error']).toBeUndefined()
-  expect(
-    workflow.jobs['changed-e2e'].steps.find((step) => step.name === 'Run changed E2E specs').run
-  ).toContain(`. != "${spec}"`)
+  expect(DEDICATED_E2E_SPECS).toContain(spec)
   for (const changed of [
     spec,
     'src/main/browser/ssh-browser-network-execution-route.ts',

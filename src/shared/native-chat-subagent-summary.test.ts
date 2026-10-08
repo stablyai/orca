@@ -4,7 +4,8 @@ import {
   isTerminalSubagentState,
   normalizeSubagentState,
   subagentGroupFallbackText,
-  summarizeSubagentGroup
+  summarizeSubagentGroup,
+  withoutSubagentGroupTwins
 } from './native-chat-subagent-summary'
 import type { NativeChatSubagentEntry } from './native-chat-types'
 
@@ -71,8 +72,75 @@ describe('summarizeSubagentGroup', () => {
       agent({ id: 'b', state: 'stopped', startedAt: 20, settledAt: 95 })
     ])
 
-    expect(working).toMatchObject({ startedAt: 20, settledAt: null })
-    expect(settled).toMatchObject({ startedAt: 20, settledAt: 95 })
+    expect(working).toMatchObject({ clockStartedAt: 20, settledAt: null })
+    expect(settled).toMatchObject({ clockStartedAt: 20, settledAt: 95 })
+  })
+
+  describe('elapsed clock', () => {
+    // What the row's clock reads: from `clockStartedAt` to now, or to `settledAt`.
+    function elapsed(agents: NativeChatSubagentEntry[], now: number): number | null {
+      const { clockStartedAt, settledAt } = summarizeSubagentGroup(agents)
+      return clockStartedAt === null ? null : (settledAt ?? now) - clockStartedAt
+    }
+
+    it('reads an overlapping fan-out as first start to last stop', () => {
+      const agents = [
+        agent({ id: 'a', state: 'completed', startedAt: 100, settledAt: 400 }),
+        agent({ id: 'b', state: 'completed', startedAt: 150, settledAt: 250 }),
+        agent({ id: 'c', state: 'failed', startedAt: 300, settledAt: 700 })
+      ]
+
+      expect(elapsed(agents, 10_000)).toBe(600)
+    })
+
+    it('counts only the two runs of a child resumed after a long gap', () => {
+      const agents = [
+        agent({ id: 'a', state: 'completed', startedAt: 1_000, settledAt: 6_000 }),
+        // The resumed child's current run, reopened long after its sibling stopped.
+        agent({ id: 'b', state: 'completed', startedAt: 300_000, settledAt: 305_000 })
+      ]
+
+      expect(elapsed(agents, 400_000)).toBe(10_000)
+    })
+
+    it('sums sequential children and skips the gap between them', () => {
+      const agents = [
+        agent({ id: 'a', state: 'completed', startedAt: 0, settledAt: 2_000 }),
+        agent({ id: 'b', state: 'completed', startedAt: 60_000, settledAt: 63_000 }),
+        agent({ id: 'c', state: 'stopped', startedAt: 120_000, settledAt: 121_000 })
+      ]
+
+      expect(elapsed(agents, 200_000)).toBe(6_000)
+    })
+
+    it('grows with now while a child works, without the gap before its run', () => {
+      const agents = [
+        agent({ id: 'a', state: 'completed', startedAt: 1_000, settledAt: 6_000 }),
+        agent({ id: 'b', state: 'working', startedAt: 300_000 })
+      ]
+
+      expect(elapsed(agents, 302_000)).toBe(7_000)
+      expect(elapsed(agents, 310_000)).toBe(15_000)
+    })
+
+    it('counts a settled run that overlaps a working one only once', () => {
+      const agents = [
+        agent({ id: 'a', state: 'completed', startedAt: 1_000, settledAt: 5_000 }),
+        agent({ id: 'b', state: 'working', startedAt: 3_000 })
+      ]
+
+      expect(elapsed(agents, 10_000)).toBe(9_000)
+    })
+
+    it('has no clock when no child carries a run time', () => {
+      expect(summarizeSubagentGroup([]).clockStartedAt).toBeNull()
+      expect(
+        summarizeSubagentGroup([
+          agent({ id: 'a', state: 'working' }),
+          agent({ id: 'b', state: 'completed', settledAt: 50 })
+        ]).clockStartedAt
+      ).toBeNull()
+    })
   })
 
   it('reads a state this build does not know as unverifiable, never as working', () => {
@@ -224,5 +292,18 @@ describe('isSubagentGroupFallbackText', () => {
     ]) {
       expect(isSubagentGroupFallbackText(prose)).toBe(false)
     }
+  })
+})
+
+describe('withoutSubagentGroupTwins', () => {
+  const twin = { type: 'text' as const, text: 'Ran 1 subagent' }
+  const prose = { type: 'text' as const, text: 'Delegating the review.' }
+
+  it('drops the twin only beside a group that draws', () => {
+    const group = { type: 'subagent-group' as const, groupId: 'g', agents: [agent({})] }
+    expect(withoutSubagentGroupTwins([twin, prose, group])).toEqual([prose, group])
+    const childless = { type: 'subagent-group' as const, groupId: 'g', agents: [] }
+    expect(withoutSubagentGroupTwins([twin, childless])).toEqual([twin, childless])
+    expect(withoutSubagentGroupTwins([twin])).toEqual([twin])
   })
 })

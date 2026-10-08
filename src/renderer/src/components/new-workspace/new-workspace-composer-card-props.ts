@@ -31,6 +31,8 @@ export type NewWorkspaceComposerCardProps = {
   contextualTourSource?: string
   containerClassName?: string
   contentClassName?: string
+  selectedRepoPath?: string | null
+  onNativeFileDrop?: (paths: string[], isCurrent: () => boolean) => Promise<void>
   composerRef?: React.RefObject<HTMLDivElement | null>
   onComposerNodeChange?: (node: HTMLDivElement | null) => void
   nameInputRef?: React.RefObject<HTMLInputElement | null>

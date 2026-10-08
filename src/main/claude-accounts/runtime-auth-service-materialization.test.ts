@@ -421,7 +421,7 @@ describe('ClaudeRuntimeAuthService', () => {
     }
   })
 
-  it('falls back to atomic write when the unchanged check cannot read the target', async () => {
+  it('preserves unreadable runtime credentials instead of overwriting unknown connector grants', async () => {
     if (hostPlatform === 'win32') {
       return
     }
@@ -449,7 +449,7 @@ describe('ClaudeRuntimeAuthService', () => {
     writeFileSync(join(managedAuthPath, '.credentials.json'), rotatedCredentials, 'utf-8')
     chmodSync(runtimeCredentialsPath, 0o000)
     try {
-      await service.syncForCurrentSelection()
+      await expect(service.syncForCurrentSelection()).rejects.toMatchObject({ code: 'EACCES' })
     } finally {
       if (existsSync(runtimeCredentialsPath)) {
         chmodSync(runtimeCredentialsPath, 0o600)
@@ -457,7 +457,8 @@ describe('ClaudeRuntimeAuthService', () => {
       warn.mockRestore()
     }
 
-    expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(rotatedCredentials)
+    expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(managedCredentials)
+    expect(testState.scopedKeychainCredentials).toBe(managedCredentials)
   })
 
   it('tightens credential file permissions when unchanged content is already present', async () => {

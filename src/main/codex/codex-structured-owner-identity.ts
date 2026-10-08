@@ -3,6 +3,7 @@ import {
   agentSessionProviderHandleKey,
   type AgentSessionProviderHandleLink
 } from '../../shared/agent-session-provider-handle'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 import type { AgentSessionProcessIdentity } from '../../shared/agent-session-record'
 import { readProcessStartTimeMs } from '../runtime/agent-session-process-identity-probe'
 
@@ -54,6 +55,8 @@ export async function codexProcessIdentity(
   if (input.pid === undefined) {
     throw new Error('codex app-server started without a pid')
   }
+  // Best-effort: without it a later owner probe is indeterminate, and recovery releases such an
+  // owner without signalling it, so an unreadable start time must not refuse the session.
   let processStartTimeMs: number | null = null
   for (
     let attempt = 0;
@@ -61,11 +64,6 @@ export async function codexProcessIdentity(
     attempt += 1
   ) {
     processStartTimeMs = await readStartTime(input.pid)
-  }
-  if (processStartTimeMs === null) {
-    // Why: recording null makes every later owner probe indeterminate — a durable latch.
-    // Failing here reaps the child and leaves a retryable refusal instead.
-    throw new Error(`codex app-server start time for pid ${input.pid} could not be read`)
   }
   return {
     hostId: input.identity.hostId,
@@ -91,16 +89,15 @@ export function codexProviderHandleLink(
 ): AgentSessionProviderHandleLink {
   return {
     linkId: input.linkId ?? `codex-${input.fence}-${input.threadId}`.slice(0, 128),
-    handle: { provider: 'codex', threadId: input.threadId },
+    handle: codexProviderHandle(input.threadId),
     origin: input.origin ?? (input.resumed ? 'resumed' : 'created'),
     mintedAtFence: input.fence,
     observedAt: input.observedAt,
     ...(input.supersedesThreadId
       ? {
-          supersedesKey: agentSessionProviderHandleKey({
-            provider: 'codex',
-            threadId: input.supersedesThreadId
-          })
+          supersedesKey: agentSessionProviderHandleKey(
+            codexProviderHandle(input.supersedesThreadId)
+          )
         }
       : {})
   }

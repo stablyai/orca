@@ -1,3 +1,4 @@
+import './unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
 import type { RuntimeTerminalDataMeta } from '../orca-runtime'

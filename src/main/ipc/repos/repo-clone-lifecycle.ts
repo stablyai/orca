@@ -8,7 +8,8 @@ import type { Repo } from '../../../shared/repo-types'
 import { isFolderRepo } from '../../../shared/repo-kind'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/constants'
 import { getGitCloneFailureMessage } from '../../../shared/git-clone-failure-message'
-import { gitSpawnAfterWindowsEnvironmentReady, nonInteractiveGitEnv } from '../../git/runner'
+import { gitSpawnAfterWindowsEnvironmentReady, promptGuardGitEnv } from '../../git/runner'
+import { reuseSavedCloneTarget } from '../../git/saved-clone-target'
 import { getRepoName } from '../../git/repo'
 import type { ClaimedCloneTarget } from '../../git/repo-clone-path'
 import {
@@ -17,7 +18,7 @@ import {
   deriveValidatedClonePath,
   getClonePathComparisonKey
 } from '../../git/repo-clone-path'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { detectRepoIconAndUpstream } from '../../repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../../worktree-root-preparation'
 import { invalidateAuthorizedRootsCache } from '../registered-worktree-roots-cache'
@@ -119,44 +120,59 @@ export function registerRepoCloneHandlers(mainWindow: BrowserWindow, store: Stor
       // Why: derive the repo folder name from the URL's last segment, matching default git clone behavior.
       const clonePath = deriveValidatedClonePath(args)
       const clonePathKey = getClonePathComparisonKey(clonePath)
+      // Remote projects can share this path string without belonging to this clone host.
+      const findSaved = (): Repo | undefined =>
+        store
+          .getRepos()
+          .find(
+            (r) =>
+              getClonePathComparisonKey(r.path) === clonePathKey &&
+              getRepoExecutionHostId(r) === LOCAL_EXECUTION_HOST_ID
+          )
       return runWithClonePathLock(clonePathKey, async () => {
         await pendingAbortCleanupByPath.get(clonePathKey)
-        const existingAfterPendingClone = store
-          .getRepos()
-          .find((r) => getClonePathComparisonKey(r.path) === clonePathKey)
-        if (existingAfterPendingClone && !isFolderRepo(existingAfterPendingClone)) {
-          // Why: clone_url always produces a git repo.
-          emitRepoAdded('clone_url', true, true)
-          return existingAfterPendingClone
-        }
-        // Why: gitSpawn cwd is args.destination, so it must exist before spawn (fresh installs may lack the defaulted parent).
-        await mkdir(args.destination, { recursive: true })
-        const claimedTarget = await claimCloneTarget(clonePath)
-
-        // Why: spawn (not execFile) avoids the maxBuffer limit — clone progress on stderr can exceed Node's 1 MB default.
-        // Why: --progress forces git to emit progress even when stderr isn't a TTY.
         const cloneMetadataRef: { current: ActiveCloneMetadata | null } = { current: null }
+        let claimedTarget: ClaimedCloneTarget
         let proc: Awaited<ReturnType<typeof gitSpawnAfterWindowsEnvironmentReady>>
+        // Why: registered before the saved-project check so Cancel also stops that git read.
         const pendingController = new AbortController()
         pendingLocalCloneControllers.add(pendingController)
         try {
-          // Why: use the parent destination as cwd so the runner detects a WSL path and routes through wsl.exe.
-          // Why: '--' isolates the URL so a malicious URL can't be read as git flags (command injection).
-          proc = await gitSpawnAfterWindowsEnvironmentReady(
-            ['clone', '--progress', '--', args.url, clonePath],
-            {
-              cwd: args.destination,
-              admissionTier: 'interactive',
-              // Why: without this, an auth-needing clone pops Git Credential Manager's OAuth window on Windows, unclosable in a restricted env (issue #7652).
-              env: nonInteractiveGitEnv(),
-              signal: pendingController.signal,
-              stdio: ['ignore', 'ignore', 'pipe']
-            }
+          const reused = await reuseSavedCloneTarget(
+            findSaved,
+            args.url,
+            LOCAL_EXECUTION_HOST_ID,
+            pendingController.signal
           )
-        } catch (err) {
-          await cleanupClaimedCloneTarget(clonePath, claimedTarget)
-          const message = err instanceof Error ? err.message : String(err)
-          throw new Error(`Clone failed: ${message}`)
+          if (reused) {
+            // Why: clone_url always produces a git repo.
+            emitRepoAdded('clone_url', true, true)
+            return reused
+          }
+          // Why: gitSpawn cwd is args.destination, so it must exist before spawn (fresh installs may lack the defaulted parent).
+          await mkdir(args.destination, { recursive: true })
+          claimedTarget = await claimCloneTarget(clonePath)
+          // Why: spawn (not execFile) avoids the maxBuffer limit — clone progress on stderr can exceed Node's 1 MB default.
+          // Why: --progress forces git to emit progress even when stderr isn't a TTY.
+          try {
+            // Why: use the parent destination as cwd so the runner detects a WSL path and routes through wsl.exe.
+            // Why: '--' isolates the URL so a malicious URL can't be read as git flags (command injection).
+            proc = await gitSpawnAfterWindowsEnvironmentReady(
+              ['clone', '--progress', '--', args.url, clonePath],
+              {
+                cwd: args.destination,
+                admissionTier: 'interactive',
+                // Why: without this, an auth-needing clone pops Git Credential Manager's OAuth window on Windows, unclosable in a restricted env (issue #7652).
+                env: promptGuardGitEnv(),
+                signal: pendingController.signal,
+                stdio: ['ignore', 'ignore', 'pipe']
+              }
+            )
+          } catch (err) {
+            await cleanupClaimedCloneTarget(clonePath, claimedTarget)
+            const message = err instanceof Error ? err.message : String(err)
+            throw new Error(`Clone failed: ${message}`)
+          }
         } finally {
           pendingLocalCloneControllers.delete(pendingController)
         }
@@ -236,9 +252,7 @@ export function registerRepoCloneHandlers(mainWindow: BrowserWindow, store: Stor
 
         try {
           // Why: check after clone (path didn't exist before); reuse+upgrade a folder repo clone landed into instead of duplicating.
-          const existing = store
-            .getRepos()
-            .find((r) => getClonePathComparisonKey(r.path) === clonePathKey)
+          const existing = findSaved()
           if (existing) {
             if (isFolderRepo(existing)) {
               const updated = store.updateRepo(existing.id, {
@@ -254,6 +268,11 @@ export function registerRepoCloneHandlers(mainWindow: BrowserWindow, store: Stor
                 return updated
               }
             }
+            // Why: git re-created this project's folder, so its worktree root is gone with it and
+            // the authorized-roots cache still holds the answers from before the folder came back.
+            await prepareLocalWorktreeRootForRepo(store, existing)
+            invalidateAuthorizedRootsCache()
+            notifyReposChanged(mainWindow)
             emitRepoAdded('clone_url', true, true)
             return existing
           }

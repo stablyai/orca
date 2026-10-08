@@ -5,6 +5,7 @@ import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
 import { resolveExplicitTerminalTitleAgentType } from '../../../shared/terminal-title-agent-type'
 import type { TerminalLayoutSnapshot } from '../../../shared/terminal-tab-types'
+import type { TerminalAgent } from '../../../shared/terminal-agent'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import {
   resolveFocusedCompletedTabAgent,
@@ -47,7 +48,7 @@ export function resolveOpenTabOccupantAgent({
   retainedAgentsByPaneKey,
   sleepingAgentSessionsByPaneKey,
   paneForegroundAgentByPaneKey
-}: OpenTabOccupantAgentInput): TuiAgent | null {
+}: OpenTabOccupantAgentInput): TerminalAgent | null {
   const hookAgent = resolveFocusedTabAgent(agentStatusByPaneKey, layout, tabId)
   const siblingHookAgent = resolveSiblingTabAgent(agentStatusByPaneKey, layout, tabId)
   const focusedCompletedHookAgent =

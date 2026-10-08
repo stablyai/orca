@@ -50,6 +50,10 @@ vi.mock('./zcode-usage-fetcher', () => ({
   fetchZcodeRateLimits: vi.fn()
 }))
 
+vi.mock('./antigravity-usage-fetcher', () => ({
+  fetchAntigravityRateLimits: vi.fn()
+}))
+
 vi.mock('./minimax/minimax-fetcher', () => ({
   fetchMiniMaxRateLimits: vi.fn()
 }))
@@ -467,8 +471,7 @@ describe('RateLimitService', () => {
     const service = new RateLimitService()
     service.setOpenCodeGoConfigResolver(() => ({
       sessionCookie: 'session=abc123',
-      workspaceIdOverride: '',
-      apiKey: ''
+      workspaceIdOverride: ''
     }))
     const networkProxySettings = {
       httpProxyUrl: 'http://proxy.example:8080',
@@ -489,7 +492,7 @@ describe('RateLimitService', () => {
       expect.objectContaining({
         authPreparation: undefined,
         allowPtyFallback: false,
-        allowUsagePanelSupplement: true,
+        allowUsagePanelSupplement: process.platform !== 'win32',
         signal: expect.any(AbortSignal)
       })
     )
@@ -598,8 +601,7 @@ describe('RateLimitService', () => {
     const service = new RateLimitService()
     service.setOpenCodeGoConfigResolver(() => ({
       sessionCookie: '',
-      workspaceIdOverride: '',
-      apiKey: ''
+      workspaceIdOverride: ''
     }))
 
     vi.mocked(fetchClaudeRateLimits).mockRejectedValueOnce(new Error('claude down'))
@@ -623,8 +625,7 @@ describe('RateLimitService', () => {
     let cookie = 'session=valid'
     service.setOpenCodeGoConfigResolver(() => ({
       sessionCookie: cookie,
-      workspaceIdOverride: '',
-      apiKey: ''
+      workspaceIdOverride: ''
     }))
 
     // 1. Success fetch
@@ -660,8 +661,7 @@ describe('RateLimitService', () => {
     let workspaceId = 'wrk_A'
     service.setOpenCodeGoConfigResolver(() => ({
       sessionCookie: 'session=valid',
-      workspaceIdOverride: workspaceId,
-      apiKey: ''
+      workspaceIdOverride: workspaceId
     }))
 
     // 1. Success fetch for Workspace A

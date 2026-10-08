@@ -66,6 +66,7 @@ export function createTabsCreateActions(
         }
 
         const shouldActivate = init?.activate ?? true
+        const recordsFocus = shouldActivate && init?.recordFocus !== false
         const createdAt = Date.now()
         const executionHostId =
           init?.executionHostId ?? getActiveExecutionHostIdForWorktree(state, worktreeId)
@@ -100,7 +101,7 @@ export function createTabsCreateActions(
           sortOrder: insertedIndex,
           createdAt,
           // Why: creating an active tab is a focus event; Cmd+J recency reads lastFocusedAt.
-          ...(shouldActivate ? { lastFocusedAt: createdAt } : {}),
+          ...(recordsFocus ? { lastFocusedAt: createdAt } : {}),
           isPreview: init?.isPreview,
           isPinned: init?.isPinned
         }

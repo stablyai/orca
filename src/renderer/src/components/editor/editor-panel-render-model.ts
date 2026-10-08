@@ -14,6 +14,7 @@ import type { FileContent } from './editor-panel-content-types'
 import { canUseChangesModeForFile } from './editor-panel-file-mode'
 import { getMarkdownRenderMode, type MarkdownRenderState } from './markdown-render-mode'
 import { getCachedMarkdownRichModeEligibility } from './markdown-rich-mode-eligibility-cache'
+import { exceedsMarkdownRichModeSizeLimit } from './markdown-rich-size-limit'
 
 type StoreState = ReturnType<typeof useAppStore.getState>
 
@@ -163,12 +164,20 @@ export function getEditorPanelRenderModel({
     ((activeFile.mode === 'markdown-preview' &&
       fileContents[activeFile.id] !== undefined &&
       fileContents[activeFile.id]?.isBinary !== true &&
-      !fileContents[activeFile.id]?.loadError) ||
+      !fileContents[activeFile.id]?.loadError &&
+      !exceedsMarkdownRichModeSizeLimit(
+        editorDrafts[activeFile.markdownPreviewSourceFileId ?? activeFile.filePath] ??
+          fileContents[activeFile.id].content
+      )) ||
       (activeFile.mode === 'edit' &&
         fileContents[activeFile.id] !== undefined &&
         !isChangesMode &&
         inlineMarkdownRenderState !== null &&
         inlineMarkdownRenderState.renderMode !== 'source' &&
+        (inlineMarkdownRenderState.renderMode !== 'preview' ||
+          !exceedsMarkdownRichModeSizeLimit(
+            editorDrafts[activeFile.id] ?? fileContents[activeFile.id].content
+          )) &&
         fileContents[activeFile.id]?.isBinary !== true &&
         !fileContents[activeFile.id]?.loadError &&
         activeFile.conflict?.conflictStatus !== 'unresolved'))

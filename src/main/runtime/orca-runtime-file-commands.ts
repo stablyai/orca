@@ -44,17 +44,24 @@ export class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreservedBranchC
         absolutePath
       }),
     resolveRuntimeGitTarget: (selector) => this.resolveRuntimeGitTarget(selector),
-    openFile: (worktreeId, filePath, relativePath, runtimeEnvironmentId) => {
+    openFile: (worktreeId, filePath, relativePath, runtimeEnvironmentId, navigation) => {
       if (!this.notifier?.openFile) {
         throw new Error('renderer_unavailable')
       }
-      this.notifier.openFile(worktreeId, filePath, relativePath, runtimeEnvironmentId)
+      this.notifier.openFile(worktreeId, filePath, relativePath, runtimeEnvironmentId, navigation)
     },
-    openDiff: (worktreeId, filePath, relativePath, staged, runtimeEnvironmentId) => {
+    openDiff: (worktreeId, filePath, relativePath, staged, runtimeEnvironmentId, navigation) => {
       if (!this.notifier?.openDiff) {
         throw new Error('renderer_unavailable')
       }
-      this.notifier.openDiff(worktreeId, filePath, relativePath, staged, runtimeEnvironmentId)
+      this.notifier.openDiff(
+        worktreeId,
+        filePath,
+        relativePath,
+        staged,
+        runtimeEnvironmentId,
+        navigation
+      )
     }
   })
 

@@ -1,6 +1,7 @@
 // One durable row per Claude background `task_id`, revised in place from the
 // lifecycle frames so a failed command prints once with the provider sentence.
 
+import type { AgentJournalTurnScope } from '../../shared/agent-session-journal-types'
 import { isSettledBackgroundTaskState } from '../../shared/native-chat-background-task-row'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { record, taskAliasId } from './claude-background-task-frames'
@@ -42,10 +43,16 @@ export type ClaudeBackgroundTaskRowsDeps = {
    *  reached the transcript is a nested child, and a top-level row minted for it
    *  would claim an invocation the user never saw. */
   isForwardedParentTool: (toolUseId: string) => boolean
+  /** Whether an earlier provider run of this session rostered this task as a
+   *  subagent. Its announcement is not repeated, so this is the only route from
+   *  a later frame for it — Claude's restart notice above all — to the roster. */
+  rosteredByEarlierRun?: (taskId: string) => boolean
   /** Opens a turn for the frame being journaled. A typed row is provider
    *  output, so writing one must reopen a turn the provider resumed itself —
    *  otherwise the session renders the row while reporting idle. */
   openOutputTurn?: (frame: Record<string, unknown>, observedAt: number) => void
+  /** The turn a row written now belongs to: the open one, else the conversation. */
+  turnScope: () => AgentJournalTurnScope
   onPersistenceFailure?: (error: Error) => void
   now?: () => number
 }
@@ -60,7 +67,11 @@ export class ClaudeBackgroundTaskRows {
 
   constructor(private readonly deps: ClaudeBackgroundTaskRowsDeps) {
     this.now = deps.now ?? (() => Date.now())
-    this.writer = new ClaudeBackgroundTaskRowWriter(deps.sink, deps.onPersistenceFailure)
+    this.writer = new ClaudeBackgroundTaskRowWriter(
+      deps.sink,
+      deps.turnScope,
+      deps.onPersistenceFailure
+    )
     this.overflowTerminalRows = new ClaudeOverflowTerminalRows(
       this.ledgers,
       this.now,
@@ -128,6 +139,10 @@ export class ClaudeBackgroundTaskRows {
       })
     }
     if (this.ledgers.foreign.has(id)) {
+      return true
+    }
+    if (!this.rows.has(id) && this.deps.rosteredByEarlierRun?.(id) === true) {
+      this.ledgers.rememberForeign(id, 'roster')
       return true
     }
     if (message.subtype === 'task_notification') {

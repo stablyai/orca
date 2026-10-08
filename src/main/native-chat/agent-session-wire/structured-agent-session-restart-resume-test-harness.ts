@@ -11,7 +11,12 @@ import type {
 } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionResumeMarker } from '../../../shared/agent-session-resume-marker'
+import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import { structuredAgentSessionResumableSet } from './structured-agent-session-restart-resume-set'
+import {
+  claudeProviderHandle,
+  codexProviderHandle
+} from '../../../shared/agent-session-provider-handle-encoding'
 
 export const SESSION = 'session-working-1'
 export const THREAD = 'thread-1'
@@ -52,7 +57,7 @@ export function record(overrides: { chain?: AgentSessionRecord['providerHandleCh
     providerHandleChain: overrides.chain ?? [
       {
         linkId: 'link-1',
-        handle: { provider: 'codex', threadId: THREAD },
+        handle: codexProviderHandle(THREAD),
         origin: 'created',
         mintedAtFence: 1,
         observedAt: NOW
@@ -123,7 +128,7 @@ export function claudeRecord(
     providerHandleChain: [
       {
         linkId: 'link-1',
-        handle: { provider: 'claude', sessionId: providerSessionId, leafUuid },
+        handle: claudeProviderHandle(providerSessionId, leafUuid),
         origin: 'created',
         mintedAtFence: 1,
         observedAt: NOW
@@ -135,7 +140,6 @@ export function claudeRecord(
 /** The fake journal's own shape, so callers can wire `appendItem` without reaching into `unknown`.
  *  The code under test sees the real `AgentSessionJournal` type; tests see this. */
 export type HarnessJournal = {
-  isReadOnly: boolean
   snapshot: () => {
     items: AgentJournalRenderItem[]
     submissions: AgentJournalSubmission[]
@@ -149,12 +153,10 @@ export type HarnessSession = { journal: HarnessJournal; child: { fence: number }
 
 export function journal(
   items: AgentJournalRenderItem[],
-  isReadOnly = false,
   submissions: AgentJournalSubmission[] = []
 ) {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the code under test calls only isReadOnly, snapshot(), submissions() and appendItem(); a real AgentSessionJournal needs an on-disk SQLite store.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the code under test calls only snapshot(), submissions() and appendItem(); a real AgentSessionJournal needs an on-disk SQLite store.
   return {
-    isReadOnly,
     snapshot: () => ({ items, submissions, cursor: { epoch: EPOCH, sequence: items.length } }),
     submissions: () => submissions,
     appendItem: async () => undefined
@@ -195,6 +197,21 @@ export function submission(
   }
 }
 
+/** A child record as the host's store serves it; live unless the test settles it. */
+export function childRecord(
+  child: Pick<AgentChildWorkView, 'id' | 'kind'> & Partial<AgentChildWorkView>
+): AgentChildWorkView {
+  return {
+    state: 'working',
+    membership: child.state === 'done' || child.state === 'idle' ? 'settled' : 'live',
+    firstObservedAt: NOW,
+    observedAt: NOW,
+    stoppable: false,
+    invocation: { invocationId: `spawn-${child.id}`, generation: 1 },
+    ...child
+  }
+}
+
 /** The epoch the fake journal reports. */
 export const EPOCH = 'epoch-1'
 
@@ -203,12 +220,15 @@ export function resumableSet(input: {
   markers: AgentSessionResumeMarker[]
   items?: AgentJournalRenderItem[]
   chain?: AgentSessionRecord['providerHandleChain']
+  /** Sessions a newer Orca saved. */
+  savedByNewerOrca?: string[]
 }) {
   return structuredAgentSessionResumableSet({
     markers: input.markers,
     getRecord: () => record(input.chain === undefined ? {} : { chain: input.chain }),
     supportsRecord: () => true,
     latestPrompt: () => 'fix the auth bug',
-    movedOn: () => false
+    movedOn: () => false,
+    savedByNewerOrca: (sessionId) => input.savedByNewerOrca?.includes(sessionId) === true
   })
 }

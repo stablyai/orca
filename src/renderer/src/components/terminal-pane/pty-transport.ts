@@ -1,3 +1,4 @@
+import { toSshExecutionHostId } from '../../../../shared/execution-host'
 import { attachIpcPty } from './ipc-pty-attach'
 import { connectIpcPty } from './ipc-pty-connect'
 import { createIpcPtySessionHandlers } from './ipc-pty-session-handlers'
@@ -48,6 +49,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
   let onAbandonedConnect: ((ptyId: string) => boolean) | undefined
   let ptyId: string | null = null
   let lifecycleGeneration = 0
+  let pendingConnectGeneration: number | null = null
   let lastExitGeneration: number | null = null
   let suppressAttentionEvents = false
   let storedCallbacks: Parameters<PtyTransport['connect']>[0]['callbacks'] = {}
@@ -105,13 +107,26 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
   const setCallbacks = (callbacks: typeof storedCallbacks): void => {
     storedCallbacks = callbacks
   }
+  const dropPreconnectInput = (reason: string): void => {
+    if (preconnectInputBuffer?.hasPendingInput()) {
+      console.warn(
+        `[pty-transport] dropped keys typed while the terminal was connecting: ${reason}`
+      )
+    }
+    preconnectInputBuffer?.clear()
+  }
   const flushPreconnectInput = async (): Promise<void> => {
     if (!preconnectInputBuffer?.isBuffering()) {
       return
     }
     const id = ptyId
     if (destroyed || !connected || !id) {
-      preconnectInputBuffer.clear()
+      // Why: a closed pane's keys have no owner; only a failed attach is worth reporting.
+      if (destroyed) {
+        preconnectInputBuffer.clear()
+      } else {
+        dropPreconnectInput('the terminal did not attach')
+      }
       return
     }
     await preconnectInputBuffer.flush({
@@ -131,6 +146,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     getPendingEscapeTailAnsi: outputProcessor.getPendingEscapeTailAnsi,
     connect: async (options) => {
       const connectGeneration = advancePtyLifecycle()
+      pendingConnectGeneration = connectGeneration
       try {
         return await connectIpcPty(options, {
           transportOptions: opts,
@@ -148,11 +164,17 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           getCallbacks: () => storedCallbacks
         })
       } finally {
+        if (pendingConnectGeneration === connectGeneration) {
+          pendingConnectGeneration = null
+        }
         if (lifecycleGeneration === connectGeneration) {
           await flushPreconnectInput()
         }
       }
     },
+
+    isConnectPending: () =>
+      !destroyed && ptyId === null && pendingConnectGeneration === lifecycleGeneration,
 
     attach: (options) => {
       const attachGeneration = advancePtyLifecycle()
@@ -178,7 +200,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     },
 
     abandonPreconnectInput() {
-      preconnectInputBuffer?.clear()
+      dropPreconnectInput('its pending connection was abandoned')
     },
 
     disconnect() {
@@ -274,6 +296,8 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     isConnected: () => connected,
     getPtyId: () => ptyId,
     getConnectionId: () => connectionId ?? null,
+    getExecutionHostId: () => (connectionId ? toSshExecutionHostId(connectionId) : 'local'),
+    getRuntimeEnvironmentId: () => null,
     getLocalSessionMetadata: () =>
       connectionId
         ? null

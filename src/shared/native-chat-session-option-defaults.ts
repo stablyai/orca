@@ -5,7 +5,10 @@ import type {
   PersistedNativeChatSessionOptions,
   SessionOptionValue
 } from './native-chat-session-options'
-import { encodeStructuredAgentSessionOptionValue } from './structured-agent-session-option-codec'
+import {
+  decodeStructuredAgentSessionOptionValue,
+  encodeStructuredAgentSessionOptionValue
+} from './structured-agent-session-option-codec'
 
 export function resolveNativeChatSessionOptionDefaults(
   persisted: PersistedNativeChatSessionOptions | null | undefined,
@@ -58,6 +61,29 @@ export function narrowStructuredLaunchSeedOptions(
     }
   }
   return Object.keys(seeded).length > 0 ? seeded : undefined
+}
+
+/** An already-encoded seed read from another host or from storage: the seedable ids whose value
+ *  decodes, or `undefined` when nothing usable remains. */
+export function parseStructuredLaunchSeedOptions(
+  value: unknown
+): Record<string, string> | undefined {
+  if (!value || typeof value !== 'object') {
+    return undefined
+  }
+  const entries = new Map<string, unknown>(Object.entries(value))
+  const parsed: Record<string, string> = {}
+  for (const id of STRUCTURED_LAUNCH_SEED_OPTION_IDS) {
+    const encoded = entries.get(id)
+    if (
+      typeof encoded === 'string' &&
+      encoded.trim() &&
+      decodeStructuredAgentSessionOptionValue(id, encoded) !== null
+    ) {
+      parsed[id] = encoded
+    }
+  }
+  return Object.keys(parsed).length > 0 ? parsed : undefined
 }
 
 /** The saved selection a structured create seeds into its string-valued reservation. */

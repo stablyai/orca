@@ -77,6 +77,14 @@ describe('detectLanguage', () => {
     expect(detectLanguage('api/v1/service.proto')).toBe('proto')
   })
 
+  it('maps Quarto and R Markdown files to the quarto language id', () => {
+    expect(detectLanguage('slides/talk.qmd')).toBe('quarto')
+    expect(detectLanguage('analysis/report.Rmd')).toBe('quarto')
+    expect(detectLanguage('/home/remote/report.rmarkdown')).toBe('quarto')
+    expect(detectLanguage('C:\\repo\\NOTES.QMD')).toBe('quarto')
+    expect(detectLanguage('README.md')).toBe('markdown')
+  })
+
   it('maps .jsonl files to the dedicated jsonl language id (case-insensitive)', () => {
     expect(detectLanguage('/home/user/.claude/sessions/transcript.jsonl')).toBe('jsonl')
     expect(detectLanguage('C:\\Users\\alice\\.codex\\LOG.JSONL')).toBe('jsonl')
@@ -122,6 +130,27 @@ describe('detectLanguage', () => {
     expect(detectLanguage('force-app/main/default/triggers/AccountTrigger.trigger')).toBe('apex')
     expect(detectLanguage('scripts/apex/seed.apex')).toBe('apex')
     expect(detectLanguage('C:\\repo\\force-app\\classes\\ACCOUNTSERVICE.CLS')).toBe('apex')
+  })
+
+  it('maps Ruby DSL extensions to the ruby language id (case-insensitive)', () => {
+    expect(detectLanguage('lib/tasks/devise.rake')).toBe('ruby')
+    expect(detectLanguage('config.ru')).toBe('ruby')
+    expect(detectLanguage('app/views/posts/index.json.jbuilder')).toBe('ruby')
+    expect(detectLanguage('lib/tasks/install.thor')).toBe('ruby')
+    expect(detectLanguage('C:\\repo\\lib\\tasks\\DEVISE.RAKE')).toBe('ruby')
+  })
+
+  it('maps Ruby DSL filenames to the ruby language id', () => {
+    expect(detectLanguage('rails/Guardfile')).toBe('ruby')
+    expect(detectLanguage('deploy/Capfile')).toBe('ruby')
+    expect(detectLanguage('ios/Podfile')).toBe('ruby')
+    expect(detectLanguage('homebrew/Brewfile')).toBe('ruby')
+    expect(detectLanguage('C:\\vms\\Vagrantfile')).toBe('ruby')
+  })
+
+  it('keeps near-miss Ruby DSL names off the ruby language id', () => {
+    expect(detectLanguage('report.rake.bak')).toBe('plaintext')
+    expect(detectLanguage('ruby.rakex')).toBe('plaintext')
   })
 
   it.each([
@@ -175,6 +204,37 @@ describe('detectLanguage', () => {
     ['C:\\repo\\.env.local\\notes', 'plaintext'],
     ['', 'plaintext']
   ])('detects dotenv names without overriding specific mappings: %s', (filePath, expected) => {
+    expect(detectLanguage(filePath)).toBe(expected)
+  })
+
+  it.each([
+    ['/Users/me/.zshrc', 'shell'],
+    ['/home/me/.bashrc', 'shell'],
+    ['C:\\Users\\me\\.bash_profile', 'shell'],
+    ['/home/me/.bash_login', 'shell'],
+    ['/home/me/.bash_logout', 'shell'],
+    ['/home/me/.profile', 'shell'],
+    ['/home/me/.zshenv', 'shell'],
+    ['/home/me/.zprofile', 'shell'],
+    ['/home/me/.zlogin', 'shell'],
+    ['/home/me/.zlogout', 'shell']
+  ])('maps shell startup dotfiles to shell: %s', (filePath, expected) => {
+    expect(detectLanguage(filePath)).toBe(expected)
+  })
+
+  it.each([
+    ['/Users/me/.ZSHRC', 'shell'],
+    ['C:\\Users\\me\\.BASHRC', 'shell'],
+    ['/home/me/.Bash_Profile', 'shell'],
+    ['/home/me/.PROFILE', 'shell'],
+    ['/home/me/.ZPROFILE', 'shell'],
+    ['C:\\repo\\DOCKERFILE', 'dockerfile'],
+    ['C:\\repo\\dockerfile', 'dockerfile'],
+    ['C:\\repo\\MAKEFILE', 'makefile'],
+    ['C:\\repo\\makefile', 'makefile'],
+    ['C:\\repo\\CMAKELISTS.TXT', 'cmake'],
+    ['C:\\repo\\.GITIGNORE', 'ini']
+  ])('maps exact filenames case-insensitively: %s', (filePath, expected) => {
     expect(detectLanguage(filePath)).toBe(expected)
   })
 })

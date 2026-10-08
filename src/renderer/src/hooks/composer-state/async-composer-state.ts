@@ -223,7 +223,6 @@ export function useComposerAsyncState(input: ComposerAsyncStateInput) {
     setCheckedHooksContextKey,
     loadedIssueCommand,
     setLoadedIssueCommand,
-    currentIssueCommand,
     issueCommandTemplate,
     hasLoadedIssueCommand,
     setupDecision,

@@ -43,6 +43,10 @@ export type AppApi = {
   awaitGitEnvironmentStartupBarrier: () => Promise<void>
   /** Inventories retained PTYs and restores durable structured ownership before renderer adoption. */
   prepareTerminalStartupRestoration: () => Promise<void>
+  /** Whether this machine's runtime holds a structured chat, saved or live. */
+  holdsStructuredAgentSessions: () => Promise<boolean>
+  /** Fires when that answer changes, e.g. when a paired client creates the first chat here. */
+  onStructuredAgentSessionsHeldChanged: (callback: (held: boolean) => void) => () => void
   /** Reconciles legacy worker authority around persisted terminal reconnect. */
   recoverLegacyWorkerTerminalsForRendererStartup: () => Promise<void>
   /** Emits a startup benchmark marker when ORCA_STARTUP_DIAGNOSTICS is enabled. */

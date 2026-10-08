@@ -23,12 +23,17 @@ const EXPECTED_REST_SIGNALS: Record<TuiAgent, TuiAgentRestSignal> = {
   'mimo-code': 'title',
   gemini: 'title',
   antigravity: 'title',
+  // Why 'title' and not 'hook-done': jcode paints a title naming itself, which the status
+  // classifier already reads, and this table deliberately trusts a first-party hook `done`
+  // only from DSH. Derived, not chosen — getTuiAgentRestSignal('jcode') returns this.
+  jcode: 'title',
   aider: 'title',
   openclaw: 'title',
   copilot: 'title',
   grok: 'title',
   muse: 'ready-body',
   qoder: 'ready-body',
+  'qoder-cn': 'ready-body',
   codebuddy: 'none',
   autohand: 'none',
   ante: 'none',

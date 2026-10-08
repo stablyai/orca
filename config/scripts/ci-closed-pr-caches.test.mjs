@@ -4,7 +4,7 @@ import { expect, it, vi } from 'vitest'
 import { parse } from 'yaml'
 
 const workflow = parse(readFileSync('.github/workflows/ci-closed-pr-caches.yml', 'utf8'))
-const script = workflow.jobs.clean.steps[0].with.script
+const script = workflow.jobs.clean.steps[1].with.script
 const ref = 'refs/pull/123/merge'
 
 function run(caches, remove = vi.fn().mockResolvedValue(undefined)) {
@@ -23,9 +23,11 @@ function run(caches, remove = vi.fn().mockResolvedValue(undefined)) {
 
 it('uses default-branch code without checking out a closed PR', () => {
   expect(workflow.on).toEqual({ pull_request_target: { types: ['closed'] } })
-  expect(workflow.permissions).toEqual({ actions: 'write' })
-  expect(workflow.jobs.clean.steps).toHaveLength(1)
-  expect(workflow.jobs.clean.steps[0].uses).toBe('actions/github-script@v8')
+  expect(workflow.permissions).toEqual({ actions: 'write', 'pull-requests': 'read' })
+  expect(workflow.jobs.clean.steps).toHaveLength(2)
+  expect(workflow.jobs.clean.steps.every((step) => step.uses === 'actions/github-script@v8')).toBe(
+    true
+  )
 })
 
 it('lists and deletes only caches scoped to the closed merge ref', async () => {

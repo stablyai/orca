@@ -437,23 +437,6 @@ describe('DaemonServer', () => {
       expect(['healthy', 'unhealthy', 'unknown']).toContain(result.health)
     })
 
-    it('handles write (fire-and-forget)', async () => {
-      await startServer()
-      const c = await connectClient()
-
-      await c.request('createOrAttach', {
-        sessionId: 'test-session',
-        cols: 80,
-        rows: 24
-      })
-
-      // Should not throw
-      c.notify('write', { sessionId: 'test-session', data: 'ls\n' })
-
-      // Give the server time to process
-      await new Promise((r) => setTimeout(r, 50))
-    })
-
     it('handles resize', async () => {
       await startServer()
       const c = await connectClient()

@@ -1,6 +1,4 @@
 import type { IPty } from 'node-pty'
-import { canUseBunPty } from '../daemon/pty-subprocess/bun-pty-process-capabilities'
-import { loadWindowsBunPtyJobNative } from '../daemon/pty-subprocess/windows-bun-pty-native'
 import { createRequire } from 'node:module'
 import { recordSelfInitiatedTreeKill } from '../crash-reporting/self-initiated-tree-kill-log'
 
@@ -233,7 +231,7 @@ function assignHostProcessOnce(): boolean {
 
 /** Whether this build can own PTY trees with job objects at all. */
 export function isPtyJobOwnershipAvailable(): boolean {
-  return canUseBunPty() ? loadWindowsBunPtyJobNative() !== null : nativeLoader() !== null
+  return nativeLoader() !== null
 }
 
 /** Test-only: substitute the native module (it is resolved via createRequire). */

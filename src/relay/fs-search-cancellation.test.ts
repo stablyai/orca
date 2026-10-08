@@ -36,8 +36,10 @@ import { encodeJsonRpcFrame } from './protocol'
 
 function createProcess(spawned = true) {
   const child = new ChildProcess()
-  child.stdout = new PassThrough()
-  child.stderr = new PassThrough()
+  Object.defineProperties(child, {
+    stdout: { value: new PassThrough() },
+    stderr: { value: new PassThrough() }
+  })
   Object.defineProperty(child, 'pid', { value: spawned ? 4321 : undefined })
   child.kill = vi.fn(() => true)
   return child
@@ -182,6 +184,8 @@ describe.each(['ripgrep', 'git grep'])('relay dispatcher cancels %s', (backend) 
       const handler = new FsHandler(dispatcher, new RelayContext(), {
         dispose: vi.fn(),
         forgetRoot: vi.fn(),
+        disposeAndWait: vi.fn(async () => {}),
+        reopen: vi.fn(),
         subscribe: vi.fn()
       })
       try {

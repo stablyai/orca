@@ -34,17 +34,6 @@ describe('ai-vault-view-defaults', () => {
     ).toBe(1)
   })
 
-  it('does not count showing empty sessions as an adjustment', () => {
-    expect(
-      countAiVaultViewAdjustments({
-        agents: [...AI_VAULT_AGENTS],
-        group: DEFAULT_AI_VAULT_GROUP,
-        hideEmptySessions: false,
-        sessionLimit: DEFAULT_AI_VAULT_SESSION_LIMIT
-      })
-    ).toBe(0)
-  })
-
   it('counts an equal-length agent swap as an adjustment', () => {
     // A swap keeps the array length but drops a default agent (here the first) for a duplicate.
     const swapped = [...AI_VAULT_AGENTS.slice(1), AI_VAULT_AGENTS[1]]

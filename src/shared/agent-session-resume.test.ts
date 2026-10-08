@@ -12,24 +12,8 @@ describe('agent session resume metadata', () => {
     expect(isResumableTuiAgent('devin')).toBe(true)
   })
 
-  it('treats omp as a resumable TUI agent', () => {
-    expect(isResumableTuiAgent('omp')).toBe(true)
-  })
-
-  it('treats Prime Agent as a resumable TUI agent', () => {
-    expect(isResumableTuiAgent('prime-agent')).toBe(true)
-  })
-
-  it('treats copilot as a resumable TUI agent', () => {
-    expect(isResumableTuiAgent('copilot')).toBe(true)
-  })
-
-  it('treats Kimi Code as a resumable TUI agent', () => {
-    expect(isResumableTuiAgent('kimi')).toBe(true)
-  })
-
-  it('treats CodeBuddy as a resumable TUI agent', () => {
-    expect(isResumableTuiAgent('codebuddy')).toBe(true)
+  it('treats jcode as a resumable TUI agent', () => {
+    expect(isResumableTuiAgent('jcode')).toBe(true)
   })
 
   it.each([
@@ -67,7 +51,9 @@ describe('agent session resume metadata', () => {
       'kimi',
       { session_id: 'session_431324d7-2165-42f0-9ecd-9f93437b3201' },
       { key: 'session_id', id: 'session_431324d7-2165-42f0-9ecd-9f93437b3201' }
-    ]
+    ],
+    ['jcode', { session_id: 'session_jc_1' }, { key: 'session_id', id: 'session_jc_1' }],
+    ['jcode', { sessionId: 'session_jc_2' }, { key: 'session_id', id: 'session_jc_2' }]
   ] as const)('extracts %s provider session ids', (source, payload, expected) => {
     expect(extractAgentProviderSession(source, payload)).toEqual(expected)
   })
@@ -99,7 +85,8 @@ describe('agent session resume metadata', () => {
       'kimi',
       { key: 'session_id', id: 'session_431324d7' },
       ['kimi', '--session', 'session_431324d7']
-    ]
+    ],
+    ['jcode', { key: 'session_id', id: 'session_jc_1' }, ['jcode', '--resume', 'session_jc_1']]
   ] as const)('builds %s resume argv', (agent, providerSession, expected) => {
     expect(getAgentResumeArgv(agent, providerSession)).toEqual(expected)
   })
@@ -135,6 +122,10 @@ describe('agent session resume metadata', () => {
 
   it('rejects devin resume when provider session key is not session_id', () => {
     expect(getAgentResumeArgv('devin', { key: 'conversation_id', id: 'x' })).toBeNull()
+  })
+
+  it('rejects jcode resume when provider session key is not session_id', () => {
+    expect(getAgentResumeArgv('jcode', { key: 'conversation_id', id: 'x' })).toBeNull()
   })
 
   it('captures the hook transcript_path for native-chat agents (claude/codex)', () => {

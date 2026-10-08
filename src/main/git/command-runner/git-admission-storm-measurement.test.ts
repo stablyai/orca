@@ -1,250 +1,183 @@
-/**
- * POSIX-only measurement: a PATH-injected git fixture exercises the real spawn path.
- * Timing distributions are reported for field comparison; CI assertions stay structural.
- */
-import { chmod, mkdtemp, mkdir, readdir, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { existsSync, watch } from 'node:fs'
+import { chmod, mkdir, readdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
+import { runProcess } from '../../../shared/child-process/run-process'
 import { gitExecFileAsync } from './git-exec-file'
 import {
-  GIT_ADMISSION_AGING_MS,
+  GENERAL_CAP,
+  GENERAL_HEADROOM,
   GitAdmissionScheduler,
-  MAX_GIT_CHILDREN,
   _gitAdmissionSnapshotForTests,
   _resetGitAdmissionForTests,
   type GitAdmissionEvent
 } from './git-subprocess-admission'
+import {
+  assertAdmissionLedger,
+  createStormRoot,
+  formatMeasurementTable,
+  measureStorm,
+  type InteractiveQueueSnapshot
+} from './git-admission-storm-test-fixture'
 
-type StormMeasurement = {
-  mode: 'disabled' | 'enabled'
-  maxConcurrentChildren: number
-  eventLoopMaxDriftMs: number
-  eventLoopP99DriftMs: number
-  interactiveP50Ms: number
-  interactiveP95Ms: number
-  totalWallMs: number
-  admissionEvents: GitAdmissionEvent[]
-  interactiveQueueSnapshots: InteractiveQueueSnapshot[]
+function waitForLiveChild(stateDir: string, id: string, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const watcher = watch(stateDir)
+    const finish = (error?: Error): void => {
+      clearTimeout(deadline)
+      watcher.close()
+      signal.removeEventListener('abort', aborted)
+      if (error) {
+        reject(error)
+      } else {
+        resolve()
+      }
+    }
+    const aborted = (): void => finish(new Error(`Aborted waiting for ${id}`))
+    const deadline = setTimeout(() => finish(new Error(`Child ${id} did not start`)), 5_000)
+    const check = (): void => {
+      if (existsSync(path.join(stateDir, `${id}.live`))) {
+        finish()
+      }
+    }
+    watcher.on('change', check)
+    watcher.once('error', finish)
+    signal.addEventListener('abort', aborted, { once: true })
+    if (signal.aborted) {
+      aborted()
+    } else {
+      check()
+    }
+  })
 }
 
-type InteractiveQueueSnapshot = {
-  commandLabel: string
-  backgroundWaiterIds: number[]
-}
-
-const tempRoots: string[] = []
-const originalAdmissionDisabled = process.env.ORCA_GIT_ADMISSION_DISABLED
-
-afterEach(async () => {
-  if (originalAdmissionDisabled === undefined) {
-    delete process.env.ORCA_GIT_ADMISSION_DISABLED
-  } else {
-    process.env.ORCA_GIT_ADMISSION_DISABLED = originalAdmissionDisabled
-  }
-  _resetGitAdmissionForTests()
-  await Promise.all(tempRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
-})
-
-function percentile(values: readonly number[], percentileValue: number): number {
-  if (values.length === 0) {
-    return 0
-  }
-  const sorted = [...values].sort((a, b) => a - b)
-  return sorted[Math.min(sorted.length - 1, Math.ceil(sorted.length * percentileValue) - 1)]
-}
-
-async function liveChildCount(stateDir: string): Promise<number> {
-  return (await readdir(stateDir)).filter((name) => name.endsWith('.live')).length
-}
-
-async function createStubGit(root: string): Promise<string> {
+async function verifySpawnContention(): Promise<void> {
+  delete process.env.ORCA_GIT_ADMISSION_DISABLED
+  const admissionEvents: GitAdmissionEvent[] = []
+  _resetGitAdmissionForTests(
+    new GitAdmissionScheduler({
+      now: () => 0,
+      onAdmissionEvent: (event) => admissionEvents.push(event)
+    })
+  )
+  const root = await createStormRoot('contention')
+  const stateDir = path.join(root, 'state')
+  const gateDir = path.join(root, 'gates')
   const binDir = path.join(root, 'bin')
-  await mkdir(binDir)
-  const stubPath = path.join(binDir, 'git')
+  await Promise.all([stateDir, gateDir, binDir].map((directory) => mkdir(directory)))
+  const backgroundIds = Array.from({ length: GENERAL_CAP + 4 }, (_, index) => `background-${index}`)
+  const headroomIds = Array.from({ length: GENERAL_HEADROOM }, (_, index) => `interactive-${index}`)
+  const queuedIds = ['interactive-queued-0', 'interactive-queued-1']
+  const ids = [...backgroundIds, ...headroomIds, ...queuedIds]
+  const gates = await runProcess({
+    program: 'mkfifo',
+    args: ids.map((id) => path.join(gateDir, id))
+  })
+  expect(gates.code, gates.stderr).toBe(0)
+  const stub = path.join(binDir, 'git')
   await writeFile(
-    stubPath,
+    stub,
     `#!/bin/sh
 set -eu
 live="$ORCA_STUB_STATE_DIR/$ORCA_STUB_ID.live"
 : > "$live"
 trap 'rm -f "$live"' EXIT HUP INT TERM
-sleep "$(awk "BEGIN { print $ORCA_STUB_SLEEP_MS / 1000 }")"
+IFS= read -r release < "$ORCA_STUB_GATE_DIR/$ORCA_STUB_ID"
 printf 'stub:%s\\n' "$*"
 `
   )
-  await chmod(stubPath, 0o755)
-  return binDir
-}
-
-function setAdmissionMode(mode: StormMeasurement['mode']): void {
-  if (mode === 'disabled') {
-    process.env.ORCA_GIT_ADMISSION_DISABLED = '1'
-  } else {
-    delete process.env.ORCA_GIT_ADMISSION_DISABLED
-  }
-}
-
-async function measureStorm(mode: StormMeasurement['mode']): Promise<StormMeasurement> {
-  setAdmissionMode(mode)
-  const admissionEvents: GitAdmissionEvent[] = []
-  const admissionClockStartedAt = performance.now()
-  _resetGitAdmissionForTests(
-    new GitAdmissionScheduler({
-      now: () => Math.min(performance.now() - admissionClockStartedAt, GIT_ADMISSION_AGING_MS - 1),
-      onAdmissionEvent: (event) => admissionEvents.push(event)
-    })
-  )
-  const root = await mkdtemp(path.join(tmpdir(), `orca-git-storm-${mode}-`))
-  tempRoots.push(root)
-  const stateDir = path.join(root, 'state')
-  await mkdir(stateDir)
-  const binDir = await createStubGit(root)
-  const repoDirs = await Promise.all(
-    Array.from({ length: 6 }, async (_, index) => {
-      const repoDir = path.join(root, `repo-${index}`)
-      await mkdir(repoDir)
-      return repoDir
-    })
-  )
-  const baseEnv = { ...process.env, PATH: `${binDir}${path.delimiter}${process.env.PATH ?? ''}` }
-  const startedAt = performance.now()
-  const drifts: number[] = []
-  let nextJankSample = performance.now() + 50
-  const jankTimer = setInterval(() => {
-    const now = performance.now()
-    drifts.push(Math.max(0, now - nextJankSample))
-    nextJankSample = now + 50
-  }, 50)
-  let maxConcurrentChildren = 0
-  const censusTimer = setInterval(() => {
-    void liveChildCount(stateDir).then((count) => {
-      maxConcurrentChildren = Math.max(maxConcurrentChildren, count)
-    })
-  }, 5)
-
-  const background = Array.from({ length: 60 }, (_, index) =>
-    gitExecFileAsync(['status', '--porcelain=v2', `storm-${index}`], {
-      cwd: repoDirs[index % repoDirs.length],
-      env: {
-        ...baseEnv,
-        ORCA_STUB_ID: `background-${index}`,
-        ORCA_STUB_SLEEP_MS: index % 10 === 0 ? '5000' : '200',
-        ORCA_STUB_STATE_DIR: stateDir
-      },
-      admissionTier: 'background'
-    })
-  )
+  await chmod(stub, 0o755)
+  const controller = new AbortController()
+  const commands = new Map<string, ReturnType<typeof gitExecFileAsync>>()
   const interactiveQueueSnapshots: InteractiveQueueSnapshot[] = []
-  const interactiveLatencies = await Promise.all(
-    Array.from(
-      { length: 10 },
-      (_, index) =>
-        new Promise<number>((resolve, reject) => {
-          setTimeout(
-            () => {
-              void (async () => {
-                const concurrentAtInjection = await liveChildCount(stateDir)
-                const commandStartedAt = performance.now()
-                const commandLabel = `interactive-${index}`
-                interactiveQueueSnapshots.push({
-                  commandLabel,
-                  backgroundWaiterIds: _gitAdmissionSnapshotForTests()
-                    .queuedWaiters.filter((waiter) => waiter.tier === 'background')
-                    .map((waiter) => waiter.id)
-                })
-                await gitExecFileAsync(['rev-parse', commandLabel], {
-                  cwd: repoDirs[index % repoDirs.length],
-                  env: {
-                    ...baseEnv,
-                    ORCA_STUB_ID: `interactive-${index}`,
-                    ORCA_STUB_SLEEP_MS: String(Math.max(10, concurrentAtInjection * 12)),
-                    ORCA_STUB_STATE_DIR: stateDir
-                  },
-                  admissionTier: 'interactive'
-                })
-                resolve(performance.now() - commandStartedAt)
-              })().catch(reject)
-            },
-            50 * (index + 1)
-          )
-        })
-    )
-  )
-  await Promise.all(background)
-  clearInterval(censusTimer)
-  clearInterval(jankTimer)
-  maxConcurrentChildren = Math.max(maxConcurrentChildren, await liveChildCount(stateDir))
-  const totalWallMs = performance.now() - startedAt
-  return {
-    mode,
-    maxConcurrentChildren,
-    eventLoopMaxDriftMs: Math.max(0, ...drifts),
-    eventLoopP99DriftMs: percentile(drifts, 0.99),
-    interactiveP50Ms: percentile(interactiveLatencies, 0.5),
-    interactiveP95Ms: percentile(interactiveLatencies, 0.95),
-    totalWallMs,
-    admissionEvents,
-    interactiveQueueSnapshots
-  }
-}
-
-function formatMeasurementTable(rows: readonly StormMeasurement[]): string {
-  const rounded = rows.map((row) => ({
-    mode: row.mode,
-    maxConcurrentChildren: row.maxConcurrentChildren,
-    eventLoopMaxDriftMs: row.eventLoopMaxDriftMs.toFixed(1),
-    eventLoopP99DriftMs: row.eventLoopP99DriftMs.toFixed(1),
-    interactiveP50Ms: row.interactiveP50Ms.toFixed(1),
-    interactiveP95Ms: row.interactiveP95Ms.toFixed(1),
-    totalWallMs: row.totalWallMs.toFixed(1)
-  }))
-  return JSON.stringify(rounded)
-}
-
-function assertAdmissionLedger(measurement: StormMeasurement): void {
-  const activeWaiters = new Set<number>()
-  const grantSequenceByWaiter = new Map<number, number>()
-  const grantByLabel = new Map<string, GitAdmissionEvent>()
-
-  measurement.admissionEvents.forEach((event, index) => {
-    expect(event.sequence).toBe(index)
-    if (event.phase === 'grant') {
-      activeWaiters.add(event.waiterId)
-      grantSequenceByWaiter.set(event.waiterId, event.sequence)
-      const label = event.args.find((arg) => arg.startsWith('interactive-'))
-      if (label) {
-        grantByLabel.set(label, event)
+  const start = (id: string, tier: 'background' | 'interactive'): void => {
+    if (tier === 'interactive') {
+      interactiveQueueSnapshots.push({
+        commandLabel: id,
+        backgroundWaiterIds: _gitAdmissionSnapshotForTests()
+          .queuedWaiters.filter((waiter) => waiter.tier === 'background')
+          .map((waiter) => waiter.id)
+      })
+    }
+    const command = gitExecFileAsync([tier === 'background' ? 'status' : 'rev-parse', id], {
+      cwd: root,
+      admissionTier: tier,
+      signal: controller.signal,
+      env: {
+        ...process.env,
+        PATH: `${binDir}${path.delimiter}${process.env.PATH ?? ''}`,
+        ORCA_STUB_ID: id,
+        ORCA_STUB_STATE_DIR: stateDir,
+        ORCA_STUB_GATE_DIR: gateDir
       }
-    } else {
-      expect(activeWaiters.delete(event.waiterId)).toBe(true)
+    })
+    void command.catch(() => {})
+    commands.set(id, command)
+  }
+  const release = async (id: string): Promise<void> => {
+    await waitForLiveChild(stateDir, id, controller.signal)
+    await writeFile(path.join(gateDir, id), 'release\n')
+    await expect(commands.get(id)).resolves.toEqual({
+      stdout: `stub:${id.startsWith('background-') ? 'status' : 'rev-parse'} ${id}\n`,
+      stderr: ''
+    })
+  }
+  try {
+    backgroundIds.forEach((id) => start(id, 'background'))
+    expect(_gitAdmissionSnapshotForTests().queued).toBe(4)
+    headroomIds.forEach((id) => start(id, 'interactive'))
+    queuedIds.forEach((id) => start(id, 'interactive'))
+    expect(_gitAdmissionSnapshotForTests()).toMatchObject({
+      queued: 6,
+      budgets: { general: { baseUsed: GENERAL_CAP, headroomUsed: GENERAL_HEADROOM } }
+    })
+    await Promise.all(
+      [...backgroundIds.slice(0, GENERAL_CAP), ...headroomIds].map((id) =>
+        waitForLiveChild(stateDir, id, controller.signal)
+      )
+    )
+    expect(await readdir(stateDir)).toHaveLength(GENERAL_CAP + GENERAL_HEADROOM)
+    for (const [index, id] of queuedIds.entries()) {
+      await release(backgroundIds[index])
+      await waitForLiveChild(stateDir, id, controller.signal)
     }
-    expect(activeWaiters.size).toBeLessThanOrEqual(MAX_GIT_CHILDREN)
-    for (const budget of event.budgets) {
-      expect(budget.baseUsed).toBeLessThanOrEqual(budget.baseCapacity)
-      expect(budget.headroomUsed).toBeLessThanOrEqual(budget.headroomCapacity)
+    expect(_gitAdmissionSnapshotForTests().queuedWaiters.map((waiter) => waiter.tier)).toEqual([
+      'background',
+      'background',
+      'background',
+      'background'
+    ])
+    for (const id of [...headroomIds, ...queuedIds, ...backgroundIds.slice(queuedIds.length)]) {
+      await release(id)
     }
-  })
-  expect(activeWaiters.size).toBe(0)
-
-  for (const snapshot of measurement.interactiveQueueSnapshots) {
-    const interactiveGrant = grantByLabel.get(snapshot.commandLabel)
-    expect(interactiveGrant).toBeDefined()
-    const preceded = snapshot.backgroundWaiterIds.filter(
-      (waiterId) => interactiveGrant!.sequence < (grantSequenceByWaiter.get(waiterId) ?? Infinity)
-    ).length
-    expect(preceded).toBeGreaterThanOrEqual(Math.ceil(snapshot.backgroundWaiterIds.length * 0.9))
+    expect(admissionEvents.filter((event) => event.phase === 'grant')).toHaveLength(ids.length)
+    expect(admissionEvents.filter((event) => event.phase === 'release')).toHaveLength(ids.length)
+    assertAdmissionLedger({ admissionEvents, interactiveQueueSnapshots })
+    expect(_gitAdmissionSnapshotForTests()).toMatchObject({
+      queued: 0,
+      budgets: { general: { baseUsed: 0, headroomUsed: 0 } }
+    })
+    expect(await readdir(stateDir)).toEqual([])
+  } finally {
+    controller.abort()
+    await Promise.allSettled(commands.values())
   }
 }
 
 describe.skipIf(process.platform === 'win32')('git admission storm measurement', () => {
-  it('reports bounded-concurrency before and after measurements', async () => {
-    const disabled = await measureStorm('disabled')
-    const enabled = await measureStorm('enabled')
-    console.info(`GIT_ADMISSION_STORM_MEASUREMENT=${formatMeasurementTable([disabled, enabled])}`)
-    assertAdmissionLedger(enabled)
-  })
+  it(
+    'bounds real children and drains interactive work before the background backlog',
+    verifySpawnContention
+  )
 
-  // Output parity lives in git-admission-output-parity.test.ts: it needs real git,
-  // not the PATH stub, so it runs on win32 too and cannot share this file's gate.
+  it.runIf(process.env.ORCA_GIT_ADMISSION_STORM_MEASUREMENT === '1')(
+    'reports bounded-concurrency before and after measurements',
+    async () => {
+      const disabled = await measureStorm('disabled')
+      const enabled = await measureStorm('enabled')
+      console.info(`GIT_ADMISSION_STORM_MEASUREMENT=${formatMeasurementTable([disabled, enabled])}`)
+      assertAdmissionLedger(enabled)
+    }
+  )
+  // Real-git output parity remains in git-admission-output-parity.test.ts, including Windows.
 })

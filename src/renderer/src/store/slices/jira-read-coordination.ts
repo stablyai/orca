@@ -12,6 +12,7 @@ import {
   type TaskSourceContext
 } from '../../../../shared/task-source-context'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
+import { parseJiraStatusError } from '../../../../shared/jira-status-error'
 
 const CACHE_TTL = 60_000
 const MAX_CACHE_ENTRIES = 500
@@ -70,7 +71,13 @@ export function evictStaleJiraCacheEntries<T>(
 
 export function looksLikeJiraAuthError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error)
-  // Jira 403 commonly means endpoint/project access is denied while the token remains valid.
+  // Why: Jira echoes the query in a 400 (`key 'PROJ-1401' does not exist`), so wording is only
+  // a fallback for errors that carry no status.
+  const status = parseJiraStatusError(message)
+  if (status) {
+    // Jira 403 commonly means endpoint/project access is denied while the token remains valid.
+    return status.code === 401
+  }
   return /authenticat|unauthorized|401/i.test(message)
 }
 

@@ -49,7 +49,9 @@ export function projectViewRequestKey(args: GetProjectViewTableArgs, sourceScope
   return `${sourceScope}:${projectKey}:${selector}${queryOverrideKeyPart(args.queryOverride)}`
 }
 
-export function projectViewSourceScope(settings: AppState['settings']): string {
+export function projectViewSourceScope(
+  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
+): string {
   const target = getActiveRuntimeTarget(settings)
   return target.kind === 'environment' ? `runtime:${target.environmentId}` : 'local'
 }

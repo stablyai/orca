@@ -87,7 +87,7 @@ describe('unhandled provider frame journal fallback', () => {
     })
   })
 
-  it('renders codex systemError and Claude error result variants', () => {
+  it('renders codex systemError and Claude error result variants when no typed translator covers the frame', () => {
     const codex = unhandledProviderFrameJournalItem('codex', 'notification:thread/status/changed', {
       threadId: 'thread-1',
       status: { type: 'systemError' }
@@ -167,6 +167,21 @@ describe('unhandled provider frame journal fallback', () => {
       unhandledProviderFrameJournalItem('codex', 'notification:future/event', {})
     ).not.toBeNull()
     expect(unhandledProviderFrameJournalItem('claude', 'message:future/event', {})).not.toBeNull()
+  })
+
+  it("leads with a local slash command's output, which Claude sends as the frame's content", () => {
+    expect(
+      unhandledProviderFrameJournalItem('claude', 'message:system:local_command_output', {
+        type: 'system',
+        subtype: 'local_command_output',
+        content: 'Session usage: 12% of your limit'
+      })?.body.text
+    ).toBe('Session usage: 12% of your limit')
+    // Scoped to that frame: another frame's `content` is not its sentence.
+    expect(
+      unhandledProviderFrameJournalItem('claude', 'message:future/event', { content: 'raw' })?.body
+        .text
+    ).toBe('claude \u00b7 message:future/event')
   })
 
   it('leads with the provider sentence instead of naming the opcode', () => {

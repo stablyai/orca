@@ -122,6 +122,7 @@ export function init(
   scope.wheelAccumDeltaY = 0
   scope.mouseModeScanTail = ''
   scope.trackedMouseTrackingMode = 'none'
+  scope.mouseEncodingKnown = false
   scope.sgrMouseMode = false
   scope.sgrMousePixelsMode = false
   scope.lastEmittedModes = {
@@ -208,7 +209,7 @@ export function init(
 }
 
 export function write(scope: TerminalDocumentScope, data: string) {
-  updateMouseModeFromData(scope, data)
+  updateMouseModeFromData(scope, data, true)
   enqueueWrite(scope, data)
   pumpWrites(scope, scope.terminalGeneration)
   // Why: first live data chunk after init may widen the buffer past

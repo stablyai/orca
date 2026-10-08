@@ -2,9 +2,9 @@ import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AttachFlowInput } from './structured-agent-session-attach-flow'
 import {
   AgentSessionAcquisitionExitUnprovenError,
-  AgentSessionAcquisitionRootExitObservedError,
-  rethrowAfterAgentSessionAcquisitionCleanup
+  AgentSessionAcquisitionRootExitObservedError
 } from './structured-agent-session-adapter'
+import { rethrowAfterAgentSessionAcquisitionCleanup } from './structured-agent-session-provider-exit-proof'
 
 export async function settlePostAcquisitionAttachFailure(
   input: AttachFlowInput,

@@ -4,7 +4,7 @@
 // rule (match on normalized user-message content) is unit-testable without React.
 
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import { setBoundedScopeCacheEntry } from './native-chat-composer-scope-cache'
+import { setBoundedScopeCacheEntry } from '../../../../shared/native-chat-scope-cache'
 import type { NativeChatLaunchPrompt } from '@/lib/native-chat-launch-prompt'
 import {
   advancedNativeChatUserContentCounts,
@@ -25,6 +25,10 @@ import {
 export type NativeChatPendingSend = {
   /** Renderer-minted id, unique per send, used as the list key. */
   id: string
+  /** Definite send outcome; absent while the send is simply awaiting its transcript row. */
+  delivery?: 'unconfirmed' | 'rejected'
+  /** When a write's acknowledgment was lost, so a remount keeps the original hold deadline. */
+  writeUnconfirmedAt?: number
   /** The exact draft text the user submitted. */
   text: string
   /** Image paths that were sent through the TUI image attachment paste path. */
@@ -80,7 +84,11 @@ export function appendPendingSendCache(
   scope: NativeChatPendingSendScope,
   entry: NativeChatPendingSend
 ): NativeChatPendingSend[] {
-  const existing = readPendingSendCache(scope)
+  const contentKey = nativeChatPendingContentKey(entry)
+  // Why: a resend replaces its failed copy; kept, that copy would claim the resend's row and pin it.
+  const existing = readPendingSendCache(scope).filter(
+    (candidate) => !candidate.delivery || nativeChatPendingContentKey(candidate) !== contentKey
+  )
   const next = assignNativeChatPendingOccurrence(existing, entry)
   return writePendingSendCache(scope, [...existing, next])
 }

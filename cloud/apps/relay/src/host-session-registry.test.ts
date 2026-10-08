@@ -18,7 +18,11 @@ import {
   type ControlRenewalOutcome,
   type ControlRenewalRequest
 } from './control-renewal-statement.js'
-import { HostSessionRegistry, type HostSession } from './host-session-registry.js'
+import {
+  HostSessionRegistry,
+  IDLE_REHOME_MIN_CONTROL_AGE_MS,
+  type HostSession
+} from './host-session-registry.js'
 import { relayHostLogDigest } from './relay-host-log-digest.js'
 import type { RelayRuntimeObserver } from './relay-observability.js'
 import {
@@ -1319,7 +1323,10 @@ describe('source-owned idle cutover', () => {
     sourceCellIncarnation: 'incarnation-1',
     targetCellId: 'target'
   }
-  async function source(store: Partial<RelayCredentialStore> = {}) {
+  async function source(
+    store: Partial<RelayCredentialStore> = {},
+    controlAgeMs = IDLE_REHOME_MIN_CONTROL_AGE_MS
+  ) {
     const h = createRegistry(vi.fn().mockResolvedValue('control:1'), store)
     const socket = new FakeSocket()
     h.registry.acceptControl(
@@ -1330,8 +1337,42 @@ describe('source-owned idle cutover', () => {
     )
     socket.removeAllListeners('message')
     await h.activate(socket as unknown as WebSocket, identity, null, 1, false, 1)
+    // Moves the clock without firing the heartbeat timers that would close the session.
+    vi.setSystemTime(Date.now() + controlAgeMs)
     return { ...h, socket, session: h.registry.get(request)! }
   }
+  it.each([
+    { controlAgeMs: 0, outcome: 'busy' },
+    { controlAgeMs: IDLE_REHOME_MIN_CONTROL_AGE_MS - 1, outcome: 'busy' },
+    { controlAgeMs: IDLE_REHOME_MIN_CONTROL_AGE_MS, outcome: 'committed' },
+    { controlAgeMs: 60 * 60 * 1000, outcome: 'committed' }
+  ])('answers $outcome for a control socket $controlAgeMs ms old', async (row) => {
+    const { controlAgeMs, outcome } = row
+    const h = await source({}, controlAgeMs)
+    const commit = vi.fn().mockResolvedValue({ outcome: 'committed' })
+    expect(
+      await h.registry.idleRehome(request, commit, vi.fn().mockResolvedValue('not-committed'))
+    ).toEqual({ outcome })
+    expect(commit).toHaveBeenCalledTimes(outcome === 'busy' ? 0 : 1)
+    expect(h.socket.close).toHaveBeenCalledTimes(outcome === 'busy' ? 0 : 1)
+  })
+  it('restarts the age when the host rebinds its control socket', async () => {
+    const h = await source()
+    const rebound = new FakeSocket()
+    h.registry.acceptControl(
+      rebound as unknown as WebSocket,
+      identity,
+      undefined,
+      new Set([RELAY_HOST_CAPABILITY_IDLE_REGIONAL_REHOME])
+    )
+    rebound.removeAllListeners('message')
+    await h.activate(rebound as unknown as WebSocket, identity, h.session, 1, true, 1)
+    const commit = vi.fn().mockResolvedValue({ outcome: 'committed' })
+    expect(
+      await h.registry.idleRehome(request, commit, vi.fn().mockResolvedValue('not-committed'))
+    ).toEqual({ outcome: 'busy' })
+    expect(commit).not.toHaveBeenCalled()
+  })
   it('keeps either established client busy until both actually leave', async () => {
     const h = await source()
     h.session.activeConnIds.add('phone')

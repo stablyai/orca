@@ -55,7 +55,7 @@ describe('CodexRuntimeHomeService', () => {
       createCodexAuthJson('wsl@example.com', 'acct-wsl', 'wsl')
     )
     const settings = createSettings({
-      shellStartupEnvProbeSupported: true,
+      realHomeRoutable: true,
       codexManagedAccounts: [
         {
           id: 'account-1',
@@ -106,7 +106,7 @@ describe('CodexRuntimeHomeService', () => {
     expect(store.updateSettings).not.toHaveBeenCalled()
     expect(warnSpy).not.toHaveBeenCalled()
 
-    expect(service.isHostSystemDefaultRealHome()).toBe(false)
+    expect(service.isHostSystemDefaultRealHomeSelected()).toBe(false)
     expect(service.prepareForRateLimitFetch()).toEqual({
       kind: 'ready',
       codexHomePath: managedHomePath1
@@ -165,7 +165,7 @@ describe('CodexRuntimeHomeService', () => {
     const managedHomePath = createManagedAuth(testState.userDataDir, 'account-1', accountAuth)
     const store = createStore(
       createSettings({
-        shellStartupEnvProbeSupported: true,
+        realHomeRoutable: true,
         codexManagedAccounts: [
           {
             id: 'account-1',
@@ -226,7 +226,7 @@ describe('CodexRuntimeHomeService', () => {
     writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
     const managedHomePath = createManagedAuth(testState.userDataDir, 'account-1', managedAuth)
     const settings = createSettings({
-      shellStartupEnvProbeSupported: true,
+      realHomeRoutable: true,
       codexManagedAccounts: [
         {
           id: 'account-1',
@@ -272,7 +272,7 @@ describe('CodexRuntimeHomeService', () => {
     writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
     const managedHomePath = createManagedAuth(testState.userDataDir, 'account-1', managedAuth)
     const settings = createSettings({
-      shellStartupEnvProbeSupported: true,
+      realHomeRoutable: true,
       codexManagedAccounts: [
         {
           id: 'account-1',

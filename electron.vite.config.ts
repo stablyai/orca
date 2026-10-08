@@ -1,3 +1,4 @@
+import { markdownParserAliases } from './config/build-plugins/markdown-parser-exports'
 import { isBuiltin } from 'node:module'
 import { resolve } from 'node:path'
 import { defineConfig, type UserConfig } from 'electron-vite'
@@ -9,13 +10,16 @@ import {
   CLI_MAIN_ENTRY_NAMES,
   createPlainNodeEntryGuardPlugin
 } from './config/build-plugins/plain-node-entry-guard'
+import { ORCAD_LOCAL_SERVE_SELECTION_ENTRY } from './src/shared/orcad-local-serve-selection'
 import packageJson from './package.json' with { type: 'json' }
 
 const BUNDLED_MAIN_DEPENDENCIES = new Set([
-  '@streamparser/json',
+  'stream-json',
+  'stream-chain',
   '@xterm/headless',
   '@xterm/addon-serialize',
   'tldts',
+  'smol-toml',
   // Why: Windows NSIS deploys app.asar before external resources; bootstrap must
   // not race the later resources/node_modules copy.
   'zod'
@@ -196,13 +200,20 @@ function createMainBootstrapPlugin() {
   }
 }
 
+/**
+ * Diagnostic escape hatch: an unminified main bundle so a V8 CPU profile of the
+ * main process attributes self time to real function names. Release builds never
+ * set this, and `pnpm build` does not read it.
+ */
+const MAIN_MINIFY: 'oxc' | false = process.env.ORCA_UNMINIFIED_MAIN === '1' ? false : 'oxc'
+
 export const electronViteConfig: UserConfig = {
   main: {
     build: {
       // Why: 'esbuild' makes rolldown disable its own minifier and re-print every
       // chunk through esbuild, which is undeclared here and only resolves via
       // pnpm hoisting. 'oxc' is rolldown's in-process minifier.
-      minify: 'oxc',
+      minify: MAIN_MINIFY,
       // Why: 'hidden' emits .js.map with no sourceMappingURL, so the shipped
       // bundle never references maps that packaging strips out. Release CI
       // uploads them so minified crash traces stay decodable.
@@ -228,11 +239,8 @@ export const electronViteConfig: UserConfig = {
           'computer-sidecar': resolve('src/main/computer/sidecar-entry.ts'),
           'stt-worker': resolve('src/main/speech/stt-worker.ts'),
           'warp-theme-parser-worker': resolve('src/main/warp-themes/warp-theme-parser-worker.ts'),
-          'session-scanner-opencode-sqlite-worker-entry': resolve(
-            'src/main/ai-vault/session-scanner-opencode-sqlite-worker-entry.ts'
-          ),
-          'session-scanner-worker-entry': resolve(
-            'src/main/ai-vault/session-scanner-worker-entry.ts'
+          'foreign-sqlite-reader-entry': resolve(
+            'src/main/foreign-sqlite-readers/foreign-sqlite-reader-entry.ts'
           ),
           'session-scanner-service-entry': resolve(
             'src/main/ai-vault/session-scanner-service-entry.ts'
@@ -249,6 +257,10 @@ export const electronViteConfig: UserConfig = {
           // corpora and read SQLite synchronously; a worker thread keeps that
           // off the main-process event loop.
           'usage-scan-worker-entry': resolve('src/main/usage/usage-scan-worker-entry.ts'),
+          // Why: a first account setup can merge a large history tree with sync fs calls.
+          'claude-profile-setup-worker-entry': resolve(
+            'src/main/claude-accounts/claude-profile-setup-worker-entry.ts'
+          ),
           'profile-state-backup-worker-entry': resolve(
             'src/main/persistence/profile-state/profile-state-backup-worker-entry.ts'
           ),
@@ -258,6 +270,10 @@ export const electronViteConfig: UserConfig = {
           // Why: forked with ELECTRON_RUN_AS_NODE so @parcel/watcher faults
           // can't take down the main process (issue #7547).
           'parcel-watcher-process-entry': resolve('src/main/ipc/parcel-watcher-process-entry.ts'),
+          // Why: `orca serve` runs it under ELECTRON_RUN_AS_NODE so the CLI never bundles orcad prep.
+          [ORCAD_LOCAL_SERVE_SELECTION_ENTRY]: resolve(
+            'src/main/orcad/orcad-local-serve-selection-entry.ts'
+          ),
           // Why: a worker thread survives the macOS 26 AppKit main-thread deadlock
           // without paying for another Electron process.
           'main-thread-hang-watchdog-entry': resolve(
@@ -306,6 +322,7 @@ export const electronViteConfig: UserConfig = {
   renderer: {
     resolve: {
       alias: {
+        ...markdownParserAliases,
         '@renderer': resolve('src/renderer/src'),
         '@': resolve('src/renderer/src')
       }

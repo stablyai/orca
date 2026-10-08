@@ -1,3 +1,4 @@
+import { ImeInput } from '@/lib/ime-text-field'
 import { useEffect, useState, useCallback } from 'react'
 import { ChevronUp, ChevronDown, X, CaseSensitive, Regex } from 'lucide-react'
 import type { SearchAddon } from '@xterm/addon-search'
@@ -152,7 +153,7 @@ export default function TerminalSearch({
       style={{ width: 340, maxWidth: 'calc(100% - 16px)' }}
       onKeyDown={handleKeyDown}
     >
-      <input
+      <ImeInput
         ref={handleInputRef}
         type="text"
         value={query}

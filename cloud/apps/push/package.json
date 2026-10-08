@@ -15,20 +15,20 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@hono/node-server": "^1.19.17",
+    "@hono/node-server": "^2.1.2",
     "@orca-cloud/postgres-schema": "workspace:*",
     "@orca-cloud/push-contract": "workspace:*",
     "google-auth-library": "^10.5.0",
-    "hono": "^4.13.7",
+    "hono": "^4.13.10",
     "pg": "^8.22.0",
     "pg-connection-string": "2.14.0",
     "tweetnacl": "^1.0.3",
     "zod": "^3.25.76"
   },
   "devDependencies": {
-    "@types/node": "^24.10.0",
+    "@types/node": "^24.19.0",
     "@types/pg": "^8.20.0",
-    "tsx": "^4.21.0",
+    "tsx": "^4.23.15",
     "typescript": "^5.9.3",
     "vitest": "^4.1.11"
   }

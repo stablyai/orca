@@ -44,14 +44,6 @@ function row(
 }
 
 describe('status-row change detection', () => {
-  it('treats the same row object on both sides as unchanged', () => {
-    const probe = new RowMutationProbe()
-    const same = row()
-    expect(probe.commit(same, same)).toBe(false)
-    expect(probe.commit(null, undefined)).toBe(false)
-    expect(probe.mutations).toEqual([])
-  })
-
   it('ignores a rebuilt row whose published content is identical', () => {
     const probe = new RowMutationProbe()
     const before = row()

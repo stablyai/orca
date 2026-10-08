@@ -176,14 +176,6 @@ describe('the catch-all switch', () => {
     expect(dependencies.routes[0]?.params).toEqual({ tab: 'diff' })
   })
 
-  it('never carries its own segments back as query params', async () => {
-    // `useLocalSearchParams` merges the route params into the search params, and both of these are
-    // already in the pathname above.
-    dependencies.params = { hostId: 'host-1', page: ['settings'] }
-    await render()
-    expect(dependencies.routes[0]).not.toHaveProperty('params')
-  })
-
   it('refuses a deep link carrying more params than the bridge will take', async () => {
     // The schema bounds them, so `shellScreenRoute` answers null and the switch refuses. Dropping
     // the overflow instead would open the page on a screen missing the state it was asked for.

@@ -685,6 +685,20 @@ describe('createJiraSlice credential errors', () => {
     expect(store.getState().jiraStatus).toEqual(focusedStatus)
   })
 
+  it('does not read a rejected query that mentions 401 as a lost connection', async () => {
+    const store = createTestStore()
+    const source = jiraSourceContext('remote-runtime')
+    const error = new Error("Error 400: An issue with key 'ALP-1401' does not exist.")
+    jiraSearchIssues.mockRejectedValueOnce(error)
+
+    await expect(
+      store
+        .getState()
+        .searchJiraIssues('key = "ALP-1401"', 12, { sourceContext: source, siteId: 'site-1' })
+    ).rejects.toBe(error)
+    expect(store.getState().jiraConnectionRevisions).toEqual({})
+  })
+
   it('does not borrow the global site when a workspace source has no selected site', async () => {
     const store = createTestStore()
     const source = jiraSourceContext('remote-runtime')

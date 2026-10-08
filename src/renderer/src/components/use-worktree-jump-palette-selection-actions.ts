@@ -65,10 +65,10 @@ export function useWorktreeJumpPaletteSelectionActions({
         )
         return
       }
-      const activation = activateAndRevealWorktree(
-        worktree.id,
-        executionHostId ? { executionHostId } : {}
-      )
+      const activation = activateAndRevealWorktree(worktree.id, {
+        navigationIntent: 'user-open',
+        ...(executionHostId ? { executionHostId } : {})
+      })
       recordFeatureInteraction('cmd-j-workspace-open')
       skipRestoreFocusRef.current = true
       closeModal()
@@ -207,6 +207,8 @@ export function useWorktreeJumpPaletteSelectionActions({
   const handleSelectProjectTarget = useCallback(
     (result: CmdJProjectSearchResult) => {
       skipRestoreFocusRef.current = true
+      // Why switch: picking a project row explicitly asks to see it in the workspace list.
+      useAppStore.getState().setSidebarBody('workspaces')
       revealSidebarRow(result.rowKey, { behavior: 'smooth', highlight: true })
       recordFeatureInteraction('cmd-j')
       closeModal()

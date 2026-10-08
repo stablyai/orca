@@ -7,13 +7,18 @@
 
 import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
 import type { AgentSessionOperationRow } from '../../shared/agent-session-operation-ledger'
-import type { AgentSessionProviderHandle } from '../../shared/agent-session-journal-types'
+import {
+  agentSessionWireProviderHandle,
+  type AgentSessionWireProviderHandle
+} from '../../shared/agent-session-provider-handle-encoding'
+import type { StructuredAgentId } from '../../shared/agent-session-provider-handle'
 import type { AgentSessionLease, AgentSessionRecord } from '../../shared/agent-session-record'
 import { agentSessionLeaseAdmitsWriter } from '../../shared/agent-session-lease-adjudication'
 
 export type StructuredAgentSessionAdoptionOwnership = {
   sessionId: string
-  provider: 'claude' | 'codex'
+  /** Any registered agent's chat may hold the conversation, though only Claude and Codex adopt. */
+  provider: StructuredAgentId
   providerSessionId: string
   lease: AgentSessionLease
 }
@@ -26,7 +31,7 @@ export type StructuredAgentSessionAdoption = {
 
 export type CommittedStructuredAgentSessionAdoptionReplay = {
   record: AgentSessionRecord
-  providerHandle: Exclude<AgentSessionProviderHandle, { kind: 'opaque' }>
+  providerHandle: AgentSessionWireProviderHandle
 }
 
 /** Exact committed-operation identity; attach still validates its fingerprint. */
@@ -58,22 +63,12 @@ export function findCommittedStructuredAgentSessionAdoptionReplay(input: {
   ) {
     return null
   }
-  const providerSessionId =
-    adopted.handle.provider === 'codex' ? adopted.handle.threadId : adopted.handle.sessionId
-  if (providerSessionId !== input.providerSessionId) {
+  // The replay re-sends the adoption as its create sent it, so it needs the wire's form.
+  const providerHandle = agentSessionWireProviderHandle(adopted.handle)
+  if (adopted.handle.nativeId !== input.providerSessionId || !providerHandle) {
     return null
   }
-  return {
-    record,
-    providerHandle:
-      adopted.handle.provider === 'codex'
-        ? { kind: 'codex', threadId: adopted.handle.threadId }
-        : {
-            kind: 'claude',
-            sessionId: adopted.handle.sessionId,
-            leafUuid: adopted.handle.leafUuid
-          }
-  }
+  return { record, providerHandle }
 }
 
 /**

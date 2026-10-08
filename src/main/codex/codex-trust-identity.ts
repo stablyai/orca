@@ -25,6 +25,7 @@ function matcherPatternForEvent(
   switch (eventLabel) {
     case 'user_prompt_submit':
     case 'stop':
+    case 'interrupt':
       return undefined
     case 'pre_tool_use':
     case 'permission_request':
@@ -38,11 +39,22 @@ function matcherPatternForEvent(
   }
 }
 
+// Why: Codex hashes the normalized timeout; Interrupt defaults to 1s and clamps to 3s (discovery.rs normalize_command_hook).
+export function normalizeCodexHookTimeoutSec(
+  eventLabel: CodexEventLabel,
+  timeoutSec: number | undefined
+): number {
+  if (eventLabel === 'interrupt') {
+    return Math.min(3, Math.max(1, timeoutSec ?? 1))
+  }
+  return Math.max(1, timeoutSec ?? 600)
+}
+
 export function computeCodexTrustedHash(entry: CodexTrustEntry): string {
   const handler: Record<string, unknown> = {
     type: 'command',
     command: entry.command,
-    timeout: Math.max(1, entry.timeoutSec ?? 600),
+    timeout: normalizeCodexHookTimeoutSec(entry.eventLabel, entry.timeoutSec),
     async: entry.async ?? false
   }
   if (entry.statusMessage !== undefined) {
@@ -68,13 +80,27 @@ export function getExplicitHomeCodexHookSourcePath(sourcePath: string): string {
   if (process.platform !== 'win32' && isUnambiguousWindowsPath(sourcePath)) {
     return normalizeCodexTrustSourcePath(sourcePath)
   }
-  try {
-    // Why: hook discovery resolves the explicit home but keeps the hooks.json leaf logical.
-    return normalizeCodexTrustSourcePath(
-      join(realpathSync.native(dirname(sourcePath)), basename(sourcePath))
-    )
-  } catch {
-    return normalizeCodexTrustSourcePath(sourcePath)
+  // Why: hook discovery resolves the explicit home but keeps the hooks.json leaf logical.
+  return normalizeCodexTrustSourcePath(
+    join(resolveThroughExistingAncestor(dirname(sourcePath)), basename(sourcePath))
+  )
+}
+
+// Why the nearest existing ancestor: a home not created yet still sits under a resolved HOME.
+function resolveThroughExistingAncestor(path: string): string {
+  const missing: string[] = []
+  let current = path
+  for (;;) {
+    try {
+      return join(realpathSync.native(current), ...missing.toReversed())
+    } catch {
+      const parent = dirname(current)
+      if (parent === current) {
+        return path
+      }
+      missing.push(basename(current))
+      current = parent
+    }
   }
 }
 
@@ -205,7 +231,8 @@ function isCodexEventLabel(value: string): value is CodexEventLabel {
     value === 'user_prompt_submit' ||
     value === 'subagent_start' ||
     value === 'subagent_stop' ||
-    value === 'stop'
+    value === 'stop' ||
+    value === 'interrupt'
   )
 }
 

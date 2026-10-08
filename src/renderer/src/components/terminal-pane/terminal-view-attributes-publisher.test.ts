@@ -12,7 +12,8 @@ import { applyTerminalAppearance } from './terminal-appearance'
 import {
   _resetTerminalViewAttributesPublisherForTest,
   composeTerminalViewAttributes,
-  publishTerminalViewAttributes
+  publishTerminalViewAttributes,
+  subscribeToPublishedTerminalViewColors
 } from './terminal-view-attributes-publisher'
 
 const cursorSettings = {
@@ -133,6 +134,22 @@ describe('publishTerminalViewAttributes dedupe', () => {
   it('skips silently when the preload bridge is unavailable (web client, tests)', () => {
     // No window stub: default send must be a safe no-op.
     expect(publishTerminalViewAttributes(null, 'dark', cursorSettings)).toBe(false)
+  })
+
+  it('hands each published fg/bg to subscribers, starting with the current one', () => {
+    const send = vi.fn(() => true)
+    publishTerminalViewAttributes({ foreground: '#111111' }, 'dark', cursorSettings, send)
+    const heard: unknown[] = []
+
+    const unsubscribe = subscribeToPublishedTerminalViewColors((colors) => heard.push(colors))
+    publishTerminalViewAttributes({ foreground: '#222222' }, 'dark', cursorSettings, send)
+    unsubscribe()
+    publishTerminalViewAttributes({ foreground: '#333333' }, 'dark', cursorSettings, send)
+
+    expect(heard).toEqual([
+      { foreground: '#111111', background: '#000000' },
+      { foreground: '#222222', background: '#000000' }
+    ])
   })
 })
 

@@ -4,19 +4,18 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { z } from 'zod'
 import {
-  ORCAD_BUILD_TARGET_FILENAME,
+  ORCAD_SERVER_TARGET_FILENAME,
   ORCAD_VERSION,
-  orcadArtifactFilenames,
-  orcadArtifactHashPrefix
+  orcadArtifactFilenames
 } from '../../shared/orcad-artifacts'
-import { ORCAD_BUN_TARGETS } from '../../shared/orcad-bun-runtime'
+import { COMPAT_SERVER_TARGETS, SERVER_TARGETS } from '../../shared/node-runtime-pin'
 import { orcadAgentBrowserNativeName } from '../../shared/orcad-agent-browser-name'
 
 /** Hash installed bytes in the build's order; a version marker is not proof of delivery. */
 export async function readOrcadArtifactIdentity(directory: string): Promise<string> {
   const target = z
-    .enum(ORCAD_BUN_TARGETS)
-    .parse((await readFile(join(directory, ORCAD_BUILD_TARGET_FILENAME), 'utf8')).trim())
+    .enum([...SERVER_TARGETS, ...COMPAT_SERVER_TARGETS])
+    .parse((await readFile(join(directory, ORCAD_SERVER_TARGET_FILENAME), 'utf8')).trim())
   const platform = target.startsWith('win32-')
     ? 'win32'
     : target.startsWith('darwin-')
@@ -31,7 +30,7 @@ export async function readOrcadArtifactIdentity(directory: string): Promise<stri
   if (existsSync(join(directory, browser))) {
     filenames.push(browser)
   }
-  const hash = createHash('sha256').update(orcadArtifactHashPrefix(target))
+  const hash = createHash('sha256')
   for (const filename of filenames) {
     for await (const chunk of createReadStream(join(directory, filename))) {
       hash.update(chunk)

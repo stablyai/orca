@@ -95,6 +95,92 @@ describe('registerWorktreeHandlers', () => {
     setupWorktreeHandlers()
   })
 
+  it.each(['resolve', 'reject'] as const)(
+    'answers a canceled SSH listing without writing when the provider settles late: %s',
+    async (outcome) => {
+      const targetId = `continuation-cancel-${outcome}`
+      const repo = {
+        id: `repo-${targetId}`,
+        path: '/remote/repo',
+        displayName: 'repo',
+        badgeColor: '#000',
+        addedAt: 0,
+        connectionId: targetId
+      }
+      let resolveProvider!: (value: GitWorktreeInfo[]) => void
+      let rejectProvider!: (error: Error) => void
+      const provider = {
+        listWorktrees: vi.fn(
+          () =>
+            new Promise<GitWorktreeInfo[]>((resolve, reject) => {
+              resolveProvider = resolve
+              rejectProvider = reject
+            })
+        )
+      }
+      store.getRepos.mockReturnValue([repo])
+      getSshGitProviderMock.mockReturnValue(provider)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: request ids are minted by the renderer; any unique string is a valid id here.
+      const providerRequestId = `request-${targetId}` as ProviderRequestId
+      const pending = handlers['worktrees:listDetected'](ipcEvent, {
+        providerRequestId,
+        repoId: repo.id,
+        executionHostId: toSshExecutionHostId(targetId),
+        expectedAuthority: getSshProviderAuthority(targetId)
+      })
+      await Promise.resolve()
+      expect(provider.listWorktrees).toHaveBeenCalledOnce()
+      handlers['worktrees:cancelListDetected'](ipcEvent, { providerRequestId })
+      await expect(pending).resolves.toMatchObject({ status: 'canceled' })
+      if (outcome === 'resolve') {
+        resolveProvider([])
+      } else {
+        rejectProvider(new Error('late provider failure'))
+      }
+      await new Promise((resolve) => setImmediate(resolve))
+      expect(store.setWorktreeMeta).not.toHaveBeenCalled()
+      expect(store.removeWorktreeLineage).not.toHaveBeenCalled()
+    }
+  )
+
+  it('lists a local folder while a legacy SSH listing is still pending', async () => {
+    const targetId = 'continuation-legacy'
+    const repo = {
+      id: 'repo-legacy',
+      path: '/remote/repo',
+      displayName: 'repo',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: targetId
+    }
+    const localRepo: Repo = {
+      id: 'repo-local',
+      path: '/local/repo',
+      displayName: 'local',
+      badgeColor: '#000',
+      addedAt: 0,
+      kind: 'folder'
+    }
+    let resolveProvider!: (value: GitWorktreeInfo[]) => void
+    const provider = {
+      listWorktrees: vi.fn(
+        () =>
+          new Promise<GitWorktreeInfo[]>((resolve) => {
+            resolveProvider = resolve
+          })
+      )
+    }
+    store.getRepos.mockReturnValue([repo, localRepo])
+    getSshGitProviderMock.mockReturnValue(provider)
+    const pending = handlers['worktrees:listDetected'](ipcEvent, { repoId: repo.id })
+    await expect(
+      handlers['worktrees:listDetected'](ipcEvent, { repoId: localRepo.id })
+    ).resolves.toMatchObject({ repoId: localRepo.id, authoritative: true })
+    expect(provider.listWorktrees).toHaveBeenCalledOnce()
+    resolveProvider([])
+    await expect(pending).resolves.toMatchObject({ repoId: repo.id, authoritative: true })
+  })
+
   it.each([
     ['malformed', 'ssh:%'],
     ['contradictory', toSshExecutionHostId('target-b')]

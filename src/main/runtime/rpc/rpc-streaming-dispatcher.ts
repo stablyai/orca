@@ -21,6 +21,7 @@ import { parseRpcRequestParams } from './dispatcher-request-parsing'
 import { routeDispatcherClientHostedBrowserRpc } from './dispatcher-client-browser-routing'
 import { needsLocalCallerFingerprint } from './dispatcher-caller-fingerprint'
 import { createDispatcherStreamingFeatureEmitter } from './dispatcher-streaming-feature-emitter'
+import { resolveRpcCallerIdentity } from './rpc-caller-identity'
 import {
   needsOrchestrationCallerResolution,
   resolveOrchestrationSessionCaller,
@@ -138,10 +139,10 @@ export class RpcStreamingDispatcher {
             subscriptionRegistrationVersion,
             clientId: options?.clientId,
             pairedDeviceId: options?.pairedDeviceId,
+            caller: resolveRpcCallerIdentity(options),
             clientKind: options?.clientKind,
             clientCapabilities: options?.clientCapabilities,
             updateClientCapabilities: options?.updateClientCapabilities,
-            orchestrationCapability: request.orchestrationCapability,
             authenticatedCallerFingerprint:
               mutation?.identity.callerFingerprint ??
               legacyCoordinator?.mutationCallerFingerprint ??
@@ -193,10 +194,10 @@ export class RpcStreamingDispatcher {
           connectionId: options?.connectionId,
           clientId: options?.clientId,
           pairedDeviceId: options?.pairedDeviceId,
+          caller: resolveRpcCallerIdentity(options),
           clientKind: options?.clientKind,
           clientCapabilities: options?.clientCapabilities,
           updateClientCapabilities: options?.updateClientCapabilities,
-          orchestrationCapability: request.orchestrationCapability,
           pairing: options?.pairing,
           sendBinary: options?.sendBinary,
           registerBinaryStreamHandler: options?.registerBinaryStreamHandler,

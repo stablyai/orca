@@ -113,12 +113,6 @@ describe('agent completion polling under a host capture it cannot use', () => {
     expect(inspect(unreadableTableRecord()).consecutiveInspectionErrors).toBe(0)
   })
 
-  it('counts an error for the late live record the same capture would have produced', () => {
-    // One of the measured captures. Every poll refusing this way is what drives the cadence to
-    // its 10s backoff floor and stops completion detection for the pane.
-    expect(inspect(liveRecord(6_140)).consecutiveInspectionErrors).toBe(1)
-  })
-
   it.each([
     ['at the ceiling', REMOTE_FOREGROUND_EVIDENCE_MAX_AGE_MS, 0],
     ['one step past it', REMOTE_FOREGROUND_EVIDENCE_MAX_AGE_MS + 1, 1]

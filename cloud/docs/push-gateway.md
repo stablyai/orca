@@ -23,7 +23,7 @@ edit plus a second set of Apple credentials.
 | Cloud Run service | `orca-cloud-push`                                      | `push_cloud_run_service_name`                |
 | Region            | `us-central1`                                          | `region`                                     |
 | Instances         | min 1, max 2                                           | `push_min_instances`, `push_max_instances`   |
-| Database pool     | 2 per instance                                         | `push_database_pool_max`                     |
+| Database pool     | 6 per instance                                         | `push_database_pool_max`                     |
 | Concurrency       | 80                                                     | `push_concurrency`                           |
 | Ingress           | all                                                    | `INGRESS_TRAFFIC_ALL`                        |
 | Invoker           | IAM disabled                                           | `invoker_iam_disabled = true` on the service |
@@ -36,8 +36,8 @@ cold start delays a notification past the point where it is worth showing, so th
 keeps a notification prompt. The
 ceiling is a different question, answered below.
 
-Push uses its approved dedicated two-vCPU HA database. Two instances with a two-connection
-pool draw four connections; three simultaneous revision resources draw twelve. Tagged
+Push uses its approved dedicated two-vCPU HA database. Two instances with a six-connection
+pool draw twelve connections; three simultaneous revision resources draw thirty-six. Tagged
 candidates can run outside the service-wide cap, so Terraform bounds instances × pool × 3
 at 64 connections, leaving dedicated capacity for maintenance and operators. Increase pool
 sizes only after measuring contention. The shared Relay budget excludes push entirely.
@@ -57,7 +57,7 @@ Set on the container by Terraform:
 | `ORCA_PUSH_PUBLIC_URL`        | `push_base_url`                                          |
 | `ORCA_PUSH_FCM_PROJECT_ID`    | `project_id` (required for standalone runtime)          |
 | `ORCA_PUSH_DATABASE_URL`      | Secret `orca-cloud-push-dedicated-database-url`, pinned version  |
-| `ORCA_PUSH_DATABASE_POOL_MAX` | `push_database_pool_max`, 2 per instance                 |
+| `ORCA_PUSH_DATABASE_POOL_MAX` | `push_database_pool_max`, 6 per instance                 |
 | `ORCA_PUSH_APNS_KEY`          | Secret `orca-cloud-push-apns-key`, version `latest`      |
 | `ORCA_PUSH_APNS_KEY_ID`       | Secret `orca-cloud-push-apns-key-id`, version `latest`   |
 | `ORCA_PUSH_APPLE_TEAM_ID`     | Secret `orca-cloud-push-apple-team-id`, version `latest` |
@@ -180,7 +180,7 @@ runtime identity with a validate-only FCM request. Cloud Run rejects deletion of
 created revision even when it has no tag or traffic. Activation therefore creates a successor
 before removing the validation tag and deleting validation. The dedicated 64-connection budget
 reserves three simultaneous revision pools: serving, validation/rejected,
-and active/recovery successor (12 configured pool connections at the current two-by-two shape).
+and active/recovery successor (36 configured pool connections at the current two-by-six shape).
 Revision deletion is not proof of physical SQL session drain; verify termination and SQL sessions
 in controlled rollout acceptance. There is no shutdown sleep used as a drain gate.
 

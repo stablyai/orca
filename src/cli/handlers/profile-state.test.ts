@@ -215,8 +215,13 @@ describe('profile-state CLI recovery', () => {
     ['--current-json', '--backup', '1'],
     ['--current-json', '--current-sqlite'],
     ['--current-json=false'],
-    ['--current-sqlite=false']
-  ])('rejects ambiguous current JSON arguments: %s', async (...flags) => {
+    ['--current-sqlite=false'],
+    ['--latest-json', '--revision', '1'],
+    ['--latest-json', '--backup', '1'],
+    ['--latest-json', '--current-json'],
+    ['--latest-json', '--current-sqlite'],
+    ['--latest-json=false']
+  ])('rejects ambiguous recovery arguments: %s', async (...flags) => {
     getCliStatusMock.mockClear()
     const profile = createProfile()
     getDefaultUserDataPathMock.mockReturnValue(profile.userDataPath)
@@ -372,7 +377,7 @@ describe('profile-state CLI recovery', () => {
     )
   })
 
-  it.each([['--revision', '1'], ['--current-json']])(
+  it.each([['--revision', '1'], ['--current-json'], ['--latest-json']])(
     'refuses rollback while runtime is reachable: %s',
     async (...flags) => {
       const profile = createProfile()

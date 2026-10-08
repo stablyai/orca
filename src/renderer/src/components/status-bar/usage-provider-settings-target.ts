@@ -9,8 +9,6 @@ export function getUsageProviderAccountsSectionId(
     case 'codex':
       return 'accounts-codex'
     case 'gemini':
-    case 'antigravity':
-      // Why: Antigravity usage currently shares Gemini's OAuth configuration.
       return 'accounts-gemini'
     case 'opencode-go':
       return 'accounts-opencode-go'
@@ -20,10 +18,12 @@ export function getUsageProviderAccountsSectionId(
       return 'accounts-grok'
     case 'cursor':
       return 'accounts-cursor'
+    case 'antigravity':
     case 'kimi':
     case 'kiro':
-    case 'zcode':
       // These CLIs own their credential lifecycles.
       return null
+    case 'zcode':
+      return 'accounts-zcode'
   }
 }

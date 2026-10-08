@@ -1,3 +1,4 @@
+import { ImeInput } from '@/lib/ime-text-field'
 import type { CSSProperties, RefObject } from 'react'
 import {
   MessageSquare,
@@ -10,10 +11,10 @@ import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
-import { WORKSPACE_FILE_PATH_MIME, WORKSPACE_FILE_PATHS_MIME } from '@/lib/workspace-file-drag'
 import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import type { PtyTransport } from './pty-transport'
-import { handleInternalTerminalFileDrop } from './terminal-drop-handler'
+import { TerminalPaneHeaderDropSurface } from './TerminalPaneHeaderDropSurface'
+import { makePaneKey } from '../../../../shared/stable-pane-id'
 
 export type PaneTitleOverlayRect = {
   left: number
@@ -144,10 +145,10 @@ export default function TerminalPaneHeaderOverlay({
         }
 
         return (
-          <div
-            key={`pane-title-${pane.leafId}`}
+          <TerminalPaneHeaderDropSurface
+            key={makePaneKey(tabId, pane.leafId)}
+            destination={{ pane, tabId, worktreeId, cwd, managerRef, paneTransportsRef }}
             className="pane-title-bar"
-            data-native-file-drop-target="terminal"
             data-terminal-tab-id={tabId}
             data-pane-prevent-terminal-focus=""
             {...(isActivePane ? { 'data-active-pane': '' } : {})}
@@ -156,40 +157,6 @@ export default function TerminalPaneHeaderOverlay({
             onPointerDownCapture={
               title || isEditing ? () => onActivatePaneTitleInteraction(pane.id) : undefined
             }
-            onDragOver={(event) => {
-              onActivatePaneTitleInteraction(pane.id)
-              if (
-                event.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME) ||
-                event.dataTransfer.types.includes(WORKSPACE_FILE_PATHS_MIME)
-              ) {
-                event.preventDefault()
-                event.dataTransfer.dropEffect = 'copy'
-              }
-            }}
-            onDrop={(event) => {
-              if (
-                !event.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME) &&
-                !event.dataTransfer.types.includes(WORKSPACE_FILE_PATHS_MIME)
-              ) {
-                return
-              }
-              event.preventDefault()
-              event.stopPropagation()
-              onActivatePaneTitleInteraction(pane.id)
-              const manager = managerRef.current
-              if (!manager) {
-                return
-              }
-              void handleInternalTerminalFileDrop({
-                manager,
-                paneTransports: paneTransportsRef.current,
-                worktreeId,
-                tabId,
-                cwd,
-                dataTransfer: event.dataTransfer,
-                dropTarget: event.target
-              })
-            }}
             onContextMenuCapture={(event) => onPaneTitleContextMenu(event, pane.id)}
             style={{
               left: overlayRect.left,
@@ -198,7 +165,7 @@ export default function TerminalPaneHeaderOverlay({
             }}
           >
             {isEditing ? (
-              <input
+              <ImeInput
                 ref={renameInputRef}
                 className="pane-title-input"
                 aria-label={translate(
@@ -407,7 +374,7 @@ export default function TerminalPaneHeaderOverlay({
                 </div>
               </>
             )}
-          </div>
+          </TerminalPaneHeaderDropSurface>
         )
       })}
     </div>

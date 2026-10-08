@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from './native-chat-types'
-import { formatWorkerTranscriptMessages } from './worker-transcript-text'
-
-const formatWorkerTranscriptMessage = (message: NativeChatMessage): string =>
-  formatWorkerTranscriptMessages([message]).join('')
+import { formatWorkerTranscriptMessage } from './worker-transcript-text'
 
 function message(blocks: NativeChatMessage['blocks']): NativeChatMessage {
   return { id: 'm-1', role: 'system', blocks, timestamp: null, source: 'hook' }

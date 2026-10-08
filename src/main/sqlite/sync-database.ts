@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
 import type { backup, BackupOptions, DatabaseSync, SQLInputValue } from 'node:sqlite'
-import { BunSqliteDatabase, loadBunSqlite } from './bun-sqlite-database'
+import { hasNodeSqliteReaderApi } from './node-sqlite-reader-api'
 import { NodeSqliteStatement } from './node-sqlite-statement'
 import type { SqliteStatement } from './sqlite-statement'
 
@@ -62,33 +62,26 @@ function hasBackup(value: unknown): value is { backup: typeof backup } {
 
 export function isSqliteAvailable(): boolean {
   try {
-    if (process.versions.bun) {
-      return loadBunSqlite() !== undefined
-    }
     const sqlite: unknown = process.getBuiltinModule?.('node:sqlite')
-    return hasDatabaseSync(sqlite) && hasBackup(sqlite)
+    return hasNodeSqliteReaderApi(sqlite)
   } catch {
     return false
   }
 }
 
 class SyncDatabase {
-  private readonly db: DatabaseSync | BunSqliteDatabase
+  private readonly db: DatabaseSync
   private readonly statementCache = new Map<string, SqliteStatement>()
 
   constructor(path: SqlitePath, options: SyncDatabaseOptions = {}) {
     if (options.fileMustExist && path !== ':memory:' && !existsSync(path)) {
       throw new Error(`SQLite database does not exist: ${String(path)}`)
     }
-    if (process.versions.bun) {
-      this.db = new BunSqliteDatabase(path, options)
-    } else {
-      const DatabaseSync = loadDatabaseSync()
-      this.db = new DatabaseSync(path, {
-        readOnly: options.readonly,
-        timeout: options.timeout
-      })
-    }
+    const DatabaseSync = loadDatabaseSync()
+    this.db = new DatabaseSync(path, {
+      readOnly: options.readonly,
+      timeout: options.timeout
+    })
   }
 
   exec(sql: string): void {
@@ -106,10 +99,7 @@ class SyncDatabase {
       this.statementCache.set(sql, cached)
       return cached
     }
-    const statement =
-      this.db instanceof BunSqliteDatabase
-        ? this.db.prepare(sql)
-        : new NodeSqliteStatement(this.db.prepare(sql))
+    const statement = new NodeSqliteStatement(this.db.prepare(sql))
     if (isStatementCacheable(sql)) {
       if (this.statementCache.size >= STATEMENT_CACHE_LIMIT) {
         const oldest = this.statementCache.keys().next().value
@@ -138,17 +128,10 @@ class SyncDatabase {
     return this.db.isTransaction
   }
 
-  /** Keep the source open until completion; Bun's compact snapshot runs synchronously. */
+  /** Keep the source open until completion. */
   async backup(path: string, options?: BackupOptions): Promise<void> {
     if (this.db.isTransaction) {
       throw new Error('SQLite backup requires an idle database connection')
-    }
-    if (this.db instanceof BunSqliteDatabase) {
-      if (options && Object.keys(options).length > 0) {
-        throw new Error('Incremental SQLite backup options are unavailable in this runtime')
-      }
-      this.db.backup(path)
-      return
     }
     const sqlite: unknown =
       typeof process.getBuiltinModule === 'function'

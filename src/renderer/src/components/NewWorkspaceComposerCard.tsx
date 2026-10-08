@@ -36,6 +36,7 @@ import {
   type NewWorkspaceComposerCardProps
 } from './new-workspace/new-workspace-composer-card-props'
 import { getSshStatusLabel } from './new-workspace/new-workspace-composer-ssh-status'
+import { useNewWorkspaceComposerFileDrop } from './new-workspace/use-new-workspace-composer-file-drop'
 import { useComposerFileDragOver } from './new-workspace/use-composer-file-drag-over'
 
 // Why lazy: this pulls the ~41 KB project-location browser onto the boot graph, and nothing
@@ -83,6 +84,12 @@ export default function NewWorkspaceComposerCard(
   const projectHostSetupOptions = props.projectHostSetupOptions ?? EMPTY_PROJECT_HOST_SETUP_OPTIONS
   const ephemeralVmRecipes = props.ephemeralVmRecipes ?? EMPTY_EPHEMERAL_VM_RECIPES
   const { isFileDragOver, dragHandlers } = useComposerFileDragOver()
+  const attachDropOwner = useNewWorkspaceComposerFileDrop({
+    projectPath: props.selectedRepoPath,
+    hostId: selectedRepoExecutionHostId,
+    connectionId: props.selectedRepoConnectionId,
+    applyDrop: props.onNativeFileDrop
+  })
   const openModal = useAppStore((state) => state.openModal)
   const activeModal = useAppStore((state) => state.activeModal)
   const defaultTuiAgent = useAppStore((state) => state.settings?.defaultTuiAgent ?? null)
@@ -95,6 +102,7 @@ export default function NewWorkspaceComposerCard(
   const nameInputFocusFrameRef = React.useRef<number | null>(null)
   const branchNameInputId = React.useId()
   const projectDescriptionId = React.useId()
+  const [sparseEditing, setSparseEditing] = React.useState(false)
   const [addRemoteHostMode, setAddRemoteHostMode] = React.useState<AddRemoteHostMode | null>(null)
   const [setLocationOption, setSetLocationOption] = React.useState<NeedsProjectHostOption | null>(
     null
@@ -183,12 +191,13 @@ export default function NewWorkspaceComposerCard(
       if (!node) {
         cancelNameInputFocusFrame()
       }
+      attachDropOwner(node)
       if (composerRef) {
         composerRef.current = node
       }
       onComposerNodeChange?.(node)
     },
-    [cancelNameInputFocusFrame, composerRef, onComposerNodeChange]
+    [attachDropOwner, cancelNameInputFocusFrame, composerRef, onComposerNodeChange]
   )
   const focusNameInput = React.useCallback((): void => {
     cancelNameInputFocusFrame()
@@ -287,18 +296,23 @@ export default function NewWorkspaceComposerCard(
     <div
       ref={setComposerNode}
       data-workspace-composer-root="true"
-      data-native-file-drop-target="composer"
+      data-sparse-preset-editing={sparseEditing ? 'true' : undefined}
       onDragEnter={dragHandlers.onDragEnter}
       onDragLeave={dragHandlers.onDragLeave}
       className={cn(
         'flex min-h-0 min-w-0 flex-1 flex-col gap-1 rounded-md transition',
-        isFileDragOver && 'ring-2 ring-ring/30',
+        isFileDragOver &&
+          props.selectedRepoPath &&
+          selectedRepoExecutionHostId &&
+          props.onNativeFileDrop &&
+          'ring-2 ring-ring/30',
         containerClassName
       )}
     >
       <div className={cn('min-h-0 min-w-0 space-y-4 pt-3', contentClassName)}>
         <NewWorkspaceComposerProjectSection
           {...props}
+          disabled={sparseEditing}
           projectOptions={projectOptions}
           projectHostSetupOptions={projectHostSetupOptions}
           ephemeralVmRecipes={ephemeralVmRecipes}
@@ -318,12 +332,16 @@ export default function NewWorkspaceComposerCard(
         <NewWorkspaceComposerNameSection {...props} onNamePlainEnter={handleNamePlainEnter} />
         <NewWorkspaceComposerAgentSection
           {...props}
+          createDisabled={props.createDisabled || sparseEditing}
+          advancedLocked={sparseEditing}
           visibleQuickAgents={visibleQuickAgents}
           defaultTuiAgent={defaultTuiAgent}
           handleSetDefaultAgent={handleSetDefaultAgent}
         />
         <NewWorkspaceComposerAdvancedSection
           {...props}
+          onSparseEditingChange={setSparseEditing}
+          sparseEditing={sparseEditing}
           branchNameInputId={branchNameInputId}
           setupConfigLabel={setupConfigLabel}
           setupRunLabel={setupRunLabel}
@@ -338,12 +356,14 @@ export default function NewWorkspaceComposerCard(
           activeFolderWorkspaceId={activeFolderWorkspaceId}
         />
       </div>
-      <div className="shrink-0 space-y-1">
-        <NewWorkspaceComposerFooter
-          {...props}
-          submitShortcutModifierLabel={getScreenSubmitModifierLabel()}
-        />
-      </div>
+      {!sparseEditing ? (
+        <div className="shrink-0 space-y-1">
+          <NewWorkspaceComposerFooter
+            {...props}
+            submitShortcutModifierLabel={getScreenSubmitModifierLabel()}
+          />
+        </div>
+      ) : null}
       <AddRemoteHostDialog mode={addRemoteHostMode} onOpenChange={setAddRemoteHostMode} />
       {setLocationDialogMounted ? (
         <React.Suspense fallback={null}>

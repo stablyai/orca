@@ -4,14 +4,17 @@ import {
   getDefaultWorkspaceSession,
   join,
   makePaneKey,
-  markCodexProjectTrustedMock,
-  markCursorWorkspaceTrustedMock,
   mkdtemp,
   setPlatform,
   setTerminalViewAttributes,
   tmpdir
 } from '../orca-runtime-test-mocks.spec'
 import type { OrchestrationDb } from '../orchestration/db'
+import { getTerminalViewerColors } from '../terminal-view-attribute-store'
+import type {
+  TerminalViewAttributes,
+  TerminalViewRgb
+} from '../../../shared/terminal-view-attributes'
 import type {
   AgentSessionExecutionClaim,
   AgentSessionSurfaceBinding
@@ -32,6 +35,21 @@ import {
   makeWorkspaceSessionWithHeadlessTerminal,
   store
 } from '../orca-runtime-test-fixtures.spec'
+
+function viewAttributes(
+  foreground: TerminalViewRgb,
+  background: TerminalViewRgb
+): TerminalViewAttributes {
+  return {
+    foreground,
+    background,
+    cursor: [0xff, 0xff, 0xff],
+    ansi: Array.from({ length: 256 }, (): TerminalViewRgb => [0, 0, 0]),
+    colorSchemeMode: 'dark',
+    cursorStyle: 'block',
+    cursorBlink: false
+  }
+}
 
 describe('OrcaRuntimeService', () => {
   it('preserves SSH dispatch authority commitment across transient relay loss', async () => {
@@ -171,15 +189,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('passes cached view colors to background agent spawns for source-owned startup replies', async () => {
-    setTerminalViewAttributes({
-      foreground: [0xff, 0xff, 0xff],
-      background: [0x28, 0x2c, 0x34],
-      cursor: [0xff, 0xff, 0xff],
-      ansi: Array.from({ length: 256 }, () => [0, 0, 0] as [number, number, number]),
-      colorSchemeMode: 'dark',
-      cursorStyle: 'block',
-      cursorBlink: false
-    })
+    setTerminalViewAttributes(viewAttributes([0xff, 0xff, 0xff], [0x28, 0x2c, 0x34]))
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
@@ -197,6 +207,53 @@ describe('OrcaRuntimeService', () => {
           foreground: '#ffffff',
           background: '#282c34'
         }
+      })
+    )
+  })
+
+  it("keeps a desktop host's own colours when a paired client creates a terminal", async () => {
+    setTerminalViewAttributes(viewAttributes([0xff, 0xff, 0xff], [0x28, 0x2c, 0x34]))
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-remote-colors' })
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      command: 'codex',
+      terminalColorQueryReplies: { foreground: '#2e3434', background: '#ffffff' }
+    })
+
+    const hostColors = { foreground: '#ffffff', background: '#282c34' }
+    expect(getTerminalViewerColors()).toEqual(hostColors)
+    expect(spawn).toHaveBeenCalledWith(
+      expect.objectContaining({ terminalColorQueryReplies: hostColors })
+    )
+  })
+
+  it("takes the creating client's colours on a host with no window of its own", async () => {
+    // A client that predates terminal.setViewerColors reports its theme only here.
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-headless-remote-colors' })
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      command: 'codex',
+      terminalColorQueryReplies: { foreground: '#2e3434', background: '#ffffff' }
+    })
+
+    expect(getTerminalViewerColors()).toEqual({ foreground: '#2e3434', background: '#ffffff' })
+    expect(spawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        terminalColorQueryReplies: { foreground: '#2e3434', background: '#ffffff' }
       })
     )
   })
@@ -374,7 +431,7 @@ describe('OrcaRuntimeService', () => {
     })
 
     const spawnCall = spawn.mock.calls[0]?.[0] as
-      | { command?: string; env?: Record<string, string> }
+      | { command?: string; launchAgent?: string; env?: Record<string, string> }
       | undefined
     expect(spawnCall?.command).toBe("codex '--dangerously-bypass-approvals-and-sandbox'")
     expect(spawnCall?.env).toMatchObject({
@@ -382,10 +439,8 @@ describe('OrcaRuntimeService', () => {
       ORCA_WORKTREE_ID: TEST_WORKTREE_ID
     })
     expect(spawnCall?.env?.ORCA_AGENT_LAUNCH_TOKEN).toMatch(UUID_RE)
-    expect(markCodexProjectTrustedMock).toHaveBeenCalledWith(TEST_WORKTREE_PATH)
-    expect(markCodexProjectTrustedMock.mock.invocationCallOrder[0]).toBeLessThan(
-      spawn.mock.invocationCallOrder[0]!
-    )
+    // The spawn builder pre-trusts the workspace for the declared launch agent.
+    expect(spawnCall?.launchAgent).toBe('codex')
   })
 
   // Why: `cursor` on PATH is the Cursor desktop launcher; only `cursor-agent` is
@@ -421,7 +476,6 @@ describe('OrcaRuntimeService', () => {
     expect(spawnCall?.command).toBe("cursor-agent '--force'")
     expect(spawnCall?.launchAgent).toBe('cursor')
     expect(spawnCall?.env).toMatchObject({ CURSOR_PROFILE: 'captured' })
-    expect(markCursorWorkspaceTrustedMock).toHaveBeenCalledWith(TEST_WORKTREE_PATH)
   })
 
   it('resolves a startupAgent to the CLI binary on Windows, where `cursor` is the IDE', async () => {

@@ -72,11 +72,13 @@ export function NativeChatResolutionReceipt({
             <p>{answer.question}</p>
           ) : null}
           <p className="line-clamp-3 whitespace-pre-wrap break-words">
-            {answer.answer ??
-              translate(
-                'components.native-chat.receipt.unavailable',
-                'Selected answer unavailable'
-              )}
+            {answer.answer === ''
+              ? translate('components.native-chat.receipt.emptyAnswer', 'Empty answer')
+              : (answer.answer ??
+                translate(
+                  'components.native-chat.receipt.unavailable',
+                  'Selected answer unavailable'
+                ))}
           </p>
         </div>
       ))}

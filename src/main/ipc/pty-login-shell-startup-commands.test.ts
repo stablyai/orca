@@ -233,7 +233,7 @@ describe('registerPtyHandlers', () => {
         mockProc.emitData('\x1b]133;A\x07% ')
         await Promise.resolve()
         vi.runAllTimers()
-        expect(mockProc.proc.write).toHaveBeenCalledWith('claude\n')
+        expect(mockProc.proc.write).toHaveBeenCalledWith('claude\r')
       } finally {
         vi.useRealTimers()
       }
@@ -396,7 +396,7 @@ describe('registerPtyHandlers', () => {
       vi.advanceTimersByTime(1)
       await Promise.resolve()
       vi.runAllTimers()
-      expect(mockProc.proc.write).toHaveBeenCalledWith('printf "hello"\n')
+      expect(mockProc.proc.write).toHaveBeenCalledWith('printf "hello"\r')
     } finally {
       vi.useRealTimers()
     }

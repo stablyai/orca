@@ -147,4 +147,41 @@ describe('release policy', () => {
 
     await expect(restoreLatestStable(github, repoRef)).resolves.toBe('v1.4.100')
   })
+
+  it('keeps a bot-published agent state rules release as a prerelease, off Latest', async () => {
+    const rules = release('agent-state-rules-engine-1-next', 'github-actions[bot]')
+    const stable = release('v1.4.214', 'github-actions[bot]')
+    const github = createGithub({
+      releases: [rules, stable],
+      tags: { 'v1.4.214': {} }
+    })
+
+    await run(github, rules, 'published')
+
+    expect(github.rest.repos.deleteRelease).not.toHaveBeenCalled()
+    expect(github.rest.git.deleteRef).not.toHaveBeenCalled()
+    expect(github.rest.repos.updateRelease).toHaveBeenCalledWith({
+      ...repoRef,
+      release_id: rules.id,
+      prerelease: true,
+      make_latest: 'false'
+    })
+    expect(github.rest.repos.updateRelease).toHaveBeenLastCalledWith({
+      ...repoRef,
+      release_id: stable.id,
+      make_latest: 'true'
+    })
+  })
+
+  it('deletes an agent state rules release a person published', async () => {
+    const rules = release('agent-state-rules-engine-1-stable', 'someone', { prerelease: true })
+    const github = createGithub({ releases: [rules] })
+
+    await run(github, rules, 'published')
+
+    expect(github.rest.repos.deleteRelease).toHaveBeenCalledWith({
+      ...repoRef,
+      release_id: rules.id
+    })
+  })
 })

@@ -1,8 +1,7 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { getConnectionId } from '@/lib/connection-context'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
-import { useAppStore } from '@/store'
+import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
 import { readWorkspaceFileDragPaths } from '@/lib/workspace-file-drag'
 import { captureTerminalDropTarget } from './terminal-drop-target'
@@ -17,13 +16,14 @@ import { resolveTerminalDropWorktreePath } from './terminal-drop-worktree-path'
 import {
   handleNativeTerminalFileDrop as handleTerminalFileDrop,
   type NativeTerminalFileDropArgs
-} from './terminal-native-file-drop'
+} from './terminal-native-file-drop-destination'
 
 export { handleTerminalFileDrop }
 
-type InternalArgs = Omit<NativeTerminalFileDropArgs, 'data'> & {
+type InternalArgs = Omit<NativeTerminalFileDropArgs, 'paths' | 'pane'> & {
   dataTransfer: Pick<DataTransfer, 'getData'>
   dropTarget?: EventTarget | null
+  paneLeafId?: string
 }
 
 export type InternalTerminalFileDropResult =
@@ -43,7 +43,8 @@ export async function handleInternalTerminalFileDrop({
   tabId,
   cwd,
   dataTransfer,
-  dropTarget
+  dropTarget,
+  paneLeafId
 }: InternalArgs): Promise<InternalTerminalFileDropResult> {
   const dragPaths = readWorkspaceFileDragPaths(dataTransfer)
   if (dragPaths.status === 'rejected') {
@@ -56,7 +57,7 @@ export async function handleInternalTerminalFileDrop({
     return { status: 'ignored', reason: 'empty' }
   }
 
-  const pane = resolveInternalTerminalDropPane(manager, dropTarget)
+  const pane = resolveInternalTerminalDropPane(manager, dropTarget, paneLeafId)
   if (!pane) {
     return { status: 'ignored', reason: 'no-pane' }
   }
@@ -66,12 +67,18 @@ export async function handleInternalTerminalFileDrop({
   }
   const dropTargetSnapshot = captureTerminalDropTarget(pane, transport)
 
-  const state = useAppStore.getState()
-  const worktreePath = resolveTerminalDropWorktreePath(worktreeId, cwd) ?? paths[0]
+  const host = parseExecutionHostId(transport.getExecutionHostId?.())
+  const runtimeEnvironmentId =
+    transport.getRuntimeEnvironmentId?.() ?? (host?.kind === 'runtime' ? host.environmentId : null)
+  const worktreePath = resolveTerminalDropWorktreePath(
+    worktreeId,
+    runtimeEnvironmentId ? undefined : cwd,
+    host?.id,
+    runtimeEnvironmentId
+  )
   if (!worktreePath) {
     return { status: 'ignored', reason: 'worktree-unavailable' }
   }
-  const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
   const connectionId = getConnectionId(worktreeId)
   if (!runtimeEnvironmentId && connectionId === undefined) {
     // Why: unresolved connection metadata means we cannot know whether these

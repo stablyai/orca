@@ -41,7 +41,6 @@ function createPorts() {
   })
   const ports: StartupArgs['ports'] = {
     canSpawn: true,
-    markTrusted: vi.fn(),
     createTerminal,
     pasteDraft: vi.fn(),
     sendFollowup: vi.fn(),
@@ -89,6 +88,31 @@ describe('startRuntimeLocalWorktreeTerminals reserved startup pane', () => {
 })
 
 describe('startRuntimeLocalWorktreeTerminals default shell seeding', () => {
+  it.each([false, true])(
+    'provisions a headless activated workspace without a viewer (setup=%s)',
+    async (withSetup) => {
+      const { ports } = createPorts()
+      ports.provisionInBackground = () => true
+      const setup = withSetup ? { runnerScriptPath: '/repo/setup.sh', envVars: {} } : undefined
+      await startRuntimeLocalWorktreeTerminals({
+        request: { repoSelector: `id:${repo.id}`, name: 'headless', activate: true },
+        repo,
+        worktree,
+        setup,
+        ports
+      })
+      expect(ports.provision).toHaveBeenCalledWith(
+        expect.objectContaining({
+          worktreeId: worktree.id,
+          hasStartupTerminal: false,
+          surfaceOwner: false,
+          ...(setup ? { setup } : {})
+        })
+      )
+      expect(ports.createTerminal).not.toHaveBeenCalled()
+    }
+  )
+
   it.each([
     ['Blank Terminal', undefined, 1],
     ['an agent', 'codex' as const, 0]

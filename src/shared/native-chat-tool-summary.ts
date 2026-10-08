@@ -111,12 +111,6 @@ function formatNormalizedToolInput(input: unknown): string {
   }
 }
 
-/** Whether the expanded detail would show structured JSON rather than repeating
- *  the row label — i.e. whether expanding the row is worth offering. */
-export function isStructuredToolInput(input: unknown): boolean {
-  return isStructuredNormalizedToolInput(normalizeToolInput(input))
-}
-
 function isStructuredNormalizedToolInput(input: unknown): boolean {
   if (input === null || typeof input !== 'object') {
     return false
@@ -204,7 +198,7 @@ function isToolInputRecord(value: unknown): value is Record<string, unknown> {
 
 /** Codex delivers tool arguments as a JSON string. Parse those into the object
  *  shape every helper below already understands; leave prose strings alone. */
-function normalizeToolInput(input: unknown): unknown {
+export function normalizeToolInput(input: unknown): unknown {
   if (typeof input !== 'string') {
     return input
   }

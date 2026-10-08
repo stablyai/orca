@@ -197,12 +197,29 @@ describe('UsageProviderStoreLifecycle', () => {
     }
   })
 
+  it('persists identities for a whole first scan with one write', async () => {
+    const telemetry = setupTelemetryClientTest()
+    try {
+      const sessions = Array.from({ length: 20 }, (_, index) => ({ id: `session-${index}` }))
+      scan.mockResolvedValue({ ...emptyScanResult(), sessions })
+      const store = createStore(join(tempDirectory, 'provider.json'))
+      await store.setEnabled(true)
+      writeProbe.opens = 0
+      await store.refresh(true)
+      // Usage cache, identity file, and token-usage snapshot: one write each.
+      expect(writeProbe.opens).toBe(3)
+      expect(telemetry.mock.capture).toHaveBeenCalledTimes(sessions.length)
+    } finally {
+      cleanupTelemetryClientTest(telemetry.envStash)
+    }
+  })
+
   it('keeps analytics identity separate from usage cache rebuilds and never puts it in snapshots', async () => {
     const cacheFile = join(tempDirectory, 'provider.json')
     const identityFile = join(tempDirectory, 'provider-analytics-session-ids.json')
     const original = createStore(cacheFile)
     expect(existsSync(identityFile)).toBe(false)
-    const id = await original.getAnalyticsSessionId('provider-session')
+    const [id] = await original.getAnalyticsSessionIds(['provider-session'])
     expect(existsSync(identityFile)).toBe(true)
     await original.setEnabled(true)
     await original.refresh(true)
@@ -211,15 +228,15 @@ describe('UsageProviderStoreLifecycle', () => {
     expect(readFileSync(cacheFile, 'utf8')).not.toContain(id)
     rmSync(cacheFile)
     const rebuilt = createStore(cacheFile)
-    expect(await rebuilt.getAnalyticsSessionId('provider-session')).toBe(id)
-    expect(await createStore().getAnalyticsSessionId('provider-session')).not.toBe(id)
+    expect(await rebuilt.getAnalyticsSessionIds(['provider-session'])).toEqual([id])
+    expect(await createStore().getAnalyticsSessionIds(['provider-session'])).not.toEqual([id])
   })
 
   it('flush waits for queued analytics identity creation', async () => {
     const store = createStore()
-    const identity = store.getAnalyticsSessionId('session')
+    const identity = store.getAnalyticsSessionIds(['session'])
     await store.flush()
-    const id = await identity
+    const [id] = await identity
     expect(
       readFileSync(join(tempDirectory, 'usage-0-analytics-session-ids.json'), 'utf8')
     ).toContain(id)

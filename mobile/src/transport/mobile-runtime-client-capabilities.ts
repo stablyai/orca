@@ -1,5 +1,4 @@
 import {
-  AGENT_LAUNCH_RUNTIME_CAPABILITY,
   AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
   AGENT_SESSION_TURN_ITEM_CAPABILITY,
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
@@ -7,6 +6,11 @@ import {
   STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../src/shared/protocol-version'
+import {
+  AGENT_LAUNCH_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_TAB_CLOSED_CLIENT_CAPABILITY,
+  AGENT_LAUNCH_UNSTARTED_TAB_CLIENT_CAPABILITY
+} from '../../../src/shared/agent-launch-runtime-capability'
 import { remoteRuntimeClientCapabilities } from '../../../src/shared/remote-runtime-client-capabilities'
 
 export const MOBILE_RUNTIME_CLIENT_CAPABILITIES = remoteRuntimeClientCapabilities([
@@ -20,7 +24,11 @@ export const MOBILE_RUNTIME_CLIENT_CAPABILITIES = remoteRuntimeClientCapabilitie
   // Mobile renders either launch outcome — a structured chat or a terminal agent — so it may ask
   // the host to pick. Without this the host refuses `agent.launch` and every mobile create with an
   // agent stays a PTY.
-  AGENT_LAUNCH_RUNTIME_CAPABILITY
+  AGENT_LAUNCH_RUNTIME_CAPABILITY,
+  // Reads a listed launch tab with no terminal yet as not started, so the host may show it early.
+  AGENT_LAUNCH_UNSTARTED_TAB_CLIENT_CAPABILITY,
+  // Reads `agent_launch_tab_closed` (a user closed its tab, which stopped it) as a definite answer.
+  AGENT_LAUNCH_TAB_CLOSED_CLIENT_CAPABILITY
 ])
 
 export const MOBILE_RUNTIME_CLIENT_CAPABILITY_UPDATE_METHOD =

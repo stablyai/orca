@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
@@ -37,7 +37,7 @@ function eolAttributes(paths) {
 function shebangScripts() {
   return git(['ls-files', '-z', '--', `${SCRIPT_DIRECTORY}/*.mjs`])
     .split('\0')
-    .filter(Boolean)
+    .filter((path) => path && existsSync(join(projectDir, path)))
     .filter((path) => readFileSync(join(projectDir, path), 'utf8').startsWith('#!'))
 }
 

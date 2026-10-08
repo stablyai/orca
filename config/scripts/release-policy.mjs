@@ -1,15 +1,19 @@
 // Enforced by .github/workflows/release-policy.yml on release events.
 
+import {
+  DESKTOP_RC_TAG as RC_TAG,
+  DESKTOP_STABLE_TAG as STABLE_TAG,
+  MOBILE_TAG,
+  isAgentStateRulesTag
+} from './release-tag-patterns.mjs'
+
 const BOT_LOGIN = 'github-actions[bot]'
 const BOT_EMAIL = '41898282+github-actions[bot]@users.noreply.github.com'
-const NUMBER = '(?:0|[1-9][0-9]*)'
-const VERSION = `${NUMBER}\\.${NUMBER}\\.${NUMBER}`
-const STABLE_TAG = new RegExp(`^v${VERSION}$`)
-const RC_TAG = new RegExp(`^v${VERSION}-rc\\.${NUMBER}(?:\\.[0-9A-Za-z]+)?$`)
-const MOBILE_TAG = new RegExp(`^mobile(?:-android)?-v${VERSION}$`)
 
+// Why agent state rules here: their publish workflow is a bot author, and as a prerelease the
+// release can never become Latest, which the app updater follows.
 export function isPrereleaseTag(tag) {
-  return RC_TAG.test(tag) || MOBILE_TAG.test(tag)
+  return RC_TAG.test(tag) || MOBILE_TAG.test(tag) || isAgentStateRulesTag(tag)
 }
 
 export function compareStableTags(left, right) {

@@ -5,9 +5,24 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../../../shared/agent-session-journal-types'
-import { createStructuredAgentSessionOutboxEntry } from '../../../../shared/structured-agent-session-outbox'
+import type { StructuredAgentSessionOptimisticMessage } from '../../../../shared/structured-agent-session-message-projection'
+import { structuredAgentSessionSendBody } from '../../../../shared/structured-agent-session-send-mutation'
 import { projectStructuredAgentSessionMessages } from './structured-agent-session-message-projection'
 import { useStructuredAgentSessionMessages } from './use-structured-agent-session-messages'
+
+function optimisticMessage(args: {
+  clientMessageId: string
+  sessionId?: string
+  text: string
+  attachments: readonly { path: string; previewUri: string }[]
+  queuedAt: number
+}): StructuredAgentSessionOptimisticMessage {
+  return {
+    clientMessageId: args.clientMessageId,
+    body: structuredAgentSessionSendBody(args.text, args.attachments),
+    queuedAt: args.queuedAt
+  }
+}
 
 afterEach(cleanup)
 const EMPTY: never[] = []
@@ -67,7 +82,7 @@ it('retains only unchanged item projections across updates, reorder, deletion, a
 })
 
 it('keeps optimistic sends and their settlement identical to uncached projection', () => {
-  const entry = createStructuredAgentSessionOutboxEntry({
+  const entry = optimisticMessage({
     clientMessageId: 'send',
     sessionId: 'session',
     text: 'Send this',

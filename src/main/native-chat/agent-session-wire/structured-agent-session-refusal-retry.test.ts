@@ -16,7 +16,8 @@ import {
   agentSessionRefusalOperationState,
   type AgentSessionRefusalOperationState
 } from '../../../shared/agent-session-refusal-retry'
-import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { abandonStructuredAgentSessionHost } from './structured-agent-session-host-test-abandon'
@@ -27,6 +28,11 @@ import {
   hostTestAttachParams,
   hostTestMessage
 } from './structured-agent-session-host-test-data'
+import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
+import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 
 const CALLER = { callerKey: 'client-1' }
 const METHODS = ['agentSession.setOption', 'agentSession.send'] as const
@@ -57,10 +63,7 @@ function operationId(timestamp = NOW): string {
 
 async function createHarness(options: { attached?: boolean } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'orca-refusal-oracle-'))
-  const store = await AgentSessionRecordStore.open({
-    directory: join(root, 'store'),
-    hostId: 'local'
-  })
+  const store = await openTestAgentSessionRecordStore(root)
   const setOption = vi.fn<StructuredAgentSessionAdapter['setOption']>(async () => undefined)
   const adapter: StructuredAgentSessionAdapter = {
     acquire: async ({ fence }) => ({
@@ -72,7 +75,7 @@ async function createHarness(options: { attached?: boolean } = {}) {
       },
       link: {
         linkId: `link-${fence}`,
-        handle: { provider: 'codex', threadId: THREAD },
+        handle: codexProviderHandle(THREAD),
         origin: 'created',
         mintedAtFence: fence,
         observedAt: NOW
@@ -89,9 +92,11 @@ async function createHarness(options: { attached?: boolean } = {}) {
     setOption
   }
   const host = new StructuredAgentSessionHost({
+    agents: NO_STRUCTURED_AGENTS,
+    logger: createStructuredAgentSessionLogger(),
     store,
     adapter,
-    journalRoot: root,
+    journalDatabase: openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-a',
     now: () => NOW
@@ -347,10 +352,10 @@ describe('agentSessionRefusalOperationState host oracle', () => {
     }
 
     const unreadable = await createHarness()
-    await unreadable.host.close(SESSION)
-    unreadable.host.deps.adapter.historyFilePath = async () => {
-      throw new Error('transcript unreadable')
-    }
+    await unreadable.host.close(SESSION, 'evict')
+    const unreadableOpen = vi
+      .spyOn(AgentSessionJournal.prototype, 'open')
+      .mockRejectedValue(new Error('journal path unreadable'))
     const unreadableSend = { method: 'agentSession.send' as const, operationId: operationId() }
     record(
       await assertHostAgreement(
@@ -358,7 +363,7 @@ describe('agentSessionRefusalOperationState host oracle', () => {
         unreadableSend,
         'agent_session_journal_unreadable',
         async () => {
-          delete unreadable.host.deps.adapter.historyFilePath
+          unreadableOpen.mockRestore()
           return { harness: unreadable, spec: unreadableSend }
         }
       )

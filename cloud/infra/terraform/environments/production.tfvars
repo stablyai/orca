@@ -407,6 +407,64 @@ relay_gce_cells = {
     connection_hard_cap         = 3000
     connection_unobserved_bound = 60
   }
+  "production-gce-c31" = {
+    hostname                    = "c31"
+    region                      = "asia-east2"
+    zone                        = "asia-east2-b"
+    machine_type                = "e2-standard-4"
+    boot_disk_gb                = 30
+    boot_image                  = "https://www.googleapis.com/compute/v1/projects/cos-cloud/global/images/cos-stable-121-18867-528-21"
+    capacity_requests           = 6000
+    database_pool_max           = 16 # 176 ms from us-central1 Postgres saturates 10 (94-156 waiters).
+    image                       = "us-central1-docker.pkg.dev/onorca-cloud/orca-cloud/relay@sha256:f30b5cb1ec52b6b6145efecfa1b8be9e3d309403beffd8abcc64197a2087e269"
+    initially_enabled           = false
+    connection_hard_cap         = 3000
+    connection_unobserved_bound = 60
+  }
+  # US cells at the Asia 3,000-host shape, one topology wave: a was lightest, b ties c.
+  "production-gce-c32" = {
+    hostname                    = "c32"
+    region                      = "us-central1"
+    zone                        = "us-central1-a"
+    machine_type                = "e2-standard-4"
+    boot_disk_gb                = 30
+    boot_image                  = "https://www.googleapis.com/compute/v1/projects/cos-cloud/global/images/cos-stable-121-18867-528-21"
+    capacity_requests           = 6000
+    database_pool_max           = 10 # The US default; 16 exists only for the asia-east2 round trip.
+    image                       = "us-central1-docker.pkg.dev/onorca-cloud/orca-cloud/relay@sha256:f30b5cb1ec52b6b6145efecfa1b8be9e3d309403beffd8abcc64197a2087e269"
+    initially_enabled           = false
+    connection_hard_cap         = 3000
+    connection_unobserved_bound = 60
+  }
+  "production-gce-c33" = {
+    hostname                    = "c33"
+    region                      = "us-central1"
+    zone                        = "us-central1-b"
+    machine_type                = "e2-standard-4"
+    boot_disk_gb                = 30
+    boot_image                  = "https://www.googleapis.com/compute/v1/projects/cos-cloud/global/images/cos-stable-121-18867-528-21"
+    capacity_requests           = 6000
+    database_pool_max           = 10 # The US default; 16 exists only for the asia-east2 round trip.
+    image                       = "us-central1-docker.pkg.dev/onorca-cloud/orca-cloud/relay@sha256:f30b5cb1ec52b6b6145efecfa1b8be9e3d309403beffd8abcc64197a2087e269"
+    initially_enabled           = false
+    connection_hard_cap         = 3000
+    connection_unobserved_bound = 60
+  }
+  # Sixth Asia cell: launched as a migration-only spare, now general; c completes the 2/2/2 zone spread.
+  "production-gce-c34" = {
+    hostname                    = "c34"
+    region                      = "asia-east2"
+    zone                        = "asia-east2-c"
+    machine_type                = "e2-standard-4"
+    boot_disk_gb                = 30
+    boot_image                  = "https://www.googleapis.com/compute/v1/projects/cos-cloud/global/images/cos-stable-121-18867-528-21"
+    capacity_requests           = 6000
+    database_pool_max           = 16 # 176 ms from us-central1 Postgres saturates 10 (94-156 waiters).
+    image                       = "us-central1-docker.pkg.dev/onorca-cloud/orca-cloud/relay@sha256:f30b5cb1ec52b6b6145efecfa1b8be9e3d309403beffd8abcc64197a2087e269"
+    initially_enabled           = false
+    connection_hard_cap         = 3000
+    connection_unobserved_bound = 60
+  }
 }
 
 relay_region_rehome_source_cell_ids = [
@@ -430,12 +488,20 @@ relay_region_rehome_source_cell_ids = [
   "production-gce-c27",
   "production-gce-c28",
   "production-gce-c29",
-  "production-gce-c30"
+  "production-gce-c30",
+  "production-gce-c31",
+  "production-gce-c32",
+  "production-gce-c33",
+  "production-gce-c34"
 ]
 
 # Slack #orca-relay-alerts, created out of band on 2026-08-05. Declared here because an apply
 # was otherwise going to strip it from every policy, leaving the alerts firing at nobody.
 relay_alert_notification_channels = ["projects/onorca-cloud/notificationChannels/4879431412695417284"]
+
+# Cells below this RELAY_FIX_LEVEL page after 6 hours. Raise it with a targeted apply of the
+# outdated-image alert once a wave has rolled every serving cell, never mid-wave.
+relay_cell_min_fix_level = 1
 
 # Mobile push gateway. Production is the only environment that runs one; the runtime account,
 # the three Apple secrets, and their accessor bindings already exist and are imported once
@@ -444,4 +510,5 @@ push_gateway_enabled = true
 push_base_url        = "https://push.onorca.dev"
 # Dedicated push pools allow three revision resources during validation and recovery.
 push_max_instances         = 2
+push_database_pool_max     = 6
 manage_push_domain_mapping = true

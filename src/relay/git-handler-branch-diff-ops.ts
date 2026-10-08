@@ -1,3 +1,4 @@
+import { isGitReadInterruptedError } from './git-buffer-overflow'
 import { buildDiffResult } from './git-diff-result'
 import { readBlobAtOid, type GitBufferExec } from './git-handler-ops'
 
@@ -43,7 +44,10 @@ export async function branchDiffEntryAtPinnedOids(
       readBlobAtOid(gitBuffer, worktreePath, headOid, filePath)
     ])
     return [buildDiffResult(left.content, right.content, left.isBinary, right.isBinary, filePath)]
-  } catch {
+  } catch (error) {
+    if (isGitReadInterruptedError(error)) {
+      throw error
+    }
     return [
       {
         kind: 'text' as const,

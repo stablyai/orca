@@ -22,6 +22,7 @@ import type { ExecutionHostId } from '../../shared/execution-host'
 import type { TerminalQuickCommand } from '../../shared/terminal-quick-command-types'
 import { recordManagedHookInstallFailure } from '../agent-hooks/install-telemetry'
 import { applyAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
+import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-status-hooks-setting'
 import type { RuntimeStore } from './runtime-store-contract'
 
 export type RuntimeClientSettings = Pick<
@@ -47,6 +48,7 @@ export type RuntimeClientSettings = Pick<
   | 'minimaxGroupId'
   | 'minimaxUsageModels'
   | 'minimaxEndpoint'
+  | 'zcodePlanSite'
   | 'prBotAuthorOverrides'
   | 'artifactSharingEnabled'
   | 'worktreeVisibilityDefaults'
@@ -83,6 +85,7 @@ export type RuntimeClientSettingsUpdate = Pick<
   | 'minimaxGroupId'
   | 'minimaxUsageModels'
   | 'minimaxEndpoint'
+  | 'zcodePlanSite'
   | 'prBotAuthorOverrides'
   | 'worktreeVisibilityDefaults'
   | 'machineName'
@@ -131,6 +134,7 @@ export class RuntimeClientSettingsController {
       minimaxGroupId: settings.minimaxGroupId ?? '',
       minimaxUsageModels: settings.minimaxUsageModels ?? 'general',
       minimaxEndpoint: settings.minimaxEndpoint ?? 'overseas',
+      zcodePlanSite: settings.zcodePlanSite ?? 'zai',
       prBotAuthorOverrides: settings.prBotAuthorOverrides ?? [],
       artifactSharingEnabled: isArtifactSharingEnabled(settings),
       worktreeVisibilityDefaults: settings.worktreeVisibilityDefaults ?? { external: 'hide' },
@@ -233,11 +237,7 @@ export class RuntimeClientSettingsController {
         onInstallError: recordManagedHookInstallFailure,
         shouldContinue: (agent) => {
           const current = this.store?.getSettings()
-          return (
-            current !== undefined &&
-            current.agentStatusHooksEnabled !== false &&
-            !current.disabledTuiAgents?.includes(agent)
-          )
+          return current !== undefined && isAgentStatusHooksEnabledForAgent(current, agent)
         }
       })
     })

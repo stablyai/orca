@@ -13,6 +13,7 @@ import { canonicalizeAgentSessionIdentity } from './agent-session-claim-identity
 import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
 import { resolveLocalWindowsAgentStartupShell } from '../../shared/windows-terminal-shell'
 import { buildAgentResumeStartupPlan } from '../../shared/tui-agent-startup'
+import { OrchestrationError } from './orchestration/orchestration-error'
 import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
@@ -93,6 +94,15 @@ export class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends OrcaRuntim
       // Legacy renderer sleep records are migration evidence, not host authority.
       throw new Error('agent_session_resume_not_authorized')
     }
+    if (
+      request.agent === 'opencode' &&
+      Object.values(request.launchPreferences ?? {}).some((value) => value !== undefined)
+    ) {
+      throw new OrchestrationError(
+        'capability_unsupported',
+        'OpenCode resume preferences are not verified by this execution host.'
+      )
+    }
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
@@ -144,7 +154,6 @@ export class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends OrcaRuntim
     if (!startup) {
       throw new Error('agent_session_identity_required')
     }
-    await this.markWorkspaceTrustedForAgent(request.agent, workspace.connectionId, workspace.path)
     if (_caller.signal?.aborted) {
       throw new Error('client_disconnected')
     }

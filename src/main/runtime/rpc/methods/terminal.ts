@@ -7,6 +7,7 @@ import {
   TERMINAL_VIEWPORT_METHODS_AFTER_STREAMS,
   TERMINAL_VIEWPORT_METHODS_BEFORE_STREAMS
 } from './terminal/terminal-viewport-methods'
+import { TERMINAL_VIEWER_COLORS_METHODS } from './terminal/terminal-viewer-colors-method'
 
 // The manifest order is part of the released RPC contract. Keep composition here so the
 // public entry point owns registration rather than forwarding an aggregated child export.
@@ -17,5 +18,6 @@ export const TERMINAL_METHODS = [
   ...TERMINAL_VIEWPORT_METHODS_BEFORE_STREAMS,
   ...TERMINAL_MULTIPLEX_METHODS,
   ...TERMINAL_SUBSCRIBE_METHODS,
-  ...TERMINAL_VIEWPORT_METHODS_AFTER_STREAMS
+  ...TERMINAL_VIEWPORT_METHODS_AFTER_STREAMS,
+  ...TERMINAL_VIEWER_COLORS_METHODS
 ]

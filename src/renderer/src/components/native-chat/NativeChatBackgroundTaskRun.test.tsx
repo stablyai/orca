@@ -36,6 +36,7 @@ describe('NativeChatBackgroundTaskRun', () => {
         })}
       />
     )
+    expect(screen.queryByText('Background command')).toBeNull()
     expect(screen.getByText('Wait for the verification verdict')).toBeInTheDocument()
     // The outcome is a state word plus its reason — the same vocabulary the
     // strip above the composer uses — not a red row of prose.
@@ -56,10 +57,15 @@ describe('NativeChatBackgroundTaskRun', () => {
     expect(screen.getByText('Background workflow')).toBeInTheDocument()
   })
 
-  it('reads a state this build has no word for as no contact, never as live', () => {
+  it('shows an unnamed task once instead of repeating its kind', () => {
+    render(<NativeChatBackgroundTaskRun block={task({ label: 'task', kind: 'unknown' })} />)
+    expect(screen.getAllByText('Background task')).toHaveLength(1)
+  })
+
+  it('reads a state this build has no word for as status unavailable, never as live', () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: models a row a newer build wrote, which the wire admits as an open string.
     render(<NativeChatBackgroundTaskRun block={task({ state: 'teleported' as 'done' })} />)
-    expect(screen.getByText(/unverifiable/)).toBeInTheDocument()
+    expect(screen.getByText(/status unavailable/)).toBeInTheDocument()
   })
 })
 

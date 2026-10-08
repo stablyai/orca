@@ -44,6 +44,8 @@ export type WorktreeCardProperty =
   | 'ports'
   // Inline agent-activity list rendered in each workspace card; on by default (see DEFAULT_WORKTREE_CARD_PROPERTIES in shared/constants.ts).
   | 'inline-agents'
+  // Execution-host pill, shown only when the visible workspaces span more than one host; on by default.
+  | 'host'
 
 export type WorktreeCardMode = 'Default' | 'Compact'
 

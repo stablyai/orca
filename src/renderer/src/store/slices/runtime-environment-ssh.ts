@@ -2,7 +2,8 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { SshConnectionState, SshTargetSummary } from '../../../../shared/ssh-types'
 import { sanitizeSshTargetGeneration } from '../../../../shared/ssh-target-generation'
-import { sshConnectionStatesEqual, sshTargetLabelsEqual } from './ssh-target-cleanup'
+import { sshConnectionStatesEqual } from './ssh-connection-state-equality'
+import { sshTargetLabelsEqual } from './ssh-target-cleanup'
 export {
   selectRuntimeAwareSshConnectionGeneration,
   selectRuntimeAwareSshError,

@@ -90,11 +90,15 @@ const KIND_CATEGORY = {
   managedAccountEnvOverride: 'startFailed',
   accountSwitchInProgress: 'startFailed',
   managedAccountUnsupported: 'startFailed',
+  launchFolderMissing: 'startFailed',
+  historyInOtherAccount: 'startFailed',
+  agentCommandNotRunnable: 'startFailed',
   restartFailed: 'startFailed',
   providerRejected: 'content',
   attachmentInvalid: 'content',
   attachmentUnreadable: 'content',
   emptyMessage: 'content',
+  commandRefused: 'content',
   queueFull: 'transport',
   writeFailed: 'transport',
   hostFault: 'transport'
@@ -114,11 +118,15 @@ const KIND_VERDICT = {
   managedAccountEnvOverride: 'failure',
   accountSwitchInProgress: 'failure',
   managedAccountUnsupported: 'failure',
+  launchFolderMissing: 'failure',
+  historyInOtherAccount: 'failure',
+  agentCommandNotRunnable: 'failure',
   restartFailed: 'failure',
   providerRejected: 'failure',
   attachmentInvalid: 'failure',
   attachmentUnreadable: 'failure',
   emptyMessage: 'failure',
+  commandRefused: 'failure',
   queueFull: 'failure',
   writeFailed: 'failure',
   hostFault: 'failure',
@@ -164,6 +172,16 @@ export function classifyDispatchRejection(
     return { category: 'content', verdict: 'failure' }
   }
   return { category: KIND_CATEGORY[kind], verdict: KIND_VERDICT[kind], kind }
+}
+
+/** A Stop withdrew it before it ran: it will not land, and only a person can send it again. */
+export function dispatchWasWithdrawn(
+  submission: Pick<AgentJournalSubmission, 'dispatchState' | 'reason' | 'rejection'> | undefined
+): boolean {
+  return (
+    submission?.dispatchState === 'rejected' &&
+    classifyDispatchRejection(submission).category === 'withdrawn'
+  )
 }
 
 /** A submission that says Orca never handed it over, in any dispatch state: journals written

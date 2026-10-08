@@ -2,13 +2,14 @@ import { isDismissedAlert, reconcileQueuedDismissal } from './push-queued-dismis
 import { parsePushDeliveryPayload } from './push-delivery-payload.js'
 import { createHash, randomUUID } from 'node:crypto'
 import { PUSH_LIMITS, type PushNotification } from '@orca-cloud/push-contract'
+import { WORKER_DRAINS } from './push-worker-concurrency.js'
 import type { PushDatabase, SqlRow } from './push-database.js'
 
 const RETENTION_MS = 24 * 60 * 60_000
 // accept() caps expires_at at due_at + TTL, so older due_at is expired: scans skip an unpruned backlog.
 const TTL_MS = PUSH_LIMITS.notificationTtlSeconds * 1000
-// Covers one claimer per worker drain skipping a device another drain holds.
-const CLAIM_CANDIDATE_ATTEMPTS = 4
+// One winner plus every other drain holding a device head, so a full set of peers cannot exhaust it.
+const CLAIM_CANDIDATE_ATTEMPTS = WORKER_DRAINS
 export const PRUNE_BATCH_ROWS = 2_000
 export const PRUNE_MAX_BATCHES = 50
 export const DELIVERY_LEASE_MS = 30_000
@@ -152,15 +153,15 @@ export class DurablePushStore {
       'UPDATE push_delivery_batches SET lease_token = ?, lease_until = ?, attempts = attempts + 1 WHERE batch_id = ?',
       [lease, now + DELIVERY_LEASE_MS, row.batch_id]
     )
-    return this.delivery(row, lease)
+    return this.delivery(row, lease, notification)
   }
 
-  private delivery(row: SqlRow, lease: string): QueuedPushDelivery {
+  private delivery(row: SqlRow, lease: string, notification: PushNotification): QueuedPushDelivery {
     return {
       id: String(row.batch_id),
       registrationId: String(row.registration_id),
       hostFingerprint: String(row.host_fingerprint),
-      notification: parsePushDeliveryPayload(String(row.payload_json)),
+      notification,
       expiresAt: Number(row.expires_at),
       lease,
       attempts: Number(row.attempts) + 1

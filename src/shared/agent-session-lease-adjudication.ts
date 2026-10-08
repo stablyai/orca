@@ -20,7 +20,12 @@ import type {
   AgentSessionRefusalDetailsByCode
 } from './agent-session-wire-refusals'
 
-export type AgentSessionIdentityMatchField = 'process-start-time' | 'spawn-token'
+/** What a PID probe can compare against the recorded owner. */
+export type AgentSessionProcessIdentityField = 'process-start-time' | 'spawn-token'
+
+/** `held-child`: this runtime still holds the child at the record's fence and has not seen it exit.
+ *  Only lease renewal in that runtime asserts it; restart and recovery probes never can. */
+export type AgentSessionIdentityMatchField = AgentSessionProcessIdentityField | 'held-child'
 
 export type AgentSessionOwnerProbe =
   /** Orca watched this exact process exit. */
@@ -28,7 +33,7 @@ export type AgentSessionOwnerProbe =
   /** The recorded pid is not present on the host. */
   | { outcome: 'pid-absent' }
   /** The pid is present but is a different process. */
-  | { outcome: 'identity-mismatch'; field: AgentSessionIdentityMatchField | 'command-line' }
+  | { outcome: 'identity-mismatch'; field: AgentSessionProcessIdentityField | 'command-line' }
   /** The pid is present and at least one identity element was verified. */
   | { outcome: 'identity-matched'; matchedOn: readonly AgentSessionIdentityMatchField[] }
   /** No process carries the reserved spawn token and the provider saw no activity after it. */
@@ -80,16 +85,23 @@ export function isProvenAliveProbe(probe: AgentSessionOwnerProbe): boolean {
 
 function deathEvidenceFor(
   probe: AgentSessionOwnerProbe,
-  observedAt: number
+  observedAt: number,
+  lease: AgentSessionLease
 ): AgentSessionDeathEvidence | null {
+  // Capped so a clock that stepped back across the restart still writes a valid interval.
+  const interval = {
+    observedAt,
+    ownerFence: lease.runtimeFence,
+    lastProvenAliveAt: Math.min(lease.lastRenewedAt, observedAt)
+  }
   if (probe.outcome === 'exit-observed') {
-    return { kind: 'exit-observed', detail: 'observed process exit', observedAt }
+    return { kind: 'exit-observed', detail: 'observed process exit', ...interval }
   }
   if (probe.outcome === 'pid-absent') {
-    return { kind: 'pid-absent', detail: 'recorded pid absent on host', observedAt }
+    return { kind: 'pid-absent', detail: 'recorded pid absent on host', ...interval }
   }
   if (probe.outcome === 'identity-mismatch') {
-    return { kind: 'identity-mismatch', detail: `mismatched ${probe.field}`, observedAt }
+    return { kind: 'identity-mismatch', detail: `mismatched ${probe.field}`, ...interval }
   }
   return null
 }
@@ -240,7 +252,12 @@ export function adjudicateAgentSessionRestart(args: {
       nextFence: nextAgentSessionFence(lease),
       evidence:
         probe.outcome === 'reservation-unused'
-          ? { kind: 'pid-absent', detail: 'reservation never spawned', observedAt }
+          ? {
+              kind: 'pid-absent',
+              detail: 'reservation never spawned',
+              observedAt,
+              ownerFence: lease.runtimeFence
+            }
           : null
     }
   }
@@ -253,7 +270,7 @@ export function adjudicateAgentSessionRestart(args: {
       reason: 'owner outlived the runtime that held its transport'
     }
   }
-  const evidence = deathEvidenceFor(probe, observedAt)
+  const evidence = deathEvidenceFor(probe, observedAt, lease)
   if (evidence) {
     return { disposition: 'evicted', nextFence: nextAgentSessionFence(lease), evidence }
   }

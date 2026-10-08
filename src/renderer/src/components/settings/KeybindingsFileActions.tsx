@@ -3,8 +3,7 @@ import { ChevronDown, Code2, ExternalLink, FileText, FolderOpen, RefreshCw } fro
 import { toast } from 'sonner'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { useAppStore } from '../../store'
-import { TOGGLE_FLOATING_TERMINAL_EVENT } from '../../lib/floating-terminal'
-import { isFloatingWorkspacePanelVisible } from '../../lib/floating-workspace-terminal-actions'
+import { revealFloatingWorkspacePanel } from '../../lib/floating-workspace-panel-reveal'
 import { detectLanguage } from '../../lib/language-detect'
 import { Button } from '../ui/button'
 import {
@@ -83,8 +82,8 @@ export function KeybindingsFileActions(): React.JSX.Element {
         (file) => file.filePath === filePath && file.worktreeId === FLOATING_TERMINAL_WORKTREE_ID
       )
       if (existingFile && !existingFile.isDirty) {
-        // Why: a prior denied read can leave a focused error tab. Reopen a
-        // clean tab after authorization so the editor retries the file load.
+        // Why: a prior failed read can leave a focused error tab. Reopen a
+        // clean tab so the editor retries the file load.
         closeFile(existingFile.id)
       }
       openFile(
@@ -104,9 +103,7 @@ export function KeybindingsFileActions(): React.JSX.Element {
       cancelFloatingTerminalToggleFrame()
       floatingTerminalToggleFrameRef.current = requestAnimationFrame(() => {
         floatingTerminalToggleFrameRef.current = null
-        if (!isFloatingWorkspacePanelVisible()) {
-          window.dispatchEvent(new CustomEvent(TOGGLE_FLOATING_TERMINAL_EVENT))
-        }
+        revealFloatingWorkspacePanel(useAppStore.getState())
       })
     } catch (error) {
       toast.error(

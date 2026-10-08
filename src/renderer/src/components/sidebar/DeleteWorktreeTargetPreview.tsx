@@ -4,8 +4,13 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import { DeleteWorktreeDirtyChangeHint } from './DeleteWorktreeDirtyChangeHint'
+import type {
+  DeleteWorktreeChangeCheckState,
+  DeleteWorktreeDirtyChangePreview
+} from './delete-worktree-dirty-change-counts'
 import type { AppState } from '@/store/types'
 import { getDeleteStateForWorktreeHost } from './worktree-delete-state-host-match'
+import { getWorktreeDeleteErrorToShow } from './worktree-delete-error-display'
 import {
   getExecutionHostLabel,
   parseExecutionHostId,
@@ -43,7 +48,9 @@ export function DeleteWorktreeTargetPreview({
   collisionWorktrees,
   hostLabelById,
   deleteStateByWorktreeId,
-  dirtyChangeCountsByWorktreeId
+  dirtyChangeCountsByWorktreeId,
+  dirtyChangePreviewsByWorktreeId,
+  changeCheckStatesByWorktreeId
 }: {
   isBatchDelete: boolean
   worktree: Worktree | null
@@ -52,6 +59,8 @@ export function DeleteWorktreeTargetPreview({
   hostLabelById: ReadonlyMap<ExecutionHostId, string>
   deleteStateByWorktreeId: AppState['deleteStateByWorktreeId']
   dirtyChangeCountsByWorktreeId: ReadonlyMap<string, number>
+  dirtyChangePreviewsByWorktreeId: ReadonlyMap<string, DeleteWorktreeDirtyChangePreview>
+  changeCheckStatesByWorktreeId?: ReadonlyMap<string, DeleteWorktreeChangeCheckState>
 }): JSX.Element | null {
   const targetIdPrefix = useId()
   const collisionIds = getCollisionIds(collisionWorktrees)
@@ -61,6 +70,7 @@ export function DeleteWorktreeTargetPreview({
         <div className="space-y-1 px-3 py-2" role="list">
           {worktrees.map((item, index) => {
             const itemDeleteState = getDeleteStateForWorktreeHost(item, deleteStateByWorktreeId)
+            const itemDeleteError = getWorktreeDeleteErrorToShow(item, itemDeleteState)
             const labelIds = {
               name: `${targetIdPrefix}-${index}-name`,
               path: `${targetIdPrefix}-${index}-path`,
@@ -88,13 +98,20 @@ export function DeleteWorktreeTargetPreview({
                       </div>
                     ) : null}
                     <DeleteWorktreeDirtyChangeHint
+                      key={getWorktreeHostIdentity(item)}
+                      checkState={changeCheckStatesByWorktreeId?.get(
+                        item.hostId ? getWorktreeHostIdentity(item) : item.id
+                      )}
                       changeCount={dirtyChangeCountsByWorktreeId.get(
                         item.hostId ? getWorktreeHostIdentity(item) : item.id
                       )}
+                      preview={dirtyChangePreviewsByWorktreeId.get(
+                        item.hostId ? getWorktreeHostIdentity(item) : item.id
+                      )}
                     />
-                    {itemDeleteState?.error ? (
+                    {itemDeleteError ? (
                       <div className="mt-1 whitespace-pre-wrap break-all text-destructive">
-                        {itemDeleteState.error}
+                        {itemDeleteError}
                       </div>
                     ) : null}
                   </div>
@@ -137,7 +154,14 @@ export function DeleteWorktreeTargetPreview({
         </div>
       ) : null}
       <DeleteWorktreeDirtyChangeHint
+        key={getWorktreeHostIdentity(worktree)}
+        checkState={changeCheckStatesByWorktreeId?.get(
+          worktree.hostId ? getWorktreeHostIdentity(worktree) : worktree.id
+        )}
         changeCount={dirtyChangeCountsByWorktreeId.get(
+          worktree.hostId ? getWorktreeHostIdentity(worktree) : worktree.id
+        )}
+        preview={dirtyChangePreviewsByWorktreeId.get(
           worktree.hostId ? getWorktreeHostIdentity(worktree) : worktree.id
         )}
       />

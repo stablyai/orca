@@ -12,6 +12,7 @@ const {
   previewWarpThemeImportMock,
   prepareLocalWorktreeRootsForReposMock,
   resolveEnvironmentMock,
+  listEnvironmentsMock,
   rebuildAppMenuMock,
   applyBrowserSessionProxiesMock,
   applySessionSearchSettingsChangeMock,
@@ -27,6 +28,7 @@ const {
   previewWarpThemeImportMock: vi.fn(),
   prepareLocalWorktreeRootsForReposMock: vi.fn(),
   resolveEnvironmentMock: vi.fn(),
+  listEnvironmentsMock: vi.fn(),
   rebuildAppMenuMock: vi.fn(),
   applyBrowserSessionProxiesMock: vi.fn(),
   applySessionSearchSettingsChangeMock: vi.fn(),
@@ -81,7 +83,8 @@ vi.mock('../menu/register-app-menu', () => ({
 }))
 
 vi.mock('../../shared/runtime-environment-store', () => ({
-  resolveEnvironment: resolveEnvironmentMock
+  resolveEnvironment: resolveEnvironmentMock,
+  listEnvironments: listEnvironmentsMock
 }))
 
 import { registerSettingsHandlers } from './settings'
@@ -126,6 +129,28 @@ describe('registerSettingsHandlers', () => {
     store.getSettings.mockReset()
     store.updateSettings.mockReset()
     store.onSettingsChanged.mockClear()
+    listEnvironmentsMock.mockReset().mockReturnValue([])
+  })
+
+  it('repairs removed Active Server preferences on asynchronous and synchronous reads', () => {
+    store.getSettings.mockReturnValue({ activeRuntimeEnvironmentId: 'removed' })
+    store.updateSettings.mockImplementation((updates) => {
+      const next = { ...store.getSettings(), ...updates }
+      store.getSettings.mockReturnValue(next)
+      return next
+    })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This handler only uses the settings methods supplied by the fixture.
+    registerSettingsHandlers(store as never)
+    const get = handleMock.mock.calls.find(([channel]) => channel === 'settings:get')?.[1]
+    const getSync = onMock.mock.calls.find(([channel]) => channel === 'settings:get-sync')?.[1]
+
+    expect(get()).toEqual({ activeRuntimeEnvironmentId: null })
+    store.getSettings.mockReturnValue({ activeRuntimeEnvironmentId: 'removed-again' })
+    const event = { returnValue: undefined }
+    getSync(event)
+    expect(event.returnValue).toEqual({ activeRuntimeEnvironmentId: null })
+    expect(store.updateSettings).toHaveBeenCalledTimes(2)
+    expect(listEnvironmentsMock).toHaveBeenCalledWith('/test/user-data', { requireStoreFile: true })
   })
 
   it('registers settings:previewGhosttyImport handler', () => {

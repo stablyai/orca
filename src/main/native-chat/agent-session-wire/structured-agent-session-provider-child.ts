@@ -5,8 +5,10 @@
 // an exit, a failed re-attach, a Stop and an eviction. Each is matched on the child's generation
 // and fence, so an ending that arrives late for an older child cannot end a newer one.
 
+import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import type {
   StructuredAgentSessionEndedChild,
   StructuredAgentSessionHostSession,
@@ -46,9 +48,43 @@ export function markProviderChildStarted(
   return child !== null
 }
 
+/** This runtime holds a child at `fence` whose process its adapter still sees running: first-hand
+ *  proof of life that needs no PID probe. A previous runtime's child is never on record here. */
+export function holdsLiveProviderChild(
+  session: Pick<ChildBearer, 'child'> | undefined,
+  fence: number,
+  processLive: (acquisitionGeneration: string) => boolean
+): boolean {
+  const child = session?.child
+  return (
+    !!child && child.fence === fence && child.generation !== null && processLive(child.generation)
+  )
+}
+
+/** The host's conversations, as lease renewal reads their children. */
+export type ProviderChildSessions = {
+  get(sessionId: string): Pick<ChildBearer, 'child'> | undefined
+}
+
+/** Lease renewal's held-child read, from the host's child record and the adapter's own handle. */
+export function heldProviderChildReader(
+  sessions: ProviderChildSessions,
+  adapter: Pick<StructuredAgentSessionAdapter, 'holdsLiveProviderProcess'> | undefined
+): (sessionId: string, fence: number) => boolean {
+  return (sessionId, fence) =>
+    holdsLiveProviderChild(
+      sessions.get(sessionId),
+      fence,
+      (generation) => adapter?.holdsLiveProviderProcess?.(sessionId, generation) === true
+    )
+}
+
+/** `endedAt` is a close's ask; an exit of the child's own ends where the journal stands. */
 export function endProviderChild(
   session: ChildBearer,
-  ended: Omit<StructuredAgentSessionEndedChild, 'endedAt' | 'startedFor'>
+  ended: Omit<StructuredAgentSessionEndedChild, 'endedAt' | 'startedFor'> & {
+    endedAt?: AgentJournalCursor
+  }
 ): boolean {
   const child = matchingChild(session, ended)
   if (!child) {
@@ -58,7 +94,7 @@ export function endProviderChild(
   session.lastEndedChild = {
     ...ended,
     ...(child.startedFor === undefined ? {} : { startedFor: child.startedFor }),
-    endedAt: session.journal.cursor()
+    endedAt: ended.endedAt ?? session.journal.cursor()
   }
   return true
 }
@@ -72,12 +108,17 @@ export function failedProviderChildStart(
   return !session.child && ended?.duringStartup && ended.cause !== 'user-stop' ? ended : null
 }
 
+export function sameProviderChild(
+  a: StructuredAgentSessionProviderChildIdentity,
+  b: StructuredAgentSessionProviderChildIdentity
+): boolean {
+  return a.generation === b.generation && a.fence === b.fence
+}
+
 function matchingChild(
   session: ChildBearer,
   identity: StructuredAgentSessionProviderChildIdentity
 ): StructuredAgentSessionProviderChild | null {
   const { child } = session
-  return child && child.generation === identity.generation && child.fence === identity.fence
-    ? child
-    : null
+  return child && sameProviderChild(child, identity) ? child : null
 }

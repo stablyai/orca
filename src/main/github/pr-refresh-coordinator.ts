@@ -51,6 +51,8 @@ export function clearVisiblePRRefreshWindow(windowId: number): void {
   pacing.clearActiveBurstWindow(windowId)
   if (hadVisibleRefreshes) {
     removeInvisibleVisibleRefreshes()
+    queue.retimeVisible((key, candidate) => visibility.candidate(key, candidate))
+    drainer.schedule()
   }
 }
 
@@ -75,6 +77,11 @@ export function enqueuePRRefresh(
   }
 
   const enqueued = queue.enqueue(candidate, reason, priority, windowId)
+  const pending = queue.get(key)
+  if (pending && reason === 'visible' && candidate.isSelected && priority >= 80) {
+    // Foreground exposure keeps retry gates while bypassing the list budget once.
+    pending.bypassBackgroundBudget = true
+  }
   events.record(enqueued.coalesced ? 'coalesced' : 'enqueued', reason)
   if (shouldBroadcastQueued(reason, enqueued.dueAt)) {
     events.broadcast({ aliases: [enqueued.alias], reason, status: 'queued' })
@@ -87,13 +94,27 @@ export function reportVisiblePRRefreshCandidates(
   generation: number,
   windowId: number
 ): void {
+  const newlyExposed = new Set(candidates.map(refreshKey).filter((key) => !visibility.has(key)))
   if (!visibility.report(candidates, generation, windowId)) {
     return
   }
   removeInvisibleVisibleRefreshes()
+  queue.retimeVisible((key, candidate) => visibility.candidate(key, candidate))
   for (const candidate of candidates) {
-    enqueuePRRefresh(candidate, 'visible', 40, windowId)
+    const key = refreshKey(candidate)
+    if (validateCandidate(candidate)) {
+      enqueuePRRefresh(candidate, 'visible', 40, windowId)
+      continue
+    }
+    queue.enqueue(
+      visibility.candidate(key, candidate),
+      'visible',
+      40,
+      windowId,
+      newlyExposed.has(key)
+    )
   }
+  drainer.schedule()
 }
 
 export function _getVisiblePRRefreshWindowCountForTests(): number {
@@ -138,6 +159,7 @@ export async function refreshPRNow(
   const primaryGateUntil = await prRefreshRateLimitPausedUntil(candidate, false)
   const gateUntil = Math.max(primaryGateUntil ?? 0, retry.manualGateUntil(key))
   if (gateUntil > Date.now()) {
+    queue.protectBackgroundUntil(key, gateUntil)
     queue.set(key, {
       key,
       candidate,
@@ -168,6 +190,7 @@ export async function refreshPRNow(
   queue.delete(key)
   const requestSequence = events.nextSequence()
   const requestStartedAt = Date.now()
+  queue.noteRequestStarted(key, requestSequence)
   events.broadcast({ aliases, reason, status: 'in-flight', requestStartedAt }, requestSequence)
   const outcome = await getPRForBranchOutcome(
     candidate.repoPath,
@@ -177,10 +200,14 @@ export async function refreshPRNow(
     candidate.linkedPRNumber == null ? (candidate.fallbackPRNumber ?? null) : null,
     ...hostedReviewOptionArgs(candidate, reason)
   )
+  if (!queue.ownsRequest(key, requestSequence)) {
+    events.broadcast({ aliases, reason, outcome, requestStartedAt }, requestSequence)
+    return outcome
+  }
   let plannedRetryAt: number | undefined
   let broadcastOutcome = outcome
   if (outcome.kind === 'upstream-error' && visibility.has(key)) {
-    plannedRetryAt = retry.nextVisibleErrorRetryAt(key)
+    plannedRetryAt = retry.nextVisibleErrorRetryAt(key, visibility.candidate(key, candidate))
     broadcastOutcome = retry.withErrorSchedule(outcome, plannedRetryAt)
   }
   events.observe(candidate, outcome)

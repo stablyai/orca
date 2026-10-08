@@ -18,12 +18,20 @@ vi.mock('./codex-fetcher', () => ({
 }))
 
 vi.mock('./gemini-usage-fetcher', () => ({ fetchGeminiRateLimits: vi.fn() }))
+vi.mock('./kiro-usage-fetcher', () => ({
+  fetchKiroRateLimits: vi.fn()
+}))
+
 vi.mock('./kimi-fetcher', () => ({ fetchKimiRateLimits: vi.fn() }))
 vi.mock('./opencode-go-usage-source-selection', () => ({ fetchOpenCodeGoUsage: vi.fn() }))
 vi.mock('./minimax/minimax-fetcher', () => ({ fetchMiniMaxRateLimits: vi.fn() }))
 vi.mock('./grok-fetcher', () => ({ fetchGrokRateLimits: vi.fn() }))
 vi.mock('./grok-auth', () => ({ readGrokAuthSession: vi.fn(() => ({ status: 'missing' })) }))
 vi.mock('./zcode-usage-fetcher', () => ({ fetchZcodeRateLimits: vi.fn() }))
+
+vi.mock('./antigravity-usage-fetcher', () => ({
+  fetchAntigravityRateLimits: vi.fn()
+}))
 
 vi.mock('./cursor-fetcher', () => ({ fetchCursorRateLimits: vi.fn() }))
 vi.mock('./cursor-auth', () => ({ readCursorAuthSession: vi.fn() }))

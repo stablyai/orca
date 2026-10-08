@@ -9,15 +9,16 @@ import type { ClaudePromptRegistry } from './claude-structured-prompt-replies'
 import { claudeProviderFrameActivity } from '../native-chat/agent-session-wire/provider-frame-activity'
 import {
   claudeProviderFrameKind,
-  claudeResultFailure,
   createClaudeProviderFrameFallback,
-  isSettledClaudeResultKind
+  isClaudeProgressFrame
 } from './claude-structured-provider-fallback'
 import { taskFrameSentence } from './claude-background-task-frames'
 import { ClaudeBackgroundTaskRows } from './claude-background-task-rows'
 import { ClaudeToolOriginRegistry } from './claude-tool-origin-registry'
 import { ClaudeProvisionalRowCorrections } from './claude-provisional-row-corrections'
+import { createClaudeStreamedThinking } from './claude-streamed-thinking'
 import { ClaudeSubagentRoster } from './claude-subagent-roster'
+import { ClaudeJournaledRoster } from './claude-subagent-journaled-roster'
 import { createClaudeStreamedBlockRegistry } from './claude-streamed-block-identity'
 import { createClaudeStreamedTextCheckpoints } from './claude-streamed-text-checkpoints'
 import {
@@ -26,13 +27,14 @@ import {
   claudeStreamTurnSource,
   isRootClaudeFrame
 } from './claude-turn-opening'
-import { claudeTurnEndForResult } from './claude-turn-lifecycle-item'
 import { ClaudeOpenTurn } from './claude-open-turn'
+import { claudeCommandCurrentTurn, observeClaudeCommandFrame } from './claude-command-turn'
 import { ClaudeContextFacts } from './claude-context-facts'
 import { claudeSessionStateEndsTurn } from './claude-session-state-turn-over'
 import { ClaudeJournalPrompts } from './claude-structured-journal-prompts'
 import { claudeChildToolQueries } from './claude-child-tool-queries'
 import { journalClaudeMessage, type ClaudeMessageJournalContext } from './claude-message-journaling'
+import { journalClaudeResult, type ClaudeResultJournalContext } from './claude-result-journaling'
 
 export type { ClaudeJournalTranslator } from './claude-journal-translator-contract'
 
@@ -65,24 +67,33 @@ export function createClaudeJournalTranslator(
   deps: ClaudeJournalTranslatorDeps
 ): ClaudeJournalTranslator {
   const tools = new Map<string, ClaudeToolUse>()
-  const prompts = new ClaudeJournalPrompts(deps)
+  // Every row joins the root turn open when it is written, whoever produced it.
+  const turnScope = () => turn.turnScope
+  const prompts = new ClaudeJournalPrompts({
+    ...deps,
+    turnScope,
+    producerOf: (prompt) => childQueries.promptProducer(prompt)
+  })
   const streamedBlocks = createClaudeStreamedBlockRegistry()
   const turn = new ClaudeOpenTurn({
     sink: deps.sink,
     settleChildren: (groupKey) => subagents.settleTurn(groupKey),
+    endOpenWork: (completedAt) => streamedThinking.finishOpen(completedAt),
     onOpen: () => context.markActivity()
   })
   const context = new ClaudeContextFacts(turn, deps.sink)
-  const providerFallback = createClaudeProviderFrameFallback(
-    deps.sink,
-    deps.fallbackIdPrefix ?? 'acquisition'
-  )
+  const fallbackId = deps.fallbackIdPrefix ?? 'acquisition'
+  const providerFallback = createClaudeProviderFrameFallback(deps.sink, fallbackId, turnScope)
   const toolOrigins = new ClaudeToolOriginRegistry()
+  const journaled = new ClaudeJournaledRoster(() => deps.sink.journalLinkage?.() ?? null)
   const subagents = new ClaudeSubagentRoster({
     sink: deps.sink,
     currentGroupKey: () => turn.groupKey,
+    currentTurnScope: turnScope,
     isForwardedParentTool: (toolUseId) => toolOrigins.has(toolUseId),
     childOwnerRefOf: (toolUseId) => toolOrigins.childOwnerRef(toolUseId),
+    // A restarted provider continues the roster earlier runs journaled.
+    journaled,
     // A settled group can receive no further announcement, so a correction
     // still owed is never coming; the rows keep the stamp they already have.
     onIdentitiesFinal: () => corrections.abandon()
@@ -90,6 +101,7 @@ export function createClaudeJournalTranslator(
   const childQueries = claudeChildToolQueries({ tools, toolOrigins, linkage: subagents.linkage })
   const corrections = new ClaudeProvisionalRowCorrections({
     ...subagents.linkage,
+    turnScope,
     rewrite: (identity, body, options) => {
       // The admission-returning path, so a correction the sink refuses under
       // backpressure stays owed instead of vanishing. Sinks without it accept
@@ -106,10 +118,12 @@ export function createClaudeJournalTranslator(
   const backgroundTasks = new ClaudeBackgroundTaskRows({
     sink: deps.sink,
     isForwardedParentTool: (toolUseId) => toolOrigins.has(toolUseId),
+    rosteredByEarlierRun: (taskId) => journaled.groupOf(taskId) !== null,
     // A typed task row is provider output: journaling one must open a resumed
     // turn, or the session shows the row while reading idle.
     openOutputTurn: (frame, observedAt) =>
       turn.ensureOpen(frame, claudeStreamTurnSource(frame), observedAt),
+    turnScope,
     ...(deps.onBackgroundTaskJournalFailure
       ? { onPersistenceFailure: deps.onBackgroundTaskJournalFailure }
       : {})
@@ -119,10 +133,20 @@ export function createClaudeJournalTranslator(
     ...(deps.schedule ? { schedule: deps.schedule } : {}),
     producer: subagents.linkage,
     persist: (identity, text, options) => {
-      deps.sink.appendItem(identity, claudeStreamingMessageBody(text), options)
+      const body = claudeStreamingMessageBody(text)
+      deps.sink.appendItem(identity, body, { ...options, turnScope: turnScope() })
       deps.sink.publish()
     }
   })
+  const streamedThinking = createClaudeStreamedThinking({
+    ...deps,
+    producer: subagents.linkage,
+    turnScope
+  })
+  const flush = (): void => {
+    streamedText.flush()
+    streamedThinking.flush()
+  }
 
   const publishActivity = (kind: string, payload: unknown): void => {
     const turnId = turn.id
@@ -136,16 +160,17 @@ export function createClaudeJournalTranslator(
   }
 
   const handleStream = (message: Record<string, unknown>, observedAt: number): boolean => {
-    const delta = streamedBlocks.observe(message)
-    // `message_start` is the provider's turn boundary. Keep the first text
+    const delta = streamedBlocks.observe(message, observedAt)
+    const thinking = streamedThinking.observe(message, observedAt)
+    // `message_start` is the provider's turn boundary. Keep the first content
     // delta as a compatibility fallback for streams that omit it.
-    const source = delta ? claudeStreamTurnSource(message) : claudeStreamTurnStartSource(message)
+    const source =
+      delta || thinking ? claudeStreamTurnSource(message) : claudeStreamTurnStartSource(message)
     turn.ensureOpen(message, source, observedAt)
-    if (!delta) {
-      return false
+    if (delta) {
+      streamedText.append(delta.identity, delta.text, delta.parentToolUseId)
     }
-    streamedText.append(delta.identity, delta.text, delta.parentToolUseId)
-    return true
+    return delta !== null || thinking
   }
 
   const messageContext: ClaudeMessageJournalContext = {
@@ -153,6 +178,7 @@ export function createClaudeJournalTranslator(
     tools,
     streamedBlocks,
     streamedText,
+    streamedThinking,
     subagents,
     toolOrigins,
     backgroundTasks,
@@ -160,6 +186,8 @@ export function createClaudeJournalTranslator(
     corrections,
     turn
   }
+
+  const resultContext: ClaudeResultJournalContext = { ...messageContext, prompts, context }
 
   const handleMessage = (
     message: Record<string, unknown>,
@@ -172,10 +200,11 @@ export function createClaudeJournalTranslator(
     handle: (event) => {
       if (event.type === 'ended') {
         prompts.retryPendingCancellations()
-        streamedText.flush()
+        flush()
         subagents.settleSession()
         backgroundTasks.settleSession()
-        // The host saw the child end, so the turn's end is observed, not lost.
+        // The host saw the child end, so the turn's end is observed, not lost. Whether it was a
+        // person's Stop is the journal's Stop event to say (`turnEndAfterStop`), else it is news.
         turn.settle({ state: 'interrupted', completedAt: event.observedAt ?? Date.now() })
         // A frame that arrives after the child is gone must not open a turn no
         // event can close.
@@ -184,6 +213,24 @@ export function createClaudeJournalTranslator(
       }
       if (event.type === 'message') {
         context.observe(event.message, event.observedAt ?? Date.now())
+        // A root init is the CLI starting a new request cycle (measured per turn,
+        // per queued turn, per background wake, per /compact); a send replayed
+        // after that cycle's first root work was folded into it. Task frames are
+        // not cycle work: they arrive between cycles too.
+        if (isRootClaudeFrame(event.message)) {
+          if (event.message.type === 'system' && event.message.subtype === 'init') {
+            turn.observeProviderCycleStart()
+          } else if (
+            event.startsTurn === true ||
+            event.message.type === 'assistant' ||
+            event.message.type === 'stream_event'
+          ) {
+            turn.observeProviderCycleWork()
+          }
+        }
+      }
+      if (event.type === 'message' && observeClaudeCommandFrame(turn.command, event.message)) {
+        return
       }
       if (event.type === 'message' && handleStream(event.message, event.observedAt ?? Date.now())) {
         return
@@ -192,10 +239,14 @@ export function createClaudeJournalTranslator(
       // writes, so an announcement landing in this same pass has to be visible
       // to it or the row is stamped provisionally one line too early.
       const announced = event.type === 'message' && subagents.observeSystemFrame(event.message)
-      streamedText.flush()
+      // Only ahead of a frame that can write a row: one per thinking token rewrote the whole row.
+      if (!(event.type === 'message' && isClaudeProgressFrame(event.message))) {
+        flush()
+      }
       if (announced) {
         corrections.retry()
         streamedText.reattribute()
+        streamedThinking.reattribute()
       }
       if (event.type === 'prompt') {
         prompts.handle(event)
@@ -203,41 +254,7 @@ export function createClaudeJournalTranslator(
         prompts.retryPendingCancellations()
         prompts.cancel(event.promptKey)
       } else if (event.type === 'message' && event.message.type === 'result') {
-        // Every turn this translator opens is root by construction, so a nested
-        // result settles the child that produced it and never the turn. The
-        // diagnostic below still runs: a child's failure is reportable even when
-        // it ends no turn.
-        const settlesTurn = isRootClaudeFrame(event.message)
-        if (settlesTurn) {
-          prompts.retryPendingCancellations()
-          turn.suppressReopenOnFailure(event.message.is_error === true)
-          // The turn is over however it ended, so a foreground child still
-          // reported as working will never be settled by an event.
-          subagents.settleTurn(turn.groupKey)
-          context.settle(
-            event.message,
-            claudeTurnEndForResult(event.message, event.observedAt ?? Date.now())
-          )
-          // The turn is over. A block still awaiting its final keeps the text the
-          // flush above journaled, but its live state goes: an interrupted turn
-          // would otherwise retain that text for the life of the session.
-          streamedBlocks.clear()
-          streamedText.settle()
-        }
-        const kind = claudeProviderFrameKind(event.message)
-        const failure = claudeResultFailure(event.message)
-        if (failure || !isSettledClaudeResultKind(kind)) {
-          providerFallback.append(
-            kind,
-            event.message,
-            failure?.text,
-            undefined,
-            undefined,
-            // A result that settles no turn is a CHILD's result: this
-            // translator only ever opens root turns.
-            settlesTurn ? undefined : corrections.stampFor(claudeFrameParentRef(event.message))
-          )
-        }
+        journalClaudeResult(resultContext, event.message, event.observedAt ?? Date.now())
       } else if (event.type === 'message') {
         const backgroundTaskCovered = backgroundTasks.observe(
           event.message,
@@ -281,12 +298,21 @@ export function createClaudeJournalTranslator(
     get currentTurnId() {
       return turn.id
     },
-    flush: streamedText.flush,
+    get commandTurnId() {
+      return turn.command ? turn.id : null
+    },
+    beginCommand: (start) => turn.beginCommand(claudeCommandCurrentTurn(start)),
+    forgetCommand: (turnId) => turn.forgetCommand(turnId),
+    commandInterruptRequested: (turnId) => turn.commandInterruptRequested(turnId),
+    get openTurnInLiveProviderCycle() {
+      return turn.openedInLiveProviderCycle
+    },
+    flush,
     childToolOwner: childQueries.childToolOwner,
     childActivity: childQueries.childActivity,
     retryPendingTaskRows: () => backgroundTasks.retryPendingWrites(),
     get pendingStreamedBlocks() {
-      return streamedText.pending
+      return streamedText.pending + streamedThinking.pending
     },
     get contextActivity() {
       return context.activityRevision
@@ -297,9 +323,10 @@ export function createClaudeJournalTranslator(
     modelMayHaveChanged: () => context.modelMayHaveChanged(),
     modelWritten: (model) => context.modelWritten(model),
     dispose: () => {
-      streamedText.flush()
+      flush()
       context.dispose()
       streamedText.dispose()
+      streamedThinking.dispose()
       tools.clear()
       prompts.clear()
       streamedBlocks.clear()

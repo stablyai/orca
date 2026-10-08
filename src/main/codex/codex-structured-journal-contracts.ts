@@ -4,9 +4,25 @@ import type { AgentSessionDeltaCoalescerDeps } from '../native-chat/agent-sessio
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
 import type { CodexSubagentExecutions } from './codex-subagent-executions'
+import type { CodexThreadItem } from './codex-structured-item-translation'
+import type { CodexHelperName } from './codex-collab-agent-item-translation'
+import type { StructuredAgentSessionCommandRun } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+
+export type CodexActiveJournalItem = {
+  threadId: string
+  turnId: string | null
+  identity: AgentJournalItemIdentity
+  item: CodexThreadItem
+  /** Names the helpers a collab call acted on, so a settled revision keeps naming them. */
+  helperName?: CodexHelperName
+  /** Host clock at item/started, for a row whose first write comes later. */
+  startedAt?: number
+}
 
 export type CodexJournalTranslatorDeps = {
   sink: StructuredAgentSessionEventSink
+  /** Names this connection in frame-row identities, so a later connection never revises its rows. */
+  acquisitionId?: string
   /** Keys restored lifecycle rows to the live identity; without it history restore skips them. */
   sessionId?: string
   now?: () => number
@@ -34,6 +50,13 @@ export type CodexJournalTranslatorDeps = {
 
 export type CodexJournalTranslator = {
   handle: (event: CodexStructuredSessionEvent) => CodexJournalTranslationAdmission
+  /** Before Orca sends a conversation command: the next primary turn carries it out, and that
+   *  turn's end is the command's. */
+  beginCommand: (command: StructuredAgentSessionCommandRun) => void
+  /** The command was never taken. */
+  forgetCommand: (turnId: string) => void
+  /** The provider turn a Stop naming `turnId` interrupts; undefined while a command has none. */
+  commandProviderTurnId: (turnId: string) => string | undefined
   cancelPrompt: (journalItemId: string) => CodexJournalTranslationAdmission
   restoreThread: (
     threadId: string,

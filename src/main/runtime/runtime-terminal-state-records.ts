@@ -7,6 +7,7 @@ import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges
 import type { TerminalSideEffectFact } from '../../shared/terminal-side-effect-facts'
 import type { TerminalTitleTracker } from '../../shared/terminal-output-side-effects'
 import type { TuiAgent } from '../../shared/tui-agent'
+import type { TerminalAgent } from '../../shared/terminal-agent'
 import type { HeadlessEmulator } from '../daemon/headless-emulator'
 import type { PtyProviderBufferSnapshot } from '../providers/types'
 import type { RetainedTailRedrawCursor } from './terminal-tail-redraw-buffer'
@@ -66,7 +67,7 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   launchIncarnationId: PtyIncarnationId | null
   launchAgent: TuiAgent | null
   agentSessionOwners: AgentSessionOwnerBinding[]
-  foregroundAgent: TuiAgent | null
+  foregroundAgent: TerminalAgent | null
   connected: boolean
   disconnectedAt: number | null
   lastExitCode: number | null
@@ -76,12 +77,21 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   /** Latest first-party state from the agent's own OSC 9999 status stream — what the
    *  agent SAYS it is doing, as opposed to `lastAgentStatus`, which is inferred from its
    *  OSC title. Optional: absent until a payload lands. */
-  lastExplicitAgentStatus?: { state: AgentStatusState; updatedAt: number } | null
+  lastExplicitAgentStatus?: {
+    state: AgentStatusState
+    updatedAt: number
+    /** A `done` row that marks a new session owning the pane, not the end of a turn. */
+    sessionBoundary?: boolean
+  } | null
   lastAgentStatusStartedAtEpochMs: number | null
   lastAgentStatusRichInvalidatedAtEpochMs: number | null
   lastOscTitle: string | null
   lastOscTitleAt: number | null
   lastOscTitleEpochMs: number | null
+  /** The stale-working timer's cleared title, dated as a genuine title would be, while it stands
+   *  over `lastOscTitle`. Display readers project through it (getPtyDisplayRecord); evidence never
+   *  reads it. On the record so it lives as long as the native title it retires. In memory only. */
+  titleDisplayClear?: { title: string; observedAt: number; observedAtEpochMs: number } | null
   managementTitle: string | null
   managementTitleAt: number | null
   controllerTitle: string | null
@@ -107,6 +117,8 @@ export type RuntimePtyTitleTrackerEntry = {
   lastTitleFactAtMs: number | null
   chunkTouchedSessionTabs: boolean
   pendingFacts: TerminalSideEffectFact[]
+  /** Run once this chunk's facts are emitted: status that readers must see after them. */
+  afterFacts: (() => void)[]
   commandCodeDetector: { observe: (data: string) => boolean } | null
 }
 
@@ -115,6 +127,8 @@ export type RuntimeHeadlessTerminal = {
   outputSequence: number
   writeChain: Promise<void>
   ownership: PtyShellOwnershipMirror
+  /** The grid a reattach reflowed the model onto, until a PTY resize off it repaints the TUI. */
+  unrepaintedReflowGrid?: { cols: number; rows: number }
 }
 
 export type RuntimeVisibleTerminalState = {

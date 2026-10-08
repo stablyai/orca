@@ -27,6 +27,9 @@ vi.mock('node-pty', () => ({ spawn: mocks.mockPtySpawn }))
 vi.mock('../main/shell-prompt-readiness-probe', () => ({
   createShellPromptReadinessProbe: mocks.mockCreateShellPromptReadinessProbe
 }))
+vi.mock('../main/opencode/opencode-launch-capabilities', () => ({
+  probeOpenCodeLaunchCapabilities: async () => null
+}))
 vi.mock('../main/pty/posix-pty-process-groups', () => ({
   forceKillPosixPtyProcessGroups: vi.fn((_pid: number, fallback: () => void) => fallback())
 }))
@@ -94,6 +97,38 @@ async function spawn(params: Record<string, unknown> = {}): Promise<Record<strin
 }
 
 describe('relay OpenCode source selection on real fixture files', () => {
+  it.each(['home', 'xdg', 'shell'] as const)(
+    'consumer config root follows the remote %s environment',
+    async (kind) => {
+      await install('// remote plugin', '')
+      const home = join(root, 'remote-home')
+      const xdg = join(root, 'remote-xdg')
+      const consumer = kind === 'home' ? join(home, '.config', 'opencode') : join(xdg, 'opencode')
+      mkdirSync(home, { recursive: true })
+      mkdirSync(consumer, { recursive: true })
+      writeFileSync(join(consumer, 'opencode.json'), '{"model":"remote-model"}')
+      if (kind === 'shell') {
+        writeFileSync(join(home, '.zshrc'), `export XDG_CONFIG_HOME='${xdg}'\n`)
+      }
+      const env = await spawn({
+        cwd: home,
+        launchAgent: 'opencode',
+        env: {
+          HOME: home,
+          USERPROFILE: home,
+          XDG_CONFIG_HOME: kind === 'xdg' ? xdg : '',
+          SHELL: kind === 'shell' ? '/bin/zsh' : '/bin/sh'
+        }
+      })
+      expect(readFileSync(plugin(consumer, 'opencode'), 'utf8')).toBe('// remote plugin')
+      expect(existsSync(plugin(join(root, 'xdg', 'opencode'), 'opencode'))).toBe(false)
+      expect(readFileSync(join(consumer, 'opencode.json'), 'utf8')).toBe('{"model":"remote-model"}')
+      expect(env.OPENCODE_CONFIG_DIR).toBeUndefined()
+      expect(env.HOME).toBe(home)
+      expect(env.XDG_CONFIG_HOME).toBe(kind === 'xdg' ? xdg : '')
+    }
+  )
+
   it('leaves a standalone relay without supplied sources unconfigured', async () => {
     const env = await spawn()
     expect(env.ORCA_OPENCODE_AGENT).toBeUndefined()
@@ -134,6 +169,17 @@ describe('relay OpenCode source selection on real fixture files', () => {
     await install('// refreshed v1', '// v2')
     expect((await spawn()).ORCA_OPENCODE_AGENT).toBe('opencode')
     expect(readFileSync(original, 'utf8')).toBe('// refreshed v1')
+  })
+  // Why: a running OpenCode 2 service reloads a changed plugin file, so connecting must upgrade it.
+  it('refreshes an existing canonical plugin on install without creating a new one', async () => {
+    const dir = join(root, 'xdg', 'opencode')
+    mkdirSync(join(dir, 'plugins'), { recursive: true })
+    writeFileSync(plugin(dir, 'opencode2'), '// old v2')
+    await install('// v1', '// v2')
+    expect(readFileSync(plugin(dir, 'opencode2'), 'utf8')).toBe('// v2')
+    const tuiEntry = join(dir, 'plugins', 'orca-opencode2-status-tui', 'tui.js')
+    expect(readFileSync(tuiEntry, 'utf8')).toBe('// v2')
+    expect(existsSync(plugin(dir, 'opencode'))).toBe(false)
   })
   it('restores the real custom source when all OpenCode sources are revoked', async () => {
     await install('// v1', '// v2')

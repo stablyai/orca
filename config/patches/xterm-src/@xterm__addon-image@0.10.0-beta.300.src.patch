@@ -1,8 +1,21 @@
 diff --git a/src/IIPHandler.ts b/src/IIPHandler.ts
-index 559b907416eb38318f439d060d7f89311ed34c7e..8541b4b0ea0d6b451aaae49007d69df64c5bd088 100644
+index 559b907416eb38318f439d060d7f89311ed34c7e..73cedbe99f831bffd202697cc8ba80a46a39cb99 100644
 --- a/src/IIPHandler.ts
 +++ b/src/IIPHandler.ts
-@@ -34,6 +34,7 @@ const DEFAULT_HEADER: IHeaderFields = {
+@@ -13,8 +13,10 @@ import { imageType, UNSUPPORTED_TYPE } from './IIPMetrics';
+ 
+ // Local const enum mirror - esbuild can't inline const enums from external packages
+ const enum DecoderConst {
+-  // Limit held memory in base64 decoder (encoded bytes).
+-  KEEP_DATA = 4194304,
++  // Held memory in base64/QOI decoders between images. Zero because each kept
++  // decoder pins a wasm memory, and V8 caps those per process (~124 in a
++  // sandboxed renderer), so idle terminals must not hold one.
++  KEEP_DATA = 0,
+   // Initial buffer allocation for the decoder.
+   INITIAL_DATA = 1048576,
+   // Local mirror of const enum (esbuild can't inline const enums from external packages)
+@@ -34,6 +36,7 @@ const DEFAULT_HEADER: IHeaderFields = {
  
  
  export class IIPHandler implements IOscHandler, IResetHandler {
@@ -10,7 +23,7 @@ index 559b907416eb38318f439d060d7f89311ed34c7e..8541b4b0ea0d6b451aaae49007d69df6
    private _aborted = false;
    private _hp = new HeaderParser();
    private _header: IHeaderFields = DEFAULT_HEADER;
-@@ -55,6 +56,7 @@ export class IIPHandler implements IOscHandler, IResetHandler {
+@@ -55,6 +58,7 @@ export class IIPHandler implements IOscHandler, IResetHandler {
    }
  
    public reset(): void {
@@ -18,7 +31,47 @@ index 559b907416eb38318f439d060d7f89311ed34c7e..8541b4b0ea0d6b451aaae49007d69df6
      this._hp.reset();
      this._dec.release();
      this._qoiDec.release();
-@@ -198,8 +200,13 @@ export class IIPHandler implements IOscHandler, IResetHandler {
+@@ -92,7 +96,10 @@ export class IIPHandler implements IOscHandler, IResetHandler {
+             this._aborted = true;
+             return;
+           }
+-          this._dec.init();
++          if (!this._initDecoder()) {
++            this._aborted = true;
++            return;
++          }
+         } else if (this._abortMulti) {
+           this._aborted = true;
+           return;
+@@ -135,7 +142,9 @@ export class IIPHandler implements IOscHandler, IResetHandler {
+       this._isMultipart = true;
+       this._abortMulti = false;
+       this._dec.release();
+-      this._dec.init();
++      if (!this._initDecoder()) {
++        this._abortMulti = true;
++      }
+       return true;
+     }
+ 
+@@ -179,7 +188,15 @@ export class IIPHandler implements IOscHandler, IResetHandler {
+ 
+     let blob: Blob | ImageData;
+     if (metrics.mime === 'image/qoi') {
+-      const data = this._qoiDec.decode(this._dec.data8);
++      let data: Uint8Array<ArrayBuffer>;
++      try {
++        data = this._qoiDec.decode(this._dec.data8);
++      } catch (e) {
++        console.warn('IIP: could not decode QOI image', e);
++        this._dec.release();
++        this._qoiDec.release();
++        return true;
++      }
+       blob = new ImageData(
+         new Uint8ClampedArray(data.buffer, data.byteOffset, data.byteLength),
+         this._qoiDec.width,
+@@ -198,8 +215,13 @@ export class IIPHandler implements IOscHandler, IResetHandler {
        blob = new Blob([this._dec.data8], { type: metrics.mime });
      }
      this._dec.release();
@@ -32,6 +85,25 @@ index 559b907416eb38318f439d060d7f89311ed34c7e..8541b4b0ea0d6b451aaae49007d69df6
          this._storage.addImage(bm);
          return true;
        })
+@@ -209,6 +231,18 @@ export class IIPHandler implements IOscHandler, IResetHandler {
+       });
+   }
+ 
++  // Why: wasm memory exhaustion must drop this image, not throw out of the parser and wedge the write queue.
++  private _initDecoder(): boolean {
++    try {
++      this._dec.init();
++      return true;
++    } catch (e) {
++      console.warn('IIP: could not allocate decoder', e);
++      this._dec.release();
++      return false;
++    }
++  }
++
+   private _resize(w: number, h: number): [number, number] {
+     const cw = this._renderer.dimensions?.css.cell.width || CELL_SIZE_DEFAULT.width;
+     const ch = this._renderer.dimensions?.css.cell.height || CELL_SIZE_DEFAULT.height;
 diff --git a/src/ImageAddon.ts b/src/ImageAddon.ts
 index 8fd39543118cd420e36c1614c1af370b6c7bbfbb..0c44d2a81642113417bf8dc10a4faa76d7cc5864 100644
 --- a/src/ImageAddon.ts
@@ -144,8 +216,156 @@ index 5854efaec1fdf9dfcb886023542998a563b6d2f2..3afaf9bd63ffd7a4cdf32bf0ac24cf33
    }
  
    public get document(): Document | undefined {
+diff --git a/src/SixelHandler.ts b/src/SixelHandler.ts
+index 1af2d85bcdd541ed60b1e707f6186a91f1bbf1b2..0711a122ea43d5212a2851add9e744b65550ec85 100644
+--- a/src/SixelHandler.ts
++++ b/src/SixelHandler.ts
+@@ -10,6 +10,7 @@ import { RGBA8888 } from 'sixel/lib/Types';
+ import { ImageRenderer } from './ImageRenderer';
+ 
+ import { DecoderAsync, Decoder } from 'sixel/lib/Decoder';
++import { LIMITS } from 'sixel/lib/wasm';
+ 
+ // always free decoder ressources after decoding if it exceeds this limit
+ const MEM_PERMA_LIMIT = 4194304; // 1024 pixels * 1024 pixels * 4 channels = 4MB
+@@ -18,48 +19,88 @@ const MEM_PERMA_LIMIT = 4194304; // 1024 pixels * 1024 pixels * 4 channels = 4MB
+ const DEFAULT_PALETTE = PALETTE_ANSI_256;
+ DEFAULT_PALETTE.set(PALETTE_VT340_COLOR);
+ 
++// Why pooled: every decoder owns a wasm memory, and V8 caps live wasm memories
++// per process (~124 in a sandboxed renderer). Terminals borrow a decoder only
++// while a SIXEL sequence is open, so idle terminals hold none.
++const MAX_IDLE_DECODERS = 2;
++const idleDecoders = new Map<number, Decoder[]>();
++let poolPrimed = false;
++
++function primeDecoderPool(memoryLimit: number): void {
++  if (poolPrimed) return;
++  poolPrimed = true;
++  // Async compile once, off the parser's hot path; later decoders reuse the cached module.
++  DecoderAsync({ memoryLimit, palette: DEFAULT_PALETTE }).then(
++    d => releaseDecoder(d, memoryLimit),
++    () => { poolPrimed = false; }
++  );
++}
++
++function acquireDecoder(memoryLimit: number): Decoder {
++  return idleDecoders.get(memoryLimit)?.pop() ?? new Decoder({ memoryLimit, palette: DEFAULT_PALETTE });
++}
++
++function releaseDecoder(dec: Decoder, memoryLimit: number): void {
++  if (dec.memoryUsage > MEM_PERMA_LIMIT) {
++    dec.release();
++  }
++  const idle = idleDecoders.get(memoryLimit) ?? [];
++  if (idle.length < MAX_IDLE_DECODERS) {
++    idle.push(dec);
++    idleDecoders.set(memoryLimit, idle);
++  }
++}
++
+ 
+ export class SixelHandler implements IDcsHandler, IResetHandler {
+   private _size = 0;
+   private _aborted = false;
+   private _dec: Decoder | undefined;
++  private _decMemoryLimit = 0;
++  // Color registers outlive a single image, so they live here rather than in a pooled decoder.
++  private readonly _palette = new Uint32Array(LIMITS.PALETTE_SIZE);
+ 
+   constructor(
+     private readonly _opts: IImageAddonOptions,
+     private readonly _storage: SixelImageStorage,
+     private readonly _coreTerminal: ITerminalExt
+   ) {
+-    DecoderAsync({
+-      memoryLimit: this._opts.pixelLimit * 4,
+-      palette: DEFAULT_PALETTE,
+-      paletteLimit: this._opts.sixelPaletteLimit
+-    }).then(d => this._dec = d);
++    this._palette.set(DEFAULT_PALETTE);
++    primeDecoderPool(this._opts.pixelLimit * 4);
+   }
+ 
+   public reset(): void {
+-    /**
+-     * reset sixel decoder to defaults:
+-     * - release all memory
+-     * - nullify palette (4096)
+-     * - apply default palette (256)
+-     */
+-    if (this._dec) {
+-      this._dec.release();
+-      // FIXME: missing interface on decoder to nullify full palette
+-      (this._dec as any)._palette.fill(0);
+-      this._dec.init(0, DEFAULT_PALETTE, this._opts.sixelPaletteLimit);
+-    }
++    this._returnDecoder();
++    this._palette.fill(0);
++    this._palette.set(DEFAULT_PALETTE);
+   }
+ 
+   public hook(params: IParams): void {
+     this._size = 0;
+     this._aborted = false;
+-    if (this._dec) {
+-      const fillColor = params.params[1] === 1 ? 0 : extractActiveBg(
+-        this._coreTerminal._core._inputHandler._curAttrData,
+-        this._coreTerminal._core._themeService?.colors);
+-      this._dec.init(fillColor, null, this._opts.sixelPaletteLimit);
++    this._returnDecoder();
++    const memoryLimit = this._opts.pixelLimit * 4;
++    try {
++      this._dec = acquireDecoder(memoryLimit);
++    } catch (e) {
++      // Why: exhausting wasm memory must drop this image, not throw out of the parser and wedge the write queue.
++      console.warn(`SIXEL: could not allocate decoder - ${e}`);
++      this._aborted = true;
++      return;
+     }
++    this._decMemoryLimit = memoryLimit;
++    const fillColor = params.params[1] === 1 ? 0 : extractActiveBg(
++      this._coreTerminal._core._inputHandler._curAttrData,
++      this._coreTerminal._core._themeService?.colors);
++    this._dec.init(fillColor, this._palette, this._opts.sixelPaletteLimit);
++  }
++
++  private _returnDecoder(): void {
++    const dec = this._dec;
++    if (!dec) return;
++    this._dec = undefined;
++    this._palette.set(dec.palette);
++    releaseDecoder(dec, this._decMemoryLimit);
+   }
+ 
+   public put(data: Uint32Array, start: number, end: number): void {
+@@ -83,6 +124,14 @@ export class SixelHandler implements IDcsHandler, IResetHandler {
+   }
+ 
+   public unhook(success: boolean): boolean | Promise<boolean> {
++    try {
++      return this._unhook(success);
++    } finally {
++      this._returnDecoder();
++    }
++  }
++
++  private _unhook(success: boolean): boolean {
+     if (this._aborted || !success || !this._dec) {
+       return true;
+     }
+@@ -100,9 +149,6 @@ export class SixelHandler implements IDcsHandler, IResetHandler {
+ 
+     const canvas = ImageRenderer.createCanvas(undefined, width, height);
+     canvas.getContext('2d')?.putImageData(new ImageData(this._dec.data8 as Uint8ClampedArray<ArrayBuffer>, width, height), 0, 0);
+-    if (this._dec.memoryUsage > MEM_PERMA_LIMIT) {
+-      this._dec.release();
+-    }
+     this._storage.addImage(canvas);
+     return true;
+   }
 diff --git a/src/kitty/KittyGraphicsHandler.ts b/src/kitty/KittyGraphicsHandler.ts
-index de889dfff75d9ecc8ab47a025e6989ffe75bb202..54ebea9c061e5bb92b187cab7a53bc1fa320c4f8 100644
+index de889dfff75d9ecc8ab47a025e6989ffe75bb202..cf66e5b75c78645b1641e53d1425d88201134f78 100644
 --- a/src/kitty/KittyGraphicsHandler.ts
 +++ b/src/kitty/KittyGraphicsHandler.ts
 @@ -7,6 +7,7 @@ import { IDisposable } from '@xterm/xterm';
@@ -172,10 +392,12 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..54ebea9c061e5bb92b187cab7a53bc1f
      this._cleanupAllPending();
      if (this._activeDecoder) {
        this._activeDecoder.release();
-@@ -200,6 +203,25 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+@@ -200,8 +203,38 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
        this._activeDecoder = pending.decoder;
      }
      if (!this._activeDecoder) {
+-      this._activeDecoder = new Base64Decoder(Constants.DECODER_KEEP_DATA, this._maxEncodedBytes, this._initialEncodedBytes);
+-      this._activeDecoder.init();
 +      // Budget WASM capacity, including one page of decoder state and rounding.
 +      const decoderCapacity = this._maxEncodedBytes + 131072;
 +      if (decoderCapacity > this._opts.storageLimit * 1000000) {
@@ -195,10 +417,23 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..54ebea9c061e5bb92b187cab7a53bc1f
 +          this._sendResponse(oldest[1].cmd.id, 'ENOMEM:pending image budget exceeded', oldest[1].cmd.quiet ?? 0);
 +        }
 +      }
-       this._activeDecoder = new Base64Decoder(Constants.DECODER_KEEP_DATA, this._maxEncodedBytes, this._initialEncodedBytes);
-       this._activeDecoder.init();
++      const decoder = new Base64Decoder(Constants.DECODER_KEEP_DATA, this._maxEncodedBytes, this._initialEncodedBytes);
++      try {
++        decoder.init();
++      } catch (e) {
++        // Why: wasm memory exhaustion must drop this image, not throw out of the parser and wedge the write queue.
++        console.warn('KITTY: could not allocate decoder', e);
++        this._aborted = true;
++        if (this._parsedCommand?.id !== undefined) {
++          this._sendResponse(this._parsedCommand.id, 'ENOMEM:could not allocate decoder', this._parsedCommand.quiet ?? 0);
++        }
++        return;
++      }
++      this._activeDecoder = decoder;
      }
-@@ -550,9 +572,11 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+ 
+     if (this._activeDecoder.put(data.subarray(start, end)) !== DECODER_OK) {
+@@ -550,9 +583,11 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
    }
  
    private async _decodeAndDisplay(image: IKittyImageData, cmd: IKittyCommand): Promise<void> {
@@ -210,7 +445,7 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..54ebea9c061e5bb92b187cab7a53bc1f
        const cropX = Math.max(0, cmd.x ?? 0);
        const cropY = Math.max(0, cmd.y ?? 0);
        const cropW = cmd.sourceWidth || (bitmap.width - cropX);
-@@ -660,6 +684,7 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+@@ -660,6 +695,7 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
          }
        }
  
@@ -218,7 +453,7 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..54ebea9c061e5bb92b187cab7a53bc1f
        const zIndex = cmd.zIndex ?? 0;
        this._kittyStorage.addImage(image.id, bitmap, true, layer, zIndex);
        bitmap = undefined;  // ownership transferred to storage
-@@ -693,6 +718,12 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+@@ -693,6 +729,12 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
      }
  
      if (image.format === KittyFormat.PNG) {
@@ -231,7 +466,7 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..54ebea9c061e5bb92b187cab7a53bc1f
        const blob = new Blob([bytes as BlobPart], { type: 'image/png' });
        if (!window.createImageBitmap) {
          const url = URL.createObjectURL(blob);
-@@ -775,27 +806,45 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+@@ -775,27 +817,45 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
    private async _decompressZlib(compressed: Uint8Array): Promise<Uint8Array> {
      try {
        return await this._decompress(compressed, 'deflate');

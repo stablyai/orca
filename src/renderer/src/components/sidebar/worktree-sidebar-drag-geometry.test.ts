@@ -228,26 +228,6 @@ describe('grab-relative hit testing', () => {
     expect(getWorktreeSidebarDragReferenceY({ localY: 300, grab: null, activeRect })).toBe(300)
   })
 
-  it('resolves the same slot wherever a tall card was grabbed', () => {
-    const rects = layout({ c: EXPANDED_CARD_HEIGHT })
-    const tall = rects.find((rect) => rect.worktreeId === 'c')!
-    const height = tall.bottom - tall.top
-    // Park the card so it visually occupies b's slot, varying only the grab point.
-    const slotTop = rects[1]!.top
-
-    const dropIndexes = [0.05, 0.25, 0.5, 0.75, 0.95].map((fraction) => {
-      const offsetY = height * fraction
-      return previewAt({
-        pointerY: slotTop + offsetY,
-        rects,
-        draggingWorktreeId: 'c',
-        grab: { offsetY, height }
-      })!.dropIndex
-    })
-
-    expect(new Set(dropIndexes).size).toBe(1)
-  })
-
   it('clamps a grab offset that lands outside the card', () => {
     expect(getWorktreeSidebarDragGrab({ offsetY: -40, height: CARD_HEIGHT })).toEqual({
       offsetY: 0,

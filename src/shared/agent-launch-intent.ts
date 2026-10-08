@@ -45,6 +45,9 @@ export type AgentLaunchTarget =
       /** The workspace root the host resolved for that selector. Host-set, never accepted from a
        *  caller: it decides whether a requested `cwd` names the root or somewhere else. */
       workspacePath?: string
+      /** The workspace's SSH connection, `null` when local. Host-set, like `workspacePath`: it
+       *  decides whether the window can read the agent's transcript, so which view the tab opens in. */
+      connectionId?: string | null
     }
   /** A worktree this launch creates. `create` is the `worktree.create` request minus its agent
    *  fields — the launch owns those, so a caller cannot set a startup agent behind the router. */
@@ -68,11 +71,8 @@ export type AgentLaunchIntent = {
    * caller explicitly wants none, and collapsing the two would make a recipe that clears its args
    * silently inherit whatever the settings happen to hold.
    *
-   * Deliberately NOT a route input. `hasExplicitTuiLaunchCommand` reads the launch *command* and
-   * pointedly not the arguments, because structured chat drives Claude through the Agent SDK and
-   * Codex through app-server, whose option sets are versioned independently of the interactive
-   * CLI's. So args reaching a structured launch are ignored rather than forcing a terminal — the
-   * host says so in `warning` instead of quietly honouring neither the args nor the preference.
+   * Deliberately NOT a route input. Structured chat reads the execution host's saved Arguments;
+   * per-call overrides remain terminal-only and the host reports that in `warning`.
    */
   agentArgs?: string | null
   /**
@@ -96,6 +96,23 @@ export type AgentLaunchIntent = {
   /** The caller-minted id of the chat session a structured launch creates. Not a route input;
    *  refused when that session already exists. */
   sessionId?: string
+}
+
+/**
+ * Where in the workspace's tab layout a new tab goes: a group, the tab it follows (a host tab id; a
+ * terminal's tab is the tab half of its pane key), or both. Never fails a launch: a group that is
+ * gone falls back to the anchor's group, then to the active one.
+ */
+export type AgentLaunchPlacement = { groupId?: string; afterTabId?: string }
+
+/** Whether the caller's own view moves to the new tab. Never names another viewer's screen. */
+export type AgentLaunchPresentation = 'focused' | 'background'
+
+/** Where the tab landed, as the window that owns the layout reported it. */
+export type AgentLaunchPlacementReceipt = {
+  groupId: string
+  /** Present when the requested group was not used: the anchor tab's group, or the active one. */
+  fallback?: 'anchor-group' | 'active-group'
 }
 
 /** The surface the host actually created. */
@@ -154,6 +171,13 @@ export type AgentLaunchPromptDisposal =
   | { outcome: 'handed-to-terminal' }
   /** Not delivered by this call; the caller still owns the text. */
   | { outcome: 'not-delivered' }
+  /**
+   * Only ever replayed, never a live answer: the host recorded the running agent, then stopped
+   * before the delivery reported back, so the text may or may not have arrived. The caller must not
+   * resend. Sent only to a caller advertising `agent.launch.prompt-unconfirmed.v1`; every other
+   * caller is refused with `agent_session_operation_unknown` instead.
+   */
+  | { outcome: 'unconfirmed' }
 
 export type AgentLaunchPromptReceipt = {
   delivery: AgentLaunchPromptDelivery
@@ -178,6 +202,9 @@ export type AgentLaunchResult = {
   /** Why the outcome is what it is — always populated, so a downgrade is never silent. */
   receipt: AgentLaunchModeReceipt
   prompt?: AgentLaunchPromptReceipt
+  /** Absent when no window placed the tab: an older host, no requested placement, or a host with no
+   *  window owning the layout. */
+  placement?: AgentLaunchPlacementReceipt
 }
 
 export type AgentLaunchMode = 'structured' | 'terminal'
@@ -189,6 +216,8 @@ export type AgentLaunchModeReason =
   | 'remote_execution_host'
   | 'reused_terminal'
   | 'agent_without_structured_session'
+  /** Historical name, kept because receipts carry it: the launch asked for a start directory
+   *  outside its workspace. A custom launch command no longer produces it. */
   | 'tui_launch_command'
   | 'structured_sessions_unavailable'
   | 'structured_support_unknown'
@@ -226,7 +255,21 @@ export function isAgentLaunchResult(value: unknown): value is AgentLaunchResult 
     typeof result.worktreeId === 'string' &&
     isAgentLaunchModeReceipt(result.receipt) &&
     (result.warning === undefined || typeof result.warning === 'string') &&
-    (result.prompt === undefined || isAgentLaunchPromptReceipt(result.prompt))
+    (result.prompt === undefined || isAgentLaunchPromptReceipt(result.prompt)) &&
+    (result.placement === undefined || isAgentLaunchPlacementReceipt(result.placement))
+  )
+}
+
+function isAgentLaunchPlacementReceipt(value: unknown): value is AgentLaunchPlacementReceipt {
+  if (typeof value !== 'object' || value === null) {
+    return false
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: narrowing an unknown for field-by-field validation; every field read below is checked before use.
+  const placement = value as Partial<AgentLaunchPlacementReceipt>
+  // A fallback word this build does not know still reads: placement is a report, not a gate.
+  return (
+    typeof placement.groupId === 'string' &&
+    (placement.fallback === undefined || typeof placement.fallback === 'string')
   )
 }
 
@@ -242,7 +285,9 @@ function isAgentLaunchPromptReceipt(value: unknown): value is AgentLaunchPromptR
   }
   return value.outcome === 'journaled'
     ? 'messageId' in value && typeof value.messageId === 'string'
-    : value.outcome === 'handed-to-terminal' || value.outcome === 'not-delivered'
+    : value.outcome === 'handed-to-terminal' ||
+        value.outcome === 'not-delivered' ||
+        value.outcome === 'unconfirmed'
 }
 
 function isAgentLaunchOutcome(value: unknown): value is AgentLaunchOutcome {
@@ -305,7 +350,9 @@ export const AGENT_LAUNCH_RESERVED_CREATE_FIELDS = [
   'startupDraft',
   'startupLaunchConfig',
   'startupEnv',
-  'startupCommandDelivery'
+  'startupCommandDelivery',
+  // The launch carries its own; a create's copy would be a second, possibly contradicting, answer.
+  'launchSource'
 ] as const
 
 /** Strips the reserved agent fields from a create payload. Callers migrating from

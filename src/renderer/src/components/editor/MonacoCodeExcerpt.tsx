@@ -3,7 +3,7 @@ import { monaco } from '@/lib/monaco-setup'
 import { computeEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
-import { useDocumentDarkTheme } from './use-document-dark-theme'
+import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 
 let pythonLanguageRegistrationPromise: Promise<void> | null = null
 

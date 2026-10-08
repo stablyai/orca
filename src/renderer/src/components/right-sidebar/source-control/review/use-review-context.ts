@@ -2,7 +2,7 @@ import type { SourceControlPanelState } from '../panel/use-panel-state'
 import { useSourceControlBaseRefs } from '../sync/use-base-refs'
 import { useSourceControlBranchCompare } from '../sync/use-branch-compare'
 import { useSourceControlCreatePrIntentTarget } from './use-create-pr-intent-target'
-import { useSourceControlHostedReviewPolling } from './use-hosted-review-polling'
+import { useSourceControlReviewPushTarget } from './use-review-push-target'
 import { useSourceControlHostedReviewProviderHint } from './use-hosted-review-provider-hint'
 import { useSourceControlHostedReviewState } from './use-hosted-review-state'
 import { useSourceControlLinkedReviews } from './use-linked-reviews'
@@ -26,9 +26,7 @@ export function useSourceControlReviewContext(panelState: SourceControlPanelStat
     activeWorktreeId,
     branchName,
     createPrIntentCurrentTargetRef,
-    enqueueGitHubPRRefresh,
     ensureHostedReviewPushTarget,
-    fetchHostedReviewForBranch,
     hostedReviewCacheKey,
     hostedReviewEntry,
     hostedReviewEntryData,
@@ -129,23 +127,13 @@ export function useSourceControlReviewContext(panelState: SourceControlPanelStat
     linkedGitLabMR,
     linkedGiteaPR
   })
-  useSourceControlHostedReviewPolling({
-    activeRepo,
+  useSourceControlReviewPushTarget({
     activeWorktree,
     activeWorktreeId,
-    branchName,
-    enqueueGitHubPRRefresh,
     ensureHostedReviewPushTarget,
-    fallbackGitHubPRNumber,
-    fetchHostedReviewForBranch,
     hasResolvableReviewPushTargetLink,
     isBranchVisible,
-    isFolder,
-    linkedAzureDevOpsPR,
-    linkedBitbucketPR,
-    linkedGitHubPR,
-    linkedGitLabMR,
-    linkedGiteaPR
+    isFolder
   })
   const suppressedGitHubPRState = resolveSourceControlSuppressedGitHubPRState({
     worktree: activeWorktree ?? null,

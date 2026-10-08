@@ -1,5 +1,7 @@
 import type { TuiAgent } from '../../shared/tui-agent'
+import type { AgentWorkspaceTrustSpawnRequest } from '../../shared/agent-workspace-trust-spawn-request'
 import type { PtyStartupIngressIntent } from '../../shared/pty-startup-ingress'
+import type { TerminalOscColorQueryReplyColors } from '../../shared/terminal-osc-color-reply'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
 import type { PtyBackgroundStreamEvent, PtyDataEvent } from './pty-provider-events'
@@ -77,6 +79,8 @@ export type PtySpawnOptions = {
   isNewSession?: boolean
   /** Host setting forwarded additively to the process owner; old owners ignore it. */
   historyIsolationEnabled?: boolean
+  /** SSH only: workspace the relay pre-trusts for `launchAgent` before spawning; old relays ignore it. */
+  agentWorkspaceTrust?: AgentWorkspaceTrustSpawnRequest
   /** Attach the named session atomically or fail without creating a process. */
   attachOnly?: boolean
   /** Exact persisted owner expected by an attach-only routing decision. */
@@ -226,8 +230,10 @@ export type IPtyProvider = {
   clearBuffer(id: string): Promise<void>
   /** Grounds the host's own terminal models (Reset Terminal); renderers ground themselves. */
   resetInputModes(id: string): Promise<void>
-  /** Ordered handoff from startup source authority to the live/hidden view authority. */
+  /** Ends the startup Kitty-query window; OSC 10/11 authority stays with the owner for life. */
   closeStartupQueryAuthority?: (id: string) => Promise<number> | number
+  /** Host-wide viewer colours the PTY owner answers OSC 10/11 from. */
+  setColorQueryReplyColors?: (colors: TerminalOscColorQueryReplyColors) => void
   acknowledgeDataEvent(id: string, charCount: number): void
   hasChildProcesses(id: string): Promise<boolean>
   getForegroundProcess(id: string): Promise<string | null>

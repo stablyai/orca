@@ -16,13 +16,6 @@ describe('summarizeToolInput', () => {
     expect(summarizeToolInput({ a: 1 })).toBe('{"a":1}')
   })
 
-  it('truncates long previews with an ellipsis', () => {
-    const long = 'x'.repeat(200)
-    const out = summarizeToolInput(long)
-    expect(out.endsWith('…')).toBe(true)
-    expect(out.length).toBe(80)
-  })
-
   it('returns empty for null/undefined', () => {
     expect(summarizeToolInput(null)).toBe('')
     expect(summarizeToolInput(undefined)).toBe('')

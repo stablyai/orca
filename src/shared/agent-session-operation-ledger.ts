@@ -37,9 +37,8 @@ export type AgentSessionOperationOutcome =
       /**
        * Empty exactly when `launch` recorded a terminal surface — a PTY has a handle, not a session
        * id. Kept a required string rather than made optional because a build that predates `launch`
-       * rejects a `succeeded` row without one, and a single rejected row invalidates the whole
-       * store on load (`agent-session-record-store-file.ts`). A downgrade must skip what it cannot
-       * read, not lose every lease in the file.
+       * rejects a `succeeded` row without one: the records file such a build keeps is unusable to it
+       * whole, and a row the database holds is dropped from the ledger, so its retry runs again.
        */
       sessionId: string
       conversationCommand?: AgentSessionConversationCommandResult
@@ -50,12 +49,10 @@ export type AgentSessionOperationOutcome =
        * settings move: a replay must return what ran, not what would run now.
        *
        * Typed `unknown`, and deliberately NOT checked by `isAgentSessionOperationRow`, for the same
-       * reason `sessionId` above stays required: a row this file rejects makes the whole store
-       * unparseable, and a primary and backup that both fail to parse raise
-       * `agent_session_store_corrupt` rather than degrading. `isAgentLaunchResult` is a
-       * hand-maintained mirror of a result type later work will edit, so a field tightened there
-       * would reject rows this same build wrote and take every lease in the file with them. It is
-       * narrowed where the value is read instead, where a payload we cannot read costs one replay.
+       * reason `sessionId` above stays required: a load drops a row it rejects. `isAgentLaunchResult`
+       * is a hand-maintained mirror of a result type later work will edit, so a field tightened
+       * there would reject rows this same build wrote and lose their replay. It is narrowed where
+       * the value is read instead, where a payload we cannot read costs one replay.
        */
       launch?: unknown
     }
@@ -71,6 +68,9 @@ export type AgentSessionOperationOutcome =
   /** The effect may or may not have happened; replay this answer instead of spawning again. */
   | { status: 'unknown' }
 
+/** A terminal pane an operation laid out before its process existed. */
+export type AgentSessionOperationOwnedPane = { worktreeId: string; paneKey: string }
+
 export type AgentSessionOperationRow = {
   callerKey: string
   operationId: string
@@ -79,6 +79,37 @@ export type AgentSessionOperationRow = {
   recordedAt: number
   expiresAt: number
   outcome: AgentSessionOperationOutcome
+  /**
+   * The pane an `agent.launch` showed before its agent existed. Written with the claim, so the pane
+   * can read its fate off this row — attach, couldn't start, couldn't confirm — across a restart,
+   * and stops being owned when the row expires. Not checked by `isAgentSessionOperationRow`: a
+   * malformed value costs that pane its verdict, never the row.
+   */
+  ownedPane?: AgentSessionOperationOwnedPane
+}
+
+/** Unexpired rows naming this pane as theirs. */
+export function listAgentSessionOperationRowsOwningPane(
+  rows: Iterable<AgentSessionOperationRow>,
+  pane: AgentSessionOperationOwnedPane,
+  now: number
+): AgentSessionOperationRow[] {
+  const owning: AgentSessionOperationRow[] = []
+  for (const row of rows) {
+    const owned: unknown = row.ownedPane
+    if (
+      row.expiresAt > now &&
+      typeof owned === 'object' &&
+      owned !== null &&
+      'paneKey' in owned &&
+      'worktreeId' in owned &&
+      owned.paneKey === pane.paneKey &&
+      owned.worktreeId === pane.worktreeId
+    ) {
+      owning.push(row)
+    }
+  }
+  return owning
 }
 
 export type AgentSessionOperationRefusalCode =
@@ -167,7 +198,7 @@ export type AgentSessionOperationClaim =
  */
 export function claimAgentSessionOperation(
   rows: ReadonlyMap<string, AgentSessionOperationRow>,
-  args: { callerKey: string; operationId: string }
+  args: { callerKey: string; operationId: string; ownedPane?: AgentSessionOperationOwnedPane }
 ): { rows: Map<string, AgentSessionOperationRow>; claim: AgentSessionOperationClaim } {
   const key = agentSessionOperationKey(args.callerKey, args.operationId)
   const existing = rows.get(key)
@@ -177,7 +208,11 @@ export function claimAgentSessionOperation(
   if (existing.outcome.status !== 'pending') {
     return { rows: new Map(rows), claim: { claim: 'lost', row: existing } }
   }
-  const claimed: AgentSessionOperationRow = { ...existing, outcome: { status: 'unknown' } }
+  const claimed: AgentSessionOperationRow = {
+    ...existing,
+    outcome: { status: 'unknown' },
+    ...(args.ownedPane ? { ownedPane: args.ownedPane } : {})
+  }
   const next = new Map(rows)
   next.set(key, claimed)
   return { rows: next, claim: { claim: 'won', row: claimed } }

@@ -1,9 +1,15 @@
+import { showNestedWorktreePreservedBranchesToast } from '@/components/sidebar/nested-worktree-preserved-branches-toast'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { RemoveWorktreeResult } from '../../../../../../shared/worktree/create-types'
 import { callRuntimeRpc, type getActiveRuntimeTarget } from '../../../../runtime/runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from '../../../../runtime/runtime-worktree-selector'
 import type { RemoveWorktreeOptions } from '../../worktree-removal-options'
-import { ARCHIVE_HOOK_TIMEOUT_MS } from '../../../../../../shared/worktree/archive-hook-removal-gate'
+import type { WorktreeSliceGet } from '../listing/worktree-slice-types'
+import {
+  isWorktreeRemovalReplyLost,
+  settleLostWorktreeRemovalReply
+} from './host-worktree-removal-state'
+import { worktreeRemovalReplyTimeoutMs } from '../../../../../../shared/worktree/archive-hook-removal-gate'
 
 /**
  * Sends the destructive removal over whichever transport owns this workspace.
@@ -17,13 +23,35 @@ export async function dispatchWorktreeRemoval(args: {
   hostId: ExecutionHostId | undefined
   force: boolean | undefined
   skipArchive: boolean
-  forgetLocalOnly: boolean
+  get: WorktreeSliceGet
   target: ReturnType<typeof getActiveRuntimeTarget>
   options: RemoveWorktreeOptions | undefined
   /** Re-checks mid-flight ownership immediately before the destructive call. */
   assertCurrent: () => void
 }): Promise<RemoveWorktreeResult> {
-  const { worktreeId, hostId, force, skipArchive, forgetLocalOnly, target, options } = args
+  try {
+    const result = await requestWorktreeRemoval(args)
+    showNestedWorktreePreservedBranchesToast(result?.nestedPreservedBranches)
+    return result
+  } catch (error) {
+    if (args.options?.mode === 'forget-local' || !isWorktreeRemovalReplyLost(error)) {
+      throw error
+    }
+    // Why: the host may still be deleting; its listing answers what the lost reply would have.
+    await settleLostWorktreeRemovalReply(args.get, {
+      worktreeId: args.worktreeId,
+      hostId: args.hostId,
+      replyError: error
+    })
+    return {}
+  }
+}
+
+async function requestWorktreeRemoval(
+  args: Parameters<typeof dispatchWorktreeRemoval>[0]
+): Promise<RemoveWorktreeResult> {
+  const { worktreeId, hostId, force, skipArchive, target, options } = args
+  const forgetLocalOnly = options?.mode === 'forget-local'
   const snapshotPruneBatch = options?.snapshotPruneBatchId
     ? { snapshotPruneBatchId: options.snapshotPruneBatchId }
     : {}
@@ -36,11 +64,19 @@ export async function dispatchWorktreeRemoval(args: {
       worktreeId,
       hostId,
       force,
+      ...(options?.approvedNestedWorktrees
+        ? { approvedNestedWorktrees: options.approvedNestedWorktrees }
+        : {}),
       allowUnverifiedPtyStop: options?.allowUnverifiedPtyStop === true,
       allowFailedArchiveHook: options?.allowFailedArchiveHook === true,
       skipArchive,
       ...snapshotPruneBatch
     })
+  }
+  if (options?.approvedNestedWorktrees) {
+    throw new Error(
+      'Nested worktree deletion is not supported by this runtime. Delete its children individually first.'
+    )
   }
   const effectiveHostId =
     options?.sameIdSurvivingHostId != null ? hostId : qualifyRuntimeCallHost(target, hostId)
@@ -58,12 +94,9 @@ export async function dispatchWorktreeRemoval(args: {
       runHooks: !skipArchive
     },
     {
-      // Why not a flat 60s (#19334): the host may run an archive hook for up to
-      // ARCHIVE_HOOK_TIMEOUT_MS before it decides anything. A client that gives up first reports a
-      // failure for a removal that is still in progress — and if the hook then succeeds, the host
-      // deletes the checkout while the user has been told the delete failed. Outlast the hook when
-      // one can run; keep the short budget when none will.
-      timeoutMs: skipArchive ? 60_000 : ARCHIVE_HOOK_TIMEOUT_MS + 60_000
+      // Why (#19334): the host may run an archive hook before it decides anything, then waits for
+      // Git's delete before it replies; outlast both when a hook can run.
+      timeoutMs: worktreeRemovalReplyTimeoutMs(!skipArchive)
     }
   )
 }

@@ -19,7 +19,7 @@ vi.mock('@/runtime/structured-agent-session-client', () =>
   moduleFactories.structuredAgentSessionClient()
 )
 vi.mock('./use-structured-agent-session', () => moduleFactories.useStructuredAgentSession())
-vi.mock('./use-native-chat-font-scale', () => moduleFactories.useNativeChatFontScale())
+vi.mock('./use-native-chat-font-size', () => moduleFactories.useNativeChatFontSize())
 vi.mock('./use-native-chat-file-link-context', () => moduleFactories.useNativeChatFileLinkContext())
 vi.mock('./use-native-chat-file-link-click', () => moduleFactories.useNativeChatFileLinkClick())
 vi.mock('./NativeChatMessageList', () => moduleFactories.nativeChatMessageList())
@@ -205,5 +205,38 @@ describe('NativeChatStructuredSession task strip above a pending prompt', () => 
     expect(strip.compareDocumentPosition(promptCard) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING
     )
+  })
+})
+
+describe('NativeChatStructuredSession queued messages above the task strip', () => {
+  afterEach(() => {
+    cleanup()
+    localStorage.clear()
+    resetStructuredSessionMocks()
+  })
+
+  it('stacks queued messages above the strip, so running shells and agents sit next to the composer', () => {
+    showStripAndGoal()
+    mocks.queuedCards = [
+      {
+        messageId: 'draft-1',
+        position: 1,
+        text: 'Reply with the word banana.',
+        state: 'waiting',
+        hold: 'turn'
+      }
+    ]
+    render(sessionView())
+
+    const queued = document.querySelector('[data-queued-message-id="draft-1"]')
+    const strip = document.querySelector(STRIP)
+    if (!queued || !strip) {
+      throw new Error('expected both a queued message and the task strip')
+    }
+    expect(queued.compareDocumentPosition(strip) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    )
+    // The strip still docks on the goal tab; the queue never sits between them.
+    expect(strip.nextElementSibling).toBe(document.querySelector(GOAL))
   })
 })

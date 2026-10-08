@@ -43,6 +43,11 @@ export const STRUCTURED_WORKER_INCARNATION_PREFIX = 'structured:'
 
 export type StructuredWorkerIdentity = {
   handle: string
+  /**
+   * The session minted for the worker: its conversation id and `/clear` lineage root, which keys
+   * the handle, pane key and incarnation. Not necessarily the session running it now; worker-level
+   * readers and actors resolve that through `structuredWorkerSession`.
+   */
   sessionId: string
   /** Null when the entry was rehydrated from the durable row, which does not carry the provider. */
   agent: 'claude' | 'codex' | null
@@ -108,7 +113,7 @@ function persistedStructuredWorkerPaneKeyIsValid(
  *
  * NOT the runtime fence: the fence is an owner-generation counter that the host bumps during its
  * own transparent crash recovery, so fencing identity on it would make a recovered — but same —
- * worker fail `verifyDispatchCapability` forever and wedge release as `identity_unproven`. The
+ * worker fail its process check forever and wedge release as `identity_unproven`. The
  * session id is minted once per dispatch and survives that recovery, so it is the lineage.
  */
 export function structuredWorkerProcessIncarnation(sessionId: string): string {

@@ -1,3 +1,4 @@
+import { captureNotificationTransportOwner } from '@/attention/notification-subject-owner'
 import { detectAgentStatusFromTitle, isClaudeAgent } from '@/lib/agent-status'
 import { useAppStore } from '@/store'
 import { isFreshNonDoneAgentStatus } from '../../../../../shared/agent-status-types'
@@ -82,6 +83,8 @@ export function installAgentTaskCompleteNotify(session: ConnectPanePtySession): 
         source: 'agent-task-complete',
         terminalTitle: title,
         paneKey: session.cacheKey,
+        ptyId: session.transport.getPtyId(),
+        workspaceOwner: captureNotificationTransportOwner(session.transport),
         ...(options.agentCompletionSource
           ? { agentCompletionSource: options.agentCompletionSource }
           : {}),

@@ -1,11 +1,18 @@
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import {
+  markStructuredAgentSessionLaunchesPublished,
+  publishedStructuredSessions
+} from '@/lib/structured-agent-session-launch-publication'
+import {
   hasStructuredAgentSessionLaunchCancellationTombstone,
   markStructuredAgentSessionLaunchCancelled
 } from '@/lib/structured-agent-session-launch-registry'
-import { discardStructuredAgentSessionLaunchOutbox } from '@/components/native-chat/structured-agent-session-outbox-storage'
+import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
+import { discardStructuredAgentSessionChatSends } from '@/lib/structured-agent-session-launch-prompt'
+import { stopStructuredAgentSessionSends } from '@/components/native-chat/structured-agent-session-message-sender'
 import { closeStructuredAgentSession } from './structured-agent-session-close'
 import { withLocalSessionTabCloseOwner } from './local-session-tab-close-owner'
+import { executionHostIdForStructuredTarget } from './structured-agent-session-owner'
 import { callRuntimeRpc, type RuntimeClientTarget } from './runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 
@@ -64,10 +71,37 @@ export function beginStructuredAgentSessionTabClose(args: {
   onError?: (error: unknown) => void
 }): void {
   if (args.provisional) {
-    markStructuredAgentSessionLaunchCancelled(args.worktreeId, args.sessionId)
+    markStructuredAgentSessionLaunchCancelled(
+      args.worktreeId,
+      args.sessionId,
+      executionHostIdForStructuredTarget(args.target)
+    )
+    discardStructuredAgentSessionChatSends(args.sessionId)
+  } else {
+    // Nothing more goes out, and nothing is dropped: one on its way settles from its answer, and
+    // the rest goes back to the conversation's draft.
+    stopStructuredAgentSessionSends(args.sessionId)
   }
-  discardStructuredAgentSessionLaunchOutbox(args.sessionId)
   retireStructuredAgentSessionTab(args)
+}
+
+/**
+ * A paired host's frame, as this client may apply it: chats cancelled before their create landed
+ * are retired on that host, and the rest settle any launch still waiting to learn they exist.
+ */
+export function acceptPairedHostStructuredSessions(
+  frame: RuntimeMobileSessionTabsResult,
+  environmentId: string
+): RuntimeMobileSessionTabsResult {
+  const snapshot = suppressCancelledStructuredSessionTabs(frame, {
+    kind: 'environment',
+    environmentId
+  })
+  markStructuredAgentSessionLaunchesPublished(
+    toRuntimeExecutionHostId(environmentId),
+    publishedStructuredSessions([snapshot])
+  )
+  return snapshot
 }
 
 /** A host snapshot containing a cancelled session is suppressed and retired again idempotently. */

@@ -4,6 +4,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { RunningStructuredSession } from './orchestration/structured-session-lineage'
 import { OrchestrationDb } from './orchestration/db'
 
 const hostRef: { current: unknown } = { current: null }
@@ -45,6 +46,11 @@ function record(lease: Partial<AgentSessionRecord['lease']>): AgentSessionRecord
     },
     lease: { claimStatus: 'live', deathEvidence: null, runtimeFence: 3, ...lease }
   } as AgentSessionRecord
+}
+
+/** The installed session as the resolved running session the custody reads take. */
+function running(current: AgentSessionRecord): RunningStructuredSession {
+  return { sessionId: SESSION, record: current, lineage: [SESSION] }
 }
 
 function installHost(current: AgentSessionRecord | null, tabs: string[]) {
@@ -189,7 +195,7 @@ describe('an open dispatch keeps its worker running (P2-19 i)', () => {
     const handle = resource.terminal_handle
     const recipients = () => listAddressableStructuredWorkers(db)
     // At rest, its dispatch abandoned: still a recipient, as a terminal worker left running is.
-    db.abandonWorkerDispatch(dispatch.id)
+    db.abandonWorkerDispatch(dispatch.id, 'epoch_test')
     const worktreeGroup = () =>
       resolveGroupAddress('@worktree:wt_1', 'term_sender', recipients(), () => 'idle')
     expect(worktreeGroup()).toEqual([handle])
@@ -221,37 +227,37 @@ describe('an open dispatch keeps its worker running (P2-19 i)', () => {
 describe('ownership, not liveness (P2-19 ii-iv, P2-26)', () => {
   it('owns a worker at rest while its tab is listed, and routes mail to it', () => {
     const handle = registerWorker()
-    installHost(
-      record({
-        claimStatus: 'released',
-        deathEvidence: { kind: 'exit-observed', detail: 'stopped', observedAt: 1 }
-      }),
-      [SESSION]
-    )
+    const current = record({
+      claimStatus: 'released',
+      deathEvidence: { kind: 'exit-observed', detail: 'stopped', observedAt: 1 }
+    })
+    installHost(current, [SESSION])
 
-    expect(structuredWorkerOwned(SESSION)).toBe(true)
+    expect(structuredWorkerOwned(running(current))).toBe(true)
     expect(observeStructuredWorker({ sessionId: SESSION }).status).toBe('exited')
     expect(resolveStructuredWorkerAuthority(handle, null)?.identity.paneKey).toBe(paneKey)
   })
 
   it('retires a released worker whose tab is gone', () => {
     const handle = registerWorker()
-    installHost(record({ claimStatus: 'released' }), [])
+    const current = record({ claimStatus: 'released' })
+    installHost(current, [])
 
-    expect(structuredWorkerOwned(SESSION)).toBe(false)
+    expect(structuredWorkerOwned(running(current))).toBe(false)
     expect(resolveStructuredWorkerAuthority(handle, null)).toBeNull()
   })
 
   it('keeps authority for a live session that has no tab', () => {
     const handle = registerWorker()
-    installHost(record({ claimStatus: 'live' }), [])
+    const current = record({ claimStatus: 'live' })
+    installHost(current, [])
 
-    expect(structuredWorkerOwned(SESSION)).toBe(true)
+    expect(structuredWorkerOwned(running(current))).toBe(true)
     expect(resolveStructuredWorkerAuthority(handle, null)).not.toBeNull()
   })
 
   it('cannot answer without a host', () => {
-    expect(structuredWorkerOwned(SESSION)).toBeNull()
+    expect(structuredWorkerOwned(running(record({})))).toBeNull()
   })
 })
 

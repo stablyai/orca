@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentAutoAckPresence from './agent-auto-ack-presence'
 import { useAutoAckViewedAgent } from './useAutoAckViewedAgent'
 import { useAppStore } from '../store'
-import { makeTab, makeTabGroup, makeUnifiedTab } from '../store/slices/store-test-helpers'
+import { makeTab, makeTabGroup, makeUnifiedTab } from '../store/slices/store-session-test-harness'
 import { structuredAgentSessionPaneKey } from '../../../shared/structured-agent-session-projection'
 
 vi.mock('./agent-auto-ack-presence', async (importOriginal) => ({
@@ -82,7 +82,7 @@ describe('useAutoAckViewedAgent focus-group transitions', () => {
   })
 
   it('rescans when focusing a group whose structured tab becomes visible', () => {
-    renderHook(() => useAutoAckViewedAgent(false))
+    renderHook(() => useAutoAckViewedAgent())
     expect(useAppStore.getState().unreadAgentCompletionPanes[CHAT_SUBJECT]).toBe('agent-completion')
 
     act(() => {

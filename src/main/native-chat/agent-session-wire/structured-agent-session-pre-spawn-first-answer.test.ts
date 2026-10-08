@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
-import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import { mapRuntimeError } from '../../runtime/rpc/errors'
 import {
   AgentSessionPreSpawnError,
@@ -16,6 +16,10 @@ import {
 } from './structured-agent-session-attach'
 import { openTestAttachConversation } from './structured-agent-session-attach-test-conversation'
 import { performAttach } from './structured-agent-session-attach-flow'
+import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { StructuredAgentArgumentsError } from '../structured-agent-arguments-error'
+import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const NOW = 1_800_000_000_000
 const SESSION = 'session-alpha'
@@ -65,10 +69,7 @@ function createParams(): AgentSessionAttachParams {
 /** The thrown first answer as the wire sends it, and the ledger's replay of the same operation. */
 async function firstAnswerAndReplay(thrown: AgentSessionPreSpawnError) {
   root = await mkdtemp(join(tmpdir(), 'orca-pre-spawn-first-answer-'))
-  const store = await AgentSessionRecordStore.open({
-    directory: join(root, 'store'),
-    hostId: 'local'
-  })
+  const store = await openTestAgentSessionRecordStore(root)
   const unused = async (): Promise<never> => {
     throw new Error('not reached before a spawn')
   }
@@ -82,10 +83,12 @@ async function firstAnswerAndReplay(thrown: AgentSessionPreSpawnError) {
     setOption: unused
   }
   const input = {
+    agents: NO_STRUCTURED_AGENTS,
     store,
     adapter,
-    journalRoot: root,
-    openConversation: openTestAttachConversation(root),
+    logger: createStructuredAgentSessionLogger(),
+    journalDatabase: openTestJournalHostDatabase(root),
+    openConversation: openTestAttachConversation(openTestJournalHostDatabase(root)),
     authority: {
       spawnToken: 'spawn-a',
       claimKeyId: 'key-1',
@@ -98,17 +101,43 @@ async function firstAnswerAndReplay(thrown: AgentSessionPreSpawnError) {
     onAttached: () => {}
   }
   const first = await performAttach(input).then(
-    () => null,
+    (result) => result,
     (error: unknown) => error
   )
-  expect(first).toBeInstanceOf(AgentSessionPreSpawnError)
+  if (first instanceof Error) {
+    expect(first).toBeInstanceOf(AgentSessionPreSpawnError)
+  }
   return {
-    first: mapRuntimeError('req-1', { runtimeId: 'runtime-1' }, first),
+    first:
+      first instanceof Error ? mapRuntimeError('req-1', { runtimeId: 'runtime-1' }, first) : first,
     replay: await performAttach(input)
   }
 }
 
 describe('a create that fails before any process spawns', () => {
+  it('answers a safe saved Arguments problem on the first call and replay', async () => {
+    const { first, replay } = await firstAnswerAndReplay(
+      new AgentSessionPreSpawnError(
+        new StructuredAgentArgumentsError('Claude', '--model=private', 'multipleValues')
+      )
+    )
+    const sentence =
+      "Claude couldn't start. Saved Arguments give --model more than one value. Edit them in Settings > Agents > Arguments. Send your message to try again."
+    for (const result of [first, replay]) {
+      expect(result).toMatchObject({
+        ok: false,
+        refusal: {
+          message: sentence,
+          details: {
+            reason: 'attachFailed',
+            argumentProblem: { agent: 'Claude', option: '--model', problem: 'multipleValues' }
+          }
+        }
+      })
+    }
+    expect(JSON.stringify([first, replay])).not.toContain('private')
+  })
+
   it.each<[string, string, AgentSessionPreSpawnReason | undefined, string]>([
     [
       'the managed account env override',
@@ -127,6 +156,24 @@ describe('a create that fails before any process spawns', () => {
       'structured Claude is not offered under the active managed Claude account',
       'managedAccountUnsupported',
       'While a Claude account is added in WSL, Claude chats need a Windows Claude account. Choose or add one in Claude Accounts settings, then send your message again.'
+    ],
+    [
+      'a floating chat whose launch folder is gone',
+      'the folder this chat ran in no longer exists: /gone/floating',
+      'launchFolderMissing',
+      'The folder this chat ran in no longer exists. Restore it to continue this chat.'
+    ],
+    [
+      'a resume whose transcript is in another Claude account',
+      'claude transcript is not in the selected account',
+      'historyInOtherAccount',
+      "This chat's history is in another Claude account. Switch back to that account to continue it."
+    ],
+    [
+      'a Command setting that names no runnable program',
+      'the claude Command setting is not a runnable program',
+      'agentCommandNotRunnable',
+      "Claude's Command in Settings → Agents must be a program path or name Orca can find, with no arguments or variables. Change it or reset it."
     ],
     [
       "Orca's own reason",
@@ -159,8 +206,11 @@ describe('a create that fails before any process spawns', () => {
     }
     // What failed is kept for the log.
     expect(warn).toHaveBeenCalledWith(
-      '[agent-session] provider start failed:',
-      expect.objectContaining({ message: raw })
+      '[agent-session] provider-start: starting the provider failed',
+      expect.objectContaining({
+        scope: 'provider-start',
+        error: expect.objectContaining({ message: raw })
+      })
     )
   })
 

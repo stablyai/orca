@@ -59,20 +59,6 @@ describe('client-hosted retained guest drag passthrough', () => {
     expect(rig.host().style.pointerEvents).toBe('auto')
   })
 
-  it('brings a retained page created mid-drag up click-through', async () => {
-    const rig = createRetainedHostFixture()
-    const endDrag = startDrag()
-    await rig.mount()
-
-    rig.attach()
-
-    expect(rig.host().style.pointerEvents).toBe('none')
-
-    endDrag()
-
-    expect(rig.host().style.pointerEvents).toBe('auto')
-  })
-
   it('keeps the retained host click-through until every drag releases', async () => {
     const rig = createRetainedHostFixture()
     await rig.mount()

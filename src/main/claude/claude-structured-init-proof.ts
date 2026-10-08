@@ -71,8 +71,11 @@ export function claudeInitializationAuthError(
   initialization: unknown
 ): AgentSessionAcquisitionRefusal | null {
   const account =
-    isRecord(initialization) && isRecord(initialization.account) ? initialization.account : null
-  return readClaudeFrameString(account ?? {}, 'tokenSource') === 'none'
+    isRecord(initialization) && isRecord(initialization.account) ? initialization.account : {}
+  // An API key (ANTHROPIC_API_KEY or a Console /login key) reports tokenSource "none".
+  const apiKeySource = readClaudeFrameString(account, 'apiKeySource')
+  return readClaudeFrameString(account, 'tokenSource') === 'none' &&
+    (apiKeySource === null || apiKeySource === 'none')
     ? new AgentSessionAcquisitionRefusal(
         'Claude is not signed in for the selected account. Sign in with the Claude CLI for this CLAUDE_CONFIG_DIR, then retry.',
         'notSignedIn'
@@ -81,11 +84,16 @@ export function claudeInitializationAuthError(
 }
 
 export function claudeAuthDiagnostic(
-  init: ClaudeInitObservation,
+  initialization: unknown,
+  init: ClaudeInitObservation | null,
   settings: unknown
 ): ClaudeAuthDiagnostic {
   const env = isRecord(settings) && isRecord(settings.env) ? settings.env : {}
-  const apiKeySource = readClaudeFrameString(init.message, 'apiKeySource')
+  const account =
+    isRecord(initialization) && isRecord(initialization.account) ? initialization.account : {}
+  const apiKeySource =
+    readClaudeFrameString(account, 'apiKeySource') ??
+    (init ? readClaudeFrameString(init.message, 'apiKeySource') : null)
   const configured = (key: string): boolean =>
     (typeof env[key] === 'string' && (env[key] as string).trim().length > 0) ||
     Boolean(process.env[key]?.trim())

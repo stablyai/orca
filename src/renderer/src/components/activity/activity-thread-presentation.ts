@@ -72,12 +72,20 @@ export function agentTitle(event: ActivityEvent): string {
     return 'Agent working'
   }
   if (event.state === 'done') {
-    const verdict = agentMainAgentVerdict(event.entry)
-    return verdict === 'failure'
-      ? 'Agent failed'
-      : verdict === 'cancellation'
-        ? 'Agent interrupted'
-        : 'Agent finished'
+    switch (agentMainAgentVerdict(event.entry)) {
+      // A turn cut short by anything but the user is a fault, as a failure is.
+      case 'failure':
+      case 'interruption':
+        return 'Agent failed'
+      case 'cancellation':
+      case 'superseded':
+        return 'Agent interrupted'
+      case 'unconfirmed':
+        return 'Couldn’t confirm agent finished'
+      case 'success':
+      case null:
+        return 'Agent finished'
+    }
   }
   return event.state === 'waiting' ? 'Agent waiting for input' : 'Agent needs input'
 }
@@ -100,12 +108,19 @@ export function agentMeta(event: ActivityEvent): string {
     return `${agent} ${event.state}`
   }
   if (event.state === 'done') {
-    const verdict = agentMainAgentVerdict(event.entry)
-    return verdict === 'failure'
-      ? `${agent} failed`
-      : verdict === 'cancellation'
-        ? `${agent} interrupted`
-        : `${agent} completed`
+    switch (agentMainAgentVerdict(event.entry)) {
+      case 'failure':
+      case 'interruption':
+        return `${agent} failed`
+      case 'cancellation':
+      case 'superseded':
+        return `${agent} interrupted`
+      case 'unconfirmed':
+        return `${agent} unconfirmed`
+      case 'success':
+      case null:
+        return `${agent} completed`
+    }
   }
   return event.state === 'waiting' ? `${agent} waiting` : `${agent} blocked`
 }
@@ -140,14 +155,17 @@ export function activityThreadStatusId(thread: AgentPaneThread): ActivityThreadS
   if (thread.currentAgentEntry && agentVerdictDisplayMark(thread.currentAgentEntry) === 'failed') {
     return 'failed'
   }
-  const paneEntry = paneActivityEntry(thread)
   const state = threadCurrentState(thread) ?? 'done'
-  const verdictEntry = paneEntry ?? thread.latestEvent?.entry
+  const verdictEntry = threadVerdictEntry(thread)
   const verdictDot = verdictEntry ? agentVerdictDisplayMark(verdictEntry) : null
   if (!thread.currentAgentState && state === 'done' && verdictDot) {
     return verdictDot
   }
   return state
+}
+
+function threadVerdictEntry(thread: AgentPaneThread): AgentStatusEntry | undefined {
+  return paneActivityEntry(thread) ?? thread.latestEvent?.entry
 }
 
 // Why the pane's row: an answered ask's done predates the blocked event, and a clear can hide it.
@@ -166,12 +184,6 @@ function threadCurrentState(
     thread.latestEvent?.state ??
     null
   )
-}
-
-// Interrupted rows deliberately keep the done glyph (#2569); a failure is a fault and does not.
-export function threadAgentState(thread: AgentPaneThread): AgentDotState {
-  const id = activityThreadStatusId(thread)
-  return id === 'interrupted' ? 'done' : id
 }
 
 export function threadAgentStateLabel(thread: AgentPaneThread): string {
@@ -204,6 +216,11 @@ export function threadAgentStateLabel(thread: AgentPaneThread): string {
       return translate(
         'auto.components.activity.ActivityPrototypePage.state.unverifiable',
         'No recent update'
+      )
+    case 'unconfirmed':
+      return translate(
+        'auto.components.activity.ActivityPrototypePage.state.unconfirmed',
+        'Couldn’t confirm'
       )
     case 'permission':
       return translate(
@@ -243,7 +260,7 @@ export function activityThreadRowCopy(thread: AgentPaneThread): ActivityThreadRo
   })
   const liveState = threadCurrentState(thread)
   const toolPreviewState = liveState === 'monitoring' ? null : liveState
-  const state = threadAgentState(thread)
+  const state = activityThreadStatusId(thread)
   const needsAttention = state === 'waiting' || state === 'blocked' || state === 'permission'
   if (renderedPreview && !previewDuplicatesIdentity(renderedPreview, taskTitle, workspaceLabel)) {
     return {

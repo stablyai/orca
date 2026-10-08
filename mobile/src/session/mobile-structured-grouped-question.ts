@@ -122,6 +122,7 @@ export function projectGroupedQuestion(
     ...(optionDescriptions.some(Boolean) ? { optionDescriptions } : {}),
     multiSelect: question.multiSelect,
     allowOther: Boolean(question.freeTextQuestionId),
+    ...(question.freeTextInput ? { freeTextInput: question.freeTextInput } : {}),
     optionTokens: question.options.map((option) =>
       encodeGroupedToken({
         kind: 'option',
@@ -155,11 +156,12 @@ function answerFromResponse(
     const trimmed = part.trim()
     const freeText = decodeGroupedFreeTextAnswer(trimmed)
     if (freeText) {
-      const answer = freeText.answer.trim()
+      const allowEmpty = question.freeTextInput?.allowEmpty === true
+      const answer = allowEmpty ? freeText.answer : freeText.answer.trim()
       if (
         freeText.promptKey !== promptKey ||
         freeText.questionId !== question.id ||
-        answer.length === 0 ||
+        (answer.length === 0 && !allowEmpty) ||
         other !== undefined
       ) {
         return null
@@ -182,14 +184,14 @@ function answerFromResponse(
   if (optionIds.some((optionId) => !offered.has(optionId))) {
     return null
   }
-  if (other && !question.freeTextQuestionId) {
+  if (other !== undefined && !question.freeTextQuestionId) {
     return null
   }
-  const answerCount = optionIds.length + (other ? 1 : 0)
+  const answerCount = optionIds.length + (other !== undefined ? 1 : 0)
   if (answerCount === 0 || (!question.multiSelect && answerCount !== 1)) {
     return null
   }
-  return { questionId: question.id, optionIds, ...(other ? { other } : {}) }
+  return { questionId: question.id, optionIds, ...(other !== undefined ? { other } : {}) }
 }
 
 /**

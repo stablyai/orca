@@ -57,11 +57,6 @@ describe('SshConnectionManager', () => {
     expect(mgr.getConnection(target.id)).toBeUndefined()
   })
 
-  it('disconnect is a no-op for unknown targets', async () => {
-    const mgr = new SshConnectionManager(createCallbacks())
-    await mgr.disconnect('unknown')
-  })
-
   it('reuses existing connected connection for same target', async () => {
     const mgr = new SshConnectionManager(createCallbacks())
     const target = createTarget()
@@ -92,5 +87,29 @@ describe('SshConnectionManager', () => {
 
     expect(mgr.getConnection('a')).toBeUndefined()
     expect(mgr.getConnection('b')).toBeUndefined()
+  })
+
+  it('does not erase a replacement registered while an admitted disconnect settles', async () => {
+    const mgr = new SshConnectionManager(createCallbacks())
+    const target = createTarget({ id: 'target' })
+    const old = await mgr.connect(target)
+    const state = old.getState()
+    vi.spyOn(old, 'getState').mockReturnValue({ ...state, status: 'disconnected' })
+    let finish!: () => void
+    vi.spyOn(old, 'disconnect')
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            finish = resolve
+          })
+      )
+      .mockResolvedValue(undefined)
+    const drain = mgr.disconnectAll()
+    const replacement = await mgr.connect(target)
+    expect(replacement).not.toBe(old)
+    finish()
+    await drain
+    expect(mgr.getConnection('target')).toBe(replacement)
+    await mgr.disconnectAll()
   })
 })

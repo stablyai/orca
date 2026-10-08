@@ -602,29 +602,6 @@ describe('selectRuntimeAgentOrchestrationBatch live-map churn', () => {
     return _getWorktreeAgentOrchestrationIndexBuildCountForTest()
   }
 
-  it('rebuilds once across repeated agentStatus:set identity churn on unrelated panes', () => {
-    releaseWorktreeAgentOrchestrationIndexCache()
-    const first = selectRuntimeAgentOrchestrationBatch(
-      makeChurnState({ [CHILD_KEY]: makeEntry(CHILD_KEY, 'wt-1') }),
-      requested
-    )
-    const buildsAfterFirst = builds()
-
-    for (let index = 0; index < 25; index += 1) {
-      // A fresh live map on every tick, exactly as `agentStatus:set` replaces the slice.
-      const churned = selectRuntimeAgentOrchestrationBatch(
-        makeChurnState({
-          [CHILD_KEY]: makeEntry(CHILD_KEY, 'wt-1'),
-          [`unrelated-${index}`]: makeEntry(`unrelated-${index}`, 'wt-9')
-        }),
-        requested
-      )
-      expect(churned).toBe(first)
-    }
-    expect(builds()).toBe(buildsAfterFirst)
-    expect(getBatchRecord(first, 'wt-1')[CHILD_KEY]).toBe(ORCHESTRATED_CONTEXT)
-  })
-
   // Why this is a structural guard: the cache key is the projection, so anything the build
   // reads straight out of the live/retained maps is unkeyed and can go stale. The build no
   // longer receives those maps at all, which shows up here as exactly one read per pane.

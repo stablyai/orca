@@ -31,7 +31,6 @@ export type PtyRuntimeControllerDeps = {
     providerSession?: AgentProviderSessionMetadata
     target: CodexAccountSelectionTarget
     launchEnv?: NodeJS.ProcessEnv
-    workspacePath?: string
   }) => PreparedCodexResumeHome | null
   resolveCodexResumeLaunch: (
     command: string | undefined,

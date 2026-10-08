@@ -16,6 +16,10 @@ export type GitExecOptions = {
   stdin?: string
   env?: NodeJS.ProcessEnv
   signal?: AbortSignal
+  /** Cancels admission only; a running child still finishes. */
+  admissionSignal?: AbortSignal
+  /** Rechecks owner eligibility after admission, before starting the child. */
+  canStart?: () => boolean
   wslDistro?: string
   preferWslDirectGit?: boolean
   useConfiguredSshCommandForNetwork?: boolean
@@ -23,4 +27,6 @@ export type GitExecOptions = {
   captureWslLoginShellOutput?: boolean
   /** Scheduler priority for this child; status is the safe default. */
   admissionTier?: GitAdmissionTier
+  /** Skips general admission; only for a caller that bounds its own concurrency (worktree deletes). */
+  admissionExempt?: true
 }

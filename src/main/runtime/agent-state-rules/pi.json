@@ -1,0 +1,22 @@
+{
+  "id": "pi",
+  "engineVersion": 1,
+  "profile": { "hooks": "authoritative" },
+  "anchors": [
+    {
+      "id": "idle_title",
+      "why": "Pi, and OMP after it, title the pane `π - <session>` at rest (`π ⠋ <session>` while working).",
+      "when": { "region": "title", "match": { "regex": "^π - " } },
+      "answer": { "state": "idle" }
+    }
+  ],
+  "rules": [
+    {
+      "id": "idle_title",
+      "why": "Orca writes an explicit `Pi ready` title at rest, while a shell auto-title names Pi from launch, mid-turn too, so a bare name counts only once quiet (#6011).",
+      "priority": 100,
+      "when": { "region": "title", "status": "idle" },
+      "answer": { "state": "idle", "strength": "weak", "requiresQuiet": true }
+    }
+  ]
+}

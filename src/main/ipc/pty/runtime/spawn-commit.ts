@@ -30,6 +30,7 @@ import { resolvePaneSpawnReservation } from '../pane/spawn-reservation'
 import { admitProviderReattachLaunchIdentity } from '../pane/launch-authority'
 import { spawnCommitBindingOrigin } from '../../../persistence/loading-store/pty-binding-span'
 import type { RuntimePtySpawnState } from './spawn-state'
+import { commitPtyWithOpenCodePromptIntent } from '../../../opencode/opencode-startup-prompt-owner'
 import {
   admitPtyReattachOwnership,
   discardUnpersistedPtySpawn,
@@ -37,6 +38,10 @@ import {
 } from '../pane/spawn-registration'
 
 export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
+  return commitPtyWithOpenCodePromptIntent(ctx, () => commitReservedRuntimePtySpawn(ctx))
+}
+
+async function commitReservedRuntimePtySpawn(ctx: RuntimePtySpawnState) {
   const args = ctx.args
   admitPtyReattachOwnership(ctx.deps.runtime, ctx.result, args.connectionId)
   const providerReattachLaunchIdentity = admitProviderReattachLaunchIdentity(ctx.result)
@@ -66,7 +71,7 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
       throw error
     }
     console.error('[pty] failed to persist runtime PTY binding after attach:', error)
-    throw Object.assign(new Error(createTerminalSessionStateSaveFailureMessage()), {
+    throw Object.assign(new Error(createTerminalSessionStateSaveFailureMessage(error)), {
       agentSessionOperationOutcome: 'unknown' as const
     })
   }
@@ -132,7 +137,8 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
   }
   if (ctx.hostSessionBinding && !ctx.stablePaneBindingPersisted) {
     try {
-      const { store, worktreeId, tabId, leafId, expectedSourceBinding } = ctx.hostSessionBinding
+      const { store, worktreeId, tabId, leafId, expectedSourceBinding, placement } =
+        ctx.hostSessionBinding
       const binding = {
         worktreeId,
         tabId,
@@ -142,6 +148,7 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
         ...(ctx.result.incarnationId ? { incarnationId: ctx.result.incarnationId } : {}),
         ...(ctx.cwd ? { startupCwd: ctx.cwd } : {}),
         ...(expectedSourceBinding ? { expectedSourceBinding } : {}),
+        ...(placement ? { placement } : {}),
         origin: spawnCommitBindingOrigin(ctx.result, expectedSourceBinding)
       }
       const persisted = args.connectionId
@@ -156,7 +163,7 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
       if (err instanceof Error && err.message === 'terminal_split_source_not_found') {
         throw err
       }
-      throw Object.assign(new Error(createTerminalSessionStateSaveFailureMessage()), {
+      throw Object.assign(new Error(createTerminalSessionStateSaveFailureMessage(err)), {
         agentSessionOperationOutcome: 'unknown' as const
       })
     }
@@ -205,6 +212,7 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
   if (ctx.result.incarnationId) {
     ptyIncarnationById.set(ctx.result.id, ctx.result.incarnationId)
   }
+
   claimSshPaneLease({
     store: ctx.deps.store,
     connectionId: args.connectionId,
@@ -223,7 +231,6 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
     isReattach: ctx.result.isReattach === true,
     pinnedByResume: ctx.codexResumeHomeSelected,
     launchCodexHomePath: ctx.selectedCodexHomePath,
-    launchEnv: args.env,
     target: ctx.codexSelectionTarget,
     settings: ctx.deps.getSettings?.()
   })

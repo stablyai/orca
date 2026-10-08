@@ -1,4 +1,5 @@
 import { createDrainMigrationRowLookup } from './drain-migration-row-lookup.js'
+import { HeapWindowReaper } from './heap-window-reaper.js'
 import {
   selectIdleRegionalRehomes,
   type IdleRegionalRehomeCandidate,
@@ -65,9 +66,11 @@ import {
   type ControlRenewalRequest
 } from './control-renewal-statement.js'
 import {
+  commitWithFinalWrite,
   REGIONAL_REHOME_DEFAULT_HOST_COOLDOWN_MS
 } from './database.js'
 import type { RelayCellConfig } from './config.js'
+import type { CellLockHoldSite } from './cell-inventory-hold-samples.js'
 import type {
   RelayDatabase,
   RelayLockOptions,
@@ -77,10 +80,13 @@ import type {
 import type { RegionalRehomeSafetySnapshot } from './relay-observability.js'
 import {
   combineRegionalRehomeSafety,
+  nextRegionalRehomeSqlFailuresBreach,
   REGIONAL_REHOME_RECONNECTS_PER_CELL_LIMIT,
   REGIONAL_REHOME_SQL_FAILURES_PER_CELL_LIMIT,
   regionalRehomePoolPressure,
-  regionalRehomeSafetyFailure
+  regionalRehomeSafetyFailure,
+  regionalRehomeSqlFailuresSustained,
+  type RegionalRehomeSqlFailuresBreach
 } from './regional-rehome-safety.js'
 import {
   REGIONAL_REHOME_ARRIVAL_WINDOW_MS,
@@ -135,6 +141,10 @@ export type RelayAssignment = AssignmentIdentity & {
   leaseExpiresAt: number
   region?: RelayRegion
 }
+
+// Set only by reconnect verification, for a host whose home cell is isolated for
+// a roll right now: its next assign re-places it rather than re-granting the pin.
+export type ResolvedRelayAssignment = RelayAssignment & { homeCellRollIsolated?: true }
 
 export type RelayRegionCatalogEntry = {
   region: RelayRegion
@@ -350,6 +360,15 @@ const ACTIVITY_REQUEST_UNITS: Record<AssignmentActivityKind, number> = {
 }
 
 const ASSIGNMENT_LOCK_RETRY_DEADLINE_MS = 15_000
+// Clamped at zero on release; an increase that would pass capacity changes no row.
+const CELL_RESERVATION_UPDATE = `UPDATE relay_cells SET reserved_requests =
+     CASE WHEN reserved_requests + ? < 0 THEN 0 ELSE reserved_requests + ? END,
+     updated_at = ?
+   WHERE cell_id = ?
+     AND (? <= 0 OR reserved_requests + ? <= capacity_requests)
+   RETURNING cell_id`
+// About one release round trip from Asia, with margin; see assignStickyOnce.
+const STICKY_ASSIGNMENT_ROW_WAIT_MS = 1_000
 
 // THE ROW LOCK ORDER. Every transaction that takes more than one of these
 // takes them in this order, whichever role it runs on:
@@ -426,12 +445,28 @@ const REGIONAL_REHOME_QUARANTINE_MEMORY_LIMIT = 1_000
 const REGIONAL_REHOME_FAILURE_BUDGET = 3
 const REGIONAL_REHOME_OBSERVATION_MS = 24 * 60 * 60_000
 const ASSIGNMENT_LOCK_RETRY_MAX_DELAY_MS = 50
-type AssignmentInventoryScope = 'none' | 'general' | 'all'
+// 'isolated' and 'isolated-other-regions': the general rows a roll-isolated
+// incumbent can move to, its own region first, never its own row. The source
+// row is the one a drain's releases keep busy.
+type AssignmentInventoryScope =
+  | 'none'
+  | 'general'
+  | 'isolated'
+  | 'isolated-other-regions'
+  | 'all'
+type IsolatedReplacementTier = 'same-region' | 'other-regions'
 type RetriedAssignmentInventoryScope = Exclude<AssignmentInventoryScope, 'none'>
 
 class AssignmentInventoryLockUnavailable extends Error {
   constructor(readonly inventoryScope: RetriedAssignmentInventoryScope) {
     super('database_lock_unavailable')
+  }
+}
+
+// Postgres holds row locks to COMMIT, so the next tier needs a new transaction.
+class AssignmentIsolatedTierExhausted extends Error {
+  constructor() {
+    super('assignment_isolated_tier_exhausted')
   }
 }
 
@@ -451,6 +486,16 @@ export type RelayHomeCellUnavailableCause =
   | 'unheard'
   | 'not_ready'
 
+// The host's own row is held, almost always by that host's release on its old
+// cell, which sits queued on that cell's busy row. Waiting here would hold the
+// director's single sticky slot for the length of that queue, so the dial is
+// refused at once and the host redials after the release has settled.
+export class RelayAssignmentRowBusyError extends Error {
+  constructor() {
+    super('relay_assignment_row_busy')
+  }
+}
+
 export class RelayHomeCellUnavailableError extends Error {
   constructor(
     readonly cellId: string,
@@ -466,6 +511,19 @@ export class RelayHomeCellUnavailableError extends Error {
 // never return otherwise starves connection headroom fleet-wide and turns
 // every placement into relay_capacity_exhausted.
 const LATE_ARRIVAL_DEBT_RETENTION_MS = 10 * 60 * 1_000
+// A released reservation is read by nothing: every reader filters it out by state, and the only
+// statement that still touches it is the per-host lock, which just makes that lock set longer. A day
+// is margin for forensics, not for reads.
+export const RELEASED_CONTROL_RESERVATION_RETENTION_MS = 24 * 60 * 60 * 1_000
+// ~27 rows per page, so a statement deletes a few hundred rows at most. With ~9 director ticks a
+// minute the row cap is ~5M rows a day: the 13.7M-row backlog drains over about three days, and a
+// walk that finds nothing reads ~1 MB a tick.
+const RELEASED_CONTROL_RESERVATION_REAP_BUDGET = {
+  pagesPerStatement: 16,
+  maxPagesPerTick: 128,
+  maxRowsPerTick: 400,
+  budgetMs: 250
+}
 const CELL_FENCE_TTL_MS = 5 * 60 * 1_000
 const CELL_FENCE_ATTEMPT_TTL_MS = 60 * 60 * 1_000
 const CELL_DRAIN_SEND_PERMIT_MS = 30_000
@@ -509,6 +567,11 @@ export class RelayAssignmentStore {
   private readonly admissionSelector: RelayCellAdmissionSelector
   private readonly migrationCellRegistrar: RelayMigrationCellRegistrar
   private readonly activityQueue = new AssignmentIdentityQueue()
+  private readonly releasedReservationReaper = new HeapWindowReaper(
+    'relay_control_connection_reservations',
+    `state = 'released' AND released_at <= ?`,
+    RELEASED_CONTROL_RESERVATION_REAP_BUDGET
+  )
   private assignmentTail: Promise<void> = Promise.resolve()
 
   constructor(
@@ -702,6 +765,10 @@ export class RelayAssignmentStore {
           inventoryScope = 'all'
           continue
         }
+        if (error instanceof AssignmentIsolatedTierExhausted) {
+          inventoryScope = 'isolated-other-regions'
+          continue
+        }
         if (
           !(error instanceof AssignmentInventoryLockUnavailable) ||
           Date.now() >= deadline
@@ -743,24 +810,41 @@ export class RelayAssignmentStore {
       // order placement uses. It only ever needs the one cell this host is
       // pinned to, so read the pin unlocked and lock that row alone; taking all
       // 23 queued every sticky refresh in the fleet behind every other one.
-      const pinnedCellId = inventoryFirst
-        ? await this.pinnedCellId(transaction, identity)
-        : undefined
+      const pinnedCellId = await this.pinnedCellId(transaction, identity)
       const lockedCells =
-        pinnedCellId === undefined
+        !inventoryFirst || pinnedCellId === undefined
           ? undefined
           : await this.lockCellRows(transaction, [pinnedCellId], lockMode)
-      const existing = await this.assignmentRow(transaction, identity, inventoryFirst)
+      // One read serves the wait policy, the stranded rule and the roll-isolation
+      // check below; issuing it twice inside one sticky transaction is waste.
+      const unlockedAdmission =
+        pinnedCellId === undefined
+          ? undefined
+          : await this.pinnedCellAdmission(transaction, pinnedCellId)
+      // Why wait at all: a calm host redialling after its own clean close meets
+      // its own release, and a refusal costs it the client's 5 s assign gate. On
+      // a live general cell that release is short, so a bounded wait is cheap.
+      // A roll, drain or dead cell keeps its release queued, so refuse at once.
+      // Never while holding the cell row: that reverses the lock order against
+      // this host's own release, which holds its row and wants the cell's.
+      const pinIsLiveGeneral =
+        lockedCells === undefined &&
+        pinnedCellId !== undefined &&
+        unlockedAdmission?.state === 'general' &&
+        (await this.cellIsLive(transaction, pinnedCellId, now))
+      const existing = await this.assignmentRowOrBusy(
+        transaction,
+        identity,
+        pinIsLiveGeneral ? STICKY_ASSIGNMENT_ROW_WAIT_MS : undefined
+      )
       if (!existing) return null
       const activityLeases = await this.lockAssignmentActivities(transaction, identity, true)
       await this.recordRegionPreference(transaction, identity, preferredRegion, now)
       if (mayNormallyReassign(activity(existing), now)) return null
-      // One read serves the stranded rule and the roll-isolation check below;
-      // issuing it twice inside one sticky transaction is pure waste.
-      const pinnedAdmission = await this.pinnedCellAdmission(
-        transaction,
-        text(existing, 'cell_id')
-      )
+      const pinnedAdmission =
+        text(existing, 'cell_id') === pinnedCellId
+          ? unlockedAdmission
+          : await this.pinnedCellAdmission(transaction, text(existing, 'cell_id'))
       // Why: a stranded host must fall through to placement — re-granting the
       // pinned cell here is what refreshes its own activity and sustains the
       // loop (issue #225).
@@ -776,10 +860,29 @@ export class RelayAssignmentStore {
         return null
       }
 
+      // Why: a null here means "fall through to placement", which is exactly
+      // what an isolated incumbent needs — and the only way out, because
+      // re-granting the pin refreshes the host's own activity and sustains the
+      // loop. The placement lane re-places it on a cell that will take it.
+      // Decided before the pinned cell row is touched: during a drain that row
+      // is the one the cell's releases keep busy.
+      if (
+        await this.incumbentCellIsolatedForRoll(
+          transaction,
+          identity,
+          existing,
+          now,
+          undefined,
+          pinnedAdmission
+        )
+      ) {
+        return null
+      }
+
       const currentCellId = text(existing, 'cell_id')
       // The pin moved between the unlocked read and the assignment lock, so the
       // row held is the wrong one. Same recovery as losing the lock: retry.
-      if (pinnedCellId !== undefined && pinnedCellId !== currentCellId) {
+      if (lockedCells && pinnedCellId !== currentCellId) {
         throw new Error('database_lock_unavailable')
       }
       const hadControl = holdsControlLease(
@@ -809,23 +912,6 @@ export class RelayAssignmentStore {
       ) {
         return null
       }
-      // Why: a null here means "fall through to placement", which is exactly
-      // what an isolated incumbent needs — and the only way out, because
-      // re-granting the pin refreshes the host's own activity and sustains the
-      // loop. The placement lane re-places it on a cell that will take it.
-      if (
-        await this.incumbentCellIsolatedForRoll(
-          transaction,
-          identity,
-          existing,
-          now,
-          undefined,
-          pinnedAdmission
-        )
-      ) {
-        return null
-      }
-
       if (
         !hadControl &&
         !(await this.cellHasConnectionHeadroom(transaction, currentCellId))
@@ -924,8 +1010,10 @@ export class RelayAssignmentStore {
     placementRegion: RelayRegion = preferredRegion ?? RELAY_DEFAULT_REGION
   ): Promise<RelayAssignment> {
     const now = this.now()
+    // An isolated retry takes its tier's rows before anything reassigns this,
+    // so a lock timeout there must retry the same tier, not fall to 'all'.
     let retryScope: RetriedAssignmentInventoryScope =
-      inventoryScope === 'all' ? 'all' : 'general'
+      inventoryScope === 'none' ? 'general' : inventoryScope
     // Why the events ride back out rather than being written where they are
     // decided: everything below runs in one transaction, and a reservation or
     // lease write that fails after the decision rolls the placement back. A
@@ -938,19 +1026,35 @@ export class RelayAssignmentStore {
       // The retry paths below open with the inventory, so this path takes its
       // host rows before any of them rather than where the others do.
       await this.lockControlConnectionReservations(transaction, identity, lockMode)
+      const isolatedTier: IsolatedReplacementTier =
+        inventoryScope === 'isolated-other-regions' ? 'other-regions' : 'same-region'
+      const isolatedScope = inventoryScope === 'isolated' || inventoryScope === 'isolated-other-regions'
+      const isolatedRetrySource = isolatedScope
+        ? await this.pinnedCellId(transaction, identity)
+        : undefined
       let lockedCells =
         inventoryScope === 'all'
           ? await this.lockCellInventory(transaction, lockMode)
           : inventoryScope === 'general'
             ? await this.lockGeneralCellInventory(transaction, lockMode)
-            : undefined
-      const existing = await this.assignmentRow(
-        transaction,
-        identity,
-        inventoryScope !== 'none'
-      )
-      retryScope = existing ? 'all' : 'general'
-      if (inventoryScope === 'general' && existing) {
+            : isolatedScope
+              ? await this.lockIsolatedReplacementCells(
+                  transaction,
+                  isolatedRetrySource,
+                  isolatedTier,
+                  lockMode
+                )
+              : undefined
+      const existing = await this.assignmentRowOrBusy(transaction, identity)
+      // A dormant host holds no units, so its placement never writes its old
+      // cell and needs only the rows it could land on.
+      const dormant = !existing || mayNormallyReassign(activity(existing), now)
+      retryScope = dormant ? 'general' : isolatedScope ? inventoryScope : 'all'
+      if (
+        (inventoryScope === 'general' && !dormant) ||
+        (isolatedScope &&
+          (!existing || dormant || text(existing, 'cell_id') !== isolatedRetrySource))
+      ) {
         throw new AssignmentInventoryScopeChanged()
       }
       const activityLeases = await this.lockAssignmentActivities(transaction, identity, true)
@@ -960,7 +1064,46 @@ export class RelayAssignmentStore {
       let strandedReassignment = false
       let isolatedIncumbent: CellRow | undefined
       let isolatedTarget: CellRow | undefined
-      if (existing && !mayNormallyReassign(activity(existing), now)) {
+      // Set when only the target rows are locked. The old cell's row is never
+      // written then, so the host must hold no units that no lease backs.
+      // Counters below the leases (drift the old reset left) are fine: the
+      // write below rebuilds them from the leases.
+      let sourceRowSkipped = false
+      if (existing && !dormant && inventoryScope !== 'all') {
+        // Unlocked on purpose: this only chooses which rows to lock. A restore
+        // racing it lets one host move off a cell that no longer needed it.
+        if (
+          requestUnits(existing) <= leaseRequestUnits(activityLeases) &&
+          (await this.isolatedIncumbentMayMove(transaction, identity, existing, now))
+        ) {
+          const source = await this.unlockedCell(transaction, text(existing, 'cell_id'))
+          retryScope = isolatedTier === 'same-region' ? 'isolated' : 'isolated-other-regions'
+          lockedCells ??= await this.lockIsolatedReplacementCells(
+            transaction,
+            source.cellId,
+            isolatedTier,
+            'nowait'
+          )
+          isolatedTarget =
+            (await this.leastLoadedCell(
+              transaction,
+              lockedCells,
+              source.region,
+              isolatedTier === 'same-region' ? 'require' : 'prefer'
+            )) ?? undefined
+          // Same region full: try the other regions. All full: decide under the
+          // all-rows lock, which keeps the pin as before.
+          if (!isolatedTarget) {
+            if (isolatedTier === 'same-region') throw new AssignmentIsolatedTierExhausted()
+            throw new AssignmentInventoryScopeChanged()
+          }
+          isolatedIncumbent = source
+          sourceRowSkipped = true
+        } else if (isolatedScope) {
+          throw new AssignmentInventoryScopeChanged()
+        }
+      }
+      if (existing && !dormant && !sourceRowSkipped) {
         lockedCells ??= await this.lockCellInventory(transaction, 'nowait')
         const admission = await cellAdmissionStates(transaction)
         const currentRow = lockedCells.find(
@@ -1006,9 +1149,9 @@ export class RelayAssignmentStore {
           if (isolatedTarget) {
             isolatedIncumbent = current
           } else {
-            // Keeping the pin is today's behaviour: the host keeps retrying its
-            // own cell. Scattering a region across the fleet is worse, and it
-            // cannot be undone without the rehome worker.
+            // Keep the pin: the host retries its own cell. The narrowed path
+            // has already tried every region, or declined because the host
+            // holds units no lease backs; the reason string is a log contract.
             events.push(
               JSON.stringify({
                 event: 'orca_relay_sticky_replacement_deferred',
@@ -1089,9 +1232,8 @@ export class RelayAssignmentStore {
         }
       }
 
-      lockedCells ??= existing
-        ? await this.lockCellInventory(transaction, 'nowait')
-        : await this.lockGeneralCellInventory(transaction, 'nowait')
+      // Only a host with no assignment or a dormant one reaches here unlocked.
+      lockedCells ??= await this.lockGeneralCellInventory(transaction, 'nowait')
       // The isolated target was chosen under the same inventory lock, with
       // region required rather than preferred; re-picking here would reopen the
       // cross-region spill it exists to refuse.
@@ -1113,14 +1255,25 @@ export class RelayAssignmentStore {
           })
         )
       }
-      const previousUnits = existing ? requestUnits(existing) : 0
+      // Units come off the cell that holds them. A lease this placement deletes
+      // frees its units on its own cell; a lease it keeps stays counted until
+      // its own release or expiry. Only units no lease backs are charged to
+      // the old cell, which is locked whenever there are any.
+      const deletesLeases = forcedDeadReassignment || strandedReassignment
+      const keptLeases = deletesLeases ? [] : activityLeases
       if (existing) {
-        await this.adjustCellReservation(transaction, text(existing, 'cell_id'), -previousUnits)
-        if (forcedDeadReassignment || strandedReassignment) {
+        const unbackedUnits = requestUnits(existing) - leaseRequestUnits(activityLeases)
+        if (unbackedUnits > 0) {
+          await this.adjustCellReservation(transaction, text(existing, 'cell_id'), -unbackedUnits)
+        }
+        if (deletesLeases) {
           // A fenced/dead incarnation cannot own drainable work, and a
           // stranded host's only leases are the unclaimed grant artifacts of
           // its own loop. Removing them prevents late expiry from
           // decrementing the replacement.
+          for (const [cellId, units] of leaseUnitsByCell(activityLeases)) {
+            await this.adjustCellReservation(transaction, cellId, -units)
+          }
           await transaction.query(
             `DELETE FROM relay_assignment_activity_leases
              WHERE user_id = ? AND relay_host_id = ?`,
@@ -1130,6 +1283,9 @@ export class RelayAssignmentStore {
       }
       await this.adjustCellReservation(transaction, target.cellId, 1)
       const assignmentEpoch = existing ? integer(existing, 'assignment_epoch') + 1 : 1
+      // Counters follow the leases the host still holds, plus the new control.
+      const counts = activityCounts(keptLeases)
+      counts.control += 1
       const leaseExpiresAt = now + ASSIGNMENT_LIMITS.activityLeaseMs
       await transaction.query(
         `INSERT INTO relay_assignments
@@ -1153,14 +1309,18 @@ export class RelayAssignmentStore {
           identity.relayHostId,
           target.cellId,
           assignmentEpoch,
-          leaseExpiresAt,
+          // Not before a kept lease expires: aggregate expiry keys off this.
+          Math.max(
+            leaseExpiresAt,
+            ...keptLeases.map((lease) => integer(lease, 'expires_at'))
+          ),
           now,
-          1,
-          0,
-          0,
-          0,
-          0,
-          0
+          counts.control,
+          counts.splice,
+          counts.invite,
+          counts.install,
+          counts.confirmation,
+          counts.migration
         ]
       )
       if (existing) {
@@ -1193,33 +1353,68 @@ export class RelayAssignmentStore {
     return outcome.assignment
   }
 
-  async resolve(identity: AssignmentIdentity): Promise<RelayAssignment | null> {
+  async resolve(
+    identity: AssignmentIdentity,
+    // Director reconnect verification only: the same read classifies a host whose
+    // home is roll-isolated, so the drain-return lane costs no extra query.
+    options: { classifyHomeRollIsolation?: boolean } = {}
+  ): Promise<ResolvedRelayAssignment | null> {
+    const classify = options.classifyHomeRollIsolation === true
     const rows = await this.database.query(
-      `SELECT assignment.*, cell.cell_url, region.region
+      `SELECT assignment.*, cell.cell_url, region.region${
+        classify
+          ? `, home_admission.admission_state AS home_admission_state,
+         home_admission.roll_isolated_at AS home_roll_isolated_at,
+         CASE WHEN home_admission.roll_isolated_at IS NULL THEN 0
+           WHEN EXISTS (
+             SELECT 1 FROM relay_assignment_migrations migration
+             WHERE migration.user_id = assignment.user_id
+               AND migration.relay_host_id = assignment.relay_host_id
+               AND migration.completed_at IS NULL AND migration.aborted_at IS NULL
+           ) THEN 1 ELSE 0 END AS home_open_migrations`
+          : ''
+      }
        FROM relay_assignments assignment
        JOIN relay_cells cell ON cell.cell_id = assignment.cell_id
-       LEFT JOIN relay_cell_regions region ON region.cell_id = cell.cell_id
+       LEFT JOIN relay_cell_regions region ON region.cell_id = cell.cell_id${
+         classify
+           ? `
+       LEFT JOIN relay_cell_admission home_admission
+         ON home_admission.cell_id = assignment.cell_id`
+           : ''
+       }
        WHERE assignment.user_id = ? AND assignment.relay_host_id = ?`,
       [identity.userId, identity.relayHostId]
     )
     const row = rows[0]
-    if (
-      row &&
-      this.requireLiveCells &&
-      !(await this.cellIsLive(this.database, text(row, 'cell_id'), this.now()))
-    ) {
+    const now = this.now()
+    if (!row) return null
+    if (this.requireLiveCells && !(await this.cellIsLive(this.database, text(row, 'cell_id'), now))) {
       return null
     }
-    return row
-      ? {
-          ...identity,
-          cellId: text(row, 'cell_id'),
-          cellUrl: text(row, 'cell_url'),
-          region: optionalRelayRegion(row, 'region') ?? RELAY_DEFAULT_REGION,
-          assignmentEpoch: integer(row, 'assignment_epoch'),
-          leaseExpiresAt: integer(row, 'lease_expires_at')
-        }
-      : null
+    const homeAdmissionState = row['home_admission_state']
+    return {
+      ...identity,
+      cellId: text(row, 'cell_id'),
+      cellUrl: text(row, 'cell_url'),
+      region: optionalRelayRegion(row, 'region') ?? RELAY_DEFAULT_REGION,
+      assignmentEpoch: integer(row, 'assignment_epoch'),
+      leaseExpiresAt: integer(row, 'lease_expires_at'),
+      ...(classify &&
+      isCellAdmissionState(homeAdmissionState) &&
+      // A migration owns this epoch; the sticky path keeps the pin, so it is not a drain return.
+      integer(row, 'migration_leases') === 0 &&
+      integer(row, 'home_open_migrations') === 0 &&
+      rollIsolationIsCurrent(
+        {
+          state: homeAdmissionState,
+          rollIsolatedAt: optionalInteger(row, 'home_roll_isolated_at')
+        },
+        now
+      )
+        ? { homeCellRollIsolated: true }
+        : {})
+    }
   }
 
   async setCellEnabled(cellId: string, enabled: boolean): Promise<void> {
@@ -2780,6 +2975,10 @@ export class RelayAssignmentStore {
   async evacuateDeadCells(limit = 100): Promise<number> {
     if (!this.requireLiveCells) return 0
     const cutoff = this.now() - this.heartbeatTtlMs
+    const cellIds = await this.deadCellEvacuationCandidates(cutoff)
+    // Why: without a candidate cell the host query below walks every assignment by primary key to
+    // return nothing (574 ms per call in production, from stale existing-only cells it can never act on).
+    if (cellIds.length === 0) return 0
     const rows = await this.database.query(
       `SELECT assignment.user_id, assignment.relay_host_id, assignment.cell_id
        FROM relay_assignments assignment
@@ -2842,8 +3041,9 @@ export class RelayAssignmentStore {
              AND fence.expires_at > ?
            )
          )
+         AND assignment.cell_id IN (${cellIds.map(() => '?').join(', ')})
        ORDER BY assignment.user_id, assignment.relay_host_id LIMIT ?`,
-      [1, cutoff, this.now(), this.now(), limit]
+      [1, cutoff, this.now(), this.now(), ...cellIds, limit]
     )
     let moved = 0
     for (const row of rows) {
@@ -2856,9 +3056,11 @@ export class RelayAssignmentStore {
         )
         if (assignment.cellId !== text(row, 'cell_id')) moved++
       } catch (error) {
-        // One unplaceable host must not end the sweep for the rest.
+        // One unplaceable or busy host must not end the sweep for the rest; a
+        // busy host is mid-release and the next tick takes it.
         if (
           !(error instanceof RelayHomeCellUnavailableError) &&
+          !(error instanceof RelayAssignmentRowBusyError) &&
           !(error instanceof Error && error.message === 'relay_capacity_exhausted')
         ) {
           throw error
@@ -2866,6 +3068,43 @@ export class RelayAssignmentStore {
       }
     }
     return moved
+  }
+
+  // The cell-level half of evacuateDeadCells' predicate, so it is a superset: every cell the host
+  // query could act on is here, and only the per-host pin checks are left out.
+  private async deadCellEvacuationCandidates(cutoff: number): Promise<string[]> {
+    const now = this.now()
+    const rows = await this.database.query(
+      `SELECT cell.cell_id
+       FROM relay_cells cell
+       LEFT JOIN relay_cell_committed_fences committed ON committed.cell_id = cell.cell_id
+       LEFT JOIN relay_cell_fence_attempts attempt ON attempt.attempt_id = committed.attempt_id
+       LEFT JOIN relay_cell_fences fence ON fence.cell_id = cell.cell_id
+       LEFT JOIN relay_cell_runtime runtime ON runtime.cell_id = cell.cell_id
+       WHERE (runtime.cell_id IS NULL OR runtime.ready != ? OR runtime.last_heartbeat_at <= ?)
+         AND (
+           (
+             cell.enabled = 1
+             AND NOT EXISTS (
+               SELECT 1 FROM relay_cell_connection_limits limits
+               WHERE limits.cell_id = cell.cell_id
+             )
+           )
+           OR (
+             cell.enabled = 0
+             AND attempt.completed_at IS NOT NULL
+             AND attempt.aborted_at IS NULL
+             AND committed.cell_incarnation = runtime.cell_incarnation
+             AND fence.cell_incarnation = committed.cell_incarnation
+             AND committed.attested_at >= runtime.last_heartbeat_at
+             AND committed.expires_at > ?
+             AND fence.expires_at > ?
+           )
+         )
+       ORDER BY cell.cell_id`,
+      [1, cutoff, now, now]
+    )
+    return rows.map((row) => text(row, 'cell_id'))
   }
 
   async configureCell(
@@ -3496,7 +3735,7 @@ export class RelayAssignmentStore {
         )
         // Keep the contended cell row locked for only the final write and commit.
         if (!existing) {
-          await this.adjustCellReservationAtomically(transaction, input.cellId, units)
+          await this.commitCellReservationAtomically(transaction, input.cellId, units)
         }
       })
     })
@@ -3519,6 +3758,7 @@ export class RelayAssignmentStore {
   }
 
   private idleRegionalCandidateCursor: IdleRehomeHostCursor = null
+  private regionalRehomeSqlFailuresBreach: RegionalRehomeSqlFailuresBreach = null
   private readonly regionalRehomePollTelemetry = new RegionalRehomePollTelemetry()
 
   async selectIdleRegionalRehomeCandidates(
@@ -3550,6 +3790,19 @@ export class RelayAssignmentStore {
       return gated('budget-closed')
     }
     const fleetSafety = await this.readRegionalRehomeFleetSafety(this.database, now)
+    const sqlBreach = nextRegionalRehomeSqlFailuresBreach(
+      this.regionalRehomeSqlFailuresBreach,
+      combineRegionalRehomeSafety(processSafety, fleetSafety).sqlFailures,
+      now
+    )
+    this.regionalRehomeSqlFailuresBreach = sqlBreach
+    // Source cells only pause on sql failures; the poll is the regular observer that latches.
+    if (sqlBreach && regionalRehomeSqlFailuresSustained(sqlBreach)) {
+      const event = await this.disableRegionalRehomeForSafety(this.database, now, 'sql_failures', fleetSafety)
+      if (event) console.warn(JSON.stringify({ ...event, sustainedMs: now - sqlBreach.since }))
+      this.regionalRehomeSqlFailuresBreach = null
+      return gated('fleet-safety')
+    }
     if (regionalRehomeFleetSafetyFailure(processSafety, fleetSafety, now)) return gated('fleet-safety')
     const startedAt = performance.now()
     const selection = await selectIdleRegionalRehomes({
@@ -3585,8 +3838,8 @@ export class RelayAssignmentStore {
       return { outcome: 'deferred', reason: 'cohort-closed' }
     }
     let safetyDisable: Record<string, string | number> | null = null
-    // Set on every fleet-safety failure, disable or not: the pause is durable
-    // and global either way, so no later candidate in this poll can get past it.
+    // Set on every fleet-safety failure, disable or not: the pause is global
+    // either way, so no later candidate in this poll can get past it.
     let safetyPaused = false
     let targetDeferral: RegionalRehomeTargetDeferral | null = null
     // Lock order: control, worker, host rows, then the target cell row alone,
@@ -3658,9 +3911,13 @@ export class RelayAssignmentStore {
          WHERE attempt_id = ?`, [now, request.attemptId]
       )
       // Must stay the last statement: the row is held from here to COMMIT.
-      const target = await this.reserveRegionalRehomeTargetRow(
-        transaction, attempt.targetCellId, attempt.targetReservedUnits, now
-      )
+      const target = await this.reserveRegionalRehomeTargetRow(transaction, {
+        identity: request,
+        assignmentEpoch: attempt.assignmentEpoch,
+        cellId: attempt.targetCellId,
+        units: attempt.targetReservedUnits,
+        now
+      })
       if (target !== 'reserved') {
         targetDeferral = target
         throw new RegionalRehomeTargetDeferred()
@@ -3976,7 +4233,7 @@ export class RelayAssignmentStore {
           now
         )
         // Release paths can safely defer the cell-row lock until their final write.
-        await this.adjustCellReservationAtomically(
+        await this.commitCellReservationAtomically(
           transaction,
           text(existing, 'cell_id'),
           -integer(existing, 'request_units')
@@ -4109,7 +4366,7 @@ export class RelayAssignmentStore {
         // trips. Holding its write lock from the first of them capped a
         // far-from-Postgres cell at a couple of accepts a second.
         if (reservationDelta !== 0) {
-          await this.adjustCellReservationAtomically(
+          await this.commitCellReservationAtomically(
             transaction,
             input.cellId,
             reservationDelta
@@ -5728,7 +5985,9 @@ export class RelayAssignmentStore {
       input.now
     )
     if (safetyFailure) {
-      input.onSafetyDisabled(await this.pauseRegionalRehomeForSafety(
+      // A sql spike alone is usually one DB stall: pause this claim and leave
+      // the latch to the director's sustained-breach check.
+      input.onSafetyDisabled(safetyFailure === 'sql_failures' ? null : await this.pauseRegionalRehomeForSafety(
         transaction,
         input.worker,
         input.now,
@@ -6021,12 +6280,21 @@ export class RelayAssignmentStore {
   // the statement, because an admission flip no longer serialises against this
   // transaction any other way. Locking the admission row too makes a flip that
   // committed after the statement's snapshot re-evaluate on its new version.
+  // Connection headroom is re-checked here too: the candidate read happened before this
+  // transaction's own reservation insert, and a placement may have reserved since. Every
+  // other reservation inserter holds this row first, so NOWAIT defers rather than races.
+  // The host's own reservation is excluded by key because the insert may have added none.
   private async reserveRegionalRehomeTargetRow(
     database: RelayDatabase,
-    cellId: string,
-    units: number,
-    now: number
+    input: {
+      identity: AssignmentIdentity
+      assignmentEpoch: number
+      cellId: string
+      units: number
+      now: number
+    }
   ): Promise<'reserved' | RegionalRehomeTargetDeferral> {
+    const { identity, cellId, units, now } = input
     const lockClause = database.dialect === 'sqlite' ? '' : 'FOR UPDATE OF cell, admission NOWAIT'
     try {
       const rows = await database.queryLocked(
@@ -6040,8 +6308,39 @@ export class RelayAssignmentStore {
          UPDATE relay_cells SET reserved_requests = reserved_requests + ?, updated_at = ?
          WHERE cell_id IN (SELECT cell_id FROM target)
            AND reserved_requests + ? <= capacity_requests
+           AND (
+             NOT EXISTS (SELECT 1 FROM relay_cell_connection_limits WHERE cell_id = ?)
+             OR EXISTS (
+               SELECT 1 FROM relay_cell_connection_limits limits
+               JOIN relay_cell_connection_snapshots snapshot ON snapshot.cell_id = limits.cell_id
+               JOIN relay_cell_runtime runtime ON runtime.cell_id = limits.cell_id
+               WHERE limits.cell_id = ?
+                 AND snapshot.snapshot_at > ?
+                 AND snapshot.cell_incarnation = runtime.cell_incarnation
+                 AND snapshot.enforced_connection_units
+                   + (SELECT COUNT(*) FROM relay_control_connection_reservations reservation
+                      WHERE reservation.cell_id = limits.cell_id
+                        AND reservation.state IN ('reserved', 'late-arrival-debt', 'claimed')
+                        AND NOT (reservation.user_id = ? AND reservation.relay_host_id = ?
+                          AND reservation.assignment_epoch = ?))
+                   + limits.unobserved_bound
+                   < limits.hard_cap - ?
+             )
+           )
          RETURNING cell_id`,
-        [cellId, units, now, units],
+        [
+          cellId,
+          units,
+          now,
+          units,
+          cellId,
+          cellId,
+          now - this.heartbeatTtlMs,
+          identity.userId,
+          identity.relayHostId,
+          input.assignmentEpoch,
+          RELAY_ADMISSION_BUDGETS.reservedHostControls
+        ],
         {
           failIfUnavailable: true,
           lockClauseInStatement: true,
@@ -6063,7 +6362,18 @@ export class RelayAssignmentStore {
     reason: string,
     fleetSafety: RegionalRehomeFleetSafety
   ): Promise<Record<string, string | number> | null> {
-    const disabled = await transaction.query(
+    const event = await this.disableRegionalRehomeForSafety(transaction, now, reason, fleetSafety)
+    await this.incrementRegionalRehomeWorkerFailure(transaction, worker, now)
+    return event
+  }
+
+  private async disableRegionalRehomeForSafety(
+    database: RelayDatabase,
+    now: number,
+    reason: string,
+    fleetSafety: RegionalRehomeFleetSafety
+  ): Promise<Record<string, string | number> | null> {
+    const disabled = await database.query(
       `UPDATE relay_region_rehome_control
        SET generation = generation + 1, enabled = 0, updated_at = ?
        WHERE control_id = 'global' AND enabled = 1
@@ -6073,27 +6383,23 @@ export class RelayAssignmentStore {
     // The durable disable is otherwise invisible: nothing else records why
     // claims stopped and inspection only shows enabled=false. Logged after
     // the transaction commits so a rollback cannot fabricate the record.
-    let event: Record<string, string | number> | null = null
-    if (disabled.length > 0) {
-      event = {
-        event: 'orca_relay_regional_rehome_safety_disabled',
-        reason,
-        controlGeneration: integer(disabled[0]!, 'generation'),
-        now,
-        requiredCells: fleetSafety.requiredCells,
-        missingCells: fleetSafety.missingCells,
-        observedAt: fleetSafety.observedAt,
-        sqlFailures: fleetSafety.sqlFailures,
-        reconnects: fleetSafety.reconnects,
-        maxReconnects: fleetSafety.maxReconnects,
-        controlActivityRecoveryFailures: fleetSafety.controlActivityRecoveryFailures,
-        databasePoolWaiting: fleetSafety.databasePoolWaiting,
-        databasePoolWaitersMax: fleetSafety.databasePoolWaitersMax,
-        databasePoolWaitMsMax: fleetSafety.databasePoolWaitMsMax
-      }
+    if (disabled.length === 0) return null
+    return {
+      event: 'orca_relay_regional_rehome_safety_disabled',
+      reason,
+      controlGeneration: integer(disabled[0]!, 'generation'),
+      now,
+      requiredCells: fleetSafety.requiredCells,
+      missingCells: fleetSafety.missingCells,
+      observedAt: fleetSafety.observedAt,
+      sqlFailures: fleetSafety.sqlFailures,
+      reconnects: fleetSafety.reconnects,
+      maxReconnects: fleetSafety.maxReconnects,
+      controlActivityRecoveryFailures: fleetSafety.controlActivityRecoveryFailures,
+      databasePoolWaiting: fleetSafety.databasePoolWaiting,
+      databasePoolWaitersMax: fleetSafety.databasePoolWaitersMax,
+      databasePoolWaitMsMax: fleetSafety.databasePoolWaitMsMax
     }
-    await this.incrementRegionalRehomeWorkerFailure(transaction, worker, now)
-    return event
   }
 
 
@@ -6992,6 +7298,12 @@ export class RelayAssignmentStore {
     return aborted
   }
 
+  async pruneReleasedControlReservations(): Promise<number> {
+    return await this.releasedReservationReaper.reap(this.database, [
+      this.now() - RELEASED_CONTROL_RESERVATION_RETENTION_MS
+    ])
+  }
+
   async releaseExpiredActivityLeases(): Promise<number> {
     const now = this.now()
     await this.database.query(
@@ -7075,10 +7387,17 @@ export class RelayAssignmentStore {
     const now = this.now()
     try {
       return await this.database.transaction(async (transaction) => {
+        // Only counters no lease backs. A host's leases can sit on more than
+        // one cell, and the lease sweep takes each one's units off its own.
         const expired = await transaction.queryLocked(
           `SELECT * FROM relay_assignments WHERE lease_expires_at <= ? AND
            (reserved_controls > 0 OR reserved_splices > 0 OR reserved_invites > 0 OR
             pending_installs > 0 OR pending_confirmations > 0 OR migration_leases > 0)
+           AND NOT EXISTS (
+             SELECT 1 FROM relay_assignment_activity_leases lease
+             WHERE lease.user_id = relay_assignments.user_id
+               AND lease.relay_host_id = relay_assignments.relay_host_id
+           )
            AND NOT EXISTS (
              SELECT 1 FROM relay_region_rehome_attempts rehome
              WHERE rehome.user_id = relay_assignments.user_id
@@ -7134,7 +7453,7 @@ export class RelayAssignmentStore {
     targetCellId: string
   ): Promise<void> {
     const now = this.now()
-    await this.database.transaction(async (transaction) => {
+    const drift = await this.database.transaction(async (transaction) => {
       // Reconciliation takes the same assignment→activity→cell order as live
       // mutations so correcting drift never races a credential or socket lease.
       const assignments = await transaction.queryLocked(
@@ -7186,6 +7505,18 @@ export class RelayAssignmentStore {
         [sourceCellId, targetCellId],
         'pool-default'
       )
+      // The counter is written as an absolute, so its units are read after the
+      // cell lock: a lease committed since the read above already bumped it.
+      const cellUnits = new Map(
+        (
+          await transaction.query(
+            `SELECT cell_id, SUM(request_units) AS units
+             FROM relay_assignment_activity_leases
+             WHERE cell_id IN (?, ?) GROUP BY cell_id`,
+            [sourceCellId, targetCellId]
+          )
+        ).map((row) => [text(row, 'cell_id'), integer(row, 'units')])
+      )
       const assignmentKeys = new Set(
         assignments.map((row) =>
           assignmentKey(text(row, 'user_id'), text(row, 'relay_host_id'))
@@ -7195,7 +7526,6 @@ export class RelayAssignmentStore {
         string,
         { counts: Record<AssignmentActivityKind, number>; leaseExpiresAt: number }
       >()
-      const cellUnits = new Map<string, number>()
 
       for (const lease of leases) {
         const key = assignmentKey(text(lease, 'user_id'), text(lease, 'relay_host_id'))
@@ -7211,7 +7541,6 @@ export class RelayAssignmentStore {
         current.counts[kind]++
         current.leaseExpiresAt = Math.max(current.leaseExpiresAt, integer(lease, 'expires_at'))
         assignmentCounts.set(key, current)
-        cellUnits.set(cellId, (cellUnits.get(cellId) ?? 0) + integer(lease, 'request_units'))
       }
 
       for (const row of assignments) {
@@ -7244,6 +7573,7 @@ export class RelayAssignmentStore {
         )
       }
 
+      const corrected: { cellId: string; reservedRequests: number; leaseUnits: number }[] = []
       for (const row of cells) {
         const cellId = text(row, 'cell_id')
         const expected = cellUnits.get(cellId) ?? 0
@@ -7255,8 +7585,18 @@ export class RelayAssignmentStore {
           `UPDATE relay_cells SET reserved_requests = ?, updated_at = ? WHERE cell_id = ?`,
           [expected, now, cellId]
         )
+        corrected.push({
+          cellId,
+          reservedRequests: integer(row, 'reserved_requests'),
+          leaseUnits: expected
+        })
       }
+      return corrected
     })
+    // Logged after COMMIT so a retried transaction reports each correction once.
+    for (const sample of drift) {
+      console.warn(JSON.stringify({ event: 'orca_relay_reservation_drift', ...sample }))
+    }
   }
 
   private async lockCellInventory(
@@ -7278,12 +7618,13 @@ export class RelayAssignmentStore {
   // row-lock order), keeps them off the fleet-wide lock without a cycle.
   // The wait policy follows the caller for the same reason the inventory lock's
   // does: a sweep must not fail terminally on ordinary contention. Hold time is
-  // deliberately not sampled here — the metric tracks the fleet-wide lock these
-  // rows replace, and mixing in short single-row holds would flatter it.
+  // sampled only for a caller that names its site: short single-row holds under
+  // the inventory label would flatter the fleet-wide lock they replace.
   private async lockCellRows(
     database: RelayDatabase,
     cellIds: string[],
-    mode: CellInventoryLockMode = 'request'
+    mode: CellInventoryLockMode = 'request',
+    holdSite?: CellLockHoldSite
   ): Promise<SqlRow[]> {
     const distinct = [...new Set(cellIds)]
     const { measureHoldMs: _sampled, ...wait } = cellInventoryLockOptions(mode)
@@ -7291,7 +7632,7 @@ export class RelayAssignmentStore {
       `SELECT * FROM relay_cells WHERE cell_id IN (${distinct.map(() => '?').join(', ')})
        ORDER BY cell_id ASC`,
       distinct,
-      wait
+      holdSite ? { ...wait, measureHoldMs: true, holdSite } : wait
     )
   }
 
@@ -7344,6 +7685,67 @@ export class RelayAssignmentStore {
     return rows
   }
 
+  // The rows a roll-isolated incumbent may move to in one tier: general cells
+  // in its own region, or in every other region, never its own. Placement
+  // re-reads admission and headroom under the lock.
+  private async lockIsolatedReplacementCells(
+    database: RelayDatabase,
+    sourceCellId: string | undefined,
+    tier: IsolatedReplacementTier,
+    mode: CellInventoryLockMode
+  ): Promise<SqlRow[]> {
+    if (sourceCellId === undefined) throw new AssignmentInventoryScopeChanged()
+    const candidates = await database.query(
+      `SELECT admission.cell_id FROM relay_cell_admission admission
+       LEFT JOIN relay_cell_regions region ON region.cell_id = admission.cell_id
+       WHERE admission.admission_state = 'general' AND admission.cell_id <> ?
+         AND COALESCE(region.region, ?) ${tier === 'same-region' ? '=' : '<>'} ?`,
+      [sourceCellId, RELAY_DEFAULT_REGION, await this.cellRegion(database, sourceCellId)]
+    )
+    if (candidates.length === 0) {
+      if (tier === 'same-region') throw new AssignmentIsolatedTierExhausted()
+      throw new AssignmentInventoryScopeChanged()
+    }
+    return await this.lockCellRows(
+      database,
+      candidates.map((row) => text(row, 'cell_id')),
+      mode,
+      'isolated-replacement'
+    )
+  }
+
+  // The same questions the all-rows path asks before moving an isolated
+  // incumbent, none of which needs a relay_cells lock.
+  private async isolatedIncumbentMayMove(
+    database: RelayDatabase,
+    identity: AssignmentIdentity,
+    existing: SqlRow,
+    now: number
+  ): Promise<boolean> {
+    const cellId = text(existing, 'cell_id')
+    const pinned = await this.pinnedCellAdmission(database, cellId)
+    if (await this.assignmentStrandedOnUnservedCell(database, identity, existing, now, pinned?.state)) {
+      return false
+    }
+    if (this.requireLiveCells && !(await this.cellIsLive(database, cellId, now))) return false
+    return await this.incumbentCellIsolatedForRoll(
+      database,
+      identity,
+      existing,
+      now,
+      undefined,
+      pinned
+    )
+  }
+
+  private async unlockedCell(database: RelayDatabase, cellId: string): Promise<CellRow> {
+    const row = (
+      await database.query(`SELECT * FROM relay_cells WHERE cell_id = ?`, [cellId])
+    )[0]
+    if (!row) throw new Error('assigned_cell_missing')
+    return cell(row, await this.cellRegion(database, cellId))
+  }
+
   private async leastLoadedCell(
     database: RelayDatabase,
     // Required: the one caller has already locked the inventory it selects from,
@@ -7351,9 +7753,8 @@ export class RelayAssignmentStore {
     rows: SqlRow[],
     preferredRegion: RelayRegion,
     // Ordinary placement treats region as a preference and spills globally
-    // rather than refuse a host a cell. Re-placing off an isolated cell is the
-    // one caller that must not: a whole region parked migration-only would send
-    // every one of its hosts to the fallback region, permanently.
+    // rather than refuse a host a cell. Re-placing off an isolated cell asks for
+    // its own region first, and leaves it only in a separate second tier.
     regionMode: 'prefer' | 'require' = 'prefer'
   ): Promise<CellRow | null> {
     const regions = new Map(
@@ -7556,10 +7957,7 @@ export class RelayAssignmentStore {
     // the single-row read.
     if (admission && admission.get(cellId) !== ROLL_ISOLATED_ADMISSION) return false
     const pinned = pinnedAdmission ?? (await this.pinnedCellAdmission(database, cellId))
-    if (pinned?.state !== ROLL_ISOLATED_ADMISSION || pinned.rollIsolatedAt === undefined) {
-      return false
-    }
-    if (now - pinned.rollIsolatedAt >= ROLL_ISOLATION_STAMP_MAX_AGE_MS) return false
+    if (!rollIsolationIsCurrent(pinned, now)) return false
     if (integer(existing, 'migration_leases') > 0) return false
     // A migration owns this assignment's epoch on both sides, and its durable
     // row outlives the 15-minute lease that the counter above tracks, so the
@@ -8015,6 +8413,29 @@ export class RelayAssignmentStore {
     )[0]
   }
 
+  // NOWAIT unless the caller grants a bounded wait; either way a held row
+  // surfaces as RelayAssignmentRowBusyError, never as a retried lock timeout.
+  private async assignmentRowOrBusy(
+    database: RelayDatabase,
+    identity: AssignmentIdentity,
+    waitMs?: number
+  ): Promise<SqlRow | undefined> {
+    try {
+      return (
+        await database.queryLocked(
+          `SELECT * FROM relay_assignments WHERE user_id = ? AND relay_host_id = ?`,
+          [identity.userId, identity.relayHostId],
+          waitMs === undefined ? { failIfUnavailable: true } : { lockTimeoutMs: waitMs }
+        )
+      )[0]
+    } catch (error) {
+      if (isDatabaseLockUnavailable(error) || (waitMs !== undefined && isDatabaseLockTimeout(error))) {
+        throw new RelayAssignmentRowBusyError()
+      }
+      throw error
+    }
+  }
+
   private async lockAssignmentActivities(
     database: RelayDatabase,
     identity: AssignmentIdentity,
@@ -8149,16 +8570,31 @@ export class RelayAssignmentStore {
     cellId: string,
     delta: number
   ): Promise<void> {
-    const rows = await database.query(
-      `UPDATE relay_cells SET reserved_requests =
-         CASE WHEN reserved_requests + ? < 0 THEN 0 ELSE reserved_requests + ? END,
-         updated_at = ?
-       WHERE cell_id = ?
-         AND (? <= 0 OR reserved_requests + ? <= capacity_requests)
-       RETURNING cell_id`,
-      [delta, delta, this.now(), cellId, delta, delta]
-    )
-    if (rows.length > 0) return
+    const rows = await database.query(CELL_RESERVATION_UPDATE, [
+      delta,
+      delta,
+      this.now(),
+      cellId,
+      delta,
+      delta
+    ])
+    if (rows.length === 0) await this.refuseCellReservation(database, cellId)
+  }
+
+  // The same write as the last statement of its transaction, committed in the same round
+  // trip so the shared cell row is not held while the reply crosses to a far cell.
+  private async commitCellReservationAtomically(
+    transaction: RelayDatabase,
+    cellId: string,
+    delta: number
+  ): Promise<void> {
+    const params = [delta, delta, this.now(), cellId, delta, delta]
+    if (!(await commitWithFinalWrite(transaction, CELL_RESERVATION_UPDATE, params))) {
+      await this.refuseCellReservation(transaction, cellId)
+    }
+  }
+
+  private async refuseCellReservation(database: RelayDatabase, cellId: string): Promise<never> {
     const cell = (
       await database.query(`SELECT cell_id FROM relay_cells WHERE cell_id = ?`, [cellId])
     )[0]
@@ -8179,6 +8615,17 @@ export class RelayAssignmentStore {
       leaseExpiresAt
     }
   }
+}
+
+// One predicate for "isolated for a roll in progress", shared by re-placement and
+// the reconnect classification so the drain-return lane admits the hosts the
+// re-placement rule would move.
+function rollIsolationIsCurrent(admission: PinnedCellAdmission | undefined, now: number): boolean {
+  return (
+    admission?.state === ROLL_ISOLATED_ADMISSION &&
+    admission.rollIsolatedAt !== undefined &&
+    now - admission.rollIsolatedAt < ROLL_ISOLATION_STAMP_MAX_AGE_MS
+  )
 }
 
 type PinnedCellAdmission = {
@@ -8231,6 +8678,19 @@ function activityCounts(rows: SqlRow[]): Record<AssignmentActivityKind, number> 
   const counts = emptyActivityCounts()
   for (const row of rows) counts[activityKind(row)]++
   return counts
+}
+
+function leaseRequestUnits(rows: SqlRow[]): number {
+  return rows.reduce((total, row) => total + integer(row, 'request_units'), 0)
+}
+
+function leaseUnitsByCell(rows: SqlRow[]): Map<string, number> {
+  const units = new Map<string, number>()
+  for (const row of rows) {
+    const cellId = text(row, 'cell_id')
+    units.set(cellId, (units.get(cellId) ?? 0) + integer(row, 'request_units'))
+  }
+  return units
 }
 
 function activityUnitsForCell(rows: SqlRow[], cellId: string): number {
@@ -8482,7 +8942,7 @@ function isDatabaseLockUnavailable(error: unknown): boolean {
   return error instanceof Error && error.message === 'database_lock_unavailable'
 }
 
-export function cellInventoryLockOptions(mode: CellInventoryLockMode): RelayLockOptions {
+function cellInventoryLockOptions(mode: CellInventoryLockMode): RelayLockOptions {
   if (mode === 'nowait') return { failIfUnavailable: true, measureHoldMs: true }
   if (mode === 'pool-default') return { measureHoldMs: true }
   return { lockTimeoutMs: CELL_INVENTORY_LOCK_TIMEOUT_MS, measureHoldMs: true }

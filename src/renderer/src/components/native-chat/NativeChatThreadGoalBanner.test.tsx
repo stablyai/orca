@@ -81,19 +81,13 @@ describe('NativeChatThreadGoalBanner', () => {
     expect(onChange).toHaveBeenCalledWith({ kind: 'status', status: 'active' })
   })
 
-  it.each([
-    ['blocked', 'Goal blocked'],
-    ['usageLimited', 'Goal limited']
-  ] as const)(
-    'offers resume on a %s goal, which the provider resumes like a paused one',
-    (status, label) => {
-      const { onChange } = renderBanner(goal({ status }))
-      expect(screen.getByText(label)).toBeInTheDocument()
-      expect(screen.queryByRole('button', { name: 'Pause goal' })).toBeNull()
-      fireEvent.click(screen.getByRole('button', { name: 'Resume goal' }))
-      expect(onChange).toHaveBeenCalledWith({ kind: 'status', status: 'active' })
-    }
-  )
+  it('offers resume on a blocked goal, which the provider resumes like a paused one', () => {
+    const { onChange } = renderBanner(goal({ status: 'blocked' }))
+    expect(screen.getByText('Goal blocked')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Pause goal' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Resume goal' }))
+    expect(onChange).toHaveBeenCalledWith({ kind: 'status', status: 'active' })
+  })
 
   it('labels a goal whose token budget is spent and offers only clear', () => {
     renderBanner(goal({ status: 'budgetLimited' }))

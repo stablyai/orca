@@ -22,6 +22,7 @@ import {
 import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
 import { TRANSPORT_CONNECT_SETTLE_GRACE_MS } from './pty-connect-limits'
 import { shouldRetainDisposedPaneSpawn } from './disposed-spawn-retention'
+import { buffersInputOnlyForSshReattach } from './ssh-reattach-input-buffering'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import { resolveTerminalInlineImagesEnabled } from '../../../../../shared/terminal-inline-images-settings'
@@ -37,11 +38,14 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
     ? { foreground: session.terminalTheme.foreground, background: session.terminalTheme.background }
     : undefined
   session.agentLaunchPreferences = toAgentLaunchPreferences(session.paneStartup?.sessionOptions)
+  session.buffersInputOnlyForReattach = buffersInputOnlyForSshReattach(session)
   session.transportOptions = {
     terminalKittyKeyboardProtocol:
       session.pane.terminal.options.vtExtensions?.kittyKeyboard === true,
     cwd: session.deps.cwd,
-    ...(session.deps.cwdPromise || session.deps.preconnectInput?.length
+    ...(session.deps.cwdPromise ||
+    session.deps.preconnectInput?.length ||
+    session.buffersInputOnlyForReattach
       ? { bufferInputUntilConnect: true }
       : {}),
     ...(session.deps.preconnectInput?.length
@@ -78,6 +82,7 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
     // and the main-side guard short-circuits.
     tabId: session.deps.tabId,
     leafId: session.pane.leafId,
+    ...(session.deps.placement ? { placement: session.deps.placement } : {}),
     activate: session.deps.isActiveRef.current && session.deps.isVisibleRef.current,
     ...(session.shellOverride ? { shellOverride: session.shellOverride } : {}),
     ...(session.projectRuntime ? { projectRuntime: session.projectRuntime } : {}),
@@ -211,6 +216,7 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
     sixelSupported: () =>
       resolveTerminalInlineImagesEnabled(useAppStore.getState().settings?.terminalInlineImages) &&
       terminalRendersInlineImages(session.pane.terminal),
+    skipOscColorQueryReplies: () => !session.shouldAnswerPaneOscColorQueries(),
     ...(session.isNativeWindowsConpty ? { da1Response: CONPTY_DA1_RESPONSE } : {})
   })
   session.respondToTerminalPixelSizeQueries = createTerminalPixelSizeQueryResponder(

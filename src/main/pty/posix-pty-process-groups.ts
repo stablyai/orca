@@ -1,3 +1,4 @@
+import { hasControllingTty } from '../../shared/posix-controlling-terminal'
 import { recordSelfInitiatedTreeKill } from '../crash-reporting/self-initiated-tree-kill-log'
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import {
@@ -66,10 +67,6 @@ function readSelectionResult(result: ProcessResult, option: 'p' | 't'): string {
     throw new UnsupportedPsSelectionError()
   }
   return output
-}
-
-function hasControllingTty(tty: string): boolean {
-  return tty !== '?' && tty !== '??' && tty !== '-' && tty !== '0' && !/^0,\d+$/.test(tty)
 }
 
 function* processTableQueries(rootPid: number): Generator<string[], string, ProcessResult> {

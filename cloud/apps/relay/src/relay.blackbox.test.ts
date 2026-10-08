@@ -408,7 +408,8 @@ describe('served relay URL', () => {
   it('exposes only /health, never /healthz', async () => {
     expect(await (await fetch(`${relayUrl}/health`)).json()).toEqual({
       ok: true,
-      connectionCapacityProtocol: 2
+      connectionCapacityProtocol: 2,
+      drainPaceWindowMaxMs: 1_200_000
     })
     expect(await (await fetch(`${relayUrl}/ready`)).json()).toEqual({ ok: true })
     expect((await fetch(`${relayUrl}/healthz`)).status).toBe(404)

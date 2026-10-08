@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef } from 'react'
 import { DashboardAgentChildDisclosure } from '@/components/dashboard/DashboardAgentChildDisclosure'
 import { AgentStateDot, agentStateLabel } from '@/components/AgentStateDot'
+import { AgentChildRowContent } from '@/components/AgentChildRowContent'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
@@ -13,7 +14,9 @@ import { useAgentRowConversationName } from '@/components/dashboard/use-agent-ro
 import { lastEnteredDoneAt } from '@/components/dashboard/agent-finished-timestamp'
 import CacheTimer, { usePromptCacheCountdownForPane } from './CacheTimer'
 import { formatShortTimeAgo } from '@/lib/short-time-ago'
-import { agentVerdictDisplayMark } from '../../../../shared/agent-main-agent-verdict'
+import { agentVerdictStatusLine } from '@/lib/agent-verdict-status-line'
+import { agentRowStoppingLabel } from '@/lib/agent-row-stopping-label'
+import { getCompactAgentLineOrder } from './worktree-card-compact-agent-line-order'
 
 function getCompactAgentPrimary(
   agent: DashboardAgentRowData,
@@ -28,17 +31,18 @@ export function getCompactAgentSecondary(
   now: number,
   lastAssistantMessageOverride?: string
 ): string {
-  const verdictMark = agentVerdictDisplayMark(agent.entry)
-  if (verdictMark === 'interrupted') {
-    return 'Interrupted by user'
-  }
-  if (verdictMark === 'failed') {
-    return 'Failed'
+  const verdictLine = agentVerdictStatusLine(agent.entry)
+  if (verdictLine) {
+    return verdictLine
   }
   // Why: the only honest thing to say about a pane Orca still holds but no longer hears
   // from is how long the silence has run; the user supplies the meaning.
   if (agent.state === 'unverifiable') {
     return agentNoUpdateLabel(agent.entry, now)
+  }
+  const stoppingLabel = agentRowStoppingLabel(agent.entry, agent.state)
+  if (stoppingLabel) {
+    return stoppingLabel
   }
   // Why: the lead turn is over in monitoring, so its last tool line is stale; name the state instead.
   if (agent.state === 'working' && agent.entry.workingMode === 'monitoring') {
@@ -134,10 +138,12 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   const stableMessage =
     turnHoldable && !currentMessage && held?.turn === turn ? held.message : undefined
   const secondary = getCompactAgentSecondary(agent, now, stableMessage)
-  // Why: sidebar truncation must preserve the passive-vs-active distinction.
-  const leadingText = dotState === 'monitoring' ? secondary : primary
-  const trailingText =
-    dotState === 'monitoring' ? (primary === secondary ? '' : primary) : secondary
+  const { leadingText, trailingText } = getCompactAgentLineOrder(
+    agent,
+    dotState,
+    primary,
+    secondary
+  )
   const rowTitle = `${leadingText}${trailingText ? ` - ${trailingText}` : ''}`
   const model = agent.entry.model?.trim() ?? ''
   const shortTime = getCompactAgentTime(agent, now)
@@ -183,41 +189,55 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
     </span>
   ) : null
 
+  // Why: the selected-row fill is strong enough to wash out the dimmed prompt/secondary text, so
+  // lift the lead toward full foreground when focused; an unvisited row stays bold either way.
+  const leadClassName = cn(
+    isUnvisited ? 'font-semibold text-foreground' : 'font-normal text-muted-foreground/90',
+    isFocusedPane && !isUnvisited && 'text-foreground'
+  )
+
   const rowBody = (
     <>
-      {/* Why: the row's actionable disabled reason must win on every hit area. */}
-      <AgentStateDot
-        state={dotState}
-        size="sm"
-        title={sendTargetDisabledReason ? null : undefined}
-        tooltipSide="right"
-      />
-      {!hideIcon && (
-        <span className="inline-flex shrink-0" title={formatAgentTypeLabel(agent.agentType)}>
-          <AgentIcon agent={agentTypeToIconAgent(agent.agentType)} size={13} />
-        </span>
-      )}
-      <span
-        className="min-w-0 flex-1 truncate"
-        title={sendTargetDisabledReason ? undefined : rowTitle}
-      >
-        {/* Why: the selected-row fill is strong enough to wash out the dimmed
-            prompt/secondary text, so lift both toward full foreground when focused. */}
-        <span
-          className={cn(
-            isUnvisited ? 'font-semibold text-foreground' : 'font-normal text-muted-foreground/90',
-            isFocusedPane && !isUnvisited && 'text-foreground'
+      {agent.childRow ? (
+        // Why: a child row reads through the piece the chat strip renders, so both say the same.
+        <AgentChildRowContent
+          row={agent.childRow}
+          now={now}
+          leadClassName={leadClassName}
+          trailClassName={isFocusedPane ? 'text-foreground/70' : 'text-muted-foreground/65'}
+          separator=" - "
+          dotTitle={sendTargetDisabledReason ? null : undefined}
+          tooltipSide="right"
+          lineTitle={!sendTargetDisabledReason}
+        />
+      ) : (
+        <>
+          {/* Why: the row's actionable disabled reason must win on every hit area. */}
+          <AgentStateDot
+            state={dotState}
+            size="sm"
+            title={sendTargetDisabledReason ? null : undefined}
+            tooltipSide="right"
+          />
+          {!hideIcon && (
+            <span className="inline-flex shrink-0" title={formatAgentTypeLabel(agent.agentType)}>
+              <AgentIcon agent={agentTypeToIconAgent(agent.agentType)} size={13} />
+            </span>
           )}
-        >
-          {leadingText}
-        </span>
-        {trailingText && (
-          <span className={isFocusedPane ? 'text-foreground/70' : 'text-muted-foreground/65'}>
-            {' '}
-            - {trailingText}
+          <span
+            className="min-w-0 flex-1 truncate"
+            title={sendTargetDisabledReason ? undefined : rowTitle}
+          >
+            <span className={leadClassName}>{leadingText}</span>
+            {trailingText && (
+              <span className={isFocusedPane ? 'text-foreground/70' : 'text-muted-foreground/65'}>
+                {' '}
+                - {trailingText}
+              </span>
+            )}
           </span>
-        )}
-      </span>
+        </>
+      )}
       {model && (
         <span
           className={cn(
