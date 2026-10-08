@@ -1,5 +1,6 @@
 import type { TerminalSnapshotUnavailableReason } from '../../../shared/terminal-snapshot-unavailability'
 import type { TerminalStreamEndVerdict } from '../../../shared/terminal-stream-end-verdict'
+import type { RemoteTerminalInputReceipts } from './remote-terminal-input-receipts'
 import type { RemoteTerminalStreamWatchdog } from './remote-terminal-stream-watchdog'
 
 export type RuntimeEnvironmentSubscriptionHandle = {
@@ -13,7 +14,7 @@ export type TerminalMultiplexEvent =
       type: 'subscribed'
       streamId: number
       streamGeneration?: string
-      capabilities?: { ackOutputSourceRanges?: 1; outputPause?: 1 }
+      capabilities?: { ackOutputSourceRanges?: 1; outputPause?: 1; ackInput?: 1 }
     }
   | { type: 'end'; streamId: number; verdict?: TerminalStreamEndVerdict }
   | { type: 'error'; streamId: number; message?: string }
@@ -61,6 +62,7 @@ export type RemoteRuntimeMultiplexedTerminalCallbacks = {
   onDriverChanged?: (
     driver: { kind: 'idle' } | { kind: 'desktop' } | { kind: 'mobile'; clientId: string }
   ) => void
+  onInputUnverifiable?: () => void
   onWriteUnavailable?: () => void
   onTransportClose?: (event: { recoverable: boolean; retryWithBackoff?: boolean }) => void
 }
@@ -133,7 +135,7 @@ export type RemoteRuntimeSnapshotOutcome = {
 
 export type RemoteRuntimeMultiplexedTerminal = {
   streamId: number
-  sendInput: (text: string) => boolean
+  sendInput: (text: string, options?: { requireReceipt?: boolean }) => boolean
   resize: (cols: number, rows: number) => boolean
   claimViewport: (cols: number, rows: number) => boolean
   setOutputPaused: (paused: boolean) => boolean
@@ -155,6 +157,8 @@ export type RemoteRuntimeMultiplexedTerminalState = {
   acknowledgeOutput: boolean
   acknowledgeOutputSourceRanges: boolean
   supportsOutputPause: boolean
+  acknowledgeInput: boolean
+  inputReceipts: RemoteTerminalInputReceipts
   outputPaused: boolean
   streamGeneration: string | null
   sourceAckedEndByte: number

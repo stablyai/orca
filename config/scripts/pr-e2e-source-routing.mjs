@@ -46,6 +46,15 @@ export const PR_E2E_SOURCE_ROUTES = [
         ))
   },
   {
+    id: 'ssh.orcad-input-delivery',
+    specs: ['tests/e2e/ssh-orcad-half-open-input.spec.ts'],
+    matches: (file) =>
+      isProductSource(file) &&
+      /^src\/(?:main\/runtime\/rpc\/methods\/terminal\/(?:terminal-(?:multiplex|input-delivery|stream)|stream-schemas)|renderer\/src\/(?:runtime\/(?:remote-runtime-terminal-(?:multiplexer|flow-controller|response-controller)|remote-terminal-input-receipts)|components\/terminal-pane\/(?:remote-runtime-pty-transport|remote-terminal-input-delivery-warning)))/.test(
+        file
+      )
+  },
+  {
     id: 'ssh.orcad-idle-exit',
     specs: ['tests/e2e/ssh-orcad-idle-exit.spec.ts'],
     matches: (file) =>

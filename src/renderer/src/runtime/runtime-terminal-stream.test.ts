@@ -103,6 +103,7 @@ describe('remote runtime terminal data subscriptions', () => {
       decodeTerminalStreamJson<{
         streamId: number
         capabilities?: {
+          ackInput?: 1
           ackOutput?: 1
           ackOutputSourceRanges?: 1
           desktopViewportClaims?: 1
@@ -112,6 +113,7 @@ describe('remote runtime terminal data subscriptions', () => {
       }>(subscribeFrame.payload)
     expect(subscribePayload?.streamId).toEqual(expect.any(Number))
     expect(subscribePayload?.capabilities).toEqual({
+      ackInput: 1,
       ackOutput: 1,
       ackOutputSourceRanges: 1,
       desktopViewportClaims: 1,

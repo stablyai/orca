@@ -100,7 +100,7 @@ function expectSnapshotStartFieldsRemainPublished(args: {
   }
 }
 
-function expectWireCompatible(record: JourneyRecord): void {
+function expectWireCompatible(record: JourneyRecord, ackInput = false): void {
   // Rule 2 — no frame may be refused by the receiving build's decoder. An opcode
   // the peer does not know is dropped silently, so this is the only signal.
   expect(record.rejected).toEqual([])
@@ -109,7 +109,9 @@ function expectWireCompatible(record: JourneyRecord): void {
   // The subscribe handshake still negotiates the optional output-pause opcode,
   // which is what keeps opcode 16 legal to send on this pairing.
   for (const event of record.subscribedEvents) {
-    expect(event.capabilities).toEqual({ outputPause: 1 })
+    expect(event.capabilities).toEqual(
+      ackInput ? { outputPause: 1, ackInput: 1 } : { outputPause: 1 }
+    )
   }
 
   // Input reached the process, before and after the reconnect.
@@ -152,7 +154,7 @@ describe('cross-version remote terminal wire', () => {
 
   it('current client against current server completes the journey, and is the reference for a current host', () => {
     expectJourneyActuallyRan(currentReference)
-    expectWireCompatible(currentReference)
+    expectWireCompatible(currentReference, true)
     expect(currentReference.snapshotStarts).toEqual([
       expect.objectContaining({ alternateScreen: false, terminalOwner: 'shell' }),
       expect.objectContaining({ alternateScreen: false, terminalOwner: 'shell' }),

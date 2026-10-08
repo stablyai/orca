@@ -61,6 +61,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     await vi.waitFor(() =>
       expect(latestSubscribePayload().capabilities).toEqual({
         ackOutput: 1,
+        ackInput: 1,
         ackOutputSourceRanges: 1,
         desktopViewportClaims: 1,
         outputPause: 1,

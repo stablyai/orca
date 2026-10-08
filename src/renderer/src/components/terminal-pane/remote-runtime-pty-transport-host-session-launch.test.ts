@@ -519,6 +519,10 @@ describe('createRemoteRuntimePtyTransport', () => {
 
       await transport.connect({ url: '', callbacks: {} })
       const { streamId } = latestRemoteSubscribePayload()
+      subscriptionCallbacks?.onResponse({
+        ok: true,
+        result: { type: 'subscribed', streamId, capabilities: { ackInput: 1 } }
+      })
       runtimeCall.mockClear()
       const send = unsubscribe?.sendBinary as unknown as {
         mockClear: () => void
@@ -527,12 +531,16 @@ describe('createRemoteRuntimePtyTransport', () => {
       send.mockClear()
 
       expect(transport.sendInput('ls\r', 'driving')).toBe(true)
-      await vi.runOnlyPendingTimersAsync()
+      await vi.advanceTimersByTimeAsync(8)
       expect(runtimeCall).not.toHaveBeenCalled()
       const inputFrame = decodeTerminalStreamFrame(send.mock.calls[0][0])
       expect(inputFrame?.opcode).toBe(TerminalStreamOpcode.Input)
       expect(inputFrame?.streamId).toBe(streamId)
 
+      subscriptionCallbacks?.onResponse({
+        ok: true,
+        result: { type: 'input-ack', streamId, seq: inputFrame?.seq, outcome: 'accepted' }
+      })
       transport.disconnect()
       expect(unsubscribeFn).toHaveBeenCalled()
       expect(runtimeCall).not.toHaveBeenCalledWith(

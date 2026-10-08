@@ -348,7 +348,8 @@ jobs:
               . != "tests/e2e/orcad-serve-mode-switch.spec.ts" and
               . != "tests/e2e/ssh-orcad-auto-convert.spec.ts" and
               . != "tests/e2e/windows-missing-appdata-startup.spec.ts" and
-              . != "tests/e2e/ssh-orcad-idle-exit.spec.ts"
+              . != "tests/e2e/ssh-orcad-idle-exit.spec.ts" and
+              . != "tests/e2e/ssh-orcad-half-open-input.spec.ts"
             )' <<<"$TEST_FILES_JSON" > "$RUNNER_TEMP/general-e2e-specs"
           fi
           mapfile -t TEST_FILES < "$RUNNER_TEMP/general-e2e-specs"
@@ -568,7 +569,7 @@ jobs:
   orcad-auto-convert-docker:
     name: ssh host auto-converts to managed orcad (Docker)
     needs: [build, prepare-native-cache]
-    if: inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/ssh-orcad-auto-convert.spec.ts') || contains(inputs.test_files, 'tests/e2e/ssh-orcad-idle-exit.spec.ts')
+    if: inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/ssh-orcad-auto-convert.spec.ts') || contains(inputs.test_files, 'tests/e2e/ssh-orcad-idle-exit.spec.ts') || contains(inputs.test_files, 'tests/e2e/ssh-orcad-half-open-input.spec.ts')
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -604,7 +605,7 @@ jobs:
           ORCA_RELAY_PATH: ${{ github.workspace }}/out/relay
         run: |
           export ORCA_E2E_ORCAD_CONVERT_TEMPLATE="$RUNNER_TEMP/orcad-convert-template"
-          xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/ssh-orcad-auto-convert.spec.ts tests/e2e/ssh-orcad-idle-exit.spec.ts --project=electron-headless --workers=1
+          xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/ssh-orcad-auto-convert.spec.ts tests/e2e/ssh-orcad-idle-exit.spec.ts tests/e2e/ssh-orcad-half-open-input.spec.ts --project=electron-headless --workers=1
       - uses: actions/upload-artifact@v7
         if: failure()
         with:

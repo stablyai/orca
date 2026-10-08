@@ -45,10 +45,9 @@ export abstract class RemoteRuntimeTerminalResponseController extends RemoteRunt
       return
     }
     if (event.type === 'subscribed') {
-      const capabilities =
-        typeof event.capabilities === 'object' && event.capabilities !== null
-          ? (event.capabilities as { ackOutputSourceRanges?: unknown; outputPause?: unknown })
-          : null
+      const capabilities = isTerminalMultiplexCapabilities(event.capabilities)
+        ? event.capabilities
+        : null
       if (
         capabilities?.ackOutputSourceRanges === 1 &&
         typeof event.streamGeneration === 'string' &&
@@ -57,11 +56,24 @@ export abstract class RemoteRuntimeTerminalResponseController extends RemoteRunt
         stream.acknowledgeOutputSourceRanges = true
         stream.streamGeneration = event.streamGeneration
       }
+      stream.acknowledgeInput = capabilities?.ackInput === 1
       stream.supportsOutputPause = capabilities?.outputPause === 1
       if (stream.supportsOutputPause) {
         stream.callbacks.onOutputPauseCapability?.()
       }
+    } else if (event.type === 'input-ack') {
+      if (
+        stream.acknowledgeInput &&
+        typeof event.seq === 'number' &&
+        Number.isSafeInteger(event.seq) &&
+        (event.outcome === 'accepted' ||
+          event.outcome === 'refused' ||
+          event.outcome === 'unverifiable')
+      ) {
+        stream.inputReceipts.settle(event.seq, event.outcome)
+      }
     } else if (event.type === 'end') {
+      stream.inputReceipts.dispose()
       discardOutputAcknowledgements(stream)
       stream.watchdog.dispose()
       clearSnapshot(stream)
@@ -122,4 +134,14 @@ export abstract class RemoteRuntimeTerminalResponseController extends RemoteRunt
       stream.callbacks.onDriverChanged?.(event.driver)
     }
   }
+}
+
+type TerminalMultiplexCapabilities = {
+  ackOutputSourceRanges?: unknown
+  outputPause?: unknown
+  ackInput?: unknown
+}
+
+function isTerminalMultiplexCapabilities(value: unknown): value is TerminalMultiplexCapabilities {
+  return typeof value === 'object' && value !== null
 }

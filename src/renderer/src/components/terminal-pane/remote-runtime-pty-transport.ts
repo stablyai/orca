@@ -1,3 +1,4 @@
+import { warnRemoteTerminalInputDelivery } from './remote-terminal-input-delivery-warning'
 import { createAgentSessionKeyboardOptions } from '@/runtime/agent-session-keyboard-capability'
 import { withRemoteReattachInputBuffer } from './remote-reattach-input-buffer'
 import {
@@ -448,7 +449,9 @@ export function createRemoteRuntimePtyTransport(
     pendingClaimInput = []
     pendingClaimQueryReplyCount = 0
     for (const segment of queued) {
-      stream.sendInput(segment.text)
+      if (!stream.sendInput(segment.text, { requireReceipt: !segment.queryReply })) {
+        sendUnacknowledgedInput(segment.text, segment.queryReply)
+      }
     }
     for (const resolve of viewportClaimReadyWaiters) {
       resolve(true)
@@ -1576,7 +1579,7 @@ export function createRemoteRuntimePtyTransport(
       return false
     }
     const stream = getCurrentMultiplexedStream(targetHandle)
-    if (stream?.sendInput(text)) {
+    if (stream?.sendInput(text, { requireReceipt: !queryReply })) {
       return true
     }
     if (pendingViewportClaim) {
@@ -1587,10 +1590,20 @@ export function createRemoteRuntimePtyTransport(
     void callRuntime<{ send: RuntimeTerminalSend }>('terminal.send', {
       terminal: targetHandle,
       text,
+      ...(queryReply ? { inputKind: 'query-reply' } : { requireWriteSettlement: true as const }),
       client: { id: clientId, type: 'desktop' },
       ...(desiredViewport ? { viewport: desiredViewport, claimViewport: true as const } : {})
     })
       .then((result) => {
+        if (
+          connected &&
+          lifecycleEpoch === targetLifecycleEpoch &&
+          handle === targetHandle &&
+          !queryReply &&
+          result.send.writeSettlement?.outcome === 'unverifiable'
+        ) {
+          warnRemoteTerminalInputDelivery(currentRuntimeEnvironmentId, targetHandle)
+        }
         if (
           connected &&
           lifecycleEpoch === targetLifecycleEpoch &&
@@ -1607,6 +1620,9 @@ export function createRemoteRuntimePtyTransport(
         if (runtimeTerminalErrorMessage(error).includes('terminal_not_writable')) {
           notifyWriteUnavailable()
         } else {
+          if (!queryReply) {
+            warnRemoteTerminalInputDelivery(currentRuntimeEnvironmentId, targetHandle)
+          }
           handleRemoteTerminalError(error)
         }
       })
@@ -2246,6 +2262,11 @@ export function createRemoteRuntimePtyTransport(
         onDriverChanged: (driver) => {
           if (isCurrentSubscription() && subscribedPtyId) {
             setDriverForPty(subscribedPtyId, driver)
+          }
+        },
+        onInputUnverifiable: () => {
+          if (isCurrentSubscription()) {
+            warnRemoteTerminalInputDelivery(currentRuntimeEnvironmentId, subscribedHandle)
           }
         },
         onWriteUnavailable: () => {

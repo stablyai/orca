@@ -19357,7 +19357,9 @@
       "learnMore": "Learn more",
       "dontShowAgain": "Don't show again",
       "dismiss": "Dismiss"
-    }
+    },
+    "inputDeliveryUncertain": "Remote terminal input delivery is uncertain",
+    "inputDeliveryUncertainDescription": "Some input may not have reached the host. Check the terminal before retrying a command."
   },
   "fileExplorer": {
     "root": {

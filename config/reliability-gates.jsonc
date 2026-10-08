@@ -11,6 +11,113 @@
   },
   "gates": [
     {
+      "id": "terminal-input.remote-delivery-uncertainty",
+      "title": "Unanswered remote terminal input remains visibly uncertain",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-runtime",
+      "layer": "host-stream-renderer-and-real-ssh",
+      "surfaces": [
+        "paired terminal keyboard input",
+        "binary input receipts",
+        "older-host RPC input fallback",
+        "reconnect warning"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "remote-runtime",
+        "ssh"
+      ],
+      "coveredPlatforms": [
+        "macos"
+      ],
+      "coveredProviders": [
+        "remote-runtime",
+        "ssh"
+      ],
+      "coverageNotes": "Hidden macOS Electron drives a Linux arm64 Docker SSH host through a controlled TCP proxy. Source-built server and installed pre-receipt server exercise negotiation and fallback. Native Windows and WSL are gaps; no physical packet outage claim.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/pull/26483"
+      ],
+      "invariant": "Only an execution-host receipt settles an input write. Missing receipts warn without replaying uncertain bytes, replacing the remote process, or treating contact loss as process exit. Parser replies do not create delivery warnings.",
+      "oracle": "Real keyboard input reaches an independent host ledger. Before and after lines arrive once in the same process; a two-way stall loses the during line and warns, while a reply-only stall delivers it exactly once and still warns. The warning survives reconnect. Unit contracts prove negotiated settlement, older-host fallback, unrelated output, out-of-order receipts, bounded state and timer cleanup.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/runtime/remote-terminal-input-receipts.test.ts src/renderer/src/runtime/remote-runtime-terminal-input-receipts.test.ts src/main/runtime/rpc/terminal-multiplex-input-receipts.test.ts src/renderer/src/components/terminal-pane/remote-runtime-input-delivery-warning.test.ts",
+        "ORCA_BACKGROUND_LAUNCH=1 ORCA_E2E_SSH_DOCKER=1 pnpm run test:e2e tests/e2e/ssh-orcad-half-open-input.spec.ts --workers=1"
+      ],
+      "testFiles": [
+        "src/renderer/src/runtime/remote-terminal-input-receipts.test.ts",
+        "src/renderer/src/runtime/remote-runtime-terminal-input-receipts.test.ts",
+        "src/main/runtime/rpc/terminal-multiplex-input-receipts.test.ts",
+        "src/renderer/src/components/terminal-pane/remote-runtime-input-delivery-warning.test.ts",
+        "tests/e2e/ssh-orcad-half-open-input.spec.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/runtime/remote-terminal-input-receipts.test.ts",
+          "assertions": [
+            "does not mistake a later write receipt for receipt of an earlier write",
+            "bounds pending receipts and uses one timer during an input flood"
+          ]
+        },
+        {
+          "file": "src/renderer/src/runtime/remote-runtime-terminal-input-receipts.test.ts",
+          "assertions": [
+            "does not treat unrelated output as an input receipt",
+            "warns on a lost connection and never replays pending input into its replacement"
+          ]
+        },
+        {
+          "file": "tests/e2e/ssh-orcad-half-open-input.spec.ts",
+          "assertions": [
+            "managed host warns about uncertain input when both traffic stalls",
+            "managed host warns about uncertain input when to-client traffic stalls"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-10-08",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/runtime/remote-terminal-input-receipts.test.ts src/renderer/src/runtime/remote-runtime-terminal-input-receipts.test.ts src/main/runtime/rpc/terminal-multiplex-input-receipts.test.ts src/renderer/src/components/terminal-pane/remote-runtime-input-delivery-warning.test.ts",
+          "result": "passed",
+          "durationSeconds": 1.0,
+          "summary": "Sixteen focused tests pass: receipt settlement, mixed-version fallback, unrelated output, exact-once transport behavior and bounded timer state."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 300,
+        "scope": "Local Docker SSH exercise; long-term CI p95 has not been established."
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Two source-built server fault cases passed locally; no soak claim."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Unchanged app loses the during line without a warning and fails the new rendered-warning assertion. Fixed source-built server warns around 15 seconds in both fault directions, preserves one host process and never duplicates the delivered line."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Existing 8 ms keyboard batching remains. Negotiated binary writes do not wait for prior round trips. At most 1024 numeric receipts and one deadline timer per active stream; no command text retained, polling, inventory reads, startup waits or subprocesses. Older hosts use existing bounded RPC request deadlines."
+      },
+      "knownGaps": [
+        "Native Windows, WSL and Linux desktop clients are not exercised. Local and daemon transports are unchanged; the Linux daemon is exercised behind the managed host.",
+        "Older hosts without PTY settlements prove request receipt only. This prevents silent network loss but cannot prove an old provider write or command execution.",
+        "A warning cannot determine whether unacknowledged input ran. The user must inspect the terminal before retrying.",
+        "Long-term soak and wide-area typing latency measurements remain unproved."
+      ],
+      "promotionCriteria": [
+        "Collect policy soak and native Windows/WSL coverage while retaining exact-once process-ledger assertions."
+      ],
+      "demotionRule": "Keep experimental until soak. Investigate missing warnings, duplicate writes or retained timers without retries or relaxed assertions."
+    },
+    {
       "id": "native-chat.transcript-consumed-boundary",
       "title": "Transcript replacement remains visible when it races message publication",
       "maturity": "experimental",

@@ -61,6 +61,7 @@ export type TerminalMultiplexStream = {
   ptyId: string
   client: TerminalViewportClient | undefined
   isMobile: boolean
+  acknowledgeInput: boolean
   ackOutput: boolean
   ackOutputSourceRanges: boolean
   streamGeneration: string

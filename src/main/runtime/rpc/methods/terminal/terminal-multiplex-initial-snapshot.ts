@@ -60,8 +60,9 @@ export async function publishMultiplexInitialSnapshot(
     rows: serialized?.rows ?? size?.rows,
     displayMode,
     seq: layoutSeq,
-    ...((stream.ackOutputSourceRanges || stream.supportsOutputPause) && {
+    ...((stream.ackOutputSourceRanges || stream.supportsOutputPause || stream.acknowledgeInput) && {
       capabilities: {
+        ...(stream.acknowledgeInput ? { ackInput: 1 as const } : {}),
         ...(stream.ackOutputSourceRanges ? { ackOutputSourceRanges: 1 as const } : {}),
         ...(stream.supportsOutputPause ? { outputPause: 1 as const } : {})
       }

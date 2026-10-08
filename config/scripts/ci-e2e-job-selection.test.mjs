@@ -145,3 +145,11 @@ it('runs remaining SSH tests after real failures and stops them when a run is ca
     expect(step.if).toContain('always()')
   }
 })
+
+it.each([
+  'src/main/runtime/rpc/methods/terminal/terminal-multiplex-input-delivery.ts',
+  'src/renderer/src/runtime/remote-terminal-input-receipts.ts',
+  'src/renderer/src/components/terminal-pane/remote-runtime-pty-transport.ts'
+])('routes input delivery faults from %s', (path) => {
+  expect(selectPrE2eSpecs([path])).toContain('tests/e2e/ssh-orcad-half-open-input.spec.ts')
+})

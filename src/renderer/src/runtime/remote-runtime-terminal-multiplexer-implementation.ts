@@ -16,6 +16,7 @@ import type {
   RemoteRuntimeMultiplexedTerminalCallbacks,
   RemoteRuntimeMultiplexedTerminalState
 } from './remote-runtime-terminal-multiplexer-types'
+import { RemoteTerminalInputReceipts } from './remote-terminal-input-receipts'
 import { createRemoteTerminalStreamWatchdog } from './remote-terminal-stream-watchdog'
 
 export class RemoteRuntimeTerminalMultiplexer extends RemoteRuntimeTerminalBinaryController {
@@ -34,6 +35,8 @@ export class RemoteRuntimeTerminalMultiplexer extends RemoteRuntimeTerminalBinar
       acknowledgeOutput: true,
       acknowledgeOutputSourceRanges: false,
       supportsOutputPause: false,
+      acknowledgeInput: false,
+      inputReceipts: new RemoteTerminalInputReceipts(() => args.callbacks.onInputUnverifiable?.()),
       outputPaused: false,
       streamGeneration: null,
       sourceAckedEndByte: 0,
@@ -83,7 +86,8 @@ export class RemoteRuntimeTerminalMultiplexer extends RemoteRuntimeTerminalBinar
 
     const stream: RemoteRuntimeMultiplexedTerminal = {
       streamId,
-      sendInput: (text) => this.isRegisteredStream(state) && this.sendInput(state, text),
+      sendInput: (text, options) =>
+        this.isRegisteredStream(state) && this.sendInput(state, text, options),
       resize: (cols, rows) =>
         this.isRegisteredStream(state) &&
         this.sendFrame(
@@ -115,6 +119,7 @@ export class RemoteRuntimeTerminalMultiplexer extends RemoteRuntimeTerminalBinar
       serializeBufferOutcome: (opts) => this.requestSnapshotOutcome(state, opts),
       close: () => {
         if (this.streams.get(streamId) === state) {
+          state.inputReceipts.dispose()
           discardOutputAcknowledgements(state)
           state.watchdog.dispose()
           this.sendFrame(streamId, TerminalStreamOpcode.Unsubscribe)
@@ -144,6 +149,7 @@ export class RemoteRuntimeTerminalMultiplexer extends RemoteRuntimeTerminalBinar
             ackOutputSourceRanges: 1,
             outputPause: 1,
             writeUnavailable: 1,
+            ackInput: 1,
             ...(args.client.type === 'desktop' ? { desktopViewportClaims: 1 } : {})
           }
         })

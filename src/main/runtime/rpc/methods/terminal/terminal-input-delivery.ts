@@ -59,6 +59,7 @@ export async function sendTerminalStreamInput(
     text: string
     client: TerminalViewportClient | undefined
     isMobile: boolean
+    requireWriteSettlement?: true
   }
 ): Promise<TerminalStreamInputOutcome> {
   const action = { text: args.text, enter: false, interrupt: false }
@@ -66,11 +67,15 @@ export async function sendTerminalStreamInput(
   const floorClaim: MobileInputFloorClaimHolder = { current: null }
   try {
     if (!clientId) {
-      const result = await runtime.sendTerminal(args.terminal, action, { inputKind: 'driving' })
-      return result.accepted ? 'delivered' : 'rejected'
+      const result = await runtime.sendTerminal(args.terminal, action, {
+        inputKind: 'driving',
+        ...(args.requireWriteSettlement ? { requireWriteSettlement: true as const } : {})
+      })
+      return streamInputOutcome(result, args.requireWriteSettlement)
     }
     const result = await runtime.sendTerminal(args.terminal, action, {
       inputKind: 'driving',
+      ...(args.requireWriteSettlement ? { requireWriteSettlement: true as const } : {}),
       reserveWrite: (writePtyId) => {
         const claim = runtime.beginMobileInputFloor(writePtyId, clientId)
         if (!claim) {
@@ -82,13 +87,25 @@ export async function sendTerminalStreamInput(
     })
     if (!result.accepted) {
       floorClaim.current?.rollback()
-      return 'rejected'
     }
-    return 'delivered'
+    return streamInputOutcome(result, args.requireWriteSettlement)
   } catch (error) {
     floorClaim.current?.rollback()
     return isTerminalStreamInputRejection(error) ? 'rejected' : 'failed'
   }
+}
+
+function streamInputOutcome(
+  result: Awaited<ReturnType<OrcaRuntimeService['sendTerminal']>>,
+  requireSettlement: true | undefined
+): TerminalStreamInputOutcome {
+  if (
+    requireSettlement &&
+    (!result.writeSettlement || result.writeSettlement.outcome === 'unverifiable')
+  ) {
+    return 'failed'
+  }
+  return result.accepted ? 'delivered' : 'rejected'
 }
 
 export type MobileInputFloorClaimHolder = {

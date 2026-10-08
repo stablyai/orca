@@ -46,7 +46,7 @@ vi.mock('@/store', () => ({
 }))
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync: vi.fn() }))
-vi.mock('sonner', () => ({ toast: { info: vi.fn() } }))
+vi.mock('sonner', () => ({ toast: { info: vi.fn(), warning: vi.fn() } }))
 vi.mock('@/lib/codex-stale-pane-sweep', () => ({ notifyCodexPaneBoundForStaleSweep: vi.fn() }))
 vi.mock('@/runtime/web-runtime-session', () => ({
   refreshWebRuntimeSessionTabsSnapshot: vi.fn(async () => {})
@@ -71,7 +71,10 @@ function startHost(): {
 } {
   const hostOpcodes: number[] = []
   // The host's whole reason to emit the opcode: the PTY refused the bytes.
-  const sendTerminal = vi.fn().mockResolvedValue({ accepted: false })
+  const sendTerminal = vi.fn().mockResolvedValue({
+    accepted: false,
+    writeSettlement: { outcome: 'refused', reason: 'provider_refused_write' }
+  })
   const runtime = {
     getRuntimeId: () => 'test-runtime',
     registerRemoteTerminalViewSubscriber: () => () => {},

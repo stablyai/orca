@@ -252,6 +252,7 @@ export abstract class RemoteRuntimeTerminalSnapshotController extends RemoteRunt
     if (this.streams.get(stream.streamId) !== stream) {
       return
     }
+    stream.inputReceipts.dispose()
     stream.watchdog.dispose()
     discardOutputAcknowledgements(stream)
     clearSnapshot(stream)

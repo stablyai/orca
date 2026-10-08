@@ -137,13 +137,14 @@ export abstract class RemoteRuntimeTerminalMultiplexerBase {
   protected sendFrame(
     streamId: number,
     opcode: TerminalStreamOpcode,
-    payload: Uint8Array<ArrayBufferLike> = new Uint8Array()
+    payload: Uint8Array<ArrayBufferLike> = new Uint8Array(),
+    seq = 0
   ): boolean {
     if (!this.matchesCurrentEnvironmentRevision() || !this.ready || !this.subscription) {
       return false
     }
     try {
-      this.subscription.sendBinary(encodeTerminalStreamFrame({ opcode, streamId, seq: 0, payload }))
+      this.subscription.sendBinary(encodeTerminalStreamFrame({ opcode, streamId, seq, payload }))
       recordE2eRemoteStreamFrame(opcode)
       return true
     } catch (error) {
@@ -192,6 +193,7 @@ export abstract class RemoteRuntimeTerminalMultiplexerBase {
     // Why: close callbacks may resubscribe synchronously; release first so every replacement shares the new environment multiplexer.
     this.releaseIfCurrent(this.environmentId, this)
     for (const stream of streams) {
+      stream.inputReceipts.dispose()
       discardOutputAcknowledgements(stream)
       stream.watchdog.dispose()
       clearSnapshot(stream)

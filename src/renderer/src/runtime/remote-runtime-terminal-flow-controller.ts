@@ -40,16 +40,29 @@ export abstract class RemoteRuntimeTerminalFlowController extends RemoteRuntimeT
     return this.streams.get(stream.streamId) === stream
   }
 
-  protected sendInput(stream: RemoteRuntimeMultiplexedTerminalState, text: string): boolean {
+  protected sendInput(
+    stream: RemoteRuntimeMultiplexedTerminalState,
+    text: string,
+    options?: { requireReceipt?: boolean }
+  ): boolean {
+    if (options?.requireReceipt && !stream.acknowledgeInput) {
+      return false
+    }
+    if (!this.matchesCurrentEnvironmentRevision() || !this.ready || !this.subscription) {
+      return false
+    }
+    const sequence = options?.requireReceipt ? stream.inputReceipts.begin() : 0
     const sent = this.sendFrame(
       stream.streamId,
       TerminalStreamOpcode.Input,
-      encodeTerminalStreamText(text)
+      encodeTerminalStreamText(text),
+      sequence
     )
     if (sent && !stream.outputPaused) {
       stream.watchdog.recordCommandInput(text)
     }
-    return sent
+    // A thrown handoff may already have written; do not invite the RPC fallback to replay it.
+    return sent || sequence > 0
   }
 
   protected setOutputPaused(

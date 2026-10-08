@@ -45,6 +45,7 @@ export async function initializeMultiplexStream(
     ptyId,
     client: request.client,
     isMobile,
+    acknowledgeInput: request.capabilities?.ackInput === 1,
     ackOutput: request.capabilities?.ackOutput === 1,
     ackOutputSourceRanges: sourceRangeConsumerAttached,
     streamGeneration,

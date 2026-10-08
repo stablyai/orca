@@ -2,6 +2,10 @@
    falls outside the *.test / *.spec / tests glob set. refreshWebRuntimeSessionTabsSnapshot is imported directly by several
    renderer runtime modules, so an injected seam would have to be threaded through all of them. */
 import { vi } from 'vitest'
+import {
+  decodeTerminalStreamFrame,
+  TerminalStreamOpcode
+} from '../../../../shared/terminal-stream-protocol'
 import type { Mock } from 'vitest'
 import {
   createTerminalStreamFixtures,
@@ -83,6 +87,28 @@ export function createRemoteRuntimeTransportMocks(
     bindings.setCallbacks(null)
     bindings.setResolvedPaneHandle('terminal-1')
     subscriptionSendBinary.mockReset()
+    subscriptionSendBinary.mockImplementation((bytes) => {
+      const frame = decodeTerminalStreamFrame(bytes)
+      if (frame?.opcode === TerminalStreamOpcode.Subscribe) {
+        const payload = JSON.parse(new TextDecoder().decode(frame.payload))
+        bindings.getCallbacks()?.onResponse({
+          ok: true,
+          result: { type: 'subscribed', streamId: payload.streamId, capabilities: { ackInput: 1 } }
+        })
+      } else if (frame?.opcode === TerminalStreamOpcode.Input && frame.seq > 0) {
+        queueMicrotask(() =>
+          bindings.getCallbacks()?.onResponse({
+            ok: true,
+            result: {
+              type: 'input-ack',
+              streamId: frame.streamId,
+              seq: frame.seq,
+              outcome: 'accepted'
+            }
+          })
+        )
+      }
+    })
     refreshSessionTabsSnapshot.mockClear()
     runtimeCall.mockImplementation(async (request: { method: string; params?: unknown }) => {
       if (request.method === 'session.tabs.activate') {
