@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { Pressable, ScrollView, View } from 'react-native'
 import { Code, Pencil } from 'lucide-react-native'
+import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import { MobileMarkdown } from '../components/MobileMarkdown'
 import { colors } from '../theme/mobile-theme'
+import { useMobileNativeChatPinchGesture } from '../session/use-mobile-native-chat-pinch-gesture'
 import {
   MobileFilePreviewSourceText,
   MobileFilePreviewTruncatedNote
@@ -15,6 +17,8 @@ type Props = {
   truncated: boolean
   byteLength: number
   initialLine?: number
+  imageSources?: Record<string, string>
+  onOpenImage?: (rawSrc: string) => void
 }
 
 export function MobileFileMarkdownPreview({
@@ -22,7 +26,9 @@ export function MobileFileMarkdownPreview({
   content,
   truncated,
   byteLength,
-  initialLine
+  initialLine,
+  imageSources,
+  onOpenImage
 }: Props) {
   const [mode, setMode] = useState<'preview' | 'source'>(() => (initialLine ? 'source' : 'preview'))
   const [previousRelativePath, setPreviousRelativePath] = useState(relativePath)
@@ -36,6 +42,9 @@ export function MobileFileMarkdownPreview({
   }
   const previewSelected = mode === 'preview'
   const sourceSelected = mode === 'source'
+  // Same pinch-to-zoom font as the native chat, so a previewed document reads
+  // at the size the session editor scales to.
+  const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture()
 
   return (
     <View style={styles.modeContainer}>
@@ -67,20 +76,30 @@ export function MobileFileMarkdownPreview({
           />
         </Pressable>
       </View>
-      {mode === 'preview' ? (
-        <ScrollView style={styles.scroll} contentContainerStyle={styles.markdownContent}>
-          {truncated ? <MobileFilePreviewTruncatedNote byteLength={byteLength} /> : null}
-          <MobileMarkdown content={content} />
-        </ScrollView>
-      ) : (
-        <MobileFilePreviewSourceText
-          relativePath={relativePath}
-          content={content}
-          truncated={truncated}
-          byteLength={byteLength}
-          initialLine={initialLine}
-        />
-      )}
+      <GestureHandlerRootView style={styles.previewGestureArea}>
+        <GestureDetector gesture={pinchGesture}>
+          {mode === 'preview' ? (
+            <ScrollView style={styles.scroll} contentContainerStyle={styles.markdownContent}>
+              {truncated ? <MobileFilePreviewTruncatedNote byteLength={byteLength} /> : null}
+              <MobileMarkdown
+                content={content}
+                imageSources={imageSources}
+                onOpenImage={onOpenImage}
+                textScale={fontScale}
+              />
+            </ScrollView>
+          ) : (
+            <MobileFilePreviewSourceText
+              relativePath={relativePath}
+              content={content}
+              truncated={truncated}
+              byteLength={byteLength}
+              initialLine={initialLine}
+              fontScale={fontScale}
+            />
+          )}
+        </GestureDetector>
+      </GestureHandlerRootView>
     </View>
   )
 }

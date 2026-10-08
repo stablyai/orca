@@ -47,6 +47,8 @@ export type RichMarkdownEditorState = {
   selectionDroppedOnBlur: boolean
   /** `keyboard-inset`: the last covered height posted, to suppress repeats. */
   lastInset: number
+  /** `editor-image-sources`: display URLs keyed by authored image src, or null before the host sends any. */
+  imageSources: Record<string, string> | null
   /** `editor-listeners`: takes the four surface listeners off again, or null before them. */
   removeEditorListeners: (() => void) | null
   /** `keyboard-inset`: takes the viewport's two listeners off again, or null before them. */
@@ -70,6 +72,7 @@ function createRichMarkdownEditorState(): RichMarkdownEditorState {
     savedSelectionRange: null,
     selectionDroppedOnBlur: false,
     lastInset: -1,
+    imageSources: null,
     removeEditorListeners: null,
     removeKeyboardInset: null,
     stopped: false

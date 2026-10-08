@@ -20,7 +20,10 @@ export function renderInline(text: string): string {
     const image = token.match(/^!\[([^\]]*)\]\(([^)]+)\)$/)
     const link = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/)
     if (image && isSafeUrl(image[2])) {
-      output += `<img src="${escapeAttr(image[2]!)}" alt="${escapeAttr(image[1] ?? '')}" />`
+      // `data-orca-src` keeps the authored src: the editor's fake origin cannot serve a relative
+      // path, so the host swaps the display `src` for a data URL and serialization reads this.
+      const src = escapeAttr(image[2]!)
+      output += `<img data-orca-src="${src}" src="${src}" alt="${escapeAttr(image[1] ?? '')}" />`
     } else if (link && isSafeUrl(link[2])) {
       output += `<a href="${escapeAttr(link[2]!)}">${renderInline(link[1]!)}</a>`
     } else if (/^https?:\/\//i.test(token)) {

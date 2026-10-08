@@ -1,29 +1,12 @@
-import { openExternalLink } from '../platform/external-link'
-import { createMarkdownInlineMatcher, type MarkdownInlineMatch } from './markdown-inline-matcher'
+import { Fragment, memo, useContext, useMemo, type ReactNode } from 'react'
+import { Pressable, ScrollView, Text as NativeText, View } from 'react-native'
 import { INLINE_TEXT_SELECTION } from './inline-text-selection'
+import { MarkdownImageView } from './markdown-image-view'
+import { renderInline } from './markdown-inline-render'
+import { MarkdownText, MarkdownTextContext, type MarkdownTextSetup } from './markdown-text'
 import { MobileSelectableText } from './MobileSelectableText'
-import {
-  Fragment,
-  createElement,
-  createContext,
-  memo,
-  useContext,
-  useMemo,
-  type ComponentType,
-  type ReactNode
-} from 'react'
-import { Pressable, ScrollView, Text as NativeText, View, type TextProps } from 'react-native'
 import { styles } from './mobile-markdown-styles'
-import {
-  detectFilePathSegments,
-  isFilePathCodeSpan,
-  normalizeFilePath
-} from './markdown-file-path-detection'
-import { routeMarkdownHref } from './markdown-href-routing'
-import {
-  isIntrawordUnderscoreToken,
-  trimAutolinkTrailingPunctuation
-} from './markdown-inline-token-rules'
+import { openMarkdownImage } from './markdown-href-routing'
 import { isMobileMermaidLanguage } from './mobile-mermaid-language'
 import { useMobileMarkdownBlocks } from './use-mobile-markdown-blocks'
 import type { NativeChatVisualDirective } from '../../../src/shared/native-chat-visual-directive'
@@ -36,14 +19,21 @@ type Props = {
   rangeSelectable?: boolean
   /** Forward long presses from interactive Android transcript spans to the message. */
   onLongPress?: () => void
-  /** Multiplier for prose font size (paragraphs, lists, quotes). Defaults to 1;
-   *  the chat view passes >1 so agent prose reads larger than the compact base. */
+  /** Multiplier for the rendered font size (paragraphs, lists, headings, quotes,
+   *  code, table cells, and inline image thumbnails). Defaults to 1; the chat view
+   *  passes >1 so agent prose reads larger than the compact base. */
   textScale?: number
   /** When provided, detected file paths and file-target hrefs render as tappable
    *  and invoke this with the path text (worktree-relative or absolute, with an
    *  optional :line(:col) suffix). Omitted on screens with no file viewer, where
    *  paths render as plain text (no behavior change). */
   onOpenFile?: (pathText: string) => void
+  /** Authored image src → data URL, resolved by the owner; an image whose src has an
+   *  entry renders as a real image instead of the tappable fallback text. */
+  imageSources?: Record<string, string>
+  /** Image taps prefer this with the authored src (resolved against the document by
+   *  the owner); without it, image taps route the src as a file href. */
+  onOpenImage?: (rawSrc: string) => void
   /** Native-chat assistant prose only: renders `::orca-visual{...}` directive lines. Without it,
    *  a directive line is ordinary text. Must be referentially stable (this component is memoized). */
   renderVisual?: (directive: NativeChatVisualDirective, index: number) => ReactNode
@@ -51,185 +41,10 @@ type Props = {
 
 const MAX_TABLE_ROWS = 40
 const MAX_TABLE_COLUMNS = 8
+/** A paragraph that is exactly one image token renders the image full width. */
+const STANDALONE_IMAGE = /^!\[([^\]\n]*)\]\(([^)\n]+)\)$/
 /** Prose base size — passed to MermaidDiagram fallback mono text. */
 const MERMAID_BASE = 13
-type MarkdownTextSetup = {
-  TextComponent: ComponentType<TextProps>
-  /** Disable native selection only within the Android transcript. */
-  androidTranscript: boolean
-  onLongPress?: () => void
-}
-const MarkdownTextContext = createContext<MarkdownTextSetup>({
-  TextComponent: NativeText,
-  androidTranscript: false
-})
-
-function MarkdownText(props: TextProps): React.JSX.Element {
-  const { TextComponent, androidTranscript, onLongPress } = useContext(MarkdownTextContext)
-  if (!androidTranscript) {
-    return createElement(TextComponent, props)
-  }
-  // Override selection without changing the nested spans' inherited behavior.
-  return createElement(TextComponent, {
-    ...props,
-    ...(props.selectable === true ? { selectable: false } : {}),
-    ...(onLongPress && props.onPress ? { onLongPress } : {})
-  })
-}
-
-// Web/mail hrefs open the system handler; file-target hrefs (file: URIs and
-// scheme-less paths — the entire desktop file-link contract) go to onOpenFile.
-function openMarkdownHref(href: string, onOpenFile?: (pathText: string) => void): void {
-  const route = routeMarkdownHref(href)
-  if (route.kind === 'web') {
-    // The seam, not react-native's `Linking`: this module is in the tasks page closure, and inside
-    // the shell's WebView `openURL` resolves without opening anything.
-    openExternalLink(route.url)
-    return
-  }
-  if (route.kind === 'file' && onOpenFile) {
-    onOpenFile(route.pathText)
-  }
-}
-
-// Render a plain (non-token) text run, splitting out tappable file paths when
-// onOpenFile is provided. Without it, paths stay plain text.
-function renderTextRun(
-  text: string,
-  keyPrefix: string,
-  onOpenFile?: (pathText: string) => void
-): ReactNode {
-  if (!onOpenFile) {
-    return text
-  }
-  const segments = detectFilePathSegments(text)
-  if (segments.length === 1 && segments[0]!.type === 'text') {
-    return text
-  }
-  return segments.map((segment, segmentIndex) => {
-    if (segment.type === 'file') {
-      return (
-        <MarkdownText
-          key={`${keyPrefix}:${segmentIndex}`}
-          style={styles.link}
-          onPress={() => onOpenFile(segment.path)}
-        >
-          {segment.value}
-        </MarkdownText>
-      )
-    }
-    return <Fragment key={`${keyPrefix}:${segmentIndex}`}>{segment.value}</Fragment>
-  })
-}
-
-function renderInline(text: string, onOpenFile?: (pathText: string) => void): ReactNode[] {
-  const parts: ReactNode[] = []
-  const pattern = createMarkdownInlineMatcher(
-    text,
-    /(`[^`]+`|~~[^~]+~~|\*\*[^*]+\*\*|__[^_]+__|\*[^*\n]+\*|_[^_\n]+_|https?:\/\/[^\s<]+)/g,
-    true
-  )
-  let pendingStart = 0
-  let match: MarkdownInlineMatch | null
-
-  while ((match = pattern.exec())) {
-    const token = match[0]
-    // Intraword `_` runs (snake_case, dunder tails) are literal text per
-    // CommonMark; leaving them unflushed keeps surrounding file paths whole
-    // for detection in the eventual text run.
-    if (token.startsWith('_') && isIntrawordUnderscoreToken(text, match.index, token)) {
-      // Resume after the opener so real tokens inside the rejected span are still scanned.
-      pattern.lastIndex = match.index + 1
-      continue
-    }
-    if (match.index > pendingStart) {
-      parts.push(
-        renderTextRun(text.slice(pendingStart, match.index), `t${pendingStart}`, onOpenFile)
-      )
-    }
-    pendingStart = pattern.lastIndex
-    const key = `${match.index}:${token}`
-    const image = token.match(/^!\[([^\]]*)\]\(([^)]+)\)$/)
-    const link = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/)
-    if (image) {
-      parts.push(
-        <MarkdownText
-          key={key}
-          style={styles.link}
-          onPress={() => openMarkdownHref(image[2]!, onOpenFile)}
-        >
-          {image[1] || 'image'}
-        </MarkdownText>
-      )
-    } else if (link) {
-      parts.push(
-        <MarkdownText
-          key={key}
-          style={styles.link}
-          onPress={() => openMarkdownHref(link[2]!, onOpenFile)}
-        >
-          {link[1]}
-        </MarkdownText>
-      )
-    } else if (/^https?:\/\//i.test(token)) {
-      const { url, trailing } = trimAutolinkTrailingPunctuation(token)
-      parts.push(
-        <MarkdownText
-          key={key}
-          style={styles.link}
-          onPress={() => openMarkdownHref(url, onOpenFile)}
-        >
-          {url}
-        </MarkdownText>
-      )
-      if (trailing) {
-        parts.push(<Fragment key={`${key}p`}>{trailing}</Fragment>)
-      }
-    } else if (token.startsWith('`')) {
-      const code = token.slice(1, -1)
-      if (onOpenFile && isFilePathCodeSpan(code)) {
-        parts.push(
-          <MarkdownText
-            key={key}
-            style={[styles.inlineCode, styles.inlineCodeLink]}
-            onPress={() => onOpenFile(normalizeFilePath(code.trim()))}
-          >
-            {code}
-          </MarkdownText>
-        )
-      } else {
-        parts.push(
-          <MarkdownText key={key} style={styles.inlineCode}>
-            {code}
-          </MarkdownText>
-        )
-      }
-    } else if (token.startsWith('~~')) {
-      parts.push(
-        <MarkdownText key={key} style={styles.strike}>
-          {renderTextRun(token.slice(2, -2), `${key}i`, onOpenFile)}
-        </MarkdownText>
-      )
-    } else if (token.startsWith('**') || token.startsWith('__')) {
-      parts.push(
-        <MarkdownText key={key} style={styles.bold}>
-          {renderTextRun(token.slice(2, -2), `${key}i`, onOpenFile)}
-        </MarkdownText>
-      )
-    } else {
-      parts.push(
-        <MarkdownText key={key} style={styles.italic}>
-          {renderTextRun(token.slice(1, -1), `${key}i`, onOpenFile)}
-        </MarkdownText>
-      )
-    }
-  }
-
-  if (pendingStart < text.length) {
-    parts.push(renderTextRun(text.slice(pendingStart), `t${pendingStart}`, onOpenFile))
-  }
-  return parts
-}
 
 function MobileMarkdownContent({
   content,
@@ -237,6 +52,8 @@ function MobileMarkdownContent({
   rangeSelectable = false,
   textScale = 1,
   onOpenFile,
+  imageSources,
+  onOpenImage,
   renderVisual
 }: Props) {
   // Interactive children own their touches and must forward the row action.
@@ -244,11 +61,17 @@ function MobileMarkdownContent({
   const rowLongPress = setup.androidTranscript ? setup.onLongPress : undefined
   const text = content?.trim() ?? ''
   const { blocks, directives } = useMobileMarkdownBlocks(text, renderVisual !== undefined)
-  // Scale prose sizes; inline spans inherit fontSize from the wrapping Text.
-  const scaled = (size: number): { fontSize: number; lineHeight: number } | null =>
-    textScale !== 1 ? { fontSize: size * textScale, lineHeight: (size + 6) * textScale } : null
-  const proseScale = scaled(13)
+  // Scale every text size; inline spans inherit fontSize from the wrapping Text.
+  const scaled = (
+    size: number,
+    lineHeight = size + 6
+  ): { fontSize: number; lineHeight: number } | null =>
+    textScale !== 1 ? { fontSize: size * textScale, lineHeight: lineHeight * textScale } : null
+  const proseScale = scaled(13) // paragraph, quote text, and list markers share the base
   const listScale = scaled(14)
+  const headingScale = scaled(14)
+  const headingLargeScale = scaled(15)
+  const compactScale = scaled(12, 17) // code text and table cells share the base
   if (!text) {
     return fallback ? (
       <MarkdownText selectable={rangeSelectable} style={styles.paragraph}>
@@ -275,17 +98,21 @@ function MobileMarkdownContent({
             <MarkdownText
               key={index}
               selectable
-              style={[styles.heading, block.level <= 2 ? styles.headingLarge : null]}
+              style={
+                block.level <= 2
+                  ? [styles.heading, styles.headingLarge, headingLargeScale]
+                  : [styles.heading, headingScale]
+              }
             >
-              {renderInline(block.text, onOpenFile)}
+              {renderInline(block.text, onOpenFile, imageSources, onOpenImage, textScale)}
             </MarkdownText>
           )
         }
         if (block.type === 'quote') {
           return (
             <View key={index} style={styles.quote}>
-              <MarkdownText selectable style={styles.quoteText}>
-                {renderInline(block.text, onOpenFile)}
+              <MarkdownText selectable style={[styles.quoteText, proseScale]}>
+                {renderInline(block.text, onOpenFile, imageSources, onOpenImage, textScale)}
               </MarkdownText>
             </View>
           )
@@ -310,7 +137,7 @@ function MobileMarkdownContent({
               {block.language ? (
                 <NativeText style={styles.codeLanguage}>{block.language}</NativeText>
               ) : null}
-              <MarkdownText selectable style={styles.codeText}>
+              <MarkdownText selectable style={[styles.codeText, compactScale]}>
                 {block.text}
               </MarkdownText>
             </View>
@@ -321,7 +148,7 @@ function MobileMarkdownContent({
             <Pressable
               key={index}
               style={styles.imageFrame}
-              onPress={() => openMarkdownHref(block.url, onOpenFile)}
+              onPress={() => openMarkdownImage(block.url, onOpenFile, onOpenImage)}
               onLongPress={rowLongPress}
             >
               <NativeText style={styles.link}>{block.alt || 'Open image'}</NativeText>
@@ -344,17 +171,27 @@ function MobileMarkdownContent({
                     <MarkdownText
                       key={cellIndex}
                       selectable
-                      style={[styles.tableCell, styles.tableHeader]}
+                      style={[styles.tableCell, styles.tableHeader, compactScale]}
                     >
-                      {renderInline(header, onOpenFile)}
+                      {renderInline(header, onOpenFile, imageSources, onOpenImage, textScale)}
                     </MarkdownText>
                   ))}
                 </View>
                 {visibleRows.map((row, rowIndex) => (
                   <View key={rowIndex} style={styles.tableRow}>
                     {visibleHeaders.map((_, cellIndex) => (
-                      <MarkdownText key={cellIndex} selectable style={styles.tableCell}>
-                        {renderInline(row[cellIndex] ?? '', onOpenFile)}
+                      <MarkdownText
+                        key={cellIndex}
+                        selectable
+                        style={[styles.tableCell, compactScale]}
+                      >
+                        {renderInline(
+                          row[cellIndex] ?? '',
+                          onOpenFile,
+                          imageSources,
+                          onOpenImage,
+                          textScale
+                        )}
                       </MarkdownText>
                     ))}
                   </View>
@@ -375,7 +212,7 @@ function MobileMarkdownContent({
             <View key={index} style={styles.list}>
               {block.items.map((item, itemIndex) => (
                 <View key={itemIndex} style={styles.listItem}>
-                  <NativeText style={styles.listMarker}>
+                  <NativeText style={[styles.listMarker, proseScale]}>
                     {item.checked == null
                       ? block.ordered
                         ? `${itemIndex + 1}.`
@@ -385,7 +222,7 @@ function MobileMarkdownContent({
                         : '[ ]'}
                   </NativeText>
                   <MarkdownText selectable style={[styles.listText, listScale]}>
-                    {renderInline(item.text, onOpenFile)}
+                    {renderInline(item.text, onOpenFile, imageSources, onOpenImage, textScale)}
                   </MarkdownText>
                 </View>
               ))}
@@ -394,6 +231,18 @@ function MobileMarkdownContent({
         }
         if (block.type === 'rule') {
           return <View key={index} style={styles.rule} />
+        }
+        const standaloneMatch = STANDALONE_IMAGE.exec(block.text)
+        const standaloneUri = standaloneMatch ? imageSources?.[standaloneMatch[2]!] : undefined
+        if (standaloneMatch && standaloneUri) {
+          return (
+            <MarkdownImageView
+              key={index}
+              uri={standaloneUri}
+              alt={standaloneMatch[1] ?? ''}
+              onPress={() => openMarkdownImage(standaloneMatch[2]!, onOpenFile, onOpenImage)}
+            />
+          )
         }
         return (
           <MarkdownText
@@ -404,7 +253,7 @@ function MobileMarkdownContent({
             {block.text.split('\n').map((line, lineIndex) => (
               <Fragment key={lineIndex}>
                 {lineIndex > 0 ? '\n' : null}
-                {renderInline(line, onOpenFile)}
+                {renderInline(line, onOpenFile, imageSources, onOpenImage, textScale)}
               </Fragment>
             ))}
           </MarkdownText>

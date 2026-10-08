@@ -23,6 +23,21 @@ function mirrorCheckedState(input: HTMLInputElement) {
   }
 }
 
+// Mirrors isExternalMarkdownImageSrc in session/markdown-relative-image-srcs.ts, kept local
+// because this module ships inside the WebView document bundle and must not pull RPC code.
+const EXTERNAL_IMAGE_SRC = /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i
+
+/** A tapped image opens on the host: zoomed when a worktree file backs it, else as a link. */
+function handleImageTap(scope: RichMarkdownEditorScope, image: Element, event: MouseEvent): void {
+  event.preventDefault()
+  const src = image.getAttribute('data-orca-src') ?? image.getAttribute('src') ?? ''
+  if (EXTERNAL_IMAGE_SRC.test(src)) {
+    post(scope, { type: 'openLink', url: src })
+    return
+  }
+  post(scope, { type: 'openImage', src })
+}
+
 function handleInput(scope: RichMarkdownEditorScope, event: Event) {
   // The flag is cleared for a checkbox too, as it always was: only the change is `change`'s, since
   // one tap raises click, input and change and each of the three used to report.
@@ -48,6 +63,12 @@ function handleChange(scope: RichMarkdownEditorScope, event: Event) {
 }
 
 function handleClick(scope: RichMarkdownEditorScope, event: MouseEvent) {
+  // The image wins over a wrapping link and over the caret refocus below: a tap means zoom.
+  const image = closestFrom(event.target, 'img')
+  if (image) {
+    handleImageTap(scope, image, event)
+    return
+  }
   const link = closestFrom(event.target, 'a[href]')
   if (link) {
     event.preventDefault()

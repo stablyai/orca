@@ -93,3 +93,52 @@ describe('useMobileSessionDocumentReaders markdown reads', () => {
     expect(doc).not.toHaveProperty('byteLength')
   })
 })
+
+describe('useMobileSessionDocumentReaders markdown image sources', () => {
+  it('patches the ready doc with the resolved relative image data URLs', async () => {
+    let docs = new Map<string, MarkdownDocState>()
+    let readers: ReturnType<typeof useMobileSessionDocumentReaders> | undefined
+    const hook = hookMount(() => {
+      readers = useMobileSessionDocumentReaders(
+        mountFixture<Parameters<typeof useMobileSessionDocumentReaders>[0]>({
+          worktreeId: 'wt-1',
+          client: {
+            sendRequest: vi.fn(async (method: string): Promise<RpcResponse> => {
+              if (method === 'markdown.readTab') {
+                return readTabResult({ content: '# head\n\n![Shot](shot.png)' })
+              }
+              return {
+                id: 'frame-2',
+                ok: true,
+                result: { content: 'QUJD', isImage: true, mimeType: 'image/png' },
+                _meta: META
+              }
+            })
+          },
+          setMarkdownDocs: (update) => {
+            docs = typeof update === 'function' ? update(docs) : update
+          },
+          setFileDocs: () => {}
+        })
+      )
+    })
+    hook.mount()
+    await performHookAction(() =>
+      readers?.readMarkdownTab(
+        mountFixture<Parameters<typeof readers.readMarkdownTab>[0]>({
+          type: 'markdown',
+          id: 'tab-md',
+          relativePath: 'README.md',
+          isDirty: false
+        })
+      )
+    )
+    // The image reads settle after the doc published; let that follow-up promise land.
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    hook.unmount()
+    expect(docs.get('tab-md')).toMatchObject({
+      status: 'ready',
+      imageSources: { 'shot.png': 'data:image/png;base64,QUJD' }
+    })
+  })
+})

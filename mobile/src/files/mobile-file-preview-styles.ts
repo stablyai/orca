@@ -1,6 +1,10 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 
+/** Base of the source-view font, kept beside the sheet so the pinch scale never drifts from it. */
+export const SOURCE_TEXT_FONT_SIZE = 13
+export const SOURCE_TEXT_LINE_HEIGHT = 19
+
 export const filePreviewStyles = StyleSheet.create({
   container: {
     flex: 1,
@@ -95,12 +99,15 @@ export const filePreviewStyles = StyleSheet.create({
   textPreview: {
     color: colors.textPrimary,
     fontFamily: typography.monoFamily,
-    fontSize: 13,
-    lineHeight: 19
+    fontSize: SOURCE_TEXT_FONT_SIZE,
+    lineHeight: SOURCE_TEXT_LINE_HEIGHT
   },
   markdownContent: {
     padding: spacing.md,
     paddingBottom: spacing.xl
+  },
+  previewGestureArea: {
+    flex: 1
   },
   modeContainer: {
     flex: 1,
@@ -139,8 +146,8 @@ export const filePreviewStyles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.editorSurface
   },
-  imageScrollContent: {
-    flexGrow: 1,
+  imageFrame: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     padding: spacing.md

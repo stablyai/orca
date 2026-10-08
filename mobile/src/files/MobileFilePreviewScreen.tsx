@@ -8,6 +8,10 @@ import { colors, spacing } from '../theme/mobile-theme'
 import { useForceReconnect, useHostClient } from '../transport/client-context'
 import { connectionRetryAction } from '../transport/connection-retry-action'
 import {
+  markdownImageTapPreviewHref,
+  readMarkdownImageSources
+} from '../session/markdown-relative-image-srcs'
+import {
   loadMobileFilePreview,
   previewError,
   saveMobileTerminalArtifactPreview,
@@ -46,6 +50,7 @@ export function MobileFilePreviewScreen({ route }: Props) {
   const [savedContent, setSavedContent] = useState('')
   const [saveError, setSaveError] = useState('')
   const [saving, setSaving] = useState(false)
+  const [markdownImageSources, setMarkdownImageSources] = useState<Record<string, string>>({})
   const draftContentRef = useRef(draftContent)
   const savedContentRef = useRef(savedContent)
   const draftSourceKeyRef = useRef<string | null>(null)
@@ -156,6 +161,55 @@ export function MobileFilePreviewScreen({ route }: Props) {
   useEffect(() => {
     void loadPreview()
   }, [loadPreview])
+
+  // Relative markdown images resolve after the document loads: the preview renders the
+  // authored srcs first and swaps in data URLs as each image read settles.
+  useEffect(() => {
+    setMarkdownImageSources({})
+    if (
+      !client ||
+      connState !== 'connected' ||
+      previewSource?.source !== 'worktree' ||
+      preview.status !== 'ready' ||
+      preview.kind !== 'markdown'
+    ) {
+      return
+    }
+    let cancelled = false
+    void readMarkdownImageSources(
+      client,
+      previewSource.worktreeId,
+      previewSource.relativePath,
+      preview.content
+    )
+      .then((sources) => {
+        if (!cancelled) {
+          setMarkdownImageSources(sources)
+        }
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [client, connState, preview, previewSource])
+
+  // A tapped markdown image pushes its own preview route: the image viewer, which pinch-zooms.
+  const openMarkdownImage = useCallback(
+    (rawSrc: string) => {
+      if (previewParams == null || previewSource?.source !== 'worktree') {
+        return
+      }
+      const href = markdownImageTapPreviewHref(rawSrc, previewSource.relativePath, {
+        hostId: previewParams.hostId,
+        worktreeId: previewSource.worktreeId,
+        worktreeName: previewParams.worktreeName
+      })
+      if (href) {
+        router.push(href)
+      }
+    },
+    [previewParams, previewSource, router]
+  )
 
   const retry = useMemo(
     () =>
@@ -270,6 +324,8 @@ export function MobileFilePreviewScreen({ route }: Props) {
         lineColumn={lineColumn}
         imageWidth={Math.max(1, width - spacing.md * 2)}
         imageHeight={Math.max(240, height - 160)}
+        markdownImageSources={markdownImageSources}
+        onOpenImage={openMarkdownImage}
         onDraftChange={setDraftContent}
         onImageError={() =>
           setPreview({ status: 'error', message: 'Unable to load preview', reconnect: false })

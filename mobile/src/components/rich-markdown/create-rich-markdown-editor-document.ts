@@ -1,5 +1,6 @@
 import { createRichMarkdownEditorScope } from './document-scope'
 import { currentMarkdown, setEditable, setMarkdown, stopEditorContent } from './editor-content'
+import { setImageSources } from './editor-image-sources'
 import { startEditorListeners, stopEditorListeners } from './editor-listeners'
 import { startEditorSurface } from './editor-surface'
 import { startHostBridge } from './host-bridge'
@@ -39,6 +40,9 @@ export function createRichMarkdownEditorDocument(
       currentMarkdown: () => currentMarkdown(scope),
       dismissKeyboard: () => {
         dismissKeyboard(scope)
+      },
+      setImageSources: (sources) => {
+        setImageSources(scope, sources)
       }
     },
     stop: () => {

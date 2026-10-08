@@ -16,6 +16,7 @@ export function MarkdownReader({
   onSave,
   onCopy,
   onDiscard,
+  onOpenImage,
   keyboardLift
 }: {
   documentId: string
@@ -25,6 +26,8 @@ export function MarkdownReader({
   onSave: () => void
   onCopy: () => void
   onDiscard: () => void
+  /** Authored image src from a tap in the editor; the owner resolves it against the doc's path. */
+  onOpenImage: (rawSrc: string) => void
   keyboardLift: number
 }) {
   // Native Keyboard events under-report the WebView editor's covered area, so prefer the larger WebView-measured inset.
@@ -63,6 +66,8 @@ export function MarkdownReader({
         editable={doc.editable && !doc.saving}
         onChange={onChange}
         onKeyboardInsetChange={setWebviewKeyboardInset}
+        imageSources={doc.imageSources}
+        onOpenImage={onOpenImage}
       />
       {showFloatingActions ? (
         <View

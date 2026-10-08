@@ -1,5 +1,13 @@
-import { describe, expect, it } from 'vitest'
-import { routeMarkdownHref } from './markdown-href-routing'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { openMarkdownHref, openMarkdownImage, routeMarkdownHref } from './markdown-href-routing'
+
+const openExternalLink = vi.hoisted(() => vi.fn())
+
+vi.mock('../platform/external-link', () => ({ openExternalLink }))
+
+beforeEach(() => {
+  openExternalLink.mockClear()
+})
 
 describe('routeMarkdownHref', () => {
   it('routes web and mail links to the system handler', () => {
@@ -53,5 +61,41 @@ describe('routeMarkdownHref', () => {
     expect(routeMarkdownHref('editor://file/x.ts')).toEqual({ kind: 'none' })
     expect(routeMarkdownHref('javascript:alert(1)')).toEqual({ kind: 'none' })
     expect(routeMarkdownHref('data:text/plain,hi')).toEqual({ kind: 'none' })
+  })
+})
+
+describe('openMarkdownHref', () => {
+  it('opens web hrefs on the system handler and file hrefs on the file opener', () => {
+    const onOpenFile = vi.fn()
+    openMarkdownHref('https://example.com/docs', onOpenFile)
+    expect(openExternalLink).toHaveBeenCalledWith('https://example.com/docs')
+    openMarkdownHref('docs/plan.md#L7', onOpenFile)
+    expect(onOpenFile).toHaveBeenCalledWith('docs/plan.md:7')
+  })
+})
+
+describe('openMarkdownImage', () => {
+  it('sends a relative src to the dedicated image handler, never the file opener', () => {
+    const onOpenFile = vi.fn()
+    const onOpenImage = vi.fn()
+    openMarkdownImage('docs/shot.png', onOpenFile, onOpenImage)
+    expect(onOpenImage).toHaveBeenCalledWith('docs/shot.png')
+    expect(onOpenFile).not.toHaveBeenCalled()
+    expect(openExternalLink).not.toHaveBeenCalled()
+  })
+
+  it('routes an external src as a web href even with the image handler present', () => {
+    const onOpenFile = vi.fn()
+    const onOpenImage = vi.fn()
+    openMarkdownImage('https://example.com/chart.png', onOpenFile, onOpenImage)
+    expect(openExternalLink).toHaveBeenCalledWith('https://example.com/chart.png')
+    expect(onOpenImage).not.toHaveBeenCalled()
+    expect(onOpenFile).not.toHaveBeenCalled()
+  })
+
+  it('routes the src as a href when no image handler is provided', () => {
+    const onOpenFile = vi.fn()
+    openMarkdownImage('docs/shot.png', onOpenFile)
+    expect(onOpenFile).toHaveBeenCalledWith('docs/shot.png')
   })
 })

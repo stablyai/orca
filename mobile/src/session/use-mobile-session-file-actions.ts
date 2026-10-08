@@ -1,8 +1,10 @@
-import { useRef, useCallback } from 'react'
+import { useLayoutEffect, useRef, useCallback } from 'react'
 import { openExternalLink } from '../platform/external-link'
+import { useRouteHandoff } from '../navigation/route-handoff'
 import { useMobileFileTapHandlers } from './use-mobile-file-tap-handlers'
 import { resolveMobileNativeChatFileSessionId } from './mobile-native-chat-eligibility'
 import { activateOpenedSourceControlDiffTab } from './opened-mobile-session-tab'
+import { markdownImageTapPreviewHref } from './markdown-relative-image-srcs'
 import type { MobileSessionTab } from './mobile-session-route-types'
 import type { MobileSessionTerminalSendActionsModel } from './use-mobile-session-terminal-send-actions'
 
@@ -44,6 +46,32 @@ export function useMobileSessionFileActions(scope: MobileSessionTerminalSendActi
     scheduleDelayedAction,
     reportChatTapFailure: nativeChatSendError.show
   })
+
+  // A tapped markdown-editor image pushes its own zoomable preview route, resolved against the
+  // active markdown tab's directory. The tab is read at tap time: per-keystroke doc updates must
+  // not churn the callback identity the memoized editor receives.
+  const router = useRouteHandoff()
+  const activeSessionTabRef = useRef(activeSessionTab)
+  useLayoutEffect(() => {
+    activeSessionTabRef.current = activeSessionTab
+  }, [activeSessionTab])
+  const handleMarkdownImageTap = useCallback(
+    (rawSrc: string) => {
+      const tab = activeSessionTabRef.current
+      if (!tab || tab.type !== 'markdown') {
+        return
+      }
+      const href = markdownImageTapPreviewHref(rawSrc, tab.relativePath, {
+        hostId,
+        worktreeId,
+        worktreeName: routeWorktreeName
+      })
+      if (href) {
+        router.push(href)
+      }
+    },
+    [hostId, routeWorktreeName, router, worktreeId]
+  )
 
   const handleOpenedFileDiffActivationSeqRef = useRef(0)
   // Capture active tab at tap time; reading it after openDiff would misread a mid-RPC switch and let the retry steal focus.
@@ -102,6 +130,7 @@ export function useMobileSessionFileActions(scope: MobileSessionTerminalSendActi
   return {
     handleFileTap,
     handleNativeChatFileTap,
+    handleMarkdownImageTap,
     handleOpenedFileDiffActivationSeqRef,
     fileOpenStartActiveTabIdRef,
     handleFileOpenStart,

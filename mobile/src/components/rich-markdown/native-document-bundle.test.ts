@@ -87,14 +87,33 @@ describe('the bundled rich Markdown editor document', () => {
     const { posted, viewportListeners, handle } = evaluateBundle()
     expect(posted).toEqual([{ type: 'keyboardInset', bottom: 280 }, { type: 'ready' }])
     expect(viewportListeners).toEqual(['resize', 'scroll'])
-    // The five members the native component reaches through `injectJavaScript`.
+    // The six members the native component reaches through `injectJavaScript`.
     expect(Object.keys(handle).sort()).toEqual([
       'currentMarkdown',
       'dismissKeyboard',
       'runCommand',
       'setEditable',
+      'setImageSources',
       'setMarkdown'
     ])
+  })
+
+  it('displays a host-resolved relative image without serializing its data URL', () => {
+    const { handle } = evaluateBundle()
+    handle.setMarkdown('![Shot](docs/a.png)', 2)
+    const image = document.querySelector('img')!
+    expect(image.getAttribute('data-orca-src')).toBe('docs/a.png')
+    expect(image.getAttribute('src')).toBe('docs/a.png')
+
+    handle.setImageSources({ 'docs/a.png': 'data:image/png;base64,QUJD' })
+    expect(image.getAttribute('src')).toBe('data:image/png;base64,QUJD')
+    expect(image.getAttribute('data-orca-src')).toBe('docs/a.png')
+    expect(handle.currentMarkdown()).toBe('![Shot](docs/a.png)')
+
+    // A host content replacement rebuilds the surface; the stored sources re-apply to it.
+    handle.setMarkdown('![Shot](docs/a.png)', 3)
+    expect(document.querySelector('img')!.getAttribute('src')).toBe('data:image/png;base64,QUJD')
+    expect(handle.currentMarkdown()).toBe('![Shot](docs/a.png)')
   })
 
   it('takes markdown through the injected handle and gives back the source it was given', () => {
@@ -200,6 +219,23 @@ describe('the bundled rich Markdown editor document', () => {
     expect(posted).toContainEqual({ type: 'openLink', url: 'https://example.com/docs' })
   })
 
+  it('reports a tapped relative image to the host with its authored src', () => {
+    const { posted, handle } = evaluateBundle()
+    handle.setMarkdown('![shot](images/shot.png)', 1)
+    posted.length = 0
+    document.querySelector('#editor img')!.dispatchEvent(new Event('click', { bubbles: true }))
+    expect(posted).toEqual([{ type: 'openImage', src: 'images/shot.png' }])
+  })
+
+  it('routes a tapped external image as a link, keeping the display swap out of it', () => {
+    const { posted, handle } = evaluateBundle()
+    handle.setMarkdown('![chart](https://example.com/chart.png)', 1)
+    handle.setImageSources({ 'https://example.com/chart.png': 'data:image/png;base64,AAA' })
+    posted.length = 0
+    document.querySelector('#editor img')!.dispatchEvent(new Event('click', { bubbles: true }))
+    expect(posted).toEqual([{ type: 'openLink', url: 'https://example.com/chart.png' }])
+  })
+
   it('is the same bytes wherever its generator was run from', () => {
     // The artifact is committed by a postinstall run whose working directory is whatever the
     // installer happened to be in, and every case above compares it with a build made here. So the
@@ -221,7 +257,7 @@ describe('the bundled rich Markdown editor document', () => {
     // three about the artifact that ships rather than about a bundle this case built for itself.
     const { script, inputs } = await richMarkdownEditorBundle()
     expect(inputs.filter((input) => input.includes('node_modules'))).toEqual([])
-    expect(inputs).toHaveLength(23)
+    expect(inputs).toHaveLength(24)
     expect(script).not.toContain('__commonJS')
     // `__esm` wrappers are esbuild's answer to a cycle, and a cycle would make a module's top level
     // run at first import rather than where the bundle places it.

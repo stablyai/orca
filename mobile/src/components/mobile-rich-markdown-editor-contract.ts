@@ -19,6 +19,7 @@ export type MobileRichMarkdownEditorMessage =
   | { type: 'ready' }
   | { type: 'change'; markdown: string; generation: number }
   | { type: 'openLink'; url: string }
+  | { type: 'openImage'; src: string }
   | { type: 'keyboardInset'; bottom: number }
 
 export type MobileRichMarkdownEditorProps = {
@@ -27,6 +28,10 @@ export type MobileRichMarkdownEditorProps = {
   onChange: (content: string) => void
   onKeyboardInsetChange?: (bottom: number) => void
   onOpenLink: (url: string) => void
+  /** Tapped image with its authored src (never external — those arrive as openLink). */
+  onOpenImage?: (src: string) => void
+  /** Display URLs keyed by authored image src, for relative paths the document cannot load itself. */
+  imageSources?: Record<string, string>
 }
 
 /** How a host delivers a command into whatever surface renders the editor document. */
@@ -34,4 +39,5 @@ export type MobileRichMarkdownEditorTransport = {
   setMarkdown: (markdown: string, generation: number) => void
   setEditable: (editable: boolean) => void
   runCommand: (command: MobileRichMarkdownCommand) => void
+  setImageSources: (sources: Record<string, string>) => void
 }

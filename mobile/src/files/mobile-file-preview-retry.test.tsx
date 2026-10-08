@@ -28,11 +28,29 @@ vi.mock('react-native', () => ({
 }))
 vi.mock('react-native-safe-area-context', () => ({ SafeAreaView: 'SafeAreaView' }))
 vi.mock('lucide-react-native', () => ({ ChevronLeft: 'Icon', Save: 'Icon' }))
+vi.mock('react-native-gesture-handler', () => {
+  const chain: Record<string, unknown> = {}
+  for (const method of ['numberOfTaps', 'onBegin', 'onEnd', 'onFinalize', 'onUpdate']) {
+    chain[method] = () => chain
+  }
+  return {
+    Gesture: { Pan: () => chain, Pinch: () => chain, Simultaneous: () => chain, Tap: () => chain },
+    GestureDetector: 'GestureDetector',
+    GestureHandlerRootView: 'GestureHandlerRootView'
+  }
+})
+vi.mock('react-native-reanimated', () => ({
+  default: { View: 'AnimatedView' },
+  useAnimatedStyle: () => ({}),
+  useSharedValue: <T,>(initial: T) => ({ value: initial }),
+  withSpring: (value: number) => value
+}))
 vi.mock('../navigation/route-handoff', () => ({
   useRouteHandoff: () => ({ back: () => {}, canGoBack: () => false })
 }))
 vi.mock('../components/ConfirmModal', () => ({ ConfirmModal: () => null }))
 vi.mock('./MobileFileMarkdownPreview', () => ({ MobileFileMarkdownPreview: () => null }))
+vi.mock('./MobileFileMediaHandoff', () => ({ MobileFileMediaHandoff: () => null }))
 vi.mock('./MobileFilePreviewSourceText', () => ({ MobileFilePreviewSourceText: () => null }))
 // A host the shell has not reached by default: no client, so the screen settles on `waiting`.
 vi.mock('../transport/client-context', () => ({

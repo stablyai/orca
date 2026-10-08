@@ -4,20 +4,27 @@ import { MobileSyntaxSegments } from '../components/MobileSyntaxSegments'
 import { formatPreviewByteLength } from './mobile-file-preview-request'
 import { scrollOffsetForPreviewLine } from './mobile-file-preview-line-column'
 import { buildMobileFilePreviewSyntax } from './mobile-file-preview-syntax'
-import { filePreviewStyles as styles } from './mobile-file-preview-styles'
+import {
+  SOURCE_TEXT_FONT_SIZE,
+  SOURCE_TEXT_LINE_HEIGHT,
+  filePreviewStyles as styles
+} from './mobile-file-preview-styles'
 
 export function MobileFilePreviewSourceText({
   relativePath,
   content,
   truncated,
   byteLength,
-  initialLine
+  initialLine,
+  fontScale = 1
 }: {
   relativePath: string
   content: string
   truncated?: boolean
   byteLength?: number
   initialLine?: number
+  /** Pinch-driven multiplier from the preview's gesture; 1 leaves the sheet sizes alone. */
+  fontScale?: number
 }) {
   const scrollRef = useRef<ScrollView>(null)
   const revealedRef = useRef(false)
@@ -51,7 +58,19 @@ export function MobileFilePreviewSourceText({
       {truncated ? (
         <MobileFilePreviewTruncatedNote byteLength={byteLength ?? content.length} />
       ) : null}
-      <Text selectable style={styles.textPreview} accessibilityLabel="File preview">
+      <Text
+        selectable
+        style={[
+          styles.textPreview,
+          fontScale !== 1
+            ? {
+                fontSize: SOURCE_TEXT_FONT_SIZE * fontScale,
+                lineHeight: SOURCE_TEXT_LINE_HEIGHT * fontScale
+              }
+            : null
+        ]}
+        accessibilityLabel="File preview"
+      >
         <MobileSyntaxSegments segments={syntax.segments} />
       </Text>
     </ScrollView>

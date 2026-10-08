@@ -6,6 +6,7 @@ import { MobileMarkdown } from './MobileMarkdown'
 const openURL = vi.fn(() => Promise.resolve())
 
 vi.mock('react-native', () => ({
+  Image: 'Image',
   Linking: { openURL: (url: string) => openURL(url) },
   Platform: { OS: 'ios' },
   Pressable: 'Pressable',
@@ -48,9 +49,15 @@ describe('MobileMarkdown file links', () => {
     renderer = null
   })
 
-  function render(content: string): ReactTestRenderer {
+  function render(
+    content: string,
+    imageSources?: Record<string, string>,
+    onOpenImage?: (rawSrc: string) => void
+  ): ReactTestRenderer {
     act(() => {
-      renderer = create(createElement(MobileMarkdown, { content, onOpenFile }))
+      renderer = create(
+        createElement(MobileMarkdown, { content, onOpenFile, imageSources, onOpenImage })
+      )
     })
     return renderer!
   }
@@ -144,5 +151,87 @@ describe('MobileMarkdown file links', () => {
       renderer = create(createElement(MobileMarkdown, { content: 'Edit src/app/Main.tsx now' }))
     })
     expect(pressables(renderer!)).toHaveLength(0)
+  })
+
+  describe('resolved relative images', () => {
+    const sources = { 'docs/shot.png': 'data:image/png;base64,AAA' }
+
+    function images(rendered: ReactTestRenderer): ReactTestInstance[] {
+      return rendered.root.findAll((node) => String(node.type) === 'Image')
+    }
+
+    function pressImage(image: ReactTestInstance): void {
+      let target: ReactTestInstance | null = image
+      while (target && typeof target.props.onPress !== 'function') {
+        target = target.parent
+      }
+      expect(target, 'no tappable ancestor of the image').not.toBeNull()
+      act(() => {
+        target!.props.onPress()
+      })
+    }
+
+    it('renders an inline image from its resolved data URL, tappable to the file', () => {
+      const tree = render('see ![shot](docs/shot.png) here', sources)
+      const image = images(tree)
+      expect(image).toHaveLength(1)
+      expect(image[0]!.props.source).toEqual({ uri: 'data:image/png;base64,AAA' })
+      pressImage(image[0]!)
+      expect(onOpenFile).toHaveBeenCalledWith('docs/shot.png')
+    })
+
+    it('renders an unresolved inline image as the tappable fallback text', () => {
+      const tree = render('see ![shot](docs/shot.png) here')
+      expect(images(tree)).toHaveLength(0)
+      pressByText(tree, 'shot')
+      expect(onOpenFile).toHaveBeenCalledWith('docs/shot.png')
+    })
+
+    it('renders a standalone image full width from its resolved data URL', () => {
+      const tree = render('![shot](docs/shot.png)', sources)
+      const image = images(tree)
+      expect(image).toHaveLength(1)
+      expect(image[0]!.props.style).toMatchObject({ width: '100%' })
+      pressImage(image[0]!)
+      expect(onOpenFile).toHaveBeenCalledWith('docs/shot.png')
+    })
+
+    it('keeps an unresolved standalone image as prose', () => {
+      const tree = render('![shot](docs/shot.png)')
+      expect(images(tree)).toHaveLength(0)
+      pressByText(tree, 'shot')
+      expect(onOpenFile).toHaveBeenCalledWith('docs/shot.png')
+    })
+
+    it('routes a tapped image to the dedicated image handler instead of the file opener', () => {
+      const onOpenImage = vi.fn()
+      const tree = render('![shot](docs/shot.png)', sources, onOpenImage)
+      pressImage(images(tree)[0]!)
+      expect(onOpenImage).toHaveBeenCalledWith('docs/shot.png')
+      expect(onOpenFile).not.toHaveBeenCalled()
+    })
+
+    it('routes an unresolved inline image fallback to the dedicated image handler', () => {
+      const onOpenImage = vi.fn()
+      const tree = render('see ![shot](docs/shot.png) here', undefined, onOpenImage)
+      pressByText(tree, 'shot')
+      expect(onOpenImage).toHaveBeenCalledWith('docs/shot.png')
+      expect(onOpenFile).not.toHaveBeenCalled()
+    })
+
+    it('keeps an external image on the system browser even with the image handler', () => {
+      const onOpenImage = vi.fn()
+      const tree = render('![chart](https://example.com/chart.png)', undefined, onOpenImage)
+      // An external standalone image parses as an image block: the handler sits on the Pressable.
+      const frame = tree.root.find(
+        (node) => node.type === ('Pressable' as never) && typeof node.props.onPress === 'function'
+      )
+      act(() => {
+        frame.props.onPress()
+      })
+      expect(openURL).toHaveBeenCalledWith('https://example.com/chart.png')
+      expect(onOpenImage).not.toHaveBeenCalled()
+      expect(onOpenFile).not.toHaveBeenCalled()
+    })
   })
 })
