@@ -43,6 +43,7 @@ import {
 import { invalidateWslGuestEnvironment } from '../wsl/wsl-guest-environment'
 import { prunePreflightWslCache } from '../preflight-wsl-cache'
 import { detectAgentCommandsOnHost } from './agent-command-detection'
+import { resolveKiroCommand } from '../rate-limits/kiro-usage-fetcher'
 export { detectAgentCommandsOnHost } from './agent-command-detection'
 
 export type PreflightStatus = {
@@ -145,15 +146,23 @@ async function detectCommandRuntime(
 }
 
 export async function detectInstalledAgents(context?: PreflightRuntimeContext): Promise<string[]> {
+  const wslTarget = getPreflightWslTarget(context)
   const commands = getTuiAgentDetectionProbeCommands(
     KNOWN_TUI_AGENT_DETECTION_COMMANDS,
-    getPreflightWslTarget(context) ? 'wsl' : process.platform
+    wslTarget ? 'wsl' : process.platform
   )
-  return resolveDetectedTuiAgentIds(
+  const detected = resolveDetectedTuiAgentIds(
     KNOWN_TUI_AGENT_DETECTION_COMMANDS,
     await detectAgentCommandsOnHost(commands, { context }),
-    getPreflightWslTarget(context) ? 'wsl' : process.platform
+    wslTarget ? 'wsl' : process.platform
   )
+  if (!wslTarget && process.env.KIRO_CLI_PATH?.trim()) {
+    const kiro = await findRunnableLocalCommand(resolveKiroCommand())
+    return kiro.status === 'available'
+      ? [...new Set([...detected, 'kiro'])]
+      : detected.filter((id) => id !== 'kiro')
+  }
+  return detected
 }
 
 export async function detectInstalledAgentsWithShellPathHydration(
