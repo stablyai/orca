@@ -353,11 +353,7 @@ describe('already-wedged profiles become usable on load', () => {
         .snapshot()
         .items.flatMap((item) => (item.body.kind === 'status' ? [item.body.text] : []))
       expect(statusRows).toEqual(
-        remote
-          ? []
-          : [
-              'Codex stopped while this response was in progress. You can continue in this conversation.'
-            ]
+        remote ? [] : ['This response was interrupted. You can continue in this conversation.']
       )
       // What the sidebar reads: every status this restart published says the chat is not working.
       expect(published.filter((summary) => summary.sessionId === SESSION)).not.toEqual([])

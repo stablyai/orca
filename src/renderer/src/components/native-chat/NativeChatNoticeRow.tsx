@@ -13,7 +13,6 @@ import {
 import type { NativeChatTextBlock } from '../../../../shared/native-chat-types'
 import { useNativeChatOrcaStopView } from './native-chat-orca-stop-context'
 import { nativeChatOrcaStopRowText } from './native-chat-orca-stop-words'
-import { AGENT_SESSION_ORCA_STOP_PRESENTATION } from '../../../../shared/agent-session-orca-stop'
 import { ProviderFrameRow } from './NativeChatTranscriptChrome'
 import { Button } from '@/components/ui/button'
 import {
@@ -32,7 +31,14 @@ const HOST_STATUS_WORDS: Record<AgentSessionHostStatusPresentation, () => string
     translate(
       'components.native-chat.notices.historyItemTooLarge',
       HOST_STATUS_COPY['history-item-too-large']
-    )
+    ),
+  'response-interrupted': () =>
+    translate(
+      'components.native-chat.notices.responseInterrupted',
+      HOST_STATUS_COPY['response-interrupted']
+    ),
+  'orca-stop': () =>
+    translate('components.native-chat.notices.responseInterrupted', HOST_STATUS_COPY['orca-stop'])
 }
 
 export function NativeChatNoticeRow({
@@ -44,8 +50,12 @@ export function NativeChatNoticeRow({
   onLinkClick?: CommentMarkdownLinkClickHandler
   allowFileUriLinks?: boolean
 }): React.JSX.Element {
-  const orcaStopView = useNativeChatOrcaStopView()
+  const { hostLabel, continueAvailable } = useNativeChatOrcaStopView()
   const claudeSignIn = useNativeChatClaudeSignInView()
+  const { orcaStop } = block
+  // The host's row about an Orca stop names the cause and the machine, muted: Orca stopped, not the
+  // agent. With no machine to name it reads as any other interrupted response.
+  const named = orcaStop !== undefined && hostLabel !== null
   if (block.presentation === 'compaction') {
     const label = translate('components.native-chat.notices.compaction', 'Context compacted')
     return (
@@ -68,7 +78,7 @@ export function NativeChatNoticeRow({
       </pre>
     )
   }
-  if (isAgentSessionHostStatusPresentation(block.presentation)) {
+  if (!named && isAgentSessionHostStatusPresentation(block.presentation)) {
     // The look of any other host status line; only the words are the reader's.
     return (
       <p className="min-w-0 max-w-full select-text text-sm text-muted-foreground [overflow-wrap:anywhere]">
@@ -98,16 +108,10 @@ export function NativeChatNoticeRow({
       </Card>
     )
   }
-  // The host's row about an Orca stop names the cause and the machine, muted: Orca stopped, not the
-  // agent. With no machine to name it keeps the host's own words.
-  const { orcaStop } = block
-  const { hostLabel, continueAvailable } = orcaStopView
-  const named = orcaStop !== undefined && hostLabel !== null
   const text = named
     ? nativeChatOrcaStopRowText(orcaStop.cause, hostLabel, { continueAvailable })
     : block.text
-  const tone =
-    named || block.presentation === AGENT_SESSION_ORCA_STOP_PRESENTATION ? 'notice' : block.tone
+  const tone = named ? 'notice' : block.tone
   const Icon =
     tone === 'warning'
       ? AlertTriangle

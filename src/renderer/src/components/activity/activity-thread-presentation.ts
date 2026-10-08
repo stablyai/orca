@@ -73,12 +73,11 @@ export function agentTitle(event: ActivityEvent): string {
   }
   if (event.state === 'done') {
     switch (agentMainAgentVerdict(event.entry)) {
-      // A turn cut short by anything but the user is a fault, as a failure is.
       case 'failure':
-      case 'interruption':
         return 'Agent failed'
       case 'cancellation':
       case 'superseded':
+      case 'interruption':
         return 'Agent interrupted'
       case 'unconfirmed':
         return 'Couldn’t confirm agent finished'
@@ -110,10 +109,10 @@ export function agentMeta(event: ActivityEvent): string {
   if (event.state === 'done') {
     switch (agentMainAgentVerdict(event.entry)) {
       case 'failure':
-      case 'interruption':
         return `${agent} failed`
       case 'cancellation':
       case 'superseded':
+      case 'interruption':
         return `${agent} interrupted`
       case 'unconfirmed':
         return `${agent} unconfirmed`

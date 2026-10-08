@@ -32,6 +32,8 @@ export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
     hasLiveDone,
     hasRetainedDone,
     hasRetainedFailed,
+    hasRetainedInterrupted,
+    hasRetainedUnconfirmed,
     agentStatusPaneIdsByTabId,
     stalePaneIdsByTabId
   } = useAppStore(useShallow((s) => selectWorktreeAgentActivitySummary(s, worktreeId)))
@@ -57,7 +59,9 @@ export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
         hasUnconfirmed,
         hasLiveDone,
         hasRetainedDone,
-        hasRetainedFailed
+        hasRetainedFailed,
+        hasRetainedInterrupted,
+        hasRetainedUnconfirmed
       }),
     [
       tabs,
@@ -75,7 +79,9 @@ export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
       hasUnconfirmed,
       hasLiveDone,
       hasRetainedDone,
-      hasRetainedFailed
+      hasRetainedFailed,
+      hasRetainedInterrupted,
+      hasRetainedUnconfirmed
     ]
   )
 }

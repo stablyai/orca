@@ -14,6 +14,8 @@ import type {
   AgentJournalTurnLifecycleState,
   AgentJournalTurnOutcome
 } from './agent-session-journal-types'
+import type { AgentTurnOutcome } from './agent-turn-outcome'
+import { structuredAgentTurnVerdictReader } from './native-chat-cut-turn-explanation'
 import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
 import { isRootAgentJournalItem } from './agent-session-journal-producer'
 import { readAgentJournalTurn, readAgentJournalTurnOutcome } from './agent-session-turn-record'
@@ -35,6 +37,9 @@ export type StructuredAgentSessionLatestRequest = {
   turnState: AgentJournalTurnLifecycleState | null
   /** The provider's verdict. Null while the turn runs, and for a turn whose end carried none. */
   outcome: AgentJournalTurnOutcome | null
+  /** The verdict a status row reports: `outcome`, else what the host observed of the turn's end,
+   *  read as every surface reads it (`structuredAgentTurnVerdictReader`). Never announced. */
+  verdict: AgentTurnOutcome | null
   /** When it settled: the turn's end, or the refusal. Undefined while it runs. */
   settledAt: number | undefined
 }
@@ -78,6 +83,7 @@ export function latestStructuredAgentSessionRequest(
         id: turn.turnId,
         turnState: turn.state,
         outcome: readAgentJournalTurnOutcome(turn),
+        verdict: structuredAgentTurnVerdictReader(items)(item),
         settledAt: turn.state === 'running' ? undefined : turnEndedAt(item, turn)
       }
     }
@@ -88,6 +94,7 @@ export function latestStructuredAgentSessionRequest(
         id: item.itemId,
         turnState: null,
         outcome: 'failure',
+        verdict: 'failure',
         settledAt: submission.resolvedAt ?? undefined
       }
     }

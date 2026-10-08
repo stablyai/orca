@@ -23,7 +23,6 @@ import {
 } from './structured-agent-session-launch-env'
 import { refuseAgentSessionMutation } from './structured-agent-session-mutation-admission'
 import { settleStaleStructuredAgentSessionState } from './structured-agent-session-dead-generation-settlement'
-import { structuredAgentSessionFailureWordsContext } from './structured-agent-session-send-preparation'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import type {
   StructuredAgentSessionProviderChild,
@@ -222,8 +221,7 @@ async function runAttachUnderAbort(
             sessionId,
             fence,
             acquisitionGeneration,
-            deathEvidence: priorDeathEvidence,
-            failureTextContext: structuredAgentSessionFailureWordsContext(priorRecord)
+            deathEvidence: priorDeathEvidence
           })
         }
         await bindAndDrain(eventSink, attached.journal, fence, (activity) =>

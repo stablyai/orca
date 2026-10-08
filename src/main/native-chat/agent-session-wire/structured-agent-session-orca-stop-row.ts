@@ -2,16 +2,12 @@
 // every client already prints for a stopped agent, with the cause beside them for clients that
 // name it (`AgentSessionOrcaStop`).
 
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import {
-  AGENT_SESSION_ORCA_STOP_PRESENTATION,
-  isAgentSessionOrcaStopCause
-} from '../../../shared/agent-session-orca-stop'
+  agentSessionHostStatusBody,
+  agentSessionResponseInterruptedStoredBody
+} from '../../../shared/agent-session-host-status-rows'
+import { isAgentSessionOrcaStopCause } from '../../../shared/agent-session-orca-stop'
 import type { AgentSessionResumeTrigger } from '../../../shared/agent-session-resume-marker'
-import {
-  agentSessionFailureWords,
-  type AgentSessionFailureWordsContext
-} from '../../../shared/agent-session-failure-words'
 import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import { isRootAgentJournalItem } from '../../../shared/agent-session-journal-producer'
 import type {
@@ -29,24 +25,13 @@ import type { StructuredAgentSessionLogger } from './structured-agent-session-lo
 
 type OrcaStopRowJournal = Pick<AgentSessionJournal, 'snapshot' | 'appendItem'>
 
-/** The row about an owner gone from under a turn: today's words and tone, which every client prints
- *  as it always has, and why Orca stopped when it was Orca, which a client that knows the cause names
- *  instead, muted. */
-export function orcaStopRowBody(
-  context: AgentSessionFailureWordsContext | undefined,
-  orcaEnd: unknown
-): AgentJournalStatusItem {
-  return {
-    kind: 'status',
-    ...agentSessionFailureWords(agentSessionFailureFact('providerExited'), {
-      ...context,
-      surface: 'row'
-    }),
-    tone: 'error',
-    ...(isAgentSessionOrcaStopCause(orcaEnd)
-      ? { presentation: AGENT_SESSION_ORCA_STOP_PRESENTATION, orcaStop: { cause: orcaEnd } }
-      : {})
-  }
+/** The row about an owner gone from under a turn: words that blame no one, stored red so an older
+ *  client keeps it on screen, and why Orca stopped when it was Orca, which a client that knows the
+ *  cause names instead, muted. */
+export function orcaStopRowBody(orcaEnd: unknown): AgentJournalStatusItem {
+  return isAgentSessionOrcaStopCause(orcaEnd)
+    ? { ...agentSessionHostStatusBody('orca-stop'), tone: 'error', orcaStop: { cause: orcaEnd } }
+    : agentSessionResponseInterruptedStoredBody()
 }
 
 /** The root turn running as the quit stops the child: the one its stop may cut. */
@@ -84,7 +69,6 @@ export async function recordStructuredAgentSessionShutdownCut(input: {
   generation: string
   turnItemId: string | null
   trigger: AgentSessionResumeTrigger
-  failureTextContext?: AgentSessionFailureWordsContext
   logger: StructuredAgentSessionLogger
 }): Promise<void> {
   try {
@@ -107,7 +91,7 @@ export async function recordStructuredAgentSessionShutdownCut(input: {
     }
     await input.journal.appendItem(
       { provider: 'orca', clientMessageId },
-      orcaStopRowBody(input.failureTextContext, input.trigger),
+      orcaStopRowBody(input.trigger),
       { fence: input.fence, turnScope: { kind: 'turn', turnItemId } }
     )
   } catch (error) {

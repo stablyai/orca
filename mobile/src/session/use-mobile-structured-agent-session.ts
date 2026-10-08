@@ -3,7 +3,6 @@ import { encodeNativeChatTranscriptIdentity } from '../../../src/shared/native-c
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import { projectStructuredAgentSessionMessages } from '../../../src/shared/structured-agent-session-message-projection'
 import { withNativeChatCutTurnNotices } from '../../../src/shared/native-chat-cut-turn-notice'
-import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/tui-agent-display-names'
 import { isStructuredAgentSessionMainAgentWorking } from '../../../src/shared/structured-agent-session-main-agent-working'
 import { isFinalAgentSessionReadRefusal } from '../../../src/shared/structured-agent-session-read-refusal'
 import {
@@ -168,13 +167,7 @@ export function useMobileStructuredAgentSession(args: {
 
   // What the transcript reads, as desktop does: the journal plus the one notice a cut turn with no
   // row gets.
-  const transcriptItems = useMemo(
-    () =>
-      withNativeChatCutTurnNotices(state.items, {
-        agentName: TUI_AGENT_DISPLAY_NAMES[agent === 'codex' ? 'codex' : 'claude']
-      }),
-    [agent, state.items]
-  )
+  const transcriptItems = useMemo(() => withNativeChatCutTurnNotices(state.items), [state.items])
   const messages = useMemo(
     // Off: the phone hands a rejected message back to its composer, so a row would show it twice.
     () =>

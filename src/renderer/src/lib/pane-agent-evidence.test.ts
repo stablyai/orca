@@ -5,6 +5,7 @@ import {
 } from '../../../shared/agent-status-types'
 import {
   classifyTitleActivity,
+  isAgentStatusShownOnDot,
   isExplicitAgentStatusFresh,
   resolveCommittedTitleAgentType,
   resolvePaneAgentActivity,
@@ -45,6 +46,39 @@ describe('isExplicitAgentStatusFresh', () => {
         AGENT_STATUS_STALE_AFTER_MS
       )
     ).toBe(false)
+  })
+})
+
+describe('isAgentStatusShownOnDot', () => {
+  const STALE = NOW - AGENT_STATUS_STALE_AFTER_MS - 60_000
+  const settled = (overrides: Partial<AgentStatusEntry> = {}) =>
+    entry({
+      state: 'done',
+      updatedAt: STALE,
+      structuredHost: 'held',
+      mainAgent: { state: 'done', outcome: 'cancellation', stateStartedAt: STALE },
+      ...overrides
+    })
+
+  it("keeps a native chat's settled verdict on the dot, without making it live evidence", () => {
+    const row = settled()
+    expect(isAgentStatusShownOnDot(row, NOW, AGENT_STATUS_STALE_AFTER_MS)).toBe(true)
+    // Liveness (child rows under it, attention, cleanup) still reads it stale.
+    expect(isExplicitAgentStatusFresh(row, NOW, AGENT_STATUS_STALE_AFTER_MS)).toBe(false)
+  })
+
+  it.each([
+    ['a hook row', { structuredHost: undefined }],
+    ['a clean done', { mainAgent: { state: 'done', outcome: 'success', stateStartedAt: STALE } }],
+    [
+      'a failed lead still held open by its subagents',
+      { state: 'working', mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: STALE } }
+    ],
+    ['an unconfirmed restore', { restoredUnconfirmed: true }]
+  ] satisfies [string, Partial<AgentStatusEntry>][])('lets %s age out', (_label, overrides) => {
+    expect(isAgentStatusShownOnDot(settled(overrides), NOW, AGENT_STATUS_STALE_AFTER_MS)).toBe(
+      false
+    )
   })
 })
 

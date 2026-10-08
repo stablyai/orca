@@ -4,6 +4,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
+import { withNativeChatCutTurnNotices } from '../../shared/native-chat-cut-turn-notice'
 import { hostTestMessage } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import { waitForStructuredAgentSessionRecovery } from './structured-agent-session-runtime'
@@ -68,5 +69,18 @@ describe('a started Claude CLI that exits while a response is in progress', () =
         }
       ])
     )
+    // The agent really died on its own, so the reader shows this one row, in its error tone, and
+    // derives no interrupted notice beside it.
+    const { items } = await host.journalSnapshot(SESSION)
+    expect(
+      withNativeChatCutTurnNotices(items).flatMap((item) =>
+        item.body.kind === 'status' ? [{ text: item.body.text, tone: item.body.tone }] : []
+      )
+    ).toEqual([
+      {
+        text: 'Claude stopped while this response was in progress. You can continue in this conversation.',
+        tone: 'error'
+      }
+    ])
   })
 })

@@ -77,8 +77,8 @@ describe('status group order', () => {
     expect(groups.map((group) => group.key)).toEqual(['working', 'done'])
   })
 
-  it("ranks a user's Stop and a replaced turn below live work, above Done", () => {
-    for (const outcome of ['cancellation', 'superseded'] as const) {
+  it("ranks a user's Stop, a replaced turn and a crash cut below live work, above Done", () => {
+    for (const outcome of ['cancellation', 'superseded', 'interruption'] as const) {
       const groups = buildActivityThreadGroups(
         makeStatusThreads([
           { paneKey: PANE_KEY, state: 'working', at: 1_000 },
@@ -100,7 +100,7 @@ describe('status group order', () => {
       makeStatusThreads([
         { paneKey: PANE_KEY, state: 'working', at: 5_000 },
         { paneKey: PANE_KEY_2, state: 'done', at: 1_000, outcome: 'unconfirmed' },
-        { paneKey: PANE_KEY_3, state: 'done', at: 3_000, outcome: 'interruption' }
+        { paneKey: PANE_KEY_3, state: 'done', at: 3_000, outcome: 'failure' }
       ]),
       'status'
     )

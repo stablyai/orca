@@ -1,6 +1,7 @@
 import type { AgentStatus } from '../../../shared/agent-detection'
 import { detectAgentStatusFromTitle, getAgentLabel } from '../../../shared/agent-detection'
 import { resolveExplicitTerminalTitleAgentType } from '../../../shared/terminal-title-agent-type'
+import { agentVerdictDisplayMark } from '../../../shared/agent-main-agent-verdict'
 import type { TerminalAgent } from '../../../shared/terminal-agent'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
@@ -33,6 +34,37 @@ export function isExplicitAgentStatusFresh(
     (entry.structuredHostOwned === true ||
       now - agentStatusEvidenceObservedAt(entry) <= staleAfterMs)
   )
+}
+
+/**
+ * A native chat's settled verdict (Interrupted, Failed, Couldn't confirm) that no timer may clear: it
+ * is the chat's state, re-derived from its journal on every change, not a live report that can go
+ * quiet, so it stays until the chat's next turn replaces it. A clean done, and a row still held open
+ * by work, are not kept.
+ */
+export function isSettledNativeChatVerdict(
+  entry: Pick<
+    AgentStatusEntry,
+    'state' | 'interrupted' | 'mainAgent' | 'structuredHost' | 'restoredUnconfirmed'
+  >
+): boolean {
+  return (
+    entry.structuredHost !== undefined &&
+    entry.restoredUnconfirmed !== true &&
+    entry.state === 'done' &&
+    agentVerdictDisplayMark(entry) !== null
+  )
+}
+
+/** Whether a row still sets its pane's status dot: while its evidence is fresh, or while it is a
+ *  native chat's settled verdict. */
+export function isAgentStatusShownOnDot(
+  entry: Parameters<typeof isExplicitAgentStatusFresh>[0] &
+    Parameters<typeof isSettledNativeChatVerdict>[0],
+  now: number,
+  staleAfterMs: number
+): boolean {
+  return isExplicitAgentStatusFresh(entry, now, staleAfterMs) || isSettledNativeChatVerdict(entry)
 }
 
 /**

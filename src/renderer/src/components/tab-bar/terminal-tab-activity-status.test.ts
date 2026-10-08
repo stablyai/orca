@@ -155,9 +155,9 @@ describe('resolveTerminalTabActivityStatus', () => {
   it.each([
     ['success', 'done'],
     ['failure', 'failed'],
-    // A user's Stop reads interrupted; a turn anything else cut short is a fault, like a failure.
+    // A user's Stop and a crash, quit or restart cut alike read interrupted; only a failure is red.
     ['cancellation', 'interrupted'],
-    ['interruption', 'failed'],
+    ['interruption', 'interrupted'],
     ['unconfirmed', 'unconfirmed']
   ] as const)('reports a %s done as %s, matching the worktree card', (outcome, status) => {
     const ended = entry(FIRST_LEAF_ID, 'done', {
@@ -231,6 +231,45 @@ describe('resolveTerminalTabActivityStatus', () => {
         ptyIdsByTabId: LIVE_PTY
       })
     ).toBe('interrupted')
+  })
+
+  // A native chat's settled verdict is its state, re-derived from its journal, so the freshness
+  // window never clears it, whoever ended the turn. A hook row and a clean done still age out.
+  it("keeps a native chat's settled verdict past the freshness window, until the chat changes", () => {
+    const ended = (
+      outcome: 'interruption' | 'cancellation' | 'failure' | 'unconfirmed' | 'success',
+      overrides: Partial<AgentStatusEntry> = {}
+    ) =>
+      entry(FIRST_LEAF_ID, 'done', {
+        updatedAt: 0,
+        structuredHost: 'held',
+        mainAgent: { state: 'done', outcome, stateStartedAt: 0 },
+        ...overrides
+      })
+    vi.setSystemTime(AGENT_STATUS_STALE_AFTER_MS + 60_000)
+    const status = (row: AgentStatusEntry) =>
+      resolveTerminalTabActivityStatus({
+        tab: TAB,
+        agentStatusByPaneKey: { [row.paneKey]: row },
+        ptyIdsByTabId: LIVE_PTY
+      })
+    expect(status(ended('interruption'))).toBe('interrupted')
+    expect(status(ended('cancellation'))).toBe('interrupted')
+    expect(status(ended('failure'))).toBe('failed')
+    expect(status(ended('unconfirmed'))).toBe('unconfirmed')
+    expect(status(ended('success'))).not.toBe('done')
+    // A stale working row is not a verdict: it ages out as any report does.
+    expect(status(ended('failure', { state: 'working', mainAgent: undefined }))).not.toBe('working')
+    expect(status(ended('cancellation', { structuredHost: undefined }))).not.toBe('interrupted')
+    // The next turn replaces it.
+    expect(
+      status(
+        entry(FIRST_LEAF_ID, 'working', {
+          updatedAt: Date.now(),
+          structuredHost: 'held'
+        })
+      )
+    ).toBe('working')
   })
 
   it('falls back to a live working title when hook status is stale', () => {

@@ -36,8 +36,7 @@ import { createStructuredAgentSessionLogger } from './structured-agent-session-l
 import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
 
 const CUT_TURN = { provider: 'codex' as const, threadId: THREAD, turnId: 'cut-turn', ordinal: 1 }
-const LEGACY_TEXT =
-  'Codex stopped while this response was in progress. You can continue in this conversation.'
+const INTERRUPTED_TEXT = 'This response was interrupted. You can continue in this conversation.'
 
 let host: StructuredAgentSessionHost
 /** How the provider ends its open turn as it is stopped. */
@@ -129,10 +128,10 @@ async function reread() {
     (item) =>
       item.body.kind === 'status' && readAgentSessionOrcaStop(item.body.orcaStop) !== undefined
   )
-  const readerErrors = withNativeChatCutTurnNotices(items, { agentName: 'Codex' }).flatMap(
-    (item) => (item.body.kind === 'status' && item.body.tone === 'error' ? [item.body.text] : [])
+  const readerRows = withNativeChatCutTurnNotices(items).flatMap((item) =>
+    item.body.kind === 'status' ? [item.body.text] : []
   )
-  return { items, turnItemId, stopRows, readerErrors }
+  return { items, turnItemId, stopRows, readerRows }
 }
 
 describe('the row a quit writes for the reply it cut', () => {
@@ -141,20 +140,21 @@ describe('the row a quit writes for the reply it cut', () => {
 
     await host.flushAllStreamedEvents({ trigger })
 
-    const { items, turnItemId, stopRows, readerErrors } = await reread()
+    const { items, turnItemId, stopRows, readerRows } = await reread()
     expect(stopRows).toHaveLength(1)
     const [row] = stopRows
+    // Stored red, so a client that reads no cause keeps it on screen; it blames no one.
     expect(row?.body).toMatchObject({
       kind: 'status',
-      text: LEGACY_TEXT,
+      text: INTERRUPTED_TEXT,
       tone: 'error',
-      failure: { kind: 'providerExited' },
       presentation: 'orca-stop',
       orcaStop: { cause: trigger }
     })
+    expect(row?.body).not.toHaveProperty('failure')
     expect(row?.turnScope).toEqual({ kind: 'turn', turnItemId })
-    // A client that reads no cause still prints exactly one row for the cut, in today's words.
-    expect(readerErrors).toEqual([LEGACY_TEXT])
+    // The reader prints exactly one row for the cut.
+    expect(readerRows).toEqual([INTERRUPTED_TEXT])
     expect(latestNativeChatOrcaStopCut(items, [])).toEqual({ turnItemId, cause: trigger })
   })
 
@@ -164,9 +164,9 @@ describe('the row a quit writes for the reply it cut', () => {
 
     await host.flushAllStreamedEvents({ trigger: 'update' })
 
-    const { stopRows, readerErrors } = await reread()
+    const { stopRows, readerRows } = await reread()
     expect(stopRows).toEqual([])
-    expect(readerErrors).toEqual([])
+    expect(readerRows).toEqual([])
   })
 
   it("writes nothing for a turn a person's Stop already ended", async () => {
@@ -184,10 +184,10 @@ describe('the row a quit writes for the reply it cut', () => {
 
     await host.close(SESSION, 'evict')
 
-    const { items, stopRows, readerErrors } = await reread()
+    const { items, stopRows, readerRows } = await reread()
     expect(stopRows).toEqual([])
-    // The cut keeps today's derived notice, and offers no Continue.
-    expect(readerErrors).toEqual([LEGACY_TEXT])
+    // The cut keeps its derived notice, and offers no Continue.
+    expect(readerRows).toEqual([INTERRUPTED_TEXT])
     expect(latestNativeChatOrcaStopCut(items, [])).toBeNull()
   })
 })
@@ -198,13 +198,13 @@ describe('the row a restart writes for a reply its Orca died in', () => {
 
     await restartAfterDeath()
 
-    const { items, turnItemId, stopRows, readerErrors } = await reread()
+    const { items, turnItemId, stopRows, readerRows } = await reread()
     expect(stopRows).toHaveLength(1)
     expect(stopRows[0]?.body).toMatchObject({
-      text: LEGACY_TEXT,
+      text: INTERRUPTED_TEXT,
       orcaStop: { cause: 'crash' }
     })
-    expect(readerErrors).toEqual([LEGACY_TEXT])
+    expect(readerRows).toEqual([INTERRUPTED_TEXT])
     expect(latestNativeChatOrcaStopCut(items, [])).toEqual({ turnItemId, cause: 'crash' })
   })
 
@@ -225,10 +225,10 @@ describe('the row a restart writes for a reply its Orca died in', () => {
 
     await restartAfterDeath()
 
-    const { stopRows, readerErrors } = await reread()
+    const { stopRows, readerRows } = await reread()
     expect(stopRows).toEqual([])
-    // The cut keeps today's words.
-    expect(readerErrors).toEqual([LEGACY_TEXT])
+    // The cut keeps the words for any interruption.
+    expect(readerRows).toEqual([INTERRUPTED_TEXT])
   })
 })
 

@@ -19,6 +19,10 @@ import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import { describeNativeChatTurnStatus } from '../../../shared/native-chat-turn-status'
 import {
+  nativeChatTurnFold,
+  type NativeChatTurnFoldRow
+} from '../../../shared/native-chat-turn-fold'
+import {
   completedStructuredAgentTurnSeconds,
   selectStructuredAgentTurnTimings
 } from '../../../shared/structured-agent-session-turn-timing'
@@ -200,6 +204,28 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true })
 })
 
+/** Whether a client from before this rule hides `row` under the settled turn it explains: that
+ *  client's fold, which keeps only the turn's answer (its last prose or error row) and a compaction
+ *  report outside the fold. */
+function foldedByAnOlderClient(row: { tone?: string; presentation?: string }): boolean {
+  const base = { turnKey: 'turn-1', rendersProse: true, draws: true, outlivesTurn: false }
+  const rows: NativeChatTurnFoldRow[] = [
+    { ...base, role: 'user', reportsFailure: false, explainsTurn: false },
+    { ...base, role: 'assistant', reportsFailure: false, explainsTurn: false },
+    {
+      ...base,
+      role: 'system',
+      reportsFailure: row.tone === 'error',
+      explainsTurn: row.presentation === 'compaction'
+    }
+  ]
+  return nativeChatTurnFold({
+    rows,
+    settledTurnKeys: new Set(['turn-1']),
+    expandedTurnKeys: new Set()
+  }).foldedRows.has(2)
+}
+
 describe('a turn a crash cut short mid-tool', () => {
   it('ends at the last renewal, not at the tool call the provider last reported', async () => {
     openHost({ probeOwner: async () => ({ outcome: 'pid-absent' }) })
@@ -222,7 +248,7 @@ describe('a turn a crash cut short mid-tool', () => {
     expect(completedStructuredAgentTurnSeconds(timing)).toBe(27)
   })
 
-  // The turn bar reads like a finished turn, so this row is the one place the chat says why.
+  // The turn bar says only that it was interrupted, so this row is the one place the chat says why.
   it('explains the cut once, with one notice row and a turn bar that does not repeat it', async () => {
     openHost({ probeOwner: async () => ({ outcome: 'pid-absent' }) })
 
@@ -230,16 +256,25 @@ describe('a turn a crash cut short mid-tool', () => {
 
     const { items } = await host.journalSnapshot(SESSION)
     // As a reader's transcript shows it: the stored row is the explanation, so none is derived.
-    const statusRows = withNativeChatCutTurnNotices(items, { agentName: 'Claude' }).flatMap(
-      (item) => (item.body.kind === 'status' ? [item.body] : [])
+    // Nothing proves who ended the agent's process, so the row blames no one and is muted.
+    const statusRows = withNativeChatCutTurnNotices(items).flatMap((item) =>
+      item.body.kind === 'status' ? [item.body] : []
     )
     expect(statusRows).toEqual([
-      expect.objectContaining({
-        text: 'Claude stopped while this response was in progress. You can continue in this conversation.',
-        failure: expect.objectContaining({ kind: 'providerExited' }),
-        tone: 'error'
-      })
+      {
+        kind: 'status',
+        text: 'This response was interrupted. You can continue in this conversation.',
+        presentation: 'response-interrupted',
+        tone: 'notice'
+      }
     ])
+    // The host stores it red with the same words: a client older than the presentation folds every
+    // row but an error one under a collapsed turn, and must still show it.
+    const stored = items.flatMap((item) => (item.body.kind === 'status' ? [item.body] : []))
+    expect(stored).toEqual([{ ...statusRows[0], tone: 'error' }])
+    expect(foldedByAnOlderClient(stored[0]!)).toBe(false)
+    // Stored muted, as this rule first wrote it, that client hid it.
+    expect(foldedByAnOlderClient({ ...stored[0]!, tone: 'notice' })).toBe(true)
     const [timing] = selectStructuredAgentTurnTimings(items).values()
     expect(
       describeNativeChatTurnStatus({
@@ -247,7 +282,7 @@ describe('a turn a crash cut short mid-tool', () => {
         workedSeconds: completedStructuredAgentTurnSeconds(timing),
         verdict: timing?.verdict
       })
-    ).toEqual({ key: 'workedFor', duration: '27s' })
+    ).toEqual({ key: 'interruptedAfter', duration: '27s' })
   })
 
   it('ends at the pre-crash renewal when the child outlived Orca and recovery stopped it', async () => {
@@ -332,7 +367,7 @@ describe('a turn a read reached before the reconcile proved its owner dead', () 
     unsubscribe()
   })
 
-  it('reports the revision to the status feed as an interruption, which the chat folds as worked', async () => {
+  it('reports the revision to the status feed as an interruption, which the chat folds as interrupted', async () => {
     const published: AgentSessionStatusSummary[] = []
     openHost({
       probeOwner: async () => ({ outcome: 'pid-absent' }),
@@ -348,7 +383,8 @@ describe('a turn a read reached before the reconcile proved its owner dead', () 
     await host.reconcileRestartLeases()
     await drainSession()
 
-    // The sidebar's red Failed until seen; the turn folds as "Worked for 27s" beside its notice row.
+    // Interrupted in the sidebar until the chat's state changes; the turn folds as "Interrupted after
+    // 27s" beside its notice row.
     await vi.waitFor(() => expect(outcomes().at(-1)).toBe('interruption'))
     const [timing] = selectStructuredAgentTurnTimings(
       (await host.journalSnapshot(SESSION)).items
@@ -359,7 +395,7 @@ describe('a turn a read reached before the reconcile proved its owner dead', () 
         workedSeconds: completedStructuredAgentTurnSeconds(timing),
         verdict: timing?.verdict
       })
-    ).toEqual({ key: 'workedFor', duration: '27s' })
+    ).toEqual({ key: 'interruptedAfter', duration: '27s' })
   })
 
   it('explains the turn its proof revised, so the cut reads once and offers Continue', async () => {
@@ -391,7 +427,7 @@ describe('a turn a read reached before the reconcile proved its owner dead', () 
       { kind: 'turn', turnItemId }
     ])
     expect(latestNativeChatOrcaStopCut(items, [])).toEqual({ turnItemId, cause: 'crash' })
-    const readerRows = withNativeChatCutTurnNotices(items, { agentName: 'Claude' }).filter(
+    const readerRows = withNativeChatCutTurnNotices(items).filter(
       (item) => item.body.kind === 'status'
     )
     expect(readerRows).toHaveLength(1)

@@ -315,14 +315,17 @@ describe('DashboardAgentRow', () => {
     )
   }
 
-  it('renders a crash-cut row as failed, with the red dot and no interrupted tag', () => {
+  // A crash, quit or restart cut it short: drawn as a Stop is, but not credited to the user.
+  it('renders a crash-cut row as interrupted, with the muted dot and the interrupted tag', () => {
     const markup = renderEndedRow({
       mainAgent: { state: 'done', outcome: 'interruption', stateStartedAt: 2_000 }
     })
 
-    expect(markup).toContain('aria-label="Failed"')
-    expect(markup).toContain('bg-red-500')
-    expect(markup).not.toContain('>interrupted<')
+    expect(markup).toContain('aria-label="Interrupted"')
+    expect(markup).not.toContain('aria-label="Interrupted by user"')
+    expect(markup).toContain('>interrupted<')
+    expect(markup).toContain('bg-muted-foreground')
+    expect(markup).not.toContain('bg-red-500')
     expect(markup).not.toContain('lucide-circle-check')
   })
 

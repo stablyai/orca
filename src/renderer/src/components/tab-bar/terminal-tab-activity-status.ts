@@ -2,7 +2,7 @@ import {
   readAgentAttentionUnreadReason,
   type ReadableAgentAttentionUnread
 } from '@/attention/agent-attention-contract'
-import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
+import { isAgentStatusShownOnDot } from '@/lib/pane-agent-evidence'
 import { resolveWorktreeStatus, type WorktreeStatus } from '@/lib/worktree-status'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
@@ -71,7 +71,7 @@ function getTerminalTabActivityFlags(
     }
     // Why: stale hook entries (>30m) are not authority; a slept/abandoned pane
     // must not keep a tab spinning. Same freshness gate as the sidebar.
-    if (!isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
+    if (!isAgentStatusShownOnDot(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
       // Stale identity suppresses Orca's one-shot permission label without suppressing native titles.
       getOrCreateTerminalTabActivityFlags(flagsByTabId, identity.tabId).stalePaneIds.add(
         identity.paneId

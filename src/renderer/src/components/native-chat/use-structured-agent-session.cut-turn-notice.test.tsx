@@ -88,8 +88,9 @@ describe('useStructuredAgentSession transcript', () => {
       role: 'system',
       blocks: [
         {
-          text: 'Codex stopped while this response was in progress. You can continue in this conversation.',
-          tone: 'error'
+          text: 'This response was interrupted. You can continue in this conversation.',
+          presentation: 'response-interrupted',
+          tone: 'notice'
         }
       ]
     })
@@ -97,7 +98,9 @@ describe('useStructuredAgentSession transcript', () => {
     expect(result.current.journalItems.at(-1)).toMatchObject({ turnScope: SCOPE })
   })
 
-  it('names any other agent by its own label, never as Claude', () => {
+  // The notice names no agent: nothing in the journal says who cut the turn, so it never names
+  // Claude, or any other agent, for it.
+  it('words a cut turn the same for any other agent, never naming Claude', () => {
     const { result } = renderHook(() =>
       useStructuredAgentSession({
         sessionId: 'session-1',
@@ -108,7 +111,8 @@ describe('useStructuredAgentSession transcript', () => {
     )
 
     expect(result.current.messages.at(-1)).toMatchObject({
-      blocks: [{ text: expect.stringMatching(/^Gemini stopped while/) }]
+      blocks: [{ text: 'This response was interrupted. You can continue in this conversation.' }]
     })
+    expect(JSON.stringify(result.current.messages)).not.toContain('Claude')
   })
 })

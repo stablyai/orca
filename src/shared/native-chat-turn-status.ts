@@ -46,9 +46,9 @@ export function describeNativeChatTurnStatus({
 }: {
   workedSeconds?: number | null
   elapsedSeconds: number
-  /** How the settled turn ended: a user's Stop or a newer request's replacement reads interrupted,
-   *  and a failure reads failed. A turn cut short when the agent stopped without anyone asking (a
-   *  crash, a quit, an eviction) reads like a finished one: the chat's notice row says it stopped. */
+  /** How the settled turn ended: a user's Stop, a newer request's replacement, or a cut nobody
+   *  asked for (Orca crashing or quitting, an eviction) reads interrupted, and a failure, the
+   *  agent's own exit included, reads failed. Only the cut gets the chat's notice row saying why. */
   verdict?: AgentTurnOutcome
 }): {
   key: 'workingFor' | 'workedFor' | 'interruptedAfter' | 'failedAfter'
@@ -65,11 +65,11 @@ function settledTurnStatusKey(
   switch (verdict) {
     case 'cancellation':
     case 'superseded':
+    case 'interruption':
       return 'interruptedAfter'
     case 'failure':
       return 'failedAfter'
     case 'success':
-    case 'interruption':
     case 'unconfirmed':
     case undefined:
       return 'workedFor'

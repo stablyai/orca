@@ -187,8 +187,6 @@ export async function settleStaleStructuredAgentSessionState(input: {
   fence: number
   acquisitionGeneration: string | null
   deathEvidence: AgentSessionDeathEvidence | null
-  /** Who the exit row names. */
-  failureTextContext?: AgentSessionFailureWordsContext
 }): Promise<number> {
   const { journal } = input
   const items = journal.snapshot().items
@@ -242,9 +240,13 @@ export async function settleStaleStructuredAgentSessionState(input: {
         provider: 'orca',
         clientMessageId: `${STALE_SESSION_ROW_PREFIX}${input.sessionId}:death-${evidence.ownerFence ?? 'unowned'}-${evidence.observedAt}`
       },
-      // The death evidence is Orca's log text, never a sentence for a person: the row says only
-      // that the provider stopped, and how Orca ended when the provider died with it.
-      body: orcaStopRowBody(input.failureTextContext, evidence.runtimeEnd),
+      // The death evidence is Orca's log text, never a sentence for a person, and it proves only that
+      // the agent's process is gone, not who ended it: a quit's close and an agent exit whose own
+      // settle failed both read `exit-observed`. So the row blames no one, and names how Orca ended
+      // when the provider died with it. Written, not left to the reader's derived notice, because a
+      // client older than that notice sees only this row, and stored red so a client older than its
+      // presentation does not fold it away.
+      body: orcaStopRowBody(evidence.runtimeEnd),
       turnScope: settledRootTurnScope(items, turnEnds)
     })
   }

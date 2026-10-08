@@ -57,7 +57,7 @@ describe('a Grok chat Stop', () => {
     expect(framesOf(second, 'session/new')).toHaveLength(0)
     expect(await messages()).toEqual(['hello', 'partial', 'again'])
     // Only the Stop's own note: no exit or cut-reply notice for a Stop the person asked for.
-    const transcript = withNativeChatCutTurnNotices(await rows(), { agentName: 'Grok' })
+    const transcript = withNativeChatCutTurnNotices(await rows())
     expect(
       transcript.flatMap((row) => (row.body.kind === 'status' ? [row.body.text] : []))
     ).toEqual(['Cancellation requested.'])

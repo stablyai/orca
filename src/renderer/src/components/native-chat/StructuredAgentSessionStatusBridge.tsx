@@ -148,7 +148,8 @@ function projectFailedStart(tab: StructuredTab, paneKey: string, failedAt: numbe
     current.agentType === tab.agentSessionAgent &&
     current.terminalTitle === tab.label &&
     current.tabId === tab.id &&
-    current.worktreeId === tab.worktreeId
+    current.worktreeId === tab.worktreeId &&
+    current.structuredHost === 'held'
   ) {
     return
   }
@@ -167,11 +168,12 @@ function projectFailedStart(tab: StructuredTab, paneKey: string, failedAt: numbe
       sessionBoundary: false
     },
     tab.label,
-    // Dated by the failure, as a host row is by its journal: it ages the same, a restart does not
-    // refresh it, and it replaces whatever newer-dated row the pane key held.
+    // Dated by the failure, as a host row is by its journal: a restart does not refresh it, and it
+    // replaces whatever newer-dated row the pane key held.
     { updatedAt: failedAt, allowOlderTimestamp: true, stateStartedAt: failedAt },
     { tabId: tab.id, worktreeId: tab.worktreeId },
-    { terminalResumeEligible: false }
+    // The chat's own settled state, kept as a host row's Failed is: no host runs its agent.
+    { terminalResumeEligible: false, structuredHost: 'held' }
   )
 }
 
@@ -202,6 +204,8 @@ function projectStatus(
     ...(summary.stopping ? { stopping: summary.stopping } : {})
   })
   const current = store.agentStatusByPaneKey?.[paneKey]
+  // The host's own provenance for the row, as its ingest stamps it.
+  const structuredHost = summary.hostExecutionOwned ? 'owned' : 'held'
   // Same continuity rule as the host ingest, on the main agent's own clock.
   const mainAgent = continueMainAgentStatus(
     current?.mainAgent,
@@ -248,6 +252,7 @@ function projectStatus(
     current.worktreeId === tab.worktreeId &&
     current.terminalResumeEligible === false &&
     current.structuredHostOwned === summary.hostExecutionOwned &&
+    current.structuredHost === structuredHost &&
     agentProviderSessionsEqual(
       tab.agentSessionAgent,
       current.providerSession,
@@ -281,6 +286,7 @@ function projectStatus(
     {
       ...(summary.providerSession ? { providerSession: summary.providerSession } : {}),
       terminalResumeEligible: false,
+      structuredHost,
       ...(summary.hostExecutionOwned ? { structuredHostOwned: true as const } : {})
     }
   )

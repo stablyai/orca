@@ -212,7 +212,8 @@ describe('cross-version worktree ps verdict', () => {
       'failed-done': 'failed',
       'failed-working': 'failed',
       stopped: 'interrupted',
-      'crash-cut': 'failed',
+      // A crash cut reads interrupted, as a Stop does; the host publishes the same row as before.
+      'crash-cut': 'interrupted',
       unproven: 'unconfirmed',
       replaced: 'interrupted'
     })

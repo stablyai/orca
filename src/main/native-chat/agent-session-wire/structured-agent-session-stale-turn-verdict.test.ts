@@ -469,9 +469,7 @@ describe('stale session state on a cold acquire', () => {
       // The probe's detail is Orca's, so the row carries none.
       expect(
         items.flatMap((item) => (item.body.kind === 'status' ? [item.body.text] : []))
-      ).toEqual([
-        'The agent stopped while this response was in progress. You can continue in this conversation.'
-      ])
+      ).toEqual(['This response was interrupted. You can continue in this conversation.'])
     } finally {
       await journals.closeAll()
       await rm(root, { recursive: true, force: true })

@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentPaneThread } from './activity-thread-types'
-import { activityThreadRowCopy } from './activity-thread-presentation'
+import type { AgentTurnOutcome } from '../../../../shared/agent-turn-outcome'
+import type { ActivityEvent, AgentPaneThread } from './activity-thread-types'
+import { activityThreadRowCopy, agentMeta, agentTitle } from './activity-thread-presentation'
 import { formatShortTimeAgo } from '@/lib/short-time-ago'
 import {
   makeRepo,
+  makeTab,
   makeTabWithIds,
+  makeWorkingEntryWithoutHistory,
   makeWorktree,
   PANE_KEY
 } from './ActivityPrototypePage-test-fixtures'
@@ -93,5 +96,37 @@ describe('activityThreadRowCopy', () => {
     )
     expect(copy.statusKind).toBe('none')
     expect(copy.statusLine).toBe('')
+  })
+})
+
+describe('agentTitle and agentMeta for a finished turn', () => {
+  function doneEvent(outcome: AgentTurnOutcome): ActivityEvent {
+    return {
+      id: 'event-1',
+      state: 'done',
+      timestamp: 3_000,
+      observedAt: 3_000,
+      worktree: makeWorktree(),
+      repo: makeRepo(),
+      entry: {
+        ...makeWorkingEntryWithoutHistory(),
+        state: 'done',
+        mainAgent: { state: 'done', outcome, stateStartedAt: 3_000 }
+      },
+      tab: makeTab(),
+      agentType: 'claude',
+      agentAlive: false,
+      unread: false
+    }
+  }
+
+  // A crash, quit or restart cut reads as the interruption it is, as a Stop does; only a failure fails.
+  it.each([
+    ['cancellation', 'Agent interrupted', 'Claude interrupted'],
+    ['interruption', 'Agent interrupted', 'Claude interrupted'],
+    ['failure', 'Agent failed', 'Claude failed']
+  ] as const)('titles a %s as %s', (outcome, title, meta) => {
+    expect(agentTitle(doneEvent(outcome))).toBe(title)
+    expect(agentMeta(doneEvent(outcome))).toBe(meta)
   })
 })

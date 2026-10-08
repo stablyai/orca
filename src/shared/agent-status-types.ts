@@ -5,6 +5,7 @@
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
 import type { AgentMainAgentStatus } from './main-agent-status'
 import type { AgentStateHistoryEntry } from './agent-state-history'
+import type { StructuredHostStatus } from './agent-hook-listener/listener-event'
 import { isAgentTurnOutcome } from './agent-turn-outcome'
 import type { OrchestrationFleetAttention } from './orchestration-fleet-attention'
 import type { AgentStatusRowFacets } from './agent-status-observation'
@@ -90,6 +91,10 @@ export type AgentStatusEntry = {
   evidenceObservedAt?: number
   /** True only while a host-held structured session is represented by its live status feed. */
   structuredHostOwned?: true
+  /** A native chat's row, re-derived by its host from the chat's journal on every change, and
+   *  whether that host still holds its agent; absent on hook and terminal reports, which can go
+   *  quiet without a final update. The host's own `structuredHost` provenance. */
+  structuredHost?: StructuredHostStatus
   /** Timestamp (ms) when the current `state` was first reported.
    *  Why: separate from updatedAt so tool/prompt pings (which reset updatedAt) don't move it. */
   stateStartedAt: number

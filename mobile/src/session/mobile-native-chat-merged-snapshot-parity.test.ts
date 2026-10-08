@@ -24,7 +24,6 @@ import {
   type StructuredAgentSessionState
 } from '../../../src/shared/structured-agent-session-reducer'
 import { selectStructuredAgentTurnBars } from '../../../src/shared/structured-agent-session-turn-timing'
-import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/tui-agent-display-names'
 import {
   buildMobileNativeChatTransientData,
   foldMobileNativeChatMessages
@@ -55,9 +54,7 @@ function apply(
 /** The rows the phone's transcript reads, as its session hook builds them: the journal plus the
  *  notice a cut turn gets, projected with no other rejected send drawn in place. */
 function phoneTranscript(state: StructuredAgentSessionState) {
-  const items = withNativeChatCutTurnNotices(state.items, {
-    agentName: TUI_AGENT_DISPLAY_NAMES.codex
-  })
+  const items = withNativeChatCutTurnNotices(state.items)
   return {
     items,
     messages: projectStructuredAgentSessionMessages(items, [], state.submissions, {

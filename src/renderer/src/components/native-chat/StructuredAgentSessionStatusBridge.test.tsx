@@ -8,7 +8,7 @@ import type {
 } from '../../../../shared/agent-session-wire'
 import { buildSubagentChildRows } from '../sidebar/worktree-subagent-child-rows'
 import { resolveAttention } from '../sidebar/smart-attention'
-import { isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
+import { isAgentStatusShownOnDot, isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { Tab } from '../../../../shared/tab-types'
 import type { AppState } from '@/store/types'
@@ -205,6 +205,25 @@ describe('StructuredAgentSessionStatusBridge', () => {
     act(() => feed().emit({ type: 'end' }))
     expect(statuses()).toHaveLength(1)
     expect(statuses()[0]).not.toHaveProperty('structuredHostOwned')
+  })
+
+  // The chat's settled verdict is re-derived from its journal, so it is not a report that goes
+  // quiet: the dot keeps it once the stream is gone, though it is no live evidence.
+  it("keeps a settled chat's verdict on the dot past the freshness window, once the stream ends", async () => {
+    render(<StructuredAgentSessionStatusBridge />)
+    await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
+    const updatedAt = Date.now() - 30 * 60 * 1000 - 1
+    act(() =>
+      feed().emit({
+        type: 'status',
+        session: summary({ status: 'idle', turnOutcome: 'cancellation', updatedAt })
+      })
+    )
+    act(() => feed().emit({ type: 'end' }))
+    const entry = statuses()[0]!
+    expect(entry).toMatchObject({ state: 'done', structuredHost: 'held' })
+    expect(isExplicitAgentStatusFresh(entry, Date.now(), 30 * 60 * 1000)).toBe(false)
+    expect(isAgentStatusShownOnDot(entry, Date.now(), 30 * 60 * 1000)).toBe(true)
   })
 
   it('maps each host status onto the sidebar agent state', async () => {

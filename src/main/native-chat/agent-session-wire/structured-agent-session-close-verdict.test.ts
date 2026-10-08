@@ -125,17 +125,17 @@ async function settledTurn() {
   const turn = items.map((item) => readAgentJournalTurn(item.body)).find(Boolean)
   const [settled] = [...selectStructuredAgentSettledTurns(items).values()]
   const label = settled && describeNativeChatTurnStatus({ elapsedSeconds: 0, ...settled }).key
-  // Every error row a reader's transcript shows, the cut turn's derived notice included.
-  const notices = withNativeChatCutTurnNotices(items, { agentName: 'Codex' }).flatMap((item) =>
-    item.body.kind === 'status' && item.body.tone === 'error' ? [item.body.text] : []
+  // Every row a reader's transcript shows about a stop, the cut turn's derived notice included.
+  const notices = withNativeChatCutTurnNotices(items).flatMap((item) =>
+    item.body.kind === 'status' && (item.body.tone === 'error' || item.body.tone === 'notice')
+      ? [`${item.body.tone}: ${item.body.text}`]
+      : []
   )
   return { turn, settled, label, notices }
 }
 
-/** A turn nobody stopped reads like a finished one, with exactly one row saying it stopped. */
-const ONE_NOTICE = [
-  'Codex stopped while this response was in progress. You can continue in this conversation.'
-]
+/** A turn nobody stopped reads interrupted, with exactly one muted row saying so, blaming no one. */
+const ONE_NOTICE = ['notice: This response was interrupted. You can continue in this conversation.']
 
 function lastSummary(statuses: AgentSessionStatusEvent[]) {
   const last = statuses.at(-1)
@@ -166,8 +166,8 @@ describe('a turn cut short by closing its provider', () => {
     const { turn, label, notices } = await settledTurn()
     expect(turn).toMatchObject({ state: 'interrupted' })
     expect(turn).not.toHaveProperty('outcome')
-    // News for the sidebar; the turn reads like a finished one beside its one notice.
-    expect(label).toBe('workedFor')
+    // Interrupted, as a Stop is, beside the one notice that says why.
+    expect(label).toBe('interruptedAfter')
     expect(notices).toEqual(ONE_NOTICE)
   })
 
@@ -261,7 +261,7 @@ describe('a turn cut short by closing its provider', () => {
       session: { status: 'idle', turnOutcome: 'interruption' }
     })
     const { label, notices } = await settledTurn()
-    expect(label).toBe('workedFor')
+    expect(label).toBe('interruptedAfter')
     expect(notices).toEqual(ONE_NOTICE)
   })
 

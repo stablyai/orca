@@ -127,7 +127,7 @@ describe('a paired client mirroring a host verdict arm', () => {
   })
 
   it.each([
-    ['interruption', 'failed'],
+    ['interruption', 'interrupted'],
     ['unconfirmed', 'unconfirmed']
   ] as const)('reads a mirrored %s as its own mark', (outcome, mark) => {
     const [row] = mirroredRows(outcome)

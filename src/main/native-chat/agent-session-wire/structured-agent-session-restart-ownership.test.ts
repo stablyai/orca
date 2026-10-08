@@ -16,7 +16,7 @@ import {
 import { STRUCTURED_AGENT_SESSION_RESTART_CONTINUATION_CALLER } from './structured-agent-session-restart-resume-wiring'
 import {
   interruptedRestart,
-  QUIT_CUT_NOTICE,
+  QUIT_CUT_ROW,
   startAgent,
   statusNotes,
   supersededRefusal,
@@ -360,7 +360,7 @@ it("refuses a continuation quietly when the user's own message was accepted firs
   })
   await vi.waitFor(() => expect(dispatch).toHaveBeenCalledOnce())
   // The quit's own row about the cut, and nothing about the refused continuation.
-  expect(await statusNotes(host)).toEqual([QUIT_CUT_NOTICE])
+  expect(await statusNotes(host)).toEqual([QUIT_CUT_ROW])
   expect(await new AgentSessionRecoveryCapsule(root).list(NOW)).toEqual([])
   expect(await new AgentSessionRecoveryCapsule(root).listFailed(NOW)).toEqual([])
 })

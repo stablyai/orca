@@ -79,7 +79,7 @@ describe('a turn its gone agent left running', () => {
     expect(await workingTurnState()).toBe('interrupted')
     const { items } = await rig.host.journalSnapshot(SESSION)
     expect(JSON.stringify(items)).toContain(
-      'Codex stopped while this response was in progress. You can continue in this conversation.'
+      'This response was interrupted. You can continue in this conversation.'
     )
     expect(rig.adapter.acquire).toHaveBeenCalledOnce()
   })
@@ -95,9 +95,9 @@ describe('a turn its gone agent left running', () => {
     await rig.host.subscribe({ id: 'reader', sessionId: SESSION, emit: reader.emit })
 
     expect(await workingTurnState()).toBe('interrupted')
-    // The death evidence is Orca's log text: the row says only that the provider stopped.
+    // The death evidence is Orca's log text: the row says only that the response was interrupted.
     expect(JSON.stringify(reader.events)).toContain(
-      'Codex stopped while this response was in progress. You can continue in this conversation.'
+      'This response was interrupted. You can continue in this conversation.'
     )
     expect(rig.adapter.acquire).toHaveBeenCalledOnce()
   })

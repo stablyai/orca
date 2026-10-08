@@ -361,9 +361,7 @@ describe('settling an earlier child before the next one takes its message', () =
     )
     expect(
       items.flatMap((item) => (item.body.kind === 'status' ? [item.body.text] : []))
-    ).toContain(
-      'Codex stopped while this response was in progress. You can continue in this conversation.'
-    )
+    ).toContain('This response was interrupted. You can continue in this conversation.')
     // Handed over at the new child's fence, which the attach reserved after settling.
     const newFence = store.getRecord(SESSION)!.lease.runtimeFence
     expect(newFence).toBeGreaterThan(releasedFence)

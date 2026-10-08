@@ -827,7 +827,8 @@ describe('an unexpected provider exit', () => {
     )
     expect(acquire).toHaveBeenCalledTimes(2)
     // The new child's acquire settled the turn from the release's evidence: ended at the exit's
-    // receipt. The evidence is Orca's log text, so the row says only that the provider stopped.
+    // receipt. The evidence is Orca's log text, so the row says only that the response was
+    // interrupted; stored red for older clients, which this client mutes.
     const history = await host.history({ sessionId: SESSION, direction: 'tail' })
     const items = history.ok ? history.page.items : []
     expect(items.map((item) => readAgentJournalTurn(item.body)).filter(Boolean)).toContainEqual(
@@ -836,8 +837,8 @@ describe('an unexpected provider exit', () => {
     const statuses = items.flatMap((item) => (item.body.kind === 'status' ? [item.body] : []))
     expect(statuses).toContainEqual({
       kind: 'status',
-      text: UNEXPECTED_PROVIDER_EXIT_OUTCOME,
-      failure: { kind: 'providerExited' },
+      text: 'This response was interrupted. You can continue in this conversation.',
+      presentation: 'response-interrupted',
       tone: 'error'
     })
     expect(statuses.map((status) => status.text).join('\n')).not.toContain('provider exited')

@@ -9,6 +9,7 @@ import { StructuredAgentSessionResumeAdmission } from './structured-agent-sessio
 import {
   interruptedRestart,
   QUIT_CUT_NOTICE,
+  QUIT_CUT_ROW,
   readerNotes,
   statusNotes,
   throwAfterContinuationAccepted
@@ -46,7 +47,7 @@ it('files nothing for a chat the user moved on in before its attempt, and spends
   expect(await capsule.listFailed(NOW)).toEqual([])
   expect(await capsule.list(NOW)).toEqual([])
   // Only the quit's own row about the cut: no note took over, so it stays the turn's one notice.
-  expect(await statusNotes(host)).toEqual([QUIT_CUT_NOTICE])
+  expect(await statusNotes(host)).toEqual([QUIT_CUT_ROW])
   expect(await readerNotes(host)).toEqual([QUIT_CUT_NOTICE])
 })
 
@@ -64,12 +65,15 @@ it('says so in the chat when the agent cannot start for the continuation', async
   expect(await host.restartResume.listFailures()).toMatchObject([
     { sessionId: SESSION, outcome: 'refused', retryable: true }
   ])
-  expect(await statusNotes(host)).toContainEqual({
+  const stored = await statusNotes(host)
+  expect(stored).toContainEqual({
     text: AGENT_SESSION_RESTART_CONTINUATION_REFUSED_NOTE,
     tone: 'error'
   })
-  // The refusal note is now the one explanation: the cut is not said a second time beside it.
-  expect(await readerNotes(host)).toEqual(await statusNotes(host))
+  // The refusal note is now the one explanation: the cut is not said a second time beside it. The
+  // reader only mutes the quit's own row, which is stored red for older clients.
+  expect(stored[0]).toEqual(QUIT_CUT_ROW)
+  expect(await readerNotes(host)).toEqual([QUIT_CUT_NOTICE, ...stored.slice(1)])
 })
 
 // A continuation that carries on, chosen in the prompt or automatically at launch, does not stand in

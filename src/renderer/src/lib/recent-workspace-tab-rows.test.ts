@@ -158,14 +158,6 @@ describe('resolveRecentWorkspaceTabStatus', () => {
     expect(resolveRecentWorkspaceTabStatus(row('split'), paneSources, NOW)).toBe('permission')
   })
 
-  it('surfaces a turn a crash cut short as failed', () => {
-    const cut = entry('cut', 'done', NOW - 1_000, {
-      mainAgent: { state: 'done', outcome: 'interruption', stateStartedAt: NOW - 1_000 }
-    })
-
-    expect(resolveRecentWorkspaceTabStatus(row('cut'), sources([cut]), NOW)).toBe('failed')
-  })
-
   it("reads a user's Stop as interrupted though attention demotes it, whether recorded or an old host's flag", () => {
     const recorded = entry('stopped', 'done', NOW - 1_000, {
       mainAgent: { state: 'done', outcome: 'cancellation', stateStartedAt: NOW - 1_000 }

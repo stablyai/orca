@@ -49,8 +49,8 @@ describe('ThreadAgentStateIndicator', () => {
 describe('ThreadAgentStateIndicator for a turn that ended without finishing', () => {
   it.each([
     { outcome: 'cancellation', label: 'Interrupted' },
-    // A turn anything but the user cut short is a fault, as a failure is.
-    { outcome: 'interruption', label: 'Failed' },
+    // A crash, quit or restart cut it short: interrupted, as a Stop is, not a fault.
+    { outcome: 'interruption', label: 'Interrupted' },
     { outcome: 'unconfirmed', label: 'Couldn’t confirm' }
   ] as const)('draws $outcome as $label', ({ outcome, label }) => {
     const threads = makeThreads(

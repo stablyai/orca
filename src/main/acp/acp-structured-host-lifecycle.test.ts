@@ -102,7 +102,7 @@ describe('reopening a Grok chat through the host', () => {
       'completed'
     )
     // The transcript explains the cut the way a Claude or Codex chat's does.
-    const transcript = withNativeChatCutTurnNotices(rows, { agentName: 'Grok' })
+    const transcript = withNativeChatCutTurnNotices(rows)
     expect(
       transcript.some(
         (row) =>
@@ -150,7 +150,7 @@ describe('a Grok crash whose exit is not proven yet', () => {
     child.exit()
     await rig.settle()
     await host.flushStreamedEvents(SESSION)
-    const transcript = withNativeChatCutTurnNotices(await rows(), { agentName: 'Grok' })
+    const transcript = withNativeChatCutTurnNotices(await rows())
     // The crash's own notice, as for any crash; not a Stop's.
     expect(
       transcript.flatMap((row) =>

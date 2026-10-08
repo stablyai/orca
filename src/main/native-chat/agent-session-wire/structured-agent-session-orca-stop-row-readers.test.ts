@@ -1,7 +1,8 @@
 // The row about Orca's own stop, as each kind of client reads it. A client that predates the cause
-// prints today's row, red and on screen; this build names the cause, muted, and never folds it.
+// prints the stored row, red and on screen; this build names the cause, muted, and never folds it.
 
 import { describe, expect, it } from 'vitest'
+import { agentSessionResponseInterruptedStoredBody } from '../../../shared/agent-session-host-status-rows'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
 import { withNativeChatCutTurnNotices } from '../../../shared/native-chat-cut-turn-notice'
@@ -9,8 +10,7 @@ import { latestNativeChatOrcaStopCut } from '../../../shared/native-chat-orca-st
 import { nativeChatTurnFold } from '../../../shared/native-chat-turn-fold'
 import { orcaStopRowBody } from './structured-agent-session-orca-stop-row'
 
-const LEGACY_TEXT =
-  'Codex stopped while this response was in progress. You can continue in this conversation.'
+const INTERRUPTED_TEXT = 'This response was interrupted. You can continue in this conversation.'
 const TURN = agentJournalItemKey({ provider: 'codex', threadId: 't', turnId: 'cut', ordinal: 1 })
 
 function cutChat(row: AgentJournalRenderItem['body']): AgentJournalRenderItem[] {
@@ -53,29 +53,28 @@ function cutChat(row: AgentJournalRenderItem['body']): AgentJournalRenderItem[] 
 }
 
 describe('the row a host writes for a cut it knows the cause of', () => {
-  const row = orcaStopRowBody({ agentName: 'Codex' }, 'update')
+  const row = orcaStopRowBody('update')
 
-  it("keeps today's words and tone, and names its presentation and cause beside them", () => {
+  it('blames no one, stays red, and names its presentation and cause', () => {
     expect(row).toMatchObject({
       kind: 'status',
-      text: LEGACY_TEXT,
+      text: INTERRUPTED_TEXT,
       tone: 'error',
-      failure: { kind: 'providerExited' },
       presentation: 'orca-stop',
       orcaStop: { cause: 'update' }
     })
+    expect(row).not.toHaveProperty('failure')
   })
 
-  it('reads, on a client that predates the cause, as the one row it prints today, on screen', () => {
+  it('reads, on a client that predates the cause, as the one row it prints, on screen', () => {
+    // That client derives no row of its own beside a host's stale-session row.
     const items = cutChat(row)
-    const read = withNativeChatCutTurnNotices(items, { agentName: 'Codex' })
-    expect(read).toBe(items)
-    expect(read.flatMap((item) => (item.body.kind === 'status' ? [item.body.text] : []))).toEqual([
-      LEGACY_TEXT
+    expect(items.flatMap((item) => (item.body.kind === 'status' ? [item.body.text] : []))).toEqual([
+      INTERRUPTED_TEXT
     ])
     // That client's fold reads only the stored tone: a red row is the turn's end, never folded.
-    const rows = read.map((item) => ({
-      turnKey: item.itemId === read[0]!.itemId ? undefined : TURN,
+    const rows = items.map((item) => ({
+      turnKey: item.itemId === items[0]!.itemId ? undefined : TURN,
       role: item.body.kind === 'message' ? item.body.role : ('system' as const),
       rendersProse: item.body.kind !== 'turn',
       draws: true,
@@ -91,6 +90,17 @@ describe('the row a host writes for a cut it knows the cause of', () => {
     expect(foldedRows.has(3)).toBe(false)
   })
 
+  it('reads, on this build, as one muted row that keeps its cause', () => {
+    const read = withNativeChatCutTurnNotices(cutChat(row))
+    const statusRows = read.filter((item) => item.body.kind === 'status')
+    expect(statusRows).toHaveLength(1)
+    expect(statusRows[0]!.body).toMatchObject({
+      tone: 'notice',
+      presentation: 'orca-stop',
+      orcaStop: { cause: 'update' }
+    })
+  })
+
   it('offers Continue on this build', () => {
     expect(latestNativeChatOrcaStopCut(cutChat(row), [])).toEqual({
       turnItemId: TURN,
@@ -98,7 +108,7 @@ describe('the row a host writes for a cut it knows the cause of', () => {
     })
   })
 
-  it('names no presentation when the cause is unknown, so it reads as any owner death', () => {
-    expect(orcaStopRowBody({ agentName: 'Codex' }, undefined)).not.toHaveProperty('presentation')
+  it('is the row for any owner death when the cause is unknown', () => {
+    expect(orcaStopRowBody(undefined)).toEqual(agentSessionResponseInterruptedStoredBody())
   })
 })

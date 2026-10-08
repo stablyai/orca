@@ -7,11 +7,11 @@
 // single place that answers "does this message take a slot?", and it answers it
 // with the same derivation the row itself renders from.
 
+import { isAgentSessionInterruptionPresentation } from '../../../../shared/agent-session-host-status-rows'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../../../shared/agent-session-journal-types'
-import { AGENT_SESSION_ORCA_STOP_PRESENTATION } from '../../../../shared/agent-session-orca-stop'
 import {
   isBackgroundTaskBlock,
   isSubagentGroupBlock,
@@ -152,18 +152,19 @@ export function buildNativeChatTranscriptSlots(
         isBackgroundTaskBlock(block) ||
         isStoppedBeforeStartBlock(block)
     ),
-    // A row about Orca's own stop is stored red for clients that predate it; it reports no failure.
+    // A row that says a turn was cut short is stored red for clients that predate it; it reports no
+    // failure.
     reportsFailure: message.blocks.some(
       (block) =>
         block.type === 'text' &&
         block.tone === 'error' &&
-        block.presentation !== AGENT_SESSION_ORCA_STOP_PRESENTATION
+        !isAgentSessionInterruptionPresentation(block.presentation)
     ),
     explainsTurn: message.blocks.some(
       (block) =>
         block.type === 'text' &&
         (block.presentation === 'compaction' ||
-          block.presentation === AGENT_SESSION_ORCA_STOP_PRESENTATION)
+          isAgentSessionInterruptionPresentation(block.presentation))
     )
   }))
   // Liveness is the turn's, not any one call's: the run at the frontier stays

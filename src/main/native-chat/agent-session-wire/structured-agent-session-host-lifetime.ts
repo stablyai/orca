@@ -34,7 +34,6 @@ import {
   recordStructuredAgentSessionShutdownCut,
   runningRootTurnItemId
 } from './structured-agent-session-orca-stop-row'
-import { structuredAgentSessionFailureWordsContext } from './structured-agent-session-send-preparation'
 export type { StructuredAgentSessionStopEnding } from './structured-agent-session-host-stop-event'
 import {
   recordStopEvent,
@@ -190,7 +189,6 @@ export async function stopStructuredAgentSessionAgentUnderSerialize(
     }
     // The exit handler has settled the turn by now, so the row reads its verdict.
     if ('quit' in ending && ending.quit) {
-      const record = context.deps.store.getRecord(sessionId)
       await recordStructuredAgentSessionShutdownCut({
         journal: session.journal,
         sessionId,
@@ -198,9 +196,6 @@ export async function stopStructuredAgentSessionAgentUnderSerialize(
         generation: child.generation ?? 'unknown',
         turnItemId: quitCuts,
         trigger: ending.quit,
-        ...(record
-          ? { failureTextContext: structuredAgentSessionFailureWordsContext(record) }
-          : {}),
         logger: context.deps.logger
       })
     }

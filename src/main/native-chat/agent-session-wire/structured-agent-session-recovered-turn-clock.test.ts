@@ -143,16 +143,16 @@ describe('a turn recovery settled after its host went away', () => {
   it.each([
     ['an unverifiable end', { state: 'unverifiable' } as const, 'unconfirmed', 'unconfirmed'],
     [
-      'an exit observed before the restart',
+      'the agent exiting on its own before the restart',
       { state: 'interrupted', completedAt: EXIT_OBSERVED },
-      'interruption',
-      // A turn the user did not stop is a fault, marked as a failure is.
+      // Its own exit row explains the cut, so it reads as that agent's failure, never announced.
+      'failure',
       'failed'
     ]
   ] satisfies [
     string,
     StructuredAgentSessionTurnVerdict,
-    'unconfirmed' | 'interruption',
+    'unconfirmed' | 'failure',
     'unconfirmed' | 'failed'
   ][])(
     'is done as of the recovery with the end the host observed, never a success: %s',
@@ -184,13 +184,25 @@ describe('a turn recovery settled after its host went away', () => {
     }
   )
 
-  // The tab's mark reads a turn nobody stopped as failed; the chat's turn bar reads it like a
-  // finished turn, since the chat's notice row says why it stopped.
+  // The tab's mark and the chat's turn bar both read a turn nobody stopped as interrupted; the
+  // chat's notice row says why it stopped.
   it.each([
     [
       'a restart',
+      // The reopen finds the old agent process gone.
       (journal: AgentSessionJournal) =>
-        settleDeadGeneration(journal, { state: 'interrupted', completedAt: EXIT_OBSERVED })
+        settleStaleStructuredAgentSessionState({
+          journal,
+          sessionId: SESSION,
+          fence: 2,
+          acquisitionGeneration: 'generation-2',
+          deathEvidence: {
+            kind: 'exit-observed',
+            detail: 'gone',
+            observedAt: EXIT_OBSERVED,
+            ownerFence: 1
+          }
+        })
     ],
     [
       'quitting Orca',
@@ -209,7 +221,7 @@ describe('a turn recovery settled after its host went away', () => {
         )
     ]
   ] as const)(
-    'reads Worked for N, marked failed, for a turn cut off by %s',
+    'reads Interrupted after N, marked interrupted, for a turn cut off by %s',
     async (_label, cut) => {
       const session = await sessionWithRunningTurn()
       session.recoverAt(RECOVERED)
@@ -217,15 +229,36 @@ describe('a turn recovery settled after its host went away', () => {
       session.publish()
 
       const [row] = session.server.getStatusSnapshot()
-      expect(row && agentVerdictDisplayMark(row)).toBe('failed')
+      expect(row && agentVerdictDisplayMark(row)).toBe('interrupted')
       const [settled] = [
         ...selectStructuredAgentSettledTurns(session.journal.snapshot().items).values()
       ]
       expect(settled && formatNativeChatTurnStatusLabel({ elapsedSeconds: 0, ...settled })).toBe(
-        'Worked for 1s'
+        'Interrupted after 1s'
       )
     }
   )
+
+  // The agent's own exit is its failure: the tab and the turn bar agree with its red exit row.
+  it('reads Failed after N, marked failed, for a turn the agent cut by exiting on its own', async () => {
+    const session = await sessionWithRunningTurn()
+    session.recoverAt(RECOVERED)
+    await settleDeadGeneration(session.journal, {
+      state: 'interrupted',
+      completedAt: EXIT_OBSERVED
+    })
+    session.publish()
+
+    const [row] = session.server.getStatusSnapshot()
+    expect(row && agentVerdictDisplayMark(row)).toBe('failed')
+    const [settled] = [
+      ...selectStructuredAgentSettledTurns(session.journal.snapshot().items).values()
+    ]
+    expect(settled && formatNativeChatTurnStatusLabel({ elapsedSeconds: 0, ...settled })).toBe(
+      'Failed after 1s'
+    )
+    expect(session.completionEvents).toEqual([])
+  })
 
   it('is dated the same way when a new provider child finds the turn still running', async () => {
     const session = await sessionWithRunningTurn()

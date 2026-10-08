@@ -44,6 +44,7 @@ function renderStatus(
 
 const LEGACY_TEXT =
   'Codex stopped while this response was in progress. You can continue in this conversation.'
+const INTERRUPTED_TEXT = 'This response was interrupted. You can continue in this conversation.'
 
 function orcaStopRow(cause: string): AgentJournalStatusItem {
   return {
@@ -81,7 +82,7 @@ describe('the row an Orca stop leaves', () => {
     // Its words and tone replaced, and the failure fact the old words came from dropped with them.
     const represented: AgentJournalStatusItem = {
       kind: 'status',
-      text: 'This response was interrupted. You can continue in this conversation.',
+      text: INTERRUPTED_TEXT,
       tone: 'notice',
       presentation: 'orca-stop',
       orcaStop: { cause: 'crash' }
@@ -94,22 +95,18 @@ describe('the row an Orca stop leaves', () => {
     ).toHaveClass('text-muted-foreground')
     cleanup()
     renderStatus(represented, null, true)
-    expect(
-      screen.getByText('This response was interrupted. You can continue in this conversation.')
-        .parentElement?.parentElement
-    ).toHaveClass('text-muted-foreground')
+    expect(screen.getByText(INTERRUPTED_TEXT)).toHaveClass('text-muted-foreground')
   })
 
-  it('keeps the host words for a cause this build does not know', () => {
+  it('reads as any interrupted response for a cause this build does not know', () => {
     renderStatus(orcaStopRow('power-loss'), 'studio-mac')
-    expect(screen.getByText(LEGACY_TEXT)).toBeInTheDocument()
+    expect(screen.getByText(INTERRUPTED_TEXT)).toBeInTheDocument()
+    expect(screen.queryByText(LEGACY_TEXT)).toBeNull()
   })
 
-  it('keeps the host words when the chat has no machine to name, muted all the same', () => {
+  it('reads as any interrupted response when the chat has no machine to name, muted', () => {
     renderStatus(orcaStopRow('update'), null)
-    expect(screen.getByText(LEGACY_TEXT).parentElement?.parentElement).toHaveClass(
-      'text-muted-foreground'
-    )
+    expect(screen.getByText(INTERRUPTED_TEXT)).toHaveClass('text-muted-foreground')
   })
 
   it('keeps the host words for a stop Orca did not cause', () => {
@@ -190,10 +187,43 @@ describe('notice rows', () => {
   // The host's text is only for a client that can't word the row itself.
   it.each([
     ['history-repaired', "Part of this chat's history couldn't be loaded."],
-    ['history-item-too-large', 'This part of the chat was too large to show.']
+    ['history-item-too-large', 'This part of the chat was too large to show.'],
+    [
+      'response-interrupted',
+      'This response was interrupted. You can continue in this conversation.'
+    ]
   ])('words a %s row itself, as a muted status line', (presentation, words) => {
     renderStatus({ kind: 'status', text: 'Words an older host wrote', presentation })
     expect(screen.getByText(words)).toHaveClass('text-muted-foreground', 'text-sm')
     expect(screen.queryByText('Words an older host wrote')).toBeNull()
+  })
+  // An interruption is not an error: its notice tone, for a client that can't name the row, stays muted.
+  it('draws an interrupted response muted, never in the error colour', () => {
+    renderStatus({
+      kind: 'status',
+      text: 'Words an older host wrote',
+      presentation: 'response-interrupted',
+      tone: 'notice'
+    })
+    const line = screen.getByText(
+      'This response was interrupted. You can continue in this conversation.'
+    )
+    expect(line).toHaveClass('text-muted-foreground')
+    expect(line.closest('.text-destructive')).toBeNull()
+  })
+  // A row naming why Orca stopped stays red for clients that fold every other row; this client says
+  // only that the response was interrupted, muted.
+  it('draws an orca-stop row as the muted interrupted line, even in its red tone', () => {
+    renderStatus({
+      kind: 'status',
+      text: 'Codex stopped while this response was in progress.',
+      presentation: 'orca-stop',
+      tone: 'error'
+    })
+    const line = screen.getByText(
+      'This response was interrupted. You can continue in this conversation.'
+    )
+    expect(line).toHaveClass('text-muted-foreground')
+    expect(line.closest('.text-destructive')).toBeNull()
   })
 })

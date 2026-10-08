@@ -18244,6 +18244,7 @@
         "plan": "プラン",
         "historyRepaired": "このチャットの履歴の一部を読み込めませんでした。",
         "historyItemTooLarge": "チャットのこの部分は大きすぎるため表示できません。",
+        "responseInterrupted": "この応答は中断されました。この会話の続きから再開できます。",
         "stoppedBeforeStart": "手動で停止しました",
         "dismiss": "閉じる",
         "copyError": "エラーをコピー",

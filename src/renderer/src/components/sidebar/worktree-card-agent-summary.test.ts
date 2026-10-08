@@ -118,7 +118,8 @@ describe('worktree card agent summary', () => {
     expect(eligible).toContain('data-slot="tooltip-trigger"')
   })
 
-  it("lists a crash-cut turn as failed and a user's Stop as interrupted, before clean completions", () => {
+  // A crash cut reads interrupted like a Stop, but only a Stop is credited to the user.
+  it("lists a crash-cut turn and a user's Stop as interrupted, before clean completions", () => {
     const done = monitoringAgent()
     done.state = 'done'
     done.entry.state = 'done'
@@ -138,8 +139,8 @@ describe('worktree card agent summary', () => {
       entry: { ...done.entry, paneKey: 'tab-1:leaf-3', interrupted: true }
     }
 
-    expect(getAgentDotState(interrupted)).toBe('failed')
-    expect(getCompactAgentSecondary(interrupted, 0)).toBe('Failed')
+    expect(getAgentDotState(interrupted)).toBe('interrupted')
+    expect(getCompactAgentSecondary(interrupted, 0)).toBe('Interrupted')
     expect(getAgentDotState(stopped)).toBe('interrupted')
     expect(getCompactAgentSecondary(stopped, 0)).toBe('Interrupted by user')
     const replaced = {
@@ -152,7 +153,7 @@ describe('worktree card agent summary', () => {
     expect(getAgentDotState(replaced)).toBe('interrupted')
     expect(getCompactAgentSecondary(replaced, 0)).toBe('Interrupted')
     expect(summarizeAgents([done, interrupted, stopped], 'Agents')).toBe(
-      'Agents: 1 failed, 1 interrupted, 1 done'
+      'Agents: 2 interrupted, 1 done'
     )
   })
 

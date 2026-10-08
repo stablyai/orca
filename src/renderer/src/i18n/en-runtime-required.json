@@ -2932,7 +2932,8 @@
       },
       "notices": {
         "historyItemTooLarge": "This part of the chat was too large to show.",
-        "historyRepaired": "Part of this chat's history couldn't be loaded."
+        "historyRepaired": "Part of this chat's history couldn't be loaded.",
+        "responseInterrupted": "This response was interrupted. You can continue in this conversation."
       },
       "question": {
         "other": "Other…"

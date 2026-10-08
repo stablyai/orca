@@ -54,13 +54,12 @@ describe('the status group headers', () => {
     { newer: 'cancellation', older: 'interruption' },
     { newer: 'interruption', older: 'cancellation' }
   ] as const)(
-    "never mixes a user's Stop with a crash, whichever is newest ($newer newest)",
+    "groups a user's Stop with a crash cut under Interrupted, whichever is newest ($newer newest)",
     ({ newer, older }) => {
       const groups = statusGroups(newer, older)
 
-      // A crash sits with failures; the Stop alone heads Interrupted, below it.
+      // A crash cut is an interruption, not a failure, so both sit in the one Interrupted group.
       expect(groups.map((group) => [group.key, group.state, group.label])).toEqual([
-        ['failed', 'failed', 'Failed'],
         ['interrupted', 'interrupted', 'Interrupted']
       ])
     }

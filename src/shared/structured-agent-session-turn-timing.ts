@@ -9,8 +9,9 @@ import type {
   AgentJournalSubmission,
   AgentJournalTurnLifecycleState
 } from './agent-session-journal-types'
-import { readAgentJournalTurn, readAgentJournalTurnOutcome } from './agent-session-turn-record'
-import { agentTurnVerdict, type AgentTurnOutcome } from './agent-turn-outcome'
+import { readAgentJournalTurn } from './agent-session-turn-record'
+import type { AgentTurnOutcome } from './agent-turn-outcome'
+import { structuredAgentTurnVerdictReader } from './native-chat-cut-turn-explanation'
 import { structuredAgentTurnAnchors } from './native-chat-turn-membership'
 import type { NativeChatSettledTurn, NativeChatSettledTurns } from './native-chat-turn-status'
 import type { AgentSessionLatestTurn } from './agent-session-wire'
@@ -32,13 +33,16 @@ export type StructuredAgentTurnTiming = {
   /** Host clock when the lifecycle row was appended; with `startedAt` it gives
    *  the host-side lag a client must subtract to anchor a live counter. */
   observedAt: number
-  /** The turn's verdict, the provider's or the host-observed end's; absent when unknown. */
+  /** The turn's verdict as every surface reads it (`structuredAgentTurnVerdictReader`); absent when
+   *  unknown. */
   verdict?: AgentTurnOutcome
 }
 
 function readTiming(
   item: Pick<AgentJournalRenderItem, 'body' | 'observedAt'>,
-  precedingTurnEndedAt: number | undefined
+  precedingTurnEndedAt: number | undefined,
+  /** The turn's verdict as every surface reads it (`structuredAgentTurnVerdictReader`). */
+  verdict: AgentTurnOutcome | null
 ): StructuredAgentTurnTiming | null {
   const turn = readAgentJournalTurn(item.body)
   if (!turn) {
@@ -60,7 +64,6 @@ function readTiming(
     durationMs !== undefined && Number.isFinite(durationMs) && durationMs >= 0
       ? durationMs
       : undefined
-  const verdict = agentTurnVerdict({ state, outcome: readAgentJournalTurnOutcome(turn) })
   // A send queued behind the previous turn counts from that turn's end (recorded, else its row's
   // last host revision), never past this turn's own start: the provider opens it only after.
   const queuedUntil =
@@ -95,6 +98,7 @@ function readStructuredAgentJournalTurns(
   const anchors = structuredAgentTurnAnchors(items, submissions)
   const byAnchor = new Map<string, StructuredAgentTurnTiming | null>()
   const byTurnId = new Map<string, StructuredAgentTurnTiming | null>()
+  const verdictOf = structuredAgentTurnVerdictReader(items)
   let precedingTurnEndedAt: number | undefined
   for (const item of items) {
     const anchor = anchors.get(item.itemId)
@@ -102,7 +106,7 @@ function readStructuredAgentJournalTurns(
     if (anchor === undefined || !turn) {
       continue
     }
-    const timing = readTiming(item, precedingTurnEndedAt)
+    const timing = readTiming(item, precedingTurnEndedAt, verdictOf(item))
     precedingTurnEndedAt = timing?.completedAt ?? item.observedAt
     byTurnId.set(turn.turnId, timing)
     if (timing || turn.state === 'unverifiable') {
@@ -238,7 +242,9 @@ export function selectStructuredAgentTurnBars(
     runningTiming: unloaded
       ? readTiming(
           { body: { kind: 'turn', ...unloaded.turn }, observedAt: unloaded.observedAt },
-          undefined
+          undefined,
+          // Running: it has no verdict yet.
+          null
         )
       : turnId === null
         ? null

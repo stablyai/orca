@@ -18325,6 +18325,7 @@
         "plan": "Plan",
         "historyRepaired": "No se pudo cargar parte del historial de este chat.",
         "historyItemTooLarge": "Esta parte del chat era demasiado grande para mostrarla.",
+        "responseInterrupted": "Esta respuesta se interrumpió. Puedes continuar en esta conversación.",
         "stoppedBeforeStart": "Detenido manualmente",
         "dismiss": "Descartar",
         "copyError": "Copiar error",

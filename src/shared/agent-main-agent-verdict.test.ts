@@ -51,11 +51,11 @@ describe('agentMainAgentVerdict', () => {
         verdict === 'cancellation' || verdict === 'superseded'
       )
       expect(agentVerdictDisplayMark(row), label).toBe(
-        verdict === 'failure' || verdict === 'interruption'
+        verdict === 'failure'
           ? 'failed'
           : row.state !== 'done'
             ? null
-            : verdict === 'cancellation' || verdict === 'superseded'
+            : verdict === 'cancellation' || verdict === 'superseded' || verdict === 'interruption'
               ? 'interrupted'
               : verdict === 'unconfirmed'
                 ? 'unconfirmed'
@@ -64,17 +64,18 @@ describe('agentMainAgentVerdict', () => {
     }
   })
 
-  it.each(['failure', 'interruption'] as const)(
-    'reads a main agent whose turn ended in %s while its subagent still works as failed',
-    (outcome) => {
-      const row = { state: 'working' as const, mainAgent: { state: 'done' as const, outcome } }
-      expect(agentMainAgentVerdict(row)).toBe(outcome)
-      expect(agentVerdictDisplayMark(row)).toBe('failed')
+  it('reads a main agent whose turn failed while its subagent still works as failed', () => {
+    const row = {
+      state: 'working' as const,
+      mainAgent: { state: 'done' as const, outcome: 'failure' as const }
     }
-  )
+    expect(agentMainAgentVerdict(row)).toBe('failure')
+    expect(agentVerdictDisplayMark(row)).toBe('failed')
+  })
 
-  it('keeps a success or a stop with live subagent work reading working', () => {
-    for (const outcome of ['success', 'cancellation'] as const) {
+  // A crash cut is an interruption, not a fault, so live child work still reads working, as a Stop does.
+  it('keeps a success, a stop or a crash cut with live subagent work reading working', () => {
+    for (const outcome of ['success', 'cancellation', 'interruption'] as const) {
       const row = { state: 'working' as const, mainAgent: { state: 'done' as const, outcome } }
       expect(agentVerdictDisplayMark(row)).toBeNull()
     }
@@ -97,14 +98,15 @@ describe('agentMainAgentVerdict', () => {
     expect(agentMainAgentVerdict({ state: 'done', interrupted: true })).toBe('cancellation')
   })
 
-  it("marks a done row by its verdict: a user's Stop reads interrupted, any other cut failed", () => {
+  it('marks a done row by its verdict: a Stop or a crash cut reads interrupted, a failure failed', () => {
     for (const [outcome, mark] of [
       ['success', null],
       ['failure', 'failed'],
       ['cancellation', 'interrupted'],
       // A newer request replaced it: not news, and no one to name.
       ['superseded', 'interrupted'],
-      ['interruption', 'failed'],
+      // A crash, quit or restart cut it short: interrupted until the chat's state changes.
+      ['interruption', 'interrupted'],
       ['unconfirmed', 'unconfirmed']
     ] as const) {
       const row = { state: 'done' as const, mainAgent: { state: 'done' as const, outcome } }
@@ -114,9 +116,9 @@ describe('agentMainAgentVerdict', () => {
     expect(agentVerdictDisplayMark({ state: 'done', interrupted: true })).toBe('interrupted')
   })
 
-  it('reads a crash-cut turn as failed and an unproven end as unconfirmed, neither a stop', () => {
+  it('reads a crash-cut turn as interrupted and an unproven end as unconfirmed, neither on purpose', () => {
     for (const [outcome, mark] of [
-      ['interruption', 'failed'],
+      ['interruption', 'interrupted'],
       ['unconfirmed', 'unconfirmed']
     ] as const) {
       const row = { state: 'done' as const, mainAgent: { state: 'done' as const, outcome } }

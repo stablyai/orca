@@ -1,7 +1,7 @@
 // A Stop that took effect still decides the turn it named after Orca restarts before the turn's end
-// was written: the relaunch's settle reads the Stop's event, so the turn reads "Interrupted after N"
-// with the muted mark, not "Failed". A turn nobody stopped, one a Stop never named, and one a
-// turnless Stop was still settling when Orca died, still read as the news they are.
+// was written: the relaunch's settle reads the Stop's event, so the turn records the person's
+// cancellation. A turn nobody stopped, one a Stop never named, and one a turnless Stop was still
+// settling when Orca died record no cancellation, and the chat says why each one stopped.
 
 import { afterEach, describe, expect, it } from 'vitest'
 import type { AgentSessionDeathEvidence } from '../../../shared/agent-session-record'
@@ -113,8 +113,10 @@ function settled(turnId?: string) {
     mark: verdict
       ? agentVerdictDisplayMark({ state: 'done', mainAgent: { state: 'done', outcome: verdict } })
       : null,
-    errorRows: items.flatMap((item) =>
-      item.body.kind === 'status' && item.body.tone === 'error' ? [item.body.text] : []
+    stopRows: items.flatMap((item) =>
+      item.body.kind === 'status' && (item.body.tone === 'error' || item.body.tone === 'notice')
+        ? [item.body.text]
+        : []
     )
   }
 }
@@ -130,12 +132,12 @@ describe('a restart between a Stop and its turn end', () => {
 
     await restartAndSettle()
 
-    const { turn, label, mark, errorRows } = settled()
+    const { turn, label, mark, stopRows } = settled()
     expect(turn).toMatchObject({ state: 'interrupted', outcome: 'cancellation' })
     expect(label).toMatch(/^Interrupted after /)
     expect(mark).toBe('interrupted')
     // A live Stop writes no row saying the provider stopped; nor does its relaunch.
-    expect(errorRows).toEqual([])
+    expect(stopRows).toEqual([])
   })
 
   // A Stop naming its turn, as the phone sends one: its event names the turn, which is what a
@@ -170,27 +172,27 @@ describe('a restart between a Stop and its turn end', () => {
 
     await restartAndSettle()
 
-    const { turn, label, mark, errorRows } = settled()
+    const { turn, label, mark, stopRows } = settled()
     expect(turn).toMatchObject({ state: 'interrupted', outcome: 'cancellation' })
     expect(label).toMatch(/^Interrupted after /)
     expect(mark).toBe('interrupted')
     // A live Stop writes no row saying the provider stopped; nor does its relaunch.
-    expect(errorRows).toEqual([])
+    expect(stopRows).toEqual([])
   })
 
-  // The notice row is the one explanation; the turn bar reads like a finished turn.
-  it('reads Worked for N, marked failed, when nobody stopped it', async () => {
+  // Interrupted, as a Stop is; the notice row is the one explanation, which a Stop never gets.
+  it('reads Interrupted after N, marked interrupted, with a notice, when nobody stopped it', async () => {
     await runningTurn(CODEX_TURN)
 
     await restartAndSettle()
 
-    const { turn, label, mark, errorRows } = settled()
+    const { turn, label, mark, stopRows } = settled()
     expect(turn).toMatchObject({ state: 'interrupted' })
     expect(turn).not.toHaveProperty('outcome')
-    expect(label).toMatch(/^Worked for /)
-    expect(mark).toBe('failed')
-    expect(errorRows).toEqual([
-      expect.stringContaining('stopped while this response was in progress')
+    expect(label).toMatch(/^Interrupted after /)
+    expect(mark).toBe('interrupted')
+    expect(stopRows).toEqual([
+      'This response was interrupted. You can continue in this conversation.'
     ])
   })
 
@@ -209,7 +211,7 @@ describe('a restart between a Stop and its turn end', () => {
   // Codex refuses a Stop naming a turn that is no longer its active one ("expected active turn id
   // X but found Y"), as a turn not running, so the child stays. The Stop names X, so Y's end is
   // never the person's, by its turn id alone.
-  it('reads Failed for the turn running when the provider refused a Stop naming the one before it', async () => {
+  it('records no Stop for the turn running when the provider refused a Stop naming the one before it', async () => {
     await runningTurn(CODEX_TURN)
     rig.cancelTurn.mockResolvedValueOnce({
       cancelled: false,
@@ -250,10 +252,13 @@ describe('a restart between a Stop and its turn end', () => {
     // Its exit is proven after the Stop, so only the turn the Stop named decides.
     await restartAndSettle('exit-observed')
 
-    const { turn, mark } = settled(NEXT_TURN)
+    const { turn, mark, stopRows } = settled(NEXT_TURN)
     expect(turn).toMatchObject({ state: 'interrupted' })
     expect(turn).not.toHaveProperty('outcome')
-    expect(mark).toBe('failed')
+    expect(mark).toBe('interrupted')
+    expect(stopRows).toEqual([
+      'This response was interrupted. You can continue in this conversation.'
+    ])
   })
 
   // Claude's Stop ends its child whatever the interrupt answered.

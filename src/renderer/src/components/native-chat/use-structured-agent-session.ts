@@ -197,11 +197,8 @@ export function useStructuredAgentSession(args: {
   )
   // What the transcript reads: the journal plus the one notice a cut turn with no row gets.
   const transcriptItems = useMemo(
-    () =>
-      withNativeChatCutTurnNotices(transportState.journalItems, {
-        agentName: structuredAgentLabel(agent)
-      }),
-    [agent, transportState.journalItems]
+    () => withNativeChatCutTurnNotices(transportState.journalItems),
+    [transportState.journalItems]
   )
   const messages = useStructuredAgentSessionMessages(
     transcriptItems,
