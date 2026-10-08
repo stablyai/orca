@@ -11,6 +11,7 @@ import { MAX_MANIFEST_BYTES } from './pet-import-size-limits'
 import { getPetsDir } from './pet-storage-paths'
 import { copyFileNoFollow, isSymlink } from './pet-symlink-safe-copy'
 
+/** Pet menu entry point: picks a bundle with the native dialog; null when the user cancels. */
 export async function importPetBundle(
   event: Electron.IpcMainInvokeEvent
 ): Promise<CustomPet | null> {

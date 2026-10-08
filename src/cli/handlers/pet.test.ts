@@ -24,6 +24,7 @@ const LIBRARY: PetLibrary = {
 describe('pet commands', () => {
   let client: RuntimeClient
 
+  /** Parses and validates argv like the real CLI before dispatching. */
   function run(args: string[]) {
     const parsed = parseArgs(['pet', ...args])
     validateCommandAndFlags(PET_COMMAND_SPECS, parsed)

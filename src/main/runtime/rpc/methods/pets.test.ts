@@ -33,10 +33,12 @@ const CAT: CustomPet = {
 }
 const CAT_ENTRY = { id: CAT.id, name: 'Cat', kind: 'image' }
 
+/** A request the dispatcher accepts without a real auth handshake. */
 function makeRequest(method: string, params?: unknown): RpcRequest {
   return { id: 'req-1', authToken: 'tok', method, params }
 }
 
+/** UI state held in memory behind a stub runtime that merges updates like the real store. */
 function setup(initial: Partial<PersistedUIState>) {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: pet methods read only pet fields.
   let ui = { ...initial } as PersistedUIState

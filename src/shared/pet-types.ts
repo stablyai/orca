@@ -9,6 +9,7 @@ export const GREMLIN_PET_ID = 'gremlin-the-trickster'
 export const BUNDLED_PET_IDS = [DEFAULT_PET_ID, OPENCODE_PET_ID, GREMLIN_PET_ID] as const
 export type BundledPetId = (typeof BUNDLED_PET_IDS)[number]
 
+/** True for pets that ship with Orca, which have no stored files to read or delete. */
 export function isBundledPetId(id: string | undefined): id is BundledPetId {
   return BUNDLED_PET_IDS.some((bundledId) => bundledId === id)
 }

@@ -4,6 +4,7 @@ import { requiredString } from './rpc-param-primitives'
 // Why 40: the pet menu truncates imported labels to 40 chars, so a longer CLI name would be cut silently.
 export const PET_NAME_MAX_LENGTH = 40
 
+/** A trimmed, non-empty label no longer than what the pet menu shows. */
 function petName(message: string) {
   return requiredString(message).pipe(
     z

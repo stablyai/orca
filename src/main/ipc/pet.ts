@@ -17,6 +17,7 @@ const PetFileRequestSchema = z.object({
   kind: z.enum(['image', 'bundle']).optional()
 })
 
+/** IPC behind the pet menu: image upload, bundle import, and serving or deleting stored pet bytes. */
 export function registerPetHandlers(): void {
   ipcMain.handle('pet:import', async (event): Promise<CustomPet | null> => {
     const senderWindow =

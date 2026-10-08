@@ -16,11 +16,12 @@ import {
   resolveSelectablePetId
 } from './pet-library-state'
 
+/** What callers need to know about the pet; storage details such as fileName stay in main. */
 function summarizePet(pet: CustomPet): PetMutationResult['pet'] {
   return { id: pet.id, name: pet.label, kind: pet.kind ?? 'image' }
 }
 
-// Why UI state: the desktop renderer re-hydrates on every ui change, so the overlay updates live.
+/** Pet commands that edit persisted UI state; the desktop renderer re-hydrates on every change, so the overlay updates live. */
 export const PET_METHODS = [
   defineMethod({
     name: 'pet.list',

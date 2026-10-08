@@ -1,7 +1,7 @@
 import { basename, join, normalize, sep } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-environment'
 
-// Why: keep the legacy `sidekicks` folder so existing user-uploaded pets keep rendering after the product rename.
+/** Custom pet storage root; keeps the legacy `sidekicks` folder so pets imported before the rename still render. */
 export function getPetsDir(): string {
   return join(getAppEnvironment().getPath('userData'), 'sidekicks', 'custom')
 }

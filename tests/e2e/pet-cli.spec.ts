@@ -5,6 +5,7 @@ import { expect, test } from './helpers/orca-app'
 import { orcaCliResult } from './helpers/compiled-orca-cli'
 import { waitForSessionReady } from './helpers/store'
 
+/** A minimal valid bundle around a real raster sheet; returns its folder. */
 function writePetBundle(): string {
   const bundleDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-pet-bundle-'))
   // Why gremlin.webp: a real raster sheet, so the import's frame check decodes it as users' sheets are.

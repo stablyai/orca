@@ -28,6 +28,7 @@ export function readActivePetId(ui: PersistedUIState, customPets: CustomPet[]): 
   return DEFAULT_PET_ID
 }
 
+/** Built-in pets first, then custom ones, with `active` resolved the way the renderer resolves it. */
 export function describePetLibrary(ui: PersistedUIState): PetLibrary {
   const customPets = readCustomPets(ui)
   const activePetId = readActivePetId(ui, customPets)
@@ -73,6 +74,7 @@ export function resolveCustomPet(customPets: CustomPet[], selector: string): Cus
   throw new InvalidArgumentError(`No custom pet matches "${selector}". Run \`orca pet list\`.`)
 }
 
+/** Built-in ids pass through as-is; any other selector must match a custom pet. */
 export function resolveSelectablePetId(customPets: CustomPet[], selector: string): string {
   return isBundledPetId(selector) ? selector : resolveCustomPet(customPets, selector).id
 }
