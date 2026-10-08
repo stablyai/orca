@@ -265,6 +265,35 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().statusBarUsageMode).toBe('verbose')
   })
 
+  it('persists per-provider status-bar usage windows and restores them on hydrate', () => {
+    const setUI = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+
+    expect(store.getState().statusBarUsageWindows).toEqual({})
+
+    store.getState().setStatusBarUsageWindows('codex', ['weekly'])
+    store.getState().setStatusBarUsageWindows('claude', ['weekly', 'session', 'fableWeekly'])
+
+    expect(setUI).toHaveBeenLastCalledWith({
+      statusBarUsageWindows: { codex: ['weekly'], claude: ['weekly', 'session', 'fableWeekly'] }
+    })
+
+    store.getState().setStatusBarUsageWindows('codex', [])
+    expect(store.getState().statusBarUsageWindows).toEqual({
+      claude: ['weekly', 'session', 'fableWeekly']
+    })
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        statusBarUsageWindows: { antigravity: ['bucket:Gemini Models · Weekly Limit Remaining'] }
+      })
+    )
+    expect(store.getState().statusBarUsageWindows).toEqual({
+      antigravity: ['bucket:Gemini Models · Weekly Limit Remaining']
+    })
+  })
+
   it('clamps persisted workspace board column width', () => {
     const store = createUIStore()
 

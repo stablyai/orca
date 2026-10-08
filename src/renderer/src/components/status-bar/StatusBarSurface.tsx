@@ -93,6 +93,7 @@ export function StatusBarSurface({
     usageMenuFocusHandoff,
     usageMenuOpen,
     usagePercentageDisplay,
+    statusBarUsageWindows,
     usageRef,
     usageTightestOnly
   } = controller
@@ -146,7 +147,9 @@ export function StatusBarSurface({
                       <span
                         key={p.provider}
                         data-usage-chip={p.provider}
-                        data-usage-urgent={getUsageTone(p) === 'urgent'}
+                        data-usage-urgent={
+                          getUsageTone(p, statusBarUsageWindows[p.provider]) === 'urgent'
+                        }
                         data-usage-collapsed={collapsedUsageProviders.includes(p.provider)}
                         aria-hidden={collapsedUsageProviders.includes(p.provider)}
                         className="inline-flex data-[usage-collapsed=true]:invisible data-[usage-collapsed=true]:absolute"
@@ -156,6 +159,7 @@ export function StatusBarSurface({
                           compact={compact}
                           display={usagePercentageDisplay}
                           mode={usageTightestOnly ? 'compact' : statusBarUsageMode}
+                          pickedWindows={statusBarUsageWindows[p.provider]}
                         />
                       </span>
                     ))}
@@ -165,6 +169,7 @@ export function StatusBarSurface({
                           collapsedUsageProviders.includes(p.provider)
                         )}
                         display={usagePercentageDisplay}
+                        pickedWindowsFor={(p) => statusBarUsageWindows[p.provider]}
                       />
                     ) : null}
                   </button>

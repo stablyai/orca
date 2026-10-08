@@ -97,6 +97,7 @@ vi.mock('../../store', () => {
     settings: { ...storeSettings, activeRuntimeEnvironmentId },
     runtimeEnvironments: [],
     usagePercentageDisplay: 'used',
+    statusBarUsageWindows: {},
     openSettingsPage: vi.fn(),
     openSettingsTarget: vi.fn(),
     fetchSettings,

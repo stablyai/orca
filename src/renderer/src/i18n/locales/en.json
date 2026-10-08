@@ -4310,6 +4310,9 @@
             "resumingAriaOne": "Resuming 1 chat. Click to open details.",
             "resumingAria": "Resuming {{value0}} chats. Click to open details.",
             "resumingTooltip": "Restoring interrupted chats and asking them to carry on…"
+          },
+          "statusBarProviderUsage": {
+            "tightestGroup": "Tightest"
           }
         }
       },
@@ -9612,7 +9615,10 @@
               "kw": {
                 "cursor": "cursor"
               }
-            }
+            },
+            "statusBarUsageWindowsTitle": "Status-bar usage windows",
+            "statusBarUsageWindowsDescription": "Pick which limits each provider shows on the status bar. Pick none to keep the default summary.",
+            "statusBarUsageWindowsLimits": "limits"
           }
         },
         "auto": {
@@ -12667,6 +12673,9 @@
           "offCount": "{{count}} off",
           "machines": "Machines",
           "machinesDescription": "Choose which machines can show notifications on this computer. A paired server’s switch also covers work reached through it."
+        },
+        "StatusBarUsageWindowsSetting": {
+          "empty": "No provider has reported usage yet."
         }
       },
       "right": {

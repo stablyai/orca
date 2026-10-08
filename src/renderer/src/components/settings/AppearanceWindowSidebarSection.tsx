@@ -18,8 +18,10 @@ import {
   getFollowSymlinkedDirectoriesEntry,
   getSidebarEntries,
   getStatusBarToggles,
+  getStatusBarUsageWindowsEntry,
   getUsagePercentageDisplayEntry
 } from './appearance-search'
+import { StatusBarUsageWindowsSetting } from './StatusBarUsageWindowsSetting'
 import { USAGE_PERCENTAGE_DISPLAY_SETTING_ID } from './appearance-usage-percentage-search'
 import { LeftSidebarAppearanceSetting } from './LeftSidebarAppearanceSetting'
 import {
@@ -76,6 +78,7 @@ export function AppearanceWindowSidebarSection({
   const setWorktreeCardMode = useAppStore((state) => state.setWorktreeCardMode)
   const visibleStatusBarToggles = useAvailableStatusBarToggles(getStatusBarToggles())
   const usagePercentageDisplayEntry = getUsagePercentageDisplayEntry()
+  const statusBarUsageWindowsEntry = getStatusBarUsageWindowsEntry()
   const leftSidebarAppearanceEntry = getLeftSidebarAppearanceEntry()
   const sidebarEntries = getSidebarEntries()
   const workspaceCardLayoutEntry = getWorkspaceCardLayoutEntry()
@@ -97,6 +100,7 @@ export function AppearanceWindowSidebarSection({
   })
   const statusBarControlMatches =
     matchesSettingsSearch(searchQuery, usagePercentageDisplayEntry) ||
+    matchesSettingsSearch(searchQuery, statusBarUsageWindowsEntry) ||
     visibleStatusBarToggles.some((toggle) =>
       matchesSettingsSearch(searchQuery, {
         title: toggle.title,
@@ -168,6 +172,14 @@ export function AppearanceWindowSidebarSection({
                     />
                   }
                 />
+              </SearchableSetting>
+
+              <SearchableSetting
+                title={statusBarUsageWindowsEntry.title}
+                description={statusBarUsageWindowsEntry.description}
+                keywords={statusBarUsageWindowsEntry.keywords}
+              >
+                <StatusBarUsageWindowsSetting />
               </SearchableSetting>
 
               {visibleStatusBarToggles.map((toggle) => {

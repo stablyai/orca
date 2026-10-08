@@ -21,11 +21,13 @@ vi.mock('../../store', () => ({
     selector: (state: {
       recordFeatureInteraction: typeof recordFeatureInteractionMock
       usagePercentageDisplay: 'used'
+      statusBarUsageWindows: Record<string, never>
     }) => unknown
   ) =>
     selector({
       recordFeatureInteraction: recordFeatureInteractionMock,
-      usagePercentageDisplay: usagePercentageDisplayMock
+      usagePercentageDisplay: usagePercentageDisplayMock,
+      statusBarUsageWindows: {}
     })
 }))
 
