@@ -25,7 +25,8 @@ import {
   PROVIDER_SESSION_ID,
   fakeClaude,
   identityFor,
-  recordingJournalSink
+  recordingJournalSink,
+  claudeStartupSettled
 } from './claude-structured-session-test-support'
 
 const SESSION = 'session-1'
@@ -120,7 +121,7 @@ async function startChild(
     events: recordingJournalSink(),
     ...(options ? { options } : {})
   })
-  await adapter.awaitStarted(SESSION)
+  await claudeStartupSettled(adapter, SESSION)
   return adapter
 }
 
@@ -130,6 +131,8 @@ function restingRecord(options: Record<string, string>): AgentSessionRecord {
     provider: 'claude',
     accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: ACCOUNT_HOME },
     location: { wslDistro: null },
+    // Why released: a chat at rest has no live claim, so its next start reads the current account.
+    lease: { claimStatus: 'released' },
     options
   } as unknown as AgentSessionRecord
 }

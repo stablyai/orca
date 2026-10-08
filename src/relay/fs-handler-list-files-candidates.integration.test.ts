@@ -1,4 +1,5 @@
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
+import { writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
@@ -19,10 +20,8 @@ it('dispatches a real late candidate beyond the capped inventory and preserves i
       { length: QUICK_OPEN_LISTING_MAX_RESULTS + 100 },
       (_, i) => `file-${i}.ts`
     )
-    for (let offset = 0; offset < paths.length; offset += 200) {
-      await Promise.all(
-        paths.slice(offset, offset + 200).map((path) => writeFile(join(root, path), ''))
-      )
+    for (const path of paths) {
+      writeFileSync(join(root, path), '')
     }
     const inventory = await harness.request({
       rootPath: root,

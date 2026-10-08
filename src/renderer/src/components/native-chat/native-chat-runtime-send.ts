@@ -38,7 +38,7 @@ export { resetNativeChatPtySendQueuesForTests }
 /** Cancels an in-flight send's pending pty writes (the delayed Enter, and any
  *  later question bodies/Enters). Safe to call after the send completes. */
 export type NativeChatSendHandle = {
-  cancel: () => void
+  cancel: (keepInput?: boolean) => void
   /** Time after which every scheduled write has fired and the handle can drop. */
   settleAfterMs: number
   /** Actual completion, which can outlive the nominal schedule if the renderer stalls. */
@@ -61,7 +61,7 @@ export function sendNativeChatMessage(
   text: string,
   options?: NativeChatSendOptions
 ): NativeChatSendHandle {
-  if (options?.onWriteRejected) {
+  if (options?.onWriteRejected || options?.onDeliverySettled) {
     return sendNativeChatObservedWrites(
       settings,
       ptyId,
@@ -232,48 +232,18 @@ export function sendNativeChatAskAnswer(
   if (groups.length === 0) {
     return { cancel: () => {}, settleAfterMs: 0 }
   }
-  const timers: ReturnType<typeof setTimeout>[] = []
-  const verifiedWrites: Promise<boolean>[] = []
-  let cancelled = false
-  groups.forEach((group, index) => {
-    timers.push(
-      setTimeout(() => {
-        const bytes = 'raw' in group ? group.raw : buildNativeChatPasteBytes(group.text)
-        if (onSettled) {
-          // Why: inference must use the remote host's acceptance result, not
-          // the fire-and-forget renderer dispatch result.
-          verifiedWrites.push(
-            sendRuntimePtyInputVerified(settings, ptyId, bytes, 'driving').catch(() => false)
-          )
-        } else {
-          sendRuntimePtyInput(settings, ptyId, bytes, 'driving')
-        }
-      }, index * NATIVE_CHAT_QUESTION_STEP_MS)
-    )
-  })
-  const settleAfterMs =
-    (groups.length - 1) * NATIVE_CHAT_QUESTION_STEP_MS + NATIVE_CHAT_SUBMIT_DELAY_MS
-  if (onSettled) {
-    // Why: status inference must wait for every paced write and must not run
-    // after cancellation or a rejected runtime write.
-    timers.push(
-      setTimeout(() => {
-        void Promise.all(verifiedWrites).then((results) => {
-          if (!cancelled) {
-            onSettled(results.every(Boolean))
-          }
-        })
-      }, settleAfterMs)
-    )
-  }
-  return {
-    cancel: () => {
-      cancelled = true
-      for (const timer of timers) {
-        clearTimeout(timer)
-      }
-    },
-    // Hold the card until the last keystroke has fired and its submit gap passed.
-    settleAfterMs
-  }
+  return sendNativeChatObservedWrites(
+    settings,
+    ptyId,
+    groups.map((group, index) => ({
+      data: 'raw' in group ? group.raw : buildNativeChatPasteBytes(group.text),
+      delayBeforeMs: index === 0 ? 0 : NATIVE_CHAT_QUESTION_STEP_MS
+    })),
+    {
+      clearInput: '',
+      stopOnUnconfirmed: !!onSettled,
+      settleDelayMs: NATIVE_CHAT_SUBMIT_DELAY_MS,
+      onDeliverySettled: onSettled
+    }
+  )
 }

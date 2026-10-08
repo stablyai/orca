@@ -102,14 +102,13 @@ export function useStructuredAgentSessionHostRecoversRewindOnSend(
   return useStructuredAgentSessionHostCapability(target, AGENT_SESSION_REWIND_RECOVERY_CAPABILITY)
 }
 
-/** Whether the host holds mid-turn sends as drafts: only then may a client send `delivery`
- *  or call the queuedMessage RPCs. */
+/** Whether the host holds mid-turn sends as drafts: only then may a client send `delivery`. The
+ *  published cards and their queuedMessage actions are not gated on it. */
 export function useStructuredAgentSessionHostQueuesMessages(target: RuntimeClientTarget): boolean {
   return useStructuredAgentSessionHostQueuesMessagesState(target) === 'supported'
 }
 
-/** Three-state, for the outbox: only `supported` lets a first attempt ask to be queued, and only
- *  `unsupported` drops the field from a replay; `unknown` holds nothing back. */
+/** Three-state: only `supported` lets a send ask to be queued; `unknown` holds nothing back. */
 export function useStructuredAgentSessionHostQueuesMessagesState(
   target: RuntimeClientTarget
 ): StructuredAgentSessionHostCapabilityState {

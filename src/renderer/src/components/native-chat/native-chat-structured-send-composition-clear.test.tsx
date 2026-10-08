@@ -9,11 +9,16 @@ import type { NativeChatStructuredComposerTransport } from './native-chat-compos
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
+const actions = vi.hoisted((): { sendDisabled: boolean | null } => ({ sendDisabled: null }))
+
 vi.mock('./NativeChatComposerActions', () => ({
-  NativeChatComposerActions: () => <div data-testid="composer-actions" />
+  NativeChatComposerActions: (props: { sendDisabled: boolean }) => {
+    actions.sendDisabled = props.sendDisabled
+    return <div data-testid="composer-actions" />
+  }
 }))
 vi.mock('./NativeChatAutocompleteMenus', () => ({
-  NativeChatMentionHint: () => null,
+  NativeChatMentionMenu: () => null,
   NativeChatPickerMenu: () => null
 }))
 vi.mock('../../store', () => {
@@ -112,9 +117,9 @@ function pressEnter(input: HTMLTextAreaElement): void {
 
 let paneCounter = 0
 
-function renderComposer(structuredTransport: NativeChatStructuredComposerTransport): void {
+function renderComposer(structuredTransport: NativeChatStructuredComposerTransport) {
   paneCounter += 1
-  render(
+  return render(
     <NativeChatComposer
       terminalTabId={`tab-${paneCounter}`}
       paneKey={`tab-${paneCounter}:structured`}
@@ -302,5 +307,31 @@ describe('a withdrawn message put back during an IME composition', () => {
 
     expect(promptValue(input)).toBe('하\n\nwithdrawn')
     expect(readNativeChatDraftCache(pane)).toBe('하\n\nwithdrawn')
+  })
+})
+
+// One send per chat, as the common pattern: while it is out, Send is off and Enter keeps the text.
+describe('a structured send while the chat has one out', () => {
+  it('keeps the text in the box and Send disabled until the send settles', async () => {
+    const structured = transport({ send: vi.fn(() => false), sendOut: true })
+    const view = renderComposer(structured)
+    const input = textarea()
+    changePrompt(input, 'next one')
+    expect(actions.sendDisabled).toBe(true)
+
+    await act(async () => pressEnter(input))
+    expect(structured.send).toHaveBeenCalledWith('next one', [])
+    expect(promptValue(input)).toBe('next one')
+
+    view.rerender(
+      <NativeChatComposer
+        terminalTabId={`tab-${paneCounter}`}
+        paneKey={`tab-${paneCounter}:structured`}
+        targetPtyId={null}
+        agent="codex"
+        structuredTransport={{ ...structured, sendOut: false }}
+      />
+    )
+    expect(actions.sendDisabled).toBe(false)
   })
 })

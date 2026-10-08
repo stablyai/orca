@@ -47,13 +47,16 @@ export function NativeChatToolRunCallCounts({
     /* Outside the truncating member list, so the one thing the reader cannot
        afford to miss survives a pane too narrow to print it. Quiet text in the
        header's own type, not a destructive tint or a swapped glyph: a tool error
-       is routine work, and the line's own detail is one click away. */
-    <span
-      aria-label={marks.map((mark) => mark.label).join(', ')}
-      className="shrink-0 font-sans text-xs tabular-nums text-chat-foreground-faint transition-colors group-hover/tool-run:text-chat-foreground"
-    >
-      <span aria-hidden> · </span>
-      {marks.map((mark) => mark.text).join(', ')}
+       is routine work, and the line's own detail is one click away. One header
+       line tall so it stays on a wrapped summary's first line. */
+    <span className="flex h-[1lh] shrink-0 items-center">
+      <span
+        aria-label={marks.map((mark) => mark.label).join(', ')}
+        className="shrink-0 font-sans text-xs tabular-nums text-chat-foreground-faint transition-colors group-hover/tool-run:text-chat-foreground"
+      >
+        <span aria-hidden> · </span>
+        {marks.map((mark) => mark.text).join(', ')}
+      </span>
     </span>
   )
 }

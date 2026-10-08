@@ -10,7 +10,7 @@ import type { AgentJournalAnsweredTurn } from '../../../shared/agent-session-jou
 import { journalDispatchRowApplies } from './journal-dispatch-settlement'
 import type { JournalReducerState } from './journal-reducer'
 import {
-  notePersonTurnAccepted,
+  noteTurnAccepted,
   placeHandedOverMessage,
   placeRejectedMessage
 } from './journal-submission-fold'
@@ -35,6 +35,13 @@ export function applyJournalDispatchRow(
   } else {
     delete submission.rejection
   }
+  if (
+    row.state === 'rejected' &&
+    typeof row.keptAsQueuedMessageId === 'string' &&
+    row.keptAsQueuedMessageId.length > 0
+  ) {
+    submission.keptAsQueuedMessageId = row.keptAsQueuedMessageId
+  }
   if (row.state === 'rejected' && row.answeredInTurn !== undefined) {
     submission.answeredInTurn = readAnsweredTurn(row.answeredInTurn)
   } else {
@@ -53,7 +60,7 @@ export function applyJournalDispatchRow(
     delete submission.recovered
   }
   if (row.state === 'accepted') {
-    notePersonTurnAccepted(state, submission)
+    noteTurnAccepted(state, submission)
   }
   if (row.state !== 'accepted' || !row.providerItemId) {
     return

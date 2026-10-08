@@ -1,8 +1,8 @@
 // A Stop's event and the queue. A Stop never withdraws a draft and no text ever
 // travels back over the wire: where it takes effect it appends ONE Stop event
 // (`JournalStopEvent`), and the queue's pause is derived from it
-// (`queued-message-pause.ts`) until a turn a person asked for is sent after it, or
-// they Resume. The cards stay published, and Send-now sends one card without lifting
+// (`queued-message-pause.ts`) until any turn is sent after it and accepted, or the
+// person Resumes. The cards stay published, and Send-now sends one card without lifting
 // the pause for the rest until that card's turn starts. The event is bookkeeping: a
 // failure is reported and never gates the interrupt.
 

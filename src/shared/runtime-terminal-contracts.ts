@@ -11,6 +11,11 @@ import type { TabGroupLayoutNode } from './tab-types'
 import type { TerminalExitCause } from './terminal-exit-cause'
 import type { TerminalPaneLayoutNode } from './terminal-tab-types'
 import type { TerminalAgent, TuiAgent } from './terminal-agent'
+export type {
+  RuntimeTerminalSend,
+  RuntimeTerminalPromptStage,
+  RuntimeTerminalPromptDelivery
+} from './runtime-terminal-send-contract'
 
 export type RuntimeTerminalSummary = {
   handle: string
@@ -208,30 +213,6 @@ export type RuntimeTerminalRename = {
   handle: string
   tabId: string
   title: string | null
-}
-
-export type RuntimeTerminalSend = {
-  handle: string
-  accepted: boolean
-  bytesWritten: number
-  refusedReason?: 'no-agent' | 'permission'
-  prompt?: RuntimeTerminalPromptDelivery
-}
-
-export type RuntimeTerminalPromptStage = 'input_accepted' | 'turn_started'
-
-export type RuntimeTerminalPromptDelivery = {
-  requestId: string
-  stages: RuntimeTerminalPromptStage[]
-  provider: 'claude' | 'codex' | 'unsupported' | 'old-host'
-  observation: 'supported' | 'unsupported' | 'incarnation_replaced' | 'permission'
-  processIncarnation: string
-  generation: number
-  baselineWorkingSequence: number
-  /** Hook turn-start timestamp before this prompt was accepted. */
-  baselineExplicitWorkingStartedAt?: number | null
-  /** Permission observations seen before this prompt was accepted. */
-  baselinePermissionSequence?: number
 }
 
 export type RuntimeTerminalAgentStatusState = 'working' | 'permission' | 'idle' | null

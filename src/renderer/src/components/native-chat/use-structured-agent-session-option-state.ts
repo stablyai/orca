@@ -3,10 +3,8 @@ import type { AgentSessionConversationCommand } from '../../../../shared/agent-s
 import type { AgentSessionOptionsResult } from '../../../../shared/agent-session-wire'
 import type { AgentSessionRewindSupport } from '../../../../shared/agent-session-rewind'
 import type { AgentType } from '../../../../shared/agent-status-types'
-import {
-  getAgentSessionOptionCatalog,
-  type AgentSessionOptionCatalog
-} from '../../../../shared/agent-session-option-catalog'
+import type { AgentSessionOptionCatalog } from '../../../../shared/agent-session-option-catalog'
+import { structuredAgentSessionSeedCatalog } from './structured-agent-session-seed-catalog'
 import {
   applyStructuredAgentSessionOptions,
   createStructuredAgentSessionOptionState,
@@ -80,7 +78,7 @@ export function useStructuredAgentSessionOptionState(args: {
     optionIdentityRef.current = identity
     const seeded = createStructuredAgentSessionOptionState(
       agent,
-      getAgentSessionOptionCatalog(agent)
+      structuredAgentSessionSeedCatalog(agent)
     )
     // A host catalog is the account's, not the fence's: keep it rather than blank the default.
     const next =

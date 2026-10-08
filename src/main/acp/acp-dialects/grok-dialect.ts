@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { acpNotificationEnvelopeSchema } from '../acp-context-usage'
 import type { AcpDialect, AcpDialectNotification } from './acp-dialect'
-import { grokRequest } from './grok-requests'
+import { grokRequest, grokSettleRequest } from './grok-requests'
 import { grokBackgroundTaskNotification, grokToolBackgroundTasks } from './grok-background-tasks'
 
 const tokenCount = z.number().int().nonnegative()
@@ -173,6 +173,7 @@ export const GROK_ACP_DIALECT: AcpDialect = {
     return parsed.success ? parsed.data['x.ai/tool'].name : undefined
   },
   request: grokRequest,
+  settleRequest: grokSettleRequest,
   toolBackgroundTasks: grokToolBackgroundTasks,
   notification,
   contextWindow,

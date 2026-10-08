@@ -6,16 +6,20 @@ import type * as DragTempFileCopy from './dragged-temp-file-copy'
 import type { DragTempCopyItemResult } from './dragged-temp-file-copy'
 
 type IpcListener = (event: { sender: unknown }, payload: unknown) => void
+type InvokeHandler = (event: { sender: unknown }, payload: unknown) => Promise<unknown>
 
-const { materializeMock, sweepMock, ipcListeners } = vi.hoisted(() => ({
+const { materializeMock, sweepMock, ipcListeners, ipcHandlers } = vi.hoisted(() => ({
   materializeMock: vi.fn(),
   sweepMock: vi.fn(),
-  ipcListeners: new Map<string, IpcListener>()
+  ipcListeners: new Map<string, IpcListener>(),
+  ipcHandlers: new Map<string, InvokeHandler>()
 }))
 
 vi.mock('electron', () => ({
   app: { getPath: () => '/app-temp' },
   ipcMain: {
+    handle: (channel: string, handler: InvokeHandler) => ipcHandlers.set(channel, handler),
+    removeHandler: (channel: string) => ipcHandlers.delete(channel),
     on: (channel: string, listener: IpcListener) => ipcListeners.set(channel, listener),
     removeListener: (channel: string, listener: IpcListener) => {
       if (ipcListeners.get(channel) === listener) {
@@ -418,6 +422,7 @@ function relay(): IpcListener {
 describe('registerFileDropRelay', () => {
   beforeEach(() => {
     ipcListeners.clear()
+    ipcHandlers.clear()
     sweepMock.mockReset()
   })
 
@@ -450,6 +455,61 @@ describe('registerFileDropRelay', () => {
     relay()({ sender: first.webContents }, { paths: [FINDER], target: 'editor' })
 
     expect(first.webContents.send).not.toHaveBeenCalled()
+  })
+
+  it('prepares ordinary paths only for its own live renderer and validates the request', async () => {
+    const { window, webContents, close } = createWindow()
+    registerFileDropRelay(window)
+    const handler = ipcHandlers.get('fs:prepareDroppedPaths')!
+    const request = { paths: [FINDER], consumer: 'agent' }
+    expect(() => handler({ sender: {} }, request)).toThrow('owning window')
+    for (const invalid of [
+      null,
+      { paths: [FINDER], consumer: 'other' },
+      { paths: [42], consumer: 'agent' }
+    ]) {
+      expect(() => handler({ sender: webContents }, invalid)).toThrow('Invalid')
+    }
+    await expect(handler({ sender: webContents }, request)).resolves.toEqual({
+      paths: [FINDER],
+      failures: []
+    })
+    expect(webContents.send).not.toHaveBeenCalled()
+    close()
+    expect(ipcHandlers.has('fs:prepareDroppedPaths')).toBe(false)
+    expect(() => handler({ sender: webContents }, request)).toThrow('owning window')
+  })
+
+  it('enforces both request caps before preparing any paths', async () => {
+    const { window, webContents } = createWindow()
+    registerFileDropRelay(window)
+    const handler = ipcHandlers.get('fs:prepareDroppedPaths')!
+    await expect(
+      handler(
+        { sender: webContents },
+        { paths: Array.from({ length: 257 }, () => DRAG_TEMP), consumer: 'agent' }
+      )
+    ).resolves.toMatchObject({
+      paths: [],
+      failures: [{ reason: 'too-many-paths', pathCount: 257 }]
+    })
+    await expect(
+      handler({ sender: webContents }, { paths: ['x'.repeat(256 * 1024 + 1)], consumer: 'agent' })
+    ).resolves.toMatchObject({ paths: [], failures: [{ reason: 'paths-too-large' }] })
+    expect(materializeMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps the replacement window handler when an older window closes late', async () => {
+    const first = createWindow()
+    const second = createWindow()
+    registerFileDropRelay(first.window)
+    registerFileDropRelay(second.window)
+    const handler = ipcHandlers.get('fs:prepareDroppedPaths')!
+    first.close()
+    expect(ipcHandlers.get('fs:prepareDroppedPaths')).toBe(handler)
+    await expect(
+      handler({ sender: second.webContents }, { paths: [FINDER], consumer: 'main-reader' })
+    ).resolves.toEqual({ paths: [FINDER], failures: [] })
   })
 
   it.skipIf(process.platform !== 'darwin')(

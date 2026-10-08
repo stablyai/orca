@@ -13,6 +13,7 @@
 
 import { randomUUID } from 'node:crypto'
 import { isDefinitiveAgentSessionCreateRefusal } from '../../../../shared/agent-session-definitive-refusal'
+import type { AgentMessageSource } from '../../../../shared/agent-session-message-source'
 import type {
   AgentJournalMessageItem,
   AgentJournalSubmission
@@ -25,6 +26,7 @@ import { mintAgentSessionOperationId } from '../../orchestration/structured-poin
 import { structuredPointerCallerKey } from '../../orchestration/structured-mailbox-pointer-host'
 import { sendAgentTurn, type StructuredAgentTurnHost } from '../../orchestration/send-agent-turn'
 import { retireSettledStructuredWorkerTab } from '../../structured-agent-session-tab-retirement'
+import { structuredWorkerSession } from '../../structured-worker-authority'
 import {
   mintStructuredWorkerHandle,
   structuredWorkerHostScope,
@@ -49,19 +51,29 @@ const bindingsByDispatchId = new Map<string, StructuredWorkerBinding>()
  *
  * EVERY settlement has to reach this — stop, release AND abandon. A surviving subscription keeps
  * nudging a session no dispatch owns.
+ *
+ * Parked mail is forgotten on every session of the worker's `/clear` lineage, derived from
+ * `workerSessionId` when no binding survives (after a restart) — mail parks on whichever session
+ * ran the worker when it arrived.
  */
 export function releaseStructuredWorkerSession(
   dispatchId: string,
-  runtime?: Pick<OrcaRuntimeService, 'forgetStructuredSessionMail'>
+  runtime?: Pick<OrcaRuntimeService, 'forgetStructuredSessionMail'>,
+  workerSessionId?: string | null
 ): void {
   const binding = bindingsByDispatchId.get(dispatchId)
-  if (!binding) {
+  if (binding) {
+    bindingsByDispatchId.delete(dispatchId)
+    binding.disposeSubscription()
+    structuredWorkerIdentities.forget(binding.handle)
+  }
+  const rootSessionId = binding?.sessionId ?? workerSessionId
+  if (!rootSessionId || !runtime?.forgetStructuredSessionMail) {
     return
   }
-  bindingsByDispatchId.delete(dispatchId)
-  binding.disposeSubscription()
-  structuredWorkerIdentities.forget(binding.handle)
-  runtime?.forgetStructuredSessionMail?.(binding.sessionId)
+  for (const sessionId of structuredWorkerSession({ sessionId: rootSessionId }).lineage) {
+    runtime.forgetStructuredSessionMail(sessionId)
+  }
 }
 
 export async function createStructuredWorkerSession(args: {
@@ -216,11 +228,14 @@ export async function sendStructuredWorkerPreamble(args: {
   sessionId: string
   dispatchId: string
   preamble: string
+  /** Who the task is from (`dispatchTaskSource`), shown on the worker's turn. */
+  from: AgentMessageSource
 }): Promise<'accepted' | 'pending'> {
   const body: AgentJournalMessageItem = {
     kind: 'message',
     role: 'user',
-    blocks: [{ type: 'text', text: args.preamble }]
+    blocks: [{ type: 'text', text: args.preamble }],
+    from: args.from
   }
   const fence = args.host.deps.store.getRecord(args.sessionId)?.lease.runtimeFence
   if (fence === undefined) {
@@ -249,7 +264,8 @@ export async function sendStructuredWorkerPreamble(args: {
   }
 }
 
-function preambleDispatchState(
+/** A sent preamble's verdict: acknowledged, or held for its agent; anything else throws. */
+export function preambleDispatchState(
   submission: AgentJournalSubmission | undefined
 ): 'accepted' | 'pending' {
   if (submission?.dispatchState === 'accepted' || submission?.dispatchState === 'pending') {

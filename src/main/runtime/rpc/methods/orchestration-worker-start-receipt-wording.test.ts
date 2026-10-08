@@ -74,7 +74,7 @@ describe('worker-start mode receipt wording', () => {
     ],
     [
       'agent with no structured session',
-      { agent: 'grok' },
+      { agent: 'gemini' },
       'agent_without_structured_session',
       'this agent has no structured session'
     ]

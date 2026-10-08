@@ -22,10 +22,12 @@ describe('what a rejection does to the draft it was consumed from', () => {
     expect(rejectedDraftSettlement({ reason: DISPATCH_REJECTED_CANCELLED })).toEqual({
       state: 'waiting'
     })
+    expect(settle('notDelivered')).toEqual({ state: 'waiting' })
   })
 
-  it('a restart or close before hand-over sends it back to waiting too', () => {
-    for (const kind of ['hostRestarted', 'chatClosed', 'notDelivered'] as const) {
+  // Whoever sent it, it waits under the reopen's pause like every card the chat closed with.
+  it('a restart or close before hand-over sends it back to waiting, with no hold of its own', () => {
+    for (const kind of ['hostRestarted', 'chatClosed'] as const) {
       expect(settle(kind)).toEqual({ state: 'waiting' })
     }
     expect(rejectedDraftSettlement({ reason: DISPATCH_REJECTED_HOST_RESTARTED })).toEqual({

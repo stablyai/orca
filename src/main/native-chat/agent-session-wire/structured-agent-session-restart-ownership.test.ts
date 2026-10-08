@@ -16,6 +16,7 @@ import {
 import { STRUCTURED_AGENT_SESSION_RESTART_CONTINUATION_CALLER } from './structured-agent-session-restart-resume-wiring'
 import {
   interruptedRestart,
+  QUIT_CUT_NOTICE,
   startAgent,
   statusNotes,
   supersededRefusal,
@@ -132,6 +133,9 @@ it('replays the same logical continuation through the durable send ledger', asyn
   if (!sent) {
     throw new Error('the continuation was not sent')
   }
+  // No person's: re-derived by its own records after another restart, so never kept as a card.
+  expect(sent).not.toHaveProperty('source')
+  expect((await host.journalSnapshot(SESSION)).submissions[0]).not.toHaveProperty('source')
   const replay = await host.send(
     { callerKey: STRUCTURED_AGENT_SESSION_RESTART_CONTINUATION_CALLER },
     { envelope: sent.envelope, body: sent.body }
@@ -354,7 +358,8 @@ it("refuses a continuation quietly when the user's own message was accepted firs
     failed: []
   })
   await vi.waitFor(() => expect(dispatch).toHaveBeenCalledOnce())
-  expect(await statusNotes(host)).toEqual([])
+  // The quit's own row about the cut, and nothing about the refused continuation.
+  expect(await statusNotes(host)).toEqual([QUIT_CUT_NOTICE])
   expect(await new AgentSessionRecoveryCapsule(root).list(NOW)).toEqual([])
   expect(await new AgentSessionRecoveryCapsule(root).listFailed(NOW)).toEqual([])
 })

@@ -1,4 +1,3 @@
-import { getChatAppearanceSearchEntries } from './chat-appearance-search'
 import type { SettingsSearchEntry } from './settings-search'
 import { getTerminalAppearanceSearchEntries } from './terminal-search'
 import { getLeftSidebarAppearanceEntry, getSidebarEntries } from './appearance-sidebar-search'
@@ -258,8 +257,6 @@ export function getAppearancePaneSearchEntries(
 ): SettingsSearchEntry[] {
   return [
     ...getAppearanceSectionEntries(),
-    { title: translate('settings.appearance.chat.title', 'Chat') },
-    ...getChatAppearanceSearchEntries(),
     ...getThemeEntries(),
     ...(SHOW_UI_LANGUAGE_SETTING ? getLanguageEntries() : []),
     ...getTypographyEntries(),

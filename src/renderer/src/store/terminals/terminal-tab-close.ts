@@ -18,6 +18,8 @@ import { omitUnverifiedPtyLossTabIds } from './terminal-unverified-pty-loss'
 import { removePaneKeysByTabPrefix } from '../slices/agent-status-pane-keyed-records'
 import { omitRecordKeys } from '../slices/worktrees/teardown/record-key-omission'
 import { deleteNativeChatComposerDraftsForTab } from '@/components/native-chat/native-chat-composer-draft-store'
+import { dropNativeChatPendingAttachmentsForTab } from '@/components/native-chat/native-chat-pending-attachment-cache'
+import { noteAgentLaunchPaneClosedByUser } from '@/lib/agent-launch-pane-closes'
 
 export function createTerminalTabCloseActions(
   set: TerminalStoreSet,
@@ -59,6 +61,14 @@ export function createTerminalTabCloseActions(
           const closing = before.find((t) => t.id === tabId)
           if (closing) {
             closingWorktreeId = wId
+            // The user closing a launch tab whose agent is still starting: that close wins.
+            if (
+              closeReason === 'user' &&
+              closing.agentLaunchPane &&
+              !closing.agentLaunchPane.outcome
+            ) {
+              noteAgentLaunchPaneClosedByUser(tabId, closing.agentLaunchPane.leafId)
+            }
             // Why: capture the first-matched tab's snapshot for the Cmd+Shift+T reopen stack (see capturedSnapshot below).
             if (!closedTab) {
               closedTab = closing
@@ -255,6 +265,7 @@ export function createTerminalTabCloseActions(
       // workspace is removed in Orca; drafts have no budget that retires them.
       if (closeReason === 'user') {
         deleteNativeChatComposerDraftsForTab(tabId)
+        dropNativeChatPendingAttachmentsForTab(tabId)
       }
       // Why shared with the paired snapshot apply: every path that removes a tab owes it the same sweep, and a second copy of the list is how one path silently misses a new entry.
       sweepRetiredTerminalTabState(get(), tabId, closingWorktreeId)

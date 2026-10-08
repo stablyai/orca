@@ -1,9 +1,9 @@
 // Host teardown, made failure-complete.
 //
 // Every phase runs whatever an earlier one threw: `flushAllEventSinks` throws BY DESIGN when a
-// sink barrier fails, and the attach drain can reject too. Each conversation is then retired —
-// what it still queues settled, its admitted writes drained — before the runtime closes the one
-// journal connection, last.
+// sink barrier fails, and the attach drain can reject too. Each conversation is then retired — its
+// admitted writes drained, what it still queues left for its next open to keep — before the
+// runtime closes the one journal connection, last.
 
 import type { AgentSessionResumeTrigger } from '../../../shared/agent-session-resume-marker'
 import { SUPERVISED_GRACEFUL_EXIT_MS } from '../../claude/claude-child-exit-proof-ladder'
@@ -11,7 +11,6 @@ import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../../provider-process/provider
 import { SNAPSHOT_DRAIN_TIMEOUT_MS } from './structured-agent-session-eviction'
 import type { StructuredAgentSessionRestartResume } from './structured-agent-session-restart-resume-host'
 import {
-  abandonQueuedStructuredAgentSessionMessages,
   evictOwnedStructuredAgentSessions,
   type StructuredAgentSessionLifetimeContext
 } from './structured-agent-session-host-lifetime'
@@ -61,6 +60,7 @@ export function structuredAgentSessionHostTeardownPhases(collaborators: {
   runtimeState: {
     stopLeaseRenewal: () => Promise<void> | void
     flushAllEventSinks: () => Promise<void>
+    acquireAborts: { abortAll: (reason: string) => void }
   }
   tasks: { drainAttaches: () => Promise<void> }
   evictOwnedSessions: () => Promise<void>
@@ -84,6 +84,11 @@ export function structuredAgentSessionHostTeardownPhases(collaborators: {
     },
     { name: 'dispose-idle-sweep', run: () => collaborators.idleSweep.dispose() },
     { name: 'stop-lease-renewal', run: () => collaborators.runtimeState.stopLeaseRenewal() },
+    // Before the drain, which would otherwise wait out a start the provider never answers.
+    {
+      name: 'abort-acquires',
+      run: () => collaborators.runtimeState.acquireAborts.abortAll('closed by quit')
+    },
     { name: 'drain-attaches', run: () => collaborators.tasks.drainAttaches() },
     {
       name: 'evict-owned-sessions',
@@ -109,8 +114,6 @@ async function tearDownStructuredAgentSessionHost(input: {
   sessions: Map<string, StructuredAgentSessionHostSession>
   retainSessionIds?: ReadonlySet<string>
   acknowledgeSessionRelease?: (sessionId: string) => void
-  /** Quit closes every conversation, so it settles what they still queue as a close does. */
-  abandonQueued?: (sessionId: string, session: StructuredAgentSessionHostSession) => Promise<void>
 }): Promise<void> {
   const failures: unknown[] = []
   for (const phase of input.phases) {
@@ -124,18 +127,18 @@ async function tearDownStructuredAgentSessionHost(input: {
   const entries = [...input.sessions.entries()].filter(
     ([sessionId]) => !input.retainSessionIds?.has(sessionId)
   )
-  // `allSettled`, so one failed settlement cannot skip the others.
+  // Quit settles nothing still queued: delivery and the queue's drain are already disposed, so
+  // nothing hands it over now, and the next open settles it as it would after a crash. `allSettled`, so one failed close
+  // cannot skip the others.
   const closed = await Promise.allSettled(
-    entries.map(async ([sessionId, session]) => {
-      await input.abandonQueued?.(sessionId, session)
+    entries.map(async ([, session]) => {
       await session.journal.close()
     })
   )
   closed.forEach((result, index) => {
     const sessionId = entries[index]?.[0]
     if (result.status === 'fulfilled') {
-      // Only a settled conversation drops out. One whose queued sends could not be settled stays
-      // indexed, so a later stop retries that settlement.
+      // Only a closed conversation drops out; one whose close failed stays indexed for a retry.
       if (sessionId !== undefined) {
         input.sessions.delete(sessionId)
         input.acknowledgeSessionRelease?.(sessionId)
@@ -171,7 +174,8 @@ export async function flushStructuredAgentSessionHost(
               stopped: context.restartResume.confirmStopped
             }
           },
-          retainSessionIds
+          retainSessionIds,
+          context.trigger
         ),
       beginResumeMarkers: () => context.restartResume.beginTeardown(context.trigger),
       recordResumeMarkers: context.restartResume.recordMarkers,
@@ -180,10 +184,6 @@ export async function flushStructuredAgentSessionHost(
     sessions: context.sessions,
     retainSessionIds,
     acknowledgeSessionRelease: (sessionId) =>
-      context.deps.adapter.acknowledgeSessionRelease?.(sessionId),
-    // Quit's is best effort: a failure is reported, and the next open rejects the leftover.
-    abandonQueued: async (sessionId, session) => {
-      await abandonQueuedStructuredAgentSessionMessages(context.deps, sessionId, session.journal)
-    }
+      context.deps.adapter.acknowledgeSessionRelease?.(sessionId)
   })
 }

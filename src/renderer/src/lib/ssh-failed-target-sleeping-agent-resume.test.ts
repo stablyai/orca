@@ -11,7 +11,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import { useAppStore } from '@/store'
-import { makeWorktree } from '@/store/slices/store-test-helpers'
+import { makeWorktree } from '../store/slices/worktrees-slice-test-fixtures'
 import { resolveWorkspaceTerminalHostAuthority } from './workspace-terminal-host-authority'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
 

@@ -1,19 +1,32 @@
 import { ImeInput } from '@/lib/ime-text-field'
-import { useState, type RefObject } from 'react'
+import { Textarea } from '@/components/ui/textarea'
+import { useRef, useState, type RefObject } from 'react'
 import { Check, Pencil, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import type { AskAnswerSelection, AskPrompt } from './native-chat-interactive-prompt'
+import { NativeChatPromptCollapseToggle } from './NativeChatPromptCollapse'
+import { useNativeChatPromptCardFocus } from './use-native-chat-prompt-card-focus'
+import { useNativeChatQuestionAutoAdvance } from './use-native-chat-question-auto-advance'
+import { useNativeChatQuestionNumberKeys } from './use-native-chat-question-number-keys'
+import { isEditableTarget } from '@/lib/editable-target'
+import type { AgentJournalFreeTextInput } from '../../../../shared/agent-session-journal-types'
 
 export type NativeChatQuestionCardProps = {
   prompt: AskPrompt
   /** Whether the snapshotted answer is still being delivered to the agent. */
   isSubmitting?: boolean
+  isCancelling?: boolean
   /** Deliver the chosen answer (per-question option indices + free text). */
   onAnswer: (selections: AskAnswerSelection[]) => void
   allowOther?: boolean | readonly boolean[]
+  freeTextInputs?: readonly (AgentJournalFreeTextInput | undefined)[]
   /** Dismiss the prompt (sends Escape to the agent). */
   onCancel: () => void
+  /** Fold the card to a strip and give the input back, writing nothing; Escape does too. */
+  onCollapse?: () => void
+  /** Take focus when the card takes the input region; number keys pick while it holds. */
+  shouldFocus?: boolean
   /** Exposes the free-text row so pane-level Paste can target it while the
    *  card replaces the composer. */
   answerInputRef?: RefObject<HTMLInputElement | null>
@@ -27,33 +40,48 @@ const TYPED_ANSWER = -1
  * Native renderer for an agent's AskUserQuestion prompt: a numbered pick-list
  * (mobile/Claude-Code parity) with a header + close, a hover-highlighted row per
  * option, and an optional free-text row for a custom answer. Single-select
- * holds one answer (an option or the typed text, whichever was chosen last);
- * multi-select toggles options, adds any typed text, and confirms via the trailing action.
+ * holds one answer (an option or the typed text, whichever was chosen last) and
+ * picking an option moves on by itself; multi-select toggles options, adds any typed
+ * text, and confirms via the trailing action. Number keys pick the numbered row.
  * Multi-question prompts step through tabs across the top. Neutral shadcn tokens.
  */
 export function NativeChatQuestionCard({
   prompt,
   isSubmitting = false,
+  isCancelling = false,
   onAnswer,
   allowOther = true,
+  freeTextInputs,
   onCancel,
+  onCollapse,
+  shouldFocus = false,
   answerInputRef
 }: NativeChatQuestionCardProps): React.JSX.Element {
+  const cardRef = useRef<HTMLDivElement>(null)
+  const autoAdvance = useNativeChatQuestionAutoAdvance()
   const [index, setIndex] = useState(0)
+  useNativeChatPromptCardFocus(cardRef, shouldFocus, index)
   // Keep option identity by index: labels are display text and are not guaranteed
   // unique, while Claude's selector commits the numbered row (STA-1860).
   const [selections, setSelections] = useState<number[][]>(() => prompt.questions.map(() => []))
-  const [otherText, setOtherText] = useState<string[]>(() => prompt.questions.map(() => ''))
+  const [otherText, setOtherText] = useState<string[]>(() =>
+    prompt.questions.map((_, qi) => freeTextInputs?.[qi]?.initialValue ?? '')
+  )
 
   const total = prompt.questions.length
   const isLast = index === total - 1
   const q = prompt.questions[index]!
   const questionAllowsOther = Array.isArray(allowOther) ? (allowOther[index] ?? false) : allowOther
+  const freeTextInput = freeTextInputs?.[index]
+  const acceptsEmpty = (qi: number): boolean =>
+    freeTextInputs?.[qi]?.allowEmpty === true && prompt.questions[qi]?.options.length === 0
+  const typedText = (qi: number, oth = otherText): string =>
+    freeTextInputs?.[qi]?.allowEmpty ? (oth[qi] ?? '') : (oth[qi] ?? '').trim()
 
   // Picking an option replaces a chosen typed answer on single-select; the text stays in
   // the field, unsent, until the user types or clicks there again.
   const typedAnswerChosen = (qi: number, sel = selections, oth = otherText): boolean =>
-    (sel[qi] ?? []).includes(TYPED_ANSWER) && (oth[qi] ?? '').trim().length > 0
+    acceptsEmpty(qi) || ((sel[qi] ?? []).includes(TYPED_ANSWER) && typedText(qi, oth).length > 0)
 
   const chooseTypedAnswer = (qi: number): void => {
     setSelections((prev) => {
@@ -70,6 +98,7 @@ export function NativeChatQuestionCard({
     (sel[qi] ?? []).filter((choice) => choice !== TYPED_ANSWER)
 
   const setOther = (qi: number, value: string): void => {
+    autoAdvance.cancel()
     setOtherText((prev) => {
       const next = [...prev]
       next[qi] = value
@@ -86,21 +115,23 @@ export function NativeChatQuestionCard({
     const picked = pickedOptions(qi, sel)
       .map((optionIndex) => question?.options[optionIndex]?.label ?? '')
       .filter((label) => label.length > 0)
-    const other = typedAnswerChosen(qi, sel, oth) ? (oth[qi] ?? '').trim() : ''
+    const other = typedAnswerChosen(qi, sel, oth) ? typedText(qi, oth) : ''
     return [...picked, ...(other ? [other] : [])].join(', ')
   }
 
-  const currentAnswered = answerFor(index).length > 0
+  const currentAnswered = answerFor(index).length > 0 || acceptsEmpty(index)
   const currentTypedAnswerChosen = typedAnswerChosen(index)
 
   const submitAll = (sel: number[][], oth: string[]): void => {
     const resolved: AskAnswerSelection[] = prompt.questions.map((_, i) => {
       return {
         indices: pickedOptions(i, sel),
-        other: typedAnswerChosen(i, sel, oth) ? (oth[i] ?? '').trim() : ''
+        other: typedAnswerChosen(i, sel, oth) ? typedText(i, oth) : ''
       }
     })
-    const anyAnswered = resolved.some((s) => s.indices.length > 0 || (s.other ?? '').length > 0)
+    const anyAnswered = resolved.some(
+      (s, i) => s.indices.length > 0 || (s.other ?? '').length > 0 || acceptsEmpty(i)
+    )
     if (anyAnswered) {
       onAnswer(resolved)
     }
@@ -117,23 +148,29 @@ export function NativeChatQuestionCard({
     }
   }
 
-  // Selecting only highlights the row; submitting is an explicit step via the
-  // trailing Send/Next button. (Auto-submitting on the first click dismissed the
-  // card before the user saw any feedback, which read as "nothing happened".)
+  // A single-select pick answers the question, so the card moves on after a beat that
+  // shows the row chosen; picking it again in that beat takes the answer back.
   const pickOption = (optionIndex: number): void => {
-    setSelections((prev) => {
-      const next = prev.map((s) => [...s])
-      const cur = next[index] ?? []
-      if (q.multiSelect) {
-        next[index] = cur.includes(optionIndex)
-          ? cur.filter((pickedIndex) => pickedIndex !== optionIndex)
-          : [...cur, optionIndex].sort((a, b) => a - b)
-      } else {
-        next[index] = cur.includes(optionIndex) ? [] : [optionIndex]
-      }
-      return next
-    })
+    const cur = selections[index] ?? []
+    const picked = !cur.includes(optionIndex)
+    const chosen = !picked
+      ? cur.filter((pickedIndex) => pickedIndex !== optionIndex)
+      : q.multiSelect
+        ? [...cur, optionIndex].sort((a, b) => a - b)
+        : [optionIndex]
+    const next = selections.map((s, i) => (i === index ? chosen : s))
+    setSelections(next)
+    autoAdvance.cancel()
+    if (picked && !q.multiSelect) {
+      autoAdvance.schedule(() => advanceOrSubmit(next, otherText))
+    }
   }
+  useNativeChatQuestionNumberKeys(
+    cardRef,
+    shouldFocus && !isSubmitting,
+    q.options.length,
+    pickOption
+  )
 
   // Trailing action (also fired by Enter). On any non-final question this just
   // advances — "Next" when answered, "Skip" when not — so skipping one question
@@ -142,11 +179,12 @@ export function NativeChatQuestionCard({
   // dismisses, but a reflexive Enter in the empty field is a no-op so it can't
   // throw away the whole prompt.
   const confirm = (fromKeyboard = false): void => {
+    autoAdvance.cancel()
     if (!isLast) {
       advanceOrSubmit(selections, otherText)
       return
     }
-    const anyAnswered = prompt.questions.some((_, i) => answerFor(i).length > 0)
+    const anyAnswered = prompt.questions.some((_, i) => answerFor(i).length > 0 || acceptsEmpty(i))
     if (anyAnswered) {
       submitAll(selections, otherText)
     } else if (!fromKeyboard) {
@@ -154,11 +192,48 @@ export function NativeChatQuestionCard({
     }
   }
 
+  // Leaving the question by any other route drops a pending auto-advance.
+  const goTo = (questionIndex: number): void => {
+    autoAdvance.cancel()
+    setIndex(questionIndex)
+  }
+  const cancel = (): void => {
+    autoAdvance.cancel()
+    onCancel()
+  }
+  const collapse = onCollapse
+    ? (): void => {
+        autoAdvance.cancel()
+        onCollapse()
+      }
+    : undefined
+
   return (
     // Part of the composer: docked in the bottom input region, matching the
     // composer's width and padding, rendered as the "ask" dialog card directly
     // above the text input. Its free-text row is the answer input.
-    <div className="shrink-0 bg-chat-canvas" aria-busy={isSubmitting}>
+    <div
+      ref={cardRef}
+      role="group"
+      aria-label={q.question}
+      tabIndex={-1}
+      className="shrink-0 bg-chat-canvas focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+      aria-busy={isSubmitting}
+      onKeyDown={(event) => {
+        // Why not from a text field: Escape there is editing, and collapsing would hide the draft.
+        if (
+          event.key === 'Escape' &&
+          !event.nativeEvent.isComposing &&
+          collapse &&
+          !isSubmitting &&
+          !isEditableTarget(event.target)
+        ) {
+          event.preventDefault()
+          event.stopPropagation()
+          collapse()
+        }
+      }}
+    >
       <div className="mx-auto w-full max-w-(--chat-content-max-width) px-3 pt-2 pb-4 sm:px-4">
         {total > 1 ? (
           <div className="mb-2 flex gap-1 overflow-x-auto pb-1 scrollbar-sleek">
@@ -167,7 +242,7 @@ export function NativeChatQuestionCard({
                 key={i}
                 type="button"
                 disabled={isSubmitting}
-                onClick={() => setIndex(i)}
+                onClick={() => goTo(i)}
                 className={cn(
                   'flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs font-medium disabled:pointer-events-none',
                   i === index
@@ -190,16 +265,24 @@ export function NativeChatQuestionCard({
         ) : null}
 
         <div className="overflow-hidden rounded-lg border border-input bg-card shadow-xs">
-          <div className="flex items-start justify-between gap-2 px-3.5 py-2.5">
+          <div className="flex items-start gap-2 px-3.5 py-2.5">
             <p
               data-testid="native-chat-question-card-title"
-              className="min-w-0 break-words text-sm font-semibold text-foreground"
+              className="min-w-0 flex-1 break-words text-sm font-semibold text-foreground"
             >
               {q.question}
             </p>
+            {collapse ? (
+              <NativeChatPromptCollapseToggle
+                expanded
+                disabled={isSubmitting}
+                onToggle={collapse}
+              />
+            ) : null}
             <button
               type="button"
-              onClick={onCancel}
+              onClick={cancel}
+              disabled={isCancelling}
               aria-label={translate('components.native-chat.question.cancel', 'Cancel')}
               className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
@@ -243,35 +326,49 @@ export function NativeChatQuestionCard({
                       AskUserQuestion tool result: it reaches the model but never the command
                       parser, so `/compact` and friends are inert, while a skill name can
                       still be acted on. */}
-                  <ImeInput
-                    ref={answerInputRef}
-                    disabled={isSubmitting}
-                    value={otherText[index]}
-                    onChange={(e) => setOther(index, e.target.value)}
-                    // Click, not focus: tabbing through the field toward Submit must not
-                    // replace the option the user just picked.
-                    onClick={() => {
-                      if ((otherText[index] ?? '').trim().length > 0) {
-                        chooseTypedAnswer(index)
+                  {freeTextInput?.multiline ? (
+                    <Textarea
+                      disabled={isSubmitting}
+                      value={otherText[index]}
+                      onChange={(e) => setOther(index, e.target.value)}
+                      onClick={autoAdvance.cancel}
+                      placeholder={freeTextInput.placeholder}
+                    />
+                  ) : (
+                    <ImeInput
+                      ref={answerInputRef}
+                      disabled={isSubmitting}
+                      value={otherText[index]}
+                      onChange={(e) => setOther(index, e.target.value)}
+                      // Click, not focus: tabbing through the field toward Submit must not
+                      // replace the option the user just picked.
+                      onClick={() => {
+                        autoAdvance.cancel()
+                        if ((otherText[index] ?? '').trim().length > 0) {
+                          chooseTypedAnswer(index)
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          confirm(true)
+                        }
+                      }}
+                      placeholder={
+                        freeTextInput?.placeholder ??
+                        translate(
+                          'components.native-chat.question.otherPlaceholder',
+                          'Type your answer'
+                        )
                       }
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault()
-                        confirm(true)
-                      }
-                    }}
-                    placeholder={translate(
-                      'components.native-chat.question.otherPlaceholder',
-                      'Type your answer'
-                    )}
-                    className={cn(
-                      'min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/60 disabled:cursor-default disabled:opacity-50',
-                      currentTypedAnswerChosen || !otherText[index]
-                        ? 'text-foreground'
-                        : 'text-muted-foreground'
-                    )}
-                  />
+                      className={cn(
+                        'min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/60 disabled:cursor-default disabled:opacity-50',
+                        currentTypedAnswerChosen || !otherText[index]
+                          ? 'text-foreground'
+                          : 'text-muted-foreground'
+                      )}
+                    />
+                  )}
                 </>
               ) : (
                 <span className="flex-1" />

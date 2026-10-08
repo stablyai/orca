@@ -10,7 +10,7 @@
  */
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
-import type { TerminalPaneLayoutNode, TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { AppState } from '@/store'
 import { useAppStore } from '@/store'
 import { getWorktreeMapFromState } from '@/store/selectors'
@@ -25,6 +25,7 @@ import {
   hasCachedWindowsTerminalCapabilities
 } from '@/lib/windows-terminal-capabilities'
 import { ptyDataHandlers, unregisterPtyDataHandlers } from './pty-dispatcher'
+import { collectLeafIds } from './terminal-pane-layout-tree'
 import { discardPreHandlerPtyState } from './pty-pre-handler-buffer'
 import { disposeParkedTerminalWatchersForPtyIds } from './terminal-parked-watcher-registry'
 
@@ -224,6 +225,9 @@ async function executeDetachedCodexPaneRestart(
     tabId: tab.id,
     leafId,
     replacesPtyId: ptyId,
+    ...(restartReplacesLayoutRoot(currentState.terminalLayoutsByTabId[tab.id], leafId)
+      ? { placement: { kind: 'root' as const } }
+      : {}),
     ...(tab.shellOverride ? { shellOverride: tab.shellOverride } : {}),
     ...(projectRuntime ? { projectRuntime } : {}),
     initiallyHidden: true
@@ -307,27 +311,23 @@ function reopenCurrentCodexRestartPrompt(located: LocatedCodexPane, replacedPtyI
   }
 }
 
-function layoutRootContainsLeaf(
-  node: TerminalPaneLayoutNode | null | undefined,
+// Why: mount replays panes from the root — a root that doesn't name this leaf
+// mints a fresh one and silently orphans the replacement PTY. Rewriting is
+// only safe when this is the tab's sole bound pane; a split keeps its root.
+function restartReplacesLayoutRoot(
+  layout: TerminalLayoutSnapshot | undefined,
   leafId: string
 ): boolean {
-  if (!node) {
-    return false
-  }
-  if (node.type === 'leaf') {
-    return node.leafId === leafId
-  }
-  return layoutRootContainsLeaf(node.first, leafId) || layoutRootContainsLeaf(node.second, leafId)
+  return (
+    !collectLeafIds(layout?.root).includes(leafId) &&
+    Object.keys(layout?.ptyIdsByLeafId ?? {}).every((id) => id === leafId)
+  )
 }
 
 function rebindCodexPaneLayoutLeaf(tabId: string, leafId: string, newPtyId: string): void {
   const store = useAppStore.getState()
   const layout = store.terminalLayoutsByTabId[tabId]
-  const boundLeafIds = Object.keys(layout?.ptyIdsByLeafId ?? {})
-  // Why: mount replays panes from the root — a root that doesn't name this leaf
-  // mints a fresh one and silently orphans the replacement PTY. Rewriting is
-  // only safe when this is the tab's sole bound pane; a split keeps its root.
-  if (!layoutRootContainsLeaf(layout?.root, leafId) && boundLeafIds.every((id) => id === leafId)) {
+  if (restartReplacesLayoutRoot(layout, leafId)) {
     store.setTabLayout(
       tabId,
       singlePaneLayoutSnapshot(leafId, newPtyId, layout?.titlesByLeafId?.[leafId] ?? null)

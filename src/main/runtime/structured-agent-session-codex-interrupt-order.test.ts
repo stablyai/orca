@@ -13,9 +13,11 @@ import type {
   CodexAppServerConnectionHandlers,
   openCodexAppServerConnection
 } from '../codex/codex-app-server-connection'
+import { readCodexTurnId } from '../codex/codex-structured-thread-facts'
 import { codexTurnLifecycleFake } from '../codex/codex-turn-lifecycle-fake'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
 import type { AgentJournalTurnItem } from '../../shared/agent-session-journal-types'
+import type { AgentSessionStatusSummary } from '../../shared/agent-session-wire'
 import { owesStructuredAgentSessionWork } from '../../shared/structured-agent-session-owed-work'
 import {
   HOST_TEST_SESSION as SESSION,
@@ -52,7 +54,13 @@ let handlers: CodexAppServerConnectionHandlers | undefined
 let answers: number
 let interrupts: number
 let turns: ReturnType<typeof codexTurnLifecycleFake>
+let statuses: AgentSessionStatusSummary[]
 let opened: Set<string>
+let steers: number
+/** The turn each turn/start answered into, in order. */
+let startedTurns: string[]
+/** When set, Codex answers the interrupt only once it resolves. */
+let interruptAnswer: Promise<void> | null
 let operations = 0
 
 /** The durable ledger stamps its own clock and refuses an id far from it. */
@@ -110,7 +118,8 @@ function turnEndRows(): AgentJournalTurnItem[] {
   })
 }
 
-/** The Stop has answered with Codex's end still to come; then Codex ends the turn. */
+/** The Stop has answered with Codex's end still to come; then Codex ends the turn. Stopping
+ *  showed while the Stop settled, ended with the turn, and no status read the turn as failed. */
 async function expectInterruptedThroughout(): Promise<void> {
   expect(interrupts).toBe(1)
   expect(turnEndRows()).toEqual([
@@ -125,6 +134,15 @@ async function expectInterruptedThroughout(): Promise<void> {
   for (const end of ends) {
     expect(end).toMatchObject({ state: 'interrupted', outcome: 'cancellation' })
   }
+  await vi.waitFor(() =>
+    expect(statuses.at(-1)).toMatchObject({ status: 'idle', turnOutcome: 'cancellation' })
+  )
+  expect(statuses.some((summary) => summary.stopping === true)).toBe(true)
+  expect(statuses.at(-1)).not.toHaveProperty('stopping')
+  const otherVerdicts = statuses.filter(
+    (summary) => summary.turnOutcome !== undefined && summary.turnOutcome !== 'cancellation'
+  )
+  expect(otherVerdicts).toEqual([])
 }
 
 async function owesWork(): Promise<boolean> {
@@ -137,6 +155,9 @@ beforeEach(async () => {
   answers = 0
   interrupts = 0
   opened = new Set()
+  steers = 0
+  startedTurns = []
+  interruptAnswer = null
   turns = codexTurnLifecycleFake(THREAD, () => (method, params) => {
     if (method === 'turn/started') {
       opened.add(turns.turnId ?? '')
@@ -151,7 +172,7 @@ beforeEach(async () => {
     const connection: CodexAppServerConnection = {
       pid: 4321,
       closed: false,
-      request: async (method) => {
+      request: async (method, params) => {
         if (method === 'thread/start' || method === 'thread/resume') {
           return { thread: { id: THREAD } }
         }
@@ -160,7 +181,13 @@ beforeEach(async () => {
         }
         if (method === 'turn/start') {
           answers += 1
-          return turns.routes['turn/start']()
+          const answer = await turns.routes['turn/start']()
+          startedTurns.push(readCodexTurnId(answer) ?? '')
+          return answer
+        }
+        if (method === 'turn/steer') {
+          steers += 1
+          return turns.routes['turn/steer'](params)
         }
         if (method === 'turn/interrupt') {
           // Taken: answered now; the test sends the turn's end once the Stop has answered. A turn
@@ -169,6 +196,9 @@ beforeEach(async () => {
           if (turns.turnId !== null && !opened.has(turns.turnId)) {
             turns.start()
           }
+          await interruptAnswer
+          // Codex drops the turn as its active one before it answers; turn/completed comes later.
+          turns.takeInterrupt()
           return {}
         }
         return {}
@@ -186,6 +216,7 @@ beforeEach(async () => {
     hostId: 'local',
     claimKeyId: 'key-1',
     resolveWorkspacePath: async () => root,
+    resolveLaunchArgs: () => [],
     resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
     resolveCodexCommand: () => 'codex',
     resolveEnvironment: async () => ({ PATH: process.env.PATH }),
@@ -199,6 +230,15 @@ beforeEach(async () => {
     throw new Error(JSON.stringify(attached.refusal))
   }
   fence = attached.value.fence
+  statuses = []
+  host.subscribeStatus({
+    id: 'interrupt-order',
+    emit: (event) => {
+      if (event.type === 'status' && event.session.sessionId === SESSION) {
+        statuses.push(event.session)
+      }
+    }
+  })
 })
 
 afterEach(async () => {
@@ -234,5 +274,40 @@ describe("a Codex Stop answered before Codex's turn/completed (interrupted)", ()
     await stopping
 
     await expectInterruptedThroughout()
+  })
+})
+
+// A message sent while the Stop ends the turn goes out once that turn has ended. Codex answered the
+// interrupt, so the turn has aborted even while its turn/completed is still on the wire: the
+// message opens its own turn, never a steer Codex would refuse.
+describe('a send behind a Codex Stop answered before its turn ends', () => {
+  it('opens its own turn with turn/start, never turn/steer', async () => {
+    await send('look around')
+    await vi.waitFor(() => expect(answers).toBe(1))
+    turns.start()
+    const answer = Promise.withResolvers<void>()
+    interruptAnswer = answer.promise
+    const stopping = stop()
+    await vi.waitFor(() => expect(interrupts).toBe(1))
+
+    // Accepted behind the Stop on the session's lane, so it reaches Codex only once the Stop has
+    // answered and the turn reads ended, while Codex's turn/completed is still to come.
+    const sent = send('run this after the stop')
+    await vi.waitFor(() => expect(statuses.some((summary) => summary.stopping === true)).toBe(true))
+    expect(answers).toBe(1)
+    answer.resolve()
+    await stopping
+    await sent
+
+    await vi.waitFor(() => expect(answers).toBe(2))
+    expect(steers).toBe(0)
+    // Its own turn, not folded into the aborted one, and the message is not lost.
+    expect(startedTurns).toEqual(['turn-1', 'turn-2'])
+    turns.end('interrupted')
+    const clientMessageId = await sent
+    const submission = (await host.journalSnapshot(SESSION)).submissions.find(
+      (entry) => entry.clientMessageId === clientMessageId
+    )
+    expect(submission?.dispatchState).not.toBe('rejected')
   })
 })

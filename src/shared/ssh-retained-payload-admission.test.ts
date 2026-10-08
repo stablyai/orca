@@ -14,6 +14,48 @@ import {
 } from './ssh-retained-payload-admission'
 
 describe('SSH retained payload admission', () => {
+  it('keeps a managed server update note, and drops an unknown one without hiding the server', () => {
+    const admit = (update: unknown) =>
+      admitSshConnectionState(
+        {
+          targetId: 'ssh-a',
+          status: 'connected',
+          error: null,
+          reconnectAttempt: 0,
+          managedServer: { kind: 'managed', environmentId: 'env-1', update }
+        },
+        'ssh-a'
+      )?.managedServer
+    expect(admit({ state: 'failed', detail: 'readiness timed out' })).toEqual({
+      kind: 'managed',
+      environmentId: 'env-1',
+      update: { state: 'failed', detail: 'readiness timed out' }
+    })
+    expect(admit({ state: 'from-the-future' })).toEqual({ kind: 'managed', environmentId: 'env-1' })
+  })
+
+  it('caps an unverifiable serving detail like its sibling details', () => {
+    const managedServer = admitSshConnectionState(
+      {
+        targetId: 'ssh-a',
+        status: 'connected',
+        error: null,
+        reconnectAttempt: 0,
+        managedServer: {
+          kind: 'managed',
+          environmentId: 'env-1',
+          serving: {
+            state: 'unverifiable',
+            detail: 'x'.repeat(SSH_CONNECTION_ERROR_MAX_UTF8_BYTES * 4)
+          }
+        }
+      },
+      'ssh-a'
+    )?.managedServer
+    const detail = managedServer?.kind === 'managed' ? managedServer.serving?.detail : undefined
+    expect(getUtf8ByteLength(detail ?? '')).toBe(SSH_CONNECTION_ERROR_MAX_UTF8_BYTES)
+  })
+
   it('keeps ordinary connection state while stripping unknown payload fields', () => {
     const admitted = admitSshConnectionState(
       {
@@ -50,6 +92,26 @@ describe('SSH retained payload admission', () => {
     const malformed = admitSshConnectionState({ ...state, plainSsh: { reason: 7 } }, 'ssh-a')
     expect(malformed).not.toBeNull()
     expect(malformed).not.toHaveProperty('plainSsh')
+  })
+
+  it('admits only a literal move offer on a relay server status', () => {
+    const state = { targetId: 'ssh-a', status: 'connected', error: null, reconnectAttempt: 0 }
+    const relay = { kind: 'relay', reason: 'relay_terminals_live', terminals: 2 }
+
+    expect(
+      admitSshConnectionState({ ...state, managedServer: { ...relay, offerMove: true } }, 'ssh-a')
+        ?.managedServer
+    ).toEqual({ ...relay, offerMove: true })
+    expect(
+      admitSshConnectionState(
+        { ...state, managedServer: { ...relay, terminalsElsewhere: true } },
+        'ssh-a'
+      )?.managedServer
+    ).toEqual({ ...relay, terminalsElsewhere: true })
+    expect(
+      admitSshConnectionState({ ...state, managedServer: { ...relay, offerMove: 'yes' } }, 'ssh-a')
+        ?.managedServer
+    ).toEqual(relay)
   })
 
   it('rejects partial and malformed provider authority', () => {

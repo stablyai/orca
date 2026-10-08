@@ -30,10 +30,9 @@ import {
 } from './structured-agent-session-send-preparation'
 import {
   endStoppedStructuredAgentSession,
-  isMainAgentWorking,
-  performCancel,
   type StructuredAgentSessionStopWindDown
-} from './structured-agent-session-turns-cancel'
+} from './structured-agent-session-stop-wind-down'
+import { isMainAgentWorking, performCancel } from './structured-agent-session-turns-cancel'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
 
 type ChatStopOutcome = TurnOutcome<AgentSessionCancelResult>
@@ -55,7 +54,9 @@ export function mutateWithChatStop<TValue>(
   const { envelope, turnId } = params
   const { sessionId } = envelope
   // Set by the Stop's step only when its provider's session ends; a replay leaves it unset.
-  let windDown: StructuredAgentSessionStopWindDown | undefined
+  let windDown:
+    | { owed: StructuredAgentSessionStopWindDown; ctx: AgentSessionTurnContext }
+    | undefined
   // The Stop's event, still landing when its session ends: the next step holds the lane for it.
   let eventAfterEnd: Promise<void> | undefined
   const named = turnId !== undefined ? { turnId } : {}
@@ -77,7 +78,7 @@ export function mutateWithChatStop<TValue>(
         // Read before the withdrawal it decides on is issued.
         const hadQueued = ctx.journal.submissions().some(isQueuedAgentJournalSubmission)
         // Stop withdraws every queued SUBMISSION first, whatever the start or the child is doing.
-        // Issued, not awaited: the interrupt never waits on bookkeeping. (The open paid any owed import.)
+        // Issued, not awaited: the interrupt never waits on bookkeeping.
         const withdrew = withdrawQueuedForStop(ctx, () =>
           ctx.journal.rejectQueuedSubmissions(
             ctx.fence,
@@ -101,8 +102,9 @@ export function mutateWithChatStop<TValue>(
           return { ok: true, value: { ...named, cancelled: await withdrew } }
         }
         if (child?.phase === 'starting') {
-          // A start that may never land is the one thing here Stop has to end; the chat stays.
-          // The event is issued first and lands behind the withdrawal, in the journal's queue order.
+          // A start that may never land takes no interrupt, so Stop ends it; the chat stays. Its end
+          // settles what the child was handed as stopped (`unrunRejection`). The event is
+          // issued first and lands behind the withdrawal, in the journal's queue order.
           const effect = tookEffect()
           try {
             await stopChild()
@@ -151,7 +153,7 @@ export function mutateWithChatStop<TValue>(
               // The host drops its child only once the exit is proven, and nothing else runs meanwhile.
               childReleased: () => context.sessions.get(sessionId)?.child !== child,
               endSession: (owed) => {
-                windDown = owed
+                windDown = { owed, ctx }
               },
               withdrewQueued: withdrew,
               ...(ownsLatestStop ? { opensSettle: true as const } : {})
@@ -182,9 +184,10 @@ export function mutateWithChatStop<TValue>(
   // Queued in the mutation's own tick, so a send made meanwhile lands behind the child's end.
   void context.serialize(sessionId, async () => {
     if (windDown) {
+      const { owed, ctx } = windDown
       await endStoppedStructuredAgentSession(
-        { sessionId, adapter: context.deps.adapter },
-        windDown,
+        { ...ctx, adapter: context.deps.adapter },
+        owed,
         stopChild,
         (error) =>
           context.deps.logger.warn("ending a stopped chat's provider session failed", {

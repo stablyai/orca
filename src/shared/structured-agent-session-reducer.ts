@@ -7,6 +7,7 @@ import type {
   AgentSessionBackgroundTaskState,
   AgentSessionSlashCommand,
   AgentSessionHistoryPage,
+  AgentSessionLatestTurn,
   AgentSessionQueuedMessage,
   AgentSessionQueuePause,
   AgentSessionSubscribeEvent,
@@ -15,15 +16,17 @@ import type {
 import type { AgentSessionRefusalReference } from './agent-session-wire-refusals'
 import { backgroundTaskStatesEqual } from './agent-session-background-task-state-equality'
 import { admitAgentSessionBackgroundTaskState } from './agent-session-background-task-state-admission'
-import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
 import {
   MAX_RETAINED_ITEMS,
   MAX_RETAINED_OWN_ITEMS,
+  mergeSubmissions,
   ownItemCount,
   trimRetainedItems
 } from './structured-agent-session-item-retention'
 import { compareAgentJournalItems } from './agent-session-journal-position'
 import { readAgentJournalTurn } from './agent-session-turn-record'
+import { queuePublicationField } from './structured-agent-session-queue-publication-field'
+import { latestTurnAfterStructuredAgentSessionBatch } from './structured-agent-session-live-turn'
 import {
   foldStructuredAgentSubagentRoster,
   foldStructuredAgentSubagentRosterPage,
@@ -60,6 +63,8 @@ export type StructuredAgentSessionState = {
   queuedMessages?: AgentSessionQueuedMessage[] | null
   /** The queue's pause, published with the list; null when it sends on its own. */
   queuePause?: AgentSessionQueuePause | null
+  /** Published with the list: the card the queue sends next once nothing runs, else null. */
+  nextQueuedMessageId?: string | null
   commands?: AgentSessionSlashCommand[] | null
   activity?: AgentSessionTurnActivity | null
   /** Absent until a frame from a host that stamps `hostNow` has been applied. */
@@ -67,6 +72,9 @@ export type StructuredAgentSessionState = {
   /** Every subagent a roster row this client received named, by agent id; not trimmed with
    *  `items`. Absent until a page has been applied. */
   subagentRoster?: StructuredAgentSubagentRoster
+  /** The host's newest turn record over the whole journal, which says whether a turn runs; absent
+   *  from an older host, whose answer is read off `items` instead. */
+  latestTurn?: AgentSessionLatestTurn | null
   /** Bumped per live batch that leaves a turn row's newest revision outside the window
    *  (dropped or trimmed), so a whole-journal answer derived from turn rows is asked for again. */
   unloadedTurnRevisions?: number
@@ -80,8 +88,6 @@ export type StructuredAgentSessionAction =
   | { type: 'event'; event: AgentSessionSubscribeEvent; opensSubscription?: boolean }
   | { type: 'history-page'; page: AgentSessionHistoryPage }
   | { type: 'older-page'; requestedCursor: AgentJournalCursor; page: AgentSessionHistoryPage }
-
-const MAX_RETAINED_SUBMISSIONS = 256
 
 export const EMPTY_STRUCTURED_AGENT_SESSION: StructuredAgentSessionState = {
   epoch: null,
@@ -105,19 +111,6 @@ function hostClockField(
   return hostClock ? { hostClock } : {}
 }
 
-type QueuePublication = Pick<StructuredAgentSessionState, 'queuedMessages' | 'queuePause'>
-
-/** First claim with a list wins, and its pause rides with it; no claim at all leaves both absent
- *  (older host). */
-function queuePublicationField(...claims: QueuePublication[]): QueuePublication {
-  for (const claim of claims) {
-    if (claim.queuedMessages !== undefined) {
-      return { queuedMessages: claim.queuedMessages, queuePause: claim.queuePause ?? null }
-    }
-  }
-  return {}
-}
-
 function replacePage(
   page: AgentSessionHistoryPage,
   fence: number | null,
@@ -136,6 +129,7 @@ function replacePage(
     status: 'ready',
     subagentRoster: foldStructuredAgentSubagentRosterPage(undefined, page),
     activity: activity ?? null,
+    ...(page.latestTurn !== undefined ? { latestTurn: page.latestTurn } : {}),
     ...(backgroundTasks !== undefined
       ? { backgroundTasks }
       : page.backgroundTasks !== undefined
@@ -180,29 +174,6 @@ function liveItemsWithinWindow(
     return incoming
   }
   return incoming.filter((item) => item.sequence >= head.sequence)
-}
-
-function mergeSubmissions(
-  current: readonly AgentJournalSubmission[],
-  incoming: readonly AgentJournalSubmission[],
-  items: readonly AgentJournalRenderItem[]
-): AgentJournalSubmission[] {
-  const byId = new Map(current.map((submission) => [submission.clientMessageId, submission]))
-  for (const submission of incoming) {
-    byId.set(submission.clientMessageId, submission)
-  }
-  const sorted = [...byId.values()].sort((left, right) => left.submittedAt - right.submittedAt)
-  const itemIds = new Set(
-    items
-      .filter((item) => item.body.kind === 'message' && item.body.role === 'user')
-      .map((item) => item.itemId)
-  )
-  // Loaded user messages need their provider alias for durable turn attribution.
-  return sorted.filter(
-    (submission, index) =>
-      index >= sorted.length - MAX_RETAINED_SUBMISSIONS ||
-      itemIds.has(agentJournalSubmissionKey(submission.clientMessageId))
-  )
 }
 
 /** `receivedAt` is the client clock at apply time; callers pass it so the reducer stays pure. */
@@ -301,6 +272,8 @@ export function reduceStructuredAgentSession(
     (event.commands === undefined || event.commands === state.commands) &&
     (event.queuedMessages === undefined || event.queuedMessages === state.queuedMessages) &&
     (event.queuePause === undefined || event.queuePause === state.queuePause) &&
+    (event.nextQueuedMessageId === undefined ||
+      event.nextQueuedMessageId === state.nextQueuedMessageId) &&
     backgroundTaskStatesEqual(backgroundTasks, state.backgroundTasks) &&
     activity?.turnId === state.activity?.turnId &&
     activity?.text === state.activity?.text &&
@@ -336,6 +309,7 @@ export function reduceStructuredAgentSession(
     error: undefined,
     readRefusal: undefined,
     commands: event.commands !== undefined ? event.commands : state.commands,
+    latestTurn: latestTurnAfterStructuredAgentSessionBatch(state.latestTurn, event),
     ...queuePublicationField(event, state),
     backgroundTasks,
     ...(activity !== undefined ? { activity } : {}),

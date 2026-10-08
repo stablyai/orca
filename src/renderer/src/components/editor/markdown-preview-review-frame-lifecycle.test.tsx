@@ -149,6 +149,9 @@ function mountSurface(
   if (!card) {
     throw new Error('Missing rendered review card')
   }
+  // Keep each card's spy separate from an inherited DOM mock.
+  const scrollIntoView = card.scrollIntoView.bind(card)
+  card.scrollIntoView = (...args) => scrollIntoView(...args)
   const scroll = vi.spyOn(card, 'scrollIntoView')
   const currentActions = actions
   const click = () => {

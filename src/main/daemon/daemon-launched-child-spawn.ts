@@ -14,6 +14,8 @@ export type DaemonChildSpawnOptions = {
   pidPath: string
   launchNonce: string
   macosLoginSessionWatch: boolean
+  /** Defaults to 10 s; a cold first exec on Windows can need longer. */
+  startupTimeoutMs?: number
 }
 
 function buildDaemonScriptArgs(options: DaemonChildSpawnOptions): string[] {

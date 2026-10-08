@@ -26,6 +26,17 @@ const CODEX_COLLAB_CALL_FRAME = 'item:collabAgentToolCall'
 
 const delegations = new WeakMap<NativeChatMessage, NativeChatSubagentDelegation | null>()
 
+/** An older journal's raw collab-call row: not drawn, but still the agent acting. */
+export function isNativeChatCodexCollabCallFrameRow(message: NativeChatMessage): boolean {
+  const [only] = message.blocks
+  return (
+    message.blocks.length === 1 &&
+    only?.type === 'text' &&
+    only.providerFrame?.provider === 'codex' &&
+    only.providerFrame.kind === CODEX_COLLAB_CALL_FRAME
+  )
+}
+
 export function nativeChatSubagentDelegation(
   message: NativeChatMessage
 ): NativeChatSubagentDelegation | null {

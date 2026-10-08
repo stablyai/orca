@@ -4,6 +4,7 @@ import {
 } from '../../../shared/agent-journal-tool-call-lifecycle'
 import type {
   AgentJournalItemBody,
+  AgentJournalMessageItem,
   AgentJournalTurnScope
 } from '../../../shared/agent-session-journal-types'
 import {
@@ -11,6 +12,7 @@ import {
   readAgentJournalTurn
 } from '../../../shared/agent-session-turn-record'
 import { cancelledJournalPromptBody } from './journal-prompt-body-bounds'
+import { endedJournalReasoning } from './journal-reasoning-row'
 
 /** True while an item is still awaiting the row that settles it, so a sink can
  *  treat that row as lifecycle-critical rather than sheddable under pressure. */
@@ -22,6 +24,15 @@ export function requiresTerminalSettlement(body: AgentJournalItemBody): boolean 
     return body.resolution.state === 'pending'
   }
   return isRunningAgentJournalTurn(body)
+}
+
+/** A message still open, ended by a sweep that cannot know when it stopped: no time is claimed. */
+export function endedUnseenMessageBody(body: AgentJournalItemBody): AgentJournalMessageItem | null {
+  if (body.kind !== 'message' || body.state !== 'running') {
+    return null
+  }
+  const { completedAt: _unseen, ...open } = body
+  return { ...open, ...endedJournalReasoning() }
 }
 
 /** The row that settles an item no one will finish: a running tool call ends as `end` (how its

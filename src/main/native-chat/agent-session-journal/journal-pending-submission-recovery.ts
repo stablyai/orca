@@ -38,9 +38,9 @@ export async function markJournalPendingSubmissionsUnknown(
   return unresolved.map((entry) => entry.clientMessageId)
 }
 
-/** Settles every submission a child that never proved its start left unanswered as `rejected`:
- *  such a child accepted nothing, so each is provably unwritten and safe to send again. A queued
- *  submission was never handed to that child; the delivery loop settles it. */
+/** Settles as `rejected` every submission a child handed over and never echoed, when that child
+ *  ended in its start: one that never answered initialize ran nothing, so each is safe to send
+ *  again. A queued submission was never handed to that child; the delivery loop settles it. */
 export async function rejectJournalPendingSubmissions(
   journal: AgentSessionJournal,
   fence: number,

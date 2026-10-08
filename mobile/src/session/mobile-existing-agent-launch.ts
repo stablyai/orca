@@ -6,8 +6,13 @@
  * every outcome is unit-testable.
  */
 
-import type { AgentLaunchPrompt, AgentLaunchResult } from '../../../src/shared/agent-launch-intent'
+import type {
+  AgentLaunchPlacement,
+  AgentLaunchPrompt,
+  AgentLaunchResult
+} from '../../../src/shared/agent-launch-intent'
 import { isAgentSessionHandleProvider } from '../../../src/shared/agent-session-provider-handle'
+import { AGENT_LAUNCH_TAB_CLOSED_CODE } from '../../../src/shared/agent-launch-tab-closed'
 import { makePaneKey } from '../../../src/shared/stable-pane-id'
 import { createStructuredAgentSessionId } from '../../../src/shared/structured-agent-session-create'
 import type { TuiAgent } from '../../../src/shared/tui-agent'
@@ -39,6 +44,9 @@ export const AGENT_LAUNCH_UNCONFIRMED_MESSAGE =
 
 // The host started nothing, and the next tap reserves new ids.
 export const AGENT_LAUNCH_RESERVATION_TAKEN_MESSAGE = "Couldn't start the agent. Try again."
+// Who closed it, and whether the agent had started, are unknown here: the phone or the computer.
+export const AGENT_LAUNCH_TAB_CLOSED_MESSAGE =
+  "The agent's tab was closed, so the agent was stopped."
 
 /**
  * The tab a launch will create, named by this device before it asks, so it can land there as soon
@@ -75,6 +83,8 @@ export type MobileExistingAgentLaunch =
   | { kind: 'failed'; message: string }
   /** The agent may or may not be running; the caller must not launch again on its own. */
   | { kind: 'unknown'; message: string }
+  /** A user closed the launch's tab, which stopped it; not a failure of the launch. */
+  | { kind: 'tab-closed'; message: string }
 
 export function supportsMobileExistingAgentLaunch(
   hostCapabilities: readonly string[] | null | undefined
@@ -91,6 +101,7 @@ export async function launchAgentInExistingWorkspace(args: {
   prompt?: AgentLaunchPrompt
   launchSource?: string
   reservation?: MobileAgentLaunchReservation
+  placement?: AgentLaunchPlacement
   // Injected in tests; each call is one new operation, so a later tap never replays this one.
   mintOperationId?: () => string
 }): Promise<MobileExistingAgentLaunch> {
@@ -103,6 +114,7 @@ export async function launchAgentInExistingWorkspace(args: {
     operationId: (args.mintOperationId ?? structuredSessionOperationId)(),
     ...(args.prompt ? { prompt: args.prompt } : {}),
     ...(args.launchSource ? { launchSource: args.launchSource } : {}),
+    ...(args.placement ? { placement: args.placement } : {}),
     ...(args.reservation
       ? {
           paneKey: makePaneKey(args.reservation.pane.tabId, args.reservation.pane.leafId),
@@ -158,6 +170,9 @@ function classifyLaunchRefusal(
     case 'failed': {
       if (isAgentLaunchReservationTakenRefusal(error)) {
         return { kind: 'failed', message: AGENT_LAUNCH_RESERVATION_TAKEN_MESSAGE }
+      }
+      if (error.code === AGENT_LAUNCH_TAB_CLOSED_CODE) {
+        return { kind: 'tab-closed', message: AGENT_LAUNCH_TAB_CLOSED_MESSAGE }
       }
       const message = error.message?.trim()
       return { kind: 'failed', message: message || "Couldn't start the agent." }

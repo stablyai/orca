@@ -12,6 +12,7 @@ import {
   type RelayRuntimeDecisionStore
 } from './ssh-relay-runtime-resolution'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
+import { trackSshRemoteRuntimeResolved } from './ssh-remote-runtime-telemetry'
 
 const facts = { target: 'linux-x64-glibc' as const, glibc: { major: 2, minor: 31 } }
 
@@ -36,6 +37,26 @@ function rememberedNoexecRun(store: RelayRuntimeDecisionStore): RelayRuntimeLadd
 describe('RelayRuntimeLadderRun', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+  })
+
+  it('reports a rung whose self-test was unverifiable or failed, and nothing else', () => {
+    const run = new RelayRuntimeLadderRun('ssh-1', null)
+    run.host = getRemoteHostPlatform('linux-x64')
+    run.facts = facts
+    run.unresolved('A')
+    run.selfTest = 'unverifiable'
+    run.unresolved('A')
+    run.selfTest = 'failed'
+    run.unresolved('C')
+    run.unresolved('legacy')
+    expect(
+      vi
+        .mocked(trackSshRemoteRuntimeResolved)
+        .mock.calls.map(([, input]) => [input.rung, input.outcome])
+    ).toEqual([
+      ['A', 'unverifiable'],
+      ['C', 'failed']
+    ])
   })
 
   it('persists a rung A refusal and replays it only under a matching key', () => {

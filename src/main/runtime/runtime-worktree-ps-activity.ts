@@ -36,6 +36,8 @@ export function applyRuntimeWorktreePsTerminalActivity(args: {
   pathIndex: RuntimeWorktreeSummaryPathIndex
   missingIds: Set<string>
   freshPtyLiveness: ReadonlySet<string> | null
+  /** Filled with every PTY this pass counts as live. */
+  countedPtyIds: Set<string>
   leaves: Iterable<RuntimeLeafRecord>
   ptysById: ReadonlyMap<string, RuntimePtyWorktreeRecord>
   tabs: ReadonlyMap<string, RuntimeSyncedTab>
@@ -59,7 +61,7 @@ export function applyRuntimeWorktreePsTerminalActivity(args: {
       }
     }
   }
-  const countedPtyIds = new Set<string>()
+  const countedPtyIds = args.countedPtyIds
   for (const leaf of args.leaves) {
     if (
       !leaf.ptyId ||
@@ -153,6 +155,7 @@ export function applyRuntimeWorktreePsTerminalActivity(args: {
     if (!summary) {
       continue
     }
+    countedPtyIds.add(pty.ptyId)
     const previousLastOutputAt = summary.lastOutputAt
     summary.liveTerminalCount += 1
     summary.hasAttachedPty = true

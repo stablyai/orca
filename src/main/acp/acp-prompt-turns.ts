@@ -33,6 +33,15 @@ export class AcpPromptTurns {
     this.current = undefined
   }
 
+  /** Forgets a prompt the agent refused before its turn opened; false for any other. */
+  refuse(clientMessageId: string): boolean {
+    if (this.current?.clientMessageId !== clientMessageId || this.current.opened) {
+      return false
+    }
+    this.current = undefined
+    return true
+  }
+
   start(turn: string, at: number): ProviderTimelineEvent[] {
     const prompt = this.current
     if (prompt?.turn !== turn || prompt.opened) {

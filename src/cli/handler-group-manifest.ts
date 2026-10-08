@@ -218,6 +218,18 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     load: async () => (await import('./handlers/environment.js')).ENVIRONMENT_HANDLERS
   },
   {
+    name: 'managed-server',
+    keys: [
+      'environment status',
+      'environment update',
+      'environment rollback',
+      'environment recover',
+      'environment stop',
+      'environment cancel-stop'
+    ],
+    load: async () => (await import('./handlers/managed-server.js')).MANAGED_SERVER_HANDLERS
+  },
+  {
     name: 'linear',
     keys: [
       'linear save-issue',

@@ -26,3 +26,11 @@ export function clampRightSidebarPanelWidth(
     Math.max(RIGHT_SIDEBAR_MIN_WIDTH, width)
   )
 }
+
+/** Width the sidebar opens to while it shows a chat visual: wide enough for a chart to read. */
+export const RIGHT_SIDEBAR_VISUAL_PREFERRED_WIDTH = 720
+
+/** The sidebar's width while it shows a visual: its own resize, else the wider of stored and preferred. */
+export function rightSidebarVisualWidth(storedWidth: number, visualWidth: number | null): number {
+  return visualWidth ?? Math.max(storedWidth, RIGHT_SIDEBAR_VISUAL_PREFERRED_WIDTH)
+}

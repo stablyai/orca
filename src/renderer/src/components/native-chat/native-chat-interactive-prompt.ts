@@ -1,7 +1,7 @@
 import { nativeChatApprovalAcceptKey } from '../../../../shared/native-chat-agent-support'
 import { translate } from '@/i18n/i18n'
 import type {
-  AgentJournalApprovalMatchedAskRule,
+  AgentJournalApprovalItem,
   AgentJournalApprovalSubject
 } from '../../../../shared/agent-session-journal-types'
 import {
@@ -40,10 +40,23 @@ export type ChatApproval = {
   description?: string
   decisionReason?: string
   blockedPath?: string
-  matchedAskRule?: AgentJournalApprovalMatchedAskRule
   subject?: AgentJournalApprovalSubject
   detail?: string
   options: { label: string; send: string }[]
+}
+
+/** A journal approval prompt as its card reads it; each option sends its id. */
+export function chatApprovalFromJournal(body: AgentJournalApprovalItem): ChatApproval {
+  return {
+    title: body.title,
+    ...(body.displayName ? { displayName: body.displayName } : {}),
+    ...(body.description ? { description: body.description } : {}),
+    ...(body.decisionReason ? { decisionReason: body.decisionReason } : {}),
+    ...(body.blockedPath ? { blockedPath: body.blockedPath } : {}),
+    ...(body.subject ? { subject: body.subject } : {}),
+    ...(body.detail ? { detail: body.detail } : {}),
+    options: body.options.map((option) => ({ label: option.label, send: option.id }))
+  }
 }
 
 export type InteractivePromptCard =

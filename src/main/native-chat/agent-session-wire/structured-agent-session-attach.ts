@@ -87,6 +87,7 @@ export type AgentSessionAttachParams = {
 
 /** Host-supplied half of the reservation. */
 export type AgentSessionAttachAuthority = {
+  launchDirectory?: string
   spawnToken: string | (() => string)
   claimKeyId: string
   handoffOperationId: string | null
@@ -319,6 +320,7 @@ export function reserveRequestFor(input: {
       : {}),
     ...(authority.launchArgs ? { launchArgs: authority.launchArgs } : {}),
     ...(authority.launchEnv ? { launchEnv: authority.launchEnv } : {}),
+    ...(authority.launchDirectory ? { launchDirectory: authority.launchDirectory } : {}),
     ...(params.adopt
       ? {
           // Fence 1 is a new record's first, and the owner probe requires the head link to carry

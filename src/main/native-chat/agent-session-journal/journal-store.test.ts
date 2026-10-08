@@ -19,7 +19,6 @@ import {
   DEFAULT_JOURNAL_PAYLOAD_LIMITS
 } from './journal-payload-bounds'
 import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-live-turn'
-import { journalDirectoryFor, journalPathSegment } from './journal-paths'
 import { AgentSessionJournalError, type AgentSessionJournal } from './journal-store'
 import type { openAgentSessionJournal } from './journal-store-factory'
 import {
@@ -438,27 +437,6 @@ describe('lifecycle batches', () => {
             )
         )
     ).toBe(false)
-  })
-})
-
-describe('journal location', () => {
-  it('keys by workspace and session id rather than by a path in the working tree', () => {
-    const dir = journalDirectoryFor('/state', { workspaceId: 'ws/1', sessionId: 'sess:2' })
-    expect(dir).toBe(
-      join(
-        '/state',
-        'agent-session-journal',
-        journalPathSegment('ws/1'),
-        journalPathSegment('sess:2')
-      )
-    )
-    expect(dir).not.toContain('ws/1')
-  })
-
-  it('separates two sessions in one workspace', () => {
-    const a = journalDirectoryFor('/state', { workspaceId: 'ws', sessionId: 'a' })
-    const b = journalDirectoryFor('/state', { workspaceId: 'ws', sessionId: 'b' })
-    expect(a).not.toBe(b)
   })
 })
 

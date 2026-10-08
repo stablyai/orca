@@ -3,7 +3,8 @@
 import { readFileSync } from 'node:fs'
 import { makeAgentStatusStoreWiring } from './agent-status-store-wiring.test-fixture'
 import { join } from 'node:path'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS } from './orca-runtime-core'
 import {
   createTranscriptPane,
   type TranscriptPaneOptions,
@@ -55,6 +56,8 @@ async function createPane(
 // cursor-agent renders a braille spinner in its OSC title while it works, and Orca reads
 // that as `working`; the title is identical whether it is running a command or waiting.
 const CURSOR_TITLE = '⠇ Cursor Agent'
+
+afterEach(() => vi.useRealTimers())
 
 describe('terminal interactive-wait visibility (STA-4513, STA-3714)', () => {
   describe('cursor-agent approval menu, the case no hook reports', () => {
@@ -374,13 +377,21 @@ describe('terminal interactive-wait visibility (STA-4513, STA-3714)', () => {
       foregroundProbeHangs: true
     })
 
-    await Promise.all([
-      runtime.getTerminalInteractiveWait(handle),
-      runtime.getTerminalInteractiveWait(handle),
-      runtime.getTerminalInteractiveWait(handle)
-    ])
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+    try {
+      const probing = Promise.all([
+        runtime.getTerminalInteractiveWait(handle),
+        runtime.getTerminalInteractiveWait(handle),
+        runtime.getTerminalInteractiveWait(handle)
+      ])
+      void probing.catch(() => undefined)
+      await vi.advanceTimersByTimeAsync(TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS)
+      await probing
 
-    expect(probes).toBe(1)
+      expect(probes).toBe(1)
+    } finally {
+      vi.useRealTimers()
+    }
   }, 20_000)
 
   it('accepts a menu whose keys are rendered as glyphs', async () => {
@@ -419,9 +430,20 @@ describe('terminal interactive-wait visibility (STA-4513, STA-3714)', () => {
       foregroundProbeHangs: true
     })
 
-    await expect(runtime.getTerminalInteractiveWait(handle)).resolves.toBeUndefined()
-    const show = (await runtime.showTerminal(handle)) as Record<string, unknown>
-    expect('agentWait' in show).toBe(false)
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+    try {
+      const waiting = runtime.getTerminalInteractiveWait(handle)
+      void waiting.catch(() => undefined)
+      await vi.advanceTimersByTimeAsync(TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS)
+      await expect(waiting).resolves.toBeUndefined()
+      const showing = runtime.showTerminal(handle)
+      void showing.catch(() => undefined)
+      await vi.advanceTimersByTimeAsync(TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS)
+      const show = await showing
+      expect('agentWait' in show).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
   }, 15_000)
 
   it('answers undefined rather than "not waiting" for a pane it cannot read', async () => {

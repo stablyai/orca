@@ -70,7 +70,9 @@ describe("a busy chat's orchestration pointer waits in its queue", () => {
     const chat = await openChat(COORDINATOR)
     const { runId, taskId } = await coordinatorRunAndTask()
     const endTurn = await runningUserTurn(chat)
-    await finishWorker(taskId)
+    const dispatchId = await finishWorker(taskId)
+    // The report was accepted, so its dispatch settled before its mail was named.
+    expect(db.getDispatchContextById(dispatchId)?.status).toBe('completed')
     await vi.waitFor(
       async () => expect(await queuedCardTexts()).toEqual([ptyPointer(`run:${runId}`)]),
       WAIT
@@ -78,10 +80,14 @@ describe("a busy chat's orchestration pointer waits in its queue", () => {
     expect(chat.turns).toHaveLength(1)
     const [card] = queuedRows()
     const [mail] = db.getAllMessages(`run:${runId}`)
-    expect(card?.source).toEqual({
+    const from = {
       kind: 'agent',
       senders: [
-        { party: { address: 'term_worker', terminalHandle: 'term_worker', orcaSessionId: null } }
+        {
+          party: { address: 'term_worker', terminalHandle: 'term_worker', orcaSessionId: null },
+          // Named by the task of the dispatch it just finished, through the real runtime's naming.
+          name: 'build it'
+        }
       ],
       orchestration: {
         message: 'mail-notice',
@@ -89,11 +95,18 @@ describe("a busy chat's orchestration pointer waits in its queue", () => {
         dispatchId: null,
         messages: [{ messageId: mail!.id, runId, from: 'term_worker' }]
       }
-    })
+    }
+    // On the card's body: the turn the queue sends carries it, and the provider never sees it.
+    expect(card?.body.from).toEqual(from)
 
     await endTurn()
     await vi.waitFor(() => expect(chat.turns).toHaveLength(2), WAIT)
     expect(turnText(chat.turns[1]!)).toBe(ptyPointer(`run:${runId}`))
+    expect(JSON.stringify(chat.turns[1])).not.toContain('term_worker')
+    const sent = (await host.journalSnapshot(COORDINATOR)).items.filter(
+      (item) => item.body.kind === 'message' && item.body.from
+    )
+    expect(sent.map((item) => item.body.kind === 'message' && item.body.from)).toEqual([from])
     expect(await queuedCardTexts()).toEqual([])
     await settleTurn(COORDINATOR, 1)
     await idleEdgesSettled()

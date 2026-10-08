@@ -38,8 +38,6 @@ export type EditCardModel = {
   consumedResults: Set<NativeChatBlock>
 }
 
-export const NO_EDIT_CARDS: EditCardModel = { editCards: new Map(), consumedResults: new Set() }
-
 /** An edit renders as one card, so its result block is folded into the call. The
  *  model decides which calls have landed; a call that has not keeps the generic
  *  tool view, its result still visible as the provider's own error. */

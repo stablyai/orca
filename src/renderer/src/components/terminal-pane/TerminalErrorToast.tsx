@@ -57,6 +57,15 @@ const SOURCE_RESTORE_REQUIRED_SOURCE =
   'SSH_PTY_SOURCE_RESTORE_REQUIRED(?::[ \\t]*\\S*(?:[ \\t]+\\S+)?)?'
 const SOURCE_RESTORE_REQUIRED_PATTERN = new RegExp(SOURCE_RESTORE_REQUIRED_SOURCE)
 const SOURCE_RESTORE_REQUIRED_REPLACE_PATTERN = new RegExp(SOURCE_RESTORE_REQUIRED_SOURCE, 'g')
+// An older Orca build's relay may still run this terminal, and this build cannot reach it. Not one of
+// the sources above: that copy implies the session is gone.
+const HELD_BY_PREVIOUS_RELAY_SOURCE = 'SSH_PTY_HELD_BY_PREVIOUS_RELAY(?::[ \\t]*\\S*)?'
+const HELD_BY_PREVIOUS_RELAY_PATTERN = new RegExp(HELD_BY_PREVIOUS_RELAY_SOURCE)
+// The pane's saved session is owned by another host connection, e.g. an older build's relay tab.
+const OWNER_HOST_MISMATCH_SOURCE = 'terminal_pane_owner_host_mismatch'
+const OWNER_HOST_MISMATCH_PATTERN = new RegExp(OWNER_HOST_MISMATCH_SOURCE)
+const OWNER_HOST_MISMATCH_REPLACE_PATTERN = new RegExp(OWNER_HOST_MISMATCH_SOURCE, 'g')
+const HELD_BY_PREVIOUS_RELAY_REPLACE_PATTERN = new RegExp(HELD_BY_PREVIOUS_RELAY_SOURCE, 'g')
 const UNREATTACHABLE_SESSION_PATTERNS = UNREATTACHABLE_SESSION_SOURCES.map(
   (source) => new RegExp(source)
 )
@@ -100,8 +109,15 @@ export function isExplainedTerminalError(error: string): boolean {
         TERMINAL_HOST_GONE_PATTERN.test(line) ||
         LEGACY_TERMINAL_HOST_GONE_PATTERN.test(line) ||
         SOURCE_RESTORE_REQUIRED_PATTERN.test(line) ||
+        HELD_BY_PREVIOUS_RELAY_PATTERN.test(line) ||
+        OWNER_HOST_MISMATCH_PATTERN.test(line) ||
         UNREATTACHABLE_SESSION_PATTERNS.some((pattern) => pattern.test(line))
     )
+}
+
+/** A terminal the previous Orca version's relay runs on the host; this client's details say nothing about it. */
+export function isHeldByPreviousRelayError(error: string): boolean {
+  return HELD_BY_PREVIOUS_RELAY_PATTERN.test(error)
 }
 
 export function isPaneOwnerUnverifiedError(error: string): boolean {
@@ -155,6 +171,18 @@ export function humanizeTerminalError(error: string): string {
       'Reconnecting this terminal — its output is being re-established. The session is still running.'
     )
   )
+  humanized = humanized.replace(HELD_BY_PREVIOUS_RELAY_REPLACE_PATTERN, () =>
+    translate(
+      'auto.components.terminal.pane.TerminalErrorToast.heldByPreviousRelay',
+      'This terminal is still running on the host under the previous Orca version, which this version cannot connect to. It keeps running until it exits. Open a new terminal to keep working here.'
+    )
+  )
+  humanized = humanized.replace(OWNER_HOST_MISMATCH_REPLACE_PATTERN, () =>
+    translate(
+      'auto.components.terminal.pane.TerminalErrorToast.ownerHostMismatch',
+      "This terminal's saved session belongs to another host connection, so Orca can't reattach it here. Open a new terminal to continue."
+    )
+  )
   if (humanized.includes(REMOTE_TERMINAL_CLOSED_MARKER)) {
     humanized = humanized.replaceAll(REMOTE_TERMINAL_CLOSED_MARKER, () =>
       translate(
@@ -187,16 +215,21 @@ export function humanizeTerminalError(error: string): string {
 
 export function TerminalErrorToast({
   error,
+  paneOnClient = true,
   onDismiss,
   onRestartDaemon,
   onRetry
 }: {
   error: string
+  /** False for a pane on an SSH or remote host, or one whose host is not yet known. */
+  paneOnClient?: boolean
   onDismiss: () => void
   onRestartDaemon?: () => void
   onRetry?: () => Promise<boolean>
 }): React.JSX.Element {
   const ssh = isSshError(error)
+  // Why: the client's OS and shell describe neither the host nor its shell, and the renderer knows neither.
+  const showClientEnvironment = paneOnClient && !ssh && !isHeldByPreviousRelayError(error)
   const paneOwnerUnverified = isPaneOwnerUnverifiedError(error)
   const showDaemonRestart = !ssh && onRestartDaemon && shouldOfferDaemonRestart(error)
   // Restart cannot recover a session after its owning daemon exits.
@@ -225,7 +258,7 @@ export function TerminalErrorToast({
 
   // Why: a select-all copy should carry details loaded asynchronously from preload.
   useEffect(() => {
-    if (ssh || hasClientEnvironmentFooter(displayError)) {
+    if (!showClientEnvironment || hasClientEnvironmentFooter(displayError)) {
       return
     }
     let cancelled = false
@@ -237,7 +270,7 @@ export function TerminalErrorToast({
     return () => {
       cancelled = true
     }
-  }, [displayError, ssh])
+  }, [displayError, showClientEnvironment])
 
   const footer = environmentFooter?.error === displayError ? environmentFooter.footer : ''
   const handleRetry = async (): Promise<void> => {
@@ -312,7 +345,7 @@ export function TerminalErrorToast({
               .
             </>
           ) : null}
-          {!ssh && footer ? `\n\n${footer}` : null}
+          {showClientEnvironment && footer ? `\n\n${footer}` : null}
           {paneOwnerUnverified && retryFailed
             ? `\n${translate(
                 'auto.components.terminal.pane.TerminalErrorToast.retryUnavailable',

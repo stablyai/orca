@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, readdir, rm, stat } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm, stat, utimes } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -94,12 +94,16 @@ describe('writeTerminalRenderDesyncEvidence', () => {
   it('retains only the newest four capture directories', async () => {
     const userData = await mkdtemp(path.join(os.tmpdir(), 'orca-render-desync-'))
     tempDirectories.push(userData)
+    const oldestCaptureTime = Date.now() - 60_000
     for (let capture = 1; capture <= 6; capture++) {
-      await writeTerminalRenderDesyncEvidence(userData, {
+      const result = await writeTerminalRenderDesyncEvidence(userData, {
         captureId: `capture-${capture}`,
         phase: 'corrupt',
         pngDataUrl: 'data:image/png;base64,eA=='
       })
+      // Space capture times beyond FAT's two-second mtime resolution.
+      const capturedAt = new Date(oldestCaptureTime + capture * 5000)
+      await utimes(result.directory, capturedAt, capturedAt)
     }
 
     const captures = await readdir(path.join(userData, 'terminal-render-desync-evidence'))

@@ -9,7 +9,6 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { translate } from '@/i18n/i18n'
 import { UsageRosterPanel } from './UsageRosterPanel'
-import { getUsageProviderAccountsSectionId } from './usage-provider-settings-target'
 import {
   STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS,
   shouldOpenStatusBarContextMenu
@@ -62,6 +61,7 @@ export function StatusBarSurface({
     anyFetching,
     anyVisible,
     barRef,
+    canSignInFromUsageRow,
     collapseUsage,
     collapsedUsageProviders,
     compact,
@@ -190,7 +190,7 @@ export function StatusBarSurface({
                     onRefresh={handleRefresh}
                     onOpenProvider={handleOpenProviderAccounts}
                     onSignIn={handleOpenProviderAccounts}
-                    canSignIn={(provider) => getUsageProviderAccountsSectionId(provider) !== null}
+                    canSignIn={canSignInFromUsageRow}
                     onManageAccounts={handleManageAccounts}
                     onUsageDetails={handleUsageDetails}
                     renderRow={(p, rowNode) => {

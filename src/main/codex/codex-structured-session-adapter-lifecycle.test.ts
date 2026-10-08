@@ -207,6 +207,29 @@ describe('CodexStructuredSessionAdapter lifecycle', () => {
     expect(adapter.backgroundTaskStops('session-1')).toBeDefined()
   })
 
+  it('times turn and item boundaries at receipt, and nothing else', async () => {
+    const codex = fakeCodex()
+    const events: CodexStructuredSessionEvent[] = []
+    await acquired(codex, {}, events)
+    const connection = codex.connections[0]
+    const item = { type: 'reasoning', id: 'r-1', summary: [], content: [] }
+    connection.handlers.onNotification?.('item/started', { threadId: THREAD_ID, item })
+    connection.handlers.onNotification?.('item/reasoning/summaryTextDelta', {
+      threadId: THREAD_ID,
+      itemId: 'r-1',
+      delta: 'Planning'
+    })
+    connection.handlers.onNotification?.('item/completed', { threadId: THREAD_ID, item })
+    const timed = events.flatMap((event) =>
+      event.type === 'notification' ? [[event.method, event.observedAt]] : []
+    )
+    expect(timed).toEqual([
+      ['item/started', 1_700_000_000_500],
+      ['item/reasoning/summaryTextDelta', undefined],
+      ['item/completed', 1_700_000_000_500]
+    ])
+  })
+
   it('ignores Codex traffic that arrives after the session is gone', async () => {
     const codex = fakeCodex()
     const adapter = await acquired(codex)

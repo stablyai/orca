@@ -9,7 +9,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { commitStructuredAgentSessionLaunchPrompt } from './agent-launch-structured-prompt'
 import { structuredAgentSessionPayloadFingerprint } from '../../../../shared/structured-agent-session-mutation'
-import { structuredAgentSessionSendBody } from '../../../../shared/structured-agent-session-outbox'
+import { structuredAgentSessionSendBody } from '../../../../shared/structured-agent-session-send-mutation'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import { recordingStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 
@@ -52,6 +52,8 @@ describe('committing a launch prompt', () => {
     expect(messageId).toBe(params.envelope.clientOperationId)
     expect(params.envelope).toMatchObject({ sessionId: 'sess-1', expectedRuntimeFence: 4 })
     expect(params.body).toEqual(structuredAgentSessionSendBody('do the thing', []))
+    // A restart keeps a launch's first prompt like a person's message, so the send says it is one.
+    expect(params.personsMessage).toBe(true)
     // The host recomputes and compares this, so a launch send must fingerprint like a client send.
     expect(params.envelope.payloadFingerprint).toBe(
       structuredAgentSessionPayloadFingerprint({

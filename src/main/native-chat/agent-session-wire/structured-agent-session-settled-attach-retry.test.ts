@@ -26,6 +26,7 @@ import {
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
@@ -135,10 +136,9 @@ function startAgent(): Promise<unknown> {
 describe('settled attach retry', () => {
   it('settles a post-acquisition journal failure and retries without a restart', async () => {
     const journalDatabase = openTestJournalHostDatabase(root)
-    // The journal's open asks where the chat's per-chat file lives before it reads anything.
-    vi.spyOn(journalDatabase, 'legacyDirectoryFor').mockImplementationOnce(() => {
-      throw new Error('journal path unavailable')
-    })
+    vi.spyOn(AgentSessionJournal.prototype, 'open').mockRejectedValueOnce(
+      new Error('journal path unavailable')
+    )
     host = new StructuredAgentSessionHost({
       agents: NO_STRUCTURED_AGENTS,
       logger: createStructuredAgentSessionLogger(),

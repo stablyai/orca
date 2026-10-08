@@ -638,7 +638,8 @@ describe('Claude structured journal translation', () => {
       role: 'reasoning',
       blocks: [
         { type: 'text', text: boundInlineText(thinking, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text }
-      ]
+      ],
+      state: 'completed'
     })
   })
 

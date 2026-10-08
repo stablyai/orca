@@ -4,26 +4,37 @@
  * and message ids join back to orchestration's own rows while those exist.
  */
 
-import { parseOrcaSessionAddress } from '../../../shared/orca-session-address'
 import type {
   AgentMessageSource,
   AgentMessageSender
 } from '../../../shared/agent-session-message-source'
 import type { MessageRow, OrchestrationDb } from './db'
-import { resolveOrchestrationParty } from './orchestration-party'
+import { agentMessageSender, type SenderNameResolver } from './agent-message-sender'
 
-export type MailSourceMessage = Pick<MessageRow, 'id' | 'from_handle' | 'run_id'>
+export type MailSourceMessage = Pick<
+  MessageRow,
+  'id' | 'from_handle' | 'run_id' | 'type' | 'payload'
+>
 
 export function structuredMailSource(input: {
   db: OrchestrationDb | null
   mailboxHandle: string
   dispatchId: string | null
   batch: readonly MailSourceMessage[]
+  senderName: SenderNameResolver
 }): AgentMessageSource {
   const senders = new Map<string, AgentMessageSender>()
   for (const { from_handle: address } of input.batch) {
     if (!senders.has(address)) {
-      senders.set(address, { party: senderParty(address, input.db) })
+      senders.set(
+        address,
+        agentMessageSender(
+          address,
+          input.db,
+          input.senderName,
+          reportedDispatchId(input.batch, address)
+        )
+      )
     }
   }
   return {
@@ -42,12 +53,28 @@ export function structuredMailSource(input: {
   }
 }
 
-function senderParty(address: string, db: OrchestrationDb | null): AgentMessageSender['party'] {
-  try {
-    const { paneKey: _credential, ...party } = resolveOrchestrationParty(address, db)
-    return party
-  } catch {
-    // A worker this host lost the identity of: what the address itself says.
-    return { address, terminalHandle: null, orcaSessionId: parseOrcaSessionAddress(address) }
+/** The dispatch a sender's own `worker_done` here reports: the task it just finished, whose
+ *  dispatch that report already settled. */
+function reportedDispatchId(
+  batch: readonly MailSourceMessage[],
+  address: string
+): string | undefined {
+  for (const message of batch) {
+    if (message.from_handle !== address || message.type !== 'worker_done' || !message.payload) {
+      continue
+    }
+    try {
+      const payload: unknown = JSON.parse(message.payload)
+      const dispatchId =
+        typeof payload === 'object' && payload !== null && 'dispatchId' in payload
+          ? payload.dispatchId
+          : undefined
+      if (typeof dispatchId === 'string' && dispatchId.length > 0) {
+        return dispatchId
+      }
+    } catch {
+      // A payload that does not parse names no dispatch.
+    }
   }
+  return undefined
 }

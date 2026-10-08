@@ -3,12 +3,8 @@ import { BoundedMap } from '../../shared/bounded-map'
 import type { ProviderTimelineEvent } from '../native-chat/agent-session-timeline/provider-timeline-event'
 import { acpNotificationEnvelopeSchema, AcpContextTimeline } from './acp-context-usage'
 import { AcpBackgroundTaskTimeline } from './acp-background-task-timeline'
-import {
-  GENERIC_ACP_DIALECT,
-  type AcpDialect,
-  type AcpRequestPresentation
-} from './acp-dialects/acp-dialect'
-import type { AcpAgentError } from './acp-errors'
+import { GENERIC_ACP_DIALECT, type AcpDialect } from './acp-dialects/acp-dialect'
+import { AcpAgentError } from './acp-errors'
 import { acpTurnEnd, AcpPromptTurns } from './acp-prompt-turns'
 import { readAcpSessionEvent, type AcpSessionEvent } from './acp-session-events'
 import { translateAcpRequest } from './acp-timeline-requests'
@@ -61,6 +57,11 @@ export class AcpTimelineTranslator {
     )
   }
 
+  /** Whether the agent's dialect echoes an injected prompt identity on the turn's events. */
+  get injectsPromptIdentity(): boolean {
+    return this.dialect.injectedPromptIdentity === true
+  }
+
   /** The host injects promptId as session/prompt._meta.promptId (and requestId). */
   openPrompt(
     clientMessageId: string,
@@ -80,10 +81,12 @@ export class AcpTimelineTranslator {
     return this.finishPrompt(clientMessageId, result.stopReason, at)
   }
 
-  /** The agent's own error answer to the prompt; Orca's errors about it (a timeout, an unreadable
-   *  answer, a closed connection) are no provider words and never reach here. */
-  promptFailed(clientMessageId: string, error: AcpAgentError, at: number): ProviderTimelineEvent[] {
-    const detail = acpPromptErrorDetail(this.dialect, error)
+  /** The prompt failed: the agent's own error answer, or an answer Orca could not read (then no
+   *  words are the agent's, and the row says only that the turn failed). A closed connection never
+   *  reaches here. */
+  promptFailed(clientMessageId: string, error: Error, at: number): ProviderTimelineEvent[] {
+    const detail =
+      error instanceof AcpAgentError ? acpPromptErrorDetail(this.dialect, error) : undefined
     const ended = this.prompts.last
     if (this.prompts.current?.clientMessageId !== clientMessageId) {
       // The provider already ended this turn; its answer may carry the only copy of the reason.
@@ -92,6 +95,12 @@ export class AcpTimelineTranslator {
         : []
     }
     return this.finishPrompt(clientMessageId, 'error', at, detail)
+  }
+
+  /** The agent refused the prompt before its turn began: forgets it and answers the agent's reason.
+   *  Null once the turn opened, when the refusal ends that turn instead (`promptFailed`). */
+  promptRefused(clientMessageId: string, error: AcpAgentError): string | null {
+    return this.prompts.refuse(clientMessageId) ? acpPromptErrorDetail(this.dialect, error) : null
   }
 
   private finishPrompt(
@@ -212,7 +221,7 @@ export class AcpTimelineTranslator {
     method: string,
     params: unknown,
     id: string | number
-  ): { events: ProviderTimelineEvent[]; presentation?: AcpRequestPresentation } {
+  ): ReturnType<typeof translateAcpRequest> {
     return translateAcpRequest(method, params, id, {
       sessionId: this.options.sessionId,
       dialect: this.dialect,

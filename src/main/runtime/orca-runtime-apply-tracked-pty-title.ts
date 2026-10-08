@@ -3,8 +3,18 @@ import { OrcaRuntimeWithGetUnpersistedTrackedTitleForPty } from './orca-runtime-
 import type { TerminalTitleFactMeta } from '../../shared/terminal-output-side-effects'
 import { detectAgentStatusFromTitle } from '../../shared/agent-detection'
 import { terminalTitleBlocksExplicitAgentStatus } from './runtime-worktree-status-projection'
+import type { ClaudeTerminalEvidence } from '../../shared/claude-terminal-interrupt'
 
 export class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnpersistedTrackedTitleForPty {
+  observeClaudeTerminalEvidence(ptyId: string, evidence: ClaudeTerminalEvidence): void {
+    if (!this.onClaudeTerminalEvidence || this.ptysById.get(ptyId)?.connectionId) {
+      return
+    }
+    for (const paneKey of this.collectPaneKeysForPty(ptyId)) {
+      this.onClaudeTerminalEvidence(paneKey, evidence)
+    }
+  }
+
   /** Apply one observed OSC title (raw form) to the PTY and leaf records.
    *  Returns true when what the PTY shows changed: its record, or its display-only clear. */
   protected applyTrackedPtyTitle(
@@ -16,6 +26,7 @@ export class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnper
     if (meta?.staleWorkingTitleClear) {
       return this.applyStaleWorkingTitleClear(ptyId, rawTitle, normalizedTitle)
     }
+    this.observeClaudeTerminalEvidence(ptyId, { kind: 'title', title: rawTitle })
     // Why: status is detected from the RAW title (mirrors the renderer tracker),
     // so working/idle transitions are unaffected by normalization; the records
     // store the NORMALIZED title so rotating Grok/Pi/Gemini frames collapse to
@@ -195,6 +206,7 @@ export class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnper
   /** Cancel the per-PTY title tracker (stale-title timer included) on PTY
    *  teardown so it cannot fire into pruned records. */
   protected disposePtyTitleTracker(ptyId: string): void {
+    this.observeClaudeTerminalEvidence(ptyId, { kind: 'reset' })
     this.ptyTitleTrackersByPtyId.get(ptyId)?.tracker.dispose()
     this.ptyTitleTrackersByPtyId.delete(ptyId)
     this.ptyForegroundAgent.clearDelayedSnapshot(ptyId)

@@ -16,7 +16,7 @@ import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire
 import type { OrcaRuntimeService } from './orca-runtime'
 import { retireSettledStructuredWorkerTab } from './structured-agent-session-tab-retirement'
 import {
-  observeStructuredWorker,
+  observeStructuredSession,
   structuredSessionCloseSettled
 } from './structured-worker-authority'
 
@@ -68,12 +68,31 @@ export async function closeStructuredAgentSessionChild(
   // started without a chat tab, or one the user had closed — which is a new side effect, not an undo.
   const restoreTabIfCloseFails =
     options.restoreTabOnUnprovenClose !== false ? readPersistedTabId(host, sessionId) : null
+  try {
+    return await closeHiddenStructuredAgentSessionChild(
+      host,
+      sessionId,
+      options,
+      restoreTabIfCloseFails
+    )
+  } finally {
+    // After the outcome, not at the hide: a close that puts the tab back leaves its chat working.
+    host.notifySessionTabHidden?.(sessionId)
+  }
+}
+
+async function closeHiddenStructuredAgentSessionChild(
+  host: StructuredAgentSessionHost,
+  sessionId: string,
+  options: StructuredAgentSessionCloseOptions,
+  restoreTabIfCloseFails: string | null
+): Promise<StructuredAgentSessionCloseOutcome> {
   // Set only once the close is actually issued: `setSessionTabVisibility` throwing first leaves a
   // running child, and a receipt that still said `closed_agent_terminal` for it would be the
   // close-that-never-happened this flag exists to rule out.
   let closeAttempted = false
   try {
-    await host.setSessionTabVisibility?.(sessionId, false)
+    await host.setSessionTabVisibility?.(sessionId, false, undefined, { deferHiddenNotice: true })
     closeAttempted = true
     // A worktree teardown or an orchestration stop: not the user closing this chat.
     await host.close(sessionId, 'evict')
@@ -91,7 +110,7 @@ export async function closeStructuredAgentSessionChild(
   }
   options.afterClose?.()
   if (!structuredSessionCloseSettled(sessionId)) {
-    const observation = observeStructuredWorker({ sessionId })
+    const observation = observeStructuredSession(sessionId)
     await restorePersistedTabVisibility(host, sessionId, restoreTabIfCloseFails)
     return {
       stopped: false,

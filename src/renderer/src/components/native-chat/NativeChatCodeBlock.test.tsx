@@ -39,6 +39,6 @@ describe('NativeChatCodeBlock', () => {
     await waitFor(() => {
       expect(writeClipboardText).toHaveBeenCalledWith('const answer = 42\nconsole.log(answer)\n')
     })
-    expect(screen.getByRole('button', { name: 'Copied' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Copied' })).toBeInTheDocument()
   })
 })

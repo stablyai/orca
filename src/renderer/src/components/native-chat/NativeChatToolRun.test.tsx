@@ -8,6 +8,7 @@ import type { AgentJournalRenderItem } from '../../../../shared/agent-session-jo
 import type { NativeChatBlock } from '../../../../shared/native-chat-types'
 import { projectStructuredItemToNativeChat } from '../../../../shared/structured-agent-session-projection'
 import { NativeChatToolRun } from './NativeChatToolRun'
+import { openToolRunMembers } from './native-chat-tool-run-members-test-support'
 
 afterEach(cleanup)
 
@@ -70,6 +71,7 @@ describe('NativeChatToolRun', () => {
     ]
 
     const { container } = render(<NativeChatToolRun blocks={blocks} expandSignal />)
+    openToolRunMembers()
 
     expect(screen.getByText('after')).toBeInTheDocument()
     expect(screen.getByText('before')).toBeInTheDocument()
@@ -103,6 +105,7 @@ describe('NativeChatToolRun', () => {
     const { container } = render(
       <NativeChatToolRun blocks={projected?.blocks ?? []} expandSignal />
     )
+    openToolRunMembers()
 
     // Row grounds come from the diff tokens, not a hardcoded palette value.
     expect(screen.getByText('after').closest('div')).toHaveClass('bg-[var(--diff-added-ground)]')
@@ -122,6 +125,7 @@ describe('NativeChatToolRun', () => {
     ]
 
     const { container } = render(<NativeChatToolRun blocks={blocks} expandSignal />)
+    openToolRunMembers()
 
     const editRow = screen.getByRole('button', { name: /^Edit Tried to edit \/repo\/a\.ts/ })
     expect(within(editRow).queryByText('Edited')).toBeNull()
@@ -143,7 +147,6 @@ describe('NativeChatToolRun', () => {
 
     const commandRow = screen.getByRole('button', { name: /^exec Ran git diff/ })
     expect(within(commandRow).queryByText('Edited')).toBeNull()
-    expect(within(commandRow).getByText('git diff')).toHaveClass('font-mono')
     expect(container).toHaveTextContent('git diff')
   })
 
@@ -159,6 +162,7 @@ describe('NativeChatToolRun', () => {
     ]
 
     render(<NativeChatToolRun blocks={blocks} expandSignal />)
+    openToolRunMembers()
 
     // Exact, because a snippet-relative number would sit ahead of the marker.
     expect(screen.getByText('now').closest('div')?.textContent).toBe('+now')
@@ -187,6 +191,7 @@ describe('NativeChatToolRun', () => {
     ]
 
     render(<NativeChatToolRun blocks={blocks} expandSignal />)
+    openToolRunMembers()
 
     const separators = screen.getAllByRole('separator')
     expect(separators).toHaveLength(1)
@@ -221,8 +226,8 @@ describe('NativeChatToolRun', () => {
       { type: 'tool-result', output: '@@ -1,3 +1,3 @@\n ctx\n-was\n+now\n… (48210 bytes)' }
     ]
 
-    // A defined expandOverride opens the run while leaving each card closed.
-    render(<NativeChatToolRun blocks={blocks} expandSignal={false} expandOverride />)
+    // An opened run lists its cards closed.
+    render(<NativeChatToolRun blocks={blocks} expandSignal />)
 
     expect(screen.getByText('Diff truncated')).toBeInTheDocument()
     expect(screen.queryByText('was')).toBeNull()
@@ -320,7 +325,7 @@ describe('NativeChatToolRun', () => {
     it('keeps the run in the transcript type, not a monospace dump', () => {
       const { container } = render(<NativeChatToolRun blocks={batch} expandSignal={false} />)
 
-      const label = runHeader(container).querySelector('span.truncate')
+      const label = runHeader(container).querySelector('span.native-chat-message-text')
       expect(label).toHaveClass('text-sm')
       expect(label).not.toHaveClass('font-mono')
     })
@@ -567,36 +572,6 @@ describe('NativeChatToolRun', () => {
     expect(container.querySelector('.lucide-check')).toBeInTheDocument()
   })
 
-  it('keeps settled tool activity behind the completed turn disclosure', () => {
-    const blocks: NativeChatBlock[] = [
-      { type: 'tool-call', name: 'shell', input: { command: 'git log -1' }, state: 'failed' },
-      { type: 'tool-result', output: 'exit 128', isError: true }
-    ]
-
-    const { rerender, container } = render(
-      <NativeChatToolRun
-        blocks={blocks}
-        expandSignal={false}
-        expandOverride={false}
-        activeTurnIsWorking={false}
-      />
-    )
-
-    expect(screen.queryByText('git log -1')).toBeNull()
-    expect(screen.queryByText('exit 128')).toBeNull()
-
-    rerender(
-      <NativeChatToolRun
-        blocks={blocks}
-        expandSignal={false}
-        expandOverride
-        activeTurnIsWorking={false}
-      />
-    )
-
-    expect(runHeader(container)).toHaveTextContent('git log -1')
-  })
-
   // Opening a turn lists the work; a call's output is one more click. Printing
   // every result beside its call doubled an opened run's height with rows whose
   // own word was `Result`.
@@ -606,16 +581,7 @@ describe('NativeChatToolRun', () => {
       { type: 'tool-result', output: 'exit 128', isError: true }
     ]
 
-    // Opened from the turn's own caret, which is the path that leaves each
-    // call's line collapsed.
-    render(
-      <NativeChatToolRun
-        blocks={blocks}
-        expandSignal={false}
-        expandOverride
-        activeTurnIsWorking={false}
-      />
-    )
+    render(<NativeChatToolRun blocks={blocks} expandSignal activeTurnIsWorking={false} />)
 
     expect(screen.queryByText('Result')).toBeNull()
     expect(screen.queryByText('exit 128')).toBeNull()
@@ -758,7 +724,7 @@ describe('NativeChatToolRun', () => {
     })
 
     const { container } = render(
-      <NativeChatToolRun blocks={projected?.blocks ?? []} expandSignal={false} expandOverride />
+      <NativeChatToolRun blocks={projected?.blocks ?? []} expandSignal />
     )
 
     // The run renders an edited-file card, so a wrench above it reads as a tool
@@ -907,9 +873,7 @@ describe('NativeChatToolRun', () => {
 
     it('scopes a row’s reveal to that row rather than the whole message', () => {
       // Open run, collapsed children — the state the turn caret leaves behind.
-      const { container } = render(
-        <NativeChatToolRun blocks={run} expandSignal={false} expandOverride />
-      )
+      const { container } = render(<NativeChatToolRun blocks={run} expandSignal />)
 
       const revealed = hoverRevealed(container)
       expect(revealed.length).toBeGreaterThan(0)
@@ -919,9 +883,7 @@ describe('NativeChatToolRun', () => {
     })
 
     it('puts every reveal inside the row button that governs it', () => {
-      const { container } = render(
-        <NativeChatToolRun blocks={run} expandSignal={false} expandOverride />
-      )
+      const { container } = render(<NativeChatToolRun blocks={run} expandSignal />)
 
       hoverRevealed(container).forEach(({ element, classes }) => {
         const scope = /group-hover\/([a-z-]+):/.exec(classes)?.[1]
@@ -930,15 +892,13 @@ describe('NativeChatToolRun', () => {
       })
     })
 
-    it('hides a collapsed chevron on every row until its own row is hovered', () => {
-      const { container } = render(
-        <NativeChatToolRun blocks={run} expandSignal={false} expandOverride />
-      )
+    it('keeps every row’s chevron in view at the row’s right edge', () => {
+      const { container } = render(<NativeChatToolRun blocks={run} expandSignal />)
 
       const chevrons = [...container.querySelectorAll('.border-l button svg.lucide-chevron-right')]
       expect(chevrons.length).toBeGreaterThan(1)
       chevrons.forEach((chevron) => {
-        expect(chevron.getAttribute('class')).toContain('group-hover/tool-line:opacity-100')
+        expect(chevron.getAttribute('class')).not.toContain('opacity-0')
       })
     })
   })
@@ -993,6 +953,7 @@ describe('NativeChatToolRun task lists', () => {
         expandSignal
       />
     )
+    openToolRunMembers()
     expect(screen.getByText('Invalid arguments', { selector: 'pre' })).toBeInTheDocument()
     expect(screen.getByText('Update rejected', { selector: 'pre' })).toBeInTheDocument()
     expect(screen.queryByText('1/1')).toBeNull()

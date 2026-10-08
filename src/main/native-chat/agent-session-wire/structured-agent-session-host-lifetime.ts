@@ -10,8 +10,7 @@
 
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
+import { holdUnsentSends } from '../agent-session-journal/journal-unsent-send-hold'
 import {
   snapshotBeforeStructuredAgentSessionStop,
   StructuredAgentSessionEvictionError
@@ -25,7 +24,17 @@ import type {
 } from './structured-agent-session-host-types'
 import type { StructuredAgentSessionChildExit } from './structured-agent-session-child-exit'
 import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
+import {
+  markStructuredQueueReopen,
+  structuredAgentSessionHostInstance
+} from './structured-agent-session-queued-pause'
 import type { StructuredAgentSessionStopCause } from './structured-agent-session-adapter'
+import type { AgentSessionResumeTrigger } from '../../../shared/agent-session-resume-marker'
+import {
+  recordStructuredAgentSessionShutdownCut,
+  runningRootTurnItemId
+} from './structured-agent-session-orca-stop-row'
+import { structuredAgentSessionFailureWordsContext } from './structured-agent-session-send-preparation'
 export type { StructuredAgentSessionStopEnding } from './structured-agent-session-host-stop-event'
 import {
   recordStopEvent,
@@ -60,33 +69,63 @@ type ConversationCloseDeps = Pick<StructuredAgentSessionHostDeps, 'logger'> & {
   store: Pick<StructuredAgentSessionHostDeps['store'], 'getRecord'>
 }
 
-/** A conversation's handle closes with nothing queued: what is still queued when the chat closes,
- *  or the app quits, will not be handed over. Best effort: the next open's delivery loop rejects a
- *  leftover itself. `which` narrows it to the messages a close that did not complete closed.
- *  Resolves false when the rejection failed; the failure is reported, never thrown. */
-export async function abandonQueuedStructuredAgentSessionMessages(
+/** What is still queued when the chat closes will not be handed over: a person's message is kept
+ *  as a card that waits for the chat's next turn, the rest rejected (`journal-unsent-send-hold.ts`).
+ *  A quit is not a close: the next open settles what it left. The chat stops running, so the
+ *  reopen mark follows (`markStructuredQueueReopen`): on every `close`, or only once it settled a
+ *  send, for a later re-check of the same close, which must never mark past a new send. `which` narrows it to the messages a close that did not complete
+ *  closed. Best effort, so a close never waits on it: resolves false when it failed, reported and
+ *  never thrown. */
+export async function holdClosedStructuredAgentSessionSends(
   deps: ConversationCloseDeps,
   sessionId: string,
   journal: StructuredAgentSessionHostSession['journal'],
-  which?: (submission: AgentJournalSubmission) => boolean
+  close: { mark: 'always' | 'settled'; which?: (submission: AgentJournalSubmission) => boolean }
 ): Promise<boolean> {
-  return journal
-    .rejectQueuedSubmissions(
-      structuredAgentSessionConversationFence(deps.store, sessionId),
-      agentSessionFailureWords(agentSessionFailureFact('chatClosed'), { surface: 'rejection' }),
-      which
-    )
-    .then(
-      () => true,
-      (error: unknown) => {
-        deps.logger.warn('rejecting queued messages of a closed chat failed', {
-          scope: 'queued-abandon',
-          sessionId,
-          error
-        })
-        return false
-      }
-    )
+  const fence = structuredAgentSessionConversationFence(deps.store, sessionId)
+  const { which } = close
+  const settled = await holdUnsentSends(journal, {
+    fence,
+    hostInstance: structuredAgentSessionHostInstance(),
+    hold: { cause: 'chatClosed', ...(which ? { which } : {}) }
+  }).then(
+    (newest) => ({ ok: true, newest }),
+    (error: unknown) => {
+      deps.logger.warn('settling queued messages of a closed chat failed', {
+        scope: 'queued-abandon',
+        sessionId,
+        error
+      })
+      return { ok: false, newest: null }
+    }
+  )
+  if (close.mark === 'always') {
+    await markStructuredQueueReopen(sessionId, journal, fence, deps.logger)
+  } else if (settled.newest !== null) {
+    // A send that woke this re-check came after the ones it settled: the mark starts at them.
+    await markStructuredQueueReopen(sessionId, journal, fence, deps.logger, settled.newest + 1)
+  }
+  return settled.ok
+}
+
+/** What an earlier host process left queued and the open could not settle (its write failed):
+ *  kept or rejected now, never handed over. A failure throws. A send that woke this came after the
+ *  ones it settled, so the reopen mark starts where they did. */
+export async function holdRestartedStructuredAgentSessionSends(
+  logger: StructuredAgentSessionHostDeps['logger'],
+  sessionId: string,
+  journal: StructuredAgentSessionHostSession['journal'],
+  fence: number
+): Promise<void> {
+  const hostInstance = structuredAgentSessionHostInstance()
+  const settled = await holdUnsentSends(journal, {
+    fence,
+    hostInstance,
+    hold: { cause: 'hostRestarted' }
+  })
+  if (settled !== null) {
+    await markStructuredQueueReopen(sessionId, journal, fence, logger, settled + 1)
+  }
 }
 
 /**
@@ -115,6 +154,7 @@ export async function stopStructuredAgentSessionAgentUnderSerialize(
       : Promise.resolve(null)
     child.close = {
       cause,
+      ...('quit' in ending && ending.quit ? { quit: true as const } : {}),
       reason: ('reason' in ending ? ending.reason : undefined) ?? null,
       recorded,
       requestedAt: session.journal.cursor()
@@ -128,6 +168,8 @@ export async function stopStructuredAgentSessionAgentUnderSerialize(
     )
   }
   const { close } = child
+  // Read before the kill: the turn a quit's stop may cut.
+  const quitCuts = 'quit' in ending && ending.quit ? runningRootTurnItemId(session.journal) : null
   try {
     if (context.restartWitness) {
       await snapshotBeforeStructuredAgentSessionStop(
@@ -146,6 +188,22 @@ export async function stopStructuredAgentSessionAgentUnderSerialize(
         new Error('provider child exit was not proven')
       )
     }
+    // The exit handler has settled the turn by now, so the row reads its verdict.
+    if ('quit' in ending && ending.quit) {
+      const record = context.deps.store.getRecord(sessionId)
+      await recordStructuredAgentSessionShutdownCut({
+        journal: session.journal,
+        sessionId,
+        fence: child.fence,
+        generation: child.generation ?? 'unknown',
+        turnItemId: quitCuts,
+        trigger: ending.quit,
+        ...(record
+          ? { failureTextContext: structuredAgentSessionFailureWordsContext(record) }
+          : {}),
+        logger: context.deps.logger
+      })
+    }
   } finally {
     // A person's close binds what its child's end cut; done, proven or not, it binds no more.
     void close?.recorded.then((settle) => session.journal.stopMarks.settled(settle))
@@ -159,14 +217,18 @@ export type StructuredAgentSessionCloseCause = Extract<
 >
 
 /** Whether the conversation's handle is only a cache now: no child, and nothing queued or waiting
- *  on the provider. */
+ *  on the provider. `atRest`: the idle sweep's own close, which also keeps a chat with a card
+ *  waiting, since a reopen marks it to wait for a turn (`markStructuredQueueReopen`), and an
+ *  eviction the person never saw must not; a person's close has marked them already. */
 export function structuredAgentSessionConversationClosable(
-  session: StructuredAgentSessionHostSession
+  session: StructuredAgentSessionHostSession,
+  atRest = false
 ): boolean {
   return (
     session.child === null &&
     !session.journal.submissions().some(isQueuedAgentJournalSubmission) &&
-    session.journal.pendingSubmissions().length === 0
+    session.journal.pendingSubmissions().length === 0 &&
+    !(atRest && session.journal.queuedMessages.awaitReopenMark())
   )
 }
 
@@ -181,10 +243,11 @@ export async function closeStructuredAgentSessionConversationUnderSerialize(
     /** The status row outlives the handle; see `StructuredAgentSessionClientDelivery`. */
     closeStatus: (sessionId: string) => void
   },
-  sessionId: string
+  sessionId: string,
+  atRest = false
 ): Promise<boolean> {
   const session = context.sessions.get(sessionId)
-  if (!session || !structuredAgentSessionConversationClosable(session)) {
+  if (!session || !structuredAgentSessionConversationClosable(session, atRest)) {
     return false
   }
   context.sessions.delete(sessionId)
@@ -198,7 +261,8 @@ export async function evictOwnedStructuredAgentSessions(
   context: StructuredAgentSessionLifetimeContext & {
     serialize: (sessionId: string, task: () => Promise<void>) => Promise<void>
   },
-  retainOnFailure: Set<string>
+  retainOnFailure: Set<string>,
+  trigger: AgentSessionResumeTrigger = 'quit'
 ): Promise<void> {
   const ownedSessionIds = [...context.sessions]
     .filter(([, session]) => session.child !== null)
@@ -216,7 +280,7 @@ export async function evictOwnedStructuredAgentSessions(
         await context.serialize(sessionId, () =>
           stopStructuredAgentSessionAgentUnderSerialize(context, sessionId, {
             cause: 'evict',
-            quit: true
+            quit: trigger
           })
         )
         retainOnFailure.delete(sessionId)

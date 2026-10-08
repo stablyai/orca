@@ -389,6 +389,8 @@ describe('connectPanePty', () => {
     const transport = createMockTransport('pty-crashed-codex')
     transportFactoryQueue.push(transport)
     vi.useFakeTimers()
+    // Pin process cadence so confirmed exit precedes the hook refresh.
+    const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0.5)
 
     try {
       const paneKey = makePaneKey('tab-1', LEAF_1)
@@ -464,6 +466,7 @@ describe('connectPanePty', () => {
       expect(transport.sendInput).toHaveBeenNthCalledWith(1, '\x1b[I', 'query-reply')
       expect(transport.sendInput).toHaveBeenLastCalledWith('\x7f', 'query-reply')
     } finally {
+      randomSpy.mockRestore()
       restoreUserAgent()
     }
   })

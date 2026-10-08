@@ -65,6 +65,13 @@
         "anti-slop/no-module-mocking": "off"
       }
     },
+    // Test-only builtin adapters publish Node-compatible behavior and instrument OS metrics.
+    {
+      "files": ["**/vitest-bun-node-builtins.ts", "**/hang-watchdog-process-metrics.test.mjs"],
+      "rules": {
+        "anti-slop/no-module-mocking": "off"
+      }
+    },
     // Test-only side effect for explicit RPC registries; real catalog tests never import it.
     {
       "files": ["**/src/main/runtime/rpc/unused-default-rpc-methods.test-fixture.ts"],

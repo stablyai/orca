@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../../shared/agent-session-record.test-fixture'
+import type { RunningStructuredSession } from './structured-session-lineage'
 
 const hostRef: { current: unknown } = { current: null }
 
@@ -20,6 +25,12 @@ const {
 } = await import('../structured-worker-identity')
 
 const SESSION_ID = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'
+/** The worker's session as the resolved running session the status read takes. */
+const RUNNING: RunningStructuredSession = {
+  sessionId: SESSION_ID,
+  record: agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId: SESSION_ID })),
+  lineage: [SESSION_ID]
+}
 
 function idleTurn(): AgentJournalRenderItem {
   return {
@@ -169,13 +180,13 @@ describe('group addressing and structured workers', () => {
     // running turn, which Codex refuses outright and Claude folds into it.
     registerWorker()
     installHost({ items: [runningTurn(), ...transcript(500)] })
-    expect(await structuredWorkerAgentStatus(SESSION_ID)).toBe('working')
+    expect(await structuredWorkerAgentStatus(RUNNING)).toBe('working')
   })
 
   it('answers idle only when no turn is running and no human is awaited', async () => {
     registerWorker()
     installHost({ items: [idleTurn()] })
-    expect(await structuredWorkerAgentStatus(SESSION_ID)).toBe('idle')
+    expect(await structuredWorkerAgentStatus(RUNNING)).toBe('idle')
     installHost({
       items: [
         {
@@ -189,13 +200,13 @@ describe('group addressing and structured workers', () => {
         } as unknown as AgentJournalRenderItem
       ]
     })
-    expect(await structuredWorkerAgentStatus(SESSION_ID)).toBe('attention')
+    expect(await structuredWorkerAgentStatus(RUNNING)).toBe('attention')
   })
 
   it('answers null rather than idle when the session cannot be read', async () => {
     // Unknown must never read as idle, or `@idle` wakes a worker mid-turn.
     hostRef.current = null
-    expect(await structuredWorkerAgentStatus(SESSION_ID)).toBeNull()
+    expect(await structuredWorkerAgentStatus(RUNNING)).toBeNull()
   })
 })
 

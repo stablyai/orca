@@ -13,6 +13,8 @@ import {
   fetchProviderAccountsSnapshot,
   selectClaudeProviderAccount
 } from '@/runtime/runtime-provider-accounts-client'
+import { toast } from 'sonner'
+import { getClaudeAccountErrorDescription } from '../settings/accounts-pane-action-errors'
 import { translate } from '@/i18n/i18n'
 import {
   getWindowsTerminalCapabilityOwnerKey,
@@ -32,9 +34,14 @@ import {
   resolveClaudeStatusAccountState
 } from './status-bar-claude-accounts'
 import { AccountRuntimeToggle } from './StatusBarAccountControls'
-import { InlineUsageBars, InlineUsageSkeleton } from './InlineProviderUsage'
+import {
+  InlineUsageBars,
+  InlineUsageSignInAction,
+  InlineUsageSkeleton
+} from './InlineProviderUsage'
 import { ProviderDetailsMenu } from './ProviderDetailsMenu'
 import { getClaudeAccountSyncKey } from './provider-account-sync-key'
+import { signInToClaudeAccount } from '@/lib/claude-account-sign-in'
 
 // Exported so its account-switch/reset logic is preserved for row drill-in even
 // though the footer now opens the consolidated UsageRosterPanel first.
@@ -59,6 +66,8 @@ export function ClaudeSwitcherMenu({
     activeAccountIdsByRuntime: { host: null, wsl: {} }
   })
   const [isSwitching, setIsSwitching] = useState(false)
+  const [signingInId, setSigningInId] = useState<string | null>(null)
+  const signingInRef = useRef(false)
   const mountedRef = useRef(true)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
@@ -114,12 +123,27 @@ export function ClaudeSwitcherMenu({
     })
   }, [loadAccounts, claudeAccountSyncKey])
 
-  const handleOpenChange = useCallback((nextOpen: boolean): void => {
-    setOpen(nextOpen)
-    if (!nextOpen) {
-      setAccountsExpanded(false)
-    }
-  }, [])
+  const handleOpenChange = useCallback(
+    (nextOpen: boolean): void => {
+      setOpen(nextOpen)
+      if (!nextOpen) {
+        setAccountsExpanded(false)
+        return
+      }
+      // Why: an account that needs a sign-in is the reason to open; show its inline Sign in.
+      if (accounts.accounts.some((account) => account.needsSignIn)) {
+        setAccountsExpanded(true)
+        if (!hasActiveRuntimeEnvironment) {
+          void fetchInactiveClaudeAccountUsage()
+        }
+      }
+      // Why reload: the login each account folder holds changes without a settings change.
+      void loadAccounts().catch((error) => {
+        console.error('Failed to load Claude accounts for status bar:', error)
+      })
+    },
+    [accounts.accounts, fetchInactiveClaudeAccountUsage, hasActiveRuntimeEnvironment, loadAccounts]
+  )
 
   // Why: fetch inactive-account usage only on switcher expansion; remote-owned accounts have no local cache to fill.
   const handleAccountsExpandedToggle = useCallback((): void => {
@@ -157,9 +181,35 @@ export function ClaudeSwitcherMenu({
       }
     } catch (error) {
       console.error('Failed to switch Claude account from status bar:', error)
+      toast.error(
+        translate(
+          'auto.components.settings.AccountsPane.2743cdc0af',
+          'Claude account update failed.'
+        ),
+        { description: getClaudeAccountErrorDescription(error) }
+      )
     } finally {
       if (mountedRef.current) {
         setIsSwitching(false)
+      }
+    }
+  }
+
+  const handleSignIn = async (accountId: string): Promise<void> => {
+    // Why a ref: the row and its button both sign in, and state lags a double press.
+    if (signingInRef.current) {
+      return
+    }
+    signingInRef.current = true
+    setSigningInId(accountId)
+    try {
+      if (await signInToClaudeAccount(accountId)) {
+        await loadAccounts()
+      }
+    } finally {
+      signingInRef.current = false
+      if (mountedRef.current) {
+        setSigningInId(null)
       }
     }
   }
@@ -258,14 +308,22 @@ export function ClaudeSwitcherMenu({
               const inactiveUsage = target.id
                 ? inactiveClaudeAccounts.find((a) => a.accountId === target.id)
                 : null
+              // Why local only: the hidden sign-in runs on this device, not a remote server.
+              const signInId = target.needsSignIn && !hasActiveRuntimeEnvironment ? target.id : null
 
               return (
                 <DropdownMenuItem
                   key={`${selectedGroup.key}:${target.id ?? 'system'}`}
-                  disabled={isSwitching || target.active}
+                  disabled={
+                    isSwitching ||
+                    signingInId !== null ||
+                    (signInId === null && (target.active || target.disabled))
+                  }
                   onSelect={(event) => {
                     event.preventDefault()
-                    if (!target.active) {
+                    if (signInId) {
+                      void handleSignIn(signInId)
+                    } else if (!target.active) {
                       void handleSelectAccount(target.id, target.runtimeTarget)
                     }
                   }}
@@ -279,6 +337,19 @@ export function ClaudeSwitcherMenu({
                         </span>
                       ) : null}
                     </div>
+                    {signInId ? (
+                      <InlineUsageSignInAction
+                        isFetching={false}
+                        isSigningIn={signingInId === signInId}
+                        disabled={isSwitching || signingInId !== null}
+                        reason={target.hint ?? undefined}
+                        onSignIn={() => void handleSignIn(signInId)}
+                      />
+                    ) : target.hint ? (
+                      <span className="text-[10px] leading-4 text-muted-foreground">
+                        {target.hint}
+                      </span>
+                    ) : null}
                     {inactiveUsage?.isFetching && !inactiveUsage.rateLimits ? (
                       <InlineUsageSkeleton />
                     ) : inactiveUsage?.rateLimits ? (
@@ -294,8 +365,8 @@ export function ClaudeSwitcherMenu({
           </div>
           <div className="px-2 py-1.5 text-[10px] leading-4 text-muted-foreground">
             {translate(
-              'auto.components.status.bar.StatusBar.8295903d17',
-              'Restart live Claude terminals before continuing old conversations after switching.'
+              'accounts.claude.profileSwitching',
+              'Switching applies to the next Claude you start in any tab. Running sessions keep their account.'
             )}
           </div>
         </div>

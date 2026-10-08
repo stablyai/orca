@@ -174,14 +174,25 @@ export class CodexJournalTurnBoundaries {
       error: readString(readRecord(readRecord(readRecord(event.params).turn).error), 'message'),
       completedAt
     })
-    const turnLifecycle = this.ownsRecord(event.threadId, turnId)
-      ? this.settled(event.threadId, turnId, {
-          state: codexTurnLifecycleState(status),
-          outcome: codexTurnOutcome(status),
-          completedAt,
-          durationMs: readCodexTurnDurationMs(event.params)
-        })
-      : null
+    // Codex records a turn's prompt only once the turn starts, so an interrupted turn this child
+    // never started, with no item or prompt read, ran nothing and gets no record: the Stop that
+    // took it settles its send.
+    const ranNothing =
+      status === 'interrupted' &&
+      !this.deps.activeTurns.has(event.threadId, turnId) &&
+      !this.deps.items.ordinals.hasItems(event.threadId, turnId) &&
+      ![...this.deps.pendingPrompts.values()].some(
+        (prompt) => prompt.threadId === event.threadId && prompt.turnId === turnId
+      )
+    const turnLifecycle =
+      this.ownsRecord(event.threadId, turnId) && !ranNothing
+        ? this.settled(event.threadId, turnId, {
+            state: codexTurnLifecycleState(status),
+            outcome: codexTurnOutcome(status),
+            completedAt,
+            durationMs: readCodexTurnDurationMs(event.params)
+          })
+        : null
     const requestOrigin = this.deps.activeTurns.requestOrigin(event.threadId, turnId)
     const latestDispatchSequence = this.deps.activeTurns.latestDispatchSequence(
       event.threadId,
@@ -193,6 +204,7 @@ export class CodexJournalTurnBoundaries {
       threadId: event.threadId,
       turnId,
       turnLifecycle,
+      completedAt,
       turnEnd: codexTurnLifecycleState(status),
       streams: this.deps.items.streams,
       activeItems: this.deps.items.activeItems,

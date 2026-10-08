@@ -3,9 +3,9 @@
 // bookkeeping: with a saved tab index it writes nothing, and a store that cannot be written costs
 // a bounded number of failed writes, not one per chat.
 
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-types'
@@ -15,7 +15,9 @@ import {
 } from '../../shared/agent-session-record.test-fixture'
 import { journalDatabasePath } from '../native-chat/agent-session-journal/journal-host-database'
 import {
+  closeTestJournalHostDatabase,
   closeTestJournalHostDatabases,
+  openTestJournalHostDatabase,
   SAVED_BY_NEWER_ORCA
 } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { openAgentSessionJournal } from '../native-chat/agent-session-journal/journal-store-factory'
@@ -25,23 +27,18 @@ import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire
 import { AgentSessionRecordStore } from './agent-session-record-store'
 import type * as AgentSessionRecordRows from './agent-session-record-rows'
 import {
-  AGENT_SESSION_STORE_SCHEMA_VERSION,
-  legacyAgentSessionStorePath
-} from './agent-session-record-store-file'
-import {
   readPersistedTestAgentSessionStore,
-  seedTestAgentSessionStoreFromNewerBuild,
-  storedTestAgentSessionRecord
+  seedTestAgentSessionRecordStore,
+  seedTestAgentSessionStoreFromNewerBuild
 } from './agent-session-record-store-test-harness'
-import { openStructuredAgentSessionJournalDatabase } from './structured-agent-session-journal-open'
 import { OrcaRuntimeService } from './orca-runtime'
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
-import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { structuredAgentSessionTabId } from '../../shared/structured-agent-session-projection'
 
 // `failing` fails every record write; `grants` lets that many more through, then fails.
 const writes = vi.hoisted(() => ({ failing: false, grants: Infinity, refused: 0 }))
@@ -65,7 +62,6 @@ const PROMPT = 'add a retry'
 const CHAT_A = 'chat-a-0001'
 const CHAT_B = 'chat-b-0002'
 const CLEARED = 'chat-s-0003'
-const OWED = 'chat-o-0004'
 
 let root: string
 
@@ -119,34 +115,25 @@ function chatRecord(
   return { ...record, ...codex, ...clear }
 }
 
-/** The records file a profile from before the chat database carries, which the install imports;
- *  `visible` is its saved tab index, absent on a legacy profile. `newer` instead leaves the records
- *  in a database a newer Orca wrote. Then each chat's history as the last run left it: one prompt,
- *  accepted, so nothing is left to send. */
+/** The chat records the last run left; `visible` is their saved tab index, absent on a legacy
+ *  profile. `newer` leaves them in a database a newer Orca wrote. Then each chat's history as the
+ *  last run left it: one prompt, accepted, so nothing is left to send. */
 async function seedProfile(
   records: AgentSessionRecord[],
   options: { newer?: boolean; visible?: string[]; history?: AgentSessionRecord[] } = {}
 ) {
-  await mkdir(dirname(legacyAgentSessionStorePath(root)), { recursive: true })
-  await writeFile(
-    legacyAgentSessionStorePath(root),
-    JSON.stringify({
-      schemaVersion: AGENT_SESSION_STORE_SCHEMA_VERSION,
-      hostId: 'local',
-      records: Object.fromEntries(
-        records.map((record) => [record.sessionId, storedTestAgentSessionRecord(record)])
-      ),
-      operations: {},
-      retiredClaimKeys: [],
-      unusableRecords: {},
-      ...(options.visible ? { visibleSessionIds: options.visible } : {})
-    })
-  )
-  const database = await openStructuredAgentSessionJournalDatabase({
-    logger: createStructuredAgentSessionLogger(),
-    stateDirectory: root,
-    hostId: 'local'
+  await seedTestAgentSessionRecordStore(root, {
+    records,
+    ...(options.visible
+      ? {
+          sessionTabs: options.visible.map((sessionId) => ({
+            tabId: structuredAgentSessionTabId(sessionId),
+            sessionId
+          }))
+        }
+      : {})
   })
+  const database = openTestJournalHostDatabase(root)
   for (const record of options.history ?? records) {
     const fence = record.lease.runtimeFence
     const journal = await openAgentSessionJournal({
@@ -171,31 +158,11 @@ async function seedProfile(
     })
     await journal.close()
   }
-  database.close()
+  closeTestJournalHostDatabase(root)
   if (options.newer) {
     await seedTestAgentSessionStoreFromNewerBuild(root)
   }
   return { path: journalDatabasePath(root) }
-}
-
-/** A chat opened, with its tab, while the records file could not be read and the copy was owed. */
-async function seedChatOpenedWhileOwed(record: AgentSessionRecord, tabId: string): Promise<void> {
-  // A directory where the file belongs: the read fails in a way that can clear.
-  await mkdir(legacyAgentSessionStorePath(root), { recursive: true })
-  const database = await openStructuredAgentSessionJournalDatabase({
-    logger: createStructuredAgentSessionLogger(),
-    stateDirectory: root,
-    hostId: 'local'
-  })
-  database.db
-    .prepare('INSERT INTO agent_session_records (session_id, record_json) VALUES (?, ?)')
-    .run(record.sessionId, JSON.stringify(storedTestAgentSessionRecord(record)))
-  await AgentSessionRecordStore.open({
-    journalDatabase: database,
-    hostId: 'local'
-  }).setSessionTabVisibility(record.sessionId, true, tabId)
-  database.close()
-  await rm(legacyAgentSessionStorePath(root), { recursive: true })
 }
 
 function startupRuntime(options: { afterInstall?: () => void; profileChats?: string[] } = {}) {
@@ -218,6 +185,7 @@ function startupRuntime(options: { afterInstall?: () => void; profileChats?: str
       claimKeyId: 'key-1',
       resolveWorkspacePath: async () => root,
       resolveEnvironment: async () => ({}),
+      resolveLaunchArgs: () => [],
       resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true })
     })
     options.afterInstall?.()
@@ -400,26 +368,6 @@ describe('restoring the chat tabs open at quit', () => {
       expect(prepared).toBe(1)
       // The restore's lease check and the seed.
       expect(writes.refused - prepared).toBe(2)
-    })
-
-    // The profile never lists a Claude chat, so only the tab row that chat left brings it back.
-    it("restores a chat opened while the copy was owed beside the profile's chats", async () => {
-      const owed = chatRecord(OWED)
-      await seedChatOpenedWhileOwed(owed, 'tab-opened-while-owed')
-      const records = [chatRecord(CHAT_A, { codex: true })]
-      await seedProfile(records, { history: [owed, ...records] })
-      const { runtime, published } = startupRuntime({ profileChats: [CHAT_A] })
-
-      await runtime.restoreStructuredAgentSessionTabs()
-
-      expect(published().map((tab) => tab.id)).toEqual([
-        `agent-session:${OWED}`,
-        `agent-session:${CHAT_A}`
-      ])
-      expect((await readPersistedTestAgentSessionStore(root)).sessionTabs).toEqual([
-        { tabId: 'tab-opened-while-owed', sessionId: OWED },
-        { tabId: `structured-agent-session-${CHAT_A}`, sessionId: CHAT_A }
-      ])
     })
 
     it('still lists the chats when that write fails, and leaves the index absent', async () => {

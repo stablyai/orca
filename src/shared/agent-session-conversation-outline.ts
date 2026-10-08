@@ -11,10 +11,14 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from './agent-session-journal-types'
-import type { NativeChatBlock } from './native-chat-types'
+import type { NativeChatBlock, NativeChatMessage } from './native-chat-types'
 import { deriveNativeChatRowContent, nativeChatRowRendersContent } from './native-chat-row-content'
+import { iterateProcessOutputLines } from './process-output-field-scanner'
+import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
+import { dispatchWasWithdrawn } from './structured-agent-session-dispatch-rejection'
 import { projectStructuredAgentSessionMessages } from './structured-agent-session-message-projection'
 import { projectNativeChatTranscriptMessages } from './native-chat-transcript-projection'
+import { nativeChatTurnMembership } from './native-chat-turn-membership'
 
 /** Previews are cut on the host: the rail clamps to two lines, so a whole prompt
  *  would cross the wire only to be hidden. */
@@ -29,6 +33,12 @@ export type AgentSessionConversationOutlineEntry = {
    *  message is images only, or when the host dropped previews to fit the reply. */
   preview: string
   imageCount: number
+  /** The message that opened this one's turn, when this one did not: a steer sent
+   *  into a running turn. Absent from a host that predates the field. */
+  turnKey?: string
+  /** What the agent answered, as preview prose. Absent when it said nothing, from a
+   *  host that predates the field, or when the host dropped replies to fit. */
+  reply?: string
 }
 
 export type AgentSessionConversationOutline = {
@@ -63,6 +73,79 @@ export function nativeChatUserMessagePreview(
   return preview
 }
 
+const replies = new WeakMap<readonly NativeChatBlock[], string>()
+
+/** An assistant message as preview prose: fenced code, rules and markdown markers
+ *  dropped, cut to the preview cap. */
+function assistantReplyProse(blocks: readonly NativeChatBlock[]): string {
+  const cached = replies.get(blocks)
+  if (cached !== undefined) {
+    return cached
+  }
+  const lines: string[] = []
+  let length = 0
+  let fenced = false
+  // Lazily, stopping at the cap: a reply can be many thousands of lines.
+  for (const raw of iterateProcessOutputLines(deriveNativeChatRowContent(blocks).markdown)) {
+    const line = raw.trim()
+    if (line.startsWith('```')) {
+      fenced = !fenced
+      continue
+    }
+    if (fenced) {
+      continue
+    }
+    const plain = line
+      .replace(/^(?:[#>]+|[-*+]|\d+[.)])\s+/, '')
+      .replace(/\*\*|`/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+    if (!/[\p{L}\p{N}]/u.test(plain)) {
+      continue
+    }
+    lines.push(plain)
+    length += plain.length + 1
+    if (length > AGENT_SESSION_OUTLINE_PREVIEW_MAX_CHARS) {
+      break
+    }
+  }
+  const prose = truncateOutlinePreview(lines.join(' '), AGENT_SESSION_OUTLINE_PREVIEW_MAX_CHARS)
+  replies.set(blocks, prose)
+  return prose
+}
+
+/** What the agent answered each turn with, by turn key: the prose of the turn's
+ *  last assistant row that has any. Turns are the transcript's own (`turnKeys` from
+ *  `nativeChatTurnMembership`), so a steer or a queued prompt cannot cut a reply
+ *  short. `only` limits the read to one turn. */
+export function nativeChatTurnReplyPreviews(
+  messages: readonly Pick<NativeChatMessage, 'role' | 'blocks'>[],
+  turnKeys: readonly (string | undefined)[],
+  only?: string
+): Map<string, string> {
+  const replies = new Map<string, string>()
+  // Newest first, so a long agentic turn reads one message, not every aside before it.
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const turnKey = turnKeys[index]
+    if (
+      turnKey === undefined ||
+      (only !== undefined && turnKey !== only) ||
+      messages[index].role !== 'assistant' ||
+      replies.has(turnKey)
+    ) {
+      continue
+    }
+    const prose = assistantReplyProse(messages[index].blocks)
+    if (prose.length > 0) {
+      replies.set(turnKey, prose)
+      if (only !== undefined) {
+        break
+      }
+    }
+  }
+  return replies
+}
+
 /** Cuts on a code-point boundary so a clipped emoji never leaves a lone surrogate. */
 export function truncateOutlinePreview(text: string, maxChars: number): string {
   if (text.length <= maxChars) {
@@ -87,26 +170,39 @@ export function projectAgentSessionConversationOutline(
       sequences.set(item.itemId, item.sequence)
     }
   }
+  // Served to clients of every version, so a send a Stop took back stays out, as it always was.
+  const stopped = new Set(
+    submissions
+      .filter((submission) => dispatchWasWithdrawn(submission))
+      .map((submission) => agentJournalSubmissionKey(submission.clientMessageId))
+  )
   const entries: AgentSessionConversationOutlineEntry[] = []
   const transcript = projectNativeChatTranscriptMessages(
     // Unchanged on the wire: a desktop's rejected rows tick once their page is loaded.
     projectStructuredAgentSessionMessages(items, [], submissions, { rejectedInPlace: false })
   )
-  for (const message of transcript) {
+  const { turnKeys } = nativeChatTurnMembership(transcript, { items, submissions })
+  const replies = nativeChatTurnReplyPreviews(transcript, turnKeys)
+  for (const [index, message] of transcript.entries()) {
     const sequence = sequences.get(message.id)
     if (
       sequence === undefined ||
+      stopped.has(message.id) ||
       message.role !== 'user' ||
       !nativeChatRowRendersContent(message.blocks)
     ) {
       continue
     }
     const preview = nativeChatUserMessagePreview(message.blocks)
+    const turnKey = turnKeys[index]
+    const reply = turnKey === undefined ? undefined : replies.get(turnKey)
     entries.push({
       itemId: message.id,
       sequence,
       preview: preview.text,
-      imageCount: preview.imageCount
+      imageCount: preview.imageCount,
+      ...(turnKey === undefined || turnKey === message.id ? {} : { turnKey }),
+      ...(reply === undefined ? {} : { reply })
     })
   }
   return entries

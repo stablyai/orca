@@ -124,6 +124,32 @@ export function provenUnverifiableTurnRevisions(
   })
 }
 
+/** An exit this host watched, of the child that holds `ownerFence`. */
+export type StructuredAgentSessionWatchedExit = { ownerFence: number; observedAt: number }
+
+/** What a watched exit revises of what its child left `unverifiable` (its stream closed before the
+ *  exit was proven), calls and turns alike, as the record's death evidence later would. The exit's
+ *  instant is the end, so no Stop mark is weighed. */
+export function watchedExitRevisions(
+  items: readonly AgentJournalRenderItem[],
+  exit: StructuredAgentSessionWatchedExit | undefined,
+  journal: Pick<AgentSessionJournal, 'itemFence'>
+): JournalLifecycleMutationInput[] {
+  if (!exit) {
+    return []
+  }
+  const proof: AgentSessionDeathEvidence = { kind: 'exit-observed', detail: '', ...exit }
+  return [
+    ...provenUnverifiedToolCallRevisions(items, proof, journal),
+    ...items.flatMap((item) => {
+      const turn = readAgentJournalTurn(item.body)
+      return turn?.state === 'unverifiable' && journal.itemFence(item.itemId) === exit.ownerFence
+        ? turnLifecycleRevision(item, turn, { state: 'interrupted', completedAt: exit.observedAt })
+        : []
+    })
+  ]
+}
+
 /** The calls those settles closed with no proof, revised by the same proof: each only when it names
  *  the owner that wrote the call, so a call that failed on its own stays failed. */
 export function provenUnverifiedToolCallRevisions(

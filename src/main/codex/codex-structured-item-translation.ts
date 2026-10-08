@@ -32,6 +32,7 @@ export {
   MAX_CODEX_TURN_ORDINAL_BYTES,
   MAX_CODEX_TURN_ORDINAL_ENTRIES
 } from './codex-turn-ordinals'
+import { journalReasoningBody } from '../native-chat/agent-session-journal/journal-reasoning-row'
 
 // Codex thread items → journal item bodies.
 
@@ -74,10 +75,6 @@ export function codexMessageBlocks(item: CodexThreadItem): NativeChatBlock[] {
 export type CodexJournalItem = {
   body: AgentJournalItemBody | null
   handled: boolean
-}
-
-function reasoningMessageBody(text: string): AgentJournalItemBody {
-  return { kind: 'message', role: 'reasoning', blocks: [{ type: 'text', text }] }
 }
 
 function commandItem(item: CodexThreadItem): CodexJournalItem {
@@ -281,13 +278,7 @@ export function codexJournalItem(
       readTextContent(item, 'text') ??
       readTextContent(item, 'summary') ??
       readTextContent(item, 'content')
-    return {
-      body:
-        text === null
-          ? null
-          : reasoningMessageBody(boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text),
-      handled: true
-    }
+    return { body: journalReasoningBody(text), handled: true }
   }
   const unhandled = unhandledProviderFrameJournalItem('codex', `item:${item.type}`, item)
   return unhandled ? { body: unhandled.body, handled: false } : { body: null, handled: true }
@@ -310,6 +301,9 @@ export function codexStreamingMessageBody(text: string): AgentJournalItemBody {
 export function codexStreamingJournalItem(item: CodexThreadItem, text: string): CodexJournalItem {
   if (item.type === 'agentMessage') {
     return { body: codexStreamingMessageBody(text), handled: true }
+  }
+  if (item.type === 'reasoning') {
+    return { body: journalReasoningBody(text), handled: true }
   }
   if (item.type === 'commandExecution') {
     return commandItem({ ...item, aggregatedOutput: text })
@@ -334,12 +328,8 @@ export function codexStreamingJournalItem(item: CodexThreadItem, text: string): 
       handled: true
     }
   }
-  const bounded = boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS)
   return {
-    body:
-      item.type === 'reasoning'
-        ? reasoningMessageBody(bounded.text)
-        : { kind: 'status', text: bounded.text },
+    body: { kind: 'status', text: boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text },
     handled: true
   }
 }

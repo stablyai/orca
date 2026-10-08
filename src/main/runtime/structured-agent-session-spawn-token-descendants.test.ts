@@ -142,6 +142,7 @@ describe('a process that inherited a spawn token', () => {
       hostId: HOST_ID,
       claimKeyId: 'key-1',
       resolveWorkspacePath: async () => stateDirectory,
+      resolveLaunchArgs: () => [],
       resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
       resolveEnvironment: async () => ({})
     })

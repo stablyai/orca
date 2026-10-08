@@ -84,7 +84,7 @@ export function ActivityThreadHoverCardSummary({
       } else {
         const state = useAppStore.getState()
         if (state.getKnownWorktreeById(worktree.id, executionHostId)) {
-          state.acknowledgeAgents([thread.paneKey])
+          state.acknowledgeAgents([thread.paneKey], undefined, 'explicit')
           jumpToWorktreeFromSidebar(worktree.id, { executionHostId })
         }
       }

@@ -63,6 +63,11 @@ export type RuntimeManagedWorktreeCreateArgs = {
   startupPaneKey?: string
   pendingFirstAgentMessageRename?: boolean
   automationProvenance?: AutomationWorkspaceProvenance
+  /**
+   * Host-side only, never on the wire: lets an offline create from a remote base use the local
+   * branch it names. Only creates a person initiated opt in.
+   */
+  allowLocalBaseFallback?: boolean
   cliProvenance?: CliWorkspaceProvenance
   creatorProvenance?: Worktree['creatorProvenance']
   startup?: WorktreeStartupLaunch

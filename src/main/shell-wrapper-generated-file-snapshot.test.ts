@@ -68,6 +68,8 @@ async function expectWrapperFiles(transport: string, root: string): Promise<void
 const CONTRACT_GLOBALS = new Set([
   'BUFFER',
   'CODEX_HOME',
+  // Exported only inside the claude function's subshell, for that one Claude process.
+  'CLAUDE_CONFIG_DIR',
   'HISTFILE',
   'MIMOCODE_HOME',
   'OPENCODE_CONFIG_DIR',

@@ -32,6 +32,7 @@ import { MANAGED_DATA_ACCOUNT_POSIX_RESTORE } from '../shared/managed-data-accou
 import { getPosixOmpShellWrapper } from './pty/omp-shell-wrapper'
 import { WSL_MANAGED_CLI_PATH_RESTORE } from './wsl-managed-cli-path-restore'
 import { getPosixCodexShellLaunchPreflight } from '../shared/codex-shell-function'
+import { getPosixClaudeShellFunction } from '../shared/claude-shell-function'
 import {
   ZSH_DEFERRED_LINE_INIT_BLOCK,
   ZSH_DEFERRED_LINE_INIT_CLEANUP_BLOCK,
@@ -185,7 +186,10 @@ ${joinBlocks([
   indentBlock(ORCA_CLI_POSIX_PATH_RESTORE, '  ').replace(/\n$/, ''),
   featureGuard('overlay', getOverlayRestoreBlocks(spec)),
   // Why outside the overlay guard: a system-default Codex home carries no overlay key.
-  indentBlock(getPosixCodexShellLaunchPreflight(), '  ').replace(/\n$/, ''),
+  indentBlock(getPosixCodexShellLaunchPreflight() + getPosixClaudeShellFunction(), '  ').replace(
+    /\n$/,
+    ''
+  ),
   // Why no /etc/zshrc repair branch: ZDOTDIR was handed back before that file
   // ran, so the value it derives is the user's own path. #11044 is unreachable.
   `  if [[ -n "\${_orca_histfile:-}" ]]; then

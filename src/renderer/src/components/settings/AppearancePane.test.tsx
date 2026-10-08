@@ -244,6 +244,16 @@ describe('AppearancePane', () => {
     delete (window as unknown as { api?: unknown }).api
   })
 
+  it('keeps chat appearance controls out of the Appearance pane', async () => {
+    mocks.state.settingsSearchQuery = ''
+    const container = await renderAppearancePane({
+      ...getDefaultSettings('/tmp'),
+      experimentalStructuredNativeChat: true
+    })
+    expect(appearanceSectionToggle(container, 'chat')).toBeUndefined()
+    expect(container.textContent).not.toContain('Reset chat appearance')
+  })
+
   it('shows language as a primary interface control without opening Advanced', async () => {
     mocks.state.settingsSearchQuery = ''
     const container = await renderAppearancePane(getDefaultSettings('/tmp'))
@@ -397,7 +407,7 @@ describe('AppearancePane', () => {
     expect(mocks.state.setWorktreeCardMode).toHaveBeenCalledWith('Compact')
   })
 
-  it('renders the four top-level section rows and no Code & Markdown row when not searching', async () => {
+  it('renders the three top-level section rows and no Code & Markdown row when not searching', async () => {
     mocks.state.settingsSearchQuery = ''
     const container = await renderAppearancePane(getDefaultSettings('/tmp'))
 
@@ -580,7 +590,7 @@ describe('AppearancePane', () => {
     expect(mocks.state.toggleStatusBarItem).toHaveBeenCalledWith('antigravity')
   })
 
-  it('expands Interface, Terminal, Chat, and Window & Sidebar by default', async () => {
+  it('expands Interface, Terminal, and Window & Sidebar by default', async () => {
     mocks.state.settingsSearchQuery = ''
     const container = await renderAppearancePane(getDefaultSettings('/tmp'))
 
@@ -588,7 +598,7 @@ describe('AppearancePane', () => {
       container.querySelectorAll<HTMLButtonElement>('button[aria-expanded="true"]')
     ).filter((button) => button.getAttribute('aria-controls')?.startsWith('appearance-section-'))
 
-    expect(expanded).toHaveLength(4)
+    expect(expanded).toHaveLength(3)
     expect(expanded.map((button) => button.textContent).join(' ')).toContain('Interface')
     expect(expanded.map((button) => button.textContent).join(' ')).toContain('Terminal')
     expect(expanded.map((button) => button.textContent).join(' ')).toContain('Window & Sidebar')
@@ -612,7 +622,7 @@ describe('AppearancePane', () => {
       container.querySelectorAll<HTMLButtonElement>('button[aria-expanded="true"]')
     ).filter((button) => button.getAttribute('aria-controls')?.startsWith('appearance-section-'))
 
-    expect(stillExpanded).toHaveLength(3)
+    expect(stillExpanded).toHaveLength(2)
     expect(stillExpanded.map((button) => button.textContent).join(' ')).toContain('Interface')
     expect(stillExpanded.map((button) => button.textContent).join(' ')).toContain(
       'Window & Sidebar'

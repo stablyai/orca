@@ -1,5 +1,7 @@
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import type { StructuredAgentSessionLifecycleEvent } from './structured-agent-session-adapter'
+import { holdUnsentSends } from '../agent-session-journal/journal-unsent-send-hold'
+import { structuredAgentSessionHostInstance } from './structured-agent-session-queued-pause'
 import { stopAgentSessionProviderRoot } from './structured-agent-session-provider-exit-proof'
 import type {
   StructuredAgentSessionHostDeps,
@@ -7,7 +9,10 @@ import type {
   StructuredAgentSessionProviderChild
 } from './structured-agent-session-host-types'
 import type { StructuredAgentSessionSinkBarrier } from './structured-agent-session-event-sink'
-import { settleStructuredAgentSessionProviderStarted } from './structured-agent-session-provider-started'
+import {
+  settleStructuredAgentSessionOptionsSkipped,
+  settleStructuredAgentSessionProviderStarted
+} from './structured-agent-session-provider-started'
 import {
   endExitedStructuredAgentSessionChildUnderSerialize,
   settleStructuredAgentSessionChildExit,
@@ -39,6 +44,17 @@ export class StructuredAgentSessionEventRecovery {
     return {
       ...this.context,
       logger: deps.logger,
+      holdUnrunSends: async (sessionId, fence, cause) => {
+        const journal = this.context.sessions.get(sessionId)?.journal
+        if (journal) {
+          await holdUnsentSends(journal, {
+            fence,
+            hostInstance: structuredAgentSessionHostInstance(),
+            hold: { cause },
+            unrun: true
+          })
+        }
+      },
       route: {
         runtimeState,
         acknowledgeRelease: (sessionId) => deps.adapter.acknowledgeSessionRelease?.(sessionId)
@@ -94,6 +110,9 @@ export class StructuredAgentSessionEventRecovery {
   async handle(event: StructuredAgentSessionLifecycleEvent): Promise<void> {
     if (event.type === 'started') {
       return settleStructuredAgentSessionProviderStarted(this.context, event)
+    }
+    if (event.type === 'options-skipped') {
+      return settleStructuredAgentSessionOptionsSkipped(this.context, event)
     }
     await settleStructuredAgentSessionChildExit(this.exitContext, event)
   }

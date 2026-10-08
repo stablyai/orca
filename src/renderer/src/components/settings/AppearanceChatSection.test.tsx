@@ -4,9 +4,12 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
+import { TooltipProvider } from '../ui/tooltip'
 import { AppearanceChatSection } from './AppearanceChatSection'
-import { getChatAppearanceEntriesByKey } from './chat-appearance-search'
-import { getAppearancePaneSearchEntries } from './appearance-search'
+import {
+  getChatAppearanceEntriesByKey,
+  getChatAppearanceSearchEntries
+} from './chat-appearance-search'
 import { matchesSettingsSearch } from './settings-search'
 
 const mocks = vi.hoisted(
@@ -46,7 +49,7 @@ function persistInMock(settings: GlobalSettings) {
   })
 }
 
-describe('chat appearance settings card', () => {
+describe('chat appearance settings controls', () => {
   it.each([
     { platform: 'darwin', increase: '⌘=', decrease: '⌘-' },
     { platform: 'win32', increase: 'Ctrl+=', decrease: 'Ctrl+-' },
@@ -130,7 +133,9 @@ describe('chat appearance settings card', () => {
         fontSize: 18,
         codeFontSize: 16,
         width: 'wide' as const,
-        contrast: 151
+        contrast: 130,
+        matchTerminalInterface: false,
+        futureSetting: 'keep'
       }
     }
     const updateSettings = persistInMock(settings)
@@ -140,12 +145,15 @@ describe('chat appearance settings card', () => {
     fireEvent.blur(text)
     fireEvent.click(screen.getByRole('button', { name: 'Reset' }))
     await waitFor(() => expect(updateSettings).toHaveBeenCalledTimes(2))
-    expect(mocks.state.settings?.nativeChatAppearance).toEqual({ contrast: 151 })
+    expect(mocks.state.settings?.nativeChatAppearance).toEqual({ futureSetting: 'keep' })
   })
-  it('indexes each row and width choice in Appearance settings search', () => {
-    const entries = getAppearancePaneSearchEntries()
+  it('indexes each row and width choice in Chat settings search', () => {
+    const entries = getChatAppearanceSearchEntries()
     for (const query of [
       'Chat',
+      'Match terminal interface',
+      'Contrast',
+      'brighter look',
       'Code text size',
       'tool output',
       'Comfortable',
@@ -155,5 +163,104 @@ describe('chat appearance settings card', () => {
     ]) {
       expect(matchesSettingsSearch(query, entries), query).toBe(true)
     }
+  })
+
+  it('disables only terminal-controlled rows while matching and restores saved values off', async () => {
+    const settings = {
+      ...getDefaultSettings('/tmp'),
+      nativeChatAppearance: {
+        fontSize: 18,
+        codeFontSize: 16,
+        contrast: 125,
+        matchTerminalInterface: true
+      }
+    }
+    const updateSettings = persistInMock(settings)
+    const { rerender } = render(
+      <AppearanceChatSection settings={settings} updateSettings={updateSettings} />,
+      { wrapper: TooltipProvider }
+    )
+    expect(screen.getAllByText('Set by terminal interface.')).toHaveLength(3)
+    expect(screen.getByRole('spinbutton', { name: 'Text size' }).hasAttribute('disabled')).toBe(
+      true
+    )
+    expect(
+      screen.getByRole('spinbutton', { name: 'Code text size' }).hasAttribute('disabled')
+    ).toBe(true)
+    expect(screen.getByRole('slider', { name: 'Contrast' }).hasAttribute('data-disabled')).toBe(
+      true
+    )
+    expect(
+      screen.getByRole('switch', { name: 'Match terminal interface' }).hasAttribute('disabled')
+    ).toBe(false)
+    fireEvent.click(screen.getByRole('radio', { name: 'Wide' }))
+    await waitFor(() => expect(mocks.state.settings?.nativeChatAppearance?.width).toBe('wide'))
+    expect(mocks.state.settings?.nativeChatAppearance).toMatchObject({
+      fontSize: 18,
+      codeFontSize: 16,
+      contrast: 125
+    })
+    rerender(
+      <AppearanceChatSection settings={mocks.state.settings!} updateSettings={updateSettings} />
+    )
+    fireEvent.click(screen.getByRole('switch', { name: 'Match terminal interface' }))
+    await waitFor(() =>
+      expect(mocks.state.settings?.nativeChatAppearance?.matchTerminalInterface).toBeUndefined()
+    )
+    rerender(
+      <AppearanceChatSection settings={mocks.state.settings!} updateSettings={updateSettings} />
+    )
+    expect(screen.queryByText('Set by terminal interface.')).toBeNull()
+    expect(screen.getByRole('spinbutton', { name: 'Text size' }).getAttribute('value')).toBe('18')
+    expect(screen.getByRole('spinbutton', { name: 'Code text size' }).getAttribute('value')).toBe(
+      '16'
+    )
+    expect(screen.getByRole('slider', { name: 'Contrast' }).getAttribute('aria-valuenow')).toBe(
+      '125'
+    )
+    expect(screen.getByRole('radio', { name: 'Wide' }).getAttribute('aria-checked')).toBe('true')
+  })
+
+  const terminalTooltip =
+    'Matching your terminal interface. Turn off Match terminal interface to change this.'
+  const controlledControls = [
+    ['spinbutton', 'Text size'],
+    ['spinbutton', 'Code text size'],
+    ['slider', 'Contrast']
+  ] as const
+
+  it.each(controlledControls)(
+    'explains a matched %s "%s" on hover of its wrapper',
+    async (role, name) => {
+      const settings = {
+        ...getDefaultSettings('/tmp'),
+        nativeChatAppearance: { matchTerminalInterface: true }
+      }
+      render(
+        <AppearanceChatSection settings={settings} updateSettings={persistInMock(settings)} />,
+        { wrapper: TooltipProvider }
+      )
+      const trigger = screen.getByRole(role, { name }).closest('[data-slot="tooltip-trigger"]')
+      expect(trigger).not.toBeNull()
+      fireEvent.pointerMove(trigger!, { pointerType: 'mouse' })
+      expect((await screen.findByRole('tooltip')).textContent).toBe(terminalTooltip)
+      // Width stays editable and unexplained.
+      expect(
+        screen.getByRole('radio', { name: 'Wide' }).closest('[data-slot="tooltip-trigger"]')
+      ).toBeNull()
+    }
+  )
+
+  it('gives the controls no tooltip while matching is off', () => {
+    const settings = getDefaultSettings('/tmp')
+    render(<AppearanceChatSection settings={settings} updateSettings={persistInMock(settings)} />, {
+      wrapper: TooltipProvider
+    })
+    for (const [role, name] of controlledControls) {
+      const control = screen.getByRole(role, { name })
+      expect(control.closest('[data-slot="tooltip-trigger"]')).toBeNull()
+      fireEvent.pointerMove(control, { pointerType: 'mouse' })
+    }
+    expect(screen.queryByRole('tooltip')).toBeNull()
   })
 })

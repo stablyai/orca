@@ -79,7 +79,10 @@ describe('Codex failed-acquisition exit proof', () => {
         resumeThreadId: 'thread-1'
       }),
       openConnection: async () => connection,
-      readProcessStartTime: async () => null
+      // An unreadable start time no longer fails a start, so the identity read itself fails here.
+      readProcessStartTime: async () => {
+        throw new Error('process table unavailable')
+      }
     })
 
     await expect(

@@ -297,6 +297,7 @@ export function normalizeMainAgentStatusField(value: unknown): AgentMainAgentSta
     state,
     // Why: a verdict belongs to a finished turn; anything riding on a live state is stale.
     ...(state === 'done' && isAgentTurnOutcome(obj.outcome) ? { outcome: obj.outcome } : {}),
+    ...(state === 'working' && obj.stopping === true ? { stopping: true as const } : {}),
     stateStartedAt: obj.stateStartedAt
   }
 }

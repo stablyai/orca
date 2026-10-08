@@ -165,10 +165,10 @@ export class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRuntimeWithApp
     if (structuredSessionId) {
       // A structured session has no PTY, so the process table can only ever fail to find it —
       // answering `exited` from that absence would release a running provider child. The durable
-      // agent-session record is asked directly rather than through the in-memory identity
-      // registry: settlement forgets the registry entry, so gating on one made a stopped worker's
-      // resource answer `unverifiable` forever and stay in `worker-list --terminalState retained`
-      // for the life of the DB.
+      // agent-session records, walked forward to any `/clear` successor, are asked directly rather
+      // than the in-memory identity registry: settlement forgets the registry entry, so gating on
+      // one made a stopped worker's resource answer `unverifiable` forever and stay in
+      // `worker-list --terminalState retained` for the life of the DB.
       return observeStructuredWorker({ sessionId: structuredSessionId }).status
     }
     const hostScope = parseWorkerTerminalHostScope(serializedHostScope)

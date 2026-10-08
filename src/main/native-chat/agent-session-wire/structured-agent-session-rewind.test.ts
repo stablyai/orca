@@ -1,3 +1,4 @@
+import { expectRawStopNoteRewindRecovery } from './structured-agent-session-rewind-stop-note.test-fixture'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalItemBody
@@ -187,6 +188,10 @@ async function params(itemId: string, epoch?: string) {
 }
 
 describe('host rewind', () => {
+  it('retains the raw Stop failure and recovers a committed rewind against raw bodies', async () => {
+    await expectRawStopNoteRewindRecovery({ host, store, rewind })
+  })
+
   it('resolves accepted codex user submissions to provider targets', async () => {
     const target = await seed(true)
     expect(target.startsWith('orca:')).toBe(true)

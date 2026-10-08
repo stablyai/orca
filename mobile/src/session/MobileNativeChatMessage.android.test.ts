@@ -23,6 +23,8 @@ vi.mock('react-native', async () => {
     Image: 'Image',
     Platform: { OS: 'android' },
     Pressable: 'Pressable',
+    ScrollView: ({ children, ...props }: { children?: ReactNode }) =>
+      React.createElement('ScrollView', props, children),
     Text,
     View: ({ children, ...props }: { children?: ReactNode }) =>
       React.createElement('View', props, children),
@@ -32,6 +34,7 @@ vi.mock('react-native', async () => {
 vi.mock('expo-clipboard', () => ({ setStringAsync: vi.fn() }))
 vi.mock('lucide-react-native', () => ({
   ArrowUp: 'ArrowUp',
+  Brain: 'Brain',
   ChevronDown: 'ChevronDown',
   Copy: 'Copy',
   SquareChevronRight: 'SquareChevronRight',
@@ -104,6 +107,36 @@ describe('MobileNativeChatMessage on Android', () => {
     expect(texts[0]!.props.selectable).toBe(false)
     act(() => byType('Pressable')[0]!.props.onLongPress())
     expect(byType('MessageActionsSheet')).toHaveLength(1)
+  })
+
+  it('opens the actions sheet from a long press on an expanded reasoning row, not on its headline', () => {
+    const reasoning: NativeChatMessage = {
+      ...message,
+      id: 'r1',
+      role: 'reasoning',
+      blocks: [{ type: 'text', text: 'Weighing two approaches' }],
+      timestamp: 1_000,
+      state: 'completed',
+      completedAt: 4_000
+    }
+    act(() => {
+      renderer = create(createElement(MobileNativeChatMessage, { message: reasoning }))
+    })
+    const [toggle] = byType('Pressable')
+    // A long press on the headline stays a plain toggle tap.
+    expect(toggle!.props.onLongPress).toBeUndefined()
+    act(() => toggle!.props.onPress())
+
+    const body = byType('Pressable').find((node) => node.props.onLongPress !== undefined)
+    expect(typeof body?.props.onLongPress).toBe('function')
+    const [markdown] = byType('MobileMarkdown')
+    expect(markdown!.props.onLongPress).toBe(body!.props.onLongPress)
+
+    act(() => body!.props.onLongPress())
+    const [sheet] = byType('MessageActionsSheet')
+    expect(sheet!.props.message).toBe(reasoning)
+    act(() => sheet!.props.onClose())
+    expect(byType('MessageActionsSheet')).toHaveLength(0)
   })
 
   it('renders the user bubble without inline selection', () => {

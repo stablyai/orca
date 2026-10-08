@@ -102,6 +102,7 @@ export const PROVIDER_FRAME_CLASSIFICATIONS = {
     'message:stream_event:content_block_start': 'status-chrome',
     'message:stream_event:content_block_delta': 'stream-into-item',
     'message:stream_event:content_block_stop': 'status-chrome',
+    'message:stream_event:ping': 'suppressed-benign',
     'message:system:compact_boundary': 'status-chrome',
     'message:system:status': 'status-chrome',
     'message:system:api_retry': 'status-chrome',
@@ -261,9 +262,8 @@ const CODEX_ITEM_CLASSIFICATIONS: Record<string, ProviderFrameClassification> = 
   // would leave that session's fan-out showing nothing.
   [CODEX_SUBAGENT_ITEM_TYPE]: 'status-chrome',
   // `{id, durationMs}` and nothing else — Codex's own transcript renders it as
-  // nothing at all. Every other item type this build does not model carries text
-  // a user would want (review output, an image path, hook prompt text), so those
-  // keep their visible fallback row.
+  // nothing at all. Every other item type this build does not model keeps its
+  // journaled fallback row; a chat draws it only when the row carries a sentence.
   sleep: 'status-chrome'
 }
 

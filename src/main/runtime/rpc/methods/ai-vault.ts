@@ -15,7 +15,8 @@ import { describeAiVaultScanError } from '../../../../shared/ai-vault-scan-error
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import {
   assertLegacyAiVaultResumeAllowed,
-  projectStructuredAiVaultSessions
+  projectStructuredAiVaultSessions,
+  searchWithStructuredOwners
 } from '../../../ai-vault/structured-session-ownership'
 import { ensureStructuredAgentSessionHostUnlessRefused } from '../../structured-agent-session-host-refusal'
 import {
@@ -29,8 +30,14 @@ export const AI_VAULT_METHODS = [
   defineMethod({
     name: 'aiVault.searchSessions',
     params: AiVaultSearchRequestSchema,
-    handler: (params, { clientKind }) =>
-      searchSessionService(params, clientKind ? 'relay' : 'runtime')
+    handler: (params, { runtime, clientKind, clientCapabilities }) => {
+      const response = searchSessionService(params, clientKind ? 'relay' : 'runtime')
+      // A client that cannot open the native owner keeps the transcript hit, as before.
+      return clientKind === undefined ||
+        clientCapabilities?.includes(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)
+        ? searchWithStructuredOwners(response, () => runtime.ensureStructuredAgentSessionHost())
+        : response
+    }
   }),
   defineMethod({
     name: 'aiVault.searchStatus',
@@ -88,14 +95,14 @@ export const AI_VAULT_METHODS = [
       }
       // Why: web clients consume this response directly (no parent-side retag),
       // so sessions must come back stamped as the runtime host they addressed.
-      const stamped = params.executionHostId
-        ? restampAiVaultListResult(result, params.executionHostId)
-        : result
-      return projectStructuredAiVaultSessions(
-        stamped,
+      const projected = projectStructuredAiVaultSessions(
+        result,
         clientKind === undefined ||
           (clientCapabilities?.includes(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY) ?? false)
       )
+      return params.executionHostId
+        ? restampAiVaultListResult(projected, params.executionHostId)
+        : projected
     }
   }),
   defineMethod({

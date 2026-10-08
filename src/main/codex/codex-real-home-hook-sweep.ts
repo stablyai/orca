@@ -1,6 +1,5 @@
 import {
   createManagedCommandMatcher,
-  MANAGED_HOOK_TIMEOUT_SECONDS,
   readHooksJsonWithRaw,
   removeManagedCommands,
   writeHooksJson,
@@ -9,18 +8,18 @@ import {
 import { resolveHooksJsonWritePath } from '../agent-hooks/hook-config-write-path'
 import {
   assertHooksJsonGeneration,
-  getRealHomeConfigTomlPath,
   getRealHomeHookKeySourcePaths,
   getRealHomeHooksJsonPath
 } from './codex-real-home-hooks-json'
 import { getCodexManagedScriptFileName } from './codex-hook-identity'
-import { removeCodexManagedHookTrustEntries } from './codex-managed-trust-reconciliation'
-import { getCodexManagedHookInstallMaterial } from './codex-hook-definition'
-import { getSystemCodexHomePath } from './codex-home-paths'
+import { getSystemCodexConfigTomlPath } from './codex-hook-definition'
 import { mutateRealHomeHooksPreservingUserTrust } from './codex-user-hook-trust-moves'
 
-/** The opt-out's removal of every Orca entry from the real ~/.codex/hooks.json, with its trust. */
-export async function sweepRealHomeCodexHook(): Promise<'removed' | 'unavailable'> {
+/**
+ * The opt-out's removal of every Orca entry from the real ~/.codex/hooks.json,
+ * moving user approvals that shift; the caller removes Orca's own approvals.
+ */
+export function sweepRealHomeCodexHook(): 'removed' | 'unavailable' {
   const hooksJsonPath = getRealHomeHooksJsonPath()
   // Why: single read — the pre-write generation guard must compare against
   // the exact bytes this sweep's parse came from.
@@ -34,7 +33,6 @@ export async function sweepRealHomeCodexHook(): Promise<'removed' | 'unavailable
     return 'removed'
   }
   const isManagedCommand = createManagedCommandMatcher(getCodexManagedScriptFileName())
-  const material = getCodexManagedHookInstallMaterial()
   const nextHooks: Record<string, HookDefinition[]> = { ...config.hooks }
   let removedAny = false
   for (const [eventName, definitions] of Object.entries(nextHooks)) {
@@ -56,10 +54,9 @@ export async function sweepRealHomeCodexHook(): Promise<'removed' | 'unavailable
   }
   if (removedAny) {
     const hooksWritePath = resolveHooksJsonWritePath(hooksJsonPath)
-    const sourcePaths = getRealHomeHookKeySourcePaths()
     mutateRealHomeHooksPreservingUserTrust({
-      sourcePaths,
-      tomlPath: getRealHomeConfigTomlPath(),
+      sourcePaths: getRealHomeHookKeySourcePaths(),
+      tomlPath: getSystemCodexConfigTomlPath(),
       beforeHooks: config.hooks,
       afterHooks: nextHooks,
       writeHooks: () => {
@@ -67,22 +64,6 @@ export async function sweepRealHomeCodexHook(): Promise<'removed' | 'unavailable
         writeHooksJson(hooksWritePath, { ...config, hooks: nextHooks }, { preserveMode: true })
       }
     })
-    // Why: dead [hooks.state] blocks for a removed hook are Orca-owned records;
-    // dropping them keeps the user's config.toml from accumulating orphans.
-    // Verify ownership by the expected hash or grant ledger: stale/mixed hook
-    // groups must never make Orca delete a user's trust record at the same key.
-    try {
-      removeCodexManagedHookTrustEntries({
-        tomlPath: getRealHomeConfigTomlPath(),
-        runtimeHomePath: getSystemCodexHomePath(),
-        sourcePaths,
-        command: material.command,
-        managedEventLabels: new Set(Object.values(material.eventLabel)),
-        timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
-      })
-    } catch (error) {
-      console.warn('[codex-real-home-hooks] failed to drop Orca trust entries:', error)
-    }
   }
   return 'removed'
 }

@@ -11,7 +11,8 @@ export function nativeChatRewindOffered(support: AgentSessionRewindSupport | und
 
 /** A sent prompt that opened its own turn, outside any subagent's section. Codex rewinds whole
  *  turns, so a steer would also discard its turn's opener; unsent, queued, command and goal rows
- *  have no turn to go back to. An image with no local file could not go back to the composer. */
+ *  have no turn to go back to. An image with no local file could not go back to the composer, and
+ *  another agent's message is not the person's to take back into their composer. */
 export function nativeChatRowOffersRewind(
   message: NativeChatMessage,
   slot: { depth: number; turnKey: string | undefined },
@@ -25,6 +26,7 @@ export function nativeChatRowOffersRewind(
     message.queued !== true &&
     message.command === undefined &&
     message.sentAs === undefined &&
+    message.from === undefined &&
     message.blocks.every((block) => block.type !== 'image-ref' || Boolean(block.path))
   )
 }

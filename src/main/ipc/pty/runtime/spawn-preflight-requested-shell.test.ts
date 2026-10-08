@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserWindow } from 'electron'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { finishPtyShutdown } from '../provider/liveness'
@@ -6,6 +6,8 @@ import { prepareRuntimePtySpawn } from './spawn-preflight'
 import { buildRuntimePtySpawnOptions } from './spawn-options'
 import { createRuntimePtySpawnState, type RuntimePtySpawnArgs } from './spawn-state'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
+import { ClaudeProfileRouter } from '../../../claude-accounts/claude-profile-router'
+import { installClaudeProfileRouter } from '../../../claude-accounts/claude-profile-installed-router'
 
 const HOST_DEFAULT_SHELL = 'powershell.exe'
 const hostPlatform = process.platform
@@ -78,5 +80,40 @@ describe('runtime pty spawn preflight: requested shell on a local Windows host',
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
 
     await expect(resolveSpawnShell(undefined)).resolves.toBe(HOST_DEFAULT_SHELL)
+  })
+})
+
+describe('runtime pty spawn preflight: Claude account routing in a WSL pane', () => {
+  afterEach(() => {
+    installClaudeProfileRouter(undefined)
+    Object.defineProperty(process, 'platform', { configurable: true, value: hostPlatform })
+  })
+
+  it('gives a wsl.exe pane the guest-relative pointer without touching the guest', async () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    const runSetup = vi.fn()
+    installClaudeProfileRouter(
+      new ClaudeProfileRouter({
+        getSettings: () => getDefaultSettings('/tmp'),
+        dataRoot: '/data/orca',
+        env: {},
+        runSetup
+      })
+    )
+    const args: RuntimePtySpawnArgs = {
+      cols: 120,
+      rows: 40,
+      cwd: '\\\\wsl.localhost\\Ubuntu\\home\\u',
+      shellOverride: 'wsl.exe',
+      env: { KEEP: '1' }
+    }
+    const ctx = createRuntimePtySpawnState(makeDeps(), args)
+    await expect(prepareRuntimePtySpawn(ctx)).resolves.toBeNull()
+    expect(ctx.codexSelectionTarget).toEqual({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+    expect(args.env).toEqual({
+      KEEP: '1',
+      ORCA_CLAUDE_PROFILE_POINTER: '~/.local/share/orca/claude-profiles/selected-wsl-orca'
+    })
+    expect(runSetup).not.toHaveBeenCalled()
   })
 })

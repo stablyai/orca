@@ -20,7 +20,7 @@ import type {
   StructuredAgentSessionWrite,
   StructuredAgentSessionWriteOutcome
 } from './use-structured-agent-session-mutate'
-import { returnMessageToComposer } from './structured-agent-session-withdrawn-message-restore'
+import { returnMessageToComposer } from './structured-agent-session-message-hand-back'
 import { nativeChatRewindOffered } from './native-chat-rewind-eligibility'
 import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
 import { useStructuredAgentSessionHostRecoversRewindOnSend } from '@/runtime/structured-agent-session-host-capability'

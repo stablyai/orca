@@ -20,6 +20,7 @@ import {
   createTrackedJournalOpener,
   openTestJournalHostDatabase
 } from '../agent-session-journal/journal-host-database-test-support'
+import { StructuredAgentSessionAcquireAborts } from './structured-agent-session-acquire-aborts'
 import { attachStructuredAgentSession } from './structured-agent-session-attach-orchestration'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
@@ -189,7 +190,8 @@ function attachContext(
       mintEventSink: () => eventSink,
       adoptEventSink: () => undefined,
       probeOwner: async () => ({ outcome: 'pid-absent' }),
-      discardEventSink: () => undefined
+      discardEventSink: () => undefined,
+      acquireAborts: new StructuredAgentSessionAcquireAborts()
     },
     sessions,
     subscribers: { snapshot: () => undefined, publish: () => undefined },
@@ -201,9 +203,19 @@ function attachContext(
   } as unknown as StructuredAgentSessionAttachContext
 }
 
-const attachParams = {
-  envelope: { sessionId: SESSION, clientOperationId: 'op-1' }
-} as unknown as Parameters<typeof attachStructuredAgentSession>[2]
+const attachParams: Parameters<typeof attachStructuredAgentSession>[2] = {
+  envelope: {
+    sessionId: SESSION,
+    clientOperationId: 'op-1',
+    expectedRuntimeFence: 1,
+    payloadFingerprint: 'fixture-payload'
+  },
+  location: ownerRecord().location,
+  provider: 'codex',
+  agent: 'codex',
+  accountHome: ownerRecord().accountHome,
+  runtimeKind: 'native'
+}
 
 describe('a session that leaves the host without an explicit close', () => {
   it('forgets the retained exact subject after the record and live session are deleted first', async () => {

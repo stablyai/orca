@@ -1,6 +1,10 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { isStructuredTab } from '@/components/native-chat/structured-agent-session-tabs'
 import type { Tab } from '../../../shared/tab-types'
+import {
+  selectFloatingWorkspacePanelVisible,
+  type FloatingWorkspacePanelVisibilityState
+} from '@/store/floating-workspace-panel-selector'
 
 export type AutoAckTabTarget = {
   tabId: string
@@ -9,11 +13,9 @@ export type AutoAckTabTarget = {
   surfaceKind: 'terminal' | 'structured'
 }
 
-type AutoAckTargetState = {
+export type AutoAckTargetState = FloatingWorkspacePanelVisibilityState & {
   activeView: string
-  activeTabId: string | null
   activeWorktreeId: string | null
-  activeTabIdByWorktree: Record<string, string | null>
   getActiveTab: (worktreeId: string) => Tab | null
 }
 
@@ -26,16 +28,15 @@ type AutoAckTargetState = {
  */
 function resolveWorkspaceAutoAckTarget(
   state: AutoAckTargetState,
-  worktreeId: string,
-  terminalTabId: string | null
+  worktreeId: string
 ): AutoAckTabTarget | null {
   const activeTab = state.getActiveTab(worktreeId)
   if (activeTab && isStructuredTab(activeTab)) {
     return { tabId: activeTab.id, worktreeId, surfaceKind: 'structured' }
   }
-  return terminalTabId === null
-    ? null
-    : { tabId: terminalTabId, worktreeId, surfaceKind: 'terminal' }
+  return activeTab?.contentType === 'terminal'
+    ? { tabId: activeTab.entityId, worktreeId, surfaceKind: 'terminal' }
+    : null
 }
 
 /**
@@ -46,17 +47,10 @@ function resolveWorkspaceAutoAckTarget(
  * overlay that sits above every view and stays mounted while closed, and its active tab never
  * becomes the global `activeTabId` — so neither the view nor the tab id can stand in for "on screen".
  */
-export function resolveAutoAckTabTargets(
-  state: AutoAckTargetState,
-  options: { floatingPanelVisible: boolean }
-): AutoAckTabTarget[] {
+export function resolveAutoAckTabTargets(state: AutoAckTargetState): AutoAckTabTarget[] {
   const targets: AutoAckTabTarget[] = []
-  if (options.floatingPanelVisible) {
-    const floating = resolveWorkspaceAutoAckTarget(
-      state,
-      FLOATING_TERMINAL_WORKTREE_ID,
-      state.activeTabIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? null
-    )
+  if (selectFloatingWorkspacePanelVisible(state)) {
+    const floating = resolveWorkspaceAutoAckTarget(state, FLOATING_TERMINAL_WORKTREE_ID)
     // The floating pane is on top when two worktrees claim the same tab ID.
     if (floating) {
       targets.push(floating)
@@ -66,12 +60,29 @@ export function resolveAutoAckTabTargets(
     return targets
   }
   const active = state.activeWorktreeId
-    ? resolveWorkspaceAutoAckTarget(state, state.activeWorktreeId, state.activeTabId)
-    : state.activeTabId === null
-      ? null
-      : { tabId: state.activeTabId, worktreeId: null, surfaceKind: 'terminal' as const }
+    ? resolveWorkspaceAutoAckTarget(state, state.activeWorktreeId)
+    : null
   if (active && !targets.some((target) => target.tabId === active.tabId)) {
     targets.push(active)
   }
   return targets
+}
+
+/**
+ * Whether a tab of either kind is on a visible surface — the one "did the user see it" rule.
+ * Attention dispatch and auto-ack both read it, so a surface the user is watching neither earns
+ * an unread marker nor has one to clear.
+ */
+export function isTabOnVisibleSurface(
+  state: AutoAckTargetState,
+  worktreeId: string,
+  tabId: string,
+  surfaceKind: AutoAckTabTarget['surfaceKind']
+): boolean {
+  return resolveAutoAckTabTargets(state).some(
+    (target) =>
+      target.surfaceKind === surfaceKind &&
+      target.tabId === tabId &&
+      target.worktreeId === worktreeId
+  )
 }

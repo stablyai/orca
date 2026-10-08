@@ -10,8 +10,8 @@ import type {
   AgentModelCatalogSuccess
 } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 
-// Why 15s: the whole probe session is SIGKILLed at the deadline, and a cold
-// `model/list` may pay one network /models fetch behind provider auth.
+// Why 15s: the whole probe session is stopped at the deadline (on POSIX its supervisor then gets
+// up to PROVIDER_SUPERVISOR_MAX_STOP_MS), and a cold `model/list` may pay one /models fetch.
 const CODEX_MODEL_CATALOG_PROBE_TIMEOUT_MS = 15_000
 
 export type CodexModelCatalogProbeDeps = Pick<

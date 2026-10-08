@@ -12,7 +12,8 @@ import { ClaudeStructuredSessionAdapter } from '../../claude/claude-structured-s
 import {
   fakeClaude,
   PROVIDER_SESSION_ID,
-  type FakeConnection
+  type FakeConnection,
+  claudeStartupSettled
 } from '../../claude/claude-structured-session-test-support'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
@@ -92,7 +93,7 @@ beforeEach(async () => {
     })
   )
   expect(attached).toMatchObject({ ok: true })
-  await adapter.awaitStarted(SESSION)
+  await claudeStartupSettled(adapter, SESSION)
 })
 
 afterEach(async () => {

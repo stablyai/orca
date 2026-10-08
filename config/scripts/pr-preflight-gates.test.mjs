@@ -32,6 +32,7 @@ it('shares one setup and runs the unchanged compiler after static checks finish'
     'node config/scripts/ci-unit-plan.mjs'
   ])
   expect(plan.env.ORCA_UNIT_SELECTION_MODE).toContain('vars.ORCA_UNIT_SELECTION_MODE')
+  expect(plan.env.ORCA_UNIT_FULL_SHARD_COUNT).toBe("${{ vars.ORCA_UNIT_FULL_SHARD_COUNT || '10' }}")
   expect(steps.indexOf(plan)).toBeLessThan(steps.indexOf(compiler))
   expect(steps.indexOf(compiler)).toBeGreaterThan(
     steps.findIndex((step) => step.wait?.includes('localization-extraction'))
@@ -183,6 +184,7 @@ it('pins every foreground and background step to its selected phase', () => {
     (step) => !step.background && /outputs\.(static_analysis|typecheck)/.test(step.if ?? '')
   )
   expect(foreground.map((step) => [step.name ?? step.run ?? step.uses, step.if])).toEqual([
+    ['Set up Bun for localization checks', staticPhase],
     ['Reject low-evidence patterns', staticPhase],
     ['Enforce type-aware code-quality baseline', staticPhase],
     [

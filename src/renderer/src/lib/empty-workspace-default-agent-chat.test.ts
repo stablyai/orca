@@ -11,7 +11,8 @@ import {
 const mocks = vi.hoisted(() => ({
   launchAgentInNewTab: vi.fn(),
   planAgentSessionLaunch: vi.fn(),
-  detectionTargetKey: vi.fn<() => string | undefined>()
+  detectionTargetKey: vi.fn<() => string | undefined>(),
+  seedShell: vi.fn(() => true)
 }))
 
 vi.mock('@/lib/launch-agent-in-new-tab', () => ({
@@ -45,7 +46,7 @@ beforeEach(() => {
   mocks.detectionTargetKey.mockReturnValue('local')
   mocks.planAgentSessionLaunch.mockReturnValue({ route: 'structured-native-chat' })
   mocks.launchAgentInNewTab.mockReturnValue({
-    surface: { kind: 'local-agent-session', tabId: 'chat-tab', sessionId: 's-1' }
+    surface: { kind: 'host-published' }
   })
 })
 
@@ -59,23 +60,38 @@ describe('openDefaultAgentChatInEmptyWorkspace', () => {
   it('launches the default agent as a chat', () => {
     seedSettings({})
 
-    expect(openDefaultAgentChatInEmptyWorkspace('wt-1')).toEqual({ primaryTabId: 'chat-tab' })
+    // The chat's tab opens once its host admits it, so none is primary yet.
+    expect(openDefaultAgentChatInEmptyWorkspace('wt-1', mocks.seedShell)).toEqual({
+      primaryTabId: null
+    })
     expect(mocks.launchAgentInNewTab).toHaveBeenCalledWith(
       expect.objectContaining({ agent: 'codex', worktreeId: 'wt-1', pendingActivationSpawn: true })
     )
   })
 
+  // The function's promise: no agent nobody asked for. A "no" seeds the shell it would have.
+  it("seeds a plain shell, not the agent's terminal, when the host declines the chat", () => {
+    seedSettings({})
+
+    openDefaultAgentChatInEmptyWorkspace('wt-1', mocks.seedShell)
+    const onDeclined = mocks.launchAgentInNewTab.mock.calls[0]?.[0]?.onStructuredHostDeclined
+
+    expect(mocks.seedShell).not.toHaveBeenCalled()
+    expect(onDeclined()).toEqual({ opened: true })
+    expect(mocks.seedShell).toHaveBeenCalledOnce()
+  })
+
   it('does nothing unless new agent tabs open as chat', () => {
     seedSettings({ openAgentTabsInChatByDefault: false })
 
-    expect(openDefaultAgentChatInEmptyWorkspace('wt-1')).toBeNull()
+    expect(openDefaultAgentChatInEmptyWorkspace('wt-1', mocks.seedShell)).toBeNull()
     expect(mocks.launchAgentInNewTab).not.toHaveBeenCalled()
   })
 
   it('respects a Blank Terminal default agent', () => {
     seedSettings({ defaultTuiAgent: 'blank' })
 
-    expect(openDefaultAgentChatInEmptyWorkspace('wt-1')).toBeNull()
+    expect(openDefaultAgentChatInEmptyWorkspace('wt-1', mocks.seedShell)).toBeNull()
     expect(mocks.launchAgentInNewTab).not.toHaveBeenCalled()
   })
 
@@ -83,7 +99,7 @@ describe('openDefaultAgentChatInEmptyWorkspace', () => {
     seedSettings({})
     mocks.planAgentSessionLaunch.mockReturnValue({ route: 'terminal-tui' })
 
-    expect(openDefaultAgentChatInEmptyWorkspace('wt-1')).toBeNull()
+    expect(openDefaultAgentChatInEmptyWorkspace('wt-1', mocks.seedShell)).toBeNull()
     expect(mocks.launchAgentInNewTab).not.toHaveBeenCalled()
   })
 
@@ -92,7 +108,7 @@ describe('openDefaultAgentChatInEmptyWorkspace', () => {
     mocks.detectionTargetKey.mockReturnValue('ssh:conn-1')
     useAppStore.setState({ remoteDetectedAgentIds: { 'conn-1': ['claude'] } })
 
-    openDefaultAgentChatInEmptyWorkspace('wt-1')
+    openDefaultAgentChatInEmptyWorkspace('wt-1', mocks.seedShell)
 
     expect(mocks.launchAgentInNewTab).toHaveBeenCalledWith(
       expect.objectContaining({ agent: 'claude' })
@@ -104,7 +120,7 @@ describe('openDefaultAgentChatInEmptyWorkspace', () => {
     mocks.detectionTargetKey.mockReturnValue(undefined)
 
     expect(emptyWorkspaceDefaultChatAwaitsDetection('wt-1')).toBe(false)
-    expect(openDefaultAgentChatInEmptyWorkspace('wt-1')).toBeNull()
+    expect(openDefaultAgentChatInEmptyWorkspace('wt-1', mocks.seedShell)).toBeNull()
     expect(mocks.launchAgentInNewTab).not.toHaveBeenCalled()
   })
 })

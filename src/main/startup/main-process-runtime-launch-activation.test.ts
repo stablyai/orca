@@ -103,10 +103,15 @@ const { initializeMainProcessReady } = await import('./main-process-ready')
 const { mainProcessState: state } = await import('./main-process-state')
 const { createServeDesktopActivationGate } = await import('./serve-desktop-activation')
 const { focusExistingMainWindow } = await import('../window/focus-existing-window')
+const { AGENT_LAUNCH_RECORD_WARMUP_DELAY_MS } = await import('./agent-launch-record-warmup')
 
 type FakeWindow = {
   id: number
-  webContents: { id: number }
+  webContents: {
+    id: number
+    isLoading: () => boolean
+    once: (event: string, listener: () => void) => void
+  }
   isDestroyed: () => boolean
   isMinimized: () => boolean
   restore: () => void
@@ -119,13 +124,23 @@ describe('desktop startup activation', () => {
   let windows: FakeWindow[]
   let ipcHandles: Set<string>
   let trustedRendererId: number | null
+  let firstLoadListeners: (() => void)[]
+  const startupSettled = vi.fn()
 
   // Mirrors openMainWindow's non-idempotent side effects that broke in the field.
   function openMainWindow(): FakeWindow {
     const id = windows.length + 1
     const window: FakeWindow = {
       id,
-      webContents: { id },
+      webContents: {
+        id,
+        isLoading: () => true,
+        once: (event, listener) => {
+          if (event === 'did-finish-load') {
+            firstLoadListeners.push(listener)
+          }
+        }
+      },
       isDestroyed: () => false,
       isMinimized: () => false,
       restore: vi.fn(),
@@ -147,12 +162,16 @@ describe('desktop startup activation', () => {
     showWindowWithoutStealingFocus.mockClear()
     ipcHandles = new Set()
     trustedRendererId = null
+    firstLoadListeners = []
+    startupSettled.mockClear()
     launchHooks.duringInstallDirRepair = () => {}
     launchHooks.failBeforeWindow = false
     state.mainWindow = null
     state.isServeMode = false
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the launch only null-checks the runtime before the mocked RPC server takes it.
-    state.runtime = {} as NonNullable<typeof state.runtime>
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the launch only null-checks the runtime and marks its launch-record warm-up before the mocked RPC server takes it.
+    state.runtime = {
+      noteAgentLaunchStartupSettled: startupSettled
+    } as unknown as NonNullable<typeof state.runtime>
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the launch only calls whenReady().
     state.windowsShellPathHydration = {
       whenReady: () => Promise.resolve()
@@ -200,6 +219,27 @@ describe('desktop startup activation', () => {
       expect(state.desktopActivationGate?.getState()).toBe('ready')
     }
   )
+
+  it('marks startup settled for the launch record only after the window has loaded and settled', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout'] })
+    try {
+      await initializeMainProcessReady({
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the launch only calls once() on the returned window.
+        openMainWindow: () => openMainWindow() as unknown as NonNullable<typeof state.mainWindow>,
+        handleMacAppActivation: vi.fn()
+      })
+      expect(startupSettled).not.toHaveBeenCalled()
+
+      for (const listener of firstLoadListeners) {
+        listener()
+      }
+      expect(startupSettled).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(AGENT_LAUNCH_RECORD_WARMUP_DELAY_MS)
+      expect(startupSettled).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 
   it('does not replay an activation when launch fails before the startup window', async () => {
     launchHooks.duringInstallDirRepair = () => state.desktopActivationGate?.requestActivation()

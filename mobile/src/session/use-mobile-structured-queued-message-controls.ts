@@ -1,8 +1,10 @@
 // The queued-draft surface the structured session exposes: cards derived from
-// the published list and the Send-now / Delete / Edit actions. All of it is
-// gated on the host capability — an incapable host gets no cards and no new
-// fields. Nothing here is durable: the host owns the queue, and the published
-// list is the only truth a card action ever needs.
+// the published list and the Send-now / Delete / Edit actions. Shown whatever
+// the queue capability says: a host that does not queue sends still publishes a
+// message it kept as a card across a restart or a close, and only queueing a new
+// send is gated. A host older than the queue publishes no list, so shows no cards.
+// Nothing here is durable: the host owns the queue, and the published list is
+// the only truth a card action ever needs.
 
 import { useCallback, useMemo } from 'react'
 import type { AgentJournalSubmission } from '../../../src/shared/agent-session-journal-types'
@@ -26,7 +28,7 @@ import type { MobileStructuredAgentMutate } from './use-mobile-structured-agent-
 export type MobileQueuedMessageEdit = (messageId: string, onCopied?: () => void) => Promise<boolean>
 
 export type MobileStructuredQueuedMessageControls = {
-  /** Host-held drafts as cards above the composer; empty off capable hosts. */
+  /** Host-held drafts as cards above the composer. */
   cards: MobileQueuedMessageCard[]
   /** Send-now: dispatch this draft into or ahead of the running turn. */
   send: (messageId: string) => Promise<boolean>
@@ -43,7 +45,6 @@ export type MobileStructuredQueuedMessageControls = {
 }
 
 export function useMobileStructuredQueuedMessageControls(args: {
-  queueCapable: boolean
   sessionKey: string
   queuedMessages: MobileQueuedMessageFeed
   queuePause: MobileQueuePause
@@ -63,7 +64,6 @@ export function useMobileStructuredQueuedMessageControls(args: {
     onActionResolved,
     onSendError,
     pendingPrompt,
-    queueCapable,
     queuedMessages,
     queuePause,
     sessionKey,
@@ -71,13 +71,11 @@ export function useMobileStructuredQueuedMessageControls(args: {
   } = args
   const cards = useMemo(
     () =>
-      queueCapable
-        ? mobileQueuedMessageCards(queuedMessages, submissions, {
-            pendingPrompt,
-            queuePaused: queuePause !== null
-          })
-        : [],
-    [pendingPrompt, queueCapable, queuePause, queuedMessages, submissions]
+      mobileQueuedMessageCards(queuedMessages, submissions, {
+        pendingPrompt,
+        queuePaused: queuePause !== null
+      }),
+    [pendingPrompt, queuePause, queuedMessages, submissions]
   )
   const resolved = useCallback(
     (accepted: boolean): boolean => {
@@ -160,6 +158,6 @@ export function useMobileStructuredQueuedMessageControls(args: {
     [mutate, resolved]
   )
   // The header shows only while Resume would send something, as on desktop.
-  const pause = queueCapable && mobileQueueHasResumableCard(cards) ? queuePause : null
+  const pause = mobileQueueHasResumableCard(cards) ? queuePause : null
   return { cards, send, delete: deleteDraft, edit, pause, resume, sessionKey }
 }

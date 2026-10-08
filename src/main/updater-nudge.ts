@@ -1,5 +1,6 @@
 import { net } from 'electron'
 import { compareVersions, isValidVersion } from './updater-fallback'
+import { parseRolloutConfig, recordRolloutConfig } from './updater/rollout-flags'
 
 export type NudgeConfig = {
   id: string
@@ -17,6 +18,8 @@ export async function fetchNudge(): Promise<NudgeConfig | null> {
     }
 
     const json: unknown = await res.json()
+    // Why here: the rollout block rides on this same request; older builds ignore the key.
+    recordRolloutConfig(parseRolloutConfig(json))
     if (!json || typeof json !== 'object' || Array.isArray(json)) {
       return null
     }

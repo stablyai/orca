@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { runProcessSync } from './script-child-process.mjs'
-import { getZipExtractorCommand } from './zip-extractor-command.mjs'
+import { getTarProgram, getZipExtractorCommand } from './zip-extractor-command.mjs'
 
 const directories = []
 afterEach(() => {
@@ -27,6 +27,15 @@ function extract(bytes) {
 }
 
 describe('native archive extraction', () => {
+  it('pins Windows tar to the system tool even when Git Bash or an unzip override is present', () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    vi.stubEnv('SystemRoot', 'C:\\Windows')
+    vi.stubEnv('ORCA_UNZIP_BIN', 'custom-unzip')
+    expect(getTarProgram()).toBe(join('C:\\Windows', 'System32', 'tar.exe'))
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
+    expect(getTarProgram()).toBe('tar')
+  })
+
   it('uses the system archive reader on Windows unless an override is configured', () => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     vi.stubEnv('SystemRoot', 'C:\\Windows')
