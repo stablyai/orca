@@ -316,28 +316,38 @@ describe('getRelayShellLaunchConfig', () => {
 
   // Why: presence alone is not enough. Agents must resolve `orca` to the relay
   // shim even when a host-installed Orca CLI sits earlier in PATH (#8608).
-  itWithBash('re-fronts the relay CLI bin dir when user startup files bury it in PATH', () => {
-    const relayBinDir = join(homeDir, '.orca-relay', 'bin')
-    mkdirSync(relayBinDir, { recursive: true })
-    writeFileSync(
-      join(homeDir, '.bash_profile'),
-      `export PATH="/usr/local/bin:$PATH:${relayBinDir}"\n`
-    )
-    const config = getRelayShellLaunchConfig('/bin/bash', {
-      HOME: homeDir,
-      ORCA_REMOTE_CLI_BIN_DIR: relayBinDir
-    })
+  itWithBash.each([false, true])(
+    're-fronts the relay CLI after startup (host CLI override: %s)',
+    (overrideHostCli) => {
+      const relayBinDir = join(homeDir, '.orca-relay', 'bin')
+      mkdirSync(relayBinDir, { recursive: true })
+      writeFileSync(
+        join(homeDir, '.bash_profile'),
+        [
+          `export PATH="/usr/local/bin:$PATH:${relayBinDir}"`,
+          overrideHostCli ? `export ORCA_CLI_BIN_DIR="${join(homeDir, 'host-cli')}"` : ''
+        ].join('\n')
+      )
+      const config = getRelayShellLaunchConfig('/bin/bash', {
+        HOME: homeDir,
+        ORCA_REMOTE_CLI_BIN_DIR: relayBinDir
+      })
 
-    const output = runInteractiveBashRcfile(
-      config.args[1] as string,
-      homeDir,
-      'case "$PATH" in "$ORCA_REMOTE_CLI_BIN_DIR":*) echo PATH_FRONT_OK ;; *) echo PATH_FRONT_BAD ;; esac\nexit 0\n',
-      { ...config.env, ORCA_REMOTE_CLI_BIN_DIR: relayBinDir }
-    )
+      const rcfile = config.args[1]
+      if (!rcfile) {
+        throw new Error('Expected Bash rcfile')
+      }
+      const output = runInteractiveBashRcfile(
+        rcfile,
+        homeDir,
+        'case "$PATH" in "$ORCA_REMOTE_CLI_BIN_DIR":*) echo PATH_FRONT_OK ;; *) echo PATH_FRONT_BAD ;; esac\nexit 0\n',
+        { ...config.env, ORCA_REMOTE_CLI_BIN_DIR: relayBinDir }
+      )
 
-    expect(output).toContain('PATH_FRONT_OK')
-    expect(output).not.toContain('PATH_FRONT_BAD')
-  })
+      expect(output).toContain('PATH_FRONT_OK')
+      expect(output).not.toContain('PATH_FRONT_BAD')
+    }
+  )
 
   it.skipIf(process.platform === 'win32')(
     'promotes the relay CLI bin dir to the PATH front in the zsh wrapper',
