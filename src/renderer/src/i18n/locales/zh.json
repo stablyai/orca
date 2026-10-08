@@ -12,7 +12,7 @@
   },
   "settings": {
     "chat": {
-      "description": "选择聊天的外观和命名方式。",
+      "description": "选择新智能体的打开方式，以及聊天的外观和命名方式。",
       "names": {
         "title": "聊天名称",
         "description": "使用智能体根据首条消息为新聊天生成名称。未生成名称时，聊天仍显示为 Claude Chat 或 Codex Chat。",
@@ -7145,6 +7145,39 @@
           "connectionTestRunning": "测试...",
           "connectionTestAction": "测试连接"
         },
+        "ChatPane": {
+          "title": "Chat UI",
+          "description": "在聊天中打开受支持的新智能体。",
+          "copy": "受支持的新智能体会在聊天中打开。不支持的启动方式使用终端。关闭此选项后，新智能体将在终端中打开，已有聊天仍可使用。",
+          "toggleLabel": "切换 Chat UI",
+          "resumeTitle": "重启后自动恢复工作聊天",
+          "resumeCopy": "当 Orca 退出或安装更新时，重新打开 Orca 后，正在工作的聊天会自动恢复。",
+          "resumeToggleLabel": "重启后切换自动恢复",
+          "shellEnvNamesLabel": "从 shell 传递的变量",
+          "shellEnvNamePlaceholder": "变量名",
+          "shellEnvNameAdd": "添加",
+          "shellEnvNameRemove": "删除 {{value0}}",
+          "shellEnvNamesEmpty": "尚未添加任何变量。",
+          "shellEnvNamesAlwaysPassed": "PATH、区域设置和 SSH_AUTH_SOCK 始终会传递。在下次聊天开始或恢复时生效。",
+          "shellEnvTitle": "使用 shell 环境",
+          "shellEnvCopy": "聊天启动时会带上登录 shell 导出的所有变量，与终端一致。关闭后可选择传递哪些变量。",
+          "shellEnvToggleLabel": "切换使用 shell 环境"
+        },
+        "chat": {
+          "search": {
+            "native": "原生",
+            "chat": "聊天",
+            "claude": "claude",
+            "codex": "codex",
+            "grok": "grok",
+            "omp": "omp",
+            "opencode": "opencode",
+            "terminal": "终端",
+            "agent": "代理",
+            "queue": "队列",
+            "variables": "变量"
+          }
+        },
         "ExperimentalPane": {
           "9762364929": "在可能时在 macOS 上使用 APFS clone-copy；否则，将配置的文件夹或文件符号链接到创建的工作树中。",
           "24416f42cd": "工作树上的共享路径",
@@ -7172,22 +7205,6 @@
             "description": "预览更新后的 worktree 卡片布局、元数据位置、卡片显示菜单选项和状态呈现。",
             "title": "新卡片样式",
             "toggleLabel": "切换新卡片样式"
-          },
-          "nativeChat": {
-            "title": "Chat UI",
-            "toggleLabel": "切换 Chat UI",
-            "shellEnvNamesLabel": "从 shell 传递的变量",
-            "shellEnvNamePlaceholder": "变量名",
-            "shellEnvNameAdd": "添加",
-            "shellEnvNameRemove": "删除 {{value0}}",
-            "shellEnvNamesEmpty": "尚未添加任何变量。",
-            "shellEnvNamesAlwaysPassed": "PATH、区域设置和 SSH_AUTH_SOCK 始终会传递。在下次聊天开始或恢复时生效。",
-            "shellEnvTitle": "使用 shell 环境",
-            "shellEnvCopy": "Codex 和 Claude 聊天启动时会带上登录 shell 导出的所有变量，与终端一致。关闭后可选择传递哪些变量。",
-            "shellEnvToggleLabel": "切换使用 shell 环境",
-            "resumeTitle": "重启后自动恢复工作聊天",
-            "resumeCopy": "当 Orca 退出或安装更新时，重新打开 Orca 后，正在工作的聊天会自动恢复。",
-            "resumeToggleLabel": "重启后切换自动恢复"
           },
           "agentDashboard": {
             "title": "智能体仪表盘",
@@ -9630,19 +9647,6 @@
               "title": "新卡片样式",
               "worktree": "工作树",
               "worktrees": "工作树"
-            },
-            "nativeChat": {
-              "title": "Chat UI",
-              "grok": "grok",
-              "native": "原生",
-              "chat": "聊天",
-              "claude": "claude",
-              "codex": "codex",
-              "openclaude": "开放克劳德",
-              "omp": "奥普",
-              "terminal": "终端",
-              "agent": "智能体",
-              "queue": "队列"
             },
             "agentDashboard": {
               "title": "智能体仪表盘",
@@ -12187,9 +12191,6 @@
           "cancel": "保持清洁",
           "stopping": "停止…",
           "confirm": "停止清理"
-        },
-        "NativeChatSupportedAgents": {
-          "label": "支持智能体："
         },
         "contrast": {
           "title": "色彩对比",
@@ -17510,7 +17511,7 @@
         "untitled": "无标题聊天",
         "listLabel": "将恢复的聊天",
         "dontAskAgain": "不再询问（自动恢复）",
-        "dontAskAgainHint": "您可以在“设置”→“实验”→“聊天 UI”中关闭此功能。",
+        "dontAskAgainHint": "您可以在“设置”→“聊天”中关闭此功能。",
         "continuedOne": "已恢复 1 个聊天",
         "continuedMany": "已恢复 {{value0}} 个聊天",
         "selectAgent": "在 {{value2}} 中恢复 {{value0}} 聊天“{{value1}}”",

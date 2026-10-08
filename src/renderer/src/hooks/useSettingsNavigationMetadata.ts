@@ -31,6 +31,7 @@ import type { SettingsNavigationBuildOptions } from './settings-navigation-build
 import { buildInterfaceSettingsSections } from './settings-navigation-interface-sections'
 import { buildRemoteSettingsSections } from './settings-navigation-remote-sections'
 import { buildWorkflowSettingsSections } from './settings-navigation-workflow-sections'
+import { useChatUiRowConditions } from './use-chat-ui-row-conditions'
 import { useWindowsTerminalCapabilityOwnerKey } from './useWindowsTerminalCapabilityOwnerKey'
 
 export { isWebClientLocation } from '@/lib/web-client-location'
@@ -41,7 +42,8 @@ export function buildSettingsNavigationMetadata({
   isLocalWindowsHost = isWindows,
   isWindowsTerminalHost = isWindows,
   isWebClient,
-  nativeChatEnabled = false,
+  structuredChatsInUse = false,
+  hostQueuesChatMessages = false,
   managedBrowserCreationEnabled = !isWebClient,
   mobileEmulatorCreationEnabled = !isWebClient,
   isDev = import.meta.env.DEV,
@@ -54,7 +56,8 @@ export function buildSettingsNavigationMetadata({
   isLocalWindowsHost?: boolean
   isWindowsTerminalHost?: boolean
   isWebClient: boolean
-  nativeChatEnabled?: boolean
+  structuredChatsInUse?: boolean
+  hostQueuesChatMessages?: boolean
   managedBrowserCreationEnabled?: boolean
   mobileEmulatorCreationEnabled?: boolean
   isDev?: boolean
@@ -82,7 +85,8 @@ export function buildSettingsNavigationMetadata({
     isLocalWindowsHost,
     isWindowsTerminalHost,
     isWebClient,
-    nativeChatEnabled,
+    structuredChatsInUse,
+    hostQueuesChatMessages,
     managedBrowserCreationEnabled,
     mobileEmulatorCreationEnabled,
     isDev,
@@ -122,7 +126,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
       ] as const
     })
   )
-  const nativeChatEnabled = settings?.experimentalNativeChat === true
+  const { structuredChatsInUse, hostQueuesChatMessages } = useChatUiRowConditions()
   const isMac = isMacUserAgent()
   const isWindows = isWindowsUserAgent()
   const isWebClient = isWebClientLocation()
@@ -165,7 +169,8 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
         isLocalWindowsHost,
         isWindowsTerminalHost,
         isWebClient,
-        nativeChatEnabled,
+        structuredChatsInUse,
+        hostQueuesChatMessages,
         managedBrowserCreationEnabled,
         mobileEmulatorCreationEnabled,
         isDev: import.meta.env.DEV,
@@ -183,7 +188,8 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
       isLocalWindowsHost,
       isWindowsTerminalHost,
       isWebClient,
-      nativeChatEnabled,
+      structuredChatsInUse,
+      hostQueuesChatMessages,
       managedBrowserCreationEnabled,
       mobileEmulatorCreationEnabled,
       isLinearConnected,

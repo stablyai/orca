@@ -1,19 +1,16 @@
 ---
 title: Chat UI (native chat)
-description: Optional chat surface over supported agent terminals — skills, model pickers, and transcript view.
+description: Optional chat surface for supported agent sessions — skills, model pickers, and transcript view.
 ---
 
-import { Callout } from '@/components/docs/prose'
-
-Chat UI is an experimental view layered on supported agent terminal sessions. The terminal remains the source of truth; Chat UI is a structured transcript + composer for the same PTY. Transcript decoding covers **Claude**, **Codex**, **Grok**, and **OMP** — OMP sessions open in Chat UI like the others instead of staying raw-terminal-only.
+Chat UI is a chat surface for supported agent sessions. New supported agents run as chats without a terminal. Unsupported agents and execution hosts continue in the terminal. Chats that already exist stay available when you turn Chat UI off.
 
 ## Enable
 
-1. Open **Settings → Experimental → Chat UI**.
+1. Open **Settings → Chat** (under **Interface**).
 1. Turn **Chat UI** on.
-1. Optionally set **Default view** to **Chat UI** so new supported agent tabs open in chat; keep **Terminal** to open the TUI first.
 
-Toggle Chat UI ↔ terminal from the agent pane once enabled.
+With Chat UI on, new supported agents open as chats; turn it off to open new agents in the terminal. Chat appearance and naming settings stay on this page either way. Chat UI is a desktop setting: paired web clients open agents in the host's terminal and do not show it.
 
 ## Composer
 
@@ -28,8 +25,3 @@ When Claude shows an **AskUserQuestion** (or similar structured permission/quest
 ## Availability
 
 Chat UI ships on desktop for supported local and remote (paired server) agent sessions. The [mobile companion](/docs/mobile) reuses chat-style transcript patterns for the same paired sessions.
-
-<Callout title="Experimental">
-  Transcript fidelity, streaming, and terminal parity are still under active tuning. Prefer the raw
-  TUI when you need every OSC/status detail.
-</Callout>

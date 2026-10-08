@@ -365,7 +365,7 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
               <span className="block text-xs text-muted-foreground">
                 {translate(
                   'auto.components.NativeChatResumeOnRestartModal.dontAskAgainHint',
-                  'You can turn this off in Settings → Experimental → Chat UI.'
+                  'You can turn this off in Settings → Chat.'
                 )}
               </span>
             </span>

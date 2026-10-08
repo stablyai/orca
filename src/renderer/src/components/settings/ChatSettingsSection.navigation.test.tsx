@@ -7,6 +7,7 @@ import { buildSettingsNavigationMetadata } from '@/hooks/useSettingsNavigationMe
 import { ChatSettingsSection } from './ChatSettingsSection'
 import { ActiveSettingsSectionProvider } from './SettingsSection'
 import { getChatAppearanceSearchEntries } from './chat-appearance-search'
+import { getChatUiSearchEntries } from './chat-search'
 import { getChatNamingSearchEntry } from './chat-naming-search'
 import { getChatInlineVisualsSearchEntry } from './chat-inline-visuals-search'
 import { useSettingsRepoScrollEffects } from './use-settings-repo-scroll-effects'
@@ -39,7 +40,7 @@ function NavigationHarness({
     isMac: false,
     isWindows: false,
     isWebClient: false,
-    nativeChatEnabled: enabled,
+    structuredChatsInUse: enabled,
     repos: []
   })
   const pendingNavSectionRef = useRef<string | null>('chat')
@@ -98,6 +99,11 @@ function NavigationHarness({
         updateSettings={vi.fn()}
         writeSourceControlAiSettings={async () => {}}
         searchEntries={[
+          ...getChatUiSearchEntries({
+            isWebClient: false,
+            structuredChatsInUse: enabled,
+            hostQueuesChatMessages: false
+          }),
           ...getChatAppearanceSearchEntries(),
           getChatNamingSearchEntry(),
           getChatInlineVisualsSearchEntry()
@@ -156,21 +162,26 @@ describe('Chat settings deep links', () => {
     await waitFor(() => expect(scrollIntoView.mock.contexts).toContain(names))
   })
 
-  it('falls back through the existing navigation rule when a hidden Chat page is selected', async () => {
+  it('keeps Chat selected with Chat UI off', async () => {
     const { container } = render(<NavigationHarness enabled={false} initialSection="chat" />)
     await waitFor(() => {
       expect(screen.getByRole('status', { name: 'Selected settings page' }).textContent).toBe(
-        'agents'
+        'chat'
       )
     })
-    expect(container.querySelector('#chat')).toBeNull()
+    expect(container.querySelector('#chat')).toBeTruthy()
+    expect(
+      screen.getByRole('switch', { name: 'Toggle Chat UI' }).getAttribute('aria-checked')
+    ).toBe('false')
   })
 
-  it('keeps the current visible page for a deep link to hidden Chat', () => {
+  it('opens Chat from a deep link with Chat UI off', async () => {
     const { container } = render(<NavigationHarness enabled={false} initialSection="appearance" />)
-    expect(screen.getByRole('status', { name: 'Selected settings page' }).textContent).toBe(
-      'appearance'
+    await waitFor(() =>
+      expect(screen.getByRole('status', { name: 'Selected settings page' }).textContent).toBe(
+        'chat'
+      )
     )
-    expect(container.querySelector('#chat')).toBeNull()
+    expect(container.querySelector('#chat')).toBeTruthy()
   })
 })

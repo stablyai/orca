@@ -34,23 +34,24 @@ function ids(
 
 describe('settings navigation metadata', () => {
   it.each([false, undefined])(
-    'omits Chat navigation and search when the opt-in is %s',
+    'keeps Chat navigation and appearance search when Chat UI is %s',
     (enabled) => {
       const sections = buildSettingsNavigationMetadata({
         isMac: false,
         isWindows: false,
         isWebClient: false,
-        nativeChatEnabled: enabled,
+        structuredChatsInUse: enabled,
         repos: []
       })
-      expect(sections.some((section) => section.id === 'chat')).toBe(false)
+      const chat = sections.find((section) => section.id === 'chat')
+      expect(chat).toBeTruthy()
       expect(buildCmdJSettingsResults(sections).some((result) => result.sectionId === 'chat')).toBe(
-        false
+        true
       )
+      expect(chat?.searchEntries.map((entry) => entry.title)).toContain('Chat UI')
+      expect(chat?.searchEntries.map((entry) => entry.title)).not.toContain('Default view')
       for (const query of ['Code text size', 'Reset chat appearance']) {
-        expect(
-          sections.some((section) => matchesSettingsSearch(query, section.searchEntries))
-        ).toBe(false)
+        expect(matchesSettingsSearch(query, chat?.searchEntries ?? [])).toBe(true)
       }
     }
   )
@@ -60,7 +61,7 @@ describe('settings navigation metadata', () => {
       isMac: false,
       isWindows: false,
       isWebClient: false,
-      nativeChatEnabled: true,
+      structuredChatsInUse: true,
       repos: []
     })
     const appearanceIndex = sections.findIndex((section) => section.id === 'appearance')
@@ -103,6 +104,75 @@ describe('settings navigation metadata', () => {
     expect(orchestration?.searchEntries.map((entry) => entry.title)).toContain(
       'Nested worker depth'
     )
+  })
+
+  it('places one Chat section under Interface with Chat UI and appearance searchable', () => {
+    const sections = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: false,
+      structuredChatsInUse: true,
+      hostQueuesChatMessages: true,
+      repos: [repo]
+    })
+    const chat = sections.find((section) => section.id === 'chat')
+
+    expect(sections.filter((section) => section.id === 'chat')).toHaveLength(1)
+    expect(chat).toMatchObject({ title: 'Chat', group: 'interface' })
+    const titles = chat?.searchEntries.map((entry) => entry.title)
+    expect(titles).toContain('Chat UI')
+    expect(titles).toContain('Queue follow-ups')
+    expect(titles).toContain('Resume working chats automatically after a restart')
+    expect(titles).toContain('Use your shell environment')
+    expect(titles).toContain('Text size')
+    expect(titles).toContain('Chat names')
+    expect(titles).not.toContain('Default view')
+    const experimental = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: false,
+      repos: [repo]
+    }).find((section) => section.id === 'experimental')
+    expect(experimental?.searchEntries.map((entry) => entry.title)).not.toContain('Chat UI')
+  })
+
+  it('keeps Chat UI searchable while off without indexing hidden options', () => {
+    const chat = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: false,
+      repos: [repo]
+    }).find((section) => section.id === 'chat')
+    const titles = chat?.searchEntries.map((entry) => entry.title)
+    expect(titles).toContain('Chat UI')
+    expect(titles).toContain('Chat names')
+    expect(titles).not.toContain('Resume working chats automatically after a restart')
+  })
+
+  it('indexes host options while chats are in use on this machine', () => {
+    const chat = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: false,
+      structuredChatsInUse: true,
+      repos: [repo]
+    }).find((section) => section.id === 'chat')
+    expect(chat?.searchEntries.map((entry) => entry.title)).toContain(
+      'Resume working chats automatically after a restart'
+    )
+  })
+
+  it('leaves Queue follow-ups out of search until this machine queues follow-ups', () => {
+    const chat = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: false,
+      structuredChatsInUse: true,
+      repos: [repo]
+    }).find((section) => section.id === 'chat')
+    const titles = chat?.searchEntries.map((entry) => entry.title)
+    expect(titles).toContain('Use your shell environment')
+    expect(titles).not.toContain('Queue follow-ups')
   })
 
   it('adds the Linear capability section right after Orchestration only when connected', () => {
@@ -193,6 +263,8 @@ describe('settings navigation metadata', () => {
       isMac: false,
       isWindows: false,
       isWebClient: true,
+      structuredChatsInUse: true,
+      hostQueuesChatMessages: true,
       repos: [repo]
     })
     const webIds = webSections.map((section) => section.id)
@@ -221,6 +293,13 @@ describe('settings navigation metadata', () => {
     expect(orchestration?.searchEntries.map((entry) => entry.title)).not.toContain(
       'Nested worker depth'
     )
+    // The browser opens agents in the host's terminal, so Chat keeps only its appearance rows.
+    const chat = webSections.find((section) => section.id === 'chat')
+    expect(chat?.searchEntries.map((entry) => entry.title)).not.toContain('Chat UI')
+    expect(chat?.searchEntries.map((entry) => entry.title)).toContain('Text size')
+    expect(chat?.searchEntries.map((entry) => entry.title)).not.toContain('Default view')
+    expect(chat?.searchEntries.map((entry) => entry.title)).not.toContain('Queue follow-ups')
+    expect(chat?.searchEntries.map((entry) => entry.title)).not.toContain('Chat names')
   })
 
   it('lists the host-only Codex server setting in desktop Agents search only', () => {

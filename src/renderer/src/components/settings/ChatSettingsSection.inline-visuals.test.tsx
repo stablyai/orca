@@ -81,7 +81,7 @@ describe('Inline visuals on the Chat settings page', () => {
         isMac: false,
         isWindows: false,
         isWebClient: false,
-        nativeChatEnabled: true,
+        structuredChatsInUse: true,
         repos: []
       })
       const results = buildCmdJSettingsResults(sections)

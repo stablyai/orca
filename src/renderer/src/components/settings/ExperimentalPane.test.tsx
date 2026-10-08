@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
 
-import { resetLocalStructuredChatsForTests } from '@/runtime/local-structured-chats'
 import { act } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { createRoot, type Root } from 'react-dom/client'
@@ -18,57 +17,6 @@ vi.mock('../../store', () => ({
 vi.mock('./EphemeralVmsPane', () => ({
   EphemeralVmsPane: () => <div data-testid="ephemeral-vms-pane">Cloud VM pane</div>
 }))
-
-vi.mock('../ui/select', async () => {
-  const React = await import('react')
-
-  const SelectContext = React.createContext<{
-    onValueChange?: (value: string) => void
-  }>({})
-
-  return {
-    Select: ({
-      value,
-      onValueChange,
-      children
-    }: {
-      value: string
-      onValueChange: (value: string) => void
-      children: React.ReactNode
-    }) => {
-      const contextValue = React.useMemo(() => ({ onValueChange }), [onValueChange])
-      return (
-        <SelectContext.Provider value={contextValue}>
-          <div data-slot="native-chat-default-view-select" data-value={value}>
-            {children}
-          </div>
-        </SelectContext.Provider>
-      )
-    },
-    SelectTrigger: ({ children, ...props }: React.ComponentProps<'button'> & { size?: string }) => (
-      <button type="button" data-slot="select-trigger" {...props}>
-        {children}
-      </button>
-    ),
-    SelectValue: () => null,
-    SelectContent: ({ children }: { children: React.ReactNode }) => (
-      <div data-slot="select-content">{children}</div>
-    ),
-    SelectItem: ({ value, children }: { value: string; children: React.ReactNode }) => {
-      const { onValueChange } = React.useContext(SelectContext)
-      return (
-        <button
-          type="button"
-          data-slot="select-item"
-          data-value={value}
-          onClick={() => onValueChange?.(value)}
-        >
-          {children}
-        </button>
-      )
-    }
-  }
-})
 
 afterEach(() => {
   document.body.innerHTML = ''
@@ -223,50 +171,20 @@ describe('ExperimentalPane', () => {
     expect(markup).toContain('aria-checked="true"')
   })
 
-  it('offers one Chat UI switch and no default-view selector', async () => {
-    const updateSettings = vi.fn()
-    const { root, container } = await renderExperimentalPane({
-      updateSettings,
-      settings: getDefaultSettings('/tmp')
-    })
-    expect(container.textContent).toContain('Chat UI')
-    expect(container.textContent).not.toContain('Default view')
-    expect(container.textContent).not.toContain('Use updated structured native chat')
-    const switchControl = container.querySelector<HTMLButtonElement>(
-      '#experimental-native-chat button[aria-label="Toggle Chat UI"]'
+  it('does not render Chat UI in Experimental', () => {
+    const markup = renderToStaticMarkup(
+      <ExperimentalPane
+        settings={{
+          ...getDefaultSettings('/tmp'),
+          experimentalNativeChat: true
+        }}
+        updateSettings={vi.fn()}
+      />
     )
-    expect(switchControl).not.toBeNull()
-    await act(async () => {
-      switchControl?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-    expect(updateSettings).toHaveBeenCalledWith({ experimentalNativeChat: true })
-    root.unmount()
-  })
 
-  it('shows structured chat controls for chats this machine still holds while Chat UI is off', async () => {
-    Object.defineProperty(window, 'api', {
-      configurable: true,
-      value: {
-        app: {
-          holdsStructuredAgentSessions: async () => true,
-          onStructuredAgentSessionsHeldChanged: () => () => undefined
-        }
-      }
-    })
-    try {
-      const { root, container } = await renderExperimentalPane({
-        updateSettings: vi.fn(),
-        settings: getDefaultSettings('/tmp')
-      })
-      await act(async () => {
-        await Promise.resolve()
-      })
-      expect(container.textContent).toContain('Resume working chats automatically after a restart')
-      root.unmount()
-    } finally {
-      resetLocalStructuredChatsForTests()
-      Reflect.deleteProperty(window, 'api')
-    }
+    expect(markup).not.toContain('Chat UI')
+    expect(markup).not.toContain('Default view')
+    expect(getExperimentalPaneSearchEntries().map((entry) => entry.title)).not.toContain('Chat UI')
   })
 
   it('renders the agent sleep idle duration as configurable minutes', async () => {

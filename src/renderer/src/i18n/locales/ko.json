@@ -12,7 +12,7 @@
   },
   "settings": {
     "chat": {
-      "description": "채팅 모양과 이름 지정 방식을 선택하세요.",
+      "description": "새 에이전트가 열리는 방식과 채팅의 모양 및 이름 지정 방식을 선택하세요.",
       "names": {
         "title": "채팅 이름",
         "description": "에이전트가 첫 메시지를 바탕으로 새 채팅의 이름을 생성합니다. 이름이 생성되지 않으면 Claude Chat 또는 Codex Chat으로 유지됩니다.",
@@ -7145,6 +7145,39 @@
           "connectionTestRunning": "테스트 중...",
           "connectionTestAction": "연결 테스트"
         },
+        "ChatPane": {
+          "title": "Chat UI",
+          "description": "지원되는 새 에이전트를 채팅에서 엽니다.",
+          "copy": "지원되는 새 에이전트는 채팅에서 열립니다. 지원되지 않는 실행은 터미널을 사용합니다. 이 옵션을 끄면 새 에이전트가 터미널에서 열리고 기존 채팅은 계속 사용할 수 있습니다.",
+          "toggleLabel": "Chat UI 전환",
+          "resumeTitle": "다시 시작한 후 작업 중인 채팅을 자동으로 재개합니다.",
+          "resumeCopy": "Orca가 종료되거나 업데이트를 설치하면 Orca가 다시 열릴 때 작업 중이던 채팅이 자동으로 재개됩니다.",
+          "resumeToggleLabel": "다시 시작한 후 자동 재개 전환",
+          "shellEnvNamesLabel": "셸에서 전달할 변수",
+          "shellEnvNamePlaceholder": "변수 이름",
+          "shellEnvNameAdd": "추가",
+          "shellEnvNameRemove": "{{value0}} 제거",
+          "shellEnvNamesEmpty": "아직 추가된 변수가 없습니다.",
+          "shellEnvNamesAlwaysPassed": "PATH, 로캘, SSH_AUTH_SOCK은 항상 전달됩니다. 다음에 채팅을 시작하거나 재개할 때 적용됩니다.",
+          "shellEnvTitle": "셸 환경 사용",
+          "shellEnvCopy": "채팅은 터미널과 마찬가지로 로그인 셸이 내보내는 모든 변수를 가지고 시작합니다. 끄면 전달할 변수를 선택할 수 있습니다.",
+          "shellEnvToggleLabel": "셸 환경 사용 전환"
+        },
+        "chat": {
+          "search": {
+            "native": "네이티브",
+            "chat": "채팅",
+            "claude": "claude",
+            "codex": "codex",
+            "grok": "grok",
+            "omp": "omp",
+            "opencode": "opencode",
+            "terminal": "터미널",
+            "agent": "에이전트",
+            "queue": "대기열",
+            "variables": "변수"
+          }
+        },
         "ExperimentalPane": {
           "9762364929": "가능하면 macOS에서 APFS clone-copy를 사용하고, 그렇지 않으면 구성된 폴더나 파일을 생성된 작업 트리에 심볼릭 링크합니다.",
           "24416f42cd": "작업 트리의 공유 경로",
@@ -7172,22 +7205,6 @@
             "description": "업데이트된 워크트리 카드 레이아웃, 메타데이터 배치, 카드 표시 메뉴 옵션 및 상태 표시를 미리 봅니다.",
             "title": "새 카드 스타일",
             "toggleLabel": "새 카드 스타일 전환"
-          },
-          "nativeChat": {
-            "title": "Chat UI",
-            "toggleLabel": "Chat UI 전환",
-            "shellEnvNamesLabel": "셸에서 전달할 변수",
-            "shellEnvNamePlaceholder": "변수 이름",
-            "shellEnvNameAdd": "추가",
-            "shellEnvNameRemove": "{{value0}} 제거",
-            "shellEnvNamesEmpty": "아직 추가된 변수가 없습니다.",
-            "shellEnvNamesAlwaysPassed": "PATH, 로캘, SSH_AUTH_SOCK은 항상 전달됩니다. 다음에 채팅을 시작하거나 재개할 때 적용됩니다.",
-            "shellEnvTitle": "셸 환경 사용",
-            "shellEnvCopy": "Codex 및 Claude 채팅은 터미널과 마찬가지로 로그인 셸이 내보내는 모든 변수를 가지고 시작합니다. 끄면 전달할 변수를 선택할 수 있습니다.",
-            "shellEnvToggleLabel": "셸 환경 사용 전환",
-            "resumeTitle": "다시 시작한 후 작업 중인 채팅을 자동으로 재개합니다.",
-            "resumeCopy": "Orca가 종료되거나 업데이트를 설치하면 Orca가 다시 열릴 때 작업 중이던 채팅이 자동으로 재개됩니다.",
-            "resumeToggleLabel": "다시 시작한 후 자동 재개 전환"
           },
           "agentDashboard": {
             "title": "에이전트 대시보드",
@@ -9630,19 +9647,6 @@
               "title": "새 카드 스타일",
               "worktree": "worktree",
               "worktrees": "worktrees"
-            },
-            "nativeChat": {
-              "title": "Chat UI",
-              "grok": "grok",
-              "native": "네이티브",
-              "chat": "채팅",
-              "claude": "claude",
-              "codex": "codex",
-              "openclaude": "개방형",
-              "omp": "펌프",
-              "terminal": "터미널",
-              "agent": "에이전트",
-              "queue": "대기열"
             },
             "agentDashboard": {
               "title": "에이전트 대시보드",
@@ -12187,9 +12191,6 @@
           "cancel": "계속 청소하세요",
           "stopping": "멎는…",
           "confirm": "정리 중지"
-        },
-        "NativeChatSupportedAgents": {
-          "label": "지원되는 에이전트:"
         },
         "contrast": {
           "title": "색상 대비",
@@ -17510,7 +17511,7 @@
         "untitled": "제목 없는 채팅",
         "listLabel": "재개될 채팅",
         "dontAskAgain": "다시 묻지 않음(자동으로 재개)",
-        "dontAskAgainHint": "설정 → 실험적 → 채팅 UI에서 이 기능을 끌 수 있습니다.",
+        "dontAskAgainHint": "설정 → 채팅에서 이 기능을 끌 수 있습니다.",
         "continuedOne": "채팅 1개를 재개했습니다",
         "continuedMany": "{{value0}}개의 채팅을 재개했습니다",
         "selectAgent": "{{value2}}에서 {{value0}} 채팅 \"{{value1}}\" 재개",

@@ -113,7 +113,7 @@
   },
   "settings": {
     "chat": {
-      "description": "Choisissez l’apparence et le nom des chats.",
+      "description": "Choisissez comment les nouveaux agents s’ouvrent, l’apparence des chats et la façon dont ils sont nommés.",
       "names": {
         "title": "Noms des chats",
         "description": "Utilisez un agent pour nommer les nouveaux chats à partir de leur premier message. Sans nom généré, ils restent Claude Chat ou Codex Chat.",
@@ -7265,6 +7265,39 @@
           "connectionTestRunning": "Test en cours...",
           "connectionTestAction": "Tester la connexion"
         },
+        "ChatPane": {
+          "title": "Chat UI",
+          "description": "Ouvrez les nouveaux agents compatibles dans le chat.",
+          "copy": "Les nouveaux agents compatibles s’ouvrent dans le chat. Les lancements non pris en charge utilisent le terminal. Désactivez cette option pour ouvrir les nouveaux agents dans le terminal ; les chats existants restent disponibles.",
+          "toggleLabel": "Activer Chat UI",
+          "resumeTitle": "Reprendre automatiquement les discussions de travail après un redémarrage",
+          "resumeCopy": "Lorsqu'Orca quitte ou installe une mise à jour, les discussions en cours reprennent automatiquement à la réouverture d'Orca.",
+          "resumeToggleLabel": "Activer la reprise automatique après un redémarrage",
+          "shellEnvNamesLabel": "Variables à transmettre depuis votre shell",
+          "shellEnvNamePlaceholder": "Nom de la variable",
+          "shellEnvNameAdd": "Ajouter",
+          "shellEnvNameRemove": "Supprimer {{value0}}",
+          "shellEnvNamesEmpty": "Aucune variable ajoutée pour le moment.",
+          "shellEnvNamesAlwaysPassed": "PATH, les paramètres régionaux et SSH_AUTH_SOCK sont toujours transmis. S'applique au prochain démarrage ou à la prochaine reprise d'un chat.",
+          "shellEnvTitle": "Utiliser l'environnement de votre shell",
+          "shellEnvCopy": "Les chats démarrent avec toutes les variables exportées par votre shell de connexion, comme un terminal. Désactivez pour choisir celles qu'ils reçoivent.",
+          "shellEnvToggleLabel": "Activer l'utilisation de l'environnement de votre shell"
+        },
+        "chat": {
+          "search": {
+            "native": "indigène",
+            "chat": "chat",
+            "claude": "claude",
+            "codex": "codex",
+            "grok": "grok",
+            "omp": "omp",
+            "opencode": "opencode",
+            "terminal": "Terminal",
+            "agent": "agent",
+            "queue": "file d’attente",
+            "variables": "variables"
+          }
+        },
         "ExperimentalPane": {
           "9762364929": "Utilise le clonage APFS sur macOS quand c'est possible, sinon crée des liens symboliques vers les dossiers ou fichiers configurés dans les worktrees créés.",
           "24416f42cd": "Chemins partagés sur les worktrees",
@@ -7293,22 +7326,6 @@
           "ca2219fe5e": "Affiche un petit compagnon animé épinglé dans le coin inférieur droit. Choisissez un personnage (Claudino, OpenCode, Gremlin) ou importez votre propre PNG, APNG, GIF, WebP, JPG ou SVG depuis le menu compagnon de la barre d'état. Masquez-le à tout moment depuis le même menu sans désactiver ce réglage.",
           "dd6f0a1d45": "Compagnon",
           "0e89a574ae": "Compagnon animé flottant dans le coin inférieur droit.",
-          "nativeChat": {
-            "title": "Chat UI",
-            "toggleLabel": "Activer Chat UI",
-            "shellEnvNamesLabel": "Variables à transmettre depuis votre shell",
-            "shellEnvNamePlaceholder": "Nom de la variable",
-            "shellEnvNameAdd": "Ajouter",
-            "shellEnvNameRemove": "Supprimer {{value0}}",
-            "shellEnvNamesEmpty": "Aucune variable ajoutée pour le moment.",
-            "shellEnvNamesAlwaysPassed": "PATH, les paramètres régionaux et SSH_AUTH_SOCK sont toujours transmis. S'applique au prochain démarrage ou à la prochaine reprise d'un chat.",
-            "shellEnvTitle": "Utiliser l'environnement de votre shell",
-            "shellEnvCopy": "Les chats Codex et Claude démarrent avec toutes les variables exportées par votre shell de connexion, comme un terminal. Désactivez pour choisir celles qu'ils reçoivent.",
-            "shellEnvToggleLabel": "Activer l'utilisation de l'environnement de votre shell",
-            "resumeTitle": "Reprendre automatiquement les discussions de travail après un redémarrage",
-            "resumeCopy": "Lorsqu'Orca quitte ou installe une mise à jour, les discussions en cours reprennent automatiquement à la réouverture d'Orca.",
-            "resumeToggleLabel": "Activer la reprise automatique après un redémarrage"
-          },
           "agentDashboard": {
             "title": "Tableau de bord des agents",
             "description": "Tableau Kanban pour surveiller les agents de tous les worktrees, dans la fenêtre ou en fenêtre indépendante.",
@@ -9793,19 +9810,6 @@
             "051203d37c": "animal",
             "6b5a56ac35": "Compagnon animé flottant dans le coin inférieur droit.",
             "87d99e634b": "Compagnon",
-            "nativeChat": {
-              "title": "Chat UI",
-              "grok": "grok",
-              "native": "indigène",
-              "chat": "chat",
-              "claude": "claude",
-              "codex": "codex",
-              "openclaude": "openclaude",
-              "omp": "omp",
-              "terminal": "Terminal",
-              "agent": "agent",
-              "queue": "file d'attente"
-            },
             "agentDashboard": {
               "title": "Tableau de bord des agents",
               "description": "Tableau Kanban pour surveiller les agents de tous les worktrees, dans la fenêtre ou en fenêtre indépendante.",
@@ -12292,9 +12296,6 @@
           "capabilityUnknownHint": "Impossible de déterminer la prise en charge de la liaison de compte GitHub CLI sur ce runtime. Effacez la liaison ou réessayez.",
           "notEnforced": "Enregistré, mais non appliqué par ce runtime (hôte à version mixte).",
           "refreshAccounts": "Actualiser les comptes GitHub"
-        },
-        "NativeChatSupportedAgents": {
-          "label": "Agents pris en charge :"
         },
         "contrast": {
           "title": "Contraste des couleurs",
@@ -17626,7 +17627,7 @@
         "untitled": "Discussion sans titre",
         "listLabel": "Des discussions qui reprendraient",
         "dontAskAgain": "Ne plus demander (reprendre automatiquement)",
-        "dontAskAgainHint": "Vous pouvez désactiver cette option dans Paramètres → Expérimental → Chat UI.",
+        "dontAskAgainHint": "Vous pouvez désactiver cette option dans Paramètres → Chat.",
         "continuedOne": "1 chat a été repris",
         "continuedMany": "{{value0}} chats ont été repris",
         "selectAgent": "Reprendre le chat {{value0}} \"{{value1}}\" dans {{value2}}",

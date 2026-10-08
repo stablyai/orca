@@ -12,7 +12,7 @@
   },
   "settings": {
     "chat": {
-      "description": "Elige cómo se ven y se nombran los chats.",
+      "description": "Elige cómo se abren los agentes nuevos, cómo se ven los chats y cómo reciben sus nombres.",
       "names": {
         "title": "Nombres de chats",
         "description": "Usa un agente para nombrar los chats nuevos a partir de su primer mensaje. Si no se genera un nombre, se mantienen como Claude Chat o Codex Chat.",
@@ -7160,6 +7160,39 @@
           "connectionTestRunning": "Pruebas...",
           "connectionTestAction": "Conexión de prueba"
         },
+        "ChatPane": {
+          "title": "Chat UI",
+          "description": "Abre nuevos agentes compatibles en el chat.",
+          "copy": "Los agentes nuevos compatibles se abren en el chat. Los lanzamientos no compatibles usan la terminal. Desactiva esta opción para abrir los agentes nuevos en la terminal; los chats existentes siguen disponibles.",
+          "toggleLabel": "Alternar Chat UI",
+          "resumeTitle": "Reanudar los chats de trabajo automáticamente después de reiniciar",
+          "resumeCopy": "Cuando Orca se cierra o instala una actualización, los chats que estaban trabajando se reanudan automáticamente al volver a abrir Orca.",
+          "resumeToggleLabel": "Alternar reanudación automática después de un reinicio",
+          "shellEnvNamesLabel": "Variables que se pasan desde tu shell",
+          "shellEnvNamePlaceholder": "Nombre de la variable",
+          "shellEnvNameAdd": "Agregar",
+          "shellEnvNameRemove": "Quitar {{value0}}",
+          "shellEnvNamesEmpty": "Aún no se han agregado variables.",
+          "shellEnvNamesAlwaysPassed": "PATH, la configuración regional y SSH_AUTH_SOCK se pasan siempre. Se aplica la próxima vez que un chat se inicie o se reanude.",
+          "shellEnvTitle": "Usar el entorno de tu shell",
+          "shellEnvCopy": "Los chats empiezan con todas las variables que exporta tu shell de inicio de sesión, igual que un terminal. Desactívalo para elegir cuáles reciben.",
+          "shellEnvToggleLabel": "Alternar el uso del entorno de tu shell"
+        },
+        "chat": {
+          "search": {
+            "native": "nativo",
+            "chat": "chat",
+            "claude": "claude",
+            "codex": "codex",
+            "grok": "grok",
+            "omp": "omp",
+            "opencode": "opencode",
+            "terminal": "Terminal",
+            "agent": "agente",
+            "queue": "cola",
+            "variables": "variables"
+          }
+        },
         "ExperimentalPane": {
           "9762364929": "Usa APFS clone-copy en macOS cuando sea posible; si no, crea symlinks de las carpetas o archivos configurados en los worktrees creados.",
           "24416f42cd": "Rutas compartidas en worktrees",
@@ -7187,22 +7220,6 @@
             "description": "Previsualiza el diseño actualizado de tarjetas de worktree, la ubicación de metadatos, las opciones del menú de visualización de tarjetas y la presentación de estado.",
             "title": "Nuevo estilo de tarjeta",
             "toggleLabel": "Alternar nuevo estilo de tarjeta"
-          },
-          "nativeChat": {
-            "title": "Chat UI",
-            "toggleLabel": "Alternar Chat UI",
-            "shellEnvNamesLabel": "Variables que se pasan desde tu shell",
-            "shellEnvNamePlaceholder": "Nombre de la variable",
-            "shellEnvNameAdd": "Agregar",
-            "shellEnvNameRemove": "Quitar {{value0}}",
-            "shellEnvNamesEmpty": "Aún no se han agregado variables.",
-            "shellEnvNamesAlwaysPassed": "PATH, la configuración regional y SSH_AUTH_SOCK se pasan siempre. Se aplica la próxima vez que un chat se inicie o se reanude.",
-            "shellEnvTitle": "Usar el entorno de tu shell",
-            "shellEnvCopy": "Los chats de Codex y Claude empiezan con todas las variables que exporta tu shell de inicio de sesión, igual que un terminal. Desactívalo para elegir cuáles reciben.",
-            "shellEnvToggleLabel": "Alternar el uso del entorno de tu shell",
-            "resumeCopy": "Cuando Orca se cierra o instala una actualización, los chats que estaban trabajando se reanudan automáticamente al volver a abrir Orca.",
-            "resumeTitle": "Reanudar los chats de trabajo automáticamente después de reiniciar",
-            "resumeToggleLabel": "Alternar reanudación automática después de un reinicio"
           },
           "agentDashboard": {
             "title": "Panel de agentes",
@@ -9645,19 +9662,6 @@
               "title": "Nuevo estilo de tarjeta",
               "worktree": "worktree",
               "worktrees": "worktrees"
-            },
-            "nativeChat": {
-              "title": "Chat UI",
-              "grok": "grok",
-              "queue": "cola",
-              "native": "nativo",
-              "chat": "chat",
-              "claude": "claude",
-              "codex": "codex",
-              "openclaude": "claudia abierta",
-              "omp": "omp",
-              "terminal": "Terminal",
-              "agent": "agente"
             },
             "agentDashboard": {
               "title": "Panel de agentes",
@@ -12273,9 +12277,6 @@
           "devChannelUnsupported": "Las compilaciones {{value0}} se producen solo para {{value1}}. Linux permanece en Estable o RC.",
           "downloadInstaller": "Descargar instalador",
           "manualInstallHint": "Las compilaciones {{value0}} no están firmadas en Windows, por lo que el actualizador en la aplicación no puede instalar una sobre una compilación firmada. Ejecute el instalador descargado una vez (Windows le advertirá sobre un editor desconocido) y cada cambio posterior, incluido el regreso a Estable, funcionará desde aquí."
-        },
-        "NativeChatSupportedAgents": {
-          "label": "Agentes apoyados:"
         },
         "TerminalRenderingSection": {
           "6d4c55bacc": "Imágenes en línea",
@@ -17521,7 +17522,7 @@
         "untitled": "Chat sin título",
         "listLabel": "Chats que se reanudarían",
         "dontAskAgain": "No volver a preguntar (reanudar automáticamente)",
-        "dontAskAgainHint": "Puedes desactivarlo en Ajustes → Experimental → Interfaz de chat.",
+        "dontAskAgainHint": "Puedes desactivarlo en Ajustes → Chat.",
         "continuedOne": "Se reanudó 1 chat",
         "continuedMany": "Se reanudaron {{value0}} chats",
         "selectAgent": "Reanudar {{value0}} chat \"{{value1}}\" en {{value2}}",

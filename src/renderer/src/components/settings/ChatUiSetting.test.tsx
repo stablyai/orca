@@ -1,30 +1,93 @@
 // @vitest-environment happy-dom
 
-import { act, cleanup, fireEvent, render } from '@testing-library/react'
+import { cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
-import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
-import { NativeChatExperimentalSetting } from './NativeChatExperimentalSetting'
+import { useAppStore } from '../../store'
+import { ChatUiSetting } from './ChatUiSetting'
+import {
+  chatUiRowsIndexedIn,
+  getChatUiSearchEntries,
+  type ChatSettingRowId,
+  type ChatUiRowConditions
+} from './chat-search'
 
 afterEach(() => {
   cleanup()
-  setLocalRuntimeCapabilitiesForTests(null)
-  vi.unstubAllGlobals()
+  useAppStore.setState({ settingsSearchQuery: '' })
 })
 
+const CHAT_UI_TOGGLE = '#chat-ui button[role="switch"]'
+const QUEUE_TOGGLE = '[aria-label="Toggle queue follow-ups"]'
+const RESUME_TOGGLE = '[aria-label="Toggle automatic resume after a restart"]'
 const SHELL_ENV_TOGGLE = '[aria-label="Toggle using your shell environment"]'
 const NAME_INPUT = '#settings-native-chat-shell-environment-name'
 
-function renderSetting(overrides: Partial<GlobalSettings>, updateSettings = vi.fn()) {
+// Desktop with chats in use on a host that does not queue follow-ups, as shipped builds are.
+function indexedRows(conditions: Partial<ChatUiRowConditions> = {}): ReadonlySet<ChatSettingRowId> {
+  return chatUiRowsIndexedIn(
+    getChatUiSearchEntries({
+      isWebClient: false,
+      structuredChatsInUse: true,
+      hostQueuesChatMessages: false,
+      ...conditions
+    })
+  )
+}
+
+function renderSetting(
+  overrides: Partial<GlobalSettings>,
+  updateSettings = vi.fn(),
+  rows = indexedRows()
+) {
   return render(
-    <NativeChatExperimentalSetting
+    <ChatUiSetting
       settings={{ ...getDefaultSettings('/tmp'), ...overrides }}
       updateSettings={updateSettings}
+      rows={rows}
     />
   )
 }
+
+describe('Chat UI nested rows', () => {
+  it('renders only the Chat UI switch while no chats are in use on this machine', () => {
+    const { container } = renderSetting(
+      { experimentalNativeChat: false },
+      vi.fn(),
+      indexedRows({ structuredChatsInUse: false })
+    )
+    expect(container.querySelector(CHAT_UI_TOGGLE)).not.toBeNull()
+    expect(container.querySelectorAll('button[role="switch"]')).toHaveLength(1)
+    expect(container.querySelector('.border-l')).toBeNull()
+  })
+
+  it('shows the host options with Chat UI off when the index lists them', () => {
+    const { container } = renderSetting({ experimentalNativeChat: false })
+    expect(container.querySelector(RESUME_TOGGLE)).not.toBeNull()
+    expect(container.querySelector(SHELL_ENV_TOGGLE)).not.toBeNull()
+  })
+
+  it('shows queue follow-ups when this machine queues follow-ups', () => {
+    const updateSettings = vi.fn()
+    const { container } = renderSetting(
+      { experimentalNativeChat: true },
+      updateSettings,
+      indexedRows({ hostQueuesChatMessages: true })
+    )
+    expect(container.textContent).toContain('Messages with images send right away.')
+    fireEvent.click(container.querySelector(QUEUE_TOGGLE)!)
+    expect(updateSettings).toHaveBeenCalledWith({ nativeChatQueueFollowUps: false })
+  })
+
+  it('leaves no queue follow-ups wrapper when this machine cannot queue follow-ups', () => {
+    const { container } = renderSetting({ experimentalNativeChat: true })
+    expect(container.querySelector(QUEUE_TOGGLE)).toBeNull()
+    expect(container.querySelector('#chat-queue-follow-ups')).toBeNull()
+    const nested = container.querySelector('.border-l')
+    expect(nested?.firstElementChild?.id).toBe('chat-resume-on-restart')
+  })
+})
 
 function nameInput(container: HTMLElement): HTMLInputElement {
   return container.querySelector<HTMLInputElement>(NAME_INPUT)!
@@ -44,18 +107,7 @@ function listedNames(container: HTMLElement): string[] {
   return Array.from(container.querySelectorAll('li')).map((item) => item.title)
 }
 
-describe('NativeChatExperimentalSetting shell environment', () => {
-  it('shows structured controls when Chat UI is on', () => {
-    const enabled = renderSetting({ experimentalNativeChat: true })
-    expect(enabled.container.querySelector(SHELL_ENV_TOGGLE)).not.toBeNull()
-    expect(enabled.container.textContent).not.toContain('Default view')
-    enabled.unmount()
-
-    const disabled = renderSetting({ experimentalNativeChat: false })
-    expect(disabled.container.querySelector(SHELL_ENV_TOGGLE)).toBeNull()
-    disabled.unmount()
-  })
-
+describe('ChatUiSetting shell environment', () => {
   const structuredOn = {
     experimentalNativeChat: true
   }
@@ -79,13 +131,14 @@ describe('NativeChatExperimentalSetting shell environment', () => {
     expect(container.textContent).toContain('No variables added yet.')
 
     rerender(
-      <NativeChatExperimentalSetting
+      <ChatUiSetting
         settings={{
           ...getDefaultSettings('/tmp'),
           ...chooseNames,
           nativeChatShellEnvironmentVariables: ['HTTPS_PROXY', 'CODEX_LB_API_KEY']
         }}
         updateSettings={vi.fn()}
+        rows={indexedRows()}
       />
     )
     expect(listedNames(container)).toEqual(['HTTPS_PROXY', 'CODEX_LB_API_KEY'])
@@ -180,13 +233,14 @@ describe('NativeChatExperimentalSetting shell environment', () => {
     fireEvent.change(nameInput(container), { target: { value: 'HTTPS_PRO' } })
 
     rerender(
-      <NativeChatExperimentalSetting
+      <ChatUiSetting
         settings={{
           ...getDefaultSettings('/tmp'),
           ...chooseNames,
           nativeChatResumeWorkOnRestart: true
         }}
         updateSettings={vi.fn()}
+        rows={indexedRows()}
       />
     )
 
@@ -194,49 +248,74 @@ describe('NativeChatExperimentalSetting shell environment', () => {
   })
 })
 
-describe('NativeChatExperimentalSetting queue follow-ups', () => {
-  const QUEUE_TOGGLE = '[aria-label="Toggle queue follow-ups"]'
-  const structuredOn = {
-    experimentalNativeChat: true
-  }
+describe('ChatUiSetting', () => {
+  it('renders Chat UI off by default with no child rows', () => {
+    const settings = getDefaultSettings('/tmp')
+    const { container } = renderSetting({}, vi.fn(), indexedRows({ structuredChatsInUse: false }))
 
-  it('shows the switch, with copy naming the image exception, when the host queues messages', () => {
-    setLocalRuntimeCapabilitiesForTests([AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY])
+    expect(settings.experimentalNativeChat).toBe(false)
+    expect(container.querySelector(CHAT_UI_TOGGLE)?.getAttribute('aria-checked')).toBe('false')
+    expect(container.textContent).toContain('Chat UI')
+    expect(container.textContent).toContain('New supported agents open in chat.')
+    expect(container.textContent).toContain('existing chats stay available.')
+    expect(container.textContent).not.toContain('Supported agents:')
+    expect(container.textContent).not.toContain('Default view')
+    expect(container.textContent).not.toMatch(/experimental|preview/i)
+    expect(container.querySelector('.border-l')).toBeNull()
+  })
+
+  it('writes only the Chat UI key from its switch', () => {
     const updateSettings = vi.fn()
-    const { container } = renderSetting(structuredOn, updateSettings)
-    expect(container.textContent).toContain('Messages with images send right away.')
-    fireEvent.click(container.querySelector(QUEUE_TOGGLE)!)
-    expect(updateSettings).toHaveBeenCalledWith({ nativeChatQueueFollowUps: false })
+    const { container } = renderSetting({}, updateSettings)
+
+    fireEvent.click(container.querySelector(CHAT_UI_TOGGLE)!)
+
+    expect(updateSettings).toHaveBeenCalledTimes(1)
+    expect(updateSettings).toHaveBeenCalledWith({ experimentalNativeChat: true })
   })
 
-  it('hides the switch when the host does not queue messages, since it would do nothing', () => {
-    setLocalRuntimeCapabilitiesForTests([])
-    const { container } = renderSetting(structuredOn)
-    expect(container.querySelector(QUEUE_TOGGLE)).toBeNull()
+  it('offers no structured-runtime opt-in', () => {
+    const { container } = renderSetting({ experimentalNativeChat: true })
+
+    expect(container.textContent).not.toContain('Use updated structured native chat')
+    expect(container.querySelectorAll('button[role="switch"]')).toHaveLength(3)
   })
 
-  it('hides the switch until the host answers, then shows it', async () => {
-    setLocalRuntimeCapabilitiesForTests(null)
-    let answer: (status: { capabilities: string[] }) => void = () => {}
-    vi.stubGlobal('api', {
-      runtime: { getStatus: () => new Promise((resolve) => (answer = resolve)) }
-    })
-    const { container } = renderSetting(structuredOn)
-    expect(container.querySelector(QUEUE_TOGGLE)).toBeNull()
-    await act(async () =>
-      answer({ capabilities: [AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY] })
-    )
-    expect(container.querySelector(QUEUE_TOGGLE)).not.toBeNull()
+  it('writes only the resume key from its switch', () => {
+    const updateSettings = vi.fn()
+    const { container } = renderSetting({ experimentalNativeChat: true }, updateSettings)
+
+    fireEvent.click(container.querySelector(RESUME_TOGGLE)!)
+
+    expect(updateSettings).toHaveBeenCalledTimes(1)
+    expect(updateSettings).toHaveBeenCalledWith({ nativeChatResumeWorkOnRestart: true })
   })
 
-  it('hides the switch with Chat UI off when no structured chats are held', () => {
-    setLocalRuntimeCapabilitiesForTests([AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY])
-    const { container } = renderSetting({ experimentalNativeChat: false })
-    expect(container.querySelector(QUEUE_TOGGLE)).toBeNull()
+  it('keeps the Chat UI switch reachable when a search matches only a host-owned row', () => {
+    useAppStore.setState({ settingsSearchQuery: 'variables' })
+    const { container } = renderSetting({ experimentalNativeChat: true })
+
+    expect(container.querySelector(CHAT_UI_TOGGLE)).not.toBeNull()
+    expect(container.querySelector('#chat-shell-environment')).not.toBeNull()
+    expect(container.querySelector('#chat-resume-on-restart')).toBeNull()
+  })
+
+  it('finds the resume row when Chat UI is on', () => {
+    useAppStore.setState({ settingsSearchQuery: 'resume' })
+    const { container } = renderSetting({ experimentalNativeChat: true })
+
+    expect(container.querySelector('#chat-resume-on-restart')).not.toBeNull()
+  })
+
+  it('keeps the Chat UI switch on unrelated searches', () => {
+    useAppStore.setState({ settingsSearchQuery: 'theme' })
+    const { container } = renderSetting({ experimentalNativeChat: true })
+
+    expect(container.querySelector(CHAT_UI_TOGGLE)).not.toBeNull()
   })
 })
 
-describe('NativeChatExperimentalSetting inline visuals', () => {
+describe('ChatUiSetting inline visuals', () => {
   it('leaves Inline visuals on the Chat page even while structured chat is enabled', () => {
     const { queryByRole, getByRole } = renderSetting({
       experimentalNativeChat: true

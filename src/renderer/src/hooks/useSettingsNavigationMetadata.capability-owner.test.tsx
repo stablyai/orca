@@ -9,6 +9,7 @@ import type { SettingsNavSection } from '@/lib/settings-navigation-types'
 import type { RuntimeEnvironmentStatus } from '@/store/slices/runtime-status-types'
 import type { Repo } from '../../../shared/repo-types'
 import { resetWindowsTerminalCapabilitiesForTests } from '@/lib/windows-terminal-capabilities'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 
 const testState = vi.hoisted(() => ({
   settings: null as GlobalSettings | null,
@@ -67,6 +68,8 @@ describe('settings navigation capability ownership', () => {
     }
     testState.runtimeEnvironments = [{ id: 'paired-a', createdAt: 1 }]
     testState.sections = null
+    // Startup has already asked the runtime for its capabilities, so only host-platform reads remain.
+    setLocalRuntimeCapabilitiesForTests([])
     const container = document.createElement('div')
     document.body.appendChild(container)
     root = createRoot(container)
@@ -75,6 +78,7 @@ describe('settings navigation capability ownership', () => {
   afterEach(() => {
     act(() => root.unmount())
     resetWindowsTerminalCapabilitiesForTests()
+    setLocalRuntimeCapabilitiesForTests(null)
     document.body.replaceChildren()
     vi.unstubAllGlobals()
   })

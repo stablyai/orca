@@ -1704,10 +1704,7 @@
             "d23ae13990": "worktree",
             "f082788cfe": "links",
             "fa72e71f05": "agents",
-            "fe5688b761": "sidebar",
-            "nativeChat": {
-              "description": "Open supported new agents in Chat UI."
-            }
+            "fe5688b761": "sidebar"
           }
         },
         "general": {
