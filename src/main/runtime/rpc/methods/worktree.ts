@@ -32,6 +32,7 @@ export const WORKTREE_METHODS = [
   ...WORKTREE_CATALOG_METHODS,
   defineMethod({
     name: 'worktree.teardownMissingTerminals',
+    permission: 'workspace',
     params: WorktreeTeardownMissingTerminalsParams,
     handler: async (params, { runtime }) =>
       runtime.teardownMissingManagedWorktreeTerminals(
@@ -42,6 +43,7 @@ export const WORKTREE_METHODS = [
   }),
   defineMethod({
     name: 'worktree.lineageList',
+    permission: 'workspace',
     params: null,
     handler: async (_params, { runtime }) => ({
       lineage: await runtime.listWorktreeLineage(),
@@ -50,6 +52,7 @@ export const WORKTREE_METHODS = [
   }),
   defineMethod({
     name: 'worktree.show',
+    permission: 'workspace',
     params: WorktreeSelector,
     handler: async (params, { runtime }) => ({
       worktree: await runtime.showManagedWorktree(params.worktree)
@@ -57,11 +60,13 @@ export const WORKTREE_METHODS = [
   }),
   defineMethod({
     name: 'worktree.sleep',
+    permission: 'workspace',
     params: WorktreeSelector,
     handler: async (params, { runtime }) => runtime.sleepManagedWorktree(params.worktree)
   }),
   defineMethod({
     name: 'worktree.activate',
+    permission: 'workspace',
     params: WorktreeActivate,
     handler: async (params, { runtime, clientKind }) =>
       // Why: clientKind ('mobile'|'runtime') scopes the host-renderer slept-agent
@@ -79,6 +84,7 @@ export const WORKTREE_METHODS = [
   }),
   defineMethod({
     name: 'worktree.create',
+    permission: 'workspace',
     params: WorktreeCreate,
     handler: async (params, context) =>
       // Why: a mobile create interrupted by a connection migration is retried with
@@ -127,6 +133,7 @@ export const WORKTREE_METHODS = [
   }),
   defineMethod({
     name: 'worktree.prefetchCreateBase',
+    permission: 'workspace',
     params: WorktreePrefetchCreateBase,
     handler: async (params, { runtime }) => {
       await runtime.prefetchManagedWorktreeCreateBase({
@@ -138,6 +145,7 @@ export const WORKTREE_METHODS = [
   }),
   defineMethod({
     name: 'worktree.set',
+    permission: 'workspace',
     params: WorktreeSet,
     handler: async (params, { runtime }) => ({
       worktree: await runtime.updateManagedWorktreeMeta(params.worktree, {
@@ -193,12 +201,14 @@ export const WORKTREE_METHODS = [
   }),
   defineMethod({
     name: 'worktree.persistSortOrder',
+    permission: 'workspace',
     params: WorktreeSortOrder,
     handler: async (params, { runtime }) =>
       runtime.persistManagedWorktreeSortOrder(params.orderedIds)
   }),
   defineMethod({
     name: 'worktree.resolvePrBase',
+    permission: 'workspace',
     params: WorktreeResolvePrBase,
     handler: async (params, { runtime }) =>
       runtime.resolveManagedPrBase({
@@ -211,6 +221,7 @@ export const WORKTREE_METHODS = [
   }),
   defineMethod({
     name: 'worktree.resolveMrBase',
+    permission: 'workspace',
     params: WorktreeResolveMrBase,
     handler: async (params, { runtime }) =>
       runtime.resolveManagedMrBase({
@@ -223,6 +234,7 @@ export const WORKTREE_METHODS = [
   }),
   defineMethod({
     name: 'worktree.rm',
+    permission: 'workspace',
     params: WorktreeRemove,
     handler: async (params, context) => {
       const { runtime } = context
@@ -274,6 +286,7 @@ export const WORKTREE_METHODS = [
   }),
   defineMethod({
     name: 'worktree.forceDeleteBranch',
+    permission: 'workspace',
     params: WorktreeForceDeleteBranch,
     handler: async (params, { runtime }) => {
       const hostId = resolvePairedCallerHostId(

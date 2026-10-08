@@ -228,6 +228,8 @@ export type GlobalSettings = NativeChatGlobalSettings & {
   /** Chat-wide: hold a mid-turn send as an editable queued draft that goes when the turn ends
    *  (capable hosts only). Absent = on; off keeps mid-turn sends immediate. */
   nativeChatQueueFollowUps?: boolean
+  /** Teach newly started native chats to create inline visuals; absent means on. */
+  nativeChatInlineVisuals?: boolean
   /** Structured chat only: Codex/Claude children inherit the whole login-shell environment.
    *  Off passes only `nativeChatShellEnvironmentVariables` (plus a PATH/locale baseline). */
   nativeChatInheritShellEnvironment?: boolean
@@ -318,8 +320,6 @@ export type GlobalSettings = NativeChatGlobalSettings & {
   claudeManagedAccounts: ClaudeManagedAccount[]
   activeClaudeManagedAccountId: string | null
   activeClaudeManagedAccountIdsByRuntime?: ClaudeManagedAccountRuntimeSelection
-  /** Dismissed the "System default may hold a copied login" notice in Settings > Accounts. */
-  claudeCopiedSystemDefaultNoticeDismissed?: boolean
   /** Per-worktree shell history so ArrowUp doesn't surface other worktrees' commands (a HISTFILE for
    *  bash/zsh, a `fish_history` session name for fish). Defaults to true. */
   terminalScopeHistoryByWorktree: boolean

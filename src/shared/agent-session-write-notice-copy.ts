@@ -26,7 +26,8 @@ export const AGENT_SESSION_WRITE_NOTICE_COPY = {
   notDoneCommand: "The command didn't run.",
   notDoneGoal: "The goal wasn't changed.",
   restartFailed: "The agent couldn't restart.",
-  capacity: 'Orca has received too many requests in the last day.',
+  capacity:
+    'Orca on the computer running this chat has hit a request limit. Update Orca there, then try again.',
   outcomeUnknown: "Orca couldn't confirm what happened. Check the chat.",
   sendOutcomeLost:
     "Orca couldn't confirm your message reached the agent. Check the chat, then send it again if needed.",
@@ -61,6 +62,8 @@ export const AGENT_SESSION_WRITE_NOTICE_COPY = {
   waitForBackgroundTasks: 'Wait for the background tasks to finish.',
   messagesUnsettled: "A message you sent earlier isn't confirmed yet.",
   settleEarlierMessage: 'Wait for your earlier message to go through, or retry it.',
+  queueTooLarge: 'Too much text is waiting in the queue.',
+  shrinkQueue: 'Delete a queued message, or wait for one to go through, then try again.',
   optionRejected: "The agent didn't accept this setting.",
   goalsUnsupported: "This agent doesn't support goals.",
   agentRefused: 'The agent turned this down.',

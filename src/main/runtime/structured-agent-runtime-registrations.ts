@@ -21,6 +21,7 @@ import {
 import type { StructuredAgentCommandSettings } from '../native-chat/structured-agent-command-resolution'
 import type { StructuredAgentDefinition } from '../native-chat/agent-session-wire/structured-agent-definition'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
+import { readClaudeManagedAccountGateSettings } from '../native-chat/claude-structured-managed-account-support'
 import { agentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { agentSessionAttachmentStoreRoot } from '../native-chat/agent-session-attachments/agent-session-attachment-references'
 import {
@@ -116,7 +117,8 @@ function nativeChatVisualsFor(deps: StructuredAgentSessionRuntimeDeps): {
     ? {
         prepareVisuals: createNativeChatVisualsDelivery({
           stateDirectory: deps.stateDirectory,
-          logger: deps.logger
+          logger: deps.logger,
+          isEnabled: deps.nativeChatVisuals.isEnabled
         })
       }
     : {}
@@ -170,6 +172,12 @@ function createClaudeAdapter(
     ...(deps.resolveClaudePermissionMode
       ? { resolveClaudePermissionMode: deps.resolveClaudePermissionMode }
       : {}),
+    ...(deps.getClaudeManagedAccountGateSettings
+      ? {
+          readClaudeManagedAccountGate: () =>
+            readClaudeManagedAccountGateSettings(deps.getClaudeManagedAccountGateSettings!)
+        }
+      : {}),
     attachmentDirectory: agentSessionAttachmentStoreRoot(deps.stateDirectory),
     onLifecycleEvent: context.deliverLifecycle,
     logger: deps.logger,
@@ -222,7 +230,11 @@ function acpRegistration(spec: AcpLaunchSpec): StructuredAgentRuntimeRegistratio
           ...(deps.resolveAgentCommandSettings
             ? { resolveCommandSettings: deps.resolveAgentCommandSettings }
             : {}),
-          ...(deps.resolveAgentFullAccess ? { resolveFullAccess: deps.resolveAgentFullAccess } : {})
+          ...(deps.resolveAgentFullAccess
+            ? { resolveFullAccess: deps.resolveAgentFullAccess }
+            : {}),
+          ...nativeChatVisualsFor(deps),
+          logger: deps.logger
         }),
         connect: (launch, options) => createAcpAgentConnection(launch, options),
         ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {}),

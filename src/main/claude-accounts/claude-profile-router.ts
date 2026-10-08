@@ -2,19 +2,13 @@ import { existsSync, mkdirSync, rmSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-status-hooks-setting'
-import {
-  CLAUDE_INJECTED_CONFIG_DIR_ENV,
-  CLAUDE_PROFILE_MISSING_MESSAGE,
-  CLAUDE_PROFILE_POINTER_ENV,
-  CLAUDE_PROFILE_SETUP_FAILED_MESSAGE,
-  CLAUDE_USER_CONFIG_DIR_ENV
-} from '../../shared/claude-profile-routing'
+import { CLAUDE_PROFILE_POINTER_ENV } from '../../shared/claude-profile-routing'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { probeClaudeCliVersion } from '../claude/claude-hook-event-versions'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import { resolveClaudeCommand } from '../codex-cli/command'
-import { AgentSessionPreSpawnError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import {
+  CLAUDE_INJECTED_CONFIG_DIR_ENV,
   claudeProfileMarkerPath,
   describeClaudeProfile,
   type ClaudeProfileDescriptor,
@@ -31,8 +25,6 @@ import {
 } from './runtime-selection'
 import { wslClaudeProfilePointer } from './claude-profile-wsl-paths'
 import { isDirectory, listClaudeProfileHomes } from './claude-profile-installed-router'
-import { removeClaudeAccountFolder } from './claude-account-folder'
-import { resolveLoginShellEnvironment } from '../startup/login-shell-environment'
 
 export type ClaudeProfileRouterSettings = Pick<
   GlobalSettings,
@@ -43,6 +35,12 @@ export type ClaudeProfileRouterSettings = Pick<
   | 'disabledTuiAgents'
 >
 
+export const CLAUDE_PROFILE_SETUP_FAILED_MESSAGE =
+  'The selected Claude account could not be set up. Try again or choose another account.'
+
+export const CLAUDE_PROFILE_MISSING_MESSAGE =
+  "The selected Claude account's folder is missing. Sign in to it again or choose another account."
+
 /**
  * Routes this host's Claude launches to the selected account's folder. Settings own the selection;
  * the pointer file mirrors it for `claude` typed in an already-open terminal.
@@ -50,25 +48,17 @@ export type ClaudeProfileRouterSettings = Pick<
 export class ClaudeProfileRouter {
   readonly pointerPath: string
   private readonly setups = new Map<string, Promise<ClaudeProfileSetupReport>>()
-  private env: NodeJS.ProcessEnv
-  private readonly envReady: Promise<unknown>
   constructor(
     private readonly args: {
       getSettings: () => ClaudeProfileRouterSettings
       dataRoot: string
       userHome?: string
-      /** Tests replace the login shell's env. */
       env?: NodeJS.ProcessEnv
       /** Tests replace the worker. */
       runSetup?: typeof runClaudeProfileSetupInWorker
     }
   ) {
     this.pointerPath = join(args.dataRoot, 'claude-profiles', 'selected-host')
-    this.env = args.env ?? process.env
-    // Why the login shell's: a Dock launch lacks the CLAUDE_CONFIG_DIR an rc exports. Chats share it.
-    this.envReady = args.env
-      ? Promise.resolve()
-      : resolveLoginShellEnvironment().then((env) => (this.env = env))
   }
 
   private get userHome(): string {
@@ -77,19 +67,24 @@ export class ClaudeProfileRouter {
 
   private selectedProfile(): ClaudeProfileDescriptor | null {
     const id = getSelectedClaudeAccountIdForTarget(this.args.getSettings(), { runtime: 'host' })
-    return id ? this.describe(id) : null
+    return id
+      ? describeClaudeProfile(this.args.dataRoot, id, { executionHostId: 'local', runtime: 'host' })
+      : null
   }
 
   /** The user's System default: their own CLAUDE_CONFIG_DIR, else ~/.claude. */
   systemDefaultHome(): string {
-    return resolveClaudeDefaultHome(this.userHome, this.userConfigDir())
+    return resolveClaudeDefaultHome(
+      this.userHome,
+      readUserClaudeConfigDir(this.args.env ?? process.env)
+    )
   }
 
   /** Null for System default. Throws for a missing folder: falling back would run the wrong account. */
   selectedHome(): string | null {
     const home = this.selectedProfile()?.home ?? null
     if (home !== null && !isDirectory(home)) {
-      throw claudeProfileMissing()
+      throw new Error(CLAUDE_PROFILE_MISSING_MESSAGE)
     }
     return home
   }
@@ -103,70 +98,24 @@ export class ClaudeProfileRouter {
     const profile = this.selectedProfile()
     mkdirSync(dirname(this.pointerPath), { recursive: true, mode: 0o700 })
     writeFileAtomically(this.pointerPath, profile?.home ?? '', { mode: 0o600 })
-    // Why even a missing folder: setup creates it without a login, so Claude's own first run
-    // signs in there (an account saved before per-account folders has none yet).
-    if (profile) {
+    // Why the existence check: setup creates the folder, and only sign-in may create an account.
+    if (profile && isDirectory(profile.home)) {
       this.setUp(profile).catch((error: unknown) => {
         console.warn('[claude-profile] Account setup failed:', error)
       })
     }
   }
 
-  /** Waits for a first setup that never finished, running or not; otherwise launches at once. */
+  /** Waits for setup only for a folder that was never set up; otherwise launches at once. */
   async prepareLaunch(): Promise<ClaudeRuntimeAuthPreparation> {
     const profile = this.selectedProfile()
-    if (!profile) {
-      // Only System default reads the login shell's env here; setup awaits it itself.
-      await this.envReady
-      return this.preparation()
-    }
-    // Why the marker: setup writes it last, so a missing folder is set up too. A re-run of a
-    // set-up folder never blocks.
-    if (!existsSync(claudeProfileMarkerPath(profile))) {
+    if (profile && isDirectory(profile.home) && !existsSync(claudeProfileMarkerPath(profile))) {
       const report = await this.setUp(profile).catch(() => null)
       if (report?.outcome !== 'prepared') {
-        throw claudeProfileSetupFailed()
+        throw new Error(CLAUDE_PROFILE_SETUP_FAILED_MESSAGE)
       }
     }
     return this.preparation()
-  }
-
-  /** An account's folder on this host, whether or not it exists yet. */
-  accountHome(accountId: string): string {
-    return this.describe(accountId).home
-  }
-
-  /** Creates and sets up an account's folder for sign-in; the login itself is Claude's. */
-  async prepareAccount(accountId: string): Promise<string> {
-    const profile = this.describe(accountId)
-    const report = await this.setUp(profile).catch(() => null)
-    if (report?.outcome !== 'prepared') {
-      throw new Error(CLAUDE_PROFILE_SETUP_FAILED_MESSAGE)
-    }
-    return profile.home
-  }
-
-  /** Deletes an account's folder after any setup running for it, which would otherwise recreate it. */
-  async removeAccount(accountId: string): Promise<void> {
-    await this.setups.get(accountId)?.catch(() => {})
-    await removeClaudeAccountFolder(this.args.dataRoot, accountId)
-  }
-
-  /** True once an older Orca copied an account's login into System default: it left this snapshot. */
-  copiedLoginIntoSystemDefault(): boolean {
-    return existsSync(join(this.args.dataRoot, 'claude-runtime-auth', 'system-default-auth.json'))
-  }
-
-  /** The user's own CLAUDE_CONFIG_DIR, which wins over the selection in their terminals. */
-  userConfigDir(): string | undefined {
-    return readUserClaudeConfigDir(this.env)
-  }
-
-  private describe(accountId: string): ClaudeProfileDescriptor {
-    return describeClaudeProfile(this.args.dataRoot, accountId, {
-      executionHostId: 'local',
-      runtime: 'host'
-    })
   }
 
   /** One setup per account at a time; a later request reuses the running one. */
@@ -181,14 +130,13 @@ export class ClaudeProfileRouter {
   }
 
   private async runSetup(profile: ClaudeProfileDescriptor): Promise<ClaudeProfileSetupReport> {
-    await this.envReady
     const hooks = isAgentStatusHooksEnabledForAgent(this.args.getSettings(), 'claude')
     const claudeVersion = hooks ? await probeClaudeCliVersion(resolveClaudeCommand()) : null
     const report = await (this.args.runSetup ?? runClaudeProfileSetupInWorker)({
       dataRoot: this.args.dataRoot,
       profile,
       userHome: this.userHome,
-      userConfigDir: this.userConfigDir(),
+      userConfigDir: readUserClaudeConfigDir(this.args.env ?? process.env),
       hooks,
       claudeVersion: claudeVersion ?? undefined
     })
@@ -215,12 +163,7 @@ export class ClaudeProfileRouter {
       return { [CLAUDE_PROFILE_POINTER_ENV]: `~/${wslClaudeProfilePointer(this.args.dataRoot)}` }
     }
     try {
-      const env = this.launchEnv()
-      const userConfigDir = this.userConfigDir()
-      // Why: the injected value replaces the user's own; the claude function restores it on System default.
-      return env.CLAUDE_CONFIG_DIR && userConfigDir
-        ? { ...env, [CLAUDE_USER_CONFIG_DIR_ENV]: userConfigDir }
-        : env
+      return this.launchEnv()
     } catch {
       return { [CLAUDE_PROFILE_POINTER_ENV]: this.pointerPath }
     }
@@ -243,17 +186,4 @@ export class ClaudeProfileRouter {
   accountHomes(): string[] {
     return listClaudeProfileHomes(this.args.dataRoot)
   }
-}
-
-// Typed so a chat names the situation; a terminal reads the same message.
-export function claudeProfileMissing(): AgentSessionPreSpawnError {
-  return new AgentSessionPreSpawnError(new Error(CLAUDE_PROFILE_MISSING_MESSAGE), {
-    reason: 'claudeAccountFolderMissing'
-  })
-}
-
-export function claudeProfileSetupFailed(): AgentSessionPreSpawnError {
-  return new AgentSessionPreSpawnError(new Error(CLAUDE_PROFILE_SETUP_FAILED_MESSAGE), {
-    reason: 'claudeAccountSetupFailed'
-  })
 }

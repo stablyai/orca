@@ -133,20 +133,32 @@ export function probeRemoteNodeRuntimeCommand(
 }
 
 /** Cheap warm-path check: a published runtime has its marker and an executable; no re-hash. */
+/**
+ * READY when the verified runtime is in place. With `run`, the same command also runs it and
+ * reports a refusal the way promotion does, so a host whose exec policy or libraries changed since
+ * the install is caught before a launch, at no extra round trip.
+ */
 export function remoteNodeRuntimePresentCommand(
   host: RemoteHostPlatform,
-  runtimeDir: string
+  runtimeDir: string,
+  run = false
 ): string {
   if (isWindowsRemoteHost(host)) {
-    return windowsNodeRuntimePresentCommand(runtimeDir)
+    return windowsNodeRuntimePresentCommand(runtimeDir, run)
   }
   const executable = shellEscape(
     joinRemotePath(host, runtimeDir, ...ORCAD_NODE_RUNTIME_POSIX_EXECUTABLE.split('/'))
   )
   const verified = shellEscape(joinRemotePath(host, runtimeDir, VERIFIED_MARKER))
+  const ready = run
+    ? `{ orca_rt_out=$(${executable} --version 2>&1); orca_rt_status=$?; ` +
+      `if [ "$orca_rt_out" = ${shellEscape(`v${NODE_RUNTIME_PIN.version}`)} ]; then echo ${REMOTE_NODE_RUNTIME_READY}; ` +
+      `else echo ${REMOTE_NODE_RUNTIME_SELFTEST_FAILED}; echo "${REMOTE_NODE_RUNTIME_EXIT_PREFIX}$orca_rt_status"; ` +
+      `printf '%s\\n' "$orca_rt_out" | head -c 4000; fi; }`
+    : `echo ${REMOTE_NODE_RUNTIME_READY}`
   return (
     `if [ -f ${verified} ] && [ -x ${executable} ]; ` +
-    `then echo ${REMOTE_NODE_RUNTIME_READY}; else echo ${REMOTE_NODE_RUNTIME_MISSING}; fi`
+    `then ${ready}; else echo ${REMOTE_NODE_RUNTIME_MISSING}; fi`
   )
 }
 

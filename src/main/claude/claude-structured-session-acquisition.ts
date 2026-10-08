@@ -1,7 +1,10 @@
-import type {
-  AgentSessionAcquisition,
-  StructuredAgentSessionAcquireInput
+import {
+  AgentSessionPreSpawnError,
+  type AgentSessionAcquisition,
+  type StructuredAgentSessionAcquireInput
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import { CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE } from '../claude-accounts/environment'
+import { isClaudeAuthSwitchInProgress } from '../claude-accounts/live-pty-gate'
 import { openClaudeStreamJsonConnection } from './claude-stream-json-connection'
 import { buildClaudePermissionCallbacks } from './claude-structured-inbound-control'
 import { resolveClaudeReplayTurn } from './claude-replay-turn-resolution'
@@ -59,6 +62,13 @@ export async function acquireClaudeSession({
   exits: Map<string, ClaudeSessionExit>
   callbacks: ClaudeAcquireCallbacks
 }): Promise<AgentSessionAcquisition> {
+  // A managed-account switch is mid-swap of the pinned credential home; refuse here,
+  // before this acquisition cancels the previous attempt and closes the live session.
+  if (isClaudeAuthSwitchInProgress()) {
+    throw new AgentSessionPreSpawnError(new Error(CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE), {
+      reason: 'accountSwitchInProgress'
+    })
+  }
   const sessionId = input.identity.sessionId
   const prompts = new ClaudePromptRegistry()
   const { previous, attempt } = acquisitions.start(sessionId, prompts)
@@ -266,6 +276,7 @@ export async function acquireClaudeSession({
       settleClaudeSessionStartup({
         session,
         facts: readClaudeStartupFacts({
+          account: launch.account,
           connection,
           initProof,
           sessionId,

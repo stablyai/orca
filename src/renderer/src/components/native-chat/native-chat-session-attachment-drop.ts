@@ -18,7 +18,7 @@ export type NativeChatPendingAttachmentChips = {
   drop: (id: string) => boolean
   /** Adds stored files as `@path` references to the scope's draft, which keeps them through an
    *  input-method composition or a remount. */
-  attachReferences: (paths: string[]) => void
+  attachReferences: (references: { id: string; path: string }[]) => void
 }
 
 /**
@@ -86,7 +86,7 @@ export async function attachNativeChatSessionAttachmentPaths(args: {
     return
   }
   const notAttached: { name: string; reason: string }[] = []
-  const references: string[] = []
+  const references: { id: string; path: string }[] = []
   for (const { path, chipId } of pending) {
     const storedPath = stored.get(path)
     if (!storedPath) {
@@ -100,9 +100,7 @@ export async function attachNativeChatSessionAttachmentPaths(args: {
       continue
     }
     // Other files become `@path` references, as every attach does, unless their chip was removed.
-    if (args.chips.drop(chipId)) {
-      references.push(storedPath)
-    }
+    references.push({ id: chipId, path: storedPath })
   }
   // Inserting at the caret clears the notice, so what failed is said after.
   if (references.length > 0) {

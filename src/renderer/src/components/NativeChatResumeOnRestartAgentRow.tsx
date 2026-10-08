@@ -45,7 +45,8 @@ export function ResumeCandidateRow({
   disabled,
   onCheckedChange,
   failure,
-  onFailureAction
+  onFailureAction,
+  renderStatus
 }: {
   candidate: ResumeCandidate
   /** Named in the checkbox's accessible name: several rows otherwise read identically. */
@@ -57,6 +58,7 @@ export function ResumeCandidateRow({
   /** Present when an earlier resume of this chat did not carry on. */
   failure?: ResumeFailure
   onFailureAction?: (action: ResumeFailureAction, sessionId: string) => void
+  renderStatus?: (sessionId: string, title: string) => React.ReactNode
 }): React.JSX.Element {
   const agentLabel = formatAgentTypeLabel(candidate.agent)
   const title =
@@ -65,6 +67,7 @@ export function ResumeCandidateRow({
   const model = candidate.model?.trim() ?? ''
   const activity = resumeActivityLabel(candidate.activity)
   const depth = useContext(ResumeTreeDepthContext)
+  const status = renderStatus?.(candidate.sessionId, title)
   const act = (action: ResumeFailureAction) => onFailureAction?.(action, candidate.sessionId)
   return (
     <ResumeTreeRow
@@ -80,9 +83,11 @@ export function ResumeCandidateRow({
         { value0: agentLabel, value1: title, value2: workspaceName }
       )}
       compact
+      checkboxSlot={status}
       // Outside the label, so pressing them never toggles the checkbox.
       trailing={
-        failure && (
+        failure &&
+        !status && (
           <ResumeFailureStatus
             failure={failure}
             title={title}
@@ -93,7 +98,8 @@ export function ResumeCandidateRow({
         )
       }
       below={
-        failure && (
+        failure &&
+        !status && (
           <ResumeFailureGuidanceLine failure={failure} disabled={disabled} onAction={act} />
         )
       }

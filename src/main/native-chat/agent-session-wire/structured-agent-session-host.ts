@@ -152,7 +152,8 @@ export class StructuredAgentSessionHost {
     })
     this.restartResume = createStructuredAgentSessionRestartResume(deps, this.sessions, {
       ...structuredAgentSessionRestartResumeSurfaces(this, this.now),
-      readChildWork: this.clientDelivery.readChildWork
+      readChildWork: this.clientDelivery.readChildWork,
+      publishStatus: this.clientDelivery.publishStatusAndSettlement
     })
     this.lifetime = createStructuredAgentSessionConversationLifetime({
       context: () => this.lifetimeContext(),

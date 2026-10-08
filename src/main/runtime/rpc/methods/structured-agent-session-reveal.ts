@@ -28,6 +28,7 @@ import { OptionsParams } from './structured-agent-session-schemas'
 export const STRUCTURED_AGENT_SESSION_REVEAL_METHODS = [
   defineMethod({
     name: 'agentSession.reveal',
+    permission: 'workspace',
     params: OptionsParams,
     handler: async (params, ctx) => {
       requireStructuredCapability(ctx)

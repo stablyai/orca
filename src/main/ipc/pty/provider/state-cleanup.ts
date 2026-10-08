@@ -1,5 +1,6 @@
 import { advertisedUrlWatcher } from '../../../ports/advertised-url-watcher'
 import { unregisterPty } from '../../../memory/pty-registry'
+import { markClaudePtyExited } from '../../../claude-accounts/live-pty-gate'
 import { forgetCodexPaneAccount } from '../../../codex/codex-pane-account-registry'
 import { openCodeHookService } from '../../../opencode/hook-service'
 import { piTitlebarExtensionService } from '../../../pi/titlebar-extension-service'
@@ -48,6 +49,8 @@ export function clearProviderPtyState(
   // new teardown path forgets to remove one provider's overlay/hook state.
   openCodeHookService.clearPty(id)
   piTitlebarExtensionService.clearPty(id)
+  // Why: SSH exit/teardown paths bypass pty.ts's local onExit but still must release Claude account-switch guards.
+  markClaudePtyExited(id)
   ptySizes.delete(id)
   ptyIncarnationById.delete(id)
   lastInputAtByPty.delete(id)

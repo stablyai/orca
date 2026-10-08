@@ -34,9 +34,6 @@ vi.mock('./use-mobile-structured-agent-options', () => ({
 vi.mock('./use-mobile-structured-prompt-responses', () => ({
   useMobileStructuredPromptResponses: mocks.promptResponses
 }))
-vi.mock('./use-mobile-structured-send-operation-reconciliation', () => ({
-  useMobileStructuredSendOperationReconciliation: vi.fn()
-}))
 
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
 

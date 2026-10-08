@@ -45,6 +45,7 @@ export function settleStructuredAgentSessionProviderStarted(
     ) {
       return
     }
+    noteStructuredAgentSessionProviderStarted(context.deps, event.sessionId)
     try {
       await persistStartedOptions(context, event)
     } catch (error) {
@@ -57,6 +58,18 @@ export function settleStructuredAgentSessionProviderStarted(
       context.publishStatus?.(event.sessionId)
     }
   })
+}
+
+/** A proven start shows the agent's program exists and may mean a sign-in was fixed, so the
+ *  catalog's held reason is re-checked by the next read's probe sooner; the probe decides. */
+export function noteStructuredAgentSessionProviderStarted(
+  deps: Pick<StructuredAgentSessionHostDeps, 'store' | 'modelCatalog'>,
+  sessionId: string
+): void {
+  const record = deps.store.getRecord(sessionId)
+  if (record) {
+    deps.modelCatalog?.providerStarted(record)
+  }
 }
 
 async function persistStartedOptions(

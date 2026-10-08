@@ -141,7 +141,7 @@ describe('desktop words for a failure fact', () => {
         agentSessionWriteNoticeParts(refused, 'send', { agentName: 'Claude' })
       )
     ).toBe(
-      "Votre message n'a pas été envoyé. Claude n'est pas connecté avec le compte sélectionné. Connectez-vous, puis renvoyez votre message."
+      "Votre message n'a pas été envoyé. Claude n’est pas connecté. Exécutez `claude` et connectez-vous avec /login, ou choisissez un compte dans les paramètres des Comptes Claude."
     )
     const detail = 'Uses {{agent}} $t(components.native-chat.failureWords.theAgent) <b>&</b>'
     const rejected = structuredAgentSessionRejectionParts(
@@ -174,7 +174,7 @@ describe('desktop words for a failure fact', () => {
       "Codex n'a pas pu redémarrer. Relancez /compact."
     )
     expect(sentence('notSignedIn', 'clear')).toBe(
-      "Codex n'est pas connecté avec le compte sélectionné. Connectez-vous, puis relancez /clear."
+      'Codex n’est pas connecté. Exécutez `codex login`. Relancez /clear.'
     )
     await i18n.changeLanguage('ja')
     expect(sentence('providerStartFailed', 'compact')).toBe(

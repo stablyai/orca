@@ -145,7 +145,6 @@ export function replayNativeChatComposerDraftJournal(
     drafts.set(scopeKey, {
       ...from,
       ...next,
-      ...(next.text === from.text ? {} : { document: undefined }),
       savedAt: at
     })
     changed.add(scopeKey)

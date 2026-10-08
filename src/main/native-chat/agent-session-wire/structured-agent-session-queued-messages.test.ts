@@ -124,14 +124,14 @@ describe('accept', () => {
     expect(await drafts()).toHaveLength(0)
   })
 
-  it('refuses past the draft-count budget with a readable message', async () => {
+  it('accepts a human message beyond twenty retained drafts', async () => {
     await workingSend()
     for (let index = 0; index < 20; index += 1) {
       expect(await send(`draft ${index}`, 'queue-if-active').result).toMatchObject({ ok: true })
     }
-    expect(await send('one too many', 'queue-if-active').result).toMatchObject({
-      ok: false,
-      refusal: { message: expect.stringContaining('queue is full') }
+    expect(await send('another message', 'queue-if-active').result).toMatchObject({
+      ok: true,
+      value: { queued: { position: 21, state: 'waiting' } }
     })
   })
 })

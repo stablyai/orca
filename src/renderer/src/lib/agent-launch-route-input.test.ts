@@ -463,7 +463,7 @@ describe('workspaceKindForWorktreeId', () => {
 })
 
 describe('a cwd that names the workspace root', () => {
-  // "Continue in New Session…" always names a cwd; at the root it must not force a terminal.
+  // "Hand Off to Another Agent" always names a cwd; at the root it must not force a terminal.
   beforeEach(stageLocalStructuredHost)
 
   const withRoot = (): AgentLaunchRouteStore =>

@@ -22,6 +22,7 @@ export function structuredAgentSessionStatusSummary({
   session: {
     params: { location: AgentSessionRecord['location']; provider: AgentSessionRecord['provider'] }
     child?: Pick<StructuredAgentSessionProviderChild, 'phase'> | null
+    restartResume?: AgentSessionStatusSummary['restartResume']
   }
   journal: AgentSessionJournal
   record: AgentSessionRecord | null
@@ -47,6 +48,7 @@ export function structuredAgentSessionStatusSummary({
           hostExecutionPhase: session.child.phase
         }
       : {}),
+    ...(session.restartResume ? { restartResume: { phase: session.restartResume.phase } } : {}),
     ...projected,
     // Only a working session is still being stopped; any other status already ended that work.
     ...(stopping && projected.status === 'working' ? { stopping: true as const } : {}),

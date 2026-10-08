@@ -26,7 +26,8 @@ export async function buildOrcadServeReadiness(input: {
     : rpc.createPairingOffer({
         address: options.pairingAddress,
         name: `${options.mobilePairing ? 'Mobile' : 'CLI'} ${new Date().toLocaleDateString()}`,
-        scope: options.mobilePairing ? 'mobile' : 'runtime'
+        scope: options.mobilePairing ? 'mobile' : 'runtime',
+        grants: options.grantDesktopControl ? ['desktop-control'] : []
       })
 
   return {

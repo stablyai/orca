@@ -3,6 +3,7 @@ import type { SshConnection } from '../ssh/ssh-connection'
 import type { SshRelaySession } from '../ssh/ssh-relay-session'
 import { getSshTargetRegistryStore } from '../ssh/ssh-target-registry'
 import { clearSshHostServerStatus } from '../ssh/ssh-host-server-status'
+import { recordSshRelayRuntimeStep } from '../ssh/ssh-host-node-runtime-mode'
 import { isSshConnectionSolelyOwnedBy } from '../ssh/ssh-connection-attribution'
 import { activeSessions } from './ssh-active-relay-sessions'
 import {
@@ -30,6 +31,7 @@ export async function removeRegisteredSshTarget(targetId: string): Promise<void>
   }
   invalidateConnectAttempt(targetId)
   clearSshHostServerStatus(targetId)
+  recordSshRelayRuntimeStep(targetId, false)
   await runTargetLifecycle(targetId, async () => {
     try {
       // Why: removal is destructive; dispose so remote PTYs cannot reattach to a deleted target.

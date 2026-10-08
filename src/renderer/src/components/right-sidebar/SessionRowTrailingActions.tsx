@@ -55,6 +55,7 @@ export function SessionRowTrailingActions({
   onResume,
   onContinueInNewSession,
   onResumeInNewChat,
+  onResumeInNewCli,
   onCopyResume,
   onCopyId,
   onCopyPath,
@@ -80,6 +81,7 @@ export function SessionRowTrailingActions({
   onContinueInNewSession?: () => void
   /** Passed through to the overflow menu only; the resting row keeps its two-icon budget. */
   onResumeInNewChat?: () => void
+  onResumeInNewCli?: () => void
   onCopyResume?: () => void
   onCopyId: () => void
   onCopyPath?: () => void
@@ -178,8 +180,8 @@ export function SessionRowTrailingActions({
                 variant="ghost"
                 size="icon-xs"
                 aria-label={translate(
-                  'components.agentSessionContinuation.continueInNewSession',
-                  'Continue in New Session…'
+                  'components.agentSessionContinuation.handOffToAnotherAgent',
+                  'Hand Off to Another Agent'
                 )}
                 draggable={false}
                 onClick={(event) => {
@@ -194,8 +196,8 @@ export function SessionRowTrailingActions({
             </TooltipTrigger>
             <TooltipContent side="top" sideOffset={4}>
               {translate(
-                'components.agentSessionContinuation.continueInNewSession',
-                'Continue in New Session…'
+                'components.agentSessionContinuation.handOffToAnotherAgent',
+                'Hand Off to Another Agent'
               )}
             </TooltipContent>
           </Tooltip>
@@ -265,6 +267,7 @@ export function SessionRowTrailingActions({
             onResume={onResume}
             onContinueInNewSession={onContinueInNewSession}
             onResumeInNewChat={onResumeInNewChat}
+            onResumeInNewCli={onResumeInNewCli}
             onJumpToOriginalPane={onJumpToOriginalPane}
             showJumpToWorktree={showJumpToWorktree}
             onJumpToWorktree={onJumpToWorktree}

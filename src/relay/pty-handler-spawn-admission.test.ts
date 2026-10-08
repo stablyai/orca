@@ -212,6 +212,34 @@ describe('PtyHandler', () => {
     expect(handler.activePtyCount).toBe(1)
   })
 
+  it('starts a create however many create records it holds, and still replays an earlier one', async () => {
+    // Why: a 4,096-record limit refused a user's create for unrelated traffic.
+    const request = (operationId: string) => ({
+      cols: 80,
+      rows: 24,
+      agentSessionCreateOperationId: operationId
+    })
+    await dispatcher.callRequest('pty.spawn', request('a'.repeat(43)))
+    const records = handler['agentSessionCreateOperations']
+    const held = records.get('a'.repeat(43))!
+    for (let index = records.size; index < 4_096; index += 1) {
+      records.set(`held-${index}`, held)
+    }
+
+    await expect(dispatcher.callRequest('pty.spawn', request('b'.repeat(43)))).resolves.toEqual({
+      id: testPtyId(2),
+      incarnationId: expect.any(String),
+      shellReadyArmed: false
+    })
+    await expect(dispatcher.callRequest('pty.spawn', request('a'.repeat(43)))).resolves.toEqual({
+      id: testPtyId(1),
+      incarnationId: expect.any(String),
+      shellReadyArmed: false
+    })
+    expect(records.size).toBe(4_097)
+    expect(mockPtySpawn).toHaveBeenCalledTimes(2)
+  })
+
   it('retains an operation fence when publication fails after native spawn', async () => {
     const operationId = 'f'.repeat(43)
     mockPtySpawn.mockReturnValue({

@@ -3,6 +3,7 @@ import { PassThrough } from 'node:stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { spawnProcess } from '../../shared/child-process/run-process'
 import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from './provider-process-supervisor'
+import { PROVIDER_SPAWN_FAILURE_MARKER } from './provider-spawn-failure-report'
 import { spawnManagedProviderProcess } from './managed-provider-process'
 import type { DescendantTreeVerdict } from '../pty-descendant-exit-verification'
 import type { ProviderProcessTree } from './provider-process-close'
@@ -177,6 +178,46 @@ describe('managed provider process', () => {
     expect(managed.processless).toBe(true)
     expect(managed.rootVerdict).toBe('exited')
     await expect(managed.close()).resolves.toMatchObject({ root: 'exited' })
+  })
+
+  it('names a missing provider executable from a direct spawn error or a supervisor report', async () => {
+    const direct = fakeChild(null)
+    const directManaged = launch(direct)
+    direct.child.emit(
+      'error',
+      Object.assign(new Error('spawn fixture-provider ENOENT'), {
+        code: 'ENOENT',
+        path: 'fixture-provider'
+      })
+    )
+    expect(directManaged.executableMissing).toBe(true)
+
+    const supervisedLaunch = (fixture: ReturnType<typeof fakeChild>) =>
+      spawnManagedProviderProcess(
+        { command: 'fixture-provider', args: ['serve'], cwd: '/workspace' },
+        {
+          spawnImpl: fixture.spawn,
+          platform: 'linux',
+          site: 'fixture-provider-teardown',
+          policy: () => ({ gracefulExitMs: PROVIDER_SUPERVISOR_MAX_STOP_MS, forcedExitMs: 50 })
+        }
+      )
+    const supervised = fakeChild()
+    const supervisedManaged = supervisedLaunch(supervised)
+    const report = (code: string): string =>
+      `${PROVIDER_SPAWN_FAILURE_MARKER}${JSON.stringify({ thrown: false, code, message: `spawn fixture-provider ${code}` })}\n`
+    supervised.child.stderr.write(report('ENOENT'))
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(supervisedManaged.executableMissing).toBe(false)
+    supervised.child.emit('exit', 127, null)
+    expect(supervisedManaged.executableMissing).toBe(true)
+
+    const denied = fakeChild()
+    const deniedManaged = supervisedLaunch(denied)
+    denied.child.stderr.write(report('EACCES'))
+    await new Promise((resolve) => setImmediate(resolve))
+    denied.child.emit('exit', 127, null)
+    expect(deniedManaged.executableMissing).toBe(false)
   })
 
   it('does not turn a transport close with an existing pid into Claude exit proof', () => {

@@ -22,8 +22,6 @@ const asyncStorage = vi.hoisted(() => ({
 
 vi.mock('@react-native-async-storage/async-storage', () => ({ default: asyncStorage }))
 
-import { resetMobileStructuredSendOperationJournalForTests } from './mobile-structured-send-operation-journal'
-
 function ok(result: unknown) {
   return { ok: true, result, _meta: { runtimeId: 'runtime-1' } }
 }
@@ -271,7 +269,7 @@ describe('useMobileStructuredAgentSession', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    resetMobileStructuredSendOperationJournalForTests()
+
     storedOperations = new Map()
     asyncStorage.getItem.mockImplementation(
       async (key: string) => storedOperations.get(key) ?? null

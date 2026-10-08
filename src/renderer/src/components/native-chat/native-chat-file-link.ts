@@ -1,7 +1,8 @@
 import { routeNativeChatHref } from '../../../../shared/native-chat-href-routing'
 import {
   parseExplicitFileLinkTarget,
-  resolveExplicitFileLinkTarget
+  resolveExplicitFileLinkTarget,
+  resolveExplicitFileLinkTargetPath
 } from '@/lib/explicit-file-link-target'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import type { AppState } from '@/store/types'
@@ -155,6 +156,10 @@ export function resolveNativeChatFileLink(
   const route = routeNativeChatHref(href)
   if (route.kind !== 'file') {
     return null
+  }
+  if (route.pathKind === 'literal') {
+    const absolutePath = resolveExplicitFileLinkTargetPath(route.pathText, context.worktreePath)
+    return absolutePath ? { absolutePath, line: null, column: null } : null
   }
   return resolvePathText(route.pathText, route.line, context)
 }

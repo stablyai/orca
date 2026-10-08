@@ -80,11 +80,25 @@ export function windowsNodeRuntimeProbeCommand(
 }
 
 /** Cheap warm-path check: a published runtime has its marker and node.exe; no re-hash. */
-export function windowsNodeRuntimePresentCommand(runtimeDir: string): string {
+/** `runs`: also run node.exe, reporting a refusal as promotion does (see the POSIX twin). */
+export function windowsNodeRuntimePresentCommand(runtimeDir: string, runs = false): string {
+  const ready = runs
+    ? [
+        "$runOut = ''; $runStatus = $null",
+        'try { $runOut = ((& $exe --version 2>&1) | ForEach-Object { "$_" }) -join "`n"; $runStatus = $LASTEXITCODE } catch { $runStatus = -1; $runOut = $_.Exception.Message }',
+        `if (($runStatus -eq 0) -and ($runOut.Trim() -eq ${powerShellLiteral(`v${NODE_RUNTIME_PIN.version}`)})) { Write-Output ${powerShellLiteral(REMOTE_NODE_RUNTIME_READY)} } else {`,
+        `Write-Output ${powerShellLiteral(REMOTE_NODE_RUNTIME_SELFTEST_FAILED)}`,
+        `Write-Output (${powerShellLiteral(REMOTE_NODE_RUNTIME_EXIT_PREFIX)} + $runStatus)`,
+        'Write-Output ($runOut.Substring(0, [Math]::Min(4000, $runOut.Length)))',
+        '}'
+      ].join('\n')
+    : `Write-Output ${powerShellLiteral(REMOTE_NODE_RUNTIME_READY)}`
   return powerShellCommand(
     [
       ...runtimeVariables(runtimeDir),
-      `if ((Test-Path -LiteralPath $verified -PathType Leaf) -and (Test-Path -LiteralPath $exe -PathType Leaf)) { Write-Output ${powerShellLiteral(REMOTE_NODE_RUNTIME_READY)} } else { Write-Output ${powerShellLiteral(REMOTE_NODE_RUNTIME_MISSING)} }`
+      `if ((Test-Path -LiteralPath $verified -PathType Leaf) -and (Test-Path -LiteralPath $exe -PathType Leaf)) {`,
+      ready,
+      `} else { Write-Output ${powerShellLiteral(REMOTE_NODE_RUNTIME_MISSING)} }`
     ].join('\n')
   )
 }

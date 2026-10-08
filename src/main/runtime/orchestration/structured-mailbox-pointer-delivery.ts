@@ -37,8 +37,9 @@ export type StructuredPointerTarget = {
   sessionId: string
   /**
    * The dispatch whose mailbox this is, or null for direct peer mail addressed to the worker's own
-   * handle outside any dispatch. Nothing downstream needs a dispatch to deliver — it only scopes
-   * the operation-ledger budget — so a worker between dispatches is nudged, not dropped.
+   * handle outside any dispatch. Nothing downstream needs a dispatch to deliver — it only names
+   * the caller on the operation row and the mail's source — so a worker between dispatches is
+   * nudged, not dropped.
    */
   dispatchId: string | null
 }

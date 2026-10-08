@@ -1,9 +1,12 @@
+import type { LinkActionRequest } from '@/components/link-actions/link-action-request'
+import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
 import {
   getTerminalFileContext,
   mapTerminalFilePath,
   openDetectedFilePath,
   shouldOpenTerminalFileWithSystemDefault,
-  terminalLinkWslDistro
+  terminalLinkWslDistro,
+  type FileOpenFailure
 } from './terminal-file-open-routing'
 import { isTerminalLinkDirectActivation } from './terminal-link-activation'
 import {
@@ -25,7 +28,13 @@ export type TerminalFileLinkActionDeps = {
   worktreePath: string
   runtimeEnvironmentId?: string | null
   wslDistro?: string | null
+  onOpenFailure?: (failure: FileOpenFailure) => void
 }
+
+export type FileLinkActions = Pick<
+  LinkActionRequest,
+  'destination' | 'kind' | 'primary' | 'alternate' | 'secondaryActions'
+>
 
 export function handleTerminalFileLink(
   filePath: string,
@@ -44,7 +53,21 @@ export function handleTerminalFileLink(
     })
     return true
   }
+  const actions = buildFileLinkActions(filePath, line, column, deps, actionContext?.sourceOwner)
+  return requestTerminalLinkAction(event, actionContext, {
+    ...actions,
+    destination: actionDestination ?? actions.destination
+  })
+}
 
+/** The file-link popover's rows (open in Orca, default app, reveal), shared by terminal and chat. */
+export function buildFileLinkActions(
+  filePath: string,
+  line: number | null,
+  column: number | null,
+  deps: TerminalFileLinkActionDeps,
+  sourceOwner: HttpLinkSourceOwner | undefined
+): FileLinkActions {
   const mappedPath = mapTerminalFilePath(
     filePath,
     deps.worktreePath,
@@ -103,7 +126,7 @@ export function handleTerminalFileLink(
   const canReveal =
     !worktreeRoot &&
     canOpenWithSystemDefault &&
-    actionContext?.sourceOwner?.kind === 'local' &&
+    sourceOwner?.kind === 'local' &&
     !isRevealInFileManagerBlocked(useAppStore.getState().settings, {
       runtimeEnvironmentId: deps.runtimeEnvironmentId
     })
@@ -115,8 +138,8 @@ export function handleTerminalFileLink(
         run: () => revealInFileManager(mappedPath)
       }
     : null
-  return requestTerminalLinkAction(event, actionContext, {
-    destination: actionDestination ?? mappedPath,
+  return {
+    destination: mappedPath,
     kind: worktreeRoot ? 'workspace' : 'file',
     primary: {
       label: worktreeRoot
@@ -132,5 +155,5 @@ export function handleTerminalFileLink(
     },
     ...(systemDefaultRow ? { alternate: systemDefaultRow } : {}),
     ...(revealRow ? { secondaryActions: [revealRow] } : {})
-  })
+  }
 }

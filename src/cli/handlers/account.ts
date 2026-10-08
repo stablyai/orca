@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
@@ -8,10 +9,10 @@ import { RuntimeClientError } from '../runtime-client'
 import { stripElectronRunAsNode } from '../runtime/launch'
 import { rejectRemoteSelectionFlags } from '../remote-selection-flag-rejection'
 import {
-  buildWslExecArgs,
-  buildWslLoginShellCommand,
-  quotePosixShell
-} from '../../shared/wsl-login-shell-command'
+  deleteActiveClaudeKeychainCredentialsStrict,
+  readActiveClaudeKeychainCredentialsStrict,
+  writeActiveClaudeKeychainCredentials
+} from '../../main/claude-accounts/keychain'
 import {
   getVersionManagerBinPaths,
   resolveCliCommand,
@@ -23,13 +24,9 @@ import {
   WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL
 } from '../../shared/windows-batch-spawn'
 import { stdioForWindowsInteractiveChild } from '../../shared/windows-console-input'
-import {
-  ACCOUNT_IMPORT_RUNTIME_CAPABILITY,
-  CLAUDE_SIGN_IN_RUNTIME_CAPABILITY
-} from '../../shared/protocol-version'
+import { ACCOUNT_IMPORT_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import type {
-  ClaudeAccountSignIn,
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState,
   ManagedDataAccountsState
@@ -143,53 +140,79 @@ async function runAgentLoginInTerminal(
   })
 }
 
-/** Signs in to a new account folder the host created, then registers it (superset AddAccountDialog). */
+async function cleanupClaudeLoginArtifacts(
+  configDir: string,
+  legacyCredentials: string | null,
+  restoreLegacyCredentials: boolean
+): Promise<void> {
+  const errors: unknown[] = []
+  if (process.platform === 'darwin') {
+    try {
+      await deleteActiveClaudeKeychainCredentialsStrict(configDir)
+    } catch (error) {
+      errors.push(error)
+    }
+    if (restoreLegacyCredentials) {
+      try {
+        await (legacyCredentials
+          ? writeActiveClaudeKeychainCredentials(legacyCredentials)
+          : deleteActiveClaudeKeychainCredentialsStrict())
+      } catch (error) {
+        errors.push(error)
+      }
+    }
+  }
+  try {
+    rmSync(configDir, { recursive: true, force: true })
+  } catch (error) {
+    errors.push(error)
+  }
+  if (errors.length > 0) {
+    throw new AggregateError(errors, 'Failed to clean up Claude login artifacts.')
+  }
+}
+
+/** Logs into a Claude account in a temp config dir, then registers it with the local runtime. */
 async function addClaudeAccount({ client, cwd, json }: HandlerContext): Promise<void> {
-  const { result: signIn } = await client.call<ClaudeAccountSignIn>(
-    'accounts.beginClaudeSignIn',
-    getWslAccountTarget(cwd) ?? {},
-    { timeoutMs: 300_000 }
-  )
+  const configDir = mkdtempSync(join(tmpdir(), 'orca-account-add-claude-'))
   const session: InteractiveLoginSession = {
     child: null,
     registering: false,
     terminationPromise: null
   }
+  let legacyCredentials: string | null = null
+  let restoreLegacyCredentials = false
   const result = await withInteractiveLoginCleanup(
     session,
-    // Why always: the host keeps a folder that became an account, and deletes an abandoned one.
-    // Never thrown: an older running Orca lacks the method, and the add itself already finished.
     async () => {
-      const { accountId, runtime, wslDistro } = signIn
-      await client
-        .call('accounts.cancelClaudeSignIn', { accountId, runtime, wslDistro })
-        .catch((error: unknown) => console.warn('[account] Could not clean up sign-in:', error))
+      await cleanupClaudeLoginArtifacts(configDir, legacyCredentials, restoreLegacyCredentials)
     },
     async () => {
-      if (signIn.runtime === 'wsl' && signIn.wslDistro) {
-        const login = `exec env CLAUDE_CONFIG_DIR=${quotePosixShell(signIn.configDir)} claude auth login`
-        await runAgentLoginInTerminal(
-          'wsl.exe',
-          buildWslExecArgs(signIn.wslDistro, ['/bin/sh', '-c', buildWslLoginShellCommand(login)]),
-          {},
-          json,
-          session
-        )
-      } else {
-        await runAgentLoginInTerminal(
-          'claude',
-          ['auth', 'login'],
-          { CLAUDE_CONFIG_DIR: signIn.configDir },
-          json,
-          session
-        )
+      if (process.platform === 'darwin') {
+        legacyCredentials = await readActiveClaudeKeychainCredentialsStrict()
+        restoreLegacyCredentials = true
       }
-      session.registering = true
-      return client.call<ClaudeRateLimitAccountsState>(
-        'accounts.finishClaudeSignIn',
-        { accountId: signIn.accountId, runtime: signIn.runtime, wslDistro: signIn.wslDistro },
-        { timeoutMs: 300_000 }
+      await runAgentLoginInTerminal(
+        'claude',
+        ['auth', 'login', '--claudeai'],
+        {
+          CLAUDE_CONFIG_DIR: configDir
+        },
+        json,
+        session
       )
+      session.registering = true
+      return client.call<ClaudeRateLimitAccountsState>('accounts.addClaudeFromConfigDir', {
+        configDir,
+        ...getWslAccountTarget(cwd),
+        ...(process.platform === 'darwin'
+          ? {
+              previousLegacyCredentialsSha256: legacyCredentials
+                ? createHash('sha256').update(legacyCredentials).digest('hex')
+                : null
+            }
+          : {})
+      })
     }
   )
   printResult(result, json, (state) => formatAccountsBlock('Claude', state))
@@ -242,14 +265,9 @@ function rejectAccountRemoteSelectionFlags(ctx: HandlerContext, command: string)
   )
 }
 
-async function assertAccountImportSupported(
-  { client }: HandlerContext,
-  agent: 'claude' | 'codex'
-): Promise<void> {
+async function assertAccountImportSupported({ client }: HandlerContext): Promise<void> {
   const status = await client.call<RuntimeStatus>('status.get')
-  const capability =
-    agent === 'claude' ? CLAUDE_SIGN_IN_RUNTIME_CAPABILITY : ACCOUNT_IMPORT_RUNTIME_CAPABILITY
-  if (!status.result.capabilities?.includes(capability)) {
+  if (!status.result.capabilities?.includes(ACCOUNT_IMPORT_RUNTIME_CAPABILITY)) {
     throw new RuntimeClientError(
       'incompatible_runtime',
       'The running Orca runtime is too old to add accounts from the CLI. Update or restart Orca and try again.'
@@ -282,7 +300,7 @@ export const ACCOUNT_HANDLERS: Record<string, CommandHandler> = {
       return
     }
     // Why: fail on runtime version skew before burning a full OAuth round trip.
-    await assertAccountImportSupported(ctx, agent)
+    await assertAccountImportSupported(ctx)
     await ctx.client.call('accounts.list', { refreshUsage: false })
     await (agent === 'claude' ? addClaudeAccount(ctx) : addCodexAccount(ctx))
   },

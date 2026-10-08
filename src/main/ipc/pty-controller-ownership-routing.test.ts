@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import type { AgentSessionOwnerBinding } from '../../shared/agent-session-host-authority'
 import { LocalPtyProvider } from '../providers/local-pty-provider'
+import { SshPlainShellPtyProvider } from '../providers/ssh-plain-shell-pty-provider'
 import {
   registerPtyHandlers,
   registerSshPtyProvider,
@@ -204,6 +205,28 @@ describe('registerPtyHandlers', () => {
         unregisterSshPtyProvider(connectionId)
         clearPtyOwnershipForConnection(connectionId)
         clearProviderPtyState(ptyId)
+      }
+    })
+
+    it('answers unknown for an earlier relay PTY once the target is in plain SSH mode', async () => {
+      // Why: rung D never saw that PTY; it may still run on the earlier relay.
+      const connectionId = 'ssh-plain-1'
+      const ptyId = `ssh:${connectionId}@@prior-relay-pty`
+      setLocalPtyProvider(new LocalPtyProvider())
+      const openShell = vi.fn(async () => {
+        throw new Error('no shell in this test')
+      })
+      const mode = { reason: 'no_runtime' as const, message: 'plain' }
+      registerSshPtyProvider(
+        connectionId,
+        new SshPlainShellPtyProvider(connectionId, openShell, mode, true, 1)
+      )
+      const controller = registerAgentClaimController()
+      try {
+        await expect(controller.probePtyLiveness(ptyId)).resolves.toBeNull()
+        await expect(controller.attach(ptyId)).resolves.toBe(false)
+      } finally {
+        unregisterSshPtyProvider(connectionId)
       }
     })
 

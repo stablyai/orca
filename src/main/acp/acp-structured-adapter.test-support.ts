@@ -175,7 +175,7 @@ export async function openAcpAdapterRig(
     resolveLaunch: async () => ({
       spec,
       command: `/opt/bin/${spec.command}`,
-      args: spec.args({ fullAccess: false }),
+      args: spec.args({ fullAccess: false, pluginDir: null }),
       cwd: '/workspace/project',
       env: { PATH: '/usr/bin', ORCA_PANE_KEY: 'tab-1:pane-1', ORCA_AGENT_HOOK_PORT: '1234' },
       envToDelete: [],

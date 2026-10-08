@@ -6,6 +6,7 @@
 import type { SubmissionRejectionFact } from '../../shared/agent-session-failure'
 import { providerStartupFailureFact } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'
 import type { ClaudeSession } from './claude-structured-session-state'
+import { withMissingProviderExecutable } from '../provider-process/provider-executable-missing'
 
 export type ClaudeSessionStartup = {
   state: 'pending' | 'proven' | 'failed'
@@ -26,9 +27,20 @@ export function createClaudeSessionStartup(): ClaudeSessionStartup {
   return { state: 'pending', answered: false, failure: null, settled: ended, end }
 }
 
+/** Why a start failed; a CLI that was never found says so, whichever error the start met first. */
+export function claudeStartupFailureCause(
+  session: ClaudeSession,
+  fallback?: Error
+): Error | undefined {
+  const failure = session.startup.failure ?? fallback
+  return failure && session.connection.executableMissing
+    ? withMissingProviderExecutable(failure)
+    : failure
+}
+
 export function claudeStartupFailureFact(session: ClaudeSession): SubmissionRejectionFact | null {
   return session.startup.state === 'failed'
-    ? providerStartupFailureFact(session.startup.failure ?? undefined)
+    ? providerStartupFailureFact(claudeStartupFailureCause(session))
     : null
 }
 

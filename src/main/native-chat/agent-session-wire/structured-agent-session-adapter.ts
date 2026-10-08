@@ -1,3 +1,4 @@
+import type { AgentSessionAccountKind } from '../../../shared/agent-session-availability'
 import type {
   AgentSessionRewindReason,
   AgentSessionRewindSupport
@@ -56,7 +57,8 @@ export class AgentSessionAcquisitionRefusal extends Error {
     message: string,
     /** The situation, so the chat can say what to do; the message is Orca's log wording. Absent,
      *  the provider refused its own start. */
-    readonly reason: AgentSessionRefusalReason<'agent_session_operation_invalid'> = 'providerStartFailed'
+    readonly reason: AgentSessionRefusalReason<'agent_session_operation_invalid'> = 'providerStartFailed',
+    readonly account?: AgentSessionAccountKind
   ) {
     super(message)
     this.name = 'AgentSessionAcquisitionRefusal'
@@ -134,8 +136,6 @@ export type AgentSessionPreSpawnReason = Extract<
   | 'managedAccountUnsupported'
   | 'launchFolderMissing'
   | 'historyInOtherAccount'
-  | 'claudeAccountFolderMissing'
-  | 'claudeAccountSetupFailed'
   | 'agentCommandNotRunnable'
 >
 

@@ -5,7 +5,7 @@ import {
 import { extractWorktreePaletteCommentSnippet } from './worktree-palette-comment-snippet'
 import type { MatchRange } from './palette-match/normalized-text'
 import type { HostedReviewInfo } from '../../../shared/hosted-review'
-import type { Worktree } from '../../../shared/worktree/types'
+import type { WorkspaceAttachment, Worktree } from '../../../shared/worktree/types'
 
 /** Chip label kinds the worktree row can render for a supporting-evidence unit. */
 export type PaletteSupportingKind =
@@ -198,6 +198,31 @@ export function buildWorktreePortEvidence(
         identifier: { kind: 'port' }
       },
       { key: 'process', text: port.processName ?? '', profile: 'structured-label' }
+    ]
+  })
+}
+
+export function buildWorktreeAttachmentEvidence(
+  item: WorkspaceAttachment
+): PaletteComposedEvidence | null {
+  if (item.type !== 'issue' && item.provider !== 'linear' && item.provider !== 'jira') {
+    return buildWorktreeReviewEvidence({
+      provider: item.provider,
+      number: item.number,
+      title: item.title
+    })
+  }
+  if (item.provider === 'github' || item.provider === 'gitlab') {
+    return buildWorktreeIssueEvidence(item)
+  }
+  const identifier = item.identifier ?? item.linearIdentifier ?? item.jiraIdentifier ?? ''
+  return composePaletteEvidence({
+    id: `task:${identifier}`,
+    kind: 'task',
+    accessibilityLabel: 'Linked task',
+    parts: [
+      { key: 'identifier', text: identifier, profile: 'identifier', identifier: { kind: 'key' } },
+      { key: 'title', text: item.title ?? '', profile: 'prose' }
     ]
   })
 }

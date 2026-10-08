@@ -4,6 +4,7 @@ import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { AppState } from '@/store/types'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../../shared/constants'
+import { createNativeChatFileHref } from '../../../../shared/native-chat-href-routing'
 import {
   findNativeChatTabOwnerWorktreeId,
   resolveNativeChatFileLink,
@@ -195,6 +196,45 @@ describe('floating workspace native chat', () => {
 })
 
 describe('resolveNativeChatFileLink', () => {
+  it.each([
+    ['/repo/report:12', '/repo/report:12'],
+    ['/repo/report:0', '/repo/report:0'],
+    ['/repo/report:12:4', '/repo/report:12:4'],
+    ['/repo/ leading ', '/repo/ leading '],
+    [' leading ', '/repo/worktree/ leading '],
+    ['notes%23?#.md', '/repo/worktree/notes%23?#.md'],
+    ['https:notes.md', '/repo/worktree/https:notes.md'],
+    ['file:notes.md', '/repo/worktree/file:notes.md'],
+    ['../sibling/readme.md', '/repo/sibling/readme.md']
+  ])('resolves literal tool path %j without parsing a reply location', (path, absolutePath) => {
+    expect(resolveNativeChatFileLink(createNativeChatFileHref(path, 'literal'), context)).toEqual({
+      absolutePath,
+      line: null,
+      column: null
+    })
+  })
+
+  it('keeps wrapped reply locations distinct from literal tool paths', () => {
+    expect(
+      resolveNativeChatFileLink(createNativeChatFileHref('/repo/report:12:4'), context)
+    ).toEqual({
+      absolutePath: '/repo/report',
+      line: 12,
+      column: 4
+    })
+    expect(
+      resolveNativeChatFileLink(createNativeChatFileHref('/repo/report:0'), context)
+    ).toBeNull()
+  })
+
+  it('resolves parent-relative reply locations against the same base', () => {
+    expect(resolveNativeChatFileLink('../sibling/readme.md:12:4', context)).toEqual({
+      absolutePath: '/repo/sibling/readme.md',
+      line: 12,
+      column: 4
+    })
+  })
+
   it('resolves repo-relative file links against the chat worktree', () => {
     expect(resolveNativeChatFileLink('docs/guide.md', context)).toEqual({
       absolutePath: '/repo/worktree/docs/guide.md',

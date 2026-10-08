@@ -30,7 +30,6 @@ import { useMobileStructuredPromptResponses } from './use-mobile-structured-prom
 import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
 import { useMobileStructuredAgentOptions } from './use-mobile-structured-agent-options'
 import { useMobileStructuredAgentTurnTiming } from './use-mobile-structured-agent-turn-timing'
-import { useMobileStructuredSendOperationReconciliation } from './use-mobile-structured-send-operation-reconciliation'
 import {
   pendingStructuredPromptIdentity,
   requestMobileStructuredAgentSessionCancel
@@ -83,8 +82,6 @@ export function useMobileStructuredAgentSession(args: {
   sessionId: string | null
   /** Host/workspace scope used to keep same provider ids isolated. */
   sourceIdentity?: string
-  /** Authenticated identity the host keys mutation admission under. */
-  callerIdentity?: string
   enabled: boolean
   /** Live transport only; gates the connection-scoped hold, and whether child rows may read live. */
   connected: boolean
@@ -100,7 +97,6 @@ export function useMobileStructuredAgentSession(args: {
   const {
     agent,
     appendComposerText,
-    callerIdentity = '',
     client,
     connected,
     sessionId,
@@ -121,7 +117,6 @@ export function useMobileStructuredAgentSession(args: {
   const stateArgs = { client, sessionId, sessionKey, enabled, connected }
   const { state, stateRef, queuedMessages, queuePause, loadingOlder, loadEarlier } =
     useMobileStructuredAgentState(stateArgs)
-  useMobileStructuredSendOperationReconciliation(state.submissions, queuedMessages)
 
   const mutate = useMobileStructuredAgentMutate({
     client,
@@ -154,10 +149,8 @@ export function useMobileStructuredAgentSession(args: {
 
   const sendWithOutcome = useMobileStructuredSendWithOutcome({
     agent,
-    callerIdentity,
     client,
     sessionId,
-    sessionKey,
     enabled,
     queueCapable,
     stateRef,

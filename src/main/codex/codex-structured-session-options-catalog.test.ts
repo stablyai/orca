@@ -15,6 +15,7 @@ import {
   AgentModelCatalogStore,
   type AgentModelCatalogProbe
 } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
+import { AgentModelCatalogUnavailableError } from '../native-chat/agent-model-catalog/agent-model-catalog-unavailable'
 import { createAgentModelCatalogService } from '../native-chat/agent-model-catalog/agent-model-catalog-service'
 import { agentModelCatalogFingerprint } from '../native-chat/agent-model-catalog/agent-model-catalog-fingerprint'
 
@@ -84,6 +85,21 @@ function seedEntry(store: AgentModelCatalogStore, ...ids: string[]): void {
 }
 
 describe('Codex session options through the host catalog store', () => {
+  it("keeps the probe's signed-out verdict when the chat's own picker lists", async () => {
+    const store = new AgentModelCatalogStore({ now: () => 1000 })
+    const signedOut: AgentModelCatalogProbe = async () => {
+      throw new AgentModelCatalogUnavailableError({ reason: 'notSignedIn', account: 'system' })
+    }
+    await store.refresh(FINGERPRINT, 'codex', signedOut, () => signedOut('/homes/a'))
+    const request = vi.fn(async () => listAnswer('gpt-live'))
+    const result = await readLiveCodexSessionOptions(storeSession(request, store), undefined)
+    expect(result.models.map((model) => model.id)).toEqual(['gpt-live'])
+    expect(store.failure(FINGERPRINT)?.unavailable).toEqual({
+      reason: 'notSignedIn',
+      account: 'system'
+    })
+  })
+
   it('lists once at the first read and serves every later read from the store', async () => {
     const store = new AgentModelCatalogStore()
     const request = vi.fn(async () => listAnswer('gpt-live', 'gpt-next'))

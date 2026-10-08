@@ -27,21 +27,9 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
     setRemoveClaudeTarget,
     settings,
     systemClaudeActive,
-    updateSettings,
     visibleClaudeAccounts,
     wslCapabilitiesLoading
   } = model
-  // Why host only: the host reads its own System default, never a WSL distro's.
-  const systemDefaultEmail =
-    accountRuntime.runtime === 'host' ? claudeAccounts.systemDefaultEmail : undefined
-  // Why the copy evidence: saving your own login as an account too is normal and needs no warning.
-  const systemDefaultIsSaved =
-    !!systemDefaultEmail &&
-    claudeAccounts.systemDefaultMayBeCopied === true &&
-    !settings.claudeCopiedSystemDefaultNoticeDismissed &&
-    claudeAccounts.accounts.some(
-      (account) => account.email.toLowerCase() === systemDefaultEmail.toLowerCase()
-    )
   return (
     <section key="claude-accounts" id="accounts-claude" className="space-y-4 scroll-mt-6">
       <div className="space-y-1">
@@ -60,8 +48,8 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
       <SearchableSetting
         title={translate('auto.components.settings.AccountsPane.8bbfd74556', 'Claude Accounts')}
         description={translate(
-          'accounts.claude.profileSwitching',
-          'Switching applies to the next Claude you start in any tab. Running sessions keep their account.'
+          'auto.components.settings.AccountsPane.79e484c3b2',
+          'Optional account switcher for the shared Claude auth files.'
         )}
         keywords={['claude', 'account', 'rate limit', 'status bar', 'quota']}
         className="space-y-3 py-2"
@@ -151,18 +139,7 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
             <div className="flex min-w-0 flex-1 flex-col gap-0.5">
               <div className="flex min-w-0 items-center gap-2">
                 <span className="truncate text-sm font-medium">
-                  {systemDefaultEmail
-                    ? translate(
-                        'accounts.claude.systemDefaultNamed',
-                        'System default: {{value0}}',
-                        {
-                          value0: systemDefaultEmail
-                        }
-                      )
-                    : translate(
-                        'auto.components.settings.AccountsPane.f2a265f8c7',
-                        'System default'
-                      )}
+                  {translate('auto.components.settings.AccountsPane.f2a265f8c7', 'System default')}
                 </span>
                 {systemClaudeActive ? (
                   <Badge
@@ -182,24 +159,6 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
               </span>
             </div>
           </button>
-          {systemDefaultIsSaved ? (
-            <div className="flex items-start justify-between gap-2">
-              <p className="text-xs text-muted-foreground">
-                {translate(
-                  'accounts.claude.systemDefaultIsSaved',
-                  'System default is signed in as {{value0}}, which is also a saved account. An earlier Orca version may have copied that login there. If it is not your own login, select System default and run claude /login.',
-                  { value0: systemDefaultEmail }
-                )}
-              </p>
-              <Button
-                variant="ghost"
-                size="xs"
-                onClick={() => updateSettings({ claudeCopiedSystemDefaultNoticeDismissed: true })}
-              >
-                {translate('accounts.claude.systemDefaultIsSavedDismiss', 'Dismiss')}
-              </Button>
-            </div>
-          ) : null}
           {visibleClaudeAccounts.length === 0 ? (
             <div className="rounded-md border border-dashed border-border/70 px-3 py-4 text-xs text-muted-foreground">
               {isRemoteAccountScope
@@ -249,7 +208,7 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
                           accountRuntimeView
                         )
                       }}
-                      disabled={isBusy || account.needsSignIn}
+                      disabled={isBusy}
                       className="flex min-w-0 flex-1 flex-col gap-0.5 text-left disabled:cursor-default"
                     >
                       <div className="flex min-w-0 items-center gap-2">
@@ -273,14 +232,9 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
                         ) : null}
                       </div>
                       <span className="truncate text-[11px] text-muted-foreground">
-                        {account.needsSignIn
-                          ? translate(
-                              'accounts.claude.signInRequired',
-                              'Sign in again to use this account'
-                            )
-                          : account.organizationName
-                            ? `${account.organizationName} · ${formatAccountTimestamp(account.lastAuthenticatedAt)}`
-                            : formatAccountTimestamp(account.lastAuthenticatedAt)}
+                        {account.organizationName
+                          ? `${account.organizationName} · ${formatAccountTimestamp(account.lastAuthenticatedAt)}`
+                          : formatAccountTimestamp(account.lastAuthenticatedAt)}
                       </span>
                     </button>
                     <div className="flex shrink-0 items-center justify-end gap-1 max-md:w-full max-md:flex-wrap">
@@ -306,7 +260,10 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
                         ) : (
                           <RefreshCw className="size-3" />
                         )}
-                        {translate('accounts.claude.signInAgain', 'Sign in again')}
+                        {translate(
+                          'auto.components.settings.AccountsPane.8a0f870153',
+                          'Re-authenticate'
+                        )}
                       </Button>
                       <Button
                         variant="ghost"

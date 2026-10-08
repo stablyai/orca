@@ -1,18 +1,26 @@
+import type { AgentSessionUnavailable } from '../../../shared/agent-session-availability'
 import type {
   AgentSessionFastModeSupport,
   AgentSessionModelOption
 } from '../../../shared/agent-session-wire'
 import type { AgentModelCatalogPersistence } from './agent-model-catalog-persistence'
+import {
+  AGENT_MODEL_CATALOG_FAILURE_TTL_MS,
+  AgentModelCatalogFailures,
+  type AgentModelCatalogFailure
+} from './agent-model-catalog-failures'
+
+export { AGENT_MODEL_CATALOG_FAILURE_TTL_MS, type AgentModelCatalogFailure }
 
 // The execution host's one model catalog per (agent, launch fingerprint):
 // served immediately at any age, refreshed in the background when old, and
 // written through by every successful listing a live session already performs.
 // Success-only: a failure, timeout or empty list is never stored as a catalog
 // and never persisted — it is held separately under a short TTL so a burst of
-// picker opens does not hammer a dead binary, then dies on its own.
+// picker opens does not hammer a dead binary, then dies on its own (see
+// `AgentModelCatalogFailures`, which also holds why no chat can start under the account).
 
 export const AGENT_MODEL_CATALOG_FRESH_MS = 10 * 60_000
-export const AGENT_MODEL_CATALOG_FAILURE_TTL_MS = 30_000
 export const AGENT_MODEL_CATALOG_PICKER_WAIT_MS = 30_000
 export const AGENT_MODEL_CATALOG_MAX_ENTRIES = 256
 
@@ -32,14 +40,14 @@ export type AgentModelCatalogSuccess = {
   fastModeSupport?: AgentSessionFastModeSupport
   fastModeTierByModel: ReadonlyMap<string, string>
   origin: 'live-session' | 'probe'
+  /** A probe that listed models but also found no chat can start (a signed-out Codex): both kept. */
+  unavailable?: AgentSessionUnavailable
 }
 
 export type AgentModelCatalogProbe = (accountHomePath: string) => Promise<AgentModelCatalogSuccess>
 
 /** Who lists, by identity: a live session's per-spawn handle, or the session-less probe. */
 export type AgentModelCatalogLister = AgentModelCatalogSessionAccess | AgentModelCatalogProbe
-
-type CatalogFailure = { detail: string; failedAt: number }
 
 type InFlightListings = Map<AgentModelCatalogLister, Promise<AgentModelCatalogEntry | null>>
 
@@ -83,7 +91,7 @@ function listingKey(entry: AgentModelCatalogEntry): string {
 
 export class AgentModelCatalogStore {
   private readonly entries = new Map<string, AgentModelCatalogEntry>()
-  private readonly failures = new Map<string, CatalogFailure>()
+  private readonly failures: AgentModelCatalogFailures
   private readonly refreshes = new Map<string, InFlightListings>()
   private readonly listingWaiters = new Map<string, Set<() => void>>()
   private readonly latestWrittenOrder = new Map<string, number>()
@@ -93,6 +101,7 @@ export class AgentModelCatalogStore {
 
   constructor(options?: { now?: () => number }) {
     this.now = options?.now ?? Date.now
+    this.failures = new AgentModelCatalogFailures(this.now)
   }
 
   /** Hydrates last-good entries from disk. Anything this run already listed wins. */
@@ -132,15 +141,19 @@ export class AgentModelCatalogStore {
   }
 
   hasActiveFailure(fingerprint: string): boolean {
-    const failure = this.failures.get(fingerprint)
-    if (!failure) {
-      return false
-    }
-    if (this.now() - failure.failedAt >= AGENT_MODEL_CATALOG_FAILURE_TTL_MS) {
-      this.failures.delete(fingerprint)
-      return false
-    }
-    return true
+    return this.failures.isActive(fingerprint)
+  }
+
+  failure(fingerprint: string): AgentModelCatalogFailure | null {
+    return this.failures.get(fingerprint)
+  }
+
+  expireFailures(agent: string): void {
+    this.failures.expireAgent(agent)
+  }
+
+  expireFailure(fingerprint: string): void {
+    this.failures.expire(fingerprint)
   }
 
   recordSuccess(
@@ -190,7 +203,7 @@ export class AgentModelCatalogStore {
     if (this.refreshes.has(fingerprint)) {
       this.latestWrittenOrder.set(fingerprint, order)
     }
-    this.failures.delete(fingerprint)
+    this.failures.listed(fingerprint, agent, success.origin, success.unavailable)
     this.evictOverCap()
     // Live sessions re-list every turn; an unchanged listing only refreshes the in-memory age.
     if (!previous || listingKey(previous) !== listingKey(entry)) {
@@ -199,8 +212,8 @@ export class AgentModelCatalogStore {
     return entry
   }
 
-  recordFailure(fingerprint: string, detail: string): void {
-    this.failures.set(fingerprint, { detail, failedAt: this.now() })
+  recordFailure(fingerprint: string, detail: string, agent?: string): void {
+    this.failures.chatFailed(fingerprint, detail, agent)
   }
 
   /** Joins an in-flight refresh by the same lister rather than starting a second. Never
@@ -229,16 +242,29 @@ export class AgentModelCatalogStore {
     const run = listModels().then(
       (success) => {
         // An older session still receives its own result, but cannot replace a newer catalog.
-        const entry =
+        const superseded =
           (this.latestWrittenOrder.get(fingerprint) ?? 0) > order && this.entries.has(fingerprint)
-            ? this.entryFromSuccess(fingerprint, agent, success)
-            : this.writeSuccess(fingerprint, agent, success, order)
+        if (superseded && success.origin === 'probe') {
+          this.failures.listed(fingerprint, agent, success.origin, success.unavailable)
+        }
+        const entry = superseded
+          ? this.entryFromSuccess(fingerprint, agent, success)
+          : this.writeSuccess(fingerprint, agent, success, order)
         settle()
         return entry
       },
       (error: unknown) => {
         settle()
-        this.recordFailure(fingerprint, error instanceof Error ? error.message : String(error))
+        // Probes are functions; a live session lists through its access object.
+        if (typeof lister === 'function') {
+          this.failures.probeFailed(fingerprint, agent, error)
+        } else {
+          this.recordFailure(
+            fingerprint,
+            error instanceof Error ? error.message : String(error),
+            agent
+          )
+        }
         return null
       }
     )

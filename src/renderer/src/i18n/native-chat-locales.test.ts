@@ -81,3 +81,21 @@ describe('native chat locale copy', () => {
     }
   )
 })
+
+describe('account-aware Send fixes', () => {
+  it.each(Object.entries({ en, es, fr, ja, ko, zh }))(
+    '%s includes the same fixes for Send and post-send failures',
+    (_locale, catalog) => {
+      const words = catalog.components['native-chat'].failureWords
+      expect(words.claudeSystemNotSignedIn).toContain('`claude`')
+      expect(words.claudeSystemNotSignedIn).toContain('/login')
+      expect(words.codexSystemNotSignedIn).toContain('`codex login`')
+      expect(words.claudeManagedNotSignedIn).not.toContain('/login')
+      expect(words.codexManagedNotSignedIn).not.toContain('`codex login`')
+      expect(words.cliMissing).toContain('{{agent}}')
+      for (const key of ['claudeManagedNotSignedIn', 'codexManagedNotSignedIn'] as const) {
+        expect(words[key].trim()).not.toBe('')
+      }
+    }
+  )
+})

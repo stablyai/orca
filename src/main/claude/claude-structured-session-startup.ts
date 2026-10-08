@@ -3,6 +3,7 @@
 // input at once. Every way the start can fail (exit, auth, a foreign session id) faults the
 // published session through its exit path; a CLI that never answers is ended by a Stop or a close.
 
+import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
 import type {
   StructuredAgentSessionOptionsSkippedEvent,
   StructuredAgentSessionStartedEvent
@@ -120,6 +121,7 @@ export async function readClaudeStartupFacts(input: {
   providerSessionId: string
   startup: Pick<ClaudeSessionStartup, 'answered'>
   resumesTranscript: boolean
+  account?: AgentSessionAccountKind
   requestTimeoutMs: number | undefined
   emit: (event: ClaudeStructuredSessionEvent) => void
 }): Promise<ClaudeStartupFacts> {
@@ -127,7 +129,7 @@ export async function readClaudeStartupFacts(input: {
   const initialization = await Promise.race([
     input.connection.initializationResult().then((result) => {
       input.startup.answered = true
-      const authError = claudeInitializationAuthError(result)
+      const authError = claudeInitializationAuthError(result, input.account)
       if (authError) {
         throw authError
       }

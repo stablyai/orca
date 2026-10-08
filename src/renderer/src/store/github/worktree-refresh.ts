@@ -20,6 +20,7 @@ export function findWorktreeById(state: AppState, worktreeId: string): Worktree 
 }
 
 type WorktreeLookupEntry = {
+  owners: Worktree[]
   first: Worktree
   unique: Worktree | null
 }
@@ -39,9 +40,10 @@ export function buildWorktreeLookupIndex(state: AppState): WorktreeLookupIndex {
       const worktreeId = worktree.id
       const existing = byId.get(worktreeId)
       if (existing) {
+        existing.owners.push(worktree)
         existing.unique = null
       } else {
-        byId.set(worktreeId, { first: worktree, unique: worktree })
+        byId.set(worktreeId, { owners: [worktree], first: worktree, unique: worktree })
       }
     }
   }

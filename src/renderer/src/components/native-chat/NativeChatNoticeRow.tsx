@@ -15,12 +15,6 @@ import { useNativeChatOrcaStopView } from './native-chat-orca-stop-context'
 import { nativeChatOrcaStopRowText } from './native-chat-orca-stop-words'
 import { AGENT_SESSION_ORCA_STOP_PRESENTATION } from '../../../../shared/agent-session-orca-stop'
 import { ProviderFrameRow } from './NativeChatTranscriptChrome'
-import { Button } from '@/components/ui/button'
-import {
-  isClaudeSignInFailureKind,
-  nativeChatClaudeSignInLabel,
-  useNativeChatClaudeSignInView
-} from './native-chat-claude-sign-in'
 
 const HOST_STATUS_WORDS: Record<AgentSessionHostStatusPresentation, () => string> = {
   'history-repaired': () =>
@@ -45,7 +39,6 @@ export function NativeChatNoticeRow({
   allowFileUriLinks?: boolean
 }): React.JSX.Element {
   const orcaStopView = useNativeChatOrcaStopView()
-  const claudeSignIn = useNativeChatClaudeSignInView()
   if (block.presentation === 'compaction') {
     const label = translate('components.native-chat.notices.compaction', 'Context compacted')
     return (
@@ -130,17 +123,6 @@ export function NativeChatNoticeRow({
         {Icon ? <Icon aria-hidden="true" className="mt-0.5 size-4 shrink-0" /> : null}
         <p className="min-w-0 whitespace-pre-wrap break-words">{text}</p>
       </div>
-      {claudeSignIn && isClaudeSignInFailureKind(block.failure?.kind) ? (
-        <Button
-          type="button"
-          variant="outline"
-          size="xs"
-          disabled={claudeSignIn.signingIn}
-          onClick={claudeSignIn.signIn}
-        >
-          {nativeChatClaudeSignInLabel(claudeSignIn)}
-        </Button>
-      ) : null}
       {block.providerFrame ? (
         <ProviderFrameRow
           block={block}

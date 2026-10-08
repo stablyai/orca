@@ -8,6 +8,7 @@ import type { AppIdentity } from '../../shared/app-identity'
 import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
 import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome-types'
 import { relaunchApp } from '../app-relaunch'
+import { quitProcess } from '../startup/process-quit-request'
 import type { Store } from '../persistence'
 import { getDevInstanceIdentity } from '../startup/dev-instance-identity'
 import { isPwshAvailableAsync } from '../pwsh'
@@ -25,6 +26,7 @@ import { registerMacSymbolicHotkeysProbeHandler } from './macos-symbolic-hotkeys
 import { registerRendererShutdownCheckpointHandler } from './renderer-shutdown-checkpoint'
 import { readMacKeyboardLayoutSnapshot } from './macos-keyboard-layout-snapshot'
 import { registerMacKeyboardLayoutChangeNotifications } from './macos-keyboard-layout-change-notifications'
+import { isProfileStateSaveDelayed } from '../startup/profile-state-save-delay'
 
 const KEYBOARD_INPUT_SOURCE_TIMEOUT_MS = 500
 const MAC_HITOOLBOX_DOMAIN = 'com.apple.HIToolbox'
@@ -255,6 +257,7 @@ async function readKeyboardInputSourceId(): Promise<string | null> {
 export function registerAppHandlers(store: Store, options: RegisterAppHandlersOptions = {}): void {
   registerRendererShutdownCheckpointHandler(store)
   registerMacKeyboardLayoutChangeNotifications()
+  ipcMain.handle('app:isProfileStateSaveDelayed', isProfileStateSaveDelayed)
 
   ipcMain.handle('app:getFeatureWallAssetBaseUrl', (): string => getFeatureWallAssetBaseUrl())
 
@@ -312,7 +315,7 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
     await runBeforeRelaunchCleanup(options.onBeforeRelaunch)
     setTimeout(() => {
       relaunchApp('admin-restart')
-      app.quit()
+      quitProcess()
     }, 150)
   })
 

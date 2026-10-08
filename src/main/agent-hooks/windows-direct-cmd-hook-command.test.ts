@@ -103,8 +103,10 @@ describe.skipIf(process.platform !== 'win32')(
           PATH: process.env.PATH,
           PATHEXT: process.env.PATHEXT,
           ComSpec: process.env.ComSpec,
+          ORCA_BACKGROUND_LAUNCH: '1',
           HOME: cwd,
-          USERPROFILE: cwd
+          // PowerShell starts batch files through cmd, whose AutoRun may read the host profile.
+          USERPROFILE: process.env.USERPROFILE ?? cwd
         },
         input: '{"hook_event_name":"PreToolUse"}',
         timeoutMs: 5_000

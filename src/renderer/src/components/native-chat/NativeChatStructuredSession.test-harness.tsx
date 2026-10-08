@@ -5,6 +5,7 @@ import type { AgentJournalRenderItem } from '../../../../shared/agent-session-jo
 import type { QueuedMessageCard } from './structured-agent-session-queued-cards'
 import type { AgentSessionBackgroundTask } from '../../../../shared/agent-session-wire'
 import type { AgentSessionWriteRefusal } from '../../../../shared/agent-session-write-failure'
+import type { AgentSessionUnavailable } from '../../../../shared/agent-session-availability'
 import type { AgentSessionRefusalReference } from '../../../../shared/agent-session-wire-refusals'
 import type { NativeChatApprovalCardProps } from './NativeChatApprovalCard'
 import type { NativeChatDeliveryNotice } from './NativeChatMessageRow'
@@ -185,6 +186,7 @@ export function createStructuredSessionMocks() {
     queuedSteerNewest: vi.fn<() => boolean>(() => false),
     queuedResumable: false,
     queueSendsNext: false,
+    unavailable: nullable<AgentSessionUnavailable>(),
     queuedResume: vi.fn<() => Promise<boolean>>(async () => true),
     revealLatest: vi.fn<() => void>()
   }
@@ -244,6 +246,7 @@ export function createStructuredSessionMocks() {
             rewind: { surface: undefined },
             canStop: mocks.canStop ?? mocks.turnId !== null,
             queueSendsNext: mocks.queueSendsNext,
+            unavailable: mocks.unavailable,
             stopPressed: mocks.stopPressed,
             sendsQueue: mocks.sendsQueue,
             stop: mocks.stop,
@@ -398,7 +401,7 @@ export function createStructuredSessionMocks() {
     mocks.loadingOlder = false
     mocks.olderHistoryGeneration = 0
     mocks.loadOlder.mockReset()
-    Object.assign(mocks, { queuedResumable: false, queueSendsNext: false })
+    Object.assign(mocks, { queuedResumable: false, queueSendsNext: false, unavailable: null })
     mocks.queuedResume.mockReset()
     mocks.revealLatest.mockReset()
     mocks.queuedSteerNewest.mockReset()

@@ -26,7 +26,7 @@ export function listClaudeProfileHomes(dataRoot: string): string[] {
 
 let installed: ClaudeProfileRouter | undefined
 
-/** Installed by the desktop's account services; workers, child processes and orcad have none. */
+/** Installed by the host runtime only when routing is enabled; workers and child processes have none. */
 export function installClaudeProfileRouter(router: ClaudeProfileRouter | undefined): void {
   installed = router
 }
@@ -46,8 +46,8 @@ export function withClaudeProfileTerminalEnv<Env extends Record<string, string> 
 }
 
 /**
- * Account `<surface>` folders the System default readers cannot see. Setup links history into the
- * System default on every platform, so only a folder setup could not link (e.g. across drives) adds any.
+ * Account `<surface>` folders the System default readers cannot see. Step 1 links history into the
+ * System default on macOS/Linux, so only Windows (or a cross-filesystem refusal) adds any.
  */
 export function claudeProfileHistoryDirs(surface: 'projects' | 'transcripts'): string[] {
   return (installed?.accountHomes() ?? []).map((home) => join(home, surface)).filter(isDirectory)

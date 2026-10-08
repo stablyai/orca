@@ -22,32 +22,38 @@ function actions(): ManagedServerActions {
 export const MANAGED_SERVER_METHODS = [
   defineMethod({
     name: 'managedServer.status',
+    permission: 'workspace',
     params: ManagedServerSelector,
     handler: ({ selector }) => actions().status(selector)
   }),
   defineMethod({
     name: 'managedServer.update',
+    permission: 'host-admin',
     params: ManagedServerUpdate,
     handler: ({ selector, force }) => actions().update(selector, force === true)
   }),
   defineMethod({
     name: 'managedServer.rollback',
+    permission: 'host-admin',
     params: ManagedServerSelector,
     handler: ({ selector }) => actions().rollback(selector)
   }),
   defineMethod({
     name: 'managedServer.recover',
+    permission: 'host-admin',
     params: ManagedServerRecover,
     handler: ({ selector, acceptChangedState }) =>
       actions().recover(selector, acceptChangedState === true)
   }),
   defineMethod({
     name: 'managedServer.stop',
+    permission: 'host-admin',
     params: ManagedServerSelector,
     handler: ({ selector }) => actions().stop(selector)
   }),
   defineMethod({
     name: 'managedServer.cancelStop',
+    permission: 'host-admin',
     params: ManagedServerSelector,
     handler: ({ selector }) => actions().cancelStop(selector)
   })

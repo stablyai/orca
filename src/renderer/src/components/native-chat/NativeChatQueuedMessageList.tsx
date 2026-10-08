@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useLayoutEffect, useRef } from 'react'
 import { Pause, Play } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '../../store'
@@ -26,6 +26,20 @@ export function NativeChatQueuedMessageList({
   const queueRef = useRef<HTMLDivElement>(null)
   const { cards, pause } = controller
   const newest = cards.at(-1)
+  const listRef = useRef<HTMLUListElement>(null)
+  const newestPosition = newest?.position ?? 0
+  const newestIsPersons = newest !== undefined && !newest.from
+  const shownPosition = useRef(newestPosition)
+  // Before paint, so the new card never shows a frame before the scroll.
+  useLayoutEffect(() => {
+    // From 0 the queue is loading or holds one card: nothing to scroll to.
+    const appended = shownPosition.current > 0 && newestPosition > shownPosition.current
+    shownPosition.current = newestPosition
+    // The list opens on the next card to send; a card the person just queued is shown instead.
+    if (appended && newestIsPersons && listRef.current) {
+      listRef.current.scrollTop = listRef.current.scrollHeight
+    }
+  }, [newestPosition, newestIsPersons])
   // Only a host that queues sends has queueing to turn off; a kept card shows without it.
   const turnOffQueueing = controller.queueCapable
     ? () => void updateSettings({ nativeChatQueueFollowUps: false })
@@ -54,11 +68,13 @@ export function NativeChatQueuedMessageList({
               />
             ) : null}
             <ul
+              ref={listRef}
               aria-label={translate(
                 'components.native-chat.queuedMessages.listLabel',
                 'Queued messages'
               )}
-              className="divide-y divide-border"
+              // Scrolls on its own so a long queue never squeezes the transcript or the composer.
+              className="scrollbar-sleek max-h-40 divide-y divide-border overflow-y-auto"
             >
               {cards.map((card) => (
                 <NativeChatQueuedMessageCard

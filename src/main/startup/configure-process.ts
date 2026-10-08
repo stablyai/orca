@@ -1,4 +1,5 @@
 import { app } from 'electron'
+import { quitProcess } from './process-quit-request'
 import { mkdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -6,6 +7,7 @@ import { getVersionManagerBinPaths } from '../codex-cli/command'
 import { getMainE2EConfig } from '../e2e-config'
 import { DISABLED_CHROMIUM_FEATURES } from './disabled-chromium-features'
 import { readHttp1CompatibilityMarker } from './http1-compatibility-marker'
+import { checkServeUserDataPath } from './serve-user-data-path-guard'
 import {
   hasMissingProfileStateDatabaseWithRetainedAuthority,
   readActiveProfileId,
@@ -100,7 +102,7 @@ function getProcessPathDelimiter(): string {
 
 function requestDevParentShutdown(): void {
   devParentShutdownRequested = true
-  app.quit()
+  quitProcess()
 
   const forceExitTimer = setTimeout(() => {
     // Why: app.quit() may stall on macOS quit handlers or window-close guards, so force-exit after a grace period to avoid a hung dev app.
@@ -230,8 +232,17 @@ function areSameE2EHomePath(left: string, right: string): boolean {
 }
 
 export function configureOrcaUserDataPathEnv(): void {
+  const userDataPath = app.getPath('userData')
+  // Why here: userData is final now and the instance lock is still ahead; preflight's catch exits serve.
+  const serveProfileRefusal = checkServeUserDataPath({
+    isServeMode: process.argv.includes('--serve'),
+    userDataPath
+  })
+  if (serveProfileRefusal) {
+    throw new Error(serveProfileRefusal)
+  }
   // Why: relaunches can inherit a stale ORCA_USER_DATA_PATH; canonicalize before CLI-shared modules build runtime-home paths.
-  process.env.ORCA_USER_DATA_PATH = app.getPath('userData')
+  process.env.ORCA_USER_DATA_PATH = userDataPath
 }
 
 export function shouldInstallManagedHooks(isDev: boolean): boolean {

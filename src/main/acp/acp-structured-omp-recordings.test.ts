@@ -82,17 +82,19 @@ describe('OMP recordings through the adapter', () => {
     })
   })
 
-  it("a successful command's row shows its output", async () => {
+  it("a successful command's row shows its output and exit code 0", async () => {
     const { rig, replay } = await replaying('omp-v17-shell-ok')
     await allowOnce(rig, replay)
     await waitFor(() => expect(replay.awaiting).toBeNull())
     await waitFor(async () =>
       expect(await turns(rig)).toMatchObject([{ state: 'completed', outcome: 'success' }])
     )
-    const tool = await toolRow(rig)
-    expect(tool).toMatchObject({ state: 'completed', output: { head: 'ok', truncated: false } })
-    // OMP reports an exit code only when it is not zero.
-    expect(tool).not.toHaveProperty('exitCode')
+    // OMP reports an exit code only when it is not zero; a completed foreground command exited 0.
+    expect(await toolRow(rig)).toMatchObject({
+      state: 'completed',
+      exitCode: 0,
+      output: { head: 'ok', truncated: false }
+    })
   })
 
   it('Stop during a running command ends the turn and leaves the row without the command as output', async () => {

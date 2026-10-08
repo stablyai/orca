@@ -4,6 +4,7 @@ import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-p
 import { getDefaultWslDistro, getWslHome } from '../wsl'
 import {
   getSystemCodexHomePath,
+  resolveOrcaManagedCodexHomePath,
   syncCodexGlobalInstructionsIntoManagedHome,
   syncSystemCodexResourcesIntoManagedHome
 } from '../codex/codex-home-paths'
@@ -288,9 +289,29 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
       // pin this non-interactive lane to the native home explicitly.
       return { kind: 'ready', codexHomePath: getSystemCodexHomePath() }
     }
-    this.syncForCurrentSelection()
+    this.syncMirrorForReadOnlyAppServer()
+    return { kind: 'ready', codexHomePath: this.getRuntimeHomePath() }
+  }
+
+  /**
+   * Before a read-only app-server reads the shared mirror home (the model catalog probe), the
+   * same sync launch prep and the usage poll run, so it reads the login a launch would. Any other
+   * home is left alone: a per-account home holds its own auth, and its sync restarts a bridge.
+   */
+  prepareHostCodexHomeForReadOnlyAppServer(homePath: string, launchEnv?: NodeJS.ProcessEnv): void {
+    if (
+      this.getSelfContainedManagedHostAccount() ||
+      normalizeRuntimePathForComparison(homePath) !==
+        normalizeRuntimePathForComparison(resolveOrcaManagedCodexHomePath())
+    ) {
+      return
+    }
+    this.syncMirrorForReadOnlyAppServer(launchEnv)
+  }
+
+  private syncMirrorForReadOnlyAppServer(launchEnv?: NodeJS.ProcessEnv): void {
+    this.syncForCurrentSelection(undefined, launchEnv)
     syncSystemCodexResourcesIntoManagedHome()
     syncSystemConfigIntoManagedCodexHome()
-    return { kind: 'ready', codexHomePath: this.getRuntimeHomePath() }
   }
 }

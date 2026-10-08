@@ -14,6 +14,7 @@ import { installMultiplexSubscribeFrame } from './terminal-multiplex-subscribe-f
 export const TERMINAL_MULTIPLEX_METHODS = [
   defineStreamingMethod({
     name: 'terminal.multiplex',
+    permission: 'workspace',
     params: TerminalMultiplex,
     handler: async (
       _params,

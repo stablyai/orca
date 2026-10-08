@@ -153,6 +153,8 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
     | ((input: { launchEnv: NodeJS.ProcessEnv }) => string | null | Promise<string | null>)
     | null
 
+  protected readonly prepareCodexCatalogProbeHomeFn: ((homePath: string) => void) | null
+
   protected readonly agentSessionClaimSigner: AgentSessionClaimSigner
 
   protected readonly agentSessionCreateOperations = new Map<string, AgentSessionCreateOperation>()

@@ -29,7 +29,7 @@ export const PAGE_STORAGE_EXACT_KEYS = [
   'orca:custom-accessory-keys',
   /** Whether a supported agent session opens on the terminal or the native chat. */
   'orca:defaultSessionView',
-  /** The durable send journal: which `agentSession.send` operation ids are still unsettled. */
+  /** Legacy journal access for embedded pages served by older hosts. */
   'orca:mobileStructuredSendOperations:v1',
   /** The terminal's text scale, which pinch-to-zoom writes. */
   'orca:terminalTextScale',
