@@ -40,6 +40,7 @@ export class RpcStreamingDispatcher {
   constructor(private readonly dependencies: RpcStreamingDispatcherDependencies) {}
 
   // Why: streaming dispatch sends multiple responses through the reply callback instead of a Promise.
+  /** Dispatch unary or streaming handlers with the authenticated caller’s identity and disconnect lifetime. */
   async dispatch(
     rawRequest: RpcRequest,
     reply: (response: string) => void,
@@ -129,11 +130,13 @@ export class RpcStreamingDispatcher {
           (needsLocalCallerFingerprint(request, effectiveParams)
             ? orchestrationMutations.getLocalAuthenticatedCallerFingerprint()
             : undefined)
+        /** Revalidate legacy authority and pass the authenticated caller and connection lifetime to the selected handler. */
         const invoke = (mutation?: DurableMutationInvocation) => {
           const legacyCoordinatorRunId = legacyCoordinator?.revalidate()
           return method.handler(effectiveParams, {
             runtime,
             signal: options?.signal,
+            retainConnectionLifetime: options?.retainConnectionLifetime,
             requestId: request.id,
             connectionId: options?.connectionId,
             subscriptionRegistrationVersion,
@@ -190,6 +193,7 @@ export class RpcStreamingDispatcher {
         {
           runtime,
           signal: options?.signal,
+          retainConnectionLifetime: options?.retainConnectionLifetime,
           requestId: request.id,
           connectionId: options?.connectionId,
           clientId: options?.clientId,

@@ -30,6 +30,7 @@ import type { EphemeralVmApi } from './api/ephemeral-vm-api'
 import type { ExportApi, FilesystemApi } from './api/filesystem-api'
 import type { GitInspectionApi } from './api/git-inspection-api'
 import type { GitOperationApi } from './api/git-operation-api'
+import type { GithubActionsApi } from './api/github-actions-api'
 import type { GithubAccountApi } from './api/github-account-api'
 import type { GithubPullRequestApi } from './api/github-pull-request-api'
 import type { GithubWorkItemApi } from './api/github-work-item-api'
@@ -87,7 +88,7 @@ export type PreloadApi = {
   feedback: FeedbackApi
   crashReports: CrashReportsApi
   export: ExportApi
-  gh: Merged<GithubPullRequestApi & GithubWorkItemApi & GithubAccountApi>
+  gh: Merged<GithubPullRequestApi & GithubWorkItemApi & GithubAccountApi & GithubActionsApi>
   hostedReview: HostedReviewApi
   gl: GitLabApi
   bitbucket: BitbucketApi

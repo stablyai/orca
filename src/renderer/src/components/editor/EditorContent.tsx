@@ -1,3 +1,4 @@
+import { ActionsRunDetailsPanel } from './ActionsRunDetailsPanel'
 import { useAppStore } from '@/store'
 import type { MarkdownViewMode, OpenFile, PendingEditorReveal } from '@/store/slices/editor'
 import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
@@ -36,6 +37,7 @@ export function getMarkdownSourceLineOffset(frontMatterRaw: string): number {
   return offset
 }
 
+/** Choose Actions details only for tabs carrying Actions context; preserve the existing editor-kind dispatch. */
 export function EditorContent({
   activeFile,
   viewStateScopeId,
@@ -135,6 +137,9 @@ export function EditorContent({
           )}
         </div>
       )
+    }
+    if (checkRunDetails.actionsContext) {
+      return <ActionsRunDetailsPanel file={activeFile} />
     }
     const details = checkRunDetails.details
     return (

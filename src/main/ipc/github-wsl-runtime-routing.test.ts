@@ -81,6 +81,18 @@ describe('registerGitHubHandlers', () => {
     getPRForBranchMock.mockResolvedValue(null)
     registerGitHubHandlers(store as never, stats as never)
     const localGitOptions = { wslDistro: 'Ubuntu' }
+    mocks.client.listActionsRuns.mockResolvedValue({ items: [] })
+    await handlers['gh:actionsRuns'](null, {
+      repoPath: '/workspace/repo',
+      repoId: 'repo-1',
+      branch: 'main'
+    })
+    expect(mocks.client.listActionsRuns).toHaveBeenCalledWith(
+      '/workspace/repo',
+      { branch: 'main' },
+      null,
+      localGitOptions
+    )
 
     await handlers['gh:prForBranch'](null, {
       repoPath: '/workspace/repo',

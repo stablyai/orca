@@ -31,8 +31,36 @@ describe('registerGitHubHandlers', () => {
   it('threads SSH connectionId through GitHub work-item handlers', async () => {
     harness.repos[0].connectionId = 'openclaw-2'
     listWorkItemsMock.mockResolvedValue({ items: [] })
+    mocks.client.listActionsRuns.mockResolvedValue({ items: [] })
 
     registerGitHubHandlers(store as never, stats as never)
+    harness.repos[0].executionHostId = 'ssh:openclaw-2'
+    await handlers['gh:actionsRuns'](null, {
+      repoPath: '/workspace/repo',
+      repoId: 'repo-1',
+      page: 2
+    })
+    expect(mocks.client.listActionsRuns).toHaveBeenCalledWith(
+      '/workspace/repo',
+      { page: 2 },
+      'openclaw-2'
+    )
+    expect(() =>
+      handlers['gh:actionsRuns'](null, { repoPath: '/workspace/repo', repoId: 'repo-1', page: 21 })
+    ).toThrow()
+    expect(() =>
+      handlers['gh:actionsRunDetails'](null, {
+        repoPath: '/workspace/repo',
+        repoId: 'repo-1',
+        runId: 0,
+        repository: { owner: 'acme', repo: 'orca' }
+      })
+    ).toThrow()
+    harness.repos[0].executionHostId = 'runtime:other'
+    expect(() =>
+      handlers['gh:actionsRuns'](null, { repoPath: '/workspace/repo', repoId: 'repo-1' })
+    ).toThrow('execution host')
+    harness.repos[0].executionHostId = 'ssh:openclaw-2'
 
     await handlers['gh:listWorkItems'](null, {
       repoPath: '/workspace/repo',

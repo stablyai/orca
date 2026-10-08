@@ -5,6 +5,7 @@ import type { GitLabTaskFilter, GitLabIssueFilter } from '@/components/task-page
 import type { GitLabWorkItem, GitLabTodo } from '../../../shared/gitlab-types'
 import { getRepoBackedTaskEmptyState } from '@/components/task-page-empty-state'
 import { isGitLabIssueFilter, isGitLabMRFilter } from './task-page-source-context'
+/** Keep Actions as a local GitHub mode while preserving provider selection and resume policy. */
 export function useTaskPageProviderState(model: TaskPageSourceAvailabilityModel) {
   const {
     settings,
@@ -54,7 +55,7 @@ export function useTaskPageProviderState(model: TaskPageSourceAvailabilityModel)
 
   // Why: Project mode is a GitHub sub-tab — visible on the GitHub source, but actual entry is gated on a non-null activeProject.
   const projectModeVisible = taskSource === 'github'
-  const [githubMode, setGithubMode] = useState<'items' | 'project'>('items')
+  const [githubMode, setGithubMode] = useState<'items' | 'project' | 'actions'>('items')
 
   // ── GitLab task-source state ──────────────────────────────────────
   // Why: parallel to Linear's slim per-source state — skips workItemsCache and cross-repo aggregation; fetches directly via window.api.gl for the primary repo.

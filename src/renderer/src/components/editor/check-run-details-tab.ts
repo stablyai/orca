@@ -1,8 +1,10 @@
+import type { ActionsRequestContext } from '../../../../shared/github/actions-types'
 import type { GitLabProjectRef } from '../../../../shared/gitlab-types'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/github/check-types'
 import type { GitHubRepositoryIdentity } from '../../../../shared/github/pull-request-types'
 
 export type OpenCheckRunDetailsState = {
+  actionsContext?: ActionsRequestContext
   contextKey: string
   check: PRCheckDetail
   requestId?: number
@@ -16,7 +18,13 @@ export type OpenCheckRunDetailsState = {
 
 export type CheckRunDetailsTabPatch = Pick<
   OpenCheckRunDetailsState,
-  'requestId' | 'details' | 'loading' | 'error' | 'githubRepository' | 'gitlabProjectRef'
+  | 'requestId'
+  | 'details'
+  | 'loading'
+  | 'error'
+  | 'githubRepository'
+  | 'gitlabProjectRef'
+  | 'actionsContext'
 >
 
 let nextCheckRunDetailsRequestId = 0
@@ -40,7 +48,11 @@ export function isSameGitHubRepository(
   return a === b || (a?.owner === b?.owner && a?.repo === b?.repo && a?.host === b?.host)
 }
 
+/** Keep Actions run tabs distinct by account/host context before falling back to existing check identities. */
 export function getCheckRunTabIdentity(check: PRCheckDetail): string {
+  if (check.actionsIdentity && check.workflowRunId) {
+    return `actions:${check.actionsIdentity}:${check.workflowRunId}`
+  }
   if (check.checkRunId) {
     return `check-run:${check.checkRunId}`
   }

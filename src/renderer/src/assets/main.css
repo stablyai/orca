@@ -115,6 +115,8 @@
   --color-terminal-pane-title-on-light-input-bg: var(--terminal-pane-title-on-light-input-bg);
   --color-terminal-pane-title-on-light-separator: var(--terminal-pane-title-on-light-separator);
   --color-ai-action-accent: var(--ai-action-accent);
+  --color-status-info: var(--status-info);
+  --color-status-warning-foreground: var(--status-warning-foreground);
   --color-status-success: var(--status-success);
   --color-status-success-background: var(--status-success-background);
   --color-status-success-border: var(--status-success-border);
@@ -386,6 +388,8 @@
 /* Status and diff colors follow the chat scheme without copying the app palette. */
 :root,
 .native-chat-appearance[data-native-chat-scheme='light'] {
+  --status-info: var(--color-blue-600);
+  --status-warning-foreground: var(--color-yellow-700);
   --destructive: #e40014;
   --destructive-foreground: #fcf3f3;
   --status-success: #15803d;
@@ -413,6 +417,8 @@
 
 .dark,
 .native-chat-appearance[data-native-chat-scheme='dark'] {
+  --status-info: var(--color-blue-400);
+  --status-warning-foreground: var(--status-warning);
   --destructive: #ff6568;
   --destructive-foreground: #df2225;
   --status-success: #86efac;

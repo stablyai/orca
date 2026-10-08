@@ -1,4 +1,8 @@
 {
+  "actions": {
+    "next": "Next",
+    "previous": "Previous"
+  },
   "agentsSidebarIntro": {
     "migrated": {
       "action": "Open Agents"

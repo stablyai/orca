@@ -14,10 +14,42 @@ export type WebGitHubApi = NonNullable<PreloadApi['gh']>
 
 export type WebGitHubResult<K extends keyof WebGitHubApi> = Awaited<ReturnType<WebGitHubApi[K]>>
 
+/** Expose the same GitHub/Actions API surface to web clients through authenticated runtime RPC. */
 export function createGitHubApi(): WebGitHubApi {
   const route = <Result>(method: WebGitHubRuntimeMethod, args?: unknown): Promise<Result> =>
     callRuntimeResult<Result>(method, mapRepoPathArg(args))
   const githubApi = {
+    /** Read artifact metadata using the caller’s registered repository, run and account context. */
+    actionsArtifacts: (args) =>
+      route<WebGitHubResult<'actionsArtifacts'>>(GITHUB_WEB_RPC_METHODS.actionsArtifacts, args),
+    /** Acquire an owner-bound archive; the returned transfer must be released after save or cancellation. */
+    startActionsArtifactDownload: (args) =>
+      route<WebGitHubResult<'startActionsArtifactDownload'>>(
+        GITHUB_WEB_RPC_METHODS.startActionsArtifactDownload,
+        args
+      ),
+    /** Read a bounded archive chunk using the original transfer’s repository and account context. */
+    readActionsArtifactChunk: (args) =>
+      route<WebGitHubResult<'readActionsArtifactChunk'>>(
+        GITHUB_WEB_RPC_METHODS.readActionsArtifactChunk,
+        args
+      ),
+    /** Release retained archive storage using the original transfer owner, including after failed saves. */
+    releaseActionsArtifactDownload: (args) =>
+      route<WebGitHubResult<'releaseActionsArtifactDownload'>>(
+        GITHUB_WEB_RPC_METHODS.releaseActionsArtifactDownload,
+        args
+      ),
+
+    /** Read a filtered run page on the registered repository’s execution host and account. */
+    actionsRuns: (args) =>
+      route<WebGitHubResult<'actionsRuns'>>(GITHUB_WEB_RPC_METHODS.actionsRuns, args),
+    /** Read a workflow page using the same repository owner as run browsing. */
+    actionsWorkflows: (args) =>
+      route<WebGitHubResult<'actionsWorkflows'>>(GITHUB_WEB_RPC_METHODS.actionsWorkflows, args),
+    /** Read jobs for the selected run attempt and page using its pinned repository owner. */
+    actionsRunDetails: (args) =>
+      route<WebGitHubResult<'actionsRunDetails'>>(GITHUB_WEB_RPC_METHODS.actionsRunDetails, args),
     viewer: () => Promise.resolve(null),
     repoSlug: (args) => route<WebGitHubResult<'repoSlug'>>(GITHUB_WEB_RPC_METHODS.repoSlug, args),
     repoUpstream: (args) =>

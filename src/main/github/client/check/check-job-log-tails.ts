@@ -46,10 +46,12 @@ export function getCheckJobLogTailCacheKey(job: PRCheckRunDetails['jobs'][number
   return `${job.id}:${job.completedAt ?? ''}`
 }
 
+/** Attach bounded failure excerpts with owner-aware caching; ordinary read failures become optional warnings. */
 export async function attachFailedJobLogTails(
   jobs: PRCheckRunDetails['jobs'],
   ownerRepo: GitHubApiRepository,
-  ghOptions: GhExecOptions
+  ghOptions: GhExecOptions,
+  options: { retryUnavailable?: boolean; warnings?: string[]; executionOwner?: string } = {}
 ): Promise<void> {
   const failedJobs = jobs
     .filter((job) => {
@@ -61,12 +63,23 @@ export async function attachFailedJobLogTails(
   // Why: cap log fetches so failed-job details stay a bounded follow-up, not a burst of hosted log downloads.
   for (const job of failedJobs) {
     const jobCacheKey = getCheckJobLogTailCacheKey(job)
-    const cacheKey = jobCacheKey ? `${githubRepoIdentityKey(ownerRepo)}:${jobCacheKey}` : null
+    const repositoryKey = `${githubRepoIdentityKey(ownerRepo)}:${jobCacheKey}`
+    const cacheKey = jobCacheKey
+      ? options.executionOwner
+        ? JSON.stringify([options.executionOwner, repositoryKey])
+        : repositoryKey
+      : null
     if (!cacheKey) {
       continue
     }
-    if (prCheckLogTailCache.has(cacheKey)) {
+    if (
+      prCheckLogTailCache.has(cacheKey) &&
+      !(options.retryUnavailable && prCheckLogTailCache.get(cacheKey) === null)
+    ) {
       job.logTail = prCheckLogTailCache.get(cacheKey) ?? null
+      if (!job.logTail) {
+        options.warnings?.push(job.name)
+      }
       continue
     }
     try {
@@ -79,6 +92,7 @@ export async function attachFailedJobLogTails(
       rethrowCheckDetailsAbort(ghOptions.signal, err)
       console.warn('getPRCheckDetails workflow job log fetch failed:', err)
       job.logTail = null
+      options.warnings?.push(job.name)
     }
     setPrCheckLogTailCache(cacheKey, job.logTail)
   }
