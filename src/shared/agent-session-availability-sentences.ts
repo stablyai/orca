@@ -8,6 +8,8 @@ import type {
 import { joinSentences } from './sentence-joining'
 import { agentSessionSignInFor } from './agent-session-sign-in'
 
+const SENTENCE_END = /[.!?。！？][\p{Pe}\p{Pf}"']*\s*$/u
+
 // The sentences for a start no account or CLI on this host can make: also the chat's notice.
 
 function agent(say: AgentSessionFailureSay, { agentName }: AgentSessionFailureWordsContext) {
@@ -36,10 +38,11 @@ export function notSignedInSentence(
           signIn?.agent !== 'codex'
         ? say(signIn ? 'thenSendAgain' : 'signInThenSend')
         : undefined
+  const detail = fact.detail?.audience === 'person' ? fact.detail.text : undefined
+  const detailSentence =
+    detail && next && !SENTENCE_END.test(detail) ? `${detail.trimEnd()}.` : detail
   return joinSentences(
-    [copy, fact.detail?.audience === 'person' ? fact.detail.text : undefined, next].filter(
-      (sentence): sentence is string => sentence !== undefined
-    )
+    [copy, detailSentence, next].filter((sentence): sentence is string => sentence !== undefined)
   )
 }
 

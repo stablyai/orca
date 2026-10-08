@@ -84,6 +84,27 @@ afterEach(async () => {
 })
 
 describe('desktop words for a failure fact', () => {
+  it.each([
+    ['en', 'Then send your message again.'],
+    ['es', 'Después, envía tu mensaje de nuevo.'],
+    ['fr', 'Puis envoyez à nouveau votre message.'],
+    ['ja', 'その後、メッセージをもう一度送信してください。'],
+    ['ko', '그런 다음 메시지를 다시 보내세요.'],
+    ['zh', '然后再次发送消息。']
+  ])('keeps %s copy while separating an unpunctuated provider detail', async (locale, retry) => {
+    await i18n.changeLanguage(locale)
+    const fact = {
+      kind: 'notSignedIn',
+      detail: { text: 'See {{agent}} docs/models.md', audience: 'person' }
+    } as const
+    const context = { agentName: 'Pi' }
+    const row = agentSessionFailureSentence(fact, 'row', context, sayAgentSessionFailureTranslated)
+    expect(row.endsWith(fact.detail.text)).toBe(true)
+    expect(
+      agentSessionFailureSentence(fact, 'rejection', context, sayAgentSessionFailureTranslated)
+    ).toBe(`${row}. ${retry}`)
+  })
+
   it('has a key for every piece, whose English default is the shared sentence', () => {
     for (const id of IDS) {
       expect([id, sayAgentSessionFailureTranslated(id, VALUES)]).toEqual([
