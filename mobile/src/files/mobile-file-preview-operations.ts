@@ -2,6 +2,7 @@ import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-o
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 import {
   fileMediaChunkSchema,
+  fileMediaStatSchema,
   filePreviewImageSchema,
   filePreviewTextSchema,
   terminalArtifactWriteSchema,
@@ -101,6 +102,16 @@ export const fileMediaChunkRead = bindDeferredRpcOperation(
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
     read: rpcResultVariant('file-media-chunk', fileMediaChunkSchema)
+  })
+)
+
+export const fileMediaStatRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'files.media-stat-or-skip',
+    method: 'files.stat',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('file-media-stat', fileMediaStatSchema)
   })
 )
 

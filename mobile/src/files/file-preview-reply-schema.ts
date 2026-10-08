@@ -104,3 +104,10 @@ export const fileMediaChunkSchema = z.looseObject({
   bytesRead: z.number().int().nonnegative(),
   eof: z.boolean()
 })
+
+export const fileMediaStatSchema = z.looseObject({
+  size: z.number().int().nonnegative(),
+  isDirectory: z.boolean(),
+  mtime: z.number().finite(),
+  ctime: z.number().finite().optional()
+})

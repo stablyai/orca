@@ -49,9 +49,15 @@ export function MobileFileMediaHandoff({
   }, [])
 
   useEffect(() => {
+    setDownloading(false)
+    setProgressBytes(0)
+    setMessage('')
     return () => {
-      activeAttempt.current?.cancel()
-      activeAttempt.current = null
+      const attempt = activeAttempt.current
+      attempt?.cancel()
+      if (activeAttempt.current === attempt) {
+        activeAttempt.current = null
+      }
     }
   }, [client, relativePath, worktreeId])
 
@@ -72,7 +78,7 @@ export function MobileFileMediaHandoff({
         { worktreeId, relativePath },
         sink,
         (bytes) => {
-          if (mounted.current) {
+          if (mounted.current && activeAttempt.current === attempt) {
             setProgressBytes(bytes)
           }
         },
@@ -84,14 +90,15 @@ export function MobileFileMediaHandoff({
       }
       await Sharing.shareAsync(sink.uri, { mimeType, dialogTitle: `Open ${title}` })
     } catch (error) {
-      if (mounted.current) {
+      if (mounted.current && activeAttempt.current === attempt) {
         setMessage(error instanceof Error ? error.message : 'Unable to open file')
       }
     } finally {
-      if (activeAttempt.current === attempt) {
+      const isCurrentAttempt = activeAttempt.current === attempt
+      if (isCurrentAttempt) {
         activeAttempt.current = null
       }
-      if (mounted.current) {
+      if (mounted.current && isCurrentAttempt) {
         setDownloading(false)
       }
     }

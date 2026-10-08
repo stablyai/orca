@@ -1,7 +1,6 @@
 import { Buffer } from 'buffer/index.js'
-import type { RpcFailure } from '../transport/types'
 import type { MobileFilePreviewRpcSender } from './mobile-file-preview-operations'
-import { fileMediaChunkRead } from './mobile-file-preview-operations'
+import { fileMediaChunkRead, fileMediaStatRead } from './mobile-file-preview-operations'
 
 // Supported external media downloads use chunked host reads and hand the cache to the OS share sheet.
 
@@ -84,11 +83,32 @@ export async function downloadMobileFileMedia(
   let appendedBytes = 0
   const requestOptions = { failWhenDisconnected: true, timeoutMs: 30_000 }
   try {
+    if (attempt.cancelled) {
+      throw new Error('Media download cancelled')
+    }
+    const initialStatReply = await fileMediaStatRead.request(
+      client,
+      { worktree: `id:${args.worktreeId}`, relativePath: args.relativePath },
+      requestOptions
+    )
+    if (attempt.cancelled) {
+      throw new Error('Media download cancelled')
+    }
+    const stat = fileMediaStatRead.interpret(initialStatReply)
+    if (stat.isDirectory || stat.size === 0) {
+      throw new Error('This file has no content to open')
+    }
+    if (stat.size > MEDIA_HANDOFF_MAX_BYTES) {
+      throw new Error('Files larger than 128 MB cannot be opened on mobile')
+    }
     for (;;) {
       if (attempt.cancelled) {
         throw new Error('Media download cancelled')
       }
-      const length = MEDIA_HANDOFF_CHUNK_BYTES
+      if (offset >= stat.size) {
+        break
+      }
+      const length = Math.min(MEDIA_HANDOFF_CHUNK_BYTES, stat.size - offset)
       const reply = await fileMediaChunkRead.request(
         client,
         {
@@ -113,13 +133,11 @@ export async function downloadMobileFileMedia(
       if (
         bytes.toString('base64') !== chunk.contentBase64 ||
         bytes.byteLength !== chunk.bytesRead ||
+        chunk.bytesRead === 0 ||
         chunk.bytesRead > length ||
-        (chunk.bytesRead === 0 && !chunk.eof)
+        (chunk.eof && offset + chunk.bytesRead !== stat.size)
       ) {
         throw new Error('File changed during download. Retry the preview')
-      }
-      if (chunk.bytesRead === 0) {
-        break
       }
       // Why: the cap tracks the bytes we actually append — a host that under-reports bytesRead
       // must not slip a large file past it, and the crossing chunk must never reach the sink.
@@ -138,6 +156,31 @@ export async function downloadMobileFileMedia(
       if (chunk.eof) {
         break
       }
+    }
+    if (offset !== stat.size) {
+      throw new Error('File changed during download. Retry the preview')
+    }
+    if (attempt.cancelled) {
+      throw new Error('Media download cancelled')
+    }
+    const latestStat = fileMediaStatRead.interpret(
+      await fileMediaStatRead.request(
+        client,
+        { worktree: `id:${args.worktreeId}`, relativePath: args.relativePath },
+        requestOptions
+      )
+    )
+    if (attempt.cancelled) {
+      throw new Error('Media download cancelled')
+    }
+    const latest = latestStat
+    if (
+      latest.isDirectory ||
+      latest.size !== stat.size ||
+      latest.mtime !== stat.mtime ||
+      (stat.ctime !== undefined && latest.ctime !== stat.ctime)
+    ) {
+      throw new Error('File changed during download. Retry the preview')
     }
   } catch (error) {
     sink.discard(attempt)

@@ -61,9 +61,17 @@ function fail(message: string, code = 'error'): RpcFailure {
   return { id: '1', ok: false, error: { code, message }, _meta: { runtimeId: 'runtime-1' } }
 }
 
-function clientWithResponses(responses: RpcResponse[]) {
+function clientWithResponses(
+  responses: RpcResponse[],
+  stats = [
+    ok({ size: 3, isDirectory: false, mtime: 1, ctime: 2 }),
+    ok({ size: 3, isDirectory: false, mtime: 1, ctime: 2 })
+  ]
+) {
   return {
-    sendRequest: vi.fn(async () => responses.shift()!)
+    sendRequest: vi.fn(async (method: string) =>
+      method === 'files.stat' ? stats.shift()! : responses.shift()!
+    )
   }
 }
 
@@ -197,7 +205,11 @@ describe('a PDF the phone hands to the OS', () => {
       [
         { contentBase64: firstChunk, bytesRead: 524288, eof: false },
         { contentBase64: finalChunk, bytesRead: 16, eof: true }
-      ].map(ok)
+      ].map(ok),
+      [
+        ok({ size: 524304, isDirectory: false, mtime: 1, ctime: 2 }),
+        ok({ size: 524304, isDirectory: false, mtime: 1, ctime: 2 })
+      ]
     )
     const tree = render({ client })
 
@@ -234,7 +246,9 @@ describe('a PDF the phone hands to the OS', () => {
       openButton(tree)?.props.onPress()
     })
     await act(async () => {
-      resolvers[0]?.(ok({ contentBase64: 'YWJj', bytesRead: 3, eof: false }))
+      resolvers[0]?.(ok({ size: 3, isDirectory: false, mtime: 1, ctime: 2 }))
+      await Promise.resolve()
+      resolvers[1]?.(ok({ contentBase64: 'YWJj', bytesRead: 3, eof: true }))
       await Promise.resolve()
     })
 
@@ -259,7 +273,7 @@ describe('a PDF the phone hands to the OS', () => {
     })
     act(() => tree.unmount())
     await act(async () => {
-      release?.(ok({ contentBase64: 'QQ==', bytesRead: 1, eof: true }))
+      release?.(ok({ size: 3, isDirectory: false, mtime: 1, ctime: 2 }))
       await Promise.resolve()
     })
 
@@ -268,12 +282,12 @@ describe('a PDF the phone hands to the OS', () => {
 
   it('does not share an old attempt after the file identity changes', async () => {
     doubles.shared.length = 0
-    let release: ((response: RpcResponse) => void) | undefined
+    const releases: ((response: RpcResponse) => void)[] = []
     const client = {
       sendRequest: vi.fn(
         () =>
           new Promise<RpcResponse>((resolve) => {
-            release = resolve
+            releases.push(resolve)
           })
       )
     }
@@ -295,7 +309,17 @@ describe('a PDF the phone hands to the OS', () => {
       )
     })
     await act(async () => {
-      release?.(ok({ contentBase64: 'QQ==', bytesRead: 1, eof: true }))
+      openButton(tree)?.props.onPress()
+      await Promise.resolve()
+    })
+    await act(async () => {
+      releases[0]?.(fail('old attempt failed'))
+      await Promise.resolve()
+    })
+    expect(texts(tree)).not.toContain('old attempt failed')
+    expect(texts(tree).some((text) => text.startsWith('Downloading'))).toBe(true)
+    await act(async () => {
+      releases[1]?.(ok({ size: 1, isDirectory: false, mtime: 1, ctime: 2 }))
       await Promise.resolve()
     })
 
@@ -314,7 +338,9 @@ describe('a PDF the phone hands to the OS', () => {
 
     await act(async () => {
       openButton(firstTree)?.props.onPress()
-      resolvers[0]?.(ok({ contentBase64: 'T0xE', bytesRead: 3, eof: false }))
+      resolvers[0]?.(ok({ size: 3, isDirectory: false, mtime: 1, ctime: 2 }))
+      await Promise.resolve()
+      resolvers[1]?.(ok({ contentBase64: 'T0xE', bytesRead: 3, eof: false }))
       await Promise.resolve()
     })
     const uri = `file:///cache/${mediaHandoffCacheName('wt-1', 'docs/report.pdf')}`
@@ -328,14 +354,22 @@ describe('a PDF the phone hands to the OS', () => {
       openButton(secondTree)?.props.onPress()
       await Promise.resolve()
     })
+    resolvers[3]?.(ok({ size: 3, isDirectory: false, mtime: 1, ctime: 2 }))
+    await act(async () => {
+      await Promise.resolve()
+    })
     // The old request resolves after the remount. Its cancelled attempt must not discard the
     // cache now owned by the second component.
     await act(async () => {
-      resolvers[1]?.(ok({ contentBase64: 'T0xE', bytesRead: 3, eof: true }))
+      resolvers[2]?.(ok({ contentBase64: 'T0xE', bytesRead: 3, eof: true }))
       await Promise.resolve()
     })
     await act(async () => {
-      resolvers[2]?.(ok({ contentBase64: 'TkVX', bytesRead: 3, eof: true }))
+      resolvers[4]?.(ok({ contentBase64: 'TkVX', bytesRead: 3, eof: true }))
+      await Promise.resolve()
+    })
+    await act(async () => {
+      resolvers[5]?.(ok({ size: 3, isDirectory: false, mtime: 1, ctime: 2 }))
       await Promise.resolve()
     })
 
@@ -358,6 +392,41 @@ describe('a PDF the phone hands to the OS', () => {
 
     expect(texts(tree)).toContain('File is binary')
     expect(openButton(tree)).toBeDefined()
+    expect(doubles.shared).toEqual([])
+  })
+
+  it('rejects an early EOF without sharing the partial cache', async () => {
+    const client = clientWithResponses(
+      [ok({ contentBase64: 'QQ==', bytesRead: 1, eof: true })],
+      [ok({ size: 3, isDirectory: false, mtime: 1, ctime: 2 })]
+    )
+    const tree = render({ client })
+
+    await act(async () => {
+      openButton(tree)?.props.onPress()
+      await Promise.resolve()
+    })
+
+    expect(texts(tree)).toContain('File changed during download. Retry the preview')
+    expect(doubles.shared).toEqual([])
+  })
+
+  it('rejects a file whose metadata changes during the download', async () => {
+    const client = clientWithResponses(
+      [ok({ contentBase64: 'YWJj', bytesRead: 3, eof: true })],
+      [
+        ok({ size: 3, isDirectory: false, mtime: 1, ctime: 2 }),
+        ok({ size: 3, isDirectory: false, mtime: 2, ctime: 2 })
+      ]
+    )
+    const tree = render({ client })
+
+    await act(async () => {
+      openButton(tree)?.props.onPress()
+      await Promise.resolve()
+    })
+
+    expect(texts(tree)).toContain('File changed during download. Retry the preview')
     expect(doubles.shared).toEqual([])
   })
 
