@@ -11,6 +11,7 @@ import { translate } from '@/i18n/i18n'
 import { NativeChatExperimentalSetting } from './NativeChatExperimentalSetting'
 import { AgentDashboardExperimentalSetting } from './AgentDashboardExperimentalSetting'
 import { EphemeralVmsExperimentalSetting } from './EphemeralVmsExperimentalSetting'
+import { PetSpeechBubbleSetting } from './PetSpeechBubbleSetting'
 import {
   MAX_AGENT_HIBERNATION_IDLE_MS,
   MIN_AGENT_HIBERNATION_IDLE_MS,
@@ -96,6 +97,9 @@ export function ExperimentalPane({
               }}
             />
           </div>
+          {settings.experimentalPet ? (
+            <PetSpeechBubbleSetting settings={settings} updateSettings={updateSettings} />
+          ) : null}
         </SearchableSetting>
       ) : null}
 
