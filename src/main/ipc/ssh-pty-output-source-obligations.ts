@@ -115,7 +115,12 @@ export class SshPtyOutputSourceObligations {
     })
   }
 
+  // Why: a recovery cancellation closes a delivery whose spans the renderer may still ACK. Nothing is
+  // owed to a closed delivery, and throwing would fail every later ACK for the PTY.
   settleDesktop(span: DesktopProjectionSpan, reason: string): void {
+    if (!this.openedTokens.has(ptySourceDeliveryKey(span))) {
+      return
+    }
     this.coordinator.settle({
       identity: span,
       spanId: span.spanId,
@@ -125,6 +130,9 @@ export class SshPtyOutputSourceObligations {
   }
 
   transferDesktop(span: DesktopProjectionSpan, reason: string): void {
+    if (!this.openedTokens.has(ptySourceDeliveryKey(span))) {
+      return
+    }
     const transition = {
       identity: span,
       spanId: span.spanId,
