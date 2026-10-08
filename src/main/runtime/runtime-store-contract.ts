@@ -96,8 +96,6 @@ export type RuntimeStore = {
     agentStatusHooksEnabled?: GlobalSettings['agentStatusHooksEnabled']
     terminalCopyTrimsGutter?: GlobalSettings['terminalCopyTrimsGutter']
     experimentalNativeChat?: GlobalSettings['experimentalNativeChat']
-    openAgentTabsInChatByDefault?: GlobalSettings['openAgentTabsInChatByDefault']
-    experimentalStructuredNativeChat?: GlobalSettings['experimentalStructuredNativeChat']
     defaultTaskSource?: GlobalSettings['defaultTaskSource']
     defaultTaskViewPreset?: GlobalSettings['defaultTaskViewPreset']
     visibleTaskProviders?: GlobalSettings['visibleTaskProviders']

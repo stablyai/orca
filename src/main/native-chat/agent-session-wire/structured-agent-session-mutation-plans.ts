@@ -20,6 +20,7 @@ import type {
   AgentSessionMutationEnvelope,
   AgentSessionOptionResult,
   AgentSessionPromptResult,
+  AgentSessionQueuedSendReceipt,
   AgentSessionSendResult
 } from '../../../shared/agent-session-wire'
 import type { AgentSessionConversationCommandResult } from '../../../shared/agent-session-conversation-command'
@@ -167,13 +168,17 @@ export function sendPlan(params: {
 
 export type ConversationCommandAcceptance =
   | { clientMessageId: string }
+  /** Held as a card, keyed by the operation id, behind work in flight. */
+  | { queued: AgentSessionQueuedSendReceipt }
   /** What an older build's run of this operation recorded. */
   | { recorded: AgentSessionConversationCommandResult }
 
 /** `/compact` accepted like a send: one submission, keyed by the operation id, that the delivery
- *  loop carries out as the command's own turn. */
+ *  loop carries out as the command's own turn — or, asked with `delivery`, a card while the
+ *  agent works, which the queue's drain turns into that submission. */
 export function conversationCommandPlan(params: {
   envelope: AgentSessionMutationEnvelope
+  delivery?: 'queue-if-active'
   priorRecord: () => AgentSessionConversationCommandResult | null
 }): MutationPlan<ConversationCommandAcceptance> {
   const clientMessageId = params.envelope.clientOperationId
@@ -181,7 +186,10 @@ export function conversationCommandPlan(params: {
     method: 'agentSession.conversationCommand',
     conversationWrite: true,
     settlesWithWrite: true,
-    fields: { command: STRUCTURED_AGENT_SESSION_COMPACT_COMMAND },
+    fields: {
+      command: STRUCTURED_AGENT_SESSION_COMPACT_COMMAND,
+      ...(params.delivery ? { delivery: params.delivery } : {})
+    },
     recoverUnknownFromDurableState: true,
     run: async (ctx) => {
       const sent = await performSend(ctx, {
@@ -197,6 +205,17 @@ export function conversationCommandPlan(params: {
     replay: (ctx, outcome) => {
       if (outcome.status === 'succeeded' && outcome.conversationCommand) {
         return { recorded: outcome.conversationCommand }
+      }
+      // A card answers from itself until drained, then from the submission it became; only a
+      // command that asked to wait can have one, as for a send.
+      const queued =
+        params.delivery === 'queue-if-active'
+          ? queuedSendAnswer(ctx.journal, clientMessageId)
+          : null
+      if (queued) {
+        return 'queued' in queued
+          ? { queued: queued.queued }
+          : { clientMessageId: queued.submission.clientMessageId }
       }
       if (ctx.journal.submissions().some((entry) => entry.clientMessageId === clientMessageId)) {
         return { clientMessageId }

@@ -34,12 +34,12 @@ function NavigationHarness({
   targetSection?: string
 }) {
   const [activeSectionId, setActiveSectionId] = useState(initialSection)
-  const settings = { ...getDefaultSettings('/tmp'), experimentalStructuredNativeChat: enabled }
+  const settings = { ...getDefaultSettings('/tmp'), experimentalNativeChat: enabled }
   const sections = buildSettingsNavigationMetadata({
     isMac: false,
     isWindows: false,
     isWebClient: false,
-    experimentalStructuredNativeChat: enabled,
+    nativeChatEnabled: enabled,
     repos: []
   })
   const pendingNavSectionRef = useRef<string | null>('chat')

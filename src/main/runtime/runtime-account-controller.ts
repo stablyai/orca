@@ -2,9 +2,7 @@ import type { ClaudeAccountService } from '../claude-accounts/service'
 import { hasAppEnvironment } from '../../shared/app-environment'
 import { getManagedDataAccountService } from '../managed-data-accounts/service'
 import type {
-  ClaudeAccountSignIn,
   ClaudeRateLimitAccountsState,
-  ClaudeSignInRequest,
   CodexRateLimitAccountsState,
   ManagedDataAccountProvider,
   ManagedDataAccountsState
@@ -166,18 +164,15 @@ export class RuntimeAccountController {
     return this.requireServices().claudeAccounts.removeAccount(accountId)
   }
 
-  beginClaudeSignIn(request: ClaudeSignInRequest): Promise<ClaudeAccountSignIn> {
-    return this.requireServices().claudeAccounts.beginSignIn(request)
-  }
-
-  finishClaudeSignIn(
-    signIn: Omit<ClaudeAccountSignIn, 'configDir'>
+  addClaudeFromConfigDir(
+    configDir: string,
+    options?: {
+      runtime?: 'host' | 'wsl'
+      wslDistro?: string | null
+      previousLegacyCredentialsSha256?: string | null
+    }
   ): Promise<ClaudeRateLimitAccountsState> {
-    return this.requireServices().claudeAccounts.finishSignIn(signIn)
-  }
-
-  cancelClaudeSignIn(signIn: Omit<ClaudeAccountSignIn, 'configDir'>): Promise<void> {
-    return this.requireServices().claudeAccounts.cancelSignIn(signIn)
+    return this.requireServices().claudeAccounts.addAccountFromConfigDir(configDir, options)
   }
 
   removeCodex(accountId: string): Promise<CodexRateLimitAccountsState> {

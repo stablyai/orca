@@ -317,7 +317,7 @@ it('resumes and continues once when the launch begins opted in', async () => {
   useAppStore.setState({
     settings: {
       ...getDefaultSettings(''),
-      experimentalStructuredNativeChat: true,
+      experimentalNativeChat: true,
       nativeChatResumeWorkOnRestart: true
     }
   })
@@ -333,12 +333,8 @@ it('resumes and continues once when the launch begins opted in', async () => {
   await act(async () =>
     useAppStore.getState().updateSettings({ nativeChatResumeWorkOnRestart: true })
   )
-  await act(async () =>
-    useAppStore.getState().updateSettings({ experimentalStructuredNativeChat: false })
-  )
-  await act(async () =>
-    useAppStore.getState().updateSettings({ experimentalStructuredNativeChat: true })
-  )
+  await act(async () => useAppStore.getState().updateSettings({ experimentalNativeChat: false }))
+  await act(async () => useAppStore.getState().updateSettings({ experimentalNativeChat: true }))
   // One bulk action, with its remaining list in the reply.
   expect(calls()).toEqual([
     ['agentSession.restartResumable', undefined],
@@ -355,7 +351,7 @@ it('shows an opted-in launch resume in the status bar while it runs', async () =
   useAppStore.setState({
     settings: {
       ...getDefaultSettings(''),
-      experimentalStructuredNativeChat: true,
+      experimentalNativeChat: true,
       nativeChatResumeWorkOnRestart: true
     }
   })
@@ -376,7 +372,7 @@ it('reports chats an opted-in launch could not carry on in one toast and the sta
   useAppStore.setState({
     settings: {
       ...getDefaultSettings(''),
-      experimentalStructuredNativeChat: true,
+      experimentalNativeChat: true,
       nativeChatResumeWorkOnRestart: true
     }
   })

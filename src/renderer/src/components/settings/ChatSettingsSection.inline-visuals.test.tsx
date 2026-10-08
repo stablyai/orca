@@ -29,7 +29,7 @@ beforeEach(() => {
 function renderChat(nativeChatInlineVisuals: boolean | undefined) {
   const settings = {
     ...getDefaultSettings('/tmp'),
-    experimentalStructuredNativeChat: true,
+    experimentalNativeChat: true,
     nativeChatInlineVisuals
   }
   state.settings = settings
@@ -81,7 +81,7 @@ describe('Inline visuals on the Chat settings page', () => {
         isMac: false,
         isWindows: false,
         isWebClient: false,
-        experimentalStructuredNativeChat: true,
+        nativeChatEnabled: true,
         repos: []
       })
       const results = buildCmdJSettingsResults(sections)

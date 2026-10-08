@@ -1,7 +1,7 @@
 import { NativeChatPromptEditor } from './NativeChatPromptEditor'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
 import type { ClipboardEventHandler, KeyboardEventHandler, RefObject } from 'react'
-import { useLayoutEffect, useRef } from 'react'
+import { useCallback, useLayoutEffect, useRef } from 'react'
 import { flushSync } from 'react-dom'
 import type { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 import { cn } from '@/lib/utils'
@@ -219,6 +219,8 @@ export function NativeChatComposerField({
     sendDisabled: sendButtonDisabled
   })
   const { resume } = primary
+  // Stable so the memoized option pickers keep their identity.
+  const focusComposer = useCallback(() => textareaRef.current?.focus(), [textareaRef])
   // The button disables while resuming, which drops its focus; typing is what comes next.
   const resumeQueue = (): void => {
     resume?.()
@@ -378,16 +380,14 @@ export function NativeChatComposerField({
                 sessionOptionsSnapshot={sessionOptionsSnapshot}
                 contextUsage={contextUsage}
                 sessionOptionsPickerRequest={sessionOptionsPickerRequest}
+                focusComposer={focusComposer}
                 onExitGoalMode={goalMode?.active ? goalMode.exit : undefined}
               />
             </div>
           </div>
         </div>
       </div>
-      <NativeChatQueueSendConfirmDialog
-        confirm={queueSendConfirm}
-        focusComposer={() => textareaRef.current?.focus()}
-      />
+      <NativeChatQueueSendConfirmDialog confirm={queueSendConfirm} focusComposer={focusComposer} />
     </div>
   )
 }

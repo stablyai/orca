@@ -5,7 +5,8 @@
 // submission's append. Until then it lives here, `session_id`-keyed so it
 // survives epoch rollover and replacement (`journal-row-table.ts` deletes only
 // `journal_rows`). After a refusal its text survives as a `returned` row a
-// rewind cannot delete; after a withdrawal it waits again.
+// rewind cannot delete — a command refused in its own turn is spent instead, its
+// turn's row saying why; after a withdrawal it waits again.
 
 import type Database from '../../sqlite/sync-database'
 import type { UnreadAgentSessionFailureFact } from '../../../shared/agent-session-failure'
@@ -226,8 +227,7 @@ export function withdrawQueuedMessages(
  * dispatched → returned, or back to waiting (`rejectedDraftSettlement`),
  * matched on the draft's CURRENT hand-off (`consumed_as`), so a re-send refused
  * again still settles while a late duplicate of an earlier refusal matches
- * nothing. A draft back to waiting keeps its position and carries no refusal; its spent
- * submissions stay findable by their `queuedMessageId` link.
+ * nothing. A withdrawal keeps its position; a command refused in its own turn is spent.
  */
 export function settleRejectedQueuedMessage(
   db: Database.Database,
@@ -236,10 +236,19 @@ export function settleRejectedQueuedMessage(
     consumedRef: string
     reason: string | null
     rejection: UnreadAgentSessionFailureFact | undefined
+    /** The refused submission's command turn exists, so its own row says why. */
+    commandTurnReported: boolean
     now: number
   }
 ): boolean {
   const settlement = rejectedDraftSettlement(input)
+  if (
+    settlement.state === 'returned' &&
+    input.commandTurnReported &&
+    spendRefusedCommandCard(db, input)
+  ) {
+    return true
+  }
   const changed =
     settlement.state === 'waiting'
       ? db
@@ -264,6 +273,26 @@ export function settleRejectedQueuedMessage(
             input.consumedRef
           )
   return Number(changed.changes ?? 0) > 0
+}
+
+/**
+ * A command card refused in its own turn is spent, not returned: that turn's row says why, once,
+ * and a returned card would hold every card behind it. Refused before any turn (a failed start),
+ * it is returned like any card; a restart or a close leaves it waiting under the queue's pause.
+ * False when the dispatched card is not a command.
+ */
+function spendRefusedCommandCard(
+  db: Database.Database,
+  input: { sessionId: string; consumedRef: string; now: number }
+): boolean {
+  const spent = db
+    .prepare(
+      `UPDATE queued_messages SET state = 'withdrawn', settled_at = ?
+       WHERE session_id = ? AND state = 'dispatched' AND consumed_as = ?
+         AND json_extract(body_json, '$.command') IS NOT NULL`
+    )
+    .run(input.now, input.sessionId, input.consumedRef)
+  return Number(spent.changes ?? 0) > 0
 }
 
 /** Replay receipts: every row a given caller-scoped operation settled. */

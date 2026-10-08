@@ -1,15 +1,15 @@
 // The pieces every failure sentence is made of, in English. The host fills them in as they are;
 // desktop translates each piece whole with this as its fallback, so the two never differ.
 
-import {
-  CLAUDE_PROFILE_MISSING_MESSAGE,
-  CLAUDE_PROFILE_SETUP_FAILED_MESSAGE
-} from './claude-profile-routing'
-
 /** Sentences a refusal notice shows too, so a chat says them one way. */
 export const TERMINAL_AGENT_HOLDS_CHAT = 'This chat is still open in a terminal agent.'
 export const QUIT_TERMINAL_AGENT = 'Quit that agent to continue the chat here.'
 export const START_NEW_CHAT = 'Start a new chat to continue.'
+export const BACKGROUND_TASKS_RUNNING = 'Background tasks are still running.'
+export const WAIT_FOR_BACKGROUND_TASKS = 'Wait for the background tasks to finish.'
+export const AGENT_STARTING = 'The agent is still starting.'
+export const WAIT_FOR_START = 'Wait for the agent to finish starting.'
+export const AGENT_STILL_WORKING = 'The agent is still working.'
 
 /** Every piece a failure sentence is made of, whole so desktop can translate each on its own.
  *  `{{agent}}` is the agent's name or `theAgent`, `{{command}}` a conversation command's name; the
@@ -59,8 +59,6 @@ export const AGENT_SESSION_FAILURE_COPY = {
     'The folder this chat ran in no longer exists. Restore it to continue this chat.',
   historyInOtherAccount:
     "This chat's history is in another Claude account. Switch back to that account to continue it.",
-  claudeAccountFolderMissing: CLAUDE_PROFILE_MISSING_MESSAGE,
-  claudeAccountSetupFailed: CLAUDE_PROFILE_SETUP_FAILED_MESSAGE,
   agentCommandNotRunnable:
     "{{agent}}'s Command in Settings → Agents must be a program path or name Orca can find, with no arguments or variables. Change it or reset it.",
   chooseClaudeAccount: 'Choose or add one in Claude Accounts settings.',
@@ -101,6 +99,14 @@ export const AGENT_SESSION_FAILURE_COPY = {
   notDeliveredSendAgain: 'This message was not delivered. Send it again to continue.',
   commandRefused: "This command didn't run.",
   commandRefusedTryAgain: "This command didn't run. Try it again.",
+  // What kept a command from running, in the words its refusal has everywhere.
+  backgroundTasksRunning: BACKGROUND_TASKS_RUNNING,
+  waitForBackgroundTasks: WAIT_FOR_BACKGROUND_TASKS,
+  agentStarting: AGENT_STARTING,
+  waitForStart: WAIT_FOR_START,
+  agentStillWorking: AGENT_STILL_WORKING,
+  runCommandWhenDone: "Run /{{command}} when it's done.",
+  commandAfterAnswer: "Answer the agent's question or approval, then run /{{command}}.",
   compactionFailed: 'Compaction failed.',
   compactionFailedQuoted: 'Compaction failed: {{detail}}.',
   compactionUnconfirmed: 'Compaction completion is unconfirmed.',

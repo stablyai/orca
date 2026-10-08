@@ -191,4 +191,15 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     await this.fetchClaudeOnly({ force: true })
     return this.getState()
   }
+
+  async refreshAfterClaudeLivePtysDrained(): Promise<void> {
+    // Why: "Waiting for Claude session" can only recover once no live claude
+    // owns the credentials. Refetch on the last PTY exit instead of leaving
+    // the stale terminal error up until the failure backoff elapses.
+    if (!this.state.claude?.usageMetadata?.deferredByLiveClaudeSession) {
+      return
+    }
+    this.activeFailureStreakByProvider.claude = 0
+    await this.fetchClaudeOnly({ force: true })
+  }
 }

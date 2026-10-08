@@ -45,19 +45,17 @@ describe('native chat locale copy', () => {
   })
 
   it.each(Object.entries(localizedCatalogs))(
-    '%s keeps provider-neutral copy localized',
+    '%s falls back to current Chat UI copy until it is translated',
     (_code, catalog) => {
       const setting = catalog.auto.components.settings.ExperimentalPane.nativeChat
       const search = catalog.auto.components.settings.experimental.search.nativeChat
-      for (const [localized, english] of [
-        [setting.description, englishSetting.description],
-        [setting.copy, englishSetting.copy],
-        [setting.defaultCopy, englishSetting.defaultCopy],
-        [search.description, englishSearch.description]
-      ]) {
-        expect(localized.trim()).not.toBe('')
-        expect(localized).not.toBe(english)
-      }
+      expect(englishSetting.description).toContain('Chat UI')
+      expect(englishSetting.copy).toContain('structured chat')
+      expect(englishSearch.description).toContain('Chat UI')
+      expect(setting).not.toHaveProperty('description')
+      expect(setting).not.toHaveProperty('copy')
+      expect(setting).not.toHaveProperty('defaultCopy')
+      expect(search).not.toHaveProperty('description')
       expect(search.grok).toBe('grok')
       const composer = catalog.components['native-chat'].composer
       for (const key of [

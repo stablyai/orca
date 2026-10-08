@@ -1,5 +1,5 @@
 /* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: PDF loading drives pdf.js document/viewer instances and decode errors through an external worker lifecycle. */
-import { type JSX, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type JSX, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { Image as ImageIcon, RotateCcw, Search, ZoomIn, ZoomOut } from 'lucide-react'
 import * as pdfjsLib from 'pdfjs-dist'
 import type {
@@ -24,6 +24,8 @@ import {
   type PdfScalePreference
 } from './pdf-scale-preference'
 import { readPdfScalePreference, writePdfScalePreference } from './pdf-scale-preference-storage'
+import { EditorCommandOwnerContext } from './editor-command-owner-context'
+import { listenForPdfZoomRequests } from './pdf-zoom-request'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl
 
@@ -66,6 +68,7 @@ function PdfDocumentViewer({
   const [scale, setScale] = useState(1)
   const keybindings = useAppStore((state) => state.keybindings)
   const findShortcutLabel = useShortcutLabel('editor.find')
+  const isCommandOwner = useContext(EditorCommandOwnerContext)
   const eventBusRef = useRef<InstanceType<typeof EventBus> | null>(null)
   const findControllerRef = useRef<InstanceType<typeof PDFFindController> | null>(null)
   const pdfViewerRef = useRef<InstanceType<typeof PdfJsViewer> | null>(null)
@@ -75,6 +78,18 @@ function PdfDocumentViewer({
 
   const filename = useMemo(() => filePath.split(/[/\\]/).pop() || filePath, [filePath])
   const cleanedContent = useMemo(() => content.replace(/\s/g, ''), [content])
+
+  // Why: every zoom entry point (toolbar, app zoom command, wheel/pinch) must record the
+  // scale preference so the next content reload restores it (see scalePreferenceRef).
+  const recordScalePreference = useCallback(
+    (preference: PdfScalePreference) => {
+      scalePreferenceRef.current = preference
+      if (preferenceKey) {
+        writePdfScalePreference(preferenceKey, preference)
+      }
+    },
+    [preferenceKey]
+  )
 
   useEffect(() => {
     const container = containerRef.current
@@ -97,7 +112,8 @@ function PdfDocumentViewer({
           scrollCacheKey,
           scalePreference: scalePreferenceRef.current,
           scaleBounds: SCALE_BOUNDS,
-          onScaleChanging: setScale
+          onScaleChanging: setScale,
+          onWheelZoom: recordScalePreference
         })
         eventBusRef.current = session.eventBus
         findControllerRef.current = session.findController
@@ -119,7 +135,7 @@ function PdfDocumentViewer({
       loaderRef.current = null
       loader.dispose()
     }
-  }, [filePath, preferenceKey, scrollCacheKey])
+  }, [filePath, preferenceKey, recordScalePreference, scrollCacheKey])
 
   useEffect(() => {
     loaderRef.current?.load(cleanedContent)
@@ -134,8 +150,6 @@ function PdfDocumentViewer({
     setFindOpen(false)
   }, [])
 
-  // Why: every zoom entry point (toolbar + keyboard) must record the scale
-  // preference so the next content reload restores it (see scalePreferenceRef).
   const stepZoom = useCallback(
     (direction: 'in' | 'out') => {
       const viewer = pdfViewerRef.current
@@ -144,12 +158,9 @@ function PdfDocumentViewer({
       }
       const next = stepPdfScalePreference(viewer.currentScale, direction, SCALE_BOUNDS)
       viewer.currentScale = next.scale
-      scalePreferenceRef.current = next.preference
-      if (preferenceKey) {
-        writePdfScalePreference(preferenceKey, next.preference)
-      }
+      recordScalePreference(next.preference)
     },
-    [preferenceKey]
+    [recordScalePreference]
   )
 
   const zoomIn = useCallback(() => stepZoom('in'), [stepZoom])
@@ -160,12 +171,18 @@ function PdfDocumentViewer({
     if (!viewer) {
       return
     }
-    scalePreferenceRef.current = 'page-width'
     applyPdfScalePreference(viewer, 'page-width', SCALE_BOUNDS)
-    if (preferenceKey) {
-      writePdfScalePreference(preferenceKey, 'page-width')
+    recordScalePreference('page-width')
+  }, [recordScalePreference])
+
+  useEffect(() => {
+    if (!isCommandOwner) {
+      return
     }
-  }, [preferenceKey])
+    return listenForPdfZoomRequests((direction) =>
+      direction === 'reset' ? zoomReset() : stepZoom(direction)
+    )
+  }, [isCommandOwner, stepZoom, zoomReset])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent): void => {
@@ -174,22 +191,11 @@ function PdfDocumentViewer({
         e.preventDefault()
         e.stopPropagation()
         setFindOpen(true)
-        return
-      }
-      if (keybindingMatchesAction('zoom.in', e, platform, keybindings)) {
-        e.preventDefault()
-        zoomIn()
-      } else if (keybindingMatchesAction('zoom.out', e, platform, keybindings)) {
-        e.preventDefault()
-        zoomOut()
-      } else if (keybindingMatchesAction('zoom.reset', e, platform, keybindings)) {
-        e.preventDefault()
-        zoomReset()
       }
     }
     window.addEventListener('keydown', handleKeyDown, true)
     return () => window.removeEventListener('keydown', handleKeyDown, true)
-  }, [keybindings, zoomIn, zoomOut, zoomReset])
+  }, [keybindings])
 
   const zoomPercent = Math.round(scale * 100)
 

@@ -3,7 +3,8 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   useMobileNativeChatSendError,
-  mobileNativeChatSendErrorMessage
+  mobileNativeChatSendErrorMessage,
+  type MobileNativeChatCommandRefusalCauses
 } from './use-mobile-native-chat-send-error'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import * as MobileNativeChatRenderData from './mobile-native-chat-render-data'
@@ -18,13 +19,17 @@ describe('useMobileNativeChatSendError', () => {
 
   function Harness({
     scopeKey,
-    bannerMounted = true
+    bannerMounted = true,
+    causes = null
   }: {
     scopeKey: string | null
     bannerMounted?: boolean
+    causes?: MobileNativeChatCommandRefusalCauses | null
   }): null {
     const api = useMobileNativeChatSendError({ scopeKey, showToast })
     api.bannerMountedRef.current = bannerMounted
+    // As the route does each render, with what the chat shows.
+    api.keepWhile(causes)
     apiRef.current = api
     return null
   }
@@ -54,6 +59,52 @@ describe('useMobileNativeChatSendError', () => {
     vi.useRealTimers()
   })
 
+  async function showing(causes: MobileNativeChatCommandRefusalCauses): Promise<void> {
+    await act(async () => {
+      renderer?.update(createElement(Harness, { scopeKey: 'terminal-1', causes }))
+    })
+  }
+
+  it('a /clear refused while the agent works goes when the agent stops, and stays gone', async () => {
+    const line = "The agent is still working. Run /clear when it's done."
+    await render()
+    await showing({ working: true, prompt: false })
+    await act(async () => api().show(line, { refusedWhile: 'working' }))
+    expect(api().message).toBe(line)
+    await showing({ working: true, prompt: false })
+    expect(api().message).toBe(line)
+
+    await showing({ working: false, prompt: false })
+    expect(api().message).toBeNull()
+    // Dropped, not hidden: the agent working again is not what that press was refused for.
+    await showing({ working: true, prompt: false })
+    expect(api().message).toBeNull()
+  })
+
+  it('a refusal behind a question goes once it is answered', async () => {
+    await render()
+    await showing({ working: false, prompt: true })
+    await act(async () =>
+      api().show("Answer the agent's question or approval, then run /clear.", {
+        refusedWhile: 'prompt'
+      })
+    )
+    await showing({ working: false, prompt: false })
+    expect(api().message).toBeNull()
+  })
+
+  it('a failure naming nothing the phone shows, or background tasks it cannot see, stays', async () => {
+    await render()
+    await act(async () => api().show('Message not sent'))
+    await showing({ working: false, prompt: false })
+    expect(api().message).toBe('Message not sent')
+    await act(async () =>
+      api().show('Background tasks are still running.', { refusedWhile: 'background' })
+    )
+    await showing({ working: false, prompt: false })
+    expect(api().message).toBe('Background tasks are still running.')
+  })
+
   it('holds a failure for four seconds, then drops it', async () => {
     await render()
     await act(async () => api().show('a'))
@@ -68,11 +119,11 @@ describe('useMobileNativeChatSendError', () => {
   it('holds the fact with its message, and clears it on another failure or expiry', async () => {
     const fact = { kind: 'notSignedIn', account: 'managed' } as const
     await render()
-    await act(async () => api().show('Sign in', fact))
+    await act(async () => api().show('Sign in', { failure: fact }))
     expect(api().failure).toEqual(fact)
     await act(async () => api().show('Stop failed'))
     expect(api().failure).toBeUndefined()
-    await act(async () => api().show('Sign in', fact))
+    await act(async () => api().show('Sign in', { failure: fact }))
     await act(async () => {
       vi.advanceTimersByTime(4000)
     })
@@ -189,7 +240,7 @@ describe('useMobileNativeChatSendError', () => {
 
   it('drops a held failure when the scope changes', async () => {
     await render('terminal-1')
-    await act(async () => api().show('a', { kind: 'notSignedIn' }))
+    await act(async () => api().show('a', { failure: { kind: 'notSignedIn' } }))
     expect(api().message).toBe('a')
 
     await act(async () => {

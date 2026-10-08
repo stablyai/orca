@@ -5,10 +5,8 @@ import {
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { ClaudeStreamJsonConnection } from './claude-stream-json-connection'
 import type { ClaudeJournalTranslator } from './claude-journal-translator-contract'
-import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
-import type { ClaudePromptRegistry } from './claude-structured-prompt-replies'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
-import type { ClaudeInitProof } from './claude-structured-session-startup'
+import type { ClaudeInitProof } from './claude-structured-init-proof'
 import type {
   ClaudeAcquisitionAttempt,
   ClaudeAcquireCallbacks
@@ -16,18 +14,18 @@ import type {
 
 export function createClaudeSessionJournalTranslator(
   sink: StructuredAgentSessionEventSink | undefined,
-  prompts: ClaudePromptRegistry,
   fallbackIdPrefix: string,
-  onBackgroundTaskJournalFailure?: (error: Error) => void,
-  account?: () => AgentSessionAccountKind | undefined
+  failure: Parameters<typeof createClaudeJournalFailureHandler>[0]
 ): ClaudeJournalTranslator | null {
+  const { attempt } = failure
   return sink
     ? createClaudeJournalTranslator({
         sink,
-        account,
+        account: () => attempt.account,
         fallbackIdPrefix,
-        ...(onBackgroundTaskJournalFailure ? { onBackgroundTaskJournalFailure } : {}),
-        bindPromptItemId: (itemId, promptKey) => prompts.bindJournalItemId(itemId, promptKey)
+        onBackgroundTaskJournalFailure: createClaudeJournalFailureHandler(failure),
+        bindPromptItemId: (itemId, promptKey) =>
+          attempt.prompts.bindJournalItemId(itemId, promptKey)
       })
     : null
 }

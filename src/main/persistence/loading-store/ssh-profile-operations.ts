@@ -1,14 +1,17 @@
 import type { RemovedSshTargetTombstone, SshTarget } from '../../../shared/ssh-types'
 import {
   type SshTargetStateOperations,
+  addClaudeLivePtySessionId as addClaudeLivePtySessionIdOperation,
   addDeletedSshConfigAlias as addDeletedSshConfigAliasOperation,
   addRemovedSshTargetTombstone as addRemovedSshTargetTombstoneOperation,
   addSshTarget as addSshTargetOperation,
   clearDeletedSshConfigAliases as clearDeletedSshConfigAliasesOperation,
+  getClaudeLivePtySessionIds as getClaudeLivePtySessionIdsOperation,
   getDeletedSshConfigAliases as getDeletedSshConfigAliasesOperation,
   getRemovedSshTargetTombstones as getRemovedSshTargetTombstonesOperation,
   getSshTarget as getSshTargetOperation,
   getSshTargets as getSshTargetsOperation,
+  removeClaudeLivePtySessionId as removeClaudeLivePtySessionIdOperation,
   removeDeletedSshConfigAlias as removeDeletedSshConfigAliasOperation,
   removeRemovedSshTargetTombstone as removeRemovedSshTargetTombstoneOperation,
   releaseRemovedSshTargetTombstone as releaseRemovedSshTargetTombstoneOperation,
@@ -23,17 +26,22 @@ import { allocateSshTargetGeneration as allocateSshTargetGenerationOperation } f
 
 import type { StoreRuntimeState } from './store-runtime-state'
 import type { WriteSchedulingOperations } from './write-scheduling'
+import type { WriteFlushBarrierOperations } from './write-flush-barriers'
 import type { RepoLifecycleOperations } from './repo-lifecycle-operations'
 import { syncProjectHostSetupCompatibilityState } from './repo-lifecycle-operations'
 import { scheduleSave } from './write-scheduling'
 import { forgetSshConnectionGeneration } from '../../ssh/ssh-connection-generation'
 
-type SshProfileOperationsRuntime = Pick<StoreRuntimeState, 'protectedSecrets' | 'state'>
+type SshProfileOperationsRuntime = Pick<
+  StoreRuntimeState,
+  'dirtyProfileStateDomains' | 'protectedSecrets' | 'state'
+>
 
 const sshProfileOperationsContext = Symbol('SshProfileOperations')
 type SshProfileOperationsContext = {
   runtime: SshProfileOperationsRuntime
   scheduling: WriteSchedulingOperations
+  flushBarriers: WriteFlushBarrierOperations
   repos: RepoLifecycleOperations
 }
 
@@ -43,9 +51,10 @@ export class SshProfileOperations {
   constructor(
     runtime: SshProfileOperationsRuntime,
     scheduling: WriteSchedulingOperations,
+    flushBarriers: WriteFlushBarrierOperations,
     repos: RepoLifecycleOperations
   ) {
-    this[sshProfileOperationsContext] = { runtime, scheduling, repos }
+    this[sshProfileOperationsContext] = { runtime, scheduling, flushBarriers, repos }
   }
 
   getSshTargets(): SshTarget[] {
@@ -77,6 +86,18 @@ export class SshProfileOperations {
     return allocateSshTargetGenerationOperation(context.runtime.state, () =>
       scheduleSave(context.scheduling)
     )
+  }
+
+  getClaudeLivePtySessionIds(): string[] {
+    return getClaudeLivePtySessionIdsOperation(this[sshProfileOperationsContext].runtime.state)
+  }
+
+  addClaudeLivePtySessionId(sessionId: string): void {
+    addClaudeLivePtySessionIdOperation(getSshTargetStateOperations(this), sessionId)
+  }
+
+  removeClaudeLivePtySessionId(sessionId: string): void {
+    removeClaudeLivePtySessionIdOperation(getSshTargetStateOperations(this), sessionId)
   }
 
   getDeletedSshConfigAliases(): string[] {
@@ -127,7 +148,13 @@ export function getSshTargetStateOperations(owner: SshProfileOperations): SshTar
   return {
     state: owner[sshProfileOperationsContext].runtime.state,
     protectedSecrets: owner[sshProfileOperationsContext].runtime.protectedSecrets,
-    scheduleSave: () => scheduleSave(owner[sshProfileOperationsContext].scheduling)
+    scheduleSave: () => scheduleSave(owner[sshProfileOperationsContext].scheduling),
+    flush: () => {
+      owner[sshProfileOperationsContext].runtime.dirtyProfileStateDomains?.add(
+        'claudeLivePtySessionIds'
+      )
+      owner[sshProfileOperationsContext].flushBarriers.flush()
+    }
   }
 }
 

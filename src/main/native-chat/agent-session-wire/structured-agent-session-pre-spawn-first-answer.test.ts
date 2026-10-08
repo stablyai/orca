@@ -2,10 +2,6 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  CLAUDE_PROFILE_MISSING_MESSAGE,
-  CLAUDE_PROFILE_SETUP_FAILED_MESSAGE
-} from '../../../shared/claude-profile-routing'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import { mapRuntimeError } from '../../runtime/rpc/errors'
@@ -100,6 +96,7 @@ async function firstAnswerAndReplay(thrown: AgentSessionPreSpawnError) {
       probe: { outcome: 'reservation-unused' as const }
     },
     callerKey: 'client-1',
+    optionRevision: () => 0,
     params: createParams(),
     now: () => NOW,
     onAttached: () => {}
@@ -172,18 +169,6 @@ describe('a create that fails before any process spawns', () => {
       'claude transcript is not in the selected account',
       'historyInOtherAccount',
       "This chat's history is in another Claude account. Switch back to that account to continue it."
-    ],
-    [
-      'a selected Claude account whose folder is gone',
-      CLAUDE_PROFILE_MISSING_MESSAGE,
-      'claudeAccountFolderMissing',
-      CLAUDE_PROFILE_MISSING_MESSAGE
-    ],
-    [
-      'a selected Claude account that could not be set up',
-      CLAUDE_PROFILE_SETUP_FAILED_MESSAGE,
-      'claudeAccountSetupFailed',
-      CLAUDE_PROFILE_SETUP_FAILED_MESSAGE
     ],
     [
       'a Command setting that names no runnable program',

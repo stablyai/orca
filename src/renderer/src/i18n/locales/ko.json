@@ -1,5 +1,9 @@
 {
   "app": {
+    "saving": {
+      "delayedTitle": "프로필 저장소 작업에 평소보다 오래 걸리고 있습니다",
+      "delayedDescription": "이 작업이 완료될 때까지 이후 저장이 지연될 수 있습니다."
+    },
     "recoverableError": {
       "rootTitle": "Orca에 렌더러 오류가 발생했습니다.",
       "rootDescription": "앱 셸에서 렌더링을 완료할 수 없습니다. 다시 마운트해 보거나 오류가 지속되면 Orca를 다시 시작하세요.",
@@ -3738,6 +3742,7 @@
             "54e8d6bb2d": "Fable",
             "d79c3362c4": "5h",
             "a79c64f87e": "Fable",
+            "8295903d17": "전환 후 이전 대화를 계속하려면 활성 Claude terminal을 다시 시작하세요.",
             "c98ea88392": "다른 계정 없음",
             "9332ba8684": "다음으로 전환",
             "d450654fa2": "Claude 계정",
@@ -6488,6 +6493,7 @@
         "AccountsPane": {
           "c2d2751587": "계정 삭제",
           "dbb9626ed1": "취소",
+          "854ebbcc45": "Orca는 저장된 계정에 대해 관리되는 Claude 인증을 삭제합니다. 현재 활성화된 경우 Orca는 시스템 기본 Claude 로그인으로 대체됩니다.",
           "63843e37e2": "Claude 계정을 삭제하시겠습니까?",
           "380a7736cc": "이 계정을 제거하면 관리되는 Codex 홈과 그 안에 저장된 모든 Codex 세션 기록 및 MCP 로그인이 영구적으로 삭제됩니다. 이 작업은 실행 취소할 수 없습니다. 계정이 현재 활성 상태인 경우 Orca는 시스템 기본 Codex 로그인으로 전환됩니다.",
           "0d47394635": "Codex 계정을 제거하시겠습니까?",
@@ -6535,10 +6541,12 @@
           "3fe7862418": "{{value0}}에 대한 관리된 Claude 계정이 없습니다. Orca는 여기에 추가할 때까지 해당 환경의 시스템 기본 Claude 로그인을 사용합니다.",
           "3455cf43fa": "Claude 로그인.",
           "fcc4093fc1": "현재 {{value0}} Codex 로그인을 사용하세요.",
+          "79e484c3b2": "공유 Claude 인증 파일에 대한 선택적 계정 전환기입니다.",
           "8bbfd74556": "Claude 계정",
           "72b36ea174": "선택 사항. Orca는 일반적인 Claude 로그인을 사용할 수 있습니다. 채팅 세션을 이동하지 않고 빠르게 전환하려는 경우에만 계정을 추가하세요.",
           "26ef4b55be": "Claude",
           "2743cdc0af": "Claude 계정 업데이트에 실패했습니다.",
+          "b15ce90870": "{{value0}} -> {{value1}}. 이전 세션을 계속하기 전에 실행 중인 Claude terminals을 다시 시작하세요.",
           "f921d32606": "Claude 계정이 업데이트되었습니다.",
           "5bf8764953": "Codex 계정 업데이트에 실패했습니다.",
           "9baf45d071": "이 기기",
@@ -7174,14 +7182,7 @@
           },
           "nativeChat": {
             "title": "Chat UI",
-            "description": "지원되는 에이전트 터미널 세션의 데스크톱 채팅 화면을 미리 봅니다.",
-            "copy": "지원되는 에이전트 터미널 창에서 전환할 수 있는 Chat UI 보기를 추가합니다. 대화 기록 충실도, 스트리밍, 터미널 동작 일치를 조정하는 동안 실험적으로 제공됩니다.",
             "toggleLabel": "Chat UI 전환",
-            "defaultTitle": "기본 보기",
-            "defaultCopy": "지원되는 에이전트의 새 터미널 탭을 여는 방식을 선택합니다.",
-            "defaultViewLabel": "기본 Chat UI 보기",
-            "defaultViewTerminal": "Terminal 채팅",
-            "defaultViewNative": "Chat UI",
             "shellEnvNamesLabel": "셸에서 전달할 변수",
             "shellEnvNamePlaceholder": "변수 이름",
             "shellEnvNameAdd": "추가",
@@ -7191,10 +7192,6 @@
             "shellEnvTitle": "셸 환경 사용",
             "shellEnvCopy": "Codex 및 Claude 채팅은 터미널과 마찬가지로 로그인 셸이 내보내는 모든 변수를 가지고 시작합니다. 끄면 전달할 변수를 선택할 수 있습니다.",
             "shellEnvToggleLabel": "셸 환경 사용 전환",
-            "structuredTitle": "업데이트된 구조화된 기본 채팅 사용",
-            "structuredCopy": "지원되는 경우 새 에이전트를 구조화된 채팅으로 엽니다. 끄면 터미널 기반 채팅으로 엽니다. 이미 있는 채팅은 그대로 유지됩니다.",
-            "structuredScope": "이 컴퓨터와 이를 지원하는 버전을 실행하는 페어링된 Orca 서버에서 실행됩니다. 이전 서버는 터미널 채팅을 유지합니다. WSL 및 SSH 호스트는 계속해서 터미널 채팅을 사용합니다.",
-            "structuredToggleLabel": "업데이트된 구조화된 기본 채팅 전환",
             "resumeTitle": "다시 시작한 후 작업 중인 채팅을 자동으로 재개합니다.",
             "resumeCopy": "Orca가 종료되거나 업데이트를 설치하면 Orca가 다시 열릴 때 작업 중이던 채팅이 자동으로 재개됩니다.",
             "resumeToggleLabel": "다시 시작한 후 자동 재개 전환"
@@ -9643,7 +9640,6 @@
             },
             "nativeChat": {
               "title": "Chat UI",
-              "description": "지원되는 에이전트 터미널 세션의 데스크톱 채팅 화면을 미리 봅니다.",
               "grok": "grok",
               "native": "네이티브",
               "chat": "채팅",
@@ -14896,6 +14892,7 @@
                 "d90d2e1f6d": "세션 및 주간 사용량을 추적합니다.",
                 "8919321417": "Codex 로그인에 실패했습니다.",
                 "c7b90c140b": "Codex 계정이 추가되었습니다.",
+                "4e71d72912": "Claude 로그인에 실패했습니다.",
                 "9ddeb558f9": "Claude 계정이 추가되었습니다.",
                 "29d0653961": "로그인",
                 "945865332e": "로그인 중",
@@ -16153,7 +16150,6 @@
             "deb5293610": "원격 런타임에서는 브라우저 주석을 사용할 수 없습니다.",
             "90d021f2ad": "추가",
             "0cb3bd6221": "주석 의도",
-            "8f87e6c2e5": "의도",
             "532bac48c5": "여기에서 agent가 무엇을 변경해야 하는지 설명하세요...",
             "d2a7092e6e": "주석 코멘트",
             "b472c5fe03": "브라우저 주석 추가",
@@ -16852,6 +16848,16 @@
         "runHistory": {
           "occurrencesWithLatest": "{{times}}회, 가장 최근에는 {{date}}",
           "occurrences": "{{times}}회"
+        },
+        "extraAgentArgs": {
+          "advanced": "고급",
+          "clear": "인수 지우기",
+          "unsupported": "이 에이전트는 아직 추가 인수를 지원하지 않습니다.",
+          "label": "추가 에이전트 인수",
+          "needsFreshSession": "추가 인수를 사용하려면 실행할 때마다 새 세션이 필요합니다.",
+          "useFreshSessions": "새 세션 사용",
+          "helper": "새 세션마다 이 호스트의 기본 인수 뒤에 추가됩니다.",
+          "detailLabel": "추가 인수"
         }
       },
       "agent": {
@@ -17831,8 +17837,6 @@
         "managedAccountUnsupported": "WSL에 Claude 계정이 추가되어 있는 동안에는 Claude 채팅에 Windows Claude 계정이 필요합니다.",
         "launchFolderMissing": "이 채팅이 실행되던 폴더가 더 이상 존재하지 않습니다. 이 채팅을 계속하려면 폴더를 복원하세요.",
         "historyInOtherAccount": "이 채팅의 기록은 다른 Claude 계정에 있습니다. 계속하려면 해당 계정으로 다시 전환하세요.",
-        "claudeAccountFolderMissing": "선택한 Claude 계정의 폴더가 없습니다. 다시 로그인하거나 다른 계정을 선택하세요.",
-        "claudeAccountSetupFailed": "선택한 Claude 계정을 설정할 수 없습니다. 다시 시도하거나 다른 계정을 선택하세요.",
         "agentCommandNotRunnable": "{{agent}}의 설정 → 에이전트 → 명령은 Orca가 찾을 수 있는 프로그램 경로나 이름이어야 하며, 인수나 변수를 포함할 수 없습니다. 변경하거나 재설정하세요.",
         "chooseClaudeAccount": "Claude 계정 설정에서 선택하거나 추가하세요.",
         "chooseClaudeAccountThenRunCommand": "Claude 계정 설정에서 선택하거나 추가한 다음 /{{command}}을(를) 다시 실행하세요.",
@@ -17889,7 +17893,10 @@
         "agentCommandNotSignedIn": "이 채팅을 실행하는 컴퓨터에서 `{{loginCommand}}`으로 {{agent}}에 로그인하세요.",
         "interactiveAgentNotSignedIn": "이 채팅을 실행하는 컴퓨터에서 `{{loginCommand}}`을 실행하고 `{{slashCommand}}`을 사용해 {{agent}}에 로그인하세요.",
         "agentNotSignedIn": "{{agent}}에 로그인하세요.",
-        "thenSendAgain": "그런 다음 메시지를 다시 보내세요."
+        "thenSendAgain": "그런 다음 메시지를 다시 보내세요.",
+        "runCommandWhenDone": "작업이 끝나면 /{{command}}을(를) 실행하세요.",
+        "commandAfterAnswer": "에이전트의 질문 또는 승인에 응답한 다음 /{{command}}을(를) 실행하세요.",
+        "sessionNotRestored": "{{agent}}이(가) 이전 세션을 다시 열 수 없어 이 채팅은 새 세션에서 계속됩니다. {{agent}}은(는) 이전 메시지를 기억하지 않습니다."
       },
       "writeNotice": {
         "notDoneReadHistory": "이 채팅의 기록을 불러오지 못했습니다.",
@@ -17951,7 +17958,16 @@
         "recordUnreadable": "Orca가 이 채팅의 저장된 상태를 읽지 못했습니다.",
         "chatNotFound": "Orca에서 이 채팅을 찾을 수 없습니다.",
         "startNewChat": "계속하려면 새 채팅을 시작하세요.",
-        "tryAgain": "다시 시도하세요."
+        "tryAgain": "다시 시도하세요.",
+        "agentStillWorking": "에이전트가 아직 작업 중입니다.",
+        "runClearWhenDone": "작업이 끝나면 /clear를 실행하세요.",
+        "clearAfterAnswer": "에이전트의 질문 또는 승인에 응답한 다음 /clear를 실행하세요.",
+        "runCompactWhenDone": "작업이 끝나면 /compact를 실행하세요.",
+        "compactAfterAnswer": "에이전트의 질문 또는 승인에 응답한 다음 /compact를 실행하세요.",
+        "clearAfterRetry": "이전 메시지를 다시 시도한 다음 /clear를 실행하세요.",
+        "compactAfterRetry": "이전 메시지를 다시 시도한 다음 /compact를 실행하세요.",
+        "clearAfterSending": "이전 메시지를 아직 보내는 중입니다. 전송이 끝나면 /clear를 실행하세요.",
+        "compactAfterSending": "이전 메시지를 아직 보내는 중입니다. 전송이 끝나면 /compact를 실행하세요."
       },
       "composer": {
         "imageUnsupported": "이 에이전트는 이미지 붙여넣기를 지원하지 않습니다.",
@@ -18410,7 +18426,8 @@
         "sendConfirmBody_other": "메시지를 보내려고 합니다. 대기열에 있는 메시지 {{count}}개를 지울까요?",
         "sendConfirmClear": "대기열 지우기",
         "sendConfirmSend": "메시지 보내기",
-        "from": "보낸 사람: {{names}}"
+        "from": "보낸 사람: {{names}}",
+        "pausedSendFailedWaiting": "보낼 수 없습니다. 에이전트가 끝나면 보내기를 눌러 다시 시도하세요."
       },
       "thought": "생각함",
       "thoughtForDuration": "{{duration}} 동안 생각함",
@@ -19396,6 +19413,9 @@
       "oldTerminalDialogRisk": "서버를 공유하는 Codex 세션은 함께 종료될 수 있으며 에이전트 상태가 잘못될 수 있습니다.",
       "oldTerminalDialogCause": "이전 터미널은 여전히 Codex 서버를 공유합니다. 새 터미널을 열어 별도의 서버에서 Codex를 실행합니다.",
       "fix": "자물쇠",
+      "openNewTerminal": "새 터미널 열기",
+      "dontShowAgain": "다시 보지 않기",
+      "dismiss": "닫기",
       "dialogTitle": "각 Codex 탭에 자체 서버를 제공합니다",
       "dialogDescription": "Codex 세션은 터미널 공유 백그라운드 서버에서 직접 시작되었습니다. ORCA는 시작되는 Codex 세션을 별도로 유지합니다. 세션이 서버를 공유할 때 서버를 닫으면 다른 세션이 종료될 수 있으며 에이전트 상태가 잘못될 수 있습니다.",
       "copy": "복사",
@@ -19406,6 +19426,7 @@
       "step2Title": "실행 중인 공유 서버 중지",
       "undo": "되돌리려면 codex features enable daemon_auto_start를 실행하세요.",
       "step2Warning": "서버를 공유하는 열려 있는 Codex 세션을 닫습니다.",
+      "learnMore": "자세히 알아보기",
       "turnOff": "끄기",
       "turningOff": "끄는 중...",
       "turnedOff": "껐어요",
@@ -19421,12 +19442,6 @@
     },
     "paneMove": {
       "failed": "분할 창을 새 탭으로 이동할 수 없습니다."
-    },
-    "paneTopBanner": {
-      "openNewTerminal": "새 터미널 열기",
-      "learnMore": "자세히 알아보기",
-      "dontShowAgain": "다시 보지 않기",
-      "dismiss": "닫기"
     }
   },
   "fileSearch": {

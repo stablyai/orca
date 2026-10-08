@@ -187,9 +187,7 @@ beforeEach(async () => {
   runtime = new OrcaRuntimeService()
   vi.spyOn(runtime, 'getClientSettings').mockReturnValue(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the structured-chat policy reads only this one setting on these paths.
-    { experimentalStructuredNativeChat: true } as ReturnType<
-      OrcaRuntimeService['getClientSettings']
-    >
+    { experimentalNativeChat: true } as ReturnType<OrcaRuntimeService['getClientSettings']>
   )
   dispatcher = new RpcDispatcher({
     runtime,

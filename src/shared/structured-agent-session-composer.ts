@@ -36,16 +36,27 @@ export type StructuredAgentSessionComposerOptions = {
   conversationCommands?: readonly AgentSessionConversationCommand[]
   runConversationCommand?: (
     command: AgentSessionConversationCommand
-  ) => Promise<{ accepted: boolean; error: string | null }>
+  ) => Promise<Omit<StructuredAgentSessionCommandOutcome, 'handled'>>
   /** Present only where the host can set this session's goal; otherwise `/goal`
    *  stays message text the agent acts on itself. */
   setThreadGoalObjective?: (objective: string) => Promise<boolean>
 }
 
+/** What the chat shows a refused command waiting on: the agent working, a pending prompt, its
+ *  background tasks, a message of this window's still being sent, or one showing its Retry. */
+export type StructuredAgentSessionCommandRefusalCause =
+  | 'working'
+  | 'prompt'
+  | 'background'
+  | 'sending'
+  | 'retry'
+
 export type StructuredAgentSessionCommandOutcome = {
   handled: boolean
   accepted: boolean
   error: string | null
+  /** The refusal is said only while this still holds. */
+  refusedWhile?: StructuredAgentSessionCommandRefusalCause
 }
 
 function commandParts(text: string): { name: string; argument: string } | null {
@@ -102,6 +113,16 @@ export function isStructuredAgentSessionComposerCommand(
   const command = commandParts(text)
   return Boolean(
     command && structuredRecognizedCommands(agent).some((entry) => entry.name === command.name)
+  )
+}
+
+/** `/clear` or `/compact` alone: a conversation command with nothing after it. */
+export function isLoneStructuredAgentSessionConversationCommand(text: string): boolean {
+  const command = commandParts(text.trim())
+  return Boolean(
+    command &&
+    command.argument === '' &&
+    CONVERSATION_COMMANDS.some((entry) => entry.name === command.name)
   )
 }
 

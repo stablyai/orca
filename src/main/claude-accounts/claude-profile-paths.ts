@@ -1,10 +1,6 @@
 import { lstatSync, mkdirSync, readFileSync, realpathSync } from 'node:fs'
 import * as hostPath from 'node:path'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
-import {
-  CLAUDE_INJECTED_CONFIG_DIR_ENV,
-  CLAUDE_USER_CONFIG_DIR_ENV
-} from '../../shared/claude-profile-routing'
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
@@ -97,23 +93,23 @@ function readOwnershipMarker(file: string): string | null {
   return ownershipRecord(version, accountId, runtime, distro)
 }
 
-// Written when a first setup finishes, so its absence means no setup has finished here yet.
+/**
+ * The only gate before writing into a profile: namespace, containment, no linked components,
+ * outside Claude's default homes, and an ownership marker beside the home. Refuses before creating anything.
+ */
+// Written by setup's ownership gate when setup starts, not when it completes: its absence means
+// setup never started here, and its presence does not prove setup finished.
 export function claudeProfileMarkerPath(profile: ClaudeProfileDescriptor): string {
   const path = profile.target.runtime === 'wsl' ? hostPath.posix : hostPath
   return path.join(path.dirname(profile.home), 'profile.json')
 }
 
-/**
- * The only gate before writing into a profile: namespace, containment, no linked components,
- * outside Claude's default homes, and an ownership marker beside the home. Refuses before creating
- * anything. Returns the step that writes the marker, which setup runs last.
- */
 export function prepareClaudeProfileDirectory(
   dataRoot: string,
   profile: ClaudeProfileDescriptor,
   userHome: string,
   userConfigDir?: string
-): () => void {
+): void {
   let expected: ClaudeProfileDescriptor
   try {
     expected = describeClaudeProfile(dataRoot, profile.accountId, profile.target)
@@ -139,14 +135,12 @@ export function prepareClaudeProfileDirectory(
     )
   }
   mkdirSync(profile.home, { recursive: true, mode: 0o700 })
-  return () => {
-    if (marker === null) {
-      writeFileAtomically(markerPath, `${record}\n`, { mode: 0o600 })
-    }
+  if (marker === null) {
+    writeFileAtomically(markerPath, `${record}\n`, { mode: 0o600 })
   }
 }
 
-function assertClaudeProfileDescendant(root: string, destination: string): void {
+export function assertClaudeProfileDescendant(root: string, destination: string): void {
   const suffix = relative(resolve(root), resolve(destination))
   if (!suffix || suffix === '..' || suffix.startsWith(`..${sep}`) || isAbsolute(suffix)) {
     throw new ClaudeProfileSurfaceError(
@@ -190,7 +184,7 @@ function canonicalPath(file: string): string {
   }
 }
 
-function assertDistinctClaudeProfile(profile: string, defaultHome: string): void {
+export function assertDistinctClaudeProfile(profile: string, defaultHome: string): void {
   const left = canonicalPath(profile)
   const right = canonicalPath(defaultHome)
   for (const [root, destination] of [
@@ -208,7 +202,7 @@ function assertDistinctClaudeProfile(profile: string, defaultHome: string): void
 }
 
 /** Claude's default homes: a profile may never be, contain, or sit inside one. */
-function assertOutsideDefaultClaudeHomes(
+export function assertOutsideDefaultClaudeHomes(
   profileHome: string,
   userHome: string,
   userConfigDir?: string
@@ -220,17 +214,15 @@ function assertOutsideDefaultClaudeHomes(
   }
 }
 
+/** Set beside every CLAUDE_CONFIG_DIR Orca injects, so its own value never reads as the user's. */
+export const CLAUDE_INJECTED_CONFIG_DIR_ENV = 'ORCA_CLAUDE_INJECTED_CONFIG_DIR'
+
 /** The user's own CLAUDE_CONFIG_DIR (their System default), or undefined for `~/.claude`. */
 export function readUserClaudeConfigDir(env: NodeJS.ProcessEnv): string | undefined {
   const configDir = env.CLAUDE_CONFIG_DIR?.trim()
   const injected = env[CLAUDE_INJECTED_CONFIG_DIR_ENV]?.trim()
-  if (!configDir) {
+  if (!configDir || (injected && resolve(injected) === resolve(configDir))) {
     return undefined
-  }
-  if (injected && resolve(injected) === resolve(configDir)) {
-    // Why: an outer Orca's injected value carries the user's own beside it.
-    const user = env[CLAUDE_USER_CONFIG_DIR_ENV]?.trim()
-    return user ? resolve(user) : undefined
   }
   return resolve(configDir)
 }

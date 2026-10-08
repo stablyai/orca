@@ -23,8 +23,6 @@ export const ptyStreamAndSerializationApi = {
     ipcRenderer.invoke('pty:disableCodexSharedServerAutoStart', { id }),
   stopCodexSharedServer: (id: string): Promise<boolean> =>
     ipcRenderer.invoke('pty:stopCodexSharedServer', { id }),
-  openedBeforeClaudeAccounts: (id: string): Promise<boolean> =>
-    ipcRenderer.invoke('pty:openedBeforeClaudeAccounts', { id }),
   getCwd: (id: string): Promise<string> => ipcRenderer.invoke('pty:getCwd', { id }),
   getSize: (id: string): Promise<{ cols: number; rows: number } | null> =>
     ipcRenderer.invoke('pty:getSize', { id }),

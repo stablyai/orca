@@ -82,7 +82,8 @@ export async function withdrawQueuedMessagesForOperation(
  * came from, which IS that pause, so the drain never sees a carried card unpaused
  * and no pause outlives the cards. Runs after the clear commits, opening the
  * replacement's conversation only when there are drafts to carry; the source
- * rows are then tombstoned. Bookkeeping around the clear: a failure, or a crash
+ * rows are then tombstoned. A command card (a waiting /compact) is tombstoned
+ * without a copy. Bookkeeping around the clear: a failure, or a crash
  * before the carry, leaves the cards on the superseded source — whose
  * supersession fence already blocks the drain — reported, never gating the
  * clear. A crash between the copy and the tombstone leaves both, which the
@@ -102,21 +103,25 @@ export async function carryQueuedMessagesToClearReplacement(
     if (rows.length === 0) {
       return
     }
-    const replacement = await input.openReplacementJournal()
-    if (!replacement) {
-      throw new Error('the replacement journal is not open')
-    }
-    for (const row of rows) {
-      // A returned card carries over as a plain waiting draft — its refusal
-      // belonged to the source's submissions. The fingerprint is re-scoped to the
-      // replacement, or its echo could never alias the sent bubble.
-      await replacement.queuedMessages.insert({
-        messageId: row.messageId,
-        body: row.body,
-        fingerprint: agentSessionSendBodyFingerprint(input.replacementSessionId, row.body),
-        hostInstance: structuredAgentSessionHostInstance(),
-        carriedFrom: ctx.sessionId
-      })
+    // A command belongs to the discarded context, so it is withdrawn instead of carried.
+    const carried = rows.filter((row) => !row.body.command)
+    if (carried.length > 0) {
+      const replacement = await input.openReplacementJournal()
+      if (!replacement) {
+        throw new Error('the replacement journal is not open')
+      }
+      for (const row of carried) {
+        // A returned card carries over as a plain waiting draft — its refusal
+        // belonged to the source's submissions. The fingerprint is re-scoped to the
+        // replacement, or its echo could never alias the sent bubble.
+        await replacement.queuedMessages.insert({
+          messageId: row.messageId,
+          body: row.body,
+          fingerprint: agentSessionSendBodyFingerprint(input.replacementSessionId, row.body),
+          hostInstance: structuredAgentSessionHostInstance(),
+          carriedFrom: ctx.sessionId
+        })
+      }
     }
     await withdrawQueuedMessagesForOperation(ctx.journal, {
       sessionId: ctx.sessionId,
@@ -213,6 +218,11 @@ export function sendQueuedStructuredAgentMessage(
         return submission
           ? { ok: true, value: { clientMessageId: submission.clientMessageId, submission } }
           : invalid('This queued message was already sent.')
+      }
+      // A command never steers: handed over mid-turn it would only be refused. Clients offer its
+      // Send only while the agent is idle; this answers an older one that offers it mid-turn.
+      if (hold === 'working' && row.body.command) {
+        return invalid("A command can't be sent while the agent is working.")
       }
       const submissionId = operationId
       try {

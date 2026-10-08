@@ -116,16 +116,6 @@ const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopy
         'components.native-chat.failureWords.historyInOtherAccount',
         COPY.historyInOtherAccount
       ),
-    claudeAccountFolderMissing: () =>
-      translate(
-        'components.native-chat.failureWords.claudeAccountFolderMissing',
-        COPY.claudeAccountFolderMissing
-      ),
-    claudeAccountSetupFailed: () =>
-      translate(
-        'components.native-chat.failureWords.claudeAccountSetupFailed',
-        COPY.claudeAccountSetupFailed
-      ),
     agentCommandNotRunnable: (values) =>
       translate(
         'components.native-chat.failureWords.agentCommandNotRunnable',
@@ -191,6 +181,34 @@ const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopy
       translate(
         'components.native-chat.failureWords.commandRefusedTryAgain',
         COPY.commandRefusedTryAgain
+      ),
+    backgroundTasksRunning: () =>
+      translate(
+        'components.native-chat.writeNotice.backgroundTasksRunning',
+        COPY.backgroundTasksRunning
+      ),
+    waitForBackgroundTasks: () =>
+      translate(
+        'components.native-chat.writeNotice.waitForBackgroundTasks',
+        COPY.waitForBackgroundTasks
+      ),
+    agentStarting: () =>
+      translate('components.native-chat.writeNotice.agentStarting', COPY.agentStarting),
+    waitForStart: () =>
+      translate('components.native-chat.writeNotice.waitForStart', COPY.waitForStart),
+    agentStillWorking: () =>
+      translate('components.native-chat.writeNotice.agentStillWorking', COPY.agentStillWorking),
+    runCommandWhenDone: (values) =>
+      translate(
+        'components.native-chat.failureWords.runCommandWhenDone',
+        COPY.runCommandWhenDone,
+        values
+      ),
+    commandAfterAnswer: (values) =>
+      translate(
+        'components.native-chat.failureWords.commandAfterAnswer',
+        COPY.commandAfterAnswer,
+        values
       ),
     compactionFailed: () =>
       translate('components.native-chat.failureWords.compactionFailed', COPY.compactionFailed),

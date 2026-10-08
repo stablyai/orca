@@ -15,7 +15,7 @@ export function buildInterfaceSettingsSections({
   isMac,
   isWindows,
   isWebClient,
-  experimentalStructuredNativeChat,
+  nativeChatEnabled,
   managedBrowserCreationEnabled,
   mobileEmulatorCreationEnabled
 }: SettingsNavigationBuildOptions): SettingsNavSection[] {
@@ -36,7 +36,7 @@ export function buildInterfaceSettingsSections({
       }),
       group: 'interface'
     },
-    ...(experimentalStructuredNativeChat
+    ...(nativeChatEnabled
       ? [
           {
             id: 'chat',

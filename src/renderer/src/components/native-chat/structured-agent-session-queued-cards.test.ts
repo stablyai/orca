@@ -9,6 +9,7 @@ import type { StructuredAgentSessionPendingSend } from './structured-agent-sessi
 import {
   newestSteerableQueuedMessageCard,
   pendingSendsOutsideQueuedCards,
+  pendingQueueSendsOnTheirWay,
   projectQueuedMessageCards,
   queuedMessageCardSteers,
   queuedMessagesQueuePause
@@ -208,6 +209,31 @@ describe('queued message cards', () => {
     expect(newestSteerableQueuedMessageCard([])).toBeNull()
   })
 
+  it('marks a command card, which the chord never steers', () => {
+    const compact: AgentSessionQueuedMessage = {
+      ...draft('c', 2),
+      body: {
+        kind: 'message',
+        role: 'user',
+        blocks: [{ type: 'text', text: '/compact' }],
+        command: { name: 'compact' }
+      }
+    }
+    const cards = projectQueuedMessageCards([draft('a', 1), compact], [], IDLE)
+    expect(cards.map((card) => [card.text, card.command ?? false])).toEqual([
+      ['text of a', false],
+      ['/compact', true]
+    ])
+    expect(newestSteerableQueuedMessageCard(cards)).toBeNull()
+    // While the agent works it offers no send; a message card is unaffected.
+    const working = projectQueuedMessageCards([draft('a', 1), compact], [], {
+      ...IDLE,
+      agentWorking: true
+    })
+    expect(working.map((card) => card.waitsForAgent ?? false)).toEqual([false, true])
+    expect(cards[1]).not.toHaveProperty('waitsForAgent')
+  })
+
   it('a mid-turn queue send on its way is no bubble; a plain or recorded one is, until its row', () => {
     const entry = (
       clientMessageId: string,
@@ -242,6 +268,28 @@ describe('queued message cards', () => {
       'queued',
       'recorded'
     ])
+  })
+  it('a sending card ends once the host records the send or hands its card off', () => {
+    const entry: StructuredAgentSessionPendingSend = {
+      clientMessageId: 'a',
+      sessionId: 'session-1',
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'a' }] },
+      previewUris: [],
+      queuedAt: 1,
+      phase: 'sending',
+      issued: true,
+      delivery: 'queue-if-active'
+    }
+    const onItsWay = (submissions: AgentJournalSubmission[]) =>
+      pendingQueueSendsOnTheirWay([entry], [], true, submissions).map(
+        (candidate) => candidate.clientMessageId
+      )
+    expect(onItsWay([])).toEqual(['a'])
+    expect(onItsWay([submission('a')])).toEqual([])
+    expect(onItsWay([handOff('a')])).toEqual([])
+    expect(pendingQueueSendsOnTheirWay([entry], ['a'], true, [])).toEqual([])
+    expect(pendingQueueSendsOnTheirWay([entry], [], false, [])).toEqual([])
+    expect(pendingQueueSendsOnTheirWay([{ ...entry, phase: 'recorded' }], [], true, [])).toEqual([])
   })
 })
 

@@ -1,7 +1,6 @@
 // Where a Claude start stands. A session is published once its child is spawned, launched with the
-// chat's saved options, before the CLI has answered initialize. Messages are written to it at once
-// (the CLI queues them behind its start); only an option write, a control request initialize must
-// answer first, waits for startup to land.
+// chat's saved options, before the CLI has answered initialize. The host hands it no message until
+// `started`; an option write, a control request initialize must answer first, waits here too.
 
 import type { SubmissionRejectionFact } from '../../shared/agent-session-failure'
 import { providerStartupFailureFact } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'

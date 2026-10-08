@@ -11,9 +11,7 @@ import {
 import { createStructuredWorkerSessionForWorktree } from './orchestration/worker/worker-topology'
 
 const STRUCTURED_PREFERENCE = {
-  experimentalNativeChat: true,
-  experimentalStructuredNativeChat: true,
-  openAgentTabsInChatByDefault: true
+  experimentalNativeChat: true
 } as const
 
 describe('a Grok worker and the structured-chat setting', () => {
@@ -56,7 +54,7 @@ describe('a Grok worker and the structured-chat setting', () => {
       expect(
         decideWorkerStartMode({
           params: { agent },
-          settings: { ...STRUCTURED_PREFERENCE, experimentalStructuredNativeChat: false }
+          settings: { experimentalNativeChat: false }
         })
       ).toMatchObject({ mode: 'terminal', preferred: 'terminal', reason: 'user_default' })
     }

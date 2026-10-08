@@ -27,6 +27,7 @@ import {
 } from './agent-session-failure-copy'
 import type { AgentSessionWireRefusalCode } from './agent-session-wire-refusals'
 import { providerRetryWords, withRetryCause } from './agent-session-provider-retry-words'
+import { commandRefusedByReason } from './agent-session-command-refusal-words'
 import { joinSentences } from './sentence-joining'
 import {
   DISPATCH_REJECTED_CANCELLED,
@@ -220,8 +221,6 @@ const FAILURE_SENTENCES = {
   accountSwitchInProgress: (_context, _fact, _surface, say) => say('accountSwitchInProgress'),
   launchFolderMissing: (_context, _fact, _surface, say) => say('launchFolderMissing'),
   historyInOtherAccount: (_context, _fact, _surface, say) => say('historyInOtherAccount'),
-  claudeAccountFolderMissing: (_context, _fact, _surface, say) => say('claudeAccountFolderMissing'),
-  claudeAccountSetupFailed: (_context, _fact, _surface, say) => say('claudeAccountSetupFailed'),
   agentCommandNotRunnable: (context, _fact, _surface, say) =>
     say('agentCommandNotRunnable', agent(say, context)),
   managedAccountUnsupported: (context, _fact, _surface, say) =>
@@ -251,8 +250,9 @@ const FAILURE_SENTENCES = {
   hostRestarted: (_context, _fact, _surface, say) => say('hostRestarted'),
   notDelivered: ({ retryControl }, _fact, _surface, say) =>
     say(retryControl ? 'notDelivered' : 'notDeliveredSendAgain'),
-  commandRefused: ({ retryControl }, _fact, _surface, say) =>
-    say(retryControl ? 'commandRefused' : 'commandRefusedTryAgain'),
+  commandRefused: (context, fact, _surface, say) =>
+    commandRefusedByReason(say, context, fact) ??
+    say(context.retryControl ? 'commandRefused' : 'commandRefusedTryAgain'),
   compactionFailed: (_context, fact, _surface, say) =>
     quotingPersonDetail(say, 'compactionFailed', 'compactionFailedQuoted', fact.detail),
   compactionUnconfirmed: (_context, _fact, _surface, say) => say('compactionUnconfirmed'),

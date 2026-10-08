@@ -69,6 +69,38 @@ describe('Claude structured session publishes before the CLI answers initialize'
     await adapter.closeAll()
   })
 
+  it('reports `started` on the initialize answer, never waiting on the settings read', async () => {
+    const SLOW_SETTINGS_MS = 25_000
+    const claude = fakeClaude({
+      initDelayMs: SLOW_INIT_MS,
+      // The fake answers `get_settings` with whatever this resolves to, when it resolves.
+      settings: new Promise((resolve) =>
+        setTimeout(
+          () => resolve({ effective: { fastMode: true }, applied: { model: 'claude-haiku-4-5' } }),
+          SLOW_INIT_MS + SLOW_SETTINGS_MS
+        )
+      )
+    })
+    const { adapter, events } = startingAdapter(claude)
+    await adapter.acquire(ACQUIRE)
+
+    await vi.advanceTimersByTimeAsync(SLOW_INIT_MS)
+
+    expect(claude.connections[0].calls.map((call) => call.subtype)).toContain('get_settings')
+    expect(events.filter((event) => event.type === 'started')).toHaveLength(1)
+    expect(events.some((event) => event.type === 'options-reported')).toBe(false)
+    expect(events.some((event) => event.type === 'auth-diagnostic')).toBe(false)
+
+    await vi.advanceTimersByTimeAsync(SLOW_SETTINGS_MS)
+    await claudeStartupSettled(adapter, 'session-1')
+
+    expect(events.find((event) => event.type === 'options-reported')).toMatchObject({
+      reportedOptions: { model: 'claude-haiku-4-5', fastMode: true }
+    })
+    expect(events.some((event) => event.type === 'auth-diagnostic')).toBe(true)
+    await adapter.closeAll()
+  })
+
   it('reports `started` with the options its child was launched with, having written none', async () => {
     const claude = fakeClaude({ initDelayMs: SLOW_INIT_MS, initModel: 'claude-opus-9' })
     const { adapter, events } = startingAdapter(claude)
@@ -87,7 +119,9 @@ describe('Claude structured session publishes before the CLI answers initialize'
       acquisitionGeneration: expect.any(String),
       // What the child was launched with, carried so the host never asks the CLI again.
       reportedOptions: expect.objectContaining({ model: 'opus' }),
-      restoreSkippedOptions: []
+      restoreSkippedOptions: [],
+      // No host revision handed in: nothing has moved it.
+      optionRevision: 0
     })
     expect(claude.connections[0].calls.map(({ subtype }) => subtype)).toEqual([
       'initialize',

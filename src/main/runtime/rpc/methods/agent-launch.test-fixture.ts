@@ -17,9 +17,7 @@ import type {
 } from '../../../../shared/agent-launch-tab-publication'
 
 export const STRUCTURED_PREFERENCE = {
-  experimentalNativeChat: true,
-  experimentalStructuredNativeChat: true,
-  openAgentTabsInChatByDefault: true
+  experimentalNativeChat: true
 }
 
 export type AgentLaunchRuntimeStubOptions = {

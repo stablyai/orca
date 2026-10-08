@@ -78,8 +78,8 @@ function oldestActionableQueuedMessage(
  *     hold, or an actionable backlog, queues the send as a draft.
  *   drain step: any hold returns early; whatever clears it publishes or
  *     commits, which re-derives.
- *   Send-now: overrides only `working` (plus FIFO order and the stored hold);
- *     `blocked` and `prompt` refuse readably.
+ *   Send-now: overrides only `working` (plus FIFO order and the stored hold),
+ *     never for a command card; `blocked` and `prompt` refuse readably.
  *
  * `blocked` is whatever refuses any send (an uncertain rewind, a cleared source);
  * the rest are waits. A /compact is a queued message and then a turn,

@@ -16,7 +16,6 @@ import {
   getProviderDisplayName,
   getProviderUsageStatusLabel
 } from './tooltip'
-import { isClaudeUsageWaitingForClaude } from './usage-error-copy'
 import { getTightestUsageSection, getUsageHeadlineSection } from './UsageRosterPanel'
 import { formatRateLimitWindowChipLabel } from '@/lib/window-label-formatter'
 import { formatUsagePercentageLabel } from './usage-percentage-label'
@@ -315,8 +314,6 @@ export function ProviderSegment({
 }): React.JSX.Element {
   const provider = p?.provider ?? 'claude'
   const statusLabel = p ? getProviderUsageStatusLabel(p) : ''
-  // Why: not a problem; Claude updates its own login the next time it runs.
-  const calm = p ? isClaudeUsageWaitingForClaude(p) : false
 
   // Idle / initial load
   if (!p || p.status === 'idle') {
@@ -354,14 +351,14 @@ export function ProviderSegment({
     return (
       <span className="inline-flex items-center gap-1 text-muted-foreground">
         <ProviderIcon provider={provider} />
-        {!calm && <AlertTriangle size={11} className="text-muted-foreground/80" />}
+        <AlertTriangle size={11} className="text-muted-foreground/80" />
         {!compact && <span className="text-[11px] font-medium">{statusLabel}</span>}
       </span>
     )
   }
 
   // Has data (ok, fetching with stale data, or error with stale data)
-  const isStale = p.status === 'error' && !calm
+  const isStale = p.status === 'error'
   const showBalance = isExtraUsageActive(p)
 
   return (

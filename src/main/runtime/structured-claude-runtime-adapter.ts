@@ -15,6 +15,7 @@ import {
   recordAgentSessionProviderHandle,
   reviseAgentSessionProviderResumePoint
 } from './agent-session-provider-handle-transition'
+import type { ClaudeManagedAccountGateSettings } from '../native-chat/claude-structured-managed-account-support'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 import { ClaudeAtRestCommandCatalog } from '../claude/claude-at-rest-commands'
 import { openClaudeStreamJsonConnection } from '../claude/claude-stream-json-connection'
@@ -39,6 +40,7 @@ export type StructuredClaudeRuntimeAdapterDeps = {
   resolveClaudeAuthPolicy: () => Promise<ClaudeStructuredAuthPolicy> | ClaudeStructuredAuthPolicy
   /** The user's Agent Permissions setting for Claude; absent means prompting. */
   resolveClaudePermissionMode?: () => Promise<PermissionMode> | PermissionMode
+  readClaudeManagedAccountGate?: () => ClaudeManagedAccountGateSettings | null
   /** Where the host stores chat attachments; granted to the agent as a readable directory. */
   attachmentDirectory?: string
   openClaudeConnection?: ClaudeStructuredSessionAdapterDeps['openConnection']
@@ -55,7 +57,11 @@ export type StructuredClaudeRuntimeAdapterDeps = {
 export function structuredClaudeLifecycleEvent(
   event: ClaudeStructuredSessionEvent
 ): StructuredAgentSessionLifecycleEvent | null {
-  if (event.type === 'started' || event.type === 'options-skipped') {
+  if (
+    event.type === 'started' ||
+    event.type === 'options-reported' ||
+    event.type === 'options-skipped'
+  ) {
     return event
   }
   // Every exit of a child with an identity, expected or not: the host ends that child's record.
@@ -114,6 +120,9 @@ export function createStructuredClaudeRuntimeAdapter(
       resolveAuthPolicy: deps.resolveClaudeAuthPolicy,
       ...(deps.resolveClaudePermissionMode
         ? { resolvePermissionMode: deps.resolveClaudePermissionMode }
+        : {}),
+      ...(deps.readClaudeManagedAccountGate
+        ? { readManagedAccountGate: deps.readClaudeManagedAccountGate }
         : {}),
       ...(deps.attachmentDirectory ? { attachmentDirectory: deps.attachmentDirectory } : {}),
       ...(deps.claudeCliFlags ? { cliFlags: deps.claudeCliFlags } : {}),
