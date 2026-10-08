@@ -15,6 +15,8 @@ import { isAgentSessionHandleProvider } from '../../../src/shared/agent-session-
 import { AGENT_LAUNCH_TAB_CLOSED_CODE } from '../../../src/shared/agent-launch-tab-closed'
 import { makePaneKey } from '../../../src/shared/stable-pane-id'
 import { createStructuredAgentSessionId } from '../../../src/shared/structured-agent-session-create'
+import { STRUCTURED_AGENT_SESSION_CLIENT_OPTIONS_RUNTIME_CAPABILITY } from '../../../src/shared/structured-agent-session-surface-capabilities'
+import { readMobileStructuredChatLaunchOptions } from './mobile-structured-chat-launch-options'
 import type { TuiAgent } from '../../../src/shared/tui-agent'
 import type { RpcClient } from '../transport/rpc-client'
 import { agentLaunchReplayRun } from '../tasks/mobile-workspace-create-operations'
@@ -108,9 +110,15 @@ export async function launchAgentInExistingWorkspace(args: {
   if (!supportsMobileExistingAgentLaunch(args.hostCapabilities)) {
     return { kind: 'unsupported' }
   }
+  const sessionOptions = args.hostCapabilities?.includes(
+    STRUCTURED_AGENT_SESSION_CLIENT_OPTIONS_RUNTIME_CAPABILITY
+  )
+    ? await readMobileStructuredChatLaunchOptions(args.client, args.agent)
+    : undefined
   const params = agentLaunchExistingParams({
     agent: args.agent,
     worktreeId: args.worktreeId,
+    ...(sessionOptions !== undefined ? { sessionOptions } : {}),
     operationId: (args.mintOperationId ?? structuredSessionOperationId)(),
     ...(args.prompt ? { prompt: args.prompt } : {}),
     ...(args.launchSource ? { launchSource: args.launchSource } : {}),

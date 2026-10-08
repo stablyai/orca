@@ -17,10 +17,12 @@ import {
   structuredAgentSupportProbe
 } from './mobile-session-launch-operations'
 import { structuredSessionRandomUuid } from './structured-session-operation-id'
+import { readMobileStructuredChatLaunchOptions } from './mobile-structured-chat-launch-options'
 
 type StructuredCreateSupport = {
   supported?: boolean
   reason?: 'agent' | 'remote' | 'wsl'
+  acceptsClientOptions?: boolean
 }
 
 const SELECTOR_NOT_RESOLVABLE_CODE = 'selector_not_found'
@@ -38,12 +40,14 @@ export type MobileStructuredAgentLaunchResult =
 
 function createParamsFor(
   agent: AgentSessionHandleProvider,
-  worktree: string
+  worktree: string,
+  options?: Readonly<Record<string, string>>
 ): StructuredAgentSessionCreateParams {
   return structuredAgentSessionCreateParams({
     sessionId: createStructuredAgentSessionId(agent, structuredSessionRandomUuid),
     worktree,
     agent,
+    ...(options !== undefined ? { options } : {}),
     randomUuid: structuredSessionRandomUuid
   })
 }
@@ -121,7 +125,11 @@ export async function createMobileStructuredAgentSession(
     return { kind: 'unsupported', reason: support?.reason }
   }
 
-  const params = createParamsFor(agent, worktree)
+  const options =
+    support.acceptsClientOptions === true
+      ? await readMobileStructuredChatLaunchOptions(client, agent)
+      : undefined
+  const params = createParamsFor(agent, worktree, options)
   let response
   try {
     response = await structuredAgentSessionCreate.request(client, params, {

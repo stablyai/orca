@@ -53,6 +53,7 @@ export function structuredAgentSessionCreateIntentFingerprint(params: {
   worktree: string
   agent: string
   resumeFrom?: StructuredAgentSessionResumeSource
+  options?: Readonly<Record<string, string>>
   tabId?: string
 }): string {
   return computeAgentSessionPayloadFingerprint({
@@ -62,6 +63,7 @@ export function structuredAgentSessionCreateIntentFingerprint(params: {
       worktree: params.worktree,
       agent: params.agent,
       resumeFrom: params.resumeFrom,
+      options: params.options,
       tabId: params.tabId
     }
   })
@@ -105,8 +107,10 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
     agent: _resolvedAgent,
     provider: _resolvedProvider,
     hostLaunchDirectory,
+    options: hostOptions,
     ...resolvedAttach
   } = resolved
+  const options = args.options === undefined ? hostOptions : args.options
   return {
     host,
     ...(hostLaunchDirectory ? { hostLaunchDirectory } : {}),
@@ -115,7 +119,7 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
       // After the fingerprint, deliberately: `attachFingerprintFields` excludes options because
       // they are the session's initial state, not its identity, so a retry that re-resolves them
       // must replay rather than conflict.
-      ...(args.options ? { options: args.options } : {}),
+      ...(options && Object.keys(options).length > 0 ? { options } : {}),
       ...(args.tabId ? { surfaceTabId: args.tabId } : {}),
       provider: resolved.provider,
       agent: resolved.agent,

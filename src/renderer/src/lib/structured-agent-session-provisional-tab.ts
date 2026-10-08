@@ -125,14 +125,15 @@ export function beginStructuredAgentSessionProvisionalLaunch(
     worktreeId,
     executionHostId: owner.executionHostId,
     target: owner.target,
-    openAdmitted: (seedOptions) =>
+    openAdmitted: (seedOptions, clientOptions) =>
       beginLocalProvisionalLaunch({
         ...args,
         target: {
           ...args.target,
           worktreeId,
           executionHostId: owner.executionHostId,
-          ...(seedOptions ? { seedOptions } : {})
+          ...(seedOptions ? { seedOptions } : {}),
+          ...(clientOptions !== undefined ? { clientOptions } : {})
         },
         beforeOpen: undefined
       }),

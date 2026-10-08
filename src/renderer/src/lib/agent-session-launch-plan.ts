@@ -71,6 +71,7 @@ export type AgentSessionLaunchTarget = {
   executionHostId?: ExecutionHostId
   /** The saved selection that host said create will seed. */
   seedOptions?: Readonly<Record<string, string>>
+  clientOptions?: Readonly<Record<string, string>>
   /** The tab group the chat opens in. */
   groupId?: string
 }
@@ -122,6 +123,7 @@ function beginStructuredPlanLaunch(
         ...structuredLaunchOptions(verdict),
         ...(executionHostId ? { executionHostId } : {}),
         ...(target?.seedOptions ? { hostSeedOptions: target.seedOptions } : {}),
+        ...(target?.clientOptions !== undefined ? { clientOptions: target.clientOptions } : {}),
         ...(target?.groupId ? { targetGroupId: target.groupId } : {})
       },
       hooks

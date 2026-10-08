@@ -12,7 +12,7 @@ const CHECKOUT_MAX_OUTPUT_BYTES = 1024 * 1024
 // Why: the wire endpoints only need the runtime RPC host, the renderer client, and
 // the shared codec, plus the relay an app update leaves running. Skipping cli keeps a cold CI
 // extraction a few seconds.
-// The phone's `worktree ps` row reader is one self-contained file, so it rides along alone.
+// Released phone readers and launch requests must consume the same replies as desktop clients.
 const ARCHIVE_PATHS = [
   'src/main',
   'src/shared',
@@ -20,7 +20,7 @@ const ARCHIVE_PATHS = [
   'src/relay',
   'src/renderer',
   'src/types',
-  'mobile/src/worktree/agent-row-display.ts'
+  'mobile/src'
 ]
 
 const ALIAS_SPECIFIER =
@@ -34,10 +34,11 @@ function isTestSource(name: string): boolean {
   return /\.(test|bench|spec)\.(ts|tsx)$/.test(name)
 }
 
-/** Keep renderer aliases inside the extracted release rather than the working tree. */
-async function rewriteRendererAliases(
+/** Keep client aliases inside the extracted release rather than the working tree. */
+async function rewriteClientAliases(
   file: string,
   source: string,
+  aliasRoot: string,
   rendererRoot: string
 ): Promise<string> {
   if (!source.includes("'@/") && !source.includes('"@/') && !source.includes('@renderer/')) {
@@ -45,8 +46,8 @@ async function rewriteRendererAliases(
   }
   const rewritten = source.replace(
     ALIAS_SPECIFIER,
-    (_match, keyword: string, quote: string, _renderer: string | undefined, target: string) => {
-      const absolute = join(rendererRoot, target)
+    (_match, keyword: string, quote: string, renderer: string | undefined, target: string) => {
+      const absolute = join(renderer ? rendererRoot : aliasRoot, target)
       let relativePath = relative(dirname(file), absolute).split('\\').join('/')
       if (!relativePath.startsWith('.')) {
         relativePath = `./${relativePath}`
@@ -62,11 +63,11 @@ async function rewriteRendererAliases(
 
 async function prepareExtractedTree(root: string, packageImports: PackageImports): Promise<void> {
   const rendererRoot = join(root, 'src', 'renderer', 'src')
-  const walk = async (directory: string): Promise<void> => {
+  const walk = async (directory: string, aliasRoot: string): Promise<void> => {
     for (const entry of await readdir(directory, { withFileTypes: true })) {
       const full = join(directory, entry.name)
       if (entry.isDirectory()) {
-        await walk(full)
+        await walk(full, aliasRoot)
         continue
       }
       if (!entry.isFile()) {
@@ -80,13 +81,15 @@ async function prepareExtractedTree(root: string, packageImports: PackageImports
       if (isRewritableSource(entry.name)) {
         const source = await readFile(full, 'utf8')
         collectPackageImports(
-          await rewriteRendererAliases(full, source, rendererRoot),
+          await rewriteClientAliases(full, source, aliasRoot, rendererRoot),
           packageImports
         )
       }
     }
   }
-  await walk(join(root, 'src'))
+  await walk(join(root, 'src'), rendererRoot)
+  const mobileRoot = join(root, 'mobile', 'src')
+  await walk(mobileRoot, mobileRoot)
 }
 
 function checkoutTarProgram(): string {

@@ -23,6 +23,8 @@ export type StructuredAgentSessionCreateParams = {
   worktree: string
   agent: StructuredAgentId
   resumeFrom?: StructuredAgentSessionResumeSource
+  /** Sent only after createSupport advertises acceptsClientOptions. */
+  options?: Readonly<Record<string, string>>
   /** Sent only to a host advertising `AGENT_SESSION_CREATE_TAB_ID_RUNTIME_CAPABILITY`. */
   tabId?: string
 }
@@ -54,6 +56,7 @@ export function structuredAgentSessionCreateParams(args: {
   worktree: string
   agent: StructuredAgentId
   resumeFrom?: StructuredAgentSessionResumeSource
+  options?: Readonly<Record<string, string>>
   tabId?: string
   randomUuid: () => string
   now?: number
@@ -62,6 +65,7 @@ export function structuredAgentSessionCreateParams(args: {
     worktree: args.worktree,
     agent: args.agent,
     ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {}),
+    ...(args.options !== undefined ? { options: args.options } : {}),
     ...(args.tabId ? { tabId: args.tabId } : {})
   }
   return {

@@ -68,6 +68,8 @@ import {
   UnsubscribeParams
 } from './structured-agent-session-schemas'
 import { sendStructuredAgentSessionForClient } from './structured-agent-session-send-compatibility'
+import { normalizeStructuredChatLaunchOptions } from '../../../../shared/structured-chat-launch-options'
+import { structuredAgentSessionClientCreateSupport } from './structured-agent-session-client-create-support'
 
 /**
  * The attach-shaped entries take the location from the client instead of resolving it from a
@@ -136,15 +138,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
     params: CreateSupportParams,
     handler: async (params, ctx) => {
       requireStructuredCreateSupportAdmission(ctx, params.agent)
-      const support = await ctx.runtime.getStructuredAgentSessionCreateSupport(
-        params.worktree,
-        params.agent
-      )
-      // Optional: older clients ignore it, and a client seeds its picker with what create will use.
-      const seedOptions = support.supported
-        ? ctx.runtime.structuredAgentSessionLaunchSeedOptions(params.agent)
-        : undefined
-      return seedOptions ? { ...support, seedOptions } : support
+      return structuredAgentSessionClientCreateSupport(ctx.runtime, params.worktree, params.agent)
     }
   }),
   defineMethod({
@@ -179,6 +173,9 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
             agent: params.agent,
             caller: callerFor(ctx),
             ...(params.resumeFrom ? { resumeFrom: params.resumeFrom } : {}),
+            ...(params.options !== undefined
+              ? { options: normalizeStructuredChatLaunchOptions(params.agent, params.options) }
+              : {}),
             ...(params.tabId ? { tabId: params.tabId } : {})
           })
         }

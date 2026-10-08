@@ -1,6 +1,8 @@
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { isDefinitiveAgentSessionCreateRefusal } from '../../../shared/agent-session-definitive-refusal'
 import { parseStructuredLaunchSeedOptions } from '../../../shared/native-chat-session-option-defaults'
+import { resolveStructuredChatLaunchOptions } from '../../../shared/structured-chat-launch-options'
+import { useAppStore } from '@/store'
 import { hasRuntimeRpcErrorCode } from '../../../shared/runtime-rpc-error-code'
 import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
@@ -26,10 +28,13 @@ function runtimeErrorCode(error: unknown): string {
   return 'runtime_unavailable'
 }
 
-/** The owning host's answer to "can you run this chat here?", asked before anything is created.
- *  An admitting host also names the saved selection create will seed, when it is new enough to. */
+/** Keep the picker aligned with the starting choices this host version can honour. */
 export type StructuredLaunchAdmission =
-  | { kind: 'admitted'; seedOptions?: Readonly<Record<string, string>> }
+  | {
+      kind: 'admitted'
+      seedOptions?: Readonly<Record<string, string>>
+      clientOptions?: Readonly<Record<string, string>>
+    }
   | { kind: 'declined' }
   | { kind: 'unreachable' }
   /** The host still could not resolve the workspace after the retries: not yet, rather than no. */
@@ -56,9 +61,17 @@ export async function askHostCreateSupport(
         supported: boolean
         reason?: string
         seedOptions?: unknown
+        acceptsClientOptions?: unknown
       }>(target, 'agentSession.createSupport', { worktree, agent })
       if (support.supported !== true) {
         return { kind: 'declined' }
+      }
+      if (support.acceptsClientOptions === true) {
+        const clientOptions = resolveStructuredChatLaunchOptions(
+          useAppStore.getState().settings,
+          agent
+        )
+        return { kind: 'admitted', seedOptions: clientOptions, clientOptions }
       }
       const seedOptions = parseStructuredLaunchSeedOptions(support.seedOptions)
       return seedOptions ? { kind: 'admitted', seedOptions } : { kind: 'admitted' }

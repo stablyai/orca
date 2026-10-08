@@ -115,14 +115,11 @@ function publishWithHeldOptions(
   return created.then((receipt) => applyStructuredLaunchHeldOptions(state, receipt))
 }
 
-/** Each attempt's probe names the seed the paired server's create will use; the picker shows it. */
+/** The picker and saved intent adopt the options immediately before create sends them. */
 function adoptPairedHostSeed(
   state: StructuredLaunchState,
   seedOptions: StructuredLaunchState['selection']['seed']
 ): void {
-  if (JSON.stringify(seedOptions) === JSON.stringify(state.intent.seedOptions)) {
-    return
-  }
   const { seedOptions: _previous, ...intent } = state.intent
   state.intent = seedOptions ? { ...intent, seedOptions } : intent
   state.selection = { ...state.selection, seed: seedOptions }
@@ -142,8 +139,7 @@ function restartStructuredLaunchState(state: StructuredLaunchState): void {
   resetStructuredLaunchCallers(state)
   delete state.failure
   state.callers.outcome = 'pending'
-  // A new create seeds from the settings of now (a paired server's arrive with its probe); picks
-  // held through the failure still apply.
+  // Retained client choices and picks survive a failed attempt.
   state.selection = { ...state.selection, seed: state.intent.seedOptions }
   state.onHostSeed = (seedOptions) => adoptPairedHostSeed(state, seedOptions)
   state.promise = publishWithHeldOptions(
@@ -221,7 +217,8 @@ function structuredAgentLaunchState(
     agent,
     options.executionHostId,
     options.resumeFrom,
-    options.hostSeedOptions
+    options.hostSeedOptions,
+    options.clientOptions
   )
   const text = launchPromptText(options)
   const stagedPrompt = text

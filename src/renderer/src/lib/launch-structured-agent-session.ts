@@ -9,7 +9,9 @@ import {
   type StructuredAgentSessionCreateParams,
   type StructuredAgentSessionResumeSource
 } from '../../../shared/structured-agent-session-create'
+import { mergeStructuredChatLaunchOptions } from '../../../shared/structured-chat-launch-options'
 import { resolveStructuredLaunchSeedOptions } from '../../../shared/native-chat-session-option-defaults'
+import { structuredAgentSessionCreateFingerprint } from '../../../shared/structured-agent-session-mutation'
 import { hasRuntimeRpcErrorCode } from '../../../shared/runtime-rpc-error-code'
 import { isDefinitiveAgentSessionCreateRefusal } from '../../../shared/agent-session-definitive-refusal'
 import { readAgentSessionRefusalReference } from '../../../shared/agent-session-wire-refusals'
@@ -66,12 +68,14 @@ function launchSeedOptions(
   state: ReturnType<typeof useAppStore.getState>,
   owner: Pick<StructuredAgentSessionLaunchIntent, 'target'>,
   agent: TuiAgent,
-  hostSeedOptions: LaunchSeed
+  hostSeedOptions: LaunchSeed,
+  clientOptions?: LaunchSeed
 ): { seedOptions?: Readonly<Record<string, string>> } {
   const seedOptions =
-    owner.target.kind === 'local'
+    clientOptions ??
+    (owner.target.kind === 'local'
       ? resolveStructuredLaunchSeedOptions(state.settings?.nativeChatSessionOptions, agent)
-      : hostSeedOptions
+      : hostSeedOptions)
   return seedOptions ? { seedOptions } : {}
 }
 
@@ -114,7 +118,8 @@ export function createStructuredAgentSessionLaunchIntent(
   agent: TuiAgent,
   executionHostId?: ExecutionHostId,
   resumeFrom?: StructuredAgentSessionResumeSource,
-  hostSeedOptions?: LaunchSeed
+  hostSeedOptions?: LaunchSeed,
+  clientOptions?: LaunchSeed
 ): StructuredAgentSessionLaunchIntent {
   const owner = structuredAgentSessionOwnerTarget(
     worktreeId,
@@ -127,7 +132,8 @@ export function createStructuredAgentSessionLaunchIntent(
     agent,
     sessionId,
     resumeFrom,
-    hostSeedOptions
+    hostSeedOptions,
+    clientOptions
   )
 }
 
@@ -137,7 +143,8 @@ function buildStructuredAgentSessionLaunchIntent(
   agent: TuiAgent,
   sessionId: string,
   resumeFrom: StructuredAgentSessionResumeSource | undefined,
-  hostSeedOptions: LaunchSeed
+  hostSeedOptions: LaunchSeed,
+  clientOptions?: LaunchSeed
 ): StructuredAgentSessionLaunchIntent {
   const state = useAppStore.getState()
   recordWebSessionFocusIntent(
@@ -158,9 +165,10 @@ function buildStructuredAgentSessionLaunchIntent(
       worktree: toRuntimeWorktreeSelector(worktreeId),
       agent,
       ...(resumeFrom ? { resumeFrom } : {}),
+      ...(clientOptions !== undefined ? { options: clientOptions } : {}),
       randomUuid: createBrowserUuid
     }),
-    ...launchSeedOptions(state, owner, agent, hostSeedOptions)
+    ...launchSeedOptions(state, owner, agent, hostSeedOptions, clientOptions)
   }
 }
 
@@ -174,7 +182,8 @@ export function retryStructuredAgentSessionLaunchIntent(
     intent.agent,
     intent.sessionId,
     intent.params.resumeFrom,
-    intent.seedOptions
+    intent.seedOptions,
+    intent.params.options
   )
 }
 
@@ -190,6 +199,7 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
   resumeFrom?: StructuredAgentSessionResumeSource
   /** A paired server's seed, kept with the launch so a reload shows what create runs. */
   seedOptions?: Readonly<Record<string, string>>
+  options?: Readonly<Record<string, string>>
 }): StructuredAgentSessionLaunchIntent {
   const state = useAppStore.getState()
   const { target } = structuredAgentSessionOwnerTarget(args.worktreeId, args.executionHostId)
@@ -215,9 +225,10 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
       },
       worktree: toRuntimeWorktreeSelector(args.worktreeId),
       agent: args.agent,
-      ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {})
+      ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {}),
+      ...(args.options !== undefined ? { options: args.options } : {})
     },
-    ...launchSeedOptions(state, { target }, args.agent, args.seedOptions)
+    ...launchSeedOptions(state, { target }, args.agent, args.seedOptions, args.options)
   }
 }
 
@@ -239,7 +250,7 @@ export function abandonStructuredAgentSessionLaunchIntent(
  */
 async function requireHostCreateSupport(
   intent: StructuredAgentSessionLaunchIntent
-): Promise<LaunchSeed> {
+): Promise<Extract<Awaited<ReturnType<typeof askHostCreateSupport>>, { kind: 'admitted' }>> {
   const support = await askHostCreateSupport(intent.target, intent.params.worktree, intent.agent)
   if (support.kind === 'unreachable') {
     throw new StructuredAgentSessionCreateUnknownOutcomeError(
@@ -256,20 +267,40 @@ async function requireHostCreateSupport(
       'structured_agent_session_unsupported'
     )
   }
-  return support.seedOptions
+  return support
 }
 
-/** Told the seed a paired server says this create will use, which may differ from an earlier
- *  attempt's; a local launch reads its own settings instead. */
+/** Publish the negotiated create choices before sending, so the picker and reload agree. */
 export type StructuredLaunchHostSeedListener = (seedOptions: LaunchSeed) => void
 
 export async function launchStructuredAgentSession(
   intent: StructuredAgentSessionLaunchIntent,
-  onHostSeed?: StructuredLaunchHostSeedListener
+  onHostSeed?: StructuredLaunchHostSeedListener,
+  heldOptions?: () => Readonly<Record<string, string>>
 ): Promise<Pick<AgentSessionAttachResult, 'sessionId' | 'fence'>> {
-  const hostSeed = await requireHostCreateSupport(intent)
-  if (intent.target.kind !== 'local') {
-    onHostSeed?.(hostSeed)
+  const support = await requireHostCreateSupport(intent)
+  if (intent.params.options !== undefined && support.clientOptions === undefined) {
+    throw new StructuredAgentSessionCreateRefusalError('structured_agent_session_unsupported')
+  }
+  const seed = intent.params.options ?? support.clientOptions
+  const options =
+    seed !== undefined && heldOptions ? mergeStructuredChatLaunchOptions(seed, heldOptions()) : seed
+  if (options !== undefined) {
+    intent.params = {
+      ...intent.params,
+      options,
+      envelope: {
+        ...intent.params.envelope,
+        payloadFingerprint: structuredAgentSessionCreateFingerprint({
+          sessionId: intent.sessionId,
+          ...intent.params,
+          options
+        })
+      }
+    }
+  }
+  if (options !== undefined || intent.target.kind !== 'local') {
+    onHostSeed?.(options ?? support.seedOptions)
   }
   let result: AgentSessionMutationResult<AgentSessionAttachResult>
   try {

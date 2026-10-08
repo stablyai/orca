@@ -17,6 +17,7 @@ export type StructuredLaunchRecoveryState = {
   cancelled: boolean
   onVisibilityChanged?: () => void
   onHostSeed?: StructuredLaunchHostSeedListener
+  selection?: { held: Readonly<Record<string, string>> }
 }
 
 export class StructuredAgentSessionLaunchCancelledError extends Error {
@@ -100,7 +101,11 @@ export async function launchAndReconcile(
   throwIfLaunchCancelled(state)
   let receipt: StructuredAgentLaunchReceipt
   try {
-    receipt = await launchStructuredAgentSession(state.intent, state.onHostSeed)
+    receipt = await launchStructuredAgentSession(
+      state.intent,
+      state.onHostSeed,
+      () => state.selection?.held ?? {}
+    )
   } catch (error) {
     if (state.cancelled) {
       throw new StructuredAgentSessionLaunchCancelledError()

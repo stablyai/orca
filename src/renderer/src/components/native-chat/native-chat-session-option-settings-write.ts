@@ -2,14 +2,13 @@ import type { NativeChatSessionOptionSettingsMutation } from '../../../../shared
 import { callRuntimeRpc, type RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 
 /**
- * The executing runtime applies deltas to its latest record. This keeps paired-runtime
- * choices on their owner and prevents desktop/mobile writes from replacing one another.
+ * Remember picker choices on the client's settings owner, including choices made in SSH chats.
  */
 export function enqueueSessionOptionSettingsWrite(
-  target: RuntimeClientTarget,
+  _target: RuntimeClientTarget,
   mutation: NativeChatSessionOptionSettingsMutation
 ): Promise<void> {
-  return callRuntimeRpc(target, 'settings.mutateNativeChatSessionOptions', mutation)
+  return callRuntimeRpc({ kind: 'local' }, 'settings.mutateNativeChatSessionOptions', mutation)
     .then(() => undefined)
     .catch(() => undefined)
 }

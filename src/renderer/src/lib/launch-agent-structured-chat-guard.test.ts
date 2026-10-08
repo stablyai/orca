@@ -286,17 +286,19 @@ describe('structured chat adoption guard on the launch path', () => {
       'codex',
       'local',
       undefined,
+      undefined,
       undefined
     )
     expect(mockLaunchStructuredCodexSession).toHaveBeenCalledWith(
       expect.objectContaining({ worktreeId: 'wt-1' }),
+      expect.any(Function),
       expect.any(Function)
     )
     expect(mockCreateTab).not.toHaveBeenCalled()
     expect(mockWaitForAgentReady).not.toHaveBeenCalled()
   })
 
-  // Routing only: the host seeds the saved values, so preservation is pinned there.
+  // Legacy-host routing keeps the seed on the host until it accepts client options.
   it('takes the structured path when a Codex model and effort are already saved', async () => {
     store.settings.nativeChatSessionOptions = {
       codex: {
@@ -319,6 +321,7 @@ describe('structured chat adoption guard on the launch path', () => {
       'codex',
       'local',
       undefined,
+      undefined,
       undefined
     )
     expect(mockCreateTab).not.toHaveBeenCalled()
@@ -339,6 +342,7 @@ describe('structured chat adoption guard on the launch path', () => {
       'wt-1',
       'claude',
       'local',
+      undefined,
       undefined,
       undefined
     )

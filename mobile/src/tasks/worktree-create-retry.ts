@@ -20,6 +20,7 @@ import {
   type WorktreeCreateAgentLaunch
 } from './agent-launch-request'
 import { structuredSessionOperationId } from '../session/structured-session-operation-id'
+import { readMobileStructuredChatLaunchOptions } from '../session/mobile-structured-chat-launch-options'
 import { WORKTREE_CREATE_TIMEOUT_MS } from './workspace-create-timeout'
 import type { WorkspaceCreateParams } from './workspace-create-params'
 import type {
@@ -71,6 +72,9 @@ export async function createWorktreeWithNameRetry(
   // Why: the route must settle before the first create, so a name-collision retry cannot land on
   // a different method than the attempt it replaces.
   let launch = await resolveAgentLaunchRoute(args.agentLaunch)
+  const sessionOptions = launch?.clientOptions
+    ? await readMobileStructuredChatLaunchOptions(client, launch.agent)
+    : undefined
   const maxAttempts = args.maxAttempts ?? CLIENT_WORKTREE_CREATE_MAX_ATTEMPTS
   const mintMutationId = args.mintMutationId ?? defaultWorktreeCreateMutationId
   const mintLaunchOperationId = args.mintLaunchOperationId ?? structuredSessionOperationId
@@ -93,7 +97,8 @@ export async function createWorktreeWithNameRetry(
       launch?.agent ?? null,
       launchOperationId,
       params,
-      worktreeCreateIdempotency
+      worktreeCreateIdempotency,
+      sessionOptions
     )
     let response = sent.response
     if (
@@ -137,12 +142,12 @@ export async function createWorktreeWithNameRetry(
 
 async function resolveAgentLaunchRoute(
   launch: WorktreeCreateAgentLaunch | undefined
-): Promise<{ agent: TuiAgent; replay: boolean } | null> {
+): Promise<{ agent: TuiAgent; replay: boolean; clientOptions?: true } | null> {
   if (!launch) {
     return null
   }
   const support = await launch.supported
-  return support ? { agent: launch.agent, replay: support.replay } : null
+  return support ? { agent: launch.agent, ...support } : null
 }
 
 // A launch receipt carries no display name, so the candidate stands in; the session route
@@ -190,7 +195,8 @@ function sendWorktreeCreateResilient(
   launchAgent: TuiAgent | null,
   launchOperationId: string | null,
   params: WorkspaceCreateParams,
-  worktreeCreateIdempotency: WorktreeCreateIdempotencySupport | false
+  worktreeCreateIdempotency: WorktreeCreateIdempotencySupport | false,
+  sessionOptions?: Readonly<Record<string, string>>
 ): Promise<{ response: RpcResponse; replayed: boolean }> {
   // Only the selected method's receipt can authorize replay after an ambiguous delivery.
   const replay: AmbiguousDeliveryReplay | null = launchAgent
@@ -208,14 +214,14 @@ function sendWorktreeCreateResilient(
           ? agentLaunchReplayRun.request(
               client,
               {
-                ...agentLaunchCreateParams(launchAgent, params),
+                ...agentLaunchCreateParams(launchAgent, params, undefined, sessionOptions),
                 operationId: launchOperationId
               },
               { timeoutMs: WORKTREE_CREATE_TIMEOUT_MS }
             )
           : agentLaunchRun.request(
               client,
-              agentLaunchCreateParams(launchAgent, params, launchOperationId),
+              agentLaunchCreateParams(launchAgent, params, launchOperationId, sessionOptions),
               { timeoutMs: WORKTREE_CREATE_TIMEOUT_MS }
             )
         : worktreeCreateRun.request(client, params, {

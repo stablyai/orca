@@ -37,6 +37,39 @@ const acceptedCreateResult = {
 const acceptedCreate = { ok: true, result: acceptedCreateResult }
 
 describe('mobile structured agent-session launch', () => {
+  it('sends the paired client preferences only after the host confirms it accepts them', async () => {
+    const client = clientReturning(
+      { ok: true, result: { supported: true, acceptsClientOptions: true } },
+      {
+        ok: true,
+        result: {
+          settings: {
+            nativeChatPermissionMode: 'ask',
+            nativeChatSessionOptions: {
+              codex: {
+                model: 'gpt-client',
+                valuesByModel: { 'gpt-client': { effort: 'high', fastMode: false } }
+              }
+            }
+          }
+        }
+      },
+      acceptedCreate
+    )
+
+    await expect(
+      createMobileStructuredAgentSession(client, 'workspace-1', 'codex')
+    ).resolves.toMatchObject({ kind: 'created' })
+    expect(client.sendRequest.mock.calls.map(([method]) => method)).toEqual([
+      'agentSession.createSupport',
+      'settings.get',
+      'agentSession.create'
+    ])
+    expect(client.sendRequest.mock.calls[2]?.[1]).toMatchObject({
+      options: { model: 'gpt-client', effort: 'high', fastMode: 'false', permissionMode: 'ask' }
+    })
+  })
+
   it('creates through the structured agent-session intent after support is confirmed', async () => {
     const client = clientReturning({ ok: true, result: { supported: true } }, acceptedCreate)
 

@@ -121,6 +121,68 @@ beforeEach(() => {
   vi.spyOn(console, 'warn').mockImplementation(() => undefined)
 })
 
+describe('new chat options from the client', () => {
+  const hostOptions = {
+    model: 'host-model',
+    effort: 'low',
+    fastMode: 'true',
+    permissionMode: 'bypass'
+  }
+  const resolveHostIntent = async (input: { envelope: unknown }) => ({
+    envelope: input.envelope,
+    ...resolvedIntent,
+    options: hostOptions
+  })
+
+  it.each(['true', 'false'])('honours client choices including Fast %s', async (fastMode) => {
+    const options = { model: 'client-model', effort: 'high', fastMode, permissionMode: 'ask' }
+    const params = createParams()
+    const response = await create(
+      { resolveStructuredAgentSessionCreateIntent: resolveHostIntent },
+      {
+        ...params,
+        options,
+        envelope: {
+          ...params.envelope,
+          payloadFingerprint: computeAgentSessionPayloadFingerprint({
+            method: 'agentSession.create',
+            sessionId: SESSION,
+            fields: { worktree: WORKTREE, agent: 'codex', options }
+          })
+        }
+      }
+    )
+    expect(response).toMatchObject({ ok: true, result: { ok: true } })
+    expect(attach).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ options }))
+  })
+
+  it('retains host seeding for old clients and does not merge it into an explicit blank model choice', async () => {
+    await create({ resolveStructuredAgentSessionCreateIntent: resolveHostIntent })
+    expect(attach).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({ options: hostOptions })
+    )
+    const options = { permissionMode: 'ask' }
+    const params = createParams()
+    await create(
+      { resolveStructuredAgentSessionCreateIntent: resolveHostIntent },
+      {
+        ...params,
+        options,
+        envelope: {
+          ...params.envelope,
+          payloadFingerprint: computeAgentSessionPayloadFingerprint({
+            method: 'agentSession.create',
+            sessionId: SESSION,
+            fields: { worktree: WORKTREE, agent: 'codex', options }
+          })
+        }
+      }
+    )
+    expect(attach).toHaveBeenLastCalledWith(expect.anything(), expect.objectContaining({ options }))
+  })
+})
+
 afterEach(() => {
   setStructuredAgentSessionHost(null)
   vi.restoreAllMocks()

@@ -44,6 +44,8 @@ export type RuntimeClientSettings = Pick<
   | 'experimentalNativeChat'
   | 'openAgentTabsInChatByDefault'
   | 'experimentalStructuredNativeChat'
+  | 'nativeChatSessionOptions'
+  | 'nativeChatPermissionMode'
   | 'compactWorktreeCards'
   | 'minimaxGroupId'
   | 'minimaxUsageModels'
@@ -130,6 +132,8 @@ export class RuntimeClientSettingsController {
       experimentalNativeChat: settings.experimentalNativeChat === true,
       openAgentTabsInChatByDefault: settings.openAgentTabsInChatByDefault === true,
       experimentalStructuredNativeChat: settings.experimentalStructuredNativeChat === true,
+      nativeChatSessionOptions: settings.nativeChatSessionOptions,
+      nativeChatPermissionMode: settings.nativeChatPermissionMode ?? 'bypass',
       compactWorktreeCards: settings.compactWorktreeCards === true,
       minimaxGroupId: settings.minimaxGroupId ?? '',
       minimaxUsageModels: settings.minimaxUsageModels ?? 'general',

@@ -5,6 +5,7 @@ import { structuredSessionOperationId } from './structured-session-operation-id'
 import type { RpcClient } from '../transport/rpc-client'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import type { RpcResponse } from '../transport/types'
+import { createWorktreeWithNameRetry } from '../tasks/worktree-create-retry'
 import {
   AGENT_LAUNCH_UNCONFIRMED_MESSAGE,
   PROMPTED_AGENT_LAUNCH_TIMEOUT_MS,
@@ -40,6 +41,66 @@ const LAUNCH_CAPABILITIES = [
   'agent.launch.replay.v1',
   'agent.launch.replay-required.v1'
 ]
+
+it('carries paired-host chat preferences explicitly and keeps them through a lost launch reply', async () => {
+  const settings: RpcResponse = {
+    id: 'settings',
+    ok: true,
+    result: {
+      settings: {
+        nativeChatPermissionMode: 'ask',
+        nativeChatSessionOptions: {
+          claude: { model: 'sonnet', valuesByModel: { sonnet: { effort: 'high', fastMode: true } } }
+        }
+      }
+    },
+    _meta: { runtimeId: 'r' }
+  }
+  const { client, sendRequest } = scriptedClient(
+    settings,
+    { throws: markRpcDeliveryUnknown(new Error('lost reply')) },
+    launched({})
+  )
+  expect(
+    await launch(client, {
+      hostCapabilities: [...LAUNCH_CAPABILITIES, 'agent-session.structured.client-options.v1']
+    })
+  ).toMatchObject({ kind: 'launched' })
+  expect(sendRequest.mock.calls.map(([method]) => method)).toEqual([
+    'settings.get',
+    'agent.launchReplay',
+    'agent.launchReplay'
+  ])
+  expect(sendRequest.mock.calls[1]?.[1]).toMatchObject({
+    sessionOptions: { model: 'sonnet', effort: 'high', fastMode: 'true', permissionMode: 'ask' }
+  })
+  expect(sendRequest.mock.calls[2]?.[1]).toEqual(sendRequest.mock.calls[1]?.[1])
+})
+
+it('carries paired-client permissions when creating the workspace and chat together', async () => {
+  const { client, sendRequest } = scriptedClient(
+    {
+      id: 'settings',
+      ok: true,
+      result: { settings: { nativeChatPermissionMode: 'ask' } },
+      _meta: { runtimeId: 'r' }
+    },
+    launched({})
+  )
+  expect(
+    await createWorktreeWithNameRetry({
+      client,
+      baseName: 'draft',
+      buildParams: (name) => ({ repo: 'id:r', name }),
+      worktreeCreateIdempotency: false,
+      agentLaunch: { agent: 'claude', supported: { replay: true, clientOptions: true } }
+    })
+  ).toEqual({ worktreeId: 'wt-1', name: 'draft' })
+  expect(sendRequest.mock.calls[1]?.[1]).toMatchObject({
+    sessionOptions: { permissionMode: 'ask' },
+    target: { kind: 'create-worktree' }
+  })
+})
 const RECEIPT = {
   mode: 'terminal',
   preferred: 'terminal',

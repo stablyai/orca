@@ -11,6 +11,10 @@ export {
   SessionId
 } from './structured-agent-session-identifiers'
 import { z } from 'zod'
+import {
+  MAX_STRUCTURED_CHAT_OPTION_LABEL,
+  StructuredChatLaunchOptions
+} from './structured-chat-launch-options-params'
 import { isAgentSessionSurfaceTabId } from '../agent-session-surface-tab-id'
 import { isStructuredAgentId } from '../agent-session-provider-handle-encoding'
 import { normalizeExecutionHostId } from '../execution-host'
@@ -35,7 +39,7 @@ const MAX_QUESTION_ANSWER_OPTIONS = 64
 
 export const MAX_BLOCKS = 64
 
-export const MAX_OPTION_LABEL = 512
+export const MAX_OPTION_LABEL = MAX_STRUCTURED_CHAT_OPTION_LABEL
 
 /** One relaunch cannot offer more chats than a profile plausibly holds. */
 export const MAX_RESTART_RESUME_SESSIONS = 512
@@ -120,6 +124,8 @@ export const CreateIntentParams = z
     worktree: Identifier('Invalid worktree selector'),
     agent: StructuredAgent,
     resumeFrom: ResumeSource.optional(),
+    /** Sent only after createSupport advertises acceptsClientOptions. Empty means CLI defaults. */
+    options: StructuredChatLaunchOptions.optional(),
     /**
      * The tab id the client reserved for this chat, so it can place the tab before the reply. The
      * host owns the id from here: it is persisted on the session record and is what the host's tab

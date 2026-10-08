@@ -33,6 +33,7 @@ import {
 } from '../../../src/shared/protocol-version'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../src/shared/runtime-types'
 import { resolveStructuredNativeChatSupport } from '../../../src/shared/structured-native-chat-launch-route'
+import { STRUCTURED_AGENT_SESSION_CLIENT_OPTIONS_RUNTIME_CAPABILITY } from '../../../src/shared/structured-agent-session-surface-capabilities'
 import { parseWorkspaceSession } from '../../../src/shared/workspace-session-schema'
 import {
   importReleaseCheckoutModule,
@@ -364,8 +365,18 @@ describe('a structured agent beyond Claude and Codex, across versions', () => {
             { clientKind: 'runtime', clientCapabilities: [...RUNTIME_CAPABILITIES] }
           )
           expect(replies, `${build.label}: ${agent}`).toEqual([
-            expect.objectContaining({ ok: true, result: { supported: true } })
+            expect.objectContaining({
+              ok: true,
+              result: expect.objectContaining({ supported: true })
+            })
           ])
+          if (
+            build.capabilities.includes(STRUCTURED_AGENT_SESSION_CLIENT_OPTIONS_RUNTIME_CAPABILITY)
+          ) {
+            expect(replies[0]?.result).toMatchObject({ acceptsClientOptions: true })
+          } else {
+            expect(replies[0]?.result).not.toHaveProperty('acceptsClientOptions')
+          }
         }
       }
     })

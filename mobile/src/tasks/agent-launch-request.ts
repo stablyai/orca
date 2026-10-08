@@ -29,12 +29,14 @@ import {
 import type { TuiAgent } from '../../../src/shared/tui-agent'
 import type { RpcSendParams } from '../transport/rpc-params-contract'
 import type { WorkspaceCreateParams } from './workspace-create-params'
+import { STRUCTURED_AGENT_SESSION_CLIENT_OPTIONS_RUNTIME_CAPABILITY } from '../../../src/shared/structured-agent-session-surface-capabilities'
 
 /** What this host's `agent.launch` can do, in the `| false` shape `worktree.create`'s own
  *  idempotency probe already uses: `false` is an older host with no `agent.launch` at all. */
 export type AgentLaunchSupport = {
   /** The host deduplicates operationId durably and refuses unknown or expired outcomes. */
   replay: boolean
+  clientOptions?: true
 }
 
 /** Reads the host's advertised capabilities; unsupported stays plain `false`. */
@@ -44,7 +46,12 @@ export function readAgentLaunchSupport(
   if (!capabilities?.includes(AGENT_LAUNCH_RUNTIME_CAPABILITY)) {
     return false
   }
-  return { replay: capabilities.includes(AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY) }
+  return {
+    replay: capabilities.includes(AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY),
+    ...(capabilities.includes(STRUCTURED_AGENT_SESSION_CLIENT_OPTIONS_RUNTIME_CAPABILITY)
+      ? { clientOptions: true as const }
+      : {})
+  }
 }
 
 export type WorktreeCreateAgentLaunch = {
@@ -63,10 +70,12 @@ export type AgentLaunchCreateOutcome = {
 export function agentLaunchCreateParams(
   agent: TuiAgent,
   create: WorkspaceCreateParams,
-  operationId?: string | null
+  operationId?: string | null,
+  sessionOptions?: Readonly<Record<string, string>>
 ): RpcSendParams<'agent.launch'> {
   return {
     agent,
+    ...(sessionOptions !== undefined ? { sessionOptions } : {}),
     ...(operationId ? { operationId } : {}),
     target: { kind: 'create-worktree', create: withoutReservedAgentCreateFields(create) }
   }
@@ -86,9 +95,11 @@ export function agentLaunchExistingParams(args: {
   paneKey?: string
   sessionId?: string
   placement?: AgentLaunchPlacement
+  sessionOptions?: Readonly<Record<string, string>>
 }): RpcSendParams<'agent.launchReplay'> {
   return {
     agent: args.agent,
+    ...(args.sessionOptions !== undefined ? { sessionOptions: args.sessionOptions } : {}),
     operationId: args.operationId,
     target: { kind: 'existing', worktree: `id:${args.worktreeId}` },
     ...(args.prompt ? { prompt: args.prompt } : {}),
