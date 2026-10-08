@@ -132,6 +132,8 @@ export abstract class AgentHookServerState {
   protected persistedAuthorityCommitmentsByPaneKey = new Map<string, AgentHookAuthorityEvidence>()
   protected revokedHydratedAuthorityCommitments = new WeakSet<AgentHookAuthorityEvidence>()
   protected currentAuthorityObservations = new Map<string, AgentHookAuthorityEvidence>()
+  /** The token of each pane's ended launch; every process its shell starts inherits it. */
+  protected endedLaunchTokenHashByPaneKey = new Map<string, string>()
   protected legacyPaneKeyAliases = new Map<string, PaneKeyAliasEntry>()
   // Why: indexed by every key the retirement fenced, so a re-attach on any of them
   // (owner, physical, or a deleted alias) finds the same record. Bounded like the maps
@@ -279,6 +281,8 @@ export abstract class AgentHookServerState {
     options?: { preserveResumeIdentity?: boolean; endedPresence?: AgentProcessPresence }
   ): number
 
+  protected abstract endPaneOwner(paneKey: string, owner: AgentProcessPresence): void
+
   protected abstract clearPaneState(
     paneKey: string,
     options?: {
@@ -294,7 +298,9 @@ export abstract class AgentHookServerState {
   protected abstract maybeWriteEndpointFile(): void
   protected abstract hydrateLastStatusFromDisk(): void
   protected abstract captureHydratedAuthorityCommitments(): void
-  protected abstract recordCurrentAuthorityObservation(payload: AgentHookEventPayload): void
+  protected abstract recordCurrentAuthorityObservation<T extends AgentHookEventPayload>(
+    payload: T
+  ): T
   protected abstract toAuthorityEvidence(
     payload: AgentHookEventPayload | EnrichedAgentHookEventPayload,
     launchTokenHashOverride?: string

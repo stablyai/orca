@@ -119,4 +119,66 @@ describe('transitionHookPresence', () => {
       event: { providerSession: { id: 'codex-x' }, payload: { model: 'gpt-5.4' } }
     })
   })
+
+  describe('after an ended owner', () => {
+    function endedRow(agent: string, process?: typeof OWNER_PROCESS) {
+      return event(agent, {
+        providerSessionOnly: true,
+        agentPresence: { agent, ...(process ? { process } : {}), ended: true }
+      })
+    }
+    const from = (
+      source: string,
+      hookEventName: string,
+      extra: Partial<AgentHookEventPayload> = {}
+    ) =>
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test sources are AgentHookSource literals.
+      event(source, { source: source as AgentHookEventPayload['source'], hookEventName, ...extra })
+
+    it("admits a new process of the ended owner's type on any event", () => {
+      const next = from('claude', 'PreToolUse', {
+        agentPresence: { agent: 'claude', process: { ...OWNER_PROCESS, pid: 4002 } }
+      })
+      expect(transitionHookPresence(next, endedRow('claude', OWNER_PROCESS), NOW, NOW).kind).toBe(
+        'write'
+      )
+      const late = from('claude', 'PreToolUse', {
+        agentPresence: { agent: 'claude', process: OWNER_PROCESS }
+      })
+      expect(transitionHookPresence(late, endedRow('claude', OWNER_PROCESS), NOW, NOW).kind).toBe(
+        'skip'
+      )
+    })
+
+    it.each([
+      ['mimo-code', 'MessagePart', { hasExplicitPrompt: true }],
+      ['opencode', 'MessagePart', { hasExplicitPrompt: true }],
+      ['opencode2', 'MessagePart', { hasExplicitPrompt: true }],
+      ['droid', 'UserPromptSubmit', {}],
+      ['codex', 'SessionStart', {}]
+    ])(
+      'admits a %s %s, which starts a new run, after its own type ended',
+      (source, name, extra) => {
+        expect(
+          transitionHookPresence(from(source, name, extra), endedRow(source), NOW, NOW).kind
+        ).toBe('write')
+      }
+    )
+
+    it('admits any event of another type, or of a process-less agent after a process owner', () => {
+      const ended = endedRow('claude', OWNER_PROCESS)
+      expect(transitionHookPresence(from('command-code', 'PreToolUse'), ended, NOW, NOW).kind).toBe(
+        'write'
+      )
+      expect(transitionHookPresence(from('droid', 'Stop'), endedRow('codex'), NOW, NOW).kind).toBe(
+        'write'
+      )
+    })
+
+    it('drops a same-type late hook with no process on either side', () => {
+      expect(transitionHookPresence(from('codex', 'Stop'), endedRow('codex'), NOW, NOW).kind).toBe(
+        'skip'
+      )
+    })
+  })
 })

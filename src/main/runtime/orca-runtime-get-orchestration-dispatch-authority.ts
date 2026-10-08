@@ -1,4 +1,5 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
+import type { TuiAgent } from '../../shared/tui-agent'
 import { OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller } from './orca-runtime-verify-orchestration-compatibility-caller'
 import type { OrchestrationCompatibilityTerminalAuthority } from './runtime-terminal-contracts'
 import { createHash } from 'node:crypto'
@@ -128,25 +129,41 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
     }
   }
 
+  /** The PTY is gone: retire its launch's claim on every pane it showed. */
   protected retirePtyAgentLaunchAuthority(ptyId: string): void {
+    for (const paneKey of this.releasePtyAgentLaunch(ptyId)?.paneKeys ?? []) {
+      this.retireAgentHookCompatibilityAuthorityFn?.(paneKey)
+    }
+  }
+
+  /** The launched agent's command finished in a PTY that lives on: end only that launch. */
+  protected endPtyAgentLaunch(ptyId: string): void {
+    const launch = this.releasePtyAgentLaunch(ptyId)
+    for (const paneKey of launch?.paneKeys ?? []) {
+      this.endAgentHookLaunchFn?.(paneKey, launch?.launchAgent ?? null)
+    }
+  }
+
+  private releasePtyAgentLaunch(
+    ptyId: string
+  ): { paneKeys: Iterable<string>; launchAgent: TuiAgent | null } | null {
     const pty = this.ptysById.get(ptyId)
     if (!pty) {
-      return
+      return null
     }
     const receipt = this.restoredOrchestrationAuthorityByPtyId.get(ptyId)
     if (!pty.launchToken && !receipt && !pty.launchAgent) {
-      return
+      return null
     }
     // Why: collect before the delete below, which drops the restored-authority receipt a
     // receipt-only pane's key comes from.
     const paneKeys = this.collectPaneKeysForPty(ptyId)
+    const launchAgent = pty.launchAgent ?? null
     this.restoredOrchestrationAuthorityByPtyId.delete(ptyId)
     pty.launchToken = null
     pty.launchIncarnationId = null
     pty.launchAgent = null
-    for (const paneKey of paneKeys) {
-      this.retireAgentHookCompatibilityAuthorityFn?.(paneKey)
-    }
+    return { paneKeys, launchAgent }
   }
 
   async resolveTerminalCwd(handle: string): Promise<string | null> {

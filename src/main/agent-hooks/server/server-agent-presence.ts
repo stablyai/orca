@@ -43,10 +43,7 @@ export abstract class AgentHookServerAgentPresence extends AgentHookServerLifecy
           return 'unverifiable' as const
         }
         if (verdict === 'exited') {
-          this.reconcileEndedProcessForPaneKeys([resolved], {
-            preserveResumeIdentity: true,
-            endedPresence: { ...presence, ended: true }
-          })
+          this.endPaneOwner(resolved, presence)
         }
         return verdict
       })

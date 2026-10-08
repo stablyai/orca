@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 
-import { isNewTurnEvent } from '../../../shared/agent-hook-listener/provider-event-routing'
+import { startsNewAgentRun } from '../../../shared/agent-hook-listener/provider-event-routing'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
 import type { AgentHookSource } from '../../../shared/agent-hook-relay'
 import {
@@ -113,37 +113,18 @@ export abstract class AgentHookServerStatusDisposition extends AgentHookServerSt
     // fresh prompt does — without it, a session resumed in a reused pane stays rowless (STA-3386).
     // Why the classifier, not literals: only 5 of 18 sources name their boundary
     // `UserPromptSubmit`/`SessionStart`; the rest stayed retired forever.
-    // Why four branches: `source` collapses to undefined when an older relay omits the field,
-    // when a newer host sends an unknown string, and when the wire value is malformed. Only an
-    // unknown string is valid future-provider evidence. Unreachable from the local path, which
-    // 404s an unresolvable source.
-    const isNewTurn =
-      event?.source !== undefined
-        ? isNewTurnEvent(event.source, event.hookEventName)
-        : typeof event?.rawSource === 'string' && event.rawSource.trim().length > 0
-          ? // Why fail OPEN for an unknown provider: its boundary event is unknowable here, and
-            // the costs are asymmetric — a stranded pane is invisible and permanent with no user
-            // recovery, while a spurious revive decays after AGENT_STATUS_STALE_AFTER_MS.
-            true
-          : event?.rawSource === undefined
-            ? // Why literals here: an older relay omits `source` entirely. Legacy shim only — it
-              // cannot revive a provider whose boundary event is named anything else.
-              event?.hookEventName === 'UserPromptSubmit' || event?.hookEventName === 'SessionStart'
-            : false
-    // Why in addition to the classifier: the OpenCode family carries its mid-session boundary in
-    // an explicit-prompt MessagePart, which isNewTurnEvent cannot name — and mimo-code has no
-    // SessionStart at all, so without this its retired panes never come back.
-    const freshOpenCodeFamilyPrompt =
-      (event?.source === 'opencode' || event?.source === 'mimo-code') &&
-      event.hookEventName === 'MessagePart' &&
-      event.hasExplicitPrompt === true
+    const startsNewRun =
+      event !== undefined &&
+      startsNewAgentRun({
+        source: event.source,
+        rawSource: event.rawSource,
+        hookEventName: event.hookEventName,
+        hasExplicitPrompt: event.hasExplicitPrompt
+      })
     // Why the token is minted here: a revive proves a live lifecycle, and fencing follow-up
     // status on that launch token stops a stale process reclaiming the pane's row without
     // restoring retired orchestration authority.
-    if (
-      (isNewTurn || freshOpenCodeFamilyPrompt || event?.processNewTurn === true) &&
-      event?.isReplay !== true
-    ) {
+    if ((startsNewRun || event?.processNewTurn === true) && event?.isReplay !== true) {
       this.closedAgentStatusPaneKeys.delete(paneKey)
       this.closedAgentStatusPaneKeys.delete(ownerPaneKey)
       const launchToken = event?.launchToken?.trim()

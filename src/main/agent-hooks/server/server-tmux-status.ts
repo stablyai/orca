@@ -45,16 +45,15 @@ export abstract class AgentHookServerTmuxStatus extends AgentHookServerOpenCodeB
         if (!this.canonicalListingOrder.has(key)) {
           this.canonicalListingOrder.set(key, this.nextStatusListingOrder())
         }
-        const after = {
+        const after = this.recordCurrentAuthorityObservation({
           ...structuredStatusLegacyEvent(status),
           source: event.source,
           hookEventName: event.hookEventName,
           hasExplicitPrompt: event.hasExplicitPrompt,
           launchToken: event.launchToken,
           promptInteractionKey: event.promptInteractionKey
-        }
+        })
         this.commitStatusRowMutation(previous && structuredStatusLegacyEvent(previous), after)
-        this.recordCurrentAuthorityObservation(after)
         this.notifyStatusChangeListeners()
         this.emitEnrichedStatus(after)
       },

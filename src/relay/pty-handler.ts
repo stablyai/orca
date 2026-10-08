@@ -273,6 +273,8 @@ type ManagedPty = {
   shellCwd?: string
   shellPathEnv?: string
   agentLaunchToken?: string
+  /** The agent Orca launched here, until its command finishes. */
+  launchAgent?: TuiAgent
   envToDelete: string[]
   gitCredentialPromptGuarded: boolean
   historyIsolationEnabled?: boolean
@@ -758,9 +760,16 @@ export class PtyHandler {
   }
 
   private agentPresenceTrigger: ((paneKey: string) => void) | null = null
+  private agentLaunchEndListener: ((paneKey: string, launchAgent: TuiAgent) => void) | null = null
 
   setAgentPresenceTrigger(listener: ((paneKey: string) => void) | null): void {
     this.agentPresenceTrigger = listener
+  }
+
+  setAgentLaunchEndListener(
+    listener: ((paneKey: string, launchAgent: TuiAgent) => void) | null
+  ): void {
+    this.agentLaunchEndListener = listener
   }
 
   private claudeTerminalEvidenceListener:
@@ -1140,7 +1149,14 @@ export class PtyHandler {
         }
         lastTitleGateKey = gateKey
       },
-      onCommandFinished: recheckAgentPresence
+      onCommandFinished: () => {
+        const launchAgent = managed.launchAgent
+        managed.launchAgent = undefined
+        if (managed.paneKey && launchAgent) {
+          this.agentLaunchEndListener?.(managed.paneKey, launchAgent)
+        }
+        recheckAgentPresence()
+      }
     })
     managed.pty.onData((data: string) => {
       presenceTriggers.handleChunk(data)
@@ -2231,6 +2247,7 @@ export class PtyHandler {
       shellCwd: cwd,
       shellPathEnv: spawnEnv.PATH,
       agentLaunchToken: ptyEnv.ORCA_AGENT_LAUNCH_TOKEN?.trim() || undefined,
+      ...(launchAgent ? { launchAgent } : {}),
       ownerBackend: resolvePtyOwnerBackend({
         platform: process.platform,
         shellPath: shell,

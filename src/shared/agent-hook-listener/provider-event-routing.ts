@@ -90,6 +90,39 @@ export function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boo
   }
 }
 
+/** Whether an event proves a new run of its agent in a pane whose previous run ended. One rule for
+ *  the retired-pane gate and the ended-owner rule, so neither keeps a weaker copy. */
+export function startsNewAgentRun(event: {
+  source?: AgentHookSource
+  /** Raw wire value, so "field absent" differs from "field present but unknown". */
+  rawSource?: unknown
+  hookEventName?: string
+  hasExplicitPrompt?: boolean
+}): boolean {
+  // Why the OpenCode family: its mid-session boundary is an explicit-prompt MessagePart, which
+  // isNewTurnEvent cannot name, and mimo-code has no SessionStart at all.
+  if (
+    (event.source === 'opencode' || event.source === 'opencode2' || event.source === 'mimo-code') &&
+    event.hookEventName === 'MessagePart' &&
+    event.hasExplicitPrompt === true
+  ) {
+    return true
+  }
+  if (event.source !== undefined) {
+    return isNewTurnEvent(event.source, event.hookEventName)
+  }
+  // Why fail open for an unknown provider string: a stranded pane is invisible and permanent,
+  // while a spurious revive decays after the freshness window.
+  if (typeof event.rawSource === 'string') {
+    return event.rawSource.trim().length > 0
+  }
+  // Why literals: an older relay omits `source` entirely; legacy shim only.
+  return (
+    event.rawSource === undefined &&
+    (event.hookEventName === 'UserPromptSubmit' || event.hookEventName === 'SessionStart')
+  )
+}
+
 export function hasExplicitUserPrompt(
   source: AgentHookSource,
   eventName: unknown,

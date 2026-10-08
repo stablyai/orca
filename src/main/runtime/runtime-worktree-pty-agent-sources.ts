@@ -5,7 +5,7 @@ import {
 } from '../../shared/agent-status-types'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../shared/stable-pane-id'
 import { agentVerdictFields } from '../../shared/agent-main-agent-verdict'
-import { isWslHookRelayConnectionId } from '../../shared/wsl-hook-relay-contract'
+import { isLocalHookConnectionId } from '../../shared/wsl-hook-relay-contract'
 import type { RuntimeWorktreeAgentSource } from './runtime-worktree-agent-source'
 
 export type ConnectedPtyEvidence = {
@@ -69,7 +69,7 @@ export function collectRuntimeWorktreePtyAgentSources(args: {
       source.structuredHost === undefined &&
       tabId !== undefined &&
       mirroredWorktreeId === undefined &&
-      (source.connectionId === null || isWslHookRelayConnectionId(source.connectionId)) &&
+      isLocalHookConnectionId(source.connectionId) &&
       !args.connectedPtyEvidence.tabIds.has(tabId) &&
       !args.connectedPtyEvidence.paneKeys.has(source.paneKey) &&
       // Resolved only from a connected PTY's handle, so its presence is the liveness evidence.

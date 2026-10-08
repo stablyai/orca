@@ -7,8 +7,8 @@ export class RelayAgentPresence {
   constructor(
     private readonly host: {
       current: (paneKey: string) => AgentHookEventPayload | undefined
-      /** Applies the exit; false when the pane could not take it (no cached envelope metadata). */
-      publish: (paneKey: string, event: AgentHookEventPayload) => boolean
+      /** Ends the pane's owner; false when the pane could not take it. */
+      end: (paneKey: string) => boolean
     }
   ) {}
 
@@ -36,12 +36,7 @@ export class RelayAgentPresence {
         if (verdict !== 'exited') {
           return verdict
         }
-        const released = this.host.publish(paneKey, {
-          ...row,
-          hookEventName: 'AgentProcessExit',
-          agentPresence: { ...presence, ended: true }
-        })
-        return released ? verdict : 'unverifiable'
+        return this.host.end(paneKey) ? verdict : 'unverifiable'
       })
       .finally(() => this.pending.delete(row))
     this.pending.set(row, check)

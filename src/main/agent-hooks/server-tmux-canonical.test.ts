@@ -17,6 +17,14 @@ class CanonicalTestServer extends AgentHookServer {
   hasLegacyRow(): boolean {
     return this.state.lastStatusByPaneKey.has(TMUX_TEST_PANE)
   }
+  /** The fence an ended launch leaves on a pane that stays open (no retirement). */
+  fenceEndedLaunchToken(token: string): void {
+    this.endedLaunchTokenHashByPaneKey.set(
+      TMUX_TEST_PANE,
+      createHash('sha256').update(token).digest('hex')
+    )
+    this.currentAuthorityObservations.delete(TMUX_TEST_PANE)
+  }
 }
 let server: CanonicalTestServer
 beforeEach(async () => {
@@ -66,5 +74,25 @@ describe('main canonical tmux projection', () => {
     expect(server.getCanonicalStatusSnapshot().parents).toHaveLength(2)
     server.dropStatusEntriesByTabPrefix('tab-tmux')
     expect(server.getCanonicalStatusSnapshot().parents).toHaveLength(0)
+  })
+  it("never lets a tmux-inner hook carry an ended launch's token, to attest or to publish", async () => {
+    const attest = () =>
+      server.attestCompatibilityAuthority({
+        paneKey: TMUX_TEST_PANE,
+        launchTokenHash: createHash('sha256').update('generation').digest('hex'),
+        connectionId: null,
+        terminalProvenance: 'current_runtime'
+      })
+    await postHookEvent(server, tmuxTestBody(), '/hook/opencode')
+    expect(attest()).not.toBeNull()
+    server.fenceEndedLaunchToken('generation')
+    expect(attest()).toBeNull()
+    const published: (string | undefined)[] = []
+    server.subscribeEnrichedStatus((row) => published.push(row.launchToken))
+    const late = tmuxTestBody()
+    const busy = { ...late, payload: { ...late.payload, hook_event_name: 'SessionBusy' } }
+    expect((await postHookEvent(server, busy, '/hook/opencode')).status).toBe(204)
+    expect(published).toEqual([undefined])
+    expect(attest()).toBeNull()
   })
 })

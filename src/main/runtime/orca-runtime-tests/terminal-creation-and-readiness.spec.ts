@@ -230,15 +230,15 @@ describe('OrcaRuntimeService', () => {
     expect(spawn).not.toHaveBeenCalled()
   })
 
-  it('retires inherited launch authority when the agent command exits', async () => {
+  it('ends the launch with its agent when the launched command finishes', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-authority', incarnationId: 'process-1' })
-    const retireAuthority = vi.fn()
+    const endLaunch = vi.fn()
     const runtime = new OrcaRuntimeService(store, undefined, {
       attestAgentHookCompatibilityAuthority: (candidate) => ({
         paneKey: candidate.paneKey,
         source: 'current_hook'
       }),
-      retireAgentHookCompatibilityAuthority: retireAuthority
+      endAgentHookLaunch: endLaunch
     })
     runtime.setPtyController({
       spawn,
@@ -283,7 +283,7 @@ describe('OrcaRuntimeService', () => {
 
     runtime.onPtyData('pty-authority', '\x1b]133;D;0\x07', 100)
 
-    expect(retireAuthority).toHaveBeenCalledWith(spawnEnv.ORCA_PANE_KEY)
+    expect(endLaunch).toHaveBeenCalledWith(spawnEnv.ORCA_PANE_KEY, 'codex')
     expect(runtime.verifyOrchestrationCompatibilityCaller(evidence)).toBeNull()
     expect((await runtime.listTerminals()).terminals).toEqual([
       expect.not.objectContaining({ agentIdentity: expect.anything() })
@@ -292,8 +292,10 @@ describe('OrcaRuntimeService', () => {
 
   it('retires only receipted restored PTY authority on command completion and exit', () => {
     const retireAuthority = vi.fn()
+    const endLaunch = vi.fn()
     const runtime = new OrcaRuntimeService(store, undefined, {
-      retireAgentHookCompatibilityAuthority: retireAuthority
+      retireAgentHookCompatibilityAuthority: retireAuthority,
+      endAgentHookLaunch: endLaunch
     })
     const internals = runtime as unknown as {
       recordPtyWorktree: (ptyId: string, worktreeId: string, state: Record<string, unknown>) => void
@@ -343,9 +345,10 @@ describe('OrcaRuntimeService', () => {
     runtime.onPtyExit('pty-restored-exit', 0, 'restored-exit')
     runtime.onPtyExit('pty-ordinary-shell', 0, 'ordinary-shell')
 
-    expect(retireAuthority).toHaveBeenCalledWith(firstPane)
+    expect(endLaunch).toHaveBeenCalledWith(firstPane, null)
+    expect(endLaunch).toHaveBeenCalledTimes(1)
     expect(retireAuthority).toHaveBeenCalledWith(secondPane)
-    expect(retireAuthority).toHaveBeenCalledTimes(2)
+    expect(retireAuthority).toHaveBeenCalledTimes(1)
   })
 
   it('restores a retained coordinator handle after a late controller inventory', async () => {

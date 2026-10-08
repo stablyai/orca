@@ -1,4 +1,5 @@
 import type { AgentHookEventPayload } from './agent-hook-listener/listener-event'
+import { startsNewAgentRun } from './agent-hook-listener/provider-event-routing'
 import {
   isSameAgentProcess,
   MAX_OWNER_HELD_SESSIONS,
@@ -6,6 +7,7 @@ import {
   type AgentProcessPresence
 } from './agent-process-presence'
 import { isFreshNonDoneAgentStatus } from './agent-status-freshness'
+import { getTuiAgentHookAgent } from './tui-agent-hook-agent'
 
 /** `write` stores the event; `skip` leaves the row unchanged. `probe` is an owner process another
  *  producer cast doubt on; on `skip` it also means the event is held until that owner is gone. */
@@ -28,6 +30,18 @@ export function currentOwner(
 ): AgentProcessPresence | undefined {
   return row?.agentPresence && !row.agentPresence.ended && !row.providerSessionOnly
     ? row.agentPresence
+    : undefined
+}
+
+/** The owner a launched agent command's end ends: the pane's owner when it is the launched agent.
+ *  Each execution host (main locally, the relay over SSH) applies it to the panes it runs. */
+export function ownerEndedByLaunch(
+  row: AgentHookEventPayload | undefined,
+  launchAgent: string | null | undefined
+): AgentProcessPresence | undefined {
+  const owner = currentOwner(row)
+  return owner && launchAgent && owner.agent === getTuiAgentHookAgent(launchAgent)
+    ? owner
     : undefined
 }
 
@@ -202,9 +216,22 @@ export function transitionHookPresence(
     }
   }
   const ended = previous?.agentPresence?.ended ? previous.agentPresence : undefined
+  // Why: an ended owner's late hooks never revive it. Without process proof on either side, only an
+  // event that starts a new run tells a new run of its type from a late hook of the ended one.
+  const lateFromEnded =
+    sameProcess(ended?.process, producer.process) ||
+    (ended !== undefined &&
+      ended.agent === producer.agent &&
+      !ended.process &&
+      !producer.process &&
+      !startsNewAgentRun({
+        source: incoming.source,
+        hookEventName: incoming.hookEventName,
+        hasExplicitPrompt: incoming.hasExplicitPrompt
+      }))
   // Why: a producer nested inside another agent's session never takes an ownerless pane, so a
   // restart that brings both back cannot hand the pane to the nested one.
-  if (exit || sameProcess(ended?.process, producer.process) || producer.nestedIn.length > 0) {
+  if (exit || lateFromEnded || producer.nestedIn.length > 0) {
     return { kind: 'skip' }
   }
   if (!producer.agent) {

@@ -2,7 +2,11 @@ import {
   inferRelayClaudeInterrupt,
   type RelayInterruptHost
 } from './agent-hook-interrupt-reconciliation'
-import { applyRelayHookEvent } from './agent-hook-event-admission'
+import {
+  applyRelayHookEvent,
+  endRelayPaneOwner,
+  type RelayHookAdmissionHost
+} from './agent-hook-event-admission'
 import { RelayAgentHookCanonicalStatus } from './agent-hook-canonical-status'
 import type {
   RelayHookForward,
@@ -18,7 +22,7 @@ import { handleRelayHookRequest } from './agent-hook-request'
 import { listenOnLoopback } from './agent-hook-loopback-listener'
 import { RelayAgentPresence } from './relay-agent-presence'
 import { PaneOwnerProbes } from '../shared/agent-pane-owner-probes'
-import { currentOwner } from '../shared/agent-hook-presence-transition'
+import { currentOwner, ownerEndedByLaunch } from '../shared/agent-hook-presence-transition'
 import type { AgentProcessVerdict } from '../shared/agent-process-presence'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { randomUUID } from 'node:crypto'
@@ -78,13 +82,7 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
   private portFallbackApplied = false
   private readonly presenceChecks = new RelayAgentPresence({
     current: (paneKey) => this.state.lastStatusByPaneKey.get(paneKey),
-    publish: (paneKey, event) => {
-      const meta = this.lastEnvelopeMetaByPaneKey.get(paneKey)
-      return (
-        meta !== undefined &&
-        this.applyEvent(event, meta.source, meta.env, meta.version) !== undefined
-      )
-    }
+    end: (paneKey) => endRelayPaneOwner(this.admissionHost(), paneKey)
   })
   private readonly ownerProbes = new PaneOwnerProbes({
     ownerOf: (paneKey) => currentOwner(this.state.lastStatusByPaneKey.get(paneKey))?.process,
@@ -240,6 +238,15 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
     return this.ownerProbes.check(paneKey)
   }
 
+  /** The pane's launched agent command finished: the launch's owner exited, whether or not its
+   *  process can be checked (the same rule main applies to local panes). */
+  endLaunch(paneKey: string, launchAgent: string): void {
+    const owner = ownerEndedByLaunch(this.state.lastStatusByPaneKey.get(paneKey), launchAgent)
+    if (owner && endRelayPaneOwner(this.admissionHost(), paneKey)) {
+      this.ownerProbes.ownerEnded(paneKey, owner.process)
+    }
+  }
+
   /** Drop a paneKey's cached entries on PTY exit so a terminated pane can't resurface as a ghost event on reconnect. */
   clearPaneState(paneKey: string, preserveTmuxInnerSubjects = false): void {
     this.claudeTerminalInterrupts.observe(paneKey, { kind: 'reset' })
@@ -284,6 +291,20 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
     })
   }
 
+  private admissionHost(): RelayHookAdmissionHost {
+    return {
+      state: this.state,
+      metadata: this.lastEnvelopeMetaByPaneKey,
+      isCanonicalPane: (paneKey) => this.isCanonicalPane(paneKey),
+      isPaneSurfaceRetired: this.isPaneSurfaceRetired,
+      clearPaneState: (paneKey) => this.clearPaneState(paneKey),
+      clearAssistantMessageRetry: (paneKey) =>
+        this.retryScheduler.clearAssistantMessageRetry(paneKey),
+      forward: this.forward,
+      ownerProbes: this.ownerProbes
+    }
+  }
+
   private applyEvent(
     incoming: AgentHookEventPayload,
     source: AgentHookSource,
@@ -291,24 +312,7 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
     version?: string,
     options: { isReplay?: boolean } = {}
   ): AgentHookEventPayload | undefined {
-    return applyRelayHookEvent(
-      {
-        state: this.state,
-        metadata: this.lastEnvelopeMetaByPaneKey,
-        isCanonicalPane: (paneKey) => this.isCanonicalPane(paneKey),
-        isPaneSurfaceRetired: this.isPaneSurfaceRetired,
-        clearPaneState: (paneKey) => this.clearPaneState(paneKey),
-        clearAssistantMessageRetry: (paneKey) =>
-          this.retryScheduler.clearAssistantMessageRetry(paneKey),
-        forward: this.forward,
-        ownerProbes: this.ownerProbes
-      },
-      incoming,
-      source,
-      env,
-      version,
-      options
-    )
+    return applyRelayHookEvent(this.admissionHost(), incoming, source, env, version, options)
   }
 
   private ingestSpoolRecord(record: SpoolRecord): void {

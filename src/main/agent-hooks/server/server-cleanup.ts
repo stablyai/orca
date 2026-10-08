@@ -13,7 +13,7 @@ import {
   type ExecutionHostScope
 } from '../../../shared/execution-host'
 import { worktreeIdsEqual } from '../../../shared/worktree/id'
-import { isWslHookRelayConnectionId } from '../../../shared/wsl-hook-relay-contract'
+import { isLocalHookConnectionId } from '../../../shared/wsl-hook-relay-contract'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import { AgentHookServerAuthorityFences } from './server-authority-fences'
 
@@ -171,6 +171,14 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
     return cleared
   }
 
+  /** A host-proven exit of the pane's owner: its row ends into the resume remnant late hooks cannot revive. */
+  protected endPaneOwner(paneKey: string, owner: AgentProcessPresence): void {
+    this.reconcileEndedProcessForPaneKeys([paneKey], {
+      preserveResumeIdentity: true,
+      endedPresence: { ...owner, ended: true }
+    })
+  }
+
   /** Anything a dead pane could still be asserting: a row, or a latch that would re-gate one through
    *  `resolveClaudePaneState` on the pane's next event even after the row reads `done`. The list
    *  itself lives beside `clearPaneCacheState`, so adding a latch cannot leave this behind in a
@@ -191,8 +199,7 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
       (!parsed ||
         (parsed.kind === 'ssh'
           ? claim.connectionId === parsed.targetId
-          : // Why: WSL panes are local; their relay only stamps transport provenance.
-            claim.connectionId === null || isWslHookRelayConnectionId(claim.connectionId)))
+          : isLocalHookConnectionId(claim.connectionId)))
     // The startup snapshot may outlive its replaced map entry; revoke only the removed owner.
     for (const commitment of this.hydratedAuthorityCommitments) {
       if (ownedByRemoved(commitment)) {

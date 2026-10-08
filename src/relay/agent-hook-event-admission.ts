@@ -1,4 +1,4 @@
-import { transitionHookPresence } from '../shared/agent-hook-presence-transition'
+import { currentOwner, transitionHookPresence } from '../shared/agent-hook-presence-transition'
 import type { PaneOwnerProbes } from '../shared/agent-pane-owner-probes'
 import { cacheRelayLegacyAgentStatus } from '../shared/agent-status-legacy-relay-cache'
 import type { HookListenerState } from '../shared/agent-hook-listener/listener-state'
@@ -12,7 +12,7 @@ import {
   withRelayClaudeTurnRevision
 } from './agent-hook-interrupt-reconciliation'
 
-type RelayHookAdmissionHost = {
+export type RelayHookAdmissionHost = {
   state: HookListenerState
   metadata: Map<string, CachedPaneEnvelopeMeta>
   isCanonicalPane: (paneKey: string) => boolean
@@ -51,6 +51,23 @@ export function applyRelayHookEvent(
       }
     }
   )
+}
+
+/** A host-proven exit of the pane's owner: its row ends into the resume remnant late hooks cannot
+ *  revive. False when there is no owner or the pane could not take it (no cached envelope metadata). */
+export function endRelayPaneOwner(host: RelayHookAdmissionHost, paneKey: string): boolean {
+  const previous = host.state.lastStatusByPaneKey.get(paneKey)
+  const owner = currentOwner(previous)
+  const meta = host.metadata.get(paneKey)
+  if (!previous || !owner || !meta) {
+    return false
+  }
+  const ended: AgentHookEventPayload = {
+    ...previous,
+    hookEventName: 'AgentProcessExit',
+    agentPresence: { ...owner, ended: true }
+  }
+  return writeRelayRow(host, previous, ended, meta.source, meta.env, meta.version, {}) !== undefined
 }
 
 function writeRelayRow(

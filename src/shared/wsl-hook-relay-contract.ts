@@ -88,6 +88,11 @@ export function isWslHookRelayConnectionId(value: string | null | undefined): bo
   return typeof value === 'string' && value.startsWith(WSL_HOOK_RELAY_CONNECTION_PREFIX)
 }
 
+/** Rows this machine executes: local panes, and WSL panes, whose relay only stamps transport provenance. */
+export function isLocalHookConnectionId(value: string | null | undefined): boolean {
+  return value === null || isWslHookRelayConnectionId(value)
+}
+
 export function wslHookRelayEndpointFilePath(guestHome: string, instanceKey: string): string {
   return `${wslHookRelayEndpointDir(guestHome, instanceKey)}/${WSL_HOOK_RELAY_ENDPOINT_FILE}`
 }

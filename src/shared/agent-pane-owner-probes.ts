@@ -68,16 +68,24 @@ export class PaneOwnerProbes {
   check(paneKey: string): Promise<AgentProcessVerdict | null> {
     const owner = this.deps.ownerOf(paneKey)
     return this.deps.checkOwner(paneKey).then((verdict) => {
-      const held = this.held.get(paneKey)
-      if (verdict === 'exited' && owner && held?.owner === ownerKey(owner)) {
-        this.held.delete(paneKey)
-        // Why: replay re-classifies against the released row, so it only lands if it may claim it.
-        if (this.now() - held.heldAt <= HELD_GUEST_WINDOW_MS) {
-          held.reapply()
-        }
+      if (verdict === 'exited') {
+        this.ownerEnded(paneKey, owner)
       }
       return verdict
     })
+  }
+
+  /** The pane's owner is gone and its pane released; hand it to the guest held behind that owner. */
+  ownerEnded(paneKey: string, owner: AgentProcessIdentity | undefined): void {
+    const held = this.held.get(paneKey)
+    if (!owner || held?.owner !== ownerKey(owner)) {
+      return
+    }
+    this.held.delete(paneKey)
+    // Why: replay re-classifies against the released row, so it only lands if it may claim it.
+    if (this.now() - held.heldAt <= HELD_GUEST_WINDOW_MS) {
+      held.reapply()
+    }
   }
 
   private sweep(now: number): void {

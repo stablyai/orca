@@ -140,8 +140,10 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
             // same key — later observations must not be ordered against the retired one.
             this.observations.rebind(event.paneKey)
           }
-          this.recordCurrentAuthorityObservation(event)
-          const enriched = this.applyNormalizedStatus(event, normalized.onAccepted)
+          const enriched = this.applyNormalizedStatus(
+            this.recordCurrentAuthorityObservation(event),
+            normalized.onAccepted
+          )
           if (enriched) {
             this.scheduleAssistantMessageRetry(source, aliasedBody, enriched)
             this.scheduleTranscriptPoll(source, aliasedBody, enriched)
@@ -248,6 +250,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
     this.persistedAuthorityCommitmentsByPaneKey.clear()
     this.revokedHydratedAuthorityCommitments = new WeakSet()
     this.currentAuthorityObservations.clear()
+    this.endedLaunchTokenHashByPaneKey.clear()
     this.promptSentDedupeByPaneKey.clear()
     this.closedAgentStatusTabIds.clear()
     this.closedAgentStatusPaneKeys.clear()
