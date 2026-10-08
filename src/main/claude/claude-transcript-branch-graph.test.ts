@@ -36,6 +36,34 @@ describe('createBranchProof file-tail tip', () => {
   })
 })
 
+describe('createBranchProof rows outside the chain', () => {
+  // The last record the SDK's forkSession wrote to a real copy, ids as written.
+  const FORK_TITLE = JSON.stringify({
+    type: 'custom-title',
+    sessionId: 'provider',
+    customTitle: 'Echo one command (fork)',
+    uuid: '0893e55c-8ec1-432e-af73-3bd165648413',
+    timestamp: '2026-10-07T18:18:59.625Z'
+  })
+
+  it('proves a forked transcript, whose closing title has an id but no parent', () => {
+    const lines = [row('anchor', null), row('leaf', 'anchor'), FORK_TITLE]
+
+    expect(build(lines, 'anchor', 'file-tail').finish()).toEqual({
+      leafUuid: 'leaf',
+      relation: 'descendant'
+    })
+  })
+
+  it('still refuses a conversation row that names no parent', () => {
+    const orphan = JSON.stringify({ type: 'assistant', uuid: 'orphan', sessionId: 'provider' })
+
+    expect(() => build([row('anchor', null), orphan], 'anchor', 'file-tail')).toThrow(
+      'record orphan has no parent identity'
+    )
+  })
+})
+
 describe('createBranchProof ancestry chain', () => {
   const MARKER = JSON.stringify({ type: 'last-prompt', sessionId: 'provider', leafUuid: 'leaf' })
 

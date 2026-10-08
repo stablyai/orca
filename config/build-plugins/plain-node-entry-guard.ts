@@ -63,6 +63,7 @@ const WORKER_THREAD_ENTRY_NAMES = [
   'port-scan-command-worker-entry',
   'usage-scan-worker-entry',
   'claude-profile-setup-worker-entry',
+  'claude-session-fork-worker-entry',
   'profile-state-backup-worker-entry',
   'profile-state-writer-worker-entry'
 ] as const

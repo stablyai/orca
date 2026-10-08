@@ -1,6 +1,9 @@
 import { isTuiAgent } from '../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../shared/tui-agent'
-import type { StructuredAgentSessionResumeSource } from '../../../shared/structured-agent-session-create'
+import {
+  structuredAgentSessionCreateSource,
+  type StructuredAgentSessionCreateSource
+} from '../../../shared/structured-agent-session-create'
 import { parseStructuredLaunchSeedOptions } from '../../../shared/native-chat-session-option-defaults'
 import type { StructuredAgentSessionLaunchIntent } from './launch-structured-agent-session'
 import {
@@ -11,7 +14,7 @@ import {
 
 export type StructuredAgentLaunchPersistedLifecycle = 'pending' | 'visibility-unknown' | 'failed'
 
-export type StructuredAgentLaunchPersistedRecord = {
+export type StructuredAgentLaunchPersistedRecord = StructuredAgentSessionCreateSource & {
   sessionId: string
   /** The host the chat was created on. Records written before paired hosts could hold a chat lack
    *  it and load as local, the only host a chat could then be launched on. */
@@ -21,7 +24,6 @@ export type StructuredAgentLaunchPersistedRecord = {
   clientOperationId: string
   payloadFingerprint: string
   expectedRuntimeFence: number | null
-  resumeFrom?: StructuredAgentSessionResumeSource
   /** A paired server's reported seed, which this machine cannot re-derive after a reload. */
   seedOptions?: Readonly<Record<string, string>>
   /** When a failed launch failed; records written by older builds lack it. */
@@ -33,7 +35,7 @@ export function structuredAgentLaunchRecordFor(
   intent: StructuredAgentSessionLaunchIntent,
   lifecycle: StructuredAgentLaunchPersistedLifecycle
 ): StructuredAgentLaunchPersistedRecord {
-  const { envelope, resumeFrom } = intent.params
+  const { envelope } = intent.params
   // A local launch re-reads this machine's settings on reload; only a paired server's seed is kept.
   const pairedSeed = intent.target.kind === 'local' ? undefined : intent.seedOptions
   return {
@@ -44,7 +46,7 @@ export function structuredAgentLaunchRecordFor(
     clientOperationId: envelope.clientOperationId,
     payloadFingerprint: envelope.payloadFingerprint,
     expectedRuntimeFence: envelope.expectedRuntimeFence,
-    ...(resumeFrom ? { resumeFrom } : {}),
+    ...structuredAgentSessionCreateSource(intent.params),
     ...(pairedSeed ? { seedOptions: pairedSeed } : {})
   }
 }
@@ -87,6 +89,7 @@ function validRecord(value: unknown): value is Omit<
     expectedRuntimeFence
   } = value
   const resumeFrom = 'resumeFrom' in value ? value.resumeFrom : undefined
+  const forkFrom = 'forkFrom' in value ? value.forkFrom : undefined
   const executionHostId = 'executionHostId' in value ? value.executionHostId : undefined
   const failedAt = 'failedAt' in value ? value.failedAt : undefined
   return (
@@ -104,7 +107,14 @@ function validRecord(value: unknown): value is Omit<
       (typeof resumeFrom === 'object' &&
         resumeFrom !== null &&
         'providerSessionId' in resumeFrom &&
-        typeof resumeFrom.providerSessionId === 'string'))
+        typeof resumeFrom.providerSessionId === 'string')) &&
+    (forkFrom === undefined ||
+      (typeof forkFrom === 'object' &&
+        forkFrom !== null &&
+        'sessionId' in forkFrom &&
+        typeof forkFrom.sessionId === 'string' &&
+        'itemId' in forkFrom &&
+        typeof forkFrom.itemId === 'string'))
   )
 }
 

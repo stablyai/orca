@@ -1,3 +1,4 @@
+import { structuredAgentSessionCreateContinues } from '../../../shared/structured-agent-session-create'
 import {
   launchStateLifecycle,
   structuredLaunchStates,
@@ -23,7 +24,7 @@ function holdsLaunchIdentity(
   if (lifecycle === 'failed' || lifecycle === 'cancelled') {
     return false
   }
-  if (state.intent.params.resumeFrom) {
+  if (structuredAgentSessionCreateContinues(state.intent.params)) {
     return true
   }
   const { attempt } = state.callers
@@ -50,7 +51,7 @@ function emptyStructuredLaunchAttempt(
   state: StructuredLaunchState
 ): Extract<StructuredLaunchAttempt, { kind: 'first' }> | undefined {
   const { attempt } = state.callers
-  return !state.intent.params.resumeFrom &&
+  return !structuredAgentSessionCreateContinues(state.intent.params) &&
     attempt.kind === 'first' &&
     attempt.blank &&
     isStructuredLaunchChatEmpty(state.intent.sessionId)

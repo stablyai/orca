@@ -2,10 +2,8 @@
 import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
 import { OrcaRuntimeWithGetWorktreePs } from './orca-runtime-get-worktree-ps'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
-import {
-  resolveCommittedStructuredAgentSessionAdoptionIntent,
-  resolveStructuredAgentSessionAdoptionForCreate
-} from './structured-agent-session-create-adoption'
+import { resolveCommittedStructuredAgentSessionAdoptionIntent } from './structured-agent-session-create-adoption'
+import { resolveStructuredAgentSessionCreateSource } from './structured-agent-session-create-source'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
 import type { AgentSessionAttachParams } from '../native-chat/agent-session-wire/structured-agent-session-attach'
@@ -22,15 +20,13 @@ import {
   isFloatingWorkspaceSelector
 } from '../../shared/floating-workspace-worktree'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
-import {
-  isLegacyAgentSessionAccountHome,
-  type AgentSessionAccountHome
-} from '../../shared/agent-session-account-home'
-import {
-  isAgentSessionHandleProvider,
-  type StructuredAgentId
-} from '../../shared/agent-session-provider-handle'
+import type { AgentSessionAccountHome } from '../../shared/agent-session-account-home'
+import type { StructuredAgentId } from '../../shared/agent-session-provider-handle'
 import { agentSessionWireProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import {
+  structuredAgentSessionCreateSource,
+  type StructuredAgentSessionForkSource
+} from '../../shared/structured-agent-session-create'
 
 export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaRuntimeWithGetWorktreePs {
   async getStructuredAgentSessionCreateSupport(
@@ -150,6 +146,7 @@ export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaR
     agent: StructuredAgentId
     callerKey?: string
     resumeFrom?: { providerSessionId: string }
+    forkFrom?: StructuredAgentSessionForkSource
   }): Promise<AgentSessionAttachParams & { hostLaunchDirectory?: string }> {
     const hostLaunchDirectory = isFloatingWorkspaceSelector(input.worktree)
       ? (await this.resolveRuntimeFileTarget(input.worktree)).worktree.path
@@ -166,7 +163,10 @@ export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaR
       })
     }
     const resolved = await this.resolveStructuredAgentSessionIntent(input, resolveAccountHome)
-    return hostLaunchDirectory ? { ...resolved, hostLaunchDirectory } : resolved
+    // A fork's own folder wins: the floating setting may have moved since its parent started.
+    return hostLaunchDirectory && !resolved.hostLaunchDirectory
+      ? { ...resolved, hostLaunchDirectory }
+      : resolved
   }
 
   /**
@@ -197,6 +197,7 @@ export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaR
       agent: StructuredAgentId
       callerKey?: string
       resumeFrom?: { providerSessionId: string }
+      forkFrom?: StructuredAgentSessionForkSource
     },
     resolveAccountHome: (context: {
       launchEnv: NodeJS.ProcessEnv
@@ -207,11 +208,9 @@ export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaR
         workspaceKind: 'folder' | 'git-worktree'
       }
     }) => AgentSessionAccountHome | Promise<AgentSessionAccountHome>
-  ): Promise<AgentSessionAttachParams> {
+  ): Promise<AgentSessionAttachParams & { hostLaunchDirectory?: string }> {
     const support = await this.getStructuredAgentSessionCreateSupport(input.worktree, input.agent)
-    // Adopting a conversation reads the agent's own transcript, which only Claude and Codex have
-    // importers for.
-    if (!support.supported || (input.resumeFrom && !isAgentSessionHandleProvider(input.agent))) {
+    if (!support.supported) {
       throw agentSessionRefusalError('structured_agent_session_unsupported', {
         reason: 'hostUnsupported'
       })
@@ -231,27 +230,17 @@ export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaR
     if (committedReplay) {
       return committedReplay
     }
-    const selectedAccountHome = await resolveAccountHome({ launchEnv, location })
-    if (input.resumeFrom && !isLegacyAgentSessionAccountHome(selectedAccountHome)) {
-      throw agentSessionRefusalError('structured_agent_session_unsupported', {
-        reason: 'hostUnsupported'
-      })
-    }
-    // Adopting pins the account home to wherever the conversation actually lives, which is not
-    // necessarily the one a fresh create would pick: Codex resolves its rollout under
-    // `accountHome.path`, and Claude reads its transcript under `<home>/projects`. Resuming under
-    // the wrong home finds nothing and lands the user in a blank chat wearing the old chat's name.
-    const adoption =
-      input.resumeFrom && isLegacyAgentSessionAccountHome(selectedAccountHome)
-        ? await resolveStructuredAgentSessionAdoptionForCreate({
-            host,
-            settings,
-            agent: input.agent,
-            providerSessionId: input.resumeFrom.providerSessionId,
-            selfSessionId: input.envelope.sessionId,
-            selectedAccountHomePath: selectedAccountHome.path
-          })
-        : null
+    const source = await resolveStructuredAgentSessionCreateSource({
+      host,
+      settings,
+      agent: input.agent,
+      selfSessionId: input.envelope.sessionId,
+      location,
+      ...structuredAgentSessionCreateSource(input),
+      selectAccountHome: () => resolveAccountHome({ launchEnv, location })
+    })
+    // A fork runs as its parent does, even where the parent never had a selection saved.
+    const seedOptions = source.forkedFrom ? source.options : options
     return {
       envelope: {
         sessionId: input.envelope.sessionId,
@@ -262,12 +251,11 @@ export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaR
       location,
       provider: input.agent,
       agent: input.agent,
-      accountHome:
-        adoption && isLegacyAgentSessionAccountHome(selectedAccountHome)
-          ? { variable: selectedAccountHome.variable, path: adoption.accountHomePath }
-          : selectedAccountHome,
-      ...(options ? { options } : {}),
-      ...(input.resumeFrom && adoption
+      accountHome: source.accountHome,
+      ...(seedOptions ? { options: seedOptions } : {}),
+      ...(source.forkedFrom ? { forkedFrom: source.forkedFrom } : {}),
+      ...(source.launchDirectory ? { hostLaunchDirectory: source.launchDirectory } : {}),
+      ...(source.adopted
         ? {
             // `adopt` is what makes the reservation seed the handle chain. Presence of
             // `providerHandle` alone must not: `agentSession.ensure` already passes one today
@@ -276,9 +264,9 @@ export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaR
               providerHandle: agentSessionWireProviderHandle({
                 transport: definition.handleTransport,
                 agent: definition.agent,
-                nativeId: input.resumeFrom.providerSessionId
+                nativeId: source.adopted.providerSessionId
               }),
-              transcriptPath: adoption.transcriptPath
+              transcriptPath: source.adopted.transcriptPath
             }
           }
         : {}),

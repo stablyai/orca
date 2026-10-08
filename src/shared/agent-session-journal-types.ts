@@ -286,6 +286,9 @@ export type AgentJournalTurnLifecycle = {
   /** On a turn a conversation command opened: the provider turn that carried out the command,
    *  once the provider opened one. Nothing else re-derives it after the command settles. */
   providerTurnId?: string
+  /** Where the provider cuts a fork of this turn, when that is not its turn id: Claude's last
+   *  transcript entry of the turn. Read through `agentJournalTurnForkPoint`. */
+  forkPoint?: string
 }
 
 /** Provider thread-goal lifecycle. Open like other persisted vocabularies: a

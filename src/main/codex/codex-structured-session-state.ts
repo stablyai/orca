@@ -37,6 +37,9 @@ export type CodexStructuredLaunch = {
   codexHome: string | null
   resumeThreadId: string | null
   resumePath?: string | null
+  /** Open a copy of another thread, through `lastTurnId`, in place of starting one. Only for a
+   *  session that has proved no thread of its own yet. */
+  forkFrom?: { threadId: string; lastTurnId: string }
   /** The resumed thread is this session's own creation: when Codex answers that it holds no
    *  rollout for it, start a new thread in its place. Never set for a thread a resume proved. */
   supersedeIfUnsaved?: boolean

@@ -21,6 +21,8 @@ export type ClaudeCurrentTurn = {
   userItemId: string
   /** Present when the turn is the host's record of a conversation command. */
   command?: ClaudeCommandTurn
+  /** The transcript entry the turn's main conversation ends on, while that is the assistant's. */
+  assistantLeafUuid?: string
 }
 
 /** The row a turn's lifecycle lives on: the host's record for a command, else the lane's own. */
@@ -93,6 +95,8 @@ export function claudeTurnLifecycleItem(
   // Write-once: the terminal revision republishes the value the running row
   // already carried, because both are built from the same open turn.
   const requested = requestedAt === undefined ? {} : { requestedAt }
+  // Only an end the provider called a success stops on that entry.
+  const forkPoint = end?.outcome === 'success' ? turn.assistantLeafUuid : undefined
   return {
     identity: claudeCurrentTurnIdentity(turn),
     body: agentJournalTurnBody(
@@ -105,7 +109,8 @@ export function claudeTurnLifecycleItem(
             ...requested,
             completedAt: end.completedAt,
             userItemId,
-            ...(end.durationMs === undefined ? {} : { durationMs: end.durationMs })
+            ...(end.durationMs === undefined ? {} : { durationMs: end.durationMs }),
+            ...(forkPoint === undefined ? {} : { forkPoint })
           }
         : { turnId, state: 'running', startedAt, ...requested, userItemId }
     ),

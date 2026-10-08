@@ -15,7 +15,8 @@ export const ORCAD_CHILD_ENTRY_POINTS = {
   backup: 'src/main/persistence/profile-state/profile-state-backup-worker-entry.ts',
   foreignSqliteReader: 'src/main/foreign-sqlite-readers/foreign-sqlite-reader-entry.ts',
   portScanCommandWorker: 'src/main/ports/port-scan-command-worker-entry.ts',
-  sessionScanner: 'src/main/ai-vault/session-scanner-service-entry.ts'
+  sessionScanner: 'src/main/ai-vault/session-scanner-service-entry.ts',
+  claudeSessionForkWorker: 'src/main/claude/claude-session-fork-worker-entry.ts'
 }
 
 /** Each child ships flat beside orcad.js under its source basename; the runtime resolvers look there. */
@@ -41,6 +42,32 @@ const jsoncParserEsm = {
       path: join(root, 'node_modules', 'jsonc-parser', 'lib', 'esm', 'main.js')
     }))
   }
+}
+
+/** One child that ships beside orcad.js. Why one call per child and not one `outdir` build:
+ *  esbuild mirrors each entry's source directory under `outdir`, and every child must land flat
+ *  beside orcad.js, where its runtime resolver looks for it. */
+export function buildOrcadChildEntry(entryPoint, outfile) {
+  return build({
+    entryPoints: [entryPoint],
+    bundle: true,
+    platform: 'node',
+    target: 'node18',
+    format: 'cjs',
+    outfile,
+    external: ORCAD_EXTERNAL_MODULES,
+    plugins: [externalNativeAddons],
+    metafile: true,
+    minify: true,
+    sourcemap: false,
+    // A bundled ES module reads its own URL at load, which CommonJS output leaves undefined.
+    banner: { js: "const __orcaImportMetaUrl=require('node:url').pathToFileURL(__filename).href;" },
+    define: {
+      'process.env.NODE_ENV': '"production"',
+      'import.meta.url': '__orcaImportMetaUrl'
+    },
+    logLevel: 'error'
+  })
 }
 
 export function buildOrcadEntry(outfile) {

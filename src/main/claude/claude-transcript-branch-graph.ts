@@ -147,6 +147,10 @@ function createBranchProof(input: BranchProofInput) {
     if (!uuid) {
       return
     }
+    // A title carries an id of its own but no chain: the SDK's fork ends every copy with one.
+    if (row.parentUuid === undefined && !TRANSCRIPT_TAIL_TYPES.has(row.type)) {
+      return
+    }
     const parentUuid = row.parentUuid === null ? null : nonEmptyString(row.parentUuid)
     if (row.parentUuid !== null && !parentUuid) {
       throw transcriptError(`record ${uuid} has no parent identity`)

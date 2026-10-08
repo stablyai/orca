@@ -13,6 +13,7 @@ import type { NativeChatTaskListPredecessors } from './native-chat-task-list-his
 import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
 import type { NativeChatDiffReveal, NativeChatDiffTarget } from './native-chat-turn-diffs'
 import { NativeChatRewindContext } from './native-chat-rewind-context'
+import { NativeChatForkContext } from './native-chat-fork-context'
 import { nativeChatRowOffersRewind } from './native-chat-rewind-eligibility'
 
 /** Everything a row needs that is the same for every row. Held as one memoized
@@ -48,6 +49,7 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
 }): React.JSX.Element {
   // Offered only on the conversation's own turn-opening prompts (`nativeChatRowOffersRewind`).
   const rewind = useContext(NativeChatRewindContext)
+  const fork = useContext(NativeChatForkContext)
   // A subagent's section is set off from the conversation it sits in.
   const sectionClassName = cn(
     slot.depth > 0 && 'border-l-2 border-border/60 pl-3',
@@ -77,6 +79,9 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
     )
   }
   const { message, turnKey, status, receipt, turnDiff, workRun } = slot
+  const forksTurn = fork?.rows.has(message.id) === true
+  // The row a turn is forked from keeps its controls, so it keeps the room they hang into.
+  const continuesTurn = slot.continuesTurn === true && !forksTurn
   const deliveryNotice = context.deliveryNotices?.get(message.id)
   const predecessors = context.taskListPredecessors.get(message.id)
   const expanded = turnKey ? context.expandedTurnIds.has(turnKey) : undefined
@@ -93,7 +98,7 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
   ) : null
   return (
     // The negative margin shortens the measured row, which is what moves the next one up.
-    <div className={cn('flex flex-col gap-5', slot.continuesTurn && '-mb-3', sectionClassName)}>
+    <div className={cn('flex flex-col gap-5', continuesTurn && '-mb-3', sectionClassName)}>
       {/* A turn with no user bubble carries its bar above its first row. */}
       {slot.statusAbove ? statusRow : null}
       {!slot.drawsMessage ? null : receipt ? (
@@ -111,7 +116,7 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
           expandSignal={context.expandSignal}
           activeTurnIsWorking={slot.activeTurnIsWorking}
           trailingRun={slot.trailingRun}
-          continuesTurn={slot.continuesTurn}
+          continuesTurn={continuesTurn}
           onScrollMessageToTop={context.onScrollMessageToTop}
           onLinkClick={context.onLinkClick}
           allowFileUriLinks={context.allowFileUriLinks}
@@ -125,6 +130,7 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
               ? rewind
               : undefined
           }
+          onFork={forksTurn ? fork?.fork : undefined}
           workRun={workRun}
         />
       )}

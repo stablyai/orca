@@ -40,6 +40,9 @@ import { useNativeChatProvisionalLaunch } from './use-native-chat-provisional-la
 import { useStructuredAgentSessionHostExecution } from './StructuredAgentSessionStatusBridge'
 import { useNativeChatRewindHost } from './use-native-chat-rewind-host'
 import { NativeChatRewindContext } from './native-chat-rewind-context'
+import { NativeChatForkContext } from './native-chat-fork-context'
+import { NativeChatForkedFromLine } from './NativeChatForkedFromLine'
+import { useNativeChatFork } from './use-native-chat-fork'
 import { NativeChatQueuedMessageList } from './NativeChatQueuedMessageList'
 import { nativeChatStructuredStopControls } from './native-chat-structured-stop-controls'
 import { chatApprovalFromJournal } from './native-chat-interactive-prompt'
@@ -161,6 +164,7 @@ export function NativeChatStructuredSession(
     { sessionId: props.sessionId, isVisible: props.isVisible }
   )
   const prompt = controller.prompts[0] ?? null
+  const fork = useNativeChatFork(props, ownerWorktreeId, controller.journalItems)
   // Prompts this build cannot answer leave the composer open: a send starts a turn, whose card
   // cancel then works.
   const promptsUnanswerable = pendingPromptsAllUnanswerableHere(controller.prompts)
@@ -247,29 +251,36 @@ export function NativeChatStructuredSession(
         ) : (
           <NativeChatRewindContext.Provider value={controller.rewind.surface}>
             <NativeChatOrcaStopContext.Provider value={continuation.view}>
-              <NativeChatMessageList
-                // A rewind replaces the conversation; nothing the old transcript held carries over.
-                key={controller.epoch ?? undefined}
-                ref={submits.messageListRef}
-                session={session}
-                journalItems={controller.journalItems}
-                journalSubmissions={controller.submissions}
-                journalLatestTurn={controller.latestTurn}
-                subagentRoster={controller.subagentRoster}
-                railOutline={controller.railOutline}
-                isVisible={props.isVisible}
-                isWorking={controller.isWorking}
-                expandSignal={false}
-                workingStartedAt={controller.workingStartedAt}
-                settledTurns={controller.settledTurns}
-                awaitingInput={prompt === null ? null : 'shown'}
-                turnActivity={controller.turnActivity}
-                stopping={stopControls.stopping}
-                onLinkClick={onLinkClick}
-                allowFileUriLinks={onLinkClick !== undefined}
-                runtimeContext={imageRuntimeContext}
-                deliveryNotices={deliveryNotices}
-              />
+              <NativeChatForkContext.Provider value={fork}>
+                <NativeChatForkedFromLine
+                  sessionId={props.sessionId}
+                  target={props.target}
+                  worktreeId={ownerWorktreeId}
+                />
+                <NativeChatMessageList
+                  // A rewind replaces the conversation; nothing the old transcript held carries over.
+                  key={controller.epoch ?? undefined}
+                  ref={submits.messageListRef}
+                  session={session}
+                  journalItems={controller.journalItems}
+                  journalSubmissions={controller.submissions}
+                  journalLatestTurn={controller.latestTurn}
+                  subagentRoster={controller.subagentRoster}
+                  railOutline={controller.railOutline}
+                  isVisible={props.isVisible}
+                  isWorking={controller.isWorking}
+                  expandSignal={false}
+                  workingStartedAt={controller.workingStartedAt}
+                  settledTurns={controller.settledTurns}
+                  awaitingInput={prompt === null ? null : 'shown'}
+                  turnActivity={controller.turnActivity}
+                  stopping={stopControls.stopping}
+                  onLinkClick={onLinkClick}
+                  allowFileUriLinks={onLinkClick !== undefined}
+                  runtimeContext={imageRuntimeContext}
+                  deliveryNotices={deliveryNotices}
+                />
+              </NativeChatForkContext.Provider>
             </NativeChatOrcaStopContext.Provider>
           </NativeChatRewindContext.Provider>
         )}

@@ -3,13 +3,15 @@ import type {
   StagedStructuredLaunchPrompt,
   StructuredPromptDeliveryResult
 } from '@/lib/structured-agent-session-launch-prompt'
-import type { StructuredAgentSessionResumeSource } from '../../../shared/structured-agent-session-create'
+import type { StructuredAgentSessionCreateSource } from '../../../shared/structured-agent-session-create'
 import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { StructuredLaunchAttempt } from './structured-agent-session-launch-request'
 import type { AgentLaunchRequestId } from './agent-launch-request-id'
 
-export type StructuredAgentLaunchOptions = {
+/** A resume or fork source is part of the launch's identity, not a preference: see
+ *  `structuredLaunchIdentity`. */
+export type StructuredAgentLaunchOptions = StructuredAgentSessionCreateSource & {
   /** The user action this start serves; only a re-delivery of it joins its chat. */
   requestId: AgentLaunchRequestId
   prompt?: string
@@ -17,9 +19,6 @@ export type StructuredAgentLaunchOptions = {
   onPromptDelivered?: () => void
   /** The caller keeps the prompt's text if it does not go out (notes), so no composer gets it. */
   promptKeptByCaller?: true
-  /** Adopt an existing provider conversation instead of starting a fresh one. Part of the launch's
-   *  identity, not a preference — see `launchIdentity`. */
-  resumeFrom?: StructuredAgentSessionResumeSource
   /** The host the route decided on; read only by the caller that starts the launch. */
   executionHostId?: ExecutionHostId
   /** The saved selection a paired host reported it will seed; read only by the starting caller. */

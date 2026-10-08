@@ -1,6 +1,10 @@
 import { parentPort, workerData } from 'node:worker_threads'
 import { ClaudeHookService } from '../claude/hook-service'
-import { provisionClaudeAccountProfile } from './claude-profile-setup'
+import type { WorkerThreadJobReply } from '../worker-thread-job'
+import {
+  provisionClaudeAccountProfile,
+  type ClaudeProfileSetupReport
+} from './claude-profile-setup'
 import type { ClaudeProfileSetupJob } from './claude-profile-setup-worker'
 
 if (!parentPort) {
@@ -9,6 +13,8 @@ if (!parentPort) {
 const port = parentPort
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: runClaudeProfileSetupInWorker is the only spawner and passes a ClaudeProfileSetupJob.
 const job = workerData as ClaudeProfileSetupJob
+const reply = (message: WorkerThreadJobReply<ClaudeProfileSetupReport>): void =>
+  port.postMessage(message)
 
 void provisionClaudeAccountProfile({
   dataRoot: job.dataRoot,
@@ -21,7 +27,7 @@ void provisionClaudeAccountProfile({
     : null
 })
   .then(
-    (report) => port.postMessage({ ok: true, report }),
-    (error: unknown) => port.postMessage({ ok: false, error: String(error) })
+    (report) => reply({ ok: true, value: report }),
+    (error: unknown) => reply({ ok: false, error: String(error) })
   )
   .finally(() => port.close())

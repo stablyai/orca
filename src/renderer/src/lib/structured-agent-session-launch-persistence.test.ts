@@ -171,6 +171,56 @@ describe('structured agent launch persistence', () => {
     expect(readStructuredAgentLaunchRecord('claude_session')?.clientOperationId).toBe('operation-2')
   })
 
+  it('saves which turn an unpublished launch forks', () => {
+    const forkFrom = { sessionId: 'codex_parent', itemId: 'codex:thread:turn-1:1' }
+    const intent: StructuredAgentSessionLaunchIntent = {
+      sessionId: 'codex_fork',
+      worktreeId: 'workspace-1',
+      executionHostId: 'local',
+      target: { kind: 'local' },
+      agent: 'codex',
+      params: {
+        envelope: {
+          sessionId: 'codex_fork',
+          clientOperationId: 'operation-5',
+          expectedRuntimeFence: null,
+          payloadFingerprint: 'fingerprint-5'
+        },
+        worktree: 'id:workspace-1',
+        agent: 'codex',
+        forkFrom
+      }
+    }
+
+    expect(structuredAgentLaunchRecordFor(intent, 'pending').forkFrom).toEqual(forkFrom)
+  })
+
+  it('keeps which turn a launch forks across a reload, and drops a record whose fork is malformed', () => {
+    const forkFrom = { sessionId: 'codex_parent', itemId: 'codex:thread:turn-1:1' }
+    const record = {
+      executionHostId: 'local',
+      agent: 'codex',
+      lifecycle: 'visibility-unknown',
+      clientOperationId: 'operation-4',
+      payloadFingerprint: 'fingerprint-4',
+      expectedRuntimeFence: null
+    } as const
+    writeStructuredAgentLaunchRecord({ ...record, sessionId: 'codex_fork', forkFrom })
+    const stored = JSON.parse(localStorage.getItem('orca:structuredAgentLaunches:v1') ?? '[]')
+    localStorage.setItem(
+      'orca:structuredAgentLaunches:v1',
+      JSON.stringify([
+        ...stored,
+        { ...record, sessionId: 'codex_bad_fork', forkFrom: { sessionId: 'codex_parent' } }
+      ])
+    )
+    reload()
+
+    // Without it a retry after the reload would start a blank chat under the fork's session id.
+    expect(readStructuredAgentLaunchRecord('codex_fork')?.forkFrom).toEqual(forkFrom)
+    expect(readStructuredAgentLaunchRecord('codex_bad_fork')).toBeUndefined()
+  })
+
   it('keeps when a failed launch failed across a reload, and still loads records without it', () => {
     writeStructuredAgentLaunchRecord({
       sessionId: 'claude_session',

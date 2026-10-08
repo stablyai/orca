@@ -7,7 +7,8 @@ import {
   createStructuredAgentSessionId,
   structuredAgentSessionCreateParams,
   type StructuredAgentSessionCreateParams,
-  type StructuredAgentSessionResumeSource
+  structuredAgentSessionCreateSource,
+  type StructuredAgentSessionCreateSource
 } from '../../../shared/structured-agent-session-create'
 import { resolveStructuredLaunchSeedOptions } from '../../../shared/native-chat-session-option-defaults'
 import { hasRuntimeRpcErrorCode } from '../../../shared/runtime-rpc-error-code'
@@ -113,7 +114,7 @@ export function createStructuredAgentSessionLaunchIntent(
   worktreeId: string,
   agent: TuiAgent,
   executionHostId?: ExecutionHostId,
-  resumeFrom?: StructuredAgentSessionResumeSource,
+  source: StructuredAgentSessionCreateSource = {},
   hostSeedOptions?: LaunchSeed
 ): StructuredAgentSessionLaunchIntent {
   const owner = structuredAgentSessionOwnerTarget(
@@ -126,7 +127,7 @@ export function createStructuredAgentSessionLaunchIntent(
     owner,
     agent,
     sessionId,
-    resumeFrom,
+    source,
     hostSeedOptions
   )
 }
@@ -136,7 +137,7 @@ function buildStructuredAgentSessionLaunchIntent(
   owner: Pick<StructuredAgentSessionLaunchIntent, 'executionHostId' | 'target'>,
   agent: TuiAgent,
   sessionId: string,
-  resumeFrom: StructuredAgentSessionResumeSource | undefined,
+  source: StructuredAgentSessionCreateSource,
   hostSeedOptions: LaunchSeed
 ): StructuredAgentSessionLaunchIntent {
   const state = useAppStore.getState()
@@ -157,7 +158,7 @@ function buildStructuredAgentSessionLaunchIntent(
       sessionId,
       worktree: toRuntimeWorktreeSelector(worktreeId),
       agent,
-      ...(resumeFrom ? { resumeFrom } : {}),
+      ...structuredAgentSessionCreateSource(source),
       randomUuid: createBrowserUuid
     }),
     ...launchSeedOptions(state, owner, agent, hostSeedOptions)
@@ -173,24 +174,25 @@ export function retryStructuredAgentSessionLaunchIntent(
     intent,
     intent.agent,
     intent.sessionId,
-    intent.params.resumeFrom,
+    intent.params,
     intent.seedOptions
   )
 }
 
 /** Rebuild a reload-surviving intent with the caller's current worktree selector. */
-export function restoreStructuredAgentSessionLaunchIntent(args: {
-  worktreeId: string
-  executionHostId: ExecutionHostId
-  sessionId: string
-  agent: TuiAgent
-  clientOperationId: string
-  payloadFingerprint: string
-  expectedRuntimeFence: number | null
-  resumeFrom?: StructuredAgentSessionResumeSource
-  /** A paired server's seed, kept with the launch so a reload shows what create runs. */
-  seedOptions?: Readonly<Record<string, string>>
-}): StructuredAgentSessionLaunchIntent {
+export function restoreStructuredAgentSessionLaunchIntent(
+  args: {
+    worktreeId: string
+    executionHostId: ExecutionHostId
+    sessionId: string
+    agent: TuiAgent
+    clientOperationId: string
+    payloadFingerprint: string
+    expectedRuntimeFence: number | null
+    /** A paired server's seed, kept with the launch so a reload shows what create runs. */
+    seedOptions?: Readonly<Record<string, string>>
+  } & StructuredAgentSessionCreateSource
+): StructuredAgentSessionLaunchIntent {
   const state = useAppStore.getState()
   const { target } = structuredAgentSessionOwnerTarget(args.worktreeId, args.executionHostId)
   recordWebSessionFocusIntent(
@@ -215,7 +217,7 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
       },
       worktree: toRuntimeWorktreeSelector(args.worktreeId),
       agent: args.agent,
-      ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {})
+      ...structuredAgentSessionCreateSource(args)
     },
     ...launchSeedOptions(state, { target }, args.agent, args.seedOptions)
   }

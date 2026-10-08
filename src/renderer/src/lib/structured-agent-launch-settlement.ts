@@ -1,3 +1,4 @@
+import { structuredAgentSessionCreateContinues } from '../../../shared/structured-agent-session-create'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-agent-session'
@@ -105,7 +106,7 @@ export function beginStructuredAgentLaunchSettlement(
   // A new chat with nothing to say reuses an empty published one open here (the launch joins an
   // empty starting one); the reused chat is not this caller's to cancel.
   const idle =
-    options.resumeFrom || options.prompt?.trim()
+    structuredAgentSessionCreateContinues(options) || options.prompt?.trim()
       ? undefined
       : findIdleEmptyStructuredChat(
           worktreeId,

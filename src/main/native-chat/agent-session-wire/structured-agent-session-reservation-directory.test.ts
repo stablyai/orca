@@ -41,4 +41,31 @@ describe('host-resolved directory in the attach reservation', () => {
     expect(request.launchDirectory).toBe('/host/floating-folder')
     expect(request.location.workspaceId).toBe(FLOATING_TERMINAL_WORKTREE_ID)
   })
+
+  it('carries where a fork was cut from, which is all a Codex fork has to start from', () => {
+    const forkedFrom = {
+      sessionId: 'codex_parent_chat',
+      itemId: 'codex:thread-parent:turn-1:1',
+      providerSessionId: 'thread-parent',
+      forkPoint: 'turn-1'
+    }
+    const authority = {
+      spawnToken: 'spawn-one',
+      claimKeyId: 'claim-one',
+      handoffOperationId: null,
+      probe: { outcome: 'reservation-unused' }
+    } as const
+    const reserve = (attach: AgentSessionAttachParams) =>
+      reserveRequestFor({
+        sessionId: attach.envelope.sessionId,
+        params: attach,
+        authority,
+        callerKey: 'client-one',
+        fingerprint: 'fingerprint',
+        now: 123
+      })
+
+    expect(reserve({ ...params, forkedFrom }).forkedFrom).toEqual(forkedFrom)
+    expect(reserve(params)).not.toHaveProperty('forkedFrom')
+  })
 })

@@ -60,6 +60,7 @@ export function structuredAgentSessionStatusSummary({
     ...(providerSession ? { providerSession } : {}),
     ...(launchDirectory ? { launchDirectory } : {}),
     ...(record?.conversationName ? { conversationName: record.conversationName } : {}),
+    ...(record?.forkedFrom ? { forkedFrom: { sessionId: record.forkedFrom.sessionId } } : {}),
     updatedAt: journal.lastActivityAt() || now()
   }
 }

@@ -56,6 +56,22 @@ export function readAgentJournalTurnOutcome(
   return AGENT_JOURNAL_TURN_OUTCOMES.find((known) => known === outcome) ?? null
 }
 
+/**
+ * Where the provider cuts a fork through `turn`, or null when the turn cannot be forked. Only a
+ * turn the provider reported finished: a stopped or failed one ends wherever it was left. Codex
+ * cuts at its own turn id; Claude only at the entry its record kept, so a turn this host did not
+ * watch end has none.
+ */
+export function agentJournalTurnForkPoint(
+  agent: string,
+  turn: AgentJournalTurnOutcomeSource | null
+): string | null {
+  if (turn?.state !== 'completed' || readAgentJournalTurnOutcome(turn) !== 'success') {
+    return null
+  }
+  return turn.forkPoint ?? (agent === 'codex' ? (turn.providerTurnId ?? turn.turnId) : null)
+}
+
 export function agentJournalTurnBody(turn: AgentJournalTurnLifecycle): AgentJournalTurnItem {
   return { kind: 'turn', ...turn }
 }

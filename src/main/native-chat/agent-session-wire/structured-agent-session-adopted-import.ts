@@ -6,6 +6,7 @@ import {
 } from '../../../shared/agent-session-wire'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import { agentSessionProviderHandleFromWire } from '../../../shared/agent-session-provider-handle-encoding'
+import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import type { AgentSessionAttachParams, AttachedJournal } from './structured-agent-session-attach'
 import type { JournalReplacementItem } from '../agent-session-journal/journal-epoch-replacement'
 import {
@@ -69,28 +70,31 @@ export async function importAdoptedTranscript(
   params: AgentSessionAttachParams,
   attached: AttachedJournal,
   record: AgentSessionRecord,
-  prepared: JournalReplacementItem[] | null
-): Promise<void> {
-  // The journal is the conversation's, which outlives a failed import; nothing here closes it.
-  await applyAdoptedTranscript(params, attached, record, prepared)
-}
-
-async function applyAdoptedTranscript(
-  params: AgentSessionAttachParams,
-  attached: AttachedJournal,
-  record: AgentSessionRecord,
-  prepared: JournalReplacementItem[] | null
+  prepared: JournalReplacementItem[] | null,
+  adapter: Pick<StructuredAgentSessionAdapter, 'forkedHistory'>
 ): Promise<void> {
   const adopt = params.adopt
   // A new journal contains only its epoch row; replay must preserve subsequent durable writes.
-  if (!adopt || attached.journal.cursor().sequence > 1) {
+  // The journal is the conversation's, which outlives a failed import; nothing here closes it.
+  if ((!adopt && !record.forkedFrom) || attached.journal.cursor().sequence > 1) {
     return
   }
   if (prepared) {
     await attached.journal.replaceEpochItems('legacy_import', record.lease.runtimeFence, prepared)
     return
   }
-  if (!adopt.transcriptPath) {
+  // A fork's copy is asked for on every start that finds the journal empty, so an import that
+  // failed is made again.
+  const source = adopt
+    ? {
+        providerSessionId: agentSessionProviderHandleFromWire(adopt.providerHandle).nativeId,
+        transcriptPath: adopt.transcriptPath
+      }
+    : await adapter.forkedHistory?.(record.sessionId)
+  if (!source) {
+    return
+  }
+  if (!source.transcriptPath) {
     throw agentSessionRefusalError('agent_session_identity_required', {
       reason: 'transcriptNotFound'
     })
@@ -98,9 +102,9 @@ async function applyAdoptedTranscript(
   const imported = await importLegacyTranscriptIntoJournal({
     journal: attached.journal,
     agent: params.agent,
-    sessionId: agentSessionProviderHandleFromWire(adopt.providerHandle).nativeId,
+    sessionId: source.providerSessionId,
     fence: record.lease.runtimeFence,
-    options: { filePath: adopt.transcriptPath }
+    options: { filePath: source.transcriptPath }
   })
   if (!imported.ok) {
     throw new Error(imported.error)

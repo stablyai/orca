@@ -96,6 +96,25 @@ describe('planAgentSessionLaunch', () => {
     )
   })
 
+  it('hands the settle loop the turn a launch forks', async () => {
+    const forkFrom = { sessionId: 'codex_parent', itemId: 'codex:thread:turn-1:1' }
+    const plan = planAgentSessionLaunch(store, {
+      requestId: 'request-fork',
+      agent: 'codex',
+      workspace: { kind: 'folder', worktreeId: 'folder:ws-1' },
+      forkFrom
+    })
+
+    await plan.launch(hooks)
+
+    expect(mocks.beginStructuredAgentLaunchSettlement).toHaveBeenCalledWith(
+      'folder:ws-1',
+      'codex',
+      expect.objectContaining({ requestId: 'request-fork', forkFrom }),
+      hooks
+    )
+  })
+
   it('sends no delivery fields the request did not carry', async () => {
     const plan = planAgentSessionLaunch(store, {
       requestId: 'request-3',

@@ -191,6 +191,8 @@ export type ClaudeSession = {
   launchedModel: string | null
   /** The launch left the saved Fast out, so the start applies it once the settings are read. */
   fastModeAtStart: boolean
+  /** The config folder this child was launched under, where Claude writes its transcript. */
+  claudeConfigDir: string
   /** Absent when the adapter runs without a host catalog store (tests). */
   catalogAccess?: AgentModelCatalogSessionAccess
   /** CLI-advertised protocol capabilities from init; gates interrupt-receipt handling. */

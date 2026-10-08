@@ -203,6 +203,7 @@ function pick(
     agent?: 'claude' | 'codex'
     worktreeId?: string
     prompt?: string
+    forkFrom?: { sessionId: string; itemId: string }
     /** The split the pick was made in; none means the workspace's active group. */
     group?: string
   } = {}
@@ -216,7 +217,8 @@ function pick(
       executionHostId: 'local',
       ...(overrides.prompt
         ? { prompt: overrides.prompt, promptDelivery: 'submit-after-ready' as const }
-        : {})
+        : {}),
+      ...(overrides.forkFrom ? { forkFrom: overrides.forkFrom } : {})
     }),
     hooks: {},
     ...(overrides.group ? { targetGroupId: overrides.group } : {})
@@ -298,6 +300,15 @@ describe('a second "new chat" with no text', () => {
       kind: 'structured',
       sessionId: first.sessionId
     })
+  })
+
+  it('opens a new chat for a fork, which is never an empty chat to stand in for', async () => {
+    pick('plus-pick-1')
+    await publishIdle(first.sessionId)
+
+    const fork = pick('fork-1', { forkFrom: { sessionId: 'codex_parent', itemId: 'row-1' } })
+
+    expect(fork.sessionId).toBe(second.sessionId)
   })
 
   it('opens a new chat when the idle chat has a typed draft', async () => {

@@ -18,11 +18,43 @@ export type StructuredAgentSessionResumeSource = {
   providerSessionId: string
 }
 
-export type StructuredAgentSessionCreateParams = {
+/**
+ * The turn a create forks instead of starting fresh: a chat on the same host, and a row of the turn
+ * to copy it through. Like `resumeFrom`, an identity only; the host works out what to copy.
+ */
+export type StructuredAgentSessionForkSource = {
+  sessionId: string
+  itemId: string
+}
+
+/** The conversation a create continues instead of starting one: at most one of the two. */
+export type StructuredAgentSessionCreateSource = {
+  resumeFrom?: StructuredAgentSessionResumeSource
+  /** Sent only to a host advertising `AGENT_SESSION_FORK_RUNTIME_CAPABILITY`. */
+  forkFrom?: StructuredAgentSessionForkSource
+}
+
+/** Just the source of `from`, so a caller carrying it onward never spreads an absent field. */
+export function structuredAgentSessionCreateSource(
+  from: StructuredAgentSessionCreateSource
+): StructuredAgentSessionCreateSource {
+  return {
+    ...(from.resumeFrom ? { resumeFrom: from.resumeFrom } : {}),
+    ...(from.forkFrom ? { forkFrom: from.forkFrom } : {})
+  }
+}
+
+/** Whether a create continues a conversation that already exists, by resuming or forking it. */
+export function structuredAgentSessionCreateContinues(
+  from: StructuredAgentSessionCreateSource
+): boolean {
+  return from.resumeFrom !== undefined || from.forkFrom !== undefined
+}
+
+export type StructuredAgentSessionCreateParams = StructuredAgentSessionCreateSource & {
   envelope: AgentSessionMutationEnvelope
   worktree: string
   agent: StructuredAgentId
-  resumeFrom?: StructuredAgentSessionResumeSource
   /** Sent only to a host advertising `AGENT_SESSION_CREATE_TAB_ID_RUNTIME_CAPABILITY`. */
   tabId?: string
 }
@@ -49,19 +81,20 @@ export function isStructuredAgentSessionIdFor(agent: string, sessionId: string):
  * transport failure. The fingerprint must be computed over the same fields the host
  * recomputes, so both clients build it here rather than each assembling their own.
  */
-export function structuredAgentSessionCreateParams(args: {
-  sessionId: string
-  worktree: string
-  agent: StructuredAgentId
-  resumeFrom?: StructuredAgentSessionResumeSource
-  tabId?: string
-  randomUuid: () => string
-  now?: number
-}): StructuredAgentSessionCreateParams {
+export function structuredAgentSessionCreateParams(
+  args: StructuredAgentSessionCreateSource & {
+    sessionId: string
+    worktree: string
+    agent: StructuredAgentId
+    tabId?: string
+    randomUuid: () => string
+    now?: number
+  }
+): StructuredAgentSessionCreateParams {
   const fields = {
     worktree: args.worktree,
     agent: args.agent,
-    ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {}),
+    ...structuredAgentSessionCreateSource(args),
     ...(args.tabId ? { tabId: args.tabId } : {})
   }
   return {

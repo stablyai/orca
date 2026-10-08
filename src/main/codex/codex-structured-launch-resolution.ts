@@ -94,6 +94,14 @@ export function createCodexStructuredLaunchResolver(
     const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
     // A Codex record's chain holds only Codex handles; the attach admission refuses anything else.
     const resumeThreadId = head?.handle.nativeId ?? null
+    // A fork copies its parent once: after that first thread is proved, the session resumes it.
+    const forkFrom =
+      !head && record.forkedFrom
+        ? {
+            threadId: record.forkedFrom.providerSessionId,
+            lastTurnId: record.forkedFrom.forkPoint
+          }
+        : null
     // The same saved options every turn sends, so the thread and its turns name one model.
     const model = record.options?.model
     const visuals = (await deps.prepareVisuals?.(record.sessionId)) ?? null
@@ -106,6 +114,7 @@ export function createCodexStructuredLaunchResolver(
       // An empty chain is a session that has never proved a thread, so it
       // starts one; anything else resumes the last link this session proved.
       resumeThreadId,
+      ...(forkFrom ? { forkFrom } : {}),
       // Only a thread this session created may still be one Codex never saved: a resumed,
       // forked or adopted head names a conversation Codex held.
       ...(resumeThreadId && head?.origin === 'created' ? { supersedeIfUnsaved: true } : {}),

@@ -6,6 +6,7 @@ import {
 } from './agent-session-journal-types'
 import {
   agentJournalTurnBody,
+  agentJournalTurnForkPoint,
   isRunningAgentJournalTurn,
   legacyAgentJournalTurnStatusBody,
   readAgentJournalTurn,
@@ -148,5 +149,26 @@ describe('journalRowSchemaVersion', () => {
     expect(journalRowSchemaVersion([agentJournalTurnBody(turn)])).toBe(3)
     expect(journalRowSchemaVersion([{ kind: 'message' }, { kind: 'status' }])).toBe(2)
     expect(journalRowSchemaVersion([])).toBe(2)
+  })
+})
+
+describe('agentJournalTurnForkPoint', () => {
+  const completed = { turnId: 'turn-1', state: 'completed', outcome: 'success' } as const
+
+  it('cuts a Codex turn at its own id, or at the provider turn a command ran as', () => {
+    expect(agentJournalTurnForkPoint('codex', completed)).toBe('turn-1')
+    expect(agentJournalTurnForkPoint('codex', { ...completed, providerTurnId: 'turn-9' })).toBe(
+      'turn-9'
+    )
+  })
+
+  it('has no cut for a Claude turn whose end this host did not record', () => {
+    expect(agentJournalTurnForkPoint('claude', completed)).toBeNull()
+  })
+
+  it('has no cut for a turn that did not finish as a success', () => {
+    expect(agentJournalTurnForkPoint('codex', { ...completed, state: 'running' })).toBeNull()
+    expect(agentJournalTurnForkPoint('codex', { ...completed, outcome: 'failure' })).toBeNull()
+    expect(agentJournalTurnForkPoint('codex', { turnId: 'turn-1', state: 'completed' })).toBeNull()
   })
 })

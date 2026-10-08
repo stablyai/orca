@@ -4,6 +4,7 @@ import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journa
 import { mkdtemp, rm, writeFile, truncate } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { agentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
@@ -59,7 +60,7 @@ async function writeCodexRollout(path: string, text: string): Promise<void> {
   await writeFile(path, `${lines.join('\n')}\n`, 'utf8')
 }
 
-function attachParams(transcriptPath?: string): AgentSessionAttachParams {
+function attachParams(transcriptPath?: string, adopts = true): AgentSessionAttachParams {
   const params: AgentSessionAttachParams = {
     envelope: {
       sessionId: SESSION,
@@ -77,10 +78,21 @@ function attachParams(transcriptPath?: string): AgentSessionAttachParams {
     agent: 'codex',
     accountHome: { variable: 'CODEX_HOME', path: '/home/dev/.codex' },
     runtimeKind: 'native',
-    adopt: {
-      providerHandle: { kind: 'codex', threadId: THREAD },
-      ...(transcriptPath ? { transcriptPath } : {})
-    }
+    ...(adopts
+      ? {
+          adopt: {
+            providerHandle: { kind: 'codex', threadId: THREAD },
+            ...(transcriptPath ? { transcriptPath } : {})
+          }
+        }
+      : {
+          forkedFrom: {
+            sessionId: 'codex_parent_session',
+            itemId: 'answer-1',
+            providerSessionId: 'parent-thread',
+            forkPoint: 'turn-1'
+          }
+        })
   }
   return {
     ...params,
@@ -118,10 +130,23 @@ function adapter(): StructuredAgentSessionAdapter {
   }
 }
 
+/** An adapter whose first start copies the conversation it runs, as a fork's does. */
+function forkingAdapter(): StructuredAgentSessionAdapter {
+  const sessionAdapter = adapter()
+  const acquire = vi.mocked(sessionAdapter.acquire)
+  const started = acquire.getMockImplementation()
+  acquire.mockImplementation(async (input) => {
+    const acquisition = await started!(input)
+    return { ...acquisition, link: { ...acquisition.link, origin: 'adopted' } }
+  })
+  return sessionAdapter
+}
+
 async function attach(
   transcriptPath: string | undefined,
   sessionAdapter: StructuredAgentSessionAdapter,
-  onAttached: AttachFlowInput['onAttached'] = () => {}
+  onAttached: AttachFlowInput['onAttached'] = () => {},
+  adopts = true
 ) {
   store ??= await openTestAgentSessionRecordStore(root!)
   return performAttach({
@@ -138,7 +163,7 @@ async function attach(
     },
     callerKey: 'client-1',
     optionRevision: () => 0,
-    params: attachParams(transcriptPath),
+    params: attachParams(transcriptPath, adopts),
     now: () => NOW,
     onAttached
   })
@@ -185,6 +210,48 @@ describe('adopting a provider conversation on create', () => {
     expect(replay.cursor.epoch).toBe(first.cursor.epoch)
     expect(JSON.stringify(replay.value.page.items)).toContain('not yet in rollout')
     expect(sessionAdapter.acquire).toHaveBeenCalledTimes(1)
+  })
+
+  it('fills a fork’s journal from the copy its adapter points to, on whichever start finds it empty', async () => {
+    root = await mkdtemp(join(tmpdir(), 'orca-fork-import-'))
+    const copiedTranscript = join(root, 'rollout.jsonl')
+    await writeCodexRollout(copiedTranscript, 'token ORCA-FORK-COPY')
+    // Not a one-shot: a start that imported nothing leaves the next one to ask again.
+    const copy = { providerSessionId: THREAD, transcriptPath: copiedTranscript }
+    const forkedHistory = vi.fn(async () => copy)
+    const sessionAdapter = forkingAdapter()
+
+    const first = await attach(
+      undefined,
+      sessionAdapter,
+      async ({ journal }) => journal.close(),
+      false
+    )
+    const second = await attach(undefined, { ...sessionAdapter, forkedHistory }, () => {}, false)
+
+    expect(JSON.stringify(first.ok && first.value.page.items)).not.toContain('ORCA-FORK-COPY')
+    expect(JSON.stringify(second.ok && second.value.page.items)).toContain('ORCA-FORK-COPY')
+  })
+
+  it('refuses a fork whose adapter cannot find the transcript it owes', async () => {
+    root = await mkdtemp(join(tmpdir(), 'orca-fork-no-transcript-'))
+    const forkedHistory = vi.fn(async () => {
+      throw agentSessionRefusalError('agent_session_identity_required', {
+        reason: 'transcriptNotFound'
+      })
+    })
+
+    await expect(
+      attach(undefined, { ...forkingAdapter(), forkedHistory }, () => {}, false)
+    ).rejects.toMatchObject({ refusal: { details: { reason: 'transcriptNotFound' } } })
+  })
+
+  it('leaves a fork’s journal to an adapter that writes the copy itself', async () => {
+    root = await mkdtemp(join(tmpdir(), 'orca-fork-own-journal-'))
+
+    const result = await attach(undefined, forkingAdapter(), () => {}, false)
+
+    expect(result).toMatchObject({ ok: true })
   })
 
   it.each(['missing', 'oversized', 'empty', 'invalid', 'source-less'] as const)(

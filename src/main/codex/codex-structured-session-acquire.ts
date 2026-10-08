@@ -18,7 +18,7 @@ import { createCodexDispatchEchoes } from './codex-structured-dispatch-echo'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 import { openCodexAppServerConnection } from './codex-app-server-connection'
 import {
-  codexProviderHandleLink,
+  codexOpenedThreadHandleLink,
   codexSpawnedProcessIdentity
 } from './codex-structured-owner-identity'
 import { codexStructuredChildEnvironment } from './codex-structured-child-environment'
@@ -215,11 +215,9 @@ export async function acquireCodexStructuredSession(input: {
     acquisitions.assertCurrent(sessionId, attempt)
     const acquired: AgentSessionAcquisition = {
       process,
-      link: codexProviderHandleLink({
-        threadId: opened.threadId,
-        ...(opened.supersededThreadId
-          ? { resumed: false, supersedesThreadId: opened.supersededThreadId }
-          : { resumed: launch.resumeThreadId !== null }),
+      link: codexOpenedThreadHandleLink({
+        opened,
+        resumed: launch.resumeThreadId !== null,
         fence: acquireInput.fence,
         linkId: deps.mintLinkId?.(),
         observedAt: deps.now?.() ?? Date.now()

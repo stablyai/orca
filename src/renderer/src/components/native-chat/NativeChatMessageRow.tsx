@@ -105,6 +105,8 @@ type MessageRowProps = {
   runtimeContext?: RuntimeFileOperationArgs | null
   /** On a user row: discards it and everything after it. */
   rewind?: NativeChatRewindSurface
+  /** Present on the row its turn is forked from. */
+  onFork?: (itemId: string) => void
   /** This row draws a run of tool calls and thoughts: every message in it, `message` first.
    *  The same row either way, so a row becoming a run keeps everything it has mounted. */
   workRun?: readonly NativeChatMessage[]
@@ -133,6 +135,7 @@ export const MessageRow = memo(function MessageRow({
   inSubagentSection = false,
   runtimeContext,
   rewind,
+  onFork,
   workRun
 }: MessageRowProps): React.JSX.Element | null {
   const rowRef = useRef<HTMLDivElement | null>(null)
@@ -365,6 +368,7 @@ export const MessageRow = memo(function MessageRow({
           markdown={words}
           timestamp={message.timestamp}
           onScrollToTop={scrollToTop}
+          {...(onFork ? { onFork: () => onFork(message.id) } : {})}
           className={cn(
             'mt-1 w-fit select-none transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 [.group:has(:focus-visible)_&]:pointer-events-auto [.group:has(:focus-visible)_&]:opacity-100',
             // They hang into the gap below; a section keeps them inside its border instead.

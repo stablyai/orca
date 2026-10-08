@@ -88,7 +88,7 @@ describe('NativeChatStructuredSession launch lifecycle', () => {
 
   it('marks a launch that resumes a conversation from history as a resume', () => {
     mocks.launchLifecycle = 'pending'
-    mocks.launchResumes = true
+    mocks.launchContinues = true
     render(sessionView())
     expect(mocks.controllerProps).toMatchObject({ launch: { kind: 'resume' } })
   })

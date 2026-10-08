@@ -10,6 +10,7 @@
  */
 
 import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
+import type { AgentSessionForkOrigin } from '../../shared/agent-session-fork-origin'
 import {
   agentSessionOperationKey,
   evaluateAgentSessionOperation,
@@ -68,6 +69,8 @@ export type AgentSessionReserveRequest = {
   /** Set only when this create adopts an existing provider conversation. Seeds the handle chain so
    *  the adapter resumes; without it a new record has never proved a thread and starts a fresh one. */
   adoptedHandleLink?: AgentSessionProviderHandleLink
+  /** Set only when this create forks another chat. */
+  forkedFrom?: AgentSessionForkOrigin
   /** Null when the session does not exist yet; otherwise the fence the caller last observed. */
   expectedFence: number | null
   /** A supplier is invoked only when this operation wins a new reservation. */
@@ -284,6 +287,7 @@ function createAgentSessionRecord(
     // Fence 1 below is this record's first, and the owner probe requires the head link to carry the
     // record's current fence — so an adopted link must be minted at that same fence.
     providerHandleChain: request.adoptedHandleLink ? [request.adoptedHandleLink] : [],
+    ...(request.forkedFrom ? { forkedFrom: request.forkedFrom } : {}),
     lease: {
       sessionId: request.sessionId,
       runtimeKind: 'native',

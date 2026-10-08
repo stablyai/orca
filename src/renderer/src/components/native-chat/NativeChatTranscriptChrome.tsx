@@ -5,6 +5,7 @@ import { translate } from '@/i18n/i18n'
 import { basename } from '@/lib/path'
 import type { NativeChatBlock } from '../../../../shared/native-chat-types'
 import { NativeChatCopyButton } from './NativeChatCopyButton'
+import { NativeChatForkAction } from './NativeChatForkAction'
 import { NativeChatMessageTimestamp } from './NativeChatMessageTimestamp'
 import { nativeChatProviderFrameSummary } from '../../../../shared/native-chat-provider-frame-summary'
 import { withoutNativeChatVisualDirectiveLines } from '../../../../shared/native-chat-visual-directive'
@@ -284,11 +285,14 @@ export function NativeChatAgentControls({
   markdown,
   timestamp,
   onScrollToTop,
+  onFork,
   className
 }: {
   markdown: string
   timestamp: number | null
   onScrollToTop: () => void
+  /** Present on the row a turn is forked from. */
+  onFork?: () => void
   className?: string
 }): React.JSX.Element {
   return (
@@ -307,6 +311,7 @@ export function NativeChatAgentControls({
       >
         <ArrowUp className="size-3.5" />
       </button>
+      {onFork ? <NativeChatForkAction onFork={onFork} /> : null}
       <NativeChatMessageTimestamp timestamp={timestamp} />
     </div>
   )

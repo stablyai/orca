@@ -1,4 +1,7 @@
-import type { StructuredAgentSessionResumeSource } from '../../../shared/structured-agent-session-create'
+import {
+  structuredAgentSessionCreateSource,
+  type StructuredAgentSessionCreateSource
+} from '../../../shared/structured-agent-session-create'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
@@ -29,21 +32,21 @@ import type { AgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { relearnHostStructuredAgents } from '@/runtime/host-structured-agents'
 import { awaitLocalRuntimeCapabilities } from '@/runtime/local-runtime-capabilities'
 
-export type AgentSessionLaunchRequest = AgentLaunchRouteArgs & {
-  /** The user action this launch serves, minted where that action is handled. */
-  requestId: AgentLaunchRequestId
-  resumeFrom?: StructuredAgentSessionResumeSource
-  onPromptDelivered?: () => void
-  /** The caller keeps the prompt's text if it does not go out (notes), so no composer gets it. */
-  promptKeptByCaller?: true
-}
+export type AgentSessionLaunchRequest = AgentLaunchRouteArgs &
+  StructuredAgentSessionCreateSource & {
+    /** The user action this launch serves, minted where that action is handled. */
+    requestId: AgentLaunchRequestId
+    onPromptDelivered?: () => void
+    /** The caller keeps the prompt's text if it does not go out (notes), so no composer gets it. */
+    promptKeptByCaller?: true
+  }
 
 /**
  * A route decided once plus exactly what its structured launch delivers. The quick-create request
  * carries the data fields in renderer memory, so a launch that happens after the workspace exists
  * (or a retry within the same session) re-enters here without re-resolving.
  */
-export type AgentSessionLaunchVerdict = {
+export type AgentSessionLaunchVerdict = StructuredAgentSessionCreateSource & {
   route: AgentLaunchRoute
   /** The user action this launch serves; a re-entry with this verdict is that same action. */
   requestId: AgentLaunchRequestId
@@ -53,7 +56,6 @@ export type AgentSessionLaunchVerdict = {
   executionHostId?: ExecutionHostId
   prompt?: string
   promptDelivery?: NativeChatLaunchPromptDelivery
-  resumeFrom?: StructuredAgentSessionResumeSource
   onPromptDelivered?: () => void
   promptKeptByCaller?: true
 }
@@ -93,7 +95,7 @@ function structuredLaunchOptions(verdict: AgentSessionLaunchVerdict): Structured
     requestId: verdict.requestId,
     ...(verdict.prompt !== undefined ? { prompt: verdict.prompt } : {}),
     ...(verdict.promptDelivery ? { promptDelivery: verdict.promptDelivery } : {}),
-    ...(verdict.resumeFrom ? { resumeFrom: verdict.resumeFrom } : {}),
+    ...structuredAgentSessionCreateSource(verdict),
     ...(verdict.onPromptDelivered ? { onPromptDelivered: verdict.onPromptDelivered } : {}),
     ...(verdict.promptKeptByCaller ? { promptKeptByCaller: true as const } : {}),
     ...(verdict.executionHostId ? { executionHostId: verdict.executionHostId } : {})
@@ -287,7 +289,7 @@ export function planAgentSessionLaunch(
     ...(request.workspace.worktreeId ? { worktreeId: request.workspace.worktreeId } : {}),
     ...(request.prompt !== undefined ? { prompt: request.prompt } : {}),
     ...(request.promptDelivery ? { promptDelivery: request.promptDelivery } : {}),
-    ...(request.resumeFrom ? { resumeFrom: request.resumeFrom } : {}),
+    ...structuredAgentSessionCreateSource(request),
     ...(request.onPromptDelivered ? { onPromptDelivered: request.onPromptDelivered } : {}),
     ...(request.promptKeptByCaller ? { promptKeptByCaller: true as const } : {})
   })

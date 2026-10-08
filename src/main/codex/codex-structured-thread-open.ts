@@ -1,4 +1,4 @@
-// Starting or resuming the single Codex thread a structured session owns.
+// Starting, resuming or forking into the single Codex thread a structured session owns.
 //
 // The reply is verified before the caller registers the session, because a
 // resume that lands on a different thread is a fork wearing a resume's name —
@@ -16,6 +16,8 @@ export type CodexOpenedThread = {
   threadId: string
   /** The unsaved thread this new one was started in place of. */
   supersededThreadId?: string
+  /** This thread is a copy just cut from another. */
+  forked?: true
   thread?: Record<string, unknown>
   historyMode?: 'legacy' | 'paginated'
   model?: string
@@ -86,6 +88,7 @@ export async function openCodexThread(
     cwd: string
     resumeThreadId: string | null
     resumePath?: string | null
+    forkFrom?: { threadId: string; lastTurnId: string }
     supersedeIfUnsaved?: boolean
     permissionPolicy?: CodexStructuredPermissionPolicy
     /** Why: Codex renders a thread's base instructions for its opening model; a first turn on
@@ -110,7 +113,15 @@ export async function openCodexThread(
     )
   let supersededThreadId: string | undefined
   let opened: unknown
-  if (!resumeThreadId) {
+  if (launch.forkFrom) {
+    // With its turns: a fork's own rollout holds none, so this reply is the copy's only history.
+    // No model, as on resume: the copy keeps the thread's saved model, provider and effort.
+    opened = await connection.request(
+      'thread/fork',
+      { ...launch.forkFrom, ...threadSettings },
+      { timeoutMs }
+    )
+  } else if (!resumeThreadId) {
     opened = await startThread()
   } else {
     // No model: naming one makes Codex skip the thread's saved model, provider and effort.
@@ -136,6 +147,10 @@ export async function openCodexThread(
   if (supersededThreadId === undefined && resumeThreadId && threadId !== resumeThreadId) {
     throw new Error(`codex app-server resumed ${threadId} instead of ${resumeThreadId}`)
   }
+  // A fork answered with its source would make this session a second writer on that thread.
+  if (launch.forkFrom?.threadId === threadId) {
+    throw new Error(`codex app-server forked ${threadId} onto itself`)
+  }
   const result = opened as Record<string, unknown>
   const thread =
     typeof result.thread === 'object' && result.thread !== null
@@ -148,6 +163,7 @@ export async function openCodexThread(
   return {
     threadId,
     ...(supersededThreadId === undefined ? {} : { supersededThreadId }),
+    ...(launch.forkFrom ? { forked: true as const } : {}),
     thread,
     ...(thread.historyMode === 'legacy' || thread.historyMode === 'paginated'
       ? { historyMode: thread.historyMode }

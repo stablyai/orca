@@ -27,17 +27,13 @@ afterAll(() => {
 function buildOrcadBundles(): string[] {
   const builder = pathToFileURL(join(REPO_ROOT, 'config/scripts/orcad-entry-build.mjs')).href
   const script = `
-    import { build } from 'esbuild'
     import { join } from 'node:path'
     import * as entries from ${JSON.stringify(builder)}
     const out = ${JSON.stringify(directory)}
     await entries.buildOrcadEntry(join(out, 'orcad.js'))
-    await Promise.all(Object.values(entries.ORCAD_CHILD_ENTRY_POINTS).map((entry) => build({
-      entryPoints: [entry], bundle: true, platform: 'node', target: 'node18', format: 'cjs',
-      outfile: join(out, entries.orcadChildOutputFilename(entry)),
-      external: entries.ORCAD_EXTERNAL_MODULES, plugins: [entries.externalNativeAddons],
-      logLevel: 'error'
-    })))`
+    await Promise.all(Object.values(entries.ORCAD_CHILD_ENTRY_POINTS).map((entry) =>
+      entries.buildOrcadChildEntry(entry, join(out, entries.orcadChildOutputFilename(entry)))
+    ))`
   const built = runProcessSync({
     program: process.execPath,
     args: ['--input-type=module', '-e', script],

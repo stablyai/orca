@@ -1,4 +1,5 @@
 import { getClaudeProfileRouter } from '../claude-accounts/claude-profile-installed-router'
+import type { ClaudeProfileRouter } from '../claude-accounts/claude-profile-router'
 import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
 import type {
   Options as ClaudeAgentSdkOptions,
@@ -44,8 +45,11 @@ import {
 } from '../native-chat/native-chat-visuals-delivery'
 import {
   claudeLaunchResumesTranscript,
+  refuseClaudeTranscriptInOtherAccount,
   resolveClaudeStructuredLaunchHome
 } from './claude-structured-launch-home'
+import { forkClaudeSession } from './claude-session-fork'
+import type { AgentSessionForkOrigin } from '../../shared/agent-session-fork-origin'
 import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
 import { resolveAgentSessionLaunchDirectory } from '../runtime/agent-session-launch-directory'
 import { CLAUDE_STRUCTURED_AGENT } from './claude-structured-agent-definition'
@@ -119,6 +123,9 @@ export type ClaudeStructuredLaunch = {
   /** Lineage: the record's chain already heads this provider session, so the child continues it
    *  even when no transcript exists to `--resume`. Never derived from the launch mode. */
   continuesChain: boolean
+  /** This launch had Claude copy the conversation from the chat it forks: the first link adopts
+   *  it, and the journal has yet to show it. */
+  forked?: true
 }
 
 export type ClaudeStructuredLaunchResolverDeps = {
@@ -157,6 +164,8 @@ export type ClaudeStructuredLaunchResolverDeps = {
     providerSessionId: string
     claudeConfigDir: string
   }) => Promise<boolean>
+  /** Has Claude copy a conversation through one of its entries; defaults to the SDK's fork. */
+  forkSession?: typeof forkClaudeSession
 }
 
 export type ClaudeStructuredInvocation = {
@@ -265,9 +274,6 @@ export function createClaudeStructuredLaunchResolver(
     ) {
       throw new Error('claude durable resume identity changed before spawn')
     }
-    const providerSessionId = head
-      ? head.nativeId
-      : claudeSessionIdForOrcaSession(identity.sessionId)
     const continuesChain = head !== null
     const cwd = await resolveAgentSessionLaunchDirectory(deps, record)
     const sources = await resolveClaudeChildEnvSources(deps)
@@ -292,7 +298,7 @@ export function createClaudeStructuredLaunchResolver(
       (await claudeLaunchResumesTranscript({
         router,
         leafUuid,
-        providerSessionId,
+        providerSessionId: head.nativeId,
         claudeConfigDir,
         hasTranscript: deps.hasTranscript
       }))
@@ -317,7 +323,16 @@ export function createClaudeStructuredLaunchResolver(
       sources
     )
     const launchHome = await resolveClaudeStructuredLaunchHome(router, env, accountHome.path)
-    const resumesTranscript = resumedWithoutRouter ?? (await resumes(launchHome))
+    // A fork's first start: no conversation is bound yet, so Claude copies the parent's through
+    // the forked turn, beside its source, and this chat resumes the copy.
+    const forked =
+      !head && record.forkedFrom
+        ? await forkClaudeConversation(deps, router, record.forkedFrom, launchHome)
+        : null
+    const providerSessionId =
+      forked ?? head?.nativeId ?? claudeSessionIdForOrcaSession(identity.sessionId)
+    const resumesTranscript =
+      forked !== null || (resumedWithoutRouter ?? (await resumes(launchHome)))
     return {
       pathToClaudeCodeExecutable: command,
       account,
@@ -341,7 +356,28 @@ export function createClaudeStructuredLaunchResolver(
       providerSessionId,
       resumeLeafUuid: resumesTranscript ? leafUuid : null,
       resumesTranscript,
-      continuesChain
+      continuesChain,
+      ...(forked ? { forked: true as const } : {})
     }
   }
+}
+
+async function forkClaudeConversation(
+  deps: Pick<ClaudeStructuredLaunchResolverDeps, 'forkSession' | 'hasTranscript'>,
+  router: ClaudeProfileRouter | undefined,
+  origin: AgentSessionForkOrigin,
+  claudeConfigDir: string
+): Promise<string> {
+  // Routed launches follow the selected account, which may not be the one holding the parent.
+  await refuseClaudeTranscriptInOtherAccount({
+    router,
+    claudeConfigDir,
+    providerSessionId: origin.providerSessionId,
+    hasTranscript: deps.hasTranscript
+  })
+  return (deps.forkSession ?? forkClaudeSession)({
+    claudeConfigDir,
+    providerSessionId: origin.providerSessionId,
+    upToMessageId: origin.forkPoint
+  })
 }

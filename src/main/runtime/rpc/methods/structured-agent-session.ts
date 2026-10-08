@@ -8,6 +8,7 @@
 import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
 import { agentSessionFingerprintConflict } from '../../../../shared/agent-session-mutation-envelope'
 import type { z } from 'zod'
+import { structuredAgentSessionCreateSource } from '../../../../shared/structured-agent-session-create'
 import {
   projectBackgroundTaskEvent,
   projectBackgroundTaskHistory
@@ -180,7 +181,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
             worktree: params.worktree,
             agent: params.agent,
             caller: callerFor(ctx),
-            ...(params.resumeFrom ? { resumeFrom: params.resumeFrom } : {}),
+            ...structuredAgentSessionCreateSource(params),
             ...(params.tabId ? { tabId: params.tabId } : {})
           })
         }

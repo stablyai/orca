@@ -18,6 +18,7 @@ import {
 } from '../../../shared/agent-session-provider-handle-encoding'
 import { claudeProviderHandleLink } from '../../claude/claude-structured-owner-identity'
 import { codexProviderHandleLink } from '../../codex/codex-structured-owner-identity'
+import type { AgentSessionForkOrigin } from '../../../shared/agent-session-fork-origin'
 import type {
   AgentSessionAccountHome,
   AgentSessionExecutionLocation,
@@ -83,6 +84,9 @@ export type AgentSessionAttachParams = {
     /** Omitted only when the exact committed operation replays an already-imported journal. */
     transcriptPath?: string
   }
+  /** Host-resolved only. Present when this create forks another chat: written once onto the new
+   *  record, where the fork's first start reads what to copy. */
+  forkedFrom?: AgentSessionForkOrigin
 }
 
 /** Host-supplied half of the reservation. */
@@ -114,6 +118,7 @@ export function attachFingerprintFields(params: AgentSessionAttachParams): Recor
     // identity. The transcript path is excluded: it is where the host found that conversation this
     // time, not part of what the caller asked for.
     adoptedProviderHandle: params.adopt?.providerHandle,
+    forkedFrom: params.forkedFrom,
     expectedRuntimeFence: params.envelope.expectedRuntimeFence
   }
 }
@@ -321,6 +326,7 @@ export function reserveRequestFor(input: {
     ...(authority.launchArgs ? { launchArgs: authority.launchArgs } : {}),
     ...(authority.launchEnv ? { launchEnv: authority.launchEnv } : {}),
     ...(authority.launchDirectory ? { launchDirectory: authority.launchDirectory } : {}),
+    ...(params.forkedFrom ? { forkedFrom: params.forkedFrom } : {}),
     ...(params.adopt
       ? {
           // Fence 1 is a new record's first, and the owner probe requires the head link to carry

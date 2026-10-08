@@ -1,7 +1,10 @@
 import { useSyncExternalStore } from 'react'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { AgentSessionWriteRefusal } from '../../../shared/agent-session-write-failure'
-import type { StructuredAgentSessionResumeSource } from '../../../shared/structured-agent-session-create'
+import {
+  structuredAgentSessionCreateContinues,
+  type StructuredAgentSessionCreateSource
+} from '../../../shared/structured-agent-session-create'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { StructuredLaunchRecoveryState } from './structured-agent-session-launch-recovery'
 import type { StructuredLaunchSelection } from './structured-agent-session-launch-options'
@@ -71,8 +74,11 @@ export function subscribeStructuredAgentLaunchStatus(listener: () => void): () =
 export function structuredLaunchIdentity(
   worktreeId: string,
   agent: TuiAgent,
-  resumeFrom?: StructuredAgentSessionResumeSource
+  { resumeFrom, forkFrom }: StructuredAgentSessionCreateSource = {}
 ): string {
+  if (forkFrom) {
+    return `${agent}:${worktreeId}:fork:${forkFrom.sessionId}:${forkFrom.itemId}`
+  }
   return resumeFrom
     ? `${agent}:${worktreeId}:resume:${resumeFrom.providerSessionId}`
     : `${agent}:${worktreeId}`
@@ -166,13 +172,12 @@ export function getStructuredAgentSessionLaunchOwner(
   )
 }
 
-/** The launch adopts an existing conversation, which may keep a model of its own. */
-export function getStructuredAgentSessionLaunchResumes(sessionId: string): boolean {
+/** The launch resumes or forks an existing conversation, which may keep a model of its own. */
+export function getStructuredAgentSessionLaunchContinues(sessionId: string): boolean {
   const state = getStructuredLaunchStateBySessionId(sessionId)
-  const resumeFrom = state
-    ? state.intent.params.resumeFrom
-    : getPersistedStructuredAgentLaunchRecord(sessionId)?.resumeFrom
-  return resumeFrom !== undefined
+  return structuredAgentSessionCreateContinues(
+    state ? state.intent.params : (getPersistedStructuredAgentLaunchRecord(sessionId) ?? {})
+  )
 }
 
 export function getStructuredAgentSessionLaunchFailure(

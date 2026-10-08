@@ -33,6 +33,7 @@ import type { ClaudeProvisionalRowCorrections } from './claude-provisional-row-c
 import type { ClaudeSubagentRoster } from './claude-subagent-roster'
 import { claudeTurnOpenedBySendEcho, type ClaudeTurnSource } from './claude-turn-opening'
 import type { ClaudeOpenTurn } from './claude-open-turn'
+import { readClaudeTranscriptEntryUuid } from './claude-transcript-entry-uuid'
 
 export type ClaudeMessageJournalContext = {
   sink: StructuredAgentSessionEventSink
@@ -174,6 +175,11 @@ export function journalClaudeMessage(
   if (sendEchoTurn) {
     ctx.turn.allowReopen()
     ctx.turn.open(sendEchoTurn, observedAt)
+  }
+  // After the frame opened or joined its turn, so the entry is credited to that turn.
+  const entryUuid = readClaudeTranscriptEntryUuid(message)
+  if (entryUuid) {
+    ctx.turn.observeTranscriptEntry(envelope.role === 'assistant' ? entryUuid : null)
   }
   if (changed) {
     ctx.sink.publish()

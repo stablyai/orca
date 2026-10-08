@@ -330,6 +330,10 @@ export class StructuredAgentSessionHost {
   journalSnapshot = async (sessionId: string): Promise<AgentJournalSnapshot> =>
     (await this.lifetime.conversation(sessionId)).journal.snapshot()
 
+  /** One reduced row by its journal key, without rendering the timeline. */
+  journalItem = async (sessionId: string, itemId: string) =>
+    (await this.lifetime.conversation(sessionId)).journal.item(itemId)
+
   subscribe = (input: AgentSessionSubscribeInput) => this.backgroundTasks.subscribe(input)
 
   settleLateDispatch = (input: Parameters<typeof settleStructuredAgentSessionLateDispatch>[1]) =>

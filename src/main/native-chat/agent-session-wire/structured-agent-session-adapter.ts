@@ -130,6 +130,8 @@ export type AgentSessionAcquisition = {
   providerChildPhase?: StructuredAgentSessionProviderChildPhase
 }
 
+export type AgentSessionForkedHistory = { providerSessionId: string; transcriptPath: string }
+
 /** A refusal before spawn that a person can act on; the site that refused names it. */
 export type AgentSessionPreSpawnReason = Extract<
   AgentSessionRefusalReason<'agent_session_operation_invalid'>,
@@ -431,6 +433,10 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     identity: AgentSessionJournalIdentity
     accountHome: AgentSessionAccountHome
   }): Promise<ProviderHistoryWindow | null>
+  /** The conversation this live session runs and its transcript, for a forked chat whose journal
+   *  does not show its copied history yet. Omitted, or null from a router, where the adapter
+   *  journals the copy itself; one that cannot find a transcript it owes refuses. */
+  forkedHistory?(sessionId: string): Promise<AgentSessionForkedHistory | null>
   /** Gracefully stops the structured owner after its event stream is drained. */
   /** Returns true only after the provider child exit is proven. A root-exit or processless verdict
    *  is thrown only once the session is finalized; read it through `stopAgentSessionProviderRoot`. */

@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import {
-  getStructuredAgentSessionLaunchResumes,
+  getStructuredAgentSessionLaunchContinues,
   relaunchFailedStructuredAgentSessionForMessage,
   retryStructuredAgentSessionLaunch,
   useStructuredAgentSessionLaunchFailure,
@@ -39,7 +39,7 @@ function useLatchedLaunchView(
   const [latched, setLatched] = useState<LatchedLaunch | null>(() =>
     launching
       ? {
-          kind: getStructuredAgentSessionLaunchResumes(sessionId) ? 'resume' : 'new',
+          kind: getStructuredAgentSessionLaunchContinues(sessionId) ? 'resume' : 'new',
           seed: selection?.seed
         }
       : null

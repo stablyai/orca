@@ -18657,7 +18657,12 @@
         "continue": "Continue",
         "failed": "Couldn't continue this chat. Try again, or send a message.",
         "explanation": "Continue, and the agent first checks whether its last step finished."
-      }
+      },
+      "fork": {
+        "action": "Fork from this turn",
+        "forkedFrom": "Forked from"
+      },
+      "structuredSessionContinuationDeclined": "A {{value0}} chat can't be started in this workspace right now."
     },
     "tab": {
       "bar": {

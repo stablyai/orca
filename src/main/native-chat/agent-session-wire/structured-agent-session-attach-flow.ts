@@ -260,7 +260,7 @@ export async function performAttach(
       openConversation: input.openConversation,
       providerHistoryWindow
     })
-    await importAdoptedTranscript(params, attached, record, preparedTranscript.items)
+    await importAdoptedTranscript(params, attached, record, preparedTranscript.items, input.adapter)
     await input.onAttached(attached, acquisitionGeneration, acquiredOwner, providerChildPhase)
     await store.recordOperationOutcome({
       callerKey: input.callerKey,

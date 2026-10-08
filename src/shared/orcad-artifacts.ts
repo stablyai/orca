@@ -109,6 +109,8 @@ export const ORCAD_FOREIGN_SQLITE_READER_ENTRY = 'foreign-sqlite-reader-entry.js
 export const ORCAD_PORT_SCAN_COMMAND_WORKER_ENTRY = 'port-scan-command-worker-entry.js'
 // Equals AI_VAULT_SERVICE_ENTRY_FILENAME: the forked child that lists agent sessions.
 export const ORCAD_SESSION_SCANNER_SERVICE_ENTRY = 'session-scanner-service-entry.js'
+/** Worker thread that has Claude copy a chat for a fork, under that chat's own account. */
+export const ORCAD_CLAUDE_SESSION_FORK_WORKER_ENTRY = 'claude-session-fork-worker-entry.js'
 
 // Kept here because build-orcad.mjs imports this manifest directly under Node type stripping.
 export const ORCAD_RIPGREP_ARTIFACTS = [
@@ -174,6 +176,7 @@ export const ORCAD_ARTIFACTS: readonly OrcadArtifact[] = [
   { filename: ORCAD_PORT_SCAN_COMMAND_WORKER_ENTRY },
   // Forked so transcript parsing stays off the server's event loop; session search stays in-process.
   { filename: ORCAD_SESSION_SCANNER_SERVICE_ENTRY },
+  { filename: ORCAD_CLAUDE_SESSION_FORK_WORKER_ENTRY },
   // Target-specific even when the JavaScript bundle is shared across packaged slots.
   { filename: ORCAD_SERVER_TARGET_FILENAME },
   // orcad never depends on a host runtime or host-installed native module.

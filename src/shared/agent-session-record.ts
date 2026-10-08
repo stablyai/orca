@@ -1,4 +1,5 @@
 import { isAgentSessionRewindRecord, type AgentSessionRewindRecord } from './agent-session-rewind'
+import { isAgentSessionForkOrigin, type AgentSessionForkOrigin } from './agent-session-fork-origin'
 import { isAgentSessionLaunchArgs } from './agent-session-launch-args'
 import { isAgentSessionConversationName } from './agent-session-conversation-name'
 import {
@@ -159,6 +160,8 @@ export type AgentSessionRecord = {
   conversationCommand?: AgentSessionConversationCommandRecord
   /** The name Orca gave this conversation, so a later acquisition need not name it again. */
   conversationName?: string
+  /** Present on a chat that began as a fork of another. */
+  forkedFrom?: AgentSessionForkOrigin
   launchArgs?: AgentSessionLaunchArgs
   lease: AgentSessionLease
   createdAt: number
@@ -363,6 +366,7 @@ export function isPersistedAgentSessionRecord(
       isAgentSessionConversationCommandRecord(record.conversationCommand)) &&
     (record.conversationName === undefined ||
       isAgentSessionConversationName(record.conversationName)) &&
+    (record.forkedFrom === undefined || isAgentSessionForkOrigin(record.forkedFrom)) &&
     (record.launchArgs === undefined || isAgentSessionLaunchArgs(record.launchArgs)) &&
     !Object.hasOwn(record, 'launchEnv') &&
     isPersistedAgentSessionLease(record.lease) &&

@@ -179,6 +179,34 @@ describe('structured agent session launch', () => {
     })
   })
 
+  it('sends the turn a launch forks, on a first create and on one restored after a reload', () => {
+    const forkFrom = { sessionId: 'codex_parent', itemId: 'codex:thread:turn-1:1' }
+
+    const created = createStructuredAgentSessionLaunchIntent('workspace-1', 'codex', 'local', {
+      forkFrom
+    })
+    const restored = restoreStructuredAgentSessionLaunchIntent({
+      worktreeId: 'workspace-1',
+      executionHostId: 'local',
+      sessionId: created.sessionId,
+      agent: 'codex',
+      clientOperationId: created.params.envelope.clientOperationId,
+      payloadFingerprint: created.params.envelope.payloadFingerprint,
+      expectedRuntimeFence: null,
+      forkFrom
+    })
+
+    expect(created.params.forkFrom).toEqual(forkFrom)
+    expect(restored.params.forkFrom).toEqual(forkFrom)
+    // Retry on a failed start is still the fork, under a new operation.
+    expect(retryStructuredAgentSessionLaunchIntent(created).params.forkFrom).toEqual(forkFrom)
+    // A blank create of the same session would declare a different payload.
+    expect(created.params.envelope.payloadFingerprint).not.toBe(
+      createStructuredAgentSessionLaunchIntent('workspace-1', 'codex', 'local').params.envelope
+        .payloadFingerprint
+    )
+  })
+
   // The picker's stand-in must be what the chat runs: only this machine's own chats run its picks.
   it("seeds only a local chat with this machine's saved selection", () => {
     const settings = useAppStore.getState().settings

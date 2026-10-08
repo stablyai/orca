@@ -63,6 +63,24 @@ describe('StructuredAgentSessionAdapterRouter.releaseAcquisition', () => {
   })
 })
 
+describe('StructuredAgentSessionAdapterRouter.forkedHistory', () => {
+  it('asks the adapter that owns the session, and answers none for one that does not offer it', async () => {
+    const history = { providerSessionId: 'copy-1', transcriptPath: '/accounts/claude/copy.jsonl' }
+    const claude = { ...adapterOf(vi.fn(async () => true)), forkedHistory: async () => history }
+    const codex = adapterOf(vi.fn(async () => true))
+    const router = claudeAndCodexRouter({ claude, codex }, async () => {})
+    await router.acquire({ identity: claudeIdentity('session-1'), fence: 1, spawnToken: 'spawn-1' })
+    await router.acquire({
+      identity: { ...claudeIdentity('session-2'), agent: 'codex' },
+      fence: 1,
+      spawnToken: 'spawn-2'
+    })
+
+    await expect(router.forkedHistory('session-1')).resolves.toBe(history)
+    await expect(router.forkedHistory('session-2')).resolves.toBeNull()
+  })
+})
+
 describe('StructuredAgentSessionAdapterRouter.readAcquisitionOptions', () => {
   it('keeps the existing live read for providers without acquisition options', async () => {
     const claude = adapterOf(vi.fn(async () => true))

@@ -232,6 +232,39 @@ describe('codex structured launch resolution', () => {
     expect(fresh).not.toHaveProperty('supersedeIfUnsaved')
   })
 
+  it('forks the parent thread for a fork that has proved no thread, and resumes its own after', async () => {
+    const forkedFrom = {
+      sessionId: 'codex_parent',
+      itemId: 'codex:thread-parent:turn-2:1',
+      providerSessionId: 'thread-parent',
+      forkPoint: 'turn-2'
+    }
+
+    const first = await resolverFor(record({ forkedFrom }))({ identity: IDENTITY })
+    expect(first).toMatchObject({
+      resumeThreadId: null,
+      forkFrom: { threadId: 'thread-parent', lastTurnId: 'turn-2' }
+    })
+
+    const later = await resolverFor(
+      record({
+        forkedFrom,
+        providerHandleChain: [
+          {
+            linkId: 'link-1',
+            handle: codexProviderHandle('thread-copy'),
+            origin: 'adopted',
+            mintedAtFence: 1,
+            observedAt: 1
+          }
+        ]
+      })
+    )({ identity: IDENTITY })
+    expect(later.resumeThreadId).toBe('thread-copy')
+    expect(later).not.toHaveProperty('forkFrom')
+    expect(later).not.toHaveProperty('supersedeIfUnsaved')
+  })
+
   // app-server owns the permission posture on the thread RPC, not process flags.
   it('resolves the bypass posture as app-server thread policy', async () => {
     const launch = await resolverFor(record(), undefined, undefined, {

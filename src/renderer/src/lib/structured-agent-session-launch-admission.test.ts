@@ -181,7 +181,9 @@ describe('a structured chat launch on a paired server', () => {
       onHostDeclined
     })
 
-    await expect(launch?.settlement).resolves.toMatchObject({ kind: 'failed' })
+    // No tab opened to carry the failure, so the launch says it: the caller adds nothing.
+    await expect(launch?.settlement).resolves.toMatchObject({ kind: 'failed', notified: true })
+    expect(mocks.toastError).toHaveBeenCalledOnce()
     expect(onHostDeclined).not.toHaveBeenCalled()
     expectNoChatCommitted()
   })

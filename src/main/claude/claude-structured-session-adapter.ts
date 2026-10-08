@@ -9,6 +9,7 @@ import { stopCurrentClaudeBackgroundTasks } from './claude-structured-control-ac
 import { dispatchClaudeTurn } from './claude-structured-dispatch'
 import { claudeHoldsDispatch } from './claude-command-lifecycle'
 import { releaseClaudeAcquisition } from './claude-structured-acquisition-release'
+import { claudeTranscriptPath } from './claude-structured-launch-home'
 import { acquireClaudeSession } from './claude-structured-session-acquisition'
 import { supportsClaudeStructuredLocation } from './claude-structured-location-support'
 import { setClaudeStructuredSessionOption } from './claude-structured-options'
@@ -36,6 +37,7 @@ import {
   type ClaudeExitLifecycle
 } from './claude-structured-session-exit-lifecycle'
 import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session-wire'
+import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
 import { resolveClaudeProviderHistoryWindow } from './claude-structured-history-window'
 import { drainClaudeChildWork } from './claude-child-work-evidence'
 import { emitClaudeStructuredSessionEvent } from './claude-structured-event-delivery'
@@ -136,6 +138,19 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
       hasLiveSession:
         this.sessions.has(input.identity.sessionId) || this.exits.has(input.identity.sessionId)
     })
+
+  forkedHistory: NonNullable<StructuredAgentSessionAdapter['forkedHistory']> = async (
+    sessionId
+  ) => {
+    const session = this.sessions.get(sessionId)
+    const transcriptPath = session ? await claudeTranscriptPath(session) : null
+    if (!session || !transcriptPath) {
+      throw agentSessionRefusalError('agent_session_identity_required', {
+        reason: 'transcriptNotFound'
+      })
+    }
+    return { providerSessionId: session.providerSessionId, transcriptPath }
+  }
 
   private emit(session: ClaudeSession | null, event: ClaudeStructuredSessionEvent): void {
     emitClaudeStructuredSessionEvent({

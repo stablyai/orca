@@ -197,6 +197,10 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
     this.requireAgent(input.identity).adapter.providerHistoryWindow?.(input) ??
     Promise.resolve(null)
 
+  /** Null where the session's adapter journals a fork's copy itself. */
+  forkedHistory = (sessionId: string) =>
+    this.owner(sessionId).forkedHistory?.(sessionId) ?? Promise.resolve(null)
+
   closeSession = (sessionId: string): Promise<boolean> =>
     this.stopSession(sessionId, (adapter) => adapter.closeSession)
 

@@ -3,10 +3,9 @@
 import { fork, spawnSync } from 'node:child_process'
 import { build } from 'esbuild'
 import {
+  buildOrcadChildEntry,
   buildOrcadEntry,
   buildOrcadLauncher,
-  externalNativeAddons,
-  ORCAD_EXTERNAL_MODULES,
   ORCAD_CHILD_ENTRY_POINTS,
   orcadChildOutputFilename
 } from './orcad-entry-build.mjs'
@@ -27,6 +26,7 @@ import process from 'node:process'
 import { smokeProfileStateWorkers } from './profile-state-worker-smoke.mjs'
 import { smokeForeignSqliteReaderWorker } from './foreign-sqlite-reader-worker-smoke.mjs'
 import { smokeSessionScannerService } from './session-scanner-service-smoke.mjs'
+import { smokeClaudeSessionForkWorker } from './claude-session-fork-worker-smoke.mjs'
 import { materializeWatcherPackage } from './orcad-watcher-package.mjs'
 import { stageOrcadWindowsProcessTree } from './orcad-windows-process-tree.mjs'
 import {
@@ -186,32 +186,12 @@ cpSync(join(ROOT, 'resources', 'native-chat-visuals'), join(OUT_DIR, 'native-cha
   recursive: true
 })
 
-/** Why one call per child and not one `outdir` build: esbuild mirrors each entry's source
- *  directory under `outdir`, and both children must land flat beside orcad.js — that is where
- *  their runtime resolvers look for them. */
-function buildForkedChild(entryPoint, outfile) {
-  return build({
-    entryPoints: [entryPoint],
-    bundle: true,
-    platform: 'node',
-    target: 'node18',
-    format: 'cjs',
-    outfile,
-    external: ORCAD_EXTERNAL_MODULES,
-    plugins: [externalNativeAddons],
-    metafile: true,
-    minify: true,
-    sourcemap: false,
-    define: {
-      'process.env.NODE_ENV': '"production"'
-    },
-    logLevel: 'error'
-  })
-}
-
 const childResults = await Promise.all(
   Object.values(ORCAD_CHILD_ENTRY_POINTS).map((entryPoint) =>
-    buildForkedChild(join(ROOT, entryPoint), join(OUT_DIR, orcadChildOutputFilename(entryPoint)))
+    buildOrcadChildEntry(
+      join(ROOT, entryPoint),
+      join(OUT_DIR, orcadChildOutputFilename(entryPoint))
+    )
   )
 )
 
@@ -341,7 +321,8 @@ if (graphErrors.length > 0) {
 const workerSmokes = [
   { label: 'profile state worker', smoke: smokeProfileStateWorkers },
   { label: 'foreign SQLite reader worker', smoke: smokeForeignSqliteReaderWorker },
-  { label: 'session scanner service', smoke: smokeSessionScannerService }
+  { label: 'session scanner service', smoke: smokeSessionScannerService },
+  { label: 'Claude session fork worker', smoke: smokeClaudeSessionForkWorker }
 ]
 // Each shipped child is checked under the build's Node and, when set, the pinned runtime.
 for (const { label, smoke } of workerSmokes) {

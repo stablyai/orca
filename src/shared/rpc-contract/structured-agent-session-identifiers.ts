@@ -22,3 +22,9 @@ export const JournalCursor = z
     sequence: z.number().int().nonnegative()
   })
   .strict()
+
+/** The turn a create forks: a chat this host holds and one of that turn's rows. An identity only;
+ *  the host works out what the provider copies. */
+export const ForkSource = z
+  .object({ sessionId: SessionId, itemId: Identifier('Invalid item id') })
+  .strict()

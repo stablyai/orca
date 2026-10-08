@@ -90,7 +90,7 @@ describe('NativeChatStructuredSession before its first read settles', () => {
   it('does not hold a cancelled resume on the cue', () => {
     mocks.messages = []
     mocks.launchLifecycle = 'cancelled'
-    mocks.launchResumes = true
+    mocks.launchContinues = true
     mocks.status = 'ready'
     render(sessionView())
 
@@ -123,7 +123,7 @@ describe('NativeChatStructuredSession before its first read settles', () => {
     (lifecycle, line) => {
       mocks.messages = []
       mocks.launchLifecycle = lifecycle
-      mocks.launchResumes = true
+      mocks.launchContinues = true
       mocks.status = 'ready'
       render(sessionView())
 
@@ -137,7 +137,7 @@ describe('NativeChatStructuredSession before its first read settles', () => {
   it('does not invite a first message into a resumed chat whose history is not read yet', () => {
     mocks.messages = []
     mocks.launchLifecycle = 'pending'
-    mocks.launchResumes = true
+    mocks.launchContinues = true
     mocks.status = 'ready'
     render(sessionView())
 

@@ -107,6 +107,7 @@ function withoutLifecycle(turn: AgentJournalTurnItem) {
     requestedAt: _requestedAt,
     completedAt: _completedAt,
     durationMs: _durationMs,
+    forkPoint: _forkPoint,
     ...kept
   } = turn
   return kept

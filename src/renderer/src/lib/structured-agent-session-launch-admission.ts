@@ -1,3 +1,4 @@
+import { structuredAgentSessionCreateContinues } from '../../../shared/structured-agent-session-create'
 import { toast } from 'sonner'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { ExecutionHostId } from '../../../shared/execution-host'
@@ -48,6 +49,16 @@ type AdmittedLaunch = {
 
 const DELIVERED: StructuredPromptDeliveryResult = { delivered: true, failureNotified: false }
 const NOT_DELIVERED: StructuredPromptDeliveryResult = { delivered: false, failureNotified: false }
+
+function notifyContinuationDeclined(agent: TuiAgent): void {
+  toast.error(
+    translate(
+      'components.native-chat.structuredSessionContinuationDeclined',
+      "A {{value0}} chat can't be started in this workspace right now.",
+      { value0: structuredAgentLabel(agent) }
+    )
+  )
+}
 
 function notifyHostDeclined(agent: TuiAgent): void {
   const agentLabel = structuredAgentLabel(agent)
@@ -188,13 +199,16 @@ export function beginHostAdmittedStructuredLaunch(args: {
         }
       }
       if (admission.kind === 'declined') {
-        if (plan.resumeFrom) {
-          resolveDelivery(NOT_DELIVERED)
+        if (structuredAgentSessionCreateContinues(plan)) {
+          // No terminal can stand in for a resume or fork, and no tab opened to say so.
+          notifyContinuationDeclined(plan.agent)
+          resolveDelivery({ delivered: false, failureNotified: true })
           return {
             kind: 'failed',
             error: new StructuredAgentSessionCreateRefusalError(
               'structured_agent_session_unsupported'
-            )
+            ),
+            notified: true
           }
         }
         // The notice explains a server's refusal; on this machine the terminal opening is the answer.

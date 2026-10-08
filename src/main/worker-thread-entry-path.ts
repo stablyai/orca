@@ -1,4 +1,5 @@
-import { join } from 'node:path'
+import { existsSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { getAppEnvironment, hasAppEnvironment } from '../shared/app-environment'
 
 /**
@@ -52,4 +53,15 @@ export function currentWorkerEntryLayout(moduleDir: string): WorkerEntryLayout {
         : undefined,
     moduleDir
   }
+}
+
+/**
+ * The built worker entry beside the calling module, for this process's layout.
+ * @param moduleDir - The calling module's `__dirname`.
+ * @returns Path passed to `new Worker()`; a missing entry is the caller's to report.
+ */
+export function findWorkerThreadEntryPath(moduleDir: string, entryFileName: string): string {
+  const entry = resolveWorkerThreadEntryPath(currentWorkerEntryLayout(moduleDir), entryFileName)
+  // Rollup can place the launcher in a shared chunk beside the worker entries.
+  return [entry, join(dirname(entry), '..', entryFileName)].find(existsSync) ?? entry
 }

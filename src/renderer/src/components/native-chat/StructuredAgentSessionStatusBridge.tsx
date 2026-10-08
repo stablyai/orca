@@ -116,6 +116,20 @@ export function useStructuredAgentSessionRewindBlockedReason(
   )
 }
 
+/** The chat this one was forked from, or null: written once, so it never re-renders the chat. */
+export function useStructuredAgentSessionForkedFrom(
+  sessionId: string,
+  target: RuntimeClientTarget
+): string | null {
+  const feed = useMemo(() => getStructuredAgentSessionStatusFeed(target), [target])
+  useEffect(() => feed.activate(), [feed])
+  return useSyncExternalStore(
+    feed.subscribe,
+    () => feed.getSnapshot().get(sessionId)?.forkedFrom?.sessionId ?? null,
+    () => null
+  )
+}
+
 /** The host's child records for the row, and the legacy roster readers of `subagents` keep. A host
  *  that publishes views is copied verbatim; only an older host's task list is converted here. */
 function childWorkFor(summary: AgentSessionStatusSummary): {

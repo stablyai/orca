@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   AGENT_SESSION_CREATE_TAB_ID_RUNTIME_CAPABILITY,
+  AGENT_SESSION_FORK_RUNTIME_CAPABILITY,
   RUNTIME_CAPABILITIES
 } from './protocol-version'
 import { structuredAgentSessionCreateParams } from './structured-agent-session-create'
@@ -20,7 +21,11 @@ function nextUuid(): string {
 }
 
 function createParams(
-  overrides: { resumeFrom?: { providerSessionId: string }; tabId?: string } = {}
+  overrides: {
+    resumeFrom?: { providerSessionId: string }
+    forkFrom?: { sessionId: string; itemId: string }
+    tabId?: string
+  } = {}
 ) {
   return structuredAgentSessionCreateParams({
     sessionId: SESSION_ID,
@@ -60,6 +65,21 @@ describe('structured agent session create params', () => {
 
     expect(adopted).not.toBe(blank)
     expect(otherRow).not.toBe(adopted)
+  })
+
+  it('separates a fork from a blank create, from a fork of another turn, and replays as itself', () => {
+    const forkFrom = { sessionId: 'codex_parent_chat', itemId: 'codex:thread:turn-1:1' }
+    const fork = createParams({ forkFrom })
+
+    expect(fork).toMatchObject({ forkFrom })
+    expect(fork.envelope.payloadFingerprint).not.toBe(createParams().envelope.payloadFingerprint)
+    expect(fork.envelope.payloadFingerprint).not.toBe(
+      createParams({ forkFrom: { ...forkFrom, itemId: 'codex:thread:turn-2:1' } }).envelope
+        .payloadFingerprint
+    )
+    expect(createParams({ forkFrom }).envelope.payloadFingerprint).toBe(
+      fork.envelope.payloadFingerprint
+    )
   })
 
   it('gives a replay of the same adoption the same digest under a new operation id', () => {
@@ -102,6 +122,11 @@ describe('the tab id a create reserves', () => {
     )
     // The declared digest covers the tab; the host still replays a retry on its attach fingerprint.
     expect(params.envelope.payloadFingerprint).not.toBe(createParams().envelope.payloadFingerprint)
+  })
+
+  it('advertises forking as a capability, because an older host refuses `forkFrom`', () => {
+    expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_FORK_RUNTIME_CAPABILITY)
+    expect(AGENT_SESSION_FORK_RUNTIME_CAPABILITY).toBe('agent-session.fork.v1')
   })
 
   it('is advertised as a capability, because an older host refuses the strict payload', () => {

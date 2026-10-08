@@ -366,7 +366,7 @@ describe('startStructuredAgentLaunch', () => {
       worktreeId,
       'claude',
       undefined,
-      undefined,
+      {},
       undefined
     )
     expect(mocks.createIntent).toHaveBeenNthCalledWith(
@@ -374,7 +374,7 @@ describe('startStructuredAgentLaunch', () => {
       worktreeId,
       'codex',
       undefined,
-      undefined,
+      {},
       undefined
     )
     expect(mocks.launch).toHaveBeenCalledTimes(2)
@@ -639,27 +639,38 @@ describe('startStructuredAgentLaunch', () => {
   })
 
   // Why a resume: the host refuses a second adoption of the conversation, so a new resume re-checks.
-  it('keeps an unresolved resume identity reserved until inventory reconciles it', async () => {
-    const worktreeId = 'wt-still-unknown'
-    const resumeFrom = { providerSessionId: 'provider-still-unknown' }
-    const intent = launchIntent(worktreeId)
-    mocks.createIntent.mockReturnValueOnce({ ...intent, params: { ...intent.params, resumeFrom } })
-    mocks.launch.mockRejectedValue(new Error('offline'))
-    vi.mocked(refreshLocalStructuredSessionTabs).mockResolvedValue([])
+  it.each([
+    ['resume', { resumeFrom: { providerSessionId: 'provider-still-unknown' } }],
+    ['fork', { forkFrom: { sessionId: 'codex_parent', itemId: 'row-still-unknown' } }]
+  ])(
+    'keeps an unresolved %s identity reserved until inventory reconciles it',
+    async (kind, source) => {
+      const worktreeId = `wt-still-unknown-${kind}`
+      const intent = launchIntent(worktreeId)
+      mocks.createIntent.mockReturnValueOnce({ ...intent, params: { ...intent.params, ...source } })
+      mocks.launch.mockRejectedValue(new Error('offline'))
+      vi.mocked(refreshLocalStructuredSessionTabs).mockResolvedValue([])
 
-    startStructuredAgentLaunch(worktreeId, 'codex', { requestId: 'request-23', resumeFrom })
-    await flushLaunchSettlement()
+      startStructuredAgentLaunch(worktreeId, 'codex', {
+        requestId: `request-23-${kind}`,
+        ...source
+      })
+      await flushLaunchSettlement()
 
-    vi.mocked(refreshLocalStructuredSessionTabs).mockResolvedValue([
-      publishedSnapshot(worktreeId, intent.sessionId)
-    ])
-    startStructuredAgentLaunch(worktreeId, 'codex', { requestId: 'request-24', resumeFrom })
-    await flushLaunchSettlement()
+      vi.mocked(refreshLocalStructuredSessionTabs).mockResolvedValue([
+        publishedSnapshot(worktreeId, intent.sessionId)
+      ])
+      startStructuredAgentLaunch(worktreeId, 'codex', {
+        requestId: `request-24-${kind}`,
+        ...source
+      })
+      await flushLaunchSettlement()
 
-    expect(mocks.createIntent).toHaveBeenCalledOnce()
-    expect(mocks.launch).toHaveBeenCalledTimes(2)
-    expect(toast.error).not.toHaveBeenCalled()
-  })
+      expect(mocks.createIntent).toHaveBeenCalledOnce()
+      expect(mocks.launch).toHaveBeenCalledTimes(2)
+      expect(toast.error).not.toHaveBeenCalled()
+    }
+  )
 
   it("keeps the prompt in the chat's composer, unsent, through an unknown outcome's recovery", async () => {
     const worktreeId = 'wt-unknown-prompt-retry'

@@ -534,3 +534,17 @@ describe('thread goal fields', () => {
     }
   })
 })
+
+describe('a turn record’s fork point', () => {
+  it('survives decoding, so a client can offer the fork the host would make', () => {
+    const body = {
+      kind: 'turn',
+      turnId: 't',
+      state: 'completed',
+      outcome: 'success',
+      forkPoint: 'leaf'
+    }
+
+    expect(AgentJournalItemBodySchema.parse(body)).toMatchObject({ forkPoint: 'leaf' })
+  })
+})

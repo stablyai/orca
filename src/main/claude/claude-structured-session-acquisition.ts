@@ -242,11 +242,10 @@ export async function acquireClaudeSession({
     }
     const publication = createClaudeSessionPublication({
       connection,
-      providerSessionId: launch.providerSessionId,
+      launch,
       leafUuid: observedLeafUuid,
       turnEndLeafUuid: launch.resumeLeafUuid,
       fence: input.fence,
-      continuesChain: launch.continuesChain,
       prompts,
       translator,
       events: input.events,

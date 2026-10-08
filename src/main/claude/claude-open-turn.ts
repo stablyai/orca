@@ -105,6 +105,14 @@ export class ClaudeOpenTurn {
     this.cycleWorkObserved = true
   }
 
+  /** The open turn's main conversation moved on: to the assistant's entry, or (null) to anything
+   *  else, such as a tool result or the notice a stop leaves. */
+  observeTranscriptEntry(assistantUuid: string | null): void {
+    if (this.current) {
+      this.current.assistantLeafUuid = assistantUuid ?? undefined
+    }
+  }
+
   /** Open a turn, ending whichever one was still open. A new turn starting is the
    *  only end the previous one gets when its result never arrives; settling it
    *  later would sweep THIS turn. The replaced turn is recorded superseded: a newer

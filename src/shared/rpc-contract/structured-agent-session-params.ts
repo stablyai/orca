@@ -1,4 +1,5 @@
 import {
+  ForkSource,
   Identifier,
   JournalCursor,
   MAX_ID_LENGTH,
@@ -120,6 +121,8 @@ export const CreateIntentParams = z
     worktree: Identifier('Invalid worktree selector'),
     agent: StructuredAgent,
     resumeFrom: ResumeSource.optional(),
+    /** Strict like `tabId`: sent only after `AGENT_SESSION_FORK_RUNTIME_CAPABILITY` is advertised. */
+    forkFrom: ForkSource.optional(),
     /**
      * The tab id the client reserved for this chat, so it can place the tab before the reply. The
      * host owns the id from here: it is persisted on the session record and is what the host's tab
@@ -131,6 +134,7 @@ export const CreateIntentParams = z
     tabId: z.string().refine(isAgentSessionSurfaceTabId, 'Invalid chat tab ID').optional()
   })
   .strict()
+  .refine((params) => !(params.resumeFrom && params.forkFrom), 'Resume or fork, not both')
 
 export const CreateParams = z.union([AttachParams, CreateIntentParams])
 

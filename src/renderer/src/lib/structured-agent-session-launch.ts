@@ -1,3 +1,4 @@
+import { structuredAgentSessionCreateSource } from '../../../shared/structured-agent-session-create'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import {
@@ -50,7 +51,7 @@ import {
 export type { StructuredAgentLaunchOptions, StructuredAgentLaunchReceipt }
 export {
   getStructuredAgentSessionLaunchLifecycle,
-  getStructuredAgentSessionLaunchResumes,
+  getStructuredAgentSessionLaunchContinues,
   hasStructuredAgentSessionLaunchCancellationTombstone,
   markStructuredAgentSessionLaunchCancelled,
   retireStructuredAgentSessionLaunchCancellationTombstone,
@@ -208,7 +209,7 @@ function structuredAgentLaunchState(
   agent: TuiAgent,
   options: StructuredAgentLaunchOptions
 ): StructuredLaunchStateResult {
-  const identity = structuredLaunchIdentity(worktreeId, agent, options.resumeFrom)
+  const identity = structuredLaunchIdentity(worktreeId, agent, options)
   const request = structuredLaunchRequest(options)
   const existing = getJoinableStructuredLaunchState(identity, request)
   const joined = existing && joinStructuredLaunchState(existing, agent, options, request)
@@ -220,7 +221,7 @@ function structuredAgentLaunchState(
     worktreeId,
     agent,
     options.executionHostId,
-    options.resumeFrom,
+    structuredAgentSessionCreateSource(options),
     options.hostSeedOptions
   )
   const text = launchPromptText(options)

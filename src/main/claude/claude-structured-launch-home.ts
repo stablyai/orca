@@ -31,15 +31,21 @@ export async function resolveClaudeStructuredLaunchHome(
   return launchHome
 }
 
-/** Whether Claude wrote a transcript for this id under the given config folder. */
-export async function claudeTranscriptExists(input: {
+/** The transcript Claude wrote for this id under the given config folder, if it wrote one. */
+export function claudeTranscriptPath(input: {
   providerSessionId: string
   claudeConfigDir: string
-}): Promise<boolean> {
-  const path = await resolveSessionFilePath('claude', input.providerSessionId, {
+}): Promise<string | null> {
+  return resolveSessionFilePath('claude', input.providerSessionId, {
     claudeProjectsDir: join(input.claudeConfigDir, 'projects')
   })
-  return path !== null
+}
+
+/** Whether Claude wrote a transcript for this id under the given config folder. */
+export async function claudeTranscriptExists(
+  input: Parameters<typeof claudeTranscriptPath>[0]
+): Promise<boolean> {
+  return (await claudeTranscriptPath(input)) !== null
 }
 
 /**
@@ -53,18 +59,29 @@ export async function claudeLaunchResumesTranscript(input: {
   claudeConfigDir: string
   hasTranscript?: typeof claudeTranscriptExists
 }): Promise<boolean> {
-  const { router, providerSessionId, claudeConfigDir } = input
-  if (!router && input.leafUuid !== null) {
-    return true
-  }
-  const hasTranscript = input.hasTranscript ?? claudeTranscriptExists
-  if (await hasTranscript({ providerSessionId, claudeConfigDir })) {
-    return true
-  }
   if (input.leafUuid === null) {
-    return false
+    const { providerSessionId, claudeConfigDir } = input
+    return (input.hasTranscript ?? claudeTranscriptExists)({ providerSessionId, claudeConfigDir })
   }
-  const otherHomes = router ? [...router.accountHomes(), router.systemDefaultHome()] : []
+  await refuseClaudeTranscriptInOtherAccount(input)
+  // Found nowhere Orca knows of (e.g. a folder since removed): the stored leaf still says it ran.
+  return true
+}
+
+/** Refuses a conversation the selected account does not hold and another account does. Unrouted,
+ *  the home is fixed, so nothing is looked up. */
+export async function refuseClaudeTranscriptInOtherAccount(input: {
+  router: ClaudeProfileRouter | undefined
+  providerSessionId: string
+  claudeConfigDir: string
+  hasTranscript?: typeof claudeTranscriptExists
+}): Promise<void> {
+  const { router, providerSessionId, claudeConfigDir } = input
+  const hasTranscript = input.hasTranscript ?? claudeTranscriptExists
+  if (!router || (await hasTranscript({ providerSessionId, claudeConfigDir }))) {
+    return
+  }
+  const otherHomes = [...router.accountHomes(), router.systemDefaultHome()]
   for (const home of otherHomes.filter((home) => home !== claudeConfigDir)) {
     if (await hasTranscript({ providerSessionId, claudeConfigDir: home })) {
       throw new AgentSessionPreSpawnError(
@@ -73,6 +90,4 @@ export async function claudeLaunchResumesTranscript(input: {
       )
     }
   }
-  // Found nowhere Orca knows of (e.g. a folder since removed): the stored leaf still says it ran.
-  return true
 }

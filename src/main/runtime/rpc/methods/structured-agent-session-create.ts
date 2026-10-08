@@ -25,7 +25,12 @@ import {
 } from '../../../native-chat/agent-session-wire/structured-agent-session-attach'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import type { StructuredAgentSessionCaller } from '../../../native-chat/agent-session-wire/structured-agent-session-host-types'
-import type { StructuredAgentSessionResumeSource } from '../../../../shared/structured-agent-session-create'
+import {
+  structuredAgentSessionCreateContinues,
+  structuredAgentSessionCreateSource,
+  type StructuredAgentSessionForkSource,
+  type StructuredAgentSessionResumeSource
+} from '../../../../shared/structured-agent-session-create'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { StructuredAgentId } from '../../../../shared/agent-session-provider-handle'
 import {
@@ -53,6 +58,7 @@ export function structuredAgentSessionCreateIntentFingerprint(params: {
   worktree: string
   agent: string
   resumeFrom?: StructuredAgentSessionResumeSource
+  forkFrom?: StructuredAgentSessionForkSource
   tabId?: string
 }): string {
   return computeAgentSessionPayloadFingerprint({
@@ -62,6 +68,7 @@ export function structuredAgentSessionCreateIntentFingerprint(params: {
       worktree: params.worktree,
       agent: params.agent,
       resumeFrom: params.resumeFrom,
+      forkFrom: params.forkFrom,
       tabId: params.tabId
     }
   })
@@ -78,6 +85,7 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
   agent: StructuredAgentId
   caller: StructuredAgentSessionCaller
   resumeFrom?: StructuredAgentSessionResumeSource
+  forkFrom?: StructuredAgentSessionForkSource
   /** Replaces the seed options the host resolves from settings. Orchestration passes the
    *  `--model`/`--effort` the dispatch asked for; a chat the user opened passes nothing and keeps
    *  the saved selection. Narrowed by the caller, so `{}` never reaches the reservation. */
@@ -86,14 +94,15 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
    *  gets the id clients derive. Beside `options`, after the fingerprint, likewise. */
   tabId?: string
 }): Promise<PreparedStructuredAgentSessionCreate> {
-  // Adoption replay may need the record loaded from disk before source discovery can be skipped.
-  let host = args.resumeFrom ? await args.ensureHost() : null
+  // Adoption replay may need the record loaded from disk before source discovery can be skipped,
+  // and a fork reads its parent from the host.
+  let host = structuredAgentSessionCreateContinues(args) ? await args.ensureHost() : null
   const resolved = await args.runtime.resolveStructuredAgentSessionCreateIntent({
     envelope: args.envelope,
     worktree: args.worktree,
     agent: args.agent,
     callerKey: args.caller.callerKey,
-    ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {})
+    ...structuredAgentSessionCreateSource(args)
   })
   const hostFingerprint = computeAgentSessionPayloadFingerprint({
     method: 'agentSession.attach',

@@ -90,6 +90,27 @@ describe('adopted handle chain seeding', () => {
     expect(record.providerHandleChain[0]?.mintedAtFence).toBe(record.lease.runtimeFence)
   })
 
+  it('keeps where a fork was cut from on its record, and on no other', () => {
+    const forkedFrom = {
+      sessionId: 'codex_parent_chat',
+      itemId: 'codex:thread-parent:turn-2:1',
+      providerSessionId: 'thread-parent',
+      forkPoint: 'turn-2'
+    }
+
+    const fork = applyAgentSessionReservation(
+      storeState(),
+      reserveRequest({ forkedFrom }),
+      LEASE_TTL_MS
+    )
+    const blank = applyAgentSessionReservation(storeState(), reserveRequest(), LEASE_TTL_MS)
+
+    expect(fork.record.forkedFrom).toEqual(forkedFrom)
+    // No chain: a Codex fork copies its parent when it first starts.
+    expect(fork.record.providerHandleChain).toEqual([])
+    expect(blank.record).not.toHaveProperty('forkedFrom')
+  })
+
   it('leaves a blank create with no chain, so the adapter starts a conversation', () => {
     const { record } = applyAgentSessionReservation(storeState(), reserveRequest(), LEASE_TTL_MS)
 

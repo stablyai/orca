@@ -3,6 +3,7 @@ import { claudeProviderHandleLink } from './claude-structured-owner-identity'
 import type { ClaudePromptRegistry } from './claude-structured-prompt-replies'
 import type { ClaudeJournalTranslator } from './claude-journal-translator-contract'
 import type { ClaudeSession } from './claude-structured-session-state'
+import type { ClaudeStructuredLaunch } from './claude-structured-launch-resolution'
 import { ClaudeBackgroundTaskTracker } from './claude-background-task-tracker'
 import { ClaudeChildWorkDecoder } from './claude-child-work-decoder'
 import { ClaudeSlashCommandCatalog } from './claude-slash-command-catalog'
@@ -11,14 +12,18 @@ import { createClaudeSessionStartup } from './claude-structured-session-startup-
 /** The session as published at spawn: nothing the CLI reports at init is assumed yet. */
 export function createClaudeSessionPublication(input: {
   connection: ClaudeSession['connection']
-  providerSessionId: string
+  /** What the launch decided: the conversation, whether the record's chain already heads it (the
+   *  link resumes, never creates), whether this start copied it from the chat it forks, and the
+   *  config folder the child runs under. */
+  launch: Pick<
+    ClaudeStructuredLaunch,
+    'providerSessionId' | 'continuesChain' | 'forked' | 'claudeConfigDir'
+  >
   leafUuid: string | null
   /** The launch's stored leaf: a frame seen before publication is not a completed turn. */
   turnEndLeafUuid: string | null
   fence: number
   acquisitionGeneration: string
-  /** The record's chain already heads this provider session: the link resumes, never creates. */
-  continuesChain: boolean
   prompts: ClaudePromptRegistry
   translator: ClaudeJournalTranslator | null
   events: ClaudeSession['events']
@@ -32,9 +37,11 @@ export function createClaudeSessionPublication(input: {
     acquisition: {
       process: input.process,
       link: claudeProviderHandleLink({
-        sessionId: input.providerSessionId,
+        sessionId: input.launch.providerSessionId,
         leafUuid: input.leafUuid,
-        resumed: input.continuesChain,
+        resumed: input.launch.continuesChain,
+        // The copy holds a conversation this record's first start did not make.
+        ...(input.launch.forked ? { origin: 'adopted' as const } : {}),
         fence: input.fence,
         ...(input.linkId ? { linkId: input.linkId } : {}),
         observedAt: input.observedAt
@@ -43,7 +50,8 @@ export function createClaudeSessionPublication(input: {
     },
     session: {
       connection: input.connection,
-      providerSessionId: input.providerSessionId,
+      providerSessionId: input.launch.providerSessionId,
+      claudeConfigDir: input.launch.claudeConfigDir,
       leafUuid: input.leafUuid,
       turnEndLeafUuid: input.turnEndLeafUuid,
       fence: input.fence,

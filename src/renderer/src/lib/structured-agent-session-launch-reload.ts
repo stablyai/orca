@@ -1,3 +1,4 @@
+import { structuredAgentSessionCreateSource } from '../../../shared/structured-agent-session-create'
 import {
   restoreStructuredAgentSessionLaunchIntent,
   StructuredAgentSessionOwnerUnresolvedError,
@@ -32,7 +33,7 @@ export function restorePersistedStructuredLaunchState(
       clientOperationId: record.clientOperationId,
       payloadFingerprint: record.payloadFingerprint,
       expectedRuntimeFence: record.expectedRuntimeFence,
-      ...(record.resumeFrom ? { resumeFrom: record.resumeFrom } : {}),
+      ...structuredAgentSessionCreateSource(record),
       ...(record.seedOptions ? { seedOptions: record.seedOptions } : {})
     })
   } catch (error) {
@@ -45,7 +46,7 @@ export function restorePersistedStructuredLaunchState(
   // Only a Retry or re-check restarts a restored launch.
   const callers: StructuredLaunchCallerGroup = createStructuredLaunchCallerGroup({ kind: 'retry' })
   const state: StructuredLaunchState = {
-    identity: structuredLaunchIdentity(worktreeId, record.agent, record.resumeFrom),
+    identity: structuredLaunchIdentity(worktreeId, record.agent, record),
     intent,
     promptDelivery: 'draft',
     promise: Promise.resolve({ sessionId: record.sessionId, fence: 0 }),

@@ -10,7 +10,10 @@ import {
   type ClaudeProfileRouterSettings
 } from '../claude-accounts/claude-profile-router'
 import { installClaudeProfileRouter } from '../claude-accounts/claude-profile-installed-router'
-import { createClaudeStructuredLaunchResolver } from './claude-structured-launch-resolution'
+import {
+  createClaudeStructuredLaunchResolver,
+  type ClaudeStructuredLaunchResolverDeps
+} from './claude-structured-launch-resolution'
 
 const roots: string[] = []
 afterEach(() => {
@@ -101,7 +104,7 @@ function routedResumeFixture() {
     ]
   }
   const transcriptHomes = new Set<string>()
-  const resolve = createClaudeStructuredLaunchResolver({
+  const deps: ClaudeStructuredLaunchResolverDeps = {
     store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
     resolveLaunchArgs: () => [],
     resolveWorkspacePath: async (id) => `/repos/${id}`,
@@ -109,7 +112,8 @@ function routedResumeFixture() {
     resolveInheritedEnv: async () => ({ PATH: '/usr/bin' }),
     resolveAuthPolicy: () => ({ stripAuthEnv: false }),
     hasTranscript: async ({ claudeConfigDir }) => transcriptHomes.has(claudeConfigDir)
-  })
+  }
+  const resolve = createClaudeStructuredLaunchResolver(deps)
   const identity = {
     sessionId: record.sessionId,
     workspaceId: 'workspace-1',
@@ -117,7 +121,32 @@ function routedResumeFixture() {
     agent: 'claude' as const,
     providerHandle: handle
   }
-  return { root, home, transcriptHomes, launch: () => resolve({ identity }) }
+  // The same chat as a fork reserves it: no conversation yet, cut from the one that ran under B.
+  const forkSession = vi.fn(async () => 'copy-1')
+  const forked = {
+    ...record,
+    providerHandleChain: [],
+    forkedFrom: {
+      sessionId: 'parent-chat',
+      itemId: 'answer-1',
+      providerSessionId: 'ran-under-b',
+      forkPoint: 'leaf-1'
+    }
+  }
+  const launchFork = () =>
+    createClaudeStructuredLaunchResolver({
+      ...deps,
+      store: { getRecord: () => forked, pinLaunchDirectory: vi.fn() },
+      forkSession
+    })({ identity: { ...identity, providerHandle: null } })
+  return {
+    root,
+    home,
+    transcriptHomes,
+    launch: () => resolve({ identity }),
+    launchFork,
+    forkSession
+  }
 }
 
 it('refuses to resume a chat whose transcript is in another account instead of starting fresh', async () => {
@@ -141,4 +170,15 @@ it('resumes a chat with a stored leaf whose transcript is in no known folder', a
   const resumed = await launch()
   expect(resumed.options).toMatchObject({ resume: 'ran-under-b' })
   expect(resumed.resumeLeafUuid).toBe('leaf-1')
+})
+
+it('refuses to fork a chat whose transcript is in another account, before copying anything', async () => {
+  const { root, transcriptHomes, launchFork, forkSession } = routedResumeFixture()
+  transcriptHomes.add(join(root, 'personal', '.claude'))
+
+  await expect(launchFork()).rejects.toMatchObject({
+    name: 'AgentSessionPreSpawnError',
+    reason: 'historyInOtherAccount'
+  })
+  expect(forkSession).not.toHaveBeenCalled()
 })

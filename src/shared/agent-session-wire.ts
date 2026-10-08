@@ -279,6 +279,8 @@ export type AgentSessionStatusSummary = {
   /** The record's saved conversation name; absent while unnamed and from older hosts. Rides this
    *  feed because a retained summary outlives the chat's tab, so a closed chat keeps its name. */
   conversationName?: string
+  /** The chat this one was forked from; absent on any other chat and from older hosts. */
+  forkedFrom?: { sessionId: string }
   /** Host-path directory the session is held to regardless of its workspace's current directory
    *  (a floating chat's pinned folder). Absent means resolve the workspace id; older hosts omit it. */
   launchDirectory?: string

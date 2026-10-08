@@ -181,4 +181,28 @@ describe('structured agent launch reload recovery', () => {
       expect.any(Function)
     )
   })
+
+  it('restores a reload-interrupted fork as the same fork, never a blank chat', () => {
+    const forkFrom = { sessionId: 'codex_parent', itemId: 'codex:thread:turn-1:1' }
+    localStorage.setItem(
+      'orca:structuredAgentLaunches:v1',
+      JSON.stringify([
+        {
+          sessionId: 'codex-fork-session',
+          agent: 'codex',
+          lifecycle: 'pending',
+          clientOperationId: 'operation-fork',
+          payloadFingerprint: 'fingerprint-fork',
+          expectedRuntimeFence: null,
+          forkFrom
+        }
+      ])
+    )
+    mocks.launch.mockResolvedValueOnce({ sessionId: 'codex-fork-session', fence: 4 })
+    mocks.refresh.mockResolvedValue([])
+
+    expect(retryStructuredAgentSessionLaunch('wt-reload', 'codex-fork-session')).toBe(true)
+
+    expect(mocks.restoreIntent).toHaveBeenCalledWith(expect.objectContaining({ forkFrom }))
+  })
 })

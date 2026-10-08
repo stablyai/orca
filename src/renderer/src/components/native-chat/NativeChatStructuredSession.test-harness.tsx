@@ -120,7 +120,7 @@ export function createStructuredSessionMocks() {
     fileLinkContext: widened<NativeChatFileLinkContext | null>(DEFAULT_FILE_LINK_CONTEXT),
     lifecycleLookup: vi.fn<(worktreeId: string, sessionId: string) => void>(),
     launchFailure: nullable<AgentSessionWriteRefusal>(),
-    launchResumes: false,
+    launchContinues: false,
     retryLaunch: vi.fn<(worktreeId: string, sessionId: string) => unknown>(),
     relaunchWithMessage: vi.fn<(worktreeId: string, sessionId: string, text: string) => void>(),
     controllerProps: nullable<{ transportEnabled?: boolean }>(),
@@ -298,7 +298,7 @@ export function createStructuredSessionMocks() {
         }
       },
       getStructuredAgentSessionLaunchLifecycle: () => mocks.launchLifecycle,
-      getStructuredAgentSessionLaunchResumes: () => mocks.launchResumes,
+      getStructuredAgentSessionLaunchContinues: () => mocks.launchContinues,
       useStructuredAgentSessionLaunchSelection: () => null,
       useStructuredAgentSessionLaunchLifecycle: (worktreeId: string, sessionId: string) => {
         mocks.lifecycleLookup(worktreeId, sessionId)
@@ -361,7 +361,7 @@ export function createStructuredSessionMocks() {
     mocks.ownerWorktreeId = 'wt-1'
     mocks.fileLinkContext = DEFAULT_FILE_LINK_CONTEXT
     mocks.launchFailure = null
-    mocks.launchResumes = false
+    mocks.launchContinues = false
     mocks.retryLaunch.mockReset()
     mocks.relaunchWithMessage.mockReset()
     mocks.lifecycleLookup.mockReset()

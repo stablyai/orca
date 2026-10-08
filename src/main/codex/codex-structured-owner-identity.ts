@@ -1,3 +1,4 @@
+import type { CodexOpenedThread } from './codex-structured-thread-open'
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
 import {
   agentSessionProviderHandleKey,
@@ -101,4 +102,28 @@ export function codexProviderHandleLink(
         }
       : {})
   }
+}
+
+/** The link for the thread an acquisition just opened: how it was opened is its origin. */
+export function codexOpenedThreadHandleLink(input: {
+  opened: Pick<CodexOpenedThread, 'threadId' | 'supersededThreadId' | 'forked'>
+  resumed: boolean
+  fence: number
+  linkId?: string
+  observedAt: number
+}): AgentSessionProviderHandleLink {
+  const { opened, resumed, ...minted } = input
+  const { threadId, supersededThreadId } = opened
+  if (supersededThreadId) {
+    return codexProviderHandleLink({
+      ...minted,
+      threadId,
+      resumed: false,
+      supersedesThreadId: supersededThreadId
+    })
+  }
+  // A fork is a copy Codex already holds a conversation for, never one to supersede as unsaved.
+  return opened.forked
+    ? codexProviderHandleLink({ ...minted, threadId, origin: 'adopted', resumed: false })
+    : codexProviderHandleLink({ ...minted, threadId, resumed })
 }
