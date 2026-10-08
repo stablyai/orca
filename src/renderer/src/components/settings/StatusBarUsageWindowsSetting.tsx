@@ -9,6 +9,7 @@ import { getStatusBarUsageWindowsEntry } from './appearance-usage-percentage-sea
 import { getProviderDisplayName } from '../status-bar/tooltip'
 import {
   formatPickedUsageName,
+  keepOfferedPicks,
   listPickableUsageWindows
 } from '../status-bar/status-bar-provider-usage'
 
@@ -61,7 +62,7 @@ export function StatusBarUsageWindowsSetting(): React.JSX.Element {
                   spacing={1}
                   className="max-w-[360px] flex-wrap justify-end"
                   aria-label={name}
-                  value={picksByProvider[p.provider] ?? []}
+                  value={keepOfferedPicks(picksByProvider[p.provider], options)}
                   onValueChange={(keys) =>
                     setPicks(p.provider, normalizeStatusBarUsageWindowKeys(keys))
                   }

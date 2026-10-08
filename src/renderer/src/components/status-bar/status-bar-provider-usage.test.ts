@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { ProviderRateLimits, RateLimitWindow } from '../../../../shared/rate-limit-types'
 import {
   formatPickedUsageResets,
+  keepOfferedPicks,
   listPickableUsageWindows,
   selectPickedUsageWindows
 } from './status-bar-provider-usage'
@@ -92,6 +93,19 @@ describe('listPickableUsageWindows', () => {
       'bucket:Gemini Models · Five Hour Limit Remaining',
       'bucket:Claude and GPT models · Weekly Limit Remaining'
     ])
+  })
+})
+
+describe('keepOfferedPicks', () => {
+  it('drops saved picks the provider no longer reports, so the next toggle clears them', () => {
+    const offered = listPickableUsageWindows(antigravity)
+    expect(
+      keepOfferedPicks(
+        ['bucket:Gemini Models · Weekly Limit Remaining', 'bucket:Retired group'],
+        offered
+      )
+    ).toEqual(['bucket:Gemini Models · Weekly Limit Remaining'])
+    expect(keepOfferedPicks(undefined, offered)).toEqual([])
   })
 })
 

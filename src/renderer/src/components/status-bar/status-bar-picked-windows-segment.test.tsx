@@ -105,6 +105,18 @@ describe('ProviderSegment with picked windows', () => {
     }
   })
 
+  it('lists every picked window in the "+N" hover text when the provider folds', async () => {
+    const { UsageOverflowChip } = await import('./StatusBarProviderSegment')
+    const markup = renderToStaticMarkup(
+      <UsageOverflowChip
+        hidden={[claude]}
+        display="used"
+        pickedWindowsFor={() => ['weekly', 'session']}
+      />
+    )
+    expect(markup).toContain('title="Also: Claude wk 68% used · 5h 4% used"')
+  })
+
   it('rates urgency by the picked windows, not the tightest overall', async () => {
     const { getUsageTone } = await import('./StatusBarProviderSegment')
     expect(getUsageTone(claude)).toBe('urgent')

@@ -80,6 +80,15 @@ export function formatPickedUsageName(pick: PickedUsageWindow): string {
   return pick.group ? `${pick.group} ${pick.label}` : pick.label
 }
 
+/** Saved picks the snapshot still offers; dropping the rest lets the next toggle clear them. */
+export function keepOfferedPicks(
+  saved: readonly StatusBarUsageWindowKey[] | undefined,
+  offered: readonly PickedUsageWindow[]
+): StatusBarUsageWindowKey[] {
+  const offeredKeys = new Set(offered.map((option) => option.key))
+  return (saved ?? []).filter((key) => offeredKeys.has(key))
+}
+
 /** Hover text: the reset countdowns the fixed window names leave out. */
 export function formatPickedUsageResets(picks: readonly PickedUsageWindow[], now: number): string {
   return picks
