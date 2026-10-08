@@ -14,6 +14,10 @@ import { cursorChatMetaPath } from './session-scanner-cursor-chat-meta'
 import { devinSessionsDbDependencyPath } from './session-scanner-devin-db'
 import { resolveKimiSessionsDir } from './session-scanner-kimi-paths'
 import { resolveMuseSessionsDir } from './session-scanner-muse-paths'
+import {
+  isKiroSessionMetadataPath,
+  kiroTranscriptPathForMetadata
+} from './session-scanner-kiro-parser'
 import { OMP_SESSION_ARTIFACT_DIR_PATTERN } from './session-scanner-omp-subagent-transcripts'
 import {
   claudeProjectsRootDirs,
@@ -65,6 +69,7 @@ const DEVIN_TRANSCRIPTS_DIR = join(
   ),
   'transcripts'
 )
+const KIRO_SESSIONS_DIR = join(homedir(), '.kiro', 'sessions', 'cli')
 const DROID_SESSIONS_DIR = join(homedir(), '.factory', 'sessions')
 const DROID_PROJECTS_DIR = join(homedir(), '.factory', 'projects')
 const CLINE_SESSIONS_DIR =
@@ -227,6 +232,20 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
     extensions: ['.json'],
     // Why: skip the live .journal.jsonl appends and consolidated backups.
     filePredicate: (filePath) => basename(filePath).startsWith('session_')
+  },
+  kiro: {
+    rootDirs: (options, wslHomeDirs) =>
+      sessionRootDirs(options.kiroSessionsDir ?? KIRO_SESSIONS_DIR, wslHomeDirs, [
+        '.kiro',
+        'sessions',
+        'cli'
+      ]),
+    extensions: ['.json'],
+    filePredicate: isKiroSessionMetadataPath,
+    // Why: turns append to the .jsonl transcript; its stat must refresh the cached row.
+    contentDependencyPath: kiroTranscriptPathForMetadata,
+    // Per-session subdirectories hold background task state, not sessions.
+    directoryPredicate: () => false
   },
   rovo: {
     rootDirs: (options, wslHomeDirs) =>

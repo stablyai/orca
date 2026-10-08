@@ -193,8 +193,9 @@ function defaultAiVaultResumeCommandBase(agent: AiVaultAgent): string {
   if (agent === 'hermes') {
     return 'hermes'
   }
-  if (agent === 'rovo') {
-    return TUI_AGENT_CONFIG.rovo.launchCmd
+  // Why: Kiro resumes through its `chat` subcommand, so the base is the full launch command.
+  if (agent === 'rovo' || agent === 'kiro') {
+    return TUI_AGENT_CONFIG[agent].launchCmd
   }
   return TUI_AGENT_CONFIG[agent].detectCmd
 }
@@ -249,6 +250,8 @@ function buildAgentResumeInvocation(
       return `${baseCommand} --resume ${sessionArg}`
     case 'antigravity':
       return `${baseCommand} --conversation ${sessionArg}`
+    case 'kiro':
+      return `${baseCommand} --resume-id ${sessionArg}`
   }
 }
 
