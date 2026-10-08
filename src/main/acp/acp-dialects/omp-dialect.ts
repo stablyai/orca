@@ -7,6 +7,8 @@ import type { AcpDialect } from './acp-dialect'
 // `$ <command>` echo. The shared reader takes content text first, so that echo became the output.
 const textBlockSchema = z.looseObject({ type: z.literal('text'), text: z.string() })
 const promptErrorDataSchema = z.looseObject({ details: z.string() })
+// OMP's prompt check: no usable model (nothing signed in), or the selected model's provider has no key.
+const SIGNED_OUT_DETAIL_PREFIXES = ['No model selected.\n\nUse /login', 'No API key found for ']
 const toolResultSchema = z.looseObject({
   content: z.array(z.unknown()),
   details: z
@@ -67,9 +69,12 @@ function normalizeToolUpdate(update: ToolCallUpdate): ToolCallUpdate {
 export const OMP_ACP_DIALECT: AcpDialect = {
   normalizeToolUpdate,
   promptErrorDetail: (error) => promptErrorDataSchema.safeParse(error.data).data?.details,
-  authenticationRequired: (error) =>
-    error.code === -32603 &&
-    promptErrorDataSchema
-      .safeParse(error.data)
-      .data?.details.startsWith('No API key found for ') === true
+  authenticationRequired: (error) => {
+    const details = promptErrorDataSchema.safeParse(error.data).data?.details
+    return (
+      error.code === -32603 &&
+      details !== undefined &&
+      SIGNED_OUT_DETAIL_PREFIXES.some((prefix) => details.startsWith(prefix))
+    )
+  }
 }

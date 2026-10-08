@@ -99,6 +99,11 @@ it.each([
     'No API key found for anthropic.\n\nUse /login, set an API key environment variable, or create /host/agent.db',
     'notSignedIn'
   ],
+  [
+    'No model selected.\n\nUse /login, set an API key environment variable, or create /host/agent.db\n\nThen use /model to select a model.',
+    'notSignedIn'
+  ],
+  ['No model selected', undefined],
   ['Rate limit exceeded', undefined],
   ['Network connection failed', undefined],
   ['No API key found elsewhere', undefined]
