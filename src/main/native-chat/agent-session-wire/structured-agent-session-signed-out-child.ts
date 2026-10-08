@@ -2,24 +2,14 @@
 // read their saved login only when they start, so a sign-in made since reaches a new child only.
 
 import { readWholeAgentSessionFailureFact } from '../../../shared/agent-session-failure'
-import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-live-turn'
-import type {
-  AgentJournalCursor,
-  AgentJournalRenderItem,
-  AgentJournalSubmission
-} from '../../../shared/agent-session-journal-types'
-import type {
-  StructuredAgentSessionHostSession,
-  StructuredAgentSessionProviderChild
-} from './structured-agent-session-host-types'
+import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
+import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 
-/** What the check reads of a conversation. */
-type SignedOutReading = {
-  child: StructuredAgentSessionProviderChild | null
-  journal: {
-    cursor(): AgentJournalCursor
-    snapshot(): { items: readonly Pick<AgentJournalRenderItem, 'sequence' | 'body'>[] }
+/** What the check reads of a conversation; every read skips building a snapshot. */
+type SignedOutReading = Pick<StructuredAgentSessionHostSession, 'child'> & {
+  journal: Pick<AgentSessionJournal, 'visitItems' | 'itemFence' | 'activeTurnId'> & {
     submissions(): readonly Pick<AgentJournalSubmission, 'dispatchState' | 'fence' | 'rejection'>[]
   }
 }
@@ -27,14 +17,13 @@ type SignedOutReading = {
 const signedOut = (failure: unknown): boolean =>
   readWholeAgentSessionFailureFact(failure)?.kind === 'notSignedIn'
 
-/** The running child itself said it is not signed in: a send it rejected, or a row it wrote after
- *  it started. Derived from the journal, so a new child starts with nothing to clear. */
+/** The running child itself said it is not signed in: a send it rejected, or a row it wrote. Each
+ *  child holds its own fence, so matching it scopes both to this child; a new one has nothing. */
 export function structuredAgentSessionChildReportedSignedOut(session: SignedOutReading): boolean {
   const { child, journal } = session
-  if (!child?.startedAt || child.phase === 'starting' || child.close) {
+  if (!child || child.phase === 'starting' || child.close) {
     return false
   }
-  // Each child holds its own fence, so a send rejected at it was rejected by this child.
   if (
     journal
       .submissions()
@@ -47,23 +36,19 @@ export function structuredAgentSessionChildReportedSignedOut(session: SignedOutR
   ) {
     return true
   }
-  const { epoch, sequence } = child.startedAt
-  return (
-    journal.cursor().epoch === epoch &&
-    journal
-      .snapshot()
-      .items.some(
-        (item) =>
-          item.sequence > sequence && item.body.kind === 'status' && signedOut(item.body.failure)
-      )
-  )
+  let found = false
+  journal.visitItems((itemId, _sequence, body) => {
+    found ||=
+      body.kind === 'status' && signedOut(body.failure) && journal.itemFence(itemId) === child.fence
+  })
+  return found
 }
 
 /** For a caller inside the session's serialize, before it hands the next send to the child. A turn
  *  still running keeps its child. A stop that fails leaves the close begun, which the start joins. */
 export async function retireSignedOutStructuredAgentSessionChild(
   sessionId: string,
-  session: Pick<StructuredAgentSessionHostSession, 'child' | 'journal'> | undefined,
+  session: SignedOutReading | undefined,
   deps: {
     stopAgent: (sessionId: string) => Promise<void>
     logger: StructuredAgentSessionLogger
@@ -72,7 +57,7 @@ export async function retireSignedOutStructuredAgentSessionChild(
   if (
     !session ||
     !structuredAgentSessionChildReportedSignedOut(session) ||
-    activeStructuredAgentSessionTurnId(session.journal.snapshot().items) !== null
+    session.journal.activeTurnId() !== null
   ) {
     return
   }

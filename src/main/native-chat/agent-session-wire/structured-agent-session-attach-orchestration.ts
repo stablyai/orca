@@ -235,9 +235,6 @@ async function runAttachUnderAbort(
             failureTextContext: structuredAgentSessionFailureWordsContext(priorRecord)
           })
         }
-        // Before the drain, so what the new child buffered counts as its own.
-        const startedAt =
-          (acquiredOwner ? undefined : current?.startedAt) ?? attached.journal.cursor()
         await bindAndDrain(eventSink, attached.journal, fence, (activity) =>
           context.subscribers.publish(sessionId, attached.journal, activity)
         )
@@ -248,8 +245,7 @@ async function runAttachUnderAbort(
             fence,
             // A re-attach to a live child keeps what that child already proved, and its cause.
             phase: acquiredOwner ? providerChildPhase : (current?.phase ?? 'ready'),
-            ...(startedFor === undefined ? {} : { startedFor }),
-            startedAt
+            ...(startedFor === undefined ? {} : { startedFor })
           }
         }
         await recoverStructuredRewind(

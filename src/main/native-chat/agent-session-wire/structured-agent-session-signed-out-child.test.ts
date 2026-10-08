@@ -72,25 +72,24 @@ describe('a send after the agent said it is not signed in', () => {
 })
 
 describe('structuredAgentSessionChildReportedSignedOut', () => {
-  const epoch = 'epoch-1'
   const child = (
     overrides: Partial<StructuredAgentSessionProviderChild> = {}
   ): StructuredAgentSessionProviderChild => ({
     generation: 'generation-2',
     fence: 2,
     phase: 'ready',
-    startedAt: { epoch, sequence: 10 },
     ...overrides
   })
-  const statusRow = (sequence: number, kind: 'notSignedIn' | 'providerExited') => ({
-    sequence,
+  const statusRow = (fence: number, kind: 'notSignedIn' | 'providerExited') => ({
+    itemId: `status-${fence}-${kind}`,
+    fence,
     body: {
       kind: 'status' as const,
       ...agentSessionFailureWords(agentSessionFailureFact(kind), { surface: 'row' })
     }
   })
-  const rejected = (fenceValue: number) => ({
-    fence: fenceValue,
+  const rejected = (fence: number) => ({
+    fence,
     dispatchState: 'rejected' as const,
     rejection: agentSessionFailureFact('notSignedIn')
   })
@@ -99,26 +98,27 @@ describe('structuredAgentSessionChildReportedSignedOut', () => {
       child?: StructuredAgentSessionProviderChild | null
       items?: ReturnType<typeof statusRow>[]
       submissions?: ReturnType<typeof rejected>[]
-      cursorEpoch?: string
     } = {}
-  ) =>
-    structuredAgentSessionChildReportedSignedOut({
+  ) => {
+    const items = input.items ?? []
+    return structuredAgentSessionChildReportedSignedOut({
       child: input.child === undefined ? child() : input.child,
       journal: {
-        cursor: () => ({ epoch: input.cursorEpoch ?? epoch, sequence: 99 }),
-        snapshot: () => ({ items: input.items ?? [] }),
-        submissions: () => input.submissions ?? []
+        submissions: () => input.submissions ?? [],
+        visitItems: (visit) => items.forEach((item, index) => visit(item.itemId, index, item.body)),
+        itemFence: (itemId) => items.find((item) => item.itemId === itemId)?.fence,
+        activeTurnId: () => null
       }
     })
+  }
 
-  it('reads a not-signed-in row the running child wrote after it started', () => {
-    expect(reported({ items: [statusRow(11, 'notSignedIn')] })).toBe(true)
+  it('reads a not-signed-in row the running child wrote', () => {
+    expect(reported({ items: [statusRow(2, 'notSignedIn')] })).toBe(true)
   })
 
-  it('ignores one written before the child started, another failure, or another epoch', () => {
-    expect(reported({ items: [statusRow(10, 'notSignedIn')] })).toBe(false)
-    expect(reported({ items: [statusRow(11, 'providerExited')] })).toBe(false)
-    expect(reported({ items: [statusRow(11, 'notSignedIn')], cursorEpoch: 'epoch-2' })).toBe(false)
+  it('ignores one an earlier child wrote, and any other failure', () => {
+    expect(reported({ items: [statusRow(1, 'notSignedIn')] })).toBe(false)
+    expect(reported({ items: [statusRow(2, 'providerExited')] })).toBe(false)
   })
 
   it('reads a send rejected as not signed in at this child, not at an earlier one', () => {
@@ -126,10 +126,9 @@ describe('structuredAgentSessionChildReportedSignedOut', () => {
     expect(reported({ submissions: [rejected(1)] })).toBe(false)
   })
 
-  it('leaves a child that is starting, closing, or from before this build', () => {
-    const items = [statusRow(11, 'notSignedIn')]
+  it('leaves a child that is starting, closing, or absent', () => {
+    const items = [statusRow(2, 'notSignedIn')]
     expect(reported({ items, child: child({ phase: 'starting' }) })).toBe(false)
-    expect(reported({ items, child: child({ startedAt: undefined }) })).toBe(false)
     expect(reported({ items, child: null })).toBe(false)
   })
 })
