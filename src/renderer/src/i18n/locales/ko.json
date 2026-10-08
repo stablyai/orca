@@ -12583,7 +12583,7 @@
             "e887fa4b2e": "터미널에서 열기",
             "1d8e182c32": "파일 보기",
             "clipboardStagingUnavailable": "Orca의 임시 저장소를 사용할 수 없기 때문에 파일을 복사할 수 없습니다.",
-            "revealInFinder": "Finder에 공개",
+            "revealInFinder": "Finder에서 보기",
             "openContainingFolder": "포함된 폴더 열기",
             "revealInFileExplorer": "파일 탐색기에 표시"
           },
