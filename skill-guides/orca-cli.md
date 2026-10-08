@@ -185,6 +185,7 @@ ORCA terminal close --worktree id:<repoId>::<worktreePath> --all --json
 Terminal rules:
 
 - `--terminal` is optional for most commands; omitted means the active terminal in the current worktree.
+- A tool that lists terminals can link to one with `orca://terminal/<handle>`. Opening the link does what `terminal switch` does in the running Orca app: it focuses that terminal's tab, or opens a tab on an already-running background terminal. It never starts a process, wakes a sleeping agent, or types input. Only handles from this Orca app's own runtime resolve (local and SSH worktrees); an exited, sleeping, stale, or unknown handle, a terminal whose SSH host is disconnected, and a handle from a paired remote server are all ignored with a log line.
 - Use `terminal close --terminal <handle>` to close one terminal. Use `terminal close --worktree <selector> --all` to stop every terminal process in exactly that workspace and durably remove its terminal tabs, layouts, and agent-resume records.
 - A bulk close fails when the execution host cannot confirm every PTY stopped. Treat that as `unverifiable`; do not report the processes as exited or retry against another host.
 - Use workspace Sleep, not close, when the terminals and agent sessions should resume later. `terminal stop` is legacy compatibility plumbing and should not be used in new agent workflows.

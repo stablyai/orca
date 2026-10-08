@@ -1,5 +1,6 @@
 import { app, clipboard, dialog, type BrowserWindow } from 'electron'
 import { parseSkillShareId } from '../shared/skill-share-link'
+import { parseTerminalDeepLink } from '../shared/terminal-deep-link'
 import { createMacAppActivationHandler } from './window/macos-app-activation'
 import { isBackgroundLaunch } from './window/foreground-activation-policy'
 import {
@@ -41,6 +42,10 @@ function requestDesktopActivation(argv: readonly string[] = []): void {
   state.skillShareDeepLinks.capture(argv, (shareId) => {
     state.mainWindow?.webContents.send('ui:openSkillShare', shareId)
   })
+  state.terminalDeepLinks.capture(
+    argv,
+    state.mainWindow && !state.mainWindow.isDestroyed() ? state.runtime : null
+  )
   state.osOpenedDocuments.capture(argv, publishOsOpenedDocuments)
   // Why: a duplicate `orca serve` must not drag a headless server into opening a desktop window (#11935).
   if (!shouldActivateDesktopForSecondInstance(argv)) {
@@ -95,7 +100,7 @@ const preflightReady = runMainProcessPreflight({
 // Why: when another process holds the lock we've already exited; skip file-writing side effects so this transient process never touches userData.
 if (preflightReady) {
   app.on('open-url', (event, url) => {
-    if (!parseSkillShareId(url)) {
+    if (!parseSkillShareId(url) && !parseTerminalDeepLink(url)) {
       return
     }
     event.preventDefault()
@@ -115,6 +120,7 @@ if (preflightReady) {
     }
   })
   state.skillShareDeepLinks.capture(process.argv)
+  state.terminalDeepLinks.capture(process.argv, null)
   // Why no publish: nothing is listening this early, so the first renderer pulls these on mount.
   state.osOpenedDocuments.capture(process.argv)
   registerMainProcessIpcHandlers()

@@ -25,7 +25,10 @@ function boundTerminalFitRestore(pending: Promise<boolean>): Promise<boolean> {
   return Promise.race([pending, deadline]).finally(() => clearTimeout(timer))
 }
 
-export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
+export function registerRuntimeHandlers(
+  runtime: OrcaRuntimeService,
+  options: { onWindowGraphReady?: () => void } = {}
+): void {
   const pendingTerminalFitRestores = new Map<string, Promise<boolean>>()
   const desktopSenders = new DesktopRuntimeSenderLifecycle(runtime)
   ipcMain.removeHandler('runtime:syncWindowGraph')
@@ -49,7 +52,11 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
       if (typeof graph.rendererGeneration !== 'string' || graph.rendererGeneration.length === 0) {
         throw new Error('Runtime graph sync requires a renderer generation')
       }
-      return runtime.syncWindowGraph(window.id, graph)
+      const result = runtime.syncWindowGraph(window.id, graph)
+      if (result.graphStatus === 'ready') {
+        options.onWindowGraphReady?.()
+      }
+      return result
     }
   )
 

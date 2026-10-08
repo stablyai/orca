@@ -72,6 +72,28 @@ describe('registerRuntimeHandlers', () => {
     expect(result).toEqual({ graphStatus: 'ready' })
   })
 
+  it('signals window-graph readiness only after a sync that left the graph ready', () => {
+    const syncWindowGraph = vi
+      .fn()
+      .mockReturnValueOnce({ graphStatus: 'reloading' })
+      .mockReturnValueOnce({ graphStatus: 'ready' })
+    const onWindowGraphReady = vi.fn()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler under test reads only syncWindowGraph from the runtime.
+    registerRuntimeHandlers({ syncWindowGraph } as never, { onWindowGraphReady })
+    const handler = handleMock.mock.calls.find(
+      ([channel]) => channel === 'runtime:syncWindowGraph'
+    )![1]
+    fromWebContentsMock.mockReturnValue({ id: 17 })
+    const mainFrame = {}
+    const event = { sender: { mainFrame }, senderFrame: mainFrame }
+    const graph = { tabs: [], leaves: [], rendererGeneration: 'renderer-1' }
+
+    handler(event, graph)
+    expect(onWindowGraphReady).not.toHaveBeenCalled()
+    handler(event, graph)
+    expect(onWindowGraphReady).toHaveBeenCalledOnce()
+  })
+
   it('rejects a graph publication queued by a superseded main frame', () => {
     const runtime = {
       syncWindowGraph: vi.fn(),

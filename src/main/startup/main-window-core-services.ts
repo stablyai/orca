@@ -97,7 +97,8 @@ export function attachMainWindowCoreServices(
       // Sign-out is the one fence a paired phone can be told about; quit and
       // relaunch above stay reasonless so a restart never reads as signed out.
       onBeforeOrcaProfileSignOut: () =>
-        state.desktopRelayService?.fenceAndCloseNow(RELAY_HOST_CLOSE_REASON.SIGNED_OUT)
+        state.desktopRelayService?.fenceAndCloseNow(RELAY_HOST_CLOSE_REASON.SIGNED_OUT),
+      onWindowGraphReady: () => state.terminalDeepLinks.windowGraphReady(runtime)
     },
     state.pluginService ?? undefined,
     state.pluginMarketplaceService && state.pluginMarketplaceInstaller

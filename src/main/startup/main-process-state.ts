@@ -37,6 +37,7 @@ import type { ServeOptions } from './main-process-serve'
 import type { HangDetectionMarker } from '../hang-watchdog/hang-detection-marker'
 import { ServeReadinessPublisher } from '../server/serve-readiness'
 import { SkillShareDeepLinkState } from './skill-share-deep-link-state'
+import { TerminalDeepLinkState } from './terminal-deep-link-state'
 import { OsOpenedDocumentState } from './os-opened-documents'
 import {
   DEFAULT_GPU_CRASH_FALLBACK_THRESHOLD,
@@ -114,6 +115,7 @@ export const mainProcessState = {
   // Why: a tray "Settings…" click can precede the renderer's ui:openSettings listener; it pulls this one-shot on mount.
   pendingOpenSettings: createWebContentsTimedFlag(),
   skillShareDeepLinks: new SkillShareDeepLinkState(),
+  terminalDeepLinks: new TerminalDeepLinkState(),
   // Why: a Finder/Explorer "Open With" can land before any window exists; the renderer pulls this buffer on mount.
   osOpenedDocuments: new OsOpenedDocumentState(),
   // Why a latch and not just "a window exists": a window can be up while its renderer has not

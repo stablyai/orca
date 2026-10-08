@@ -104,6 +104,7 @@ type CoreHandlerLifecycleOptions = {
   onBeforeRelaunch?: () => void | Promise<void>
   onOrcaProfileAuthMutation?: () => void
   onBeforeOrcaProfileSignOut?: () => void
+  onWindowGraphReady?: () => void
   getAdditionalAiVaultCodexHomePaths?: () => readonly string[]
   prepareAiVaultSessionResume?: (
     args: AiVaultPrepareSessionResumeArgs
@@ -220,7 +221,7 @@ export function registerCoreHandlers(
     registerFilesystemHandlers(store)
   }
   registerFilesystemWatcherHandlers()
-  registerRuntimeHandlers(runtime)
+  registerRuntimeHandlers(runtime, { onWindowGraphReady: lifecycleOptions.onWindowGraphReady })
   registerRuntimeEnvironmentHandlers(store)
   registerEphemeralVmHandlers(store, pluginService)
   // Session history and terminal resume are not chats; a refused host leaves nothing to check.

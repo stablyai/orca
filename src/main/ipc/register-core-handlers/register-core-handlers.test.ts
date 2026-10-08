@@ -589,7 +589,9 @@ describe('registerCoreHandlers', () => {
     expect(registerEmulatorFrameStreamHandlersMock).toHaveBeenCalled()
     expect(registerEmulatorVideoStreamHandlersMock).toHaveBeenCalled()
     expect(registerFilesystemHandlersMock).toHaveBeenCalledWith(store)
-    expect(registerRuntimeHandlersMock).toHaveBeenCalledWith(runtime)
+    expect(registerRuntimeHandlersMock).toHaveBeenCalledWith(runtime, {
+      onWindowGraphReady: undefined
+    })
     expect(registerRuntimeEnvironmentHandlersMock).toHaveBeenCalledWith(store)
     expect(registerEphemeralVmHandlersMock).toHaveBeenCalledWith(store, undefined)
     expect(registerAiVaultHandlersMock).toHaveBeenCalledWith(
