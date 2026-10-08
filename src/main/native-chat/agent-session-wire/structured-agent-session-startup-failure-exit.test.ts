@@ -94,7 +94,7 @@ describe('a provider that ends before it finished starting', () => {
             identity: { provider: 'orca', clientMessageId: `start-failure:${GENERATION}` },
             body: {
               kind: 'status',
-              text: "Claude isn't signed in. Run `claude` and sign in with /login, or choose an account in Claude Accounts settings.",
+              text: "Claude isn't signed in. Run `claude auth login`, or choose an account in Claude Accounts settings.",
               tone: 'error',
               failure: { kind: 'notSignedIn' }
             }
