@@ -88,6 +88,16 @@ describe('scanAiVaultSessions — CodeBuddy scope discovery', () => {
     expect(result.sessions.find((session) => session.sessionId === 'old-in-scope')?.agent).toBe(
       'codebuddy'
     )
+    expect(result.scopeFullyScanned).toBe(false)
+
+    const deeper = await scanAiVaultSessions({
+      ...roots,
+      platform: 'linux',
+      limit: 2,
+      scopePaths: [workspace]
+    })
+    expect(deeper.sessions.map((session) => session.sessionId)).toContain('old-in-scope')
+    expect(deeper.scopeFullyScanned).toBe(true)
   })
 
   it('finds an older session when another cwd shares its encoded bucket', async () => {
@@ -131,5 +141,6 @@ describe('scanAiVaultSessions — CodeBuddy scope discovery', () => {
     const result = await scanAiVaultSessions({ ...roots, platform: 'linux', limit: 1 })
 
     expect(result.sessions.map((session) => session.sessionId)).toEqual(['new'])
+    expect(result.scopeFullyScanned).toBe(false)
   })
 })

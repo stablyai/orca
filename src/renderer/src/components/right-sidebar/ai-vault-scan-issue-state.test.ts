@@ -2,10 +2,17 @@ import { describe, expect, it } from 'vitest'
 import type { AiVaultListResult } from '../../../../shared/ai-vault-types'
 import {
   aiVaultScanNoticeIssues,
+  aiVaultSessionFileKey,
+  aiVaultSessionReadNotices,
   blockingAiVaultScanIssue,
   skippedAiVaultTranscriptCount,
   skippedAiVaultTranscriptReasons
 } from './ai-vault-scan-issue-state'
+
+// The panel builds the notice map once and hands the same one to the banners.
+function noticeIssues(scan: AiVaultListResult | null) {
+  return aiVaultScanNoticeIssues(scan, aiVaultSessionReadNotices(scan))
+}
 
 describe('blockingAiVaultScanIssue', () => {
   it('surfaces the cause when a scan returns no sessions', () => {
@@ -51,7 +58,7 @@ describe('aiVaultScanNoticeIssues', () => {
     const truncated = result([], [scopeIssue])
 
     expect(blockingAiVaultScanIssue(truncated)).toBeNull()
-    expect(aiVaultScanNoticeIssues(truncated)).toEqual([scopeIssue])
+    expect(noticeIssues(truncated)).toEqual([scopeIssue])
     expect(skippedAiVaultTranscriptCount(truncated)).toBe(0)
   })
 
@@ -74,7 +81,7 @@ describe('aiVaultScanNoticeIssues', () => {
       [hostIssue, scopeIssue, { agent: 'codex', path: '/bad.jsonl', message: 'Malformed' }]
     )
 
-    expect(aiVaultScanNoticeIssues(partial)).toEqual([hostIssue, scopeIssue])
+    expect(noticeIssues(partial)).toEqual([hostIssue, scopeIssue])
     expect(skippedAiVaultTranscriptCount(partial)).toBe(1)
   })
 
@@ -93,7 +100,7 @@ describe('aiVaultScanNoticeIssues', () => {
 
     expect(skippedAiVaultTranscriptCount(empty)).toBe(0)
     expect(skippedAiVaultTranscriptReasons(empty)).toEqual([])
-    expect(aiVaultScanNoticeIssues(empty)).toEqual([sourceIssue])
+    expect(noticeIssues(empty)).toEqual([sourceIssue])
   })
 
   it('does not repeat the blocking issue as a notice row', () => {
@@ -105,12 +112,45 @@ describe('aiVaultScanNoticeIssues', () => {
       message: 'Remote connection dropped.'
     }
 
-    expect(aiVaultScanNoticeIssues(result([], [hostIssue]))).toEqual([])
+    expect(noticeIssues(result([], [hostIssue]))).toEqual([])
   })
 
   it('reports nothing before the first scan', () => {
-    expect(aiVaultScanNoticeIssues(null)).toEqual([])
+    expect(noticeIssues(null)).toEqual([])
     expect(skippedAiVaultTranscriptCount(null)).toBe(0)
+  })
+})
+
+describe('aiVaultSessionReadNotices', () => {
+  const oversized = {
+    executionHostId: 'local' as const,
+    agent: 'pi' as const,
+    kind: 'notice' as const,
+    path: '/sessions/big.jsonl',
+    message: 'Skipped 1 oversized transcript record over the 10.0 MiB limit.'
+  }
+
+  it('moves a notice about a listed session onto that session instead of a banner', () => {
+    const scan = result([{ id: 'big' }], [oversized])
+
+    expect(noticeIssues(scan)).toEqual([])
+    expect(aiVaultSessionReadNotices(scan).get(aiVaultSessionFileKey(scan.sessions[0]))).toEqual([
+      oversized.message
+    ])
+  })
+
+  it('keeps a notice that matches no listed session as a banner', () => {
+    const overflow = { ...oversized, path: '/sessions' }
+    const scan = result([{ id: 'big' }], [overflow])
+
+    expect(noticeIssues(scan)).toEqual([overflow])
+    expect(aiVaultSessionReadNotices(scan).size).toBe(0)
+  })
+
+  it('does not attach a notice from another host to a same-path session', () => {
+    const scan = result([{ id: 'big' }], [{ ...oversized, executionHostId: 'ssh:dev-box' }])
+
+    expect(aiVaultSessionReadNotices(scan).size).toBe(0)
   })
 })
 
@@ -171,11 +211,16 @@ describe('skippedAiVaultTranscriptReasons', () => {
 })
 
 function result(
-  sessions: { id: string }[],
+  sessions: { id: string; filePath?: string; executionHostId?: string }[],
   issues: AiVaultListResult['issues']
 ): AiVaultListResult {
   return {
-    sessions: sessions as AiVaultListResult['sessions'],
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixtures carry only the fields these helpers read.
+    sessions: sessions.map((session) => ({
+      executionHostId: 'local',
+      filePath: `/sessions/${session.id}.jsonl`,
+      ...session
+    })) as unknown as AiVaultListResult['sessions'],
     issues,
     scannedAt: '2026-07-26T00:00:00.000Z'
   }

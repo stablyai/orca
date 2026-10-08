@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { scanAiVaultSessions } from './session-scanner'
+import { isolatedScanRoots } from './session-scanner-test-fixtures'
 import type { AiVaultScanOptions } from './session-scanner-types'
 
 let tempRoots: string[] = []
@@ -36,6 +37,16 @@ function scopedScanOptions(claudeProjectsDir: string, extra: Partial<AiVaultScan
     kimiSessionsDir: '/nonexistent/kimi',
     ...extra
   } satisfies AiVaultScanOptions
+}
+
+// Every agent root inside the temp dir. scopedScanOptions leaves a few sources
+// on their defaults, and whether the machine running the test has a real ~/.omp
+// transcript is exactly what `scopeFullyScanned` answers.
+function isolatedScopeOptions(
+  root: string,
+  extra: Partial<AiVaultScanOptions>
+): AiVaultScanOptions {
+  return { ...isolatedScanRoots(root), ...extra }
 }
 
 async function writeClaudeSession(args: {
@@ -134,6 +145,84 @@ describe('scanAiVaultSessions scope inclusion', () => {
 
     const matches = result.sessions.filter((session) => session.sessionId === 'recent-in-scope')
     expect(matches).toHaveLength(1)
+  })
+
+  // Why: the renderer's "Show more" and the count's "+" both hang off this flag.
+  // Claude and Pi are the only agents whose scoped pass bypasses the recency cap;
+  // for any other agent a deeper scan really does surface more in-scope rows.
+  describe('scopeFullyScanned', () => {
+    it('vouches for a scope when only cwd-bucket agents have transcripts', async () => {
+      const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-scope-'))
+      tempRoots.push(root)
+      const claudeRoot = join(root, 'claude-projects')
+
+      await writeClaudeSession({
+        claudeRoot,
+        dirName: '-repo-app',
+        sessionId: 'in-scope',
+        cwd: '/repo/app',
+        iso: '2026-06-24T00:00:00.000Z'
+      })
+
+      const result = await scanAiVaultSessions(
+        isolatedScopeOptions(root, { limit: 2, scopePaths: ['/repo/app'] })
+      )
+
+      expect(result.scopeFullyScanned).toBe(true)
+    })
+
+    it('refuses to vouch once an agent without a cwd-bucket layout has a transcript', async () => {
+      const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-scope-'))
+      tempRoots.push(root)
+      const claudeRoot = join(root, 'claude-projects')
+      const codexRoot = join(root, 'codex-sessions')
+
+      await writeClaudeSession({
+        claudeRoot,
+        dirName: '-repo-app',
+        sessionId: 'in-scope',
+        cwd: '/repo/app',
+        iso: '2026-06-24T00:00:00.000Z'
+      })
+      await mkdir(codexRoot, { recursive: true })
+      await writeFile(
+        join(codexRoot, 'rollout-2026-06-24T00-00-00-codex.jsonl'),
+        [
+          JSON.stringify({
+            type: 'session_meta',
+            payload: { id: 'codex-1', timestamp: '2026-06-24T00:00:00.000Z', cwd: '/elsewhere' }
+          })
+        ].join('\n')
+      )
+
+      const result = await scanAiVaultSessions(
+        isolatedScopeOptions(root, {
+          limit: 2,
+          scopePaths: ['/repo/app'],
+          codexSessionsDir: codexRoot
+        })
+      )
+
+      expect(result.scopeFullyScanned).toBe(false)
+    })
+
+    it('claims nothing when the request carried no scope', async () => {
+      const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-scope-'))
+      tempRoots.push(root)
+      const claudeRoot = join(root, 'claude-projects')
+
+      await writeClaudeSession({
+        claudeRoot,
+        dirName: '-repo-app',
+        sessionId: 'in-scope',
+        cwd: '/repo/app',
+        iso: '2026-06-24T00:00:00.000Z'
+      })
+
+      const result = await scanAiVaultSessions(isolatedScopeOptions(root, { limit: 2 }))
+
+      expect(result.scopeFullyScanned).toBe(false)
+    })
   })
 
   it('matches WSL UNC scope paths against Linux Claude cwd values', async () => {
