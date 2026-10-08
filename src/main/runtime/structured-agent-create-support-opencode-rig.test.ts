@@ -66,8 +66,7 @@ function createSupport(settings: ReturnType<typeof rigSettings>) {
     runtime: {
       requireStore: () => ({ getSettings: () => settings }),
       resolveRuntimeFileTarget: async () => ({ worktree: { path: join(root, 'proj') } })
-    },
-    getSettings: () => ({ claudeManagedAccounts: [], activeClaudeManagedAccountId: null })
+    }
   })
 }
 
@@ -101,11 +100,18 @@ describe.skipIf(process.platform === 'win32')('OpenCode create support under the
     )
   })
 
-  it('names the check that refused a 2.x Command in the main log', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  it('admits the 2.x first on the shell PATH when the Command names it', async () => {
+    vi.spyOn(console, 'info').mockImplementation(() => {})
     const homebrew = join(root, 'homebrew', 'opencode')
 
-    expect(await createSupport(rigSettings(homebrew))).toEqual({
+    expect(await createSupport(rigSettings(homebrew))).toEqual({ supported: true })
+  })
+
+  it('names the check that refused an older Command in the main log', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const older = await fakeOpencode(join(root, 'older'), '1.18.30')
+
+    expect(await createSupport(rigSettings(older))).toEqual({
       supported: false,
       reason: 'agent'
     })

@@ -19,6 +19,7 @@ import {
 export const ORCHESTRATION_FEDERATION_CONTROL_METHODS = [
   defineMethod({
     name: 'orchestration.federationFleetSnapshot',
+    permission: 'workspace',
     params: FederationFleetSnapshotParams,
     handler: async (params, { runtime, authenticatedCallerFingerprint }) => {
       const items = await mapWithConcurrency(params.dispatchIds, 16, async (dispatchId) => {
@@ -41,6 +42,7 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS = [
   }),
   defineMethod({
     name: 'orchestration.federationRelease',
+    permission: 'workspace',
     params: FederationDispatchParams,
     handler: async (params, { runtime, authenticatedCallerFingerprint }) => {
       const attachment = requireHomeAttachment(
@@ -54,6 +56,7 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS = [
   }),
   defineMethod({
     name: 'orchestration.federationShow',
+    permission: 'workspace',
     params: FederationDispatchParams,
     handler: async (params, { runtime, authenticatedCallerFingerprint }) => {
       const attachment = requireHomeAttachment(
@@ -78,6 +81,7 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS = [
   }),
   defineMethod({
     name: 'orchestration.federationRead',
+    permission: 'workspace',
     params: FederationReadParams,
     handler: async (params, { runtime, authenticatedCallerFingerprint }) => {
       requireHomeAttachment(runtime, params.dispatchId, authenticatedCallerFingerprint)
@@ -103,6 +107,7 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS = [
   }),
   defineMethod({
     name: 'orchestration.federationReadOutput',
+    permission: 'workspace',
     params: FederationOutputReadParams,
     handler: async (params, { runtime, authenticatedCallerFingerprint }) => {
       const attachment = requireHomeAttachment(
@@ -186,6 +191,7 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS = [
   }),
   defineMethod({
     name: 'orchestration.federationStop',
+    permission: 'workspace',
     params: FederationDispatchParams,
     handler: async (params, { runtime, authenticatedCallerFingerprint }) => {
       requireHomeAttachment(runtime, params.dispatchId, authenticatedCallerFingerprint)

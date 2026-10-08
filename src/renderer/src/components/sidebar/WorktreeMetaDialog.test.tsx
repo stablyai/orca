@@ -1,81 +1,48 @@
 // @vitest-environment happy-dom
-
-import { act, type ReactNode } from 'react'
+import { act, createContext, useContext, type ReactNode } from 'react'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
-import type { LinearIssue } from '../../../../shared/linear/issue-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import type { WorktreeMetaUpdateOptions } from '@/store/slices/worktree-helpers'
-import type { Worktree } from '../../../../shared/worktree/types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 
-// Why: Radix tooltips need a provider the dialog does not own, and the menu's
-// portal needs real layout. Stand-ins keep these tests on provider selection.
 vi.mock('@/components/ui/tooltip', () => ({
   Tooltip: ({ children }: { children?: ReactNode }) => <>{children}</>,
   TooltipContent: () => null,
   TooltipTrigger: ({ children }: { children?: ReactNode }) => <>{children}</>
 }))
-
-vi.mock('@/components/ui/dropdown-menu', async () => {
-  const React = await import('react')
-  const SelectContext = React.createContext<(value: string) => void>(() => {})
-  const Passthrough = ({ children }: { children?: ReactNode }) => <>{children}</>
+vi.mock('@/components/ui/dropdown-menu', () => {
+  const Selection = createContext<(value: string) => void>(() => {})
+  const Pass = ({ children }: { children?: ReactNode }) => <>{children}</>
   return {
-    DropdownMenu: Passthrough,
-    DropdownMenuTrigger: Passthrough,
-    DropdownMenuContent: Passthrough,
+    DropdownMenu: Pass,
+    DropdownMenuContent: Pass,
+    DropdownMenuTrigger: Pass,
     DropdownMenuRadioGroup: ({
-      value,
-      onValueChange,
-      children
+      children,
+      onValueChange
     }: {
-      value: string
-      onValueChange: (value: string) => void
       children?: ReactNode
-    }) => (
-      <SelectContext.Provider value={onValueChange}>
-        <div data-selected={value}>{children}</div>
-      </SelectContext.Provider>
-    ),
+      onValueChange: (value: string) => void
+    }) => <Selection.Provider value={onValueChange}>{children}</Selection.Provider>,
     DropdownMenuRadioItem: ({ value, children }: { value: string; children?: ReactNode }) => {
-      const onSelect = React.useContext(SelectContext)
+      const select = useContext(Selection)
       return (
-        <button type="button" role="menuitemradio" onClick={() => onSelect(value)}>
+        <button type="button" onClick={() => select(value)}>
           {children}
         </button>
       )
     }
   }
 })
-
+vi.mock('@/runtime/runtime-linear-client', () => ({
+  linearStatus: vi.fn(async () => ({ connected: false, viewer: null }))
+}))
 import WorktreeMetaDialog from './WorktreeMetaDialog'
-
-const REPO_ID = 'repo-1'
-const WORKTREE_ID = 'repo-1::/repo/worktrees/feature'
-
-const IME_FIELDS = [
-  {
-    placeholder: 'Notes about this worktree...',
-    value: '日本語',
-    updates: { comment: '日本語' }
-  },
-  {
-    placeholder: 'Custom display name...',
-    value: '日本語の名前',
-    updates: { displayName: '日本語の名前' }
-  },
-  {
-    placeholder: 'Issue #, or a GitHub or Linear URL',
-    value: '42',
-    updates: { linkedIssue: 42 }
-  },
-  { placeholder: 'PR # or GitHub URL', value: '43', updates: { linkedPR: 43 } },
-  { placeholder: 'MR ! or GitLab URL', value: '!44', updates: { linkedGitLabMR: 44 } }
-] as const
 
 const initialState = useAppStore.getInitialState()
 const updateWorktreeMeta =
@@ -86,26 +53,15 @@ const updateWorktreeMeta =
       options?: WorktreeMetaUpdateOptions
     ) => Promise<{ ok: true } | { ok: false; error: string }>
   >()
-const fetchLinearIssue = vi.fn<(...args: never[]) => Promise<LinearIssue | null>>()
-const openUrl = vi.fn<(url: string) => void>()
-
-/** Only `url` is read by the open-issue path. */
-function makeLinearIssue(url: string): LinearIssue {
-  return { url } as LinearIssue
-}
-
-function makeRepo(id: string = REPO_ID, path: string = '/repo'): Repo {
-  return { id, path, displayName: 'orca', badgeColor: '#999999', addedAt: 1 }
-}
-
-function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
+const openUrl = vi.fn()
+function worktree(overrides: Partial<Worktree> = {}): Worktree {
   return {
-    id: WORKTREE_ID,
-    repoId: REPO_ID,
+    id: 'repo::/repo/worktrees/feature',
+    repoId: 'repo',
     path: '/repo/worktrees/feature',
     displayName: 'Feature work',
     branch: 'feature',
-    head: 'abc123',
+    head: 'abc',
     isBare: false,
     isMainWorktree: false,
     comment: 'existing note',
@@ -120,694 +76,553 @@ function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
     ...overrides
   }
 }
-
-function makeFolderWorkspace(overrides: Partial<FolderWorkspace> = {}): FolderWorkspace {
-  return {
-    id: 'fw-1',
-    projectGroupId: 'pg-1',
-    name: 'Docs folder',
-    folderPath: '/repo/docs',
-    linkedTask: {
-      provider: 'linear',
-      type: 'issue',
-      number: 901,
-      title: 'Fix auth',
-      url: 'https://linear.app/acme/issue/STA-901',
-      linearIdentifier: 'STA-901'
-    },
-    comment: '',
-    isArchived: false,
-    isUnread: false,
-    isPinned: false,
-    sortOrder: 0,
-    lastActivityAt: 1,
-    createdAt: 1,
-    updatedAt: 1,
-    ...overrides
-  }
-}
-
 function openDialog(
-  options: {
-    worktree?: Partial<Worktree>
-    worktreeId?: string
-    folderWorkspace?: Partial<FolderWorkspace>
-    /** Extra owners of the same workspace ID, which the index reads as ambiguous. */
-    otherRepos?: { repoId: string; worktree?: Partial<Worktree> }[]
-    modalRepoId?: string
-    modalExecutionHostId?: string
-    modalReviewProvider?: 'github' | 'gitlab'
-    modalCurrentReview?: number
-    modalSuppressHostedReviewRefresh?: boolean
-    linearViewerOrganizationUrlKey?: string
-  } = {}
-): void {
-  const worktree = makeWorktree(options.worktree)
-  const otherRepos = options.otherRepos ?? []
+  overrides: Partial<Worktree> = {},
+  modal: Record<string, unknown> = {}
+): Worktree {
+  const item = worktree(overrides)
   useAppStore.setState({
-    repos: [makeRepo(), ...otherRepos.map((other) => makeRepo(other.repoId, `/${other.repoId}`))],
-    worktreesByRepo: {
-      [REPO_ID]: [worktree],
-      ...Object.fromEntries(
-        otherRepos.map((other) => [
-          other.repoId,
-          [makeWorktree({ repoId: other.repoId, ...other.worktree })]
-        ])
-      )
-    },
-    ...(options.folderWorkspace
-      ? { folderWorkspaces: [makeFolderWorkspace(options.folderWorkspace)] }
-      : {}),
-    ...(options.linearViewerOrganizationUrlKey
-      ? {
-          linearStatus: {
-            connected: true,
-            viewer: {
-              displayName: 'Viewer',
-              email: null,
-              organizationName: 'Active',
-              organizationUrlKey: options.linearViewerOrganizationUrlKey
-            }
-          }
+    repos: [
+      {
+        id: 'repo',
+        path: '/repo',
+        displayName: 'orca',
+        badgeColor: '',
+        addedAt: 1,
+        ...(overrides.hostId ? { executionHostId: overrides.hostId } : {}),
+        gitRemoteIdentity: {
+          canonicalKey: 'github.com/acme/orca',
+          remoteName: 'origin',
+          remoteUrl: 'https://github.com/acme/orca.git'
         }
-      : {}),
+      }
+    ],
+    worktreesByRepo: { repo: [item] },
     activeModal: 'edit-meta',
     modalData: {
-      worktreeId: options.worktreeId ?? worktree.id,
-      ...(options.modalRepoId ? { repoId: options.modalRepoId } : {}),
-      ...(options.modalExecutionHostId ? { executionHostId: options.modalExecutionHostId } : {}),
-      ...(options.modalReviewProvider ? { reviewProvider: options.modalReviewProvider } : {}),
-      ...(options.modalCurrentReview ? { currentReview: options.modalCurrentReview } : {}),
-      ...(options.modalSuppressHostedReviewRefresh ? { suppressHostedReviewRefresh: true } : {}),
-      currentDisplayName: worktree.displayName,
-      currentComment: worktree.comment,
-      focus: 'comment'
+      worktreeId: item.id,
+      repoId: item.repoId,
+      currentDisplayName: item.displayName,
+      currentComment: item.comment,
+      focus: 'comment',
+      ...modal
     },
-    updateWorktreeMeta,
-    fetchLinearIssue: fetchLinearIssue as unknown as ReturnType<
-      typeof useAppStore.getState
-    >['fetchLinearIssue']
+    updateWorktreeMeta
   })
   render(<WorktreeMetaDialog />)
+  return item
+}
+function input(): HTMLElement {
+  const field = screen.getByRole('combobox', { name: 'Search references' })
+  act(() => field.focus())
+  return field
+}
+async function add(value: string, kind?: string): Promise<void> {
+  const field = input()
+  fireEvent.change(field, { target: { value } })
+  if (kind) {
+    fireEvent.click(screen.getByRole('button', { name: kind }))
+  }
+  const command = await screen.findByRole('option', { name: /^Add (PR|Issue|MR|STA)/ })
+  await waitFor(() => expect(command.getAttribute('data-disabled')).not.toBe('true'))
+  fireEvent.click(command)
+}
+async function save(): Promise<void> {
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+  await waitFor(() => expect(updateWorktreeMeta).toHaveBeenCalled())
 }
 
-function issueInput(): HTMLInputElement {
-  return screen.getByPlaceholderText('Issue #, or a GitHub or Linear URL')
-}
-
-function providerChip(): HTMLButtonElement {
-  return screen.getByRole('button', { name: 'Issue provider' })
-}
-
-function saveButton(): HTMLButtonElement {
-  return screen.getByRole('button', { name: 'Save' })
-}
-
-function openIssueButton(): HTMLButtonElement {
-  return screen.getByRole('button', { name: 'Open linked issue' })
-}
-
-describe('WorktreeMetaDialog issue link row', () => {
+describe('workspace linked work editor', () => {
   beforeEach(() => {
     useAppStore.setState(initialState, true)
-    updateWorktreeMeta.mockReset()
-    updateWorktreeMeta.mockResolvedValue({ ok: true })
-    fetchLinearIssue.mockReset()
-    fetchLinearIssue.mockResolvedValue(null)
+    useAppStore.setState({
+      fetchWorkItems: vi.fn(async () => []),
+      getCachedWorkItems: vi.fn(() => []),
+      refreshPreflightStatus: vi.fn(async () => {}),
+      checkLinearConnection: vi.fn(async () => {}),
+      readJiraStatus: vi.fn(async () => ({ connected: false, viewer: null, sites: [] })),
+      linearStatusChecked: true
+    })
+    Element.prototype.scrollIntoView = vi.fn()
+    updateWorktreeMeta.mockReset().mockResolvedValue({ ok: true })
     openUrl.mockReset()
-    Object.defineProperty(window, 'api', {
-      configurable: true,
-      value: { shell: { openUrl } }
+    Object.defineProperty(window, 'api', { configurable: true, value: { shell: { openUrl } } })
+  })
+  afterEach(cleanup)
+
+  it('adds multiple reviews and tasks without displacing existing links', async () => {
+    openDialog({ linkedPR: 1, linkedIssue: 2 })
+    await add('3', 'GitHub PR')
+    await add('STA-4', 'Linear task')
+    expect(screen.getByText('PR #1')).toBeTruthy()
+    expect(screen.getByText('PR #3')).toBeTruthy()
+    expect(screen.getByText('Issue #2')).toBeTruthy()
+    expect(screen.getByText('STA-4')).toBeTruthy()
+    await save()
+    expect(updateWorktreeMeta.mock.calls[0]?.[1].linkedItems).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ provider: 'github', type: 'pr', number: 1 }),
+        expect.objectContaining({ provider: 'github', type: 'pr', number: 3 }),
+        expect.objectContaining({ provider: 'linear', identifier: 'STA-4' })
+      ])
+    )
+  })
+  it('adds a pasted URL according to its provider and type', async () => {
+    openDialog()
+    act(() =>
+      useAppStore.setState({
+        repos: [
+          {
+            id: 'repo',
+            path: '/repo',
+            displayName: 'orca',
+            badgeColor: '',
+            addedAt: 1,
+            gitRemoteIdentity: {
+              canonicalKey: 'gitlab.example.com/team/orca',
+              remoteName: 'origin',
+              remoteUrl: 'https://gitlab.example.com/team/orca.git'
+            }
+          }
+        ]
+      })
+    )
+    await add('https://gitlab.example.com/team/orca/-/merge_requests/12')
+    expect(screen.getByText('MR !12')).toBeTruthy()
+    await save()
+    expect(updateWorktreeMeta.mock.calls[0]?.[1].linkedItems).toEqual([
+      expect.objectContaining({ provider: 'gitlab', type: 'mr', number: 12 })
+    ])
+  })
+  it('shows an existing reference as linked', async () => {
+    openDialog({ linkedIssue: 42 })
+    fireEvent.change(input(), { target: { value: '#42' } })
+    expect(await screen.findByText('Linked')).toBeTruthy()
+    expect(screen.getAllByText('Issue #42')).toHaveLength(1)
+  })
+  it('unlinks only the chosen item', async () => {
+    openDialog({
+      linkedPR: 1,
+      linkedItems: [
+        { provider: 'github', type: 'pr', number: 1 },
+        { provider: 'github', type: 'pr', number: 2 }
+      ]
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Unlink PR #2' }))
+    await save()
+    expect(updateWorktreeMeta.mock.calls[0]?.[1].linkedItems).toEqual([
+      { provider: 'github', type: 'pr', number: 1 }
+    ])
+  })
+  it('keeps all reviews without exposing a checks selector', async () => {
+    openDialog({
+      linkedPR: 1,
+      linkedItems: [
+        { provider: 'github', type: 'pr', number: 1 },
+        { provider: 'github', type: 'pr', number: 2 }
+      ]
+    })
+    expect(screen.queryByRole('button', { name: /Use .* for checks/ })).toBeNull()
+    expect(screen.queryByText('Used for checks')).toBeNull()
+    await save()
+    expect(updateWorktreeMeta.mock.calls[0]?.[1]).toEqual({})
+  })
+  it('unlinks a review without overriding another client’s concurrently selected review', async () => {
+    const original = openDialog({
+      linkedPR: 1,
+      linkedItems: [
+        { provider: 'github', type: 'pr', number: 1 },
+        { provider: 'github', type: 'pr', number: 2 }
+      ]
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Unlink PR #1' }))
+    act(() =>
+      useAppStore.setState({
+        worktreesByRepo: {
+          repo: [
+            {
+              ...original,
+              linkedPR: 3,
+              linkedItems: [
+                ...(original.linkedItems ?? []),
+                { provider: 'github', type: 'pr', number: 3 }
+              ]
+            }
+          ]
+        }
+      })
+    )
+    await save()
+    expect(updateWorktreeMeta.mock.calls[0]?.[1]).toEqual({
+      linkedItemsBase: original.linkedItems,
+      linkedItems: [{ provider: 'github', type: 'pr', number: 2 }]
     })
   })
-
-  afterEach(() => {
-    cleanup()
-    vi.restoreAllMocks()
-    useAppStore.setState(initialState, true)
+  it('passes the original snapshot so persistence can preserve background additions', async () => {
+    const original = openDialog({ linkedIssue: 1 })
+    fireEvent.click(screen.getByRole('button', { name: 'Unlink Issue #1' }))
+    act(() =>
+      useAppStore.setState({
+        worktreesByRepo: {
+          repo: [
+            {
+              ...original,
+              linkedItems: [
+                { provider: 'github', type: 'issue', number: 1 },
+                { provider: 'github', type: 'issue', number: 2 }
+              ]
+            }
+          ]
+        }
+      })
+    )
+    await save()
+    expect(updateWorktreeMeta.mock.calls[0]?.[1]).toEqual({
+      linkedItemsBase: [{ provider: 'github', type: 'issue', number: 1 }],
+      linkedItems: []
+    })
   })
-
-  it.each(IME_FIELDS)(
-    'ignores IME Enter and resets on blur in $placeholder',
-    async ({ placeholder, value, updates }) => {
-      openDialog(placeholder === 'MR ! or GitLab URL' ? { modalReviewProvider: 'gitlab' } : {})
-      const input = screen.getByPlaceholderText(placeholder)
-      fireEvent.change(input, { target: { value } })
-      for (const marker of [{ isComposing: true, keyCode: 13 }, { keyCode: 229 }]) {
-        expect(fireEvent.keyDown(input, { key: 'Enter', ...marker })).toBe(true)
-        expect(updateWorktreeMeta).not.toHaveBeenCalled()
-        expect(useAppStore.getState().activeModal).toBe('edit-meta')
-      }
-      fireEvent.compositionStart(input)
-      expect(fireEvent.keyDown(input, { key: 'Enter', keyCode: 13 })).toBe(true)
-      expect(updateWorktreeMeta).not.toHaveBeenCalled()
-      fireEvent.blur(input)
-      await act(async () => {
-        fireEvent.keyDown(input, { key: 'Enter', keyCode: 13 })
-      })
-      expect(updateWorktreeMeta).toHaveBeenCalledTimes(1)
-      expect(updateWorktreeMeta.mock.calls[0]?.[1]).toEqual(expect.objectContaining(updates))
-      expect(useAppStore.getState().activeModal).toBe('none')
-    }
-  )
-
-  it.each(
-    ['before keyup', 'after keyup'].flatMap((order) =>
-      IME_FIELDS.map((field) => ({ ...field, order }))
-    )
-  )(
-    'ignores the IME Enter redispatch $order in $placeholder',
-    async ({ order, placeholder, value, updates }) => {
-      openDialog(placeholder === 'MR ! or GitLab URL' ? { modalReviewProvider: 'gitlab' } : {})
-      const input = screen.getByPlaceholderText(placeholder)
-      const frames: FrameRequestCallback[] = []
-      vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) =>
-        frames.push(callback)
-      )
-      fireEvent.compositionStart(input)
-      fireEvent.keyDown(input, { key: 'Process', keyCode: 229, isComposing: true })
-      fireEvent.change(input, { target: { value } })
-      fireEvent.compositionEnd(input)
-      if (order === 'after keyup') {
-        fireEvent.keyUp(input, { key: 'Enter', keyCode: 13 })
-      }
-      expect(fireEvent.keyDown(input, { key: 'Enter', keyCode: 13 })).toBe(false)
-      expect(updateWorktreeMeta).not.toHaveBeenCalled()
-      expect(useAppStore.getState().activeModal).toBe('edit-meta')
-      fireEvent.keyUp(input, { key: 'Enter', keyCode: 13 })
-      act(() => frames.forEach((callback) => callback(0)))
-      await act(async () => {
-        fireEvent.keyDown(input, { key: 'Enter', keyCode: 13 })
-      })
-      expect(updateWorktreeMeta.mock.calls[0]?.[1]).toEqual(expect.objectContaining(updates))
-      expect(updateWorktreeMeta).toHaveBeenCalledTimes(1)
-      expect(useAppStore.getState().activeModal).toBe('none')
-    }
-  )
-
-  it.each(IME_FIELDS)(
-    'expires an IME gesture without redispatch in $placeholder',
-    async ({ placeholder }) => {
-      openDialog(placeholder === 'MR ! or GitLab URL' ? { modalReviewProvider: 'gitlab' } : {})
-      const input = screen.getByPlaceholderText(placeholder)
-      const frames: FrameRequestCallback[] = []
-      vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) =>
-        frames.push(callback)
-      )
-      fireEvent.compositionStart(input)
-      fireEvent.keyDown(input, { key: 'Enter', keyCode: 229 })
-      fireEvent.compositionEnd(input)
-      fireEvent.keyUp(input, { key: 'Enter', keyCode: 13 })
-      act(() => frames.forEach((callback) => callback(0)))
-      await act(async () => {
-        fireEvent.keyDown(input, { key: 'Enter', keyCode: 13 })
-      })
-      expect(updateWorktreeMeta).toHaveBeenCalledTimes(1)
-      expect(useAppStore.getState().activeModal).toBe('none')
-    }
-  )
-
-  it.each(
-    ['active composition', 'pending confirmation'].flatMap((phase) =>
-      IME_FIELDS.map((field) => ({ ...field, phase }))
-    )
-  )(
-    'allows a deliberate save after closing with $phase in $placeholder',
-    async ({ phase, placeholder, value, updates }) => {
-      openDialog(placeholder === 'MR ! or GitLab URL' ? { modalReviewProvider: 'gitlab' } : {})
-      const input = screen.getByPlaceholderText(placeholder)
-      const modalData = useAppStore.getState().modalData
-      fireEvent.compositionStart(input)
-      if (phase === 'pending confirmation') {
-        fireEvent.keyDown(input, { key: 'Enter', keyCode: 229 })
-        fireEvent.compositionEnd(input)
-      }
-      act(() => useAppStore.getState().closeModal())
-      expect(screen.queryByPlaceholderText(placeholder)).toBeNull()
-      act(() => useAppStore.setState({ activeModal: 'edit-meta', modalData }))
-      const reopenedInput = screen.getByPlaceholderText(placeholder)
-      fireEvent.change(reopenedInput, { target: { value } })
-      await act(async () => {
-        fireEvent.keyDown(reopenedInput, { key: 'Enter', keyCode: 13 })
-      })
-      expect(updateWorktreeMeta).toHaveBeenCalledTimes(1)
-      expect(updateWorktreeMeta.mock.calls[0]?.[1]).toEqual(expect.objectContaining(updates))
-      expect(useAppStore.getState().activeModal).toBe('none')
-    }
-  )
-
-  it('keeps a folder workspace note open through composition confirmation', async () => {
-    const worktreeId = folderWorkspaceKey('fw-1')
-    openDialog({ worktreeId, folderWorkspace: {} })
-    const input = screen.getByPlaceholderText('Notes about this worktree...')
-    fireEvent.change(input, { target: { value: '日本語' } })
-    fireEvent.compositionStart(input)
-    fireEvent.keyDown(input, { key: 'Enter', keyCode: 229 })
-    fireEvent.compositionEnd(input)
-    fireEvent.keyDown(input, { key: 'Enter', keyCode: 13 })
-    expect(updateWorktreeMeta).not.toHaveBeenCalled()
+  it('omits untouched links on comment-only saves', async () => {
+    openDialog({ linkedIssue: 1, linkedLinearIssue: 'STA-2' })
+    fireEvent.change(screen.getByPlaceholderText('Notes about this worktree...'), {
+      target: { value: 'new note' }
+    })
+    await save()
+    expect(updateWorktreeMeta.mock.calls[0]?.[1]).toEqual({ comment: 'new note' })
+  })
+  it('keeps the draft and error visible after a failed save', async () => {
+    updateWorktreeMeta.mockResolvedValue({ ok: false, error: 'Host is disconnected' })
+    openDialog()
+    await add('4')
+    await save()
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toBe('Host is disconnected')
+    expect(alert.parentElement?.contains(screen.getByRole('button', { name: 'Save' }))).toBe(true)
+    expect(screen.getByText('Issue #4')).toBeTruthy()
     expect(useAppStore.getState().activeModal).toBe('edit-meta')
-    await act(async () => {
-      fireEvent.keyDown(input, { key: 'Enter', keyCode: 13 })
-    })
-    expect(updateWorktreeMeta).toHaveBeenCalledExactlyOnceWith(worktreeId, { comment: '日本語' })
-    expect(useAppStore.getState().activeModal).toBe('none')
   })
-
+  it('supports folder workspace links', async () => {
+    const folder: FolderWorkspace = {
+      id: 'folder-1',
+      projectGroupId: 'group',
+      name: 'Docs',
+      folderPath: '/docs',
+      linkedTask: null,
+      comment: '',
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: 1,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    useAppStore.setState({ folderWorkspaces: [folder] })
+    openDialog({}, { worktreeId: folderWorkspaceKey(folder.id), repoId: undefined })
+    await add('STA-5', 'Linear task')
+    await save()
+    expect(updateWorktreeMeta.mock.calls[0]?.[0]).toBe(folderWorkspaceKey(folder.id))
+    expect(updateWorktreeMeta.mock.calls[0]?.[1].linkedItems).toEqual([
+      expect.objectContaining({ provider: 'linear', identifier: 'STA-5' })
+    ])
+  })
+  it('preserves the execution host in a metadata save', async () => {
+    openDialog({ hostId: 'runtime:host-1' }, { executionHostId: 'runtime:host-1' })
+    await add('4')
+    await save()
+    expect(updateWorktreeMeta.mock.calls[0]?.[2]).toEqual({ executionHostId: 'runtime:host-1' })
+  })
+  it('Enter adds another link and leaves the editor open', async () => {
+    openDialog()
+    const field = input()
+    fireEvent.change(field, { target: { value: 'https://github.com/acme/orca/issues/4' } })
+    fireEvent.keyDown(field, { key: 'Enter' })
+    expect(screen.queryByText('Issue #4')).toBeNull()
+    const command = await screen.findByRole('option', { name: 'Add Issue #4' })
+    await waitFor(() => expect(command.getAttribute('data-disabled')).not.toBe('true'))
+    fireEvent.keyDown(field, { key: 'Enter' })
+    expect(screen.getByText('Issue #4')).toBeTruthy()
+    expect(updateWorktreeMeta).not.toHaveBeenCalled()
+  })
+  it('does not add during an IME composition gesture', () => {
+    openDialog()
+    const field = input()
+    fireEvent.change(field, { target: { value: '4' } })
+    fireEvent.compositionStart(field)
+    fireEvent.keyDown(field, { key: 'Enter', isComposing: true })
+    expect(screen.queryByText('Issue #4')).toBeNull()
+    expect(updateWorktreeMeta).not.toHaveBeenCalled()
+  })
   it.each([
-    { userAgent: 'Macintosh', modifier: { metaKey: true } },
-    { userAgent: 'Windows', modifier: { ctrlKey: true } },
-    { userAgent: 'Linux', modifier: { ctrlKey: true } }
-  ])(
-    'keeps the save shortcut outside composition on $userAgent',
-    async ({ userAgent, modifier }) => {
-      vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(userAgent)
-      openDialog()
-      const input = screen.getByPlaceholderText('Notes about this worktree...')
-      fireEvent.compositionStart(input)
-      fireEvent.keyDown(input, { key: 'Enter', keyCode: 13, ...modifier })
-      expect(updateWorktreeMeta).not.toHaveBeenCalled()
-      fireEvent.compositionEnd(input)
-      await act(async () => {
-        fireEvent.keyDown(input, { key: 'Enter', keyCode: 13, ...modifier })
-      })
-      expect(updateWorktreeMeta).toHaveBeenCalledTimes(1)
-    }
-  )
-
-  it('leaves Shift+Enter available for a newline', () => {
+    { key: 'Enter', keyCode: 13, isComposing: true },
+    { key: 'Enter', keyCode: 229 },
+    { key: 'Enter', keyCode: 13 }
+  ])('keeps notes open through IME confirmation and redispatch: %j', async (event) => {
     openDialog()
-    const input = screen.getByPlaceholderText('Notes about this worktree...')
-    expect(fireEvent.keyDown(input, { key: 'Enter', keyCode: 13, shiftKey: true })).toBe(true)
+    const notes = screen.getByRole('textbox', { name: 'Notes' })
+    fireEvent.compositionStart(notes)
+    fireEvent.change(notes, { target: { value: '確定' } })
+    fireEvent.keyDown(notes, event)
+    fireEvent.compositionEnd(notes)
+    fireEvent.keyUp(notes, { key: 'Enter', keyCode: 13 })
+    fireEvent.keyDown(notes, { key: 'Enter', keyCode: 13 })
     expect(updateWorktreeMeta).not.toHaveBeenCalled()
     expect(useAppStore.getState().activeModal).toBe('edit-meta')
+    fireEvent.keyDown(notes, { key: 'Enter', keyCode: 13 })
+    await waitFor(() => expect(updateWorktreeMeta).toHaveBeenCalled())
+    expect(updateWorktreeMeta.mock.calls[0]?.[1].comment).toBe('確定')
   })
-
-  it('seeds the chip and value from a GitHub link', () => {
-    openDialog({ worktree: { linkedIssue: 42 } })
-
-    expect(providerChip().textContent).toContain('GitHub')
-    expect(issueInput().value).toBe('42')
+  it('saves selected drafts while leaving search text unattached', async () => {
+    openDialog({ linkedIssue: 1 })
+    await add('https://github.com/acme/orca/issues/4')
+    fireEvent.change(input(), { target: { value: '42' } })
+    expect(screen.getByRole('button', { name: 'Save' }).hasAttribute('disabled')).toBe(false)
+    expect(screen.getByText('Select a result to attach it.')).toBeTruthy()
+    await save()
+    expect(updateWorktreeMeta.mock.calls[0]?.[1].linkedItems).toEqual([
+      expect.objectContaining({ number: 1 }),
+      expect.objectContaining({ number: 4 })
+    ])
   })
-
-  it('seeds and saves the GitLab MR row through the GitLab slot', async () => {
-    openDialog({
-      worktree: { linkedGitLabMR: 42 },
-      modalReviewProvider: 'gitlab',
-      modalCurrentReview: 42,
-      modalSuppressHostedReviewRefresh: true
-    })
-    const input = screen.getByPlaceholderText('MR ! or GitLab URL')
-
-    expect(screen.getByText('GitLab MR')).toBeTruthy()
-    expect((input as HTMLInputElement).value).toBe('42')
-    fireEvent.change(input, { target: { value: '!43' } })
-    await act(async () => fireEvent.click(saveButton()))
-
-    await waitFor(() => expect(updateWorktreeMeta).toHaveBeenCalledTimes(1))
-    expect(updateWorktreeMeta.mock.calls[0]?.[1]).toEqual(
-      expect.objectContaining({ linkedGitLabMR: 43 })
-    )
-    expect(updateWorktreeMeta.mock.calls[0]?.[1]).not.toHaveProperty('linkedPR')
-    expect(updateWorktreeMeta.mock.calls[0]?.[2]).toEqual({ suppressHostedReviewRefresh: true })
-  })
-
-  it('replaces a completed emoji shortcode in the display name', () => {
+  it('blocks known foreign issue URLs with an explanation', () => {
     openDialog()
-    const displayNameInput = screen.getByRole('textbox', { name: 'Display Name' })
-
-    fireEvent.change(displayNameInput, {
-      target: { value: 'Feature :wink:', selectionStart: 14 }
+    fireEvent.change(input(), {
+      target: { value: 'https://github.com/other/project/issues/4' }
     })
-
-    expect((displayNameInput as HTMLInputElement).value).toBe('Feature 😉')
-  })
-
-  it('seeds the chip and value from a Linear link', () => {
-    openDialog({ worktree: { linkedLinearIssue: 'STA-335' } })
-
-    expect(providerChip().textContent).toContain('Linear')
-    expect(issueInput().value).toBe('STA-335')
-  })
-
-  it('flips to Linear when a linear.app issue URL is pasted', () => {
-    openDialog({ worktree: { linkedIssue: 42 } })
-
-    fireEvent.change(issueInput(), {
-      target: { value: 'https://linear.app/acme/issue/STA-335/fix-the-thing' }
-    })
-
-    expect(providerChip().textContent).toContain('Linear')
-  })
-
-  // Why: Linear and Jira issue keys are the same shape, so only a URL may steer
-  // the provider — a bare key must never override the user's explicit choice.
-  it('keeps the chip on GitHub when a bare issue key is typed', () => {
-    openDialog({ worktree: { linkedIssue: 42 } })
-
-    fireEvent.change(issueInput(), { target: { value: 'GH-1234' } })
-
-    expect(providerChip().textContent).toContain('GitHub')
-    expect(providerChip().textContent).not.toContain('Linear')
-  })
-
-  it('flips to GitHub when a GitHub issue URL is pasted over a Linear link', () => {
-    openDialog({ worktree: { linkedLinearIssue: 'STA-335' } })
-
-    fireEvent.change(issueInput(), {
-      target: { value: 'https://github.com/acme/orca/issues/77' }
-    })
-
-    expect(providerChip().textContent).toContain('GitHub')
-  })
-
-  it('names the Linear issue that switching to GitHub would unlink', () => {
-    openDialog({ worktree: { linkedLinearIssue: 'STA-335' } })
-
-    fireEvent.click(screen.getByRole('menuitemradio', { name: 'GitHub' }))
-    fireEvent.change(issueInput(), { target: { value: '99' } })
-
     expect(
-      screen.getByText('Saving unlinks Linear STA-335 — a workspace tracks one issue.')
-    ).toBeTruthy()
-  })
-
-  // Both slots can hold a link at once — naming only one understates the save.
-  it('names both links when clearing the field would drop both', () => {
-    openDialog({ worktree: { linkedIssue: 42, linkedLinearIssue: 'STA-335' } })
-
-    fireEvent.change(issueInput(), { target: { value: '' } })
-
+      screen.getByRole('option', { name: /^Add / }).getAttribute('aria-disabled') === 'true'
+    ).toBe(true)
     expect(
       screen.getByText(
-        'Saving unlinks Linear STA-335 and GitHub #42 — a workspace tracks one issue.'
+        'This issue belongs to another repository. Add issues from this workspace’s repository.'
       )
     ).toBeTruthy()
   })
-
-  // The warning above only promises the displacement — this asserts the payload
-  // that carries it out, which is where the one-issue-per-workspace rule lives.
-  it('clears the displaced GitHub link when a Linear value is saved', async () => {
-    openDialog({ worktree: { linkedIssue: 42 } })
-
-    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Linear' }))
-    fireEvent.change(issueInput(), { target: { value: 'STA-335' } })
-    await act(async () => {
-      fireEvent.click(saveButton())
+  it('blocks known foreign review URLs with an explanation', () => {
+    openDialog()
+    fireEvent.change(input(), {
+      target: { value: 'https://github.com/other/project/pull/4' }
     })
-
-    await waitFor(() => expect(updateWorktreeMeta).toHaveBeenCalledTimes(1))
-    const updates = updateWorktreeMeta.mock.calls[0]?.[1] ?? {}
-    expect(updates.linkedLinearIssue).toBe('STA-335')
-    expect(updates.linkedIssue).toBeNull()
-  })
-
-  // A GitHub-only save must carry no Linear keys: persistence gates the remote
-  // Linear capability on key presence, so a synthetic clear fails the save.
-  it('sends no Linear keys when the workspace has no Linear link', async () => {
-    openDialog({ worktree: { linkedIssue: 42 } })
-
-    fireEvent.change(issueInput(), { target: { value: '99' } })
-    await act(async () => {
-      fireEvent.click(saveButton())
-    })
-
-    await waitFor(() => expect(updateWorktreeMeta).toHaveBeenCalledTimes(1))
-    const updates = updateWorktreeMeta.mock.calls[0]?.[1] ?? {}
-    expect(updates.linkedIssue).toBe(99)
-    expect(updates).not.toHaveProperty('linkedLinearIssue')
-  })
-  it('qualifies a save with the host selected by the opening row', async () => {
-    openDialog({
-      worktree: { hostId: 'ssh:build-box' },
-      modalExecutionHostId: 'ssh:build-box'
-    })
-
-    fireEvent.change(screen.getByPlaceholderText('Notes about this worktree...'), {
-      target: { value: 'remote note' }
-    })
-    await act(async () => {
-      fireEvent.click(saveButton())
-    })
-
-    await waitFor(() =>
-      expect(updateWorktreeMeta).toHaveBeenCalledWith(
-        WORKTREE_ID,
-        expect.objectContaining({ comment: 'remote note' }),
-        { executionHostId: 'ssh:build-box' }
+    expect(
+      screen.getByRole('option', { name: /^Add / }).getAttribute('aria-disabled') === 'true'
+    ).toBe(true)
+    expect(
+      screen.getByText(
+        'This review belongs to another repository. Add reviews from this workspace’s repository.'
       )
-    )
+    ).toBeTruthy()
   })
-
-  // updateWorktreeMeta stamps lastActivityAt on any comment write, which would
-  // reorder the workspace under the time-decay sidebar sort.
-  it('sends no comment when only the issue link changed', async () => {
-    openDialog({ worktree: { linkedLinearIssue: 'STA-335' } })
-
-    fireEvent.change(issueInput(), { target: { value: 'STA-999' } })
-    await act(async () => {
-      fireEvent.click(saveButton())
-    })
-
-    await waitFor(() => expect(updateWorktreeMeta).toHaveBeenCalledTimes(1))
-    expect(updateWorktreeMeta.mock.calls[0]?.[1] ?? {}).not.toHaveProperty('comment')
-  })
-
-  // A failed save refetches and reverts the optimistic write, so closing here
-  // would report success for an edit that silently undid itself.
-  it('keeps the dialog open and reports why when the save fails', async () => {
-    openDialog({ worktree: { linkedLinearIssue: 'STA-335' } })
-    updateWorktreeMeta.mockResolvedValue({ ok: false, error: 'Runtime is offline' })
-
-    fireEvent.change(issueInput(), { target: { value: 'STA-999' } })
-    await act(async () => {
-      fireEvent.click(saveButton())
-    })
-
-    expect(screen.getByRole('alert').textContent).toBe('Runtime is offline')
+  it('clears search with captured Escape before the next Escape closes details', () => {
+    openDialog()
+    const field = input()
+    fireEvent.change(field, { target: { value: 'unselected search' } })
+    fireEvent.keyDown(field, { key: 'Escape' })
+    expect(screen.getByRole('combobox')).toBe(field)
+    expect(screen.queryByRole('option')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Clear search' })).toBeNull()
     expect(useAppStore.getState().activeModal).toBe('edit-meta')
+    fireEvent.keyDown(field, { key: 'Escape' })
+    expect(useAppStore.getState().activeModal).toBe('none')
   })
-
-  it('leaves the Linear link alone when only the comment is edited', async () => {
-    openDialog({ worktree: { linkedLinearIssue: 'STA-335' } })
-
-    fireEvent.change(screen.getByPlaceholderText('Notes about this worktree...'), {
-      target: { value: 'updated note' }
-    })
-
-    expect(screen.queryByText(/Saving unlinks/)).toBeNull()
-
-    await act(async () => {
-      fireEvent.click(saveButton())
-    })
-
-    await waitFor(() => expect(updateWorktreeMeta).toHaveBeenCalledTimes(1))
-    const updates = updateWorktreeMeta.mock.calls[0]?.[1] ?? {}
-    expect(Object.keys(updates)).not.toContain('linkedLinearIssue')
-    expect(Object.keys(updates)).not.toContain('linkedIssue')
-    expect(updates.comment).toBe('updated note')
+  it('keeps real GitLab-enabled controller effects bounded in Smart mode', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    openDialog({ hostId: 'ssh:test-host' })
+    input()
+    await waitFor(() => expect(useAppStore.getState().fetchWorkItems).toHaveBeenCalledTimes(1))
+    expect(screen.getByRole('tab', { name: 'GitLab' })).toBeTruthy()
+    expect(errors.mock.calls.flat().join(' ')).not.toContain('Maximum update depth')
+    errors.mockRestore()
   })
-
-  it('blocks saving an unparseable Linear value', () => {
-    openDialog({ worktree: { linkedLinearIssue: 'STA-335' } })
-
-    fireEvent.change(issueInput(), { target: { value: 'not an issue' } })
-
-    expect(screen.getByText('Not a Linear issue key or linear.app issue URL.')).toBeTruthy()
-    expect(saveButton().disabled).toBe(true)
-  })
-
-  it('is read-only for a folder workspace', () => {
-    openDialog({ worktreeId: folderWorkspaceKey('fw-1') })
-
-    expect(issueInput().disabled).toBe(true)
-    expect(providerChip().disabled).toBe(true)
-    expect(
-      screen.getByText(
-        "Issue links are set when a folder workspace is created and can't be changed here yet."
-      )
-    ).toBeTruthy()
-  })
-
-  // Folder workspaces live outside worktreesByRepo, so the indexed lookup alone
-  // leaves the row blank and the link it does hold looks lost.
-  it('shows a folder workspace its own linked issue', () => {
-    openDialog({ worktreeId: folderWorkspaceKey('fw-1'), folderWorkspace: {} })
-
-    expect(issueInput().value).toBe('STA-901')
-    expect(providerChip().textContent).toContain('Linear')
-  })
-
-  // A background `orca worktree set` must not move the baseline mid-edit: the
-  // field would read as dirty and a comment-only save would write the stale seed.
-  it('keeps the baseline frozen when the store changes while open', async () => {
-    openDialog({ worktree: { linkedLinearIssue: 'STA-335' } })
-
-    act(() => {
-      useAppStore.setState({
-        worktreesByRepo: {
-          [REPO_ID]: [makeWorktree({ linkedLinearIssue: 'STA-999' })]
-        }
-      })
-    })
-    fireEvent.change(screen.getByPlaceholderText('Notes about this worktree...'), {
-      target: { value: 'still working' }
-    })
-    await act(async () => {
-      fireEvent.click(saveButton())
-    })
-
-    const updates = updateWorktreeMeta.mock.calls[0]?.[1] ?? {}
-    expect(updates.comment).toBe('still working')
-    expect(updates).not.toHaveProperty('linkedLinearIssue')
-    expect(updates).not.toHaveProperty('linkedIssue')
-  })
-
-  // A bare key names no organization. Building one from the connected viewer
-  // opens a not-found page — or a colliding issue — for every other workspace
-  // the user belongs to, and skips the lookup that would have said so.
-  it('resolves a bare Linear key across workspaces rather than the active organization', async () => {
-    fetchLinearIssue.mockResolvedValue(makeLinearIssue('https://linear.app/other/issue/STA-999'))
-    openDialog({
-      worktree: { linkedLinearIssue: 'STA-335' },
-      linearViewerOrganizationUrlKey: 'active-org'
-    })
-
-    fireEvent.change(issueInput(), { target: { value: 'STA-999' } })
-    await act(async () => {
-      fireEvent.click(openIssueButton())
-    })
-
-    expect(fetchLinearIssue.mock.calls[0]?.slice(0, 2)).toEqual(['STA-999', 'all'])
-    expect(openUrl).toHaveBeenCalledWith('https://linear.app/other/issue/STA-999')
-  })
-
-  // The stored key belongs to the persisted identifier, so it stays authoritative
-  // for it — no lookup, no round trip.
-  it('opens a stored Linear link directly from its organization key', async () => {
-    openDialog({
-      worktree: {
-        linkedLinearIssue: 'STA-335',
-        linkedLinearIssueOrganizationUrlKey: 'acme'
-      },
-      linearViewerOrganizationUrlKey: 'active-org'
-    })
-
-    await act(async () => {
-      fireEvent.click(openIssueButton())
-    })
-
-    expect(fetchLinearIssue).not.toHaveBeenCalled()
-    expect(openUrl).toHaveBeenCalledWith('https://linear.app/acme/issue/STA-335')
-  })
-
-  // Promise.race cannot cancel the lookup, and the field stays editable while it
-  // runs — a late result must not open the issue the user just replaced.
-  it('does not open a lookup result after the field moved on', async () => {
-    let resolveLookup: ((issue: LinearIssue | null) => void) | undefined
-    fetchLinearIssue.mockReturnValue(
-      new Promise<LinearIssue | null>((resolve) => {
-        resolveLookup = resolve
-      })
-    )
-    openDialog({ worktree: { linkedLinearIssue: 'STA-335' } })
-
-    fireEvent.change(issueInput(), { target: { value: 'STA-999' } })
-    fireEvent.click(openIssueButton())
-    fireEvent.change(issueInput(), { target: { value: 'STA-777' } })
-    await act(async () => {
-      resolveLookup?.(makeLinearIssue('https://linear.app/acme/issue/STA-999'))
-    })
-
-    expect(openUrl).not.toHaveBeenCalled()
-    expect(
-      screen.queryByText(
-        "Couldn't open that issue. Check the identifier and your Linear connection."
-      )
-    ).toBeNull()
-  })
-
-  // Displacement is decided at save time, not at open: a link added by the CLI
-  // while the dialog sat open must not outlive the save that warned about it.
-  it('clears a Linear link added while the dialog was open', async () => {
-    openDialog({ worktree: { linkedIssue: 42 } })
-
-    act(() => {
-      useAppStore.setState({
-        worktreesByRepo: {
-          [REPO_ID]: [makeWorktree({ linkedIssue: 42, linkedLinearIssue: 'STA-999' })]
-        }
-      })
-    })
-    fireEvent.change(issueInput(), { target: { value: '99' } })
-
-    expect(
-      screen.getByText('Saving unlinks Linear STA-999 — a workspace tracks one issue.')
-    ).toBeTruthy()
-
-    await act(async () => {
-      fireEvent.click(saveButton())
-    })
-
-    await waitFor(() => expect(updateWorktreeMeta).toHaveBeenCalledTimes(1))
-    const updates = updateWorktreeMeta.mock.calls[0]?.[1] ?? {}
-    expect(updates.linkedIssue).toBe(99)
-    expect(updates.linkedLinearIssue).toBeNull()
-  })
-
-  // Same issue, different spelling: the link is unchanged, so its title and
-  // SSH/runtime source context must survive the save.
-  it('keeps the linked work item when the value is only respelled', async () => {
-    openDialog({
-      worktree: {
-        linkedLinearIssue: 'STA-335',
-        linkedWorkItem: {
-          provider: 'linear',
+  it('adds a searched issue with title and source context and stays ready for another', async () => {
+    useAppStore.setState({
+      fetchWorkItems: vi.fn(async (): Promise<GitHubWorkItem[]> => [
+        {
+          id: 'issue-71',
+          repoId: 'repo',
           type: 'issue',
-          number: 335,
-          title: 'Fix auth',
-          url: 'https://linear.app/acme/issue/STA-335'
+          number: 71,
+          title: 'Searchable issue',
+          state: 'open',
+          url: 'https://github.com/acme/orca/issues/71',
+          labels: [],
+          updatedAt: '2026-10-05',
+          author: null
         }
-      }
+      ])
     })
-
-    fireEvent.change(issueInput(), { target: { value: 'sta-335' } })
-
-    expect(screen.queryByText(/Saving unlinks/)).toBeNull()
-
-    await act(async () => {
-      fireEvent.click(saveButton())
+    openDialog()
+    const field = input()
+    fireEvent.change(field, { target: { value: 'Searchable' } })
+    await screen.findByRole('option', { name: /Searchable issue/ })
+    await waitFor(() =>
+      expect(
+        screen.getByRole('option', { name: /Searchable issue/ }).getAttribute('data-disabled')
+      ).not.toBe('true')
+    )
+    fireEvent.click(screen.getByRole('option', { name: /Searchable issue/ }))
+    expect(screen.getByRole('combobox')).toBeTruthy()
+    expect(field).toBeInstanceOf(HTMLInputElement)
+    if (!(field instanceof HTMLInputElement)) {
+      throw new Error('Expected reference input')
+    }
+    expect(field.value).toBe('')
+    await save()
+    expect(updateWorktreeMeta.mock.calls[0]?.[1].linkedItems).toEqual([
+      expect.objectContaining({
+        number: 71,
+        title: 'Searchable issue',
+        taskSourceContext: expect.objectContaining({
+          provider: 'github',
+          providerIdentity: expect.objectContaining({ owner: 'acme', repo: 'orca' })
+        })
+      })
+    ])
+  })
+  it('does not select a held result after typing a different query', async () => {
+    useAppStore.setState({
+      fetchWorkItems: vi.fn(async (): Promise<GitHubWorkItem[]> => [
+        {
+          id: 'issue-71',
+          repoId: 'repo',
+          type: 'issue',
+          number: 71,
+          title: 'Old result',
+          state: 'open',
+          url: 'https://github.com/acme/orca/issues/71',
+          labels: [],
+          updatedAt: '2026-10-05',
+          author: null
+        }
+      ])
     })
-
-    await waitFor(() => expect(updateWorktreeMeta).toHaveBeenCalledTimes(1))
-    const updates = updateWorktreeMeta.mock.calls[0]?.[1] ?? {}
-    expect(updates).not.toHaveProperty('linkedWorkItem')
-    expect(updates).not.toHaveProperty('linkedTaskSourceContext')
-    expect(updates).not.toHaveProperty('linkedLinearIssue')
+    openDialog()
+    const field = input()
+    fireEvent.change(field, { target: { value: 'Old' } })
+    const result = await screen.findByRole('option', { name: /Old result/ })
+    fireEvent.change(field, { target: { value: 'new query' } })
+    fireEvent.keyDown(field, { key: 'Enter' })
+    fireEvent.click(result)
+    expect(screen.getByText('0 linked')).toBeTruthy()
+  })
+  it('stops cmdk from adding an IME-owned unmarked Enter', () => {
+    openDialog()
+    const field = input()
+    fireEvent.change(field, { target: { value: 'https://github.com/acme/orca/issues/71' } })
+    fireEvent.compositionStart(field)
+    fireEvent.keyDown(field, { key: 'Enter', keyCode: 13, isComposing: false })
+    fireEvent.compositionEnd(field)
+    fireEvent.keyDown(field, { key: 'Enter', keyCode: 13, isComposing: false })
+    expect(screen.getByText('0 linked')).toBeTruthy()
   })
 
-  // The owner index reports a duplicated workspace ID as ambiguous rather than
-  // guessing, so the opening row has to name its own bucket.
-  it('shows the clicked row when the same workspace ID exists under two hosts', () => {
-    openDialog({
-      worktree: { linkedIssue: 42 },
-      otherRepos: [{ repoId: 'repo-2', worktree: { linkedIssue: 77 } }],
-      modalRepoId: 'repo-2'
-    })
-
-    expect(issueInput().value).toBe('77')
-    expect(providerChip().textContent).toContain('GitHub')
+  it('focuses an inline suggested review without assuming it has been attached', () => {
+    openDialog({}, { focus: 'pr', currentReview: 42 })
+    expect(screen.getByRole('combobox', { name: 'Search references' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Save' }).hasAttribute('disabled')).toBe(false)
+    expect(screen.getByRole('option', { name: 'Add PR #42' })).toBeTruthy()
   })
-
-  it('dispatches nothing when the dialog is cancelled', async () => {
-    openDialog({ worktree: { linkedLinearIssue: 'STA-335' } })
-
-    fireEvent.change(issueInput(), { target: { value: '99' } })
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
-    })
-
+  it('keeps search inside the single details dialog and starts with no result overlay', () => {
+    openDialog()
+    const field = input()
+    expect(screen.getAllByRole('dialog')).toHaveLength(1)
+    expect(screen.getByRole('dialog').contains(field)).toBe(true)
+    expect(screen.queryByRole('option')).toBeNull()
+    fireEvent.keyDown(field, { key: 'Enter' })
+    expect(screen.getByText('0 linked')).toBeTruthy()
+  })
+  it('clears results explicitly and preserves the selected drafts', async () => {
+    openDialog()
+    await add('https://github.com/acme/orca/issues/4')
+    fireEvent.change(input(), { target: { value: 'unselected' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Clear search' }))
+    expect(screen.queryByRole('option')).toBeNull()
+    expect(screen.getByText('Issue #4')).toBeTruthy()
+    expect(document.activeElement).toBe(input())
+  })
+  it('cancels added references without a metadata write', async () => {
+    openDialog()
+    await add('https://github.com/acme/orca/issues/4')
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
     expect(updateWorktreeMeta).not.toHaveBeenCalled()
     expect(useAppStore.getState().activeModal).toBe('none')
+  })
+  it('keeps empty notes collapsed for link focus and preserves existing notes', () => {
+    openDialog({ comment: '' }, { focus: 'links' })
+    expect(screen.queryByRole('textbox', { name: 'Notes' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Add notes' }))
+    expect(screen.getByRole('textbox', { name: 'Notes' })).toBeTruthy()
+    expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Notes' }))
+  })
+  it('preserves name and comment autofocus while search remains inline', () => {
+    openDialog({}, { focus: 'displayName' })
+    expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Display Name' }))
+  })
+  it('does not dismiss the dialog when Escape belongs to IME composition', () => {
+    openDialog()
+    const field = input()
+    fireEvent.compositionStart(field)
+    fireEvent.keyDown(field, { key: 'Escape', isComposing: false })
+    expect(useAppStore.getState().activeModal).toBe('edit-meta')
+    fireEvent.compositionEnd(field)
+  })
+  it('resets the draft when another host opens the same workspace ID', async () => {
+    const original = openDialog({ linkedIssue: 1 }, { executionHostId: 'local' })
+    fireEvent.change(screen.getByRole('textbox', { name: 'Notes' }), {
+      target: { value: 'Local draft' }
+    })
+    await add('https://github.com/acme/orca/issues/3')
+    act(() =>
+      useAppStore.setState({
+        worktreesByRepo: {
+          repo: [
+            original,
+            { ...original, hostId: 'ssh:other', linkedIssue: 2, comment: 'Remote note' }
+          ]
+        },
+        modalData: {
+          worktreeId: original.id,
+          repoId: 'repo',
+          executionHostId: 'ssh:other',
+          focus: 'comment'
+        }
+      })
+    )
+    expect(screen.getByText('Issue #2')).toBeTruthy()
+    expect(screen.queryByText('Issue #1')).toBeNull()
+    expect(screen.queryByText('Issue #3')).toBeNull()
+    expect(
+      screen.getByRole('textbox', { name: 'Notes' }).getAttribute('value') ??
+        screen.getByRole('textbox', { name: 'Notes' }).textContent
+    ).toBe('Remote note')
+    await save()
+    expect(updateWorktreeMeta.mock.calls[0]).toEqual([
+      original.id,
+      {},
+      { executionHostId: 'ssh:other' }
+    ])
+  })
+  it('does not close a new owner’s draft when an earlier save completes', async () => {
+    const original = openDialog({}, { executionHostId: 'local' })
+    const pending = Promise.withResolvers<{ ok: true }>()
+    updateWorktreeMeta.mockReturnValueOnce(pending.promise)
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(updateWorktreeMeta).toHaveBeenCalledOnce()
+    act(() =>
+      useAppStore.setState({
+        worktreesByRepo: {
+          repo: [original, { ...original, hostId: 'ssh:other', comment: 'Remote draft' }]
+        },
+        modalData: {
+          worktreeId: original.id,
+          repoId: 'repo',
+          executionHostId: 'ssh:other',
+          focus: 'comment'
+        }
+      })
+    )
+    await act(async () => pending.resolve({ ok: true }))
+    expect(useAppStore.getState().activeModal).toBe('edit-meta')
+    expect(screen.getByRole('button', { name: 'Save' }).hasAttribute('disabled')).toBe(false)
+    expect(screen.getByRole('textbox', { name: 'Notes' }).textContent).toBe('Remote draft')
   })
 })

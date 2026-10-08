@@ -16,10 +16,7 @@ const RUNTIME_ENTRY_FILENAME = /[A-Za-z0-9_.-]+-(?:entry|worker)\.c?js/g
  * Named in orcad's bundle but not shipped yet. Each is a known gap, not an exemption: shipping
  * one removes it here, and this list may only shrink.
  */
-const KNOWN_UNSHIPPED_ENTRIES = new Set([
-  'session-scanner-service-entry.js',
-  'wsl-transcript-fs-process-entry.js'
-])
+const KNOWN_UNSHIPPED_ENTRIES = new Set(['wsl-transcript-fs-process-entry.js'])
 const directory = mkdtempSync(join(tmpdir(), 'orcad-runtime-entries-'))
 
 afterAll(() => {
@@ -31,13 +28,13 @@ function buildOrcadBundles(): string[] {
   const builder = pathToFileURL(join(REPO_ROOT, 'config/scripts/orcad-entry-build.mjs')).href
   const script = `
     import { build } from 'esbuild'
-    import { basename, join } from 'node:path'
+    import { join } from 'node:path'
     import * as entries from ${JSON.stringify(builder)}
     const out = ${JSON.stringify(directory)}
     await entries.buildOrcadEntry(join(out, 'orcad.js'))
     await Promise.all(Object.values(entries.ORCAD_CHILD_ENTRY_POINTS).map((entry) => build({
       entryPoints: [entry], bundle: true, platform: 'node', target: 'node18', format: 'cjs',
-      outfile: join(out, basename(entry).replace(/\\.ts$/, '.js')),
+      outfile: join(out, entries.orcadChildOutputFilename(entry)),
       external: entries.ORCAD_EXTERNAL_MODULES, plugins: [entries.externalNativeAddons],
       logLevel: 'error'
     })))`
@@ -65,4 +62,15 @@ it('ships every worker and child entry orcad loads at runtime', () => {
   for (const filename of KNOWN_UNSHIPPED_ENTRIES) {
     expect(named.has(filename) && !shipped.has(filename), filename).toBe(true)
   }
+})
+
+it('ships every child entry build-orcad.mjs builds', async () => {
+  const builder = pathToFileURL(join(REPO_ROOT, 'config/scripts/orcad-entry-build.mjs')).href
+  const entries = await import(builder)
+  const shipped = new Set(orcadArtifactFilenames('linux-x64-glibc'))
+  const built = Object.values<string>(entries.ORCAD_CHILD_ENTRY_POINTS).map((entry) =>
+    entries.orcadChildOutputFilename(entry)
+  )
+  expect(built).toContain('session-scanner-service-entry.js')
+  expect(built.filter((filename) => !shipped.has(filename))).toEqual([])
 })

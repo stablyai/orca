@@ -27,6 +27,7 @@ import { WORKER_TERMINAL_LIST_STATES, WorkerListParams } from './worker-release-
 
 export const ORCHESTRATION_WORKER_LIST_METHOD = defineMethod({
   name: 'orchestration.workerList',
+  permission: 'workspace',
   params: WorkerListParams,
   handler: async (params, { runtime }) => {
     const db = runtime.getOrchestrationDb()

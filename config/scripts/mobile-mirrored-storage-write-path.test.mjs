@@ -31,7 +31,6 @@ const MIRRORED_WRITERS = [
     keys: ['TERMINAL_ACCESSORY_LAYOUT_STORAGE_KEY']
   },
   { file: 'src/components/CustomKeyModal.tsx', keys: ['CUSTOM_ACCESSORY_KEYS_STORAGE_KEY'] },
-  { file: 'src/session/mobile-structured-send-operation-journal.ts', keys: ['STORAGE_KEY'] },
   {
     file: 'src/worktree/last-visited-worktree-repo.ts',
     keys: ['LAST_VISITED_WORKTREE_STORAGE_KEY']

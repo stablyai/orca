@@ -20,6 +20,8 @@ export type SnapshotFrameOptions = {
   cwd?: string | null
   truncated?: boolean
   truncatedByByteBudget?: boolean
+  /** History rows this image carries above its screen; 0 tells the client to keep its own. */
+  scrollbackRows?: number
   // Why: distinguishes "I could not answer right now" from a genuinely empty buffer; omitted on success.
   unavailable?: TerminalSnapshotUnavailableReason
   source?: 'headless' | 'renderer'

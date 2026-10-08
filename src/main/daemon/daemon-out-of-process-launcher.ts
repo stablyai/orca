@@ -24,6 +24,7 @@ import {
 } from './daemon-spawner'
 import { PROTOCOL_VERSION } from './types'
 import { prepareDaemonReplacement } from './daemon-replacement-preflight'
+import { ensureDaemonSocketDir } from './daemon-socket-endpoint-path'
 
 // Why: the adapter decides a runtime resolver replacement, but the launcher completes it — and by
 // then the daemon has usually self-retired (dropping its last authenticated client is enough), so
@@ -70,6 +71,9 @@ export function createOutOfProcessLauncher(
     // what makes a bare module-scoped slot safe — keep it that way or a concurrent launch can steal it.
     const attributedReason = attributedReplaceReason
     attributedReplaceReason = null
+    // Why first: adoption, the preflight probes and health checks all talk to this endpoint, and a
+    // relocated one is only safe to talk to once its directories are proven private and ours.
+    ensureDaemonSocketDir(socketPath)
     let adoptionClient: DaemonClient | null = new DaemonClient({
       socketPath,
       tokenPath

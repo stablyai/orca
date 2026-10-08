@@ -420,9 +420,7 @@ describe('the notice for every reason a host names', () => {
           details: { reason: 'notSignedIn' }
         })
       )
-    ).toBe(
-      'Your message was not sent. Codex is not signed in for the selected account. Sign in first.'
-    )
+    ).toBe("Your message was not sent. Codex isn't signed in. Run `codex login`.")
     expect(
       agentSessionWriteNoticeEnglish(
         send({
@@ -660,7 +658,9 @@ describe('agentSessionRefusalCauseParts', () => {
           { agentName: 'Claude' }
         )
       )
-    ).toBe('Claude is not signed in for the selected account. Sign in first.')
+    ).toBe(
+      "Claude isn't signed in. Run `claude` and sign in with /login, or choose an account in Claude Accounts settings."
+    )
     expect(
       agentSessionWriteNoticeEnglish(
         agentSessionRefusalCauseParts({
@@ -682,6 +682,24 @@ describe('agentSessionRefusalCauseParts', () => {
       'While a Claude account is added in WSL, Claude chats need a Windows Claude account. Choose or add one in Claude Accounts settings.'
     )
   })
+
+  it.each(['managed', 'system'] as const)(
+    'retains the %s account when saving a refused message',
+    (account) => {
+      const refusal = {
+        code: 'agent_session_operation_invalid',
+        details: { reason: 'notSignedIn', account }
+      } as const
+      const saved = agentSessionRefusalFailure(refusal)
+      expect(saved.details).toEqual(refusal.details)
+      const parts = agentSessionRefusalCauseParts(saved, { agentName: 'Claude' })
+      expect(agentSessionWriteNoticeEnglish(parts)).toBe(
+        agentSessionFailureSentence({ kind: 'notSignedIn', account }, 'rejection', {
+          agentName: 'Claude'
+        })
+      )
+    }
+  )
 
   it('writes the same sentences as before where no Retry stands beside them', () => {
     expect(agentSessionFailureSentence({ kind: 'notSignedIn' }, 'rejection')).toBe(

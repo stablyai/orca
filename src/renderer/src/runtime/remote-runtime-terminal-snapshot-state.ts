@@ -97,6 +97,7 @@ export function decodeSnapshotInfo(
     kittyKeyboardFlags?: unknown
     alternateScreen?: unknown
     terminalOwner?: unknown
+    scrollbackRows?: unknown
   }>(payload)
   if (!raw) {
     return null
@@ -116,9 +117,25 @@ export function decodeSnapshotInfo(
     requestId: typeof raw.requestId === 'number' ? raw.requestId : undefined,
     truncated: raw.truncated === true,
     unavailable: parseTerminalSnapshotUnavailableReason(raw.unavailable),
+    scrollbackRows:
+      typeof raw.scrollbackRows === 'number' &&
+      Number.isSafeInteger(raw.scrollbackRows) &&
+      raw.scrollbackRows >= 0
+        ? raw.scrollbackRows
+        : undefined,
     pendingEscapeTailAnsi:
       typeof raw.pendingEscapeTailAnsi === 'string' ? raw.pendingEscapeTailAnsi : undefined
   }
+}
+
+/**
+ * Whether a pushed (initial or recovery) image leaves the pane's history alone.
+ * Absent counts as none: hosts that predate the field pushed desktop images screen-only (#14593).
+ */
+export function pushedSnapshotKeepsLocalScrollback(
+  info: RemoteRuntimeSnapshotInfo | null
+): boolean {
+  return (info?.scrollbackRows ?? 0) === 0
 }
 
 export function retryWorthySnapshotOutcome(

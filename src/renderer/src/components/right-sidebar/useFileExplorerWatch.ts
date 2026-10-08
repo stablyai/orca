@@ -209,6 +209,12 @@ export function useFileExplorerWatch({
         }
         return
       }
+      if (
+        normalizeRuntimePathForComparison(payload.worktreePath) !==
+        normalizeRuntimePathForComparison(currentWorktreePath)
+      ) {
+        return
+      }
       // Why: defer refreshes during inline input/drag so rows don't shift; native drags only set isNativeDragOver (design §6.2).
       if (
         inlineInputRef.current !== null ||

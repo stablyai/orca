@@ -1,3 +1,4 @@
+import type { AgentSessionUnavailable } from './agent-session-availability'
 import type {
   AgentSessionBackgroundTask,
   AgentSessionBackgroundTaskState
@@ -405,13 +406,16 @@ export type AgentSessionFastModeSupport = {
  * for the key yet — the client keeps its static seed. Additive read-only
  * surface: an older host simply lacks the method.
  */
-export type AgentSessionModelCatalogResult =
-  | {
-      origin: 'unknown'
-      /** The host is running its first listing for this account; a `waitForListing` read answers
-       *  when it lands. Absent from a host that predates it. */
-      listingInProgress?: true
-    }
+export type AgentSessionModelCatalogResult = {
+  /** The host is running the listing this answer is waiting on (its first for the account, or
+   *  the probe re-checking `unavailable`); a `waitForListing` read answers when it lands. Absent
+   *  from a host that predates it; such a host sends it only with `unknown`. */
+  listingInProgress?: true
+  /** Why no chat can start under the account, as the host's probe last found it. Absent is
+   *  unknown, which shows nothing; an older host never sends it. */
+  unavailable?: AgentSessionUnavailable
+} & (
+  | { origin: 'unknown' }
   | {
       /** What produced the listing; any age is served, `fetchedAt` carries it. */
       origin: 'live-session' | 'probe'
@@ -419,6 +423,7 @@ export type AgentSessionModelCatalogResult =
       fastModeSupport?: AgentSessionFastModeSupport
       fetchedAt: number
     }
+)
 
 /** One entry of the `/` menu the running provider reports for itself. `skill`
  *  marks a name the session loaded as a skill rather than a built-in command;

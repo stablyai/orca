@@ -23,6 +23,12 @@ import { needsLocalCallerFingerprint } from './dispatcher-caller-fingerprint'
 import { createDispatcherStreamingFeatureEmitter } from './dispatcher-streaming-feature-emitter'
 import { resolveRpcCallerIdentity } from './rpc-caller-identity'
 import {
+  bindRpcCallToCallerScope,
+  denyRpcMethodForCaller,
+  OWNER_RPC_CALLER_SCOPE,
+  type RpcCallerScope
+} from './rpc-caller-scope'
+import {
   needsOrchestrationCallerResolution,
   resolveOrchestrationSessionCaller,
   type ResolvedOrchestrationRequest
@@ -34,6 +40,7 @@ export type RpcStreamingDispatcherDependencies = {
   orchestrationMutations: OrchestrationMutationExecutor
   legacyOrchestration: OrchestrationLegacyCompatibility
   meta: () => RpcEnvelopeMeta
+  pinnedCallerScope?: RpcCallerScope
 }
 
 export class RpcStreamingDispatcher {
@@ -50,6 +57,13 @@ export class RpcStreamingDispatcher {
       this.dependencies
     const envelopeMeta = meta()
     const method = registry.get(request.method)
+    const callerScope =
+      this.dependencies.pinnedCallerScope ?? options?.callerScope ?? OWNER_RPC_CALLER_SCOPE
+    const denial = denyRpcMethodForCaller(callerScope, request.method, method?.permission)
+    if (denial) {
+      reply(JSON.stringify(errorResponse(request.id, envelopeMeta, 'forbidden', denial)))
+      return
+    }
     if (!method) {
       reply(
         JSON.stringify(
@@ -88,6 +102,12 @@ export class RpcStreamingDispatcher {
       return
     }
     const params = parsedParams.value
+    const pendingBinding = bindRpcCallToCallerScope(callerScope, runtime, request.method, params)
+    const binding = pendingBinding ? await pendingBinding : null
+    if (binding?.kind === 'denied') {
+      reply(JSON.stringify(errorResponse(request.id, envelopeMeta, 'forbidden', binding.message)))
+      return
+    }
 
     if (!isStreamingMethod(method)) {
       try {
@@ -170,7 +190,14 @@ export class RpcStreamingDispatcher {
           orchestrationCaller?.orcaSessionId
         )
         recordRuntimeFeatureInteraction(runtime, request.method, result, undefined, request.params)
-        reply(JSON.stringify(successResponse(request.id, envelopeMeta, result)))
+        const filtered = binding?.filterResult?.(result) ?? { kind: 'allowed', result }
+        reply(
+          JSON.stringify(
+            filtered.kind === 'denied'
+              ? errorResponse(request.id, envelopeMeta, 'forbidden', filtered.message)
+              : successResponse(request.id, envelopeMeta, filtered.result)
+          )
+        )
       } catch (error) {
         reply(JSON.stringify(mapDispatcherError(request, envelopeMeta, error)))
       }

@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { isStableCliVersionOnLine, probeAgentCliVersion } from './agent-cli-version-probe'
+import {
+  isStableCliVersionFrom,
+  isStableCliVersionOnLine,
+  probeAgentCliVersion
+} from './agent-cli-version-probe'
 
 const { runProcess } = vi.hoisted(() => ({ runProcess: vi.fn() }))
 vi.mock('../shared/child-process/run-process', () => ({ runProcess }))
@@ -40,6 +44,13 @@ describe('probeAgentCliVersion', () => {
     const seen: string[] = []
     await probeAgentCliVersion(INPUT, (version) => (seen.push(version), true))
     expect(seen).toEqual(['2.0.21'])
+  })
+
+  it('reads a version printed after the program name and a slash', async () => {
+    prints('omp/17.0.5\n')
+    const seen: string[] = []
+    await probeAgentCliVersion(INPUT, (version) => (seen.push(version), true))
+    expect(seen).toEqual(['17.0.5'])
   })
 
   it.each([
@@ -90,5 +101,18 @@ describe('isStableCliVersionOnLine', () => {
     ['11.0.0', false]
   ])('%s -> %s', (version, supported) => {
     expect(isStableCliVersionOnLine(version, line)).toBe(supported)
+  })
+})
+
+describe('isStableCliVersionFrom', () => {
+  it.each([
+    ['17.0.5', true],
+    ['17.2.12', true],
+    ['18.4.5', true],
+    ['17.0.4', false],
+    ['16.9.0', false],
+    ['18.0.0-beta.1', false]
+  ])('%s -> %s', (version, supported) => {
+    expect(isStableCliVersionFrom(version, '17.0.5')).toBe(supported)
   })
 })

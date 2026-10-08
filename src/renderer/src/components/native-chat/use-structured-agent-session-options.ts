@@ -90,7 +90,7 @@ export function useStructuredAgentSessionOptions(args: {
     unloadedTurnRevisions: args.unloadedTurnRevisions
   })
 
-  const awaitingHostModelList = useHostModelCatalogUpgrade({
+  const hostCatalog = useHostModelCatalogUpgrade({
     agent,
     sessionId,
     target,
@@ -100,11 +100,17 @@ export function useStructuredAgentSessionOptions(args: {
     namesDefault: launch?.kind === 'new' && optionCatalog?.hostListingNamesConfiguredModel === true,
     ...(launch?.worktree ? { worktree: launch.worktree } : {}),
     fence,
+    turnId,
     activeOptionRecordRef,
     updateOptionState
   })
-  // The running provider's own list ends the wait for the host's.
-  const modelListPending = awaitingHostModelList && optionState.catalogSource !== 'live'
+  // A list in hand, the running provider's or the host's, ends the wait for the host's; so does a
+  // verdict, whose re-check is for the chat's notice, not the picker.
+  const modelListPending =
+    hostCatalog.awaitingListing &&
+    hostCatalog.unavailable === null &&
+    optionState.catalogSource !== 'live' &&
+    optionState.catalogSource !== 'host'
 
   // What a settled pick must remember so the next launch starts where the user left off.
   const rememberOptionPicks = useCallback(
@@ -287,6 +293,7 @@ export function useStructuredAgentSessionOptions(args: {
     rewind: support?.fence === fence ? support.rewind : undefined,
     optionSnapshot,
     optionSurface,
-    setStructuredOption
+    setStructuredOption,
+    unavailable: hostCatalog.unavailable
   }
 }

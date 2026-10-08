@@ -151,7 +151,9 @@ async function downloadVerifiedArchiveOnce(
     }
   } catch (error) {
     // Why: the fetch may reject a stalled abort with its own AbortError rather than our reason.
-    throw stall.signal.aborted && !signal?.aborted ? stalled : error
+    const downloadError = stall.signal.aborted && !signal?.aborted ? stalled : error
+    stall.abort()
+    throw downloadError
   } finally {
     clearTimeout(stallTimer)
   }

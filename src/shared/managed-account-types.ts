@@ -95,12 +95,33 @@ export type ClaudeManagedAccountSummary = {
   createdAt: number
   updatedAt: number
   lastAuthenticatedAt: number
+  /** Its folder holds no login yet, e.g. an account saved by an older Orca; it needs a sign-in. */
+  needsSignIn?: true
+}
+
+/** A sign-in to a new account folder, or to a saved account's own when `accountId` is given. */
+export type ClaudeSignInRequest = {
+  accountId?: string
+  runtime?: 'host' | 'wsl'
+  wslDistro?: string | null
+}
+
+/** A sign-in in progress: `configDir` is the CLAUDE_CONFIG_DIR `claude auth login` runs against. */
+export type ClaudeAccountSignIn = {
+  accountId: string
+  configDir: string
+  runtime?: 'host' | 'wsl'
+  wslDistro?: string | null
 }
 
 export type ClaudeRateLimitAccountsState = {
   accounts: ClaudeManagedAccountSummary[]
   activeAccountId: string | null
   activeAccountIdsByRuntime?: ClaudeManagedAccountRuntimeSelection
+  /** The login System default holds, when the host can read it and accounts exist. */
+  systemDefaultEmail?: string
+  /** An older Orca's copy-based switching once wrote an account's login into System default. */
+  systemDefaultMayBeCopied?: boolean
 }
 
 export type ClaudeManagedAccountRuntimeSelection = {

@@ -20,17 +20,21 @@ import {
   type AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire-refusals'
 import { AgentSessionAcquisitionRefusal } from './structured-agent-session-adapter'
+import { providerExecutableMissing } from '../../provider-process/provider-executable-missing'
 import { argumentProblemOf } from '../structured-agent-arguments-error'
 
 /** Start refusals whose situation is itself what the person reads, with its own next step. */
 const TYPED_START_REFUSALS = [
   'notSignedIn',
+  'cliMissing',
   'historyTooLarge',
   'managedAccountEnvOverride',
   'accountSwitchInProgress',
   'managedAccountUnsupported',
   'launchFolderMissing',
   'historyInOtherAccount',
+  'claudeAccountFolderMissing',
+  'claudeAccountSetupFailed',
   'agentCommandNotRunnable'
 ] as const satisfies readonly (AgentSessionFailureKind &
   AgentSessionRefusalReason<'agent_session_operation_invalid'>)[]
@@ -72,7 +76,13 @@ export function providerStartupFailureFact(cause?: unknown): SubmissionRejection
     cause instanceof AgentSessionAcquisitionRefusal ? cause.reason : undefined
   )
   if (typed) {
-    return agentSessionFailureFact(typed)
+    return agentSessionFailureFact(
+      typed,
+      cause instanceof AgentSessionAcquisitionRefusal ? { account: cause.account } : {}
+    )
+  }
+  if (providerExecutableMissing(cause)) {
+    return agentSessionFailureFact('cliMissing')
   }
   return agentSessionFailureFact(
     providerExitObserved(cause) ? 'providerStartFailed' : 'startFailed',
@@ -101,7 +111,12 @@ function refusedStartFailureFact(
   const reason = refusal.details?.reason
   const typed = typedStartRefusal(reason)
   if (typed) {
-    return agentSessionFailureFact(typed)
+    return agentSessionFailureFact(
+      typed,
+      refusal.code === 'agent_session_operation_invalid'
+        ? { account: refusal.details?.account }
+        : {}
+    )
   }
   if (reason === 'providerStartFailed') {
     return agentSessionFailureFact('providerStartFailed', { detail: diagnostic })

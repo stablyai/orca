@@ -1,3 +1,4 @@
+import type { WorkspaceAttachmentMutation } from '../../../shared/workspace-attachment-mutation'
 import { randomUUID } from 'node:crypto'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
@@ -210,7 +211,7 @@ export function setWorktreeMetaForHost(
   scheduling: WriteSchedulingOperations,
   worktreeId: string,
   executionHostId: ExecutionHostId,
-  meta: Partial<WorktreeMeta>
+  meta: Partial<WorktreeMeta> & WorkspaceAttachmentMutation
 ): WorktreeMeta {
   const state = runtime.state
   migrateLegacyWorktreeMetadata(state, worktreeId, executionHostId)

@@ -35,6 +35,7 @@ import {
   structuredAgentSessionConversationFence
 } from './structured-agent-session-provider-child'
 import type { DeferredStructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
+import { noteStructuredAgentSessionProviderStarted } from './structured-agent-session-provider-started'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
   addAgentSessionCreatePhaseAttributes,
@@ -230,6 +231,7 @@ async function runAttachUnderAbort(
         )
         attempt.candidate = {
           sink: eventSink,
+          provedStart: acquiredOwner && providerChildPhase === 'ready',
           child: {
             generation: acquisitionGeneration ?? current?.generation ?? null,
             fence,
@@ -259,6 +261,9 @@ async function runAttachUnderAbort(
       context.runtimeState.adoptEventSink(sessionId, candidate.sink)
       attempt.committed = candidate.sink === attemptSink
       indexProviderChild(conversation, candidate.child)
+      if (candidate.provedStart) {
+        noteStructuredAgentSessionProviderStarted(context.deps, sessionId)
+      }
       context.publishStatus?.(sessionId)
     }
     return stampFailedCreateOwnerVerdict(context.deps.store, callerKey, params.envelope, attached)
@@ -272,6 +277,8 @@ async function runAttachUnderAbort(
 type AttachCandidate = {
   child: StructuredAgentSessionProviderChild
   sink: DeferredStructuredAgentSessionEventSink
+  /** This attach acquired a child that proved its start; a re-attach to a live one proved nothing. */
+  provedStart: boolean
 }
 
 function endReleasedChild(

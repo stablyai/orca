@@ -84,7 +84,9 @@ vi.mock('./rate-limit', () => ({
   spendsSharedGitHubComQuota: spendsSharedGitHubComQuotaMock
 }))
 
-import { getPRChecks, rerunPRChecks, _resetOwnerRepoCache } from './client'
+import { getPRChecks } from './client/check/get-pr-checks'
+import { rerunPRChecks } from './client/check/rerun-pr-checks'
+import { _resetOwnerRepoCache } from './gh-utils'
 
 import { _resetOriginGitHubApiRepositoryCache } from './github-api-repository'
 

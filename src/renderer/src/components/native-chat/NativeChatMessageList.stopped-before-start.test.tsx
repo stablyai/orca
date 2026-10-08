@@ -27,7 +27,7 @@ beforeAll(() => {
 afterAll(() => restoreViewport())
 afterEach(cleanup)
 
-const STOP_ROW = 'Stopped before the agent started'
+const STOP_ROW = 'Stopped manually'
 const THREAD: AgentJournalTurnScope = { kind: 'thread' }
 let sequence = 0
 

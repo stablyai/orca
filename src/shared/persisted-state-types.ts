@@ -108,8 +108,6 @@ export type PersistedState = {
   sshRemotePtyLeases: SshRemotePtyLease[]
   /** Main-owned authenticated relay recovery records; never expose through renderer settings APIs. */
   sshPtyConsumerRecoveries?: SshPtyConsumerRecovery[]
-  /** Live local Claude daemon session ids; seeds the live-PTY gate so early OAuth refresh can't rotate the single-use refresh token out from under a running daemon. */
-  claudeLivePtySessionIds?: string[]
   migrationUnsupportedPtyEntries: MigrationUnsupportedPtyEntry[]
   legacyPaneKeyAliasEntries: LegacyPaneKeyAliasEntry[]
   automations: Automation[]

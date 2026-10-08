@@ -1,8 +1,12 @@
+import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
+import type { GlobalSettings } from '../../shared/global-settings-types'
+import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { getClaudeProfileRouter } from '../claude-accounts/claude-profile-installed-router'
+import { normalizeCodexRuntimeSelection } from '../codex-accounts/runtime-selection'
+import { resolveOrcaManagedCodexHomePath, getSystemCodexHomePath } from '../codex/codex-home-paths'
+import { resolveAbsoluteDirOverride } from '../../shared/absolute-dir-override'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { getSystemCodexHomePath } from '../codex/codex-home-paths'
-import { resolveAbsoluteDirOverride } from '../../shared/absolute-dir-override'
 
 // The one resolver for "which account home would a structured launch pin right
 // now". The create path fills `record.accountHome` with it, and the model
@@ -60,6 +64,31 @@ export async function resolveStructuredCodexAccountHomePath(
     (deps.resolveLaunchHome ? getSystemCodexHomePath() : configuredHome?.trim()) ||
     getSystemCodexHomePath()
   )
+}
+
+export function resolveStructuredCodexAccountKind(
+  home: string,
+  settings: Pick<
+    GlobalSettings,
+    'codexManagedAccounts' | 'activeCodexManagedAccountId' | 'activeCodexManagedAccountIdsByRuntime'
+  >
+): AgentSessionAccountKind | undefined {
+  const same = (other: string): boolean =>
+    normalizeRuntimePathForComparison(home) === normalizeRuntimePathForComparison(other)
+  if (
+    (settings.codexManagedAccounts ?? []).some(
+      (account) => account.managedHomeRuntime !== 'wsl' && same(account.managedHomePath)
+    )
+  ) {
+    return 'managed'
+  }
+  if (same(getSystemCodexHomePath())) {
+    return 'system'
+  }
+  if (same(resolveOrcaManagedCodexHomePath())) {
+    return normalizeCodexRuntimeSelection(settings).host ? 'managed' : 'system'
+  }
+  return undefined
 }
 
 /** An agent whose config directory is one environment variable with a default under the user's

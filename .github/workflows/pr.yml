@@ -1258,6 +1258,9 @@ jobs:
           src/main/agent-hooks/windows-hook-payload-delivery.test.ts
           src/main/jcode/hook-gate-script.test.ts
           src/main/agent-hooks/windows-direct-cmd-hook-command.test.ts
+          src/main/agent-hooks/windows-cmd-hook-command-unicode.test.ts
+          src/main/agent-hooks/windows-batch-hook-launcher.test.ts
+          src/main/agent-hooks/windows-powershell-hook-launcher.test.ts
           src/main/codex/windows-hook-command.test.ts
           src/main/codex/windows-hook-upgrade.test.ts
           src/main/codex/hook-service-managed-install.test.ts
@@ -1272,6 +1275,7 @@ jobs:
           src/main/wsl/wsl-runner.test.ts
           src/main/wsl/wsl-guest-environment.test.ts
           src/main/wsl/wsl-executable-path.win32.test.ts
+          src/main/claude-accounts/claude-profile-history-windows.test.ts
           src/main/wsl/wsl-w1-w3-contract.test.ts
           src/shared/source-scan/source-tree-scan.test.ts
           src/main/cli/wsl-cli-powershell-boundary.test.ts

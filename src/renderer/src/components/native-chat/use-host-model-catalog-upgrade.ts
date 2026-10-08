@@ -1,4 +1,14 @@
-import { useEffect, useSyncExternalStore, type MutableRefObject } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useState,
+  useSyncExternalStore,
+  type MutableRefObject
+} from 'react'
+import {
+  readAgentSessionUnavailable,
+  type AgentSessionUnavailable
+} from '../../../../shared/agent-session-availability'
 import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session-wire'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { AgentSessionOptionCatalog } from '../../../../shared/agent-session-option-catalog'
@@ -25,7 +35,11 @@ import {
  *
  * When the host says its first listing for the account is running, one more
  * read waits for it — one per chat, joined by every later run and remount.
- * Returns true while that read is in flight.
+ * Reports that wait, and why the host's latest answer says no chat can start
+ * (kept until the next answer replaces it; a failed read is unknown). Only
+ * while it says so, the window gaining focus or a turn starting or ending
+ * reads again: the host pushes no change, the fix (signing in, installing)
+ * happens elsewhere, and a started chat makes the host re-check.
  */
 export function useHostModelCatalogUpgrade(args: {
   agent: AgentType
@@ -39,11 +53,13 @@ export function useHostModelCatalogUpgrade(args: {
   /** Where the launch runs: the host names no default its config could replace. */
   worktree?: string
   fence: number | null
+  /** The chat's running turn: one running proves its start, which the host re-checks against. */
+  turnId?: string | null
   activeOptionRecordRef: MutableRefObject<NativeChatSessionOptionRecord>
   updateOptionState: (
     update: (current: StructuredAgentSessionOptionState) => StructuredAgentSessionOptionState
   ) => void
-}): boolean {
+}): { awaitingListing: boolean; unavailable: AgentSessionUnavailable | null } {
   const {
     activeOptionRecordRef,
     agent,
@@ -60,6 +76,22 @@ export function useHostModelCatalogUpgrade(args: {
   const awaitingListing = useSyncExternalStore(subscribeHostModelListingWaits, () =>
     isHostModelListingWaitInFlight(waitKey)
   )
+  const [verdict, setVerdict] = useState<{
+    key: string
+    unavailable: AgentSessionUnavailable | null
+  } | null>(null)
+  const unavailable = verdict?.key === waitKey ? verdict.unavailable : null
+  const [rereads, setRereads] = useState(0)
+  const recheck = useCallback(() => setRereads((count) => count + 1), [])
+  const said = unavailable !== null
+  const turnWhileSaid = said ? (args.turnId ?? null) : null
+  useEffect(() => {
+    if (!said) {
+      return
+    }
+    window.addEventListener('focus', recheck)
+    return () => window.removeEventListener('focus', recheck)
+  }, [said, recheck])
   useEffect(() => {
     // Any agent the host registered: it answers `unknown` for one whose catalog it does not keep.
     if (!enabled || !optionCatalog) {
@@ -73,7 +105,20 @@ export function useHostModelCatalogUpgrade(args: {
         'agentSession.modelCatalog',
         waitForListing ? { ...params, waitForListing } : params
       )
-    const apply = (catalog: AgentSessionModelCatalogResult): void =>
+    const apply = (catalog: AgentSessionModelCatalogResult | null): void => {
+      const next = readAgentSessionUnavailable(catalog?.unavailable)
+      setVerdict((current) => {
+        const shown = current?.key === waitKey ? current.unavailable : null
+        // A reason the host is still re-checking is kept where shown but never newly shown: the
+        // joined read's answer decides, so a fixed sign-in never flashes the old notice.
+        return JSON.stringify(shown) === JSON.stringify(next) ||
+          (catalog?.listingInProgress === true && next !== null)
+          ? current
+          : { key: waitKey, unavailable: next }
+      })
+      if (!catalog) {
+        return
+      }
       updateOptionState((current) =>
         current.record === activeOptionRecordRef.current
           ? applyStructuredAgentSessionModelCatalog(current, optionCatalog, catalog, {
@@ -81,17 +126,10 @@ export function useHostModelCatalogUpgrade(args: {
             })
           : current
       )
+    }
     let leave: (() => void) | null = null
     const waitForListing = (): void => {
-      leave = joinHostModelListingWait(
-        waitKey,
-        () => read(true),
-        (catalog) => {
-          if (catalog) {
-            apply(catalog)
-          }
-        }
-      )
+      leave = joinHostModelListingWait(waitKey, () => read(true), apply)
     }
     if (isHostModelListingWaitInFlight(waitKey)) {
       waitForListing()
@@ -101,14 +139,17 @@ export function useHostModelCatalogUpgrade(args: {
           if (stale) {
             return
           }
+          apply(catalog)
           // Only a host that reports the listing knows the wait param; an older one refuses it.
-          if (catalog.origin === 'unknown' && catalog.listingInProgress === true) {
+          if (catalog.listingInProgress === true) {
             waitForListing()
-          } else {
-            apply(catalog)
           }
         })
-        .catch(() => {})
+        .catch(() => {
+          if (!stale) {
+            apply(null)
+          }
+        })
     }
     return () => {
       stale = true
@@ -121,11 +162,13 @@ export function useHostModelCatalogUpgrade(args: {
     fence,
     namesDefault,
     optionCatalog,
+    rereads,
     sessionId,
+    turnWhileSaid,
     target,
     updateOptionState,
     waitKey,
     worktree
   ])
-  return awaitingListing
+  return { awaitingListing, unavailable }
 }

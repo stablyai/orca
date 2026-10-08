@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import {
   ActivityIndicator,
   Pressable,
@@ -58,20 +59,33 @@ export function MobileSourceControlContent({ state }: Props) {
   const shouldShowGenerateButton = stagedCount > 0 || generatingMessage
   const createPrHeroActive =
     createPrAction.visible && !createPrAction.disabled && !createPrAction.pushFirst
-  const branchCompareFooter = (
-    <BranchCompareFooter
-      state={{
-        shouldShowBranchCompareSection: state.shouldShowBranchCompareSection,
-        branchCompareSummaryText: state.branchCompareSummaryText,
-        branchEntries: state.branchEntries,
-        branchCompareState: state.branchCompareState,
-        branchCompareResult: state.branchCompareResult,
-        busyAction,
-        openBranchDiff,
-        openingBranchPath,
-        openingPath
-      }}
-    />
+  const branchCompareFooter = useMemo(
+    () => (
+      <BranchCompareFooter
+        state={{
+          shouldShowBranchCompareSection: state.shouldShowBranchCompareSection,
+          branchCompareSummaryText: state.branchCompareSummaryText,
+          branchEntries: state.branchEntries,
+          branchCompareState: state.branchCompareState,
+          branchCompareResult: state.branchCompareResult,
+          busyAction,
+          openBranchDiff,
+          openingBranchPath,
+          openingPath
+        }}
+      />
+    ),
+    [
+      state.shouldShowBranchCompareSection,
+      state.branchCompareSummaryText,
+      state.branchEntries,
+      state.branchCompareState,
+      state.branchCompareResult,
+      busyAction,
+      openBranchDiff,
+      openingBranchPath,
+      openingPath
+    ]
   )
 
   return (

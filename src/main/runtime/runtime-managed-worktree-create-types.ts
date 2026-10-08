@@ -5,6 +5,7 @@ import type {
   CliWorkspaceProvenance,
   GitPushTarget,
   WorkspaceLinkedItem,
+  WorkspaceAttachment,
   Worktree
 } from '../../shared/worktree/types'
 import type { TuiAgent } from '../../shared/tui-agent'
@@ -33,6 +34,7 @@ export type RuntimeManagedWorktreeCreateArgs = {
   linkedAzureDevOpsPR?: number | null
   linkedGiteaPR?: number | null
   linkedWorkItem?: WorkspaceLinkedItem | null
+  linkedItems?: WorkspaceAttachment[]
   linkedTaskSourceContext?: TaskSourceContext | null
   comment?: string
   displayName?: string

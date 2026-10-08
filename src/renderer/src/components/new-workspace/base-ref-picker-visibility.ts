@@ -1,5 +1,5 @@
-import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/SmartWorkspaceNameField'
-import type { SmartNameMode } from './smart-workspace-source-results'
+import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/smart-workspace-name-field-model'
+import type { SmartNameMode } from '../../../../shared/new-workspace/smart-workspace-source-results'
 
 /**
  * Whether the composer offers a base ref for the worktree it is about to create.

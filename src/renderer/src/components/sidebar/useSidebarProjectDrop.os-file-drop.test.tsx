@@ -48,8 +48,6 @@ beforeEach(() => {
     failures: []
   }))
   vi.stubGlobal('api', {
-    // The legacy broadcast stays available; only the element drop may add a project.
-    ui: { onFileDrop: () => () => undefined },
     fs: {
       getPathForFile: () => '/Users/me/project',
       prepareDroppedPaths: mocks.prepare,

@@ -41,6 +41,8 @@ import { TabWorkspaceLayoutMenuSection } from '@/components/tab-bar/TabWorkspace
 import { canMoveTabToNewPaneColumn } from '@/components/tab-bar/tab-move-to-pane-column'
 import { isEditableTarget } from '@/lib/editable-target'
 import { NativeChatCopyOrcaSessionIdMenuItem } from './NativeChatCopyOrcaSessionIdMenuItem'
+import { NativeChatSelectionQuote } from './NativeChatSelectionQuote'
+import type { NativeChatComposerHandle } from './native-chat-composer-types'
 import type { TabSplitDirection } from '@/store/slices/tabs'
 
 type NativeChatContextMenuState = {
@@ -53,6 +55,8 @@ type NativeChatContextMenuState = {
 
 type UseNativeChatContextMenuArgs = {
   rootRef: RefObject<HTMLElement | null>
+  /** Where a selection from an agent's reply is quoted. */
+  composerRef: RefObject<NativeChatComposerHandle | null>
   enabled?: boolean
   /** Bridge-only escape hatch; structured sessions have no terminal view. */
   onSwitchToTerminal?: () => void
@@ -112,6 +116,7 @@ export const emptyNativeChatContextMenuActions: Omit<NativeChatContextMenuAction
 
 export function useNativeChatContextMenu({
   rootRef,
+  composerRef,
   enabled = true,
   onSwitchToTerminal,
   actions,
@@ -184,6 +189,12 @@ export function useNativeChatContextMenu({
     onPointerDownCapture: keepSelectionThroughMenuPress,
     menu: (
       <DropdownMenu open={enabled && state.open && hasItems} onOpenChange={setOpen} modal={false}>
+        {/* Mounted here as the menu root adds no DOM; it steps aside while the menu is open. */}
+        <NativeChatSelectionQuote
+          rootRef={rootRef}
+          composerRef={composerRef}
+          enabled={enabled && !(state.open && hasItems)}
+        />
         <DropdownMenuTrigger asChild>
           <button
             aria-hidden

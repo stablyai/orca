@@ -104,6 +104,8 @@ export type OrcadOptions = {
   pairingAddress?: string
   /** Desktop `orca serve` parity: a mobile-scoped offer with a terminal QR. */
   mobilePairing?: boolean
+  /** Lets the paired runtime client drive this machine's desktop (computer.*). */
+  grantDesktopControl?: boolean
   /** Desktop `orca serve` parity: print only the ephemeral-VM recipe line. */
   recipeJson?: boolean
   projectRoot?: string

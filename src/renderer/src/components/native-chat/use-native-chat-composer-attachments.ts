@@ -31,7 +31,10 @@ import {
   takeNativeChatPendingAttachment,
   useNativeChatPendingAttachments
 } from './native-chat-pending-attachment-cache'
-import { appendNativeChatAttachmentCache, appendNativeChatDraftCache } from './native-chat-draft-cache'
+import {
+  appendNativeChatAttachmentCache,
+  appendNativeChatDraftCache
+} from './native-chat-draft-cache'
 import { useNativeChatComposerAttachmentPreviews } from './use-native-chat-composer-attachment-previews'
 import { formatNativeChatFileReference } from '../../../../shared/agent-image-paste'
 

@@ -8,6 +8,7 @@ import {
   type AgentSessionFailureCopyValues,
   type AgentSessionFailureSay
 } from '../../../../shared/agent-session-failure-copy'
+import { AVAILABILITY_PIECES } from './agent-session-availability-words-text'
 import { ATTACHMENT_FAILURE_PIECES } from './agent-session-failure-attachment-words-text'
 
 // The pieces a refusal notice says too keep the notice's keys, so each has one translation.
@@ -77,6 +78,7 @@ const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopy
       translate('components.native-chat.writeNotice.startNewChat', COPY.startNewChat),
     notSignedIn: (values) =>
       translate('components.native-chat.failureWords.notSignedIn', COPY.notSignedIn, values),
+    ...AVAILABILITY_PIECES,
     signInFirst: () =>
       translate('components.native-chat.failureWords.signInFirst', COPY.signInFirst),
     signInThenRunCommand: (values) =>
@@ -113,6 +115,16 @@ const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopy
       translate(
         'components.native-chat.failureWords.historyInOtherAccount',
         COPY.historyInOtherAccount
+      ),
+    claudeAccountFolderMissing: () =>
+      translate(
+        'components.native-chat.failureWords.claudeAccountFolderMissing',
+        COPY.claudeAccountFolderMissing
+      ),
+    claudeAccountSetupFailed: () =>
+      translate(
+        'components.native-chat.failureWords.claudeAccountSetupFailed',
+        COPY.claudeAccountSetupFailed
       ),
     agentCommandNotRunnable: (values) =>
       translate(

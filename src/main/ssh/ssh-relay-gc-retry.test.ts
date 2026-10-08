@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({ app: { getAppPath: () => '/mock/app' } }))
 vi.mock('fs', () => ({
@@ -78,8 +78,11 @@ function makeConnection(): SshConnection {
 }
 
 describe('relay GC deploy retry', () => {
+  afterEach(() => vi.unstubAllEnvs())
   beforeEach(() => {
     vi.clearAllMocks()
+    // The host-npm path is opt-in; these cases cover it.
+    vi.stubEnv('ORCA_SSH_REMOTE_RUNTIME', 'legacy')
   })
 
   it('recomputes install state when GC wins before a healthy relay launch', async () => {

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, useSyncExternalStore } from 'react'
+import { useCallback, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useNativeChatRestartOfferEnabled } from './native-chat-restart-offer-gate'
 import { RotateCcw } from 'lucide-react'
 import { Button } from './ui/button'
@@ -15,12 +15,18 @@ import { useAppStore } from '../store'
 import { translate } from '@/i18n/i18n'
 import { activateAiVaultStructuredSession } from '@/lib/activate-ai-vault-structured-session'
 import { ResumeOnRestartGroups } from './NativeChatResumeOnRestartGroups'
+import { ResumeTreeRow } from './NativeChatResumeTreeRow'
 import {
   resumeFailureGuidance,
   resumeFailureSelectable,
   type ResumeFailureAction
 } from './native-chat-resume-failure-guidance'
-import type { ResumeCandidate, ResumeFailure } from './native-chat-resume-on-restart-grouping'
+import {
+  resumeSelectionState,
+  toggleResumeSelection,
+  type ResumeCandidate,
+  type ResumeFailure
+} from './native-chat-resume-on-restart-grouping'
 import {
   consumeNativeChatResumeOnRestartDialogRequest,
   getNativeChatResumeOnRestartDialogRequest,
@@ -64,6 +70,56 @@ function selectedByDefault(failure: ResumeFailure | undefined): boolean {
   return guidance.primary === 'retry' || guidance.secondary === 'retry'
 }
 
+/**
+ * Tree keys. On a row's checkbox: Up/Down step between the enabled checkboxes, Home/End jump to the
+ * first/last, Left collapses and Right expands the node through its own disclosure; Space toggles
+ * natively. On the tree itself (its Tab stop): Down/Home enter at the first checkbox, Up/End at
+ * the last.
+ */
+function moveInTree(event: React.KeyboardEvent<HTMLElement>): void {
+  const target = event.target
+  if (!(target instanceof HTMLElement)) {
+    return
+  }
+  const boxes = [
+    ...event.currentTarget.querySelectorAll<HTMLElement>('[role="checkbox"]:not(:disabled)')
+  ]
+  const onTree = target === event.currentTarget
+  if (!onTree && target.getAttribute('role') !== 'checkbox') {
+    return
+  }
+  const jump =
+    event.key === 'Home' || (onTree && event.key === 'ArrowDown')
+      ? boxes[0]
+      : event.key === 'End' || (onTree && event.key === 'ArrowUp')
+        ? boxes.at(-1)
+        : undefined
+  if (jump) {
+    event.preventDefault()
+    jump.focus()
+    return
+  }
+  if (onTree) {
+    return
+  }
+  if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    event.preventDefault()
+    boxes[boxes.indexOf(target) + (event.key === 'ArrowDown' ? 1 : -1)]?.focus()
+    return
+  }
+  if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+    event.preventDefault()
+    // Rows are flat treeitems, so the nearest one is this checkbox's own node.
+    const disclosure = target
+      .closest('[role="treeitem"]')
+      ?.querySelector<HTMLButtonElement>('button[aria-expanded]')
+    const open = disclosure?.getAttribute('aria-expanded') === 'true'
+    if (disclosure && open === (event.key === 'ArrowLeft')) {
+      disclosure.click()
+    }
+  }
+}
+
 export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
   const offerEnabled = useNativeChatRestartOfferEnabled()
   const { candidates, failed, listedAt } = useNativeChatRestartOffer(offerEnabled)
@@ -81,6 +137,7 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
   )
   const updateSettings = useAppStore((store) => store.updateSettings)
   const [dontAskAgain, setDontAskAgain] = useState(false)
+  const resumeButtonRef = useRef<HTMLButtonElement>(null)
   // The store's: the resume outlives this dialog, which can close or reopen mid-run.
   const resuming = useNativeChatRestartResuming()
   const busy = resuming.length > 0
@@ -97,24 +154,31 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
       setOverrides(new Map())
     }
   }
-  /** Derived from the host's own list, so an action can never name a chat it did not list. */
-  const chosen = useMemo(
+  /** Every chat a tick can name; a failure the host marks unretryable is left out. */
+  const selectable = useMemo(
     () =>
       rows
         .filter((row) => {
           const failure = failureBySession.get(row.sessionId)
-          // A tick made before the host marked it unretryable must not carry into the action.
-          return (
-            (!failure || resumeFailureSelectable(failure)) &&
-            (overrides.get(row.sessionId) ?? selectedByDefault(failure))
-          )
+          return !failure || resumeFailureSelectable(failure)
         })
         .map((row) => row.sessionId),
-    [rows, overrides, failureBySession]
+    [rows, failureBySession]
+  )
+  /** Derived from the host's own list, so an action can never name a chat it did not list. */
+  const chosen = useMemo(
+    () =>
+      // A tick made before the host marked it unretryable must not carry into the action.
+      selectable.filter(
+        (sessionId) =>
+          overrides.get(sessionId) ?? selectedByDefault(failureBySession.get(sessionId))
+      ),
+    [selectable, overrides, failureBySession]
   )
   const selected = useMemo(() => new Set(chosen), [chosen])
   // Mid-run the ticks show what is running; this opening's own ticks may name chats left out of it.
   const ticked = useMemo(() => (busy ? new Set(resuming) : selected), [busy, resuming, selected])
+  const allSelection = resumeSelectionState(selectable, ticked)
 
   const toggleSelected = useCallback((sessionId: string, checked: boolean) => {
     setOverrides((current) => new Map(current).set(sessionId, checked))
@@ -176,6 +240,10 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
   }
 
   const interruptedByUpdate = rows.some((row) => row.trigger === 'update')
+  const selectAllLabel = translate(
+    'auto.components.NativeChatResumeOnRestartModal.selectAllLabel',
+    'Select all'
+  )
 
   return (
     <Dialog
@@ -188,7 +256,20 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
     >
       {/* Height is capped, never the data: the list scrolls inside the dialog so the header and
           the primary action stay put however many chats were interrupted. */}
-      <DialogContent className="grid-rows-[auto_minmax(0,1fr)_auto_auto] sm:max-w-xl max-h-[85vh]">
+      {/* Wide enough for a nested chat row to keep its name, model and age on one line. */}
+      <DialogContent
+        className="grid-rows-[auto_minmax(0,1fr)_auto] sm:max-w-3xl max-h-[85vh]"
+        // Keep the scrollable list out of initial focus, including while Resume is disabled.
+        onOpenAutoFocus={(event) => {
+          event.preventDefault()
+          const resumeButton = resumeButtonRef.current
+          if (resumeButton && !resumeButton.disabled) {
+            resumeButton.focus()
+          } else if (event.currentTarget instanceof HTMLElement) {
+            event.currentTarget.focus()
+          }
+        }}
+      >
         <DialogHeader>
           <DialogTitle>
             {/* Plain wrapper owns the icon spacing; DialogTitle owns its own. */}
@@ -214,13 +295,44 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
         </DialogHeader>
 
         <div
+          role="tree"
           tabIndex={0}
           aria-label={translate(
             'auto.components.NativeChatResumeOnRestartModal.listLabel',
             'Chats that would be resumed'
           )}
-          className="min-h-0 overflow-y-auto scrollbar-sleek rounded-md border bg-muted/35 p-1.5"
+          // The sidebar's own surface, so its workspaces read here as they do there.
+          className="min-h-0 overflow-y-auto scrollbar-sleek rounded-md bg-worktree-sidebar p-1.5 pb-2"
+          onKeyDown={moveInTree}
         >
+          {/* Here, not in the groups: a list may hold one set of groups per machine. The tree's one
+              divider sets it apart from the nodes. */}
+          <div className="mb-1 border-b border-worktree-sidebar-border pb-0.5">
+            <ResumeTreeRow
+              depth={0}
+              name={selectAllLabel}
+              checked={allSelection.checked}
+              disabled={busy || allSelection.total === 0}
+              onCheckedChange={() =>
+                toggleResumeSelection(selectable, allSelection, toggleSelected)
+              }
+              checkboxLabel={translate(
+                'auto.components.NativeChatResumeOnRestartModal.selectAll',
+                'Select all chats'
+              )}
+            >
+              <span className="min-w-0 truncate text-xs font-semibold text-muted-foreground">
+                {selectAllLabel}
+              </span>
+              <span className="ml-auto shrink-0 pl-2 text-[11px] tabular-nums text-muted-foreground">
+                {translate(
+                  'auto.components.NativeChatResumeOnRestartModal.selectedCount',
+                  '{{value0}} of {{value1}} selected',
+                  { value0: allSelection.selectedCount, value1: allSelection.total }
+                )}
+              </span>
+            </ResumeTreeRow>
+          </div>
           <ResumeOnRestartGroups
             candidates={rows}
             listedAt={listedAt}
@@ -232,37 +344,38 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
           />
         </div>
 
-        <label className="flex items-start gap-2.5">
-          <Checkbox
-            checked={dontAskAgain}
-            disabled={busy}
-            onCheckedChange={(next) => setDontAskAgain(next === true)}
-            className="mt-0.5"
-          />
-          <span className="min-w-0 space-y-0.5">
-            <span className="block text-sm">
-              {translate(
-                'auto.components.NativeChatResumeOnRestartModal.dontAskAgain',
-                "Don't ask again (resume automatically)"
-              )}
-            </span>
-            {/* Where to undo it; what it does is the body copy's job. */}
-            <span className="block text-xs text-muted-foreground">
-              {translate(
-                'auto.components.NativeChatResumeOnRestartModal.dontAskAgainHint',
-                'You can turn this off in Settings → Experimental → Chat UI.'
-              )}
-            </span>
-          </span>
-        </label>
-
         {/* Two controls: one deletes the offer, one acts on it. Closing snoozes, so it needs none. */}
-        <DialogFooter className="sm:justify-between">
+        <DialogFooter className="sm:items-center">
+          {/* Why order-last: the narrow footer stacks bottom-up, so this keeps the option above the actions. */}
+          <label className="order-last flex min-w-0 items-start gap-2.5 sm:order-none sm:mr-auto">
+            <Checkbox
+              checked={dontAskAgain}
+              disabled={busy}
+              onCheckedChange={(next) => setDontAskAgain(next === true)}
+              className="mt-0.5"
+            />
+            <span className="min-w-0 space-y-0.5">
+              <span className="block text-sm">
+                {translate(
+                  'auto.components.NativeChatResumeOnRestartModal.dontAskAgain',
+                  "Don't ask again (resume automatically)"
+                )}
+              </span>
+              {/* Where to undo it; what it does is the body copy's job. */}
+              <span className="block text-xs text-muted-foreground">
+                {translate(
+                  'auto.components.NativeChatResumeOnRestartModal.dontAskAgainHint',
+                  'You can turn this off in Settings → Experimental → Chat UI.'
+                )}
+              </span>
+            </span>
+          </label>
           {/* Quiet, explicit cleanup of the durable records. */}
           <Button variant="ghost" size="sm" disabled={busy} onClick={() => void dismissAll()}>
             {translate('auto.components.NativeChatResumeOnRestartModal.dismissAll', 'Dismiss all')}
           </Button>
           <Button
+            ref={resumeButtonRef}
             variant="default"
             size="sm"
             disabled={busy || chosen.length === 0}

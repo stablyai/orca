@@ -13,6 +13,11 @@ import {
 
 const TIMEOUT_MS = 30_000
 
+async function drainTimeoutCheck(): Promise<void> {
+  await waitForPoll()
+  await waitForPoll()
+}
+
 afterEach(() => {
   vi.useRealTimers()
   publishSystemResume()
@@ -48,6 +53,16 @@ function harness() {
 }
 
 describe('profile state writer deadline', () => {
+  it('lets a queued reply clear the deadline after the first poll', async () => {
+    const { deadline, onTimeout, unsubscribe, run } = harness()
+    run(TIMEOUT_MS)
+    setImmediate(() => deadline.clear())
+    await drainTimeoutCheck()
+    expect(onTimeout).not.toHaveBeenCalled()
+    expect(unsubscribe).toHaveBeenCalledOnce()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
   it('times out a request after allowing queued replies to drain', async () => {
     const { onTimeout, onGrace, unsubscribe, run } = harness()
     run(TIMEOUT_MS - 1)
@@ -55,7 +70,7 @@ describe('profile state writer deadline', () => {
     run(1)
     expect(onGrace).not.toHaveBeenCalled()
     expect(onTimeout).not.toHaveBeenCalled()
-    await waitForPoll()
+    await drainTimeoutCheck()
     expect(onTimeout).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ overdueMs: 0, graces: 0, powerState: 'awake' })
     )
@@ -74,7 +89,7 @@ describe('profile state writer deadline', () => {
     run(TIMEOUT_MS - 1)
     expect(onTimeout).not.toHaveBeenCalled()
     run(1)
-    await waitForPoll()
+    await drainTimeoutCheck()
     expect(onTimeout).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ overdueMs: 0, graces: 1 })
     )
@@ -85,7 +100,7 @@ describe('profile state writer deadline', () => {
     stall(PROFILE_STATE_WRITER_OVERDUE_GRACE_MS - 1)
     run(TIMEOUT_MS)
     expect(onGrace).not.toHaveBeenCalled()
-    await waitForPoll()
+    await drainTimeoutCheck()
     expect(onTimeout).toHaveBeenCalledOnce()
   })
 
@@ -99,7 +114,7 @@ describe('profile state writer deadline', () => {
     stall(60 * 60_000)
     run(TIMEOUT_MS)
     expect(onGrace).toHaveBeenCalledTimes(PROFILE_STATE_WRITER_MAX_GRACES)
-    await waitForPoll()
+    await drainTimeoutCheck()
     expect(onTimeout).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ graces: PROFILE_STATE_WRITER_MAX_GRACES })
     )
@@ -114,7 +129,7 @@ describe('profile state writer deadline', () => {
     run(TIMEOUT_MS - 1)
     expect(onTimeout).not.toHaveBeenCalled()
     run(1)
-    await waitForPoll()
+    await drainTimeoutCheck()
     expect(onGrace).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ graces: 1 }))
     expect(onTimeout).toHaveBeenCalledOnce()
   })
@@ -129,7 +144,7 @@ describe('profile state writer deadline', () => {
     expect(onGrace).toHaveBeenCalledTimes(PROFILE_STATE_WRITER_MAX_GRACES)
     expect(onTimeout).not.toHaveBeenCalled()
     run(TIMEOUT_MS)
-    await waitForPoll()
+    await drainTimeoutCheck()
     expect(onTimeout).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ powerState: 'suspended' })
     )
@@ -148,7 +163,7 @@ describe('profile state writer deadline', () => {
           power().onResume()
         }
         run(1)
-        await waitForPoll()
+        await drainTimeoutCheck()
         expect(onTimeout).toHaveBeenCalledExactlyOnceWith(
           expect.objectContaining({ graces: PROFILE_STATE_WRITER_MAX_GRACES })
         )
@@ -170,7 +185,7 @@ describe('profile state writer deadline', () => {
       run(TIMEOUT_MS)
       // An exhausted resume must not cancel the final queued timeout check.
       power().onResume()
-      await waitForPoll()
+      await drainTimeoutCheck()
       expect(onGrace).toHaveBeenCalledTimes(PROFILE_STATE_WRITER_MAX_GRACES)
       expect(onTimeout).toHaveBeenCalledOnce()
       expect(vi.getTimerCount()).toBe(0)
@@ -183,7 +198,7 @@ describe('profile state writer deadline', () => {
     const { deadline, onTimeout, unsubscribe, run } = harness()
     run(TIMEOUT_MS)
     deadline.clear()
-    await waitForPoll()
+    await drainTimeoutCheck()
     expect(onTimeout).not.toHaveBeenCalled()
     expect(unsubscribe).toHaveBeenCalledOnce()
     expect(vi.getTimerCount()).toBe(0)
@@ -193,10 +208,10 @@ describe('profile state writer deadline', () => {
     const { onTimeout, run, power } = harness()
     run(TIMEOUT_MS)
     power().onResume()
-    await waitForPoll()
+    await drainTimeoutCheck()
     expect(onTimeout).not.toHaveBeenCalled()
     run(TIMEOUT_MS)
-    await waitForPoll()
+    await drainTimeoutCheck()
     expect(onTimeout).toHaveBeenCalledOnce()
     expect(vi.getTimerCount()).toBe(0)
   })

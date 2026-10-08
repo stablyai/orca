@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { WorkspaceAttachmentsSchema } from '../workspace-attachment-schema'
 import { WorkspaceLinkedItemSchema } from '../workspace-linked-item-schema'
 import { TaskSourceContextSchema } from '../task-source-context-schema'
 import { workspaceSourceSchema } from '../telemetry-events'
@@ -43,6 +44,7 @@ export const WorktreeCreate = z
     linkedAzureDevOpsPR: TriStateLinkedIssue,
     linkedGiteaPR: TriStateLinkedIssue,
     linkedWorkItem: WorkspaceLinkedItemSchema.nullable().optional(),
+    linkedItems: WorkspaceAttachmentsSchema.optional(),
     linkedTaskSourceContext: TaskSourceContextSchema.nullable().optional(),
     comment: OptionalString,
     displayName: OptionalString,

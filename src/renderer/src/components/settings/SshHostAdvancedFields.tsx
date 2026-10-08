@@ -120,6 +120,36 @@ export function SshHostAdvancedFields({
               )}
             />
           </div>
+          <div className="flex items-start justify-between gap-4 py-1 text-xs">
+            <div className="min-w-0 flex-1 space-y-0.5">
+              <Label className="text-xs font-medium">
+                {translate(
+                  'auto.components.settings.SshTargetForm.allowRemoteCliControl',
+                  "Allow this host's orca CLI to control Orca"
+                )}
+              </Label>
+              <p className="text-muted-foreground">
+                {translate(
+                  'auto.components.settings.SshTargetForm.allowRemoteCliControlHelp',
+                  'When off, orca commands run on this host reach only its own terminals. Turn on to let them reach other hosts, orchestration, files, and integrations on this computer.'
+                )}
+              </p>
+            </div>
+            <SettingsSwitch
+              checked={form.allowRemoteCliControl}
+              disabled={disabled}
+              onChange={() =>
+                onFormChange((f) => ({
+                  ...f,
+                  allowRemoteCliControl: !f.allowRemoteCliControl
+                }))
+              }
+              ariaLabel={translate(
+                'auto.components.settings.SshTargetForm.allowRemoteCliControl',
+                "Allow this host's orca CLI to control Orca"
+              )}
+            />
+          </div>
           <SshRemoteRuntimeField
             value={form.remoteRuntime}
             disabled={disabled}

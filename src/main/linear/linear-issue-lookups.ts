@@ -31,17 +31,36 @@ import {
   type LinearIssueWriteRecord
 } from './linear-issue-write-support'
 
+const ISSUE_DETAIL_TIMEOUT_MS = 30_000
+
 export async function getIssue(
   id: string,
   workspaceId?: LinearWorkspaceSelection | null
 ): Promise<LinearIssue | null> {
-  const entries = getClients(workspaceId)
+  const controller = new AbortController()
+  const timer = setTimeout(
+    () => controller.abort(new Error('Linear issue detail lookup timed out')),
+    ISSUE_DETAIL_TIMEOUT_MS
+  )
+  try {
+    return await readIssueWithSignal(id, workspaceId, controller.signal)
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+async function readIssueWithSignal(
+  id: string,
+  workspaceId: LinearWorkspaceSelection | null | undefined,
+  signal: AbortSignal
+): Promise<LinearIssue | null> {
+  const entries = getClients(workspaceId, signal)
   if (entries.length === 0) {
     return null
   }
 
   for (const entry of entries) {
-    await acquire()
+    await acquire(signal)
     try {
       const issue = await entry.client.issue(id)
       const mapped = await mapIssueForWorkspace(entry, issue, {
@@ -51,10 +70,13 @@ export async function getIssue(
       const descriptionImageUrls = await getDescriptionImageUrls(
         entry,
         mapped.id,
-        mapped.description
+        mapped.description,
+        signal
       )
+      signal.throwIfAborted()
       return { ...mapped, ...(descriptionImageUrls ? { descriptionImageUrls } : {}) }
     } catch (error) {
+      signal.throwIfAborted()
       if (isAuthError(error)) {
         clearToken(entry.workspace.id)
         if (shouldThrowAuthError(workspaceId)) {

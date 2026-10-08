@@ -7,12 +7,14 @@ import {
   MessagesSquare,
   PanelTopOpen,
   Play,
+  SquareTerminal,
   Trash2
 } from 'lucide-react'
 import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
+import { ResumeInNewCliTooltipText } from './ai-vault-session-cli-fork-copy'
 
 export function SessionActionMenuItems({
   menuKind = 'dropdown',
@@ -22,6 +24,7 @@ export function SessionActionMenuItems({
   onResume,
   onContinueInNewSession,
   onResumeInNewChat,
+  onResumeInNewCli,
   onJumpToOriginalPane,
   showJumpToWorktree,
   onJumpToWorktree,
@@ -41,6 +44,8 @@ export function SessionActionMenuItems({
   onResume: () => void
   onContinueInNewSession?: () => void
   onResumeInNewChat?: () => void
+  // Offered only on rows native chat owns, where it forks: see ai-vault-session-cli-fork.
+  onResumeInNewCli?: () => void
   onJumpToOriginalPane?: () => void
   showJumpToWorktree: boolean
   onJumpToWorktree?: () => void
@@ -104,10 +109,26 @@ export function SessionActionMenuItems({
         <Item onSelect={onResumeInNewChat}>
           <MessagesSquare className="size-3.5" />
           {translate(
-            'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewChat',
-            'Resume in New Chat'
+            'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewNativeChat',
+            'Resume in New Native Chat'
           )}
         </Item>
+      ) : null}
+      {onResumeInNewCli ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Item onSelect={onResumeInNewCli}>
+              <SquareTerminal className="size-3.5" />
+              {translate(
+                'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewCli',
+                'Resume in New CLI'
+              )}
+            </Item>
+          </TooltipTrigger>
+          <TooltipContent side={menuKind === 'context' ? 'right' : 'left'} sideOffset={8}>
+            <ResumeInNewCliTooltipText />
+          </TooltipContent>
+        </Tooltip>
       ) : null}
       {onContinueInNewSession ? (
         <Item onSelect={onContinueInNewSession}>

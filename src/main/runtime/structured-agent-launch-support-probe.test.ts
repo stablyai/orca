@@ -71,9 +71,9 @@ function launchWith(settings: Settings) {
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-opencode-probe-'))
-  shellBin = await fakeOpencode(join(root, 'homebrew'), '2.0.21')
+  shellBin = await fakeOpencode(join(root, 'homebrew'), '1.18.30')
   privateBin = await fakeOpencode(join(root, 'oc-prefix', 'bin'), '1.18.31')
-  // Orca's resolved login-shell PATH, with a 2.x `opencode` first.
+  // Orca's resolved login-shell PATH, with an `opencode` older than the structured chat's first.
   loginShell.env = { PATH: `${shellBin}:/usr/bin:/bin`, HOME: root }
 })
 afterEach(async () => {
@@ -97,11 +97,20 @@ describe.skipIf(process.platform === 'win32')(
       expect((await launchWith(settings)).command).toBe(join(privateBin, 'opencode'))
     })
 
-    it('keeps 2.x first on PATH on the terminal chat when nothing points elsewhere', async () => {
+    it('keeps a refused release first on PATH on the terminal chat when nothing points elsewhere', async () => {
       const settings = { ...base, agentDefaultEnv: {} }
       expect(await structuredAgentSupportsLaunch('opencode', 'id:w', runtimeWith(settings))).toBe(
         false
       )
+    })
+
+    it('runs a stable 2.x first on PATH in the structured chat', async () => {
+      await fakeOpencode(shellBin, '2.0.21')
+      const settings = { ...base, agentDefaultEnv: {} }
+      expect(await structuredAgentSupportsLaunch('opencode', 'id:w', runtimeWith(settings))).toBe(
+        true
+      )
+      expect((await launchWith(settings)).command).toBe(join(shellBin, 'opencode'))
     })
 
     it('checks and launches the binary the Command setting names', async () => {

@@ -8,6 +8,7 @@ import { ChatSettingsSection } from './ChatSettingsSection'
 import { ActiveSettingsSectionProvider } from './SettingsSection'
 import { getChatAppearanceSearchEntries } from './chat-appearance-search'
 import { getChatNamingSearchEntry } from './chat-naming-search'
+import { getChatInlineVisualsSearchEntry } from './chat-inline-visuals-search'
 import { useSettingsRepoScrollEffects } from './use-settings-repo-scroll-effects'
 import type { SettingsStoreModel } from './use-settings-store-model'
 import type { SettingsInteractionController } from './use-settings-interaction-controller'
@@ -96,7 +97,11 @@ function NavigationHarness({
         settings={settings}
         updateSettings={vi.fn()}
         writeSourceControlAiSettings={async () => {}}
-        searchEntries={[...getChatAppearanceSearchEntries(), getChatNamingSearchEntry()]}
+        searchEntries={[
+          ...getChatAppearanceSearchEntries(),
+          getChatNamingSearchEntry(),
+          getChatInlineVisualsSearchEntry()
+        ]}
         showDesktopOnlySettings
         isMounted
       />
@@ -105,6 +110,23 @@ function NavigationHarness({
 }
 
 describe('Chat settings deep links', () => {
+  it('activates Chat and scrolls to Inline visuals from another settings page', async () => {
+    const scrollIntoView = vi.spyOn(HTMLElement.prototype, 'scrollIntoView')
+    const { container } = render(
+      <NavigationHarness enabled initialSection="appearance" targetSection="chat-inline-visuals" />
+    )
+    await waitFor(() => {
+      expect(screen.getByRole('status', { name: 'Selected settings page' }).textContent).toBe(
+        'chat'
+      )
+    })
+    const visuals = container.querySelector('#chat-inline-visuals')
+    expect(visuals?.querySelector('[role="switch"]')).toBe(
+      screen.getByRole('switch', { name: 'Toggle inline visuals' })
+    )
+    await waitFor(() => expect(scrollIntoView.mock.contexts).toContain(visuals))
+  })
+
   it('activates Chat and renders the moved row for a deep link', async () => {
     render(<NavigationHarness enabled initialSection="appearance" />)
     await waitFor(() => {

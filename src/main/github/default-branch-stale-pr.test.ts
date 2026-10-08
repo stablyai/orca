@@ -122,13 +122,11 @@ vi.mock('./rate-limit', () => ({
   noteRepositoryRateLimitSpend: noteRepositoryRateLimitSpendMock
 }))
 
-import {
-  getPRForBranch,
-  getPRForBranchOutcome,
-  _resetOwnerRepoCache,
-  _resetMergeQueueCacheForTests,
-  __resetTrackedUpstreamBranchCacheForTests
-} from './client'
+import { getPRForBranch } from './client/lookup/get-pr-for-branch'
+import { getPRForBranchOutcome } from './client/lookup/pr-for-branch-outcome'
+import { _resetOwnerRepoCache } from './gh-utils'
+import { _resetMergeQueueCacheForTests } from './client/detect/repository-merge-metadata-cache'
+import { __resetTrackedUpstreamBranchCacheForTests } from './client/lookup/tracked-upstream-cache'
 import { __resetPRConflictSummaryCachesForTests } from './conflict-summary'
 import { resetMergedPRCommitMembershipCacheForTest } from './merged-pr-commit-membership'
 import { __resetRepoDefaultBranchCacheForTests } from '../source-control/repo-default-branch'

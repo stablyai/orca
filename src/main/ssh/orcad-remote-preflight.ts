@@ -13,8 +13,9 @@ import {
   orcadWindowsNodeCommandLine,
   readOrcadWindowsEncodedAnswer
 } from './orcad-remote-windows-node'
+import { readWindowsOrcadSlotEntry } from './orcad-remote-launch-windows'
 import { ORCAD_WINDOWS_RUNTIME_MARKER } from './orcad-windows-host-script'
-import { orcadNodeSlotRuntimeCommand } from './orcad-remote-runtime'
+import { orcadNodeSlotRuntimeCommand, selectOrcadSlotEntryCommand } from './orcad-remote-runtime'
 import { execCommand } from './ssh-relay-deploy-helpers'
 import { shellEscape } from './ssh-connection-utils'
 import { isWindowsRemoteHost, joinRemotePath, type RemoteHostPlatform } from './ssh-remote-platform'
@@ -31,11 +32,11 @@ export function orcadProfilePreflightCommand(
   const launch = [
     'ORCA_BACKGROUND_LAUNCH=1',
     '"$orcad_runtime"',
-    shellEscape(joinRemotePath(host, directory, 'orcad.js')),
+    '"$orcad_entry"',
     ORCAD_PROFILE_PREFLIGHT_FLAG,
     shellEscape(nonce)
   ].join(' ')
-  return `[ -e ${marker} ] || exit 78; ${orcadNodeSlotRuntimeCommand(host, directory)}${launch}`
+  return `[ -e ${marker} ] || exit 78; ${orcadNodeSlotRuntimeCommand(host, directory)}${selectOrcadSlotEntryCommand(host, directory)}; ${launch}`
 }
 
 /** Failure leaves the incumbent and its data untouched, including an unconfirmed SSH exit. */
@@ -59,7 +60,7 @@ export async function preflightInstalledOrcad(options: {
 }
 
 /**
- * Windows: resolve the slot's node.exe, then run its `orcad.js` with plain argv. No
+ * Windows: resolve the slot's node.exe, then run its selected entry with plain argv. No
  * ORCA_BACKGROUND_LAUNCH here: orcad opens no window, and argv cannot set environment.
  */
 async function windowsOrcadProfilePreflightCommand(
@@ -72,21 +73,19 @@ async function windowsOrcadProfilePreflightCommand(
   nonce: string
 ): Promise<string> {
   const { host, remoteInstallDir } = options
-  const runtime = readOrcadWindowsEncodedAnswer(
-    await execCommand(
-      options.conn,
-      orcadWindowsHostOpCommand(host, orcadWindowsBaseDir(host, remoteInstallDir), 'slot-runtime', [
-        remoteInstallDir
-      ]),
-      { signal: options.signal, wrapCommand: false }
-    ),
-    ORCAD_WINDOWS_RUNTIME_MARKER
+  const slotAnswer = await execCommand(
+    options.conn,
+    orcadWindowsHostOpCommand(host, orcadWindowsBaseDir(host, remoteInstallDir), 'slot-runtime', [
+      remoteInstallDir
+    ]),
+    { signal: options.signal, wrapCommand: false }
   )
+  const runtime = readOrcadWindowsEncodedAnswer(slotAnswer, ORCAD_WINDOWS_RUNTIME_MARKER)
   if (!runtime) {
     throw new Error('The Windows host did not name the runtime this orcad slot needs.')
   }
   return orcadWindowsNodeCommandLine(runtime, [
-    joinRemotePath(host, remoteInstallDir, 'orcad.js'),
+    readWindowsOrcadSlotEntry(slotAnswer, host, remoteInstallDir),
     ORCAD_PROFILE_PREFLIGHT_FLAG,
     nonce
   ])

@@ -126,7 +126,9 @@ function ActivityThreadHoverCardContent({
     issueCacheKey: review.issueCacheKey,
     fetchIssue: foundation.fetchIssue,
     showLinearIssue: true,
-    fetchLinearIssue: foundation.fetchLinearIssue
+    fetchLinearIssue: foundation.fetchLinearIssue,
+    linearSourceContext: review.linearSourceContext,
+    linearWorkspaceId: review.linearWorkspaceId
   })
 
   const secondary = useWorktreeCardSecondaryDetails({

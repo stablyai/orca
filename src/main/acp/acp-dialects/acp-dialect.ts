@@ -4,7 +4,7 @@ import type { AgentSessionPromptResponse } from '../../../shared/agent-session-q
 import type { NativeChatBackgroundTaskBlock } from '../../../shared/native-chat-types'
 import type { ProviderTimelineRequestBody } from '../../native-chat/agent-session-timeline/provider-timeline-event'
 import type { AcpAgentError } from '../acp-errors'
-import type { PermissionOption, ToolCallUpdate } from '../generated/acp-protocol.generated'
+import type { ToolCallUpdate } from '../generated/acp-protocol.generated'
 
 export type AcpRequestPresentation = {
   body: ProviderTimelineRequestBody
@@ -43,8 +43,6 @@ export type AcpDialect = {
   injectedPromptIdentity?: true
   /** A tool update in the shared shape (`rawOutput.stdout`, `rawOutput.exitCode`), read first. */
   normalizeToolUpdate?(update: ToolCallUpdate): ToolCallUpdate
-  /** The words for a permission option whose own name misstates what it grants. */
-  permissionOptionLabel?(option: PermissionOption): string | undefined
   toolName?(update: ToolCallUpdate): string | undefined
   toolBackgroundTasks?(
     update: ToolCallUpdate,

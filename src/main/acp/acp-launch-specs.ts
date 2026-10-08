@@ -9,13 +9,14 @@ import {
 import { AGENT_HOOK_RUNTIME_ENV_KEYS } from '../ipc/pty/host-env/spawn-env-keys'
 import type { AcpDialect } from './acp-dialects/acp-dialect'
 import { GROK_ACP_DIALECT } from './acp-dialects/grok-dialect'
+import { OMP_ACP_DIALECT } from './acp-dialects/omp-dialect'
 import { OPENCODE_ACP_DIALECT } from './acp-dialects/opencode-dialect'
 import { directoryAccountBinding, type AcpAccountBinding } from './acp-account-binding'
 import { openCodeAcpAccountBinding } from '../opencode/opencode-structured-account-home'
 import { scrubOpenCodeAcpEnvironment } from '../opencode/opencode-acp-environment'
 import { openCodeStoredUserMessagesReader } from '../opencode/opencode-acp-stored-messages'
 import type { AcpStoredUserMessagesReader } from './acp-recovery-history'
-import { isStableCliVersionOnLine } from '../agent-cli-version-probe'
+import { isStableCliVersionFrom, isStableCliVersionOnLine } from '../agent-cli-version-probe'
 import type { TuiAgent } from '../../shared/tui-agent'
 
 export type AcpLaunchSpec = {
@@ -70,9 +71,15 @@ const GROK_LAUNCH_SPEC: AcpLaunchSpec = {
   installDirectories: ({ env }) => (env.GROK_HOME ? [join(env.GROK_HOME, 'bin')] : [])
 }
 
-// OpenCode 1.x serves ACP in-process through `opencode acp`. OpenCode 2 (`opencode2`, and any
-// `opencode` that is 2.x) is not: its `acp` runs inside the user's own background service, which a
-// chat's environment and account pin do not reach, so it keeps its terminal-backed chat.
+// `opencode acp` on 1.x serves in-process; on 2.x it starts a private `opencode serve --stdio` child
+// with this environment and ends it with stdin, so both lines run the chat's own account.
+const OPENCODE_ACP_RELEASE_LINES = [
+  // The release the recorded sessions capture.
+  { major: 1, floor: '1.18.31' },
+  // The 2.x release verified to start that private child.
+  { major: 2, floor: '2.0.14' }
+] as const
+
 const OPENCODE_LAUNCH_SPEC: AcpLaunchSpec = {
   agent: 'opencode',
   command: 'opencode',
@@ -86,13 +93,37 @@ const OPENCODE_LAUNCH_SPEC: AcpLaunchSpec = {
   loginCommand: ['opencode', 'auth', 'login'],
   account: openCodeAcpAccountBinding(),
   installDirectories: ({ homePath }) => [join(homePath, '.opencode', 'bin')],
-  // Stable 1.x from 1.18.31, the release the recorded sessions capture.
-  supportsVersion: (version) => isStableCliVersionOnLine(version, { major: 1, floor: '1.18.31' }),
+  supportsVersion: (version) =>
+    OPENCODE_ACP_RELEASE_LINES.some((line) => isStableCliVersionOnLine(version, line)),
   imagePrompts: true,
   readStoredUserMessages: openCodeStoredUserMessagesReader()
 }
 
-export const ACP_LAUNCH_SPECS: readonly AcpLaunchSpec[] = [GROK_LAUNCH_SPEC, OPENCODE_LAUNCH_SPEC]
+// OMP serves ACP through `omp acp`; its environment reaches it as the user set it.
+const OMP_LAUNCH_SPEC: AcpLaunchSpec = {
+  agent: 'omp',
+  command: 'omp',
+  // `omp acp` takes no flags: full access answers each permission request yes.
+  args: () => ['acp'],
+  env: {},
+  dialect: OMP_ACP_DIALECT,
+  // OMP signs in from its own `/login`.
+  loginCommand: ['omp'],
+  // The directory OMP's terminal chats read too; its default is OMP's own.
+  account: directoryAccountBinding('PI_CODING_AGENT_DIR', (homePath) =>
+    join(homePath, '.omp', 'agent')
+  ),
+  // OMP's installers use directories the shared resolver already searches after PATH.
+  installDirectories: () => [],
+  // Stable releases from 17.0.5, the release verified to serve `omp acp`.
+  supportsVersion: (version) => isStableCliVersionFrom(version, '17.0.5')
+}
+
+export const ACP_LAUNCH_SPECS: readonly AcpLaunchSpec[] = [
+  GROK_LAUNCH_SPEC,
+  OPENCODE_LAUNCH_SPEC,
+  OMP_LAUNCH_SPEC
+]
 
 export function acpLaunchSpecFor(agent: string): AcpLaunchSpec | null {
   return ACP_LAUNCH_SPECS.find((spec) => spec.agent === agent) ?? null

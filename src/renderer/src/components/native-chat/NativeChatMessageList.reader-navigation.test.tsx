@@ -309,6 +309,8 @@ describe('reader navigation', () => {
       const composer = {
         focus,
         insertTypedText,
+        acceptsText: () => true,
+        appendText: vi.fn(),
         handlePasteEvent: vi.fn(),
         pasteFromClipboard: vi.fn(),
         contains: () => false

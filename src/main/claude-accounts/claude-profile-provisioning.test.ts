@@ -13,13 +13,15 @@ vi.mock('../codex-accounts/fs-utils', async (original) => {
   return { ...actual, writeFileAtomically: vi.fn(actual.writeFileAtomically) }
 })
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
-import { CLAUDE_PROFILE_MEMORY_IMPORT, provisionClaudeProfile } from './claude-profile-provisioning'
+import { provisionClaudeProfile } from './claude-profile-provisioning'
 
 const USER_HOOK = { matcher: '', hooks: [{ type: 'command', command: 'notify-me' }] }
 const ORCA_HOOK = {
   matcher: '',
   hooks: [{ type: 'command', command: '"$HOME/.orca/agent-hooks/claude-hook.sh"' }]
 }
+// What Claude writes on a finished sign-in.
+const LOGIN = { emailAddress: 'p@example.com' }
 const roots: string[] = []
 function fixture() {
   const root = fs.realpathSync(fs.mkdtempSync(join(tmpdir(), 'claude-profile-setup-')))
@@ -33,13 +35,8 @@ function fixture() {
   const read = (file: string): Record<string, unknown> => JSON.parse(fs.readFileSync(file, 'utf8'))
   return { root, userHome, profileHome, source, json, read }
 }
-const provision = (f: { profileHome: string; userHome: string }, trustKeys?: string[]) =>
-  provisionClaudeProfile({
-    profileHome: f.profileHome,
-    userHome: f.userHome,
-    trustKeys,
-    platform: 'linux'
-  })
+const provision = (f: { profileHome: string; userHome: string }) =>
+  provisionClaudeProfile({ profileHome: f.profileHome, userHome: f.userHome, platform: 'linux' })
 afterEach(() => {
   vi.clearAllMocks()
   for (const dir of roots.splice(0)) {
@@ -219,7 +216,7 @@ describe('dormant Claude profile provisioning', () => {
     const f = fixture()
     f.json(join(f.source, 'settings.json'), { model: 'a' })
     f.json(join(f.userHome, '.claude.json'), { mcpServers: { a: {} }, theme: 'dark' })
-    f.json(join(f.profileHome, '.claude.json'), { userID: 'p' })
+    f.json(join(f.profileHome, '.claude.json'), { userID: 'p', oauthAccount: LOGIN })
     await provision(f)
     fs.writeFileSync(join(f.source, 'settings.json'), '{bad')
     fs.writeFileSync(join(f.userHome, '.claude.json'), '{bad')
@@ -233,17 +230,18 @@ describe('dormant Claude profile provisioning', () => {
     await provision(f)
     expect(f.read(join(f.profileHome, '.claude.json'))).toEqual({
       userID: 'p',
+      oauthAccount: LOGIN,
       theme: 'dark',
       hasCompletedOnboarding: true
     })
   })
-  it('requires existing state, merges MCP/theme/onboarding/trust and never copies or writes credentials', async () => {
+  it('requires existing state, merges MCP/theme/onboarding and never copies or writes credentials', async () => {
     const f = fixture()
     fs.writeFileSync(join(f.source, '.credentials.json'), 'SOURCE_CREDENTIAL_BYTES')
     f.json(join(f.userHome, '.claude.json'), {
       mcpServers: { local: { command: 'example' } },
       theme: 'dark',
-      oauthAccount: { email: 'source' },
+      oauthAccount: { emailAddress: 'source@example.com' },
       userID: 'source-id'
     })
     await provision(f)
@@ -251,18 +249,18 @@ describe('dormant Claude profile provisioning', () => {
     expect(fs.existsSync(join(f.profileHome, '.credentials.json'))).toBe(false)
     fs.writeFileSync(join(f.profileHome, '.credentials.json'), 'PROFILE_CREDENTIAL_BYTES')
     f.json(join(f.profileHome, '.claude.json'), {
-      oauthAccount: { email: 'profile' },
+      oauthAccount: { emailAddress: 'profile@example.com' },
       userID: 'profile-id',
       projects: { '/work': { allowedTools: ['Read'] } }
     })
-    await provision(f, ['/work'])
+    await provision(f)
     expect(f.read(join(f.profileHome, '.claude.json'))).toEqual({
-      oauthAccount: { email: 'profile' },
+      oauthAccount: { emailAddress: 'profile@example.com' },
       userID: 'profile-id',
       mcpServers: { local: { command: 'example' } },
       theme: 'dark',
       hasCompletedOnboarding: true,
-      projects: { '/work': { allowedTools: ['Read'], hasTrustDialogAccepted: true } }
+      projects: { '/work': { allowedTools: ['Read'] } }
     })
     expect(fs.readFileSync(join(f.source, '.credentials.json'), 'utf8')).toBe(
       'SOURCE_CREDENTIAL_BYTES'
@@ -277,44 +275,50 @@ describe('dormant Claude profile provisioning', () => {
       }
     }
   })
-  it('still forces onboarding and trust when the personal state is unreadable', async () => {
+  it('leaves a folder Claude has not signed in yet to Claude’s own onboarding', async () => {
+    const f = fixture()
+    f.json(join(f.userHome, '.claude.json'), { theme: 'dark', mcpServers: { a: {} } })
+    // Claude writes its state file at the theme pick, before the sign-in.
+    f.json(join(f.profileHome, '.claude.json'), { theme: 'light' })
+    expect((await provision(f)).surfaces['.claude.json']).toBe('absent')
+    expect(f.read(join(f.profileHome, '.claude.json'))).toEqual({ theme: 'light' })
+    f.json(join(f.profileHome, '.claude.json'), { theme: 'light', oauthAccount: LOGIN })
+    expect((await provision(f)).surfaces['.claude.json']).toBe('merged')
+    expect(f.read(join(f.profileHome, '.claude.json'))).toEqual({
+      theme: 'light',
+      oauthAccount: LOGIN,
+      mcpServers: { a: {} },
+      hasCompletedOnboarding: true
+    })
+  })
+  it('still forces onboarding when the personal state is unreadable', async () => {
     const f = fixture()
     fs.writeFileSync(join(f.userHome, '.claude.json'), '{"theme": "da')
-    f.json(join(f.profileHome, '.claude.json'), { userID: 'p' })
-    const report = await provision(f, ['/work'])
+    f.json(join(f.profileHome, '.claude.json'), { userID: 'p', oauthAccount: LOGIN })
+    const report = await provision(f)
     expect(f.read(join(f.profileHome, '.claude.json'))).toEqual({
       userID: 'p',
-      hasCompletedOnboarding: true,
-      projects: { '/work': { hasTrustDialogAccepted: true } }
+      oauthAccount: LOGIN,
+      hasCompletedOnboarding: true
     })
     expect(report.warnings).toContainEqual(
       expect.objectContaining({ surface: '.claude.json', code: 'unreadable' })
     )
   })
-  it('skips only folder trust when the profile projects value is malformed', async () => {
-    const f = fixture()
-    f.json(join(f.userHome, '.claude.json'), { theme: 'dark' })
-    f.json(join(f.profileHome, '.claude.json'), { userID: 'p', projects: 'bad' })
-    const report = await provision(f, ['/work'])
-    expect(report.surfaces['.claude.json']).toBe('merged')
-    expect(f.read(join(f.profileHome, '.claude.json'))).toEqual({
-      userID: 'p',
-      projects: 'bad',
-      theme: 'dark',
-      hasCompletedOnboarding: true
-    })
-  })
   it('skips the state write while Claude holds its lock and records nothing for it', async () => {
     const f = fixture()
     f.json(join(f.userHome, '.claude.json'), { theme: 'dark' })
-    f.json(join(f.profileHome, '.claude.json'), { userID: 'p' })
+    f.json(join(f.profileHome, '.claude.json'), { userID: 'p', oauthAccount: LOGIN })
     fs.mkdirSync(join(f.profileHome, '.claude.json.lock'))
     const report = await provision(f)
     expect(report.surfaces['.claude.json']).toBe('failed')
     expect(report.warnings).toContainEqual(
       expect.objectContaining({ surface: '.claude.json', code: 'locked' })
     )
-    expect(f.read(join(f.profileHome, '.claude.json'))).toEqual({ userID: 'p' })
+    expect(f.read(join(f.profileHome, '.claude.json'))).toEqual({
+      userID: 'p',
+      oauthAccount: LOGIN
+    })
     fs.rmdirSync(join(f.profileHome, '.claude.json.lock'))
     expect((await provision(f)).surfaces['.claude.json']).toBe('merged')
     expect(f.read(join(f.profileHome, '.claude.json')).theme).toBe('dark')
@@ -372,9 +376,7 @@ describe('dormant Claude profile provisioning', () => {
     expect(fs.existsSync(join(f.profileHome, 'CLAUDE.md'))).toBe(false)
     fs.writeFileSync(join(f.source, 'CLAUDE.md'), 'personal instructions')
     expect((await provision(f)).surfaces['CLAUDE.md']).toBe('synced')
-    expect(fs.readFileSync(join(f.profileHome, 'CLAUDE.md'), 'utf8')).toBe(
-      CLAUDE_PROFILE_MEMORY_IMPORT
-    )
+    expect(fs.readFileSync(join(f.profileHome, 'CLAUDE.md'), 'utf8')).toBe('@~/.claude/CLAUDE.md\n')
     fs.writeFileSync(join(f.source, 'CLAUDE.md'), 'edited personal instructions')
     expect((await provision(f)).surfaces['CLAUDE.md']).toBe('unchanged')
   })
@@ -388,7 +390,7 @@ describe('dormant Claude profile provisioning', () => {
       f.json(join(userConfigDir, 'settings.json'), { model: 'custom' })
       f.json(join(userConfigDir, '.claude.json'), { theme: 'custom' })
       f.json(join(f.userHome, '.claude.json'), { theme: 'home' })
-      f.json(join(f.profileHome, '.claude.json'), { userID: 'p' })
+      f.json(join(f.profileHome, '.claude.json'), { userID: 'p', oauthAccount: LOGIN })
       await provisionClaudeProfile({ ...f, userConfigDir, platform: 'linux' })
       expect(fs.realpathSync(join(f.profileHome, 'skills'))).toBe(join(userConfigDir, 'skills'))
       expect(fs.readFileSync(join(f.profileHome, 'CLAUDE.md'), 'utf8')).toBe('custom instructions')

@@ -28,6 +28,7 @@ import {
   structuredAgentSessionStartFailure
 } from './structured-agent-session-failure-text'
 import { structuredAgentSessionFailureWordsContext } from './structured-agent-session-send-preparation'
+import { providerExecutableMissing } from '../../provider-process/provider-executable-missing'
 import { argumentProblemOf } from '../structured-agent-arguments-error'
 
 /** Who a failed acquisition's sentence names, and whether it was the session's first start. */
@@ -115,10 +116,13 @@ function failedAcquisitionDetails(
     return { reason: 'attachFailed', argumentProblem }
   }
   if (error instanceof AgentSessionAcquisitionRefusal) {
-    return { reason: error.reason }
+    return { reason: error.reason, ...(error.account ? { account: error.account } : {}) }
   }
   if (isAgentSessionPreSpawnError(error) && error.reason) {
     return { reason: error.reason }
+  }
+  if (isExitProvenAcquisitionFailure(error) && providerExecutableMissing(error)) {
+    return { reason: 'cliMissing' }
   }
   if (isExitProvenAcquisitionFailure(error) && providerExitObserved(error)) {
     return { reason: 'providerStartFailed' }

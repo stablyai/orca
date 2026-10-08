@@ -37,7 +37,7 @@ const NOT_SIGNED_IN = {
   details: { reason: 'notSignedIn' }
 } as const
 // Retry beside it is the resend, so the words keep only the step before it.
-const NOT_SIGNED_IN_TEXT = 'Codex is not signed in for the selected account. Sign in first.'
+const NOT_SIGNED_IN_TEXT = "Codex isn't signed in. Run `codex login`."
 
 function sessionView(): React.JSX.Element {
   return (

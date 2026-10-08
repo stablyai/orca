@@ -300,7 +300,7 @@ export function hostileHostSshTarget(target: HostileHostTarget): SshTarget {
     port: target.port,
     username: target.username,
     identityFile: target.identityFile,
-    identitiesOnly: true,
-    remoteRuntime: 'pinned-node'
+    // No remoteRuntime: the matrix proves the ladder a host gets by default.
+    identitiesOnly: true
   }
 }

@@ -11,6 +11,7 @@ import {
   ORCAD_PROFILE_PREFLIGHT_FLAG,
   parseOrcadProfilePreflight
 } from '../../src/shared/orcad-profile-preflight.ts'
+import { ORCAD_SERVER_ENTRY_FILENAME } from '../../src/shared/orcad-artifacts.ts'
 import { NODE_RUNTIME_PIN } from '../../src/shared/node-runtime-pin.ts'
 
 async function initializeFixture(directory, databasePath, profileId) {
@@ -88,7 +89,7 @@ export async function smokeProfileStateWorkers(outDir, { timeoutMs = 30_000, run
     const nonce = randomUUID()
     const result = runProcessSync({
       program: runtimePath,
-      args: [join(outDir, 'orcad.js'), ORCAD_PROFILE_PREFLIGHT_FLAG, nonce],
+      args: [join(outDir, ORCAD_SERVER_ENTRY_FILENAME), ORCAD_PROFILE_PREFLIGHT_FLAG, nonce],
       env: { ...process.env, ORCA_BACKGROUND_LAUNCH: '1' },
       timeoutMs,
       maxOutputBytes: 64 * 1024

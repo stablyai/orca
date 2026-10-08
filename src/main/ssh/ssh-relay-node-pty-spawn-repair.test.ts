@@ -152,8 +152,11 @@ describe('spawn-time node-pty repair through the locked deploy path', () => {
     execCallCountAtWrite: {}
   }
 
+  afterEach(() => vi.unstubAllEnvs())
   beforeEach(() => {
     vi.clearAllMocks()
+    // The host-npm path is opt-in; these cases cover it.
+    vi.stubEnv('ORCA_SSH_REMOTE_RUNTIME', 'legacy')
     vi.mocked(execCommand).mockReset().mockResolvedValue('')
     sftpCapture.paths.length = 0
     for (const key of Object.keys(sftpCapture.contents)) {

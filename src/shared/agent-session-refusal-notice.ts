@@ -100,7 +100,21 @@ function reasonParts(
   }
   if ('fact' in words) {
     return write === 'send' || write === 'composer-send'
-      ? [NOT_DONE[write], { failure: { kind: words.fact }, surface: 'rejection', context }]
+      ? [
+          NOT_DONE[write],
+          {
+            failure: {
+              kind: words.fact,
+              ...(words.fact === 'notSignedIn' &&
+              failure.code === 'agent_session_operation_invalid' &&
+              failure.details?.account
+                ? { account: failure.details.account }
+                : {})
+            },
+            surface: 'rejection',
+            context
+          }
+        ]
       : undefined
   }
   const { cause, step } = write === 'read-history' && words.history ? words.history : words

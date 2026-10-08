@@ -16,7 +16,6 @@ export function useMobileNativeChatSessionLane({
   transcriptPath,
   sessionId,
   sourceIdentity,
-  callerIdentity,
   hostSupport,
   appendComposerTextRef,
   enabled,
@@ -33,7 +32,6 @@ export function useMobileNativeChatSessionLane({
   transcriptPath: string | null
   sessionId: string | null
   sourceIdentity: Parameters<typeof useMobileNativeChatSession>[0]['sourceIdentity']
-  callerIdentity: string
   hostSupport: StructuredAgentSessionHostSupport | null
   /** The active pane's live composer; a queued card's Edit copies through it.
    *  A ref because the drafts (and their append) mount after this lane. */
@@ -62,7 +60,6 @@ export function useMobileNativeChatSessionLane({
     client,
     sessionId: structured ? sessionId : null,
     sourceIdentity,
-    callerIdentity,
     hostSupport,
     appendComposerText,
     enabled,

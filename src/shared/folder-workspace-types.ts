@@ -5,6 +5,7 @@ import type { DiffComment } from './diff-comment-types'
 import type {
   WorkspaceCreatorProvenance,
   WorkspaceLinkedItem,
+  WorkspaceAttachment,
   WorkspaceStatus
 } from './worktree/types'
 
@@ -26,6 +27,7 @@ export type FolderWorkspace = {
   /** Authenticated client that created this workspace. Missing means unknown legacy origin. */
   creatorProvenance?: WorkspaceCreatorProvenance
   linkedTask: WorkspaceLinkedItem | null
+  linkedItems?: WorkspaceAttachment[]
   linkedTaskSourceContext?: TaskSourceContext | null
   comment: string
   isArchived: boolean

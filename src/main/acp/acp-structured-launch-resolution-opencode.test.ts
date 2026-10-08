@@ -218,9 +218,16 @@ describe('OpenCode ACP launch resolution', () => {
     ).rejects.toThrow(/pinned data account/)
   })
 
-  it('refuses an `opencode` that is 2.x before spawning it, as a host that cannot run the chat', async () => {
-    const launch = resolver(openCodeRecord(UNMANAGED), {
+  it('runs an `opencode` that is stable 2.x', async () => {
+    const launch = await resolver(openCodeRecord(UNMANAGED), {
       probeVersion: async (_input, supports) => supports('2.0.21')
+    })({ identity })
+    expect(launch.args).toEqual(['acp'])
+  })
+
+  it('refuses a release outside its lines before spawning it, as a host that cannot run the chat', async () => {
+    const launch = resolver(openCodeRecord(UNMANAGED), {
+      probeVersion: async (_input, supports) => supports('3.0.0')
     })({ identity })
     await expect(launch).rejects.toMatchObject({
       refusal: {

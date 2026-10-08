@@ -39,6 +39,7 @@ import {
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import * as recoveryResolution from './structured-agent-session-recovery-resolution'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 import {
@@ -500,7 +501,17 @@ describe('already-wedged profiles become usable on load', () => {
       stopOwnerProcess
     })
 
-    await host.restoreReadableSessions()
+    const resolveRecovery = recoveryResolution.resolveStructuredSessionRecovery
+    const recovery = vi
+      .spyOn(recoveryResolution, 'resolveStructuredSessionRecovery')
+      .mockImplementation((deps, sessionId) =>
+        resolveRecovery({ ...deps, delay: async () => {} }, sessionId)
+      )
+    try {
+      await host.restoreReadableSessions()
+    } finally {
+      recovery.mockRestore()
+    }
 
     expect(stopOwnerProcess.mock.calls).toEqual([
       [DEAD_OWNER.pid, 'SIGTERM'],

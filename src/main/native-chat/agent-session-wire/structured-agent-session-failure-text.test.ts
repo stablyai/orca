@@ -10,9 +10,11 @@ import {
   refuseUnclassified
 } from '../../../shared/agent-session-wire-refusals'
 import {
+  AgentSessionAcquisitionExitProvenError,
   AgentSessionAcquisitionRefusal,
   AgentSessionPreSpawnError
 } from './structured-agent-session-adapter'
+import { withMissingProviderExecutable } from '../../provider-process/provider-executable-missing'
 import { MAX_UNEXPECTED_EXIT_REASON_CHARS } from './structured-agent-session-dead-generation-settlement'
 import { StructuredAgentArgumentsError } from '../structured-agent-arguments-error'
 import {
@@ -73,6 +75,29 @@ describe('structuredAgentSessionStartFailure', () => {
     ).toEqual({ kind: 'startFailed' })
   })
 
+  it("words a CLI that was never found as the chat's notice does, with the step to take", () => {
+    const missing = new AgentSessionAcquisitionExitProvenError(
+      withObservedProviderExit(
+        withMissingProviderExecutable(new Error('claude stream-json exited (code 127)'))
+      )
+    )
+    expect(structuredAgentSessionStartFailure({ error: missing }, { agentName: 'Claude' })).toEqual(
+      {
+        reason:
+          "Claude wasn't found on the computer running this chat. Install it, or check its Command in Settings → Agents.",
+        rejection: { kind: 'cliMissing' }
+      }
+    )
+    expect(
+      structuredAgentSessionStartFailure(
+        { error: missing },
+        { agentName: 'Codex', command: 'compact' }
+      ).reason
+    ).toBe(
+      "Codex wasn't found on the computer running this chat. Install it, or check its Command in Settings → Agents. Run /compact again."
+    )
+  })
+
   it('keeps a start refusal the adapter typed', () => {
     const refusal = new AgentSessionAcquisitionRefusal(
       'Claude is not signed in for the selected account.',
@@ -81,11 +106,33 @@ describe('structuredAgentSessionStartFailure', () => {
     expect(structuredAgentSessionStartFailure({ error: refusal }, { agentName: 'Claude' })).toEqual(
       {
         reason:
-          'Claude is not signed in for the selected account. Sign in, then send your message again.',
+          "Claude isn't signed in. Run `claude` and sign in with /login, or choose an account in Claude Accounts settings.",
         rejection: { kind: 'notSignedIn' }
       }
     )
   })
+
+  it.each(['managed', 'system'] as const)(
+    'keeps the %s account in every start-failure fact',
+    (account) => {
+      const direct = structuredAgentSessionStartFailure(
+        { error: new AgentSessionAcquisitionRefusal('signed out', 'notSignedIn', account) },
+        { agentName: 'Claude' }
+      )
+      const refused = structuredAgentSessionStartFailure(
+        {
+          refusal: refuse(
+            'agent_session_operation_invalid',
+            { reason: 'notSignedIn', account },
+            'log'
+          )
+        },
+        { agentName: 'Claude' }
+      )
+      expect(direct.rejection).toEqual({ kind: 'notSignedIn', account })
+      expect(refused).toEqual(direct)
+    }
+  )
 
   it.each([
     [

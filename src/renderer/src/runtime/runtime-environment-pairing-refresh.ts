@@ -15,6 +15,10 @@ export function setRuntimeEnvironmentCatalogRefresher(refresher: CatalogRefreshe
   refreshCatalog = refresher
 }
 
+export function runtimeEnvironmentPairingChangedError(): Error {
+  return new Error(`${PAIRING_CHANGED_MESSAGE}; refresh and try again`)
+}
+
 export function isRuntimeEnvironmentPairingChangedError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : typeof error === 'string' ? error : ''
   return message.includes(PAIRING_CHANGED_MESSAGE)

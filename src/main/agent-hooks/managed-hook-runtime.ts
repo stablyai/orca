@@ -86,7 +86,9 @@ export async function installManagedHooks(options?: {
     return { installers: 0, errors: 0 }
   }
   const home = homedir()
-  const grokHomeDir = await resolveRelayGrokHome(home, options?.signal)
+  const grokHomeDir = agents.includes('grok')
+    ? await resolveRelayGrokHome(home, options?.signal)
+    : undefined
   options?.signal?.throwIfAborted()
   const hostIdentity = scopeManagedHookHostIdentity(
     await readManagedHookHostIdentity(),

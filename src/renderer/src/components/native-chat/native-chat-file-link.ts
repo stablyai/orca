@@ -71,11 +71,43 @@ export function findNativeChatTabOwnerWorktreeId(
   )
 }
 
+export function createNativeChatTabOwnerSelector(tabId: string) {
+  let terminalTabs: NativeChatFileLinkState['tabsByWorktree'] | null = null
+  let unifiedTabs: NativeChatFileLinkState['unifiedTabsByWorktree']
+  let owner: string | null = null
+  return (state: Pick<NativeChatFileLinkState, 'tabsByWorktree' | 'unifiedTabsByWorktree'>) => {
+    // Hidden chats still subscribe; ownership changes only with the immutable tab maps.
+    if (terminalTabs !== state.tabsByWorktree || unifiedTabs !== state.unifiedTabsByWorktree) {
+      owner = findNativeChatTabOwnerWorktreeId(state, tabId)
+      terminalTabs = state.tabsByWorktree
+      unifiedTabs = state.unifiedTabsByWorktree
+    }
+    return owner
+  }
+}
+
 export function resolveNativeChatFileLinkContext(
   state: NativeChatFileLinkState,
   terminalTabId: string
 ): NativeChatFileLinkContext | null {
-  const worktreeId = findNativeChatTabOwnerWorktreeId(state, terminalTabId)
+  return resolveNativeChatFileLinkContextForOwner(
+    state,
+    terminalTabId,
+    findNativeChatTabOwnerWorktreeId(state, terminalTabId)
+  )
+}
+
+export function createNativeChatFileLinkContextSelector(tabId: string) {
+  const selectOwner = createNativeChatTabOwnerSelector(tabId)
+  return (state: NativeChatFileLinkState) =>
+    resolveNativeChatFileLinkContextForOwner(state, tabId, selectOwner(state))
+}
+
+function resolveNativeChatFileLinkContextForOwner(
+  state: NativeChatFileLinkState,
+  terminalTabId: string,
+  worktreeId: string | null
+): NativeChatFileLinkContext | null {
   if (!worktreeId) {
     return null
   }

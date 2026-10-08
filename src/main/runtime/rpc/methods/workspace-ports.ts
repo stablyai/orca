@@ -7,11 +7,13 @@ import {
 export const WORKSPACE_PORT_METHODS = [
   defineMethod({
     name: 'workspacePorts.scan',
+    permission: 'workspace',
     params: WorkspacePortScanParams,
     handler: async (params, { runtime }) => runtime.scanWorkspacePorts(params.repoId)
   }),
   defineMethod({
     name: 'workspacePorts.kill',
+    permission: 'workspace',
     params: WorkspacePortKillParams,
     handler: async (params, { runtime }) =>
       runtime.killWorkspacePort({
