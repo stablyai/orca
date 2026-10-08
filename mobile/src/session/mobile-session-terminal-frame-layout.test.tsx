@@ -45,17 +45,20 @@ import { MobileSessionActiveContent } from './MobileSessionActiveContent'
 
 type Controller = Parameters<typeof MobileSessionActiveContent>[0]['controller']
 
+type Branch = 'loading' | 'pending' | 'terminal'
+
 function controller(
-  showLoadingState: boolean,
-  notifyTerminalFrameHeight: (height: number) => void
+  branch: Branch | boolean,
+  notifyTerminalFrame: (frame: { width: number; height: number }) => void
 ): Controller {
+  const shown = branch === true ? 'loading' : branch === false ? 'terminal' : branch
   const scope = {
-    showLoadingState,
+    showLoadingState: shown === 'loading',
+    activePendingTerminalTab: shown === 'pending' ? { title: 'Loading terminal' } : null,
+    isPendingTerminalRecoveryParked: false,
     showEmptyState: false,
     terminals: [],
-    terminalFrameHeightRef: { current: 0 },
-    setTerminalFrameWidth: () => {},
-    notifyTerminalFrameHeight,
+    notifyTerminalFrame,
     dictation: { isRecording: false },
     nativeChatSendError: { message: null, clear: () => {} }
   }
@@ -66,8 +69,8 @@ function controller(
 describe('the terminal frame on the page', () => {
   it('reports its height when the session opens from the loading state', () => {
     const heights: number[] = []
-    const notify = (height: number): void => {
-      heights.push(height)
+    const notify = (frame: { height: number }): void => {
+      heights.push(frame.height)
     }
     let renderer: ReturnType<typeof create> | undefined
     act(() => {
@@ -80,6 +83,32 @@ describe('the terminal frame on the page', () => {
         createElement(MobileSessionActiveContent, { controller: controller(false, notify) })
       )
     })
+    expect(heights).toEqual([FRAME.height])
+  })
+
+  it('stays one mounted frame across loading, a pending terminal and the terminal', () => {
+    // A frame that remounts per branch reports again on every return; one that stays reports once.
+    const heights: number[] = []
+    const notify = (frame: { height: number }): void => {
+      heights.push(frame.height)
+    }
+    let renderer: ReturnType<typeof create> | undefined
+    const show = (branch: Branch) => {
+      const element = createElement(MobileSessionActiveContent, {
+        controller: controller(branch, notify)
+      })
+      act(() => {
+        if (renderer) {
+          renderer.update(element)
+        } else {
+          renderer = create(element)
+        }
+      })
+    }
+    show('loading')
+    show('terminal')
+    show('pending')
+    show('terminal')
     expect(heights).toEqual([FRAME.height])
   })
 })

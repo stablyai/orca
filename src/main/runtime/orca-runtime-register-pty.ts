@@ -27,9 +27,17 @@ export class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHand
     isWsl?: boolean
   ): void {
     this.assertPtyDidNotExitBeforeRegistration(ptyId, binding?.incarnationId)
-    this.pendingPtySurfaceRetirementsByPtyId.delete(ptyId)
-    this.invalidatePtyControllerInventoryForLifecycle(ptyId, connectionId)
     const existingPty = this.ptysById.get(ptyId)
+    // Why: a relay reattach can finish registering after a stop recorded that incarnation's exit.
+    if (
+      binding?.incarnationId !== undefined &&
+      existingPty?.incarnationId === binding.incarnationId &&
+      !existingPty.connected &&
+      this.getPtyLivenessVerdict(ptyId)?.status === 'exited'
+    ) {
+      return
+    }
+    this.invalidatePtyControllerInventoryForLifecycle(ptyId, connectionId)
     const replacementHandle = binding?.terminalHandle?.trim()
     const pendingReplacement = this.pendingPtyHandleReplacementFences.get(ptyId)
     const pendingReplacementMatches =
@@ -141,6 +149,8 @@ export class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHand
         currentFence.pendingRegistration = false
       }
     }
+    // Why: a listed surface's pending-handle → ready flip must not wait on a later renderer graph change.
+    this.touchMobileSessionSnapshotsForPty(ptyId)
     // Why: the renderer's own PTY spawn is the reliable signal that the pending
     // mobile create's tab is live; publish its surface main-side (#7587).
     if (binding && paneKey) {

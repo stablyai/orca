@@ -45,7 +45,10 @@ class MobileWebShellCspTest {
       listOf("img-src 'self' data: https:"),
       directives.filter { it.contains("data:") }
     )
-    assertFalse(MOBILE_WEB_SHELL_CSP.contains("blob:"))
+    assertEquals(
+      listOf("media-src blob:"),
+      directives.filter { it.contains("blob:") }
+    )
     // Same shape for `https:`: images and nothing else. `http:` is not a substring of `https:`, so
     // this still refuses a cleartext source anywhere in the header.
     assertEquals(

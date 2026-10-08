@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AiVaultSession } from '../../../shared/ai-vault-types'
-import { prepareAiVaultSessionForResume } from './ai-vault-session-resume-preparation'
+import {
+  dropDeletedSshResumeCwd,
+  prepareAiVaultSessionForResume
+} from './ai-vault-session-resume-preparation'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -92,6 +95,49 @@ describe('prepareAiVaultSessionForResume', () => {
 
     await expect(prepareAiVaultSessionForResume(current)).resolves.toBe(current)
     expect(prepareSessionResume).not.toHaveBeenCalled()
+  })
+})
+
+describe('dropDeletedSshResumeCwd', () => {
+  it('leaves a live SSH session alone, scanner command and all', async () => {
+    const pathExists = vi.fn().mockResolvedValue(true)
+    vi.stubGlobal('window', { api: { fs: { pathExists } } })
+    const remote = session({ executionHostId: 'ssh:server-1', cwd: '/home/ada/wt/feat-x' })
+
+    // Why: dropping the cwd here would strand every ordinary remote resume at the workspace root.
+    await expect(dropDeletedSshResumeCwd(remote)).resolves.toBe(remote)
+    expect(pathExists).toHaveBeenCalledWith({
+      filePath: '/home/ada/wt/feat-x',
+      connectionId: 'server-1'
+    })
+  })
+
+  it('never probes a host for a local session', async () => {
+    const pathExists = vi.fn()
+    vi.stubGlobal('window', { api: { fs: { pathExists } } })
+    const local = session({ cwd: '/repo' })
+
+    await expect(dropDeletedSshResumeCwd(local)).resolves.toBe(local)
+    expect(pathExists).not.toHaveBeenCalled()
+  })
+
+  it('keeps the recorded folder when the SSH host cannot answer', async () => {
+    const pathExists = vi.fn().mockRejectedValue(new Error('CONNECTION_LOST'))
+    vi.stubGlobal('window', { api: { fs: { pathExists } } })
+    const remote = session({ executionHostId: 'ssh:server-1', cwd: '/home/ada/wt/feat-x' })
+
+    // Why: losing the host is not evidence the folder is gone (ssh-execution-boundary.md).
+    await expect(dropDeletedSshResumeCwd(remote)).resolves.toBe(remote)
+    expect(pathExists).toHaveBeenCalled()
+  })
+
+  it('keeps the recorded folder for an agent that can only resume there', async () => {
+    const pathExists = vi.fn().mockResolvedValue(false)
+    vi.stubGlobal('window', { api: { fs: { pathExists } } })
+    const kimi = session({ agent: 'kimi', executionHostId: 'ssh:server-1', cwd: '/home/ada/wt/x' })
+
+    // Why: kimi-cli 1.52 silently opens a new empty session with the same id from any other folder.
+    await expect(dropDeletedSshResumeCwd(kimi)).resolves.toBe(kimi)
   })
 })
 

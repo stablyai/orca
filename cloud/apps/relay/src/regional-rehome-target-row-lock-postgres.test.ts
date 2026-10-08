@@ -1,13 +1,16 @@
-import pg from 'pg'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { RelayAssignmentStore } from './assignment-store.js'
 import {
   consumeRelayCellInventoryHold,
   openRelayDatabase,
-  PostgresDatabase,
+  type PostgresDatabase,
   type RelayDatabase
 } from './database.js'
 import { readRegionCorrectionOutcomes } from './region-correction-outcomes.js'
+import {
+  openDelayedPostgresDatabase,
+  type StatementDelay
+} from './test-fixtures/delayed-postgres-database.js'
 
 const databaseUrl = process.env.ORCA_RELAY_TEST_POSTGRES_URL
 const describePostgres = databaseUrl ? describe : describe.skip
@@ -29,26 +32,25 @@ const CELL_TABLES = [
 // The target-row statement locks exactly these, held from it to COMMIT.
 const TARGET_LOCKED = ['target:relay_cells', 'target:relay_cell_admission']
 
-type Trip = { sql: string; lockable: Record<string, boolean> }
+type Trip = { sql: string; lockable: Record<string, boolean>; probeMs: number }
 
-type DelayControl = {
-  enabled: boolean
-  // Runs before each delayed statement leaves the client, so it sees the locks
-  // the transaction holds between round trips.
-  beforeTrip: (sql: string) => Promise<void>
-}
+type DelayControl = StatementDelay & { beforeTrip: (sql: string) => Promise<void> }
 
 describePostgres('PostgreSQL regional rehome target-row lock', () => {
   let primary: RelayDatabase
   let observer: RelayDatabase
   let delayed: PostgresDatabase
-  const control: DelayControl = { enabled: false, beforeTrip: async () => undefined }
+  const control: DelayControl = {
+    enabled: false,
+    delayMs: STATEMENT_DELAY_MS,
+    beforeTrip: async () => undefined
+  }
   let sequence = 0
 
   beforeAll(async () => {
     primary = await openRelayDatabase({ databaseUrl, dataDir: '' })
     observer = await openRelayDatabase({ databaseUrl, dataDir: '' })
-    delayed = openDelayedDatabase(databaseUrl!, control)
+    delayed = openDelayedPostgresDatabase(databaseUrl!, control)
   })
 
   beforeEach(async () => {
@@ -157,11 +159,12 @@ describePostgres('PostgreSQL regional rehome target-row lock', () => {
       bystander: context.bystander.id
     }
     control.beforeTrip = async (sql) => {
+      const probeStartedAt = performance.now()
       const state: Record<string, boolean> = {}
       for (const [role, cellId] of Object.entries(probed)) {
         for (const table of CELL_TABLES) state[`${role}:${table}`] = await lockable(table, cellId)
       }
-      trips.push({ sql, lockable: state })
+      trips.push({ sql, lockable: state, probeMs: performance.now() - probeStartedAt })
     }
     consumeRelayCellInventoryHold(delayed)
     control.enabled = true
@@ -186,13 +189,22 @@ describePostgres('PostgreSQL regional rehome target-row lock', () => {
       ])
     }
     const counts = consumeRelayCellInventoryHold(delayed)
+    const commitProbeMs = trips.at(-1)!.probeMs
     console.info(
-      JSON.stringify({ event: 'rehome_target_row_hold', trips: trips.length, ...counts })
+      JSON.stringify({
+        event: 'rehome_target_row_hold',
+        trips: trips.length,
+        commitProbeMs,
+        ...counts
+      })
     )
     expect(counts.rehomeTargetRowHolds).toBe(1)
     expect(counts.cellInventoryHoldMaxSite).toBe('rehome-target-row')
     expect(counts.rehomeTargetRowHoldMsMax).toBeGreaterThanOrEqual(STATEMENT_DELAY_MS)
-    expect(counts.rehomeTargetRowHoldMsMax).toBeLessThanOrEqual(2 * STATEMENT_DELAY_MS)
+    // The COMMIT observer probes run under the lock, but are absent in production.
+    expect(counts.rehomeTargetRowHoldMsMax - commitProbeMs).toBeLessThanOrEqual(
+      2 * STATEMENT_DELAY_MS
+    )
     expect(await reservedRequests(context.target.id)).toBe(context.targetReservedBefore + 2)
   })
 
@@ -249,6 +261,66 @@ describePostgres('PostgreSQL regional rehome target-row lock', () => {
     // NOWAIT: no 1s lock_timeout wait and no transaction retry behind the writer.
     expect(elapsedMs).toBeLessThan(40 * STATEMENT_DELAY_MS)
     await expectNothingCommitted(context)
+  })
+
+  // A placement that reserves on the target between the candidate read and the target-row
+  // statement: modelled by raising the target's enforced units right before that statement.
+  async function fillTargetBefore(
+    context: Awaited<ReturnType<typeof fixture>>,
+    freeSeats: number
+  ): Promise<void> {
+    control.beforeTrip = async (sql) => {
+      if (!sql.includes('WITH target AS')) return
+      const foreign = await observer.query(
+        `SELECT COUNT(*) AS count FROM relay_control_connection_reservations
+         WHERE cell_id = ? AND state IN ('reserved', 'late-arrival-debt', 'claimed')
+           AND user_id <> ?`,
+        [context.target.id, context.identity.userId]
+      )
+      // Headroom: enforced + outstanding + unobserved < hard cap - reserved host controls.
+      const enforced = 1_000 - 100 - 60 - Number(foreign[0]!.count) - freeSeats
+      await observer.query(
+        `UPDATE relay_cell_connection_snapshots SET enforced_connection_units = ? WHERE cell_id = ?`,
+        [enforced, context.target.id]
+      )
+    }
+  }
+
+  it('defers when a placement takes the target last connection seat after selection', async () => {
+    const context = await fixture()
+    const request = await context.select()
+    await fillTargetBefore(context, 0)
+    control.enabled = true
+
+    const result = await context.delayedStore.commitIdleRegionalRehome(request, context.safety())
+    control.enabled = false
+
+    expect(result).toEqual({ outcome: 'deferred', reason: 'candidate-ineligible' })
+    await expectNothingCommitted(context)
+  })
+
+  it('admits into the last connection seat, not counting its own reservation', async () => {
+    const context = await fixture()
+    const request = await context.select()
+    await fillTargetBefore(context, 1)
+    control.enabled = true
+
+    const result = await context.delayedStore.commitIdleRegionalRehome(request, context.safety())
+    control.enabled = false
+
+    expect(result).toEqual({ outcome: 'committed' })
+  })
+
+  it('admits a target with no connection limits row', async () => {
+    const context = await fixture()
+    const request = await context.select()
+    await primary.query(`DELETE FROM relay_cell_connection_limits WHERE cell_id = ?`, [
+      context.target.id
+    ])
+
+    const result = await context.delayedStore.commitIdleRegionalRehome(request, context.safety())
+
+    expect(result).toEqual({ outcome: 'committed' })
   })
 
   async function expectNothingCommitted(context: Awaited<ReturnType<typeof fixture>>) {
@@ -341,32 +413,6 @@ describePostgres('PostgreSQL regional rehome target-row lock', () => {
     }
   }
 })
-
-// Same session settings as the serving pool, with a fixed delay in front of
-// every statement, BEGIN and COMMIT included.
-function openDelayedDatabase(url: string, control: DelayControl): PostgresDatabase {
-  const pool = new pg.Pool({
-    connectionString: url,
-    max: 4,
-    statement_timeout: 5_000,
-    lock_timeout: 1_000,
-    idle_in_transaction_session_timeout: 5_000
-  })
-  pool.on('error', () => undefined)
-  pool.on('connect', (client) => {
-    const query = client.query
-    Object.assign(client, {
-      query: async (...args: unknown[]) => {
-        if (control.enabled) {
-          await control.beforeTrip(typeof args[0] === 'string' ? args[0] : '')
-          await new Promise((resolve) => setTimeout(resolve, STATEMENT_DELAY_MS))
-        }
-        return await Reflect.apply(query, client, args)
-      }
-    })
-  })
-  return new PostgresDatabase(pool)
-}
 
 const storeOptions = {
   regionalRehomeCohortPercent: 100,

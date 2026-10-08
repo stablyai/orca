@@ -1,4 +1,4 @@
-import type { AgentSessionWireRefusalCode } from './agent-session-wire'
+import type { AgentSessionOwnerVerdict, AgentSessionWireRefusalCode } from './agent-session-wire'
 
 export type AgentSessionRefusalOperationState = 'settled-rejected' | 'pending-admission' | 'unknown'
 
@@ -27,4 +27,17 @@ export function agentSessionRefusalOperationState(
       // These refusals do not prove the operation reached durable settlement.
       return 'pending-admission'
   }
+}
+
+/**
+ * Whether a verdict lets a retry use a new operation id. A stored `exited` is final: nothing runs
+ * the refused operation, so a new id cannot collide with it. Any other stored verdict is a floor:
+ * the first operation may still land, so only a verdict re-derived from the current lease can prove
+ * `exited`, and nothing lowers a stored `exited`.
+ */
+export function agentSessionOwnerVerdictAllowsFreshOperationId(
+  stored: AgentSessionOwnerVerdict | undefined,
+  current?: AgentSessionOwnerVerdict
+): boolean {
+  return stored === 'exited' || current === 'exited'
 }

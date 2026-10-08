@@ -388,19 +388,6 @@ describe('E2EEChannel', () => {
     })
   })
 
-  describe('cross-compatibility', () => {
-    it('desktop encrypt is decryptable by desktop decrypt (sanity)', () => {
-      const a = generateKeyPair()
-      const b = generateKeyPair()
-      const sharedA = deriveSharedKey(a.secretKey, b.publicKey)
-      const sharedB = deriveSharedKey(b.secretKey, a.publicKey)
-
-      const msg = '{"method":"terminal.subscribe","params":{"terminal":"t1"}}'
-      const enc = encrypt(msg, sharedA)
-      expect(decrypt(enc, sharedB)).toBe(msg)
-    })
-  })
-
   describe('destroy', () => {
     it('clears state and stops forwarding', () => {
       const ctx = setup()

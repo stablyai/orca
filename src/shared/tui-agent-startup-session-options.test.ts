@@ -24,7 +24,7 @@ describe('tui agent startup session options', () => {
     expect(plan?.sessionOptions).toEqual({ model: 'claude-opus-5', effort: 'high' })
   })
 
-  it('emits catalog options before user arguments without recording an overridden model', () => {
+  it('sends neither the picked model nor its options when user arguments set the model', () => {
     const plan = buildAgentStartupPlan({
       agent: 'claude',
       prompt: '',
@@ -34,7 +34,7 @@ describe('tui agent startup session options', () => {
       sessionOptions: { model: 'opus', effort: 'xhigh', fastMode: true },
       agentArgs: '--model haiku'
     })
-    expect(plan?.launchCommand).toBe("claude '--model' 'opus' '--effort' 'xhigh' '--model' 'haiku'")
+    expect(plan?.launchCommand).toBe("claude '--model' 'haiku'")
     expect(plan?.sessionOptions).toBeUndefined()
   })
 
@@ -104,6 +104,24 @@ describe('tui agent startup session options', () => {
       "muse --trust-workspace '--model' 'muse-spark-1.3' '--reasoning-effort' 'xhigh'"
     )
     expect(plan?.sessionOptions).toEqual({ model: 'muse-spark-1.3', effort: 'xhigh' })
+  })
+
+  it('keeps OpenCode agent arguments while replacing only the per-launch model', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'opencode',
+      prompt: '',
+      cmdOverrides: {},
+      platform: 'linux',
+      allowEmptyPromptLaunch: true,
+      sessionOptions: { model: 'zai-coding-plan/glm-5.3-flash' },
+      sessionOptionsOverrideAgentArgs: true,
+      agentArgs: '--share --model opencode/global-default'
+    })
+    expect(plan?.launchCommand).toBe("opencode '--share' '--model' 'zai-coding-plan/glm-5.3-flash'")
+    expect(plan?.launchConfig.agentCommand).toBe(
+      "opencode '--share' '--model' 'opencode/global-default'"
+    )
+    expect(plan?.sessionOptions).toEqual({ model: 'zai-coding-plan/glm-5.3-flash' })
   })
 
   it('inserts worker preferences before an argument terminator', () => {

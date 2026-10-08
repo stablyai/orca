@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserTab as BrowserTabState } from '../../../../../shared/browser-workspace-types'
 import type { Tab, TabGroup } from '../../../../../shared/tab-types'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 
 type MockAppState = {
   browserTabsByWorktree: Record<string, readonly BrowserTabState[]>
@@ -269,6 +270,26 @@ describe('BrowserPaneOverlayLayer', () => {
       expect(view.container.querySelectorAll('[data-browser-pane-id]')).toHaveLength(0)
     }
     expect(view.container.querySelectorAll('[data-browser-overlay-tab-id]')).toHaveLength(1000)
+  })
+
+  it('keeps a floating browser to chords from its own overlay even when its group holds focus', () => {
+    const floating = FLOATING_TERMINAL_WORKTREE_ID
+    const state = createState()
+    mocks.state = {
+      ...state,
+      browserTabsByWorktree: { [floating]: state.browserTabsByWorktree['wt-1'] },
+      unifiedTabsByWorktree: { [floating]: state.unifiedTabsByWorktree['wt-1'] },
+      groupsByWorktree: { [floating]: state.groupsByWorktree['wt-1'] },
+      activeGroupIdByWorktree: { [floating]: 'group-1' }
+    }
+
+    const markup = renderToStaticMarkup(
+      <BrowserPaneOverlayLayer worktreeId={floating} isWorktreeActive />
+    )
+
+    expect(markup).toContain(
+      'data-browser-pane-id="browser-a" data-browser-pane-active="true" data-browser-find-shortcut-scope="owned-target"'
+    )
   })
 
   it('keeps an active browser pane unfocused when another split holds focus (#11348)', () => {

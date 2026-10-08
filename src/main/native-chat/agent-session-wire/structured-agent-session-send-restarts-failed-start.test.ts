@@ -1,20 +1,21 @@
 // A session that published and then lost its child before startup (not signed in, say) keeps a
 // released lease and a chat the user can still type into. The send is the user asking for the
-// child back: the host restarts it before admitting the write and delivers against the new owner,
-// instead of parking the message behind a lease nothing would ever re-acquire.
+// child back: the host accepts the message, and its delivery restarts the child and hands the
+// message to the new owner, instead of parking it behind a lease nothing would ever re-acquire.
 //
 // A child is published before it has proven its start, and it owns the send from that moment: the
-// message is admitted against it and the adapter holds it for the start. When the child exits
-// first, the exit settlement rejects the message and writes the cause into the chat, once, and
-// the next send is a fresh restart.
+// message is handed to it. When the child exits first, the exit settlement rejects the message and
+// writes the cause into the chat, once, and the next send is a fresh restart.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session-wire'
-import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import {
@@ -22,12 +23,22 @@ import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD,
   hostTestAttachParams,
+  hostTestDrawnRowIds,
   hostTestMessage,
   hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
+import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const CALLER = { callerKey: 'client-1' }
+
+/** Delivery runs on its own serialized steps; under a loaded runner they take more than a second. */
+function eventually(assertion: () => void | Promise<void>): Promise<void> {
+  return vi.waitFor(assertion, { timeout: 10_000 })
+}
 const EXIT_REASON = 'Claude Code is not signed in. Sign in with the Claude CLI'
 
 let root: string
@@ -53,7 +64,7 @@ function sendEnvelope(
   }
 }
 
-/** A send is admitted against the child it meets, proven or not; the adapter holds the rest. */
+/** A send is accepted at once and handed to the child delivery finds or starts. */
 async function send(
   text: string,
   fence = store.getRecord(SESSION)?.lease.runtimeFence ?? 0
@@ -63,9 +74,13 @@ async function send(
   expect(sent, JSON.stringify(sent)).toMatchObject({
     ok: true,
     replayed: false,
-    value: { submission: { dispatchState: 'pending' } }
+    value: { submission: { dispatchState: 'pending', handoverRecorded: true } }
   })
-  return sent.ok ? sent.value.clientMessageId : ''
+  const clientMessageId = sent.ok ? sent.value.clientMessageId : ''
+  await eventually(async () =>
+    expect((await submission(clientMessageId))?.handedOverAt).toBeDefined()
+  )
+  return clientMessageId
 }
 
 /** The child of the current acquisition, as the adapter would identify it in a lifecycle event. */
@@ -91,21 +106,27 @@ function exitBeforeProof(): Promise<void> {
     type: 'ended',
     ...currentChild(),
     reason: EXIT_REASON,
+    failure: { kind: 'providerExited', detail: { text: EXIT_REASON, audience: 'log' } },
     cause: 'unexpected-exit',
     startupUnproven: true
   })
 }
 
-function journalStatuses(): string[] {
-  return host
-    .journalSnapshot(SESSION)
-    .items.flatMap((item) => (item.body.kind === 'status' ? [item.body.text] : []))
+const STARTUP_FAILURE = {
+  kind: 'providerStartFailed',
+  detail: { text: EXIT_REASON, audience: 'log' }
 }
 
-function submission(clientMessageId: string) {
-  return host
-    .journalSnapshot(SESSION)
-    .submissions.find((entry) => entry.clientMessageId === clientMessageId)
+async function journalStatuses(): Promise<string[]> {
+  return (await host.journalSnapshot(SESSION)).items.flatMap((item) =>
+    item.body.kind === 'status' ? [item.body.text] : []
+  )
+}
+
+async function submission(clientMessageId: string) {
+  return (await host.journalSnapshot(SESSION)).submissions.find(
+    (entry) => entry.clientMessageId === clientMessageId
+  )
 }
 
 beforeEach(async () => {
@@ -116,7 +137,7 @@ beforeEach(async () => {
     process: { hostId: 'local', pid: 4242, processStartTimeMs: 1_700_000_000_000, spawnToken },
     link: {
       linkId: `link-${fence}`,
-      handle: { provider: 'codex', threadId: THREAD },
+      handle: codexProviderHandle(THREAD),
       // A re-acquire resumes the thread the first child minted, as a real adapter does.
       origin: generation === 0 ? ('created' as const) : ('resumed' as const),
       mintedAtFence: fence,
@@ -126,8 +147,10 @@ beforeEach(async () => {
     providerChildPhase: 'starting' as const
   }))
   dispatch = vi.fn(async () => ({ state: 'admitted' as const }))
-  store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
+  store = await openTestAgentSessionRecordStore(root)
   host = new StructuredAgentSessionHost({
+    agents: NO_STRUCTURED_AGENTS,
+    logger: createStructuredAgentSessionLogger(),
     store,
     adapter: {
       acquire,
@@ -138,7 +161,7 @@ beforeEach(async () => {
       answerPrompt: vi.fn(async () => undefined),
       setOption: vi.fn(async () => undefined)
     },
-    journalRoot: root,
+    journalDatabase: openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => `spawn-${generation + 1}`,
     now: () => NOW
@@ -164,18 +187,23 @@ describe('a send into a published session whose child ended before startup', () 
   it('restarts the child and admits the message against it before it has proven its start', async () => {
     const releasedFence = store.getRecord(SESSION)?.lease.runtimeFence ?? 0
 
-    await send('hello again', releasedFence)
+    const first = await send('hello again', releasedFence)
 
-    // A send still fenced to the lost owner is admitted once against the restarted one, with no
-    // stale round trip.
+    // Accepted at the lost owner's fence and handed to the child delivery started, once.
     expect(acquire).toHaveBeenCalledTimes(2)
     expect(store.getRecord(SESSION)?.lease.claimStatus).toBe('live')
     expect(dispatch).toHaveBeenCalledOnce()
     const current = store.getRecord(SESSION)?.lease.runtimeFence ?? 0
     expect(current).toBeGreaterThan(releasedFence)
 
-    // Once proven, the next send meets a live owner and restarts nothing.
+    // Once proven, the next send meets a live owner and restarts nothing. The child echoes the first
+    // message, as a live one does, so the next is not held behind a turn still opening.
     await proveStarted()
+    await host.settleLateDispatch({
+      sessionId: SESSION,
+      clientMessageId: first,
+      providerIdentity: { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 0 }
+    })
     await send('and again', current)
     expect(acquire).toHaveBeenCalledTimes(2)
     expect(dispatch).toHaveBeenCalledTimes(2)
@@ -183,40 +211,50 @@ describe('a send into a published session whose child ended before startup', () 
 
   it('retires the held message with the cause when the restarted child exits before proving its start', async () => {
     const releasedFence = store.getRecord(SESSION)?.lease.runtimeFence ?? 0
-    const rowsBefore = journalStatuses().length
+    const rowsBefore = (await journalStatuses()).length
 
     const held = await send('still not signed in', releasedFence)
     await exitBeforeProof()
 
     // The child never proved its start, so it accepted nothing: the exit rejects the message this
     // host admitted, so nothing pins the session and Retry stays offered, and one row names the cause.
-    expect(submission(held)).toMatchObject({
+    expect(await submission(held)).toMatchObject({
       dispatchState: 'rejected',
-      reason: expect.stringContaining(EXIT_REASON),
+      reason: 'Codex stopped before it finished starting. Send your message to try again.',
+      rejection: STARTUP_FAILURE,
       recovered: true
     })
     expect(
-      host.journalSnapshot(SESSION).submissions.filter((e) => e.dispatchState === 'pending')
+      (await host.journalSnapshot(SESSION)).submissions.filter((e) => e.dispatchState === 'pending')
     ).toEqual([])
-    expect(journalStatuses().slice(rowsBefore)).toEqual([
-      expect.stringMatching(/stopped before it finished starting: .*not signed in/)
+    expect((await journalStatuses()).slice(rowsBefore)).toEqual([
+      'Codex stopped before it finished starting. Send your message to try again.'
     ])
+    // Accepted before the restart it needed, so the chat draws it above the row naming the cause.
+    const snapshot = await host.journalSnapshot(SESSION)
+    const causeRow = snapshot.items.findLast((item) => item.body.kind === 'status')?.itemId
+    const shown = [agentJournalSubmissionKey(held), causeRow]
+    expect(
+      hostTestDrawnRowIds(snapshot, [
+        { clientMessageId: held, text: 'still not signed in' }
+      ]).filter((id) => shown.includes(id))
+    ).toEqual(shown)
     // The failed restart moved the fence twice: the acquisition, and the exit that released it.
     expect(store.getRecord(SESSION)?.lease.runtimeFence).toBe(releasedFence + 2)
     expect(store.getRecord(SESSION)?.lease.claimStatus).toBe('released')
     // One spawn per user action: nothing restarted it a second time.
     expect(acquire).toHaveBeenCalledTimes(2)
 
-    // Retry is a fresh action: it restarts once and is admitted against the new child.
+    // Retry is a fresh action: it restarts once and is handed to the new child.
     await send('signed in now')
     expect(acquire).toHaveBeenCalledTimes(3)
     expect(dispatch).toHaveBeenCalledTimes(2)
-    expect(journalStatuses().slice(rowsBefore)).toHaveLength(1)
+    expect((await journalStatuses()).slice(rowsBefore)).toHaveLength(1)
   })
 })
 
 describe('a send while the child of the first start is still proving itself', () => {
-  it('is admitted against the starting child, and nothing restarts it', async () => {
+  it('is handed to the starting child, and nothing restarts it', async () => {
     await send('hello')
 
     expect(dispatch).toHaveBeenCalledOnce()
@@ -225,7 +263,7 @@ describe('a send while the child of the first start is still proving itself', ()
     await proveStarted()
 
     expect(acquire).toHaveBeenCalledOnce()
-    expect(journalStatuses()).toEqual([])
+    expect(await journalStatuses()).toEqual([])
   })
 
   it('is retired with the cause when that child exits first, and restarts nothing', async () => {
@@ -234,14 +272,15 @@ describe('a send while the child of the first start is still proving itself', ()
 
     await exitBeforeProof()
 
-    expect(submission(held)).toMatchObject({
+    expect(await submission(held)).toMatchObject({
       dispatchState: 'rejected',
-      reason: expect.stringContaining(EXIT_REASON),
+      reason: 'Codex stopped before it finished starting. Send your message to try again.',
+      rejection: STARTUP_FAILURE,
       recovered: true
     })
     expect(acquire).toHaveBeenCalledOnce()
-    expect(journalStatuses()).toEqual([
-      expect.stringMatching(/stopped before it finished starting: .*not signed in/)
+    expect(await journalStatuses()).toEqual([
+      'Codex stopped before it finished starting. Send your message to try again.'
     ])
     expect(store.getRecord(SESSION)?.lease.runtimeFence).toBe(fence + 1)
   })

@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type Database from '../../sqlite/sync-database'
 import { OrchestrationDb } from './db'
-import { createRootDispatch } from './db/root-dispatch-test-fixture'
+import { createRootDispatch, reattachDispatchConsumer } from './db/root-dispatch-test-fixture'
 
 type DatabaseHarness = {
   db: OrchestrationDb
@@ -82,7 +82,7 @@ describe('Task/Dispatch invariant transactions', () => {
         deps: [task.id]
       })
       const dispatch = createRootDispatch(db, task.id, 'term_worker')
-      const capability = db.mintDispatchCapability({
+      reattachDispatchConsumer(db, {
         dispatchId: dispatch.id,
         paneKey: 'tab_worker:leaf_worker',
         processIncarnation: 'worker:1'
@@ -109,14 +109,6 @@ describe('Task/Dispatch invariant transactions', () => {
         completed_at: null,
         capability_revoked_at: null
       })
-      expect(
-        db.verifyDispatchCapability({
-          dispatchId: dispatch.id,
-          capability,
-          paneKey: 'tab_worker:leaf_worker',
-          processIncarnation: 'worker:1'
-        })
-      ).toEqual({ valid: true })
       expect(db.getTask(dependent.id)?.status).toBe('pending')
     }
   )
@@ -415,7 +407,7 @@ describe('Task/Dispatch invariant transactions', () => {
         taskId: task.id,
         startOptions: {}
       })
-      const capability = db.prepareStartingWorkerAuthority({
+      db.prepareStartingWorkerAuthority({
         dispatchId: started.dispatch.id,
         handle: 'term_worker',
         paneKey: 'tab_worker:dddddddd-dddd-4ddd-8ddd-dddddddddddd',
@@ -443,14 +435,6 @@ describe('Task/Dispatch invariant transactions', () => {
         capability_revoked_at: null
       })
       expect(db.getWorkerDispatch(started.dispatch.id)?.state).toBe('starting')
-      expect(
-        db.verifyDispatchCapability({
-          dispatchId: started.dispatch.id,
-          capability,
-          paneKey: 'tab_worker:dddddddd-dddd-4ddd-8ddd-dddddddddddd',
-          processIncarnation: 'worker:1'
-        })
-      ).toEqual({ valid: true })
     }
   )
 

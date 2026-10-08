@@ -4,7 +4,7 @@ import { getPreferredPairingOffer } from '../../shared/runtime-environments'
 import type { RuntimeHostStatusOwner } from '../../shared/runtime-host-status-owner'
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import { createRuntimeEnvironmentStatusOwner } from './runtime-environment-status-owner'
-import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/protocol-version'
+import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
 import type {
   RuntimeOrchestrationEnvelope,
   RuntimeRpcResponse
@@ -149,13 +149,15 @@ export function subscribeRemoteRuntimeSharedControlRequest<TResult>(
     onBinary?: (bytes: Uint8Array<ArrayBufferLike>) => void
     onError: (error: { code: string; message: string }) => void
     onClose?: () => void
-  }
+  },
+  signal?: AbortSignal
 ): Promise<RemoteRuntimeSharedSubscription> {
   return getSharedControlConnection(environmentId, pairing).subscribe(
     method,
     params,
     timeoutMs,
-    callbacks
+    callbacks,
+    signal
   )
 }
 

@@ -10,6 +10,7 @@ import {
   LOCAL_COMMIT_MESSAGE_HOST_KEY
 } from '../../../../shared/commit-message-host-key'
 import { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
+import { hasExplicitTuiLaunchCommand } from '../../../../shared/tui-agent-launch-command-override'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import {
   getLocalProjectExecutionRuntimeContext,
@@ -126,7 +127,12 @@ export async function discoverNativeChatCatalogModels(
   const hostCatalogAgent =
     agent === 'claude' ? ('claude' as const) : agent === 'codex' ? ('codex' as const) : null
   // Only `local` proves a native pane: a paired runtime's key also covers its SSH/WSL worktrees.
-  if (hostCatalogAgent && hostKey === LOCAL_COMMIT_MESSAGE_HOST_KEY) {
+  // Terminal-backed chat runs the full custom command line, which only the CLI listing models.
+  if (
+    hostCatalogAgent &&
+    hostKey === LOCAL_COMMIT_MESSAGE_HOST_KEY &&
+    !hasExplicitTuiLaunchCommand(context.settings, hostCatalogAgent)
+  ) {
     const fromHost = await readLocalHostCatalogModels(hostCatalogAgent)
     if (fromHost) {
       return fromHost
@@ -149,6 +155,7 @@ export async function discoverNativeChatCatalogModels(
     label: model.label,
     ...(model.description ? { description: model.description } : {}),
     ...(model.isDefault ? { isDefault: true as const } : {}),
+    ...(model.contextWindowTokens ? { contextWindowTokens: model.contextWindowTokens } : {}),
     options:
       agent === 'claude'
         ? createClaudeCatalogOptions({

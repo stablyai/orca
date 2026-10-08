@@ -230,7 +230,7 @@ describe('OrcaRuntimeService', () => {
     expect(new Set(handles).size).toBe(handles.length)
 
     await expect(
-      runtime.sendTerminal('term_victim', { text: 'for victim' })
+      runtime.sendTerminal('term_victim', { text: 'for victim' }, { inputKind: 'driving' })
     ).resolves.toMatchObject({ accepted: true })
     expect(writesByPty.get('pty-victim')).toEqual(['for victim'])
     expect(writesByPty.has('pty-imposter')).toBe(false)
@@ -260,7 +260,7 @@ describe('OrcaRuntimeService', () => {
     const listed = await runtime.listTerminals()
     expect(listed.terminals[0]?.handle).toBe('term_already_bound')
     await expect(
-      runtime.sendTerminal('term_already_bound', { text: 'still routed' })
+      runtime.sendTerminal('term_already_bound', { text: 'still routed' }, { inputKind: 'driving' })
     ).resolves.toMatchObject({ accepted: true })
     expect(writes).toEqual(['still routed'])
     // the reported-but-not-adopted handle must not resolve to the live pty
@@ -347,7 +347,9 @@ describe('OrcaRuntimeService', () => {
       handle,
       tail: ['after unavailable']
     })
-    await expect(runtime.sendTerminal(handle, { text: 'still writable' })).resolves.toMatchObject({
+    await expect(
+      runtime.sendTerminal(handle, { text: 'still writable' }, { inputKind: 'driving' })
+    ).resolves.toMatchObject({
       handle,
       accepted: true
     })

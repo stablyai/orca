@@ -244,7 +244,7 @@ export function createMarkdownDocLink(transport: RichMarkdownSourceTransport) {
                 return false
               }
               const { state } = view
-              if (!(state.selection instanceof TextSelection)) {
+              if (!(state.selection instanceof TextSelection) || !state.selection.empty) {
                 return false
               }
               const { $from } = state.selection

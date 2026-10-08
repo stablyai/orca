@@ -72,9 +72,15 @@ export function NativeChatAwaitingInputRow({
   const questions = subject?.kind === 'questions' && listsQuestions ? subject.questions : null
   // A count always hides its questions, so the list needs no clipping measurement.
   const toggles = questions !== null || (question !== null && (open || clipped))
-  const label = pending
-    ? translate('components.native-chat.ask.awaiting', NATIVE_CHAT_ASK_ROW_COPY.awaiting)
-    : translate('components.native-chat.ask.asked', NATIVE_CHAT_ASK_ROW_COPY.asked)
+  // With nothing to name, the label must read as a whole phrase, not end on a colon.
+  const label = !pending
+    ? translate('components.native-chat.ask.asked', NATIVE_CHAT_ASK_ROW_COPY.asked)
+    : subject === null
+      ? translate(
+          'components.native-chat.ask.awaitingUnnamed',
+          NATIVE_CHAT_ASK_ROW_COPY.awaitingUnnamed
+        )
+      : translate('components.native-chat.ask.awaiting', NATIVE_CHAT_ASK_ROW_COPY.awaiting)
   const text =
     subject === null
       ? null

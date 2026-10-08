@@ -61,6 +61,7 @@ vi.mock('./ssh-connection-utils', () => ({
 import { deployAndLaunchRelay } from './ssh-relay-deploy'
 import { execCommand } from './ssh-relay-deploy-helpers'
 import type { SshConnection } from './ssh-connection'
+import { REMOTE_INSTALL_ORDER_OK } from './remote-install-previous-version'
 
 function makeMockConnection(): SshConnection {
   return {
@@ -149,6 +150,12 @@ describe('cross-version isolation', () => {
       }
       if (command.includes('test -S') && command.includes('echo ALIVE || echo DEAD')) {
         return Promise.resolve('DEAD')
+      }
+      if (command.includes(REMOTE_INSTALL_ORDER_OK)) {
+        // A newer v0 is the previous build, so v1 is kept only by its live socket.
+        return Promise.resolve(
+          `relay-0.1.0+222222222222\nrelay-0.1.0+000000000000\nrelay-0.1.0+111111111111\n${REMOTE_INSTALL_ORDER_OK}`
+        )
       }
       if (command.includes('__ORCA_RELAY_GC_FIND_STATUS__')) {
         return Promise.resolve('relay-0.1.0+111111111111\nrelay-0.1.0+222222222222\n')

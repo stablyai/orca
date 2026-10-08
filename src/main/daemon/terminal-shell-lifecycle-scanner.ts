@@ -34,6 +34,8 @@ export type ShellLifecycleScanEvents = {
    * and after this index were NOT consumed; the caller re-feeds them.
    */
   uncleanDeathTriggerEnd?: number
+  /** Where that OSC 133;D begins in the chunk; 0 when it began in an earlier one. */
+  uncleanDeathTriggerStart?: number
   /** An OSC 133;D closed a command that had entered the alternate screen and left it cleanly. */
   cleanExitCandidate?: { generation: number }
 }
@@ -150,6 +152,7 @@ export class TerminalShellLifecycleScanner {
             0,
             match.index + match[0].length - previousTailLength
           )
+          events.uncleanDeathTriggerStart = Math.max(0, match.index - previousTailLength)
           return events
         }
         if (cleanExit) {

@@ -113,7 +113,12 @@ function runRecoveryRequest(payload: string | undefined): ProfileStateRecoveryRe
       }
       return {
         ok: true,
-        result: rollbackProfileState(userDataPath, parsed.data.selector, maintenance)
+        result: rollbackProfileState(
+          userDataPath,
+          parsed.data.selector,
+          maintenance,
+          parsed.data.profileId
+        )
       }
     } finally {
       maintenance.release()

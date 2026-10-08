@@ -146,7 +146,7 @@ export function stubLayout({
         }
         // The transcript column: as tall as the window it wraps, plus what sits
         // under it. This is the element the list observes for streamed growth.
-        return this.classList.contains('max-w-4xl')
+        return this.hasAttribute('data-native-chat-transcript-column')
           ? reservedTranscriptHeight(this) + layout.belowTranscriptPx
           : 0
       }
@@ -292,7 +292,6 @@ export function list(messages: NativeChatMessage[], isVisible = true): React.JSX
       isVisible={isVisible}
       isWorking={false}
       expandSignal={false}
-      fontScale={1}
     />
   )
 }
@@ -325,6 +324,7 @@ export function scrollTranscript(container: HTMLElement, top: number): void {
   if (!scroller) {
     throw new Error('no transcript scroll root')
   }
+  fireEvent.wheel(scroller, { deltaY: top - scroller.scrollTop })
   scroller.scrollTop = top
   fireEvent.scroll(scroller)
 }

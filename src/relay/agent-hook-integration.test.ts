@@ -118,6 +118,44 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
     rmSync(tmpDir, { recursive: true, force: true })
   })
 
+  it('publishes a title-confirmed Claude Escape from the execution host and replays it on reconnect', async () => {
+    const paneKey = `tab-7:${LEAF_7}`
+    const { port, token } = hookServer.getCoordinates()
+    const response = await fetch(`http://127.0.0.1:${port}/hook/claude`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Orca-Agent-Hook-Token': token },
+      body: JSON.stringify({
+        paneKey,
+        tabId: 'tab-7',
+        worktreeId: 'folder-workspace',
+        env: 'remote',
+        version: '1',
+        payload: { hook_event_name: 'UserPromptSubmit', prompt: 'long table' }
+      })
+    })
+    expect(response.status).toBe(204)
+    await expect.poll(() => orcaServer.getStatusSnapshotForPane(paneKey)[0]?.state).toBe('working')
+    const native = hookServer.claudeTerminalInterrupts
+    native.observe(paneKey, { kind: 'title', title: '◐ Long table' })
+    native.observe(paneKey, { kind: 'input', data: '\x1b' })
+    native.observe(paneKey, { kind: 'title', title: '◑ Long table' })
+    expect(orcaServer.getStatusSnapshotForPane(paneKey)[0].state).toBe('working')
+    native.observe(paneKey, { kind: 'input', data: '\x1b' })
+    native.observe(paneKey, { kind: 'title', title: '✳ Long table' })
+    await expect
+      .poll(() => orcaServer.getStatusSnapshotForPane(paneKey)[0])
+      .toMatchObject({
+        state: 'done',
+        interrupted: true,
+        connectionId: 'conn-test',
+        mainAgent: { state: 'done', outcome: 'cancellation' }
+      })
+    expect(hookServer.replayCachedPayloadsForPanes()).toBe(1)
+    await expect
+      .poll(() => orcaServer.getStatusSnapshotForPane(paneKey)[0]?.mainAgent?.outcome)
+      .toBe('cancellation')
+  })
+
   it.each([
     { agent: 'claude', input: { hook_event_name: 'UserPromptSubmit', prompt: 'roundtrip' } },
     {

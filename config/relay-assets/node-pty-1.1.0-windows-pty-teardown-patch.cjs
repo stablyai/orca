@@ -80,9 +80,9 @@ const { join, resolve } = require('node:path')
  *
  *   - the pnpm patch does not cross the SSH boundary -- the remote `npm install` yields upstream's
  *     unpatched node-pty;
- *   - the orcad prebuild matrix has no win32 entry (`MATRIX_SLOTS`,
- *     `config/scripts/build-orcad-prebuilds.mjs`), so no Windows binary is ever compiled from
- *     patched source to ship;
+ *   - the orcad prebuild matrix now compiles win32 slots from patched source
+ *     (`config/scripts/build-orcad-prebuilds.mjs`), but only standalone orcad consumes them;
+ *     nothing ships them to a Windows relay host yet;
  *   - a relay asset CAN patch native source and rebuild on the host -- that is exactly what
  *     `node-pty-1.1.0-master-cloexec-patch.cjs` does -- but it returns
  *     `skipped:unsupported-platform` for anything but linux/darwin. Extending it to win32 means

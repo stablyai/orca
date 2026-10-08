@@ -134,7 +134,7 @@ describe('profile-state startup authority boundary', () => {
   it('rejects direct orcad startup on an incapable runtime', async () => {
     const original = process.getBuiltinModule
     vi.spyOn(process, 'getBuiltinModule').mockImplementation((id) => {
-      if (id === 'node:sqlite' || id === 'bun:sqlite') {
+      if (id === 'node:sqlite') {
         return undefined
       }
       return original(id)
@@ -247,12 +247,9 @@ describe('profile-state startup authority boundary', () => {
 
   it('refuses a runtime with SQLite but no native backup', async () => {
     const original = process.getBuiltinModule
-    vi.spyOn(process, 'getBuiltinModule').mockImplementation((id) => {
-      if (id === 'bun:sqlite') {
-        return undefined
-      }
-      return id === 'node:sqlite' ? { DatabaseSync: class {} } : original(id)
-    })
+    vi.spyOn(process, 'getBuiltinModule').mockImplementation((id) =>
+      id === 'node:sqlite' ? { DatabaseSync: class {} } : original(id)
+    )
     await expect(
       createProfileStateStoreForStartup({
         dataFile: join(tmpdir(), 'missing-backup-orca-data.json'),
@@ -273,7 +270,7 @@ describe('profile-state startup authority boundary', () => {
     writeFileSync(dataFile, source)
     const original = process.getBuiltinModule
     vi.spyOn(process, 'getBuiltinModule').mockImplementation((id) =>
-      id === 'node:sqlite' || id === 'bun:sqlite' ? undefined : original(id)
+      id === 'node:sqlite' ? undefined : original(id)
     )
 
     await expect(

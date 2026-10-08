@@ -162,6 +162,17 @@ describe('terminal inventory after a pane is dropped', () => {
     expect(dropped?.tabId).toBe(`pty:${DROPPED_PTY}`)
   })
 
+  it('names the pane the dropped terminal was last recorded in, and only for the orphan', async () => {
+    const runtime = makeRuntime()
+    dropOnePane(runtime)
+
+    const { terminals } = await runtime.listTerminals(`id:${WORKTREE_ID}`)
+    const byPty = new Map(terminals.map((terminal) => [terminal.ptyId, terminal]))
+    // The renderer may still hold that pane unmounted; it needs the name to rebind instead of forking.
+    expect(byPty.get(DROPPED_PTY)?.recordedPaneKey).toBe(makePaneKey('tab-dropped', DROPPED_LEAF))
+    expect(byPty.get(KEPT_PTY)).not.toHaveProperty('recordedPaneKey')
+  })
+
   it('keeps reporting the live PTY rather than dropping it from inventory', async () => {
     const runtime = makeRuntime()
     dropOnePane(runtime)

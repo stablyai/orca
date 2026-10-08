@@ -5,7 +5,15 @@
 // and never forks.
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -23,6 +31,12 @@ const projectDir = resolve(import.meta.dirname, '../..')
 const relayOutDir = mkdtempSync(join(tmpdir(), 'orca-relay-contract-'))
 
 beforeAll(() => {
+  // A repeated build must not copy stale companions into the other platform bundles.
+  for (const platform of RELAY_BUILD_PLATFORMS) {
+    const outDir = join(relayOutDir, platform)
+    mkdirSync(outDir, { recursive: true })
+    writeFileSync(join(outDir, 'stale-companion.js'), 'throw new Error("stale")')
+  }
   execFileSync('node', [join(projectDir, 'config', 'scripts', 'build-relay.mjs')], {
     cwd: projectDir,
     stdio: 'pipe',

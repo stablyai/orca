@@ -1,5 +1,4 @@
 import React from 'react'
-import { Code2 } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import { getCodeBlockLanguageLabel } from '@/components/editor/rich-markdown-code-block-languages'
@@ -16,14 +15,13 @@ export function NativeChatCodeBlock({
   const code = extractCodeText(children)
 
   return (
-    <div className="group/code relative my-3 min-w-0 max-w-full overflow-hidden rounded-md bg-accent">
+    <div className="group/code relative my-3 min-w-0 max-w-full overflow-hidden rounded-lg border border-chat-code-border bg-chat-code-surface">
       {language ? (
-        <div className="flex h-9 items-center justify-between border-b border-border/60 px-3">
+        <div className="flex h-7.5 items-center justify-between px-3">
           <span
             data-code-language={language}
-            className="flex min-w-0 items-center gap-1.5 font-mono text-[11px] text-muted-foreground"
+            className="min-w-0 font-sans text-xs text-chat-foreground-faint"
           >
-            <Code2 className="size-3.5 shrink-0" />
             <span className="truncate">{getCodeBlockLanguageLabel(language)}</span>
           </span>
           {code ? (
@@ -36,9 +34,10 @@ export function NativeChatCodeBlock({
         </div>
       ) : null}
       <pre
+        data-native-chat-code-content
         className={cn(
-          'scrollbar-sleek m-0 max-h-80 max-w-full overflow-x-auto p-3 font-mono text-[12px]',
-          !language && 'pr-10'
+          'scrollbar-sleek m-0 max-w-full overflow-x-auto font-mono text-[12px] text-chat-code-foreground',
+          language ? 'px-3.5 pt-0.5 pb-3' : 'p-3 pr-10'
         )}
       >
         {children}
@@ -47,7 +46,7 @@ export function NativeChatCodeBlock({
         <NativeChatCopyButton
           text={code}
           label={translate('components.native-chat.copyCode', 'Copy code')}
-          className="absolute right-2 top-2 opacity-100 transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover/code:pointer-events-auto group-hover/code:opacity-100 group-has-[:focus-visible]/code:pointer-events-auto group-has-[:focus-visible]/code:opacity-100"
+          className="absolute right-2 top-2 opacity-100 transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover/code:pointer-events-auto group-hover/code:opacity-100 [[class~='group/code']:has(:focus-visible)_&]:pointer-events-auto [[class~='group/code']:has(:focus-visible)_&]:opacity-100"
         />
       ) : null}
     </div>

@@ -9,7 +9,8 @@ import { parseAgentSessionFile } from './session-scanner-agent-parser'
 import { withFullFirstUserPromptCapture } from './session-scanner-first-user-prompt-capture'
 import {
   parseOpenCodeSqliteSessionViaWorker,
-  parseOpenCode2SqliteSessionViaWorker
+  parseOpenCode2SqliteSessionViaWorker,
+  parseZcodeSqliteSessionViaWorker
 } from './session-scanner-opencode-sqlite-worker-spawn'
 import { splitOpenCodeSqliteCandidate } from './session-scanner-opencode-sqlite-paths'
 import type { FileWithMtime } from './session-scanner-types'
@@ -76,12 +77,14 @@ async function parseSessionForFullFirstUserPrompt(args: {
   codexHome: string | null
 }): Promise<AiVaultSession | null> {
   // Full capture belongs inside the reader, including the guest reader for WSL.
-  if (args.agent === 'opencode' || args.agent === 'opencode2') {
+  if (args.agent === 'opencode' || args.agent === 'opencode2' || args.agent === 'zcode') {
     const parse =
       args.agent === 'opencode2'
         ? parseOpenCode2SqliteSessionViaWorker
-        : parseOpenCodeSqliteSessionViaWorker
-    const fromSynthetic = splitOpenCodeSqliteCandidate(args.filePath)
+        : args.agent === 'zcode'
+          ? parseZcodeSqliteSessionViaWorker
+          : parseOpenCodeSqliteSessionViaWorker
+    const fromSynthetic = splitOpenCodeSqliteCandidate(args.filePath, args.agent)
     if (fromSynthetic) {
       return parse({
         fullFirstUserPrompt: true,

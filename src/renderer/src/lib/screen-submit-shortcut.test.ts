@@ -66,4 +66,19 @@ describe('screen submit shortcut', () => {
       })
     ).toBe(false)
   })
+
+  it.each(['Macintosh', 'Linux', 'Windows NT'])(
+    'ignores keyCode-only IME chords on %s',
+    (platform) => {
+      setUserAgent(platform)
+      const chord = {
+        key: 'Enter',
+        metaKey: platform === 'Macintosh',
+        ctrlKey: platform !== 'Macintosh'
+      }
+      expect(isScreenSubmitShortcut({ ...chord, keyCode: 229 })).toBe(false)
+      expect(isScreenSubmitShortcut({ ...chord, nativeEvent: { keyCode: 229 } })).toBe(false)
+      expect(isScreenSubmitShortcut(chord)).toBe(true)
+    }
+  )
 })

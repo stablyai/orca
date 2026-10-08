@@ -41,6 +41,7 @@ import {
 } from '../ssh/ssh-connection-generation'
 import { resetSshProviderAuthorities } from '../ssh/ssh-provider-authority'
 import { activeSessions } from './ssh-active-relay-sessions'
+import { installManagedOrcadStartStatus } from './runtime-environment-managed-tunnel'
 import {
   registerAdvertisedUrlRefresh,
   unregisterAdvertisedUrlRefresh
@@ -77,6 +78,10 @@ import { broadcastPortForwards, relayStateOverrides } from './ssh-renderer-broad
 import { resetSshShutdownDrain } from './ssh-shutdown-drain'
 import { registerSshTargetCrudHandlers } from './ssh-target-crud-handlers'
 import { targetLifecycleInFlight } from './ssh-target-lifecycle-queue'
+import { disposeOrcadManagedTunnels } from '../ssh/orcad-managed-tunnel'
+import { reconcileManagedOrcadSshTargets } from '../ssh/orcad-retained-source'
+import { installOrcadMigrationScrollbackRetention } from '../ssh/orcad-migration-scrollback-retention-wiring'
+import { getAppEnvironment } from '../../shared/app-environment'
 
 const SSH_IPC_CHANNELS = [
   'ssh:listTargets',
@@ -90,6 +95,7 @@ const SSH_IPC_CHANNELS = [
   'ssh:connect',
   'ssh:disconnect',
   'ssh:terminateSessions',
+  'ssh:moveToManagedServer',
   'ssh:resetRelay',
   'ssh:getState',
   'ssh:needsPassphrasePrompt',
@@ -184,7 +190,10 @@ export function registerSshHandlers(
   setCurrentRuntime(runtime)
   setSshTargetRegistryStore(new SshConnectionStore(store))
   setPersistedStore(store)
+  reconcileManagedOrcadSshTargets(getAppEnvironment().getPath('userData'), store)
+  installOrcadMigrationScrollbackRetention(getAppEnvironment().getPath('userData'), store)
   registerAdvertisedUrlRefresh(getCurrentMainWindow)
+  installManagedOrcadStartStatus()
 
   registerCredentialHandler()
 
@@ -209,7 +218,7 @@ export function registerSshHandlers(
     }
   })
   refreshActiveRelaySessions()
-  registerPowerMonitorReconnect()
+  registerPowerMonitorReconnect(() => getAppEnvironment().getPath('userData'))
   registerSshBrowseHandler(() => connectionManager)
   setSshConnectionManagerResolver(() => connectionManager)
 
@@ -253,6 +262,7 @@ export async function resetSshHandlerStateForTests(): Promise<void> {
   resetSshShutdownDrain()
 
   await connectionManager?.disconnectAll()
+  disposeOrcadManagedTunnels()
   portForwardManager?.dispose()
   setConnectionManager(null)
   setSshConnectionManagerResolver(null)

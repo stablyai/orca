@@ -11,7 +11,8 @@ import {
 } from '../../../shared/structured-agent-session-projection'
 import {
   continueMainAgentStatus,
-  isAgentStatusHeldOpenByChildWork
+  isAgentStatusHeldOpenByChildWork,
+  mainAgentTurnInterrupted
 } from '../../../shared/agent-lead-status-fold'
 import { structuredAgentSessionAgentStatus } from '../../../shared/structured-agent-session-agent-status'
 import {
@@ -43,10 +44,13 @@ export abstract class AgentHookServerIngestStructured extends AgentHookServerIng
     }
     const previous = this.canonicalStatusStore.getParent(parsed)
     const priorStatus = previous?.status
+    // The host's own child records, not the summary's lossy task list: the summary is derived
+    // from these records, and reading them here keeps the row and every view of it on one source.
     const agentStatus = structuredAgentSessionAgentStatus({
       status: summary.status,
-      backgroundTasks: summary.backgroundTasks,
-      turnOutcome: summary.turnOutcome
+      childWork: this.canonicalStatusStore.getChildren(parsed),
+      turnOutcome: summary.turnOutcome,
+      ...(summary.stopping ? { stopping: summary.stopping } : {})
     })
     const { state, workingMode } = agentStatus
     // The main agent's own clock keeps continuity the same way the combined row's does below, dated
@@ -73,6 +77,8 @@ export abstract class AgentHookServerIngestStructured extends AgentHookServerIng
       state,
       ...(workingMode ? { workingMode } : {}),
       mainAgent,
+      // Readers that predate `mainAgent` read a cancellation off this flag, as the hook lanes publish it.
+      interrupted: mainAgentTurnInterrupted(mainAgent),
       prompt: summary.latestPrompt,
       agentType: summary.agent,
       ...(summary.model ? { model: summary.model } : {}),

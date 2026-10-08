@@ -15,7 +15,6 @@ export type ClaudeModelCatalogProbeDeps = Pick<
   ClaudeStructuredLaunchResolverDeps,
   'resolveCommand' | 'resolveEnv' | 'resolveInheritedEnv' | 'resolveAuthPolicy'
 > & {
-  authSwitchSettleTimeoutMs?: number
   /** Test seams; production runs the one-shot listing child. */
   discover?: typeof discoverModelsLocal
   spawnAgent?: typeof spawnSourceControlAgent
@@ -60,7 +59,7 @@ export function createClaudeModelCatalogProbe(
         ...(model.description ? { description: model.description } : {}),
         isDefault: model.isDefault === true,
         // No defaultEffort: the listing's thinking default is the commit-message generator's
-        // choice, not the effort Claude runs, and a live session's listing never names one.
+        // choice, not the effort Claude runs; the store keeps the one a live child reported.
         efforts: (model.thinkingLevels ?? []).map((level) => ({
           value: level.id,
           label: level.label

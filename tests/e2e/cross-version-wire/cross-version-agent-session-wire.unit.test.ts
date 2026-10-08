@@ -18,18 +18,26 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import type { StructuredAgentSessionAdapter } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-adapter'
 import { StructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-host'
 import { setStructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-registry'
-import { AgentSessionRecordStore } from '../../../src/main/runtime/agent-session-record-store'
-import { RuntimeSubscriptionRegistry } from '../../../src/main/runtime/runtime-subscription-registry'
+import type { AgentSessionRecordStore } from '../../../src/main/runtime/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../../src/main/runtime/agent-session-record-store-test-harness'
 import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session-wire'
 import {
+  AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY,
+  AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY,
   AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY,
   AGENT_SESSION_REWIND_RUNTIME_CAPABILITY,
   AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY,
   AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../src/shared/protocol-version'
 import { resolveBaselineReleaseRef } from './release-checkout'
+import {
+  callBuild,
+  expectDeclaredSurfaceExecutes,
+  runtimeStub
+} from './structured-agent-session-surface-execution'
 import {
   installableHost,
   structuredHostStub,
@@ -58,9 +66,16 @@ import {
   type RpcClientIdentity,
   type RpcReply
 } from './versioned-agent-session-wire'
+import { openTestJournalHostDatabase } from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-logger'
+import { codexProviderHandle } from '../../../src/shared/agent-session-provider-handle-encoding'
+import { NO_STRUCTURED_AGENTS } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
+import { describeReleasedStopNoteProjection } from './cross-version-stop-note-scenarios'
 
 // Why: a cold CI run extracts the baseline checkout before the first pairing.
 const SUITE_TIMEOUT_MS = 180_000
+
+describeReleasedStopNoteProjection({ build: () => current, callBuild, runtimeStub })
 
 const CLIENT_CAPABILITY_UPDATE_METHOD = 'runtime.clientCapabilities.update'
 
@@ -73,29 +88,6 @@ beforeAll(async () => {
   current = await loadAgentSessionWireBuild(WORKING_TREE)
   baseline = await loadAgentSessionWireBuild(baselineRef)
 }, SUITE_TIMEOUT_MS)
-
-function runtimeStub(): unknown {
-  const subscriptions = new RuntimeSubscriptionRegistry()
-  return {
-    getRuntimeId: () => 'runtime-1',
-    getClientSettings: () => ({ experimentalStructuredNativeChat: true }),
-    ensureStructuredAgentSessionHost: async () => undefined,
-    getStructuredAgentSessionCreateSupport: async () => ({ supported: true }),
-    resolveStructuredAgentSessionCreateIntent: async () => {
-      const {
-        envelope: _envelope,
-        providerHandle: _providerHandle,
-        ...resolved
-      } = attachParams(null)
-      return resolved
-    },
-    publishStructuredAgentSessionTab: () => {},
-    registerSubscriptionCleanup: subscriptions.register.bind(subscriptions),
-    registerOwnedSubscriptionCleanup: subscriptions.registerOwned.bind(subscriptions),
-    cleanupSubscription: subscriptions.cleanup.bind(subscriptions),
-    cleanupSubscriptionsByPrefix: subscriptions.cleanupByPrefix.bind(subscriptions)
-  }
-}
 
 /**
  * What a client too old to know the structured surface advertises: the baseline's
@@ -113,73 +105,6 @@ function legacyClientCapabilities(): string[] {
 /** The structured methods the baseline release actually registers, read from it. */
 function baselineStructuredMethods(): string[] {
   return baseline.methodNames.filter((name) => name.startsWith('agentSession.'))
-}
-
-/** Every reply one call produced. Streaming methods answer more than once, and a
- *  refusal has to arrive as a reply rather than as silence. */
-async function callBuild(
-  build: AgentSessionWireBuild,
-  method: string,
-  params: unknown,
-  client: RpcClientIdentity,
-  runtime: unknown = runtimeStub()
-): Promise<RpcReply[]> {
-  const replies: RpcReply[] = []
-  await build
-    .createDispatcher(runtime)
-    .dispatchStreaming(
-      { id: `request-${method}`, authToken: 'cross-version-token', method, params },
-      (raw) => replies.push(JSON.parse(raw) as RpcReply),
-      client
-    )
-  return replies
-}
-
-/**
- * The one thing this suite exists to guarantee, written once and applied per
- * build: every method the manifest declares is not merely registered but reaches
- * its host method on this call, answers, and answers with its declared result.
- *
- * Written as a helper rather than inline because a build passing it is the claim,
- * and each skew that registers the surface owes the same claim — a check that
- * covers one method leaves the rest registered-but-unusable behind a green suite.
- */
-async function expectDeclaredSurfaceExecutes(
-  build: AgentSessionWireBuild,
-  hostCalls: Record<string, ReturnType<typeof vi.fn>>,
-  clientCapabilities: readonly string[]
-): Promise<void> {
-  for (const { method, hostMethod, result } of STRUCTURED_CALLS) {
-    // Two methods share one host method, so "has been called" would already be
-    // true from the earlier one: only this call's own delta pins the pairing.
-    const before = hostMethod ? hostCalls[hostMethod].mock.calls.length : 0
-    const replies = await callBuild(build, method, paramsFor(method), {
-      clientKind: 'runtime',
-      clientCapabilities
-    })
-    if (hostMethod) {
-      expect(
-        hostCalls[hostMethod].mock.calls.length - before,
-        `${build.label}: ${method} did not reach the host`
-      ).toBe(1)
-    }
-    for (const reply of replies) {
-      expect(
-        reply,
-        `${build.label}: ${method} was refused: ${JSON.stringify(reply)}`
-      ).toMatchObject({ ok: true })
-    }
-    if (result) {
-      // The declared answer, not merely a non-refusal: a handler that is
-      // registered and returns an execution error, or hands back someone else's
-      // envelope, fails here rather than passing as "reached the host".
-      expect(replies, `${build.label}: ${method} must answer exactly once`).toHaveLength(1)
-      expect(replies[0], `${build.label}: ${method} answered off-contract`).toMatchObject({
-        ok: true,
-        result
-      })
-    }
-  }
 }
 
 describe('cross-version structured agent sessions', () => {
@@ -238,6 +163,74 @@ describe('cross-version structured agent sessions', () => {
     })
   })
 
+  // Released phones ask createSupport whether a launch should be a chat at all, and the host's
+  // setting answered; a client that picks the mode itself advertises that it does.
+  describe('a client that leaves the launch mode to the host', () => {
+    const SEED = { model: 'seeded-model' }
+    const settingOff = (): unknown =>
+      runtimeStub({
+        getClientSettings: () => ({ experimentalStructuredNativeChat: false }),
+        structuredAgentSessionLaunchSeedOptions: () => SEED
+      })
+    // The release's own list, so the day a release ships the launch-mode capability this still
+    // describes a client without it.
+    const released = (...extra: string[]): RpcClientIdentity => ({
+      clientKind: 'mobile',
+      clientCapabilities: [
+        ...baseline.capabilities.filter(
+          (capability) => capability !== STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY
+        ),
+        STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+        ...extra
+      ]
+    })
+    const createSupport = (build: AgentSessionWireBuild, client: RpcClientIdentity) =>
+      callBuild(
+        build,
+        'agentSession.createSupport',
+        paramsFor('agentSession.createSupport'),
+        client,
+        settingOff()
+      )
+
+    beforeEach(async () => {
+      for (const build of [current, baseline]) {
+        await build.installStructuredHost(installableHost(structuredHostStub(SESSION, WORKSPACE)))
+      }
+    })
+
+    afterEach(async () => {
+      for (const build of [current, baseline]) {
+        await build.installStructuredHost(null)
+      }
+    })
+
+    it('is refused by a host whose setting is off, exactly as the release refused it', async () => {
+      const replies = await createSupport(current, released())
+      expect(replies).toHaveLength(1)
+      expect(replies[0]).toMatchObject({
+        ok: false,
+        error: { message: expect.stringContaining('structured_agent_session_unsupported') }
+      })
+      if (baseline.methodNames.includes('agentSession.createSupport')) {
+        // Older clients read the existing refusal fields and ignore additive error metadata.
+        expect(replies[0]).toMatchObject({
+          error: (await createSupport(baseline, released()))[0]?.error
+        })
+      }
+    })
+
+    it('is supported once it picks the mode itself, with the host seed as an extra field', async () => {
+      const replies = await createSupport(
+        current,
+        released(STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY)
+      )
+      expect(replies).toHaveLength(1)
+      // `supported` is all an older desktop or phone reads; the seed rides beside it.
+      expect(replies[0]).toMatchObject({ ok: true, result: { supported: true, seedOptions: SEED } })
+    })
+  })
+
   describe('a client that predates the turn item', () => {
     beforeEach(() => turnItemSkew.install(SESSION, WORKSPACE))
     afterEach(() => setStructuredAgentSessionHost(null))
@@ -256,6 +249,8 @@ describe('cross-version structured agent sessions', () => {
     it('registers the whole surface on the new build', () => {
       expect(current.capabilities).toContain(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)
       expect(current.capabilities).toContain(AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY)
+      // The host admits by client capability, so a client may pick each launch mode itself.
+      expect(current.capabilities).toContain(STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY)
       expect(current.methodNames.filter((name) => name.startsWith('agentSession.'))).toHaveLength(
         STRUCTURED_CALLS.length
       )
@@ -288,6 +283,40 @@ describe('cross-version structured agent sessions', () => {
       // Additive surface: bumping the protocol number would strand every paired
       // device on this release rather than degrade one feature.
       expect(current.protocolVersion).toBe(baseline.protocolVersion)
+    })
+
+    // The client sends a Stop naming no turn only to a host advertising this, because older cancel
+    // params are strict and require the turn. The invariant survives a release cut: each build
+    // advertises the capability exactly when its dispatcher accepts that cancel.
+    it('advertises conversation stop exactly where a cancel naming no turn is accepted', async () => {
+      const named = paramsFor('agentSession.cancel')
+      if (typeof named !== 'object' || named === null) {
+        throw new Error('the manifest has no cancel params')
+      }
+      const unnamed = Object.fromEntries(Object.entries(named).filter(([key]) => key !== 'turnId'))
+      for (const build of [current, baseline]) {
+        if (!build.methodNames.includes('agentSession.cancel')) {
+          continue
+        }
+        // Without a host every call answers `structured_agent_session_unsupported`, which would
+        // read as the params refusal this looks for.
+        const hostCalls = structuredHostStub(SESSION, WORKSPACE)
+        await build.installStructuredHost(installableHost(hostCalls))
+        try {
+          const replies = await callBuild(build, 'agentSession.cancel', unnamed, {
+            clientKind: 'runtime',
+            clientCapabilities: current.capabilities
+          })
+          expect(replies, `${build.label}: a cancel naming no turn`).toHaveLength(1)
+          expect(replies[0]?.ok, `${build.label}: a cancel naming no turn`).toBe(
+            build.capabilities.includes(AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY)
+          )
+          expect(hostCalls.cancel).toHaveBeenCalledTimes(replies[0]?.ok ? 1 : 0)
+        } finally {
+          await build.installStructuredHost(null)
+        }
+      }
+      expect(current.capabilities).toContain(AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY)
     })
 
     it('gets a clean answer from the old dispatcher rather than silence', async () => {
@@ -435,11 +464,10 @@ describe('cross-version structured agent sessions', () => {
 
     beforeEach(async () => {
       root = await mkdtemp(join(tmpdir(), 'orca-cross-version-ai-vault-'))
-      store = await AgentSessionRecordStore.open({
-        directory: join(root, 'store'),
-        hostId: 'local'
-      })
+      store = await openTestAgentSessionRecordStore(root)
       const host = new StructuredAgentSessionHost({
+        agents: NO_STRUCTURED_AGENTS,
+        logger: createStructuredAgentSessionLogger(),
         store,
         adapter: {
           acquire: async ({ fence }) => ({
@@ -451,7 +479,7 @@ describe('cross-version structured agent sessions', () => {
             },
             link: {
               linkId: `link-${fence}`,
-              handle: { provider: 'codex', threadId: THREAD },
+              handle: codexProviderHandle(THREAD),
               origin: 'created',
               mintedAtFence: fence,
               observedAt: NOW
@@ -462,7 +490,7 @@ describe('cross-version structured agent sessions', () => {
           answerPrompt: async () => undefined,
           setOption: async () => undefined
         },
-        journalRoot: root,
+        journalDatabase: openTestJournalHostDatabase(root),
         claimKeyId: 'key-1',
         mintSpawnToken: () => 'spawn-vault',
         now: () => NOW
@@ -619,6 +647,10 @@ describe('cross-version structured agent sessions', () => {
     let store: AgentSessionRecordStore
     let runtime: unknown
 
+    /** Holds a provider start open, so a reply's timing can be read against it. */
+    let startGate: Promise<void> = Promise.resolve()
+    let starts = 0
+
     /** Phase 2 owns provider processes; the adapter is the only stub here. */
     function adapter(): StructuredAgentSessionAdapter {
       return {
@@ -626,23 +658,27 @@ describe('cross-version structured agent sessions', () => {
         // `supportsLocation`, which this fake also lacks, so the client-supplied-location gate
         // refused for the fake's silence rather than for the location.
         supportsCreate: () => true,
-        acquire: async ({ fence }) => ({
-          process: {
-            hostId: 'local',
-            pid: 4242,
-            processStartTimeMs: 1_700_000_000_000,
-            spawnToken: store.getRecord(SESSION)?.lease.reservedSpawnToken ?? 'spawn-a'
-          },
-          link: {
-            linkId: `link-${fence}`,
-            handle: { provider: 'codex', threadId: THREAD },
-            // A restarted host re-proves the thread it inherited; only the first
-            // owner of a session may claim to have created it.
-            origin: store.getRecord(SESSION)?.providerHandleChain.length ? 'resumed' : 'created',
-            mintedAtFence: fence,
-            observedAt: NOW
+        acquire: async ({ fence }) => {
+          starts += 1
+          await startGate
+          return {
+            process: {
+              hostId: 'local',
+              pid: 4242,
+              processStartTimeMs: 1_700_000_000_000,
+              spawnToken: store.getRecord(SESSION)?.lease.reservedSpawnToken ?? 'spawn-a'
+            },
+            link: {
+              linkId: `link-${fence}`,
+              handle: codexProviderHandle(THREAD),
+              // A restarted host re-proves the thread it inherited; only the first
+              // owner of a session may claim to have created it.
+              origin: store.getRecord(SESSION)?.providerHandleChain.length ? 'resumed' : 'created',
+              mintedAtFence: fence,
+              observedAt: NOW
+            }
           }
-        }),
+        },
         dispatch: async () => ({
           state: 'accepted',
           providerIdentity: { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 1 }
@@ -656,14 +692,13 @@ describe('cross-version structured agent sessions', () => {
     /** Reopens the store from disk and installs a fresh host over the same journal
      *  root — what a process restart actually leaves behind. */
     async function bootHost(generation: string): Promise<StructuredAgentSessionHost> {
-      store = await AgentSessionRecordStore.open({
-        directory: join(root, 'store'),
-        hostId: 'local'
-      })
+      store = await openTestAgentSessionRecordStore(root)
       const host = new StructuredAgentSessionHost({
+        agents: NO_STRUCTURED_AGENTS,
+        logger: createStructuredAgentSessionLogger(),
         store,
         adapter: adapter(),
-        journalRoot: root,
+        journalDatabase: openTestJournalHostDatabase(root),
         claimKeyId: 'key-1',
         mintSpawnToken: () => `spawn-${generation}`,
         // The provider died with the host that spawned it, which is what makes
@@ -697,14 +732,18 @@ describe('cross-version structured agent sessions', () => {
       return reattached
     }
 
-    async function call(method: string, params: unknown): Promise<RpcReply[]> {
+    async function call(
+      method: string,
+      params: unknown,
+      clientCapabilities: readonly string[] = [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
+    ): Promise<RpcReply[]> {
       return callBuild(
         current,
         method,
         params,
         {
           clientKind: 'runtime',
-          clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY],
+          clientCapabilities,
           clientId: 'paired-device-1',
           connectionId: 'connection-1'
         },
@@ -723,6 +762,7 @@ describe('cross-version structured agent sessions', () => {
 
     beforeEach(async () => {
       resetOperationIds()
+      startGate = Promise.resolve()
       root = await mkdtemp(join(tmpdir(), 'orca-cross-version-agent-session-'))
       runtime = runtimeStub()
       await bootHost('a')
@@ -775,6 +815,58 @@ describe('cross-version structured agent sessions', () => {
         ok: true,
         fence: reattached.fence
       })
+    })
+
+    // A released client answers a send's `pending` as delivered-or-refused; it has no way to show
+    // a rejection that arrives after it. So it is answered once the message is handed over, while
+    // a client that advertises accepted sends is answered at acceptance, start or no start (W9).
+    it('holds the send reply of a released client until the handover, and answers a current one at once', async () => {
+      // Why: the baseline is the newest release, which will itself carry accepted sends.
+      const released = baseline.capabilities.filter(
+        (capability) => capability !== AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY
+      )
+      const created = await answer('agentSession.create', createIntentParams())
+      await bootHost('b')
+      let open = (): void => undefined
+      startGate = new Promise((resolve) => (open = resolve))
+
+      let answered = false
+      const releasedReply = call(
+        'agentSession.send',
+        sendParams('released', created.fence),
+        released
+      ).finally(() => (answered = true))
+      // The start that delivers it is under way, and the reply still waits for it.
+      const before = starts
+      await vi.waitFor(() => expect(starts).toBeGreaterThan(before))
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      expect(answered).toBe(false)
+      open()
+      const [reply] = await releasedReply
+      // Handed over, whatever the provider has said since.
+      expect(reply).toMatchObject({
+        ok: true,
+        result: { value: { submission: { handedOverAt: expect.any(Number) } } }
+      })
+
+      const restarted = await bootHost('c')
+      startGate = new Promise((resolve) => (open = resolve))
+      const currentReply = await call('agentSession.send', sendParams('current', created.fence), [
+        ...released,
+        AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY
+      ])
+      expect(currentReply[0]).toMatchObject({
+        ok: true,
+        result: { value: { submission: { dispatchState: 'pending', handoverRecorded: true } } }
+      })
+      open()
+      await vi.waitFor(async () =>
+        expect(
+          (await restarted.journalSnapshot(SESSION)).submissions.every(
+            (row) => row.dispatchState !== 'pending' || row.handedOverAt
+          )
+        ).toBe(true)
+      )
     })
   })
 })

@@ -85,8 +85,8 @@ function parseValues(resultPath: string): Record<string, string> {
  * Runs an interactive login zsh under a PTY, waits for its first prompt, runs
  * the requested commands, and reports the requested shell variables.
  *
- * Readiness is detected by a sentinel baked into PS1 rather than a fixed sleep,
- * so a slow prompt framework makes the run slower, never flaky.
+ * A PS1 sentinel confirms readiness after the first input; observed output
+ * quiescence gates that input but does not prove startup has finished.
  */
 export async function runZshPty(options: ZshPtyOptions): Promise<ZshPtyRun> {
   const sentinel = '@@ORCA-PTY-READY@@'
@@ -109,7 +109,7 @@ export async function runZshPty(options: ZshPtyOptions): Promise<ZshPtyRun> {
 
   let output = ''
   let answeredCompinit = false
-  let lastDataAt = Date.now()
+  let lastDataAt: number | null = null
   let resolveReady: (() => void) | undefined
   const ready = new Promise<void>((resolve) => {
     resolveReady = resolve
@@ -160,7 +160,8 @@ export async function runZshPty(options: ZshPtyOptions): Promise<ZshPtyRun> {
    */
   async function waitForQuiet(quietMs: number): Promise<void> {
     while (!hasExited) {
-      const idleFor = Date.now() - lastDataAt
+      // Silence before the first output is not evidence that startup has settled.
+      const idleFor = lastDataAt === null ? 0 : Date.now() - lastDataAt
       if (idleFor >= quietMs) {
         return
       }

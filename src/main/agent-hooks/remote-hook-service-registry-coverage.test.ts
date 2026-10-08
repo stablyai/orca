@@ -1,3 +1,4 @@
+import { codebuddyHookService } from '../codebuddy/hook-service'
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({
@@ -19,9 +20,13 @@ import { geminiHookService } from '../gemini/hook-service'
 import { grokHookService } from '../grok/hook-service'
 import { hermesHookService } from '../hermes/hook-service'
 import { kimiHookService } from '../kimi/hook-service'
+import { dshHookService } from '../dsh/hook-service'
 import { museHookService } from '../muse/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
+import { qwenCodeHookService } from '../qwen-code/hook-service'
+import { qoderCnHookService, qoderHookService } from '../qoder/hook-service'
 import { zcodeHookService } from '../zcode/hook-service'
+import { jcodeHookService } from '../jcode/hook-service'
 import { MANAGED_AGENT_HOOK_INSTALLERS } from './managed-agent-hook-controls'
 import { REMOTE_MANAGED_HOOK_INSTALLER_AGENTS } from './remote-managed-hook-installers'
 
@@ -50,7 +55,13 @@ describe('remote hook service registry coverage', () => {
       ['devin', devinHookService],
       ['kimi', kimiHookService],
       ['muse', museHookService],
-      ['zcode', zcodeHookService]
+      ['qoder', qoderHookService],
+      ['qoder-cn', qoderCnHookService],
+      ['qwen-code', qwenCodeHookService],
+      ['codebuddy', codebuddyHookService],
+      ['zcode', zcodeHookService],
+      ['dsh', dshHookService],
+      ['jcode', jcodeHookService]
     ])
 
     // Guard against a service silently missing from the map above as new agents land.

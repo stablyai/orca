@@ -2,11 +2,8 @@ import type { GitRuntimeOptions } from './git-runtime-options'
 import { canonicalWorktreePath } from './worktree-path-comparison'
 import { detectSparseCheckout } from './worktree-sparse-state'
 
-// Why: `git worktree list` only emits a `sparse` porcelain line on newer Git (annotateSparseCheckoutStatus
-// already skips rows where that's set), but Orca's compatibility baseline is Git 2.25, which predates it —
-// so every listing still paid a per-worktree fs.stat + config read on the fallback path, measured at ~9x
-// the cost of the `git worktree list` call it decorates on a 1000-worktree repo. Cache the result, scoped
-// per repo so churn in one repo can't evict another's warm entries.
+// Worktree porcelain omits sparse state, so cache the per-worktree filesystem detection.
+// Keys isolate repositories and distros; one global budget bounds retained results.
 //
 // Invalidation coverage:
 //  - Orca-driven remove/move: explicit calls below (worktree-removal.ts, worktree-move.ts).

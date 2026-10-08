@@ -1,35 +1,34 @@
 import type { z } from 'zod'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
+import type { WorkerDispatchState } from '../../../../orchestration/types'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { clampOrchestrationAskTimeoutMs } from '../../../../../../shared/orchestration-ask-timeout'
 import type { AskParams } from '../schemas'
+import { assertWorkerCanReport } from '../../../../orchestration/worker-report-admission'
 
 export async function askRemoteRunHome(args: {
   params: z.infer<typeof AskParams>
   runtime: OrcaRuntimeService
   signal?: AbortSignal
-  orchestrationCapability?: string
   recordMutationReceipt?: (receipt: unknown) => void
   from: string
   paneKey: string
   dispatchId: string
   taskId: string
+  workerState: WorkerDispatchState
 }): Promise<unknown> {
   const db = args.runtime.getOrchestrationDb()
   const timeoutMs = clampOrchestrationAskTimeoutMs(args.params.timeoutMs)
-  if (
-    !db.verifyRemoteAttachmentAuthority({
+  assertWorkerCanReport({
+    dispatchId: args.dispatchId,
+    from: args.from,
+    workerState: args.workerState,
+    processCurrent: db.isRemoteAttachmentProcessCurrent({
       dispatchId: args.dispatchId,
-      capability: args.orchestrationCapability,
       paneKey: args.paneKey,
       processIncarnation: args.runtime.getTerminalProcessIncarnation(args.from)
     })
-  ) {
-    throw new OrchestrationError(
-      'dispatch_capability_invalid',
-      'The remote Dispatch capability or exact worker process is invalid.'
-    )
-  }
+  })
   const options =
     args.params.options
       ?.split(',')

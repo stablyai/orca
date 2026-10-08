@@ -1,14 +1,11 @@
 import { randomBytes } from 'node:crypto'
-import { copyFile, link, mkdtemp, rm } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
-import { getAppEnvironment } from '../../shared/app-environment'
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
-import { ORCAD_BUN_RELEASE_ASSETS, type OrcadBunTarget } from '../../shared/orcad-bun-runtime'
 import type { SshConnection } from './ssh-connection'
-import { resolveOrcadDeploymentTarget } from './orcad-deployment-target'
-import { materializeCachedOrcadBunRuntime } from './orcad-bun-runtime-materializer'
+import type { RemoteRuntimeStep } from './orcad-remote-node-runtime'
+import { preparePinnedNodeForVault } from './ssh-relay-opencode-pinned-node'
+import { RUNTIME_REF_NODE_PREFIX } from './remote-node-runtime-store-inventory'
 import { execCommand, isUnconfirmedSshCommandTermination } from './ssh-relay-deploy-helpers'
-import { uploadRelayDirectory, writeRelayFile } from './ssh-relay-install-transfers'
+import { writeRelayFile } from './ssh-relay-install-transfers'
 import {
   createRelayUploadStageNamespace,
   relayUploadStageSftpNamespaceMapping
@@ -25,13 +22,12 @@ import {
 } from './ssh-relay-upload-stage-commands'
 import {
   parseOpenCodeRuntimeResult,
-  probeOpenCodeRuntimeCacheCommand,
   probeOpenCodeNodeSqliteCommand,
-  promoteOpenCodeRuntimeCommand,
   publishOpenCodeRuntimeReferenceCommand
 } from './ssh-relay-opencode-runtime-commands'
 
 const SETUP_TIMEOUT_MS = 180_000
+const RUNTIME_REFERENCE_NAME = 'opencode-sqlite-runtime.json'
 export type RemoteOpenCodeRuntimeOutcome =
   | 'ready'
   | 'not-needed'
@@ -41,15 +37,15 @@ const installations = new WeakMap<
   SshConnection,
   { generation: number; byDirectory: Map<string, Promise<RemoteOpenCodeRuntimeOutcome>> }
 >()
-const downloads = new Map<string, Promise<string>>()
 
 type SetupOptions = {
   nodePath: string
+  /** The relay's verified pinned node.exe, if any; stage fencing then needs no Add-Type (D5). */
+  verifiedNodePath?: string
   relayDir: string
   signal?: AbortSignal
   cacheRoot?: string
 }
-type RemoteOperation = <T>(operation: () => Promise<T>) => Promise<T>
 
 /** Optional companion setup; the host's relay and terminals never depend on it. */
 export function ensureRemoteOpenCodeRuntime(
@@ -83,7 +79,7 @@ export function ensureRemoteOpenCodeRuntime(
       throw new Error('SSH connection changed during SQLite runtime setup.')
     }
   }
-  const remote: RemoteOperation = async (operation) => {
+  const remote: RemoteRuntimeStep = async (operation) => {
     signal.throwIfAborted()
     assertCurrentGeneration()
     remotePending = true
@@ -133,7 +129,7 @@ async function install(
   remoteHome: string,
   options: SetupOptions,
   signal: AbortSignal,
-  remote: RemoteOperation
+  remote: RemoteRuntimeStep
 ): Promise<RemoteOpenCodeRuntimeOutcome> {
   const exec = async (command: string): Promise<string> => {
     signal.throwIfAborted()
@@ -156,39 +152,27 @@ async function install(
     throw new Error('The host did not complete its SQLite read probe.')
   }
   let executable = node.executable
-  let target: OrcadBunTarget | undefined
-  let localRuntime: string | undefined
+  let runtimeRef: { path: string; sha256: string } | undefined
+  let identityNode = options.verifiedNodePath
   if (node.status === 'unsupported') {
-    target = await resolveOrcadDeploymentTarget({ conn, host, signal, exec })
-    const expectedHash = ORCAD_BUN_RELEASE_ASSETS[target].executableSha256
-    executable = joinRemotePath(
+    const pinned = await preparePinnedNodeForVault({
+      conn,
       host,
-      remoteHome,
-      RELAY_REMOTE_DIR,
-      'vault-sqlite',
-      expectedHash,
-      isWindowsRemoteHost(host) ? 'bun.exe' : 'bun'
-    )
-    const cached = parseOpenCodeRuntimeResult(
-      await exec(
-        probeOpenCodeRuntimeCacheCommand({
-          host,
-          nodePath: options.nodePath,
-          executable,
-          expectedHash,
-          reference: joinRemotePath(host, options.relayDir, 'opencode-sqlite-runtime.json')
-        })
-      )
-    )
-    if (cached.status === 'ready' && cached.executable) {
-      executable = cached.executable
-    } else if (cached.status === 'missing') {
-      const cacheRoot =
-        options.cacheRoot ?? join(getAppEnvironment().getPath('userData'), 'orcad-artifacts')
-      localRuntime = await cachedRuntime(target, cacheRoot, signal)
-      signal.throwIfAborted()
-    } else {
-      throw new Error('The host did not confirm its SQLite runtime cache.')
+      relayDir: options.relayDir,
+      cacheRoot: options.cacheRoot,
+      signal,
+      exec,
+      remote
+    })
+    executable = pinned.executable
+    identityNode ??= pinned.executable
+    runtimeRef = {
+      path: joinRemotePath(
+        host,
+        options.relayDir,
+        `${RUNTIME_REF_NODE_PREFIX}${pinned.runtimeSha256}`
+      ),
+      sha256: pinned.runtimeSha256
     }
   }
   if (!executable) {
@@ -198,12 +182,13 @@ async function install(
   const relativePool = `${RELAY_REMOTE_DIR}/${RELAY_UPLOAD_STAGE_POOL_NAME}`
   const poolDir = joinRemotePath(host, remoteHome, relativePool)
   const owner = createRelayInstallMarkerFileName()
-  await exec(recoverOneStaleRelayUploadStageCommand(host, poolDir))
+  const identity = identityNode ? { node: identityNode } : undefined
+  await exec(recoverOneStaleRelayUploadStageCommand(host, poolDir, undefined, identity))
   const stage = parseReservedRelayUploadStage(
     host,
     poolDir,
     owner,
-    await exec(reserveRelayUploadStageCommand(host, poolDir, owner))
+    await exec(reserveRelayUploadStageCommand(host, poolDir, owner, identity))
   )
   const stageDir = stage.slotDir
   const namespace = createRelayUploadStageNamespace(`${relativePool}/${stage.slotName}`, owner)
@@ -213,40 +198,7 @@ async function install(
       : undefined
   let cleanupAllowed = true
   try {
-    if (target && localRuntime) {
-      const localStage = await mkdtemp(join(dirname(localRuntime), '.vault-upload-'))
-      try {
-        const binaryName = isWindowsRemoteHost(host) ? 'bun.exe' : 'bun'
-        const localBinary = join(localStage, binaryName)
-        await link(localRuntime, localBinary).catch(() => copyFile(localRuntime, localBinary))
-        signal.throwIfAborted()
-        await remote(() =>
-          uploadRelayDirectory(conn, localStage, joinRemotePath(host, stageDir, 'payload'), host, {
-            signal,
-            sftpNamespace: mapping()
-          })
-        )
-        const promoted = parseOpenCodeRuntimeResult(
-          await exec(
-            promoteOpenCodeRuntimeCommand({
-              host,
-              nodePath: options.nodePath,
-              stagedBinary: joinRemotePath(host, stageDir, 'payload', binaryName),
-              executable,
-              expectedHash: ORCAD_BUN_RELEASE_ASSETS[target].executableSha256,
-              repairToken: token
-            })
-          )
-        )
-        if (promoted.status !== 'ready' || !promoted.executable) {
-          throw new Error('The host did not verify the uploaded SQLite runtime.')
-        }
-        executable = promoted.executable
-      } finally {
-        await rm(localStage, { recursive: true, force: true }).catch(() => {})
-      }
-    }
-    const referenceName = 'opencode-sqlite-runtime.json'
+    const referenceName = RUNTIME_REFERENCE_NAME
     const stagedReference = joinRemotePath(host, stageDir, 'payload', referenceName)
     signal.throwIfAborted()
     await remote(() =>
@@ -262,7 +214,8 @@ async function install(
           nodePath: options.nodePath,
           stagedReference,
           reference: joinRemotePath(host, options.relayDir, referenceName),
-          token
+          token,
+          runtimeRef
         })
       )
     )
@@ -272,27 +225,13 @@ async function install(
     throw error
   } finally {
     if (cleanupAllowed && !signal.aborted) {
-      await exec(cleanupOwnedRelayUploadStageCommand(host, stage, owner)).catch((error) => {
-        if (isUnconfirmedSshCommandTermination(error)) {
-          throw error
+      await exec(cleanupOwnedRelayUploadStageCommand(host, stage, owner, identity)).catch(
+        (error) => {
+          if (isUnconfirmedSshCommandTermination(error)) {
+            throw error
+          }
         }
-      })
+      )
     }
   }
-}
-
-function cachedRuntime(
-  target: OrcadBunTarget,
-  cacheRoot: string,
-  signal: AbortSignal
-): Promise<string> {
-  const key = `${cacheRoot}\0${target}`
-  let pending = downloads.get(key)
-  if (!pending) {
-    pending = materializeCachedOrcadBunRuntime(target, cacheRoot, {
-      signal: AbortSignal.timeout(SETUP_TIMEOUT_MS)
-    }).finally(() => downloads.delete(key))
-    downloads.set(key, pending)
-  }
-  return waitForPromiseWithSignal(pending, signal)
 }

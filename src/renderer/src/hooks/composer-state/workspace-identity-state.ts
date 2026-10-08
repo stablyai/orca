@@ -20,7 +20,7 @@ import { getLinkedWorkItemProvider, isGitLabIssueUrl } from '@/lib/new-workspace
 import {
   type SmartNameMode,
   isBlockingJiraUrlIntent
-} from '@/components/new-workspace/smart-workspace-source-results'
+} from '../../../../shared/new-workspace/smart-workspace-source-results'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { filterEnabledTuiAgents, isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'

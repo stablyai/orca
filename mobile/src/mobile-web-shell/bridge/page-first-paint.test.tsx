@@ -188,29 +188,4 @@ describe('which commit the page reports its frame from', () => {
     })
     expect(reports).toBe(1)
   })
-
-  it('reports the screen that arrived and not the one that replaced it', async () => {
-    const route = deferredRouteChunk()
-    const Screen = lazy(() => route.chunk.then(withRouteScreenPaintReport))
-    let reports = 0
-    await act(async () => {
-      create(
-        <RouteScreenPaintProvider
-          report={() => {
-            reports += 1
-            return () => undefined
-          }}
-        >
-          <Suspense fallback={null}>
-            <Screen />
-          </Suspense>
-        </RouteScreenPaintProvider>
-      )
-    })
-    await act(async () => {
-      route.arrive()
-    })
-    // Once per screen that commits: the shell latches the first, and a re-render is not a new one.
-    expect(reports).toBe(1)
-  })
 })

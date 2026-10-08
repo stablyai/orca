@@ -1,18 +1,21 @@
 import { existsSync, globSync, readFileSync } from 'node:fs'
+import { runInNewContext } from 'node:vm'
 import { parse } from 'yaml'
 import { describe, expect, it } from 'vitest'
-import { mobileWebCheckArgs } from './run-mobile-web-app-checks.mjs'
+import { UNIT_EXCLUDE } from './ci-unit-files.mjs'
 import { MOBILE_WEB_APP_DEPENDENCIES_REQUIRED_ENV } from './mobile-web-app-bundle-dependencies.mjs'
 
 const workflow = parse(readFileSync('.github/workflows/pr.yml', 'utf8'))
 const prTestLocWorkflow = parse(readFileSync('.github/workflows/pr-test-loc.yml', 'utf8'))
-const trackingWorkflow = parse(readFileSync('.github/workflows/track-community-prs.yaml', 'utf8'))
 const releasePolicyWorkflow = parse(readFileSync('.github/workflows/release-policy.yml', 'utf8'))
 const issueLabelWorkflow = parse(readFileSync('.github/workflows/issue-os-labeler.yaml', 'utf8'))
 const unitTestWorkflow = parse(readFileSync('.github/workflows/unit-tests.yml', 'utf8'))
 const nodeNextWorkflow = parse(readFileSync('.github/workflows/node-next-compat.yml', 'utf8'))
 const dependencyAction = parse(
   readFileSync('.github/actions/install-node-dependencies/action.yml', 'utf8')
+)
+const nativeAction = parse(
+  readFileSync('.github/actions/prepare-native-runtime/action.yml', 'utf8')
 )
 const packageJson = JSON.parse(readFileSync('package.json', 'utf8'))
 const pnpmWorkspace = parse(readFileSync('pnpm-workspace.yaml', 'utf8'))
@@ -24,9 +27,11 @@ const shellContractFiles = [
   'src/main/pty/omp-shell-wrapper-alias-safety.test.ts',
   'src/main/pty/omp-shell-wrapper.node-pty.test.ts',
   'src/main/shell-startup-feature-channel.test.ts',
+  'src/main/zsh-deferred-startup-line-init.live-shell.test.ts',
   'src/main/zsh-scoped-histfile.live-shell.test.ts',
   'src/main/zsh-startup-hook-user-config-equivalence.live-shell.test.ts',
   'src/main/zsh-wrapper-version-mismatch.live-shell.test.ts',
+  'src/main/runtime/structured-session-cli-login-shell.live-shell.test.ts',
   'src/shared/posix-command-path-lookup.test.ts'
 ]
 const patchedNodePtyContractFiles = [
@@ -45,15 +50,14 @@ const testFilePatterns = [
 // rather than calling spawnSync('zsh') themselves. Without this branch the rule
 // silently stops noticing the very tests that need the lane's zsh install.
 const realZshUsage =
-  /(?:spawnSync|execFileSync|spawn)\(\s*['"](?:\/(?:usr\/)?bin\/)?zsh['"]|spawnSync\(\s*['"]which['"]\s*,\s*\[\s*['"]zsh['"]|name:\s*['"]zsh['"]\s*,\s*path:\s*executablePath|from '[^']*zsh-startup-hook-pty-harness'/
+  /(?:spawnSync|execFileSync|spawn)\(\s*['"](?:\/(?:usr\/)?bin\/)?zsh['"]|program:\s*['"](?:\/(?:usr\/)?bin\/)?zsh['"]|spawnSync\(\s*['"]which['"]\s*,\s*\[\s*['"]zsh['"]|name:\s*['"]zsh['"]\s*,\s*path:\s*executablePath|from '[^']*zsh-startup-hook-pty-harness'/
 
 describe('PR workflow parallelism', () => {
   it('keeps lightweight orchestration jobs on the free slim runner', () => {
     expect(workflow.jobs.code_paths['runs-on']).toBe('ubuntu-slim')
-    expect(workflow.jobs.typecheck['runs-on']).toBe('ubuntu-24.04-arm')
+    expect(workflow.jobs.preflight['runs-on']).toBe('ubuntu-24.04-arm')
     expect(workflow.jobs.verify['runs-on']).toBe('ubuntu-slim')
     expect(prTestLocWorkflow.jobs.loc['runs-on']).toBe('ubuntu-slim')
-    expect(trackingWorkflow.jobs['track-community-pr']['runs-on']).toBe('ubuntu-slim')
     expect(releasePolicyWorkflow.jobs.enforce['runs-on']).toBe('ubuntu-slim')
     expect(issueLabelWorkflow.jobs['apply-os-label']['runs-on']).toBe('ubuntu-slim')
   })
@@ -70,13 +74,13 @@ describe('PR workflow parallelism', () => {
     expect(workflow.permissions).toEqual({ contents: 'read' })
   })
 
-  it('runs all eight shards on ARM for PRs and both Node versions on x86 daily', () => {
+  it('runs PR shards on ARM and both Node versions on x86 daily', () => {
     const sharedTest = unitTestWorkflow.jobs.test
     const testStep = sharedTest.steps.find((step) => step.name === 'Test shard')
     const installStep = sharedTest.steps.find(
       (step) => step.uses === './.github/actions/install-node-dependencies'
     )
-    const primerInstall = workflow.jobs.test_native_cache.steps.find(
+    const staticInstall = workflow.jobs.preflight.steps.find(
       (step) => step.uses === './.github/actions/install-node-dependencies'
     )
     const nodeNextPrimerInstall = nodeNextWorkflow.jobs.test_native_cache.steps.find(
@@ -88,7 +92,7 @@ describe('PR workflow parallelism', () => {
     expect(nodeNextWorkflow.jobs.test.uses).toBe('./.github/workflows/unit-tests.yml')
     expect(JSON.parse(nodeNextWorkflow.jobs.test.with.node_versions)).toEqual(['24', '26'])
     expect(workflow.jobs.test.with.runner).toBe('ubuntu-24.04-arm')
-    expect(workflow.jobs.test_native_cache['runs-on']).toBe('ubuntu-24.04-arm')
+    expect(workflow.jobs.preflight['runs-on']).toBe('ubuntu-24.04-arm')
     expect(sharedTest['runs-on']).toBe('${{ inputs.runner }}')
     expect(unitTestWorkflow.on.workflow_call.inputs.runner.default).toBe('ubuntu-latest')
     expect(nodeNextWorkflow.jobs.test.with.runner).toBeUndefined()
@@ -105,22 +109,24 @@ describe('PR workflow parallelism', () => {
     expect(nodeNextWorkflow.on.schedule).toHaveLength(1)
     expect(nodeNextWorkflow.on.workflow_dispatch).toBeNull()
     expect(sharedTest.strategy.matrix.node).toBe('${{ fromJSON(inputs.node_versions) }}')
-    expect(sharedTest.strategy.matrix.shard).toEqual(
-      Array.from({ length: 8 }, (_, index) => index + 1)
-    )
-    expect(sharedTest.strategy.matrix.shard_total).toEqual([8])
+    expect(sharedTest.strategy.matrix.shard).toBe('${{ fromJSON(inputs.shards) }}')
+    // PR planning overlaps typecheck; the daily suite keeps its separate planner.
+    expect(sharedTest.needs).toBeUndefined()
+    expect(unitTestWorkflow.jobs.plan).toBeUndefined()
+    expect(unitTestWorkflow.on.workflow_call.inputs.shards.required).toBe(true)
     expect(installStep.with['node-version']).toBe('${{ matrix.node }}')
     expect(installStep.with['cache-electron-package']).toBe('true')
-    expect(testStep.run).toContain('--shard=${{ matrix.shard }}/${{ matrix.shard_total }}')
+    expect(testStep.run).toContain('--shard=${{ matrix.shard.index }}/${{ matrix.shard.count }}')
     for (const testFile of nativeShellContractFiles) {
-      expect(testStep.run).toContain(`--exclude=${testFile}`)
+      expect(UNIT_EXCLUDE).toContain(testFile)
     }
-    expect(primerInstall.with['native-runtime']).toBe('node')
-    expect(primerInstall.with['node-version']).toBe('24')
-    expect(workflow.jobs.test.needs).toContain('test_native_cache')
+    expect(staticInstall.with['native-runtime']).toBe('node')
+    expect(staticInstall.with['node-version']).toBe('24')
+    expect(workflow.jobs.test.needs).toContain('preflight')
+    expect(workflow.jobs.test_native_cache).toBeUndefined()
     expect(nodeNextPrimerInstall.with['native-runtime']).toBe('node')
     expect(nodeNextPrimerInstall.with['node-version']).toBe('${{ matrix.node }}')
-    expect(nodeNextWorkflow.jobs.test.needs).toEqual(['test_native_cache'])
+    expect(nodeNextWorkflow.jobs.test.needs).toEqual(['test_native_cache', 'unit_plan'])
   })
 
   it('runs real-shell coverage once outside the general shards', () => {
@@ -218,6 +224,27 @@ describe('PR workflow parallelism', () => {
     expect(installStep.run).toMatch(/timeout \d+ sudo apt-get install/)
   })
 
+  it('bounds package tooling refresh and keeps required installation fatal', () => {
+    const steps = workflow.jobs.package.steps
+    const installStep = steps.find((step) => step.id === 'linux-package-tools')
+    const commands = installStep.run
+      .split('\n')
+      .filter((line) => !line.trim().startsWith('#'))
+      .join('\n')
+
+    expect(installStep.background).toBe(true)
+    expect(commands).toContain('Acquire::http::Timeout "15";')
+    expect(commands).toContain('Acquire::https::Timeout "15";')
+    expect(commands).toContain('Acquire::Retries "1";')
+    expect(commands).toMatch(/^timeout 120 sudo apt-get update \|\| true$/m)
+    expect(commands).toMatch(/^timeout 300 sudo apt-get install -y cpio rpm$/m)
+    expect(commands.trim().split('\n').at(-1)).toBe('timeout 300 sudo apt-get install -y cpio rpm')
+    expect(steps.find((step) => step.wait?.includes('linux-package-tools')).wait).toEqual([
+      'linux-package-tools',
+      'web-client'
+    ])
+  })
+
   it('keeps every real-zsh test in the dedicated shell lane', () => {
     const discoveredFiles = globSync(testFilePatterns)
       // Why this file is excluded: it carries the detector pattern as a literal
@@ -281,11 +308,12 @@ describe('PR workflow parallelism', () => {
     expect(pnpmIndex).toBeLessThan(nodeIndex)
     expect(pnpmIndex).toBeLessThan(requestedNodeIndex)
     const packageManagerVersion = /^pnpm@([^+]+)/.exec(packageJson.packageManager)?.[1]
-    expect(packageManagerVersion).toBe('12.0.0')
+    expect(packageManagerVersion).toBe('12.8.1')
     expect(steps[pnpmIndex].uses).toBe('pnpm/setup@v2')
     expect(steps[pnpmIndex].with.version).toBeUndefined()
     expect(steps[pnpmIndex].with.install).toBe(false)
-    const saveOutsidePrs = "${{ github.event_name != 'pull_request' && 'pnpm' || '' }}"
+    const saveOutsidePrs =
+      "${{ github.event_name != 'pull_request' && inputs.cache-pnpm-store != 'false' && steps.pnpm-store-mode.outputs.lookup-only != 'true' && 'pnpm' || '' }}"
     expect(steps[nodeIndex].with.cache).toBe(saveOutsidePrs)
     expect(steps[nodeIndex].if).toBe("inputs.node-version == ''")
     expect(steps[requestedNodeIndex].if).toBe("inputs.node-version != ''")
@@ -299,6 +327,9 @@ describe('PR workflow parallelism', () => {
       steps.findIndex((step) => step.name === 'Install dependencies')
     )
     expect(steps[restoreIndex].uses).toBe('actions/cache/restore@v5')
+    expect(steps[restoreIndex].if).toBe(
+      "github.event_name == 'pull_request' && inputs.cache-pnpm-store != 'false' && !((runner.os == 'Linux' || runner.os == 'macOS') && (runner.arch == 'X64' || runner.arch == 'ARM64') && inputs.cache-dependency-path == 'pnpm-lock.yaml') && (runner.os != 'Windows' || !(runner.arch == 'X64' && contains(inputs.cache-dependency-path, 'mobile/pnpm-lock.yaml')) && !((runner.arch == 'X64' || runner.arch == 'ARM64') && inputs.cache-dependency-path == 'pnpm-lock.yaml'))"
+    )
   })
 
   it('uses the repository package-manager version for every direct pnpm setup', () => {
@@ -339,10 +370,11 @@ describe('PR workflow parallelism', () => {
       (step) => step.uses === './.github/actions/install-node-dependencies'
     )
 
-    for (const jobName of ['typecheck', 'git_compatibility', 'xterm_patch_sync']) {
+    for (const jobName of ['git_compatibility']) {
       expect(installFor(jobName).with, jobName).toBeUndefined()
     }
-    expect(installFor('static_analysis').with['native-runtime']).toBe('node')
+    expect(installFor('xterm_patch_sync')).toBeUndefined()
+    expect(installFor('preflight').with['native-runtime']).toBe('node')
     expect(installFor('shell_contracts').with['native-runtime']).toBe('node')
     expect(sharedTestInstall.with['native-runtime']).toBe('node')
     expect(installFor('package').with['native-runtime']).toBe('electron')
@@ -355,9 +387,9 @@ describe('PR workflow parallelism', () => {
     ).toBe("steps.deps.outputs.native-cache-hit != 'true'")
 
     expect(dependencyAction.inputs['persist-native-cache'].default).toBe('true')
-    expect(
-      dependencyAction.runs.steps.find((step) => step.name === 'Use external node-gyp').if
-    ).toBe("runner.os == 'Linux' && inputs.native-runtime != 'none'")
+    expect(nativeAction.runs.steps.find((step) => step.name === 'Use external node-gyp').if).toBe(
+      "runner.os == 'Linux' && inputs.native-runtime == 'node'"
+    )
     const dependencyInstall = dependencyAction.runs.steps.find(
       (step) => step.name === 'Install dependencies'
     )
@@ -378,7 +410,13 @@ describe('PR workflow parallelism', () => {
       (step) => step.name === 'Prepare native runtime'
     )
     expect(prepareRuntime.if).toBe("inputs.native-runtime != 'none'")
-    expect(prepareRuntime.run).toContain('ensure-native-runtime.mjs --runtime="$NATIVE_RUNTIME"')
+    expect(prepareRuntime.uses).toBe('./.github/actions/prepare-native-runtime')
+    expect(prepareRuntime.with).toEqual({
+      'native-runtime': '${{ inputs.native-runtime }}',
+      'node-version':
+        '${{ steps.requested-node.outputs.node-version || steps.default-node.outputs.node-version }}',
+      'persist-native-cache': '${{ inputs.persist-native-cache }}'
+    })
   })
 
   it('reuses native preparation after the dependency action gate', () => {
@@ -394,14 +432,16 @@ describe('PR workflow parallelism', () => {
   })
 
   it('restores compiled native modules after the install that strips them', () => {
-    const steps = dependencyAction.runs.steps
-    const installIndex = steps.findIndex((step) => step.name === 'Install dependencies')
+    const installerSteps = dependencyAction.runs.steps
+    const installIndex = installerSteps.findIndex((step) => step.name === 'Install dependencies')
+    const nativeIndex = installerSteps.findIndex((step) => step.id === 'native-runtime')
+    expect(installIndex).toBeLessThan(nativeIndex)
+    const steps = nativeAction.runs.steps
     const cacheIndex = steps.findIndex((step) => step.name === 'Restore compiled native modules')
     const prepareIndex = steps.findIndex((step) => step.name === 'Prepare native runtime')
 
     // `--ignore-scripts` leaves no build/, so a restore before the install would be
     // overwritten and one after the rebuild would never save a hit.
-    expect(installIndex).toBeLessThan(cacheIndex)
     expect(cacheIndex).toBeLessThan(prepareIndex)
     expect(steps[cacheIndex].if).toBe(
       "inputs.native-runtime != 'none' && inputs.persist-native-cache != 'false'"
@@ -416,20 +456,8 @@ describe('PR workflow parallelism', () => {
     // Native artifacts are ABI-bound: a key missing either dimension serves a build
     // that cannot load, and ensure-native-runtime would recompile it anyway.
     for (const cacheStep of [steps[cacheIndex], restoreOnly]) {
-      expect(cacheStep.with.key).toContain('${{ inputs.native-runtime }}')
-      expect(cacheStep.with.key).toContain('${{ runner.os }}')
-      expect(cacheStep.with.key).toContain('${{ runner.arch }}')
-      expect(cacheStep.with.key).toContain(
-        'steps.requested-node.outputs.node-version || steps.default-node.outputs.node-version'
-      )
-      expect(cacheStep.with.key).toContain('steps.native-cache-scope.outputs.scope')
-      expect(cacheStep.with.key).toContain('config/patches/node-pty@1.1.0.patch')
-      expect(cacheStep.with.key).toContain(
-        'config/patches/@vscode__windows-process-tree@0.8.0.patch'
-      )
-      expect(cacheStep.with.key).toContain('.github/actions/install-node-dependencies/action.yml')
-      expect(cacheStep.with.key).toContain('config/scripts/ensure-native-runtime.mjs')
-      expect(cacheStep.with.key).toContain('config/scripts/rebuild-native-deps.mjs')
+      expect(cacheStep.with.key).toBe('${{ steps.native-cache-scope.outputs.key }}')
+      expect(cacheStep.with.path).not.toContain('${{')
       expect(cacheStep.with.path).toContain('node-pty@*/node_modules/node-pty/build')
       expect(cacheStep.with.path).toContain('native/windows-registry/build')
       expect(cacheStep.with.path).toContain('@vscode+windows-process-tre*')
@@ -440,30 +468,39 @@ describe('PR workflow parallelism', () => {
     const cacheScope = steps.find((step) => step.name === 'Resolve native cache scope')
     expect(cacheScope.if).toBe("inputs.native-runtime != 'none'")
     expect(cacheScope.run).toContain('/etc/os-release')
-    expect(dependencyAction.outputs['native-cache-scope'].value).toBe(
+    expect(nativeAction.outputs['cache-scope'].value).toBe(
       '${{ steps.native-cache-scope.outputs.scope }}'
     )
-    expect(dependencyAction.outputs['native-cache-hit'].value).toContain(
+    expect(nativeAction.outputs['cache-hit'].value).toContain(
       'steps.native-cache-restore.outputs.cache-hit'
     )
-    expect(dependencyAction.outputs['native-cache-hit'].value).toContain(
+    expect(nativeAction.outputs['cache-hit'].value).toContain(
       'steps.native-cache-restore-only.outputs.cache-hit'
     )
-    const electronCache = steps.find((step) => step.name === 'Cache Electron package archive')
-    const electronCacheResolution = steps.find(
+    for (const output of ['scope', 'hit', 'key', 'path']) {
+      expect(dependencyAction.outputs[`native-cache-${output}`].value).toBe(
+        `\${{ steps.native-runtime.outputs.cache-${output} }}`
+      )
+    }
+    const electronCache = installerSteps.find(
+      (step) => step.name === 'Cache Electron package archive'
+    )
+    const electronCacheResolution = installerSteps.find(
       (step) => step.name === 'Resolve Electron package cache'
     )
     expect(electronCacheResolution.if).toBe(
       "inputs.native-runtime == 'electron' || inputs.cache-electron-package == 'true'"
     )
-    expect(electronCache.if).toBe(electronCacheResolution.if)
+    expect(electronCache.if).toBe(
+      "(github.event_name != 'pull_request' || runner.os != 'Linux') && steps.electron-package-cache.outputs.version != ''"
+    )
     expect(electronCache.uses).toBe('actions/cache@v5')
     expect(electronCache.with.key).toContain('steps.electron-package-cache.outputs.version')
     expect(dependencyAction.inputs['cache-electron-package'].default).toBe('false')
   })
 
   it('reuses TypeScript incremental state across typecheck runs', () => {
-    const steps = workflow.jobs.typecheck.steps
+    const steps = workflow.jobs.preflight.steps
     const cacheIndex = steps.findIndex((step) => step.name === 'Cache TypeScript incremental state')
     const checkIndex = steps.findIndex((step) => step.run === 'pnpm run typecheck')
 
@@ -494,11 +531,41 @@ describe('PR workflow parallelism', () => {
     }
   })
 
+  it('keeps advisory unit-selection evidence off the gate', () => {
+    // It is continue-on-error, so it can never fail a PR. Living inside unit-tests.yml made a
+    // caller's `needs: test` wait for it anyway, holding verify ~36s past the last shard. Pinned
+    // here so it cannot drift back onto the critical path.
+    const evidence = workflow.jobs.unit_selection_evidence
+    expect(evidence.uses).toBe('./.github/workflows/unit-selection-evidence.yml')
+    expect(evidence.needs).toEqual(['test'])
+    for (const [result, cancelled, expected] of [
+      ['success', false, true],
+      ['failure', false, true],
+      ['skipped', false, false],
+      ['cancelled', false, false],
+      ['success', true, false],
+      ['failure', true, false]
+    ]) {
+      expect(
+        runInNewContext(evidence.if.slice(3, -2), {
+          cancelled: () => cancelled,
+          needs: { test: { result } }
+        })
+      ).toBe(expected)
+    }
+    expect(workflow.jobs.verify.needs).not.toContain('unit_selection_evidence')
+    expect(unitTestWorkflow.jobs.selection_evidence).toBeUndefined()
+    const evidenceWorkflow = parse(
+      readFileSync('.github/workflows/unit-selection-evidence.yml', 'utf8')
+    )
+    const job = evidenceWorkflow.jobs.selection_evidence
+    expect(job['continue-on-error']).toBe(true)
+  })
+
   it('keeps verify as the aggregate required check', () => {
     expect(workflow.jobs.verify.needs).toEqual([
       'code_paths',
-      'static_analysis',
-      'typecheck',
+      'preflight',
       'git_compatibility',
       'codex_index_heal_contract',
       'xterm_patch_sync',
@@ -538,12 +605,5 @@ describe('PR workflow parallelism', () => {
     expect(step.run).toContain('node config/scripts/run-mobile-web-app-checks.mjs')
     expect(step.run).not.toContain('--prepare-route-snapshot')
     expect(step.env[MOBILE_WEB_APP_DEPENDENCIES_REQUIRED_ENV]).toBe('1')
-    expect(mobileWebCheckArgs).toEqual([
-      'run',
-      '--config',
-      'config/vitest.config.ts',
-      'config/scripts/mobile-web-app-',
-      'config/scripts/build-mobile-web-app-bundle.test.mjs'
-    ])
   })
 })

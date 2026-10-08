@@ -1,17 +1,8 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "terminal.query-reply",
   "family": "terminal.query-reply",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "02a55944347346065453e179e071e64d9ae861dc",
-  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
-  "recorderSha256": "0317fe2aebe4743ce5e7ae194531aa91b4fe0a84df457640851fe6dfdb9362af",
-  "adapterSha256": "7588d30f33a8bb846c48f160aa9a4a8138176662bb2fb6be7bbdf352f553d05f",
-  "scenarioSha256": "bfa1d5f83b4112d3cce6a19e9dc27daf9281ed99745bc01bd19226dd7b268c71",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "11a49f853eb8": {
       "accepted": true

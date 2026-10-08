@@ -12,7 +12,7 @@ import type { BuildPtyHostEnvOptions } from './types'
 
 const fixture = vi.hoisted(() => ({ userData: '', guestOverlay: '' }))
 vi.mock('../../../../shared/app-environment', () => ({
-  getAppEnvironment: () => ({ getPath: () => fixture.userData })
+  getAppEnvironment: () => ({ getPath: () => fixture.userData, onWillQuit: vi.fn() })
 }))
 vi.mock('../../../agent-hooks/server', () => ({
   agentHookServer: { buildPtyEnv: () => ({ ORCA_AGENT_HOOK_PORT: '12345' }) }
@@ -77,6 +77,107 @@ afterEach(() => {
 })
 
 describe('OpenCode installation uses the current enabled agents', () => {
+  it.each(
+    process.platform === 'win32' ? (['home', 'xdg'] as const) : (['home', 'xdg', 'shell'] as const)
+  )(
+    'consumer config root follows the %s execution environment without redirecting JSON',
+    (kind) => {
+      const home = join(root, 'consumer-home')
+      const xdg = join(root, 'consumer-xdg')
+      const consumer = kind === 'home' ? join(home, '.config', 'opencode') : join(xdg, 'opencode')
+      mkdirSync(home, { recursive: true })
+      mkdirSync(consumer, { recursive: true })
+      const settings = '{"model":"consumer-model","description":"external-settings"}'
+      writeFileSync(join(consumer, 'opencode.json'), settings)
+      if (kind === 'shell') {
+        writeFileSync(join(home, '.zshrc'), `export XDG_CONFIG_HOME='${xdg}'\n`)
+      }
+      const input = {
+        HOME: home,
+        USERPROFILE: home,
+        XDG_CONFIG_HOME: kind === 'xdg' ? xdg : '',
+        SHELL: kind === 'shell' ? '/bin/zsh' : '/bin/sh'
+      }
+      const env = buildPtyHostEnv(
+        'folder-pane',
+        { ...input },
+        { ...options, launchAgent: 'opencode' }
+      )
+      expect(existsSync(plugin(consumer, 'opencode'))).toBe(true)
+      expect(existsSync(plugin(config, 'opencode'))).toBe(false)
+      expect(readFileSync(join(consumer, 'opencode.json'), 'utf8')).toBe(settings)
+      expect(env.OPENCODE_CONFIG_DIR).toBeUndefined()
+      for (const key of ['HOME', 'USERPROFILE', 'XDG_CONFIG_HOME', 'SHELL'] as const) {
+        expect(env[key]).toBe(input[key])
+      }
+    }
+  )
+
+  it.skipIf(process.platform === 'win32').each([
+    { selected: '/bin/bash', inherited: '/bin/zsh', file: '.bash_profile' },
+    { selected: '/bin/zsh', inherited: '/bin/bash', file: '.zshrc' }
+  ])('consumer config follows selected $selected over inherited $inherited', (selection) => {
+    const home = join(root, 'selected-shell-home')
+    const selectedXdg = join(root, 'selected-shell-xdg')
+    const inheritedXdg = join(root, 'inherited-shell-xdg')
+    mkdirSync(home)
+    writeFileSync(
+      join(home, '.bash_profile'),
+      `export XDG_CONFIG_HOME='${selection.file === '.bash_profile' ? selectedXdg : inheritedXdg}'\n`
+    )
+    writeFileSync(
+      join(home, '.zshrc'),
+      `export XDG_CONFIG_HOME='${selection.file === '.zshrc' ? selectedXdg : inheritedXdg}'\n`
+    )
+    const input = { HOME: home, USERPROFILE: home, XDG_CONFIG_HOME: '', SHELL: selection.inherited }
+    const launchOptions = {
+      ...options,
+      launchAgent: 'opencode' as const,
+      shellPath: selection.selected
+    }
+    const env = buildPtyHostEnv('selected-shell-pane', input, launchOptions)
+    expect(existsSync(plugin(join(selectedXdg, 'opencode'), 'opencode'))).toBe(true)
+    expect(existsSync(plugin(join(inheritedXdg, 'opencode'), 'opencode'))).toBe(false)
+    expect(env.SHELL).toBe(selection.inherited)
+    expect(env.OPENCODE_CONFIG_DIR).toBeUndefined()
+  })
+
+  it.each([false, true])('consumer config root is untouched with hooks disabled %s', (disabled) => {
+    const consumer = join(root, 'disabled-consumer')
+    buildPtyHostEnv(
+      'pane',
+      { XDG_CONFIG_HOME: consumer },
+      {
+        ...options,
+        agentStatusHooksEnabled: disabled,
+        disabledTuiAgents: disabled ? ['opencode', 'opencode2'] : []
+      }
+    )
+    expect(existsSync(join(consumer, 'opencode'))).toBe(false)
+  })
+
+  it('refuses spawn if a prepared startup intent loses its owned installer', () => {
+    mkdirSync(fixture.userData, { recursive: true })
+    writeFileSync(
+      join(fixture.userData, 'opencode-startup-prompt-overlays'),
+      'blocked fixture root'
+    )
+    expect(() =>
+      buildPtyHostEnv(
+        'owned-launch',
+        {
+          OPENCODE_CONFIG_DIR: custom,
+          ORCA_OPENCODE_PLUGIN_API: 'v2',
+          ORCA_OPENCODE_STARTUP_PROMPT_NONCE: 'fixture-nonce',
+          ORCA_OPENCODE_STARTUP_PROMPT_BODY: 'original caller brief'
+        },
+        { ...options, agentStatusHooksEnabled: false }
+      )
+    ).toThrow('launch was canceled')
+    expect(readFileSync(join(custom, 'opencode.json'), 'utf8')).toBe('{"model":"fixture"}')
+    expect(readFileSync(join(custom, 'plugins', 'user.js'), 'utf8')).toBe('// user plugin')
+  })
+
   const combinations = [
     { disabled: [], fallback: 'opencode' },
     { disabled: ['opencode'], fallback: 'opencode2' },
@@ -365,3 +466,131 @@ it.each([true, false])(
     expect(existsSync(config)).toBe(false)
   }
 )
+
+// Why: pre-1.4.209 panes exported Orca's retired <userData>/opencode-hooks/shared dir. OpenCode 2
+// treats OPENCODE_CONFIG_DIR as the only config dir, so inheriting it loaded a stale plugin and hid
+// the user's global config.
+describe.each([
+  { name: 'marked', marked: true },
+  { name: 'unmarked', marked: false }
+])('inherited retired shared hooks dir ($name)', ({ marked }) => {
+  it.each([
+    { agent: 'opencode', hooksDir: 'opencode-hooks' },
+    { agent: 'opencode', hooksDir: 'opencode2-hooks' },
+    { agent: 'opencode2', hooksDir: 'opencode-hooks' },
+    { agent: 'opencode2', hooksDir: 'opencode2-hooks' }
+  ] as const)('drops $hooksDir for $agent panes', ({ agent, hooksDir }) => {
+    const legacy = join(fixture.userData, hooksDir, 'shared')
+    mkdirSync(join(legacy, 'plugins'), { recursive: true })
+    const env = buildPtyHostEnv(
+      'pane',
+      marked
+        ? { OPENCODE_CONFIG_DIR: legacy, ORCA_OPENCODE_CONFIG_DIR: legacy }
+        : { OPENCODE_CONFIG_DIR: legacy },
+      { ...options, launchAgent: agent }
+    )
+    expect(env.OPENCODE_CONFIG_DIR).toBeUndefined()
+    expect(env.ORCA_OPENCODE_CONFIG_DIR).toBeUndefined()
+    expect(env.ORCA_OPENCODE_SOURCE_CONFIG_DIR).toBeUndefined()
+    expect(existsSync(plugin(config, agent))).toBe(true)
+    expect(existsSync(join(fixture.userData, `${agent}-config-overlays`))).toBe(false)
+  })
+})
+
+it('keeps a user config dir that merely sits beside the retired hooks dir', () => {
+  const neighbour = join(fixture.userData, 'opencode-hooks', 'mine')
+  mkdirSync(neighbour, { recursive: true })
+  const env = buildPtyHostEnv('pane', { OPENCODE_CONFIG_DIR: neighbour }, options)
+  expect(env.ORCA_OPENCODE_SOURCE_CONFIG_DIR).toBe(neighbour)
+  expect(env.OPENCODE_CONFIG_DIR).not.toBeUndefined()
+})
+
+it.each(['explicit', 'inherited'])('refreshes the %s stale plugin with hooks off', (source) => {
+  const legacy = join(fixture.userData, 'opencode-hooks', 'shared')
+  const stalePlugin = join(legacy, 'plugins', 'orca-opencode-status.js')
+  mkdirSync(join(legacy, 'plugins'), { recursive: true })
+  writeFileSync(stalePlugin, 'export default { id: "orca-opencode-status", server() {} }\n')
+  if (source === 'inherited') {
+    vi.stubEnv('OPENCODE_CONFIG_DIR', legacy)
+  }
+  const env = buildPtyHostEnv(
+    'pane',
+    source === 'explicit' ? { OPENCODE_CONFIG_DIR: legacy } : {},
+    { ...options, agentStatusHooksEnabled: false }
+  )
+  expect(env.OPENCODE_CONFIG_DIR).toBeUndefined()
+  expect(readFileSync(stalePlugin, 'utf8')).toContain('setup')
+})
+
+it.each([true, false])('strips daemon-inherited retired paths (known to main: %s)', (known) => {
+  const legacy = join(fixture.userData, 'opencode-hooks', 'shared')
+  if (known) {
+    vi.stubEnv('OPENCODE_CONFIG_DIR', legacy)
+  }
+  const env = buildPtyHostEnv('pane', {}, { ...options, agentStatusHooksEnabled: false })
+  vi.stubEnv('ORCA_USER_DATA_PATH', fixture.userData)
+  vi.stubEnv('OPENCODE_CONFIG_DIR', legacy)
+  const request = { sessionId: 'pane', cols: 80, rows: 24, cwd: root, env }
+  const result = createDaemonPtyEnvironment(request)
+  expect(result.OPENCODE_CONFIG_DIR).toBeUndefined()
+  result.OPENCODE_CONFIG_DIR = legacy
+  rescrubDaemonPtyEnvironment(result, request)
+  expect(result.OPENCODE_CONFIG_DIR).toBeUndefined()
+})
+
+it('preserves explicit user config over a retired daemon-inherited path', () => {
+  vi.stubEnv('ORCA_USER_DATA_PATH', fixture.userData)
+  vi.stubEnv('OPENCODE_CONFIG_DIR', join(fixture.userData, 'opencode-hooks', 'shared'))
+  const env = { OPENCODE_CONFIG_DIR: custom }
+  const result = createDaemonPtyEnvironment({
+    sessionId: 'pane',
+    cols: 80,
+    rows: 24,
+    cwd: root,
+    env
+  })
+  expect(result.OPENCODE_CONFIG_DIR).toBe(custom)
+})
+
+it('does not restore a retired source from process.env with hooks disabled', () => {
+  vi.stubEnv('ORCA_OPENCODE_SOURCE_CONFIG_DIR', join(fixture.userData, 'opencode-hooks', 'shared'))
+  const env = buildPtyHostEnv('pane', {}, { ...options, agentStatusHooksEnabled: false })
+  expect(env.OPENCODE_CONFIG_DIR).toBeUndefined()
+})
+
+it.each([true, false])(
+  'preserves explicit config with a retired parent source (hooks: %s)',
+  (enabled) => {
+    vi.stubEnv(
+      'ORCA_OPENCODE_SOURCE_CONFIG_DIR',
+      join(fixture.userData, 'opencode-hooks', 'shared')
+    )
+    const env = buildPtyHostEnv(
+      'pane',
+      { OPENCODE_CONFIG_DIR: custom },
+      { ...options, agentStatusHooksEnabled: enabled }
+    )
+    if (enabled) {
+      expect(env.ORCA_OPENCODE_SOURCE_CONFIG_DIR).toBe(custom)
+      expect(readFileSync(join(env.OPENCODE_CONFIG_DIR, 'opencode.json'), 'utf8')).toBe(
+        '{"model":"fixture"}'
+      )
+    } else {
+      expect(env.OPENCODE_CONFIG_DIR).toBe(custom)
+    }
+  }
+)
+
+it('repairs both legacy variants without main inheriting any retired path or enabling hooks', () => {
+  for (const agent of ['opencode', 'opencode2']) {
+    const path = plugin(join(fixture.userData, `${agent}-hooks`, 'shared'), agent)
+    mkdirSync(join(path, '..'), { recursive: true })
+    writeFileSync(path, '// old plugin')
+  }
+  buildPtyHostEnv('pane', {}, { ...options, agentStatusHooksEnabled: false })
+  for (const agent of ['opencode', 'opencode2']) {
+    expect(
+      readFileSync(plugin(join(fixture.userData, `${agent}-hooks`, 'shared'), agent), 'utf8')
+    ).toContain('setup')
+  }
+})

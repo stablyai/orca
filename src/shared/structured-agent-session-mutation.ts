@@ -1,4 +1,8 @@
 import { sha256 } from './sha256'
+import {
+  isAgentSessionHandleProvider,
+  type StructuredAgentId
+} from './agent-session-provider-handle'
 
 function canonicalize(value: unknown): string {
   if (value === null || typeof value !== 'object') {
@@ -13,15 +17,21 @@ function canonicalize(value: unknown): string {
   return `{${entries.map(([key, entry]) => `${JSON.stringify(key)}:${canonicalize(entry)}`).join(',')}}`
 }
 
+export function serializeStructuredAgentSessionFingerprintPayload(input: {
+  method: string
+  sessionId: string
+  fields: Record<string, unknown>
+}): string {
+  return canonicalize({ method: input.method, sessionId: input.sessionId, fields: input.fields })
+}
+
 export function structuredAgentSessionPayloadFingerprint(input: {
   method: string
   sessionId: string
   fields: Record<string, unknown>
 }): string {
   const bytes = sha256(
-    new TextEncoder().encode(
-      canonicalize({ method: input.method, sessionId: input.sessionId, fields: input.fields })
-    )
+    new TextEncoder().encode(serializeStructuredAgentSessionFingerprintPayload(input))
   )
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
 }
@@ -41,7 +51,7 @@ export function structuredAgentSessionDomainFingerprint(input: {
 export function structuredAgentSessionCreateFingerprint(input: {
   sessionId: string
   worktree: string
-  agent: 'claude' | 'codex'
+  agent: StructuredAgentId
   resumeFrom?: { providerSessionId: string }
   tabId?: string
 }): string {
@@ -66,11 +76,7 @@ export function showStructuredAgentSessionChoice(input: {
   workspaceSupport: boolean
   agent: string
 }): boolean {
-  return (
-    input.hostCapability &&
-    input.workspaceSupport &&
-    (input.agent === 'claude' || input.agent === 'codex')
-  )
+  return input.hostCapability && input.workspaceSupport && isAgentSessionHandleProvider(input.agent)
 }
 
 export function createStructuredAgentSessionOperationId(

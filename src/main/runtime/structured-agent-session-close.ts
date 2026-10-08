@@ -3,8 +3,8 @@
  *
  * Extracted from `stopStructuredWorker` so that orchestration settlement and worktree teardown
  * close a session the SAME way rather than one of them inventing a shorter version. Everything
- * dispatch-shaped — dropping the hold, the redrive subscription and the parked mail — stays with
- * the caller that has a dispatch; this is only the child.
+ * dispatch-shaped — dropping the redrive subscription, the registry entry and the parked mail —
+ * stays with the caller that has a dispatch; this is only the child.
  *
  * `host.close` returns void and keeps a failed close indexed for retry, so the only settlement
  * evidence is the observation AFTER it: a session the host no longer holds and whose lease is no
@@ -15,7 +15,10 @@ import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wi
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { OrcaRuntimeService } from './orca-runtime'
 import { retireSettledStructuredWorkerTab } from './structured-agent-session-tab-retirement'
-import { observeStructuredWorker } from './structured-worker-authority'
+import {
+  observeStructuredSession,
+  structuredSessionCloseSettled
+} from './structured-worker-authority'
 
 export type StructuredAgentSessionCloseOutcome = {
   stopped: boolean
@@ -32,8 +35,8 @@ export type StructuredAgentSessionCloseOptions = {
   /**
    * Runs after the close is issued and BEFORE the proof is read.
    *
-   * Not after: an unsettled close returns early, so a dispatch that released its hold there would
-   * keep the child un-evictable for the life of the app. Every settlement has to reach it.
+   * Not after: an unsettled close returns early, so a dispatch released there would keep its
+   * redrive subscription nudging a session no dispatch owns. Every settlement has to reach it.
    */
   afterClose?: () => void
   /**
@@ -65,14 +68,34 @@ export async function closeStructuredAgentSessionChild(
   // started without a chat tab, or one the user had closed — which is a new side effect, not an undo.
   const restoreTabIfCloseFails =
     options.restoreTabOnUnprovenClose !== false ? readPersistedTabId(host, sessionId) : null
+  try {
+    return await closeHiddenStructuredAgentSessionChild(
+      host,
+      sessionId,
+      options,
+      restoreTabIfCloseFails
+    )
+  } finally {
+    // After the outcome, not at the hide: a close that puts the tab back leaves its chat working.
+    host.notifySessionTabHidden?.(sessionId)
+  }
+}
+
+async function closeHiddenStructuredAgentSessionChild(
+  host: StructuredAgentSessionHost,
+  sessionId: string,
+  options: StructuredAgentSessionCloseOptions,
+  restoreTabIfCloseFails: string | null
+): Promise<StructuredAgentSessionCloseOutcome> {
   // Set only once the close is actually issued: `setSessionTabVisibility` throwing first leaves a
   // running child, and a receipt that still said `closed_agent_terminal` for it would be the
   // close-that-never-happened this flag exists to rule out.
   let closeAttempted = false
   try {
-    await host.setSessionTabVisibility?.(sessionId, false)
+    await host.setSessionTabVisibility?.(sessionId, false, undefined, { deferHiddenNotice: true })
     closeAttempted = true
-    await host.close(sessionId)
+    // A worktree teardown or an orchestration stop: not the user closing this chat.
+    await host.close(sessionId, 'evict')
   } catch (error) {
     // Only `closeAttempted` proves the hide landed: the store transaction restores its own state on
     // failure, so a `setSessionTabVisibility` that threw hid nothing and has nothing to undo.
@@ -86,8 +109,8 @@ export async function closeStructuredAgentSessionChild(
     }
   }
   options.afterClose?.()
-  const observation = observeStructuredWorker({ sessionId })
-  if (observation.status !== 'exited') {
+  if (!structuredSessionCloseSettled(sessionId)) {
+    const observation = observeStructuredSession(sessionId)
     await restorePersistedTabVisibility(host, sessionId, restoreTabIfCloseFails)
     return {
       stopped: false,
@@ -137,15 +160,16 @@ async function restorePersistedTabVisibility(
   sessionId: string,
   tabId: string | null
 ): Promise<void> {
-  if (tabId === null || observeStructuredWorker({ sessionId }).status === 'exited') {
+  if (tabId === null || structuredSessionCloseSettled(sessionId)) {
     return
   }
   try {
     await host.setSessionTabVisibility?.(sessionId, true, tabId)
   } catch (error) {
-    console.warn(
-      `[structured-session-close] could not restore the chat tab for ${sessionId} after a failed close`,
+    host.deps.logger.warn('restoring the chat tab after a failed close failed', {
+      scope: 'close-tab-restore',
+      sessionId,
       error
-    )
+    })
   }
 }

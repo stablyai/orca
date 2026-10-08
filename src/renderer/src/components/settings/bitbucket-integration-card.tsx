@@ -1,3 +1,4 @@
+import { UnsealedCredentialNotice } from './UnsealedCredentialNotice'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ExternalLink, GitPullRequestArrow, LoaderCircle, Unlink } from 'lucide-react'
 import type { BitbucketConnectionStatus } from '../../../../shared/bitbucket-credentials'
@@ -155,6 +156,13 @@ export function BitbucketIntegrationCard(): React.JSX.Element {
     >
       {status !== 'checking' ? (
         <IntegrationCardDetails>
+          <UnsealedCredentialNotice
+            protection={connection?.credentialProtection ?? null}
+            credentialName={translate(
+              'auto.components.settings.bitbucket.integration.card.credentialName',
+              'Your Bitbucket credential'
+            )}
+          />
           {connected ? (
             <div className={subordinateRowClass}>
               <div className="min-w-0 flex-1">

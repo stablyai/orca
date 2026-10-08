@@ -1,6 +1,7 @@
 // A structured-session runtime whose Claude children are scripted: the production runtime,
 // adapter, record store and host, with only the CLI process replaced.
 
+import { providerDiagnostic, withProviderDiagnostic } from '../../shared/agent-session-failure'
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -19,7 +20,12 @@ import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
+import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 
+/** The error a real CLI's exit reaches the adapter as: Orca's message, the stderr as a log detail. */
+export function scriptedClaudeExitError(diagnostic: string): Error {
+  return withProviderDiagnostic(new Error(diagnostic), providerDiagnostic(diagnostic, 'log'))
+}
 export type ScriptedClaudeBehavior = {
   /** Initialize never answers; only the child's exit settles it. */
   initHangs?: boolean
@@ -37,6 +43,12 @@ export type ScriptedClaudeBehavior = {
   optionWritesHang?: boolean
   /** Startup's own settings read goes unanswered. */
   startupSettingsReadHangs?: boolean
+  /** Every option write loses its answer while the CLI keeps running (not a refusal). */
+  optionWritesFail?: boolean
+  /** The init frame names another provider session than the one launched. */
+  initNamesForeignSession?: boolean
+  /** No start frame before the first turn, as with no SessionStart hook configured. */
+  sendsNoStartFrame?: boolean
 }
 
 export type ScriptedClaudeChild = {
@@ -86,7 +98,13 @@ export function createScriptedClaudeRuntime(sessionIds: readonly string[]) {
     const never = <T>(): Promise<T> => new Promise<T>(() => {})
     const optionWrite = (subtype: string): Promise<void> => {
       child.calls.push(subtype)
-      return control(subtype, () => (behavior.optionWritesHang ? never() : Promise.resolve()))
+      return control(subtype, () =>
+        behavior.optionWritesFail
+          ? Promise.reject(new Error('Query closed before response received'))
+          : behavior.optionWritesHang
+            ? never()
+            : Promise.resolve()
+      )
     }
     let settingsReads = 0
     const child: ScriptedClaudeChild = {
@@ -106,14 +124,18 @@ export function createScriptedClaudeRuntime(sessionIds: readonly string[]) {
         exitVerdict: { root: 'live', tree: 'unverifiable' },
         initializationResult: () => {
           const initialized = { models: [{ value: 'sonnet', displayName: 'Sonnet' }] }
-          const announce = (): void =>
+          const announce = (): void => {
+            if (behavior.sendsNoStartFrame) {
+              return
+            }
             handlers.onMessage?.({
               type: 'system',
               subtype: 'init',
-              session_id: providerSessionId,
+              session_id: behavior.initNamesForeignSession ? 'foreign-session' : providerSessionId,
               model: 'claude-sonnet-5',
               apiKeySource: 'none'
             })
+          }
           if (behavior.initHangs) {
             return new Promise((resolve, reject) => {
               failInit = reject
@@ -156,7 +178,7 @@ export function createScriptedClaudeRuntime(sessionIds: readonly string[]) {
         setPermissionMode: () => optionWrite('set_permission_mode'),
         applyFlagSettings: () => optionWrite('apply_flag_settings'),
         interrupt: async () => undefined,
-        cancelAsyncMessage: async () => {},
+        cancelAsyncMessage: async () => false,
         stopTask: async () => {},
         send: async () => {
           child.calls.push('send')
@@ -175,7 +197,7 @@ export function createScriptedClaudeRuntime(sessionIds: readonly string[]) {
   }
   const exitAtSpawn = (child: ScriptedClaudeChild, diagnostic: string): void => {
     child.connection.closed = true
-    child.exit(new Error(diagnostic))
+    child.exit(scriptedClaudeExitError(diagnostic))
   }
   /** A pid whose process is gone has no start time to read. */
   const readProcessStartTime = async (pid: number): Promise<number | null> => {
@@ -207,11 +229,13 @@ export function createScriptedClaudeRuntime(sessionIds: readonly string[]) {
       await mkdir(join(root, 'claude-home'), { recursive: true })
       const directory = root
       return ensureStructuredAgentSessionHost({
+        logger: createStructuredAgentSessionLogger(),
         stateDirectory: directory,
         hostId: 'local',
         claimKeyId: 'key-1',
         resolveWorkspacePath: async () => directory,
         resolveClaudeCommand: () => '/usr/local/bin/claude',
+        resolveLaunchArgs: () => [],
         resolveClaudeAuthPolicy: () => ({ stripAuthEnv: false }),
         openClaudeConnection: openConnection,
         readProcessStartTime

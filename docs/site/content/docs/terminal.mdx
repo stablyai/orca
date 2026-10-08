@@ -46,6 +46,23 @@ If you've collected themes in Warp, click **Import themes from Warp** in the ter
 
 Imported themes appear alongside Orca's built-ins in the theme dropdown.
 
+## macOS and Linux shell
+
+By default, local terminal panes on macOS and Linux open your system shell (`$SHELL`) as a **login shell** (`-l`). With the default arguments:
+
+- **zsh** reads `.zshenv`, `.zprofile`, `.zshrc`, and `.zlogin` in order from `$ZDOTDIR`, or your home directory (`~`) if unset. Each user file follows its system counterpart (`zshenv`, `zprofile`, `zshrc`, `zlogin`), usually under `/etc` or `/etc/zsh`.
+- **bash** reads `/etc/profile`, then the first of `~/.bash_profile`, `~/.bash_login`, or `~/.profile` that exists. It does **not** read `~/.bashrc` on its own. If your `PATH` or version-manager setup (nvm, asdf, mise) lives in `~/.bashrc`, source it from that login file, as many distributions' default `~/.profile` or `~/.bash_profile` already do:
+
+  ```bash
+  [ -n "${BASH_VERSION:-}" ] && [ -f "$HOME/.bashrc" ] && . "$HOME/.bashrc"
+  ```
+
+  The guard keeps non-bash shells that also read `~/.profile` from loading bash-only setup, even with `set -u` enabled. Add it only if the login file bash reads does not already source `~/.bashrc`.
+
+When Orca uses its bash integration wrapper, it starts bash with `--rcfile` instead of `-l`. The wrapper sources the same login files without separately sourcing `~/.bashrc`; bash itself is not in login mode.
+
+To open a different shell, choose **Custom shell** under [Settings → Terminal → Terminal shell](/docs/settings). Under **Advanced → Custom args**, enter one argument per line to replace the default `-l` for ordinary local panes. An empty list requests no arguments: unwrapped interactive bash then reads `~/.bashrc` instead of the login files. When the terminal daemon is unavailable, Orca's bash or zsh integration can override custom arguments and retain login startup. Agent launches, startup commands, and one-off shell choices do not use this argument setting.
+
 ## Windows shell
 
 The default shell on Windows is configurable between PowerShell, Command Prompt, and WSL under [Settings → Terminal](/docs/settings). WSL is offered automatically when `wsl.exe --status` succeeds. The **+** dropdown on the tab bar also shows a submenu so you can open a one-off tab in any shell without changing your default.

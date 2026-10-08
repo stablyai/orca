@@ -1,6 +1,11 @@
 import { getClipboardTextByteLength, isClipboardTextByteLengthOverLimit } from './clipboard-text'
+import { clampUtf8TextPrefix } from './utf8-byte-limits'
 
 export const MOBILE_MARKDOWN_EDIT_MAX_BYTES = 256 * 1024
+/** Markdown preview budget; the file preview keeps its own. Above it a mobile read returns a
+ *  UTF-8-boundary prefix marked `truncated`, never a refusal. Sized like the 2 MiB terminal
+ *  snapshot; the relay splice frame cap is 8 MiB. */
+export const MOBILE_MARKDOWN_READ_MAX_BYTES = 2 * 1024 * 1024
 
 export type RuntimeMarkdownReadOnlyReason =
   | 'unsupported_preview'
@@ -46,6 +51,10 @@ export type RuntimeMarkdownReadTabResult = {
   source: 'draft' | 'file'
   editable: boolean
   readOnlyReason?: RuntimeMarkdownReadOnlyReason
+  /** Present only when `content` is a prefix; older phones ignore both fields. */
+  truncated?: boolean
+  /** The full document's UTF-8 size, sent with `truncated`. */
+  byteLength?: number
 }
 
 export type RuntimeMarkdownSaveTabResult = {
@@ -70,4 +79,20 @@ export function isMarkdownContentByteLengthOverLimit(content: string, maxBytes: 
 
 export function utf8ByteLength(content: string): number {
   return getClipboardTextByteLength(content)
+}
+
+export function truncateMobileMarkdownRead(
+  content: string
+):
+  | { content: string; truncated: false }
+  | { content: string; truncated: true; byteLength: number } {
+  const byteLength = utf8ByteLength(content)
+  if (byteLength <= MOBILE_MARKDOWN_READ_MAX_BYTES) {
+    return { content, truncated: false }
+  }
+  return {
+    content: clampUtf8TextPrefix(content, MOBILE_MARKDOWN_READ_MAX_BYTES),
+    truncated: true,
+    byteLength
+  }
 }

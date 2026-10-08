@@ -25,10 +25,6 @@ type ShellStartupFiles = {
   syntax: StartupFileSyntax
 }
 
-export function isShellStartupEnvProbeSupported(): boolean {
-  return process.platform !== 'win32'
-}
-
 function parseAssignedValue(
   content: string,
   name: string,
@@ -162,7 +158,7 @@ function unquoteShellValue(value: string): { text: string; quoted: '"' | "'" | n
   return { text: trimmed, quoted: null }
 }
 
-function stripTrailingComment(value: string): string {
+export function stripTrailingComment(value: string): string {
   // Why: shells only treat `#` as a comment delimiter when it begins a word
   // (unquoted, preceded by whitespace). Walk the string so `#` inside quotes
   // and `path/with#hash` (no preceding whitespace) are preserved literally.
@@ -215,7 +211,8 @@ const cache = new Map<string, string | undefined>()
  *   nothing. LAST matching assignment wins.
  * - fish universal variables (`set -Ux` stored in fish_variables) are only
  *   seen when the assignment is also written in a config file.
- * - Windows is unsupported (PowerShell profile parsing is out of scope).
+ * - Windows has no POSIX default shell and reads nothing; Git Bash goes
+ *   through readBashStartupEnvVar, PowerShell through powershell-profile-env.ts.
  *
  * Results are memoized per (name, home, shell, configHome); a bounded recent
  * window keeps SSH/WSL home churn from retaining every historical key.
@@ -226,7 +223,23 @@ export function readShellStartupEnvVar(
   shell = process.env.SHELL,
   configHome = process.env.XDG_CONFIG_HOME
 ): string | undefined {
-  if (!home || !isShellStartupEnvProbeSupported()) {
+  return process.platform === 'win32'
+    ? undefined
+    : readStartupFilesEnvVar(name, home, shell, configHome)
+}
+
+/** The same probe over bash login files, for a Windows pane running Git Bash. */
+export function readBashStartupEnvVar(name: string, home: string): string | undefined {
+  return readStartupFilesEnvVar(name, home, 'bash', undefined)
+}
+
+function readStartupFilesEnvVar(
+  name: string,
+  home: string | undefined,
+  shell: string | undefined,
+  configHome: string | undefined
+): string | undefined {
+  if (!home) {
     return undefined
   }
   // Why: the regex above is fixed; rejecting unsafe names is cheap defense

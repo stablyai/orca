@@ -1,5 +1,5 @@
 import type { AgentStatusState } from './agent-status-types'
-import type { AgentJournalTurnOutcome } from './agent-turn-outcome'
+import type { AgentTurnOutcome } from './agent-turn-outcome'
 
 /** The main agent's OWN state, kept apart from the row's combined `state`. The row's
  *  `state` answers "what should the user see" and folds live child work in, so a settled main agent
@@ -8,11 +8,14 @@ import type { AgentJournalTurnOutcome } from './agent-turn-outcome'
 export type AgentMainAgentStatus = {
   state: AgentStatusState
   /** The recorded verdict on the main agent's most recent finished turn: reported by the
-   *  provider, or `cancellation` inferred from the user's own interrupt keystroke. Present only
-   *  while `state` is `done`; a new turn clears it. ABSENT MEANS UNKNOWN — a plain Stop never
-   *  infers `success`, because an older provider that omits its interrupt flag would turn
-   *  a cancel into a false success. */
-  outcome?: AgentJournalTurnOutcome
+   *  provider, `cancellation` inferred from the user's own interrupt keystroke, or what the host
+   *  observed of an end the provider gave no verdict on. Present only while `state` is `done`; a
+   *  new turn clears it. ABSENT MEANS UNKNOWN — a plain Stop never infers `success`, because an
+   *  older provider that omits its interrupt flag would turn a cancel into a false success. */
+  outcome?: AgentTurnOutcome
+  /** Present only while `state` is `working`: a person's Stop is ending this turn. Published by a
+   *  structured session's host; readers present it ("Stopping…") and never store it. */
+  stopping?: true
   /** When the main agent's own `state` first appeared (ms). The row's `stateStartedAt` dates the
    *  combined state instead, so the two differ while child work holds the row open. */
   stateStartedAt: number
@@ -28,5 +31,10 @@ export function mainAgentStatusEqual(
   if (!a || !b) {
     return false
   }
-  return a.state === b.state && a.outcome === b.outcome && a.stateStartedAt === b.stateStartedAt
+  return (
+    a.state === b.state &&
+    a.outcome === b.outcome &&
+    a.stopping === b.stopping &&
+    a.stateStartedAt === b.stateStartedAt
+  )
 }

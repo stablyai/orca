@@ -68,172 +68,172 @@ export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnecte
       pty?.incarnationId ??
       `runtime:${this.runtimeId}:${this.getPtyLifecycleGeneration(ptyId)}`
     this.advancePtyLifecycleGeneration(ptyId)
-    this.notifyPtyExitListeners(ptyId)
-    const exactSurfaceByKey = new Map<
-      string,
-      Pick<RetiredTerminalSurface, 'worktreeId' | 'parentTabId' | 'leafId'>
-    >()
-    for (const [worktreeId, snapshot] of this.mobileSessionTabsByWorktree) {
-      for (const tab of snapshot.tabs) {
-        if (
-          tab.type === 'terminal' &&
-          (tab.ptyId === ptyId || tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId] === ptyId)
-        ) {
-          exactSurfaceByKey.set(`${worktreeId}\0${tab.parentTabId}\0${tab.leafId}`, {
-            worktreeId,
-            parentTabId: tab.parentTabId,
-            leafId: tab.leafId
-          })
+    let retirement: Promise<void> | undefined
+    try {
+      const exactSurfaceByKey = new Map<
+        string,
+        Pick<RetiredTerminalSurface, 'worktreeId' | 'parentTabId' | 'leafId'>
+      >()
+      for (const [worktreeId, snapshot] of this.mobileSessionTabsByWorktree) {
+        for (const tab of snapshot.tabs) {
+          if (
+            tab.type === 'terminal' &&
+            (tab.ptyId === ptyId || tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId] === ptyId)
+          ) {
+            exactSurfaceByKey.set(`${worktreeId}\0${tab.parentTabId}\0${tab.leafId}`, {
+              worktreeId,
+              parentTabId: tab.parentTabId,
+              leafId: tab.leafId
+            })
+          }
         }
       }
-    }
-    for (const leaf of this.getLeavesForPty(ptyId)) {
-      exactSurfaceByKey.set(`${leaf.worktreeId}\0${leaf.tabId}\0${leaf.leafId}`, {
-        worktreeId: leaf.worktreeId,
-        parentTabId: leaf.tabId,
-        leafId: leaf.leafId
-      })
-    }
-    const parsedPaneKey = parsePaneKey(pty?.paneKey ?? '')
-    if (pty?.tabId && parsedPaneKey) {
-      exactSurfaceByKey.set(`${pty.worktreeId}\0${pty.tabId}\0${parsedPaneKey.leafId}`, {
-        worktreeId: pty.worktreeId,
-        parentTabId: pty.tabId,
-        leafId: parsedPaneKey.leafId
-      })
-    }
-    const exactSurfaces = [...exactSurfaceByKey.values()]
-    const pendingIncarnation = this.pendingPtyRegistrationIncarnations.get(ptyId)
-    const exitMatchesPendingRegistration =
-      this.pendingPtyRegistrationIncarnations.has(ptyId) &&
-      (pendingIncarnation === null ||
-        exitIncarnationId === null ||
-        exitIncarnationId === undefined ||
-        pendingIncarnation === exitIncarnationId)
-    if (exitMatchesPendingRegistration) {
-      // Why: reused surfaces can look registered while their replacement incarnation still awaits admission.
-      this.earlyExitedPtyIncarnations.set(
-        ptyId,
-        exitIncarnationId ?? pendingIncarnation ?? pty?.incarnationId ?? null
-      )
-    }
-    const intentionalStopIncarnation = this.intentionalHandlelessPtyStops.get(ptyId)
-    const preservesIntentionalHandlelessSurface =
-      this.intentionalHandlelessPtyStops.has(ptyId) &&
-      (intentionalStopIncarnation === null || intentionalStopIncarnation === incarnationId)
-    advertisedUrlWatcher.unbindPty(ptyId)
-    // Clean up new mobile state for this PTY
-    this.mobileSubscribers.delete(ptyId)
-    this.terminalViewSubscribers.clearSubscribers(ptyId)
-    this.mobileDisplayModes.delete(ptyId)
-    this.resizeListeners.delete(ptyId)
-    this.lastRendererSizes.delete(ptyId)
-    this.recentPtyOutputById.delete(ptyId)
-    this.setupCompletionTokenByPtyId.delete(ptyId)
-    this.clearWaitBlockedCheckState(ptyId)
-    this.recentPtyPathCandidatesById.delete(ptyId)
-    this.ptyOutputSequenceById.delete(ptyId)
-    this.providerSequenceInitializedPtys.delete(ptyId)
-    this.providerSequenceOffsetByPtyId.delete(ptyId)
-    this.providerSnapshotPreferredPtys.delete(ptyId)
-    this.providerModeTrackersByPtyId.delete(ptyId)
-    this.providerModeSnapshotScansByPtyId.delete(ptyId)
-    this.providerBufferAcquisitionsByPtyId.delete(ptyId)
-    this.providerVisibleStateByPtyId.delete(ptyId)
-    this.providerVisibleRetryAtByPtyId.delete(ptyId)
-    this.agentPromptExplicitStatusFloorByPtyId.delete(ptyId)
-    this.ptyLifecycleGenerationById.delete(ptyId)
-    this.pendingPtySurfaceRetirementsByPtyId.delete(ptyId)
-    this.agentStatusOscProcessorsByPtyId.delete(ptyId)
-    this.terminalSpawnCommandsByPtyId.delete(ptyId)
-    this.disposePtyTitleTracker(ptyId)
-    this.oscTitleScanTailByPtyId.delete(ptyId)
-    this.osc7ScanTailByPtyId.delete(ptyId)
-    this.terminalCwdByPtyId.delete(ptyId)
-    this.terminalFileUriHostnameByPtyId.delete(ptyId)
-    this.wslDistroByPtyId.delete(ptyId)
-    // Why: a Claude agent-team leader whose PTY exits naturally (agent finished,
-    // process died, renderer reload) must release its team + nested panes map.
-    // Previously only explicit closeTerminal evicted it, so natural exits leaked
-    // one team per never-reused teamId for the runtime's lifetime.
-    const exitedTeamLeaderHandle = this.handleByPtyId.get(ptyId)
-    if (exitedTeamLeaderHandle) {
-      this.claudeAgentTeams.removeTeamForLeaderHandle(exitedTeamLeaderHandle)
-    }
-    // Layout state machine: clear `layouts` and `layoutQueues`. Any
-    // already-queued applyLayout work for this ptyId will run, but every
-    // applyLayout re-checks `layouts.has(ptyId)` (or fresh-subscribe) and
-    // short-circuits with `pty-exited`.
-    this.layouts.delete(ptyId)
-    this.layoutQueues.delete(ptyId)
-    this.freshSubscribeGuard.delete(ptyId)
-    this.cancelPendingDriverMutations(ptyId)
-    // Why: a cold restore can respawn under the same session id within the
-    // delayed-Enter window; the armed Enter would inject \r into the
-    // replacement and stamp rows it never received.
-    this.orchestrationMailboxNotifications.retirePty(ptyId)
-    // Why: the dead pty's terminal handle and any run bound to its panes still carry mailbox
-    // pointers; schedule a debounced repoint so they do not stay aimed at a retired session.
-    for (const leaf of this.getLeavesForPty(ptyId)) {
-      const mailboxHandle = this.handleByLeafKey.get(this.getLeafKey(leaf.tabId, leaf.leafId))
-      if (mailboxHandle) {
-        this.mailPointerRepointScheduler.schedule(mailboxHandle)
+      for (const leaf of this.getLeavesForPty(ptyId)) {
+        exactSurfaceByKey.set(`${leaf.worktreeId}\0${leaf.tabId}\0${leaf.leafId}`, {
+          worktreeId: leaf.worktreeId,
+          parentTabId: leaf.tabId,
+          leafId: leaf.leafId
+        })
       }
-      const boundRun = this._orchestrationDb?.getCurrentRunForPane?.(`${leaf.tabId}:${leaf.leafId}`)
-      if (boundRun) {
-        this.mailPointerRepointScheduler.schedule(`run:${boundRun.id}`)
+      const parsedPaneKey = parsePaneKey(pty?.paneKey ?? '')
+      if (pty?.tabId && parsedPaneKey) {
+        exactSurfaceByKey.set(`${pty.worktreeId}\0${pty.tabId}\0${parsedPaneKey.leafId}`, {
+          worktreeId: pty.worktreeId,
+          parentTabId: pty.tabId,
+          leafId: parsedPaneKey.leafId
+        })
       }
-    }
+      const exactSurfaces = [...exactSurfaceByKey.values()]
+      const pendingIncarnation = this.pendingPtyRegistrationIncarnations.get(ptyId)
+      const exitMatchesPendingRegistration =
+        this.pendingPtyRegistrationIncarnations.has(ptyId) &&
+        (pendingIncarnation === null ||
+          exitIncarnationId === null ||
+          exitIncarnationId === undefined ||
+          pendingIncarnation === exitIncarnationId)
+      if (exitMatchesPendingRegistration) {
+        // Why: reused surfaces can look registered while their replacement incarnation still awaits admission.
+        this.earlyExitedPtyIncarnations.set(
+          ptyId,
+          exitIncarnationId ?? pendingIncarnation ?? pty?.incarnationId ?? null
+        )
+      }
+      // Why both kinds: a sleep keeps its wake hint, and a restart's replacement takes the pane.
+      const preservesIntentionallyStoppedSurface =
+        this.intentionalPtyStops.claimExit(ptyId, exitIncarnationId ?? pty?.incarnationId).length >
+        0
+      advertisedUrlWatcher.unbindPty(ptyId)
+      // Clean up new mobile state for this PTY
+      this.mobileSubscribers.delete(ptyId)
+      this.terminalViewSubscribers.clearSubscribers(ptyId)
+      this.mobileDisplayModes.delete(ptyId)
+      this.resizeListeners.delete(ptyId)
+      this.lastRendererSizes.delete(ptyId)
+      this.recentPtyOutputById.delete(ptyId)
+      this.setupCompletionTokenByPtyId.delete(ptyId)
+      this.clearWaitBlockedCheckState(ptyId)
+      this.recentPtyPathCandidatesById.delete(ptyId)
+      this.ptyOutputSequenceById.delete(ptyId)
+      this.providerSequenceInitializedPtys.delete(ptyId)
+      this.providerSequenceOffsetByPtyId.delete(ptyId)
+      this.providerSnapshotPreferredPtys.delete(ptyId)
+      this.providerModeTrackersByPtyId.delete(ptyId)
+      this.providerModeSnapshotScansByPtyId.delete(ptyId)
+      this.providerBufferAcquisitionsByPtyId.delete(ptyId)
+      this.providerVisibleStateByPtyId.delete(ptyId)
+      this.providerVisibleRetryAtByPtyId.delete(ptyId)
+      this.agentPromptExplicitStatusFloorByPtyId.delete(ptyId)
+      this.ptyLifecycleGenerationById.delete(ptyId)
+      this.agentStatusOscProcessorsByPtyId.delete(ptyId)
+      this.terminalSpawnCommandsByPtyId.delete(ptyId)
+      this.disposePtyTitleTracker(ptyId)
+      this.oscTitleScanTailByPtyId.delete(ptyId)
+      this.osc7ScanTailByPtyId.delete(ptyId)
+      this.terminalCwdByPtyId.delete(ptyId)
+      this.terminalFileUriHostnameByPtyId.delete(ptyId)
+      this.wslDistroByPtyId.delete(ptyId)
+      // Why: a Claude agent-team leader whose PTY exits naturally (agent finished,
+      // process died, renderer reload) must release its team + nested panes map.
+      // Previously only explicit closeTerminal evicted it, so natural exits leaked
+      // one team per never-reused teamId for the runtime's lifetime.
+      const exitedTeamLeaderHandle = this.handleByPtyId.get(ptyId)
+      if (exitedTeamLeaderHandle) {
+        this.claudeAgentTeams.removeTeamForLeaderHandle(exitedTeamLeaderHandle)
+      }
+      // Layout state machine: clear `layouts` and `layoutQueues`. Any
+      // already-queued applyLayout work for this ptyId will run, but every
+      // applyLayout re-checks `layouts.has(ptyId)` (or fresh-subscribe) and
+      // short-circuits with `pty-exited`.
+      this.layouts.delete(ptyId)
+      this.layoutQueues.delete(ptyId)
+      this.freshSubscribeGuard.delete(ptyId)
+      this.cancelPendingDriverMutations(ptyId)
+      // Why: a cold restore can respawn under the same session id within the
+      // delayed-Enter window; the armed Enter would inject \r into the
+      // replacement and stamp rows it never received.
+      this.orchestrationMailboxNotifications.retirePty(ptyId)
+      // Why: the dead pty's terminal handle and any run bound to its panes still carry mailbox
+      // pointers; schedule a debounced repoint so they do not stay aimed at a retired session.
+      for (const leaf of this.getLeavesForPty(ptyId)) {
+        const mailboxHandle = this.handleByLeafKey.get(this.getLeafKey(leaf.tabId, leaf.leafId))
+        if (mailboxHandle) {
+          this.mailPointerRepointScheduler.schedule(mailboxHandle)
+        }
+        const boundRun = this._orchestrationDb?.getCurrentRunForPane?.(
+          `${leaf.tabId}:${leaf.leafId}`
+        )
+        if (boundRun) {
+          this.mailPointerRepointScheduler.schedule(`run:${boundRun.id}`)
+        }
+      }
 
-    if (this.terminalFitOverrides.has(ptyId)) {
-      this.terminalFitOverrides.delete(ptyId)
-      this.notifier?.terminalFitOverrideChanged(ptyId, 'desktop-fit', 0, 0)
-      this.notifyFitOverrideListeners(ptyId, 'desktop-fit', 0, 0)
-    }
-    // Why: clear driver state and notify the renderer so any lock banner on
-    // this dead pane unmounts. Without this, the pane shows a stuck banner
-    // until tab teardown, and `getDriver(deadPtyId)` would keep returning a
-    // stale `mobile{X}` to any caller that hasn't yet seen the exit IPC.
-    this.terminalDrivers.clear(ptyId)
-    this.remoteDesktopFloor.clearPty(ptyId)
-    this.disposeHeadlessTerminal(ptyId)
-    if (processDeathCertified) {
-      // The bounded verdict register also fences late graphs after the PTY record was pruned.
-      this.rememberPtyLivenessVerdict(ptyId, { status: 'exited' })
-    }
-    if (pty) {
-      pty.connected = false
-      pty.runtimeSessionOwned = false
-      this.setPairedRendererSessionOwnership(pty.ptyId, false)
-      pty.disconnectedAt = Date.now()
-      pty.lastExitCode = exitCode
-      pty.lastExitCause = exitCause
-      // Why: the exited process's live frames say nothing about a replacement.
-      // A same-id respawn makes the leaf writable again before any new title,
-      // so leaving this true would let push delivery type into the new process
-      // on the dead one's idle. lastAgentStatus itself stays for `ps` display.
-      pty.lastAgentStatusObservedLive = false
-      this.resolvePtyExitWaiters(pty, ptyId)
-      this.pruneDisconnectedPtyTranscript(pty)
-    }
-    let retirement: Promise<void> | undefined
-    if (preservesIntentionalHandlelessSurface || preservesAbnormalSshSurface) {
-      // Why: relay loss is recoverable; keep the HUB-owned pane addressable through the bounded reconnect grace.
-      this.touchMobileSessionSnapshotsForPty(ptyId, { immediate: true })
-    } else {
-      // Why: permanent process exit is absence, not a starting/sleeping tab.
-      // Retire before publishing so paired clients never persist a ghost.
-      const pendingRetirement = {}
-      this.pendingPtySurfaceRetirementsByPtyId.set(ptyId, pendingRetirement)
-      retirement = this.retireMobileSessionSurfacesForPty(ptyId, incarnationId, exactSurfaces)
-        .catch((error) => {
+      if (this.terminalFitOverrides.has(ptyId)) {
+        this.terminalFitOverrides.delete(ptyId)
+        this.notifier?.terminalFitOverrideChanged(ptyId, 'desktop-fit', 0, 0)
+        this.notifyFitOverrideListeners(ptyId, 'desktop-fit', 0, 0)
+      }
+      // Why: clear driver state and notify the renderer so any lock banner on
+      // this dead pane unmounts. Without this, the pane shows a stuck banner
+      // until tab teardown, and `getDriver(deadPtyId)` would keep returning a
+      // stale `mobile{X}` to any caller that hasn't yet seen the exit IPC.
+      this.terminalDrivers.clear(ptyId)
+      this.remoteDesktopFloor.clearPty(ptyId)
+      this.disposeHeadlessTerminal(ptyId)
+      if (processDeathCertified) {
+        // The bounded verdict register also fences late graphs after the PTY record was pruned.
+        this.rememberPtyLivenessVerdict(ptyId, { status: 'exited' })
+      }
+      if (pty) {
+        pty.connected = false
+        pty.runtimeSessionOwned = false
+        this.setPairedRendererSessionOwnership(pty.ptyId, false)
+        pty.disconnectedAt = Date.now()
+        pty.lastExitCode = exitCode
+        pty.lastExitCause = exitCause
+        // Why: the exited process's live frames say nothing about a replacement.
+        // A same-id respawn makes the leaf writable again before any new title,
+        // so leaving this true would let push delivery type into the new process
+        // on the dead one's idle. lastAgentStatus itself stays for `ps` display.
+        pty.lastAgentStatusObservedLive = false
+        this.resolvePtyExitWaiters(pty, ptyId)
+        this.pruneDisconnectedPtyTranscript(pty)
+      }
+      if (preservesIntentionallyStoppedSurface || preservesAbnormalSshSurface) {
+        // Why: relay loss is recoverable; keep the HUB-owned pane addressable through the bounded reconnect grace.
+        this.touchMobileSessionSnapshotsForPty(ptyId, { immediate: true })
+      } else {
+        // Why: permanent process exit is absence, not a starting/sleeping tab.
+        // Retire before publishing so paired clients never persist a ghost.
+        try {
+          retirement = this.retireMobileSessionSurfacesForPty(ptyId, incarnationId, exactSurfaces)
+        } catch (error) {
           console.error('[runtime] failed to publish terminal retirement:', error)
-        })
-        .finally(() => {
-          if (this.pendingPtySurfaceRetirementsByPtyId.get(ptyId) === pendingRetirement) {
-            this.pendingPtySurfaceRetirementsByPtyId.delete(ptyId)
-          }
-        })
+        }
+      }
+    } finally {
+      // Why last: a stream end cues clients to re-activate the pane it ended, so the retirement
+      // must precede it; a cleanup fault must still end the stream.
+      this.notifyPtyExitListeners(ptyId)
     }
 
     const exitedSurfaces: { handle: string; paneKey: string | null }[] = []

@@ -29,7 +29,7 @@ import {
 } from '../composer-drop-result'
 import { applyComposerNativeFileDrop } from '../composer-native-file-drop'
 import { useMountedRef } from '../useMountedRef'
-import { useComposerDropListener } from './composer-drop-listener'
+import { userNamedFileAccess } from '@/lib/local-file-access'
 
 // Local drops bypass the runtime importer's skip classification.
 function localDropFailure(detail: string | undefined): ComposerDropFailure {
@@ -220,11 +220,7 @@ export function useAttachmentDropState(input: AttachmentDropStateInput) {
           return
         }
         try {
-          await window.api.fs.authorizeExternalPath({ targetPath: filePath })
-          if (!mountedRef.current) {
-            return
-          }
-          const stat = await window.api.fs.stat({ filePath })
+          const stat = await window.api.fs.stat({ filePath, access: userNamedFileAccess() })
           results.push({
             status: 'imported',
             destPath: filePath,
@@ -253,8 +249,8 @@ export function useAttachmentDropState(input: AttachmentDropStateInput) {
   )
 
   const applyNativeDrop = useCallback(
-    (paths: string[], isCurrentOwner: () => boolean): void => {
-      void applyComposerNativeFileDrop({
+    (paths: string[], isCurrentOwner: () => boolean): Promise<void> => {
+      return applyComposerNativeFileDrop({
         paths,
         isCurrentOwner,
         uploadPaths: (sourcePaths) =>
@@ -282,14 +278,13 @@ export function useAttachmentDropState(input: AttachmentDropStateInput) {
       uploadComposerPaths
     ]
   )
-  // Why: native OS file drops relay via the preload bridge; only the most recently mounted composer applies them.
-  useComposerDropListener(applyNativeDrop)
 
   return {
     addComposerAttachments,
     insertComposerFolderPaths,
     uploadComposerPaths,
     handleAddAttachment,
-    applyLocalComposerDrop
+    applyLocalComposerDrop,
+    applyNativeDrop
   }
 }

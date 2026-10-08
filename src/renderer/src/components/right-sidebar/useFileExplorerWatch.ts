@@ -180,6 +180,7 @@ export function useFileExplorerWatch({
         worktreeId: currentWorktreeId,
         cache: dirCacheRef.current,
         expanded: expandedRef.current,
+        followSymlinks: useAppStore.getState().settings?.followSymlinkedDirectories ?? false,
         setDirCache,
         setSelectedPath,
         refreshDir: scheduler.requestDirRefresh,
@@ -206,6 +207,12 @@ export function useFileExplorerWatch({
             resyncWatchKeys.add(currentWatchKey)
           }
         }
+        return
+      }
+      if (
+        normalizeRuntimePathForComparison(payload.worktreePath) !==
+        normalizeRuntimePathForComparison(currentWorktreePath)
+      ) {
         return
       }
       // Why: defer refreshes during inline input/drag so rows don't shift; native drags only set isNativeDragOver (design §6.2).

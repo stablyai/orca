@@ -16,9 +16,11 @@ describe('terminateWindowsProcessTree', () => {
         callback(null)
       }
     )
-    await terminateWindowsProcessTree(1234, {
-      execFileImpl: execFileImpl as never
-    })
+    await expect(
+      terminateWindowsProcessTree(1234, {
+        execFileImpl: execFileImpl as never
+      })
+    ).resolves.toBe(true)
     expect(execFileImpl).toHaveBeenCalledWith(
       'taskkill',
       ['/pid', '1234', '/T', '/F'],
@@ -30,7 +32,7 @@ describe('terminateWindowsProcessTree', () => {
     )
   })
 
-  it('resolves even when taskkill reports failure (already dead)', async () => {
+  it('resolves false, never throws, when taskkill reports failure (already dead)', async () => {
     const execFileImpl = vi.fn(
       (
         _cmd: string,
@@ -43,7 +45,7 @@ describe('terminateWindowsProcessTree', () => {
     )
     await expect(
       terminateWindowsProcessTree(55, { execFileImpl: execFileImpl as never })
-    ).resolves.toBeUndefined()
+    ).resolves.toBe(false)
   })
 
   it('skips taskkill for invalid pids', async () => {
@@ -51,5 +53,7 @@ describe('terminateWindowsProcessTree', () => {
     await terminateWindowsProcessTree(0, { execFileImpl: execFileImpl as never })
     await terminateWindowsProcessTree(-1, { execFileImpl: execFileImpl as never })
     expect(execFileImpl).not.toHaveBeenCalled()
+    // No tree was addressed, so nothing reports it terminated.
+    await expect(terminateWindowsProcessTree(0)).resolves.toBe(false)
   })
 })

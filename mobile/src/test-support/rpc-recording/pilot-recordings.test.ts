@@ -5,13 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { runRecording } from './run-recording'
 import { pilotMountAdapters } from './pilot-mount-adapters'
 import { vitestRecordingScheduler } from './vitest-recording-scheduler'
-import {
-  compareGolden,
-  goldenBytes,
-  goldenRecording,
-  readGolden,
-  writeGolden
-} from './golden-recording'
+import { expectGoldenFile, goldenBytes, goldenRecording, writeGolden } from './golden-recording'
 import type { Recording } from './recording-scenario'
 import type { RecordedValue } from './recording-values'
 import { determinismRuns } from './determinism-runs'
@@ -42,7 +36,7 @@ describe('RPC main recordings', () => {
           expect(visibleState(recording)).toEqual({ files: ['third.ts'] })
         }
         if (id === 'b2') {
-          // The shipped null result is still the seed, and the screen still reports an error the
+          // The null result is still the seed, and the screen still reports an error the
           // user can see. What moved in step 7 is the sentence: the checked reader names the reply
           // and the method, where main read `.ok` off null and showed V8's property-read text.
           expect(visibleState(recording)).toMatchObject({
@@ -56,7 +50,7 @@ describe('RPC main recordings', () => {
             loading: false
           })
         }
-        const golden = goldenRecording(root, input.baseline, pilot.scenarios(), recording)
+        const golden = goldenRecording(pilot.scenarios(), recording)
         const bytes = goldenBytes(golden)
         if (run) {
           expect(bytes).toBe(first)
@@ -65,7 +59,7 @@ describe('RPC main recordings', () => {
         if (process.env.RPC_FOUNDATION_MODE === '--record') {
           await writeGolden(goldens, golden, '--record')
         } else {
-          compareGolden(readGolden(goldens, id), golden)
+          await expectGoldenFile(goldens, id, golden)
         }
       }
     })

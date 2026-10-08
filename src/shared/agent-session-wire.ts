@@ -4,8 +4,16 @@ import type {
 } from './agent-session-background-task-wire'
 import type { AgentSessionRewindReason, AgentSessionRewindSupport } from './agent-session-rewind'
 import type { AgentSessionWireRefusal } from './agent-session-wire-refusals'
+import type { AgentChildWorkView } from './agent-status-child-work-view'
+import type {
+  AgentSessionQueuedMessage,
+  AgentSessionQueuePause,
+  AgentSessionQueuePublicationFields
+} from './agent-session-queued-message-wire'
 
 export * from './agent-session-wire-refusals'
+export * from './agent-session-queued-message-wire'
+export * from './agent-session-turn-completion-wire'
 import type { AgentSessionConversationCommand } from './agent-session-conversation-command'
 import type { AgentSessionContextUsage } from './agent-session-context-usage'
 // ─── Structured agent-session wire contract ─────────────────────────────────
@@ -22,15 +30,12 @@ import type {
   AgentJournalResolution,
   AgentJournalSubmission,
   AgentJournalThreadGoal,
-  AgentJournalTurnOutcome
+  AgentJournalTurnLifecycle
 } from './agent-session-journal-types'
-import {
-  agentSessionScopeKey,
-  type AgentSessionExecutionLocation,
-  type AgentSessionHandoffStage,
-  type AgentSessionRecord
-} from './agent-session-record'
+import type { AgentTurnOutcome } from './agent-turn-outcome'
+import type { AgentSessionHandoffStage, AgentSessionRecord } from './agent-session-record'
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
+import type { NativeChatSubagentEntry } from './native-chat-types'
 import type { StructuredAgentSessionProjectedStatus } from './structured-agent-session-projection'
 
 /** `agentSession.handoffStatus`. Named for the removed terminal handoff; released desktop clients
@@ -56,6 +61,18 @@ export type AgentSessionTurnActivity = {
   text: string
 }
 
+/** The session's newest turn record over the WHOLE journal. A page windows the timeline and a
+ *  turn's record keeps the place it opened at, so a long turn's record falls off the page; this is
+ *  what tells a client a turn is running. Present null: the journal records no turn. Absent: an
+ *  older host, whose clients still read the loaded rows. */
+export type AgentSessionLatestTurn = {
+  /** The record's journal key, which rows of the turn name as their scope. */
+  itemId: string
+  /** Host clock at the record's creation, as on its own row; a revision does not move it. */
+  observedAt: number
+  turn: AgentJournalTurnLifecycle
+}
+
 export const AGENT_SESSION_ID_MAX_LENGTH = 512
 
 /** Backward paging is the client's normal read; 40 matches the page size the
@@ -75,6 +92,16 @@ export type AgentSessionHistoryRequest = {
   /** Required for `before` and `after`; ignored for `tail`. */
   cursor?: AgentJournalCursor
   limit?: number
+}
+
+/** A subagent named by a roster row the page does not carry, while its own rows are on it. */
+export type AgentSessionSubagentRosterEntry = {
+  /** The roster row naming it: the first that does. */
+  itemId: string
+  sequence: number
+  sequenceIndex?: number
+  revision: number
+  entry: NativeChatSubagentEntry
 }
 
 export type AgentSessionHistoryPage = {
@@ -103,9 +130,23 @@ export type AgentSessionHistoryPage = {
   hasNewer: boolean
   /** Present on hosts that expose provider-owned background task lifecycle. */
   backgroundTasks?: AgentSessionBackgroundTaskState | null
+  /** The host's queued drafts. Absent = no claim (older host); `[]`/null = empty.
+   *  Live subscription state stays authoritative over a stale history answer. */
+  queuedMessages?: AgentSessionQueuedMessage[] | null
+  /** The queue's pause, published with the list: present whenever `queuedMessages` is, null
+   *  when the queue sends on its own. */
+  queuePause?: AgentSessionQueuePause | null
+  /** Rides with `queuedMessages`: the card the queue sends next as soon as nothing runs, null
+   *  while anything holds the queue. Absent from an older host, read as null. */
+  nextQueuedMessageId?: string | null
   /** Host wall clock (ms epoch) when the page was read, so a client attaching mid-turn
    *  can anchor a live counter on the real start. Absent from older hosts. */
   hostNow?: number
+  /** Names the subagents with rows on the page whose roster row is older than it; bounded.
+   *  Absent from older hosts, and when every such roster row is on the page. */
+  subagentRoster?: AgentSessionSubagentRosterEntry[]
+  /** As of the page's read; a client applies it only from a page that replaces its state. */
+  latestTurn?: AgentSessionLatestTurn | null
 }
 
 export type AgentSessionHistoryResult =
@@ -130,8 +171,9 @@ export type AgentSessionJournalBatch = {
   submissions: AgentJournalSubmission[]
 }
 
-/** Host wall clock (ms epoch) stamped once per published frame; see `AgentSessionHistoryPage`. */
-type AgentSessionHostClockField = { hostNow?: number }
+/** Every published frame: the host wall clock (ms epoch, see `AgentSessionHistoryPage`), and what
+ *  rides beside its `queuedMessages`. */
+type AgentSessionFrameFields = { hostNow?: number } & AgentSessionQueuePublicationFields
 
 export type AgentSessionSubscribeEvent =
   | ({
@@ -140,11 +182,13 @@ export type AgentSessionSubscribeEvent =
       page: AgentSessionHistoryPage
       fence: number
       backgroundTasks?: AgentSessionBackgroundTaskState | null
+      /** Whole-list draft publication; omitted when unchanged since the last frame sent. */
+      queuedMessages?: AgentSessionQueuedMessage[] | null
       /** Omitted when unchanged; null clears a previous provider catalog. */
       commands?: AgentSessionSlashCommand[] | null
       /** Latest provider-authored turn activity; optional for mixed-version hosts. */
       activity?: AgentSessionTurnActivity | null
-    } & AgentSessionHostClockField)
+    } & AgentSessionFrameFields)
   | ({
       type: 'batch'
       sessionId: string
@@ -152,11 +196,17 @@ export type AgentSessionSubscribeEvent =
       /** Optional so mixed-version cursors retain the ownership fence. */
       fence?: number
       backgroundTasks?: AgentSessionBackgroundTaskState | null
+      /** Whole-list draft publication. On a multi-page catch-up it rides only the
+       *  final page, so a consumed card never vanishes before its bubble arrives. */
+      queuedMessages?: AgentSessionQueuedMessage[] | null
       /** Omitted when unchanged; null clears a previous provider catalog. */
       commands?: AgentSessionSlashCommand[] | null
       /** Additive ephemeral state; it never creates or advances journal rows. */
       activity?: AgentSessionTurnActivity | null
-    } & AgentSessionHostClockField)
+      /** Rides every batch that carries rows, removals or submissions, so absent there means an
+       *  older host; absent on one that carries none, which changes no turn. */
+      latestTurn?: AgentSessionLatestTurn | null
+    } & AgentSessionFrameFields)
   | ({
       type: 'reset'
       sessionId: string
@@ -164,10 +214,12 @@ export type AgentSessionSubscribeEvent =
       page: AgentSessionHistoryPage
       fence: number
       backgroundTasks?: AgentSessionBackgroundTaskState | null
+      /** Whole-list draft publication; a reset re-hydrates it with the page. */
+      queuedMessages?: AgentSessionQueuedMessage[] | null
       /** Omitted when unchanged; null clears a previous provider catalog. */
       commands?: AgentSessionSlashCommand[] | null
       activity?: AgentSessionTurnActivity | null
-    } & AgentSessionHostClockField)
+    } & AgentSessionFrameFields)
   | { type: 'end' }
 
 // ─── Status feed ────────────────────────────────────────────────────────────
@@ -196,16 +248,34 @@ export type AgentSessionStatusSummary = {
   toolInput?: string
   /** Preview of the newest assistant prose, so a settled row says what the agent said. */
   lastAssistantMessage?: string
-  /** The provider's verdict on the newest settled root turn. Present only while `status` is
-   *  `idle`: a running or attention-blocked turn has no verdict yet, and a stale one must not
-   *  ride along. Absent means UNKNOWN, never success. Optional for mixed-version hosts; the
-   *  agent-status row publishes it as `mainAgent.outcome`. */
-  turnOutcome?: AgentJournalTurnOutcome
+  /** The verdict on the latest request: the provider's, or, when it gave none, what the host
+   *  observed of the turn's end. Present only while `status` is `idle`: a running or
+   *  attention-blocked turn has no verdict yet, and a stale one must not ride along. Absent means
+   *  UNKNOWN, never success. Optional for mixed-version hosts; an older client reads an arm it
+   *  does not know as no verdict. The agent-status row publishes it as `mainAgent.outcome`. */
+  turnOutcome?: AgentTurnOutcome
+  /** Present only while `status` is 'working' and a person's Stop is still ending that work: while
+   *  the Stop settles, then until the turn it stopped or failed to stop ends. A Stop that settles
+   *  having stopped nothing clears it. Derived by the host, never stored. Absent from older hosts;
+   *  an older client ignores it. */
+  stopping?: true
   /** Live provider-owned background tasks, so session lists can render
    *  subagent children without holding a journal reader open. Optional for
-   *  mixed-version hosts. */
+   *  mixed-version hosts. Derived from `children` on hosts that publish it. */
   backgroundTasks?: AgentSessionBackgroundTask[]
+  /** The host's running child records for this session, as views: live ones, and a finished one
+   *  whose own work still runs (it reads monitoring); finished children ride the background-task
+   *  channel only. Absent from older hosts; decode with `decodeAgentChildWorkViews`. Usage is
+   *  omitted, and an evidence clock that only ticked does not republish: per-tick freshness rides
+   *  the background-task channel. */
+  children?: AgentChildWorkView[]
   providerSession?: AgentProviderSessionMetadata
+  /** The record's saved conversation name; absent while unnamed and from older hosts. Rides this
+   *  feed because a retained summary outlives the chat's tab, so a closed chat keeps its name. */
+  conversationName?: string
+  /** Host-path directory the session is held to regardless of its workspace's current directory
+   *  (a floating chat's pinned folder). Absent means resolve the workspace id; older hosts omit it. */
+  launchDirectory?: string
   updatedAt: number
   /** When the session's own agent entered `status`, dated by its own lifecycle edges and never by
    *  row activity: `updatedAt` also moves for a subagent's rows. Absent from older hosts, and when
@@ -219,48 +289,6 @@ export type AgentSessionStatusEvent =
   | { type: 'snapshot'; sessions: AgentSessionStatusSummary[] }
   | { type: 'status'; session: AgentSessionStatusSummary }
   | { type: 'end' }
-
-// ─── Turn completion feed ───────────────────────────────────────────────────
-
-/**
- * One root turn reaching a terminal outcome, derived by the EXECUTION HOST at journal commit.
- *
- * This is the EDGE, with turn identity; `AgentSessionStatusSummary.turnOutcome` is the STATE.
- * The summary carries the verdict only while the session is idle, as a fact about the main agent's
- * last turn that a status reader may act on (attention alerts, the `mainAgent.outcome` row field),
- * and never a turn id: a reader that needs to know WHICH turn finished, or to react exactly once
- * per finish, subscribes here. Re-broadcasting the summary on every status change therefore
- * repeats a state, not a completion.
- *
- * `outcome` is A0's provider verdict and is never inferred — a turn the host only observed ending
- * carries no outcome and produces no event at all, because absent means UNKNOWN, not success.
- */
-export type AgentSessionTurnCompletion = {
-  /** Host-and-workspace scope; a bare provider turn id is not globally unique. */
-  scope: AgentSessionExecutionLocation
-  sessionId: string
-  /** Root turn identity from the journal turn record; no second identity is minted. */
-  turnId: string
-  outcome: AgentJournalTurnOutcome
-  /** Execution host's clock at journal commit. */
-  completedAt: number
-}
-
-/**
- * LIVE-ONLY: there is no snapshot arm and no replay arm, by decision. A subscriber is told what
- * completes while it is subscribed and nothing else; completions that land while it is away are
- * dropped rather than queued, so nothing durable can strand. On reconnect the client baselines.
- */
-export type AgentSessionTurnCompletionEvent =
-  | { type: 'completion'; completion: AgentSessionTurnCompletion }
-  | { type: 'end' }
-
-/** Delivery dedupe address. Unread is idempotent and does not need it; mobile fanout does. */
-export function agentSessionTurnCompletionKey(completion: AgentSessionTurnCompletion): string {
-  return [agentSessionScopeKey(completion.scope), completion.sessionId, completion.turnId].join(
-    '\u0000'
-  )
-}
 
 // ─── Mutation envelope ──────────────────────────────────────────────────────
 
@@ -295,20 +323,41 @@ export type AgentSessionAttachResult = {
   sessionId: string
   fence: number
   page: AgentSessionHistoryPage
-  /** Submissions the crash boundary settled as `unknown` while attaching. */
+  /** Submissions a crash boundary left `unknown` that provider history could not decide. */
   unconfirmedClientMessageIds: string[]
   /** The host-owned id of the tab showing this chat, when it has one. Absent from older hosts. */
   tabId?: string
 }
 
-export type AgentSessionSendResult = {
-  clientMessageId: string
-  submission: AgentJournalSubmission
+/** The host queued the send as a draft instead of submitting it. Only clients
+ *  that sent `delivery: 'queue-if-active'` — gated on
+ *  `agent-session.queued-messages.v1` — ever receive this arm; `state` other
+ *  than `waiting` appears only on replays of an already-settled draft. */
+export type AgentSessionQueuedSendReceipt = {
+  messageId: string
+  position: number
+  state: 'waiting' | 'dispatched' | 'returned' | 'withdrawn'
+}
+
+export type AgentSessionSendResult =
+  | {
+      clientMessageId: string
+      submission: AgentJournalSubmission
+    }
+  | { clientMessageId: string; queued: AgentSessionQueuedSendReceipt }
+
+/** The submission arm's payload; undefined for a queued answer. For callers that
+ *  never send `delivery` the queued arm cannot arrive, and `undefined` reads as
+ *  delivery-unknown rather than as an error. */
+export function agentSessionSendSubmission(
+  result: AgentSessionSendResult | undefined
+): AgentJournalSubmission | undefined {
+  return result !== undefined && 'submission' in result ? result.submission : undefined
 }
 
 export type AgentSessionCancelResult = {
-  /** The turn the client named, echoed so a late reply can be matched. */
-  turnId: string
+  /** The turn the client named, echoed so a late reply can be matched; absent when it named none. */
+  turnId?: string
   cancelled: boolean
 }
 
@@ -357,7 +406,12 @@ export type AgentSessionFastModeSupport = {
  * surface: an older host simply lacks the method.
  */
 export type AgentSessionModelCatalogResult =
-  | { origin: 'unknown' }
+  | {
+      origin: 'unknown'
+      /** The host is running its first listing for this account; a `waitForListing` read answers
+       *  when it lands. Absent from a host that predates it. */
+      listingInProgress?: true
+    }
   | {
       /** What produced the listing; any age is served, `fetchedAt` carries it. */
       origin: 'live-session' | 'probe'

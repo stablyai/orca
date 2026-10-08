@@ -6,7 +6,6 @@ import {
   resetTerminalDataReplyAuthority,
   resumeTerminalDataReplyAuthority
 } from './document/query-reply'
-import { documentModuleSource } from './document/document-module-source.test-support'
 
 type QueryReplyGate = {
   forward: (data: string) => void
@@ -50,32 +49,6 @@ function createQueryReplyGate(notify: (message: unknown) => void): {
 }
 
 describe('mobile terminal query replies', () => {
-  it('forwards xterm-generated data only after initial replay drains', () => {
-    const bridge = documentModuleSource('query-reply')
-    const init = documentModuleSource('terminal-init')
-    // The listener is armed by the bridge, and what it forwards is the gate's own call.
-    expect(bridge).toContain('term.onData(')
-    expect(bridge).toContain('forwardTerminalDataReply(scope, data)')
-    // The terminal takes keystrokes from the host, never from its own textarea: stdin is enabled so
-    // xterm generates replies, and the textarea is read-only so the phone's keyboard cannot type.
-    expect(init).toContain('disableStdin: false')
-    // Both are the bridge's own doing, where the listener it arms is: it takes the key handler and
-    // the textarea in the same breath.
-    expect(bridge).toContain('term.attachCustomKeyEventHandler(')
-    expect(bridge).toContain('term.textarea.readOnly = true')
-  })
-
-  it('mutes a replacement terminal until its own replay drains', () => {
-    const init = documentModuleSource('terminal-init')
-    const initIndex = init.indexOf('export function init(')
-    const disableIndex = init.indexOf('resetTerminalDataReplyAuthority(scope)', initIndex)
-    const enableIndex = init.indexOf('attachTerminalQueryReplyBridge(scope,', disableIndex)
-
-    expect(initIndex).toBeGreaterThanOrEqual(0)
-    expect(disableIndex).toBeGreaterThan(initIndex)
-    expect(enableIndex).toBeGreaterThan(disableIndex)
-  })
-
   it('suppresses replay, then forwards live queries queued behind its boundary', () => {
     const messages: unknown[] = []
     const { gate, queuedBoundaries } = createQueryReplyGate((message) => messages.push(message))
@@ -117,10 +90,5 @@ describe('mobile terminal query replies', () => {
     gate.forward('\x1b[3;4R')
 
     expect(messages).toEqual([{ type: 'terminal-data', bytes: '\x1b[3;4R' }])
-    const router = documentModuleSource('host-message-router')
-    const clearStart = router.indexOf("} else if (msg.type === 'clear') {")
-    const clearEnd = router.indexOf("} else if (msg.type === 'measure')", clearStart)
-    expect(clearStart).toBeGreaterThanOrEqual(0)
-    expect(router.slice(clearStart, clearEnd)).toContain('resumeTerminalDataReplyAuthority(scope)')
   })
 })

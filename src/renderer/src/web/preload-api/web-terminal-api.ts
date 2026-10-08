@@ -17,6 +17,8 @@ export function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     signal: () => {},
     // Web panes clear the host buffer via the terminal.clearBuffer runtime RPC.
     clearBuffer: () => {},
+    // Likewise terminal.resetInputModes.
+    resetInputModes: () => {},
     kill: () => Promise.resolve(),
     ackColdRestore: () => {},
     ackData: () => {},
@@ -38,12 +40,19 @@ export function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     inspectProcess: () => Promise.reject(new Error('terminal_liveness_unavailable')),
     // Why: paired web panes cannot provide a local post-boundary process scan.
     confirmForegroundProcess: () => Promise.resolve(null),
+    // Why: a paired client's terminals belong to the host, whose Codex settings this client does not own.
+    isCodexOnSharedServer: () => Promise.resolve({ joined: false }),
+    disableCodexSharedServerAutoStart: () => Promise.resolve(false),
+    stopCodexSharedServer: () => Promise.resolve(false),
+    openedBeforeClaudeAccounts: () => Promise.resolve(false),
     getCwd: () => Promise.resolve('~'),
     getSize: () => Promise.resolve(null),
     listSessions: () => Promise.resolve([]),
     getAuthoritativeBufferSnapshotCapabilities: (ids) =>
       Promise.resolve(ids.map((id) => ({ id, authoritative: false }))),
     hasPty: () => Promise.resolve(null),
+    // Why: no local main owns a paired client's session, so the move stays in this window.
+    moveLeafToNewTab: () => Promise.resolve({ status: 'not_held' }),
     getMainBufferSnapshot: () => Promise.resolve(null),
     // Why: remote-runtime PTYs skip local main (no side-effect source); renderer byte parsing stays authoritative.
     onSideEffect: () => noopUnsubscribe,
@@ -84,6 +93,7 @@ export function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     onSpawned: () => noopUnsubscribe,
     onSerializeBufferRequest: () => noopUnsubscribe,
     onClearBufferRequest: () => noopUnsubscribe,
+    onResetInputModesRequest: () => noopUnsubscribe,
     sendSerializedBuffer: () => {},
     declarePendingPaneSerializer: () => Promise.resolve(0),
     settlePaneSerializer: () => Promise.resolve(),

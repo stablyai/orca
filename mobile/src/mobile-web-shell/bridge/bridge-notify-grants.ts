@@ -37,11 +37,10 @@ const BRIDGE_NOTIFY_GRANTS: Readonly<Record<BridgeNotifyName, string | null>> = 
   // The protocol's own as well: it spends a request this shell handed the page, on a param closed
   // to the one the shell hands over, so there is nothing here for a grant to gate.
   [BRIDGE_ROUTE_PARAM_CLEAR]: null,
-  // The page reporting on its own document. Nothing here reaches the host or the device, and the
-  // shell acts on it only for a page that declared it in `ready.reports`.
+  // The page reporting on its own document. Nothing here reaches the host or the device.
   [BRIDGE_PAGE_PAINTED]: null,
   // The page reporting on its own document as well. A claim is not a capability: the shell decides
-  // whether to hand the key over, and it acts on this only for a page that declared it takes one.
+  // whether to hand the key over.
   [BRIDGE_BACK_CLAIM_NOTIFY]: null,
   navigate: 'navigate',
   [BRIDGE_NAVIGATE_BACK_NOTIFY]: 'navigate',

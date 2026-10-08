@@ -48,6 +48,8 @@ export type RelayArtifact = {
 /** The bare Windows process-table addon; see docs/reference/windows-process-enumeration.md. */
 export const RELAY_WINDOWS_PROCESS_TREE_FILENAME = 'windows-process-tree.node'
 export const RELAY_OPENCODE_SQLITE_READER_FILENAME = 'opencode-sqlite-reader.cjs'
+/** Built into the WSL-only bundle dir (out/relay/wsl), never into an SSH relay dir. */
+export const WSL_CLAUDE_PROFILE_HELPER_FILENAME = 'claude-profile-wsl.cjs'
 
 export const RELAY_ARTIFACTS: readonly RelayArtifact[] = [
   { filename: 'relay.js' },
@@ -87,6 +89,9 @@ export const RELAY_VERSION_FILENAME = '.version'
 
 /** Written last by the installer; its absence means a torn install. */
 export const RELAY_INSTALL_COMPLETE_FILENAME = '.install-complete'
+
+/** PID of the last relay daemon that bound a socket from this version dir; GC liveness evidence. */
+export const RELAY_PID_FILENAME = '.relay-pid'
 
 /** Artifacts every relay must have; the remote install probe requires each one. */
 export function relayArtifactFilenames(isWindows: boolean): string[] {

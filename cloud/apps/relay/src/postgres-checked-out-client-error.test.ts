@@ -27,14 +27,6 @@ function poolOf(client: FakePoolClient) {
 }
 
 describe('checked-out PostgreSQL client failure handling', () => {
-  it('crashes the process when nothing listens, which is the bug being fixed', () => {
-    // Node's own contract: this is what killed cell c28 on 2026-09-20 20:18Z.
-    const unguarded = new EventEmitter()
-    expect(() => unguarded.emit('error', new Error('Connection terminated unexpectedly'))).toThrow(
-      'Connection terminated unexpectedly'
-    )
-  })
-
   it('absorbs the error, rejects the transaction, and releases the client as failed', async () => {
     const terminated = Object.assign(new Error('Connection terminated unexpectedly'), {
       code: '57P01'

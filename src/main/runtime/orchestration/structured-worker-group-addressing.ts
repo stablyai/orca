@@ -16,28 +16,52 @@
  */
 
 import type { TuiAgent } from '../../../shared/tui-agent'
-import { observeStructuredWorker, structuredWorkerAgent } from '../structured-worker-authority'
-import { structuredWorkerIdentities } from '../structured-worker-identity'
+import type { TerminalAgent } from '../../../shared/terminal-agent'
+import {
+  holdStructuredWorker,
+  resolveStructuredWorkerAuthority,
+  structuredWorkerAgent
+} from '../structured-worker-authority'
+import {
+  STRUCTURED_WORKER_INCARNATION_PREFIX,
+  structuredWorkerIdentityFromRow
+} from '../structured-worker-identity'
+import type { OrchestrationDb } from './db'
 import { readStructuredSessionGateFacts } from './structured-mailbox-pointer-host'
+import type { RunningStructuredSession } from './structured-session-lineage'
 
 /** The only facts group addressing reads off a recipient. */
 export type OrchestrationAddressableAgent = {
   handle: string
   worktreeId: string
   /** Absent means "unknown", and `@claude`/`@codex` fail closed on it, exactly as for a pane. */
-  agentIdentity?: TuiAgent
+  agentIdentity?: TerminalAgent
 }
 
 /**
- * Live structured workers of this runtime, as group-address candidates.
+ * Structured workers this runtime owns, as group-address candidates.
  *
- * Liveness-gated on the same observation the rest of the structured surface uses: a settled or
- * handed-off worker is not a recipient, and addressing one would store mail no lane will deliver.
+ * Read from the durable worker-terminal rows, which outlive a settled dispatch and a restart, and
+ * gated on ownership and on the orchestration not having released it — the same answer direct mail
+ * routes on — never on liveness: a worker at rest is a recipient, and the mail starts it. A retired
+ * or released one is not.
  */
-export function listAddressableStructuredWorkers(): OrchestrationAddressableAgent[] {
-  return structuredWorkerIdentities
-    .list()
-    .filter((identity) => observeStructuredWorker(identity).status === 'live')
+export function listAddressableStructuredWorkers(
+  db: OrchestrationDb | null
+): OrchestrationAddressableAgent[] {
+  const seen = new Set<string>()
+  return (
+    db?.listWorkerTerminalResourcesByIncarnationPrefix(STRUCTURED_WORKER_INCARNATION_PREFIX) ?? []
+  )
+    .flatMap((row) => {
+      const identity = structuredWorkerIdentityFromRow(row)
+      // Newest row first: a session is one recipient, under its latest handle.
+      if (!identity || seen.has(identity.sessionId)) {
+        return []
+      }
+      seen.add(identity.sessionId)
+      return holdStructuredWorker(identity, db, row).kind === 'held' ? [identity] : []
+    })
     .map((identity) => ({
       handle: identity.handle,
       worktreeId: identity.worktreeId,
@@ -46,14 +70,28 @@ export function listAddressableStructuredWorkers(): OrchestrationAddressableAgen
 }
 
 /**
+ * `@idle` status for a handle, read off the session running the worker now; `undefined` when the
+ * handle is not a structured worker this runtime holds, so the PTY probes answer instead.
+ */
+export async function structuredWorkerHandleAgentStatus(
+  handle: string,
+  db: OrchestrationDb | null | undefined
+): Promise<string | null | undefined> {
+  const authority = resolveStructuredWorkerAuthority(handle, db)
+  return authority ? structuredWorkerAgentStatus(authority.running) : undefined
+}
+
+/**
  * A structured worker's agent status, in the vocabulary `@idle` already matches on.
  *
  * Null when the session cannot be read: unknown must not read as idle, or a broadcast to `@idle`
- * would wake a worker mid-turn — which Codex coalesces into the running turn and Claude queues
- * behind it.
+ * would wake a worker mid-turn — which Codex coalesces into the running turn and Claude folds
+ * into it.
  */
-export function structuredWorkerAgentStatus(sessionId: string): string | null {
-  const facts = readStructuredSessionGateFacts(sessionId)
+export async function structuredWorkerAgentStatus(
+  running: RunningStructuredSession
+): Promise<string | null> {
+  const facts = await readStructuredSessionGateFacts(running.sessionId)
   if (!facts) {
     return null
   }

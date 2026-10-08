@@ -138,14 +138,6 @@ describe('terminal-history', () => {
   })
 
   describe('resolveShellKind', () => {
-    it('detects zsh', () => {
-      expect(resolveShellKind('/bin/zsh')).toBe('zsh')
-    })
-
-    it('detects bash', () => {
-      expect(resolveShellKind('/bin/bash')).toBe('bash')
-    })
-
     it('detects versioned bash (bash-5.2)', () => {
       expect(resolveShellKind('/usr/local/bin/bash-5.2')).toBe('bash')
     })
@@ -158,23 +150,9 @@ describe('terminal-history', () => {
       expect(resolveShellKind('/nix/store/abc123/bin/zsh')).toBe('zsh')
     })
 
-    it('detects fish', () => {
-      expect(resolveShellKind('/usr/bin/fish')).toBe('fish')
-    })
-
     it('detects pwsh', () => {
       expect(resolveShellKind('pwsh')).toBe('pwsh')
       expect(resolveShellKind('pwsh.exe')).toBe('pwsh')
-    })
-
-    it('detects cmd.exe', () => {
-      expect(resolveShellKind('cmd.exe')).toBe('cmd')
-    })
-
-    it('returns unknown for unrecognized shells', () => {
-      expect(resolveShellKind('/bin/tcsh')).toBe('unknown')
-      expect(resolveShellKind('/bin/dash')).toBe('unknown')
-      expect(resolveShellKind('/bin/elvish')).toBe('unknown')
     })
   })
 

@@ -4,12 +4,15 @@ import { subscribeRuntimeEnvironmentFromPreload } from '../../../../preload/runt
 import { tagRuntimeSubscriptionReplayResponse } from '../../../../shared/runtime-subscription-replay'
 import { createCompatibleRuntimeStatusResponse } from '@/runtime/runtime-compatibility-test-fixture'
 import { registerRuntimeClientIpcBridge } from './runtime-client-ipc-bridge'
+import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
+import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
 
 const initialState = useAppStore.getState()
 
 beforeEach(() => vi.useFakeTimers())
 afterEach(() => {
   useAppStore.setState(initialState, true)
+  replaceRuntimeEnvironmentRevisions(initialState.runtimeEnvironments)
   vi.useRealTimers()
   vi.unstubAllGlobals()
 })
@@ -38,6 +41,7 @@ function createHarness() {
   }
   const getIssue = vi.fn(() => issueRead.promise)
   const refreshStatus = vi.fn(async () => true)
+  const fetchRuntimeEnvironmentRepos = vi.fn(async () => [])
   let nextId = 0
   vi.stubGlobal('window', {
     api: {
@@ -76,14 +80,17 @@ function createHarness() {
     linearProjectIssueCache: {},
     linearCustomViewIssueCache: {},
     checkLinearConnection: vi.fn(async () => {}),
-    refreshRuntimeEnvironmentStatus: refreshStatus
+    refreshRuntimeEnvironmentStatus: refreshStatus,
+    fetchRuntimeEnvironmentRepos
   })
   const starts: (() => void)[] = []
+  const activateNotifiedWorktree = vi.fn(async () => {})
+  const enqueue = vi.fn()
   const start = (): (() => void) => {
     const unsubs: (() => void)[] = []
     const unsubscribeStore = registerRuntimeClientIpcBridge(unsubs, {
-      worktreeChangeRefreshQueue: { enqueue: vi.fn(), dispose: vi.fn() },
-      activateNotifiedWorktree: vi.fn(async () => {})
+      worktreeChangeRefreshQueue: { enqueue, dispose: vi.fn() },
+      activateNotifiedWorktree
     })
     const stop = (): void => {
       unsubscribeStore()
@@ -96,14 +103,17 @@ function createHarness() {
     start,
     getIssue,
     refreshStatus,
+    fetchRuntimeEnvironmentRepos,
     pending,
     ipc,
-    emit: (index: number, replay = false) => {
+    activateNotifiedWorktree,
+    enqueue,
+    emit: (index: number, replay = false, event?: RuntimeClientEvent) => {
       const response = {
         id: 'r',
         ok: true as const,
         _meta: { runtimeId: 'remote-runtime' },
-        result: {
+        result: event ?? {
           type: 'linearLinkedIssueUpdated',
           identifier: 'ISSUE-1',
           workspaceId: 'workspace-a'
@@ -149,6 +159,144 @@ it('does no Linear read dispatch or cache publication after cleanup while setup 
   }
   expect(h.ipc.removeListener).toHaveBeenCalledOnce()
 })
+
+it('does not navigate for an unaddressed activation from an older remote host', async () => {
+  const h = createHarness()
+  try {
+    h.start()
+    h.emit(0, false, { type: 'activateWorktree', repoId: 'remote-repo', worktreeId: 'remote-wt' })
+    for (let index = 0; index < 10; index += 1) {
+      await Promise.resolve()
+    }
+    expect(h.activateNotifiedWorktree).not.toHaveBeenCalled()
+    h.emit(0, false, { type: 'worktreesChanged', repoId: 'remote-repo' })
+    for (let index = 0; index < 10; index += 1) {
+      await Promise.resolve()
+    }
+    expect(h.enqueue).toHaveBeenCalledWith({
+      repoId: 'remote-repo',
+      executionHostId: 'runtime:host-a'
+    })
+  } finally {
+    await h.finish()
+  }
+})
+
+it.each(['caller', 'host'] as const)(
+  'ignores remote activation addressed to %s',
+  async (navigation) => {
+    const h = createHarness()
+    try {
+      h.start()
+      h.emit(0, false, {
+        type: 'activateWorktree',
+        repoId: 'remote-repo',
+        worktreeId: 'remote-wt',
+        navigation
+      })
+      for (let index = 0; index < 10; index += 1) {
+        await Promise.resolve()
+      }
+      expect(h.activateNotifiedWorktree).not.toHaveBeenCalled()
+    } finally {
+      await h.finish()
+    }
+  }
+)
+
+it.each(['clients', 'all'] as const)(
+  'honors explicit %s activation on the publishing host',
+  async (navigation) => {
+    const h = createHarness()
+    try {
+      h.start()
+      const event: RuntimeClientEvent = {
+        type: 'activateWorktree',
+        repoId: 'remote-repo',
+        worktreeId: 'remote-wt',
+        navigation
+      }
+      h.emit(0, false, event)
+      for (let index = 0; index < 10; index += 1) {
+        await Promise.resolve()
+      }
+      expect(h.activateNotifiedWorktree).toHaveBeenCalledWith(event, {
+        allowRuntimeEnvironment: true,
+        executionHostId: 'runtime:host-a',
+        isCurrent: expect.any(Function)
+      })
+    } finally {
+      await h.finish()
+    }
+  }
+)
+
+it('does not mistake a local repo with the same id for the publishing remote repo', async () => {
+  const h = createHarness()
+  useAppStore.setState({
+    repos: [
+      {
+        id: 'same-repo',
+        path: '/local/repo',
+        displayName: 'Local repo',
+        badgeColor: 'blue',
+        addedAt: 1
+      }
+    ]
+  })
+  try {
+    h.start()
+    h.emit(0, false, {
+      type: 'activateWorktree',
+      repoId: 'same-repo',
+      worktreeId: 'same-wt',
+      navigation: 'clients'
+    })
+    for (let index = 0; index < 10; index += 1) {
+      await Promise.resolve()
+    }
+    expect(h.fetchRuntimeEnvironmentRepos).toHaveBeenCalledWith('host-a')
+    expect(h.activateNotifiedWorktree).toHaveBeenCalledWith(expect.anything(), {
+      allowRuntimeEnvironment: true,
+      executionHostId: 'runtime:host-a',
+      isCurrent: expect.any(Function)
+    })
+  } finally {
+    await h.finish()
+  }
+})
+
+it.each(['cleanup', 're-pair'] as const)(
+  'cancels an accepted activation after %s during repository discovery',
+  async (change) => {
+    const h = createHarness()
+    const repos = Promise.withResolvers<never[]>()
+    h.fetchRuntimeEnvironmentRepos.mockImplementation(() => repos.promise)
+    try {
+      const stop = h.start()
+      h.emit(0, false, {
+        type: 'activateWorktree',
+        repoId: 'remote-repo',
+        worktreeId: 'remote-wt',
+        navigation: 'clients'
+      })
+      expect(h.fetchRuntimeEnvironmentRepos).toHaveBeenCalledWith('host-a')
+      if (change === 'cleanup') {
+        stop()
+      } else {
+        replaceRuntimeEnvironmentRevisions([{ id: 'host-a', createdAt: 1, pairingRevision: 2 }])
+      }
+      repos.resolve([])
+      for (let index = 0; index < 10; index += 1) {
+        await Promise.resolve()
+      }
+      expect(h.activateNotifiedWorktree).not.toHaveBeenCalled()
+    } finally {
+      repos.resolve([])
+      await h.finish()
+    }
+  }
+)
 
 it('does no replay recovery or resubscription after cleanup', async () => {
   const h = createHarness()

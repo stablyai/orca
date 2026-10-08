@@ -73,7 +73,8 @@ function sessionState(fence: number | null): StructuredAgentSessionState {
     fence,
     items: [],
     submissions: [],
-    retainedItemLimit: 1_024,
+    retainedOwnItemLimit: 1_024,
+    retainedItemCap: 8_192,
     hasOlder: false,
     status: 'ready',
     commands: []
@@ -126,8 +127,8 @@ describe('a chat pane over its own launch', () => {
 
   it('keeps the selection its create seeded when a pick in another chat saves a new one', () => {
     saveSelection('gpt-5.5')
-    startStructuredAgentLaunch('wt-first', 'codex')
-    const second = startStructuredAgentLaunch('wt-second', 'codex')
+    startStructuredAgentLaunch('wt-first', 'codex', { requestId: 'request-1' })
+    const second = startStructuredAgentLaunch('wt-second', 'codex', { requestId: 'request-2' })
     const { result, rerender } = renderLaunchedChat('wt-second', second.sessionId)
     expect(currentModel(result.current.optionSnapshot)).toBe('gpt-5.5')
 
@@ -155,7 +156,7 @@ describe('a chat pane over its own launch', () => {
           })
         : new Promise(() => {})
     )
-    const launch = startStructuredAgentLaunch('wt-refused', 'codex')
+    const launch = startStructuredAgentLaunch('wt-refused', 'codex', { requestId: 'request-3' })
     const { sessionId } = launch
     const { result, rerender } = renderLaunchedChat('wt-refused', sessionId)
     await act(async () => {

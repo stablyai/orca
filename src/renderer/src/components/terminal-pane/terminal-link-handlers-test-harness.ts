@@ -35,7 +35,6 @@ export function installTerminalLinkTestEnvironment(doubles: TerminalLinkTestDoub
     openUrlMock,
     openFileUriMock,
     openFilePathMock,
-    authorizeExternalPathMock,
     statMock,
     fsPathExistsMock,
     runtimeEnvironmentCallMock,
@@ -71,7 +70,6 @@ export function installTerminalLinkTestEnvironment(doubles: TerminalLinkTestDoub
           pathExists: vi.fn().mockResolvedValue(true)
         },
         fs: {
-          authorizeExternalPath: authorizeExternalPathMock,
           pathExists: fsPathExistsMock,
           stat: statMock
         },

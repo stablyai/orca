@@ -1,4 +1,3 @@
-import { hasFlag } from './agent-cli-flag-detection'
 import { removeAgentArgOption } from './agent-session-option-agent-args'
 import type {
   AgentSessionOptionCatalog,
@@ -46,8 +45,7 @@ function kiroModelOptions(modelId: string): CatalogOption[] {
       },
       apply: {
         launchArgs: (value) => ['--effort', String(value)],
-        agentArgsOverride: (tokens) => hasFlag(tokens, ['--effort']),
-        removeAgentArgs: (tokens) => removeAgentArgOption(tokens, ['--effort'])
+        removeAgentArgs: (tokens) => removeAgentArgOption('kiro', tokens, ['--effort'])
       }
     }
   ]
@@ -73,8 +71,7 @@ export const KIRO_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   ],
   modelApply: {
     launchArgs: (value) => ['--model', String(value)],
-    agentArgsOverride: (tokens) => hasFlag(tokens, ['--model']),
-    removeAgentArgs: (tokens) => removeAgentArgOption(tokens, ['--model'])
+    removeAgentArgs: (tokens) => removeAgentArgOption('kiro', tokens, ['--model'])
   },
   resolveModelOptions: kiroModelOptions,
   launchOptionDefaults: false,

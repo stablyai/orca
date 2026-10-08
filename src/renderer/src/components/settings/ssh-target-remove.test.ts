@@ -24,9 +24,21 @@ describe('removeSshTargetWithBestEffortCleanup', () => {
   it('terminates then removes when the relay is already connected', async () => {
     const api = createApi()
     await removeSshTargetWithBestEffortCleanup(api, 'ssh-1')
-    expect(api.terminateSessions).toHaveBeenCalledWith({ targetId: 'ssh-1' })
+    expect(api.terminateSessions).toHaveBeenCalledWith({ targetId: 'ssh-1', forRemoval: true })
     expect(api.connect).not.toHaveBeenCalled()
     expect(api.removeTarget).toHaveBeenCalledWith({ id: 'ssh-1' })
+  })
+
+  it('asks main to refuse a managed server host before any terminal ends', async () => {
+    const api = createApi({
+      terminateSessions: vi.fn().mockRejectedValue(new Error('Stop it first')),
+      removeTarget: vi.fn().mockRejectedValue(new Error('Stop it first'))
+    })
+    await expect(removeSshTargetWithBestEffortCleanup(api, 'ssh-1')).rejects.toThrow(
+      'Stop it first'
+    )
+    expect(api.terminateSessions).toHaveBeenCalledWith({ targetId: 'ssh-1', forRemoval: true })
+    expect(api.connect).not.toHaveBeenCalled()
   })
 
   it('reconnects and retries termination when the relay is detached', async () => {

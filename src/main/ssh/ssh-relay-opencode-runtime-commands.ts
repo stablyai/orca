@@ -1,3 +1,4 @@
+import { NODE_SQLITE_READER_API_SOURCE } from '../sqlite/node-sqlite-reader-api'
 import { shellEscape } from './ssh-connection-utils'
 import { posix, win32 } from 'node:path'
 import { powerShellCommand, powerShellLiteral, powerShellNativeArg } from './ssh-remote-powershell'
@@ -20,10 +21,8 @@ function nodeCommand(
 }
 
 const SEND = `const send=(value)=>console.log(${JSON.stringify(OPENCODE_RUNTIME_RESULT)}+JSON.stringify(value));`
-const HASH = `const fs=require('node:fs');const fsp=fs.promises;const path=require('node:path');
-async function hash(file){try{const digest=require('node:crypto').createHash('sha256');for await(const chunk of fs.createReadStream(file))digest.update(chunk);return digest.digest('hex')}catch(error){if(error.code==='ENOENT')return null;throw error}}
-`
 
+/** Host Node needs backup() too: 22.13-22.15 have DatabaseSync without it (design D4). */
 export function probeOpenCodeNodeSqliteCommand(
   host: RemoteHostPlatform,
   nodePath: string,
@@ -40,7 +39,8 @@ try{if(override&&override!==':memory:'){present=(await fs.stat(path.isAbsolute(o
 else if(!override){const directory=await fs.opendir(data);for await(const entry of directory){if(entry.isFile()&&/^opencode(?:-[A-Za-z0-9_.-]+)?\\.db$/.test(entry.name)){present=true;break}}}}
 catch(error){if(error.code!=='ENOENT'&&error.code!=='ENOTDIR')throw error}
 if(!present){send({status:'not-needed'});return}
-let db;try{db=new(require('node:sqlite').DatabaseSync)(':memory:');
+let db;try{const sqlite=require('node:sqlite');if(!(${NODE_SQLITE_READER_API_SOURCE})(sqlite))throw Error('SQLite reader API missing');
+db=new sqlite.DatabaseSync(':memory:');
 if(db.prepare('SELECT 1 AS ready').get().ready!==1)throw Error('SQLite read failed');
 send({status:'ready',executable:process.execPath})}catch{send({status:'unsupported'})}finally{if(db)db.close()}
 })().catch(error=>{console.error(error.message);process.exitCode=1})`,
@@ -48,75 +48,34 @@ send({status:'ready',executable:process.execPath})}catch{send({status:'unsupport
   )
 }
 
-export function probeOpenCodeRuntimeCacheCommand(args: {
-  host: RemoteHostPlatform
-  nodePath: string
-  executable: string
-  expectedHash: string
-  reference: string
-}): string {
-  return nodeCommand(
-    args.host,
-    args.nodePath,
-    `${HASH}${SEND}
-(async()=>{const [executable,expected,reference]=process.argv.slice(1);
-let candidate=executable;let digest=candidate?await hash(candidate):null;
-if(candidate&&digest!==expected){try{const ref=JSON.parse(await fsp.readFile(reference,'utf8'));
-const relative=path.relative(path.dirname(executable),ref.executable);
-if(ref.protocol===1&&relative&&!relative.startsWith('..'+path.sep)&&relative!=='..'&&!path.isAbsolute(relative)){candidate=ref.executable;digest=await hash(candidate)}}catch{}}
-if(candidate&&digest===expected){if(process.platform!=='win32')await fsp.chmod(candidate,448);send({status:'ready',executable:candidate});return}
-send({status:'missing'})})().catch(error=>{console.error(error.message);process.exitCode=1})`,
-    [args.executable, args.expectedHash, args.reference]
-  )
-}
-
-export function promoteOpenCodeRuntimeCommand(args: {
-  host: RemoteHostPlatform
-  nodePath: string
-  stagedBinary: string
-  executable: string
-  expectedHash: string
-  repairToken: string
-}): string {
-  return nodeCommand(
-    args.host,
-    args.nodePath,
-    `${HASH}${SEND}
-(async()=>{const [source,destination,expected,token]=process.argv.slice(1);
-if(await hash(source)!==expected)throw Error('Uploaded SQLite runtime checksum mismatch');
-let executable=destination;const existing=await hash(destination);
-if(existing!==expected){
-if(existing!==null)executable=path.join(path.dirname(destination),'repair-'+token,path.basename(destination));
-await fsp.mkdir(path.dirname(executable),{recursive:true,mode:448});
-if(process.platform!=='win32')await fsp.chmod(source,448);
-try{await fsp.link(source,executable)}catch(error){if(await hash(executable)!==expected){
-if(!['EPERM','EOPNOTSUPP','ENOTSUP','ENOSYS','EXDEV'].includes(error.code))throw error;
-executable=path.join(path.dirname(destination),'repair-'+token,path.basename(destination));
-await fsp.mkdir(path.dirname(executable),{recursive:true,mode:448});await fsp.rename(source,executable)
-}}
-}
-send({status:'ready',executable})})().catch(error=>{console.error(error.message);process.exitCode=1})`,
-    [args.stagedBinary, args.executable, args.expectedHash, args.repairToken]
-  )
-}
-
+/**
+ * Publishes the reference. With `runtimeRef`, the relay dir first gains the store ref file that
+ * keeps the pinned runtime from store GC, so the reference never names an unheld runtime.
+ */
 export function publishOpenCodeRuntimeReferenceCommand(args: {
   host: RemoteHostPlatform
   nodePath: string
   stagedReference: string
   reference: string
   token: string
+  runtimeRef?: { path: string; sha256: string }
 }): string {
   return nodeCommand(
     args.host,
     args.nodePath,
     `${SEND}
 const fs=require('node:fs/promises');const path=require('node:path');
-(async()=>{const [source,destination,token]=process.argv.slice(1);const temporary=destination+'.upload-'+token;
-try{await fs.copyFile(source,temporary,require('node:fs').constants.COPYFILE_EXCL);
+(async()=>{const [source,destination,token,refPath,refSha]=process.argv.slice(1);const temporary=destination+'.upload-'+token;
+try{if(refPath)await fs.writeFile(refPath,refSha+'\\n');
+await fs.copyFile(source,temporary,require('node:fs').constants.COPYFILE_EXCL);
 await fs.rename(temporary,destination);send({status:'published'})}
 finally{await fs.rm(temporary,{force:true})}})().catch(error=>{console.error(error.message);process.exitCode=1})`,
-    [args.stagedReference, args.reference, args.token]
+    [
+      args.stagedReference,
+      args.reference,
+      args.token,
+      ...(args.runtimeRef ? [args.runtimeRef.path, args.runtimeRef.sha256] : [])
+    ]
   )
 }
 

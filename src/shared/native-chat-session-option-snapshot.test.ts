@@ -9,6 +9,7 @@ import {
   CODEX_SESSION_OPTION_CATALOG
 } from './agent-session-option-catalog-claude-codex'
 import { CURSOR_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-gemini-cursor'
+import { KIRO_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-kiro'
 import { GROK_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-grok'
 import { resolveAgentSessionOptionLaunch } from './agent-session-option-launch'
 import {
@@ -292,7 +293,7 @@ describe('defaults on load', () => {
   it('shows the default model before anything is picked', () => {
     const model = grokDraft()[0]!
     expect(model).toMatchObject({ id: 'model', valueSource: 'default' })
-    expect(model.kind.type === 'select' ? model.kind.currentValue : null).toBe('grok-4.6')
+    expect(model.kind.type === 'select' ? model.kind.currentValue : null).toBe('grok-4.7')
   })
 
   it('offers the effort row under that default model without naming its value', () => {
@@ -308,7 +309,7 @@ describe('defaults on load', () => {
     // default — as true of a running session as of a draft.
     const live = grokDraft(GROK_SESSION_OPTION_CATALOG.models, 'live')
     expect(live[0]).toMatchObject({ id: 'model', valueSource: 'default' })
-    expect(live[0]!.kind.type === 'select' ? live[0]!.kind.currentValue : null).toBe('grok-4.6')
+    expect(live[0]!.kind.type === 'select' ? live[0]!.kind.currentValue : null).toBe('grok-4.7')
     expect(live.find((descriptor) => descriptor.id === 'effort')).toMatchObject({
       valueSource: 'unknown'
     })
@@ -376,6 +377,38 @@ describe('defaults on load', () => {
     const effort = snapshot.find((descriptor) => descriptor.id === 'effort')
     expect(effort).toMatchObject({ valueSource: 'default' })
     expect(effort?.kind.type === 'select' ? effort.kind.currentValue : null).toBeDefined()
+  })
+
+  it('keeps unselected Kiro effort unknown and shows an explicit pick', () => {
+    const catalog = KIRO_SESSION_OPTION_CATALOG
+    const models =
+      catalog.listModels?.parse(JSON.stringify({ models: [{ model_id: 'gpt-5.6-sol' }] })) ?? []
+    const record = createNativeChatSessionOptionRecord('kiro')
+    record.model = { value: 'gpt-5.6-sol', source: 'applied' }
+    const snapshot = () =>
+      buildNativeChatSessionOptionSnapshot({
+        catalog,
+        models,
+        record,
+        mode: 'draft',
+        modelLabel: 'Model',
+        liveTransport: 'catalog'
+      })
+    expect(snapshot().find((option) => option.id === 'effort')).toMatchObject({
+      valueSource: 'unknown',
+      kind: { type: 'select' }
+    })
+    const effort = snapshot().find((option) => option.id === 'effort')
+    expect(effort?.kind.type === 'select' ? effort.kind.currentValue : null).toBeUndefined()
+    expect(resolveAgentSessionOptionLaunch('kiro', { model: 'gpt-5.6-sol' }).args).toEqual([
+      '--model',
+      'gpt-5.6-sol'
+    ])
+    record.valuesByModel['gpt-5.6-sol'] = { effort: { value: 'low', source: 'applied' } }
+    expect(snapshot().find((option) => option.id === 'effort')).toMatchObject({
+      valueSource: 'applied',
+      kind: { currentValue: 'low' }
+    })
   })
 
   it('does not turn a shown default into a launch flag', () => {

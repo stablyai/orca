@@ -5,6 +5,8 @@ import {
   runtimeWorktreeIdsEqual
 } from './runtime-worktree-path-identity'
 import { makePaneKey } from '../../shared/stable-pane-id'
+import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import { layoutContainsLeafId } from '../persistence/restoring-sessions/terminal-layout-normalization'
 import type { LegacyWorkerTerminalRecoveryPlan } from './orchestration/orchestration-legacy-worker-terminal-recovery'
 import { retireTerminalSurfacesFromSnapshot } from './mobile-session-terminal-retirement'
 import type {
@@ -27,6 +29,35 @@ import type {
 } from '../../shared/artifacts'
 
 export class OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity extends OrcaRuntimeWithAutomationOperations {
+  /** The host's saved session, when it still lists `tabId` under this worktree. */
+  protected getPersistedSessionListingTerminalTab(
+    worktreeId: string,
+    tabId: string,
+    session = this.getWorkspaceSessionForWorktree(worktreeId)
+  ): WorkspaceSessionState | null {
+    const sessionWorktreeId = session ? resolveTerminalSessionWorktreeId(session, worktreeId) : null
+    return session &&
+      sessionWorktreeId &&
+      session.tabsByWorktree[sessionWorktreeId]?.some((candidate) => candidate.id === tabId)
+      ? session
+      : null
+  }
+
+  protected hasPersistedTerminalSurfaceMembership(
+    worktreeId: string,
+    tabId: string,
+    leafId: string
+  ): boolean {
+    // Why own partition: emptying a rotated runtime partition re-routes reads to an older copy
+    // that can still list a surface retirement just removed.
+    const layout = this.getPersistedSessionListingTerminalTab(
+      worktreeId,
+      tabId,
+      this.getOwnWorkspaceSessionForWorktree(worktreeId)
+    )?.terminalLayoutsByTabId[tabId]
+    return Boolean(layout && layoutContainsLeafId(layout.root, leafId))
+  }
+
   protected hasExactPersistedTerminalSurfaceIdentity(expected: {
     worktreeId: string
     tabId: string
@@ -34,19 +65,10 @@ export class OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity extends Orc
     ptyId: string
     incarnationId: string
   }): boolean {
-    const session = this.getWorkspaceSessionForWorktree(expected.worktreeId)
-    const sessionWorktreeId = session
-      ? resolveTerminalSessionWorktreeId(session, expected.worktreeId)
-      : null
-    if (!session || !sessionWorktreeId) {
-      return false
-    }
-    const tab = session.tabsByWorktree[sessionWorktreeId]?.find(
-      (candidate) => candidate.id === expected.tabId
-    )
+    const session = this.getPersistedSessionListingTerminalTab(expected.worktreeId, expected.tabId)
     const paneKey = makePaneKey(expected.tabId, expected.leafId)
     return Boolean(
-      tab &&
+      session &&
       session.terminalLayoutsByTabId[expected.tabId]?.ptyIdsByLeafId?.[expected.leafId] ===
         expected.ptyId &&
       session.terminalPtyIncarnationsByPaneKey?.[paneKey] === expected.incarnationId
@@ -158,7 +180,7 @@ export class OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity extends Orc
     }
     const reveal = await this.notifier.revealTerminalSession(candidate.worktreeId, {
       ptyId: candidate.ptyId,
-      title: getLatestPtyTitle(pty) ?? pty.controllerTitle,
+      title: getLatestPtyTitle(this.getPtyDisplayRecord(pty)) ?? pty.controllerTitle,
       activate: false,
       presentation: 'background',
       tabId: candidate.tabId,
@@ -181,6 +203,10 @@ export class OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity extends Orc
 
   setAutomationService(service: AutomationService): void {
     this.automation.setService(service)
+  }
+
+  releaseFinishedAutomationRunTerminals(): Promise<number> {
+    return this.automation.releaseFinishedRunTerminals()
   }
 
   setArtifactService(service: ArtifactCloudService): void {

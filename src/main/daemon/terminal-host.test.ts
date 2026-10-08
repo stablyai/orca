@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { readFileSync, rmSync } from 'node:fs'
 import { Session } from './session'
 import { IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS } from './session-termination-controller'
 import type { SubprocessHandle } from './session-subprocess-handle'
@@ -189,9 +190,7 @@ describe('TerminalHost', () => {
 
       lastSubprocess._onDataCb?.('\r\nuser@host $ ')
       await new Promise((r) => setTimeout(r, 40))
-      expect(lastSubprocess.write).toHaveBeenCalledWith(
-        process.platform === 'win32' ? 'echo hello\r' : 'echo hello\n'
-      )
+      expect(lastSubprocess.write).toHaveBeenCalledWith('echo hello\r')
     })
 
     it('uses the short daemon settle path when marker and prompt arrive together', async () => {
@@ -211,9 +210,7 @@ describe('TerminalHost', () => {
         expect(lastSubprocess.write).not.toHaveBeenCalled()
 
         vi.advanceTimersByTime(1)
-        expect(lastSubprocess.write).toHaveBeenCalledWith(
-          process.platform === 'win32' ? 'echo hello\r' : 'echo hello\n'
-        )
+        expect(lastSubprocess.write).toHaveBeenCalledWith('echo hello\r')
       } finally {
         vi.useRealTimers()
       }
@@ -242,12 +239,10 @@ describe('TerminalHost', () => {
         streamClient: { onData: vi.fn(), onExit: vi.fn() }
       })
 
-      expect(lastSubprocess.write).toHaveBeenCalledWith(
-        process.platform === 'win32' ? 'echo hello\r' : 'echo hello\n'
-      )
+      expect(lastSubprocess.write).toHaveBeenCalledWith('echo hello\r')
     })
 
-    it('does not bracketed-paste-wrap multiline commands for a fallback shell without paste mode', async () => {
+    it('stages multiline commands for a fallback shell without paste mode', async () => {
       spawnFn = vi.fn(() => {
         const sub = createMockSubprocess({ shellPath: '/bin/sh' }) as ReturnType<
           typeof createMockSubprocess
@@ -271,8 +266,11 @@ describe('TerminalHost', () => {
       })
 
       const written = (lastSubprocess.write as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]
-      expect(written).not.toContain('\x1b[200~')
-      expect(written).toContain('line one\nline two')
+      // Staged: the line sources a script holding the whole command, submitted with Enter's CR.
+      const scriptPath = /^\. '(.*orca-launch-[0-9a-f]+\.sh)'\r$/.exec(written)?.[1]
+      expect(scriptPath).toBeDefined()
+      expect(readFileSync(scriptPath!, 'utf8')).toContain('claude "line one\nline two"\n')
+      rmSync(scriptPath!, { force: true })
     })
 
     it('keeps the shell-ready barrier when the spawned shell supports the marker', async () => {

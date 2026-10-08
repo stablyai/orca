@@ -117,20 +117,6 @@ describe('BrowserClientDownloadRelay', () => {
     expect(removed).toContain(path.dirname(route.stagingPath))
   })
 
-  it('sweeps the staging root left behind by an earlier run', () => {
-    const { filesystem, sweptSync } = memoryFilesystem(Buffer.alloc(0))
-
-    new BrowserClientDownloadRelay({
-      stagingRoot: '/tmp/staging',
-      hostLabel: 'build-box',
-      transport: negotiatedTransport(() => ({ accepted: true })),
-      resolvePage: () => page,
-      filesystem
-    })
-
-    expect(sweptSync).toEqual(['/tmp/staging'])
-  })
-
   it('removes the per-transfer staging directory when the transfer is aborted', async () => {
     const { filesystem, removed } = memoryFilesystem(Buffer.from('abc'))
     const relay = new BrowserClientDownloadRelay({

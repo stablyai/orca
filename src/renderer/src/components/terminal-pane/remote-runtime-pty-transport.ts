@@ -1,4 +1,5 @@
 import { createAgentSessionKeyboardOptions } from '@/runtime/agent-session-keyboard-capability'
+import { withRemoteReattachInputBuffer } from './remote-reattach-input-buffer'
 /* eslint-disable max-lines -- Why: remote PTY transport keeps lifecycle, JSON fallback, and binary stream wiring together so reconnect/destroy ordering stays testable as one behavior surface. */
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
 import {
@@ -69,6 +70,7 @@ import { replaceDriverPtyId, setDriverForPty } from '@/lib/pane-manager/mobile-d
 import { isWebTerminalSurfaceTabId, toHostSessionTabId } from '@/runtime/web-terminal-surface-id'
 import { listRemoteRuntimeSessionTabsDeduped } from '@/runtime/remote-runtime-session-tabs-inflight'
 import { subscribeAcceptedWebSessionTerminalHandle } from '@/runtime/web-session-terminal-handle-events'
+import { hostSnapshotAffirmsWorktreeContents } from '@/runtime/host-session-snapshot-authority'
 import { runRemoteAgentSessionLaunch } from '@/runtime/remote-agent-session-launch'
 import { useAppStore } from '@/store'
 import { recordWebAgentSessionHandoff } from '@/runtime/web-agent-session-handoff'
@@ -422,10 +424,12 @@ export function createRemoteRuntimePtyTransport(
   ): void => {
     outputProcessor.processData(data, storedCallbacks, undefined, meta)
   }
+  // Why flagged: only pushed snapshots are buffered for this pty during a shutdown.
   const shutdownReplayHandler = (data: string): void => {
     outputProcessor.processData(data, storedCallbacks, {
       replayingBufferedData: true,
-      suppressAttentionEvents: true
+      suppressAttentionEvents: true,
+      carriesNormalBuffer: true
     })
   }
   const shutdownLifecycle = {
@@ -845,13 +849,15 @@ export function createRemoteRuntimePtyTransport(
           return { handle: nextHandle, inventoryFailed: false }
         }
         if (request === 'list') {
-          if (!hasHostSessionTerminalSurface(listed, hostTabId)) {
+          if (hasHostSessionTerminalSurface(listed, hostTabId)) {
+            if (!nextHandle) {
+              // Why: the surface is published but unmaterialized, and only activation can mint its PTY.
+              nextRequest = 'activate'
+            }
+          } else if (hostSnapshotAffirmsWorktreeContents(listed)) {
             return { handle: null, inventoryFailed: false }
           }
-          if (!nextHandle) {
-            // Why: the surface is published but unmaterialized, and only activation can mint its PTY.
-            nextRequest = 'activate'
-          }
+          // Why: an unpublished frame from a relaunched host is unknown liveness, so keep asking.
         } else {
           // Why: an activation response can race host publication, so inventory — not this snapshot — decides what exists.
           nextRequest = 'list'
@@ -885,7 +891,7 @@ export function createRemoteRuntimePtyTransport(
       return true
     }
     if (lastConnectOptions) {
-      void transport.connect(lastConnectOptions)
+      void connectForRecovery(lastConnectOptions)
       return true
     }
     return false
@@ -1637,10 +1643,20 @@ export function createRemoteRuntimePtyTransport(
           return
         }
         if (update.terminalHandle === previousHandle) {
-          // Why: once the auto-recovery window is spent, a host still publishing this surface is evidence the fenced handle outlived the stale error.
-          if (!autoRecoveryWindowSpent || getCurrentMultiplexedStream(previousHandle)) {
+          if (getCurrentMultiplexedStream(previousHandle)) {
             return
           }
+          if (!autoRecoveryWindowSpent) {
+            // Why: a published surface is the evidence a parked wait (not a scheduled backoff) is waiting for, unless it needs a replacement handle.
+            if (
+              recovery.currentPhase === 'recovering' &&
+              getRecoveryReplacementPolicy(previousHandle) !== 'require-replacement'
+            ) {
+              recovery.retryNow()
+            }
+            return
+          }
+          // Why: once the auto-recovery window is spent, a host still publishing this surface is evidence the fenced handle outlived the stale error.
           // Why: one reattach per spent window, so a handle that really is dead is not retried on every host snapshot.
           autoRecoveryWindowSpent = false
           const reattachEpoch = recovery.begin()
@@ -1778,6 +1794,8 @@ export function createRemoteRuntimePtyTransport(
         }
         // Why: liveness is unknown, so auto-retry stops here; keep an unarmed retry parked for online/resume/reconnect to fire.
         recovery.parkRetryForExternalTrigger(recoveryEpoch, (nextEpoch) => {
+          // Why: an external trigger is a fresh attempt, not a repeated stale send, so it takes over this epoch's snapshot wait.
+          clearPublishedHandleWait()
           scheduleResubscribeAfterTransportClose(
             handle ? getRecoveryReplacementPolicy(handle) : 'reuse',
             nextEpoch
@@ -2018,7 +2036,8 @@ export function createRemoteRuntimePtyTransport(
               // host dimensions. Absent/zero degrades to the pane's own grid.
               ...(meta?.cols !== undefined && meta.rows !== undefined
                 ? { snapshotCols: meta.cols, snapshotRows: meta.rows }
-                : {})
+                : {}),
+              carriesNormalBuffer: true
             })
           }
         },
@@ -2173,6 +2192,7 @@ export function createRemoteRuntimePtyTransport(
     flushPendingClaimInput(nextStream)
   }
 
+  let connectForRecovery: PtyTransport['connect'] = (options) => transport.connect(options)
   const transport: PtyTransport = {
     async connect(options) {
       cancelTerminalCreateRetryWait()
@@ -2583,6 +2603,8 @@ export function createRemoteRuntimePtyTransport(
       storedCallbacks = {}
     },
 
+    // Why no kind: terminal.send has no launch kind, and its query-reply kind is for mobile
+    // clients, so the host classifies a desktop's bytes itself.
     sendInput(data: string): boolean {
       if (!connected || !handle || recoveryBlocksIo()) {
         return false
@@ -2713,7 +2735,7 @@ export function createRemoteRuntimePtyTransport(
         recovery.currentPhase === 'disconnected'
       ) {
         recovery.begin()
-        void transport.connect(lastConnectOptions)
+        void connectForRecovery(lastConnectOptions)
         return true
       }
       // Why: online/resume fires a parked retry; the button must not be weaker than an event (#12684).
@@ -2783,6 +2805,9 @@ export function createRemoteRuntimePtyTransport(
       return stream.serializeBufferOutcome(opts)
     },
 
+    setConnectForRecovery(connect) {
+      connectForRecovery = connect
+    },
     destroy() {
       destroyed = true
       setAttachmentUnavailable()
@@ -2798,5 +2823,5 @@ export function createRemoteRuntimePtyTransport(
       viewportBatcher.clear()
     }
   }
-  return transport
+  return withRemoteReattachInputBuffer(transport)
 }

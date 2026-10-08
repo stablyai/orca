@@ -174,6 +174,7 @@ export function useAiVaultSessionRefresh(
       const scanKey = `${baseKey}\n${selectedLimit}`
       try {
         const result = await window.api.aiVault.listSessions({
+          includeAntigravityIdeSessions: true,
           limit,
           unlimited: selectedLimit === 'unlimited',
           scopePaths: scopePathsRef.current,

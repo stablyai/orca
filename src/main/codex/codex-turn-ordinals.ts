@@ -100,6 +100,11 @@ export class CodexTurnOrdinals {
     }
   }
 
+  /** Whether any of the turn's items was read. */
+  hasItems(threadId: string, turnId: string): boolean {
+    return this.turns.has(this.turnKey(threadId, turnId))
+  }
+
   ordinalFor(threadId: string, turnId: string, codexItemId: string): number {
     const turnKey = this.turnKey(threadId, turnId)
     let turn = this.turns.get(turnKey)

@@ -156,8 +156,7 @@ describe('README local link check', () => {
     ])
   })
 
-  // Why the ungated job: static_analysis is skipped for docs-only diffs, which is
-  // exactly the kind of PR that deletes a docs-site GIF the README embeds.
+  // Docs-only diffs skip preflight, so the detector must check README links.
   it('runs on every PR through the ungated detector and in the lint script', () => {
     const { scripts } = JSON.parse(readFileSync(path.join(projectDir, 'package.json'), 'utf8'))
     const workflow = parse(readFileSync(path.join(projectDir, '.github/workflows/pr.yml'), 'utf8'))

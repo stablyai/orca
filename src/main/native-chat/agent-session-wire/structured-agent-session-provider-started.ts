@@ -10,12 +10,16 @@
 // asks the provider nothing: the event carries what the child proved.
 
 import { agentSessionLeaseAdmitsWriter } from '../../../shared/agent-session-lease-adjudication'
-import type { StructuredAgentSessionStartedEvent } from './structured-agent-session-adapter'
+import type {
+  StructuredAgentSessionOptionsSkippedEvent,
+  StructuredAgentSessionStartedEvent
+} from './structured-agent-session-adapter'
 import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession
 } from './structured-agent-session-host-types'
 import { nativeSessionOptionsFromReport } from './structured-agent-session-option-restoration'
+import { markProviderChildStarted } from './structured-agent-session-provider-child'
 
 export type StructuredAgentSessionProviderStartedContext = {
   deps: StructuredAgentSessionHostDeps
@@ -23,8 +27,6 @@ export type StructuredAgentSessionProviderStartedContext = {
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
   now: () => number
   publishStatus?: (sessionId: string) => void
-  restartReleaseGrace: (sessionId: string) => void
-  onBarrierError: (sessionId: string, error: unknown) => void
 }
 
 export function settleStructuredAgentSessionProviderStarted(
@@ -35,20 +37,22 @@ export function settleStructuredAgentSessionProviderStarted(
   return context.serialize(event.sessionId, async () => {
     const session = context.sessions.get(event.sessionId)
     if (
-      !session?.hasProviderChild ||
-      session.fence !== event.fence ||
-      session.acquisitionGeneration !== event.acquisitionGeneration
+      !session ||
+      !markProviderChildStarted(session, {
+        generation: event.acquisitionGeneration,
+        fence: event.fence
+      })
     ) {
       return
     }
-    session.providerChildPhase = 'ready'
-    // Prompts held for the start are written now but open a turn only on their echo; a release
-    // tick in between would stop the child before it runs them.
-    context.restartReleaseGrace(event.sessionId)
     try {
       await persistStartedOptions(context, event)
     } catch (error) {
-      context.onBarrierError(event.sessionId, error)
+      context.deps.logger.warn('recording what a started provider reported failed', {
+        scope: 'provider-started-options',
+        sessionId: event.sessionId,
+        error
+      })
     } finally {
       context.publishStatus?.(event.sessionId)
     }
@@ -74,8 +78,51 @@ async function persistStartedOptions(
     options: nativeSessionOptionsFromReport({
       reported: event.reportedOptions,
       restoreSkipped: event.restoreSkippedOptions,
+      ...(event.retiredOptions ? { retired: event.retiredOptions } : {}),
       ...(record.options ? { priorOptions: record.options } : {})
     }),
     now: context.now()
+  })
+}
+
+/** A running child showed saved options it cannot run: the record drops them, as a start that
+ *  skipped them would, so the next start runs the provider's own. Reported, never thrown. */
+export function settleStructuredAgentSessionOptionsSkipped(
+  context: StructuredAgentSessionProviderStartedContext,
+  event: StructuredAgentSessionOptionsSkippedEvent
+): Promise<void> {
+  return context.serialize(event.sessionId, async () => {
+    const { store } = context.deps
+    const record = store.getRecord(event.sessionId)
+    if (
+      !record?.options ||
+      record.lease.runtimeFence !== event.fence ||
+      !agentSessionLeaseAdmitsWriter(record.lease)
+    ) {
+      return
+    }
+    const options = { ...record.options }
+    for (const [key, value] of Object.entries(event.options)) {
+      // A pick made since the child launched is the user's, whatever the child showed.
+      if (options[key] === value) {
+        delete options[key]
+      }
+    }
+    try {
+      await store.replaceSessionOptions({
+        sessionId: event.sessionId,
+        fence: event.fence,
+        options,
+        now: context.now()
+      })
+    } catch (error) {
+      context.deps.logger.warn('dropping a saved option the provider cannot run failed', {
+        scope: 'provider-options-skipped',
+        sessionId: event.sessionId,
+        error
+      })
+    } finally {
+      context.publishStatus?.(event.sessionId)
+    }
   })
 }

@@ -1,5 +1,12 @@
 import { reserveNotificationCooldown } from '../../shared/notification-burst-cooldown'
 import type { AgentStatusState } from '../../shared/agent-status-types'
+import {
+  agentSessionAttentionSubjectPrefix,
+  attentionOriginWasRead,
+  type StructuredAttentionOrigin,
+  type StructuredAttentionRead,
+  type StructuredAttentionState
+} from '../../shared/agent-session-attention'
 import type {
   MobilePushTestResult,
   MobilePushRegisterInput,
@@ -29,6 +36,9 @@ export type MobileNotificationDispatchEvent = {
   // Why: background push must tell "needs input" from "finished" without re-deriving
   // it from the title. Optional and additive — old clients ignore it.
   agentState?: AgentStatusState
+  /** See `NotificationDispatchRequest.attentionKey`: cooldowns key on it instead of the workspace. */
+  attentionKey?: string
+  structuredOrigin?: StructuredAttentionOrigin
 }
 
 export type MobileNotificationDismissEvent = {
@@ -36,6 +46,7 @@ export type MobileNotificationDismissEvent = {
   notificationId: string
   notificationSeq?: number
   notificationEpoch?: string
+  dismissedDelivery?: DeliveredNotificationIdentity
 }
 
 export type MobileNotificationEvent =
@@ -104,7 +115,7 @@ export class RuntimeMobileNotificationController {
         (event.emittedAt === undefined ||
           reserveNotificationCooldown(
             this.legacyCooldown,
-            event.worktreeId ?? 'global',
+            event.attentionKey ?? event.worktreeId ?? 'global',
             event.emittedAt
           ))
       event = {
@@ -145,6 +156,37 @@ export class RuntimeMobileNotificationController {
 
   dismiss(notificationId: string): void {
     this.dispatch({ type: 'dismiss', notificationId })
+  }
+
+  private retireDelivery(delivery: DeliveredNotificationIdentity): void {
+    this.dispatch({
+      type: 'dismiss',
+      notificationId: delivery.notificationId,
+      dismissedDelivery: {
+        notificationId: delivery.notificationId,
+        notificationEpoch: delivery.notificationEpoch,
+        notificationSeq: delivery.notificationSeq
+      }
+    })
+  }
+
+  retireStructuredAttention(read: StructuredAttentionRead): void {
+    for (const delivery of this.dismissalStore?.liveDeliveries() ?? []) {
+      if (attentionOriginWasRead(delivery.structuredOrigin, read)) {
+        this.retireDelivery(delivery)
+      }
+    }
+  }
+
+  reconcileStructuredPromptAttention(state: StructuredAttentionState): void {
+    const prefix = agentSessionAttentionSubjectPrefix(state.scope, state.sessionId)
+    const pending = new Set(state.pendingPromptIds)
+    for (const delivery of this.dismissalStore?.liveDeliveries(prefix) ?? []) {
+      const cause = delivery.structuredOrigin?.cause
+      if (cause?.kind === 'prompt' && !pending.has(cause.promptId)) {
+        this.retireDelivery(delivery)
+      }
+    }
   }
 
   async dispatchPlugin(input: {

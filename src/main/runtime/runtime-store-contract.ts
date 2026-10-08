@@ -51,6 +51,11 @@ export type RuntimeStore = {
   runDurableMutation?: Store['runDurableMutation']
   flushOrThrow?: Store['flushOrThrow']
   flushPendingOrThrowAsync?: Store['flushPendingOrThrowAsync']
+  stageOrcadMigrationCatalog?: Store['stageOrcadMigrationCatalog']
+  commitStagedOrcadMigrationCatalog?: Store['commitStagedOrcadMigrationCatalog']
+  stageOrcadMigrationSnapshotChunk?: Store['stageOrcadMigrationSnapshotChunk']
+  abortStagedOrcadMigrationCatalog?: Store['abortStagedOrcadMigrationCatalog']
+  getOrcadMigrationCatalogState?: Store['getOrcadMigrationCatalogState']
   persistPtyBinding?: Store['persistPtyBinding']
   getSshRemotePtyLeases?: Store['getSshRemotePtyLeases']
   getUI?: Store['getUI']
@@ -86,6 +91,8 @@ export type RuntimeStore = {
     agentDefaultArgs?: GlobalSettings['agentDefaultArgs']
     agentDefaultEnv?: GlobalSettings['agentDefaultEnv']
     terminalWindowsShell?: GlobalSettings['terminalWindowsShell']
+    // Read by the launch-line carry rule to name the shell a local line is typed into.
+    terminalDefaultShell?: GlobalSettings['terminalDefaultShell']
     floatingTerminalEnabled?: GlobalSettings['floatingTerminalEnabled']
     agentStatusHooksEnabled?: GlobalSettings['agentStatusHooksEnabled']
     terminalCopyTrimsGutter?: GlobalSettings['terminalCopyTrimsGutter']
@@ -103,6 +110,7 @@ export type RuntimeStore = {
     minimaxGroupId?: GlobalSettings['minimaxGroupId']
     minimaxUsageModels?: GlobalSettings['minimaxUsageModels']
     minimaxEndpoint?: GlobalSettings['minimaxEndpoint']
+    zcodePlanSite?: GlobalSettings['zcodePlanSite']
     prBotAuthorOverrides?: GlobalSettings['prBotAuthorOverrides']
     artifactSharingEnabled?: GlobalSettings['artifactSharingEnabled']
     terminalQuickCommands?: GlobalSettings['terminalQuickCommands']
@@ -125,6 +133,8 @@ export type RuntimeStore = {
     nativeChatInheritShellEnvironment?: GlobalSettings['nativeChatInheritShellEnvironment']
     nativeChatShellEnvironmentVariables?: GlobalSettings['nativeChatShellEnvironmentVariables']
     aiVaultSearch?: GlobalSettings['aiVaultSearch']
+    sourceControlAi?: GlobalSettings['sourceControlAi']
+    commitMessageAi?: GlobalSettings['commitMessageAi']
   }
   // Why: narrow to `unknown` return so test mocks can return void without
   // a cast. The runtime never reads the return value — the persisted value

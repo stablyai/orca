@@ -7,6 +7,7 @@ import {
   createSetupRunnerScript,
   detectInstalledAgentsWithShellPathHydrationMock,
   detectRemoteAgentsMock,
+  electronMocks,
   ensurePathWithinWorkspaceMock,
   getEffectiveHooks,
   listWorktrees,
@@ -83,7 +84,7 @@ describe('OrcaRuntimeService', () => {
       })
     )
     await vi.waitFor(() => {
-      expect(write).toHaveBeenCalledWith('pty-cli-aider-startup', 'fix it\r')
+      expect(write).toHaveBeenCalledWith('pty-cli-aider-startup', 'fix it\r', 'launch')
     })
   })
 
@@ -509,6 +510,7 @@ describe('OrcaRuntimeService', () => {
       repoSelector: 'id:repo-1',
       name: 'runtime-explicit-draft',
       startupDraft: draftUrl,
+      startupLaunchSource: 'cli',
       createdWithAgent: 'codex',
       activate: true
     })
@@ -519,14 +521,20 @@ describe('OrcaRuntimeService', () => {
       expect.objectContaining({
         cwd: '/tmp/workspaces/runtime-explicit-draft',
         command: "codex '--dangerously-bypass-approvals-and-sandbox'",
-        worktreeId: result.worktree.id
+        worktreeId: result.worktree.id,
+        // The host picked and launched this agent, so it carries the caller's surface too.
+        telemetry: { agent_kind: 'codex', launch_source: 'cli', request_kind: 'new' }
       })
     )
     expect(metaById[result.worktree.id]).toMatchObject({ createdWithAgent: 'codex' })
 
     runtime.onPtyData('pty-explicit-draft', '\x1b[?2004h›', Date.now())
     await vi.waitFor(() => {
-      expect(write).toHaveBeenCalledWith('pty-explicit-draft', `\x1b[200~${draftUrl}\x1b[201~`)
+      expect(write).toHaveBeenCalledWith(
+        'pty-explicit-draft',
+        `\x1b[200~${draftUrl}\x1b[201~`,
+        'launch'
+      )
     })
   })
 
@@ -572,6 +580,8 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.attachWindow(1)
 
+    runtime.markGraphReady(1)
+    electronMocks.BrowserWindow.fromId.mockReturnValue({ isDestroyed: () => false })
     computeWorktreePathMock.mockReturnValue('/tmp/workspaces/runtime-blank-draft')
     ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/runtime-blank-draft')
     vi.mocked(listWorktrees).mockResolvedValue([

@@ -34,8 +34,12 @@ jobs:
           native-runtime: node
           node-version: ${{ matrix.node }}
 
+  unit_plan:
+    uses: ./.github/workflows/unit-plan.yml
+
   test:
-    needs: [test_native_cache]
+    needs: [test_native_cache, unit_plan]
     uses: ./.github/workflows/unit-tests.yml
     with:
       node_versions: '["24", "26"]'
+      shards: ${{ needs.unit_plan.outputs.shards }}

@@ -262,6 +262,8 @@ export async function openSkillTarGzip(archivePath: string): Promise<{
     }
   })
   const gunzip = createGunzip()
+  // Observe late aborts before the archive reader starts.
+  gunzip.on('error', () => undefined)
   const completion = pipeline(source, verifier, gunzip)
   const archiveIdentity = completion.then(() => ({
     archiveSha256: archiveHash.digest('hex'),

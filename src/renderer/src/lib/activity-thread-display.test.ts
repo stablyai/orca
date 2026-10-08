@@ -203,6 +203,17 @@ describe('getActivityThreadStatusPreview', () => {
     ).toBe('Interrupted by user')
   })
 
+  it('surfaces a failed turn as failed, not as its last reply', () => {
+    expect(
+      getActivityThreadStatusPreview({
+        state: 'done',
+        lastAssistantMessage: 'Done!',
+        mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: 1 },
+        prompt: 'Ship it'
+      })
+    ).toBe('Failed')
+  })
+
   it('names what a blocked approval is waiting on', () => {
     // Why: a permission request parks the row on 'waiting', and the tool fields are the
     // only thing that says what the user is being asked to approve (STA-3160).

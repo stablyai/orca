@@ -45,6 +45,12 @@ describe('ready-for-review required check reuse', () => {
   it('reuses a completed success only for the identical PR, merge source and workflow', () => {
     expect(reusablePrCheckRun([passed], identity)).toBe(passed)
     expect(reusablePrCheckRun([], identity)).toBeUndefined()
+    expect(
+      reusablePrCheckRun(
+        [{ ...passed, display_title: prCheckRunTitle({ ...identity, unitMode: 'selected' }) }],
+        identity
+      )
+    ).toBeUndefined()
     for (const key of ['number', 'sourceSha', 'workflowSha', 'headSha', 'runId']) {
       const changed = key === 'number' ? 43 : key === 'runId' ? '123' : 'd'.repeat(40)
       expect(reusablePrCheckRun([passed], { ...identity, [key]: changed }), key).toBeUndefined()
@@ -121,7 +127,7 @@ describe('ready-for-review required check reuse', () => {
 
   it('keeps required skips conditional on proof and leaves advisory routing eligible', () => {
     expect(workflow['run-name']).toBe(
-      'PR ${{ github.event.pull_request.number }} | source ${{ github.sha }} | workflow ${{ github.workflow_sha }}'
+      "PR ${{ github.event.pull_request.number }} | source ${{ github.sha }} | workflow ${{ github.workflow_sha }} | unit ${{ github.event.pull_request.draft && vars.ORCA_UNIT_SELECTION_MODE == 'selected' && 'selected' || 'full' }}"
     )
     expect(workflow.on.pull_request.types).toContain('ready_for_review')
     const detector = workflow.jobs.code_paths
@@ -133,7 +139,7 @@ describe('ready-for-review required check reuse', () => {
     expect(detector.steps[0].with['sparse-checkout']).toContain(
       '/config/scripts/pr-ready-check-reuse.mjs'
     )
-    for (const job of ['native_cache_changed', ...PR_CHECK_JOBS]) {
+    for (const job of PR_CHECK_JOBS) {
       expect(detector.outputs[job]).toBe(
         `\${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.${job} }}`
       )
@@ -151,7 +157,11 @@ describe('ready-for-review required check reuse', () => {
       "github.event.pull_request.draft != true && steps.filter.outputs.should_run == 'true'"
     )
     expect(workflow.jobs.verify.if).toBe('${{ !cancelled() }}')
-    expect(workflow.jobs.verify.needs).toEqual(['code_paths', ...PR_CHECK_JOBS])
+    expect(workflow.jobs.verify.needs).toEqual([
+      'code_paths',
+      'preflight',
+      ...PR_CHECK_JOBS.filter((job) => job !== 'static_analysis' && job !== 'typecheck')
+    ])
   })
 
   it.each(['pr-test-loc.yml', 'mobile.yml'])(

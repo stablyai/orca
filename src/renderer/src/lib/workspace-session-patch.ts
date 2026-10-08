@@ -20,7 +20,6 @@ import { withoutStagedBrowserTabs } from './workspace-session-staged-browser-tab
 import { buildPersistedUnifiedTabSessionData } from './workspace-session-unified-tabs'
 import { buildLastVisitedAtByWorktreeId } from './workspace-session-focus-recency'
 import { buildSleepingAgentSessionData } from './workspace-session-sleeping-agents'
-import { buildPersistedClosedTerminalTabTombstones } from './workspace-session-closed-tab-tombstones'
 
 type SessionRelevantField = keyof WorkspaceSessionSnapshot
 
@@ -65,6 +64,13 @@ export function buildWorkspaceSessionPatch(
   }
   if (changed.has('activeWorktreeId')) {
     patch.activeWorktreeId = snapshot.activeWorktreeId
+  }
+  // Why: without these the debounced writer kept the first focus's key and host forever.
+  if (changed.has('activeWorkspaceKey')) {
+    patch.activeWorkspaceKey = snapshot.activeWorkspaceKey
+  }
+  if (changed.has('activeWorkspaceExecutionHostId')) {
+    patch.activeWorkspaceExecutionHostId = snapshot.activeWorkspaceExecutionHostId ?? null
   }
   if (changed.has('activeTabId')) {
     patch.activeTabId = snapshot.activeTabId
@@ -192,11 +198,6 @@ export function buildWorkspaceSessionPatch(
       Object.keys(snapshot.defaultTerminalTabsAppliedByWorktreeId).length > 0
         ? snapshot.defaultTerminalTabsAppliedByWorktreeId
         : undefined
-  }
-  if (changed.has('closedTerminalTabTombstonesByTabId')) {
-    patch.closedTerminalTabTombstonesByTabId = buildPersistedClosedTerminalTabTombstones(
-      snapshot.closedTerminalTabTombstonesByTabId
-    )
   }
   if (changed.has('sleepingAgentSessionsByPaneKey')) {
     patch.sleepingAgentSessionsByPaneKey =

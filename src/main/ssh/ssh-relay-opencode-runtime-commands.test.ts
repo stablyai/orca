@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto'
 import { mkdir, mkdtemp, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -8,9 +7,7 @@ import { getRemoteHostPlatform } from './ssh-remote-platform'
 import { decodeRemotePowerShellScript } from './ssh-remote-powershell'
 import {
   parseOpenCodeRuntimeResult,
-  probeOpenCodeRuntimeCacheCommand,
   probeOpenCodeNodeSqliteCommand,
-  promoteOpenCodeRuntimeCommand,
   publishOpenCodeRuntimeReferenceCommand
 } from './ssh-relay-opencode-runtime-commands'
 import {
@@ -23,7 +20,7 @@ import {
 const host = getRemoteHostPlatform('linux-x64')
 const nodePath = process.execPath
 const directories: string[] = []
-const expectedHash = createHash('sha256').update('verified runtime').digest('hex')
+const runtimeSha = 'a'.repeat(64)
 const markerName = '.sftp-namespace-0123456789abcdef0123456789abcdef'
 
 afterEach(async () => {
@@ -68,39 +65,48 @@ describe.skipIf(process.platform === 'win32')('host-owned SQLite setup commands'
     })
   })
 
-  it('stages, verifies by bytes, promotes and atomically publishes under quoted paths', async () => {
+  it('sends a host Node without the SyncDatabase surface to the pinned runtime', async () => {
+    const home = await directory()
+    const data = join(home, '.local', 'share', 'opencode')
+    await mkdir(data, { recursive: true })
+    await writeFile(join(data, 'opencode.db'), '')
+    // Node 22.13-22.15: DatabaseSync ships, the backup export does not.
+    const preload = join(home, 'node-22-13-sqlite.cjs')
+    await writeFile(preload, "delete require('node:sqlite').backup")
+    const result = await command(probeOpenCodeNodeSqliteCommand(host, nodePath, home), {
+      NODE_OPTIONS: `--require ${JSON.stringify(preload)}`
+    })
+    expect(result.code, result.stderr).toBe(0)
+    expect(parseOpenCodeRuntimeResult(result.stdout)).toEqual({ status: 'unsupported' })
+  })
+
+  it('ignores the experimental SQLite warning older Node prints to stderr', async () => {
+    const home = await directory()
+    const data = join(home, '.local', 'share', 'opencode')
+    await mkdir(data, { recursive: true })
+    await writeFile(join(data, 'opencode.db'), '')
+    const preload = join(home, 'experimental-warning.cjs')
+    await writeFile(
+      preload,
+      "process.emitWarning('SQLite is an experimental feature and might change at any time','ExperimentalWarning')"
+    )
+    const result = await command(probeOpenCodeNodeSqliteCommand(host, nodePath, home), {
+      NODE_OPTIONS: `--require ${JSON.stringify(preload)}`
+    })
+    expect(result.stderr).toContain('ExperimentalWarning')
+    expect(parseOpenCodeRuntimeResult(result.stdout)).toEqual({
+      status: 'ready',
+      executable: nodePath
+    })
+  })
+
+  it('publishes the reference atomically through a staged file under quoted paths', async () => {
     const root = await directory()
     const stage = await reserveStage(root)
-    const stageDir = stage.slotDir
-    const executable = join(root, expectedHash, 'bun')
-    const prepared = await command(
-      probeOpenCodeRuntimeCacheCommand({
-        host,
-        nodePath,
-        executable,
-        expectedHash,
-        reference: join(root, 'runtime.json')
-      })
-    )
-    expect(parseOpenCodeRuntimeResult(prepared.stdout).status).toBe('missing')
-    expect((await stat(join(stageDir, markerName))).isFile()).toBe(true)
-    const stagedBinary = join(stageDir, 'payload', 'bun')
-    await writeFile(stagedBinary, 'verified runtime')
-    const promoted = await command(
-      promoteOpenCodeRuntimeCommand({
-        host,
-        nodePath,
-        stagedBinary,
-        executable,
-        expectedHash,
-        repairToken: 'repair'
-      })
-    )
-    expect(parseOpenCodeRuntimeResult(promoted.stdout)).toEqual({ status: 'ready', executable })
-    expect(await readFile(executable, 'utf8')).toBe('verified runtime')
+    const executable = join(root, 'runtimes', `node-${runtimeSha}`, 'bin', 'node')
     const reference = join(root, 'opencode-sqlite-runtime.json')
     await writeFile(reference, '{"old":true}')
-    const stagedReference = join(stageDir, 'payload', 'ref.json')
+    const stagedReference = join(stage.slotDir, 'payload', 'ref.json')
     await writeFile(stagedReference, JSON.stringify({ protocol: 1, executable }))
     const published = await command(
       publishOpenCodeRuntimeReferenceCommand({
@@ -113,67 +119,30 @@ describe.skipIf(process.platform === 'win32')('host-owned SQLite setup commands'
     )
     expect(parseOpenCodeRuntimeResult(published.stdout).status).toBe('published')
     expect(JSON.parse(await readFile(reference, 'utf8'))).toEqual({ protocol: 1, executable })
-    await command(cleanupOwnedRelayUploadStageCommand(host, stage, markerName))
-    await expect(stat(stageDir)).rejects.toMatchObject({ code: 'ENOENT' })
-    expect(await readFile(executable, 'utf8')).toBe('verified runtime')
-  })
-
-  it('refuses equal-sized corrupt uploads instead of accepting a size match', async () => {
-    const root = await directory()
-    const stagedBinary = join(root, 'source')
-    const executable = join(root, 'installed', 'bun')
-    await writeFile(stagedBinary, 'corrupt! runtime')
-    expect((await stat(stagedBinary)).size).toBe(Buffer.byteLength('verified runtime'))
-    const result = await command(
-      promoteOpenCodeRuntimeCommand({
-        host,
-        nodePath,
-        stagedBinary,
-        executable,
-        expectedHash,
-        repairToken: 'one'
-      })
-    )
-    expect(result.code).not.toBe(0)
-    expect(result.stderr).toContain('checksum mismatch')
-    await expect(stat(executable)).rejects.toMatchObject({ code: 'ENOENT' })
-  })
-
-  it('preserves an existing corrupt binary and reuses its verified repair reference', async () => {
-    const root = await directory()
-    const executable = join(root, expectedHash, 'bun')
-    await mkdir(join(root, expectedHash))
-    await writeFile(executable, 'old binary still owned by another process')
-    const stagedBinary = join(root, 'source')
-    await writeFile(stagedBinary, 'verified runtime')
-    const promoted = await command(
-      promoteOpenCodeRuntimeCommand({
-        host,
-        nodePath,
-        stagedBinary,
-        executable,
-        expectedHash,
-        repairToken: 'two'
-      })
-    )
-    const repaired = join(root, expectedHash, 'repair-two', 'bun')
-    expect(parseOpenCodeRuntimeResult(promoted.stdout).executable).toBe(repaired)
-    expect(await readFile(executable, 'utf8')).toBe('old binary still owned by another process')
-    const reference = join(root, 'runtime.json')
-    await writeFile(reference, JSON.stringify({ protocol: 1, executable: repaired }))
-    const prepared = await command(
-      probeOpenCodeRuntimeCacheCommand({
-        host,
-        nodePath,
-        executable,
-        expectedHash,
-        reference
-      })
-    )
-    expect(parseOpenCodeRuntimeResult(prepared.stdout)).toEqual({
-      status: 'ready',
-      executable: repaired
+    await expect(stat(join(root, `.runtime-ref-node-${runtimeSha}`))).rejects.toMatchObject({
+      code: 'ENOENT'
     })
+    await command(cleanupOwnedRelayUploadStageCommand(host, stage, markerName))
+    await expect(stat(stage.slotDir)).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it('writes the store ref that holds a pinned runtime before the reference names it', async () => {
+    const root = await directory()
+    const stagedReference = join(root, 'staged.json')
+    await writeFile(stagedReference, '{"protocol":1}')
+    const ref = join(root, `.runtime-ref-node-${runtimeSha}`)
+    const published = await command(
+      publishOpenCodeRuntimeReferenceCommand({
+        host,
+        nodePath,
+        stagedReference,
+        reference: join(root, 'opencode-sqlite-runtime.json'),
+        token: 'two',
+        runtimeRef: { path: ref, sha256: runtimeSha }
+      })
+    )
+    expect(parseOpenCodeRuntimeResult(published.stdout).status).toBe('published')
+    expect(await readFile(ref, 'utf8')).toBe(`${runtimeSha}\n`)
   })
 
   it('defers an empty host, honors database overrides, and ignores in-memory databases', async () => {
@@ -207,54 +176,27 @@ describe.skipIf(process.platform === 'win32')('host-owned SQLite setup commands'
     await expect(stat(abandoned.slotDir)).rejects.toMatchObject({ code: 'ENOENT' })
     expect(await readFile(join(fresh.slotDir, 'payload', 'bun'), 'utf8')).toBe('active upload')
   })
-
-  it('falls back to an atomic unique rename when the host filesystem rejects hard links', async () => {
-    const root = await directory()
-    const source = join(root, 'source')
-    await writeFile(source, 'verified runtime')
-    const preload = join(root, 'disable-hardlinks.cjs')
-    await writeFile(
-      preload,
-      "require('node:fs').promises.link=async()=>{throw Object.assign(Error('unsupported'),{code:'EPERM'})}"
-    )
-    const executable = join(root, expectedHash, 'bun')
-    const result = await command(
-      promoteOpenCodeRuntimeCommand({
-        host,
-        nodePath,
-        stagedBinary: source,
-        executable,
-        expectedHash,
-        repairToken: 'fallback'
-      }),
-      { NODE_OPTIONS: `--require ${JSON.stringify(preload)}` }
-    )
-    expect(result.code, result.stderr).toBe(0)
-    const repaired = join(root, expectedHash, 'repair-fallback', 'bun')
-    expect(parseOpenCodeRuntimeResult(result.stdout)).toEqual({
-      status: 'ready',
-      executable: repaired
-    })
-    expect(await readFile(repaired, 'utf8')).toBe('verified runtime')
-    await expect(stat(source)).rejects.toMatchObject({ code: 'ENOENT' })
-  })
 })
 
 it('carries Windows JavaScript and path arguments through the established PowerShell encoder', () => {
   const windows = getRemoteHostPlatform('win32-x64')
-  const command = promoteOpenCodeRuntimeCommand({
+  const command = publishOpenCodeRuntimeReferenceCommand({
     host: windows,
     nodePath: "C:/Program Files/O'Brien/node.exe",
-    stagedBinary: 'C:/Users/a & b/.upload/bun.exe',
-    executable: 'C:/Users/a & b/cache/bun.exe',
-    expectedHash,
-    repairToken: 'one'
+    stagedReference: 'C:/Users/a & b/.upload/ref.json',
+    reference: 'C:/Users/a & b/.orca-remote/relay-x/opencode-sqlite-runtime.json',
+    token: 'one',
+    runtimeRef: {
+      path: `C:/Users/a & b/.orca-remote/relay-x/.runtime-ref-node-${runtimeSha}`,
+      sha256: runtimeSha
+    }
   })
   const decoded = decodeRemotePowerShellScript(command)
   expect(decoded).toContain("& 'C:/Program Files/O''Brien/node.exe'")
-  expect(decoded).toContain('createHash')
-  expect(decoded).toContain('C:/Users/a & b/.upload/bun.exe')
+  expect(decoded).toContain('C:/Users/a & b/.upload/ref.json')
+  expect(decoded).toContain(`.runtime-ref-node-${runtimeSha}`)
   expect(command).not.toContain('-ExecutionPolicy')
+  expect(decoded).not.toContain('Add-Type')
 })
 
 it('rejects missing or malformed host confirmations', () => {

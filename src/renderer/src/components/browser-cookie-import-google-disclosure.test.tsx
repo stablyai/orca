@@ -83,7 +83,7 @@ describe('cookie-import Google disclosure footer', () => {
         <BrowserUseCookieImportStep
           cookiesImported={false}
           isImportingDefault={false}
-          step3Blocked={false}
+          disabled={false}
           sourceLabel={null}
         />
       )

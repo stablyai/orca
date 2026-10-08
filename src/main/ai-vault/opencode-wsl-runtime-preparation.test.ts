@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { ORCAD_BUN_RELEASE_ASSETS } from '../../shared/orcad-bun-runtime'
+import { NODE_RUNTIME_ASSETS } from '../../shared/node-runtime-pin'
 import { runProcess } from '../../shared/child-process/run-process'
 import type * as preparationModule from './opencode-wsl-runtime-preparation'
 
@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   exists: vi.fn(() => true),
   run: vi.fn(),
   running: vi.fn(async (paths: readonly string[]) => [...paths]),
-  download: vi.fn(async () => 'C:\\cache\\bun'),
+  download: vi.fn(async () => 'C:\\cache\\node-v24.21.0-linux-arm64-musl.tar.gz'),
   bundles: vi.fn((platform: string) => [`C:/relay/${platform}`])
 }))
 vi.mock('node:fs', () => ({ existsSync: mocks.exists }))
@@ -24,8 +24,8 @@ vi.mock('../wsl/wsl-runner', () => ({ runWslProcess: mocks.run }))
 vi.mock('../wsl-running-path-filter', () => ({
   filterPathsToRunningWslDistrosAsync: mocks.running
 }))
-vi.mock('../ssh/orcad-bun-runtime-materializer', () => ({
-  materializeCachedOrcadBunRuntime: mocks.download
+vi.mock('../ssh/pinned-runtime-materializer', () => ({
+  materializeNodeRuntimeArchive: mocks.download
 }))
 vi.mock('../ssh/relay-bundle-paths', () => ({ relayBundleCandidates: mocks.bundles }))
 
@@ -84,7 +84,7 @@ describe('WSL SQLite runtime preparation', () => {
       expect.objectContaining({
         program: 'node',
         loginPath: 'preferred',
-        args: ['-e', expect.stringContaining("require('node:sqlite')")]
+        args: ['-e', expect.stringMatching(/require\('node:sqlite'\).*backup/)]
       })
     )
     expect(mocks.bundles.mock.calls.map(([platform]) => platform)).toEqual([
@@ -131,8 +131,41 @@ describe('WSL SQLite runtime preparation', () => {
     await prepared()
   })
 
-  it('falls back to the pinned proxy runtime, verifies the guest stage, and preserves literal argv', async () => {
-    const expected = ORCAD_BUN_RELEASE_ASSETS['linux-arm64-musl'].executableSha256
+  it('rejects a guest Node without the SyncDatabase surface and tolerates its stderr warning', async () => {
+    await prepared()
+    const probe = mocks.run.mock.calls.find(([spec]) => spec.program === 'node')?.[0]
+    expect(probe?.args[0]).toBe('-e')
+    const directory = await mkdtemp(join(tmpdir(), 'orca-wsl-sqlite-probe-'))
+    const runProbe = (preload: string) =>
+      runProcess({
+        program: process.execPath,
+        args: probe.args,
+        timeoutMs: 10_000,
+        env: { ...process.env, NODE_OPTIONS: `--require ${JSON.stringify(preload)}` }
+      })
+    try {
+      // Node 22.13-22.15: DatabaseSync ships, the backup export does not.
+      const withoutBackup = join(directory, 'node-22-13-sqlite.cjs')
+      await writeFile(withoutBackup, "delete require('node:sqlite').backup")
+      const rejected = await runProbe(withoutBackup)
+      expect(rejected.code).not.toBe(0)
+      expect(rejected.stdout).toBe('')
+      const warning = join(directory, 'experimental-warning.cjs')
+      await writeFile(
+        warning,
+        "process.emitWarning('SQLite is an experimental feature and might change at any time','ExperimentalWarning')"
+      )
+      const admitted = await runProbe(warning)
+      expect(admitted.code, admitted.stderr).toBe(0)
+      expect(admitted.stderr).toContain('ExperimentalWarning')
+      expect(admitted.stdout.trim()).toBe(process.execPath)
+    } finally {
+      await rm(directory, { recursive: true, force: true })
+    }
+  })
+
+  it('falls back to the pinned Node in the runtimes/ store, verified in the guest, with literal argv', async () => {
+    const expected = NODE_RUNTIME_ASSETS['linux-arm64-musl'].executableSha256
     mocks.run.mockImplementation(async (spec) => {
       if (spec.script?.startsWith('data=')) {
         return success('present')
@@ -144,7 +177,9 @@ describe('WSL SQLite runtime preparation', () => {
         return success('aarch64')
       }
       if (spec.program === 'wslpath') {
-        return success('/mnt/c/reader $literal.cjs')
+        return success(
+          `/mnt/c/${spec.args.at(-1).includes('.tar.gz') ? 'node $literal.tar.gz' : 'reader $literal.cjs'}`
+        )
       }
       if (spec.script?.startsWith('getconf')) {
         return success('musl libc')
@@ -152,7 +187,12 @@ describe('WSL SQLite runtime preparation', () => {
       if (spec.script?.startsWith('printf')) {
         return success('/home/ada $literal')
       }
-      return success('')
+      if (spec.script?.includes('ORCA_NODE_RUNTIME_EXTRACT_FAILED')) {
+        return success('ORCA_NODE_RUNTIME_READY')
+      }
+      return success(
+        spec.script?.includes('ORCA_NODE_RUNTIME_MISSING') ? 'ORCA_NODE_RUNTIME_MISSING' : ''
+      )
     })
     const result = await prepared()
     expect(mocks.download).toHaveBeenCalledWith(
@@ -160,18 +200,20 @@ describe('WSL SQLite runtime preparation', () => {
       expect.any(String),
       expect.objectContaining({ signal: expect.any(AbortSignal) })
     )
-    expect(result[0]?.executable).toBe(
-      `/home/ada $literal/.cache/orca/vault-sqlite/${expected}/bun`
-    )
-    expect(mocks.run).toHaveBeenCalledWith(
-      expect.objectContaining({
-        args: ['/mnt/c/reader $literal.cjs', result[0]?.executable, expected],
-        script: expect.stringContaining('actual=$(sha256sum -- "$stage")')
-      })
-    )
+    expect(result[0]).toEqual({
+      distro: 'Ubuntu',
+      executable: `/home/ada $literal/.cache/orca/runtimes/node-${expected}/bin/node`,
+      readerPath: '/mnt/c/reader $literal.cjs'
+    })
+    const install = mocks.run.mock.calls
+      .map(([spec]) => spec)
+      .find((spec) => spec.script?.includes('ORCA_NODE_RUNTIME_EXTRACT_FAILED'))
+    expect(install).toMatchObject({ args: ['/mnt/c/node $literal.tar.gz'], loginPath: 'none' })
+    expect(install.script).toContain(expected)
+    expect(install.timeoutMs).toBeLessThanOrEqual(120_000)
     expect(
       mocks.run.mock.calls.every(
-        ([spec]) => spec.timeoutMs <= 15_000 && spec.maxOutputBytes === 16_384
+        ([spec]) => (spec === install || spec.timeoutMs <= 15_000) && spec.maxOutputBytes === 16_384
       )
     ).toBe(true)
   })
@@ -200,10 +242,11 @@ describe('WSL SQLite runtime preparation', () => {
     })
     mocks.download.mockImplementationOnce(async () => {
       mocks.running.mockResolvedValue([])
-      return 'C:\\cache\\bun'
+      return 'C:\\cache\\node.tar.gz'
     })
     await prepare([home])
     await vi.waitFor(async () => expect((await prepare([home]))[0]?.error).toContain('not running'))
+    expect(mocks.download).toHaveBeenCalledOnce()
     expect(mocks.run.mock.calls.some(([spec]) => spec.script?.includes('mv -f'))).toBe(false)
   })
 

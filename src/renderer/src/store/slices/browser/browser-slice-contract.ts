@@ -112,6 +112,7 @@ export type BrowserSlice = {
   browserPagesByWorkspace: Record<string, BrowserPage[]>
   browserCertificateFailuresByPageId: Record<string, BrowserCertificateFailure>
   browserAnnotationsByPageId: Record<string, BrowserPageAnnotation[]>
+  browserAnnotationMarkerIdsByPageId: Record<string, string[]>
   remoteBrowserPageHandlesByPageId: Record<string, RemoteBrowserPageHandle>
   /**
    * Closes of client-hosted pages their owning runtime never heard, keyed by environment.
@@ -147,7 +148,9 @@ export type BrowserSlice = {
   closeBrowserTab: (tabId: string, options?: { reason?: 'cleanup' }) => void
   shutdownWorktreeBrowsers: (worktreeId: string) => Promise<void>
   reopenClosedBrowserTab: (worktreeId: string) => BrowserWorkspace | null
-  setActiveBrowserTab: (tabId: string) => void
+  /** Activation uses the tab's workspace unless a target is supplied; global selection
+   *  moves only when that workspace is active. */
+  setActiveBrowserTab: (tabId: string, targetWorktreeId?: string) => void
   createBrowserPage: (
     workspaceId: string,
     url: string,
@@ -196,6 +199,7 @@ export type BrowserSlice = {
   ) => void
   deleteBrowserPageAnnotation: (pageId: string, annotationId: string) => void
   clearBrowserPageAnnotations: (pageId: string) => void
+  invalidateBrowserPageAnnotationGeometry: (pageId: string) => void
   removeDeliveredBrowserPageAnnotations: (
     pageId: string,
     deliveredAnnotations: readonly BrowserPageAnnotation[]

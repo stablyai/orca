@@ -286,8 +286,16 @@ async function probeInteractivity(
     `LINE:${token}`,
     LIVE_PAINT_BUDGET_MS
   )
-  const paneGrid = await readActivePaneGrid(page, target.webTabId)
+  let paneGrid = await readActivePaneGrid(page, target.webTabId)
+  let ptyGrid = readPtyGridFromContent(readSink(target.sinkPath))
+  console.log(`[paired-grid-initial] ${JSON.stringify({ name, paneGrid, ptyGrid })}`)
   const diagnostics = await readPaneDiagnostics(page, worktreeId, target.webTabId)
+  const screenshotPath = test.info().outputPath(`paired-terminal-${name}.png`)
+  await page.screenshot({ path: screenshotPath })
+  await test.info().attach(`paired-terminal-${name}`, {
+    path: screenshotPath,
+    contentType: 'image/png'
+  })
   let paintedAfterFlip = paintedLive
   if (!paintedLive) {
     await openClientTab(page, worktreeId, flipTo.webTabId)
@@ -299,6 +307,31 @@ async function probeInteractivity(
       LIVE_PAINT_BUDGET_MS
     )
   }
+  // Preserve the scenario report even when geometry fails to converge.
+  await expect
+    .configure({ soft: true })
+    .poll(
+      async () => {
+        paneGrid = await readActivePaneGrid(page, target.webTabId)
+        ptyGrid = readPtyGridFromContent(readSink(target.sinkPath))
+        return {
+          paneGrid,
+          ptyGrid,
+          converged:
+            paneGrid !== null &&
+            ptyGrid !== null &&
+            paneGrid.cols > 0 &&
+            paneGrid.rows > 0 &&
+            paneGrid.cols === ptyGrid.cols &&
+            paneGrid.rows === ptyGrid.rows
+        }
+      },
+      {
+        timeout: REVEAL_BUDGET_MS,
+        message: `${name}: revealed pane and host PTY grids did not converge`
+      }
+    )
+    .toMatchObject({ converged: true })
   const sink = readSink(target.sinkPath)
   return {
     name,
@@ -307,7 +340,7 @@ async function probeInteractivity(
     paintedLive,
     paintedAfterFlip,
     paneGrid,
-    ptyGrid: readPtyGridFromContent(sink),
+    ptyGrid,
     diagnostics
   }
 }

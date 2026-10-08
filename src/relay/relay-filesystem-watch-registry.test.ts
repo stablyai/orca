@@ -47,6 +47,8 @@ class FakeWatcherPool {
   readonly installed: InstalledWatch[] = []
   readonly dispose = vi.fn()
   readonly forgetRoot = vi.fn()
+  readonly disposeAndWait = vi.fn(async () => {})
+  readonly reopen = vi.fn()
 
   async subscribe(
     rootPath: string,
@@ -138,20 +140,21 @@ describe('RelayFilesystemWatchRegistry', () => {
     ])
   })
 
-  it('moves a terminal shard failure into recovery without dropping shared clients', async () => {
+  it.each([
+    ['native watcher failure', new Error('native subscription stopped')],
+    [
+      'watcher process failure',
+      new WatcherProcessFailure('crashed repeatedly', 'supervisor', 'supervisor_crash_fuse')
+    ]
+  ])('recovers after a %s without dropping shared clients', async (_kind, error) => {
     await registry.watch('/repo', context(1))
     await registry.watch('/repo', context(2))
     const first = pool.installed[0]
-    first.hooks.onTerminalError?.(
-      new WatcherProcessFailure(
-        'file watcher process crashed repeatedly',
-        'supervisor',
-        'supervisor_crash_fuse'
-      )
-    )
+    first.hooks.onTerminalError?.(error)
     await Promise.resolve()
 
     expect(pool.installed).toHaveLength(2)
+    first.callback(null, [{ type: 'create', path: '/repo/late.txt' }])
     pool.installed[1].callback(null, [{ type: 'create', path: '/repo/recovered.txt' }])
     expect(dispatcher.fsChanged).toEqual([
       { events: [{ kind: 'overflow', absolutePath: '/repo' }] },

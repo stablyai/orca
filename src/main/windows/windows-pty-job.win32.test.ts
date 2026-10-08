@@ -111,6 +111,9 @@ describeOnWindows('ConPTY job ownership', () => {
       timeoutMs: 90_000
     })
     const status = result.code === null ? 'null' : `0x${(result.code >>> 0).toString(16)}`
+    if (result.code === 0 && !result.timedOut) {
+      console.log(result.stdout)
+    }
     expect(
       result,
       `Native host exited ${status} (${result.signal}); timedOut=${result.timedOut}\n${result.stdout}\n${result.stderr}`

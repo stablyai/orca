@@ -298,7 +298,7 @@ function getTerminalHandleFocusHint(showActions: boolean): string {
     : `${prefix}Ctrl+click to switch terminal`
 }
 
-async function focusRuntimeTerminalHandle(
+export async function focusRuntimeTerminalHandle(
   handle: string,
   runtimeEnvironmentId: string | null
 ): Promise<void> {

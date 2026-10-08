@@ -217,62 +217,6 @@ describe('Persisted Claude lead boundaries', () => {
     }
   })
 
-  it('clears a persisted lead boundary when sticky permission hides new lead work', async () => {
-    const firstServer = new AgentHookServer()
-    await firstServer.start({ env: 'production', userDataPath })
-    await postHookEvent(
-      firstServer,
-      buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'resume after boundary' })
-    )
-    await postHookEvent(
-      firstServer,
-      buildBody({ hook_event_name: 'SubagentStart', agent_id: 'achild-a' })
-    )
-    await postHookEvent(
-      firstServer,
-      buildBody({ hook_event_name: 'SubagentStart', agent_id: 'achild-b' })
-    )
-    await postHookEvent(firstServer, buildBody({ hook_event_name: 'Stop' }))
-    await postHookEvent(
-      firstServer,
-      buildBody({
-        hook_event_name: 'PermissionRequest',
-        agent_id: 'achild-a',
-        tool_name: 'Bash',
-        tool_input: { command: 'false' }
-      })
-    )
-    await postHookEvent(
-      firstServer,
-      buildBody({ hook_event_name: 'PreToolUse', tool_name: 'Read' })
-    )
-    expect(firstServer.getStatusSnapshot()[0]).toMatchObject({ state: 'waiting', toolName: 'Bash' })
-    expect(mainAgentState(firstServer)).toBe('working')
-    await postHookEvent(
-      firstServer,
-      buildBody({ hook_event_name: 'SubagentStop', agent_id: 'achild-a' })
-    )
-    firstServer.flushStatusPersistSync()
-    firstServer.stop()
-
-    const server = new AgentHookServer()
-    await server.start({ env: 'production', userDataPath })
-    try {
-      await postHookEvent(
-        server,
-        buildBody({ hook_event_name: 'SubagentStop', agent_id: 'achild-b' })
-      )
-
-      expect(server.getStatusSnapshot()[0]).toMatchObject({
-        state: 'working',
-        restoredUnconfirmed: true
-      })
-      expect(server.getStatusChangeSnapshot()[0]?.observedInCurrentRuntime).toBe(false)
-    } finally {
-      server.stop()
-    }
-  })
-
   it('keeps a persisted lead boundary unconfirmed after an unrelated child stop', async () => {
     const firstServer = new AgentHookServer()
     await firstServer.start({ env: 'production', userDataPath })

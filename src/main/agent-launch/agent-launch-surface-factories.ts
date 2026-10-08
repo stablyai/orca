@@ -5,15 +5,17 @@
  */
 
 import type { AgentLaunchPrompt } from '../../shared/agent-launch-intent'
+import type { StructuredAgentId } from '../../shared/agent-session-provider-handle'
 import type { TuiAgent } from '../../shared/tui-agent'
 
 /** How a surface is built once the executor has decided which one. Injected because an
- *  orchestration worker's session carries a dispatch hold and a mailbox a plain launch must not
- *  take, while the decision and ordering above it are identical. */
+ *  orchestration worker's session carries a redrive subscription and a mailbox a plain launch
+ *  must not take, while the decision and ordering above it are identical. */
 export type AgentLaunchSurfaceFactory = {
   createStructuredSession(args: {
     worktreeId: string
-    agent: 'claude' | 'codex'
+    /** An agent this host registered as structured; the launch mode already checked it. */
+    agent: StructuredAgentId
     options?: Readonly<Record<string, unknown>>
     /** The caller-minted session id; refused with `AgentLaunchSessionAlreadyExistsError` if taken. */
     sessionId?: string
@@ -25,8 +27,8 @@ export type AgentLaunchSurfaceFactory = {
     worktreeId: string
     agent: TuiAgent
     options?: Readonly<Record<string, unknown>>
-    /** Set only for an agent whose CLI takes the prompt on argv, so the text is in the process's
-     *  arguments at exec time rather than raced into its composer afterwards. */
+    /** Offered only for an agent whose CLI takes the prompt on argv. It rides the launch command
+     *  only when the typed line can carry it; `promptRodeLaunchCommand` reports which happened. */
     startupPrompt?: string
     /** Replaces the settings default for this launch only; `null` means no arguments at all. */
     agentArgs?: string | null
@@ -35,11 +37,15 @@ export type AgentLaunchSurfaceFactory = {
     launchSource?: string
     /** The caller-minted pane to create; refused with `AgentLaunchPaneAlreadyLiveError` if live. */
     paneKey?: string
+    /** The tab's first view, derived on the host by the window's own rule. */
+    viewMode?: 'terminal' | 'chat'
   }): Promise<{
     handle: string
     /** The pane this create minted; a factory whose runtime reports none omits it, never invents. */
     paneKey?: string
     warning?: string
+    /** Reported by the surface that built the typed line, never predicted by the executor. */
+    promptRodeLaunchCommand?: boolean
   }>
   /**
    * Commits the launch text as the session's first turn, answering with the transcript row's id.
@@ -56,12 +62,19 @@ export type AgentLaunchSurfaceFactory = {
   /**
    * Writes the launch text into a terminal agent's live PTY, answering whether it landed.
    *
-   * The other half of `startupPrompt`, for the two cases argv cannot serve: a `stdin-after-start`
-   * agent, whose CLI takes no prompt argument, and a reused terminal, whose process was already
-   * running before this launch existed. `false` for every failure, on the same rule the structured
+   * The other half of `startupPrompt`, for the cases the launch command cannot serve: a
+   * `stdin-after-start` agent, whose CLI takes no prompt argument; a prompt the typed line cannot
+   * carry; and a reused terminal, whose process was already running before this launch existed. `false` for every failure, on the same rule the structured
    * twin follows — a launch whose agent is running must not fail because its text did not land.
    */
-  deliverTerminalPrompt?(args: { handle: string; prompt: AgentLaunchPrompt }): Promise<boolean>
+  deliverTerminalPrompt?(args: {
+    handle: string
+    /** The launched agent, whose own readiness signal the write waits for. */
+    agent: TuiAgent
+    /** False for a reused terminal, which has no fresh launch readiness to wait for. */
+    freshLaunch: boolean
+    prompt: AgentLaunchPrompt
+  }): Promise<boolean>
 }
 
 /** `fence` is the lease the create was admitted at, carried so the launch prompt's send can fill its
@@ -95,8 +108,8 @@ export type AgentLaunchWorkspaceFactory = {
      *  wait-for-setup gate for free. A structured launch has no startup command to sequence and
      *  must await that gate explicitly instead. */
     startupAgent: TuiAgent | undefined
-    /** Set only alongside a `startupAgent` whose CLI takes the prompt on argv: agent-first creation
-     *  builds the startup command, so that is where an argv prompt belongs. */
+    /** Offered only alongside a `startupAgent` whose CLI takes the prompt on argv: agent-first
+     *  creation builds the startup command, so that is where the typed line is measured. */
     startupPrompt?: string
     /** Inputs needed when this terminal is created as the worktree's startup surface. */
     agentArgs?: string | null
@@ -107,10 +120,14 @@ export type AgentLaunchWorkspaceFactory = {
     options?: Readonly<Record<string, unknown>>
   }): Promise<{
     worktreeId: string
+    /** The new workspace's SSH connection; `null` is local. Decides what its agent tab can show. */
+    connectionId: string | null
     startupTerminalHandle: string | undefined
     /** The pane minted with the startup terminal, when the runtime reported one. */
     startupTerminalPaneKey?: string
     /** Created, but incomplete — surfaced on the launch result rather than dropped. */
     warning?: string
+    /** Reported by the create that built the startup command's typed line. */
+    promptRodeLaunchCommand?: boolean
   }>
 }

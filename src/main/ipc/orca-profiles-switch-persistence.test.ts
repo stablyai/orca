@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 import {
   createWorkerMaintenanceFixture,
@@ -85,7 +85,7 @@ describe('plain profile switch persistence', () => {
     let final: Promise<void> | undefined
     quit.mockImplementation(() => {
       store.markSshRemotePtyLeasesForShutdown('remote', 'detached')
-      final = store.flushFinalOrThrowAsync({ exportJsonCompatibility: true })
+      final = store.flushFinalOrThrowAsync()
     })
     registerOrcaProfileHandlers(store, {
       onBeforeRelaunch: async () => {
@@ -110,6 +110,6 @@ describe('plain profile switch persistence', () => {
       settings: { theme: 'light' },
       sshRemotePtyLeases: [expect.objectContaining({ state: 'detached' })]
     })
-    expect(JSON.parse(readFileSync(dataFile, 'utf8'))).toEqual(readState())
+    expect(existsSync(dataFile)).toBe(false)
   })
 })

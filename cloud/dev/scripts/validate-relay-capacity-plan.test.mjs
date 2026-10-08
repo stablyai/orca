@@ -4,7 +4,9 @@ import {
   RELAY_CELL_CONNECTION_DRAIN_SECONDS,
   RELAY_CELL_LOG_SAMPLE_RATE
 } from './validate-relay-asia-topology-plan.mjs'
+import { readFileSync } from 'node:fs'
 import {
+  DECLARED_MANAGER_FIELDS,
   parseCapacityPlanArguments,
   validateCapacityPlan as validateCapacityPlanRaw
 } from './validate-relay-capacity-plan.mjs'
@@ -240,6 +242,7 @@ test('accepts only the exact canary template replacement and MIG update', () => 
     ),
     /no exact planned C26 state/
   )
+  // A MIG moving back to its declared label and update policy is reconciliation in every mode.
   const restartedBootstrapManager = structuredClone(bootstrapManager)
   restartedBootstrapManager.change.before.update_policy = [{ minimal_action: 'RESTART' }]
   restartedBootstrapManager.change.after.update_policy = [{ minimal_action: 'REPLACE' }]
@@ -253,33 +256,20 @@ test('accepts only the exact canary template replacement and MIG update', () => 
     ),
     { mode: 'bootstrap-cell', changes: 2 }
   )
-  assert.throws(
-    () =>
-      validateCapacityPlan(
-        { resource_changes: [template, restartedBootstrapManager] },
-        cellConfig
-      ),
-    /outside the reviewed capacity fields/
+  assert.deepEqual(
+    validateCapacityPlan({ resource_changes: [template, restartedBootstrapManager] }, cellConfig),
+    { mode: 'cell', changes: 2 }
   )
-  const unrecognizedRestartManager = structuredClone(restartedBootstrapManager)
-  unrecognizedRestartManager.change.before.version[0].name = 'operator-version'
-  assert.throws(
-    () =>
-      validateCapacityPlan(
-        { resource_changes: [bootstrapTemplate, unrecognizedRestartManager] },
-        bootstrapConfig
-      ),
-    /outside the reviewed capacity fields/
-  )
-  const unrecognizedRestartPolicy = structuredClone(restartedBootstrapManager)
-  unrecognizedRestartPolicy.change.before.update_policy[0].minimal_action = 'REFRESH'
-  assert.throws(
-    () =>
-      validateCapacityPlan(
-        { resource_changes: [bootstrapTemplate, unrecognizedRestartPolicy] },
-        bootstrapConfig
-      ),
-    /outside the reviewed capacity fields/
+  const operatorLabelManager = structuredClone(restartedBootstrapManager)
+  operatorLabelManager.change.before.version[0].name = 'operator-version'
+  delete operatorLabelManager.change.before.update_policy
+  delete operatorLabelManager.change.after.update_policy
+  assert.deepEqual(
+    validateCapacityPlan(
+      { resource_changes: [bootstrapTemplate, operatorLabelManager] },
+      bootstrapConfig
+    ),
+    { mode: 'bootstrap-cell', changes: 2 }
   )
   const unrecognizedPrimaryVersion = structuredClone(restartedBootstrapManager)
   unrecognizedPrimaryVersion.change.after.version[0].name = 'other'
@@ -301,23 +291,13 @@ test('accepts only the exact canary template replacement and MIG update', () => 
       ),
     /outside the reviewed capacity fields/
   )
-  const missingRestartPolicy = structuredClone(restartedBootstrapManager)
-  delete missingRestartPolicy.change.before.update_policy
-  delete missingRestartPolicy.change.after.update_policy
+  // Gaining a whole policy block is not a field reverting, so it is not reconciliation.
+  const addedPolicy = structuredClone(restartedBootstrapManager)
+  delete addedPolicy.change.before.update_policy
   assert.throws(
     () =>
       validateCapacityPlan(
-        { resource_changes: [bootstrapTemplate, missingRestartPolicy] },
-        bootstrapConfig
-      ),
-    /outside the reviewed capacity fields/
-  )
-  const missingRestartVersion = structuredClone(restartedBootstrapManager)
-  missingRestartVersion.change.before.version[0].name = 'primary'
-  assert.throws(
-    () =>
-      validateCapacityPlan(
-        { resource_changes: [bootstrapTemplate, missingRestartVersion] },
+        { resource_changes: [bootstrapTemplate, addedPolicy] },
         bootstrapConfig
       ),
     /outside the reviewed capacity fields/
@@ -484,6 +464,127 @@ test('same-cap mode preserves 1000/60 while adding only the reviewed trust confi
   assert.deepEqual(
     validateCapacityPlan({ resource_changes: [template, manager] }, sameCapConfig),
     { mode: 'same-cap-cell', changes: 2 }
+  )
+  // A gcloud rolling action on a stranded cell renamed its MIG version; the next roll reverts it.
+  const relabelledManager = structuredClone(manager)
+  relabelledManager.change.before.version[0].name = '0/2026-10-01 10:41:28.681518+00:00'
+  relabelledManager.change.after.version[0].name = 'primary'
+  assert.deepEqual(
+    validateCapacityPlan({ resource_changes: [template, relabelledManager] }, sameCapConfig),
+    { mode: 'same-cap-cell', changes: 2 }
+  )
+  for (const [field, moved] of [
+    ['target_size', 0],
+    ['base_instance_name', 'relay-other'],
+    ['named_port', [{ name: 'relay', port: 9090 }]]
+  ]) {
+    const unrelated = structuredClone(relabelledManager)
+    unrelated.change.after[field] = moved
+    assert.throws(
+      () => validateCapacityPlan({ resource_changes: [template, unrelated] }, sameCapConfig),
+      /outside the reviewed capacity fields/,
+      field
+    )
+  }
+  const declaredPolicy = {
+    type: 'PROACTIVE',
+    minimal_action: 'REPLACE',
+    most_disruptive_allowed_action: 'REPLACE',
+    replacement_method: 'RECREATE',
+    max_surge_fixed: 0,
+    max_unavailable_fixed: 1
+  }
+  for (const [field, drifted, away] of [
+    ['type', 'OPPORTUNISTIC', 'OPPORTUNISTIC'],
+    ['minimal_action', 'RESTART', 'RESTART'],
+    ['most_disruptive_allowed_action', 'RESTART', 'RESTART'],
+    ['replacement_method', 'SUBSTITUTE', 'SUBSTITUTE'],
+    ['max_surge_fixed', 1, 1],
+    ['max_unavailable_fixed', 0, 0]
+  ]) {
+    const reverted = structuredClone(relabelledManager)
+    reverted.change.before.update_policy = [{ ...declaredPolicy, [field]: drifted }]
+    reverted.change.after.update_policy = [{ ...declaredPolicy }]
+    assert.deepEqual(
+      validateCapacityPlan({ resource_changes: [template, reverted] }, sameCapConfig),
+      { mode: 'same-cap-cell', changes: 2 },
+      field
+    )
+    const leaving = structuredClone(relabelledManager)
+    leaving.change.before.update_policy = [{ ...declaredPolicy }]
+    leaving.change.after.update_policy = [{ ...declaredPolicy, [field]: away }]
+    assert.throws(
+      () => validateCapacityPlan({ resource_changes: [template, leaving] }, sameCapConfig),
+      /outside the reviewed capacity fields/,
+      field
+    )
+  }
+  // A second version is a canary split, never a label revert.
+  const secondVersion = structuredClone(relabelledManager)
+  secondVersion.change.after.version.push({
+    name: 'primary',
+    instance_template: 'projects/project/global/instanceTemplates/canary',
+    target_size: [{ fixed: 1 }]
+  })
+  assert.throws(
+    () => validateCapacityPlan({ resource_changes: [template, secondVersion] }, sameCapConfig),
+    /outside the reviewed capacity fields/
+  )
+  // A stranded rollback whose template is already in place plans only the label revert.
+  const plannedCell = (startupScript, templateLink) => ({
+    root_module: {
+      resources: [
+        {
+          address: 'google_compute_instance_template.relay_gce_cell["staging-gce-c3"]',
+          values: { metadata_startup_script: startupScript, self_link: templateLink }
+        },
+        {
+          address: 'google_compute_instance_group_manager.relay_gce_cell["staging-gce-c3"]',
+          values: { version: [{ instance_template: templateLink, name: 'primary' }] }
+        }
+      ]
+    }
+  })
+  const reviewedLink = 'projects/project/global/instanceTemplates/reviewed'
+  const labelOnly = {
+    address: manager.address,
+    change: {
+      actions: ['update'],
+      before: {
+        target_size: 1,
+        version: [{ instance_template: reviewedLink, name: '0/2026-10-01 10:41:28.681518+00:00' }]
+      },
+      after: { target_size: 1, version: [{ instance_template: reviewedLink, name: 'primary' }] },
+      after_unknown: {}
+    }
+  }
+  const strandedPlan = (managerChange) => ({
+    resource_changes: [managerChange],
+    planned_values: plannedCell(template.change.after.metadata_startup_script, reviewedLink)
+  })
+  assert.deepEqual(
+    validateCapacityPlan(strandedPlan(labelOnly), sameCapConfig),
+    { mode: 'same-cap-cell', changes: 1 }
+  )
+  const labelAway = structuredClone(labelOnly)
+  labelAway.change.before.version[0].name = 'primary'
+  labelAway.change.after.version[0].name = 'other'
+  assert.throws(
+    () => validateCapacityPlan(strandedPlan(labelAway), sameCapConfig),
+    /outside the reviewed capacity fields/
+  )
+  const labelAndResize = structuredClone(labelOnly)
+  labelAndResize.change.after.target_size = 0
+  assert.throws(
+    () => validateCapacityPlan(strandedPlan(labelAndResize), sameCapConfig),
+    /outside the reviewed capacity fields/
+  )
+  const percentSurge = structuredClone(relabelledManager)
+  percentSurge.change.before.update_policy = [{ ...declaredPolicy, max_surge_percent: 0 }]
+  percentSurge.change.after.update_policy = [{ ...declaredPolicy, max_surge_percent: 50 }]
+  assert.throws(
+    () => validateCapacityPlan({ resource_changes: [template, percentSurge] }, sameCapConfig),
+    /outside the reviewed capacity fields/
   )
   // A pre-template-apply rollback resume validates drift for the image the
   // cell already serves: the template leaves and re-enters the rollback image.
@@ -1299,4 +1400,31 @@ test('a same-cap roll may carry only this cell backend drain and request logging
     ),
     /only the exact instance template and MIG/
   )
+})
+
+// The reconciliation allowance is only safe while it names exactly what Terraform declares.
+test('the declared MIG fields match relay-gce-cells.tf', () => {
+  const terraform = readFileSync(
+    new URL('../../infra/terraform/relay-gce-cells.tf', import.meta.url),
+    'utf8'
+  )
+  const manager = terraform
+    .split('resource "google_compute_instance_group_manager" "relay_gce_cell" {')[1]
+    ?.split('\n}')[0] ?? ''
+  const block = (name) => manager.split(`  ${name} {`)[1]?.split('\n  }')[0] ?? ''
+  const topology = terraform.split('  relay_gce_topology = {')[1]?.split('\n  }')[0] ?? ''
+  const attribute = (source, name) => {
+    const raw = new RegExp(`\\n\\s+${name}\\s+= (.+)`).exec(source)?.[1]
+    assert.notEqual(raw, undefined, `relay-gce-cells.tf declares no ${name}`)
+    const local = /^local\.relay_gce_topology\.(\w+)$/.exec(raw)?.[1]
+    if (local) return Number(new RegExp(`${local}\\s+= (\\d+)`).exec(topology)?.[1])
+    return JSON.parse(raw)
+  }
+  const declared = Object.fromEntries(
+    Object.keys(DECLARED_MANAGER_FIELDS).map((path) => {
+      const [blockName, , field] = path.split('.')
+      return [path, attribute(block(blockName), field)]
+    })
+  )
+  assert.deepEqual(declared, { ...DECLARED_MANAGER_FIELDS })
 })

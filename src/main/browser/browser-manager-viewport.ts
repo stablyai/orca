@@ -5,9 +5,12 @@ import {
   type BrowserAnnotationViewportBridgeOptions
 } from '../../shared/browser-annotation-viewport-bridge'
 import type { BrowserViewportOverride } from '../../shared/browser-workspace-types'
-import { googleAuthUserAgent, isGoogleAuthUrl } from './browser-google-auth-ua'
 import { BrowserManagerDownloadLifecycle } from './browser-manager-download-lifecycle'
-import { getBrowserProcessUserAgentIdentity } from './browser-process-user-agent'
+import { sendGuestCdpCommand } from './guest-cdp-command'
+
+// Why no maxTouchPoints: Chromium rejects values outside 1..16 even when disabling, which left
+// touch emulation (and no-hover media features) on after leaving a mobile preset (#22749).
+const TOUCH_EMULATION_DISABLED = { enabled: false } as const
 
 export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifecycle {
   // Why: guests are isolated from Orca's preload bridge, so main owns the devtools escape hatch after a tab→guest lookup.
@@ -39,11 +42,13 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
     // Why: chain per-tab so rapid toggles don't interleave CDP commands and the last-requested override wins.
     const expectedWebContentsId = this.webContentsIdByTabId.get(browserTabId)
     if (expectedWebContentsId !== undefined) {
-      // Keep host panning available while CDP applies the requested dimensions. The guest id fence
-      // prevents this intent from leaking to a replacement guest; clearing the preset removes it.
-      this.viewportPresetActiveByTabId.set(browserTabId, {
+      // Record the request before CDP runs so host panning follows it at once. What is applied only
+      // moves once Chromium accepts it. The guest id fence keeps both off a replacement guest.
+      const previous = this.viewportPresetByTabId.get(browserTabId)
+      this.viewportPresetByTabId.set(browserTabId, {
         guestWebContentsId: expectedWebContentsId,
-        active: override !== null
+        requested: override,
+        applied: previous?.guestWebContentsId === expectedWebContentsId ? previous.applied : null
       })
     }
     // The renderer resizes the host before CDP completes; discard the old geometry until it
@@ -72,7 +77,13 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
     const prev = this.annotationViewportBridgeOpsByTabId.get(browserTabId) ?? Promise.resolve()
     const next = prev
       .catch(() => {})
-      .then(() => this.doSetAnnotationViewportBridgeImpl(options, resolveGuest))
+      .then(() => {
+        // A newer document invalidation retires geometry still waiting in the queue.
+        if (this.annotationViewportBridgeOpsByTabId.get(browserTabId) !== next) {
+          return false
+        }
+        return this.doSetAnnotationViewportBridgeImpl(options, resolveGuest)
+      })
     this.annotationViewportBridgeOpsByTabId.set(browserTabId, next)
     try {
       return await next
@@ -146,84 +157,59 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
     }
 
     const dbg = guest.debugger
+    const metricsApplied = await this.runViewportEmulationStep(
+      browserTabId,
+      'device metrics',
+      () =>
+        override
+          ? sendGuestCdpCommand(guest, 'Emulation.setDeviceMetricsOverride', {
+              width: override.width,
+              height: override.height,
+              deviceScaleFactor: override.deviceScaleFactor,
+              mobile: override.mobile
+            })
+          : dbg.sendCommand('Emulation.clearDeviceMetricsOverride', {})
+    )
+    // Why record before any further await: a debugger detach clears the metrics, and its handler
+    // must land after this write, not be overwritten by it.
+    if (metricsApplied) {
+      this.recordAppliedViewportOverride(browserTabId, webContentsId, override)
+    }
+    const touchApplied = await this.runViewportEmulationStep(browserTabId, 'touch emulation', () =>
+      dbg.sendCommand(
+        'Emulation.setTouchEmulationEnabled',
+        override?.mobile ? { enabled: true, maxTouchPoints: 5 } : TOUCH_EMULATION_DISABLED
+      )
+    )
+    if (this.webContentsIdByTabId.get(browserTabId) !== webContentsId) {
+      return false
+    }
+    // Why: identity follows the device metrics Chromium actually holds, not the request, so a failed
+    // metrics write never pairs a phone identity with a desktop viewport, or the reverse.
+    const identityApplied = await this.runViewportEmulationStep(browserTabId, 'identity', () =>
+      this.retargetTabIdentity(guest, this.resolveTabNavigationUrl(guest))
+    )
+    return (
+      metricsApplied &&
+      touchApplied &&
+      identityApplied &&
+      this.webContentsIdByTabId.get(browserTabId) === webContentsId
+    )
+  }
+
+  private async runViewportEmulationStep(
+    browserTabId: string,
+    step: string,
+    send: () => Promise<unknown>
+  ): Promise<boolean> {
     try {
-      if (override) {
-        await dbg.sendCommand('Emulation.setDeviceMetricsOverride', {
-          width: override.width,
-          height: override.height,
-          deviceScaleFactor: override.deviceScaleFactor,
-          mobile: override.mobile
-        })
-        if (this.webContentsIdByTabId.get(browserTabId) === webContentsId) {
-          this.viewportPresetActiveByTabId.set(browserTabId, {
-            guestWebContentsId: webContentsId,
-            active: true
-          })
-        }
-        await dbg.sendCommand('Emulation.setTouchEmulationEnabled', {
-          enabled: override.mobile,
-          maxTouchPoints: override.mobile ? 5 : 0
-        })
-        if (this.webContentsIdByTabId.get(browserTabId) !== webContentsId) {
-          return false
-        }
-        // Navigation must see the preset while the final CDP write is in flight.
-        this.viewportUaOverrideMobileByTabId.set(browserTabId, override.mobile)
-        await this.sendViewportUserAgentOverride(guest, override.mobile)
-      } else {
-        await dbg.sendCommand('Emulation.clearDeviceMetricsOverride', {})
-        if (this.webContentsIdByTabId.get(browserTabId) === webContentsId) {
-          this.viewportPresetActiveByTabId.set(browserTabId, {
-            guestWebContentsId: webContentsId,
-            active: false
-          })
-        }
-        await dbg.sendCommand('Emulation.setTouchEmulationEnabled', {
-          enabled: false,
-          maxTouchPoints: 0
-        })
-        if (this.webContentsIdByTabId.get(browserTabId) !== webContentsId) {
-          return false
-        }
-        const trackedMobile = this.viewportUaOverrideMobileByTabId.get(browserTabId)
-        // A navigation after this point must not re-install the override behind the clear.
-        this.viewportUaOverrideMobileByTabId.delete(browserTabId)
-        try {
-          if (this.authUserAgentOverrideStateByGuestId.has(guest.id)) {
-            const url = this.resolveTabNavigationUrl(guest)
-            const identity = getBrowserProcessUserAgentIdentity()
-            // Firefox is delivered per-target and cannot reach workers; keep it clean-only to preserve
-            // one coherent identity per mode instead of pairing a Firefox document with native workers.
-            const restored = await this.applyAuthUserAgentOverrideOverCdp(
-              guest,
-              false,
-              url,
-              identity.mode === 'clean' && isGoogleAuthUrl(url)
-                ? googleAuthUserAgent()
-                : identity.userAgent
-            )
-            if (!restored) {
-              throw new Error('Failed to preserve auth user agent')
-            }
-          } else {
-            // Why: passing an empty string restores the session default UA.
-            await dbg.sendCommand('Emulation.setUserAgentOverride', { userAgent: '' })
-          }
-        } catch (error) {
-          if (
-            trackedMobile !== undefined &&
-            this.webContentsIdByTabId.get(browserTabId) === webContentsId
-          ) {
-            this.viewportUaOverrideMobileByTabId.set(browserTabId, trackedMobile)
-          }
-          throw error
-        }
-      }
-      if (this.webContentsIdByTabId.get(browserTabId) !== webContentsId) {
-        return false
-      }
-      return true
-    } catch {
+      // A step that reports its own failure resolves false rather than throwing.
+      return (await send()) !== false
+    } catch (error) {
+      console.warn(`[browser-manager] setViewportOverride: ${step} failed`, {
+        browserTabId,
+        error: error instanceof Error ? error.message : String(error)
+      })
       return false
     }
   }

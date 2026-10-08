@@ -26,6 +26,7 @@ import {
   WorktreeTeardownMissingTerminalsParams
 } from './worktree-schemas'
 import { WORKTREE_CATALOG_METHODS } from './worktree-catalog-methods'
+import { readsWorktreeRemovalMarker } from '../worktree-removal-marker-projection'
 
 export const WORKTREE_METHODS = [
   ...WORKTREE_CATALOG_METHODS,
@@ -71,7 +72,8 @@ export const WORKTREE_METHODS = [
         navigation: resolveRuntimeNavigationTarget({
           navigation: params.navigation,
           notifyClients: params.notifyClients,
-          clientKind
+          clientKind,
+          defaultTarget: 'host'
         })
       })
   }),
@@ -155,6 +157,13 @@ export const WORKTREE_METHODS = [
         linkedAzureDevOpsPR: params.linkedAzureDevOpsPR,
         linkedGiteaPR: params.linkedGiteaPR,
         linkedWorkItem: params.linkedWorkItem,
+        linkedItems: params.linkedItems,
+        ...(params.linkedItemsBase !== undefined
+          ? { linkedItemsBase: params.linkedItemsBase }
+          : {}),
+        ...(params.linkedItemsSelectionChanged !== undefined
+          ? { linkedItemsSelectionChanged: params.linkedItemsSelectionChanged }
+          : {}),
         linkedTaskSourceContext: params.linkedTaskSourceContext,
         comment: params.comment,
         isArchived: params.isArchived,
@@ -179,7 +188,7 @@ export const WORKTREE_METHODS = [
                 noParent: params.noParent === true
               }
             : undefined
-      } as Parameters<typeof runtime.updateManagedWorktreeMeta>[1])
+      })
     })
   }),
   defineMethod({
@@ -215,7 +224,8 @@ export const WORKTREE_METHODS = [
   defineMethod({
     name: 'worktree.rm',
     params: WorktreeRemove,
-    handler: async (params, { runtime }) => {
+    handler: async (params, context) => {
+      const { runtime } = context
       // Translate a paired client's runtime-local host spelling before host-qualified reads.
       let resolvedHostId = resolvePairedCallerHostId(
         () => runtime.listRepos(),
@@ -250,7 +260,10 @@ export const WORKTREE_METHODS = [
         runHooks: params.runHooks === true,
         allowUnverifiedPtyStop: params.allowUnverifiedPtyStop === true,
         allowFailedArchiveHook: params.allowFailedArchiveHook === true,
-        ...(resolvedHostId ? { hostId: resolvedHostId } : {})
+        ...(resolvedHostId ? { hostId: resolvedHostId } : {}),
+        // Why: only a client that shows the `removing` marker can wait out Git's delete; older
+        // clients get the acceptance and never see the row again.
+        ...(readsWorktreeRemovalMarker(context) ? { waitForBackgroundRemoval: true } : {})
       })
       return {
         removed: true,

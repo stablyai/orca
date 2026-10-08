@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 // The launch client against the create wire contract: a failed create whose provider is proven
-// gone reads as failed (with its reason) and Retry starts it again; any other verdict stays unknown.
+// gone reads as failed (with its refusal) and Retry starts it again; any other verdict stays unknown.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
@@ -49,13 +49,14 @@ import {
   startStructuredAgentLaunch
 } from './structured-agent-session-launch'
 import {
-  getStructuredAgentSessionLaunchFailureReason,
+  getStructuredAgentSessionLaunchFailure,
   resetStructuredAgentLaunchRegistryForTests
 } from './structured-agent-session-launch-registry'
 import { resetStructuredAgentLaunchPersistenceForTests } from './structured-agent-session-launch-persistence'
 
 const WORKTREE = 'wt-1'
 const EXIT_REASON = 'claude stream-json exited (code 1): stderr tail'
+const HOST_REFUSAL = { kind: 'refused', code: 'agent_session_operation_invalid' }
 
 /** The verdict the host puts on the failed operation's replay; undefined models an older host. */
 let replayVerdict: AgentSessionOwnerVerdict | undefined
@@ -93,7 +94,7 @@ async function settle(sessionId: string): Promise<void> {
 }
 
 function launch(): string {
-  const started = startStructuredAgentLaunch(WORKTREE, 'codex')
+  const started = startStructuredAgentLaunch(WORKTREE, 'codex', { requestId: 'request-1' })
   void started.launchResult.catch(() => undefined)
   return started.sessionId
 }
@@ -125,12 +126,13 @@ beforeEach(() => {
 })
 
 describe('structured launch after a host-failed create', () => {
-  it('fails with the host reason when the provider is proven gone, and Retry starts it under a new operation', async () => {
+  it('fails with the host refusal when the provider is proven gone, and Retry starts it under a new operation', async () => {
     const sessionId = launch()
     await settle(sessionId)
 
     expect(getStructuredAgentSessionLaunchLifecycle(WORKTREE, sessionId)).toBe('failed')
-    expect(getStructuredAgentSessionLaunchFailureReason(WORKTREE, sessionId)).toBe(EXIT_REASON)
+    // The host's message is for its log; the Retry line words the refusal.
+    expect(getStructuredAgentSessionLaunchFailure(WORKTREE, sessionId)).toEqual(HOST_REFUSAL)
     expect(createdOperations.every((operation) => operation === failedOperation)).toBe(true)
 
     expect(retryStructuredAgentSessionLaunch(WORKTREE, sessionId)).toBe(true)
@@ -147,7 +149,8 @@ describe('structured launch after a host-failed create', () => {
     const sessionId = launch()
     await settle(sessionId)
     expect(getStructuredAgentSessionLaunchLifecycle(WORKTREE, sessionId)).toBe('failed')
-    expect(getStructuredAgentSessionLaunchFailureReason(WORKTREE, sessionId)).toBe(EXIT_REASON)
+    // The host's message is for its log; the Retry line words the refusal.
+    expect(getStructuredAgentSessionLaunchFailure(WORKTREE, sessionId)).toEqual(HOST_REFUSAL)
     expect(createdOperations).toEqual([failedOperation])
     expect(retryStructuredAgentSessionLaunch(WORKTREE, sessionId)).toBe(true)
     await settle(sessionId)

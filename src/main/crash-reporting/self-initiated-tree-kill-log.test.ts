@@ -124,7 +124,7 @@ describe('self-initiated tree kill breadcrumb', () => {
         ;(done as () => void)()
         return undefined as never
       }) as never,
-      site: 'codex-turn-added-roots'
+      site: 'codex-app-server-teardown'
     })
 
     expect(getCrashBreadcrumbSnapshot()).toEqual([
@@ -132,7 +132,7 @@ describe('self-initiated tree kill breadcrumb', () => {
         name: 'self_tree_kill',
         data: expect.objectContaining({
           pid: 777,
-          site: 'codex-turn-added-roots',
+          site: 'codex-app-server-teardown',
           scope: 'win-taskkill-tree'
         })
       })

@@ -9,10 +9,12 @@ vi.mock('electron', () => ({
 }))
 
 import { fetchNudge, versionMatchesRange, shouldApplyNudge } from './updater-nudge'
+import { isRolloutFlagActive, resetRolloutConfigForTests } from './updater/rollout-flags'
 
 describe('updater-nudge', () => {
   beforeEach(() => {
     netFetchMock.mockReset()
+    resetRolloutConfigForTests()
   })
 
   describe('fetchNudge', () => {
@@ -123,6 +125,40 @@ describe('updater-nudge', () => {
       })
 
       await expect(fetchNudge()).resolves.toBeNull()
+    })
+  })
+
+  describe('rollout block on the same request', () => {
+    const install = { appVersion: '1.5.0', installId: 'install-a' }
+    const killSwitch = { version: 1, flags: { 'pinned-relay-default': { state: 'on' } } }
+
+    it('records the block without changing the nudge it rides on', async () => {
+      netFetchMock.mockResolvedValue({
+        ok: true,
+        json: async () => ({ id: 'campaign-1', minVersion: '1.0.0', rollout: killSwitch })
+      })
+
+      await expect(fetchNudge()).resolves.toEqual({ id: 'campaign-1', minVersion: '1.0.0' })
+      expect(isRolloutFlagActive('pinned-relay-default', install)).toBe(true)
+      expect(netFetchMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('reads a block even when there is no nudge campaign', async () => {
+      netFetchMock.mockResolvedValue({ ok: true, json: async () => ({ rollout: killSwitch }) })
+
+      await expect(fetchNudge()).resolves.toBeNull()
+      expect(isRolloutFlagActive('pinned-relay-default', install)).toBe(true)
+    })
+
+    it('keeps the last block when a later request fails', async () => {
+      netFetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ rollout: killSwitch }) })
+      await fetchNudge()
+      netFetchMock.mockResolvedValueOnce({ ok: false })
+      await fetchNudge()
+      netFetchMock.mockRejectedValueOnce(new Error('network down'))
+      await fetchNudge()
+
+      expect(isRolloutFlagActive('pinned-relay-default', install)).toBe(true)
     })
   })
 

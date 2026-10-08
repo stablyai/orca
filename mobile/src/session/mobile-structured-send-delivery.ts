@@ -13,17 +13,30 @@
 //
 //   accepted/pending — the send happened. The id is spent; a later identical
 //     message is a new message and must carry a new id.
+//   withdrawn — a submission a Stop took back before the agent started it is
+//     drawn in the chat with its stop row, so it spends the id and goes back to no
+//     draft. Answering a first send, it is that message: sent, then stopped. As a
+//     retained replay it cannot be told from a new send of the same text, and it
+//     provably never ran, so the caller sends it again under a fresh id.
 //   rejected — a terminal refusal or rejected submission spends a fresh id. A
 //     pending-admission refusal, or any refusal after earlier transport doubt,
-//     keeps it because neither proves a retained delivery did not happen.
+//     keeps it because neither proves a retained delivery did not happen. Two
+//     exceptions spend it anyway, because the host can never accept the replay
+//     and keeping the id would only refuse every later send of the same text:
+//     a host that refuses the replay's request shape itself (an older host's
+//     strict schema turning `delivery` away), and an id the host has expired.
+//     A rejection the host kept as a card answers as `queued`: the card holds the text.
 //   unknown — the one answer that KEEPS its id, whether it came from the host or
 //     from an ack-loss on the way back. The message may be with the provider, so
 //     the retry has to stay a replay. Rotating here is what sent one message to a
 //     model five times.
 
+import type { AgentJournalSubmission } from '../../../src/shared/agent-session-journal-types'
 import type { AgentSessionSendResult } from '../../../src/shared/agent-session-wire'
 import { agentSessionRefusalOperationState } from '../../../src/shared/agent-session-refusal-retry'
-import { structuredAgentSessionRejectionNotice } from '../../../src/shared/structured-agent-session-send-disposition'
+import { agentSessionWriteNoticeEnglish } from '../../../src/shared/agent-session-refusal-notice'
+import { structuredAgentSessionRejectionNotice } from '../../../src/shared/structured-agent-session-rejection-words'
+import { dispatchWasWithdrawn } from '../../../src/shared/structured-agent-session-dispatch-rejection'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import type { StructuredAgentSessionMutationCallResult } from './mobile-structured-agent-session-rpc'
 
@@ -33,6 +46,21 @@ export type MobileStructuredSendDelivery = {
   operationIdSpent: boolean
   /** Copy for the user, or null when the outcome needs none. */
   error: string | null
+}
+
+/** Whether a send answer is its own submission, which a Stop took back before the agent started it. */
+export function mobileStructuredSendWithdrawnBeforeStart(
+  result: StructuredAgentSessionMutationCallResult<AgentSessionSendResult>
+): boolean {
+  if (result.status !== 'accepted' || !('submission' in result.value)) {
+    return false
+  }
+  const { submission } = result.value
+  return (
+    submission.queuedMessageId === undefined &&
+    submission.dispatchState === 'rejected' &&
+    dispatchWasWithdrawn(submission)
+  )
 }
 
 export function mobileStructuredSendDelivery(
@@ -47,6 +75,15 @@ export function mobileStructuredSendDelivery(
     if (refusalState === 'unknown') {
       return { outcome: 'unknown', operationIdSpent: false, error: null }
     }
+    if (retained && result.code === 'agent_session_operation_expired') {
+      // The host refuses this id for good once its day is up, so keeping it would refuse this text
+      // forever. The earlier attempt may already be in the chat, so the words say to check first.
+      return {
+        outcome: 'rejected',
+        operationIdSpent: true,
+        error: agentSessionWriteNoticeEnglish(['sendOutcomeLost'])
+      }
+    }
     return {
       outcome: 'rejected',
       operationIdSpent: refusalState === 'settled-rejected' && !retained,
@@ -56,13 +93,40 @@ export function mobileStructuredSendDelivery(
   if (result.status !== 'accepted') {
     return {
       outcome: 'rejected',
-      operationIdSpent: !retained,
+      operationIdSpent: !retained || result.hostRejectedByRequestSchema === true,
       error: result.message
     }
   }
-  const submission = result.value.submission as AgentSessionSendResult['submission'] | undefined
+  if ('queued' in result.value && result.value.queued) {
+    // The host holds (or already settled) the draft: the send is spent — a
+    // later identical message is a new message. A withdrawn replay is spent
+    // too, never unknown: its card was deleted or carried by a /clear, and the
+    // caller resends it or hands the text back. A dispatched draft answers here
+    // only when the host could not find the submission it became (a live one
+    // answers with that submission), so no echo would retire an optimistic
+    // bubble: it shows nothing, and the transcript or the card owns the text.
+    return { outcome: 'queued', operationIdSpent: true, error: null }
+  }
+  const submission: AgentJournalSubmission | undefined =
+    'submission' in result.value ? result.value.submission : undefined
+  if (submission !== undefined && submission.queuedMessageId === result.value.clientMessageId) {
+    // The host says this id's queued draft was handed off as that submission: the send reached
+    // it, so the id is spent now, not when a stream that may never carry the hand-off shows it.
+    // Which send the phone meant stays unconfirmed, as for any retained replay of a live send.
+    return { outcome: 'unknown', operationIdSpent: true, error: null }
+  }
   if (!submission || submission.dispatchState === 'unknown') {
     return { outcome: 'unknown', operationIdSpent: false, error: null }
+  }
+  if (submission.dispatchState === 'rejected' && submission.keptAsQueuedMessageId !== undefined) {
+    // The host kept it as a card, which holds the text: no error, and nothing handed back to the
+    // composer, so the words never show twice.
+    return { outcome: 'queued', operationIdSpent: true, error: null }
+  }
+  if (mobileStructuredSendWithdrawnBeforeStart(result)) {
+    // The chat draws it with its stop row, so it is never handed back to the composer as well. A
+    // retained replay is resent by the caller.
+    return { outcome: retained ? 'rejected' : 'accepted', operationIdSpent: true, error: null }
   }
   if (submission.dispatchState === 'rejected') {
     return {

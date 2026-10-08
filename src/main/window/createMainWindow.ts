@@ -31,6 +31,7 @@ import {
 import { installMainWindowWebviewSecurity } from './main-window-webview-security'
 import { rectHasVisibleAreaOnAnyDisplay } from './window-bounds-validation'
 import { installWindowsPathRegistryChangeListener } from '../pty/windows-path-registry-change'
+import { recordAgentSessionRuntimeEnd } from '../runtime/agent-session-runtime-end-record'
 
 export { WINDOW_QUIT_RENDERER_ACK_TIMEOUT_MS }
 
@@ -155,6 +156,8 @@ export function createMainWindow(
           ? event.reasons.filter((reason) => typeof reason === 'string').join(',')
           : ''
       })
+      // Windows emits no will-quit for an OS shutdown or logoff, so its teardown never records it.
+      recordAgentSessionRuntimeEnd('quit')
     })
   }
 

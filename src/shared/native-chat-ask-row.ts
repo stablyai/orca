@@ -9,6 +9,7 @@ import { pairToolBlocks } from './native-chat-tool-fold'
 
 export const NATIVE_CHAT_ASK_ROW_COPY = {
   awaiting: 'Awaiting user input:',
+  awaitingUnnamed: 'Awaiting user input',
   asked: 'Asked:',
   questionCount: '{{value0}} questions'
 } as const

@@ -2,19 +2,16 @@
 //
 // A different question from storage: the durable record decides which markers are still present;
 // this decides which of those a resume may act on. The offer, the click and the pre-send check all
-// ask it, and all get the same answer: the marker stands until the user sends a newer message.
+// ask it, and the start asks the same `hostCanStartRecord`, so none offers what the start refuses.
 
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
-import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionWireRefusal } from '../../../shared/agent-session-wire'
 import type { AgentSessionResumeMarker } from '../../../shared/agent-session-resume-marker'
-import {
-  latestStructuredAgentSessionPrompt,
-  latestStructuredAgentSessionUserItem
-} from '../../../shared/structured-agent-session-projection'
+import { latestStructuredAgentSessionPrompt } from '../../../shared/structured-agent-session-latest-request'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
-import { adapterSupportsRecord } from './structured-agent-session-provider-support'
+import { hostCanStartRecord } from './structured-agent-session-provider-support'
+import type { StructuredAgentRegistry } from './structured-agent-registry'
 import {
   structuredAgentSessionResumableSet,
   type StructuredAgentSessionResumableSet
@@ -23,61 +20,67 @@ import {
 /** The only part of a live session this reads. */
 export type StructuredAgentSessionRestartJournalSource = { journal: AgentSessionJournal }
 
-export type StructuredAgentSessionRestartCandidateOptions = {
-  /** A continuation already in flight; its own submission is not newer user work. */
-  pendingContinuationId?: string
-}
-
 export type StructuredAgentSessionRestartCandidateReader = (
   markers: readonly AgentSessionResumeMarker[],
-  leaseState: 'must-be-released' | 'may-be-held',
-  options?: StructuredAgentSessionRestartCandidateOptions
+  leaseState: 'must-be-released' | 'may-be-held'
 ) => StructuredAgentSessionResumableSet
-
-/** The newest user message in a live session's journal, the same fact the predicate compares
- *  against a marker. Undefined when the session is not readable here, which decides nothing. */
-export function liveStructuredAgentSessionLatestUserItemId(
-  sessions: ReadonlyMap<string, StructuredAgentSessionRestartJournalSource>,
-  sessionId: string
-): string | null | undefined {
-  const session = sessions.get(sessionId)
-  return session
-    ? (latestStructuredAgentSessionUserItem(session.journal.snapshot().items)?.itemId ?? null)
-    : undefined
-}
 
 export function createStructuredAgentSessionRestartCandidateReader(deps: {
   /** The host's live session map; a marker's chat is readable once listing has revealed it. */
   sessions: ReadonlyMap<string, StructuredAgentSessionRestartJournalSource>
   getRecord: (sessionId: string) => AgentSessionRecord | null
   adapter: StructuredAgentSessionAdapter
+  agents: Pick<StructuredAgentRegistry, 'definition'>
+  /** Whether the chat moved on since the offer was taken; see the offer withdrawal. */
+  movedOn: (marker: AgentSessionResumeMarker) => boolean
+  /** Whether the chat was saved by a newer Orca: its whole database, or its journal's open. */
+  savedByNewerOrca: (sessionId: string) => boolean
 }): StructuredAgentSessionRestartCandidateReader {
-  return (markers, leaseState, options = {}) => {
-    const items = new Map<string, AgentJournalRenderItem[] | undefined>()
-    const itemsFor = (sessionId: string): AgentJournalRenderItem[] | undefined => {
-      if (items.has(sessionId)) {
-        return items.get(sessionId)
-      }
-      let snapshot = deps.sessions.get(sessionId)?.journal.snapshot().items
-      if (snapshot && options.pendingContinuationId) {
-        const ownItemId = agentJournalSubmissionKey(options.pendingContinuationId)
-        snapshot = snapshot.filter((item) => item.itemId !== ownItemId)
-      }
-      items.set(sessionId, snapshot)
-      return snapshot
-    }
-    return structuredAgentSessionResumableSet({
+  return (markers, leaseState) =>
+    structuredAgentSessionResumableSet({
       markers,
       getRecord: deps.getRecord,
-      supportsRecord: (record) => adapterSupportsRecord(deps.adapter, record),
-      latestPrompt: (sessionId) => latestStructuredAgentSessionPrompt(itemsFor(sessionId) ?? []),
-      latestUserItemId: (sessionId) => {
-        const snapshot = itemsFor(sessionId)
-        return snapshot === undefined
-          ? undefined
-          : (latestStructuredAgentSessionUserItem(snapshot)?.itemId ?? null)
-      },
+      supportsRecord: (record) => hostCanStartRecord(deps, record),
+      movedOn: deps.movedOn,
+      savedByNewerOrca: deps.savedByNewerOrca,
+      latestPrompt: (sessionId) =>
+        latestStructuredAgentSessionPrompt(
+          deps.sessions.get(sessionId)?.journal.snapshot().items ?? []
+        ),
       leaseState
     })
+}
+
+/** The listing's reader, which skips a newer Orca's chats, and the one right before sending, which
+ *  skips nothing for them: turning one away there would spend its offer, so its send is refused
+ *  instead and settling keeps the offer. */
+export function createStructuredAgentSessionRestartCandidateReaders(
+  deps: Parameters<typeof createStructuredAgentSessionRestartCandidateReader>[0]
+): {
+  derive: StructuredAgentSessionRestartCandidateReader
+  deriveAtSend: StructuredAgentSessionRestartCandidateReader
+} {
+  return {
+    derive: createStructuredAgentSessionRestartCandidateReader(deps),
+    deriveAtSend: createStructuredAgentSessionRestartCandidateReader({
+      ...deps,
+      savedByNewerOrca: () => false
+    })
+  }
+}
+
+/** Chats the latest reveal found saved by a newer Orca: listing skips them and never spends their
+ *  offers. Each reveal re-derives its chat's entry; nothing is stored. */
+export function createNewerOrcaChats(databaseIsNewer: () => boolean) {
+  const chats = new Set<string>()
+  return {
+    has: (sessionId: string): boolean => databaseIsNewer() || chats.has(sessionId),
+    note: (sessionId: string, revealed: { openRefusal?: AgentSessionWireRefusal } | null): void => {
+      if (revealed?.openRefusal?.details?.reason === 'journalWrittenByNewerOrca') {
+        chats.add(sessionId)
+      } else {
+        chats.delete(sessionId)
+      }
+    }
   }
 }

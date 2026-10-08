@@ -1,3 +1,4 @@
+import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachment-mutation'
 import type { GhAccountBinding } from '../../../../shared/github/account-binding'
 import type { SshRepoReadoption } from '../../../../shared/ssh-types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
@@ -67,6 +68,7 @@ export type FolderWorkspaceUpdates = Partial<
     | 'name'
     | 'folderPath'
     | 'linkedTask'
+    | 'linkedItems'
     | 'linkedTaskSourceContext'
     | 'comment'
     | 'isArchived'
@@ -81,7 +83,8 @@ export type FolderWorkspaceUpdates = Partial<
     | 'lastActivityAt'
     | 'diffComments'
   >
->
+> &
+  WorkspaceAttachmentMutation
 
 export type NestedRepoScanControls = {
   scanId?: string
@@ -147,6 +150,9 @@ export type RepoSlice = {
   projectGroups: readonly ProjectGroup[]
   folderWorkspaces: readonly FolderWorkspace[]
   folderWorkspacePathStatuses: Record<string, FolderWorkspacePathStatusCacheEntry>
+  /** Host-resolved floating workspace directory; null until the host has answered. */
+  floatingWorkspacePath: string | null
+  setFloatingWorkspacePath: (path: string) => void
   activeRepoId: string | null
   // Monotonic sequence so overlapping catalog fetches can drop stale same-host results (#7020).
   reposFetchGeneration: number
@@ -203,6 +209,7 @@ export type RepoSlice = {
       folderPath?: string | null
       connectionId?: string | null
       linkedTask?: FolderWorkspace['linkedTask']
+      linkedItems?: FolderWorkspace['linkedItems']
       linkedTaskSourceContext?: FolderWorkspace['linkedTaskSourceContext']
       createdWithAgent?: FolderWorkspace['createdWithAgent']
       pendingFirstAgentMessageRename?: boolean

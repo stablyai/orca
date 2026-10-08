@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 // What an open chat receives, asserted at its subscriber rather than in the journal: a fresh
 // subscribe re-reads the journal and hides a write that never reached the readers already open.
 
@@ -11,7 +12,8 @@ import type {
   AgentJournalSubmission
 } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
-import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import {
@@ -23,6 +25,10 @@ import {
   hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
+import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const CALLER = { callerKey: 'client-1' }
 const EXIT_REASON = 'Claude Code is not signed in. Sign in with the Claude CLI'
@@ -33,10 +39,10 @@ let host: StructuredAgentSessionHost
 let acquire: Mock<StructuredAgentSessionAdapter['acquire']>
 let generation = 0
 
-/** Everything a live subscriber was sent after it opened. */
-function liveReader() {
+/** Everything a live subscriber was sent after its opening snapshot. */
+async function liveReader() {
   const events: AgentSessionSubscribeEvent[] = []
-  host.subscribe({ id: 'pane', sessionId: SESSION, emit: (event) => events.push(event) })
+  await host.subscribe({ id: 'pane', sessionId: SESSION, emit: (event) => events.push(event) })
   const opened = events.length
   const received = () => {
     const items: AgentJournalRenderItem[] = []
@@ -50,8 +56,16 @@ function liveReader() {
         submissions.push(...event.page.submissions)
       }
     }
+    const rows = new Map<string, string>()
+    for (const item of items) {
+      if (item.body.kind === 'status') {
+        rows.set(item.itemId, item.body.text)
+      }
+    }
     return {
       statuses: items.flatMap((item) => (item.body.kind === 'status' ? [item.body.text] : [])),
+      /** Each status row as the chat renders it: its latest revision, once. */
+      statusRows: [...rows.values()],
       submissions,
       batches: events.slice(opened).filter((event) => event.type === 'batch').length
     }
@@ -85,6 +99,7 @@ function exitBeforeProof(): Promise<void> {
     fence: store.getRecord(SESSION)?.lease.runtimeFence ?? 0,
     acquisitionGeneration: `generation-${generation}`,
     reason: EXIT_REASON,
+    failure: { kind: 'providerExited', detail: { text: EXIT_REASON, audience: 'log' } },
     cause: 'unexpected-exit',
     startupUnproven: true
   })
@@ -106,7 +121,7 @@ beforeEach(async () => {
     process: { hostId: 'local', pid: 4242, processStartTimeMs: 1_700_000_000_000, spawnToken },
     link: {
       linkId: `link-${fence}`,
-      handle: { provider: 'codex', threadId: THREAD },
+      handle: codexProviderHandle(THREAD),
       origin: generation === 0 ? ('created' as const) : ('resumed' as const),
       mintedAtFence: fence,
       observedAt: NOW
@@ -114,8 +129,10 @@ beforeEach(async () => {
     acquisitionGeneration: `generation-${++generation}`,
     providerChildPhase: 'starting' as const
   }))
-  store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
+  store = await openTestAgentSessionRecordStore(root)
   host = new StructuredAgentSessionHost({
+    agents: NO_STRUCTURED_AGENTS,
+    logger: createStructuredAgentSessionLogger(),
     store,
     adapter: {
       acquire,
@@ -126,7 +143,7 @@ beforeEach(async () => {
       answerPrompt: vi.fn(async () => undefined),
       setOption: vi.fn(async () => undefined)
     },
-    journalRoot: root,
+    journalDatabase: openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => `spawn-${generation + 1}`,
     now: () => NOW
@@ -144,26 +161,34 @@ afterEach(async () => {
 describe('an open chat receives every row its journal commits', () => {
   it('shows a failed start whose lease could not be handed back', async () => {
     const held = await send('hello')
-    const pane = liveReader()
+    const pane = await liveReader()
     // The exit settles the journal, then fails to release the lease: nothing moves the fence.
     vi.spyOn(store, 'transitionHandoff').mockRejectedValueOnce(new Error('record store busy'))
 
     await exitBeforeProof()
 
-    expect(pane.received().statuses).toEqual([
-      expect.stringMatching(/stopped before it finished starting: .*not signed in/)
-    ])
-    expect(pane.received().submissions).toContainEqual(
-      expect.objectContaining({ clientMessageId: held, dispatchState: 'rejected' })
+    // The exit ends the child; the delivery loop, which reads why, rejects what it had queued.
+    await vi.waitFor(() =>
+      expect(pane.received().submissions).toContainEqual(
+        expect.objectContaining({ clientMessageId: held, dispatchState: 'rejected' })
+      )
     )
+    // One row, however many of its writers reported the start.
+    expect(pane.received().statusRows).toEqual([
+      'Codex stopped before it finished starting. Send your message to try again.'
+    ])
   })
 
   it('shows a revision the provider queued with no publish behind it', async () => {
-    const pane = liveReader()
+    const pane = await liveReader()
     const identity = { provider: 'orca' as const, clientMessageId: 'context-usage' }
     const body = { kind: 'status' as const, text: 'context usage answered after the turn' }
 
-    expect(providerSink().tryReviseResolvedItem?.(4_096, () => ({ identity, body }))).toEqual({
+    expect(
+      providerSink().tryReviseResolvedItem?.(4_096, () => ({ identity, body }), {
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
+      })
+    ).toEqual({
       accepted: true
     })
     await host.flushStreamedEvents(SESSION)
@@ -172,7 +197,7 @@ describe('an open chat receives every row its journal commits', () => {
   })
 
   it('shows a row appended straight to the journal', async () => {
-    const pane = liveReader()
+    const pane = await liveReader()
     const journal = host['sessions'].get(SESSION)?.journal
     if (!journal) {
       throw new Error('the attached chat has no journal')
@@ -181,7 +206,10 @@ describe('an open chat receives every row its journal commits', () => {
     await journal.appendItem(
       { provider: 'orca', clientMessageId: 'host-note' },
       { kind: 'status', text: 'written by a writer that publishes nothing' },
-      { fence: store.getRecord(SESSION)?.lease.runtimeFence ?? 0 }
+      {
+        fence: store.getRecord(SESSION)?.lease.runtimeFence ?? 0,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
+      }
     )
 
     expect(pane.received().statuses).toEqual(['written by a writer that publishes nothing'])
@@ -190,7 +218,7 @@ describe('an open chat receives every row its journal commits', () => {
 
 describe('an open chat receives each row once', () => {
   it('when the provider frame that wrote it also publishes', async () => {
-    const pane = liveReader()
+    const pane = await liveReader()
     const sink = providerSink()
     const journal = host['sessions'].get(SESSION)?.journal
     if (!journal) {
@@ -200,7 +228,8 @@ describe('an open chat receives each row once', () => {
 
     sink.appendItem(
       { provider: 'orca', clientMessageId: 'streamed' },
-      { kind: 'status', text: 'streamed row' }
+      { kind: 'status', text: 'streamed row' },
+      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     sink.publish()
     await host.flushStreamedEvents(SESSION)
@@ -211,7 +240,7 @@ describe('an open chat receives each row once', () => {
   })
 
   it('when a writer publishes the row it appended', async () => {
-    const pane = liveReader()
+    const pane = await liveReader()
     const journal = host['sessions'].get(SESSION)?.journal
     if (!journal) {
       throw new Error('the attached chat has no journal')
@@ -220,7 +249,10 @@ describe('an open chat receives each row once', () => {
     await journal.appendItem(
       { provider: 'orca', clientMessageId: 'host-row' },
       { kind: 'status', text: 'host row' },
-      { fence: store.getRecord(SESSION)?.lease.runtimeFence ?? 0 }
+      {
+        fence: store.getRecord(SESSION)?.lease.runtimeFence ?? 0,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
+      }
     )
     host['subscribers'].publish(SESSION, journal)
 

@@ -3,6 +3,8 @@ import type { Worktree } from './worktree/types'
 import { folderWorkspaceKey } from './workspace-scope'
 import { parseExecutionHostId, toSshExecutionHostId } from './execution-host'
 import { normalizeWorkspaceCreatorProvenance } from './workspace-creator-provenance'
+import { getWorkspaceAttachments } from './workspace-attachments'
+import { normalizeWorkspaceAttachment } from './workspace-attachment-normalization'
 
 /**
  * A folder workspace has no git repo, so its synthetic `Worktree` borrows the `repoId` slot to
@@ -28,6 +30,11 @@ export function projectGroupIdFromRepoId(repoId: string | null | undefined): str
 
 export function folderWorkspaceToWorktree(folderWorkspace: FolderWorkspace): Worktree {
   const linkedTask = folderWorkspace.linkedTask
+  const selectedTask = linkedTask
+    ? normalizeWorkspaceAttachment(linkedTask)
+    : getWorkspaceAttachments({
+        linkedItems: folderWorkspace.linkedItems
+      }).find((item) => item.type === 'issue')
   const creatorProvenance = normalizeWorkspaceCreatorProvenance(folderWorkspace.creatorProvenance)
   const hostId =
     folderWorkspace.executionHostId ??
@@ -40,17 +47,30 @@ export function folderWorkspaceToWorktree(folderWorkspace: FolderWorkspace): Wor
     displayName: folderWorkspace.name,
     comment: folderWorkspace.comment,
     linkedIssue:
-      linkedTask?.provider === 'github' && linkedTask.type === 'issue' ? linkedTask.number : null,
+      selectedTask?.provider === 'github' && selectedTask.type === 'issue'
+        ? selectedTask.number
+        : null,
     linkedPR: null,
     linkedLinearIssue:
-      linkedTask?.provider === 'linear' ? (linkedTask.linearIdentifier ?? null) : null,
+      selectedTask?.provider === 'linear'
+        ? (selectedTask.identifier ?? selectedTask.linearIdentifier ?? null)
+        : null,
+    linkedLinearIssueWorkspaceId:
+      selectedTask?.provider === 'linear' ? (selectedTask.linearWorkspaceId ?? null) : null,
+    linkedLinearIssueOrganizationUrlKey:
+      selectedTask?.provider === 'linear' ? (selectedTask.linearOrganizationUrlKey ?? null) : null,
     linkedGitLabMR: null,
     linkedGitLabIssue:
-      linkedTask?.provider === 'gitlab' && linkedTask.type === 'issue' ? linkedTask.number : null,
+      selectedTask?.provider === 'gitlab' && selectedTask.type === 'issue'
+        ? selectedTask.number
+        : null,
     linkedBitbucketPR: null,
     linkedAzureDevOpsPR: null,
     linkedGiteaPR: null,
     linkedWorkItem: linkedTask,
+    ...(folderWorkspace.linkedItems !== undefined
+      ? { linkedItems: folderWorkspace.linkedItems }
+      : {}),
     linkedTaskSourceContext: folderWorkspace.linkedTaskSourceContext ?? null,
     isArchived: folderWorkspace.isArchived,
     isUnread: folderWorkspace.isUnread,

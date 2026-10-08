@@ -18,7 +18,13 @@ afterEach(() => {
   }
 })
 
-function exercise({ hit = false, save = false, loadFails = false, inspectFails = false } = {}) {
+function exercise({
+  hit = false,
+  save = false,
+  loadFails = false,
+  inspectFails = false,
+  fixture = 'cli-launch-contract'
+} = {}) {
   directory = mkdtempSync(join(tmpdir(), 'orca-package-cache-'))
   const bin = join(directory, 'bin')
   mkdirSync(bin)
@@ -48,7 +54,7 @@ function exercise({ hit = false, save = false, loadFails = false, inspectFails =
       RUNNER_TEMP: directory,
       GITHUB_OUTPUT: output,
       COMMAND_LOG: commandLog,
-      FIXTURE: 'cli-launch-contract',
+      FIXTURE: fixture,
       CACHE_HIT: String(hit),
       SAVE_CACHE: String(save),
       LOAD_FAILS: String(loadFails),
@@ -81,6 +87,12 @@ describe.runIf(process.platform !== 'win32')('fixture cache fallbacks', () => {
     expect(result.commands).not.toMatch(/(?:build|save) /)
   })
 
+  it('loads the daemon shutdown fixture without running package or source tests in the cache action', () => {
+    const result = exercise({ hit: true, fixture: 'daemon-shutdown-descendants' })
+    expect(result.output).toBe('image=orca-package-fixture-daemon-shutdown-descendants:cache\n')
+    expect(result.commands).not.toMatch(/(?:build|save|run) /)
+  })
+
   it('builds and exports inline cache only when the warmer has no usable image', () => {
     const result = exercise({ save: true })
     expect(result.commands).toContain(
@@ -105,6 +117,7 @@ it('uses exact context/platform keys and the same restore-only action in package
     step.uses?.endsWith('/prepare-linux-package-fixture')
   )
   expect(prepared.map((step) => step.with)).toEqual([
+    { fixture: 'daemon-shutdown-descendants' },
     { fixture: 'headless-serve-shutdown' },
     { fixture: 'cli-launch-contract' }
   ])

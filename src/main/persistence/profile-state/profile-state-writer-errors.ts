@@ -1,3 +1,4 @@
+import { storageCapacityErrorCode } from '../../../shared/storage-capacity-error'
 import {
   ProfileStateDocumentCorruptionError,
   ProfileStateRevisionConflictError
@@ -64,7 +65,7 @@ export function encodeProfileStateWriterError(
     return { code: error.code, message: error.message, outcome }
   }
   return {
-    code: 'profile-state-write-failed',
+    code: storageCapacityErrorCode(error) ?? 'profile-state-write-failed',
     message: 'Profile state persistence failed',
     outcome
   }

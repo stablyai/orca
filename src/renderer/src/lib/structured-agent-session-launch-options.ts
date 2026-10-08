@@ -23,9 +23,10 @@ import {
 } from './structured-agent-session-launch-registry'
 import {
   agentSessionRefusalFailure,
-  agentSessionRpcErrorFailure,
+  agentSessionThrownFailure,
   type AgentSessionWriteFailure
-} from '../../../shared/agent-session-refusal-notice'
+} from '../../../shared/agent-session-write-failure'
+import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
 
 /** The options a launch starts with, replaced whole so readers can compare by identity. */
 export type StructuredLaunchSelection = {
@@ -82,6 +83,7 @@ export function holdStructuredAgentSessionLaunchOption(
 }
 
 async function setLaunchOption(
+  target: RuntimeClientTarget,
   sessionId: string,
   fence: number,
   key: string,
@@ -91,7 +93,7 @@ async function setLaunchOption(
   try {
     const result = await callStructuredAgentSession<
       AgentSessionMutationResult<AgentSessionOptionResult>
-    >({ kind: 'local' }, 'agentSession.setOption', {
+    >(target, 'agentSession.setOption', {
       envelope: {
         sessionId,
         clientOperationId: createStructuredAgentSessionOperationId(createBrowserUuid),
@@ -110,7 +112,8 @@ async function setLaunchOption(
   } catch (error) {
     return {
       kind: 'refused',
-      failure: agentSessionRpcErrorFailure(
+      failure: agentSessionThrownFailure(
+        error,
         error instanceof RuntimeRpcCallError ? error.code : undefined
       )
     }
@@ -160,7 +163,13 @@ export async function applyStructuredLaunchHeldOptions(
     if (!id || encoded === undefined) {
       return receipt
     }
-    const outcome = await setLaunchOption(state.intent.sessionId, receipt.fence, id, encoded)
+    const outcome = await setLaunchOption(
+      state.intent.target,
+      state.intent.sessionId,
+      receipt.fence,
+      id,
+      encoded
+    )
     settleHeldOption(state, id, encoded, outcome)
   }
 }

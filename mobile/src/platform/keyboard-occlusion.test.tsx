@@ -47,24 +47,16 @@ vi.mock('react-native', () => ({
 import {
   currentSoftKeyboardHeight,
   subscribeSoftKeyboard,
-  useKeyboardAvoidingPadding,
   useKeyboardOcclusion,
   useSoftKeyboard,
   type SoftKeyboardState
 } from './keyboard-occlusion'
 
 let lift = 0
-let padding = 0
 let keyboardState: SoftKeyboardState = { height: 0, visible: false }
 
 function Harness(): null {
   lift = useKeyboardOcclusion()
-  return null
-}
-
-/** Separate, so the padding case measures the padding hook's own subscriptions and nothing else. */
-function PaddingHarness(): null {
-  padding = useKeyboardAvoidingPadding()
   return null
 }
 
@@ -94,7 +86,6 @@ describe('the keyboard the phone reports', () => {
     keyboard.addListenerCalls = 0
     keyboard.metrics = undefined
     lift = 0
-    padding = 0
     keyboardState = { height: 0, visible: false }
   })
 
@@ -135,17 +126,6 @@ describe('the keyboard the phone reports', () => {
     const tree = await mount()
     await act(async () => tree.unmount())
     expect(keyboard.removed.sort()).toEqual(['keyboardWillHide', 'keyboardWillShow'])
-  })
-
-  it('asks a phone for no composer padding, because KeyboardAvoidingView already moved it', async () => {
-    // Rendered, not called: a hook read outside a component measures whatever the module does at
-    // the top of its body and nothing its effects do, which is where a subscription would live.
-    // And it subscribes to nothing doing it, so a composer that calls this renders as often as it
-    // does today — which is what makes adding the call to a shared component safe.
-    await mountComponent(PaddingHarness)
-    expect(padding).toBe(0)
-    expect(keyboard.addListenerCalls).toBe(0)
-    expect(keyboard.listeners.size).toBe(0)
   })
 
   it('answers both facts from one subscription, so a screen wanting each pays for one', async () => {

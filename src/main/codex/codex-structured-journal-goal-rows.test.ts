@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
@@ -35,8 +36,11 @@ function frames(): {
     },
     publish: vi.fn()
   } as unknown as StructuredAgentSessionEventSink
-  const goals = new CodexJournalGoals(sink, () => ({}))
-  const generic = new CodexJournalGenericFrames({ sink, linkageFor: () => ({}) }, () => null)
+  const goals = new CodexJournalGoals(sink, () => ({ turnScope: AGENT_JOURNAL_THREAD_SCOPE }))
+  const generic = new CodexJournalGenericFrames(
+    { sink, attributionFor: () => ({ turnScope: AGENT_JOURNAL_THREAD_SCOPE }) },
+    () => null
+  )
   return {
     rows,
     frames: {

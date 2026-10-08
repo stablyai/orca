@@ -8,6 +8,7 @@ import type {
   ListKnownWorktreesForExecutionHostArgs,
   ProviderRequestId
 } from '../../shared/detected-worktree-provider-contract'
+import type { NestedWorktreeRemovalApproval } from '../../shared/worktree/nested-removal'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { RetiredNameRegistry } from '../../shared/worktree/retired-name-registry'
 import type {
@@ -37,6 +38,7 @@ import type {
   DetectedWorktreeListResult,
   GitHubPrStartPoint,
   GitPushTarget,
+  GitWorktreeInfo,
   Worktree,
   WorktreeHeadIdentity
 } from '../../shared/worktree/types'
@@ -89,10 +91,15 @@ export type WorktreeApi = {
   }) => Promise<
     { baseBranch: string; compareBaseRef?: string; pushTarget?: GitPushTarget } | { error: string }
   >
+  previewNestedRemoval?: (args: {
+    worktreeId: string
+    hostId?: ExecutionHostId
+  }) => Promise<GitWorktreeInfo[]>
   remove: (args: {
     worktreeId: string
     hostId?: ExecutionHostId
     force?: boolean
+    approvedNestedWorktrees?: NestedWorktreeRemovalApproval[]
     // Why (#11960): distinct from `force`, which the plain Delete confirmation
     // already sets to skip the dirty-file prompt. Only an explicit Force Delete
     // may waive the proof that every PTY stopped.

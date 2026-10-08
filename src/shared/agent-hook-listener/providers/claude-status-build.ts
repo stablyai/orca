@@ -22,6 +22,7 @@ export function buildClaudeStatusPayload(
     workingMode?: AgentWorkingMode
     updateToolSnapshot: boolean
     sessionBoundary?: boolean
+    claudeTaskWakeupPending?: ParsedAgentStatusPayload['claudeTaskWakeupPending']
   }
 ): ParsedAgentStatusPayload | null {
   // Why: child-driven refreshes are roster bookkeeping, not lead tool activity; read the cached snapshot without merging so they can't clear a live AskUserQuestion card or clobber the tool preview.
@@ -40,6 +41,7 @@ export function buildClaudeStatusPayload(
   return normalizeAgentStatusPayload({
     state: options.stateName,
     workingMode: options.workingMode,
+    claudeTaskWakeupPending: options.claudeTaskWakeupPending,
     // Why: only lead-origin events may reset the prompt cache; a child-driven refresh must not blank the lead's prompt label.
     prompt: resolvePrompt(state, paneKey, promptText, {
       resetOnNewTurn: options.updateToolSnapshot && isNewTurnEvent('claude', eventName)

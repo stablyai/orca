@@ -24,7 +24,8 @@
   unicode-range: U+E000-F8FF, U+F0000-FFFFD, U+100000-10FFFD;
 }
 
-@custom-variant dark (&:is(.dark *));
+/* A matching chat can use a different scheme from the document; portaled menus stay outside it. */
+@custom-variant dark (&:is(.dark *:not(:where([data-native-chat-scheme='light'], [data-native-chat-scheme='light'] *)), [data-native-chat-scheme='dark'], [data-native-chat-scheme='dark'] *));
 
 /* Why: hover-reveal controls (sidebar/row action buttons) hide with `opacity-0`
    and fade in via `group-hover`. Touch devices have no hover, so those controls
@@ -43,6 +44,19 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-chat-canvas: var(--chat-canvas);
+  --color-chat-foreground: var(--chat-foreground);
+  --color-chat-foreground-strong: var(--chat-foreground-strong);
+  --color-chat-foreground-faint: var(--chat-foreground-faint);
+  --color-chat-user-surface: var(--chat-user-surface);
+  --color-chat-user-border: var(--chat-user-border);
+  --color-chat-code-foreground: var(--chat-code-foreground);
+  --color-chat-code-surface: var(--chat-code-surface);
+  --color-chat-code-border: var(--chat-code-border);
+  --color-chat-inline-code-surface: var(--chat-inline-code-surface);
+  --color-chat-inline-code-border: var(--chat-inline-code-border);
+  --color-chat-composer-surface: var(--chat-composer-surface);
+  --color-chat-composer-border: var(--chat-composer-border);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
   --color-popover: var(--popover);
@@ -107,6 +121,8 @@
   --color-status-warning: var(--status-warning);
   --color-status-warning-background: var(--status-warning-background);
   --color-status-warning-border: var(--status-warning-border);
+  --color-callout-note: var(--callout-note);
+  --color-callout-important: var(--callout-important);
   --color-workspace-status-done: var(--workspace-status-done);
   --color-workspace-status-review: var(--workspace-status-review);
   --color-workspace-status-progress: var(--workspace-status-progress);
@@ -160,6 +176,21 @@
   --background: #fff;
   --editor-surface: #ffffff;
   --foreground: #0a0a0a;
+  --chat-canvas-mix: 0%;
+  --chat-foreground-mix: 82%;
+  --chat-strong-mix: 92%;
+  --chat-faint-mix: 100%;
+  --chat-user-mix: 4%;
+  --chat-user-border-mix: 7%;
+  --chat-code-mix: 2%;
+  --chat-code-base: var(--chat-canvas);
+  --chat-inline-code-mix: 4%;
+  --chat-inline-code-base: var(--chat-canvas);
+  --chat-inline-code-border-mix: 9%;
+  --chat-composer-mix: 0%;
+  --chat-composer-base: var(--chat-canvas);
+  --chat-composer-border-mix: 11%;
+  --chat-content-max-width: 46rem;
   --card: #fff;
   --card-foreground: #0a0a0a;
   --popover: #fff;
@@ -172,8 +203,6 @@
   --muted-foreground: #737373;
   --accent: #f5f5f5;
   --accent-foreground: #171717;
-  --destructive: #e40014;
-  --destructive-foreground: #fcf3f3;
   --border: #e5e5e5;
   --input: #e5e5e5;
   --ring: #a1a1a1;
@@ -185,14 +214,6 @@
   --agent-question: var(--color-orange-600);
   /* Legible weight for text/glyphs on a tinted --agent-question surface. */
   --agent-question-text: var(--color-orange-700);
-  --status-success: #15803d;
-  --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
-  --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);
-  /* Needs-attention state that is not an error: a resume that did not carry on, an update that
-     failed. Yellow, so it stays apart from destructive red and from the orange working state. */
-  --status-warning: #ca8a04;
-  --status-warning-background: color-mix(in srgb, var(--status-warning) 10%, transparent);
-  --status-warning-border: color-mix(in srgb, var(--status-warning) 25%, transparent);
   /* Workspace PR-state tones: same hue in both themes so a status keeps its
      identity when the theme flips. */
   --workspace-status-done: #c7a594;
@@ -231,17 +252,6 @@
   --terminal-pane-title-on-light-button-hover-fg: rgb(24 24 27);
   --terminal-pane-title-on-light-input-bg: rgb(24 24 27 / 0.05);
   --terminal-pane-title-on-light-separator: rgb(24 24 27 / 0.1);
-  --git-decoration-added: #587c0c;
-  --git-decoration-modified: #895503;
-  --git-decoration-deleted: #ad0707;
-  --git-decoration-renamed: #007acc;
-  --git-decoration-untracked: #007100;
-  --git-decoration-copied: #007acc;
-  --git-decoration-ignored: #8c8c8c;
-  --diff-added-ground: color-mix(in srgb, var(--git-decoration-added) 13%, transparent);
-  --diff-added-gutter: color-mix(in srgb, var(--git-decoration-added) 26%, transparent);
-  --diff-removed-ground: color-mix(in srgb, var(--git-decoration-deleted) 11%, transparent);
-  --diff-removed-gutter: color-mix(in srgb, var(--git-decoration-deleted) 22%, transparent);
   --git-graph-ref: #007acc;
   --git-graph-remote-ref: #b66dff;
   --git-graph-base-ref: #ea5c00;
@@ -283,6 +293,21 @@
   --background: #0a0a0a;
   --editor-surface: #1e1e1e;
   --foreground: #fafafa;
+  --chat-canvas-mix: 5%;
+  --chat-foreground-mix: 78%;
+  --chat-strong-mix: 90%;
+  --chat-faint-mix: 83%;
+  --chat-user-mix: 7%;
+  --chat-user-border-mix: 6%;
+  --chat-code-mix: 3.5%;
+  --chat-code-base: transparent;
+  --chat-inline-code-mix: 6%;
+  --chat-inline-code-base: transparent;
+  --chat-inline-code-border-mix: 8%;
+  --chat-composer-mix: 4%;
+  --chat-composer-base: transparent;
+  --chat-composer-border-mix: 9%;
+  --chat-content-max-width: 46rem;
   --card: #171717;
   --card-foreground: #fafafa;
   --popover: #171717;
@@ -295,8 +320,6 @@
   --muted-foreground: #a1a1a1;
   --accent: #404040;
   --accent-foreground: #fafafa;
-  --destructive: #ff6568;
-  --destructive-foreground: #df2225;
   --border: rgb(255 255 255 / 0.07);
   --input: rgb(255 255 255 / 0.15);
   --ring: #737373;
@@ -304,12 +327,6 @@
   --ai-action-accent: var(--color-violet-400);
   --agent-question: var(--color-orange-500);
   --agent-question-text: var(--color-orange-300);
-  --status-success: #86efac;
-  --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
-  --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);
-  --status-warning: #eab308;
-  --status-warning-background: color-mix(in srgb, var(--status-warning) 10%, transparent);
-  --status-warning-border: color-mix(in srgb, var(--status-warning) 25%, transparent);
   --workspace-status-done: #c7a594;
   --workspace-status-review: #16a34a;
   --workspace-status-progress: #d4a300;
@@ -350,17 +367,6 @@
   --terminal-pane-title-on-light-button-hover-fg: rgb(24 24 27);
   --terminal-pane-title-on-light-input-bg: rgb(24 24 27 / 0.05);
   --terminal-pane-title-on-light-separator: rgb(24 24 27 / 0.1);
-  --git-decoration-added: #81b88b;
-  --git-decoration-modified: #e2c08d;
-  --git-decoration-deleted: #c74e39;
-  --git-decoration-renamed: #73c991;
-  --git-decoration-untracked: #73c991;
-  --git-decoration-copied: #73c991;
-  --git-decoration-ignored: #6e6e6e;
-  --diff-added-ground: color-mix(in srgb, var(--git-decoration-added) 16%, transparent);
-  --diff-added-gutter: color-mix(in srgb, var(--git-decoration-added) 30%, transparent);
-  --diff-removed-ground: color-mix(in srgb, var(--git-decoration-deleted) 18%, transparent);
-  --diff-removed-gutter: color-mix(in srgb, var(--git-decoration-deleted) 32%, transparent);
   --git-graph-ref: #3794ff;
   --git-graph-remote-ref: #b66dff;
   --git-graph-base-ref: #ea5c00;
@@ -375,6 +381,59 @@
   /* Brighter than terminal defaults so the always-visible line clears 3:1 on `--card`. */
   --tab-group-split-divider: #71717a;
   --tab-group-split-divider-strong: #a1a1aa;
+}
+
+/* Status and diff colors follow the chat scheme without copying the app palette. */
+:root,
+.native-chat-appearance[data-native-chat-scheme='light'] {
+  --destructive: #e40014;
+  --destructive-foreground: #fcf3f3;
+  --status-success: #15803d;
+  --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
+  --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);
+  /* Needs-attention states use yellow, separate from errors and working states. */
+  --status-warning: #ca8a04;
+  --status-warning-background: color-mix(in srgb, var(--status-warning) 10%, transparent);
+  --status-warning-border: color-mix(in srgb, var(--status-warning) 25%, transparent);
+  /* GitHub's own hues for the two callout kinds no status token covers. */
+  --callout-note: #0969da;
+  --callout-important: #8250df;
+  --git-decoration-added: #587c0c;
+  --git-decoration-modified: #895503;
+  --git-decoration-deleted: #ad0707;
+  --git-decoration-renamed: #007acc;
+  --git-decoration-untracked: #007100;
+  --git-decoration-copied: #007acc;
+  --git-decoration-ignored: #8c8c8c;
+  --diff-added-ground: color-mix(in srgb, var(--git-decoration-added) 13%, transparent);
+  --diff-added-gutter: color-mix(in srgb, var(--git-decoration-added) 26%, transparent);
+  --diff-removed-ground: color-mix(in srgb, var(--git-decoration-deleted) 11%, transparent);
+  --diff-removed-gutter: color-mix(in srgb, var(--git-decoration-deleted) 22%, transparent);
+}
+
+.dark,
+.native-chat-appearance[data-native-chat-scheme='dark'] {
+  --destructive: #ff6568;
+  --destructive-foreground: #df2225;
+  --status-success: #86efac;
+  --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
+  --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);
+  --status-warning: #eab308;
+  --status-warning-background: color-mix(in srgb, var(--status-warning) 10%, transparent);
+  --status-warning-border: color-mix(in srgb, var(--status-warning) 25%, transparent);
+  --callout-note: #4493f8;
+  --callout-important: #ab7df8;
+  --git-decoration-added: #81b88b;
+  --git-decoration-modified: #e2c08d;
+  --git-decoration-deleted: #c74e39;
+  --git-decoration-renamed: #73c991;
+  --git-decoration-untracked: #73c991;
+  --git-decoration-copied: #73c991;
+  --git-decoration-ignored: #6e6e6e;
+  --diff-added-ground: color-mix(in srgb, var(--git-decoration-added) 16%, transparent);
+  --diff-added-gutter: color-mix(in srgb, var(--git-decoration-added) 30%, transparent);
+  --diff-removed-ground: color-mix(in srgb, var(--git-decoration-deleted) 18%, transparent);
+  --diff-removed-gutter: color-mix(in srgb, var(--git-decoration-deleted) 32%, transparent);
 }
 
 .plugin-security-chrome {
@@ -409,12 +468,14 @@
 
 [data-sonner-toaster] {
   font-family: var(--font-sans);
-  z-index: 40 !important;
+  z-index: var(--toaster-z-index, 40) !important;
 }
 
-/* Keep errors above standard modal backdrops at the existing popover tier. */
-body:has([data-slot='dialog-overlay'], [data-slot='sheet-overlay']) [data-sonner-toaster] {
-  z-index: 60 !important;
+/* Keep errors above standard modal backdrops at the existing popover tier.
+   Why: overlays portal straight into body, and `>` plus a :has() on body alone (not in the toaster's
+   selector) keeps unrelated DOM changes from rescanning the page; the old form froze large diffs. */
+body:has(> [data-slot='dialog-overlay'], > [data-slot='sheet-overlay']) {
+  --toaster-z-index: 60;
 }
 
 [data-sonner-toaster] [data-sonner-toast][data-styled='true'] {
@@ -485,6 +546,72 @@ body:has([data-slot='dialog-overlay'], [data-slot='sheet-overlay']) [data-sonner
 }
 
 /* ── Base Layer ──────────────────────────────────────── */
+
+/* Re-evaluate chat colors where the appearance producer supplies their source colors. */
+:root,
+.dark,
+.native-chat-appearance {
+  --chat-source-background: var(--background);
+  --chat-source-foreground: var(--foreground);
+  --chat-source-muted-foreground: var(--muted-foreground);
+  --chat-canvas: color-mix(
+    in srgb,
+    var(--chat-source-foreground) var(--chat-canvas-mix),
+    var(--chat-source-background)
+  );
+  --chat-foreground: color-mix(
+    in srgb,
+    var(--chat-source-foreground) var(--chat-foreground-mix),
+    var(--chat-canvas)
+  );
+  --chat-foreground-strong: color-mix(
+    in srgb,
+    var(--chat-source-foreground) var(--chat-strong-mix),
+    var(--chat-canvas)
+  );
+  --chat-foreground-faint: color-mix(
+    in srgb,
+    var(--chat-source-muted-foreground) var(--chat-faint-mix),
+    var(--chat-canvas)
+  );
+  --chat-user-surface: color-mix(
+    in srgb,
+    var(--chat-source-foreground) var(--chat-user-mix),
+    var(--chat-canvas)
+  );
+  --chat-user-border: color-mix(
+    in srgb,
+    var(--chat-source-foreground) var(--chat-user-border-mix),
+    transparent
+  );
+  --chat-code-foreground: color-mix(in srgb, var(--chat-source-foreground) 85%, var(--chat-canvas));
+  --chat-code-surface: color-mix(
+    in srgb,
+    var(--chat-source-foreground) var(--chat-code-mix),
+    var(--chat-code-base)
+  );
+  --chat-code-border: color-mix(in srgb, var(--chat-source-foreground) 7%, transparent);
+  --chat-inline-code-surface: color-mix(
+    in srgb,
+    var(--chat-source-foreground) var(--chat-inline-code-mix),
+    var(--chat-inline-code-base)
+  );
+  --chat-inline-code-border: color-mix(
+    in srgb,
+    var(--chat-source-foreground) var(--chat-inline-code-border-mix),
+    transparent
+  );
+  --chat-composer-surface: color-mix(
+    in srgb,
+    var(--chat-source-foreground) var(--chat-composer-mix),
+    var(--chat-composer-base)
+  );
+  --chat-composer-border: color-mix(
+    in srgb,
+    var(--chat-source-foreground) var(--chat-composer-border-mix),
+    transparent
+  );
+}
 
 @layer base {
   *,
@@ -724,9 +851,22 @@ body:has([data-slot='dialog-overlay'], [data-slot='sheet-overlay']) [data-sonner
   mask-image: linear-gradient(to right, transparent, #000 1.5rem, #000 100%);
 }
 
-.terminal-tab-strip--fade-end:not(.terminal-tab-strip--fade-start) {
+/* Why: the status bar's usage cluster reuses the end fade so a clipped cluster never cuts a glyph. */
+.terminal-tab-strip--fade-end:not(.terminal-tab-strip--fade-start),
+.status-bar-usage-cluster[data-overflowing='true'] {
   -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 1.5rem), transparent);
   mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 1.5rem), transparent);
+}
+
+/* Why: tabs only draw a right border, so a tab docked at the end has no seam against the tab it covers. */
+.terminal-tab-strip[data-active-tab-docked='end'] > [data-active-tab-dock]::before {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  left: 0;
+  width: 1px;
+  background: var(--border);
+  z-index: 30;
 }
 
 /* Tab activity affordance (amber wash) is rendered as a React DOM child in
@@ -1281,6 +1421,14 @@ html.native-shell .app-layout {
   background: color-mix(in srgb, var(--sidebar-accent) 40%, transparent);
 }
 
+/* Why: one multi-selected look for every list on the card surface (workspaces and
+   agents); after the hover rules so it wins, and never on the active/open row. */
+[data-worktree-card-surface][data-worktree-card-selected]:not([data-worktree-card-active]) {
+  border-color: color-mix(in oklab, var(--worktree-sidebar-ring) 35%, transparent);
+  background-color: color-mix(in oklab, var(--worktree-sidebar-accent) 70%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--worktree-sidebar-ring) 30%, transparent);
+}
+
 /* Why: the brighter border carries the selected state; a translucent wash keeps
    card text legible instead of lifting the surface toward the foreground color. */
 [data-worktree-card-surface][data-worktree-card-active='primary'] {
@@ -1622,6 +1770,31 @@ html.native-shell .app-layout {
 
 .compact-agent-expansion-grid-expanded .compact-agent-expansion-content {
   animation: compact-agent-expansion-reveal 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Keep the disclosure in the timestamp slot without moving adjacent content. */
+.agent-child-disclosure-time {
+  visibility: hidden;
+}
+
+@media (hover: hover) {
+  .agent-child-disclosure[data-expanded='false'] .agent-child-disclosure-time {
+    visibility: visible;
+  }
+
+  .agent-child-disclosure[data-expanded='false'] [data-agent-child-disclosure-button] {
+    opacity: 0;
+  }
+
+  .agent-disclosure-row:hover .agent-child-disclosure-time,
+  .agent-disclosure-row:focus-within .agent-child-disclosure-time {
+    visibility: hidden;
+  }
+
+  .agent-disclosure-row:hover [data-agent-child-disclosure-button],
+  .agent-disclosure-row:focus-within [data-agent-child-disclosure-button] {
+    opacity: 1;
+  }
 }
 
 /* Why: the collapsed summary still uses pill spacing, while expanded compact

@@ -188,6 +188,31 @@ describe('deregistered repo residue', () => {
     expect(reloaded.sweepDeregisteredRepoResidue()).toEqual([])
   })
 
+  // A close record names its workspace only in its value, so like a sleeping agent it must seed the
+  // sweep itself or a removed project's records wait out the TTL.
+  it("drops a close record that is the orphan repo's only residue, and self-clears", async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [makeRepo({ id: LIVE_REPO, path: '/workspace/live' })],
+      worktreeMeta: {},
+      workspaceSession: {
+        ...getDefaultWorkspaceSession(),
+        closedTerminalTabTombstonesByTabId: {
+          'tab-gone': { worktreeId: GONE_WORKTREE, closedAt: Date.now(), reason: 'user' },
+          'tab-live': { worktreeId: LIVE_WORKTREE, closedAt: Date.now(), reason: 'user' }
+        }
+      }
+    })
+
+    const store = await createStore()
+    store.flush()
+    expect(
+      Object.keys(store.getWorkspaceSession('local').closedTerminalTabTombstonesByTabId ?? {})
+    ).toEqual(['tab-live'])
+    const reloaded = await createStore()
+    expect(reloaded.sweepDeregisteredRepoResidue()).toEqual([])
+  })
+
   // The session scalars are pruned by bespoke rules, not by owner key, so no owner-key loop reaches
   // them. Each has to be able to seed the sweep on its own or an orphan named only there is stuck.
   it.each([

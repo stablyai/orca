@@ -26,8 +26,10 @@ import { searchWithGitGrep } from './fs-handler-git-search'
 
 function child(spawned: boolean) {
   const result = new ChildProcess()
-  result.stdout = new PassThrough()
-  result.stderr = new PassThrough()
+  Object.defineProperties(result, {
+    stdout: { value: new PassThrough() },
+    stderr: { value: new PassThrough() }
+  })
   Object.defineProperty(result, 'pid', { value: spawned ? 4321 : undefined })
   result.kill = vi.fn(() => true)
   return result

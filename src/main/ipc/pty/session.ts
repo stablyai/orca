@@ -10,7 +10,6 @@ import type {
   PtyRendererDeliveryStateReport
 } from '../../../shared/pty-renderer-delivery-health'
 import type { PtyRendererDeliveryDebugSnapshot } from './delivery/debug'
-import type { ReplacedPtyStop } from './delivery/exit'
 import { PtyProducerFlowController } from '../pty-producer-flow-control'
 import { PtyPendingDataDrainQueue, type PendingPtyData } from '../pty-pending-data-drain-queue'
 import type { SshPtyOutputIntake } from '../ssh-pty-output-intake'
@@ -56,6 +55,8 @@ export type PtyIpcSessionOptions = {
   isRecoveryReloadInFlight?: (webContentsId: number) => boolean
   onCodexHomePtySpawned?: (args: CodexHomePtySpawnedLifecycleArgs) => void
   onPtyExit?: (id: string, exitSequence: number) => void
+  /** The OS appearance, for a 'system' theme; absent on a host with no display. */
+  systemPrefersDark?: () => boolean
 }
 
 export type PtyRendererDelivery = Pick<
@@ -108,8 +109,6 @@ export type PtyIpcSession = {
     string,
     { cleanupTimer: NodeJS.Timeout; incarnationId: string | undefined }
   >
-  reversibleStopOwnersByPtyId: Map<string, number>
-  replacedPtyStopsById: Map<string, ReplacedPtyStop>
   retiredRejectedPtyIds: Map<string, NodeJS.Timeout>
   pendingSerializeRequests: Map<
     string,
@@ -238,8 +237,6 @@ export function createPtyIpcSession(args: {
     sourceCreditPendingPtys: new Set(),
     backgroundedDeliverySyncByPty: new Map(),
     syntheticKillExitPtyIds: new Map(),
-    reversibleStopOwnersByPtyId: new Map(),
-    replacedPtyStopsById: new Map(),
     retiredRejectedPtyIds: new Map(),
     pendingSerializeRequests: new Map(),
     canSendPtyDataToRenderer: unsetSessionFn,

@@ -16,7 +16,8 @@ import {
   agentSessionProviderHandleChainHead,
   agentSessionProviderHandleRoot
 } from '../../../shared/agent-session-provider-handle'
-import { latestStructuredAgentSessionUserItem } from '../../../shared/structured-agent-session-projection'
+import { latestStructuredAgentSessionUserItem } from '../../../shared/structured-agent-session-latest-request'
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type {
   AgentSessionResumeMarker,
@@ -27,7 +28,6 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionBackgroundTask } from '../../../shared/agent-session-background-task-wire'
 import {
   AGENT_SESSION_RESTART_ACTIVITY_MAX_LABEL_LENGTH,
   AGENT_SESSION_RESTART_ACTIVITY_MAX_PROMPTS,
@@ -37,11 +37,19 @@ import {
   type AgentSessionRestartTask
 } from '../../../shared/agent-session-restart-activity'
 import { isLiveChildWork } from '../../../shared/agent-status-child-work-liveness'
+import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
+import {
+  isStructuredAgentSessionCommandEntry,
+  isStructuredAgentSessionCommandTurn
+} from '../../../shared/structured-agent-session-command-entry'
 import {
   activeStructuredAgentSessionTurnId,
   newestStructuredAgentSessionTurn
 } from '../../../shared/structured-agent-session-live-turn'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import { isUnansweredHandedOverSubmission } from '../agent-session-journal/journal-unsent-send-hold'
 import { structuredAgentSessionShownStatus } from './structured-agent-session-shown-work'
 
 /** A send Orca journaled that the provider has neither opened a turn for nor refused. Mirrors the
@@ -83,12 +91,31 @@ function structuredAgentSessionResumeWork(
   items: readonly AgentJournalRenderItem[],
   submissions: readonly AgentJournalSubmission[]
 ): AgentSessionResumeWork | null {
+  const bodies = new Map(items.map((item) => [item.itemId, item.body]))
+  const bodyOf = (itemId: string) => bodies.get(itemId)
+  // A conversation command in flight is nothing to resume: the user ran it, not the agent.
+  const newest = newestStructuredAgentSessionTurn(items)
+  const inFlightSubmission = pendingSubmissionInFlight(submissions)
+  if (
+    (newest?.state === 'running' && isStructuredAgentSessionCommandTurn(newest, bodyOf)) ||
+    (inFlightSubmission &&
+      isStructuredAgentSessionCommandEntry(
+        bodyOf(agentJournalSubmissionKey(inFlightSubmission.clientMessageId))
+      ))
+  ) {
+    return null
+  }
   const inFlight = structuredAgentSessionWorkInFlight(items, submissions)
   if (inFlight) {
     return inFlight
   }
-  const newest = newestStructuredAgentSessionTurn(items)
-  return newest ? { kind: 'turn', id: newest.turnId } : null
+  // A settled lead whose children were the work anchors on its last real turn.
+  const lastRequest = items.findLast((item) => {
+    const turn = readAgentJournalTurn(item.body)
+    return turn !== null && !isStructuredAgentSessionCommandTurn(turn, bodyOf)
+  })
+  const turn = readAgentJournalTurn(lastRequest?.body)
+  return turn ? { kind: 'turn', id: turn.turnId } : null
 }
 
 function boundedLabel(text: string | undefined): string {
@@ -122,21 +149,20 @@ function pendingPrompts(items: readonly AgentJournalRenderItem[]): AgentSessionR
   return prompts
 }
 
-/** The live rows of the provider's roster, by the same liveness rule the sidebar's fold counts. */
+/** The live child records, by the same liveness rule the sidebar's fold counts. */
 function liveTasks(
-  roster: readonly AgentSessionBackgroundTask[] | null | undefined
+  childWork: readonly AgentChildWorkView[] | undefined
 ): AgentSessionRestartTask[] {
-  return (roster ?? [])
-    .filter((task) => isLiveChildWork(task))
+  return (childWork ?? [])
+    .filter((child) => isLiveChildWork(child))
     .slice(0, AGENT_SESSION_RESTART_ACTIVITY_MAX_TASKS)
-    .map((task) => ({ kind: task.kind, label: boundedLabel(task.description ?? task.name) }))
+    .map((child) => ({ kind: child.kind, label: boundedLabel(child.description ?? child.name) }))
 }
 
 type WorkingCandidateSession = {
   journal: AgentSessionJournal
   /** Only this host generation's own child counts. A restored-for-reading journal has none. */
-  hasProviderChild: boolean
-  fence?: number
+  child: { fence: number } | null
 }
 
 /** The offer one session is owed, taken right before teardown stops its provider child; null when
@@ -145,25 +171,38 @@ export function structuredAgentSessionWorkingAtStop(input: {
   sessionId: string
   session: WorkingCandidateSession | undefined
   getRecord: (sessionId: string) => AgentSessionRecord | null
-  /** The provider's live child roster, the same one the status feed publishes. */
-  backgroundTasks: (sessionId: string) => readonly AgentSessionBackgroundTask[] | null | undefined
+  /** The session's child records, the same read the status feed publishes. */
+  childWork: (sessionId: string) => readonly AgentChildWorkView[] | undefined
+  /** False when the session's live child never answered its start; the exit reads the same fact. */
+  startAnswered?: (sessionId: string) => boolean | undefined
   trigger: AgentSessionResumeTrigger
   /** Stable teardown identity for continuation deduplication, not launch ancestry. */
   teardownId: string
   now: number
 }): AgentSessionResumeMarker | null {
   const { sessionId, session } = input
-  // A journal this host cannot read tells us nothing about what the turn was doing.
-  if (!session?.hasProviderChild || session.journal.isReadOnly) {
+  if (!session?.child) {
     return null
   }
   const snapshot = session.journal.snapshot()
-  const roster = input.backgroundTasks(sessionId)
-  const status = structuredAgentSessionShownStatus(snapshot, roster, session.fence)
+  // A queued message reached no agent, and one handed to a start that never answered ran nowhere:
+  // neither is work to resume. The next open or the exit keeps it as unsent.
+  const unanswered = input.startAnswered?.(sessionId) === false
+  const handedOver = snapshot.submissions.filter(
+    (submission) =>
+      !isQueuedAgentJournalSubmission(submission) &&
+      !(unanswered && isUnansweredHandedOverSubmission(submission))
+  )
+  const childWork = input.childWork(sessionId)
+  const status = structuredAgentSessionShownStatus(
+    { items: snapshot.items, submissions: handedOver },
+    childWork,
+    session.child.fence
+  )
   if (status.state === 'done') {
     return null
   }
-  const work = structuredAgentSessionResumeWork(snapshot.items, snapshot.submissions)
+  const work = structuredAgentSessionResumeWork(snapshot.items, handedOver)
   const head = agentSessionProviderHandleChainHead(
     input.getRecord(sessionId)?.providerHandleChain ?? []
   )
@@ -175,7 +214,7 @@ export function structuredAgentSessionWorkingAtStop(input: {
     // and carries them in `tasks`, which is how the dialog tells the two apart.
     state: status.mainAgent.state,
     prompts: pendingPrompts(snapshot.items),
-    tasks: liveTasks(roster)
+    tasks: liveTasks(childWork)
   }
   return {
     sessionId,
@@ -184,6 +223,7 @@ export function structuredAgentSessionWorkingAtStop(input: {
     recordedAt: input.now,
     trigger: input.trigger,
     teardownId: input.teardownId,
+    journalCursor: snapshot.cursor,
     // Root, not key: the close path advances Claude's leaf moments after this runs, and a key
     // comparison would then refuse the session forever.
     providerHandleRoot: agentSessionProviderHandleRoot(head.handle),

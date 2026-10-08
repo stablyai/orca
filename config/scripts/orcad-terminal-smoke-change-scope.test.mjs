@@ -51,12 +51,12 @@ describe('the actual terminal smoke dependency graph', () => {
     'src/main/worker-thread-entry-path.ts',
     'src/cli/index.ts',
     'config/scripts/runtime-serve-terminal-smoke.mjs',
-    'config/scripts/build-orcad-bun.mjs',
+    'config/scripts/build-orcad-node.mjs',
     'config/scripts/build-orcad.mjs',
     'config/scripts/profile-state-worker-smoke.mjs',
     'config/scripts/install-dev-cli.mjs',
     'config/scripts/verify-cli-bin.mjs',
-    'config/scripts/bun-profile-change-scope.mjs'
+    'config/scripts/node-server-change-scope.mjs'
   ])('retains the runtime, CLI, build or smoke dependency: %s', async (file) => {
     expect(inputs.has(file)).toBe(true)
     expect((await classifyOrcadTerminalSmokeChanges([file], async () => inputs)).shouldRun).toBe(
@@ -92,17 +92,17 @@ it('only skips the unchanged smoke after a successful diff and dependency analys
   const workflow = parse(
     readFileSync(new URL('../../.github/workflows/pr.yml', import.meta.url), 'utf8')
   )
-  const step = workflow.jobs.static_analysis.steps.find(
+  const step = workflow.jobs.preflight.steps.find(
     (candidate) => candidate.name === 'Boot orcad and round-trip a terminal'
   )
   expect(step.env).toEqual({
     BASE_SHA: '${{ github.event.pull_request.base.sha }}',
-    HEAD_SHA: '${{ github.event.pull_request.head.sha }}',
     ORCA_BACKGROUND_LAUNCH: '1'
   })
-  expect(step.run).toContain(
-    'git diff --name-only --no-renames -z --merge-base "$BASE_SHA" "$HEAD_SHA"'
-  )
+  // See the localization gate: HEAD^1 removes the merge-base computation, so a shallow checkout
+  // is enough and the payload head SHA is unused.
+  expect(step.run).toContain('node config/scripts/git-pull-request-diff-base.mjs "$BASE_SHA"')
+  expect(step.run).toContain('git diff --name-only --no-renames -z "$DIFF_BASE" HEAD')
   expect(step.run).not.toContain('--diff-filter')
   expect(step.run).toContain('&& [ "$scope" = false ]; then')
   expect(step.run).toMatch(/else\s+pnpm run smoke:orcad-terminal\s+fi/)

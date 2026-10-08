@@ -1,7 +1,6 @@
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
-import type { Worktree } from '../../../../../../shared/worktree/types'
-import { PINNED_GROUP_KEY, getProjectGroupHeaderKey } from '../grouping/group-keys'
+import { getProjectGroupHeaderKey } from '../grouping/group-keys'
 import type { ProjectGroupingModel } from '../grouping/project-grouping'
 
 function getProjectIdFromHeaderRowKey(rowKey: string): string | null {
@@ -88,24 +87,4 @@ export function getSidebarRowRevealAncestorKeys(args: {
     }
   }
   return [...keys]
-}
-
-export function getPinnedWorktreeRevealCollapsedGroupKeys({
-  worktree,
-  collapsedGroups,
-  inPinnedSection = worktree.isPinned
-}: {
-  worktree: Worktree
-  collapsedGroups: ReadonlySet<string>
-  inPinnedSection?: boolean
-}): string[] {
-  if (!inPinnedSection) {
-    return []
-  }
-  const keys: string[] = []
-  // Why: the reveal effect already opens this host; re-returning it would toggle it back closed.
-  if (collapsedGroups.has(PINNED_GROUP_KEY)) {
-    keys.push(PINNED_GROUP_KEY)
-  }
-  return keys
 }

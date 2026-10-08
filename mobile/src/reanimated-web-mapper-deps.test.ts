@@ -238,14 +238,6 @@ describe('reanimated mapper hooks in the web bundle', () => {
     expect(found).toEqual(['fixture.tsx:2 useAnimatedStyle omits fade'])
   })
 
-  it('does not ask for a value the updater only writes, which is an output', () => {
-    const found = callsMissingDependencies(
-      'fixture.tsx',
-      `${FROM}useAnimatedReaction(() => progress.value, (v) => { opacity.value = v }, [progress])\n`
-    )
-    expect(found).toEqual([])
-  })
-
   it('still asks for one that is read and written', () => {
     const found = callsMissingDependencies(
       'fixture.tsx',

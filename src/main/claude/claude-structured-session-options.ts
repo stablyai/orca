@@ -13,6 +13,8 @@ import {
   type ListedModel
 } from './claude-structured-model-catalog'
 import type { ClaudeSession } from './claude-structured-session-state'
+import { structuredAgentSessionOptionModels } from '../native-chat/agent-session-wire/structured-agent-session-option-models'
+import { claudeCatalogRowsOfAccount } from './claude-structured-retired-model'
 import { decodeStructuredAgentSessionOptionValue } from '../../shared/structured-agent-session-option-codec'
 
 /**
@@ -121,14 +123,6 @@ export function readClaudeCurrentModel(session: ClaudeSession): {
   }
 }
 
-/**
- * The effort levels the session's current model advertises, with the catalog id
- * that matched so a refusal names the model the pill shows. Levels are null when
- * nothing identified the model: `apply_flag_settings` accepts and stores any
- * level for a model with no effort control, so the catalog is the only evidence
- * of a refusal — and an absent or unlisted one is not evidence, or a live CLI
- * that predates `list_models` would have every effort refused under it.
- */
 /** One catalog read serves a whole option write. The admit check, the effort guard
  *  and the Fast guard all ask about the same list; each taking its own read made a
  *  single model write pay for two `list_models` round trips and let two guards answer
@@ -142,6 +136,14 @@ export async function readClaudeListedModels(
   return catalog ? listedModels({ models: catalog }) : []
 }
 
+/**
+ * The effort levels the session's current model advertises, with the catalog id
+ * that matched so a refusal names the model the pill shows. Levels are null when
+ * nothing identified the model: `apply_flag_settings` accepts and stores any
+ * level for a model with no effort control, so the catalog is the only evidence
+ * of a refusal — and an absent or unlisted one is not evidence, or a live CLI
+ * that predates `list_models` would have every effort refused under it.
+ */
 export function claudeModelEffortLevels(
   session: ClaudeSession,
   models: readonly ListedModel[]
@@ -223,15 +225,43 @@ export function claudeCatalogAdmitsModel(models: readonly ListedModel[], modelId
   )
 }
 
-function wireClaudeModels(models: readonly ListedModel[]): AgentSessionOptionsResult['models'] {
-  return models.map((entry) => ({
+type WireClaudeModel = AgentSessionOptionsResult['models'][number]
+
+function wireClaudeModel(entry: ListedModel): WireClaudeModel {
+  return {
     id: entry.id,
     label: entry.label,
     ...(entry.description ? { description: entry.description } : {}),
     isDefault: entry.isDefault,
     efforts: entry.efforts,
     ...(entry.supportsFastMode !== undefined ? { supportsFastMode: entry.supportsFastMode } : {})
-  }))
+  }
+}
+
+function wireClaudeModels(models: readonly ListedModel[]): WireClaudeModel[] {
+  return models.map(wireClaudeModel)
+}
+
+/** The built-in models a running child lists when the CLI gives it none; a chat at rest with no
+ *  catalog lists the same. */
+export function claudeFallbackModelOptions(): WireClaudeModel[] {
+  return wireClaudeModels(seedModels())
+}
+
+/** The listing, with what the CLI runs when no effort is sent on each model the child applies —
+ *  a default only a running child knows, and only while this session has no effort pick. */
+function catalogClaudeModels(session: ClaudeSession, discovered: ListedModel[]): WireClaudeModel[] {
+  const applied = session.options.has('effort') ? undefined : session.appliedOptions
+  return discovered.map((listed) => {
+    const model = wireClaudeModel(listed)
+    const effort = applied?.effort
+    const runsApplied =
+      applied?.model !== undefined &&
+      (listed.id === applied.model || listed.resolvedModel === applied.model)
+    return effort && runsApplied && model.efforts.some((choice) => choice.value === effort)
+      ? { ...model, defaultEffort: effort }
+      : model
+  })
 }
 
 /** Write a provider-listed catalog through to the host store. Account-level
@@ -241,9 +271,10 @@ function writeClaudeCatalogThrough(session: ClaudeSession, discovered: ListedMod
   if (discovered.length === 0 || !session.catalogAccess) {
     return
   }
-  const support = claudeFastModeSupport(discovered, undefined)
+  const rows = claudeCatalogRowsOfAccount(session.catalogAccess, discovered, session.launchedModel)
+  const support = claudeFastModeSupport(rows, undefined)
   session.catalogAccess.store.recordSuccess(session.catalogAccess.fingerprint, 'claude', {
-    models: wireClaudeModels(discovered),
+    models: catalogClaudeModels(session, rows),
     ...(support ? { fastModeSupport: support } : {}),
     fastModeTierByModel: new Map(),
     origin: 'live-session'
@@ -294,9 +325,9 @@ function observeClaudeSettingsReadback(
 }
 
 /** The options as main already holds them, over `catalog`; asks the CLI nothing. Startup's
- *  settings readback and restore's confirmations are applied by the time a start proves, and
- *  the SDK answers `list_models` from its initialize result, so a started session's snapshot
- *  passes that result here rather than paying two round trips for what it already read. */
+ *  settings readback is applied by the time a start proves, and the SDK answers `list_models`
+ *  from its initialize result, so a started session's snapshot passes that result here rather
+ *  than paying two round trips for what it already read. */
 export function claudeStructuredSessionOptionsFrom(
   session: ClaudeSession,
   catalog: unknown[] | null,
@@ -304,12 +335,13 @@ export function claudeStructuredSessionOptionsFrom(
 ): AgentSessionOptionsResult {
   const discovered = listedModels(catalog ? { models: catalog } : null)
   writeClaudeCatalogThrough(session, discovered)
-  const models = discovered.length > 0 ? discovered : seedModels()
+  const listed = discovered.length > 0 ? discovered : seedModels()
   const current = readClaudeCurrentModel(session)
-  const model = currentModelId(models, current.id)
-  if (!models.some((entry) => entry.id === model)) {
-    models.push({ id: model, label: model, isDefault: false, efforts: [], resolvedModel: null })
-  }
+  const model = currentModelId(listed, current.id)
+  const models = structuredAgentSessionOptionModels(listed, model, (row) => ({
+    ...row,
+    resolvedModel: null
+  }))
   const effort =
     session.options.get('effort') ??
     session.reportedOptions.effort ??

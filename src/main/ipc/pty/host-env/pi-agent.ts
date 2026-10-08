@@ -8,7 +8,11 @@ import {
   type PiAgentKind
 } from '../../../../shared/pi-agent-kind'
 import { readSessionShellStartupEnvVar } from '../../../pty/shell-startup-env'
-import { AGENT_HOOK_RUNTIME_ENV_KEYS, CLAUDE_CHILD_SESSION_STAMP_ENV_KEYS } from './spawn-env-keys'
+import {
+  AGENT_HOOK_RUNTIME_ENV_KEYS,
+  CLAUDE_CHILD_SESSION_STAMP_ENV_KEYS,
+  ORCA_AGENT_SESSION_CALLER_ENV_KEYS
+} from './spawn-env-keys'
 
 export function readEnvWithProcessFallback(
   baseEnv: Record<string, string>,
@@ -138,13 +142,16 @@ export function getInheritedAgentHookEnvKeysToDelete(
   ].filter((key) => env[key] === undefined)
 }
 
-export function getInheritedClaudeSessionStampEnvKeysToDelete(
+export function getInheritedAgentSessionStampEnvKeysToDelete(
   spawnEnv: Record<string, string> | undefined
 ): string[] {
   const env = spawnEnv ?? {}
-  // Why: strip only values inherited from the pty host; a caller that explicitly
-  // provides a stamp (deliberately spawning a nested Claude child) keeps it.
-  return CLAUDE_CHILD_SESSION_STAMP_ENV_KEYS.filter((key) => env[key] === undefined)
+  // Why: a caller that explicitly provides a Claude stamp (a nested Claude child) keeps it; no
+  // terminal is a structured session, so the session caller keys always go.
+  return [
+    ...CLAUDE_CHILD_SESSION_STAMP_ENV_KEYS.filter((key) => env[key] === undefined),
+    ...ORCA_AGENT_SESSION_CALLER_ENV_KEYS
+  ]
 }
 
 export { restoreOrStripOverlayEnv } from '../../../../shared/agent-overlay-env'
@@ -170,15 +177,16 @@ export function resolveMimocodeSourceHome(baseEnv: Record<string, string>): stri
 }
 
 export function resolveOpenCodeSourceConfigDir(
-  baseEnv: Record<string, string>
+  baseEnv: Record<string, string>,
+  inheritedEnv: NodeJS.ProcessEnv = process.env
 ): string | undefined {
-  const configDir = baseEnv.OPENCODE_CONFIG_DIR ?? process.env.OPENCODE_CONFIG_DIR
-  const orcaConfigDir = baseEnv.ORCA_OPENCODE_CONFIG_DIR ?? process.env.ORCA_OPENCODE_CONFIG_DIR
+  const configDir = baseEnv.OPENCODE_CONFIG_DIR ?? inheritedEnv.OPENCODE_CONFIG_DIR
+  const orcaConfigDir = baseEnv.ORCA_OPENCODE_CONFIG_DIR ?? inheritedEnv.ORCA_OPENCODE_CONFIG_DIR
   if (configDir && orcaConfigDir && configDir !== orcaConfigDir) {
     return configDir
   }
   const sourceDir =
-    baseEnv.ORCA_OPENCODE_SOURCE_CONFIG_DIR ?? process.env.ORCA_OPENCODE_SOURCE_CONFIG_DIR
+    baseEnv.ORCA_OPENCODE_SOURCE_CONFIG_DIR ?? inheritedEnv.ORCA_OPENCODE_SOURCE_CONFIG_DIR
   if (sourceDir) {
     return sourceDir
   }

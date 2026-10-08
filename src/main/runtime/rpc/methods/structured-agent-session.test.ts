@@ -4,6 +4,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import {
+  AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY,
+  AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY,
   AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
   RUNTIME_CAPABILITIES,
   RUNTIME_PROTOCOL_VERSION,
@@ -12,7 +14,9 @@ import {
   STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
+import { STRUCTURED_AGENT_SESSION_START_WAIT_MS } from '../../../native-chat/agent-session-wire/structured-agent-session-send-settlement'
 import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session-mutation-envelope'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { ALL_RPC_METHODS } from './index'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-agent-session'
 import { CLEANUP_METHODS } from './structured-agent-session-gate-classification.test-fixture'
@@ -78,7 +82,7 @@ describe('agentSession.reveal', () => {
   })
 
   it('publishes the tab even when the journal could not be read', async () => {
-    // A pre-SQLite chat restores to nothing, but attach still recovers it, so the tab is worth
+    // An unreadable chat restores to nothing, but attach still recovers it, so the tab is worth
     // publishing and the pane's hold finishes the job. Refusing here would strand it forever.
     hostCalls.revealSession.mockResolvedValueOnce({
       sessionId: SESSION,
@@ -130,7 +134,7 @@ describe('capability gating', () => {
     const response = await call('agentSession.close', { sessionId: SESSION }, STRUCTURED_CLIENT)
 
     expect(response).toMatchObject({ ok: true, result: { ok: true } })
-    expect(hostCalls.close).toHaveBeenCalledWith(SESSION)
+    expect(hostCalls.close).toHaveBeenCalledWith(SESSION, 'user-close')
     expect(hostCalls.setSessionTabVisibility).toHaveBeenCalledWith(SESSION, false)
     expect(hostCalls.setSessionTabVisibility.mock.invocationCallOrder[0]).toBeLessThan(
       hostCalls.close.mock.invocationCallOrder[0]!
@@ -149,6 +153,10 @@ describe('capability gating', () => {
   it('advertises the capability without bumping the protocol version', () => {
     expect(RUNTIME_CAPABILITIES).toContain(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)
     expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY)
+    // A client tells a host that accepts first, and admits a writer-free Stop before a turn, by it.
+    expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY)
+    // And a cancel naming no turn, which a host that only accepts first still refuses as invalid.
+    expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY)
     expect(RUNTIME_CAPABILITIES).toContain(STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY)
     expect(RUNTIME_CAPABILITIES).toContain(STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY)
     // Separate from the structured capability on purpose: a host can serve the rest of the
@@ -167,7 +175,7 @@ describe('capability gating', () => {
     }
     // Bump deliberately: the whole agentSession.* surface is behind the structured capability,
     // so an additive method is invisible to old clients and needs no protocol bump.
-    expect(STRUCTURED_AGENT_SESSION_METHODS).toHaveLength(29)
+    expect(STRUCTURED_AGENT_SESSION_METHODS).toHaveLength(34)
   })
 
   it('hides the surface from a declared client that did not advertise it', async () => {
@@ -252,11 +260,11 @@ describe('capability gating', () => {
       signal: controller.signal
     })
 
-    expect(hostCalls.waitForSendSettlement).toHaveBeenCalledWith(
-      SESSION,
-      'client-1',
-      controller.signal
-    )
+    expect(hostCalls.waitForSendSettlement).toHaveBeenCalledWith(SESSION, 'client-1', {
+      until: 'answered',
+      budgetMs: STRUCTURED_AGENT_SESSION_START_WAIT_MS,
+      signal: controller.signal
+    })
     expect(response).toMatchObject({
       ok: true,
       result: {
@@ -302,50 +310,9 @@ describe('capability gating', () => {
     })
   })
 
-  it('returns durable pending immediately to clients that understand admission', async () => {
-    hostCalls.send.mockResolvedValueOnce({
-      ok: true,
-      replayed: false,
-      fence: 1,
-      cursor: { epoch: 'epoch-a', sequence: 1 },
-      value: {
-        clientMessageId: 'client-1',
-        submission: {
-          clientMessageId: 'client-1',
-          fence: 1,
-          payloadFingerprint: 'fingerprint',
-          dispatchState: 'pending',
-          providerItemId: null,
-          reason: null,
-          submittedAt: 1,
-          resolvedAt: null
-        }
-      }
-    })
-
-    const response = await call('agentSession.send', sendParams(), STRUCTURED_CLIENT)
-
-    expect(hostCalls.waitForSendSettlement).not.toHaveBeenCalled()
-    expect(response).toMatchObject({
-      ok: true,
-      result: { value: { submission: { dispatchState: 'pending' } } }
-    })
-  })
-
-  it('requires the host structured-chat setting for mobile clients', async () => {
+  it('serves a capable mobile client whatever the host structured-chat setting says', async () => {
     const response = await call('agentSession.send', sendParams(), STRUCTURED_MOBILE_CLIENT, {
       getClientSettings: () => ({ experimentalStructuredNativeChat: false })
-    })
-    expect(response).toMatchObject({
-      ok: false,
-      error: { message: expect.stringContaining('structured_agent_session_unsupported') }
-    })
-    expect(hostCalls.send).not.toHaveBeenCalled()
-  })
-
-  it('serves mobile clients only after capability and setting negotiation', async () => {
-    const response = await call('agentSession.send', sendParams(), STRUCTURED_MOBILE_CLIENT, {
-      getClientSettings: () => ({ experimentalStructuredNativeChat: true })
     })
     expect(response).toMatchObject({ ok: true })
     expect(hostCalls.send).toHaveBeenCalledTimes(1)
@@ -363,7 +330,9 @@ describe('capability gating', () => {
         ok: false,
         error: { message: expect.stringContaining('structured_agent_session_unsupported') }
       })
-      expect(hostCalls[hostCall]).not.toHaveBeenCalled()
+      if (hostCall !== null) {
+        expect(hostCalls[hostCall]).not.toHaveBeenCalled()
+      }
     }
   )
 
@@ -374,7 +343,6 @@ describe('capability gating', () => {
       setStructuredAgentSessionHost(null)
 
       const response = await call(method, params, STRUCTURED_CLIENT, {
-        getClientSettings: () => ({ experimentalStructuredNativeChat: false }),
         ensureStructuredAgentSessionHost: ensureHost
       })
 
@@ -455,6 +423,46 @@ describe('method routing', () => {
     expect(hostCalls.attach).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ surfaceTabId: 'chat-tab-1' })
+    )
+  })
+
+  it('keeps the host-resolved floating folder outside a worktree create payload', async () => {
+    const worktree = `id:${FLOATING_TERMINAL_WORKTREE_ID}`
+    const params = {
+      envelope: envelope({
+        expectedRuntimeFence: null,
+        payloadFingerprint: computeAgentSessionPayloadFingerprint({
+          method: 'agentSession.create',
+          sessionId: SESSION,
+          fields: { worktree, agent: 'codex' }
+        })
+      }),
+      worktree,
+      agent: 'codex'
+    }
+
+    expect(
+      await call('agentSession.create', params, STRUCTURED_CLIENT, {
+        resolveStructuredAgentSessionCreateIntent: async () => ({
+          envelope: params.envelope,
+          location: {
+            executionHostId: 'local',
+            wslDistro: null,
+            workspaceId: FLOATING_TERMINAL_WORKTREE_ID,
+            workspaceKind: 'folder'
+          },
+          provider: 'codex',
+          agent: 'codex',
+          accountHome: { variable: 'CODEX_HOME', path: '/host/account' },
+          runtimeKind: 'native',
+          hostLaunchDirectory: '/host/floating-folder'
+        })
+      })
+    ).toMatchObject({ ok: true, result: { ok: true } })
+    expect(hostCalls.attach).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.not.objectContaining({ hostLaunchDirectory: expect.anything() }),
+      { hostLaunchDirectory: '/host/floating-folder' }
     )
   })
 
@@ -622,6 +630,41 @@ describe('method routing', () => {
     const ensured = await call('agentSession.ensure', attachParams({ envelope: envelope() }))
     expect(ensured).toMatchObject({ ok: true })
   })
+
+  it.each(['agentSession.create', 'agentSession.ensure'] as const)(
+    'routes a new floating client location through host attach for %s',
+    async (method) => {
+      const params = attachParams({
+        location: {
+          executionHostId: 'local',
+          wslDistro: null,
+          workspaceId: FLOATING_TERMINAL_WORKTREE_ID,
+          workspaceKind: 'folder'
+        }
+      })
+
+      expect(await call(method, params, STRUCTURED_CLIENT)).toMatchObject({ ok: true })
+      expect(hostCalls.attach).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ location: params.location })
+      )
+      expect(hostCalls.attach.mock.calls[0]?.[1]).not.toHaveProperty('launchDirectory')
+    }
+  )
+
+  it.each(['agentSession.create', 'agentSession.ensure'] as const)(
+    'rejects a client-selected floating launch directory for %s',
+    async (method) => {
+      const response = await call(
+        method,
+        { ...attachParams(), launchDirectory: '/client/selected-folder' },
+        STRUCTURED_CLIENT
+      )
+
+      expect(response).toMatchObject({ ok: false })
+      expect(hostCalls.attach).not.toHaveBeenCalled()
+    }
+  )
 
   /** A client-supplied location skips the worktree-resolving support check, so both attach-shaped
    *  entries must ask the executing host directly or a host that cannot fence a provider child

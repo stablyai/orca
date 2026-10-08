@@ -30,6 +30,14 @@
       "reason": "expo-secure-store resolves to {} on web, and the bridge carries the RPC, so the page holds no device token."
     },
     {
+      "file": "src/platform/native-chat-image-fingerprint.web.ts",
+      "reason": "The web image uploader uses WebCrypto SHA-256 when available to reduce JavaScript hashing of large images. Native keeps the synchronous portable fingerprint; unavailable or failed web crypto uses that same portable fallback."
+    },
+    {
+      "file": "src/platform/host-os.web.ts",
+      "reason": "Platform.OS is web inside the shell's page, but the keyboard the page lifts over is the phone's, reported in that OS's own terms: iOS counts the home indicator. Keyboard and inset arithmetic branches on the host OS, so this answers the phone's OS from the WebView's user agent, and the page computes what the native screen computes."
+    },
+    {
       "file": "app/_layout.web.tsx",
       "reason": "The page's route tree starts at app/h, so without a root layout expo-router mounts DefaultNavigator, an all-edges SafeAreaView that would pad every screen a second time. The native root owns pairing and push and cannot reach the page. This one adds no padding and feeds the insets the shell sent in init to react-native-safe-area-context, whose web provider reads env(safe-area-inset-*) as 0 in both WebViews."
     },
@@ -68,6 +76,10 @@
     {
       "file": "src/platform/keyboard-occlusion.web.ts",
       "reason": "react-native-web's Keyboard is a stub: addListener returns a subscription that never fires and isVisible() is always false, so a screen waiting for keyboardDidShow inside the page waits forever and the software keyboard covers whatever sits at the bottom of the document \u2014 the source-control commit bar, and the review note composer whose KeyboardAvoidingView is driven by those same events. The browser publishes the geometry a different way: the layout viewport keeps its size and visualViewport shrinks, so the occluded strip is innerHeight minus the visual viewport's height and offsetTop, tracked on its resize and scroll. A document with no visualViewport answers 0 rather than guessing."
+    },
+    {
+      "file": "src/platform/keyboard-persisting-taps.web.ts",
+      "reason": "react-native-web ignores keyboardShouldPersistTaps, and its Pressable is a focusable element that takes focus on mousedown. On Pixel_API_37 a tap on a session tab or a dock key moved focus off the live input and the IME closed, while natively a Pressable never takes focus and those two ScrollViews persist taps. This sibling gives the tab bar ('handled') and the accessory bar ('always') the same rule by keeping a focused text field's focus through the mousedown; the native module returns no ref."
     },
     {
       "file": "src/platform/live-input-composing-range.web.ts",
@@ -154,6 +166,10 @@
       "reason": "The auth-failed banner offers Retry, Re-pair and Remove, and on the page only Re-pair works. /pair-scan sits outside the page's route root of app/h (config/scripts/mobile-web-app-route-manifest.mjs:6), so route-handoff.web.ts:207 hands the push to the shell, which opens the native scan screen and returns to the same page document on Back. Retry and Remove are inert here: forceReconnect is null (client-context.web.tsx:57, read through host-client-hooks.ts:88) and removal refuses (page-host-removal-refusal.ts). The banner is reachable on the page because the shell forwards the native client's state (mobile-web-shell/bridge-host.ts:301) and auth-failed is in the wire enum (bridge/bridge-envelope.ts:44). So this one renders Re-pair as native does and one line naming the app for reconnect and removal."
     },
     {
+      "file": "src/session/MobileNativeChatVisualFrame.web.tsx",
+      "reason": "The native frame runs a chat visual's scripts in a sandboxed child of a trusted host document inside a react-native-webview, which throws at import in a browser. The page's response-header policy (script-src 'self', frame-src 'none') is inherited by a srcdoc frame, so a visual's inline scripts cannot run here without loosening the page policy. This one renders the visual sealed, as MobileHtmlPreview.web.tsx does: an empty sandbox, no script, a fixed-height frame the visual scrolls inside."
+    },
+    {
       "file": "src/components/MobileHtmlPreview.web.tsx",
       "reason": "The native preview renders an agent-produced HTML artifact inside a sandboxed WebView with navigation locked to the initial inline document, and react-native-webview throws at import in a browser for the reason above. This one renders the artifact in a sandboxed iframe with no allow-scripts and no allow-same-origin, keeping the Preview/Source toggle. srcdoc rather than a blob: URL and no CSP change at all: a srcdoc frame has no URL for frame-src to match and inherits its embedder's policy instead, so it is admitted under the shipped frame-src 'none' on Chromium and WebKit alike, while a blob: frame is refused by frame-src and refused again in WebKit by the frame-ancestors 'none' it inherits. The inherited policy is also what seals it -- script-src 'self' refuses the artifact's inline script, img-src bounds its images, font-src 'none' its fonts -- and allow-top-navigation-by-user-activation is the one capability granted, so a tapped link becomes a top-frame navigation the shell opens externally (ruling 29) while a meta refresh, a form submit, target=_blank and any script-initiated navigation produce none. That token is granted only when the shell says it can open such a navigation: without the externalNavigation grant this file renders the artifact with its links as text and seals the frame with an empty sandbox instead (C8.1, ruling 37.2)."
     },
@@ -192,6 +208,22 @@
     {
       "file": "src/notifications/desktop-notification-channel.web.ts",
       "reason": "The page creates no Android notification channel and the native file already returns early off Android, so what this sibling changes is the import of expo-notifications, whose import-time read breaks the document for the reason push-token.web.ts beside it gives."
+    },
+    {
+      "file": "src/navigation/host-stack.web.tsx",
+      "reason": "expo-router's Stack renders @react-navigation/native-stack's web view on the page, which flips each screen's display and ignores the animation option, so pushing the session from the worktree list and Back were instant cuts where the native stack slides. This one keeps a popped screen mounted until it has slid out."
+    },
+    {
+      "file": "src/app-update/use-wall-app-update.web.ts",
+      "reason": "The update checker runs in the app, not the page. The native file hands the compatibility wall the release that check found; this one offers none, so the wall inside the page keeps its store or releases link and the page bundle never carries the checker."
+    },
+    {
+      "file": "src/files/MobileMediaPlayback.web.tsx",
+      "reason": "The browser and hybrid shell play cached Blob URLs with HTML media controls. The native sibling uses the existing WebView to play its private cache file."
+    },
+    {
+      "file": "src/files/mobile-media-preview-cache.web.ts",
+      "reason": "The page has no native filesystem. This cache creates a temporary Blob URL from bounded chunks and revokes it when the preview closes; native builds write the chunks to a cache file."
     }
   ]
 }

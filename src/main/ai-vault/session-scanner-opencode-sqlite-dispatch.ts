@@ -1,3 +1,7 @@
+import {
+  readOpenCodeTranscriptPage,
+  readOpenCodeTranscriptSignal
+} from '../native-chat/transcript-opencode-sqlite-query'
 import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
 import { captureOpenCodeSqliteSession } from './session-scanner-opencode-sqlite-capture'
 import { listOpenCodeSqliteSessions } from './session-scanner-opencode-sqlite-list'
@@ -18,6 +22,13 @@ export async function handleOpenCodeSqliteRequest(
   request: OpenCodeSqliteWorkerRequest
 ): Promise<OpenCodeSqliteWorkerResponse> {
   try {
+    if (request.kind === 'native-page' || request.kind === 'native-signal') {
+      const value =
+        request.kind === 'native-signal'
+          ? readOpenCodeTranscriptSignal(request.dbPath, request.sessionId)
+          : readOpenCodeTranscriptPage({ ...request, limit: request.limit ?? 50 })
+      return { id: request.id, ok: true, value }
+    }
     if (request.kind === 'list') {
       const issues: AiVaultScanIssue[] = []
       const candidates =
@@ -30,7 +41,8 @@ export async function handleOpenCodeSqliteRequest(
           : await listOpenCodeSqliteSessions({
               dbPaths: request.dbPaths,
               limit: request.limit ?? Infinity,
-              issues
+              issues,
+              agent: request.agent === 'zcode' ? 'zcode' : 'opencode'
             })
       return { id: request.id, ok: true, value: { candidates, issues } }
     }
@@ -38,8 +50,14 @@ export async function handleOpenCodeSqliteRequest(
       const capture =
         request.agent === 'opencode2'
           ? await captureOpenCode2SqliteSession(request)
-          : await captureOpenCodeSqliteSession(request)
+          : await captureOpenCodeSqliteSession({
+              ...request,
+              agent: request.agent === 'zcode' ? 'zcode' : 'opencode'
+            })
       return { id: request.id, ok: true, value: capture }
+    }
+    if (request.kind !== 'parse') {
+      throw new Error('Unsupported OpenCode SQLite request')
     }
     const parse = async () =>
       request.agent === 'opencode2'
@@ -51,7 +69,8 @@ export async function handleOpenCodeSqliteRequest(
         : await parseOpenCodeSqliteSession({
             dbPath: request.dbPath,
             sessionId: request.sessionId,
-            platform: request.platform
+            platform: request.platform,
+            agent: request.agent === 'zcode' ? 'zcode' : 'opencode'
           })
     const session = request.fullFirstUserPrompt
       ? await withFullFirstUserPromptCapture(parse)

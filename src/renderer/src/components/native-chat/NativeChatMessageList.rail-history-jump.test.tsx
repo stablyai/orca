@@ -99,7 +99,6 @@ function PagedTranscript({
       railOutline={railOutline}
       isWorking={false}
       expandSignal={false}
-      fontScale={1}
     />
   )
 }
@@ -195,7 +194,9 @@ describe('jumping from the rail while following the end', () => {
       configurable: true,
       get: () =>
         TOP_GUTTER_PX +
-        (screen.queryByRole('button', { name: /load earlier messages/i })?.closest('.max-w-4xl')
+        (screen
+          .queryByRole('button', { name: /load earlier messages/i })
+          ?.closest('[data-native-chat-transcript-column]')
           ? OLDER_HISTORY_ROW_PX
           : 0)
     })
@@ -276,8 +277,6 @@ describe('jumping from the rail while following the end', () => {
     expect(distanceFromBottom()).toBe(0)
     expect(screen.queryByText(prompt) !== null).toBe(loaded)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Your messages' }))
-    await frame()
     fireEvent.click(screen.getByRole('button', { name: prompt }))
     await settle(60)
 
@@ -301,13 +300,11 @@ describe('jumping from the rail while following the end', () => {
     render(<PagedTranscript holdPage={holdPage} />)
     await settle(10)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Your messages' }))
-    await frame()
     fireEvent.click(screen.getByRole('button', { name: 'prompt-5' }))
     await frame()
     // Anti-vacuous: the older page is in flight.
     expect(releaseFirstPage).not.toBeNull()
-    // The list stays open while the pick pages in, so the reader picks again in place.
+    // The reader picks again while the first pick is still paging in.
     fireEvent.click(screen.getByRole('button', { name: 'prompt-45' }))
     await settle(40)
     act(() => releaseFirstPage?.())
@@ -340,27 +337,23 @@ describe('jumping from the rail while following the end', () => {
   }
 
   async function pickUnloadedWhilePaging(prompt: string): Promise<void> {
-    fireEvent.click(screen.getByRole('button', { name: 'Your messages' }))
-    await frame()
     fireEvent.click(screen.getByRole('button', { name: prompt }))
     await frame()
   }
 
-  it('keeps the list open with the pick marked busy until its history lands', async () => {
+  it('marks the pick busy until its history lands', async () => {
     const pages = holdFirstPage()
     render(<PagedTranscript holdPage={pages.holdPage} />)
     await settle(10)
     await pickUnloadedWhilePaging('prompt-5')
     expect(pages.asked()).toBe(1)
 
-    // The failure mode: picking closed the list, so the busy item was never seen.
-    expect(screen.getByRole('dialog')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'prompt-5' }).getAttribute('aria-busy')).toBe('true')
 
     pages.release()
     await settle(60)
 
-    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.getByRole('button', { name: 'prompt-5' }).getAttribute('aria-busy')).toBeNull()
     expect(Math.abs(rowOffsetFromViewportTop('prompt-5'))).toBeLessThanOrEqual(2)
   })
 
@@ -381,8 +374,8 @@ describe('jumping from the rail while following the end', () => {
 
     input()
     await frame()
-    // Abandoning the jump settles the pick: nothing is left pulsing in an open list.
-    expect(screen.queryByRole('dialog')).toBeNull()
+    // Abandoning the jump settles the pick: nothing is left pulsing on the rail.
+    expect(screen.getByRole('button', { name: 'prompt-5' }).getAttribute('aria-busy')).toBeNull()
     pages.release()
     await settle(60)
 
@@ -400,7 +393,7 @@ describe('jumping from the rail while following the end', () => {
     expect(pages.asked()).toBe(1)
 
     // The rail forwards its wheel to the transcript: the reader is scrolling.
-    fireEvent.wheel(screen.getByRole('button', { name: 'Your messages' }), { deltaY: -40 })
+    fireEvent.wheel(screen.getByRole('toolbar', { name: 'Your messages' }), { deltaY: -40 })
     await frame()
     // Anti-vacuous: the wheel moved the transcript.
     expect(distanceFromBottom()).toBe(40)
@@ -412,28 +405,13 @@ describe('jumping from the rail while following the end', () => {
     expect(distanceFromBottom()).toBe(40)
   })
 
-  it('keeps paging when the reader wheels the open message list', async () => {
-    const pages = holdFirstPage()
-    render(<PagedTranscript holdPage={pages.holdPage} />)
-    await settle(10)
-    await pickUnloadedWhilePaging('prompt-5')
-    expect(pages.asked()).toBe(1)
-
-    // The list scrolls itself; the transcript is not being read.
-    fireEvent.wheel(screen.getByRole('dialog'), { deltaY: -40 })
-    pages.release()
-    await settle(60)
-
-    expect(pages.asked()).toBeGreaterThan(1)
-    expect(Math.abs(rowOffsetFromViewportTop('prompt-5'))).toBeLessThanOrEqual(2)
-  })
-
   it('stays at the latest message when "Jump to latest" is pressed while the jump pages', async () => {
     const pages = holdFirstPage()
     render(<PagedTranscript holdPage={pages.holdPage} />)
     await settle(10)
     // A reader parked above the end, so the button shows.
     act(() => {
+      fireEvent.wheel(scroller(), { deltaY: -100 })
       scroller().scrollTop = 200
     })
     await settle(2)
@@ -448,6 +426,27 @@ describe('jumping from the rail while following the end', () => {
     expect(pages.asked()).toBe(1)
     expect(screen.queryByText('prompt-5')).toBeNull()
     expect(distanceFromBottom()).toBe(0)
+  })
+
+  it('jumps to a message without animating when the reader asks for reduced motion', async () => {
+    vi.spyOn(window, 'matchMedia').mockImplementation((query: string) => ({
+      matches: query === '(prefers-reduced-motion: reduce)',
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false
+    }))
+    render(<PagedTranscript />)
+    await settle(10)
+
+    fireEvent.click(screen.getByRole('button', { name: 'prompt-45' }))
+    await frame()
+
+    // A smooth scroll would still be easing in here, a few pixels from where it started.
+    expect(Math.abs(rowOffsetFromViewportTop('prompt-45'))).toBeLessThanOrEqual(2)
   })
 })
 
@@ -515,7 +514,6 @@ describe('revealing a diff while a rail jump pages', () => {
         railOutline={loadedOlder ? [] : [{ id: 'older', text: 'Oldest prompt', hasImages: false }]}
         isWorking={false}
         expandSignal={false}
-        fontScale={1}
       />
     )
   }
@@ -532,14 +530,13 @@ describe('revealing a diff while a rail jump pages', () => {
     vi.spyOn(HTMLElement.prototype, 'scrollTo').mockImplementation(scrollTo)
     const { container } = render(<DiffTranscript holdPage={holdPage} />)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Your messages' }))
     fireEvent.click(screen.getByRole('button', { name: 'Oldest prompt' }))
     // Anti-vacuous: the older page is in flight.
     expect(holdPage).toHaveBeenCalledTimes(1)
     fireEvent.click(screen.getByRole('button', { name: /1 changed file/ }))
     fireEvent.click(screen.getByRole('button', { name: /src\/a.ts/ }))
     scrollTranscript(container, 6000)
-    expect(screen.getByText('Edited file')).toBeInTheDocument()
+    expect(screen.getByText('Edited')).toBeInTheDocument()
     scrollTo.mockClear()
 
     await act(async () => {
@@ -550,6 +547,6 @@ describe('revealing a diff while a rail jump pages', () => {
     // The abandoned jump would have taken the pin and smooth-scrolled up to the oldest
     // prompt; the prepend's own anchoring is an instant write.
     expect(scrollTo.mock.calls.filter(([options]) => options?.behavior === 'smooth')).toEqual([])
-    expect(screen.getByText('Edited file')).toBeInTheDocument()
+    expect(screen.getByText('Edited')).toBeInTheDocument()
   })
 })

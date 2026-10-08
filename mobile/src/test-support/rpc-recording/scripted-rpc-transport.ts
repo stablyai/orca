@@ -25,10 +25,9 @@ type SendRequestArgs = Parameters<RpcClient['sendRequest']>
  * substitute for this one: `requests`, `payloads` and the scripted replies are all still observed
  * here, and a golden recorded through a wrapper is comparable to the one recorded without it.
  *
- * Declared as a function rather than as an import of the thing that uses it. The page bridge lives
- * in `mobile/src/mobile-web-shell/`, which is inside the recorder's own fence, so the engine naming
- * it would put a product module in `recorderSha256`; `rpc-recording-through-bridge.test.ts` builds
- * the pair and hands it in instead.
+ * Declared as a function rather than as an import of the thing that uses it: the page bridge in
+ * `mobile/src/mobile-web-shell/` is product code the native recording never runs, so the engine
+ * does not load it; `rpc-recording-through-bridge.test.ts` builds the pair and hands it in instead.
  */
 export type ScriptedClientWrapper = (client: RpcClient) => RpcClient
 
