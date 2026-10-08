@@ -43,4 +43,30 @@ describe('createTerminalLayoutTopologySignature', () => {
     const second = signature.project(layouts)
     expect(second).toBe(first)
   })
+
+  function splitLayout(ratio: number): Record<string, TerminalLayoutSnapshot> {
+    return {
+      [TAB_ID]: {
+        root: {
+          type: 'split',
+          direction: 'horizontal',
+          first: { type: 'leaf', leafId: LEAF_A },
+          second: { type: 'leaf', leafId: LEAF_B },
+          ratio
+        },
+        activeLeafId: LEAF_A,
+        expandedLeafId: null
+      }
+    }
+  }
+
+  it('does not change when only the split ratio changes (e.g. dragging the divider)', () => {
+    const signature = createTerminalLayoutTopologySignature()
+    const first = signature.project(splitLayout(0.5))
+    // Why: dragging a split divider calls setTabLayout every frame with a
+    // changed ratio — the leaf id set (what pruning cares about) is
+    // untouched, so this must not re-trigger the retention sync per frame.
+    const second = signature.project(splitLayout(0.73))
+    expect(second).toBe(first)
+  })
 })
