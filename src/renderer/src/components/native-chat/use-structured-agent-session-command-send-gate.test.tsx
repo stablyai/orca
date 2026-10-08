@@ -29,13 +29,15 @@ vi.mock('./use-structured-agent-session-read', () => ({
   })
 }))
 
-vi.mock('./use-structured-agent-session-outbox', () => ({
-  structuredSessionOperationId: () => 'operation-1',
-  useStructuredAgentSessionOutbox: () => ({
-    outbox: [],
+vi.mock('./structured-agent-session-operation-id', () => ({
+  structuredSessionOperationId: () => 'operation-1'
+}))
+vi.mock('./use-structured-agent-session-sends', () => ({
+  useStructuredAgentSessionSends: () => ({
+    pending: [],
     error: null,
     send: mocks.outboxSend,
-    retry: vi.fn()
+    stopSends: vi.fn()
   })
 }))
 
@@ -59,7 +61,7 @@ beforeEach(() => {
 })
 
 /** Starts `/compact` and leaves its reply outstanding, then sends a message. */
-function sendDuringCommand(): boolean {
+function sendDuringCommand(): boolean | 'queued' {
   mocks.call.mockImplementation((_target: unknown, method: string) =>
     method === 'agentSession.conversationCommand' ? new Promise(() => {}) : Promise.resolve(null)
   )

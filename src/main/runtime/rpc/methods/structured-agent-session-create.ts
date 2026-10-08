@@ -36,6 +36,7 @@ import {
 export type PreparedStructuredAgentSessionCreate = {
   host: StructuredAgentSessionHost
   attachParams: AgentSessionAttachParams
+  hostLaunchDirectory?: string
   /** Null when the caller supplied its own location; only a resolved worktree publishes a tab. */
   tab: { workspaceId: string; agent: StructuredAgentId } | null
 }
@@ -100,9 +101,15 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
     fields: attachFingerprintFields({ ...resolved, envelope: args.envelope })
   })
   host ??= await args.ensureHost()
-  const { agent: _resolvedAgent, provider: _resolvedProvider, ...resolvedAttach } = resolved
+  const {
+    agent: _resolvedAgent,
+    provider: _resolvedProvider,
+    hostLaunchDirectory,
+    ...resolvedAttach
+  } = resolved
   return {
     host,
+    ...(hostLaunchDirectory ? { hostLaunchDirectory } : {}),
     attachParams: {
       ...resolvedAttach,
       // After the fingerprint, deliberately: `attachFingerprintFields` excludes options because
@@ -129,7 +136,11 @@ export async function commitStructuredAgentSessionCreate(args: {
   activate: boolean
 }): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
   const { prepared } = args
-  const result = await prepared.host.attach(args.caller, prepared.attachParams)
+  const result = prepared.hostLaunchDirectory
+    ? await prepared.host.attach(args.caller, prepared.attachParams, {
+        hostLaunchDirectory: prepared.hostLaunchDirectory
+      })
+    : await prepared.host.attach(args.caller, prepared.attachParams)
   if (!result.ok || !prepared.tab) {
     return result
   }

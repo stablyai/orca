@@ -101,6 +101,6 @@ describe('tool run sentences', () => {
     expect(screen.getByText('Subagente')).toBeInTheDocument()
     expect(screen.getByText('Flujo de trabajo en segundo plano')).toBeInTheDocument()
     expect(screen.getByText('Salida: /tmp/result.txt')).toBeInTheDocument()
-    expect(screen.getByText('bloqueado · falló')).toBeInTheDocument()
+    expect(screen.getByText('bloqueado · con error')).toBeInTheDocument()
   })
 })

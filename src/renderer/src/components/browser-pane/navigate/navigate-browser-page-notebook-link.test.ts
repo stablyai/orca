@@ -8,7 +8,7 @@ vi.mock('@/store', () => ({
   useAppStore: {
     getState: () => ({
       settings: {},
-      allWorktrees: () => [{ id: 'wt-1', path: '/repo' }],
+      getKnownWorktreeById: (id: string) => (id === 'wt-1' ? { id, path: '/repo' } : undefined),
       setActiveTabType: vi.fn(),
       ensureWorktreeRootGroup: () => 'group-1',
       openFile: mocks.openFile

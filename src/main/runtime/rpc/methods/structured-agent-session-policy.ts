@@ -1,5 +1,6 @@
 import {
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+  PI_STRUCTURED_DIALOGS_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
   STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
@@ -24,9 +25,7 @@ export function supportsStructuredAgentSessions(
   )
 }
 
-/** Whether a remote client renders `agent`'s chat: the one rule for every surface that withholds
- *  an agent's rows (tabs, restart offers). Codex needs structured support; Claude also its own
- *  capability; any other agent a client that renders the host's registered agents. */
+/** One audience rule for tabs and restart offers. Pi also needs dialog-shape support. */
 export function clientRendersStructuredAgent(
   clientCapabilities: readonly RuntimeCapability[] | undefined,
   agent: string
@@ -37,10 +36,25 @@ export function clientRendersStructuredAgent(
   if (agent === 'codex') {
     return true
   }
+  if (agent === 'pi' && !clientCapabilities.includes(PI_STRUCTURED_DIALOGS_RUNTIME_CAPABILITY)) {
+    return false
+  }
   return clientCapabilities.includes(
     agent === 'claude'
       ? CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
       : STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
+  )
+}
+
+/** Preserve the existing session audience for every agent except Pi. */
+export function clientReadsStructuredSessionAgent(
+  context: Pick<RpcContext, 'clientCapabilities' | 'clientKind'>,
+  agent: string
+): boolean {
+  return (
+    agent !== 'pi' ||
+    context.clientKind === undefined ||
+    clientRendersStructuredAgent(context.clientCapabilities, agent)
   )
 }
 

@@ -5,6 +5,10 @@ import { registerRendererRestartIpcRelays } from './renderer-restart-wiring'
 import { createUpdaterQuitAbortRelay } from '../shared/renderer-restart-preparation'
 import { ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT } from '../shared/updater-renderer-events'
 import {
+  OS_FILE_DROP_BOUNDARY_ATTRIBUTE,
+  OS_FILE_DROP_OWNER_ATTRIBUTE
+} from '../shared/native-file-drop-preparation'
+import {
   ORCA_INTERNAL_FILE_DRAG_TYPE,
   createNativeFileDropPayload,
   createRejectedNativeFileDropPayload,
@@ -88,6 +92,24 @@ function resolveNativeFileDrop(event: DragEvent): NativeDropResolution | null {
   return resolveNativeFileDropPath(pathEntries)
 }
 
+function nearestDropBoundaryIsMigrated(event: DragEvent): boolean {
+  for (const entry of event.composedPath()) {
+    if (!(entry instanceof HTMLElement)) {
+      continue
+    }
+    if (
+      entry.hasAttribute(OS_FILE_DROP_OWNER_ATTRIBUTE) ||
+      entry.hasAttribute(OS_FILE_DROP_BOUNDARY_ATTRIBUTE)
+    ) {
+      return true
+    }
+    if (entry.hasAttribute('data-native-file-drop-target')) {
+      return false
+    }
+  }
+  return false
+}
+
 /** Installs the one preload-side listener that converts native File objects to paths. */
 export function installNativeFileDropHandlers(): void {
   // Preload entry points can be evaluated more than once in tests and during development reloads;
@@ -101,6 +123,12 @@ export function installNativeFileDropHandlers(): void {
       if (event.dataTransfer && !hasNativeFileDragTypes(event.dataTransfer.types)) {
         return
       }
+      if (
+        hasNativeFileDragTypes(event.dataTransfer?.types) &&
+        nearestDropBoundaryIsMigrated(event)
+      ) {
+        return
+      }
       event.preventDefault()
       if (event.dataTransfer) {
         event.dataTransfer.dropEffect = 'copy'
@@ -112,6 +140,12 @@ export function installNativeFileDropHandlers(): void {
     'drop',
     (event) => {
       if (event.dataTransfer?.types.includes(ORCA_INTERNAL_FILE_DRAG_TYPE)) {
+        return
+      }
+      if (
+        hasNativeFileDragTypes(event.dataTransfer?.types) &&
+        nearestDropBoundaryIsMigrated(event)
+      ) {
         return
       }
       event.preventDefault()

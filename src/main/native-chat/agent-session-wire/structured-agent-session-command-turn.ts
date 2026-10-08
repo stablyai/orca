@@ -210,8 +210,8 @@ export async function handOverStructuredAgentSessionCommand(
       command: { clientMessageId, ...turn, running }
     })
   } catch (error) {
-    // A child that had not proven its start took nothing, so the command provably did not run. Any
-    // other throw is a lost reply: the command may have run.
+    // A child still starting throws only for a start that failed before the write, so the command
+    // provably did not run. Any other throw is a lost reply: the command may have run.
     const unsent =
       ctx.providerChildPhase?.() === 'starting'
         ? {

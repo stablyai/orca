@@ -1,8 +1,11 @@
 // Which restored draft images are known to be gone. A paste in Orca's paste folder asks main
-// whether it is still kept, which holds only for a file really inside that folder; any other image
-// goes through the existing existence check (the workspace's read rules locally, the host over SSH).
+// whether it is still kept, which holds only for a file really inside that folder; a file a paired
+// server stored for the chat is that server's to check, which its claim at send does; any other
+// image goes through the existing existence check (the workspace's read rules locally, the host
+// over SSH).
 
 import { useEffect, useSyncExternalStore } from 'react'
+import { isAgentSessionAttachmentStorePath } from '../../../../shared/agent-session-attachments'
 import type { NativeChatComposerDraftImage } from './native-chat-composer-draft-storage'
 import {
   isKeptLocalPaste,
@@ -37,7 +40,7 @@ export async function findMissingNativeChatComposerDraftImages(
   }
   await Promise.all(
     checkable
-      .filter((image) => !isKeptLocalPaste(image))
+      .filter((image) => !isKeptLocalPaste(image) && !isAgentSessionAttachmentStorePath(image.path))
       .map(async (image) => {
         try {
           const exists = await pathExists({

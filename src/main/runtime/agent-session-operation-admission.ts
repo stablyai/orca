@@ -11,6 +11,7 @@ import {
   type AgentSessionOperationClaim,
   type AgentSessionOperationDecision,
   type AgentSessionOperationOutcome,
+  type AgentSessionOperationOwnedPane,
   type AgentSessionOperationRow
 } from '../../shared/agent-session-operation-ledger'
 import {
@@ -19,7 +20,7 @@ import {
 } from '../../shared/agent-session-mutation-envelope'
 import type { AgentSessionMutationEnvelope } from '../../shared/agent-session-wire'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
-import type { AgentSessionStoreState } from './agent-session-record-store-file'
+import type { AgentSessionStoreState } from './agent-session-store-state'
 
 export type AgentSessionOperationAdmission = {
   callerKey: string
@@ -186,7 +187,7 @@ export function admitAgentSessionGlobalOperationInto(
 
 export function claimAgentSessionOperationInto(
   state: { operations: Map<string, AgentSessionOperationRow> },
-  args: { callerKey: string; operationId: string }
+  args: { callerKey: string; operationId: string; ownedPane?: AgentSessionOperationOwnedPane }
 ): AgentSessionOperationClaim {
   const claimed = claimAgentSessionOperation(state.operations, args)
   state.operations = claimed.rows
@@ -196,11 +197,16 @@ export function claimAgentSessionOperationInto(
 /** Whether an admission left the right to run open, so the same transaction should claim it. */
 export type ClaimAfterAdmission = (decision: AgentSessionOperationDecision) => boolean
 
+/** An admission whose claimant laid out a pane before its effect; recorded only if the claim wins. */
+export type AgentSessionOperationClaimingAdmission = AgentSessionOperationAdmission & {
+  ownedPane?: AgentSessionOperationOwnedPane
+}
+
 /** Admission and, when `claimAfter` says so, the claim, in one transaction: the same swap as
  *  `claimAgentSessionOperationInto`, with one durable write instead of two. */
 export function admitAndClaimAgentSessionOperationInto(
   state: { operations: Map<string, AgentSessionOperationRow> },
-  args: AgentSessionOperationAdmission,
+  args: AgentSessionOperationClaimingAdmission,
   claimAfter: ClaimAfterAdmission
 ): { decision: AgentSessionOperationDecision; claim: AgentSessionOperationClaim | null } {
   const decision = admitAgentSessionOperationInto(state, args)

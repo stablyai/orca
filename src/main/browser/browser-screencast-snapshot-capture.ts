@@ -8,6 +8,10 @@ import type {
   PendingScreencastFrame
 } from './browser-screencast-stream-types'
 import { positiveInteger, scaleSnapshotToFit } from './browser-screencast-viewport-fit'
+import { withTimeout } from '../../shared/promise-timeout-fallback'
+
+// Why: a hung capture would also wedge the viewport updates and stop queued behind it.
+const SNAPSHOT_CAPTURE_TIMEOUT_MS = 10_000
 
 type BrowserScreencastSnapshotCaptureDeps = {
   webContents: WebContents
@@ -89,12 +93,19 @@ export function createBrowserScreencastSnapshotCapture(
                   height: viewportHeight
                 })
               )
-              const nativeImage = await browserCaptureIdle.trackNative(webContents, nativeCapture)
-              const capture = scaleSnapshotToFit(nativeImage, options)
-              const buffer =
-                options.format === 'png' ? capture.toPNG() : capture.toJPEG(options.quality)
-              if (buffer.byteLength > 0) {
-                image = new Uint8Array(buffer)
+              // A timeout releases the stream queue, but the real capture still blocks layout changes.
+              const nativeImage = await withTimeout(
+                browserCaptureIdle.trackNative(webContents, nativeCapture),
+                SNAPSHOT_CAPTURE_TIMEOUT_MS,
+                null
+              )
+              if (nativeImage) {
+                const capture = scaleSnapshotToFit(nativeImage, options)
+                const buffer =
+                  options.format === 'png' ? capture.toPNG() : capture.toJPEG(options.quality)
+                if (buffer.byteLength > 0) {
+                  image = new Uint8Array(buffer)
+                }
               }
             } catch {
               image = null

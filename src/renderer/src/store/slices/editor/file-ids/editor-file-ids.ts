@@ -1,6 +1,7 @@
 import type { AppState } from '../../../types'
 import type { EditorSlice } from '../types/editor-slice'
 import type { DiffSource, EditorOpenTargetOptions, OpenFile } from '../types/open-file'
+import { toSshExecutionHostId } from '../../../../../../shared/execution-host'
 import { areLocalWindowsWslPathAliases } from '../../../../../../shared/cross-platform-path'
 import { getConnectionIdForFileFromState } from '@/lib/connection-owner-resolution'
 import { isLocalWindowsDesktopClient } from '@/lib/desktop-window-chrome'
@@ -18,6 +19,25 @@ export function isSameEditorOwner(
     file.worktreeId === worktreeId &&
     runtimeOwnerKey(file.runtimeEnvironmentId) === runtimeOwnerKey(runtimeEnvironmentId)
   )
+}
+
+export function mayShareEditorBackingFile(candidate: OpenFile, file: OpenFile): boolean {
+  if (
+    candidate.filePath !== file.filePath ||
+    runtimeOwnerKey(candidate.runtimeEnvironmentId) !== runtimeOwnerKey(file.runtimeEnvironmentId)
+  ) {
+    return false
+  }
+  const candidateHost =
+    candidate.operationProvenance?.generation.route.executionHostId ??
+    (candidate.externalSshTargetId
+      ? toSshExecutionHostId(candidate.externalSshTargetId)
+      : undefined)
+  const fileHost =
+    file.operationProvenance?.generation.route.executionHostId ??
+    (file.externalSshTargetId ? toSshExecutionHostId(file.externalSshTargetId) : undefined)
+  // Missing provenance cannot prove that a retained view uses a different backing file.
+  return !candidateHost || !fileHost || candidateHost === fileHost
 }
 
 export function canReuseLocalWslAlias(

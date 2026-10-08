@@ -158,6 +158,35 @@ vi.mock('@/components/ui/dropdown-menu', () => {
   }
 })
 
+// Same test ids as the dropdown mock: the model pill is a popover, the options pill a menu.
+vi.mock('@/components/ui/popover', () => ({
+  Popover: ({ children, open }: { children: React.ReactNode; open?: boolean }) => (
+    <div data-testid="dropdown-root" data-open={open ? 'true' : 'false'}>
+      {children}
+    </div>
+  ),
+  PopoverTrigger: ({ children, disabled }: { children: React.ReactNode; disabled?: boolean }) => (
+    <div data-disabled={disabled || undefined}>{children}</div>
+  ),
+  PopoverContent: ({
+    children,
+    side,
+    collisionPadding
+  }: {
+    children: React.ReactNode
+    side?: string
+    collisionPadding?: number
+  }) => (
+    <div
+      data-testid="session-option-menu"
+      data-side={side}
+      data-collision-padding={collisionPadding}
+    >
+      {children}
+    </div>
+  )
+}))
+
 import { NativeChatSessionOptionPickers } from './NativeChatSessionOptionPickers'
 
 const surface = {
@@ -266,6 +295,19 @@ describe('NativeChatSessionOptionPickers', () => {
           ?.getAttribute('data-open')
       ).toBe('true')
     )
+  })
+
+  it('sends a picked model to the session surface', async () => {
+    const setOption = vi.fn().mockResolvedValue({ snapshot: [] })
+    render(
+      <NativeChatSessionOptionPickers
+        surface={{ ...surface, setOption }}
+        snapshot={[model()]}
+        isWorking={false}
+      />
+    )
+    screen.getByRole('option', { name: 'Sonnet 5' }).click()
+    await waitFor(() => expect(setOption).toHaveBeenCalledExactlyOnceWith('model', 'sonnet'))
   })
 
   it('prefers collision-aware upward placement for model and option menus', () => {

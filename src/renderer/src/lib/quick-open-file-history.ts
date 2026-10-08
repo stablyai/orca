@@ -1,3 +1,5 @@
+import { useSyncExternalStore } from 'react'
+import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
@@ -51,7 +53,16 @@ export function readQuickOpenHistory(scope: string | null): readonly string[] {
   return scope ? (historyMap().get(scope) ?? EMPTY_HISTORY) : EMPTY_HISTORY
 }
 
-export function subscribeQuickOpenHistory(listener: () => void): () => void {
+export function useQuickOpenHistory(
+  worktreeId: string | null,
+  root: string | null
+): readonly string[] {
+  const scope =
+    worktreeId && root ? quickOpenHistoryScope(useAppStore.getState(), worktreeId, root) : null
+  return useSyncExternalStore(subscribeQuickOpenHistory, () => readQuickOpenHistory(scope))
+}
+
+function subscribeQuickOpenHistory(listener: () => void): () => void {
   listeners.add(listener)
   return () => {
     listeners.delete(listener)

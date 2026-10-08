@@ -389,6 +389,76 @@ describe('structured session acquisition options', () => {
     expect(store.getRecord(SESSION)?.options).toEqual({ model: 'gpt-standard' })
   })
 
+  it('proves an opened Codex owner from effective options without reading its catalog', async () => {
+    root = await mkdtemp(join(tmpdir(), 'orca-acquisition-known-options-'))
+    const store = await openTestAgentSessionRecordStore(root)
+    const sessionAdapter: StructuredAgentSessionAdapter = {
+      ...adapter({ origin: 'created' }),
+      readOptions: vi.fn(async () => {
+        throw new Error('model list unavailable')
+      }),
+      readAcquisitionOptions: vi.fn(() => ({ model: 'gpt-reported', effort: 'high' }))
+    }
+
+    const created = await performAttach({
+      agents: NO_STRUCTURED_AGENTS,
+      logger: createStructuredAgentSessionLogger(),
+      store,
+      adapter: sessionAdapter,
+      openConversation: openTestAttachConversation(openTestJournalHostDatabase(root!)),
+      authority: {
+        spawnToken: 'spawn-a',
+        claimKeyId: 'key-1',
+        handoffOperationId: CREATE_OPERATION,
+        probe: { outcome: 'reservation-unused' }
+      },
+      callerKey: 'client-1',
+      params: attachParams(CREATE_OPERATION, null, { model: 'gpt-saved', effort: 'medium' }),
+      now: () => NOW,
+      onAttached: () => {}
+    })
+
+    expect(created).toMatchObject({ ok: true })
+    expect(sessionAdapter.readOptions).not.toHaveBeenCalled()
+    expect(store.getRecord(SESSION)?.options).toEqual({ model: 'gpt-reported', effort: 'high' })
+    expect(store.getRecord(SESSION)?.lease.claimStatus).toBe('live')
+  })
+
+  it('retains saved options when an opened Codex thread reports no effective model', async () => {
+    root = await mkdtemp(join(tmpdir(), 'orca-acquisition-saved-options-'))
+    const store = await openTestAgentSessionRecordStore(root)
+    const sessionAdapter: StructuredAgentSessionAdapter = {
+      ...adapter({ origin: 'created' }),
+      readOptions: vi.fn(async () => {
+        throw new Error('model list unavailable')
+      }),
+      readAcquisitionOptions: vi.fn(() => undefined)
+    }
+    const options = { model: 'gpt-saved', effort: 'medium' }
+
+    const created = await performAttach({
+      agents: NO_STRUCTURED_AGENTS,
+      logger: createStructuredAgentSessionLogger(),
+      store,
+      adapter: sessionAdapter,
+      openConversation: openTestAttachConversation(openTestJournalHostDatabase(root!)),
+      authority: {
+        spawnToken: 'spawn-a',
+        claimKeyId: 'key-1',
+        handoffOperationId: CREATE_OPERATION,
+        probe: { outcome: 'reservation-unused' }
+      },
+      callerKey: 'client-1',
+      params: attachParams(CREATE_OPERATION, null, options),
+      now: () => NOW,
+      onAttached: () => {}
+    })
+
+    expect(created).toMatchObject({ ok: true })
+    expect(store.getRecord(SESSION)?.options).toEqual(options)
+    expect(sessionAdapter.readOptions).not.toHaveBeenCalled()
+  })
+
   it('releases an acquisition when provider options cannot be read', async () => {
     root = await mkdtemp(join(tmpdir(), 'orca-acquisition-options-failure-'))
     const store = await openTestAgentSessionRecordStore(root)

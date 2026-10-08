@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import type { AgentJournalItemBody } from '../../../shared/agent-session-journal-types'
+import type {
+  AgentJournalItemBody,
+  AgentJournalMessageItem
+} from '../../../shared/agent-session-journal-types'
 import {
   AgentSessionRewindRecordSchema,
   type AgentSessionRewindRecord
@@ -142,6 +145,44 @@ describe('rewind keeps each retained row attributed', () => {
     expect(scopeOf(codexKey('b', 1))).toEqual({ kind: 'turn', turnItemId: commandTurn })
     // No record to join: the rebuilt epoch places it by position.
     expect(scopeOf(codexKey('c', 1))).toBeUndefined()
+  })
+})
+
+describe("a rewind keeps another agent's messages its", () => {
+  const from = {
+    kind: 'agent' as const,
+    senders: [
+      {
+        party: { address: 'term_a', terminalHandle: 'term_a', orcaSessionId: null },
+        name: 'Worker'
+      }
+    ],
+    orchestration: null
+  }
+  const user = (text: string): AgentJournalMessageItem => ({
+    kind: 'message',
+    role: 'user',
+    blocks: [{ type: 'text', text }]
+  })
+
+  it("puts the sender back on the provider's copy, which never carries it", () => {
+    const itemId = codexKey('turn-1', 0)
+    const merged = mergeRetainedHostLifecycleRows(
+      [retained(itemId, { ...user('You have 1 orchestration message.'), from })],
+      [providerItem(itemId, user('You have 1 orchestration message.'))]
+    )
+    expect(merged).toHaveLength(1)
+    expect(merged[0]?.body).toMatchObject({ from })
+  })
+
+  it("leaves the person's own message, and a provider row of another role, without one", () => {
+    const own = codexKey('turn-1', 0)
+    const answer = codexKey('turn-1', 1)
+    const merged = mergeRetainedHostLifecycleRows(
+      [retained(own, user('mine')), retained(answer, { ...user('hi'), from })],
+      [providerItem(own, user('mine')), providerItem(answer, prose('hi'))]
+    )
+    expect(merged.map((row) => 'from' in row.body)).toEqual([false, false])
   })
 })
 

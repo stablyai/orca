@@ -49,6 +49,7 @@ import {
   newestStructuredAgentSessionTurn
 } from '../../../shared/structured-agent-session-live-turn'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import { isUnansweredHandedOverSubmission } from '../agent-session-journal/journal-unsent-send-hold'
 import { structuredAgentSessionShownStatus } from './structured-agent-session-shown-work'
 
 /** A send Orca journaled that the provider has neither opened a turn for nor refused. Mirrors the
@@ -172,6 +173,8 @@ export function structuredAgentSessionWorkingAtStop(input: {
   getRecord: (sessionId: string) => AgentSessionRecord | null
   /** The session's child records, the same read the status feed publishes. */
   childWork: (sessionId: string) => readonly AgentChildWorkView[] | undefined
+  /** False when the session's live child never answered its start; the exit reads the same fact. */
+  startAnswered?: (sessionId: string) => boolean | undefined
   trigger: AgentSessionResumeTrigger
   /** Stable teardown identity for continuation deduplication, not launch ancestry. */
   teardownId: string
@@ -182,9 +185,13 @@ export function structuredAgentSessionWorkingAtStop(input: {
     return null
   }
   const snapshot = session.journal.snapshot()
-  // A queued message reached no agent, so it is no work to resume: the next open settles it.
+  // A queued message reached no agent, and one handed to a start that never answered ran nowhere:
+  // neither is work to resume. The next open or the exit keeps it as unsent.
+  const unanswered = input.startAnswered?.(sessionId) === false
   const handedOver = snapshot.submissions.filter(
-    (submission) => !isQueuedAgentJournalSubmission(submission)
+    (submission) =>
+      !isQueuedAgentJournalSubmission(submission) &&
+      !(unanswered && isUnansweredHandedOverSubmission(submission))
   )
   const childWork = input.childWork(sessionId)
   const status = structuredAgentSessionShownStatus(

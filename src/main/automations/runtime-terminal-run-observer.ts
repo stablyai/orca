@@ -3,10 +3,13 @@ import type {
   AutomationRunCompletionObservation,
   AutomationRunTerminalObserver
 } from './run-completion-watcher'
-import type { AutomationRunOutputSnapshot } from '../../shared/automations-types'
+import type { AutomationRun, AutomationRunOutputSnapshot } from '../../shared/automations-types'
+import { judgeIdleRun, type AutomationRunAgentEvidence } from './automation-run-agent-evidence'
 
 const TERMINAL_SNAPSHOT_LIMIT = 2_000
 
+/** Cadence for re-checking an idle pane whose agent has not reported yet. */
+const AGENT_EVIDENCE_POLL_INTERVAL_MS = 1_000
 /** Cadence for re-probing a pane that already satisfied tui-idle at dispatch. */
 const AGENT_START_POLL_INTERVAL_MS = 250
 /** Kept under the runtime's 2s tui-idle fallback poll so a probe waiter is torn
@@ -32,6 +35,63 @@ export type AutomationRunTerminalHost = {
     options?: { condition?: 'tui-idle'; timeoutMs?: number; signal?: AbortSignal }
   ): Promise<{ satisfied: boolean; blockedReason?: string }>
   readTerminal(handle: string, opts?: { limit?: number }): Promise<{ tail: string[] }>
+}
+
+async function readTail(runtime: AutomationRunTerminalHost, handle: string): Promise<string[]> {
+  try {
+    return (await runtime.readTerminal(handle, { limit: TERMINAL_SNAPSHOT_LIMIT })).tail
+  } catch {
+    return []
+  }
+}
+
+function snapshotOf(tail: readonly string[]): AutomationRunOutputSnapshot | null {
+  const snapshotBuffer = createHeadlessAutomationOutputSnapshotBuffer()
+  snapshotBuffer.append(tail.join('\n'))
+  return snapshotBuffer.snapshot()
+}
+
+/** A satisfied wait judged by the run's agent evidence; null while the agent may still start. */
+async function judgeIdleTail(
+  tail: readonly string[],
+  evidence: AutomationRunAgentEvidence,
+  run: AutomationRun,
+  runStartedAt: number
+): Promise<AutomationRunCompletionObservation | null> {
+  const verdict = judgeIdleRun(evidence, run, tail, runStartedAt, Date.now())
+  if (verdict.kind === 'wait') {
+    return null
+  }
+  return verdict.kind === 'completed'
+    ? { status: 'completed', outputSnapshot: snapshotOf(tail), error: null }
+    : { status: 'dispatch_failed', outputSnapshot: snapshotOf(tail), error: verdict.error }
+}
+
+/**
+ * After a satisfied wait inside the agent-start window. An idle shell never produces a new idle
+ * edge, so a fresh wait would only time out; instead the pane stays idle while its output is
+ * unchanged, and that state is re-judged until the window passes or the agent reports.
+ * Null once the pane changes: something is running, so the caller waits again.
+ */
+async function settleIdlePane(
+  runtime: AutomationRunTerminalHost,
+  handle: string,
+  judged: { evidence: AutomationRunAgentEvidence; run: AutomationRun },
+  runStartedAt: number,
+  signal: AbortSignal
+): Promise<AutomationRunCompletionObservation | null> {
+  const idleTail = (await readTail(runtime, handle)).join('\n')
+  for (;;) {
+    const tail = await readTail(runtime, handle)
+    if (tail.join('\n') !== idleTail) {
+      return null
+    }
+    const observation = await judgeIdleTail(tail, judged.evidence, judged.run, runStartedAt)
+    if (observation) {
+      return observation
+    }
+    await sleep(AGENT_EVIDENCE_POLL_INTERVAL_MS, signal)
+  }
 }
 
 function isTerminalWaitTimeout(error: unknown): boolean {
@@ -146,19 +206,25 @@ async function buildUnobservedObservation(
 }
 
 export function createRuntimeAutomationRunTerminalObserver(
-  runtime: AutomationRunTerminalHost
+  runtime: AutomationRunTerminalHost,
+  /** Judges idle panes by the agent's own status; without it, an idle pane after the busy edge completes. */
+  evidence?: AutomationRunAgentEvidence
 ): AutomationRunTerminalObserver {
   return {
     resolveRunTerminal: (run) =>
       run.terminalPaneKey ? runtime.getTerminalHandleForPaneKey(run.terminalPaneKey) : null,
-    observeCompletion: async (handle, { signal }) => {
+    observeCompletion: async (handle, { signal, run }) => {
       const startedAt = Date.now()
+      const judged = evidence && run?.terminalPaneKey ? { evidence, run } : null
+      // The run's own start bounds which agent status counts and when idleness is believed.
+      const runStartedAt = run?.startedAt ?? run?.dispatchedAt ?? startedAt
       // Why: tui-idle is level-triggered, so a reused pane still idle from the
       // PREVIOUS run satisfies it before this run's agent has typed a character.
       // Evidence that predates dispatch proves nothing about this run, so require
       // the pane to leave that state first — the busy edge the renderer's own
       // dispatch observer requires on reuse (requireWorkingAfterStart).
-      if (await isTuiIdleSatisfiedNow(runtime, handle, signal)) {
+      // Agent evidence already discounts a previous run's idleness, so it skips the busy edge.
+      if (!judged && (await isTuiIdleSatisfiedNow(runtime, handle, signal))) {
         const started = await waitForAgentStart(
           runtime,
           handle,
@@ -177,7 +243,13 @@ export function createRuntimeAutomationRunTerminalObserver(
       for (;;) {
         try {
           const wait = await runtime.waitForTerminal(handle, { condition: 'tui-idle', signal })
-          return await buildObservation(runtime, handle, wait)
+          if (!judged || !wait.satisfied) {
+            return await buildObservation(runtime, handle, wait)
+          }
+          const observation = await settleIdlePane(runtime, handle, judged, runStartedAt, signal)
+          if (observation) {
+            return observation
+          }
         } catch (error) {
           // Why: tui-idle waits expire on their own schedule; an agent still
           // working past that window is live, so re-arm rather than fail it.

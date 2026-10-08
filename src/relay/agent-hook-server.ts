@@ -1,4 +1,7 @@
-import { inferRelayClaudeInterrupt } from './agent-hook-interrupt-reconciliation'
+import {
+  inferRelayClaudeInterrupt,
+  type RelayInterruptHost
+} from './agent-hook-interrupt-reconciliation'
 import { applyRelayHookEvent } from './agent-hook-event-admission'
 import { RelayAgentHookCanonicalStatus } from './agent-hook-canonical-status'
 import type {
@@ -42,7 +45,11 @@ import { buildRelayHookPtyEnv, defaultEndpointDir } from './agent-hook-endpoint-
 import { buildRelayHookEnvelope } from './agent-hook-envelope-build'
 import { drainRelayHookSpool, ingestRelayHookSpoolRecord } from './agent-hook-spool-ingest'
 import { AgentHookResultRetryScheduler } from './agent-hook-result-retry-scheduler'
-import { selectReplayableCachedPanes } from './agent-hook-cached-pane-status'
+import {
+  selectReplayableCachedPanes,
+  type CachedPaneEnvelopeMeta
+} from './agent-hook-cached-pane-status'
+import { createRelayClaudeTerminalInterrupts } from './claude-terminal-interrupt-status'
 
 export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
   private server: ReturnType<typeof createServer> | null = null
@@ -58,10 +65,7 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
   })
   // Why: retain envelope metadata so replays match live POSTs.
   // Invariant: keys mirror state.lastStatusByPaneKey, populated/cleared in lockstep.
-  private lastEnvelopeMetaByPaneKey = new Map<
-    string,
-    { source: AgentHookSource; env?: string; version?: string }
-  >()
+  private lastEnvelopeMetaByPaneKey = new Map<string, CachedPaneEnvelopeMeta>()
   private forward: RelayHookForward
   private isPaneSurfaceRetired: (paneKey: string) => boolean
   private getAgentLaunchToken: (paneKey: string) => string | undefined
@@ -70,6 +74,9 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
   private portFallbackApplied = false
   private readonly presenceChecks = new RelayAgentPresence()
   private retryScheduler: AgentHookResultRetryScheduler
+  readonly claudeTerminalInterrupts = createRelayClaudeTerminalInterrupts(this.state, () =>
+    this.relayInterruptHost()
+  )
 
   constructor(options: RelayHookServerOptions) {
     super()
@@ -181,6 +188,7 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
     this.stopCanonicalHooks()
     this.retryScheduler.clearAll()
     clearAllListenerCaches(this.state)
+    this.claudeTerminalInterrupts.clear()
     this.lastEnvelopeMetaByPaneKey.clear()
   }
 
@@ -204,26 +212,27 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
   }
 
   inferInterrupt(request: unknown): boolean {
-    return inferRelayClaudeInterrupt(
-      {
-        state: this.state,
-        isListening: this.server !== null,
-        getMetadata: (paneKey) => this.lastEnvelopeMetaByPaneKey.get(paneKey),
-        getAgentLaunchToken: this.getAgentLaunchToken,
-        isPaneBlocked: (paneKey) =>
-          this.isCanonicalPane(paneKey) || this.isPaneSurfaceRetired(paneKey),
-        apply: (event, meta) =>
-          this.applyEvent(event, meta.source, meta.env, meta.version, { checkPresence: false }),
-        armExpiry: (paneKey, meta) =>
-          this.retryScheduler.armClaudeOwedNotificationExpiry(
-            meta.source,
-            paneKey,
-            meta.env,
-            meta.version
-          )
-      },
-      request
-    )
+    return inferRelayClaudeInterrupt(this.relayInterruptHost(), request)
+  }
+
+  private relayInterruptHost(): RelayInterruptHost {
+    return {
+      state: this.state,
+      isListening: this.server !== null,
+      getMetadata: (paneKey) => this.lastEnvelopeMetaByPaneKey.get(paneKey),
+      getAgentLaunchToken: this.getAgentLaunchToken,
+      isPaneBlocked: (paneKey) =>
+        this.isCanonicalPane(paneKey) || this.isPaneSurfaceRetired(paneKey),
+      apply: (event, meta) =>
+        this.applyEvent(event, meta.source, meta.env, meta.version, { checkPresence: false }),
+      armExpiry: (paneKey, meta) =>
+        this.retryScheduler.armClaudeOwedNotificationExpiry(
+          meta.source,
+          paneKey,
+          meta.env,
+          meta.version
+        )
+    }
   }
 
   checkAgentPresence(paneKey: string): Promise<void> {
@@ -242,6 +251,7 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
 
   /** Drop a paneKey's cached entries on PTY exit so a terminated pane can't resurface as a ghost event on reconnect. */
   clearPaneState(paneKey: string, preserveTmuxInnerSubjects = false): void {
+    this.claudeTerminalInterrupts.observe(paneKey, { kind: 'reset' })
     if (!preserveTmuxInnerSubjects) {
       this.clearCanonicalPane(paneKey)
     }

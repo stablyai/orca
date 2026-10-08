@@ -450,7 +450,7 @@ relay_gce_cells = {
     connection_hard_cap         = 3000
     connection_unobserved_bound = 60
   }
-  # Asia spare: registered migration-only as a drain landing zone; c completes the 2/2/2 zone spread.
+  # Sixth Asia cell: launched as a migration-only spare, now general; c completes the 2/2/2 zone spread.
   "production-gce-c34" = {
     hostname                    = "c34"
     region                      = "asia-east2"

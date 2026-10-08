@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { evaluateOrcadActivation } from './orcad-activation-gate'
+import { classifyOrcadHostUnavailable } from './orcad-host-unavailable'
 import type { ServeReadiness } from '../server/serve-readiness'
 import type { OrcadHealth, TerminalDaemonHealth } from '../orcad/orcad-health'
 
@@ -85,6 +86,8 @@ describe('evaluateOrcadActivation', () => {
       EXPECTED
     )
     expect(verdict).toMatchObject({ decision: 'reject', code: 'orcad_activation_daemon_absent' })
+    // A cold daemon start is transient: the host must stay eligible for the next connect's deploy.
+    expect(classifyOrcadHostUnavailable({ code: 'orcad_activation_daemon_absent' })).toBeNull()
   })
 
   it('refuses a degraded daemon, whose fresh terminals would not survive a restart', () => {

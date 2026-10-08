@@ -103,6 +103,22 @@ describe('launchDaemonChild identity', () => {
   })
 })
 
+describe('launchDaemonChild startup budget', () => {
+  it('waits for readiness past the default 10 s when the caller allows it', async () => {
+    vi.useFakeTimers()
+    const child = fakeDaemonChild(4242)
+    spawnDaemonChildProcessMock.mockReturnValue(child)
+    try {
+      const launch = launchDaemonChild({ ...LAUNCH_OPTIONS, startupTimeoutMs: 30_000 })
+      await vi.advanceTimersByTimeAsync(20_000)
+      child.emit('message', { type: 'ready', pid: 4242, startedAtMs: 1_000_000 })
+      await expect(launch).resolves.toMatchObject({ identity: { pid: 4242 } })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+
 describe('launchDaemonChild durable-scope fallback', () => {
   it('retries once without cgroup isolation when the scoped attempt fails', async () => {
     isDurableDaemonScopeSupportedMock.mockReturnValue(true)

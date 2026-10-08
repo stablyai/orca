@@ -152,7 +152,10 @@ export async function recoverStructuredRewind(
   if (
     alreadyReplaced &&
     !isDeepStrictEqual(
-      journal.snapshot().items.map(({ itemId, body }) => ({ itemId, body })),
+      journal.snapshot().items.map(({ itemId }) => ({
+        itemId,
+        body: journal.itemBody(itemId)
+      })),
       replacement.map(({ identity, body }) => ({ itemId: agentJournalItemKey(identity), body }))
     )
   ) {

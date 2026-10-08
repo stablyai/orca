@@ -4,7 +4,6 @@ import { getNativeChatCommandReply } from '../../../../shared/native-chat-agent-
 import { deriveNativeChatContextUsage } from '../../../../shared/native-chat-context-usage'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { ompModelSelector } from '../../../../shared/omp-model-list-probe'
-import { pushHistory, type HistoryState } from './native-chat-composer-state'
 import {
   formatNativeChatContextUsageAnswer,
   formatNativeChatContextUsageUnreported
@@ -79,11 +78,11 @@ export function answerNativeChatCommandInComposer(args: {
   answerCommandLocally?: NativeChatLocalCommandAnswer
   sessionOptionsSurface: NativeChatPtySessionOptionsSurface | null
   onSlashCommand?: (command: string, output?: string) => void
-  setHistory: Dispatch<SetStateAction<HistoryState>>
+  onSubmitted?: () => void
   setDraft: (value: string) => void
   setCaret: Dispatch<SetStateAction<number>>
   clearSkillOrigin: () => void
-  setNotice: Dispatch<SetStateAction<string | null>>
+  setNotice: (notice: string | null) => void
 }): boolean {
   const command = args.draft.trim()
   const answer =
@@ -95,7 +94,7 @@ export function answerNativeChatCommandInComposer(args: {
     return false
   }
   args.onSlashCommand?.(command, answer)
-  args.setHistory((previous) => pushHistory(previous, args.draft))
+  args.onSubmitted?.()
   args.setDraft('')
   args.setCaret(0)
   args.clearSkillOrigin()

@@ -39,6 +39,8 @@ import {
 import { resettleOpenStructuredAgentSessionConversation } from './structured-agent-session-conversation-open'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { withNativeChatCutTurnNotices } from '../../../shared/native-chat-cut-turn-notice'
+import { latestNativeChatOrcaStopCut } from '../../../shared/native-chat-orca-stop-cut'
+import { beginAgentSessionRuntimeRecord } from '../../runtime/agent-session-runtime-end-record'
 import { STRUCTURED_AGENT_SESSION_IDLE_MS } from './structured-agent-session-idle-sweep'
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 import {
@@ -358,6 +360,41 @@ describe('a turn a read reached before the reconcile proved its owner dead', () 
         verdict: timing?.verdict
       })
     ).toEqual({ key: 'workedFor', duration: '27s' })
+  })
+
+  it('explains the turn its proof revised, so the cut reads once and offers Continue', async () => {
+    // The Orca that crashed recorded that it started, and never that it ended.
+    const crashed = crashedClaudeRecord()
+    const ownerProcess = crashed.lease.ownerProcess
+    if (!ownerProcess) {
+      throw new Error('the crashed record has no owner')
+    }
+    await seedTestAgentSessionRecordStore(root, {
+      records: [
+        {
+          ...crashed,
+          lease: { ...crashed.lease, ownerProcess: { ...ownerProcess, runtime: 'runtime-crashed' } }
+        }
+      ]
+    })
+    beginAgentSessionRuntimeRecord(root, 'runtime-crashed', TOOL_STARTED_AT - 60_000)
+    store = await openTestAgentSessionRecordStore(root)
+    openHost({ probeOwner: async () => ({ outcome: 'pid-absent' }) })
+    expect(await settledTurn()).toEqual(UNVERIFIABLE_TURN)
+
+    await host.reconcileRestartLeases()
+    await drainSession()
+
+    const { items } = await host.journalSnapshot(SESSION)
+    const turnItemId = items.find((item) => item.body.kind === 'turn')?.itemId
+    expect(items.flatMap((item) => (item.body.kind === 'status' ? [item.turnScope] : []))).toEqual([
+      { kind: 'turn', turnItemId }
+    ])
+    expect(latestNativeChatOrcaStopCut(items, [])).toEqual({ turnItemId, cause: 'crash' })
+    const readerRows = withNativeChatCutTurnNotices(items, { agentName: 'Claude' }).filter(
+      (item) => item.body.kind === 'status'
+    )
+    expect(readerRows).toHaveLength(1)
   })
 
   it('revises nothing twice, whoever re-runs the settle', async () => {

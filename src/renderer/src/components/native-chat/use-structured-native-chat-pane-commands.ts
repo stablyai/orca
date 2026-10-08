@@ -21,6 +21,7 @@ export function useStructuredNativeChatPaneCommands({
   isVisible,
   rootRef,
   composerRef,
+  questionAnswerInputRef,
   terminalPaneActions,
   sessionId,
   target
@@ -30,6 +31,7 @@ export function useStructuredNativeChatPaneCommands({
   isVisible: boolean
   rootRef: RefObject<HTMLDivElement | null>
   composerRef: RefObject<NativeChatComposerHandle | null>
+  questionAnswerInputRef: RefObject<HTMLInputElement | null>
   terminalPaneActions?: Omit<NativeChatContextMenuActions, 'onPaste'>
   sessionId: string
   target: RuntimeClientTarget
@@ -42,7 +44,11 @@ export function useStructuredNativeChatPaneCommands({
         : undefined,
     [sessionId, target]
   )
-  const pasteClipboardIntoComposer = useNativeChatPasteBridge({ rootRef, composerRef })
+  const pasteClipboardIntoComposer = useNativeChatPasteBridge({
+    rootRef,
+    composerRef,
+    questionAnswerInputRef
+  })
   const contextMenu = useNativeChatContextMenu({
     rootRef,
     actions: {
@@ -52,6 +58,7 @@ export function useStructuredNativeChatPaneCommands({
     },
     enabled: isVisible,
     resolveOrcaSessionId,
+    composerRef,
     showTerminalPaneActions: terminalPaneActions !== undefined,
     splitShortcutLabels: {
       right: formatShortcutLabel('terminal.splitRight', keybindings),

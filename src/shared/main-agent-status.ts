@@ -13,6 +13,9 @@ export type AgentMainAgentStatus = {
    *  new turn clears it. ABSENT MEANS UNKNOWN — a plain Stop never infers `success`, because an
    *  older provider that omits its interrupt flag would turn a cancel into a false success. */
   outcome?: AgentTurnOutcome
+  /** Present only while `state` is `working`: a person's Stop is ending this turn. Published by a
+   *  structured session's host; readers present it ("Stopping…") and never store it. */
+  stopping?: true
   /** When the main agent's own `state` first appeared (ms). The row's `stateStartedAt` dates the
    *  combined state instead, so the two differ while child work holds the row open. */
   stateStartedAt: number
@@ -28,5 +31,10 @@ export function mainAgentStatusEqual(
   if (!a || !b) {
     return false
   }
-  return a.state === b.state && a.outcome === b.outcome && a.stateStartedAt === b.stateStartedAt
+  return (
+    a.state === b.state &&
+    a.outcome === b.outcome &&
+    a.stopping === b.stopping &&
+    a.stateStartedAt === b.stateStartedAt
+  )
 }

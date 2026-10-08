@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentJournalRenderItem, AgentJournalSubmission } from './agent-session-journal-types'
-import type { AgentSessionHistoryPage } from './agent-session-wire'
+import type { AgentSessionHistoryPage, AgentSessionLatestTurn } from './agent-session-wire'
+import { runningStructuredAgentSessionTurnId } from './structured-agent-session-live-turn'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession
@@ -532,6 +533,66 @@ describe('structured agent session reducer', () => {
 
     expect(cleared.activity).toBeNull()
     expect(cleared.items).toBe(active.items)
+  })
+
+  describe("the host's newest turn record", () => {
+    const turnRow = (state: 'running' | 'completed'): AgentJournalRenderItem => ({
+      itemId: 'turn-record',
+      revision: state === 'running' ? 1 : 2,
+      sequence: 1,
+      observedAt: 1,
+      body: { kind: 'turn', turnId: 'turn-1', state }
+    })
+    const hostTurn = (state: 'running' | 'completed'): AgentSessionLatestTurn => ({
+      itemId: 'turn-record',
+      observedAt: 1,
+      turn: { turnId: 'turn-1', state }
+    })
+    const opened = () =>
+      reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
+        type: 'event',
+        event: {
+          type: 'snapshot',
+          sessionId: 'session-a',
+          fence: 1,
+          page: { ...hydrationPage([turnRow('running')]), latestTurn: hostTurn('running') }
+        }
+      })
+    const batch = (
+      state: ReturnType<typeof opened>,
+      items: AgentJournalRenderItem[],
+      latestTurn?: AgentSessionLatestTurn | null
+    ) =>
+      reduceStructuredAgentSession(state, {
+        type: 'event',
+        event: {
+          type: 'batch',
+          sessionId: 'session-a',
+          batch: {
+            cursor: { epoch: 'epoch-a', sequence: state.cursor!.sequence + items.length },
+            items,
+            removedItemIds: [],
+            submissions: []
+          },
+          activity: { turnId: 'turn-1', text: 'Reading' },
+          ...(latestTurn !== undefined ? { latestTurn } : {})
+        }
+      })
+
+    it('keeps it across a frame that carries no rows, and takes the next one rows carry', () => {
+      const quiet = batch(opened(), [])
+      expect(quiet.latestTurn).toEqual(hostTurn('running'))
+      const ended = batch(quiet, [turnRow('completed')], hostTurn('completed'))
+      expect(ended.latestTurn).toEqual(hostTurn('completed'))
+      expect(runningStructuredAgentSessionTurnId(ended)).toBeNull()
+    })
+
+    it('falls back to the loaded rows when rows arrive without it, as from an older host', () => {
+      // A cursor resume against a downgraded host: its rows end the turn but restate nothing.
+      const downgraded = batch(opened(), [turnRow('completed')])
+      expect(downgraded.latestTurn).toBeUndefined()
+      expect(runningStructuredAgentSessionTurnId(downgraded)).toBeNull()
+    })
   })
 
   it('records the host clock from frames that carry it and keeps it otherwise', () => {

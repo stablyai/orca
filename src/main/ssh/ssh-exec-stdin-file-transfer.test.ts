@@ -48,14 +48,23 @@ function localShellConnection(rewrite: (command: string) => string = (c) => c): 
         autoDestroy: false,
         emitClose: false,
         read() {},
+        // Why no error is forwarded: ssh2 silently drops writes once the remote side stops reading,
+        // so EPIPE here would race the exit code and fail the upload for the wrong reason.
         write(chunk, encoding, callback) {
-          child.stdin.write(chunk, encoding, callback)
+          if (child.stdin.destroyed) {
+            callback()
+            return
+          }
+          child.stdin.write(chunk, encoding, () => callback())
         },
         final(callback) {
-          child.stdin.end(callback)
+          if (child.stdin.destroyed) {
+            callback()
+            return
+          }
+          child.stdin.end(() => callback())
         }
       })
-      // EPIPE when the shell stops reading early is the command's answer, not a test failure.
       child.stdin.on('error', () => {})
       child.stdout.on('data', (data: Buffer) => channel.push(data))
       child.on('close', (code) => {
@@ -119,7 +128,8 @@ describe.skipIf(process.platform === 'win32')('exec-stdin writer through a real 
   it('leaves no file behind when the host receives fewer bytes than were sent', async () => {
     const dir = tempDir()
     const local = join(dir, 'payload.bin')
-    writeFileSync(local, randomBytes(64 * 1024))
+    // Larger than any pipe buffer, so the shell always stops reading while bytes are still in flight.
+    writeFileSync(local, randomBytes(1024 * 1024))
     const remote = join(dir, 'remote', 'payload.bin')
     // Models a stream cut short: the host keeps only the first 1000 bytes.
     const truncating = localShellConnection((command) =>

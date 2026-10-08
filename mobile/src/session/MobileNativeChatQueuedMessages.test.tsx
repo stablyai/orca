@@ -36,6 +36,7 @@ function card(
     paused: false,
     needsAttention: false,
     caption: null,
+    attribution: null,
     ...overrides
   }
 }
@@ -156,6 +157,25 @@ describe('MobileNativeChatQueuedMessages', () => {
     expect(nodeTypes(rows[1]!)).toContain('CornerDownRight')
   })
 
+  it("holds Steer while a person's Stop ends the turn; Delete still works", async () => {
+    const onSend = vi.fn(async () => true)
+    const onDelete = vi.fn(async () => true)
+    const mounted = await mount({
+      cards: [card({ messageId: 'w' })],
+      onSend,
+      onDelete,
+      steerHeld: true
+    })
+    const steer = mounted.root.findByProps({
+      accessibilityLabel: 'Submit without interrupting the model'
+    })
+    expect(steer.props.disabled).toBe(true)
+    expect(steer.props.accessibilityState).toEqual({ disabled: true })
+    const trash = mounted.root.findByProps({ accessibilityLabel: 'Delete this queued message' })
+    await act(async () => trash.props.onPress())
+    expect(onDelete).toHaveBeenCalledWith('w')
+  })
+
   it('deletes a card from its trash button', async () => {
     const onDelete = vi.fn(async () => true)
     const mounted = await mount({ cards: [card({ messageId: 'w' })], onDelete })
@@ -261,9 +281,7 @@ describe('MobileNativeChatQueuedMessages', () => {
 
     it('heads the box with why the queue is paused, for each reason', async () => {
       const rows: readonly [AgentSessionQueuePause['reason'], string][] = [
-        ['stopped', 'Queue paused because you interrupted'],
-        ['restarted', 'Queue paused because Orca restarted'],
-        ['cleared', 'Queue paused after you cleared the conversation']
+        ['stopped', 'Queue paused because you interrupted']
       ]
       for (const [reason, label] of rows) {
         const mounted = await mountPaused({ pause: { reason } })
@@ -298,7 +316,7 @@ describe('MobileNativeChatQueuedMessages', () => {
     it('Resume asks the host to lift the pause once, however fast it is tapped twice', async () => {
       let answer: (resumed: boolean) => void = () => undefined
       const onResume = vi.fn(() => new Promise<boolean>((resolve) => (answer = resolve)))
-      const mounted = await mountPaused({ pause: { reason: 'restarted' }, onResume })
+      const mounted = await mountPaused({ pause: { reason: 'stopped' }, onResume })
       // Both taps land in one frame, before the disabled state can render.
       await act(async () => {
         resumeButton(mounted).props.onPress()

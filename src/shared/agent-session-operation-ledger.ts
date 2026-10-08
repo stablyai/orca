@@ -68,6 +68,9 @@ export type AgentSessionOperationOutcome =
   /** The effect may or may not have happened; replay this answer instead of spawning again. */
   | { status: 'unknown' }
 
+/** A terminal pane an operation laid out before its process existed. */
+export type AgentSessionOperationOwnedPane = { worktreeId: string; paneKey: string }
+
 export type AgentSessionOperationRow = {
   callerKey: string
   operationId: string
@@ -76,6 +79,37 @@ export type AgentSessionOperationRow = {
   recordedAt: number
   expiresAt: number
   outcome: AgentSessionOperationOutcome
+  /**
+   * The pane an `agent.launch` showed before its agent existed. Written with the claim, so the pane
+   * can read its fate off this row — attach, couldn't start, couldn't confirm — across a restart,
+   * and stops being owned when the row expires. Not checked by `isAgentSessionOperationRow`: a
+   * malformed value costs that pane its verdict, never the row.
+   */
+  ownedPane?: AgentSessionOperationOwnedPane
+}
+
+/** Unexpired rows naming this pane as theirs. */
+export function listAgentSessionOperationRowsOwningPane(
+  rows: Iterable<AgentSessionOperationRow>,
+  pane: AgentSessionOperationOwnedPane,
+  now: number
+): AgentSessionOperationRow[] {
+  const owning: AgentSessionOperationRow[] = []
+  for (const row of rows) {
+    const owned: unknown = row.ownedPane
+    if (
+      row.expiresAt > now &&
+      typeof owned === 'object' &&
+      owned !== null &&
+      'paneKey' in owned &&
+      'worktreeId' in owned &&
+      owned.paneKey === pane.paneKey &&
+      owned.worktreeId === pane.worktreeId
+    ) {
+      owning.push(row)
+    }
+  }
+  return owning
 }
 
 export type AgentSessionOperationRefusalCode =
@@ -164,7 +198,7 @@ export type AgentSessionOperationClaim =
  */
 export function claimAgentSessionOperation(
   rows: ReadonlyMap<string, AgentSessionOperationRow>,
-  args: { callerKey: string; operationId: string }
+  args: { callerKey: string; operationId: string; ownedPane?: AgentSessionOperationOwnedPane }
 ): { rows: Map<string, AgentSessionOperationRow>; claim: AgentSessionOperationClaim } {
   const key = agentSessionOperationKey(args.callerKey, args.operationId)
   const existing = rows.get(key)
@@ -174,7 +208,11 @@ export function claimAgentSessionOperation(
   if (existing.outcome.status !== 'pending') {
     return { rows: new Map(rows), claim: { claim: 'lost', row: existing } }
   }
-  const claimed: AgentSessionOperationRow = { ...existing, outcome: { status: 'unknown' } }
+  const claimed: AgentSessionOperationRow = {
+    ...existing,
+    outcome: { status: 'unknown' },
+    ...(args.ownedPane ? { ownedPane: args.ownedPane } : {})
+  }
   const next = new Map(rows)
   next.set(key, claimed)
   return { rows: next, claim: { claim: 'won', row: claimed } }

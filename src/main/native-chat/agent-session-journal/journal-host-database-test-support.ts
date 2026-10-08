@@ -3,7 +3,6 @@
 // same directory reads the same database the way a restarted host would.
 
 import { resolve } from 'node:path'
-import { NO_LEGACY_JOURNAL_RECORDS } from './journal-database'
 import { JournalHostDatabase } from './journal-host-database'
 import { replayJournal, type JournalLoad } from './journal-open'
 import { serializeJournalRow, type JournalRow } from './journal-row-schema'
@@ -26,7 +25,7 @@ export function openTestJournalHostDatabase(stateDirectory: string): JournalHost
   if (existing && !existing.isClosed) {
     return existing
   }
-  const database = JournalHostDatabase.openWith(directory, NO_LEGACY_JOURNAL_RECORDS)
+  const database = JournalHostDatabase.open(directory)
   opened.set(directory, database)
   return database
 }

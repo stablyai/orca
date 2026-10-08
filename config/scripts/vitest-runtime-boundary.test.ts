@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest'
 import { access } from 'node:fs/promises'
+import { NODE_RUNTIME_INCLUDE } from './vitest-node-runtime-files.mjs'
 import { runProcessSync } from '../../src/shared/child-process/run-process'
 
 it('uses Bun for ordinary suites when the Bun project is selected', () => {
@@ -19,4 +20,17 @@ it('launches application child fixtures under Node even when Vitest runs under B
   expect(result.code).toBe(0)
   const identity: unknown = JSON.parse(result.stdout)
   expect(identity).toEqual({ node: expect.stringMatching(/^\d+\.\d+\.\d+$/) })
+})
+
+it('routes native-chat journal and record-store SQLite contracts through Node', () => {
+  expect(NODE_RUNTIME_INCLUDE).toEqual(
+    expect.arrayContaining([
+      'src/main/native-chat/agent-session-wire/structured-agent-session-status-feed.test.ts',
+      'src/main/native-chat/agent-session-wire/structured-agent-session-status-first-input-identity.test.ts',
+      'src/main/native-chat/structured-chat-naming-command-first.test.ts',
+      'src/main/native-chat/structured-chat-naming-status-hook.test.ts',
+      'src/main/runtime/agent-session-conversation-name-store.test.ts',
+      'src/main/runtime/structured-session-mail-redrive-wiring.test.ts'
+    ])
+  )
 })

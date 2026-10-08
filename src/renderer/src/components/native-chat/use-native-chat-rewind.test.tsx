@@ -448,6 +448,23 @@ describe('which rows offer rewind', () => {
     ['a /compact row', message({ command: { name: 'compact' } }), opens, false],
     ['a goal', message({ sentAs: 'goal' }), opens, false],
     [
+      "another agent's message, which is not the person's to take back",
+      message({
+        from: {
+          kind: 'agent',
+          senders: [
+            {
+              party: { address: 'term_a', terminalHandle: 'term_a', orcaSessionId: null },
+              name: 'Coder'
+            }
+          ],
+          orchestration: null
+        }
+      }),
+      opens,
+      false
+    ],
+    [
       'a prompt with a URL image, which could not go back to the composer',
       message({ blocks: [{ type: 'image-ref', url: 'https://example.com/shot.png' }] }),
       opens,

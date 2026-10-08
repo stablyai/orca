@@ -421,6 +421,7 @@ export function ClientHostedBrowserPagePane({
             runtimeEnvironmentId={runtimeEnvironmentId}
             worktreeId={worktreeId}
             lastCommittedUrl={browserTab.url}
+            placementHostClientId={browserHostClientId}
           />
         ) : null}
       </div>

@@ -49,6 +49,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
   let onAbandonedConnect: ((ptyId: string) => boolean) | undefined
   let ptyId: string | null = null
   let lifecycleGeneration = 0
+  let pendingConnectGeneration: number | null = null
   let lastExitGeneration: number | null = null
   let suppressAttentionEvents = false
   let storedCallbacks: Parameters<PtyTransport['connect']>[0]['callbacks'] = {}
@@ -145,6 +146,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     getPendingEscapeTailAnsi: outputProcessor.getPendingEscapeTailAnsi,
     connect: async (options) => {
       const connectGeneration = advancePtyLifecycle()
+      pendingConnectGeneration = connectGeneration
       try {
         return await connectIpcPty(options, {
           transportOptions: opts,
@@ -162,11 +164,17 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           getCallbacks: () => storedCallbacks
         })
       } finally {
+        if (pendingConnectGeneration === connectGeneration) {
+          pendingConnectGeneration = null
+        }
         if (lifecycleGeneration === connectGeneration) {
           await flushPreconnectInput()
         }
       }
     },
+
+    isConnectPending: () =>
+      !destroyed && ptyId === null && pendingConnectGeneration === lifecycleGeneration,
 
     attach: (options) => {
       const attachGeneration = advancePtyLifecycle()

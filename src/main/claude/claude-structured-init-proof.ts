@@ -84,11 +84,16 @@ export function claudeInitializationAuthError(
 }
 
 export function claudeAuthDiagnostic(
-  init: ClaudeInitObservation,
+  initialization: unknown,
+  init: ClaudeInitObservation | null,
   settings: unknown
 ): ClaudeAuthDiagnostic {
   const env = isRecord(settings) && isRecord(settings.env) ? settings.env : {}
-  const apiKeySource = readClaudeFrameString(init.message, 'apiKeySource')
+  const account =
+    isRecord(initialization) && isRecord(initialization.account) ? initialization.account : {}
+  const apiKeySource =
+    readClaudeFrameString(account, 'apiKeySource') ??
+    (init ? readClaudeFrameString(init.message, 'apiKeySource') : null)
   const configured = (key: string): boolean =>
     (typeof env[key] === 'string' && (env[key] as string).trim().length > 0) ||
     Boolean(process.env[key]?.trim())

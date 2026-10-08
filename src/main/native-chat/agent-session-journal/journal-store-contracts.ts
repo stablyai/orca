@@ -21,8 +21,6 @@ export type AgentSessionJournalOptions = {
   database: JournalHostDatabase
   now?: () => number
   mintEpoch?: () => string
-  /** A restore's open: see `AgentSessionJournal.whenImported`. */
-  deferPerSessionImport?: boolean
 }
 
 export type JournalReadSince =
@@ -114,9 +112,9 @@ export type JournalSubmissionConsume = {
   /** The host process handing it off, stamped on the draft so a hand-off withdrawn back to
    *  waiting belongs to the process that sent it, not the one that first wrote the card. */
   hostInstance?: string
-  /** The queue's own send: refused in the consume's transaction while the queue's pause, as
-   *  this host instance derives it, holds the card. Send-now omits it. */
-  yieldsToPause?: { hostInstance: string }
+  /** The queue's own send: refused in the consume's transaction while the queue's pause holds
+   *  the card. Send-now omits it. */
+  yieldsToPause?: true
 }
 
 export type JournalItemAppendInput = {

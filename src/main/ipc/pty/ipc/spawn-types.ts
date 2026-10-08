@@ -53,6 +53,8 @@ export type PtySpawnIpcArgs = {
   leafId?: string
   // Why: a pane with a live owner is otherwise reattached, so a restart names the PTY it replaces.
   replacesPtyId?: string
+  // Untyped on purpose: parseTerminalPanePlacement is the one check, and drops what it rejects.
+  placement?: unknown
   // Why: renderer-threaded launch telemetry (telemetry-plan.md§Agent launch semantics); loosely typed because the main-side schema validator is the single enforcement point.
   telemetry?: {
     agent_kind?: unknown

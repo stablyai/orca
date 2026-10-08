@@ -94,7 +94,17 @@ export function buildClaudeStatusSwitchGroups(
           id: account.id,
           label: account.email,
           active: account.id === activeId,
-          runtimeTarget: target
+          runtimeTarget: target,
+          ...(account.needsSignIn
+            ? {
+                disabled: true,
+                needsSignIn: true,
+                hint: translate(
+                  'accounts.claude.signInRequired',
+                  'Sign in again to use this account'
+                )
+              }
+            : {})
         }))
       ]
     }
@@ -137,16 +147,20 @@ export function buildClaudeStatusSwitchGroups(
 }
 
 function getClaudeStatusAccountsFromSettings(
-  settings: GlobalSettings | null | undefined
+  settings: GlobalSettings | null | undefined,
+  runtimeState: ClaudeRateLimitAccountsState
 ): ClaudeRateLimitAccountsState | null {
   if (!settings) {
     return null
   }
+  // Why: settings carry the fresh selection; only the host reads each account folder's login.
+  const read = new Map(runtimeState.accounts.map((account) => [account.id, account]))
   return {
     accounts: settings.claudeManagedAccounts
       .map((account) => ({
         id: account.id,
-        email: account.email,
+        email: read.get(account.id)?.email ?? account.email,
+        ...(read.get(account.id)?.needsSignIn ? { needsSignIn: true as const } : {}),
         managedAuthRuntime: account.managedAuthRuntime ?? 'host',
         wslDistro: account.wslDistro ?? null,
         authMethod: account.authMethod ?? 'unknown',
@@ -180,5 +194,5 @@ export function resolveClaudeStatusAccountState(
   if (settings?.activeRuntimeEnvironmentId?.trim()) {
     return runtimeState
   }
-  return getClaudeStatusAccountsFromSettings(settings) ?? runtimeState
+  return getClaudeStatusAccountsFromSettings(settings, runtimeState) ?? runtimeState
 }

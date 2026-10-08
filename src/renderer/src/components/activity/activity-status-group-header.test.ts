@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import {
-  buildActivityEvents,
-  buildActivityThreadGroups,
-  buildAgentPaneThreads
-} from './ActivityPrototypePage'
+import { buildActivityEvents } from './activity-event-builder'
+import { buildActivityThreadGroups } from './activity-thread-grouping'
+import { buildAgentPaneThreads } from './activity-thread-builder'
 import {
   makeRepo,
   makeTabWithIds,

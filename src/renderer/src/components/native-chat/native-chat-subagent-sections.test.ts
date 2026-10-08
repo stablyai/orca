@@ -240,6 +240,17 @@ describe("a subagent's rows live in its own section", () => {
     expect(new Set(slots.map(nativeChatSlotKey)).size).toBe(slots.length)
   })
 
+  // The parent's live line speaks for the session's own agent only, so a child's open block draws.
+  it("draws a working agent's open reasoning in its section", () => {
+    const thinking = row('child-think', say('Comparing the two diffs'), {
+      ...by('task-1'),
+      role: 'reasoning',
+      state: 'running'
+    })
+    const rows = [...transcriptWith('working').slice(0, 3), thinking]
+    expect(outline(slotsOf(rows, { 'task-1': true }, true))).toContain('>child-think')
+  })
+
   // The fold reads only the conversation, so a subagent's failure after the answer is its own.
   it("folds a settled turn to the session's own answer, not a subagent's later failure", () => {
     const failed = [{ type: 'text' as const, text: 'The subagent failed.', tone: 'error' as const }]

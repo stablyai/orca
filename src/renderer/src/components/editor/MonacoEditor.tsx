@@ -252,6 +252,7 @@ export default function MonacoEditor({
         onChange={contentSync.handleChange}
         onMount={handleMount}
         options={{
+          dropIntoEditor: { enabled: false },
           // `IGlobalEditorOptions`, not per-editor: setting it here pins it for every
           // Monaco surface (diff, Peek) too, so this is the only site that needs it.
           // Defense-in-depth only — it does NOT guard the Monarch embed recursion,

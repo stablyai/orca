@@ -132,7 +132,7 @@ export class RuntimeFileCommandsWithSearchRuntimeFiles extends RuntimeFileComman
   async statRuntimeFile(
     worktreeSelector: string,
     relativePath: string
-  ): Promise<{ size: number; isDirectory: boolean; mtime: number }> {
+  ): Promise<{ size: number; isDirectory: boolean; mtime: number; ctime?: number }> {
     const target = await this.resolveFileExplorerPath(worktreeSelector, relativePath)
     const provider = requireRuntimeFileProvider(target)
     if (provider) {
@@ -145,6 +145,11 @@ export class RuntimeFileCommandsWithSearchRuntimeFiles extends RuntimeFileComman
     }
     const filePath = await resolveAuthorizedPath(target.path, this.host.requireStore())
     const stats = await stat(filePath)
-    return { size: stats.size, isDirectory: stats.isDirectory(), mtime: stats.mtimeMs }
+    return {
+      size: stats.size,
+      isDirectory: stats.isDirectory(),
+      mtime: stats.mtimeMs,
+      ctime: stats.ctimeMs
+    }
   }
 }

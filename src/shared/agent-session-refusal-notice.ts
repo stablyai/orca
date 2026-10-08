@@ -79,6 +79,21 @@ function reasonParts(
   write: AgentSessionWriteKind,
   context: AgentSessionFailureWordsContext
 ): AgentSessionWriteNoticePart[] | undefined {
+  if (
+    failure.code === 'agent_session_operation_invalid' &&
+    failure.details?.argumentProblem &&
+    (write === 'send' || write === 'composer-send')
+  ) {
+    const argumentProblem = failure.details.argumentProblem
+    return [
+      NOT_DONE[write],
+      {
+        failure: { kind: 'startFailed', argumentProblem },
+        surface: 'rejection',
+        context: { ...context, agentName: argumentProblem.agent }
+      }
+    ]
+  }
   const words = agentSessionRefusalReasonWords(failure)
   if (!words || 'words' in words) {
     return undefined
@@ -164,6 +179,19 @@ export function agentSessionWriteNoticeParts(
   }
   // A newer host can send a code this client has never heard of.
   return [notDone]
+}
+
+/** A send nobody can confirm: the host's own reason first when it gave one, never "not sent". */
+export function agentSessionUnconfirmedSendParts(
+  thrownRefusal: AgentSessionWriteFailure | null | undefined
+): AgentSessionWriteNoticePart[] {
+  const cause = thrownRefusal
+    ? agentSessionWriteNoticeParts(thrownRefusal, 'composer-send').filter(
+        (part) =>
+          part !== 'notDoneSend' && part !== 'tryAgainComposerSend' && part !== 'outcomeUnknown'
+      )
+    : []
+  return [...cause, 'sendOutcomeLost']
 }
 
 export function agentSessionWriteNoticeEnglish(

@@ -55,6 +55,7 @@ function createHarness(
       queuePause: null,
       submissions: [],
       hasPendingPrompt: false,
+      isWorking: false,
       composerScopeKey: 'composerScopeKey' in overrides ? overrides.composerScopeKey : SCOPE,
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each scripted answer is the result shape of the one mutate it responds to; generic erasure cannot express that.
       mutate: mutate as StructuredAgentSessionMutate

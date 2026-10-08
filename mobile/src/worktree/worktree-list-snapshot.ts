@@ -133,6 +133,7 @@ function areMainAgentsEqual(
   return (
     left.state === right.state &&
     left.outcome === right.outcome &&
-    left.stateStartedAt === right.stateStartedAt
+    left.stateStartedAt === right.stateStartedAt &&
+    left.stopping === right.stopping
   )
 }

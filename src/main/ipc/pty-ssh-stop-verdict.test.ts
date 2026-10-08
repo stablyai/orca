@@ -184,6 +184,88 @@ describe('stopping a PTY whose SSH provider is unregistered', () => {
     }
   })
 
+  it('waits for an observed SSH exit to reach the runtime record before confirming', async () => {
+    const connectionId = 'ssh-observed-exit'
+    const ptyId = 'ssh-observed-exit-pty'
+    const exitListeners = new Set<(payload: { id: string }) => void>()
+    const provider = {
+      onExit: vi.fn((listener: (payload: { id: string }) => void) => {
+        exitListeners.add(listener)
+        return () => exitListeners.delete(listener)
+      }),
+      shutdown: vi.fn(async () => {
+        for (const listener of exitListeners) {
+          listener({ id: ptyId })
+        }
+      }),
+      listProcesses: vi.fn(async () => [])
+    }
+    registerSshPtyProvider(connectionId, provider as never)
+    setPtyOwnership(ptyId, connectionId)
+    try {
+      const { controller, runtime } = installController()
+      let recordExit: (recorded: boolean) => void = () => {}
+      const waitForPtyExitRecord = vi.fn(
+        (_ptyId: string, _timeoutMs: number) =>
+          new Promise<boolean>((resolve) => (recordExit = resolve))
+      )
+      Object.assign(runtime, { waitForPtyExitRecord })
+
+      let settled = false
+      const stop = controller.stopAndWait(ptyId).then((stopped) => {
+        settled = true
+        return stopped
+      })
+      await vi.waitFor(() => expect(waitForPtyExitRecord).toHaveBeenCalled())
+      const [waitedPtyId, timeoutMs] = waitForPtyExitRecord.mock.calls[0] ?? []
+      expect(waitedPtyId).toBe(ptyId)
+      expect(timeoutMs).toBeGreaterThan(0)
+      expect(timeoutMs).toBeLessThanOrEqual(10_000)
+      expect(settled).toBe(false)
+      recordExit(true)
+      await expect(stop).resolves.toBe(true)
+      // The intake delivers the exit itself; the stop must not fabricate a second one.
+      expect(runtime.onPtyExit).not.toHaveBeenCalled()
+    } finally {
+      deletePtyOwnership(ptyId)
+      unregisterSshPtyProvider(connectionId)
+    }
+  })
+
+  it('caps the observed-exit wait at the caller deadline', async () => {
+    const connectionId = 'ssh-observed-exit-deadline'
+    const ptyId = 'ssh-observed-exit-deadline-pty'
+    const exitListeners = new Set<(payload: { id: string }) => void>()
+    const provider = {
+      onExit: vi.fn((listener: (payload: { id: string }) => void) => {
+        exitListeners.add(listener)
+        return () => exitListeners.delete(listener)
+      }),
+      shutdown: vi.fn(async () => {
+        for (const listener of exitListeners) {
+          listener({ id: ptyId })
+        }
+      }),
+      listProcesses: vi.fn(async () => [])
+    }
+    registerSshPtyProvider(connectionId, provider as never)
+    setPtyOwnership(ptyId, connectionId)
+    try {
+      const { controller, runtime } = installController()
+      const waitForPtyExitRecord = vi.fn(async (_ptyId: string, _timeoutMs: number) => false)
+      Object.assign(runtime, { waitForPtyExitRecord })
+
+      await expect(controller.stopAndWait(ptyId, { deadlineMs: Date.now() + 2_000 })).resolves.toBe(
+        true
+      )
+      const timeoutMs = waitForPtyExitRecord.mock.calls[0]?.[1]
+      expect(timeoutMs).toBeLessThanOrEqual(2_000)
+    } finally {
+      deletePtyOwnership(ptyId)
+      unregisterSshPtyProvider(connectionId)
+    }
+  })
+
   it('reports lost contact when a registered provider drops during the stop', async () => {
     const connectionId = 'ssh-mid-stop-drop'
     const ptyId = 'ssh-mid-stop-pty'

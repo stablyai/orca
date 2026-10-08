@@ -265,12 +265,14 @@ export default function ActivityPrototypePage(): React.JSX.Element {
         worktreesByRepo: storeData.worktreesByRepo,
         detectedWorktreesByRepo: storeData.detectedWorktreesByRepo,
         folderWorkspaces: storeData.folderWorkspaces,
+        floatingWorkspacePath: storeData.floatingWorkspacePath,
         defaultHostId: storeData.defaultHostId
       }),
     [
       storeData.worktreesByRepo,
       storeData.detectedWorktreesByRepo,
       storeData.folderWorkspaces,
+      storeData.floatingWorkspacePath,
       storeData.defaultHostId
     ]
   )

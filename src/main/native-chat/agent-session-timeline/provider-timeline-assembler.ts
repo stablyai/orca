@@ -14,6 +14,9 @@
 //   recovered: a new child is a new assembler, in a new acquisition generation.
 
 import type { AgentType } from '../../../shared/agent-session-journal-types'
+import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
+import type { StructuredAgentSessionCommandRun } from '../agent-session-wire/structured-agent-session-adapter'
 import type { AgentSessionDeltaCoalescerDeps } from '../agent-session-wire/agent-session-delta-coalescer'
 import type { StructuredAgentSessionSinkAdmission } from '../agent-session-wire/structured-agent-session-event-sink'
 import {
@@ -47,6 +50,9 @@ export type { ProviderTimelineDropRule } from './provider-timeline-decision'
 export type { ProviderTimelineApplyResult } from './provider-timeline-text-events'
 
 export type ProviderTimelineAssembler = {
+  /** The host already wrote this command's running turn; the provider ends that same row. */
+  beginCommand(command: StructuredAgentSessionCommandRun): void
+  forgetCommand(turnId: string): void
   apply(event: ProviderTimelineEvent): ProviderTimelineApplyResult
   /** The turn id of the open turn, as its row and a client's Stop name it. */
   readonly openTurnId: string | null
@@ -191,6 +197,27 @@ export function createProviderTimelineAssembler(
   }
 
   return {
+    forgetCommand: (turnId) => {
+      if (state.open?.turnId === turnId) {
+        state.endTurn(state.open)
+      }
+    },
+    beginCommand: (command) => {
+      if (state.ended || state.open || state.stopped) {
+        throw new Error('Provider timeline cannot adopt a command while work is open')
+      }
+      const running = readAgentJournalTurn(command.running)
+      if (!running || running.state !== 'running' || running.turnId !== command.turnId) {
+        throw new Error('Provider timeline command is not a running host turn')
+      }
+      state.open = {
+        identity: command.identity,
+        itemId: agentJournalItemKey(command.identity),
+        turnId: command.turnId,
+        key: { source: 'provider', value: command.turnId },
+        running
+      }
+    },
     apply,
     get openTurnId() {
       return state.open?.turnId ?? null

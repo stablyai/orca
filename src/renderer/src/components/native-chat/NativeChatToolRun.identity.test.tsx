@@ -11,6 +11,7 @@ import {
   NativeChatDisclosureContext,
   useNativeChatDisclosures
 } from './native-chat-disclosure-store'
+import { openToolRunMembers } from './native-chat-tool-run-members-test-support'
 
 vi.mock('./NativeChatDiffCard', () => ({ NativeChatDiffCard: () => null }))
 vi.mock('./NativeChatDiffView', () => ({ NativeChatDiffView: () => null }))
@@ -18,7 +19,8 @@ vi.mock('./NativeChatDiffView', () => ({ NativeChatDiffView: () => null }))
 const disclosureWrite = vi.fn()
 const capturedDisclosures = {
   read: (_key: string) => undefined,
-  write: (key: string, open: boolean) => disclosureWrite(key, open)
+  write: (key: string, open: boolean) => disclosureWrite(key, open),
+  runScroll: new Map()
 }
 
 afterEach(() => {
@@ -41,14 +43,13 @@ const shellResult: NativeChatToolResultBlock = {
   isError: true
 }
 
-function ToolRunDisclosureHarness({ expandOverride }: { expandOverride: boolean }) {
+function ToolRunDisclosureHarness({ expandSignal }: { expandSignal: boolean }) {
   const disclosures = useNativeChatDisclosures()
   return (
     <NativeChatDisclosureContext.Provider value={disclosures}>
       <NativeChatToolRun
         blocks={[shell]}
-        expandSignal={false}
-        expandOverride={expandOverride}
+        expandSignal={expandSignal}
         activeTurnIsWorking={false}
         disclosureId="message-1"
       />
@@ -58,16 +59,16 @@ function ToolRunDisclosureHarness({ expandOverride }: { expandOverride: boolean 
 
 describe('inline tool annotations', () => {
   it('restores a per-run deviation when its turn returns to the same disclosure state', () => {
-    const { rerender } = render(<ToolRunDisclosureHarness expandOverride />)
+    const { rerender } = render(<ToolRunDisclosureHarness expandSignal />)
     const run = screen.getByRole('button', { expanded: true })
 
     fireEvent.click(run)
     expect(run.getAttribute('aria-expanded')).toBe('false')
 
-    rerender(<ToolRunDisclosureHarness expandOverride={false} />)
-    expect(screen.queryByRole('button')).toBeNull()
+    rerender(<ToolRunDisclosureHarness expandSignal={false} />)
+    fireEvent.click(screen.getByRole('button', { name: /missing-command/ }))
 
-    rerender(<ToolRunDisclosureHarness expandOverride />)
+    rerender(<ToolRunDisclosureHarness expandSignal />)
     expect(
       screen.getByRole('button', { name: /missing-command/ }).getAttribute('aria-expanded')
     ).toBe('false')
@@ -101,7 +102,7 @@ describe('inline tool annotations', () => {
 
     fireEvent.click(screen.getAllByRole('button')[2]!)
 
-    expect(disclosureWrite).toHaveBeenCalledExactlyOnceWith('line:message-1:call:call-b', false)
+    expect(disclosureWrite).toHaveBeenCalledExactlyOnceWith('line:message-1:call:call-b', true)
   })
 
   it('keeps occurrence identity as the fallback for calls without provider IDs', () => {
@@ -119,7 +120,7 @@ describe('inline tool annotations', () => {
 
     expect(disclosureWrite).toHaveBeenCalledExactlyOnceWith(
       'line:message-1:tool-call:shell:{"command":"missing-command"}:1',
-      false
+      true
     )
   })
 
@@ -138,18 +139,13 @@ describe('inline tool annotations', () => {
 
     expect(disclosureWrite).toHaveBeenCalledExactlyOnceWith(
       'line:message-1:tool-call:shell:{"command":"missing-command"}:1',
-      false
+      true
     )
   })
 
   it('keeps command completion annotations on the collapsed tool line', () => {
     render(
-      <NativeChatToolRun
-        blocks={[shell, shellResult]}
-        expandSignal={false}
-        expandOverride
-        activeTurnIsWorking={false}
-      />
+      <NativeChatToolRun blocks={[shell, shellResult]} expandSignal activeTurnIsWorking={false} />
     )
     expect(screen.getByText('exit 127').closest('button')).toBe(
       screen.getByText('400ms').closest('button')
@@ -185,14 +181,7 @@ describe('inline tool annotations', () => {
       state: 'completed',
       webSearchResults: [{ title: 'Reference docs', url: 'https://example.com/docs' }]
     }
-    render(
-      <NativeChatToolRun
-        blocks={[block]}
-        expandSignal={false}
-        expandOverride
-        onLinkClick={onLinkClick}
-      />
-    )
+    render(<NativeChatToolRun blocks={[block]} expandSignal onLinkClick={onLinkClick} />)
     expect(screen.queryByRole('link')).toBeNull()
     fireEvent.click(screen.getByText('Searched the web').closest('button')!)
     const link = screen.getByRole('link', { name: /Reference docs/ })
@@ -280,6 +269,7 @@ it('filters untrusted persisted result URLs at the renderer boundary', () => {
       onLinkClick={onLinkClick}
     />
   )
+  openToolRunMembers()
   const links = screen.getAllByRole('link')
   expect(links).toHaveLength(1)
   fireEvent.click(links[0]!)

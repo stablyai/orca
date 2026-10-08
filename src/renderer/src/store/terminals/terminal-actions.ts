@@ -69,7 +69,7 @@ export type TerminalActions = {
     options?: {
       pendingActivationSpawn?: boolean
       initialPtyId?: string
-      /** Stable leaf identity for adopting an already-live pane without changing its pane key. */
+      /** Stable leaf identity: an already-live pane's, or a host launch's pane before its process. */
       initialLeafId?: string
       /** Published atomically with the tab so its first mount cannot spawn a bare shell. */
       pendingStartup?: TerminalState['pendingStartupByTabId'][string]
@@ -79,6 +79,8 @@ export type TerminalActions = {
       recordInteraction?: boolean
       id?: string
       launchAgent?: TuiAgent
+      /** The pane a host `agent.launch` laid out before its agent existed, while its fate is open. */
+      agentLaunchPane?: TerminalTab['agentLaunchPane']
       quickCommandLabel?: string | null
       viewMode?: Tab['viewMode']
       startupCwd?: string
@@ -131,6 +133,13 @@ export type TerminalActions = {
     }
   ) => void
   setTabColor: (tabId: string, color: string | null) => void
+  /** What the tab keeps about the launch that laid out one of its panes; undefined clears it.
+   *  `remount` remounts the tab's panes, so one whose spawn was refused spawns again. */
+  setTabAgentLaunchPane: (
+    tabId: string,
+    launchPane: TerminalTab['agentLaunchPane'],
+    options?: { remount?: boolean }
+  ) => void
   /** Binds only live tabs and migrates replacement identity state before publishing ownership. */
   updateTabPtyId: (
     tabId: string,

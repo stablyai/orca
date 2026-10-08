@@ -123,7 +123,8 @@ jobs:
           ORCA_E2E_APT_PACKAGES: build-essential python3
         run: &install_e2e_tools |
           read -r -a packages <<< "$ORCA_E2E_APT_PACKAGES"
-          for source in /etc/apt/sources.list /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources; do
+          # Why apt-mirrors.txt: runner images resolve mirror+file: sources through it, so editing the lists alone leaves Azure in use.
+          for source in /etc/apt/apt-mirrors.txt /etc/apt/sources.list /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources; do
             if [ -f "$source" ]; then
               sudo sed -i 's|https*://azure\.archive\.ubuntu\.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' "$source"
             fi
@@ -134,7 +135,7 @@ jobs:
           Acquire::Retries "1";
           APTCONF
           timeout 120 sudo apt-get update
-          timeout 300 sudo apt-get install -y "${packages[@]}"
+          timeout 300 sudo apt-get install -y "${packages[@]}" || timeout 300 sudo apt-get install -y --fix-missing "${packages[@]}"
 
       - uses: ./.github/actions/install-node-dependencies
         with:
@@ -328,10 +329,12 @@ jobs:
               . != "tests/e2e/ssh-lost-kill-tab-resurrection.spec.ts" and
               . != "tests/e2e/ssh-pi-compatible-agent-title.spec.ts" and
               . != "tests/e2e/ssh-port-forward-lifecycle.spec.ts" and
+              . != "tests/e2e/ssh-reattach-home-partition.spec.ts" and
               . != "tests/e2e/ssh-reconnect-tab-destruction.spec.ts" and
               . != "tests/e2e/ssh-restart-tab-accumulation.spec.ts" and
               . != "tests/e2e/ssh-skill-installation.spec.ts" and
               . != "tests/e2e/ssh-stale-resume-execution-host-scope.spec.ts" and
+              . != "tests/e2e/ssh-startup-local-shadow.spec.ts" and
               . != "tests/e2e/ssh-terminal-window-wake-stale-grid-repro.spec.ts" and
               . != "tests/e2e/terminal-inline-images-ssh.spec.ts" and
               . != "tests/e2e/ssh-docker-watcher-isolation.spec.ts" and
@@ -341,7 +344,11 @@ jobs:
               . != "tests/e2e/paired-startup-exec-readiness.spec.ts" and
               . != "tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts" and
               . != "tests/e2e/ssh-localhost.spec.ts" and
-              . != "tests/e2e/terminal-ibus-hangul-native.spec.ts"
+              . != "tests/e2e/terminal-ibus-hangul-native.spec.ts" and
+              . != "tests/e2e/orcad-serve-mode-switch.spec.ts" and
+              . != "tests/e2e/ssh-orcad-auto-convert.spec.ts" and
+              . != "tests/e2e/windows-missing-appdata-startup.spec.ts" and
+              . != "tests/e2e/ssh-orcad-idle-exit.spec.ts"
             )' <<<"$TEST_FILES_JSON" > "$RUNNER_TEMP/general-e2e-specs"
           fi
           mapfile -t TEST_FILES < "$RUNNER_TEMP/general-e2e-specs"
@@ -509,6 +516,157 @@ jobs:
           ORCA_BACKGROUND_LAUNCH: '1'
           ORCA_RUN_DOCKER_SSH_BROWSER_E2E: '1'
         run: node_modules/.bin/vitest run --config config/vitest.config.ts tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts
+
+  orcad-serve-mode-switch:
+    name: orca serve Electron/orcad mode switch (D7)
+    needs: [build, prepare-native-cache]
+    if: inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/orcad-serve-mode-switch.spec.ts')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      ORCA_BACKGROUND_LAUNCH: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          persist-credentials: false
+      - name: Install headless tools
+        run: sudo apt-get update && sudo apt-get install -y build-essential ripgrep xvfb openbox x11-utils
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: electron
+      - uses: actions/download-artifact@v8
+        with:
+          name: e2e-build-out
+          path: out/
+      # The packaged orcad slot the T6-11 launcher runs: its own node-pty under the pinned Node.
+      # The template is what `orca serve`'s default selection materializes that slot from.
+      - name: Build this runner's orcad slot and template
+        run: |
+          slot="$(node config/scripts/build-orcad-prebuilds.mjs --print-slot)"
+          pnpm build:orcad-prebuilds
+          pnpm build:orcad-prebuilds --require-slots "$slot"
+          pnpm build:orcad
+          node config/scripts/build-orcad-template.mjs --targets "$slot"
+      - name: Switch serve hosts on one profile
+        env:
+          SKIP_BUILD: '1'
+          ORCA_E2E_ORCAD_SERVE: '1'
+          ORCA_E2E_FORWARD_APP_LOGS: '1'
+        run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/orcad-serve-mode-switch.spec.ts --project=electron-headless --workers=1
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: orcad-serve-mode-switch-traces
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # #24979 on a real host: a relay-era Docker host converts to managed orcad on connect, and a managed
+  # orcad idles out and restarts on the next connect. Needs the
+  # orcad template for the fixture's target (Debian, linux-x64-glibc), which only this job builds.
+  orcad-auto-convert-docker:
+    name: ssh host auto-converts to managed orcad (Docker)
+    needs: [build, prepare-native-cache]
+    if: inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/ssh-orcad-auto-convert.spec.ts') || contains(inputs.test_files, 'tests/e2e/ssh-orcad-idle-exit.spec.ts')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      ORCA_BACKGROUND_LAUNCH: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          persist-credentials: false
+      - name: Install headless tools
+        run: sudo apt-get update && sudo apt-get install -y build-essential ripgrep xvfb openbox x11-utils
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: electron
+      - uses: actions/download-artifact@v8
+        with:
+          name: e2e-build-out
+          path: out/
+      # Built to a path the app does not look at by default, so the relay phase has no template.
+      - name: Build the linux-x64-glibc orcad template
+        run: |
+          pnpm build:orcad-prebuilds
+          pnpm build:orcad-prebuilds --require-slots linux-x64-glibc
+          pnpm build:orcad
+          node config/scripts/build-orcad-template.mjs --targets linux-x64-glibc
+          mv out/orcad-template "$RUNNER_TEMP/orcad-convert-template"
+      - name: Convert a relay-era Docker host
+        env:
+          SKIP_BUILD: '1'
+          ORCA_E2E_SSH_DOCKER: '1'
+          ORCA_E2E_ORCAD_CONVERT_HOST: docker
+          ORCA_E2E_FORWARD_APP_LOGS: '1'
+          ORCA_RELAY_PATH: ${{ github.workspace }}/out/relay
+        run: |
+          export ORCA_E2E_ORCAD_CONVERT_TEMPLATE="$RUNNER_TEMP/orcad-convert-template"
+          xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/ssh-orcad-auto-convert.spec.ts tests/e2e/ssh-orcad-idle-exit.spec.ts --project=electron-headless --workers=1
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: orcad-auto-convert-docker-traces
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # D7 on Windows: both hosts share <userData>\daemon and so one daemon pipe. Built here rather than
+  # from the Linux e2e build because the slot, template and addons are Windows-native. Also runs the
+  # missing-AppData startup check, which needs the same Windows e2e build.
+  orcad-serve-mode-switch-windows:
+    name: orca serve on Windows (D7 mode switch, missing AppData)
+    if: inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/orcad-serve-mode-switch.spec.ts') || contains(inputs.test_files, 'tests/e2e/windows-missing-appdata-startup.spec.ts')
+    runs-on: windows-2022
+    timeout-minutes: 45
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+      ORCA_BACKGROUND_LAUNCH: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: electron
+      - uses: ./.github/actions/prepare-orcad-prebuilds
+        with:
+          resolve-windows-cache: 'true'
+          restore-windows-cache: 'true'
+      - name: Build the e2e app, CLI, orcad slot and template
+        shell: bash
+        run: |
+          pnpm run build:relay
+          pnpm exec electron-vite build --mode e2e
+          pnpm run build:cli
+          pnpm build:orcad
+          node config/scripts/build-windows-process-tree-relay-addon.mjs --arch=x64
+          node config/scripts/build-orcad-template.mjs --targets win32-x64
+      # A profile-less Windows session has no roaming AppData; Electron 43 used to crash natively there.
+      - name: Start serve with no AppData folder
+        if: inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/windows-missing-appdata-startup.spec.ts')
+        env:
+          SKIP_BUILD: '1'
+          ORCA_E2E_FORWARD_APP_LOGS: '1'
+        run: pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/windows-missing-appdata-startup.spec.ts --project=electron-headless --workers=1
+      - name: Switch serve hosts on one profile
+        if: ${{ !cancelled() && (inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/orcad-serve-mode-switch.spec.ts')) }}
+        env:
+          SKIP_BUILD: '1'
+          ORCA_E2E_ORCAD_SERVE: '1'
+          ORCA_E2E_FORWARD_APP_LOGS: '1'
+          ORCA_E2E_PRESERVE_PROFILE_LOGS_DIR: ${{ github.workspace }}\test-results\profile-logs
+        run: pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/orcad-serve-mode-switch.spec.ts --project=electron-headless --workers=1
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: orcad-serve-mode-switch-windows-traces
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: ignore
 
   ssh-localhost:
     name: localhost SSH terminal and hooks

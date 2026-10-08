@@ -106,18 +106,20 @@ describe('recorded ACP traffic through the journal', () => {
     expect(await fixture.rig.turns()).toHaveLength(2)
   })
 
-  it('answers questions and plan approval with the recorded exact reply shapes', async () => {
+  it('answers questions with the recorded reply shape and shows the plan as a plan, not a gate', async () => {
     const fixture = await openAcpFixtureRig()
     const rows = await fixture.feed(await readAcpFixture('s5-plan-approved'))
     expect(rows.flatMap((row) => (row.body.kind === 'question' ? [row.body] : []))).toMatchObject([
       { resolution: { state: 'resolved', answers: [{ questionId: 'q1', optionIds: ['o1'] }] } }
     ])
-    expect(rows.flatMap((row) => (row.body.kind === 'approval' ? [row.body] : []))).toMatchObject([
-      {
-        subject: { kind: 'plan', text: '# Plan\n\nUpdate the example and run its tests.' },
-        resolution: { state: 'resolved', selectedOptionId: 'approved' }
-      }
-    ])
+    expect(rows.filter((row) => row.body.kind === 'approval')).toEqual([])
+    expect(rows.map((row) => row.body)).toContainEqual(
+      expect.objectContaining({
+        kind: 'status',
+        presentation: 'plan-document',
+        text: '# Plan\n\nUpdate the example and run its tests.'
+      })
+    )
     expect((await fixture.rig.turns())[0]!.outcome).toBe('success')
   })
 

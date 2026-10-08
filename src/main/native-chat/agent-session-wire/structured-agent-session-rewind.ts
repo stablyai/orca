@@ -121,13 +121,19 @@ export async function rewindStructuredAgentSession(
           }
           const retained = snapshot.items
             .slice(0, boundary)
-            .map(({ itemId, body, observedAt, turnScope, ...linkage }) => ({
-              itemId: providerKey(itemId),
-              body: withRenamedTurnOpener(body, providerKey),
-              observedAt,
-              ...(turnScope ? { turnScope } : {}),
-              ...agentJournalLinkageFields(linkage)
-            }))
+            .map(({ itemId, observedAt, turnScope, ...linkage }) => {
+              const body = ctx.journal.itemBody(itemId)
+              if (!body) {
+                throw new Error('agent_session_rewind:missing-retained-item')
+              }
+              return {
+                itemId: providerKey(itemId),
+                body: withRenamedTurnOpener(body, providerKey),
+                observedAt,
+                ...(turnScope ? { turnScope } : {}),
+                ...agentJournalLinkageFields(linkage)
+              }
+            })
           if (
             retained.length > 10_000 ||
             Buffer.byteLength(JSON.stringify(retained), 'utf8') >

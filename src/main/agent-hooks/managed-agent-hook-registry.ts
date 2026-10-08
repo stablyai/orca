@@ -22,9 +22,9 @@ import { museHookService } from '../muse/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
 import { zcodeHookService } from '../zcode/hook-service'
 
-// Why (#16441): Codex's installer awaits a codex app-server trust-grant session
-// instead of blocking the main thread on spawnSync. Widening the tuple keeps the
-// other thirteen agent services synchronous — the shared loop already awaits.
+// Why (#16441): Codex's installer may await a codex app-server session for its
+// hook hashes instead of blocking the main thread on spawnSync. Widening the tuple
+// keeps the other agent services synchronous — the shared loop already awaits.
 export type ManagedAgentHookInstallOptions = { userInitiated?: boolean; cliVersion?: string }
 export type ManagedAgentHookInstaller = readonly [
   HookInstallAgent,
@@ -46,7 +46,7 @@ export type ManagedAgentHookStatusReader = readonly [HookInstallAgent, () => Age
 export const MANAGED_AGENT_HOOK_INSTALLERS: readonly ManagedAgentHookInstaller[] = [
   ['claude', (options) => claudeHookService.install({ claudeVersion: options?.cliVersion })],
   ['openclaude', () => openClaudeHookService.install()],
-  ['codex', () => codexHookService.install()],
+  ['codex', () => codexHookService.reconcileHooks()],
   ['gemini', () => geminiHookService.install()],
   ['qoder', () => qoderHookService.install()],
   ['qoder-cn', () => qoderCnHookService.install()],

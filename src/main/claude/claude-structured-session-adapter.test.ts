@@ -7,8 +7,11 @@ import {
   AgentSessionPromptAnswerRejectedError
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { ClaudeStreamJsonConnection } from './claude-stream-json-connection'
-import { ClaudeControlRequestError } from './claude-stream-json-connection'
 import { CLAUDE_SPAWN_TOKEN_ENV } from './claude-structured-owner-identity'
+import {
+  ClaudeControlRequestError,
+  ClaudeControlRequestTimeoutError
+} from './claude-agent-sdk-control-requests'
 import type {
   ClaudeStructuredSessionAdapter,
   ClaudeStructuredSessionEvent
@@ -67,7 +70,7 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
     expect(events[0]).toMatchObject({ type: 'message', message: { subtype: 'hook_started' } })
   })
 
-  it('restores persisted model and effort before publishing a reacquired session', async () => {
+  it('launches a reacquired session with its persisted model and effort, and writes neither', async () => {
     const claude = fakeClaude()
     const adapter = adapterFor(claude, { resumesTranscript: true, continuesChain: true })
 
@@ -78,69 +81,19 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
       options: { model: 'opus', effort: 'high' }
     })
 
-    expect(claude.connections[0].calls.slice(-4)).toEqual([
-      { subtype: 'set_model', params: { model: 'opus' } },
-      // The restored model's advertised levels gate the replay, so a stale effort
-      // is dropped rather than re-applied to a model with no effort control.
-      { subtype: 'list_models' },
-      { subtype: 'apply_flag_settings', params: { settings: { effortLevel: 'high' } } },
-      // The effort is only recorded once the child reports having adopted it.
-      { subtype: 'get_settings' }
+    expect(claude.connections[0].launch.options).toMatchObject({ model: 'opus', effort: 'high' })
+    expect(claude.connections[0].calls.map((call) => call.subtype)).toEqual([
+      'initialize',
+      'get_settings'
     ])
     await expect(adapter.readOptions({ sessionId: 'session-1', fence: 7 })).resolves.toMatchObject({
       current: { model: 'opus', effort: 'high' }
     })
   })
 
-  it('restores an encoded Fast preference through the absolute flag setting', async () => {
+  it('launches a resumed conversation with its saved Fast as a flag setting', async () => {
     const claude = fakeClaude({
-      settings: { effective: { fastMode: false, fastModePerSessionOptIn: false } },
-      routes: {
-        list_models: () => [{ value: 'opus', displayName: 'Opus', supportsFastMode: true }]
-      }
-    })
-    const adapter = adapterFor(claude)
-
-    await adapter.acquire({
-      identity: identityFor(),
-      fence: 7,
-      spawnToken: 'spawn-9',
-      options: { model: 'opus', fastMode: 'true' }
-    })
-
-    expect(claude.connections[0].calls).toContainEqual({
-      subtype: 'apply_flag_settings',
-      params: { settings: { fastMode: true } }
-    })
-  })
-
-  it('does not carry a saved opt-in into a new per-session-opt-in child', async () => {
-    const claude = fakeClaude({
-      settings: { effective: { fastMode: false, fastModePerSessionOptIn: true } },
-      routes: {
-        list_models: () => [{ value: 'opus', displayName: 'Opus', supportsFastMode: true }]
-      }
-    })
-    const adapter = adapterFor(claude)
-
-    await adapter.acquire({
-      identity: identityFor(),
-      fence: 7,
-      spawnToken: 'spawn-9',
-      options: { model: 'opus', fastMode: 'true' }
-    })
-
-    expect(
-      claude.connections[0].calls.filter((call) => call.subtype === 'apply_flag_settings')
-    ).toEqual([])
-  })
-
-  it('restores Fast when reacquiring the same per-session-opt-in conversation', async () => {
-    const claude = fakeClaude({
-      settings: { effective: { fastMode: false, fastModePerSessionOptIn: true } },
-      routes: {
-        list_models: () => [{ value: 'opus', displayName: 'Opus', supportsFastMode: true }]
-      }
+      settings: { effective: { fastMode: true, fastModePerSessionOptIn: false } }
     })
     const adapter = adapterFor(claude, { resumesTranscript: true, continuesChain: true })
 
@@ -151,85 +104,149 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
       options: { model: 'opus', fastMode: 'true' }
     })
 
-    expect(claude.connections[0].calls).toContainEqual({
-      subtype: 'apply_flag_settings',
-      params: { settings: { fastMode: true } }
-    })
-  })
-
-  it('self-heals a Fast preference the running model no longer supports', async () => {
-    const claude = fakeClaude({
-      settings: { effective: { fastMode: false } },
-      routes: {
-        list_models: () => [{ value: 'opus', displayName: 'Opus', supportsFastMode: false }]
-      }
-    })
-    const adapter = adapterFor(claude)
-
-    await expect(
-      adapter.acquire({
-        identity: identityFor(),
-        fence: 7,
-        spawnToken: 'spawn-9',
-        options: { model: 'opus', fastMode: 'true' }
-      })
-    ).resolves.toBeDefined()
-
-    expect(adapter.readOptionRestoreFailures('session-1')).toContain('fastMode')
+    expect(claude.connections[0].launch.options.settings).toEqual({ fastMode: true })
     expect(
       claude.connections[0].calls.filter((call) => call.subtype === 'apply_flag_settings')
     ).toEqual([])
   })
 
-  it.each([
-    ['model', 'set_model', { model: 'retired-model' }],
-    ['effort', 'apply_flag_settings', { effort: 'retired-effort' }],
-    ['permissionMode', 'set_permission_mode', { permissionMode: 'retired-mode' }]
-  ] as const)(
-    'self-heals a persisted %s rejected during restore',
-    async (key, subtype, options) => {
-      const claude = fakeClaude({
-        routes: {
-          [subtype]: () => {
-            throw new ClaudeControlRequestError(subtype, 'value is no longer available')
-          }
-        }
-      })
-      const adapter = adapterFor(claude)
-
-      await expect(
-        adapter.acquire({
-          identity: identityFor(),
-          fence: 7,
-          spawnToken: 'spawn-9',
-          options
-        })
-      ).resolves.toBeDefined()
-      expect(adapter.readOptionRestoreFailures('session-1')).toEqual([key])
-    }
-  )
-
-  it('does not treat a transport timeout while restoring an option as recoverable', async () => {
+  it('does not carry a saved Fast into a new conversation whose settings opt in per session', async () => {
     const claude = fakeClaude({
-      routes: {
-        set_model: () => {
-          throw new Error('claude set_model request timed out')
-        }
-      }
+      settings: { effective: { fastMode: false, fastModePerSessionOptIn: true } }
     })
-    const input = {
+    const events: ClaudeStructuredSessionEvent[] = []
+    const adapter = adapterFor(claude, {}, events)
+
+    await adapter.acquire({
       identity: identityFor(),
       fence: 7,
       spawnToken: 'spawn-9',
-      options: { model: 'temporarily-unavailable' }
-    }
-
-    // Restore runs after publish, so its failure ends the session rather than the create.
-    await expect(endedAtStartup(claude, input)).resolves.toMatchObject({
-      reason: 'claude set_model request timed out',
-      startupUnproven: true
+      options: { model: 'opus', fastMode: 'true' }
     })
-    expect(claude.connections[0]?.closeCount).toBe(1)
+
+    expect(claude.connections[0].launch.options.settings).toBeUndefined()
+    expect(
+      claude.connections[0].calls.filter((call) => call.subtype === 'apply_flag_settings')
+    ).toEqual([])
+    // Left out, not refused: the record takes the provider's own Fast, as before.
+    expect(adapter.readOptionRestoreFailures('session-1')).toEqual([])
+    expect(events.find((event) => event.type === 'started')).toMatchObject({
+      reportedOptions: { fastMode: false }
+    })
+  })
+
+  // No message waits on it: the launch carries no Fast, and the start applies it once the CLI's
+  // settings show no per-session opt-in, as the live CLI reports with no settings file at all.
+  it('applies a saved Fast on to a new conversation once its settings allow it, and keeps the pick', async () => {
+    const claude = fakeClaude({
+      settings: { applied: {}, effective: {}, sources: {} },
+      initModels: [{ value: 'opus', displayName: 'Opus', supportsFastMode: true }]
+    })
+    const events: ClaudeStructuredSessionEvent[] = []
+    const adapter = adapterFor(claude, {}, events)
+
+    await adapter.acquire({
+      identity: identityFor(),
+      fence: 7,
+      spawnToken: 'spawn-9',
+      options: { model: 'opus', fastMode: 'true' }
+    })
+
+    expect(claude.connections[0].launch.options.settings).toBeUndefined()
+    expect(claude.connections[0].calls.map((call) => call.subtype)).toEqual([
+      'initialize',
+      'get_settings',
+      'apply_flag_settings'
+    ])
+    expect(claude.connections[0].calls.at(-1)).toEqual({
+      subtype: 'apply_flag_settings',
+      params: { settings: { fastMode: true } }
+    })
+    expect(events.find((event) => event.type === 'started')).toMatchObject({
+      reportedOptions: { fastMode: true },
+      restoreSkippedOptions: []
+    })
+  })
+
+  it.each([
+    ['refuses', new ClaudeControlRequestError('apply_flag_settings', 'not for this org'), false],
+    ['never answers', new ClaudeControlRequestTimeoutError('apply_flag_settings'), true]
+  ] as const)(
+    'settles a saved Fast on a new conversation when the CLI %s its apply',
+    async (_case, failure, kept) => {
+      let answerApply: (error: Error) => void = () => {}
+      const claude = fakeClaude({
+        settings: { applied: {}, effective: {}, sources: {} },
+        initModels: [{ value: 'opus', displayName: 'Opus', supportsFastMode: true }],
+        routes: {
+          apply_flag_settings: () => new Promise<never>((_, reject) => (answerApply = reject))
+        }
+      })
+      const events: ClaudeStructuredSessionEvent[] = []
+      const adapter = adapterFor(claude, {}, events)
+
+      await adapter.acquire({
+        identity: identityFor(),
+        fence: 7,
+        spawnToken: 'spawn-9',
+        options: { model: 'opus', fastMode: 'true' }
+      })
+
+      // Started, with the pick, while the apply is still unanswered: nothing waits on it.
+      expect(claude.connections[0].calls.at(-1)?.subtype).toBe('apply_flag_settings')
+      expect(events.find((event) => event.type === 'started')).toMatchObject({
+        reportedOptions: { fastMode: true },
+        restoreSkippedOptions: []
+      })
+      answerApply(failure)
+      await tick()
+
+      // A refusal drops the pick, as main's refused restore did, from the record too, after
+      // `started`; silence keeps it wanted and unconfirmed.
+      const skipped = events.filter((event) => event.type === 'options-skipped')
+      expect(skipped).toEqual(
+        kept ? [] : [expect.objectContaining({ fence: 7, options: { fastMode: 'true' } })]
+      )
+      expect(adapter.readOptionRestoreFailures('session-1')).toEqual(kept ? [] : ['fastMode'])
+      const options = await adapter.readOptions({ sessionId: 'session-1', fence: 7 })
+      expect(options.current.fastMode === true).toBe(kept)
+      expect(options.current.confirmed ?? []).not.toContain('fastMode')
+    }
+  )
+
+  it('drops a saved Fast on from a new conversation whose model the CLI lists without it', async () => {
+    const claude = fakeClaude({
+      settings: { applied: {}, effective: {}, sources: {} },
+      initModels: [{ value: 'opus', displayName: 'Opus', supportsFastMode: false }]
+    })
+    const adapter = adapterFor(claude)
+
+    await adapter.acquire({
+      identity: identityFor(),
+      fence: 7,
+      spawnToken: 'spawn-9',
+      options: { model: 'opus', fastMode: 'true' }
+    })
+
+    expect(
+      claude.connections[0].calls.filter((call) => call.subtype === 'apply_flag_settings')
+    ).toEqual([])
+    expect(adapter.readOptionRestoreFailures('session-1')).toEqual(['fastMode'])
+  })
+
+  it.each([
+    ['effort', { effort: 'retired-effort' }],
+    ['permissionMode', { permissionMode: 'retired-mode' }]
+  ] as const)('self-heals a persisted %s the CLI would refuse at launch', async (key, options) => {
+    const claude = fakeClaude()
+    const adapter = adapterFor(claude)
+
+    await expect(
+      adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 'spawn-9', options })
+    ).resolves.toBeDefined()
+    expect(adapter.readOptionRestoreFailures('session-1')).toEqual([key])
+    expect(claude.connections[0].launch.options).not.toHaveProperty('effort')
+    expect(claude.connections[0].launch.options).not.toHaveProperty('permissionMode')
   })
 
   it('recovers a cancellable lifecycle when the replay arrives after dispatch returned', async () => {

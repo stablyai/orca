@@ -53,6 +53,8 @@ export type EditorFileSavedDetail = {
 
 export type EditorRequestFileCloseDetail = {
   fileId: string
+  /** Runs once the file actually closes — after save or discard, never on cancel. */
+  onClosed?: () => void
 }
 
 export type EditorRequestCmdSaveDetail = {
@@ -212,10 +214,13 @@ export async function requestEditorFileSave(target: EditorSaveFileTarget): Promi
   })
 }
 
-export function requestEditorFileClose(fileId: string): void {
+export function requestEditorFileClose(
+  fileId: string,
+  options?: Pick<EditorRequestFileCloseDetail, 'onClosed'>
+): void {
   window.dispatchEvent(
     new CustomEvent<EditorRequestFileCloseDetail>(ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT, {
-      detail: { fileId }
+      detail: { fileId, ...options }
     })
   )
 }

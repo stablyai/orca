@@ -2,6 +2,7 @@
 // launch-agent-in-new-tab.test.ts to keep both files within the lines budget.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 
 const mockCreateTab = vi.fn()
@@ -87,20 +88,25 @@ vi.mock('@/components/native-chat/native-chat-session-option-cache', () => ({
 describe('launchAgentInNewTab terminal tab activation', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // The local runtime has answered (without structured support), so no launch waits on it.
+    setLocalRuntimeCapabilitiesForTests([])
     store.settings = placementSettings()
     mockCreateTab.mockReturnValue({ id: 'tab-1' })
   })
 
-  it('shows terminals in the worktree it launched into', async () => {
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+  // Why: the store scopes activation to the launch's own workspace, so the floating panel launches
+  // like every other caller and cannot move the main window's selection.
+  it.each(['wt-1', FLOATING_TERMINAL_WORKTREE_ID])(
+    'selects the new tab within %s only',
+    async (worktreeId) => {
+      const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    launchAgentInNewTab({ requestId: 'request-1', agent: 'codex', worktreeId: 'wt-1' })
+      launchAgentInNewTab({ requestId: 'request-1', agent: 'codex', worktreeId })
 
-    expect(mockCreateTab.mock.calls[0]?.[3]).not.toHaveProperty('activate')
-    // Why: an unscoped call targets the active worktree — the main window — whatever worktree the
-    // launch landed in, which is how a floating launch dropped the main window off its editor.
-    expect(mockSetActiveTabType).toHaveBeenCalledExactlyOnceWith('terminal', 'wt-1')
-  })
+      expect(mockCreateTab.mock.calls[0]?.[3]).not.toHaveProperty('activate')
+      expect(mockSetActiveTabType).toHaveBeenCalledExactlyOnceWith('terminal', worktreeId)
+    }
+  )
 
   it('honours the chat default in a floating launch and scopes its surface to the floating workspace', async () => {
     store.settings = placementSettings({

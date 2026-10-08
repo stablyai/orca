@@ -144,6 +144,13 @@ export const GOOGLE_METRICS: GoogleMetricDefinition[] = [
       'resource.type="cloud_run_revision" AND metric.label."response_code_class"="5xx"',
     aggregation: 'window-sum',
     emptyIsZero: true
+  },
+  {
+    signal: 'auth.requests',
+    type: 'run.googleapis.com/request_count',
+    resourceFilter: 'resource.type="cloud_run_revision"',
+    aggregation: 'window-sum',
+    emptyIsZero: true
   }
 ]
 

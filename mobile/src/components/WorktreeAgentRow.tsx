@@ -1,6 +1,7 @@
 import { memo } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
+import { withoutNativeChatVisualDirectiveLines } from '../../../src/shared/native-chat-visual-directive'
 import { colors, spacing } from '../theme/mobile-theme'
 import {
   agentDisplayLabel,
@@ -26,7 +27,15 @@ type Props = {
 // Mirrors desktop DashboardAgentRow's compact in-card layout.
 function WorktreeAgentRowComponent({ agent, depth, now, unvisited }: Props) {
   const dotState = agentDotState(agent, now)
-  const label = agentDisplayLabel(agent, now)
+  // A visual line renders only in the transcript; the row shows the words around it, and a reply
+  // that is only a visual falls back like an empty one.
+  const reply = agent.lastAssistantMessage
+  const label = agentDisplayLabel(
+    reply
+      ? { ...agent, lastAssistantMessage: withoutNativeChatVisualDirectiveLines(reply) }
+      : agent,
+    now
+  )
   const ts = formatTimeAgo(agentRowTimeAt(agent), now)
 
   return (

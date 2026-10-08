@@ -199,9 +199,10 @@ async function compareReplay(
 
 function countClippedWideCells(terminal: Terminal): number {
   const buffer = terminal.buffer.active
+  const scratch = buffer.getNullCell()
   let count = 0
   for (let y = 0; y < buffer.length; y++) {
-    if (cellDescriptor(buffer.getLine(y), terminal.cols - 1, terminal.cols) === CLIPPED) {
+    if (cellDescriptor(buffer.getLine(y), terminal.cols - 1, terminal.cols, scratch) === CLIPPED) {
       count++
     }
   }

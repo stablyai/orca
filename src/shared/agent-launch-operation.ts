@@ -54,6 +54,9 @@ export type AgentLaunchFingerprintInput = {
    * its own original. That is the rule the mutable host settings above are excluded under — the
    * digest covers what the call DOES — and the cost of leaving it out is only that a replay reports
    * the first attempt's attribution, which is the truthful answer: one launch happened.
+   *
+   * `placement` and `presentation` are absent by the same rule: they say where the tab sits and whose
+   * view moves, not what runs, so a retry that moved them replays the first answer.
    */
 }
 

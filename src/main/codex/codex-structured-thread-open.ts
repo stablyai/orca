@@ -91,11 +91,17 @@ export async function openCodexThread(
     /** Why: Codex renders a thread's base instructions for its opening model; a first turn on
      *  another model reads as a mid-conversation switch and injects a second full prompt. */
     model?: string
+    /** Config overrides for this thread, on start and resume alike. */
+    threadConfig?: Record<string, unknown>
   },
   timeoutMs: number | undefined
 ): Promise<CodexOpenedThread> {
   const resumeThreadId = launch.resumeThreadId
-  const threadSettings = { cwd: launch.cwd, ...launch.permissionPolicy }
+  const threadSettings = {
+    cwd: launch.cwd,
+    ...launch.permissionPolicy,
+    ...(launch.threadConfig ? { config: launch.threadConfig } : {})
+  }
   const startThread = (): Promise<unknown> =>
     connection.request(
       'thread/start',

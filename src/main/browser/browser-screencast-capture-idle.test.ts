@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer'
 import { describe, expect, it, vi } from 'vitest'
 
 import { browserCaptureIdle } from './browser-capture-idle'
@@ -14,6 +15,66 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
 }
 
 describe('screencast capture idle participation', () => {
+  it('keeps the raw native capture busy after snapshot timeout and fallback completion', async () => {
+    vi.useFakeTimers()
+    const raw = deferred<unknown>()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the snapshot and idle gate use only these supplied guest and debugger methods.
+    const webContents = {
+      isDestroyed: vi.fn(() => false),
+      isCrashed: vi.fn(() => false),
+      capturePage: vi.fn(() => raw.promise),
+      debugger: {
+        sendCommand: vi.fn(async () => ({ data: Buffer.from('fallback').toString('base64') }))
+      }
+    } as unknown as Electron.WebContents
+    const queueFrame = vi.fn()
+    const capture = createBrowserScreencastSnapshotCapture({
+      webContents,
+      dbg: webContents.debugger,
+      options: {
+        format: 'png',
+        quality: 80,
+        maxWidth: 100,
+        maxHeight: 100,
+        viewportWidth: 100,
+        viewportHeight: 100,
+        everyNthFrame: 1,
+        minFrameIntervalMs: 0,
+        onFrame: () => {}
+      },
+      isClosed: () => false,
+      isStopping: () => false,
+      getSeq: () => 0,
+      queueFrame,
+      applyDeviceMetricsOverride: async () => {}
+    })
+    try {
+      const snapshot = capture.emitSnapshotFrame(true)
+      await vi.advanceTimersByTimeAsync(10_000)
+      await snapshot
+      expect(queueFrame).toHaveBeenCalledTimes(1)
+      expect(Buffer.from(queueFrame.mock.calls[0][0].image).toString()).toBe('fallback')
+      let reserved = false
+      const reservation = browserCaptureIdle.reserve(webContents).then((lease) => {
+        reserved = true
+        return lease
+      })
+      await vi.advanceTimersByTimeAsync(1)
+      expect(reserved).toBe(false)
+      expect(() => browserCaptureIdle.assertCaptureAllowed(webContents)).toThrow('reserved')
+      raw.resolve({
+        toPNG: () => Buffer.from('late'),
+        getSize: () => ({ width: 100, height: 100 })
+      })
+      const lease = await reservation
+      expect(queueFrame).toHaveBeenCalledTimes(1)
+      lease.release()
+    } finally {
+      raw.resolve(undefined)
+      vi.useRealTimers()
+    }
+  })
+
   it('drops a best-effort frame when a native lifecycle owns the surface', async () => {
     const fixture = createOwnedViewFixture()
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reservation refuses this fixture before any Debugger API can run.

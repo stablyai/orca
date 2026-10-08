@@ -6,7 +6,13 @@ import {
 /** Who a conversation's agent is and how it launches: the same whether it is created or founded. */
 export type AgentSessionRecordIdentity = Pick<
   AgentSessionRecord,
-  'sessionId' | 'location' | 'provider' | 'accountHome' | 'options' | 'launchArgs'
+  | 'sessionId'
+  | 'location'
+  | 'provider'
+  | 'accountHome'
+  | 'options'
+  | 'launchArgs'
+  | 'launchDirectory'
 >
 
 export function agentSessionRecordIdentityFields(
@@ -21,10 +27,15 @@ export function agentSessionRecordIdentityFields(
     accountHome: identity.accountHome,
     ...(identity.options ? { options: { ...identity.options } } : {}),
     ...(identity.launchArgs ? { launchArgs: [...identity.launchArgs] } : {}),
+    // A /clear continues in the same tab, so it stays in the folder the chat ran in.
+    ...(identity.launchDirectory ? { launchDirectory: identity.launchDirectory } : {}),
     createdAt: now,
     updatedAt: now
   }
 }
+
+/** The fence a founded conversation starts at; every reservation moves it. */
+export const AGENT_SESSION_FOUNDING_FENCE = 1
 
 /**
  * A conversation no agent has run yet, at rest: its first send starts one. The empty handle chain
@@ -41,7 +52,7 @@ export function foundAgentSessionRecord(
       sessionId: identity.sessionId,
       runtimeKind: 'native',
       // Not 0: clients echo the fence as their expected fence, which the wire requires positive.
-      runtimeFence: 1,
+      runtimeFence: AGENT_SESSION_FOUNDING_FENCE,
       handoffStage: null,
       provenHandleLinkId: null,
       ownerProcess: null,

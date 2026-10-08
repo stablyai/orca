@@ -83,9 +83,9 @@ describe('NotificationHostToggles', () => {
     const remoteSwitch = getByRole('switch', { name: 'M4Air mac' })
     expect(remoteSwitch.getAttribute('aria-checked')).toBe('false')
     fireEvent.click(remoteSwitch)
-    expect(onChange).toHaveBeenCalledWith('runtime:m4air', false)
+    expect(onChange).toHaveBeenCalledWith(['runtime:m4air'], false)
     fireEvent.click(getByRole('switch', { name: 'Local Mac' }))
-    expect(onChange).toHaveBeenCalledWith('local', true)
+    expect(onChange).toHaveBeenCalledWith(['local'], true)
     fireEvent.click(getByRole('button', { name: /Machines/ }))
     rerender(
       <NotificationHostToggles

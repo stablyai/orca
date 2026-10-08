@@ -8,6 +8,7 @@ import { recoverStructuredRewind } from './structured-rewind-recovery'
 // state; this owns the ordering between them.
 
 import { randomUUID } from 'node:crypto'
+import { isFloatingWorkspaceId } from '../../../shared/floating-workspace-worktree'
 import type {
   AgentSessionAttachResult,
   AgentSessionMutationResult,
@@ -43,10 +44,13 @@ import {
 } from '../../observability/agent-session-instrumentation'
 
 export type StructuredAgentSessionAttachOptions = {
+  hostLaunchDirectory?: string
   recordPhase?: AgentSessionCreatePhaseRecorder
   onAcquisitionFailed?: AttachFlowInput['onAcquisitionFailed']
   /** The queued message a start is for; see `StructuredAgentSessionProviderChild.startedFor`. */
   startedFor?: string
+  /** A close, an admitted Stop or quit aborted this attach: its refusal is that abort's. */
+  onAborted?: () => void
 }
 
 /**
@@ -69,14 +73,17 @@ export function attachStructuredAgentSessionUnderSerialize(
 export function attachStructuredAgentSession(
   context: StructuredAgentSessionAttachContext,
   callerKey: string,
-  params: AgentSessionAttachParams
+  params: AgentSessionAttachParams,
+  options: StructuredAgentSessionAttachOptions = {}
 ): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
   const sessionId = params.envelope.sessionId
   // Tracked from enqueue, not from its turn on the queue: a quit drains a queued attach before it
   // evicts, so no child is spawned behind the eviction and orphaned.
   const run = (recordPhase?: AgentSessionCreatePhaseRecorder) =>
     context.tasks.trackAttach(
-      context.serialize(sessionId, () => runAttach(context, callerKey, params, { recordPhase }))
+      context.serialize(sessionId, () =>
+        runAttach(context, callerKey, params, { ...options, recordPhase })
+      )
     )
   if (params.envelope.expectedRuntimeFence !== null) {
     return run()
@@ -101,6 +108,25 @@ async function runAttach(
   params: AgentSessionAttachParams,
   options: StructuredAgentSessionAttachOptions
 ): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
+  // Begun first, so a close or Stop during any phase below still stops the start.
+  const acquire = context.runtimeState.acquireAborts.begin(params.envelope.sessionId)
+  try {
+    return await runAttachUnderAbort(context, callerKey, params, options, acquire.signal)
+  } finally {
+    acquire.end()
+    if (acquire.signal.aborted) {
+      options.onAborted?.()
+    }
+  }
+}
+
+async function runAttachUnderAbort(
+  context: StructuredAgentSessionAttachContext,
+  callerKey: string,
+  params: AgentSessionAttachParams,
+  options: StructuredAgentSessionAttachOptions,
+  acquireSignal: AbortSignal
+): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
   const sessionId = params.envelope.sessionId
   const recordPhase = options.recordPhase
   // Readers of a conversation already open are re-baselined when this attach moves its fence.
@@ -119,14 +145,22 @@ async function runAttach(
   const probe = await withAgentSessionCreatePhase('probe_owner', recordPhase, () =>
     context.runtimeState.probeOwner(sessionId)
   )
-  // A child this attach spawns writes through a sink this attempt owns. Only a successful
-  // attach makes the child and its sink the session's; any other exit closes the sink with
-  // whatever the child queued, and leaves the conversation's child as it was.
-  const attemptSink = context.runtimeState.mintEventSink(sessionId)
   // Read before the reserve clears it: how the previous generation ended decides how whatever it
   // left running is settled.
   const priorRecord = context.deps.store.getRecord(sessionId)
   const priorDeathEvidence = priorRecord?.lease.deathEvidence ?? null
+  const launchDirectory =
+    !priorRecord && isFloatingWorkspaceId(params.location.workspaceId)
+      ? (options.hostLaunchDirectory ??
+        (await context.deps.resolveWorkspacePath?.(params.location.workspaceId)))
+      : undefined
+  if (!priorRecord && isFloatingWorkspaceId(params.location.workspaceId) && !launchDirectory) {
+    throw new Error('floating_agent_session_launch_directory_unavailable')
+  }
+  // A child this attach spawns writes through a sink this attempt owns. Only a successful
+  // attach makes the child and its sink the session's; any other exit closes the sink with
+  // whatever the child queued, and leaves the conversation's child as it was.
+  const attemptSink = context.runtimeState.mintEventSink(sessionId)
   const attempt: { candidate: AttachCandidate | null; committed: boolean } = {
     candidate: null,
     committed: false
@@ -146,6 +180,7 @@ async function runAttach(
         }
       },
       authority: {
+        ...(launchDirectory ? { launchDirectory } : {}),
         spawnToken: () => context.deps.mintSpawnToken?.() ?? randomUUID(),
         claimKeyId: context.deps.claimKeyId,
         handoffOperationId: params.envelope.clientOperationId,
@@ -157,6 +192,7 @@ async function runAttach(
       params,
       now: () => context.now(),
       recordPhase,
+      acquireSignal,
       ...(options.onAcquisitionFailed ? { onAcquisitionFailed: options.onAcquisitionFailed } : {}),
       openConversation: async (record) => {
         const conversation = await context.openConversation(record.sessionId, {

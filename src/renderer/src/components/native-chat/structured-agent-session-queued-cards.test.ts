@@ -1,15 +1,17 @@
 // Card projection policy: queue order, derived hold labels (the wire carries
-// none), and the presentation-only suppression of a card whose submission
+// holds, not labels), and the presentation-only suppression of a card whose submission
 // already arrived — a queued draft is otherwise never a transcript bubble.
 
 import { describe, expect, it } from 'vitest'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
 import type { AgentSessionQueuedMessage } from '../../../../shared/agent-session-wire'
-import type { StructuredAgentSessionOutboxEntry } from '../../../../shared/structured-agent-session-outbox'
+import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
 import {
   newestSteerableQueuedMessageCard,
-  outboxOutsideQueuedCards,
-  projectQueuedMessageCards
+  pendingSendsOutsideQueuedCards,
+  projectQueuedMessageCards,
+  queuedMessageCardSteers,
+  queuedMessagesQueuePause
 } from './structured-agent-session-queued-cards'
 
 function draft(
@@ -54,7 +56,6 @@ function handOff(
 }
 
 const IDLE = { hasPendingPrompt: false }
-const QUEUEING = { capability: 'supported', enabled: true } as const
 
 describe('queued message cards', () => {
   it('orders by host position whatever order the list arrives in', () => {
@@ -159,13 +160,40 @@ describe('queued message cards', () => {
     ).toBe('awaiting-answer')
   })
 
-  // A kept card is held on its own, like a failed one: the host sends the cards behind it.
-  it('a card behind a kept or a send_failed card is not held by it', () => {
+  it('a paused queue holds every waiting card, in order: an answer does not drain it', () => {
+    const cards = projectQueuedMessageCards([draft('held', 1), draft('typed-after', 2)], [], {
+      hasPendingPrompt: true,
+      queuePaused: true
+    })
+    expect(cards.map((card) => card.hold)).toEqual(['queue-paused', 'queue-paused'])
+    // Still Steer: the header row, not the card, says it waits.
+    expect(cards.map((card) => queuedMessageCardSteers(card))).toEqual([true, true])
+  })
+
+  it("the header names the queue's pause while it holds a card, and none over cards Resume would not send", () => {
+    const stopped = { reason: 'stopped' } as const
+    const project = (messages: AgentSessionQueuedMessage[], queuePaused = true) =>
+      projectQueuedMessageCards(messages, [], { hasPendingPrompt: false, queuePaused })
+    expect(queuedMessagesQueuePause(project([draft('held', 1)]), stopped)).toEqual(stopped)
+    const unsendable = [
+      draft('returned', 1, { state: 'returned', returnedReason: null }),
+      draft('behind', 2),
+      draft('failed', 3, { paused: true, pausedReason: 'send_failed' })
+    ]
+    expect(queuedMessagesQueuePause(project(unsendable), stopped)).toBeNull()
+    // No published pause (an idle chat after a restart): plain cards, no header.
+    const unpaused = project([draft('waiting', 1)], false)
+    expect(unpaused.map((card) => card.hold)).toEqual(['turn'])
+    expect(queuedMessagesQueuePause(unpaused, null)).toBeNull()
+  })
+
+  // A card held on its own (a failed send, or a newer host's hold) holds nothing behind it.
+  it('a card behind a card held on its own is not held by it', () => {
     const cards = projectQueuedMessageCards(
       [
         draft('failed', 1, { paused: true, pausedReason: 'send_failed' }),
         draft('after-failed', 2),
-        draft('kept', 3, { paused: true, pausedReason: 'kept' }),
+        draft('newer-hold', 3, { paused: true }),
         draft('behind', 4)
       ],
       [],
@@ -180,69 +208,61 @@ describe('queued message cards', () => {
     expect(newestSteerableQueuedMessageCard([])).toBeNull()
   })
 
-  it('a mid-turn queue send on its way is no bubble; one that stalled stays visible', () => {
+  it('a mid-turn queue send on its way is no bubble; a plain or recorded one is, until its row', () => {
     const entry = (
       clientMessageId: string,
-      overrides: Partial<StructuredAgentSessionOutboxEntry> = {}
-    ): StructuredAgentSessionOutboxEntry => ({
+      overrides: Partial<StructuredAgentSessionPendingSend> = {}
+    ): StructuredAgentSessionPendingSend => ({
       clientMessageId,
       sessionId: 'session-1',
       body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: clientMessageId }] },
       previewUris: [],
-      state: 'queued',
       queuedAt: 1,
-      lastAttemptAt: null,
-      retryAfterUnknownSubmittedAt: null,
+      phase: 'sending',
+      issued: true,
       ...overrides
     })
-    const ids = (entries: readonly StructuredAgentSessionOutboxEntry[]): string[] =>
+    const ids = (entries: readonly StructuredAgentSessionPendingSend[]): string[] =>
       entries.map((candidate) => candidate.clientMessageId)
-    const inFlight = [
-      entry('a', { state: 'dispatching', lastAttemptAt: 2, sentDelivery: 'queue-if-active' }),
-      entry('b')
+    const sends = [
+      entry('queued', { delivery: 'queue-if-active' }),
+      entry('plain'),
+      entry('recorded', { phase: 'recorded' })
     ]
-    expect(ids(outboxOutsideQueuedCards(inFlight, [], true, QUEUEING))).toEqual([])
-    expect(ids(outboxOutsideQueuedCards(inFlight, [], false, QUEUEING))).toEqual(['a', 'b'])
-    // Refused and held for Retry: its text stays in view, and what follows it is on its way.
-    const refused = [entry('a', { lastFailure: { kind: 'failed' } }), entry('b')]
-    expect(ids(outboxOutsideQueuedCards(refused, [], true, QUEUEING))).toEqual(['a'])
-    // A rejected send holds nothing up: what follows it is still on its way to a card.
-    const rejected = [
-      entry('a', { state: 'rejected', lastFailure: { kind: 'rejected', reason: null } }),
-      entry('b')
-    ]
-    expect(ids(outboxOutsideQueuedCards(rejected, [], true, QUEUEING))).toEqual(['a'])
-    const unconfirmed = [entry('a', { state: 'unconfirmed' }), entry('b')]
-    expect(ids(outboxOutsideQueuedCards(unconfirmed, [], true, QUEUEING))).toEqual(['a', 'b'])
-    // Once the host visibly holds it, it is a card whatever this queue last heard.
-    expect(ids(outboxOutsideQueuedCards(unconfirmed, ['a'], true, QUEUEING))).toEqual(['b'])
+    // Its card draws a queue send while the agent works; a plain send stays in view, and so does a
+    // recorded one until its row arrives (the transcript drops it then).
+    expect(ids(pendingSendsOutsideQueuedCards(sends, [], true))).toEqual(['plain', 'recorded'])
+    expect(ids(pendingSendsOutsideQueuedCards(sends, [], false))).toEqual([
+      'queued',
+      'plain',
+      'recorded'
+    ])
+    // Once the host visibly holds it, it is a card.
+    expect(ids(pendingSendsOutsideQueuedCards(sends, ['plain'], false))).toEqual([
+      'queued',
+      'recorded'
+    ])
   })
+})
 
-  it('hides a send only by what its request carries: a plain one is always a bubble', () => {
-    const entry = (
-      clientMessageId: string,
-      overrides: Partial<StructuredAgentSessionOutboxEntry> = {}
-    ): StructuredAgentSessionOutboxEntry => ({
-      clientMessageId,
-      sessionId: 'session-1',
-      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: clientMessageId }] },
-      previewUris: [],
-      state: 'queued',
-      queuedAt: 1,
-      lastAttemptAt: null,
-      retryAfterUnknownSubmittedAt: null,
-      ...overrides
-    })
-    const ids = (entries: readonly StructuredAgentSessionOutboxEntry[]): string[] =>
-      entries.map((candidate) => candidate.clientMessageId)
-    // The capability is unknown: a new send goes out plain, so it stays in view.
-    const unknown = { capability: 'unknown', enabled: true } as const
-    expect(ids(outboxOutsideQueuedCards([entry('new')], [], true, unknown))).toEqual(['new'])
-    // A send that went out plain stays a bubble; one that went out queued replays queued.
-    const sent = [
-      entry('plain', { state: 'dispatching', lastAttemptAt: 2, sentDelivery: null }),
-      entry('queued', { state: 'dispatching', lastAttemptAt: 2, sentDelivery: 'queue-if-active' })
-    ]
-    expect(ids(outboxOutsideQueuedCards(sent, [], true, unknown))).toEqual(['plain'])
+describe("another agent's card", () => {
+  it('carries who it is from, read through the shared reader', () => {
+    const from = {
+      kind: 'agent' as const,
+      senders: [
+        {
+          party: { address: 'term_a', terminalHandle: 'term_a', orcaSessionId: null },
+          name: 'Coder'
+        }
+      ],
+      orchestration: null
+    }
+    const agentDraft = draft('a', 1)
+    const cards = projectQueuedMessageCards(
+      [{ ...agentDraft, body: { ...agentDraft.body, from } }, draft('b', 2)],
+      [],
+      { hasPendingPrompt: false }
+    )
+    expect(cards.map((card) => card.from)).toEqual([from, undefined])
   })
 })

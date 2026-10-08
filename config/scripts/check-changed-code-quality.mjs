@@ -149,9 +149,22 @@ export function collectAddedLineRanges(root, requestedBase) {
   // payload base SHA can lag HEAD^1 by any number of commits and need not be in the graph at all.
   // Off that ref (local runs) the requested base is an arbitrary branch tip, so the merge base is
   // still what isolates this branch's own lines.
-  const comparisonBase =
-    resolvePullRequestDiffBase(root, null) ??
-    runGit(root, ['merge-base', resolveBase(root, requestedBase), 'HEAD']).trim()
+  let comparisonBase = resolvePullRequestDiffBase(root, null)
+  if (!comparisonBase) {
+    const base = resolveBase(root, requestedBase)
+    const pendingMerge = spawnSync('git', ['rev-parse', '--verify', 'MERGE_HEAD'], {
+      cwd: root,
+      stdio: 'ignore'
+    })
+    // Incoming base commits are already in the index while HEAD still points to the old feature tip.
+    const mergingBase =
+      pendingMerge.status === 0 &&
+      spawnSync('git', ['merge-base', '--is-ancestor', base, 'MERGE_HEAD'], {
+        cwd: root,
+        stdio: 'ignore'
+      }).status === 0
+    comparisonBase = mergingBase ? base : runGit(root, ['merge-base', base, 'HEAD']).trim()
+  }
   const changedFiles = splitNullDelimited(
     runGit(root, ['diff', '--name-only', '-z', '--diff-filter=ACMRTUB', comparisonBase, '--'])
   )

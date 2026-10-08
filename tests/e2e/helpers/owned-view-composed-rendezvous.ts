@@ -108,7 +108,7 @@ function rgb(value: unknown): value is number[] {
   )
 }
 
-async function optionalJson(file: string): Promise<unknown | undefined> {
+async function optionalJson(file: string): Promise<unknown> {
   try {
     return JSON.parse(await readFile(file, 'utf8'))
   } catch (error) {

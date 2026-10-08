@@ -180,13 +180,18 @@ export async function abandonInstall(
   conn: SshConnection,
   remoteRelayDir: string,
   host: RemoteHostPlatform = DEFAULT_REMOTE_HOST
-): Promise<void> {
+): Promise<boolean> {
   const lock = joinRemotePath(host, remoteRelayDir, RELAY_INSTALL_LOCK_NAME)
-  await execHostCommand(conn, host, removeRemoteTreeCommand(host, lock)).catch((error) => {
-    if (isUnconfirmedSshCommandTermination(error)) {
-      throw error
+  return execHostCommand(conn, host, removeRemoteTreeCommand(host, lock)).then(
+    () => true,
+    (error) => {
+      if (isUnconfirmedSshCommandTermination(error)) {
+        throw error
+      }
+      // Not confirmed removed: the lock may remain.
+      return false
     }
-  })
+  )
 }
 
 /**

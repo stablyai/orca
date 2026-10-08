@@ -5,6 +5,7 @@ import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { NativeChatQuestionCard } from './NativeChatQuestionCard'
 import type { AskAnswerSelection, AskPrompt } from './native-chat-interactive-prompt'
+import { NATIVE_CHAT_QUESTION_AUTO_ADVANCE_MS } from '../../../../shared/native-chat-question-auto-advance'
 
 // The card resolves its own label-keyed selection state into the index-based
 // answer the delivery layer needs. These tests pin that resolution — the exact
@@ -23,12 +24,14 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount())
   container.remove()
+  vi.useRealTimers()
 })
 
 function render(
   prompt: AskPrompt,
   onAnswer: (s: AskAnswerSelection[]) => void,
-  allowOther: boolean | readonly boolean[] = true
+  allowOther: boolean | readonly boolean[] = true,
+  shouldFocus = false
 ): void {
   act(() => {
     root.render(
@@ -37,9 +40,26 @@ function render(
         onAnswer={onAnswer}
         onCancel={() => {}}
         allowOther={allowOther}
+        shouldFocus={shouldFocus}
       />
     )
   })
+}
+
+function pressKey(init: KeyboardEventInit, target: EventTarget = document.body): KeyboardEvent {
+  const event = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init })
+  act(() => {
+    target.dispatchEvent(event)
+  })
+  return event
+}
+
+function passAutoAdvanceBeat(): void {
+  act(() => vi.advanceTimersByTime(NATIVE_CHAT_QUESTION_AUTO_ADVANCE_MS))
+}
+
+function cardTitle(): string | null | undefined {
+  return container.querySelector('[data-testid="native-chat-question-card-title"]')?.textContent
 }
 
 function click(button: Element | undefined, describe: string): void {
@@ -82,6 +102,21 @@ function optionPressed(label: string): string | null | undefined {
   return [...container.querySelectorAll('button[aria-pressed]')]
     .find((b) => b.textContent?.includes(label))
     ?.getAttribute('aria-pressed')
+}
+
+const indentThenFruits: AskPrompt = {
+  questions: [
+    {
+      question: 'Do you prefer tabs or spaces?',
+      multiSelect: false,
+      options: [{ label: 'Tabs' }, { label: 'Spaces' }]
+    },
+    {
+      question: 'Which fruit?',
+      multiSelect: false,
+      options: [{ label: 'Apple' }, { label: 'Banana' }]
+    }
+  ]
 }
 
 const tabsOrSpaces: AskPrompt = {
@@ -355,5 +390,135 @@ describe('NativeChatQuestionCard', () => {
     clickAction('Submit')
 
     expect(onAnswer).toHaveBeenCalledWith([{ indices: [1], other: 'Desktop app' }])
+  })
+
+  it('moves to the next question after a pick and sends after the last one', () => {
+    vi.useFakeTimers()
+    const onAnswer = vi.fn()
+    render(indentThenFruits, onAnswer)
+
+    clickOption('Spaces')
+    expect(optionPressed('Spaces')).toBe('true')
+    expect(cardTitle()).toBe('Do you prefer tabs or spaces?')
+    passAutoAdvanceBeat()
+    expect(cardTitle()).toBe('Which fruit?')
+    expect(onAnswer).not.toHaveBeenCalled()
+    clickOption('Apple')
+    passAutoAdvanceBeat()
+
+    expect(onAnswer).toHaveBeenCalledExactlyOnceWith([
+      { indices: [1], other: '' },
+      { indices: [0], other: '' }
+    ])
+  })
+
+  it('sends nothing when the question is cancelled before the pick moves on', () => {
+    vi.useFakeTimers()
+    const onAnswer = vi.fn()
+    render(tabsOrSpaces, onAnswer)
+
+    clickOption('Spaces')
+    click(container.querySelector('button[aria-label="Cancel"]') ?? undefined, 'Cancel')
+    passAutoAdvanceBeat()
+
+    expect(onAnswer).not.toHaveBeenCalled()
+  })
+
+  it('picks the numbered option when its number key is pressed', () => {
+    vi.useFakeTimers()
+    const onAnswer = vi.fn()
+    render(tabsOrSpaces, onAnswer, true, true)
+
+    pressKey({ key: '2' })
+    passAutoAdvanceBeat()
+
+    expect(onAnswer).toHaveBeenCalledExactlyOnceWith([{ indices: [1], other: '' }])
+  })
+
+  it('toggles multi-select options by number key and waits for Submit', () => {
+    vi.useFakeTimers()
+    const onAnswer = vi.fn()
+    render(
+      {
+        questions: [
+          {
+            question: 'Which fruits?',
+            multiSelect: true,
+            options: [{ label: 'Apple' }, { label: 'Banana' }, { label: 'Cherry' }]
+          }
+        ]
+      },
+      onAnswer,
+      true,
+      true
+    )
+
+    pressKey({ key: '1' })
+    pressKey({ key: '3' })
+    pressKey({ key: '1' })
+    passAutoAdvanceBeat()
+    expect(onAnswer).not.toHaveBeenCalled()
+    clickAction('Submit')
+
+    expect(onAnswer).toHaveBeenCalledExactlyOnceWith([{ indices: [2], other: '' }])
+  })
+
+  it('keeps the keyboard on the card when the focused option is replaced by the next question', () => {
+    vi.useFakeTimers()
+    container.setAttribute('data-native-chat-root', 'true')
+    render(indentThenFruits, vi.fn(), true, true)
+    const spaces = container.querySelectorAll<HTMLElement>('button[aria-pressed]')[1]!
+
+    act(() => spaces.focus())
+    clickOption('Spaces')
+    passAutoAdvanceBeat()
+
+    expect(cardTitle()).toBe('Which fruit?')
+    expect(document.activeElement).toBe(container.querySelector('[role="group"]'))
+  })
+
+  it('picks from a number key pressed anywhere inside its own chat pane', () => {
+    vi.useFakeTimers()
+    const onAnswer = vi.fn()
+    container.setAttribute('data-native-chat-root', 'true')
+    render(tabsOrSpaces, onAnswer, true, true)
+
+    pressKey({ key: '2' }, container.querySelector('button[aria-pressed]')!)
+    passAutoAdvanceBeat()
+
+    expect(onAnswer).toHaveBeenCalledExactlyOnceWith([{ indices: [1], other: '' }])
+  })
+
+  it.each<{
+    when: string
+    shouldFocus?: boolean
+    from?: 'answer-field' | 'outside-pane'
+    init: KeyboardEventInit
+  }>([
+    { when: 'typed into the answer field', from: 'answer-field', init: { key: '1' } },
+    { when: 'pressed on another surface', from: 'outside-pane', init: { key: '1' } },
+    { when: 'pressed while another pane has the keyboard', shouldFocus: false, init: { key: '1' } },
+    { when: 'past the last option', init: { key: '3' } },
+    { when: 'held with a modifier', init: { key: '1', metaKey: true } }
+  ])('leaves a number key alone when $when', ({ shouldFocus = true, from, init }) => {
+    vi.useFakeTimers()
+    const onAnswer = vi.fn()
+    container.setAttribute('data-native-chat-root', 'true')
+    render(tabsOrSpaces, onAnswer, true, shouldFocus)
+    const outside = document.body.appendChild(document.createElement('button'))
+
+    const event = pressKey(
+      init,
+      from === 'answer-field'
+        ? container.querySelector('input')!
+        : from === 'outside-pane'
+          ? outside
+          : document.body
+    )
+    passAutoAdvanceBeat()
+    outside.remove()
+
+    expect(event.defaultPrevented).toBe(false)
+    expect(onAnswer).not.toHaveBeenCalled()
   })
 })

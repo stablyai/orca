@@ -6,8 +6,9 @@
 // crash boundary. That
 // needs no lease: provider history decides such a row later, under a won lease, in the attach. A
 // row an earlier process accepted and never handed over (it quit or crashed first) is settled here
-// too, before any reader, command or child sees it: a person's message is kept as a held card, the
-// rest rejected (`journal-unsent-send-hold.ts`). Nothing here starts a provider child.
+// too, before any reader, command or child sees it: a person's message is kept as a card, the rest
+// rejected (`journal-unsent-send-hold.ts`). The cards then wait for the chat's next turn
+// (`queued-message-pause.ts`). Nothing here starts a provider child.
 
 import type { JournalHostDatabase } from '../agent-session-journal/journal-host-database'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -23,7 +24,10 @@ import {
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { settleStaleStructuredAgentSessionState } from './structured-agent-session-dead-generation-settlement'
 import { structuredAgentSessionFailureWordsContext } from './structured-agent-session-send-preparation'
-import { structuredAgentSessionHostInstance } from './structured-agent-session-queued-pause'
+import {
+  markStructuredQueueReopen,
+  structuredAgentSessionHostInstance
+} from './structured-agent-session-queued-pause'
 import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession
@@ -43,8 +47,6 @@ export type StructuredAgentSessionConversationOpenDeps = {
  *  what the gone generation left running itself, from what it read before. */
 export type StructuredAgentSessionConversationOpenOptions = {
   acquisition?: boolean
-  /** A restore's open, which copies no per-chat file: see `AgentSessionJournal.whenImported`. */
-  deferPerSessionImport?: boolean
 }
 
 export type StructuredAgentSessionConversationOpenContext = {
@@ -90,11 +92,7 @@ export async function openStructuredAgentSessionConversationJournal(
     expectedRuntimeFence: fence
   })
   const identity = journalIdentityFor(record, params)
-  const journal = await openAgentSessionJournal({
-    identity,
-    database: deps.journalDatabase,
-    deferPerSessionImport: options.deferPerSessionImport
-  })
+  const journal = await openAgentSessionJournal({ identity, database: deps.journalDatabase })
   try {
     // A handed-over row found here is only doubt, which provider history decides under a won lease.
     await journal.markPendingSubmissionsUnknown(fence)
@@ -121,6 +119,9 @@ export async function openStructuredAgentSessionConversationJournal(
       error
     })
   }
+  // After the leftovers became cards, so the mark follows every card this open found. Every open
+  // comes after the chat stopped running: the idle sweep never closes one with cards waiting.
+  await markStructuredQueueReopen(sessionId, journal, fence, deps.logger)
   // No child in this process writes to a journal nobody had open, so whatever it shows running
   // belongs to a generation that is gone, whatever the lease still claims. Settled before any
   // reader or child sees it.

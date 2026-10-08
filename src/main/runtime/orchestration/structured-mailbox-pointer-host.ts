@@ -103,7 +103,6 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
           body: input.body,
           // As a person's message is: a busy chat queues it as a card, sent when the turn ends.
           delivery: 'queue',
-          source: input.source,
           operationId: input.operationId,
           expectedRuntimeFence: input.expectedRuntimeFence
         }

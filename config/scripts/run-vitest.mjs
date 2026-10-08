@@ -19,6 +19,6 @@ try {
 
   process.exitCode = result.code ?? 1
 } catch (error) {
-  console.error('Could not start Vitest. Install the Bun version in config/bun-version.', error)
+  console.error('Could not start Vitest. Install the Bun version in config/.bun-version.', error)
   process.exitCode = 1
 }

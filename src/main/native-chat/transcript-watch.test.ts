@@ -3,19 +3,31 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { NativeChatMessage, NativeChatTurnLifecycle } from '../../shared/native-chat-types'
+import type { NativeChatTranscriptSubscription } from './transcript-watch-contract'
 import {
   getActiveNativeChatWatcherCount,
   readNativeChatTranscriptTail,
-  subscribeNativeChatTranscript
+  subscribeNativeChatTranscript as subscribeTranscript
 } from './transcript-watch'
 
+const subscriptions = new Set<NativeChatTranscriptSubscription>()
 let tempRoots: string[] = []
+
+async function subscribeNativeChatTranscript(...args: Parameters<typeof subscribeTranscript>) {
+  const subscription = await subscribeTranscript(...args)
+  subscriptions.add(subscription)
+  return subscription
+}
 
 beforeEach(() => {
   tempRoots = []
 })
 
 afterEach(async () => {
+  for (const subscription of subscriptions) {
+    subscription.unsubscribe()
+  }
+  subscriptions.clear()
   await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })))
   tempRoots = []
 })

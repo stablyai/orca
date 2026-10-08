@@ -380,6 +380,23 @@ describe('DashboardAgentRow', () => {
     expect(activeToolMarkup).toContain('ListDir')
   })
 
+  it("says Stopping in place of the tool line while a person's Stop ends the turn", () => {
+    const markup = renderRow(
+      makeAgent(
+        {},
+        {
+          toolName: 'Bash',
+          toolInput: 'pnpm test',
+          mainAgent: { state: 'working', stopping: true, stateStartedAt: 60_000 }
+        }
+      )
+    )
+
+    expect(markup).toContain('Stopping…')
+    expect(markup).not.toContain('lucide-wrench')
+    expect(markup).toContain('data-agent-spinner')
+  })
+
   it('renders monitoring without a spinner or active tool line', () => {
     const markup = renderRow(
       makeAgent(

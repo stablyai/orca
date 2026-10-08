@@ -23,7 +23,11 @@ describe('structured agent-session host teardown', () => {
     const phases = structuredAgentSessionHostTeardownPhases({
       logger: createStructuredAgentSessionLogger(),
       idleSweep: { dispose: noop },
-      runtimeState: { stopLeaseRenewal: () => undefined, flushAllEventSinks: noop },
+      runtimeState: {
+        stopLeaseRenewal: () => undefined,
+        flushAllEventSinks: noop,
+        acquireAborts: { abortAll: () => {} }
+      },
       tasks: { drainAttaches: noop },
       evictOwnedSessions: noop,
       beginResumeMarkers: () => {},
@@ -33,6 +37,7 @@ describe('structured agent-session host teardown', () => {
       'begin-resume-markers',
       'dispose-idle-sweep',
       'stop-lease-renewal',
+      'abort-acquires',
       'drain-attaches',
       'evict-owned-sessions',
       'record-resume-markers',
@@ -67,7 +72,11 @@ describe('structured agent-session host teardown', () => {
     const evict = structuredAgentSessionHostTeardownPhases({
       logger: createStructuredAgentSessionLogger(),
       idleSweep: { dispose: noop },
-      runtimeState: { stopLeaseRenewal: () => undefined, flushAllEventSinks: noop },
+      runtimeState: {
+        stopLeaseRenewal: () => undefined,
+        flushAllEventSinks: noop,
+        acquireAborts: { abortAll: () => {} }
+      },
       tasks: { drainAttaches: noop },
       evictOwnedSessions: noop,
       beginResumeMarkers: () => {},
@@ -97,7 +106,11 @@ describe('structured agent-session host teardown', () => {
     const phases = structuredAgentSessionHostTeardownPhases({
       logger: log.logger,
       idleSweep: { dispose: cleaned },
-      runtimeState: { stopLeaseRenewal: () => {}, flushAllEventSinks: flush },
+      runtimeState: {
+        stopLeaseRenewal: () => {},
+        flushAllEventSinks: flush,
+        acquireAborts: { abortAll: () => {} }
+      },
       tasks: { drainAttaches: cleaned },
       evictOwnedSessions: cleaned,
       beginResumeMarkers: () => {},

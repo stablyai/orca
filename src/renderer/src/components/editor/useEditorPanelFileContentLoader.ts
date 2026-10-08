@@ -20,6 +20,8 @@ import {
 } from './editor-panel-content-types'
 import type { EditorPanelContentLoadOptions } from './useEditorPanelExternalContentEvents'
 import { migrateRestoredEditorFileOwner } from './migrate-restored-editor-file-owner'
+import { findRestoredEditorWorkspaceRuntimeOwner } from './restored-editor-workspace-runtime-owner'
+import type { RuntimeWorkspaceFileRoute } from '@/lib/runtime-workspace-file-route'
 import { editorTabFileAccess } from '@/lib/local-file-access'
 
 const inFlightFileReads = new Map<string, InFlightContentRead<FileContent>>()
@@ -101,6 +103,41 @@ export function useEditorPanelFileContentLoader({
         readConnectionId = connectionId
         let readWorktreeId = worktreeId
         let readRelativePath = restoredOpenFile?.relativePath ?? relativePath
+        // Re-owning re-keys the tab, which starts a fresh load under the new owner.
+        const reownRestoredFile = async (
+          route: RuntimeWorkspaceFileRoute,
+          runtimeEnvironmentId: string | null
+        ): Promise<void> => {
+          const migration = await migrateRestoredEditorFileOwner(id, route, runtimeEnvironmentId)
+          if (!migration.ok) {
+            throw new Error(
+              migration.reason === 'collision'
+                ? 'The sibling file is already open; close one tab before restoring it.'
+                : 'The sibling file owner changed while the tab was restoring.'
+            )
+          }
+          fileReadGenerationRef.current[id] = ++fileReadGenerationCounterRef.current
+          setFileContents((prev) => {
+            const next = { ...prev }
+            delete next[id]
+            return next
+          })
+        }
+        const workspaceRuntimeOwner =
+          restoredOpenFile && !isLiveTailLogTab
+            ? findRestoredEditorWorkspaceRuntimeOwner(
+                useAppStore.getState(),
+                restoredOpenFile,
+                worktreeId
+              )
+            : null
+        if (workspaceRuntimeOwner) {
+          await reownRestoredFile(
+            workspaceRuntimeOwner.route,
+            workspaceRuntimeOwner.runtimeEnvironmentId
+          )
+          return
+        }
         if (
           resolvedConnectionId === undefined &&
           !readSettings?.activeRuntimeEnvironmentId?.trim() &&
@@ -132,24 +169,7 @@ export function useEditorPanelFileContentLoader({
                 : LOCAL_EXECUTION_HOST_ID
             const route = findWorkspaceFileRoute(currentState, executionHostId, filePath)
             if (route && route.worktreeId !== worktreeId) {
-              const migration = await migrateRestoredEditorFileOwner(
-                id,
-                route,
-                runtimeEnvironmentId ?? null
-              )
-              if (!migration.ok) {
-                throw new Error(
-                  migration.reason === 'collision'
-                    ? 'The sibling file is already open; close one tab before restoring it.'
-                    : 'The sibling file owner changed while the tab was restoring.'
-                )
-              }
-              fileReadGenerationRef.current[id] = ++fileReadGenerationCounterRef.current
-              setFileContents((prev) => {
-                const next = { ...prev }
-                delete next[id]
-                return next
-              })
+              await reownRestoredFile(route, runtimeEnvironmentId ?? null)
               return
             }
             if (runtimeEnvironmentId && !route) {

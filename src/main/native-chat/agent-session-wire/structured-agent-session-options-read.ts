@@ -111,19 +111,37 @@ export async function readStructuredAgentSessionOptions(
   sessionId: string
 ): Promise<AgentSessionOptionsResult> {
   const { adapter, agents, store } = context.deps
-  const live = await context.serialize(sessionId, async () => {
+  const started = await context.serialize(sessionId, async () => {
     const session = await context.openConversation(sessionId).catch((error: unknown) => {
       throw journalOpenReadRefusal(error, context.deps.logger, sessionId)
     })
     const child = session?.child
     if (!child) {
-      return null
+      return { kind: 'rest' as const }
+    }
+    const prepared = adapter.prepareReadOptions?.({ sessionId, fence: child.fence })
+    if (prepared) {
+      return { kind: 'prepared' as const, child, prepared }
     }
     if (!adapter.readOptions) {
       throw new Error('structured_agent_session_options_unsupported')
     }
-    return adapter.readOptions({ sessionId, fence: child.fence })
+    return {
+      kind: 'live' as const,
+      options: await adapter.readOptions({ sessionId, fence: child.fence })
+    }
   })
+  const live =
+    started.kind === 'live'
+      ? started.options
+      : started.kind === 'prepared'
+        ? await started.prepared.then((apply) =>
+            context.serialize(sessionId, async () => {
+              const child = (await context.openConversation(sessionId))?.child
+              return child === started.child ? apply() : null
+            })
+          )
+        : null
   const options = live ?? (await readStructuredAgentSessionOptionsAtRest(context.deps, sessionId))
   // Re-acquired after the reads above: the handle they saw may have closed and reopened since.
   const session = await context.conversation(sessionId)

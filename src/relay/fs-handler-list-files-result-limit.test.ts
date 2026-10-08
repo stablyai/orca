@@ -44,6 +44,8 @@ function createHandler(): { listFiles: ListFilesHandler; dispose: () => void } {
   const handler = new FsHandler(dispatcher, new RelayContext(), {
     dispose: vi.fn(),
     forgetRoot: vi.fn(),
+    disposeAndWait: vi.fn(async () => {}),
+    reopen: vi.fn(),
     subscribe: vi.fn()
   })
   return { listFiles: requestHandlers.get('fs.listFiles')!, dispose: () => handler.dispose() }

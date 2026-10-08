@@ -748,6 +748,22 @@ describe('tui agent startup plans', () => {
     ).toBeNull()
   })
 
+  it('launches Rovo Dev as an acli subcommand and types the prompt after start', () => {
+    // `acli rovodev run <instruction>` is one-shot, so the prompt must not ride argv.
+    const plan = buildAgentStartupPlan({
+      agent: 'rovo',
+      prompt: 'fix it',
+      cmdOverrides: {},
+      agentArgs: resolveTuiAgentLaunchArgs('rovo', null),
+      platform: 'linux'
+    })
+    expect(plan).toMatchObject({
+      launchCommand: "acli rovodev run '--yolo'",
+      expectedProcess: 'acli',
+      followupPrompt: 'fix it'
+    })
+  })
+
   it('launches Devin with stdin-after-start prompt delivery', () => {
     const plan = buildAgentStartupPlan({
       agent: 'devin',

@@ -26,7 +26,19 @@ afterEach(cleanup)
 describe('revealing a diff from a turn rollup', () => {
   let restoreLayout = (): void => {}
   beforeEach(() => {
-    restoreLayout = stubLayout()
+    restoreLayout = stubLayout({ scrollGeometry: true })
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: HTMLElement
+    ) {
+      const row = this.closest<HTMLElement>('[data-index]')
+      const scroller = this.closest<HTMLElement>('[data-native-chat-scroll]')
+      return new DOMRect(
+        0,
+        row ? Number.parseFloat(row.style.top) - (scroller?.scrollTop ?? 0) : 0,
+        100,
+        this.offsetHeight
+      )
+    })
   })
   afterEach(() => {
     restoreLayout()
@@ -79,7 +91,7 @@ describe('revealing a diff from a turn rollup', () => {
     ].map((item, index) => ({ ...item, sequence: index + 1 }))
     const scrollTo = vi.fn()
     vi.spyOn(HTMLElement.prototype, 'scrollTo').mockImplementation(scrollTo)
-    const { container } = render(
+    const transcript = (): React.JSX.Element => (
       <NativeChatMessageList
         session={session(projectStructuredItemsToNativeChat(withPrompts))}
         journalItems={withPrompts}
@@ -87,21 +99,38 @@ describe('revealing a diff from a turn rollup', () => {
         expandSignal={false}
       />
     )
+    const { container, rerender } = render(transcript())
+    const selectedTop = Number.parseFloat(
+      screen.getByText('Second prompt').closest<HTMLElement>('[data-index]')?.style.top ?? ''
+    )
+    expect(selectedTop).toBeGreaterThan(0)
     fireEvent.click(screen.getByRole('button', { name: /1 changed file/ }))
     fireEvent.click(screen.getByRole('button', { name: /src\/a.ts/ }))
     scrollTranscript(container, 6000)
     expect(screen.getByText('Edited')).toBeInTheDocument()
     scrollTo.mockClear()
-    fireEvent.click(screen.getByRole('button', { name: 'Your messages' }))
     fireEvent.click(screen.getByRole('button', { name: 'Second prompt' }))
-    expect(scrollTo).toHaveBeenCalledTimes(1)
+    expect(scrollTo.mock.calls).toEqual([
+      [{ top: 6000, behavior: 'auto' }],
+      [{ top: selectedTop, behavior: 'smooth' }]
+    ])
     expect(screen.queryByRole('button', { name: /^Edited .*a\.ts(?:\s|$)/ })).toBeNull()
+    scrollTo.mockClear()
+    rerender(transcript())
+    rerender(transcript())
+    expect(scrollTo).not.toHaveBeenCalled()
 
     scrollTranscript(container, 0)
     scrollTo.mockClear()
     fireEvent.click(screen.getByRole('button', { name: /1 changed file/ }))
     fireEvent.click(screen.getByRole('button', { name: /src\/a.ts/ }))
-    expect(scrollTo).toHaveBeenCalledTimes(1)
+    const diffTop = Number.parseFloat(
+      screen.getByText('Edited').closest<HTMLElement>('[data-index]')?.style.top ?? ''
+    )
+    expect(Number.isFinite(diffTop)).toBe(true)
+    expect(scrollTo.mock.calls.filter(([options]) => options?.behavior === 'smooth')).toEqual([
+      [{ top: diffTop, behavior: 'smooth' }]
+    ])
   })
 })
 
@@ -134,12 +163,7 @@ describe('jumping to a message from the rail', () => {
     index % 10 === 0 ? userMarker(index) : marker(index)
   )
 
-  /** Open the hover panel through the trigger and click the first prompt. */
   function jumpToFirstPrompt(): void {
-    fireEvent.click(screen.getByRole('button', { name: 'Your messages' }))
-    act(() => {
-      vi.advanceTimersByTime(300)
-    })
     fireEvent.click(screen.getByRole('button', { name: 'prompt-0' }))
     act(() => {
       vi.advanceTimersByTime(300)

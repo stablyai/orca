@@ -3,6 +3,46 @@ import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import type { SettingsSearchEntry } from './settings-search'
 import { formatPrimaryShortcutLabel } from '@/hooks/useShortcutLabel'
 
+export function chatTerminalControlledHint(): string {
+  return translate('settings.appearance.chat.terminalControlledHint', 'Set by terminal interface.')
+}
+
+export function chatTerminalControlledTooltip(): string {
+  return translate(
+    'settings.appearance.chat.terminalControlledTooltip',
+    'Matching your terminal interface. Turn off Match terminal interface to change this.'
+  )
+}
+
+export const getChatContrastEntriesByKey = createLocalizedCatalog(
+  () =>
+    ({
+      matchTerminalInterface: {
+        title: translate(
+          'settings.appearance.chat.matchTerminalInterface',
+          'Match terminal interface'
+        ),
+        description: translate(
+          'settings.appearance.chat.matchTerminalInterfaceDescription',
+          "Use your terminal interface's font and colors for the whole chat. Stays in sync if you change your terminal theme later."
+        ),
+        targetSectionId: 'chat-match-terminal-interface'
+      },
+      contrast: {
+        title: translate('settings.appearance.chat.contrast', 'Contrast'),
+        description: translate(
+          'settings.appearance.chat.contrastDescription',
+          'How bright chat text is against the background. The right end matches the older, brighter look.'
+        ),
+        targetSectionId: 'chat-contrast'
+      }
+    }) satisfies Record<string, SettingsSearchEntry>
+)
+
+export function getChatContrastSearchEntries(): SettingsSearchEntry[] {
+  return Object.values(getChatContrastEntriesByKey())
+}
+
 const getChatAppearanceCatalog = createLocalizedCatalog(
   () =>
     ({
@@ -63,10 +103,9 @@ export function getChatAppearanceEntriesByKey(shortcuts?: { increase: string; de
 
 export function getChatAppearanceSearchEntries(): SettingsSearchEntry[] {
   return [
-    {
-      title: translate('auto.components.settings.Settings.2b4474780a', 'Appearance')
-    },
-    ...Object.values(getChatAppearanceEntriesByKey())
+    { title: translate('auto.components.settings.Settings.2b4474780a', 'Appearance') },
+    ...Object.values(getChatAppearanceEntriesByKey()),
+    ...getChatContrastSearchEntries()
   ]
 }
 

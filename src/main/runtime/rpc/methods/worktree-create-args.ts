@@ -66,6 +66,9 @@ export function buildManagedWorktreeCreateArgs(
     setupDecision: params.setupDecision,
     createdWithAgent: params.createdWithAgent ?? params.startupAgent,
     ...provenance,
+    // Why: a person initiated this create (the phone, CLI text and agent.launch don't surface the
+    // fallback yet); an automation run has no one watching, so it keeps the network error.
+    ...(provenance.automationProvenance ? {} : { allowLocalBaseFallback: true }),
     startup: params.startupCommand
       ? {
           command: params.startupCommand,

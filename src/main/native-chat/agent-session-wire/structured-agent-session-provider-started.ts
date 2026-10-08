@@ -10,7 +10,10 @@
 // asks the provider nothing: the event carries what the child proved.
 
 import { agentSessionLeaseAdmitsWriter } from '../../../shared/agent-session-lease-adjudication'
-import type { StructuredAgentSessionStartedEvent } from './structured-agent-session-adapter'
+import type {
+  StructuredAgentSessionOptionsSkippedEvent,
+  StructuredAgentSessionStartedEvent
+} from './structured-agent-session-adapter'
 import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession
@@ -75,8 +78,51 @@ async function persistStartedOptions(
     options: nativeSessionOptionsFromReport({
       reported: event.reportedOptions,
       restoreSkipped: event.restoreSkippedOptions,
+      ...(event.retiredOptions ? { retired: event.retiredOptions } : {}),
       ...(record.options ? { priorOptions: record.options } : {})
     }),
     now: context.now()
+  })
+}
+
+/** A running child showed saved options it cannot run: the record drops them, as a start that
+ *  skipped them would, so the next start runs the provider's own. Reported, never thrown. */
+export function settleStructuredAgentSessionOptionsSkipped(
+  context: StructuredAgentSessionProviderStartedContext,
+  event: StructuredAgentSessionOptionsSkippedEvent
+): Promise<void> {
+  return context.serialize(event.sessionId, async () => {
+    const { store } = context.deps
+    const record = store.getRecord(event.sessionId)
+    if (
+      !record?.options ||
+      record.lease.runtimeFence !== event.fence ||
+      !agentSessionLeaseAdmitsWriter(record.lease)
+    ) {
+      return
+    }
+    const options = { ...record.options }
+    for (const [key, value] of Object.entries(event.options)) {
+      // A pick made since the child launched is the user's, whatever the child showed.
+      if (options[key] === value) {
+        delete options[key]
+      }
+    }
+    try {
+      await store.replaceSessionOptions({
+        sessionId: event.sessionId,
+        fence: event.fence,
+        options,
+        now: context.now()
+      })
+    } catch (error) {
+      context.deps.logger.warn('dropping a saved option the provider cannot run failed', {
+        scope: 'provider-options-skipped',
+        sessionId: event.sessionId,
+        error
+      })
+    } finally {
+      context.publishStatus?.(event.sessionId)
+    }
   })
 }

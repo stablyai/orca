@@ -1,9 +1,10 @@
 // What becomes of a send the host accepted and can no longer hand over: an earlier host process
 // quit or crashed first (settled at the next open), or the chat is closing. Either way the agent
 // provably never got it. A person's message (typed, or a launch's first prompt) is kept as a card
-// at the head of the queue, held until the person sends, edits or deletes it (`kept`). Everything
-// else is rejected as before, because something else re-derives it or the person re-runs it. The
-// submission itself is always rejected, so it is never handed over twice.
+// at the head of the queue, an ordinary one: like every card the chat closed with, it waits for the
+// chat's next turn (`queued-message-pause.ts`). Everything else is rejected as before, because
+// something else re-derives it or the person re-runs it. The submission itself is always rejected,
+// so it is never handed over twice.
 
 import type {
   AgentJournalItemBody,
@@ -12,11 +13,10 @@ import type {
 } from '../../../shared/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
-import { QUEUED_MESSAGE_PAUSED_KEPT } from '../../../shared/agent-session-queued-message-wire'
 import { USER_MESSAGE_SOURCE } from '../../../shared/agent-session-message-source'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
-import { structuredAgentSessionPayloadFingerprint } from '../../../shared/structured-agent-session-mutation'
+import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
 import type { AgentSessionJournal } from './journal-store'
 import type { JournalRowTransactionHook } from './journal-row-writer'
 import type { QueuedMessagePositionMove } from './queued-message-positions'
@@ -46,13 +46,27 @@ export function unsentSendKeptAsCard(
     return null
   }
   const { source } = submission
-  // Exactly 'user': never `readAgentSessionMessageSource`, whose fallback for what it cannot read
-  // is the person.
+  // Exactly 'user': never a fallback that reads a kind it does not know as the person's.
   const persons =
     source?.kind === USER_MESSAGE_SOURCE.kind ||
     // A build before `source` was recorded: `client` was only ever a person's send.
     (source === undefined && submission.origin === 'client')
   return persons ? body : null
+}
+
+/** A send handed to the agent that it has neither echoed nor refused. Handed to a child that never
+ *  answered its start, it ran nowhere. */
+export function isUnansweredHandedOverSubmission(
+  entry: Pick<
+    AgentJournalSubmission,
+    'handoverRecorded' | 'dispatchState' | 'handedOverAt' | 'recovered'
+  >
+): boolean {
+  return (
+    !isQueuedAgentJournalSubmission(entry) &&
+    (entry.dispatchState === 'pending' ||
+      (entry.dispatchState === 'unknown' && entry.recovered !== true))
+  )
 }
 
 /**
@@ -61,25 +75,34 @@ export function unsentSendKeptAsCard(
  * both. This batch's cards, and the card of a Send the person asked for, go to the head of the
  * queue in the order they were accepted, behind the cards an earlier settlement kept; the queue's
  * own hand-off returns its card where it stood. Throws once every row was
- * tried when one of them could not be written at all: that row stays queued.
+ * tried when one of them could not be written at all: that row stays queued. Resolves where the
+ * newest send it settled was accepted, or null when it settled none.
  */
 export async function holdUnsentSends(
   journal: AgentSessionJournal,
-  input: { fence: number; hostInstance: string; hold: UnsentSendHold }
-): Promise<void> {
+  input: {
+    fence: number
+    hostInstance: string
+    hold: UnsentSendHold
+    /** In place of the queued sends: those a child that ended before it answered its start was
+     *  handed and never echoed. It ran none, so each is unsent as surely as a queued one. */
+    unrun?: true
+  }
+): Promise<number | null> {
   const { hold } = input
   const unsent = journal
     .submissions()
-    .filter(
-      (entry) =>
-        isQueuedAgentJournalSubmission(entry) &&
-        (hold.cause === 'hostRestarted'
-          ? journal.wroteBeforeOpen(entry.acceptedSequence)
-          : (hold.which?.(entry) ?? true))
+    .filter((entry) =>
+      input.unrun
+        ? isUnansweredHandedOverSubmission(entry)
+        : isQueuedAgentJournalSubmission(entry) &&
+          (hold.cause === 'hostRestarted'
+            ? journal.wroteBeforeOpen(entry.acceptedSequence)
+            : (hold.which?.(entry) ?? true))
     )
     .sort((a, b) => (a.acceptedSequence ?? 0) - (b.acceptedSequence ?? 0))
   if (unsent.length === 0) {
-    return
+    return null
   }
   const { epoch } = journal.cursor()
   const kept = unsent.map((submission) => ({
@@ -117,15 +140,11 @@ export async function holdUnsentSends(
                 ? {
                     messageId: clientMessageId,
                     body: card.body,
-                    fingerprint: structuredAgentSessionPayloadFingerprint({
-                      method: 'agentSession.send',
-                      sessionId: journal.queuedMessages.sessionId,
-                      fields: { body: card.body }
-                    }),
+                    fingerprint: agentSessionSendBodyFingerprint(
+                      journal.queuedMessages.sessionId,
+                      card.body
+                    ),
                     hostInstance: input.hostInstance,
-                    holdReason: QUEUED_MESSAGE_PAUSED_KEPT,
-                    // Only a person's send is kept.
-                    source: USER_MESSAGE_SOURCE,
                     queuedAt: { epoch, sequence: submission.acceptedSequence ?? 0 },
                     position: card.position
                   }
@@ -166,6 +185,7 @@ export async function holdUnsentSends(
   if (failures.length > 0) {
     throw new AggregateError(failures, 'settling unsent sends failed')
   }
+  return unsent.at(-1)?.acceptedSequence ?? 0
 }
 
 /** Where each card of the batch goes: right before every other card, the cards an earlier
@@ -177,8 +197,18 @@ function headOfQueuePositions(
   batch: readonly { submission: AgentJournalSubmission; body: AgentJournalMessageItem | null }[]
 ): { placed: QueuedMessagePositionMove[]; earlier: QueuedMessagePositionMove[] } {
   const cards = journal.queuedMessages.list()
+  const keptIds = new Set(
+    journal.submissions().flatMap((entry) => entry.keptAsQueuedMessageId ?? [])
+  )
+  const { epoch } = journal.cursor()
+  // Kept by an earlier settlement: its rejection names it, or, past an epoch that dropped that
+  // row, it was queued in an earlier epoch, before anything this one accepted.
   const earlier = cards
-    .filter((card) => card.state === 'waiting' && card.holdReason === QUEUED_MESSAGE_PAUSED_KEPT)
+    .filter(
+      (card) =>
+        card.state === 'waiting' &&
+        (keptIds.has(card.messageId) || (card.queuedAt !== null && card.queuedAt.epoch !== epoch))
+    )
     .map((card) => card.messageId)
   const placed: QueuedMessagePositionMove[] = []
   for (const { submission, body } of batch) {

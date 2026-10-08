@@ -3,10 +3,6 @@
 
 import type { UnreadAgentSessionFailureFact } from '../../../shared/agent-session-failure'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
-import {
-  readAgentSessionMessageSource,
-  type AgentSessionMessageSource
-} from '../../../shared/agent-session-message-source'
 import { readStoredRejectionFact } from './journal-dispatch-reducer'
 import type { QueuedMessageRow } from './queued-message-table'
 
@@ -31,7 +27,6 @@ export function readStoredQueuedMessageRow(row: unknown): QueuedMessageRow | nul
     carried_from: string | null
     queued_epoch: string | null
     queued_sequence: number | null
-    source_json: string | null
   }
   let body: AgentJournalMessageItem
   try {
@@ -60,7 +55,7 @@ export function readStoredQueuedMessageRow(row: unknown): QueuedMessageRow | nul
     createdAt: record.created_at,
     hostInstance: record.host_instance,
     state,
-    holdReason: record.hold_reason,
+    holdReason: storedHoldReason(record.hold_reason),
     returnedReason: record.returned_reason,
     returnedRejection: storedRejection(record.returned_rejection),
     settledAt: record.settled_at,
@@ -70,19 +65,16 @@ export function readStoredQueuedMessageRow(row: unknown): QueuedMessageRow | nul
     queuedAt:
       record.queued_epoch !== null && typeof record.queued_sequence === 'number'
         ? { epoch: record.queued_epoch, sequence: record.queued_sequence }
-        : null,
-    source: storedSource(record.source_json)
+        : null
   }
 }
 
-function storedSource(json: string | null): AgentSessionMessageSource {
-  let stored: unknown = null
-  try {
-    stored = json === null ? null : JSON.parse(json)
-  } catch {
-    // An unreadable value is read as no value; the source reader decides what that means.
-  }
-  return readAgentSessionMessageSource(stored)
+/** Holds an earlier build stored that this one derives instead: a kept send (`kept`) waits under
+ *  the reopen's pause, a Stop's (`stopped`) under the Stop's. */
+const QUEUED_MESSAGE_RETIRED_HOLD_REASONS: ReadonlySet<string> = new Set(['kept', 'stopped'])
+
+function storedHoldReason(stored: string | null): string | null {
+  return stored !== null && QUEUED_MESSAGE_RETIRED_HOLD_REASONS.has(stored) ? null : stored
 }
 
 function storedRejection(json: string | null): UnreadAgentSessionFailureFact | null {

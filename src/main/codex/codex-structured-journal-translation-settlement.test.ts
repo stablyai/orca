@@ -834,7 +834,8 @@ describe('codex journal translation', () => {
     expect(reduced.get('orca:codex-item%3Athread-abc%3Ar-1')).toEqual({
       kind: 'message',
       role: 'reasoning',
-      blocks: [{ type: 'text', text: 'thinking' }]
+      blocks: [{ type: 'text', text: 'thinking' }],
+      state: 'running'
     })
     expect(reduced.get('orca:codex-item%3Athread-abc%3Apatch-1')).toMatchObject({
       kind: 'diff',

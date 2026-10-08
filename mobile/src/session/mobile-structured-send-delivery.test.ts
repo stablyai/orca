@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentJournalDispatchState } from '../../../src/shared/agent-session-journal-types'
 import type { AgentSessionSendResult } from '../../../src/shared/agent-session-wire'
+import { DISPATCH_REJECTED_CANCELLED } from '../../../src/shared/structured-agent-session-dispatch-rejection'
 import { mobileStructuredSendDelivery } from './mobile-structured-send-delivery'
 import type { StructuredAgentSessionMutationCallResult } from './mobile-structured-agent-session-rpc'
 import { structuredSendResultFixture } from './structured-agent-send-result.test-fixture'
+
+const WITHDRAWN_SENTENCE = 'This message was withdrawn before the agent started it.'
 
 function accepted(
   dispatchState: AgentJournalDispatchState,
@@ -152,6 +155,28 @@ describe('mobileStructuredSendDelivery', () => {
       })
     }
   })
+
+  // The chat draws a send a Stop took back with its stop row, so it never goes back to the draft. A
+  // retained replay is resent by the caller, which needs the id spent and no words of its own.
+  it.each([
+    { retained: false, reason: DISPATCH_REJECTED_CANCELLED, fact: false, outcome: 'accepted' },
+    { retained: false, reason: WITHDRAWN_SENTENCE, fact: true, outcome: 'accepted' },
+    { retained: true, reason: DISPATCH_REJECTED_CANCELLED, fact: false, outcome: 'rejected' },
+    { retained: true, reason: WITHDRAWN_SENTENCE, fact: true, outcome: 'rejected' }
+  ] as const)(
+    'reads a send a Stop took back (retained $retained, typed fact $fact) as $outcome, spent, wordless',
+    ({ retained, reason, fact, outcome }) => {
+      const value = structuredSendResultFixture('rejected', reason)
+      if (fact && 'submission' in value) {
+        value.submission.rejection = { kind: 'cancelled' }
+      }
+      expect(mobileStructuredSendDelivery({ status: 'accepted', value }, retained)).toEqual({
+        outcome,
+        operationIdSpent: true,
+        error: null
+      })
+    }
+  )
 
   it('shows a provider content rejection verbatim', () => {
     expect(

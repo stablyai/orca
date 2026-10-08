@@ -1,5 +1,6 @@
 import { getAppearancePaneSearchEntries } from '@/components/settings/appearance-search'
 import { getChatAppearanceSearchEntries } from '@/components/settings/chat-appearance-search'
+import { getChatNamingSearchEntry } from '@/components/settings/chat-naming-search'
 import { getInputPaneSearchEntries } from '@/components/settings/input-search'
 import { getNotificationsPaneSearchEntries } from '@/components/settings/notifications-search'
 import { getShortcutsPaneSearchEntries } from '@/components/settings/shortcuts-search'
@@ -39,9 +40,15 @@ export function buildInterfaceSettingsSections({
           {
             id: 'chat',
             title: translate('settings.appearance.chat.title', 'Chat'),
-            description: translate('settings.chat.description', 'Choose how chats look.'),
+            description: translate(
+              'settings.chat.description',
+              'Choose how chats look and get their names.'
+            ),
             icon: MessageSquare,
-            searchEntries: getChatAppearanceSearchEntries(),
+            searchEntries: [
+              ...getChatAppearanceSearchEntries(),
+              ...(showDesktopOnlySettings ? [getChatNamingSearchEntry()] : [])
+            ],
             group: 'interface'
           }
         ]

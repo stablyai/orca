@@ -19,7 +19,7 @@ import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listen
 import type { AgentHookSource } from '../shared/agent-hook-relay'
 import type { CachedPaneEnvelopeMeta } from './agent-hook-cached-pane-status'
 
-type RelayInterruptHost = {
+export type RelayInterruptHost = {
   state: HookListenerState
   isListening: boolean
   getMetadata: (paneKey: string) => CachedPaneEnvelopeMeta | undefined
@@ -63,6 +63,14 @@ export function inferRelayClaudeInterrupt(host: RelayInterruptHost, request: unk
   ) {
     return false
   }
+  return applyRelayClaudeInterrupt(host, row, meta)
+}
+
+export function applyRelayClaudeInterrupt(
+  host: Pick<RelayInterruptHost, 'state' | 'apply' | 'armExpiry'>,
+  row: AgentHookEventPayload,
+  meta: CachedPaneEnvelopeMeta
+): boolean {
   const cancelled = markClaudeLeadTurnInterrupted(host.state, row.paneKey)
   const { workingMode: _workingMode, interrupted: _interrupted, ...payload } = row.payload
   const accepted = host.apply(

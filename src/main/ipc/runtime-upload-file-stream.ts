@@ -36,6 +36,38 @@ export type RuntimeUploadFileStreamArgs = RuntimeUploadFileStreamRequest & {
 export async function streamExternalFileToRuntime(
   args: RuntimeUploadFileStreamArgs
 ): Promise<{ byteLength: number }> {
+  return streamExternalFileSlices({
+    sourceRootPath: args.sourceRootPath,
+    entryRelativePath: args.entryRelativePath,
+    expected: args.expected,
+    signal: args.signal,
+    maxFileBytes: REMOTE_IMPORT_MAX_FILE_BYTES,
+    limitLabel: 'per-file remote import limit',
+    writeSlice: (contentBase64, offset) => sendChunk(args, contentBase64, offset > 0)
+  })
+}
+
+export type ExternalFileSliceStreamArgs = {
+  /** Client-local path of the dropped source (file, or root of a dropped directory). */
+  sourceRootPath: string
+  /** Path of this file within the dropped directory; empty when the source is a file. */
+  entryRelativePath: string
+  expected: StagedRuntimeUploadFileIdentity
+  signal?: AbortSignal
+  maxFileBytes: number
+  /** Names the ceiling in the refusal, e.g. "per-file remote import limit". */
+  limitLabel: string
+  /** Sends one base64 slice; `offset` is in source bytes. An empty file sends one empty slice. */
+  writeSlice: (contentBase64: string, offset: number) => Promise<void>
+}
+
+/**
+ * Read a staged client-local file in slices and hand each to `writeSlice`, refusing a source that
+ * was swapped or changed since staging. The destination decides what a slice becomes.
+ */
+export async function streamExternalFileSlices(
+  args: ExternalFileSliceStreamArgs
+): Promise<{ byteLength: number }> {
   const sourcePath = resolveEntrySourcePath(args.sourceRootPath, args.entryRelativePath)
 
   // Why: relativePath is the hidden .orca-upload-<nonce> temp destination, so a
@@ -72,16 +104,16 @@ export async function streamExternalFileToRuntime(
     const totalBytes = openedStat.size
     // Why: enforced again where the bytes actually move. Staging is a separate
     // call, so the ceiling only holds here if this boundary checks it too.
-    if (totalBytes > REMOTE_IMPORT_MAX_FILE_BYTES) {
+    if (totalBytes > args.maxFileBytes) {
       throw new Error(
         `'${displayPath}' is ${formatByteCeiling(totalBytes)}, over the ` +
-          `${formatByteCeiling(REMOTE_IMPORT_MAX_FILE_BYTES)} per-file remote import limit`
+          `${formatByteCeiling(args.maxFileBytes)} ${args.limitLabel}`
       )
     }
     if (totalBytes === 0) {
       // Why: a zero-byte source produces no slices, but the destination still
       // has to exist before commitUpload renames it into place.
-      await sendChunk(args, '', false)
+      await args.writeSlice('', 0)
     } else {
       const buffer = Buffer.allocUnsafe(Math.min(RUNTIME_UPLOAD_SLICE_BYTES, totalBytes))
       let offset = 0
@@ -93,7 +125,7 @@ export async function streamExternalFileToRuntime(
         if (bytesRead === 0) {
           throw new Error(`File truncated during upload: '${displayPath}'`)
         }
-        await sendChunk(args, buffer.subarray(0, bytesRead).toString('base64'), offset > 0)
+        await args.writeSlice(buffer.subarray(0, bytesRead).toString('base64'), offset)
         offset += bytesRead
       }
     }

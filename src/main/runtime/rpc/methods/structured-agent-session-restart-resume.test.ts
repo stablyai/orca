@@ -22,11 +22,13 @@ afterEach(clearStructuredHostStub)
 const CLAUDE_OFFER = { sessionId: 'claude-session', agent: 'claude' }
 const GROK_OFFER = { sessionId: 'grok-session', agent: 'grok' }
 
-// What the desktop renderer really dispatches with: every client that calls these methods
-// advertises Claude support.
+// A desktop from before registered agents: every client that calls these methods advertises Claude
+// support, and this one nothing beyond Claude and Codex.
 const OLD_CLIENT = {
   ...STRUCTURED_CLIENT,
-  clientCapabilities: [...DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES]
+  clientCapabilities: DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES.filter(
+    (capability) => capability !== STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
+  )
 }
 const NEW_CLIENT = {
   ...OLD_CLIENT,

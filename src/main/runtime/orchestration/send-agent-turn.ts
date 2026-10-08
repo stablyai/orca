@@ -17,7 +17,6 @@ import {
   type AgentSessionQueuedSendReceipt
 } from '../../../shared/agent-session-wire'
 import type { AgentSessionWireRefusal } from '../../../shared/agent-session-wire-refusals'
-import type { AgentMessageSource } from '../../../shared/agent-session-message-source'
 import { ORCHESTRATION_READINESS_TIMEOUT_MS } from '../../../shared/orchestration-timing-budgets'
 import { structuredAgentSessionMessageSendMutation } from '../../../shared/structured-agent-session-send-mutation'
 import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-host'
@@ -36,15 +35,13 @@ export type StructuredAgentTurnHost = Pick<
 >
 
 export type StructuredSessionTurn = {
+  /** Carries its sender as `from`, which the chat shows and no fingerprint covers. */
   body: AgentJournalMessageItem
   /** Reused on a retry, so the host replays its recorded answer instead of sending twice. */
   operationId: string
   expectedRuntimeFence: number
-} & (
-  | { delivery: 'now' }
-  /** A queued card records who it is from. */
-  | { delivery: 'queue'; source: AgentMessageSource }
-)
+  delivery: AgentTurnDelivery
+}
 
 export type StructuredSessionTurnSend = {
   kind: 'structured-session'
@@ -134,11 +131,7 @@ async function sendStructuredSessionTurn(
     body: turn.body,
     delivery: turn.delivery === 'queue' ? 'queue-if-active' : undefined
   })
-  const result = await send.host.send(
-    { callerKey: send.callerKey },
-    // The source is host-local and outside the fingerprint: a retry under the same id replays.
-    turn.delivery === 'queue' ? { ...message, source: turn.source } : message
-  )
+  const result = await send.host.send({ callerKey: send.callerKey }, message)
   if (!result.ok) {
     return { kind: 'refused', refusal: result.refusal }
   }

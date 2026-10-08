@@ -13,7 +13,7 @@ import type {
 } from '../../../shared/agent-session-journal-types'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
-import { queuedMessageFingerprint } from '../agent-session-wire/structured-agent-session-queued-messages'
+import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
 import { JournalQueuedMessages } from './journal-queued-messages'
 import type { AgentSessionJournal } from './journal-store'
 import { createTrackedJournalOpener } from './journal-host-database-test-support'
@@ -72,13 +72,12 @@ async function handOffAndReject(
   options: { handedOver: boolean } = { handedOver: true }
 ): Promise<void> {
   const body = message(text)
-  const fingerprint = queuedMessageFingerprint(IDENTITY.sessionId, body)
+  const fingerprint = agentSessionSendBodyFingerprint(IDENTITY.sessionId, body)
   await journal.queuedMessages.insert({
     messageId: 'draft-1',
     body,
     fingerprint,
-    hostInstance: 'p',
-    source: { kind: 'user' }
+    hostInstance: 'p'
   })
   await journal.appendSubmission(
     {
@@ -152,7 +151,7 @@ describe("a waiting draft whose 'never delivered' claim an echo disproves", () =
     const body = message('did it land?')
     await journal.appendSubmission({
       clientMessageId: 'typed-again',
-      payloadFingerprint: queuedMessageFingerprint(IDENTITY.sessionId, body),
+      payloadFingerprint: agentSessionSendBodyFingerprint(IDENTITY.sessionId, body),
       body,
       fence: 0,
       handoverRecorded: true

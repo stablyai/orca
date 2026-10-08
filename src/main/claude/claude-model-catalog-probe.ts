@@ -15,7 +15,6 @@ export type ClaudeModelCatalogProbeDeps = Pick<
   ClaudeStructuredLaunchResolverDeps,
   'resolveCommand' | 'resolveEnv' | 'resolveInheritedEnv' | 'resolveAuthPolicy'
 > & {
-  authSwitchSettleTimeoutMs?: number
   /** Test seams; production runs the one-shot listing child. */
   discover?: typeof discoverModelsLocal
   spawnAgent?: typeof spawnSourceControlAgent

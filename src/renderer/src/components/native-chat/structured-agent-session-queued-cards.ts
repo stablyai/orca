@@ -3,17 +3,15 @@
 
 import type { UnreadAgentSessionFailureFact } from '../../../../shared/agent-session-failure'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
-import type { AgentSessionQueuedMessage } from '../../../../shared/agent-session-wire'
+import type {
+  AgentSessionQueuedMessage,
+  AgentSessionQueuePause
+} from '../../../../shared/agent-session-wire'
+import {
+  readAgentMessageSource,
+  type AgentMessageSource
+} from '../../../../shared/agent-session-message-source'
 import { handedOffQueuedMessageIds } from '../../../../shared/structured-agent-session-draft-hand-off'
-import {
-  structuredAgentSessionEntryAsksToQueue,
-  type StructuredAgentSessionQueueDelivery
-} from '../../../../shared/structured-agent-session-outbox-delivery'
-import type { StructuredAgentSessionOutboxEntry } from '../../../../shared/structured-agent-session-outbox'
-import {
-  admitStructuredAgentSessionOutboxEntry,
-  structuredAgentSessionEntryHeldForRetry
-} from '../../../../shared/structured-agent-session-outbox-admission'
 
 /** Why a card is not on its way right now; decides the caption under the text. */
 export type QueuedMessageCardHold =
@@ -37,6 +35,8 @@ export type QueuedMessageCard = {
   returnedReason?: string | null
   /** The typed fact the returned card's submission settled with; read like its `rejection`. */
   returnedRejection?: UnreadAgentSessionFailureFact
+  /** Another agent's card: who sent it. */
+  from?: AgentMessageSource
 }
 
 function queuedMessageCardText(body: AgentSessionQueuedMessage['body']): string {
@@ -76,6 +76,7 @@ export function projectQueuedMessageCards(
                 ? 'awaiting-answer'
                 : 'turn'
     behindReturned = behindReturned || message.state === 'returned'
+    const from = readAgentMessageSource(message.body.from)
     return {
       messageId: message.messageId,
       position: message.position,
@@ -86,9 +87,25 @@ export function projectQueuedMessageCards(
       ...(message.returnedReason !== undefined ? { returnedReason: message.returnedReason } : {}),
       ...(message.returnedRejection !== undefined
         ? { returnedRejection: message.returnedRejection }
-        : {})
+        : {}),
+      ...(from ? { from } : {})
     }
   })
+}
+
+/** The pause the header row names, while it holds a card. A pause over cards Resume would not
+ *  send (returned, held on their own, or behind a returned one) offers nothing to press. */
+export function queuedMessagesQueuePause(
+  cards: readonly QueuedMessageCard[],
+  queuePause: AgentSessionQueuePause | null
+): AgentSessionQueuePause | null {
+  return cards.some((card) => card.hold === 'queue-paused') ? queuePause : null
+}
+
+/** Steer names the mid-turn jump, also while the whole queue is paused; a card held on its own or
+ *  returned is not waiting on the turn, so its action is plainly Send. */
+export function queuedMessageCardSteers(card: QueuedMessageCard): boolean {
+  return card.hold !== 'paused' && card.hold !== 'returned'
 }
 
 /** The card Cmd/Ctrl+Enter steers: the newest one; every shown card takes Send-now. */
@@ -99,31 +116,17 @@ export function newestSteerableQueuedMessageCard(
 }
 
 /**
- * The outbox entries the transcript may show as pending bubbles. A send the host holds
- * as a draft (same id) is a card, and so is a send on its way out asking to be queued —
- * read from what its request carries — otherwise it paints
- * in the transcript until the queued answer retires it. A plain send stays a bubble. From
- * the entry the drain is stopped on (read through the drain's own rule), nothing is on its
- * way, nor is one held for its Retry: those stay bubbles so their text is visible beside the
- * Retry row.
+ * The sends the transcript draws as pending bubbles. One the host holds as a card (same id) is a
+ * card, and so is one asking to be queued while the agent works, which would otherwise paint in the
+ * transcript until its card appears. A recorded one stays drawn until its row arrives.
  */
-export function outboxOutsideQueuedCards(
-  outbox: readonly StructuredAgentSessionOutboxEntry[],
-  heldIds: readonly string[],
-  isWorking: boolean,
-  host: StructuredAgentSessionQueueDelivery
-): readonly StructuredAgentSessionOutboxEntry[] {
+export function pendingSendsOutsideQueuedCards<
+  Send extends { clientMessageId: string; delivery?: 'queue-if-active' }
+>(pending: readonly Send[], heldIds: readonly string[], isWorking: boolean): readonly Send[] {
   const held = new Set(heldIds)
-  const admission = admitStructuredAgentSessionOutboxEntry(outbox)
-  const stalledFrom = admission.state === 'blocked' ? outbox.indexOf(admission.entry) : -1
-  const next = outbox.filter((entry, index) => {
-    const onItsWay =
-      isWorking &&
-      (stalledFrom === -1 || index < stalledFrom) &&
-      (entry.state === 'queued' || entry.state === 'dispatching') &&
-      !structuredAgentSessionEntryHeldForRetry(entry) &&
-      structuredAgentSessionEntryAsksToQueue(entry, host)
-    return !held.has(entry.clientMessageId) && !onItsWay
-  })
-  return next.length === outbox.length ? outbox : next
+  const next = pending.filter(
+    (entry) =>
+      !held.has(entry.clientMessageId) && !(isWorking && entry.delivery === 'queue-if-active')
+  )
+  return next.length === pending.length ? pending : next
 }

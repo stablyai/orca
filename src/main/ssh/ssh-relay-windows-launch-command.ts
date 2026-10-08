@@ -9,13 +9,12 @@
  * the addon, or a job that refuses breakaway), and a refusal there is reported as one.
  */
 import {
-  RELAY_WINDOWS_BREAKAWAY_ARGS_FLAG,
-  RELAY_WINDOWS_BREAKAWAY_EXIT_CODES,
-  RELAY_WINDOWS_BREAKAWAY_LAUNCH_FLAG,
-  RELAY_WINDOWS_BREAKAWAY_STDERR_FLAG,
-  RELAY_WINDOWS_BREAKAWAY_STDOUT_FLAG,
-  RELAY_WINDOWS_LAUNCH_REPORT_MARKER
-} from '../../shared/relay-windows-breakaway-launch'
+  RELAY_WINDOWS_BREAKAWAY_CONTRACT,
+  WINDOWS_BREAKAWAY_EXIT_CODES,
+  WINDOWS_BREAKAWAY_LAUNCH_FLAG,
+  WINDOWS_BREAKAWAY_STDERR_FLAG,
+  WINDOWS_BREAKAWAY_STDOUT_FLAG
+} from '../../shared/windows-breakaway-launch'
 import { commandWithNodePath } from './ssh-remote-commands'
 import { joinRemotePath, type RemoteHostPlatform } from './ssh-remote-platform'
 import { powerShellLiteral, powerShellNativeArg } from './ssh-remote-powershell'
@@ -76,12 +75,12 @@ export function windowsRelayLaunchCommand(
 ): string {
   const relayScript = joinRemotePath(hostPlatform, opts.remoteDir, 'relay.js')
   const launcherArgs = [
-    RELAY_WINDOWS_BREAKAWAY_LAUNCH_FLAG,
-    RELAY_WINDOWS_BREAKAWAY_STDOUT_FLAG,
+    WINDOWS_BREAKAWAY_LAUNCH_FLAG,
+    WINDOWS_BREAKAWAY_STDOUT_FLAG,
     opts.logFile,
-    RELAY_WINDOWS_BREAKAWAY_STDERR_FLAG,
+    WINDOWS_BREAKAWAY_STDERR_FLAG,
     opts.errFile,
-    RELAY_WINDOWS_BREAKAWAY_ARGS_FLAG,
+    RELAY_WINDOWS_BREAKAWAY_CONTRACT.argsFlag,
     ...relayDaemonArgs(opts)
   ]
   const launcher = `& ${powerShellLiteral(opts.nodePath)} relay.js ${launcherArgs.map(powerShellNativeArg).join(' ')}`
@@ -91,7 +90,7 @@ export function windowsRelayLaunchCommand(
     `$orcaWmi = Invoke-CimMethod -ErrorAction Stop -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = ${powerShellLiteral(wmiCommandLine(opts, relayScript))}; CurrentDirectory = ${powerShellLiteral(opts.remoteDir)} }`,
     `} catch { throw "${refused}: breakaway launcher unavailable ($orcaLaunch) and WMI Win32_Process.Create denied ($($_.Exception.Message))" }`,
     `if ($orcaWmi.ReturnValue -ne 0) { throw "${refused}: breakaway launcher unavailable ($orcaLaunch) and Win32_Process.Create returned $($orcaWmi.ReturnValue)" }`,
-    `'${RELAY_WINDOWS_LAUNCH_REPORT_MARKER} {"method":"wmi"}'`
+    `'${RELAY_WINDOWS_BREAKAWAY_CONTRACT.reportMarker} {"method":"wmi"}'`
   ].join('; ')
   return commandWithNodePath(
     hostPlatform,
@@ -101,8 +100,8 @@ export function windowsRelayLaunchCommand(
       `$orcaLaunch = (${launcher}) -join ' '`,
       '$orcaLaunchCode = $LASTEXITCODE',
       '$orcaLaunch',
-      `if ($orcaLaunchCode -eq ${RELAY_WINDOWS_BREAKAWAY_EXIT_CODES.unavailable}) { ${wmi} } ` +
-        `elseif ($orcaLaunchCode -ne ${RELAY_WINDOWS_BREAKAWAY_EXIT_CODES.launched}) { throw "Relay launcher exited $($orcaLaunchCode): $orcaLaunch" }`
+      `if ($orcaLaunchCode -eq ${WINDOWS_BREAKAWAY_EXIT_CODES.unavailable}) { ${wmi} } ` +
+        `elseif ($orcaLaunchCode -ne ${WINDOWS_BREAKAWAY_EXIT_CODES.launched}) { throw "Relay launcher exited $($orcaLaunchCode): $orcaLaunch" }`
     ].join('; ')
   )
 }
@@ -123,5 +122,21 @@ export function classifyWindowsRelayLaunchError(error: unknown): unknown {
   return new Error(
     `The Windows host refused to start Orca's relay outside the SSH session. ${detail}`,
     { cause: error }
+  )
+}
+
+/** Reaches a running Windows relay through its own bridge, as a reconnect or a census does. */
+export function windowsRelayConnectCommand(
+  hostPlatform: RemoteHostPlatform,
+  nodePath: string,
+  remoteDir: string,
+  sockPath: string,
+  credentialFile: string
+): string {
+  return commandWithNodePath(
+    hostPlatform,
+    nodePath,
+    remoteDir,
+    `& ${powerShellLiteral(nodePath)} relay.js --connect --sock-path ${powerShellLiteral(sockPath)} --credential-file ${powerShellLiteral(credentialFile)}`
   )
 }

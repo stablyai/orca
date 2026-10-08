@@ -54,11 +54,11 @@ on:
         required: true
         type: string
       drain-pace-window-ms:
-        description: Window the cell spreads its drain over; below 300000 only for US general cells, named in the confirmation
+        description: Window the cell spreads its drain over; below 300000 only for US general cells; any other value named in the confirmation
         required: true
         default: '300000'
         type: choice
-        options: ['300000', '60000', '30000']
+        options: ['300000', '60000', '30000', '900000', '1200000']
       canary-run-id:
         description: Successful same-code canary in this rehome control generation; reusable across batches
         required: false
