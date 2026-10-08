@@ -29,7 +29,11 @@ import {
 import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
 import { NO_OBSERVING_PROVIDER_REASON } from '../../shared/pty-liveness-verdict'
 import { buildControllerTerminalIdentities } from './orca-runtime-build-controller-terminal-identities'
-import { retireOrchestrationAuthorityAbsentFromInventory } from './runtime-restored-orchestration-authority-sweep'
+import {
+  isPtyOutsideRefreshScope,
+  retireOrchestrationAuthorityAbsentFromInventory,
+  skipSessionOutsideTargetWorktree
+} from './runtime-restored-orchestration-authority-sweep'
 
 export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory extends OrcaRuntimeWithRefreshPtyWorktreeRecordsFromController {
   protected async refreshPtyWorktreeRecordsWithControllerInventory(
@@ -144,8 +148,6 @@ export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory ext
     const allLivePtyIds = new Set(sessions.map((session) => session.id))
     const selectedLivePtyIds = new Set<string>()
     for (const session of sessions) {
-      // The owning inventory positively observed this PTY, providing host evidence of life.
-      this.markPtyLivenessLive(session.id, livenessObservationAtStart)
       const sessionConnectionId =
         parseAppSshPtyId(session.id)?.connectionId ??
         (typeof connectionId === 'string' ? connectionId : null)
@@ -176,6 +178,16 @@ export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory ext
             persistedWorktree?.id ??
             inferredWorktreeId ??
             findResolvedWorktreeIdForPath(resolvedWorktrees, session.cwd, targetWorktreeId))
+      if (
+        skipSessionOutsideTargetWorktree(this.restoredOrchestrationAuthorityByPtyId, {
+          ptyId: session.id,
+          worktreeId,
+          trackedWorktreeId: this.ptysById.get(session.id)?.worktreeId,
+          targetWorktreeId
+        })
+      ) {
+        continue
+      }
       const persistedSurface = persistedIndexes.surfaceByPtyId.get(session.id)
       const restoresExactSurface =
         persistedSurface &&
@@ -183,28 +195,15 @@ export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory ext
         persistedSurface.incarnationId === session.incarnationId &&
         Boolean(worktreeId) &&
         runtimeWorktreeIdsEqual(persistedSurface.worktreeId, worktreeId as string)
+      // A scoped inventory may contain other workspaces on this same host.
+      this.markPtyLivenessLive(session.id, livenessObservationAtStart)
       this.adoptControllerTerminalHandle(
         session.id,
         controllerIdentity?.handle ?? session.terminalHandle,
         controllerIdentity?.incarnationId ?? session.incarnationId,
         { exactRestoredSurface: Boolean(restoresExactSurface && controllerIdentity) }
       )
-      if (
-        !targetWorktreeId ||
-        (worktreeId && runtimeWorktreeIdsEqual(worktreeId, targetWorktreeId))
-      ) {
-        selectedLivePtyIds.add(session.id)
-      }
-      if (
-        targetWorktreeId &&
-        (!worktreeId || !runtimeWorktreeIdsEqual(worktreeId, targetWorktreeId))
-      ) {
-        const receipt = this.restoredOrchestrationAuthorityByPtyId.get(session.id)
-        if (receipt && runtimeWorktreeIdsEqual(receipt.worktreeId, targetWorktreeId)) {
-          this.restoredOrchestrationAuthorityByPtyId.delete(session.id)
-        }
-        continue
-      }
+      selectedLivePtyIds.add(session.id)
       this.restoredOrchestrationAuthorityByPtyId.delete(session.id)
       if (worktreeId) {
         const pty = this.recordPtyWorktree(session.id, worktreeId, {
@@ -236,7 +235,7 @@ export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory ext
       }
     }
     for (const pty of this.ptysById.values()) {
-      if (connectionId !== undefined && pty.connectionId !== connectionId) {
+      if (isPtyOutsideRefreshScope(pty, targetWorktreeId, connectionId)) {
         continue
       }
       const encodedHostId = getPtyExecutionHost(pty.ptyId)
@@ -299,9 +298,10 @@ export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory ext
     retireOrchestrationAuthorityAbsentFromInventory(this.restoredOrchestrationAuthorityByPtyId, {
       queriedHostIds,
       allLivePtyIds,
-      connectionId
+      connectionId,
+      targetWorktreeId
     })
-    this.pruneDisconnectedPtyRecords()
+    this.pruneDisconnectedPtyRecords(targetWorktreeId)
     return {
       livePtyIds: targetWorktreeId ? selectedLivePtyIds : allLivePtyIds,
       allLivePtyIds,

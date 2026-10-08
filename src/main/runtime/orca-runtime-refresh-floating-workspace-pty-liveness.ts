@@ -1,4 +1,5 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
+import { runtimeWorktreeIdsEqual } from './runtime-worktree-path-identity'
 import { OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory } from './orca-runtime-refresh-pty-worktree-records-with-controller-inventory'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
@@ -84,7 +85,7 @@ export class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends OrcaRunt
         pty.disconnectedAt ??= Date.now()
       }
     }
-    this.pruneDisconnectedPtyRecords()
+    this.pruneDisconnectedPtyRecords(FLOATING_TERMINAL_WORKTREE_ID)
     return livePtyIds
   }
 
@@ -106,9 +107,14 @@ export class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends OrcaRunt
     pty.tailWaitState = undefined
   }
 
-  protected pruneDisconnectedPtyRecords(): void {
+  protected pruneDisconnectedPtyRecords(targetWorktreeId: string | null = null): void {
     const retained = [...this.ptysById.values()]
-      .filter((pty) => !pty.connected && !this.leafExistsForPty(pty.ptyId))
+      .filter(
+        (pty) =>
+          (!targetWorktreeId || runtimeWorktreeIdsEqual(pty.worktreeId, targetWorktreeId)) &&
+          !pty.connected &&
+          !this.leafExistsForPty(pty.ptyId)
+      )
       .sort((a, b) => (a.disconnectedAt ?? 0) - (b.disconnectedAt ?? 0))
     const staleCount = Math.max(0, retained.length - DISCONNECTED_PTY_RECORD_MAX)
     for (const stale of retained.slice(0, staleCount)) {
