@@ -1,4 +1,6 @@
+import { rpcExecutionHostEnvelope } from '../../transport/rpc-execution-host-target'
 import type { BrowserScreencastFrame } from '../../transport/browser-screencast-protocol'
+import type { RpcClient } from '../../transport/rpc-client'
 import {
   BRIDGE_PROTOCOL_VERSION,
   type BridgeClientMessage,
@@ -72,7 +74,7 @@ export class BridgeClientSubscriptions {
     method: string,
     params: unknown,
     onData: (result: unknown) => void,
-    onBinaryFrame?: (frame: BrowserScreencastFrame) => void
+    { onBinaryFrame, executionHost }: Parameters<RpcClient['subscribe']>[3] = {}
   ): boolean {
     this.streams.set(id, { onData, onBinaryFrame, lastSeq: 0, unackedFrames: 0, unackedBytes: 0 })
     const sent = this.options.send({
@@ -83,7 +85,8 @@ export class BridgeClientSubscriptions {
       params,
       // Asked for only when there is something to hand the frames to, so a shell that pays to
       // encode binary is one a listener is waiting on.
-      ...(onBinaryFrame === undefined ? {} : { wantsBinary: true })
+      ...(onBinaryFrame === undefined ? {} : { wantsBinary: true }),
+      ...rpcExecutionHostEnvelope(executionHost)
     })
     if (sent) {
       return true

@@ -157,6 +157,10 @@ export const hostViewSettingsSchema = z
       workspaceStatuses: salvagedOptional(
         'workspaceStatuses',
         z.array(z.looseObject({ id: z.string(), label: z.string() }))
+      ),
+      visibleWorkspaceHostIds: salvagedOptional(
+        'visibleWorkspaceHostIds',
+        z.array(z.string()).nullable()
       )
     })
   })

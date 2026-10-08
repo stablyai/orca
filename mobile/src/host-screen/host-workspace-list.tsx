@@ -72,6 +72,12 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
           onDismiss={() => setDismissedNotice(noticeParam ?? null)}
         />
       )}
+      {state.serverNotice ? (
+        <HostRouteNoticeBanner
+          message={state.serverNotice}
+          onDismiss={() => state.setServerNotice(null)}
+        />
+      ) : null}
 
       {/* An action that did not happen. Above the list and dismissible, because the list, the
           header and the confirm it re-opens all have to stay on screen. */}

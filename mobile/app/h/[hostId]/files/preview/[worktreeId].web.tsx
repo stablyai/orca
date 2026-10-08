@@ -1,3 +1,4 @@
+import { withWorkspaceRoute } from '../../../../../src/navigation/workspace-route'
 import { useLocalSearchParams } from 'expo-router'
 import { MobileFilePreviewScreen } from '../../../../../src/files/MobileFilePreviewScreen'
 import { normalizeMobileFilePreviewRouteParams } from '../../../../../src/files/mobile-file-preview-route'
@@ -10,7 +11,7 @@ import { normalizeMobileFilePreviewRouteParams } from '../../../../../src/files/
  * OrcaMobileWebShellView, whose module calls requireNativeViewManager at import and throws in a
  * browser, which is what the page opening this route would hit.
  */
-export default function MobileFilePreviewRoute() {
+export default withWorkspaceRoute(function MobileFilePreviewRoute() {
   const params = useLocalSearchParams<{
     hostId?: string | string[]
     worktreeId?: string | string[]
@@ -29,4 +30,4 @@ export default function MobileFilePreviewRoute() {
     worktreeName?: string | string[]
   }>()
   return <MobileFilePreviewScreen route={normalizeMobileFilePreviewRouteParams(params)} />
-}
+})

@@ -32,6 +32,7 @@ function catalogHook(fetched: unknown, actionErrors: string[], catalogErrors: (s
     setLastKnownWorktrees: () => {},
     setOptimisticActiveWorktreeIdentity: () => {},
     setPinnedIds: (apply: (previous: Set<string>) => Set<string>) => apply(new Set()),
+    setServerWorkspaces: () => {},
     setSleptIds: (apply: (previous: Set<string>) => Set<string>) => apply(new Set()),
     setWorktrees: () => {},
     setWorktreesLoaded: () => {},
@@ -44,6 +45,7 @@ function catalogHook(fetched: unknown, actionErrors: string[], catalogErrors: (s
     connState: 'connected',
     embedded: true,
     fetchRepoMetadata: async () => {},
+    hostCapabilities: [],
     hostId: 'host-1',
     state,
     syncViewSettingsFromDesktop: async () => {}

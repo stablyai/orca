@@ -11,6 +11,7 @@ export default function PrRedirect() {
     worktreeId?: string | string[]
     name?: string | string[]
     origin?: string | string[]
+    executionHost?: string | string[]
   }>()
   return (
     <Redirect
@@ -21,6 +22,7 @@ export default function PrRedirect() {
           worktreeId: firstParam(params.worktreeId),
           name: firstParam(params.name),
           origin: firstParam(params.origin),
+          executionHost: firstParam(params.executionHost),
           tab: 'pr'
         }
       }}

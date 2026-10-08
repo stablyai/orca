@@ -12,6 +12,7 @@ import {
   type WorkspaceViewSettings
 } from '../worktree/workspace-view-settings'
 import type { Worktree } from '../worktree/workspace-list-sections'
+import { readVisibleHostIds } from '../worktree/visible-host-rows'
 import { hostViewSettingsRead, hostViewSettingsWrite } from './host-screen-operations'
 import type { HostScreenState } from './use-host-screen-state'
 
@@ -31,6 +32,7 @@ export function useHostViewSettings(args: {
     setFilters,
     setGroupMode,
     setSortMode,
+    setVisibleHostIds,
     setWorkspaceStatuses,
     sortMode,
     viewStateRef,
@@ -109,6 +111,7 @@ export function useHostViewSettings(args: {
         return
       }
       applyViewState(applyDesktopViewSettings(viewStateRef.current, ui))
+      setVisibleHostIds(readVisibleHostIds(ui.visibleWorkspaceHostIds))
     } catch {
       // Transient transport failure; retry on the next focus/connect.
     }

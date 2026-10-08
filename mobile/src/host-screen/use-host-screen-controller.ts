@@ -78,6 +78,7 @@ export function useHostScreenController({
     connState,
     embedded,
     fetchRepoMetadata,
+    hostCapabilities,
     hostId,
     state,
     syncViewSettingsFromDesktop: settings.syncViewSettingsFromDesktop
@@ -88,6 +89,7 @@ export function useHostScreenController({
     embedded,
     fetchWorktrees: catalog.fetchWorktrees,
     forgetHostClient,
+    hostCapabilities,
     hostId,
     pathname,
     router,

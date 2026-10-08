@@ -438,19 +438,30 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
     const phone = await connectPhone(desktop.server, 'iPhone')
     const opensBefore = passthroughOpens.count
 
-    for (const method of ['settings.get', 'status.get']) {
-      phone.send(`${method}:targeted`, method, {})
-      phone.send(`${method}:untargeted`, method, {}, null)
-      const targeted = await phone.next(`${method}:targeted`)
-      const untargeted = await phone.next(`${method}:untargeted`)
-      expect(isOk(targeted)).toBe(true)
-      expect(targeted.result).toEqual(untargeted.result)
-    }
+    phone.send('settings:targeted', 'settings.get', {})
+    phone.send('settings:untargeted', 'settings.get', {}, null)
+    const targeted = await phone.next('settings:targeted')
+    expect(isOk(targeted)).toBe(true)
+    expect(targeted.result).toEqual((await phone.next('settings:untargeted')).result)
     expect(passthroughOpens.count).toBe(opensBefore)
     // An execution-host method under the same target still relays.
     phone.send('list', 'terminal.list', {})
     expect(isOk(await phone.next('list'))).toBe(true)
     expect(passthroughOpens.count).toBe(opensBefore + 1)
+  })
+
+  it('answers a targeted status from the server, so a server workspace gates on its own features', async () => {
+    const { host, desktop } = await startTopology()
+    const phone = await connectPhone(desktop.server, 'iPhone')
+    const StatusSchema = z.looseObject({ runtimeId: z.string(), capabilities: z.array(z.string()) })
+
+    phone.send('status:server', 'status.get', {})
+    phone.send('status:desktop', 'status.get', {}, null)
+    const server = StatusSchema.parse((await phone.next('status:server')).result)
+    const own = StatusSchema.parse((await phone.next('status:desktop')).result)
+    expect(server.runtimeId).toBe(host.runtime.getRuntimeId())
+    expect(own.runtimeId).toBe(desktop.runtime.getRuntimeId())
+    expect(server.capabilities).toEqual(host.runtime.getStatus().capabilities)
   })
 
   it('refuses binary-frame methods and unknown servers without running anything on the desktop', async () => {

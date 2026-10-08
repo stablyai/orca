@@ -53,6 +53,13 @@ export const BRIDGE_FOREGROUND_NUDGE_REASONS = ['focus', 'app-resume', 'network-
 export const BRIDGE_FAULT_GRANT = 'fault'
 
 /**
+ * The protocol grant that says this shell forwards a request's or subscribe's `executionHost`. An
+ * older shell strips the field, so the call would run on the paired desktop instead; the page names
+ * a server's workspace only once this is granted.
+ */
+export const BRIDGE_EXECUTION_HOST_GRANT = 'executionHost'
+
+/**
  * The `navigate` grant's second verb, and the first notify whose name is not its grant's.
  *
  * The page is served at `/` with one history entry written by `replaceState`, so its own Back goes

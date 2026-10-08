@@ -16,11 +16,15 @@ import {
 import { RpcClientTerminalStreamRouter } from './rpc-client-terminal-stream-router'
 import * as sessionTabsStream from './rpc-client-session-tabs-stream'
 import type { ConnectionState, RpcResponse, RpcSuccess } from './types'
+import type { ExecutionHostId } from '../../../src/shared/execution-host'
+import { rpcExecutionHostEnvelope } from './rpc-execution-host-target'
 
 export type RpcStreamingListener = (result: unknown) => void
 
 export type RpcStreamSubscribeOptions = {
   onBinaryFrame?: (frame: BrowserScreencastFrame) => void
+  /** The host the stream runs on; its unsubscribe and replay frames must name it too. */
+  executionHost?: ExecutionHostId
 }
 
 type StreamRequest = {
@@ -28,6 +32,7 @@ type StreamRequest = {
   params: unknown
   listener?: RpcStreamingListener
   onBinaryFrame?: (frame: BrowserScreencastFrame) => void
+  executionHost?: ExecutionHostId
   subscriptionId?: string
   cancelled?: boolean
   sent?: boolean
@@ -60,7 +65,8 @@ export class RpcClientStreamRegistry {
       method,
       params,
       listener,
-      onBinaryFrame: subscribeOptions?.onBinaryFrame
+      onBinaryFrame: subscribeOptions?.onBinaryFrame,
+      executionHost: subscribeOptions?.executionHost
     }
     this.streams.set(id, stream)
     if (method === 'browser.screencast') {
@@ -189,7 +195,7 @@ export class RpcClientStreamRegistry {
           this.pendingBrowserRequestId !== response.id &&
           this.activeBrowserRequestId !== response.id
         ) {
-          this.sendBrowserUnsubscribe(result.subscriptionId)
+          this.sendBrowserUnsubscribe(stream, result.subscriptionId)
           this.remove(response.id)
           return
         }
@@ -224,7 +230,7 @@ export class RpcClientStreamRegistry {
     }
     const unsubscribe = buildRequestStreamUnsubscribe(stream?.method, stream?.params, id)
     if (unsubscribe) {
-      this.sendRpc(unsubscribe.method, unsubscribe.params)
+      this.sendRpc(unsubscribe.method, unsubscribe.params, stream?.executionHost)
     }
     this.remove(id)
   }
@@ -256,30 +262,25 @@ export class RpcClientStreamRegistry {
     }
     const unsubscribe = buildReadyStreamUnsubscribe(stream.method, stream.subscriptionId)
     if (unsubscribe) {
-      this.sendRpc(unsubscribe.method, unsubscribe.params)
+      this.sendRpc(unsubscribe.method, unsubscribe.params, stream.executionHost)
     }
   }
 
-  private sendBrowserUnsubscribe(subscriptionId: string): void {
-    this.sendRpc('browser.screencast.unsubscribe', { subscriptionId })
+  private sendBrowserUnsubscribe(stream: StreamRequest, subscriptionId: string): void {
+    this.sendRpc('browser.screencast.unsubscribe', { subscriptionId }, stream.executionHost)
   }
 
-  private sendRpc(method: string, params: unknown): boolean {
-    return this.options.sendEncrypted({
-      id: this.options.nextId(),
-      deviceToken: this.options.deviceToken,
-      method,
-      params
-    })
+  private sendRpc(method: string, params: unknown, target: ExecutionHostId | undefined): boolean {
+    return this.sendFrame(this.options.nextId(), method, params, target)
   }
 
   private send(id: string, stream: StreamRequest): boolean {
-    return this.options.sendEncrypted({
-      id,
-      deviceToken: this.options.deviceToken,
-      method: stream.method,
-      params: stream.params
-    })
+    return this.sendFrame(id, stream.method, stream.params, stream.executionHost)
+  }
+
+  private sendFrame(id: string, method: string, params: unknown, target?: ExecutionHostId) {
+    const frame = { id, deviceToken: this.options.deviceToken, method, params }
+    return this.options.sendEncrypted({ ...frame, ...rpcExecutionHostEnvelope(target) })
   }
 
   private remove(id: string): void {

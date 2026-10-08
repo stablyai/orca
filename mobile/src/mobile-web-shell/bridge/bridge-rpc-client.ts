@@ -1,4 +1,3 @@
-import type { BrowserScreencastFrame } from '../../transport/browser-screencast-protocol'
 import type { RpcClient, SendRequestOptions } from '../../transport/rpc-client'
 import type { ConnectionState, RpcResponse, RpcSuccess } from '../../transport/types'
 import {
@@ -15,6 +14,7 @@ import { createBridgeInitHandshake, createPageReadyFrame } from './bridge-client
 import {
   BridgeClientCapExceededError,
   BridgeClientClosedError,
+  BridgeClientExecutionHostUngrantedError,
   BridgeClientNotNativeVerbError,
   BridgeClientNotReadyError,
   BridgeRequestOversizedError,
@@ -31,6 +31,7 @@ import { BridgeClientSubscriptions } from './bridge-client-subscriptions'
 import { isBridgeNativeMethod, type BridgeNativeVerb } from './bridge-native-verbs'
 import { BRIDGE_ROUTE_PARAM_CLEAR, type BridgeClearableRouteParam } from './bridge-route-update'
 import {
+  BRIDGE_EXECUTION_HOST_GRANT,
   BRIDGE_PROTOCOL_VERSION,
   type BridgeClientMessage,
   type BridgeConnectionSnapshot,
@@ -334,6 +335,9 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
       )
     }
     const [method, params, requestOptions] = args
+    if (requestOptions?.executionHost && !carriesExecutionHost()) {
+      return Promise.reject(new BridgeClientExecutionHostUngrantedError())
+    }
     const id = nextId()
     return new Promise<RpcResponse>((resolve, reject) => {
       requests.open(id, { resolve, reject })
@@ -364,7 +368,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     method: string,
     params: unknown,
     onData: (result: unknown) => void,
-    subscribeOptions?: { onBinaryFrame?: (frame: BrowserScreencastFrame) => void }
+    subscribeOptions?: Parameters<RpcClient['subscribe']>[3]
   ): () => void {
     requireSession()
     if (closed) {
@@ -376,10 +380,13 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     if (subscriptions.size >= BRIDGE_MAX_SUBSCRIPTIONS) {
       throw new BridgeClientCapExceededError(`over ${BRIDGE_MAX_SUBSCRIPTIONS} subscriptions`)
     }
+    if (subscribeOptions?.executionHost && !carriesExecutionHost()) {
+      throw new BridgeClientExecutionHostUngrantedError()
+    }
     const id = nextId()
     // A frame that never left already told the listener and gave the slot back; the caller still
     // gets a dispose, because it has no way to know which of the two it is holding.
-    if (!subscriptions.open(id, method, params, onData, subscribeOptions?.onBinaryFrame)) {
+    if (!subscriptions.open(id, method, params, onData, subscribeOptions)) {
       return () => undefined
     }
     let disposed = false
@@ -407,11 +414,13 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     unsubscribeFromMessages()
   }
 
+  const hasGrant = (name: string) => shellSession.current()?.grants.native.includes(name) === true
+  const carriesExecutionHost = () => hasGrant(BRIDGE_EXECUTION_HOST_GRANT)
   const notifications = createBridgeClientNotifications({
     send: posted,
     requireSession,
     isClosed: () => closed,
-    hasGrant: (name) => shellSession.current()?.grants.native.includes(name) === true
+    hasGrant
   })
 
   const unsubscribeFromMessages = options.onMessage(receive)
@@ -429,6 +438,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     // zero is as true as any other. The page still answers a number, because the member it stands in
     // for is one the native screens read without asking whether it exists.
     getGeneration: () => snapshot().generation ?? 0,
+    carriesExecutionHost,
     // Not gated on the session: it registers a listener and reads nothing, so it cannot answer
     // wrongly, and a provider that subscribes before `init` is how a screen hears the first change.
     onStateChange: (listener) => cache.onStateChange(listener),

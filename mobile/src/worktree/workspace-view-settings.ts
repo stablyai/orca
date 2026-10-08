@@ -20,6 +20,8 @@ export type WorkspaceViewSettings = {
   filterRepoIds?: string[]
   collapsedGroups?: string[]
   workspaceStatuses?: WorkspaceStatusDefinition[]
+  /** Read-only here: the desktop's shown hosts. */
+  visibleWorkspaceHostIds?: string[] | null
 }
 
 const GROUP_TO_DESKTOP: Record<MobileGroupMode, NonNullable<WorkspaceViewSettings['groupBy']>> = {

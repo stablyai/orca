@@ -28,7 +28,6 @@ export const PAIRED_DESKTOP_METHODS = [
   // The Mac republishes host changes it already observes.
   'runtime.clientEvents.subscribe',
   'runtime.clientEvents.unsubscribe',
-  'status.get',
   'diagnostics.memory',
   'stats.summary',
   'ui.get',

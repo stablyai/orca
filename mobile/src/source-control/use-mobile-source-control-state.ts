@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useHostClient, useForceReconnect } from '../transport/client-context'
+import { useForceReconnect } from '../transport/client-context'
+import { useWorkspaceClient } from '../transport/use-workspace-client'
 import { getWorktreeLabel } from '../session/worktree-label'
 import { useMobileGitRequests } from './use-mobile-git-requests'
 import { useMobileSourceControlLoaders } from './use-mobile-source-control-loaders'
@@ -32,8 +33,6 @@ import {
   type MobileBranchEntryView
 } from './mobile-source-control-screen-state'
 
-type MobileGitLocalBranches = RuntimeGitLocalBranches
-
 export type MobileSourceControlStateParams = {
   hostId: string
   worktreeId: string
@@ -61,13 +60,13 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     onOpenHistory
   } = params
   const insets = useSafeAreaInsets()
-  const { client, state: connState } = useHostClient(hostId)
+  const { client, state: connState } = useWorkspaceClient(hostId)
   const forceReconnect = useForceReconnect()
   const [busyAction, setBusyAction] = useState<string | null>(null)
   const [commitMessage, setCommitMessage] = useState('')
   const [generatingMessage, setGeneratingMessage] = useState(false)
   const [showBranchPicker, setShowBranchPicker] = useState(false)
-  const [localBranches, setLocalBranches] = useState<MobileGitLocalBranches | null>(null)
+  const [localBranches, setLocalBranches] = useState<RuntimeGitLocalBranches | null>(null)
   const [createdPrUrl, setCreatedPrUrl] = useState<string | null>(null)
   const [createdPrWarning, setCreatedPrWarning] = useState<string | null>(null)
   const [discardTarget, setDiscardTarget] = useState<MobileGitStatusEntry | null>(null)

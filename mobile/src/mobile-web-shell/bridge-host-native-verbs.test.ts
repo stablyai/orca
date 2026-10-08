@@ -292,7 +292,12 @@ describe('grants scoped to the route the page was opened for', () => {
     const bridge = harness({ routeGrants: navigationOnly })
     bridge.host.receive(clientFrame({ type: 'ready' }))
     const init = bridge.last()
-    expect(init.type === 'init' && init.grants.native).toEqual(['fault', 'navigate', 'storage'])
+    expect(init.type === 'init' && init.grants.native).toEqual([
+      'fault',
+      'executionHost',
+      'navigate',
+      'storage'
+    ])
   })
 
   it('refuses a verb that route never asked for', async () => {

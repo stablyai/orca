@@ -1,3 +1,4 @@
+import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import type { RpcResponse } from './types'
 
 // The raw request port, kept in its own module so that reaching it is a visible act.
@@ -19,6 +20,8 @@ export type SendRequestOptions = {
   budgetSpansConnect?: boolean
   /** Reject instead of replaying the request after reconnect. */
   failWhenDisconnected?: boolean
+  /** Runs the call on this host through the paired desktop; only sent once the desktop relays. */
+  executionHost?: ExecutionHostId
 }
 
 /** Unvalidated: an arbitrary method name in, an unread envelope out. */

@@ -1,3 +1,8 @@
+import { withWorkspaceRoute } from '../../../../src/navigation/workspace-route'
+import {
+  useWorkspaceExecutionHost,
+  workspaceRouteParams
+} from '../../../../src/navigation/workspace-execution-host'
 import { useLocalSearchParams } from 'expo-router'
 import { MobileAgentSessionHistoryPanel } from '../../../../src/agent-history/MobileAgentSessionHistoryPanel'
 import { MobileWebShellScreen } from '../../../../src/mobile-web-shell/MobileWebShellScreen'
@@ -29,7 +34,7 @@ import { firstParam } from '../../../../src/navigation/route-param-reader'
  * routes first, and every switch now asks the one module beside the schema
  * rather than carrying its own copy of the call.
  */
-export default function MobileAgentSessionHistoryScreen() {
+export default withWorkspaceRoute(function MobileAgentSessionHistoryScreen() {
   const params = useLocalSearchParams<{
     hostId?: string | string[]
     worktreeId?: string | string[]
@@ -38,6 +43,11 @@ export default function MobileAgentSessionHistoryScreen() {
   const hostId = firstParam(params.hostId)
   const worktreeId = firstParam(params.worktreeId)
   const name = firstParam(params.name)
+  const executionHost = useWorkspaceExecutionHost()
+  const routeParams = {
+    ...(name === '' ? {} : { name }),
+    ...workspaceRouteParams(executionHost)
+  }
   const panel = (
     <MobileAgentSessionHistoryPanel hostId={hostId} worktreeId={worktreeId} name={name} />
   )
@@ -50,7 +60,7 @@ export default function MobileAgentSessionHistoryScreen() {
           pathname: `/h/${encodeURIComponent(hostId)}/agent-history/${encodeURIComponent(worktreeId)}`,
           // Omitted rather than empty: the page reads the label off the search half, and a `name=`
           // with nothing after it is a label, where an absent one lets the panel derive its own.
-          ...(name === '' ? {} : { params: { name } })
+          ...(Object.keys(routeParams).length === 0 ? {} : { params: routeParams })
         })
       : null
   const decision = useShellSwitchDecision(route)
@@ -73,4 +83,4 @@ export default function MobileAgentSessionHistoryScreen() {
       fallback={panel}
     />
   )
-}
+})

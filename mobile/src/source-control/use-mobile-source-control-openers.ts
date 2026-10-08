@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState, type MutableRefObject } from 'react'
-import { useRouteHandoff } from '../navigation/route-handoff'
+import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
 import type { RpcClient } from '../transport/rpc-client'
 import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
 import type { ConnectionState } from '../transport/types'
@@ -69,7 +69,7 @@ export function useMobileSourceControlOpeners(params: Params) {
   } = params
   // The seam, not expo-router's own: inside the shell's page a push to a route the page does not
   // render has to be handed back to the app, and only this knows which targets those are.
-  const router = useRouteHandoff()
+  const router = useWorkspaceRouteHandoff()
   const [branchDiffPreview, setBranchDiffPreview] = useState<MobileBranchDiffPreviewState | null>(
     null
   )

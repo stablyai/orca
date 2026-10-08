@@ -4,9 +4,10 @@ import { MobileDiffReviewScreenView } from '../components/MobileDiffReviewScreen
 import { firstReviewParam, normalizeReviewFilterParam } from './mobile-diff-review-screen-model'
 import { normalizeReviewAreaParam } from './mobile-diff-review-positioning'
 import { useMobileDiffReviewController } from './use-mobile-diff-review-controller'
-import { useForceReconnect, useHostClient } from '../transport/client-context'
+import { useForceReconnect } from '../transport/client-context'
+import { useWorkspaceClient } from '../transport/use-workspace-client'
 import { useHostProtocolGates } from '../components/HostProtocolGate'
-import { useRouteHandoff } from '../navigation/route-handoff'
+import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
 
 /**
  * The review screen as a component rather than a route module, which is what lets a switch hold it.
@@ -41,8 +42,8 @@ export function MobileDiffReviewRouteScreen() {
   )
   // Not `useRouter`: inside the shell's page the session screen is native, so that replace has to
   // be handed back to the app rather than posted into a document that does not render it.
-  const router = useRouteHandoff()
-  const { client, state: connState } = useHostClient(hostId)
+  const router = useWorkspaceRouteHandoff()
+  const { client, state: connState } = useWorkspaceClient(hostId)
   const forceReconnect = useForceReconnect()
 
   const openSession = useCallback(() => {

@@ -3,7 +3,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams } from 'expo-router'
 import { useRouteHandoff } from '../navigation/route-handoff'
 import { HOST_DOCK_MIN_WIDTH } from '../storage/preferences'
-import { useHostClient, useForceReconnect } from '../transport/client-context'
+import { useForceReconnect } from '../transport/client-context'
+import { useWorkspaceClient } from '../transport/use-workspace-client'
 import {
   useLastConnectedAt,
   useReconnectAttempt
@@ -37,7 +38,7 @@ export function useMobileSessionFoundation() {
   const router = useRouteHandoff()
   const insets = useSafeAreaInsets()
   // Why: shared client per host owned by RpcClientProvider (docs/mobile-shared-client-per-host.md).
-  const { client, clientId, state: connState } = useHostClient(hostId)
+  const { client, clientId, state: connState } = useWorkspaceClient(hostId)
   const { hostCapabilities } = useHostProtocolGates()
   const reconnectAttempts = useReconnectAttempt(hostId)
   const lastConnectedAt = useLastConnectedAt(hostId)

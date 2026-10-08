@@ -2,10 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Pressable, Text, View, useWindowDimensions } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { ChevronLeft, Save } from 'lucide-react-native'
-import { useRouteHandoff } from '../navigation/route-handoff'
+import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
 import { getWorktreeLabel } from '../session/worktree-label'
 import { colors, spacing } from '../theme/mobile-theme'
-import { useForceReconnect, useHostClient } from '../transport/client-context'
+import { useForceReconnect } from '../transport/client-context'
+import { useWorkspaceClient } from '../transport/use-workspace-client'
 import { connectionRetryAction } from '../transport/connection-retry-action'
 import {
   loadMobileFilePreview,
@@ -35,9 +36,9 @@ type Props = {
 }
 
 export function MobileFilePreviewScreen({ route }: Props) {
-  const router = useRouteHandoff()
+  const router = useWorkspaceRouteHandoff()
   const previewParams = route.ok ? route.params : null
-  const { client, state: connState } = useHostClient(previewParams?.hostId)
+  const { client, state: connState } = useWorkspaceClient(previewParams?.hostId)
   const forceReconnect = useForceReconnect()
   const [preview, setPreview] = useState<MobileFilePreviewResult>(() =>
     route.ok ? { status: 'loading', message: 'Loading preview...' } : previewError(route.message)

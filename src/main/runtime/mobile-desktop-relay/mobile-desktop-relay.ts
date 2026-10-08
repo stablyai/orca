@@ -55,7 +55,6 @@ class RelayLink {
  * - Only `execution-host` methods (MOBILE_RPC_METHOD_ROUTES) reach here; `paired-desktop` ones run locally.
  * - A server without the delegated-devices capability is `update-needed`; nothing relays to it.
  * - A server-side revoke of a phone is final until the next sync.
- * - Hidden until S2: MOBILE_DESKTOP_RELAY_RUNTIME_CAPABILITY is not advertised yet.
  */
 export class MobileDesktopRelay {
   private readonly links = new Map<string, RelayLink>()

@@ -1,3 +1,4 @@
+import { withWorkspaceRoute } from '../../../../src/navigation/workspace-route'
 import { MobileSessionRouteScreen } from '../../../../src/session/MobileSessionRouteScreen'
 
 /**
@@ -8,6 +9,6 @@ import { MobileSessionRouteScreen } from '../../../../src/session/MobileSessionR
  * sibling reaches OrcaMobileWebShellView, whose module calls requireNativeViewManager at import and
  * throws in a browser, and the route manifest imports every route.
  */
-export default function MobileSessionScreen() {
+export default withWorkspaceRoute(function MobileSessionScreen() {
   return <MobileSessionRouteScreen />
-}
+})

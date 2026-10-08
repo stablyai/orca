@@ -1,3 +1,4 @@
+import { withWorkspaceRoute } from '../../../../src/navigation/workspace-route'
 import { useLocalSearchParams } from 'expo-router'
 import { MobileSourceControlPanel } from '../../../../src/source-control/MobileSourceControlPanel'
 import { firstParam } from '../../../../src/navigation/route-param-reader'
@@ -11,7 +12,7 @@ import { parseSourceControlHubTab } from '../../../../src/source-control/mobile-
  * OrcaMobileWebShellView, whose module calls requireNativeViewManager at import and throws in a
  * browser, and the route manifest imports every route — one throwing module takes the bundle down.
  */
-export default function MobileSourceControlScreen() {
+export default withWorkspaceRoute(function MobileSourceControlScreen() {
   // Through `firstParam`, as the native sibling does. The page reaches this route only through
   // `init.route`, whose params are a `Record<string, string>`, so an array cannot arrive today —
   // read the same way regardless, because the two files are meant to be the same screen and a
@@ -33,4 +34,4 @@ export default function MobileSourceControlScreen() {
       embedded={false}
     />
   )
-}
+})

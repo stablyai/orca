@@ -1,5 +1,9 @@
 import { z } from 'zod'
 import { salvagedOptional } from '../../../../src/shared/zod-salvage'
+import {
+  normalizeExecutionHostId,
+  type ExecutionHostId
+} from '../../../../src/shared/execution-host'
 import { NODE_PLATFORM_NAMES } from '../../transport/mobile-runtime-host-platform'
 import { isRpcResponse } from '../../transport/rpc-response-shape'
 import type { RpcResponse } from '../../transport/types'
@@ -13,6 +17,7 @@ import { BRIDGE_BACK_FRAME } from './bridge-page-back'
 import { BRIDGE_ID_PATTERN, idSchema, methodSchema, versionSchema } from './bridge-frame-fields'
 
 export {
+  BRIDGE_EXECUTION_HOST_GRANT,
   BRIDGE_EXTERNAL_LINK_GRANT,
   BRIDGE_FAULT_GRANT,
   BRIDGE_FOREGROUND_NUDGE_REASONS,
@@ -121,11 +126,17 @@ export const BridgeInitStorageSchema = z
   )
   .refine((entries) => Object.keys(entries).length <= PAGE_STORAGE_MAX_ENTRIES)
 
+/** Canonical only: the desktop routes on this exact string. */
+const executionHostSchema = z.custom<ExecutionHostId>(
+  (value) => typeof value === 'string' && normalizeExecutionHostId(value) === value
+)
+
 /** Pinned against `SendRequestOptions` in this module's test. */
 export const BridgeSendRequestOptionsSchema = z.object({
   timeoutMs: z.number().int().positive().optional(),
   budgetSpansConnect: z.boolean().optional(),
-  failWhenDisconnected: z.boolean().optional()
+  failWhenDisconnected: z.boolean().optional(),
+  executionHost: executionHostSchema.optional()
 })
 
 /**
@@ -187,7 +198,8 @@ const BridgeClientMessageSchema = z.discriminatedUnion('type', [
     id: idSchema,
     method: methodSchema,
     params: z.unknown(),
-    wantsBinary: z.boolean().optional()
+    wantsBinary: z.boolean().optional(),
+    executionHost: executionHostSchema.optional()
   }),
   z.object({
     v: versionSchema,

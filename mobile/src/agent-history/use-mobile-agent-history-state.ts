@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useHostClient, useForceReconnect } from '../transport/client-context'
+import { useForceReconnect } from '../transport/client-context'
+import { useWorkspaceClient } from '../transport/use-workspace-client'
 import type { RpcClient } from '../transport/rpc-client'
 import { connectionRetryAction } from '../transport/connection-retry-action'
 import type {
@@ -40,7 +41,7 @@ export type MobileAgentHistoryStateParams = {
 
 export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams) {
   const { hostId, worktreeId, worktrees, worktreesLoaded } = params
-  const { client, state: connState } = useHostClient(hostId)
+  const { client, state: connState } = useWorkspaceClient(hostId)
   const forceReconnect = useForceReconnect()
   const [scope, setScope] = useState<AiVaultScope>('workspace')
   const [screenState, setScreenState] = useState<AgentHistoryScreenState>({ kind: 'loading' })

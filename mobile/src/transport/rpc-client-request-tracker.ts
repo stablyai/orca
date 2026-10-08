@@ -1,4 +1,6 @@
+import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import { markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
+import { rpcExecutionHostEnvelope } from './rpc-execution-host-target'
 import { openRpcRequestBudget, resolvePostConnectRequestTimeout } from './rpc-request-budget'
 import type { SendRequestOptions } from './rpc-client'
 import type { ConnectionState, RpcResponse } from './types'
@@ -45,7 +47,8 @@ export class RpcClientRequestTracker {
     return this.sendConnectedRequest(
       method,
       params,
-      resolvePostConnectRequestTimeout(budget, REQUEST_TIMEOUT_MS)
+      resolvePostConnectRequestTimeout(budget, REQUEST_TIMEOUT_MS),
+      requestOptions?.executionHost
     )
   }
 
@@ -60,7 +63,8 @@ export class RpcClientRequestTracker {
   private sendConnectedRequest(
     method: string,
     params: unknown,
-    timeoutMs: number
+    timeoutMs: number,
+    executionHost?: ExecutionHostId
   ): Promise<RpcResponse> {
     return new Promise((resolve, reject) => {
       const id = this.options.nextId()
@@ -88,7 +92,8 @@ export class RpcClientRequestTracker {
           id,
           deviceToken: this.options.deviceToken,
           method,
-          params
+          params,
+          ...rpcExecutionHostEnvelope(executionHost)
         })
       ) {
         this.pending.delete(id)

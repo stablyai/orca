@@ -1,3 +1,5 @@
+import type { ExecutionHostId } from '../../../src/shared/execution-host'
+import { rpcExecutionHostEnvelope } from '../transport/rpc-execution-host-target'
 import { BRIDGE_MAX_MESSAGE_BYTES, utf8ByteLength } from './bridge/bridge-caps'
 import { BRIDGE_PROTOCOL_VERSION, type BridgeHostMessage } from './bridge/bridge-envelope'
 import {
@@ -116,7 +118,13 @@ export class BridgeHostSubscriptions {
    * Asked for only then, because encoding one costs the shell a base64 pass over the whole image
    * and a page with no listener would pay for frames it drops.
    */
-  start(id: string, method: string, params: unknown, wantsBinary = false): void {
+  start(
+    id: string,
+    method: string,
+    params: unknown,
+    wantsBinary = false,
+    executionHost?: ExecutionHostId
+  ): void {
     const record: OpenSubscription = {
       unsubscribe: () => undefined,
       seq: 0,
@@ -139,7 +147,14 @@ export class BridgeHostSubscriptions {
         method,
         params,
         (payload) => this.deliver(id, payload),
-        wantsBinary ? { onBinaryFrame: (frame) => this.deliverBinaryFrame(id, frame) } : undefined
+        wantsBinary || executionHost
+          ? {
+              ...(wantsBinary
+                ? { onBinaryFrame: (frame) => this.deliverBinaryFrame(id, frame) }
+                : {}),
+              ...rpcExecutionHostEnvelope(executionHost)
+            }
+          : undefined
       )
     } catch (error) {
       this.open.delete(id)

@@ -5,6 +5,7 @@ import { BridgeHostRequests } from './bridge-host-requests'
 import { BridgeHostSubscriptions } from './bridge-host-subscriptions'
 import { createBridgeHostStreamFrames } from './bridge-host-stream-frames'
 import {
+  BRIDGE_EXECUTION_HOST_GRANT,
   BRIDGE_FAULT_GRANT,
   BRIDGE_PROTOCOL_VERSION,
   readBridgeClientMessage,
@@ -69,8 +70,12 @@ export type BridgeHost = {
  */
 export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
   const { client, buildId, sessionId, pageRoutes, host } = options
-  // The protocol's own grant rides with every session; the rest is what this route asked for.
-  const granted: readonly string[] = [BRIDGE_FAULT_GRANT, ...options.routeGrants]
+  // The protocol's own grants ride with every session; the rest is what this route asked for.
+  const granted: readonly string[] = [
+    BRIDGE_FAULT_GRANT,
+    BRIDGE_EXECUTION_HOST_GRANT,
+    ...options.routeGrants
+  ]
   // Checked here for the reason the route is: a pair the page's reader would refuse takes the whole
   // `init` with it, and a session that never gets one is worse than one that never starts.
   const parsedRouteGrants =

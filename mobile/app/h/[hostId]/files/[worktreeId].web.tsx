@@ -1,3 +1,4 @@
+import { withWorkspaceRoute } from '../../../../src/navigation/workspace-route'
 import { useLocalSearchParams } from 'expo-router'
 import { MobileFileExplorerPanel } from '../../../../src/files/MobileFileExplorerPanel'
 import { firstParam } from '../../../../src/navigation/route-param-reader'
@@ -10,7 +11,7 @@ import { firstParam } from '../../../../src/navigation/route-param-reader'
  * OrcaMobileWebShellView, whose module calls requireNativeViewManager at import and throws in a
  * browser, which is what the page opening this route would hit.
  */
-export default function MobileFileExplorerScreen() {
+export default withWorkspaceRoute(function MobileFileExplorerScreen() {
   // Through `firstParam`, as the native sibling does. The page reaches this route only through
   // `init.route`, whose params are a `Record<string, string>`, so an array cannot arrive today —
   // read the same way regardless, because the two files are meant to be the same screen and a
@@ -26,4 +27,4 @@ export default function MobileFileExplorerScreen() {
   return (
     <MobileFileExplorerPanel hostId={hostId} worktreeId={worktreeId} name={name} embedded={false} />
   )
-}
+})

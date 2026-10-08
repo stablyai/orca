@@ -1,3 +1,4 @@
+import { withWorkspaceRoute } from '../../../../src/navigation/workspace-route'
 import { useLocalSearchParams } from 'expo-router'
 import { MobileAgentSessionHistoryPanel } from '../../../../src/agent-history/MobileAgentSessionHistoryPanel'
 import { firstParam } from '../../../../src/navigation/route-param-reader'
@@ -11,7 +12,7 @@ import { firstParam } from '../../../../src/navigation/route-param-reader'
  * browser, and one throwing route module takes the whole bundle down because the manifest imports
  * them all.
  */
-export default function MobileAgentSessionHistoryScreen() {
+export default withWorkspaceRoute(function MobileAgentSessionHistoryScreen() {
   const params = useLocalSearchParams<{
     hostId?: string | string[]
     worktreeId?: string | string[]
@@ -24,4 +25,4 @@ export default function MobileAgentSessionHistoryScreen() {
       name={firstParam(params.name)}
     />
   )
-}
+})

@@ -1,3 +1,4 @@
+import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import type { BrowserScreencastFrame } from './browser-screencast-protocol'
 import { DirectRpcClient } from './direct-rpc-client'
 import type { ConnectionLogSink, ConnectionState, ForegroundNudgeReason } from './types'
@@ -9,6 +10,7 @@ export type { SendRequestOptions } from './unvalidated-rpc-request-port'
 
 type SubscribeOptions = {
   onBinaryFrame?: (frame: BrowserScreencastFrame) => void
+  executionHost?: ExecutionHostId
 }
 
 type StreamingListener = (result: unknown) => void
@@ -36,6 +38,8 @@ export type RpcClient = UnvalidatedRpcRequestPort & {
    * implementation growing a counter it does not have.
    */
   getGeneration?: () => number
+  /** False when this transport would drop a call's `executionHost`; absent means it keeps it. */
+  carriesExecutionHost?: () => boolean
   onStateChange: (listener: (state: ConnectionState) => void) => () => void
   notifyForeground: (reason?: ForegroundNudgeReason) => void
   /**

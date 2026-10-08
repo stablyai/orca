@@ -347,12 +347,13 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: colors.textMuted
   },
+  // Why the cap is on the name, not the badge: a health word after a long name must stay readable.
   hostBadge: {
-    flexShrink: 1,
-    maxWidth: 140
+    flexShrink: 1
   },
   hostBadgeText: {
-    flexShrink: 1
+    flexShrink: 1,
+    maxWidth: 100
   },
   hostHealthText: {
     flexShrink: 0

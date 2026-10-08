@@ -6,7 +6,7 @@ import {
   BRIDGE_MAX_ROUTE_PATHNAME_CHARS,
   BRIDGE_MAX_SUBSCRIPTIONS
 } from './bridge/bridge-caps'
-import { BRIDGE_FAULT_GRANT } from './bridge/bridge-envelope'
+import { BRIDGE_EXECUTION_HOST_GRANT, BRIDGE_FAULT_GRANT } from './bridge/bridge-envelope'
 import { routeViewOf } from './page-route-policy'
 
 describe('init and state', () => {
@@ -40,6 +40,7 @@ describe('init and state', () => {
         // What the shell will do for the page, and what makes its `navigate` frame acceptable.
         native: [
           BRIDGE_FAULT_GRANT,
+          BRIDGE_EXECUTION_HOST_GRANT,
           'navigate',
           'storage',
           'externalLink',
@@ -143,7 +144,11 @@ describe('init and state', () => {
     if (init.type !== 'init') {
       throw new Error('expected an init frame')
     }
-    expect(init.grants.native).toEqual([BRIDGE_FAULT_GRANT, ...view.routeGrants])
+    expect(init.grants.native).toEqual([
+      BRIDGE_FAULT_GRANT,
+      BRIDGE_EXECUTION_HOST_GRANT,
+      ...view.routeGrants
+    ])
     const pair = (init.pageRouteGrants ?? []).find((entry) => entry.pathname === '/h/[hostId]')
     expect(pair?.grants).toEqual(view.routeGrants)
     // The optional name is in both, so the case is the lane and not two equal required lists.

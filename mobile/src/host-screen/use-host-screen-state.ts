@@ -14,6 +14,7 @@ import type {
 } from '../worktree/workspace-view-settings'
 import type { FilterState, Worktree } from '../worktree/workspace-list-sections'
 import type { MobileHostRepoIcon } from './host-screen-reply-schema'
+import { NO_SERVER_WORKSPACES, type ServerWorkspaces } from '../worktree/server-workspaces'
 
 export function useHostScreenState(hostId: string | undefined, action: string | undefined) {
   const [initialCache] = useState(() =>
@@ -76,6 +77,12 @@ export function useHostScreenState(hostId: string | undefined, action: string | 
     new Map()
   )
   const [hostPlatform, setHostPlatform] = useState<NodeJS.Platform | null>(null)
+  // The desktop's servers and their rows, listed through the desktop (mobileRelay.hosts.*).
+  const [serverWorkspaces, setServerWorkspaces] = useState<ServerWorkspaces>(NO_SERVER_WORKSPACES)
+  // The desktop's shown hosts (ui.get visibleWorkspaceHostIds); null shows every host.
+  const [visibleHostIds, setVisibleHostIds] = useState<ReadonlySet<ExecutionHostId> | null>(null)
+  // Why its own banner state: a tap on a server that needs an update says so until dismissed.
+  const [serverNotice, setServerNotice] = useState<string | null>(null)
   const [showSortPicker, setShowSortPicker] = useState(false)
   const [showGroupPicker, setShowGroupPicker] = useState(false)
   const [showFilterModal, setShowFilterModal] = useState(false)
@@ -133,6 +140,8 @@ export function useHostScreenState(hostId: string | undefined, action: string | 
     repoMetadataFetchedAtRef,
     routeActionState,
     search,
+    serverNotice,
+    serverWorkspaces,
     setActionTarget,
     setCatalogError,
     setCollapsedGroups,
@@ -156,6 +165,8 @@ export function useHostScreenState(hostId: string | undefined, action: string | 
     setRepoIdsByName,
     setRouteActionState,
     setSearch,
+    setServerNotice,
+    setServerWorkspaces,
     setShowFilterModal,
     setShowPinnedInGroups,
     setShowGroupPicker,
@@ -163,6 +174,7 @@ export function useHostScreenState(hostId: string | undefined, action: string | 
     setShowSortPicker,
     setSleptIds,
     setSortMode,
+    setVisibleHostIds,
     setWorkspaceStatuses,
     setWorktrees,
     setWorktreesLoaded,
@@ -174,6 +186,7 @@ export function useHostScreenState(hostId: string | undefined, action: string | 
     sleptIds,
     sortMode,
     viewStateRef,
+    visibleHostIds,
     workspaceStatuses,
     worktreeCatalogRef,
     worktrees,

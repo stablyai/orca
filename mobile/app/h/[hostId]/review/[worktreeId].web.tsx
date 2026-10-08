@@ -1,3 +1,4 @@
+import { withWorkspaceRoute } from '../../../../src/navigation/workspace-route'
 import { MobileDiffReviewRouteScreen } from '../../../../src/session/MobileDiffReviewRouteScreen'
 
 /**
@@ -7,6 +8,6 @@ import { MobileDiffReviewRouteScreen } from '../../../../src/session/MobileDiffR
  * read. The screen reads its own params, so this file is the whole of the difference: its native
  * sibling reaches OrcaMobileWebShellView, whose module throws at import in a browser.
  */
-export default function MobileDiffReviewScreen() {
+export default withWorkspaceRoute(function MobileDiffReviewScreen() {
   return <MobileDiffReviewRouteScreen />
-}
+})

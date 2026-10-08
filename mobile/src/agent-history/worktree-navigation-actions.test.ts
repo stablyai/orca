@@ -33,6 +33,28 @@ describe('the worktree row action sheet', () => {
     ])
   })
 
+  it('opens a server workspace on its server, and offers nothing when that server is unreachable', () => {
+    const forHost = (executionHost: 'runtime:vm' | null) => {
+      const targets: string[] = []
+      const actions = buildWorktreeNavigationActions({
+        hostId: 'host-a',
+        worktreeId: 'wt-1',
+        worktreeName: 'w',
+        executionHost,
+        hostCapabilities: [MOBILE_AI_VAULT_CAPABILITY],
+        navigate: (target) => targets.push(target),
+        onDone: () => {}
+      })
+      actions.forEach((action) => action.onPress())
+      return targets
+    }
+    expect(forHost('runtime:vm')).toEqual([
+      '/h/host-a/source-control/wt-1?name=w&origin=host&executionHost=runtime%3Avm',
+      '/h/host-a/agent-history/wt-1?name=w&executionHost=runtime%3Avm'
+    ])
+    expect(forHost(null)).toEqual([])
+  })
+
   it('offers only source control on a host that does not', () => {
     const actions = buildWorktreeNavigationActions({
       hostId: 'host-a',

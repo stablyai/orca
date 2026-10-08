@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { useFocusEffect } from 'expo-router'
 import { setCachedWorktrees } from '../cache/worktree-cache'
 import type { RpcClient } from '../transport/rpc-client'
@@ -15,12 +15,19 @@ import {
 import { savePinnedIds } from '../storage/preferences'
 import type { FetchHostRepoMetadata } from './use-host-repo-metadata'
 import type { HostScreenState } from './use-host-screen-state'
+import { relaysToServers } from '../transport/execution-host-scoped-rpc-client'
+import {
+  applyServerWorkspaces,
+  fetchServerWorkspaces,
+  NO_SERVER_WORKSPACES
+} from '../worktree/server-workspaces'
 
 export function useHostWorktreeCatalog(args: {
   client: RpcClient | null
   connState: ConnectionState
   embedded: boolean
   fetchRepoMetadata: FetchHostRepoMetadata
+  hostCapabilities: readonly string[]
   hostId: string | undefined
   state: HostScreenState
   syncViewSettingsFromDesktop: () => Promise<void>
@@ -30,6 +37,7 @@ export function useHostWorktreeCatalog(args: {
     connState,
     embedded,
     fetchRepoMetadata,
+    hostCapabilities,
     hostId,
     state,
     syncViewSettingsFromDesktop
@@ -43,12 +51,43 @@ export function useHostWorktreeCatalog(args: {
     setLastKnownWorktrees,
     setOptimisticActiveWorktreeIdentity,
     setPinnedIds,
+    setServerWorkspaces,
     setShowPinnedInGroups,
     setSleptIds,
     setWorktrees,
     setWorktreesLoaded,
     worktreeCatalogRef
   } = state
+  // Keyed by client: a fetch still running on a replaced client must not skip the new one's.
+  const serverFetchInFlightRef = useRef<RpcClient | null>(null)
+
+  // Why beside worktree.ps, not inside it: a slow server must not hold back the desktop's own rows.
+  const fetchServerRows = useCallback(
+    async (requestClient: RpcClient) => {
+      if (!relaysToServers(requestClient, hostCapabilities)) {
+        // An older desktop or shell: today's view, and no rows that could not open.
+        setServerWorkspaces(NO_SERVER_WORKSPACES)
+        return
+      }
+      if (serverFetchInFlightRef.current === requestClient) {
+        return
+      }
+      serverFetchInFlightRef.current = requestClient
+      try {
+        const fetched = await fetchServerWorkspaces(requestClient)
+        if (fetched && clientRef.current === requestClient) {
+          setServerWorkspaces((previous) => applyServerWorkspaces(previous, fetched))
+        }
+      } catch {
+        // Keeps the rows shown; the next poll retries.
+      } finally {
+        if (serverFetchInFlightRef.current === requestClient) {
+          serverFetchInFlightRef.current = null
+        }
+      }
+    },
+    [hostCapabilities]
+  )
 
   const fetchWorktrees = useCallback(
     async (options: { allowDuringModal?: boolean } = {}) => {
@@ -65,6 +104,7 @@ export function useHostWorktreeCatalog(args: {
       fetchWorktreesInFlightRef.current = true
       const requestClient = client
       const requestHostId = hostId
+      void fetchServerRows(requestClient)
 
       try {
         const fetched = await worktreeCatalogRef.current.fetch(requestClient, requestHostId)
@@ -136,7 +176,7 @@ export function useHostWorktreeCatalog(args: {
         fetchWorktreesInFlightRef.current = false
       }
     },
-    [client, connState, hostId]
+    [client, connState, hostId, fetchServerRows]
   )
 
   useFocusEffect(

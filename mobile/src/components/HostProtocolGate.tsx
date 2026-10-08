@@ -1,8 +1,9 @@
-import { createContext, useContext, useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { ActivityIndicator, StyleSheet, View } from 'react-native'
 import { useHostClient } from '../transport/client-context'
 import { useHostStatusGates, type HostStatusGates } from '../transport/host-status-gates'
 import { colors } from '../theme/mobile-theme'
+import { HostStatusGatesContext, useOptionalHostProtocolGates } from './host-protocol-gates-context'
 import { ProtocolBlockScreen } from './ProtocolBlockScreen'
 
 type Props = {
@@ -10,10 +11,8 @@ type Props = {
   children: ReactNode
 }
 
-const HostStatusGatesContext = createContext<HostStatusGates | null>(null)
-
 export function useHostProtocolGates(): HostStatusGates {
-  const gates = useContext(HostStatusGatesContext)
+  const gates = useOptionalHostProtocolGates()
   if (!gates) {
     throw new Error('useHostProtocolGates must be used inside <HostProtocolGate>')
   }

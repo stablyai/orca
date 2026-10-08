@@ -86,3 +86,12 @@ export class BridgeClientNotNativeVerbError extends Error {
     this.name = 'BridgeClientNotNativeVerbError'
   }
 }
+
+/** A call naming a server's workspace under a shell that would strip the name and run it on the
+ *  desktop instead. Refused before posting, because silently running it elsewhere is worse. */
+export class BridgeClientExecutionHostUngrantedError extends Error {
+  constructor() {
+    super('this app version cannot reach workspaces on other computers; update the app')
+    this.name = 'BridgeClientExecutionHostUngrantedError'
+  }
+}
