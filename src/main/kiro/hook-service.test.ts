@@ -68,6 +68,7 @@ describe('KiroHookService', () => {
     const result = new KiroHookService().install()
     expect(result.state).toBe('not_installed')
     expect(result.detail).toContain('kiro-cli agent create')
+    expect(result.detail).toContain(agentsDir())
     // The launcher is still laid down so the refresher can keep it current.
     expect(existsSync(scriptPath())).toBe(true)
   })

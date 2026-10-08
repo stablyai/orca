@@ -76,8 +76,9 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
   ].join('\n')
 }
 
-const NO_AGENTS_DETAIL =
-  "No custom Kiro agents in ~/.kiro/agents. Kiro's built-in default agent cannot carry hooks; create one with `kiro-cli agent create` and make it the default so Orca can track Kiro's status"
+function noAgentsDetail(agentsDir: string): string {
+  return `No custom Kiro agents in ${agentsDir}. Kiro's built-in default agent cannot carry hooks; create one with \`kiro-cli agent create\` and make it the default so Orca can track Kiro's status`
+}
 
 type AgentFileRead =
   | { fileName: string; config: Record<string, unknown> }
@@ -122,7 +123,7 @@ function readLocalAgentFiles(agentsDir: string): AgentFileRead[] | null {
 
 function buildStatus(agentsDir: string, files: AgentFileRead[]): AgentHookInstallStatus {
   if (files.length === 0) {
-    return status(agentsDir, 'not_installed', NO_AGENTS_DETAIL)
+    return status(agentsDir, 'not_installed', noAgentsDetail(agentsDir))
   }
   const isManaged = getKiroManagedCommandMatcher()
   const problems: string[] = []
@@ -177,7 +178,7 @@ export class KiroHookService {
     // Write the script first so no agent config ever points at a missing file.
     writeManagedScript(scriptPath, getManagedScript())
     if (files.length === 0) {
-      return status(agentsDir, 'not_installed', NO_AGENTS_DETAIL)
+      return status(agentsDir, 'not_installed', noAgentsDetail(agentsDir))
     }
     const command = getKiroManagedCommand(scriptPath)
     const isManaged = getKiroManagedCommandMatcher()
@@ -207,7 +208,7 @@ export class KiroHookService {
         .filter(isKiroAgentConfigFileName)
         .sort()
       if (fileNames.length === 0) {
-        return status(agentsDir, 'not_installed', NO_AGENTS_DETAIL)
+        return status(agentsDir, 'not_installed', noAgentsDetail(agentsDir))
       }
       await writeManagedScriptRemote(sftp, scriptPath, getManagedScript('posix'))
       const command = getKiroRemoteManagedCommand(scriptPath)
