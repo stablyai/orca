@@ -1,10 +1,62 @@
+import { createHash } from 'node:crypto'
+import { mkdtemp, mkdir, chmod, rm, writeFile, readFile, stat, symlink } from 'node:fs/promises'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import { runProcess } from '../../shared/child-process/run-process'
+import {
+  buildAntigravityWslCredentialCommand,
+  encodeAntigravityWslWrite,
+  decodeAntigravityWslReply
+} from './native-wsl-credential-script'
 import { quotePosixShell } from '../../shared/wsl-login-shell-command'
-import { chmod, readFile, stat, symlink, writeFile } from 'node:fs/promises'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { wslScriptFixture } from './native-wsl-credential-script-fixtures'
-import { decodeAntigravityWslReply } from './native-wsl-credential-protocol'
 import { credential } from './native-account-test-fixtures'
+
+async function wslScriptFixture() {
+  const home = await mkdtemp(join(homedir(), '.orca-agy-guest-test-'))
+  const directory = join(home, '.gemini', 'antigravity-cli')
+  await mkdir(directory, { recursive: true, mode: 0o700 })
+  await chmod(home, 0o700)
+  const path = join(directory, 'antigravity-oauth-token')
+  const authority = {
+    distro: 'Ubuntu',
+    uid: process.getuid?.() ?? 0,
+    home,
+    canonicalHome: home,
+    authorityId: 'a'.repeat(64),
+    credentialPath: path
+  }
+  return {
+    home,
+    path,
+    directory,
+    authority,
+    put: (contents: string, mode = 0o600) => writeFile(path, contents, { mode }),
+    clean: () => rm(home, { recursive: true, force: true }),
+    async run(
+      action: 'read' | 'write',
+      contents = '',
+      expected: string | null = null,
+      prefix = '',
+      deadline = Date.now() + 5000
+    ) {
+      const command = buildAntigravityWslCredentialCommand(action, authority, 'abc123', deadline)
+      if (command.script === undefined) {
+        throw new Error('Expected guest script')
+      }
+      return runProcess({
+        program: '/bin/sh',
+        args: ['-c', prefix + command.script, '--', ...(command.args ?? [])],
+        env: { ...process.env, HOME: home, WSL_DISTRO_NAME: 'Ubuntu' },
+        input: action === 'write' ? encodeAntigravityWslWrite(contents, expected) : undefined,
+        timeoutMs: 5000,
+        maxOutputBytes: 192 * 1024,
+        killOnOutputLimit: true
+      })
+    }
+  }
+}
+
 let guest: Awaited<ReturnType<typeof wslScriptFixture>>
 describe.runIf(process.platform === 'linux')('isolated POSIX guest script evidence', () => {
   beforeEach(async () => {
@@ -168,3 +220,32 @@ it.runIf(process.platform === 'linux')(
     }
   }
 )
+
+const digest = (value: Buffer) => createHash('sha256').update(value).digest('hex')
+describe.runIf(process.platform === 'linux')('private guest HOME isolation', () => {
+  let first: Awaited<ReturnType<typeof wslScriptFixture>>
+  let second: Awaited<ReturnType<typeof wslScriptFixture>>
+  beforeEach(async () => {
+    first = await wslScriptFixture()
+    second = await wslScriptFixture()
+  })
+  afterEach(async () => {
+    await first.clean()
+    await second.clean()
+  })
+  it('keeps independent credential authorities unchanged on switch, conflict and cleanup', async () => {
+    await first.put(credential('first'))
+    await second.put(credential('second'))
+    const before = digest(await readFile(second.path))
+    expect((await first.run('write', credential('replacement'), credential('first'))).code).toBe(0)
+    expect((await first.run('write', credential('stale'), credential('first'))).code).toBe(73)
+    expect(digest(await readFile(second.path))).toBe(before)
+    await first.clean()
+    expect(digest(await readFile(second.path))).toBe(before)
+    const read = await second.run('read')
+    expect(decodeAntigravityWslReply(read.stdout, 'abc123')).toEqual({
+      status: 'present',
+      contents: credential('second')
+    })
+  })
+})

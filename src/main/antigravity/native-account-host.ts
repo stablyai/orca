@@ -9,17 +9,17 @@ import {
   type AntigravityAccountStore
 } from './native-account-store'
 import { createAntigravityHostCredentialBackend } from './native-credential-backend'
-import { AntigravityAccountService } from './native-account-service'
+import {
+  AntigravityAccountService,
+  remainingAccountOperationMs,
+  withAntigravityAccountOperation,
+  type AntigravityAccountOperation
+} from './native-account-service'
 import { createAntigravityWslCredentialBackend } from './native-wsl-credential-backend'
 import {
   resolveAntigravityWslTarget,
   type ResolvedAntigravityWslTarget
 } from './native-wsl-account-target'
-import {
-  remainingAccountOperationMs,
-  withAntigravityAccountOperation,
-  type AntigravityAccountOperation
-} from './native-account-operation'
 
 export type AntigravityAccountAction = 'List' | 'AddCurrent' | 'Select' | 'Remove'
 type AccountEntry = {

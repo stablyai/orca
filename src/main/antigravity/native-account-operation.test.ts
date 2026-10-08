@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { withAntigravityAccountOperation } from './native-account-operation'
+import { withAntigravityAccountOperation } from './native-account-service'
 
 afterEach(() => vi.useRealTimers())
 it('shares a 15 second deadline and cancels blocked work', async () => {

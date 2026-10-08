@@ -5,12 +5,12 @@ import {
   sameVaultFile,
   vaultReadByteBudget
 } from './native-account-vault-read'
-import { writeProtectedFileAtomic } from '../../shared/secure-file'
+import { writeProtectedFileAtomic } from '../../shared/secure-file-publication'
 import {
   remainingAccountOperationMs,
   withAntigravityAccountOperation,
   type AntigravityAccountOperation
-} from './native-account-operation'
+} from './native-account-service'
 import type { ResolvedAntigravityWslTarget } from './native-wsl-account-target'
 import {
   closeSync,

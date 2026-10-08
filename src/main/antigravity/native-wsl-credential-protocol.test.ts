@@ -2,7 +2,7 @@ import { expect, it } from 'vitest'
 import {
   decodeAntigravityWslReply,
   encodeAntigravityWslWrite
-} from './native-wsl-credential-protocol'
+} from './native-wsl-credential-script'
 const nonce = 'abc123'
 it('encodes secret bytes only in the fixed stdin protocol', () => {
   expect(encodeAntigravityWslWrite('secret\n', null)).toBe(

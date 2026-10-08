@@ -5,7 +5,7 @@ import { restrictWindowsPath } from '../../shared/secure-path-windows-acl'
 import {
   remainingAccountOperationMs,
   type AntigravityAccountOperation
-} from './native-account-operation'
+} from './native-account-service'
 
 export const MAX_VAULT_BYTES = 4 * 1024 * 1024
 /** One byte past the checked size reveals a same-metadata append, but never past the cap. */

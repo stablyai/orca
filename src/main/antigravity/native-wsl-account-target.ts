@@ -7,7 +7,7 @@ import { runWslProcess } from '../wsl/wsl-runner'
 import {
   remainingAccountOperationMs,
   type AntigravityAccountOperation
-} from './native-account-operation'
+} from './native-account-service'
 
 export type ResolvedAntigravityWslTarget = {
   distro: string

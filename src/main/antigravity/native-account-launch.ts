@@ -1,4 +1,4 @@
-import { withAntigravityAccountOperation } from './native-account-operation'
+import { withAntigravityAccountOperation } from './native-account-service'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-environment'

@@ -1,22 +1,22 @@
 import { randomBytes } from 'node:crypto'
 import { runWslProcess } from '../wsl/wsl-runner'
-import type { AntigravityCredentialBackend } from './native-account-service'
 import {
+  type AntigravityCredentialBackend,
   remainingAccountOperationMs,
   withAntigravityAccountOperation,
   type AntigravityAccountOperation
-} from './native-account-operation'
+} from './native-account-service'
 import {
   resolveAntigravityWslTarget,
   type ResolvedAntigravityWslTarget
 } from './native-wsl-account-target'
 import { parseAntigravityNativeCredential } from './native-credential-codec'
-import { buildAntigravityWslCredentialCommand } from './native-wsl-credential-script'
 import {
+  buildAntigravityWslCredentialCommand,
   decodeAntigravityWslReply,
   encodeAntigravityWslWrite,
   MAX_WSL_CREDENTIAL_TRANSPORT_BYTES
-} from './native-wsl-credential-protocol'
+} from './native-wsl-credential-script'
 
 export function createAntigravityWslCredentialBackend(
   authority: ResolvedAntigravityWslTarget
