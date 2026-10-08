@@ -550,6 +550,31 @@ describe('process gone diagnostics', () => {
     })
   })
 
+  // Seven v1.4.200 field crashes reported processMetricsBrowserCount: 1 while the
+  // browser was already being killed; the census is the truth of one instant only.
+  it('dates the post-death census against the death, so a live-looking browser count is not read as survival', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(500_000)
+    appMetricsMock.mockReturnValue([
+      { pid: 10, type: 'Browser', memory: { workingSetSize: 1024 * 100 } }
+    ])
+
+    const details = buildProcessGoneCrashDetails({}, 'renderer', 499_998)
+
+    expect(details.processMetricsBrowserCount).toBe(1)
+    expect(details.processMetricsSampleAfterGoneMs).toBe(2)
+  })
+
+  it('omits the census age when the caller cannot date the death', () => {
+    appMetricsMock.mockReturnValue([
+      { pid: 10, type: 'Browser', memory: { workingSetSize: 1024 * 100 } }
+    ])
+
+    expect(
+      buildProcessGoneCrashDetails({}, 'renderer').processMetricsSampleAfterGoneMs
+    ).toBeUndefined()
+  })
+
   it('lets every metrics-owned key family win over colliding incoming details', () => {
     // Precedence must hold per family — live buckets, system memory, PreGone
     // mirrors, and the absence flag are all written after the incoming spread.
