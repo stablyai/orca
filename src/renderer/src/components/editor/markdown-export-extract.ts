@@ -66,6 +66,21 @@ export async function getActiveMarkdownExportPayload({
     return null
   }
 
+  return getMarkdownExportPayload({
+    root,
+    title: basenameWithoutExt(activeFile.relativePath || activeFile.filePath)
+  })
+}
+
+export async function getMarkdownExportPayload({
+  root,
+  title,
+  allowEmpty = false
+}: {
+  root: ParentNode
+  title: string
+  allowEmpty?: boolean
+}): Promise<MarkdownExportPayload | null> {
   const subtree = findDocumentSubtree(root)
   if (!subtree || subtree.hasAttribute('data-markdown-preview-incomplete')) {
     return null
@@ -82,11 +97,10 @@ export async function getActiveMarkdownExportPayload({
   await inlineBlobImageSources(clone)
 
   const renderedHtml = clone.innerHTML.trim()
-  if (!renderedHtml) {
+  if (!renderedHtml && !allowEmpty) {
     return null
   }
 
-  const title = basenameWithoutExt(activeFile.relativePath || activeFile.filePath)
   const html = buildMarkdownExportHtml({ title, renderedHtml })
   return { title, html }
 }

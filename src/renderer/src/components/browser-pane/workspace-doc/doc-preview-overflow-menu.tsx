@@ -21,6 +21,7 @@ export function DocPreviewOverflowMenu({
   onReload,
   onHardReload,
   onOpenSource,
+  onOpenWindow,
   onCopyPath,
   onCopyRelativePath,
   overflow
@@ -28,6 +29,7 @@ export function DocPreviewOverflowMenu({
   onReload: () => void
   onHardReload: () => void
   onOpenSource: () => void
+  onOpenWindow?: () => void
   onCopyPath: () => void
   /** Why it lives here: the preview hides the editor's path header, which was the only way to copy it. */
   onCopyRelativePath: () => void
@@ -63,6 +65,11 @@ export function DocPreviewOverflowMenu({
           {translate('auto.components.browser.pane.BrowserPane.a1f3c2e4b5', 'Hard Reload')}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
+        {onOpenWindow ? (
+          <DropdownMenuItem onSelect={onOpenWindow}>
+            {translate('documentPreview.openWindow', 'Open preview in window')}
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuItem onSelect={onOpenSource}>
           <FileCode2 className="size-3.5" />
           {translate('auto.components.editor.HtmlDocPreview.openSourceControl', 'Open source file')}

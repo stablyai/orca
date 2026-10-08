@@ -11,6 +11,19 @@ import type { DocPreviewGrantRequest } from '../api/doc-preview-api'
 import type { PreloadApi } from '../api-types'
 
 export const docPreviewApi = {
+  openMarkdownWindow: (request): Promise<void> =>
+    ipcRenderer.invoke('docPreview:openMarkdownWindow', request),
+  updateMarkdownWindow: (request): Promise<boolean> =>
+    ipcRenderer.invoke('docPreview:updateMarkdownWindow', request),
+  readMarkdownWindowSource: (fileId: string) =>
+    ipcRenderer.invoke('docPreview:readMarkdownWindowSource', fileId),
+  onMarkdownWindowClosed: (callback: (fileId: string) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, fileId: string): void => callback(fileId)
+    ipcRenderer.on('docPreview:markdownWindowClosed', listener)
+    return () => ipcRenderer.removeListener('docPreview:markdownWindowClosed', listener)
+  },
+  openHtmlWindow: (grantId: string): Promise<void> =>
+    ipcRenderer.invoke('docPreview:openHtmlWindow', { grantId }),
   mintGrant: (request: DocPreviewGrantRequest): Promise<{ grantId: string; url: string }> =>
     ipcRenderer.invoke(DOC_PREVIEW_MINT_GRANT_CHANNEL, request),
   revokeGrant: (grantId: string): Promise<boolean> =>

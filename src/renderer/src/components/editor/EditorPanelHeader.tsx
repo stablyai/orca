@@ -52,6 +52,7 @@ type EditorPanelHeaderProps = {
   onToggleMarkdownTableOfContents: () => void
   onToggleMarkdownFrontmatter: () => void
   onExportMarkdownToPdf: () => void
+  onOpenPreviewWindow?: () => void
   createMarkdownArtifactRequest?: () => Promise<ArtifactWriteRequest>
 }
 
@@ -86,6 +87,7 @@ export function EditorPanelHeader({
   onToggleMarkdownTableOfContents,
   onToggleMarkdownFrontmatter,
   onExportMarkdownToPdf,
+  onOpenPreviewWindow,
   createMarkdownArtifactRequest
 }: EditorPanelHeaderProps): React.JSX.Element {
   const { comments: diffComments } = useVisibleWorktreeDiffComments(activeFile.worktreeId)
@@ -336,6 +338,7 @@ export function EditorPanelHeader({
         onToggleEditorWordWrap={() => void updateSettings({ editorWordWrap: !editorWordWrap })}
         onToggleMarkdownFrontmatter={onToggleMarkdownFrontmatter}
         onExportMarkdownToPdf={onExportMarkdownToPdf}
+        onOpenPreviewWindow={onOpenPreviewWindow}
       />
     </div>
   )

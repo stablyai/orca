@@ -28,6 +28,7 @@ type EditorPanelMarkdownActionsMenuProps = {
   onToggleEditorWordWrap: () => void
   onToggleMarkdownFrontmatter: () => void
   onExportMarkdownToPdf: () => void
+  onOpenPreviewWindow?: () => void
 }
 
 export function EditorPanelMarkdownActionsMenu({
@@ -44,7 +45,8 @@ export function EditorPanelMarkdownActionsMenu({
   onToggleDiffWhitespace,
   onToggleEditorWordWrap,
   onToggleMarkdownFrontmatter,
-  onExportMarkdownToPdf
+  onExportMarkdownToPdf,
+  onOpenPreviewWindow
 }: EditorPanelMarkdownActionsMenuProps): React.JSX.Element | null {
   const hasMarkdownActions =
     isMarkdown && (shouldShowMarkdownExportAction || canShowMarkdownFrontmatterToggle)
@@ -109,6 +111,11 @@ export function EditorPanelMarkdownActionsMenu({
             </DropdownMenuItem>
             {shouldShowMarkdownExportAction ? <DropdownMenuSeparator /> : null}
           </>
+        ) : null}
+        {isMarkdown && !isDiffSurface && onOpenPreviewWindow ? (
+          <DropdownMenuItem disabled={!canExportMarkdownToPdf} onSelect={onOpenPreviewWindow}>
+            {translate('documentPreview.openWindow', 'Open preview in window')}
+          </DropdownMenuItem>
         ) : null}
         {shouldShowMarkdownExportAction ? (
           <DropdownMenuItem
