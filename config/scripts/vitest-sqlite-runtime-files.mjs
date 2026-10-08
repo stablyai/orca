@@ -50,6 +50,7 @@ export const SQLITE_RUNTIME_INCLUDE = [
   'src/main/native-chat/agent-session-wire/structured-agent-session-append-delivery.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-at-rest-commands.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-attach-reconciliation.test.ts',
+  'src/main/native-chat/agent-session-wire/structured-agent-session-attach-send-recovery.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-attachment-admission.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-claude-compact-stop.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-claude-echo-working.test.ts',

@@ -146,7 +146,8 @@ beforeEach(async () => {
       handle: codexProviderHandle(THREAD),
       origin: store.getRecord(SESSION)?.providerHandleChain.length ? 'resumed' : 'created',
       mintedAtFence: fence,
-      observedAt: NOW
+      // Before any send: journal rows are stamped on the real clock, not NOW.
+      observedAt: 0
     }
   }))
   releaseAcquisition = vi.fn(async () => true)

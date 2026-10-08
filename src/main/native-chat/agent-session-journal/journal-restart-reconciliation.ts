@@ -22,7 +22,10 @@ import {
 } from '../../../shared/agent-session-journal-item-key'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 import type { AgentSessionJournal } from './journal-store'
-import { reconcileSubmissions, type ProviderHistoryWindow } from './journal-submission-reconciler'
+import {
+  reconcileSubmissions,
+  type PlacedProviderHistoryWindow
+} from './journal-submission-reconciler'
 
 /**
  * Only a text-only body can be compared against provider content. A submission
@@ -63,8 +66,8 @@ function comparableSubmissions(journal: AgentSessionJournal): AgentJournalSubmis
  *  claimable would let an undelivered message match an older identical one. */
 function unseenHistory(
   journal: AgentSessionJournal,
-  history: ProviderHistoryWindow
-): ProviderHistoryWindow {
+  history: PlacedProviderHistoryWindow
+): PlacedProviderHistoryWindow {
   const snapshot = journal.snapshot()
   const committed = new Set(snapshot.items.map((item) => item.itemId))
   // Accepted submissions alias their provider item to the optimistic `orca:*`
@@ -85,20 +88,17 @@ function unseenHistory(
   }
 }
 
-/**
- * Decide what the crash boundary could only doubt. Returns the client message
- * ids this pass settled, so the attach result stops reporting them unconfirmed.
- */
+/** Decide what the crash boundary could only doubt. Settles one send at a time, so a failed write
+ *  leaves it and every send after it as the crash boundary wrote them. */
 export async function reconcileJournalSubmissionsAgainstHistory(input: {
   journal: AgentSessionJournal
   fence: number
-  history: ProviderHistoryWindow
-}): Promise<string[]> {
+  history: PlacedProviderHistoryWindow
+}): Promise<void> {
   const submissions = comparableSubmissions(input.journal)
   if (submissions.length === 0) {
-    return []
+    return
   }
-  const settled: string[] = []
   for (const outcome of reconcileSubmissions({
     submissions,
     history: unseenHistory(input.journal, input.history)
@@ -131,7 +131,5 @@ export async function reconcileJournalSubmissionsAgainstHistory(input: {
             recovered: true
           }
     )
-    settled.push(outcome.clientMessageId)
   }
-  return settled
 }

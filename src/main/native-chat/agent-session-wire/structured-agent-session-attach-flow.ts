@@ -16,7 +16,6 @@ import type {
   AgentSessionMutationResult
 } from '../../../shared/agent-session-wire'
 import { agentSessionLeaseAdmitsWriter } from '../../../shared/agent-session-lease-adjudication'
-import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import {
   admitAttachOrRefuse,
@@ -46,7 +45,8 @@ import {
   withAgentSessionCreatePhase,
   type AgentSessionCreatePhaseRecorder
 } from '../../observability/agent-session-instrumentation'
-import type { ProviderHistoryWindow } from '../agent-session-journal/journal-submission-reconciler'
+import type { PlacedProviderHistoryWindow } from '../agent-session-journal/journal-submission-reconciler'
+import { sampleProviderHistoryWindow } from './structured-agent-session-history-sample'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 
@@ -124,7 +124,7 @@ export async function performAttach(
   let reservedRecord: AgentSessionRecord | null = null
   let unsupportedReservationSettlementAttempted = false
   let replayed = false
-  let providerHistoryWindow: ProviderHistoryWindow | null = null
+  let providerHistoryWindow: PlacedProviderHistoryWindow | null = null
   const preparedTranscript = store.getRecord(sessionId)
     ? { ok: true as const, items: null }
     : await prepareAdoptedTranscript(params)
@@ -178,10 +178,10 @@ export async function performAttach(
     // Sample provider history before a new child is acquired. Once acquireOwner
     // starts the child, the adapter's liveness signal intentionally becomes
     // conservative and an absent prompt can no longer prove non-delivery.
-    providerHistoryWindow = await readProviderHistoryWindow({
+    providerHistoryWindow = await sampleProviderHistoryWindow({
       adapter: input.adapter,
       identity: journalIdentityFor(record, params),
-      accountHome: record.accountHome,
+      record,
       ownerAlreadyAdmitted: agentSessionLeaseAdmitsWriter(record.lease)
     })
     if (!agentSessionLeaseAdmitsWriter(record.lease)) {
@@ -246,9 +246,8 @@ export async function performAttach(
     await input.beforeJournalOpen?.()
     attached = await attachJournal({
       record,
-      params,
-      adapter: input.adapter,
       openConversation: input.openConversation,
+      logger: input.logger,
       providerHistoryWindow
     })
     await importAdoptedTranscript(params, attached, record, preparedTranscript.items)
@@ -277,27 +276,6 @@ export async function performAttach(
       ...(tabId ? { tabId } : {})
     }
   }
-}
-
-async function readProviderHistoryWindow(input: {
-  adapter: StructuredAgentSessionAdapter
-  identity: AgentSessionJournalIdentity
-  accountHome: AgentSessionRecord['accountHome']
-  ownerAlreadyAdmitted: boolean
-}): Promise<ProviderHistoryWindow | null> {
-  const read = input.adapter.providerHistoryWindow
-  if (!read) {
-    return null
-  }
-  let history: ProviderHistoryWindow | null
-  try {
-    history = await read({ identity: input.identity, accountHome: input.accountHome })
-  } catch {
-    return null
-  }
-  // A lease that was already live may belong to a provider child this process
-  // has not indexed yet. Preserve the safe unknown outcome in that case.
-  return history && input.ownerAlreadyAdmitted ? { ...history, turnInFlight: true } : history
 }
 
 async function settleUnsupportedReservation(

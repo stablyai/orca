@@ -14,7 +14,10 @@ import type {
 } from '../../../shared/agent-session-journal-types'
 import { digestPayload } from './journal-payload-bounds'
 import { reconcileJournalSubmissionsAgainstHistory } from './journal-restart-reconciliation'
-import type { ProviderHistoryItem, ProviderHistoryWindow } from './journal-submission-reconciler'
+import type {
+  PlacedProviderHistoryWindow,
+  ProviderHistoryItem
+} from './journal-submission-reconciler'
 import { createTrackedJournalOpener } from './journal-host-database-test-support'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
@@ -65,11 +68,18 @@ function history(uuid: string, text: string): ProviderHistoryItem {
   }
 }
 
+/** Read from a resume point the sends' own owner, at fence 1, set before handing them over. */
 function window(
   items: ProviderHistoryItem[],
-  overrides: Partial<ProviderHistoryWindow> = {}
-): ProviderHistoryWindow {
-  return { items, boundaryConsistent: true, turnInFlight: false, ...overrides }
+  overrides: Partial<PlacedProviderHistoryWindow> = {}
+): PlacedProviderHistoryWindow {
+  return {
+    items,
+    boundaryConsistent: true,
+    turnInFlight: false,
+    start: { fence: 1, movedAt: 0 },
+    ...overrides
+  }
 }
 
 /** A host that wrote the submission row and died before learning its outcome. */
@@ -103,13 +113,12 @@ describe('reconcileJournalSubmissionsAgainstHistory', () => {
   it('settles a message found in provider history as accepted on its provider identity', async () => {
     const journal = await reopenAfterCrash()
 
-    const settled = await reconcileJournalSubmissionsAgainstHistory({
+    await reconcileJournalSubmissionsAgainstHistory({
       journal,
       fence: 2,
       history: window([history('uuid-1', 'deploy the thing')])
     })
 
-    expect(settled).toEqual(['cm_1'])
     const submission = journal.submissions()[0]
     expect(submission?.dispatchState).toBe('accepted')
     expect(submission?.providerItemId).toBe(agentJournalItemKey(claudeIdentity('uuid-1')))
@@ -118,13 +127,12 @@ describe('reconcileJournalSubmissionsAgainstHistory', () => {
   it('settles a message provably absent from history as rejected: not_delivered', async () => {
     const journal = await reopenAfterCrash()
 
-    const settled = await reconcileJournalSubmissionsAgainstHistory({
+    await reconcileJournalSubmissionsAgainstHistory({
       journal,
       fence: 2,
       history: window([])
     })
 
-    expect(settled).toEqual(['cm_1'])
     const submission = journal.submissions()[0]
     expect(submission?.dispatchState).toBe('rejected')
     // A sentence, since released clients print the reason as it is, and the fact beside it.
@@ -144,26 +152,24 @@ describe('reconcileJournalSubmissionsAgainstHistory', () => {
   it('leaves a submission unknown while the provider reports a turn in flight', async () => {
     const journal = await reopenAfterCrash()
 
-    const settled = await reconcileJournalSubmissionsAgainstHistory({
+    await reconcileJournalSubmissionsAgainstHistory({
       journal,
       fence: 2,
       history: window([], { turnInFlight: true })
     })
 
-    expect(settled).toEqual([])
     expect(journal.submissions()[0]?.dispatchState).toBe('unknown')
   })
 
   it('leaves a submission unknown when the history boundary is inconsistent', async () => {
     const journal = await reopenAfterCrash()
 
-    const settled = await reconcileJournalSubmissionsAgainstHistory({
+    await reconcileJournalSubmissionsAgainstHistory({
       journal,
       fence: 2,
       history: window([], { boundaryConsistent: false })
     })
 
-    expect(settled).toEqual([])
     expect(journal.submissions()[0]?.dispatchState).toBe('unknown')
   })
 
@@ -180,13 +186,12 @@ describe('reconcileJournalSubmissionsAgainstHistory', () => {
       'look at this'
     )
 
-    const settled = await reconcileJournalSubmissionsAgainstHistory({
+    await reconcileJournalSubmissionsAgainstHistory({
       journal,
       fence: 2,
       history: window([])
     })
 
-    expect(settled).toEqual([])
     expect(journal.submissions()[0]?.dispatchState).toBe('unknown')
   })
 
@@ -203,13 +208,12 @@ describe('reconcileJournalSubmissionsAgainstHistory', () => {
       'first\nsecond'
     )
 
-    const settled = await reconcileJournalSubmissionsAgainstHistory({
+    await reconcileJournalSubmissionsAgainstHistory({
       journal,
       fence: 2,
       history: window([history('uuid-1', 'first\nsecond')])
     })
 
-    expect(settled).toEqual([])
     expect(journal.submissions()[0]?.dispatchState).toBe('unknown')
   })
 

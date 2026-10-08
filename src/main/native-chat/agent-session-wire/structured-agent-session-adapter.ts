@@ -415,8 +415,8 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     | undefined
   /** Option keys skipped after a provider rejected their persisted restore value. */
   readOptionRestoreFailures?(sessionId: string): readonly string[]
-  /** Provider history for restart reconciliation, bounded to what the provider
-   *  recorded after the journal's last committed item. Only the adapter can say
+  /** Provider history for restart reconciliation, read from the resume point
+   *  `identity.providerHandle` names. Only the adapter can say
    *  whether the read has a proven start and whether a turn is still running, so
    *  it owns both flags. Omit where the provider records no boundary-consistent
    *  history; an omitted window leaves every unsettled submission `unknown`. */

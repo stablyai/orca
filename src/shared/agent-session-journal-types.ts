@@ -495,6 +495,9 @@ export type AgentJournalSubmission = {
   handoverRecorded?: true
   /** When the host handed it to the provider (its `dispatch{pending}` row). */
   handedOverAt?: number
+  /** Host-only, for restart reconciliation: its first handover's fence and row time, recomputed on
+   *  every fold. The snapshot still carries it, but the submission schema omits it and no client reads it. */
+  firstHandover?: { fence: number; at: number }
   /** Host-only: the submission row's sequence, which tells which host process accepted it. Set
    *  only on a send accepted for later handover. The snapshot still carries it, but the submission
    *  schema omits it; no released client reads it, and clients read `submittedSequence` instead. */

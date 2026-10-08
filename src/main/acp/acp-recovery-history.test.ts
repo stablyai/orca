@@ -100,7 +100,10 @@ describe('ACP restart recovery from the agent store', () => {
     )
     expect(window).toMatchObject({ boundaryConsistent: false, turnInFlight: true })
     expect(
-      reconcileSubmissions({ submissions: [...load.state.submissions.values()], history: window! })
+      reconcileSubmissions({
+        submissions: [...load.state.submissions.values()],
+        history: { ...window!, start: null }
+      })
     ).toEqual([
       {
         clientMessageId: 'held',
@@ -119,7 +122,10 @@ describe('ACP restart recovery from the agent store', () => {
     const { window } = await windowFor(load, [stored('msg_1', 'continue', 105)])
     expect(window?.items).toEqual([])
     expect(
-      reconcileSubmissions({ submissions: [...load.state.submissions.values()], history: window! })
+      reconcileSubmissions({
+        submissions: [...load.state.submissions.values()],
+        history: { ...window!, start: null }
+      })
     ).toMatchObject([{ clientMessageId: 'held', outcome: 'unknown' }])
   })
 
@@ -153,7 +159,10 @@ describe('ACP restart recovery from the agent store', () => {
       stored('msg_2', 'yes', 405)
     ])
     expect(
-      reconcileSubmissions({ submissions: [...load.state.submissions.values()], history: window! })
+      reconcileSubmissions({
+        submissions: [...load.state.submissions.values()],
+        history: { ...window!, start: null }
+      })
     ).toMatchObject([{ clientMessageId: 'held', outcome: 'accepted', providerItemId: 'msg_2' }])
   })
 
