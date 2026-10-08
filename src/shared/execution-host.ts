@@ -4,6 +4,7 @@ import type { Worktree } from './worktree/types'
 
 export const LOCAL_EXECUTION_HOST_ID = 'local'
 export const ALL_EXECUTION_HOSTS_SCOPE = 'all'
+export const ORCA_CLI_EXECUTION_HOST_ID_ENV = 'ORCA_CLI_EXECUTION_HOST_ID'
 
 export type ExecutionHostKind = 'local' | 'ssh' | 'runtime'
 export type ExecutionHostId = typeof LOCAL_EXECUTION_HOST_ID | `ssh:${string}` | `runtime:${string}`
