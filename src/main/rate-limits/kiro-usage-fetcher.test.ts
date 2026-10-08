@@ -41,6 +41,17 @@ Credits (1233.74 of 2000 covered in plan)
     })
   })
 
+  it('accepts a Kiro reset description without an ISO date', () => {
+    const output =
+      'Estimated Usage | resets on 01/01 | KIRO PRO\nCredits (10 of 100 covered in plan)\n10%'
+
+    expect(parseKiroUsageOutput(output)).toMatchObject({
+      status: 'ok',
+      planType: 'KIRO PRO',
+      monthly: { usedPercent: 10, resetsAt: null, resetDescription: '01/01' }
+    })
+  })
+
   it('runs the local non-model usage command', async () => {
     const runner = vi.fn().mockResolvedValue({
       stdout: KIRO_USAGE_OUTPUT,
