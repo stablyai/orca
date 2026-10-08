@@ -1,13 +1,14 @@
 import { BrowserWindow, dialog, ipcMain } from 'electron'
 import { copyFile, mkdir, readFile, rm, stat } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
-import { basename, extname, join, normalize, sep } from 'node:path'
+import { basename, extname, join } from 'node:path'
 import { z } from 'zod'
 import type { CustomPet } from '../../shared/pet-types'
 import { importPetBundle } from './pet-bundle-import'
+import { removePetFiles } from './pet-file-removal'
 import { classifyFile } from './pet-image-formats'
 import { MAX_BYTES } from './pet-import-size-limits'
-import { getPetsDir, isSafeId, resolvePetFile } from './pet-storage-paths'
+import { getPetsDir, resolvePetFile } from './pet-storage-paths'
 
 // Why: renderer IPC inputs are untrusted — validate shape here; resolvePetFile still gates the actual filesystem path.
 const PetFileRequestSchema = z.object({
@@ -125,32 +126,7 @@ export function registerPetHandlers(): void {
       } catch {
         throw new Error('Invalid pet:delete arguments')
       }
-      if (!isSafeId(parsed.id)) {
-        return
-      }
-      if ((parsed.kind ?? 'image') === 'bundle') {
-        // Why: defense in depth — verify path stays under pets root before recursive removal.
-        const root = normalize(getPetsDir())
-        const target = normalize(join(root, parsed.id))
-        if (!target.startsWith(root + sep)) {
-          return
-        }
-        try {
-          await rm(target, { recursive: true, force: true })
-        } catch (error) {
-          console.warn('[pet-overlay] pet:delete (bundle) failed', error)
-        }
-        return
-      }
-      const filePath = resolvePetFile(parsed.id, parsed.fileName, 'image')
-      if (!filePath) {
-        return
-      }
-      try {
-        await rm(filePath, { force: true })
-      } catch (error) {
-        console.warn('[pet-overlay] pet:delete failed', error)
-      }
+      await removePetFiles(parsed.id, parsed.fileName, parsed.kind ?? 'image')
     }
   )
 }

@@ -51,6 +51,7 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   'parent-worktree':
     '--parent-worktree <selector> Parent worktree selector such as identity:<identity>, id:<repo-id>::<path>, branch:<branch>, issue:<number>, path:<path>, or active/current',
   path: '--path <path>          Path argument for the command',
+  pet: '--pet <id|name>        Pet id from `orca pet list`, or a custom pet name',
   pr: '--pr <number|null>     Linked GitHub pull request number; null clears on set',
   prompt: '--prompt <text>        Prompt text for agent-backed commands',
   query: '--query <text>        Search text for matching refs',

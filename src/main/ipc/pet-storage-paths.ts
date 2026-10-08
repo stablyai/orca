@@ -1,9 +1,9 @@
-import { app } from 'electron'
 import { basename, join, normalize, sep } from 'node:path'
+import { getAppEnvironment } from '../../shared/app-environment'
 
 // Why: keep the legacy `sidekicks` folder so existing user-uploaded pets keep rendering after the product rename.
 export function getPetsDir(): string {
-  return join(app.getPath('userData'), 'sidekicks', 'custom')
+  return join(getAppEnvironment().getPath('userData'), 'sidekicks', 'custom')
 }
 
 export function isSafeId(id: string): boolean {
