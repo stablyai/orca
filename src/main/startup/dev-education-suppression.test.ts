@@ -135,9 +135,7 @@ describe('suppressDevEducationForStore', () => {
     })
     expect(state.ui.featureTipsSeenIds).toEqual([
       'voice-dictation',
-      'agent-session-search',
-      'orca-cli',
-      'cmd-j-palette'
+      ...FEATURE_TIP_IDS.filter((id) => id !== 'voice-dictation')
     ])
     expect(state.ui.contextualToursSeenIds).toEqual([
       'tasks',

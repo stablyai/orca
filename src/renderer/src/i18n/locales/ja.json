@@ -14999,6 +14999,25 @@
             "d20ccf1e61": "完了",
             "379d776971": "タイピング",
             "0418f9becc": "開く"
+          },
+          "NativeChatUpgradeFeatureTipVisual": {
+            "chatRowTitle": "Claude チャット",
+            "chatRowText": "リトライを追加し、Webhook のテストを更新しました。",
+            "cliRowTitle": "不安定なチェックアウトのテストを修正",
+            "cliRowText": "チェックアウトのテストスイートが 10 回連続で成功しました。",
+            "otherRowTitle": "lockfile を更新",
+            "otherRowText": "依存関係を更新しました。ビルドは引き続き成功しています。",
+            "copySessionId": "セッション ID をコピー",
+            "resume": "再開",
+            "resumeInNewCliTooltipFork": "この会話を新しい CLI セッションにフォークします。",
+            "resumeInNewCliTooltipChat": "ネイティブチャットはそのまま残ります。",
+            "resumeInNewCli": "新規 CLI で再開",
+            "resumeInNewNativeChat": "新規ネイティブチャットで再開",
+            "copyResumeCommand": "再開コマンドをコピー",
+            "roleAgent": "Agent",
+            "messageCount": "{{value0}} 件",
+            "panelTitle": "Agent セッション履歴",
+            "panelSubtitle": "過去のセッションを再開"
           }
         }
       },
@@ -19091,6 +19110,19 @@
       "recent3Title": "リリースノートの下書き",
       "settingsLink": "設定 → Agent セッションの検索",
       "startSearching": "検索を開始"
+    },
+    "nativeChatUpgrade": {
+      "eyebrow": "新機能",
+      "title": "ネイティブチャットがアップグレードされました",
+      "description": "新規チャットはターミナルを映すのではなく、Agent と直接やり取りするようになりました。",
+      "cta": "了解",
+      "sessionHistoryIntro": "右サイドバーの Agent セッション履歴で:",
+      "resumeInChatLabel": "新規ネイティブチャットで再開",
+      "resumeInChatText": "は CLI セッションをチャットに移します。",
+      "resumeInCliLabel": "新規 CLI で再開",
+      "resumeInCliText": "は Claude または Codex のチャットを新しい CLI セッションにコピーします。チャットはそのまま残ります。",
+      "settingsLead": "いつでも以下で変更できます:",
+      "settingsLink": "設定 → チャット"
     }
   },
   "quickOpen": {

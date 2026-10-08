@@ -14999,6 +14999,25 @@
             "d20ccf1e61": "完成",
             "379d776971": "打字",
             "0418f9becc": "打开"
+          },
+          "NativeChatUpgradeFeatureTipVisual": {
+            "chatRowTitle": "Claude 聊天",
+            "chatRowText": "已添加重试并更新了 webhook 测试。",
+            "cliRowTitle": "修复不稳定的结账测试",
+            "cliRowText": "结账测试套件连续通过了十次。",
+            "otherRowTitle": "更新 lockfile",
+            "otherRowText": "已更新依赖项，构建仍然通过。",
+            "copySessionId": "复制会话 ID",
+            "resume": "继续",
+            "resumeInNewCliTooltipFork": "将此对话派生到新的 CLI 会话中。",
+            "resumeInNewCliTooltipChat": "本机聊天保持不变。",
+            "resumeInNewCli": "在新的 CLI 中恢复",
+            "resumeInNewNativeChat": "在新的本机聊天中恢复",
+            "copyResumeCommand": "复制恢复命令",
+            "roleAgent": "智能体",
+            "messageCount": "{{value0}} 条消息",
+            "panelTitle": "智能体会话历史",
+            "panelSubtitle": "恢复过往会话"
           }
         }
       },
@@ -19091,6 +19110,19 @@
       "recent3Title": "发布说明草稿",
       "settingsLink": "设置 → 智能体会话搜索",
       "startSearching": "开始搜索"
+    },
+    "nativeChatUpgrade": {
+      "eyebrow": "新功能",
+      "title": "本机聊天已升级",
+      "description": "新聊天现在直接与智能体通信，而不是镜像终端。",
+      "cta": "知道了",
+      "sessionHistoryIntro": "在右侧边栏的智能体会话历史中：",
+      "resumeInChatLabel": "在新的本机聊天中恢复",
+      "resumeInChatText": "会将 CLI 会话移入聊天。",
+      "resumeInCliLabel": "在新的 CLI 中恢复",
+      "resumeInCliText": "会将 Claude 或 Codex 聊天复制到新的 CLI 会话中。聊天保持不变。",
+      "settingsLead": "随时可在以下位置更改",
+      "settingsLink": "设置 → 聊天"
     }
   },
   "quickOpen": {

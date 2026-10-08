@@ -22,14 +22,16 @@ const firstTimeOnboarding: OnboardingState = getDefaultOnboardingState()
 // Session search defaults on so tests about the older tips don't see the session-search tip first.
 function makeSettings(
   voiceEnabled = false,
-  sessionSearchEnabled = true
-): Pick<GlobalSettings, 'voice' | 'aiVaultSearch'> {
+  sessionSearchEnabled = true,
+  nativeChatGraduationCohort?: GlobalSettings['nativeChatGraduationCohort']
+): Pick<GlobalSettings, 'voice' | 'aiVaultSearch' | 'nativeChatGraduationCohort'> {
   return {
     voice: {
       ...getDefaultVoiceSettings(),
       enabled: voiceEnabled
     },
-    aiVaultSearch: { enabled: sessionSearchEnabled, historyDays: null }
+    aiVaultSearch: { enabled: sessionSearchEnabled, historyDays: null },
+    nativeChatGraduationCohort
   }
 }
 
@@ -324,5 +326,32 @@ describe('feature tip startup gate', () => {
 
   it('treats a profile with no session search settings as search off', () => {
     expect(isSessionSearchFeatureTipCompleted({}, false)).toBe(false)
+  })
+
+  it('opens the native chat upgrade tip first only for the experimental opt-in cohort', () => {
+    const decide = (
+      nativeChatGraduationCohort: GlobalSettings['nativeChatGraduationCohort'],
+      featureTipsSeenIds: 'native-chat-upgrade'[] = []
+    ): ReturnType<typeof getFeatureTipsAppOpenDecision> =>
+      getFeatureTipsAppOpenDecision({
+        activeModal: 'none',
+        cliInstalled: false,
+        featureTipsSeenIds,
+        featureInteractions: {},
+        onboarding: existingUserOnboarding,
+        persistedUIReady: true,
+        promptedThisSession: false,
+        settings: makeSettings(false, true, nativeChatGraduationCohort),
+        suppressedByOnboardingThisSession: false,
+        webClient: false
+      })
+
+    expect(decide('experimental-opt-in')).toEqual({ kind: 'open', tipId: 'native-chat-upgrade' })
+    expect(decide('experimental-opt-in', ['native-chat-upgrade'])).toEqual({
+      kind: 'open',
+      tipId: 'orca-cli'
+    })
+    expect(decide('other')).toEqual({ kind: 'open', tipId: 'orca-cli' })
+    expect(decide(undefined)).toEqual({ kind: 'open', tipId: 'orca-cli' })
   })
 })

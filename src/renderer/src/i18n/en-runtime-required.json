@@ -3127,6 +3127,14 @@
       "title": "Agent dashboard"
     }
   },
+  "featureTips": {
+    "nativeChatUpgrade": {
+      "cta": "Got it",
+      "description": "New chats now talk to the agent directly instead of mirroring a terminal.",
+      "eyebrow": "New",
+      "title": "Native chat got an upgrade"
+    }
+  },
   "fileExplorer": {
     "root": {
       "omittedFiles": "Files omitted by sparse checkout are not searched.",

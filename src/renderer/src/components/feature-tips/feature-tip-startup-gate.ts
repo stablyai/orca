@@ -2,8 +2,10 @@ import {
   getCompletedFeatureTipIds,
   getOrderedUnseenFeatureTips,
   type FeatureTip,
+  type FeatureTipAudienceState,
   type FeatureTipId
 } from '../../../../shared/feature-tips'
+import { isNativeChatGraduationOptIn } from '../../../../shared/native-chat-graduation-cohort'
 import { resolveAiVaultSearchSettings } from '../../../../shared/ai-vault-search-settings'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
 import type { FeatureInteractionState } from '../../../../shared/feature-interactions'
@@ -25,6 +27,14 @@ export function isCliFeatureTipCompleted(status: CliInstallStatus): boolean {
 export type FeatureTipSettings = {
   voice?: GlobalSettings['voice']
   aiVaultSearch?: GlobalSettings['aiVaultSearch']
+  nativeChatGraduationCohort?: GlobalSettings['nativeChatGraduationCohort']
+}
+
+export function getFeatureTipAudience(
+  settings: FeatureTipSettings | null | undefined
+): FeatureTipAudienceState {
+  // Why: the browser client's settings are a host projection without the marker, so it fails closed.
+  return { nativeChatGraduationOptIn: isNativeChatGraduationOptIn(settings) }
 }
 
 export function isSessionSearchFeatureTipCompleted(
@@ -45,6 +55,7 @@ export function getPendingFeatureTips(args: {
 }): FeatureTip[] {
   return getOrderedUnseenFeatureTips({
     seenTipIds: new Set(args.seenTipIds),
+    audience: getFeatureTipAudience(args.settings),
     completedTipIds: getCompletedFeatureTipIds({
       cliInstalled: args.cliInstalled,
       voiceDictationEnabled: args.settings?.voice?.enabled === true,

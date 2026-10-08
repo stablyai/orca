@@ -4,7 +4,12 @@ import {
   type FeatureInteractionState
 } from './feature-interactions'
 
-export type FeatureTipId = 'voice-dictation' | 'orca-cli' | 'cmd-j-palette' | 'agent-session-search'
+export type FeatureTipId =
+  | 'native-chat-upgrade'
+  | 'voice-dictation'
+  | 'orca-cli'
+  | 'cmd-j-palette'
+  | 'agent-session-search'
 
 export type FeatureTipPriority = 'new' | 'unseen'
 
@@ -13,7 +18,15 @@ export type FeatureTipAction =
   | 'setup-cli'
   | 'learn-cmd-j-palette'
   | 'enable-session-search'
+  | 'learn-native-chat-upgrade'
 
+/** Profiles a tip is limited to; tips without one are for everyone. */
+export type FeatureTipAudience = 'native-chat-graduation-opt-in'
+
+export type FeatureTipAudienceState = {
+  /** Only from the main-owned graduation cohort marker, never from the live Chat UI toggle. */
+  nativeChatGraduationOptIn: boolean
+}
 export type FeatureTip = {
   id: FeatureTipId
   priority: FeatureTipPriority
@@ -24,6 +37,7 @@ export type FeatureTip = {
   ctaLabel: string
   /** Feature interactions that mean this tip is no longer useful to show. */
   completedByFeatureInteractions?: readonly FeatureInteractionId[]
+  audience?: FeatureTipAudience
 }
 
 export type CompletedFeatureTipState = {
@@ -35,6 +49,17 @@ export type CompletedFeatureTipState = {
 }
 
 export const FEATURE_TIPS = [
+  {
+    id: 'native-chat-upgrade',
+    priority: 'new',
+    eyebrow: 'New',
+    title: 'Native chat got an upgrade',
+    description: 'New chats now talk to the agent directly instead of mirroring a terminal.',
+    action: 'learn-native-chat-upgrade',
+    ctaLabel: 'Got it',
+    completedByFeatureInteractions: [],
+    audience: 'native-chat-graduation-opt-in'
+  },
   {
     id: 'agent-session-search',
     priority: 'new',
@@ -124,13 +149,30 @@ export function getCompletedFeatureTipIds(state: CompletedFeatureTipState): Set<
   return completedIds
 }
 
+/** Every surface that picks a tip (startup, explicit id) must pass through this. */
+export function isFeatureTipForAudience(
+  tip: FeatureTip,
+  audience: FeatureTipAudienceState
+): boolean {
+  switch (tip.audience) {
+    case undefined:
+      return true
+    case 'native-chat-graduation-opt-in':
+      return audience.nativeChatGraduationOptIn
+  }
+}
+
 export function getOrderedUnseenFeatureTips(args: {
   seenTipIds: ReadonlySet<FeatureTipId>
   completedTipIds?: ReadonlySet<FeatureTipId>
+  audience: FeatureTipAudienceState
 }): FeatureTip[] {
   const completedTipIds = args.completedTipIds ?? new Set<FeatureTipId>()
   const unseenTips = FEATURE_TIPS.filter(
-    (tip) => !args.seenTipIds.has(tip.id) && !completedTipIds.has(tip.id)
+    (tip) =>
+      !args.seenTipIds.has(tip.id) &&
+      !completedTipIds.has(tip.id) &&
+      isFeatureTipForAudience(tip, args.audience)
   )
   return [
     ...unseenTips.filter((tip) => tip.priority === 'new'),

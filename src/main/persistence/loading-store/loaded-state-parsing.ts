@@ -86,6 +86,7 @@ export class LoadedStateParsingOperations {
 
     let result: PersistedState | null = null
     let parsed: PersistedState | undefined
+    let savedExperimentalNativeChat: unknown
     try {
       if (fileExistedOnLoad) {
         const readStartedAt = performance.now()
@@ -105,6 +106,8 @@ export class LoadedStateParsingOperations {
         if (parsed === undefined) {
           throw new Error('Profile state startup snapshot is missing')
         }
+        // Why: read before any normalizer can fill or rewrite it; this is the pre-graduation fact.
+        savedExperimentalNativeChat = parsed.settings?.experimentalNativeChat
         // Why: secrets are stored encrypted via safeStorage; decrypt at the load boundary so the app sees plaintext.
         if (parsed.settings?.opencodeSessionCookie) {
           parsed.settings.opencodeSessionCookie = this.runtime.protectedSecrets.decrypt(
@@ -263,9 +266,13 @@ export class LoadedStateParsingOperations {
       this.runtime.loadNeedsSave = true
     }
 
-    const migrated = this.cohorts.migrateTabSwitchKeybindings(
-      this.cohorts.migrateTelemetry(result, fileExistedOnLoad),
-      fileExistedOnLoad
+    const migrated = this.cohorts.migrateNativeChatGraduationCohort(
+      this.cohorts.migrateTabSwitchKeybindings(
+        this.cohorts.migrateTelemetry(result, fileExistedOnLoad),
+        fileExistedOnLoad
+      ),
+      fileExistedOnLoad,
+      savedExperimentalNativeChat
     )
 
     // githubCache is a sidecar file now (see getGithubCacheFile); legacy in-file caches seed the session, then get stripped.

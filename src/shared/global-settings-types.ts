@@ -15,6 +15,7 @@ import type { UiLanguage } from './ui-language'
 import type { GlobalWindowsRuntimeDefault } from './project-execution-runtime'
 import type { PersistedNativeChatSessionOptions } from './native-chat-session-options'
 import type { ComputerAwakeMode } from './computer-awake-mode'
+import type { NativeChatGraduationCohort } from './native-chat-graduation-cohort'
 import type { CommitMessageAiSettings } from './commit-message-ai-types'
 import type { HostSettingOverrides } from './host-setting-overrides'
 import type {
@@ -526,6 +527,8 @@ export type GlobalSettings = NativeChatGlobalSettings & {
   /** One-shot cohort marker for the tab-switch keybinding swap. 'pending' =
    *  pre-existing install (seed pins old chords, then flips to 'done'); 'done' = fresh install. */
   tabSwitchKeybindingSeed?: 'pending' | 'done'
+  /** Main-owned, write-once cohort marker set at profile load; no settings update can change it. */
+  nativeChatGraduationCohort?: NativeChatGraduationCohort
   /** Local voice/dictation config. Optional for pre-voice profiles; getDefaultSettings() hydrates defaults via the persistence merge. */
   voice?: VoiceSettings
   /** Transcript full-text search consent + retention. Absent means off; nothing indexes until the user opts in. */

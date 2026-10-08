@@ -1,5 +1,9 @@
 import { randomUUID } from 'node:crypto'
 import type { PersistedState } from '../../../shared/persisted-state-types'
+import {
+  classifyNativeChatGraduationCohort,
+  isNativeChatGraduationCohort
+} from '../../../shared/native-chat-graduation-cohort'
 
 import type { StoreRuntimeState } from './store-runtime-state'
 
@@ -60,6 +64,31 @@ export class LoadedCohortMigrationOperations {
               ? existing.installId
               : randomUUID()
         }
+      }
+    }
+  }
+
+  /** `savedExperimentalNativeChat` must be read from the parsed file before defaults fill it in. */
+  migrateNativeChatGraduationCohort(
+    state: PersistedState,
+    fileExistedOnLoad: boolean,
+    savedExperimentalNativeChat: unknown
+  ): PersistedState {
+    const existing: unknown = state.settings?.nativeChatGraduationCohort
+    if (isNativeChatGraduationCohort(existing)) {
+      return state
+    }
+    // Why: once classified (even malformed), never re-read the live toggle; post-graduation users
+    // can turn Chat UI on, so re-deriving would admit them. Dirty so the first save pins it.
+    this.runtime.loadNeedsSave = true
+    return {
+      ...state,
+      settings: {
+        ...state.settings,
+        nativeChatGraduationCohort:
+          existing === undefined
+            ? classifyNativeChatGraduationCohort({ fileExistedOnLoad, savedExperimentalNativeChat })
+            : 'other'
       }
     }
   }

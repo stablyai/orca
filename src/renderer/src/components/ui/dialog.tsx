@@ -1,6 +1,7 @@
 'use client'
 
 import * as React from 'react'
+import { cva, type VariantProps } from 'class-variance-authority'
 import { XIcon } from 'lucide-react'
 import * as DialogPrimitive from 'radix-ui/dialog'
 
@@ -127,24 +128,53 @@ function DialogFooter({
   )
 }
 
-function DialogTitle({ className, ...props }: React.ComponentProps<typeof DialogPrimitive.Title>) {
+// Why: `feature-tip` is the large headline treatment of the two-column feature tip dialogs.
+const dialogTitleVariants = cva('font-semibold break-words', {
+  variants: {
+    variant: {
+      default: 'text-lg leading-snug',
+      'feature-tip': 'text-2xl leading-tight tracking-tight md:text-[1.75rem]'
+    }
+  },
+  defaultVariants: { variant: 'default' }
+})
+
+function DialogTitle({
+  className,
+  variant = 'default',
+  ...props
+}: React.ComponentProps<typeof DialogPrimitive.Title> & VariantProps<typeof dialogTitleVariants>) {
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
-      className={cn('text-lg leading-snug font-semibold break-words', className)}
+      data-variant={variant}
+      className={cn(dialogTitleVariants({ variant, className }))}
       {...props}
     />
   )
 }
 
+const dialogDescriptionVariants = cva('text-sm text-muted-foreground', {
+  variants: {
+    variant: {
+      default: '',
+      'feature-tip': 'leading-relaxed'
+    }
+  },
+  defaultVariants: { variant: 'default' }
+})
+
 function DialogDescription({
   className,
+  variant = 'default',
   ...props
-}: React.ComponentProps<typeof DialogPrimitive.Description>) {
+}: React.ComponentProps<typeof DialogPrimitive.Description> &
+  VariantProps<typeof dialogDescriptionVariants>) {
   return (
     <DialogPrimitive.Description
       data-slot="dialog-description"
-      className={cn('text-sm text-muted-foreground', className)}
+      data-variant={variant}
+      className={cn(dialogDescriptionVariants({ variant, className }))}
       {...props}
     />
   )

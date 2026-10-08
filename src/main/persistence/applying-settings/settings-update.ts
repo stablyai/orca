@@ -58,6 +58,8 @@ export function updateSettings(
   options: { notifyListeners?: boolean; originWebContentsId?: number } = {}
 ): GlobalSettings {
   const sanitizedUpdates = stripRetiredGlobalSettings(updates)
+  // Why: the cohort is a historical fact main records at load; no client may rewrite or clear it.
+  delete sanitizedUpdates.nativeChatGraduationCohort
   if ('opencodeSessionCookie' in updates && !updates.opencodeSessionCookie) {
     operations.removeRetainedBlob(PROTECTED_SECRET_SLOT.opencodeSessionCookie)
   }

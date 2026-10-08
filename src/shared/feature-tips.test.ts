@@ -3,13 +3,21 @@ import {
   FEATURE_TIPS,
   getCompletedFeatureTipIds,
   getOrderedUnseenFeatureTips,
+  isFeatureTipForAudience,
   normalizeFeatureTipIds,
+  type FeatureTipAudienceState,
   type FeatureTipId
 } from './feature-tips'
 
+const everyone: FeatureTipAudienceState = { nativeChatGraduationOptIn: false }
+const optedIn: FeatureTipAudienceState = { nativeChatGraduationOptIn: true }
+
 describe('feature tips', () => {
   it('orders new unseen tips before older unseen tips', () => {
-    const tips = getOrderedUnseenFeatureTips({ seenTipIds: new Set<FeatureTipId>() })
+    const tips = getOrderedUnseenFeatureTips({
+      seenTipIds: new Set<FeatureTipId>(),
+      audience: everyone
+    })
 
     expect(tips.map((tip) => tip.id)).toEqual([
       'agent-session-search',
@@ -21,6 +29,7 @@ describe('feature tips', () => {
 
   it('skips tips the user has already seen', () => {
     const tips = getOrderedUnseenFeatureTips({
+      audience: everyone,
       seenTipIds: new Set<FeatureTipId>([
         'voice-dictation',
         'orca-cli',
@@ -34,6 +43,7 @@ describe('feature tips', () => {
 
   it('skips tips for features the user has already completed', () => {
     const tips = getOrderedUnseenFeatureTips({
+      audience: everyone,
       // cmd-j is a seen-based tip with no feature completion, so mark it seen here.
       seenTipIds: new Set<FeatureTipId>(['cmd-j-palette']),
       completedTipIds: getCompletedFeatureTipIds({
@@ -48,6 +58,7 @@ describe('feature tips', () => {
 
   it('skips the CLI tip when the CLI is already installed', () => {
     const tips = getOrderedUnseenFeatureTips({
+      audience: everyone,
       seenTipIds: new Set<FeatureTipId>(['voice-dictation', 'cmd-j-palette']),
       completedTipIds: getCompletedFeatureTipIds({
         cliInstalled: true,
@@ -61,6 +72,7 @@ describe('feature tips', () => {
 
   it('skips tips for features the user has already interacted with', () => {
     const tips = getOrderedUnseenFeatureTips({
+      audience: everyone,
       seenTipIds: new Set<FeatureTipId>(),
       completedTipIds: getCompletedFeatureTipIds({
         cliInstalled: false,
@@ -119,5 +131,42 @@ describe('feature tips', () => {
     expect(voiceTip?.priority).toBe('unseen')
     expect(voiceTip?.title).toBe('Dictate into any pane')
     expect(voiceTip?.ctaLabel).toBe('Set up voice dictation')
+  })
+
+  it('offers the native chat upgrade tip first, and only to the pre-graduation opt-in cohort', () => {
+    const forCohort = getOrderedUnseenFeatureTips({
+      seenTipIds: new Set<FeatureTipId>(),
+      audience: optedIn
+    })
+    const forEveryoneElse = getOrderedUnseenFeatureTips({
+      seenTipIds: new Set<FeatureTipId>(),
+      audience: everyone
+    })
+
+    expect(forCohort[0]?.id).toBe('native-chat-upgrade')
+    expect(forEveryoneElse.map((tip) => tip.id)).not.toContain('native-chat-upgrade')
+  })
+
+  it('keeps the cohort after the tip is seen; seen alone retires it', () => {
+    const tips = getOrderedUnseenFeatureTips({
+      seenTipIds: new Set<FeatureTipId>(['native-chat-upgrade']),
+      audience: optedIn
+    })
+
+    expect(tips.map((tip) => tip.id)).not.toContain('native-chat-upgrade')
+  })
+
+  it('limits only the native chat upgrade tip by audience', () => {
+    const limited = FEATURE_TIPS.filter((tip) => !isFeatureTipForAudience(tip, everyone))
+
+    expect(limited.map((tip) => tip.id)).toEqual(['native-chat-upgrade'])
+    expect(FEATURE_TIPS.every((tip) => isFeatureTipForAudience(tip, optedIn))).toBe(true)
+  })
+
+  it('keeps a seen native chat upgrade receipt when normalizing', () => {
+    expect(normalizeFeatureTipIds(['native-chat-upgrade', 'orca-cli'])).toEqual([
+      'native-chat-upgrade',
+      'orca-cli'
+    ])
   })
 })

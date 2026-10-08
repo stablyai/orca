@@ -15104,6 +15104,25 @@
             "d20ccf1e61": "terminé",
             "379d776971": "saisie",
             "0418f9becc": "ouvrir"
+          },
+          "NativeChatUpgradeFeatureTipVisual": {
+            "chatRowTitle": "Chat Claude",
+            "chatRowText": "J'ai ajouté la nouvelle tentative et mis à jour les tests du webhook.",
+            "cliRowTitle": "Corriger le test de paiement instable",
+            "cliRowText": "La suite de paiement a réussi dix fois de suite.",
+            "otherRowTitle": "Mettre à jour le lockfile",
+            "otherRowText": "Dépendances mises à jour ; le build passe toujours.",
+            "copySessionId": "Copier l'ID de session",
+            "resume": "Reprendre",
+            "resumeInNewCliTooltipFork": "Forke cette conversation dans une nouvelle session CLI.",
+            "resumeInNewCliTooltipChat": "Le chat natif reste tel quel.",
+            "resumeInNewCli": "Reprendre dans une nouvelle CLI",
+            "resumeInNewNativeChat": "Reprendre dans un nouveau chat natif",
+            "copyResumeCommand": "Copier la commande de reprise",
+            "roleAgent": "Agent",
+            "messageCount": "{{value0}} messages",
+            "panelTitle": "Historique des sessions d'agent",
+            "panelSubtitle": "Reprendre les sessions passées"
           }
         }
       },
@@ -19039,6 +19058,19 @@
       "recent3Title": "Brouillon des notes de version",
       "settingsLink": "Paramètres → Recherche de session d'agent",
       "startSearching": "Commencer la recherche"
+    },
+    "nativeChatUpgrade": {
+      "eyebrow": "Nouveau",
+      "title": "Le chat natif a été amélioré",
+      "description": "Les nouveaux chats communiquent désormais directement avec l’agent au lieu de refléter un terminal.",
+      "cta": "Compris",
+      "sessionHistoryIntro": "Dans Historique des sessions d'agent, dans la barre latérale droite :",
+      "resumeInChatLabel": "Reprendre dans un nouveau chat natif",
+      "resumeInChatText": "transfère une session CLI dans un chat.",
+      "resumeInCliLabel": "Reprendre dans une nouvelle CLI",
+      "resumeInCliText": "copie un chat Claude ou Codex dans une nouvelle session CLI. Le chat reste tel quel.",
+      "settingsLead": "Modifiez ce réglage à tout moment dans",
+      "settingsLink": "Paramètres → Chat"
     }
   },
   "quickOpen": {

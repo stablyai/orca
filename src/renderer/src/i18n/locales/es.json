@@ -14999,6 +14999,25 @@
             "d20ccf1e61": "hecho",
             "379d776971": "escribiendo",
             "0418f9becc": "abierto"
+          },
+          "NativeChatUpgradeFeatureTipVisual": {
+            "chatRowTitle": "Chat de Claude",
+            "chatRowText": "Añadí el reintento y actualicé las pruebas del webhook.",
+            "cliRowTitle": "Arreglar la prueba inestable del checkout",
+            "cliRowText": "La suite del checkout pasó diez veces seguidas.",
+            "otherRowTitle": "Actualizar el lockfile",
+            "otherRowText": "Actualicé las dependencias; la compilación sigue pasando.",
+            "copySessionId": "Copiar ID de sesión",
+            "resume": "Reanudar",
+            "resumeInNewCliTooltipFork": "Hace un fork de esta conversación en una nueva sesión de CLI.",
+            "resumeInNewCliTooltipChat": "El chat nativo queda como está.",
+            "resumeInNewCli": "Reanudar en una nueva CLI",
+            "resumeInNewNativeChat": "Reanudar en un nuevo chat nativo",
+            "copyResumeCommand": "Copiar comando para reanudar",
+            "roleAgent": "Agente",
+            "messageCount": "{{value0}} mensajes",
+            "panelTitle": "Historial de sesiones de agentes",
+            "panelSubtitle": "Reanudar sesiones anteriores"
           }
         }
       },
@@ -19063,6 +19082,19 @@
       "unassignedInstruction": "Asigna un atajo de dictado antes de iniciar el dictado por voz en un panel enfocado.",
       "settingsInstruction": "Cambia el modelo, el modo de dictado o el atajo en cualquier momento en",
       "settingsLink": "Ajustes → Voz"
+    },
+    "nativeChatUpgrade": {
+      "eyebrow": "Nuevo",
+      "title": "El chat nativo se ha mejorado",
+      "description": "Ahora los chats nuevos se comunican directamente con el agente en lugar de reflejar una terminal.",
+      "cta": "Entiendo",
+      "sessionHistoryIntro": "En Historial de sesiones de agentes, en la barra lateral derecha:",
+      "resumeInChatLabel": "Reanudar en un nuevo chat nativo",
+      "resumeInChatText": "pasa una sesión de CLI a un chat.",
+      "resumeInCliLabel": "Reanudar en una nueva CLI",
+      "resumeInCliText": "copia un chat de Claude o Codex en una nueva sesión de CLI. El chat queda como está.",
+      "settingsLead": "Cámbialo cuando quieras en",
+      "settingsLink": "Ajustes → Chat"
     }
   },
   "fileExplorer": {

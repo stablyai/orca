@@ -11,6 +11,7 @@ import { CliSetupTipDialog } from './CliSetupTipDialog'
 import { CmdJPaletteTipDialog } from './CmdJPaletteTipDialog'
 import { installCliFromFeatureTip } from './feature-tip-cli-install-action'
 import { getFeatureTipForModal } from './feature-tip-modal-state'
+import { NativeChatUpgradeTipDialog } from './NativeChatUpgradeTipDialog'
 import {
   getOrcaCliFeatureTipTelemetrySource,
   trackCmdJPaletteFeatureTipAcknowledged,
@@ -111,6 +112,13 @@ export default function FeatureTipsModal(): JSX.Element | null {
     openSettingsPage()
   }
 
+  const openChatSettings = (): void => {
+    markCurrentTipSeen()
+    closeModal()
+    openSettingsTarget({ pane: 'chat', repoId: null })
+    openSettingsPage()
+  }
+
   const enableOrchestrationSkillSetup = (): void => {
     localStorage.setItem(ORCHESTRATION_ENABLED_STORAGE_KEY, '1')
     localStorage.removeItem(ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY)
@@ -130,6 +138,10 @@ export default function FeatureTipsModal(): JSX.Element | null {
         trackCmdJPaletteFeatureTipAcknowledged(
           getOrcaCliFeatureTipTelemetrySource(modalData.source)
         )
+        closeModal()
+        break
+      }
+      case 'learn-native-chat-upgrade': {
         closeModal()
         break
       }
@@ -287,6 +299,19 @@ export default function FeatureTipsModal(): JSX.Element | null {
         onSettingsClick={openSessionSearchSettings}
         stage={sessionSearchSetup.stage}
         status={sessionSearchSetup.status}
+      />
+    )
+  }
+
+  if (currentTip.action === 'learn-native-chat-upgrade') {
+    return (
+      <NativeChatUpgradeTipDialog
+        open={isOpen}
+        tip={currentTip}
+        primaryBusy={primaryBusy}
+        onOpenChange={handleOpenChange}
+        onPrimaryAction={() => void handlePrimaryAction()}
+        onSettingsClick={openChatSettings}
       />
     )
   }

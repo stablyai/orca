@@ -15234,6 +15234,25 @@
             "d20ccf1e61": "done",
             "379d776971": "typing",
             "0418f9becc": "open"
+          },
+          "NativeChatUpgradeFeatureTipVisual": {
+            "chatRowTitle": "Claude Chat",
+            "chatRowText": "Added the retry and updated the webhook tests.",
+            "cliRowTitle": "Fix the flaky checkout test",
+            "cliRowText": "The checkout suite passed ten runs in a row.",
+            "otherRowTitle": "Bump the lockfile",
+            "otherRowText": "Updated the dependencies; the build still passes.",
+            "copySessionId": "Copy Session ID",
+            "resume": "Resume",
+            "resumeInNewCliTooltipFork": "Forks this conversation into a new CLI session.",
+            "resumeInNewCliTooltipChat": "The native chat stays as it is.",
+            "resumeInNewCli": "Resume in New CLI",
+            "resumeInNewNativeChat": "Resume in New Native Chat",
+            "copyResumeCommand": "Copy Resume Command",
+            "roleAgent": "Agent",
+            "messageCount": "{{value0}} msgs",
+            "panelTitle": "Agent Session History",
+            "panelSubtitle": "Resume past sessions"
           }
         }
       },
@@ -19134,6 +19153,19 @@
       "demoHit6Age": "1mo",
       "readyToast": "Session search is ready",
       "readyToastOpen": "Open"
+    },
+    "nativeChatUpgrade": {
+      "eyebrow": "New",
+      "title": "Native chat got an upgrade",
+      "description": "New chats now talk to the agent directly instead of mirroring a terminal.",
+      "cta": "Got it",
+      "sessionHistoryIntro": "In Agent Session History, in the right sidebar:",
+      "resumeInChatLabel": "Resume in New Native Chat",
+      "resumeInChatText": "moves a CLI session into a chat.",
+      "resumeInCliLabel": "Resume in New CLI",
+      "resumeInCliText": "copies a Claude or Codex chat into a new CLI session. The chat stays as it is.",
+      "settingsLead": "Change it anytime in",
+      "settingsLink": "Settings → Chat"
     }
   },
   "quickOpen": {
