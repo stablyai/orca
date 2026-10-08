@@ -1,4 +1,3 @@
-/* eslint-disable max-lines */
 import { useLayoutEffect, useRef, type MutableRefObject } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
@@ -15,19 +14,12 @@ import { useMobileStructuredNativeChatSendBridge } from './use-mobile-structured
 import { useMobileNativeChatPrompts } from './use-mobile-native-chat-prompts'
 import { useNativeChatAcceptedAction } from './use-native-chat-action-outcomes'
 import { useThrottledLatestValue } from './use-throttled-latest-value'
-import type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
 import { useMobileBridgeChatPromptWrites } from './use-mobile-bridge-chat-prompt-writes'
 import { useMobileNativeChatActiveResolution } from './use-mobile-native-chat-active-resolution'
 import { useMobileNativeChatPromptCards } from './use-mobile-native-chat-prompt-cards'
 import { mobileNativeChatScopeKey } from './mobile-native-chat-scope-key'
 import type { MobileSessionTabViewModeBridge } from './use-mobile-session-view-mode'
-
 export type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
-
-const NATIVE_CHAT_STREAM_THROTTLE_MS = 50
-
-/** Owns mobile native-chat state and teardown outside the already dense session
- *  route. The route remains responsible only for choosing and rendering the view. */
 export function useMobileNativeChatController(args: {
   client: RpcClient | null
   hostId: string
@@ -39,7 +31,6 @@ export function useMobileNativeChatController(args: {
   deviceTokenRef: MutableRefObject<string | null>
   nativeChatTranscriptIsLocalReadable: boolean
   nativeChatInputLeaseReady: boolean
-  /** Live socket state; the lease collapses on disconnect but one render later. */
   connState: ConnectionState
   /** Host capability fact from the shared runtime status probe. */
   agentSessionHostSupport?: StructuredAgentSessionHostSupport | null
@@ -47,7 +38,7 @@ export function useMobileNativeChatController(args: {
   /** Retires a held failure banner. Any accepted chat write clears it — a delivered
    *  answer or permission reply must not sit under a stale "not sent". */
   onSendResolved: () => void
-}): MobileNativeChatController {
+}) {
   const {
     client,
     hostId,
@@ -88,7 +79,6 @@ export function useMobileNativeChatController(args: {
     nativeChatTranscriptIsLocalReadable,
     sessionTabViewMode
   })
-
   // The lane runs before the drafts hook (fixed hook order); Edit's composer
   // append reaches the drafts state through this ref, set below once they exist.
   // Until the drafts mount, nothing is copied, so Edit deletes nothing.
@@ -140,9 +130,6 @@ export function useMobileNativeChatController(args: {
     transcriptSettled: nativeChatSession.status === 'ready',
     queuedCards: structuredNativeChat.queued.cards
   })
-
-  // Deliberately not gated on the chat view being visible: the streaming gate
-  // has to tell "hidden mid-turn" from "the turn ended".
   const nativeChatStreamLive = activeChatStructured
     ? structuredNativeChat.isWorking
     : activeTabAgentWorking
@@ -154,7 +141,7 @@ export function useMobileNativeChatController(args: {
     activeChatStructured
       ? undefined
       : mobileNativeChatStreamPreview(nativeChatStatus, nativeChatAgentWorking),
-    NATIVE_CHAT_STREAM_THROTTLE_MS
+    50
   )
   const {
     permission: legacyNativeChatPermission,
@@ -179,13 +166,11 @@ export function useMobileNativeChatController(args: {
     sessionKey: activeChatSessionId,
     observing: showNativeChat && (nativeChatDetectedAsk != null || nativeChatTranscriptSettled)
   })
-
   // Every chat write gates on both: the lease proves the input floor is ours, and
   // `connState` collapses a render before the lease does on disconnect.
   const inputSendable = activeChatStructured
     ? client != null && activeChatSessionId != null && connState === 'connected'
     : nativeChatInputLeaseReady && connState === 'connected'
-
   const {
     answerAsk: handleNativeChatAnswerAsk,
     cancelAsk: handleNativeChatCancelAsk,
@@ -201,14 +186,11 @@ export function useMobileNativeChatController(args: {
     streamIdentity,
     onSendError
   })
-
   const nativeChatFiles = useMobileNativeChatFileSearch({ client, worktreeId })
-
   // Why: the send seam reports outgoing catalog commands to session-option
   // tracking, but the options hook needs the seam's dispatcher — a ref breaks
   // the cycle without re-creating the send callbacks per snapshot.
   const recordSessionOptionCommandRef = useRef<(command: string) => void>(() => {})
-
   const {
     send: handleNativeChatSend,
     sendWithOutcome: handleNativeChatSendWithOutcome,
@@ -229,7 +211,6 @@ export function useMobileNativeChatController(args: {
     holdUnconfirmedSend,
     onSendError
   })
-
   const structuredNativeChatSend = useMobileStructuredNativeChatSendBridge({
     agent: activeChatResolution?.agent === 'claude' ? 'claude' : 'codex',
     sendStructured: structuredNativeChat.sendWithOutcome,
@@ -240,7 +221,6 @@ export function useMobileNativeChatController(args: {
     restoreRejectedDraft,
     onSendError
   })
-
   const { nativeChatSessionOptions, recordCommand: recordNativeChatSessionOptionCommand } =
     useMobileNativeChatSessionOptionController({
       client,
@@ -268,7 +248,6 @@ export function useMobileNativeChatController(args: {
     recordSessionOptionCommandRef.current = recordNativeChatSessionOptionCommand
     appendComposerTextRef.current = appendComposerText
   }, [appendComposerText, recordNativeChatSessionOptionCommand])
-  // Card actions retire the route's held failure banner too, not just sends.
   const answerAsk = useNativeChatAcceptedAction(handleNativeChatAnswerAsk, onSendResolved)
   const cancelAsk = useNativeChatAcceptedAction(handleNativeChatCancelAsk, onSendResolved)
   const promptCards = useMobileNativeChatPromptCards({
@@ -285,7 +264,6 @@ export function useMobileNativeChatController(args: {
     structured: activeChatStructured ? structuredNativeChat : null,
     onSendResolved
   })
-
   return {
     isTabChatView,
     toggleTabChatView,
@@ -324,7 +302,6 @@ export function useMobileNativeChatController(args: {
     handleNativeChatAnswerAsk: answerAsk,
     handleNativeChatCancelAsk: cancelAsk,
     handleNativeChatStop: activeChatStructured ? structuredNativeChat.cancel : handleNativeChatStop,
-    // The inactive lane's session is starved of identity, so its cards stay empty.
     nativeChatQueued: structuredNativeChat.queued,
     nativeChatBackgroundTasks: activeChatStructured ? structuredNativeChat.backgroundTasks : null,
     ...nativeChatFiles,
