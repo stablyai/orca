@@ -3016,7 +3016,7 @@
         "attachmentExpired": "This attachment expired.",
         "backgroundTasksRunning": "Background tasks are still running.",
         "cannotRunHere": "Orca can't run this agent in a chat here.",
-        "capacity": "Orca has received too many requests in the last day.",
+        "capacity": "Orca on the computer running this chat has hit a request limit. Update Orca there, then try again.",
         "chatNotFound": "Orca can't find this chat.",
         "chatSavedByNewerOrca": "This chat was saved by a newer Orca.",
         "clearUnfinished": "The last /clear didn't finish.",

@@ -1,18 +1,12 @@
 import { toSshExecutionHostId } from '../../../../shared/execution-host'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
-import type { AgentLaunchPaneEvidence } from '../../../agent-launch/agent-launch-pane-attachment'
+import {
+  readLaunchBookkeepingOr,
+  type AgentLaunchPaneEvidence
+} from '../../../agent-launch/agent-launch-pane-attachment'
 import type { Store } from '../../../persistence'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import { resolveStablePaneOwner } from './stable-owner'
-
-/** Reading the record is bookkeeping: a read that fails must leave the spawn as it was, never stop it. */
-function orElse<T>(read: () => T, fallback: T): T {
-  try {
-    return read()
-  } catch {
-    return fallback
-  }
-}
 
 /** What a pane's spawn reads to learn whether an agent launch owns it. */
 export function agentLaunchPaneEvidence(
@@ -25,17 +19,22 @@ export function agentLaunchPaneEvidence(
     // The persisted binding counts: a restored pane whose agent survived in the daemon is adopted
     // by the spawn below, never called unconfirmed.
     isPaneLive: () =>
-      orElse(
+      readLaunchBookkeepingOr(
         () =>
           (runtime?.hasLiveTerminalForPaneKey(paneKey) ?? false) ||
           resolveStablePaneOwner(runtime, store, paneKey, pane.worktreeId, pane.connectionId) !==
             null,
         false
       ),
-    openedRows: () =>
-      orElse(() => runtime?.openedAgentSessionRecordStore()?.listOperationRows() ?? null, null),
+    openedRows: (ownedPane, now) =>
+      readLaunchBookkeepingOr(
+        () =>
+          runtime?.openedAgentSessionRecordStore()?.listOperationRowsOwningPane(ownedPane, now) ??
+          null,
+        null
+      ),
     launchPaneOnTab: () =>
-      orElse(() => {
+      readLaunchBookkeepingOr(() => {
         if (!store || typeof store.getWorkspaceSession !== 'function') {
           return null
         }
@@ -47,11 +46,14 @@ export function agentLaunchPaneEvidence(
         )?.agentLaunchPane
         return launchPane?.leafId === pane.leafId ? launchPane : null
       }, null),
-    openRows: async () => {
+    openRows: async (ownedPane, now) => {
       if (!runtime) {
         throw new Error('runtime_unavailable')
       }
-      return (await runtime.openAgentSessionRecordStore()).listOperationRows()
+      return (await runtime.openAgentSessionRecordStore()).listOperationRowsOwningPane(
+        ownedPane,
+        now
+      )
     },
     now: () => Date.now()
   }

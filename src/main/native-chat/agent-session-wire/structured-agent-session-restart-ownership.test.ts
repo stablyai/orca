@@ -1,3 +1,4 @@
+import { readTestAgentSessionOperationRows } from '../../runtime/agent-session-operation-test-rows'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import {
@@ -165,9 +166,9 @@ it('keeps a continuation unconfirmed when its send throws after acceptance', asy
   })
   // Its acceptance committed with its submission: a resend replays it.
   expect(
-    store
-      .listOperationRows()
-      .find((row) => row.callerKey === STRUCTURED_AGENT_SESSION_RESTART_CONTINUATION_CALLER)
+    readTestAgentSessionOperationRows(store).find(
+      (row) => row.callerKey === STRUCTURED_AGENT_SESSION_RESTART_CONTINUATION_CALLER
+    )
   ).toMatchObject({ outcome: { status: 'succeeded' } })
 })
 

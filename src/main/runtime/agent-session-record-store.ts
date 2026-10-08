@@ -8,11 +8,10 @@ import {
   type AgentSessionConversationClear
 } from './agent-session-conversation-command-record'
 import { pinAgentSessionRecordLaunchDirectory } from './agent-session-record-launch-directory'
-import {
-  agentSessionOperationKey,
-  type AgentSessionOperationClaim,
-  type AgentSessionOperationDecision,
-  type AgentSessionOperationRow
+import type {
+  AgentSessionOperationClaim,
+  AgentSessionOperationDecision,
+  AgentSessionOperationOwnedPane
 } from '../../shared/agent-session-operation-ledger'
 import {
   admitAgentSessionGlobalOperationInto,
@@ -96,12 +95,12 @@ export class AgentSessionRecordStore {
     readonly hostId: string
   ) {}
 
-  /** Reads every structurally valid row, independently of which agents this host can start. */
+  /** Loads session records independently of which agents this host can start. */
   static open(args: {
     journalDatabase: JournalHostDatabase
     hostId: string
   }): AgentSessionRecordStore {
-    const rows = loadAgentSessionStoreRows(args.journalDatabase.db)
+    const rows = loadAgentSessionStoreRows(() => args.journalDatabase.db)
     const transactions = new AgentSessionStoreTransactions(args.journalDatabase, rows)
     return new AgentSessionRecordStore(transactions, args.hostId)
   }
@@ -185,14 +184,16 @@ export class AgentSessionRecordStore {
     )
 
   /** A record this build cannot validate: readable as present, never grantable as a writer. */
-  isSessionUnreadable(sessionId: string): boolean {
-    return this.state.unreadableRecords.has(sessionId)
-  }
+  isSessionUnreadable = (sessionId: string): boolean => this.state.unreadableRecords.has(sessionId)
 
-  listOperationRows = (): AgentSessionOperationRow[] => [...this.state.operations.values()]
+  getOperationRow = (callerKey: string, operationId: string) =>
+    this.state.operations.get(callerKey, operationId)
 
-  getOperationRow = (callerKey: string, operationId: string): AgentSessionOperationRow | null =>
-    this.state.operations.get(agentSessionOperationKey(callerKey, operationId)) ?? null
+  findOperationRow = (operationId: string, now?: number) =>
+    this.state.operations.find(operationId, now)
+
+  listOperationRowsOwningPane = (pane: AgentSessionOperationOwnedPane, now: number) =>
+    this.state.operations.owningPane(pane, now)
 
   isClaimKeyVerifiable = (keyId: string, now: number): boolean =>
     isAgentSessionClaimKeyVerifiable(this.state, keyId, now)

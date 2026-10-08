@@ -9,7 +9,6 @@ import type {
   RetiredAgentSessionClaimKey
 } from './agent-session-store-state'
 import {
-  isReadableAgentSessionStoreOperation,
   isReadableAgentSessionStoreRecord,
   isReadableAgentSessionStoreTab,
   isReadableRetiredAgentSessionClaimKey
@@ -21,7 +20,6 @@ export function draftAgentSessionStoreState(state: AgentSessionStoreState): Agen
   return {
     ...state,
     records: new Map(state.records),
-    operations: new Map(state.operations),
     retiredClaimKeys: [...state.retiredClaimKeys],
     sessionTabs: state.sessionTabs?.clone() ?? null
   }
@@ -32,7 +30,6 @@ type KeyedRowWrites = { upsert: [key: string, json: string][]; remove: string[] 
 /** Exactly the rows a draft changed, each serialized as it will be stored. */
 export type AgentSessionStoreRowWrites = {
   records: KeyedRowWrites
-  operations: KeyedRowWrites
   /** The whole list when it changed, else null. */
   retiredClaimKeys: RetiredAgentSessionClaimKey[] | null
   /** The whole index when it changed: `recorded: false` is a store that has never recorded one. */
@@ -93,9 +90,6 @@ export function agentSessionStoreDraftRowWrites(
     (sessionId, written) => isReadableAgentSessionStoreRecord(sessionId, written),
     encodeAgentSessionRecord
   )
-  const operations = serializeChangedRows(published.operations, draft.operations, (key, written) =>
-    isReadableAgentSessionStoreOperation(key, written)
-  )
   const retiredClaimKeys = retiredClaimKeysChanged(
     published.retiredClaimKeys,
     draft.retiredClaimKeys
@@ -124,8 +118,6 @@ export function agentSessionStoreDraftRowWrites(
   const changed =
     records.upsert.length > 0 ||
     records.remove.length > 0 ||
-    operations.upsert.length > 0 ||
-    operations.remove.length > 0 ||
     retiredClaimKeys !== null ||
     tabsChanged
   if (!changed) {
@@ -133,7 +125,6 @@ export function agentSessionStoreDraftRowWrites(
   }
   return {
     records,
-    operations,
     retiredClaimKeys,
     sessionTabs: tabsChanged ? { recorded: draft.sessionTabs !== null, tabs } : null
   }

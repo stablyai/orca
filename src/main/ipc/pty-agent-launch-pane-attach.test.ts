@@ -145,10 +145,10 @@ describe('a pane whose process belongs to an agent launch', () => {
       onPtyData: vi.fn(),
       hasLiveTerminalForPaneKey: vi.fn(() => false),
       openedAgentSessionRecordStore: vi.fn(() =>
-        record.rows ? { listOperationRows: () => record.rows } : null
+        record.rows ? { listOperationRowsOwningPane: () => record.rows } : null
       ),
       openAgentSessionRecordStore: vi.fn(async () => ({
-        listOperationRows: () => record.rows ?? [recorded({ status: 'unknown' })]
+        listOperationRowsOwningPane: () => record.rows ?? [recorded({ status: 'unknown' })]
       })),
       reportAgentLaunchPaneVerdict: vi.fn()
     }

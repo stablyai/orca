@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecordStore } from '../../../src/main/runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../../src/main/runtime/agent-session-record-store-test-harness'
+import { readTestAgentSessionOperationRows } from '../../../src/main/runtime/agent-session-operation-test-rows'
 import { OrcaRuntimeRpcServer } from '../../../src/main/runtime/runtime-rpc'
 import { DeviceRegistry } from '../../../src/main/runtime/device-registry'
 import type { AuthenticatedMobileSocket } from '../../../src/main/runtime/rpc/mobile-socket-wiring'
@@ -199,7 +200,7 @@ describe('mobile launch retry authority', () => {
       })
     ])
     expect(runtime.createManagedWorktree).toHaveBeenCalledTimes(1)
-    expect(store.listOperationRows()[0]?.callerKey).toBe(mobile.deviceId)
+    expect(readTestAgentSessionOperationRows(store)[0]?.callerKey).toBe(mobile.deviceId)
   })
 
   it('rejects an unnamed replay request before workspace creation', async () => {
@@ -249,7 +250,7 @@ describe('mobile launch retry authority', () => {
     ).resolves.toEqual(first)
     expect(runtime.createManagedWorktree).toHaveBeenCalledTimes(1)
     expect(createStructuredSession).toHaveBeenCalledTimes(1)
-    expect(store.listOperationRows()).toHaveLength(1)
+    expect(readTestAgentSessionOperationRows(store)).toHaveLength(1)
   })
 
   it('does not duplicate when a replacement host strips operationId', async () => {
@@ -339,7 +340,7 @@ describe('mobile launch retry authority', () => {
     })
     expect(launch.runtime.createManagedWorktree).toHaveBeenCalledTimes(1)
     expect(createStructuredSession).not.toHaveBeenCalled()
-    expect(store.listOperationRows()[0]?.outcome).toMatchObject({
+    expect(readTestAgentSessionOperationRows(store)[0]?.outcome).toMatchObject({
       status: 'failed',
       code: 'worktree_create_collision'
     })

@@ -17840,7 +17840,7 @@
         "notDoneCommand": "命令未运行。",
         "notDoneGoal": "目标未更改。",
         "restartFailed": "智能体无法重新启动。",
-        "capacity": "Orca 在过去一天内收到的请求过多。",
+        "capacity": "运行此聊天的计算机上的 Orca 已达到请求上限。请在那台计算机上更新 Orca，然后重试。",
         "outcomeUnknown": "Orca 无法确认发生了什么。请查看聊天。",
         "sendOutcomeLost": "Orca 无法确认你的消息已送达智能体。请查看聊天，如有需要请重新发送。",
         "questionChanged": "此问题已被回答或已更改。",

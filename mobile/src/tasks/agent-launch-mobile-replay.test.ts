@@ -12,6 +12,7 @@ import {
 } from '../../../src/shared/agent-session-host-authority'
 import type { AgentSessionRecordStore } from '../../../src/main/runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../../src/main/runtime/agent-session-record-store-test-harness'
+import { readTestAgentSessionOperationRows } from '../../../src/main/runtime/agent-session-operation-test-rows'
 import type { OrcaRuntimeService } from '../../../src/main/runtime/orca-runtime'
 import { RpcDispatcher } from '../../../src/main/runtime/rpc/dispatcher'
 import {
@@ -135,7 +136,7 @@ describe('mobile launch retries through the host ledger', () => {
     await expect(launch.result).resolves.toEqual({ error: 'agent_session_operation_unknown' })
     expect(launch.runtime.createManagedWorktree).toHaveBeenCalledTimes(1)
     expect(launch.attempts).toHaveLength(1)
-    expect(store.listOperationRows()[0]?.outcome.status).toBe('unknown')
+    expect(readTestAgentSessionOperationRows(store)[0]?.outcome.status).toBe('unknown')
   })
 
   it('keeps the operation identity after its receipt expires during a lost reply', async () => {

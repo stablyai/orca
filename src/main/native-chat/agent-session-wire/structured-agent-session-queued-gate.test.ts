@@ -1,3 +1,4 @@
+import { deleteTestAgentSessionOperation } from '../../runtime/agent-session-operation-test-rows'
 // The one queue gate: admission, the drain step and Send-now consume a single
 // typed hold decision, so the lists cannot drift — pinned here with a clear in
 // doubt, Send-now's override set, and the replay-preference rule for a refused
@@ -248,12 +249,7 @@ describe('the hand-off link on answers', () => {
     await eventually(async () => expect(await rig.handoff(clientOperationId)).toBeDefined())
     const handedOffAs = await rig.handoffId(clientOperationId)
     // The ledger forgot the id, so the send runs again rather than replaying.
-    const operations = store['transactions'].state.operations
-    for (const [key, row] of operations) {
-      if (row.operationId === clientOperationId) {
-        operations.delete(key)
-      }
-    }
+    deleteTestAgentSessionOperation(store, clientOperationId)
     const count = (await host.journalSnapshot(SESSION)).submissions.length
     expect(await host.send(CALLER, params)).toMatchObject({
       ok: true,
@@ -285,12 +281,7 @@ describe('Send-now rerun', () => {
       expect(await drafts()).toMatchObject([{ messageId: draftId, state: 'returned' }])
     )
     // The host died before the Send's answer settled: its ledger row is still pending, so it reruns.
-    const operations = store['transactions'].state.operations
-    for (const [key, row] of operations) {
-      if (row.operationId === operationId) {
-        operations.set(key, { ...row, outcome: { status: 'pending' } })
-      }
-    }
+    await store.recordOperationOutcome({ operationId, outcome: { status: 'pending' } })
     const count = (await host.journalSnapshot(SESSION)).submissions.length
     expect(await sendNow(draftId, operationId)).toMatchObject({
       ok: true,

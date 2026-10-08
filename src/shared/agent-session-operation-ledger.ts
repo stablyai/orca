@@ -8,13 +8,11 @@ import {
   type AgentSessionRewindResult
 } from './agent-session-rewind'
 /**
- * Durable client-operation ledger.
+ * Durable operation admission, claims and outcomes, persisted with the session records.
  *
- * `terminal.ensureAgentSession` / `terminal.createAgentSession` already enforce timestamped
- * operation ids with fingerprint conflict detection, age expiry, capacity limits, and tombstone
- * retention — but in memory, so a host restart turns "replay this create" into "spawn another
- * agent". These are the same rules over rows that survive a restart; the store writes a row in
- * the same atomic transaction as the lease reservation.
+ * There is no count limit. Rows are bookkeeping for retries, and a full ledger refused every
+ * caller's next write, including the user's own send behind unrelated agent traffic. A row's only
+ * lifetime is the replay window it protects (`agentSessionOperationExpiry`).
  */
 
 import {
@@ -26,9 +24,6 @@ import {
   isAgentSessionConversationCommandResult,
   type AgentSessionConversationCommandResult
 } from './agent-session-conversation-command'
-
-export const AGENT_SESSION_DURABLE_OPERATION_PER_CLIENT_LIMIT = 512
-export const AGENT_SESSION_DURABLE_OPERATION_GLOBAL_LIMIT = 4_096
 
 export type AgentSessionOperationOutcome =
   | { status: 'pending' }
@@ -55,6 +50,7 @@ export type AgentSessionOperationOutcome =
        * the value is read instead, where a payload we cannot read costs one replay.
        */
       launch?: unknown
+      terminalCreate?: unknown
     }
   | {
       status: 'failed'
@@ -66,7 +62,7 @@ export type AgentSessionOperationOutcome =
       details?: AgentSessionAnyRefusalDetails
     }
   /** The effect may or may not have happened; replay this answer instead of spawning again. */
-  | { status: 'unknown' }
+  | { status: 'unknown'; message?: string }
 
 /** A terminal pane an operation laid out before its process existed. */
 export type AgentSessionOperationOwnedPane = { worktreeId: string; paneKey: string }
@@ -86,6 +82,8 @@ export type AgentSessionOperationRow = {
    * malformed value costs that pane its verdict, never the row.
    */
   ownedPane?: AgentSessionOperationOwnedPane
+  /** Read at replay, never during row validation: an unreadable plan must retain its fence. */
+  terminalCreate?: unknown
 }
 
 /** Unexpired rows naming this pane as theirs. */
@@ -116,7 +114,6 @@ export type AgentSessionOperationRefusalCode =
   | 'agent_session_operation_invalid'
   | 'agent_session_operation_conflict'
   | 'agent_session_operation_expired'
-  | 'agent_session_operation_capacity'
 
 export type AgentSessionOperationDecision =
   | { decision: 'replay'; row: AgentSessionOperationRow }
@@ -198,7 +195,12 @@ export type AgentSessionOperationClaim =
  */
 export function claimAgentSessionOperation(
   rows: ReadonlyMap<string, AgentSessionOperationRow>,
-  args: { callerKey: string; operationId: string; ownedPane?: AgentSessionOperationOwnedPane }
+  args: {
+    callerKey: string
+    operationId: string
+    ownedPane?: AgentSessionOperationOwnedPane
+    terminalCreate?: unknown
+  }
 ): { rows: Map<string, AgentSessionOperationRow>; claim: AgentSessionOperationClaim } {
   const key = agentSessionOperationKey(args.callerKey, args.operationId)
   const existing = rows.get(key)
@@ -211,7 +213,8 @@ export function claimAgentSessionOperation(
   const claimed: AgentSessionOperationRow = {
     ...existing,
     outcome: { status: 'unknown' },
-    ...(args.ownedPane ? { ownedPane: args.ownedPane } : {})
+    ...(args.ownedPane ? { ownedPane: args.ownedPane } : {}),
+    ...(args.terminalCreate !== undefined ? { terminalCreate: args.terminalCreate } : {})
   }
   const next = new Map(rows)
   next.set(key, claimed)
@@ -234,36 +237,9 @@ export function agentSessionOperationExpiry(
   )
 }
 
-/** The unexpired row a globally scoped id already holds, under whichever caller admitted it. */
-export function findAgentSessionGlobalOperationRow(
-  rows: ReadonlyMap<string, AgentSessionOperationRow>,
-  operationId: string,
-  now: number
-): AgentSessionOperationRow | undefined {
-  for (const row of rows.values()) {
-    if (row.expiresAt > now && row.operationId === operationId) {
-      return row
-    }
-  }
-  return undefined
-}
-
-export function pruneAgentSessionOperationRows(
-  rows: ReadonlyMap<string, AgentSessionOperationRow>,
-  now: number
-): Map<string, AgentSessionOperationRow> {
-  const kept = new Map<string, AgentSessionOperationRow>()
-  for (const [key, row] of rows) {
-    if (row.expiresAt > now) {
-      kept.set(key, row)
-    }
-  }
-  return kept
-}
-
 /**
  * Decide what a mutating call with this operation id means against the persisted ledger. Callers
- * must prune first; a row that is present is a row that is still authoritative.
+ * must drop expired rows first; a row that is present is a row that is still authoritative.
  */
 export function evaluateAgentSessionOperation(args: {
   rows: ReadonlyMap<string, AgentSessionOperationRow>
@@ -271,8 +247,6 @@ export function evaluateAgentSessionOperation(args: {
   operationId: string
   fingerprint: string
   now: number
-  perClientLimit?: number
-  globalLimit?: number
 }): AgentSessionOperationDecision {
   const { rows, callerKey, operationId, fingerprint, now } = args
   const operationTimestamp = parseAgentSessionOperationTimestamp(operationId)
@@ -305,23 +279,6 @@ export function evaluateAgentSessionOperation(args: {
       decision: 'refused',
       code: 'agent_session_operation_expired',
       details: { reason: 'operationExpired' }
-    }
-  }
-  const perClientLimit = args.perClientLimit ?? AGENT_SESSION_DURABLE_OPERATION_PER_CLIENT_LIMIT
-  const globalLimit = args.globalLimit ?? AGENT_SESSION_DURABLE_OPERATION_GLOBAL_LIMIT
-  let callerCount = 0
-  for (const row of rows.values()) {
-    if (row.callerKey === callerKey) {
-      callerCount += 1
-    }
-  }
-  if (callerCount >= perClientLimit || rows.size >= globalLimit) {
-    // Why: tombstones cannot be evicted early without making an old replay capable of spawning
-    // again; reject new ids until retained rows age out.
-    return {
-      decision: 'refused',
-      code: 'agent_session_operation_capacity',
-      details: { reason: 'operationCapacity' }
     }
   }
   return {

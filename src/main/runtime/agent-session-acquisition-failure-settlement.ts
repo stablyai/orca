@@ -1,8 +1,4 @@
-import {
-  agentSessionOperationKey,
-  settleAgentSessionOperation,
-  type AgentSessionOperationOutcome
-} from '../../shared/agent-session-operation-ledger'
+import type { AgentSessionOperationOutcome } from '../../shared/agent-session-operation-ledger'
 import { nextAgentSessionFence } from '../../shared/agent-session-next-fence'
 import type {
   AgentSessionDeathEvidence,
@@ -49,7 +45,7 @@ export function settleFailedAgentSessionAcquisition(
   state: AgentSessionStoreState,
   args: AgentSessionFailedAcquisitionSettlement
 ): AgentSessionRecord {
-  const operation = state.operations.get(agentSessionOperationKey(args.callerKey, args.operationId))
+  const operation = state.operations.get(args.callerKey, args.operationId)
   if (!operation || operation.outcome.status !== 'pending') {
     throw new Error('agent_session_operation_conflict')
   }
@@ -59,7 +55,7 @@ export function settleFailedAgentSessionAcquisition(
   }
   const next = settleFailedLease(record, args)
   state.records.set(args.sessionId, next)
-  state.operations = settleAgentSessionOperation(state.operations, args)
+  state.operations.settle(args)
   return next
 }
 
@@ -68,7 +64,7 @@ export function settleFailedAgentSessionPostAcquisitionAttachment(
   state: AgentSessionStoreState,
   args: AgentSessionFailedPostAcquisitionAttachmentSettlement
 ): AgentSessionRecord {
-  const operation = state.operations.get(agentSessionOperationKey(args.callerKey, args.operationId))
+  const operation = state.operations.get(args.callerKey, args.operationId)
   if (!operation || operation.outcome.status !== 'pending') {
     throw new Error('agent_session_operation_conflict')
   }
@@ -116,7 +112,7 @@ export function settleFailedAgentSessionPostAcquisitionAttachment(
           }
         })
   state.records.set(args.sessionId, next)
-  state.operations = settleAgentSessionOperation(state.operations, args)
+  state.operations.settle(args)
   return next
 }
 

@@ -1,3 +1,4 @@
+import { readTestAgentSessionOperationRows } from '../../runtime/agent-session-operation-test-rows'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 // Source validation must finish before a new session claims the provider conversation.
 
@@ -212,7 +213,7 @@ describe('adopting a provider conversation on create', () => {
       expect(sessionAdapter.releaseAcquisition).not.toHaveBeenCalled()
       expect(onAttached).not.toHaveBeenCalled()
       expect(store?.getRecord(SESSION)).toBeNull()
-      expect(store?.listOperationRows()).toEqual([])
+      expect(readTestAgentSessionOperationRows(store)).toEqual([])
       if (kind === 'oversized') {
         expect(JSON.stringify(result)).toContain('import bound')
       }

@@ -1,3 +1,4 @@
+import { readTestAgentSessionOperationRows } from './agent-session-operation-test-rows'
 // A create the host was running when it died is retried under the same operation id. Recovery has
 // released its reservation by then, so the retry continues it at the next fence; a reservation that
 // is still held keeps answering exactly as it did.
@@ -93,7 +94,7 @@ describe('a create retried after recovery released its reservation', () => {
       reservedSpawnToken: 'spawn-b',
       handoffOperationId: OPERATION
     })
-    expect(store.listOperationRows()).toEqual([
+    expect(readTestAgentSessionOperationRows(store)).toEqual([
       expect.objectContaining({ operationId: OPERATION, outcome: { status: 'pending' } })
     ])
 

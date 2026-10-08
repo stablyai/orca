@@ -231,7 +231,7 @@ describe('a live-pane refusal under a named operation', () => {
   })
 
   function outcomeOf(operationId: string) {
-    return store.listOperationRows().find((row) => row.operationId === operationId)?.outcome
+    return store.findOperationRow(operationId)?.outcome
   }
 
   async function dispatch(runtime: RuntimeStub, method: string, params: unknown) {

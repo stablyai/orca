@@ -1,4 +1,3 @@
-import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import {
   AgentSessionPreDispatchError,
@@ -12,6 +11,7 @@ import {
 } from './structured-agent-session-host-test-harness'
 import {
   hostTestMessage,
+  HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD
 } from './structured-agent-session-host-test-data'
@@ -33,7 +33,7 @@ async function context(): Promise<AgentSessionTurnContext> {
         agent: 'codex',
         providerHandle: codexProviderHandle(THREAD)
       },
-      stateDirectory: join(hostTestState().root, 'settlement')
+      stateDirectory: hostTestState().root
     }),
     fence: 1,
     agents: NO_STRUCTURED_AGENTS,
@@ -125,6 +125,12 @@ it('accepts without touching the provider', async () => {
   const beforeRun = vi.fn()
   const body = hostTestMessage('Continue the interrupted work')
   const operation = envelope('agentSession.send', { body })
+  await store.admitOperation({
+    callerKey: 'test',
+    operationId: operation.clientOperationId,
+    fingerprint: operation.payloadFingerprint,
+    now: NOW
+  })
   const result = await runSettledAgentSessionMutation({
     store,
     operationCallerKey: 'test',
@@ -133,6 +139,10 @@ it('accepts without touching the provider', async () => {
     plan: sendPlan({ envelope: operation, body, beforeRun })
   })
   expect(result).toMatchObject({ ok: true })
+  expect(store.getOperationRow('test', operation.clientOperationId)?.outcome).toEqual({
+    status: 'succeeded',
+    sessionId: SESSION
+  })
   expect(beforeRun).toHaveBeenCalledOnce()
   expect(hostTestState().dispatch).not.toHaveBeenCalled()
   expect(ctx.journal.submissions()[0]).toMatchObject({

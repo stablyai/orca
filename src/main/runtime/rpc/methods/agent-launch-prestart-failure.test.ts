@@ -76,7 +76,7 @@ describe('a launch whose terminal fails', () => {
   })
 
   function outcomeOf(operationId: string) {
-    return store.listOperationRows().find((row) => row.operationId === operationId)?.outcome
+    return store.findOperationRow(operationId)?.outcome
   }
 
   async function replay(

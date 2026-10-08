@@ -101,9 +101,9 @@ describe('send', () => {
       refusal: { code: 'agent_session_operation_invalid' }
     })
     expect(dispatch).not.toHaveBeenCalled()
-    expect(
-      store.listOperationRows().find((row) => row.operationId === params.envelope.clientOperationId)
-    ).toMatchObject({ outcome: { status: 'failed' } })
+    expect(store.findOperationRow(params.envelope.clientOperationId)).toMatchObject({
+      outcome: { status: 'failed' }
+    })
   })
 
   it('settles a thrown dispatch as unknown, never as a rejection', async () => {
@@ -313,9 +313,9 @@ describe('send', () => {
     const clientMessageId = params.envelope.clientOperationId
 
     await expect(host.send(CALLER, params)).resolves.toMatchObject({ ok: true, replayed: false })
-    expect(
-      store.listOperationRows().find((row) => row.operationId === clientMessageId)
-    ).toMatchObject({ outcome: { status: 'succeeded' } })
+    expect(store.findOperationRow(clientMessageId)).toMatchObject({
+      outcome: { status: 'succeeded' }
+    })
     await delivered(clientMessageId)
     await expect(host.send(CALLER, params)).resolves.toMatchObject({
       ok: true,
@@ -339,9 +339,9 @@ describe('send', () => {
     )
     expect(hostJournal().submissions()).toHaveLength(0)
     // Its success would have committed with its write, so a row still pending wrote nothing.
-    expect(
-      store.listOperationRows().find((row) => row.operationId === clientMessageId)
-    ).toMatchObject({ outcome: { status: 'pending' } })
+    expect(store.findOperationRow(clientMessageId)).toMatchObject({
+      outcome: { status: 'pending' }
+    })
 
     await expect(host.send({ callerKey: 'client-after-recovery' }, params)).resolves.toMatchObject({
       ok: true,
@@ -349,9 +349,10 @@ describe('send', () => {
       value: { submission: { clientMessageId, dispatchState: 'pending' } }
     })
     await delivered(clientMessageId)
-    expect(
-      store.listOperationRows().find((row) => row.operationId === clientMessageId)
-    ).toMatchObject({ callerKey: CALLER.callerKey, outcome: { status: 'succeeded' } })
+    expect(store.findOperationRow(clientMessageId)).toMatchObject({
+      callerKey: CALLER.callerKey,
+      outcome: { status: 'succeeded' }
+    })
     await expect(host.send(CALLER, params)).resolves.toMatchObject({ ok: true, replayed: true })
     expect(dispatch).toHaveBeenCalledTimes(1)
   })
@@ -456,10 +457,9 @@ describe('send', () => {
       dispatchState: 'unknown'
     })
     // Acceptance is what the ledger answers for; delivery is the journal's to say.
-    expect(
-      store.listOperationRows().find((row) => row.operationId === params.envelope.clientOperationId)
-        ?.outcome
-    ).toMatchObject({ status: 'succeeded' })
+    expect(store.findOperationRow(params.envelope.clientOperationId)?.outcome).toMatchObject({
+      status: 'succeeded'
+    })
     expect(dispatch).toHaveBeenCalledTimes(1)
 
     await journal.markPendingSubmissionsUnknown(store.getRecord(SESSION)?.lease.runtimeFence ?? 1)

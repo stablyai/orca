@@ -1,5 +1,4 @@
-// The agent-session store's rows in the host's chat journal database: every row loaded once at open,
-// and exactly the rows a transaction changed written back.
+// Session records, keys and tabs loaded at open, with changed rows written back at commit.
 //
 // A record row this build cannot read is derived as unreadable at each load and never rewritten: a
 // write only touches changed rows, and every mutation of an unreadable id is refused.
@@ -13,9 +12,9 @@ import { decodePersistedAgentSessionRecord } from '../../shared/agent-session-re
 import type Database from '../sqlite/sync-database'
 import type { SqliteRow } from '../sqlite/sqlite-statement'
 import type { AgentSessionStoreState } from './agent-session-store-state'
+import { AgentSessionOperationRepository } from './agent-session-operation-repository'
 import type { AgentSessionStoreRowWrites } from './agent-session-store-draft'
 import {
-  isReadableAgentSessionStoreOperation,
   isReadableAgentSessionStoreRecord,
   isReadableAgentSessionStoreTab,
   isReadableRetiredAgentSessionClaimKey
@@ -74,14 +73,16 @@ function unreadableRecordReason(value: unknown): string {
 }
 
 /**
- * The whole store, read once. Every lease loads unreconciled: the process that wrote it may still
- * be alive, so nothing persisted grants a writer until this host adjudicates it. Operation, key and
- * tab rows this build cannot read are skipped, as a record row it cannot read is set aside.
+ * Every lease loads unreconciled: the process that wrote it may still be alive. Unreadable record
+ * rows are set aside, unreadable keys and tabs skipped, and operation receipts stay on disk.
  */
-export function loadAgentSessionStoreRows(db: Database.Database): AgentSessionStoreState {
+export function loadAgentSessionStoreRows(
+  database: () => Database.Database
+): AgentSessionStoreState {
+  const db = database()
   const state: AgentSessionStoreState = {
     records: new Map(),
-    operations: new Map(),
+    operations: new AgentSessionOperationRepository(database),
     retiredClaimKeys: [],
     unreadableRecords: new Map(),
     sessionTabs: null
@@ -114,15 +115,6 @@ export function loadAgentSessionStoreRows(db: Database.Database): AgentSessionSt
         reason: unreadableRecordReason(value),
         raw: value
       })
-    }
-  }
-  for (const row of db
-    .prepare('SELECT operation_key, row_json FROM agent_session_operations ORDER BY rowid')
-    .all()) {
-    const key = text(row, 'operation_key')
-    const parsed = parseJson(text(row, 'row_json'))
-    if (key !== null && parsed.ok && isReadableAgentSessionStoreOperation(key, parsed.value)) {
-      state.operations.set(key, parsed.value)
     }
   }
   for (const row of db
@@ -191,15 +183,6 @@ export function writeAgentSessionStoreRows(
   }
   for (const sessionId of writes.records.remove) {
     db.prepare('DELETE FROM agent_session_records WHERE session_id = ?').run(sessionId)
-  }
-  const upsertOperation = db.prepare(
-    'INSERT INTO agent_session_operations (operation_key, row_json) VALUES (?, ?) ON CONFLICT(operation_key) DO UPDATE SET row_json = excluded.row_json'
-  )
-  for (const [key, json] of writes.operations.upsert) {
-    upsertOperation.run(key, json)
-  }
-  for (const key of writes.operations.remove) {
-    db.prepare('DELETE FROM agent_session_operations WHERE operation_key = ?').run(key)
   }
   if (writes.retiredClaimKeys) {
     db.prepare('DELETE FROM agent_session_retired_claim_keys').run()

@@ -1,7 +1,6 @@
-// The agent-session store's in-memory state: loaded from the chat journal database and written
-// back to it row by row (agent-session-record-rows.ts).
+// Session records are published after commit; operation receipts are queried on the same database.
 
-import type { AgentSessionOperationRow } from '../../shared/agent-session-operation-ledger'
+import type { AgentSessionOperationRepository } from './agent-session-operation-repository'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import type { AgentSessionOrcaStopCause } from '../../shared/agent-session-orca-stop'
 import type { AgentSessionTabTable } from './agent-session-tab-table'
@@ -10,7 +9,7 @@ export type RetiredAgentSessionClaimKey = { keyId: string; retiredAt: number }
 
 export type AgentSessionStoreState = {
   records: Map<string, AgentSessionRecord>
-  operations: Map<string, AgentSessionOperationRow>
+  operations: AgentSessionOperationRepository
   retiredClaimKeys: RetiredAgentSessionClaimKey[]
   /** Rows this build cannot validate, kept with a durable refusal reason. */
   unreadableRecords: Map<string, { reason: string; raw: unknown }>

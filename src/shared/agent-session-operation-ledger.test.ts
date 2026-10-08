@@ -11,7 +11,6 @@ import {
   pendingAgentSessionOperationRow,
   settleAgentSessionOperation,
   isAgentSessionOperationRow,
-  pruneAgentSessionOperationRows,
   type AgentSessionOperationRow
 } from './agent-session-operation-ledger'
 
@@ -28,8 +27,6 @@ function evaluate(
     operationId: string
     fingerprint: string
     now: number
-    perClientLimit: number
-    globalLimit: number
   }> = {}
 ) {
   return evaluateAgentSessionOperation({
@@ -115,21 +112,33 @@ describe('operation admission', () => {
     ).toBe('admit')
   })
 
-  it('refuses new ids at the per-client and global caps rather than evicting tombstones', () => {
+  it('admits a fresh id however many unexpired rows other callers hold', () => {
+    // Why: a count cap filled by background agent traffic used to refuse the user's own send.
     const rows = new Map<string, AgentSessionOperationRow>()
-    admit(rows, { operationId: operationId(NOW, 'b'.repeat(32)) })
-    expect(evaluate(rows, { perClientLimit: 1 })).toEqual({
-      decision: 'refused',
-      code: 'agent_session_operation_capacity',
-      details: { reason: 'operationCapacity' }
+    for (let index = 0; index < 5_000; index += 1) {
+      admit(rows, {
+        callerKey: `agent-${index % 10}`,
+        operationId: operationId(NOW - index, index.toString(16).padStart(32, '0'))
+      })
+    }
+    for (let index = 0; index < 600; index += 1) {
+      admit(rows, {
+        callerKey: 'desktop',
+        operationId: operationId(NOW - index, `d${index.toString(16).padStart(31, '0')}`)
+      })
+    }
+    const fresh = evaluate(rows, {
+      callerKey: 'desktop',
+      operationId: operationId(NOW, 'e'.repeat(32))
     })
-    // A different caller is still refused once the global cap is reached.
-    expect(evaluate(rows, { callerKey: 'client-2', globalLimit: 1 })).toEqual({
-      decision: 'refused',
-      code: 'agent_session_operation_capacity',
-      details: { reason: 'operationCapacity' }
-    })
-    expect(evaluate(rows, { callerKey: 'client-2', perClientLimit: 1 }).decision).toBe('admit')
+    expect(fresh.decision).toBe('admit')
+    // Retries of earlier ids still replay rather than running again.
+    expect(
+      evaluate(rows, {
+        callerKey: 'agent-0',
+        operationId: operationId(NOW, '0'.repeat(32))
+      }).decision
+    ).toBe('replay')
   })
 })
 
@@ -179,25 +188,14 @@ describe('retention', () => {
   it('keeps a tombstone strictly longer than its id can be admitted as new', () => {
     const expiry = agentSessionOperationExpiry(NOW, NOW)
     const lastAdmissibleAt = NOW + AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS
-    expect(expiry).toBeGreaterThan(lastAdmissibleAt)
     // Why: a retry landing in that gap would become a second spawn instead of a replay.
-    const rows = new Map<string, AgentSessionOperationRow>()
-    admit(rows)
-    expect(pruneAgentSessionOperationRows(rows, lastAdmissibleAt).size).toBe(1)
-    expect(evaluate(pruneAgentSessionOperationRows(rows, lastAdmissibleAt)).decision).toBe('replay')
+    expect(expiry).toBeGreaterThan(lastAdmissibleAt)
   })
 
   it('anchors retention to the later of recording and stamping', () => {
     const late = agentSessionOperationExpiry(NOW + 10_000, NOW)
     expect(late).toBe(agentSessionOperationExpiry(NOW + 10_000, NOW + 10_000))
     expect(late).toBeGreaterThan(agentSessionOperationExpiry(NOW, NOW))
-  })
-
-  it('drops only rows past their own expiry', () => {
-    const rows = new Map<string, AgentSessionOperationRow>()
-    const row = admit(rows)
-    expect(pruneAgentSessionOperationRows(rows, row.expiresAt).size).toBe(0)
-    expect(pruneAgentSessionOperationRows(rows, row.expiresAt - 1).size).toBe(1)
   })
 })
 

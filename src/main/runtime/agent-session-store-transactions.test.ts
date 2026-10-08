@@ -6,6 +6,9 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import Database from '../sqlite/sync-database'
+import { journalDatabasePath } from '../native-chat/agent-session-journal/journal-host-database'
+import { AgentSessionOperationRepository } from './agent-session-operation-repository'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import {
   closeTestJournalHostDatabases,
@@ -158,19 +161,24 @@ describe('a receipt', () => {
   }
 
   // Written inside the caller's journal transaction, so it commits or rolls back with that write.
-  it('shows its rows in memory only once committed is called after the commit', async () => {
+  it('publishes a receipt to other connections only once the journal commits', async () => {
     const store = await pendingOperation()
     const receipt = store.operationOutcomeReceipt({ callerKey: 'client-1', operationId, outcome })
 
-    openTestJournalHostDatabase(root).transaction((db) => {
-      receipt.write(db)
-      expect(store.getOperationRow('client-1', operationId)?.outcome.status).toBe('pending')
-    })
-    expect(store.getOperationRow('client-1', operationId)?.outcome.status).toBe('pending')
-    expect(await persistedStatus()).toBe('succeeded')
-
-    receipt.committed()
-    expect(store.getOperationRow('client-1', operationId)?.outcome).toEqual(outcome)
+    const reader = new Database(journalDatabasePath(root), { readonly: true })
+    try {
+      const receipts = new AgentSessionOperationRepository(() => reader)
+      openTestJournalHostDatabase(root).transaction((db) => {
+        receipt.write(db)
+        expect(receipts.get('client-1', operationId)?.outcome.status).toBe('pending')
+      })
+      expect(receipts.get('client-1', operationId)?.outcome).toEqual(outcome)
+      expect(await persistedStatus()).toBe('succeeded')
+      receipt.committed()
+      expect(store.getOperationRow('client-1', operationId)?.outcome).toEqual(outcome)
+    } finally {
+      reader.close()
+    }
   })
 
   it('leaves memory and rows as they were when the transaction rolls back', async () => {
@@ -188,6 +196,18 @@ describe('a receipt', () => {
     expect(await persistedStatus()).toBe('pending')
     // The next store transaction diffs from what committed, not from the discarded draft.
     await store.setConversationName('chat-a-0001', 'after')
+    expect(await persistedStatus()).toBe('pending')
+  })
+
+  it('refuses a transaction on another connection, whose rollback would not undo its receipt', async () => {
+    const store = await pendingOperation()
+    const receipt = store.operationOutcomeReceipt({ callerKey: 'client-1', operationId, outcome })
+    const other = new Database(journalDatabasePath(root))
+    try {
+      expect(() => receipt.write(other)).toThrow("store's own journal connection")
+    } finally {
+      other.close()
+    }
     expect(await persistedStatus()).toBe('pending')
   })
 })

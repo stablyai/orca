@@ -1,3 +1,4 @@
+import { readTestAgentSessionOperationRows } from '../../runtime/agent-session-operation-test-rows'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -202,7 +203,7 @@ describe('processless structured session reservation', () => {
       runtimeFence: 2,
       deathEvidence: { kind: 'pid-absent', detail: 'reservation failed before spawn' }
     })
-    expect(store.listOperationRows()[0]?.outcome).toMatchObject({
+    expect(readTestAgentSessionOperationRows(store)[0]?.outcome).toMatchObject({
       status: 'failed',
       code: 'structured_agent_session_unsupported'
     })
@@ -253,7 +254,7 @@ describe('processless structured session reservation', () => {
       reservedSpawnToken: null,
       deathEvidence: { kind: 'pid-absent', detail: 'reservation failed before spawn' }
     })
-    expect(store.listOperationRows()[0]?.outcome).toMatchObject({ status: 'failed' })
+    expect(readTestAgentSessionOperationRows(store)[0]?.outcome).toMatchObject({ status: 'failed' })
 
     const reopened = await openTestAgentSessionRecordStore(root)
     await reopened.reconcileOnRestart({

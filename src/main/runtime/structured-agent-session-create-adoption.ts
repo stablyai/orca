@@ -38,7 +38,9 @@ export function resolveCommittedStructuredAgentSessionAdoptionIntent(input: {
           callerKey: input.callerKey,
           operationId: input.envelope.clientOperationId,
           record: input.host.deps.store.getRecord(input.envelope.sessionId),
-          operations: input.host.deps.store.listOperationRows()
+          operations: [
+            input.host.deps.store.getOperationRow(input.callerKey, input.envelope.clientOperationId)
+          ].flatMap((row) => (row ? [row] : []))
         })
       : null
   if (!replay || !agentSessionExecutionLocationsEqual(replay.record.location, input.location)) {

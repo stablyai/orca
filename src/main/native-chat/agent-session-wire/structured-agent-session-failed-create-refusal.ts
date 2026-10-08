@@ -192,7 +192,12 @@ export function stampFailedCreateOwnerVerdict(
   if (result.ok) {
     return result
   }
-  const row = store.getOperationRow(callerKey, envelope.clientOperationId)
+  let row: AgentSessionOperationRow | null = null
+  try {
+    row = store.getOperationRow(callerKey, envelope.clientOperationId)
+  } catch {
+    // The refusal stands without its verdict; an unread row answers as one still pending.
+  }
   return failedCreateRefusal(
     result.refusal,
     row?.outcome.status ?? 'pending',

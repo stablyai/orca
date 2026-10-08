@@ -220,7 +220,13 @@ function settledResumeRefusal(
   sessionId: string,
   error: unknown
 ): { ok: false; refusal: AgentSessionWireRefusal } | null {
-  const outcome = context.deps.store.getOperationRow(callerKey, operationId)?.outcome
+  let outcome
+  try {
+    outcome = context.deps.store.getOperationRow(callerKey, operationId)?.outcome
+  } catch {
+    // A record that can't be read leaves the caller its own error, not the read's.
+    return null
+  }
   const reference =
     outcome?.status === 'failed'
       ? readAgentSessionRefusalReference({ code: outcome.code, details: outcome.details })

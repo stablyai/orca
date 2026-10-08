@@ -11,10 +11,7 @@
 
 import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
 import {
-  agentSessionOperationKey,
-  evaluateAgentSessionOperation,
   pendingAgentSessionOperationRow,
-  pruneAgentSessionOperationRows,
   type AgentSessionOperationDecision,
   type AgentSessionOperationRow
 } from '../../shared/agent-session-operation-ledger'
@@ -96,9 +93,7 @@ export function evaluateAgentSessionReserveOperation(
   state: AgentSessionStoreState,
   request: AgentSessionReserveRequest
 ): AgentSessionOperationDecision {
-  state.operations = pruneAgentSessionOperationRows(state.operations, request.now)
-  return evaluateAgentSessionOperation({
-    rows: state.operations,
+  return state.operations.evaluate({
     callerKey: request.operation.callerKey,
     operationId: request.operation.operationId,
     fingerprint: request.operation.fingerprint,
@@ -143,8 +138,13 @@ export function admitPendingAgentSessionReservationReplay(
   return record
 }
 
+type ReservationState = Pick<
+  AgentSessionStoreState,
+  'records' | 'unreadableRecords' | 'sessionTabs'
+>
+
 export function applyAgentSessionReservation(
-  state: AgentSessionStoreState,
+  state: ReservationState,
   request: AgentSessionReserveRequest,
   leaseTtlMs: number
 ): {
@@ -229,7 +229,7 @@ export function applyAgentSessionReservation(
  * silently, so the cost of missing this is a corrupted conversation rather than an error.
  */
 function assertAdoptedConversationUnowned(
-  state: AgentSessionStoreState,
+  state: ReservationState,
   request: AgentSessionReserveRequest
 ): void {
   const adopted = request.adoptedHandleLink
@@ -258,7 +258,7 @@ function assertAdoptedConversationUnowned(
  * gets that far leaves nothing in the table to restore or release.
  */
 function assertReservedTabUnheld(
-  state: AgentSessionStoreState,
+  state: ReservationState,
   request: AgentSessionReserveRequest
 ): void {
   if (request.surfaceTabId === undefined) {
@@ -351,7 +351,7 @@ function reserveWithOperationRow(
   leaseTtlMs: number
 ): AgentSessionReserveResult {
   const result = applyAgentSessionReservation(state, request, leaseTtlMs)
-  state.operations.set(agentSessionOperationKey(row.callerKey, row.operationId), row)
+  state.operations.put(row)
   state.records.set(result.record.sessionId, result.record)
   return { ...result, operationRow: row }
 }

@@ -1,3 +1,4 @@
+import { readTestAgentSessionOperationRows } from '../../agent-session-operation-test-rows'
 import '../unused-default-rpc-methods.test-fixture'
 /**
  * Replay safety for `agent.launch`, against the real durable ledger.
@@ -116,7 +117,7 @@ async function launch(
 }
 
 function rowFor(operationId: string): AgentSessionOperationRow | undefined {
-  return store.listOperationRows().find((row) => row.operationId === operationId)
+  return store.findOperationRow(operationId) ?? undefined
 }
 
 beforeEach(async () => {
@@ -250,7 +251,7 @@ describe('stable replay identity', () => {
     ).rejects.toThrow('agent_session_identity_required')
     expect(runtime.ensureStructuredAgentSessionHost).not.toHaveBeenCalled()
     expect(runtime.createManagedWorktree).not.toHaveBeenCalled()
-    expect(store.listOperationRows()).toHaveLength(0)
+    expect(readTestAgentSessionOperationRows(store)).toHaveLength(0)
   })
 })
 
@@ -500,7 +501,7 @@ describe('an unreadable launch payload costs one replay, never the store', () =>
     const reopened = await openTestAgentSessionRecordStore(directory)
     setAgentLaunchRecordStore(reopened)
 
-    expect(reopened.listOperationRows()).toHaveLength(1)
+    expect(readTestAgentSessionOperationRows(reopened)).toHaveLength(1)
     const retry = runtimeStub()
     await expect(launch(params, retry)).rejects.toThrow('agent_session_operation_unknown')
     expect(retry.createManagedWorktree).not.toHaveBeenCalled()
@@ -554,7 +555,7 @@ describe('a client that names no operation keeps today behaviour', () => {
     await launch(createLaunch(), runtime)
 
     expect(runtime.createManagedWorktree).toHaveBeenCalledTimes(1)
-    expect(store.listOperationRows()).toHaveLength(0)
+    expect(readTestAgentSessionOperationRows(store)).toHaveLength(0)
   })
 
   it('still dedupes a repeated create through the in-memory mutation-id cache', async () => {
@@ -570,7 +571,7 @@ describe('a client that names no operation keeps today behaviour', () => {
 
     expect(first).toEqual(second)
     expect(runtime.createManagedWorktree).toHaveBeenCalledTimes(1)
-    expect(store.listOperationRows()).toHaveLength(0)
+    expect(readTestAgentSessionOperationRows(store)).toHaveLength(0)
   })
 })
 

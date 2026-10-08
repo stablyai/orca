@@ -1,3 +1,4 @@
+import { readTestAgentSessionOperationRows } from '../../agent-session-operation-test-rows'
 /**
  * A launch's record across a host restart, against the real durable ledger.
  *
@@ -491,7 +492,9 @@ describe('a caller cannot claim an identity', () => {
     })
 
     expect(JSON.parse(response)).toMatchObject({ ok: true })
-    expect(store.listOperationRows().map((entry) => entry.callerKey)).toEqual(['device-1'])
+    expect(readTestAgentSessionOperationRows(store).map((entry) => entry.callerKey)).toEqual([
+      'device-1'
+    ])
   })
 
   it('refuses replay safety to a transport that cannot name its caller', async () => {
@@ -512,7 +515,7 @@ describe('a caller cannot claim an identity', () => {
       error: { code: 'agent_session_identity_required' }
     })
     expect(host.createTerminal).not.toHaveBeenCalled()
-    expect(store.listOperationRows()).toHaveLength(0)
+    expect(readTestAgentSessionOperationRows(store)).toHaveLength(0)
   })
 })
 
@@ -531,14 +534,15 @@ describe('the ledger stays bounded', () => {
     releasePaste(true)
     await running
 
-    expect(store.listOperationRows()).toHaveLength(1)
+    expect(readTestAgentSessionOperationRows(store)).toHaveLength(1)
     expect(row()?.expiresAt).toBe(afterFirstWrite?.expiresAt)
     expect(row()?.recordedAt).toBe(afterFirstWrite?.recordedAt)
   })
 
-  it('holds the desktop to the same per-caller cap as every other caller', async () => {
+  it('starts the desktop launch however many unexpired operations the caller already holds', async () => {
+    // Why: a full ledger used to refuse the user's launch for traffic unrelated to it.
     const now = Date.now()
-    for (let index = 0; index < 512; index += 1) {
+    for (let index = 0; index < 600; index += 1) {
       await store.admitOperation({
         callerKey: 'trusted-local:desktop',
         operationId: `${now}-${index.toString(16).padStart(32, '0')}`,
@@ -548,11 +552,9 @@ describe('the ledger stays bounded', () => {
     }
     const host = hostRuntime()
 
-    await expect(launch(host, PROMPTED_LAUNCH, { ...DESKTOP_IPC })).rejects.toThrow(
-      'agent_session_operation_capacity'
-    )
-    expect(host.createTerminal).not.toHaveBeenCalled()
-    // Another caller's namespace is not starved by it.
-    await expect(launch(host)).resolves.toMatchObject({ outcome: { kind: 'terminal' } })
+    await expect(launch(host, PROMPTED_LAUNCH, { ...DESKTOP_IPC })).resolves.toMatchObject({
+      outcome: { kind: 'terminal' }
+    })
+    expect(host.createTerminal).toHaveBeenCalledTimes(1)
   })
 })

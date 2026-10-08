@@ -15,6 +15,7 @@ import {
 import { JournalUnreleasedSchemaError } from './journal-open-failure'
 import { ensureQueuedMessagesTable } from './queued-message-schema'
 import { ensureAgentSessionAttachmentClaimTables } from '../agent-session-attachments/agent-session-attachment-claims'
+import { ensureAgentSessionOperationIndexes } from '../../runtime/agent-session-operation-sql'
 
 export const JOURNAL_BUSY_TIMEOUT_MS = 5000
 /** Bounds the WAL a checkpoint leaves behind; SQLite truncates it back to this after a reset. */
@@ -82,6 +83,7 @@ export function openJournalDatabase(dbPath: string): OpenJournalDatabase {
     // writable open with no `user_version` bump (see `ensureQueuedMessagesTable`).
     ensureQueuedMessagesTable(probe)
     ensureAgentSessionAttachmentClaimTables(probe)
+    buildOperationIndexes(probe)
     hardenSqliteDatabaseFiles(dbPath)
     transferred = true
     return { db: probe, readOnly: false }
@@ -89,6 +91,26 @@ export function openJournalDatabase(dbPath: string): OpenJournalDatabase {
     if (!transferred) {
       probe.close()
     }
+  }
+}
+
+/** Receipt indexes only speed lookups: a failed build warns and the next open retries it. */
+function buildOperationIndexes(db: Database.Database): void {
+  let stranded = false
+  try {
+    runJournalTransaction(
+      db,
+      () => ensureAgentSessionOperationIndexes(db),
+      () => {
+        stranded = true
+      }
+    )
+  } catch (error) {
+    // A connection still inside the failed transaction is unusable.
+    if (stranded) {
+      throw error
+    }
+    console.warn('[journal-open] operation receipt index build skipped:', error)
   }
 }
 

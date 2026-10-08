@@ -24,10 +24,7 @@ import type {
   AgentLaunchTabPublished,
   AgentLaunchTabViewerRule
 } from '../../../../shared/agent-launch-tab-publication'
-import {
-  listAgentSessionOperationRowsOwningPane,
-  type AgentSessionOperationOwnedPane
-} from '../../../../shared/agent-session-operation-ledger'
+import type { AgentSessionOperationOwnedPane } from '../../../../shared/agent-session-operation-ledger'
 import {
   navigationTargetsHost,
   resolveRuntimeNavigationTarget
@@ -36,6 +33,7 @@ import { makePaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
 import { workspaceKindForWorktreeId } from '../../../../shared/workspace-launch-kind'
 import {
   agentLaunchPaneVerdictFromRecord,
+  readLaunchBookkeepingOr,
   trackRunningAgentLaunchPane
 } from '../../../agent-launch/agent-launch-pane-attachment'
 import type { AgentLaunchPaneVerdict } from '../../../../shared/agent-launch-pane-verdict'
@@ -126,11 +124,14 @@ function isRecordedOperation(params: AgentLaunchParams, context: RpcContext): bo
   if (!params.operationId || !context.caller) {
     return false
   }
-  const store = context.runtime.openedAgentSessionRecordStore()
-  return (
-    store !== null &&
-    store.getOperationRow(agentLaunchOperationCallerKey(context), params.operationId) !== null
-  )
+  const operationId = params.operationId
+  return readLaunchBookkeepingOr(() => {
+    const store = context.runtime.openedAgentSessionRecordStore()
+    return (
+      store !== null &&
+      store.getOperationRow(agentLaunchOperationCallerKey(context), operationId) !== null
+    )
+  }, false)
 }
 
 /** Never throws: the early tab is a view, and a launch must not fail over one. */
@@ -236,10 +237,12 @@ export async function publishAgentLaunchTabEarly(
       runtime.hasLiveTerminalForPaneKey(paneKey)
         ? { kind: 'proceed' }
         : agentLaunchPaneVerdictFromRecord(
-            listAgentSessionOperationRowsOwningPane(
-              runtime.openedAgentSessionRecordStore()?.listOperationRows() ?? [],
-              ownedPane,
-              Date.now()
+            readLaunchBookkeepingOr(
+              () =>
+                runtime
+                  .openedAgentSessionRecordStore()
+                  ?.listOperationRowsOwningPane(ownedPane, Date.now()) ?? [],
+              []
             ),
             paneKey
           )

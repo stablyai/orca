@@ -128,6 +128,30 @@ describe('the host journal database open', () => {
     await expect(rm(root, { recursive: true, force: true })).resolves.toBeUndefined()
     root = await mkdtemp(join(tmpdir(), 'orca-journal-db-'))
   })
+
+  it('opens writable when the receipt index build fails', () => {
+    openJournalDatabase(dbPath).db.close()
+    const raw = new Database(dbPath)
+    // A table holding an index's name makes CREATE INDEX IF NOT EXISTS fail.
+    raw.exec('DROP INDEX agent_session_operations_id; CREATE TABLE agent_session_operations_id (x)')
+    raw.close()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    const opened = openJournalDatabase(dbPath)
+    try {
+      expect(opened.readOnly).toBe(false)
+      expect(opened.db.isTransaction).toBe(false)
+      opened.db
+        .prepare('INSERT INTO agent_session_operations (operation_key, row_json) VALUES (?, ?)')
+        .run('key-1', '{}')
+      expect(warn).toHaveBeenCalledWith(
+        '[journal-open] operation receipt index build skipped:',
+        expect.any(Error)
+      )
+    } finally {
+      opened.db.close()
+    }
+  })
 })
 
 describe('journal row statements', () => {

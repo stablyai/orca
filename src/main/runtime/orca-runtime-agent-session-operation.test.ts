@@ -2,12 +2,27 @@ import {
   CreateAgentSessionParams,
   EnsureAgentSessionParams
 } from '../../shared/rpc-contract/agent-session-params'
-import { describe, expect, it, vi } from 'vitest'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { closeTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import { openTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
 import type {
   RuntimeCreateAgentSessionRequest,
   RuntimeCreateAgentSessionResult
 } from '../../shared/agent-session-host-authority'
 import { OrcaRuntimeService } from './orca-runtime'
+
+let stateDirectory: string
+beforeEach(async () => {
+  stateDirectory = await mkdtemp(join(tmpdir(), 'orca-create-operation-'))
+})
+afterEach(async () => {
+  closeTestJournalHostDatabase(stateDirectory)
+  vi.restoreAllMocks()
+  await rm(stateDirectory, { recursive: true, force: true })
+})
 
 function operationId(now = Date.now()): string {
   return `${now}-0123456789abcdef0123456789abcdef`
@@ -63,6 +78,9 @@ function createRuntime(provider?: {
     path: '/tmp/worktree-1',
     connectionId: null
   }))
+  vi.spyOn(runtime, 'openAgentSessionRecordStore').mockImplementation(() =>
+    openTestAgentSessionRecordStore(stateDirectory)
+  )
   return runtime
 }
 
@@ -320,6 +338,7 @@ describe('agent-session create operation ledger', () => {
         clientId: 'device-a'
       })
     ).rejects.toThrow('agent_session_operation_conflict')
+    await vi.waitFor(() => expect(createTerminal).toHaveBeenCalledOnce())
     finish(terminal())
     await expect(first).resolves.toMatchObject({ disposition: 'created' })
     await expect(joined).resolves.toMatchObject({ disposition: 'replayed' })

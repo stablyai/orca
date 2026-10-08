@@ -219,7 +219,7 @@ describe('a taken session id under a named operation', () => {
   })
 
   function outcomeOf(operationId: string) {
-    return store.listOperationRows().find((row) => row.operationId === operationId)?.outcome
+    return store.findOperationRow(operationId)?.outcome
   }
 
   it('records the refusal as a failure, so a retry is answered rather than left unknown', async () => {

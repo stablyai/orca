@@ -65,11 +65,11 @@ function reserveRequest(
   }
 }
 
-function storeState(records: readonly AgentSessionRecord[] = []): AgentSessionStoreState {
+function storeState(
+  records: readonly AgentSessionRecord[] = []
+): Pick<AgentSessionStoreState, 'records' | 'unreadableRecords' | 'sessionTabs'> {
   return {
     records: new Map(records.map((record) => [record.sessionId, record])),
-    operations: new Map(),
-    retiredClaimKeys: [],
     unreadableRecords: new Map(),
     sessionTabs: null
   }

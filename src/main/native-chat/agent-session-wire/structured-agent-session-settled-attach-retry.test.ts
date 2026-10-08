@@ -160,10 +160,9 @@ describe('settled attach retry', () => {
       reservedSpawnToken: null,
       runtimeFence: 2
     })
-    expect(
-      store.listOperationRows().find((row) => row.operationId === first.envelope.clientOperationId)
-        ?.outcome
-    ).toMatchObject({ status: 'failed' })
+    expect(store.findOperationRow(first.envelope.clientOperationId)?.outcome).toMatchObject({
+      status: 'failed'
+    })
 
     await expect(host.attach(CALLER, hostTestAttachParams(2))).resolves.toMatchObject({ ok: true })
     expect(acquire).toHaveBeenCalledTimes(2)

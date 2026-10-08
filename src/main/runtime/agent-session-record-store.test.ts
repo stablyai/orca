@@ -1,3 +1,4 @@
+import { readTestAgentSessionOperationRows } from './agent-session-operation-test-rows'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -327,7 +328,7 @@ describe('concurrent claims', () => {
     const second = await store.reserveOwner(reserveRequest({ operation }))
     expect(second.disposition).toBe('replayed')
     expect(second.record.lease.runtimeFence).toBe(first.record.lease.runtimeFence)
-    expect(store.listOperationRows()).toHaveLength(1)
+    expect(readTestAgentSessionOperationRows(store)).toHaveLength(1)
   })
 
   it('refuses the same operation id carrying different parameters', async () => {
@@ -356,7 +357,7 @@ describe('concurrent claims', () => {
       store.reserveOwner(reserveRequest({ expectedFence: 1, probe: INDETERMINATE }))
     ).rejects.toThrow('agent_session_ownership_unknown')
     expect(store.getRecord('session-alpha')).toEqual(before)
-    expect(store.listOperationRows()).toHaveLength(1)
+    expect(readTestAgentSessionOperationRows(store)).toHaveLength(1)
   })
 
   it('never keeps a change in memory that failed to commit to disk', async () => {
@@ -656,7 +657,7 @@ describe('restart reconciliation', () => {
     })
 
     const reopened = await open()
-    expect(reopened.listOperationRows()).toHaveLength(1)
+    expect(readTestAgentSessionOperationRows(reopened)).toHaveLength(1)
     const replayed = await reopened.reserveOwner(reserveRequest({ operation }))
     expect(replayed.disposition).toBe('replayed')
     expect(replayed.record.sessionId).toBe('session-alpha')

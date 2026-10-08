@@ -1,3 +1,4 @@
+import { readTestAgentSessionOperationRows } from '../../runtime/agent-session-operation-test-rows'
 // What a resend of a send id gets: the answer its record holds, never a refusal made before the
 // host looked the id up, and never a made-up record.
 
@@ -164,9 +165,9 @@ describe('a resent send id', () => {
     await deliveredOnce()
     expect(journal.submissions()).toHaveLength(1)
     expect(
-      store
-        .listOperationRows()
-        .filter((row) => row.operationId === params.envelope.clientOperationId)
+      readTestAgentSessionOperationRows(store).filter(
+        (row) => row.operationId === params.envelope.clientOperationId
+      )
     ).toHaveLength(1)
   })
 
@@ -204,7 +205,7 @@ describe('a resent send id', () => {
     await host.send(CALLER, params)
     await deliveredOnce()
     await host.close(SESSION, 'evict')
-    const rowsBefore = store.listOperationRows()
+    const rowsBefore = readTestAgentSessionOperationRows(store)
     Object.defineProperty(openTestJournalHostDatabase(root), 'readOnly', { value: true })
     expect(store.readOnly).toBe(true)
     vi.spyOn(console, 'warn').mockImplementation(() => undefined)
@@ -215,7 +216,7 @@ describe('a resent send id', () => {
       refusal: { code: 'agent_session_operation_unknown', details: { reason: 'outcomeUnknown' } }
     })
     expect(dispatch).toHaveBeenCalledTimes(1)
-    expect(store.listOperationRows()).toEqual(rowsBefore)
+    expect(readTestAgentSessionOperationRows(store)).toEqual(rowsBefore)
   })
 })
 
@@ -233,9 +234,9 @@ describe('a send queued behind a running turn', () => {
         ok: true,
         value: { queued: { messageId: queued.id, state: 'waiting' } }
       })
-      expect(
-        rig.store.listOperationRows().find((row) => row.operationId === queued.id)
-      ).toMatchObject({ outcome: { status: 'succeeded' } })
+      expect(rig.store.findOperationRow(queued.id)).toMatchObject({
+        outcome: { status: 'succeeded' }
+      })
       expect(settle).not.toHaveBeenCalled()
     } finally {
       await rig.dispose()

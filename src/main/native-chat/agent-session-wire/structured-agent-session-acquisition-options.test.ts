@@ -603,9 +603,9 @@ describe('structured session acquisition options', () => {
       const reopened = await openTestAgentSessionRecordStore(root)
       const failedRecord = reopened.getRecord(SESSION)
       expectSettledAttachLease(failedRecord)
-      expect(
-        reopened.listOperationRows().find((row) => row.operationId === CREATE_OPERATION)?.outcome
-      ).toMatchObject({ status: 'failed' })
+      expect(reopened.findOperationRow(CREATE_OPERATION)?.outcome).toMatchObject({
+        status: 'failed'
+      })
 
       await reopened.reconcileOnRestart({
         probe: async (record) =>

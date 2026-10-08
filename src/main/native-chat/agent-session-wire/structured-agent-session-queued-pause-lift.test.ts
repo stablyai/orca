@@ -1,3 +1,4 @@
+import { deleteTestAgentSessionOperation } from '../../runtime/agent-session-operation-test-rows'
 // A Stop pauses the whole queue, derived from the journal: it lasts until any turn
 // sent after it starts — the provider accepts it, never merely the host — or the
 // person Resumes. Whoever sent that turn: a person, Orca's own mail, or the queue.
@@ -174,12 +175,7 @@ describe("a Stop's queue pause", () => {
     await rig.stop()
     await rig.settleAccepted(working, 'stopped')
     // The ledger forgot the id, so the send runs again and answers with its accepted submission.
-    const operations = rig.store['transactions'].state.operations
-    for (const [key, row] of operations) {
-      if (row.operationId === working) {
-        operations.delete(key)
-      }
-    }
+    deleteTestAgentSessionOperation(rig.store, working)
     const body = hostTestMessage('work on this')
     const replayed = await rig.host.send(QUEUED_RIG_CALLER, {
       envelope: rig.envelope({ body }, 'agentSession.send', working),

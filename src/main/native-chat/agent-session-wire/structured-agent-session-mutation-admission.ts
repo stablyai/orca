@@ -29,20 +29,20 @@ import {
   type AgentSessionMutationResult,
   type AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire'
-import { isAgentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
 import { AGENT_SESSION_UNATTACHED_REFUSAL_CODE } from '../../../shared/structured-agent-session-read-refusal'
 import type {
   AgentSessionMutationOperationAdmission,
   AgentSessionMutationOperationDecision
 } from '../../runtime/agent-session-operation-admission'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import {
-  classifyJournalOpenFailure,
-  journalOpenRefusal
-} from '../agent-session-journal/journal-open-failure'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import type { MutationPlan } from './structured-agent-session-mutation-plans'
+import {
+  evaluateLedgerOrAssumeNoRow,
+  ledgerFailureRefusal,
+  readMutationLedger
+} from './structured-agent-session-mutation-ledger-read'
 import { runSettledAgentSessionMutation } from './structured-agent-session-operation-settlement'
 import {
   agentSessionOperationOutcomeUnknown,
@@ -107,13 +107,17 @@ export async function admitAndRunAgentSessionMutation<TValue>(
     return refuseAgentSessionMutation(conflict)
   }
   if (request.prepareSession) {
-    const ledger = request.store.evaluateMutationOperation({
+    const read = readMutationLedger(request, {
       callerKey: request.callerKey,
       envelope,
       hostFingerprint,
       now: request.now(),
       ...(plan.operationIdScope ? { operationIdScope: plan.operationIdScope } : {})
     })
+    if (!read.ok) {
+      return refuseAgentSessionMutation(read.refusal)
+    }
+    const ledger = read.answer
     if (!ledger) {
       return refuseAgentSessionMutation(AGENT_SESSION_NOT_ATTACHED)
     }
@@ -156,18 +160,11 @@ export async function admitAndRunAgentSessionMutation<TValue>(
   try {
     admitted = await request.store.admitMutationOperation(operation)
   } catch (error) {
-    if (plan.runsWithoutLedgerRow) {
-      admitted = admitWithoutLedgerRow(request, operation, error)
-      ledgerRowWritten = false
-    } else if (
-      isAgentSessionRefusalError(error) ||
-      classifyJournalOpenFailure(error) === 'journalCorrupt'
-    ) {
-      // A store refusing the row (a newer Orca's records) or damage SQLite proves: as an open says.
-      return refuseAgentSessionMutation(journalOpenRefusal(error))
-    } else {
-      throw error
+    if (!plan.runsWithoutLedgerRow) {
+      return refuseAgentSessionMutation(ledgerFailureRefusal(error))
     }
+    admitted = admitWithoutLedgerRow(request, operation, error)
+    ledgerRowWritten = false
   }
   if (!admitted) {
     return refuseAgentSessionMutation(AGENT_SESSION_NOT_ATTACHED)
@@ -246,13 +243,17 @@ async function answerRecordedOperation<TValue>(
   }
   const journal = request.journal()
   // Read again after the open: the row as it stands, against the record the open left.
-  const current = request.store.evaluateMutationOperation({
+  const read = readMutationLedger(request, {
     callerKey: request.callerKey,
     envelope,
     hostFingerprint,
     now: request.now(),
     ...(plan.operationIdScope ? { operationIdScope: plan.operationIdScope } : {})
   })
+  if (!read.ok) {
+    return refuseAgentSessionMutation(read.refusal)
+  }
+  const current = read.answer
   if (!journal || !current) {
     return refuseAgentSessionMutation(
       agentSessionOperationOutcomeUnknown(envelope.clientOperationId)
@@ -296,7 +297,7 @@ function replayRecordedOperation<TValue>(
     : 'rerun'
 }
 
-/** The committed ledger's admission, placing nothing: a failed commit left memory as it was. */
+/** The committed ledger's admission, placing nothing; a ledger it can't read answers as unrecorded. */
 function admitWithoutLedgerRow(
   { store, logger }: Pick<AgentSessionMutationRequest<unknown>, 'store' | 'logger'>,
   operation: AgentSessionMutationOperationAdmission,
@@ -307,7 +308,7 @@ function admitWithoutLedgerRow(
     sessionId: operation.envelope.sessionId,
     error
   })
-  const evaluated = store.evaluateMutationOperation(operation)
+  const evaluated = evaluateLedgerOrAssumeNoRow(store, operation).answer
   if (!evaluated) {
     return null
   }

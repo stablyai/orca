@@ -3,13 +3,17 @@ import {
   computeAgentSessionPayloadFingerprint
 } from '../../../shared/agent-session-mutation-envelope'
 import type { AgentSessionMutationRequest } from './structured-agent-session-mutation-admission'
+import { evaluateLedgerOrAssumeNoRow } from './structured-agent-session-mutation-ledger-read'
 import type { MutationPlan } from './structured-agent-session-mutation-plans'
 
 /** Whether admission would run `plan` for the first time now, placing nothing: for an effect that
  *  must not wait in the session's queue for its turn. */
 export function agentSessionMutationAdmitsNow<TValue>(
   request: Pick<AgentSessionMutationRequest<TValue>, 'store' | 'callerKey' | 'envelope' | 'now'> & {
-    plan: Pick<MutationPlan<TValue>, 'method' | 'fields' | 'operationIdScope' | 'conversationWrite'>
+    plan: Pick<
+      MutationPlan<TValue>,
+      'method' | 'fields' | 'operationIdScope' | 'conversationWrite' | 'runsWithoutLedgerRow'
+    >
   }
 ): boolean {
   const { plan, envelope } = request
@@ -18,13 +22,17 @@ export function agentSessionMutationAdmitsNow<TValue>(
     sessionId: envelope.sessionId,
     fields: plan.fields
   })
-  const evaluated = request.store.evaluateMutationOperation({
+  const { answer: evaluated, failure } = evaluateLedgerOrAssumeNoRow(request.store, {
     callerKey: request.callerKey,
     envelope,
     hostFingerprint,
     now: request.now(),
     ...(plan.operationIdScope ? { operationIdScope: plan.operationIdScope } : {})
   })
+  // Only a call that runs without its row (Stop) may decide from a ledger it couldn't read.
+  if (failure && !plan.runsWithoutLedgerRow) {
+    throw failure.error
+  }
   return (
     evaluated !== null &&
     admitAgentSessionMutation({
