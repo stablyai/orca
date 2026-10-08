@@ -14562,7 +14562,6 @@
       "feature": {
         "wall": {
           "AgentCapabilitiesSetupAction": {
-            "b8dc9dd8a2": "Instalado",
             "1b51644c2d": "Permite que los agentes controlen el escritorio, muevan el cursor, hagan clic y escriban en cualquier app.",
             "362a07517d": "Uso de computadora",
             "5e8fe5a72d": "Da a los agentes acceso directo al navegador de Orca para que puedan probar páginas, hacer capturas de pantalla y actuar según lo que ven.",

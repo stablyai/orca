@@ -14667,7 +14667,6 @@
       "feature": {
         "wall": {
           "AgentCapabilitiesSetupAction": {
-            "b8dc9dd8a2": "Installés",
             "1b51644c2d": "Laissez les agents contrôler le bureau : déplacer le curseur, cliquer et taper dans n'importe quelle application.",
             "362a07517d": "Computer Use",
             "5e8fe5a72d": "Donnez aux agents un accès direct au navigateur d'Orca pour tester des pages, capturer des captures d'écran et agir sur ce qu'ils voient.",

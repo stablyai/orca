@@ -14791,7 +14791,6 @@
       "feature": {
         "wall": {
           "AgentCapabilitiesSetupAction": {
-            "b8dc9dd8a2": "Installed",
             "1b51644c2d": "Let agents control the desktop, moving the cursor, clicking, and typing in any app.",
             "362a07517d": "Computer Use",
             "5e8fe5a72d": "Give agents direct access to Orca's browser so they can test pages, capture screenshots, and act on what they see.",
