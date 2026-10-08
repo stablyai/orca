@@ -100,6 +100,94 @@ describe('registerSshBrowseHandler', () => {
     expect(exec).toHaveBeenCalledWith("cd '/tmp/it'\\''s here' && pwd && command ls -1Ap")
   })
 
+  it('uses a close status when the exit event was missed before subscription', async () => {
+    const channel = createMockChannel()
+    const exec = vi.fn().mockResolvedValue(channel)
+    const getConnectionManager = () => ({
+      getConnection: () => ({ exec })
+    })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This mock only implements the getConnection().exec surface consumed by the handler; the production manager type is intentionally outside this unit test.
+    registerSshBrowseHandler(getConnectionManager as never)
+
+    const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: '/tmp' })
+    channel.emit('exit', 0)
+    await Promise.resolve()
+    channel.emit('data', Buffer.from('/tmp\nfolder/\n'))
+    channel.emit('close', 0)
+
+    await expect(resultPromise).resolves.toEqual({
+      resolvedPath: '/tmp',
+      pathFlavor: 'posix',
+      entries: [{ name: 'folder', isDirectory: true }]
+    })
+    expect(exec).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the exit status when close reports a different status', async () => {
+    const posixChannel = createMockChannel()
+    const fallbackChannel = createMockChannel()
+    const exec = vi.fn().mockResolvedValueOnce(posixChannel).mockResolvedValueOnce(fallbackChannel)
+    const getConnectionManager = () => ({
+      getConnection: () => ({ exec })
+    })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This mock only implements the getConnection().exec surface consumed by the handler; the production manager type is intentionally outside this unit test.
+    registerSshBrowseHandler(getConnectionManager as never)
+
+    const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: '/tmp' })
+    await Promise.resolve()
+    posixChannel.emit('exit', 1)
+    posixChannel.emit('close', 0)
+    await vi.waitFor(() => expect(fallbackChannel.listenerCount('close')).toBe(1))
+    fallbackChannel.emit('exit', 127)
+    fallbackChannel.emit('close', 127)
+
+    await expect(resultPromise).rejects.toThrow('Remote listing failed (exit 1)')
+  })
+
+  it('treats an exit without a status as failure even when close is zero', async () => {
+    const posixChannel = createMockChannel()
+    const fallbackChannel = createMockChannel()
+    const exec = vi.fn().mockResolvedValueOnce(posixChannel).mockResolvedValueOnce(fallbackChannel)
+    const getConnectionManager = () => ({
+      getConnection: () => ({ exec })
+    })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This mock only implements the getConnection().exec surface consumed by the handler; the production manager type is intentionally outside this unit test.
+    registerSshBrowseHandler(getConnectionManager as never)
+
+    const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: '/tmp' })
+    await Promise.resolve()
+    posixChannel.emit('exit', null, 'SIGTERM')
+    posixChannel.emit('close', 0)
+    await vi.waitFor(() => expect(fallbackChannel.listenerCount('close')).toBe(1))
+    fallbackChannel.emit('exit', 127)
+    fallbackChannel.emit('close', 127)
+
+    await expect(resultPromise).rejects.toThrow(
+      'Remote listing failed (channel closed without exit status)'
+    )
+  })
+
+  it('rejects when neither exit nor close supplies a status', async () => {
+    const posixChannel = createMockChannel()
+    const fallbackChannel = createMockChannel()
+    const exec = vi.fn().mockResolvedValueOnce(posixChannel).mockResolvedValueOnce(fallbackChannel)
+    const getConnectionManager = () => ({
+      getConnection: () => ({ exec })
+    })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This mock only implements the getConnection().exec surface consumed by the handler; the production manager type is intentionally outside this unit test.
+    registerSshBrowseHandler(getConnectionManager as never)
+
+    const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: '/tmp' })
+    await Promise.resolve()
+    posixChannel.emit('close')
+    await vi.waitFor(() => expect(fallbackChannel.listenerCount('close')).toBe(1))
+    fallbackChannel.emit('close')
+
+    await expect(resultPromise).rejects.toThrow(
+      'Remote listing failed (channel closed without exit status)'
+    )
+  })
+
   it('falls back to PowerShell when a Windows SSH shell rejects POSIX exec', async () => {
     const posixChannel = createMockChannel()
     const windowsChannel = createMockChannel()
@@ -397,11 +485,11 @@ describe('registerSshBrowseHandler', () => {
     registerSshBrowseHandler(getConnectionManager as never)
 
     const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: '/opt/exec' })
+    posixChannel.emit('exit', 127)
     await Promise.resolve()
     // A non-zero POSIX failure triggers the fallback probe on any host...
     posixChannel.stderr.emit('data', Buffer.from('exec: command not found'))
-    posixChannel.emit('exit', 127)
-    posixChannel.emit('close')
+    posixChannel.emit('close', 127)
     await vi.waitFor(() => {
       expect(windowsChannel.listenerCount('close')).toBe(1)
     })
