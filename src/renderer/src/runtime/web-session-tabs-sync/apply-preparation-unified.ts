@@ -230,7 +230,8 @@ export function prepareWebSessionTabsSnapshotUnified(
     terminalTabs: mirroredTerminalTabEntries,
     browserTabs: mirroredBrowserTabs,
     editorTabs: mirroredEditorTabs,
-    agentTabs: mirroredAgentTabs
+    agentTabs: mirroredAgentTabs,
+    hostGroupIdByTabId
   })
 
   return {
