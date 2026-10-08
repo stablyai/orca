@@ -8,8 +8,8 @@ import type { StructuredAgentSessionStatusObserverOptions } from './structured-a
 //
 // The last projection is kept after the session's provider child is evicted: an idle session is
 // still idle without a process, and a renderer that reloads must not lose every settled row until
-// each chat is reopened. Restart is the one boundary that forgets, and restoring readable sessions
-// republishes them.
+// each chat is reopened. Across a restart the sink keeps each chat's last status, and startup
+// restores a settled chat's here until that chat's own open republishes it.
 
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type {
@@ -192,6 +192,16 @@ export class StructuredAgentSessionStatusFeed {
     const { conversationName: _previous, ...rest } = publication.summary
     const summary = name ? { ...rest, conversationName: name } : rest
     this.published.set(sessionId, { ...publication, summary })
+    this.broadcast({ type: 'status', session: summary })
+  }
+
+  /** A restart's saved status for a chat nothing has opened yet; its first publish replaces it. */
+  restoreSaved(summary: AgentSessionStatusSummary, location: AgentSessionRecord['location']): void {
+    if (this.published.has(summary.sessionId)) {
+      return
+    }
+    this.published.set(summary.sessionId, { summary, firstInputSubmissionKey: null })
+    this.sink(summary, location)
     this.broadcast({ type: 'status', session: summary })
   }
 

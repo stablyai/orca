@@ -42,6 +42,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
     this.token = randomUUID()
     this.endpointFileWritten = false
     this.lastWrittenJson = null
+    this.loadSavedStructuredStatuses()
     if (this.statusHooksEnabled) {
       this.initializeStatusHookOwner()
     }
@@ -215,8 +216,9 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
   }
 
   stop(): void {
-    // Terminal status may still have a pending write while hook ingress is disabled.
-    if (this.statusHooksEnabled || this.statusPersistTimer) {
+    // Terminal status may still have a pending write while hook ingress is disabled; native chats
+    // save whatever that setting says.
+    if (this.statusHooksEnabled || this.statusPersistTimer || this.savedStructuredStatuses.size) {
       this.flushStatusPersistSync()
     }
     this.stopOpenCodeBinderLoop()
@@ -242,6 +244,8 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
     this.endpointFileWritten = false
     this.lastStatusFilePath = null
     this.lastWrittenJson = null
+    this.savedStructuredStatuses.clear()
+    this.unhydratedStatusFile = null
     this.runtimeObservedStatusPaneKeys.clear()
     this.paneKeyByTerminalHandle.clear()
     this.hydratedAuthorityCommitments = Object.freeze([])

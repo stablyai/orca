@@ -109,7 +109,7 @@ describe('a turn its gone agent left running', () => {
 
     // The client's read opens the chat first; the restore then finds it open and skips it.
     expect(await workingTurnState()).toBe('interrupted')
-    await rig.host.restoreReadableSessions([SESSION])
+    await rig.host.collaboratorsForTests().restoreReadableSessions([SESSION])
     expect(await workingTurnState()).toBe('interrupted')
     expect(rig.adapter.acquire).toHaveBeenCalledOnce()
   })

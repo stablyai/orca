@@ -1,5 +1,5 @@
 // With native chat on, the renderer's startup also awaits the chat tab restore (`session.tabs.listAll`),
-// which reads every chat whose tab was open at quit. That read must not wait on record-store
+// which lists every chat whose tab was open at quit. That listing must not wait on record-store
 // bookkeeping: with a saved tab index it writes nothing, and a store that cannot be written costs
 // a bounded number of failed writes, not one per chat.
 
@@ -320,7 +320,8 @@ describe('restoring the chat tabs open at quit', () => {
 
     expect(published()).toHaveLength(count)
     expect(prepared).toBe(1)
-    expect(writes.refused - prepared).toBe(1)
+    // Listing opens no chat, so no restore pass checks leases again.
+    expect(writes.refused - prepared).toBe(0)
   })
 
   describe('on a legacy profile, with no tab index yet', () => {
@@ -366,8 +367,8 @@ describe('restoring the chat tabs open at quit', () => {
 
       expect(published()).toHaveLength(2)
       expect(prepared).toBe(1)
-      // The restore's lease check and the seed.
-      expect(writes.refused - prepared).toBe(2)
+      // The seed alone: listing opens no chat, so no restore pass checks leases again.
+      expect(writes.refused - prepared).toBe(1)
     })
 
     it('still lists the chats when that write fails, and leaves the index absent', async () => {

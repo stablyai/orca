@@ -607,7 +607,7 @@ describe("the replacement's first send", () => {
   it('starts after a restart between the /clear and the first send', async () => {
     const replacement = await clearCommits()
     await restartHost()
-    await host.restoreReadableSessions(store.listVisibleSessionIds())
+    await host.collaboratorsForTests().restoreReadableSessions(store.listVisibleSessionIds())
     expect(store.getRecord(replacement)?.lease).toMatchObject({
       claimStatus: 'released',
       handoffStage: null,
@@ -675,7 +675,7 @@ describe('what an older build left', () => {
     ).toMatchObject({ admission: { decision: 'admit' } })
     expect(await host.attach(caller, orphanStart)).toMatchObject({ ok: true })
     await restartHost()
-    await host.restoreReadableSessions(store.listVisibleSessionIds())
+    await host.collaboratorsForTests().restoreReadableSessions(store.listVisibleSessionIds())
 
     const replacement = await clearCommits(params)
     expect(replacement).not.toBe(orphan)

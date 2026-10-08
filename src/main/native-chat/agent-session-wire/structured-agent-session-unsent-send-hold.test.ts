@@ -754,7 +754,7 @@ describe("the reopen's mark", () => {
     void working
     const sent = rig.dispatch.mock.calls.length
     rig.crashRestartHostProcess()
-    await rig.host.restoreReadableSessions([SESSION])
+    await rig.host.collaboratorsForTests().restoreReadableSessions([SESSION])
     expect(rig.host.collaboratorsForTests().sessions.has(SESSION)).toBe(true)
     await new Promise((resolve) => setTimeout(resolve, 100))
     expect(await rig.handoff(queued.id)).toBeUndefined()

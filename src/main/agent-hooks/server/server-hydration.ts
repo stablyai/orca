@@ -22,6 +22,62 @@ import {
 import { AgentHookServerReaping } from './server-reaping'
 
 export abstract class AgentHookServerHydration extends AgentHookServerReaping {
+  /** The file as the last write left it, or null; a missing one is normal (first launch). */
+  private readLastStatusFile(): { raw: string; file: Partial<LastStatusFile> } | null {
+    if (!this.lastStatusFilePath) {
+      return null
+    }
+    let raw: string
+    this.statusFileForeign = false
+    try {
+      raw = readFileSync(this.lastStatusFilePath, 'utf8')
+    } catch (err) {
+      // Why: missing file is normal (first launch); other errors degrade to empty hydration + one warn.
+      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+        console.warn('[agent-hooks] failed to read last-status file:', err)
+        this.statusFileForeign = true
+      }
+      return null
+    }
+    // Cleared again once the file proves readable.
+    this.statusFileForeign = true
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(raw)
+    } catch {
+      console.warn('[agent-hooks] last-status file is not valid JSON; ignoring')
+      return null
+    }
+    if (typeof parsed !== 'object' || parsed === null) {
+      console.warn('[agent-hooks] last-status file is not an object; ignoring')
+      return null
+    }
+    const file = parsed as Partial<LastStatusFile>
+    if (file.version !== LAST_STATUS_FILE_VERSION) {
+      console.warn(
+        `[agent-hooks] last-status file version mismatch (${String(
+          file.version
+        )} != ${LAST_STATUS_FILE_VERSION}); ignoring`
+      )
+      return null
+    }
+    this.statusFileForeign = false
+    return { raw, file }
+  }
+
+  /** Native chats have no status hooks, so their saved statuses load whatever that setting says. */
+  protected loadSavedStructuredStatuses(): void {
+    this.savedStructuredStatuses.clear()
+    const read = this.readLastStatusFile()
+    this.unhydratedStatusFile = read
+      ? { entries: read.file.entries ?? {}, authorityCommitments: read.file.authorityCommitments }
+      : null
+    // No age limit: each entry dies with its chat's record or tab, or is replaced by its next save.
+    for (const [sessionId, entry] of Object.entries(read?.file.structuredSessions ?? {})) {
+      this.savedStructuredStatuses.set(sessionId, entry)
+    }
+  }
+
   /** Hydrate the durable cache, validating every row before it reaches the live listener state. */
   protected hydrateLastStatusFromDisk(): void {
     if (!this.lastStatusFilePath) {
@@ -31,36 +87,12 @@ export abstract class AgentHookServerHydration extends AgentHookServerReaping {
     clearLegacyAgentStatuses(this.state)
     this.hydratedLaunchTokenHashByPaneKey.clear()
     this.persistedAuthorityCommitmentsByPaneKey.clear()
-    let raw: string
-    try {
-      raw = readFileSync(this.lastStatusFilePath, 'utf8')
-    } catch (err) {
-      // Why: missing file is normal (first launch); other errors degrade to empty hydration + one warn.
-      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
-        console.warn('[agent-hooks] failed to read last-status file:', err)
-      }
+    this.unhydratedStatusFile = null
+    const read = this.readLastStatusFile()
+    if (!read) {
       return
     }
-    let parsed: unknown
-    try {
-      parsed = JSON.parse(raw)
-    } catch {
-      console.warn('[agent-hooks] last-status file is not valid JSON; ignoring')
-      return
-    }
-    if (typeof parsed !== 'object' || parsed === null) {
-      console.warn('[agent-hooks] last-status file is not an object; ignoring')
-      return
-    }
-    const file = parsed as Partial<LastStatusFile>
-    if (file.version !== LAST_STATUS_FILE_VERSION) {
-      console.warn(
-        `[agent-hooks] last-status file version mismatch (${String(
-          file.version
-        )} != ${LAST_STATUS_FILE_VERSION}); ignoring`
-      )
-      return
-    }
+    const { raw, file } = read
     const entries = file.entries
     if (typeof entries !== 'object' || entries === null) {
       console.warn('[agent-hooks] last-status file entries missing or wrong shape; ignoring')

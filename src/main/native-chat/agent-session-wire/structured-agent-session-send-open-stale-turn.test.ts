@@ -153,7 +153,7 @@ it('settles it when a read reaches the chat before the startup reconcile, then r
   await host.history({ sessionId: SESSION, direction: 'tail' })
   expect(await turnStates(host)).toEqual(['unverifiable'])
   await host.reconcileRestartLeases()
-  await host.restoreReadableSessions([SESSION])
+  await host.collaboratorsForTests().restoreReadableSessions([SESSION])
 
   expect(await turnStates(host)).toEqual(['interrupted'])
   await host.flushAllStreamedEvents()

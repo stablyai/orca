@@ -117,6 +117,32 @@ export function structuredSessionOwnedMailboxes(sessionId: string, db: Orchestra
   return mailboxes
 }
 
+/** Every mailbox holding mail not yet delivered, which a restart owes a re-drive. */
+export function restoredPendingMailboxHandles(db: OrchestrationDb | null | undefined): Set<string> {
+  return new Set([
+    ...(db?.getUndeliveredUnreadMailboxHandles?.() ?? []),
+    // Pointer-phase rows are excluded from the undelivered scan, so they need their own.
+    ...(db?.getPendingMailboxPointerHandles?.() ?? [])
+  ])
+}
+
+/** The sessions that mail waits on: a restart owes each the re-drive its idle edge gives, and
+ *  nothing else gives it to a chat nobody opens. Bookkeeping: a failure costs only that re-drive. */
+export function structuredSessionsOwedMail(
+  openDb: () => OrchestrationDb | null,
+  resolveTarget: (mailboxHandle: string) => StructuredPointerTarget | null
+): string[] {
+  try {
+    const mailboxes = [...restoredPendingMailboxHandles(openDb())]
+    return [...new Set(mailboxes.flatMap((mailbox) => resolveTarget(mailbox)?.sessionId ?? []))]
+  } catch (error) {
+    console.warn('[orchestration] could not find the chats parked mail waits on', {
+      error: error instanceof Error ? error.message : String(error)
+    })
+    return []
+  }
+}
+
 /** The mailboxes a session's idle edge re-derives, opening an existing database if nothing has
  *  yet: after a restart this edge is what redrives mail stored before it. No database file means
  *  no mail, so `openDb` answers null and nothing is created. */

@@ -123,7 +123,7 @@ describe('structured session restart status publication', () => {
   it('projects the persisted turn of a session restored without a provider', async () => {
     const restarted = await restartWithPersistedTurn()
 
-    await restarted.restoreReadableSessions()
+    await restarted.collaboratorsForTests().restoreReadableSessions()
     const events: AgentSessionStatusEvent[] = []
     restarted.subscribeStatus({ id: 'session-list', emit: (event) => events.push(event) })
 
@@ -149,7 +149,7 @@ describe('structured session restart status publication', () => {
     restarted.subscribeStatus({ id: 'session-list', emit: (event) => events.push(event) })
     expect(events).toEqual([{ type: 'snapshot', sessions: [] }])
 
-    await restarted.restoreReadableSessions()
+    await restarted.collaboratorsForTests().restoreReadableSessions()
 
     // The restore wiring publishes; without it this list never hears about the session at all.
     expect(events.at(-1)).toEqual({

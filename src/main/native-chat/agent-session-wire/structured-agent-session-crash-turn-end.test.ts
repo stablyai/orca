@@ -204,7 +204,7 @@ describe('a turn a crash cut short mid-tool', () => {
   it('ends at the last renewal, not at the tool call the provider last reported', async () => {
     openHost({ probeOwner: async () => ({ outcome: 'pid-absent' }) })
 
-    await host.restoreReadableSessions()
+    await host.collaboratorsForTests().restoreReadableSessions()
 
     expect(store.getRecord(SESSION)?.lease.deathEvidence).toMatchObject({
       kind: 'pid-absent',
@@ -226,7 +226,7 @@ describe('a turn a crash cut short mid-tool', () => {
   it('explains the cut once, with one notice row and a turn bar that does not repeat it', async () => {
     openHost({ probeOwner: async () => ({ outcome: 'pid-absent' }) })
 
-    await host.restoreReadableSessions()
+    await host.collaboratorsForTests().restoreReadableSessions()
 
     const { items } = await host.journalSnapshot(SESSION)
     // As a reader's transcript shows it: the stored row is the explanation, so none is derived.
@@ -262,7 +262,7 @@ describe('a turn a crash cut short mid-tool', () => {
     })
     openHost({ probeOwner, stopOwnerProcess })
 
-    await host.restoreReadableSessions()
+    await host.collaboratorsForTests().restoreReadableSessions()
 
     expect(stopOwnerProcess).toHaveBeenCalledOnce()
     expect(store.getRecord(SESSION)?.lease.deathEvidence).toMatchObject({
@@ -413,7 +413,7 @@ describe('a turn a read reached before the reconcile proved its owner dead', () 
           host.collaboratorsForTests().sessions.get(SESSION)
         )
       )
-    await host.restoreReadableSessions()
+    await host.collaboratorsForTests().restoreReadableSessions()
 
     expect(await host.journalSnapshot(SESSION)).toEqual(settled)
   })
@@ -444,7 +444,7 @@ describe('a turn a read reached before the reconcile proved its owner dead', () 
     expect(await settledTurn()).toEqual(UNVERIFIABLE_TURN)
 
     // The reconcile only parks the live orphan in recovery; recovery's stop is what proves it gone.
-    await host.restoreReadableSessions()
+    await host.collaboratorsForTests().restoreReadableSessions()
     await drainSession()
 
     expect(stopOwnerProcess).toHaveBeenCalledOnce()

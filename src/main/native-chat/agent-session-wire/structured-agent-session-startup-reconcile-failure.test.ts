@@ -166,7 +166,9 @@ it('restores a chat for reading while the reconcile keeps failing, and reports i
   writes.failing = true
   await host.reconcileRestartLeases()
 
-  await expect(host.restoreReadableSessions([SESSION])).resolves.toBeUndefined()
+  await expect(
+    host.collaboratorsForTests().restoreReadableSessions([SESSION])
+  ).resolves.toBeUndefined()
 
   expect(host.hasSession(SESSION)).toBe(true)
   expect(store.getRecord(SESSION)?.lease.unreconciled).toBe(true)
@@ -196,7 +198,9 @@ it('opens no chat from records a newer Orca wrote, and writes nothing trying', a
   const path = journalDatabasePath(stateDirectory)
   const bytes = await readFile(path)
 
-  await expect(host.restoreReadableSessions([SESSION])).resolves.toBeUndefined()
+  await expect(
+    host.collaboratorsForTests().restoreReadableSessions([SESSION])
+  ).resolves.toBeUndefined()
 
   expect(host.hasSession(SESSION)).toBe(false)
   expect(leaseReconcileLogged).not.toHaveBeenCalled()
@@ -213,7 +217,9 @@ it('restores a chat for reading when resolving its recovery cannot write the sto
   expect(store.getRecord(SESSION)?.lease.handoffStage).toBe('recovering')
   writes.failing = true
 
-  await expect(host.restoreReadableSessions([SESSION])).resolves.toBeUndefined()
+  await expect(
+    host.collaboratorsForTests().restoreReadableSessions([SESSION])
+  ).resolves.toBeUndefined()
 
   expect(host.hasSession(SESSION)).toBe(true)
   expect(store.getRecord(SESSION)?.lease.handoffStage).toBe('recovering')
@@ -223,7 +229,11 @@ it('restores a chat for reading when resolving its recovery cannot write the sto
 
 it.each([
   ['startup reconcile', (host: StructuredAgentSessionHost) => host.reconcileRestartLeases()],
-  ['read restore', (host: StructuredAgentSessionHost) => host.restoreReadableSessions([SESSION])]
+  [
+    'read restore',
+    (host: StructuredAgentSessionHost) =>
+      host.collaboratorsForTests().restoreReadableSessions([SESSION])
+  ]
 ])('keeps the %s resolving when the logger throws', async (_step, read) => {
   const { host, leaseReconcileLogged } = await relaunch()
   const sinkError = new Error('error sink failed')

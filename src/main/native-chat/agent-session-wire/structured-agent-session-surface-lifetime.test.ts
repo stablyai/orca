@@ -405,7 +405,7 @@ describe('startup', () => {
 
     store = await openTestAgentSessionRecordStore(root)
     openHost(async () => ({ outcome: 'pid-absent' }))
-    await host.restoreReadableSessions()
+    await host.collaboratorsForTests().restoreReadableSessions()
 
     const restored = await host.history({ sessionId: SESSION, direction: 'tail' })
     expect(restored.ok && restored.page.items.some((item) => item.body.kind === 'status')).toBe(
@@ -427,11 +427,11 @@ describe('startup', () => {
     await attach()
     await reboot()
 
-    await host.restoreReadableSessions()
+    await host.collaboratorsForTests().restoreReadableSessions()
 
     // The record is readable — the tab comes back, history answers — and nothing is running.
     expect(acquire).not.toHaveBeenCalled()
-    expect(host.listSessionTabs()).toEqual([
+    expect(host.listSessionTabs([SESSION])).toEqual([
       { sessionId: SESSION, workspaceId: 'workspace-1', agent: 'codex' }
     ])
     expect((await host.history({ sessionId: SESSION, direction: 'tail' })).ok).toBe(true)
@@ -441,7 +441,7 @@ describe('startup', () => {
   it('gives the child back for work, never for a read', async () => {
     await attach()
     await reboot()
-    await host.restoreReadableSessions()
+    await host.collaboratorsForTests().restoreReadableSessions()
 
     const unsubscribe = await host.subscribe({
       id: 'viewer-1',

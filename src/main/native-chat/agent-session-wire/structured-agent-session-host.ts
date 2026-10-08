@@ -131,7 +131,8 @@ export class StructuredAgentSessionHost {
       // Site 10: cannot overwrite a live entry — the restorer returns early on
       // `hasSession` inside the same serialized step as this `set`.
       onReadable: this.conversationDelivery.adoptOpened,
-      onUnopened: (sessionId) => this.tabs.markUnopened(sessionId)
+      restoreSaved: this.clientDelivery.restoreSavedStatus,
+      close: (sessionId) => this.close(sessionId, 'evict')
     })
     this.eventRecovery = new StructuredAgentSessionEventRecovery({
       deps,
@@ -235,8 +236,9 @@ export class StructuredAgentSessionHost {
 
   reconcileRestartLeases = (): Promise<void> => this.restore.reconcileRestartLeases()
 
-  restoreReadableSessions = (sessionIds?: readonly string[]): Promise<void> =>
-    this.restore.restoreReadableSessions(sessionIds)
+  /** Startup, after the lease check: see `structured-agent-session-saved-status-restore`. */
+  restoreSavedStatuses = (listed: readonly string[], owedMail?: readonly string[]): Promise<void> =>
+    this.restore.restoreSavedStatuses(listed, owedMail)
 
   /** Make one persisted session addressable again; see `structured-agent-session-reveal`. */
   revealSession = (sessionId: string): Promise<StructuredAgentSessionReveal> =>
@@ -358,6 +360,8 @@ export class StructuredAgentSessionHost {
     runtimeState: this.runtimeState,
     conversationDelivery: this.conversationDelivery,
     lifetime: this.lifetime,
-    serialize: this.serialize
+    serialize: this.serialize,
+    /** The open-and-settle pass startup runs for the chats a restart owes, over any ids. */
+    restoreReadableSessions: this.restore.restoreReadableSessions
   })
 }

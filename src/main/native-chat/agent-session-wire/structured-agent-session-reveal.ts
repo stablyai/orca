@@ -23,6 +23,8 @@ import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionReveal
 } from './structured-agent-session-host-types'
+import { restoreSavedStructuredAgentSessionStatuses } from './structured-agent-session-saved-status-restore'
+import { listSavedSessionTabs } from './structured-agent-session-host-tabs'
 
 /** Throws its refusal as the code itself. */
 export async function revealStructuredAgentSession(
@@ -52,8 +54,8 @@ export async function revealStructuredAgentSession(
   }
 }
 
-/** The host's startup readable-restore sweep: reconcile, resolve, then open each chat's journal.
- *  Its lease bookkeeping is a reader's, which never fails a read or startup; startup shares it. */
+/** The host's startup restore: reconcile, then show each settled chat's saved status and open only
+ *  the chats a restart owes. Its lease bookkeeping is a reader's, which never fails a read or startup. */
 export function createStructuredAgentSessionHostRestore(
   deps: StructuredAgentSessionHostDeps,
   wiring: Omit<
@@ -62,12 +64,15 @@ export function createStructuredAgentSessionHostRestore(
   > & {
     reconcileLeases: (sessionId: string) => Promise<AgentSessionWireRefusal | null>
     resolveRecovery: (sessionId: string) => Promise<unknown>
+    restoreSaved: Parameters<typeof restoreSavedStructuredAgentSessionStatuses>[0]['restoreSaved']
+    close: (sessionId: string) => Promise<void>
   }
 ): {
   reconcileRestartLeases: () => Promise<void>
   restoreReadableSessions: (sessionIds?: readonly string[]) => Promise<void>
+  restoreSavedStatuses: (listed: readonly string[], owedMail?: readonly string[]) => Promise<void>
 } {
-  const { reconcileLeases, resolveRecovery, ...rest } = wiring
+  const { reconcileLeases, resolveRecovery, restoreSaved, close, ...rest } = wiring
   const failures = reportEachFailureOnce(deps.logger)
   const reconcile = createReaderReconcile(reconcileLeases, failures)
   const restorer = new StructuredAgentSessionReadableRestorer({
@@ -85,10 +90,26 @@ export function createStructuredAgentSessionHostRestore(
     ...rest
   })
   const gate = new StructuredAgentSessionRestartRestoreGate()
+  const restoreReadableSessions = (sessionIds?: readonly string[]) =>
+    gate.run(() => restorer.restore(sessionIds))
   return {
     reconcileRestartLeases: async () => {
       await reconcile('startup')
     },
-    restoreReadableSessions: (sessionIds) => gate.run(() => restorer.restore(sessionIds))
+    restoreReadableSessions,
+    restoreSavedStatuses: (listed, owedMail = []) =>
+      restoreSavedStructuredAgentSessionStatuses({
+        // The tab list's own filter, so a chat it does not show gets no row either.
+        listed: listSavedSessionTabs(deps, listed).map((tab) => tab.sessionId),
+        owedMail,
+        saved: deps.statusSink?.readSavedStatuses?.() ?? [],
+        getRecord: (sessionId) => deps.store.getRecord(sessionId),
+        isUnreadable: (sessionId) => deps.store.isSessionUnreadable(sessionId),
+        restoreSaved,
+        dropSaved: (sessionId) => deps.statusSink?.dropSavedStatus?.(sessionId),
+        settle: restoreReadableSessions,
+        close,
+        logger: deps.logger
+      })
   }
 }

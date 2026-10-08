@@ -186,7 +186,7 @@ describe('recovery exits', () => {
       mintSpawnToken: () => 'spawn-c',
       probeOwner: async () => ({ outcome: 'pid-absent' })
     })
-    await host.restoreReadableSessions()
+    await host.collaboratorsForTests().restoreReadableSessions()
 
     // Death proof releases the residue outright: no handoff continuation, no spawned child,
     // no stage a user would have to clear by hand.
@@ -262,7 +262,7 @@ describe('recovery exits', () => {
       stopOwnerProcess
     })
 
-    await host.restoreReadableSessions()
+    await host.collaboratorsForTests().restoreReadableSessions()
 
     // Healing is startup's job; spawning is not. The orphan is stopped and the lease is free, but
     // nothing has asked this session for work, so no replacement child exists yet.
@@ -323,7 +323,7 @@ describe('recovery exits', () => {
       }
     })
 
-    await host.restoreReadableSessions()
+    await host.collaboratorsForTests().restoreReadableSessions()
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       runtimeFence: 2,
       claimStatus: 'released',

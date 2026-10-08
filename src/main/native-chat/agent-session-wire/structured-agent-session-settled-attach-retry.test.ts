@@ -292,7 +292,7 @@ describe('settled attach retry', () => {
       now: () => NOW
     })
 
-    await host.restoreReadableSessions()
+    await host.collaboratorsForTests().restoreReadableSessions()
     expect(releaseAcquisition).toHaveBeenCalledTimes(1)
     // No owner was recorded: released at restart, with no evidence, since nothing proved one.
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
@@ -346,7 +346,7 @@ describe('settled attach retry', () => {
       probeOwner: async () => ({ outcome: 'pid-absent' }),
       now: () => NOW
     })
-    await host.restoreReadableSessions()
+    await host.collaboratorsForTests().restoreReadableSessions()
     await startAgent()
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       claimStatus: 'live',

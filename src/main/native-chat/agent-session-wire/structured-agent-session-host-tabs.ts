@@ -1,6 +1,7 @@
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { readJournalSessionEpoch } from '../agent-session-journal/journal-row-table'
 
 /**
  * Chat-tab visibility is the deletion funnel: every path that removes a chat as a user-facing
@@ -44,56 +45,47 @@ export type StructuredAgentSessionTab = {
   agent: AgentSessionRecord['provider']
 }
 
-export function listStructuredAgentSessionTabs(
-  sessions: ReadonlyMap<
-    string,
-    { params: { location: { workspaceId: string }; provider: AgentSessionRecord['provider'] } }
-  >
+/** Tabs from saved state alone: each given id, once and in order, that has a record and a history
+ *  to read. Opens nothing; a chat that cannot open keeps its tab, and its read says why. */
+export function listSavedSessionTabs(
+  deps: {
+    store: Pick<AgentSessionRecordStore, 'getRecord'>
+    journalDatabase: { db: Parameters<typeof readJournalSessionEpoch>[0] }
+  },
+  sessionIds: readonly string[]
 ): StructuredAgentSessionTab[] {
-  return [...sessions.entries()].map(([sessionId, session]) => ({
-    sessionId,
-    workspaceId: session.params.location.workspaceId,
-    agent: session.params.provider
-  }))
+  const tabs = new Map<string, StructuredAgentSessionTab>()
+  for (const sessionId of sessionIds) {
+    const record = tabs.has(sessionId) ? null : deps.store.getRecord(sessionId)
+    // One never written stays unlisted rather than founding an empty history.
+    if (record && readJournalSessionEpoch(deps.journalDatabase.db, sessionId) !== null) {
+      tabs.set(sessionId, {
+        sessionId,
+        workspaceId: record.location.workspaceId,
+        agent: record.provider
+      })
+    }
+  }
+  return [...tabs.values()]
 }
 
-type TabSessions = ReadonlyMap<
-  string,
-  {
-    child?: unknown
-    params: { location: { workspaceId: string }; provider: AgentSessionRecord['provider'] }
-  }
->
+type TabSessions = ReadonlyMap<string, { child?: unknown }>
 
 /** The host's chat-tab surface; reads `host.deps` per call, so it sees the host's wrapped deps. */
 export function createStructuredAgentSessionTabSurface(
   host: Parameters<typeof setStructuredAgentSessionTabVisibility>[0] & {
-    deps: {
+    deps: Parameters<typeof listSavedSessionTabs>[0] & {
       store: Pick<
         AgentSessionRecordStore,
-        'getVisibleSessionTabIndex' | 'getSessionTabId' | 'showSessionTabs' | 'getRecord'
+        'getVisibleSessionTabIndex' | 'getSessionTabId' | 'showSessionTabs'
       >
     }
   },
   sessions: TabSessions,
   forgetStatus: (sessionId: string) => void
 ) {
-  // Restored chats that could not be opened. Each keeps its tab, whose read says why.
-  const unopened = new Set<string>()
   return {
-    listSessionTabs: (): StructuredAgentSessionTab[] => [
-      ...listStructuredAgentSessionTabs(sessions),
-      ...[...unopened].flatMap((sessionId) => {
-        const record = sessions.has(sessionId) ? null : host.deps.store.getRecord(sessionId)
-        return record
-          ? [{ sessionId, workspaceId: record.location.workspaceId, agent: record.provider }]
-          : []
-      })
-    ],
-    /** A restore target with a record whose open failed. */
-    markUnopened: (sessionId: string): void => {
-      unopened.add(sessionId)
-    },
+    listSessionTabs: (sessionIds: readonly string[]) => listSavedSessionTabs(host.deps, sessionIds),
     getPersistedVisibleSessionTabIndex: () => host.deps.store.getVisibleSessionTabIndex(),
     getSessionTabId: (sessionId: string): string | null =>
       host.deps.store.getSessionTabId(sessionId),
@@ -107,11 +99,8 @@ export function createStructuredAgentSessionTabSurface(
       options?: { deferHiddenNotice?: boolean }
     ): Promise<void> => {
       await setStructuredAgentSessionTabVisibility(host, sessionId, visible, tabId)
-      if (!visible) {
-        unopened.delete(sessionId)
-        if (!options?.deferHiddenNotice) {
-          notifyTabHidden(host, sessionId)
-        }
+      if (!visible && !options?.deferHiddenNotice) {
+        notifyTabHidden(host, sessionId)
       }
       // The tab edge of the row's lifetime; the handle close is the other.
       if (!visible && !sessions.get(sessionId)?.child) {

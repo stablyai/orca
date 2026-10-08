@@ -12,6 +12,10 @@ import type {
 } from './server-types'
 import { authorityCommitmentsMatch } from './server-persistence-validation'
 import { AgentHookServerHydration } from './server-hydration'
+import {
+  parseSavedStructuredSessionStatus,
+  type SavedStructuredSessionEntry
+} from '../../../shared/structured-agent-session-saved-status'
 
 export abstract class AgentHookServerPersistence extends AgentHookServerHydration {
   protected serializeStatusFile(): string {
@@ -27,11 +31,6 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
         continue
       }
       const enrichedPayload = payload as EnrichedAgentHookEventPayload
-      // Why: the session journal is the durable truth for a structured row and the host republishes
-      // it on restore; a persisted copy would hydrate unconfirmed and fight that republish.
-      if (enrichedPayload.structuredHost) {
-        continue
-      }
       const {
         promptInteractionKey: _promptInteractionKey,
         // Why: never persisted — hydrate re-stamps it, so a stored copy could only drift.
@@ -72,10 +71,26 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
     }
     const file: LastStatusFile = {
       version: LAST_STATUS_FILE_VERSION,
-      entries,
-      authorityCommitments
+      ...(this.unhydratedStatusFile ?? { entries, authorityCommitments }),
+      ...(this.savedStructuredStatuses.size > 0
+        ? { structuredSessions: Object.fromEntries(this.savedStructuredStatuses) }
+        : {})
     }
     return JSON.stringify(file)
+  }
+
+  dropSavedStructuredStatus(sessionId: string): void {
+    if (this.savedStructuredStatuses.delete(sessionId)) {
+      this.runStatusPersist()
+    }
+  }
+
+  /** Every saved entry; one this build cannot read is null, and stays in the file as written. */
+  readSavedStructuredStatuses(): SavedStructuredSessionEntry[] {
+    return [...this.savedStructuredStatuses].map(([sessionId, entry]) => ({
+      sessionId,
+      saved: parseSavedStructuredSessionStatus(sessionId, entry)
+    }))
   }
 
   protected scheduleStatusPersist(): void {
@@ -108,7 +123,12 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
   }
 
   protected runStatusPersist(): void {
-    if (!this.lastStatusFilePath || !this.endpointDir) {
+    // Hooks on rewrites a foreign file as it always has; a chat's save alone never does.
+    if (
+      !this.lastStatusFilePath ||
+      !this.endpointDir ||
+      (this.statusFileForeign && !this.statusHooksEnabled)
+    ) {
       return
     }
     const json = this.serializeStatusFile()

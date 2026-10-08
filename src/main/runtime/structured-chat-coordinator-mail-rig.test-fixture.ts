@@ -248,6 +248,13 @@ beforeEach(async () => {
   codex = fakeCodex()
   db = new OrchestrationDb(':memory:')
   runtime = startRuntime()
+  host = await installHost()
+  dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
+})
+
+/** The host over the rig's directories; installed again after `stopStructuredAgentSessionRuntime`,
+ *  it is what an Orca restart leaves of every chat. */
+export async function installHost(): Promise<StructuredAgentSessionHost> {
   host = await ensureStructuredAgentSessionHost({
     logger: createStructuredAgentSessionLogger(),
     stateDirectory: root,
@@ -264,8 +271,8 @@ beforeEach(async () => {
     onSessionStatusChanged: (summary) => runtime.onStructuredSessionStatusForMail(summary),
     onSessionTabHidden: (sessionId) => runtime.onStructuredSessionTabHidden(sessionId)
   })
-  dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
-})
+  return host
+}
 
 /** The runtime over the shared database; a second call is what an Orca restart leaves behind. */
 export function startRuntime(): OrcaRuntimeService {

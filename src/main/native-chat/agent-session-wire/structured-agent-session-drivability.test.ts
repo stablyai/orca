@@ -216,7 +216,7 @@ it('keeps saved history readable without a registration and resumes when it retu
   try {
     expect(router.supportsCreate(params('2', created.fence).location, 'grok')).toBe(false)
     expect(store.listVisibleSessionIds()).toEqual([SESSION])
-    await host.restoreReadableSessions([SESSION])
+    await host.collaboratorsForTests().restoreReadableSessions([SESSION])
     expect(host.hasSession(SESSION)).toBe(true)
     await expect(host.revealSession(SESSION)).resolves.toMatchObject({
       sessionId: SESSION,

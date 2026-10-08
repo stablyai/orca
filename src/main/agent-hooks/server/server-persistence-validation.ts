@@ -69,7 +69,7 @@ export function sanitizeHydratedEntry(
   if (record.paneKey !== paneKey) {
     return null
   }
-  // Why: structured rows are never written; the host republishes the live projection on restore.
+  // Why: a native chat saves its summary under `structuredSessions`; one here would take its address.
   if (record.structuredHost !== undefined) {
     return null
   }

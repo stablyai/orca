@@ -36,6 +36,7 @@ import type {
   AgentHookStatusFreshnessObservation,
   AgentPromptSentDedupeEntry,
   EnrichedAgentHookEventPayload,
+  LastStatusFile,
   NormalizedLocalHook,
   PaneKeyAliasEntry,
   PaneKeyAliasPersistenceListener,
@@ -140,6 +141,13 @@ export abstract class AgentHookServerState {
   protected paneKeyAliasPersistenceListener: PaneKeyAliasPersistenceListener | null = null
   // Why: on-disk last-status cache path; null without a userDataPath (tests), where persistence is a no-op and only in-memory replay applies.
   protected lastStatusFilePath: string | null = null
+  // Why raw: an entry a newer build wrote is written back as it was until this build saves that chat.
+  protected savedStructuredStatuses = new Map<string, unknown>()
+  // Why: a file this build cannot read is another build's; with hooks off nothing else rewrites it.
+  protected statusFileForeign = false
+  // Why: with status hooks off nothing hydrates the CLI rows, so a native chat's save writes them back as read.
+  protected unhydratedStatusFile: Pick<LastStatusFile, 'entries' | 'authorityCommitments'> | null =
+    null
   // Why: trailing-edge debounce timer, per-instance so test servers in one process don't share state.
   protected statusPersistTimer: ReturnType<typeof setTimeout> | null = null
   protected assistantMessageRetryTimers = new Map<string, ReturnType<typeof setTimeout>>()

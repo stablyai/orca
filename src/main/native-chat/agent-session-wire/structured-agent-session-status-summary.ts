@@ -8,6 +8,29 @@ import type { StructuredAgentSessionProviderChild } from './structured-agent-ses
 import { structuredAgentSessionProviderSessionMetadata } from './structured-agent-session-history-result'
 import { agentSessionPinnedLaunchDirectory } from '../../runtime/agent-session-record-launch-directory'
 
+/** The summary fields the record owns, read the same way for a live row and a restored one. */
+export function structuredAgentSessionRecordSummaryFields(
+  record: AgentSessionRecord | null
+): Pick<
+  AgentSessionStatusSummary,
+  'rewindBlockedReason' | 'model' | 'providerSession' | 'launchDirectory' | 'conversationName'
+> {
+  const providerSession = structuredAgentSessionProviderSessionMetadata(record)
+  // The journal has no model: the record's acknowledged options are where a mid-session
+  // switch lands, so the row follows whichever is in force.
+  const model = normalizeOptionalField(record?.options?.model, AGENT_MODEL_MAX_LENGTH)
+  const launchDirectory = record ? agentSessionPinnedLaunchDirectory(record) : undefined
+  return {
+    ...(record?.rewind?.phase === 'prepared' || record?.rewind?.phase === 'provider-succeeded'
+      ? { rewindBlockedReason: 'outcome-unknown' as const }
+      : {}),
+    ...(model ? { model } : {}),
+    ...(providerSession ? { providerSession } : {}),
+    ...(launchDirectory ? { launchDirectory } : {}),
+    ...(record?.conversationName ? { conversationName: record.conversationName } : {})
+  }
+}
+
 export function structuredAgentSessionStatusSummary({
   sessionId,
   session,
@@ -32,11 +55,6 @@ export function structuredAgentSessionStatusSummary({
   now: () => number
 }): AgentSessionStatusSummary {
   const projected = state.summary
-  const providerSession = structuredAgentSessionProviderSessionMetadata(record)
-  // The journal has no model: the record's acknowledged options are where a mid-session
-  // switch lands, so the row follows whichever is in force.
-  const model = normalizeOptionalField(record?.options?.model, AGENT_MODEL_MAX_LENGTH)
-  const launchDirectory = record ? agentSessionPinnedLaunchDirectory(record) : undefined
   return {
     sessionId,
     workspaceId: session.params.location.workspaceId,
@@ -50,14 +68,8 @@ export function structuredAgentSessionStatusSummary({
     ...projected,
     // Only a working session is still being stopped; any other status already ended that work.
     ...(stopping && projected.status === 'working' ? { stopping: true as const } : {}),
-    ...(record?.rewind?.phase === 'prepared' || record?.rewind?.phase === 'provider-succeeded'
-      ? { rewindBlockedReason: 'outcome-unknown' as const }
-      : {}),
-    ...(model ? { model } : {}),
+    ...structuredAgentSessionRecordSummaryFields(record),
     ...childWork,
-    ...(providerSession ? { providerSession } : {}),
-    ...(launchDirectory ? { launchDirectory } : {}),
-    ...(record?.conversationName ? { conversationName: record.conversationName } : {}),
     updatedAt: journal.lastActivityAt() || now()
   }
 }

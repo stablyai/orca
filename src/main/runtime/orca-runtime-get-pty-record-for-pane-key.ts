@@ -14,6 +14,7 @@ import {
   handleLessCoordinatorSessionId,
   structuredSessionAddressTarget,
   structuredSessionMailTarget,
+  restoredPendingMailboxHandles,
   structuredSessionIdleEdgeMailboxes
 } from './orchestration/structured-session-mail-target'
 import { exitedChatDispatchesForSession } from './orchestration/chat-assignee'
@@ -342,12 +343,7 @@ export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneM
   protected scheduleRestoredMessageRepoints(): void {
     let handles: Set<string>
     try {
-      const db = this._orchestrationDb
-      // Pointer-phase rows are excluded from the undelivered scan, so they need their own.
-      handles = new Set([
-        ...(db?.getUndeliveredUnreadMailboxHandles?.() ?? []),
-        ...(db?.getPendingMailboxPointerHandles?.() ?? [])
-      ])
+      handles = restoredPendingMailboxHandles(this._orchestrationDb)
     } catch (error) {
       console.warn('[orchestration] failed to scan restored mailboxes', error)
       return

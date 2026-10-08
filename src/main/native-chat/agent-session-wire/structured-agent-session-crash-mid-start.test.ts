@@ -140,7 +140,7 @@ describe('a host that dies while its Codex child is starting', () => {
         stopOwnerProcess
       }
     )
-    await relaunched.restoreReadableSessions()
+    await relaunched.collaboratorsForTests().restoreReadableSessions()
 
     expect(stopOwnerProcess).toHaveBeenCalledWith(CHILD_PID, 'SIGTERM')
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
@@ -209,7 +209,7 @@ describe('a create replayed after the host that ran it died', () => {
         now: () => NOW + elapsedMs
       }
     )
-    await relaunched.restoreReadableSessions()
+    await relaunched.collaboratorsForTests().restoreReadableSessions()
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       claimStatus: 'released',
       handoffStage: null,

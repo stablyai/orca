@@ -274,11 +274,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       return undefined
     }
     this.commitStatusRowMutation(rowBefore, enriched)
-    // Why skipped for structured rows: the serializer drops them, so the whole walk and stringify
-    // can only ever reproduce the last file — once per debounce window for a streaming chat.
-    if (!enriched.structuredHost) {
-      this.scheduleStatusPersist()
-    }
+    this.scheduleStatusPersist()
     this.notifyStatusChangeListeners()
     this.emitEnrichedStatus(
       authorityRestartId && payload.isReplay !== true

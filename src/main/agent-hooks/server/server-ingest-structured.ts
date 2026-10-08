@@ -20,6 +20,11 @@ import {
   structuredAgentSessionRowStateStartedAt
 } from '../../../shared/structured-agent-session-status-started-at'
 import { structuredStatusLegacyEvent } from './server-structured-status-row'
+import {
+  parseSavedStructuredSessionStatus,
+  savedStructuredSessionStatusChanged,
+  savedStructuredSessionSummary
+} from '../../../shared/structured-agent-session-saved-status'
 import { AgentHookServerIngestTerminal } from './server-ingest-terminal'
 
 export abstract class AgentHookServerIngestStructured extends AgentHookServerIngestTerminal {
@@ -132,8 +137,23 @@ export abstract class AgentHookServerIngestStructured extends AgentHookServerIng
     }
     const after = structuredStatusLegacyEvent(committed)
     this.commitStatusRowMutation(priorStatus && structuredStatusLegacyEvent(priorStatus), after)
+    this.saveStructuredStatus(summary)
     this.notifyStatusChangeListeners()
     this.emitEnrichedStatus(after)
+  }
+
+  /** Written at once, and only when what a restart would show changes: a crash right after a turn
+   *  ends must still find the end, and a streamed delta is never worth a write. */
+  private saveStructuredStatus(summary: AgentSessionStatusSummary): void {
+    const next = savedStructuredSessionSummary(summary)
+    const previous = parseSavedStructuredSessionStatus(
+      summary.sessionId,
+      this.savedStructuredStatuses.get(summary.sessionId)
+    )
+    if (next && savedStructuredSessionStatusChanged(previous?.summary, next)) {
+      this.savedStructuredStatuses.set(summary.sessionId, { summary: next })
+      this.runStatusPersist()
+    }
   }
 
   /** Pane cleanup never resolves a canonical subject; only its owning feed can forget this row. */
@@ -141,6 +161,10 @@ export abstract class AgentHookServerIngestStructured extends AgentHookServerIng
     const parsed = parseAgentStatusSubject(subject)
     if (!parsed || parsed.kind !== 'structured-session') {
       throw new Error('Structured status removal requires its exact owner subject')
+    }
+    // The host let go of the chat (its tab closed, or it closed unlisted): no restart shows it.
+    if (this.savedStructuredStatuses.delete(parsed.sessionId)) {
+      this.runStatusPersist()
     }
     const previous = this.canonicalStatusStore.getParent(parsed)
     if (!previous) {

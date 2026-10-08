@@ -1,4 +1,4 @@
-// A restored chat whose open fails keeps its tab, so a phone on a headless host still lists it and
+// A restored chat whose history cannot open keeps its tab, so a phone on a headless host still lists it and
 // its read says why, instead of the chat disappearing: damaged, or saved by a newer Orca.
 
 import { cp, rm } from 'node:fs/promises'
@@ -89,12 +89,10 @@ it.each([
     const workspaceId = hostTestState().store.getRecord(SESSION)?.location.workspaceId
     const refusal = { code: 'agent_session_journal_unreadable', details: { reason } }
 
-    await host.restoreReadableSessions([SESSION])
-
-    expect(host.hasSession(SESSION)).toBe(false)
-    expect(host.listSessionTabs()).toEqual([
+    expect(host.listSessionTabs([SESSION])).toEqual([
       { sessionId: SESSION, workspaceId, agent: expect.any(String) }
     ])
+    expect(host.hasSession(SESSION)).toBe(false)
     // Every read is refused with why, and the host logs it once for the chat.
     for (let read = 0; read < 3; read += 1) {
       await expect(host.history({ sessionId: SESSION, direction: 'tail' })).rejects.toMatchObject({
@@ -111,7 +109,7 @@ it.each([
     ).resolves.toMatchObject({ ok: false, refusal })
 
     await host.setSessionTabVisibility(SESSION, false)
-    expect(host.listSessionTabs()).toEqual([])
+    expect(host.getPersistedVisibleSessionTabIndex().sessionIds).not.toContain(SESSION)
     await host.flushAllStreamedEvents()
   }
 )

@@ -6,6 +6,7 @@ import { replaceConversationInSnapshot } from './structured-conversation-tab-rep
 import type { ConversationReplacement } from '../native-chat/agent-session-wire/structured-conversation-command'
 import { collectSavedStructuredAgentSessionIds } from './saved-structured-agent-session-restoration'
 import { seedStructuredAgentSessionTabIndex } from './structured-agent-session-tab-index-seed'
+import { structuredSessionsOwedMail } from './orchestration/structured-session-mail-target'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import type {
   RuntimeMobileSessionAgentTab,
@@ -62,7 +63,12 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
       this.store?.getWorkspaceSession?.(LOCAL_EXECUTION_HOST_ID) ?? null
     )
     const targets = persistedVisibleIndex.present ? persistedVisibleIndex.sessionIds : profileIds
-    await host?.restoreReadableSessions(targets)
+    // Saved statuses, not histories: only a chat a restart cut, or one parked mail waits on, opens.
+    const owedMail = structuredSessionsOwedMail(
+      () => this.getExistingOrchestrationDb(),
+      (mailbox) => this.resolveStructuredMailboxTarget(mailbox)
+    )
+    await host?.restoreSavedStatuses(targets, owedMail)
     for (const worktreeId of this.getKnownWorkspaceSessionWorktreeIds()) {
       this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId, {
         allowAttachedWindow: true,
@@ -71,7 +77,7 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
     }
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession()
     // Every session here is of an agent this host registered: its store holds no other agent's records.
-    const restored = (host?.listSessionTabs() ?? []).flatMap((session) => {
+    const restored = (host?.listSessionTabs(targets) ?? []).flatMap((session) => {
       let sessionId = session.sessionId
       while (sessionId.startsWith('agent-session:')) {
         sessionId = sessionId.slice('agent-session:'.length)

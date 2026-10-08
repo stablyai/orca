@@ -15,7 +15,10 @@ import type {
 } from './structured-agent-session-host-types'
 import { AGENT_SESSION_NOT_ATTACHED } from './structured-agent-session-mutation-admission'
 import { StructuredAgentSessionSendSettlement } from './structured-agent-session-send-settlement'
-import type { StructuredAgentSessionStatusSubscriber } from './structured-agent-session-status-feed'
+import type {
+  StructuredAgentSessionStatusFeed,
+  StructuredAgentSessionStatusSubscriber
+} from './structured-agent-session-status-feed'
 import { createStructuredAgentSessionHostStatusFeed } from './structured-agent-session-host-status-feed'
 import {
   StructuredAgentSessionTurnCompletionFeed,
@@ -118,6 +121,9 @@ export class StructuredAgentSessionClientDelivery {
     this.statusFeed.publish(sessionId, undefined, { replay: true })
     this.turnCompletionFeed.observe(sessionId, undefined, { historical: true })
   }
+
+  restoreSavedStatus: StructuredAgentSessionStatusFeed['restoreSaved'] = (summary, location) =>
+    this.statusFeed.restoreSaved(summary, location)
 
   subscribeStatus = (subscriber: StructuredAgentSessionStatusSubscriber): (() => void) =>
     this.statusFeed.subscribe(subscriber)
