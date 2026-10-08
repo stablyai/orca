@@ -190,6 +190,7 @@ export function registerTerminalPanePasteListeners({
       connectionId,
       runtimeEnvironmentId,
       forceBracketedMultilineTextPaste,
+      protectedMultilineTextPasteOptions: execution.resolvePaneProtectedMultilinePasteOptions(pane),
       pasteText: (text, options) =>
         executePanePasteText(pane, 'app-menu', activeElementAtDispatch, text, options),
       onTextPasteError: () =>
