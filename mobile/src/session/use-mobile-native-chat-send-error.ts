@@ -6,6 +6,7 @@ import {
 import { sameAgentSessionFailureFact } from '../../../src/shared/agent-session-visible-failures'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { structuredAgentSessionRejectionNotice } from '../../../src/shared/structured-agent-session-rejection-words'
+import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
 
 const NATIVE_CHAT_SEND_ERROR_HOLD_MS = 4000
 const NATIVE_CHAT_SEND_ERROR_TOAST_MS = 1600
@@ -19,7 +20,7 @@ export function mobileNativeChatSendErrorMessage(
   if (!message || !failure) {
     return message
   }
-  const stated = messages.some((row) =>
+  const stated = foldMobileNativeChatMessages(messages).some((row) =>
     row.blocks.some((block) => {
       const fact =
         block.type === 'text' ? readWholeAgentSessionFailureFact(block.failure) : undefined

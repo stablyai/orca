@@ -6,6 +6,7 @@ import {
   mobileNativeChatSendErrorMessage
 } from './use-mobile-native-chat-send-error'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import * as MobileNativeChatRenderData from './mobile-native-chat-render-data'
 
 type HookApi = ReturnType<typeof useMobileNativeChatSendError>
 
@@ -94,7 +95,7 @@ describe('useMobileNativeChatSendError', () => {
         blocks: [{ type: 'text', text: 'Host guidance', failure }]
       }
     ]
-    const scan = vi.spyOn(messages, 'some')
+    const scan = vi.spyOn(MobileNativeChatRenderData, 'foldMobileNativeChatMessages')
     expect(mobileNativeChatSendErrorMessage({ message: 'Stop failed' }, messages)).toBe(
       'Stop failed'
     )
@@ -118,6 +119,38 @@ describe('useMobileNativeChatSendError', () => {
       )
     ).toBe('Sign in')
     scan.mockRestore()
+  })
+
+  it('keeps sign-in guidance when only a hidden child states the failure', () => {
+    const failure = { kind: 'notSignedIn' } as const
+    const child: NativeChatMessage = {
+      id: 'child-auth',
+      agentId: 'codex-child',
+      role: 'system',
+      timestamp: 1,
+      source: 'transcript',
+      blocks: [{ type: 'text', text: 'Sign in to Codex', failure }]
+    }
+    expect(
+      mobileNativeChatSendErrorMessage({ message: 'Sign in to Codex', failure }, [child])
+    ).toBe('Sign in to Codex')
+  })
+
+  it('shortens guidance only while a matching row is visible', () => {
+    const failure = { kind: 'notSignedIn' } as const
+    const visible: NativeChatMessage = {
+      id: 'parent-auth',
+      role: 'system',
+      timestamp: 1,
+      source: 'transcript',
+      blocks: [{ type: 'text', text: 'Sign in to Codex', failure }]
+    }
+    const child = { ...visible, id: 'child-auth', agentId: 'codex-child' }
+    const error = { message: 'Sign in to Codex', failure }
+    expect(mobileNativeChatSendErrorMessage(error, [child, visible])).toBe(
+      'Your message was not sent.'
+    )
+    expect(mobileNativeChatSendErrorMessage(error, [child])).toBe(error.message)
   })
 
   it('restarts the hold when a second failure lands mid-hold', async () => {

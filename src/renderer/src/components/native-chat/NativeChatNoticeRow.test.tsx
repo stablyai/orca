@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { projectStructuredItemsToNativeChat } from '../../../../shared/structured-agent-session-projection'
 import type { AgentJournalStatusItem } from '../../../../shared/agent-session-journal-types'
 import { MessageRow } from './NativeChatMessageRow'
+import { NativeChatNoticeRow } from './NativeChatNoticeRow'
 import { i18n } from '@/i18n/i18n'
 import { agentSessionFailureWords } from '../../../../shared/agent-session-failure-words'
 import {
@@ -133,6 +134,18 @@ describe('the row an Orca stop leaves', () => {
 })
 
 describe('notice rows', () => {
+  it('keeps unmatched host auth wording and its next step', async () => {
+    await i18n.changeLanguage('fr')
+    const text = 'Use the host-specific sign-in page, then run /compact again.'
+    render(
+      <NativeChatNoticeRow
+        block={{ type: 'text', tone: 'error', text, failure: { kind: 'notSignedIn' } }}
+        agentName="Grok"
+      />
+    )
+    expect(screen.getByText(text)).toBeInTheDocument()
+  })
+
   it.each(['providerStartFailed', 'notSignedIn'] as const)(
     'keeps the host /compact retry instruction for %s',
     (kind) => {
