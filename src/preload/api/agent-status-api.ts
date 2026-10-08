@@ -18,8 +18,6 @@ export type AgentStatusApi = {
   inferInterrupt: (request: AgentInterruptInferenceRequest) => Promise<boolean>
   /** Guarded clear for an answered AskUserQuestion wait — the CLI emits no hook at answer time, so the renderer reports the submit keystroke. */
   inferQuestionAnswered: (request: AgentQuestionAnsweredInferenceRequest) => Promise<boolean>
-  /** Whether the host can check this pane's agent process; without that, silence keeps today's cleanup. */
-  hasVerifiableAgentProcess?: (paneKey: string) => Promise<boolean>
   /** Listen for PTYs on a legacy numeric pane key that have registry-backed UUID pane proof. */
   onMigrationUnsupported: (callback: (entry: MigrationUnsupportedPtyEntry) => void) => () => void
   onMigrationUnsupportedClear: (callback: (data: { ptyId: string }) => void) => () => void
@@ -37,9 +35,6 @@ export type AgentStatusApi = {
   dropPersisted: (identity: AgentStatusCacheIdentity) => void
   /** Same as dropPersisted for many identities in one IPC message and one listener notification. */
   dropPersistedBatch?: (identities: readonly AgentStatusCacheIdentity[]) => void
-  /** Retire a pane whose agent process is proven gone — clears the row AND the per-pane caches a
-   *  dismissal deliberately keeps. Not `drop`: that one is a user dismissal of a live pane's row. */
-  reconcileEndedProcess: (paneKey: string) => void
   /** Drop every cached hook status under one terminal tab prefix. Fire-and-forget. */
   dropByTabPrefix: (tabId: string) => void
   /** Permanently retire one pane's hook authority while siblings stay live. */

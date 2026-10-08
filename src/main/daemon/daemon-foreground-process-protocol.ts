@@ -10,6 +10,11 @@ export type ConfirmForegroundProcessRequest = Omit<GetForegroundProcessRequest, 
   type: 'confirmForegroundProcess'
 }
 
+/** A daemon that predates it answers `Unknown request type`; the client then reads nothing. */
+export type ReadTerminalForegroundRequest = Omit<GetForegroundProcessRequest, 'type'> & {
+  type: 'readTerminalForeground'
+}
+
 export type ConfirmShellForegroundRequest = Omit<GetForegroundProcessRequest, 'type'> & {
   type: 'confirmShellForeground'
 }

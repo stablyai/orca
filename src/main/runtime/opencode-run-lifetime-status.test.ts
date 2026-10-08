@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ParsedAgentStatusPayload } from '../../shared/agent-status-types'
 import { FOREGROUND_COMMAND_READS } from '../../shared/foreground-command-settle'
 import { OpenCodeRunLifetimeStatus } from './opencode-run-lifetime-status'
+import { CommandForegroundTracker } from '../../shared/command-foreground-tracker'
 
 type Published = { ptyId: string; payload: ParsedAgentStatusPayload; yieldsToHookSince: number }
 
@@ -14,23 +15,43 @@ function setup(
   } = {}
 ) {
   const published: Published[] = []
-  const readForegroundProcessName = vi.fn(async () =>
+  const readForegroundProcessName = vi.fn(async (_ptyId: string): Promise<string | null> =>
     options.name === undefined ? 'opencode' : options.name
   )
   const readForegroundCommandLine = vi.fn(async () =>
     options.commandLine === undefined ? 'opencode run fix the bug' : options.commandLine
   )
   let clock = 1_000
-  const lifetime = new OpenCodeRunLifetimeStatus({
-    isObservablePty: () => options.observable ?? true,
+  const status = new OpenCodeRunLifetimeStatus({
     isStatusEnabled: (agent) =>
       (options.enabledAgents ?? ['opencode', 'opencode2']).includes(agent),
-    readForegroundProcessName,
     readForegroundCommandLine,
     publish: (ptyId, payload, yieldsToHookSince) =>
       published.push({ ptyId, payload, yieldsToHookSince }),
     now: () => clock++
   })
+  // Wired as the runtime wires them: the tracker reads, the run producer consumes its samples.
+  const observable = options.observable ?? true
+  const tracker = new CommandForegroundTracker({
+    read: async (ptyId) =>
+      observable
+        ? { available: true, process: await readForegroundProcessName(ptyId) }
+        : { available: false, process: null },
+    readsOnStart: () => observable && status.wantsStartReads(),
+    onSample: (ptyId, process, commandId) => status.observeForeground(ptyId, process, commandId),
+    now: () => 0
+  })
+  const lifetime = {
+    onCommandStarted: (ptyId: string) => status.onCommandStarted(ptyId, tracker.started(ptyId)),
+    onCommandFinished: (ptyId: string, exitCode: number | null) => {
+      tracker.forget(ptyId)
+      status.onCommandFinished(ptyId, exitCode)
+    },
+    forgetPty: (ptyId: string) => {
+      tracker.forget(ptyId)
+      status.forgetPty(ptyId)
+    }
+  }
   const states = (): string[] =>
     published.map(({ payload }) =>
       payload.interrupted ? `${payload.state}:interrupted` : payload.state

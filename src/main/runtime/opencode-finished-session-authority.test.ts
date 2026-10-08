@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer } from '../agent-hooks/server'
 import { OrcaRuntimeService } from './orca-runtime'
 import { makeStore } from './runtime-rpc-worktree-store-fixtures'
+import type { FinishedCommand } from '../../shared/command-foreground-tracker'
 
 // STA-4557: #14866 deferred command-finished retirement for OpenCode panes behind an
 // async "is the foreground still OpenCode?" read. These pin the two ways a finished
@@ -66,8 +67,9 @@ async function launchOpenCodePane(options: {
       ? {
           retireAgentHookCompatibilityAuthority: (paneKey: string) =>
             options.hookServer?.retirePaneAuthority(paneKey),
-          endAgentHookLaunch: (paneKey: string, launchAgent: string | null) =>
-            options.hookServer?.endLaunchAuthority(paneKey, launchAgent)
+          endAgentHookLaunch: (paneKey: string) => options.hookServer?.endLaunchAuthority(paneKey),
+          endAgentHookCommand: (paneKey: string, command: FinishedCommand) =>
+            options.hookServer?.endCommand(paneKey, command)
         }
       : {})
   })

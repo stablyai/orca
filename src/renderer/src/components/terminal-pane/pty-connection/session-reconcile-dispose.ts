@@ -305,7 +305,6 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
         session.pendingGeometryReportRaf = null
       }
       session.commandLifecycle.dispose()
-      session.deferredCommandFinishedStatusDrop = null
       session.visibleForegroundSamplePending = false
       session.visibleForegroundSampleSettled = false
       session.paneForegroundAgentTracker.dispose()

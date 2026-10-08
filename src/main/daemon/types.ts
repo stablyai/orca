@@ -2,14 +2,16 @@ import type {
   ConfirmForegroundProcessRequest,
   ConfirmShellForegroundRequest,
   GetForegroundProcessRequest,
-  InspectProcessRequest
+  InspectProcessRequest,
+  ReadTerminalForegroundRequest
 } from './daemon-foreground-process-protocol'
 
 export type {
   ConfirmForegroundProcessRequest,
   ConfirmShellForegroundRequest,
   GetForegroundProcessRequest,
-  InspectProcessRequest
+  InspectProcessRequest,
+  ReadTerminalForegroundRequest
 } from './daemon-foreground-process-protocol'
 
 // ─── Protocol Version ────────────────────────────────────────────────
@@ -317,6 +319,7 @@ export type DaemonRequest =
   | InspectProcessRequest
   | ConfirmForegroundProcessRequest
   | ConfirmShellForegroundRequest
+  | ReadTerminalForegroundRequest
   | TerminalBufferActionRequest
   | ShutdownRequest
   | PingRequest

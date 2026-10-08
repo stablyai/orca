@@ -284,6 +284,15 @@ export async function confirmLocalPtyForegroundProcess(id: string): Promise<stri
   }
 }
 
+/** node-pty's read of the terminal's foreground process group; null where it only names the
+ *  spawned shell (Windows). */
+export function readLocalPtyTerminalForeground(id: string): string | null {
+  const proc = ptyProcesses.get(id)
+  return proc && process.platform !== 'win32' && !ptyProcessNameIsSpawnFile(proc)
+    ? proc.process || null
+    : null
+}
+
 export async function confirmLocalPtyShellForeground(id: string): Promise<boolean> {
   const proc = ptyProcesses.get(id)
   if (!proc) {

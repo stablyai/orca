@@ -77,9 +77,15 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       {
         write: apply,
         reapply: () => {
-          if (this.server) {
-            this.applyNormalizedStatus(incoming, onAccepted)
+          if (!this.server) {
+            return
           }
+          // Why: the owner's exit cleared the pane's prompt cache; the replayed guest's turn is now
+          // the pane's, so its later events (a tool use) keep that turn's prompt.
+          if (incoming.payload.prompt) {
+            this.state.lastPromptByPaneKey.set(incoming.paneKey, incoming.payload.prompt)
+          }
+          this.applyNormalizedStatus(incoming, onAccepted)
         }
       }
     )

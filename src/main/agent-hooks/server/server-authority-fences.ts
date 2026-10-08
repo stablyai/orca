@@ -1,5 +1,7 @@
 import { clearPaneCacheState } from '../../../shared/agent-hook-listener/listener-state'
-import { currentOwner, ownerEndedByLaunch } from '../../../shared/agent-hook-presence-transition'
+import { commandEndEndsRow, confirmCommandEnd } from '../../../shared/agent-command-end'
+import { currentOwner } from '../../../shared/agent-hook-presence-transition'
+import type { FinishedCommand } from '../../../shared/command-foreground-tracker'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { isLocalHookConnectionId } from '../../../shared/wsl-hook-relay-contract'
 import { AgentHookServerAuthorityAliases } from './server-authority-aliases'
@@ -10,22 +12,11 @@ import type {
 } from './server-types'
 
 export abstract class AgentHookServerAuthorityFences extends AgentHookServerAuthorityAliases {
-  /** The pane's launched agent command ended in a terminal that lives on. That is its owner's exit
-   *  when the launch still owns the pane; any other row (a resume remnant, an owner it handed the
-   *  pane to, an SSH row its relay decides) stays. */
-  endLaunchAuthority(paneKey: string, launchAgent: string | null): void {
+  /** The pane's launched agent command finished: the launch's authority ends with it, and its
+   *  token, which every later process in the shell inherits, never attests again. The row is the
+   *  command-end rule's (endCommand), as for any other command. */
+  endLaunchAuthority(paneKey: string): void {
     const ownerPaneKey = this.resolvePaneKeyAlias(paneKey)
-    const row = this.state.lastStatusByPaneKey.get(ownerPaneKey)
-    const owner = currentOwner(row)
-    const executedHere = isLocalHookConnectionId(row?.connectionId ?? null)
-    // Why: with no owner record, or a restored launch whose agent is unknown, nothing tells the
-    // launch's row from another's, so reset the pane as before.
-    if ((!row?.providerSessionOnly && !owner) || (executedHere && !launchAgent)) {
-      this.retirePaneAuthority(paneKey)
-      return
-    }
-    // Why: the launch's authority ends with it, and its token, which every later process in the
-    // shell inherits, never attests again; nor does its restart fence block a later agent.
     const endedHash =
       this.currentAuthorityObservations.get(ownerPaneKey)?.launchTokenHash ??
       this.hydratedLaunchTokenHashByPaneKey.get(ownerPaneKey)
@@ -33,23 +24,46 @@ export abstract class AgentHookServerAuthorityFences extends AgentHookServerAuth
       this.endedLaunchTokenHashByPaneKey.set(ownerPaneKey, endedHash)
     }
     this.currentAuthorityObservations.delete(ownerPaneKey)
+    // Why: nor does the launch's restart fence block a later agent.
     this.restartedStatusLaunchTokenHashByPaneKey.delete(ownerPaneKey)
     if (this.revokeHydratedAuthorityForPaneKeys(new Set([ownerPaneKey]))) {
       this.scheduleStatusPersist()
       this.notifyStatusChangeListeners()
     }
-    // Why: an SSH row's launch is ended by its relay, which runs the same rule.
-    const ended = executedHere ? ownerEndedByLaunch(row, launchAgent) : undefined
-    if (!ended) {
+  }
+
+  /** A command finished in a pane: end the agent it ran. A hook row from an SSH pane is its relay's,
+   *  which runs the same rule; main decides every other row, including SSH rows painted only from
+   *  terminal output, which no relay holds. */
+  async endCommand(paneKey: string, command: FinishedCommand): Promise<void> {
+    const ownerPaneKey = this.resolvePaneKeyAlias(paneKey)
+    if (!(await confirmCommandEnd(() => this.commandEndsRow(ownerPaneKey, command), command))) {
       return
     }
-    this.endPaneOwner(ownerPaneKey, ended)
-    this.paneOwnerProbes.ownerEnded(ownerPaneKey, ended.process)
+    const owner = currentOwner(this.state.lastStatusByPaneKey.get(ownerPaneKey))
+    if (!owner) {
+      this.reconcileEndedProcessForPaneKeys([ownerPaneKey], { preserveResumeIdentity: true })
+      return
+    }
+    this.endPaneOwner(ownerPaneKey, owner)
+    this.paneOwnerProbes.ownerEnded(ownerPaneKey, owner.process)
     // Why after ownerEnded: it replays a held guest synchronously, so only a pane left empty (an owner
     // with no session to resume leaves no ended record) is fenced against late hooks, as before.
     if (!this.state.lastStatusByPaneKey.has(ownerPaneKey)) {
       this.retirePaneAuthority(paneKey)
     }
+  }
+
+  private commandEndsRow(ownerPaneKey: string, command: FinishedCommand): boolean {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Main admits enriched legacy rows; the shared view declares their base event type.
+    const row = this.state.lastStatusByPaneKey.get(ownerPaneKey) as
+      | EnrichedAgentHookEventPayload
+      | undefined
+    return (
+      !!row &&
+      (isLocalHookConnectionId(row.connectionId ?? null) || row.agentPresence === undefined) &&
+      commandEndEndsRow(row, row.receivedAt, command)
+    )
   }
 
   // Why: retirement fences a pane and every alias of it, then deletes those aliases.

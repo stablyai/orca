@@ -239,6 +239,9 @@ export type IPtyProvider = {
   getForegroundProcess(id: string): Promise<string | null>
   /** Strong process evidence captured after the caller's command boundary. */
   confirmForegroundProcess?: (id: string) => Promise<string | null>
+  /** The process group holding the PTY's terminal, read now (no process-table cache); null when
+   *  the host cannot tell. */
+  readTerminalForeground?: (id: string) => Promise<string | null>
   /** Fresh execution-host proof that the spawned shell owns the PTY foreground. */
   confirmShellForeground?: (id: string) => Promise<boolean>
   serialize(ids: string[]): Promise<string>

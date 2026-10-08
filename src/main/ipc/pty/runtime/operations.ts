@@ -170,6 +170,14 @@ export async function confirmForegroundProcessFromRuntimeController(ptyId: strin
   }
 }
 
+export async function readTerminalForegroundFromRuntimeController(ptyId: string) {
+  try {
+    return (await getProviderForPty(ptyId).readTerminalForeground?.(ptyId)) ?? null
+  } catch {
+    return null
+  }
+}
+
 export async function confirmShellForegroundFromRuntimeController(ptyId: string) {
   try {
     return (await getProviderForPty(ptyId).confirmShellForeground?.(ptyId)) ?? false

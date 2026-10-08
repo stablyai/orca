@@ -165,11 +165,13 @@ describe('RelayAgentHookRuntime wiring', () => {
     const surfaceRetiredListeners: PtySurfaceRetiredListener[] = []
     const setClaudeTerminalEvidenceListener =
       vi.fn<(listener: (paneKey: string, evidence: ClaudeTerminalEvidence) => void) => void>()
+    const observeAgentActivity = vi.fn<(paneKey: string) => void>()
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this stand-in implements every PtyHandler member the hook runtime registers or reads.
     const ptyHandler = {
       addEnvAugmenter: vi.fn(),
       setAgentPresenceTrigger: vi.fn(),
-      setAgentLaunchEndListener: vi.fn(),
+      setAgentCommandEndListener: vi.fn(),
+      observeAgentActivity,
       setClaudeTerminalEvidenceListener,
       setExitListener: vi.fn(),
       getAgentLaunchToken: () => undefined,
@@ -197,6 +199,10 @@ describe('RelayAgentHookRuntime wiring', () => {
       const server = (runtime as unknown as { hookServer: RelayAgentHookServer }).hookServer
       expect(await postHook(server, PANE_KEY)).toBe(204)
       expect(cachedPaneKeys(server)).toEqual([PANE_KEY])
+      // A live report reads the pane's foreground; a replay of the cached row is not activity.
+      expect(observeAgentActivity.mock.calls).toEqual([[PANE_KEY]])
+      server.replayCachedPayloadsForPanes()
+      expect(observeAgentActivity).toHaveBeenCalledOnce()
 
       expect(setClaudeTerminalEvidenceListener).toHaveBeenCalledOnce()
       const observe = setClaudeTerminalEvidenceListener.mock.calls[0]?.[0]

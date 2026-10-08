@@ -7,7 +7,6 @@ import {
   type AgentProcessPresence
 } from './agent-process-presence'
 import { isFreshNonDoneAgentStatus } from './agent-status-freshness'
-import { getTuiAgentHookAgent } from './tui-agent-hook-agent'
 
 /** `write` stores the event; `skip` leaves the row unchanged. `probe` is an owner process another
  *  producer cast doubt on; on `skip` it also means the event is held until that owner is gone. */
@@ -30,18 +29,6 @@ export function currentOwner(
 ): AgentProcessPresence | undefined {
   return row?.agentPresence && !row.agentPresence.ended && !row.providerSessionOnly
     ? row.agentPresence
-    : undefined
-}
-
-/** The owner a launched agent command's end ends: the pane's owner when it is the launched agent.
- *  Each execution host (main locally, the relay over SSH) applies it to the panes it runs. */
-export function ownerEndedByLaunch(
-  row: AgentHookEventPayload | undefined,
-  launchAgent: string | null | undefined
-): AgentProcessPresence | undefined {
-  const owner = currentOwner(row)
-  return owner && launchAgent && owner.agent === getTuiAgentHookAgent(launchAgent)
-    ? owner
     : undefined
 }
 

@@ -459,19 +459,14 @@ describe('createParkedTerminalCommandStatusPolicy', () => {
     expect(dispatchTerminalCommandFinishedEvent).toHaveBeenCalledWith(WORKTREE_ID, 0)
   })
 
-  it('drops a same-turn status row on command finished for SSH PTYs only', async () => {
+  it('leaves a status row on command finished: the host decides whether its agent ended', async () => {
     mockStoreState.agentStatusByPaneKey[PANE_KEY] = makeStatusEntry()
-    const local = await createPolicy(PTY_ID_LOCAL)
-    local.onCommandFinished(0)
-    // Why: local drops need the mounted pane's foreground process-confirm ladder
-    // (leaked nested-shell 133;D protection), so the watcher must not drop them.
+    for (const ptyId of [PTY_ID_LOCAL, PTY_ID_SSH]) {
+      const policy = await createPolicy(ptyId)
+      policy.onCommandFinished(0)
+      policy.dispose()
+    }
     expect(mockStoreState.dropAgentStatus).not.toHaveBeenCalled()
-    local.dispose()
-
-    const ssh = await createPolicy(PTY_ID_SSH)
-    ssh.onCommandFinished(0)
-    expect(mockStoreState.dropAgentStatus).toHaveBeenCalledWith(PANE_KEY)
-    ssh.dispose()
   })
 
   it('clears the launch registry on SSH command finished when no status row exists', async () => {

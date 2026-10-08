@@ -10,14 +10,6 @@ export abstract class AgentHookServerAgentPresence extends AgentHookServerLifecy
     Promise<AgentProcessVerdict | null>
   >()
 
-  /** Whether this pane's owner carries a process identity that its execution host can check. */
-  hasVerifiableAgentProcess(paneKey: string): boolean {
-    return (
-      currentOwner(this.state.lastStatusByPaneKey.get(this.resolvePaneKeyAlias(paneKey)))
-        ?.process !== undefined
-    )
-  }
-
   checkAgentPresence(paneKey: string): Promise<AgentProcessVerdict | null> {
     return this.paneOwnerProbes.check(paneKey)
   }

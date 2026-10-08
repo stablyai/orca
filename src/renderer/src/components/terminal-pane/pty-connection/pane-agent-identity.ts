@@ -92,65 +92,8 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
       session.deps.updateTabTitle(session.deps.tabId, neutralTitle)
     }
   }
-  session.deferredCommandFinishedStatusDrop = null
-  session.deferredConfirmedShellReconcile = null
-  /** The pane's foreground was proven to be a shell, so its agent exited. Unlike a user dismissal,
-   *  this must also retire the main-side per-pane caches — a surviving Claude latch resolves the
-   *  next event straight back to `working`.
-   *
-   *  Ordered by the row's `acceptedStatusSeq`, not by row identity or `updatedAt`: the confirming
-   *  process read can take seconds, an unrelated field moving in that window is not evidence the
-   *  agent is alive, and a genuinely newer row can share the anchor's millisecond. Reading the token
-   *  off the row is what makes the ordering safe — the paired drop runs FIRST and removes the row,
-   *  and a removed row means nothing reported, not "the anchor is gone".
-   *
-   *  Residual: a row deleted by some OTHER path mid-window and then rebuilt restarts its count, so a
-   *  pane armed at 1 that reports exactly once more compares equal. It needs a foreign drop inside
-   *  the confirm window; the relaunch case that would otherwise hit it is already discarded by
-   *  onCommandStarted, and the cost is retiring a pane the process table just proved is a shell. */
-  const reconcileEndedProcessIfPaneQuiet = (armedAcceptedStatusSeq: number | undefined): void => {
-    const current = useAppStore.getState().agentStatusByPaneKey[session.cacheKey]
-    if (current && current.acceptedStatusSeq !== armedAcceptedStatusSeq) {
-      return
-    }
-    // Why: main-side only. The renderer row and launch config are already owned by the deferred
-    // drop above; what that path cannot reach is the hook server's per-pane Claude latches, which
-    // `agentStatus:drop` deliberately preserves for a still-live pane. Main echoes its own clear
-    // back through the pane-status-cleared channel, so both sides stay consistent.
-    window.api?.agentStatus?.reconcileEndedProcess?.(session.cacheKey)
-  }
   session.visibleForegroundSamplePending = false
   session.visibleForegroundSampleSettled = false
-  session.settleDeferredCommandFinishedStatusDrop = (
-    options: { confirmedShell?: boolean } = {}
-  ): void => {
-    const dropStatus = session.deferredCommandFinishedStatusDrop
-    const reconcile = session.deferredConfirmedShellReconcile
-    session.deferredConfirmedShellReconcile = null
-    if (options.confirmedShell || !dropStatus) {
-      session.deferredCommandFinishedStatusDrop = null
-      if (options.confirmedShell) {
-        dropStatus?.()
-        reconcile?.()
-      }
-      return
-    }
-    // Why: only a pane whose agent process the host can check keeps its row on an unanswered read;
-    // every other pane keeps today's cleanup until the renderer reads the owner record (step 2).
-    // The drop stays armed while main answers, so a new command start still cancels it.
-    const dropUnlessVerifiable = (verifiable: boolean): void => {
-      if (session.deferredCommandFinishedStatusDrop !== dropStatus) {
-        return
-      }
-      session.deferredCommandFinishedStatusDrop = null
-      if (!verifiable) {
-        dropStatus()
-      }
-    }
-    void Promise.resolve(window.api?.agentStatus?.hasVerifiableAgentProcess?.(session.cacheKey))
-      .then((verifiable) => dropUnlessVerifiable(verifiable === true))
-      .catch(() => dropUnlessVerifiable(false))
-  }
   const isRemotePtyId = (id: string): boolean =>
     Boolean(isRemoteExecutionHostPtyId(id) || parseAppSshPtyId(id))
   session.isForegroundTrackingAllowed = (id: string): boolean => {
@@ -209,21 +152,16 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
       // surviving shell then receives pointer moves as typed SGR reports; the
       // replay guard keeps xterm's auto-replies from leaking to the shell.
       session.writeInputModeGround(CONFIRMED_SHELL_MODE_RESET)
-      // Why: no 133;D backs these proofs, so a deferred command-finished drop keeps its own read.
       if (reason === 'process-exit') {
         // Why: reopen the one-shot visible sample so the next agent typed here is identified.
         session.visibleForegroundSamplePending = false
         session.visibleForegroundSampleSettled = false
       }
-      if (reason === 'visible-pty' || reason === 'process-exit') {
-        state.clearAgentLaunchConfig(session.cacheKey)
-        return
-      }
-      session.settleDeferredCommandFinishedStatusDrop({ confirmedShell: true })
+      // Why: the host ends the exited agent's row; only the launch registry is the pane's to clear.
+      state.clearAgentLaunchConfig(session.cacheKey)
     },
-    // Why wrapped: passed bare, a caller-supplied argument would be read as `options` and could
-    // reconcile on the unavailable path, which has no proof the agent exited.
-    onCommandFinishedUnavailable: () => session.settleDeferredCommandFinishedStatusDrop(),
+    onCommandFinishedUnavailable: () =>
+      useAppStore.getState().clearAgentLaunchConfig(session.cacheKey),
     onVisibleForegroundSettled: (outcome) => {
       session.visibleForegroundSamplePending = false
       session.visibleForegroundSampleSettled = outcome !== 'inconclusive'
@@ -249,42 +187,16 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
   session.handleCommandFinished = (bestEffortExitCode: number | null): void => {
     session.clearCommandInferredPaneAgentAfterPtySideEffects()
     session.visibleForegroundSamplePending = false
-    const shouldDeferStatusDrop = session.paneForegroundAgentTracker.onCommandFinished()
+    const awaitsShellConfirmation = session.paneForegroundAgentTracker.onCommandFinished()
     // Why: the finished command may have moved HEAD or the index (e.g.
     // `git checkout`); nudge git UI now instead of waiting for a poll.
     dispatchTerminalCommandFinishedEvent(session.deps.worktreeId, bestEffortExitCode)
-    const state = useAppStore.getState()
-    const entry = state.agentStatusByPaneKey[session.cacheKey]
-    const inferenceResult = session.flushPendingInterruptInference()
-    const dropStatus = (): void => {
-      if (inferenceResult === true) {
-        session.dropCommandFinishedStatusIfSameTurn(entry, { allowInferredInterrupt: true })
-        return
-      }
-      if (inferenceResult instanceof Promise) {
-        void inferenceResult.then((applied) => {
-          session.dropCommandFinishedStatusIfSameTurn(entry, {
-            allowInferredInterrupt: applied === true
-          })
-        })
-        return
-      }
-      session.dropCommandFinishedStatusIfSameTurn(entry)
+    // Why: an inferred interrupt still settles here; whether the agent ended is the host's call.
+    void session.flushPendingInterruptInference()
+    // Why: the launch registry goes with the command, or once a pending foreground read settles.
+    if (!awaitsShellConfirmation) {
+      useAppStore.getState().clearAgentLaunchConfig(session.cacheKey)
     }
-    if (shouldDeferStatusDrop) {
-      // Why: keep the concrete pane identity routable while the local process
-      // check distinguishes a leaked nested-shell D from a genuine agent exit.
-      // Anchor the accepted-status ordinal once, here — not per rung of the confirm ladder, which
-      // can span seconds — so the gate tolerates churn across the whole window.
-      const armedAcceptedStatusSeq = entry?.acceptedStatusSeq
-      session.deferredCommandFinishedStatusDrop = dropStatus
-      session.deferredConfirmedShellReconcile = () =>
-        reconcileEndedProcessIfPaneQuiet(armedAcceptedStatusSeq)
-      return
-    }
-    session.deferredCommandFinishedStatusDrop = null
-    session.deferredConfirmedShellReconcile = null
-    dropStatus()
   }
   session.sampleVisiblePaneForegroundAgent = (forceRoutingConfirmation = false): void => {
     if (
@@ -357,9 +269,6 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
   }
   session.commandLifecycle = createTerminalCommandLifecycle({
     onCommandStarted: () => {
-      // Why: a new command invalidates cleanup waiting on the previous D; only
-      // a later confirmed shell boundary may retire this pane's live identity.
-      session.deferredCommandFinishedStatusDrop = null
       session.visibleForegroundSamplePending = false
       session.visibleForegroundSampleSettled = false
       // Why: typed commands can be aliases, so they only widen the bounded

@@ -174,6 +174,24 @@ describe('LocalPtyProvider', () => {
     })
   })
 
+  describe('readTerminalForeground', () => {
+    it("reads node-pty's terminal group, not the cached process-table identity", async () => {
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+      mockProc.process = 'codex'
+      expect(await provider.readTerminalForeground(id)).toBe('codex')
+      mockProc.process = 'zsh'
+      expect(await provider.readTerminalForeground(id)).toBe('zsh')
+      expect(resolveAgentForegroundProcessMock).not.toHaveBeenCalled()
+      expect(await provider.readTerminalForeground('nonexistent')).toBeNull()
+    })
+
+    it('reads nothing where node-pty names only the spawned shell (Windows)', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const { id } = await provider.spawn({ cols: 80, rows: 24, shellOverride: 'powershell.exe' })
+      expect(await provider.readTerminalForeground(id)).toBeNull()
+    })
+  })
+
   describe('getForegroundProcess', () => {
     it('returns the process name', async () => {
       const { id } = await provider.spawn({ cols: 80, rows: 24 })

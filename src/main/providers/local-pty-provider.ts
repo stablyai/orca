@@ -8,6 +8,7 @@ import {
 import {
   confirmLocalPtyForegroundProcess,
   confirmLocalPtyShellForeground,
+  readLocalPtyTerminalForeground,
   getLocalPtyForegroundProcess,
   hasLocalPtyChildProcesses,
   inspectLocalPtyChildProcesses
@@ -168,6 +169,10 @@ export class LocalPtyProvider implements IPtyProvider {
 
   confirmShellForeground(id: string): Promise<boolean> {
     return confirmLocalPtyShellForeground(id)
+  }
+
+  async readTerminalForeground(id: string): Promise<string | null> {
+    return readLocalPtyTerminalForeground(id)
   }
 
   async serialize(_ids: string[]): Promise<string> {

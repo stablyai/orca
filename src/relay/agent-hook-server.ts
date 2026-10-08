@@ -22,7 +22,9 @@ import { handleRelayHookRequest } from './agent-hook-request'
 import { listenOnLoopback } from './agent-hook-loopback-listener'
 import { RelayAgentPresence } from './relay-agent-presence'
 import { PaneOwnerProbes } from '../shared/agent-pane-owner-probes'
-import { currentOwner, ownerEndedByLaunch } from '../shared/agent-hook-presence-transition'
+import { commandEndEndsRow, confirmCommandEnd } from '../shared/agent-command-end'
+import { currentOwner } from '../shared/agent-hook-presence-transition'
+import type { FinishedCommand } from '../shared/command-foreground-tracker'
 import type { AgentProcessVerdict } from '../shared/agent-process-presence'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { randomUUID } from 'node:crypto'
@@ -238,12 +240,15 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
     return this.ownerProbes.check(paneKey)
   }
 
-  /** The pane's launched agent command finished: the launch's owner exited, whether or not its
-   *  process can be checked (the same rule main applies to local panes). */
-  endLaunch(paneKey: string, launchAgent: string): void {
-    const owner = ownerEndedByLaunch(this.state.lastStatusByPaneKey.get(paneKey), launchAgent)
-    if (owner && endRelayPaneOwner(this.admissionHost(), paneKey)) {
-      this.ownerProbes.ownerEnded(paneKey, owner.process)
+  /** A command finished in this pane: end the agent it ran (the host's command-end rule). */
+  async endCommand(paneKey: string, command: FinishedCommand): Promise<void> {
+    const row = () => this.state.lastStatusByPaneKey.get(paneKey)
+    const writtenAt = () => this.lastEnvelopeMetaByPaneKey.get(paneKey)?.writtenAt
+    if (await confirmCommandEnd(() => commandEndEndsRow(row(), writtenAt(), command), command)) {
+      const owner = currentOwner(row())
+      if (owner && endRelayPaneOwner(this.admissionHost(), paneKey)) {
+        this.ownerProbes.ownerEnded(paneKey, owner.process)
+      }
     }
   }
 

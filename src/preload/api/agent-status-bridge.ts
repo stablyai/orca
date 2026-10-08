@@ -28,8 +28,6 @@ export const agentStatusApi = {
     ipcRenderer.invoke('agentStatus:getSnapshot'),
   inferInterrupt: (request: AgentInterruptInferenceRequest): Promise<boolean> =>
     ipcRenderer.invoke('agentStatus:inferInterrupt', request),
-  hasVerifiableAgentProcess: (paneKey: string): Promise<boolean> =>
-    ipcRenderer.invoke('agentStatus:hasVerifiableAgentProcess', paneKey),
   inferQuestionAnswered: (request: AgentQuestionAnsweredInferenceRequest): Promise<boolean> =>
     ipcRenderer.invoke('agentStatus:inferQuestionAnswered', request),
   onMigrationUnsupported: (
@@ -74,9 +72,6 @@ export const agentStatusApi = {
   },
   dropPersistedBatch: (identities: readonly AgentStatusCacheIdentity[]): void => {
     ipcRenderer.send('agentStatus:dropPersistedBatch', identities)
-  },
-  reconcileEndedProcess: (paneKey: string): void => {
-    ipcRenderer.send('agentStatus:reconcileEndedProcess', paneKey)
   },
   /** Drop all cached hook statuses under one terminal tab prefix; fired on explicit tab close even without a local row. */
   dropByTabPrefix: (tabId: string): void => {

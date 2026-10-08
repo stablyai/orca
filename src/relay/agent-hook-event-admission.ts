@@ -108,7 +108,7 @@ function writeRelayRow(
     return undefined
   }
   host.metadata.delete(event.paneKey)
-  host.metadata.set(event.paneKey, { source, env, version })
+  host.metadata.set(event.paneKey, { source, env, version, writtenAt: Date.now() })
   host.forward(buildRelayHookEnvelope(event, source, env, version, options))
   // Why: retries compare against the cached row by identity, so they must hold that exact row.
   return host.state.lastStatusByPaneKey.get(event.paneKey)

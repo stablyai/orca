@@ -218,12 +218,14 @@ export class TerminalHost {
   }
 
   // Why: null-not-throw — fetched for the tab-bar icon, so a vanished pane should quietly yield "no agent".
-  getForegroundProcess(sessionId: string): string | null {
+  // `rawFallback`: node-pty's uncached read of the terminal's group, which names only the shell on Windows.
+  getForegroundProcess(sessionId: string, options?: { rawFallback?: boolean }): string | null {
     const session = this.sessions.get(sessionId)
-    if (!session || !session.isAlive) {
+    const staticName = process.platform === 'win32' || session?.processNameIsSpawnFile
+    if (!session || !session.isAlive || (options?.rawFallback && staticName)) {
       return null
     }
-    return session.getForegroundProcess()
+    return session.getForegroundProcess(options)
   }
 
   inspectProcess(

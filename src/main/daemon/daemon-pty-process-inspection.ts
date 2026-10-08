@@ -80,6 +80,18 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
     }
   }
 
+  async readTerminalForeground(id: string): Promise<string | null> {
+    try {
+      const result = await this.client.request<{ foregroundProcess: string | null }>(
+        'readTerminalForeground',
+        { sessionId: id }
+      )
+      return result.foregroundProcess
+    } catch {
+      return null
+    }
+  }
+
   async confirmShellForeground(id: string): Promise<boolean> {
     try {
       const result = await this.client.request<{ confirmed: boolean }>('confirmShellForeground', {

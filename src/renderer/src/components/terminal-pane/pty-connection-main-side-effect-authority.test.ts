@@ -358,7 +358,7 @@ describe('connectPanePty', () => {
       expect(deps.markTerminalPaneUnread).not.toHaveBeenCalled()
     })
 
-    it('drops the agent status from a command-finished fact like the byte path did', async () => {
+    it('leaves the agent status to the host on a command-finished fact, like the byte path', async () => {
       enableMainAuthority()
       const { connectPanePty } = await import('./pty-connection')
       const handler = await import('./terminal-side-effect-facts-handler')
@@ -387,7 +387,7 @@ describe('connectPanePty', () => {
         facts: [{ kind: 'command-finished', exitCode: 130 }]
       })
 
-      expect(mockStoreState.dropAgentStatus).toHaveBeenCalledWith(paneKey)
+      expect(mockStoreState.dropAgentStatus).not.toHaveBeenCalled()
       expect(mockStoreState.removeAgentStatus).not.toHaveBeenCalled()
     })
 

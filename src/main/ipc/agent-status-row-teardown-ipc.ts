@@ -24,7 +24,6 @@ export function registerAgentStatusRowTeardownIpcHandlers(): void {
   ipcMain.removeAllListeners('agentStatus:drop')
   ipcMain.removeAllListeners('agentStatus:dropPersisted')
   ipcMain.removeAllListeners('agentStatus:dropPersistedBatch')
-  ipcMain.removeAllListeners('agentStatus:reconcileEndedProcess')
   ipcMain.removeAllListeners('agentStatus:dropByTabPrefix')
 
   ipcMain.on('agentStatus:drop', (_event, paneKey: unknown) => {
@@ -73,25 +72,6 @@ export function registerAgentStatusRowTeardownIpcHandlers(): void {
       }
     } catch (err) {
       console.warn('[agent-hooks] dropPersistedStatusEntries failed:', err)
-    }
-  })
-
-  ipcMain.on('agentStatus:reconcileEndedProcess', (_event, paneKey: unknown) => {
-    if (typeof paneKey !== 'string' || !isValidPaneKey(paneKey)) {
-      return
-    }
-    try {
-      // Why: a process-table-confirmed agent exit is exactly the case the dismissal above excludes
-      // — the pane's agent is NOT still alive — so its latches must go with the row (STA-4612).
-      agentHookServer.reconcileEndedProcessForPaneKeys([paneKey], {
-        // Why: this route only fires on a confirmed shell foreground, so the PTY outlived the
-        // agent. The row's resume identity is still usable in that very pane — only its live
-        // claims are dead.
-        preserveResumeIdentity: true
-      })
-      clearMigrationUnsupportedPtysForPaneKey(paneKey)
-    } catch (err) {
-      console.warn('[agent-hooks] reconcileEndedProcessForPaneKeys failed:', err)
     }
   })
 

@@ -221,6 +221,10 @@ export class DaemonPtyRouter implements IPtyProvider {
     return this.adapterFor(id).confirmForegroundProcess(id)
   }
 
+  async readTerminalForeground(id: string): Promise<string | null> {
+    return this.adapterFor(id).readTerminalForeground(id)
+  }
+
   async confirmShellForeground(id: string): Promise<boolean> {
     return (await this.adapterFor(id).confirmShellForeground?.(id)) ?? false
   }

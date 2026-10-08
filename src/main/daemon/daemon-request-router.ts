@@ -107,8 +107,11 @@ export class DaemonRequestRouter {
       case 'getCwd':
         return { cwd: await this.options.host.getCwd(request.payload.sessionId) }
       case 'getForegroundProcess':
+      case 'readTerminalForeground':
         return {
-          foregroundProcess: this.options.host.getForegroundProcess(request.payload.sessionId)
+          foregroundProcess: this.options.host.getForegroundProcess(request.payload.sessionId, {
+            rawFallback: request.type === 'readTerminalForeground'
+          })
         }
       case 'inspectProcess': {
         const options = {

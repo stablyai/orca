@@ -1,4 +1,5 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
+import { CommandForegroundTracker } from '../../shared/command-foreground-tracker'
 import { OrchestrationStructuredMailboxPointerDelivery } from './orchestration/structured-mailbox-pointer-delivery'
 import { createStructuredMailboxPointerHost } from './orchestration/structured-mailbox-pointer-host'
 import { localOrchestrationCliCommand } from './orchestration/cli-command'
@@ -169,21 +170,12 @@ export class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId
   })
 
   protected readonly openCodeRunLifetime = new OpenCodeRunLifetimeStatus({
-    isObservablePty: (ptyId) => {
-      const pty = this.ptysById.get(ptyId)
-      // Why: SSH and WSL foregrounds live on another host or in the guest.
-      return !!pty && !pty.connectionId && !pty.wslDistro && !this.wslDistroByPtyId.has(ptyId)
-    },
     isStatusEnabled: (agent) =>
       isAgentStatusHooksEnabledForAgent(this.store?.getSettings?.(), agent),
-    readForegroundProcessName: async (ptyId) => {
-      const read = await this.ptyForegroundAgent.read(ptyId)
-      return read?.available ? read.process : null
-    },
     readForegroundCommandLine: (ptyId, foregroundProcess) =>
       readLocalPtyForegroundCommandLine(ptyId, foregroundProcess),
-    // Why after the chunk's facts: the renderer drops an exited agent's row on command-finished
-    // unless the row changed after it, so the run's Done must arrive after that fact.
+    // Why after the chunk's facts: the run's Done must land after its command-finished fact, so the
+    // host's command end (which keeps rows written after the command finished) never ends it.
     publish: (ptyId, payload, yieldsToHookSince) =>
       this.runAfterPendingTerminalSideEffectFacts(ptyId, () =>
         this.emitTerminalAgentStatusEvents(
@@ -194,6 +186,33 @@ export class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId
       ),
     now: () => Date.now()
   })
+
+  /** The one per-command foreground sampler: the host's command end and `opencode run` read it. */
+  protected readonly commandForeground = new CommandForegroundTracker({
+    read: async (ptyId) =>
+      (this.isForegroundReadablePty(ptyId) && (await this.ptyForegroundAgent.read(ptyId))) || {
+        available: false,
+        process: null
+      },
+    // Why the fallback: a host that cannot read the terminal's group (Windows, an older daemon)
+    // still answers from a fresh process-table read.
+    readTerminalForeground: async (ptyId) =>
+      (this.isForegroundReadablePty(ptyId) &&
+        ((await this.ptyController?.readTerminalForeground?.(ptyId)) ??
+          (await this.ptyController?.confirmForegroundProcess?.(ptyId)))) ||
+      null,
+    readsOnStart: (ptyId) =>
+      this.isForegroundReadablePty(ptyId) && this.openCodeRunLifetime.wantsStartReads(),
+    onSample: (ptyId, process, commandId) =>
+      this.openCodeRunLifetime.observeForeground(ptyId, process, commandId),
+    now: () => Date.now()
+  })
+
+  /** Local PTYs only: SSH foregrounds are the relay's to read, and WSL's live in the guest. */
+  private isForegroundReadablePty(ptyId: string): boolean {
+    const pty = this.ptysById.get(ptyId)
+    return !!pty && !pty.connectionId && !pty.wslDistro && !this.wslDistroByPtyId.has(ptyId)
+  }
 
   protected readonly terminalAgentStatus = new RuntimeTerminalAgentStatusQuery({
     getController: () => this.ptyController,

@@ -27,7 +27,10 @@ function createMockSubprocess(): SubprocessHandle & {
   let onExitCb: ((code: number) => void) | null = null
   return {
     pid: 55555,
-    getForegroundProcess: vi.fn(() => null),
+    // node-pty's raw name is the terminal's group; the cached name stays null here.
+    getForegroundProcess: vi.fn((options?: { rawFallback?: boolean }) =>
+      options?.rawFallback ? 'zsh' : null
+    ),
     confirmForegroundProcess: confirmForegroundProcessMock,
     write: vi.fn(),
     resize: vi.fn(),
@@ -519,6 +522,22 @@ describe('DaemonServer', () => {
         })
       ).resolves.toEqual({ foregroundProcess: 'droid' })
       expect(confirmForegroundProcessMock).toHaveBeenCalledTimes(1)
+    })
+
+    it("reads the terminal's foreground group from node-pty, not the cached name", async () => {
+      await startServer()
+      const c = await connectClient()
+      await c.request('createOrAttach', { sessionId: 'test-session', cols: 80, rows: 24 })
+      await expect(
+        c.request<{ foregroundProcess: string | null }>('readTerminalForeground', {
+          sessionId: 'test-session'
+        })
+      ).resolves.toEqual({ foregroundProcess: 'zsh' })
+      await expect(
+        c.request<{ foregroundProcess: string | null }>('getForegroundProcess', {
+          sessionId: 'test-session'
+        })
+      ).resolves.toEqual({ foregroundProcess: null })
     })
 
     it('returns error for unknown session operations', async () => {

@@ -122,8 +122,8 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
       agentHookServer.attestCompatibilityAuthority(candidate),
     retireAgentHookCompatibilityAuthority: (paneKey) =>
       agentHookServer.retirePaneAuthority(paneKey),
-    endAgentHookLaunch: (paneKey, launchAgent) =>
-      agentHookServer.endLaunchAuthority(paneKey, launchAgent),
+    endAgentHookLaunch: (paneKey) => agentHookServer.endLaunchAuthority(paneKey),
+    endAgentHookCommand: (paneKey, command) => void agentHookServer.endCommand(paneKey, command),
     checkHookAgentPresence: (paneKey) => agentHookServer.checkAgentPresence(paneKey),
     reconcileAgentStatusForEndedProcess: (paneKeys) =>
       agentHookServer.reconcileEndedProcessForPaneKeys(paneKeys),
@@ -176,9 +176,10 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     recordDurableCrashBreadcrumb('agent_state_rules_active', rules)
   )
   state.runtime = runtime
-  agentHookServer.subscribeEnrichedStatus((enriched) =>
+  agentHookServer.subscribeEnrichedStatus((enriched) => {
     recordObservedAgentStatusPaneIdentity(observedPaneIdentities, enriched.paneKey, runtime)
-  )
+    runtime.observeAgentActivityForPaneKey(enriched.paneKey)
+  })
   // Why before anything can attach: a client host that reattaches to a restarted runtime is only
   // handed its pages back if the runtime found them first.
   runtime.rehydrateClientHostedBrowserPages()

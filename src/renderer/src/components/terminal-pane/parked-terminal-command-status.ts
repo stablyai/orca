@@ -4,7 +4,6 @@
  * This ports the store-level subset of pty-connection's handlers; the pane-coupled parts
  * (foreground process-confirm ladder, key-intent interrupt inference) stay with the mounted pane.
  */
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { resolvePaneAgentOwner } from '../../../../shared/pane-agent-owner'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { isShellProcess } from '../../../../shared/shell-process-detection'
@@ -80,33 +79,6 @@ export function createParkedTerminalCommandStatusPolicy(options: {
       paneOwnerAgent,
       retainedPaneOwnerAgent: state.retainedAgentsByPaneKey[paneKey]?.agentType
     })
-  }
-
-  // Port of pty-connection's dropCommandFinishedStatusIfSameTurn, minus the interrupt-inference
-  // option: parked panes receive no key events, so inference never has evidence here.
-  const dropCommandFinishedStatusIfSameTurn = (entry: AgentStatusEntry | undefined): void => {
-    const state = useAppStore.getState()
-    if (!entry) {
-      // Why: an Orca-started agent can exit before its first hook status; clear the launch
-      // registry on command exit like the mounted path does.
-      state.clearAgentLaunchConfig(paneKey)
-      return
-    }
-    const current = state.agentStatusByPaneKey[paneKey]
-    if (!current) {
-      state.clearAgentLaunchConfig(paneKey)
-      return
-    }
-    const unchanged =
-      current.state === entry.state &&
-      current.prompt === entry.prompt &&
-      current.updatedAt === entry.updatedAt &&
-      current.stateStartedAt === entry.stateStartedAt &&
-      current.agentType === entry.agentType
-    if (!unchanged) {
-      return
-    }
-    state.dropAgentStatus(paneKey)
   }
 
   // Complete the row only while it is still this turn's command-code/working entry.
@@ -187,14 +159,12 @@ export function createParkedTerminalCommandStatusPolicy(options: {
       // `git checkout` in a parked worktree); nudge git UI now instead of waiting for a poll.
       dispatchTerminalCommandFinishedEvent(worktreeId, bestEffortExitCode)
       void retireForegroundAgentUnlessConfirmed()
-      // Why: drop the same-turn status row only for SSH PTYs — exact parity with the mounted
-      // path, whose foreground tracker refuses SSH ids and drops un-probed. Local PTYs need
-      // pty-connection's process-confirm ladder to tell a leaked nested-shell 133;D from a
-      // real agent exit, so their drop stays with the mounted pane.
-      if (parseAppSshPtyId(ptyId) === null) {
-        return
+      // Why: an Orca-started agent can exit before its first hook status; clear its launch registry
+      // with the command, as the mounted path does. Local panes keep that to the mounted pane.
+      const state = useAppStore.getState()
+      if (parseAppSshPtyId(ptyId) !== null && !state.agentStatusByPaneKey[paneKey]) {
+        state.clearAgentLaunchConfig(paneKey)
       }
-      dropCommandFinishedStatusIfSameTurn(useAppStore.getState().agentStatusByPaneKey[paneKey])
     },
 
     // Port of pty-connection's seedCommandCodeOutputWorkingStatus (store-level only).

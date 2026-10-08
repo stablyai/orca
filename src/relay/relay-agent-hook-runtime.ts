@@ -40,7 +40,13 @@ export class RelayAgentHookRuntime {
   ) {
     this.hookServer = new RelayAgentHookServer({
       endpointDir: endpointDir ?? endpointDirForRelaySocket(sockPath),
-      forward: (envelope) => publishAgentHookEnvelope(dispatcher, envelope),
+      forward: (envelope) => {
+        // Why: a replay re-tells a cached row; only a live report says who holds the foreground now.
+        if (envelope.isReplay !== true) {
+          ptyHandler.observeAgentActivity(envelope.paneKey)
+        }
+        publishAgentHookEnvelope(dispatcher, envelope)
+      },
       forwardUnavailable: (envelope) => publishAgentHookEnvelope(dispatcher, envelope),
       // Why: the PTY handler is the only component that knows which panes still have a client
       // surface, so it — not the client — decides whether a hook post describes a live pane.
@@ -77,8 +83,8 @@ export class RelayAgentHookRuntime {
     this.ptyHandler.setAgentPresenceTrigger((paneKey) => {
       void this.hookServer.checkAgentPresence(paneKey)
     })
-    this.ptyHandler.setAgentLaunchEndListener((paneKey, launchAgent) => {
-      this.hookServer.endLaunch(paneKey, launchAgent)
+    this.ptyHandler.setAgentCommandEndListener((paneKey, command) => {
+      void this.hookServer.endCommand(paneKey, command)
     })
     this.ptyHandler.addEnvAugmenter(() => this.hookServer.buildPtyEnv())
     this.ptyHandler.addEnvAugmenter((context) => this.buildPluginEnvironment(context))

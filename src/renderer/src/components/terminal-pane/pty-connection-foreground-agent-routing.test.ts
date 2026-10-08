@@ -153,7 +153,7 @@ describe('connectPanePty', () => {
     await restoreTerminalTestGlobals()
   })
 
-  it('drops agent status without retaining when OSC 133 reports the command finished', async () => {
+  it('leaves agent status to the host when OSC 133 reports the command finished', async () => {
     const { connectPanePty } = await import('./pty-connection')
 
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
@@ -191,7 +191,7 @@ describe('connectPanePty', () => {
     capturedDataCallback.current?.('\x1b]133;D;130\x07thebr ~/repo $ ')
     await flushAsyncTicks()
 
-    expect(mockStoreState.dropAgentStatus).toHaveBeenCalledWith(paneKey)
+    expect(mockStoreState.dropAgentStatus).not.toHaveBeenCalled()
     expect(mockStoreState.removeAgentStatus).not.toHaveBeenCalled()
   })
 
