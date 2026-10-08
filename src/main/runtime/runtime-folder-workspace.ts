@@ -55,6 +55,7 @@ export function mergeRuntimeFolderWorkspace(
     linkedAzureDevOpsPR: meta.linkedAzureDevOpsPR ?? null,
     linkedGiteaPR: meta.linkedGiteaPR ?? null,
     linkedWorkItem: meta.linkedWorkItem ?? null,
+    ...(meta.linkedItems !== undefined ? { linkedItems: meta.linkedItems } : {}),
     linkedTaskSourceContext: meta.linkedTaskSourceContext ?? null,
     isArchived: meta.isArchived ?? false,
     isUnread: meta.isUnread ?? false,

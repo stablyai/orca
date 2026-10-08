@@ -22,20 +22,45 @@ export function partitionJournalLifecycleMutations(
   if (mutations.length === 0) {
     return []
   }
+  if (mutations.length === 1) {
+    return [{ settlementId, mutations: [mutations[0]] }]
+  }
   const chunks: JournalLifecycleMutationInput[][] = []
   const probeId = chunkSettlementId(settlementId, mutations.length - 1, mutations.length)
   let pending: JournalLifecycleMutationInput[] = []
-  for (const mutation of mutations) {
-    const candidate = [...pending, mutation]
-    if (pending.length > 0 && !serializedLifecycleBatchFits(probeId, candidate)) {
-      chunks.push(pending)
-      pending = [mutation]
-    } else {
-      pending = candidate
+  let pendingBytes = 0
+  let pendingVersion = journalRowSchemaVersion([])
+  const overheadByVersion = new Map<number, number>()
+  const overhead = (version: number): number => {
+    let bytes = overheadByVersion.get(version)
+    if (bytes === undefined) {
+      bytes = serializedLifecycleBatchOverhead(probeId, version)
+      overheadByVersion.set(version, bytes)
     }
+    return bytes
+  }
+  for (const mutation of mutations) {
+    const bytes = Buffer.byteLength(JSON.stringify(toLifecycleMutationRow(mutation)), 'utf8')
+    const version = journalRowSchemaVersion(mutation.kind === 'item' ? [mutation.body] : [])
+    const candidateVersion = Math.max(pendingVersion, version)
+    const candidateBytes = pendingBytes + bytes + (pending.length > 0 ? 1 : 0)
+    if (
+      pending.length > 0 &&
+      candidateBytes + overhead(candidateVersion) > MAX_JOURNAL_LIFECYCLE_BATCH_BYTES
+    ) {
+      chunks.push(pending)
+      pending = []
+      pendingBytes = 0
+      pendingVersion = journalRowSchemaVersion([])
+    }
+    pendingBytes += bytes + (pending.length > 0 ? 1 : 0)
+    pendingVersion = Math.max(pendingVersion, version)
+    pending.push(mutation)
     if (pending.length === MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS) {
       chunks.push(pending)
       pending = []
+      pendingBytes = 0
+      pendingVersion = journalRowSchemaVersion([])
     }
   }
   if (pending.length > 0) {
@@ -52,23 +77,18 @@ function chunkSettlementId(settlementId: string, index: number, total: number): 
   return `${settlementId}:${index + 1}/${total}`
 }
 
-function serializedLifecycleBatchFits(
-  settlementId: string,
-  mutations: readonly JournalLifecycleMutationInput[]
-): boolean {
+function serializedLifecycleBatchOverhead(settlementId: string, version: number): number {
   const row: JournalLifecycleBatchRow = {
-    v: journalRowSchemaVersion(
-      mutations.flatMap((mutation) => (mutation.kind === 'item' ? [mutation.body] : []))
-    ),
+    v: version,
     kind: 'lifecycle-batch',
     epoch: '00000000-0000-4000-8000-000000000000',
     seq: Number.MAX_SAFE_INTEGER,
     fence: Number.MAX_SAFE_INTEGER,
     ts: Number.MAX_SAFE_INTEGER,
     settlementId,
-    mutations: mutations.map(toLifecycleMutationRow)
+    mutations: []
   }
-  return Buffer.byteLength(JSON.stringify(row), 'utf8') + 1 <= MAX_JOURNAL_LIFECYCLE_BATCH_BYTES
+  return Buffer.byteLength(JSON.stringify(row), 'utf8') + 1
 }
 
 /** Sized as a Stop may write it (`turnEndAfterStop`), so the chunk built from it still fits. */

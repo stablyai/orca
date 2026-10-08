@@ -13,6 +13,7 @@ import { finishPtyShutdown } from './provider/liveness'
 import type { GetSelectedCodexHomePath, PrepareClaudeAuth } from './host-env/types'
 import { installPtyInspectIpcHandlers } from './ipc/inspect'
 import { installPtyCodexSharedServerIpcHandler } from './ipc/codex-shared-server'
+import { installPtyClaudeOldTerminalIpcHandler } from './ipc/claude-old-terminal'
 import {
   installPtyKillIpcHandler,
   stopReplacedPanePty,
@@ -124,6 +125,7 @@ export function registerPtyHandlers(
   ipcMain.removeHandler('pty:isCodexOnSharedServer')
   ipcMain.removeHandler('pty:disableCodexSharedServerAutoStart')
   ipcMain.removeHandler('pty:stopCodexSharedServer')
+  ipcMain.removeHandler('pty:openedBeforeClaudeAccounts')
   ipcMain.removeHandler('pty:getCwd')
   ipcMain.removeHandler('pty:getSize')
   ipcMain.removeHandler('pty:getAuthoritativeBufferSnapshotCapabilities')
@@ -286,5 +288,6 @@ export function registerPtyHandlers(
   installPtyResizeVisibilityIpc(session)
   installPtyInspectIpcHandlers({ getLocalPtyProviderStartupPromise })
   installPtyCodexSharedServerIpcHandler({ getLocalPtyProviderStartupPromise })
+  installPtyClaudeOldTerminalIpcHandler({ getLocalPtyProviderStartupPromise })
   installPtyKillIpcHandler(killDeps)
 }

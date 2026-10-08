@@ -3737,7 +3737,6 @@
             "54e8d6bb2d": "Fable",
             "d79c3362c4": "5h",
             "a79c64f87e": "Fable",
-            "8295903d17": "Reinicia los terminales Claude activos antes de continuar conversaciones antiguas después de cambiar.",
             "c98ea88392": "Ninguna otra cuenta",
             "9332ba8684": "Cambiar a",
             "d450654fa2": "Cuenta de Claude",
@@ -6505,7 +6504,6 @@
         "AccountsPane": {
           "c2d2751587": "Eliminar cuenta",
           "dbb9626ed1": "Cancelar",
-          "854ebbcc45": "Orca eliminará la autenticación de Claude gestionada para esta cuenta guardada. Si está activa actualmente, Orca volverá al login predeterminado de Claude del sistema.",
           "63843e37e2": "¿Eliminar la cuenta de Claude?",
           "380a7736cc": "Eliminar esta cuenta borra permanentemente su home de Codex gestionado, incluido todo el historial de sesiones de Codex y los inicios de sesión de MCP almacenados dentro. Esto no se puede deshacer. Si la cuenta está activa, Orca vuelve al login predeterminado de Codex del sistema.",
           "0d47394635": "¿Eliminar cuenta de Codex?",
@@ -6553,12 +6551,10 @@
           "3fe7862418": "No hay cuentas de Claude gestionadas para {{value0}}. Orca usará el login predeterminado de Claude del sistema de ese entorno hasta que agregues una aquí.",
           "3455cf43fa": "Login de Claude.",
           "fcc4093fc1": "Usa tu login actual de Codex de {{value0}}.",
-          "79e484c3b2": "Switcher de cuenta opcional para los archivos de autenticación compartidos de Claude.",
           "8bbfd74556": "Cuentas de Claude",
           "72b36ea174": "Opcional. Orca puede usar tu login normal de Claude; agrega cuentas solo si quieres cambiar rápido sin mover sesiones de chat.",
           "26ef4b55be": "Claude",
           "2743cdc0af": "Error al actualizar la cuenta de Claude.",
-          "b15ce90870": "{{value0}} -> {{value1}}. Reinicia los terminales Claude activos antes de continuar sesiones antiguas.",
           "f921d32606": "Cuenta Claude actualizada.",
           "5bf8764953": "Error al actualizar la cuenta del Codex.",
           "9baf45d071": "Este dispositivo",
@@ -14896,7 +14892,6 @@
                 "d90d2e1f6d": "Controla el uso por sesión y semanal.",
                 "8919321417": "Error al iniciar sesión en Codex.",
                 "c7b90c140b": "Cuenta de Codex agregada.",
-                "4e71d72912": "Error al iniciar sesión en Claude.",
                 "9ddeb558f9": "Cuenta de Claude agregada.",
                 "29d0653961": "Iniciar sesión",
                 "945865332e": "Iniciando sesión",
@@ -17755,6 +17750,8 @@
         "managedAccountUnsupported": "Mientras haya una cuenta de Claude agregada en WSL, los chats de Claude necesitan una cuenta de Claude de Windows.",
         "launchFolderMissing": "La carpeta en la que se ejecutaba este chat ya no existe. Restáurela para continuar este chat.",
         "historyInOtherAccount": "El historial de este chat está en otra cuenta de Claude. Vuelva a esa cuenta para continuarlo.",
+        "claudeAccountFolderMissing": "Falta la carpeta de la cuenta de Claude seleccionada. Vuelva a iniciar sesión en ella o elija otra cuenta.",
+        "claudeAccountSetupFailed": "No se pudo configurar la cuenta de Claude seleccionada. Vuelva a intentarlo o elija otra cuenta.",
         "agentCommandNotRunnable": "{{agent}}: el Comando en Ajustes → Agentes debe ser la ruta o el nombre de un programa que Orca pueda encontrar, sin argumentos ni variables. Cámbielo o restablézcalo con Reiniciar.",
         "chooseClaudeAccount": "Elija o agregue una en la configuración de Cuentas de Claude.",
         "chooseClaudeAccountThenRunCommand": "Elija o agregue una en la configuración de Cuentas de Claude y vuelva a ejecutar /{{command}}.",
@@ -18135,6 +18132,7 @@
         "estimated": "Estimado a partir de la última respuesta."
       },
       "dismissDeliveryNotice": "Descartar",
+      "addSelectionToChat": "Añadir al chat",
       "messageNotSent": "Mensaje no enviado",
       "deliveryUnconfirmed": "Entrega sin confirmar — revisa el chat antes de reintentar",
       "messageSending": "Enviando…",
@@ -18275,7 +18273,7 @@
         "plan": "Plan",
         "historyRepaired": "No se pudo cargar parte del historial de este chat.",
         "historyItemTooLarge": "Esta parte del chat era demasiado grande para mostrarla.",
-        "stoppedBeforeStart": "Detenido antes de que el agente empezara",
+        "stoppedBeforeStart": "Detenido manualmente",
         "dismiss": "Descartar",
         "copyError": "Copiar error",
         "orcaStopUpdate": "Orca en {{machine}} se reinició para actualizarse mientras esta respuesta estaba en curso.",
@@ -19299,7 +19297,6 @@
     },
     "codexSharedServerBanner": {
       "fix": "Solucionar",
-      "dismiss": "Descartar",
       "copied": "Copiado",
       "done": "Hecho",
       "cancel": "Cancelar",
@@ -19310,8 +19307,6 @@
       "oldTerminalDialogTitle": "Por qué este Codex comparte un servidor",
       "oldTerminalDialogRisk": "Las sesiones de Codex que comparten un servidor pueden terminar juntas, y el estado del agente puede ser incorrecto.",
       "oldTerminalDialogCause": "Los terminales antiguos aún comparten un servidor de Codex. Abre un terminal nuevo para ejecutar Codex en un servidor aparte.",
-      "openNewTerminal": "Abrir terminal nuevo",
-      "dontShowAgain": "No volver a mostrar",
       "dialogTitle": "Dar a cada pestaña de Codex su propio servidor",
       "dialogDescription": "Las sesiones de Codex iniciadas directamente en un terminal comparten un servidor en segundo plano. Orca mantiene separadas las sesiones de Codex que inicia. Cuando las sesiones comparten un servidor, cerrar una puede terminar con las demás, y el estado del agente puede ser incorrecto.",
       "copy": "Copiar",
@@ -19320,7 +19315,6 @@
       "step2Title": "Detener el servidor compartido en ejecución",
       "undo": "Para deshacerlo, ejecuta codex features enable daemon_auto_start.",
       "step2Warning": "Cierra cualquier sesión de Codex abierta que comparta el servidor",
-      "learnMore": "Más información",
       "turnOff": "Desactivar",
       "turningOff": "Desactivando…",
       "turnedOff": "Desactivado",
@@ -19343,6 +19337,12 @@
     },
     "paneMove": {
       "failed": "No se pudo mover el panel a una pestaña nueva."
+    },
+    "paneTopBanner": {
+      "openNewTerminal": "Abrir terminal nuevo",
+      "learnMore": "Más información",
+      "dontShowAgain": "No volver a mostrar",
+      "dismiss": "Descartar"
     }
   },
   "quickOpen": {

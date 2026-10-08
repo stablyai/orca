@@ -6,6 +6,7 @@ import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { MessageRow, type NativeChatDeliveryNotice } from './NativeChatMessageRow'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { NativeChatRewindSurface } from './use-native-chat-rewind'
+import { readNativeChatQuotableSelection } from './native-chat-quote-selection'
 
 const confirm = vi.hoisted(() => vi.fn())
 vi.mock('@/components/confirmation-dialog-context', () => ({
@@ -156,6 +157,19 @@ describe('MessageRow control visibility', () => {
       expect(screen.queryAllByRole('button')).toHaveLength(role === 'reasoning' ? 1 : 0)
     }
   )
+})
+
+describe('which messages can be quoted', () => {
+  it.each([
+    ['assistant', 'Message text'],
+    ['user', undefined],
+    ['system', undefined]
+  ] as const)('a selection in a %s message', (role, quoted) => {
+    const { container } = renderMessage(role)
+    window.getSelection()!.selectAllChildren(screen.getByText('Message text'))
+
+    expect(readNativeChatQuotableSelection(container)?.text).toBe(quoted)
+  })
 })
 
 describe('MessageRow send mode', () => {

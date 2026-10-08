@@ -1,3 +1,4 @@
+import { WORKSPACE_ATTACHMENT_RUNTIME_CAPABILITIES } from './workspace-attachment-capabilities'
 import { STRUCTURED_AGENT_SESSION_SURFACE_RUNTIME_CAPABILITIES } from './structured-agent-session-surface-capabilities'
 export {
   STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY,
@@ -57,7 +58,6 @@ import {
   SKILL_MANAGEMENT_CAPABILITY,
   SKILL_UPLOAD_CAPABILITY
 } from './skill-install-capability'
-export { SKILL_INSTALL_RESULT_V2_CAPABILITY } from './skill-install-capability'
 import {
   AGENT_LAUNCH_RUNTIME_CAPABILITIES,
   AGENT_LAUNCH_RUNTIME_CAPABILITY
@@ -165,6 +165,8 @@ export const WORKTREE_ARCHIVE_FAILURE_BLOCKING_RUNTIME_CAPABILITY =
   'worktree.archive-failure-blocking.v1' as const
 export const CODEX_RESET_CREDIT_RUNTIME_CAPABILITY = 'accounts.codex-reset-credit.v1' as const
 export const ACCOUNT_IMPORT_RUNTIME_CAPABILITY = 'accounts.import-host-credentials.v1' as const
+// Why: `orca account add claude` signs in to an account folder the host creates first.
+export const CLAUDE_SIGN_IN_RUNTIME_CAPABILITY = 'accounts.claude-sign-in.v1' as const
 export const ANTIGRAVITY_ACCOUNTS_RUNTIME_CAPABILITY = 'accounts.antigravity-native.v1' as const
 export const DATA_ACCOUNT_RUNTIME_CAPABILITY = 'accounts.managed-data-profiles.v1' as const
 // Why: older hosts cannot reconcile terminal.create's mutation after losing the reply, so clients may only retry unknown outcomes when advertised.
@@ -366,6 +368,7 @@ export const RUNTIME_CAPABILITIES = [
   TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY,
   WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY,
   WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY,
+  ...WORKSPACE_ATTACHMENT_RUNTIME_CAPABILITIES,
   WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
   REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
   FOLDER_WORKSPACE_PATH_STATUS_RUNTIME_CAPABILITY,
@@ -415,6 +418,7 @@ export const RUNTIME_CAPABILITIES = [
   WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY,
   ACCOUNT_IMPORT_RUNTIME_CAPABILITY,
+  CLAUDE_SIGN_IN_RUNTIME_CAPABILITY,
   ANTIGRAVITY_ACCOUNTS_RUNTIME_CAPABILITY,
   DATA_ACCOUNT_RUNTIME_CAPABILITY,
   CODEX_RESET_CREDIT_RUNTIME_CAPABILITY,

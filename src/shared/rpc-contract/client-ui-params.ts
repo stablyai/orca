@@ -244,6 +244,7 @@ export const UiUpdateFields = z
     usageEmptyStateDismissed: z.boolean().optional(),
     codexTerminalServerIsolationNoticeSeen: z.boolean().optional(),
     codexSharedSettingsNoticeSeen: z.boolean().optional(),
+    claudeAccountSignInNoticeSeen: z.boolean().optional(),
     petVisible: z.boolean().optional(),
     petId: z.string().optional(),
     customPets: UnknownRecordArray.optional(),

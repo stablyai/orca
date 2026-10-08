@@ -8,8 +8,7 @@
  * to cross the process boundary: orcad drives it, the daemon performs it, and the verdict
  * travels back over the daemon's socket.
  */
-import { createHash } from 'node:crypto'
-import { readFileSync } from 'node:fs'
+import { hashOrcadLauncher } from '../../shared/orcad-build-identity'
 import process from 'node:process'
 import { checkDaemonHealthWithCoverage, type DaemonHealth } from '../daemon/daemon-health'
 import { ptySpawnHealthPlatformCoverage } from '../daemon/daemon-health-identity'
@@ -58,7 +57,7 @@ export type TerminalDaemonHealth = {
 }
 
 export type OrcadHealth = {
-  /** Content hash of the running orcad bundle — the deployed build's identity. */
+  /** Launcher hash understood by older clients; split launchers embed the server digest. */
   buildHash: string
   buildVersion: string
   nodeVersion: string
@@ -83,7 +82,7 @@ export type OrcadHealth = {
 }
 
 /**
- * Identity of the exact bytes running.
+ * Launcher identity shared with clients that predate split server bundles.
  *
  * Why hash the entry and not read a version string: `ORCA_VERSION` is whatever the deploy
  * exported, so two different builds can carry one version. A rollback that did not actually
@@ -94,7 +93,7 @@ export function computeOrcadBuildHash(entryPath = process.argv[1]): string {
     return 'unknown'
   }
   try {
-    return createHash('sha256').update(readFileSync(entryPath)).digest('hex').slice(0, 16)
+    return hashOrcadLauncher(entryPath)
   } catch {
     return 'unknown'
   }

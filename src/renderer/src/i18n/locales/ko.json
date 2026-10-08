@@ -3737,7 +3737,6 @@
             "54e8d6bb2d": "Fable",
             "d79c3362c4": "5h",
             "a79c64f87e": "Fable",
-            "8295903d17": "전환 후 이전 대화를 계속하려면 활성 Claude terminal을 다시 시작하세요.",
             "c98ea88392": "다른 계정 없음",
             "9332ba8684": "다음으로 전환",
             "d450654fa2": "Claude 계정",
@@ -6490,7 +6489,6 @@
         "AccountsPane": {
           "c2d2751587": "계정 삭제",
           "dbb9626ed1": "취소",
-          "854ebbcc45": "Orca는 저장된 계정에 대해 관리되는 Claude 인증을 삭제합니다. 현재 활성화된 경우 Orca는 시스템 기본 Claude 로그인으로 대체됩니다.",
           "63843e37e2": "Claude 계정을 삭제하시겠습니까?",
           "380a7736cc": "이 계정을 제거하면 관리되는 Codex 홈과 그 안에 저장된 모든 Codex 세션 기록 및 MCP 로그인이 영구적으로 삭제됩니다. 이 작업은 실행 취소할 수 없습니다. 계정이 현재 활성 상태인 경우 Orca는 시스템 기본 Codex 로그인으로 전환됩니다.",
           "0d47394635": "Codex 계정을 제거하시겠습니까?",
@@ -6538,12 +6536,10 @@
           "3fe7862418": "{{value0}}에 대한 관리된 Claude 계정이 없습니다. Orca는 여기에 추가할 때까지 해당 환경의 시스템 기본 Claude 로그인을 사용합니다.",
           "3455cf43fa": "Claude 로그인.",
           "fcc4093fc1": "현재 {{value0}} Codex 로그인을 사용하세요.",
-          "79e484c3b2": "공유 Claude 인증 파일에 대한 선택적 계정 전환기입니다.",
           "8bbfd74556": "Claude 계정",
           "72b36ea174": "선택 사항. Orca는 일반적인 Claude 로그인을 사용할 수 있습니다. 채팅 세션을 이동하지 않고 빠르게 전환하려는 경우에만 계정을 추가하세요.",
           "26ef4b55be": "Claude",
           "2743cdc0af": "Claude 계정 업데이트에 실패했습니다.",
-          "b15ce90870": "{{value0}} -> {{value1}}. 이전 세션을 계속하기 전에 실행 중인 Claude terminals을 다시 시작하세요.",
           "f921d32606": "Claude 계정이 업데이트되었습니다.",
           "5bf8764953": "Codex 계정 업데이트에 실패했습니다.",
           "9baf45d071": "이 기기",
@@ -14896,7 +14892,6 @@
                 "d90d2e1f6d": "세션 및 주간 사용량을 추적합니다.",
                 "8919321417": "Codex 로그인에 실패했습니다.",
                 "c7b90c140b": "Codex 계정이 추가되었습니다.",
-                "4e71d72912": "Claude 로그인에 실패했습니다.",
                 "9ddeb558f9": "Claude 계정이 추가되었습니다.",
                 "29d0653961": "로그인",
                 "945865332e": "로그인 중",
@@ -17790,6 +17785,8 @@
         "managedAccountUnsupported": "WSL에 Claude 계정이 추가되어 있는 동안에는 Claude 채팅에 Windows Claude 계정이 필요합니다.",
         "launchFolderMissing": "이 채팅이 실행되던 폴더가 더 이상 존재하지 않습니다. 이 채팅을 계속하려면 폴더를 복원하세요.",
         "historyInOtherAccount": "이 채팅의 기록은 다른 Claude 계정에 있습니다. 계속하려면 해당 계정으로 다시 전환하세요.",
+        "claudeAccountFolderMissing": "선택한 Claude 계정의 폴더가 없습니다. 다시 로그인하거나 다른 계정을 선택하세요.",
+        "claudeAccountSetupFailed": "선택한 Claude 계정을 설정할 수 없습니다. 다시 시도하거나 다른 계정을 선택하세요.",
         "agentCommandNotRunnable": "{{agent}}의 설정 → 에이전트 → 명령은 Orca가 찾을 수 있는 프로그램 경로나 이름이어야 하며, 인수나 변수를 포함할 수 없습니다. 변경하거나 재설정하세요.",
         "chooseClaudeAccount": "Claude 계정 설정에서 선택하거나 추가하세요.",
         "chooseClaudeAccountThenRunCommand": "Claude 계정 설정에서 선택하거나 추가한 다음 /{{command}}을(를) 다시 실행하세요.",
@@ -18195,7 +18192,7 @@
         "plan": "계획",
         "historyRepaired": "이 채팅 기록의 일부를 불러올 수 없습니다.",
         "historyItemTooLarge": "채팅의 이 부분은 너무 커서 표시할 수 없습니다.",
-        "stoppedBeforeStart": "에이전트가 시작되기 전에 중지됨",
+        "stoppedBeforeStart": "수동으로 중지됨",
         "dismiss": "닫기",
         "copyError": "오류 복사",
         "orcaStopUpdate": "이 응답이 진행되는 동안 {{machine}}의 Orca가 업데이트를 위해 다시 시작되었습니다.",
@@ -18327,6 +18324,7 @@
         "estimated": "마지막 응답 기준 추정치입니다."
       },
       "dismissDeliveryNotice": "닫기",
+      "addSelectionToChat": "채팅에 추가",
       "messageNotSent": "메시지가 전송되지 않음",
       "deliveryUnconfirmed": "전달 확인 안 됨 — 다시 시도하기 전에 채팅을 확인하세요",
       "messageSending": "전송 중…",
@@ -19346,9 +19344,6 @@
       "oldTerminalDialogRisk": "서버를 공유하는 Codex 세션은 함께 종료될 수 있으며 에이전트 상태가 잘못될 수 있습니다.",
       "oldTerminalDialogCause": "이전 터미널은 여전히 Codex 서버를 공유합니다. 새 터미널을 열어 별도의 서버에서 Codex를 실행합니다.",
       "fix": "자물쇠",
-      "openNewTerminal": "새 터미널 열기",
-      "dontShowAgain": "다시 보지 않기",
-      "dismiss": "닫기",
       "dialogTitle": "각 Codex 탭에 자체 서버를 제공합니다",
       "dialogDescription": "Codex 세션은 터미널 공유 백그라운드 서버에서 직접 시작되었습니다. ORCA는 시작되는 Codex 세션을 별도로 유지합니다. 세션이 서버를 공유할 때 서버를 닫으면 다른 세션이 종료될 수 있으며 에이전트 상태가 잘못될 수 있습니다.",
       "copy": "복사",
@@ -19359,7 +19354,6 @@
       "step2Title": "실행 중인 공유 서버 중지",
       "undo": "되돌리려면 codex features enable daemon_auto_start를 실행하세요.",
       "step2Warning": "서버를 공유하는 열려 있는 Codex 세션을 닫습니다.",
-      "learnMore": "자세히 알아보기",
       "turnOff": "끄기",
       "turningOff": "끄는 중...",
       "turnedOff": "껐어요",
@@ -19375,6 +19369,12 @@
     },
     "paneMove": {
       "failed": "분할 창을 새 탭으로 이동할 수 없습니다."
+    },
+    "paneTopBanner": {
+      "openNewTerminal": "새 터미널 열기",
+      "learnMore": "자세히 알아보기",
+      "dontShowAgain": "다시 보지 않기",
+      "dismiss": "닫기"
     }
   },
   "fileSearch": {

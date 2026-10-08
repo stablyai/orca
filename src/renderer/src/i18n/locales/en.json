@@ -319,7 +319,10 @@
       "fileExplorer": "file explorer"
     },
     "followSymlinkedDirectories": "Follow symlinked directories",
-    "followSymlinkedDirectoriesDescription": "Search linked folders in Quick Open and expand local linked folders in File Explorer."
+    "followSymlinkedDirectoriesDescription": "Search linked folders in Quick Open and expand local linked folders in File Explorer.",
+    "accounts": {
+      "claudeRemoveFolder": "Orca deletes this account's Claude folder and its sign-in from this computer. Chat history shared with System default stays. If it is selected, the next Claude you start uses System default."
+    }
   },
   "menu": {
     "checkForUpdates": "Check for Updates...",
@@ -3929,7 +3932,6 @@
             "54e8d6bb2d": "Fable",
             "d79c3362c4": "5h",
             "a79c64f87e": "Fable",
-            "8295903d17": "Restart live Claude terminals before continuing old conversations after switching.",
             "c98ea88392": "No other accounts",
             "9332ba8684": "Switch to",
             "d450654fa2": "Claude Account",
@@ -4192,6 +4194,16 @@
                 "message": "Run cursor-agent login in a terminal on the computer running Orca, then retry usage."
               },
               "plan": "Plan"
+            },
+            "claude": {
+              "waiting": {
+                "label": "Updates when Claude runs",
+                "message": "Claude usage updates the next time Claude runs."
+              },
+              "expired": {
+                "label": "Sign-in expired",
+                "message": "Claude usage has expired. Start Claude in this account to refresh it."
+              }
             }
           },
           "SshTargetStatusRow": {
@@ -6716,7 +6728,6 @@
         "AccountsPane": {
           "c2d2751587": "Remove Account",
           "dbb9626ed1": "Cancel",
-          "854ebbcc45": "Orca will delete the managed Claude auth for this saved account. If it is currently active, Orca falls back to the system default Claude login.",
           "63843e37e2": "Remove Claude Account?",
           "380a7736cc": "Removing this account permanently deletes its managed Codex home, including all Codex session history and MCP logins stored inside. This cannot be undone. If the account is currently active, Orca falls back to the system default Codex login.",
           "0d47394635": "Remove Codex Account?",
@@ -6768,12 +6779,10 @@
           "3fe7862418": "No managed Claude accounts for {{value0}}. Orca will use that environment's system default Claude login until you add one here.",
           "3455cf43fa": "Claude login.",
           "fcc4093fc1": "Use your current {{value0}} Codex login.",
-          "79e484c3b2": "Optional account switcher for the shared Claude auth files.",
           "8bbfd74556": "Claude Accounts",
           "72b36ea174": "Optional. Orca can use your normal Claude login; add accounts only if you want quick switching without moving chat sessions.",
           "26ef4b55be": "Claude",
           "2743cdc0af": "Claude account update failed.",
-          "b15ce90870": "{{value0}} -> {{value1}}. Restart live Claude terminals before continuing old sessions.",
           "f921d32606": "Claude account updated.",
           "5bf8764953": "Codex account update failed.",
           "9baf45d071": "This device",
@@ -15107,11 +15116,11 @@
                 "d90d2e1f6d": "Track session and weekly usage.",
                 "8919321417": "Codex sign-in failed.",
                 "c7b90c140b": "Codex account added.",
-                "4e71d72912": "Claude sign-in failed.",
                 "9ddeb558f9": "Claude account added.",
                 "29d0653961": "Sign in",
                 "945865332e": "Signing in",
-                "accountStatusUnknown": "Account status unknown"
+                "accountStatusUnknown": "Account status unknown",
+                "4e71d72912": "Claude sign-in failed."
               },
               "UsagePage": {
                 "64265cb295": "29% used 5h",
@@ -17969,6 +17978,8 @@
         "managedAccountUnsupported": "While a Claude account is added in WSL, Claude chats need a Windows Claude account.",
         "launchFolderMissing": "The folder this chat ran in no longer exists. Restore it to continue this chat.",
         "historyInOtherAccount": "This chat's history is in another Claude account. Switch back to that account to continue it.",
+        "claudeAccountFolderMissing": "The selected Claude account's folder is missing. Sign in to it again or choose another account.",
+        "claudeAccountSetupFailed": "The selected Claude account could not be set up. Try again or choose another account.",
         "agentCommandNotRunnable": "{{agent}}'s Command in Settings → Agents must be a program path or name Orca can find, with no arguments or variables. Change it or reset it.",
         "chooseClaudeAccount": "Choose or add one in Claude Accounts settings.",
         "chooseClaudeAccountThenRunCommand": "Choose or add one in Claude Accounts settings, then run /{{command}} again.",
@@ -18120,7 +18131,7 @@
         "plan": "Plan",
         "historyRepaired": "Part of this chat's history couldn't be loaded.",
         "historyItemTooLarge": "This part of the chat was too large to show.",
-        "stoppedBeforeStart": "Stopped before the agent started",
+        "stoppedBeforeStart": "Stopped manually",
         "dismiss": "Dismiss",
         "copyError": "Copy error",
         "orcaStopUpdate": "Orca on {{machine}} restarted for an update while this response was in progress.",
@@ -18534,6 +18545,7 @@
         "orcaSessionIdTooltip": "Orca's ID for this chat, separate from the agent CLI's own session ID. Agents use it to refer to each other through Orca."
       },
       "dismissDeliveryNotice": "Dismiss",
+      "addSelectionToChat": "Add to chat",
       "messageNotSent": "Message not sent",
       "deliveryUnconfirmed": "Delivery unconfirmed — check chat before retrying",
       "messageSending": "Sending…",
@@ -18588,6 +18600,9 @@
         "continue": "Continue",
         "failed": "Couldn't continue this chat. Try again, or send a message.",
         "explanation": "Continue, and the agent first checks whether its last step finished."
+      },
+      "claudeSignIn": {
+        "signingIn": "Signing in…"
       }
     },
     "tab": {
@@ -19287,9 +19302,6 @@
       "oldTerminalDialogRisk": "Codex sessions that share a server can end together, and agent status can be wrong.",
       "oldTerminalDialogCause": "Older terminals still share a Codex server. Open a new terminal to run Codex on a separate server.",
       "fix": "Fix",
-      "openNewTerminal": "Open new terminal",
-      "dontShowAgain": "Don't show again",
-      "dismiss": "Dismiss",
       "dialogTitle": "Give each Codex tab its own server",
       "dialogDescription": "Codex sessions started directly in a terminal share one background server. Orca keeps the Codex sessions it starts separate. When sessions share a server, closing one can end the others, and agent status can be wrong.",
       "copy": "Copy",
@@ -19300,7 +19312,6 @@
       "step2Title": "Stop the running shared server",
       "undo": "To undo, run codex features enable daemon_auto_start.",
       "step2Warning": "Closes any open Codex sessions that share the server",
-      "learnMore": "Learn more",
       "turnOff": "Turn off",
       "turningOff": "Turning off…",
       "turnedOff": "Turned off",
@@ -19316,6 +19327,18 @@
     },
     "paneMove": {
       "failed": "Couldn't move the pane to a new tab."
+    },
+    "claudeOldTerminalBanner": {
+      "title": "This terminal was opened before Orca's Claude account update, so claude here uses System default's login.",
+      "dialogTitle": "Why claude here doesn't use the selected account",
+      "dialogDescription": "Orca now keeps each Claude account in its own folder, and claude in a new terminal follows the account you select.",
+      "dialogCause": "Terminals opened before this update don't, so claude here signs in with System default's login. Open a new terminal to use the selected account."
+    },
+    "paneTopBanner": {
+      "openNewTerminal": "Open new terminal",
+      "learnMore": "Learn more",
+      "dontShowAgain": "Don't show again",
+      "dismiss": "Dismiss"
     }
   },
   "fileExplorer": {
@@ -19406,6 +19429,24 @@
         "accounts": "accounts"
       }
     },
+    "claude": {
+      "added": "Account added. Select it to use it for the next Claude you start.",
+      "nextLaunch": "{{value0}} → {{value1}}. The next Claude you start uses it. Running sessions keep their account.",
+      "profileSwitching": "Switching applies to the next Claude you start in any tab. Running sessions keep their account.",
+      "systemDefaultNamed": "System default: {{value0}}",
+      "systemDefaultIsSaved": "System default is signed in as {{value0}}, which is also a saved account. An earlier Orca version may have copied that login there. If it is not your own login, select System default and run claude /login.",
+      "systemDefaultIsSavedDismiss": "Dismiss",
+      "signInRequired": "Sign in again to use this account",
+      "signInAgain": "Sign in again",
+      "usageSignInLabel": "Sign in again",
+      "usageSignInMessage": "The selected Claude account needs you to sign in again. Open Settings > AI Provider Accounts, or choose System default.",
+      "signIn": "Sign in",
+      "signInNotice": {
+        "title": "Finish setting up your Claude accounts",
+        "description": "Sign in to each saved account once and you're ready to switch anytime.",
+        "action": "Sign in to {{value0}}"
+      }
+    },
     "managedData": {
       "description": "Add accounts by running this command in a terminal on the Orca host. Selection applies to new explicit agent launches on that host; direct SSH relay and Windows-hosted WSL launches use their own credentials.",
       "copied": "Copied",
@@ -19465,5 +19506,80 @@
     "unavailable": "Unable to play this media file. The file may be unavailable or use an unsupported codec.",
     "openFailed": "Could not open this file in the default app.",
     "openDefault": "Open in Default App"
+  },
+  "workspace": {
+    "links": {
+      "foreignReview": "This review belongs to another repository. Add reviews from this workspace’s repository.",
+      "repositoryLoading": "Repository identity is still loading. Try again once it is available.",
+      "duplicate": "This link is already attached.",
+      "title": "Linked work",
+      "count": "{{count}} linked",
+      "empty": "Keep every review and task for this workspace together.",
+      "reviews": "Reviews",
+      "tasks": "Issues & tasks",
+      "openItem": "Open {{label}}",
+      "open": "Open link",
+      "unlinkItem": "Unlink {{label}}",
+      "unlink": "Unlink from workspace",
+      "show": "Show {{count}} linked reviews and tasks",
+      "manage": "Manage links…",
+      "details": "Workspace details",
+      "description": "Attach reviews and tasks, and keep notes for this workspace.",
+      "commentHelp": "Markdown supported. Enter or {{shortcut}} to save · Shift+Enter for a new line.",
+      "kind": {
+        "github_pr": "GitHub PR",
+        "github_issue": "GitHub issue",
+        "linear_task": "Linear task",
+        "gitlab_mr": "GitLab MR",
+        "gitlab_issue": "GitLab issue",
+        "jira_task_url": "Jira task (URL)",
+        "bitbucket_pr": "Bitbucket PR",
+        "azure_devops_pr": "Azure DevOps PR",
+        "gitea_pr": "Gitea PR"
+      },
+      "mrReference": "MR !{{number}}",
+      "prReference": "PR #{{number}}",
+      "issueReference": "Issue #{{number}}",
+      "foreignIssue": "This issue belongs to another repository. Add issues from this workspace’s repository.",
+      "linkedResult": "Linked",
+      "addReference": "Add reference",
+      "searchLabel": "Search references",
+      "searchReferences": "Search reviews and tasks, or paste a link",
+      "noReferences": "No matching references. Try a title, number, or URL.",
+      "addItem": "Add {{label}}",
+      "referenceType": "Reference type",
+      "clearSearch": "Clear search",
+      "inlineSearchHint": "Select a result to attach it.",
+      "nameHelp": "Shown in the sidebar. The folder name stays the same.",
+      "notes": "Notes",
+      "addNotes": "Add notes",
+      "notesOptional": "Optional · Markdown",
+      "saveHint": "Changes apply when you save",
+      "terminal": "Terminal",
+      "seenIn": "Seen in {{label}}",
+      "unavailableTab": "Tab unavailable",
+      "sessions": "Sessions & terminals",
+      "jiraModeRequired": "Select Smart or Jira to load this issue.",
+      "linearModeRequired": "Select Smart or Linear to load this issue.",
+      "loadingLinear": "Loading Linear issue…",
+      "linearConnectRequired": "Connect Linear in Settings to link this issue.",
+      "linearReadFailed": "Couldn’t load this Linear issue. Check the URL and connected workspace.",
+      "retrySource": "Retry",
+      "lastKnownStatus": "Last known status",
+      "reviewTarget": "Target: {{branch}}",
+      "reviewUrlRequired": "Paste the review URL to verify its repository and provider.",
+      "stackSummary": "{{count}} linked: {{references}}",
+      "sessionsForItem": "Sessions & terminals for {{label}} · {{count}}",
+      "checksFailed": "Failed",
+      "checksPending": "Pending",
+      "checksPassing": "Passing",
+      "checksUnknown": "Unknown",
+      "checksNeutral": "Neutral",
+      "allReviewChecks": "Reviews: {{count}} · Checks: {{status}}"
+    },
+    "attachments": {
+      "updateRuntime": "Update the remote runtime to change workspace links",
+      "updateRuntimeSafely": "Update the remote runtime to safely change workspace links"
+    }
   }
 }

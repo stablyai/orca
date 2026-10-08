@@ -3737,7 +3737,6 @@
             "54e8d6bb2d": "Fable",
             "d79c3362c4": "5小时",
             "a79c64f87e": "Fable",
-            "8295903d17": "切换后继续旧对话之前，请重新启动实时 Claude 终端。",
             "c98ea88392": "没有其他账户",
             "9332ba8684": "切换到",
             "d450654fa2": "Claude 账户",
@@ -6490,7 +6489,6 @@
         "AccountsPane": {
           "c2d2751587": "删除账户",
           "dbb9626ed1": "取消",
-          "854ebbcc45": "Orca 将删除此已保存账户的托管 Claude 身份验证。如果当前处于活动状态，Orca 将回退到系统默认的 Claude 登录名。",
           "63843e37e2": "删除 Claude 账户？",
           "380a7736cc": "移除此账户会永久删除其托管的 Codex 主目录，包括其中存储的所有 Codex 会话历史记录和 MCP 登录信息。此操作无法撤销。如果该账户当前处于活动状态，Orca 将回退到系统默认的 Codex 登录。",
           "0d47394635": "删除 Codex 账户？",
@@ -6538,12 +6536,10 @@
           "3fe7862418": "{{value0}} 没有受管理的 Claude 账户。Orca 将使用该环境的系统默认 Claude 登录，直到您在此处添加一个。",
           "3455cf43fa": "Claude 登录。",
           "fcc4093fc1": "使用您当前 {{value0}} Codex 登录名。",
-          "79e484c3b2": "用于共享 Claude 身份验证文件的可选账户切换器。",
           "8bbfd74556": "Claude 账户",
           "72b36ea174": "可选。Orca 可使用系统默认 Claude 登录；仅当你需要快速切换且不想迁移聊天会话时才添加账户。",
           "26ef4b55be": "Claude",
           "2743cdc0af": "Claude 账户更新失败。",
-          "b15ce90870": "{{value0}} -> {{value1}}。在继续旧会话之前重新启动实时 Claude 终端。",
           "f921d32606": "Claude 账户已更新。",
           "5bf8764953": "Codex 账户更新失败。",
           "9baf45d071": "当前设备",
@@ -14896,7 +14892,6 @@
                 "d90d2e1f6d": "跟踪会话和每周使用情况。",
                 "8919321417": "Codex 登录失败。",
                 "c7b90c140b": "添加了 Codex 账户。",
-                "4e71d72912": "Claude 登录失败。",
                 "9ddeb558f9": "已添加 Claude 账户。",
                 "29d0653961": "登入",
                 "945865332e": "登录",
@@ -17755,6 +17750,8 @@
         "managedAccountUnsupported": "当 WSL 中添加了 Claude 账户时，Claude 聊天需要 Windows Claude 账户。",
         "launchFolderMissing": "此聊天运行所在的文件夹已不存在。请恢复该文件夹以继续此聊天。",
         "historyInOtherAccount": "此聊天的历史记录位于另一个 Claude 账户中。请切换回该账户以继续此聊天。",
+        "claudeAccountFolderMissing": "所选 Claude 账户的文件夹不存在。请重新登录该账户或选择其他账户。",
+        "claudeAccountSetupFailed": "无法设置所选 Claude 账户。请重试或选择其他账户。",
         "agentCommandNotRunnable": "{{agent}} 在设置 → 智能体中的命令必须是 Orca 能找到的程序路径或名称，且不能包含参数或变量。请修改或重置。",
         "chooseClaudeAccount": "请在 Claude 账户设置中选择或添加一个。",
         "chooseClaudeAccountThenRunCommand": "请在 Claude 账户设置中选择或添加一个，然后重新运行 /{{command}}。",
@@ -18160,7 +18157,7 @@
         "plan": "计划",
         "historyRepaired": "此聊天的部分历史记录无法加载。",
         "historyItemTooLarge": "聊天的这一部分过大，无法显示。",
-        "stoppedBeforeStart": "在智能体开始前已停止",
+        "stoppedBeforeStart": "已手动停止",
         "dismiss": "关闭",
         "copyError": "复制错误",
         "orcaStopUpdate": "此回复进行期间，{{machine}} 上的 Orca 为更新而重新启动。",
@@ -18292,6 +18289,7 @@
         "estimated": "根据上一次响应的估算值。"
       },
       "dismissDeliveryNotice": "关闭",
+      "addSelectionToChat": "添加到聊天",
       "messageNotSent": "消息未发送",
       "deliveryUnconfirmed": "无法确认送达 — 重试前请检查聊天",
       "messageSending": "正在发送…",
@@ -19346,9 +19344,6 @@
       "oldTerminalDialogRisk": "共享服务器的 Codex 会话可能会一起结束，并且智能体状态可能会错误。",
       "oldTerminalDialogCause": "较旧的终端仍然共享 Codex 服务器。打开一个新终端以在单独的服务器上运行 Codex。",
       "fix": "使固定",
-      "openNewTerminal": "打开新终端",
-      "dontShowAgain": "不再显示",
-      "dismiss": "关闭",
       "dialogTitle": "为每个 Codex 选项卡提供自己的服务器",
       "dialogDescription": "Codex 会话直接在共享一台后台服务器的终端中启动。 Orca 将其启动的 Codex 会话分开保存。当会话共享一台服务器时，关闭一个服务器可能会结束其他服务器，并且智能体状态可能会错误。",
       "copy": "复制",
@@ -19359,7 +19354,6 @@
       "step2Title": "停止正在运行的共享服务器",
       "undo": "要撤消，请运行 codex features enable daemon_auto_start。",
       "step2Warning": "关闭共享服务器的所有打开的 Codex 会话",
-      "learnMore": "了解更多",
       "turnOff": "关",
       "turningOff": "正在关闭…",
       "turnedOff": "已关闭",
@@ -19375,6 +19369,12 @@
     },
     "paneMove": {
       "failed": "无法将窗格移动到新选项卡。"
+    },
+    "paneTopBanner": {
+      "openNewTerminal": "打开新终端",
+      "learnMore": "了解更多",
+      "dontShowAgain": "不再显示",
+      "dismiss": "关闭"
     }
   },
   "fileSearch": {

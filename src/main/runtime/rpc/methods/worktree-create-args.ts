@@ -36,6 +36,7 @@ export function buildManagedWorktreeCreateArgs(
     linkedAzureDevOpsPR: params.linkedAzureDevOpsPR,
     linkedGiteaPR: params.linkedGiteaPR,
     linkedWorkItem: params.linkedWorkItem,
+    linkedItems: params.linkedItems,
     linkedTaskSourceContext: params.linkedTaskSourceContext,
     comment: params.comment,
     displayName: params.displayName,

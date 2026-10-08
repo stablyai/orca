@@ -1,3 +1,4 @@
+import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachment-mutation'
 import type { GhAccountBinding } from '../../../../shared/github/account-binding'
 import type { SshRepoReadoption } from '../../../../shared/ssh-types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
@@ -67,6 +68,7 @@ export type FolderWorkspaceUpdates = Partial<
     | 'name'
     | 'folderPath'
     | 'linkedTask'
+    | 'linkedItems'
     | 'linkedTaskSourceContext'
     | 'comment'
     | 'isArchived'
@@ -81,7 +83,8 @@ export type FolderWorkspaceUpdates = Partial<
     | 'lastActivityAt'
     | 'diffComments'
   >
->
+> &
+  WorkspaceAttachmentMutation
 
 export type NestedRepoScanControls = {
   scanId?: string
@@ -206,6 +209,7 @@ export type RepoSlice = {
       folderPath?: string | null
       connectionId?: string | null
       linkedTask?: FolderWorkspace['linkedTask']
+      linkedItems?: FolderWorkspace['linkedItems']
       linkedTaskSourceContext?: FolderWorkspace['linkedTaskSourceContext']
       createdWithAgent?: FolderWorkspace['createdWithAgent']
       pendingFirstAgentMessageRename?: boolean
