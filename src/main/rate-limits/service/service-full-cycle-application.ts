@@ -128,7 +128,7 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
           } satisfies ProviderRateLimits)
 
     const latestCodexHome = this.resolveCodexHome(codexTarget)
-    const latestClaudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
+    const latestClaudeAuthPreparation = await this.resolveClaudeAuthForUsage(claudeTarget, signal)
     if (signal.aborted) {
       return
     }

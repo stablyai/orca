@@ -136,14 +136,15 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
     this.pruneInactiveClaudeState()
     this.pruneInactiveCodexState()
     return {
-      ...this.state,
+      ...this.projectAllowedState(this.state),
       // Why: the cookie lives on the filesystem, not GlobalSettings; surface its presence so the renderer keeps the MiniMax bar across reloads.
       minimaxCookieConfigured: hasMiniMaxSessionCookie(),
       minimaxApiKeyConfigured: hasMiniMaxApiKey(),
       zcodePlanApiKeyConfigured: hasZcodePlanApiKey(),
-      opencodeGoApiKeyConfigured: this.openCodeGoApiKeyConfigured,
-      grokAuthConfigured: this.grokAuthConfigured,
-      cursorAuthConfigured: this.cursorAuthConfigured,
+      opencodeGoApiKeyConfigured:
+        this.isProviderAllowed('opencode-go') && this.openCodeGoApiKeyConfigured,
+      grokAuthConfigured: this.isProviderAllowed('grok') && this.grokAuthConfigured,
+      cursorAuthConfigured: this.isProviderAllowed('cursor') && this.cursorAuthConfigured,
       claudeTarget: this.claudeFetchTarget,
       codexTarget: this.codexFetchTarget,
       inactiveClaudeAccounts: this.buildInactiveArray(

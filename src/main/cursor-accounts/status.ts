@@ -1,3 +1,4 @@
+import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { CursorAccountStatus } from '../../shared/rate-limit-types'
 import { readCursorAuthSession } from '../rate-limits/cursor-auth'
 import { isCursorSessionTokenExpired } from '../rate-limits/cursor-session-token'
@@ -14,8 +15,20 @@ function signedOut(error: string | null): CursorAccountStatus {
   }
 }
 
-export async function getCursorAccountStatus(): Promise<CursorAccountStatus> {
+export async function getCursorAccountStatus(
+  settings:
+    | Pick<GlobalSettings, 'automaticallyDetectAiAccounts'>
+    | (() => Pick<GlobalSettings, 'automaticallyDetectAiAccounts'>)
+): Promise<CursorAccountStatus> {
+  const detectionEnabled = () =>
+    (typeof settings === 'function' ? settings() : settings).automaticallyDetectAiAccounts !== false
+  if (!detectionEnabled()) {
+    return signedOut(null)
+  }
   const readResult = await readCursorAuthSession()
+  if (!detectionEnabled()) {
+    return signedOut(null)
+  }
   if (readResult.status !== 'ok') {
     return signedOut(readResult.status === 'error' ? readResult.error : null)
   }

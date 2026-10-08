@@ -216,6 +216,7 @@ export function buildDefaultSettings(args: {
     minimaxUsageModels: 'general',
     minimaxEndpoint: 'overseas',
     zcodePlanSite: 'zai',
+    automaticallyDetectAiAccounts: true,
     geminiCliOAuthEnabled: false,
     agentCmdOverrides: {},
     agentDefaultArgs: { ...DEFAULT_TUI_AGENT_ARGS },

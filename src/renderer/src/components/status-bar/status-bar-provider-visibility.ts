@@ -7,6 +7,7 @@ export type UsageProviderSettings = Pick<
   | 'claudeManagedAccounts'
   | 'opencodeSessionCookie'
   | 'geminiCliOAuthEnabled'
+  | 'automaticallyDetectAiAccounts'
 > & {
   // Why: Antigravity has no separate persisted usage credential in Orca. The
   // checked status-bar item is the durable user signal; StatusBar only sets
@@ -78,6 +79,11 @@ export function isProviderConfigured(
 export function hasUsageProviderSettings(
   settings: Partial<UsageProviderSettings> | null | undefined
 ): boolean {
+  if (settings?.automaticallyDetectAiAccounts === false) {
+    return (['claude', 'codex', 'gemini', 'opencode-go', 'minimax', 'zcode'] as const).some(
+      (provider) => hasUsageProviderSettingsForProvider(provider, settings)
+    )
+  }
   return Boolean(
     (settings?.codexManagedAccounts?.length ?? 0) > 0 ||
     (settings?.claudeManagedAccounts?.length ?? 0) > 0 ||
@@ -114,6 +120,12 @@ export function hasUsageProviderSettingsForProvider(
       Boolean(settings.opencodeSessionCookie?.trim()) ||
       settings.opencodeGoApiKeyConfigured === true
     )
+  }
+  if (
+    settings.automaticallyDetectAiAccounts === false &&
+    (providerId === 'antigravity' || providerId === 'grok' || providerId === 'cursor')
+  ) {
+    return false
   }
   if (providerId === 'antigravity') {
     // Why no Gemini OAuth gate: the snapshot comes from the `agy` CLI probe, so
@@ -157,6 +169,13 @@ export function getVisibleUsageProvider(
   provider: ProviderRateLimits | null | undefined,
   settings: Partial<UsageProviderSettings> | null | undefined
 ): ProviderRateLimits | null {
+  if (
+    settings?.automaticallyDetectAiAccounts === false &&
+    providerId !== 'antigravity' &&
+    !hasUsageProviderSettingsForProvider(providerId, settings)
+  ) {
+    return null
+  }
   if (isProviderConfigured(provider)) {
     return provider
   }
@@ -174,6 +193,9 @@ export function isUsageEmptyState(
   // hydrate, avoid showing a setup CTA that can contradict connected accounts.
   if (!settings) {
     return false
+  }
+  if (settings.automaticallyDetectAiAccounts === false) {
+    return !hasUsageProviderSettings(settings) && !isProviderConfigured(providers.antigravity)
   }
   // Why: system-default Claude/Codex accounts have no persisted account row;
   // their first durable signal is the usage snapshot, so wait for snapshots to

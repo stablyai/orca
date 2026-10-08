@@ -1,7 +1,19 @@
+import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { GrokAccountStatus } from '../../shared/rate-limit-types'
 import { isGrokAccessTokenFresh, readGrokAuthSession } from '../rate-limits/grok-auth'
 
-export function getGrokAccountStatus(): GrokAccountStatus {
+export function getGrokAccountStatus(
+  settings: Pick<GlobalSettings, 'automaticallyDetectAiAccounts'>
+): GrokAccountStatus {
+  if (settings.automaticallyDetectAiAccounts === false) {
+    return {
+      signedIn: false,
+      email: null,
+      teamId: null,
+      tokenFresh: false,
+      error: null
+    }
+  }
   const readResult = readGrokAuthSession()
   if (readResult.status === 'missing') {
     return {

@@ -26,6 +26,33 @@ describe('AccountsPane', () => {
     useAppStore.setState({ settingsSearchQuery: '', runtimeEnvironments: [] })
   })
 
+  it('renders the default-on autodetection control before provider accounts', () => {
+    const markup = renderPane(getDefaultSettings('/tmp'))
+    expect(markup).toContain('Automatically detect existing AI accounts')
+    expect(markup).toContain(
+      'Explicitly connected accounts and terminal CLI logins are unaffected.'
+    )
+    expect(markup.indexOf('Automatically detect existing AI accounts')).toBeLessThan(
+      markup.indexOf('id="accounts-claude"')
+    )
+  })
+
+  it('explains disabled ambient accounts instead of claiming they are signed out', () => {
+    const markup = renderPane({
+      ...getDefaultSettings('/tmp'),
+      automaticallyDetectAiAccounts: false
+    })
+    expect(markup).toContain('Automatic account detection is disabled.')
+    expect(markup).not.toContain('Not signed in to Grok CLI')
+  })
+
+  it('finds the autodetection control through discovery search', () => {
+    useAppStore.setState({ settingsSearchQuery: 'discovery' })
+    expect(renderPane(getDefaultSettings('/tmp'))).toContain(
+      'Automatically detect existing AI accounts'
+    )
+  })
+
   it('hides the WSL account location controls on platforms without WSL support', () => {
     const markup = renderPane({
       ...getDefaultSettings('/tmp'),

@@ -54,6 +54,7 @@ export type RuntimeClientSettings = Pick<
   | 'worktreeVisibilityDefaults'
   | 'agentSkillSharingEnabled'
   | 'machineName'
+  | 'automaticallyDetectAiAccounts'
 > & {
   hostSettingOverrides: RuntimeHostDisplayLabelOverrides
   sourceControlAi: RuntimeClientSourceControlAi
@@ -89,6 +90,7 @@ export type RuntimeClientSettingsUpdate = Pick<
   | 'prBotAuthorOverrides'
   | 'worktreeVisibilityDefaults'
   | 'machineName'
+  | 'automaticallyDetectAiAccounts'
 >
 
 export class RuntimeClientSettingsController {
@@ -140,6 +142,7 @@ export class RuntimeClientSettingsController {
       worktreeVisibilityDefaults: settings.worktreeVisibilityDefaults ?? { external: 'hide' },
       agentSkillSharingEnabled: isAgentSkillSharingEnabled(settings),
       machineName: settings.machineName ?? '',
+      automaticallyDetectAiAccounts: settings.automaticallyDetectAiAccounts !== false,
       // Why projected: a paired client's AI buttons start these actions' agents, and must honour
       // the agent saved for each one as the desktop does. Absent on older hosts.
       sourceControlAi: projectSourceControlLaunchRecipes(settings),

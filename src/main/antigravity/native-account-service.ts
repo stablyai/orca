@@ -24,6 +24,7 @@ function matches(account: StoredAntigravityAccount, current: AntigravityNativeCr
 
 export class AntigravityAccountService {
   private mutation: Promise<unknown> = Promise.resolve()
+  private selectedAccountPresent: boolean | undefined
 
   constructor(
     private readonly store: AntigravityAccountStore,
@@ -31,8 +32,41 @@ export class AntigravityAccountService {
     private readonly now: () => number = Date.now
   ) {}
 
-  listAccounts(): Promise<AntigravityAccountState> {
-    return this.serialize(async () => this.state(await this.reconcile()))
+  hasSelectedAccount(): boolean {
+    if (this.selectedAccountPresent === undefined) {
+      try {
+        this.readVault()
+      } catch {
+        return false
+      }
+    }
+    return this.selectedAccountPresent === true
+  }
+
+  listAccounts(automaticallyDetect: boolean | (() => boolean)): Promise<AntigravityAccountState> {
+    const detectionEnabled = () =>
+      typeof automaticallyDetect === 'function' ? automaticallyDetect() : automaticallyDetect
+    return this.serialize(async () => {
+      const initialVault = this.readVault()
+      const selected = initialVault.accounts.find(
+        (account) => account.id === initialVault.selectedAccountId
+      )
+      const current = detectionEnabled() || selected ? await this.backend.read() : null
+      const vault = this.readVault()
+      if (!detectionEnabled()) {
+        const latestSelected = vault.accounts.find(
+          (account) => account.id === vault.selectedAccountId
+        )
+        // Opt-out permits verification of the selected account, never ambient discovery.
+        if (!current?.identity || !latestSelected || !matches(latestSelected, current)) {
+          return this.state({ vault, current: null })
+        }
+      }
+      if (current && this.updateSnapshot(vault, current)) {
+        this.writeVault(vault)
+      }
+      return this.state({ vault, current })
+    })
   }
 
   addCurrentAccount(): Promise<AntigravityAccountState> {
@@ -59,7 +93,7 @@ export class AntigravityAccountService {
           updatedAt: timestamp
         }
         vault.accounts.push(account)
-        this.store.write(vault)
+        this.writeVault(vault)
       }
       return this.state({ vault, current })
     })
@@ -82,13 +116,13 @@ export class AntigravityAccountService {
           'Antigravity account switching could not be verified; refresh before retrying.'
         )
       }
-      const latest = this.store.read()
+      const latest = this.readVault()
       if (!latest.accounts.some((account) => account.id === id && matches(account, readback))) {
         throw new Error('Antigravity snapshots changed during selection; refresh before retrying.')
       }
       latest.selectedAccountId = id
       this.updateSnapshot(latest, readback)
-      this.store.write(latest)
+      this.writeVault(latest)
       return this.state({ vault: latest, current: readback })
     })
   }
@@ -104,7 +138,7 @@ export class AntigravityAccountService {
         throw new Error('Select another Antigravity account before removing this account.')
       }
       const readback = await this.backend.read()
-      const latest = this.store.read()
+      const latest = this.readVault()
       const latestAccount = latest.accounts.find((entry) => entry.id === id)
       if (!latestAccount) {
         throw new Error('Antigravity account snapshots changed; refresh before retrying.')
@@ -116,7 +150,7 @@ export class AntigravityAccountService {
         this.updateSnapshot(latest, readback)
       }
       latest.accounts = latest.accounts.filter((entry) => entry.id !== id)
-      this.store.write(latest)
+      this.writeVault(latest)
       return this.state({ vault: latest, current: readback })
     })
   }
@@ -136,12 +170,39 @@ export class AntigravityAccountService {
     })
   }
 
+  private readVault(): AntigravityAccountVault {
+    try {
+      const vault = this.store.read()
+      this.updateSelectedAccountPresence(vault)
+      return vault
+    } catch (error) {
+      this.selectedAccountPresent = false
+      throw error
+    }
+  }
+
+  private writeVault(vault: AntigravityAccountVault): void {
+    try {
+      this.store.write(vault)
+      this.updateSelectedAccountPresence(vault)
+    } catch (error) {
+      this.selectedAccountPresent = false
+      throw error
+    }
+  }
+
+  private updateSelectedAccountPresence(vault: AntigravityAccountVault): void {
+    this.selectedAccountPresent = vault.accounts.some(
+      (account) => account.id === vault.selectedAccountId
+    )
+  }
+
   private async reconcile() {
     const current = await this.backend.read()
     // Re-read after native I/O so a delayed read never restores an older vault.
-    const vault = this.store.read()
+    const vault = this.readVault()
     if (current && this.updateSnapshot(vault, current)) {
-      this.store.write(vault)
+      this.writeVault(vault)
     }
     return { vault, current }
   }

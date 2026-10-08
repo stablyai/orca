@@ -248,19 +248,27 @@ export function renderCodexAccountsSection(model: AccountsPaneSectionModel): Rea
                   systemCodexNeedsSignIn ? 'text-destructive' : 'text-muted-foreground'
                 }`}
               >
-                {systemCodexNeedsSignIn
-                  ? systemCodexMissingSignIn
-                    ? translate(
-                        'auto.components.settings.AccountsPane.codexSystemDefaultNeedsSignIn',
-                        'No Codex sign-in was found for {{value0}}.',
-                        { value0: accountRuntimeSentenceLabel }
-                      )
-                    : translate(
-                        'auto.components.settings.AccountsPane.fd62f37c24',
-                        'Codex reported this {{value0}} login is out of date.',
-                        { value0: accountRuntimeSentenceLabel }
-                      )
-                  : getCodexSystemDefaultSubtitle(systemCodexIdentity, accountRuntimeSentenceLabel)}
+                {model.ambientDisabled
+                  ? translate(
+                      'accounts.autodetection.disabled',
+                      'Automatic account detection is disabled. Terminal CLI logins are unaffected.'
+                    )
+                  : systemCodexNeedsSignIn
+                    ? systemCodexMissingSignIn
+                      ? translate(
+                          'auto.components.settings.AccountsPane.codexSystemDefaultNeedsSignIn',
+                          'No Codex sign-in was found for {{value0}}.',
+                          { value0: accountRuntimeSentenceLabel }
+                        )
+                      : translate(
+                          'auto.components.settings.AccountsPane.fd62f37c24',
+                          'Codex reported this {{value0}} login is out of date.',
+                          { value0: accountRuntimeSentenceLabel }
+                        )
+                    : getCodexSystemDefaultSubtitle(
+                        systemCodexIdentity,
+                        accountRuntimeSentenceLabel
+                      )}
               </span>
             </div>
           </button>

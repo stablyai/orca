@@ -1,5 +1,7 @@
 import { app } from 'electron'
 import { RateLimitService } from '../rate-limits/service'
+import { createAccountDiscoveryPolicy } from '../rate-limits/service/account-discovery-policy'
+import { getAntigravityAccountService } from '../antigravity/native-account-host'
 import { CodexRuntimeHomeService } from '../codex-accounts/runtime-home-service'
 import { CodexAccountService } from '../codex-accounts/service'
 import { ClaudeRuntimeAuthService } from '../claude-accounts/runtime-auth-service'
@@ -13,9 +15,9 @@ import { getOrcaManagedCodexHomePath } from '../codex/codex-home-paths'
 import { getInitialCodexRateLimitTarget } from '../rate-limits/codex-rate-limit-target'
 import { getInitialClaudeRateLimitTarget } from '../rate-limits/claude-rate-limit-target'
 import { getKimiRuntimeTarget, resolveKimiHome } from '../kimi/kimi-runtime-home'
-import { readMiniMaxSessionCookie } from '../minimax/minimax-cookie-store'
-import { readMiniMaxApiKey } from '../minimax/minimax-api-key-store'
-import { readZcodePlanApiKey } from '../zcode/zcode-plan-api-key-store'
+import { hasMiniMaxSessionCookie, readMiniMaxSessionCookie } from '../minimax/minimax-cookie-store'
+import { hasMiniMaxApiKey, readMiniMaxApiKey } from '../minimax/minimax-api-key-store'
+import { hasZcodePlanApiKey, readZcodePlanApiKey } from '../zcode/zcode-plan-api-key-store'
 import {
   hasOpenCodeGoApiKey,
   readOpenCodeGoApiKey,
@@ -41,6 +43,20 @@ export function initializeMainProcessAccountServices(): void {
     throw new Error('Usage stores must be initialized before account services')
   }
   state.rateLimits = new RateLimitService()
+  state.rateLimits.setAccountDiscoveryPolicyResolver(() =>
+    createAccountDiscoveryPolicy(store.getSettings(), {
+      opencodeGo: hasOpenCodeGoApiKey,
+      minimax: () => hasMiniMaxApiKey() || hasMiniMaxSessionCookie(),
+      zcode: hasZcodePlanApiKey,
+      antigravity: () => {
+        try {
+          return getAntigravityAccountService({ runtime: 'host' }).hasSelectedAccount()
+        } catch {
+          return false
+        }
+      }
+    })
+  )
   state.codexRuntimeHome = new CodexRuntimeHomeService(store)
   void startCodexStateDbBackfillRecoveryInBackground(getOrcaManagedCodexHomePath())
   state.codexSessionMigration = createCodexSessionMigrationScheduler({
@@ -78,6 +94,23 @@ export function initializeMainProcessAccountServices(): void {
     store.getSettings()
   )
   store.onSettingsChanged((updates, settings) => {
+    if (
+      'automaticallyDetectAiAccounts' in updates ||
+      'geminiCliOAuthEnabled' in updates ||
+      'claudeManagedAccounts' in updates ||
+      'codexManagedAccounts' in updates ||
+      'activeClaudeManagedAccountId' in updates ||
+      'activeCodexManagedAccountId' in updates ||
+      'activeClaudeManagedAccountIdsByRuntime' in updates ||
+      'activeCodexManagedAccountIdsByRuntime' in updates
+    ) {
+      state.rateLimits?.accountDiscoveryPolicyChanged()
+      void state.rateLimits
+        ?.refresh()
+        .catch((error: unknown) =>
+          console.warn('[rate-limits] Failed to refresh account discovery policy:', error)
+        )
+    }
     // Why: auto is a live policy; retarget only providers whose settings-derived runtime changed.
     void syncAccountRuntimeTargets(updates, settings).catch((error) =>
       console.warn('[rate-limits] Failed to apply account runtime target:', error)

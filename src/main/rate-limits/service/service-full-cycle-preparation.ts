@@ -13,6 +13,7 @@ import { fetchMiniMaxRateLimits } from '../minimax/minimax-fetcher'
 import { createHash } from 'node:crypto'
 import { fetchOpenCodeGoUsage } from '../opencode-go-usage-source-selection'
 import { RateLimitServiceFetchPolicy } from './service-fetch-policy'
+import { discoveryDisabledSnapshot } from './account-discovery-policy'
 import type { SettledProviderResult } from './service-sibling-provider-result'
 import type {
   ClaudeRuntimeAuthPreparation,
@@ -65,7 +66,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     const claudeTarget = this.claudeFetchTarget
     // Why: capture before the resolver await so an account switch during it invalidates both the snapshot and the state apply.
     const claudeGeneration = this.claudeFetchGeneration
-    const claudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
+    const claudeAuthPreparation = await this.resolveClaudeAuthForUsage(claudeTarget, signal)
     if (signal.aborted) {
       return null
     }
@@ -98,7 +99,9 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     const miniMaxApiKey = miniMaxConfigResult.config.apiKey
     const geminiCliOAuthEnabled = this.geminiCliOAuthEnabledResolver?.() ?? false
     // Why: getState() is hot (renderer pushes + mobile snapshots); keep Grok's sync auth-file probe on fetch cycles instead.
-    const grokAuthReadResult = readGrokAuthSession()
+    const grokAuthReadResult = this.isProviderAllowed('grok')
+      ? readGrokAuthSession()
+      : { status: 'missing' as const }
     this.grokAuthConfigured = grokAuthReadResult.status === 'ok'
 
     // Discard stale data on config change — it belongs to a different session/workspace.
@@ -171,17 +174,20 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
 
     // Why its own promise: the keychain read and the desktop state.vscdb read
     // (on its worker thread) are both async and must not delay other providers.
-    const cursorResultPromise = readCursorAuthSession()
-      .then((authReadResult) => {
+    const cursorResultPromise = this.fetchAllowedProvider('cursor', signal, () =>
+      readCursorAuthSession().then((authReadResult) => {
+        if (!this.canFetchProvider('cursor', signal)) {
+          return discoveryDisabledSnapshot('cursor')
+        }
         this.cursorAuthConfigured = authReadResult.status === 'ok'
         return fetchCursorRateLimits({ signal, authReadResult })
       })
-      .then(
-        (value) => ({ status: 'fulfilled', value }) as const,
-        (reason) => ({ status: 'rejected', reason }) as const
-      )
+    ).then(
+      (value) => ({ status: 'fulfilled', value }) as const,
+      (reason) => ({ status: 'rejected', reason }) as const
+    )
 
-    const zcodeResultPromise = (
+    const zcodeResultPromise = this.fetchAllowedProvider('zcode', signal, () =>
       zcodePlanConfigResult.error
         ? Promise.resolve(this.getZcodePlanCredentialError(zcodePlanConfigResult.error))
         : fetchZcodeRateLimits({ signal, planCredential: zcodePlanCredential })
@@ -191,7 +197,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     )
 
     // Hidden meters avoid the CLI spawn; the separate promise keeps other providers responsive.
-    const antigravityResultPromise = (
+    const antigravityResultPromise = this.fetchAllowedProvider('antigravity', signal, () =>
       antigravityUsageEnabled
         ? fetchAntigravityRateLimits({ signal })
         : Promise.resolve(previousState.antigravity ?? antigravityUsageDisabledSnapshot())
@@ -202,17 +208,20 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
 
     const missingWslCodexHome =
       codexFetchGated || codexHomePath ? null : this.getMissingWslCodexHomeResult(codexTarget)
-    const grokResultPromise = fetchGrokRateLimits({
-      signal,
-      authReadResult: grokAuthReadResult
-    }).then(
+    const grokResultPromise = this.fetchAllowedProvider('grok', signal, () =>
+      fetchGrokRateLimits({
+        signal,
+        authReadResult: grokAuthReadResult
+      })
+    ).then(
       (value) => ({ status: 'fulfilled', value }) as const,
       (reason) => ({ status: 'rejected', reason }) as const
     )
 
     // Why: skip automated Claude fetches while a Retry-After window is open or a live session feed is fresher than the OAuth poll would be.
     const claudeFetchGated =
-      !options?.force && this.shouldSkipAutomatedClaudeFetch(previousState.claude)
+      !this.canFetchProvider('claude', signal, claudeTarget) ||
+      (!options?.force && this.shouldSkipAutomatedClaudeFetch(previousState.claude))
 
     const [claudeResult, codexResult, geminiResult, opencodeGoResult, kimiResult, miniMaxResult] =
       await Promise.allSettled([
@@ -232,37 +241,44 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
               codexHomePath,
               signal
             })),
-        fetchGeminiRateLimits(geminiCliOAuthEnabled),
-        fetchOpenCodeGoUsage({
-          settingsApiKey: openCodeGoApiKey,
-          // Why here: the key can also come from the environment or OpenCode's
-          // own store, so presence is only known once the fetch resolves it.
-          onApiKeyResolved: (resolution) => {
-            // Why: a credential change mid-fetch bumps the generation; its stale presence must not win.
-            if (opencodeGeneration !== this.opencodeFetchGeneration) {
-              return
-            }
-            // An undecryptable or briefly unreadable saved key still counts, so the bar stays up.
-            this.openCodeGoApiKeyConfigured =
-              resolution.status === 'found' ||
-              openCodeGoApiKeyError !== null ||
-              openCodeGoApiKeyReadSkipped
-          },
-          cookie,
-          workspaceIdOverride: workspaceIdOverride || undefined,
-          networkProxySettings: this.networkProxySettingsResolver?.(),
-          signal
-        }),
-        this.fetchKimiWithResolvedHome(),
-        miniMaxConfigResult.error
-          ? Promise.resolve(this.getMiniMaxCredentialError(miniMaxConfigResult.error))
-          : fetchMiniMaxRateLimits({
-              cookie: miniMaxCookie,
-              groupId: miniMaxGroupId,
-              models: miniMaxModels,
-              endpointMode: miniMaxEndpoint,
-              apiKey: miniMaxApiKey
-            })
+        this.fetchAllowedProvider('gemini', signal, () =>
+          fetchGeminiRateLimits(geminiCliOAuthEnabled)
+        ),
+        this.fetchAllowedProvider('opencode-go', signal, () =>
+          fetchOpenCodeGoUsage({
+            allowAmbientCredentials: this.isAutomaticDiscoveryEnabled(),
+            settingsApiKey: openCodeGoApiKey,
+            // Why here: the key can also come from the environment or OpenCode's
+            // own store, so presence is only known once the fetch resolves it.
+            onApiKeyResolved: (resolution) => {
+              // Why: a credential change mid-fetch bumps the generation; its stale presence must not win.
+              if (opencodeGeneration !== this.opencodeFetchGeneration) {
+                return
+              }
+              // An undecryptable or briefly unreadable saved key still counts, so the bar stays up.
+              this.openCodeGoApiKeyConfigured =
+                resolution.status === 'found' ||
+                openCodeGoApiKeyError !== null ||
+                openCodeGoApiKeyReadSkipped
+            },
+            cookie,
+            workspaceIdOverride: workspaceIdOverride || undefined,
+            networkProxySettings: this.networkProxySettingsResolver?.(),
+            signal
+          })
+        ),
+        this.fetchKimiWithResolvedHome(signal),
+        this.fetchAllowedProvider('minimax', signal, () =>
+          miniMaxConfigResult.error
+            ? Promise.resolve(this.getMiniMaxCredentialError(miniMaxConfigResult.error))
+            : fetchMiniMaxRateLimits({
+                cookie: miniMaxCookie,
+                groupId: miniMaxGroupId,
+                models: miniMaxModels,
+                endpointMode: miniMaxEndpoint,
+                apiKey: miniMaxApiKey
+              })
+        )
       ])
 
     if (signal.aborted) {

@@ -119,6 +119,7 @@ export type RuntimeStore = {
     mobileEmulatorEnabled?: boolean
     mobileEmulatorDefaultDeviceUdid?: string | null
     machineName?: GlobalSettings['machineName']
+    automaticallyDetectAiAccounts?: GlobalSettings['automaticallyDetectAiAccounts']
     voice?: VoiceSettings
     claudeAgentTeamsMode?: GlobalSettings['claudeAgentTeamsMode']
     // Why: Phase-5 query responder kill switches — read per chunk in

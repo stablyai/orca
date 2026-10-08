@@ -106,6 +106,10 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   // Why: thread non-GlobalSettings durability flags so bars stay visible across reloads and snapshot refreshes.
   const usageSettings = {
     ...settings,
+    // Remote snapshots are host-owned; a local opt-out cannot suppress their managed accounts.
+    automaticallyDetectAiAccounts: settings?.activeRuntimeEnvironmentId
+      ? undefined
+      : settings?.automaticallyDetectAiAccounts,
     antigravityUsageConfigured,
     minimaxCookieConfigured: rateLimits.minimaxCookieConfigured,
     minimaxApiKeyConfigured: rateLimits.minimaxApiKeyConfigured,

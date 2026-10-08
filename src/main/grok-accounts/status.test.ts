@@ -13,10 +13,22 @@ describe('getGrokAccountStatus', () => {
     vi.mocked(isGrokAccessTokenFresh).mockReturnValue(true)
   })
 
+  it('does not probe Grok credentials when detection is disabled', () => {
+    expect(getGrokAccountStatus({ automaticallyDetectAiAccounts: false })).toEqual({
+      signedIn: false,
+      email: null,
+      teamId: null,
+      tokenFresh: false,
+      error: null
+    })
+    expect(readGrokAuthSession).not.toHaveBeenCalled()
+    expect(isGrokAccessTokenFresh).not.toHaveBeenCalled()
+  })
+
   it('reports unsigned status when the Grok auth file is missing', () => {
     vi.mocked(readGrokAuthSession).mockReturnValue({ status: 'missing' })
 
-    expect(getGrokAccountStatus()).toEqual({
+    expect(getGrokAccountStatus({})).toEqual({
       signedIn: false,
       email: null,
       teamId: null,
@@ -31,7 +43,7 @@ describe('getGrokAccountStatus', () => {
       error: 'Grok auth file is invalid'
     })
 
-    expect(getGrokAccountStatus()).toEqual({
+    expect(getGrokAccountStatus({ automaticallyDetectAiAccounts: true })).toEqual({
       signedIn: false,
       email: null,
       teamId: null,
@@ -54,7 +66,7 @@ describe('getGrokAccountStatus', () => {
     })
     vi.mocked(isGrokAccessTokenFresh).mockReturnValue(false)
 
-    const status = getGrokAccountStatus()
+    const status = getGrokAccountStatus({})
 
     expect(status).toEqual({
       signedIn: true,

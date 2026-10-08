@@ -133,7 +133,7 @@ describe('RateLimitService', () => {
     expect(service.getState().zcode?.session?.usedPercent).toBe(42)
   })
 
-  it('does not reread Grok auth when callers read state snapshots', () => {
+  it('probes Grok only on refresh, not construction or state reads', async () => {
     vi.mocked(readGrokAuthSession).mockReturnValue({
       status: 'ok',
       session: {
@@ -146,6 +146,9 @@ describe('RateLimitService', () => {
       }
     })
     const service = new RateLimitService()
+    expect(readGrokAuthSession).not.toHaveBeenCalled()
+    expect(service.getState().grokAuthConfigured).toBe(false)
+    await service.refreshGrok()
     vi.mocked(readGrokAuthSession).mockClear()
 
     expect(service.getState().grokAuthConfigured).toBe(true)

@@ -6,6 +6,11 @@ import type {
 } from '../../../../shared/managed-account-types'
 import type { CodexConfigSyncStatus } from '../../../../shared/codex-config-sync-types'
 import { toast } from 'sonner'
+import { useAiAccountAutodetection } from './use-ai-account-autodetection'
+import {
+  renderAccountsAutodetectionSection,
+  renderAmbientProviderAccountsSections
+} from './accounts-pane-autodetection-section'
 import { useAppStore } from '../../store'
 import { translate } from '@/i18n/i18n'
 import { isWebClientLocation } from '@/lib/web-client-location'
@@ -19,8 +24,6 @@ import {
   getAccountsClaudeSearchEntries,
   getAccountsCodexSearchEntries,
   getAccountsGeminiSearchEntries,
-  getAccountsCursorSearchEntries,
-  getAccountsGrokSearchEntries,
   getAccountsAntigravitySearchEntries,
   getAccountsLocationSearchEntries,
   getAccountsMiniMaxSearchEntries,
@@ -39,10 +42,8 @@ import {
   providerAccountIsActiveInView,
   providerAccountMatchesView
 } from './provider-account-visibility'
-import { GrokAccountsSection } from './GrokAccountsSection'
 import { AntigravityAccountsSection } from './AntigravityAccountsSection'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
-import { CursorAccountsSection } from './CursorAccountsSection'
 import { ZcodePlanAccountsSection } from './ZcodePlanAccountsSection'
 import type {
   AccountsPaneProps,
@@ -80,6 +81,8 @@ export function AccountsPane({
   wslCapabilitiesLoading = false,
   accountOwnerPlatform = null
 }: AccountsPaneProps): React.JSX.Element {
+  const autodetection = useAiAccountAutodetection(settings, updateSettings)
+  const ambientDisabled = autodetection.enabled === false
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const codexRateLimits = useAppStore((s) => s.rateLimits.codex)
   const codexRateLimitTarget = useAppStore((s) => s.rateLimits.codexTarget)
@@ -189,19 +192,20 @@ export function AccountsPane({
   // runtime's own ~/.codex), so only surface it in the host view. Per-distro
   // WSL falls back to the generic label.
   const systemCodexIdentity =
-    accountRuntime.runtime === 'host' ? codexAccounts.systemDefault : undefined
+    !ambientDisabled && accountRuntime.runtime === 'host' ? codexAccounts.systemDefault : undefined
   // Why: remote snapshots own their system-default identity, but the desktop's
   // rate-limit poll must not be misattributed to a remote account owner.
-  const activeCodexAuthWarning = codexAccountsLoaded
-    ? getCodexAccountAuthWarning({
-        limits: isRemoteAccountScope ? null : codexRateLimits,
-        target: codexRateLimitTarget,
-        runtime: accountRuntime,
-        activeAccountId: activeCodexAccountId,
-        accountId: activeCodexAccountId,
-        authKind: activeCodexAccountId === null ? systemCodexIdentity?.authKind : undefined
-      })
-    : null
+  const activeCodexAuthWarning =
+    codexAccountsLoaded && (!ambientDisabled || activeCodexAccountId !== null)
+      ? getCodexAccountAuthWarning({
+          limits: isRemoteAccountScope ? null : codexRateLimits,
+          target: codexRateLimitTarget,
+          runtime: accountRuntime,
+          activeAccountId: activeCodexAccountId,
+          accountId: activeCodexAccountId,
+          authKind: activeCodexAccountId === null ? systemCodexIdentity?.authKind : undefined
+        })
+      : null
   // Why: the mirror keeps serving the last synced settings when ~/.codex is
   // unusable, so without this the user only sees their edits being ignored.
   const [codexConfigSync, setCodexConfigSync] = useState<CodexConfigSyncStatus | null>(null)
@@ -209,7 +213,11 @@ export function AccountsPane({
     // Why: the status resolves the host's own ~/.codex and shared runtime home.
     // A WSL or remote scope mirrors different homes entirely, so showing it there
     // would name a config file that has nothing to do with the selected runtime.
-    if (isRemoteAccountScope || accountRuntime.runtime !== 'host') {
+    if (
+      isRemoteAccountScope ||
+      accountRuntime.runtime !== 'host' ||
+      (ambientDisabled && activeCodexAccountId === null)
+    ) {
       setCodexConfigSync(null)
       return
     }
@@ -222,7 +230,13 @@ export function AccountsPane({
     // Why: the status resolves whichever home the ACTIVE selection mirrors into
     // (per-account, shared, or none for the real-home lane), so switching
     // accounts must refetch or the banner describes the previous account.
-  }, [isRemoteAccountScope, accountRuntime.runtime, activeCodexAccountId, codexAccountsLoaded])
+  }, [
+    isRemoteAccountScope,
+    accountRuntime.runtime,
+    activeCodexAccountId,
+    codexAccountsLoaded,
+    ambientDisabled
+  ])
   const codexConfigSyncWarning = getCodexConfigSyncWarning(codexConfigSync)
   const systemCodexMissingSignIn = activeCodexAuthWarning === 'missing-sign-in'
   const systemCodexNeedsSignIn = activeCodexAccountId === null && Boolean(activeCodexAuthWarning)
@@ -297,7 +311,7 @@ export function AccountsPane({
     return () => {
       watcher.close()
     }
-  }, [activeRuntimeEnvironmentId])
+  }, [activeRuntimeEnvironmentId, ambientDisabled])
 
   const runCodexAccountAction = createCodexAccountActionRunner({
     settings,
@@ -342,6 +356,7 @@ export function AccountsPane({
     claudeAction,
     visibleClaudeAccounts,
     systemClaudeActive,
+    ambientDisabled,
     setRemoveClaudeTarget,
     runClaudeAccountAction,
     codexAccounts,
@@ -376,6 +391,7 @@ export function AccountsPane({
     clearMiniMaxCookie
   }
   const visibleSections = [
+    renderAccountsAutodetectionSection(autodetection),
     !searchQuery || /opencode|devin|account/i.test(searchQuery) ? (
       <div key={settings.activeRuntimeEnvironmentId ?? 'local'} className="space-y-8">
         <ManagedDataAccountsSection provider="opencode" target={getActiveRuntimeTarget(settings)} />
@@ -402,6 +418,7 @@ export function AccountsPane({
         owner={getActiveRuntimeTarget(settings)}
         target={{ runtime: accountRuntime.runtime, wslDistro: accountRuntime.wslDistro }}
         label={accountRuntimeSentenceLabel}
+        ambientDisabled={ambientDisabled}
       />
     ) : null,
     matchesSettingsSearch(searchQuery, getAccountsOpencodeSearchEntries())
@@ -410,12 +427,7 @@ export function AccountsPane({
     matchesSettingsSearch(searchQuery, getAccountsMiniMaxSearchEntries())
       ? renderMiniMaxAccountsSection(model)
       : null,
-    matchesSettingsSearch(searchQuery, getAccountsGrokSearchEntries()) ? (
-      <GrokAccountsSection key="grok" />
-    ) : null,
-    matchesSettingsSearch(searchQuery, getAccountsCursorSearchEntries()) ? (
-      <CursorAccountsSection key="cursor" />
-    ) : null,
+    ...renderAmbientProviderAccountsSections(searchQuery, ambientDisabled, isRemoteAccountScope),
     matchesSettingsSearch(searchQuery, getAccountsZcodePlanSearchEntries()) ? (
       <ZcodePlanAccountsSection key="zcode" />
     ) : null

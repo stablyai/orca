@@ -1,6 +1,27 @@
 import { RateLimitServiceState } from './service-state'
+import type { ProviderRateLimits } from './service-types'
+import type { ClaudeAccountSelectionTarget } from '../../claude-accounts/runtime-selection'
+import { discoveryDisabledSnapshot } from './account-discovery-policy'
 
 export abstract class RateLimitServiceFetchControl extends RateLimitServiceState {
+  protected canFetchProvider(
+    provider: ProviderRateLimits['provider'],
+    signal: AbortSignal,
+    target?: ClaudeAccountSelectionTarget
+  ): boolean {
+    return !signal.aborted && this.isProviderAllowed(provider, target)
+  }
+
+  protected fetchAllowedProvider(
+    provider: ProviderRateLimits['provider'],
+    signal: AbortSignal,
+    fetch: () => Promise<ProviderRateLimits>
+  ): Promise<ProviderRateLimits> {
+    return this.canFetchProvider(provider, signal)
+      ? fetch()
+      : Promise.resolve(discoveryDisabledSnapshot(provider))
+  }
+
   protected waitForFetchIdle(): Promise<void> {
     if (
       !this.isFetching &&

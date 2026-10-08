@@ -50,6 +50,27 @@ describe('fetchOpenCodeGoUsage', () => {
     fetchWithCookieMock.mockReset()
   })
 
+  it('uses only the saved cookie without ambient key lookup when discovery is disabled', async () => {
+    fetchWithCookieMock.mockResolvedValue(cookieResult('ok'))
+    const result = await fetchOpenCodeGoUsage({ cookie: COOKIE, allowAmbientCredentials: false })
+    expect(resolveApiKeyMock).not.toHaveBeenCalled()
+    expect(fetchWithApiKeyMock).not.toHaveBeenCalled()
+    expect(fetchWithCookieMock).toHaveBeenCalled()
+    expect(result.status).toBe('ok')
+  })
+
+  it('retains the saved key path with discovery disabled', async () => {
+    resolveApiKeyMock.mockResolvedValue({ status: 'found', key: API_KEY, tier: 'settings' })
+    fetchWithApiKeyMock.mockResolvedValue({ kind: 'ok', windows: WINDOWS })
+    await fetchOpenCodeGoUsage({
+      cookie: '',
+      settingsApiKey: API_KEY,
+      allowAmbientCredentials: false
+    })
+    expect(resolveApiKeyMock).toHaveBeenCalledExactlyOnceWith({ settingsOverride: API_KEY })
+    expect(fetchWithApiKeyMock).toHaveBeenCalledWith(API_KEY, undefined)
+  })
+
   it('uses the API key ahead of a configured cookie and records its tier', async () => {
     resolveApiKeyMock.mockResolvedValue({ status: 'found', key: API_KEY, tier: 'environment' })
     fetchWithApiKeyMock.mockResolvedValue({ kind: 'ok', windows: WINDOWS })

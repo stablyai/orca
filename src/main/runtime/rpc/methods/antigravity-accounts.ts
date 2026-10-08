@@ -9,7 +9,10 @@ export const ANTIGRAVITY_ACCOUNT_METHODS = [
   defineMethod({
     name: 'accounts.antigravityList',
     params: AntigravityAccountTargetParams,
-    handler: async (target) => getAntigravityAccountService(target).listAccounts()
+    handler: async (target, { runtime }) =>
+      getAntigravityAccountService(target).listAccounts(
+        () => runtime.getClientSettings().automaticallyDetectAiAccounts !== false
+      )
   }),
   defineMethod({
     name: 'accounts.antigravityAddCurrent',

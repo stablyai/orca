@@ -22,7 +22,8 @@ import {
   type NetworkProxySettings,
   DEFAULT_POLL_MS
 } from './service-types'
-import { readGrokAuthSession } from '../grok-auth'
+import type { AccountDiscoveryPolicyResolver } from './account-discovery-policy'
+import type { ClaudeAccountSelectionTarget } from '../../claude-accounts/runtime-selection'
 
 export abstract class RateLimitServiceState {
   protected state: InternalRateLimitState = {
@@ -37,7 +38,7 @@ export abstract class RateLimitServiceState {
     cursor: null,
     zcode: null
   }
-  protected grokAuthConfigured = readGrokAuthSession().status === 'ok'
+  protected grokAuthConfigured = false
   // Why: the Cursor probe reads the macOS Keychain, so it cannot run synchronously
   // at construction the way Grok's auth-file probe does; each fetch cycle sets it.
   protected cursorAuthConfigured = false
@@ -122,7 +123,48 @@ export abstract class RateLimitServiceState {
   protected inactiveCodexAccountsGeneration = 0
   protected stateListeners = new Set<(state: RateLimitState) => void>()
 
-  constructor() {}
+  private accountDiscoveryPolicyResolver: AccountDiscoveryPolicyResolver | null = null
+
+  setAccountDiscoveryPolicyResolver(resolver: AccountDiscoveryPolicyResolver): void {
+    this.accountDiscoveryPolicyResolver = resolver
+    this.accountDiscoveryPolicyChanged()
+  }
+
+  accountDiscoveryPolicyChanged(): void {
+    for (const controller of this.activeFetchAbortControllers) {
+      controller.abort()
+    }
+    this.claudeFetchGeneration += 1
+    this.codexFetchGeneration += 1
+    this.opencodeFetchGeneration += 1
+    this.minimaxFetchGeneration += 1
+    this.zcodeFetchGeneration += 1
+    this.lastClaudeAuthSnapshot = null
+    if (!this.isProviderAllowed('grok')) {
+      this.grokAuthConfigured = false
+    }
+    if (!this.isProviderAllowed('cursor')) {
+      this.cursorAuthConfigured = false
+    }
+    if (!this.isProviderAllowed('opencode-go')) {
+      this.openCodeGoApiKeyConfigured = false
+    }
+    this.updateState(this.state)
+  }
+
+  protected isAutomaticDiscoveryEnabled(): boolean {
+    return this.accountDiscoveryPolicyResolver?.().automaticallyDetect ?? true
+  }
+
+  protected isProviderAllowed(
+    provider: ProviderRateLimits['provider'],
+    target?: ClaudeAccountSelectionTarget
+  ): boolean {
+    const policy = this.accountDiscoveryPolicyResolver?.()
+    const effectiveTarget =
+      target ?? (provider === 'claude' ? this.claudeFetchTarget : this.codexFetchTarget)
+    return !policy || policy.automaticallyDetect || policy.isConnected(provider, effectiveTarget)
+  }
 
   onStateChange(listener: (state: RateLimitState) => void): () => void {
     this.stateListeners.add(listener)
@@ -160,8 +202,23 @@ export abstract class RateLimitServiceState {
     return result
   }
 
+  protected projectAllowedState(next: InternalRateLimitState): InternalRateLimitState {
+    return {
+      claude: this.isProviderAllowed('claude') ? next.claude : null,
+      codex: this.isProviderAllowed('codex') ? next.codex : null,
+      gemini: this.isProviderAllowed('gemini') ? next.gemini : null,
+      opencodeGo: this.isProviderAllowed('opencode-go') ? next.opencodeGo : null,
+      kimi: this.isProviderAllowed('kimi') ? next.kimi : null,
+      antigravity: this.isProviderAllowed('antigravity') ? next.antigravity : null,
+      minimax: this.isProviderAllowed('minimax') ? next.minimax : null,
+      grok: this.isProviderAllowed('grok') ? next.grok : null,
+      cursor: this.isProviderAllowed('cursor') ? next.cursor : null,
+      zcode: this.isProviderAllowed('zcode') ? next.zcode : null
+    }
+  }
+
   protected updateState(next: InternalRateLimitState): void {
-    this.state = next
+    this.state = this.projectAllowedState(next)
     this.pushToRenderer()
   }
 

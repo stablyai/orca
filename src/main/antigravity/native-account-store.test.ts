@@ -70,7 +70,7 @@ describe('protected Antigravity account snapshots', () => {
     expect(readFileSync(path).equals(before)).toBe(true)
     expect(store.read().accounts).toHaveLength(52)
     h.setNative(paddedCredential('large-51', 65000))
-    await expect(service.listAccounts()).rejects.toThrow('could not be saved')
+    await expect(service.listAccounts(true)).rejects.toThrow('could not be saved')
     expect(readFileSync(path).equals(before)).toBe(true)
     expect(store.read().accounts).toHaveLength(52)
   })

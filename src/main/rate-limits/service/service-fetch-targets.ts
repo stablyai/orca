@@ -16,6 +16,8 @@ import {
 } from './service-types'
 import type { CodexRateLimitResetOutcome } from '../../../shared/rate-limit-types'
 import { ApiKeyFileUnreadableError } from '../../credentials/api-key-file-unreadable-error'
+import { discoveryDisabledSnapshot } from './account-discovery-policy'
+import type { ClaudeAccountSelectionTarget } from '../../claude-accounts/runtime-selection'
 
 const CODEX_RESET_REFRESH_RETRIES = 3
 const CODEX_RESET_REFRESH_DELAY_MS = 250
@@ -44,10 +46,19 @@ function codexResetUsageVisible(
 }
 
 export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResultPolicy {
+  protected resolveClaudeAuthForUsage(target: ClaudeAccountSelectionTarget, signal: AbortSignal) {
+    return this.canFetchProvider('claude', signal, target)
+      ? this.claudeAuthPreparationResolver?.(target)
+      : undefined
+  }
+
   protected resolveCodexHome(target?: CodexAccountSelectionTarget): {
     skip: boolean
     homePath: string | null
   } {
+    if (!this.isProviderAllowed('codex', target)) {
+      return { skip: true, homePath: null }
+    }
     const resolution = this.codexHomePathResolver?.(target)
     if (!resolution) {
       return { skip: false, homePath: null }
@@ -59,10 +70,19 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
 
   // Why: resolving a WSL home probes wsl.exe, so it must not run before the other
   // providers' fetches are started; chaining keeps the no-resolver path immediate.
-  protected fetchKimiWithResolvedHome(): Promise<ProviderRateLimits> {
+  protected fetchKimiWithResolvedHome(signal: AbortSignal): Promise<ProviderRateLimits> {
+    if (!this.canFetchProvider('kimi', signal)) {
+      return Promise.resolve(discoveryDisabledSnapshot('kimi'))
+    }
     const pendingHome = this.kimiHomeResolver?.()
     return pendingHome
-      ? pendingHome.then((home) => fetchKimiRateLimits({ home }))
+      ? pendingHome.then((home) => {
+          // Why: opting out while the WSL home resolves must not start a credential read.
+          if (!this.canFetchProvider('kimi', signal)) {
+            return discoveryDisabledSnapshot('kimi')
+          }
+          return fetchKimiRateLimits({ home })
+        })
       : fetchKimiRateLimits({ home: undefined })
   }
 
@@ -191,14 +211,18 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
   }
 
   protected resolveOpenCodeGoConfig(): OpenCodeGoResolvedConfig {
-    const config = this.openCodeGoConfigResolver?.() ?? {
+    const config = (this.isProviderAllowed('opencode-go')
+      ? this.openCodeGoConfigResolver?.()
+      : undefined) ?? {
       sessionCookie: '',
       workspaceIdOverride: ''
     }
     try {
       return {
         ...config,
-        apiKey: this.openCodeGoApiKeyResolver?.() ?? '',
+        apiKey:
+          (this.isProviderAllowed('opencode-go') ? this.openCodeGoApiKeyResolver?.() : undefined) ??
+          '',
         apiKeyError: null,
         apiKeyReadSkipped: false
       }
@@ -221,7 +245,9 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
   protected resolveMiniMaxConfig(): MiniMaxResolvedConfig {
     try {
       return {
-        config: this.miniMaxConfigResolver?.() ?? {
+        config: (this.isProviderAllowed('minimax')
+          ? this.miniMaxConfigResolver?.()
+          : undefined) ?? {
           sessionCookie: '',
           groupId: '',
           models: 'general',
@@ -248,7 +274,9 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
   protected resolveZcodePlanConfig(): ZcodePlanResolvedConfig {
     try {
       return {
-        config: this.zcodePlanConfigResolver?.() ?? { site: 'zai', apiKey: '' },
+        config: (this.isProviderAllowed('zcode')
+          ? this.zcodePlanConfigResolver?.()
+          : undefined) ?? { site: 'zai', apiKey: '' },
         error: null
       }
     } catch (error) {

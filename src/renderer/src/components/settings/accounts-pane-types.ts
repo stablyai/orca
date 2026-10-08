@@ -81,6 +81,7 @@ export type AccountsPaneSectionModel = {
   claudeAccounts: ClaudeRateLimitAccountsState
   claudeAction: ClaudeAccountAction
   visibleClaudeAccounts: ClaudeRateLimitAccountsState['accounts']
+  ambientDisabled: boolean
   systemClaudeActive: boolean
   setRemoveClaudeTarget: Dispatch<SetStateAction<RemoveAccountTarget | null>>
   runClaudeAccountAction: ClaudeAccountActionRunner

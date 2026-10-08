@@ -47,7 +47,16 @@ export class CodexAccountSelection {
         .sort((a, b) => b.updatedAt - a.updatedAt),
       activeAccountId: normalizeCodexRuntimeSelection(settings).host,
       activeAccountIdsByRuntime: normalizeCodexRuntimeSelection(settings),
-      systemDefault: this.dependencies.resolveSystemDefault()
+      systemDefault:
+        settings.automaticallyDetectAiAccounts === false
+          ? {
+              hasAuth: false,
+              authKind: 'none',
+              email: null,
+              providerAccountId: null,
+              workspaceLabel: null
+            }
+          : this.dependencies.resolveSystemDefault()
     }
   }
 

@@ -68,6 +68,112 @@ beforeEach(() => {
 afterEach(() => cleanup())
 
 describe('native Antigravity Accounts', () => {
+  it('refreshes verified selected account usage while automatic detection is disabled', async () => {
+    vi.mocked(callRuntimeRpc).mockResolvedValue(usage)
+    render(
+      <AntigravityAccountsSection
+        owner={owner}
+        target={target}
+        label="This device"
+        ambientDisabled
+      />
+    )
+    await screen.findByText('Native account')
+    await userEvent.click(screen.getByRole('button', { name: 'Refresh usage' }))
+    await screen.findByText('Session: 31% · Weekly: —')
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(callAntigravityAccounts).toHaveBeenCalledTimes(3)
+  })
+
+  it('refuses usage when selected identity verification is lost while opted out', async () => {
+    vi.mocked(callRuntimeRpc).mockResolvedValue(usage)
+    render(
+      <AntigravityAccountsSection
+        owner={owner}
+        target={target}
+        label="This device"
+        ambientDisabled
+      />
+    )
+    await screen.findByText('Native account')
+    vi.mocked(callAntigravityAccounts)
+      .mockResolvedValueOnce(state)
+      .mockResolvedValueOnce({ ...state, currentAccount: null, activeAccountId: null })
+    await userEvent.click(screen.getByRole('button', { name: 'Refresh usage' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('native account changed')
+    expect(screen.queryByText('Session: 31% · Weekly: —')).toBeNull()
+  })
+
+  it('redacts stale ambient identity and quota on opt-out, and allows explicit save', async () => {
+    vi.mocked(callAntigravityAccounts).mockResolvedValue(changedState)
+    vi.mocked(callRuntimeRpc).mockResolvedValue(usage)
+    const view = render(
+      <AntigravityAccountsSection owner={owner} target={target} label="This device" />
+    )
+    await screen.findByText('second@example.invalid')
+    await userEvent.click(screen.getByRole('button', { name: 'Refresh usage' }))
+    await screen.findByText('Session: 31% · Weekly: —')
+    const deferred = Promise.withResolvers<AntigravityAccountState>()
+    vi.mocked(callAntigravityAccounts).mockReturnValueOnce(deferred.promise)
+    view.rerender(
+      <AntigravityAccountsSection
+        owner={owner}
+        target={target}
+        label="This device"
+        ambientDisabled
+      />
+    )
+    expect(screen.queryByText('second@example.invalid')).toBeNull()
+    expect(screen.queryByText('Session: 31% · Weekly: —')).toBeNull()
+    deferred.resolve({ ...state, currentAccount: null, activeAccountId: null })
+    await screen.findByText(/Automatic account detection is disabled/)
+    expect(screen.queryByText(/The native account changed/)).toBeNull()
+    expect(screen.getByRole('button', { name: 'Refresh usage' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Save current account' })).toBeEnabled()
+    vi.mocked(callAntigravityAccounts).mockResolvedValueOnce(state)
+    await userEvent.click(screen.getByRole('button', { name: 'Save current account' }))
+    await screen.findByText('Native account')
+    expect(callAntigravityAccounts).toHaveBeenLastCalledWith(owner, target, 'AddCurrent', undefined)
+  })
+
+  it.each([false, true])(
+    'does not claim an uninspected account changed (disabled: %s)',
+    async (disabled) => {
+      vi.mocked(callAntigravityAccounts).mockResolvedValue({
+        ...state,
+        activeAccountId: null,
+        currentAccount: null
+      })
+      render(
+        <AntigravityAccountsSection
+          owner={owner}
+          target={target}
+          label="This device"
+          ambientDisabled={disabled}
+        />
+      )
+      await screen.findByText('synthetic@example.invalid')
+      expect(screen.queryByText(/The native account changed/)).toBeNull()
+      expect(screen.getByRole('button', { name: 'Select' })).toBeEnabled()
+    }
+  )
+
+  it('does not warn when native credentials have no known identity', async () => {
+    vi.mocked(callAntigravityAccounts).mockResolvedValue({
+      ...changedState,
+      currentAccount: { email: null, subject: null, authMethod: 'consumer', identityKnown: false }
+    })
+    render(<AntigravityAccountsSection owner={owner} target={target} label="This device" />)
+    await screen.findByText('Signed-in identity unavailable')
+    expect(screen.queryByText(/The native account changed/)).toBeNull()
+  })
+
+  it('warns when an inspected identity differs from the selected account', async () => {
+    vi.mocked(callAntigravityAccounts).mockResolvedValue(changedState)
+    render(<AntigravityAccountsSection owner={owner} target={target} label="This device" />)
+    expect(await screen.findByText(/The native account changed/)).toBeTruthy()
+  })
+
   it.each(['Refresh accounts', 'Save current account'])(
     'hides the previous account quota when %s observes a different native identity',
     async (action) => {
@@ -163,6 +269,6 @@ describe('native Antigravity Accounts', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Selected' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('Readback failed')
     expect(screen.queryByText('Native account')).toBeNull()
-    expect(screen.getByText(/The native account changed/)).toBeTruthy()
+    expect(screen.queryByText(/The native account changed/)).toBeNull()
   })
 })

@@ -105,6 +105,9 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
 
   /** Live usage windows forwarded from a Claude session's statusLine command. */
   ingestLiveClaudeRateLimits(event: ClaudeStatusLineRateLimits): void {
+    if (!this.isProviderAllowed('claude')) {
+      return
+    }
     // Why: attribution needs the selected account's config dir; until a fetch cycle captures it, drop posts rather than guess the account.
     const snapshot = this.lastClaudeAuthSnapshot
     if (!snapshot) {

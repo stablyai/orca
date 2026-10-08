@@ -15,11 +15,13 @@ import { Badge } from '../ui/badge'
 export function AntigravityAccountsSection({
   owner,
   target,
-  label
+  label,
+  ambientDisabled = false
 }: {
   owner: RuntimeClientTarget
   target: AntigravityAccountTarget
   label: string
+  ambientDisabled?: boolean
 }): React.JSX.Element {
   const [state, setState] = useState<AntigravityAccountState | null>(null)
   const [usageSnapshot, setUsageSnapshot] = useState<{
@@ -36,6 +38,7 @@ export function AntigravityAccountsSection({
   const [busy, setBusy] = useState(false)
   const pending = useRef(false)
   const mounted = useRef(true)
+  const generation = useRef(0)
   const ownerKind = owner.kind
   const environmentId = owner.kind === 'environment' ? owner.environmentId : null
   const runtime = target.runtime
@@ -43,6 +46,10 @@ export function AntigravityAccountsSection({
 
   useEffect(() => {
     mounted.current = true
+    generation.current += 1
+    setState(null)
+    setUsageSnapshot(null)
+    setError(null)
     let cancelled = false
     const currentOwner: RuntimeClientTarget =
       ownerKind === 'environment' && environmentId
@@ -66,7 +73,7 @@ export function AntigravityAccountsSection({
       cancelled = true
       mounted.current = false
     }
-  }, [ownerKind, environmentId, runtime, wslDistro])
+  }, [ownerKind, environmentId, runtime, wslDistro, ambientDisabled])
 
   async function run(
     action: 'List' | 'AddCurrent' | 'Select' | 'Remove' | 'Usage',
@@ -76,6 +83,8 @@ export function AntigravityAccountsSection({
       return
     }
     pending.current = true
+    const startedGeneration = generation.current
+    const isCurrent = () => mounted.current && generation.current === startedGeneration
     setBusy(true)
     setError(null)
     try {
@@ -88,7 +97,7 @@ export function AntigravityAccountsSection({
           { refreshUsage: true }
         )
         const after = await callAntigravityAccounts(owner, target, 'List')
-        if (mounted.current) {
+        if (isCurrent()) {
           setState(after)
         }
         if (
@@ -98,7 +107,7 @@ export function AntigravityAccountsSection({
         ) {
           throw new Error('The native account changed while reading usage. Refresh usage again.')
         }
-        if (mounted.current) {
+        if (isCurrent()) {
           setUsageSnapshot({
             subject: before.currentAccount.subject,
             authMethod: before.currentAccount.authMethod,
@@ -110,7 +119,7 @@ export function AntigravityAccountsSection({
           setUsageSnapshot(null)
         }
         const next = await callAntigravityAccounts(owner, target, action, accountId)
-        if (mounted.current) {
+        if (isCurrent()) {
           setState(next)
         }
       }
@@ -118,16 +127,16 @@ export function AntigravityAccountsSection({
       if (action === 'Select' || action === 'Remove' || action === 'AddCurrent') {
         try {
           const observed = await callAntigravityAccounts(owner, target, 'List')
-          if (mounted.current) {
+          if (isCurrent()) {
             setState(observed)
           }
         } catch {
-          if (mounted.current) {
+          if (isCurrent()) {
             setState(null)
           }
         }
       }
-      if (mounted.current) {
+      if (isCurrent()) {
         setError(cause instanceof Error ? cause.message : 'Antigravity account action failed.')
       }
     } finally {
@@ -178,23 +187,37 @@ export function AntigravityAccountsSection({
       {state && (
         <div className="space-y-3">
           <p className="text-xs">
-            {state.currentAccount
-              ? (state.currentAccount.email ??
-                translate('accounts.antigravity.identityUnknown', 'Signed-in identity unavailable'))
-              : translate('accounts.antigravity.signedOut', 'No native agy account is signed in.')}
+            {ambientDisabled && !state.activeAccountId
+              ? translate(
+                  'accounts.autodetection.disabled',
+                  'Automatic account detection is disabled. Terminal CLI logins are unaffected.'
+                )
+              : state.currentAccount
+                ? (state.currentAccount.email ??
+                  translate(
+                    'accounts.antigravity.identityUnknown',
+                    'Signed-in identity unavailable'
+                  ))
+                : translate(
+                    'accounts.antigravity.signedOut',
+                    'No native agy account is signed in.'
+                  )}
           </p>
-          {state.selectedAccountId && state.activeAccountId !== state.selectedAccountId && (
-            <p className="text-xs text-destructive">
-              {translate(
-                'accounts.antigravity.changed',
-                'The native account changed. Select a saved account again before launching agy.'
-              )}
-            </p>
-          )}
+          {!ambientDisabled &&
+            state.currentAccount?.identityKnown &&
+            state.selectedAccountId &&
+            state.activeAccountId !== state.selectedAccountId && (
+              <p className="text-xs text-destructive">
+                {translate(
+                  'accounts.antigravity.changed',
+                  'The native account changed. Select a saved account again before launching agy.'
+                )}
+              </p>
+            )}
           <div className="flex flex-wrap items-center gap-2">
             <Button
               size="sm"
-              disabled={busy || !state.currentAccount?.identityKnown}
+              disabled={busy || (!ambientDisabled && !state.currentAccount?.identityKnown)}
               onClick={() => void run('AddCurrent')}
             >
               {translate('accounts.antigravity.save', 'Save current account')}

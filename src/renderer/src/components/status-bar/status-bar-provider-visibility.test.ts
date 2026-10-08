@@ -28,6 +28,33 @@ function provider(
   }
 }
 
+describe('autodetection opt-out', () => {
+  it('hides cached ambient usage and disk credential presence', () => {
+    const settings = {
+      automaticallyDetectAiAccounts: false,
+      grokAuthConfigured: true,
+      cursorAuthConfigured: true
+    }
+    expect(
+      getVisibleUsageProvider('grok', provider('ok', { provider: 'grok' }), settings)
+    ).toBeNull()
+    expect(
+      getVisibleUsageProvider('codex', provider('ok', { provider: 'codex' }), settings)
+    ).toBeNull()
+    expect(hasUsageProviderSettings(settings)).toBe(false)
+  })
+
+  it('keeps explicitly configured usage available', () => {
+    const snapshot = provider('ok', { provider: 'opencode-go' })
+    expect(
+      getVisibleUsageProvider('opencode-go', snapshot, {
+        automaticallyDetectAiAccounts: false,
+        opencodeSessionCookie: 'session'
+      })
+    ).toBe(snapshot)
+  })
+})
+
 describe('isProviderConfigured', () => {
   it('hides a provider whose state has not loaded yet', () => {
     expect(isProviderConfigured(null)).toBe(false)

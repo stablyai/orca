@@ -15,6 +15,7 @@ import { fetchOpenCodeGoRateLimits, normalizeCookieInput } from './opencode-go-u
 export type OpenCodeGoUsageSourceInput = {
   /** Explicit Orca override; the highest-precedence key tier. */
   settingsApiKey?: string
+  allowAmbientCredentials?: boolean
   environment?: NodeJS.ProcessEnv
   backend?: OpenCodeCredentialBackend
   cwd?: string
@@ -101,17 +102,18 @@ function apiFailureResult(
 export async function fetchOpenCodeGoUsage(
   input: OpenCodeGoUsageSourceInput
 ): Promise<ProviderRateLimits> {
-  const context = input.settingsApiKey?.trim()
-    ? {}
-    : {
-        ...(input.environment ? { environment: input.environment } : {}),
-        ...(input.backend ? { backend: input.backend } : {}),
-        ...(input.cwd ? { cwd: input.cwd } : {})
-      }
-  const apiKeyResolution = await resolveOpenCodeGoApiKey({
-    settingsOverride: input.settingsApiKey,
-    ...context
-  })
+  const context =
+    input.settingsApiKey?.trim() || input.allowAmbientCredentials === false
+      ? {}
+      : {
+          ...(input.environment ? { environment: input.environment } : {}),
+          ...(input.backend ? { backend: input.backend } : {}),
+          ...(input.cwd ? { cwd: input.cwd } : {})
+        }
+  const apiKeyResolution: OpenCodeGoApiKeyResolution =
+    input.allowAmbientCredentials === false && !input.settingsApiKey?.trim()
+      ? { status: 'missing' }
+      : await resolveOpenCodeGoApiKey({ settingsOverride: input.settingsApiKey, ...context })
   input.onApiKeyResolved?.(apiKeyResolution)
   const hasCookie = Boolean(normalizeCookieInput(input.cookie))
   if (apiKeyResolution.status === 'credential-database-unreadable' && !hasCookie) {

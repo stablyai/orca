@@ -4,13 +4,177 @@ import { parseAntigravityNativeCredential } from './native-credential-codec'
 import { credential, harness } from './native-account-test-fixtures'
 
 describe('Antigravity native account identity and selection', () => {
+  it('verifies selection without exposing unrelated native discovery when disabled', async () => {
+    const h = harness()
+    const id = (await h.service.addCurrentAccount()).activeAccountId!
+    await h.service.selectAccount(id)
+    h.setNative(credential('another'))
+    vi.mocked(h.backend.read).mockClear()
+
+    const state = await h.service.listAccounts(false)
+
+    expect(h.backend.read).toHaveBeenCalledOnce()
+    expect(state.accounts).toHaveLength(1)
+    expect(state.selectedAccountId).toBe(id)
+    expect(state.activeAccountId).toBeNull()
+    expect(state.currentAccount).toBeNull()
+    expect((await h.service.addCurrentAccount()).accounts).toHaveLength(2)
+    expect(h.backend.read).toHaveBeenCalled()
+  })
+
+  it('resolves detection policy when a queued list begins', async () => {
+    const h = harness()
+    const started = Promise.withResolvers<void>()
+    const gate = Promise.withResolvers<void>()
+    vi.mocked(h.backend.read).mockImplementationOnce(async () => {
+      started.resolve()
+      await gate.promise
+      return parseAntigravityNativeCredential(credential('a'))
+    })
+    const add = h.service.addCurrentAccount()
+    await started.promise
+    let enabled = true
+    const listing = h.service.listAccounts(() => enabled)
+    enabled = false
+    gate.resolve()
+    const saved = await add
+    const result = await listing
+    expect(h.backend.read).toHaveBeenCalledOnce()
+    expect(result.accounts).toEqual(saved.accounts)
+    expect(result.currentAccount).toBeNull()
+    expect(result.activeAccountId).toBeNull()
+  })
+
+  it('checks the live vault when an opted-out list is queued behind selection', async () => {
+    const h = harness()
+    const id = (await h.service.addCurrentAccount()).activeAccountId!
+    const started = Promise.withResolvers<void>()
+    const gate = Promise.withResolvers<void>()
+    vi.mocked(h.backend.read).mockImplementationOnce(async () => {
+      started.resolve()
+      await gate.promise
+      return parseAntigravityNativeCredential(credential('a'))
+    })
+    const selecting = h.service.selectAccount(id)
+    await started.promise
+    const listing = h.service.listAccounts(false)
+    gate.resolve()
+    await selecting
+    expect((await listing).activeAccountId).toBe(id)
+  })
+
+  it('discards pending discovery after opt-out without updating managed snapshots', async () => {
+    const h = harness()
+    const id = (await h.service.addCurrentAccount()).activeAccountId!
+    const original = h.getVault()
+    const started = Promise.withResolvers<void>()
+    const gate = Promise.withResolvers<void>()
+    vi.mocked(h.backend.read).mockImplementationOnce(async () => {
+      started.resolve()
+      await gate.promise
+      return parseAntigravityNativeCredential(credential('a', 2, 'private@example.invalid'))
+    })
+    let enabled = true
+    const listing = h.service.listAccounts(() => enabled)
+    await started.promise
+    enabled = false
+    gate.resolve()
+    const result = await listing
+    expect(result.currentAccount).toBeNull()
+    expect(result.activeAccountId).toBeNull()
+    expect(result.selectedAccountId).toBeNull()
+    expect(result.accounts[0].id).toBe(id)
+    expect(h.getVault()).toEqual(original)
+    expect(result.accounts[0].email).toBe('a@example.invalid')
+  })
+
+  it('does not probe saved but unselected accounts while opted out', async () => {
+    const h = harness()
+    await h.service.addCurrentAccount()
+    vi.mocked(h.backend.read).mockClear()
+    expect((await h.service.listAccounts(false)).currentAccount).toBeNull()
+    expect(h.backend.read).not.toHaveBeenCalled()
+  })
+
+  it('verifies the selected managed identity and refreshes only its snapshot while opted out', async () => {
+    const h = harness()
+    const a = (await h.service.addCurrentAccount()).activeAccountId!
+    h.setNative(credential('b'))
+    await h.service.addCurrentAccount()
+    await h.service.selectAccount(a)
+    h.setNative(credential('a', 2))
+    const result = await h.service.listAccounts(false)
+    expect(result.activeAccountId).toBe(a)
+    expect(result.currentAccount?.subject).toBe('a')
+    expect(h.getVault().accounts[0].credentials).toBe(credential('a', 2))
+    const original = h.getVault()
+    h.setNative(credential('b', 2))
+    expect((await h.service.listAccounts(false)).currentAccount).toBeNull()
+    expect(h.getVault()).toEqual(original)
+  })
+
+  it('does not substitute a saved identity when native verification is unavailable', async () => {
+    const h = harness()
+    const id = (await h.service.addCurrentAccount()).activeAccountId!
+    await h.service.selectAccount(id)
+    const original = h.getVault()
+    h.setNative(JSON.stringify({ auth_method: 'consumer', token: { access_token: 'unknown' } }))
+    const result = await h.service.listAccounts(false)
+    expect(result.selectedAccountId).toBe(id)
+    expect(result.currentAccount).toBeNull()
+    expect(result.activeAccountId).toBeNull()
+    expect(h.getVault()).toEqual(original)
+  })
+
+  it('rechecks selection after a pending native read while opted out', async () => {
+    const h = harness()
+    const id = (await h.service.addCurrentAccount()).activeAccountId!
+    await h.service.selectAccount(id)
+    const started = Promise.withResolvers<void>()
+    const gate = Promise.withResolvers<void>()
+    vi.mocked(h.backend.read).mockImplementationOnce(async () => {
+      started.resolve()
+      await gate.promise
+      return parseAntigravityNativeCredential(credential('a', 2))
+    })
+    const listing = h.service.listAccounts(false)
+    await started.promise
+    const vault = h.getVault()
+    vault.selectedAccountId = null
+    h.store.write(vault)
+    gate.resolve()
+    expect((await listing).currentAccount).toBeNull()
+    expect(h.getVault()).toEqual(vault)
+  })
+
+  it('keeps verified selected identity when opting out during a pending read', async () => {
+    const h = harness()
+    const id = (await h.service.addCurrentAccount()).activeAccountId!
+    await h.service.selectAccount(id)
+    const started = Promise.withResolvers<void>()
+    const gate = Promise.withResolvers<void>()
+    vi.mocked(h.backend.read).mockImplementationOnce(async () => {
+      started.resolve()
+      await gate.promise
+      return parseAntigravityNativeCredential(credential('a', 2))
+    })
+    let enabled = true
+    const listing = h.service.listAccounts(() => enabled)
+    await started.promise
+    enabled = false
+    gate.resolve()
+    const result = await listing
+    expect(result.activeAccountId).toBe(id)
+    expect(result.currentAccount?.subject).toBe('a')
+  })
+
   it('keeps one stable account through access, refresh, expiry, ID-token and email rotation', async () => {
     const h = harness()
     const first = await h.service.addCurrentAccount()
     const id = first.activeAccountId
     const updated = credential('a', 2, 'renamed@example.invalid')
     h.setNative(updated)
-    const refreshed = await h.service.listAccounts()
+    const refreshed = await h.service.listAccounts(true)
     expect(refreshed.accounts).toHaveLength(1)
     expect(refreshed.activeAccountId).toBe(id)
     expect(refreshed.accounts[0].email).toBe('renamed@example.invalid')
@@ -44,7 +208,7 @@ describe('Antigravity native account identity and selection', () => {
     const restarted = new AntigravityAccountService(h.store, h.backend)
     await restarted.prepareForLaunch()
     h.setNative(credential('another'))
-    const state = await restarted.listAccounts()
+    const state = await restarted.listAccounts(true)
     expect(state.selectedAccountId).toBe(id)
     expect(state.activeAccountId).toBeNull()
     await expect(restarted.prepareForLaunch()).rejects.toThrow('native Antigravity account changed')
@@ -69,7 +233,7 @@ describe('Antigravity native account identity and selection', () => {
         token: { access_token: 'unknown' }
       })
     )
-    expect((await h.service.listAccounts()).currentAccount).toEqual({
+    expect((await h.service.listAccounts(true)).currentAccount).toEqual({
       email: null,
       subject: null,
       authMethod: 'consumer',
@@ -88,7 +252,7 @@ describe('Antigravity native account identity and selection', () => {
     })
     await expect(h.service.selectAccount(id)).rejects.toThrow('native conflict')
     expect(h.getVault().selectedAccountId).toBeNull()
-    expect((await h.service.listAccounts()).currentAccount?.identityKnown).toBe(true)
+    expect((await h.service.listAccounts(true)).currentAccount?.identityKnown).toBe(true)
   })
 
   it('does not trust write success when the native readback differs', async () => {
@@ -114,7 +278,7 @@ describe('Antigravity native account identity and selection', () => {
     const add = h.service.addCurrentAccount()
     const remove = h.service.removeAccount(a)
     const select = h.service.selectAccount(b)
-    const refresh = h.service.listAccounts()
+    const refresh = h.service.listAccounts(true)
     gate.resolve()
     const results = await Promise.all([add, remove, select, refresh])
     expect(results[3].accounts).toHaveLength(2)
@@ -132,7 +296,7 @@ describe('Antigravity native account identity and selection', () => {
       await gate.promise
       return parseAntigravityNativeCredential(credential('a', 2))
     })
-    const listing = h.service.listAccounts()
+    const listing = h.service.listAccounts(true)
     await Promise.resolve()
     original.accounts.push({
       ...original.accounts[0],

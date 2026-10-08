@@ -33,8 +33,7 @@ describe('CodexAccountService config sync', () => {
     const systemCodexHomeDir = () => join(testState.fakeHomeDir, '.codex')
     const systemAuthPath = () => join(systemCodexHomeDir(), 'auth.json')
 
-    async function newService() {
-      const store = createStore(createSettings())
+    async function newService(store = createStore(createSettings())) {
       const rateLimits = createRateLimits()
       const runtimeHome = createRuntimeHome()
       const { CodexAccountService } = await import('./service')
@@ -54,6 +53,50 @@ describe('CodexAccountService config sync', () => {
         }
       }
     }
+
+    it('retains managed selection without resolving ambient identity when disabled', async () => {
+      const managedHomePath = createManagedHome(testState.userDataDir, 'account-1')
+      const store = createStore(
+        createSettings({
+          automaticallyDetectAiAccounts: false,
+          activeCodexManagedAccountId: 'account-1',
+          codexManagedAccounts: [
+            {
+              id: 'account-1',
+              email: 'saved@example.com',
+              managedHomePath,
+              providerAccountId: null,
+              workspaceLabel: null,
+              workspaceAccountId: null,
+              createdAt: 1,
+              updatedAt: 1,
+              lastAuthenticatedAt: 1
+            }
+          ]
+        })
+      )
+      const { CodexAccountIdentity } = await import('./codex-account-identity')
+      const resolve = vi.spyOn(CodexAccountIdentity.prototype, 'resolveSystemDefault')
+      const service = await newService(store)
+      try {
+        const state = service.listAccounts()
+        expect(resolve).not.toHaveBeenCalled()
+        expect(state.accounts.map((account) => account.id)).toEqual(['account-1'])
+        expect(state.activeAccountId).toBe('account-1')
+        expect(state.systemDefault).toEqual({
+          hasAuth: false,
+          authKind: 'none',
+          email: null,
+          providerAccountId: null,
+          workspaceLabel: null
+        })
+        store.updateSettings({ automaticallyDetectAiAccounts: true })
+        service.listAccounts()
+        expect(resolve).toHaveBeenCalledOnce()
+      } finally {
+        resolve.mockRestore()
+      }
+    })
 
     it('reports the real ~/.codex OAuth identity for the system default', async () => {
       writeFileSync(
