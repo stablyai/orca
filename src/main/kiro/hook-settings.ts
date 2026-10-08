@@ -1,5 +1,5 @@
-import { homedir } from 'node:os'
 import { join, posix as pathPosix } from 'node:path'
+import { resolveKiroHomeDir } from '../../shared/kiro-home'
 import {
   createManagedCommandMatcher,
   getSharedManagedScriptPath,
@@ -30,9 +30,10 @@ const KIRO_TOOL_EVENTS: ReadonlySet<string> = new Set(['preToolUse', 'postToolUs
  * `kiro_default` agent has none to edit. So Orca patches every global agent the user owns.
  */
 export function getKiroAgentsDir(): string {
-  return join(homedir(), '.kiro', 'agents')
+  return join(resolveKiroHomeDir(), 'agents')
 }
 
+// Why: a remote $KIRO_HOME is unknown over SFTP; default matches the CLI's own fallback.
 export function getKiroRemoteAgentsDir(remoteHome: string): string {
   return pathPosix.join(remoteHome.replace(/\/$/, ''), '.kiro', 'agents')
 }

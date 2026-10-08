@@ -5,6 +5,7 @@ import { resolveAbsoluteDirOverride } from '../../shared/absolute-dir-override'
 import type { AiVaultAgent } from '../../shared/ai-vault-types'
 import type { AiVaultDeletableAgent } from '../../shared/ai-vault-session-deletion'
 import { resolveGrokSessionsDir } from '../../shared/grok-session-paths'
+import { resolveKiroHomeDir } from '../../shared/kiro-home'
 import { uniqueCodexSessionsDirs } from './session-scanner-codex-paths'
 import {
   clineMessagesPathForMetadata,
@@ -69,7 +70,7 @@ const DEVIN_TRANSCRIPTS_DIR = join(
   ),
   'transcripts'
 )
-const KIRO_SESSIONS_DIR = join(homedir(), '.kiro', 'sessions', 'cli')
+const KIRO_SESSIONS_DIR = join(resolveKiroHomeDir(), 'sessions', 'cli')
 const DROID_SESSIONS_DIR = join(homedir(), '.factory', 'sessions')
 const DROID_PROJECTS_DIR = join(homedir(), '.factory', 'projects')
 const CLINE_SESSIONS_DIR =

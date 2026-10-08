@@ -10,6 +10,7 @@ import { getKiroManagedCommandMatcher, KIRO_HOOK_EVENTS } from './hook-settings'
 let home: string
 let originalHome: string | undefined
 let originalUserProfile: string | undefined
+let originalKiroHome: string | undefined
 
 beforeEach(() => {
   home = mkdtempSync(join(tmpdir(), 'orca-kiro-hook-'))
@@ -17,6 +18,8 @@ beforeEach(() => {
   originalUserProfile = process.env.USERPROFILE
   process.env.HOME = home
   process.env.USERPROFILE = home
+  originalKiroHome = process.env.KIRO_HOME
+  delete process.env.KIRO_HOME
 })
 
 afterEach(() => {
@@ -29,6 +32,11 @@ afterEach(() => {
     delete process.env.USERPROFILE
   } else {
     process.env.USERPROFILE = originalUserProfile
+  }
+  if (originalKiroHome === undefined) {
+    delete process.env.KIRO_HOME
+  } else {
+    process.env.KIRO_HOME = originalKiroHome
   }
   rmSync(home, { recursive: true, force: true })
 })
@@ -117,6 +125,15 @@ describe('KiroHookService', () => {
     expect(service.remove().state).toBe('not_installed')
     expect(readAgent('caverna').hooks).toEqual({ stop: [USER_STOP_HOOK] })
     expect(readAgent('plain')).toEqual({ name: 'plain' })
+  })
+
+  it('patches the agents under $KIRO_HOME instead of ~/.kiro', () => {
+    const kiroHome = join(home, 'custom-kiro')
+    mkdirSync(join(kiroHome, 'agents'), { recursive: true })
+    writeFileSync(join(kiroHome, 'agents', 'relocated.json'), JSON.stringify({ name: 'relocated' }))
+    process.env.KIRO_HOME = kiroHome
+    expect(new KiroHookService().install().state).toBe('installed')
+    expect(existsSync(agentsDir())).toBe(false)
   })
 
   it('ignores non-JSON files such as the shipped example config', () => {
