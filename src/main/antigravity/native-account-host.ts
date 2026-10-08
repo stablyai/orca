@@ -133,6 +133,7 @@ export function runAntigravityAccountOperation(
             }
           : state
       } catch (error) {
+        // Reconciliation may save refreshed credentials before validating the mutation.
         if (entry.authority && action !== 'List') {
           entry.needsVerification = true
         }

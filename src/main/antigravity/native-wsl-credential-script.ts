@@ -24,7 +24,10 @@ fail() { exit "$1"; }
 for tool in id stat base64 cmp head mktemp flock mv sync readlink tr date chmod mkdir rm dirname find timeout sh; do
   command -v "$tool" >/dev/null 2>&1 || fail 69
 done
-action=$1; distro=$2; uid=$3; home=$4; nonce=$5; deadline=$6
+action=$1; distro=$2; uid=$3; home=$4; nonce=$5; budget=$6
+case "$budget" in ''|*[!0-9]*) fail 65 ;; esac
+[ "$budget" -gt 0 ] || fail 75
+deadline=$(( $(date +%s) + budget ))
 [ "$(printf %s "${'$'}{WSL_DISTRO_NAME:-}" | tr '[:upper:]' '[:lower:]')" = "$distro" ] || fail 74
 [ "$(id -u)" = "$uid" ] || fail 74
 [ "$(readlink -e -- "$home")" = "$home" ] || fail 74
@@ -156,7 +159,7 @@ export function buildAntigravityWslCredentialCommand(
       String(authority.uid),
       authority.canonicalHome,
       nonce,
-      String(Math.floor(deadline / 1000))
+      String(Math.max(1, Math.ceil((deadline - Date.now()) / 1000)))
     ]
   }
 }

@@ -6,7 +6,7 @@ import { wslScriptFixture } from './native-wsl-credential-script-fixtures'
 import { decodeAntigravityWslReply } from './native-wsl-credential-protocol'
 import { credential } from './native-account-test-fixtures'
 let guest: Awaited<ReturnType<typeof wslScriptFixture>>
-describe.skipIf(process.platform === 'win32')('isolated POSIX guest script evidence', () => {
+describe.runIf(process.platform === 'linux')('isolated POSIX guest script evidence', () => {
   beforeEach(async () => {
     guest = await wslScriptFixture()
   })
@@ -26,6 +26,33 @@ describe.skipIf(process.platform === 'win32')('isolated POSIX guest script evide
     expect(await readFile(guest.path, 'utf8')).toBe(credential('b'))
     expect((await stat(guest.path)).mode & 0o777).toBe(0o600)
   })
+  it.each([-300, 300])(
+    'reads credentials with a guest clock offset of %i seconds',
+    async (offset) => {
+      await guest.put(credential('a'))
+      const prefix = `date() { printf '%s\\n' "$(( $(command date +%s) + ${offset} ))"; }\n`
+      const result = await guest.run('read', '', null, prefix)
+      expect(result.code).toBe(0)
+      expect(decodeAntigravityWslReply(result.stdout, 'abc123')).toEqual({
+        status: 'present',
+        contents: credential('a')
+      })
+    }
+  )
+  it.each([-300, 300])(
+    'switches accounts with a guest clock offset of %i seconds',
+    async (offset) => {
+      await guest.put(credential('a'))
+      const prefix = `date() { printf '%s\\n' "$(( $(command date +%s) + ${offset} ))"; }\n`
+      const result = await guest.run('write', credential('b'), credential('a'), prefix)
+      expect(result.code).toBe(0)
+      expect(decodeAntigravityWslReply(result.stdout, 'abc123')).toEqual({
+        status: 'written',
+        contents: credential('b')
+      })
+      expect(await readFile(guest.path, 'utf8')).toBe(credential('b'))
+    }
+  )
   it.each([0o644, 0o400, 0o700])(
     'refuses unsafe mode %o without credential output',
     async (mode) => {
@@ -108,7 +135,7 @@ describe.skipIf(process.platform === 'win32')('isolated POSIX guest script evide
   })
 })
 
-it.skipIf(process.platform === 'win32')(
+it.runIf(process.platform === 'linux')(
   'does not recreate a credential deleted between stat and read',
   async () => {
     const fixture = await wslScriptFixture()
@@ -123,13 +150,13 @@ it.skipIf(process.platform === 'win32')(
   }
 )
 
-it.skipIf(process.platform === 'win32')(
+it.runIf(process.platform === 'linux')(
   'bounds a FIFO replacement racing the read-only open',
   async () => {
     const fixture = await wslScriptFixture()
     try {
       await fixture.put(credential('a'))
-      const prefix = `stat() { command stat "$@"; if [ "$1" = -c ] && [ "$2" = '%d:%i:%u:%a:%h:%s:%y:%z' ] && [ "$4" = ${quotePosixShell(fixture.path)} ]; then rm -f -- "$4"; mkfifo -m 600 -- "$4"; fi; }\n`
+      const prefix = `date() { printf '%s\\n' "$(( $(command date +%s) - 300 ))"; }\nstat() { command stat "$@"; if [ "$1" = -c ] && [ "$2" = '%d:%i:%u:%a:%h:%s:%y:%z' ] && [ "$4" = ${quotePosixShell(fixture.path)} ]; then rm -f -- "$4"; mkfifo -m 600 -- "$4"; fi; }\n`
       const started = performance.now()
       const result = await fixture.run('read', '', null, prefix, Date.now() + 2000)
       expect(result.code).not.toBe(0)

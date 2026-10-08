@@ -6,7 +6,7 @@ import { credential } from './native-account-test-fixtures'
 import { decodeAntigravityWslReply } from './native-wsl-credential-protocol'
 
 const digest = (value: Buffer) => createHash('sha256').update(value).digest('hex')
-describe.skipIf(process.platform === 'win32')('private guest HOME isolation', () => {
+describe.runIf(process.platform === 'linux')('private guest HOME isolation', () => {
   let first: Awaited<ReturnType<typeof wslScriptFixture>>
   let second: Awaited<ReturnType<typeof wslScriptFixture>>
   beforeEach(async () => {
