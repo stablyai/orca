@@ -32,6 +32,8 @@ type FakeChild = EventEmitter & {
   kill: ReturnType<typeof vi.fn>
 }
 
+type TestRun = { id: string; legacy: number }
+
 function createFakeChild(): FakeChild {
   const child = new EventEmitter() as FakeChild
   child.stdout = new EventEmitter()
@@ -83,11 +85,14 @@ describe('runRemoteOrcaCli', () => {
       getLegacyAdoption: vi.fn(() => undefined),
       getActiveDispatchForIdentity: vi.fn(() => undefined),
       getActiveDispatchMailboxOwners: vi.fn(() => []),
-      getCurrentRunForPane: vi.fn(() => undefined),
+      getCurrentRunForPane: vi.fn<(paneKey: string) => TestRun | undefined>(() => undefined),
       getCurrentRunForCoordinator: vi.fn(() => undefined),
+      getRun: vi.fn<(runId: string) => TestRun | undefined>(() => undefined),
+      getRunMailboxHistory: vi.fn<(runId: string, limit?: number) => unknown[]>(() => []),
       getRunMailboxOwnerIdsForHandle: vi.fn(() => []),
       findActiveRemoteAttachmentForPane: vi.fn(() => undefined)
     }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the legacy SSH dispatcher only reads the mocked runtime members below.
     const runtime = {
       getRuntimeId: () => 'runtime-test',
       getStatus: () => ({
@@ -100,6 +105,7 @@ describe('runRemoteOrcaCli', () => {
       }),
       getOrchestrationDb: () => db,
       getTerminalPaneKey: () => null,
+      verifyOrchestrationCompatibilityCaller: () => undefined,
       getLiveTerminalPaneKey: (handle: string) =>
         handle === 'term_windows' ? 'tab_windows:leaf_windows' : null,
       deliverPendingMessagesForHandle: vi.fn(),
@@ -592,6 +598,35 @@ describe('runRemoteOrcaCli', () => {
       'term_stale_ssh',
       'tab_ssh:leaf_ssh'
     )
+  })
+
+  it('carries the remote pane key for a Run-scoped inbox read', async () => {
+    const { runtime, db } = createRuntime()
+    const run = { id: 'run_ssh', legacy: 0 }
+    db.getRun.mockReturnValue(run)
+    db.getCurrentRunForCoordinator.mockReturnValue(run)
+
+    const result = await runRemoteOrcaCli(
+      runtime,
+      {
+        argv: ['orchestration', 'inbox', '--run', run.id, '--json'],
+        cwd: '/home/alice/repo',
+        env: {
+          ORCA_TERMINAL_HANDLE: 'term_stale_ssh',
+          ORCA_PANE_KEY: 'tab_ssh:leaf_ssh'
+        }
+      },
+      LEGACY_FALLBACK_OPTIONS
+    )
+
+    expect(result.exitCode).toBe(0)
+    expect(db.getCurrentRunForCoordinator).toHaveBeenCalledWith(
+      expect.objectContaining({
+        terminalHandle: 'term_stale_ssh',
+        paneKey: 'tab_ssh:leaf_ssh'
+      })
+    )
+    expect(db.getRunMailboxHistory).toHaveBeenCalledWith(run.id, undefined)
   })
 
   it('does not inherit a remote pane key for explicit legacy inspection', async () => {

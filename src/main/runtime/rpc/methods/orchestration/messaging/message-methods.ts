@@ -10,16 +10,10 @@ import {
   stripMutationReplayNudge
 } from '../../../orchestration-mutation-executor'
 import { exposeMessage } from './mailbox-message-receipt'
-import { resolveOrchestrationParty } from '../../../../orchestration/orchestration-party'
+import { ORCHESTRATION_INBOX_METHOD } from './inbox-method'
 import { recordReceiptBeforeNudge, replayMutationNudge } from './mutation-replay-nudge'
 import { resolveReplyRecipient } from './recipient-routing'
-import {
-  ReplyParams,
-  InboxParams,
-  TaskCreateParams,
-  TaskListParams,
-  TaskUpdateParams
-} from '../schemas'
+import { ReplyParams, TaskCreateParams, TaskListParams, TaskUpdateParams } from '../schemas'
 
 export const ORCHESTRATION_MESSAGE_METHODS = [
   defineMethod({
@@ -137,21 +131,7 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
     }
   }),
 
-  defineMethod({
-    name: 'orchestration.inbox',
-    params: InboxParams,
-    handler: (params, { runtime }) => {
-      const db = runtime.getOrchestrationDb()
-      // Why: stale/unknown handles return empty rather than error — historical rows survive handle deletion (design doc §3.3).
-      const messages = params.terminal
-        ? db.getAllMessagesForHandle(
-            resolveOrchestrationParty(params.terminal, db).address,
-            params.limit
-          )
-        : db.getInbox(params.limit)
-      return { messages, count: messages.length }
-    }
-  }),
+  ORCHESTRATION_INBOX_METHOD,
 
   defineMethod({
     name: 'orchestration.taskCreate',
