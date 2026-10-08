@@ -63,7 +63,7 @@ export function useMobileSessionTerminalList(scope: MobileSessionTerminalStreamD
             if (!isCurrent() || !response.accepted) {
               return false
             }
-            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reader checked the array and each row's handle; the rest of a row is the host's terminal record, which this module reads but does not re-declare.
             const result = response.value as { terminals: Terminal[] }
             if (result.terminals.length === 0 && !allowsEmpty()) {
               return true

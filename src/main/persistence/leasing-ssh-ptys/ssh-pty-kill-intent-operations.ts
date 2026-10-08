@@ -126,7 +126,7 @@ export function recordSshRemotePtyKillIntent(
     const prior = existing.pendingKill
     // Same incarnation means a repeated close; a recycled relay id starts a new intent lifetime.
     existing.pendingKill =
-      prior?.incarnationId === intent.incarnationId
+      prior && prior.incarnationId === intent.incarnationId
         ? {
             ...intent,
             requestedAt: Math.min(prior.requestedAt, now),

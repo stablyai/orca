@@ -4,9 +4,13 @@
 // hour's loss; fsync stops it from happening.
 
 import { closeSync, fsyncSync, openSync, rmSync, writeFileSync } from 'node:fs'
-import { copyFile, open, readdir, rename, rm, stat } from 'node:fs/promises'
+import { copyFile, open, readdir, rm, stat } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
-import { renameFileWithWindowsRetry } from './codex-accounts/fs-utils'
+import {
+  publishFileWithoutOverwrite,
+  renameFileWithWindowsRetry,
+  renameFileWithWindowsRetryAsync
+} from './codex-accounts/fs-utils'
 
 /**
  * fsync a directory so a rename within it is durable. Best-effort by design: Windows cannot open a
@@ -25,7 +29,8 @@ async function syncDirectory(directory: string): Promise<void> {
   }
 }
 
-function syncDirectorySync(directory: string): void {
+/** Sync variant of the best-effort directory fsync, for callers that publish by rename or link. */
+export function syncDirectoryDurablySync(directory: string): void {
   let fd: number | null = null
   try {
     fd = openSync(directory, 'r')
@@ -43,12 +48,28 @@ function syncDirectorySync(directory: string): void {
   }
 }
 
+/** Rename an already-fsynced file and make the containing directory durable. */
+export function renameDurableSync(tmpPath: string, finalPath: string): void {
+  renameFileWithWindowsRetry(tmpPath, finalPath)
+  syncDirectoryDurablySync(dirname(finalPath))
+}
+
+/** Publish an already-fsynced file without replacing a concurrently created destination. */
+export function publishFileDurableSync(tmpPath: string, finalPath: string): boolean {
+  if (!publishFileWithoutOverwrite(tmpPath, finalPath)) {
+    return false
+  }
+  syncDirectoryDurablySync(dirname(finalPath))
+  rmSync(tmpPath)
+  return true
+}
+
 /**
  * Rename and then fsync the containing directory. For callers that already fsynced the temp file
  * themselves and need the rename made durable.
  */
 export async function renameDurable(tmpPath: string, finalPath: string): Promise<void> {
-  await rename(tmpPath, finalPath)
+  await renameFileWithWindowsRetryAsync(tmpPath, finalPath)
   await syncDirectory(dirname(finalPath))
 }
 
@@ -96,7 +117,7 @@ export async function copyFileDurable(sourcePath: string, finalPath: string): Pr
     } finally {
       await handle.close()
     }
-    await rename(tmpPath, finalPath)
+    await renameFileWithWindowsRetryAsync(tmpPath, finalPath)
     renamed = true
     await syncDirectory(dirname(finalPath))
     return true
@@ -132,10 +153,9 @@ export async function writeFileDurableIfCurrent(
   try {
     // Why: fsync BEFORE rename. A rename that lands first can expose a zero-length file.
     await writeTempFileDurable(tmpPath, payload)
-    if (!isCurrent()) {
+    if (!(await renameFileWithWindowsRetryAsync(tmpPath, finalPath, isCurrent))) {
       return false
     }
-    await rename(tmpPath, finalPath)
     renamed = true
     await syncDirectory(dirname(finalPath))
     return true
@@ -190,21 +210,22 @@ export async function removeStaleDurableWriteTempFiles(
 export function writeFileDurableSync(
   tmpPath: string,
   finalPath: string,
-  payload: string | Uint8Array
+  payload: string | Uint8Array,
+  /** Creation mode for a new file, e.g. 0o600 for state other users must not read. */
+  mode?: number
 ): void {
   let renamed = false
   try {
     // A Uint8Array payload is written verbatim; a string still defaults to UTF-8.
-    writeFileSync(tmpPath, payload)
+    writeFileSync(tmpPath, payload, mode === undefined ? undefined : { mode })
     const fd = openSync(tmpPath, 'r+')
     try {
       fsyncSync(fd)
     } finally {
       closeSync(fd)
     }
-    renameFileWithWindowsRetry(tmpPath, finalPath)
+    renameDurableSync(tmpPath, finalPath)
     renamed = true
-    syncDirectorySync(dirname(finalPath))
   } finally {
     if (!renamed) {
       rmSync(tmpPath, { force: true })

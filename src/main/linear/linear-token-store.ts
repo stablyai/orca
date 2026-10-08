@@ -31,6 +31,8 @@ import {
   readStoredCredentialToken
 } from '../integration-credential-file'
 import type { LinearWorkspace } from '../../shared/linear/workspace-types'
+import { readCredentialFileProtection } from '../credential-file-protection'
+import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protection'
 
 function writeEncryptedToken(path: string, apiKey: string): void {
   if (getSecretStore().isEncryptionAvailable()) {
@@ -90,6 +92,11 @@ export function loadToken(options: { force?: boolean; workspaceId?: string } = {
     }
     return null
   }
+}
+
+/** How a workspace's stored token sits on disk, or null when none is stored. */
+export function getWorkspaceTokenProtection(workspaceId: string): SecretAtRestProtection | null {
+  return readCredentialFileProtection(getWorkspaceTokenPath(workspaceId))
 }
 
 export function clearTokenFile(workspaceId: string): void {

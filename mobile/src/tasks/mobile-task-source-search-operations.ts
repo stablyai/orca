@@ -1,10 +1,16 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import type { RpcCompatibleReader } from '../transport/rpc-operation-contract'
-import { rpcReadUnchecked, rpcUncheckedPayloadReader } from '../transport/rpc-reader-payload'
-import { extractLinearIssueReadItems } from './linear-mobile-issue-read'
+import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+import { githubPrRepoSlugSchema } from '../session/github-pr-read-reply-schema'
+import {
+  taskGitHubWorkItemListSchema,
+  taskGitLabWorkItemListSchema,
+  taskLinearIssueListSchema,
+  taskWorkItemLookupSchema
+} from './task-source-search-reply-schema'
 
 // The Smart workspace-source picker's provider reads: per-repo search, and the single-item lookups
-// a pasted link or number resolves to. Provider-specific fallbacks stay at their own call sites.
+// a pasted link or number resolves to. Provider-specific fallbacks stay at their own call sites,
+// and the readers are checked against task-source-search-reply-schema.ts.
 
 export const githubWorkItemSearchRead = bindDeferredRpcOperation(
   defineRpcOperation({
@@ -12,7 +18,7 @@ export const githubWorkItemSearchRead = bindDeferredRpcOperation(
     method: 'github.listWorkItems',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('github-work-items')
+    read: rpcResultVariant('github-work-items', taskGitHubWorkItemListSchema)
   })
 )
 
@@ -23,15 +29,16 @@ export const gitlabWorkItemSearchRead = bindDeferredRpcOperation(
     method: 'gitlab.listWorkItems',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('gitlab-work-items')
+    read: rpcResultVariant('gitlab-work-items', taskGitLabWorkItemListSchema)
   })
 )
 
 // Linear replies either as a bare array or as an `{ items }` envelope, and the picker has always
 // accepted both through this projection. Two operations share it because the empty-query path asks
-// a different method, not because the two answers differ.
-const linearIssueReader: RpcCompatibleReader<unknown, 'linear-issues', unknown> = (raw) =>
-  rpcReadUnchecked('linear-issues', extractLinearIssueReadItems(raw))
+// a different method, not because the two answers differ. The union in the schema is what used to
+// be linear-mobile-issue-read.ts's hand reader, whose `throw new Error('Unexpected Linear tasks
+// response')` reached the screen as unattributed copy; the same payloads now name the method.
+const linearIssueReader = rpcResultVariant('linear-issues', taskLinearIssueListSchema)
 
 export const linearIssueSearchRead = bindDeferredRpcOperation(
   defineRpcOperation({
@@ -65,7 +72,7 @@ export const githubRepoSlugRead = bindDeferredRpcOperation(
     method: 'github.repoSlug',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('repo-slug')
+    read: rpcResultVariant('repo-slug', githubPrRepoSlugSchema)
   })
 )
 
@@ -75,7 +82,7 @@ export const githubWorkItemByNumberRead = bindDeferredRpcOperation(
     method: 'github.workItem',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('github-work-item')
+    read: rpcResultVariant('github-work-item', taskWorkItemLookupSchema)
   })
 )
 
@@ -85,7 +92,7 @@ export const githubWorkItemBySlugRead = bindDeferredRpcOperation(
     method: 'github.workItemByOwnerRepo',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('github-work-item')
+    read: rpcResultVariant('github-work-item', taskWorkItemLookupSchema)
   })
 )
 
@@ -95,6 +102,6 @@ export const gitlabWorkItemByPathRead = bindDeferredRpcOperation(
     method: 'gitlab.workItemByPath',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('gitlab-work-item')
+    read: rpcResultVariant('gitlab-work-item', taskWorkItemLookupSchema)
   })
 )

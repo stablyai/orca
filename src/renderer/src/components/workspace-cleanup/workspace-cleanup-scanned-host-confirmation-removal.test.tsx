@@ -43,7 +43,7 @@ vi.mock('../../../../main/providers/ssh-git-dispatch', () => ({
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn() } }))
 
 import { useAppStore } from '@/store'
-import { makeWorktree } from '@/store/slices/store-test-helpers'
+import { makeWorktree } from '../../store/slices/worktrees-slice-test-fixtures'
 import { resetAuthoritativelyRemovedWorktreeMemoryForTests } from '@/store/slices/worktrees'
 import { useWorkspaceCleanupRemoval } from './use-workspace-cleanup-removal'
 

@@ -228,6 +228,21 @@ describe('getPiTitlebarExtensionSource', () => {
     expect(transferTitles[0]).toMatch(BRAILLE_RE)
   })
 
+  it.each([{ kind: 'omp' as const }, { processTitle: 'omp' }])(
+    'stops final OMP completion without waiting for isIdle: %j',
+    async (options) => {
+      const isIdle = vi.fn(() => false)
+      const harness = createHarness({ ...options, isIdle })
+      await harness.callHook('agent_start')
+      await harness.callHook('agent_end', { willContinue: false })
+      const completedTitle = harness.lastTitle()
+      expect(completedTitle).not.toMatch(BRAILLE_RE)
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(harness.lastTitle()).toBe(completedTitle)
+      expect(isIdle).not.toHaveBeenCalled()
+    }
+  )
+
   it('keeps spinning across a non-terminal OMP agent_end', async () => {
     const harness = createHarness()
 

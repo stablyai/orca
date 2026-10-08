@@ -11,6 +11,10 @@ import {
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspace-worktree'
 import {
+  floatingWorkspaceToWorktree,
+  isFloatingWorkspaceId
+} from '../../../../../../shared/floating-workspace-worktree'
+import {
   findIndexedDetectedWorktrees,
   findIndexedWorktreeOwnerForHost
 } from '@/lib/worktree-runtime-owner-index'
@@ -18,6 +22,9 @@ import { findWorktreeById, withoutErasedRequiredWorktreeFields } from '../../wor
 import { worktreeMatchesHost } from './worktree-host-ownership'
 
 const folderWorkspaceWorktreeCache = new WeakMap<FolderWorkspace, Worktree>()
+// Why a one-slot cache: the floating workspace is a singleton; retained selectors only need the
+// row's identity to hold while the resolved directory is unchanged.
+let floatingWorkspaceWorktreeCache: { path: string; worktree: Worktree } | null = null
 
 import { worktreeRowMatchesMetaHost } from './worktree-meta-host-match'
 import { branchName } from '@/lib/git-utils'
@@ -70,10 +77,25 @@ export function folderWorkspaceMatchesHost(
 }
 
 export function findKnownWorktreeById(
-  state: Pick<AppState, 'worktreesByRepo' | 'detectedWorktreesByRepo' | 'folderWorkspaces'>,
+  state: Pick<
+    AppState,
+    'worktreesByRepo' | 'detectedWorktreesByRepo' | 'folderWorkspaces' | 'floatingWorkspacePath'
+  >,
   worktreeId: string,
   executionHostId?: ExecutionHostId
 ): Worktree | DetectedWorktreeListResult['worktrees'][number] | undefined {
+  if (isFloatingWorkspaceId(worktreeId)) {
+    // The floating workspace has no repo/folder row; mint the same synthetic row the host resolves
+    // with, from the host-resolved directory. Before resolution there is no path to answer with.
+    const path = state.floatingWorkspacePath
+    if (!path || (executionHostId && executionHostId !== LOCAL_EXECUTION_HOST_ID)) {
+      return undefined
+    }
+    if (floatingWorkspaceWorktreeCache?.path !== path) {
+      floatingWorkspaceWorktreeCache = { path, worktree: floatingWorkspaceToWorktree(path) }
+    }
+    return floatingWorkspaceWorktreeCache.worktree
+  }
   const workspaceScope = parseWorkspaceKey(worktreeId)
   if (workspaceScope?.type === 'folder') {
     const folderWorkspace = state.folderWorkspaces.find(

@@ -47,6 +47,24 @@ locals {
       description = "Cloud SQL checkpoints triggered by WAL volume instead of the timed schedule; a sustained run is the fsync loop that stalled every relay process at once on 2026-09-04."
       filter      = "resource.type=\"cloudsql_database\" AND resource.labels.database_id=\"${var.project_id}:${local.relay_database_instance_name}\" AND textPayload:\"checkpoint starting: wal\""
     }
+    # Why: `db=orca_relay,` keeps auth on the shared instance out. NOWAIT refusals ("could not
+    # obtain lock") are excluded: sweeps step aside by design at ~160/min even with rehome paused.
+    cloud_sql_lock_timeouts = {
+      description = "Relay statements Postgres cancelled after waiting out their lock timeout; a burst means one transaction is holding rows every other relay process needs."
+      filter      = "resource.type=\"cloudsql_database\" AND resource.labels.database_id=\"${var.project_id}:${local.relay_database_instance_name}\" AND textPayload:\"db=orca_relay,\" AND textPayload:\"canceling statement due to lock timeout\""
+    }
+    reservation_drift = {
+      description = "Cells whose reserved_requests disagreed with their lease units when reconciliation corrected them; should trend to zero."
+      filter      = "((resource.type=\"cloud_run_revision\" AND (${local.relay_service_log_filter})) OR resource.type=\"gce_instance\") AND jsonPayload.event=\"orca_relay_reservation_drift\""
+    }
+    # Why the cell's line and not the load balancer's: the LB writes a WebSocket's log entry at
+    # close but stamps it with the stream's start, and a log-based metric counts by that stamp. Of
+    # the 1,046 `internal_error` streams on 2026-10-06 18:34Z, 42 were stamped within 10 minutes of
+    # the drop; the median was 2.4 h earlier, so an LB-log rate never shows the pulse.
+    cell_control_abnormal_closes = {
+      description = "Desktop control sockets a GCE cell saw end with no close frame (1006), counted when they closed. Hundreds on one cell in a minute is the load balancer ending streams."
+      filter      = "resource.type=\"gce_instance\" AND logName=\"projects/${var.project_id}/logs/cos_containers\" AND jsonPayload.message:\"[orca-relay] control closed \" AND jsonPayload.message:\" code=1006 \""
+    }
   }
 
   relay_runtime_metrics = {
@@ -60,6 +78,10 @@ locals {
     control_renewal_latency_ms_p50     = { field = "controlRenewalLatencyMsP50", description = "Control renewal latency p50 in the interval." }
     control_renewal_latency_ms_p95     = { field = "controlRenewalLatencyMsP95", description = "Control renewal latency p95 in the interval." }
     control_renewal_latency_ms_max     = { field = "controlRenewalLatencyMsMax", description = "Maximum control renewal latency in the interval." }
+    control_renewal_flushes            = { field = "controlRenewalFlushesDelta", description = "Batched control-renewal statements issued in the interval, one per cell per flush window." }
+    control_renewal_flush_rows_max     = { field = "controlRenewalFlushRowsMax", description = "Largest number of hosts renewed by a single statement in the interval; the row ceiling is what bounds how long one flush holds its row locks." }
+    control_renewal_flush_ms_p95       = { field = "controlRenewalFlushLatencyMsP95", description = "Batched control-renewal statement duration p95 in the interval. Row locks live until the statement commits, so this is the lock hold." }
+    control_renewal_flush_ms_max       = { field = "controlRenewalFlushLatencyMsMax", description = "Maximum batched control-renewal statement duration in the interval." }
     control_renewals                   = { field = "controlRenewalsDelta", description = "Control renewal attempts in the interval." }
     control_renewal_successes          = { field = "controlRenewalSuccessesDelta", description = "Successful control renewals in the interval." }
     control_renewal_lease_misses       = { field = "controlRenewalLeaseMissesDelta", description = "Control renewals that found their activity lease missing." }
@@ -93,6 +115,24 @@ locals {
     db_waiters_max                     = { field = "databasePoolWaitersMax", description = "Maximum requests queued for a PostgreSQL connection during the interval." }
     db_oldest_wait_ms                  = { field = "databasePoolOldestWaitMs", description = "Current oldest PostgreSQL pool waiter age." }
     db_wait_ms_max                     = { field = "databasePoolWaitMsMax", description = "Maximum PostgreSQL pool wait during the interval." }
+    host_hellos_shed                   = { field = "hostHellosShedDelta", description = "Desktop control connections refused with a retryable 503 because the PostgreSQL pool queue was full." }
+    cell_inventory_hold_ms_max         = { field = "cellInventoryHoldMsMax", description = "Longest cell-inventory lock hold in the interval." }
+    cell_inventory_hold_ms_p95         = { field = "cellInventoryHoldMsP95", description = "Cell-inventory lock hold p95 in the interval; the bound is tuned against this." }
+    cell_inventory_holds               = { field = "cellInventoryHolds", description = "Cell-inventory locks acquired in the interval; the percentiles above summarise these." }
+    cell_inventory_lock_unavailable    = { field = "cellInventoryLockUnavailable", description = "Fail-fast cell-inventory acquisitions that found the lock held. Includes background sweeps, which step aside by design, so this is contention pressure rather than user-visible failure." }
+    cell_inventory_lock_timeouts       = { field = "cellInventoryLockTimeouts", description = "Bounded cell-inventory waits that expired, counted per attempt rather than per request. This is the user-visible lane." }
+    inventory_hold_ms_p99              = { field = "inventoryHoldMsP99", description = "Cell-inventory lock (every row, or every general row) hold p99 in the interval, this site only." }
+    rehome_target_row_hold_ms_p99      = { field = "rehomeTargetRowHoldMsP99", description = "Rehome target-row lock hold p99 in the interval, this site only." }
+    isolated_replacement_hold_ms_p99   = { field = "isolatedReplacementHoldMsP99", description = "Drain-return regional target-row lock hold p99 in the interval, this site only." }
+    isolated_replacement_holds         = { field = "isolatedReplacementHolds", description = "Drain-return regional target-row locks acquired in the interval." }
+    drain_return_service_ms_p50        = { field = "drainReturnServiceMsP50", description = "Drain-return lane slot hold p50; lane capacity is concurrency / this. Omitted when no drain return ran." }
+    drain_return_service_ms_p95        = { field = "drainReturnServiceMsP95", description = "Drain-return lane slot hold p95 in the interval." }
+    sticky_service_ms_p50              = { field = "stickyServiceMsP50", description = "Sticky lane slot hold p50, verification included; herd recovery is concurrency / this." }
+    sticky_service_ms_p99              = { field = "stickyServiceMsP99", description = "Sticky lane slot hold p99 in the interval." }
+    assign_non_drain_503s              = { field = "assignNonDrain503sDelta", description = "Director /v1/assign 503s other than scheduled drain-return deferrals; the per-cause split is assign503sByCauseDelta." }
+    db_lock_wait_samples               = { field = "dbLockWaitSamplesDelta", description = "Relay-database lock-wait samples taken by this director in the interval; divide the waiter sums below by this." }
+    db_cell_row_lock_waiters_director  = { field = "dbCellRowLockWaitersDirectorDelta", description = "Director backends waiting on a relay_cells row lock, summed over samples." }
+    db_cell_row_lock_waiters_cell      = { field = "dbCellRowLockWaitersCellDelta", description = "Cell backends waiting on a relay_cells row lock, summed over samples." }
   }
 
   # Regions the director can hint or select. Pinned to relay-contract's RELAY_REGIONS by
@@ -308,7 +348,7 @@ resource "google_logging_metric" "relay_snapshot" {
   metric_descriptor {
     metric_kind = "DELTA"
     value_type  = "DISTRIBUTION"
-    unit        = contains(["sql_latency_ms", "control_rtt_ms_p50", "control_rtt_ms_p95", "control_rtt_ms_max", "client_accept_total_ms_p50", "client_accept_total_ms_p95", "client_accept_total_ms_max", "client_accept_assignment_ms_p95", "client_accept_credential_ms_p95", "client_accept_activity_ms_p95", "client_accept_attach_ms_p95", "client_accept_basis_ms_p95", "control_renewal_latency_ms_p50", "control_renewal_latency_ms_p95", "control_renewal_latency_ms_max", "http_latency_ms", "event_loop_ms_p99", "db_oldest_wait_ms", "db_wait_ms_max"], each.key) ? "ms" : each.key == "queued_bytes" || each.key == "heap_used_bytes" || each.key == "forwarded_bytes" ? "By" : "1"
+    unit        = contains(["sql_latency_ms", "control_rtt_ms_p50", "control_rtt_ms_p95", "control_rtt_ms_max", "client_accept_total_ms_p50", "client_accept_total_ms_p95", "client_accept_total_ms_max", "client_accept_assignment_ms_p95", "client_accept_credential_ms_p95", "client_accept_activity_ms_p95", "client_accept_attach_ms_p95", "client_accept_basis_ms_p95", "control_renewal_latency_ms_p50", "control_renewal_latency_ms_p95", "control_renewal_latency_ms_max", "http_latency_ms", "event_loop_ms_p99", "db_oldest_wait_ms", "db_wait_ms_max", "inventory_hold_ms_p99", "rehome_target_row_hold_ms_p99", "isolated_replacement_hold_ms_p99", "drain_return_service_ms_p50", "drain_return_service_ms_p95", "sticky_service_ms_p50", "sticky_service_ms_p99"], each.key) ? "ms" : each.key == "queued_bytes" || each.key == "heap_used_bytes" || each.key == "forwarded_bytes" ? "By" : "1"
 
     labels {
       key         = "role"
@@ -344,6 +384,45 @@ resource "google_logging_metric" "relay_incident" {
     metric_kind = "DELTA"
     value_type  = "INT64"
     unit        = "1"
+  }
+}
+
+# Why: the hold sample is emitted only after COMMIT, so a failed acquisition never reads as a hold.
+# The 1,000 ms bar lives in the filter so the alert is on the sampled milliseconds, not on the
+# percentile interpolation of a wide exponential bucket.
+resource "google_logging_metric" "relay_long_cell_inventory_hold" {
+  project         = var.project_id
+  name            = "orca_relay_long_cell_inventory_hold_ms"
+  description     = "Cell-inventory lock holds of at least 1,000 ms, one value per 30-second runtime sample."
+  filter          = "${local.relay_runtime_log_filter} AND jsonPayload.cellInventoryHoldMsMax>=1000"
+  value_extractor = "EXTRACT(jsonPayload.cellInventoryHoldMsMax)"
+  label_extractors = {
+    role    = "EXTRACT(jsonPayload.role)"
+    cell_id = "EXTRACT(jsonPayload.cellId)"
+  }
+
+  metric_descriptor {
+    metric_kind = "DELTA"
+    value_type  = "DISTRIBUTION"
+    unit        = "ms"
+
+    labels {
+      key         = "role"
+      value_type  = "STRING"
+      description = "Relay process role."
+    }
+
+    labels {
+      key         = "cell_id"
+      value_type  = "STRING"
+      description = "Durable relay cell identifier, or director."
+    }
+  }
+
+  bucket_options {
+    explicit_buckets {
+      bounds = [1000, 2000, 3000, 4000, 6000, 10000, 30000]
+    }
   }
 }
 
@@ -762,6 +841,230 @@ resource "google_monitoring_alert_policy" "relay_cell_process_exit" {
   depends_on = [google_logging_metric.relay_incident]
 }
 
+# Pages on cell holds only: director holds of 1-2.5 s recur several times a day with rehoming paused,
+# and pausing rehome does not stop them, so paging on them would ask on-call to do nothing.
+resource "google_monitoring_alert_policy" "relay_long_cell_inventory_hold" {
+  project               = var.project_id
+  display_name          = "Orca Relay: cell table lock held over 1 second"
+  combiner              = "OR"
+  enabled               = true
+  notification_channels = var.relay_alert_notification_channels
+
+  conditions {
+    display_name = "Cell table lock held at least 1,000 ms (GCE cell)"
+
+    condition_threshold {
+      # The metric filter already drops samples under 1,000 ms, so any value present is a breach.
+      filter          = "resource.type=\"gce_instance\" AND metric.type=\"logging.googleapis.com/user/${google_logging_metric.relay_long_cell_inventory_hold.name}\" AND metric.label.\"role\"=\"cell\""
+      comparison      = "COMPARISON_GT"
+      threshold_value = 0
+      duration        = "0s"
+
+      aggregations {
+        alignment_period     = "60s"
+        per_series_aligner   = "ALIGN_PERCENTILE_99"
+        cross_series_reducer = "REDUCE_MAX"
+        group_by_fields      = ["metric.label.\"cell_id\""]
+      }
+
+      trigger {
+        count = 1
+      }
+    }
+  }
+
+  conditions {
+    display_name = "Cell table lock held at least 1,000 ms (Cloud Run cell)"
+
+    condition_threshold {
+      filter          = "resource.type=\"cloud_run_revision\" AND metric.type=\"logging.googleapis.com/user/${google_logging_metric.relay_long_cell_inventory_hold.name}\" AND metric.label.\"role\"=\"cell\""
+      comparison      = "COMPARISON_GT"
+      threshold_value = 0
+      duration        = "0s"
+
+      aggregations {
+        alignment_period     = "60s"
+        per_series_aligner   = "ALIGN_PERCENTILE_99"
+        cross_series_reducer = "REDUCE_MAX"
+        group_by_fields      = ["metric.label.\"cell_id\""]
+      }
+
+      trigger {
+        count = 1
+      }
+    }
+  }
+
+  documentation {
+    content   = "A relay cell held the lock on every row of the relay cell table for at least one second. While it is held, host connects and reservation changes on every cell wait and then fail, so each hold is a fleet-wide stall of that length. Between 2026-09-20 and 2026-09-22 every cell hold came from a regional rehome committed on an asia-east2 cell (c27, c28 or c29), about 3.6 s each. First response: pause regional rehoming with the `Operate Relay Production Rehome` workflow, action `pause`. See `cloud/docs/relay-incident-monitor.md`, section \"Relay lock contention alert policies\"."
+    mime_type = "text/markdown"
+  }
+}
+
+# Visibility only, no notification channel, like the non-paging relay_custom policies.
+resource "google_monitoring_alert_policy" "relay_director_cell_inventory_hold" {
+  project               = var.project_id
+  display_name          = "Orca Relay: director cell table lock held over 1 second"
+  combiner              = "OR"
+  enabled               = true
+  notification_channels = []
+
+  conditions {
+    display_name = "Director cell table lock held at least 1,000 ms"
+
+    condition_threshold {
+      filter          = "resource.type=\"cloud_run_revision\" AND metric.type=\"logging.googleapis.com/user/${google_logging_metric.relay_long_cell_inventory_hold.name}\" AND metric.label.\"role\"=\"director\""
+      comparison      = "COMPARISON_GT"
+      threshold_value = 0
+      duration        = "0s"
+
+      aggregations {
+        alignment_period     = "60s"
+        per_series_aligner   = "ALIGN_PERCENTILE_99"
+        cross_series_reducer = "REDUCE_MAX"
+        group_by_fields      = ["metric.label.\"cell_id\""]
+      }
+
+      trigger {
+        count = 1
+      }
+    }
+  }
+
+  documentation {
+    content   = "The director held the lock on every row of the relay cell table for at least one second. These holds happen a few times a day even with regional rehoming paused, and pausing rehome does not stop them, so this policy does not page. Use it to explain a `Orca Relay: lock timeout burst` alert that has no cell hold in the same minute. Do not drain or restart cells for it."
+    mime_type = "text/markdown"
+  }
+}
+
+# The bar lives in the filter, as for the long-hold metric: an exponential bucket's percentile
+# interpolation would put any value from 128 to 255 above 200. Why 200: a healthy cell peaks at
+# 2 waiters (p99), but single-cell stalls of 50-196 recur several times a day and already time
+# out. 200 keeps those for the SQL-failure alerts and pages on herds. Since 2026-10-03 a bar of 50
+# was crossed in 84 episodes, 150 in 29, and 200 in 10, among them every known herd (10-03 17:50,
+# 10-05 06:26 and 18:22, 10-06 01:33 and 18:34, 10-07 20:00).
+resource "google_logging_metric" "relay_cell_pool_herd" {
+  project     = var.project_id
+  name        = "orca_relay_cell_pool_herd"
+  description = "Cell runtime samples in which more than 200 requests queued at once for a PostgreSQL connection."
+  filter      = "${local.relay_runtime_log_filter} AND jsonPayload.role=\"cell\" AND jsonPayload.databasePoolWaitersMax>200"
+
+  metric_descriptor {
+    metric_kind = "DELTA"
+    value_type  = "INT64"
+    unit        = "1"
+  }
+}
+
+resource "google_monitoring_alert_policy" "relay_cell_control_close_burst" {
+  project               = var.project_id
+  display_name          = "Orca Relay: cell desktop disconnect burst"
+  combiner              = "OR"
+  enabled               = true
+  notification_channels = var.relay_alert_notification_channels
+
+  conditions {
+    display_name = "Over 120 abnormal desktop control closes on one cell in a minute"
+
+    condition_threshold {
+      filter          = "resource.type=\"gce_instance\" AND metric.type=\"logging.googleapis.com/user/orca_relay_cell_control_abnormal_closes\""
+      comparison      = "COMPARISON_GT"
+      threshold_value = 120
+      duration        = "0s"
+
+      aggregations {
+        alignment_period     = "60s"
+        per_series_aligner   = "ALIGN_SUM"
+        cross_series_reducer = "REDUCE_SUM"
+        group_by_fields      = ["resource.label.\"instance_id\""]
+      }
+
+      trigger {
+        count = 1
+      }
+    }
+  }
+
+  documentation {
+    content   = "Over 120 desktop control sockets on one relay cell ended without a close frame (code 1006) in one minute. On 2026-10-06 at 18:34 UTC the asia-east2 cells logged 213-247 each in the minute Google's load balancer ended 1,046 of their streams, against a baseline of 6-49 per minute (US cells: 17 or fewer, all codes). Smaller pulses of about 60 per cell (01:33 and 20:40 UTC that day) stay under the bar. First response: read the load balancer logs for the same minute by `receiveTimestamp`, not `timestamp` (the LB stamps a WebSocket with its start), and bucket `jsonPayload.statusDetails`. If they show `internal_error` across several cells at once, the proxy ended the streams: record the timestamps for the Google support case, and do not drain, restart or resize the cell. If `Orca Relay: cell database pool herd` fired in the same minute, the reconnecting desktops overran the cell's database pool. Otherwise look at the cell itself: a crash or restart, the event loop, or memory."
+    mime_type = "text/markdown"
+  }
+
+  depends_on = [google_logging_metric.relay_incident]
+}
+
+resource "google_monitoring_alert_policy" "relay_cell_pool_herd" {
+  project               = var.project_id
+  display_name          = "Orca Relay: cell database pool herd"
+  combiner              = "OR"
+  enabled               = true
+  notification_channels = var.relay_alert_notification_channels
+
+  conditions {
+    display_name = "Over 200 requests queued for a PostgreSQL connection on one cell"
+
+    condition_threshold {
+      # The metric filter already drops samples at or under 200, so any value present is a breach.
+      filter          = "resource.type=\"gce_instance\" AND metric.type=\"logging.googleapis.com/user/${google_logging_metric.relay_cell_pool_herd.name}\""
+      comparison      = "COMPARISON_GT"
+      threshold_value = 0
+      duration        = "0s"
+
+      aggregations {
+        alignment_period     = "60s"
+        per_series_aligner   = "ALIGN_SUM"
+        cross_series_reducer = "REDUCE_SUM"
+        group_by_fields      = ["resource.label.\"instance_id\""]
+      }
+
+      trigger {
+        count = 1
+      }
+    }
+  }
+
+  documentation {
+    content   = "More than 200 requests on one relay cell queued at once for a PostgreSQL connection, and requests that wait 2 s fail. A healthy cell peaks at 2 waiters (p99 on 2026-10-07). Single-cell stalls of 50-196 waiters recur several times a day, mostly on the asia-east2 cells, whose every query crosses the Pacific. Each is about 30 seconds long and already timing requests out (96-367 SQL failures per 30-second sample at 184-196 on 2026-10-07). This bar leaves those to the SQL-failure alerts. Reconnect herds go well past 200 on several cells at once (2026-10-06 18:34 UTC: 233-527 on all five asia-east2 cells). Since 2026-10-03 this bar was crossed in 10 episodes. Six were herds across several cells, and four were a single cell at 201-228. This uses the interval maximum (`databasePoolWaitersMax`), so a herd shorter than the 30-second sample still shows. First response: check `Orca Relay: cell desktop disconnect burst` for the same minute. If it fired too, a mass disconnect caused this, so follow that policy and leave the database alone. If it did not, check Cloud SQL health and lock contention (`Orca Relay: lock timeout burst`) before touching the cell."
+    mime_type = "text/markdown"
+  }
+}
+
+resource "google_monitoring_alert_policy" "relay_lock_timeout_burst" {
+  project               = var.project_id
+  display_name          = "Orca Relay: lock timeout burst"
+  combiner              = "OR"
+  enabled               = true
+  notification_channels = var.relay_alert_notification_channels
+
+  conditions {
+    display_name = "Relay lock timeouts at least 20 in a minute"
+
+    condition_threshold {
+      filter          = "resource.type=\"cloudsql_database\" AND metric.type=\"logging.googleapis.com/user/orca_relay_cloud_sql_lock_timeouts\""
+      comparison      = "COMPARISON_GT"
+      threshold_value = 19
+      duration        = "0s"
+
+      aggregations {
+        alignment_period     = "60s"
+        per_series_aligner   = "ALIGN_SUM"
+        cross_series_reducer = "REDUCE_SUM"
+      }
+
+      trigger {
+        count = 1
+      }
+    }
+  }
+
+  documentation {
+    content   = "Postgres cancelled at least 20 relay statements in one minute because they waited too long for a lock. Each cancel is a host connect, reservation or placement that failed and retried. Only the relay database is counted; auth traffic on the same instance and fail-fast lock refusals from background sweeps are excluded. Between 2026-09-20 and 2026-09-22 all 88 such minutes overlapped a lock hold from a regional rehome on an asia-east2 cell. A burst can also come from a director hold while rehoming is paused, as on 2026-09-23 at 04:23 UTC. First response: check the `Orca Relay: cell table lock held over 1 second` policy for the same minute. If an asia-east2 cell held the lock, pause regional rehoming with the `Operate Relay Production Rehome` workflow, action `pause`. If no cell hold appears in that minute, check `Orca Relay: director cell table lock held over 1 second` instead of pausing rehome, and do not drain or restart cells for it. See `cloud/docs/relay-incident-monitor.md`, section \"Relay lock contention alert policies\"."
+    mime_type = "text/markdown"
+  }
+
+  depends_on = [google_logging_metric.relay_incident]
+}
+
 # Why: nothing fired while US desktops sat on asia-east2 cells for weeks in 2026-08. The two
 # per-cell policies below read that as distance, and the fleet-wide one reads it as a bad region
 # hint. All three are MQL because each needs the sum of a DELTA DISTRIBUTION as a volume floor,
@@ -882,6 +1185,71 @@ resource "google_monitoring_alert_policy" "relay_region_hint_skew" {
   }
 
   depends_on = [google_logging_metric.relay_snapshot]
+}
+
+# Declared for a targeted apply after the step-2 wave. Cells only: a director-only fix must not
+# raise the level the cells are held to. sum / count of the distribution is the exact level.
+resource "google_logging_metric" "relay_cell_fix_level" {
+  project         = var.project_id
+  name            = "orca_relay_cell_fix_level"
+  description     = "RELAY_FIX_LEVEL reported by each cell's runtime metrics line."
+  filter          = "${local.relay_runtime_log_filter} AND jsonPayload.role=\"cell\" AND jsonPayload.fixLevel:*"
+  value_extractor = "EXTRACT(jsonPayload.fixLevel)"
+  label_extractors = {
+    cell_id = "EXTRACT(jsonPayload.cellId)"
+  }
+
+  metric_descriptor {
+    metric_kind = "DELTA"
+    value_type  = "DISTRIBUTION"
+    unit        = "1"
+
+    labels {
+      key         = "cell_id"
+      value_type  = "STRING"
+      description = "Durable relay cell identifier."
+    }
+  }
+
+  bucket_options {
+    linear_buckets {
+      num_finite_buckets = 64
+      width              = 1
+      offset             = 0
+    }
+  }
+}
+
+locals {
+  relay_cell_fix_level_hourly = "(sum by (cell_id) (increase(logging_googleapis_com:user_orca_relay_cell_fix_level_sum{monitored_resource=\"gce_instance\"}[1h])) / sum by (cell_id) (increase(logging_googleapis_com:user_orca_relay_cell_fix_level_count{monitored_resource=\"gce_instance\"}[1h])))"
+  relay_cell_serving          = "(sum by (cell_id) (increase(logging_googleapis_com:user_orca_relay_controls_sum{monitored_resource=\"gce_instance\",role=\"cell\"}[1h])) > 0)"
+}
+
+# One PromQL condition per policy, and log-based metrics allow at most 25 h of lookback, so the
+# floor is a fixed variable rather than a fleet maximum: raise it with a targeted apply once a
+# wave has rolled every serving cell. Images from before the field report no level at all.
+resource "google_monitoring_alert_policy" "relay_cell_outdated_fix_level" {
+  project               = var.project_id
+  display_name          = "Orca Relay: cell left on an outdated image"
+  combiner              = "OR"
+  enabled               = true
+  notification_channels = var.relay_alert_notification_channels
+
+  conditions {
+    display_name = "Serving cell below fix level ${var.relay_cell_min_fix_level} for 6 hours"
+
+    condition_prometheus_query_language {
+      query    = "((${local.relay_cell_fix_level_hourly} < ${var.relay_cell_min_fix_level}) or (${local.relay_cell_serving} unless on (cell_id) ${local.relay_cell_fix_level_hourly})) and on (cell_id) ${local.relay_cell_serving}"
+      duration = "21600s"
+    }
+  }
+
+  documentation {
+    content   = "A cell holding desktops runs an image below `relay_cell_min_fix_level`, or one too old to report `fixLevel`. On 2026-09-28, 18 cells still ran images without the pg connection-error fix and crashed in a two-minute database failover, dropping ~16.3k hosts. Roll the named cell with a same-capacity roll to the current digest. Empty cells do not fire because they hold no controls. Raise the floor only after a wave has rolled every serving cell."
+    mime_type = "text/markdown"
+  }
+
+  depends_on = [google_logging_metric.relay_cell_fix_level]
 }
 
 # Why: the four signals that had to be assembled by hand during the 2026-09-04 incident.

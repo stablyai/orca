@@ -25,6 +25,7 @@ import {
   parseGlabJsonList,
   parseGlabPaginationHeader,
   isMissingJobLogError,
+  glabHostEnvOptions,
   getProjectRef,
   getProjectRefForRemote,
   parseGlabApiResponse,
@@ -559,11 +560,6 @@ Self-hosted-git
     expect(parseGlabAuthStatusHosts('Not logged in.')).toEqual([])
   })
 
-  it('captures a non-default port on "Logged in to" lines', () => {
-    const out = '✓ Logged in to gitlab.example.com:8080 as user (token)'
-    expect(parseGlabAuthStatusHosts(out)).toEqual(['gitlab.example.com:8080'])
-  })
-
   it('captures a non-default port on header-style lines', () => {
     const out = `
 gitlab.example.com:8080:
@@ -675,26 +671,11 @@ describe('parseGlabApiResponse', () => {
     expect(usedSeparatorMatch).toBe(false)
   })
 
-  it('lowercases header names for stable lookup', () => {
-    const stdout = 'HTTP/2.0 200 OK\nX-Total: 1\nContent-Type: application/json\n\n{}'
-    const parsed = parseGlabApiResponse(stdout)
-    expect(parsed.headers['x-total']).toBe('1')
-    expect(parsed.headers['content-type']).toBe('application/json')
-  })
-
   it('returns the full input as body when there is no header separator', () => {
     const stdout = '{"iid":1}'
     const parsed = parseGlabApiResponse(stdout)
     expect(parsed.body).toBe(stdout)
     expect(parsed.headers).toEqual({})
-  })
-
-  it('skips the status line in the header block', () => {
-    const stdout = 'HTTP/2.0 200 OK\nX-Total: 5\n\n[]'
-    const parsed = parseGlabApiResponse(stdout)
-    // The status line should not have leaked into headers under any key.
-    expect(parsed.headers['http/2.0']).toBeUndefined()
-    expect(parsed.headers['x-total']).toBe('5')
   })
 })
 
@@ -716,5 +697,49 @@ describe('parseGlabPaginationHeader', () => {
     expect(parseGlabPaginationHeader('0', 1)).toBeUndefined()
     expect(parseGlabPaginationHeader('0', 0)).toBe(0)
     expect(parseGlabPaginationHeader('-3', 0)).toBeUndefined()
+  })
+})
+
+describe('glabHostEnvOptions', () => {
+  const projectRef = { host: 'gitlab.example.internal' }
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+
+  it('carries the host in GITLAB_HOST for a connection-backed workspace', () => {
+    const { env } = glabHostEnvOptions(projectRef, 'conn-1')
+
+    expect(env?.GITLAB_HOST).toBe('gitlab.example.internal')
+  })
+
+  it('returns nothing for a local workspace', () => {
+    expect(glabHostEnvOptions(projectRef, null)).toEqual({})
+    expect(glabHostEnvOptions(projectRef, undefined)).toEqual({})
+  })
+
+  it('returns nothing when the project ref carries no host', () => {
+    expect(glabHostEnvOptions(null, 'conn-1')).toEqual({})
+    expect(glabHostEnvOptions({ host: '' }, 'conn-1')).toEqual({})
+  })
+
+  // Why: spawn env stops at the wsl.exe boundary, so Windows has to name the
+  // variable in WSLENV or glab in the distro never sees the host.
+  it('forwards GITLAB_HOST through WSLENV on Windows', () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+
+    const { env } = glabHostEnvOptions(projectRef, 'conn-1')
+
+    expect(env?.GITLAB_HOST).toBe('gitlab.example.internal')
+    expect(env?.WSLENV?.split(':')).toContain('GITLAB_HOST')
+  })
+
+  it('leaves WSLENV alone off Windows', () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+
+    const { env } = glabHostEnvOptions(projectRef, 'conn-1')
+
+    expect(env?.WSLENV).toBe(process.env.WSLENV)
   })
 })

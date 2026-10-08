@@ -97,13 +97,16 @@ export function workspaceSettingsMounts(
         runSetup: false,
         trustedOrcaHooks: {},
         getWorktreeCreateCutoverSupport: async () => false,
+        // False for the same reason as the cutover probe: an old host is the baseline the
+        // recordings pin, so the create stays on worktree.create rather than agent.launch.
+        getAgentLaunchSupport: async () => false,
         transitionDrawer: (view: unknown) => context.effect('drawer', view),
         onCreated: (id: unknown, name: unknown) => context.effect('created', { id, name }),
         onClose: () => context.effect('close', null)
       })
       let state: ReturnType<typeof useSubmit>
       const hook = hookMount(() => {
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the recorder supplies only the members the hook reads.
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the model is partial by construction, so the assertion is what lets it mount. It also silences the compiler: when the hook gained a required getAgentLaunchSupport, nothing failed here and the scenario threw mid-submit instead. Add the member to the model above when this hook grows one.
         state = useSubmit(model as unknown as Parameters<typeof useSubmit>[0])
       })
       return {

@@ -7,8 +7,8 @@ import {
 } from './stable-logical-rpc-client'
 import { isRpcDeliveryUnknown, markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
 import {
-  RpcIncompatibleReplyError,
-  isRpcIncompatibleReplyError
+  RPC_INCOMPATIBLE_REPLY_CODE,
+  RpcIncompatibleReplyError
 } from './rpc-incompatible-reply-error'
 import { captureRpcOperationSettlement, runRpcOperation } from './rpc-operation'
 import {
@@ -296,7 +296,6 @@ describe('an incompatible reply', () => {
     ).catch((thrown: unknown) => thrown)
 
     expect(caught).toBeInstanceOf(RpcIncompatibleReplyError)
-    expect(isRpcIncompatibleReplyError(caught)).toBe(true)
     expect((caught as RpcIncompatibleReplyError).method).toBe('worktree.ps')
     expect((caught as RpcIncompatibleReplyError).operationName).toBe('test.workspaceListOrThrow')
     expect((caught as RpcIncompatibleReplyError).issues.length).toBeGreaterThan(0)
@@ -319,6 +318,23 @@ describe('an incompatible reply', () => {
     await expect(
       runRpcOperation(connectedSession(incompatible), workspaceListOrNull, {})
     ).resolves.toBeNull()
+  })
+
+  // `message` reaches toasts and screen copy, so the machine token lives on `code`/`name` instead.
+  it('carries readable copy in the message and the token on code and name', async () => {
+    const caught = await runRpcOperation(
+      connectedSession(incompatible),
+      workspaceListOrThrow,
+      {}
+    ).catch((thrown: unknown) => thrown)
+
+    if (!(caught instanceof RpcIncompatibleReplyError)) {
+      throw new Error('expected an incompatible-reply error')
+    }
+    expect(caught.message).toBe('The host sent a reply this app could not read (worktree.ps)')
+    expect(caught.message).not.toContain('incompatible_reply')
+    expect(caught.code).toBe(RPC_INCOMPATIBLE_REPLY_CODE)
+    expect(caught.name).toBe('RpcIncompatibleReplyError')
   })
 })
 

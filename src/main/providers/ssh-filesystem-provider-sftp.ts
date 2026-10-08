@@ -1,3 +1,4 @@
+import { closeSftpDirectoryHandle } from './ssh-sftp-directory-close'
 import type { FileEntryWithStats, SFTPWrapper, Stats } from 'ssh2'
 import type { FileStat } from './types'
 
@@ -95,15 +96,65 @@ export function fastGetViaSftp(
   )
 }
 
-export function readDirViaSftp(
+export async function* readDirectoryEntriesViaSftp(
   sftp: SFTPWrapper,
   dirPath: string,
   options?: { signal?: AbortSignal }
-): Promise<FileEntryWithStats[]> {
-  return waitForSftpCallback<FileEntryWithStats[]>(
-    (callback) => sftp.readdir(dirPath, callback),
+): AsyncGenerator<FileEntryWithStats> {
+  // Keep the late handle visible to finally when cancellation races opendir.
+  options?.signal?.throwIfAborted()
+  const handle = await waitForSftpCallback<Buffer>(
+    (callback) =>
+      sftp.opendir(dirPath, (error, value) => {
+        if (!error && options?.signal?.aborted) {
+          void closeSftpDirectoryHandle(sftp, value)
+          callback(new Error('Download canceled'))
+          return
+        }
+        callback(error, value)
+      }),
     options
   )
+  let reachedEof = false
+  let closeError: Error | undefined
+  try {
+    options?.signal?.throwIfAborted()
+    while (true) {
+      let chunk: FileEntryWithStats[] | false
+      try {
+        chunk = await waitForSftpCallback<FileEntryWithStats[] | false>(
+          (callback) => sftp.readdir(handle, callback),
+          options
+        )
+      } catch (error) {
+        options?.signal?.throwIfAborted()
+        if (error instanceof Error && 'code' in error && error.code === 1) {
+          reachedEof = true
+          break
+        }
+        throw error
+      }
+      if (chunk === false) {
+        reachedEof = true
+        break
+      }
+      for (const entry of chunk) {
+        options?.signal?.throwIfAborted()
+        if (entry.filename !== '.' && entry.filename !== '..') {
+          yield entry
+        }
+      }
+    }
+  } finally {
+    closeError = await closeSftpDirectoryHandle(sftp, handle)
+  }
+  // Consumer failures enter finally via return(); do not replace their reason.
+  if (reachedEof) {
+    options?.signal?.throwIfAborted()
+    if (closeError) {
+      throw closeError
+    }
+  }
 }
 
 export function statViaSftp(

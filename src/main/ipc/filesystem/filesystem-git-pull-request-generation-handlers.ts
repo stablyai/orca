@@ -18,6 +18,7 @@ import {
 import { resolveRegisteredWorktreePath } from '../registered-worktree-roots-cache'
 import { getLocalGitOptionsForRegisteredWorktree } from '../local-worktree-runtime-options'
 import { gitExecFileAsync } from '../../git/runner'
+import { execSshReviewDraft } from '../../providers/ssh-review-draft-context'
 import { withLinkedIssueDraftContext } from '../../../shared/source-control-ai-action-variables'
 import { resolveSourceControlAiLinkedIssueMeta } from '../source-control-ai-linked-issue'
 import { resolveHostedReviewBodyForGeneration } from '../../source-control/pull-request-template'
@@ -89,6 +90,8 @@ export function registerFilesystemGitPullRequestGenerationHandlers(
           repoPath: args.worktreePath,
           connectionId: args.connectionId
         })
+        // Preparation can return before this lookup settles; retain its error for the later await.
+        void linkedIssueDetailsPromise.catch(() => undefined)
         let context: Awaited<ReturnType<typeof getPullRequestDraftContext>>
         try {
           const currentBody = await resolveHostedReviewBodyForGeneration({
@@ -100,11 +103,7 @@ export function registerFilesystemGitPullRequestGenerationHandlers(
           })
           context = await getPullRequestDraftContext(
             (argv, commandOptions) =>
-              commandOptions?.timeoutMs !== undefined
-                ? provider.exec(argv, args.worktreePath, { timeoutMs: commandOptions.timeoutMs })
-                : commandOptions?.timeout !== undefined
-                  ? provider.exec(argv, args.worktreePath, { timeoutMs: commandOptions.timeout })
-                  : provider.exec(argv, args.worktreePath),
+              execSshReviewDraft(provider, argv, args.worktreePath, commandOptions),
             {
               base: args.base,
               currentTitle: args.title,
@@ -151,6 +150,8 @@ export function registerFilesystemGitPullRequestGenerationHandlers(
         connectionId: args.connectionId,
         localGitOptions: gitOptions
       })
+      // Preparation can return before this lookup settles; retain its error for the later await.
+      void linkedIssueDetailsPromise.catch(() => undefined)
       let context: Awaited<ReturnType<typeof getPullRequestDraftContext>>
       try {
         const currentBody = await resolveHostedReviewBodyForGeneration({

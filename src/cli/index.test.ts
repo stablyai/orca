@@ -120,6 +120,20 @@ describe('command aliases dispatch to the canonical handler', () => {
     )
   })
 
+  it('says the checkout is still being deleted when the host accepted a background removal', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_show', { worktree: { hostId: 'local' } }),
+      okFixture('req', { removed: true, removing: true })
+    )
+
+    await main(['worktree', 'rm', '--worktree', 'id:wt-1'], '/tmp/repo')
+
+    expect(logSpy).toHaveBeenCalledWith(
+      'removed: true\nOrca is still deleting the checkout in the background.'
+    )
+  })
+
   it('fails closed when worktree removal cannot resolve a host', async () => {
     queueFixtures(callMock, okFixture('req_show', { worktree: { id: 'wt-1' } }))
     const priorExitCode = process.exitCode
@@ -381,6 +395,38 @@ describe('unknown help command surfaces a suggestion', () => {
   })
 })
 
+describe('nested command group help', () => {
+  it.each([
+    ['browser', ['browser'], ['identity get', 'identity set']],
+    ['browser identity', ['browser', 'identity'], ['get', 'set']]
+  ])(
+    'prints successful help for %s without constructing a runtime client',
+    async (_, path, commands) => {
+      const previousExitCode = process.exitCode
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+      runtimeClientConstructorMock.mockClear()
+      process.exitCode = 0
+
+      try {
+        await main([...path, '--help'], '/tmp/repo')
+
+        expect(process.exitCode).toBe(0)
+        const output = logSpy.mock.calls.flat().join('\n')
+        expect(output).toContain(`orca ${path.join(' ')}`)
+        for (const command of commands) {
+          expect(output).toContain(command)
+        }
+        expect(output).not.toContain('Unknown command')
+        expect(runtimeClientConstructorMock).not.toHaveBeenCalled()
+        expect(callMock).not.toHaveBeenCalled()
+      } finally {
+        process.exitCode = previousExitCode
+        logSpy.mockRestore()
+      }
+    }
+  )
+})
+
 describe('orca root help', () => {
   it('advertises machine-readable agent discovery', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
@@ -397,10 +443,10 @@ describe('orca root help', () => {
     await main([], '/tmp/repo')
 
     expect(logSpy.mock.calls.flat().join('\n')).toContain(
-      'account add               Add a managed Claude or Codex account on this Orca host'
+      'account add               Add a managed agent account on this Orca host'
     )
     expect(logSpy.mock.calls.flat().join('\n')).toContain(
-      'account list              List managed Claude and Codex accounts on this Orca host'
+      'account list              List managed agent accounts on this Orca host'
     )
     logSpy.mockRestore()
   })
@@ -484,7 +530,7 @@ describe('orca root help', () => {
 
     const rootHelp = String(logSpy.mock.calls[0][0])
     expect(rootHelp).toContain('Linear:')
-    expect(rootHelp).toContain('linear                    Read Linear ticket context for agents')
+    expect(rootHelp).toContain('linear                    Read and write Linear issues for agents')
     expect(rootHelp).not.toContain('linear issue')
     expect(rootHelp).not.toContain('linear search')
 

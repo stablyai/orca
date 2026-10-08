@@ -9,8 +9,7 @@ import {
 } from './notification-delivery-preferences'
 import type {
   MobilePushFilter,
-  MobilePushRegisterInput,
-  MobilePushRegisterResult
+  MobilePushRegisterInput
 } from '../../../src/shared/mobile-push-contract'
 import { NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
 import type { RpcClient } from '../transport/rpc-client'
@@ -115,8 +114,7 @@ async function sendRegister(
   if (!registration?.accepted) {
     return false
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-  return (registration.value as MobilePushRegisterResult | null)?.registered === true
+  return registration.value?.registered === true
 }
 
 async function sendUnregister(client: PushClient, timeoutMs: number): Promise<boolean> {

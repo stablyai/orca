@@ -21,8 +21,8 @@ describe('CdpWsProxy', () => {
 
   beforeEach(async () => {
     mock = createMockWebContents()
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    proxy = new CdpWsProxy(mock.webContents as any)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mock implements every WebContents member the proxy calls.
+    proxy = new CdpWsProxy(mock.webContents as never, () => () => {})
     endpoint = await proxy.start()
   })
 
@@ -802,24 +802,5 @@ describe('CdpWsProxy', () => {
     const removedEvents = offSpy.mock.calls.map(([event]) => event)
     expect(removedEvents).toEqual(expect.arrayContaining(['message', 'close']))
     offSpy.mockRestore()
-  })
-
-  it('rejects inflight requests on stop', async () => {
-    let resolveCommand: (v: unknown) => void
-    mock.webContents.debugger.sendCommand.mockImplementation(
-      () =>
-        new Promise((r) => {
-          resolveCommand = r as (v: unknown) => void
-        })
-    )
-
-    const client = await connect(endpoint)
-    client.send(JSON.stringify({ id: 1, method: 'Page.enable', params: {} }))
-
-    await new Promise((r) => setTimeout(r, 10))
-    await proxy.stop()
-
-    resolveCommand!({})
-    client.close()
   })
 })

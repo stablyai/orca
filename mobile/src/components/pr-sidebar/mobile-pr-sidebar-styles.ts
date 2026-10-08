@@ -1,5 +1,6 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
+import { TEXT_INPUT_FONT_SIZE } from '../../platform/text-input-font-size'
 
 // Fixed inline-dock width (KTD2/U4): leaves the diff >= ~380px within the 700px
 // breakpoint where docking engages.
@@ -296,7 +297,7 @@ export const mobilePrSidebarStyles = StyleSheet.create({
     backgroundColor: colors.bgPanel,
     color: colors.textPrimary,
     paddingHorizontal: spacing.md,
-    fontSize: typography.bodySize,
+    fontSize: TEXT_INPUT_FONT_SIZE,
     marginBottom: spacing.sm
   },
   // No maxHeight / FlatList: the parent BottomDrawer scrolls this block so we

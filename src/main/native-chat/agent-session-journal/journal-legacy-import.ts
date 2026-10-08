@@ -62,30 +62,6 @@ export type LegacyImportResult =
     }
   | { ok: false; error: string }
 
-export async function appendLegacyTranscriptMessages(input: {
-  journal: AgentSessionJournal
-  agent: AgentType
-  sessionId: string
-  fence: number
-  messages: NativeChatMessage[]
-}): Promise<number> {
-  let appended = 0
-  for (const message of input.messages) {
-    await input.journal.appendItem(
-      {
-        provider: 'legacy',
-        agent: input.agent,
-        sessionId: input.sessionId,
-        recordId: message.id
-      },
-      legacyItemBody(message, DEFAULT_JOURNAL_PAYLOAD_LIMITS),
-      { fence: input.fence, observedAt: message.timestamp ?? undefined }
-    )
-    appended += 1
-  }
-  return appended
-}
-
 export async function importLegacyTranscriptIntoJournal(input: {
   journal: AgentSessionJournal
   agent: AgentType
@@ -97,7 +73,7 @@ export async function importLegacyTranscriptIntoJournal(input: {
   if (!prepared.ok) {
     return prepared
   }
-  // An empty import must preserve any existing repair anchor and disclosure.
+  // An empty import leaves the epoch as it stands.
   if (prepared.items.length === 0) {
     const current = input.journal.cursor()
     return { ok: true, epoch: current.epoch, cursor: current, imported: 0, replaced: false }
@@ -114,7 +90,7 @@ export async function prepareLegacyTranscriptImport(input: {
   const options = input.options ?? {}
   const limits = options.limits ?? DEFAULT_JOURNAL_PAYLOAD_LIMITS
   const transcriptAgent = resolveNativeChatTranscriptAgent(input.agent)
-  if (!transcriptAgent) {
+  if (!transcriptAgent || transcriptAgent === 'opencode') {
     return { ok: false, error: `Unsupported agent for journal import: ${input.agent}` }
   }
   const filePath =
@@ -194,7 +170,8 @@ async function decodeWithIdentities(input: {
   const identities: AgentJournalItemIdentity[] = []
   let lineIndex = 0
 
-  const stream = createReadStream(input.filePath, { encoding: 'utf-8' })
+  // Count raw bytes while reading: the source can grow after the stat check.
+  const stream = createReadStream(input.filePath)
   const { messages } = await decodeTranscriptStream(
     stream,
     input.filePath,
@@ -217,7 +194,8 @@ async function decodeWithIdentities(input: {
       }
       return message
     },
-    true
+    true,
+    MAX_LEGACY_IMPORT_SOURCE_BYTES
   )
   return { messages, identities }
 }

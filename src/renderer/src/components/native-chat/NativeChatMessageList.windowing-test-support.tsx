@@ -108,7 +108,7 @@ export function stubLayout({
         }
         // The transcript column: as tall as the window it wraps, plus what sits
         // under it. This is the element the list observes for streamed growth.
-        return this.classList.contains('max-w-4xl')
+        return this.hasAttribute('data-native-chat-transcript-column')
           ? reservedTranscriptHeight(this) + belowTranscriptPx
           : 0
       }
@@ -172,6 +172,7 @@ export function session(messages: NativeChatMessage[]): NativeChatLiveSession {
     agent: 'codex',
     hasMore: false,
     loadingEarlier: false,
+    olderHistoryGeneration: 0,
     loadEarlier: vi.fn(),
     readPhase: 'ready'
   }
@@ -179,12 +180,7 @@ export function session(messages: NativeChatMessage[]): NativeChatLiveSession {
 
 export function list(messages: NativeChatMessage[]): React.JSX.Element {
   return (
-    <NativeChatMessageList
-      session={session(messages)}
-      isWorking={false}
-      expandSignal={false}
-      fontScale={1}
-    />
+    <NativeChatMessageList session={session(messages)} isWorking={false} expandSignal={false} />
   )
 }
 

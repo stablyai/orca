@@ -1,0 +1,234 @@
+import { EventEmitter } from 'node:events'
+import { PassThrough } from 'node:stream'
+import { resolve, win32 } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+const { spawnMock, stopMock } = vi.hoisted(() => ({ spawnMock: vi.fn(), stopMock: vi.fn() }))
+vi.mock('../ripgrep/bundled-ripgrep-spawn', () => ({ spawnBundledRipgrep: spawnMock }))
+vi.mock('../ripgrep/bundled-ripgrep-stop', () => ({ stopBundledRipgrep: stopMock }))
+
+import { listMarkdownDocuments } from './markdown-documents'
+
+class ListingProcess extends EventEmitter {
+  stdout = new PassThrough()
+  stderr = new PassThrough()
+  pid: number | undefined = 123
+  kill = vi.fn<(signal?: NodeJS.Signals) => boolean>(() => true)
+}
+
+const root = resolve('/workspace/docs')
+const originalPlatform = process.platform
+let child: ListingProcess
+
+beforeEach(() => {
+  child = new ListingProcess()
+  spawnMock.mockReset().mockReturnValue(child)
+  stopMock.mockReset().mockImplementation((process: ListingProcess) => process.kill('SIGKILL'))
+})
+afterEach(() => {
+  vi.useRealTimers()
+  vi.restoreAllMocks()
+  Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+})
+
+describe('Markdown document ripgrep lifecycle', () => {
+  it('decodes split Unicode and NUL records without splitting newline filenames', async () => {
+    const result = listMarkdownDocuments(root)
+    const bytes = Buffer.from('./日本語\nnotes.MDX\0./.md\0./script.ts\0./README.md\0')
+    for (const byte of bytes) {
+      child.stdout.write(Buffer.from([byte]))
+    }
+    child.emit('close', 0, null)
+
+    expect((await result).map((doc) => doc.basename).sort()).toEqual([
+      'README.md',
+      '日本語\nnotes.MDX'
+    ])
+    expect(child.kill).not.toHaveBeenCalled()
+    expect(child.stdout.listenerCount('data')).toBe(0)
+    expect(child.listenerCount('close')).toBe(0)
+  })
+
+  it('preserves timeout when an incomplete UTF-8 scalar is abandoned', async () => {
+    vi.useFakeTimers()
+    const result = listMarkdownDocuments(root)
+    const outcome = expect(result).rejects.toThrow('timed out')
+    child.stdout.write(Buffer.from([0xf0, 0x9f]))
+    await vi.advanceTimersByTimeAsync(15_000)
+    await outcome
+  })
+
+  it.each(['invalid', 'incomplete'] as const)('rejects %s UTF-8 filename bytes', async (kind) => {
+    const result = listMarkdownDocuments(root)
+    child.stdout.write(Buffer.from(kind === 'invalid' ? [0xff] : [0xe2, 0x82]))
+    if (kind === 'incomplete') {
+      child.emit('close', 0, null)
+    }
+    await expect(result).rejects.toThrow('not valid UTF-8')
+  })
+
+  it('accepts an empty listing', async () => {
+    const result = listMarkdownDocuments(root)
+    child.emit('close', 1, null)
+    await expect(result).resolves.toEqual([])
+  })
+
+  it.each(['C:\\repo', '\\\\server\\share\\repo'])(
+    'preserves native Windows editor path identity under %s',
+    async (windowsRoot) => {
+      const result = listMarkdownDocuments(windowsRoot)
+      child.stdout.write('./docs/README.md\0')
+      child.emit('close', 0, null)
+      expect(await result).toEqual([
+        {
+          filePath: win32.join(windowsRoot, 'docs', 'README.md'),
+          relativePath: 'docs/README.md',
+          basename: 'README.md',
+          name: 'README'
+        }
+      ])
+    }
+  )
+
+  it('rejects an unreadable subtree even after receiving valid documents', async () => {
+    const result = listMarkdownDocuments(root)
+    child.stdout.write('./README.md\0')
+    child.stderr.write('Permission denied')
+    child.emit('close', 2, null)
+    await expect(result).rejects.toThrow('Permission denied')
+  })
+
+  it('rejects a truncated final path instead of returning partial documents', async () => {
+    const result = listMarkdownDocuments(root)
+    child.stdout.write('./README.md\0./unfinished.md')
+    child.emit('close', 0, null)
+    await expect(result).rejects.toThrow('Incomplete path')
+  })
+
+  it.each(['../escape.md', '/outside.md', './dir/../escape.md'])(
+    'rejects a path outside the relative listing protocol: %s',
+    async (path) => {
+      const result = listMarkdownDocuments(root)
+      child.stdout.write(`${path}\0`)
+      await expect(result).rejects.toThrow('Invalid path')
+      expect(child.kill).toHaveBeenCalledWith('SIGKILL')
+    }
+  )
+
+  it('rejects an oversized unfinished record without retaining the process', async () => {
+    const result = listMarkdownDocuments(root)
+    child.stdout.write(`./${'a'.repeat(1024 * 1024)}`)
+    await expect(result).rejects.toThrow('Workspace is too large')
+    expect(child.kill).toHaveBeenCalledWith('SIGKILL')
+  })
+
+  it('rejects a spawn failure and does not signal a missing process', async () => {
+    const result = listMarkdownDocuments(root)
+    child.pid = undefined
+    child.emit('error', Object.assign(new Error('missing bundled binary'), { code: 'ENOENT' }))
+    await expect(result).rejects.toThrow('missing bundled binary')
+    expect(child.kill).not.toHaveBeenCalled()
+  })
+
+  it('rejects synchronous spawn failures', async () => {
+    spawnMock.mockImplementation(() => {
+      throw new Error('spawn refused')
+    })
+    await expect(listMarkdownDocuments(root)).rejects.toThrow('spawn refused')
+  })
+
+  it('times out, kills the child and releases listeners even if close never arrives', async () => {
+    vi.useFakeTimers()
+    const result = listMarkdownDocuments(root)
+    const rejected = expect(result).rejects.toThrow('timed out')
+    child.stdout.write('./README.md\0')
+    await vi.advanceTimersByTimeAsync(15_000)
+    await rejected
+    expect(child.kill).toHaveBeenCalledWith('SIGKILL')
+    expect(child.stdout.listenerCount('data')).toBe(0)
+    expect(child.stderr.listenerCount('data')).toBe(0)
+    expect(child.listenerCount('close')).toBe(0)
+    expect(vi.getTimerCount()).toBe(0)
+    expect(() => child.emit('error', new Error('late error'))).not.toThrow()
+    expect(() => child.stdout.emit('error', new Error('late pipe error'))).not.toThrow()
+  })
+
+  it('rejects stdout failure instead of returning an incomplete set', async () => {
+    const result = listMarkdownDocuments(root)
+    child.stdout.emit('error', new Error('broken pipe'))
+    await expect(result).rejects.toThrow('broken pipe')
+  })
+
+  it('does not confuse an unreachable WSL cwd with no matching documents', async () => {
+    const result = listMarkdownDocuments(root, { wslDistro: 'Ubuntu' })
+    child.emit('close', 97, null)
+    await expect(result).rejects.toThrow('Search root is not reachable')
+  })
+
+  it.each([
+    { path: root, options: { wslDistro: 'Ubuntu' }, distro: 'Ubuntu' },
+    { path: '\\\\wsl.localhost\\Debian\\home\\repo', options: {}, distro: 'Debian' }
+  ])('selects the Linux binary for $distro', async ({ path, options, distro }) => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    const result = listMarkdownDocuments(path, options)
+    expect(spawnMock).toHaveBeenCalledWith(expect.any(Array), {
+      cwd: path,
+      wslDistro: options.wslDistro,
+      wslDistroForOutput: distro,
+      stdio: ['ignore', 'pipe', 'pipe']
+    })
+    child.emit('close', 1, null)
+    await result
+  })
+})
+
+it('returns the complete 20,000-document boundary', async () => {
+  const result = listMarkdownDocuments(root)
+  child.stdout.write(Array.from({ length: 20_000 }, (_, index) => `./doc-${index}.md\0`).join(''))
+  child.emit('close', 0, null)
+  expect(await result).toHaveLength(20_000)
+  expect(child.kill).not.toHaveBeenCalled()
+})
+
+it('rejects the 20,001st document without retaining the child', async () => {
+  const result = listMarkdownDocuments(root)
+  const paths = Array.from({ length: 20_000 }, (_, index) => `./doc-${index}.md\0`).join('')
+  child.stdout.write(paths)
+  child.stdout.write('./overflow.md\0')
+  await expect(result).rejects.toThrow('Workspace is too large')
+  expect(child.kill).toHaveBeenCalledWith('SIGKILL')
+  expect(child.stdout.listenerCount('data')).toBe(0)
+})
+
+it('cancels the filtered producer and permits a fresh request', async () => {
+  const controller = new AbortController()
+  const result = listMarkdownDocuments(root, { signal: controller.signal })
+  child.stdout.write('./partial')
+  controller.abort(new Error('editor closed'))
+  await expect(result).rejects.toThrow('editor closed')
+  expect(child.kill).toHaveBeenCalledWith('SIGKILL')
+  expect(child.stdout.listenerCount('data')).toBe(0)
+})
+
+it.each(['abort', 'timeout', 'capacity'] as const)(
+  'uses the bundled WSL process-tree stop for Markdown %s',
+  async (reason) => {
+    vi.useFakeTimers()
+    const controller = new AbortController()
+    const result = listMarkdownDocuments(root, {
+      wslDistro: 'Ubuntu',
+      signal: controller.signal
+    })
+    const rejected = expect(result).rejects.toThrow()
+    if (reason === 'abort') {
+      controller.abort(new Error('editor closed'))
+    } else if (reason === 'timeout') {
+      await vi.advanceTimersByTimeAsync(15_000)
+    } else {
+      child.stdout.write(`./${'a'.repeat(65_537)}`)
+    }
+    await rejected
+    expect(stopMock).toHaveBeenCalledExactlyOnceWith(child, true)
+    expect(child.stdout.listenerCount('data')).toBe(0)
+  }
+)

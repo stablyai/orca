@@ -28,7 +28,8 @@ import {
   type ComposerDropItemResult
 } from '../composer-drop-result'
 import { applyComposerNativeFileDrop } from '../composer-native-file-drop'
-import { useComposerDropListener } from './composer-drop-listener'
+import { useMountedRef } from '../useMountedRef'
+import { userNamedFileAccess } from '@/lib/local-file-access'
 
 // Local drops bypass the runtime importer's skip classification.
 function localDropFailure(detail: string | undefined): ComposerDropFailure {
@@ -53,6 +54,7 @@ export function useAttachmentDropState(input: AttachmentDropStateInput) {
     setAgentPrompt,
     setAttachmentPaths
   } = input
+  const mountedRef = useMountedRef()
 
   const addComposerAttachments = useCallback(
     (paths: string[]): void => {
@@ -214,9 +216,11 @@ export function useAttachmentDropState(input: AttachmentDropStateInput) {
     async (paths: string[], canApply: () => boolean = () => true): Promise<void> => {
       const results: ComposerDropItemResult[] = []
       for (const filePath of paths) {
+        if (!mountedRef.current) {
+          return
+        }
         try {
-          await window.api.fs.authorizeExternalPath({ targetPath: filePath })
-          const stat = await window.api.fs.stat({ filePath })
+          const stat = await window.api.fs.stat({ filePath, access: userNamedFileAccess() })
           results.push({
             status: 'imported',
             destPath: filePath,
@@ -227,7 +231,7 @@ export function useAttachmentDropState(input: AttachmentDropStateInput) {
         }
       }
 
-      if (!canApply()) {
+      if (!mountedRef.current || !canApply()) {
         return
       }
       const dropResult = collectComposerDropResult(results)
@@ -241,12 +245,12 @@ export function useAttachmentDropState(input: AttachmentDropStateInput) {
         })
       }
     },
-    [addComposerAttachments, insertComposerFolderPaths]
+    [addComposerAttachments, insertComposerFolderPaths, mountedRef]
   )
 
   const applyNativeDrop = useCallback(
-    (paths: string[], isCurrentOwner: () => boolean): void => {
-      void applyComposerNativeFileDrop({
+    (paths: string[], isCurrentOwner: () => boolean): Promise<void> => {
+      return applyComposerNativeFileDrop({
         paths,
         isCurrentOwner,
         uploadPaths: (sourcePaths) =>
@@ -274,14 +278,13 @@ export function useAttachmentDropState(input: AttachmentDropStateInput) {
       uploadComposerPaths
     ]
   )
-  // Why: native OS file drops relay via the preload bridge; only the most recently mounted composer applies them.
-  useComposerDropListener(applyNativeDrop)
 
   return {
     addComposerAttachments,
     insertComposerFolderPaths,
     uploadComposerPaths,
     handleAddAttachment,
-    applyLocalComposerDrop
+    applyLocalComposerDrop,
+    applyNativeDrop
   }
 }

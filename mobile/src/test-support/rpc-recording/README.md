@@ -62,7 +62,7 @@ Reads resolve the declared entry or `null`, and never a write. A write that fed 
 would let a later read return a byte nothing declared, which is the device back inside the
 recording; writes are recorded as effects instead, where they are observed rather than assumed.
 That is the whole point of the declaration: every byte a read can return is visible in the scenario
-file, and `scenarioSha256` pins it per golden like any other scenario field.
+file, and the golden records what the product read from it.
 
 ## Scenario actions
 
@@ -85,7 +85,10 @@ absence remains absence. Completion params are asserted against projected sender
 Concurrent requests of one method require a logical binding and asserted params; random
 wire ids never identify completions. Timers only advance explicitly, and zero-time drains
 flush due timers, promise continuations, and React work after every step. Date, performance,
-Math.random, Web Crypto random bytes/UUIDs, and transport ids are deterministic.
+Math.random, Web Crypto random bytes/UUIDs, and transport ids are deterministic. React draws one
+Math.random of its own the first time a process awaits `act`, and memoizes what it resolves, so the
+scheduler pays that draw before it installs the seeded generator: every recording starts at the
+same seeded value whether it runs alone or after another family.
 
 A `frame` names the subscribe payload it arrives on — `<method>#<n>`, the same per-method
 occurrence a request is named by — and carries a whole host response, which the real registry
@@ -96,6 +99,17 @@ then the unary reply the dispatcher sends once the handler returns, which is wha
 and which the registry reports to the listener as an error. A streaming frame arriving after that
 is accepted and observes nothing, because the opener path answers for an id it no longer holds; a
 non-streaming one names the scenario that has stopped matching.
+
+A listener that throws on a frame is recorded as a `stream-listener-crash` effect rather than
+failing the suite, the same rule the crash boundary holds for a screen and the unhandled-rejection
+window holds for a detached effect. Only three listeners check the payload is an object before
+reading its `type` — the two `runtime.clientEvents` ones and the structured agent session's, which
+guards with `isSubscribeEvent` in `use-mobile-structured-agent-state.ts` — so without this every
+other subscribing family died on the matrix's `result-absent` and `result-null` partitions — the
+two shapes a stream listener is most likely to be wrong about were the only ones the oracle could
+not record. The scenario's own faults
+stay loud: a missing subscribe payload, a params mismatch and a closed stream are all raised before
+or after the listener runs, and none of them is caught.
 
 ### Recorded time
 
@@ -120,98 +134,67 @@ visible, it does not make the reduction itself observable.
 
 ## Golden schema
 
-Each file records `runnerVersion`, `baseline`, `lockfileSha256` (mobile's lockfile),
-`recorderSha256`, `adapterSha256`, `scenarioSha256`, `platform`, `scenarioVersion`,
-`projectionVersion`, `goldenFormatVersion`, `operation`, `family`, and `namedDeltas`. `platform`
-and `lockfileSha256` are provenance and are not compared: a dependency or OS that changes
-behaviour changes the trace itself, so comparing them would only fail candidates on unrelated
-bumps. The rest are pinned.
+Each file holds `goldenFormatVersion`, `operation`, `family`, `namedDeltas`, the value pool and the
+interned recording. Nothing else: no commit it was recorded from and no digest of its inputs. Every
+run of the recording suites re-derives each golden from the current tree and compares it, which is
+a stronger claim than "reproduces from some pinned commit", and git already records where each byte
+came from.
 
-`recorderSha256` covers every non-markdown file under this directory **except `adapters/`**, so the
-engine that produced a golden is as pinned as the product baseline: editing the runner, the
-transport, the projection or a fixture fails candidate mode on the header of every golden and
-forces a deliberate re-record of all of them.
+Format version 5 and earlier also carried a pinned `baseline` commit and digests of the recorder,
+the mount adapter and the scenario. A digest could only fail when an input changed and the recording
+did not, which is exactly the change that carries no information, and the pin had to name the
+recording branch's own commit, which a squash merge then made unreachable. Every behaviour change
+rewrote all 787 headers and needed a follow-up pull request to repin main; version 6 dropped all of
+it. `rpc:diff` still reads the old files, so a diff across the change is a real diff.
 
-`adapterSha256` covers the source of the mount adapter module _that golden_ was recorded through —
-the file under `adapters/` that mounts each operation its scenarios drive, read off the same
-`mounts` calls that build the table the recording runs against, so the pin cannot name a file the
-runner did not use. Adding a domain's module re-digests nothing that was already recorded, and
-editing one fails exactly the goldens mounted through it. The adapters used to sit in
-`recorderSha256` with the engine, which made every golden's header a function of every other
-family's adapter: #20568 added two task modules and put a conflict on that one line in 153 files,
-against every domain branch in flight.
+A failed replay reports the identity fields that moved by name, the checkpoint list, then each
+differing (checkpoint, field) at its first differing JSON path with both resolved values, grouped
+where an append-only field re-states the same moved entry at later checkpoints; past eight groups it
+counts the rest. The failure ends with the command that re-records that golden.
 
-`mutants/` is excluded for a different reason: nothing there is pinned by anything. A file that
-cannot change a recording is not provenance for one, and pinning it would claim a provenance the
-golden does not have — while charging every domain that adds a mutant a re-record of all 153
-files.
-The mutant table, the per-family mutant registry, the reference states and the suites that apply
-them all live there. What makes the exclusion sound is that no recording can reach them: the loader
-takes a resolved mutation spec instead of importing a table by name.
-`mutants/mutant-seam.test.ts` is the check, and it proves reachability forward, walking the static
-import graph from the two recording drivers and failing if any module under `mutants/` appears in
-it. Naming the directory is rejected too, in either spelling, for the paths a module can be read by
-rather than imported; `MUTANT_DIRECTORY` is not exported for the same reason. A path assembled at
-runtime from fragments would defeat both, which is the seam's remaining edge.
-
-For the same reason `recorderSha256` pins only the suites in `recording-drivers.ts`. A golden's
-bytes come from `pilot-recordings.test.ts` or `family-recordings.test.ts` and from what they
-import; a suite that reads goldens, or writes one to a scratch directory, puts no observation in a
-recorded file. `scripts/rpc-recording.mts` records exactly that list, so the two cannot drift apart.
+`mutants/` is unreachable from the recording drivers by rule, not by convention:
+`mutants/mutant-seam.test.ts` walks the static import graph from the two drivers and fails if any
+module under `mutants/` appears in it, and refuses a recording file that names the directory. A
+mutant planted on the recording path would be recorded and replayed alike, so every golden would
+compare clean while certifying the mutated code.
 
 A module-private product export an adapter drives is exposed by its own module — see
-`settingsMountExposures` — not by a shared table, because the exposure text does change what a
-recording loads. Each domain module gets its own loader carrying its own exposures, and one
-recording mounts one adapter, so `adapterSha256` pins exactly the exposures that reached it.
-
-The adapter seam is the directory, not a filename convention, because a convention is a rule nobody
-enforces. `adapter-seam.test.ts` enforces this one: every file under `adapters/` is a registered
-module, every registered module is declared in the file it is registered under, no adapter module
-imports a sibling (which would leave a golden pinned to one module and driven by two), and
-`pilotMountAdapters` mounts nothing of its own — an adapter defined in an engine file would be
-pinned by `recorderSha256` on all 153 goldens instead of by `adapterSha256` on its own.
-
-`scenarioSha256` covers the scenario input _that golden_ was recorded from — one manifest scenario
-for a pilot golden, the generated variants and any hoisted prelude for a matrix or schedule golden,
-canonicalised by `captureValue` so an explicit-undefined param stays distinct from an absent one.
-Editing a scenario still fails candidate mode on the header, but only for the goldens derived from
-it. The manifest used to be an input to `recorderSha256` instead, which made every golden's header
-a function of every other family's scenarios: adding one domain's family re-digested all 153 files
-and put a conflict on that line in every domain branch in flight. Which goldens a manifest derives
-lives in `derived-goldens.ts`, so the digest is a function of the same derivation that records the
-file rather than of a restatement of it; `golden-header-digest.test.ts` pins what both separations
-buy.
+`settingsMountExposures` — not by a shared table. One exposure is shared instead: five domains
+mount a screen that reads the client off the context `client-context.tsx` keeps module-private, and
+`hostClientContextExposure` is the one copy of that string. A rename of the local is invisible to
+`tsc`, so `adapter-seam.test.ts` asserts the declaration it names exists exactly once, and refuses a
+sixth inline copy. The same test requires every file under `adapters/` to be registered in
+`adapters/mounted-operation-modules.ts`.
 
 Checkpoints contain ordered sender calls and serialized physical application payloads, action and
-request settlements, projected state, and ordered external effects. Each effect and each payload
-also carries `sent`, the number of requests sent when it was recorded: sender, payloads and effects
-are independent lists, so without it a send reordered ahead of a device write, or ahead of a
-subscribe, moves no list and no golden notices. A subscribe is the sharper case of the two, because
-it publishes synchronously while a request first waits for connected: swapping `client.subscribe`
-and the first `sendRequest` in `use-live-worktree-name.ts` leaves the payload order byte-identical
-and moves only `sent`, from 0 to 1.
+request settlements, projected state, and ordered external effects. Each sender call, each payload
+and each effect carries `ordinal`, its position in one monotonic counter the recording shares
+across all three lists (`write-ordinal.ts`), stamped at the moment that entry is written: the three
+are independent append-only lists, so without a shared ordinal a send reordered ahead of a device
+write, or ahead of a subscribe, moves no list and no golden notices. A subscribe is the sharper case
+of the two, because it publishes synchronously while a request first waits for connected: swapping
+`client.subscribe` and the first `sendRequest` in `use-live-worktree-name.ts` leaves the payload
+order byte-identical and moves only the ordinals.
 Scheduling the journal write in `codex-reset-attempt-journal.ts` on a timer instead of awaiting it
-moved none of the 520 goldens before `sent` existed and moves two now, `codex-reset-credit-consumed`
-and its reply matrix, where the write's `sent` goes from 0 to 1. What `sent` cannot see is a defer
-shorter than the product's own await chain: dropping that `await`, or deferring the write by one
-microtask, still lands it before the send, because resolving the journal's promise chain costs more
-microtask ticks than the defer saved. Nor can it see anything in a family that sends no requests:
-`host-worktree-refresh` sends none, so every `sent` in its goldens is `0` across all eight
-checkpoints, and moving that file's two initial snapshot reads from after `client.subscribe` to
-before it moves no golden. A request count orders payloads and effects against sends, not against
-each other, so subscribe-vs-effect order in a request-free family is unpinned. The fix is one
-monotonic write ordinal shared by requests, payloads and effects, which forces a full refresh and is
-not done here. Sender args have three
+moved none of the 520 goldens before the ordinal existed and moves two now,
+`codex-reset-credit-consumed` and its reply matrix. A request takes its ordinal at the logical
+`sendRequest` call, not when the physical payload is published, so the two stamps differ whenever
+the send waited for connected. What the ordinal cannot see is a defer shorter than the product's own
+await chain: dropping that `await`, or deferring the write by one microtask, still lands it before
+the send, because resolving the journal's promise chain costs more microtask ticks than the defer
+saved.
+
+`ordinal` replaced `sent`, a count of the requests sent at write time. A request count orders
+payloads and effects against sends, never against each other, so it saw nothing at all in a family
+that sends no requests: `host-worktree-refresh` sends none, every `sent` in its goldens was `0`
+across all eight checkpoints, and moving that file's two initial snapshot reads from after
+`client.subscribe` to before it moved no golden. Under the shared ordinal the same reorder fails
+five — the family's own golden and its four matrix variants. Sender args have three
 positional slots; absent, undefined and null are distinct `$rpc` tags. Literal objects containing
 `$rpc` are escaped. Only object keys are sorted; array/effect order, options, budgets, settlement
 times and errors stay observable. Errors contain category, message and `isRpcDeliveryUnknown`, never
 stack paths, plus `code` and a recursively captured `cause` when the thrown error carries them.
-Platform is provenance; candidate comparison does not require the same operating system.
-
-Format version 4 added `scenarioSha256` and version 5 adds `adapterSha256`. A stale golden would
-already fail this reader's byte compare, so each bump buys the diagnosis rather than the rejection:
-`readGolden` names the stale format and says to re-record, instead of reporting an opaque
-`(encoding)` difference. Neither bump moved an observation.
+A golden records no operating system, so comparison does not require the one it was recorded on.
 
 ### Value pool
 
@@ -235,11 +218,15 @@ early request every downstream checkpoint re-states — touches the same 16 file
 under version 2 that is ±17,100 lines and 1.03 MB of diff, and under version 3 ±3,764 lines and
 0.20 MB, because a moved entry no longer rewrites every field value that contains it.
 
-`readGolden` refuses any other `goldenFormatVersion`, checks that every pooled entry hashes to its
-own key and that no entry sits in the pool unreferenced — content addressing is what keeps an entry
-shared across checkpoints honest, and an unread entry would be content in the file that nothing
-compares. It then resolves hashes back to values, and `compareGolden` reports the scenario, the
-checkpoint id, the field, the JSON path inside it, and both resolved values.
+Replay passes only if the committed file is exactly the text `rpc:record` would write for the run,
+so nothing the file carries goes uncompared: a leftover header key, a stale pool entry, reordered
+keys or a hand edit all fail with the re-record command. When the text differs, `readGolden` decodes
+the file for the report: it refuses any other `goldenFormatVersion`, checks that every pooled entry
+hashes to its own key and that no entry sits in the pool unreferenced (a file it cannot decode fails
+with the re-record command too), and resolves hashes back to values; the report names the scenario,
+the checkpoint id, the field, the JSON path inside it, and both resolved values, or says every field
+matches and only the file text differs. `rpc:diff` decodes leniently instead, so it still reads the
+old formats.
 
 ### Prelude checkpoints
 
@@ -252,9 +239,9 @@ the same state through different inputs is evidence. Sibling schedules already d
 prefix, so they are unchanged.
 
 Nothing about a shared prelude is unverified. The `.prelude` scenario's checkpoints live in the same
-golden as the variants that start after them, and `compareGolden` walks every checkpoint in the
-file, so changing the prelude fails the golden it belongs to. The value pool does not weaken that:
-it is per-file and content-addressed, so a prelude entry a later checkpoint re-states is stored once
+golden as the variants that start after them, and replay compares every checkpoint in the file,
+so changing the prelude fails the golden it belongs to. The value pool does not weaken that: it is
+per-file and content-addressed, so a prelude entry a later checkpoint re-states is stored once
 and any change to it moves the hash in every checkpoint that reads it.
 
 Family matrices and schedule recordings retain both boundaries. Matrices execute
@@ -279,7 +266,7 @@ without a message, `method_not_found`, and a transport rejection with and withou
 that were recorded before and are gone were unreachable: `successResponse` always sets `result`, so
 JSON carries no explicit-undefined slot, and no mounted method's handler returns a number, a string,
 an array, a bare `{}`, or a boolean. `null` stays because `linear.getIssue` returns it for a missing
-issue and the b2 seed is a shipped null-result bug.
+issue and the b2 seed is a null result accepted as success.
 
 The message-less refusal and rejection are what separate the two failure paths a migrated call site
 must keep apart: a refusal with no message falls back to the screen's copy, a transport drop with no
@@ -308,7 +295,7 @@ success fails the suite until it is given a fulfilled scenario or a line in
 `REPLY_MATRIX_NORMAL_RESULT_INVENTORY`, which carries the reply and the reason; an entry whose
 family has since recorded a success fails too, so the list only shrinks. Four sites are on it: both
 legs of the b3 seed, whose single scenario exists to record the defect; the b2 seed, whose only
-recorded success is the shipped null result; and `settings.update`, a best-effort write whose reply
+recorded success is the null result; and `settings.update`, a best-effort write whose reply
 body no call site reads.
 
 Detached unhandled rejections are captured as effects in a sequential process-scoped window,
@@ -316,20 +303,28 @@ with prior process listeners restored afterward. The known main bug it first rec
 both legs: `new-workspace-runtime-context-null-results-degrade-to-absent` now records a null or
 absent `settings.get` or `ui.get` result degrading the way a reply missing that member does, so
 neither matrix golden carries a property-read TypeError effect any more. That leaves no golden
-recording an unhandled rejection at all, so `unhandled-recording.test.ts` is what pins the capture:
+recording an unhandled rejection at all, so `unhandled-recording.test.ts` is what pins the capture,
+both the helper and its wiring through `runRecording` into a checkpoint and the cleanup checkpoint:
 without it a refactor could stop emitting the effect and every golden would still compare clean.
 Task-model projections record setter invocations and resulting model values, not native UI.
 
-## Commands and checker contract
-
-Record only from unchanged pinned product sources and lockfile. The fence exempts only
-`mobile/src/test-support/rpc-recording`, which `recorderSha256` and `adapterSha256` pin between
-them; every other test-support path is compared against the baseline like product code:
+## Commands
 
 ```sh
-ORCA_BACKGROUND_LAUNCH=1 RPC_FOUNDATION_RECORD=1 pnpm --dir mobile exec tsx scripts/rpc-recording.mts --record
-ORCA_BACKGROUND_LAUNCH=1 pnpm --dir mobile test src/test-support/rpc-recording
+ORCA_BACKGROUND_LAUNCH=1 pnpm --dir mobile test src/test-support/rpc-recording  # replay and compare
+pnpm --dir mobile rpc:record                    # re-record every golden from the current tree
+pnpm --dir mobile rpc:record <golden-id> ...    # re-record only these (ids as the failure prints)
+pnpm --dir mobile rpc:record --prune            # also delete goldens the manifest no longer derives
+pnpm --dir mobile rpc:diff [<base>]             # decode what moved against <base> (default: merge base with origin/main)
 ```
+
+With no base, `rpc:diff` includes the moves the branch already committed; `rpc:diff HEAD` shows
+only the uncommitted ones.
+
+Recording is deterministic and carries no header, so an unchanged behaviour re-records to the same
+bytes on any machine: recording everything is always safe, and `git diff` shows only what moved.
+Without `--prune`, a golden the manifest stopped deriving is listed and the census test
+(`derived-goldens.test.ts`) keeps failing on it; deleting coverage is always explicit.
 
 Mutants are the defect evidence. `mutants/operation-mutations.ts` holds one anchored source edit
 per adapter family, and every family's recording must change visible state when its mutant is
@@ -340,7 +335,8 @@ hook. `runRecordingMutant` accepts a mutated mounting adapter, scheduler, baseli
 observation projection, and returns `{verdict: "killed" | "survived", recording}`. Every mutant
 test requires the mutation to apply exactly once and change visible state to count as killed.
 
-Set `RPC_FOUNDATION_REFERENCE_ROOT` to an archived `bcba08b3e4` source tree to corroborate the
+The b1, b2 and b3 seeds are regressions from an unmerged refactor (`bcba08b3e4`, never on main),
+not shipped bugs. Set `RPC_FOUNDATION_REFERENCE_ROOT` to an archived `bcba08b3e4` source tree to corroborate the
 three B-seed mutants against the real defect; the reference checkout is never edited. Each seed
 pins the archived tree's visible state, so a later refactor of those files cannot pass by merely
 differing from main. Archived-tree corroboration for b1/b2/b3 is **unproven in CI**:
@@ -350,13 +346,32 @@ families because no reference states are defined for them.
 
 ## What this oracle does and does not see
 
-It replays 342 manifest scenarios against frozen goldens and fails on any divergence: 679 goldens
-over 796 tests, all inside `pnpm --dir mobile test`. Counts quoted further down are measurements of
-the change they describe and are not restatements of this one. For a migration it answers one
-question — does the rewritten call site produce the same sender calls, settlements, state and
-effects as main did?
+It replays every manifest scenario against its committed golden and fails on any divergence, all
+inside `pnpm --dir mobile test`. Counted with
+`python3 -c "import json;print(len(json.load(open('mobile/rpc-foundation/pilot-scenarios.json'))['scenarios']))"`
+and `find mobile/rpc-foundation/goldens -type f | wc -l`. Counts quoted further down are
+measurements of the change they describe and are not restatements of this one. For a refactor it
+answers one question — does the rewritten call site produce the same sender calls, settlements,
+state and effects as the base branch did? A pull request that moves no golden says yes.
 
-It is not a substitute for reading the diff. Three facts bound it, all learned the hard way:
+### Recorded requests against the host's params contract
+
+The goldens script the host's replies, so nothing in a replay stops a scenario from recording a
+success for a request the real host would refuse. `recorded-request-params.test.ts` parses every
+distinct request the corpus puts on the wire with the host dispatcher's own
+`parseRpcRequestParams` and the schema `rpc-params-catalog.generated.ts` binds to that method. It
+fails on a method the host does not have, params the host refuses, params sent to a method that
+takes none (the dispatcher never reads them), and keys the schema silently strips, unless an entry
+in its inventory gives the reason; an entry nothing strips fails too. It runs in the Mobile Checks
+suite, which a desktop pull request to `src/shared/` triggers, so tightening a host schema that
+today's phone requests do not satisfy fails there. It checks against the current
+host only, and it does not check the scripted replies against real host results.
+
+When it landed it found twelve requests the host would refuse, all from invented fixture values
+rather than product code: git object ids that were not ids, an iOS push token without its APNs
+environment, a Linear filter passed as a GitHub preset, and a GitLab project reference as a string.
+
+It is not a substitute for reading the diff. Five facts bound it, all learned the hard way:
 
 - **It was blind to refusal ordering.** Reordering the settings and sibling refusal checks in
   `mobile-new-tab-agent-loader.ts` survives every golden except `probe-new-tab-both-refused` —
@@ -376,29 +391,60 @@ It is not a substitute for reading the diff. Three facts bound it, all learned t
   all 163 tests, because no scenario rejected `git.status` for that family. Driving every scripted
   reply kills it on five matrix goldens. The lesson is about the skip, not about that call site: a
   generator that opts a family out without failing is indistinguishable from coverage.
+- **It was blind to a stream close with no frame behind it.** Deleting `unsubscribeStream()` from
+  `mobile-notifications.ts`'s cleanup — the local close, not the `notifications.unsubscribe` RPC
+  beside it — survived all 810 tests. Neither unsubscribe builder in `rpc-client-stream-registry.ts`
+  knew `notifications.subscribe` then, so closing that stream wrote nothing to the wire: what the
+  mutant leaked was a live subscription record, and the leak stayed invisible until a cutover replayed
+  it. `notifications-desktop-stream-closed` stops the stream and then cuts over, where the leak
+  becomes a second `notifications.subscribe` payload — one hand-written scenario per builder-less
+  method, which is a rule nobody enforces. The teardown observation below closes the class: the same
+  mutant then failed seven goldens rather than that one, and a family whose method does build an
+  unsubscribe (`nativeChat.subscribe`, `runtime.clientEvents.subscribe`) is pinned by that payload
+  at unmount as well.
 
-`mutants/probe-hole-witness.test.ts` closes the first two and keeps them closed. It asserts the
+- **It was blind to a guard whose empty arm no scenario declared.** Every session recording filled
+  the cell its send is gated on — a measured viewport, a device token, a tab load that resolves — so
+  dropping `viewportRef.current &&`, dropping the device-token conditional beside it in
+  `use-mobile-session-terminal-stream-display.ts`, and dropping the `.catch(() => null)` on
+  `ensureSessionTabs()` in `use-mobile-session-startup.ts` each survived the whole suite. The fix is
+  scenarios that declare those cells empty, and the lesson generalises past them: a value an
+  adapter holds as a constant is a cell no scenario can empty, so the arm that reads it empty is
+  unreachable until the constant becomes a scenario argument. A stub may also reject where the
+  product awaits it, on the scenario's instruction — that is declaration, not shaping, and it is the
+  only way a refused scope callback is reachable at all.
+
+  The terminal-create family is the same lesson read the other way round, and it cost three more
+  holes. Its adapter pinned the active tab as a fixture, so the arm that omits `afterTabId` was one
+  nothing could reach and sending `null` in its place survived; it dropped every launch option but
+  the prompt and its two toasts, so swapping the `command` and `agentPrompt` members the host reads
+  survived with those members never on the wire; and no scenario tapped twice, so dropping the
+  in-flight guard survived. An argument the adapter supplies itself is not an
+  argument. What the adapter forwards is the whole of what the goldens can hold.
+
+`mutants/probe-hole-witness.test.ts` closes the first two and the last, and keeps them closed. It asserts the
 hole and the closure together: each probe must kill its mutation _and_ every pre-probe scenario of
 the same operation must still survive it. A probe that stops being load-bearing fails instead of
 lingering.
 
 What is still not covered: what the count-based raw-port inventory covers instead (which files
-reach `sendRequest`, and how often), native storage, transport skew, and the two mutations under
-_Known-open holes_ below. The `subscribe` / `sendUnsubscribe` ports are covered for
-`runtime.clientEvents.subscribe` only — the two client-event families are the whole of it. Nine
-product call sites call `client.subscribe`; those two are recorded and seven are not, and no golden
-mentions any of their methods: `notifications.subscribe`, `agentSession.subscribe`,
-`session.tabs.subscribe`, `nativeChat.subscribe`, `terminal.subscribe`, `browser.screencast` and
-`accounts.subscribe`. The frame plumbing is method-agnostic, so what stops each of the seven is its
-consumer, not the runner. `terminal.subscribe` and `browser.screencast` write to a webview terminal
-ref this runner has no substitute for. `accounts.subscribe` is wired on a per-host client from
-`useAllHostClients`, and the runner hands an adapter one client rather than the multi-host context
-that hook reads. Its snapshot decoder is not the wall: the loader reaches
-`decodeAccountsSnapshot` and it throws its own domain error on a bad snapshot. The remaining four are unwritten scenarios, not walls. Blur is
-unrecorded across all of them: `useFocusEffect` is substituted as `useEffect`, so a route's focus
-cleanup is recorded at unmount and an unsubscribe only a blur would reach is not — driving focus
-needs a substitute, and no recording reads one yet. Four of the nine
-probes pin behaviour with no demonstrated mutation — the two mixed reject/refusal new-tab orders
+reach `sendRequest`, and how often), native storage, transport skew, and the mutations listed under
+_Known-open holes_ below.
+
+Which subscriptions are covered is no longer stated here. It is held as data in
+`mobile/src/transport/rpc-subscription-inventory.ts`, where every product `client.subscribe` is
+classified as recorded, an unwritten scenario, or walled with the wall named, and
+`rpc-subscription-boundary.test.ts` fails on a new site, a stale entry, a wrong method and a
+`recorded` entry naming a family this manifest does not have. This paragraph is why: it said nine
+sites when there were ten — the count was taken over `mobile/src`, and the host screen's
+`accounts.subscribe` lives under `app/`. A count in prose cannot fail. Today four of the ten are
+recorded, two are unwritten scenarios and four are walled, and the list is what says so.
+
+The frame plumbing is method-agnostic, so what stops a site is its consumer rather than the runner.
+Blur is unrecorded across all ten subscribing sites: `useFocusEffect` is substituted as `useEffect`,
+so a route's focus cleanup is recorded at unmount and an unsubscribe only a blur would reach is not
+— driving focus needs a substitute, and no recording reads one yet. Four of the nine probes pin
+behaviour with no demonstrated mutation — the two mixed reject/refusal new-tab orders
 and the home-providers and resume-metadata refresh refusals; they are frozen observations, not
 proven defect detectors. `settings.resume-metadata` projects `{}` as its state, so its probe
 observes only sender calls and settlements.
@@ -415,50 +461,37 @@ the runtime task settings. That divergence is recorded, not repaired —
 `settings-task-hydration-refuse-after-data.json` is the observation, and changing the behaviour is
 a product change with its own re-record.
 
-### Running it for a step-4 migration
+### Working with the recordings
 
-```sh
-# 1. Before touching the call site, confirm the oracle is green on your branch.
-ORCA_BACKGROUND_LAUNCH=1 pnpm --dir mobile test src/test-support/rpc-recording
+- **Refactor.** Run the suite. No golden moves: that is the parity proof. If one moves, the failure
+  names the golden, checkpoint, field and path; `rpc:diff` shows the same after a re-record.
+- **Behaviour change.** Change the product, run the suite, read each failure, then
+  `pnpm --dir mobile rpc:record` and commit. The pull request diff is exactly the goldens whose
+  recorded behaviour moved; say why in the pull request. Nothing is owed after the merge.
+- **New scenario.** Add it to `pilot-scenarios.json`. The suite fails naming each missing golden
+  and the command that records it; run that command and commit the new files.
+- **Recorder change.** Re-record. The diff is exactly what the recorder now observes differently;
+  if there is none, there is nothing to commit.
+- **Review.** Read the "RPC recording changes" section of the Mobile Checks job summary, which is
+  `rpc:diff` against the base. Each changed file is one behaviour move.
+- **Merge conflict in a golden.** Never hand-merge one: goldens are derived. Take the incoming side
+  (`git checkout origin/main -- mobile/rpc-foundation/goldens`, from the incoming ref, not `HEAD`),
+  finish merging the product code and the scenarios, run `rpc:record`, then
+  `rpc:diff origin/main` and check it lists only the moves your branch means to make — a re-record
+  would otherwise absorb a regression the merge introduced.
+- **Red main.** `Mobile tests on main` replays the whole mobile suite on every merge, because two
+  pull requests can each pass against their own base and disagree once both land. The failure names
+  each golden and the command; whoever merged last re-records in a follow-up.
 
-# 2. Migrate the call site. Re-run. Any divergence is your diff, reported down to the JSON path.
+A desktop pull request can move a golden too: the recordings import a few hundred modules under
+`src/shared`. Mobile Checks therefore runs on any pull request that touches `src/shared/**` or the
+root lockfile, not only on changes under `mobile/`.
 
-# 3. If a divergence is intended, say so deliberately. Recording refuses to run unless the
-#    product tree matches the pinned baseline, so bump `baseline` in pilot-scenarios.json to the
-#    commit you are recording from first.
-ORCA_BACKGROUND_LAUNCH=1 RPC_FOUNDATION_RECORD=1 \
-  pnpm --dir mobile exec tsx scripts/rpc-recording.mts --record
-```
-
-A call site that subscribes runs the same recipe, with one thing to check before step 2. The
-subscribe payload is named `<method>#<n>` by per-method occurrence, and every `frame` step in the
-scenario names it — so a migration that moves the subscribe past another send of the same method
-renames it and the scenario no longer resolves. That is a loud failure, not a silent one
+A subscription scenario names its payload `<method>#<n>` by per-method occurrence, and every
+`frame` step names it too — so a change that moves the subscribe past another send of the same
+method renames it and the scenario no longer resolves. That is a loud failure, not a silent one
 (`Missing subscription payload`), but it is the first thing to read when a subscription scenario
 stops matching.
-
-A re-record is a claim about behaviour. State the cause in the commit; every golden the refresh
-moves should have one.
-
-Editing the recorder engine on a migration branch is the awkward case: `recorderSha256` moves, so
-every golden needs rewriting, but the product tree no longer matches `baseline`, and bumping
-`baseline` to the branch would record the migrated source and make the parity claim circular. Record
-from the pinned commit instead, with this branch's recorder laid over it: `git worktree add
---detach <dir> <baseline>`, this tree's `rpc-recording/` and `pilot-scenarios.json` copied in,
-`node_modules` symlinked, `RPC_FOUNDATION_GOLDENS` pointed at a scratch directory — then copy the
-result back and run the candidate suite here. It must be a worktree, not a `git archive`
-extraction: the fence runs `git diff --quiet <baseline>` and an untracked-file check, both of which
-need a real `.git`, so an archive tree fails as `Product sources or lockfile differ from the pinned
-main baseline` — a product mismatch that is not there. Format the recorder before recording: an
-`oxfmt` pass afterwards moves `recorderSha256` again. A recorder-only branch that has merged main
-is not the awkward case: its product tree is main's, so repin `baseline` to main's tip and record
-in place — there is no migrated source for the goldens to be recorded against. That repin is the
-whole of it, though. Where a branch is told not to repin, `--record` refuses on any product tree
-that is not the pinned one, merged or not, and the detached-pin worktree above is the only recipe
-that runs. Adding or editing
-one domain's module under `adapters/` no longer needs any of this: only that domain's goldens move,
-and they re-record from its own branch like any other behaviour change. Adding a mutant, a probe or
-a suite that does not record needs none of it either, and moves no golden at all.
 
 If your call site carries a mutation anchor in `mutants/operation-mutations.ts`, rewriting it will
 make the anchor match zero sites. Re-anchor the same defect at its new home rather than deleting
@@ -472,10 +505,11 @@ product-tree edit.
 
 ## Known-open holes
 
-Two behavioural mutations are not caught by any golden. Both were confirmed by mutating product
-source and re-deriving the whole suite; neither is reachable through the adapters as they stand,
-so closing them needs new adapter capability rather than another scenario. Anyone migrating these
-call sites should not assume the recordings will notice a change here:
+Each entry below is a mutation no golden catches, confirmed by applying it to product source and
+re-deriving the whole suite. None is reachable through the adapters as they stand, so closing one
+needs new adapter capability or a call site that reads what it decides — not another scenario.
+Anyone migrating these call sites should not assume the recordings will notice a change here. The
+list is the count; a number in this paragraph would be one more thing that cannot fail.
 
 - **`use-host-repo-metadata.ts` cross-module cache write.** Deleting `setCachedRepos(...)` survives.
   `workspace.repositories` now mounts `useNewWorkspaceRepositories`, which is the consumer that
@@ -486,11 +520,47 @@ call sites should not assume the recordings will notice a change here:
   `sourceClientRef.current !== client` to `false` survives. The adapter closes over one client
   object: `reset` changes only the refresh key, `cutover` migrates the same stable logical client,
   and remounting discards the old hook state. Closing it needs a same-mount client replacement.
+- **`mobile-session-write-operations.ts` display-mode acceptance.** Swapping
+  `terminalDisplayModeSet`'s `success-result-or-skip` for `require-result-or-throw-message` moves
+  none of the fifteen goldens that reach it. This one is not an adapter limit but a call-site
+  property: the toggle reads no verdict and its own `catch` swallows a throw either way, so no
+  acceptance is observable there. The first caller that reads a verdict closes it. What the goldens
+  do hold at that site is the method, the params and the viewport pair.
+- **`use-mobile-session-startup.ts` attached-terminal guard.** Deleting
+  `if (activeHandleRef.current) { return }` from the 1800 ms created-session timer survives. The
+  startup adapter owns that ref and nothing a scenario can drive writes it between the mount and the
+  timer, so the arm the guard exists for — a terminal that attached while the timer was pending —
+  has no way to occur. In the product it does, and the mutant then sends a second `worktree.activate`
+  for a session that is already live. Closing it needs an adapter that can attach a terminal
+  mid-scenario.
 
 The original settings slice coverage maps nine host-RPC callers in
 `settings-recording-coverage.json`; device-preference entries are excluded by coordinator
 instruction. Later manifest additions require new scenarios and remain uncovered until
 those recordings land. This runner does not certify native storage or transport skew.
+
+## Salvaged reads
+
+A checked reader parses tolerantly: `salvagingArray` drops an element that does not parse rather
+than failing the whole reply, and `salvagedOptional` drops a member that is present but malformed
+rather than reading it as incompatible. `collectSalvageDrops` counts both and names their paths on
+every decoded reply, and no product code reads the result — so which rows a reply lost was visible
+nowhere, including here.
+
+The recorder now reads it. `salvage-observation.ts` wraps `classifyRpcReply` on the mounted module,
+which is the one seam every checked read passes through and the only one that knows which operation
+the drop happened under, and records a non-empty report as a `reply-salvage` effect carrying the
+operation, the method, the decoded variant, the dropped paths and the count. Nothing in the product
+tree changes: the report was already being built and thrown away.
+
+44 of the goldens carried one when this was written, and every other checked read in the corpus decodes its reply
+whole (`grep -l reply-salvage mobile/rpc-foundation/goldens/*.json | wc -l`). The matrix varies the
+envelope a host sends rather than the shape of a row inside a result, so on most families this
+observation pins an absence rather than a recorded drop. What it buys is the next tightening: an element or member schema narrowed so a recorded row stops parsing moves the
+golden even where nothing downstream reads the row. `salvage-observation.test.ts` is what keeps the
+observation itself honest, driving a malformed row and a malformed optional through the real
+`git.status` reply schema, because a refactor that stopped reporting would otherwise leave every
+golden comparing clean.
 
 ## The cleanup checkpoint
 
@@ -507,3 +577,35 @@ Five goldens carry one today, covering six scenarios whose dropped observations 
 `workspaceAgentOverridden`, `creatingKey`, `selectedAgent`, `agentOverridden` and `error`. A
 scenario that stops leaking loses its checkpoint, which is a visible golden diff rather than a
 silent improvement.
+
+### Streams still registered at teardown
+
+Teardown also asks each session's `RpcClientStreamRegistry` what it still holds, after the product's
+own cleanup has run and drained and before the transport disposes the registries, and records a
+non-empty answer as a `streams-registered-at-teardown` effect. Each entry is the stream's method,
+the subscribe payload it was opened on, and whether the registry has it marked cancelled. The set is
+read off the registry's own map rather than mirrored from the subscribes and frames the recorder
+watches go by: the leak this exists to catch is exactly a divergence between what the product
+believes it closed and what the registry still holds, so a mirror would reproduce the product's
+bookkeeping instead of observing it.
+
+The drain before the read is part of the contract. A cleanup that closes its stream on a due 0ms
+timer has not run when `dispose()` returns, so reading the set first made a deferred close
+byte-identical to a stream nobody ever closed.
+
+Why it is not enough to watch the wire: closing a stream only writes a frame when its method has an
+unsubscribe builder. `notifications.subscribe` had none until the transport took over its release:
+deleting its cleanup's `unsubscribeStream()` used to fail one golden, the cutover scenario written
+for it, and this observation made it fail seven, so the next builder-less method needs no scenario
+of its own.
+
+An empty set is not recorded, so the corpus stays quiet and a family that starts leaking gains a
+checkpoint. Five goldens report a non-empty set today, and all five are the same non-leak: the two
+`runtime.clientEvents.subscribe` matrices and the `notifications.subscribe` matrix, on every
+partition whose subscribe reply is not a well-formed `ready`. With no `subscriptionId` to unsubscribe with, `disposeServerSubscription` marks
+the record cancelled and keeps it until the id arrives — the retention the per-session registry
+paragraph above describes. `cancelled` is in the observation so those are legible as what they are:
+a product cleanup that never ran records `cancelled: false`, and because the drain precedes the
+read, a cleanup that deferred its close to a timer already due records nothing at all. `flush()`
+only runs work due at the current virtual time, so a close parked on a later timer is still
+registered at the read and records `cancelled: false` like any other.

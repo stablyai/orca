@@ -1,0 +1,77 @@
+{
+  "sourcePath": "src/main/native-chat/agent-session-wire/agent-session-delta-coalescer.ts",
+  "canonicalization": "CRLF to LF",
+  "baselineSha256": "48828e4ee21858075cbb87ec1caa4a82991a55f80928482615d1df7ec5dc0fb2",
+  "fixedSha256": "7caf0f24250b42e0ac4fe99e93bcbe0a4acb7cb3465fdde6b248d8bf6ba0d2d0",
+  "reportedSha256": "bfff14bd820a2d7be90e82db6403d2415c0fb3de998cf61d7c3830ff4c415605",
+  "reportedFixedSha256": "2f00aec9b7a4fb24cad4e01d1bf7e1d0b881076f9760b322cdf72c39594ae89c",
+  "namedReferences": {
+    "main": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+    "reported": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+    "reportedTag": "v1.4.198"
+  },
+  "commonDependencies": {
+    "src/shared/agent-session-journal-item-key.ts": "09ebe4758e3f38b5b7591f07f7b4dbfd04c7cc01713c9b0afe03b07b656d1fe8",
+    "src/main/codex/codex-command-lifecycle.ts": "7b480d3b111304e3caff71768fb3b11ab6c36e1fa8f5b0440623a77cac2382c2",
+    "src/shared/native-chat-turn-status.ts": "4ce2b64fa7818106814c135e5daf77bb183f601c35f9f08e5b7ff847fba01378",
+    "src/shared/native-chat-tool-identity.ts": "8c98eec1a53b26a67ed48a0859c5863f5accbe67e013c4eb5a0f8b32441ee925",
+    "src/main/codex/codex-structured-item-stream-bounds.ts": "88e9efa8a9c163905f1a5eb5eaf316fba2f194d76c5a94ed7f55636cc0d74ae0",
+    "src/main/codex/codex-item-stream-retention.ts": "66d1f1d51ed6711e20f81698b14be2d003e899dbc587ac1306b6a656cf951b96",
+    "src/main/native-chat/agent-session-journal/journal-payload-bounds.ts": "a421da6c6eee9346746a69f8ba7ff966ce81969dfa0a93f58784cac27cf8cdad",
+    "src/main/codex/codex-goal-journal-rows.ts": "415846ca105300349778da7637216ca6ce978c7036219f6b3038f7228ba8724e",
+    "src/main/codex/codex-subagent-activity.ts": "5cdf18a4ea2c68178a67a845d4c95672a0d94bb282e8e15c3a930c6dd59151e4",
+    "src/main/native-chat/agent-session-wire/provider-frame-disposition.ts": "f24008cebb1b8a77b0cbd091e49140a4bf99c676bc61eedeb0a82f1263244a7c",
+    "src/main/native-chat/agent-session-wire/unhandled-provider-frame.ts": "f8169a024a573adfc97e4eb8c99ecc4e80f82e9f94a04a29011a6b8051cc7626",
+    "src/shared/raster-image-dimensions.ts": "0d7462b8b2e53bfcdcbd32803edcfb85ed0063f56d45cf230fb59aac4783d063",
+    "src/shared/raster-image-preview-limits.ts": "f2d836b354b3951912f1ec689d84b82aa1aade89ed8e9c6f76be2321d600e9a7",
+    "src/shared/raster-image-base64-preview.ts": "89baf40f4637615456888e0f35115517a8445a3b1cb640b7bc495dd9a98fcedb",
+    "src/shared/image-data-uri.ts": "3eb9d2bda499b8f10c74783f9de766041469b140a9b96b2b5be7d97528688ce0",
+    "src/main/codex/codex-item-field-readers.ts": "aa4b178c562a63995b7de63c6f5daaf7b6b610fb163fb0a357cc230314076323",
+    "src/main/codex/codex-image-item-translation.ts": "c4f88236c707472cbcfcdfb1a04e51c738f8741aa5847a33f730759499522f5e",
+    "src/main/codex/codex-command-action-class.ts": "93b7bceb66a9e5bfae680e018b61bddb5c1117fe26243088ceccc8738841f966",
+    "src/main/codex/codex-thread-item-identity.ts": "04b98b367a4d658fb759ebc4fc73ea4ae731ae3f238f191c8ce002b2a2c9e2a8",
+    "src/main/codex/codex-turn-ordinals.ts": "9b7cf66986235bcacd6c198950452c7f40bd559a3a0ce20995aac496a1e32d7f",
+    "src/main/codex/codex-structured-item-translation.ts": "8ab9debb279baf3a5043ffe754c8911755c6e4ca9edfc0a094671c4d5d166639",
+    "src/main/codex/codex-structured-item-stream-events.ts": "da2a9da9025af354ce705a190badadf822f9ac3b403eef04aa0ef8aaf6f023de",
+    "src/main/codex/codex-structured-item-streams.ts": "b70c3306e8bec3587342afc3bc156f40903513fa7ff3865b217ba4cc912cd89f"
+  },
+  "callerSourceHashes": [
+    {
+      "path": "src/main/codex/codex-structured-item-streams.ts",
+      "working": "b70c3306e8bec3587342afc3bc156f40903513fa7ff3865b217ba4cc912cd89f",
+      "main": "b70c3306e8bec3587342afc3bc156f40903513fa7ff3865b217ba4cc912cd89f",
+      "reported": "0f05fd8232d5f9b7a928abdd97ea04846ffade9512d61371f120dbcff00c09b6"
+    },
+    {
+      "path": "src/main/codex/codex-structured-journal-translation.ts",
+      "working": "56e17b9649471e804d29d1d54a3e14b4298ca8af2e25c4759dc37fce000b06a1",
+      "main": "56e17b9649471e804d29d1d54a3e14b4298ca8af2e25c4759dc37fce000b06a1",
+      "reported": "7a6409082b977e481b137b19f446ee3e17d530f4f72c4d141263a49d3ca7722c"
+    },
+    {
+      "path": "src/main/codex/codex-structured-provider-events.ts",
+      "working": "a411dc378e521ea8fc915e2a2a21476341a30f440e8233ae5649205d2a1e2e44",
+      "main": "a411dc378e521ea8fc915e2a2a21476341a30f440e8233ae5649205d2a1e2e44",
+      "reported": "69af127e2d2ee6b6d648028f16f3e6d25ea45ed61919d14642a7a554e3ad05a5"
+    },
+    {
+      "path": "src/main/codex/codex-app-server-notification-schema.ts",
+      "working": "d551b5fb47aad42fb09d9cee2c68e1e4438d209e13869875fed68c3679ef66c8",
+      "main": "d551b5fb47aad42fb09d9cee2c68e1e4438d209e13869875fed68c3679ef66c8",
+      "reported": "d551b5fb47aad42fb09d9cee2c68e1e4438d209e13869875fed68c3679ef66c8"
+    },
+    {
+      "path": "src/main/claude/claude-streamed-text-checkpoints.ts",
+      "working": "a0e435f5fcf73f37e48e5363f8f9245d992a0d6c0a80abdf5cc5c72b2595fe6d",
+      "main": "a0e435f5fcf73f37e48e5363f8f9245d992a0d6c0a80abdf5cc5c72b2595fe6d",
+      "reported": "a0e435f5fcf73f37e48e5363f8f9245d992a0d6c0a80abdf5cc5c72b2595fe6d"
+    },
+    {
+      "path": "src/main/claude/claude-streamed-block-identity.ts",
+      "working": "8bc2d4a18fdecd4e27fdf2e8ea3274fcf2e3353edb75607bd0d1133546bfbdc0",
+      "main": "8bc2d4a18fdecd4e27fdf2e8ea3274fcf2e3353edb75607bd0d1133546bfbdc0",
+      "reported": "8bc2d4a18fdecd4e27fdf2e8ea3274fcf2e3353edb75607bd0d1133546bfbdc0"
+    }
+  ],
+  "scope": "Exact current/main coalescer before/after plus exact v1.4.198 coalescer and same local guard, using current Codex stream callers/dependencies. Not a packaged historical release replay."
+}

@@ -1,9 +1,11 @@
+import { removePaneKeys } from './agent-status-pane-keyed-records'
 import type { AppState } from '../types'
 import { forgetAgentHibernationTabOutput } from '@/lib/agent-hibernation-output-activity'
 import { forgetForegroundTerminalTabs } from '@/lib/foreground-terminal-tabs'
 import { forgetAgentStartupDeliveriesForTabs } from '@/lib/agent-startup-delivery-guards'
 // Why: the store-free registry (not terminal-parked-tab-watchers, which imports @/store) so a slice can import this module during its own evaluation.
 import { retireParkedTerminalTab } from '@/components/terminal-pane/terminal-parked-watcher-registry'
+import { forgetNativeChatPromptDismissalsForTab } from '@/components/native-chat/native-chat-prompt-dismissals'
 import { retireAgentPaneAuthorityAliasesByOwnerTab } from './agent-pane-authority'
 import {
   buildAgentStatusTabPrefixDropPatch,
@@ -45,6 +47,7 @@ export function sweepRetiredTerminalTabState(
   actions.clearPaneForegroundAgentByTabPrefix(tabId)
   // Why: retirement permanently retires the tab's panes (a reopen mints a fresh leafId), so drop hibernation output epochs to keep the module map from growing forever.
   forgetAgentHibernationTabOutput(tabId)
+  forgetNativeChatPromptDismissalsForTab(tabId)
   // Why: same rationale — retired tab ids never recur, so drop the foreground last-seen and consumed agent-startup delivery guards.
   forgetForegroundTerminalTabs([tabId])
   forgetAgentStartupDeliveriesForTabs([tabId])
@@ -59,7 +62,7 @@ export function buildRetiredTerminalTabStateSweepPatch(
   state: RetiredTerminalTabSweepState,
   tabIds: readonly string[],
   worktreeId?: string | null,
-  opts?: { preserveActivityClearedState?: boolean }
+  opts?: { preserveActivityClearedState?: boolean; paneKeys?: ReadonlySet<string> }
 ): Partial<RetiredTerminalTabSweepState> | null {
   if (tabIds.length === 0) {
     return null
@@ -69,25 +72,39 @@ export function buildRetiredTerminalTabStateSweepPatch(
   // that discards the patch still mutates the registries.
   let swept: RetiredTerminalTabSweepState = state
   for (const tabId of tabIds) {
-    retireParkedTerminalTab(tabId)
+    if (!opts?.paneKeys) {
+      retireParkedTerminalTab(tabId)
+    }
     const { patch } = buildAgentStatusTabPrefixDropPatch(
       swept,
       tabId,
-      retireAgentPaneAuthorityAliasesByOwnerTab(tabId),
+      opts?.paneKeys ? [] : retireAgentPaneAuthorityAliasesByOwnerTab(tabId),
       {
         ...(worktreeId ? { worktreeId } : {}),
+        ...(opts?.paneKeys ? { paneKeys: opts.paneKeys } : {}),
         ...(opts?.preserveActivityClearedState ? { preserveActivityClearedState: true } : {})
       }
     )
-    const foreground = buildPaneForegroundAgentTabPrefixClearPatch(
-      swept.paneForegroundAgentByPaneKey,
-      [`${tabId}:`]
-    )
+    const foreground = opts?.paneKeys
+      ? {
+          paneForegroundAgentByPaneKey: removePaneKeys(
+            swept.paneForegroundAgentByPaneKey,
+            opts.paneKeys
+          )
+        }
+      : buildPaneForegroundAgentTabPrefixClearPatch(swept.paneForegroundAgentByPaneKey, [
+          `${tabId}:`
+        ])
     swept = { ...swept, ...patch, ...foreground }
-    forgetAgentHibernationTabOutput(tabId)
+    if (!opts?.paneKeys) {
+      forgetAgentHibernationTabOutput(tabId)
+      forgetNativeChatPromptDismissalsForTab(tabId)
+    }
   }
-  forgetForegroundTerminalTabs(tabIds)
-  forgetAgentStartupDeliveriesForTabs(tabIds)
+  if (!opts?.paneKeys) {
+    forgetForegroundTerminalTabs(tabIds)
+    forgetAgentStartupDeliveriesForTabs(tabIds)
+  }
   const changed: Record<string, unknown> = {}
   for (const key of Object.keys(swept) as (keyof RetiredTerminalTabSweepState)[]) {
     if (!Object.is(swept[key], state[key])) {

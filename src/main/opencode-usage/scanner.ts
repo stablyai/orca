@@ -2,6 +2,10 @@ import { yieldToEventLoop } from '../../shared/event-loop-yield'
 import Database from '../sqlite/sync-database'
 import { createUsageEventAggregation } from '../usage/usage-event-aggregation'
 import {
+  createUsageWorktreeResolver,
+  type UsageWorktreeResolver
+} from '../usage/usage-worktree-resolver'
+import {
   compareOpenCodeClaimPriority,
   getProcessedDatabaseInfo,
   listOpenCodeDatabases
@@ -10,7 +14,6 @@ import { parseOpenCodeUsageRow } from './opencode-usage-row-parsing'
 import { selectUsageRows } from './opencode-usage-row-queries'
 import {
   attributeOpenCodeUsageEvent,
-  buildWorktreesWithCanonicalPaths,
   type OpenCodeUsageWorktreeRef
 } from './opencode-usage-worktree-attribution'
 import type {
@@ -29,17 +32,25 @@ function addCost(left: number | null, right: number | null): number | null {
   return (left ?? 0) + (right ?? 0)
 }
 
-type OpenCodeUsageMetric = { estimatedCostUsd: number | null }
+type OpenCodeUsageMetric = {
+  estimatedCostUsd: number | null
+  cacheWriteInputTokens?: number
+}
 
 const openCodeUsageAggregation = createUsageEventAggregation<
   OpenCodeUsageAttributedEvent,
   OpenCodeUsageMetric
 >({
   metric: {
-    empty: () => ({ estimatedCostUsd: null }),
-    fromEvent: (event) => ({ estimatedCostUsd: event.estimatedCostUsd }),
+    empty: () => ({ estimatedCostUsd: null, cacheWriteInputTokens: 0 }),
+    fromEvent: (event) => ({
+      estimatedCostUsd: event.estimatedCostUsd,
+      cacheWriteInputTokens: event.cacheWriteInputTokens ?? 0
+    }),
     fold: (target, source) => {
       target.estimatedCostUsd = addCost(target.estimatedCostUsd, source.estimatedCostUsd)
+      target.cacheWriteInputTokens =
+        (target.cacheWriteInputTokens ?? 0) + (source.cacheWriteInputTokens ?? 0)
     }
   },
   cloneSessionForMerge: (session) => structuredClone(session)
@@ -50,7 +61,7 @@ const { finalizeSessions, mergeSessions, mergeDailyAggregates, sortDailyAggregat
 
 export async function parseOpenCodeUsageDatabase(
   dbPath: string,
-  worktrees: (OpenCodeUsageWorktreeRef & { canonicalPath: string })[],
+  resolveWorktree: UsageWorktreeResolver,
   options: { claimSession?: (sessionId: string) => boolean } = {}
 ): Promise<OpenCodeUsagePersistedDatabase> {
   const processedDatabase = await getProcessedDatabaseInfo(dbPath)
@@ -76,7 +87,7 @@ export async function parseOpenCodeUsageDatabase(
         hasDeferredClaims = true
         continue
       }
-      const attributed = await attributeOpenCodeUsageEvent(parsed, worktrees)
+      const attributed = await attributeOpenCodeUsageEvent(parsed, resolveWorktree)
       if (attributed) {
         events.push(attributed)
       }
@@ -96,7 +107,8 @@ export async function parseOpenCodeUsageDatabase(
 
 export async function scanOpenCodeUsageDatabases(
   worktrees: OpenCodeUsageWorktreeRef[],
-  previousProcessedDatabases: OpenCodeUsagePersistedDatabase[]
+  previousProcessedDatabases: OpenCodeUsagePersistedDatabase[],
+  onFilesScanned?: (count: number) => void
 ): Promise<{
   processedDatabases: OpenCodeUsagePersistedDatabase[]
   sessions: OpenCodeUsageSession[]
@@ -106,7 +118,8 @@ export async function scanOpenCodeUsageDatabases(
   const previousByPath = new Map(
     previousProcessedDatabases.map((database) => [database.path, database])
   )
-  const worktreesWithCanonicalPaths = await buildWorktreesWithCanonicalPaths(worktrees)
+  // Why: one resolver for the whole scan so every database shares the per-cwd memo.
+  const resolveWorktree = await createUsageWorktreeResolver(worktrees)
 
   const currentPaths = new Set(dbPaths)
   // Why: when a database that owned sessions is deleted, remaining siblings
@@ -182,7 +195,7 @@ export async function scanOpenCodeUsageDatabases(
   const parsedByPath = new Map<string, OpenCodeUsagePersistedDatabase>()
   const orderedPathsToParse = [...pathsToParse].sort(compareOpenCodeClaimPriority)
   for (const [index, dbPath] of orderedPathsToParse.entries()) {
-    const processed = await parseOpenCodeUsageDatabase(dbPath, worktreesWithCanonicalPaths, {
+    const processed = await parseOpenCodeUsageDatabase(dbPath, resolveWorktree, {
       claimSession: (sessionId) => {
         const owner = sessionOwnerById.get(sessionId)
         if (owner !== undefined && owner !== dbPath) {
@@ -194,6 +207,7 @@ export async function scanOpenCodeUsageDatabases(
     })
     parsedByPath.set(dbPath, processed)
 
+    onFilesScanned?.(1)
     if ((index + 1) % YIELD_EVERY_DATABASES === 0) {
       await yieldToEventLoop()
     }

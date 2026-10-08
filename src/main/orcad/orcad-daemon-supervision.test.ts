@@ -56,6 +56,20 @@ describe('startOrcadDaemon', () => {
     })
   })
 
+  it('gives a cold Windows daemon a longer startup budget', async () => {
+    await startOrcadDaemon('win32')
+    expect(initDaemonPtyProviderMock).toHaveBeenCalledWith(undefined, {
+      macosLoginSessionWatch: false,
+      startupTimeoutMs: 30_000
+    })
+  })
+
+  it('retries the daemon spawn once before falling back to in-process terminals', async () => {
+    initDaemonPtyProviderMock.mockRejectedValueOnce(new Error('Daemon startup timed out'))
+    await expect(startOrcadDaemon()).resolves.toEqual({ state: 'live', pid: 4242 })
+    expect(initDaemonPtyProviderMock).toHaveBeenCalledTimes(2)
+  })
+
   it('reports degraded when fresh terminals would fall back to the local provider', async () => {
     daemonOwnsFreshPersistentPtysMock.mockReturnValue(false)
     const result = await startOrcadDaemon()
@@ -71,6 +85,7 @@ describe('startOrcadDaemon', () => {
       state: 'unavailable',
       reason: 'node-pty is missing'
     })
+    expect(initDaemonPtyProviderMock).toHaveBeenCalledTimes(2)
   })
 })
 

@@ -30,6 +30,14 @@ export function taskWorkspaceSenderMountAdapters(
             worktreeCreateIdempotency: Promise.resolve(
               args.idempotency === false ? false : { dedupeTtlMs: 60_000 }
             ),
+            // The launch route is a create-time decision the caller has already settled, so the
+            // scenario turns it on rather than naming an agent: which agent is picked changes only
+            // the params, and the arm that matters is `agent.launch` instead of `worktree.create`.
+            // `replay: false` keeps the recorded method `agent.launch`; the replay-required route
+            // is a different method and would need its own scenario.
+            ...(args.agentLaunch === true
+              ? { agentLaunch: { agent: 'codex' as const, supported: { replay: false } } }
+              : {}),
             ...(args.maxAttempts === undefined ? {} : { maxAttempts: Number(args.maxAttempts) }),
             mintMutationId: () => `mutation-${++minted}`
           }).then((value: unknown) => {

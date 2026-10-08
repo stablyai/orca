@@ -1,9 +1,16 @@
+import {
+  closeTestStores,
+  testState,
+  createStore,
+  writeDataFile,
+  readDataFile
+} from './persistence-test-harness'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { PersistedState } from '../shared/persisted-state-types'
-import { testState, createStore, writeDataFile, readDataFile } from './persistence-test-harness'
+
 import {
   REORDERED_DEFAULT_WORKSPACE_STATUSES,
   REORDERED_DONE_DEFAULT_WORKSPACE_STATUSES,
@@ -59,7 +66,8 @@ describe('Store', () => {
     getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 2 })
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
   it('preserves persisted smart sort value', async () => {

@@ -74,6 +74,8 @@ function renderPane(
             onJumpToWorkspace={vi.fn()}
             onMarkThreadRead={vi.fn()}
             onMarkThreadUnread={vi.fn()}
+            onMarkThreadsRead={vi.fn()}
+            onMarkThreadsUnread={vi.fn()}
             canJumpToWorkspace={() => true}
             showFilterControls={false}
             showOptionsMenu={false}

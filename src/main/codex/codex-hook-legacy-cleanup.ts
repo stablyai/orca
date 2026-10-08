@@ -1,14 +1,12 @@
-import { existsSync, readFileSync, statSync, unlinkSync } from 'node:fs'
+import { existsSync, readFileSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import {
-  createManagedCommandMatcher,
   hookDefinitionHasManagedCommand,
   readHooksJsonWithRaw,
   removeManagedCommands,
   writeHooksJson
 } from '../agent-hooks/installer-utils'
 import { resolveHooksJsonWritePath } from '../agent-hooks/hook-config-write-path'
-import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import { findManagedTomlBlocks } from '../agent-hooks/managed-toml-ownership'
 import { writeConfigAtomically, type CodexTrustEntry } from './config-toml-trust'
 import {
@@ -16,76 +14,57 @@ import {
   getSystemCodexConfigTomlPath,
   getSystemConfigPath
 } from './codex-hook-definition'
-import { getCodexManagedScriptFileName } from './codex-hook-identity'
+import { isRetiredCodexHookCommand } from './codex-hook-retired-commands'
 import { getSystemCodexHomePath } from './codex-home-paths'
 import {
   collectManagedTrustEntries,
-  removeSelfComputedMatchingTrustEntries,
-  removeSystemManagedHookTrustEntries
+  removeSelfComputedMatchingTrustEntries
 } from './codex-hook-trust-cleanup'
-import { readCodexTrustGrantLedgerHomeForReconciliation } from './codex-managed-trust-reconciliation'
 import { runExclusivelyForCodexTrustConfig } from './codex-trust-config-mutation-queue'
-import { mutateRealHomeHooksPreservingUserTrust } from './codex-user-hook-trust-rebase'
+import { getRealHomeHookKeySourcePaths } from './codex-real-home-hooks-json'
+import { mutateRealHomeHooksPreservingUserTrust } from './codex-user-hook-trust-moves'
 
 const LEGACY_ORCA_PROFILE_NAME = 'orca-agent-status'
 const LEGACY_ORCA_PROFILE_BLOCK_START = '# BEGIN ORCA AGENT STATUS HOOKS'
 const LEGACY_ORCA_PROFILE_BLOCK_END = '# END ORCA AGENT STATUS HOOKS'
-
-// Why: when the real-home lane owns ~/.codex/hooks.json (system-default flag ON
-// with hooks enabled), the legacy system-home sweep must stand down or every
-// managed install would delete the entry the real-home installer just wrote.
-// Injected as a gate because this module is bundled into plain-node CLI entries
-// that have no settings store; the CLI default keeps the sweep active.
-let systemCodexHomeHookSweepSuppressed: () => boolean = () => false
-
-export function setSystemCodexHomeHookSweepSuppressed(gate: () => boolean): void {
-  systemCodexHomeHookSweepSuppressed = gate
-}
 
 function getLegacyCodexProfileTomlPath(): string {
   return join(getSystemCodexHomePath(), `${LEGACY_ORCA_PROFILE_NAME}.config.toml`)
 }
 
 export function cleanupLegacySystemManagedHooks(): Promise<void> {
-  // Why: shares the real-home lane with ensureRealHomeCodexHookState — both
-  // capture, mutate and roll back the user's ~/.codex/config.toml.
+  // Why: shares the real-home lane with the ~/.codex reconcile; both
+  // write the user's ~/.codex/hooks.json and its trust in config.toml.
   return runExclusivelyForCodexTrustConfig(
     getSystemCodexConfigTomlPath(),
     sweepLegacySystemManagedHooks
   )
 }
 
+/**
+ * Removes only retired Orca command forms from the user's ~/.codex/hooks.json.
+ *
+ * Why never the current entry or its trust: every Orca instance on this HOME
+ * shares that entry, and this runs on every install, including launch prep for
+ * any pane. Removing it is reserved for an explicit opt-out.
+ */
 async function sweepLegacySystemManagedHooks(): Promise<void> {
-  if (systemCodexHomeHookSweepSuppressed()) {
-    return
-  }
   const legacyConfigPath = getSystemConfigPath()
   const runtimeConfigPath = getConfigPath()
   if (legacyConfigPath === runtimeConfigPath) {
     return
   }
 
-  const systemHomePath = getSystemCodexHomePath()
-  const hasRecordedRealHomeGrant =
-    readCodexTrustGrantLedgerHomeForReconciliation(systemHomePath) !== null
   // Why: the pre-write guard below compares against these bytes; a separate
   // later read would let a concurrent save land between parse and snapshot.
   const { raw: previousRaw, config } = readHooksJsonWithRaw(legacyConfigPath)
-  // Why: `config === null` with no raw is the "could not read" answer, not the
-  // "no hooks here" one — the branch below removes managed trust entries AND
-  // their grant-ledger record, so acting on it would discard approvals over a
-  // read that merely failed. A genuine absence still returns `config: {}`.
-  if (config === null && previousRaw === null) {
-    return
-  }
   if (!config?.hooks || previousRaw === null) {
-    if (hasRecordedRealHomeGrant) {
-      removeSystemManagedHookTrustEntries(systemHomePath, legacyConfigPath)
-    }
     return
   }
 
-  const isManagedCommand = createManagedCommandMatcher(getCodexManagedScriptFileName())
+  // Why every spelling: with a symlinked home, Codex may have approved the
+  // retired hook under its resolved key too.
+  const sourcePaths = getRealHomeHookKeySourcePaths()
   const nextHooks = { ...config.hooks }
   const trustEntries: CodexTrustEntry[] = []
   let removedManagedHook = false
@@ -93,19 +72,20 @@ async function sweepLegacySystemManagedHooks(): Promise<void> {
     if (!Array.isArray(definitions)) {
       continue
     }
-    const eventTrustEntries = collectManagedTrustEntries(
-      legacyConfigPath,
-      eventName,
-      definitions,
-      isManagedCommand
-    )
-    // Why: user hook configs can be large; avoid the argument limit from push(...entries).
-    for (const entry of eventTrustEntries) {
-      trustEntries.push(entry)
+    for (const sourcePath of sourcePaths) {
+      // Why: user hook configs can be large; avoid the argument limit from push(...entries).
+      for (const entry of collectManagedTrustEntries(
+        sourcePath,
+        eventName,
+        definitions,
+        isRetiredCodexHookCommand
+      )) {
+        trustEntries.push(entry)
+      }
     }
-    const cleaned = removeManagedCommands(definitions, isManagedCommand)
+    const cleaned = removeManagedCommands(definitions, isRetiredCodexHookCommand)
     removedManagedHook ||= definitions.some((definition) =>
-      hookDefinitionHasManagedCommand(definition, isManagedCommand)
+      hookDefinitionHasManagedCommand(definition, isRetiredCodexHookCommand)
     )
     if (cleaned.length === 0) {
       delete nextHooks[eventName]
@@ -114,15 +94,13 @@ async function sweepLegacySystemManagedHooks(): Promise<void> {
     }
   }
 
-  // Why: Codex hooks moved to Orca's managed CODEX_HOME; stale ~/.codex entries would keep external Codex sessions reporting into Orca.
+  // Why: Codex hooks moved to Orca's managed CODEX_HOME in #2350; hooks from before then would keep external Codex sessions reporting into Orca.
   if (removedManagedHook) {
     // Why: this is the user's system hooks file, not Orca's runtime copy.
-    // Remove only stale Orca hook entries and preserve other managers' metadata.
+    // Remove only retired Orca hook entries and preserve other managers' metadata.
     const hooksWritePath = resolveHooksJsonWritePath(legacyConfigPath)
-    const previousMode = statSync(hooksWritePath).mode
-    await mutateRealHomeHooksPreservingUserTrust({
-      sourcePath: legacyConfigPath,
-      runtimeHomePath: systemHomePath,
+    mutateRealHomeHooksPreservingUserTrust({
+      sourcePaths,
       tomlPath: getSystemCodexConfigTomlPath(),
       beforeHooks: config.hooks,
       afterHooks: nextHooks,
@@ -131,22 +109,14 @@ async function sweepLegacySystemManagedHooks(): Promise<void> {
           readFileSync(legacyConfigPath, 'utf-8') !== previousRaw ||
           resolveHooksJsonWritePath(legacyConfigPath) !== hooksWritePath
         ) {
-          // Why: the pre-mutation RPC may overlap a user save; downgrade must
-          // never replace that newer dotfiles generation with our stale parse.
-          throw new Error('System Codex hooks changed during trust repair')
+          // Why: another process may have saved since the read; never replace
+          // that newer dotfiles generation with this stale parse.
+          throw new Error('System Codex hooks changed since Orca read them')
         }
         writeHooksJson(hooksWritePath, { ...config, hooks: nextHooks }, { preserveMode: true })
-      },
-      restoreHooks: () => writeFileAtomically(hooksWritePath, previousRaw, { mode: previousMode })
+      }
     })
-    // Why: stale dev/version entries can reference an older managed script
-    // path that is not represented by the current grant ledger.
     removeSelfComputedMatchingTrustEntries(getSystemCodexConfigTomlPath(), trustEntries)
-  }
-  if (removedManagedHook || hasRecordedRealHomeGrant) {
-    // Why: the ledger recognizes Codex-computed hashes and remains a retry
-    // marker if a prior cleanup removed hooks.json but could not update TOML.
-    removeSystemManagedHookTrustEntries(systemHomePath, legacyConfigPath)
   }
 }
 

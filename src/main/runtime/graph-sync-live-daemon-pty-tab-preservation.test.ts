@@ -1,3 +1,4 @@
+import { withDurableRuntimeStore } from './runtime-durable-store-fixture'
 /**
  * shouldPreserveHeadlessMobileSessionTab excludes the daemon ptyId form
  * <worktreeId>@@<uuid> from its runtime-owned checks, so a host-created terminal
@@ -51,7 +52,7 @@ function createHarness() {
   // Starts empty: only the create path may put this terminal in the session.
   let session: WorkspaceSessionState = { ...getDefaultWorkspaceSession() }
   const repo = makeRepo()
-  const store = {
+  const store = withDurableRuntimeStore({
     getRepos: () => [repo],
     getRepo: (id: string) => (id === REPO_ID ? repo : undefined),
     getAllWorktreeMeta: () => ({}),
@@ -63,7 +64,7 @@ function createHarness() {
       session = next
     },
     flushOrThrow: () => {}
-  }
+  })
   const runtime = new OrcaRuntimeService(store as never)
   runtime.setNotifier({
     closeTerminal: vi.fn(),

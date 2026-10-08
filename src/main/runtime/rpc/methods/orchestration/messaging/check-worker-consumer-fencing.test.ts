@@ -2,7 +2,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RpcContext } from '../../../core'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
-import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-test-fixture'
+import {
+  createRootDispatch,
+  reattachDispatchConsumer
+} from '../../../../orchestration/db/root-dispatch-test-fixture'
 import { createOrchestrationRpcHarness } from '../rpc-test-harness'
 
 const PANE_A = 'tab_a:cccccccc-cccc-4ccc-8ccc-cccccccccccc'
@@ -30,7 +33,7 @@ describe('orchestration.check on a re-attached Dispatch', () => {
     ;({ db, runtime, ctx } = h.setup())
     const task = db.createTask({ spec: 'worker that gets replaced' })
     const dispatch = createRootDispatch(db, task.id, 'term_worker', PANE_A)
-    db.mintDispatchCapability({
+    reattachDispatchConsumer(db, {
       dispatchId: dispatch.id,
       paneKey: PANE_A,
       processIncarnation: 'runtime:pty-a:1'
@@ -53,7 +56,7 @@ describe('orchestration.check on a re-attached Dispatch', () => {
   }
 
   function reattach(dispatchId: string): void {
-    db.mintDispatchCapability({
+    reattachDispatchConsumer(db, {
       dispatchId,
       paneKey: PANE_B,
       processIncarnation: 'runtime:pty-b:1'
@@ -62,7 +65,7 @@ describe('orchestration.check on a re-attached Dispatch', () => {
 
   /** Same pane, new process: bumps the generation without moving the Dispatch off PANE_A. */
   function remintOnSamePane(dispatchId: string): void {
-    db.mintDispatchCapability({
+    reattachDispatchConsumer(db, {
       dispatchId,
       paneKey: PANE_A,
       processIncarnation: 'runtime:pty-a:2'

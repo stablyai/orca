@@ -15,7 +15,6 @@ import {
   GITHUB_REPO_CONCURRENCY,
   type GitHubRepoSources,
   type GitHubWorkItem,
-  type LinearStatusResponse,
   type LinearTeam,
   type RepoSummary,
   type TaskItem,
@@ -53,8 +52,7 @@ export function useMobileTasksProviderLoadActions(model: RuntimeHydrationModel) 
       return
     }
     const statusReply = await linearAccountStatusRead.request(client)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-    const status = linearAccountStatusRead.interpret(statusReply) as LinearStatusResponse
+    const status = linearAccountStatusRead.interpret(statusReply)
     setLinearConnected(status.connected === true)
     if (status.connected !== true) {
       setLinearWorkspaces([])
@@ -72,8 +70,7 @@ export function useMobileTasksProviderLoadActions(model: RuntimeHydrationModel) 
     const teamsReply = await linearWorkspaceTeamListRead.request(client, {
       workspaceId: workspaceId ?? undefined
     })
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-    const teams = linearWorkspaceTeamListRead.interpret(teamsReply) as LinearTeam[]
+    const teams = linearWorkspaceTeamListRead.interpret(teamsReply)
     setLinearTeams(teams)
     setSelectedLinearTeamIds(reconcileTeamSelection(teams, defaultLinearTeamSelectionRef.current))
   }, [client, connState, tasksSupported])
@@ -127,7 +124,7 @@ export function useMobileTasksProviderLoadActions(model: RuntimeHydrationModel) 
               // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: `before` is the undeclared key described above; every other field matches the schema.
               pageParams as RpcSendParams<'github.listWorkItems'>
             )
-            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the schema requires `items` and each row's `labels`, and types the other eight (`id`, `type`, `number`, `title`, `state`, `url`, `updatedAt`, `author`). Two gaps keep the cast: the salvaged members type as `T | undefined` where GitHubWorkItem declares them required, and `sources`/`errors`/`issueSourceFellBack` are deliberately `z.unknown()` because the two banner extractors below read them member by member with their own guards.
             const envelope = githubWorkItemSearchRead.interpret(reply) as {
               items: Array<Omit<GitHubWorkItem, 'repoId' | 'repoName'>>
               sources?: GitHubRepoSources
@@ -202,8 +199,10 @@ export function useMobileTasksProviderLoadActions(model: RuntimeHydrationModel) 
               },
               { timeoutMs: 30_000 }
             )
-            const count = githubWorkItemCountRead.interpret(reply)
-            return typeof count === 'number' ? count : 0
+            // The reader answers the number, so the `typeof` fallback this call site kept is gone:
+            // a reply that is not one reaches the catch below, which already counts a failed repo
+            // as zero and now says which repo and why.
+            return githubWorkItemCountRead.interpret(reply)
           } catch (err) {
             const isExpectedSshSkip = isGitHubWorkItemsSshRemoteRequiredError(err)
             const logWorkItemCountFailure = isExpectedSshSkip ? console.log : console.warn

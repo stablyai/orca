@@ -37,7 +37,10 @@ export function createVirtualizedScrollAnchorListener<TScrollElement extends Ele
   recordUserScroll,
   targetOffset,
   scrollOffsetRef
-}: CreateVirtualizedScrollAnchorListenerArgs<TScrollElement>): (event: Event) => void {
+}: CreateVirtualizedScrollAnchorListenerArgs<TScrollElement>): {
+  onScroll: (event: Event) => void
+  cancelMountRestore: () => void
+} {
   // Why: a write to the current position emits no scroll event, so an armed
   // restore would never complete and would snap later marked writes back to
   // this stale target. Nothing to restore — don't arm.
@@ -56,10 +59,23 @@ export function createVirtualizedScrollAnchorListener<TScrollElement extends Ele
     }
   }
 
-  return (event: Event): void => {
+  const onScroll = (event: Event): void => {
     const marks = getMarks()
     if (marks) {
       const isProgrammatic = marks.consume(event, el.scrollTop, el.scrollHeight - el.clientHeight)
+      if (
+        !isProgrammatic &&
+        el.scrollTop === scrollOffsetRef.current &&
+        getHasDirectScrollInput()?.() !== true
+      ) {
+        return
+      }
+      if (restoring && isProgrammatic && pendingRestoreRef.current) {
+        // Source-row restoration owns this landing; pixel restoration must not replace its anchor.
+        restoring = false
+        onProgrammaticScroll(el.scrollTop)
+        return
+      }
       if (restoring) {
         if (el.scrollTop === targetOffset) {
           completeRestore()
@@ -113,6 +129,7 @@ export function createVirtualizedScrollAnchorListener<TScrollElement extends Ele
       // viewport. Treat the current offset as intentional instead of snapping
       // back to a stale persisted offset while restoration is still pending.
       restoring = false
+      pendingRestoreRef.current = false
       recordCurrentAnchor()
       return
     }
@@ -136,5 +153,11 @@ export function createVirtualizedScrollAnchorListener<TScrollElement extends Ele
       return
     }
     recordUserScroll(el.scrollTop)
+  }
+  return {
+    onScroll,
+    cancelMountRestore: () => {
+      restoring = false
+    }
   }
 }

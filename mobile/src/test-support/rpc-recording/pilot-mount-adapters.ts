@@ -1,17 +1,15 @@
 import { MOUNTED_OPERATION_MODULES } from './adapters/mounted-operation-modules'
 import { declaredDeviceSubstitutes, type DeclaredDeviceState } from './declared-device-state'
 import { operationModuleLoader, type OperationMutation } from './operation-module-loader'
+import { bindSalvageObserver } from './salvage-observation'
 import type { MountOptions } from './mounted-operation-module'
 import type { MountAdapter } from './recording-scenario'
 
 /**
- * The mount table one recording runs against: every registered domain module, merged. Nothing is
- * mounted here, because an adapter defined in this file would be pinned by `recorderSha256` on
- * every golden rather than by `adapterSha256` on the goldens that mount it.
+ * The mount table one recording runs against: every registered domain module, merged.
  *
  * Each module gets its own loader, carrying its own exposures. One recording mounts one adapter, so
- * a golden is only ever influenced by the exposures its own module declares — which is what lets
- * `adapterSha256` pin them instead of every golden's `recorderSha256`.
+ * a golden is only ever influenced by the exposures its own module declares.
  */
 export function pilotMountAdapters(
   root: string,
@@ -32,6 +30,9 @@ export function pilotMountAdapters(
       // scenario records one without its adapter having to wire the sink itself.
       adapters[operation] = (context) => {
         device.bind(context.effect)
+        // Same reason as the device sink: the reply classifier is loaded per adapter module, and
+        // the mount is what knows which recording a salvaged read belongs to.
+        bindSalvageObserver(context.effect)
         return adapter(context)
       }
     }

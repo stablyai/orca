@@ -56,11 +56,7 @@ export function useMobileTasksProjectThreadReplyActions(
           },
           { timeoutMs: 30_000 }
         )
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-        const result = githubProjectCommentDelete.interpret(reply) as {
-          ok?: boolean
-          error?: string | { message?: string }
-        }
+        const result = githubProjectCommentDelete.interpret(reply)
         if (result.ok === false) {
           throw new Error(
             typeof result.error === 'string'
@@ -196,16 +192,10 @@ export function useMobileTasksProjectThreadReplyActions(
                 { timeoutMs: 30_000 }
               )
             )
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-        const result = written as {
-          ok?: boolean
-          error?: string
-          comment?: DetailComment
+        if (written.ok === false) {
+          throw new Error(written.error ?? 'Failed to reply')
         }
-        if (result.ok === false) {
-          throw new Error(result.error ?? 'Failed to reply')
-        }
-        const reply: DetailComment = result.comment ?? {
+        const reply: DetailComment = written.comment ?? {
           id: `local-${Date.now()}`,
           body,
           createdAt: new Date().toISOString(),

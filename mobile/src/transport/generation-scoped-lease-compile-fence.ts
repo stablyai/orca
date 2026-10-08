@@ -55,6 +55,17 @@ export function fenceLoaderOnlyReturns(): void {
   // @ts-expect-error the loader publishes by returning the owner's value, not some other type
   void paths.load(scope, { query: 'a' }, async () => 'not-a-path-list')
   void paths.load(scope, { query: 'a' }, async () => null)
+  void paths.load(scope, { query: 'a' }, async (currency) => (currency.isCurrent() ? ['a'] : null))
+}
+
+export function fenceCurrencyIsAProbeNotALease(): void {
+  void paths.load(scope, { query: 'a' }, async (currency) => {
+    // @ts-expect-error the probe answers currency and is not the lease, so it cannot publish
+    paths.commit(currency, ['a'])
+    // @ts-expect-error the probe exposes no generation at all, so there is no member to read
+    void currency.generation
+    return null
+  })
 }
 
 // @ts-expect-error the lease carries its generation privately; a caller cannot read or compare it

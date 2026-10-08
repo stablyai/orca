@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { drawShape } from './markup-shape-render'
+import { drawShape, textInkBox } from './markup-shape-render'
 import { HIGHLIGHT_ALPHA, type MarkupShape } from './markup-drawing-model'
 
 // Minimal recording stand-in for CanvasRenderingContext2D — drawShape only uses
@@ -24,6 +24,16 @@ function makeRecordingCtx() {
     strokeRect: record('strokeRect'),
     fillText: record('fillText'),
     strokeText: record('strokeText'),
+    // Records the style in force when measuring, and returns fixed ink metrics.
+    measureText: () => {
+      calls.push({ method: 'measureText', args: [ctx.font, ctx.textBaseline] })
+      return {
+        actualBoundingBoxLeft: 1,
+        actualBoundingBoxRight: 40,
+        actualBoundingBoxAscent: -2,
+        actualBoundingBoxDescent: 20
+      }
+    },
     lineCap: '',
     lineJoin: '',
     strokeStyle: '',
@@ -149,5 +159,26 @@ describe('drawShape dispatch', () => {
     })
     expect(methods('save')).toHaveLength(1)
     expect(methods('restore')).toHaveLength(1)
+  })
+})
+
+describe('textInkBox', () => {
+  it('covers the measured glyphs plus the halo, measured in the style text is drawn with', () => {
+    const { ctx, methods } = makeRecordingCtx()
+
+    const box = textInkBox(ctx, {
+      id: 't',
+      kind: 'text',
+      color: '#111827',
+      at: { x: 100, y: 200 },
+      text: 'gy',
+      fontSize: 18
+    })
+
+    const [font, textBaseline] = methods('measureText')[0].args
+    expect(font).toContain('18px')
+    expect(textBaseline).toBe('top')
+    // The halo is 3px wide at 18px type, so it adds 1.5px on every side.
+    expect(box).toEqual({ x: 97.5, y: 200.5, width: 44, height: 21 })
   })
 })

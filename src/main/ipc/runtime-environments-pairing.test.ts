@@ -4,10 +4,8 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
-  MIN_COMPATIBLE_RUNTIME_SERVER_VERSION
-} from '../../shared/protocol-version'
+import { MIN_COMPATIBLE_RUNTIME_SERVER_VERSION } from '../../shared/protocol-version'
+import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
 import * as environmentStore from '../../shared/runtime-environment-store'
 import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
 
@@ -102,6 +100,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   let store: {
     getSettings: () => { activeRuntimeEnvironmentId: string | null }
     updateSettings: ReturnType<typeof vi.fn>
+    removeWorkspaceSessionHost: ReturnType<typeof vi.fn>
   }
 
   beforeEach(() => {
@@ -109,6 +108,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     activeRuntimeEnvironmentId = null
     store = {
       getSettings: () => ({ activeRuntimeEnvironmentId }),
+      removeWorkspaceSessionHost: vi.fn(),
       updateSettings: vi.fn((updates: { activeRuntimeEnvironmentId: string | null }) => {
         activeRuntimeEnvironmentId = updates.activeRuntimeEnvironmentId
       })
@@ -154,6 +154,23 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       'runtimeEnvironments:retryConnectionsNow',
       'runtimeEnvironments:getStatus',
       'runtimeEnvironments:call',
+      'runtimeEnvironments:linkSshAccess',
+      'runtimeEnvironments:unlinkSshAccess',
+      'runtimeEnvironments:createOrcadSshHost',
+      'runtimeEnvironments:resumeOrcadSshHost',
+      'runtimeEnvironments:listPendingOrcadSshProvisioning',
+      'runtimeEnvironments:deployOrcad',
+      'runtimeEnvironments:getOrcadStatus',
+      'runtimeEnvironments:convertSshHostToManagedOrcad',
+      'runtimeEnvironments:listPendingOrcadMigrations',
+      'runtimeEnvironments:previewOrcadDeltaMove',
+      'runtimeEnvironments:moveOrcadDelta',
+      'runtimeEnvironments:keepOrcadServerVersion',
+      'runtimeEnvironments:updateOrcad',
+      'runtimeEnvironments:rollbackOrcad',
+      'runtimeEnvironments:recoverOrcad',
+      'runtimeEnvironments:stopOrcad',
+      'runtimeEnvironments:cancelOrcadStop',
       'runtimeEnvironments:subscribe',
       'runtimeEnvironments:unsubscribe'
     ])
@@ -180,6 +197,23 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       'runtimeEnvironments:call',
       'runtimeEnvironments:subscribe',
       'runtimeEnvironments:unsubscribe',
+      'runtimeEnvironments:linkSshAccess',
+      'runtimeEnvironments:unlinkSshAccess',
+      'runtimeEnvironments:deployOrcad',
+      'runtimeEnvironments:getOrcadStatus',
+      'runtimeEnvironments:updateOrcad',
+      'runtimeEnvironments:rollbackOrcad',
+      'runtimeEnvironments:recoverOrcad',
+      'runtimeEnvironments:stopOrcad',
+      'runtimeEnvironments:cancelOrcadStop',
+      'runtimeEnvironments:convertSshHostToManagedOrcad',
+      'runtimeEnvironments:listPendingOrcadMigrations',
+      'runtimeEnvironments:previewOrcadDeltaMove',
+      'runtimeEnvironments:moveOrcadDelta',
+      'runtimeEnvironments:keepOrcadServerVersion',
+      'runtimeEnvironments:createOrcadSshHost',
+      'runtimeEnvironments:resumeOrcadSshHost',
+      'runtimeEnvironments:listPendingOrcadSshProvisioning',
       'runtimeEnvironments:retryConnectionsNow'
     ])
     expect(removeAllListenersMock).toHaveBeenCalledWith('runtimeEnvironments:subscriptionBinary')
@@ -249,6 +283,10 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     })
     expect(activeRuntimeEnvironmentId).toBeNull()
     expect(closeRemoteRuntimeRequestConnectionMock).toHaveBeenCalledWith(added.environment.id)
+    // A removed server's session partition goes too, so listings stop naming it as a host.
+    expect(store.removeWorkspaceSessionHost).toHaveBeenCalledWith(
+      `runtime:${encodeURIComponent(added.environment.id)}`
+    )
     expect(JSON.stringify(removed)).not.toContain('device-token')
     expect(await list(null, undefined)).toEqual([])
   })

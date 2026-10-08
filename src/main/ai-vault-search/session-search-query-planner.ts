@@ -31,8 +31,15 @@ export type SessionSearchQueryPlan = {
   truncated: boolean
   /** Deduplicated index-faithful terms for the OR fallback, incl. identifier pieces. */
   terms: string[]
-  /** Query-order tokens minus stop words: the phrase / AND candidate. */
+  /** Query-order tokens minus stop words for prose, all of them for a literal. */
   body: string[]
+  /**
+   * Query-order tokens exactly as typed, stop words kept: the phrase / AND
+   * candidate. A sentence pasted out of a transcript is only adjacent in the
+   * index with its stop words in place, and `unicode61` indexes them, so the
+   * phrase rung has to search the words the user actually typed.
+   */
+  phrase: string[]
 }
 
 export function isLiteralQuery(query: string): boolean {
@@ -95,7 +102,8 @@ export function planSessionSearchQuery(
     literal,
     truncated,
     terms: [...terms, ...extra].slice(0, MAX_TERMS),
-    body: body.slice(0, MAX_BODY_TERMS)
+    body: body.slice(0, MAX_BODY_TERMS),
+    phrase: raw
   }
 }
 

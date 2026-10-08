@@ -1,0 +1,225 @@
+import { AlertCircle, Loader2, RotateCcw } from 'lucide-react'
+import { useNativeChatRestartOfferEnabled } from '../native-chat-restart-offer-gate'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { translate } from '@/i18n/i18n'
+import {
+  reopenNativeChatRestartOffer,
+  useNativeChatRestartOffer,
+  useNativeChatRestartResuming
+} from '../native-chat-resume-on-restart-store'
+
+// Why: closing the resume dialog is a snooze, not a decline — the host keeps the offer. This is
+// then the only surface left carrying it, so it is always rendered rather than gated by
+// `statusBarItems`. Pressing Resume closes the dialog too, so this entry carries the run while it
+// is in flight. It is also the lasting summary of chats the resume could not carry on: its
+// toast says so once, and each chat it reached carries its own note.
+
+function Segment({
+  icon,
+  label,
+  ariaLabel,
+  tooltip,
+  iconOnly,
+  count
+}: {
+  icon: React.ReactNode
+  label: string
+  ariaLabel: string
+  tooltip: string
+  iconOnly: boolean
+  count: number
+}): React.JSX.Element {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          onClick={() => void reopenNativeChatRestartOffer()}
+          className="inline-flex cursor-pointer items-center gap-1.5 rounded px-1 py-0.5 hover:bg-accent/70"
+          aria-label={ariaLabel}
+        >
+          {icon}
+          <span className="text-[11px]">{iconOnly ? count : label}</span>
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="top" sideOffset={6}>
+        {tooltip}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
+type SegmentText = { label: string; ariaLabel: string; tooltip: string }
+
+function resumingText(count: number): SegmentText {
+  return {
+    label:
+      count === 1
+        ? translate(
+            'auto.components.status.bar.NativeChatResumeStatusSegment.resumingLabelOne',
+            'Resuming 1 chat'
+          )
+        : translate(
+            'auto.components.status.bar.NativeChatResumeStatusSegment.resumingLabel',
+            'Resuming {{value0}} chats',
+            { value0: count }
+          ),
+    ariaLabel:
+      count === 1
+        ? translate(
+            'auto.components.status.bar.NativeChatResumeStatusSegment.resumingAriaOne',
+            'Resuming 1 chat. Click to open details.'
+          )
+        : translate(
+            'auto.components.status.bar.NativeChatResumeStatusSegment.resumingAria',
+            'Resuming {{value0}} chats. Click to open details.',
+            { value0: count }
+          ),
+    tooltip: translate(
+      'auto.components.status.bar.NativeChatResumeStatusSegment.resumingTooltip',
+      'Restoring interrupted chats and asking them to carry on…'
+    )
+  }
+}
+
+function failedText(count: number): SegmentText {
+  return {
+    label:
+      count === 1
+        ? translate(
+            'auto.components.status.bar.NativeChatResumeStatusSegment.failedLabelOne',
+            '1 chat failed to resume'
+          )
+        : translate(
+            'auto.components.status.bar.NativeChatResumeStatusSegment.failedLabel',
+            '{{value0}} chats failed to resume',
+            { value0: count }
+          ),
+    ariaLabel:
+      count === 1
+        ? translate(
+            'auto.components.status.bar.NativeChatResumeStatusSegment.failedAriaOne',
+            '1 chat failed to resume. Click for details.'
+          )
+        : translate(
+            'auto.components.status.bar.NativeChatResumeStatusSegment.failedAria',
+            '{{value0}} chats failed to resume. Click for details.',
+            { value0: count }
+          ),
+    tooltip: translate(
+      'auto.components.status.bar.NativeChatResumeStatusSegment.failedTooltip',
+      'Chats Orca could not resume after the restart. Click for details.'
+    )
+  }
+}
+
+/** True of a refused chat and an unconfirmed one alike, for a list holding either. */
+function checkText(count: number): SegmentText {
+  return {
+    label:
+      count === 1
+        ? translate(
+            'auto.components.status.bar.NativeChatResumeStatusSegment.checkLabelOne',
+            '1 chat to check'
+          )
+        : translate(
+            'auto.components.status.bar.NativeChatResumeStatusSegment.checkLabel',
+            '{{value0}} chats to check',
+            { value0: count }
+          ),
+    ariaLabel:
+      count === 1
+        ? translate(
+            'auto.components.status.bar.NativeChatResumeStatusSegment.checkAriaOne',
+            '1 chat to check after resuming. Click for details.'
+          )
+        : translate(
+            'auto.components.status.bar.NativeChatResumeStatusSegment.checkAria',
+            '{{value0}} chats to check after resuming. Click for details.',
+            { value0: count }
+          ),
+    tooltip: translate(
+      'auto.components.status.bar.NativeChatResumeStatusSegment.checkTooltip',
+      'Chats Orca couldn’t resume, or couldn’t confirm it resumed, after the restart. Click for details.'
+    )
+  }
+}
+
+export function NativeChatResumeStatusSegment({
+  iconOnly
+}: {
+  iconOnly: boolean
+}): React.JSX.Element | null {
+  const offerEnabled = useNativeChatRestartOfferEnabled()
+  const { candidates, failed } = useNativeChatRestartOffer(offerEnabled)
+  const resumingIds = useNativeChatRestartResuming()
+  if (!offerEnabled) {
+    return null
+  }
+
+  // A chat being resumed is counted once, as in flight, until the host answers for it.
+  const inFlight = new Set(resumingIds)
+  const waiting = failed.filter((failure) => !inFlight.has(failure.sessionId))
+  const resuming = inFlight.size
+  const pending = candidates.filter((candidate) => !inFlight.has(candidate.sessionId)).length
+  const failures = waiting.length
+  // An unconfirmed chat may be working, so "failed" would invite a duplicate "continue".
+  const unconfirmed = waiting.some((failure) => failure.outcome === 'unconfirmed')
+  return (
+    <>
+      {resuming > 0 && (
+        <Segment
+          iconOnly={iconOnly}
+          count={resuming}
+          icon={<Loader2 className="size-3 animate-spin text-muted-foreground" />}
+          {...resumingText(resuming)}
+        />
+      )}
+      {pending > 0 && (
+        <Segment
+          iconOnly={iconOnly}
+          count={pending}
+          icon={<RotateCcw className="size-3 text-muted-foreground" />}
+          label={
+            pending === 1
+              ? translate(
+                  'auto.components.status.bar.NativeChatResumeStatusSegment.labelOne',
+                  '1 chat to resume'
+                )
+              : translate(
+                  'auto.components.status.bar.NativeChatResumeStatusSegment.label',
+                  '{{value0}} chats to resume',
+                  { value0: pending }
+                )
+          }
+          ariaLabel={
+            pending === 1
+              ? translate(
+                  'auto.components.status.bar.NativeChatResumeStatusSegment.ariaLabelOne',
+                  '1 chat available to resume'
+                )
+              : translate(
+                  'auto.components.status.bar.NativeChatResumeStatusSegment.ariaLabel',
+                  '{{value0}} chats available to resume',
+                  { value0: pending }
+                )
+          }
+          tooltip={translate(
+            'auto.components.status.bar.NativeChatResumeStatusSegment.tooltip',
+            'Open interrupted chats available to resume'
+          )}
+        />
+      )}
+      {failures > 0 && (
+        // A different fact from the offer — the outcome of acting on it — so a second entry, not a
+        // merged count. Same yellow the skill-update segment uses for its own failed state.
+        <Segment
+          iconOnly={iconOnly}
+          count={failures}
+          icon={<AlertCircle className="size-3 text-status-warning" />}
+          {...(unconfirmed ? checkText(failures) : failedText(failures))}
+        />
+      )}
+    </>
+  )
+}

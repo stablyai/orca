@@ -58,7 +58,10 @@ describe('guest viewport wheel forwarding', () => {
 
     const zoomPreventDefault = trigger(true, { modifiers: ['ctrl'], deltaY: -120 })
     expect(zoomPreventDefault).toHaveBeenCalledTimes(1)
-    expect(rendererSend).toHaveBeenLastCalledWith('ui:zoomBrowserPage', 'in')
+    expect(rendererSend).toHaveBeenLastCalledWith('ui:zoomBrowserPage', {
+      browserPageId: 'tab-1',
+      direction: 'in'
+    })
   })
 
   it('leaves fitting presets and host-edge wheels to the guest page', () => {

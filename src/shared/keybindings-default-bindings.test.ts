@@ -459,4 +459,33 @@ describe('keybindings', () => {
       })
     ).toBe(true)
   })
+
+  it('binds annotate to Cmd+Shift+C on macOS', () => {
+    expect(getEffectiveKeybindingsForAction('browser.annotateElement', 'darwin')).toEqual([
+      'Mod+Shift+C'
+    ])
+  })
+
+  // Ctrl+Shift+C is terminal copy on Linux and Windows, including web terminals inside a page.
+  it.each(['linux', 'win32'] as const)('leaves Ctrl+Shift+C to terminal copy on %s', (platform) => {
+    const ctrlShiftC = {
+      key: 'C',
+      code: 'KeyC',
+      meta: false,
+      control: true,
+      alt: false,
+      shift: true
+    }
+    const altShiftN = {
+      key: 'N',
+      code: 'KeyN',
+      meta: false,
+      control: false,
+      alt: true,
+      shift: true
+    }
+
+    expect(keybindingMatchesAction('browser.annotateElement', ctrlShiftC, platform)).toBe(false)
+    expect(keybindingMatchesAction('browser.annotateElement', altShiftN, platform)).toBe(true)
+  })
 })

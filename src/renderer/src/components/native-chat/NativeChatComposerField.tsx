@@ -2,36 +2,62 @@ import { NativeChatPromptEditor } from './NativeChatPromptEditor'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
 import type { ClipboardEventHandler, KeyboardEventHandler, RefObject } from 'react'
 import { useLayoutEffect, useRef } from 'react'
-import { ImageOff } from 'lucide-react'
+import { flushSync } from 'react-dom'
 import type { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 import { cn } from '@/lib/utils'
-import { NATIVE_FILE_DROP_TARGET } from '../../../../shared/native-file-drop'
 import type { ComposerAutocomplete, NativeChatPickerItem } from './native-chat-composer-state'
-import { NativeChatMentionHint, NativeChatPickerMenu } from './NativeChatAutocompleteMenus'
+import { NativeChatMentionMenu, NativeChatPickerMenu } from './NativeChatAutocompleteMenus'
+import type { NativeChatMentionFiles } from './use-native-chat-mention-files'
 import { NativeChatComposerActions } from './NativeChatComposerActions'
-import { nativeChatComposerPlaceholder } from './native-chat-composer-target'
+import { NativeChatComposerNotices } from './NativeChatComposerNotices'
+import type { NativeChatComposerNotice } from './native-chat-composer-notice'
+import type { NativeChatContextUsageSummary } from './native-chat-context-usage-summary'
+import {
+  nativeChatComposerPlaceholder,
+  type NativeChatAfterStopSend
+} from './native-chat-composer-target'
 import type {
   SessionOptionDescriptor,
   SessionOptionsSurface
 } from '../../../../shared/native-chat-session-options'
 import type { NativeChatOptionPickerRequest } from './native-chat-composer-types'
+import {
+  nativeChatComposerPrimaryButton,
+  type NativeChatQueueResume
+} from './native-chat-composer-primary-action'
 import { NativeChatImageAttachmentPreview } from './NativeChatImageAttachmentPreview'
+import { NativeChatQueueSendConfirmDialog } from './NativeChatQueueSendConfirmDialog'
+import type { NativeChatQueueSendConfirm } from './use-native-chat-held-queue-composer-send'
+import type { NativeChatComposerGoalMode } from './use-native-chat-composer-submit'
+import { translate } from '@/i18n/i18n'
+import { useNativeChatComposerDraftUnsaved } from './use-native-chat-draft-unsaved'
 
 export type NativeChatComposerFieldProps = {
   /** Pane identity published to the drop pipeline so a native file drop lands
    *  only in the composer it was dropped on. */
-  composerScopeKey: string
+  /** Owner of the draft the editor's document is saved with. */
+  draftScopeKey: string
   textareaRef: RefObject<NativeChatComposerInput | null>
   draft: string
   disabled: boolean
   hasPty: boolean
   canSend: boolean
   autocomplete: ComposerAutocomplete
+  mentionFiles: NativeChatMentionFiles
   activeSuggestion: number
-  notice: string | null
+  notices: readonly NativeChatComposerNotice[]
   imageAttachments: readonly NativeChatComposerImageAttachment[]
+  /** The paired server a structured chat runs on, which reads back files stored there. */
+  attachmentEnvironmentId?: string
   sendButtonDisabled: boolean
+  /** Why the send button is disabled, when the user can do something about it. */
+  sendBlockedReason?: string | null
   isWorking: boolean
+  /** This client's Stop request is in flight: the Stop control is disabled and says so. */
+  isStopping?: boolean
+  /** The chat reads Stopping: the placeholder says a message runs after the stop, queued as a
+   *  card where the host holds sends as cards (`queue`), else sent and held by the host (`send`). */
+  afterStop?: NativeChatAfterStopSend
   attachDisabled: boolean
   dictationDisabled: boolean
   isDictating: boolean
@@ -45,7 +71,7 @@ export type NativeChatComposerFieldProps = {
   pickerListboxId: string
   onChoosePickerItem: (item: NativeChatPickerItem) => void
   onRetrySkills: () => void
-  onAcceptMention: () => void
+  onChooseMentionFile: (path: string) => void
   onRemoveImageAttachment: (id: string) => void
   onAttach: () => void
   onDictationToggle: () => void
@@ -53,9 +79,13 @@ export type NativeChatComposerFieldProps = {
   onDictationHoldEnd: () => void
   onSend: () => void
   onStop?: () => void
+  queueResume?: NativeChatQueueResume | undefined
+  queueSendConfirm?: NativeChatQueueSendConfirm | null
   sessionOptionsSurface: SessionOptionsSurface | null
   sessionOptionsSnapshot: SessionOptionDescriptor[]
+  contextUsage?: NativeChatContextUsageSummary | null
   sessionOptionsPickerRequest?: NativeChatOptionPickerRequest | null
+  goalMode?: NativeChatComposerGoalMode
 }
 
 export type NativeChatComposerImageAttachment = {
@@ -68,6 +98,12 @@ export type NativeChatComposerImageAttachment = {
   previewUrl?: string
   /** True while the pasted image is still being written to disk or uploaded. */
   pending?: boolean
+  /** The file's name while it uploads: a dropped or picked file, not a pasted image. */
+  pendingName?: string
+  /** Owed to the message but not shown yet: a rich-text paste's image while its server is asked. */
+  hidden?: true
+  /** Set on an image the draft names but can't send: the file to attach again. */
+  unavailableName?: string
 }
 
 /**
@@ -92,18 +128,23 @@ function imeComposedSegment(base: string, settled: string): string {
 }
 
 export function NativeChatComposerField({
-  composerScopeKey,
+  draftScopeKey,
   textareaRef,
   draft,
   disabled,
   hasPty,
   canSend,
   autocomplete,
+  mentionFiles,
   activeSuggestion,
-  notice,
+  notices,
   imageAttachments,
+  attachmentEnvironmentId,
   sendButtonDisabled,
+  sendBlockedReason,
   isWorking,
+  isStopping = false,
+  afterStop,
   attachDisabled,
   dictationDisabled,
   isDictating,
@@ -117,7 +158,7 @@ export function NativeChatComposerField({
   pickerListboxId,
   onChoosePickerItem,
   onRetrySkills,
-  onAcceptMention,
+  onChooseMentionFile,
   onRemoveImageAttachment,
   onAttach,
   onDictationToggle,
@@ -125,10 +166,22 @@ export function NativeChatComposerField({
   onDictationHoldEnd,
   onSend,
   onStop,
+  queueResume,
+  queueSendConfirm = null,
   sessionOptionsSurface,
   sessionOptionsSnapshot,
-  sessionOptionsPickerRequest
+  contextUsage,
+  sessionOptionsPickerRequest,
+  goalMode
 }: NativeChatComposerFieldProps): React.JSX.Element {
+  const shownAttachments = imageAttachments.filter((attachment) => !attachment.hidden)
+  const draftNotSaved = useNativeChatComposerDraftUnsaved(draftScopeKey)
+  const optionCount =
+    autocomplete.mode === 'slash'
+      ? autocomplete.items.length
+      : autocomplete.mode === 'mention'
+        ? mentionFiles.files.length
+        : 0
   // Value the IME started from, and whether a programmatic clear was dropped on top of it.
   const compositionBaseRef = useRef('')
   const droppedDraftClearRef = useRef(false)
@@ -161,11 +214,25 @@ export function NativeChatComposerField({
     onImeSettled(element)
   }
 
+  const primary = nativeChatComposerPrimaryButton({
+    isWorking,
+    composerEmpty: draft.trim() === '' && imageAttachments.length === 0,
+    queueResume,
+    composerDisabled: disabled,
+    sendDisabled: sendButtonDisabled
+  })
+  const { resume } = primary
+  // The button disables while resuming, which drops its focus; typing is what comes next.
+  const resumeQueue = (): void => {
+    resume?.()
+    textareaRef.current?.focus()
+  }
+
   return (
-    <div className="shrink-0 bg-background">
+    <div className="shrink-0 bg-chat-canvas">
       {/* Extra bottom padding keeps the input box off the window rim. */}
       <div className="px-3 pt-2 pb-4 sm:px-4">
-        <div className="relative mx-auto w-full max-w-4xl">
+        <div className="relative mx-auto w-full max-w-(--chat-content-max-width)">
           {autocomplete.mode === 'slash' ? (
             <NativeChatPickerMenu
               autocomplete={autocomplete}
@@ -176,23 +243,35 @@ export function NativeChatComposerField({
             />
           ) : null}
           {autocomplete.mode === 'mention' ? (
-            <NativeChatMentionHint query={autocomplete.query} onAccept={onAcceptMention} />
+            <NativeChatMentionMenu
+              mention={mentionFiles}
+              activeIndex={activeSuggestion}
+              listboxId={pickerListboxId}
+              onChoose={onChooseMentionFile}
+            />
           ) : null}
-          {notice ? (
-            <div className="mb-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-              <ImageOff className="size-3.5 shrink-0" />
-              <span>{notice}</span>
-            </div>
-          ) : null}
+          <NativeChatComposerNotices
+            notices={notices.map((notice) =>
+              // A dismissed row takes its focused × with it; the message box gets focus back.
+              notice.onDismiss
+                ? {
+                    ...notice,
+                    onDismiss: () => {
+                      notice.onDismiss?.()
+                      textareaRef.current?.focus()
+                    }
+                  }
+                : notice
+            )}
+            className="mb-1.5"
+          />
           <div
-            data-native-file-drop-target={NATIVE_FILE_DROP_TARGET.composer}
-            data-composer-scope-key={composerScopeKey}
             className={cn(
               // Why: always-on hairline (token-level border, not focus ring) —
               // no focus/click border flash. The box is a container, not a
               // focus target.
-              'rounded-lg border border-border p-1.5 shadow-xs',
-              'bg-muted/50 dark:bg-input/40',
+              'rounded-xl border border-chat-composer-border p-1.5 shadow-xs',
+              'bg-chat-composer-surface',
               // Why (#10481): the native caret blink invalidates paint up to the
               // nearest containment boundary; without this the whole transcript
               // re-rasterizes twice a second. Pickers are siblings and every menu
@@ -203,20 +282,21 @@ export function NativeChatComposerField({
               '[contain:paint]'
             )}
           >
-            {imageAttachments.length > 0 ? (
+            {shownAttachments.length > 0 ? (
               <div className="mb-2 flex flex-wrap gap-2 px-1 pt-1.5">
-                {imageAttachments.map((attachment) => (
+                {shownAttachments.map((attachment) => (
                   <NativeChatImageAttachmentPreview
                     key={attachment.id}
                     attachment={attachment}
+                    hostEnvironmentId={attachmentEnvironmentId}
                     onRemove={onRemoveImageAttachment}
                   />
                 ))}
               </div>
             ) : null}
             <NativeChatPromptEditor
-              key={composerScopeKey}
-              scopeKey={composerScopeKey}
+              key={draftScopeKey}
+              scopeKey={draftScopeKey}
               inputRef={textareaRef}
               initialValue={draft}
               disabled={disabled}
@@ -235,6 +315,11 @@ export function NativeChatComposerField({
                 }
               }}
               onCompositionStart={() => {
+                if (imeEnterGesture.isComposing()) {
+                  imeEnterGesture.setComposing(false)
+                  // Settle the interrupted composition before the new one takes browser ownership.
+                  flushSync(() => settleImeValue(textareaRef.current!))
+                }
                 compositionBaseRef.current = textareaRef.current!.value
                 imeEnterGesture.setComposing(true)
               }}
@@ -247,31 +332,42 @@ export function NativeChatComposerField({
               }}
               onPasteCapture={onPaste}
               onSelect={onTextareaSelect}
-              aria-expanded={autocomplete.mode === 'slash'}
-              aria-controls={autocomplete.mode === 'slash' ? pickerListboxId : undefined}
+              aria-expanded={autocomplete.mode !== 'none'}
+              aria-controls={autocomplete.mode !== 'none' ? pickerListboxId : undefined}
               aria-activedescendant={
-                autocomplete.mode === 'slash' && autocomplete.items.length > 0
-                  ? `${pickerListboxId}-option-${Math.min(activeSuggestion, autocomplete.items.length - 1)}`
+                optionCount > 0
+                  ? `${pickerListboxId}-option-${Math.min(activeSuggestion, optionCount - 1)}`
                   : undefined
               }
-              placeholder={nativeChatComposerPlaceholder(hasPty, canSend)}
+              placeholder={
+                goalMode?.active
+                  ? translate(
+                      'components.native-chat.goal.placeholder',
+                      'Describe your goal, define measurable outcomes for best results'
+                    )
+                  : nativeChatComposerPlaceholder(hasPty, canSend, afterStop)
+              }
               // Why: coarse-pointer min-height follows the app's touch target convention.
               // Editable content grows naturally; the 8lh cap (plus
               // py-1) turns further growth into internal scrolling, and scrollbar-sleek
               // keeps that gutter off the heavy native scrollbar. Both are layout-driven,
               // so re-wrap on window/pane resize is handled without a measure pass.
               className={cn(
-                'min-h-12 w-full bg-transparent px-2 py-1 text-sm outline-none pointer-coarse:min-h-14',
+                'min-h-12 w-full bg-transparent px-2 py-1 text-sm native-chat-message-text text-chat-foreground-strong outline-none pointer-coarse:min-h-14',
                 'max-h-[calc(8lh+0.5rem)] overflow-y-auto scrollbar-sleek',
-                'placeholder:text-muted-foreground/60 disabled:cursor-not-allowed disabled:opacity-50'
+                'placeholder:text-chat-foreground-faint disabled:cursor-not-allowed disabled:opacity-50'
               )}
             />
             <div className="flex flex-wrap items-center gap-2 pt-0.5">
               <NativeChatComposerActions
                 attachDisabled={attachDisabled}
                 dictationDisabled={dictationDisabled}
-                sendDisabled={sendButtonDisabled}
+                sendDisabled={primary.disabled}
+                primaryAction={primary.action}
+                sendBlockedReason={sendBlockedReason}
+                draftNotSaved={draftNotSaved}
                 isWorking={isWorking}
+                isStopping={isStopping}
                 isDictating={isDictating}
                 isDictationHoldMode={isDictationHoldMode}
                 onAttach={onAttach}
@@ -280,14 +376,21 @@ export function NativeChatComposerField({
                 onDictationHoldEnd={onDictationHoldEnd}
                 onSend={onSend}
                 onStop={onStop}
+                {...(resume ? { onResume: resumeQueue } : {})}
                 sessionOptionsSurface={sessionOptionsSurface}
                 sessionOptionsSnapshot={sessionOptionsSnapshot}
+                contextUsage={contextUsage}
                 sessionOptionsPickerRequest={sessionOptionsPickerRequest}
+                onExitGoalMode={goalMode?.active ? goalMode.exit : undefined}
               />
             </div>
           </div>
         </div>
       </div>
+      <NativeChatQueueSendConfirmDialog
+        confirm={queueSendConfirm}
+        focusComposer={() => textareaRef.current?.focus()}
+      />
     </div>
   )
 }

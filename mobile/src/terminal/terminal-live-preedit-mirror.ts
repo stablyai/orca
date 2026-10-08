@@ -21,9 +21,10 @@ export type TerminalLiveMirrorStep = {
  * ever classified. That is what makes this hold for input methods nobody tested.
  *
  * `composing` is undefined only where the platform reports no range at all —
- * today React Native Android. The fallback holds the trailing non-ASCII run: a
- * conversion IME always leaves one and ASCII keeps its zero-latency echo. It
- * enumerates nothing, and it cannot see an ASCII preedit — only a report can.
+ * today React Native Android and the page on Android. The fallback holds the
+ * trailing non-ASCII run: a conversion IME always leaves one and ASCII keeps its
+ * zero-latency echo. It enumerates nothing, and it cannot see an ASCII preedit —
+ * only a report can.
  */
 function heldPreeditLength(
   fieldCodePoints: readonly string[],

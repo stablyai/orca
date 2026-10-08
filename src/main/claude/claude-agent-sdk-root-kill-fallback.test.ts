@@ -3,9 +3,7 @@ import { PassThrough } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
 import type { SpawnedProcess } from '../../shared/child-process/run-process'
 import type { DescendantSnapshot } from '../pty-descendant-termination'
-import type { WindowsDescendantSnapshot } from '../windows-descendant-exit-verification'
 import { createClaudeChildTreeReaper } from './claude-agent-sdk-exit-proof'
-import { mergeClaudeCapturedTrees } from './claude-child-tree-snapshot'
 
 const ROOT_PID = 424242
 const ROOT_STARTED_AT = 'Mon Jan 1 00:00:00 2026'
@@ -29,15 +27,6 @@ function posixSnapshot(input: {
     rootPgid: ROOT_PID,
     descendants: input.descendants ?? [],
     capturedAtMs: input.capturedAtMs
-  }
-}
-
-function windowsSnapshot(capturedAtMs = 1): WindowsDescendantSnapshot {
-  return {
-    root: { pid: ROOT_PID, creationTimeMs: 1_700_000_000_001 },
-    descendants: [{ pid: 4243, creationTimeMs: 1_700_000_000_000 }],
-    unidentifiedCount: 0,
-    capturedAtMs
   }
 }
 
@@ -78,8 +67,7 @@ describe('Claude root kill fallback', () => {
       platform: 'linux',
       exited: () => false,
       captureDescendants,
-      terminateDescendants: vi.fn(async () => 'exited' as const),
-      verifyRootIdentity: vi.fn(async () => true)
+      terminateDescendants: vi.fn(async () => 'exited' as const)
     })
 
     await tree.capture()
@@ -89,7 +77,7 @@ describe('Claude root kill fallback', () => {
     expect(child.kill).toHaveBeenCalledWith('SIGKILL')
   })
 
-  it('keeps an observed live descendant when the root identity probe declined', async () => {
+  it('keeps an observed live descendant through the root kill', async () => {
     const child = mockChild()
     const tree = createClaudeChildTreeReaper(child, {
       platform: 'linux',
@@ -100,29 +88,12 @@ describe('Claude root kill fallback', () => {
           descendants: [{ pid: 100, ppid: ROOT_PID, pgid: ROOT_PID, startedAt: ROOT_STARTED_AT }]
         })
       ),
-      terminateDescendants: vi.fn(async () => 'live' as const),
-      verifyRootIdentity: vi.fn(async () => false)
+      terminateDescendants: vi.fn(async () => 'live' as const)
     })
 
     await expect(tree.reap()).resolves.toBe('live')
     expect(tree.treeVerdict).toBe('live')
     expect(child.kill).toHaveBeenCalledWith('SIGKILL')
-  })
-
-  it('reports a Windows taskkill that worked as exited, not unverifiable', async () => {
-    const child = mockChild()
-    // Probe 1 gates taskkill; a later probe correctly finds the root already dead.
-    const verifyRootIdentity = vi.fn().mockResolvedValueOnce(true).mockResolvedValue(false)
-    const tree = createClaudeChildTreeReaper(child, {
-      platform: 'win32',
-      exited: () => false,
-      captureWindowsDescendants: vi.fn(async () => windowsSnapshot()),
-      terminateWindowsTree: vi.fn(async () => {}),
-      terminateWindowsDescendants: vi.fn(async () => 'exited' as const),
-      verifyRootIdentity
-    })
-
-    await expect(tree.reap()).resolves.toBe('exited')
   })
 
   it('kills the root when no POSIX snapshot could be read', async () => {
@@ -138,23 +109,6 @@ describe('Claude root kill fallback', () => {
     expect(child.kill).toHaveBeenCalledWith('SIGKILL')
   })
 
-  it('kills the root when the Windows process table is unreadable', async () => {
-    const child = mockChild()
-    const terminateWindowsTree = vi.fn(async () => {})
-    const tree = createClaudeChildTreeReaper(child, {
-      platform: 'win32',
-      exited: () => false,
-      captureWindowsDescendants: vi.fn(async () => null),
-      terminateWindowsTree,
-      terminateWindowsDescendants: vi.fn()
-    })
-
-    await expect(tree.reap()).resolves.toBe('unverifiable')
-    // No identity means no bare-pid tree kill, but the owned handle is still ours.
-    expect(terminateWindowsTree).not.toHaveBeenCalled()
-    expect(child.kill).toHaveBeenCalledWith('SIGKILL')
-  })
-
   it('never signals a root the reaper already saw exit', async () => {
     const child = mockChild()
     const tree = createClaudeChildTreeReaper(child, {
@@ -165,26 +119,5 @@ describe('Claude root kill fallback', () => {
 
     await expect(tree.reap()).resolves.toBe('unverifiable')
     expect(child.kill).not.toHaveBeenCalled()
-  })
-
-  it('chains per-pid Windows boundaries across a second merge', async () => {
-    const first = windowsSnapshot(1_000)
-    const second: WindowsDescendantSnapshot = {
-      ...windowsSnapshot(2_000),
-      descendants: [
-        { pid: 4243, creationTimeMs: 1_700_000_000_000 },
-        { pid: 4244, creationTimeMs: 1_700_000_000_002 }
-      ]
-    }
-    const third: WindowsDescendantSnapshot = { ...second, capturedAtMs: 3_000 }
-
-    const merged = mergeClaudeCapturedTrees(
-      { platform: 'win32', tree: first },
-      { platform: 'win32', tree: second }
-    )
-    expect(merged?.tree.capturedAtMsByPid).toEqual({ '4243': 1_000, '4244': 2_000 })
-    const rechained = mergeClaudeCapturedTrees(merged!, { platform: 'win32', tree: third })
-
-    expect(rechained?.tree.capturedAtMsByPid).toEqual({ '4243': 1_000, '4244': 2_000 })
   })
 })

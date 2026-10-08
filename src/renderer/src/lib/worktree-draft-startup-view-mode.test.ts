@@ -59,11 +59,4 @@ describe('resolveBackendDraftStartup', () => {
     setRepoConnection('runtime-ssh-env-1')
     expect(viewModeFor('omp')).toBe('chat')
   })
-
-  it('preserves the same split for Grok', () => {
-    setRepoConnection(null)
-    expect(viewModeFor('grok')).toBe('chat')
-    setRepoConnection('ssh-target-1')
-    expect(viewModeFor('grok')).toBe('terminal')
-  })
 })

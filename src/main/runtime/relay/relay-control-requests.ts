@@ -18,6 +18,20 @@ type PendingRequest = {
   timer: ReturnType<typeof setTimeout>
 }
 
+export type RelayControlRequestTimeout = {
+  kind: PendingRequest['kind']
+  sentAt: number
+}
+
+/** Notified when a request hits its deadline, so liveness can probe the socket. */
+export type OnRelayControlRequestTimeout = (timeout: RelayControlRequestTimeout) => void
+
+// A classification key, not prose: consumers exact-match this against
+// /^relay_[a-z0-9_]{1,74}$/ (src/shared/mobile-relay-mint-failure.ts), so any
+// appended diagnostic downgrades a precise code to the generic fallback.
+// Diagnostics belong in the log — see RelayControlLiveness.noteRequestTimeout.
+const REQUEST_TIMEOUT_CODE = 'relay_control_request_timeout'
+
 export type DeviceCredentialInstallAuthorization =
   | { mode: 'relay-basis'; basisConnId: string }
   | { mode: 'authenticated-direct'; directAuthId: string }
@@ -42,7 +56,10 @@ type SendRelayControlRequest = (payload: RelayControlRequestPayload) => void
 export class RelayControlRequests {
   private readonly pending = new Map<string, PendingRequest>()
 
-  constructor(private readonly onPendingChanged?: () => void) {}
+  constructor(
+    private readonly onPendingChanged?: () => void,
+    private readonly onTimeout?: OnRelayControlRequestTimeout
+  ) {}
 
   get size(): number {
     return this.pending.size
@@ -170,10 +187,13 @@ export class RelayControlRequests {
     if (this.pending.has(reqId)) {
       return Promise.reject(new Error('duplicate_relay_request_id'))
     }
+    const sentAt = Date.now()
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.finish(reqId)
-        reject(new Error('relay_control_request_timeout'))
+        // Runs before the reject so the probe observes the socket as the deadline found it.
+        this.onTimeout?.({ kind, sentAt })
+        reject(new Error(REQUEST_TIMEOUT_CODE))
       }, 10_000)
       this.pending.set(reqId, { kind, resolve, reject, timer })
       try {

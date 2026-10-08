@@ -1,9 +1,16 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import { rpcUncheckedPayloadReader } from '../transport/rpc-reader-payload'
+import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+import { dictationSetupSchema, dictationUnreadReplySchema } from './dictation-reply-schema'
 
 // The dictation setup sheet's reads and writes, and the three sends one dictation session makes.
 // Every refusing site here surfaces the host's own message with a screen fallback, so they share
 // one policy and differ only in the copy they fall back to, which stays at the call site.
+//
+// Three of the eight read a setup the sheet renders, and those are checked. The other five read no
+// reply body at all, or read it past a guard whose order is load-bearing; dictation-reply-schema.ts
+// says which and why. An unreadable setup now reaches the sheet's own catch through
+// `interpretOrThrowRefusalMessage`, which shows the host-reply message where main showed
+// `undefined` models and then crashed the refresh on `.some`.
 
 export const dictationSetupRead = bindDeferredRpcOperation(
   defineRpcOperation({
@@ -11,7 +18,7 @@ export const dictationSetupRead = bindDeferredRpcOperation(
     method: 'speech.models.list',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('dictation-setup')
+    read: rpcResultVariant('dictation-setup', dictationSetupSchema)
   })
 )
 
@@ -22,7 +29,7 @@ export const dictationModelDownload = bindDeferredRpcOperation(
     method: 'speech.models.download',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('dictation-download-started')
+    read: rpcResultVariant('dictation-download-started', dictationUnreadReplySchema)
   })
 )
 
@@ -33,7 +40,7 @@ export const dictationModelDelete = bindDeferredRpcOperation(
     method: 'speech.models.delete',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('dictation-setup')
+    read: rpcResultVariant('dictation-setup', dictationSetupSchema)
   })
 )
 
@@ -43,7 +50,7 @@ export const dictationConfigWrite = bindDeferredRpcOperation(
     method: 'speech.dictation.setup',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('dictation-setup')
+    read: rpcResultVariant('dictation-setup', dictationSetupSchema)
   })
 )
 
@@ -53,7 +60,7 @@ export const dictationSessionStart = bindDeferredRpcOperation(
     method: 'speech.dictation.start',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('dictation-started')
+    read: rpcResultVariant('dictation-started', dictationUnreadReplySchema)
   })
 )
 
@@ -63,7 +70,7 @@ export const dictationAudioChunkSend = bindDeferredRpcOperation(
     method: 'speech.dictation.chunk',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('dictation-chunk-received')
+    read: rpcResultVariant('dictation-chunk-received', dictationUnreadReplySchema)
   })
 )
 
@@ -78,7 +85,7 @@ export const dictationSessionFinish = bindDeferredRpcOperation(
     method: 'speech.dictation.finish',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('dictation-finished')
+    read: rpcResultVariant('dictation-finished', dictationUnreadReplySchema)
   })
 )
 
@@ -94,6 +101,6 @@ export const dictationSessionCancel = bindDeferredRpcOperation(
     method: 'speech.dictation.cancel',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('dictation-cancelled')
+    read: rpcResultVariant('dictation-cancelled', dictationUnreadReplySchema)
   })
 )
