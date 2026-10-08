@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { resolveArchiveHookCommandPaths } from './archive-hook-command-paths'
+import {
+  archiveHookShellPathOnHost,
+  resolveArchiveHookCommandPaths
+} from './archive-hook-command-paths'
 
 const POSIX = {
   yamlRoot: '/repo/main',
@@ -66,6 +69,22 @@ describe('resolveArchiveHookCommandPaths', () => {
     expect(command).toBe("bash '/repo/main/scripts/a.sh' <<EOF\nscripts/a.sh\nEOF\n")
   })
 
+  it('ends a tab-stripped heredoc and rewrites the command after it', () => {
+    const script = 'cat <<-EOF\n\tscripts/a.sh\n\tEOF\nbash scripts/a.sh\n'
+    const command = resolveArchiveHookCommandPaths(script, {
+      ...POSIX,
+      isFile: files(['/repo/main/scripts/a.sh'])
+    })
+    expect(command).toBe("cat <<-EOF\n\tscripts/a.sh\n\tEOF\nbash '/repo/main/scripts/a.sh'\n")
+    const literal = 'cat <<EOF\n\tEOF\nscripts/a.sh\nEOF\nbash scripts/a.sh\n'
+    expect(
+      resolveArchiveHookCommandPaths(literal, {
+        ...POSIX,
+        isFile: files(['/repo/main/scripts/a.sh'])
+      })
+    ).toBe("cat <<EOF\n\tEOF\nscripts/a.sh\nEOF\nbash '/repo/main/scripts/a.sh'\n")
+  })
+
   it('does not rewrite a comment or an expansion', () => {
     const isFile = files(['/repo/main/scripts/a.sh'])
     expect(
@@ -76,14 +95,38 @@ describe('resolveArchiveHookCommandPaths', () => {
     )
   })
 
-  it('quotes a Windows path for cmd.exe', () => {
-    const command = resolveArchiveHookCommandPaths('bash scripts/a.sh', {
-      yamlRoot: 'C:\\repo',
-      cwd: 'C:\\wt',
-      shell: 'cmd',
-      isFile: files(['C:\\repo\\scripts\\a.sh'])
-    })
-    expect(command).toBe('bash "C:\\repo\\scripts\\a.sh"')
+  it('escapes a Windows path for cmd.exe without wrapping quotes', () => {
+    const escape = (yamlRoot: string) =>
+      resolveArchiveHookCommandPaths('bash scripts/a.sh', {
+        yamlRoot,
+        cwd: 'C:\\wt',
+        shell: 'cmd',
+        isFile: files([`${yamlRoot}\\scripts\\a.sh`])
+      })
+    expect(escape('C:\\repo')).toBe('bash C:\\repo\\scripts\\a.sh')
+    expect(escape('C:\\repo dir')).toBe('bash C:\\repo^ dir\\scripts\\a.sh')
+    expect(escape('C:\\repo\\a&b')).toBe('bash C:\\repo\\a^&b\\scripts\\a.sh')
+    expect(escape('C:\\repo\\a^b')).toBe('bash C:\\repo\\a^^b\\scripts\\a.sh')
+  })
+
+  it('maps a WSL worktree beside the checkout back to a path Windows can stat', () => {
+    expect(
+      archiveHookShellPathOnHost(
+        '/home/me/proj-wt/scripts/a.sh',
+        '\\\\wsl.localhost\\Ubuntu\\home\\me\\proj',
+        '/home/me/proj'
+      )
+    ).toBe('\\\\wsl.localhost\\Ubuntu\\home\\me\\proj-wt\\scripts\\a.sh')
+    expect(archiveHookShellPathOnHost('/mnt/c/wt/scripts/a.sh', 'C:\\repo', '/mnt/c/repo')).toBe(
+      'C:\\wt\\scripts\\a.sh'
+    )
+    expect(
+      archiveHookShellPathOnHost(
+        '/home/me/orca/workspaces/old/scripts/a.sh',
+        '\\\\wsl.localhost\\Ubuntu\\home\\me\\proj',
+        '/home/me/proj'
+      )
+    ).toBe('\\\\wsl.localhost\\Ubuntu\\home\\me\\orca\\workspaces\\old\\scripts\\a.sh')
   })
 
   it('returns the command unchanged when yaml and cwd are the same directory', () => {

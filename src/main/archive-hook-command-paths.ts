@@ -1,6 +1,7 @@
 import { statSync } from 'node:fs'
 import path from 'node:path'
 import { isWindowsAbsolutePathLike } from '../shared/cross-platform-path'
+import { parseWslUncPath, toWindowsWslDrivePath, toWindowsWslUncPath } from '../shared/wsl-paths'
 import { quotePosixShell } from '../shared/wsl-login-shell-command'
 
 export type ArchiveHookShell = 'posix' | 'cmd'
@@ -22,9 +23,17 @@ function pathApi(root: string): path.PlatformPath {
   return isWindowsAbsolutePathLike(root) ? path.win32 : path.posix
 }
 
+/**
+ * cmd sees this unquoted. Node's local shell wrap and the relay's argv quoting each add one
+ * pair that `/s` strips, and an inner quote is turned into a backslash on that relay hop.
+ */
+function quoteForCmd(value: string): string {
+  return value.replace(/[ \t&|()<>^]/g, (char) => `^${char}`)
+}
+
 function quoteForShell(value: string, shell: ArchiveHookShell): string {
   if (shell === 'cmd') {
-    return `"${value.replace(/"/g, '""')}"`
+    return quoteForCmd(value)
   }
   return quotePosixShell(value)
 }
@@ -47,10 +56,24 @@ function staysInside(root: string, absolute: string, api: path.PlatformPath): bo
   return relative !== '' && !relative.startsWith('..') && !api.isAbsolute(relative)
 }
 
+type Heredoc = { delimiter: string; stripTabs: boolean }
+
 /** POSIX heredoc opener. The body is the worktree's data, not a path to retarget. */
-function heredocDelimiter(line: string): string | null {
-  const match = line.match(/<<-?\s*(?:'([^']*)'|"([^"]*)"|\\?([A-Za-z0-9_]+))/)
-  return match ? (match[1] ?? match[2] ?? match[3] ?? null) : null
+function heredocDelimiter(line: string): Heredoc | null {
+  const match = line.match(/<<(-)?\s*(?:'([^']*)'|"([^"]*)"|\\?([A-Za-z0-9_]+))/)
+  if (!match) {
+    return null
+  }
+  const delimiter = match[2] ?? match[3] ?? match[4]
+  if (delimiter == null) {
+    return null
+  }
+  return { delimiter, stripTabs: match[1] === '-' }
+}
+
+function heredocClosed(line: string, heredoc: Heredoc): boolean {
+  const closer = heredoc.stripTabs ? line.replace(/^\t+/, '') : line
+  return closer === heredoc.delimiter
 }
 
 function scanWords(line: string, shell: ArchiveHookShell): Word[] {
@@ -188,14 +211,14 @@ function walkLines(
   if (samePlace(lookup.yamlRoot, lookup.cwd, api)) {
     return script
   }
-  let heredoc: string | null = null
+  let heredoc: Heredoc | null = null
   return script
     .split('\n')
     .map((rawLine) => {
       const cr = rawLine.endsWith('\r')
       const line = cr ? rawLine.slice(0, -1) : rawLine
       if (heredoc) {
-        if (line === heredoc) {
+        if (heredocClosed(line, heredoc)) {
           heredoc = null
         }
         return rawLine
@@ -253,13 +276,26 @@ export async function resolveArchiveHookCommandPathsWhere(
   })
 }
 
-function shellPathOnHost(
+/**
+ * Windows cannot stat the Linux path the hook shell uses. A worktree sits beside the checkout
+ * that supplied orca.yaml, so a relative join from that checkout starts with `..` and used to
+ * leave the Linux path unmapped. Then the worktree's own script looked missing and lost to main.
+ */
+export function archiveHookShellPathOnHost(
   shellAbsolute: string,
   hostYamlRoot: string,
   shellYamlRoot: string
 ): string {
   if (hostYamlRoot === shellYamlRoot) {
     return shellAbsolute
+  }
+  const drivePath = toWindowsWslDrivePath(shellAbsolute)
+  if (drivePath) {
+    return drivePath
+  }
+  const hostWsl = parseWslUncPath(hostYamlRoot)
+  if (hostWsl && shellAbsolute.startsWith('/') && !shellAbsolute.startsWith('//')) {
+    return toWindowsWslUncPath(shellAbsolute, hostWsl.distro)
   }
   const relative = path.posix.relative(shellYamlRoot, shellAbsolute)
   if (!relative || relative.startsWith('..') || path.posix.isAbsolute(relative)) {
@@ -276,7 +312,7 @@ export function archiveHookPathIsFile(
   shellYamlRoot: string
 ): boolean {
   try {
-    return statSync(shellPathOnHost(shellAbsolute, hostYamlRoot, shellYamlRoot)).isFile()
+    return statSync(archiveHookShellPathOnHost(shellAbsolute, hostYamlRoot, shellYamlRoot)).isFile()
   } catch {
     return false
   }
