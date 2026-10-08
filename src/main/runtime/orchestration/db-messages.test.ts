@@ -17,6 +17,34 @@ describe('OrchestrationDb', () => {
   }
 
   describe('messages', () => {
+    it('settles accepted notice members without changing prior timestamps or another mailbox', () => {
+      const d = createDb()
+      const pointed = d.insertMessage({ runId, from: 'a', to: 'b', subject: 'pointed' })
+      const fetched = d.insertMessage({ runId, from: 'a', to: 'b', subject: 'fetched' })
+      const foreign = d.insertMessage({ runId, from: 'a', to: 'c', subject: 'foreign' })
+      const audit = d.insertMessage({
+        runId,
+        from: 'a',
+        to: 'b',
+        subject: 'audit',
+        deliveryContract: 'audit_only'
+      })
+      d.db
+        .prepare('UPDATE messages SET delivered_at = ? WHERE id = ?')
+        .run('2026-01-01 00:00:00', pointed.id)
+      d.markAsRead([fetched.id])
+
+      d.markUnpointedMailboxMessagesAsDelivered('b', [pointed.id, fetched.id, foreign.id, audit.id])
+
+      expect(d.getMessageById(pointed.id)?.delivered_at).toBe('2026-01-01T00:00:00Z')
+      expect(d.getMessageById(fetched.id)).toMatchObject({
+        read: 1,
+        delivered_at: expect.any(String)
+      })
+      expect(d.getMessageById(foreign.id)?.delivered_at).toBeNull()
+      expect(d.getMessageById(audit.id)?.delivered_at).toBeNull()
+    })
+
     it('inserts and retrieves a message', () => {
       const d = createDb()
       const msg = d.insertMessage({
@@ -86,6 +114,36 @@ describe('OrchestrationDb', () => {
       // Explicit `check` still sees both (they are still unread).
       const unread = d.getUnreadMessages('b')
       expect(unread).toHaveLength(2)
+    })
+
+    it('selects independent mail beyond the SQLite parameter limit of owned IDs', () => {
+      const d = createDb()
+      const owned = d.insertMessage({ runId, from: 'a', to: 'b', subject: 'owned' })
+      const fresh = d.insertMessage({ runId, from: 'a', to: 'b', subject: 'fresh' })
+      const excludeMessageIds = Array.from({ length: 250001 }, (_, index) => `owned-${index}`)
+      excludeMessageIds.push(owned.id)
+
+      const selected = d.getUndeliveredUnreadMessages('b', undefined, {
+        excludeMessageIds,
+        limit: 50
+      })
+
+      expect(selected.map((message) => message.id)).toEqual([fresh.id])
+    })
+
+    it('excludes all owned members before applying the notice limit', () => {
+      const d = createDb()
+      const owned = Array.from({ length: 51 }, (_, index) =>
+        d.insertMessage({ runId, from: 'a', to: 'b', subject: `owned-${index}` })
+      )
+      const fresh = d.insertMessage({ runId, from: 'a', to: 'b', subject: 'fresh' })
+
+      const selected = d.getUndeliveredUnreadMessages('b', undefined, {
+        excludeMessageIds: owned.map((message) => message.id),
+        limit: 50
+      })
+
+      expect(selected.map((message) => message.id)).toEqual([fresh.id])
     })
 
     it('creates the undelivered inbox index used by push delivery', () => {

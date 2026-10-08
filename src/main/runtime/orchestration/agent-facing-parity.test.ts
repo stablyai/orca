@@ -130,7 +130,7 @@ async function renderChatPointer(mailbox: string): Promise<string> {
     getCliCommand: localOrchestrationCliCommand,
     senderName: () => null,
     host: {
-      readSessionFacts: async () => ({ submissions: [] }),
+      readSessionFacts: async () => ({ submissions: [], queuedSends: [] }),
       currentFence: () => 1,
       send: async (input) => {
         for (const block of input.body.blocks) {

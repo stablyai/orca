@@ -92,7 +92,7 @@ describe('buildDispatchPreamble', () => {
       .split('\n')
       .filter((line) => line.trimStart().startsWith('orca orchestration'))
 
-    expect(commandLines).toHaveLength(5)
+    expect(commandLines).toHaveLength(6)
     expect(result).not.toContain('\\\n')
     expect(commandLines.filter((line) => line.includes('--type worker_done'))).toHaveLength(1)
     expect(commandLines.filter((line) => line.includes('--type heartbeat'))).toHaveLength(1)
@@ -185,6 +185,19 @@ describe('buildDispatchPreamble', () => {
     expect(cadence).toContain('before you\n  # start a new file and after a test run')
     expect(cadence).toContain('immediately before\n  # you send worker_done')
   })
+
+  it.each(['orca', 'orca-ide', 'orca-dev'] as const)(
+    'teaches one whole-batch ack with %s',
+    (cliCommand) => {
+      const commands = cliFence(buildDispatchPreamble(baseParams({ cliCommand })))
+      expect(commands).toContain('Process every message in the returned batch before acknowledging')
+      expect(commands).toContain('then process the next batch returned')
+      expect(commands.split('--ack')).toHaveLength(2)
+      expect(commands).toContain(
+        `${cliCommand} orchestration check --terminal term_worker --ack "<delivery_id>" --json`
+      )
+    }
+  )
 
   it('renders worker_done and heartbeat recipes bound to the exact Dispatch', () => {
     const result = buildDispatchPreamble(baseParams())

@@ -9,6 +9,8 @@ import { interruptedAcknowledgedCheck } from '../routing'
 import { currentDispatchAssigneeRun } from './recipient-routing'
 import type { CheckParams } from '../schemas'
 import type { z } from 'zod'
+import type { ReplayRecoveryMailbox } from './check-replay-recovery'
+import { checkDeliveryResult } from './check-delivery-result'
 
 type CheckParamsInput = z.infer<typeof CheckParams>
 type ActiveDispatch = NonNullable<ReturnType<OrchestrationDb['getActiveDispatchForIdentity']>>
@@ -29,6 +31,7 @@ export async function checkWorkerMailbox(args: {
   wakeTypes?: MessageType[]
   revalidateConsumer?: () => void
   deferDelivery?: () => boolean
+  recoveryMailboxes?: ReplayRecoveryMailbox[]
   recordMutationReceipt?: (receipt: unknown) => void
 }) {
   const {
@@ -240,10 +243,7 @@ export async function checkWorkerMailbox(args: {
     if (current || !params.wait) {
       return {
         ...mailboxIdentity,
-        deliveryId: current?.delivery.id ?? null,
-        messages: exposeMessages(current?.messages ?? []),
-        count: current?.messages.length ?? 0,
-        replayed: current?.replayed ?? false,
+        ...checkDeliveryResult(db, params, current, args.recoveryMailboxes),
         acknowledged: acknowledged?.delivery.id ?? null,
         timedOut: false,
         cancelled: false,
@@ -293,10 +293,7 @@ export async function checkWorkerMailbox(args: {
   const arrived = readDelivery(typeFilter)
   return {
     ...mailboxIdentity,
-    deliveryId: arrived?.delivery.id ?? null,
-    messages: exposeMessages(arrived?.messages ?? []),
-    count: arrived?.messages.length ?? 0,
-    replayed: arrived?.replayed ?? false,
+    ...checkDeliveryResult(db, params, arrived, args.recoveryMailboxes),
     acknowledged: acknowledged?.delivery.id ?? null,
     ...(params.format || params.inject
       ? { formatted: arrived?.messages.map(formatMessageBanner).join('\n\n') ?? '' }

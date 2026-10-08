@@ -724,7 +724,7 @@ describe('orchestration notification mailbox consistency', () => {
       })
     )
     const notificationQuery = vi.spyOn(db, 'getUndeliveredUnreadMessages')
-    const submitRevalidation = vi.spyOn(db, 'areUnreadMessages')
+    const submitRevalidation = vi.spyOn(db, 'getMailboxPointerAttentionIds')
     const prepare = vi.spyOn(sqliteFor(db), 'prepare')
 
     await driveToLiveIdle(harness.runtime)
@@ -743,7 +743,7 @@ describe('orchestration notification mailbox consistency', () => {
     )
     const revalidationSql = prepare.mock.calls
       .map(([sql]) => sql)
-      .find((sql) => sql.includes('SELECT COUNT(*)') && sql.includes('id IN'))
+      .find((sql) => sql.includes('SELECT id FROM messages') && sql.includes('id IN'))
     expect(revalidationSql).toContain('INDEXED BY idx_messages_id')
     const revalidationPlan = sqliteFor(db)
       .prepare(`EXPLAIN QUERY PLAN ${revalidationSql}`)
@@ -833,7 +833,7 @@ describe('orchestration notification mailbox consistency', () => {
     db.close()
   })
 
-  it('does not point newer Run mail behind an outstanding Delivery', async () => {
+  it('points newer Run mail while preserving an outstanding Delivery replay', async () => {
     vi.useFakeTimers()
     const db = createDatabase('orca-mailbox-outstanding-')
     const harness = createRuntime(db)
@@ -855,7 +855,7 @@ describe('orchestration notification mailbox consistency', () => {
     await driveToLiveIdle(harness.runtime)
     const replayed = await checkBoundMailbox(harness.runtime)
 
-    expect(pointerCount(harness.write)).toBe(0)
+    expect(pointerCount(harness.write)).toBe(1)
     expect(replayed.messages).toEqual([expect.objectContaining({ id: firstMessage.id })])
     expect(replayed.deliveryId).toBe(firstDelivery.deliveryId)
 

@@ -2,14 +2,19 @@ import type { MessageType, MessageRow } from '../../types'
 import { exposeMessageTimestamps, exposeMessageListTimestamps } from '../utc-timestamp'
 import { addLifecycleRejectionMarker } from '../lifecycle-rejection-marker'
 import type { OrchestrationDb } from '../orchestration-db'
+import {
+  getUndeliveredUnreadMessages,
+  getMailboxPointerAttentionIds
+} from './mailbox-pointer-attention'
 
 const MESSAGE_ID_UPDATE_BATCH_SIZE = 500
 const MESSAGE_MUTATION_SAVEPOINT = 'message_id_mutation'
 
 function runBatchedMessageMutation(
   db: OrchestrationDb,
-  ids: string[],
-  sqlForPlaceholders: (placeholders: string) => string
+  ids: readonly string[],
+  sqlForPlaceholders: (placeholders: string) => string,
+  leadingParams: readonly string[] = []
 ): void {
   if (ids.length === 0) {
     return
@@ -19,7 +24,7 @@ function runBatchedMessageMutation(
     for (let offset = 0; offset < ids.length; offset += MESSAGE_ID_UPDATE_BATCH_SIZE) {
       const batch = ids.slice(offset, offset + MESSAGE_ID_UPDATE_BATCH_SIZE)
       const placeholders = batch.map(() => '?').join(',')
-      db.db.prepare(sqlForPlaceholders(placeholders)).run(...batch)
+      db.db.prepare(sqlForPlaceholders(placeholders)).run(...leadingParams, ...batch)
     }
     db.db.exec(`RELEASE ${MESSAGE_MUTATION_SAVEPOINT}`)
   } catch (error) {
@@ -86,44 +91,6 @@ export function convertLifecycleMessageToRejection(
   return this.getMessageById(messageId)
 }
 
-// Why: delivered_at IS NULL filter — push-on-idle delivers each row at most once; read (set only by check) wouldn't prevent replay.
-export function getUndeliveredUnreadMessages(
-  this: OrchestrationDb,
-  toHandle: string,
-  types?: MessageType[],
-  options?: { excludeTypes?: readonly string[]; limit?: number }
-): MessageRow[] {
-  const conditions = [
-    'to_handle = ?',
-    'read = 0',
-    'delivered_at IS NULL',
-    'pointer_enter_pending = 0',
-    "delivery_contract = 'current_delivery'"
-  ]
-  const params: (string | number)[] = [toHandle]
-  if (types?.length) {
-    conditions.push(`type IN (${types.map(() => '?').join(',')})`)
-    params.push(...types)
-  }
-  if (options?.excludeTypes?.length) {
-    conditions.push(`type NOT IN (${options.excludeTypes.map(() => '?').join(',')})`)
-    params.push(...options.excludeTypes)
-  }
-  const limitSql = options?.limit === undefined ? '' : ' LIMIT ?'
-  if (options?.limit !== undefined) {
-    params.push(Math.max(1, Math.floor(options.limit)))
-  }
-  return exposeMessageListTimestamps(
-    this.db
-      .prepare(
-        `SELECT * FROM messages
-         WHERE ${conditions.join(' AND ')}
-         ORDER BY sequence${limitSql}`
-      )
-      .all(...params) as MessageRow[]
-  )
-}
-
 export function getUndeliveredUnreadMailboxHandles(this: OrchestrationDb): string[] {
   return (
     this.db
@@ -174,6 +141,23 @@ export function markAsDelivered(this: OrchestrationDb, ids: string[]): void {
        SET delivered_at = datetime('now'), pointer_enter_pending = 0,
            pointer_pty_id = NULL, pointer_process_incarnation = NULL
        WHERE id IN (${placeholders})`
+  )
+}
+
+export function markUnpointedMailboxMessagesAsDelivered(
+  this: OrchestrationDb,
+  mailboxHandle: string,
+  ids: readonly string[]
+): void {
+  runBatchedMessageMutation(
+    this,
+    ids,
+    (placeholders) =>
+      `UPDATE messages SET delivered_at = datetime('now'), pointer_enter_pending = 0,
+        pointer_pty_id = NULL, pointer_process_incarnation = NULL
+       WHERE to_handle = ? AND delivered_at IS NULL
+         AND delivery_contract = 'current_delivery' AND id IN (${placeholders})`,
+    [mailboxHandle]
   )
 }
 
@@ -279,11 +263,13 @@ export type MessageInboxMethods = {
   getUnreadMessages: typeof getUnreadMessages
   convertLifecycleMessageToRejection: typeof convertLifecycleMessageToRejection
   getUndeliveredUnreadMessages: typeof getUndeliveredUnreadMessages
+  getMailboxPointerAttentionIds: typeof getMailboxPointerAttentionIds
   getUndeliveredUnreadMailboxHandles: typeof getUndeliveredUnreadMailboxHandles
   getAllMessages: typeof getAllMessages
   getMessageById: typeof getMessageById
   markAsRead: typeof markAsRead
   markAsDelivered: typeof markAsDelivered
+  markUnpointedMailboxMessagesAsDelivered: typeof markUnpointedMailboxMessagesAsDelivered
   markAsUndelivered: typeof markAsUndelivered
   areUnreadMessages: typeof areUnreadMessages
   markAsReadAndDelivered: typeof markAsReadAndDelivered
@@ -297,11 +283,13 @@ export function attachMessageInbox(ctor: { prototype: object }): void {
     getUnreadMessages,
     convertLifecycleMessageToRejection,
     getUndeliveredUnreadMessages,
+    getMailboxPointerAttentionIds,
     getUndeliveredUnreadMailboxHandles,
     getAllMessages,
     getMessageById,
     markAsRead,
     markAsDelivered,
+    markUnpointedMailboxMessagesAsDelivered,
     markAsUndelivered,
     areUnreadMessages,
     markAsReadAndDelivered,

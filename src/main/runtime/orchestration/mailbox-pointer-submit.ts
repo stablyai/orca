@@ -4,7 +4,7 @@ import {
   MAILBOX_POINTER_WRITE_ATTEMPTED
 } from './db/messages/mailbox-pointer-enter-state'
 import {
-  shouldReleaseOrchestrationPointer,
+  selectStagedOrchestrationPointerMessages,
   type OrchestrationMessageWaiter
 } from './mailbox-pointer-eligibility'
 import type { OrchestrationMailboxLeaf, OrchestrationMailboxOwner } from './mailbox-owner'
@@ -51,11 +51,12 @@ export function submitOrchestrationMailboxPointer<TWaiter extends OrchestrationM
   let redriveClearedPointer = true
   let submitted = false
   let releaseWithoutRedrive = false
+  let coveredBeforeEnter = false
   let finalizeReservation = true
   let preserveAmbiguousDelivery = false
   let deferredUntilIdle = false
   let expectedPhase = MAILBOX_POINTER_WRITE_ATTEMPTED
-  const messageIds = input.messages.map((message) => message.id)
+  let messageIds = input.messages.map((message) => message.id)
   const reservationTarget = {
     ptyId: input.ptyId,
     processIncarnation: input.expectedTarget.processIncarnation
@@ -99,18 +100,24 @@ export function submitOrchestrationMailboxPointer<TWaiter extends OrchestrationM
       } else if (!queueSafe) {
         releaseWithoutRedrive = true
       } else {
-        if (
-          shouldReleaseOrchestrationPointer(
-            deps.getDb(),
-            input.mailboxHandle,
-            input.messages,
-            deps.getMessageWaiters(input.mailboxHandle)
-          )
-        ) {
+        const db = deps.getDb()
+        const eligibleIds = selectStagedOrchestrationPointerMessages(
+          db,
+          input.mailboxHandle,
+          input.messages,
+          deps.getMessageWaiters(input.mailboxHandle)
+        ).map((message) => message.id)
+        if (eligibleIds.length === 0) {
           releaseWithoutRedrive = true
+          coveredBeforeEnter = true
         } else {
           preserveAmbiguousDelivery = true
-          const db = deps.getDb()
+          const eligible = new Set(eligibleIds)
+          const coveredIds = messageIds.filter((id) => !eligible.has(id))
+          if (coveredIds.length > 0) {
+            db?.releaseMailboxPointerEnter(coveredIds, reservationTarget, [expectedPhase])
+          }
+          messageIds = eligibleIds
           if (!db?.markMailboxPointerEnterAttempted(messageIds, reservationTarget)) {
             return
           }
@@ -151,7 +158,15 @@ export function submitOrchestrationMailboxPointer<TWaiter extends OrchestrationM
           }
         } else if (submitted || releaseWithoutRedrive) {
           try {
-            deps.getDb()?.settleMailboxPointerEnter(messageIds, reservationTarget, [expectedPhase])
+            if (coveredBeforeEnter) {
+              deps
+                .getDb()
+                ?.releaseMailboxPointerEnter(messageIds, reservationTarget, [expectedPhase])
+            } else {
+              deps
+                .getDb()
+                ?.settleMailboxPointerEnter(messageIds, reservationTarget, [expectedPhase])
+            }
           } catch {
             // A surviving pending row is revalidated against live agent state after restart.
           }

@@ -62,6 +62,10 @@ Don't post to Slack, GitHub, or other channels during the run; report through th
   # start a new file and after a test run — and once more immediately before
   # you send worker_done, so a redirect lands before the task settles.
   orca orchestration check --terminal orca_session_id:WORKER --json
+
+  # Process every message in the returned batch before acknowledging,
+  # then process the next batch returned. Use its deliveryId, not a message ID.
+  orca orchestration check --terminal orca_session_id:WORKER --ack "<delivery_id>" --json
 \`\`\`
 
 === AFTER YOU SEND worker_done ===
@@ -146,6 +150,10 @@ Don't post to Slack, GitHub, or other channels during the run; report through th
   # start a new file and after a test run — and once more immediately before
   # you send worker_done, so a redirect lands before the task settles.
   orca orchestration check --terminal term_WORKER --json
+
+  # Process every message in the returned batch before acknowledging,
+  # then process the next batch returned. Use its deliveryId, not a message ID.
+  orca orchestration check --terminal term_WORKER --ack "<delivery_id>" --json
 \`\`\`
 
 === AFTER YOU SEND worker_done ===

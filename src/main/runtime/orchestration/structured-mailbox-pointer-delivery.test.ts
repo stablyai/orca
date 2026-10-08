@@ -36,6 +36,9 @@ function harness(options: {
   const mailbox = options.mailbox ?? 'dispatch:d1'
   const dispatchId = options.dispatchId === undefined ? 'd1' : options.dispatchId
   let attached = options.attached ?? true
+  let runtimeFence = 4
+  let targetSession = IDENTITY.sessionId
+  let dbAvailable = true
   // The session's recorded sends, as its journal reports them.
   let submissions: StructuredPointerSubmission[] = []
   // The mailbox's unread mail; a pointed message is no longer selected for a pointer.
@@ -43,6 +46,9 @@ function harness(options: {
     { id: 'm1', type: 'status', sequence: 3, from_handle: 'term_coord', run_id: 'run_1' }
   ]
   const pointed = new Set<string>()
+  const fetched = new Set(options.outstandingOwnDelivery ? ['m1'] : [])
+  const read = new Set<string>()
+  let waiters: ReadonlySet<{ typeFilter: string[] | undefined }> | undefined
   const markAsDelivered = vi.fn((ids: string[]) => {
     for (const id of ids) {
       pointed.add(id)
@@ -55,28 +61,56 @@ function harness(options: {
   )
   const sendMock = vi.mocked(send)
   const stored = new Map<string, StructuredPointerOperationRow>()
+  const readSessionFacts = vi.fn<StructuredMailboxPointerHost['readSessionFacts']>(async () =>
+    attached ? { submissions, queuedSends: [] } : null
+  )
   const db = {
     getDispatchContextById: () => ({ run_id: 'run_1' }),
     hasOutstandingMailboxDelivery: (handle: string) =>
       ((options.outstandingRunDelivery ?? false) && handle.startsWith('run:')) ||
       ((options.outstandingOwnDelivery ?? false) && !handle.startsWith('run:')),
-    getUndeliveredUnreadMessages: () => mail.filter((message) => !pointed.has(message.id)),
+    getUndeliveredUnreadMessages: (
+      _handle: string,
+      _types: unknown,
+      selection?: {
+        excludeFetched?: boolean
+        excludeMessageIds?: readonly string[]
+        excludeTypes?: readonly string[]
+      }
+    ) =>
+      mail.filter(
+        (message) =>
+          !pointed.has(message.id) &&
+          !read.has(message.id) &&
+          !(selection?.excludeFetched && fetched.has(message.id)) &&
+          !selection?.excludeMessageIds?.includes(message.id) &&
+          !selection?.excludeTypes?.includes(message.type)
+      ),
     markAsDelivered,
+    markUnpointedMailboxMessagesAsDelivered: (handle: string, ids: readonly string[]) => {
+      const unpointed = ids.filter(
+        (id) => handle === mailbox && !pointed.has(id) && mail.some((message) => message.id === id)
+      )
+      if (unpointed.length > 0) {
+        markAsDelivered(unpointed)
+      }
+    },
     getStructuredPointerOperation: (key: string) => stored.get(key),
     putStructuredPointerOperation: (row: StructuredPointerOperationRow) =>
       stored.set(row.mailbox_handle, row),
     deleteStructuredPointerOperation: (key: string) => stored.delete(key)
   }
   const delivery = new OrchestrationStructuredMailboxPointerDelivery({
-    getDb: () => db as never,
-    getMessageWaiters: () => undefined,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fixture implements every database operation this lane invokes.
+    getDb: () => (dbAvailable ? db : null) as never,
+    getMessageWaiters: () => waiters,
     resolveStructuredTarget: (mailboxHandle) =>
-      mailboxHandle === mailbox ? { sessionId: IDENTITY.sessionId, dispatchId } : null,
+      mailboxHandle === mailbox ? { sessionId: targetSession, dispatchId } : null,
     getCliCommand: () => 'orca-dev',
     senderName: (party) => (party.address === 'term_coord' ? 'Coordinator' : null),
     host: {
-      readSessionFacts: async () => (attached ? { submissions } : null),
-      currentFence: () => 4,
+      readSessionFacts,
+      currentFence: () => runtimeFence,
       send
     }
   })
@@ -85,6 +119,21 @@ function harness(options: {
     markAsDelivered,
     send: sendMock,
     stored,
+    readSessionFacts,
+    fetch: (...ids: string[]) => ids.forEach((id) => fetched.add(id)),
+    acknowledge: (...ids: string[]) => ids.forEach((id) => read.add(id)),
+    setWaiters: (next: typeof waiters) => {
+      waiters = next
+    },
+    setFence: (next: number) => {
+      runtimeFence = next
+    },
+    setTargetSession: (next: string) => {
+      targetSession = next
+    },
+    setDbAvailable: (next: boolean) => {
+      dbAvailable = next
+    },
     setAttached: (next: boolean) => {
       attached = next
     },
@@ -202,6 +251,37 @@ describe('structured mailbox pointer delivery', () => {
     })
   })
 
+  it.each([
+    { kind: 'sent', state: 'accepted' },
+    { kind: 'queued' },
+    { kind: 'sent', state: 'rejected' },
+    { kind: 'sent', state: 'unknown' },
+    { kind: 'unattached' }
+  ] as const)(
+    'rederives arrived mail only after a successful $kind $state handoff',
+    async (outcome) => {
+      const { delivery, send, receive } = harness({})
+      let finish: (() => void) | undefined
+      send.mockImplementationOnce(() => new Promise((resolve) => (finish = () => resolve(outcome))))
+      delivery.deliverForHandle('dispatch:d1')
+      await flush()
+      expect(send).toHaveBeenCalledTimes(1)
+      receive('m2', 4)
+      delivery.deliverForHandle('dispatch:d1')
+      finish?.()
+      await flush()
+      await flush()
+      const handedOff =
+        outcome.kind === 'queued' || (outcome.kind === 'sent' && outcome.state === 'accepted')
+      expect(send).toHaveBeenCalledTimes(handedOff ? 2 : 1)
+      if (handedOff) {
+        expect(send.mock.calls[1]![0].body.from?.orchestration).toMatchObject({
+          messages: [{ messageId: 'm2' }]
+        })
+      }
+    }
+  )
+
   it('nudges the worker while its coordinator holds an unacked Run delivery', async () => {
     // The exact window in which a coordinator replies to its workers: it checked, is acting on the
     // batch, and has not acked yet. The gate is keyed on the handle being nudged, so the
@@ -216,13 +296,178 @@ describe('structured mailbox pointer delivery', () => {
     expect(markAsDelivered).toHaveBeenCalledWith(['m1'])
   })
 
-  it('does not re-nudge a mailbox still holding its own unacked batch', async () => {
-    // The other half of the same gate: the consumer already has this batch, so a second nudge
-    // spends a whole provider turn telling it something it was told.
-    const { delivery, send } = harness({ outstandingOwnDelivery: true })
+  it('does not re-nudge exact members of its own unacked batch', async () => {
+    const { delivery, send, receive } = harness({ outstandingOwnDelivery: true })
     delivery.deliverForHandle('dispatch:d1')
     await flush()
     expect(send).not.toHaveBeenCalled()
+    receive('m2', 4)
+    delivery.deliverForHandle('dispatch:d1')
+    await flush()
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(send.mock.calls[0]![0].body.from?.orchestration).toMatchObject({
+      messages: [{ messageId: 'm2' }]
+    })
+  })
+
+  it.each(['pending', 'accepted'] as const)(
+    'reconciles the original batch when a %s notice loses one member to check',
+    async (dispatchState) => {
+      const { delivery, send, stored, receive, fetch, setSubmissions, markAsDelivered } = harness({
+        dispatchState: 'unknown'
+      })
+      receive('m2', 4)
+      delivery.deliverForHandle('dispatch:d1')
+      await flush()
+      const operationId = send.mock.calls[0]![0].operationId
+      setSubmissions([
+        {
+          clientMessageId: operationId,
+          dispatchState,
+          submittedAt: Date.now(),
+          mailNotice: { mailbox: 'dispatch:d1', messageIds: ['m1', 'm2'] }
+        }
+      ])
+      fetch('m1')
+      delivery.onJournalActivity('session-1')
+      await flush()
+      expect(send).toHaveBeenCalledTimes(1)
+      if (dispatchState === 'pending') {
+        expect(markAsDelivered).not.toHaveBeenCalled()
+        expect(stored.get('dispatch:d1')?.operation_id).toBe(operationId)
+      } else {
+        expect(markAsDelivered).toHaveBeenCalledWith(['m1', 'm2'])
+        expect(stored.has('dispatch:d1')).toBe(false)
+      }
+    }
+  )
+
+  it('notifies independent mail while the journal owns an earlier pending batch', async () => {
+    const { delivery, send, receive, fetch, setSubmissions, markAsDelivered } = harness({
+      dispatchState: 'unknown'
+    })
+    receive('m2', 4)
+    delivery.deliverForHandle('dispatch:d1')
+    await flush()
+    const first = send.mock.calls[0]![0].operationId
+    setSubmissions([
+      {
+        clientMessageId: first,
+        dispatchState: 'pending',
+        submittedAt: Date.now(),
+        mailNotice: { mailbox: 'dispatch:d1', messageIds: ['m1', 'm2'] }
+      }
+    ])
+    fetch('m1')
+    receive('m3', 5)
+    delivery.onJournalActivity('session-1')
+    await flush()
+    expect(send).toHaveBeenCalledTimes(2)
+    expect(send.mock.calls[1]![0].operationId).not.toBe(first)
+    expect(send.mock.calls[1]![0].body.from?.orchestration).toMatchObject({
+      messages: [{ messageId: 'm3' }]
+    })
+    expect(markAsDelivered).not.toHaveBeenCalled()
+  })
+
+  it.each(['fetched', 'acknowledged', 'waiter'] as const)(
+    'revalidates mail that becomes %s while reading the journal',
+    async (change) => {
+      const { delivery, send, stored, readSessionFacts, fetch, acknowledge, setWaiters } = harness(
+        {}
+      )
+      let release: (() => void) | undefined
+      readSessionFacts.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => (release = () => resolve({ submissions: [], queuedSends: [] })))
+      )
+      delivery.deliverForHandle('dispatch:d1')
+      await flush()
+      if (change === 'fetched') {
+        fetch('m1')
+      }
+      if (change === 'acknowledged') {
+        acknowledge('m1')
+      }
+      if (change === 'waiter') {
+        setWaiters(new Set([{ typeFilter: ['status'] }]))
+      }
+      release?.()
+      await flush()
+      expect(send).not.toHaveBeenCalled()
+      expect(stored.size).toBe(0)
+    }
+  )
+
+  it('reconciles original acceptance after an independent accepted notice replaced its operation row', async () => {
+    const { delivery, send, receive, fetch, setSubmissions, markAsDelivered } = harness({
+      dispatchState: 'unknown'
+    })
+    receive('m2', 4)
+    delivery.deliverForHandle('dispatch:d1')
+    await flush()
+    const first = send.mock.calls[0]![0].operationId
+    const original: StructuredPointerSubmission = {
+      clientMessageId: first,
+      dispatchState: 'pending',
+      submittedAt: Date.now(),
+      mailNotice: { mailbox: 'dispatch:d1', messageIds: ['m1', 'm2'] }
+    }
+    setSubmissions([original])
+    fetch('m1')
+    receive('m3', 5)
+    send.mockResolvedValueOnce({ kind: 'sent', state: 'accepted' })
+    delivery.onJournalActivity('session-1')
+    await flush()
+    expect(send).toHaveBeenCalledTimes(2)
+    expect(markAsDelivered).toHaveBeenCalledWith(['m3'])
+    delivery.onJournalActivity('session-1')
+    await flush()
+    expect(send).toHaveBeenCalledTimes(2)
+    setSubmissions([{ ...original, dispatchState: 'accepted' }])
+    delivery.onJournalActivity('session-1')
+    await flush()
+    expect(send).toHaveBeenCalledTimes(2)
+    expect(markAsDelivered).toHaveBeenCalledWith(['m1', 'm2'])
+  })
+
+  it.each(['lease', 'database'] as const)(
+    'does not submit against %s authority that changed during the journal read',
+    async (change) => {
+      const { delivery, send, stored, readSessionFacts, setFence, setDbAvailable } = harness({})
+      let release: (() => void) | undefined
+      readSessionFacts.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => (release = () => resolve({ submissions: [], queuedSends: [] })))
+      )
+      delivery.deliverForHandle('dispatch:d1')
+      await flush()
+      if (change === 'lease') {
+        setFence(5)
+      } else {
+        setDbAvailable(false)
+      }
+      release?.()
+      await flush()
+      expect(send).not.toHaveBeenCalled()
+      expect(stored.size).toBe(0)
+    }
+  )
+
+  it('reselects for the successor when clear moves the mailbox during its journal read', async () => {
+    const { delivery, send, readSessionFacts, setTargetSession } = harness({})
+    let release: (() => void) | undefined
+    readSessionFacts.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => (release = () => resolve({ submissions: [], queuedSends: [] })))
+    )
+    delivery.deliverForHandle('dispatch:d1')
+    await flush()
+    setTargetSession('successor')
+    release?.()
+    await flush()
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(send.mock.calls[0]![0].sessionId).toBe('successor')
   })
 
   it('retries a rejected nudge on the next journal edge, under the same id', async () => {
@@ -402,13 +647,23 @@ describe('forgetting one settled worker', () => {
       kind: 'sent' as const,
       state: 'accepted' as const
     }))
+    const pointed = new Set<string>()
     const db = {
       getDispatchContextById: () => ({ run_id: 'run_1' }),
       hasOutstandingMailboxDelivery: () => false,
-      getUndeliveredUnreadMessages: () => [
-        { id: 'm1', type: 'status', sequence: 3, from_handle: 'term_coord', run_id: 'run_1' }
-      ],
-      markAsDelivered: vi.fn(),
+      getUndeliveredUnreadMessages: (mailbox: string) =>
+        pointed.has(mailbox)
+          ? []
+          : [
+              {
+                id: mailbox,
+                type: 'status',
+                sequence: 3,
+                from_handle: 'term_coord',
+                run_id: 'run_1'
+              }
+            ],
+      markAsDelivered: vi.fn((ids: string[]) => ids.forEach((id) => pointed.add(id))),
       getStructuredPointerOperation: () => undefined,
       putStructuredPointerOperation: () => {},
       deleteStructuredPointerOperation: () => {}
@@ -425,7 +680,7 @@ describe('forgetting one settled worker', () => {
       getCliCommand: () => 'orca',
       senderName: () => null,
       host: {
-        readSessionFacts: async () => (attached ? { submissions: [] } : null),
+        readSessionFacts: async () => (attached ? { submissions: [], queuedSends: [] } : null),
         currentFence: () => 4,
         send
       }
@@ -523,7 +778,7 @@ describe('a mailbox a /clear moves while its nudge is in flight', () => {
       getCliCommand: () => 'orca-dev',
       senderName: () => null,
       host: {
-        readSessionFacts: async () => ({ submissions: [] }),
+        readSessionFacts: async () => ({ submissions: [], queuedSends: [] }),
         currentFence: () => 4,
         send
       }

@@ -88,7 +88,7 @@ describe('a worker result reaches the structured chat that coordinates it', () =
   })
 
   /** Fires both edges and waits until every gate read they started has answered. */
-  const edgesAnswered = (): Promise<void> => observationClock.edgesAnswered(runtime, WAIT)
+  const edgesAnswered = (): Promise<void> => observationClock.edgesAnswered(runtime)
 
   /** The operation ids the coordinator's journal recorded for its pointer turns. */
   async function pointerSends(): Promise<string[]> {

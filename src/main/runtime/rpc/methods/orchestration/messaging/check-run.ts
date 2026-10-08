@@ -11,6 +11,7 @@ import type { CheckParams } from '../schemas'
 import type { z } from 'zod'
 import type { OrchestrationSessionCaller } from '../../../../orchestration/orchestration-caller-identity'
 import { checkRunPendingMail } from './check-run-pending-mail'
+import { checkDeliveryResult } from './check-delivery-result'
 
 type CheckParamsInput = z.infer<typeof CheckParams>
 
@@ -105,6 +106,8 @@ export async function checkRunMailbox(args: {
     return pending.result
   }
   const acknowledged = pending.acknowledged
+  const deliveryResult = (current: Parameters<typeof checkDeliveryResult>[2]) =>
+    checkDeliveryResult(db, params, current, pending.readResidualMailboxes)
   if (params.all || (params.unread === false && !params.peek)) {
     const messages = db.getRunMailboxHistory(run.id, 100, typeFilter)
     const result = {
@@ -142,10 +145,7 @@ export async function checkRunMailbox(args: {
   if (current) {
     return {
       runId: run.id,
-      deliveryId: current.delivery.id,
-      messages: exposeMessages(current.messages),
-      count: current.messages.length,
-      replayed: current.replayed,
+      ...deliveryResult(current),
       acknowledged: acknowledged ?? null,
       timedOut: false,
       cancelled: false,
@@ -246,10 +246,7 @@ export async function checkRunMailbox(args: {
   current = readDelivery(typeFilter)
   return {
     runId: run.id,
-    deliveryId: current?.delivery.id ?? null,
-    messages: exposeMessages(current?.messages ?? []),
-    count: current?.messages.length ?? 0,
-    replayed: current?.replayed ?? false,
+    ...deliveryResult(current),
     acknowledged: acknowledged ?? null,
     timedOut: false,
     cancelled: false,

@@ -331,6 +331,12 @@ export class StructuredAgentSessionHost {
   journalSnapshot = async (sessionId: string): Promise<AgentJournalSnapshot> =>
     (await this.lifetime.conversation(sessionId)).journal.snapshot()
 
+  /** Includes settled queue receipts, which the published card list omits. */
+  mailboxPointerSnapshot = async (sessionId: string) => {
+    const { journal } = await this.lifetime.conversation(sessionId)
+    return { snapshot: journal.snapshot(), queuedMessages: journal.queuedMessages.list() }
+  }
+
   subscribe = (input: AgentSessionSubscribeInput) => this.backgroundTasks.subscribe(input)
 
   settleLateDispatch = (input: Parameters<typeof settleStructuredAgentSessionLateDispatch>[1]) =>

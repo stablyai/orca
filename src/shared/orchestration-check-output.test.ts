@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   formatOrchestrationCheckText,
-  prepareOrchestrationCheckOutput
+  prepareOrchestrationCheckOutput,
+  type OrchestrationCheckOutput
 } from './orchestration-check-output'
 
 describe('prepareOrchestrationCheckOutput', () => {
@@ -41,6 +42,48 @@ describe('prepareOrchestrationCheckOutput', () => {
       '[Inspection only: reply and acknowledgment are unavailable.]'
     )
     expect(prepared.formatted).not.toContain('unsafe stale formatter output')
+  })
+})
+
+describe('replayed Delivery output', () => {
+  const recovery = {
+    waitingCount: 71,
+    ackCommand: 'orca-ide orchestration check --terminal term_worker --ack delivery_old',
+    guidance:
+      'Process every message in this batch before acknowledging, then process the next batch returned.'
+  }
+  it.each([undefined, 'Message body'])(
+    'renders recovery in plain and formatted output: %s',
+    (formatted) => {
+      const result: OrchestrationCheckOutput = {
+        messages: [{ id: 'msg_one', from_handle: 'worker', subject: 'old' }],
+        count: 1,
+        deliveryId: 'delivery_old',
+        replayed: true,
+        formatted,
+        replayRecovery: recovery
+      }
+      const output = formatOrchestrationCheckText(result, 'term_worker')
+      expect(output).toContain('Delivery delivery_old (replayed)')
+      expect(output).toContain('71 unread messages waiting behind this Delivery.')
+      expect(output).toContain(recovery.ackCommand)
+      expect(output).toContain(recovery.guidance)
+      expect(output.split(recovery.ackCommand)).toHaveLength(2)
+      expect(output).toContain(formatted ?? 'msg_one [status]')
+    }
+  )
+
+  it('retains the optional recovery object in the actual JSON result', () => {
+    const result: OrchestrationCheckOutput = {
+      messages: [],
+      count: 0,
+      deliveryId: 'delivery_old',
+      replayed: true,
+      replayRecovery: recovery
+    }
+    expect(
+      JSON.parse(JSON.stringify(prepareOrchestrationCheckOutput(result, 'term_worker', false)))
+    ).toHaveProperty('replayRecovery', recovery)
   })
 })
 

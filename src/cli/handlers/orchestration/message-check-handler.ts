@@ -6,6 +6,7 @@ import type { RuntimeRpcSuccess } from '../../runtime-client'
 import {
   formatOrchestrationCheckText,
   prepareOrchestrationCheckOutput,
+  type OrchestrationReplayRecovery,
   type LegacyCompatibilityResult,
   type OrchestrationMessageSummary as MessageSummary
 } from '../../../shared/orchestration-check-output'
@@ -20,6 +21,8 @@ type CheckResult = {
   count: number
   formatted?: string
   deliveryId?: string | null
+  replayed?: boolean
+  replayRecovery?: OrchestrationReplayRecovery
   runId?: string
   timedOut?: boolean
   cancelled?: boolean
@@ -72,7 +75,12 @@ export const ORCHESTRATION_CHECK_HANDLER: Record<string, CommandHandler> = {
     }
     result = {
       ...result,
-      result: prepareOrchestrationCheckOutput(result.result, callerLabel, flags.has('format'))
+      result: prepareOrchestrationCheckOutput(result.result, callerLabel, flags.has('format'), {
+        cliCommand: resolveCompatibilityCliCommand(),
+        terminal,
+        run: getOptionalStringFlag(flags, 'run'),
+        consuming: !peek && !flags.has('all')
+      })
     }
     printResult(result, json, (value) => formatOrchestrationCheckText(value, callerLabel))
     const compatibilityAck = result.result.legacyCompatibility?.ackMessageIds

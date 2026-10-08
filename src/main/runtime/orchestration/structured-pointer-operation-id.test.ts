@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { StructuredPointerOperationRow } from './db/messages/structured-pointer-operation-store'
 import {
   AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS,
   AGENT_SESSION_MAX_OPERATION_REPLAY_AGE_MS
@@ -7,6 +8,8 @@ import {
   decideStructuredPointerAttempt,
   mintAgentSessionOperationId,
   resolveStructuredPointerOperation,
+  structuredPointerBatchFingerprint,
+  type StructuredPointerOperationStore,
   type StructuredPointerSubmission
 } from './structured-pointer-operation-id'
 
@@ -32,14 +35,13 @@ function resolveId(
   return resolved
 }
 
-function fakeDb() {
-  const rows = new Map<string, { mailbox_handle: string; operation_id: string }>()
+function fakeDb(): StructuredPointerOperationStore {
+  const rows = new Map<string, StructuredPointerOperationRow>()
   return {
-    rows,
     getStructuredPointerOperation: (handle: string) => rows.get(handle),
-    putStructuredPointerOperation: (row: { mailbox_handle: string; operation_id: string }) =>
+    putStructuredPointerOperation: (row: StructuredPointerOperationRow) =>
       rows.set(row.mailbox_handle, row)
-  } as never
+  }
 }
 
 describe('structured pointer operation id', () => {
@@ -169,6 +171,154 @@ describe('structured pointer operation id', () => {
     })
     expect(moved.operationId).not.toBe(first.operationId)
   })
+
+  it.each(['pending', 'accepted'] as const)(
+    'retains a changed batch when a legacy %s submission cannot identify original members',
+    (dispatchState) => {
+      const db = fakeDb()
+      const input = { db, mailboxHandle: 'dispatch:d1', sessionId: 's1', now: 1_000 }
+      const first = resolveId({ ...input, messageIds: ['m1', 'm2'] })
+      expect(
+        resolveStructuredPointerOperation({
+          ...input,
+          messageIds: ['m2'],
+          submissions: [{ clientMessageId: first.operationId, dispatchState, submittedAt: 1_000 }],
+          sentByThisProcess: first.operationId
+        })
+      ).toEqual({ kind: 'park' })
+      expect(db.getStructuredPointerOperation('dispatch:d1')?.operation_id).toBe(first.operationId)
+    }
+  )
+
+  it('stamps the original proven batch rather than an eligible subset', () => {
+    const db = fakeDb()
+    const input = { db, mailboxHandle: 'dispatch:d1', sessionId: 's1', now: 1_000 }
+    const first = resolveId({ ...input, messageIds: ['m1', 'm2'] })
+    expect(
+      resolveStructuredPointerOperation({
+        ...input,
+        messageIds: ['m2'],
+        submissions: [
+          {
+            clientMessageId: first.operationId,
+            dispatchState: 'accepted',
+            submittedAt: 1_000,
+            mailNotice: { mailbox: 'dispatch:d1', messageIds: ['m1', 'm2'] }
+          }
+        ],
+        sentByThisProcess: first.operationId
+      })
+    ).toEqual({ kind: 'stamp', messageIds: ['m1', 'm2'] })
+  })
+
+  it('settles queue acceptance across actor and session changes using the original fingerprint', () => {
+    const db = fakeDb()
+    const input = { db, mailboxHandle: 'dispatch:d1', sessionId: 's1', now: 1_000 }
+    const first = resolveId({ ...input, messageIds: ['m1', 'm2'] })
+    expect(
+      resolveStructuredPointerOperation({
+        ...input,
+        sessionId: 'successor',
+        messageIds: ['m2'],
+        submissions: [],
+        queuedSends: [
+          {
+            operationId: first.operationId,
+            mailNotice: { mailbox: 'dispatch:d1', messageIds: ['m1', 'm2'] }
+          }
+        ],
+        sentByThisProcess: undefined
+      })
+    ).toEqual({ kind: 'stamp', messageIds: ['m1', 'm2'] })
+  })
+
+  it('retains queue acceptance with unverifiable original provenance instead of minting a duplicate', () => {
+    const db = fakeDb()
+    const input = { db, mailboxHandle: 'dispatch:d1', sessionId: 's1', now: 1_000 }
+    const first = resolveId({ ...input, messageIds: ['m1', 'm2'] })
+    expect(
+      resolveStructuredPointerOperation({
+        ...input,
+        messageIds: ['m2'],
+        submissions: [],
+        queuedSends: [{ operationId: first.operationId }],
+        sentByThisProcess: undefined
+      })
+    ).toEqual({ kind: 'park' })
+    expect(db.getStructuredPointerOperation('dispatch:d1')?.operation_id).toBe(first.operationId)
+  })
+
+  it('admits independent messages without replacing an overlapping pending notice', () => {
+    const db = fakeDb()
+    const input = { db, mailboxHandle: 'dispatch:d1', sessionId: 's1', now: 1_000 }
+    const first = resolveId({ ...input, messageIds: ['m1', 'm2'] })
+    const submissions: StructuredPointerSubmission[] = [
+      {
+        clientMessageId: first.operationId,
+        dispatchState: 'pending',
+        submittedAt: 1_000,
+        mailNotice: { mailbox: 'dispatch:d1', messageIds: ['m1', 'm2'] }
+      }
+    ]
+    expect(
+      resolveStructuredPointerOperation({
+        ...input,
+        messageIds: ['m2', 'm3'],
+        submissions,
+        sentByThisProcess: first.operationId
+      })
+    ).toEqual({ kind: 'park' })
+    const independent = resolveId({ ...input, messageIds: ['m3'], submissions })
+    expect(independent.operationId).not.toBe(first.operationId)
+  })
+
+  it('requires mailbox and fingerprint agreement before trusting projected original IDs', () => {
+    const db = fakeDb()
+    const input = { db, mailboxHandle: 'dispatch:d1', sessionId: 's1', now: 1_000 }
+    const first = resolveId({ ...input, messageIds: ['m1', 'm2'] })
+    for (const mailNotice of [
+      { mailbox: 'dispatch:other', messageIds: ['m1', 'm2'] },
+      { mailbox: 'dispatch:d1', messageIds: ['m2'] }
+    ]) {
+      expect(
+        resolveStructuredPointerOperation({
+          ...input,
+          messageIds: ['m3'],
+          submissions: [
+            {
+              clientMessageId: first.operationId,
+              dispatchState: 'accepted',
+              submittedAt: 1_000,
+              mailNotice
+            }
+          ],
+          sentByThisProcess: first.operationId
+        })
+      ).toEqual({ kind: 'park' })
+    }
+  })
+
+  it('releases legacy acceptance uncertainty once its owning journal turn settles', () => {
+    const db = fakeDb()
+    const input = { db, mailboxHandle: 'dispatch:d1', sessionId: 's1', now: 1_000 }
+    const first = resolveId({ ...input, messageIds: ['m1', 'm2'] })
+    const next = resolveId({
+      ...input,
+      messageIds: ['m2'],
+      submissions: [
+        {
+          clientMessageId: first.operationId,
+          dispatchState: 'accepted',
+          submittedAt: 1_000,
+          turnSettled: true
+        }
+      ]
+    })
+    expect(next.operationId).not.toBe(first.operationId)
+    expect(db.getStructuredPointerOperation('dispatch:d1')?.batch_fingerprint).toBe(
+      structuredPointerBatchFingerprint('s1', ['m2'])
+    )
+  })
 })
 
 describe('what a pointer attempt does with its operation row', () => {
@@ -235,6 +385,16 @@ describe('what a pointer attempt does with its operation row', () => {
     expect(decide([sent('accepted')])).toBe('stamp')
     expect(decide([sent('pending')])).toBe('park')
   })
+
+  it.each([
+    ['pending', 'park'],
+    ['accepted', 'stamp']
+  ] as const)(
+    'reconciles a %s operation before comparing changed membership',
+    (state, expected) => {
+      expect(decide([sent(state)], { batchFingerprint: 'batch-2' })).toBe(expected)
+    }
+  )
 
   it.each([
     ['in doubt', sent('unknown')],

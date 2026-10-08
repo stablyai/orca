@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { OrchestrationDb } from './db/orchestration-db'
 import {
   selectOrchestrationPointerBatch,
+  shouldReleaseOrchestrationPointer,
   type OrchestrationMessageWaiter
 } from './mailbox-pointer-eligibility'
 
@@ -27,6 +28,51 @@ function waiters(...filters: (string[] | undefined)[]): ReadonlySet<Orchestratio
 }
 
 describe('selectOrchestrationPointerBatch', () => {
+  it('selects new mail behind a fetched batch before limiting the notice rows', () => {
+    const db = new OrchestrationDb(':memory:')
+    try {
+      const run = db.createRun({
+        objective: 'Read a full batch',
+        coordinatorHandle: 'coordinator',
+        coordinatorPaneKey: 'tab:leaf'
+      })
+      const mailbox = `run:${run.id}`
+      db.insertMessages(
+        Array.from({ length: 50 }, (_, index) => ({
+          runId: run.id,
+          from: 'worker',
+          to: mailbox,
+          subject: `Fetched ${index}`
+        }))
+      )
+      const fetched = db.getOrCreateRunDelivery({
+        runId: run.id,
+        consumerGeneration: run.consumer_generation
+      })
+      expect(fetched?.messages).toHaveLength(50)
+      const newer = db.insertMessage({
+        runId: run.id,
+        from: 'worker',
+        to: mailbox,
+        subject: 'New mail'
+      })
+      expect(
+        selectOrchestrationPointerBatch({
+          db,
+          mailboxHandle: mailbox,
+          waiters: undefined,
+          reservedTypes: undefined
+        }).map((message) => message.id)
+      ).toEqual([newer.id])
+      expect(shouldReleaseOrchestrationPointer(db, mailbox, [newer], undefined)).toBe(false)
+      expect(
+        shouldReleaseOrchestrationPointer(db, mailbox, fetched?.messages ?? [], undefined)
+      ).toBe(true)
+    } finally {
+      db.close()
+    }
+  })
+
   it('excludes a waiter-claimed type', () => {
     const db = seeded()
     try {

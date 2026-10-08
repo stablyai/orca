@@ -8,6 +8,7 @@ import { orchestrationCallerIdentity } from '../runs/run-scope'
 import type { OrchestrationSessionCaller } from '../../../../orchestration/orchestration-caller-identity'
 import type { CheckParams } from '../schemas'
 import type { z } from 'zod'
+import type { ReplayRecoveryMailbox } from './check-replay-recovery'
 
 export async function checkRunPendingMail(args: {
   params: z.infer<typeof CheckParams>
@@ -21,7 +22,11 @@ export async function checkRunPendingMail(args: {
   signal: AbortSignal | undefined
   revalidateConsumer: () => void
   recordMutationReceipt: ((receipt: unknown) => void) | undefined
-}): Promise<{ acknowledged?: string; result?: unknown }> {
+}): Promise<{
+  acknowledged?: string
+  result?: unknown
+  readResidualMailboxes?: () => ReplayRecoveryMailbox[]
+}> {
   const {
     params,
     runtime,
@@ -68,15 +73,14 @@ export async function checkRunPendingMail(args: {
     }
   }
   recordAcknowledged()
-  if (
-    residual &&
-    residual.run_id !== run.id &&
-    (residual.assignee_orca_session_id === null ||
-      residual.assignee_orca_session_id === caller.orcaSessionId) &&
-    callerHoldsDispatchPane(residual, paneKey) &&
-    currentDispatchAssigneeRun(runtime, db, residual)?.id === run.id &&
-    (residualAck || !db.hasOutstandingMailboxDelivery(address))
-  ) {
+  const canReadResidual = (candidate: typeof residual): candidate is NonNullable<typeof residual> =>
+    candidate !== undefined &&
+    candidate.run_id !== run.id &&
+    (candidate.assignee_orca_session_id === null ||
+      candidate.assignee_orca_session_id === caller.orcaSessionId) &&
+    callerHoldsDispatchPane(candidate, paneKey) &&
+    currentDispatchAssigneeRun(runtime, db, candidate)?.id === run.id
+  if (canReadResidual(residual) && (residualAck || !db.hasOutstandingMailboxDelivery(address))) {
     const result = await checkWorkerMailbox({
       params: { ...params, ack: residualAck, wait: false },
       runtime,
@@ -90,6 +94,7 @@ export async function checkRunPendingMail(args: {
       wakeTypes: params.wait ? typeFilter : undefined,
       // Accept the original owner's ack without creating a batch ahead of Run replay.
       deferDelivery: () => db.hasOutstandingMailboxDelivery(address),
+      recoveryMailboxes: [{ runId: run.id, mailboxHandle: address }],
       revalidateConsumer: () => {
         revalidateConsumer()
         const current = db.getActiveDispatchForIdentity(handle, paneKey)
@@ -136,5 +141,19 @@ export async function checkRunPendingMail(args: {
   if (params.ack && !acknowledged) {
     acknowledgeRun()
   }
-  return { acknowledged: acknowledged?.delivery.id }
+  return {
+    acknowledged: acknowledged?.delivery.id,
+    readResidualMailboxes: () => {
+      const latest = !params.run ? db.getActiveDispatchForIdentity(handle, paneKey) : undefined
+      if (latest?.id !== residual?.id || !canReadResidual(latest)) {
+        return []
+      }
+      // Direct aliases stay under the original Dispatch Run until its next consuming check.
+      const addresses = new Set([`dispatch:${latest.id}`, handle])
+      if (latest.assignee_handle) {
+        addresses.add(latest.assignee_handle)
+      }
+      return [...addresses].map((mailboxHandle) => ({ runId: latest.run_id, mailboxHandle }))
+    }
+  }
 }

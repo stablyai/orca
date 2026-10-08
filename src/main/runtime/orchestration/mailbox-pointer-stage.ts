@@ -6,6 +6,7 @@ import type {
 } from './mailbox-pointer-delivery-contract'
 import {
   shouldReleaseOrchestrationPointer,
+  selectStagedOrchestrationPointerMessages,
   type OrchestrationMessageWaiter
 } from './mailbox-pointer-eligibility'
 import type { OrchestrationMailboxLeaf } from './mailbox-owner'
@@ -16,6 +17,7 @@ import type {
 import { submitOrchestrationMailboxPointer } from './mailbox-pointer-submit'
 import type { OrchestrationMailboxPointerSubmitTarget } from './mailbox-pointer-submit'
 import { isSettledWrite, type WriteSettlement } from '../../../shared/pty-write-settlement'
+import { MAILBOX_POINTER_WRITE_ATTEMPTED } from './db/messages/mailbox-pointer-enter-state'
 
 type StagePointerArgs<TWaiter extends OrchestrationMessageWaiter> = {
   deps: PointerDeliveryDependencies<TWaiter>
@@ -46,17 +48,19 @@ export function stageOrchestrationMailboxPointer<TWaiter extends OrchestrationMe
     ptyId,
     processIncarnation: expectedTarget.processIncarnation
   }
-  if (
-    !db ||
-    shouldReleaseOrchestrationPointer(
-      db,
-      args.mailboxHandle,
-      args.messages,
-      args.deps.getMessageWaiters(args.mailboxHandle)
-    )
-  ) {
+  if (!db) {
     return
   }
+  const messages = selectStagedOrchestrationPointerMessages(
+    db,
+    args.mailboxHandle,
+    args.messages,
+    args.deps.getMessageWaiters(args.mailboxHandle)
+  )
+  if (messages.length === 0) {
+    return
+  }
+  args = { ...args, messages }
   const flight = args.state.beginFlight(ptyId)
   flight.processIncarnation = expectedTarget.processIncarnation
   flight.stagedMessageIds = args.messages.map((message) => message.id)
@@ -142,6 +146,14 @@ function finishPointerWriteAndStageEnter<TWaiter extends OrchestrationMessageWai
         args.deps.getMessageWaiters(args.mailboxHandle)
       )
     ) {
+      db?.releaseMailboxPointerEnter(
+        flight.stagedMessageIds,
+        {
+          ptyId,
+          processIncarnation: expectedTarget.processIncarnation
+        },
+        [MAILBOX_POINTER_WRITE_ATTEMPTED]
+      )
       if (args.state.clearWatermark(args.mailboxHandle, args.newestSequence, ptyId)) {
         args.redrive(args.mailboxHandle)
       }

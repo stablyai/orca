@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
 import type { AgentMessageSource } from '../../../shared/agent-session-message-source'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+import {
+  resolveStructuredPointerOperation,
+  structuredPointerBatchFingerprint
+} from './structured-pointer-operation-id'
 
 const hostRef: { current: unknown } = { current: null }
 
@@ -35,6 +40,10 @@ function transcript(count: number): AgentJournalRenderItem[] {
   )
 }
 
+function pointerSnapshot(snapshot: { items: readonly unknown[]; submissions: readonly unknown[] }) {
+  return { mailboxPointerSnapshot: () => ({ snapshot, queuedMessages: [] }) }
+}
+
 const NOTICE_SOURCE: AgentMessageSource = {
   kind: 'agent',
   senders: [],
@@ -61,9 +70,121 @@ describe('structured mailbox pointer host', () => {
 
   it("reads what the session's sends settled as", async () => {
     const submissions = [{ clientMessageId: 'op1', dispatchState: 'unknown' }]
-    hostRef.current = { journalSnapshot: () => ({ items: [], submissions }) }
+    hostRef.current = pointerSnapshot({ items: [], submissions })
     expect(await createStructuredMailboxPointerHost().readSessionFacts('s1')).toEqual({
+      queuedSends: [],
       submissions
+    })
+  })
+
+  it.each(['pending', 'accepted'] as const)(
+    'projects original mailbox members from the %s submission body',
+    async (dispatchState) => {
+      const submissions = [{ clientMessageId: 'op1', dispatchState, submittedAt: 1 }]
+      const item: AgentJournalRenderItem = {
+        itemId: agentJournalSubmissionKey('op1'),
+        revision: 1,
+        sequence: 1,
+        observedAt: 1,
+        body: {
+          kind: 'message',
+          role: 'user',
+          blocks: [],
+          from: {
+            ...NOTICE_SOURCE,
+            orchestration: {
+              message: 'mail-notice',
+              mailbox: 'dispatch:d1',
+              dispatchId: 'd1',
+              messages: [
+                { messageId: 'm1', runId: 'r1', from: 'term_coord' },
+                { messageId: 'm2', runId: 'r1', from: 'term_coord' }
+              ]
+            }
+          }
+        }
+      }
+      hostRef.current = pointerSnapshot({ items: [item], submissions })
+      expect(await createStructuredMailboxPointerHost().readSessionFacts('s1')).toEqual({
+        queuedSends: [],
+        submissions: [
+          {
+            ...submissions[0],
+            mailNotice: { mailbox: 'dispatch:d1', messageIds: ['m1', 'm2'] }
+          }
+        ]
+      })
+    }
+  )
+
+  it.each(['completed', 'interrupted', 'running', 'unverifiable'] as const)(
+    'derives legacy operation settlement from its own %s turn',
+    async (state) => {
+      const submission = { clientMessageId: 'op1', dispatchState: 'accepted', submittedAt: 1 }
+      const turn: AgentJournalRenderItem = {
+        itemId: 'turn-item-1',
+        revision: 1,
+        sequence: 2,
+        observedAt: 2,
+        body: {
+          kind: 'turn',
+          turnId: 'turn-1',
+          state,
+          userItemId: agentJournalSubmissionKey('op1')
+        }
+      }
+      hostRef.current = pointerSnapshot({ items: [turn], submissions: [submission] })
+      expect(await createStructuredMailboxPointerHost().readSessionFacts('s1')).toEqual({
+        queuedSends: [],
+        submissions: [
+          {
+            ...submission,
+            ...(['completed', 'interrupted'].includes(state) ? { turnSettled: true } : {})
+          }
+        ]
+      })
+    }
+  )
+
+  it('does not treat an unrelated settled turn as the original operation settling', async () => {
+    const submission = { clientMessageId: 'op1', dispatchState: 'accepted', submittedAt: 1 }
+    const turn: AgentJournalRenderItem = {
+      itemId: 'unrelated-turn',
+      revision: 1,
+      sequence: 2,
+      observedAt: 2,
+      body: { kind: 'turn', turnId: 'turn-2', state: 'completed', userItemId: 'another-send' }
+    }
+    hostRef.current = pointerSnapshot({ items: [turn], submissions: [submission] })
+    expect(await createStructuredMailboxPointerHost().readSessionFacts('s1')).toEqual({
+      queuedSends: [],
+      submissions: [submission]
+    })
+  })
+
+  it('reads legacy settlement through a send`s explicit turn scope', async () => {
+    const submission = { clientMessageId: 'op1', dispatchState: 'accepted', submittedAt: 1 }
+    const items: AgentJournalRenderItem[] = [
+      {
+        itemId: agentJournalSubmissionKey('op1'),
+        revision: 1,
+        sequence: 1,
+        observedAt: 1,
+        turnScope: { kind: 'turn', turnItemId: 'turn-item-1' },
+        body: { kind: 'message', role: 'user', blocks: [] }
+      },
+      {
+        itemId: 'turn-item-1',
+        revision: 1,
+        sequence: 2,
+        observedAt: 2,
+        body: { kind: 'turn', turnId: 'turn-1', state: 'completed' }
+      }
+    ]
+    hostRef.current = pointerSnapshot({ items, submissions: [submission] })
+    expect(await createStructuredMailboxPointerHost().readSessionFacts('s1')).toEqual({
+      queuedSends: [],
+      submissions: [{ ...submission, turnSettled: true }]
     })
   })
 
@@ -71,11 +192,175 @@ describe('structured mailbox pointer host', () => {
     // Null retains the pointer; an empty answer would send into a session this runtime cannot see.
     expect(await createStructuredMailboxPointerHost().readSessionFacts('s1')).toBeNull()
     hostRef.current = {
-      journalSnapshot: () => {
+      mailboxPointerSnapshot: () => {
         throw new Error('agent_session_ownership_unknown')
       }
     }
     expect(await createStructuredMailboxPointerHost().readSessionFacts('s1')).toBeNull()
+  })
+
+  it('retains unreadable queue ownership even when journal-only facts are readable', async () => {
+    hostRef.current = {
+      journalSnapshot: () => ({ items: [], submissions: [] }),
+      mailboxPointerSnapshot: () => {
+        throw new Error('queue read failed')
+      }
+    }
+    expect(await createStructuredMailboxPointerHost().readSessionFacts('s1')).toBeNull()
+  })
+
+  it.each(['waiting', 'returned', 'dispatched', 'withdrawn'] as const)(
+    'projects historical acceptance of a %s queue row under its original identity',
+    async (state) => {
+      const body = {
+        kind: 'message',
+        role: 'user',
+        blocks: [],
+        from: {
+          ...NOTICE_SOURCE,
+          orchestration: {
+            message: 'mail-notice',
+            mailbox: 'dispatch:d1',
+            dispatchId: 'd1',
+            messages: [{ messageId: 'm1', runId: 'r1', from: 'term_coord' }]
+          }
+        }
+      }
+      hostRef.current = {
+        mailboxPointerSnapshot: () => ({
+          snapshot: { items: [], submissions: [] },
+          queuedMessages: [{ messageId: 'original', state, body, consumedAs: 'fresh' }]
+        })
+      }
+      expect(await createStructuredMailboxPointerHost().readSessionFacts('s1')).toEqual({
+        submissions: [],
+        queuedSends: [
+          {
+            operationId: 'original',
+            mailNotice: { mailbox: 'dispatch:d1', messageIds: ['m1'] },
+            ...(state === 'withdrawn' ? { settled: true } : {})
+          }
+        ]
+      })
+    }
+  )
+
+  it.each(['withdrawn', 'completed', 'interrupted', 'running', 'unverifiable', 'waiting'] as const)(
+    'ends missing-provenance queue ownership only with its own proven %s lifecycle',
+    async (state) => {
+      const turn: AgentJournalRenderItem = {
+        itemId: 'own-turn',
+        revision: 1,
+        sequence: 2,
+        observedAt: 2,
+        body: {
+          kind: 'turn',
+          turnId: 'turn-1',
+          state: state === 'withdrawn' || state === 'waiting' ? 'completed' : state,
+          userItemId: agentJournalSubmissionKey('fresh-handoff')
+        }
+      }
+      hostRef.current = {
+        mailboxPointerSnapshot: () => ({
+          snapshot: {
+            items: [turn],
+            submissions: [
+              {
+                clientMessageId: 'fresh-handoff',
+                queuedMessageId: 'original',
+                dispatchState: 'accepted',
+                submittedAt: 1,
+                providerItemId: null
+              }
+            ]
+          },
+          queuedMessages: [
+            {
+              messageId: 'original',
+              state: state === 'withdrawn' || state === 'waiting' ? state : 'dispatched',
+              consumedAs: 'fresh-handoff',
+              body: { kind: 'message', role: 'user', blocks: [] }
+            }
+          ]
+        })
+      }
+      const facts = await createStructuredMailboxPointerHost().readSessionFacts('s1')
+      if (!facts) {
+        throw new Error('fixture facts were unreadable')
+      }
+      const put = vi.fn()
+      const outcome = resolveStructuredPointerOperation({
+        db: {
+          getStructuredPointerOperation: () => ({
+            mailbox_handle: 'dispatch:d1',
+            session_id: 's1',
+            operation_id: 'original',
+            batch_fingerprint: structuredPointerBatchFingerprint('s1', ['old']),
+            minted_at_ms: 1
+          }),
+          putStructuredPointerOperation: put
+        },
+        mailboxHandle: 'dispatch:d1',
+        sessionId: 's1',
+        messageIds: ['new'],
+        submissions: facts.submissions,
+        queuedSends: facts.queuedSends,
+        sentByThisProcess: undefined
+      })
+      const ended = state === 'withdrawn' || state === 'completed' || state === 'interrupted'
+      expect(outcome.kind).toBe(ended ? 'send' : 'park')
+      expect(put).toHaveBeenCalledTimes(ended ? 1 : 0)
+    }
+  )
+
+  it('does not let an older ended handoff retire a newer handoff across a clock step', async () => {
+    hostRef.current = {
+      mailboxPointerSnapshot: () => ({
+        snapshot: {
+          items: [
+            {
+              itemId: 'old-turn',
+              revision: 1,
+              sequence: 2,
+              observedAt: 2,
+              body: {
+                kind: 'turn',
+                turnId: 'old',
+                state: 'completed',
+                userItemId: agentJournalSubmissionKey('old-handoff')
+              }
+            }
+          ],
+          submissions: [
+            {
+              clientMessageId: 'new-handoff',
+              queuedMessageId: 'original',
+              submittedSequence: 3,
+              submittedAt: 1,
+              dispatchState: 'pending'
+            },
+            {
+              clientMessageId: 'old-handoff',
+              queuedMessageId: 'original',
+              submittedSequence: 1,
+              submittedAt: 10,
+              dispatchState: 'accepted'
+            }
+          ]
+        },
+        queuedMessages: [
+          {
+            messageId: 'original',
+            state: 'dispatched',
+            consumedAs: 'new-handoff',
+            body: { kind: 'message', role: 'user', blocks: [] }
+          }
+        ]
+      })
+    }
+    expect(
+      (await createStructuredMailboxPointerHost().readSessionFacts('s1'))?.queuedSends
+    ).toEqual([{ operationId: 'original' }])
   })
 
   it('reports an unattached host rather than a rejection when nothing can be sent', async () => {

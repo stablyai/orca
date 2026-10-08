@@ -24,14 +24,13 @@ export function createCoordinatorMailObservationClock(
       await new Promise<void>((resolve) => setImmediate(resolve))
     },
     async edgesAnswered(
-      runtime: Pick<OrcaRuntimeService, 'onStructuredSessionStatusForMail'>,
-      wait: { timeout: number }
+      runtime: Pick<OrcaRuntimeService, 'onStructuredSessionStatusForMail'>
     ): Promise<void> {
-      const reads = vi.spyOn(getHost(), 'journalSnapshot')
+      const reads = vi.spyOn(getHost(), 'mailboxPointerSnapshot')
       runtime.onStructuredSessionStatusForMail({ sessionId, status: null })
       runtime.onStructuredSessionStatusForMail({ sessionId, status: 'idle' })
-      await vi.waitFor(() => expect(reads).toHaveBeenCalled(), wait)
       await Promise.all(reads.mock.results.map((read) => read.value))
+      await getHost().flushStreamedEvents(sessionId)
       await new Promise((resolve) => setImmediate(resolve))
       reads.mockRestore()
     },

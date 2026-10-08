@@ -43,6 +43,7 @@ export function selectOrchestrationPointerBatch(input: {
   mailboxHandle: string
   waiters: ReadonlySet<OrchestrationMessageWaiter> | undefined
   reservedTypes: ReadonlySet<string> | undefined
+  excludeMessageIds?: readonly string[]
 }): MessageRow[] {
   if (hasUnfilteredOrchestrationWaiter(input.waiters)) {
     return []
@@ -55,8 +56,28 @@ export function selectOrchestrationPointerBatch(input: {
   }
   return input.db.getUndeliveredUnreadMessages(input.mailboxHandle, undefined, {
     excludeTypes: [...excludedTypes],
+    excludeFetched: true,
+    excludeMessageIds: input.excludeMessageIds,
     limit: ORCHESTRATION_DELIVERY_BATCH_LIMIT
   })
+}
+
+export function selectStagedOrchestrationPointerMessages<T extends { id: string; type: string }>(
+  db: OrchestrationDb | null,
+  mailboxHandle: string,
+  messages: readonly T[],
+  waiters: ReadonlySet<OrchestrationMessageWaiter> | undefined
+): T[] {
+  const eligibleIds = db?.getMailboxPointerAttentionIds?.(
+    mailboxHandle,
+    messages.map((message) => message.id)
+  )
+  const eligible = eligibleIds ? new Set(eligibleIds) : null
+  return messages.filter(
+    (message) =>
+      !messageTypeHasOrchestrationWaiter(waiters, message.type) &&
+      (eligible?.has(message.id) ?? db?.areUnreadMessages?.(mailboxHandle, [message.id]) ?? true)
+  )
 }
 
 export function shouldReleaseOrchestrationPointer(
@@ -65,16 +86,5 @@ export function shouldReleaseOrchestrationPointer(
   messages: readonly { id: string; type: string }[],
   waiters: ReadonlySet<OrchestrationMessageWaiter> | undefined
 ): boolean {
-  if (db?.hasOutstandingMailboxDelivery?.(mailboxHandle)) {
-    return true
-  }
-  if (messages.some((message) => messageTypeHasOrchestrationWaiter(waiters, message.type))) {
-    return true
-  }
-  return !(
-    db?.areUnreadMessages?.(
-      mailboxHandle,
-      messages.map((message) => message.id)
-    ) ?? true
-  )
+  return selectStagedOrchestrationPointerMessages(db, mailboxHandle, messages, waiters).length === 0
 }

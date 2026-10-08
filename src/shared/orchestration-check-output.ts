@@ -36,10 +36,40 @@ export type OrchestrationCheckOutput = {
   count: number
   formatted?: string
   deliveryId?: string | null
+  replayed?: boolean
+  replayRecovery?: OrchestrationReplayRecovery
   timedOut?: boolean
   cancelled?: boolean
   connectionLost?: boolean
   legacyCompatibility?: LegacyCompatibilityResult
+}
+
+export type OrchestrationReplayRecovery = {
+  waitingCount?: number
+  ackCommand: string
+  guidance: string
+}
+
+export type OrchestrationCheckInvocation = {
+  cliCommand: 'orca' | 'orca-ide' | 'orca-dev'
+  terminal?: string
+  run?: string
+  consuming: boolean
+}
+
+export function createOrchestrationReplayRecovery(
+  deliveryId: string,
+  invocation: OrchestrationCheckInvocation,
+  waitingCount?: number
+): OrchestrationReplayRecovery {
+  const terminal = invocation.terminal ? ` --terminal ${invocation.terminal}` : ''
+  const run = invocation.run ? ` --run ${invocation.run}` : ''
+  return {
+    ...(waitingCount === undefined ? {} : { waitingCount }),
+    ackCommand: `${invocation.cliCommand} orchestration check${terminal}${run} --ack ${deliveryId}`,
+    guidance:
+      'Process every message in this batch before acknowledging, then process the next batch returned.'
+  }
 }
 
 export function formatMessageReadOnlyTag(
@@ -80,8 +110,12 @@ export function formatOrchestrationCheckText(
         : '[LEGACY COMPATIBILITY]\n'
     : ''
   const deliveryNotice = formatCurrentDeliveryNotice(prepared.legacyCompatibility?.currentDelivery)
+  const replayNotice = formatReplayRecoveryNotice(prepared.replayRecovery)
+  const deliveryHeader = prepared.deliveryId
+    ? `Delivery ${prepared.deliveryId}${prepared.replayRecovery ? ' (replayed)' : ''}\n`
+    : ''
   if (prepared.formatted) {
-    return `${legacyHeader}${prepared.deliveryId ? `Delivery ${prepared.deliveryId}\n` : ''}${prepared.formatted}${deliveryNotice}`
+    return `${legacyHeader}${deliveryHeader}${prepared.formatted}${replayNotice}${deliveryNotice}`
   }
   if (prepared.count === 0) {
     if (prepared.timedOut) {
@@ -104,28 +138,53 @@ export function formatOrchestrationCheckText(
         )} [${message.type ?? 'status'}] from=${message.from_handle} "${message.subject}"`
     )
     .join('\n')
-  const output = prepared.deliveryId ? `Delivery ${prepared.deliveryId}\n${rendered}` : rendered
-  return `${legacyHeader}${output}${deliveryNotice}`
+  return `${legacyHeader}${deliveryHeader}${rendered}${replayNotice}${deliveryNotice}`
 }
 
 export function prepareOrchestrationCheckOutput<T extends OrchestrationCheckOutput>(
   result: T,
   checkedTerminal: string,
-  formattedRequested: boolean
+  formattedRequested: boolean,
+  invocation?: OrchestrationCheckInvocation
 ): T {
   const compatibilityActive = Boolean(
     result.legacyCompatibility && !result.legacyCompatibility.readOnly
   )
+  const prepared =
+    invocation?.consuming &&
+    result.replayed &&
+    result.deliveryId &&
+    !result.legacyCompatibility &&
+    !result.messages.some((message) => isLegacyReadOnlyMessage(message))
+      ? {
+          ...result,
+          replayRecovery:
+            result.replayRecovery ??
+            createOrchestrationReplayRecovery(result.deliveryId, invocation)
+        }
+      : result
   if (
     !formattedRequested ||
     !result.messages.some((message) => isLegacyReadOnlyMessage(message, compatibilityActive))
   ) {
-    return result
+    return prepared
   }
   return {
-    ...result,
+    ...prepared,
     formatted: formatLegacyAwareCheckMessages(result.messages, checkedTerminal, compatibilityActive)
   }
+}
+
+function formatReplayRecoveryNotice(recovery: OrchestrationReplayRecovery | undefined): string {
+  if (!recovery) {
+    return ''
+  }
+  const count = recovery.waitingCount
+  const waiting =
+    count === undefined
+      ? ''
+      : `${count} unread ${count === 1 ? 'message' : 'messages'} waiting behind this Delivery.\n`
+  return `\n${waiting}${recovery.guidance}\nAcknowledge: ${recovery.ackCommand}`
 }
 
 function formatMessagePriorityTag(message: OrchestrationMessageSummary): string {

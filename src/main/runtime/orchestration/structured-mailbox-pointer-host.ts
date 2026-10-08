@@ -8,11 +8,22 @@
 
 import { AGENT_SESSION_NOT_ATTACHED } from '../../native-chat/agent-session-wire/structured-agent-session-mutation-admission'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
+import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-host'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+import { isRootAgentJournalItem } from '../../../shared/agent-session-journal-producer'
+import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import type {
   StructuredMailboxPointerHost,
   StructuredPointerSessionFacts
 } from './structured-mailbox-pointer-delivery'
-import type { AgentJournalSnapshot } from '../../../shared/agent-session-journal-types'
+import type {
+  AgentJournalItemBody,
+  AgentJournalSnapshot
+} from '../../../shared/agent-session-journal-types'
+import type {
+  StructuredPointerQueuedSend,
+  StructuredPointerSubmission
+} from './structured-pointer-operation-id'
 import {
   structuredSessionGateFacts,
   type StructuredSessionGateFacts
@@ -54,21 +65,107 @@ export async function readStructuredSessionGateFacts(
 async function readPointerSessionFacts(
   sessionId: string
 ): Promise<StructuredPointerSessionFacts | null> {
-  const snapshot = await readSessionJournal(sessionId)
-  return snapshot ? { submissions: snapshot.submissions } : null
+  const state = await readSession(sessionId, (host) => host.mailboxPointerSnapshot(sessionId))
+  if (!state) {
+    return null
+  }
+  const { snapshot, queuedMessages } = state
+  const items = new Map(snapshot.items.map((item) => [item.itemId, item]))
+  const queuedSends = new Map<string, StructuredPointerQueuedSend>()
+  const queuedRows = new Map(queuedMessages.map((row) => [row.messageId, row]))
+  const handoffSequences = new Map<string, number>()
+  for (const row of queuedMessages) {
+    const mailNotice = readMailNotice(row.body)
+    queuedSends.set(row.messageId, {
+      operationId: row.messageId,
+      ...(mailNotice ? { mailNotice } : {}),
+      ...(row.state === 'withdrawn' ? { settled: true as const } : {})
+    })
+  }
+  const settledTurns = new Set<string>()
+  const settledOpeners = new Set<string>()
+  for (const item of snapshot.items) {
+    const turn = readAgentJournalTurn(item.body)
+    if (
+      isRootAgentJournalItem(item) &&
+      (turn?.state === 'completed' || turn?.state === 'interrupted')
+    ) {
+      settledTurns.add(item.itemId)
+      if (turn.userItemId) {
+        settledOpeners.add(turn.userItemId)
+      }
+    }
+  }
+  return {
+    submissions: snapshot.submissions.map((submission) => {
+      const submissionKey = agentJournalSubmissionKey(submission.clientMessageId)
+      const item = items.get(submissionKey)
+      const mailNotice = readMailNotice(item?.body)
+      const turnSettled =
+        settledOpeners.has(submissionKey) ||
+        (submission.providerItemId !== null && settledOpeners.has(submission.providerItemId)) ||
+        (item?.turnScope?.kind === 'turn' && settledTurns.has(item.turnScope.turnItemId))
+      if (submission.queuedMessageId) {
+        const operationId = submission.queuedMessageId
+        const previous = queuedSends.get(operationId)
+        const notice = previous?.mailNotice ?? mailNotice
+        const draft = queuedRows.get(operationId)
+        const sequence = submission.submittedSequence ?? 0
+        const latest = sequence >= (handoffSequences.get(operationId) ?? -1)
+        const settled = latest
+          ? draft?.state === 'withdrawn' ||
+            (!draft && submission.dispatchState === 'rejected') ||
+            ((!draft ||
+              (draft.state === 'dispatched' && draft.consumedAs === submission.clientMessageId)) &&
+              turnSettled)
+          : previous?.settled
+        if (latest) {
+          handoffSequences.set(operationId, sequence)
+        }
+        // A fresh handoff still names its original card after retention prunes the row.
+        queuedSends.set(operationId, {
+          operationId,
+          ...(notice ? { mailNotice: notice } : {}),
+          ...(settled ? { settled: true as const } : {})
+        })
+      }
+      return {
+        ...submission,
+        ...(turnSettled ? { turnSettled: true as const } : {}),
+        ...(mailNotice ? { mailNotice } : {})
+      }
+    }),
+    queuedSends: [...queuedSends.values()]
+  }
 }
 
-async function readSessionJournal(sessionId: string): Promise<AgentJournalSnapshot | null> {
+function readMailNotice(
+  body: AgentJournalItemBody | undefined
+): StructuredPointerSubmission['mailNotice'] {
+  const notice = body?.kind === 'message' && body.role === 'user' ? body.from?.orchestration : null
+  return notice?.message === 'mail-notice'
+    ? { mailbox: notice.mailbox, messageIds: notice.messages.map((message) => message.messageId) }
+    : undefined
+}
+
+function readSessionJournal(sessionId: string): Promise<AgentJournalSnapshot | null> {
+  return readSession(sessionId, (host) => host.journalSnapshot(sessionId))
+}
+
+async function readSession<T>(
+  sessionId: string,
+  read: (host: StructuredAgentSessionHost) => Promise<T>
+): Promise<T | null> {
   const host = getStructuredAgentSessionHost()
   if (!host) {
     return null
   }
   try {
     // Opens a conversation the idle sweep closed; that starts no agent.
-    return await host.journalSnapshot(sessionId)
+    return await read(host)
   } catch (error) {
     // Not attached is a retain reason, not a failure; anything else is still unreadable.
-    if ((error as Error)?.message !== AGENT_SESSION_NOT_ATTACHED.code) {
+    if (!(error instanceof Error && error.message === AGENT_SESSION_NOT_ATTACHED.code)) {
       console.warn('[orchestration] structured journal unreadable', sessionId, error)
     }
     return null

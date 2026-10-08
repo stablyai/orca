@@ -184,6 +184,27 @@ export function hasOutstandingMailboxDelivery(
   )
 }
 
+export function countUnreadMessagesOutsideDelivery(
+  this: OrchestrationDb,
+  params: { runId: string; mailboxHandle: string; deliveryId?: string }
+): number {
+  const row = this.db
+    .prepare(
+      `SELECT COUNT(*) AS count FROM messages AS message
+       WHERE message.run_id = ? AND message.to_handle = ? AND message.read = 0
+         AND message.delivery_contract = 'current_delivery'
+         AND NOT EXISTS (
+           SELECT 1 FROM deliveries AS delivery, json_each(delivery.message_ids) AS member
+           WHERE delivery.id = ? AND member.value = message.id
+         )`
+    )
+    .get(params.runId, params.mailboxHandle, params.deliveryId ?? null)
+  if (typeof row === 'object' && row !== null && 'count' in row && typeof row.count === 'number') {
+    return row.count
+  }
+  throw new Error('Unread message count was not returned.')
+}
+
 export function fenceUnacknowledgedMailboxDeliveries(
   this: OrchestrationDb,
   mailboxHandle: string
@@ -201,6 +222,7 @@ export type RoleMailboxDeliveryMethods = {
   getOrCreateMailboxDelivery: typeof getOrCreateMailboxDelivery
   acknowledgeMailboxDelivery: typeof acknowledgeMailboxDelivery
   hasOutstandingMailboxDelivery: typeof hasOutstandingMailboxDelivery
+  countUnreadMessagesOutsideDelivery: typeof countUnreadMessagesOutsideDelivery
   fenceUnacknowledgedMailboxDeliveries: typeof fenceUnacknowledgedMailboxDeliveries
 }
 
@@ -211,6 +233,7 @@ export function attachRoleMailboxDelivery(ctor: { prototype: object }): void {
     getOrCreateMailboxDelivery,
     acknowledgeMailboxDelivery,
     hasOutstandingMailboxDelivery,
+    countUnreadMessagesOutsideDelivery,
     fenceUnacknowledgedMailboxDeliveries
   })
 }
