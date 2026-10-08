@@ -1,11 +1,12 @@
 import type { MessageRow } from '../../../../orchestration/types'
 
-// Why: read/sequence and the pointer_* and sender_pane_key columns are delivery plumbing
-// the runtime owns. Publishing them made a caller treat internal state as mailbox truth.
+// Why: read/sequence and the pointer_*, sender_pane_key and busy_delivery columns are delivery
+// plumbing the runtime owns. Publishing them made a caller treat internal state as mailbox truth.
 const INTERNAL_MESSAGE_COLUMNS = [
   'read',
   'sequence',
   'sender_pane_key',
+  'busy_delivery',
   'pointer_enter_pending',
   'pointer_pty_id',
   'pointer_process_incarnation'

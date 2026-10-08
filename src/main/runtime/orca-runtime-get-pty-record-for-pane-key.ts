@@ -14,7 +14,7 @@ import {
   handleLessCoordinatorSessionId,
   structuredSessionAddressTarget,
   structuredSessionMailTarget,
-  structuredSessionIdleEdgeMailboxes
+  redriveStructuredSessionMailOnStatus
 } from './orchestration/structured-session-mail-target'
 import { exitedChatDispatchesForSession } from './orchestration/chat-assignee'
 import { OPERATOR_CLOSE_EXIT_CAUSE } from '../../shared/terminal-exit-cause'
@@ -199,23 +199,20 @@ export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneM
   }
 
   /**
-   * Every structured session's status change reaches here. At its idle edge, retry what is parked
-   * on it and re-derive the mailboxes it owns, so mail it could not take earlier (mid-turn, closed)
-   * is pointed again. Workers and chats alike: this is not per-dispatch.
+   * Every structured session's status change reaches here, so mail it could not take earlier
+   * (mid-turn, closed, behind a prompt) is pointed again. Workers and chats alike.
    */
-  onStructuredSessionStatusForMail(summary: {
-    sessionId: string
-    status: 'working' | 'attention' | 'idle' | null
-  }): void {
-    if (summary.status === 'working' || summary.status === 'attention') {
-      return
-    }
+  onStructuredSessionStatusForMail(
+    summary: { sessionId: string; status: 'working' | 'attention' | 'idle' | null },
+    transition?: { previousStatus?: 'working' | 'attention' | 'idle' | null }
+  ): void {
     // Logged, never thrown: the same status callback goes on to the first-turn workspace rename.
     try {
-      this.notifyStructuredSessionJournalActivity(summary.sessionId)
-      const openDb = () => this.getExistingOrchestrationDb()
-      const deliver = (mailbox: string) => this.deliverPendingMessagesForHandle(mailbox)
-      structuredSessionIdleEdgeMailboxes(summary.sessionId, openDb).forEach(deliver)
+      redriveStructuredSessionMailOnStatus(summary, transition?.previousStatus, {
+        retryParked: (sessionId) => this.notifyStructuredSessionJournalActivity(sessionId),
+        openDb: () => this.getExistingOrchestrationDb(),
+        deliver: (mailbox) => this.deliverPendingMessagesForHandle(mailbox)
+      })
     } catch (error) {
       console.warn('[orchestration] structured session mail redrive failed', {
         sessionId: summary.sessionId,

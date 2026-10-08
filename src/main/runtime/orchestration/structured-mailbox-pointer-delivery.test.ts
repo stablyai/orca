@@ -32,27 +32,45 @@ function harness(options: {
   /** The mailbox this worker owns; its own handle for direct peer mail outside a dispatch. */
   mailbox?: string
   dispatchId?: string | null
+  /** What the first message's sender asked a mid-turn chat to do with it. */
+  busyDelivery?: 'queue' | 'steer'
+  /** Each send waits for `releaseSend`, so mail can arrive while one is in flight. */
+  holdSends?: true
 }) {
   const mailbox = options.mailbox ?? 'dispatch:d1'
   const dispatchId = options.dispatchId === undefined ? 'd1' : options.dispatchId
   let attached = options.attached ?? true
+  let awaitingHuman = false
   // The session's recorded sends, as its journal reports them.
   let submissions: StructuredPointerSubmission[] = []
   // The mailbox's unread mail; a pointed message is no longer selected for a pointer.
   const mail = [
-    { id: 'm1', type: 'status', sequence: 3, from_handle: 'term_coord', run_id: 'run_1' }
+    {
+      id: 'm1',
+      type: 'status',
+      sequence: 3,
+      from_handle: 'term_coord',
+      run_id: 'run_1',
+      busy_delivery: options.busyDelivery ?? 'queue'
+    }
   ]
+  const heldSends: (() => void)[] = []
   const pointed = new Set<string>()
   const markAsDelivered = vi.fn((ids: string[]) => {
     for (const id of ids) {
       pointed.add(id)
     }
   })
-  const send: StructuredMailboxPointerHost['send'] = vi.fn(async () =>
-    options.queued
+  const send: StructuredMailboxPointerHost['send'] = vi.fn(async (input) => {
+    if (options.holdSends) {
+      await new Promise<void>((resolve) => heldSends.push(resolve))
+    }
+    // Only a queued send can become a card; a steer joins the turn.
+    return options.queued && input.delivery === 'queue'
       ? { kind: 'queued' as const }
       : { kind: 'sent' as const, state: options.dispatchState ?? ('accepted' as const) }
-  )
+  })
+  const onRetain = vi.fn()
   const sendMock = vi.mocked(send)
   const stored = new Map<string, StructuredPointerOperationRow>()
   const db = {
@@ -60,7 +78,10 @@ function harness(options: {
     hasOutstandingMailboxDelivery: (handle: string) =>
       ((options.outstandingRunDelivery ?? false) && handle.startsWith('run:')) ||
       ((options.outstandingOwnDelivery ?? false) && !handle.startsWith('run:')),
-    getUndeliveredUnreadMessages: () => mail.filter((message) => !pointed.has(message.id)),
+    getUndeliveredUnreadMessages: vi.fn(
+      (_handle: string, _since: undefined, _options: { excludeTypes: string[] }) =>
+        mail.filter((message) => !pointed.has(message.id))
+    ),
     markAsDelivered,
     getStructuredPointerOperation: (key: string) => stored.get(key),
     putStructuredPointerOperation: (row: StructuredPointerOperationRow) =>
@@ -75,21 +96,35 @@ function harness(options: {
     getCliCommand: () => 'orca-dev',
     senderName: (party) => (party.address === 'term_coord' ? 'Coordinator' : null),
     host: {
-      readSessionFacts: async () => (attached ? { submissions } : null),
+      readSessionFacts: async () => (attached ? { submissions, awaitingHuman } : null),
       currentFence: () => 4,
       send
-    }
+    },
+    onRetain
   })
   return {
     delivery,
     markAsDelivered,
+    selectBatch: db.getUndeliveredUnreadMessages,
     send: sendMock,
+    onRetain,
     stored,
     setAttached: (next: boolean) => {
       attached = next
     },
-    receive: (id: string, sequence: number) => {
-      mail.push({ id, type: 'status', sequence, from_handle: 'term_coord', run_id: 'run_1' })
+    setAwaitingHuman: (next: boolean) => {
+      awaitingHuman = next
+    },
+    releaseSend: () => heldSends.shift()?.(),
+    receive: (id: string, sequence: number, busyDelivery: 'queue' | 'steer' = 'queue') => {
+      mail.push({
+        id,
+        type: 'status',
+        sequence,
+        from_handle: 'term_coord',
+        run_id: 'run_1',
+        busy_delivery: busyDelivery
+      })
     },
     setSubmissions: (next: StructuredPointerSubmission[]) => {
       submissions = next
@@ -389,6 +424,141 @@ describe('structured mailbox pointer delivery', () => {
   })
 })
 
+describe("a sender's choice for a chat that is mid-turn", () => {
+  it('queues the pointer for mail sent to queue, and steers it for mail sent to steer', async () => {
+    const queued = harness({})
+    queued.delivery.deliverForHandle('dispatch:d1')
+    await flush()
+    expect(queued.send.mock.calls[0]![0].delivery).toBe('queue')
+
+    const steered = harness({ busyDelivery: 'steer' })
+    steered.delivery.deliverForHandle('dispatch:d1')
+    await flush()
+    expect(steered.send.mock.calls[0]![0].delivery).toBe('now')
+    expect(steered.markAsDelivered).toHaveBeenCalledWith(['m1'])
+  })
+
+  it('steers a whole batch when any one of its messages asked to', async () => {
+    const { delivery, send, receive } = harness({})
+    receive('m2', 4, 'steer')
+    delivery.deliverForHandle('dispatch:d1')
+    await flush()
+    expect(send.mock.calls[0]![0].delivery).toBe('now')
+    expect(send.mock.calls[0]![0].body.blocks[0]).toMatchObject({
+      text: expect.stringContaining('You have 2 orchestration messages.')
+    })
+  })
+
+  it('resends a reused operation id with the delivery it was first sent with', async () => {
+    // The host fingerprints delivery with the operation, so a retry that changed it would conflict.
+    const { delivery, send } = harness({ busyDelivery: 'steer', dispatchState: 'unknown' })
+    delivery.deliverForHandle('dispatch:d1')
+    await flush()
+    delivery.onJournalActivity('session-1')
+    await flush()
+    expect(send.mock.calls.map(([input]) => [input.operationId, input.delivery])).toEqual([
+      [send.mock.calls[0]![0].operationId, 'now'],
+      [send.mock.calls[0]![0].operationId, 'now']
+    ])
+  })
+
+  it('holds a steer while an approval or question is open, and steers it once answered', async () => {
+    const { delivery, send, onRetain, setAwaitingHuman, markAsDelivered } = harness({
+      busyDelivery: 'steer'
+    })
+    setAwaitingHuman(true)
+    delivery.deliverForHandle('dispatch:d1')
+    await flush()
+    expect(send).not.toHaveBeenCalled()
+    expect(markAsDelivered).not.toHaveBeenCalled()
+    expect(onRetain).toHaveBeenCalledWith(expect.objectContaining({ reason: 'awaiting-human' }))
+
+    setAwaitingHuman(false)
+    delivery.onJournalActivity('session-1')
+    await flush()
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(send.mock.calls[0]![0].delivery).toBe('now')
+    expect(markAsDelivered).toHaveBeenCalledWith(['m1'])
+  })
+
+  it('lets queued mail reach a chat with an open prompt, as a card', async () => {
+    const { delivery, send, setAwaitingHuman } = harness({ queued: true })
+    setAwaitingHuman(true)
+    delivery.deliverForHandle('dispatch:d1')
+    await flush()
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(send.mock.calls[0]![0].delivery).toBe('queue')
+  })
+
+  it('steers mail that arrives while an earlier nudge is still in flight, once that one settles', async () => {
+    const { delivery, send, receive, releaseSend, markAsDelivered } = harness({ holdSends: true })
+    delivery.deliverForHandle('dispatch:d1')
+    await flush()
+    expect(send).toHaveBeenCalledTimes(1)
+    receive('m2', 4, 'steer')
+    delivery.deliverForHandle('dispatch:d1')
+    await flush()
+    expect(send).toHaveBeenCalledTimes(1)
+
+    releaseSend()
+    await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(2))
+    expect(send.mock.calls[1]![0].delivery).toBe('now')
+    expect(send.mock.calls[1]![0].body.from).toMatchObject({
+      orchestration: { messages: [{ messageId: 'm2' }] }
+    })
+    releaseSend()
+    await vi.waitFor(() => expect(markAsDelivered).toHaveBeenCalledWith(['m2']))
+  })
+
+  it('stamps a steer the chat already took even while a prompt is open', async () => {
+    const { delivery, send, setSubmissions, setAwaitingHuman, markAsDelivered, onRetain } = harness(
+      { busyDelivery: 'steer', dispatchState: 'unknown' }
+    )
+    delivery.deliverForHandle('dispatch:d1')
+    await flush()
+    const first = send.mock.calls[0]![0].operationId
+    setSubmissions([{ clientMessageId: first, dispatchState: 'accepted', submittedAt: Date.now() }])
+    setAwaitingHuman(true)
+    delivery.onJournalActivity('session-1')
+    await flush()
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(markAsDelivered).toHaveBeenCalledWith(['m1'])
+    expect(onRetain).not.toHaveBeenCalledWith(expect.objectContaining({ reason: 'awaiting-human' }))
+  })
+
+  it('reruns with every reserved type asked for while the send was in flight', async () => {
+    const { delivery, receive, releaseSend, selectBatch, send } = harness({ holdSends: true })
+    delivery.deliverForHandle('dispatch:d1')
+    await flush()
+    receive('m2', 4)
+    delivery.deliverForHandle('dispatch:d1', new Set(['question']))
+    delivery.deliverForHandle('dispatch:d1', new Set(['escalation']))
+    releaseSend()
+    await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(2))
+    expect(new Set(selectBatch.mock.calls.at(-1)![2].excludeTypes)).toEqual(
+      new Set(['question', 'escalation'])
+    )
+    releaseSend()
+  })
+
+  it('steers a later message on its own while an earlier queued card still waits', async () => {
+    // Intended: the card's rows count as pointed once it is queued, so the steer points only the
+    // new mail; the card later sends a notice whose mail the agent has already read.
+    const { delivery, send, receive, markAsDelivered } = harness({ queued: true })
+    delivery.deliverForHandle('dispatch:d1')
+    await flush()
+    expect(markAsDelivered).toHaveBeenCalledWith(['m1'])
+    receive('m2', 4, 'steer')
+    delivery.deliverForHandle('dispatch:d1')
+    await flush()
+    expect(send).toHaveBeenCalledTimes(2)
+    expect(send.mock.calls[1]![0].delivery).toBe('now')
+    expect(send.mock.calls[1]![0].body.blocks[0]).toMatchObject({
+      text: expect.stringContaining('You have 1 orchestration message.')
+    })
+  })
+})
+
 describe('forgetting one settled worker', () => {
   /** Two workers, each detached and so each parked on its OWN session's journal edge. */
   function twoWorkerHarness() {
@@ -425,7 +595,7 @@ describe('forgetting one settled worker', () => {
       getCliCommand: () => 'orca',
       senderName: () => null,
       host: {
-        readSessionFacts: async () => (attached ? { submissions: [] } : null),
+        readSessionFacts: async () => (attached ? { submissions: [], awaitingHuman: false } : null),
         currentFence: () => 4,
         send
       }
@@ -523,7 +693,7 @@ describe('a mailbox a /clear moves while its nudge is in flight', () => {
       getCliCommand: () => 'orca-dev',
       senderName: () => null,
       host: {
-        readSessionFacts: async () => ({ submissions: [] }),
+        readSessionFacts: async () => ({ submissions: [], awaitingHuman: false }),
         currentFence: () => 4,
         send
       }

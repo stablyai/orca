@@ -85,6 +85,129 @@ describe('orca cli worktree awareness', () => {
     expect(logSpy).toHaveBeenCalledWith('Sent 2 messages to 2 recipients')
   })
 
+  it('sends --delivery steer to the runtime', async () => {
+    process.env.ORCA_TERMINAL_HANDLE = 'term_sender'
+    callMock.mockResolvedValueOnce({
+      id: 'req_send',
+      ok: true,
+      result: { message: { id: 'msg_1' } },
+      _meta: { runtimeId: 'runtime-1' }
+    })
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'orchestration',
+        'send',
+        '--to',
+        'dispatch:ctx_1',
+        '--subject',
+        'stop',
+        '--delivery',
+        'steer'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith(
+      'orchestration.send',
+      expect.objectContaining({ to: 'dispatch:ctx_1', delivery: 'steer' })
+    )
+  })
+
+  it.each([
+    [['--delivery', 'restart'], '--delivery'],
+    [['--delivery', 'steer', '--type', 'heartbeat'], 'heartbeat']
+  ])('refuses send %j before any request', async (flags, named) => {
+    process.env.ORCA_TERMINAL_HANDLE = 'term_sender'
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['orchestration', 'send', '--subject', 'x', ...flags, '--json'], '/tmp/repo')
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect(JSON.parse(String(logSpy.mock.calls[0]?.[0]))).toMatchObject({
+      ok: false,
+      error: { code: 'invalid_argument', message: expect.stringContaining(named) }
+    })
+    process.exitCode = undefined
+  })
+
+  it('refuses dispatch --delivery without --inject before any request', async () => {
+    process.env.ORCA_TERMINAL_HANDLE = 'term_sender'
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'orchestration',
+        'dispatch',
+        '--task',
+        'task_1',
+        '--to',
+        'term_worker',
+        '--delivery',
+        'steer',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect(JSON.parse(String(logSpy.mock.calls[0]?.[0]))).toMatchObject({
+      ok: false,
+      error: { code: 'invalid_argument', message: expect.stringContaining('--inject') }
+    })
+    process.exitCode = undefined
+  })
+
+  it.each([
+    ['queued', ' (task queued in the chat)'],
+    ['accepted', ' (task sent)'],
+    ['pending', ' (task handed to the chat; not taken yet)'],
+    // A newer runtime's arm this CLI does not know, and an older runtime that sends none.
+    ['steered', ''],
+    [undefined, '']
+  ])(
+    'sends dispatch --delivery steer, and says how a chat took its task (%s)',
+    async (delivery, said) => {
+      process.env.ORCA_TERMINAL_HANDLE = 'term_sender'
+      callMock.mockImplementation(async (method: string) => ({
+        id: method,
+        ok: true,
+        result:
+          method === 'orchestration.dispatch'
+            ? {
+                dispatch: { id: 'ctx_1', task_id: 'task_1', status: 'dispatched' },
+                injected: true,
+                ...(delivery ? { delivery } : {})
+              }
+            : { identity: { live: true } },
+        _meta: { runtimeId: 'runtime-1' }
+      }))
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+      await main(
+        [
+          'orchestration',
+          'dispatch',
+          '--task',
+          'task_1',
+          '--to',
+          'term_worker',
+          '--inject',
+          '--delivery',
+          'steer'
+        ],
+        '/tmp/repo'
+      )
+
+      expect(callMock).toHaveBeenCalledWith(
+        'orchestration.dispatch',
+        expect.objectContaining({ inject: true, delivery: 'steer' })
+      )
+      expect(logSpy).toHaveBeenCalledWith(`Dispatched task_1 -> ctx_1 [dispatched]${said}`)
+    }
+  )
+
   it("refuses an agent session's caller flag naming another caller before any request", async () => {
     // One chokepoint for every verb: the spec says which flag names the caller.
     process.env.ORCA_AGENT_SESSION_ID = 'f7a1c0de-1111-4222-8333-444455556666'

@@ -26,6 +26,7 @@ import { mayNameSession } from './session-recipient'
 import { sendPointToPointMessage } from './send-point-to-point'
 import { sendGroupMessage } from './send-group'
 import { sendFederatedControlMail } from './send-control-mail'
+import { federatedSteerWarnings } from './federated-steer-warning'
 import { orchestrationCallerIdentity } from '../runs/run-scope'
 import { assertLifecycleCallerIsNotAnotherParty } from './lifecycle-caller-fence'
 
@@ -194,6 +195,9 @@ export const ORCHESTRATION_SEND_METHODS = [
             messageRunId = runBound.runId
             sendWarnings.push(runBound.warning)
           }
+        }
+        if (federatedTarget) {
+          sendWarnings.push(...federatedSteerWarnings(params.delivery, to))
         }
         const federatedControl = sendFederatedControlMail({
           params,

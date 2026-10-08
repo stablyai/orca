@@ -10,6 +10,7 @@ import { parseRemoteWorkerPayload } from '../schemas'
 import type { SendParams } from '../schemas'
 import { rejectFederatedExplicitTarget } from '../routing'
 import { assertWorkerCanReport } from '../../../../orchestration/worker-report-admission'
+import { federatedSteerWarnings } from './federated-steer-warning'
 
 type SendParamsInput = z.infer<typeof SendParams>
 
@@ -100,6 +101,11 @@ export async function sendRemoteMessage(args: {
       'worker_done was queued, but the Run-home runtime did not confirm settlement. Verify the Task and Dispatch before retrying.'
     )
   }
+  const warnings = federatedSteerWarnings(
+    params.delivery,
+    `dispatch:${relay.dispatch_id}`,
+    `the Run home of Dispatch ${relay.dispatch_id}`
+  )
   return {
     relay: {
       messageId: relay.message_id,
@@ -108,6 +114,7 @@ export async function sendRemoteMessage(args: {
       destination: 'run_home',
       accepted: true
     },
-    ...(lifecycle ? { lifecycle } : {})
+    ...(lifecycle ? { lifecycle } : {}),
+    ...(warnings.length > 0 ? { warnings } : {})
   }
 }

@@ -218,6 +218,7 @@ async function dispatchRemoteCli(
           body: optionalRemoteCliString(parsed.flags, 'body'),
           type,
           priority: optionalRemoteCliString(parsed.flags, 'priority'),
+          delivery: optionalRemoteCliString(parsed.flags, 'delivery'),
           threadId: optionalRemoteCliString(parsed.flags, 'thread-id'),
           payload: getRemoteOrchestrationPayload(parsed.flags),
           // Why: the legacy in-process bridge must preserve the same pane

@@ -50,12 +50,17 @@ export async function readStructuredSessionGateFacts(
   return snapshot ? structuredSessionGateFacts(snapshot.items) : null
 }
 
-/** What each recorded send settled as. */
+/** What each recorded send settled as, and whether a prompt holds a steer back. */
 async function readPointerSessionFacts(
   sessionId: string
 ): Promise<StructuredPointerSessionFacts | null> {
   const snapshot = await readSessionJournal(sessionId)
-  return snapshot ? { submissions: snapshot.submissions } : null
+  return snapshot
+    ? {
+        submissions: snapshot.submissions,
+        awaitingHuman: structuredSessionGateFacts(snapshot.items).awaitingHuman
+      }
+    : null
 }
 
 async function readSessionJournal(sessionId: string): Promise<AgentJournalSnapshot | null> {
@@ -101,8 +106,7 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
           : structuredSessionPointerCallerKey(input.sessionId),
         turn: {
           body: input.body,
-          // As a person's message is: a busy chat queues it as a card, sent when the turn ends.
-          delivery: 'queue',
+          delivery: input.delivery,
           operationId: input.operationId,
           expectedRuntimeFence: input.expectedRuntimeFence
         }

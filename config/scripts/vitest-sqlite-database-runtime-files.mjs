@@ -71,6 +71,7 @@ export const SQLITE_DATABASE_RUNTIME_INCLUDE = [
   'src/main/runtime/orchestration/db/remaining-dispatch-statement-compilation.test.ts',
   'src/main/runtime/orchestration/db/row-column-lists.test.ts',
   'src/main/runtime/orchestration/db/runs/run-coordinator-orca-session-binding.test.ts',
+  'src/main/runtime/orchestration/db/schema/busy-delivery-migration.test.ts',
   'src/main/runtime/orchestration/db/schema/derived-delivery-migration.test.ts',
   'src/main/runtime/orchestration/db/schema/federated-home-run-migration.test.ts',
   'src/main/runtime/orchestration/db/schema/structured-pointer-schema-migration.test.ts',

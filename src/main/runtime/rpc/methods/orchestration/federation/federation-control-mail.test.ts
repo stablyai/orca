@@ -183,6 +183,54 @@ describe('orchestration federation control mail', () => {
     expect(homeDb.listPendingFederationRelay(dispatchId, 'to_worker')).toHaveLength(0)
   })
 
+  it('says a steer to a Dispatch on another Orca server is queued there, and still relays it', async () => {
+    vi.spyOn(homeRuntime, 'ensureOrchestrationFederationRelay').mockImplementation(() => {})
+    const sent = await homeDispatcher.dispatch({
+      id: 'send-steer',
+      authToken: 'coordinator-token',
+      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
+      orchestrationRequestId: 'send-steer-request',
+      method: 'orchestration.send',
+      params: {
+        from: 'term_coord',
+        to: `dispatch:${dispatchId}`,
+        subject: 'Stop',
+        delivery: 'steer'
+      }
+    })
+
+    expect(sent).toMatchObject({
+      ok: true,
+      result: {
+        relay: { dispatchId, accepted: true },
+        warnings: [{ code: 'delivery_not_relayed', recipient: `dispatch:${dispatchId}` }]
+      }
+    })
+    await syncFederationBarrier(homeRuntime, homeDb)
+    expect(workerDb.getUnreadMessages(`dispatch:${dispatchId}`)).toMatchObject([
+      { subject: 'Stop', busy_delivery: 'queue' }
+    ])
+  })
+
+  it("says a worker's steer to its Run home on another Orca server is queued there", async () => {
+    const sent = await workerDispatcher.dispatch({
+      id: 'worker-steer',
+      authToken: workerToken,
+      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
+      orchestrationRequestId: 'worker-steer-request',
+      method: 'orchestration.send',
+      params: { from: 'term_worker', subject: 'Blocked', delivery: 'steer' }
+    })
+
+    expect(sent).toMatchObject({
+      ok: true,
+      result: {
+        relay: { destination: 'run_home', accepted: true },
+        warnings: [{ code: 'delivery_not_relayed', recipient: `dispatch:${dispatchId}` }]
+      }
+    })
+  })
+
   it('wakes a remote worker waiter when control mail imports', async () => {
     const waiting = workerDispatcher.dispatch(checkRequest('wait-for-control', true))
     await Promise.resolve()

@@ -41,6 +41,11 @@ export type StructuredSessionTurn = {
   operationId: string
   expectedRuntimeFence: number
   delivery: AgentTurnDelivery
+  /**
+   * False for a `now` send into a turn already running: the agent takes it at its next step, not
+   * at a start, so `pending` is already the hand-off and there is no start to wait out.
+   */
+  awaitsStart?: boolean
 }
 
 export type StructuredSessionTurnSend = {
@@ -142,7 +147,7 @@ async function sendStructuredSessionTurn(
   // Accepted is not delivered: the agent may still be starting, so wait the start out. A wait
   // that fails or runs out leaves the first answer standing.
   const answered = agentSessionSendSubmission(result.value)
-  if (answered?.dispatchState !== 'pending') {
+  if (answered?.dispatchState !== 'pending' || turn.awaitsStart === false) {
     return { kind: 'sent', clientMessageId, submission: answered }
   }
   // The submission's own id: a replayed `queue` turn whose draft went out answers with the

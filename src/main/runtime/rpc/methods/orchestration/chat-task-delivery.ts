@@ -1,19 +1,27 @@
 /**
- * A chat assignee's task, sent as any agent's message into a chat is: the composer's queued send,
- * held as a card while the chat is busy, recording the Dispatch it is from. The operation id is
- * derived from the Dispatch, so a second send for one Dispatch replays instead of queueing twice.
+ * A chat assignee's task, sent as any agent's message into a chat is: by default the composer's
+ * queued send, held as a card while the chat is busy; with `steer`, its plain send, which joins the
+ * running turn. Either records the Dispatch it is from. The operation id is derived from the
+ * Dispatch, so a second send for one Dispatch replays instead of queueing twice.
  */
 
 import { createHash } from 'node:crypto'
 import type { AgentJournalMessageItem } from '../../../../../shared/agent-session-journal-types'
 import type { AgentMessageSource } from '../../../../../shared/agent-session-message-source'
+import {
+  agentTurnDeliveryFor,
+  type OrchestrationBusyDelivery
+} from '../../../../../shared/orchestration-busy-delivery'
 import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { chatAssigneeSessionId, observeChatAssignee } from '../../../orchestration/chat-assignee'
 import type { OrchestrationDb } from '../../../orchestration/db'
 import { exposeUtcTimestamp } from '../../../orchestration/db/utc-timestamp'
 import { OrchestrationError } from '../../../orchestration/orchestration-error'
-import { sendAgentTurn } from '../../../orchestration/send-agent-turn'
-import { structuredPointerCallerKey } from '../../../orchestration/structured-mailbox-pointer-host'
+import { sendAgentTurn, type AgentTurnDelivery } from '../../../orchestration/send-agent-turn'
+import {
+  readStructuredSessionGateFacts,
+  structuredPointerCallerKey
+} from '../../../orchestration/structured-mailbox-pointer-host'
 import type { DispatchContextRow } from '../../../orchestration/types'
 import { preambleDispatchState } from '../orchestration-structured-worker-session'
 
@@ -41,6 +49,8 @@ export async function sendChatTask(args: {
   /** Who the task is from (`dispatchTaskSource`), shown on the chat's card or turn. */
   from: AgentMessageSource
   preamble: string
+  /** Defaults to `queue`. */
+  delivery?: OrchestrationBusyDelivery
 }): Promise<ChatTaskDelivery> {
   const sessionId = chatAssigneeSessionId(args.dispatch.assignee_handle)
   const host = getStructuredAgentSessionHost()
@@ -65,8 +75,7 @@ export async function sendChatTask(args: {
     callerKey: structuredPointerCallerKey(args.dispatch.id),
     turn: {
       body,
-      // As a person's message is: a busy chat queues it as a card, sent when the queue reaches it.
-      delivery: 'queue',
+      ...(await chatTaskTurnDelivery(observed.session.sessionId, args.delivery ?? 'queue')),
       operationId: chatTaskOperationId(args.dispatch),
       expectedRuntimeFence: observed.session.lease.runtimeFence
     }
@@ -81,5 +90,27 @@ export async function sendChatTask(args: {
       return 'queued'
     case 'sent':
       return preambleDispatchState(outcome.submission)
+  }
+}
+
+/**
+ * A steer never goes past an open approval or question, as the person's own Steer does not. This
+ * one send cannot wait the prompt out, so it queues as a card, which the result reports. A steer
+ * into a running turn reports its hand-off at once: the chat takes it at its next step.
+ */
+async function chatTaskTurnDelivery(
+  sessionId: string,
+  delivery: OrchestrationBusyDelivery
+): Promise<{ delivery: AgentTurnDelivery; awaitsStart?: boolean }> {
+  if (delivery === 'queue') {
+    return { delivery: 'queue' }
+  }
+  const gate = await readStructuredSessionGateFacts(sessionId)
+  if (gate?.awaitingHuman) {
+    return { delivery: 'queue' }
+  }
+  return {
+    delivery: agentTurnDeliveryFor(delivery),
+    ...(gate?.turnRunning ? { awaitsStart: false } : {})
   }
 }

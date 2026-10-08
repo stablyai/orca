@@ -45,7 +45,10 @@ CREATE TABLE IF NOT EXISTS messages (
   sender_pane_key TEXT,
   pointer_enter_pending INTEGER NOT NULL DEFAULT 0,
   pointer_pty_id TEXT,
-  pointer_process_incarnation TEXT
+  pointer_process_incarnation TEXT,
+  -- What the sender asked a mid-turn chat to do: 'queue' or 'steer'. No CHECK, so a later value
+  -- needs no table rebuild; readers take an unknown one as 'queue'.
+  busy_delivery TEXT NOT NULL DEFAULT 'queue'
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_id ON messages(id);

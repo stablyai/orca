@@ -33,9 +33,9 @@ message ID; do not create a duplicate question.
 
 ## Reading coordinator follow-ups
 
-The coordinator steers a running worker with `send --to dispatch:<id>`. That
-enqueue is durable but does not interrupt you, so nothing arrives unless you
-look:
+The coordinator redirects a running worker with `send --to dispatch:<id>`. A
+plain send is durable but does not interrupt you (`--delivery steer` into a
+chat does), so look for it:
 
 ```text
 ORCA orchestration check --terminal <worker_handle> --json

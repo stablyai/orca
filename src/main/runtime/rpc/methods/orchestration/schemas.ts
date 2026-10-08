@@ -6,6 +6,11 @@ import { isGroupAddress } from '../../../orchestration/groups'
 import { MESSAGE_TYPES } from '../../../orchestration/types'
 import { OrchestrationError } from '../../../orchestration/orchestration-error'
 import {
+  HEARTBEAT_STEER_REFUSAL_MESSAGE,
+  INVALID_ORCHESTRATION_BUSY_DELIVERY_MESSAGE,
+  ORCHESTRATION_BUSY_DELIVERIES
+} from '../../../../../shared/orchestration-busy-delivery'
+import {
   getLifecycleGroupRecipientError,
   isDispatchMutationMessageType
 } from '../../../../../shared/rpc-contract/orchestration-params'
@@ -101,6 +106,9 @@ export const SendParams = z
       })
       .optional(),
     priority: z.enum(['normal', 'high', 'urgent']).optional(),
+    delivery: z
+      .enum(ORCHESTRATION_BUSY_DELIVERIES, { error: INVALID_ORCHESTRATION_BUSY_DELIVERY_MESSAGE })
+      .optional(),
     threadId: OptionalString,
     payload: OptionalString,
     // Why: pane key is the remint-stable identity used to verify worker_done/heartbeat ownership; the from handle stays routing metadata.
@@ -110,6 +118,13 @@ export const SendParams = z
     devMode: OptionalBoolean
   })
   .superRefine((params, ctx) => {
+    if (params.type === 'heartbeat' && params.delivery === 'steer') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: HEARTBEAT_STEER_REFUSAL_MESSAGE,
+        path: ['delivery']
+      })
+    }
     if (!isDispatchMutationMessageType(params.type) || !params.to || !isGroupAddress(params.to)) {
       return
     }

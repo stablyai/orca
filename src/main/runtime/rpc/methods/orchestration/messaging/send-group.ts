@@ -250,6 +250,7 @@ export async function sendGroupMessage(args: {
       payload: params.payload,
       senderPaneKey,
       runId: resolution.runId,
+      busyDelivery: params.delivery,
       deliveryContract: legacyWorkerDeliveryContract(
         runtime,
         resolution.runId ?? legacyCoordinatorRunId,

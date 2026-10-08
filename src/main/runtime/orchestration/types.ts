@@ -253,6 +253,8 @@ export type MessageRow = {
   created_at: string
   delivered_at: string | null
   sender_pane_key: string | null
+  /** What the sender asked a mid-turn chat to do with it; read through `readOrchestrationBusyDelivery`. */
+  busy_delivery?: string
   pointer_enter_pending?: number
   pointer_pty_id?: string | null
   pointer_process_incarnation?: string | null

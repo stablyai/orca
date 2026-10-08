@@ -19,6 +19,8 @@ export type StructuredPointerRetainReason =
   | 'turn-unsettled'
   | 'dispatch-rejected'
   | 'dispatch-unknown'
+  /** A steer waits out an approval or question, as the person's own Steer does. */
+  | 'awaiting-human'
 
 /** The dispatch states both provider adapters converge on. */
 export type StructuredDispatchState = 'accepted' | 'rejected' | 'unknown'

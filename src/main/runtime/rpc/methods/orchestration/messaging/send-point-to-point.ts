@@ -70,6 +70,7 @@ export function sendPointToPointMessage(args: {
         : params.payload,
       senderPaneKey,
       runId: messageRunId,
+      busyDelivery: params.delivery,
       deliveryContract: legacyWorkerDeliveryContract(
         runtime,
         messageRunId ?? legacyCoordinatorRunId,

@@ -135,6 +135,17 @@ describe('sendAgentTurn to a structured session', () => {
     })
   })
 
+  it('answers a send into a running turn at its hand-off, with no start to wait out', async () => {
+    const fake = structuredHost(
+      accepted({ clientMessageId: 'op-1', submission: submissionOf('pending') }),
+      submissionOf('accepted')
+    )
+    await expect(
+      sendAgentTurn(structured(fake.host, { ...turn, awaitsStart: false }))
+    ).resolves.toMatchObject({ kind: 'sent', submission: { dispatchState: 'pending' } })
+    expect(fake.waitForSendSettlement).not.toHaveBeenCalled()
+  })
+
   it('keeps the first answer when the wait runs out or fails', async () => {
     for (const settled of [undefined, 'throws'] as const) {
       const fake = structuredHost(

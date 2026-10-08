@@ -4,6 +4,8 @@ import { getOptionalStringFlag, getRequiredStringFlag } from '../../flags'
 import { RuntimeClientError } from '../../runtime-client'
 import { readInjectedAgentSessionId } from '../../../shared/agent-session-caller-env'
 import { requireWorkerDoneSettlement } from '../orchestration-worker-settlement'
+import { HEARTBEAT_STEER_REFUSAL_MESSAGE } from '../../../shared/orchestration-busy-delivery'
+import { getOptionalBusyDeliveryFlag } from './busy-delivery-flag'
 import { getOptionalStructuredMessagePayload } from './message-payload'
 import { callOrchestrationMutation } from './mutation-request'
 import { isDevCliInvocation } from './runtime-compatibility'
@@ -68,6 +70,10 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
     if (to) {
       rejectLifecycleGroupRecipient(type, to)
     }
+    const delivery = getOptionalBusyDeliveryFlag(flags)
+    if (type === 'heartbeat' && delivery === 'steer') {
+      throw new RuntimeClientError('invalid_argument', HEARTBEAT_STEER_REFUSAL_MESSAGE)
+    }
     const outcome = getOptionalStringFlag(flags, 'outcome')
     if (type !== 'worker_done' && outcome !== undefined) {
       throw new RuntimeClientError(
@@ -95,6 +101,7 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
       body: getOptionalStringFlag(flags, 'body'),
       type,
       priority: getOptionalStringFlag(flags, 'priority'),
+      delivery,
       threadId: getOptionalStringFlag(flags, 'thread-id'),
       payload: getOptionalStructuredMessagePayload(flags),
       // Why: pane key is the remint-stable sender identity the runtime verifies lifecycle ownership against; older runtimes strip it.

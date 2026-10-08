@@ -1,4 +1,4 @@
-// The production wiring of the idle-edge mail redrive: the host the runtime installs must report
+// The production wiring of the status-edge mail redrive: the host the runtime installs must report
 // every status change to the runtime's mail redrive. The integration test installs its own callback,
 // so without this nothing pins the line that connects the two in the real app.
 
@@ -23,7 +23,7 @@ const { OrcaRuntimeService } = await import('./orca-runtime')
 const { OrchestrationDb } = await import('./orchestration/db')
 
 describe("the runtime's own structured host install", () => {
-  it('reports every session status change to the mail redrive', async () => {
+  it('forwards answered-prompt status transitions to the mail redrive', async () => {
     const runtime = new OrcaRuntimeService()
     const redrive = vi
       .spyOn(runtime, 'onStructuredSessionStatusForMail')
@@ -33,16 +33,23 @@ describe("the runtime's own structured host install", () => {
       sessionId: 'claude_1234abcd',
       workspaceId: 'workspace-1',
       agent: 'claude',
-      status: 'idle',
+      status: 'working',
       latestPrompt: '',
       updatedAt: 0
     }
     try {
-      installed.deps?.onSessionStatusChanged?.(summary, { replay: false })
+      installed.deps?.onSessionStatusChanged?.(summary, {
+        replay: false,
+        previousStatus: 'attention'
+      })
     } catch {
       // The same callback's rename half needs a store this bare runtime does not have.
     }
-    expect(redrive).toHaveBeenCalledWith(summary)
+    // With the edge it replaces, so the redrive can act on an answered prompt alone.
+    expect(redrive).toHaveBeenCalledWith(summary, {
+      replay: false,
+      previousStatus: 'attention'
+    })
   })
 
   it('logs a redrive the database fails, so the status callback goes on to the workspace rename', () => {

@@ -19,7 +19,7 @@ import {
   chatAssigneeOf,
   refuseChatSelfAssignment
 } from '../chat-assignee-admission'
-import { sendChatTask } from '../chat-task-delivery'
+import { sendChatTask, type ChatTaskDelivery } from '../chat-task-delivery'
 import { dispatchTaskSource } from '../../../../orchestration/dispatch-task-source'
 
 export const ORCHESTRATION_DISPATCH_METHODS = [
@@ -175,6 +175,7 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
 
       let injected = false
       let prompt
+      let chatDelivery: ChatTaskDelivery | undefined
       if (params.inject) {
         try {
           if (chatAssignee) {
@@ -185,7 +186,13 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
               senderName: (party, reported) =>
                 runtime.orchestrationSenderNames.nameOf(party, reported)
             })
-            await sendChatTask({ db, dispatch: ctx, from, preamble })
+            chatDelivery = await sendChatTask({
+              db,
+              dispatch: ctx,
+              from,
+              preamble,
+              delivery: params.delivery
+            })
           } else {
             prompt = await sendAgentTurn({
               kind: 'terminal',
@@ -209,16 +216,24 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
         }
       }
 
+      // How a chat took its task; a terminal's is typed at once, so it has none.
+      const delivered = chatDelivery ? { delivery: chatDelivery } : {}
       // Why: returnPreamble is opt-in because the preamble is several hundred bytes most callers don't need in the response.
       if (params.returnPreamble) {
         return {
           dispatch: ctx,
           injected,
+          ...delivered,
           preamble,
           ...(prompt?.prompt ? { prompt: prompt.prompt } : {})
         }
       }
-      return { dispatch: ctx, injected, ...(prompt?.prompt ? { prompt: prompt.prompt } : {}) }
+      return {
+        dispatch: ctx,
+        injected,
+        ...delivered,
+        ...(prompt?.prompt ? { prompt: prompt.prompt } : {})
+      }
     }
   }),
 

@@ -63,7 +63,22 @@ describe('structured mailbox pointer host', () => {
     const submissions = [{ clientMessageId: 'op1', dispatchState: 'unknown' }]
     hostRef.current = { journalSnapshot: () => ({ items: [], submissions }) }
     expect(await createStructuredMailboxPointerHost().readSessionFacts('s1')).toEqual({
-      submissions
+      submissions,
+      awaitingHuman: false
+    })
+  })
+
+  it('reports a pending approval, which holds a steer back', async () => {
+    const approval = {
+      itemId: 'approval-1',
+      revision: 1,
+      body: { kind: 'approval', resolution: { state: 'pending' } }
+    }
+    hostRef.current = {
+      journalSnapshot: () => ({ items: [runningTurn(), approval], submissions: [] })
+    }
+    expect(await createStructuredMailboxPointerHost().readSessionFacts('s1')).toMatchObject({
+      awaitingHuman: true
     })
   })
 
@@ -136,13 +151,33 @@ describe('structured mailbox pointer host', () => {
         dispatchId: 'd1',
         operationId: 'op1',
         expectedRuntimeFence: 1,
-        body: { kind: 'message', role: 'user', blocks: [], from: NOTICE_SOURCE }
+        body: { kind: 'message', role: 'user', blocks: [], from: NOTICE_SOURCE },
+        delivery: 'queue'
       })
     ).resolves.toEqual({ kind: 'queued' })
     expect(send.mock.calls[0]![1]).toMatchObject({
       delivery: 'queue-if-active',
       body: { from: NOTICE_SOURCE }
     })
+  })
+
+  it("sends a steer as the composer's plain send, which joins a running turn", async () => {
+    const send = vi.fn(async (_caller: unknown, _payload: { delivery?: string }) => ({
+      ok: true,
+      value: { clientMessageId: 'op1', submission: { dispatchState: 'accepted' } }
+    }))
+    hostRef.current = { send }
+    await expect(
+      createStructuredMailboxPointerHost().send({
+        sessionId: 's1',
+        dispatchId: 'd1',
+        operationId: 'op1',
+        expectedRuntimeFence: 1,
+        body: { kind: 'message', role: 'user', blocks: [], from: NOTICE_SOURCE },
+        delivery: 'now'
+      })
+    ).resolves.toEqual({ kind: 'sent', state: 'accepted' })
+    expect(send.mock.calls[0]![1]).not.toHaveProperty('delivery')
   })
 
   it('consumes mail once an accepted nudge is delivered while the worker starts (W10)', async () => {

@@ -5,6 +5,11 @@ import {
   OptionalString,
   requiredString
 } from './rpc-param-primitives'
+import {
+  DISPATCH_DELIVERY_WITHOUT_INJECT_MESSAGE,
+  INVALID_ORCHESTRATION_BUSY_DELIVERY_MESSAGE,
+  ORCHESTRATION_BUSY_DELIVERIES
+} from '../orchestration-busy-delivery'
 
 export type DispatchMutationMessageType =
   | 'worker_done'
@@ -94,17 +99,31 @@ export const TaskListParams = z.object({
   callerTerminalHandle: OptionalString
 })
 
-export const DispatchParams = z.object({
-  task: requiredString('Missing --task'),
-  // Why: --to is optional so --dry-run can preview without a target; the handler enforces presence before any side-effecting work.
-  to: OptionalString,
-  from: OptionalString,
-  inject: OptionalBoolean,
-  dryRun: OptionalBoolean,
-  returnPreamble: OptionalBoolean,
-  devMode: OptionalBoolean,
-  run: OptionalString
-})
+export const DispatchParams = z
+  .object({
+    task: requiredString('Missing --task'),
+    // Why: --to is optional so --dry-run can preview without a target; the handler enforces presence before any side-effecting work.
+    to: OptionalString,
+    from: OptionalString,
+    inject: OptionalBoolean,
+    dryRun: OptionalBoolean,
+    returnPreamble: OptionalBoolean,
+    devMode: OptionalBoolean,
+    run: OptionalString,
+    // Closed on purpose: a value this host does not know is refused, never quietly queued.
+    delivery: z
+      .enum(ORCHESTRATION_BUSY_DELIVERIES, { error: INVALID_ORCHESTRATION_BUSY_DELIVERY_MESSAGE })
+      .optional()
+  })
+  .superRefine((params, ctx) => {
+    if (params.delivery !== undefined && !params.inject) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: DISPATCH_DELIVERY_WITHOUT_INJECT_MESSAGE,
+        path: ['delivery']
+      })
+    }
+  })
 
 /** An Orca agent session id; the answer is its conversation's Orca session ID. */
 export const SessionAddressParams = z.object({

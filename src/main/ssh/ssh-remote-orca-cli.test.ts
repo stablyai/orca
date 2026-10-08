@@ -246,6 +246,35 @@ describe('runRemoteOrcaCli', () => {
     expect(db.getUnreadMessages('term_windows')[0]?.from_handle).toBe('term_ssh')
   })
 
+  it('passes --delivery through the legacy fallback', async () => {
+    const { runtime, db } = createRuntime()
+
+    const result = await runRemoteOrcaCli(
+      runtime,
+      {
+        argv: [
+          'orchestration',
+          'send',
+          '--to',
+          'term_windows',
+          '--subject',
+          'stop',
+          '--delivery',
+          'steer',
+          '--json'
+        ],
+        cwd: '/home/alice/repo',
+        env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      },
+      LEGACY_FALLBACK_OPTIONS
+    )
+
+    expect(result.exitCode, result.stdout).toBe(0)
+    expect(db.insertMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ busyDelivery: 'steer' })
+    )
+  })
+
   it('does not trust caller-supplied remote pane identity in the legacy fallback', async () => {
     const { runtime, db } = createRuntime()
 
