@@ -1,3 +1,4 @@
+import { ImeTextarea } from '@/lib/ime-text-field'
 import { useEffect, useState } from 'react'
 import { CircleCheck, Copy, MessageSquarePlus, Pencil, Send, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -18,15 +19,18 @@ import {
 import { BROWSER_ANNOTATION_INTENT_OPTIONS } from '../describe-page/browser-annotation-geometry'
 import { BrowserAnnotationSendMenuContent } from './BrowserAnnotationSendMenuContent'
 import { preventAgentSendTargetOutsideDismiss } from './prevent-agent-send-target-outside-dismiss'
+import { browserAnnotationMatchesPageUrl } from './browser-annotation-page-url'
 
 export function BrowserPageAnnotationTray({
   browserAnnotations,
+  currentUrl,
   annotationTraySendOpen,
   handleAnnotationTraySendOpenChange,
   worktreeId,
   activeGroupId,
   browserAnnotationsPrompt,
   handleBrowserAnnotationsSentToAgent,
+  handleBrowserAnnotationsHandedOff,
   handleCopyBrowserAnnotations,
   browserAnnotationsCopied,
   handleClearBrowserAnnotations,
@@ -34,12 +38,14 @@ export function BrowserPageAnnotationTray({
   handleUpdateBrowserAnnotation
 }: {
   browserAnnotations: BrowserPageAnnotation[]
+  currentUrl?: string
   annotationTraySendOpen: boolean
   handleAnnotationTraySendOpenChange: (open: boolean) => void
   worktreeId: string
   activeGroupId: string | undefined
   browserAnnotationsPrompt: string
   handleBrowserAnnotationsSentToAgent: () => void
+  handleBrowserAnnotationsHandedOff: (delivered: Promise<unknown>) => void
   handleCopyBrowserAnnotations: () => void
   browserAnnotationsCopied: boolean
   handleClearBrowserAnnotations: () => void
@@ -108,7 +114,12 @@ export function BrowserPageAnnotationTray({
           <Tooltip>
             <TooltipTrigger asChild>
               <DropdownMenuTrigger asChild>
-                <Button size="xs" variant="outline" className="gap-1.5">
+                <Button
+                  size="xs"
+                  variant="outline"
+                  className="gap-1.5"
+                  disabled={!browserAnnotationsPrompt}
+                >
                   <Send className="size-3" />
                   {translate('auto.components.browser.pane.BrowserPane.ac39b9366b', 'Send')}
                 </Button>
@@ -132,6 +143,7 @@ export function BrowserPageAnnotationTray({
               groupId={activeGroupId ?? worktreeId}
               prompt={browserAnnotationsPrompt}
               onPromptDelivered={handleBrowserAnnotationsSentToAgent}
+              onPromptHandedOff={handleBrowserAnnotationsHandedOff}
             />
           </DropdownMenuContent>
         </DropdownMenu>
@@ -194,7 +206,7 @@ export function BrowserPageAnnotationTray({
                     }
                   }}
                 >
-                  <textarea
+                  <ImeTextarea
                     value={editComment}
                     onChange={(event) => setEditComment(event.target.value)}
                     maxLength={GRAB_BUDGET.annotationCommentMaxLength}
@@ -269,8 +281,17 @@ export function BrowserPageAnnotationTray({
                     <div className="mt-0.5 line-clamp-2 text-muted-foreground">
                       {annotation.comment}
                     </div>
-                    <div className="mt-1 text-[11px] text-muted-foreground">
+                    <div className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
                       <span>{annotation.intent}</span>
+                      {currentUrl !== undefined &&
+                      !browserAnnotationMatchesPageUrl(
+                        annotation.payload.page.sanitizedUrl,
+                        currentUrl
+                      ) ? (
+                        <span className="truncate" title={annotation.payload.page.sanitizedUrl}>
+                          {annotation.payload.page.sanitizedUrl}
+                        </span>
+                      ) : null}
                     </div>
                   </div>
                   <div className="flex shrink-0 items-start gap-0.5">

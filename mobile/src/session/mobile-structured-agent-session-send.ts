@@ -2,7 +2,7 @@ import type { AgentSessionSendResult } from '../../../src/shared/agent-session-w
 import {
   structuredAgentSessionSendBody,
   type StructuredAgentSessionAttachment
-} from '../../../src/shared/structured-agent-session-outbox'
+} from '../../../src/shared/structured-agent-session-send-mutation'
 import {
   structuredAgentSessionDomainFingerprint,
   structuredAgentSessionPayloadFingerprint
@@ -14,7 +14,10 @@ import {
   timeoutForDeadline
 } from './mobile-structured-agent-session-rpc'
 import { structuredSessionOperationId } from './structured-session-operation-id'
-import { mobileStructuredSendDelivery } from './mobile-structured-send-delivery'
+import {
+  mobileStructuredSendDelivery,
+  mobileStructuredSendWithdrawnBeforeStart
+} from './mobile-structured-send-delivery'
 import {
   bypassedMobileStructuredSendOperationId,
   clearMobileStructuredSendOperation,
@@ -162,11 +165,12 @@ export async function sendMobileStructuredAgentSessionMessage(input: {
     }
   }
   const withdrawnReplay =
-    result.status === 'accepted' &&
-    'queued' in result.value &&
-    result.value.queued?.state === 'withdrawn'
+    (result.status === 'accepted' &&
+      'queued' in result.value &&
+      result.value.queued?.state === 'withdrawn') ||
+    (operation.retained && mobileStructuredSendWithdrawnBeforeStart(result))
   if (withdrawnReplay && operation.retained && !input.resendingAfterWithdrawal) {
-    // The retained id's draft was withdrawn, so it never reached the agent:
+    // The retained id's draft or submission was withdrawn, so it never reached the agent:
     // this identical message is a new one, not a replay to swallow. A record
     // storage would not clear is bookkeeping: it is reported, never allowed to
     // block the send.
@@ -181,6 +185,10 @@ export async function sendMobileStructuredAgentSessionMessage(input: {
       input.onError("Sent, but this phone couldn't update its record of sent messages.")
     }
     return resent
+  }
+  if (withdrawnReplay && mobileStructuredSendWithdrawnBeforeStart(result)) {
+    // Not resent, but the chat draws it with its stop row: handing it back too would show it twice.
+    return 'accepted'
   }
   if (withdrawnReplay) {
     // Not resent: no card and no bubble holds the text, so it goes back to the

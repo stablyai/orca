@@ -358,6 +358,35 @@ describe('deployAndLaunchRelay on the pinned Node runtime', () => {
     warn.mockRestore()
   })
 
+  it('runs the ladder to rung B where this connect just recorded that managed orcad cannot run', async () => {
+    const registry = {
+      getTarget: vi.fn(() => ({
+        id: 'target-1',
+        managedServerUnavailable: { reason: 'runtime_self_test', appVersion: '1.0.0' }
+      })),
+      updateTarget: vi.fn(() => null)
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the ladder reads and writes only these two registry members.
+    vi.mocked(getSshTargetRegistryStore).mockReturnValue(registry as unknown as SshConnectionStore)
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const oldGlibc = { major: 2, minor: 17 }
+    vi.mocked(resolvePinnedRelayTargetFacts).mockResolvedValue({
+      target: 'linux-x64-glibc',
+      glibc: oldGlibc
+    })
+    vi.mocked(planPinnedNodeRelay)
+      .mockResolvedValueOnce({ kind: 'host-node', fallbackReason: 'libc_floor' })
+      .mockResolvedValueOnce({ ...pinnedPlan(), target: 'linux-x64-glibc217', glibc: oldGlibc })
+    queueInstalledPinnedLaunch()
+
+    // The connection's own target predates the record and carries no runtime setting.
+    const result = await deployAndLaunchRelay(makeConnection(), undefined, undefined, 'target-1')
+
+    expect(resolveRemoteNodePath).not.toHaveBeenCalled()
+    expect(result.nodePath).toBe(COMPAT_NODE)
+    expect(planHostNodeAddonRelay).not.toHaveBeenCalled()
+  })
+
   it('skips rung B on a current glibc when rung A refused for a reason B cannot answer', async () => {
     const conn = makeConnection('pinned-node')
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -389,6 +418,8 @@ describe('deployAndLaunchRelay on the pinned Node runtime', () => {
     )
     expect(resolveRemoteNodePath).not.toHaveBeenCalled()
     expect(detachedLaunchCommand(conn)).toBeUndefined()
+    // No self-test ran, so there is no unverifiable runtime outcome to report.
+    expect(track).not.toHaveBeenCalled()
   })
 
   it('releases the staged addons after the attempt', async () => {

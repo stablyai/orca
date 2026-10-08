@@ -1,3 +1,4 @@
+import { AGENT_HOOK_INFER_INTERRUPT_METHOD } from '../shared/agent-hook-interrupt-reconciliation'
 import { homedir } from 'node:os'
 import type { RelayDispatcher } from './dispatcher'
 import type { PtyEnvAugmenter, PtyHandler } from './pty-handler'
@@ -25,6 +26,7 @@ import { selectOpenCodeHookAgent } from '../shared/opencode-launch-command'
 import { relayLogLine } from './relay-diagnostic-log'
 import { restoreOrStripOverlayEnv } from '../shared/agent-overlay-env'
 import { registerManagedHookInstaller } from './managed-hook-installer'
+import { readSessionShellStartupEnvVar } from '../main/pty/shell-startup-env'
 
 export class RelayAgentHookRuntime {
   private readonly hookServer: RelayAgentHookServer
@@ -43,6 +45,7 @@ export class RelayAgentHookRuntime {
       // Why: the PTY handler is the only component that knows which panes still have a client
       // surface, so it — not the client — decides whether a hook post describes a live pane.
       isPaneSurfaceRetired: (paneKey) => ptyHandler.isPaneSurfaceRetired(paneKey),
+      getAgentLaunchToken: (paneKey) => ptyHandler.getAgentLaunchToken(paneKey),
       getTmuxManagedPty: async (paneKey) => ptyHandler.getTmuxManagedPty(paneKey)
     })
   }
@@ -68,6 +71,9 @@ export class RelayAgentHookRuntime {
   }
 
   private registerPtyEnvironment(): void {
+    this.ptyHandler.setClaudeTerminalEvidenceListener((paneKey, evidence) => {
+      this.hookServer.claudeTerminalInterrupts.observe(paneKey, evidence)
+    })
     this.ptyHandler.setAgentPresenceTrigger((paneKey) => {
       void this.hookServer.checkAgentPresence(paneKey)
     })
@@ -121,7 +127,12 @@ export class RelayAgentHookRuntime {
           env.ORCA_OPENCODE_SOURCE_CONFIG_DIR = sourceDir
         }
       } else {
-        this.pluginOverlay.installOpenCodePlugin(opencodeAgent, context.env)
+        this.pluginOverlay.installOpenCodePlugin(opencodeAgent, {
+          ...context.env,
+          XDG_CONFIG_HOME:
+            readSessionShellStartupEnvVar('XDG_CONFIG_HOME', context.env, context.shell) ??
+            context.env.XDG_CONFIG_HOME
+        })
       }
     }
     const explicitKind = isPiCompatibleAgentType(context.launchAgent)
@@ -180,22 +191,28 @@ export class RelayAgentHookRuntime {
   }
 
   private registerHandlers(): void {
+    this.dispatcher.onRequest(AGENT_HOOK_INFER_INTERRUPT_METHOD, async (params) => ({
+      applied: this.hookServer.inferInterrupt(params)
+    }))
     this.dispatcher.onRequest(AGENT_HOOK_REQUEST_REPLAY_METHOD, async () => ({
       replayed: this.hookServer.replayCachedPayloadsForPanes()
     }))
     registerManagedHookInstaller(this.dispatcher)
     this.dispatcher.onRequest(AGENT_HOOK_INSTALL_PLUGINS_METHOD, async (params) => {
+      const startupPrompt = params.opencodeStartupPromptSource
       const opencode = params.opencodePluginSource
       const opencode2 = params.opencode2PluginSource
       const pi = params.piExtensionSource
       const omp = params.ompExtensionSource
       const primeAgent = params.primeAgentExtensionSource
+      assertPluginSourceUnderByteCap('opencodeStartupPromptSource', startupPrompt)
       assertPluginSourceUnderByteCap('opencodePluginSource', opencode)
       assertPluginSourceUnderByteCap('opencode2PluginSource', opencode2)
       assertPluginSourceUnderByteCap('piExtensionSource', pi)
       assertPluginSourceUnderByteCap('ompExtensionSource', omp)
       assertPluginSourceUnderByteCap('primeAgentExtensionSource', primeAgent)
       this.pluginOverlay.setSources({
+        opencodeStartupPromptSource: typeof startupPrompt === 'string' ? startupPrompt : undefined,
         opencodePluginSource: typeof opencode === 'string' ? opencode : undefined,
         opencode2PluginSource: typeof opencode2 === 'string' ? opencode2 : undefined,
         piExtensionSource: typeof pi === 'string' ? pi : undefined,
@@ -212,8 +229,12 @@ export class RelayAgentHookRuntime {
           installOpenCodePluginInCanonicalConfig(source, agent, process.env, homedir(), true)
         }
       }
+      const startupPromptInstalled = this.pluginOverlay.installOpenCodeStartupPromptPlugin(
+        process.env
+      )
       return {
         installed: {
+          opencodeStartupPrompt: startupPromptInstalled,
           opencode: this.pluginOverlay.hasOpenCodeSource(),
           opencode2: this.pluginOverlay.hasOpenCode2Source(),
           pi: this.pluginOverlay.hasPiSource('pi'),

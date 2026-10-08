@@ -42,6 +42,7 @@ import type {
   StructuredAgentSessionAdapter,
   StructuredAgentSessionProviderChildPhase
 } from './structured-agent-session-adapter'
+import type { StructuredAgentRegistry } from './structured-agent-registry'
 import { structuredAgentSessionStartFailure } from './structured-agent-session-failure-text'
 import { conversationCommandBlocked } from './structured-conversation-command-admission'
 
@@ -153,6 +154,7 @@ export type StructuredAgentSessionCommandHandoverContext = {
   journal: AgentSessionJournal
   fence: number
   adapter: StructuredAgentSessionAdapter
+  agents: StructuredAgentRegistry
   providerChildPhase?: () => StructuredAgentSessionProviderChildPhase | undefined
   /** Who a failure the handover meets names, as the start's own row does. */
   failureTextContext?: AgentSessionFailureWordsContext
@@ -208,8 +210,8 @@ export async function handOverStructuredAgentSessionCommand(
       command: { clientMessageId, ...turn, running }
     })
   } catch (error) {
-    // A child that had not proven its start took nothing, so the command provably did not run. Any
-    // other throw is a lost reply: the command may have run.
+    // A child still starting throws only for a start that failed before the write, so the command
+    // provably did not run. Any other throw is a lost reply: the command may have run.
     const unsent =
       ctx.providerChildPhase?.() === 'starting'
         ? {
@@ -310,12 +312,16 @@ function commandBlocked(
   ctx: StructuredAgentSessionCommandHandoverContext,
   body: AgentJournalMessageItem
 ): SubmissionRejectionFact | null {
-  if (body.command?.name !== STRUCTURED_AGENT_SESSION_COMPACT_COMMAND || !ctx.adapter.compact) {
+  if (body.command?.name !== STRUCTURED_AGENT_SESSION_COMPACT_COMMAND) {
     return agentSessionFailureFact('commandRefused')
   }
   const record = ctx.record()
   if (!record) {
     return agentSessionFailureFact('hostFault')
+  }
+  // The declaration admits it, as it does the advertised command list; a client may send it anyway.
+  if (!ctx.agents.capabilities(record.provider)?.compact) {
+    return agentSessionFailureFact('commandRefused')
   }
   const refusal = conversationCommandBlocked(ctx, record, ctx.childWork(), 'handover')
   return refusal

@@ -7,7 +7,7 @@
 // conversation: each subagent's rows are that subagent's, kept apart and folded on
 // their own, for the surface that shows them beside the spawn that ran it.
 
-import type { NativeChatMessage } from './native-chat-types'
+import { nativeChatSemanticRowId, type NativeChatMessage } from './native-chat-types'
 import { compareAgentJournalPositions } from './agent-session-journal-position'
 import { agentJournalItemSubagentId } from './agent-session-journal-producer'
 import { stripNoiseMessages } from './native-chat-noise'
@@ -25,18 +25,23 @@ export function compareNativeChatMessagesByTime(
   if (at !== bt) {
     return at - bt
   }
-  if (a.id < b.id) {
+  // Split reasoning shares its provider row's key, before that row's answer.
+  const aId = nativeChatSemanticRowId(a)
+  const bId = nativeChatSemanticRowId(b)
+  const aReasoning = aId !== a.id
+  const bReasoning = bId !== b.id
+  if (aId < bId) {
     return -1
   }
-  if (a.id > b.id) {
+  if (aId > bId) {
     return 1
   }
-  return 0
+  return Number(bReasoning) - Number(aReasoning)
 }
 
 /** Rows the journal holds read in the journal's own order, never its clock: a
  *  batch shares one timestamp, and a row recovered after a crash carries an
- *  earlier one. A row not in the journal yet — a send still in the outbox — was
+ *  earlier one. A row not in the journal yet — a send still on its way — was
  *  made after everything the journal holds, so it follows them; only such rows,
  *  and terminal-backed transcripts, which have no journal, order by time. */
 export function compareNativeChatTranscriptMessages(

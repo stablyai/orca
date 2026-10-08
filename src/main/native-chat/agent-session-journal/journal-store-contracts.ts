@@ -1,5 +1,6 @@
 import type { AgentJournalDispatchRejection } from '../../../shared/agent-session-failure-words'
 import type {
+  AgentJournalAnsweredTurnIdentity,
   AgentJournalCursor,
   AgentJournalItemBody,
   AgentJournalItemIdentity,
@@ -10,6 +11,7 @@ import type {
   AgentJournalTurnScope,
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
+import type { AgentSessionMessageSource } from '../../../shared/agent-session-message-source'
 import type { JournalHostDatabase } from './journal-host-database'
 import type { JournalLifecycleMutationInput } from './journal-row-builders'
 import type { JournalRow } from './journal-row-schema'
@@ -19,8 +21,6 @@ export type AgentSessionJournalOptions = {
   database: JournalHostDatabase
   now?: () => number
   mintEpoch?: () => string
-  /** A restore's open: see `AgentSessionJournal.whenImported`. */
-  deferPerSessionImport?: boolean
 }
 
 export type JournalReadSince =
@@ -40,7 +40,11 @@ export type ResolveDispatchInput = {
     | { state: 'pending'; turnScope: AgentJournalTurnScope }
     /** `reason` is what released clients print, `rejection` what newer ones read: both from
      *  `agentSessionFailureWords`, never written by hand. */
-    | ({ state: 'rejected' } & AgentJournalDispatchRejection)
+    | ({
+        state: 'rejected'
+        keptAsQueuedMessageId?: string
+        answeredInTurn?: AgentJournalAnsweredTurnIdentity
+      } & AgentJournalDispatchRejection)
     | { state: 'unknown'; reason?: string | null }
   )
 
@@ -70,6 +74,18 @@ export type JournalLifecycleBatchInput = {
   mutations: readonly JournalLifecycleMutationInput[]
   fence: number
   recovered?: true
+  /** Rejects the sends still queued with this first, in the same append: a failed start's row
+   *  follows the messages it failed, and no reader meets one without the other. With none still
+   *  queued, the batch is not written either. */
+  rejectsQueued?: AgentJournalDispatchRejection
+}
+
+export type JournalResolvedLifecycleBatchInput = Omit<
+  JournalLifecycleBatchInput,
+  'mutations' | 'rejectsQueued'
+> & {
+  /** Read from the fold with every earlier write landed; may return none. */
+  resolve: () => readonly JournalLifecycleMutationInput[]
 }
 
 export type JournalSubmissionInput = {
@@ -83,6 +99,8 @@ export type JournalSubmissionInput = {
   queuedMessageId?: string
   /** Who asked for this turn (`JournalSubmissionRow.origin`). */
   origin?: 'client' | 'host'
+  /** Who it is from (`JournalSubmissionRow.source`); the row keeps the kind only. */
+  source?: Pick<AgentSessionMessageSource, 'kind'>
 }
 
 /** A submission append that converts a queued draft, in one transaction. */
@@ -94,9 +112,9 @@ export type JournalSubmissionConsume = {
   /** The host process handing it off, stamped on the draft so a hand-off withdrawn back to
    *  waiting belongs to the process that sent it, not the one that first wrote the card. */
   hostInstance?: string
-  /** The queue's own send: refused in the consume's transaction while the queue's pause, as
-   *  this host instance derives it, holds the card. Send-now omits it. */
-  yieldsToPause?: { hostInstance: string }
+  /** The queue's own send: refused in the consume's transaction while the queue's pause holds
+   *  the card. Send-now omits it. */
+  yieldsToPause?: true
 }
 
 export type JournalItemAppendInput = {

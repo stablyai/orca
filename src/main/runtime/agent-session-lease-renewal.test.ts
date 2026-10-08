@@ -8,6 +8,7 @@ import {
   openTestAgentSessionRecordStore,
   readPersistedTestAgentSessionStoreText
 } from './agent-session-record-store-test-harness'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const NOW = 1_800_000_000_000
 const MATCHED = { outcome: 'identity-matched', matchedOn: ['spawn-token'] } as const
@@ -54,7 +55,7 @@ async function establishOwner(
     fence,
     link: {
       linkId: `link-${suffix}`,
-      handle: { provider: 'codex', threadId: `thread-${suffix}` },
+      handle: codexProviderHandle(`thread-${suffix}`),
       origin: 'created',
       mintedAtFence: fence,
       observedAt: NOW

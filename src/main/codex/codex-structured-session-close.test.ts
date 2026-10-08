@@ -16,7 +16,8 @@ import { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
 import { CodexPromptRegistry } from './codex-structured-prompt-replies'
 import type { CodexSession } from './codex-structured-session-state'
 import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import { StructuredAgentSessionAdapterRouter } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router'
+import { claudeAndCodexRouter } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const THREAD = 'thread-1'
 
@@ -26,7 +27,7 @@ function identity(sessionId: string): AgentSessionJournalIdentity {
     workspaceId: 'workspace-1',
     hostId: 'host-1',
     agent: 'codex',
-    providerHandle: { kind: 'codex', threadId: THREAD }
+    providerHandle: codexProviderHandle(THREAD)
   }
 }
 
@@ -96,15 +97,13 @@ describe('Codex structured session close lifecycle', () => {
       connection,
       backgroundTasks: new CodexBackgroundTaskTracker('thread-1'),
       ended: false,
-      requestedClose,
+      ...(requestedClose ? { orcaClose: { requested: true, reason: new Error('closed') } } : {}),
       fence: 7,
       acquisitionGeneration: 'generation-1',
       threadId: THREAD,
-      historyPath: null,
       prompts,
       options: new Map(),
       reportedOptions: {},
-      fastModeTierByModel: new Map(),
       dispatchEchoes: createCodexDispatchEchoes(),
       turnOpenWaits: createCodexTurnOpenWaits(),
       translator
@@ -135,7 +134,7 @@ describe('Codex structured session close lifecycle', () => {
     expect(translator.handle).toHaveBeenCalledOnce()
   })
 
-  it("ends a Stop's wait for its turn to open when a requested close cannot publish its end yet", async () => {
+  it("ends the session and a Stop's wait for its turn to open when a requested close cannot publish its end", async () => {
     const { connection, prompts, session, sessions } = backpressuredSession(true)
     let released = false
     void session.turnOpenWaits.wait('turn-1', 60_000).then(() => {
@@ -151,10 +150,10 @@ describe('Codex structured session close lifecycle', () => {
         closedByOrca: true,
         prompts
       })
-    ).toBe(false)
+    ).toBe(true)
     await Promise.resolve()
-    // Left for the retry, but the child is gone: nothing waits on a turn it would open.
-    expect(session.ended).toBe(false)
+    // The exit is observed: the refused row is the host's to settle, and nothing waits on a turn.
+    expect(session.ended).toBe(true)
     expect(released).toBe(true)
   })
 
@@ -211,7 +210,7 @@ describe('Codex structured session close lifecycle', () => {
 
   it('routes Codex sink-failure recovery through force-close and preserves unexpected-exit settlement', async () => {
     const { adapter, connections, events } = adapterFixture()
-    const router = new StructuredAgentSessionAdapterRouter(
+    const router = claudeAndCodexRouter(
       { claude: claudeAdapterStub(), codex: adapter },
       async () => {}
     )

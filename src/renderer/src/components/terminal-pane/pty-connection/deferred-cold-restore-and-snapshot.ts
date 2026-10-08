@@ -159,7 +159,8 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
       ...(meta.alternateScreen !== undefined ? { alternateScreen: meta.alternateScreen } : {}),
       ...(meta.snapshotCols !== undefined && meta.snapshotRows !== undefined
         ? { snapshotCols: meta.snapshotCols, snapshotRows: meta.snapshotRows }
-        : {})
+        : {}),
+      ...(meta.carriesNormalBuffer ? { carriesNormalBuffer: true } : {})
     }
     session.scheduleReplayDataDrain()
   }

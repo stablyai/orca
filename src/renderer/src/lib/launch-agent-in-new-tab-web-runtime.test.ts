@@ -80,6 +80,7 @@ describe('launchAgentInNewTab paired web runtime', () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     const result = launchAgentInNewTab({
+      requestId: 'request-1',
       agent: 'claude',
       worktreeId: 'wt-1',
       groupId: 'group-1'
@@ -113,6 +114,7 @@ describe('launchAgentInNewTab paired web runtime', () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     const result = launchAgentInNewTab({
+      requestId: 'request-2',
       agent: 'codex',
       worktreeId: 'wt-1',
       prompt: 'fix the spinner',

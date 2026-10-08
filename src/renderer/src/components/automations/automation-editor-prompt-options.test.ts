@@ -12,6 +12,7 @@ describe('buildAutomationPromptEditorOptions', () => {
     })
 
     expect(options.find).toEqual(monacoFindOptions)
+    expect(options.dropIntoEditor).toEqual({ enabled: false })
     expect(options.wordWrap).toBe('on')
     expect(options.lineNumbers).toBe('off')
     expect(options.minimap).toEqual({ enabled: false })

@@ -101,7 +101,11 @@ export class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRuntimeWithC
     this.adoptControllerTerminalHandle(session.id, terminalHandle)
     const pty = this.recordPtyWorktree(session.id, worktreeId, {
       connected: true,
-      title: session.title
+      title: session.title,
+      ...(session.incarnationId ? { incarnationId: session.incarnationId } : {}),
+      ...(session.wslDistro !== undefined
+        ? { wslDistro: session.wslDistro, isWsl: session.wslDistro !== null }
+        : {})
     })
     const adoptedHandle = this.issuePtyHandle(pty)
     if (adoptedHandle !== terminalHandle) {

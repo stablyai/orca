@@ -1,4 +1,3 @@
-import { readFile } from 'node:fs/promises'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
@@ -109,20 +108,5 @@ describe('Cmd/Ctrl+1-9 folder-workspace path gate (#10716)', () => {
 
     expect(store.getState().activeWorkspaceKey).toBe(folderWorkspaceKey(folderWorkspace.id))
     expect(mocks.toastError).not.toHaveBeenCalled()
-  })
-
-  // Why: the guard only helps if the IPC handler actually calls it. Pin the source
-  // so re-pointing the handler back at the unguarded activateAndRevealWorktree fails.
-  it('wires onJumpToWorktreeIndex to the guarded workspace activator', async () => {
-    const source = await readFile(
-      new URL('../hooks/ipc-events/workspace-shortcut-ipc-bridge.ts', import.meta.url),
-      'utf8'
-    )
-    const handler = source.slice(
-      source.indexOf('onJumpToWorktreeIndex('),
-      source.indexOf('onJumpToTabIndex(')
-    )
-    expect(handler).toContain('activateAndRevealWorkspace(target.id')
-    expect(handler).not.toContain('activateAndRevealWorktree(target.id')
   })
 })

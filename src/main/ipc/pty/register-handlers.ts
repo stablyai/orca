@@ -13,6 +13,7 @@ import { finishPtyShutdown } from './provider/liveness'
 import type { GetSelectedCodexHomePath, PrepareClaudeAuth } from './host-env/types'
 import { installPtyInspectIpcHandlers } from './ipc/inspect'
 import { installPtyCodexSharedServerIpcHandler } from './ipc/codex-shared-server'
+import { installPtyClaudeOldTerminalIpcHandler } from './ipc/claude-old-terminal'
 import {
   installPtyKillIpcHandler,
   stopReplacedPanePty,
@@ -20,6 +21,7 @@ import {
 } from './ipc/renderer-kill'
 import { installPtyWriteIpcHandlers } from './ipc/write'
 import { installPtySpawnIpcHandler } from './ipc/spawn'
+import { installPtyLeafMoveIpcHandler } from './ipc/leaf-move'
 import { installPtyRuntimeController } from './runtime/controller'
 import { installPtySnapshotIpcHandlers } from './ipc/snapshot'
 import {
@@ -112,6 +114,7 @@ export function registerPtyHandlers(
 
   // Remove prior handlers so re-registration (e.g. macOS re-activate creating a new window) doesn't double-register.
   ipcMain.removeHandler('pty:spawn')
+  ipcMain.removeHandler('pty:moveLeafToNewTab')
   ipcMain.removeHandler('pty:kill')
   ipcMain.removeHandler('pty:listSessions')
   ipcMain.removeHandler('pty:hasPty')
@@ -122,6 +125,7 @@ export function registerPtyHandlers(
   ipcMain.removeHandler('pty:isCodexOnSharedServer')
   ipcMain.removeHandler('pty:disableCodexSharedServerAutoStart')
   ipcMain.removeHandler('pty:stopCodexSharedServer')
+  ipcMain.removeHandler('pty:openedBeforeClaudeAccounts')
   ipcMain.removeHandler('pty:getCwd')
   ipcMain.removeHandler('pty:getSize')
   ipcMain.removeHandler('pty:getAuthoritativeBufferSnapshotCapabilities')
@@ -255,6 +259,7 @@ export function registerPtyHandlers(
     rememberSyntheticKillExit: session.rememberSyntheticKillExit,
     sendPtyExitToRenderer: session.sendPtyExitToRenderer
   }
+  installPtyLeafMoveIpcHandler({ store, runtime })
   installPtySpawnIpcHandler({
     runtime,
     store,
@@ -283,5 +288,6 @@ export function registerPtyHandlers(
   installPtyResizeVisibilityIpc(session)
   installPtyInspectIpcHandlers({ getLocalPtyProviderStartupPromise })
   installPtyCodexSharedServerIpcHandler({ getLocalPtyProviderStartupPromise })
+  installPtyClaudeOldTerminalIpcHandler({ getLocalPtyProviderStartupPromise })
   installPtyKillIpcHandler(killDeps)
 }

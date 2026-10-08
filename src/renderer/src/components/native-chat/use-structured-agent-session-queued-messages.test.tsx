@@ -17,6 +17,10 @@ import {
   readNativeChatDraftCache
 } from './native-chat-draft-cache'
 import { useStructuredAgentSessionQueuedMessages } from './use-structured-agent-session-queued-messages'
+import {
+  createMemoryNativeChatComposerDraftStorage,
+  setNativeChatComposerDraftStorageForTests
+} from './native-chat-composer-draft-storage'
 import type { StructuredAgentSessionMutate } from './use-structured-agent-session-mutate'
 
 type MutateCall = [string, string, Record<string, unknown>]
@@ -51,6 +55,7 @@ function createHarness(
       queuePause: null,
       submissions: [],
       hasPendingPrompt: false,
+      isWorking: false,
       composerScopeKey: 'composerScopeKey' in overrides ? overrides.composerScopeKey : SCOPE,
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each scripted answer is the result shape of the one mutate it responds to; generic erasure cannot express that.
       mutate: mutate as StructuredAgentSessionMutate
@@ -148,6 +153,25 @@ describe('queued message actions', () => {
     await act(() => harness.result.current.edit('draft-1'))
     expect(readNativeChatDraftCache(SCOPE)).toBe('text of draft-1')
     expect(toast.error).toHaveBeenCalledWith('Already sent — your text is still in the composer.')
+  })
+
+  it('Edit deletes the card only once storage holds the text, and keeps it when storage refuses', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const storage = createMemoryNativeChatComposerDraftStorage()
+    storage.refuseWrites = true
+    setNativeChatComposerDraftStorageForTests(storage)
+    try {
+      const harness = createHarness()
+      await act(() => harness.result.current.edit('draft-1'))
+      expect(readNativeChatDraftCache(SCOPE)).toBe('text of draft-1')
+      expect(harness.mutate).not.toHaveBeenCalled()
+
+      storage.refuseWrites = false
+      await act(() => harness.result.current.edit('draft-2'))
+      expect(harness.mutate).toHaveBeenCalledTimes(1)
+    } finally {
+      warn.mockRestore()
+    }
   })
 
   it('Edit with no composer to hold the text deletes nothing', async () => {

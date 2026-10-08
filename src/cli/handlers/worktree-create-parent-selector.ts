@@ -10,9 +10,12 @@ export type CreateParentSelector = {
 
 const CREATE_PARENT_CONFLICT_MESSAGE = 'Choose either one parent selector or --no-parent.'
 
-export function assertCreateParentFlagsCompatible(flags: Map<string, string | boolean>): void {
+export function assertWorktreeParentFlagsCompatible(
+  flags: Map<string, string | boolean>,
+  conflictMessage: string = CREATE_PARENT_CONFLICT_MESSAGE
+): void {
   if (flags.has('parent-worktree') && flags.get('no-parent') === true) {
-    throw new RuntimeClientError('invalid_argument', CREATE_PARENT_CONFLICT_MESSAGE)
+    throw new RuntimeClientError('invalid_argument', conflictMessage)
   }
   const parentWorktree = flags.get('parent-worktree')
   if (

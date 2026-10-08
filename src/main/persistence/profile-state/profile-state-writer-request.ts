@@ -1,3 +1,8 @@
+import { createProfileStateWriterDeadline } from './profile-state-writer-deadline'
+import {
+  recordProfileStateWriterGrace,
+  recordProfileStateWriterTimeout
+} from './profile-state-writer-diagnostics'
 import type {
   ProfileStateWriterCommand,
   ProfileStateWriterResponse
@@ -10,7 +15,7 @@ export type PendingProfileStateWriterRequest = {
   promise: Promise<SuccessfulProfileStateWriterResponse>
   resolve: (response: SuccessfulProfileStateWriterResponse) => void
   reject: (error: Error) => void
-  timer: ReturnType<typeof setTimeout>
+  clearDeadline: () => void
 }
 
 export function isExpectedProfileStateWriterSuccess(
@@ -35,7 +40,7 @@ export function isExpectedProfileStateWriterSuccess(
   if (command === 'export-json') {
     return response.exportedRevision !== undefined && response.exportedRevision !== null
   }
-  if (command === 'export-compatibility' || command === 'export-latest') {
+  if (command === 'export-latest') {
     return (
       response.exportedRevision !== undefined &&
       (response.exportedRevision !== null || response.revision === 0)
@@ -44,16 +49,30 @@ export function isExpectedProfileStateWriterSuccess(
   return response.exportedRevision === undefined
 }
 
+/** Each request owns its deadline; timeouts and grace leave a durable breadcrumb. */
 export function createProfileStateWriterRequest(
   id: number,
   command: PendingProfileStateWriterRequest['command'],
   timeoutMs: number,
-  onTimeout: () => void
+  handlers: { onTimeout: () => void; acknowledgedRevision: () => number; now?: () => number }
 ): PendingProfileStateWriterRequest {
+  const describe = () => ({
+    command,
+    requestId: id,
+    acknowledgedRevision: handlers.acknowledgedRevision()
+  })
+  const deadline = createProfileStateWriterDeadline(
+    timeoutMs,
+    (expiry) => {
+      recordProfileStateWriterTimeout(describe(), expiry)
+      handlers.onTimeout()
+    },
+    { now: handlers.now, onGrace: (expiry) => recordProfileStateWriterGrace(describe(), expiry) }
+  )
   return {
     id,
     command,
     ...Promise.withResolvers<SuccessfulProfileStateWriterResponse>(),
-    timer: setTimeout(onTimeout, timeoutMs)
+    clearDeadline: deadline.clear
   }
 }

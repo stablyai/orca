@@ -25,6 +25,7 @@ import {
   type AgentSessionFailureSay
 } from './agent-session-failure-copy'
 import type { AgentSessionWireRefusalCode } from './agent-session-wire-refusals'
+import { providerRetryWords, withRetryCause } from './agent-session-provider-retry-words'
 import { joinSentences } from './sentence-joining'
 import {
   DISPATCH_REJECTED_CANCELLED,
@@ -122,28 +123,45 @@ function quotingPersonDetail(
   return quoted ? say(quotedLead, { ...values, detail: quoted }) : say(lead, values)
 }
 
-/** The provider's account of what failed goes on the line under the sentence, as it wrote it. */
-function withRetryCause(sentence: string, cause: string | undefined): string {
-  return cause ? `${sentence}\n${cause}` : sentence
-}
-
 /** The next step after a start or restart that failed: the command, or the message, again. */
 function startRetry(
   say: AgentSessionFailureSay,
-  { command, retryControl }: AgentSessionFailureWordsContext
+  { command, retryControl }: AgentSessionFailureWordsContext,
+  sendAgain: 'sendToTryAgain' | 'sendAgainToTryOnceMore' = 'sendToTryAgain'
 ): string[] {
   if (retryControl) {
     return []
   }
-  return [command ? say('runCommandAgain', { command }) : say('sendToTryAgain')]
+  return [command ? say('runCommandAgain', { command }) : say(sendAgain)]
 }
 
 function couldNot(verb: 'couldNotStart' | 'couldNotRestart'): Sentence {
   return (context, fact, _surface, say) => {
     const failed = say(verb, agent(say, context))
+    if (fact.argumentProblem) {
+      const problemCopy = {
+        unsupportedOption: 'argumentsUnsupportedOption',
+        missingValue: 'argumentsMissingValue',
+        multipleValues: 'argumentsMultipleValues',
+        positionalPrompt: 'argumentsPositionalPrompt'
+      } as const
+      return joinSentences([
+        failed,
+        say(problemCopy[fact.argumentProblem.problem], { option: fact.argumentProblem.option }),
+        say('editSavedArguments'),
+        ...startRetry(say, context)
+      ])
+    }
     // Only a terminal agent an older build recorded holds a claim; quitting it frees the chat.
     if (fact.refusal?.details?.reason === 'claimConflicted') {
       return joinSentences([failed, say('terminalAgentHoldsChat'), say('quitTerminalAgent')])
+    }
+    // The previous process may still run, so nothing started: that, never that it exited.
+    if (fact.refusal?.details?.reason === 'previousExitUnverifiable') {
+      return joinSentences([
+        say('previousExitUnverifiable', agent(say, context)),
+        ...startRetry(say, context, 'sendAgainToTryOnceMore')
+      ])
     }
     const code = fact.refusal?.code
     return joinSentences(
@@ -201,6 +219,12 @@ const FAILURE_SENTENCES = {
     joinSentences([say('historyTooLarge'), say('startNewChat')]),
   managedAccountEnvOverride: (_context, _fact, _surface, say) => say('managedAccountEnvOverride'),
   accountSwitchInProgress: (_context, _fact, _surface, say) => say('accountSwitchInProgress'),
+  launchFolderMissing: (_context, _fact, _surface, say) => say('launchFolderMissing'),
+  historyInOtherAccount: (_context, _fact, _surface, say) => say('historyInOtherAccount'),
+  claudeAccountFolderMissing: (_context, _fact, _surface, say) => say('claudeAccountFolderMissing'),
+  claudeAccountSetupFailed: (_context, _fact, _surface, say) => say('claudeAccountSetupFailed'),
+  agentCommandNotRunnable: (context, _fact, _surface, say) =>
+    say('agentCommandNotRunnable', agent(say, context)),
   managedAccountUnsupported: (context, _fact, _surface, say) =>
     joinSentences([
       say('managedAccountUnsupported'),
@@ -251,25 +275,22 @@ const FAILURE_SENTENCES = {
   hostStopped: (context, _fact, _surface, say) => say('hostStopped', agent(say, context)),
   // A provider that says how its retry is going, for a person, is quoted: that is the progress.
   providerRetrying: (context, { retry, detail }, _surface, say) =>
-    withRetryCause(
-      detail?.audience === 'person'
-        ? quotingPersonDetail(
+    detail?.audience === 'person'
+      ? withRetryCause(
+          quotingPersonDetail(
             say,
             'providerRetrying',
             'providerRetryingQuoted',
             detail,
             agent(say, context)
-          )
-        : say(
-            retry?.error === 'rate_limit' || retry?.status === 429
-              ? 'providerRateLimited'
-              : 'providerRetrying',
-            agent(say, context)
           ),
-      retry?.cause
-    ),
+          retry?.cause
+        )
+      : providerRetryWords(say, agent(say, context), retry),
   previousExitUnverifiable: (context, _fact, _surface, say) =>
-    say('previousExitUnverifiable', agent(say, context))
+    say('previousExitUnverifiable', agent(say, context)),
+  sessionNotRestored: (context, _fact, _surface, say) =>
+    say('sessionNotRestored', agent(say, context))
 } satisfies Record<AgentSessionFailureKind, Sentence>
 
 /** The sentence a person reads for this fact on this surface; never a marker. */

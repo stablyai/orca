@@ -18,18 +18,6 @@ import {
   testState,
   writePaneRegistry
 } from './runtime-home-service-test-harness'
-import { hasCompletedCodexSessionBackfillMarker } from '../codex/codex-session-backfill-marker'
-import { getCodexSessionBackfillDate } from '../codex/codex-session-backfill-scan-dates'
-
-function expectBaselineKeptWithLaunchDatePending(markerPath: string): void {
-  const marker = JSON.parse(readFileSync(markerPath, 'utf-8')) as {
-    pendingScanDates?: unknown
-  }
-  expect(marker.pendingScanDates).toEqual([getCodexSessionBackfillDate()])
-  expect(
-    hasCompletedCodexSessionBackfillMarker(markerPath, join(getSystemCodexHomePath(), 'sessions'))
-  ).toBe(true)
-}
 
 // Why: temp homes exceed sun_path on macOS but not on Linux; keep asserted config bytes host-independent.
 vi.mock('../codex/codex-daemon-socket-path-guard', async (importOriginal) => ({
@@ -60,119 +48,28 @@ describe('CodexRuntimeHomeService', () => {
     teardownRuntimeHomeTest()
   })
 
-  it('returns the Orca-managed runtime home for Codex launch and rate-limit preparation', async () => {
-    const markerPath = join(
-      testState.userDataDir,
-      'codex-session-backfill',
-      'backfill-complete.json'
-    )
-    mkdirSync(join(testState.userDataDir, 'codex-session-backfill'), { recursive: true })
-    writeFileSync(markerPath, '{}\n', 'utf-8')
-    const store = createStore(createSettings({ realHomeRoutable: true }))
-    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
-    const service = new CodexRuntimeHomeService(store as never)
-    // Why: an unusable hook lane is the migration-eligible route onto the mirror.
-    service.setRealHomeLaneGate(() => false)
-    expect(service.prepareForCodexLaunch()).toBe(getRuntimeCodexHomePath())
-    expect(
-      hasCompletedCodexSessionBackfillMarker(markerPath, join(getSystemCodexHomePath(), 'sessions'))
-    ).toBe(false)
-    service.finishHostSystemDefaultSessionMigrationPass()
-    expect(service.beginHostSystemDefaultSessionMigrationLaunch(getRuntimeCodexHomePath())).toBe(
-      true
-    )
-    service.finishHostSystemDefaultSessionMigrationPass()
-    writeFileSync(
-      markerPath,
-      `${JSON.stringify({
-        version: 3,
-        systemSessionsRoot: join(getSystemCodexHomePath(), 'sessions'),
-        summary: { scannedFiles: 1 }
-      })}\n`,
-      'utf-8'
-    )
-    service.prepareForCodexLaunch()
-    writeFileSync(
-      markerPath,
-      `${JSON.stringify({
-        version: 3,
-        systemSessionsRoot: join(getSystemCodexHomePath(), 'sessions'),
-        summary: { scannedFiles: 1 }
-      })}\n`,
-      'utf-8'
-    )
-    expect(service.beginHostSystemDefaultSessionMigrationLaunch(getRuntimeCodexHomePath())).toBe(
-      false
-    )
-    expectBaselineKeptWithLaunchDatePending(markerPath)
-    service.prepareForCodexLaunch()
-    expect(service.beginHostSystemDefaultSessionMigrationLaunch(getRuntimeCodexHomePath())).toBe(
-      false
-    )
-    expect(service.beginHostSystemDefaultSessionMigrationLaunch(null)).toBeNull()
-    service.finishHostSystemDefaultSessionMigrationPass()
-    writeFileSync(
-      markerPath,
-      `${JSON.stringify({
-        version: 3,
-        systemSessionsRoot: join(getSystemCodexHomePath(), 'sessions'),
-        summary: { scannedFiles: 1 }
-      })}\n`,
-      'utf-8'
-    )
-    expect(service.beginHostSystemDefaultSessionMigrationLaunch(null, { reattached: true })).toBe(
-      false
-    )
-    expectBaselineKeptWithLaunchDatePending(markerPath)
-    store.updateSettings({
-      codexSessionSourceHome: { host: join(testState.fakeHomeDir, 'moved-history'), wsl: {} }
-    })
-    service.prepareForCodexLaunch()
-    expect(service.beginHostSystemDefaultSessionMigrationLaunch(getRuntimeCodexHomePath())).toBe(
-      true
-    )
-    expect(service.prepareForRateLimitFetch()).toEqual({
-      kind: 'ready',
-      codexHomePath: getRuntimeCodexHomePath()
-    })
-    expect(service.getHostCodexHomePathsForSessionDiscovery()).toEqual([getRuntimeCodexHomePath()])
-    expect(existsSync(getRuntimeCodexHomePath())).toBe(true)
-  })
-
   it('routes host system default to the real home', async () => {
     const store = createStore(createSettings({ realHomeRoutable: true }))
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
 
-    expect(service.isHostSystemDefaultRealHome()).toBe(true)
-    expect(service.getSelectedHostCodexHomeRoute()).toBe('real-home')
+    expect(service.isHostSystemDefaultRealHomeSelected()).toBe(true)
     expect(service.prepareForCodexLaunch()).toBeNull()
     expect(service.getHostCodexHomePathsForSessionDiscovery()).toEqual([
       getRuntimeCodexHomePath(),
       getSystemCodexHomePath()
     ])
-    service.setRealHomeLaneGate(() => false)
-    expect(service.getSelectedHostCodexHomeRoute()).toBe('shared-home')
-    expect(service.getHostCodexHomePathsForSessionDiscovery()).toEqual([getRuntimeCodexHomePath()])
     const markerPath = join(
       testState.userDataDir,
       'codex-session-backfill',
       'backfill-complete.json'
     )
     mkdirSync(join(testState.userDataDir, 'codex-session-backfill'), { recursive: true })
-    writeFileSync(markerPath, '{}\n', 'utf-8')
-    expect(service.prepareForCodexLaunch()).toBe(getRuntimeCodexHomePath())
-    expect(
-      hasCompletedCodexSessionBackfillMarker(markerPath, join(getSystemCodexHomePath(), 'sessions'))
-    ).toBe(false)
-    expect(service.beginHostSystemDefaultSessionMigrationLaunch(getRuntimeCodexHomePath())).toBe(
-      true
-    )
-    service.finishHostSystemDefaultSessionMigrationPass()
-    service.setRealHomeLaneGate(() => true)
     const perSpawnCustomHome = join(testState.fakeHomeDir, 'per-spawn-custom-codex-home')
     writeFileSync(markerPath, '{}\n', 'utf-8')
-    expect(service.isHostSystemDefaultRealHome({ CODEX_HOME: perSpawnCustomHome })).toBe(false)
+    expect(service.isHostSystemDefaultRealHomeSelected({ CODEX_HOME: perSpawnCustomHome })).toBe(
+      false
+    )
     expect(service.prepareForCodexLaunch(undefined, { CODEX_HOME: perSpawnCustomHome })).toBe(
       getRuntimeCodexHomePath()
     )
@@ -191,7 +88,7 @@ describe('CodexRuntimeHomeService', () => {
         'utf-8'
       )
       const shellLaunchEnv = { HOME: testState.fakeHomeDir, SHELL: '/bin/zsh' }
-      expect(service.isHostSystemDefaultRealHome(shellLaunchEnv)).toBe(false)
+      expect(service.isHostSystemDefaultRealHomeSelected(shellLaunchEnv)).toBe(false)
       expect(service.prepareForCodexLaunch(undefined, shellLaunchEnv)).toBe(
         getRuntimeCodexHomePath()
       )
@@ -209,9 +106,9 @@ describe('CodexRuntimeHomeService', () => {
       })
       process.env.CODEX_HOME = getSystemCodexHomePath()
       delete process.env.ORCA_CODEX_HOME
-      expect(service.isHostSystemDefaultRealHome()).toBe(true)
+      expect(service.isHostSystemDefaultRealHomeSelected()).toBe(true)
       process.env.CODEX_HOME = join(testState.fakeHomeDir, 'user-owned-codex-home')
-      expect(service.isHostSystemDefaultRealHome()).toBe(false)
+      expect(service.isHostSystemDefaultRealHomeSelected()).toBe(false)
       expect(service.prepareForRateLimitFetch()).toEqual({
         kind: 'ready',
         codexHomePath: getRuntimeCodexHomePath()
@@ -356,7 +253,6 @@ describe('CodexRuntimeHomeService', () => {
 
     const service = new CodexRuntimeHomeService(store as never)
 
-    service.setRealHomeLaneGate(() => true)
     expect(readFileSync(getRuntimeCodexAuthPath(), 'utf-8')).toBe(oldSystemAuth)
     expect(readFileSync(join(getRuntimeCodexHomePath(), 'config.toml'), 'utf-8')).toContain(
       'stale-provider'
@@ -378,7 +274,6 @@ describe('CodexRuntimeHomeService', () => {
 
     setRealHomeRoutableForTest(true)
     const restartedService = new CodexRuntimeHomeService(store as never)
-    restartedService.setRealHomeLaneGate(() => true)
 
     expect(restartedService.prepareForCodexLaunch()).toBeNull()
     expect(readFileSync(getRuntimeCodexAuthPath(), 'utf-8')).toBe(managedAuth)

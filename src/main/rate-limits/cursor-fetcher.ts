@@ -84,6 +84,8 @@ async function fetchDashboardJson(
   const res = await net.fetch(url, {
     // Keep dashboard redirects visible without forwarding session credentials.
     redirect: 'manual',
+    // The selected account's Cookie must not be replaced by Electron's session jar.
+    credentials: 'omit',
     headers: requestHeaders(session),
     signal: requestSignal
   })

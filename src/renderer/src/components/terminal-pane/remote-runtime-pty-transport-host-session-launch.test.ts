@@ -191,7 +191,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       })
     )
 
-    expect(onReplayData).toHaveBeenCalledWith('hello')
+    expect(onReplayData).toHaveBeenCalledWith('hello', { carriesNormalBuffer: true })
     expect(onConnect).toHaveBeenCalled()
     expect(onData).toHaveBeenCalledWith(' world', expect.objectContaining({ seq: 4 }))
   })

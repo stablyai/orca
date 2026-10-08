@@ -74,10 +74,10 @@ export type RemoteInstallGcOptions = {
    */
   pinnedDirNames?: readonly string[]
   /**
-   * More pins, resolved only once a candidate exists. Null means the host could not say which
-   * directories to keep, so this pass deletes nothing.
+   * More pins, resolved only once a candidate exists, given those candidates. Null means the
+   * host could not say which directories to keep, so this pass deletes nothing.
    */
-  resolveExtraPinnedDirNames?: () => Promise<readonly string[] | null>
+  resolveExtraPinnedDirNames?: (candidates: readonly string[]) => Promise<readonly string[] | null>
 }
 
 /**
@@ -133,7 +133,7 @@ export async function gcOldRemoteInstallVersions(
     return
   }
   const extraPins = options.resolveExtraPinnedDirNames
-    ? await options.resolveExtraPinnedDirNames()
+    ? await options.resolveExtraPinnedDirNames(candidates)
     : []
   if (!extraPins) {
     return

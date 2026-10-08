@@ -4,6 +4,7 @@ import { preserveTerminalRetirementProofs } from './mobile-session-terminal-reti
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { replaceConversationInSnapshot } from './structured-conversation-tab-replacement'
 import type { TuiAgent } from '../../shared/tui-agent'
+import { isTuiAgent } from '../../shared/tui-agent-config'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { RuntimeClientSettingsController } from './runtime-client-settings'
 import type { RuntimeAutomationController } from './runtime-automation-controller'
@@ -44,6 +45,7 @@ import type { PtyIncarnationHandleRecord } from './orca-runtime-core'
 import { MailPointerRepointScheduler } from './orchestration/mail-pointer-repoint-scheduler'
 import { RuntimeTerminalWaiterRegistry } from './runtime-terminal-waiter-registry'
 import { RuntimeTerminalWriter } from './runtime-terminal-writer'
+import { writeRefused } from '../../shared/pty-write-settlement'
 import { RuntimeTerminalIdlePolls } from './runtime-terminal-idle-polls'
 import { TerminalIntentionalStops } from './terminal-intentional-stops'
 import { TerminalRunFactsRegister, type TerminalSpawnCommit } from './terminal-run-facts'
@@ -132,16 +134,15 @@ export class OrcaRuntimeWithRuntimeId {
 
   protected sessionTabsInventoryWaiters = new Set<() => void>()
 
+  // Worktrees answered with the unpublished placeholder, owed their real answer once the graph publishes.
+  protected worktreesAwaitingSessionTabsPublication = new Set<string>()
+
   protected readonly clientHostedPageReconciliation = new ClientHostedPageReconciliationWindow(
     Date.now()
   )
 
-  // Why: renderer publication ordering must be judged against the renderer's
-  // own last-accepted (epoch, version) — never against the stored snapshot's
-  // version, which main-local touches bump independently and can push
-  // permanently ahead of the renderer's counter. The renderer reuses one pair
-  // for byte-identical content, so a same-epoch version <= this one is a no-op
-  // resend (or stale) and is skipped without touching the stored entry.
+  // Main-local touches advance stored versions; reject unchanged renderer resends using
+  // the renderer's last accepted epoch/version instead.
   protected acceptedRendererMobileSnapshotByWorktree = new Map<
     string,
     {
@@ -250,9 +251,7 @@ export class OrcaRuntimeWithRuntimeId {
     this.intentionalPtyStops.noteSpawnCommit(commit.id)
   }
 
-  // Why: coalesces title/status-driven session.tabs emits so spinner churn
-  // doesn't fan out (and per-client JSON.stringify) a snapshot several times a
-  // second. Emit reads the latest snapshot, so only the freshest version ships.
+  // Coalesce title/status notifications and emit the latest session snapshot.
   protected readonly mobileSessionTabsNotifyCoalescer: MobileSessionTabsNotifyCoalescer =
     createMobileSessionTabsNotifyCoalescer((worktreeId) =>
       this.flushScheduledMobileSessionTabsChanged(worktreeId)
@@ -264,10 +263,7 @@ export class OrcaRuntimeWithRuntimeId {
       (worktreeId) => this.touchMobileSessionTabsForWorktree(worktreeId)
     )
 
-  // Why: concurrent host terminal.focus storms (CLI switch fan-out / bulk open)
-  // each await a full host reveal; only one terminal can be focused, so latest-wins
-  // single-flight bounds host work. Does not replace cheaper activation or
-  // reconnect-scan bounding for sequential soft freezes.
+  // Concurrent focus requests share one host reveal; the latest pane wins.
   protected readonly terminalFocusNavigationCoalescer =
     new TerminalFocusNavigationCoalescer<RuntimeTerminalFocus>()
 
@@ -281,7 +277,8 @@ export class OrcaRuntimeWithRuntimeId {
       return null
     }
     const pty = this.ptysById.get(ptyId)
-    return pty?.launchAgent ?? pty?.foregroundAgent ?? null
+    const agent = pty?.launchAgent ?? pty?.foregroundAgent ?? null
+    return isTuiAgent(agent) ? agent : null
   }
 
   /** One-shot delivery retries, keyed by leaf. See checkDeliverySettledAndArmRecheck. */
@@ -337,7 +334,10 @@ export class OrcaRuntimeWithRuntimeId {
   protected readonly terminalWriter = new RuntimeTerminalWriter(
     (ptyId, data, inputKind) => this.ptyController?.write(ptyId, data, inputKind) ?? false,
     (ptyId) => this.getPtyWriteHostPlatform(ptyId),
-    (ptyId) => this.getPtyAgent(ptyId)
+    (ptyId) => this.getPtyAgent(ptyId),
+    (ptyId, data, inputKind) =>
+      this.ptyController?.writeWithSettlement?.(ptyId, data, inputKind) ??
+      writeRefused('provider_cannot_settle')
   )
 
   // Why one source: every tui-idle site must read the same evidence, or they rank one pane differently.

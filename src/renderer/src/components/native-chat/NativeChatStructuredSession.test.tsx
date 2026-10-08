@@ -1,9 +1,12 @@
+import * as terminalThemeSelection from '../../../../shared/terminal-theme-selection'
+import { getDefaultSettings } from '../../../../shared/constants'
 // @vitest-environment happy-dom
 
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
 import { useAppStore } from '@/store'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import {
   claudeGroupedQuestionPromptItems,
   legacySingleQuestionPromptItems
@@ -17,8 +20,9 @@ vi.mock('@/runtime/structured-agent-session-client', () =>
   moduleFactories.structuredAgentSessionClient()
 )
 vi.mock('./use-structured-agent-session', () => moduleFactories.useStructuredAgentSession())
-vi.mock('./use-native-chat-font-scale', () => moduleFactories.useNativeChatFontScale())
+vi.mock('./use-native-chat-font-size', () => moduleFactories.useNativeChatFontSize())
 vi.mock('./use-native-chat-file-link-context', () => moduleFactories.useNativeChatFileLinkContext())
+vi.mock('./use-native-chat-tab-owner', () => moduleFactories.useNativeChatTabOwner())
 vi.mock('./use-native-chat-file-link-click', () => moduleFactories.useNativeChatFileLinkClick())
 vi.mock('./NativeChatMessageList', () => moduleFactories.nativeChatMessageList())
 vi.mock('./NativeChatComposer', () => moduleFactories.nativeChatComposer())
@@ -28,14 +32,119 @@ vi.mock('./NativeChatQuestionCard', () => moduleFactories.nativeChatQuestionCard
 
 import { NativeChatStructuredSession } from './NativeChatStructuredSession'
 import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
+import { structuredAgentSessionDraftScopeKey } from './native-chat-composer-draft-store'
 
 describe('NativeChatStructuredSession', () => {
+  it('applies persisted appearance at the chat root and updates it live', () => {
+    const original = useAppStore.getState().settings
+    useAppStore.setState({
+      settings: {
+        ...getDefaultSettings('/tmp'),
+        theme: 'dark',
+        nativeChatAppearance: {
+          fontSize: 18,
+          codeFontSize: 11,
+          width: 'wide',
+          matchTerminalInterface: true,
+          contrast: 120
+        },
+        terminalFontFamily: 'Consolas',
+        terminalFontSize: 16,
+        terminalColorOverrides: { background: '#112233', foreground: '#ddeeff' }
+      }
+    })
+    const { container } = render(
+      <NativeChatStructuredSession
+        isVisible
+        isFocusedGroup
+        tabId="appearance-tab"
+        sessionId="appearance-session"
+        target={{ kind: 'local' }}
+        agent="codex"
+      />
+    )
+    const root = container.querySelector<HTMLElement>('[data-native-chat-root]')
+    expect(root?.style.colorScheme).toBe('dark')
+    expect(root?.style.color).toBe('var(--foreground)')
+    expect(root?.dataset.nativeChatScheme).toBe('dark')
+    expect(root?.style.getPropertyValue('--chat-source-background')).toBe('#112233')
+    expect(root?.style.getPropertyValue('--chat-source-foreground')).toBe('#ddeeff')
+    expect(root?.style.getPropertyValue('--chat-code-font-family')).toContain('Consolas')
+    expect(root?.style.getPropertyValue('--chat-font-family')).toContain('Consolas')
+    expect(root?.style.getPropertyValue('--chat-foreground-mix')).toBe('100%')
+    expect(root?.style.getPropertyValue('--chat-font-size')).toBe('16px')
+    expect(root?.style.getPropertyValue('--chat-code-font-size')).toBe('16px')
+    expect(root?.style.getPropertyValue('--chat-content-max-width')).toBe('60rem')
+    act(() =>
+      useAppStore.setState({
+        settings: {
+          ...getDefaultSettings('/tmp'),
+          theme: 'dark',
+          nativeChatAppearance: { width: 'full' }
+        }
+      })
+    )
+    expect(root?.style.colorScheme).toBe('')
+    expect(root?.style.color).toBe('')
+    expect(root?.dataset.nativeChatScheme).toBeUndefined()
+    expect(root?.style.getPropertyValue('--chat-source-background')).toBe('')
+    expect(root?.style.getPropertyValue('--chat-source-foreground')).toBe('')
+    expect(root?.style.getPropertyValue('--chat-font-family')).toBe('')
+    expect(root?.style.getPropertyValue('--chat-foreground-mix')).toBe('78%')
+    expect(root?.style.getPropertyValue('--chat-font-size')).toBe('14px')
+    expect(root?.style.getPropertyValue('--chat-content-max-width')).toBe('none')
+    act(() => useAppStore.setState({ settings: original }))
+  })
+
+  it('skips appearance work on unrelated settings writes and updates the root for appearance changes', () => {
+    const original = useAppStore.getState().settings
+    const settings = {
+      ...getDefaultSettings('/tmp'),
+      theme: 'dark' as const,
+      nativeChatAppearance: { matchTerminalInterface: true }
+    }
+    useAppStore.setState({ settings })
+    const resolveColors = vi.spyOn(terminalThemeSelection, 'resolveConfiguredTerminalColors')
+    const view = render(
+      <NativeChatStructuredSession
+        isVisible
+        isFocusedGroup
+        tabId="appearance-subscription-tab"
+        sessionId="appearance-subscription-session"
+        target={{ kind: 'local' }}
+        agent="codex"
+      />
+    )
+    const initialResolutions = resolveColors.mock.calls.length
+    act(() =>
+      useAppStore.setState({
+        settings: { ...settings, terminalFontSize: settings.terminalFontSize + 1 }
+      })
+    )
+    expect(resolveColors).toHaveBeenCalledTimes(initialResolutions + 1)
+    expect(
+      view.container
+        .querySelector<HTMLElement>('[data-native-chat-root]')
+        ?.style.getPropertyValue('--chat-font-size')
+    ).toBe(`${settings.terminalFontSize + 1}px`)
+    act(() => useAppStore.setState({ settings: { ...settings, terminalFontFamily: 'Menlo' } }))
+    expect(resolveColors).toHaveBeenCalledTimes(initialResolutions + 2)
+    expect(
+      view.container
+        .querySelector<HTMLElement>('[data-native-chat-root]')
+        ?.style.getPropertyValue('--chat-code-font-family')
+    ).toContain('Menlo')
+    view.unmount()
+    useAppStore.setState({ settings: original })
+  })
+
   afterEach(() => {
     cleanup()
     resetStructuredSessionMocks()
+    vi.restoreAllMocks()
   })
 
-  it('gives what a Stop withdrew back to the composer this pane shows', () => {
+  it("gives the composer this pane shows the conversation's own draft, and Stop returns text there", () => {
     render(
       <NativeChatStructuredSession
         isVisible
@@ -47,8 +156,14 @@ describe('NativeChatStructuredSession', () => {
       />
     )
     const paneKey = structuredAgentSessionPaneKey('structured-tab-1', 'session-1')
-    expect(mocks.composerProps).toMatchObject({ paneKey })
-    expect(mocks.controllerProps).toMatchObject({ composerScopeKey: paneKey })
+    // The pane routes drops and pickers; the draft belongs to the conversation, whatever pane shows it.
+    expect(mocks.composerProps).toMatchObject({
+      paneKey,
+      draftScopeKey: structuredAgentSessionDraftScopeKey('session-1')
+    })
+    expect(mocks.controllerProps).toMatchObject({
+      composerScopeKey: structuredAgentSessionDraftScopeKey('session-1')
+    })
   })
 
   it('routes the launch draft and app-menu paste to the structured composer', () => {
@@ -256,7 +371,7 @@ describe('NativeChatStructuredSession', () => {
     expect(mocks.composerProps?.isWorking).toBe(true)
   })
 
-  it('suppresses live turn activity for a pending approval but keeps background work visible', () => {
+  it('suppresses live turn activity for a pending approval but keeps background work visible', async () => {
     const approvalItems: AgentJournalRenderItem[] = [
       {
         itemId: 'approval-item',
@@ -266,6 +381,8 @@ describe('NativeChatStructuredSession', () => {
         body: {
           kind: 'approval',
           title: 'Allow command?',
+          blockedPath: '/outside/repo/.git/config',
+          matchedAskRule: { source: 'projectSettings', toolName: 'Bash' },
           detail: 'pnpm test',
           options: [
             { id: 'allow', label: 'Allow' },
@@ -301,6 +418,9 @@ describe('NativeChatStructuredSession', () => {
       awaitingInput: 'shown'
     })
     expect(mocks.approvalCardProps?.approval.title).toBe('Allow command?')
+    // The card decides whether to show the path; the ask rule never reaches it.
+    expect(mocks.approvalCardProps?.approval.blockedPath).toBe('/outside/repo/.git/config')
+    expect(mocks.approvalCardProps?.approval).not.toHaveProperty('matchedAskRule')
     expect(screen.queryByTestId('structured-composer')).toBeNull()
     expect(document.querySelector('[data-native-chat-background-tasks="true"]')).not.toBeNull()
 
@@ -309,6 +429,7 @@ describe('NativeChatStructuredSession', () => {
       kind: 'option',
       optionId: 'allow'
     })
+    await waitFor(() => expect(mocks.revealLatest).toHaveBeenCalledOnce())
     expect(mocks.messageListProps?.awaitingInput).toBe('shown')
 
     act(() => mocks.approvalCardProps?.onCancel?.())
@@ -389,6 +510,24 @@ describe('NativeChatStructuredSession', () => {
     act(() => mocks.composerProps?.onStop?.())
     expect(mocks.stop).toHaveBeenCalledOnce()
     expect(mocks.cancel).not.toHaveBeenCalled()
+  })
+
+  it("shows the queue's coming send as a Stop that is not live until a turn can be stopped", () => {
+    mocks.queueSendsNext = true
+    render(claudeSessionView('structured-tab-sends-next', 'session-sends-next'))
+    expect(mocks.composerProps?.isWorking).toBe(true)
+    expect(mocks.composerProps?.onStop).toBeUndefined()
+  })
+
+  it('hands the composer Resume, on its transport, only while the queue controller offers it', () => {
+    const { rerender } = render(claudeSessionView('structured-tab-resume', 'session-resume'))
+    expect(mocks.composerProps?.structuredTransport?.queueResume).toBeUndefined()
+    mocks.queuedResumable = true
+    rerender(claudeSessionView('structured-tab-resume', 'session-resume'))
+    act(() => {
+      mocks.composerProps?.structuredTransport?.queueResume?.resume()
+    })
+    expect(mocks.queuedResume).toHaveBeenCalledOnce()
   })
 
   it('keeps the strip mounted through a running turn, with the turn owning the voice', () => {
@@ -604,5 +743,105 @@ describe('NativeChatStructuredSession', () => {
       kind: 'answers',
       answers: [{ questionId: 'q1', optionIds: [], other: 'Svelte' }]
     })
+  })
+
+  it('gives a question card the keyboard, holds it while its answer is with the host, and frees it on a refusal', async () => {
+    mocks.promptItems = legacySingleQuestionPromptItems
+    render(
+      <NativeChatStructuredSession
+        isVisible
+        isFocusedGroup
+        tabId="structured-tab-hold"
+        sessionId="session-hold"
+        target={{ kind: 'local' }}
+        agent="claude"
+      />
+    )
+    let refuse: (result: null) => void = () => {}
+    mocks.respond.mockReturnValueOnce(
+      new Promise<null>((resolve) => {
+        refuse = resolve
+      })
+    )
+
+    // The card owns this pane's keyboard, which is what turns its number keys on.
+    expect(mocks.questionCardProps?.shouldFocus).toBe(true)
+    act(() => mocks.questionCardProps?.onAnswer([{ indices: [1], other: '' }]))
+    expect(mocks.questionCardProps?.isSubmitting).toBe(true)
+    await act(async () => refuse(null))
+
+    expect(mocks.questionCardProps?.isSubmitting).toBe(false)
+  })
+
+  // The reader may have scrolled far up; what they just did has to come into view.
+  it('brings the latest into view at the press for the submits this pane makes', async () => {
+    mocks.promptItems = legacySingleQuestionPromptItems
+    const { rerender } = render(
+      <NativeChatStructuredSession
+        isVisible
+        isFocusedGroup
+        tabId="structured-tab-reveal"
+        sessionId="session-reveal"
+        target={{ kind: 'local' }}
+        agent="claude"
+      />
+    )
+    // An answer reveals as it is pressed, before the host decides on it.
+    mocks.respond.mockReturnValueOnce(new Promise(() => {}))
+    mocks.questionCardProps?.onAnswer([{ indices: [1], other: '' }])
+    expect(mocks.respond).toHaveBeenCalledOnce()
+    expect(mocks.revealLatest).toHaveBeenCalledOnce()
+
+    mocks.promptItems = []
+    rerender(
+      <NativeChatStructuredSession
+        isVisible
+        isFocusedGroup
+        tabId="structured-tab-reveal"
+        sessionId="session-reveal"
+        target={{ kind: 'local' }}
+        agent="claude"
+      />
+    )
+    const steerQueued = mocks.composerProps?.steerQueued
+    const onSubmitted = mocks.composerProps?.structuredTransport?.onSubmitted
+    if (!steerQueued || typeof onSubmitted !== 'function') {
+      throw new Error('Structured composer was not wired')
+    }
+    mocks.revealLatest.mockClear()
+
+    // Refused: nothing was steered, so nothing moves.
+    expect(steerQueued()).toBe(false)
+    expect(mocks.revealLatest).not.toHaveBeenCalled()
+
+    // The composer's sends reveal through its transport.
+    onSubmitted()
+    expect(mocks.revealLatest).toHaveBeenCalledOnce()
+    mocks.queuedSteerNewest.mockReturnValue(true)
+    expect(steerQueued()).toBe(true)
+    expect(mocks.revealLatest).toHaveBeenCalledTimes(2)
+  })
+
+  it("brings the latest into view when a queued card's Steer sends it now", () => {
+    mocks.queuedCards = [
+      { messageId: 'draft-1', position: 1, text: 'Also check SSH', state: 'waiting', hold: 'turn' }
+    ]
+    render(
+      <TooltipProvider>
+        <NativeChatStructuredSession
+          isVisible
+          isFocusedGroup
+          tabId="structured-tab-queue"
+          sessionId="session-queue"
+          target={{ kind: 'local' }}
+          agent="claude"
+        />
+      </TooltipProvider>
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /Steer/ }))
+
+    expect(mocks.queuedSteer).toHaveBeenCalledWith('draft-1')
+    expect(mocks.revealLatest).toHaveBeenCalledOnce()
   })
 })

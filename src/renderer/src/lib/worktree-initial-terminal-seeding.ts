@@ -231,7 +231,20 @@ export function ensureWorktreeHasInitialTerminal(
     !hasExplicitLaunchWork &&
     opts.activateCreatedTabs !== false
   ) {
-    const defaultChat = openDefaultAgentChatInEmptyWorkspace(worktreeId)
+    // A host's "no" to the chat seeds what this same call would have without the default chat.
+    const defaultChat = openDefaultAgentChatInEmptyWorkspace(
+      worktreeId,
+      () =>
+        ensureWorktreeHasInitialTerminal(
+          store,
+          worktreeId,
+          startup,
+          setup,
+          issueCommand,
+          defaultTabs,
+          { ...opts, seedUserDefaultSurface: false }
+        ) !== null
+    )
     if (defaultChat) {
       return defaultChat.primaryTabId
     }

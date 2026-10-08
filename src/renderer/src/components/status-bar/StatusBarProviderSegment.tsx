@@ -6,6 +6,8 @@ import {
   type UsagePercentageDisplay
 } from '../../../../shared/usage-percentage-display'
 import type { StatusBarUsageMode } from '../../../../shared/status-bar-usage-mode'
+import { formatCurrencyAmount } from '../../../../shared/currency-format'
+import { formatCreditCount } from '../../../../shared/credit-count-format'
 import {
   ProviderIcon,
   USAGE_URGENT_PERCENT,
@@ -14,6 +16,7 @@ import {
   getProviderDisplayName,
   getProviderUsageStatusLabel
 } from './tooltip'
+import { isClaudeUsageWaitingForClaude } from './usage-error-copy'
 import { getTightestUsageSection, getUsageHeadlineSection } from './UsageRosterPanel'
 import { formatRateLimitWindowChipLabel } from '@/lib/window-label-formatter'
 import { formatUsagePercentageLabel } from './usage-percentage-label'
@@ -262,6 +265,43 @@ function VerboseProviderUsage({
   )
 }
 
+// A plan spends into its overage balance only once an included window is
+// exhausted. Treat ~100% as capped to tolerate provider rounding.
+const CAP_THRESHOLD_PERCENT = 99.5
+
+// Why: only reveal the compact balance once a capped window can spend it.
+function isExtraUsageActive(p: ProviderRateLimits): boolean {
+  if (
+    !p.extraUsage ||
+    !p.extraUsage.enabled ||
+    (p.extraUsage.unit === 'currency' &&
+      (p.extraUsage.balance === null || p.extraUsage.balance <= 0))
+  ) {
+    return false
+  }
+  return [p.session, p.weekly, p.monthly, p.fableWeekly].some(
+    (w) => w != null && clampUsedPercent(w.usedPercent) >= CAP_THRESHOLD_PERCENT
+  )
+}
+
+function formatCompactExtraUsage(balance: ProviderRateLimits['extraUsage']): string {
+  if (!balance) {
+    return ''
+  }
+  if (balance.unit === 'credits') {
+    return balance.unlimited
+      ? translate('auto.components.status.bar.StatusBar.4025a6f62f', 'Unlimited')
+      : translate('auto.components.status.bar.StatusBar.a95969101f', '{{value0}} credits', {
+          value0: formatCreditCount(balance.balance)
+        })
+  }
+  return balance.balance === null
+    ? ''
+    : translate('auto.components.status.bar.StatusBar.4fba7dc1e7', '{{value0}} bal', {
+        value0: formatCurrencyAmount(balance.balance, balance.currencyCode)
+      })
+}
+
 export function ProviderSegment({
   p,
   compact,
@@ -275,6 +315,8 @@ export function ProviderSegment({
 }): React.JSX.Element {
   const provider = p?.provider ?? 'claude'
   const statusLabel = p ? getProviderUsageStatusLabel(p) : ''
+  // Why: not a problem; Claude updates its own login the next time it runs.
+  const calm = p ? isClaudeUsageWaitingForClaude(p) : false
 
   // Idle / initial load
   if (!p || p.status === 'idle') {
@@ -312,14 +354,15 @@ export function ProviderSegment({
     return (
       <span className="inline-flex items-center gap-1 text-muted-foreground">
         <ProviderIcon provider={provider} />
-        <AlertTriangle size={11} className="text-muted-foreground/80" />
+        {!calm && <AlertTriangle size={11} className="text-muted-foreground/80" />}
         {!compact && <span className="text-[11px] font-medium">{statusLabel}</span>}
       </span>
     )
   }
 
   // Has data (ok, fetching with stale data, or error with stale data)
-  const isStale = p.status === 'error'
+  const isStale = p.status === 'error' && !calm
+  const showBalance = isExtraUsageActive(p)
 
   return (
     <span className="inline-flex items-center gap-1.5">
@@ -338,6 +381,12 @@ export function ProviderSegment({
           display={display}
           showLabel={!compact}
         />
+      ) : null}
+      {showBalance && p.extraUsage ? (
+        <>
+          <span className="text-muted-foreground">·</span>
+          <span className="tabular-nums">{formatCompactExtraUsage(p.extraUsage)}</span>
+        </>
       ) : null}
       {isStale && <AlertTriangle size={11} className="text-muted-foreground/80" />}
     </span>

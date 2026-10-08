@@ -23,13 +23,17 @@ import {
   buildJournalQueueResumeRow,
   buildJournalStopEventRow
 } from './journal-stop-and-resume-rows'
+import {
+  agentSessionJournalProviderHandle,
+  codexProviderHandle
+} from '../../../shared/agent-session-provider-handle-encoding'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-s',
   workspaceId: 'ws-1',
   hostId: 'host-1',
   agent: 'codex',
-  providerHandle: { kind: 'codex', threadId: 'thread-1' }
+  providerHandle: codexProviderHandle('thread-1')
 }
 const EPOCH = 'epoch-1'
 
@@ -46,8 +50,8 @@ afterEach(async () => {
 })
 
 /** One epoch's rows, folded as an open folds them. */
-function fold(rows: readonly JournalRow[], repairedFrom: number | null = null) {
-  const folding = startJournalRowFold({ sessionId: IDENTITY.sessionId, epoch: EPOCH, repairedFrom })
+function fold(rows: readonly JournalRow[]) {
+  const folding = startJournalRowFold({ sessionId: IDENTITY.sessionId, epoch: EPOCH })
   for (const row of rows) {
     folding.add({ seq: row.seq, rowJson: serializeJournalRow(row) })
   }
@@ -64,7 +68,7 @@ function epochWith(
     {
       kind: 'epoch',
       reason,
-      providerHandle: IDENTITY.providerHandle,
+      providerHandle: agentSessionJournalProviderHandle(IDENTITY),
       ...journalRowBase(EPOCH, 1, 1, 1)
     }
   ]
@@ -110,13 +114,13 @@ describe("a Stop's event and a Resume", () => {
     expect(projected).toMatchObject({ ok: true, batch: { items: [], removedItemIds: [] } })
   })
 
-  it('are no provider history: an unreconcilable epoch holding only them still reads corrupt', () => {
-    expect(fold(epochWith('unreconcilable_prefix', ['stop', 'resume'])).corrupt).toBe(true)
-    expect(fold(epochWith('unreconcilable_prefix', ['stop', 'item'])).corrupt).toBe(false)
-  })
-
-  it('are no rebuilt history: a pending repair followed only by them still reads corrupt', () => {
-    expect(fold(epochWith('handle_forked', ['stop', 'resume']), 2).corrupt).toBe(true)
-    expect(fold(epochWith('handle_forked', ['stop', 'item']), 2).corrupt).toBe(false)
+  // An older build founded `unreconcilable_prefix` epochs when it deleted history; this one opens
+  // such an epoch as it stands.
+  it('fold as history in an epoch an older build founded after deleting rows', () => {
+    expect(fold(epochWith('unreconcilable_prefix', ['stop', 'resume']))).toMatchObject({
+      newer: null,
+      damage: null,
+      state: { lastSequence: 3 }
+    })
   })
 })

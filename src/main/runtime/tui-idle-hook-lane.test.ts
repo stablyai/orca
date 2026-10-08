@@ -315,13 +315,13 @@ describe('evaluateTuiIdle hook lane', () => {
     ).toEqual({ kind: 'pending', quietForeground: 'closed' })
   })
 
-  it('never reads hooks for identity-only claude', () => {
+  it('ignores an ordinary done hook for identity-only claude', () => {
     const readHookTurn = vi.fn(() => DONE)
     expect(evaluateTuiIdle(input({ agent: 'claude', readHookTurn }))).toEqual({
       kind: 'pending',
       quietForeground: 'closed'
     })
-    expect(readHookTurn).not.toHaveBeenCalled()
+    expect(readHookTurn).toHaveBeenCalledOnce()
   })
 })
 

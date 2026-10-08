@@ -5,7 +5,8 @@
 // always named: `SELECT *` is uncacheable and can drop a column.
 
 import type Database from '../../sqlite/sync-database'
-import { serializeJournalRow, type JournalRow } from './journal-row-schema'
+import { parseJournalRow, serializeJournalRow, type JournalRow } from './journal-row-schema'
+import { AgentSessionJournalError } from './journal-write-guards'
 
 export type JournalStoredRow = { epoch: string; seq: number; ts: number; rowJson: string }
 
@@ -19,10 +20,7 @@ const INSERT_ROW =
 const SELECT_ROWS_AFTER = `SELECT seq, ts, row_json FROM journal_rows
 WHERE session_id = ? AND epoch = ? AND seq > ? ORDER BY seq ASC`
 const SELECT_ROWS_AFTER_LIMITED = `${SELECT_ROWS_AFTER} LIMIT ?`
-const DELETE_SUFFIX = 'DELETE FROM journal_rows WHERE session_id = ? AND epoch = ? AND seq >= ?'
 const DELETE_EPOCH = 'DELETE FROM journal_rows WHERE session_id = ? AND epoch = ?'
-const DELETE_UNPUBLISHED = `DELETE FROM journal_rows WHERE session_id = ?
-AND epoch IS NOT (SELECT epoch FROM journal_sessions WHERE session_id = ?)`
 
 export function readJournalSessionEpoch(db: Database.Database, sessionId: string): string | null {
   const epoch = db.prepare(SELECT_EPOCH).get(sessionId)?.epoch
@@ -44,6 +42,15 @@ export function insertJournalRow(
   row: JournalRow
 ): number {
   const rowJson = serializeJournalRow(row)
+  // A row the reader rejects would fail the chat's next load, so it is never written: the throw
+  // rolls back the caller's transaction.
+  const readBack = parseJournalRow(rowJson)
+  if (!readBack.ok || readBack.row.seq !== row.seq) {
+    throw new AgentSessionJournalError(
+      'journal_row_rejected',
+      `the ${row.kind} row for ${sessionId} would not read back, so it was not written`
+    )
+  }
   db.prepare(INSERT_ROW).run(sessionId, row.epoch, row.seq, row.ts, rowJson)
   return Buffer.byteLength(rowJson, 'utf8')
 }
@@ -96,20 +103,4 @@ export function deleteJournalEpochRows(
   epoch: string
 ): void {
   db.prepare(DELETE_EPOCH).run(sessionId, epoch)
-}
-
-/** Rows of this chat under any epoch its pointer does not name: a copy that never published. */
-export function deleteUnpublishedJournalRows(db: Database.Database, sessionId: string): void {
-  db.prepare(DELETE_UNPUBLISHED).run(sessionId, sessionId)
-}
-
-/** Drop the rejected suffix a repair found, from `fromSeq` to the tip. */
-export function deleteJournalRowSuffix(
-  db: Database.Database,
-  sessionId: string,
-  epoch: string,
-  fromSeq: number
-): number {
-  const deleted = db.prepare(DELETE_SUFFIX).run(sessionId, epoch, fromSeq)
-  return Number(deleted.changes ?? 0)
 }

@@ -99,7 +99,8 @@ export function appendCodexLifecycleItem(
   sink: StructuredAgentSessionEventSink,
   identity: AgentJournalItemIdentity,
   body: AgentJournalItemBody,
-  attribution: AgentJournalRowAttribution
+  /** With the host time a row first written here should carry instead of its append time. */
+  attribution: AgentJournalRowAttribution & { observedAt?: number }
 ): CodexJournalTranslationAdmission {
   const options = { lifecycle: true, ...attribution }
   if (sink.tryAppendItem) {

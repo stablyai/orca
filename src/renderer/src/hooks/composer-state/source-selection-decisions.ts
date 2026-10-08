@@ -1,6 +1,7 @@
 import type { GitHubPrStartPoint, GitPushTarget } from '../../../../shared/worktree/types'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
-import { getLinkedWorkItemProvider, type LinkedWorkItemSummary } from '@/lib/new-workspace'
+import { getLinkedWorkItemProvider } from '@/lib/linked-work-item-provider'
+import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import type { SmartGitHubSubmitResolution } from '@/lib/smart-github-submit'
 import {
   resolveGitHubWorkItemIdentity,

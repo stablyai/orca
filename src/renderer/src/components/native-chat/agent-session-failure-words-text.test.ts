@@ -6,6 +6,7 @@ import zh from '@/i18n/locales/zh.json'
 import {
   AGENT_SESSION_ATTACHMENT_PROBLEM_REASONS,
   AGENT_SESSION_FAILURE_KINDS,
+  readWholeAgentSessionFailureFact,
   type AgentSessionFailureFact
 } from '../../../../shared/agent-session-failure'
 import {
@@ -20,7 +21,7 @@ import {
 import { AGENT_SESSION_WRITE_NOTICE_COPY } from '../../../../shared/agent-session-write-notice-copy'
 import { agentSessionWriteNoticeParts } from '../../../../shared/agent-session-refusal-notice'
 import { agentSessionRefusalFailure } from '../../../../shared/agent-session-write-failure'
-import { structuredAgentSessionRejectionParts } from '../../../../shared/structured-agent-session-send-disposition'
+import { structuredAgentSessionRejectionParts } from '../../../../shared/structured-agent-session-rejection-words'
 import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
 import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
 
@@ -45,7 +46,8 @@ const VALUES = {
   command: 'compact',
   detail: 'Image type .bmp',
   limit: '20',
-  size: '5'
+  size: '5',
+  option: '--remote'
 }
 
 function factsFor(kind: AgentSessionFailureFact['kind']): AgentSessionFailureFact[] {
@@ -219,6 +221,22 @@ describe('desktop words for a failure fact', () => {
     expect(sentence('totalTooLarge', 20)).toBe(
       "Les images de ce message dépassent 20 Mo au total, le message n'a donc pas été envoyé."
     )
+  })
+
+  it('uses the host sentence if the argument detail is newer than this reader', () => {
+    const sentence = 'Codex could not start. Edit saved Arguments in Settings > Agents.'
+    expect(
+      agentSessionWriteNoticeText(
+        structuredAgentSessionRejectionParts(
+          sentence,
+          'send',
+          readWholeAgentSessionFailureFact({
+            kind: 'startFailed',
+            argumentProblem: { agent: 'Codex', option: '--remote', problem: 'futureProblem' }
+          })
+        )
+      )
+    ).toBe(sentence)
   })
 
   it('shows a host sentence with no fact beside it as written', async () => {

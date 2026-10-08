@@ -58,12 +58,22 @@ const SENTENCES: Record<AgentSessionWriteNoticeSentence, () => string> = {
       'components.native-chat.writeNotice.updateOrcaToKeepUsing',
       COPY.updateOrcaToKeepUsing
     ),
+  chatSavedByNewerOrca: () =>
+    translate('components.native-chat.writeNotice.chatSavedByNewerOrca', COPY.chatSavedByNewerOrca),
+  updateOrcaToOpenChat: () =>
+    translate('components.native-chat.writeNotice.updateOrcaToOpenChat', COPY.updateOrcaToOpenChat),
   unsupported: () => translate('components.native-chat.writeNotice.unsupported', COPY.unsupported),
   notAvailable: () =>
     translate('components.native-chat.writeNotice.notAvailable', COPY.notAvailable),
+  cannotRunHere: () =>
+    translate('components.native-chat.writeNotice.cannotRunHere', COPY.cannotRunHere),
   unreachable: () => translate('components.native-chat.writeNotice.unreachable', COPY.unreachable),
   recordFailed: () =>
     translate('components.native-chat.writeNotice.recordFailed', COPY.recordFailed),
+  attachmentExpired: () =>
+    translate('components.native-chat.writeNotice.attachmentExpired', COPY.attachmentExpired),
+  reattachFile: () =>
+    translate('components.native-chat.writeNotice.reattachFile', COPY.reattachFile),
   conversationCleared: () =>
     translate('components.native-chat.writeNotice.conversationCleared', COPY.conversationCleared),
   openCurrentConversation: () =>

@@ -105,9 +105,12 @@ describe('persistent profile state write worker', () => {
       ui: { note: 'hi \ud800' },
       automationRuns: [{ id: 'run-1', output: 'first' }]
     })
-    const compatibility = join(f.root, 'compatibility.json')
-    expect(await client.writeJsonCompatibilityExportAsync(compatibility)).toBe(3)
-    expect(readFileSync(compatibility, 'utf8')).toBe(readFileSync(exported, 'utf8'))
+    const dataFile = join(f.root, 'orca-data.json')
+    expect(await client.writeLatestJsonExport(dataFile)).toBe(3)
+    expect(readFileSync(`${dataFile}.sqlite-export.3.json`, 'utf8')).toBe(
+      readFileSync(exported, 'utf8')
+    )
+    expect(existsSync(dataFile)).toBe(false)
     expect(await client.writeSerializedState(Buffer.from('{"settings":{"theme":"light"}}'))).toBe(4)
     expect(await client.assertCurrentRevision()).toBe(4)
     await client.close()

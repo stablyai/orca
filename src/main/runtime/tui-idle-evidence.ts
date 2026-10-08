@@ -8,6 +8,8 @@ import type { RuntimeTerminalWaitBlockedReason } from '../../shared/runtime-type
 import { getSyntheticAgentTerminalTitle } from '../../shared/synthetic-agent-title'
 import { resolveExplicitTerminalTitleAgentType } from '../../shared/terminal-title-agent-type'
 import type { TuiAgent } from '../../shared/tui-agent'
+import type { TerminalAgent } from '../../shared/terminal-agent'
+import { isTuiAgent } from '../../shared/tui-agent-config'
 import { getTuiAgentRestSignal } from '../../shared/tui-agent-rest-signal'
 import { detectExplicitIdleStatusFromTitle } from './terminal-wait-detection'
 import { isOmpIdleStateTitle } from './omp-terminal-readiness'
@@ -134,7 +136,7 @@ export function nameOnlyIdleNeedsCorroboration(
   // Why the title fallback: an adopted pane carries no launch metadata, but its
   // name-only title is exactly the thing that names the agent.
   const resolved = agent ?? (title ? resolveExplicitTerminalTitleAgentType(title) : null)
-  if (resolved === null) {
+  if (!isTuiAgent(resolved)) {
     return false
   }
   return (
@@ -146,12 +148,15 @@ export function nameOnlyIdleNeedsCorroboration(
 export function hasSustainedTitleIdle(
   record: TuiIdleEvidenceRecord,
   agent: TuiAgent | null | undefined,
-  quiescenceMs: number
+  quiescenceMs: number,
+  launchReadiness = false
 ): boolean {
   if (record.lastAgentStatus !== 'idle') {
     return false
   }
-  if (!nameOnlyIdleNeedsCorroboration(agent, record.lastOscTitle)) {
+  // Why launch readiness always corroborates: a shell auto-title (`grok`, `gemini`) names the
+  // agent before its TUI mounts, and a paste then lands in a booting TUI or the shell itself.
+  if (!launchReadiness && !nameOnlyIdleNeedsCorroboration(agent, record.lastOscTitle)) {
     // The title is the only rest signal this agent emits, so there is nothing to wait for.
     return true
   }
@@ -179,8 +184,10 @@ function hasQuietOutput(record: TuiIdleEvidenceRecord, quiescenceMs: number): bo
  */
 export type QuietForegroundLane = 'closed' | 'after-paint' | 'open'
 
-function quietForegroundLane(agent: TuiAgent | null | undefined): QuietForegroundLane {
-  if (!agent) {
+export function quietForegroundLaneForTerminalAgent(
+  agent: TerminalAgent | null | undefined
+): QuietForegroundLane {
+  if (!isTuiAgent(agent)) {
     return 'open'
   }
   return getTuiAgentRestSignal(agent) === 'none' ? 'after-paint' : 'closed'
@@ -210,6 +217,9 @@ export type TuiIdleEvaluationInput = {
   /** Tier 0: the hook server's fresh row for the pane, read only for an authoritative agent. */
   readHookTurn?: () => TuiIdleHookTurn | null
   quiescenceMs: number
+  /** Waiting for a just-launched agent to open its composer, where a name-only title proves
+   *  nothing until the stream goes quiet. */
+  launchReadiness?: boolean
 }
 
 export type TuiIdleVerdict =
@@ -333,29 +343,34 @@ function rankTuiIdleEvidence(input: TuiIdleEvaluationInput): TuiIdleVerdict {
   // refused, and an agent's own idle-title rule replaces the sustained-title lane below.
   const ruled = input.readAgentRuleVerdict()
   if (ruled !== null) {
-    return isSettledWeakIdle(ruled, input.record, input.quiescenceMs)
+    return isSettledWeakIdle(ruled, input.record, input.quiescenceMs, input.launchReadiness)
       ? READY_WEAK
       : { kind: 'pending', quietForeground: 'closed' }
   }
-  if (hasSustainedTitleIdle(input.record, input.agent, input.quiescenceMs)) {
+  if (hasSustainedTitleIdle(input.record, input.agent, input.quiescenceMs, input.launchReadiness)) {
     return READY_WEAK
   }
   return {
     kind: 'pending',
     quietForeground:
-      input.record.lastAgentStatus === null ? quietForegroundLane(input.agent) : 'closed'
+      input.record.lastAgentStatus === null
+        ? quietForegroundLaneForTerminalAgent(input.agent)
+        : 'closed'
   }
 }
 
+// Why launch readiness asks quiet of every weak idle: those rules read a name-only title, which a
+// shell auto-title writes before the TUI mounts, as in the sustained-title lane.
 function isSettledWeakIdle(
   verdict: AgentStateVerdict,
   record: TuiIdleEvidenceRecord,
-  quiescenceMs: number
+  quiescenceMs: number,
+  launchReadiness = false
 ): boolean {
   return (
     verdict.state === 'idle' &&
     verdict.strength === 'weak' &&
-    (!verdict.requiresQuiet || hasQuietOutput(record, quiescenceMs))
+    ((!verdict.requiresQuiet && !launchReadiness) || hasQuietOutput(record, quiescenceMs))
   )
 }
 

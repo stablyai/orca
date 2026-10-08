@@ -6,8 +6,10 @@ import { buildNativeChatTranscriptSlots } from './native-chat-transcript-slots'
 import {
   buildNativeChatRailItems,
   mergeNativeChatRailOutline,
+  nativeChatRailReplyPreview,
+  nativeChatRailTickCapacity,
   selectNativeChatRailTicks,
-  NATIVE_CHAT_RAIL_MAX_TICKS,
+  NATIVE_CHAT_RAIL_ROOMY_TICKS,
   type NativeChatRailItem
 } from './native-chat-message-rail-items'
 
@@ -110,40 +112,118 @@ describe('rail items', () => {
   })
 })
 
+describe('rail reply preview', () => {
+  const outline = [
+    { id: 'old-1', text: 'first', hasImages: false, reply: 'Host reply 1' },
+    { id: 'old-2', text: 'second', hasImages: false, reply: 'Host reply 2, cut off early' }
+  ]
+  const rowsOf = (messages: NativeChatMessage[], turnKeys: (string | undefined)[]) => ({
+    messages,
+    turnKeys
+  })
+
+  it("reads a loaded message its turn's reply, past a steer into the same turn", () => {
+    const rows = rowsOf(
+      [
+        text('u1', 'ask', 'user'),
+        text('a1', 'Looking.'),
+        text('s1', 'also', 'user'),
+        text('a2', 'Done.')
+      ],
+      ['u1', 'u1', 'u1', 'u1']
+    )
+    expect(nativeChatRailReplyPreview(rows, [], 'u1')).toBe('Done.')
+    expect(nativeChatRailReplyPreview(rows, [], 's1')).toBe('Done.')
+    expect(nativeChatRailReplyPreview(rows, [], 'gone')).toBe('')
+  })
+
+  it('reads unloaded history its reply from the host', () => {
+    const rows = rowsOf([text('u1', 'ask', 'user'), text('a1', 'Done.')], ['u1', 'u1'])
+    const items = mergeNativeChatRailOutline(outline, [])
+    expect(nativeChatRailReplyPreview(rows, items, 'old-1')).toBe('Host reply 1')
+    expect(nativeChatRailReplyPreview(rows, items, 'old-2')).toBe('Host reply 2, cut off early')
+  })
+
+  // A long live turn scrolls its own prompt out of the loaded window; the host's
+  // reply for it was cut when the outline was read, the loaded rows are current.
+  it('prefers the loaded end of a turn whose prompt is no longer loaded', () => {
+    const rows = rowsOf(
+      [text('a0', 'Still going, latest words.'), text('u1', 'ask', 'user')],
+      ['old-2', 'u1']
+    )
+    const items = mergeNativeChatRailOutline(outline, [])
+    expect(nativeChatRailReplyPreview(rows, items, 'old-2')).toBe('Still going, latest words.')
+    expect(nativeChatRailReplyPreview(rows, items, 'old-1')).toBe('Host reply 1')
+  })
+
+  // A steer is in the turn it was sent into, under another message's key: without
+  // the host naming that turn it would keep the host's reply while its turn's own
+  // prompt, beside it on the rail, showed the loaded one.
+  it("reads an unloaded steer the loaded end of its turn, as its turn's prompt", () => {
+    const rows = rowsOf([text('a0', 'Still going, latest words.')], ['old-2'])
+    const items = mergeNativeChatRailOutline(
+      [
+        ...outline,
+        { id: 'steer', text: 'also this', hasImages: false, reply: 'Stale.', turnKey: 'old-2' }
+      ],
+      []
+    )
+    expect(nativeChatRailReplyPreview(rows, items, 'steer')).toBe('Still going, latest words.')
+    expect(nativeChatRailReplyPreview(rows, items, 'old-2')).toBe('Still going, latest words.')
+  })
+})
+
 describe('rail tick sampling', () => {
   it('keeps every tick while the thread fits', () => {
-    const items = railItems(NATIVE_CHAT_RAIL_MAX_TICKS)
-    expect(selectNativeChatRailTicks({ items, activeId: null })).toBe(items)
+    const items = railItems(NATIVE_CHAT_RAIL_ROOMY_TICKS)
+    expect(selectNativeChatRailTicks({ items, keepIds: [] })).toBe(items)
+  })
+
+  // A tick is the only way to its message, so a tall transcript draws more of them.
+  it('fits more ticks into a taller viewport, never fewer than the roomy count', () => {
+    const items = railItems(60)
+    expect(nativeChatRailTickCapacity(0)).toBe(NATIVE_CHAT_RAIL_ROOMY_TICKS)
+    const maxTicks = nativeChatRailTickCapacity(800)
+    expect(maxTicks).toBeGreaterThanOrEqual(60)
+    expect(selectNativeChatRailTicks({ items, keepIds: [], maxTicks })).toBe(items)
+    expect(selectNativeChatRailTicks({ items, keepIds: [], maxTicks: 30 })).toHaveLength(30)
   })
 
   it('caps a long thread and keeps both ends', () => {
     const items = railItems(120)
-    const ticks = selectNativeChatRailTicks({ items, activeId: null })
-    expect(ticks).toHaveLength(NATIVE_CHAT_RAIL_MAX_TICKS)
+    const ticks = selectNativeChatRailTicks({ items, keepIds: [] })
+    expect(ticks).toHaveLength(NATIVE_CHAT_RAIL_ROOMY_TICKS)
     expect(ticks[0]?.id).toBe('m0')
     expect(ticks.at(-1)?.id).toBe('m119')
   })
 
   it('always includes the active tick', () => {
     const items = railItems(120)
-    const ticks = selectNativeChatRailTicks({ items, activeId: 'm7' })
+    const ticks = selectNativeChatRailTicks({ items, keepIds: ['m7'] })
     expect(ticks.map((tick) => tick.id)).toContain('m7')
-    expect(ticks).toHaveLength(NATIVE_CHAT_RAIL_MAX_TICKS)
+    expect(ticks).toHaveLength(NATIVE_CHAT_RAIL_ROOMY_TICKS)
   })
 
   // Losing an end would make the rail claim the conversation starts or stops
   // somewhere it doesn't, so the eviction has to fall on a neighbour instead.
   it('evicts a neighbour rather than an end when the active tick is near one', () => {
     const items = railItems(120)
-    const ticks = selectNativeChatRailTicks({ items, activeId: 'm1' })
+    const ticks = selectNativeChatRailTicks({ items, keepIds: ['m1'] })
     const ids = ticks.map((tick) => tick.id)
     expect(ids).toContain('m0')
     expect(ids).toContain('m1')
     expect(ids).toContain('m119')
   })
 
+  // A previewed or focused tick must not be resampled away as the reader scrolls.
+  it('keeps every named tick at once, within the cap', () => {
+    const ticks = selectNativeChatRailTicks({ items: railItems(120), keepIds: ['m7', 'm8', null] })
+    expect(ticks).toHaveLength(NATIVE_CHAT_RAIL_ROOMY_TICKS)
+    expect(ticks.map((tick) => tick.id)).toEqual(expect.arrayContaining(['m0', 'm7', 'm8', 'm119']))
+  })
+
   it('returns ticks in thread order', () => {
-    const ticks = selectNativeChatRailTicks({ items: railItems(120), activeId: 'm63' })
+    const ticks = selectNativeChatRailTicks({ items: railItems(120), keepIds: ['m63'] })
     const indexes = ticks.map((tick) => tick.slotIndex ?? -1)
     expect(indexes).toEqual([...indexes].sort((left, right) => left - right))
   })

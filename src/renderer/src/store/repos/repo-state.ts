@@ -147,6 +147,9 @@ export type RepoSlice = {
   projectGroups: readonly ProjectGroup[]
   folderWorkspaces: readonly FolderWorkspace[]
   folderWorkspacePathStatuses: Record<string, FolderWorkspacePathStatusCacheEntry>
+  /** Host-resolved floating workspace directory; null until the host has answered. */
+  floatingWorkspacePath: string | null
+  setFloatingWorkspacePath: (path: string) => void
   activeRepoId: string | null
   // Monotonic sequence so overlapping catalog fetches can drop stale same-host results (#7020).
   reposFetchGeneration: number

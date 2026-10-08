@@ -132,6 +132,8 @@ export type WorktreeSlice = {
    * — NOT by selection-triggered side-effects like clearing `isUnread`.
    */
   sortEpoch: number
+  /** sortEpoch after the settle window; the sidebar sort reads this (see store/settled-sort-epoch.ts). */
+  settledSortEpoch: number
   /**
    * Worktree IDs that have been activated at least once during this app
    * session. The first activation of a worktree is special: its
@@ -310,7 +312,11 @@ export type WorktreeSlice = {
   setActiveWorktree: (
     worktreeId: string | null,
     executionHostId?: ExecutionHostId,
-    options?: { stateTransition?: ActiveWorktreeStateTransition }
+    options?: {
+      stateTransition?: ActiveWorktreeStateTransition
+      /** Tabs the caller just created there: their first spawn is new work, not a wake. */
+      createdTabIds?: readonly string[]
+    }
   ) => boolean
   /**
    * Health-driven remount of one terminal tab: bumps the tab's generation so

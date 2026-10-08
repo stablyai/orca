@@ -1,3 +1,8 @@
+// Ref mutation tests use fictitious repositories; administrative reservations have real-Git coverage.
+vi.mock('../../shared/git-worktree-admin', () => ({
+  isBranchReservedByWorktreeOperation: vi.fn().mockResolvedValue(false)
+}))
+
 import type * as FsPromises from 'node:fs/promises'
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 

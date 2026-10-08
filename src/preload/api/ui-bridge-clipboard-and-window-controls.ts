@@ -1,3 +1,4 @@
+import type { AgentSessionAttachmentClipboardTarget } from '../../shared/agent-session-attachments'
 import { ipcRenderer, webFrame } from 'electron'
 import type {
   RuntimeMobileMarkdownRequest,
@@ -93,9 +94,16 @@ export const uiClipboardAndWindowControlsApi = {
   saveClipboardImageAsTempFile: (args?: {
     connectionId?: string | null
     runtimeEnvironmentId?: string | null
+    agentSessionAttachment?: AgentSessionAttachmentClipboardTarget
+    /** A native-chat composer paste, kept where its draft can bring it back. */
+    forNativeChatDraft?: boolean
   }): Promise<string | null> => ipcRenderer.invoke('clipboard:saveImageAsTempFile', args),
   clipboardHasImage: (): Promise<boolean> => ipcRenderer.invoke('clipboard:hasImage'),
   readClipboardFilePaths: (): Promise<string[]> => ipcRenderer.invoke('clipboard:readFilePaths'),
+  restoreNativeChatPastes: (
+    paths: string[]
+  ): Promise<{ path: string; kept: boolean; exists: boolean }[]> =>
+    ipcRenderer.invoke('clipboard:restoreNativeChatPastes', paths),
   readClipboardImageThumbnail: (): Promise<ClipboardImageThumbnail | null> =>
     ipcRenderer.invoke('clipboard:readImageThumbnail'),
   writeClipboardText: (text: string): Promise<void> =>

@@ -66,6 +66,8 @@ export async function runRelayDaemon(options: RelayLaunchOptions): Promise<void>
     hasAcceptedSocketClient: () => reconnectListener?.hasAcceptedClient ?? false,
     ownsSocketPath: () => socketOwnership.owned,
     disposeOwnedProcesses: () => runtime.disposeOwnedProcesses(),
+    reopenOwnedProcesses: () => runtime.reopenOwnedProcesses(),
+    disposeExitOnlyServices: () => runtime.disposeExitOnlyServices(),
     disposeRuntime: () => {
       primaryChannel.dispatcher.dispose()
       runtime.disposeHandlers()

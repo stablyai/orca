@@ -196,6 +196,7 @@ describe('scanAiVaultSessions Codex worker sessions', () => {
 
     const result = await scanAiVaultSessions({
       ...isolatedScanRoots(root),
+      jcodeSessionsDir: join(root, 'jcode-sessions'),
       platform: 'darwin'
     })
 

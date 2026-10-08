@@ -13,16 +13,15 @@ import {
   type AgentSessionSendResult,
   type AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire'
-import {
-  createStructuredAgentSessionOperationId,
-  structuredAgentSessionPayloadFingerprint
-} from '../../../shared/structured-agent-session-mutation'
+import { createStructuredAgentSessionOperationId } from '../../../shared/structured-agent-session-mutation'
+import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
 import { queuedSendAnswer } from './structured-agent-session-queued-send-answer'
 import { structuredAgentSessionSendBlock } from './structured-agent-session-send-preparation'
 import { isUnsettledQueuedMessage } from '../agent-session-journal/queued-message-table'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import { isStructuredAgentSessionMainAgentWorking } from '../../../shared/structured-agent-session-main-agent-working'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import type { AgentSessionTurnContext } from './structured-agent-session-turns'
 import { QueuedMessageNotConsumableError } from '../agent-session-journal/journal-queued-messages'
 import type { QueuedMessageRow } from '../agent-session-journal/queued-message-table'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
@@ -32,6 +31,8 @@ import {
 } from './structured-agent-session-queued-pause'
 import { nextSendableQueuedCard } from '../agent-session-journal/queued-message-pause'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { agentSessionAttachmentExpiredRefusal } from './structured-agent-session-turns'
+import { isAgentSessionAttachmentExpiredError } from '../agent-session-attachments/agent-session-attachment-claims'
 
 /** Budget at accept, in the send schema's own unit (`Buffer.byteLength` of the
  *  serialized blocks); refused readably rather than trimmed. */
@@ -121,6 +122,27 @@ export function structuredQueueHold(input: {
   return null
 }
 
+/** The card the drain sends next, or null while anything holds the queue: the drain's own pick
+ *  through the one gate, so a client told this reads what the drain acts on. Live facts only; the
+ *  backlog is never a gate, so a lone draft drains. */
+export function nextStructuredQueuedMessage(input: {
+  journal: AgentSessionJournal
+  record: AgentSessionRecord | null
+  fence: number
+}): QueuedMessageRow | null {
+  const next = oldestActionableQueuedMessage(input.journal)
+  const { journal, fence } = input
+  // The gate's cheap `working` first: publication asks on every streamed frame, and the gate's
+  // prompt check walks the whole fold.
+  if (
+    next === null ||
+    isStructuredAgentSessionMainAgentWorking(journal.activeTurnId(), journal.submissions(), fence)
+  ) {
+    return null
+  }
+  return structuredQueueHold(input) === null ? next : null
+}
+
 /**
  * Whether a `queue-if-active` send becomes a draft: any queue hold short of
  * `blocked`, or an actionable draft already exists (FIFO backlog — an
@@ -144,16 +166,6 @@ export function shouldQueueStructuredAgentSessionSend(input: {
     return true
   }
   return oldestActionableQueuedMessage(input.journal) !== null
-}
-
-/** A draft's payload fingerprint in the session that will send it: the reducer
- *  aliases the provider's echo to the submission by recomputing exactly this. */
-export function queuedMessageFingerprint(sessionId: string, body: AgentJournalMessageItem): string {
-  return structuredAgentSessionPayloadFingerprint({
-    method: 'agentSession.send',
-    sessionId,
-    fields: { body }
-  })
 }
 
 /** The accept-side budget refusal, or null when the draft fits. */
@@ -185,15 +197,13 @@ export async function maybeQueueStructuredAgentSessionSend(
   context: {
     deps: { store: { getRecord: (sessionId: string) => AgentSessionRecord | null } }
   },
-  ctx: {
-    sessionId: string
-    journal: AgentSessionJournal
-    fence: number
-  },
+  ctx: Pick<AgentSessionTurnContext, 'sessionId' | 'journal' | 'fence' | 'operationReceipt'>,
   params: {
     envelope: { clientOperationId: string }
     body: AgentJournalMessageItem
     delivery?: 'queue-if-active'
+    /** A person's send at a chat surface: every attachment it names must still be stored. */
+    userSend?: true
   }
 ): Promise<
   | { ok: true; value: AgentSessionSendResult }
@@ -214,9 +224,7 @@ export async function maybeQueueStructuredAgentSessionSend(
   if (ctx.journal.submissions().some((entry) => entry.clientMessageId === clientMessageId)) {
     return null
   }
-  // A newer Orca's journal takes no new draft: the immediate path refuses the send.
   if (
-    ctx.journal.isReadOnly ||
     !shouldQueueStructuredAgentSessionSend({
       journal: ctx.journal,
       record: context.deps.store.getRecord(ctx.sessionId),
@@ -231,12 +239,25 @@ export async function maybeQueueStructuredAgentSessionSend(
   }
   // The insert notifies through the journal's commit listener: publication and
   // the drain re-derive with no call here to forget.
-  const row = await ctx.journal.queuedMessages.insert({
-    messageId: clientMessageId,
-    body: params.body,
-    fingerprint: queuedMessageFingerprint(ctx.sessionId, params.body),
-    hostInstance: structuredAgentSessionHostInstance()
-  })
+  let row: QueuedMessageRow
+  try {
+    row = await ctx.journal.queuedMessages.insert(
+      {
+        messageId: clientMessageId,
+        body: params.body,
+        // In the session that will send it: the reducer aliases the provider's echo by exactly this.
+        fingerprint: agentSessionSendBodyFingerprint(ctx.sessionId, params.body),
+        hostInstance: structuredAgentSessionHostInstance(),
+        ...(params.userSend ? { requireAttachments: true } : {})
+      },
+      ctx.operationReceipt
+    )
+  } catch (error) {
+    if (isAgentSessionAttachmentExpiredError(error)) {
+      return agentSessionAttachmentExpiredRefusal()
+    }
+    throw error
+  }
   return {
     ok: true,
     value: {
@@ -264,12 +285,20 @@ export type QueuedMessageDrainDeps = {
  */
 export class StructuredAgentSessionQueuedMessageDrain {
   private readonly scheduled = new Set<string>()
+  private disposed = false
 
   constructor(private readonly deps: QueuedMessageDrainDeps) {}
 
+  /** Quit, with delivery: a hand-off made now could only be settled by the next process, so a
+   *  quit leaves the cards exactly as a crash does. Read by the step at its start, and again
+   *  right before it appends, since quit can land while it awaits. */
+  dispose(): void {
+    this.disposed = true
+  }
+
   schedule(sessionId: string): void {
-    const journal = this.deps.sessions.get(sessionId)?.journal
-    if (!journal || journal.isReadOnly) {
+    const journal = this.disposed ? undefined : this.deps.sessions.get(sessionId)?.journal
+    if (!journal) {
       return
     }
     // Cheap pre-check so token streams do not pay a serialized step per delta.
@@ -312,7 +341,7 @@ export class StructuredAgentSessionQueuedMessageDrain {
 
   private async step(sessionId: string): Promise<void> {
     const session = this.deps.sessions.get(sessionId)
-    if (!session || session.journal.isReadOnly) {
+    if (this.disposed || !session) {
       return
     }
     const journal = session.journal
@@ -326,16 +355,11 @@ export class StructuredAgentSessionQueuedMessageDrain {
         })
       })
     }
-    const next = oldestActionableQueuedMessage(journal)
-    if (!next) {
-      return
-    }
-    const record = this.deps.getRecord(sessionId)
     const fence = this.deps.conversationFence(sessionId)
-    // Live facts only, through the one gate; the backlog is never a gate, so a
-    // lone draft drains. Whatever clears a hold publishes or commits, which
-    // re-derives this step.
-    if (structuredQueueHold({ journal, record, fence }) !== null) {
+    // Whatever clears a hold publishes or commits, which re-derives this step.
+    const record = this.deps.getRecord(sessionId)
+    const next = nextStructuredQueuedMessage({ journal, record, fence })
+    if (this.disposed || !next) {
       return
     }
     // Always a fresh id: the submission names its draft by `queuedMessageId`, never by id equality.
@@ -344,7 +368,7 @@ export class StructuredAgentSessionQueuedMessageDrain {
       await journal.appendSubmission(
         {
           clientMessageId: submissionId,
-          // The queue's own automatic send: it never ends a pause.
+          // The queue's own automatic send, never kept as a card by a restart or a close.
           origin: 'host',
           payloadFingerprint: next.fingerprint,
           body: next.body,
@@ -356,7 +380,7 @@ export class StructuredAgentSessionQueuedMessageDrain {
           expect: 'waiting',
           settledByOp: null,
           hostInstance: structuredAgentSessionHostInstance(),
-          yieldsToPause: { hostInstance: structuredAgentSessionHostInstance() }
+          yieldsToPause: true
         }
       )
     } catch (error) {

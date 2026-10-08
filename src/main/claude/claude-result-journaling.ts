@@ -59,9 +59,7 @@ export function journalClaudeResult(
   // Read before the settle below closes the turn: an error end the journal's Stop rule makes a
   // person's cancellation is theirs to decide as the end is written (`turnEndAfterStop`).
   const turnId = settlesTurn ? turn.id : null
-  const leftToStop =
-    turnId !== null &&
-    sink.journalStopDecidesTurn?.(turnId, observedAt, turn.openedBy ?? undefined) === true
+  const leftToStop = turnId !== null && sink.journalStopDecidesTurn?.(turnId, observedAt) === true
   if (settlesTurn) {
     prompts.retryPendingCancellations()
     turn.suppressReopenOnFailure(message.is_error === true)

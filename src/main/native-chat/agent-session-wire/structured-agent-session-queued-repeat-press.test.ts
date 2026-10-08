@@ -8,6 +8,7 @@ import {
   eventually,
   type QueuedMessageTestRig
 } from './structured-agent-session-queued-message-rig.test-fixture'
+import { openRigTurnFor } from './structured-agent-session-queued-rig-turn.test-fixture'
 import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
 
 let rig: QueuedMessageTestRig
@@ -28,7 +29,7 @@ async function queuedDraft(text: string): Promise<string> {
 
 describe('a repeated draft press under a fresh operation id', () => {
   it('Send-now pressed twice sends the draft once and answers both presses with its submission', async () => {
-    await rig.workingSend()
+    await openRigTurnFor(rig, await rig.workingSend())
     const draftId = await queuedDraft('send me now')
     const [first, second] = await Promise.all([rig.sendNow(draftId), rig.sendNow(draftId)])
     expect(first).toMatchObject({ ok: true, replayed: false })

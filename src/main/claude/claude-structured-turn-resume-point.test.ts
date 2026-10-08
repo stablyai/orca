@@ -6,7 +6,7 @@ import {
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
-import { reviseAgentSessionClaudeResumePoint } from '../runtime/agent-session-provider-handle-transition'
+import { reviseAgentSessionProviderResumePoint } from '../runtime/agent-session-provider-handle-transition'
 import { createClaudeStructuredLaunchResolver } from './claude-structured-launch-resolution'
 import {
   ClaudeStructuredSessionAdapter,
@@ -20,6 +20,7 @@ import {
   recordingJournalSink,
   tick
 } from './claude-structured-session-test-support'
+import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const FENCE = 7
 
@@ -36,14 +37,14 @@ function liveRecord(): AgentSessionRecord {
         origin: 'created',
         mintedAtFence: 1,
         observedAt: 500,
-        handle: { provider: 'claude', sessionId: PROVIDER_SESSION_ID, leafUuid: null }
+        handle: claudeProviderHandle(PROVIDER_SESSION_ID, null)
       },
       {
         linkId: 'published-link',
         origin: 'resumed',
         mintedAtFence: FENCE,
         observedAt: 1_000,
-        handle: { provider: 'claude', sessionId: PROVIDER_SESSION_ID, leafUuid: 'resumed-at' }
+        handle: claudeProviderHandle(PROVIDER_SESSION_ID, 'resumed-at')
       }
     ]
   }
@@ -78,11 +79,10 @@ async function liveOwner(
     persistResumePoint:
       persistResumePoint ??
       (async ({ providerSessionId, leafUuid, fence }) => {
-        store.record = reviseAgentSessionClaudeResumePoint({
+        store.record = reviseAgentSessionProviderResumePoint({
           record: store.record,
           fence,
-          providerSessionId,
-          leafUuid,
+          handle: claudeProviderHandle(providerSessionId, leafUuid),
           now: 2_000
         })
       })
@@ -115,12 +115,12 @@ describe('Claude durable resume point at turn end', () => {
     const { adapter, store, turn } = await liveOwner()
     try {
       await turn('u1', 'a1')
-      expect(store.record.providerHandleChain.at(-1)?.handle).toMatchObject({ leafUuid: 'a1' })
+      expect(store.record.providerHandleChain.at(-1)?.handle).toMatchObject({ resumeCursor: 'a1' })
       await turn('u2', 'a2')
       expect(store.record.providerHandleChain).toHaveLength(2)
       expect(store.record.providerHandleChain.at(-1)).toMatchObject({
         linkId: 'published-link',
-        handle: { leafUuid: 'a2' }
+        handle: { resumeCursor: 'a2' }
       })
     } finally {
       await adapter.closeAll()
@@ -135,9 +135,10 @@ describe('Claude durable resume point at turn end', () => {
     frame({ type: 'user', uuid: 'u3' })
     await tick()
     const head = store.record.providerHandleChain.at(-1)!.handle
-    expect(head).toMatchObject({ leafUuid: 'a2' })
+    expect(head).toMatchObject({ resumeCursor: 'a2' })
 
     const resolve = createClaudeStructuredLaunchResolver({
+      resolveLaunchArgs: () => [],
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolver reads only getRecord from its store.
       store: { getRecord: () => store.record } as unknown as AgentSessionRecordStore,
       resolveWorkspacePath: async (id) => `/repos/${id}`,
@@ -147,7 +148,7 @@ describe('Claude durable resume point at turn end', () => {
     const launch = await resolve({
       identity: {
         ...identityFor(store.record.sessionId),
-        providerHandle: { kind: 'claude', sessionId: PROVIDER_SESSION_ID, leafUuid: 'a2' }
+        providerHandle: claudeProviderHandle(PROVIDER_SESSION_ID, 'a2')
       }
     })
     // Bookkeeping only: Claude continues from the end of its own conversation.

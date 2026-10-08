@@ -215,7 +215,7 @@ describe('fetchWorkspaceSessionFromHosts', () => {
           [folderKey]: 'runtime:env-1'
         }
       }
-    )
+    ).written
 
     expect(patch).toHaveBeenCalledWith(expect.objectContaining({ tabsByWorktree: {} }))
     expect(patch).toHaveBeenCalledWith(
@@ -259,7 +259,7 @@ describe('fetchWorkspaceSessionFromHosts', () => {
           [folderKey]: 'runtime:stale-env'
         }
       }
-    )
+    ).written
 
     expect(patch).toHaveBeenCalledTimes(1)
     expect(patch.mock.calls[0][0]).toEqual(
@@ -306,7 +306,7 @@ describe('fetchWorkspaceSessionFromHosts', () => {
           'remote-repo': [{ id: worktreeId, repoId: 'remote-repo' }]
         }
       }
-    )
+    ).written
 
     expect(patch).toHaveBeenCalledWith(expect.objectContaining({ tabsByWorktree: {} }))
     expect(patch).toHaveBeenCalledWith(
@@ -374,7 +374,7 @@ describe('fetchWorkspaceSessionFromHosts', () => {
           ]
         }
       }
-    )
+    ).written
 
     expect(patch).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -483,6 +483,29 @@ describe('fetchWorkspaceSessionFromHosts', () => {
   })
 })
 
+describe('patchWorkspaceSessionByHost write outcome', () => {
+  it('rejects `written` when a host partition fails, while the local write still resolves', async () => {
+    const folderKey = folderWorkspaceKey('folder-1')
+    const patch = vi.fn(async (_slice: unknown, hostId?: string) => {
+      if (hostId) {
+        throw new Error('runtime down')
+      }
+    })
+    const result = patchWorkspaceSessionByHost(
+      { get: vi.fn(), patch, setSync: vi.fn() },
+      { activeWorktreeId: folderKey, tabsByWorktree: { [folderKey]: [] } },
+      {
+        repos: [],
+        worktreesByRepo: {},
+        restoredRuntimeHostIdByWorkspaceSessionKey: { [folderKey]: 'runtime:env-1' }
+      }
+    )
+    await expect(result.localWrite).resolves.toBeUndefined()
+    await expect(result.written).rejects.toThrow('runtime down')
+    expect(patch).toHaveBeenCalledWith(expect.anything(), 'runtime:env-1')
+  })
+})
+
 describe('patchWorkspaceSessionByHost tab-keyed routing', () => {
   const remoteWorktreeId = 'remote-repo::/srv/remote'
   const localWorktreeId = 'local-repo::/home/me/local'
@@ -523,7 +546,7 @@ describe('patchWorkspaceSessionByHost tab-keyed routing', () => {
       { get: vi.fn(), patch, setSync: vi.fn() },
       { terminalLayoutsByTabId: { 'remote-tab': parkedLayout } },
       { ...catalog, tabsByWorktree: { [remoteWorktreeId]: [remoteTab] } }
-    )
+    ).written
 
     expect(patch).toHaveBeenCalledWith(
       { terminalLayoutsByTabId: { 'remote-tab': parkedLayout } },
@@ -539,7 +562,7 @@ describe('patchWorkspaceSessionByHost tab-keyed routing', () => {
       { get: vi.fn(), patch, setSync: vi.fn() },
       { remoteSessionIdsByTabId: { 'remote-tab': 'sess-1' } },
       { ...catalog, tabsByWorktree: { [remoteWorktreeId]: [remoteTab] } }
-    )
+    ).written
 
     expect(patch).toHaveBeenCalledWith(
       { remoteSessionIdsByTabId: { 'remote-tab': 'sess-1' } },
@@ -560,7 +583,7 @@ describe('patchWorkspaceSessionByHost tab-keyed routing', () => {
           [remoteWorktreeId]: [{ id: 'remote-tab', worktreeId: remoteWorktreeId }]
         }
       }
-    )
+    ).written
 
     expect(patch).toHaveBeenCalledWith(
       { terminalLayoutsByTabId: { 'remote-tab': parkedLayout } },
@@ -580,7 +603,7 @@ describe('patchWorkspaceSessionByHost tab-keyed routing', () => {
         terminalLayoutsByTabId: { 'remote-tab': parkedLayout }
       },
       { ...catalog, tabsByWorktree: { [remoteWorktreeId]: [remoteTab] } }
-    )
+    ).written
 
     expect(patch).toHaveBeenCalledTimes(1)
     expect(patch).toHaveBeenCalledWith(

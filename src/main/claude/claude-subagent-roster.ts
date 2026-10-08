@@ -27,7 +27,11 @@ import { writeClaudeSubagentGroupRow } from './claude-subagent-group-row'
 import { ClaudeSubagentIds } from './claude-subagent-id-aliases'
 import type { ClaudeJournaledRosterSource } from './claude-subagent-journaled-roster'
 import { ClaudeSubagentRosterGroups } from './claude-subagent-roster-groups'
-import { ClaudeSubagentLinkage, type ClaudeSubagentLinkageSource } from './claude-subagent-linkage'
+import {
+  ClaudeSubagentLinkage,
+  type ClaudeAgentLinkageSource,
+  type ClaudeSubagentLinkageSource
+} from './claude-subagent-linkage'
 import { readClaudeSubagentTaskFrame } from './claude-subagent-task-frames'
 import {
   applyClaudeSubagentInvocation,
@@ -72,7 +76,7 @@ export class ClaudeSubagentRoster {
   private readonly groups: ClaudeSubagentRosterGroups
   private readonly ids: ClaudeSubagentIds
   /** Who produced a row, for every write site journaling this session. */
-  readonly linkage: ClaudeSubagentLinkageSource
+  readonly linkage: ClaudeSubagentLinkageSource & ClaudeAgentLinkageSource
   /** Set by ANY `task_started`, including one the subagent filter rejects. Once
    *  this CLI has proven it declares its tasks, child traffic for an id it never
    *  announced is a nested tool or a grandchild, not a subagent. */
@@ -91,7 +95,8 @@ export class ClaudeSubagentRoster {
       ids: this.ids,
       trackedFor: (canonicalId) => this.groups.locate(canonicalId)?.tracked ?? null,
       isForwardedParentTool: deps.isForwardedParentTool,
-      childOwnerRefOf: deps.childOwnerRefOf
+      childOwnerRefOf: deps.childOwnerRefOf,
+      spawnRefOf: (canonicalId) => this.groups.locate(canonicalId)?.tracked.toolUseId ?? null
     })
   }
 

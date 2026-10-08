@@ -54,6 +54,7 @@ import type { RelayReadinessDependency } from './relay-readiness.js'
 import type {
   AssignmentAdmissionLane,
   AssignmentAdmissionOutcome,
+  AssignmentUnavailableCause,
   RegionalRehomeSafetySnapshot,
   RelayRuntimeCounts
 } from './relay-observability.js'
@@ -72,8 +73,9 @@ const ASSIGNMENT_REJECTION_LOG_WINDOW_MS = 10_000
 // A release holds the row for about one lock timeout, so one second is enough.
 const ASSIGNMENT_ROW_BUSY_RETRY_AFTER_SECONDS = 1
 const REGION_CATALOG_CACHE_MS = 30_000
-// A drain that outlives the roll step it belongs to is an outage, not a pacing win.
-const DRAIN_PACE_WINDOW_MAX_MS = 5 * 60 * 1_000
+// A drain that outlives the roll step it belongs to is an outage, not a pacing win. The roll
+// step's timeout scales with the window, up to the same-cap wave's slowest pace.
+const DRAIN_PACE_WINDOW_MAX_MS = 20 * 60 * 1_000
 
 type AdmissionRejectionLogEntry = {
   route: 'assign' | 'resolve'
@@ -121,6 +123,8 @@ export function createRelayApp(
       reason: AssignmentAdmissionRejection
     ) => void
     recordDrainReturnRetryAfter?: (seconds: number) => void
+    recordAdmissionServiceMs?: (lane: 'sticky' | 'drain-return', durationMs: number) => void
+    recordAssignmentUnavailable?: (cause: AssignmentUnavailableCause) => void
     recordRegionRequest?: (region: RelayRegion | undefined) => void
     recordRegionSelection?: (input: {
       targetRegion: RelayRegion
@@ -202,11 +206,25 @@ export function createRelayApp(
     context.header('Retry-After', String(stickyRetryAfterSeconds))
     return context.json({ error: 'assignments_temporarily_unavailable' }, 503)
   }
+  // The slot's hold, not the request's latency: herd recovery is slots / this.
+  const timeStickySlot = (lease: { release(): void }): { release(): void } => {
+    const startedAt = performance.now()
+    let released = false
+    return {
+      release: () => {
+        if (released) return
+        released = true
+        operations.recordAdmissionServiceMs?.('sticky', performance.now() - startedAt)
+        lease.release()
+      }
+    }
+  }
   // Classified server-side from the host's own assignment row, never from a
   // client claim: only a host whose home is roll-isolated reaches this lane.
   const drainReturnAdmission = new RelayDrainReturnAdmission(publicAssignmentAdmission, {
     maxConcurrent: Math.max(1, drainReturnConcurrency),
-    maxRetryAfterSeconds: config.drainReturnMaxRetryAfterSeconds ?? 300
+    maxRetryAfterSeconds: config.drainReturnMaxRetryAfterSeconds ?? 300,
+    onServiceMs: (durationMs) => operations.recordAdmissionServiceMs?.('drain-return', durationMs)
   })
   const deferDrainReturn = (context: Context, retryAfterSeconds: number): Response => {
     context.header('Retry-After', String(retryAfterSeconds))
@@ -263,8 +281,14 @@ export function createRelayApp(
   })
 
   // Not /healthz: Google Front End reserves that path before the container.
+  // The drain pace cap is read before a roll isolates a cell, so a slower pace than the cell
+  // accepts stops with the cell untouched.
   app.get('/health', (context) =>
-    context.json({ ok: true, connectionCapacityProtocol: 2 })
+    context.json({
+      ok: true,
+      connectionCapacityProtocol: 2,
+      drainPaceWindowMaxMs: DRAIN_PACE_WINDOW_MAX_MS
+    })
   )
   app.get('/ready', async (context) => {
     if (!(await operations.ready())) return context.json({ error: 'dependency_unavailable' }, 503)
@@ -287,7 +311,10 @@ export function createRelayApp(
   })
   app.post('/v1/assign', async (context) => {
     if (config.role === 'cell') return context.json({ error: 'director_only' }, 404)
-    if (!config.publicAssignmentsEnabled) return rejectPublicAssignment(context)
+    if (!config.publicAssignmentsEnabled) {
+      operations.recordAssignmentUnavailable?.('disabled')
+      return rejectPublicAssignment(context)
+    }
     const bearer = readBearer(context.req.header('authorization'))
     if (!bearer) return context.json({ error: 'invalid_token' }, 401)
     const claims = await verifyRelayToken(bearer)
@@ -312,11 +339,12 @@ export function createRelayApp(
     let lane: AssignmentAdmissionLane = 'placement'
     if (body.data.reconnect) {
       let rejection: AssignmentAdmissionRejection | undefined
-      const fastLane = await stickyAssignmentAdmission.acquire(claims.relayHostId, (reason) => {
+      const stickySlot = await stickyAssignmentAdmission.acquire(claims.relayHostId, (reason) => {
         rejection = reason
       })
-      if (!fastLane) {
+      if (!stickySlot) {
         operations.recordAssignmentAdmission?.('sticky-rejected')
+        operations.recordAssignmentUnavailable?.('sticky-lane')
         logAdmissionRejection({
           route: 'assign',
           lane: 'sticky',
@@ -326,6 +354,7 @@ export function createRelayApp(
         })
         return rejectStickyAssignment(context)
       }
+      const fastLane = timeStickySlot(stickySlot)
       let verified: ResolvedRelayAssignment | null = null
       try {
         verified = await operations.assignments.resolve(identity, {
@@ -342,6 +371,7 @@ export function createRelayApp(
             relayHostId: claims.relayHostId,
             reason: operationError(error)
           })
+          operations.recordAssignmentUnavailable?.('sticky-verify-database')
           return rejectStickyAssignment(context)
         }
         throw error
@@ -356,6 +386,7 @@ export function createRelayApp(
           operations.recordAssignmentAdmission?.('drain-return-deferred')
           operations.recordAssignmentRejectionReason?.('drain-return', drainReturn.reason)
           operations.recordDrainReturnRetryAfter?.(drainReturn.retryAfterSeconds)
+          operations.recordAssignmentUnavailable?.('drain-return-deferred')
           logAdmissionRejection({
             route: 'assign',
             lane,
@@ -391,6 +422,7 @@ export function createRelayApp(
           relayHostId: claims.relayHostId,
           reason: rejection
         })
+        operations.recordAssignmentUnavailable?.('placement-lane')
         return rejectPublicAssignment(context)
       }
     }
@@ -430,6 +462,7 @@ export function createRelayApp(
         })
         // The host's own release is settling; its next dial finds the row free.
         context.header('Retry-After', String(ASSIGNMENT_ROW_BUSY_RETRY_AFTER_SECONDS))
+        operations.recordAssignmentUnavailable?.('relay_assignment_row_busy')
         return context.json({ error: 'assignment_row_busy' }, 503)
       }
       if (isRelayAssignmentUnavailableError(error) || isRelayDatabaseTransientError(error)) {
@@ -442,13 +475,16 @@ export function createRelayApp(
           ...homeCellRejectionDetail(error)
         })
       }
-      if (isRelayAssignmentUnavailableError(error)) {
+      const unavailable = assignmentUnavailableCause(error)
+      if (unavailable) {
         if (lane === 'placement') {
           operations.recordRegionSelection?.({ targetRegion, fallback: false })
         }
+        operations.recordAssignmentUnavailable?.(unavailable)
         return context.json({ error: operationError(error) }, 503)
       }
       if (isRelayDatabaseTransientError(error)) {
+        operations.recordAssignmentUnavailable?.('database')
         return lane === 'placement'
           ? rejectPublicAssignment(context)
           : rejectStickyAssignment(context)
@@ -2054,16 +2090,22 @@ function logAssignmentRejection(input: {
 
 // The home-cell reason is not capacity, but it is the same answer to the client:
 // retry, the director cannot place you right now.
+const RELAY_ASSIGNMENT_UNAVAILABLE_ERRORS = [
+  'relay_capacity_exhausted',
+  'relay_connection_headroom_exhausted',
+  'relay_home_cell_unavailable',
+  'relay_assignment_row_busy'
+] as const satisfies readonly AssignmentUnavailableCause[]
+
+function assignmentUnavailableCause(
+  error: unknown
+): (typeof RELAY_ASSIGNMENT_UNAVAILABLE_ERRORS)[number] | undefined {
+  if (!(error instanceof Error)) return undefined
+  return RELAY_ASSIGNMENT_UNAVAILABLE_ERRORS.find((message) => message === error.message)
+}
+
 function isRelayAssignmentUnavailableError(error: unknown): boolean {
-  return (
-    error instanceof Error &&
-    [
-      'relay_capacity_exhausted',
-      'relay_connection_headroom_exhausted',
-      'relay_home_cell_unavailable',
-      'relay_assignment_row_busy'
-    ].includes(error.message)
-  )
+  return assignmentUnavailableCause(error) !== undefined
 }
 
 function homeCellRejectionDetail(

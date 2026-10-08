@@ -161,7 +161,7 @@ describe('profile state backup worker', () => {
     await expect(runProfileStateBackupWorker(job, { workerPath })).rejects.toThrow(expectedError)
     expect(existsSync(job.targetPath)).toBe(false)
     expect(readFileSync(retained, 'utf8')).toBe('previous recovery point')
-    expect(readFileSync(job.databasePath)).toEqual(before)
+    expect(readFileSync(job.databasePath).equals(before)).toBe(true)
   })
 
   it.each(['true', 'false'])('waits for actual exit after an ok=%s response', async (ok) => {
@@ -251,7 +251,7 @@ describe('profile state backup worker', () => {
     await expect(
       runProfileStateBackupWorker(job, { workerPath: join(directory, 'missing.js') })
     ).rejects.toThrow()
-    expect(readFileSync(job.databasePath)).toEqual(before)
+    expect(readFileSync(job.databasePath).equals(before)).toBe(true)
   })
 
   it('coalesces desktop work and drains a started backup before allowing quarantine', async () => {

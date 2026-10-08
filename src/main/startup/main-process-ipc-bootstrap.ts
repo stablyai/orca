@@ -2,7 +2,7 @@ import { ipcMain } from 'electron'
 import { recoverLegacyWorkerTerminalsForRendererStartup } from './legacy-worker-renderer-recovery'
 import { logStartupMilestone } from './startup-diagnostics'
 import { mainProcessState as state } from './main-process-state'
-import { resolveOpenedMarkdownDocuments } from './os-opened-markdown-files'
+import { resolveOsOpenedDocuments } from './os-opened-documents'
 import {
   onStructuredAgentSessionsHeldChanged,
   structuredAgentSessionsHeld
@@ -61,13 +61,13 @@ export function registerMainProcessIpcHandlers(): void {
   // cold-start "Open With" queued before mount still opens. The pull doubles as the proof
   // that the listener is live, which is what lets main start pushing.
   ipcMain.handle('ui:consumePendingMarkdownFileOpens', async () => {
-    state.markdownFileOpenListenerReady = true
-    const filePaths = state.osOpenedMarkdownFiles.consume()
+    state.osDocumentOpenListenerReady = true
+    const filePaths = state.osOpenedDocuments.consume()
     try {
-      return await resolveOpenedMarkdownDocuments(filePaths)
+      return await resolveOsOpenedDocuments(filePaths)
     } catch (error) {
       // Why restored: the renderer never received these, so a later mount must still get them.
-      state.osOpenedMarkdownFiles.restore(filePaths)
+      state.osOpenedDocuments.restore(filePaths)
       throw error
     }
   })

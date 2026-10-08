@@ -122,6 +122,11 @@ export class OrcaRuntimeWithWaitForLeafPtyId extends OrcaRuntimeWithRestoreLiveP
       { cols: snapshot.cols, rows: snapshot.rows },
       { cwd: snapshot.cwd, oscLinks: snapshot.oscLinks }
     )
+    // Why: a hidden pane answers at its own size; later bytes paint the PTY grid.
+    const ptyGrid = this.getTerminalSize(ptyId)
+    if (ptyGrid) {
+      this.resizeHeadlessTerminal(ptyId, ptyGrid.cols, ptyGrid.rows)
+    }
     for (const chunk of trailingOutput) {
       this.trackHeadlessTerminalData(ptyId, chunk.data, chunk.seq)
     }

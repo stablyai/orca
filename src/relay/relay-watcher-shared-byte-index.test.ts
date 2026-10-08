@@ -101,6 +101,19 @@ function eventLookupCount(calls: readonly (readonly unknown[])[]): number {
   }).length
 }
 
+function expectFrameBytes(actual: readonly Buffer[], expected: readonly Buffer[]): void {
+  expect(actual).toHaveLength(expected.length)
+  for (const [index, expectedFrame] of expected.entries()) {
+    const actualFrame = actual[index]
+    expect(Buffer.isBuffer(actualFrame), `frame ${index} type`).toBe(true)
+    const equal = actualFrame?.equals(expectedFrame)
+    if (!equal) {
+      expect(actualFrame).toEqual(expectedFrame)
+    }
+    expect(equal, `frame ${index} bytes`).toBe(true)
+  }
+}
+
 afterEach(() => vi.restoreAllMocks())
 
 describe('relay watcher shared byte index', () => {
@@ -118,7 +131,7 @@ describe('relay watcher shared byte index', () => {
         const lookups = eventLookupCount(get.mock.calls)
         get.mockRestore()
         for (const [index, capacity] of [12288, 24576, 49152].entries()) {
-          expect(clients[index].frames).toEqual(expectedFrames(root, events, capacity))
+          expectFrameBytes(clients[index].frames, expectedFrames(root, events, capacity))
           expect(clients[index].closed()).toBe(0)
         }
         expect(lookups).toBe(events.length)
@@ -136,9 +149,9 @@ describe('relay watcher shared byte index', () => {
     const events = watcherBatch(root, 200)
     try {
       emitRelayWatcherEvents(dispatcher, root, false, events)
-      expect(clients[0].frames).toEqual(expectedFrames(root, events, 49152))
+      expectFrameBytes(clients[0].frames, expectedFrames(root, events, 49152))
       expect(clients[0].frames).toHaveLength(1)
-      expect(clients[1].frames).toEqual(expectedFrames(root, events, 12288))
+      expectFrameBytes(clients[1].frames, expectedFrames(root, events, 12288))
       expect(clients[1].frames.length).toBeGreaterThan(1)
     } finally {
       dispatcher.dispose()
@@ -166,7 +179,8 @@ describe('relay watcher shared byte index', () => {
       for (const [index, capacity] of [12288, 49152].entries()) {
         const freshFrames = expectedFrames(root, events, capacity)
         const firstSequence = clients[index].frames.length - freshFrames.length + 1
-        expect(clients[index].frames.slice(-freshFrames.length)).toEqual(
+        expectFrameBytes(
+          clients[index].frames.slice(-freshFrames.length),
           expectedFrames(root, events, capacity, firstSequence)
         )
       }
@@ -187,7 +201,7 @@ describe('relay watcher shared byte index', () => {
       vi.spyOn(process.stderr, 'write').mockReturnValue(true)
       emitRelayWatcherEvents(dispatcher, root, false, events)
       for (const [index, capacity] of [12288, 49152].entries()) {
-        expect(clients[index].frames).toEqual(expectedFrames(root, events, capacity))
+        expectFrameBytes(clients[index].frames, expectedFrames(root, events, capacity))
         expect(clients[index].closed()).toBe(0)
       }
     } finally {
@@ -206,7 +220,7 @@ describe('relay watcher shared byte index', () => {
     const events = watcherBatch(root, 1000)
     try {
       emitRelayWatcherEvents(dispatcher, root, false, events)
-      expect(primary.frames).toEqual(expectedFrames(root, events, 12288))
+      expectFrameBytes(primary.frames, expectedFrames(root, events, 12288))
       expect(peer.frames).toEqual([])
     } finally {
       dispatcher.dispose()

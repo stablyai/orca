@@ -38,20 +38,23 @@ import { isAgentSessionLaunchArgs } from '../../shared/agent-session-launch-args
 import { isAgentSessionSurfaceTabId } from '../../shared/agent-session-surface-tab-id'
 import {
   agentSessionProviderHandleRoot,
-  type AgentSessionHandleProvider,
+  type StructuredAgentId,
   type AgentSessionProviderHandleLink
 } from '../../shared/agent-session-provider-handle'
 import {
   reserveAgentSessionOwner,
   type AgentSessionReservation
 } from './agent-session-lease-transitions'
-import type { AgentSessionStoreState } from './agent-session-record-store-file'
+import type { AgentSessionStoreState } from './agent-session-store-state'
 import { agentSessionRecordIdentityFields } from './agent-session-record-founding'
+import { agentSessionAccountHomesEqual } from '../../shared/agent-session-account-home'
 
 export type AgentSessionReserveRequest = {
+  /** Host-resolved floating directory committed with the first owner reservation. */
+  launchDirectory?: string
   sessionId: string
   location: AgentSessionExecutionLocation
-  provider: AgentSessionHandleProvider
+  provider: StructuredAgentId
   accountHome: AgentSessionAccountHome
   /** Arguments pinned on first reservation so owner replacement repeats the same launch. */
   launchArgs?: AgentSessionLaunchArgs
@@ -184,8 +187,7 @@ export function applyAgentSessionReservation(
   if (
     !agentSessionExecutionLocationsEqual(existing.location, request.location) ||
     existing.provider !== request.provider ||
-    existing.accountHome.variable !== request.accountHome.variable ||
-    existing.accountHome.path !== request.accountHome.path
+    !agentSessionAccountHomesEqual(existing.accountHome, request.accountHome)
   ) {
     // Why: location, provider, and account are the session identity; changing one is a fork.
     throw agentSessionRefusalError('agent_session_conflict', { reason: 'identityMismatch' })

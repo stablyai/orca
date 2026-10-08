@@ -1,3 +1,4 @@
+import '../unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AI_VAULT_AGENTS } from '../../../../shared/ai-vault-types'
 import { RpcDispatcher } from '../dispatcher'
@@ -56,7 +57,11 @@ describe('session search runtime RPC', () => {
         {
           query: 'needle',
           limit: 20,
-          filters: { agents: AI_VAULT_AGENTS.filter((agent) => agent !== 'qoder') }
+          filters: {
+            agents: AI_VAULT_AGENTS.filter(
+              (agent) => !['codebuddy', 'zcode', 'qoder', 'jcode'].includes(agent)
+            )
+          }
         },
         undefined
       )
@@ -68,7 +73,7 @@ describe('session search runtime RPC', () => {
     }
   )
   it.each([undefined, 'runtime', 'mobile'] as const)(
-    'preserves explicitly supported Qoder filters for client kind %s',
+    'retains the current catalog for an attested client kind %s',
     async (clientKind) => {
       const service = fakeSearchService()
       setSessionSearchService(service)
@@ -76,14 +81,72 @@ describe('session search runtime RPC', () => {
         await dispatcher().dispatch(
           request({
             query: 'needle',
-            supportsQoderHistory: true,
-            filters: { agents: ['qoder', 'codex'] }
+            supportedAgents: [...AI_VAULT_AGENTS],
+            filters: { agents: ['jcode'] }
           }),
           { clientKind }
         )
       ).toMatchObject({ ok: true })
       expect(service.search).toHaveBeenCalledExactlyOnceWith(
-        { query: 'needle', limit: 20, filters: { agents: ['qoder', 'codex'] } },
+        { query: 'needle', limit: 20, filters: { agents: ['jcode'] } },
+        undefined
+      )
+    }
+  )
+  describe.each(['qoder', 'jcode'] as const)('%s history capability', (agent) => {
+    const supportField = agent === 'qoder' ? 'supportsQoderHistory' : 'supportsJcodeHistory'
+    it.each([undefined, 'runtime', 'mobile'] as const)(
+      'preserves explicitly supported filters for client kind %s',
+      async (clientKind) => {
+        const service = fakeSearchService()
+        setSessionSearchService(service)
+        expect(
+          await dispatcher().dispatch(
+            request({
+              query: 'needle',
+              [supportField]: true,
+              filters: { agents: [agent, 'codex'] }
+            }),
+            { clientKind }
+          )
+        ).toMatchObject({ ok: true })
+        expect(service.search).toHaveBeenCalledExactlyOnceWith(
+          { query: 'needle', limit: 20, filters: { agents: [agent, 'codex'] } },
+          undefined
+        )
+      }
+    )
+  })
+  it.each(['runtime', 'relay'] as const)(
+    'searches when the real dispatcher is missing only status over %s',
+    async (transport) => {
+      const service = fakeSearchService()
+      setSessionSearchService(service)
+      const rpc = new RpcDispatcher({
+        runtime: new OrcaRuntimeService(),
+        methods: AI_VAULT_METHODS.filter((method) => method.name !== 'aiVault.searchStatus')
+      })
+      const replies: unknown[] = []
+      const client = createSessionSearchClient(async (method, params) => {
+        const response = await rpc.dispatch({ ...request(params), method })
+        replies.push(response)
+        if (!response.ok) {
+          throw Object.assign(new Error(response.error.message), { code: response.error.code })
+        }
+        return response.result
+      }, transport)
+      expect(
+        await client.searchSessions({
+          query: 'needle',
+          filters: { agents: ['claude'] }
+        })
+      ).toMatchObject({ kind: 'results' })
+      expect(replies).toMatchObject([
+        { ok: false, error: { code: 'method_not_found' } },
+        { ok: true }
+      ])
+      expect(service.search).toHaveBeenCalledExactlyOnceWith(
+        { query: 'needle', limit: 20, filters: { agents: ['claude'] } },
         undefined
       )
     }

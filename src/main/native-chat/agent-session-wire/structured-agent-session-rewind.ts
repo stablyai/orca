@@ -36,6 +36,7 @@ export async function rewindStructuredAgentSession(
     const result = await admitAndRunAgentSessionMutation<AgentSessionRewindResult>({
       store,
       adapter: context.deps.adapter,
+      agents: context.deps.agents,
       logger: context.deps.logger,
       callerKey: caller.callerKey,
       envelope: params.envelope,
@@ -64,7 +65,7 @@ export async function rewindStructuredAgentSession(
         run: async (ctx) => {
           await attachContext.runtimeState.flushEventSink(sessionId)
           const record = store.getRecord(sessionId)!
-          const support = ctx.adapter.rewindSupport?.(sessionId)
+          const support = ctx.adapter.rewindSupport?.(sessionId, ctx.agent)
           if (!support?.supported) {
             return rewindRefusal(support?.reason ?? 'unsupported')
           }
@@ -76,9 +77,6 @@ export async function rewindStructuredAgentSession(
           }
           if (conversationCommandBlocked(ctx, record, context.readChildWork(sessionId))) {
             return rewindRefusal('busy')
-          }
-          if (ctx.journal.isReadOnly) {
-            return rewindRefusal('unsupported')
           }
           const snapshot = ctx.journal.snapshot()
           const providerKeys = new Map(
@@ -99,13 +97,14 @@ export async function rewindStructuredAgentSession(
           }
           const selected = snapshot.items.findIndex((item) => item.itemId === params.itemId)
           const key = selected === -1 ? null : parseAgentJournalItemKey(providerKey(params.itemId))
+          // The head belongs to the record's provider: the record store refuses any other.
           const head = agentSessionProviderHandleChainHead(record.providerHandleChain)?.handle
-          if (!key || !head || key.provider !== head.provider) {
+          if (!key || !head || key.provider !== record.provider) {
             return rewindRefusal('invalid-target')
           }
           let boundary = selected
-          if (key.provider === 'codex' && head.provider === 'codex') {
-            if (key.threadId !== head.threadId) {
+          if (key.provider === 'codex') {
+            if (key.threadId !== head.nativeId) {
               return rewindRefusal('invalid-target')
             }
             boundary = snapshot.items.findIndex((item) => {
@@ -122,13 +121,19 @@ export async function rewindStructuredAgentSession(
           }
           const retained = snapshot.items
             .slice(0, boundary)
-            .map(({ itemId, body, observedAt, turnScope, ...linkage }) => ({
-              itemId: providerKey(itemId),
-              body: withRenamedTurnOpener(body, providerKey),
-              observedAt,
-              ...(turnScope ? { turnScope } : {}),
-              ...agentJournalLinkageFields(linkage)
-            }))
+            .map(({ itemId, observedAt, turnScope, ...linkage }) => {
+              const body = ctx.journal.itemBody(itemId)
+              if (!body) {
+                throw new Error('agent_session_rewind:missing-retained-item')
+              }
+              return {
+                itemId: providerKey(itemId),
+                body: withRenamedTurnOpener(body, providerKey),
+                observedAt,
+                ...(turnScope ? { turnScope } : {}),
+                ...agentJournalLinkageFields(linkage)
+              }
+            })
           if (
             retained.length > 10_000 ||
             Buffer.byteLength(JSON.stringify(retained), 'utf8') >

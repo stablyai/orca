@@ -114,8 +114,10 @@ describe('/clear', () => {
     try {
       const cleared = command('clear')
       await eventually(() => expect(committing).toHaveBeenCalledOnce())
-      expect(await rig.send('sent while clearing', 'queue-if-active').result).toEqual(WAIT_REFUSAL)
+      // Judged on arrival, answered on its turn: behind the clear.
+      const sent = rig.send('sent while clearing', 'queue-if-active').result
       release?.()
+      expect(await sent).toEqual(WAIT_REFUSAL)
       const done = await cleared
       const replacementId = done.ok ? done.value.replacementSessionId : undefined
       if (!replacementId) {
@@ -150,7 +152,8 @@ describe('/clear', () => {
       { messageId: firstId, state: 'waiting' },
       { messageId: secondId, state: 'waiting' }
     ])
-    expect(await rig.queuePause(replacementId)).toEqual({ reason: 'cleared' })
+    // Held, unshown: nothing runs in the fresh conversation.
+    expect(await rig.queuePause(replacementId)).toBeNull()
 
     const body = hostTestMessage('first in the new chat')
     const fields = { body, delivery: 'queue-if-active' as const }
@@ -158,8 +161,7 @@ describe('/clear', () => {
     expect(
       await rig.host.send(CALLER, {
         envelope: rig.envelope(fields, 'agentSession.send', sentId, replacementId),
-        ...fields,
-        userSend: true
+        ...fields
       })
     ).toMatchObject({ ok: true, value: { submission: expect.anything() } })
     await eventually(() =>

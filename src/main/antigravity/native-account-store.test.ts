@@ -67,11 +67,11 @@ describe('protected Antigravity account snapshots', () => {
     const service = new AntigravityAccountService(store, h.backend)
     h.setNative(paddedCredential('new-account', 60000))
     await expect(service.addCurrentAccount()).rejects.toThrow('could not be saved')
-    expect(readFileSync(path)).toEqual(before)
+    expect(readFileSync(path).equals(before)).toBe(true)
     expect(store.read().accounts).toHaveLength(52)
     h.setNative(paddedCredential('large-51', 65000))
     await expect(service.listAccounts()).rejects.toThrow('could not be saved')
-    expect(readFileSync(path)).toEqual(before)
+    expect(readFileSync(path).equals(before)).toBe(true)
     expect(store.read().accounts).toHaveLength(52)
   })
 
@@ -115,7 +115,7 @@ describe('protected Antigravity account snapshots', () => {
         'Protected secret storage'
       )
       expect(() => store.read()).toThrow('Protected secret storage')
-      expect(readFileSync(path)).toEqual(before)
+      expect(readFileSync(path).equals(before)).toBe(true)
     }
   )
 

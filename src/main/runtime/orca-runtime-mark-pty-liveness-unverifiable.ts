@@ -109,6 +109,28 @@ export class OrcaRuntimeWithMarkPtyLivenessUnverifiable extends OrcaRuntimeWithO
     return unsubscribe
   }
 
+  /** Resolves once a registered PTY's exit reaches its runtime record; false on timeout. */
+  waitForPtyExitRecord(ptyId: string, timeoutMs: number): Promise<boolean> {
+    if (!this.ptysById.has(ptyId) || this.isPtyKnownExited(ptyId)) {
+      return Promise.resolve(true)
+    }
+    return new Promise((resolve) => {
+      let unsubscribe = (): void => {}
+      const timer = setTimeout(
+        () => {
+          unsubscribe()
+          resolve(false)
+        },
+        Math.max(0, timeoutMs)
+      )
+      timer.unref?.()
+      unsubscribe = this.subscribeToPtyExit(ptyId, () => {
+        clearTimeout(timer)
+        resolve(true)
+      })
+    })
+  }
+
   protected rememberPtyLivenessVerdict(ptyId: string, verdict: PtyLivenessVerdict): void {
     // An earned death certificate is KEPT, not dropped, so the register is three-valued on disk as
     // well as in the type. Its only writer is a host-delivered exit frame; nothing weaker may

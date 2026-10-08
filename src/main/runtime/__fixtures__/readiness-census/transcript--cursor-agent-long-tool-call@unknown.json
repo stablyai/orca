@@ -1,7 +1,0 @@
-{
-  "description": "cursor recording at 80x24 replayed on the unknown pane, one entry per chunk",
-  "observations": {
-    "clocked": ["0-15: now=pending:open edge=pending:open quiet=pending:open wait=ready@poll"],
-    "clockless": ["0-15: verdict=pending:open wait=ready@poll"]
-  }
-}

@@ -16,8 +16,7 @@ import {
 import { hasCustomCodexHomeOverrideForLaunch } from '../codex/codex-real-home-path'
 import {
   hasRecordedLegacySharedCodexPane,
-  getCodexPaneAccount,
-  type CodexPaneHomeRoute
+  getCodexPaneAccount
 } from '../codex/codex-pane-account-registry'
 import { ManagedCodexHomeTemporarilyUnavailableError } from './host-codex-managed-home-ownership'
 import { syncLegacySharedCodexConfigForRetainedPanes } from './legacy-shared-config-compatibility'
@@ -28,7 +27,7 @@ import { CodexRuntimeHomeManagedHome } from './runtime-home-service-managed-home
 export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHome {
   getHostCodexHomePathsForSessionDiscovery(): string[] {
     const homes = [this.getRuntimeHomePath()]
-    if (this.isHostSystemDefaultRealHome() || this.getSelfContainedManagedHostAccount()) {
+    if (this.isHostSystemDefaultRealHomeSelected() || this.getSelfContainedManagedHostAccount()) {
       // Why: nested Orca processes can retain an ambient managed CODEX_HOME.
       // Per-account lanes no longer bridge real-home history into the shared
       // mirror, so include the real root for both directly-routed host lanes.
@@ -92,13 +91,6 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
       : { kind: 'skip' }
   }
 
-  getSelectedHostCodexHomeRoute(): CodexPaneHomeRoute {
-    if (this.getSelfContainedManagedHostAccount()) {
-      return 'account-home'
-    }
-    return this.isHostSystemDefaultRealHome() ? 'real-home' : 'shared-home'
-  }
-
   getRetainedHostCodexHookHomePaths(ptyIds: readonly string[]): string[] {
     const settings = this.store.getSettings()
     const homes = new Map<string, string>()
@@ -107,11 +99,7 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
       if (!record || record.selectionKey !== 'host') {
         continue
       }
-      if (
-        record.homeRoute === undefined ||
-        record.homeRoute === 'shared-home' ||
-        record.homeRoute === 'custom-home'
-      ) {
+      if (record.homeRoute === undefined || record.homeRoute === 'shared-home') {
         const homePath = this.getRuntimeHomePath()
         homes.set(normalizeRuntimePathForComparison(homePath), homePath)
         continue
@@ -133,15 +121,6 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
     return [...homes.values()]
   }
 
-  // Why: the real-home hook installer flips this gate off when the trust-grant
-  // client reports the host incapable, keeping that host byte-identical to the
-  // managed lane instead of shipping status-blind panes.
-  protected realHomeLaneGate: () => boolean = () => true
-
-  setRealHomeLaneGate(gate: () => boolean): void {
-    this.realHomeLaneGate = gate
-  }
-
   // Why: real-home routing applies only to the host system-default selection.
   // Managed accounts run in their own homes; custom CODEX_HOMEs stay on the
   // mirror until cleanup can be tracked across old homes.
@@ -152,19 +131,8 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
     )
   }
 
-  isHostSystemDefaultRealHome(launchEnv?: NodeJS.ProcessEnv): boolean {
-    return this.isHostSystemDefaultRealHomeSelected(launchEnv) && this.realHomeLaneGate()
-  }
-
-  // Why: launch prep evaluates the real-home lane AFTER clearing an unusable
-  // managed selection; read-only siblings need that same verdict with the
-  // selection ignored rather than cleared.
-  protected wouldSystemDefaultRouteToRealHome(launchEnv?: NodeJS.ProcessEnv): boolean {
-    return !hasCustomCodexHomeOverrideForLaunch(launchEnv) && this.realHomeLaneGate()
-  }
-
   reconcileLegacySharedHomeForRetainedPanes(): void {
-    if (!this.isHostSystemDefaultRealHome() || !hasRecordedLegacySharedCodexPane()) {
+    if (!this.isHostSystemDefaultRealHomeSelected() || !hasRecordedLegacySharedCodexPane()) {
       return
     }
     this.syncLegacySharedSystemDefaultAuthForRetainedPanes()
@@ -309,7 +277,7 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
       }
       this.clearSelfContainedManagedSelection(selfContainedAccount)
     }
-    if (this.isHostSystemDefaultRealHome()) {
+    if (this.isHostSystemDefaultRealHomeSelected()) {
       this.copyMirrorLoginIntoEmptySystemHome()
       if (hasRecordedLegacySharedCodexPane()) {
         this.syncLegacySharedSystemDefaultAuthForRetainedPanes()

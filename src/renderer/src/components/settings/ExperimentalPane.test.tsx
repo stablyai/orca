@@ -260,9 +260,12 @@ describe('ExperimentalPane', () => {
 
     expect(container.textContent).toContain('Use updated structured native chat')
     // The one setting governs both providers, so its copy must not name only Codex.
-    expect(container.textContent).toContain('Open new Codex and Claude agents as structured chats.')
+    expect(container.textContent).toContain('Open new agents as structured chats where supported.')
+    // The setting picks what new agents open as; existing chats are left alone.
+    expect(container.textContent).toContain('Chats that already exist stay as they are.')
+    // Paired Orca servers run structured chats too; only WSL and SSH stay on terminal chat.
     expect(container.textContent).toContain(
-      'Local sessions only for now. WSL and remote execution hosts (including SSH) continue to use terminal chat, and Windows falls back to it unless Orca can read process start times.'
+      'Runs on this machine and on paired Orca servers running a version that supports it; older servers keep terminal chat. WSL and SSH hosts continue to use terminal chat.'
     )
     expect(container.textContent).toContain('Default view')
     root.unmount()

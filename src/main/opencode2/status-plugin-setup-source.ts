@@ -1,11 +1,13 @@
 import { getOpenCode2TuiSource } from './status-plugin-tui-source'
 import { openCodeTuiPluginDirName } from '../../shared/opencode-tui-plugin-install'
+import { getLegacyOpenCodeTuiSource } from '../opencode/status-plugin-legacy-tui-source'
 
 /** The OpenCode 2 entry points (server setup and TUI reporter) plus the constants they share. */
 export function getOpenCode2ModuleSource(pluginID: string, expectedAgent: string): string[] {
   return [
     `const ORCA_TUI_PLUGIN_ENTRY = new URL("./${openCodeTuiPluginDirName(`${pluginID}.js`)}/tui.js", import.meta.url);`,
     `const ORCA_STATUS_AGENT = "${expectedAgent}";`,
+    ...getLegacyOpenCodeTuiSource(),
     ...getOpenCode2SetupSource()
   ]
 }
@@ -81,9 +83,11 @@ async function tuiReportsPaneLifecycle() {
 }
 
 async function setupOpenCode2Status(ctx) {
-  reportingOpenCodeMajor = 2;
   const noop = async () => {};
-  if (isOpenCode2TuiContext(ctx)) return setupOpenCode2Tui(ctx);
+  if (isOpenCode2TuiContext(ctx)) {
+    reportingOpenCodeMajor = 2;
+    return setupOpenCode2Tui(ctx);
+  }
   let hooks;
   // Why: OpenCode may probe setup() with no context during startup, and the setup
   // API shape can drift between releases. Never throw from setup — a throw surfaces
@@ -91,6 +95,7 @@ async function setupOpenCode2Status(ctx) {
   // than silently running without status reporting.
   try {
     if (!ctx || typeof ctx.session?.hook !== "function" || typeof ctx.event?.subscribe !== "function") return noop;
+    reportingOpenCodeMajor = 2;
     if (await tuiReportsPaneLifecycle()) return noop;
     const controller = new AbortController();
     // Why the envelope: OpenCode 2's plugin adapter unwraps a single-property

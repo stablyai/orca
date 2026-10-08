@@ -15,12 +15,7 @@ export function structuredAgentSessionProviderSessionMetadata(
   record: AgentSessionRecord | null
 ): AgentProviderSessionMetadata | undefined {
   const head = record ? agentSessionProviderHandleChainHead(record.providerHandleChain) : null
-  return head
-    ? {
-        key: 'session_id',
-        id: head.handle.provider === 'claude' ? head.handle.sessionId : head.handle.threadId
-      }
-    : undefined
+  return head ? { key: 'session_id', id: head.handle.nativeId } : undefined
 }
 
 export function readStructuredAgentSessionHistoryResult(input: {

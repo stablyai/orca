@@ -1,6 +1,6 @@
 // A publish-first create proves nothing about the model until Claude answers startup. The record
 // must never hold the catalog's default in the meantime: an owner handoff or a reopen would
-// replay it as a `set_model` and silently move a user whose CLI default is not Sonnet.
+// launch it as `--model` and silently move a user whose CLI default is not Sonnet.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -10,7 +10,8 @@ import type { AgentSessionStatusEvent } from '../../../shared/agent-session-wire
 import { ClaudeStructuredSessionAdapter } from '../../claude/claude-structured-session-adapter'
 import {
   fakeClaude,
-  PROVIDER_SESSION_ID
+  PROVIDER_SESSION_ID,
+  claudeStartupSettled
 } from '../../claude/claude-structured-session-test-support'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
@@ -24,6 +25,7 @@ import {
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const CALLER = { callerKey: 'client-1' }
 const INIT_DELAY_MS = 40
@@ -76,6 +78,7 @@ beforeEach(async () => {
   })
   store = await openTestAgentSessionRecordStore(root)
   host = new StructuredAgentSessionHost({
+    agents: NO_STRUCTURED_AGENTS,
     logger: createStructuredAgentSessionLogger(),
     store,
     // The production router is what declares create support; the bare adapter only knows locations.
@@ -116,7 +119,7 @@ describe('a publish-first Claude create whose init is slow', () => {
     expect(store.getRecord(SESSION)?.options?.model).toBeUndefined()
     expect(lastPhase()).toBe('starting')
 
-    await adapter.awaitStarted(SESSION)
+    await claudeStartupSettled(adapter, SESSION)
     await Promise.all(lifecycle)
 
     expect(store.getRecord(SESSION)?.options?.model).toBe('claude-opus-9')
@@ -130,7 +133,7 @@ describe('a publish-first Claude create whose init is slow', () => {
     ).resolves.toMatchObject({ ok: true })
     expect(store.getRecord(SESSION)?.options?.model).toBe('opus')
 
-    await adapter.awaitStarted(SESSION)
+    await claudeStartupSettled(adapter, SESSION)
     await Promise.all(lifecycle)
 
     expect(store.getRecord(SESSION)?.options?.model).toBe('opus')
@@ -140,7 +143,7 @@ describe('a publish-first Claude create whose init is slow', () => {
   it('keeps the picked model across a resume whose new child starts on its own default', async () => {
     const params = claudeParams()
     await host.attach(CALLER, { ...params, options: { model: 'opus' } })
-    await adapter.awaitStarted(SESSION)
+    await claudeStartupSettled(adapter, SESSION)
     await Promise.all(lifecycle)
     await host.close(SESSION, 'evict')
     const releasedFence = store.getRecord(SESSION)?.lease.runtimeFence ?? 0
@@ -150,11 +153,11 @@ describe('a publish-first Claude create whose init is slow', () => {
       ok: true
     })
     expect(store.getRecord(SESSION)?.lease.runtimeFence).toBeGreaterThan(releasedFence)
-    // The new child's init reports its CLI default; the saved pick is restored over it.
+    // The new child is launched with the saved pick, whatever its CLI default.
     expect(store.getRecord(SESSION)?.options?.model).toBe('opus')
     expect(lastPhase()).toBe('starting')
 
-    await adapter.awaitStarted(SESSION)
+    await claudeStartupSettled(adapter, SESSION)
     await Promise.all(lifecycle)
 
     expect(store.getRecord(SESSION)?.options?.model).toBe('opus')

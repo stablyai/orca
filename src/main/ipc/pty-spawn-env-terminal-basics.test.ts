@@ -1,14 +1,16 @@
 import { withFreshOmpLaunch } from '../../shared/omp-fresh-launch'
 import { describe, expect, it, vi } from 'vitest'
 import { piBuildPtyEnvMock, spawnMock } from './pty-ipc-mock-registry'
-import { TEST_CODEX_HOME, makeDisposable } from './pty-ipc-test-constants'
+import { TEST_CODEX_HOME } from './pty-ipc-test-constants'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { LocalPtyProvider } from '../providers/local-pty-provider'
 import { __resetPersistedWindowsPathCacheForTests } from '../pty/windows-environment-path'
 import { __setWindowsPathRegistryLoaderForTests } from '../pty/windows-path-registry-reader'
-import { hasLiveClaudePtys, markClaudePtySpawned } from '../claude-accounts/live-pty-gate'
 import { wslHookRelayManager } from '../agent-hooks/wsl-hook-relay-manager'
-import { registerPtyHandlers, buildPtyHostEnv, clearProviderPtyState } from './pty'
+import { registerPtyHandlers, buildPtyHostEnv } from './pty'
+import { buildJcodeRuntimeDir, shouldInjectJcodeRuntimeDir } from '../../shared/jcode-runtime-dir'
+import { makePaneKey } from '../../shared/stable-pane-id'
+import { selectShellStartupFeatures } from '../shell-startup-features'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -58,6 +60,41 @@ describe('registerPtyHandlers', () => {
   const { handlers, mainWindow, spawnAndGetEnv, withBundledCli } = setupPtyIpcSuite()
 
   describe('spawn environment', () => {
+    it.each(['/bin/bash', '/bin/zsh'])(
+      'does not wrap a bare %s pane merely to expose this app CLI',
+      (shellPath) => {
+        const originalPlatform = process.platform
+        Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
+        try {
+          const env = buildPtyHostEnv(
+            'bare-cli-pane',
+            {},
+            {
+              isPackaged: false,
+              userDataPath: '/tmp/orca-user-data',
+              selectedCodexHomePath: null,
+              agentStatusHooksEnabled: false
+            }
+          )
+          expect(env.ORCA_CLI_BIN_DIR).toBe('/tmp/orca-user-data/cli/bin')
+          expect(
+            selectShellStartupFeatures({
+              shellPath,
+              env,
+              hasStartupCommand: false,
+              waitsForShellReady: false,
+              emitsStartupIdentity: false
+            })
+          ).toEqual([])
+        } finally {
+          Object.defineProperty(process, 'platform', {
+            configurable: true,
+            value: originalPlatform
+          })
+        }
+      }
+    )
+
     it('does not install managed Pi extensions when Pi is disabled', () => {
       piBuildPtyEnvMock.mockClear()
 
@@ -282,49 +319,6 @@ describe('registerPtyHandlers', () => {
         id: expect.any(String)
       })
     })
-    it('marks local Claude launches live until the PTY is killed', async () => {
-      let exitCb: ((info: { exitCode: number }) => void) | undefined
-      spawnMock.mockReturnValue({
-        onData: vi.fn(() => makeDisposable()),
-        onExit: vi.fn((cb: (info: { exitCode: number }) => void) => {
-          exitCb = cb
-          return makeDisposable()
-        }),
-        write: vi.fn(),
-        resize: vi.fn(),
-        kill: vi.fn(() => exitCb?.({ exitCode: -1 })),
-        process: 'zsh',
-        pid: 12345
-      })
-      const prepareClaudeAuth = vi.fn(async () => ({
-        configDir: '/tmp/claude',
-        envPatch: {},
-        stripAuthEnv: false,
-        provenance: 'managed:account-1'
-      }))
-      registerPtyHandlers(mainWindow as never, undefined, undefined, undefined, prepareClaudeAuth)
-
-      const spawnResult = (await handlers.get('pty:spawn')!(null, {
-        cols: 80,
-        rows: 24,
-        command: 'claude'
-      })) as { id: string }
-
-      expect(prepareClaudeAuth).toHaveBeenCalledTimes(1)
-      expect(hasLiveClaudePtys()).toBe(true)
-
-      await handlers.get('pty:kill')!(null, { id: spawnResult.id })
-
-      expect(hasLiveClaudePtys()).toBe(false)
-    })
-    it('clears Claude live-PTY tracking from shared provider teardown', () => {
-      markClaudePtySpawned('ssh-claude-pty')
-      expect(hasLiveClaudePtys()).toBe(true)
-
-      clearProviderPtyState('ssh-claude-pty')
-
-      expect(hasLiveClaudePtys()).toBe(false)
-    })
     it('defaults LANG to en_US.UTF-8 when not inherited from process.env', async () => {
       const env = await spawnAndGetEnv(undefined, { LANG: undefined })
       expect(env.LANG).toBe('en_US.UTF-8')
@@ -336,6 +330,31 @@ describe('registerPtyHandlers', () => {
     it('lets caller-provided env override LANG', async () => {
       const env = await spawnAndGetEnv({ LANG: 'fr_FR.UTF-8' })
       expect(env.LANG).toBe('fr_FR.UTF-8')
+    })
+
+    it('stamps a per-pane jcode runtime dir on local spawns', async () => {
+      const leafId = '7bad1a11-ba5f-4d47-9761-d5d7ac6e975f'
+      const tabId = 'tab-1'
+      const paneKey = makePaneKey(tabId, leafId)
+      handlers.clear()
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the suite's mock BrowserWindow, widened the same way every other registerPtyHandlers call in this file does; the handler only touches webContents.send.
+      registerPtyHandlers(mainWindow as never)
+      await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        env: { ORCA_PANE_KEY: paneKey },
+        tabId,
+        leafId,
+        worktreeId: 'wt-1'
+      })
+      const spawnedEnv: Record<string, string | undefined> =
+        spawnMock.mock.calls.at(-1)?.[2]?.env ?? {}
+      // Why: buildJcodeRuntimeDirEnv intentionally omits the var on win32.
+      if (shouldInjectJcodeRuntimeDir(process.platform)) {
+        expect(spawnedEnv.JCODE_RUNTIME_DIR).toBe(buildJcodeRuntimeDir(paneKey))
+      } else {
+        expect(spawnedEnv.JCODE_RUNTIME_DIR).toBeUndefined()
+      }
     })
     it('strips inherited Claude child-session stamps from a local spawn env', async () => {
       // Why: the local provider spreads main's process.env, so a GUI launched from

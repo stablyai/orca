@@ -14,6 +14,8 @@ import type { OpenCodeWslRuntime } from './session-scanner-opencode-wsl-runtime'
 
 export type AiVaultScanOptions = {
   claudeProjectsDir?: string
+  /** Account `projects` folders the System default does not link; resolved by the host process. */
+  claudeProfileProjectsDirs?: readonly string[]
   codebuddyProjectsDir?: string
   qoderProjectsDir?: string
   codexSessionsDir?: string
@@ -49,6 +51,7 @@ export type AiVaultScanOptions = {
   clineSessionsDir?: string
   kimiSessionsDir?: string
   museSessionsDir?: string
+  jcodeSessionsDir?: string
   limit?: number
   unlimited?: boolean
   limitPerAgent?: number

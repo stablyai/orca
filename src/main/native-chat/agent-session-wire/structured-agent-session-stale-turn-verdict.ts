@@ -6,6 +6,10 @@
 // ladder — carries none, and neither does a later owner's death; the turn is then `unverifiable`
 // with no end at all, until a proof naming its owner is written and revises it.
 
+import {
+  interruptedAgentJournalToolCall,
+  isUnverifiedEndAgentJournalToolCall
+} from '../../../shared/agent-journal-tool-call-lifecycle'
 import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
@@ -116,6 +120,61 @@ export function provenUnverifiableTurnRevisions(
           turn,
           turnVerdictFromDeathEvidence(evidence, ownerFence, stopFoundTurnLiveAt(journal, item))
         )
+      : []
+  })
+}
+
+/** An exit this host watched, of the child that holds `ownerFence`. */
+export type StructuredAgentSessionWatchedExit = { ownerFence: number; observedAt: number }
+
+/** What a watched exit revises of what its child left `unverifiable` (its stream closed before the
+ *  exit was proven), calls and turns alike, as the record's death evidence later would. The exit's
+ *  instant is the end, so no Stop mark is weighed. */
+export function watchedExitRevisions(
+  items: readonly AgentJournalRenderItem[],
+  exit: StructuredAgentSessionWatchedExit | undefined,
+  journal: Pick<AgentSessionJournal, 'itemFence'>
+): JournalLifecycleMutationInput[] {
+  if (!exit) {
+    return []
+  }
+  const proof: AgentSessionDeathEvidence = { kind: 'exit-observed', detail: '', ...exit }
+  return [
+    ...provenUnverifiedToolCallRevisions(items, proof, journal),
+    ...items.flatMap((item) => {
+      const turn = readAgentJournalTurn(item.body)
+      return turn?.state === 'unverifiable' && journal.itemFence(item.itemId) === exit.ownerFence
+        ? turnLifecycleRevision(item, turn, { state: 'interrupted', completedAt: exit.observedAt })
+        : []
+    })
+  ]
+}
+
+/** The calls those settles closed with no proof, revised by the same proof: each only when it names
+ *  the owner that wrote the call, so a call that failed on its own stays failed. */
+export function provenUnverifiedToolCallRevisions(
+  items: readonly AgentJournalRenderItem[],
+  evidence: AgentSessionDeathEvidence | null | undefined,
+  journal: Pick<AgentSessionJournal, 'itemFence'>
+): JournalLifecycleMutationInput[] {
+  const ownerFence = evidence?.ownerFence
+  if (ownerFence === undefined) {
+    return []
+  }
+  return items.flatMap((item): JournalLifecycleMutationInput[] => {
+    const identity = parseAgentJournalItemKey(item.itemId)
+    return identity &&
+      item.body.kind === 'tool-call' &&
+      isUnverifiedEndAgentJournalToolCall(item.body) &&
+      journal.itemFence(item.itemId) === ownerFence
+      ? [
+          {
+            kind: 'item',
+            identity,
+            body: interruptedAgentJournalToolCall(item.body),
+            turnScope: item.turnScope ?? AGENT_JOURNAL_THREAD_SCOPE
+          }
+        ]
       : []
   })
 }

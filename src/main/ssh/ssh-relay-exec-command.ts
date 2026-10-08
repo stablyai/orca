@@ -46,8 +46,34 @@ export function isUnconfirmedSshCommandTermination(
   )
 }
 
+/** A command that ran and exited nonzero; `stdout` is its own output, never the command text. */
+export type SshCommandExitError = Error & { exitCode: number; stdout: string }
+
+export function isSshCommandExitError(error: unknown): error is SshCommandExitError {
+  return (
+    error instanceof Error &&
+    'exitCode' in error &&
+    typeof error.exitCode === 'number' &&
+    'stdout' in error &&
+    typeof error.stdout === 'string'
+  )
+}
+
+export function sshCommandExitError(
+  command: string,
+  code: number,
+  stdout: string,
+  output = stdout.trim()
+): SshCommandExitError {
+  const message = `Command "${redactRelayInstallMarkerTokens(command)}" failed (exit ${code}): ${redactRelayInstallMarkerTokens(output)}`
+  return Object.assign(new Error(message), {
+    exitCode: code,
+    stdout: redactRelayInstallMarkerTokens(stdout)
+  })
+}
+
 export async function execCommand(
-  conn: SshConnection,
+  conn: Pick<SshConnection, 'exec' | 'usesSystemSshTransport'>,
   command: string,
   options?: ExecCommandOptions
 ): Promise<string> {
@@ -164,15 +190,8 @@ export async function execCommand(
       } else if (code !== 0) {
         // Why: on the system-ssh transport channel.stderr carries local OpenSSH
         // client noise; preferring it masks the real failure in stdout (2>&1).
-        const output = redactRelayInstallMarkerTokens(
-          [stderr.trim(), stdout.trim()].filter(Boolean).join('\n')
-        )
-        settle(
-          reject,
-          new Error(
-            `Command "${redactRelayInstallMarkerTokens(command)}" failed (exit ${code}): ${output}`
-          )
-        )
+        const output = [stderr.trim(), stdout.trim()].filter(Boolean).join('\n')
+        settle(reject, sshCommandExitError(command, code, stdout, output))
       } else {
         if (stderr && onStderr) {
           onStderr(redactRelayInstallMarkerTokens(stderr))

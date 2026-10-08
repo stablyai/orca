@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentJournalDispatchState } from '../../../src/shared/agent-session-journal-types'
 import type { AgentSessionSendResult } from '../../../src/shared/agent-session-wire'
+import { DISPATCH_REJECTED_CANCELLED } from '../../../src/shared/structured-agent-session-dispatch-rejection'
 import { mobileStructuredSendDelivery } from './mobile-structured-send-delivery'
 import type { StructuredAgentSessionMutationCallResult } from './mobile-structured-agent-session-rpc'
 import { structuredSendResultFixture } from './structured-agent-send-result.test-fixture'
+
+const WITHDRAWN_SENTENCE = 'This message was withdrawn before the agent started it.'
 
 function accepted(
   dispatchState: AgentJournalDispatchState,
@@ -125,6 +128,56 @@ describe('mobileStructuredSendDelivery', () => {
     })
   })
 
+  it('answers a send the host kept as a card like a queued one, first send or replay', () => {
+    // The card shows the text, so neither an error nor a composer hand-back may repeat it.
+    const kept: StructuredAgentSessionMutationCallResult<AgentSessionSendResult> = {
+      status: 'accepted',
+      value: {
+        clientMessageId: 'msg-1',
+        submission: {
+          clientMessageId: 'msg-1',
+          fence: 3,
+          payloadFingerprint: 'fingerprint',
+          dispatchState: 'rejected',
+          providerItemId: null,
+          reason: 'Orca restarted before this was sent.',
+          submittedAt: 10,
+          resolvedAt: 10,
+          keptAsQueuedMessageId: 'msg-1'
+        }
+      }
+    }
+    for (const retained of [false, true]) {
+      expect(mobileStructuredSendDelivery(kept, retained)).toEqual({
+        outcome: 'queued',
+        operationIdSpent: true,
+        error: null
+      })
+    }
+  })
+
+  // The chat draws a send a Stop took back with its stop row, so it never goes back to the draft. A
+  // retained replay is resent by the caller, which needs the id spent and no words of its own.
+  it.each([
+    { retained: false, reason: DISPATCH_REJECTED_CANCELLED, fact: false, outcome: 'accepted' },
+    { retained: false, reason: WITHDRAWN_SENTENCE, fact: true, outcome: 'accepted' },
+    { retained: true, reason: DISPATCH_REJECTED_CANCELLED, fact: false, outcome: 'rejected' },
+    { retained: true, reason: WITHDRAWN_SENTENCE, fact: true, outcome: 'rejected' }
+  ] as const)(
+    'reads a send a Stop took back (retained $retained, typed fact $fact) as $outcome, spent, wordless',
+    ({ retained, reason, fact, outcome }) => {
+      const value = structuredSendResultFixture('rejected', reason)
+      if (fact && 'submission' in value) {
+        value.submission.rejection = { kind: 'cancelled' }
+      }
+      expect(mobileStructuredSendDelivery({ status: 'accepted', value }, retained)).toEqual({
+        outcome,
+        operationIdSpent: true,
+        error: null
+      })
+    }
+  )
+
   it('shows a provider content rejection verbatim', () => {
     expect(
       mobileStructuredSendDelivery(accepted('rejected', 'Claude does not support .bmp'))
@@ -169,7 +222,9 @@ describe('mobileStructuredSendDelivery', () => {
     })
   })
 
-  it('never releases an ambiguous id on a later RPC refusal or failure', () => {
+  it('spends an ambiguous id the host has expired, and says to check the chat', () => {
+    // The host refuses an expired id on every replay; keeping it would refuse this text forever.
+    // The earlier attempt may still be in the chat, so the words never say it was not sent.
     expect(
       mobileStructuredSendDelivery(
         {
@@ -179,7 +234,25 @@ describe('mobileStructuredSendDelivery', () => {
         },
         true
       )
-    ).toEqual({ outcome: 'rejected', operationIdSpent: false, error: 'Operation expired' })
+    ).toEqual({
+      outcome: 'rejected',
+      operationIdSpent: true,
+      error:
+        "Orca couldn't confirm your message reached the agent. Check the chat, then send it again if needed."
+    })
+  })
+
+  it('never releases an ambiguous id on any other later RPC refusal or failure', () => {
+    expect(
+      mobileStructuredSendDelivery(
+        {
+          status: 'refused',
+          code: 'agent_session_operation_conflict',
+          message: 'Operation conflict'
+        },
+        true
+      )
+    ).toEqual({ outcome: 'rejected', operationIdSpent: false, error: 'Operation conflict' })
     expect(
       mobileStructuredSendDelivery(
         { status: 'failed', message: 'Your message was not sent. Send it again.' },

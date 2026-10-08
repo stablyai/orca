@@ -1,7 +1,7 @@
 import { AlertCircle, AlertTriangle, Info } from 'lucide-react'
-import CommentMarkdown, {
-  type CommentMarkdownLinkClickHandler
-} from '@/components/sidebar/CommentMarkdown'
+import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
+import { NativeChatMarkdown } from './NativeChatMarkdown'
+import { NativeChatCodeBlock } from './NativeChatCodeBlock'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
@@ -11,7 +11,16 @@ import {
   type AgentSessionHostStatusPresentation
 } from '../../../../shared/agent-session-host-status-rows'
 import type { NativeChatTextBlock } from '../../../../shared/native-chat-types'
+import { useNativeChatOrcaStopView } from './native-chat-orca-stop-context'
+import { nativeChatOrcaStopRowText } from './native-chat-orca-stop-words'
+import { AGENT_SESSION_ORCA_STOP_PRESENTATION } from '../../../../shared/agent-session-orca-stop'
 import { ProviderFrameRow } from './NativeChatTranscriptChrome'
+import { Button } from '@/components/ui/button'
+import {
+  isClaudeSignInFailureKind,
+  nativeChatClaudeSignInLabel,
+  useNativeChatClaudeSignInView
+} from './native-chat-claude-sign-in'
 
 const HOST_STATUS_WORDS: Record<AgentSessionHostStatusPresentation, () => string> = {
   'history-repaired': () =>
@@ -35,6 +44,8 @@ export function NativeChatNoticeRow({
   onLinkClick?: CommentMarkdownLinkClickHandler
   allowFileUriLinks?: boolean
 }): React.JSX.Element {
+  const orcaStopView = useNativeChatOrcaStopView()
+  const claudeSignIn = useNativeChatClaudeSignInView()
   if (block.presentation === 'compaction') {
     const label = translate('components.native-chat.notices.compaction', 'Context compacted')
     return (
@@ -47,6 +58,14 @@ export function NativeChatNoticeRow({
         <span>{label}</span>
         <span className="h-px flex-1 bg-border" />
       </div>
+    )
+  }
+  if (block.presentation === 'command-output') {
+    // Why: command output is laid out in columns; proportional type breaks its grid.
+    return (
+      <pre className="whitespace-pre-wrap break-words font-mono text-xs text-foreground">
+        {block.text}
+      </pre>
     )
   }
   if (isAgentSessionHostStatusPresentation(block.presentation)) {
@@ -66,10 +85,11 @@ export function NativeChatNoticeRow({
           </CardTitle>
         </CardHeader>
         <CardContent className="px-4 text-sm leading-relaxed text-foreground">
-          <CommentMarkdown
+          <NativeChatMarkdown
             content={block.text}
             variant="document"
-            className="text-sm"
+            renderCodeBlock={NativeChatCodeBlock}
+            className="text-sm text-chat-foreground"
             onLinkClick={onLinkClick}
             allowFileUriLinks={allowFileUriLinks}
             linkifyFilePaths={onLinkClick !== undefined}
@@ -78,7 +98,16 @@ export function NativeChatNoticeRow({
       </Card>
     )
   }
-  const tone = block.tone
+  // The host's row about an Orca stop names the cause and the machine, muted: Orca stopped, not the
+  // agent. With no machine to name it keeps the host's own words.
+  const { orcaStop } = block
+  const { hostLabel, continueAvailable } = orcaStopView
+  const named = orcaStop !== undefined && hostLabel !== null
+  const text = named
+    ? nativeChatOrcaStopRowText(orcaStop.cause, hostLabel, { continueAvailable })
+    : block.text
+  const tone =
+    named || block.presentation === AGENT_SESSION_ORCA_STOP_PRESENTATION ? 'notice' : block.tone
   const Icon =
     tone === 'warning'
       ? AlertTriangle
@@ -99,8 +128,19 @@ export function NativeChatNoticeRow({
     >
       <div className="flex items-start gap-2">
         {Icon ? <Icon aria-hidden="true" className="mt-0.5 size-4 shrink-0" /> : null}
-        <p className="min-w-0 whitespace-pre-wrap break-words">{block.text}</p>
+        <p className="min-w-0 whitespace-pre-wrap break-words">{text}</p>
       </div>
+      {claudeSignIn && isClaudeSignInFailureKind(block.failure?.kind) ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="xs"
+          disabled={claudeSignIn.signingIn}
+          onClick={claudeSignIn.signIn}
+        >
+          {nativeChatClaudeSignInLabel(claudeSignIn)}
+        </Button>
+      ) : null}
       {block.providerFrame ? (
         <ProviderFrameRow
           block={block}

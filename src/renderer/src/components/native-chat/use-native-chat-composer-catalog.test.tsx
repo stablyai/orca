@@ -3,7 +3,6 @@ import { renderHook } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { buildNativeChatPickerItems } from './native-chat-picker-items'
 import { useNativeChatComposerKeyDown } from './use-native-chat-composer-keydown'
-import { EMPTY_HISTORY } from './native-chat-composer-state'
 import { useNativeChatComposerCatalog } from './use-native-chat-composer-catalog'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 import { getVerifiedNativeChatCommands } from '../../../../shared/native-chat-agent-profiles'
@@ -129,9 +128,10 @@ it('Enter completes a known pre-init skill while still dispatching a built-in co
           skillsEnabled: true,
           skillStatus: 'ready'
         },
+        mentionFiles: { files: [], loading: false, failed: false },
+        completeMention: vi.fn(),
         activeSuggestion,
         draft: '/',
-        history: EMPTY_HISTORY,
         isComposing: () => false,
         completePickerItem: complete,
         dispatchPickerCommand: dispatch,
@@ -140,8 +140,7 @@ it('Enter completes a known pre-init skill while still dispatching a built-in co
         send: vi.fn(),
         setActiveSuggestion: vi.fn(),
         setDraft: vi.fn(),
-        setCaret: vi.fn(),
-        setHistory: vi.fn()
+        setCaret: vi.fn()
       })
     },
     { initialProps: { activeSuggestion: 1 } }

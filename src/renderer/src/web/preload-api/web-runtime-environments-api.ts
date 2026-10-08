@@ -1,3 +1,4 @@
+const pendingSubscriptions = new Map<string, AbortController>()
 import type { PreloadApi } from '../../../../preload/api-types'
 import { parseHostAccessLink } from '../../../../shared/remote-pairing-address'
 import { verifyRemotePairingRuntimeStatus } from '../../../../shared/remote-pairing-verification'
@@ -200,10 +201,30 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
     prepareBrowserClientHostPlacement: async () => ({ kind: 'server' }),
     call: ({ selector, method, params, timeoutMs }) =>
       callEnvironmentEnvelope(selector, method, params, timeoutMs),
-    subscribe: async ({ selector, method, params, timeoutMs }, callbacks) => {
+    cancelSubscription: async ({ subscriptionId }) => {
+      pendingSubscriptions.get(subscriptionId)?.abort()
+    },
+    subscribe: async ({ selector, method, params, timeoutMs, subscriptionId }, callbacks) => {
       const environment = resolveEnvironment(selector)
       const client = getClientForEnvironment(environment)
-      const subscription = await client.subscribe(method, params, callbacks, { timeoutMs })
+      const controller = new AbortController()
+      if (subscriptionId) {
+        if (pendingSubscriptions.has(subscriptionId)) {
+          throw new Error('Subscription id already exists')
+        }
+        pendingSubscriptions.set(subscriptionId, controller)
+      }
+      let subscription
+      try {
+        subscription = await client.subscribe(method, params, callbacks, {
+          timeoutMs,
+          signal: controller.signal
+        })
+      } finally {
+        if (subscriptionId && pendingSubscriptions.get(subscriptionId) === controller) {
+          pendingSubscriptions.delete(subscriptionId)
+        }
+      }
       if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
         subscription.unsubscribe()
         throw new Error('runtime_manually_disconnected')

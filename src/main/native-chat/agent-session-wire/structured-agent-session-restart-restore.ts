@@ -34,6 +34,8 @@ export type StructuredAgentSessionReadRestoreDeps = {
   resolveRecovery: (sessionId: string) => Promise<boolean>
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
   hasSession: (sessionId: string) => boolean
+  /** A chat whose open failed: it still has its record, so it keeps its tab. */
+  onUnopened?: (sessionId: string) => void
   onReadable: (
     sessionId: string,
     opened: OpenedStructuredAgentSessionConversation
@@ -92,6 +94,16 @@ export async function restoreStructuredAgentSessionsOnRestart(
   await mapWithConcurrency(input.records, JOURNAL_RESTORE_CONCURRENCY, async ({ sessionId }) => {
     // A journal open is synchronous SQLite: without a macrotask per chat the restore is one long task.
     await yieldToEventLoop()
-    await restoreOneStructuredAgentSessionRead(input, sessionId, settleLeases)
+    // One chat that cannot open must not keep the rest from restoring; a read of it still refuses.
+    await restoreOneStructuredAgentSessionRead(input, sessionId, settleLeases).catch(
+      (error: unknown) => {
+        input.openDeps.logger.warn('restoring a chat at startup failed', {
+          scope: 'restart-restore',
+          sessionId,
+          error
+        })
+        input.onUnopened?.(sessionId)
+      }
+    )
   })
 }

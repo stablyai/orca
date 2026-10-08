@@ -1,10 +1,23 @@
 import { execFile, spawn } from 'node:child_process'
-import { copyFile, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises'
+import {
+  copyFile,
+  cp,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  stat,
+  symlink,
+  writeFile
+} from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join, sep } from 'node:path'
 import { promisify } from 'node:util'
+import { fileURLToPath } from 'node:url'
+import { createPackageWithOptions, statFile } from '@electron/asar'
 import { describe, expect, it } from 'vitest'
+import { runProcess } from '../../shared/child-process/run-process'
 
 const require = createRequire(import.meta.url)
 const execFileAsync = promisify(execFile)
@@ -44,6 +57,81 @@ describe('packaged CLI assets', () => {
     // authoring-only files that do not exist in installed applications.
     expect(builderConfig.asarUnpack).toContain('out/cli/**')
     expect(builderConfig.files).toContain('!skill-guides{,/**/*}')
+  })
+
+  it('loads worktree link validation from the installed CLI', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-cli-gitlab-package-'))
+    const projectDir = fileURLToPath(new URL('../../../', import.meta.url))
+    const source = join(root, 'app-source')
+    const archive = join(root, 'resources', 'app.asar')
+    try {
+      const compile = await runProcess({
+        program: process.execPath,
+        args: [
+          join(projectDir, 'node_modules', 'typescript', 'bin', 'tsc'),
+          '-p',
+          join(projectDir, 'config', 'tsconfig.cli.json'),
+          '--outDir',
+          join(source, 'out'),
+          '--composite',
+          'false',
+          '--incremental',
+          'false',
+          // This fixture checks the emitted package; the CLI typecheck runs separately.
+          '--noCheck'
+        ],
+        cwd: projectDir,
+        timeoutMs: 60_000
+      })
+      expect(compile.code, compile.stdout + compile.stderr).toBe(0)
+      await mkdir(dirname(archive), { recursive: true })
+      await writeFile(join(source, 'out', 'package.json'), JSON.stringify({ type: 'commonjs' }))
+      for (const name of ['zod', 'tweetnacl']) {
+        await cp(
+          join(projectDir, 'node_modules', name),
+          join(root, 'resources', 'node_modules', name),
+          {
+            recursive: true,
+            dereference: true
+          }
+        )
+      }
+      await createPackageWithOptions(source, archive, {
+        unpack: `{${builderConfig.asarUnpack?.map((pattern) => join(source, pattern).split(sep).join('/')).join(',')}}`
+      })
+      expect(statFile(archive, join('out', 'cli', 'index.js')).unpacked).toBe(true)
+      const result = await runProcess({
+        program: process.execPath,
+        args: [
+          join(`${archive}.unpacked`, 'out', 'cli', 'index.js'),
+          'worktree',
+          'create',
+          '--repo',
+          'id:repo',
+          '--name',
+          'packaged-link',
+          '--no-parent',
+          '--pr',
+          '0',
+          '--json'
+        ],
+        cwd: root,
+        env: {
+          ...process.env,
+          ORCA_BACKGROUND_LAUNCH: '1',
+          ORCA_USER_DATA_PATH: join(root, 'user-data'),
+          HOME: join(root, 'home')
+        },
+        timeoutMs: 10_000
+      })
+      expect(result.code, result.stderr).toBe(1)
+      expect(JSON.parse(result.stdout)).toMatchObject({
+        ok: false,
+        error: { code: 'invalid_argument', message: 'Pass a positive safe integer for --pr.' }
+      })
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
   })
 
   it('copies runtime dependencies used before Electron asar integration is available', () => {

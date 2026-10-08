@@ -30,6 +30,7 @@ import type { StructuredAgentSessionMutate } from './use-structured-agent-sessio
 import { useStructuredAgentSessionOptions } from './use-structured-agent-session-options'
 
 const LOCAL_TARGET = { kind: 'local' } as const
+const PAIRED_TARGET = { kind: 'environment', environmentId: 'server-1' } as const
 
 class FakeRpcCallError extends Error {
   constructor(readonly code: string) {
@@ -76,6 +77,7 @@ type RenderProps = {
   worktree?: string
   agent?: 'claude' | 'codex'
   providerStarting?: boolean
+  paired?: boolean
 }
 
 // A new chat: create has not published, so there is no fence and no live read.
@@ -92,7 +94,7 @@ function renderOptions(initial: RenderProps, mutate: StructuredAgentSessionMutat
       useStructuredAgentSessionOptions({
         agent: props.agent ?? 'codex',
         sessionId: 'session-1',
-        target: LOCAL_TARGET,
+        target: props.paired ? PAIRED_TARGET : LOCAL_TARGET,
         transportEnabled: props.transportEnabled,
         isVisible: !props.hidden,
         providerVisible: props.transportEnabled && !props.hidden,
@@ -509,6 +511,69 @@ describe('useStructuredAgentSessionOptions', () => {
       rerender({ ...starting, providerStarting: false })
       // Re-read once started: only then has the host read what the provider will run.
       await waitFor(() => expect(optionReads()).toBe(2))
+      unmount()
+    })
+  })
+
+  // A paired server names the saved selection its create seeds when it admits the chat.
+  describe("a paired server's new chat", () => {
+    it("shows the server's seed at once and remembers a pick on the server under its model", async () => {
+      answer({})
+      mocks.hold.mockResolvedValue({ kind: 'accepted', options: { effort: 'high' } })
+      const { result, unmount } = renderOptions(
+        { ...PROVISIONAL, paired: true, launchSeedOptions: SEED },
+        mutateWith(async () => null).mutate
+      )
+      await waitFor(() =>
+        expect(currentValue(result.current.optionSnapshot, 'model')).toBe('gpt-5.5')
+      )
+      expect(descriptor(result.current.optionSnapshot, 'model')?.settable).toBe(true)
+
+      await act(async () => {
+        await result.current.setStructuredOption('effort', 'high')
+      })
+      await waitFor(() =>
+        expect(mocks.enqueue).toHaveBeenCalledWith(PAIRED_TARGET, {
+          type: 'apply-picks',
+          agent: 'codex',
+          picks: [{ modelId: 'gpt-5.5', optionId: 'effort', value: 'high' }]
+        })
+      )
+      unmount()
+    })
+
+    // A server whose user never saved a model starts the CLI default, as a local chat does.
+    it('shows the CLI default and takes picks when the server saved no model', async () => {
+      answer({ modelCatalog: () => Promise.resolve(HOST_CATALOG) })
+      mocks.hold.mockResolvedValue({ kind: 'accepted', options: { model: 'gpt-hosted' } })
+      const { result, unmount } = renderOptions(
+        { ...PROVISIONAL, paired: true },
+        mutateWith(async () => null).mutate
+      )
+      await waitFor(() =>
+        expect(currentValue(result.current.optionSnapshot, 'model')).toBe('gpt-hosted')
+      )
+      expect(descriptor(result.current.optionSnapshot, 'model')?.settable).toBe(true)
+
+      await act(async () => {
+        await result.current.setStructuredOption('model', 'gpt-hosted')
+      })
+      expect(mocks.hold).toHaveBeenCalledWith('session-1', 'model', 'gpt-hosted')
+      unmount()
+    })
+
+    it('takes picks again once the server reports its model', async () => {
+      answer({ options: () => Promise.resolve(LIVE_OPTIONS) })
+      const { calls, mutate } = mutateWith(async () => ({ options: { model: 'gpt-5.6-luna' } }))
+      const { result, unmount } = renderOptions({ ...ATTACHED, paired: true }, mutate)
+      await waitFor(() =>
+        expect(currentValue(result.current.optionSnapshot, 'model')).toBe('gpt-5.5')
+      )
+
+      await act(async () => {
+        await result.current.setStructuredOption('model', 'gpt-5.6-luna')
+      })
+      expect(setOptionCalls(calls)).toHaveLength(1)
       unmount()
     })
   })

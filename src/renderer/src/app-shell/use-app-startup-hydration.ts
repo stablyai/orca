@@ -5,6 +5,7 @@ import { installCodexDetachedPaneRestartExecutor } from '@/components/terminal-p
 import { useAppStore } from '../store'
 import { reconcileHydratedWorkspaceTabModels } from './reconcile-hydrated-workspace-tab-models'
 import { useStartupActions } from './use-app-startup-actions'
+import { waitForNativeChatDraftsAtStartup } from './native-chat-draft-startup'
 import { WORKTREE_REFRESH_CONCURRENCY } from '../store/slices/worktrees'
 import { sweepRestoredCodexPanesForStaleAccounts } from '../lib/codex-stale-pane-sweep'
 import { fetchWorkspaceSessionWithRuntimeHostOwners } from '../lib/workspace-session-host-hydration'
@@ -180,7 +181,8 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
         // Why: wait for both writers to settle before recovery so neither can mutate hydrated state afterward.
         const [sessionOutcome, catalogOutcome] = await Promise.allSettled([
           hydrationSessionChain,
-          localCatalogChain
+          localCatalogChain,
+          timeRendererStartupStep('native-chat-drafts', waitForNativeChatDraftsAtStartup)
         ])
         if (sessionOutcome.status === 'rejected') {
           throw sessionOutcome.reason

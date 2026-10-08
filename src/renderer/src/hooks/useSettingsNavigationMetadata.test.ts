@@ -1,3 +1,5 @@
+import { buildCmdJSettingsResults } from '../components/cmd-j/palette-results'
+import { matchesSettingsSearch } from '../components/settings/settings-search'
 import { describe, expect, it } from 'vitest'
 import { buildSettingsNavigationMetadata } from './useSettingsNavigationMetadata'
 import type { Repo } from '../../../shared/repo-types'
@@ -31,6 +33,47 @@ function ids(
 }
 
 describe('settings navigation metadata', () => {
+  it.each([false, undefined])(
+    'omits Chat navigation and search when the opt-in is %s',
+    (enabled) => {
+      const sections = buildSettingsNavigationMetadata({
+        isMac: false,
+        isWindows: false,
+        isWebClient: false,
+        experimentalStructuredNativeChat: enabled,
+        repos: []
+      })
+      expect(sections.some((section) => section.id === 'chat')).toBe(false)
+      expect(buildCmdJSettingsResults(sections).some((result) => result.sectionId === 'chat')).toBe(
+        false
+      )
+      for (const query of ['Code text size', 'Reset chat appearance']) {
+        expect(
+          sections.some((section) => matchesSettingsSearch(query, section.searchEntries))
+        ).toBe(false)
+      }
+    }
+  )
+
+  it('places Chat directly after Appearance in Interface and moves its search entries', () => {
+    const sections = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: false,
+      experimentalStructuredNativeChat: true,
+      repos: []
+    })
+    const appearanceIndex = sections.findIndex((section) => section.id === 'appearance')
+    const chat = sections[appearanceIndex + 1]
+    expect(chat.id).toBe('chat')
+    expect(chat.title).toBe('Chat')
+    expect(chat.group).toBe('interface')
+    for (const query of ['Code text size', 'Reset chat appearance']) {
+      expect(matchesSettingsSearch(query, chat.searchEntries)).toBe(true)
+      expect(matchesSettingsSearch(query, sections[appearanceIndex].searchEntries)).toBe(false)
+    }
+  })
+
   it('puts AI capability panes at the top on desktop', () => {
     expect(ids().slice(0, 10)).toEqual([
       'agents',
@@ -413,6 +456,30 @@ describe('settings navigation metadata', () => {
     const repoSections = sections.filter((section) => section.id.startsWith('repo-'))
     expect(repoSections).toHaveLength(1)
     expect(repoSections[0].id).toBe('repo-local-1')
+  })
+
+  it('renders a nav section per same-host clone, titled by the clone (#20861)', () => {
+    const gitRemote = {
+      canonicalKey: 'gitlab.com/acme/app',
+      remoteName: 'origin',
+      remoteUrl: 'git@gitlab.com:acme/app.git'
+    }
+    const clone = { badgeColor: '#000', addedAt: 0, gitRemoteIdentity: gitRemote }
+    const sections = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: false,
+      repos: [
+        { ...clone, id: 'clone-a', path: '/work/app', displayName: 'app' },
+        { ...clone, id: 'clone-b', path: '/work/app-b', displayName: 'app-b' }
+      ]
+    })
+
+    const repoSections = sections.filter((section) => section.id.startsWith('repo-'))
+    expect(repoSections.map((section) => [section.id, section.title])).toEqual([
+      ['repo-clone-a', 'app'],
+      ['repo-clone-b', 'app-b']
+    ])
   })
 
   it('keeps macOS permissions mac-only', () => {

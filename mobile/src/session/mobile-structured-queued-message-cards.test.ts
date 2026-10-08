@@ -45,7 +45,8 @@ describe('mobileQueuedMessageCards', () => {
       state: 'waiting',
       paused: false,
       needsAttention: false,
-      caption: null
+      caption: null,
+      attribution: null
     })
   })
 
@@ -104,12 +105,6 @@ describe('mobileQueuedMessageCards', () => {
   it('words the paused queue by reason, and one this build does not know as a plain pause', () => {
     expect(mobileQueuePauseLabel({ reason: 'stopped' })).toBe(
       'Queue paused because you interrupted'
-    )
-    expect(mobileQueuePauseLabel({ reason: 'restarted' })).toBe(
-      'Queue paused because Orca restarted'
-    )
-    expect(mobileQueuePauseLabel({ reason: 'cleared' })).toBe(
-      'Queue paused after you cleared the conversation'
     )
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a reason newer than this build's union, as a newer host would send it.
     const newer = { reason: 'later_reason' } as never

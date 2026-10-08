@@ -18,6 +18,7 @@ import {
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 /** pid -> the NUL-separated environment block `/proc/<pid>/environ` serves. */
 const fakeProc = vi.hoisted(() => ({ environs: new Map<number, string>() }))
@@ -113,7 +114,7 @@ describe('a process that inherited a spawn token', () => {
       fence,
       link: {
         linkId: 'link-1',
-        handle: { provider: 'codex', threadId: 'thread-1' },
+        handle: codexProviderHandle('thread-1'),
         origin: 'created',
         mintedAtFence: fence,
         observedAt: NOW
@@ -141,6 +142,7 @@ describe('a process that inherited a spawn token', () => {
       hostId: HOST_ID,
       claimKeyId: 'key-1',
       resolveWorkspacePath: async () => stateDirectory,
+      resolveLaunchArgs: () => [],
       resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
       resolveEnvironment: async () => ({})
     })

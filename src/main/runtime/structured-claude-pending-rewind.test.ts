@@ -11,7 +11,9 @@ import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-sessio
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { claudeSessionIdForOrcaSession } from '../claude/claude-structured-launch-resolution'
 import { fakeClaude } from '../claude/claude-structured-session-test-support'
+import { claudeAndCodexAgents } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
 import { StructuredAgentSessionAdapterRouter } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router'
+import { CLAUDE_STRUCTURED_AGENT } from '../claude/claude-structured-agent-definition'
 import { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import {
   HOST_TEST_NOW,
@@ -115,19 +117,20 @@ beforeEach(async () => {
     store,
     resolveWorkspacePath: async (id) => `/repos/${id}`,
     resolveClaudeCommand: () => '/usr/local/bin/claude',
+    resolveClaudeLaunchArgs: () => [],
     resolveClaudeAuthPolicy: () => ({ stripAuthEnv: false }),
     openClaudeConnection: claude.openConnection,
     readProcessStartTime: async () => HOST_TEST_NOW,
     onLifecycleEvent: () => {}
   })
   log = recordingStructuredAgentSessionLogger()
+  // Only Claude sessions are attached here; the router supplies the production create gate.
+  const agents = claudeAndCodexAgents({ claude: adapter, codex: adapter })
   host = new StructuredAgentSessionHost({
+    agents,
     logger: log.logger,
     store,
-    // Only Claude sessions are attached here; the router supplies the production create gate.
-    adapter: new StructuredAgentSessionAdapterRouter({ claude: adapter, codex: adapter }, () =>
-      adapter.closeAll()
-    ),
+    adapter: new StructuredAgentSessionAdapterRouter(agents, () => adapter.closeAll()),
     journalDatabase: openTestJournalHostDatabase(directory),
     claimKeyId: 'key',
     now: () => HOST_TEST_NOW,
@@ -145,10 +148,7 @@ afterEach(async () => {
 
 describe('Claude rewind is unsupported', () => {
   it('refuses a rewind RPC before writing any rewind record', async () => {
-    expect(adapter.rewindSupport(HOST_TEST_SESSION)).toEqual({
-      supported: false,
-      reason: 'unsupported'
-    })
+    expect(CLAUDE_STRUCTURED_AGENT.capabilities.rewind).toBe(false)
     expect(await host.rewind(caller, rewindParams(fence()))).toMatchObject({
       ok: false,
       refusal: { rewindReason: 'unsupported' }

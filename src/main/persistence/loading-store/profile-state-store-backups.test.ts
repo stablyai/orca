@@ -129,7 +129,7 @@ describe('Store automatic SQLite recovery snapshots', () => {
     expect(readSnapshot(backups[0].path).state.workspaceSession.activeWorktreeId).toBe(
       'backup-worktree'
     )
-    expect(readFileSync(state.retained[0].path)).toEqual(state.retainedBytes)
+    expect(readFileSync(state.retained[0].path).equals(state.retainedBytes)).toBe(true)
     expect(readFileSync(state.dataFile, 'utf8')).toBe(state.legacyBytes)
     expect(
       readdirSync(state.directory)
@@ -192,7 +192,7 @@ describe('Store automatic SQLite recovery snapshots', () => {
       let settled = false
       const barrier = (
         kind === 'quit'
-          ? state.store.flushAsync({ exportJsonCompatibility: true })
+          ? state.store.flushAsync()
           : flushActiveProfileBeforeFileMutation(state.store)
       ).then(() => {
         settled = true
@@ -208,10 +208,8 @@ describe('Store automatic SQLite recovery snapshots', () => {
       const backups = profileStateDatabaseBackups(state.databasePath)
       expect(backups).toHaveLength(2)
       expect(readSnapshot(backups[0].path).state.settings.theme).toBe('dark')
-      expect(readFileSync(state.retained[0].path)).toEqual(state.retainedBytes)
-      expect(JSON.parse(readFileSync(state.dataFile, 'utf8'))).toEqual(
-        readSnapshot(state.databasePath).state
-      )
+      expect(readFileSync(state.retained[0].path).equals(state.retainedBytes)).toBe(true)
+      expect(readFileSync(state.dataFile, 'utf8')).toBe(state.legacyBytes)
     }
   )
 
@@ -241,7 +239,7 @@ describe('Store automatic SQLite recovery snapshots', () => {
       )
       expect(readSnapshot(state.databasePath).state.settings.theme).toBe('dark')
       expect(profileStateDatabaseBackups(state.databasePath)).toEqual(state.retained)
-      expect(readFileSync(state.retained[0].path)).toEqual(state.retainedBytes)
+      expect(readFileSync(state.retained[0].path).equals(state.retainedBytes)).toBe(true)
       expect(readSnapshot(state.retained[0].path).state.settings.theme).toBe('light')
       expect(readFileSync(state.dataFile, 'utf8')).toBe(state.legacyBytes)
       expect(existsSync(`${state.dataFile}.bak.0`)).toBe(false)

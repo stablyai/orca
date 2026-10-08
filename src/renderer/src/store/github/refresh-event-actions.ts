@@ -177,6 +177,7 @@ export const createRefreshEventActions = (
             hasRepoOwner: true,
             pr: data,
             fetchedAt: event.outcome.fetchedAt,
+            fetchedHeadOid: alias.currentHeadOid,
             state: s,
             worktreeId: alias.worktreeId,
             linkedPRNumber: alias.linkedPRNumber,

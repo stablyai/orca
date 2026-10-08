@@ -2,9 +2,9 @@
  * Plan a relay launch on Orca's pinned Node with the orcad slot's prebuilt addons, instead
  * of the host's Node plus a host-side npm install (design D5, D6 rung A, D8.1).
  *
- * Opt-in per host (`SshTarget.remoteRuntime`). Anything this module cannot
- * establish on the client, and every classified refusal from the host, falls back to the
- * legacy host-Node path with a logged reason.
+ * Opt-in per host (`SshTarget.remoteRuntime`), and on by default where managed orcad can't run.
+ * Anything this module cannot establish on the client, and every classified refusal from the
+ * host, falls back to the legacy host-Node path with a logged reason.
  */
 import { createHash } from 'node:crypto'
 import { chmod, copyFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
@@ -52,14 +52,25 @@ export const PINNED_NODE_GLIBC_FLOOR: GlibcVersion = { major: 2, minor: 28 }
 export const SSH_REMOTE_RUNTIME_ENV = 'ORCA_SSH_REMOTE_RUNTIME'
 
 export function resolveSshRemoteRuntime(
-  target: Pick<SshTarget, 'remoteRuntime'> | undefined,
+  target: Pick<SshTarget, 'remoteRuntime' | 'managedServerUnavailable'> | undefined,
   env: NodeJS.ProcessEnv = process.env
 ): SshRemoteRuntime {
   if (target?.remoteRuntime) {
     return target.remoteRuntime
   }
   const fromEnv = SSH_REMOTE_RUNTIMES.find((runtime) => runtime === env[SSH_REMOTE_RUNTIME_ENV])
-  return fromEnv ?? DEFAULT_SSH_REMOTE_RUNTIME
+  // Why: where managed orcad can't run the relay is the host's server; the ladder still ends at legacy.
+  return fromEnv ?? (target?.managedServerUnavailable ? 'pinned-node' : DEFAULT_SSH_REMOTE_RUNTIME)
+}
+
+/** Why `recorded`: this connect's host-server decision may have just recorded orcad unavailable. */
+export function resolveConnectRemoteRuntime(
+  target: SshTarget | undefined,
+  recorded: SshTarget | undefined
+): SshRemoteRuntime {
+  const managedServerUnavailable =
+    recorded?.managedServerUnavailable ?? target?.managedServerUnavailable
+  return resolveSshRemoteRuntime(target && { ...target, managedServerUnavailable })
 }
 
 export function isGlibcBelow(version: GlibcVersion, floor: GlibcVersion): boolean {

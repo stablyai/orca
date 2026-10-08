@@ -6,19 +6,18 @@
  * the send and reports what the host said.
  */
 
-import { ORCHESTRATION_READINESS_TIMEOUT_MS } from '../../../shared/orchestration-timing-budgets'
-import { agentSessionSendSubmission } from '../../../shared/agent-session-wire'
 import { AGENT_SESSION_NOT_ATTACHED } from '../../native-chat/agent-session-wire/structured-agent-session-mutation-admission'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import type {
   StructuredMailboxPointerHost,
-  StructuredPointerGateFacts
+  StructuredPointerSessionFacts
 } from './structured-mailbox-pointer-delivery'
 import type { AgentJournalSnapshot } from '../../../shared/agent-session-journal-types'
 import {
   structuredSessionGateFacts,
   type StructuredSessionGateFacts
 } from './structured-session-pointer-delivery'
+import { sendAgentTurn } from './send-agent-turn'
 
 /** Per-dispatch so one worker's nudges cannot exhaust the shared runtime operation-ledger budget. */
 export function structuredPointerCallerKey(dispatchId: string): string {
@@ -37,12 +36,12 @@ export function structuredSessionPointerCallerKey(sessionId: string): string {
 }
 
 /**
- * The idle gate for a structured session, read off its FULL reduced timeline.
+ * Whether a structured session is idle, for group addressing (`@idle`), read off its FULL reduced
+ * timeline.
  *
  * Never a bounded page. A settled turn's lifecycle item is revised in place, so on any tail window
  * an idle session and a busy one whose lifecycle item scrolled off look identical — and
- * idle-with-history is the normal steady state of a working agent. Shared so the pointer lane and
- * group addressing cannot disagree about it.
+ * idle-with-history is the normal steady state of a working agent.
  */
 export async function readStructuredSessionGateFacts(
   sessionId: string
@@ -51,12 +50,12 @@ export async function readStructuredSessionGateFacts(
   return snapshot ? structuredSessionGateFacts(snapshot.items) : null
 }
 
-/** The pointer lane's gate: the shared idle facts, plus what each recorded send settled as. */
-async function readPointerGateFacts(sessionId: string): Promise<StructuredPointerGateFacts | null> {
+/** What each recorded send settled as. */
+async function readPointerSessionFacts(
+  sessionId: string
+): Promise<StructuredPointerSessionFacts | null> {
   const snapshot = await readSessionJournal(sessionId)
-  return snapshot
-    ? { ...structuredSessionGateFacts(snapshot.items), submissions: snapshot.submissions }
-    : null
+  return snapshot ? { submissions: snapshot.submissions } : null
 }
 
 async function readSessionJournal(sessionId: string): Promise<AgentJournalSnapshot | null> {
@@ -78,8 +77,8 @@ async function readSessionJournal(sessionId: string): Promise<AgentJournalSnapsh
 
 export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHost {
   return {
-    readGateFacts(sessionId) {
-      return readPointerGateFacts(sessionId)
+    readSessionFacts(sessionId) {
+      return readPointerSessionFacts(sessionId)
     },
 
     currentFence(sessionId) {
@@ -93,46 +92,37 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
       if (!host) {
         return { kind: 'unattached' }
       }
-      const result = await host.send(
-        {
-          callerKey: input.dispatchId
-            ? structuredPointerCallerKey(input.dispatchId)
-            : structuredSessionPointerCallerKey(input.sessionId)
-        },
-        {
-          envelope: {
-            sessionId: input.sessionId,
-            clientOperationId: input.operationId,
-            expectedRuntimeFence: input.expectedRuntimeFence,
-            payloadFingerprint: input.payloadFingerprint
-          },
-          body: input.body
+      const outcome = await sendAgentTurn({
+        kind: 'structured-session',
+        host,
+        sessionId: input.sessionId,
+        callerKey: input.dispatchId
+          ? structuredPointerCallerKey(input.dispatchId)
+          : structuredSessionPointerCallerKey(input.sessionId),
+        turn: {
+          body: input.body,
+          // As a person's message is: a busy chat queues it as a card, sent when the turn ends.
+          delivery: 'queue',
+          operationId: input.operationId,
+          expectedRuntimeFence: input.expectedRuntimeFence
         }
-      )
-      if (!result.ok) {
-        return result.refusal.code === AGENT_SESSION_NOT_ATTACHED.code
-          ? { kind: 'unattached' }
-          : { kind: 'sent', state: 'rejected' }
-      }
-      // `pending` is not yet an acknowledgement; only `accepted` may consume mail. Accepted is not
-      // delivered, so wait out a start; a wait that runs out parks for the next journal edge.
-      const answered = agentSessionSendSubmission(result.value)
-      const submission =
-        answered?.dispatchState === 'pending'
-          ? (agentSessionSendSubmission(
-              (
-                await host
-                  .waitForSendSettlement(input.sessionId, result.value.clientMessageId, {
-                    budgetMs: ORCHESTRATION_READINESS_TIMEOUT_MS
-                  })
-                  .catch(() => undefined)
-              )?.value
-            ) ?? answered)
-          : answered
-      const state = submission?.dispatchState
-      return {
-        kind: 'sent',
-        state: state === 'accepted' ? 'accepted' : state === 'rejected' ? 'rejected' : 'unknown'
+      })
+      switch (outcome.kind) {
+        case 'refused':
+          return outcome.refusal.code === AGENT_SESSION_NOT_ATTACHED.code
+            ? { kind: 'unattached' }
+            : { kind: 'sent', state: 'rejected' }
+        case 'queued':
+          return { kind: 'queued' }
+        case 'sent': {
+          // `pending` is not yet an acknowledgement; only `accepted` may consume mail. A send still
+          // pending after the wait parks for the next journal edge.
+          const state = outcome.submission?.dispatchState
+          return {
+            kind: 'sent',
+            state: state === 'accepted' ? 'accepted' : state === 'rejected' ? 'rejected' : 'unknown'
+          }
+        }
       }
     }
   }

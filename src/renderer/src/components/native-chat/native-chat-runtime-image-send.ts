@@ -10,6 +10,8 @@ import {
   NATIVE_CHAT_SUBMIT
 } from './native-chat-send'
 import { enqueueNativeChatPtySend } from './native-chat-pty-send-queue'
+import { formatImageDropPasteText } from '../terminal-pane/terminal-drop-image-path'
+import { isTerminalDropWindowsPathLike } from '../terminal-pane/terminal-drop-shell'
 import {
   clearConfirmDurationMs,
   clearThenWrite,
@@ -21,6 +23,17 @@ import { sendNativeChatMessage, type NativeChatSendHandle } from './native-chat-
 export const NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS = 300
 
 type RuntimeSettings = ReturnType<typeof getSettingsForAgentTabRuntimeOwner>
+
+/** The path text an agent detects as an image. One with spaces or shell characters is escaped as a
+ *  terminal image drop is, which agent TUIs undo before checking the file exists. */
+export function agentImagePastePath(agent: AgentType, path: string): string {
+  const formatted = formatAgentImagePath(agent, path)
+  if (formatted !== path) {
+    return formatted
+  }
+  const targetShell = isTerminalDropWindowsPathLike(path) ? 'windows' : 'posix'
+  return formatImageDropPasteText(path, targetShell) ?? path
+}
 
 export function sendNativeChatMessageWithImageAttachments(
   agent: AgentType,
@@ -37,7 +50,7 @@ export function sendNativeChatMessageWithImageAttachments(
   if (options?.onWriteRejected) {
     const writes = agentImagePasteWrites(
       agent,
-      imagePaths.map((path) => buildNativeChatImagePasteBytes(formatAgentImagePath(agent, path))),
+      imagePaths.map((path) => buildNativeChatImagePasteBytes(agentImagePastePath(agent, path))),
       trimmedText.length > 0
     ).map((data) => ({ data, delayBeforeMs: 0 }))
     if (trimmedText) {
@@ -67,7 +80,7 @@ export function sendNativeChatMessageWithImageAttachments(
         for (const payload of agentImagePasteWrites(
           agent,
           imagePaths.map((path) =>
-            buildNativeChatImagePasteBytes(formatAgentImagePath(agent, path))
+            buildNativeChatImagePasteBytes(agentImagePastePath(agent, path))
           ),
           trimmedText.length > 0
         )) {

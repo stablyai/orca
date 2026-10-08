@@ -25,9 +25,7 @@ import { readProfileStateRevision } from './profile-state-revision'
 import { readProfileStateJsonAcceptance } from './legacy-json/profile-state-json-acceptance'
 
 export {
-  acceptProfileStateJsonCompatibility,
   readProfileStateJsonAcceptance,
-  stageProfileStateJsonCompatibility,
   type ProfileStateJsonAcceptance
 } from './legacy-json/profile-state-json-acceptance'
 

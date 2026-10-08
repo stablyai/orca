@@ -142,6 +142,17 @@ describe('large Markdown preview documents', () => {
     ).toBe(false)
   })
 
+  it('keeps code searchable when syntax expansion alone exceeds the node budget', async () => {
+    const engine = new MarkdownPreviewDocumentEngine()
+    engine.load(`\`\`\`javascript\n${'const needle = 42;\n'.repeat(900)}\`\`\``)
+    const block = engine.blocks([0])[0]
+    expect(block.oversized).toBe(false)
+    expect(countMarkdownPreviewNodes(block.tree, MARKDOWN_PREVIEW_BLOCK_MAX_NODES)).toBeLessThan(
+      MARKDOWN_PREVIEW_BLOCK_MAX_NODES
+    )
+    expect((await engine.search('const needle'))?.matches).toHaveLength(900)
+  })
+
   it('rejects giant atomic blocks and excessive input without attempting a full DOM', () => {
     const engine = new MarkdownPreviewDocumentEngine()
     engine.load(`\`\`\`javascript\n${'const value = 3;\n'.repeat(10_000)}\`\`\``)

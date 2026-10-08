@@ -13,7 +13,6 @@ const {
   spawnMock,
   childStdinEndMock,
   resolveAuthorizedPathMock,
-  authorizeExternalPathMock,
   fsAccessMock,
   fsLstatMock,
   fsMkdirMock,
@@ -50,7 +49,6 @@ const {
     return child
   }),
   resolveAuthorizedPathMock: vi.fn(),
-  authorizeExternalPathMock: vi.fn(),
   fsAccessMock: vi.fn(),
   fsLstatMock: vi.fn(),
   fsMkdirMock: vi.fn(),
@@ -86,16 +84,13 @@ vi.mock('node:fs/promises', () => ({
   stat: fsStatMock,
   realpath: vi.fn(), // unused here; only satisfies filesystem-path-containment's named import
   writeFile: fsWriteFileMock,
-  default: {
-    writeFile: fsWriteFileMock
-  }
+  default: { writeFile: fsWriteFileMock, mkdir: fsMkdirMock }
 }))
 
 vi.mock('../ipc/filesystem-auth', () => ({
   PATH_ACCESS_DENIED_MESSAGE:
     'Access denied: path resolves outside allowed directories. If this blocks a legitimate workflow, please file a GitHub issue.',
-  resolveAuthorizedPath: resolveAuthorizedPathMock,
-  authorizeExternalPath: authorizeExternalPathMock
+  resolveAuthorizedPath: resolveAuthorizedPathMock
 }))
 
 vi.mock('node:crypto', () => ({
@@ -321,7 +316,7 @@ describe('registerClipboardHandlers', () => {
     ).resolves.toEqual({ ok: true })
 
     expect(fsStatMock).toHaveBeenCalledWith('/tmp/copied-file.txt')
-    expect(resolveAuthorizedPathMock).toHaveBeenCalledWith('/tmp/copied-file.txt', {})
+    expect(resolveAuthorizedPathMock.mock.calls[0]?.[0]).toBe('/tmp/copied-file.txt')
     if (process.platform === 'darwin') {
       expect(clipboardWriteBufferMock).toHaveBeenCalledWith(
         'public.file-url',

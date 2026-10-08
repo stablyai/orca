@@ -84,7 +84,9 @@ export abstract class RemoteRuntimeTerminalBinarySnapshots extends RemoteRuntime
               kittyKeyboardFlags: info?.kittyKeyboardFlags,
               alternateScreen: info?.alternateScreen,
               terminalOwner: info?.terminalOwner,
-              pendingEscapeTailAnsi: info?.pendingEscapeTailAnsi
+              pendingEscapeTailAnsi: info?.pendingEscapeTailAnsi,
+              // The host folds the normal buffer into `data` (see terminal-snapshot-publication.ts).
+              carriesNormalBuffer: true
             }
           })
           clearPendingSnapshotRequest(stream)

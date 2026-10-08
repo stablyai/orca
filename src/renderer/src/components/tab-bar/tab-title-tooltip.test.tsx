@@ -134,14 +134,6 @@ vi.mock('@/components/editor/markdown-preview-controls', () => ({
   canOpenMarkdownPreview: () => false
 }))
 
-vi.mock('@/lib/local-path-open-guard', () => ({
-  showLocalPathOpenBlockedToast: vi.fn()
-}))
-
-vi.mock('./editor-tab-local-open-guard', () => ({
-  shouldBlockEditorTabLocalOpen: () => false
-}))
-
 function makeDragData(tabType: TabDragItemData['tabType'], visibleTabId: string): TabDragItemData {
   return {
     kind: 'tab',

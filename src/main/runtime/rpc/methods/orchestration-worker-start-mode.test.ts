@@ -87,12 +87,17 @@ describe('a structured default this dispatch cannot honour', () => {
     expect(decide({ params: { agent: 'codex', worktree: 'current' } }).mode).toBe('structured')
   })
 
-  it('falls back rather than dropping a custom TUI launch the session cannot apply', () => {
-    expect(
-      decide({
-        settings: { ...STRUCTURED_DEFAULT, agentCmdOverrides: { claude: 'claude-wrapper' } }
-      })
-    ).toMatchObject({ mode: 'terminal', reason: 'tui_launch_command' })
+  // A custom launch command never decides the surface; native chat runs it as the program.
+  it.each([
+    ['claude', 'claude-wrapper'],
+    ['codex', 'codex-nightly']
+  ] as const)('keeps a %s worker structured with launch command %s', (agent, command) => {
+    const settings = { ...STRUCTURED_DEFAULT, agentCmdOverrides: { [agent]: command } }
+    expect(decide({ params: { agent }, settings })).toMatchObject({
+      mode: 'structured',
+      preferred: 'structured',
+      reason: 'user_default'
+    })
   })
 })
 

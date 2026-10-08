@@ -65,6 +65,16 @@ export function nodeGypRebuildInvocation(
   }
 }
 
+export function nodeGypRebuildTimeoutMs(
+  moduleName,
+  { platform = process.platform, arch = process.arch, ci = process.env.CI } = {}
+) {
+  // Cold headers and toolchain discovery consumed over four minutes on Windows ARM CI.
+  return moduleName === 'node-pty' && platform === 'win32' && arch === 'arm64' && ci === 'true'
+    ? 600_000
+    : 300_000
+}
+
 /** The binary the addon actually loads. */
 export function windowsProcessTreeAddonPath(packageDir = WINDOWS_PROCESS_TREE_PACKAGE_DIR) {
   return join(packageDir, 'build', 'Release', 'windows_process_tree.node')

@@ -56,6 +56,10 @@ export type AgentSessionDeltaCoalescer = {
   dispose: () => void
   /** Bounded last-known state for terminalizing a rejected completion. */
   snapshot: (key: string) => AgentSessionDeltaSnapshot | null
+  /** Streams with text not yet emitted, in arrival order, for a caller that writes them itself. */
+  dirty: () => { key: string; snapshot: AgentSessionDeltaSnapshot }[]
+  /** The caller wrote this stream's current text itself; nothing is owed until it grows. */
+  markFlushed: (key: string) => void
 }
 
 function defaultSchedule(run: () => void, ms: number): () => void {
@@ -215,6 +219,27 @@ export function createAgentSessionDeltaCoalescer(
             truncated: stream.truncated
           }
         : null
+    },
+    dirty: () =>
+      [...streams].flatMap(([key, stream]) =>
+        stream.dirty
+          ? [
+              {
+                key,
+                snapshot: {
+                  text: stream.chunks.join(''),
+                  observedBytes: stream.observedBytes,
+                  truncated: stream.truncated
+                }
+              }
+            ]
+          : []
+      ),
+    markFlushed: (key) => {
+      const stream = streams.get(key)
+      if (stream) {
+        stream.dirty = false
+      }
     }
   }
 }

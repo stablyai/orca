@@ -10,6 +10,7 @@ export function getStatusPluginPostSource(hookPathname: string): string[] {
     '  if (!coords.port || !coords.token || !paneKey) return false;',
     '  const tmuxMatch = /^(.*),[0-9]+,[0-9]+$/.exec(process.env.TMUX || "");',
     '  const tmuxPane = process.env.TMUX_PANE;',
+    '  if (reportingOpenCodeTui && coords.openCodeTui !== "1") return false;',
     `  const url = \`http://127.0.0.1:\${coords.port}${hookPathname}\`;`,
     '  const body = JSON.stringify({',
     '    paneKey,',
@@ -21,6 +22,8 @@ export function getStatusPluginPostSource(hookPathname: string): string[] {
     '    version: coords.version,',
     // opencodeMajor is set only by the OpenCode 2 setup() path, never read from OpenCode's version.
     '    ...(reportingOpenCodeMajor ? { opencodeMajor: reportingOpenCodeMajor } : {}),',
+    '    ...(reportingOpenCodeTui ? { opencodeTui: 1 } : {}),',
+    '    ...(reportingOpenCodeMajor < 2 && isOpenCodeCommandProcess("serve") && coords.openCodeTui === "1" ? { opencodeSharedServer: 1 } : {}),',
     '    payload: { hook_event_name: hookEventName, ...(extraProperties || {}) },',
     '  });',
     '  const controller = new AbortController();',

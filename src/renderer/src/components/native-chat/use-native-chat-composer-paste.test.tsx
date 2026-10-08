@@ -269,6 +269,17 @@ describe('useNativeChatComposerPaste', () => {
     }
   )
 
+  it('saves a local paste where its draft can bring it back after a restart', async () => {
+    mocks.saveClipboardImageAsTempFile.mockResolvedValue(
+      '/Users/me/Library/Application Support/orca/native-chat-pastes/orca-paste-1.png'
+    )
+    const probe = await renderProbe({ resolveAttachmentOwner: () => ({ kind: 'local' }) })
+    await act(async () => {
+      probe.latest().handlePaste(imagePasteEvent())
+    })
+    expect(mocks.saveClipboardImageAsTempFile).toHaveBeenCalledWith({ forNativeChatDraft: true })
+  })
+
   it('saves on the SSH host and settles the chip on the returned remote path', async () => {
     mocks.saveClipboardImageAsTempFile.mockResolvedValue('/remote/tmp/orca-paste-1.png')
     const store = createChipStore()

@@ -16,6 +16,7 @@ export type MarkdownPreviewBlock = {
   estimate: number
   anchors: string[]
   sourceLine: number | null
+  sourceColumn?: number
   sourceEndLine: number | null
 }
 export type MarkdownPreviewDocument = {

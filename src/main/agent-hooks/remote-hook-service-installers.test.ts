@@ -19,12 +19,13 @@ import { GeminiHookService } from '../gemini/hook-service'
 import { AntigravityHookService } from '../antigravity/hook-service'
 import { AmpHookService } from '../amp/hook-service'
 import { ClaudeHookService, claudeHookService } from '../claude/hook-service'
-import { openClaudeHookService } from '../openclaude/hook-service'
 import { GrokHookService } from '../grok/hook-service'
 import { CopilotHookService } from '../copilot/hook-service'
 import { HermesHookService } from '../hermes/hook-service'
 import { DevinHookService } from '../devin/hook-service'
 import { KimiHookService } from '../kimi/hook-service'
+import { JcodeHookService } from '../jcode/hook-service'
+import { openClaudeHookService } from '../openclaude/hook-service'
 import {
   installRemoteManagedAgentHooks,
   REMOTE_MANAGED_HOOK_INSTALLER_AGENTS
@@ -183,6 +184,10 @@ describe('remote hook service installers', () => {
         {
           path: '/home/dev/.orca/agent-hooks/devin-hook.sh',
           install: (sftp: SFTPWrapper) => new DevinHookService().installRemote(sftp, '/home/dev')
+        },
+        {
+          path: '/home/dev/.orca/agent-hooks/jcode-hook.sh',
+          install: (sftp: SFTPWrapper) => new JcodeHookService().installRemote(sftp, '/home/dev')
         },
         {
           path: '/home/dev/.orca/agent-hooks/droid-hook.sh',
@@ -711,7 +716,6 @@ describe('remote hook service installers', () => {
     expect(settings.hooks.TeammateIdle).toBeUndefined()
     expect(fs.files.get('/home/dev/.orca/agent-hooks/qoder-hook.sh')).toContain('/hook/qoder')
   })
-
   it('installs Droid and Copilot when running the aggregate remote installer (issue #7253)', async () => {
     const { sftp } = createFakeSftp()
     const results = await installRemoteManagedAgentHooks(sftp, '/home/dev', {

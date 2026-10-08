@@ -28,7 +28,7 @@ it('warms the same Linux Node runtime the PR shards restore', () => {
   const install = arm.steps.find(
     (step) => step.uses === './.github/actions/install-node-dependencies'
   )
-  const primer = readWorkflow('pr').jobs.static_analysis
+  const primer = readWorkflow('pr').jobs.preflight
   expect(arm['runs-on']).toBe(primer['runs-on'])
   expect(arm.steps.at(-1).run).toBe('node config/scripts/ensure-native-runtime.mjs --check-only')
   expect(install.with).toMatchObject(primer.steps.find((step) => step.uses === install.uses).with)
@@ -51,7 +51,7 @@ it('populates shared Electron archives on both Linux architectures without chang
 
 it('publishes incremental state under a key and prefix that new PRs restore', () => {
   const cache = steps.find((step) => step.id === 'typecheck-cache')
-  const prCache = readWorkflow('pr').jobs.typecheck.steps.find((step) => step.name === cache.name)
+  const prCache = readWorkflow('pr').jobs.preflight.steps.find((step) => step.name === cache.name)
   expect(cache.with.path).toBe(prCache.with.path)
   expect(cache.with['restore-keys']).toBe(prCache.with['restore-keys'])
   expect(cache.with.key).toBe(
@@ -83,6 +83,18 @@ it('lets scheduled warmers wait while pushes, PR updates, and manual runs can re
     group: 'ci-cache-warmup-${{ github.event.pull_request.number || github.ref }}',
     'cancel-in-progress': "${{ github.event_name != 'schedule' }}"
   })
+})
+
+it('keeps compiler changes validated without starting warmers for test-only edits', () => {
+  for (const event of ['push', 'pull_request']) {
+    const paths = workflow.on[event].paths
+    expect(paths).toContain('config/scripts/headless-detector-compiler-cache.mjs')
+    expect(paths).not.toContain('config/scripts/headless-detector-compiler-cache*')
+    expect(paths).not.toContain('config/scripts/headless-detector-compiler-cache.test.mjs')
+    expect(paths).not.toContain('config/scripts/ci-cache-warmup-workflow.test.mjs')
+    expect(paths).toContain('.github/workflows/ci-cache-warmup.yml')
+    expect(paths).toContain('.github/actions/prepare-headless-compiler/**')
+  }
 })
 
 it('warms and probes both Windows images with the persistence job runtime', () => {

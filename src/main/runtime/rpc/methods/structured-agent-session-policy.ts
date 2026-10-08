@@ -1,6 +1,10 @@
 import {
+  CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+  PI_STRUCTURED_DIALOGS_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+  STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+  type RuntimeCapability
 } from '../../../../shared/protocol-version'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcContext } from '../core'
@@ -19,6 +23,52 @@ export function supportsStructuredAgentSessions(
     context.clientKind === undefined ||
     context.clientCapabilities?.includes(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY) === true
   )
+}
+
+/** One audience rule for tabs and restart offers. Pi also needs dialog-shape support. */
+export function clientRendersStructuredAgent(
+  clientCapabilities: readonly RuntimeCapability[] | undefined,
+  agent: string
+): boolean {
+  if (!clientCapabilities?.includes(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)) {
+    return false
+  }
+  if (agent === 'codex') {
+    return true
+  }
+  if (agent === 'pi' && !clientCapabilities.includes(PI_STRUCTURED_DIALOGS_RUNTIME_CAPABILITY)) {
+    return false
+  }
+  return clientCapabilities.includes(
+    agent === 'claude'
+      ? CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+      : STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
+  )
+}
+
+/** Preserve the existing session audience for every agent except Pi. */
+export function clientReadsStructuredSessionAgent(
+  context: Pick<RpcContext, 'clientCapabilities' | 'clientKind'>,
+  agent: string
+): boolean {
+  return (
+    agent !== 'pi' ||
+    context.clientKind === undefined ||
+    clientRendersStructuredAgent(context.clientCapabilities, agent)
+  )
+}
+
+/** The agents this client reads rows of, among those registered or saved here; undefined when it
+ *  reads every one, so an action for it is exactly the unscoped one (one fence for every offer). */
+export function structuredAgentsReadBy(
+  context: Pick<RpcContext, 'clientCapabilities' | 'clientKind'>,
+  agents: readonly string[]
+): ((agent: string) => boolean) | undefined {
+  if (context.clientKind === undefined) {
+    return undefined
+  }
+  const reads = (agent: string) => clientRendersStructuredAgent(context.clientCapabilities, agent)
+  return agents.every(reads) ? undefined : reads
 }
 
 /**

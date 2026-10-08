@@ -1,3 +1,4 @@
+import { throwIfSignalAborted } from '../shared/abort-signal-reason'
 import { annotateWorktreeLocksFromAdmin } from '../shared/git-worktree-admin'
 import * as path from 'node:path'
 import type { RequestContext } from './dispatcher'
@@ -67,7 +68,10 @@ export class GitHandlerWorktreeOperations extends GitHandlerOperationContext {
     }
   }
 
-  private async readRepoLocation(repoPath: string): Promise<RelayRepoLocation | undefined> {
+  private async readRepoLocation(
+    repoPath: string,
+    signal?: AbortSignal
+  ): Promise<RelayRepoLocation | undefined> {
     try {
       return await this.gitCapabilities.runWithFallback(
         'rev-parse-path-format',
@@ -80,7 +84,8 @@ export class GitHandlerWorktreeOperations extends GitHandlerOperationContext {
               '--git-common-dir',
               '--git-dir'
             ],
-            repoPath
+            repoPath,
+            { signal }
           )
           if (hasUnsupportedRevParsePathFormatEcho(stdout)) {
             // Why: old Git echoes the unknown option and exits zero; remember the signal though the paths still parse.
@@ -91,21 +96,25 @@ export class GitHandlerWorktreeOperations extends GitHandlerOperationContext {
         async () => {
           const { stdout } = await this.git(
             ['rev-parse', '--show-toplevel', '--git-common-dir', '--git-dir'],
-            repoPath
+            repoPath,
+            { signal }
           )
           return parseRelayRepoLocation(repoPath, stdout)
         },
         isUnsupportedRevParsePathFormatError
       )
     } catch {
+      throwIfSignalAborted(signal)
       return undefined
     }
   }
 
   private async normalizeMainWorktreePath(
     repoPath: string,
-    worktrees: GitWorktreeInfo[]
+    worktrees: GitWorktreeInfo[],
+    signal?: AbortSignal
   ): Promise<GitWorktreeInfo[]> {
+    throwIfSignalAborted(signal)
     const mainIndex = worktrees.findIndex((worktree) => worktree.isMainWorktree === true)
     const mainWorktree = worktrees[mainIndex]
     const mainPath = mainWorktree?.path ?? ''
@@ -115,7 +124,8 @@ export class GitHandlerWorktreeOperations extends GitHandlerOperationContext {
       return worktrees
     }
 
-    const location = await this.readRepoLocation(resolvedRepoPath)
+    const location = await this.readRepoLocation(resolvedRepoPath, signal)
+    throwIfSignalAborted(signal)
     if (!location) {
       return worktrees
     }
@@ -144,7 +154,8 @@ export class GitHandlerWorktreeOperations extends GitHandlerOperationContext {
         })
         return this.normalizeMainWorktreePath(
           repoPath,
-          parseWorktreeList(stdout, { nulDelimited: true })
+          parseWorktreeList(stdout, { nulDelimited: true }),
+          context?.signal
         )
       },
       async () => {
@@ -154,12 +165,17 @@ export class GitHandlerWorktreeOperations extends GitHandlerOperationContext {
         const { stdout } = await this.git(['worktree', 'list', '--porcelain'], repoPath, {
           signal: context?.signal
         })
-        const normalized = await this.normalizeMainWorktreePath(repoPath, parseWorktreeList(stdout))
+        const normalized = await this.normalizeMainWorktreePath(
+          repoPath,
+          parseWorktreeList(stdout),
+          context?.signal
+        )
         // Why: Git <2.31 emits no `prunable` annotation, so probe each linked worktree's existence instead of trusting stale registrations (issue #8389).
         return annotatePrunableWorktreesByExistence(
           await annotateWorktreeLocksFromAdmin(expandTilde(repoPath), normalized, {
             signal: context?.signal
-          })
+          }),
+          context?.signal
         )
       },
       isUnsupportedWorktreeListZError

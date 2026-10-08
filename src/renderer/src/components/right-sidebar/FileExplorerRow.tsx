@@ -16,7 +16,7 @@ import { RENAME_HOTSPOT_ATTR } from './file-explorer-dir-toggle-timing'
 import type { TreeNode } from './file-explorer-types'
 import { useFileExplorerRowDrag } from './useFileExplorerRowDrag'
 import { translate } from '@/i18n/i18n'
-import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/components/tab-bar/SortableTab'
+import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 import { createMultiSelectDragGhost } from './file-explorer-multi-drag-image'
 import { FileExplorerRowContextMenu } from './file-explorer-row-context-menu'
@@ -149,7 +149,8 @@ export function FileExplorerRow({
           )}
           style={{ paddingLeft: `${(node.depth - displayDepthOffset) * 16 + 8}px` }}
           ref={setRowDragNode}
-          data-native-file-drop-dir={rowDropDir}
+          // Why: the explorer's OS-drop owner reads the target folder from this at drop time.
+          data-file-explorer-drop-dir={rowDropDir}
           // Why: marks this draggable row so the wheel-capture handler can rescue
           // scroll Chromium swallows over draggable nodes (file-explorer-drag-scroll-marker).
           data-explorer-draggable="true"

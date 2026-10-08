@@ -51,9 +51,6 @@ export function registerTerminalRequestIpcBridge(unsubs: (() => void)[]): void {
         const shouldActivate = terminalPresentation === 'focused'
         const shouldSurfaceOwner =
           terminalPresentation !== 'background' && data.surfaceOwner !== false
-        if (shouldActivate) {
-          activateTerminalInitiatedWorktree(store, worktreeId)
-        }
         // Why: the paired launch client already resolved the mode, so its choice wins over the host renderer's local default.
         const tabOptions = data.launchAgent
           ? {
@@ -92,6 +89,8 @@ export function registerTerminalRequestIpcBridge(unsubs: (() => void)[]): void {
           }
         }
         if (shouldActivate) {
+          // After the tab lands: activating prunes the workspace's empty groups, the requested one too.
+          activateTerminalInitiatedWorktree(store, worktreeId, [tab.id])
           store.setActiveTabType('terminal', worktreeId)
           store.setActiveTab(tab.id)
         }

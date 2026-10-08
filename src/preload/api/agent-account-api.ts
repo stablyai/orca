@@ -34,8 +34,6 @@ export type CodexAccountsApi = {
       ptyId: string
       launchAccountId: string | null
       activeAccountId: string | null
-      /** Optional for compatibility with a pre-reason main process. */
-      reason?: 'account-change' | 'home-route-change'
     }[]
   >
   /** The selection lane each PTY launched from, keyed by pty id; unrecorded panes are absent. */

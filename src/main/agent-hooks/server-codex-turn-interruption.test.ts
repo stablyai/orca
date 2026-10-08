@@ -85,16 +85,22 @@ describe('Codex recorded turn interruption', () => {
         expect(server.getStatusSnapshot()[0]).toEqual(beforeSide)
       }
       const baseline = server.getStatusSnapshot()[0]
-      expect(
-        server.inferInterrupt({
-          paneKey: PANE,
-          baselineUpdatedAt: baseline.receivedAt,
-          baselineStateStartedAt: baseline.stateStartedAt,
-          baselinePrompt: baseline.prompt,
-          baselineAgentType: 'codex',
-          intent: 'ctrl-c'
-        })
-      ).toBe(false)
+      for (const intent of ['ctrl-c', 'plain-escape'] as const) {
+        for (const inputCount of [1, 2]) {
+          expect(
+            server.inferInterrupt({
+              paneKey: PANE,
+              baselineUpdatedAt: baseline.receivedAt,
+              baselineStateStartedAt: baseline.stateStartedAt,
+              baselinePrompt: baseline.prompt,
+              baselineAgentType: 'codex',
+              intent,
+              inputCount
+            })
+          ).toBe(false)
+          expect(server.getStatusSnapshot()[0]).toEqual(baseline)
+        }
+      }
       await new Promise((resolve) => setTimeout(resolve, 600))
       expect(server.getStatusSnapshot()[0].state).toBe('working')
       appendFileSync(

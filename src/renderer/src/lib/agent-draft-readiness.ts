@@ -28,6 +28,7 @@ export function waitForAgentDraftInputReady(
     let settled = false
     const scanner = createDraftPasteReadyScanner(readySignal)
     let quietTimer: number | null = null
+    let graceTimer: number | null = null
     let hardTimer: number | null = null
     let unsubscribe: (() => void) | null = null
 
@@ -42,6 +43,9 @@ export function waitForAgentDraftInputReady(
       if (quietTimer !== null) {
         window.clearTimeout(quietTimer)
       }
+      if (graceTimer !== null) {
+        window.clearTimeout(graceTimer)
+      }
       unsubscribe?.()
       resolve(value)
     }
@@ -54,10 +58,16 @@ export function waitForAgentDraftInputReady(
     }
 
     const observeData = (data: string): void => {
-      const { ready, armQuietTimer: shouldArm } = scanner.observe(data)
+      const { ready, armQuietTimer: shouldArm, readyAfterMs } = scanner.observe(data)
       if (ready) {
         finish(true)
         return
+      }
+      if (readyAfterMs === null && graceTimer !== null) {
+        window.clearTimeout(graceTimer)
+        graceTimer = null
+      } else if (typeof readyAfterMs === 'number' && graceTimer === null) {
+        graceTimer = window.setTimeout(() => finish(true), readyAfterMs)
       }
       if (shouldArm) {
         armQuietTimer()
@@ -87,7 +97,8 @@ export function waitForAgentDraftInputReady(
     }
 
     if (!settled) {
-      hardTimer = window.setTimeout(() => finish(false), timeoutMs)
+      // A pending grace means the box was seen: take it, as the box rule would have.
+      hardTimer = window.setTimeout(() => finish(graceTimer !== null), timeoutMs)
     }
   })
 }

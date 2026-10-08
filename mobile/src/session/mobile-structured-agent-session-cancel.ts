@@ -1,7 +1,7 @@
 import type { AgentSessionCancelResult } from '../../../src/shared/agent-session-wire'
 import type { AgentJournalRenderItem } from '../../../src/shared/agent-session-journal-types'
 import type { StructuredAgentSessionState } from '../../../src/shared/structured-agent-session-reducer'
-import { activeStructuredAgentSessionTurnId } from '../../../src/shared/structured-agent-session-live-turn'
+import { runningStructuredAgentSessionTurnId } from '../../../src/shared/structured-agent-session-live-turn'
 import type { RpcClient } from '../transport/rpc-client'
 import {
   requestStructuredAgentSessionMutation,
@@ -37,7 +37,7 @@ export async function requestMobileStructuredAgentSessionCancel(args: {
 }): Promise<boolean> {
   const { client, enabled, inFlight, onSendError, sessionId, stateRef } = args
   const current = stateRef.current
-  const turnId = activeStructuredAgentSessionTurnId(current.items)
+  const turnId = runningStructuredAgentSessionTurnId(current)
   if (!client || !sessionId || !enabled || current.fence === null || !turnId) {
     onSendError('Stop not sent')
     return false

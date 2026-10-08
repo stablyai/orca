@@ -5,7 +5,7 @@ import {
   runtimeWorktreeIdsEqual
 } from './runtime-worktree-path-identity'
 import { makePaneKey } from '../../shared/stable-pane-id'
-import { terminalLayoutContainsLeaf } from './headless-terminal-split-layout'
+import { terminalLayoutContainsLeaf } from '../../shared/workspace-session-pane-ownership'
 import type {
   AgentTeamsTmuxCompatRequest,
   AgentTeamsTmuxCompatResponse

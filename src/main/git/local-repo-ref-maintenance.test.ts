@@ -100,13 +100,13 @@ describe('local repo ref maintenance target', () => {
     await expect(target().isOptedOut?.(NO_ABORT)).resolves.toBe(false)
   })
 
-  it('fails closed when the auto-maintenance config cannot be read', async () => {
+  it('reports unreadable auto-maintenance config without claiming a user opt-out', async () => {
     for (const error of [
       new Error('spawn failed'),
       Object.assign(new Error('bad config'), { code: 128 })
     ]) {
       gitExecFileAsyncMock.mockRejectedValue(error)
-      await expect(target().isOptedOut?.(NO_ABORT)).resolves.toBe(true)
+      await expect(target().isOptedOut?.(NO_ABORT)).rejects.toBe(error)
     }
   })
 

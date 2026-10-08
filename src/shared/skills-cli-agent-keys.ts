@@ -58,7 +58,8 @@ export const SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT = {
   muse: null,
   zcode: 'zcode',
   // Why: DSH ships skills as Cordis plugins, not a `skills --agent` target.
-  dsh: null
+  dsh: null,
+  jcode: null
 } satisfies Record<TuiAgent, string | null>
 
 /**

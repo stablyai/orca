@@ -1,19 +1,22 @@
+import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
 import { AgentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import type { SubscriberFieldHooks } from './agent-session-subscriber-frame-fields'
 import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
-import { tryReadQueuePublication } from './structured-agent-session-queued-publication'
+import {
+  structuredQueueSendGate,
+  tryReadQueuePublication
+} from './structured-agent-session-queued-publication'
 import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession
 } from './structured-agent-session-host-types'
 import { AGENT_SESSION_NOT_ATTACHED } from './structured-agent-session-mutation-admission'
 import { StructuredAgentSessionSendSettlement } from './structured-agent-session-send-settlement'
-import {
-  createStructuredAgentSessionHostStatusFeed,
-  type StructuredAgentSessionStatusSubscriber
-} from './structured-agent-session-status-feed'
+import type { StructuredAgentSessionStatusSubscriber } from './structured-agent-session-status-feed'
+import { createStructuredAgentSessionHostStatusFeed } from './structured-agent-session-host-status-feed'
 import {
   StructuredAgentSessionTurnCompletionFeed,
   type StructuredAgentSessionTurnCompletionSubscriber
@@ -32,22 +35,25 @@ export class StructuredAgentSessionClientDelivery {
     private readonly sessions: Map<string, StructuredAgentSessionHostSession>,
     now: () => number,
     private readonly deps: () => StructuredAgentSessionHostDeps,
-    private readonly onJournalActivity?: (sessionId: string) => void,
-    onAgentStarted?: (sessionId: string) => void,
+    private readonly onJournalActivity: (sessionId: string) => void,
+    onAgentStarted: (sessionId: string) => void,
     /** A session's child records changed; the chat strip republishes from them. */
-    onChildWorkChanged?: (sessionId: string) => void
+    onChildWorkChanged: (sessionId: string) => void,
+    // Required: an opening frame without the roster reads as "no tasks" to current clients.
+    readBackgroundTasks: NonNullable<SubscriberFieldHooks['readBackgroundTasks']>
   ) {
     this.statusFeed = createStructuredAgentSessionHostStatusFeed({
       sessions,
       now,
       deps,
-      ...(onAgentStarted ? { onAgentStarted } : {}),
-      ...(onChildWorkChanged ? { onChildWorkChanged } : {})
+      onAgentStarted,
+      onChildWorkChanged
     })
     this.turnCompletionFeed = new StructuredAgentSessionTurnCompletionFeed({
       sessions,
       now,
-      readStatusState: (sessionId, journal) => this.statusFeed.statusState(sessionId, journal)
+      readStatusState: (sessionId, journal) =>
+        this.statusFeed.journalProjection(sessionId, journal)?.state ?? null
     })
     this.sendSettlement = new StructuredAgentSessionSendSettlement((sessionId) =>
       this.requireJournal(sessionId)
@@ -56,7 +62,11 @@ export class StructuredAgentSessionClientDelivery {
     this.subscribers = new AgentSessionSubscribers({
       readCommands: (sessionId) => this.readCommands(sessionId),
       readQueuePublication: (sessionId) =>
-        tryReadQueuePublication(sessions.get(sessionId)?.journal),
+        tryReadQueuePublication(
+          sessions.get(sessionId)?.journal,
+          structuredQueueSendGate(this.deps().store, sessionId)
+        ),
+      readBackgroundTasks,
       onJournalPublished: (sessionId, journal) => this.publishJournal(sessionId, journal)
     })
   }
@@ -81,8 +91,17 @@ export class StructuredAgentSessionClientDelivery {
 
   publishStatus = (sessionId: string): void => this.statusFeed.publish(sessionId)
 
+  publishConversationName = (sessionId: string): void =>
+    this.statusFeed.publishConversationName(sessionId)
+
   publishChildWork = (sessionId: string, evidence: AgentChildWorkEvidence[]): void =>
     this.statusFeed.publishChildWork(sessionId, evidence)
+
+  /** What the feed publishes as `stopping`: only a working session is still being stopped. */
+  readStopping = (sessionId: string): boolean => {
+    const projection = this.statusFeed.journalProjection(sessionId)
+    return projection?.stopping === true && projection.state.summary.status === 'working'
+  }
 
   readChildWork = (sessionId: string): AgentChildWorkView[] | undefined =>
     this.statusFeed.readChildWork(sessionId)
@@ -95,12 +114,17 @@ export class StructuredAgentSessionClientDelivery {
     }
   }
 
-  publishRestored = (sessionId: string): void =>
+  publishRestored = (sessionId: string): void => {
     this.statusFeed.publish(sessionId, undefined, { replay: true })
+    this.turnCompletionFeed.observe(sessionId, undefined, { historical: true })
+  }
 
   subscribeStatus = (subscriber: StructuredAgentSessionStatusSubscriber): (() => void) =>
     this.statusFeed.subscribe(subscriber)
   forgetStatus = (sessionId: string): void => this.statusFeed.forget(sessionId)
+
+  readStatusSummary = (sessionId: string): AgentSessionStatusSummary | undefined =>
+    this.statusFeed.readPublished(sessionId)
 
   subscribeTurnCompletions = (
     subscriber: StructuredAgentSessionTurnCompletionSubscriber
@@ -131,7 +155,7 @@ export class StructuredAgentSessionClientDelivery {
     // subscribed, which is the whole reason a backgrounded chat can complete at all. After the
     // status publish, so it reads the projection that publish cached.
     this.turnCompletionFeed.observe(sessionId, journal)
-    this.onJournalActivity?.(sessionId)
+    this.onJournalActivity(sessionId)
   }
 
   private requireJournal(sessionId: string): AgentSessionJournal {

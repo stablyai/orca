@@ -11,6 +11,7 @@ import {
   type AgentJournalTurnOutcome
 } from './agent-session-journal-types'
 import { agentTurnLifecycleText } from './agent-turn-lifecycle-text'
+import { tuiAgentDisplayName } from './tui-agent-display-names'
 
 export function readAgentJournalTurn(
   body: AgentJournalItemBody | undefined
@@ -67,9 +68,7 @@ export function legacyAgentJournalTurnStatusBody(
   itemId: string,
   sessionAgent?: string | null
 ): AgentJournalStatusItem {
-  const agent =
-    (sessionAgent ?? (itemId.startsWith('legacy:claude:') ? 'claude' : 'codex')) === 'claude'
-      ? 'Claude'
-      : 'Codex'
-  return { kind: 'status', text: agentTurnLifecycleText(agent, turn.state), turnLifecycle: turn }
+  const agent = sessionAgent ?? /^legacy:([^:]+):/.exec(itemId)?.[1] ?? null
+  const name = agent === null ? 'Agent' : (tuiAgentDisplayName(agent) ?? agent)
+  return { kind: 'status', text: agentTurnLifecycleText(name, turn.state), turnLifecycle: turn }
 }

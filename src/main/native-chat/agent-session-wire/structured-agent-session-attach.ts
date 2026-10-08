@@ -5,15 +5,17 @@
 // the record store's compare-and-swap, which also owns the idempotency row, so
 // a retried attach replays instead of reserving a second owner.
 
-import type {
-  AgentSessionJournalIdentity,
-  AgentSessionProviderHandle
-} from '../../../shared/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
 import type {
-  AgentSessionHandleProvider,
+  StructuredAgentId,
   AgentSessionProviderHandleLink
 } from '../../../shared/agent-session-provider-handle'
+import {
+  agentSessionProviderHandleBelongsTo,
+  agentSessionProviderHandleFromWire,
+  type AgentSessionWireProviderHandle
+} from '../../../shared/agent-session-provider-handle-encoding'
 import { claudeProviderHandleLink } from '../../claude/claude-structured-owner-identity'
 import { codexProviderHandleLink } from '../../codex/codex-structured-owner-identity'
 import type {
@@ -54,8 +56,8 @@ import { structuredAgentSessionRefusalMessage } from './structured-agent-session
 export type AgentSessionAttachParams = {
   envelope: AgentSessionMutationEnvelope
   location: AgentSessionExecutionLocation
-  provider: AgentSessionHandleProvider
-  agent: AgentSessionHandleProvider
+  provider: StructuredAgentId
+  agent: StructuredAgentId
   accountHome: AgentSessionAccountHome
   /** Always `native`; kept on the params because the operation fingerprint covers it. */
   runtimeKind: 'native'
@@ -65,8 +67,9 @@ export type AgentSessionAttachParams = {
    *  attach fingerprint: which tab shows the chat is not which conversation it attaches to. */
   surfaceTabId?: string
   launchArgs?: string[]
-  /** Omitted only for create-by-intent; the adapter proves the durable handle. */
-  providerHandle?: Exclude<AgentSessionProviderHandle, { kind: 'opaque' }>
+  /** Omitted only for create-by-intent; the adapter proves the durable handle. In the wire's
+   *  form, because the attach fingerprint covers it as the client sent it. */
+  providerHandle?: AgentSessionWireProviderHandle
   /**
    * Host-resolved only. Present when this create adopts an existing provider conversation rather
    * than starting one: it seeds the handle chain so the adapter resumes instead of creating, and
@@ -76,7 +79,7 @@ export type AgentSessionAttachParams = {
    * without adopting — presence of a handle must never be what triggers a resume.
    */
   adopt?: {
-    providerHandle: Exclude<AgentSessionProviderHandle, { kind: 'opaque' }>
+    providerHandle: AgentSessionWireProviderHandle
     /** Omitted only when the exact committed operation replays an already-imported journal. */
     transcriptPath?: string
   }
@@ -84,6 +87,7 @@ export type AgentSessionAttachParams = {
 
 /** Host-supplied half of the reservation. */
 export type AgentSessionAttachAuthority = {
+  launchDirectory?: string
   spawnToken: string | (() => string)
   claimKeyId: string
   handoffOperationId: string | null
@@ -119,7 +123,24 @@ export function attachFingerprintFields(params: AgentSessionAttachParams): Recor
 export function admitAttachOrRefuse(
   params: AgentSessionAttachParams
 ): { ok: true; fingerprint: string } | { ok: false; refusal: AgentSessionWireRefusal } {
-  if (params.providerHandle && params.providerHandle.kind !== params.provider) {
+  // The start check judges the record's agent and the router starts `agent`'s adapter: one agent.
+  if (params.agent !== params.provider) {
+    return {
+      ok: false,
+      refusal: refuse(
+        'agent_session_operation_invalid',
+        { reason: 'requestMalformed' },
+        `A ${params.provider} session cannot be started as ${params.agent}.`
+      )
+    }
+  }
+  if (
+    params.providerHandle &&
+    !agentSessionProviderHandleBelongsTo(
+      agentSessionProviderHandleFromWire(params.providerHandle),
+      params.provider
+    )
+  ) {
     return {
       ok: false,
       refusal: refuse(
@@ -143,16 +164,9 @@ export function journalIdentityFor(
   params: AgentSessionAttachParams
 ): AgentSessionJournalIdentity {
   const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
-  const providerHandle: AgentSessionProviderHandle =
-    head?.handle.provider === 'codex'
-      ? { kind: 'codex', threadId: head.handle.threadId }
-      : head?.handle.provider === 'claude'
-        ? {
-            kind: 'claude',
-            sessionId: head.handle.sessionId,
-            leafUuid: head.handle.leafUuid
-          }
-        : (params.providerHandle ?? { kind: 'opaque', agent: params.agent, value: 'pending' })
+  const providerHandle =
+    head?.handle ??
+    (params.providerHandle ? agentSessionProviderHandleFromWire(params.providerHandle) : null)
   return {
     sessionId: record.sessionId,
     workspaceId: params.location.workspaceId,
@@ -265,7 +279,7 @@ async function reconcileAgainstProviderHistory(input: {
 const ADOPTED_HANDLE_FENCE = 1
 
 function adoptedProviderHandleLink(
-  handle: Exclude<AgentSessionProviderHandle, { kind: 'opaque' }>,
+  handle: AgentSessionWireProviderHandle,
   observedAt: number
 ): AgentSessionProviderHandleLink {
   return handle.kind === 'claude'
@@ -306,6 +320,7 @@ export function reserveRequestFor(input: {
       : {}),
     ...(authority.launchArgs ? { launchArgs: authority.launchArgs } : {}),
     ...(authority.launchEnv ? { launchEnv: authority.launchEnv } : {}),
+    ...(authority.launchDirectory ? { launchDirectory: authority.launchDirectory } : {}),
     ...(params.adopt
       ? {
           // Fence 1 is a new record's first, and the owner probe requires the head link to carry

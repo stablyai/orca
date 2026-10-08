@@ -1,4 +1,8 @@
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalRenderItem
+} from '../../../shared/agent-session-journal-types'
+import { withNativeChatCutTurnNotices } from '../../../shared/native-chat-cut-turn-notice'
 // A chat interrupted mid-turn by a restart, rebuilt on a fresh host over the same store, for the
 // restart-resume ownership and failure tests.
 
@@ -13,6 +17,7 @@ import type { AgentSessionRecordStore } from '../../runtime/agent-session-record
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import { parseAgentSessionResumeMarker } from '../../../shared/agent-session-resume-marker'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
+import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 import { StructuredAgentSessionResumeAdmission } from './structured-agent-session-restart-resume-runner'
@@ -35,6 +40,12 @@ import {
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { recordingProductionStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
+import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
+import type { StructuredAgentRegistry } from './structured-agent-registry'
+import { rotateStructuredAgentSessionHostInstanceForTests } from './structured-agent-session-queued-pause'
+
+/** What `interruptedRestart('queued-cards')` queues behind the running turn, in order. */
+export const QUEUED_BEFORE_QUIT = ['card A', 'card B'] as const
 
 /** Starts the agent explicitly — the attach a client's ensure makes — for a test that needs a
  *  running child before its next step. Nothing else starts one ahead of a send. */
@@ -50,12 +61,15 @@ export async function startAgent(state: {
 }
 
 export async function interruptedRestart(
-  work: 'turn' | 'submission' | 'send-after-reply' | 'children' = 'turn',
+  /** 'queued-cards': a running turn with `QUEUED_BEFORE_QUIT` queued behind it. */
+  work: 'turn' | 'submission' | 'send-after-reply' | 'children' | 'queued-cards' = 'turn',
   historyBoundaryConsistent = true,
   /** What the restarted host proves about the recorded owner; gone unless a test says otherwise. */
   probeOwner: NonNullable<StructuredAgentSessionHostDeps['probeOwner']> = async () => ({
     outcome: 'pid-absent'
-  })
+  }),
+  /** What the relaunched host registers; restart actions scope by it. */
+  agents: StructuredAgentRegistry = claudeAndCodexDeclared()
 ) {
   const previous = hostTestState()
   let children: AgentChildWorkView[] = []
@@ -120,13 +134,29 @@ export async function interruptedRestart(
     )
   }
   await previous.host.flushStreamedEvents(SESSION)
+  if (work === 'queued-cards') {
+    for (const text of QUEUED_BEFORE_QUIT) {
+      const body = hostTestMessage(text)
+      const fields = { body, delivery: 'queue-if-active' as const }
+      const queued = await previous.host.send(CALLER, {
+        envelope: envelope('agentSession.send', fields),
+        ...fields
+      })
+      expect(queued).toMatchObject({ ok: true, value: { queued: expect.anything() } })
+    }
+  }
   await previous.host.flushAllStreamedEvents()
+  if (work === 'queued-cards') {
+    // The relaunch is a new process: the cards it finds were written by the one that quit.
+    rotateStructuredAgentSessionHostInstanceForTests()
+  }
   const store = await openTestAgentSessionRecordStore(previous.root)
   const closeSession = vi.fn(async () => true)
   // The relaunch comes after the quit that recorded the offer.
   const clock = { now: NOW + 1 }
   const log = recordingProductionStructuredAgentSessionLogger()
   const host = new StructuredAgentSessionHost({
+    agents,
     logger: log.logger,
     store,
     adapter: {
@@ -160,10 +190,42 @@ export async function interruptedRestart(
   return { ...hostTestState(), host, store, log, closeSession, marker, clock }
 }
 
+/** The continuation's submission commits, then its send throws: a send Orca may have taken.
+ *  Install it right before the continuation, the only submission written from then on. */
+export function throwAfterContinuationAccepted(): void {
+  const append = AgentSessionJournal.prototype.appendSubmission
+  vi.spyOn(AgentSessionJournal.prototype, 'appendSubmission').mockImplementation(async function (
+    this: AgentSessionJournal,
+    ...args: Parameters<AgentSessionJournal['appendSubmission']>
+  ) {
+    await append.apply(this, args)
+    throw new Error('the accepted continuation could not be answered')
+  })
+}
+
 export async function statusNotes(host: StructuredAgentSessionHost) {
-  return (await host.journalSnapshot(SESSION)).items.flatMap((item) =>
+  return notesOf((await host.journalSnapshot(SESSION)).items)
+}
+
+/** The notes a reader's transcript shows, the cut turn's derived notice included. */
+export async function readerNotes(host: StructuredAgentSessionHost) {
+  return notesOf(
+    withNativeChatCutTurnNotices((await host.journalSnapshot(SESSION)).items, {
+      agentName: 'Codex'
+    })
+  )
+}
+
+function notesOf(items: readonly AgentJournalRenderItem[]) {
+  return items.flatMap((item) =>
     item.body.kind === 'status' ? [{ text: item.body.text, tone: item.body.tone }] : []
   )
+}
+
+/** The one row the quit's cut turn reads with when nothing else explains it. */
+export const QUIT_CUT_NOTICE = {
+  text: 'Codex stopped while this response was in progress. You can continue in this conversation.',
+  tone: 'error'
 }
 
 /** A continuation the host refuses because the user's own message was accepted first: another

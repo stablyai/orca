@@ -9,6 +9,7 @@ import {
   withRolledBackVersion,
   type OrcadStateSnapshot
 } from './orcad-activation-record'
+import { sameOrcadActivationRecord } from './orcad-activation-transaction'
 
 const SNAPSHOT: OrcadStateSnapshot = {
   dirName: 'pre-0.2.0+bb01-1000',
@@ -106,5 +107,44 @@ describe('orcad activation record', () => {
       '0.3.0+cc01'
     )
     expect(pinned).toEqual(['orcad-0.3.0+cc01'])
+  })
+
+  it('records which Orca activated each version, and the build a rollback left', () => {
+    const first = withActivatedVersion(
+      emptyOrcadActivationRecord(),
+      '0.1.0+aa01',
+      null,
+      NOW,
+      '1.4.0'
+    )
+    const second = withActivatedVersion(first, '0.2.0+bb01', SNAPSHOT, NOW, '1.5.0')
+    expect(second).toMatchObject({ activeAppVersion: '1.5.0', previousAppVersion: '1.4.0' })
+    expect(parseOrcadActivationRecord(serializeOrcadActivationRecord(second))).toEqual({
+      state: 'ok',
+      record: second
+    })
+    const rolledBack = withRolledBackVersion(second, NOW)
+    expect(rolledBack).toMatchObject({
+      active: '0.1.0+aa01',
+      activeAppVersion: '1.4.0',
+      rolledBackFrom: '0.2.0+bb01'
+    })
+    // A later activation is an explicit choice, so it lifts the hold.
+    expect(withActivatedVersion(rolledBack, '0.3.0+cc01', null, NOW, '1.6.0')).not.toHaveProperty(
+      'rolledBackFrom'
+    )
+  })
+
+  it('matches a journal from a build that drops the advisory fields', () => {
+    const current = withActivatedVersion(
+      emptyOrcadActivationRecord(),
+      '0.1.0+aa01',
+      null,
+      NOW,
+      '1.5.0'
+    )
+    const { activeAppVersion: _dropped, ...older } = current
+    expect(sameOrcadActivationRecord(current, older)).toBe(true)
+    expect(sameOrcadActivationRecord(current, { ...older, active: '0.2.0+bb01' })).toBe(false)
   })
 })

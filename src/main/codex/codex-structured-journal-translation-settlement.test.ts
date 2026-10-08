@@ -336,8 +336,13 @@ describe('codex journal translation', () => {
     const mutations = batches.at(-1)?.mutations ?? []
     expect(mutations).toEqual(
       expect.arrayContaining([
+        // The host saw the child go, so the call it was running was cut short.
         expect.objectContaining({
-          body: expect.objectContaining({ kind: 'tool-call', state: 'failed' })
+          body: expect.objectContaining({
+            kind: 'tool-call',
+            state: 'failed',
+            endedAs: 'interrupted'
+          })
         }),
         expect.objectContaining({
           body: expect.objectContaining({
@@ -560,6 +565,37 @@ describe('codex journal translation', () => {
           }
         ]
       }
+    ])
+    // A completed turn proves no interruption.
+    expect(batches[0]?.mutations[0]).not.toHaveProperty('body.endedAs')
+  })
+
+  it('cuts short an active tool when Codex reports its turn interrupted', () => {
+    const tap = recorder()
+    const bodies: unknown[] = []
+    tap.sink.appendLifecycleBatch = (_settlementId, mutations) => {
+      bodies.push(
+        ...mutations.flatMap((mutation) => (mutation.kind === 'item' ? [mutation.body] : []))
+      )
+    }
+    const translator = createCodexJournalTranslator({
+      sink: tap.sink,
+      primaryThreadId: () => THREAD_ID
+    })
+
+    translator.handle(TURN_STARTED)
+    translator.handle(
+      notification('item/started', {
+        item: { type: 'commandExecution', id: 'exec-active', command: 'run', status: 'inProgress' }
+      })
+    )
+    translator.handle(
+      notification('turn/completed', { turn: { id: TURN_ID, status: 'interrupted' } })
+    )
+
+    expect(bodies).toEqual([
+      expect.objectContaining({ kind: 'tool-call', state: 'failed', endedAs: 'interrupted' }),
+      expect.objectContaining({ kind: 'turn', turnId: TURN_ID, state: 'interrupted' })
     ])
   })
 
@@ -798,7 +834,8 @@ describe('codex journal translation', () => {
     expect(reduced.get('orca:codex-item%3Athread-abc%3Ar-1')).toEqual({
       kind: 'message',
       role: 'reasoning',
-      blocks: [{ type: 'text', text: 'thinking' }]
+      blocks: [{ type: 'text', text: 'thinking' }],
+      state: 'running'
     })
     expect(reduced.get('orca:codex-item%3Athread-abc%3Apatch-1')).toMatchObject({
       kind: 'diff',

@@ -106,7 +106,7 @@ describe('CodexRuntimeHomeService', () => {
     expect(store.updateSettings).not.toHaveBeenCalled()
     expect(warnSpy).not.toHaveBeenCalled()
 
-    expect(service.isHostSystemDefaultRealHome()).toBe(false)
+    expect(service.isHostSystemDefaultRealHomeSelected()).toBe(false)
     expect(service.prepareForRateLimitFetch()).toEqual({
       kind: 'ready',
       codexHomePath: managedHomePath1

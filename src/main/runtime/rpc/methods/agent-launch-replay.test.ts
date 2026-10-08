@@ -1,3 +1,4 @@
+import '../unused-default-rpc-methods.test-fixture'
 /**
  * Replay safety for `agent.launch`, against the real durable ledger.
  *
@@ -11,7 +12,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../shared/agent-launch-runtime-capability'
 import {
   computeAgentLaunchFingerprint,
   deriveAgentLaunchChildOperationId,
@@ -30,8 +31,6 @@ import {
   openTestAgentSessionRecordStore,
   readPersistedTestAgentSessionStore
 } from '../../agent-session-record-store-test-harness'
-import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
-import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import type { RpcContext } from '../core'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { RpcDispatcher } from '../dispatcher'
@@ -39,6 +38,7 @@ import {
   methodNamed,
   rpcContext,
   runtimeStub,
+  setAgentLaunchRecordStore,
   type AgentLaunchRuntimeStub
 } from './agent-launch.test-fixture'
 
@@ -125,14 +125,12 @@ beforeEach(async () => {
   createStructuredSession.mockClear()
   directory = await mkdtemp(join(tmpdir(), 'orca-agent-launch-replay-'))
   store = await openTestAgentSessionRecordStore(directory)
-  // The launch reaches the ledger through the installed host; nothing else on the host is used,
-  // because the structured create below it is mocked out.
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: `deps.store` is the only member `agent.launch` reads, and a member it omits throws on call.
-  setStructuredAgentSessionHost({ deps: { store } } as unknown as StructuredAgentSessionHost)
+  // The ledger alone, as admission opens it: no chat host is installed.
+  setAgentLaunchRecordStore(store)
 })
 
 afterEach(async () => {
-  setStructuredAgentSessionHost(null)
+  setAgentLaunchRecordStore(null)
   await rm(directory, { recursive: true, force: true })
 })
 
@@ -181,6 +179,49 @@ describe('exactly one execution per launch operation', () => {
     ])
     expect(claims.filter((claim) => claim.claim === 'won')).toHaveLength(1)
     expect(claims.filter((claim) => claim.claim === 'lost')).toHaveLength(1)
+  })
+})
+
+describe('a fresh launch writes the ledger once before its effect', () => {
+  it('admits and claims in one durable transaction, claimed on disk when the effect starts', async () => {
+    const admitAndClaim = vi.spyOn(store, 'admitAndClaimOperation')
+    const admit = vi.spyOn(store, 'admitOperation')
+    const claimOnly = vi.spyOn(store, 'claimOperation')
+    const runtime = runtimeStub()
+    let statusAtEffect: string | undefined
+    runtime.createManagedWorktree.mockImplementationOnce(async () => {
+      const persisted = await readPersistedTestAgentSessionStore(directory)
+      statusAtEffect =
+        persisted.operations[agentSessionOperationKey('device-1', OPERATION_ID)]?.outcome.status
+      return { worktree: { id: 'wt-new' }, startupTerminal: undefined }
+    })
+
+    await launch(createLaunch({ operationId: OPERATION_ID }), runtime)
+
+    expect(admitAndClaim).toHaveBeenCalledTimes(1)
+    expect(admit).not.toHaveBeenCalled()
+    expect(claimOnly).not.toHaveBeenCalled()
+    // A claim moves the row from `pending` to `unknown`: taken, not yet settled.
+    expect(statusAtEffect).toBe('unknown')
+  })
+
+  it('still lets exactly one of two concurrent admissions run the effect', async () => {
+    const admission = {
+      callerKey: 'device-1',
+      operationId: OPERATION_ID,
+      fingerprint: 'fp-1',
+      now: NOW
+    }
+    const claimAfter = (decision: { decision: string; row?: AgentSessionOperationRow }) =>
+      decision.decision === 'admit' ||
+      (decision.decision === 'replay' && decision.row?.outcome.status === 'pending')
+
+    const results = await Promise.all([
+      store.admitAndClaimOperation(admission, claimAfter),
+      store.admitAndClaimOperation(admission, claimAfter)
+    ])
+
+    expect(results.filter((result) => result.claim?.claim === 'won')).toHaveLength(1)
   })
 })
 
@@ -246,10 +287,7 @@ describe('a replay answers from the record', () => {
     const first = await launch(params, runtime)
 
     const reopened = await openTestAgentSessionRecordStore(directory)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: see the setup above.
-    setStructuredAgentSessionHost({
-      deps: { store: reopened }
-    } as unknown as StructuredAgentSessionHost)
+    setAgentLaunchRecordStore(reopened)
     const afterRestart = runtimeStub()
 
     expect(await launch(params, afterRestart)).toEqual(first)
@@ -460,10 +498,7 @@ describe('an unreadable launch payload costs one replay, never the store', () =>
     await rewriteRecordedLaunch({ outcome: { kind: 'structured' }, worktreeId: 'wt-1' })
 
     const reopened = await openTestAgentSessionRecordStore(directory)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: see the setup above.
-    setStructuredAgentSessionHost({
-      deps: { store: reopened }
-    } as unknown as StructuredAgentSessionHost)
+    setAgentLaunchRecordStore(reopened)
 
     expect(reopened.listOperationRows()).toHaveLength(1)
     const retry = runtimeStub()

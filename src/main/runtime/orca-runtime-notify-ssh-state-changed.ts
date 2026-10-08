@@ -165,12 +165,19 @@ export class OrcaRuntimeWithNotifySshStateChanged extends OrcaRuntimeWithGetStat
     defaultTabs?: CreateWorktreeResult['defaultTabs'],
     navigationTarget?: RuntimeNavigationTarget
   ): void {
-    const navigation = navigationTarget ?? 'all'
+    const navigation = navigationTarget ?? 'host'
     if (navigationTargetsHost(navigation)) {
       this.notifyHostActivateWorktree(repoId, worktreeId, setup, startup, defaultTabs)
     }
     if (navigationTargetsClients(navigation)) {
-      this.notifyClientsActivateWorktree(repoId, worktreeId, setup, startup, defaultTabs)
+      this.notifyClientsActivateWorktree(
+        repoId,
+        worktreeId,
+        setup,
+        startup,
+        defaultTabs,
+        navigation
+      )
     }
   }
 
@@ -189,10 +196,11 @@ export class OrcaRuntimeWithNotifySshStateChanged extends OrcaRuntimeWithGetStat
     worktreeId: string,
     setup?: CreateWorktreeResult['setup'],
     startup?: WorktreeStartupLaunch,
-    defaultTabs?: CreateWorktreeResult['defaultTabs']
+    defaultTabs?: CreateWorktreeResult['defaultTabs'],
+    navigation: RuntimeNavigationTarget = 'clients'
   ): void {
     this.emitClientEvent(
-      toRuntimeActivateWorktreeEvent(repoId, worktreeId, setup, startup, defaultTabs)
+      toRuntimeActivateWorktreeEvent(repoId, worktreeId, setup, startup, defaultTabs, navigation)
     )
   }
 

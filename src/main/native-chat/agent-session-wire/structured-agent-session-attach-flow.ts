@@ -29,7 +29,11 @@ import {
   type AttachedJournal
 } from './structured-agent-session-attach'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import { adapterSupportsCreateIfDeclared } from './structured-agent-session-provider-support'
+import {
+  adapterSupportsCreateIfDeclared,
+  hostCanStartRecord
+} from './structured-agent-session-provider-support'
+import type { StructuredAgentRegistry } from './structured-agent-registry'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import { resolveAgentSessionReplayOutcome } from './structured-agent-session-replay-outcome'
 import { readAgentSessionHydrationPage } from './agent-session-history-page'
@@ -49,12 +53,16 @@ import type { StructuredAgentSessionLogger } from './structured-agent-session-lo
 export type AttachFlowInput = {
   store: AgentSessionRecordStore
   adapter: StructuredAgentSessionAdapter
+  /** What decides whether this build may start a record's agent at all (`agentDrivesSession`). */
+  agents: Pick<StructuredAgentRegistry, 'definition'>
   logger: StructuredAgentSessionLogger
   authority: AgentSessionAttachAuthority
   callerKey: string
   params: AgentSessionAttachParams
   now: () => number
   recordPhase?: AgentSessionCreatePhaseRecorder
+  /** Aborted when a close, or a Stop admitted now, must not wait behind this attach's acquire. */
+  acquireSignal?: AbortSignal
   /** Publishes the journal before clients can send against the new owner. `acquiredOwner` is
    *  true only when this attach spawned the provider child, so a re-attach to a live one is not
    *  mistaken for a cold acquire. */
@@ -97,8 +105,15 @@ export async function performAttach(
   if (!admitted.ok) {
     return admitted
   }
+  // Every start of every agent passes here, so this is where a record this build cannot drive (its
+  // transport or account variable is not its agent's) is refused; reading it never is.
+  const supported = (record: AgentSessionRecord | null) =>
+    record === null
+      ? input.agents.definition(params.agent) !== null &&
+        adapterSupportsCreateIfDeclared(input.adapter, params.location, params.agent)
+      : hostCanStartRecord(input, record)
   // Ensure/recovery bypass create-intent, so recheck before reserving or spawning.
-  if (!adapterSupportsCreateIfDeclared(input.adapter, params.location, params.agent)) {
+  if (!supported(store.getRecord(sessionId))) {
     return unsupported()
   }
 
@@ -135,7 +150,7 @@ export async function performAttach(
     // every reservation at its effect boundary so it cannot bypass the support
     // gate, and release a pending reservation that support drift invalidated.
     reservedRecord = record
-    if (!adapterSupportsCreateIfDeclared(input.adapter, params.location, params.agent)) {
+    if (!supported(record)) {
       if (
         record.lease.claimStatus === 'reserved' &&
         record.lease.handoffStage === 'new-owner-proving' &&

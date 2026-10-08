@@ -78,6 +78,25 @@ describe('remote runtime setting', () => {
       )
     ).toBe('legacy')
   })
+
+  it('runs the pinned ladder where managed orcad was found unable to run, unless the host opts out', () => {
+    const unavailable = { reason: 'runtime_self_test', appVersion: '1.0.0' }
+    expect(resolveSshRemoteRuntime({ managedServerUnavailable: unavailable }, {})).toBe(
+      'pinned-node'
+    )
+    expect(
+      resolveSshRemoteRuntime(
+        { managedServerUnavailable: unavailable, remoteRuntime: 'legacy' },
+        {}
+      )
+    ).toBe('legacy')
+    expect(
+      resolveSshRemoteRuntime(
+        { managedServerUnavailable: unavailable },
+        { [SSH_REMOTE_RUNTIME_ENV]: 'legacy' }
+      )
+    ).toBe('legacy')
+  })
 })
 
 describe('pinned relay version (D8.1)', () => {

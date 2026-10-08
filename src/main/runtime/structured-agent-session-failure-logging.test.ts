@@ -132,9 +132,8 @@ describe('failures the desktop host used to drop', () => {
   it('logs provider events the chat journal would not take', async () => {
     const log = recordingStructuredAgentSessionLogger()
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: minting and binding a sink reads no other host dependency.
-    const runtime = new StructuredAgentSessionHostRuntimeState({
-      logger: log.logger
-    } as unknown as StructuredAgentSessionHostDeps)
+    const deps = { logger: log.logger } as unknown as StructuredAgentSessionHostDeps
+    const runtime = new StructuredAgentSessionHostRuntimeState(deps, new Map())
     const sink = runtime.eventSinkFor(SESSION)
     const error = new Error('journal append failed')
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the sink calls only appendItem before it fails.
@@ -209,7 +208,7 @@ describe('host collaborators log with their own scope', () => {
 
   it('the queued-message drain logs a step that fails', async () => {
     const log = recordingStructuredAgentSessionLogger()
-    const journal = { isReadOnly: false, queuedMessages: { settlementOwed: () => true } }
+    const journal = { queuedMessages: { settlementOwed: () => true } }
     const drain = new StructuredAgentSessionQueuedMessageDrain(
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a schedule past the owed-settlement check reads only these members.
       {
@@ -308,6 +307,7 @@ describe('installing the runtime', () => {
           hostId: 'local',
           claimKeyId: 'key-1',
           resolveWorkspacePath: async () => root,
+          resolveLaunchArgs: () => [],
           resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true })
         } as unknown as Parameters<typeof ensureStructuredAgentSessionHost>[0]
       )
@@ -324,6 +324,7 @@ describe('installing the runtime', () => {
       claimKeyId: 'key-1',
       resolveWorkspacePath: async () => root,
       resolveEnvironment: async () => ({}),
+      resolveLaunchArgs: () => [],
       resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
       logger: {
         warn: () => {

@@ -10,13 +10,17 @@ import { removeWorktreeVisitEntriesForTargets } from '@/lib/worktree-visit-recen
 import { forgetAmbiguousOwnerWarnings } from '../listing/worktree-owner-settings'
 import { forgetWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import {
+  getStructuredAgentSessionLaunchOwner,
   markStructuredAgentSessionLaunchCancelledSilently,
   shouldRetainStructuredAgentSessionLaunchTab,
   structuredLaunchStates
 } from '@/lib/structured-agent-session-launch-registry'
-import { discardStructuredAgentSessionLaunchOutbox } from '@/components/native-chat/structured-agent-session-outbox-storage'
+import { discardStructuredAgentSessionChatSends } from '@/lib/structured-agent-session-launch-prompt'
 import { clearWebSessionFocusIntentIfMatches } from '@/runtime/web-session-focus-intent'
-import { LOCAL_STRUCTURED_SESSION_OWNER } from '@/runtime/local-structured-session-owner'
+import {
+  structuredAgentSessionFocusOwner,
+  structuredAgentSessionTargetForHost
+} from '@/runtime/structured-agent-session-owner'
 
 /** Builds a bulk cleanup patch and clears auxiliary warning records without requiring individual terminal teardown. */
 export function buildWorktreePurgeState(
@@ -35,10 +39,14 @@ export function buildWorktreePurgeState(
       worktreeIdSet.has(worktreeId) &&
       shouldRetainStructuredAgentSessionLaunchTab(worktreeId, launch.intent.sessionId)
     ) {
-      markStructuredAgentSessionLaunchCancelledSilently(worktreeId, launch.intent.sessionId)
-      discardStructuredAgentSessionLaunchOutbox(launch.intent.sessionId)
+      markStructuredAgentSessionLaunchCancelledSilently(
+        worktreeId,
+        launch.intent.sessionId,
+        launch.intent.executionHostId
+      )
+      discardStructuredAgentSessionChatSends(launch.intent.sessionId)
       clearWebSessionFocusIntentIfMatches(
-        { environmentId: LOCAL_STRUCTURED_SESSION_OWNER },
+        structuredAgentSessionFocusOwner(launch.intent.target),
         worktreeId,
         `agent-session:${launch.intent.sessionId}`
       )
@@ -47,15 +55,21 @@ export function buildWorktreePurgeState(
   }
   for (const worktreeId of worktreeIdSet) {
     for (const tab of s.unifiedTabsByWorktree[worktreeId] ?? []) {
+      // A retained launch here survived a reload, so its persisted record names its host.
+      const owner =
+        tab.contentType === 'agent-session' && !cancelledSessionIds.has(tab.entityId)
+          ? getStructuredAgentSessionLaunchOwner(tab.entityId)
+          : undefined
+      const target = structuredAgentSessionTargetForHost(owner)
       if (
-        tab.contentType === 'agent-session' &&
-        !cancelledSessionIds.has(tab.entityId) &&
+        owner &&
+        target &&
         shouldRetainStructuredAgentSessionLaunchTab(worktreeId, tab.entityId)
       ) {
-        markStructuredAgentSessionLaunchCancelledSilently(worktreeId, tab.entityId)
-        discardStructuredAgentSessionLaunchOutbox(tab.entityId)
+        markStructuredAgentSessionLaunchCancelledSilently(worktreeId, tab.entityId, owner)
+        discardStructuredAgentSessionChatSends(tab.entityId)
         clearWebSessionFocusIntentIfMatches(
-          { environmentId: LOCAL_STRUCTURED_SESSION_OWNER },
+          structuredAgentSessionFocusOwner(target),
           worktreeId,
           `agent-session:${tab.entityId}`
         )
@@ -181,6 +195,7 @@ export function buildWorktreePurgeState(
     activeBrowserTabIdByWorktree: omitByWorktree(s.activeBrowserTabIdByWorktree),
     // Why: keyed by page/workspace id, only cleaned by closeBrowserTab on the single-removal path; the bulk reconcile missed them, orphaning an entry per page of externally-removed worktrees.
     browserAnnotationsByPageId: omitByPageId(s.browserAnnotationsByPageId),
+    browserAnnotationMarkerIdsByPageId: omitByPageId(s.browserAnnotationMarkerIdsByPageId),
     remoteBrowserPageHandlesByPageId: omitByPageId(s.remoteBrowserPageHandlesByPageId),
     pendingAddressBarFocusByPageId: omitByPageId(s.pendingAddressBarFocusByPageId),
     // createBrowserTab writes both the workspace id and the page id into this map.

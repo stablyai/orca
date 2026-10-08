@@ -9,14 +9,13 @@ import {
   stat,
   writeFile
 } from 'node:fs/promises'
-import { createServer } from 'node:http'
+import { randomUUID } from 'node:crypto'
 import { homedir, tmpdir } from 'node:os'
 import type * as Os from 'node:os'
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
 import { runProcess } from '../../shared/child-process/run-process'
-import { createHookListenerState } from '../../shared/agent-hook-listener/listener-state'
-import { normalizeAndAccept } from '../../shared/agent-hook-listener-test-harness'
+import { makePaneKey } from '../../shared/stable-pane-id'
 import { parseQoderSessionFile } from '../ai-vault/session-scanner-qoder-parser'
 
 const sandbox = vi.hoisted(() => ({ home: '' }))
@@ -27,6 +26,7 @@ vi.mock('node:os', async (importOriginal) => {
 vi.mock('electron', () => ({ app: { getPath: () => sandbox.home } }))
 import { qoderHookService } from './hook-service'
 import { markQoderWorkspaceTrusted } from './workspace-trust'
+import { AgentHookServer } from '../agent-hooks/server'
 
 it.skipIf(process.env.ORCA_REAL_QODER_CLI_TEST !== '1')(
   'generates and resumes a real task through managed hooks',
@@ -35,28 +35,22 @@ it.skipIf(process.env.ORCA_REAL_QODER_CLI_TEST !== '1')(
     sandbox.home = await realpath(await mkdtemp(join(tmpdir(), 'orca-qoder-real-')))
     const config = join(sandbox.home, '.qoder')
     const workspace = join(sandbox.home, 'folder')
+    const proofFile = `qoder-proof-${randomUUID()}.txt`
+    const marker = `QODER_MANAGED_PROOF_${randomUUID()}`
     const statuses: {
       event: unknown
       state: unknown
       agent: unknown
       session: string | undefined
     }[] = []
-    const listener = createHookListenerState()
-    const server = createServer(async (request, response) => {
-      let content = ''
-      for await (const chunk of request) {
-        content += chunk
-      }
-      const fields = new URLSearchParams(content)
-      const payload = JSON.parse(fields.get('payload') ?? '{}')
-      const normalized = normalizeAndAccept(listener, 'qoder', payload)
+    const server = new AgentHookServer()
+    server.subscribeEnrichedStatus((normalized) => {
       statuses.push({
-        event: payload.hook_event_name,
-        state: normalized?.payload.state,
-        agent: normalized?.payload.agentType,
-        session: normalized?.providerSession?.id
+        event: normalized.hookEventName,
+        state: normalized.payload.state,
+        agent: normalized.payload.agentType,
+        session: normalized.providerSession?.id
       })
-      response.writeHead(request.url === '/hook/qoder' ? 200 : 404).end()
     })
     try {
       await mkdir(workspace)
@@ -68,23 +62,18 @@ it.skipIf(process.env.ORCA_REAL_QODER_CLI_TEST !== '1')(
       )
       expect(qoderHookService.install().state).toBe('installed')
       markQoderWorkspaceTrusted(workspace, sandbox.home)
-      await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
-      const address = server.address()
-      if (!address || typeof address === 'string') {
-        throw new Error('No test receiver port')
-      }
+      await server.start({ env: 'production', userDataPath: join(sandbox.home, 'orca') })
       const env = {
         ...process.env,
         HOME: sandbox.home,
         USERPROFILE: sandbox.home,
-        ORCA_AGENT_HOOK_PORT: String(address.port),
-        ORCA_AGENT_HOOK_TOKEN: 'test-token',
-        ORCA_PANE_KEY: 'qoder-proof-pane',
-        ORCA_AGENT_HOOK_ENDPOINT: '',
-        ORCA_AGENT_HOOK_TRANSPORT: '',
+        ...server.buildPtyEnv(),
+        ORCA_PANE_KEY: makePaneKey(randomUUID(), randomUUID()),
         ORCA_BACKGROUND_LAUNCH: '1'
       }
       const command = process.env.ORCA_QODER_CLI_PATH ?? join(realHome, '.local', 'bin', 'qodercli')
+      const version = await runProcess({ program: command, args: ['--version'], env })
+      expect(version.code).toBe(0)
       const args = [
         '--config-dir',
         config,
@@ -100,15 +89,14 @@ it.skipIf(process.env.ORCA_REAL_QODER_CLI_TEST !== '1')(
           ...args,
           '--permission-mode',
           'accept_edits',
-          'Create proof.txt containing exactly QODER_MANAGED_PROOF. Then reply QODER_MANAGED_COMPLETE.'
+          `Create ${proofFile} containing exactly ${marker}. Then reply QODER_MANAGED_COMPLETE.`
         ],
         env,
         timeoutMs: 90000
       })
       expect(generated.code).toBe(0)
-      expect((await readFile(join(workspace, 'proof.txt'), 'utf8')).trim()).toBe(
-        'QODER_MANAGED_PROOF'
-      )
+      expect(generated.stdout.trim()).toBe('QODER_MANAGED_COMPLETE')
+      expect((await readFile(join(workspace, proofFile), 'utf8')).trim()).toBe(marker)
       const session = statuses.find((s) => s.event === 'SessionStart')?.session
       expect(session).toBeTruthy()
       if (!session) {
@@ -120,13 +108,18 @@ it.skipIf(process.env.ORCA_REAL_QODER_CLI_TEST !== '1')(
           ...args,
           '--resume',
           session,
-          'What exact marker did you write? Reply only with that marker.'
+          '--permission-mode',
+          'accept_edits',
+          `Recall the exact marker you wrote earlier without reading any file. Create resumed.txt containing that marker followed by a newline and QODER_RESUMED_CHANGE. Reply only with the original marker.`
         ],
         env,
         timeoutMs: 90000
       })
       expect(resumed.code).toBe(0)
-      expect(resumed.stdout.trim()).toBe('QODER_MANAGED_PROOF')
+      expect(resumed.stdout.trim()).toBe(marker)
+      expect((await readFile(join(workspace, 'resumed.txt'), 'utf8')).trim()).toBe(
+        `${marker}\nQODER_RESUMED_CHANGE`
+      )
       const projects = join(config, 'projects')
       const transcript = (await readdir(projects, { recursive: true })).find(
         (path) => path.endsWith(`${session}.jsonl`) && !path.includes('subagents')
@@ -142,8 +135,17 @@ it.skipIf(process.env.ORCA_REAL_QODER_CLI_TEST !== '1')(
         modifiedAt: modified.mtime.toISOString()
       })
       expect(history).toMatchObject({ agent: 'qoder', sessionId: session, cwd: workspace })
-      expect(history?.previewMessages.at(-1)?.text).toBe('QODER_MANAGED_PROOF')
+      expect(history?.previewMessages.at(-1)?.text).toBe(marker)
       expect(history?.resumeCommand).toContain(`qodercli --resume '${session}'`)
+      expect(server.getStatusSnapshot()).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            agentType: 'qoder',
+            state: 'done',
+            providerSession: expect.objectContaining({ id: session })
+          })
+        ])
+      )
       expect(statuses).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
@@ -162,9 +164,20 @@ it.skipIf(process.env.ORCA_REAL_QODER_CLI_TEST !== '1')(
           evidencePath,
           JSON.stringify(
             {
+              command,
+              version: version.stdout.trim(),
+              proofFile,
+              marker,
+              generatedExitCode: generated.code,
+              resumedExitCode: resumed.code,
               generated: generated.stdout.trim(),
               resumed: resumed.stdout.trim(),
               statuses,
+              canonicalSnapshot: server.getStatusSnapshot().map((row) => ({
+                agent: row.agentType,
+                state: row.state,
+                session: row.providerSession?.id
+              })),
               history: {
                 agent: history?.agent,
                 sessionId: history?.sessionId,
@@ -178,7 +191,7 @@ it.skipIf(process.env.ORCA_REAL_QODER_CLI_TEST !== '1')(
         )
       }
     } finally {
-      await new Promise<void>((resolve) => server.close(() => resolve()))
+      server.stop()
       await rm(sandbox.home, { recursive: true, force: true })
       sandbox.home = ''
     }

@@ -3,8 +3,8 @@
  *
  * Two properties are pinned here, because both were false at some point in this lane:
  *
- * - a worker is TAUGHT the same thing whichever mode it runs in, byte for byte once how it is named
- *   and the dispatch id are normalised. The sub-dispatch section used to be withheld from a structured
+ * - a worker is TAUGHT the same thing whichever mode it runs in, byte for byte once how it is named,
+ *   where it runs (chat or terminal) and the dispatch id are normalised. The sub-dispatch section used to be withheld from a structured
  *   worker, which is a two-tier capability model dressed as a preamble tweak;
  * - a structured worker can actually BE a coordinator. `worker-start` used to resolve `--from`
  *   through `showTerminal`, which needs a PTY, so the capability the preamble withheld was in fact
@@ -19,6 +19,10 @@ import {
   structuredWorkerIdentities,
   structuredWorkerProcessIncarnation
 } from '../../structured-worker-identity'
+import {
+  CHAT_REDISPATCH_PARAGRAPH,
+  TERMINAL_REDISPATCH_PARAGRAPH
+} from '../../orchestration/preamble'
 import { ORCHESTRATION_METHODS } from './orchestration'
 import { readStructuredWorkerOutput } from './orchestration-structured-worker-lifecycle'
 import { inspectWorkerTerminal } from './orchestration/worker/worker-observation'
@@ -107,6 +111,11 @@ function normalizePreamble(preamble: string, handle: string, dispatchId: string)
     .join('<dispatch>')
     .replace(/dcap_[\w-]+/g, '<capability>')
     .replace(/task_[0-9a-f]+/g, '<task>')
+    .split(CHAT_REDISPATCH_PARAGRAPH)
+    .join('<redispatch>')
+    .split(TERMINAL_REDISPATCH_PARAGRAPH)
+    .join('<redispatch>')
+    .replace(/\bthis (chat|terminal)\b/g, 'this <surface>')
 }
 
 describe('a worker cannot tell which mode it is running in', () => {
@@ -224,6 +233,10 @@ describe('a worker cannot tell which mode it is running in', () => {
     expect(structuredPreamble).toContain(`${selfLine}\n`)
     expect(structuredPreamble).not.toContain(STRUCTURED_HANDLE)
     expect(terminalPreamble).not.toContain('Orca session ID')
+    // Only the surface words differ: a chat is told about its chat, a terminal keeps main's text.
+    expect(structuredPreamble).toContain(CHAT_REDISPATCH_PARAGRAPH)
+    expect(terminalPreamble).toContain(TERMINAL_REDISPATCH_PARAGRAPH)
+    expect(structuredPreamble).not.toContain('this terminal')
     // The section the structured lane used to withhold, asserted by name so the equality above
     // cannot pass by both preambles losing it.
     expect(structuredPreamble).toContain('=== SUB-DISPATCH ===')

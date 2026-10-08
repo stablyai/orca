@@ -1,3 +1,4 @@
+import './rpc/unused-default-rpc-methods.test-fixture'
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -28,6 +29,7 @@ import {
   waitForStructuredAgentSessionRecovery
 } from './structured-agent-session-runtime'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const SESSION = 'claude-integration-1'
 const PROVIDER_SESSION = claudeSessionIdForOrcaSession(SESSION)
@@ -247,8 +249,14 @@ beforeEach(async () => {
         // Hermetic: never the developer's real login shell.
         resolveEnvironment: async () => shellEnv,
         resolveShellEnvironmentPolicy: () => shellEnvironmentPolicy,
+        resolveLaunchArgs: () => [],
         resolveClaudeAuthPolicy: () => claudeAuthPolicy,
         openClaudeConnection: claude.openConnection,
+        claudeCliFlags: {
+          supports: async (flag) => flag.option === '--thinking-display',
+          prewarm: () => {},
+          observeExit: () => {}
+        },
         // Production's sink wiring onto a real hook server, whose records a Stop reaches.
         statusSink: {
           publish: (summary, subject) => hookServer.ingestStructuredStatus(summary, subject),
@@ -328,6 +336,15 @@ describe('a structured Claude session over agentSession.*', () => {
     expect(env).toMatchObject({
       ANTHROPIC_BASE_URL: 'https://gateway.example.test',
       CLAUDE_CONFIG_DIR: join(root, 'claude-home')
+    })
+  })
+
+  // The runtime builds each agent's adapter from a registration; this one must reach Claude's.
+  it('asks the Claude CLI for readable thinking when the runtime knows it takes the flag', async () => {
+    await ok<{ fence: number }>('agentSession.create', createIntentParams())
+
+    expect(claude.live().launch.options.extraArgs).toMatchObject({
+      'thinking-display': 'summarized'
     })
   })
 
@@ -768,19 +785,20 @@ describe('a structured Claude session over agentSession.*', () => {
     ).resolves.toMatchObject({ turnId: 'provider-opened-assistant', cancelled: true })
     expect(claude.live().calls.at(-1)).toMatchObject({ subtype: 'interrupt' })
 
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test-only view of the host's store; only `getRecord` is read.
     const host = getStructuredAgentSessionHost() as unknown as {
       deps: {
         store: {
           getRecord: (sessionId: string) => {
-            providerHandleChain: { handle: { provider: string; leafUuid?: string | null } }[]
+            providerHandleChain: { handle: { transport: string; resumeCursor?: string } }[]
           }
         }
       }
     }
     // A completed turn advances the durable resume point in place while the owner is live.
     expect(host.deps.store.getRecord(SESSION).providerHandleChain.at(-1)?.handle).toMatchObject({
-      provider: 'claude',
-      leafUuid: 'assistant-leaf'
+      transport: 'claude-sdk',
+      resumeCursor: 'assistant-leaf'
     })
     // A Claude Stop ends its child once Claude ends the stopped turn, so the chat rests; the next
     // open resumes the conversation.
@@ -806,11 +824,7 @@ describe('a structured Claude session over agentSession.*', () => {
     expect(claude.live().launch.options).toMatchObject({ resume: PROVIDER_SESSION })
     expect(claude.live().launch.options).not.toHaveProperty('resumeSessionAt')
     const lastCompletedTurn = {
-      handle: {
-        provider: 'claude',
-        sessionId: PROVIDER_SESSION,
-        leafUuid: 'provider-opened-assistant'
-      },
+      handle: claudeProviderHandle(PROVIDER_SESSION, 'provider-opened-assistant'),
       origin: 'resumed'
     }
     expect(host.deps.store.getRecord(SESSION).providerHandleChain.at(-1)).toMatchObject(

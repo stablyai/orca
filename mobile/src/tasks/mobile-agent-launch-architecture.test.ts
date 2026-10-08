@@ -9,9 +9,10 @@ import { DeviceRegistry } from '../../../src/main/runtime/device-registry'
 import type { AuthenticatedMobileSocket } from '../../../src/main/runtime/rpc/mobile-socket-wiring'
 import { RpcDispatcher } from '../../../src/main/runtime/rpc/dispatcher'
 import { AgentLaunchFields } from '../../../src/main/runtime/rpc/methods/agent-launch-schemas'
-import { runtimeStub } from '../../../src/main/runtime/rpc/methods/agent-launch.test-fixture'
-import { setStructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-registry'
-import type { StructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-host'
+import {
+  runtimeStub,
+  setAgentLaunchRecordStore
+} from '../../../src/main/runtime/rpc/methods/agent-launch.test-fixture'
 import type { OrcaRuntimeService } from '../../../src/main/runtime/orca-runtime'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { createStableLogicalRpcClient } from '../transport/stable-logical-rpc-client'
@@ -23,7 +24,7 @@ import { readNewWorktreeRuntimeCapabilities } from './worktree-create-capability
 import {
   AGENT_LAUNCH_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY
-} from '../../../src/shared/protocol-version'
+} from '../../../src/shared/agent-launch-runtime-capability'
 
 const createStructuredSession = vi.fn()
 vi.mock('../../../src/main/runtime/rpc/methods/structured-agent-session-create', () => ({
@@ -39,12 +40,11 @@ beforeEach(async () => {
   createStructuredSession.mockResolvedValue({ ok: true, value: { sessionId: 'session-1' } })
   directory = await mkdtemp(join(tmpdir(), 'orca-launch-architecture-'))
   store = await openTestAgentSessionRecordStore(directory)
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the launch reads deps.store; session creation is injected above.
-  setStructuredAgentSessionHost({ deps: { store } } as unknown as StructuredAgentSessionHost)
+  setAgentLaunchRecordStore(store)
 })
 
 afterEach(async () => {
-  setStructuredAgentSessionHost(null)
+  setAgentLaunchRecordStore(null)
   await rm(directory, { recursive: true, force: true })
 })
 
@@ -243,8 +243,7 @@ describe('mobile launch retry authority', () => {
     const first = await dispatcher.dispatch(request)
     expect(first.ok).toBe(true)
     store = await openTestAgentSessionRecordStore(directory)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: launch admission reads only deps.store from the installed host.
-    setStructuredAgentSessionHost({ deps: { store } } as unknown as StructuredAgentSessionHost)
+    setAgentLaunchRecordStore(store)
     await expect(
       dispatcher.dispatch({ ...request, method: 'agent.launchReplay' })
     ).resolves.toEqual(first)
@@ -293,8 +292,7 @@ describe('mobile launch retry authority', () => {
       }
     })
     store = await openTestAgentSessionRecordStore(directory)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: launch admission reads only deps.store from the installed host.
-    setStructuredAgentSessionHost({ deps: { store } } as unknown as StructuredAgentSessionHost)
+    setAgentLaunchRecordStore(store)
     await expect(dispatcher.dispatch(request)).resolves.toMatchObject({
       ok: false,
       error: { code: 'worktree_create_collision' }

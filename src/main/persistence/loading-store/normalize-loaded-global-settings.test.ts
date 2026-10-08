@@ -36,6 +36,15 @@ describe('retired Agents sidebar setting', () => {
   })
 })
 
+describe('retired managed servers experiment', () => {
+  it('drops the stored toggle, since managed servers are the default SSH path', () => {
+    expect('experimentalManagedServers' in normalizeLegacyProfile({})).toBe(false)
+    expect(
+      'experimentalManagedServers' in normalizeLegacyProfile({ experimentalManagedServers: true })
+    ).toBe(false)
+  })
+})
+
 describe('structured chat shell environment settings', () => {
   it('keeps a valid saved list and an explicit opt-out', () => {
     const normalized = normalizeLegacyProfile({
@@ -74,5 +83,21 @@ describe('machine name setting', () => {
     )
     expect(normalizeLegacyProfile({ machineName: undefined }).machineName).toBe('')
     expect(normalizeLegacyProfile({ machineName: 'x'.repeat(300) }).machineName).toHaveLength(255)
+  })
+})
+
+describe('chat appearance settings', () => {
+  it('normalizes old and malformed profiles on load', () => {
+    expect(normalizeLegacyProfile({}).nativeChatAppearance).toBeUndefined()
+    expect(
+      normalizeLegacyProfile({
+        nativeChatAppearance: { fontSize: 40, codeFontSize: 1, width: 'wide' }
+      }).nativeChatAppearance
+    ).toEqual({ fontSize: 20, codeFontSize: 10, width: 'wide' })
+    expect(
+      normalizeLegacyProfile({
+        nativeChatAppearance: { fontSize: 14, codeFontSize: 12, width: 'comfortable' }
+      }).nativeChatAppearance
+    ).toBeUndefined()
   })
 })

@@ -7,7 +7,6 @@
 
 import { describe, expect, it } from 'vitest'
 import {
-  AGENT_LAUNCH_RUNTIME_CAPABILITY,
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
   AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
   AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
@@ -23,10 +22,19 @@ import {
   WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY,
   type RuntimeCapability
 } from '../../shared/protocol-version'
+import {
+  AGENT_LAUNCH_PROMPT_UNCONFIRMED_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_TAB_CLOSED_CLIENT_CAPABILITY
+} from '../../shared/agent-launch-runtime-capability'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
 import { remoteRuntimeClientCapabilities } from '../../shared/remote-runtime-client-capabilities'
 import { supportsAgentLaunch } from '../runtime/rpc/methods/agent-launch'
-import { createSupportFollowsHostSetting } from '../runtime/rpc/methods/structured-agent-session-policy'
+import { readsAgentLaunchTabClosed } from '../runtime/rpc/methods/agent-launch-replay'
+import {
+  createSupportFollowsHostSetting,
+  structuredAgentsReadBy
+} from '../runtime/rpc/methods/structured-agent-session-policy'
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from './desktop-renderer-runtime-capabilities'
 
 // Every paired transport sends the shared base plus the Electron list, so compare the union.
@@ -63,6 +71,13 @@ const REMOTE_ONLY_BY_DECISION: readonly RuntimeCapability[] = [
   SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY
 ]
 
+/** Advertised to main and deliberately NOT to a remote host yet. */
+const LOCAL_ONLY_BY_DECISION: readonly RuntimeCapability[] = [
+  // Read by the desktop's own launches first; a remote host is told when its launches move over.
+  AGENT_LAUNCH_PROMPT_UNCONFIRMED_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_TAB_CLOSED_CLIENT_CAPABILITY
+]
+
 function missingFrom(
   source: readonly RuntimeCapability[],
   other: readonly RuntimeCapability[]
@@ -88,6 +103,15 @@ describe('desktop renderer runtime client capabilities', () => {
     ).toBe(false)
   })
 
+  it('is told a launch ended because the user closed its tab, not that its outcome is unknown', () => {
+    expect(
+      readsAgentLaunchTabClosed({
+        clientKind: 'runtime',
+        clientCapabilities: DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES
+      })
+    ).toBe(true)
+  })
+
   // The desktop routes a launch on its own settings. A paired host answering createSupport from its
   // own setting would fail a chat the user asked for; main shares the desktop's setting, so locally
   // this only lets Retry on an existing chat relaunch after the setting is turned off.
@@ -100,13 +124,28 @@ describe('desktop renderer runtime client capabilities', () => {
     )
   })
 
+  // The renderer reads `agentSession.agents` (host-structured-agents.ts) and renders any listed
+  // agent's chat, so each host serves it every agent's tabs.
+  it.each([
+    ['a paired host', PAIRED_HOST_RECEIVES],
+    ['its own main process', DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES]
+  ] as const)('reads every agent %s registered', (_host, clientCapabilities) => {
+    expect(
+      structuredAgentsReadBy({ clientKind: 'runtime', clientCapabilities }, [
+        'claude',
+        'codex',
+        'grok'
+      ])
+    ).toBeUndefined()
+  })
+
   it('diverges from what a paired host receives only where a decision was recorded', () => {
     expect(missingFrom(PAIRED_HOST_RECEIVES, DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES)).toEqual(
       [...REMOTE_ONLY_BY_DECISION].sort()
     )
-    // The same renderer reads structured chats on either host, so it claims nothing only locally.
+    // The same renderer reads structured chats on either host, so only a recorded decision is local.
     expect(missingFrom(DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES, PAIRED_HOST_RECEIVES)).toEqual(
-      []
+      [...LOCAL_ONLY_BY_DECISION].sort()
     )
   })
 })

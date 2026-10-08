@@ -51,6 +51,9 @@ export type RuntimeManagedWorktreeCreateArgs = {
   startupAgent?: TuiAgent
   startupLaunchPreferences?: AgentLaunchPreferences
   startupPrompt?: string
+  /** Main-internal: set by a caller that delivers an uncarried `startupPrompt` itself, so the text
+   *  rides only a typed line that can carry it; reports whether it did. */
+  onStartupPromptCarry?: (carried: boolean) => void
   /** Per-launch inputs used when `startupAgent` is the created terminal surface. */
   startupAgentArgs?: string | null
   startupCwd?: string
@@ -60,6 +63,11 @@ export type RuntimeManagedWorktreeCreateArgs = {
   startupPaneKey?: string
   pendingFirstAgentMessageRename?: boolean
   automationProvenance?: AutomationWorkspaceProvenance
+  /**
+   * Host-side only, never on the wire: lets an offline create from a remote base use the local
+   * branch it names. Only creates a person initiated opt in.
+   */
+  allowLocalBaseFallback?: boolean
   cliProvenance?: CliWorkspaceProvenance
   creatorProvenance?: Worktree['creatorProvenance']
   startup?: WorktreeStartupLaunch

@@ -2,7 +2,7 @@ import { isCustomAgentId } from './commit-message-agent-spec'
 import type { CommitMessageAiSettings } from './commit-message-ai-types'
 import {
   DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES,
-  SOURCE_CONTROL_ACTION_IDS,
+  AI_ACTION_IDS,
   SOURCE_CONTROL_TEXT_ACTION_IDS,
   normalizeSourceControlAiActionDefaults,
   readSourceControlActionDefault
@@ -30,14 +30,15 @@ function copyRecord<T>(value: T | undefined): T | undefined {
 }
 
 export function getDefaultSourceControlAiSettings(): SourceControlAiSettings {
+  const actions: NonNullable<SourceControlAiSettings['actions']> = {}
+  for (const actionId of AI_ACTION_IDS) {
+    actions[actionId] = {
+      commandInputTemplate: DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES[actionId]
+    }
+  }
   return {
     enabled: true,
-    actions: Object.fromEntries(
-      SOURCE_CONTROL_ACTION_IDS.map((actionId) => [
-        actionId,
-        { commandInputTemplate: DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES[actionId] }
-      ])
-    ) as SourceControlAiSettings['actions'],
+    actions,
     agentId: null,
     selectedModelByAgent: {},
     selectedModelByAgentByHost: {},

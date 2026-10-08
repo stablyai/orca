@@ -30,7 +30,6 @@ afterAll(() => {
 const NO_OPEN_DEPS = {
   store: { getRecord: () => null, listRecords: () => [] },
   journalDatabase: openTestJournalHostDatabase(stateDirectory),
-  adapter: {},
   logger: recordingStructuredAgentSessionLogger().logger
 }
 
@@ -52,8 +51,7 @@ describe('restart journal restoration', () => {
           params: { location: { workspaceId: 'workspace-1' }, provider: 'codex' },
           child: null,
           sessionId
-        },
-        reset: null
+        }
       }
     })
     const records = Array.from(
@@ -139,8 +137,7 @@ describe('restart journal restoration', () => {
       runtimeKind: 'native'
     }
     const restored = {
-      session: { journal: {}, params, child: null },
-      reset: null
+      session: { journal: {}, params, child: null }
     }
     // The open is what settles: it runs after recovery resolution and before the publish.
     restoreRead.mockImplementation(async () => {
@@ -219,10 +216,46 @@ describe('restart journal restoration', () => {
     })
   })
 
+  it('opens every other chat when one chat cannot be opened, and the pass still settles', async () => {
+    restoreRead.mockImplementation(async (_deps, sessionId: string) => {
+      if (sessionId === 'session-0') {
+        throw new Error('this chat cannot be opened')
+      }
+      return { session: { journal: {}, params: {}, child: null, sessionId } }
+    })
+    const readable: string[] = []
+    const log = recordingStructuredAgentSessionLogger()
+    const records = Array.from(
+      { length: 12 },
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the restore reads only the record's session id here.
+      (_, index) => ({ sessionId: `session-${index}` }) as AgentSessionRecord
+    )
+
+    await expect(
+      restoreStructuredAgentSessionsOnRestart({
+        openDeps: { ...NO_OPEN_DEPS, logger: log.logger },
+        records,
+        reconcile: async () => true,
+        resolveRecovery: async () => true,
+        serialize: async (_sessionId, task) => task(),
+        hasSession: () => false,
+        onReadable: (sessionId) => {
+          readable.push(sessionId)
+        }
+      })
+    ).resolves.toBeUndefined()
+
+    expect(readable).toEqual(records.slice(1).map((record) => record.sessionId))
+    expect(log.entries).toEqual([
+      expect.objectContaining({
+        fields: expect.objectContaining({ scope: 'restart-restore', sessionId: 'session-0' })
+      })
+    ])
+  })
+
   it('does not settle again when a second restore finds the session already open', async () => {
     restoreRead.mockResolvedValue({
-      session: { journal: {}, params: {}, child: null },
-      reset: null
+      session: { journal: {}, params: {}, child: null }
     })
 
     await restoreStructuredAgentSessionsOnRestart({

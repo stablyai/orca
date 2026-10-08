@@ -1,3 +1,6 @@
+import { readSftpDirectory } from './ssh-sftp-directory-listing'
+import { SftpFilesystemChannel } from './ssh-sftp-filesystem-channel'
+export { readSftpDirectory } from './ssh-sftp-directory-listing'
 /**
  * Filesystem provider for plain SSH mode (design D6 rung D): read, list, stat and write over
  * one reused SFTP channel. Anything that needs the Orca remote server (search, file lists,
@@ -5,7 +8,6 @@
  */
 import { extname } from 'node:path'
 import type { SFTPWrapper, Stats } from 'ssh2'
-import { sortDirEntries } from '../../shared/file-name-sort'
 import { IMAGE_FILE_MIME_TYPES } from '../../shared/image-file-extensions'
 import { capturePathExistence, type PathExistenceResult } from '../../shared/path-existence-batch'
 import type { SearchResult } from '../../shared/code-search-types'
@@ -18,12 +20,7 @@ import {
   type FolderDownloadOptions,
   type SftpFactory
 } from './ssh-filesystem-download'
-import {
-  fileStatFromSftpStats,
-  lstatViaSftp,
-  readDirViaSftp,
-  statViaSftp
-} from './ssh-filesystem-provider-sftp'
+import { fileStatFromSftpStats, lstatViaSftp, statViaSftp } from './ssh-filesystem-provider-sftp'
 import type { FileReadLimits, FileReadResult, FileStat, IFilesystemProvider } from './types'
 
 // Why: same caps and probe window as the relay's fs.readFile so previews behave identically.
@@ -63,52 +60,23 @@ function isBinaryBuffer(buffer: Buffer): boolean {
 }
 
 export class SshSftpFilesystemProvider implements IFilesystemProvider {
-  private sftpPromise: Promise<SFTPWrapper> | null = null
-  private disposed = false
+  private readonly channel: SftpFilesystemChannel
 
   constructor(
     private readonly connectionId: string,
     private readonly createSftp: SftpFactory,
     private readonly mode: SshPlainSshMode,
     private readonly windowsRemotePaths = false
-  ) {}
+  ) {
+    this.channel = new SftpFilesystemChannel(createSftp)
+  }
 
   getConnectionId(): string {
     return this.connectionId
   }
 
   dispose(): void {
-    this.disposed = true
-    const pending = this.sftpPromise
-    this.sftpPromise = null
-    void pending?.then(
-      (sftp) => sftp.end(),
-      () => {}
-    )
-  }
-
-  private async sftp(): Promise<SFTPWrapper> {
-    if (this.disposed) {
-      throw new Error('SSH connection is not active')
-    }
-    if (!this.sftpPromise) {
-      const opening = this.createSftp().then((sftp) => {
-        // Why: a closed channel must not be reused; the next call reopens one.
-        sftp.once('close', () => {
-          if (this.sftpPromise === opening) {
-            this.sftpPromise = null
-          }
-        })
-        return sftp
-      })
-      opening.catch(() => {
-        if (this.sftpPromise === opening) {
-          this.sftpPromise = null
-        }
-      })
-      this.sftpPromise = opening
-    }
-    return this.sftpPromise
+    this.channel.dispose()
   }
 
   /** Round-trips one SFTP request; a silent transport times out as not alive. */
@@ -132,7 +100,7 @@ export class SshSftpFilesystemProvider implements IFilesystemProvider {
 
   private async run<T>(op: (sftp: SFTPWrapper) => Promise<T>): Promise<T> {
     try {
-      return await op(await this.sftp())
+      return await op(await this.channel.get())
     } catch (error) {
       throw normalizeSftpError(error)
     }
@@ -156,24 +124,10 @@ export class SshSftpFilesystemProvider implements IFilesystemProvider {
     return new PlainSshUnsupportedError(feature, this.mode)
   }
 
-  async readDir(dirPath: string): Promise<DirEntry[]> {
+  async readDir(dirPath: string, options?: { followSymlinks?: boolean }): Promise<DirEntry[]> {
     const path = toSftpPath(dirPath)
     return this.run(async (sftp) => {
-      const entries = await readDirViaSftp(sftp, path)
-      const mapped = await Promise.all(
-        entries.map(async (entry): Promise<DirEntry> => {
-          const isSymlink = entry.attrs.isSymbolicLink()
-          let isDirectory = entry.attrs.isDirectory()
-          if (isSymlink) {
-            // Why: a symlink to a directory must expand in the tree like its target.
-            isDirectory = await statViaSftp(sftp, `${path.replace(/\/$/, '')}/${entry.filename}`)
-              .then((stats) => stats.isDirectory())
-              .catch(() => false)
-          }
-          return { name: entry.filename, isDirectory, isSymlink }
-        })
-      )
-      return sortDirEntries(mapped)
+      return readSftpDirectory(sftp, path, options)
     })
   }
 

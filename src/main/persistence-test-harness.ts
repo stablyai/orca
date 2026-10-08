@@ -3,7 +3,6 @@ import { dirname, join } from 'node:path'
 import { installFakeAppEnvironment } from '../../config/scripts/vitest-host-ports-setup'
 import type { Project, ProjectHostSetup } from '../shared/project-types'
 import type { Repo } from '../shared/repo-types'
-import type { TerminalTab } from '../shared/terminal-tab-types'
 import type { WorkspaceLineage, WorktreeLineage } from '../shared/worktree/lineage-types'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../shared/workspace-scope'
 import type { PersistedState } from '../shared/persisted-state-types'
@@ -17,6 +16,8 @@ import {
   profileStateDatabaseFile
 } from './persistence/profile-state/profile-state-database'
 import { exportProfileStateJson } from './persistence/profile-state/profile-state-documents'
+
+export { makeTerminalTab } from './persistence-session-fixtures'
 
 // Shared mutable state so the electron mock can reference a per-test directory
 export const testState = { dir: '' }
@@ -177,18 +178,6 @@ export const makeProjectHostSetup = (
   setupMethod: 'imported-existing-folder',
   createdAt: 1,
   updatedAt: 1,
-  ...overrides
-})
-
-export const makeTerminalTab = (overrides: Partial<TerminalTab> = {}): TerminalTab => ({
-  id: 'tab1',
-  ptyId: 'pty1',
-  worktreeId: 'repo1::/worktree',
-  title: 'Terminal',
-  customTitle: null,
-  color: null,
-  sortOrder: 0,
-  createdAt: 1,
   ...overrides
 })
 

@@ -14,6 +14,7 @@ import {
   buildPosixGrokReplayGuardLines,
   buildWindowsGrokReplayGuardLines
 } from '../agent-hooks/grok-replay-guard'
+import { quoteStartupArg } from '../../shared/tui-agent-startup-shell'
 import { getCursorHookResponse, type CursorEvent } from './hook-events'
 
 const CURSOR_HOOK_RESPONSE_ENV = 'ORCA_CURSOR_HOOK_RESPONSE'
@@ -29,7 +30,8 @@ export function getPosixManagedCommand(scriptPath: string, eventName: CursorEven
 
 export function getManagedCommand(scriptPath: string, eventName: CursorEvent): string {
   if (process.platform !== 'win32') {
-    return getPosixManagedCommand(scriptPath, eventName)
+    // Cursor uses the login shell; keep the POSIX guard inside sh with portable argument quoting.
+    return `/bin/sh -c ${quoteStartupArg(getPosixManagedCommand(scriptPath, eventName), 'posix')}`
   }
   const response = getCursorHookResponse(eventName)
   const command = buildWindowsHookPowerShellCommand(

@@ -13,6 +13,7 @@ import {
 import { setMainHttpClient } from '../network/http-client'
 import { runProcess } from '../../shared/child-process/run-process'
 import { materializeCachedNodeRuntime } from './pinned-runtime-materializer'
+import { RUNTIME_ARCHIVE_RETRY_DELAYS_MS } from './runtime-archive-download'
 
 const extraction = vi.hoisted(() => ({ executable: new Uint8Array(), member: '' }))
 
@@ -273,15 +274,26 @@ it('allows a progressing download to exceed two minutes', async () => {
   expect(await readFile(await pending)).toEqual(Buffer.from(extraction.executable))
 })
 
-it('aborts a stalled body and removes the unfinished download', async () => {
+it('retries a stalled body, then gives up and removes the unfinished download', async () => {
   vi.useFakeTimers()
+  vi.spyOn(console, 'warn').mockImplementation(() => undefined)
   const cancel = vi.fn()
   const fetcher = vi.fn<typeof fetch>(async () => new Response(new ReadableStream({ cancel })))
   const pending = materializeCachedNodeRuntime(TARGET, cacheRoot, { fetcher })
   const rejected = expect(pending).rejects.toThrow('Node download stalled')
-  await vi.waitFor(() => expect(fetcher).toHaveBeenCalledOnce())
-  await vi.advanceTimersByTimeAsync(120_000)
+  const attempts = RUNTIME_ARCHIVE_RETRY_DELAYS_MS.length + 1
+  // Real file I/O sits between the timers, so step the clock until each attempt shows.
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    await vi.waitFor(async () => {
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(fetcher).toHaveBeenCalledTimes(attempt)
+    })
+    await vi.waitFor(async () => {
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(cancel).toHaveBeenCalledTimes(attempt)
+    })
+  }
   await rejected
-  expect(cancel).toHaveBeenCalledOnce()
+  expect(fetcher).toHaveBeenCalledTimes(attempts)
   expect(await readdir(runtimeDirFor())).toEqual([])
 })
