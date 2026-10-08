@@ -93,7 +93,15 @@ export const hostSshTargetSummariesSchema = z
   .looseObject({
     targets: salvagedOptional(
       'targets',
-      salvagingArray(z.looseObject({ id: z.string(), label: z.string() }))
+      salvagingArray(
+        z.looseObject({
+          id: z.string(),
+          label: z.string(),
+          // Read raw: an arm a newer desktop adds must leave the badge as it is, not read as a verdict.
+          connected: salvagedOptional('connected', z.boolean()),
+          connectionStatus: salvagedOptional('connectionStatus', z.string())
+        })
+      )
     )
   })
   .transform((reply) => reply.targets ?? [])

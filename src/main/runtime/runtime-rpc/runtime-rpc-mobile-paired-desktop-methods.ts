@@ -12,6 +12,9 @@ export const PAIRED_DESKTOP_METHODS = [
   'notifications.unsubscribe',
   'pairing.getEndpoints',
   'pairing.provisionRelay',
+  // The configured servers the desktop shows, and their workspace lists as it last fetched them.
+  'mobileRelay.hosts.list',
+  'mobileRelay.hosts.worktrees',
   'speech.dictation.cancel',
   'speech.dictation.chunk',
   'speech.dictation.finish',

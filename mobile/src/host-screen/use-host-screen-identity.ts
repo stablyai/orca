@@ -18,6 +18,7 @@ export function useHostScreenIdentity(args: {
     setCatalogError,
     setError,
     setHostLabelById,
+    setHostHealthById,
     setHostName,
     setHostPlatform,
     setHostStoredDescriptor,
@@ -62,6 +63,7 @@ export function useHostScreenIdentity(args: {
     setRepoIconsByName(new Map())
     setRepoHostIdByRepoId(new Map())
     setHostLabelById(new Map())
+    setHostHealthById(new Map())
     setHostPlatform(null)
     setShowPinnedInGroups(false)
     repoMetadataFetchedAtRef.current = 0

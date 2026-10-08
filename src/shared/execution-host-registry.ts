@@ -18,14 +18,9 @@ import type { RuntimeEnvironmentSource } from './runtime-environments'
 import type { GlobalSettings } from './global-settings-types'
 import type { Repo } from './repo-types'
 import { annotateManagedOrcadExecutionHosts } from './managed-orcad-execution-host'
+import { getSshConnectionHealth, type ExecutionHostHealth } from './execution-host-health'
 
-export type ExecutionHostHealth =
-  | 'local'
-  | 'available'
-  | 'connecting'
-  | 'blocked'
-  | 'disconnected'
-  | 'error'
+export type { ExecutionHostHealth } from './execution-host-health'
 
 export type ExecutionHostRegistryEntry = {
   id: ExecutionHostId
@@ -108,24 +103,6 @@ function runtimeControlHealth(
       return null
     case undefined:
       return null
-  }
-}
-
-function sshHealth(state: SshConnectionState | undefined): ExecutionHostHealth {
-  switch (state?.status) {
-    case 'connected':
-      return 'available'
-    case 'connecting':
-    case 'deploying-relay':
-    case 'reconnecting':
-      return 'connecting'
-    case 'auth-failed':
-    case 'error':
-    case 'reconnection-failed':
-      return 'error'
-    case 'disconnected':
-    case undefined:
-      return 'disconnected'
   }
 }
 
@@ -292,7 +269,7 @@ export function buildExecutionHostRegistry(args: {
       kind: 'ssh',
       label: args.sshTargetLabels?.get(targetId) || targetId,
       detail: 'SSH',
-      health: sshHealth(state),
+      health: getSshConnectionHealth(state?.status),
       connectionStatus: state?.status
     })
   }

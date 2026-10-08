@@ -9,6 +9,8 @@ import { resolveAdvertisedPairingEndpoint } from '../pairing-endpoint'
 import { RuntimeRpcNetworkExposure } from './runtime-rpc-network-exposure'
 import { MobileDesktopRelay } from '../mobile-desktop-relay/mobile-desktop-relay'
 import type { MobileDesktopRelayHosts } from '../mobile-desktop-relay/mobile-desktop-relay-hosts'
+import { MobileRelayHostCatalog } from '../mobile-desktop-relay/mobile-relay-host-catalog'
+import { getHostDisplayLabelOverrides } from '../../../shared/host-setting-overrides'
 import { DELEGATED_PHONE_NAME_MAX_CHARS } from '../../../shared/delegated-mobile-device-contract'
 import { allocateTerminalSubscriptionStreamId } from '../rpc/methods/terminal/terminal-subscription-stream-id'
 import {
@@ -91,6 +93,12 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
           listPhones: () => this.listRelayedPhones(),
           // Why: one allocator with local streams, so relayed ids never collide on the phone's socket.
           allocateStreamId: allocateTerminalSubscriptionStreamId
+        })
+      : null
+    this.mobileRelayHostCatalog = hosts
+      ? new MobileRelayHostCatalog({
+          hosts,
+          hostLabelOverrides: () => getHostDisplayLabelOverrides(this.runtime.getClientSettings())
         })
       : null
   }

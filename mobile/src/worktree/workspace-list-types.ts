@@ -13,6 +13,8 @@ export type Worktree = {
   hostContextLabel?: string
   /** Resolved host for the display label; present when legacy rows omit hostId. */
   hostContextHostId?: ExecutionHostId
+  /** Display-only; the host's health word beside its label, absent while the host is healthy. */
+  hostContextHealthLabel?: string
   repo: string
   branch: string
   displayName: string

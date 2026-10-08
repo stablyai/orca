@@ -10,6 +10,10 @@ import type {
 } from '../../../shared/mobile-relay-credential-contract'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
 import type {
+  MobileRelayHostsListResult,
+  MobileRelayHostWorktreesResult
+} from '../../../shared/mobile-relay-hosts-contract'
+import type {
   DelegatedPhone,
   DelegatedMobileDeviceSyncResult
 } from '../../../shared/delegated-mobile-device-contract'
@@ -117,6 +121,11 @@ export type RpcContext = {
   // Why: federation pins the authenticated saved-environment caller without exposing its token to handlers or storage.
   authenticatedCallerFingerprint?: string
   pairing?: PairingRpcContext
+  // Why: set only on a desktop that relays; it lists the configured servers it shows.
+  mobileRelayHosts?: {
+    list(): MobileRelayHostsListResult
+    worktrees(hostId: string): Promise<MobileRelayHostWorktreesResult>
+  }
   // Why: set only for an authenticated runtime-scope device and bound to it, so it manages only its own phones.
   delegatedMobileDevices?: {
     sync(phones: readonly DelegatedPhone[]): DelegatedMobileDeviceSyncResult

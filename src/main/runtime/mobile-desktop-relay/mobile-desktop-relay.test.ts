@@ -56,6 +56,12 @@ function relayWithPhone(
   const syncCalls: unknown[] = []
   const server = { capable: true }
   const hosts: MobileDesktopRelayHosts = {
+    list: () => ({
+      environments: [],
+      statusByEnvironmentId: new Map(),
+      sshTargetLabels: new Map(),
+      sshConnectionStates: new Map()
+    }),
     resolve: async (environmentId) => ({
       environmentId,
       fence: 'f',

@@ -216,6 +216,7 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
               }
             : undefined,
         pairing: pairingContext,
+        mobileRelayHosts: this.mobileRelayHostCatalog ?? undefined,
         delegatedMobileDevices:
           device.scope === 'runtime'
             ? { sync: (phones) => this.syncDelegatedMobileDevices(device.deviceId, phones) }

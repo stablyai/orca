@@ -38,23 +38,6 @@
         }
       }
     },
-    "071880b671a1": {
-      "hostLabelById": [["ssh:ssh-1", "SSH"]],
-      "hostPlatform": "linux",
-      "repoColorsByName": [
-        ["Local", "#6366f1"],
-        ["Remote", "#f97316"]
-      ],
-      "repoHostIdByRepoId": [
-        ["repo-1", "local"],
-        ["repo-2", "ssh:ssh-1"]
-      ],
-      "repoIconsByName": [],
-      "repoIdsByName": [
-        ["Local", "repo-1"],
-        ["Remote", "repo-2"]
-      ]
-    },
     "19b2979d7fc2": {
       "name": "repo.list#1",
       "ordinal": 2,
@@ -186,10 +169,15 @@
         }
       }
     },
-    "56ab81cb67dc": {
-      "name": "hostLabelById",
+    "53226cb82ec3": {
+      "name": "hostPlatform",
+      "ordinal": 15,
+      "value": "linux"
+    },
+    "6063e534d9db": {
+      "name": "hostHealthById",
       "ordinal": 13,
-      "value": [["ssh:ssh-1", "SSH"]]
+      "value": []
     },
     "6134b73f18d0": {
       "repoColorsByName": [
@@ -262,6 +250,11 @@
       "ordinal": 11,
       "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
     },
+    "bea13a4a2e87": {
+      "name": "hostLabelById",
+      "ordinal": 14,
+      "value": [["ssh:ssh-1", "SSH"]]
+    },
     "c752e67787f9": {
       "name": "ssh.listTargetSummaries#1",
       "ordinal": 7,
@@ -309,10 +302,23 @@
         "$rpc": "undefined"
       }
     },
-    "f9193cae5824": {
-      "name": "hostPlatform",
-      "ordinal": 14,
-      "value": "linux"
+    "f4667dda0187": {
+      "hostHealthById": [],
+      "hostLabelById": [["ssh:ssh-1", "SSH"]],
+      "hostPlatform": "linux",
+      "repoColorsByName": [
+        ["Local", "#6366f1"],
+        ["Remote", "#f97316"]
+      ],
+      "repoHostIdByRepoId": [
+        ["repo-1", "local"],
+        ["repo-2", "ssh:ssh-1"]
+      ],
+      "repoIconsByName": [],
+      "repoIdsByName": [
+        ["Local", "repo-1"],
+        ["Remote", "repo-2"]
+      ]
     }
   },
   "recording": {
@@ -340,14 +346,15 @@
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"
           },
-          "state": "071880b671a1",
+          "state": "f4667dda0187",
           "effects": [
             "2f1b95eac8f1",
             "1ff13ee8621c",
             "7e772c1c111d",
             "8ef3b348c179",
-            "56ab81cb67dc",
-            "f9193cae5824"
+            "6063e534d9db",
+            "bea13a4a2e87",
+            "53226cb82ec3"
           ]
         }
       }

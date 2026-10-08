@@ -74,6 +74,9 @@ export function startHostWorktreeRefresh({
         void fetchRepoMetadata({ force: true, queueIfInFlight: true })
       } else if (event.type === 'worktreesChanged') {
         void fetchWorktrees()
+      } else if (event.type === 'sshStateChanged') {
+        // Why: host badges carry SSH health, read with the labels from ssh.listTargetSummaries.
+        void fetchRepoMetadata({ force: true, queueIfInFlight: true })
       }
     }
   )

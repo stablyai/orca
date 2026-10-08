@@ -178,6 +178,8 @@ export const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'linear.updateIssue',
   'markdown.readTab',
   'markdown.saveTab',
+  'mobileRelay.hosts.list',
+  'mobileRelay.hosts.worktrees',
   'mobileWeb.bundle.chunk',
   'mobileWeb.bundle.manifest',
   'mobileWeb.bundle.range',

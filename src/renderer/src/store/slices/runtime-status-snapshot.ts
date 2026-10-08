@@ -1,4 +1,7 @@
-import type { RuntimeHostStatusSnapshot } from '../../../../shared/runtime-host-status'
+import {
+  runtimeEnvironmentStatusFromSnapshot,
+  type RuntimeHostStatusSnapshot
+} from '../../../../shared/runtime-host-status'
 import type { AppState } from '../types'
 import type { RuntimeEnvironmentStatus } from './runtime-status-types'
 import { ensureBrowserClientHostsForRestoredPages } from '@/runtime/restored-client-hosted-browser-host-attach'
@@ -21,17 +24,11 @@ export function applyRuntimeHostStatusSnapshot(
     return
   }
   const entry: RuntimeEnvironmentStatus = {
-    snapshot,
-    checkedAt: snapshot.checkedAt,
+    ...runtimeEnvironmentStatusFromSnapshot(snapshot),
     connectionGeneration: previous?.connectionGeneration,
-    hostContactEpoch: previous?.hostContactEpoch,
-    status: snapshot.verification === 'verified' && !snapshot.retired ? snapshot.status : null,
-    remoteControl: snapshot.remoteControl
+    hostContactEpoch: previous?.hostContactEpoch
   }
   if (entry.status) {
-    if (snapshot.remoteControl) {
-      entry.status = { ...entry.status, remoteControl: snapshot.remoteControl }
-    }
     state.setRuntimeEnvironmentStatus(snapshot.environmentId, entry)
     if (previous?.status == null) {
       void ensureBrowserClientHostsForRestoredPages(state)

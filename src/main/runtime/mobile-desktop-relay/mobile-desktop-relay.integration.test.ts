@@ -144,8 +144,19 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
     const registry = host.server.getDeviceRegistry()!
     const children = () => registry.listDelegatedMobileDevices(desktopOnHost.pairedDeviceId!)
     const syncedNames: string[][] = []
-    const state = { capable: true, retire: (_id: string) => {} }
+    const retirementListeners = new Set<(environmentId: string) => void>()
+    const state = {
+      capable: true,
+      retire: (environmentId: string) =>
+        retirementListeners.forEach((listener) => listener(environmentId))
+    }
     const hosts: MobileDesktopRelayHosts = {
+      list: () => ({
+        environments: [],
+        statusByEnvironmentId: new Map(),
+        sshTargetLabels: new Map(),
+        sshConnectionStates: new Map()
+      }),
       resolve: async (environmentId) =>
         environmentId === 'env-1'
           ? { environmentId, fence: 'pairing-1', pairing: desktopOnHost }
@@ -165,8 +176,8 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
           : response
       },
       onEnvironmentRetired: (listener) => {
-        state.retire = listener
-        return () => {}
+        retirementListeners.add(listener)
+        return () => retirementListeners.delete(listener)
       }
     }
     desktop.server.setMobileDesktopRelayHosts(hosts)

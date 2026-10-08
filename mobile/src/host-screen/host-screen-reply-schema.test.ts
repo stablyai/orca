@@ -83,6 +83,20 @@ describe('host screen reply schemas', () => {
     ).toEqual([{ id: 't', label: 'T' }])
   })
 
+  it('keeps SSH lifecycle fields raw and drops a malformed one without losing the target', () => {
+    expect(
+      hostSshTargetSummariesSchema.parse({
+        targets: [
+          { id: 't', label: 'T', connected: false, connectionStatus: 'hibernating' },
+          { id: 'u', label: 'U', connected: 'no', connectionStatus: 7 }
+        ]
+      })
+    ).toEqual([
+      { id: 't', label: 'T', connected: false, connectionStatus: 'hibernating' },
+      { id: 'u', label: 'U' }
+    ])
+  })
+
   it('answers the empty target list for a reply that is no object at all', () => {
     // Why: the label write runs before the platform write in the same sequence, so a throw here
     // would take the platform down with it. readSshTargets answered [] for every one of these.

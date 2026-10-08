@@ -36,6 +36,8 @@ export type WorktreeListRowItem = {
   hostContextLabel?: string
   /** Resolved host for the display label; present when legacy rows omit hostId. */
   hostContextHostId?: ExecutionHostId
+  /** The host's health word, e.g. "Disconnected"; absent while the host is healthy. */
+  hostContextHealthLabel?: string
   repo: string
   branch: string
   displayName: string
@@ -165,7 +167,12 @@ function WorktreeListRowComponent<T extends WorktreeListRowItem>({
             </View>
           )}
           {item.hostContextLabel ? (
-            <View style={[styles.childBadge, styles.hostBadge]}>
+            <View
+              style={[styles.childBadge, styles.hostBadge]}
+              accessibilityLabel={[item.hostContextLabel, item.hostContextHealthLabel]
+                .filter(Boolean)
+                .join(', ')}
+            >
               {/* Rows from hosts that predate hostId stamping are local: a remote row always carries one. */}
               {(parseExecutionHostId(item.hostContextHostId ?? item.hostId)?.kind ?? 'local') ===
               'local' ? (
@@ -176,6 +183,12 @@ function WorktreeListRowComponent<T extends WorktreeListRowItem>({
               <Text style={[styles.childBadgeText, styles.hostBadgeText]} numberOfLines={1}>
                 {item.hostContextLabel}
               </Text>
+              {/* Why separate Text: the name truncates first so the health word stays readable. */}
+              {item.hostContextHealthLabel ? (
+                <Text style={[styles.childBadgeText, styles.hostHealthText]}>
+                  {`· ${item.hostContextHealthLabel}`}
+                </Text>
+              ) : null}
             </View>
           ) : null}
           {/* Repo glyph+name only when not already grouped under this repo;
@@ -340,6 +353,9 @@ const styles = StyleSheet.create({
   },
   hostBadgeText: {
     flexShrink: 1
+  },
+  hostHealthText: {
+    flexShrink: 0
   },
   lineageToggle: {
     alignSelf: 'flex-start',
