@@ -136,7 +136,8 @@ export function connectPanePty(
       return
     }
     writeTerminalOutput(session.pane.terminal, reset, {
-      foreground: shouldWritePtyOutputForeground(session.deps.isVisibleRef.current)
+      foreground: shouldWritePtyOutputForeground(session.deps.isVisibleRef.current),
+      onParsed: idleCursorReset.getResetParsedCallback()
     })
   }
   // Why: passphrase-gate waits register a teardown here so dispose() can
