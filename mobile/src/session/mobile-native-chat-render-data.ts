@@ -55,7 +55,7 @@ export type MobileNativeChatPendingItem = {
 
 export function foldMobileNativeChatMessages(messages: NativeChatMessage[]): NativeChatMessage[] {
   // The conversation only: a subagent's rows are that subagent's, and mobile shows
-  // each spawn as its roster's one line rather than the child's own rows.
+  // each spawn as its roster row (one line per child) rather than the child's own rows.
   // Normalize first (desktop assembler parity): image marker turns fold into
   // image-ref blocks instead of rendering as raw `[Image: …]` text. An unrecognised event
   // with no words of its own is stored, not drawn; mobile draws no task list, so a plan update

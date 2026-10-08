@@ -13,7 +13,11 @@ import { chmodSync, copyFileSync, existsSync, linkSync, mkdirSync, readFileSync 
 import { dirname, join } from 'node:path'
 import { runProcess } from '../../shared/child-process/run-process'
 import { NODE_RUNTIME_ASSETS, type ServerTarget } from '../../shared/node-runtime-pin'
-import { ORCAD_VERSION_FILENAME, orcadNodeRuntimeRelativePath } from '../../shared/orcad-artifacts'
+import {
+  ORCAD_SERVER_ENTRY_FILENAME,
+  ORCAD_VERSION_FILENAME,
+  orcadNodeRuntimeRelativePath
+} from '../../shared/orcad-artifacts'
 import {
   ORCAD_NATIVE_PREFLIGHT_FLAG,
   parseOrcadNativePreflightReport
@@ -87,7 +91,7 @@ export async function selectServeRuntime(
   if (!runtime) {
     return electron('the orcad slot names no pinned runtime')
   }
-  const entry = join(slotDir, 'orcad.js')
+  const entry = join(slotDir, ORCAD_SERVER_ENTRY_FILENAME)
   const report = parseOrcadNativePreflightReport(
     await (input.nativePreflight ?? runNativePreflight)(runtime, entry).catch(() => '')
   )

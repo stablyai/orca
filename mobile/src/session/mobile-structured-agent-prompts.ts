@@ -192,6 +192,7 @@ export function projectStructuredQuestion(
     ...(optionDescriptions.some(Boolean) ? { optionDescriptions } : {}),
     multiSelect: false,
     allowOther: Boolean(prompt.body.freeTextQuestionId),
+    ...(prompt.body.freeTextInput ? { freeTextInput: prompt.body.freeTextInput } : {}),
     optionTokens: prompt.body.options.map((option) =>
       encodePromptToken({
         kind: 'question-option',
@@ -258,8 +259,13 @@ export function structuredQuestionResponseTarget(
   }
   const freeText = decodeQuestionFreeTextAnswer(response)
   if (freeText) {
-    const answer = freeText.answer.trim()
-    return answer.length > 0
+    const allowEmpty =
+      currentPrompt?.itemId === freeText.payload.itemId &&
+      currentPrompt.revision === freeText.payload.revision &&
+      currentPrompt.body.freeTextQuestionId === freeText.payload.questionId &&
+      currentPrompt.body.freeTextInput?.allowEmpty === true
+    const answer = allowEmpty ? freeText.answer : freeText.answer.trim()
+    return answer.length > 0 || allowEmpty
       ? {
           itemId: freeText.payload.itemId,
           expectedRevision: freeText.payload.revision,
@@ -272,6 +278,7 @@ export function structuredQuestionResponseTarget(
   }
   const [question] = agentSessionPromptQuestions(currentPrompt.body)
   const trimmed = response.trim()
+  const allowEmpty = currentPrompt.body.freeTextInput?.allowEmpty === true
   const option = currentPrompt.body.options.find(
     (candidate) => candidate.id === response || candidate.label === trimmed
   )
@@ -282,11 +289,11 @@ export function structuredQuestionResponseTarget(
       answer: { questionId: question.id, optionIds: [option.id] }
     }
   }
-  return question && currentPrompt.body.freeTextQuestionId && trimmed
+  return question && currentPrompt.body.freeTextQuestionId && (trimmed || allowEmpty)
     ? {
         itemId: currentPrompt.itemId,
         expectedRevision: currentPrompt.revision,
-        answer: { questionId: question.id, optionIds: [], other: trimmed }
+        answer: { questionId: question.id, optionIds: [], other: allowEmpty ? response : trimmed }
       }
     : null
 }

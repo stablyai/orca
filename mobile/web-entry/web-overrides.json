@@ -30,6 +30,10 @@
       "reason": "expo-secure-store resolves to {} on web, and the bridge carries the RPC, so the page holds no device token."
     },
     {
+      "file": "src/platform/native-chat-image-fingerprint.web.ts",
+      "reason": "The web image uploader uses WebCrypto SHA-256 when available to reduce JavaScript hashing of large images. Native keeps the synchronous portable fingerprint; unavailable or failed web crypto uses that same portable fallback."
+    },
+    {
       "file": "src/platform/host-os.web.ts",
       "reason": "Platform.OS is web inside the shell's page, but the keyboard the page lifts over is the phone's, reported in that OS's own terms: iOS counts the home indicator. Keyboard and inset arithmetic branches on the host OS, so this answers the phone's OS from the WebView's user agent, and the page computes what the native screen computes."
     },
@@ -160,6 +164,10 @@
     {
       "file": "src/components/AuthFailedBannerActions.web.tsx",
       "reason": "The auth-failed banner offers Retry, Re-pair and Remove, and on the page only Re-pair works. /pair-scan sits outside the page's route root of app/h (config/scripts/mobile-web-app-route-manifest.mjs:6), so route-handoff.web.ts:207 hands the push to the shell, which opens the native scan screen and returns to the same page document on Back. Retry and Remove are inert here: forceReconnect is null (client-context.web.tsx:57, read through host-client-hooks.ts:88) and removal refuses (page-host-removal-refusal.ts). The banner is reachable on the page because the shell forwards the native client's state (mobile-web-shell/bridge-host.ts:301) and auth-failed is in the wire enum (bridge/bridge-envelope.ts:44). So this one renders Re-pair as native does and one line naming the app for reconnect and removal."
+    },
+    {
+      "file": "src/session/MobileNativeChatVisualFrame.web.tsx",
+      "reason": "The native frame runs a chat visual's scripts in a sandboxed child of a trusted host document inside a react-native-webview, which throws at import in a browser. The page's response-header policy (script-src 'self', frame-src 'none') is inherited by a srcdoc frame, so a visual's inline scripts cannot run here without loosening the page policy. This one renders the visual sealed, as MobileHtmlPreview.web.tsx does: an empty sandbox, no script, a fixed-height frame the visual scrolls inside."
     },
     {
       "file": "src/components/MobileHtmlPreview.web.tsx",

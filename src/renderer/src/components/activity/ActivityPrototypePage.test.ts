@@ -8,13 +8,16 @@ import { makePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import {
   ACTIVITY_SEARCH_QUERY_MAX_BYTES,
-  activityThreadResponseRenderPreview,
   activityThreadMatchesSearchQuery,
-  buildActivityEvents,
-  buildAgentPaneThreads,
   buildActivityThreadGroups,
   isActivitySearchQueryTooLarge
-} from './ActivityPrototypePage'
+} from './activity-thread-grouping'
+import {
+  activityThreadResponseRenderPreview,
+  activityThreadStatusId
+} from './activity-thread-presentation'
+import { buildActivityEvents } from './activity-event-builder'
+import { buildAgentPaneThreads } from './activity-thread-builder'
 import {
   makeActivityResult,
   makeRepo,
@@ -29,7 +32,6 @@ import {
   PANE_KEY_2,
   PANE_KEY_3
 } from './ActivityPrototypePage-test-fixtures'
-import { activityThreadStatusId } from './activity-thread-presentation'
 
 describe('buildActivityEvents', () => {
   it('keeps every pane visible before applying the global activity cap', () => {

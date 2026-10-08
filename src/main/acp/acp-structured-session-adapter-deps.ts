@@ -5,6 +5,7 @@ import type {
   AgentSessionJournalIdentity
 } from '../../shared/agent-session-journal-types'
 import type { AgentJournalDispatchRejection } from '../../shared/agent-session-failure-words'
+import type { JournalLoad } from '../native-chat/agent-session-journal/journal-open'
 import type { AcpLaunchSpec } from './acp-launch-specs'
 import type { ConnectAcpAgent } from './acp-structured-connection'
 import type { AcpStructuredLaunch } from './acp-structured-launch-resolution'
@@ -17,6 +18,8 @@ export const ACP_OPTION_WRITE_TIMEOUT_MS = 30_000
 export type AcpStructuredSessionAdapterDeps = {
   spec: AcpLaunchSpec
   resolveLaunch: (input: { identity: AgentSessionJournalIdentity }) => Promise<AcpStructuredLaunch>
+  /** The chat's journal as it stands, read without opening it; null when it has none. */
+  readJournal?: (sessionId: string) => JournalLoad | null
   /** Starts the agent's process and owns its protocol: `createAcpAgentConnection` in production. */
   connect: ConnectAcpAgent
   readProcessStartTime?: (pid: number) => Promise<number | null>

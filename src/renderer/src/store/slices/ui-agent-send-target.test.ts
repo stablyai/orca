@@ -10,8 +10,10 @@ import { createUIStore } from './ui-slice-test-harness'
 
 const mocks = vi.hoisted(() => ({
   sendNotesToActiveAgentSession: vi.fn(),
-  appendStructuredAgentSessionOutboxMessage: vi.fn(),
-  relaunchFailedStructuredAgentSessionForMessage: vi.fn(),
+  sendStructuredAgentSessionMessage: vi.fn(),
+  relaunchFailedStructuredAgentSessionWithMessage: vi.fn(
+    (): Promise<{ delivered: boolean }> | null => null
+  ),
   track: vi.fn(),
   toastMessage: vi.fn(),
   toastSuccess: vi.fn(),
@@ -26,13 +28,26 @@ vi.mock('@/lib/active-agent-note-send', () => ({
   sendNotesToActiveAgentSession: mocks.sendNotesToActiveAgentSession
 }))
 
-vi.mock('@/components/native-chat/structured-agent-session-outbox-storage', () => ({
-  appendStructuredAgentSessionOutboxMessage: mocks.appendStructuredAgentSessionOutboxMessage
+vi.mock('@/components/native-chat/structured-agent-session-message-sender', () => ({
+  sendStructuredAgentSessionMessage: mocks.sendStructuredAgentSessionMessage
+}))
+// The chat's tab names its host; the send only needs to find one.
+vi.mock('@/store', () => ({
+  useAppStore: {
+    getState: () => ({
+      unifiedTabsByWorktree: {
+        'wt-1': [{ contentType: 'agent-session', entityId: 'claude_1', worktreeId: 'wt-1' }]
+      }
+    })
+  }
+}))
+vi.mock('@/runtime/structured-agent-session-owner', () => ({
+  structuredAgentSessionTargetForTab: () => ({ kind: 'local' })
 }))
 
-vi.mock('@/lib/structured-agent-session-launch', () => ({
-  relaunchFailedStructuredAgentSessionForMessage:
-    mocks.relaunchFailedStructuredAgentSessionForMessage
+vi.mock('@/lib/structured-agent-session-launch-message', () => ({
+  relaunchFailedStructuredAgentSessionWithMessage:
+    mocks.relaunchFailedStructuredAgentSessionWithMessage
 }))
 
 vi.mock('@/lib/telemetry', () => ({
@@ -55,9 +70,12 @@ afterEach(() => {
 beforeEach(() => {
   mocks.sendNotesToActiveAgentSession.mockReset()
   mocks.sendNotesToActiveAgentSession.mockResolvedValue({ status: 'sent' })
-  mocks.appendStructuredAgentSessionOutboxMessage.mockReset()
-  mocks.appendStructuredAgentSessionOutboxMessage.mockReturnValue({ clientMessageId: 'queued' })
-  mocks.relaunchFailedStructuredAgentSessionForMessage.mockReset()
+  mocks.sendStructuredAgentSessionMessage.mockReset()
+  mocks.sendStructuredAgentSessionMessage.mockReturnValue({
+    clientMessageId: 'sent',
+    outcome: Promise.resolve('recorded')
+  })
+  mocks.relaunchFailedStructuredAgentSessionWithMessage.mockClear()
   mocks.track.mockReset()
   mocks.toastMessage.mockReset()
   mocks.toastSuccess.mockReset()
@@ -411,13 +429,17 @@ describe('createUISlice agent send target mode', () => {
 
     await expect(store.getState().sendPromptToSidebarAgentTarget(chatPaneKey)).resolves.toBe(true)
 
-    expect(mocks.appendStructuredAgentSessionOutboxMessage).toHaveBeenCalledWith(
-      'claude_1',
-      'Review this'
-    )
-    expect(mocks.relaunchFailedStructuredAgentSessionForMessage).toHaveBeenCalledWith(
+    expect(mocks.sendStructuredAgentSessionMessage).toHaveBeenCalledWith({
+      sessionId: 'claude_1',
+      target: { kind: 'local' },
+      text: 'Review this',
+      callerKeepsText: true
+    })
+    expect(mocks.relaunchFailedStructuredAgentSessionWithMessage).toHaveBeenCalledWith(
       worktreeId,
-      'claude_1'
+      'claude_1',
+      'Review this',
+      { callerKeepsText: true }
     )
     expect(mocks.sendNotesToActiveAgentSession).not.toHaveBeenCalled()
     expect(onPromptDelivered).toHaveBeenCalledTimes(1)

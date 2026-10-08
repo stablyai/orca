@@ -1,15 +1,16 @@
 // @vitest-environment happy-dom
 
 import { cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react'
-import type { KeyboardEventHandler } from 'react'
+import { useState, type KeyboardEventHandler } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import {
   applyPickerSuggestion,
   deriveComposerAutocomplete,
-  EMPTY_HISTORY,
   type ComposerAutocomplete
 } from './native-chat-composer-state'
 import { getNativeChatAgentProfile } from '../../../../shared/native-chat-agent-profiles'
+import { useNativeChatRecallPosition } from './use-native-chat-composer-recall'
+import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { useNativeChatComposerKeyDown } from './use-native-chat-composer-keydown'
 
 const COMMAND = {
@@ -55,8 +56,7 @@ function setup(
     send: vi.fn(),
     setActiveSuggestion: vi.fn(),
     setDraft: vi.fn(),
-    setCaret: vi.fn(),
-    setHistory: vi.fn()
+    setCaret: vi.fn()
   }
   const hook = renderHook(() =>
     useNativeChatComposerKeyDown({
@@ -64,7 +64,6 @@ function setup(
       mentionFiles: { files, loading, failed: false },
       activeSuggestion,
       draft,
-      history: EMPTY_HISTORY,
       isComposing: () => composing,
       ...callbacks
     })
@@ -198,5 +197,124 @@ describe('useNativeChatComposerKeyDown', () => {
     expect(event.preventDefault).toHaveBeenCalledOnce()
     expect(callbacks.dispatchPickerCommand).not.toHaveBeenCalled()
     expect(callbacks.send).not.toHaveBeenCalled()
+  })
+
+  describe('prompt recall', () => {
+    const userMessage = (id: string, text: string): NativeChatMessage => ({
+      id,
+      role: 'user',
+      blocks: [{ type: 'text', text }],
+      timestamp: null,
+      source: 'transcript'
+    })
+
+    const onEveryEdge = (): boolean => true
+
+    function Composer({
+      prompts,
+      initialDraft = '',
+      hasAttachments,
+      isCaretOnVisualEdge = onEveryEdge
+    }: {
+      prompts: string[]
+      initialDraft?: string
+      hasAttachments?: boolean
+      isCaretOnVisualEdge?: (edge: 'start' | 'end') => boolean
+    }): React.JSX.Element {
+      const [draft, setDraft] = useState(initialDraft)
+      const [recallPosition, setRecallPosition] = useNativeChatRecallPosition(draft)
+      const onKeyDown = useNativeChatComposerKeyDown({
+        autocomplete: { mode: 'none' },
+        activeSuggestion: 0,
+        draft,
+        mentionFiles: { files: [], loading: false, failed: false },
+        completeMention: vi.fn(),
+        recall: {
+          source: { messages: prompts.map((text, index) => userMessage(String(index), text)) },
+          position: recallPosition,
+          setPosition: setRecallPosition,
+          isCaretOnVisualEdge,
+          show: vi.fn()
+        },
+        isComposing: () => false,
+        completePickerItem: vi.fn(),
+        dispatchPickerCommand: vi.fn(),
+        dismissPicker: vi.fn(),
+        interrupt: vi.fn(),
+        send: vi.fn(),
+        setActiveSuggestion: vi.fn(),
+        setDraft,
+        setCaret: vi.fn(),
+        ...(hasAttachments === undefined ? {} : { hasAttachments })
+      })
+      return (
+        <textarea
+          aria-label="composer"
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={onKeyDown}
+        />
+      )
+    }
+
+    function setup(props: Parameters<typeof Composer>[0]) {
+      const field = render(<Composer {...props} />).container.querySelector('textarea')!
+      return {
+        field,
+        // The draft after the press, and whether the handler claimed the key.
+        press: (key: string, init: KeyboardEventInit = {}) => {
+          const claimed = !fireEvent.keyDown(field, { key, ...init })
+          return { draft: field.value, claimed }
+        }
+      }
+    }
+
+    it('walks every prompt in the chat, back to the oldest and forward to an empty draft', () => {
+      const { press } = setup({ prompts: ['one', 'two', 'three'] })
+      expect(press('ArrowUp')).toEqual({ draft: 'three', claimed: true })
+      expect(press('ArrowUp').draft).toBe('two')
+      expect(press('ArrowUp').draft).toBe('one')
+      expect(press('ArrowUp')).toEqual({ draft: 'one', claimed: false })
+      expect(press('ArrowDown').draft).toBe('two')
+      expect(press('ArrowDown').draft).toBe('three')
+      expect(press('ArrowDown')).toEqual({ draft: '', claimed: true })
+      expect(press('ArrowDown')).toEqual({ draft: '', claimed: false })
+    })
+
+    it('leaves the arrows to the caret while a typed draft is live', () => {
+      const { press } = setup({ prompts: ['one'], initialDraft: 'typing' })
+      expect(press('ArrowUp')).toEqual({ draft: 'typing', claimed: false })
+    })
+
+    it('treats an edited recall as a typed draft', () => {
+      const { field, press } = setup({ prompts: ['one', 'two'] })
+      press('ArrowUp')
+      fireEvent.change(field, { target: { value: 'two, edited' } })
+      expect(press('ArrowUp')).toEqual({ draft: 'two, edited', claimed: false })
+      // Edited back to the recalled text, it is still a typed draft.
+      fireEvent.change(field, { target: { value: 'two' } })
+      expect(press('ArrowUp')).toEqual({ draft: 'two', claimed: false })
+    })
+
+    it('moves the caret inside a recalled prompt until it reaches the edge', () => {
+      const isCaretOnVisualEdge = vi.fn((edge: 'start' | 'end') => edge === 'end')
+      const { press } = setup({ prompts: ['one', 'two\nlines'], isCaretOnVisualEdge })
+      isCaretOnVisualEdge.mockReturnValueOnce(true)
+      press('ArrowUp')
+      expect(press('ArrowUp')).toEqual({ draft: 'two\nlines', claimed: false })
+      expect(press('ArrowDown')).toEqual({ draft: '', claimed: true })
+    })
+
+    it('does not recall on a modified arrow or into a composer holding attachments', () => {
+      const selecting = setup({ prompts: ['one', 'two'] })
+      selecting.press('ArrowUp')
+      expect(selecting.press('ArrowUp', { shiftKey: true })).toEqual({
+        draft: 'two',
+        claimed: false
+      })
+
+      const attached = setup({ prompts: ['one'], hasAttachments: true })
+      expect(attached.press('ArrowUp')).toEqual({ draft: '', claimed: false })
+    })
   })
 })

@@ -57,6 +57,28 @@ function makeRestartedServeRuntime(overrides: Partial<WorkspaceSessionState> = {
   return runtime
 }
 
+const SPLIT_GROUPS = [
+  {
+    id: 'group-left',
+    worktreeId: TEST_WORKTREE_ID,
+    activeTabId: 'serve-tab',
+    tabOrder: ['serve-tab']
+  },
+  {
+    id: 'group-right',
+    worktreeId: TEST_WORKTREE_ID,
+    activeTabId: 'daemon-tab',
+    tabOrder: ['daemon-tab']
+  }
+]
+
+// Why: the per-client list projection repairs activeGroupId, so read the host's stored snapshot.
+function storedActiveGroupId(runtime: OrcaRuntimeService): string | null | undefined {
+  const snapshots: Map<string, { activeGroupId?: string | null }> =
+    runtime['mobileSessionTabsByWorktree']
+  return snapshots.get(TEST_WORKTREE_ID)?.activeGroupId
+}
+
 function terminalPtyIds(tabs: readonly { type: string; ptyId?: string | null }[]): string[] {
   return tabs.flatMap((tab) => (tab.type === 'terminal' && tab.ptyId ? [tab.ptyId] : [])).sort()
 }
@@ -104,22 +126,8 @@ describe('OrcaRuntimeService', () => {
 
   it('restores a persisted split group layout on the cold rebuild', async () => {
     const runtime = makeRestartedServeRuntime({
-      tabGroups: {
-        [TEST_WORKTREE_ID]: [
-          {
-            id: 'group-left',
-            worktreeId: TEST_WORKTREE_ID,
-            activeTabId: 'serve-tab',
-            tabOrder: ['serve-tab']
-          },
-          {
-            id: 'group-right',
-            worktreeId: TEST_WORKTREE_ID,
-            activeTabId: 'daemon-tab',
-            tabOrder: ['daemon-tab']
-          }
-        ]
-      }
+      activeGroupIdByWorktree: { [TEST_WORKTREE_ID]: 'group-left' },
+      tabGroups: { [TEST_WORKTREE_ID]: SPLIT_GROUPS }
     })
 
     const listed = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
@@ -128,5 +136,44 @@ describe('OrcaRuntimeService', () => {
       ['serve-tab'],
       ['daemon-tab']
     ])
+    expect(storedActiveGroupId(runtime)).toBe('group-left')
+  })
+
+  it('restores the saved active group of a split even when it is not the first group', async () => {
+    const runtime = makeRestartedServeRuntime({
+      activeTabId: 'daemon-tab',
+      activeTabIdByWorktree: { [TEST_WORKTREE_ID]: 'daemon-tab' },
+      activeGroupIdByWorktree: { [TEST_WORKTREE_ID]: 'group-right' },
+      tabGroups: { [TEST_WORKTREE_ID]: SPLIT_GROUPS }
+    })
+
+    const listed = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+    expect(storedActiveGroupId(runtime)).toBe('group-right')
+    expect(listed.activeGroupId).toBe('group-right')
+  })
+
+  it('falls back to the active tab group when the saved active group was not restored', async () => {
+    const runtime = makeRestartedServeRuntime({
+      activeTabId: 'daemon-tab',
+      activeTabIdByWorktree: { [TEST_WORKTREE_ID]: 'daemon-tab' },
+      activeGroupIdByWorktree: { [TEST_WORKTREE_ID]: 'group-gone' },
+      tabGroups: { [TEST_WORKTREE_ID]: SPLIT_GROUPS }
+    })
+
+    await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+    expect(storedActiveGroupId(runtime)).toBe('group-right')
+  })
+
+  it('keeps the headless group active when there is no persisted split', async () => {
+    const runtime = makeRestartedServeRuntime({
+      activeGroupIdByWorktree: { [TEST_WORKTREE_ID]: 'group-gone' }
+    })
+
+    const listed = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+    expect(listed.tabGroups).toHaveLength(1)
+    expect(storedActiveGroupId(runtime)).toBe(listed.tabGroups?.[0]?.id)
   })
 })

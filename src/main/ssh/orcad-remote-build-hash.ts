@@ -1,4 +1,5 @@
-/** The installed slot's `orcad.js` identity, the same 16-hex prefix orcad reports in its health. */
+/** The installed entry bytes, hashed as the server reports them for activation and rollback. */
+import { ORCAD_LAUNCHER_FILENAME } from '../../shared/orcad-artifacts'
 import { shellEscape } from './ssh-connection-utils'
 import { execOrcadRemote, type OrcadRemoteExecTarget } from './orcad-remote-runtime-control'
 import { orcadWindowsBaseDir, orcadWindowsHostOpCommand } from './orcad-remote-windows-node'
@@ -29,12 +30,13 @@ export function remoteOrcadBuildHashCommand(
       host,
       orcadWindowsBaseDir(host, remoteInstallDir),
       'build-hash',
-      [joinRemotePath(host, remoteInstallDir, 'orcad.js')]
+      [joinRemotePath(host, remoteInstallDir, ORCAD_LAUNCHER_FILENAME)]
     )
   }
-  const path = shellEscape(joinRemotePath(host, remoteInstallDir, 'orcad.js'))
+  const path = shellEscape(joinRemotePath(host, remoteInstallDir, ORCAD_LAUNCHER_FILENAME))
   // Why both tools: GNU/busybox ship sha256sum, macOS ships shasum; either prints the digest first.
   return [
+    `[ -f ${path} ] && [ -r ${path} ] || exit 1;`,
     `orca_hash=$(if command -v sha256sum >/dev/null 2>&1; then sha256sum ${path} | awk '{print $1}';`,
     `elif command -v shasum >/dev/null 2>&1; then shasum -a 256 ${path} | awk '{print $1}'; fi);`,
     `case "$orca_hash" in [0-9a-fA-F][0-9a-fA-F]*) printf '%s %.16s\\n' ${shellEscape(BUILD_HASH_MARKER)} "$orca_hash";; esac`

@@ -31,6 +31,8 @@ import {
 } from './structured-agent-session-queued-pause'
 import { nextSendableQueuedCard } from '../agent-session-journal/queued-message-pause'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { agentSessionAttachmentExpiredRefusal } from './structured-agent-session-turns'
+import { isAgentSessionAttachmentExpiredError } from '../agent-session-attachments/agent-session-attachment-claims'
 
 /** Budget at accept, in the send schema's own unit (`Buffer.byteLength` of the
  *  serialized blocks); refused readably rather than trimmed. */
@@ -200,6 +202,8 @@ export async function maybeQueueStructuredAgentSessionSend(
     envelope: { clientOperationId: string }
     body: AgentJournalMessageItem
     delivery?: 'queue-if-active'
+    /** A person's send at a chat surface: every attachment it names must still be stored. */
+    userSend?: true
   }
 ): Promise<
   | { ok: true; value: AgentSessionSendResult }
@@ -235,16 +239,25 @@ export async function maybeQueueStructuredAgentSessionSend(
   }
   // The insert notifies through the journal's commit listener: publication and
   // the drain re-derive with no call here to forget.
-  const row = await ctx.journal.queuedMessages.insert(
-    {
-      messageId: clientMessageId,
-      body: params.body,
-      // In the session that will send it: the reducer aliases the provider's echo by exactly this.
-      fingerprint: agentSessionSendBodyFingerprint(ctx.sessionId, params.body),
-      hostInstance: structuredAgentSessionHostInstance()
-    },
-    ctx.operationReceipt
-  )
+  let row: QueuedMessageRow
+  try {
+    row = await ctx.journal.queuedMessages.insert(
+      {
+        messageId: clientMessageId,
+        body: params.body,
+        // In the session that will send it: the reducer aliases the provider's echo by exactly this.
+        fingerprint: agentSessionSendBodyFingerprint(ctx.sessionId, params.body),
+        hostInstance: structuredAgentSessionHostInstance(),
+        ...(params.userSend ? { requireAttachments: true } : {})
+      },
+      ctx.operationReceipt
+    )
+  } catch (error) {
+    if (isAgentSessionAttachmentExpiredError(error)) {
+      return agentSessionAttachmentExpiredRefusal()
+    }
+    throw error
+  }
   return {
     ok: true,
     value: {
@@ -367,7 +380,7 @@ export class StructuredAgentSessionQueuedMessageDrain {
           expect: 'waiting',
           settledByOp: null,
           hostInstance: structuredAgentSessionHostInstance(),
-          yieldsToPause: { hostInstance: structuredAgentSessionHostInstance() }
+          yieldsToPause: true
         }
       )
     } catch (error) {

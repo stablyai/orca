@@ -108,8 +108,7 @@ export function useStructuredAgentSessionHostQueuesMessages(target: RuntimeClien
   return useStructuredAgentSessionHostQueuesMessagesState(target) === 'supported'
 }
 
-/** Three-state, for the outbox: only `supported` lets a first attempt ask to be queued, and only
- *  `unsupported` drops the field from a replay; `unknown` holds nothing back. */
+/** Three-state: only `supported` lets a send ask to be queued; `unknown` holds nothing back. */
 export function useStructuredAgentSessionHostQueuesMessagesState(
   target: RuntimeClientTarget
 ): StructuredAgentSessionHostCapabilityState {

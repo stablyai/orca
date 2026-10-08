@@ -2,7 +2,7 @@ import type { AgentSessionSendResult } from '../../../src/shared/agent-session-w
 import {
   structuredAgentSessionSendBody,
   type StructuredAgentSessionAttachment
-} from '../../../src/shared/structured-agent-session-outbox'
+} from '../../../src/shared/structured-agent-session-send-mutation'
 import {
   structuredAgentSessionDomainFingerprint,
   structuredAgentSessionPayloadFingerprint

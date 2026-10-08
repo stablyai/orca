@@ -7,7 +7,7 @@ import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type { SparsePreset } from '../../../../shared/worktree/create-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { PendingSmartGitHubSubmitResolution } from './source-selection-decisions'
-import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/SmartWorkspaceNameField'
+import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/smart-workspace-name-field-model'
 export type ComposerSourceModel = {
   addComposerAttachments: (paths: string[]) => void
   applyLinkedGitLabWorkItem: (item: GitLabWorkItem) => void
@@ -15,6 +15,7 @@ export type ComposerSourceModel = {
     item: GitHubWorkItem,
     options?: { preserveBranchNameOverride?: boolean | undefined }
   ) => void
+  applyNativeDrop: (paths: string[], isCurrentOwner: () => boolean) => Promise<void>
   applyLocalComposerDrop: (paths: string[], canApply?: () => boolean) => Promise<void>
   canPrefetchSelectedRepoWorkItems: boolean
   folderCreateDisabled: boolean

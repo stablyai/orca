@@ -29,6 +29,7 @@ function TranscriptHarness({
     showsTailRow: false,
     isVisible,
     alignToViewportTop: vi.fn(),
+    isAlignPending: () => false,
     scrollToEnd,
     restoreScrollOffset,
     consumeProgrammaticScroll: () => false,

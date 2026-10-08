@@ -97,7 +97,8 @@ afterEach(() => {
 
 async function launchTestRuntime(
   legacyWrapper = false,
-  stopRequests = false
+  stopRequests = false,
+  splitEntry = false
 ): Promise<{
   runtimePid: number
   recordedPid: number
@@ -106,7 +107,7 @@ async function launchTestRuntime(
   const terminatedFile = join(versionDir, 'terminated')
   const requestFile = join(versionDir, ORCAD_STOP_REQUEST_FILENAME)
   writeFileSync(
-    join(versionDir, 'orcad.js'),
+    join(versionDir, splitEntry ? 'orcad-server.js' : 'orcad.js'),
     [
       `const fs = require('node:fs');`,
       `process.on('SIGTERM', () => {`,
@@ -131,6 +132,9 @@ async function launchTestRuntime(
       `setTimeout(() => process.exit(1), 10_000);`
     ].join('\n')
   )
+  if (splitEntry) {
+    writeFileSync(join(versionDir, 'orcad.js'), 'require("./orcad-server.js")')
+  }
   let command = orcadLaunchCommand(host, {
     remoteInstallDir: versionDir,
     nodePath: process.execPath,
@@ -372,16 +376,30 @@ describe('state snapshot commands, run for real', () => {
 })
 
 describe('liveness and stop commands, run for real', () => {
-  it('records the runtime PID and waits for that runtime to exit when stopped', async () => {
-    const { runtimePid, recordedPid, terminatedFile } = await launchTestRuntime()
-    expect(recordedPid).toBe(runtimePid)
-    expect(stopTestRuntime()).toBe('stopped')
-    expect(readFileSync(terminatedFile, 'utf8')).toBe('terminated')
-    // An unreaped zombie has exited even though kill -0 still succeeds.
-    expect(sh(`ps -o stat= -p ${runtimePid} || true`).trim()).toMatch(/^(?:Z.*)?$/)
-    expect(existsSync(join(versionDir, ORCAD_PID_FILENAME))).toBe(true)
-    expect(stopTestRuntime()).toBe('already-exited')
-  })
+  it.each([false, true])(
+    'records and stops the runtime PID with split entry %s',
+    async (splitEntry) => {
+      const { runtimePid, recordedPid, terminatedFile } = await launchTestRuntime(
+        false,
+        false,
+        splitEntry
+      )
+      expect(recordedPid).toBe(runtimePid)
+      expect(parseOrcadLiveness(sh(orcadLivenessProbeCommand(host, versionDir)))).toBe('LIVE')
+      // The prior client recognizes only orcad.js when deciding whether this PID was reused.
+      const legacyIdentity = sh(
+        `args=$(ps -o args= -p ${recordedPid}); ` +
+          `case "$args" in *${shellEscape(join(versionDir, 'orcad.js'))}*) echo LIVE;; *) echo DEAD;; esac`
+      ).trim()
+      expect(legacyIdentity).toBe('LIVE')
+      expect(stopTestRuntime()).toBe('stopped')
+      expect(readFileSync(terminatedFile, 'utf8')).toBe('terminated')
+      // An unreaped zombie has exited even though kill -0 still succeeds.
+      expect(sh(`ps -o stat= -p ${runtimePid} || true`).trim()).toMatch(/^(?:Z.*)?$/)
+      expect(existsSync(join(versionDir, ORCAD_PID_FILENAME))).toBe(true)
+      expect(stopTestRuntime()).toBe('already-exited')
+    }
+  )
 
   it('stops a build that consumes stop requests by request file, not by signal', async () => {
     const { terminatedFile } = await launchTestRuntime(false, true)
@@ -486,12 +504,19 @@ describe('liveness and stop commands, run for real', () => {
 
   it('reports a permission-denied liveness probe as UNKNOWN in any locale', () => {
     writeFileSync(join(versionDir, ORCAD_PID_FILENAME), '4242')
+    // Keep the permission branch independent of unrelated host PID reuse.
+    const matchingPs =
+      'ps() { [ "$#" = 4 ] && [ "$1" = -o ] && [ "$2" = args= ] && ' +
+      '[ "$3" = -p ] && [ "$4" = 4242 ] || return 1; ' +
+      `printf 'node %s\\n' ${shellEscape(join(versionDir, 'orcad.js'))}; };`
     const deniedKill =
       'kill() { if [ "$LC_ALL" = C ]; then echo "kill: Operation not permitted" >&2; ' +
       'else echo "kill: Vorgang nicht zulässig" >&2; fi; return 1; };'
     expect(
       parseOrcadLiveness(
-        sh(`LC_ALL=de_DE.UTF-8; ${deniedKill} ${orcadLivenessProbeCommand(host, versionDir)}`)
+        sh(
+          `LC_ALL=de_DE.UTF-8; ${matchingPs} ${deniedKill} ${orcadLivenessProbeCommand(host, versionDir)}`
+        )
       )
     ).toBe('UNKNOWN')
   })
@@ -506,31 +531,34 @@ describe('liveness and stop commands, run for real', () => {
     }
   })
 
-  it('reports LIVE for a running process and stops it with SIGTERM', async () => {
-    // Stands in for orcad: its command line runs this slot's orcad.js.
-    const child = spawn(
-      process.execPath,
-      ['-e', 'setTimeout(() => {}, 30000)', join(versionDir, 'orcad.js')],
-      { stdio: 'ignore' }
-    )
-    try {
-      writeFileSync(join(versionDir, ORCAD_PID_FILENAME), String(child.pid))
-      expect(parseOrcadLiveness(sh(orcadLivenessProbeCommand(host, versionDir)))).toBe('LIVE')
-
-      const exited = new Promise<NodeJS.Signals | null>((resolve) =>
-        child.once('exit', (_code, signal) => resolve(signal))
+  it.each(['orcad.js', 'orcad-server.js'])(
+    'reports LIVE and stops a running %s even without entry files',
+    async (entry) => {
+      // Stands in for orcad: its command line runs this slot's orcad.js.
+      const child = spawn(
+        process.execPath,
+        ['-e', 'setTimeout(() => {}, 30000)', join(versionDir, entry)],
+        { stdio: 'ignore' }
       )
-      expect(
-        parseOrcadStopOutcome(
-          sh(stopOrcadCommand(host, versionDir, { waitSeconds: 10, justLaunched: true }))
+      try {
+        writeFileSync(join(versionDir, ORCAD_PID_FILENAME), String(child.pid))
+        expect(parseOrcadLiveness(sh(orcadLivenessProbeCommand(host, versionDir)))).toBe('LIVE')
+
+        const exited = new Promise<NodeJS.Signals | null>((resolve) =>
+          child.once('exit', (_code, signal) => resolve(signal))
         )
-      ).toBe('stopped')
-      expect(await exited).toBe('SIGTERM')
-      expect(parseOrcadLiveness(sh(orcadLivenessProbeCommand(host, versionDir)))).toBe('DEAD')
-    } finally {
-      child.kill('SIGKILL')
+        expect(
+          parseOrcadStopOutcome(
+            sh(stopOrcadCommand(host, versionDir, { waitSeconds: 10, justLaunched: true }))
+          )
+        ).toBe('stopped')
+        expect(await exited).toBe('SIGTERM')
+        expect(parseOrcadLiveness(sh(orcadLivenessProbeCommand(host, versionDir)))).toBe('DEAD')
+      } finally {
+        child.kill('SIGKILL')
+      }
     }
-  })
+  )
 
   // `kill -0` succeeds on a zombie, so a probe built on it alone calls an exited process
   // live: the stop loop would time out on a process that is already gone, and GC would keep

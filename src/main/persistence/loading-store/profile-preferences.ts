@@ -25,6 +25,7 @@ type ProfilePreferencesRuntime = Pick<
   | 'githubCacheDirty'
   | 'githubCacheGeneration'
   | 'protectedSecrets'
+  | 'runDurableMutation'
   | 'settingsChangeListeners'
   | 'state'
   | 'uiChangeListeners'
@@ -72,6 +73,52 @@ export class ProfilePreferences {
     options: { notifyListeners?: boolean; originWebContentsId?: number } = {}
   ): GlobalSettings {
     return updateSettingsOperation(getSettingsMutationOperations(this), updates, options)
+  }
+
+  async updateSettingsAndFlush(
+    updates: Partial<GlobalSettings>,
+    options: { notifyListeners?: boolean; originWebContentsId?: number } = {}
+  ): Promise<GlobalSettings> {
+    const { runtime } = this[profilePreferencesContext]
+    let changedUpdates: Partial<GlobalSettings> = {}
+    await runtime.runDurableMutation(() => {
+      const previous = runtime.state.settings
+      const next = this.updateSettings(updates)
+      const previousEntries = new Map(Object.entries(previous))
+      const updateKeys = new Set(Object.keys(updates))
+      changedUpdates = Object.fromEntries(
+        Object.entries(next).filter(
+          ([key, value]) => updateKeys.has(key) && !Object.is(previousEntries.get(key), value)
+        )
+      )
+      return {
+        value: undefined,
+        rollback: () => {
+          const currentEntries = new Map(Object.entries(runtime.state.settings))
+          const nextEntries = new Map(Object.entries(next))
+          const restoredUpdates = Object.fromEntries(
+            Object.entries(previous).filter(
+              ([key]) =>
+                updateKeys.has(key) && Object.is(currentEntries.get(key), nextEntries.get(key))
+            )
+          )
+          const restoredSettings = { ...runtime.state.settings, ...restoredUpdates }
+          for (const key of updateKeys) {
+            if (
+              !previousEntries.has(key) &&
+              Object.is(currentEntries.get(key), nextEntries.get(key))
+            ) {
+              Reflect.deleteProperty(restoredSettings, key)
+            }
+          }
+          runtime.state.settings = restoredSettings
+        }
+      }
+    })
+    if (options.notifyListeners && Object.keys(changedUpdates).length > 0) {
+      notifySettingsChanged(this, changedUpdates, options.originWebContentsId)
+    }
+    return this.getSettings()
   }
 
   getUI(): PersistedState['ui'] {

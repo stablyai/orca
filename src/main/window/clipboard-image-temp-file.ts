@@ -6,11 +6,14 @@ import { requireSshFilesystemProvider } from '../providers/ssh-filesystem-dispat
 import { getAppEnvironment } from '../../shared/app-environment'
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 import { assertClipboardImageByteLengthWithinLimit } from '../../shared/clipboard-image'
+import type { AgentSessionAttachmentClipboardTarget } from '../../shared/agent-session-attachments'
 import { nativeChatPasteFolder } from './native-chat-paste-files'
 
 export type SaveClipboardImageAsTempFileArgs = {
   connectionId?: string | null
   runtimeEnvironmentId?: string | null
+  /** With `runtimeEnvironmentId`: store the image as an attachment of this structured chat. */
+  agentSessionAttachment?: AgentSessionAttachmentClipboardTarget
   /** A native-chat composer paste: kept in Orca's paste folder so its draft can bring it back. */
   forNativeChatDraft?: boolean
 }

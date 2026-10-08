@@ -13,7 +13,6 @@ import type {
 } from '../../../shared/agent-session-journal-types'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
-import { QUEUED_MESSAGE_PAUSED_KEPT } from '../../../shared/agent-session-queued-message-wire'
 import Database from '../../sqlite/sync-database'
 import { JOURNAL_DB_SCHEMA_VERSION } from './journal-database-schema'
 import { journalDatabasePath } from './journal-host-database'
@@ -420,11 +419,11 @@ describe('returned transition (D1/N4)', () => {
   })
 
   it.each([
-    { by: 'the queue', origin: 'host' as const, holdReason: null },
-    { by: 'the person', origin: 'client' as const, holdReason: QUEUED_MESSAGE_PAUSED_KEPT }
+    { by: 'the queue', origin: 'host' as const },
+    { by: 'the person', origin: 'client' as const }
   ])(
     'a restart between $by’s consume and handover sends the draft back to waiting',
-    async ({ origin, holdReason }) => {
+    async ({ origin }) => {
       let journal = await open()
       await queueDraft(journal, 'draft-1')
       await consumeDraft(journal, 'draft-1', { origin })
@@ -434,11 +433,10 @@ describe('returned transition (D1/N4)', () => {
       await journal.rejectQueuedSubmissions(0, HOST_RESTARTED, (submission) =>
         journal.wroteBeforeOpen(submission.acceptedSequence)
       )
-      // The queue's own hand-off waits under the restart's pause, derived from the row's host
-      // instance; a Send the person asked for waits for them, kept.
+      // Whoever sent it, it waits with no hold of its own, under the reopen's pause.
       expect(journal.queuedMessages.get('draft-1')).toMatchObject({
         state: 'waiting',
-        holdReason,
+        holdReason: null,
         hostInstance: 'proc-1',
         consumedAs: null,
         returnedReason: null
@@ -595,23 +593,15 @@ describe('open-time repair and retention', () => {
     }
   })
 
-  // The repair reaches the live hook's answer from the stored rejection and who asked for it.
+  // The repair reaches the live hook's answer from the stored rejection.
   it.each([
-    {
-      origin: 'client' as const,
-      cause: 'hostRestarted' as const,
-      holdReason: QUEUED_MESSAGE_PAUSED_KEPT
-    },
-    { origin: 'host' as const, cause: 'hostRestarted' as const, holdReason: null },
-    {
-      origin: 'client' as const,
-      cause: 'chatClosed' as const,
-      holdReason: QUEUED_MESSAGE_PAUSED_KEPT
-    },
-    { origin: 'host' as const, cause: 'chatClosed' as const, holdReason: null }
+    { origin: 'client' as const, cause: 'hostRestarted' as const },
+    { origin: 'host' as const, cause: 'hostRestarted' as const },
+    { origin: 'client' as const, cause: 'chatClosed' as const },
+    { origin: 'host' as const, cause: 'chatClosed' as const }
   ])(
-    'a skipped hook for a $origin hand-off cut short ($cause) is repaired at open, holdReason $holdReason',
-    async ({ origin, cause, holdReason }) => {
+    'a skipped hook for a $origin hand-off cut short ($cause) is repaired at open, back to waiting',
+    async ({ origin, cause }) => {
       let journal = await open()
       await queueDraft(journal, 'draft-1')
       await consumeDraft(journal, 'draft-1', { origin })
@@ -629,7 +619,7 @@ describe('open-time repair and retention', () => {
       journal = await open()
       expect(journal.queuedMessages.get('draft-1')).toMatchObject({
         state: 'waiting',
-        holdReason,
+        holdReason: null,
         consumedAs: null
       })
     }

@@ -32,7 +32,6 @@ vi.mock('./NativeChatQuestionCard', () => moduleFactories.nativeChatQuestionCard
 
 import { NativeChatStructuredSession } from './NativeChatStructuredSession'
 import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
-import { seededEntry, seedOutbox } from './NativeChatStructuredSession.test-harness'
 import { structuredAgentSessionDraftScopeKey } from './native-chat-composer-draft-store'
 
 describe('NativeChatStructuredSession', () => {
@@ -746,6 +745,34 @@ describe('NativeChatStructuredSession', () => {
     })
   })
 
+  it('gives a question card the keyboard, holds it while its answer is with the host, and frees it on a refusal', async () => {
+    mocks.promptItems = legacySingleQuestionPromptItems
+    render(
+      <NativeChatStructuredSession
+        isVisible
+        isFocusedGroup
+        tabId="structured-tab-hold"
+        sessionId="session-hold"
+        target={{ kind: 'local' }}
+        agent="claude"
+      />
+    )
+    let refuse: (result: null) => void = () => {}
+    mocks.respond.mockReturnValueOnce(
+      new Promise<null>((resolve) => {
+        refuse = resolve
+      })
+    )
+
+    // The card owns this pane's keyboard, which is what turns its number keys on.
+    expect(mocks.questionCardProps?.shouldFocus).toBe(true)
+    act(() => mocks.questionCardProps?.onAnswer([{ indices: [1], other: '' }]))
+    expect(mocks.questionCardProps?.isSubmitting).toBe(true)
+    await act(async () => refuse(null))
+
+    expect(mocks.questionCardProps?.isSubmitting).toBe(false)
+  })
+
   // The reader may have scrolled far up; what they just did has to come into view.
   it('brings the latest into view at the press for the submits this pane makes', async () => {
     mocks.promptItems = legacySingleQuestionPromptItems
@@ -793,32 +820,6 @@ describe('NativeChatStructuredSession', () => {
     mocks.queuedSteerNewest.mockReturnValue(true)
     expect(steerQueued()).toBe(true)
     expect(mocks.revealLatest).toHaveBeenCalledTimes(2)
-  })
-
-  it('reveals the latest when a delivery notice retries its message', async () => {
-    mocks.mode = 'outbox'
-    mocks.call.mockResolvedValue({
-      ok: true,
-      value: { submission: { clientMessageId: 'op-head', dispatchState: 'accepted' } }
-    })
-    seedOutbox('session-retry-reveal', [
-      seededEntry('session-retry-reveal', 'op-head', 'first', 'unconfirmed')
-    ])
-    render(
-      <NativeChatStructuredSession
-        isVisible
-        isFocusedGroup
-        tabId="structured-tab-retry-reveal"
-        sessionId="session-retry-reveal"
-        target={{ kind: 'local' }}
-        agent="codex"
-      />
-    )
-
-    fireEvent.click(await screen.findByRole('button', { name: /Retry/ }))
-
-    expect(mocks.revealLatest).toHaveBeenCalledOnce()
-    await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
   })
 
   it("brings the latest into view when a queued card's Steer sends it now", () => {

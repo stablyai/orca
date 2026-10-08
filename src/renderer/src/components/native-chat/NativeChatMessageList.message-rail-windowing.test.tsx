@@ -109,7 +109,6 @@ describe('revealing a diff from a turn rollup', () => {
     scrollTranscript(container, 6000)
     expect(screen.getByText('Edited')).toBeInTheDocument()
     scrollTo.mockClear()
-    fireEvent.click(screen.getByRole('button', { name: 'Your messages' }))
     fireEvent.click(screen.getByRole('button', { name: 'Second prompt' }))
     expect(scrollTo.mock.calls).toEqual([
       [{ top: 6000, behavior: 'auto' }],
@@ -164,12 +163,7 @@ describe('jumping to a message from the rail', () => {
     index % 10 === 0 ? userMarker(index) : marker(index)
   )
 
-  /** Open the hover panel through the trigger and click the first prompt. */
   function jumpToFirstPrompt(): void {
-    fireEvent.click(screen.getByRole('button', { name: 'Your messages' }))
-    act(() => {
-      vi.advanceTimersByTime(300)
-    })
     fireEvent.click(screen.getByRole('button', { name: 'prompt-0' }))
     act(() => {
       vi.advanceTimersByTime(300)

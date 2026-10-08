@@ -21,7 +21,7 @@ import {
 import { AGENT_SESSION_WRITE_NOTICE_COPY } from '../../../../shared/agent-session-write-notice-copy'
 import { agentSessionWriteNoticeParts } from '../../../../shared/agent-session-refusal-notice'
 import { agentSessionRefusalFailure } from '../../../../shared/agent-session-write-failure'
-import { structuredAgentSessionRejectionParts } from '../../../../shared/structured-agent-session-send-disposition'
+import { structuredAgentSessionRejectionParts } from '../../../../shared/structured-agent-session-rejection-words'
 import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
 import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
 

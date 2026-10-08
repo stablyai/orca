@@ -13,7 +13,8 @@ vi.mock('@/lib/agent-launch-route-input', () => ({
 }))
 vi.mock('@/lib/agent-launch-routing', () => ({
   resolveAgentLaunchRoute: mocks.resolveAgentLaunchRoute,
-  structuredAgentLaunchSupported: mocks.structuredAgentLaunchSupported
+  structuredAgentLaunchSupported: mocks.structuredAgentLaunchSupported,
+  structuredAgentLaunchDowngrade: () => null
 }))
 vi.mock('@/lib/structured-agent-launch-settlement', () => ({
   beginStructuredAgentLaunchSettlement: mocks.beginStructuredAgentLaunchSettlement

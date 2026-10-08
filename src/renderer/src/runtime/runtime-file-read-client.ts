@@ -17,6 +17,7 @@ import {
   hasRemoteRuntimeOwner
 } from './runtime-file-routing'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
+import { isAgentSessionAttachmentStorePath } from '../../../shared/agent-session-attachments'
 import type { LocalFileAccess } from '../../../shared/local-file-access'
 
 const REMOTE_DOWNLOAD_CHUNK_BYTES = 384 * 1024
@@ -99,6 +100,21 @@ export async function readRuntimeFilePreview(
     context.expectedExternalSshTargetId
   )
   const remoteArgs = getRemoteFileArgs(context, filePath)
+  const runtimeTarget = getActiveRuntimeTarget(context.settings)
+  // A chat attachment lives in the paired server's store, outside every worktree; that server
+  // reads it back itself (an older one answers method_not_found, and the preview falls back).
+  if (
+    !remoteArgs &&
+    runtimeTarget.kind === 'environment' &&
+    isAgentSessionAttachmentStorePath(filePath)
+  ) {
+    return callRuntimeRpc<RuntimeFilePreviewResult>(
+      runtimeTarget,
+      'agentSessionAttachment.read',
+      { path: filePath },
+      { timeoutMs: 15_000 }
+    )
+  }
   if (!remoteArgs) {
     if (hasRemoteRuntimeOwner(context)) {
       throw new Error('Remote file is outside the owning runtime worktree')

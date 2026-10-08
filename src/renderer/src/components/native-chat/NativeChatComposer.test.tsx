@@ -123,7 +123,8 @@ vi.mock('./use-native-chat-composer-attachments', () => ({
       attachResolvedPaths: vi.fn(),
       clearImageAttachments: vi.fn(),
       flushPendingAttachments: mocks.flushPendingAttachments,
-      removeImageAttachment: vi.fn()
+      removeImageAttachment: vi.fn(),
+      pendingChips: { begin: vi.fn(), resolve: vi.fn(), drop: vi.fn(), attachReferences: vi.fn() }
     }
   }
 }))
@@ -216,8 +217,7 @@ describe('NativeChatComposer', () => {
       configurable: true,
       value: {
         git: { discoverCommitMessageModels: mocks.discoverCommitMessageModels },
-        pty: { getMainBufferSnapshot: mocks.getMainBufferSnapshot },
-        ui: { onFileDrop: () => vi.fn() }
+        pty: { getMainBufferSnapshot: mocks.getMainBufferSnapshot }
       }
     })
   })

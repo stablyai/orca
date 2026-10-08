@@ -204,6 +204,31 @@ describe('background-tasks strip header', () => {
     expect(header.textContent).toBe('1 agent · 1 shell')
   })
 
+  describe('on a narrow strip', () => {
+    const wideWindow = window.innerWidth
+    afterEach(() => {
+      window.innerWidth = wideWindow
+    })
+
+    it('totals a breakdown across kinds', () => {
+      window.innerWidth = 320
+      const header = renderHeader([
+        { id: 'a1', kind: 'agent' },
+        { id: 'c1', kind: 'command' }
+      ])
+      expect(header).toHaveAttribute('aria-label', '2 background tasks')
+    })
+
+    it('keeps one kind in its attention form', () => {
+      window.innerWidth = 320
+      const header = renderHeader([
+        { id: 'a1', kind: 'agent', state: 'waiting' },
+        { id: 'a2', kind: 'agent', state: 'waiting' }
+      ])
+      expect(header).toHaveAttribute('aria-label', '2 agents waiting — needs approval')
+    })
+  })
+
   it('carries no icon on a collapsed total, which spans kinds', () => {
     const header = renderHeader([
       { id: 'a1', kind: 'agent' },

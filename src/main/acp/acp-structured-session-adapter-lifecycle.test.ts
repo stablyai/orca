@@ -421,6 +421,7 @@ describe('ACP startup that never answers', () => {
             args: [],
             cwd: '/workspace/project',
             env: {},
+            envToDelete: [],
             fullAccess: false,
             resume: null
           }

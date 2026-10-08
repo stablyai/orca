@@ -822,6 +822,14 @@
   color: rgba(0, 0, 0, 0.6);
 }
 
+/* Border and title colors come from the callout component. */
+.markdown-body [data-callout] {
+  margin: 0.75em 0;
+  padding: 0.25em 1em;
+  border-left-width: 3px;
+  border-left-style: solid;
+}
+
 .markdown-body table {
   margin: 1em 0;
   border-collapse: collapse;

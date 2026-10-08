@@ -180,6 +180,13 @@ export type AgentJournalPromptOption = {
   description?: string
 }
 
+export type AgentJournalFreeTextInput = {
+  allowEmpty?: boolean
+  multiline?: boolean
+  initialValue?: string
+  placeholder?: string
+}
+
 export type AgentJournalQuestion = {
   id: string
   question: string
@@ -188,6 +195,7 @@ export type AgentJournalQuestion = {
   options: AgentJournalPromptOption[]
   /** Present when the provider accepts an answer outside the offered options. */
   freeTextQuestionId?: string
+  freeTextInput?: AgentJournalFreeTextInput
 }
 
 export type AgentJournalApprovalMatchedAskRule = {
@@ -236,6 +244,7 @@ export type AgentJournalQuestionItem = {
   questions?: AgentJournalQuestion[]
   /** Present when the provider accepts an answer outside the offered options. */
   freeTextQuestionId?: string
+  freeTextInput?: AgentJournalFreeTextInput
   resolution: AgentJournalResolution
 }
 
@@ -326,6 +335,9 @@ type AgentJournalStatusItemFields = {
   }
   /** Present on thread-goal transitions; absent on rows from older hosts. */
   threadGoal?: AgentJournalThreadGoalState
+  /** On the row about a reply Orca's own stop cut off: why Orca stopped. Its cause is open (a newer
+   *  host may name one this build does not know), so read it with `readAgentSessionOrcaStop`. */
+  orcaStop?: { cause: string }
 }
 
 /** A status row that reports no failure; its text is its writer's own. */

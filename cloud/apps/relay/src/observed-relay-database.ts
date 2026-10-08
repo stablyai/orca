@@ -29,11 +29,21 @@ export function observeRelayDatabase(
         error instanceof Error &&
         error.message === 'database_lock_unavailable'
     )
+  const queryPriority = database.queryPriority?.bind(database)
   const commitWithFinal = database.commitWithFinal?.bind(database)
   return {
     dialect: database.dialect,
     query,
     queryLocked,
+    ...(queryPriority
+      ? {
+          queryPriority: (sql: string, params?: unknown[]): Promise<SqlRow[]> =>
+            timedRelayOperation(
+              () => queryPriority(sql, params),
+              (durationMs, success) => observer.recordSql(durationMs, success)
+            )
+        }
+      : {}),
     ...(commitWithFinal
       ? {
           commitWithFinal: (sql: string, params?: unknown[]): Promise<boolean> =>

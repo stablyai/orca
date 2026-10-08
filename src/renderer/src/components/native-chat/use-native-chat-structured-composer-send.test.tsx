@@ -48,7 +48,6 @@ function harness(
       structuredTransport,
       isComposing: () => false,
       clearSkillOrigin: vi.fn(),
-      setHistory: vi.fn(),
       setDraft: vi.fn(),
       setCaret: vi.fn()
     })
@@ -97,6 +96,22 @@ describe('attachment guard follows what the host claims', () => {
     )
     expect(setObjective).not.toHaveBeenCalled()
     expect(structuredTransport.send).not.toHaveBeenCalled()
+  })
+})
+
+describe('an attachment still uploading', () => {
+  it('holds a picked command, as Send is held, rather than send the chip without its path', async () => {
+    const { send, structuredTransport } = harness('claude')
+    const pending: NativeChatComposerImageAttachment = {
+      id: 'p1',
+      path: '',
+      pending: true,
+      pendingName: 'notes.pdf'
+    }
+    send('/review', [pending])
+    await Promise.resolve()
+    expect(structuredTransport.send).not.toHaveBeenCalled()
+    expect(structuredTransport.onError).not.toHaveBeenCalled()
   })
 })
 

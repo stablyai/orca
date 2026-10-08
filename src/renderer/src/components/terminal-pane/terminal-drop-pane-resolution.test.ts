@@ -1,10 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from 'vitest'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
-import {
-  resolveInternalTerminalDropPane,
-  resolveNativeTerminalDropPane
-} from './terminal-drop-pane-resolution'
+import { resolveInternalTerminalDropPane } from './terminal-drop-pane-resolution'
 
 describe('terminal drop pane resolution', () => {
   const container = document.createElement('div')
@@ -19,12 +16,6 @@ describe('terminal drop pane resolution', () => {
   const getActivePane = vi.fn(() => pane)
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Resolution only enumerates panes; active-pane access must stay unused.
   const manager = { getPanes: () => [pane], getActivePane } as unknown as PaneManager
-
-  it('refuses missing or stale native leaves without consulting focus', () => {
-    expect(resolveNativeTerminalDropPane(manager, undefined)).toBeNull()
-    expect(resolveNativeTerminalDropPane(manager, 'stale-leaf')).toBeNull()
-    expect(getActivePane).not.toHaveBeenCalled()
-  })
 
   it('refuses missing, outside, and stale internal destinations', () => {
     expect(resolveInternalTerminalDropPane(manager, undefined)).toBeNull()

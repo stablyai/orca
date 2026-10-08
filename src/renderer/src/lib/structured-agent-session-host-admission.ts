@@ -32,16 +32,18 @@ export type StructuredLaunchAdmission =
   | { kind: 'admitted'; seedOptions?: Readonly<Record<string, string>> }
   | { kind: 'declined' }
   | { kind: 'unreachable' }
+  /** The host still could not resolve the workspace after the retries: not yet, rather than no. */
+  | { kind: 'workspace-unresolved' }
 
 export type HostCreateSupport =
-  | { kind: 'admitted'; seedOptions?: Readonly<Record<string, string>> }
-  | { kind: 'declined' }
+  | Exclude<StructuredLaunchAdmission, { kind: 'unreachable' }>
   | { kind: 'unreachable'; code: string; message: string; error: unknown }
 
 /**
  * Whether the executing host supports creating this session, retrying only while the host cannot
  * yet resolve the worktree. "Could not answer" and "answered no" are different states and only the
- * second is a verdict. Each call is bounded by the runtime RPC client's own timeout.
+ * second is a verdict. A paired server's call is bounded by the runtime RPC client's timeout; this
+ * machine's call has none.
  */
 export async function askHostCreateSupport(
   target: RuntimeClientTarget,
@@ -61,12 +63,11 @@ export async function askHostCreateSupport(
       const seedOptions = parseStructuredLaunchSeedOptions(support.seedOptions)
       return seedOptions ? { kind: 'admitted', seedOptions } : { kind: 'admitted' }
     } catch (error) {
-      const retryDelayMs = CREATE_SUPPORT_RETRY_DELAYS_MS[attempt]
-      if (retryDelayMs === undefined) {
-        // A selector that never appears is a definitive refusal.
-        return { kind: 'declined' }
-      }
       if (hasRuntimeRpcErrorCode(error, SELECTOR_NOT_RESOLVABLE_CODE)) {
+        const retryDelayMs = CREATE_SUPPORT_RETRY_DELAYS_MS[attempt]
+        if (retryDelayMs === undefined) {
+          return { kind: 'workspace-unresolved' }
+        }
         await delay(retryDelayMs)
         continue
       }
@@ -80,12 +81,30 @@ export async function askHostCreateSupport(
   }
 }
 
+/** How long a launch on this machine waits for its answer before anything shows. Past it the
+ *  launch treats the host as unable to answer, and the chat's own create keeps asking. */
+export const LOCAL_ADMISSION_WAIT_MS = 3_000
+
 /** Asks a host to admit a chat before the client commits any of it. */
 export async function admitStructuredLaunchOnHost(
   target: RuntimeClientTarget,
   worktree: string,
   agent: TuiAgent
 ): Promise<StructuredLaunchAdmission> {
-  const support = await askHostCreateSupport(target, worktree, agent)
-  return support.kind === 'unreachable' ? { kind: 'unreachable' } : support
+  const asked = askHostCreateSupport(target, worktree, agent).then(
+    (support): StructuredLaunchAdmission =>
+      support.kind === 'unreachable' ? { kind: 'unreachable' } : support
+  )
+  if (target.kind !== 'local') {
+    return asked
+  }
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timedOut = new Promise<StructuredLaunchAdmission>((resolve) => {
+    timer = setTimeout(() => resolve({ kind: 'unreachable' }), LOCAL_ADMISSION_WAIT_MS)
+  })
+  try {
+    return await Promise.race([asked, timedOut])
+  } finally {
+    clearTimeout(timer)
+  }
 }

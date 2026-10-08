@@ -76,7 +76,7 @@ vi.mock('@/components/sidebar/CacheTimer', () => ({
 
 import { StructuredAgentSessionStatusBridge } from './StructuredAgentSessionStatusBridge'
 import { NativeChatStructuredSessionStatus } from './NativeChatStructuredSessionStatus'
-import { structuredSessionBackgroundTasksView } from './structured-session-background-tasks-view'
+import { structuredSessionBackgroundTasksView } from '../../../../shared/structured-session-background-tasks-view'
 import { CompactAgentRow } from '@/components/sidebar/worktree-card-compact-agent-row'
 import { buildSubagentChildRows } from '@/components/sidebar/worktree-subagent-child-rows'
 import { TooltipProvider } from '@/components/ui/tooltip'

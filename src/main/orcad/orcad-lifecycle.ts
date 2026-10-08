@@ -5,6 +5,7 @@ import type { OrcadManagedStopInstance } from '../../shared/orcad-stop-request'
 import { acquireOrcadInstanceLock } from './orcad-instance-lock'
 import { ORCAD_BUNDLED_LAUNCHER_ENV } from './orcad-bundled-runtime'
 import { resolveOrcadExitCode } from './orcad-exit-code'
+import { recordAgentSessionRuntimeEnd } from '../runtime/agent-session-runtime-end-record'
 import { ORCAD_SHUTDOWN_DEADLINE_MS } from './orcad-stop-deadlines'
 import {
   acquireProfileStateRuntimeAdmission,
@@ -78,6 +79,8 @@ export async function startOrcadWithLifecycle<T extends object>(
   // Runtime resources stop in reverse registration order before any host resource.
   const runtime = new OrcadRuntimeLifetime()
   const cleanup = createIdempotentOrcadCleanup(async () => {
+    // First, before any wait: chats whose agent dies with this stop read as a restart, not a crash.
+    recordAgentSessionRuntimeEnd('quit')
     let runtimeCleanupSucceeded = false
     try {
       await runtime.stop()

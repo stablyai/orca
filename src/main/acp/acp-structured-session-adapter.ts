@@ -27,24 +27,34 @@ import {
   endAcpStructuredSession,
   type AcpStructuredSession
 } from './acp-structured-session'
-import { AcpStructuredStarts, type AcpStartAttempt } from './acp-structured-starts'
+import {
+  ProviderAcquisitionStarts,
+  type ProviderStartAttempt
+} from '../provider-process/provider-acquisition-starts'
+import type { AcpStructuredConnection } from './acp-structured-connection'
 import { waitForAcpExit } from './acp-structured-connection'
 import { AcpConnectionClosedError } from './acp-errors'
-import { acpPromptBlocks } from './acp-structured-turns'
 import { awaitAcpTurnEnd, interruptAcpTurn, windDownAcpTurn } from './acp-structured-stop'
+import { acpDispatchPrompt } from './acp-prompt-content'
 import {
   ACP_OPTION_WRITE_TIMEOUT_MS,
   ACP_STOP_GRACE_MS,
   type AcpStructuredSessionAdapterDeps
 } from './acp-structured-session-adapter-deps'
 import { writeAcpSessionOption } from './acp-structured-options'
+import { readAcpRecoveryHistory } from './acp-recovery-history'
 
 export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapter {
   /** Live children, and ones whose exit is not yet proven; a proven exit removes its entry. */
   private readonly sessions = new Map<string, AcpStructuredSession>()
-  private readonly starts = new AcpStructuredStarts()
+  private readonly starts = new ProviderAcquisitionStarts<AcpStructuredConnection>()
 
   constructor(private readonly deps: AcpStructuredSessionAdapterDeps) {}
+
+  /** Restart recovery's evidence; null for an agent whose own store Orca cannot read. */
+  providerHistoryWindow: NonNullable<StructuredAgentSessionAdapter['providerHistoryWindow']> = ({
+    identity
+  }) => readAcpRecoveryHistory(this.deps, identity)
 
   // The child runs on this runtime's own machine; Windows needs process start-time proof.
   supportsLocation = (location: AgentSessionExecutionLocation): boolean =>
@@ -69,7 +79,7 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
 
   private async start(
     input: StructuredAgentSessionAcquireInput,
-    attempt: AcpStartAttempt
+    attempt: ProviderStartAttempt<AcpStructuredConnection>
   ): Promise<AgentSessionAcquisition> {
     const sessionId = input.identity.sessionId
     const generation = this.deps.mintGeneration?.() ?? randomUUID()
@@ -142,9 +152,13 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
       return this.rejected(lost, 'providerExited')
     }
     const session = this.live(input.sessionId)
-    const prompt = acpPromptBlocks(input.body)
-    if (!prompt) {
-      return this.rejected(session, 'attachmentInvalid')
+    const prompt = await acpDispatchPrompt(input.body, session)
+    if (!Array.isArray(prompt)) {
+      return { state: 'rejected', ...prompt }
+    }
+    if (this.sessions.get(input.sessionId) !== session || session.journalClosed !== null) {
+      // The child ended while its attachments were read: nothing left Orca.
+      return this.rejected(session, 'providerExited')
     }
     await input.beforeDispatch?.()
     session.turns.dispatch({
@@ -312,7 +326,7 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
 
   private rejected(
     session: AcpStructuredSession,
-    kind: 'providerExited' | 'attachmentInvalid'
+    kind: 'providerExited'
   ): AgentSessionDispatchOutcome {
     return {
       state: 'rejected',

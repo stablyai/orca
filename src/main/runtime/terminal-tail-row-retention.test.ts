@@ -79,6 +79,21 @@ describe('retained terminal tail row storage', () => {
     }
   })
 
+  it('does not pin overwritten multiline redraw chunks through completed rows', () => {
+    let lines: string[] = []
+    const before = collectHeap()
+    for (let index = 0; index < 200; index += 1) {
+      const chunk = `\x1b[0A${'x'.repeat(64 * 1024)}\rstep ${index} done\x1b[K\n`
+      const next = appendNormalizedToTailBuffer(lines, '', chunk)
+      lines = next.lines
+    }
+    const retained = collectHeap() - before
+
+    expect(lines).toHaveLength(200)
+    expect(lines.at(-1)).toBe('step 199 done')
+    expect(retained).toBeLessThan(4 * 1024 * 1024)
+  })
+
   it('owns the redraw partial line without re-owning carried rows', () => {
     const own = vi.spyOn(ownership, 'ownRetainedString')
     try {
@@ -93,7 +108,7 @@ describe('retained terminal tail row storage', () => {
 
       expect(redrawn.lines).toEqual(['row one'])
       expect(redrawn.partialLine).toBe('rewritten two')
-      // One call for the partial only: redraw rows are built character by character.
+      // Only the final partial is retained; carried rows need no copies.
       expect(own).toHaveBeenCalledTimes(1)
       expect(own).toHaveBeenLastCalledWith('rewritten two')
     } finally {

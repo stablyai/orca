@@ -26,6 +26,7 @@ import type {
   AgentModelCatalogSessionAccess,
   AgentModelCatalogStore
 } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
+import type { NativeChatVisualsLaunch } from '../native-chat/native-chat-visuals-delivery'
 
 export type CodexSessionCatalogAccess = AgentModelCatalogSessionAccess
 
@@ -43,6 +44,8 @@ export type CodexStructuredLaunch = {
   /** The model the session chose; the thread opens on it so its first turn is not a switch. */
   model?: string
   env?: Record<string, string>
+  /** This chat's visuals folder and skill; absent when the chat has no visuals. */
+  visuals?: NativeChatVisualsLaunch
 }
 
 /** Turn and item boundaries, timed by when the host received them, never by when a buffered or

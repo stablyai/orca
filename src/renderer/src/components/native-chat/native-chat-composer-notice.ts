@@ -13,11 +13,9 @@ export type NativeChatComposerNoticeContent = {
 
 export type NativeChatComposerNotice = NativeChatComposerNoticeContent & {
   key: string
-  /** `attachment` is the composer's own paste and attachment notice. */
-  kind: 'error' | 'attachment'
-  action?: { label: string; onClick: () => void }
+  action?: { label: string; onClick: () => void; disabled?: boolean }
   onDismiss?: () => void
-}
+} & ({ kind: 'error' | 'attachment' } | { kind: 'host'; tone: 'warning' | 'muted' })
 
 /** `headline` in Orca's words, with the error as written beside it. `localErrorIsOrcaWords`: an
  *  error raised in this window (not wrapped by main-process IPC) is already Orca's sentence. */

@@ -2,20 +2,20 @@
 
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { StructuredAgentSessionOutboxEntry } from '../../../../shared/structured-agent-session-outbox'
+import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
 import type { StructuredAgentSessionState } from '../../../../shared/structured-agent-session-reducer'
 
 const mocks = vi.hoisted(() => {
-  const outboxEntries: StructuredAgentSessionOutboxEntry[] = []
+  const pending: StructuredAgentSessionPendingSend[] = []
   return {
     call: vi.fn<(target: unknown, method: string, params: unknown) => Promise<unknown>>(),
     hold: vi.fn((_args: { enabled?: boolean }) => ({ error: null })),
     read: vi.fn<(args: { isVisible?: boolean }) => void>(),
     outbox: vi.fn<(args: { fence: number | null; submissions: readonly unknown[] }) => void>(),
     send: vi.fn<(text: string) => boolean>(),
-    retry: vi.fn<(clientMessageId: string) => void>(),
-    withdrawUnsent: vi.fn<() => void>(),
-    outboxEntries
+    stopSends: vi.fn<() => void>(),
+    takeBackLaunchText: vi.fn<(sessionId: string) => void>(),
+    pending
   }
 })
 
@@ -41,21 +41,26 @@ vi.mock('./use-structured-agent-session-read', () => ({
   }
 }))
 
-vi.mock('./use-structured-agent-session-outbox', () => ({
-  structuredSessionOperationId: () => 'operation-1',
-  useStructuredAgentSessionOutbox: (args: {
+vi.mock('./structured-agent-session-operation-id', () => ({
+  structuredSessionOperationId: () => 'operation-1'
+}))
+vi.mock('./use-structured-agent-session-sends', () => ({
+  useStructuredAgentSessionSends: (args: {
     fence: number | null
     submissions: readonly unknown[]
   }) => {
     mocks.outbox(args)
     return {
-      outbox: mocks.outboxEntries,
+      pending: mocks.pending,
       error: null,
       send: mocks.send,
-      retry: mocks.retry,
-      withdrawUnsent: mocks.withdrawUnsent
+      stopSends: mocks.stopSends
     }
   }
+}))
+
+vi.mock('@/lib/structured-agent-session-launch-prompt', () => ({
+  takeBackStructuredLaunchPrompts: mocks.takeBackLaunchText
 }))
 
 vi.mock('./native-chat-session-option-settings-write', () => ({
@@ -106,7 +111,7 @@ function sessionState(): StructuredAgentSessionState {
 describe('useStructuredAgentSession provisional launch gate', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mocks.outboxEntries = []
+    mocks.pending = []
     readState = sessionState()
     mocks.send.mockReturnValue(true)
     mocks.call.mockResolvedValue(OPTIONS)
@@ -153,7 +158,7 @@ describe('useStructuredAgentSession provisional launch gate', () => {
     expect(methodsCalled()).toEqual(['agentSession.modelCatalog'])
   })
 
-  it('offers Stop for a message sent while the launch is unpublished, and takes it back locally', async () => {
+  it("offers Stop while the launch's text waits on an unpublished chat, and takes it back locally", async () => {
     const render = () =>
       renderHook(() =>
         useStructuredAgentSession({
@@ -166,16 +171,15 @@ describe('useStructuredAgentSession provisional launch gate', () => {
         })
       )
     expect(render().result.current.canStop).toBe(false)
-    mocks.outboxEntries = [
+    mocks.pending = [
       {
         clientMessageId: 'sent-while-starting',
         sessionId: 'session-1',
         body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] },
         previewUris: [],
-        state: 'queued',
         queuedAt: 1,
-        lastAttemptAt: null,
-        retryAfterUnknownSubmittedAt: null
+        phase: 'sending',
+        issued: false
       }
     ]
     const { result } = render()
@@ -185,7 +189,8 @@ describe('useStructuredAgentSession provisional launch gate', () => {
       await result.current.stop()
     })
 
-    expect(mocks.withdrawUnsent).toHaveBeenCalledTimes(1)
+    expect(mocks.takeBackLaunchText).toHaveBeenCalledWith('session-1')
+    expect(mocks.stopSends).toHaveBeenCalledTimes(1)
     // Nothing reached a host, so nothing is asked of one.
     expect(methodsCalled().filter((method) => method === 'agentSession.cancel')).toEqual([])
   })

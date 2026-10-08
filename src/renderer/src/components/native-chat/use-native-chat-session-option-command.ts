@@ -1,11 +1,10 @@
-import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import { emitNativeChatMessageSent } from '@/lib/native-chat-telemetry'
 import {
   nativeChatComposerTargetIsRemote,
   type NativeChatResolvedTarget
 } from './native-chat-composer-target'
-import { pushHistory, type HistoryState } from './native-chat-composer-state'
 import { sendNativeChatMessageVerified, typeNativeChatCommand } from './native-chat-runtime-send'
 import { cancelNativeChatPtySends, waitForNativeChatPtyIdle } from './native-chat-pty-send-queue'
 import {
@@ -20,9 +19,8 @@ export function useNativeChatSessionOptionCommand(args: {
   onSlashCommand?: (command: string) => void
   onSubmitted?: () => void
   resolveTarget: () => NativeChatResolvedTarget | null
-  setHistory: Dispatch<SetStateAction<HistoryState>>
 }): { dispatch: NativeChatSessionOptionDispatchCommand; isDispatching: boolean } {
-  const { agent, disabled, onSlashCommand, onSubmitted, resolveTarget, setHistory } = args
+  const { agent, disabled, onSlashCommand, onSubmitted, resolveTarget } = args
   const mountedRef = useRef(true)
   const activeObserversRef = useRef(new Set<ClaudeModelSwitchConfirmationObserver>())
   const activeSendsRef = useRef(new Set<AbortController>())
@@ -114,7 +112,6 @@ export function useNativeChatSessionOptionCommand(args: {
           agent,
           runtime: nativeChatComposerTargetIsRemote(target.ptyId) ? 'remote' : 'local'
         })
-        setHistory((previous) => pushHistory(previous, command))
         const outcome = observer ? await observer.result : undefined
         return { outcome }
       } finally {
@@ -126,7 +123,7 @@ export function useNativeChatSessionOptionCommand(args: {
         }
       }
     },
-    [agent, disabled, onSlashCommand, onSubmitted, resolveTarget, setHistory]
+    [agent, disabled, onSlashCommand, onSubmitted, resolveTarget]
   )
 
   return { dispatch, isDispatching }

@@ -11,7 +11,7 @@ import {
   SESSION,
   type ProviderTimelineRig
 } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
-import { acpLaunchSpecFor } from './acp-launch-specs'
+import { acpLaunchSpecFor, type AcpLaunchSpec } from './acp-launch-specs'
 import { AcpScriptedAgent, tick, type FakeFrame } from './acp-scripted-agent.test-support'
 import type { AcpAgentConnectionOptions } from './acp-agent-connection'
 import { AcpConnectionClosedError } from './acp-errors'
@@ -156,6 +156,8 @@ export type AcpAdapterRig = {
 
 export async function openAcpAdapterRig(
   options: {
+    /** The agent's row; Grok's unless a test drives another agent. */
+    spec?: AcpLaunchSpec
     launch?: Partial<AcpStructuredLaunch>
     initialize?: Record<string, unknown>
     script?: (agent: AcpScriptedAgent) => void
@@ -167,14 +169,16 @@ export async function openAcpAdapterRig(
   const spawned: string[] = []
   const lifecycle: StructuredAgentSessionLifecycleEvent[] = []
   const settled: AcpAdapterRig['settled'] = []
+  const spec = options.spec ?? GROK
   const adapter = new AcpStructuredSessionAdapter({
-    spec: GROK,
+    spec,
     resolveLaunch: async () => ({
-      spec: GROK,
-      command: '/opt/grok/bin/grok',
-      args: GROK.args({ fullAccess: false }),
+      spec,
+      command: `/opt/bin/${spec.command}`,
+      args: spec.args({ fullAccess: false }),
       cwd: '/workspace/project',
       env: { PATH: '/usr/bin', ORCA_PANE_KEY: 'tab-1:pane-1', ORCA_AGENT_HOOK_PORT: '1234' },
+      envToDelete: [],
       fullAccess: false,
       resume: null,
       ...options.launch
@@ -226,7 +230,7 @@ export async function openAcpAdapterRig(
           sessionId: SESSION,
           workspaceId: 'workspace-1',
           hostId: 'local',
-          agent: 'grok',
+          agent: spec.agent,
           providerHandle: null
         },
         fence: acquireOptions.fence ?? 1,

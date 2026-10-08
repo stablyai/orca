@@ -1,8 +1,8 @@
 // The queued-draft surface the structured session exposes: cards derived from
 // the published list and the Send-now / Delete / Edit actions. Shown whatever
 // the queue capability says: a host that does not queue sends still publishes a
-// message it kept across a restart or a close, and only queueing a new send is
-// gated. A host older than the queue publishes no list, so shows no cards.
+// message it kept as a card across a restart or a close, and only queueing a new
+// send is gated. A host older than the queue publishes no list, so shows no cards.
 // Nothing here is durable: the host owns the queue, and the published list is
 // the only truth a card action ever needs.
 

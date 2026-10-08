@@ -232,7 +232,7 @@ describe('placement on the binding write is inert', () => {
     it(`${scenario.name}: memory and saved state match a write without placement`, async () => {
       const baseline = await bindAndSave(scenario, undefined)
       expect(baseline.result).toBe(true)
-      expect(placementAttributes).toEqual(['absent'])
+      expect(placementAttributes).toEqual([scenario.prebind ? 'leaf_present' : 'absent'])
       const cases = scenario.placements('<existing leaf>')
       for (const [index, [, agreement]] of cases.entries()) {
         const placed = await bindAndSave(scenario, (leaf) => scenario.placements(leaf)[index][0])

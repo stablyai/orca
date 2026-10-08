@@ -159,6 +159,31 @@ describe('a structured launch that creates its own worktree', () => {
     expect(result.receipt).toMatchObject({ reason: 'structured_support_unknown' })
   })
 
+  it('keeps Pi on the terminal path when its RPC version is unsupported', async () => {
+    const h = harness({ createSupport: { supported: false, reason: 'agent' } })
+    const result = await h.run({
+      ...CREATE_INTENT,
+      agent: 'pi',
+      prompt: { text: 'continue my task', delivery: 'submit' }
+    })
+    expect(h.calls).toEqual([
+      'createWorktree(startupAgent=undefined)',
+      'createSupport',
+      'createTerminalAgent'
+    ])
+    expect(h.createStructuredSession).not.toHaveBeenCalled()
+    expect(h.createTerminalAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        startupPrompt: 'continue my task'
+      })
+    )
+    expect(result.outcome).toEqual({ kind: 'terminal', handle: 'term_1' })
+    expect(result.receipt).toMatchObject({
+      mode: 'terminal',
+      reason: 'structured_unsupported_on_host'
+    })
+  })
+
   it('falls back only for a definitive structured refusal after the worktree exists', async () => {
     const h = harness({
       structuredCreateError: new AgentLaunchStructuredSessionRefusedError(

@@ -14,6 +14,7 @@ import { orcadLivenessProbeCommand, type OrcadLaunchSpec } from './orcad-remote-
 import {
   OrcadWindowsLaunchRefusedError,
   readWindowsOrcadLaunchReport,
+  readWindowsOrcadSlotEntry,
   windowsOrcadLaunchCommand,
   windowsOrcadLaunchRuntimeCommand
 } from './orcad-remote-launch-windows'
@@ -86,6 +87,18 @@ describe('Windows orcad commands run node.exe directly', () => {
     ['build hash', remoteOrcadBuildHashCommand(host, slot)]
   ]
 
+  it('selects the split server entry and preserves older host-script answers', () => {
+    const server = `${slot}/orcad-server.js`
+    const selected = readWindowsOrcadSlotEntry(encoded('__ORCAD_ENTRY__', server), host, slot)
+    expect(selected).toBe(server)
+    expect(windowsOrcadLaunchCommand(host, spec, SLOT_NODE, selected)).toContain(
+      `${server} --windows-breakaway-launch`
+    )
+    expect(readWindowsOrcadSlotEntry(encoded('__ORCAD_RUNTIME__', SLOT_NODE), host, slot)).toBe(
+      `${slot}/orcad.js`
+    )
+  })
+
   it.each(commands())('%s: no PowerShell hop, no encoding, no WMI or signal', (_name, command) => {
     expect(command).toMatch(/^C:\\Users\\u\\\.orca-remote\\runtimes\\node-[0-9a-f]+\\node\.exe /u)
     expect(command).not.toMatch(
@@ -126,7 +139,10 @@ describe('Windows orcad commands run node.exe directly', () => {
 
   it('never polls across SSH: runtime, launch, then one host-side wait', async () => {
     mockExec
-      .mockResolvedValueOnce(encoded('__ORCAD_RUNTIME__', SLOT_NODE))
+      .mockResolvedValueOnce(
+        encoded('__ORCAD_RUNTIME__', SLOT_NODE) +
+          encoded('__ORCAD_ENTRY__', `${slot}/orcad-server.js`)
+      )
       .mockResolvedValueOnce(
         'ORCA_ORCAD_LAUNCH {"method":"breakaway","pid":4242,"inJob":false}\r\n'
       )
@@ -144,6 +160,9 @@ describe('Windows orcad commands run node.exe directly', () => {
     expect(result).toMatchObject({ state: 'ready', readiness: { runtimeId: 'r1' } })
     expect(mockExec).toHaveBeenCalledTimes(3)
     expect(String(mockExec.mock.calls[1]?.[1]).startsWith(`${SLOT_NODE} `)).toBe(true)
+    expect(String(mockExec.mock.calls[1]?.[1])).toContain(
+      `${slot}/orcad-server.js --windows-breakaway-launch`
+    )
     expect(sleep).not.toHaveBeenCalled()
   })
 })

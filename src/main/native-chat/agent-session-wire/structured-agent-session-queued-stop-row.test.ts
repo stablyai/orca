@@ -246,7 +246,11 @@ describe("a /clear's carried cards", () => {
     if (!replacementId) {
       throw new Error(`expected a replacement session: ${JSON.stringify(cleared)}`)
     }
-    expect(await rig.queuePause(replacementId)).toEqual({ reason: 'cleared' })
+    // Held there, unshown: nothing runs in the fresh conversation.
+    expect(await rig.queuePause(replacementId)).toBeNull()
+    expect(structuredQueuePauses(journal(replacementId)).map((pause) => pause.reason)).toEqual([
+      'cleared'
+    ])
     // Idle there, so the person's send goes straight out rather than queueing.
     const text = hostTestMessage('hi')
     const person = rig.host.send(QUEUED_RIG_CALLER, {
@@ -299,7 +303,9 @@ describe('no stored pause', () => {
       ...fields
     })
     const replacementId = cleared.ok ? cleared.value.replacementSessionId : undefined
-    expect(replacementId && (await rig.queuePause(replacementId))).toEqual({ reason: 'cleared' })
+    expect(
+      replacementId && structuredQueuePauses(journal(replacementId)).map((pause) => pause.reason)
+    ).toEqual(['cleared'])
     expect(pauseTables()).toBe(0)
   })
 })

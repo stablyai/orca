@@ -12,6 +12,7 @@ import {
   readNativeChatComposerDraft,
   updateNativeChatComposerDraft
 } from './native-chat-composer-draft-store'
+import { clearNativeChatPendingAttachmentsForTests } from './native-chat-pending-attachment-cache'
 
 export function readNativeChatDraftCache(scopeKey: string): string {
   return readNativeChatComposerDraft(scopeKey).text
@@ -44,7 +45,7 @@ export function appendNativeChatDraftCache(scopeKey: string, text: string): bool
     return true
   }
   const previous = readNativeChatDraftCache(scopeKey)
-  // Durable now: the copy it came from (an outbox entry, a queued card) goes right after this.
+  // Durable now: the copy it came from (a send handed back, a queued card) goes right after this.
   const durable = appendToNativeChatComposerDraft(scopeKey, { text })
   appendListeners.get(scopeKey)?.forEach((listener) => listener(text, previous))
   return durable
@@ -119,4 +120,5 @@ export function appendNativeChatAttachmentCache(
 
 export function clearNativeChatAttachmentCacheForTests(): void {
   clearNativeChatComposerDraftsForTests()
+  clearNativeChatPendingAttachmentsForTests()
 }

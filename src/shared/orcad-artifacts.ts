@@ -100,6 +100,8 @@ export const ORCAD_EMOJI_SHORTCODE_DATASET =
   'node_modules/emojibase-data/en/shortcodes/emojibase.json'
 
 export const ORCAD_VERSION = '0.1.0'
+export const ORCAD_LAUNCHER_FILENAME = 'orcad.js'
+export const ORCAD_SERVER_ENTRY_FILENAME = 'orcad-server.js'
 
 // Equals FOREIGN_SQLITE_READER_ENTRY_FILENAME; that module is not loadable under type stripping.
 export const ORCAD_FOREIGN_SQLITE_READER_ENTRY = 'foreign-sqlite-reader-entry.js'
@@ -140,6 +142,12 @@ export const ORCAD_RIPGREP_LICENSE_ARTIFACTS = [
   'ripgrep/licenses/UNLICENSE'
 ] as const
 
+/** The skill plugin native-chat agents load by path; mirrors resources/native-chat-visuals. */
+export const ORCAD_NATIVE_CHAT_VISUALS_ARTIFACTS = [
+  'native-chat-visuals/.claude-plugin/plugin.json',
+  'native-chat-visuals/skills/orca-chat-visuals/SKILL.md'
+] as const
+
 export type OrcadArtifact = {
   filename: string
   /**
@@ -151,7 +159,8 @@ export type OrcadArtifact = {
 }
 
 export const ORCAD_ARTIFACTS: readonly OrcadArtifact[] = [
-  { filename: 'orcad.js' },
+  { filename: ORCAD_LAUNCHER_FILENAME },
+  { filename: ORCAD_SERVER_ENTRY_FILENAME },
   // Forked so a native @parcel/watcher fault kills the child, not the server.
   { filename: 'parcel-watcher-process-entry.js' },
   // Forked so PTYs outlive the runtime process; its absence makes every restart destructive.
@@ -169,7 +178,8 @@ export const ORCAD_ARTIFACTS: readonly OrcadArtifact[] = [
   { filename: ORCAD_PARCEL_WATCHER_NATIVE },
   { filename: ORCAD_EMOJI_SHORTCODE_DATASET },
   ...ORCAD_NODE_PTY_JS_ARTIFACTS.map((filename) => ({ filename })),
-  ...ORCAD_RIPGREP_LICENSE_ARTIFACTS.map((filename) => ({ filename }))
+  ...ORCAD_RIPGREP_LICENSE_ARTIFACTS.map((filename) => ({ filename })),
+  ...ORCAD_NATIVE_CHAT_VISUALS_ARTIFACTS.map((filename) => ({ filename }))
 ]
 
 /** Written after the artifacts, so it is never an input to its own hash. */

@@ -53,6 +53,9 @@ export function mergeFolderWorkspaceUpdateResponse(
   }
   const next = { ...current }
   for (const field of fields) {
+    if (field === 'linkedItemsBase' || field === 'linkedItemsSelectionChanged') {
+      continue
+    }
     // Why: coalesced activity can land an older response after later local bumps.
     if (field === 'lastActivityAt') {
       next.lastActivityAt = Math.max(current.lastActivityAt, updated.lastActivityAt)

@@ -41,6 +41,8 @@ export type AcpDialectNotification =
 /** Hooks interpret extensions; lifecycle and row identity stay shared. */
 export type AcpDialect = {
   injectedPromptIdentity?: true
+  /** A tool update in the shared shape (`rawOutput.stdout`, `rawOutput.exitCode`), read first. */
+  normalizeToolUpdate?(update: ToolCallUpdate): ToolCallUpdate
   toolName?(update: ToolCallUpdate): string | undefined
   toolBackgroundTasks?(
     update: ToolCallUpdate,

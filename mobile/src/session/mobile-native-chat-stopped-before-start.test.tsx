@@ -174,7 +174,7 @@ describe('a send a Stop took back before the agent started it, on the phone', ()
       renderer = create(createElement(MobileNativeChatMessage, { message: messages[3]! }))
     })
     expect(renderer!.root.findAllByType(MobileMarkdown).map((node) => node.props.content)).toEqual([
-      'Stopped before the agent started'
+      'Stopped manually'
     ])
   })
 })

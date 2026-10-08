@@ -3,6 +3,9 @@ import type { AgentSessionFailureSentence } from './agent-session-failure-words'
 
 export type AgentSessionConversationCommand = 'clear' | 'compact'
 
+/** How long a client waits for a conversation command: the host may first start an agent at rest. */
+export const AGENT_SESSION_CONVERSATION_COMMAND_TIMEOUT_MS = 195_000
+
 export type AgentSessionConversationCommandResult = {
   command: AgentSessionConversationCommand
   state: 'completed' | 'unknown'

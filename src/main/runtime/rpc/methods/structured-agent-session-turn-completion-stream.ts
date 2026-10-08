@@ -17,6 +17,7 @@ import {
 } from './structured-agent-session-schemas'
 import { structuredAgentSessionTurnCompletionSubscriptionId } from './structured-agent-session-subscription-id'
 import { bindStructuredAgentSessionStream } from './structured-agent-session-status-stream'
+import { clientReadsStructuredSessionAgent } from './structured-agent-session-policy'
 
 export const STRUCTURED_AGENT_SESSION_TURN_COMPLETION_METHODS = [
   // Retire only deliveries whose journal cause the client's accepted read covered: the session and
@@ -46,7 +47,21 @@ export const STRUCTURED_AGENT_SESSION_TURN_COMPLETION_METHODS = [
       }
       dispose = host.subscribeTurnCompletions({
         id: subscriptionId,
-        emit,
+        // A client that cannot read an agent's rows is not told that agent's edges either.
+        emit: (event) => {
+          const sessionId =
+            event.type === 'completion'
+              ? event.completion.sessionId
+              : event.type === 'prompt'
+                ? event.prompt.sessionId
+                : undefined
+          if (
+            sessionId === undefined ||
+            clientReadsStructuredSessionAgent(ctx, host.sessionAgent(sessionId) ?? '')
+          ) {
+            emit(event)
+          }
+        },
         includePrompts: params.includePrompts === true
       })
       if (stream.isClosed()) {

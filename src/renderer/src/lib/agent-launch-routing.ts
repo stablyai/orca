@@ -2,7 +2,8 @@ import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
 import {
   prefersStructuredNativeChatByDefault,
-  resolveStructuredNativeChatSupport
+  resolveStructuredNativeChatSupport,
+  type StructuredNativeChatBlocker
 } from '../../../shared/structured-native-chat-launch-route'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { WorkspaceLaunchKind } from '../../../shared/workspace-launch-kind'
@@ -70,15 +71,38 @@ export function structuredAgentLaunchSupported(
 ): boolean {
   return (
     input.settings?.experimentalStructuredNativeChat === true &&
-    resolveStructuredNativeChatSupport({
-      agent: input.agent,
-      executionHostId: input.executionHostId,
-      hostCapabilities: input.hostCapabilities,
-      ...(input.clientCapabilities ? { clientCapabilities: input.clientCapabilities } : {}),
-      workspaceKind: input.workspaceKind,
-      projectRuntime: input.projectRuntime,
-      startsOutsideWorkspaceRoot: input.startsOutsideWorkspaceRoot,
-      ...(input.hostStructuredAgents ? { hostStructuredAgents: input.hostStructuredAgents } : {})
-    }).supported
+    structuredAgentLaunchSupport(input).supported
   )
+}
+
+function structuredAgentLaunchSupport(input: Omit<AgentLaunchRoutingInput, 'launchText'>) {
+  return resolveStructuredNativeChatSupport({
+    agent: input.agent,
+    executionHostId: input.executionHostId,
+    hostCapabilities: input.hostCapabilities,
+    ...(input.clientCapabilities ? { clientCapabilities: input.clientCapabilities } : {}),
+    workspaceKind: input.workspaceKind,
+    projectRuntime: input.projectRuntime,
+    startsOutsideWorkspaceRoot: input.startsOutsideWorkspaceRoot,
+    ...(input.hostStructuredAgents ? { hostStructuredAgents: input.hostStructuredAgents } : {})
+  })
+}
+
+/** Why a launch with structured chat turned on did not route to it; null when it did, or when
+ *  structured chat is off. Diagnostics only: the route itself is `resolveAgentLaunchRoute`. */
+export function structuredAgentLaunchDowngrade(
+  input: AgentLaunchRoutingInput,
+  route: AgentLaunchRoute
+): StructuredNativeChatBlocker | 'new-tabs-default-to-terminal' | null {
+  if (
+    route === 'structured-native-chat' ||
+    input.settings?.experimentalStructuredNativeChat !== true
+  ) {
+    return null
+  }
+  if (!prefersStructuredNativeChatByDefault(input.settings)) {
+    return 'new-tabs-default-to-terminal'
+  }
+  const support = structuredAgentLaunchSupport(input)
+  return support.supported ? null : support.blocker
 }

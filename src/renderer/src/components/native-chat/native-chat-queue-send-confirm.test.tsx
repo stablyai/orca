@@ -139,8 +139,7 @@ beforeEach(() => {
     configurable: true,
     value: {
       git: { discoverCommitMessageModels: vi.fn().mockResolvedValue({ success: false }) },
-      pty: { getMainBufferSnapshot: vi.fn().mockResolvedValue(null) },
-      ui: { onFileDrop: () => vi.fn() }
+      pty: { getMainBufferSnapshot: vi.fn().mockResolvedValue(null) }
     }
   })
 })
@@ -390,5 +389,42 @@ describe('sending while the queue is held', () => {
     await act(async () => pressEnter(input))
     await waitFor(() => expect(held.send).toHaveBeenCalledWith('a new instruction', []))
     expect(held.send).toHaveBeenCalledTimes(1)
+  })
+})
+
+// The chat takes one send at a time: while ours is out the question would only lead to a refused send.
+describe('sending while the queue is held and a send is out', () => {
+  it('asks nothing and sends nothing on Enter; the text stays', async () => {
+    const hold = heldQueue(2)
+    const input = renderComposer({ ...transport(hold), sendOut: true })
+    changePrompt(input, 'not yet')
+    await act(async () => pressEnter(input))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(hold.clear).not.toHaveBeenCalled()
+    expect(promptValue(input)).toBe('not yet')
+  })
+
+  it('Clear queue deletes nothing when a send went out after the question opened', async () => {
+    const hold = heldQueue(2)
+    const structured = transport(hold)
+    paneCounter += 1
+    const view = (sendOut: boolean) => (
+      <NativeChatComposer
+        terminalTabId={`tab-${paneCounter}`}
+        paneKey={`tab-${paneCounter}:structured`}
+        targetPtyId={null}
+        agent="codex"
+        structuredTransport={{ ...structured, sendOut }}
+      />
+    )
+    const { rerender } = render(view(false))
+    const input = screen.getByRole('textbox')
+    changePrompt(input, 'start over')
+    await act(async () => pressEnter(input))
+    const clear = await screen.findByRole('button', { name: 'Clear queue' })
+    rerender(view(true))
+    await act(async () => fireEvent.click(clear))
+    expect(hold.clear).not.toHaveBeenCalled()
+    expect(structured.send).not.toHaveBeenCalled()
   })
 })

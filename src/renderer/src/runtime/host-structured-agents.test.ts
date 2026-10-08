@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => {
   return {
     callRuntimeRpc: vi.fn(),
     ensureLocalRuntimeCapabilities: vi.fn(),
+    capabilitiesKnown: new Set<(capabilities: readonly string[]) => void>(),
     state,
     listeners: new Set<(state: StoreState, previous: StoreState) => void>()
   }
@@ -27,7 +28,11 @@ const mocks = vi.hoisted(() => {
 
 vi.mock('./runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRuntimeRpc }))
 vi.mock('./local-runtime-capabilities', () => ({
-  ensureLocalRuntimeCapabilities: mocks.ensureLocalRuntimeCapabilities
+  ensureLocalRuntimeCapabilities: mocks.ensureLocalRuntimeCapabilities,
+  subscribeLocalRuntimeCapabilitiesKnown: (listener: (capabilities: readonly string[]) => void) => {
+    mocks.capabilitiesKnown.add(listener)
+    return () => mocks.capabilitiesKnown.delete(listener)
+  }
 }))
 vi.mock('./local-structured-chats', () => ({
   localStructuredChatsInUse: async (settings: StoreState['settings']) =>
@@ -95,6 +100,7 @@ beforeEach(() => {
   resetHostStructuredAgentsForTests()
   mocks.state = { runtimeStatusByEnvironmentId: new Map(), settings: ON }
   mocks.listeners.clear()
+  mocks.capabilitiesKnown.clear()
   mocks.callRuntimeRpc.mockReset().mockResolvedValue(GROK_LIST)
   mocks.ensureLocalRuntimeCapabilities.mockReset().mockResolvedValue(REGISTERED)
 })
@@ -174,6 +180,19 @@ describe('host structured agents', () => {
     mocks.listeners.forEach((listener) => listener(mocks.state, previous))
     await vi.waitFor(() => expect(agentIds('local')).toEqual(['claude', 'grok']))
     await vi.waitFor(() => expect(agentIds('runtime:env-1')).toEqual(['claude', 'grok']))
+  })
+
+  it("reads the local host's agents once its capabilities land, when startup asked too early", async () => {
+    mocks.ensureLocalRuntimeCapabilities.mockResolvedValue(null)
+    uninstall = installHostStructuredAgentsSync()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
+
+    mocks.ensureLocalRuntimeCapabilities.mockResolvedValue(REGISTERED)
+    mocks.capabilitiesKnown.forEach((listener) => listener(REGISTERED))
+
+    await vi.waitFor(() => expect(agentIds('local')).toEqual(['claude', 'grok']))
   })
 
   it('leaves a host unlearned when its reply is not an agent list', async () => {

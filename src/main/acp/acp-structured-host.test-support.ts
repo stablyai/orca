@@ -61,6 +61,7 @@ export function launch(resume: () => boolean): () => Promise<AcpStructuredLaunch
     args: [],
     cwd: '/workspace',
     env: {},
+    envToDelete: [],
     fullAccess: false,
     resume: resume()
       ? {

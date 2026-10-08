@@ -74,7 +74,10 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     holdClosed: async (sessionId, which) => {
       const session = sessions.get(sessionId)
       return session
-        ? holdClosedStructuredAgentSessionSends(deps, sessionId, session.journal, which)
+        ? holdClosedStructuredAgentSessionSends(deps, sessionId, session.journal, {
+            mark: 'settled',
+            which
+          })
         : true
     },
     failureTextContext: (sessionId) =>

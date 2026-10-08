@@ -157,6 +157,13 @@ export const WORKTREE_METHODS = [
         linkedAzureDevOpsPR: params.linkedAzureDevOpsPR,
         linkedGiteaPR: params.linkedGiteaPR,
         linkedWorkItem: params.linkedWorkItem,
+        linkedItems: params.linkedItems,
+        ...(params.linkedItemsBase !== undefined
+          ? { linkedItemsBase: params.linkedItemsBase }
+          : {}),
+        ...(params.linkedItemsSelectionChanged !== undefined
+          ? { linkedItemsSelectionChanged: params.linkedItemsSelectionChanged }
+          : {}),
         linkedTaskSourceContext: params.linkedTaskSourceContext,
         comment: params.comment,
         isArchived: params.isArchived,
@@ -181,7 +188,7 @@ export const WORKTREE_METHODS = [
                 noParent: params.noParent === true
               }
             : undefined
-      } as Parameters<typeof runtime.updateManagedWorktreeMeta>[1])
+      })
     })
   }),
   defineMethod({

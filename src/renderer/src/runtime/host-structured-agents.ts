@@ -7,6 +7,7 @@ import { parseExecutionHostId } from '../../../shared/execution-host'
 import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import { lastVerifiedRuntimeStatus } from '../../../shared/runtime-host-status'
 import type { RuntimeEnvironmentStatus } from '../../../shared/runtime-host-status'
+import { ensureLocalRuntimeCapabilities } from './local-runtime-capabilities'
 import { callRuntimeRpc } from './runtime-rpc-client'
 
 /**
@@ -115,6 +116,25 @@ export function loadHostStructuredAgents(
     })
   inflight.set(key, read)
   return read
+}
+
+/** Asks a host again when a launch found its agents unlearned. The startup read runs once per
+ *  runtime, so without this a read that failed, or was skipped while the local runtime's
+ *  capabilities were unknown, kept that host's agents off the chat route for the whole session. */
+export async function relearnHostStructuredAgents(
+  executionHostId: string,
+  hostCapabilities: readonly string[] | null | undefined,
+  statuses: HostStructuredAgentsStatuses
+): Promise<void> {
+  const runtimeId = currentRuntimeId(executionHostId, statuses)
+  if (runtimeId === undefined || readHostStructuredAgentsForRuntime(executionHostId, runtimeId)) {
+    return
+  }
+  const capabilities =
+    runtimeId === null && !hostCapabilities
+      ? await ensureLocalRuntimeCapabilities()
+      : hostCapabilities
+  await loadHostStructuredAgents(executionHostId, capabilities, runtimeId)
 }
 
 /** Drops hosts no longer paired; a stale runtime is already ignored by the reader. */

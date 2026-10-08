@@ -1,13 +1,14 @@
 // A message handed to an agent whose start never answers provably never ran: its CLI takes no
 // message before it answers initialize. So when the chat ends then, the message is settled as a
 // queued one is for the same end (`journal-unsent-send-hold.ts`): a quit or a close keeps a
-// person's words as a held card, a person's Stop withdraws it. Against the real host, store and
+// person's words as an ordinary card that waits for the chat's next turn, a person's Stop
+// withdraws it. Against the real host, store and
 // journal, with an agent that stays starting.
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
-import { QUEUED_MESSAGE_PAUSED_KEPT } from '../../../shared/agent-session-queued-message-wire'
+import { structuredQueuePauses } from './structured-agent-session-queued-pause'
 import {
   createQueuedMessageTestRig,
   eventually,
@@ -17,7 +18,17 @@ import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-te
 
 const words = (kind: 'hostRestarted' | 'chatClosed' | 'cancelled') =>
   agentSessionFailureWords(agentSessionFailureFact(kind), { surface: 'rejection' })
-const KEPT = { state: 'waiting', paused: true }
+/** A kept send: an ordinary waiting card, with no hold of its own. */
+const KEPT = { state: 'waiting' }
+
+/** What holds the queue, derived from the open journal. */
+function derivedPauses(): string[] {
+  const journal = rig.host.collaboratorsForTests().sessions.get(SESSION)?.journal
+  if (!journal) {
+    throw new Error('expected the conversation open')
+  }
+  return structuredQueuePauses(journal).map((pause) => pause.reason)
+}
 
 let rig: QueuedMessageTestRig
 
@@ -47,7 +58,7 @@ async function handedToHungStart(text: string): Promise<string> {
 }
 
 describe('a message handed to a start that never answered, then the chat ends', () => {
-  it('is a held card after a quit, rejected as a restart, as a queued one is', async () => {
+  it('is a card after a quit, rejected as a restart, held by the reopen until a turn', async () => {
     const id = await handedToHungStart('kept through quit')
     await rig.quitRestartHostProcess()
 
@@ -59,7 +70,8 @@ describe('a message handed to a start that never answered, then the chat ends', 
     expect(await rig.drafts()).toEqual([{ messageId: id, ...KEPT }])
     const [card] =
       rig.host.collaboratorsForTests().sessions.get(SESSION)?.journal.queuedMessages.list() ?? []
-    expect(card).toMatchObject({ holdReason: QUEUED_MESSAGE_PAUSED_KEPT })
+    expect(card).toMatchObject({ holdReason: null })
+    expect(derivedPauses()).toEqual(['restarted'])
     // Nothing ran, so there is nothing to resume: the card alone holds the words.
     expect(await rig.restartOffers()).toEqual([])
   })
@@ -81,7 +93,7 @@ describe('a message handed to a start that never answered, then the chat ends', 
   })
 
   it.each(['user-close', 'evict'] as const)(
-    'is a held card after a %s, rejected as closed, as a queued one is',
+    'is a card after a %s, rejected as closed, held by the reopen until a turn',
     async (cause) => {
       const id = await handedToHungStart('kept at close')
       await rig.host.close(SESSION, cause)
@@ -93,6 +105,7 @@ describe('a message handed to a start that never answered, then the chat ends', 
         keptAsQueuedMessageId: id
       })
       expect(await rig.drafts()).toEqual([{ messageId: id, ...KEPT }])
+      expect(derivedPauses()).toEqual(['restarted'])
     }
   )
 

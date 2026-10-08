@@ -73,7 +73,7 @@ export function appendNormalizedToMultilineTailBufferUnwindowed(
     ensureCursorRow()
     rows[cursorRow]!.completed = false
   }
-  const writeChar = (char: string): void => {
+  const writeText = (text: string): void => {
     ensureCursorRow()
     markCursorRowRewritten()
     const row = rows[cursorRow]!
@@ -82,9 +82,9 @@ export function appendNormalizedToMultilineTailBufferUnwindowed(
     }
     row.text =
       cursorColumn >= row.text.length
-        ? `${row.text}${char}`
-        : `${row.text.slice(0, cursorColumn)}${char}${row.text.slice(cursorColumn + 1)}`
-    cursorColumn += 1
+        ? `${row.text}${text}`
+        : `${row.text.slice(0, cursorColumn)}${text}${row.text.slice(cursorColumn + text.length)}`
+    cursorColumn += text.length
   }
   const eraseLine = (mode: number): void => {
     ensureCursorRow()
@@ -100,13 +100,28 @@ export function appendNormalizedToMultilineTailBufferUnwindowed(
     }
   }
 
+  let textStart = 0
+  const writePendingText = (end: number): void => {
+    if (end > textStart) {
+      writeText(
+        end === textStart + 1 ? normalizedChunk[textStart]! : normalizedChunk.slice(textStart, end)
+      )
+    }
+    textStart = end + 1
+  }
   for (let index = 0; index < normalizedChunk.length; index += 1) {
     const char = normalizedChunk[index]
     if (char === '\n') {
+      writePendingText(index)
       ensureCursorRow()
       rows[cursorRow]!.completed = true
       newCompleteLines += 1
-      retainNewlyCompletedLine(trimTerminalLineRight(rows[cursorRow]!.text))
+      // Own only retained text; a short erase-to-end result can otherwise pin a large span.
+      const row = rows[cursorRow]!
+      const trimmed = trimTerminalLineRight(row.text)
+      const completedLine = ownRetainedString(trimmed)
+      row.text = trimmed === row.text ? completedLine : ownRetainedString(row.text)
+      retainNewlyCompletedLine(completedLine)
       cursorRow += 1
       cursorColumn = 0
       ensureCursorRow()
@@ -114,19 +129,23 @@ export function appendNormalizedToMultilineTailBufferUnwindowed(
       continue
     }
     if (char === '\r') {
+      writePendingText(index)
       cursorColumn = 0
       continue
     }
     if (char === '\u0008') {
+      writePendingText(index)
       cursorColumn = Math.max(0, cursorColumn - 1)
       continue
     }
     if (char === '\u001b') {
+      writePendingText(index)
       const parsed = parseAnsiControlSequence(normalizedChunk, index)
       if (!parsed) {
         continue
       }
       index = parsed.endIndex
+      textStart = index + 1
       if (parsed.kind !== 'csi' || !hasCanonicalNumericCsiParams(parsed.params)) {
         continue
       }
@@ -145,8 +164,8 @@ export function appendNormalizedToMultilineTailBufferUnwindowed(
       }
       continue
     }
-    writeChar(char)
   }
+  writePendingText(normalizedChunk.length)
 
   return finalizeRetainedTerminalRows(
     rows,
@@ -186,7 +205,10 @@ function finalizeRetainedTerminalRows(
   newlyCompletedLines: string[]
 } {
   let truncated = initialTruncated
-  let retainedRows = rows.map((row) => ({ ...row, text: trimTerminalLineRight(row.text) }))
+  let retainedRows = rows.map((row) => {
+    const trimmed = trimTerminalLineRight(row.text)
+    return { ...row, text: trimmed === row.text ? row.text : ownRetainedString(trimmed) }
+  })
 
   if (retainedRows.length > MAX_TAIL_LINES + 1) {
     const removeCount = retainedRows.length - (MAX_TAIL_LINES + 1)
@@ -242,10 +264,7 @@ function finalizeRetainedTerminalRows(
 
   return {
     lines,
-    // Why only the partial: redraw rows are built character by character and never sliced from
-    // the chunk, but the partial is re-sliced from its own row on every chunk, so it alone can
-    // accumulate a backing string across frames. Owning the rows too costs 20-36% on TUI floods
-    // for no measured retention.
+    // Completed rows own their storage at newline; the final partial may still reference a span.
     partialLine: ownRetainedString(partialLine),
     redrawCursor,
     truncated,

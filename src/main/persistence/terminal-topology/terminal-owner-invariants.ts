@@ -24,7 +24,7 @@ export type TerminalLeafOwner = {
 export type TerminalOwnerConflictReason =
   | 'pty_bound_to_other_leaf'
   | 'leaf_in_other_tab'
-  // Kept apart: the relay reattach writes SSH panes into `local`, so this may be one moved surface.
+  // Kept apart: older relay reattaches left SSH panes in `local`, so this may be one moved surface.
   | 'leaf_in_other_tab_on_other_host'
 
 /** `runtime:` partitions belong to a remote Orca server and are written only by its tab sync. */
@@ -83,7 +83,7 @@ export function isSameTerminal(
 
 /**
  * The saved leaf a binding into `hostId` would duplicate, if any. The same tab:leaf in two
- * partitions is one surface: the relay reattach still binds an SSH pane into `local`.
+ * partitions is one surface: older relay reattaches left SSH panes in `local`.
  */
 export function findTerminalBindingConflict(
   binding: { tabId: string; leafId: string; ptyId: string; incarnationId?: string },

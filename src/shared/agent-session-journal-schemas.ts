@@ -136,13 +136,21 @@ const PromptOption = z.object({
   description: z.string().optional()
 })
 
+const FreeTextInput = z.object({
+  allowEmpty: z.boolean().optional(),
+  multiline: z.boolean().optional(),
+  initialValue: z.string().optional(),
+  placeholder: z.string().optional()
+})
+
 const Question = z.object({
   id: z.string(),
   question: z.string(),
   header: z.string().optional(),
   multiSelect: z.boolean(),
   options: z.array(PromptOption),
-  freeTextQuestionId: z.string().optional()
+  freeTextQuestionId: z.string().optional(),
+  freeTextInput: FreeTextInput.optional()
 })
 
 const Resolution = z.object({
@@ -236,6 +244,7 @@ const KnownItemBody = z.discriminatedUnion('kind', [
     options: z.array(PromptOption),
     questions: z.array(Question).optional(),
     freeTextQuestionId: z.string().optional(),
+    freeTextInput: FreeTextInput.optional(),
     resolution: Resolution
   }),
   z.object({
@@ -246,7 +255,8 @@ const KnownItemBody = z.discriminatedUnion('kind', [
     turnLifecycle: z.object(TurnLifecycleFields).optional(),
     providerFrame: ProviderFrame.optional(),
     threadGoal: AgentJournalThreadGoalStateSchema.optional(),
-    failure: AgentSessionFailureFactSchema.optional()
+    failure: AgentSessionFailureFactSchema.optional(),
+    orcaStop: z.object({ cause: z.string().min(1) }).optional()
   }),
   z.object({
     kind: z.literal('turn'),

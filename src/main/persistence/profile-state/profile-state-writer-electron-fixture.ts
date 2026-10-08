@@ -38,19 +38,29 @@ async function run(): Promise<void> {
   const counters = new SharedArrayBuffer(8)
   const counts = new Int32Array(counters)
   const failures: string[] = []
+  let phase = 'initialize'
   const initialization = { databasePath, profileId, revision: 0, counters }
   const client = new ProfileStateWriteWorkerClient(initialization, {
     workerPath: join(root, 'observed-worker.cjs'),
     timeoutMs,
-    onFailure: (error) => failures.push(error.message)
+    onFailure: (error) => {
+      failures.push(error.message)
+      console.error('[writer-fixture] failure', {
+        phase,
+        queuedReplies: Atomics.load(counts, 0),
+        workerStarts: Atomics.load(counts, 1)
+      })
+    }
   })
   const write = (marker: string) =>
     client.writeSerializedDomains([{ domain: 'ui', payload: JSON.stringify({ marker }) }])
   const revisions: number[] = []
   try {
     await client.ready
+    phase = 'before'
     assert.equal(await write('before'), 1)
     for (let cycle = 0; cycle < 4; cycle += 1) {
+      phase = `stall-${cycle}`
       let pending: Promise<number> | undefined
       await new Promise<void>((resolve, reject) => {
         // Dispatch from check so the overdue timer runs before the next poll.
@@ -76,6 +86,7 @@ async function run(): Promise<void> {
       }
       revisions.push(await pending)
     }
+    phase = 'after'
     assert.equal(await write('after'), 6)
   } finally {
     await client.close()

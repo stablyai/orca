@@ -68,6 +68,7 @@ it.each([true, false])(
     await waitForPoll()
     vi.advanceTimersByTime(TIMEOUT_MS)
     await waitForPoll()
+    await waitForPoll()
     expect(worker.terminate).toHaveBeenCalledOnce()
     expect(settled).toBe(false)
     worker.emit('exit', 1)

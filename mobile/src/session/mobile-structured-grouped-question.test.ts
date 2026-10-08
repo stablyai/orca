@@ -123,6 +123,43 @@ describe('mobile structured grouped questions', () => {
     ])
   })
 
+  it('projects editor metadata and preserves allowed empty and whitespace answers', () => {
+    const editor = question({
+      options: [],
+      freeTextInput: {
+        allowEmpty: true,
+        multiline: true,
+        initialValue: 'draft',
+        placeholder: 'Edit response'
+      }
+    })
+    const projected = projectGroupedQuestion([editor], null, PROMPT_KEY)!
+    expect(projected.freeTextInput).toEqual(editor.freeTextInput)
+
+    for (const answer of ['', '  \n ']) {
+      const result = advanceGroupedQuestion({
+        response: formatQuestionFreeTextAnswer(projected, answer),
+        questions: [editor],
+        draft: null,
+        promptKey: PROMPT_KEY
+      })
+      expect(result).toEqual({
+        kind: 'submit',
+        answers: [{ questionId: 'q1', optionIds: [], other: answer }]
+      })
+    }
+
+    const legacy = question({ options: [] })
+    expect(
+      advanceGroupedQuestion({
+        response: formatQuestionFreeTextAnswer(projected, ''),
+        questions: [legacy],
+        draft: null,
+        promptKey: PROMPT_KEY
+      })
+    ).toBeNull()
+  })
+
   it('keeps selected options and other text for grouped multi-select answers', () => {
     const questions = [SECOND]
     const only = projectGroupedQuestion(questions, null, PROMPT_KEY)!

@@ -8,7 +8,7 @@
 
 import { backgroundTaskBlocks, claimBackgroundTaskTwins } from './native-chat-background-task-row'
 import { isWordlessProviderFrameBlock } from './native-chat-provider-frame-summary'
-import { isSubagentGroupFallbackText, subagentGroupBlocks } from './native-chat-subagent-summary'
+import { isReplacedSubagentGroupTwin, subagentGroupBlocks } from './native-chat-subagent-summary'
 import {
   isBackgroundTaskBlock,
   isSubagentGroupBlock,
@@ -42,7 +42,7 @@ function derive(blocks: readonly NativeChatBlock[]) {
             !isSubagentGroupBlock(block) &&
             !isBackgroundTaskBlock(block) &&
             !taskTwins.twinTextIndexes.has(index) &&
-            !(groups.length > 0 && block.type === 'text' && isSubagentGroupFallbackText(block.text))
+            !isReplacedSubagentGroupTwin(block, groups.length > 0)
         )
   return {
     prose,

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { NativeChatBackgroundTasksStatus } from './NativeChatBackgroundTasksStatus'
-import type { StructuredSessionBackgroundTasksView } from './structured-session-background-tasks-view'
+import type { StructuredSessionBackgroundTasksView } from '../../../../shared/structured-session-background-tasks-view'
 import { useStructuredSessionChildRowContext } from './use-structured-session-child-row-context'
 
 type StoppingBackgroundTasks = {

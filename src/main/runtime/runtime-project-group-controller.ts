@@ -1,3 +1,4 @@
+import type { WorkspaceAttachmentMutation } from '../../shared/workspace-attachment-mutation'
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../shared/project-group-types'
 import type { Repo } from '../../shared/repo-types'
@@ -29,6 +30,7 @@ type FolderWorkspaceUpdates = Partial<
     | 'name'
     | 'folderPath'
     | 'linkedTask'
+    | 'linkedItems'
     | 'linkedTaskSourceContext'
     | 'comment'
     | 'isArchived'
@@ -43,7 +45,8 @@ type FolderWorkspaceUpdates = Partial<
     | 'lastActivityAt'
     | 'diffComments'
   >
->
+> &
+  WorkspaceAttachmentMutation
 
 export class RuntimeProjectGroupController {
   constructor(private readonly deps: RuntimeProjectGroupDependencies) {}
@@ -126,6 +129,7 @@ export class RuntimeProjectGroupController {
     connectionId?: string | null
     creatorProvenance?: FolderWorkspace['creatorProvenance']
     linkedTask?: FolderWorkspace['linkedTask']
+    linkedItems?: FolderWorkspace['linkedItems']
     linkedTaskSourceContext?: FolderWorkspace['linkedTaskSourceContext']
     createdWithAgent?: FolderWorkspace['createdWithAgent']
     pendingFirstAgentMessageRename?: boolean

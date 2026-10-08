@@ -100,6 +100,11 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
     return this.getLivePtyForHandle(handle)?.pty.ptyId ?? null
   }
 
+  /** Every provider-session row this host holds, resume-identity-only rows included. */
+  getAgentProviderSessionRows(): AgentStatusIpcPayload[] {
+    return this.getAgentProviderSessionSnapshotFn?.() ?? []
+  }
+
   /** Agent status rows this host holds for a pane, from hooks, OSC and titles alike. */
   getAgentStatusRowsForPane(paneKey: string): AgentStatusIpcPayload[] {
     return this.getAgentProviderSessionRowsForPaneFn?.(paneKey) ?? []

@@ -1,4 +1,7 @@
-import { closeTestStores, createSqliteTestStore } from './persistence-test-harness'
+import { closeTestStores, createSqliteTestStore, testState } from './persistence-test-harness'
+import { Store as CanonicalStore } from './persistence/loading-store/store'
+import { initDataPath as initCanonicalDataPath } from './persistence/loading-store/user-data-path'
+import { resetRetirementCollisionKeyCacheForTests } from './worktree-name-retirement'
 // Why this file exists: removing a workspace's session rows must take its close records with it,
 // or they hold cap slots until the TTL and read as "emptied on purpose" for a new workspace at the
 // same path.
@@ -15,7 +18,7 @@ import {
   type ClosedTerminalTabTombstonesByTabId
 } from '../shared/closed-terminal-tab-tombstones'
 
-const testState = { dir: '' }
+let hasCreatedStoreInCase = false
 
 vi.mock('./ssh/ssh-config-parser', () => ({
   loadUserSshConfig: vi.fn(),
@@ -37,6 +40,13 @@ vi.mock('./telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('./telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn().mockReturnValue({}) }))
 
 async function createStore() {
+  if (!hasCreatedStoreInCase) {
+    hasCreatedStoreInCase = true
+    initCanonicalDataPath()
+    return createSqliteTestStore(CanonicalStore, {
+      dataFile: join(testState.dir, 'orca-data.json')
+    })
+  }
   vi.resetModules()
   const { Store, initDataPath } = await import('./persistence')
   initDataPath()
@@ -70,6 +80,8 @@ function sessionWithRecords(map: ClosedTerminalTabTombstonesByTabId) {
 
 describe('close records on workspace removal', () => {
   beforeEach(() => {
+    hasCreatedStoreInCase = false
+    resetRetirementCollisionKeyCacheForTests()
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
   })
 

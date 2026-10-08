@@ -11,6 +11,7 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../../../shared/agent-session-journal-types'
+import { AGENT_SESSION_ORCA_STOP_PRESENTATION } from '../../../../shared/agent-session-orca-stop'
 import {
   isBackgroundTaskBlock,
   isSubagentGroupBlock,
@@ -79,6 +80,8 @@ export type NativeChatMessageSlot = {
   drawsMessage: boolean
   /** Whether this row's turn hides anything, so its status row offers a caret. */
   turnFolds: boolean
+  /** The agent's next row in the same turn follows directly, so the two sit close. */
+  continuesTurn?: boolean
   turnDiff: NativeChatTurnDiff | undefined
   /** On a roster row: whether its list is open, and the subagents whose sections open
    *  under their entries, each with whether it is open. A closed list draws none of them. */
@@ -149,9 +152,18 @@ export function buildNativeChatTranscriptSlots(
         isBackgroundTaskBlock(block) ||
         isStoppedBeforeStartBlock(block)
     ),
-    reportsFailure: message.blocks.some((block) => block.type === 'text' && block.tone === 'error'),
-    reportsCompaction: message.blocks.some(
-      (block) => block.type === 'text' && block.presentation === 'compaction'
+    // A row about Orca's own stop is stored red for clients that predate it; it reports no failure.
+    reportsFailure: message.blocks.some(
+      (block) =>
+        block.type === 'text' &&
+        block.tone === 'error' &&
+        block.presentation !== AGENT_SESSION_ORCA_STOP_PRESENTATION
+    ),
+    explainsTurn: message.blocks.some(
+      (block) =>
+        block.type === 'text' &&
+        (block.presentation === 'compaction' ||
+          block.presentation === AGENT_SESSION_ORCA_STOP_PRESENTATION)
     )
   }))
   // Liveness is the turn's, not any one call's: the run at the frontier stays
@@ -250,7 +262,26 @@ export function buildNativeChatTranscriptSlots(
     sectionSlots.openAnchoredAt(message, roster, turnKey)
   }
   sectionSlots.openBefore(pending, undefined, 0)
-  return nativeChatTranscriptWorkRuns(slots, typography)
+  const drawn = nativeChatTranscriptWorkRuns(slots, typography)
+  for (let index = 0; index < drawn.length - 1; index += 1) {
+    const slot = drawn[index]!
+    const next = drawn[index + 1]!
+    if (
+      slot.kind === 'message' &&
+      next.kind === 'message' &&
+      // A subagent's section keeps the transcript's gap as part of its frame.
+      slot.depth === 0 &&
+      next.depth === 0 &&
+      slot.turnKey !== undefined &&
+      next.turnKey === slot.turnKey &&
+      // The agent's own next step, not a notice or task row that trails its answer.
+      (next.message.role === 'assistant' || next.message.role === 'reasoning') &&
+      next.drawsMessage
+    ) {
+      slot.continuesTurn = true
+    }
+  }
+  return drawn
 }
 
 /** Stable key for a slot: its message id, the agent whose section it heads, or its

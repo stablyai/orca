@@ -15,8 +15,10 @@ import type {
   AgentJournalSubmission,
   AgentJournalTurnScope
 } from '../../../../shared/agent-session-journal-types'
-import type { StructuredAgentSessionOutboxEntry } from '../../../../shared/structured-agent-session-outbox'
-import { projectStructuredAgentSessionMessages } from '../../../../shared/structured-agent-session-message-projection'
+import {
+  projectStructuredAgentSessionMessages,
+  type StructuredAgentSessionOptimisticMessage
+} from '../../../../shared/structured-agent-session-message-projection'
 import { selectStructuredAgentSettledTurns } from '../../../../shared/structured-agent-session-turn-timing'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import { installNativeChatMessageListTestViewport } from './native-chat-message-list-test-viewport'
@@ -103,27 +105,25 @@ const FIRST_TURN_PROVIDER_KEY = 'codex:thread:turn-first:0'
 const inFirstTurn: AgentJournalTurnScope = { kind: 'turn', turnItemId: 'turn-first' }
 
 /** This client's own send the host has not recorded yet: its lane still runs the first handover. */
-const unrecorded = (clientMessageId: string, text: string): StructuredAgentSessionOutboxEntry => ({
+const unrecorded = (
+  clientMessageId: string,
+  text: string
+): StructuredAgentSessionOptimisticMessage => ({
   clientMessageId,
-  sessionId: 'session-1',
   body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text }] },
-  previewUris: [],
-  state: 'dispatching',
-  queuedAt: NOW + 100,
-  lastAttemptAt: NOW + 100,
-  retryAfterUnknownSubmittedAt: null
+  queuedAt: NOW + 100
 })
 
 function frame(
   items: AgentJournalRenderItem[],
   submissions: AgentJournalSubmission[],
-  outbox: StructuredAgentSessionOutboxEntry[],
+  optimistic: StructuredAgentSessionOptimisticMessage[],
   stopping = false
 ): React.JSX.Element {
   return (
     <NativeChatMessageList
       session={{
-        messages: projectStructuredAgentSessionMessages(items, outbox, submissions, {
+        messages: projectStructuredAgentSessionMessages(items, optimistic, submissions, {
           rejectedInPlace: true
         }),
         status: 'ready',
@@ -209,7 +209,7 @@ describe('a message sent while the turn ahead is still opening', () => {
       ...agentSessionFailureWords(agentSessionFailureFact('cancelled'), { surface: 'rejection' })
     })
     view.rerender(frame(queued, [...submissions, withdrawn], [], true))
-    const stopRow = screen.getByText('Stopped before the agent started')
+    const stopRow = screen.getByText('Stopped manually')
     expect(follows(screen.getByText('B'), liveStatus())).toBe(true)
     expect(follows(stopRow, screen.getByText('B'))).toBe(true)
     expect(follows(liveActivity(), stopRow)).toBe(true)
@@ -221,10 +221,9 @@ describe('a message sent while the turn ahead is still opening', () => {
     const view = render(frame(items, submissions, [unrecorded('b', 'B')], true))
     waitsAtTheTail('B')
 
-    const typedWhileStopping: StructuredAgentSessionOutboxEntry = {
+    const typedWhileStopping: StructuredAgentSessionOptimisticMessage = {
       ...unrecorded('c', 'C'),
       queuedAt: NOW + 300,
-      lastAttemptAt: NOW + 300,
       sentWhileStopping: true
     }
     view.rerender(frame(items, submissions, [unrecorded('b', 'B'), typedWhileStopping], true))
@@ -238,7 +237,7 @@ describe('a message sent while the turn ahead is still opening', () => {
     steps: [
       AgentJournalRenderItem[],
       AgentJournalSubmission[],
-      StructuredAgentSessionOutboxEntry[]
+      StructuredAgentSessionOptimisticMessage[]
     ][]
   ): void {
     const view = render(<div />)
@@ -311,23 +310,5 @@ describe('a message sent while the turn ahead is still opening', () => {
       [steered, [warm, first, echoed(handedOver)], []],
       [steered, [warm, echoed(first), echoed(handedOver)], []]
     ])
-  })
-
-  // The host holds nothing for a send only the user's Retry sends again, so it stays where it is.
-  it.each([
-    ['unconfirmed', { state: 'unconfirmed' as const, retryAfterUnknownSubmittedAt: NOW - 50_000 }],
-    ['outlived by a Stop', { state: 'queued' as const, outlivedStop: true as const }]
-  ])('does not move a send waiting on Retry (%s) behind the opening turn', (_, retry) => {
-    const { items, submissions } = openingFirst()
-    const awaitingRetry: StructuredAgentSessionOutboxEntry = {
-      ...unrecorded('c', 'C'),
-      queuedAt: NOW - 50_000,
-      lastAttemptAt: NOW - 50_000,
-      ...retry
-    }
-
-    render(frame(items, submissions, [awaitingRetry]))
-
-    expect(follows(liveActivity(), screen.getByText('C'))).toBe(true)
   })
 })

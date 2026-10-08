@@ -44,6 +44,7 @@ import {
   journalOpenRefusal
 } from '../agent-session-journal/journal-open-failure'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { isAgentSessionAttachmentExpiredError } from '../agent-session-attachments/agent-session-attachment-claims'
 import type { StructuredAgentRegistry } from './structured-agent-registry'
 export { performSetOption } from './structured-agent-session-turns-options'
 export { performPrompt } from './structured-agent-session-turns-prompt'
@@ -84,6 +85,17 @@ function invalid(
   message: string
 ): { ok: false; refusal: AgentSessionWireRefusal } {
   return { ok: false, refusal: refuse('agent_session_operation_invalid', { reason }, message) }
+}
+
+/** A message naming an attachment this host no longer stores is refused whole, before delivery. */
+export function agentSessionAttachmentExpiredRefusal(): {
+  ok: false
+  refusal: AgentSessionWireRefusal
+} {
+  return invalid(
+    'attachmentExpired',
+    'A chat attachment in this message is no longer stored on the host, so it was not sent.'
+  )
 }
 
 /** A thrown adapter error is indistinguishable from a lost reply, so it settles as `unknown`
@@ -159,6 +171,9 @@ export async function performSend(
       ctx.operationReceipt
     )
   } catch (error) {
+    if (isAgentSessionAttachmentExpiredError(error)) {
+      return agentSessionAttachmentExpiredRefusal()
+    }
     // Damage SQLite proves is the chat's, and no retry writes past it: say so, as an open does. So
     // does a chat holding a newer Orca's rows, which only an update writes past, and a refusal the
     // journal already classified (a failed transaction that will not roll back).

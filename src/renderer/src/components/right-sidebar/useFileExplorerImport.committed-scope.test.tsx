@@ -4,7 +4,7 @@ import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { useFileExplorerImport } from './useFileExplorerImport'
 
-const mocks = vi.hoisted(() => ({ importPaths: vi.fn(), subscribe: vi.fn() }))
+const mocks = vi.hoisted(() => ({ importPaths: vi.fn(), prepare: vi.fn() }))
 vi.mock('@/runtime/runtime-file-client', () => ({
   importExternalPathsToRuntime: mocks.importPaths
 }))
@@ -18,20 +18,38 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
+function dropOn(target: Element): { dropEffect: string } {
+  const transfer = { types: ['Files'], files: [new File(['a'], 'file.ts')], dropEffect: 'move' }
+  for (const type of ['dragover', 'drop']) {
+    const event = new Event(type, { bubbles: true, cancelable: true, composed: true })
+    Object.defineProperty(event, 'dataTransfer', { value: transfer })
+    Object.defineProperty(event, 'isTrusted', { value: true })
+    target.dispatchEvent(event)
+  }
+  return transfer
+}
+
 it('keeps native drops on committed scope when a new scope render suspends', async () => {
-  vi.stubGlobal('api', { ui: { onFileDrop: mocks.subscribe } })
+  vi.stubGlobal('api', {
+    fs: {
+      getPathForFile: () => '/source/file.ts',
+      prepareDroppedPaths: mocks.prepare.mockImplementation(async ({ paths }) => ({
+        paths,
+        failures: []
+      }))
+    }
+  })
   const selected = vi.fn()
   const clearDrag = vi.fn()
   const refresh = vi.fn().mockResolvedValue(undefined)
   const suspended = new Promise<void>(() => {})
-  mocks.subscribe.mockReturnValue(vi.fn())
   mocks.importPaths.mockResolvedValue({
     results: [{ status: 'imported', destPath: '/repo/app/file.ts' }]
   })
 
   function Probe({ scope, suspend = false }: { scope: string; suspend?: boolean }) {
-    useFileExplorerImport({
-      activeWorktreeId: 'wt',
+    const ownerRef = useFileExplorerImport({
+      worktreeId: 'wt',
       worktreePath: '/repo',
       displayRootPath: scope,
       refreshDir: refresh,
@@ -41,7 +59,13 @@ it('keeps native drops on committed scope when a new scope render suspends', asy
     if (suspend) {
       throw suspended
     }
-    return <span>{scope}</span>
+    return (
+      <div ref={ownerRef}>
+        <span data-testid="row" data-file-explorer-drop-dir="/repo/app">
+          {scope}
+        </span>
+      </div>
+    )
   }
   const view = render(
     <Suspense fallback="Loading">
@@ -58,9 +82,8 @@ it('keeps native drops on committed scope when a new scope render suspends', asy
     )
   })
   expect(view.getByText('/repo/app')).toBeTruthy()
-  const drop = mocks.subscribe.mock.calls[0][0]
   await act(async () => {
-    drop({ target: 'file-explorer', paths: ['/source/file.ts'], destinationDir: '/repo/app' })
+    dropOn(view.getByTestId('row'))
   })
   await waitFor(() => expect(selected).toHaveBeenCalledWith('/repo/app/file.ts'))
   expect(refresh).toHaveBeenCalledWith('/repo/app')
@@ -71,12 +94,14 @@ it('keeps native drops on committed scope when a new scope render suspends', asy
       <Probe scope="/repo/api" />
     </Suspense>
   )
+  let transfer: { dropEffect: string } | undefined
   await act(async () => {
-    drop({ target: 'file-explorer', paths: ['/source/file.ts'], destinationDir: '/repo/app' })
+    transfer = dropOn(view.getByTestId('row'))
   })
-  await waitFor(() => expect(clearDrag).toHaveBeenCalledTimes(2))
+  // The row still names /repo/app, which is outside the committed /repo/api root.
+  expect(transfer?.dropEffect).toBe('none')
   expect(selected).not.toHaveBeenCalled()
   expect(mocks.importPaths).toHaveBeenCalledTimes(1)
   expect(refresh).toHaveBeenCalledTimes(1)
-  expect(mocks.subscribe).toHaveBeenCalledTimes(1)
+  expect(mocks.prepare).toHaveBeenCalledTimes(1)
 })

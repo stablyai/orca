@@ -13,12 +13,11 @@ import {
 } from './agent-launch-caller-profiles-test-harness'
 import { createLaunchFunnelStore, resetLaunchFunnelStore } from './agent-launch-funnel-test-harness'
 
-import type * as PairedAdmissionModule from './structured-agent-session-paired-admission'
+import type * as LaunchAdmissionModule from './structured-agent-session-launch-admission'
 const store = createLaunchFunnelStore()
 const mockIsWebRuntimeSessionActive = vi.fn(() => false)
 const mockLaunchAgentInWebHostTab = vi.fn()
-const mockLaunchAgentInStructuredNewTab = vi.fn()
-const mockBeginPairedStructuredLaunch = vi.fn()
+const mockBeginHostAdmittedStructuredLaunch = vi.fn()
 const mockCreateSupport = vi.fn()
 const mockHostCapabilities = vi.fn<() => readonly string[] | null>(() => [])
 const mockExecutionHostId = vi.fn(() => 'local')
@@ -60,13 +59,11 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: (_target: unknown, method: string) =>
     method === 'agentSession.createSupport' ? mockCreateSupport() : new Promise(() => undefined)
 }))
-vi.mock('sonner', () => ({ toast: { info: vi.fn(), error: vi.fn(), success: vi.fn() } }))
-vi.mock('@/lib/structured-agent-session-paired-admission', async (importOriginal) => ({
-  ...(await importOriginal<typeof PairedAdmissionModule>()),
-  beginPairedStructuredLaunch: mockBeginPairedStructuredLaunch
-}))
-vi.mock('@/lib/launch-agent-in-new-tab-structured', () => ({
-  launchAgentInStructuredNewTab: mockLaunchAgentInStructuredNewTab
+const { mockToastInfo } = vi.hoisted(() => ({ mockToastInfo: vi.fn() }))
+vi.mock('sonner', () => ({ toast: { info: mockToastInfo, error: vi.fn(), success: vi.fn() } }))
+vi.mock('@/lib/structured-agent-session-launch-admission', async (importOriginal) => ({
+  ...(await importOriginal<typeof LaunchAdmissionModule>()),
+  beginHostAdmittedStructuredLaunch: mockBeginHostAdmittedStructuredLaunch
 }))
 vi.mock('@/runtime/local-runtime-capabilities', () => ({
   readLocalRuntimeCapabilitiesOrUnknown: () => mockHostCapabilities()
@@ -88,6 +85,15 @@ const CHAT_DEFAULT_SETTINGS = {
 
 const cases = callerProfileCases()
 
+async function useActualAdmission(): Promise<void> {
+  const actual = await vi.importActual<typeof LaunchAdmissionModule>(
+    './structured-agent-session-launch-admission'
+  )
+  mockBeginHostAdmittedStructuredLaunch.mockImplementationOnce(
+    actual.beginHostAdmittedStructuredLaunch
+  )
+}
+
 async function launch(profile: AgentLaunchCallerProfile) {
   const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
   return launchAgentInNewTab({ requestId: 'request-1', ...profile.args })
@@ -101,10 +107,11 @@ describe('agent launch caller routing', () => {
     mockExecutionHostId.mockReturnValue('local')
     serverReports(null)
     mockHostCapabilities.mockReturnValue([STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY])
-    mockLaunchAgentInStructuredNewTab.mockReturnValue({
-      sessionId: 'session-1',
-      tabId: 'tab-structured',
-      structuredSettlement: Promise.resolve({ kind: 'structured' })
+    mockBeginHostAdmittedStructuredLaunch.mockReturnValue({
+      sessionId: null,
+      tab: null,
+      settlement: new Promise(() => undefined),
+      cancel: vi.fn()
     })
     mockLaunchAgentInWebHostTab.mockResolvedValue({ delivered: true, failureNotified: false })
   })
@@ -114,7 +121,7 @@ describe('agent launch caller routing', () => {
 
     expect(result?.surface.kind).toBe('local-terminal')
     expect(store.createTab).toHaveBeenCalledTimes(1)
-    expect(mockLaunchAgentInStructuredNewTab).not.toHaveBeenCalled()
+    expect(mockBeginHostAdmittedStructuredLaunch).not.toHaveBeenCalled()
     expect(mockLaunchAgentInWebHostTab).not.toHaveBeenCalled()
   })
 
@@ -147,34 +154,29 @@ describe('agent launch caller routing', () => {
       // Why: a caller-named cwd is a process shape only a PTY produces, so that profile is
       // structurally barred rather than merely unconfigured and stays terminal with the default on.
       const structurallyBarred = profile.id === 'session-continuation'
-      expect(result?.surface.kind).toBe(
-        structurallyBarred ? 'local-terminal' : 'local-agent-session'
-      )
+      expect(result?.surface.kind).toBe(structurallyBarred ? 'local-terminal' : 'host-published')
     }
   )
 
   it.each(cases)(
-    'reports the structured session identity to %s when it routes structured',
+    'asks this machine to admit the chat %s routes structured before any of it opens',
     async (_id, profile) => {
       store.settings = { ...store.settings, ...CHAT_DEFAULT_SETTINGS }
 
       const result = await launch(profile)
 
-      if (result?.surface.kind !== 'local-agent-session') {
-        expect(mockLaunchAgentInStructuredNewTab).not.toHaveBeenCalled()
+      if (result?.surface.kind !== 'host-published') {
+        expect(mockBeginHostAdmittedStructuredLaunch).not.toHaveBeenCalled()
         return
       }
-      expect(result.surface).toEqual({
-        kind: 'local-agent-session',
-        tabId: 'tab-structured',
-        sessionId: 'session-1'
-      })
       expect(result.pasteDraftAfterLaunch).toBe(false)
       expect(store.createTab).not.toHaveBeenCalled()
-      // Placement is the one launch input that does ride to the structured executor, as a target
-      // group rather than anything on a wire.
-      expect(mockLaunchAgentInStructuredNewTab.mock.calls[0]?.[0]?.targetGroupId).toBe(
-        profile.args.groupId
+      expect(mockBeginHostAdmittedStructuredLaunch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          worktreeId: profile.args.worktreeId,
+          executionHostId: 'local',
+          target: { kind: 'local' }
+        })
       )
     }
   )
@@ -191,13 +193,6 @@ describe('agent launch caller routing', () => {
     ])
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    mockBeginPairedStructuredLaunch.mockReturnValueOnce({
-      sessionId: null,
-      tab: null,
-      settlement: new Promise(() => undefined),
-      cancel: vi.fn()
-    })
-
     const result = launchAgentInNewTab({
       requestId: 'request-2',
       agent: 'claude',
@@ -206,8 +201,9 @@ describe('agent launch caller routing', () => {
 
     // The server admits the chat before any of it exists here, so the surface is the host's.
     expect(result?.surface.kind).toBe('host-published')
-    expect(mockBeginPairedStructuredLaunch).toHaveBeenCalledTimes(1)
-    expect(mockLaunchAgentInStructuredNewTab).not.toHaveBeenCalled()
+    expect(mockBeginHostAdmittedStructuredLaunch).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ target: { kind: 'environment', environmentId: 'web-runtime' } })
+    )
     expect(mockLaunchAgentInWebHostTab).not.toHaveBeenCalled()
   })
 
@@ -221,10 +217,7 @@ describe('agent launch caller routing', () => {
       STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
       STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY
     ])
-    const actual = await vi.importActual<typeof PairedAdmissionModule>(
-      './structured-agent-session-paired-admission'
-    )
-    mockBeginPairedStructuredLaunch.mockImplementationOnce(actual.beginPairedStructuredLaunch)
+    await useActualAdmission()
     mockCreateSupport.mockResolvedValue({ supported: false, reason: 'wsl' })
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
@@ -253,7 +246,67 @@ describe('agent launch caller routing', () => {
         agentArgs: '--model sonnet'
       })
     )
-    expect(mockLaunchAgentInStructuredNewTab).not.toHaveBeenCalled()
+    expect(store.createTab).not.toHaveBeenCalled()
+  })
+
+  // Before, a local chat opened first and this machine's "no" left it failed, with a Retry that
+  // failed the same way and no terminal.
+  it("runs the caller's own launch as a local terminal when this machine declines the chat", async () => {
+    store.settings = { ...store.settings, ...CHAT_DEFAULT_SETTINGS }
+    await useActualAdmission()
+    mockCreateSupport.mockResolvedValue({ supported: false, reason: 'wsl' })
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    const result = launchAgentInNewTab({
+      requestId: 'request-10',
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      groupId: 'group-1',
+      prompt: 'fix the flaky test',
+      promptDelivery: 'submit-after-ready',
+      agentArgs: '--model sonnet'
+    })
+
+    expect(result?.surface).toEqual({ kind: 'host-published' })
+    expect(store.createTab).not.toHaveBeenCalled()
+    await expect(result?.structuredSettlement).resolves.toEqual({ kind: 'terminal' })
+    expect(store.createTab).toHaveBeenCalledOnce()
+    expect(store.createTab.mock.calls[0]?.slice(0, 2)).toEqual(['wt-1', 'group-1'])
+    expect(store.queueTabStartupCommand).toHaveBeenCalledOnce()
+    expect(store.queueTabStartupCommand.mock.calls[0]?.[1]?.command).toBe(
+      "claude '--model' 'sonnet'"
+    )
+    // The typed prompt goes to that terminal once, and the caller hears it arrived.
+    await expect(result?.promptDeliveryResult).resolves.toEqual({
+      delivered: true,
+      failureNotified: false
+    })
+    const { pasteDraftWhenAgentReady } = await import('@/lib/agent-paste-draft')
+    expect(pasteDraftWhenAgentReady).toHaveBeenCalledOnce()
+    expect(pasteDraftWhenAgentReady).toHaveBeenCalledWith(
+      expect.objectContaining({ content: 'fix the flaky test' })
+    )
+    // On this machine the terminal opening is the answer; no notice names a server.
+    expect(mockToastInfo).not.toHaveBeenCalled()
+    expect(mockLaunchAgentInWebHostTab).not.toHaveBeenCalled()
+  })
+
+  it("opens the caller's own fallback, not the agent's terminal, when it names one", async () => {
+    store.settings = { ...store.settings, ...CHAT_DEFAULT_SETTINGS }
+    await useActualAdmission()
+    mockCreateSupport.mockResolvedValue({ supported: false })
+    const onStructuredHostDeclined = vi.fn(() => ({ opened: true }))
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    const result = launchAgentInNewTab({
+      requestId: 'request-11',
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      onStructuredHostDeclined
+    })
+
+    await expect(result?.structuredSettlement).resolves.toEqual({ kind: 'terminal' })
+    expect(onStructuredHostDeclined).toHaveBeenCalledOnce()
     expect(store.createTab).not.toHaveBeenCalled()
   })
 
@@ -271,7 +324,7 @@ describe('agent launch caller routing', () => {
     })
 
     expect(result?.surface).toEqual({ kind: 'host-published' })
-    expect(mockLaunchAgentInStructuredNewTab).not.toHaveBeenCalled()
+    expect(mockBeginHostAdmittedStructuredLaunch).not.toHaveBeenCalled()
   })
 
   it('aborts a terminal open when beforeSurfaceOpen refuses', async () => {
@@ -308,28 +361,22 @@ describe('agent launch caller routing', () => {
     expect(mockLaunchAgentInWebHostTab).not.toHaveBeenCalled()
   })
 
-  it('hands the structured branch a session-scoped refusal hook', async () => {
+  it('aborts a structured open before its host is asked when beforeSurfaceOpen refuses', async () => {
     store.settings = { ...store.settings, ...CHAT_DEFAULT_SETTINGS }
     const beforeSurfaceOpen = vi.fn(() => false)
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    launchAgentInNewTab({
+    const result = launchAgentInNewTab({
       requestId: 'request-7',
       agent: 'codex',
       worktreeId: 'wt-1',
       beforeSurfaceOpen
     })
 
-    // Why: the structured route cannot name its surface before the session id exists, so the
-    // funnel wraps the caller's hook and the structured executor decides when to ask.
-    const beforeOpen = mockLaunchAgentInStructuredNewTab.mock.calls[0]?.[0]?.beforeOpen
-    expect(typeof beforeOpen).toBe('function')
-    expect(beforeSurfaceOpen).not.toHaveBeenCalled()
-    expect(beforeOpen('session-7')).toBe(false)
-    expect(beforeSurfaceOpen).toHaveBeenCalledExactlyOnceWith({
-      kind: 'local-agent-session',
-      sessionId: 'session-7'
-    })
+    expect(result).toBeNull()
+    expect(beforeSurfaceOpen).toHaveBeenCalledExactlyOnceWith({ kind: 'host-published' })
+    expect(mockBeginHostAdmittedStructuredLaunch).not.toHaveBeenCalled()
+    expect(mockCreateSupport).not.toHaveBeenCalled()
   })
 
   it('opens the terminal when beforeSurfaceOpen returns undefined rather than false', async () => {

@@ -97,13 +97,15 @@ export function createProfileStateWriterDeadline(
     ) {
       return
     }
-    // Even an on-time timer can run before a reply already queued by the worker.
+    // Windows can deliver a queued worker reply after the first poll following a stall.
     timeoutCheck = setImmediate(() => {
-      timeoutCheck = undefined
-      if (active) {
-        clear()
-        onTimeout(expiry)
-      }
+      timeoutCheck = setImmediate(() => {
+        timeoutCheck = undefined
+        if (active) {
+          clear()
+          onTimeout(expiry)
+        }
+      })
     })
   }
   // Subscription replays the current state synchronously; only later resumes re-arm.

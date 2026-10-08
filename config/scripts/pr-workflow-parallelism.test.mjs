@@ -224,6 +224,27 @@ describe('PR workflow parallelism', () => {
     expect(installStep.run).toMatch(/timeout \d+ sudo apt-get install/)
   })
 
+  it('bounds package tooling refresh and keeps required installation fatal', () => {
+    const steps = workflow.jobs.package.steps
+    const installStep = steps.find((step) => step.id === 'linux-package-tools')
+    const commands = installStep.run
+      .split('\n')
+      .filter((line) => !line.trim().startsWith('#'))
+      .join('\n')
+
+    expect(installStep.background).toBe(true)
+    expect(commands).toContain('Acquire::http::Timeout "15";')
+    expect(commands).toContain('Acquire::https::Timeout "15";')
+    expect(commands).toContain('Acquire::Retries "1";')
+    expect(commands).toMatch(/^timeout 120 sudo apt-get update \|\| true$/m)
+    expect(commands).toMatch(/^timeout 300 sudo apt-get install -y cpio rpm$/m)
+    expect(commands.trim().split('\n').at(-1)).toBe('timeout 300 sudo apt-get install -y cpio rpm')
+    expect(steps.find((step) => step.wait?.includes('linux-package-tools')).wait).toEqual([
+      'linux-package-tools',
+      'web-client'
+    ])
+  })
+
   it('keeps every real-zsh test in the dedicated shell lane', () => {
     const discoveredFiles = globSync(testFilePatterns)
       // Why this file is excluded: it carries the detector pattern as a literal

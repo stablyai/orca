@@ -88,11 +88,6 @@ function queuePauseText(pause: { reason: string }): string {
         'components.native-chat.queuedMessages.queuePausedStopped',
         'Queue paused because you interrupted'
       )
-    case 'cleared':
-      return translate(
-        'components.native-chat.queuedMessages.queuePausedCleared',
-        'Queue paused after you cleared the conversation'
-      )
     default:
       return translate('components.native-chat.queuedMessages.queuePaused', 'Queue paused')
   }

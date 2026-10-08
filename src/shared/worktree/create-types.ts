@@ -10,6 +10,7 @@ import type {
   GitPushTarget,
   GitWorktreeInfo,
   WorkspaceLinkedItem,
+  WorkspaceAttachment,
   WorkspaceStatus,
   Worktree
 } from './types'
@@ -122,6 +123,7 @@ export type CreateWorktreeArgs = {
   linkedAzureDevOpsPR?: number | null
   linkedGiteaPR?: number | null
   linkedWorkItem?: WorkspaceLinkedItem | null
+  linkedItems?: WorkspaceAttachment[]
   linkedTaskSourceContext?: TaskSourceContext | null
   pushTarget?: GitPushTarget
   workspaceStatus?: WorkspaceStatus
