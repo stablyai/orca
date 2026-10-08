@@ -3,7 +3,6 @@ import { collectAgentTitleEvidence } from '../../../shared/agent-title-evidence'
 import { resolveExplicitTerminalTitleAgentType } from '../../../shared/terminal-title-agent-type'
 import { resolveTabAgentFromSignals } from './tab-agent-from-signals'
 
-// Names two agents in task text with no vendor marker (stablyai/orca#26513).
 const MENTION_ONLY_TITLE = '◑ Tab title showing Codex instead of Claude Code'
 const GENUINE_CODEX_TITLE = 'Task - codex'
 
@@ -18,7 +17,6 @@ describe('title that only mentions another agent', () => {
     expect(resolveExplicitTerminalTitleAgentType(MENTION_ONLY_TITLE)).toBe('codex')
   })
 
-  // Sibling-only identity is not covered: with an empty focused slot the title still fills it (empty-slot rule unchanged here).
   it.each([
     ['live hook', { hookAgent: 'claude' }],
     ['foreground process', { hookAgent: null, processAgent: 'claude' }],

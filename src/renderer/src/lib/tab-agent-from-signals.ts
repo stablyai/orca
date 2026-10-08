@@ -66,19 +66,8 @@ function titleEvidenceIsStrong(title: string): boolean {
 }
 
 /**
- * Resolve which coding-harness agent a terminal tab is running, for its tab-bar
- * icon: a pane's IDENTITY (separate from activity state), from already-computed
- * state with no foreground probing. Identity-first precedence:
- *
- * 1. Live focused hook — ground truth while the agent works; never title-overridden.
- * 2. Process identity — recognized foreground process (local only); re-owned within its title-identity group so OMP's nested `pi` (shell → omp → pi) can't flip the icon.
- * 3. Title — a reuse override only with vendor-marker/anchored evidence (a name in task text never displaces a known owner), or a legacy standalone identity; native OpenCode titles cannot displace durable ownership.
- * 4. Idle focused identity — the pane's completed hook or sidebar-retained completion; suppressed locally once OSC 133;D proves exit.
- * 5. Sleeping session identity — current provider-session ownership.
- * 6. launchAgent — bootstrap before any hook/process signal; cleared once exit evidence shows it left.
- * 7. Sibling-pane identity (live, then completed/retained) — split-tab fallback.
- *
- * Same-group titles (OMP wraps Pi) are not reuse evidence.
+ * Identity-first precedence: live hook > process > title > completed > sleeping
+ * > launch > sibling. Same-group titles (OMP wraps Pi) are not reuse evidence.
  */
 export function resolveTabAgentFromSignals(args: {
   hasObservedAgentSignal: boolean
