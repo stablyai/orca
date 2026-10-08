@@ -72,7 +72,11 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     serialize: input.serialize,
     trackStart: input.trackStart,
     ensureProviderChild: async (sessionId, startedFor) => {
-      await retireSignedOutStructuredAgentSessionChild(sessionId, sessions.get(sessionId), {
+      // A send waiting on a person's Stop is not handed over yet; the step after the Stop decides.
+      const session = input.clientDelivery.readStopping(sessionId)
+        ? undefined
+        : sessions.get(sessionId)
+      await retireSignedOutStructuredAgentSessionChild(sessionId, session, {
         work: {
           childWork: () => input.clientDelivery.readChildWork(sessionId),
           hasOpenDispatch: () => {

@@ -18,6 +18,13 @@ import {
   structuredAgentSessionChildReportedSignedOut
 } from './structured-agent-session-signed-out-child'
 import type { StructuredAgentSessionProviderChild } from './structured-agent-session-host-types'
+import type {
+  AgentJournalItemBody,
+  AgentJournalTurnLifecycle
+} from '../../../shared/agent-session-journal-types'
+import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
+import type { JournalItemLinkageVisitor } from '../agent-session-journal/journal-store-contracts'
+import type { StructuredAgentSessionChildWorkReads } from './structured-agent-session-idle-sweep'
 
 describe('a send after the agent said it is not signed in', () => {
   let rig: RestTestRig
@@ -74,17 +81,7 @@ describe('a send after the agent said it is not signed in', () => {
   })
 })
 
-type Row = {
-  itemId: string
-  fence: number
-  agentId?: string
-  body: {
-    kind: 'status' | 'approval'
-    text: string
-    failure?: ReturnType<typeof agentSessionFailureFact>
-    resolution?: { state: 'pending' }
-  }
-}
+type Row = { itemId: string; fence: number; agentId?: string; body: AgentJournalItemBody }
 
 const statusRow = (
   fence: number,
@@ -118,6 +115,7 @@ const conversation = (
     items?: Row[]
     submissions?: ReturnType<typeof rejected>[]
     activeTurnId?: string
+    newestTurnEndedAt?: number
   } = {}
 ) => {
   const items = input.items ?? []
@@ -125,28 +123,18 @@ const conversation = (
     child: input.child === undefined ? childAt() : input.child,
     journal: {
       submissions: () => input.submissions ?? [],
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the check reads only kind, failure and resolution of these test rows.
-      visitItems: (visit: (itemId: string, sequence: number, body: never) => void) =>
-        items.forEach((item, index) => visit(item.itemId, index, item.body as never)),
-      visitItemsWithLinkage: (
-        visit: (
-          itemId: string,
-          sequence: number,
-          body: never,
-          attribution: { agentId?: string }
-        ) => void
-      ) =>
+      visitItems: (visit: (itemId: string, sequence: number, body: AgentJournalItemBody) => void) =>
+        items.forEach((item, index) => visit(item.itemId, index, item.body)),
+      visitItemsWithLinkage: (visit: JournalItemLinkageVisitor) =>
         items.forEach((item, index) =>
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the check reads only kind and failure of these test rows.
-          visit(
-            item.itemId,
-            index,
-            item.body as never,
-            item.agentId ? { agentId: item.agentId } : {}
-          )
+          visit(item.itemId, index, item.body, item.agentId ? { agentId: item.agentId } : {})
         ),
       itemFence: (itemId: string) => items.find((item) => item.itemId === itemId)?.fence,
-      activeTurnId: () => input.activeTurnId ?? null
+      activeTurnId: () => input.activeTurnId ?? null,
+      newestTurn: (): AgentJournalTurnLifecycle | null =>
+        input.newestTurnEndedAt === undefined
+          ? null
+          : { turnId: 'turn-0', state: 'completed', completedAt: input.newestTurnEndedAt }
     }
   }
 }
@@ -178,7 +166,17 @@ describe('structuredAgentSessionChildReportedSignedOut', () => {
 })
 
 describe('retireSignedOutStructuredAgentSessionChild', () => {
-  const idle = {
+  const liveChildWork: AgentChildWorkView = {
+    id: 'subagent-1',
+    kind: 'agent',
+    state: 'working',
+    membership: 'live',
+    firstObservedAt: 0,
+    observedAt: 0,
+    stoppable: false,
+    invocation: { invocationId: 'spawn-subagent-1', generation: 1 }
+  }
+  const idle: StructuredAgentSessionChildWorkReads = {
     childWork: () => [],
     hasOpenDispatch: () => false,
     providerHoldsDispatch: () => false
@@ -203,19 +201,35 @@ describe('retireSignedOutStructuredAgentSessionChild', () => {
   })
 
   it('keeps it while it owes work the idle sweep also protects', async () => {
-    const pending: Row = {
-      itemId: 'approval-1',
-      fence: 2,
-      body: { kind: 'approval', text: 'Allow?', resolution: { state: 'pending' } }
-    }
+    // A pending prompt is the shared check's too; the idle sweep's tests cover that case.
     for (const kept of [
       await retire({ ...signedOut, activeTurnId: 'turn-1' }),
-      await retire({ ...signedOut, items: [pending] }),
+      await retire(signedOut, { childWork: () => [liveChildWork] }),
       await retire(signedOut, { hasOpenDispatch: () => true }),
       await retire(signedOut, { providerHoldsDispatch: () => true })
     ]) {
       expect(kept.stopAgent).not.toHaveBeenCalled()
     }
+  })
+
+  it('keeps it while a result that settled after the last turn may still wake it', async () => {
+    const settled: AgentChildWorkView = {
+      ...liveChildWork,
+      state: 'done',
+      membership: 'settled',
+      outcome: 'succeeded',
+      settledAt: 200
+    }
+    const after = await retire(
+      { ...signedOut, newestTurnEndedAt: 100 },
+      { childWork: () => [settled] }
+    )
+    expect(after.stopAgent).not.toHaveBeenCalled()
+    const before = await retire(
+      { ...signedOut, newestTurnEndedAt: 300 },
+      { childWork: () => [settled] }
+    )
+    expect(before.stopAgent).toHaveBeenCalledWith('session')
   })
 
   it('logs a stop that fails and lets the send go on', async () => {

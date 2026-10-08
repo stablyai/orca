@@ -4,6 +4,7 @@
 import { readWholeAgentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { isRootAgentJournalItem } from '../../../shared/agent-session-journal-producer'
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
+import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 import {
@@ -16,7 +17,7 @@ import type { StructuredAgentSessionLogger } from './structured-agent-session-lo
 type SignedOutReading = Pick<StructuredAgentSessionHostSession, 'child'> & {
   journal: Pick<
     AgentSessionJournal,
-    'visitItems' | 'visitItemsWithLinkage' | 'itemFence' | 'activeTurnId'
+    'visitItems' | 'visitItemsWithLinkage' | 'itemFence' | 'activeTurnId' | 'newestTurn'
   > & {
     submissions(): readonly Pick<AgentJournalSubmission, 'dispatchState' | 'fence' | 'rejection'>[]
   }
@@ -56,6 +57,19 @@ export function structuredAgentSessionChildReportedSignedOut(session: SignedOutR
   return found
 }
 
+/** Child work that settled after the lead's newest turn ended: the lead may still owe the turn
+ *  that reads its result, which journals nothing until it opens. The idle sweep's window covers
+ *  this; a restart before the next send has none, so it waits for that turn. */
+function owesWakeUp(
+  journal: Pick<AgentSessionJournal, 'newestTurn'>,
+  childWork: readonly AgentChildWorkView[] | undefined
+): boolean {
+  const ended = journal.newestTurn()?.completedAt
+  return (childWork ?? []).some(
+    (work) => work.settledAt !== undefined && (ended === undefined || work.settledAt > ended)
+  )
+}
+
 /** For a caller inside the session's serialize, before it hands the next send to the child. Work
  *  the child still owes keeps it, as it keeps an idle one from the sweep. A stop that fails leaves
  *  the close begun, which the start joins. */
@@ -71,7 +85,8 @@ export async function retireSignedOutStructuredAgentSessionChild(
   if (
     !session ||
     !structuredAgentSessionChildReportedSignedOut(session) ||
-    structuredAgentSessionChildHasOpenWork(session.journal, deps.work)
+    structuredAgentSessionChildHasOpenWork(session.journal, deps.work) ||
+    owesWakeUp(session.journal, deps.work.childWork())
   ) {
     return
   }
