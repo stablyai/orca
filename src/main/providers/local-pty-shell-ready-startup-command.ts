@@ -18,7 +18,7 @@ export function writeStartupCommandWhenShellReady(
   startupCommand: string,
   onExit: (cleanup: () => void) => void,
   // Why: only shells with bracketed-paste active (see isBracketedPasteSafeShell) accept the wrapper; others use the raw path so ESC[200~ isn't echoed.
-  options: { bracketedPasteSafe?: boolean } = {}
+  options: { bracketedPasteSafe?: boolean; writeInput?: (data: string) => void } = {}
 ): void {
   let sent = false
   let postReadyTimer: ReturnType<typeof setTimeout> | null = null
@@ -47,7 +47,8 @@ export function writeStartupCommandWhenShellReady(
     }
     // Why: run in the same interactive shell (not `shell -c`) so the session survives after the agent exits.
     // Why: single write after the ready barrier avoids incremental-paste char drops; multiline is bracketed-paste wrapped so newlines don't submit early.
-    proc.write(
+    const writeInput = options.writeInput ?? ((data: string) => proc.write(data))
+    writeInput(
       buildStartupCommandSubmission(startupCommand, {
         bracketedPasteSafe: options.bracketedPasteSafe === true
       })

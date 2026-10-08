@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as pty from 'node-pty'
 import { writeStartupCommandWhenShellReady } from './local-pty-shell-ready-startup-command'
+import { writeLocalPtyStartupInput } from './local-pty-startup-input'
+import { ptyIncarnations, ptyProcesses } from './local-pty-provider-state'
+import { ptyInputTransactions, ptyInputTransactionKey } from '../runtime/pty-input-transactions'
 
 type DataCb = (data: string) => void
 type ExitCb = (info: { exitCode: number }) => void
@@ -46,6 +49,45 @@ function createMockProc(): pty.IPty & {
 }
 
 describe('writeStartupCommandWhenShellReady', () => {
+  it('queues the ready startup command behind a transaction on the same process', async () => {
+    vi.useFakeTimers()
+    const id = 'startup-input'
+    const incarnation = 'startup-incarnation'
+    const proc = createMockProc()
+    ptyProcesses.set(id, proc)
+    ptyIncarnations.set(id, incarnation)
+    let release: () => void = () => {}
+    const pending = ptyInputTransactions.run(
+      { key: ptyInputTransactionKey(id), isCurrent: () => true },
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve
+        })
+    )
+    try {
+      writeStartupCommandWhenShellReady(
+        Promise.resolve({ postMarkerBytesObserved: true }),
+        proc,
+        'startup',
+        () => {},
+        {
+          writeInput: (data) => writeLocalPtyStartupInput(id, incarnation, data)
+        }
+      )
+      await vi.advanceTimersByTimeAsync(30)
+      expect(proc._writes).toEqual([])
+      release()
+      await pending
+      expect(proc._writes).toEqual(['startup\r'])
+      expect(ptyInputTransactions.size).toBe(0)
+    } finally {
+      release()
+      await pending
+      ptyProcesses.delete(id)
+      ptyIncarnations.delete(id)
+    }
+  })
+
   let origPlatform: NodeJS.Platform
 
   beforeEach(() => {

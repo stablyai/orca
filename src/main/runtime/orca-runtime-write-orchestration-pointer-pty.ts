@@ -1,6 +1,5 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness } from './orca-runtime-refresh-floating-workspace-pty-liveness'
-import { writeOrchestrationPointerWithSettlement } from './orchestration/mailbox-pointer-pty-write'
 import type { WriteSettlement } from '../../shared/pty-write-settlement'
 import type { RuntimeLeafRecord } from './runtime-terminal-state-records'
 import type { ExecutionHostId } from '../../shared/execution-host'
@@ -26,11 +25,9 @@ export class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRuntimeWith
     ptyId: string,
     data: string
   ): WriteSettlement | Promise<WriteSettlement> {
-    return writeOrchestrationPointerWithSettlement({
-      ptyId,
-      data,
-      controller: this.ptyController
-    })
+    return this.runTerminalInputTransaction(ptyId, (transaction) =>
+      transaction.writeWithSettlement(data, 'driving')
+    )
   }
 
   // A parked leaf has left the renderer graph but its PTY is still addressable, so the pointer

@@ -1,5 +1,12 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithAgentPromptRequestCorrelation } from './orca-runtime-agent-prompt-request-correlation'
+import {
+  ptyInputTransactions,
+  ptyInputTransactionKey,
+  type PtyInputBinding,
+  type PtyInputTransaction,
+  type PtyInputTransactionOptions
+} from './pty-input-transactions'
 import type { RuntimeTerminalAgentStatusSnapshot } from './runtime-terminal-agent-status-query'
 import type { AgentStatus } from '../../shared/agent-detection'
 import type { RuntimeTerminalWaitBlockedReason } from '../../shared/runtime-types'
@@ -167,6 +174,45 @@ export class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission extends O
     options: RuntimeTerminalWriteOptions
   ): Promise<WriteSettlement | undefined> {
     return this.terminalWriter.writeAction(ptyId, action, payload, options)
+  }
+
+  protected bindTerminalInput(ptyId: string): PtyInputBinding {
+    const controller = this.ptyController
+    const providerBinding = controller?.bindInput?.(ptyId)
+    let incarnation = this.ptysById.get(ptyId)?.incarnationId
+    const generation = this.getPtyLifecycleGeneration(ptyId)
+    return {
+      key: ptyInputTransactionKey(ptyId),
+      isCurrent: () => {
+        const currentIncarnation = this.ptysById.get(ptyId)?.incarnationId
+        incarnation ??= currentIncarnation
+        return (
+          (providerBinding ? providerBinding.isCurrent() : controller === this.ptyController) &&
+          currentIncarnation === incarnation &&
+          this.getPtyLifecycleGeneration(ptyId) === generation
+        )
+      }
+    }
+  }
+
+  protected runTerminalInputTransaction<T>(
+    ptyId: string,
+    operation: (transaction: PtyInputTransaction) => T | Promise<T>,
+    options: PtyInputTransactionOptions = {}
+  ): T | Promise<T> {
+    return ptyInputTransactions.run(this.bindTerminalInput(ptyId), operation, {
+      ...options,
+      writer: {
+        write: (data, kind, transaction) =>
+          this.ptyController?.write(ptyId, data, kind, transaction) ?? false,
+        ...(this.ptyController?.writeWithSettlement
+          ? {
+              writeWithSettlement: (data, kind, transaction) =>
+                this.ptyController.writeWithSettlement(ptyId, data, kind, transaction)
+            }
+          : {})
+      }
+    })
   }
 
   protected writeTerminalInputChunks(

@@ -422,7 +422,7 @@ describe('plain terminal send suffix delay', () => {
     expect(submitTimes[0]).toBeGreaterThan(3_342)
   })
 
-  it('abandons the scaled suffix wait when the request is aborted', async () => {
+  it('finishes the scaled suffix wait when a started request is aborted', async () => {
     useHostPlatform('win32')
     vi.useFakeTimers()
     const controller = new AbortController()
@@ -432,13 +432,13 @@ describe('plain terminal send suffix delay', () => {
       { text: 'z'.repeat(320_000), enter: true },
       { inputKind: 'driving', signal: controller.signal }
     )
-    const rejected = expect(send).rejects.toThrow('request_aborted')
-
     await vi.advanceTimersByTimeAsync(100)
+    expect(writes.length).toBeGreaterThan(0)
     controller.abort()
     await vi.runAllTimersAsync()
 
-    await rejected
-    expect(countSubmits(writes)).toBe(0)
+    await expect(send).resolves.toMatchObject({ accepted: true })
+    expect(writes.join('')).toBe(`${'z'.repeat(320_000)}\r`)
+    expect(countSubmits(writes)).toBe(1)
   })
 })

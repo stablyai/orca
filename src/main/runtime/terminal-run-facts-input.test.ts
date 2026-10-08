@@ -65,14 +65,15 @@ async function createFreshRun(): Promise<FreshRun> {
   } as unknown as IPtyProvider)
   const controller: RuntimePtyController = {
     spawn: async () => ({ id: PTY_ID }),
-    write: (id, data, inputKind) => {
+    write: (id, data, inputKind, transaction) => {
       kinds.push(inputKind)
-      return writePtyFromRuntimeController({ runtime }, id, data, inputKind)
+      return writePtyFromRuntimeController({ runtime }, id, data, inputKind, { transaction })
     },
-    writeWithSettlement: (id, data, inputKind) => {
+    writeWithSettlement: (id, data, inputKind, transaction) => {
       kinds.push(inputKind)
       return writePtyFromRuntimeController({ runtime }, id, data, inputKind, {
-        waitForSettlement: true
+        waitForSettlement: true,
+        transaction
       })
     },
     kill: () => true,

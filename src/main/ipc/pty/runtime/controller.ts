@@ -1,4 +1,5 @@
 import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { bindProviderPtyInput } from '../provider/input-binding'
 import { claimRuntimePaneCreate, makePaneSpawnReservationKey } from '../pane/spawn-reservation'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
 import { spawnPtyFromRuntimeController } from './spawn'
@@ -38,6 +39,7 @@ export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): voi
   const { runtime, adoptStablePane, requestSerializedBuffer } = deps
 
   runtime?.setPtyController({
+    bindInput: bindProviderPtyInput,
     claimStablePaneCreate: (args) => {
       const paneKey = makePaneKey(args.tabId, args.leafId)
       const ownerKey = makePaneSpawnReservationKey(args.worktreeId, args.connectionId, paneKey)
@@ -45,9 +47,13 @@ export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): voi
     },
     adoptStablePane,
     spawn: async (args) => spawnPtyFromRuntimeController(deps, args),
-    write: (ptyId, data, inputKind) => writePtyFromRuntimeController(deps, ptyId, data, inputKind),
-    writeWithSettlement: (ptyId, data, inputKind) =>
-      writePtyFromRuntimeController(deps, ptyId, data, inputKind, { waitForSettlement: true }),
+    write: (ptyId, data, inputKind, transaction) =>
+      writePtyFromRuntimeController(deps, ptyId, data, inputKind, { transaction }),
+    writeWithSettlement: (ptyId, data, inputKind, transaction) =>
+      writePtyFromRuntimeController(deps, ptyId, data, inputKind, {
+        waitForSettlement: true,
+        transaction
+      }),
     probePtyLiveness: (ptyId) => probePtyLivenessFromRuntimeController(deps, ptyId),
     // Why: subscriber-driven ingestion for daemon sessions no renderer pane
     // ever attached. Local daemon sessions only — SSH panes have their own

@@ -43,7 +43,7 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
-  it('keeps ordinary terminal send suffix failures on the existing not-writable contract', async () => {
+  it('reports ordinary terminal send suffix failures as partial after writing text', async () => {
     const writes: string[] = []
     const beforeWrite = vi.fn()
     const afterWrite = vi.fn()
@@ -87,7 +87,14 @@ describe('OrcaRuntimeService', () => {
         { text: 'notes', enter: true },
         { inputKind: 'driving', beforeWrite, afterWrite }
       )
-    ).rejects.toThrow('terminal_not_writable')
+    ).resolves.toMatchObject({
+      accepted: false,
+      writeSettlement: {
+        outcome: 'unverifiable',
+        reason: 'partial_write',
+        bytesHandedToTransport: true
+      }
+    })
     expect(writes).toEqual(['notes', '\r'])
     expect(beforeWrite).toHaveBeenCalledTimes(2)
     expect(afterWrite).toHaveBeenCalledOnce()

@@ -127,7 +127,7 @@ describe('sendTerminal absence gate for leaf-branch writes', () => {
       accepted: true
     })
 
-    expect(write).toHaveBeenCalledWith(STALE_PTY_ID, 'ping', 'driving')
+    expect(write).toHaveBeenCalledWith(STALE_PTY_ID, 'ping', 'driving', expect.anything())
   })
 
   it('treats a throwing probe as unknown and proceeds', async () => {
@@ -143,7 +143,7 @@ describe('sendTerminal absence gate for leaf-branch writes', () => {
       accepted: true
     })
 
-    expect(write).toHaveBeenCalledWith(STALE_PTY_ID, 'ping', 'driving')
+    expect(write).toHaveBeenCalledWith(STALE_PTY_ID, 'ping', 'driving', expect.anything())
   })
 
   it('proceeds when the probe answers live (restored session before its pane remounts)', async () => {
@@ -157,7 +157,7 @@ describe('sendTerminal absence gate for leaf-branch writes', () => {
       accepted: true
     })
 
-    expect(write).toHaveBeenCalledWith(STALE_PTY_ID, 'ping', 'driving')
+    expect(write).toHaveBeenCalledWith(STALE_PTY_ID, 'ping', 'driving', expect.anything())
   })
 
   it('proceeds unchanged when the controller exposes no probe', async () => {
@@ -169,7 +169,7 @@ describe('sendTerminal absence gate for leaf-branch writes', () => {
       accepted: true
     })
 
-    expect(write).toHaveBeenCalledWith(STALE_PTY_ID, 'ping', 'driving')
+    expect(write).toHaveBeenCalledWith(STALE_PTY_ID, 'ping', 'driving', expect.anything())
   })
 
   it('never probes when the provider synchronously knows the id (live pty)', async () => {
@@ -186,7 +186,7 @@ describe('sendTerminal absence gate for leaf-branch writes', () => {
     })
 
     expect(probe).not.toHaveBeenCalled()
-    expect(write).toHaveBeenCalledWith(STALE_PTY_ID, 'ping', 'driving')
+    expect(write).toHaveBeenCalledWith(STALE_PTY_ID, 'ping', 'driving', expect.anything())
   })
 
   it('reuses a proven-absent verdict across repeated sends instead of re-probing', async () => {
@@ -223,7 +223,7 @@ describe('sendTerminal absence gate for leaf-branch writes', () => {
       accepted: true
     })
     expect(probe).toHaveBeenCalledTimes(1)
-    expect(write).toHaveBeenCalledWith(STALE_PTY_ID, 'b', 'driving')
+    expect(write).toHaveBeenCalledWith(STALE_PTY_ID, 'b', 'driving', expect.anything())
   })
 })
 

@@ -123,10 +123,16 @@ export class OrcaRuntimeWithRestoreLivePairedRendererSessionOwnedMobileTerminals
     if (!pty || this.terminalSpawnCommandsByPtyId.has(pty.ptyId)) {
       return
     }
-    if (this.ptyController?.write(pty.ptyId, command, 'launch')) {
+    const deliver = this.runTerminalInputTransaction(pty.ptyId, (transaction) => {
+      if (!transaction.write(command, 'launch')) {
+        return
+      }
       // Why: Enter rides its own write so a long command cannot swallow it.
-      this.ptyController.write(pty.ptyId, '\r', 'launch')
+      transaction.write('\r', 'launch')
       this.noteTerminalSpawnCommand(pty.ptyId, command)
+    })
+    if (deliver instanceof Promise) {
+      void deliver.catch((error) => console.warn('[runtime] startup input failed:', error))
     }
   }
 

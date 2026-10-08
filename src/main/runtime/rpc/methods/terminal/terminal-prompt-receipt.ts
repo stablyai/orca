@@ -49,7 +49,7 @@ export function ensureUnsupportedTerminalPromptReceipt(
   requestId: string,
   send: RuntimeTerminalSend
 ): RuntimeTerminalSend {
-  if (send.prompt) {
+  if (!send.accepted || send.prompt) {
     return send
   }
   const binding = runtime.getTerminalPromptRequestBinding(handle)

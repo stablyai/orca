@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import type { RpcRequest } from './core'
 import { RpcDispatcher } from './dispatcher'
+import { TERMINAL_SEND_METHODS } from './methods/terminal/terminal-send-method'
 import { TERMINAL_METHODS } from './methods/terminal'
 
 function makeRequest(params: unknown): RpcRequest {
@@ -17,6 +18,50 @@ function makeRuntime(overrides: Partial<OrcaRuntimeService>): OrcaRuntimeService
 }
 
 describe('terminal agent prompt send RPC', () => {
+  it('does not attach an accepted receipt to a failed orchestration prompt', async () => {
+    const failed = {
+      handle: 'terminal-1',
+      accepted: false,
+      bytesWritten: 12,
+      writeSettlement: {
+        outcome: 'unverifiable',
+        reason: 'partial_write',
+        bytesHandedToTransport: true
+      }
+    } as const
+    const getBinding = vi.fn(() => {
+      throw new Error('failed input has no accepted receipt')
+    })
+    const runtime = makeRuntime({
+      resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+      getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
+      isTerminalRunningSettledPromptAgent: vi.fn().mockResolvedValue(true),
+      sendTerminalAgentPrompt: vi.fn().mockResolvedValue(failed),
+      getTerminalPromptRequestBinding: getBinding
+    })
+    const method = TERMINAL_SEND_METHODS[0]
+    const result = await method.handler(
+      method.params.parse({
+        terminal: 'terminal-1',
+        text: 'prompt',
+        enter: true,
+        agentPrompt: true,
+        client: { id: 'orca-cli', type: 'desktop' }
+      }),
+      {
+        runtime,
+        orchestrationMutation: {
+          callerFingerprint: 'test',
+          requestId: 'failed-prompt',
+          method: 'terminal.send',
+          payloadHash: 'test'
+        }
+      }
+    )
+    expect(result).toEqual({ send: failed })
+    expect(getBinding).not.toHaveBeenCalled()
+  })
+
   it('routes an explicit CLI agent prompt through settled prompt delivery', async () => {
     const sendTerminal = vi.fn()
     const sendTerminalAgentPrompt = vi.fn().mockResolvedValue({

@@ -176,6 +176,11 @@ function formatTerminalReadLimitedWarning(terminal: RuntimeTerminalRead): string
 
 export function formatTerminalSend(result: { send: RuntimeTerminalSend }): string {
   if (!result.send.accepted) {
+    if (result.send.writeSettlement?.outcome === 'unverifiable') {
+      return result.send.bytesWritten > 0
+        ? `Input partially written to ${result.send.handle}; outcome unknown.`
+        : `Input outcome unknown on ${result.send.handle}.`
+    }
     const reason = result.send.refusedReason ? `: ${result.send.refusedReason}` : ''
     return `Input refused by ${result.send.handle}${reason}.`
   }

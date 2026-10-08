@@ -39,6 +39,7 @@ import {
 import { createLocalPtyShellReadinessSession } from './local-pty-shell-readiness-session'
 import { destroyPtyProcess, createPtyPhysicalExit } from './local-pty-termination'
 import { writeStartupCommandWhenShellReady } from './local-pty-shell-ready-startup-command'
+import { writeLocalPtyStartupInput } from './local-pty-startup-input'
 import type { PtySpawnOptions, PtySpawnResult } from './types'
 
 export function activateLocalPtySession(args: {
@@ -206,7 +207,8 @@ export function activateLocalPtySession(args: {
         readiness.setStartupCommandCleanup(cleanup)
       },
       {
-        bracketedPasteSafe
+        bracketedPasteSafe,
+        writeInput: (data) => writeLocalPtyStartupInput(id, incarnationId, data)
       }
     )
   }

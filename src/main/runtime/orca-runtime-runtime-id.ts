@@ -45,6 +45,7 @@ import type { PtyIncarnationHandleRecord } from './orca-runtime-core'
 import { MailPointerRepointScheduler } from './orchestration/mail-pointer-repoint-scheduler'
 import { RuntimeTerminalWaiterRegistry } from './runtime-terminal-waiter-registry'
 import { RuntimeTerminalWriter } from './runtime-terminal-writer'
+import { ptyInputTransactions } from './pty-input-transactions'
 import { writeRefused } from '../../shared/pty-write-settlement'
 import { RuntimeTerminalIdlePolls } from './runtime-terminal-idle-polls'
 import { TerminalIntentionalStops } from './terminal-intentional-stops'
@@ -332,12 +333,15 @@ export class OrcaRuntimeWithRuntimeId {
   protected readonly terminalWaiters = new RuntimeTerminalWaiterRegistry()
 
   protected readonly terminalWriter = new RuntimeTerminalWriter(
-    (ptyId, data, inputKind) => this.ptyController?.write(ptyId, data, inputKind) ?? false,
+    (ptyId, data, inputKind, transaction) =>
+      this.ptyController?.write(ptyId, data, inputKind, transaction) ?? false,
     (ptyId) => this.getPtyWriteHostPlatform(ptyId),
     (ptyId) => this.getPtyAgent(ptyId),
-    (ptyId, data, inputKind) =>
-      this.ptyController?.writeWithSettlement?.(ptyId, data, inputKind) ??
-      writeRefused('provider_cannot_settle')
+    (ptyId, data, inputKind, transaction) =>
+      this.ptyController?.writeWithSettlement?.(ptyId, data, inputKind, transaction) ??
+      writeRefused('provider_cannot_settle'),
+    (ptyId) => this.bindTerminalInput(ptyId),
+    ptyInputTransactions
   )
 
   // Why one source: every tui-idle site must read the same evidence, or they rank one pane differently.

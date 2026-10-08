@@ -88,4 +88,13 @@ describe('the check before each write of a launch prompt', () => {
     cleared.guard.dispose()
     expect(cleared.unsubscribe).toHaveBeenCalledTimes(1)
   })
+  it('revalidates cached proof synchronously without scanning processes inside a transaction', async () => {
+    const { runtime, guard, emit } = guardHarness(['agent', 'shell'])
+    await guard.beforeWrite('pty-1')
+    expect(guard.beforeWrite.revalidate('pty-1')).toBeUndefined()
+    emit('\x1b]133;A\x07')
+    expect(() => guard.beforeWrite.revalidate('pty-1')).toThrow('agent_not_in_foreground')
+    expect(runtime.readLaunchedAgentForeground).toHaveBeenCalledTimes(1)
+    guard.dispose()
+  })
 })

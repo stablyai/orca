@@ -67,7 +67,16 @@ export class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends OrcaRunt
         this.ptyController!.hasChildProcesses?.(ptyId) ?? Promise.resolve(false),
       subscribeToData: (ptyId, listener) => this.subscribeToTerminalData(ptyId, listener),
       readRecentOutput: (ptyId) => this.recentPtyOutputById.get(ptyId)?.read(),
-      write: (ptyId, data, inputKind) => this.ptyController?.write(ptyId, data, inputKind)
+      write: (ptyId, data, inputKind) => {
+        const result = this.runTerminalInputTransaction(ptyId, (transaction) => {
+          return transaction.write(data, inputKind)
+        })
+        if (result instanceof Promise) {
+          void result.catch((error) =>
+            console.warn('[worktree-create] startup input failed:', error)
+          )
+        }
+      }
     }
   }
 

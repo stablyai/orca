@@ -101,6 +101,8 @@ export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithReso
     },
     options: {
       signal?: AbortSignal
+      deadlineAt?: number
+      rawInput?: boolean
       beforeWrite?: (ptyId: string) => void | Promise<void>
       reserveWrite?: (ptyId: string) => void
       afterWrite?: (ptyId: string) => void | Promise<void>
@@ -114,25 +116,25 @@ export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithReso
       if (!pty.pty.connected) {
         throw new Error('terminal_not_writable')
       }
+      const binding = this.bindTerminalInput(pty.pty.ptyId)
       const payload = buildTerminalSendPayload(action)
       if (payload === null) {
         throw new Error('invalid_terminal_send')
       }
       await assertTerminalInputWithinLimitWithYield(action.text)
-      const writeSettlement = await this.writeTerminalAction(
-        pty.pty.ptyId,
-        action,
-        payload,
-        options
-      )
+      let bytesWritten = 0
+      const writeSettlement = await this.writeTerminalAction(pty.pty.ptyId, action, payload, {
+        ...options,
+        binding,
+        onBytesWritten: (bytes) => {
+          bytesWritten = bytes
+        }
+      })
       return {
         handle,
         accepted: !writeSettlement || writeSettlement.outcome === 'accepted',
         ...(writeSettlement ? { writeSettlement } : {}),
-        bytesWritten:
-          !writeSettlement || writeSettlement.outcome === 'accepted'
-            ? Buffer.byteLength(payload, 'utf8')
-            : 0
+        bytesWritten
       }
     }
 
@@ -140,6 +142,7 @@ export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithReso
     if (!leaf.writable || !leaf.ptyId) {
       throw new Error('terminal_not_writable')
     }
+    const binding = this.bindTerminalInput(leaf.ptyId)
     const payload = buildTerminalSendPayload(action)
     if (payload === null) {
       throw new Error('invalid_terminal_send')
@@ -153,16 +156,20 @@ export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithReso
       throw new Error('terminal_not_writable')
     }
 
-    const writeSettlement = await this.writeTerminalAction(leaf.ptyId, action, payload, options)
+    let bytesWritten = 0
+    const writeSettlement = await this.writeTerminalAction(leaf.ptyId, action, payload, {
+      ...options,
+      binding,
+      onBytesWritten: (bytes) => {
+        bytesWritten = bytes
+      }
+    })
 
     return {
       handle,
       accepted: !writeSettlement || writeSettlement.outcome === 'accepted',
       ...(writeSettlement ? { writeSettlement } : {}),
-      bytesWritten:
-        !writeSettlement || writeSettlement.outcome === 'accepted'
-          ? Buffer.byteLength(payload, 'utf8')
-          : 0
+      bytesWritten
     }
   }
 
@@ -204,11 +211,11 @@ export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithReso
           })
         }
       )
-      const bytesWritten = Buffer.byteLength(payload, 'utf8') + delivery.submits
       return {
         handle,
-        accepted: true,
-        bytesWritten,
+        accepted: !delivery.writeSettlement,
+        ...(delivery.writeSettlement ? { writeSettlement: delivery.writeSettlement } : {}),
+        bytesWritten: delivery.bytesWritten,
         ...(delivery.prompt ? { prompt: delivery.prompt } : {})
       }
     }
@@ -233,11 +240,11 @@ export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithReso
         promptForSchedule: prompt
       })
     })
-    const bytesWritten = Buffer.byteLength(payload, 'utf8') + delivery.submits
     return {
       handle,
-      accepted: true,
-      bytesWritten,
+      accepted: !delivery.writeSettlement,
+      ...(delivery.writeSettlement ? { writeSettlement: delivery.writeSettlement } : {}),
+      bytesWritten: delivery.bytesWritten,
       ...(delivery.prompt ? { prompt: delivery.prompt } : {})
     }
   }

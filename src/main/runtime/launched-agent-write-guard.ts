@@ -14,7 +14,7 @@ export type LaunchedAgentWriteGuardRuntime = Pick<
   Partial<Pick<OrcaRuntimeService, 'launchedAgentHostProvesAgent'>>
 
 export type LaunchedAgentWriteGuard = {
-  beforeWrite: (ptyId: string) => Promise<void>
+  beforeWrite: ((ptyId: string) => Promise<void>) & { revalidate: (ptyId: string) => void }
   dispose: () => void
 }
 
@@ -64,16 +64,22 @@ export function createLaunchedAgentWriteGuard(
       cleared = watch
       return
     }
-    watch.unsubscribe()
     if (
       foreground === 'shell' ||
       unprovableHost === 'refuse' ||
       runtime.launchedAgentHostProvesAgent?.(ptyId) !== false
     ) {
+      watch.unsubscribe()
+      throw new Error('agent_not_in_foreground')
+    }
+    cleared = watch
+  }
+  const revalidate = (ptyId: string): void => {
+    if (cleared?.ptyId !== ptyId || cleared.shellMayHaveReturned) {
       throw new Error('agent_not_in_foreground')
     }
   }
-  return { beforeWrite, dispose }
+  return { beforeWrite: Object.assign(beforeWrite, { revalidate }), dispose }
 }
 
 /**

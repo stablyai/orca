@@ -88,6 +88,23 @@ describe('formatTerminalClose', () => {
 })
 
 describe('formatTerminalSend', () => {
+  it('describes partially written input as an unknown outcome', () => {
+    expect(
+      formatTerminalSend({
+        send: {
+          handle: 'term_worker',
+          accepted: false,
+          bytesWritten: 4,
+          writeSettlement: {
+            outcome: 'unverifiable',
+            reason: 'partial_write',
+            bytesHandedToTransport: true
+          }
+        }
+      })
+    ).toBe('Input partially written to term_worker; outcome unknown.')
+  })
+
   it('exposes the provider and healthy delivery observation', () => {
     expect(
       formatTerminalSend({

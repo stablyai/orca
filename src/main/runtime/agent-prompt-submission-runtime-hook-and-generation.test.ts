@@ -92,9 +92,8 @@ describe('agent prompt submission runtime hook and generation cases', () => {
       write: (_ptyId, data) => {
         writes.push(data)
         if (data === '\r') {
-          vi.setSystemTime(3_000)
           hook.state = 'working'
-          hook.stateStartedAt = 3_000
+          hook.stateStartedAt = Date.now()
         }
         return true
       },
@@ -121,9 +120,8 @@ describe('agent prompt submission runtime hook and generation cases', () => {
       write: (_ptyId, data) => {
         writes.push(data)
         if (data === '\r') {
-          vi.setSystemTime(3_000)
           hook.state = 'working'
-          hook.stateStartedAt = 3_000
+          hook.stateStartedAt = Date.now()
         }
         return true
       },
@@ -442,6 +440,7 @@ describe('agent prompt submission runtime hook and generation cases', () => {
         await firstGate
       }
     })
+    const stale = expect(first).rejects.toThrow('terminal_handle_stale')
     await firstWrite
     runtime.synchronizePtyOutputSequenceFromProvider(
       'pty-prompt',
@@ -452,12 +451,17 @@ describe('agent prompt submission runtime hook and generation cases', () => {
     const replacement = runtime.sendTerminalAgentPrompt(handle, 'replacement prompt', {
       inputKind: 'driving'
     })
-    await vi.runAllTimersAsync()
+    await vi.advanceTimersByTimeAsync(
+      getAgentPromptSubmitDelayMs(
+        process.platform,
+        Buffer.byteLength(buildAgentPromptPasteBytes('replacement prompt'), 'utf8')
+      )
+    )
     await expect(replacement).resolves.toMatchObject({ accepted: true })
     expect(writes.some((data) => data.includes('replacement prompt'))).toBe(true)
 
     releaseFirst()
-    await expect(first).rejects.toThrow('terminal_handle_stale')
+    await stale
   })
 
   it('does not close a partial paste after the PTY generation changes', async () => {

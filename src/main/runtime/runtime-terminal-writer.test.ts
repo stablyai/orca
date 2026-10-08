@@ -7,6 +7,7 @@ import {
   type WriteSettlement
 } from '../../shared/pty-write-settlement'
 import { TERMINAL_INPUT_CHUNK_MAX_BYTES } from '../../shared/terminal-input'
+import { resolveAgentPromptSubmitDelayForAgent } from '../../shared/agent-prompt-injection'
 
 afterEach(() => vi.useRealTimers())
 
@@ -37,10 +38,12 @@ describe('requested terminal write settlement', () => {
       inputKind: 'driving',
       requireWriteSettlement: true
     })
-    await vi.advanceTimersByTimeAsync(2000)
+    await vi.advanceTimersByTimeAsync(
+      resolveAgentPromptSubmitDelayForAgent('linux', text, null) + 1
+    )
     expect(bytes).toHaveLength(1)
     finish(WRITE_ACCEPTED)
-    await vi.advanceTimersByTimeAsync(2000)
+    await vi.runAllTimersAsync()
     await expect(pending).resolves.toEqual(WRITE_ACCEPTED)
     expect(bytes.join('')).toBe(`${text}\r`)
     expect(bytes.at(-1)).toBe('\r')

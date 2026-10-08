@@ -11,6 +11,7 @@ import {
   isTerminalInputLockedForClient,
   isTerminalSendGuardNotWritable,
   resolveMobileFloorClientId,
+  rawMobileInputOptions,
   type MobileInputFloorClaimHolder
 } from './terminal-input-delivery'
 import { updateViewportForClient } from './terminal-viewport-update'
@@ -236,6 +237,7 @@ export const TERMINAL_SEND_METHODS = [
               {
                 beforeWrite,
                 signal,
+                ...rawMobileInputOptions(params.client, hasSuffix, params.inputKind),
                 // Why: a wire write carries no provenance beyond a client's own query reply.
                 inputKind: params.inputKind === 'query-reply' ? 'query-reply' : 'driving',
                 ...(params.requireWriteSettlement ? { requireWriteSettlement: true as const } : {}),
@@ -283,7 +285,12 @@ export const TERMINAL_SEND_METHODS = [
       ) {
         runtime.notifyNativeChatLaunchDraftResolved(params.terminal, params.resolvedLaunchDraft)
       }
-      if (orchestrationMutation && params.agentPrompt === true && !result.prompt) {
+      if (
+        orchestrationMutation &&
+        params.agentPrompt === true &&
+        result.accepted &&
+        !result.prompt
+      ) {
         result = ensureUnsupportedTerminalPromptReceipt(
           runtime,
           params.terminal,

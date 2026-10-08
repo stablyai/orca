@@ -1,5 +1,6 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithTerminalDrivers } from './orca-runtime-terminal-drivers'
+import { KeyedOperationQueue } from './keyed-operation-queue'
 import { confirmRunTerminalShellAlone, readRunTerminalClientUse } from './run-terminal-client-use'
 import { ALL_EXECUTION_HOSTS_SCOPE, type ExecutionHostScope } from '../../shared/execution-host'
 import { RuntimePreservedBranchCleanup } from './runtime-preserved-branch-cleanup'
@@ -159,7 +160,7 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
 
   protected readonly agentSessionCreateOperations = new Map<string, AgentSessionCreateOperation>()
 
-  protected readonly agentPromptSubmissionTailByPtyId = new Map<string, Promise<void>>()
+  protected readonly agentPromptSubmissions = new KeyedOperationQueue()
 
   protected readonly agentPromptLifecycleByPtyId = new Map<
     string,

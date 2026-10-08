@@ -5,7 +5,18 @@ import {
   TERMINAL_INPUT_TOO_LARGE_ERROR,
   isTerminalInputTooLargeWithYield
 } from '../../../../../shared/terminal-input'
+import type { TerminalInputKind } from '../../../../../shared/terminal-input-kind'
 import type { TerminalViewportClient } from './terminal-stream-types'
+
+export function rawMobileInputOptions(
+  client: TerminalViewportClient | undefined,
+  hasSuffix: boolean,
+  inputKind: TerminalInputKind | undefined
+): { rawInput?: true } {
+  return client?.type === 'mobile' && !hasSuffix && inputKind !== 'query-reply'
+    ? { rawInput: true }
+    : {}
+}
 
 export function isTerminalInputLockedForClient(
   runtime: OrcaRuntimeService,
@@ -66,11 +77,15 @@ export async function sendTerminalStreamInput(
   const floorClaim: MobileInputFloorClaimHolder = { current: null }
   try {
     if (!clientId) {
-      const result = await runtime.sendTerminal(args.terminal, action, { inputKind: 'driving' })
+      const result = await runtime.sendTerminal(args.terminal, action, {
+        inputKind: 'driving',
+        rawInput: true
+      })
       return result.accepted ? 'delivered' : 'rejected'
     }
     const result = await runtime.sendTerminal(args.terminal, action, {
       inputKind: 'driving',
+      rawInput: true,
       reserveWrite: (writePtyId) => {
         const claim = runtime.beginMobileInputFloor(writePtyId, clientId)
         if (!claim) {
