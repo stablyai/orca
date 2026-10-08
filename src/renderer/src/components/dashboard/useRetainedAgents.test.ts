@@ -585,4 +585,75 @@ describe('useRetainedAgentsSync', () => {
     expect(state.retainedAgentsByPaneKey[paneKey]?.entry.state).toBe('done')
     hook.unmount()
   })
+
+  it('drops a retained done row for a leaf setTabLayout replaced, with no tabsByWorktree or epoch change', async () => {
+    const repo = makeRepo()
+    const worktree = makeWorktree()
+    const tab = makeTab({ id: 'tab-1' })
+    const oldLeafId = '11111111-1111-4111-8111-111111111111'
+    const newLeafId = '22222222-2222-4222-8222-222222222222'
+    const paneKey = makePaneKey(tab.id, oldLeafId)
+    const row = makeAgentRow({ paneKey, state: 'done' })
+    useAppStore.setState({
+      repos: [repo],
+      worktreesByRepo: { [repo.id]: [worktree] },
+      tabsByWorktree: { [worktree.id]: [tab] },
+      terminalLayoutsByTabId: {
+        [tab.id]: {
+          root: { type: 'leaf', leafId: oldLeafId },
+          activeLeafId: oldLeafId,
+          expandedLeafId: null
+        }
+      },
+      agentStatusByPaneKey: { [paneKey]: row.entry },
+      agentStatusEpoch: initialAppState.agentStatusEpoch + 1
+    })
+    const hook = renderHook(() => useRetainedAgentsSync())
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    // The agent finishes with the pane still open, same as the control test —
+    // this is what gets the row into retainedAgentsByPaneKey in the first place.
+    act(() => {
+      useAppStore.setState((state) => ({
+        agentStatusByPaneKey: {},
+        agentStatusEpoch: state.agentStatusEpoch + 1
+      }))
+    })
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(useAppStore.getState().retainedAgentsByPaneKey[paneKey]).toBeDefined()
+
+    const tabsByWorktreeBefore = useAppStore.getState().tabsByWorktree
+    const epochBefore = useAppStore.getState().agentStatusEpoch
+
+    // Why: setTabLayout (a respawned pane reusing the tab) only replaces
+    // terminalLayoutsByTabId — it never touches tabsByWorktree or
+    // agentStatusEpoch, which is exactly the gap the sync effect must cover.
+    act(() => {
+      useAppStore.getState().setTabLayout(tab.id, {
+        root: { type: 'leaf', leafId: newLeafId },
+        activeLeafId: newLeafId,
+        expandedLeafId: null
+      })
+    })
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    const state = useAppStore.getState()
+    expect(state.tabsByWorktree, 'tabsByWorktree must stay untouched by setTabLayout').toBe(
+      tabsByWorktreeBefore
+    )
+    expect(state.agentStatusEpoch, 'agentStatusEpoch must stay untouched by setTabLayout').toBe(
+      epochBefore
+    )
+    expect(
+      state.retainedAgentsByPaneKey[paneKey],
+      'a setTabLayout-only leaf replacement must still sweep the stale retained row'
+    ).toBeUndefined()
+    hook.unmount()
+  })
 })

@@ -27,6 +27,7 @@ function retainedRowIsOrphaned(
   return liveLeafIds !== null && liveLeafIds !== undefined && !liveLeafIds.has(parsed.leafId)
 }
 
+/** Builds the retain/dismiss/prune action set for the agent-status slice. */
 export function createAgentStatusRetentionActions(
   runtime: AgentStatusRuntime
 ): Pick<

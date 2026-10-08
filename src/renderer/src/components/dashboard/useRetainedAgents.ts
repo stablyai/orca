@@ -11,6 +11,10 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { resolveAgentPaneAuthorityKey } from '@/store/slices/agent-pane-authority'
 import {
+  collectTerminalLayoutLeafIds,
+  createTerminalLayoutTopologySignature
+} from '@/lib/terminal-layout-leaf-topology'
+import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
@@ -57,30 +61,6 @@ export function createRetainedAgentsTabTopologyProjection(
 
 function paneKeyTabId(paneKey: string): string | null {
   return parsePaneKey(paneKey)?.tabId ?? null
-}
-
-function collectTerminalLayoutLeafIds(
-  layout: TerminalLayoutSnapshot | undefined
-): Set<string> | null {
-  if (!layout) {
-    // Why null, not empty: an unhydrated layout must read as "unknown", so
-    // pruning never evicts a retained row on missing evidence alone.
-    return null
-  }
-  const leafIds = new Set<string>()
-  const visit = (node: TerminalLayoutSnapshot['root']): void => {
-    if (!node) {
-      return
-    }
-    if (node.type === 'leaf') {
-      leafIds.add(node.leafId)
-      return
-    }
-    visit(node.first)
-    visit(node.second)
-  }
-  visit(layout.root)
-  return leafIds
 }
 
 function buildLiveTabIndex(args: {
@@ -136,6 +116,7 @@ function agentStartedAt(entry: AgentStatusEntry): number {
   return entry.stateHistory[0]?.startedAt ?? entry.stateStartedAt
 }
 
+/** Projects live tabs/leaves and status entries into this sync tick's retention inputs. */
 export function buildRetainedAgentsSyncSnapshot(args: RetainedAgentsSyncSnapshotInputs): {
   currentAgents: RetainedAgentSnapshot
   existingWorktreeIds: Set<string>
@@ -174,27 +155,38 @@ export function buildRetainedAgentsSyncSnapshot(args: RetainedAgentsSyncSnapshot
   return { currentAgents, existingWorktreeIds, tabIndex, liveLeafIdsByTabId }
 }
 
+/** Mounts the periodic effect that retains "done" rows on disappearance and prunes stale ones. */
 export function useRetainedAgentsSync(): void {
   const tabTopologyProjectionRef = useRef<WorktreeTabBucketProjection<
     TerminalTab,
     TerminalTab
   > | null>(null)
   tabTopologyProjectionRef.current ??= createRetainedAgentsTabTopologyProjection()
+  const layoutTopologySignatureRef = useRef<ReturnType<
+    typeof createTerminalLayoutTopologySignature
+  > | null>(null)
+  layoutTopologySignatureRef.current ??= createTerminalLayoutTopologySignature()
   const retainAgents = useAppStore((s) => s.retainAgents)
   const pruneRetainedAgents = useAppStore((s) => s.pruneRetainedAgents)
   const clearRetentionSuppressedPaneKeys = useAppStore((s) => s.clearRetentionSuppressedPaneKeys)
-  const [repos, worktreesByRepo, folderWorkspaces, tabTopology, agentStatusEpoch] = useAppStore(
-    useShallow(
-      (s) =>
-        [
-          s.repos,
-          s.worktreesByRepo,
-          s.folderWorkspaces,
-          tabTopologyProjectionRef.current!.project(s.tabsByWorktree),
-          s.agentStatusEpoch
-        ] as const
+  const [repos, worktreesByRepo, folderWorkspaces, tabTopology, agentStatusEpoch, layoutTopology] =
+    useAppStore(
+      useShallow(
+        (s) =>
+          [
+            s.repos,
+            s.worktreesByRepo,
+            s.folderWorkspaces,
+            tabTopologyProjectionRef.current!.project(s.tabsByWorktree),
+            s.agentStatusEpoch,
+            // Why: setTabLayout can replace a tab's root leaf (a respawned
+            // pane) without touching tabsByWorktree or agentStatusEpoch, so
+            // without this the effect below would never re-run to sweep the
+            // now-stale retained row for the old leaf.
+            layoutTopologySignatureRef.current!.project(s.terminalLayoutsByTabId)
+          ] as const
+      )
     )
-  )
   const prevAgentsRef = useRef<RetainedAgentSnapshot>(new Map())
 
   useEffect(() => {
@@ -248,6 +240,7 @@ export function useRetainedAgentsSync(): void {
     folderWorkspaces,
     tabTopology,
     agentStatusEpoch,
+    layoutTopology,
     retainAgents,
     pruneRetainedAgents,
     clearRetentionSuppressedPaneKeys
