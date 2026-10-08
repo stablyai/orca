@@ -7213,7 +7213,7 @@
             "resumeCopy": "Cuando Orca se cierra o instala una actualización, los chats que estaban trabajando se reanudan automáticamente al volver a abrir Orca.",
             "structuredTitle": "Utilice el chat nativo estructurado actualizado",
             "structuredCopy": "Abre nuevos agentes como chats estructurados cuando sea posible. Si está desactivado, los abre en el chat respaldado por la terminal. Los chats que ya existen permanecen como están.",
-            "structuredScope": "Se ejecuta en esta máquina y en servidores Orca emparejados que ejecutan una versión que lo admita; los servidores más antiguos mantienen el chat de terminal. Los hosts WSL y SSH continúan usando el chat de terminal.",
+            "structuredScope": "Se ejecuta en esta máquina, en servidores Orca emparejados que lo admitan y en hosts SSH donde Orca administra el servidor. Los servidores más antiguos y los hosts WSL usan el chat de terminal.",
             "structuredToggleLabel": "Alternar chat nativo estructurado actualizado",
             "resumeTitle": "Reanudar los chats de trabajo automáticamente después de reiniciar",
             "resumeToggleLabel": "Alternar reanudación automática después de un reinicio"

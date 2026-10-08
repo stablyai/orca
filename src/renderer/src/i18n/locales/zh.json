@@ -7197,7 +7197,7 @@
             "shellEnvToggleLabel": "切换使用 shell 环境",
             "structuredTitle": "使用更新的结构化本机聊天",
             "structuredCopy": "在支持的情况下，将新的智能体作为结构化聊天打开。关闭时会在基于终端的聊天中打开。已有的聊天保持不变。",
-            "structuredScope": "在本机和运行支持该功能版本的已配对 Orca 服务器上运行；较旧的服务器保留终端聊天。WSL 和 SSH 主机继续使用终端聊天。",
+            "structuredScope": "在本机、支持该功能的已配对 Orca 服务器，以及由 Orca 管理服务器的 SSH 主机上运行。较旧的服务器和 WSL 主机使用终端聊天。",
             "structuredToggleLabel": "切换更新的结构化本机聊天",
             "resumeTitle": "重启后自动恢复工作聊天",
             "resumeCopy": "当 Orca 退出或安装更新时，重新打开 Orca 后，正在工作的聊天会自动恢复。",

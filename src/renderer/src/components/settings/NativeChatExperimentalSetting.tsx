@@ -141,7 +141,7 @@ export function NativeChatExperimentalSetting({
                 <p className="text-xs text-muted-foreground">
                   {translate(
                     'auto.components.settings.ExperimentalPane.nativeChat.structuredScope',
-                    'Runs on this machine and on paired Orca servers running a version that supports it; older servers keep terminal chat. WSL and SSH hosts continue to use terminal chat.'
+                    'Runs on this machine, on paired Orca servers that support it, and on SSH hosts where Orca manages the server. Older servers and WSL hosts use terminal chat.'
                   )}
                 </p>
               </div>

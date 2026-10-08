@@ -7317,7 +7317,7 @@
             "shellEnvToggleLabel": "Activer l'utilisation de l'environnement de votre shell",
             "structuredTitle": "Utiliser le chat natif structuré mis à jour",
             "structuredCopy": "Ouvre les nouveaux agents sous forme de discussions structurées lorsque c'est possible. Désactivé, ils s'ouvrent dans le chat basé sur le terminal. Les discussions existantes restent telles quelles.",
-            "structuredScope": "Fonctionne sur cette machine et sur les serveurs Orca appairés dont la version le prend en charge ; les serveurs plus anciens conservent le chat du terminal. WSL et les hôtes SSH continuent d'utiliser le chat du terminal.",
+            "structuredScope": "Fonctionne sur cette machine, sur les serveurs Orca appairés compatibles et sur les hôtes SSH dont Orca gère le serveur. Les serveurs plus anciens et les hôtes WSL utilisent le chat du terminal.",
             "structuredToggleLabel": "Basculer le chat natif structuré mis à jour",
             "resumeTitle": "Reprendre automatiquement les discussions de travail après un redémarrage",
             "resumeCopy": "Lorsqu'Orca quitte ou installe une mise à jour, les discussions en cours reprennent automatiquement à la réouverture d'Orca.",

@@ -7197,7 +7197,7 @@
             "shellEnvToggleLabel": "셸 환경 사용 전환",
             "structuredTitle": "업데이트된 구조화된 기본 채팅 사용",
             "structuredCopy": "지원되는 경우 새 에이전트를 구조화된 채팅으로 엽니다. 끄면 터미널 기반 채팅으로 엽니다. 이미 있는 채팅은 그대로 유지됩니다.",
-            "structuredScope": "이 컴퓨터와 이를 지원하는 버전을 실행하는 페어링된 Orca 서버에서 실행됩니다. 이전 서버는 터미널 채팅을 유지합니다. WSL 및 SSH 호스트는 계속해서 터미널 채팅을 사용합니다.",
+            "structuredScope": "이 컴퓨터, 이 기능을 지원하는 페어링된 Orca 서버, Orca가 서버를 관리하는 SSH 호스트에서 실행됩니다. 이전 서버와 WSL 호스트는 터미널 채팅을 사용합니다.",
             "structuredToggleLabel": "업데이트된 구조화된 기본 채팅 전환",
             "resumeTitle": "다시 시작한 후 작업 중인 채팅을 자동으로 재개합니다.",
             "resumeCopy": "Orca가 종료되거나 업데이트를 설치하면 Orca가 다시 열릴 때 작업 중이던 채팅이 자동으로 재개됩니다.",

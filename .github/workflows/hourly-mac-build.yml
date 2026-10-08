@@ -4,9 +4,9 @@ name: Hourly macOS Dev Build
 # updater can install directly, without waiting for an RC cut.
 #
 # Deliberately narrow scope:
-#   - macOS only. Other platforms keep using RC/stable.
-#   - No tests, no lint, no e2e. This channel trades safety for latency; PR CI
-#     and release-cut remain the gates that matter.
+#   - macOS and unsigned Windows builds share the same release.
+#   - Server qualification gates the deployment template; full desktop tests,
+#     lint and e2e remain in PR CI and release-cut.
 #   - Signed AND notarized, exactly like a release. The notary round trip is the
 #     one slow step kept: macOS anchors a notarized app's TCC grants on identifier
 #     + team rather than on its cdhash, so those grants survive an update. Without
@@ -127,16 +127,62 @@ jobs:
     with:
       ref: ${{ needs.preflight.outputs.head_sha }}
 
-  build-hourly-mac:
-    needs:
-      - preflight
-      - relay-windows-process-tree
+  # Why: a branch cut before the orcad template landed has none to build or ship.
+  orcad-template-support:
+    needs: preflight
     if: needs.preflight.outputs.should_build == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      ships: ${{ steps.detect.outputs.ships }}
+    steps:
+      - name: Checkout the template packager only
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.preflight.outputs.head_sha }}
+          sparse-checkout: |
+            /config/scripts/packaged-orcad-template.cjs
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: Detect whether the ref ships the orcad template
+        id: detect
+        shell: bash
+        run: |
+          if [[ -f config/scripts/packaged-orcad-template.cjs ]]; then
+            echo "ships=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "ships=false" >>"$GITHUB_OUTPUT"
+            echo "::notice::This ref predates the orcad template; the build ships without it."
+          fi
+
+  # Every desktop channel needs the qualified server template to deploy managed SSH.
+  orcad-template:
+    needs: [preflight, orcad-template-support]
+    if: needs.orcad-template-support.outputs.ships == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/node-server-tests.yml
+    with:
+      ref: ${{ needs.preflight.outputs.head_sha }}
+      build_template: true
+
+  build-hourly-mac:
+    needs: [preflight, relay-windows-process-tree, orcad-template-support, orcad-template]
+    if: >-
+      !cancelled() && needs.preflight.outputs.should_build == 'true' &&
+      needs.relay-windows-process-tree.result == 'success' &&
+      needs.orcad-template-support.result == 'success' &&
+      (needs.orcad-template.result == 'success' ||
+        (needs.orcad-template.result == 'skipped' &&
+          needs.orcad-template-support.outputs.ships == 'false'))
     outputs:
       tag: ${{ steps.release.outputs.tag }}
       version: ${{ steps.hourly.outputs.version }}
       head_sha: ${{ needs.preflight.outputs.head_sha }}
       published: ${{ steps.publish_live.outcome == 'success' && 'true' || 'false' }}
+      ships_orcad_template: ${{ needs.orcad-template-support.outputs.ships }}
     runs-on: blacksmith-6vcpu-macos-15
     # Why 150: it must exceed the worst case the retry budgets below can produce
     # (install 3x10 + publish 2x45 = 120, plus ~25 for checkout/build/verify), or
@@ -287,6 +333,14 @@ jobs:
           # sshd's job for a standard user on a Windows SSH host.
           ORCA_REQUIRE_RELAY_NATIVE_ADDONS: x64,arm64
 
+      # The app build cleans out/, so collect the template only after it finishes.
+      - name: Download the orcad deployment template
+        if: needs.orcad-template-support.outputs.ships == 'true'
+        uses: actions/download-artifact@v8
+        with:
+          name: orcad-template
+          path: out/orcad-template
+
       # Why a second mint: everything from here on writes to the hourly repo, and
       # the notary round trip inside the publish step can be tens of minutes. The
       # token minted at the top has already spent install + build of its one hour
@@ -332,7 +386,7 @@ jobs:
 
           Built from [\`stablyai/orca@$short_sha\`](https://github.com/stablyai/orca/commit/$SHA).
 
-          **Unvetted.** No tests ran. The macOS build is signed and notarized like a
+          **Unvetted desktop build.** The macOS build is signed and notarized like a
           release, so it installs through Orca's in-app updater and opens from a manual
           download without a Gatekeeper prompt — but nothing here has been reviewed.
 
@@ -360,6 +414,7 @@ jobs:
           GH_TOKEN: ${{ steps.app_token_publish.outputs.token }}
           ORCA_HOURLY_BUILD_VERSION: ${{ steps.hourly.outputs.version }}
           ORCA_BUILD_COMMIT: ${{ steps.hourly.outputs.commit }}
+          ORCA_REQUIRE_ORCAD_TEMPLATE: ${{ needs.orcad-template-support.outputs.ships == 'true' && '1' || '' }}
           CSC_LINK: ${{ secrets.MAC_CERTS }}
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}
           # Why all three: electron-builder's notarize step authenticates to the
@@ -515,3 +570,4 @@ jobs:
       tag: ${{ needs.build-hourly-mac.outputs.tag }}
       ref: ${{ needs.build-hourly-mac.outputs.head_sha }}
       version: ${{ needs.build-hourly-mac.outputs.version }}
+      orcad_template: ${{ needs.build-hourly-mac.outputs.ships_orcad_template == 'true' }}

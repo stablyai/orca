@@ -9,8 +9,9 @@ name: Daily macOS Dev Build
 # 15 avoids stacking with hourly-mac-build, which fires at minute 0 every hour.
 #
 # Deliberately narrow scope:
-#   - macOS only. Other platforms keep using RC/stable.
-#   - No tests or lint on the build job. After a live publish we fire-and-forget
+#   - macOS and unsigned Windows builds share the same release.
+#   - Server qualification gates the deployment template; no desktop tests or
+#     lint on the build job. After a live publish we fire-and-forget
 #     the full E2E workflow at the cut SHA (same detached dispatch as
 #     release-cut). A red suite must not fail or delay the daily.
 #   - PR CI and release-cut remain the gates that matter.
@@ -70,47 +71,15 @@ env:
   DAILY_RETAIN_COUNT: 30
 
 jobs:
-  # Why its own job: this package ships relays for Windows SSH hosts, and only a
-  # Windows runner compiles the addon that launches one outside sshd's job.
-  # Why main and not the mac job's head_sha: that is resolved inside the mac job.
-  # A commit or two of drift is harmless; build-relay rejects a stale or wrong-arch addon.
-  relay-windows-process-tree:
+  # Avoid occupying the limited Mac pool when main has not moved.
+  preflight:
     if: github.repository == 'stablyai/orca'
-    permissions:
-      contents: read
-    uses: ./.github/workflows/relay-windows-process-tree.yml
-    with:
-      ref: main
-
-  build-daily-mac:
-    needs: relay-windows-process-tree
-    if: github.repository == 'stablyai/orca'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
-      tag: ${{ steps.release.outputs.tag }}
-      version: ${{ steps.daily.outputs.version }}
+      should_build: ${{ steps.freshness.outputs.should_build }}
       head_sha: ${{ steps.freshness.outputs.head_sha }}
-      published: ${{ steps.publish_live.outcome == 'success' && 'true' || 'false' }}
-    runs-on: blacksmith-6vcpu-macos-15
-    # Why 150: it must exceed the worst case the retry budgets below can produce
-    # (install 3x10 + publish 2x45 = 120, plus ~25 for checkout/build/verify), or
-    # the job is killed mid-retry and no cleanup step runs at all. A typical run
-    # is far shorter — this is the notary queue's tail, not its median.
-    timeout-minutes: 150
-    env:
-      NODE_OPTIONS: --max-old-space-size=4096
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          ref: main
-          # Version helpers only read HEAD; published versions come from git tags.
-          fetch-depth: 1
-          # Why: this job only reads stablyai/orca and never pushes; every write
-          # goes to the daily repo through a minted App token passed by env.
-          # Not persisting the checkout credential shrinks the blast radius if a
-          # build step is compromised (zizmor: artipacked).
-          persist-credentials: false
-
       - name: Mint daily repo token
         id: app_token
         uses: actions/create-github-app-token@v2
@@ -119,18 +88,19 @@ jobs:
           private-key: ${{ secrets.HOURLY_RELEASE_APP_PRIVATE_KEY }}
           owner: stablyai
           repositories: orca-daily
+          permission-contents: read
 
-      # Why: main is often idle. Rebuilding an unchanged commit burns a runner
-      # hour and adds a redundant tag to the retention window.
       - name: Check whether main moved since the last daily
         id: freshness
         shell: bash
         env:
           GH_TOKEN: ${{ steps.app_token.outputs.token }}
+          MAIN_REPO_TOKEN: ${{ github.token }}
           FORCED: ${{ github.event_name == 'workflow_dispatch' && inputs.force }}
         run: |
           set -euo pipefail
-          head_sha="$(git rev-parse HEAD)"
+          head_sha="$(GH_TOKEN="$MAIN_REPO_TOKEN" gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)"
+          [[ "$head_sha" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::Could not resolve main"; exit 1; }
           echo "head_sha=$head_sha" >>"$GITHUB_OUTPUT"
           if [[ "$FORCED" == "true" ]]; then
             echo "should_build=true" >>"$GITHUB_OUTPUT"
@@ -157,14 +127,111 @@ jobs:
             echo "main moved to $head_sha (last daily built $last_sha); building."
           fi
 
+  # Why its own job: this package ships relays for Windows SSH hosts, and only a
+  # Windows runner compiles the addon that launches one outside sshd's job.
+  relay-windows-process-tree:
+    needs: preflight
+    if: needs.preflight.outputs.should_build == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/relay-windows-process-tree.yml
+    with:
+      ref: ${{ needs.preflight.outputs.head_sha }}
+
+  # Why: a branch cut before the orcad template landed has none to build or ship.
+  orcad-template-support:
+    needs: preflight
+    if: needs.preflight.outputs.should_build == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      ships: ${{ steps.detect.outputs.ships }}
+    steps:
+      - name: Checkout the template packager only
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.preflight.outputs.head_sha }}
+          sparse-checkout: |
+            /config/scripts/packaged-orcad-template.cjs
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: Detect whether the ref ships the orcad template
+        id: detect
+        shell: bash
+        run: |
+          if [[ -f config/scripts/packaged-orcad-template.cjs ]]; then
+            echo "ships=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "ships=false" >>"$GITHUB_OUTPUT"
+            echo "::notice::This ref predates the orcad template; the build ships without it."
+          fi
+
+  # Every desktop channel needs the qualified server template to deploy managed SSH.
+  orcad-template:
+    needs: [preflight, orcad-template-support]
+    if: needs.orcad-template-support.outputs.ships == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/node-server-tests.yml
+    with:
+      ref: ${{ needs.preflight.outputs.head_sha }}
+      build_template: true
+
+  build-daily-mac:
+    needs: [preflight, relay-windows-process-tree, orcad-template-support, orcad-template]
+    if: >-
+      !cancelled() && needs.preflight.outputs.should_build == 'true' &&
+      needs.relay-windows-process-tree.result == 'success' &&
+      needs.orcad-template-support.result == 'success' &&
+      (needs.orcad-template.result == 'success' ||
+        (needs.orcad-template.result == 'skipped' &&
+          needs.orcad-template-support.outputs.ships == 'false'))
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.daily.outputs.version }}
+      head_sha: ${{ needs.preflight.outputs.head_sha }}
+      published: ${{ steps.publish_live.outcome == 'success' && 'true' || 'false' }}
+      ships_orcad_template: ${{ needs.orcad-template-support.outputs.ships }}
+    runs-on: blacksmith-6vcpu-macos-15
+    # Why 150: it must exceed the worst case the retry budgets below can produce
+    # (install 3x10 + publish 2x45 = 120, plus ~25 for checkout/build/verify), or
+    # the job is killed mid-retry and no cleanup step runs at all. A typical run
+    # is far shorter — this is the notary queue's tail, not its median.
+    timeout-minutes: 150
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.preflight.outputs.head_sha }}
+          # Version helpers only read HEAD; published versions come from git tags.
+          fetch-depth: 1
+          # Why: this job only reads stablyai/orca and never pushes; every write
+          # goes to the daily repo through a minted App token passed by env.
+          # Not persisting the checkout credential shrinks the blast radius if a
+          # build step is compromised (zizmor: artipacked).
+          persist-credentials: false
+
+      - name: Mint daily repo token
+        id: app_token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.HOURLY_RELEASE_APP_ID }}
+          private-key: ${{ secrets.HOURLY_RELEASE_APP_PRIVATE_KEY }}
+          owner: stablyai
+          repositories: orca-daily
+
       - name: Setup pnpm
-        if: steps.freshness.outputs.should_build == 'true'
+        if: needs.preflight.outputs.should_build == 'true'
         uses: pnpm/setup@v2
         with:
           install: false
 
       - name: Setup Node.js
-        if: steps.freshness.outputs.should_build == 'true'
+        if: needs.preflight.outputs.should_build == 'true'
         uses: actions/setup-node@v6
         with:
           node-version-file: package.json
@@ -174,7 +241,7 @@ jobs:
             mobile/pnpm-lock.yaml
 
       - name: Cache electron-builder downloads
-        if: steps.freshness.outputs.should_build == 'true'
+        if: needs.preflight.outputs.should_build == 'true'
         uses: actions/cache@v5
         with:
           path: |
@@ -187,7 +254,7 @@ jobs:
       # Why both CPUs: the mac config packages x64 and arm64 from this arm64
       # runner, so the install must carry both variants of the native optional deps.
       - name: Install dependencies
-        if: steps.freshness.outputs.should_build == 'true'
+        if: needs.preflight.outputs.should_build == 'true'
         uses: nick-fields/retry@v4
         with:
           timeout_minutes: 10
@@ -198,12 +265,12 @@ jobs:
       # Why here: electron-builder's beforePack requires out/mobile-web, and the bundle
       # build resolves React Native and Expo from mobile/node_modules.
       - uses: ./.github/actions/install-mobile-dependencies
-        if: steps.freshness.outputs.should_build == 'true'
+        if: needs.preflight.outputs.should_build == 'true'
 
       # Why: signing is what makes a daily installable over an existing Orca, so
       # a missing cert must fail here rather than after a 20-minute build.
       - name: Verify macOS signing environment
-        if: steps.freshness.outputs.should_build == 'true'
+        if: needs.preflight.outputs.should_build == 'true'
         run: node config/scripts/verify-macos-release-env.mjs
         env:
           CSC_LINK: ${{ secrets.MAC_CERTS }}
@@ -214,7 +281,7 @@ jobs:
 
       - name: Compute daily version
         id: daily
-        if: steps.freshness.outputs.should_build == 'true'
+        if: needs.preflight.outputs.should_build == 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ steps.app_token.outputs.token }}
@@ -263,14 +330,14 @@ jobs:
       # Only a Windows runner compiles these; the relay-windows-process-tree job
       # built them for this run.
       - name: Collect the Windows process-table addons for the relay
-        if: steps.freshness.outputs.should_build == 'true'
+        if: needs.preflight.outputs.should_build == 'true'
         uses: actions/download-artifact@v8
         with:
           name: relay-windows-process-tree
           path: .build/windows-process-tree
 
       - name: Build app
-        if: steps.freshness.outputs.should_build == 'true'
+        if: needs.preflight.outputs.should_build == 'true'
         run: pnpm build:release
         env:
           NODE_OPTIONS: --max-old-space-size=4096
@@ -282,6 +349,14 @@ jobs:
           # sshd's job for a standard user on a Windows SSH host.
           ORCA_REQUIRE_RELAY_NATIVE_ADDONS: x64,arm64
 
+      # The app build cleans out/, so collect the template only after it finishes.
+      - name: Download the orcad deployment template
+        if: needs.orcad-template-support.outputs.ships == 'true'
+        uses: actions/download-artifact@v8
+        with:
+          name: orcad-template
+          path: out/orcad-template
+
       # Why a second mint: everything from here on writes to the daily repo, and
       # the notary round trip inside the publish step can be tens of minutes. The
       # token minted at the top has already spent install + build of its one hour
@@ -289,7 +364,7 @@ jobs:
       # part the full budget.
       - name: Re-mint daily repo token for publish
         id: app_token_publish
-        if: steps.freshness.outputs.should_build == 'true'
+        if: needs.preflight.outputs.should_build == 'true'
         uses: actions/create-github-app-token@v2
         with:
           app-id: ${{ secrets.HOURLY_RELEASE_APP_ID }}
@@ -299,13 +374,13 @@ jobs:
 
       - name: Create daily release
         id: release
-        if: steps.freshness.outputs.should_build == 'true'
+        if: needs.preflight.outputs.should_build == 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ steps.app_token_publish.outputs.token }}
           TAG: v${{ steps.daily.outputs.version }}
           NAME: ${{ steps.daily.outputs.name }}
-          SHA: ${{ steps.freshness.outputs.head_sha }}
+          SHA: ${{ needs.preflight.outputs.head_sha }}
         run: |
           set -euo pipefail
           # Kept at 12 even though the title shows 7: the freshness check above
@@ -320,7 +395,7 @@ jobs:
 
           Built from [\`stablyai/orca@$short_sha\`](https://github.com/stablyai/orca/commit/$SHA).
 
-          **Unvetted.** No tests ran. The macOS build is signed and notarized like a
+          **Unvetted desktop build.** The macOS build is signed and notarized like a
           release, so it installs through Orca's in-app updater and opens from a manual
           download without a Gatekeeper prompt — but nothing here has been reviewed.
 
@@ -349,7 +424,7 @@ jobs:
           echo "notes_file=$notes_file" >>"$GITHUB_OUTPUT"
 
       - name: Publish daily macOS artifacts
-        if: steps.freshness.outputs.should_build == 'true'
+        if: needs.preflight.outputs.should_build == 'true'
         uses: nick-fields/retry@v4
         with:
           # Why 45 like the release pipeline: an attempt is pack + notarize +
@@ -366,6 +441,7 @@ jobs:
           GH_TOKEN: ${{ steps.app_token_publish.outputs.token }}
           ORCA_DAILY_BUILD_VERSION: ${{ steps.daily.outputs.version }}
           ORCA_BUILD_COMMIT: ${{ steps.daily.outputs.commit }}
+          ORCA_REQUIRE_ORCAD_TEMPLATE: ${{ needs.orcad-template-support.outputs.ships == 'true' && '1' || '' }}
           CSC_LINK: ${{ secrets.MAC_CERTS }}
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}
           # Why all three: electron-builder's notarize step authenticates to the
@@ -385,7 +461,7 @@ jobs:
       # most, since the cleanup step below runs only on that path.
       - name: Re-mint daily repo token for verify and cleanup
         id: app_token_final
-        if: always() && steps.freshness.outputs.should_build == 'true'
+        if: always() && needs.preflight.outputs.should_build == 'true'
         uses: actions/create-github-app-token@v2
         with:
           app-id: ${{ secrets.HOURLY_RELEASE_APP_ID }}
@@ -397,7 +473,7 @@ jobs:
       # release missing that manifest is a tag the picker offers and the download
       # 404s on, so fail loudly instead of leaving a broken entry.
       - name: Verify update manifest published
-        if: steps.freshness.outputs.should_build == 'true'
+        if: needs.preflight.outputs.should_build == 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ steps.app_token_final.outputs.token }}
@@ -427,7 +503,7 @@ jobs:
       # means the picker can never offer a release whose assets are incomplete.
       - name: Publish the verified release
         id: publish_live
-        if: steps.freshness.outputs.should_build == 'true'
+        if: needs.preflight.outputs.should_build == 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ steps.app_token_final.outputs.token }}
@@ -577,3 +653,4 @@ jobs:
       tag: ${{ needs.build-daily-mac.outputs.tag }}
       ref: ${{ needs.build-daily-mac.outputs.head_sha }}
       version: ${{ needs.build-daily-mac.outputs.version }}
+      orcad_template: ${{ needs.build-daily-mac.outputs.ships_orcad_template == 'true' }}
