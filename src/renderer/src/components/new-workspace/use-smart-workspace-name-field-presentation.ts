@@ -23,6 +23,7 @@ import {
 } from './smart-workspace-source-results'
 import { RESULT_LIMIT, type RowEntry } from './smart-workspace-name-field-model'
 import type { useSmartWorkspaceNameFieldFoundation } from './use-smart-workspace-name-field-foundation'
+import { useSmartWorkspaceBranchIntentArm } from './use-smart-workspace-branch-intent-arm'
 
 type Foundation = ReturnType<typeof useSmartWorkspaceNameFieldFoundation>
 
@@ -222,11 +223,17 @@ export function useSmartWorkspaceNameFieldPresentation(
     githubLoading,
     gitlabLoading
   })
+  const branchIntentValue = useSmartWorkspaceBranchIntentArm(foundation, {
+    isQueryStale,
+    rows,
+    trimmedValue
+  })
   const resolvedCommandValue = resolveSmartWorkspaceCommandValue({
     currentValue: commandValue,
     rows,
     isQueryStale,
-    sourceIntent
+    sourceIntent,
+    branchIntentValue
   })
   // Why: ignored stale cmdk changes must not reappear after the query settles.
   useEffect(() => {
