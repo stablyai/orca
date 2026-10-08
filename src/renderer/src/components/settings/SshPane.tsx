@@ -104,12 +104,9 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
   useSshAddTargetIntent(addTargetIntentSignal, openAddTargetForm)
 
   const handleSave = async (): Promise<void> => {
-    // Why the baseline: the form submits a full snapshot, and persistence reads a
-    // present-but-empty proxy as an explicit clear, so unchanged fields must be omitted.
-    const savePayload = buildSshTargetSavePayload(
-      form,
-      targets.find((t) => t.id === editingId)
-    )
+    // Why the baseline: persistence reads a present-but-empty proxy as a clear.
+    const saved = targets.find((t) => t.id === editingId)
+    const savePayload = buildSshTargetSavePayload(form, saved)
     if (!savePayload.ok) {
       toast.error(savePayload.error)
       return

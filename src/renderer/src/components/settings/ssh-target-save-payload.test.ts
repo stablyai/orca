@@ -133,6 +133,8 @@ describe('buildSshTargetSavePayload', () => {
     })
     expect(form.allowRemoteCliControl).toBe(true)
     expect(isSshTargetFormDirty({ ...form, allowRemoteCliControl: false }, form)).toBe(true)
+  })
+
   it('persists a per-host HTTP proxy with normalized URL and bypass rules', () => {
     const result = buildSshTargetSavePayload({
       ...EMPTY_FORM,
