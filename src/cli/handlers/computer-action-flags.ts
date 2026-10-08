@@ -12,6 +12,7 @@ import {
   getRequiredStringFlagAllowingEmpty
 } from '../flags'
 import { RuntimeClientError } from '../runtime-client'
+import { readStdinPayload } from '../stdin-payload'
 import {
   validateDragTarget,
   validateElementOrCoordinates,
@@ -185,7 +186,7 @@ async function getTextPayload(
         `Use either --${name} or --${stdinFlag}, not both`
       )
     }
-    const payload = await readStdin()
+    const payload = await readStdinPayload()
     if (name === 'text' && payload.length === 0) {
       throw new RuntimeClientError('invalid_argument', 'Missing text from stdin')
     }
@@ -194,17 +195,6 @@ async function getTextPayload(
   return name === 'value'
     ? getRequiredStringFlagAllowingEmpty(flags, name)
     : getRequiredStringFlag(flags, name)
-}
-
-async function readStdin(): Promise<string> {
-  if (process.stdin.isTTY) {
-    throw new RuntimeClientError('invalid_argument', 'stdin payload requested but stdin is a TTY')
-  }
-  const chunks: Buffer[] = []
-  for await (const chunk of process.stdin) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)))
-  }
-  return Buffer.concat(chunks).toString('utf8')
 }
 
 function getOptionalPositiveNumberFlag(

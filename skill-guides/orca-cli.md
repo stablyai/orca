@@ -182,6 +182,28 @@ ORCA terminal close --terminal <handle> --json
 ORCA terminal close --worktree id:<repoId>::<worktreePath> --all --json
 ```
 
+For generated multiline text, use `--text-stdin` instead of `--text`. This POSIX
+shell example produces UTF-8 text without a trailing newline:
+
+```sh
+node -e 'process.stdout.write("first line\nsecond line")' | ORCA terminal send --terminal <handle> --text-stdin --enter --json
+```
+
+Do not combine `--text` and `--text-stdin`. The reader refuses interactive TTY
+input and sends once after EOF; a producer that never closes can keep the CLI
+waiting. Valid UTF-8 text, including CRLF and trailing newlines, is preserved;
+malformed UTF-8 uses replacement characters. The reader cannot undo evaluation
+or encoding performed by the producer or launcher. A newline already in the text
+can affect the target program; `--enter` is a separate submit action. Empty stdin
+is legal, including bare Enter with `--enter`, but `--wait-submit` and
+`--retry-request` require nonempty text. On retry, pipe the exact same text and
+keep the same flags and reported request ID.
+
+The terminal reader rejects raw input over 16 MiB without truncation. The
+existing local RPC cap remains 1 MiB including the JSON envelope and escaping,
+so a 16 MiB file is not guaranteed deliverable. This entry point does not repair
+shell or launcher stdin forwarding.
+
 Terminal rules:
 
 - `--terminal` is optional for most commands; omitted means the active terminal in the current worktree.
