@@ -9,6 +9,13 @@ wsl.exe --import Ubuntu $distroDir $rootfs --version 1
 if ($LASTEXITCODE -ne 0) { throw "WSL import failed: $LASTEXITCODE" }
 wsl.exe --distribution Ubuntu --user root --exec /usr/bin/true
 if ($LASTEXITCODE -ne 0) { throw "WSL guest did not start: $LASTEXITCODE" }
+if ($env:ORCA_WSL_SETUP_SECOND_DISTRO -eq 'true') {
+    $secondDistroDir = Join-Path $env:RUNNER_TEMP 'orca-wsl-ubuntu-secondary'
+    wsl.exe --import Ubuntu-Secondary $secondDistroDir $rootfs --version 1
+    if ($LASTEXITCODE -ne 0) { throw "Second WSL import failed: $LASTEXITCODE" }
+    wsl.exe --distribution Ubuntu-Secondary --user root --exec /usr/bin/true
+    if ($LASTEXITCODE -ne 0) { throw "Second WSL guest did not start: $LASTEXITCODE" }
+}
 wsl.exe --distribution Ubuntu --user root --exec /usr/bin/apt-get update
 if ($LASTEXITCODE -ne 0) { throw "WSL apt update failed: $LASTEXITCODE" }
 wsl.exe --distribution Ubuntu --user root --exec /usr/bin/apt-get install --yes git curl xz-utils
