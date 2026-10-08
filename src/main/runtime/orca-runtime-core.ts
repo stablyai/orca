@@ -58,7 +58,7 @@ export function isCursorAgentOrchestrationTarget(
   return [leaf.lastOscTitle, leaf.paneTitle, tabTitle].some(isCursorAgentTitle)
 }
 
-export const AGENT_SESSION_OPERATION_PER_CLIENT_LIMIT = 512
+export const AGENT_SESSION_OPERATION_PER_CLIENT_LIMIT = 2_048
 
 export const AGENT_SESSION_OPERATION_GLOBAL_LIMIT = 4_096
 
