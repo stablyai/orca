@@ -3,6 +3,29 @@ import type { AgentStatusSlice } from './agent-status-slice-contract'
 import type { AgentStatusRuntime } from './agent-status-runtime'
 import { mergeCurrentOrchestrationContext } from './agent-status-orchestration-context'
 import { capRetainedAgents } from './agent-status-capacity-eviction'
+import { parsePaneKey } from '../../../../shared/stable-pane-id'
+
+// Why: a retained row survives only as long as the tab/leaf it reports on is
+// still real. `undefined` (tab absent from the map) and a Set not containing
+// the leaf both mean "gone"; `null` means the tab's layout has not hydrated
+// yet, so leaf absence is inconclusive and must not evict the row.
+function retainedRowIsOrphaned(
+  retained: RetainedAgentEntry,
+  liveLeafIdsByTabId: ReadonlyMap<string, ReadonlySet<string> | null>
+): boolean {
+  const parsed = parsePaneKey(retained.entry.paneKey)
+  const tabId = parsed?.tabId ?? retained.tab.id
+  if (!liveLeafIdsByTabId.has(tabId)) {
+    return true
+  }
+  if (!parsed) {
+    // Legacy numeric pane keys resolve to a stable leaf elsewhere; absent
+    // that resolution, tab existence (checked above) is the only evidence.
+    return false
+  }
+  const liveLeafIds = liveLeafIdsByTabId.get(tabId)
+  return liveLeafIds !== null && liveLeafIds !== undefined && !liveLeafIds.has(parsed.leafId)
+}
 
 export function createAgentStatusRetentionActions(
   runtime: AgentStatusRuntime
@@ -138,12 +161,16 @@ export function createAgentStatusRetentionActions(
       }
     },
 
-    pruneRetainedAgents: (validWorktreeIds) => {
+    pruneRetainedAgents: (validWorktreeIds, liveLeafIdsByTabId) => {
       set((s) => {
         let changed = false
         const next: Record<string, RetainedAgentEntry> = {}
         for (const [key, retained] of Object.entries(s.retainedAgentsByPaneKey)) {
-          if (!validWorktreeIds.has(retained.worktreeId)) {
+          const orphaned =
+            !validWorktreeIds.has(retained.worktreeId) ||
+            (liveLeafIdsByTabId !== undefined &&
+              retainedRowIsOrphaned(retained, liveLeafIdsByTabId))
+          if (orphaned) {
             changed = true
           } else {
             next[key] = retained

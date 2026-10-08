@@ -440,4 +440,149 @@ describe('useRetainedAgentsSync', () => {
     expect(state.retentionSuppressedPaneKeys[sourcePaneKey]).toBeUndefined()
     hook.unmount()
   })
+
+  // Ghost "Done" sidebar row regression: a crashed PTY (or a pane respawned
+  // in place) clears the tab/leaf without ever planting
+  // recentlyClosedAgentStatusTabIds — that marker is only set by the
+  // explicit closeTab path. Without it, collectRetainedAgentsOnDisappear
+  // still retains the last "done" snapshot (correctly — a crash must not
+  // discard real completion evidence), so pruning is the only backstop left,
+  // and pruneRetainedAgents historically only checked worktree existence.
+  it('prunes a retained done row after a PTY crash removes its tab without a closed-tab marker', async () => {
+    const repo = makeRepo()
+    const worktree = makeWorktree()
+    const tab = makeTab({ id: 'tab-1' })
+    const paneKey = makePaneKey(tab.id, '11111111-1111-4111-8111-111111111111')
+    const row = makeAgentRow({ paneKey, state: 'done' })
+    useAppStore.setState({
+      repos: [repo],
+      worktreesByRepo: { [repo.id]: [worktree] },
+      tabsByWorktree: { [worktree.id]: [tab] },
+      agentStatusByPaneKey: { [paneKey]: row.entry },
+      agentStatusEpoch: initialAppState.agentStatusEpoch + 1
+    })
+    const hook = renderHook(() => useRetainedAgentsSync())
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    // Why: model a crash — the tab and the live status entry both vanish,
+    // but nothing plants the closed-tab suppressor (only closeTab does).
+    act(() => {
+      useAppStore.setState((state) => ({
+        tabsByWorktree: { [worktree.id]: [] },
+        agentStatusByPaneKey: {},
+        agentStatusEpoch: state.agentStatusEpoch + 1
+      }))
+    })
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    const state = useAppStore.getState()
+    expect(state.recentlyClosedAgentStatusTabIds[tab.id]).toBeUndefined()
+    expect(
+      state.retainedAgentsByPaneKey[paneKey],
+      'a crashed tab must not leave a permanent ghost "done" row in the sidebar'
+    ).toBeUndefined()
+    hook.unmount()
+  })
+
+  it('prunes a retained done row whose leaf no longer exists in its still-open tab (respawn)', async () => {
+    const repo = makeRepo()
+    const worktree = makeWorktree()
+    const tab = makeTab({ id: 'tab-1' })
+    const oldLeafId = '11111111-1111-4111-8111-111111111111'
+    const newLeafId = '22222222-2222-4222-8222-222222222222'
+    const paneKey = makePaneKey(tab.id, oldLeafId)
+    const row = makeAgentRow({ paneKey, state: 'done' })
+    useAppStore.setState({
+      repos: [repo],
+      worktreesByRepo: { [repo.id]: [worktree] },
+      tabsByWorktree: { [worktree.id]: [tab] },
+      terminalLayoutsByTabId: {
+        [tab.id]: {
+          root: { type: 'leaf', leafId: oldLeafId },
+          activeLeafId: oldLeafId,
+          expandedLeafId: null
+        }
+      },
+      agentStatusByPaneKey: { [paneKey]: row.entry },
+      agentStatusEpoch: initialAppState.agentStatusEpoch + 1
+    })
+    const hook = renderHook(() => useRetainedAgentsSync())
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    // Why: the tab stays open but respawns a fresh leaf for a new run — no
+    // tab close, no suppressor, just a new leafId replacing the old one.
+    act(() => {
+      useAppStore.setState((state) => ({
+        terminalLayoutsByTabId: {
+          [tab.id]: {
+            root: { type: 'leaf', leafId: newLeafId },
+            activeLeafId: newLeafId,
+            expandedLeafId: null
+          }
+        },
+        agentStatusByPaneKey: {},
+        agentStatusEpoch: state.agentStatusEpoch + 1
+      }))
+    })
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    const state = useAppStore.getState()
+    expect(state.tabsByWorktree[worktree.id]?.map((t) => t.id)).toContain(tab.id)
+    expect(
+      state.retainedAgentsByPaneKey[paneKey],
+      'a respawned pane must not leave a duplicate ghost "done" row next to the live one'
+    ).toBeUndefined()
+    hook.unmount()
+  })
+
+  it('keeps a retained done row while its tab and leaf both still exist', async () => {
+    const repo = makeRepo()
+    const worktree = makeWorktree()
+    const tab = makeTab({ id: 'tab-1' })
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    const paneKey = makePaneKey(tab.id, leafId)
+    const row = makeAgentRow({ paneKey, state: 'done' })
+    useAppStore.setState({
+      repos: [repo],
+      worktreesByRepo: { [repo.id]: [worktree] },
+      tabsByWorktree: { [worktree.id]: [tab] },
+      terminalLayoutsByTabId: {
+        [tab.id]: { root: { type: 'leaf', leafId }, activeLeafId: leafId, expandedLeafId: null }
+      },
+      agentStatusByPaneKey: { [paneKey]: row.entry },
+      agentStatusEpoch: initialAppState.agentStatusEpoch + 1
+    })
+    const hook = renderHook(() => useRetainedAgentsSync())
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    // Why: the agent finished but the user never closed or touched the pane —
+    // only the live status entry clears; tab and leaf are untouched.
+    act(() => {
+      useAppStore.setState((state) => ({
+        agentStatusByPaneKey: {},
+        agentStatusEpoch: state.agentStatusEpoch + 1
+      }))
+    })
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    const state = useAppStore.getState()
+    expect(
+      state.retainedAgentsByPaneKey[paneKey],
+      'a done row for a still-open pane must keep rendering until dismissed'
+    ).toBeDefined()
+    expect(state.retainedAgentsByPaneKey[paneKey]?.entry.state).toBe('done')
+    hook.unmount()
+  })
 })
