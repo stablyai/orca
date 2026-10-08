@@ -11,7 +11,7 @@ export function nativeChatBlocksInOwnWords(blocks: NativeChatBlock[]): NativeCha
               type: 'text',
               text: translate(
                 'components.native-chat.notices.stoppedBeforeStart',
-                'Stopped before the agent started'
+                'Stopped manually'
               )
             }
           : block

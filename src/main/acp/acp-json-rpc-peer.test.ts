@@ -293,6 +293,22 @@ describe('ACP JSON-RPC peer', () => {
     output.destroy()
   })
 
+  it('closes when a request times out mid-write, so a cancel never waits behind it', async () => {
+    vi.useFakeTimers()
+    const input = new PassThrough()
+    const output = new Writable({ write() {} })
+    const peer = new AcpJsonRpcPeer(input, output, {}, { requestTimeoutMs: 20 })
+    peers.push(peer)
+    const timedOut = expect(peer.request('stuck', {})).rejects.toBeInstanceOf(
+      AcpRequestTimeoutError
+    )
+    await vi.advanceTimersByTimeAsync(20)
+    await timedOut
+    expect(peer.closed).toBe(true)
+    await expect(peer.notify('session/cancel', {})).rejects.toBeInstanceOf(AcpRequestTimeoutError)
+    input.destroy()
+  })
+
   it('fails pending requests on an output stream error', async () => {
     const { peer, agent } = fixture()
     const rejected = expect(peer.request('wait', {})).rejects.toThrow('Broken pipe')

@@ -16,8 +16,8 @@ export const STRUCTURED_AGENT_SESSION_HOLD_METHODS = [
   defineMethod({
     name: 'agentSession.hold',
     params: HoldParams,
-    handler: async (_params, ctx) => {
-      await requireInstalledStructuredHost(ctx)
+    handler: async (params, ctx) => {
+      await requireInstalledStructuredHost(ctx, params.sessionId)
       return { held: true as const }
     }
   }),

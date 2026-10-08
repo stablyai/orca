@@ -64,7 +64,7 @@ export function NativeChatReasoningRow({
             <NativeChatReasoningChevron />
           </button>
         </CollapsibleTrigger>
-        <CollapsibleContent>
+        <CollapsibleContent animation="height" data-native-chat-member-detail>
           <NativeChatReasoningBody
             markdown={markdown}
             onLinkClick={onLinkClick}

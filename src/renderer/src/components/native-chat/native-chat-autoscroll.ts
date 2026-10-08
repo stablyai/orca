@@ -50,11 +50,15 @@ export type FollowIntent = {
   geometry: ScrollGeometry
   /** Distance from the end at the previous scroll event. */
   previousDistanceFromEnd: number
+  /** Whether a jump to a row is still travelling there. Rows it passes measure
+   *  shorter than estimated, the content shrinks, and the browser clamps the view
+   *  onto the end: that is the end arriving, not the reader. */
+  settling: boolean
 }
 
 /** Passive offsets preserve following; detached views rearm only while closing on the actual tail. */
 export function nextFollowingEnd(intent: FollowIntent): boolean {
-  if (intent.following || intent.programmatic) {
+  if (intent.following || intent.programmatic || intent.settling) {
     return intent.following
   }
   if (distanceFromBottom(intent.geometry) > intent.previousDistanceFromEnd) {

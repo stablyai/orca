@@ -57,7 +57,7 @@ const next = (slot, overrides = {}) => ({
 })
 
 describe('N-API pinning', () => {
-  it('pins N-API 8 so a host Node 18 (rung C) can load every slot', () => {
+  it('keeps the N-API 8 addon ABI stable across runtime upgrades', () => {
     expect(SLOT_NAPI_VERSION).toBe(8)
     // The client's rung C host-Node gate must ask for exactly what the slots are built against.
     expect(ORCAD_ADDON_NAPI_VERSION).toBe(SLOT_NAPI_VERSION)

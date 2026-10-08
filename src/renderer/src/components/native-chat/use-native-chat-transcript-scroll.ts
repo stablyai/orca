@@ -59,6 +59,7 @@ export function useNativeChatTranscriptScroll({
   showsTailRow,
   isVisible,
   alignToViewportTop,
+  isAlignPending,
   scrollToEnd,
   restoreScrollOffset,
   consumeProgrammaticScroll,
@@ -72,6 +73,8 @@ export function useNativeChatTranscriptScroll({
   showsTailRow: boolean
   isVisible: boolean
   alignToViewportTop: (element: HTMLElement) => void
+  /** Whether a jump to a row is still travelling there. */
+  isAlignPending: () => boolean
   scrollToEnd: () => void
   restoreScrollOffset: (offset: number) => void
   consumeProgrammaticScroll: (event: Event) => boolean
@@ -117,13 +120,14 @@ export function useNativeChatTranscriptScroll({
         following: followingRef.current,
         programmatic: consumeProgrammaticScroll(event.nativeEvent),
         geometry,
-        previousDistanceFromEnd: previousDistanceFromEndRef.current
+        previousDistanceFromEnd: previousDistanceFromEndRef.current,
+        settling: isAlignPending()
       })
       reconcileReaderScroll(false)
       previousDistanceFromEndRef.current = distanceFromBottom(geometry)
       syncScrollState()
     },
-    [consumeProgrammaticScroll, reconcileReaderScroll, scrollRef, syncScrollState]
+    [consumeProgrammaticScroll, isAlignPending, reconcileReaderScroll, scrollRef, syncScrollState]
   )
 
   const scrollToEndWhenMeasurable = useCallback(() => {

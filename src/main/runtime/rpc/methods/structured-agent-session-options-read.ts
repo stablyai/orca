@@ -11,17 +11,34 @@
 import { defineMethod } from '../core'
 import {
   requireInstalledStructuredHost,
+  requireStructuredAgentAudience,
   requireStructuredHost
 } from './structured-agent-session-gate'
-import { ModelCatalogParams, OptionsParams } from './structured-agent-session-schemas'
+import {
+  HandoffStatusParams,
+  ModelCatalogParams,
+  OptionsParams
+} from './structured-agent-session-schemas'
 import { agentSessionPinnedLaunchDirectory } from '../../agent-session-record-launch-directory'
 
 export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
   defineMethod({
+    name: 'agentSession.handoffStatus',
+    params: HandoffStatusParams,
+    handler: async (params, ctx) =>
+      (await requireInstalledStructuredHost(ctx, params.sessionId)).handoffStatus(params.sessionId)
+  }),
+  defineMethod({
+    name: 'agentSession.commands',
+    params: OptionsParams,
+    handler: async (params, ctx) =>
+      (await requireInstalledStructuredHost(ctx, params.sessionId)).readCommands(params.sessionId)
+  }),
+  defineMethod({
     name: 'agentSession.options',
     params: OptionsParams,
     handler: async (params, ctx) =>
-      (await requireInstalledStructuredHost(ctx)).readOptions(params.sessionId)
+      (await requireInstalledStructuredHost(ctx, params.sessionId)).readOptions(params.sessionId)
   }),
   defineMethod({
     name: 'agentSession.modelCatalog',
@@ -29,10 +46,11 @@ export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
     // A structured chat's read names its session and builds the host, since it may come first;
     // terminal-backed chat's session-less read must not open the journal where none runs.
     handler: async ({ worktree, ...params }, ctx) => {
+      requireStructuredAgentAudience(ctx, params.agent)
       const host =
         params.sessionId === undefined
           ? requireStructuredHost(ctx)
-          : await requireInstalledStructuredHost(ctx)
+          : await requireInstalledStructuredHost(ctx, params.sessionId)
       const catalog = host.deps.modelCatalog
       if (!catalog) {
         return { origin: 'unknown' as const }

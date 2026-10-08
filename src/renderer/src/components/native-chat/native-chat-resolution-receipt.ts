@@ -8,6 +8,7 @@ import {
 } from '../../../../shared/agent-session-question-answer'
 
 export type NativeChatResolvedPrompt = AgentJournalApprovalItem | AgentJournalQuestionItem
+/** `answer` is '' for an explicitly empty text answer and null when the answer cannot be read. */
 export type NativeChatReceiptAnswer = { question: string | null; answer: string | null }
 
 export function nativeChatReceiptAnswers(
@@ -28,11 +29,16 @@ export function nativeChatReceiptAnswers(
         (id) => question.options.find((option) => option.id === id)?.label
       )
       const valid = labels?.every((label) => label !== undefined)
+      const parts = [...(labels ?? []), ...(answer?.other?.trim() ? [answer.other] : [])]
       return {
         question: body.questions ? question.question : null,
-        answer: valid
-          ? [...(labels ?? []), ...(answer?.other ? [answer.other] : [])].join(' · ') || null
-          : null
+        answer: !valid
+          ? null
+          : parts.length > 0
+            ? parts.join(' · ')
+            : answer?.other !== undefined
+              ? ''
+              : null
       }
     })
   }

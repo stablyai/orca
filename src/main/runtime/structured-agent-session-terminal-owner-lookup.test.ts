@@ -26,7 +26,8 @@ vi.mock('../orca-profiles/profile-storage-paths', () => ({
 }))
 
 vi.mock('../native-chat/agent-session-wire/structured-agent-session-logger', () => ({
-  createStructuredAgentSessionLogger: vi.fn(() => ({ warn: vi.fn(), error: vi.fn() }))
+  createStructuredAgentSessionLogger: vi.fn(() => ({ warn: vi.fn(), error: vi.fn() })),
+  neverThrowingStructuredAgentSessionLogger: vi.fn((logger) => logger)
 }))
 
 const WORKSPACE: TerminalWorkspaceLaunchScope = {

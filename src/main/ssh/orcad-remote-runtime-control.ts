@@ -9,6 +9,7 @@ import {
 import {
   readWindowsOrcadLaunchReport,
   readWindowsOrcadSlotRuntime,
+  readWindowsOrcadSlotEntry,
   windowsOrcadLaunchCommand,
   windowsOrcadLaunchRuntimeCommand
 } from './orcad-remote-launch-windows'
@@ -104,14 +105,17 @@ export async function launchOrcadAndAwaitReadiness(
   spec: OrcadLaunchSpec
 ): Promise<OrcadReadinessParse> {
   if (isWindowsRemoteHost(target.host)) {
-    const slotRuntime = readWindowsOrcadSlotRuntime(
+    const slotAnswer = await execOrcadRemote(
+      target,
+      windowsOrcadLaunchRuntimeCommand(target.host, spec.remoteInstallDir)
+    )
+    const slotRuntime = readWindowsOrcadSlotRuntime(slotAnswer)
+    const slotEntry = readWindowsOrcadSlotEntry(slotAnswer, target.host, spec.remoteInstallDir)
+    readWindowsOrcadLaunchReport(
       await execOrcadRemote(
         target,
-        windowsOrcadLaunchRuntimeCommand(target.host, spec.remoteInstallDir)
+        windowsOrcadLaunchCommand(target.host, spec, slotRuntime, slotEntry)
       )
-    )
-    readWindowsOrcadLaunchReport(
-      await execOrcadRemote(target, windowsOrcadLaunchCommand(target.host, spec, slotRuntime))
     )
   } else {
     await execOrcadRemote(target, orcadLaunchCommand(target.host, spec))

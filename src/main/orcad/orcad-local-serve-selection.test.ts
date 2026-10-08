@@ -33,6 +33,7 @@ function slotFixture(): string {
   writeFileSync(join(slot, ORCAD_NODE_RUNTIME_MARKER_FILENAME), `${SHA}\n`)
   writeFileSync(join(slot, ORCAD_VERSION_FILENAME), '0.1.0+abc\n')
   writeFileSync(join(slot, 'orcad.js'), '')
+  writeFileSync(join(slot, 'orcad-server.js'), '')
   return slot
 }
 
@@ -77,7 +78,7 @@ describe('orca serve runtime selection', () => {
     expect(selection).toEqual({
       kind: 'orcad',
       runtime,
-      entry: join(slot, 'orcad.js'),
+      entry: join(slot, 'orcad-server.js'),
       version: '0.1.0+abc'
     })
     expect(existsSync(runtime)).toBe(true)

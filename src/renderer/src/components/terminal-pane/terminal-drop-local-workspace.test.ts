@@ -60,7 +60,8 @@ describe('local terminals without catalog workspaces', () => {
       if (lane === 'native') {
         await handleTerminalFileDrop({
           ...args,
-          data: { target: 'terminal', paneLeafId: 'leaf-1', paths: ['/local/file.txt'] }
+          pane: pane,
+          paths: ['/local/file.txt']
         })
       } else {
         const result = await handleInternalTerminalFileDrop({
@@ -76,7 +77,7 @@ describe('local terminals without catalog workspaces', () => {
         expect(result).toEqual({ status: 'pasted', pathCount: 1 })
       }
       expect(sendInput).toHaveBeenCalledExactlyOnceWith('/local/file.txt ', 'driving')
-      expect(focus).toHaveBeenCalled()
+      expect(focus).toHaveBeenCalledTimes(lane === 'internal' ? 1 : 0)
       expect(mocks.importPaths).not.toHaveBeenCalled()
       expect(mocks.resolvePaths).not.toHaveBeenCalled()
     }

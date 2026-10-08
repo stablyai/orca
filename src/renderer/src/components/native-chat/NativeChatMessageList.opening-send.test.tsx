@@ -209,7 +209,7 @@ describe('a message sent while the turn ahead is still opening', () => {
       ...agentSessionFailureWords(agentSessionFailureFact('cancelled'), { surface: 'rejection' })
     })
     view.rerender(frame(queued, [...submissions, withdrawn], [], true))
-    const stopRow = screen.getByText('Stopped before the agent started')
+    const stopRow = screen.getByText('Stopped manually')
     expect(follows(screen.getByText('B'), liveStatus())).toBe(true)
     expect(follows(stopRow, screen.getByText('B'))).toBe(true)
     expect(follows(liveActivity(), stopRow)).toBe(true)

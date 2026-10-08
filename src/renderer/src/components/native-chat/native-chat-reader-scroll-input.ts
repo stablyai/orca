@@ -67,6 +67,8 @@ function gestureLeavesEnd(gesture: ReaderGesture, transcript: HTMLElement): bool
 
 type ReaderScrollCallbacks = {
   onReaderScroll: () => void
+  /** The same gesture, for whatever was still moving the transcript to yield to it. */
+  onTakeScroll?: () => void
   onLeaveEnd: () => void
 }
 
@@ -135,8 +137,12 @@ export function nativeChatReaderScrollInputHandlers({
 /** The transcript scroller's input props, and the wheel the rail overlaying it forwards. */
 export function useNativeChatReaderScrollInput(
   scrollRef: React.RefObject<HTMLElement | null>,
-  { onReaderScroll, onLeaveEnd }: ReaderScrollCallbacks
+  { onReaderScroll: onScrollInput, onTakeScroll, onLeaveEnd }: ReaderScrollCallbacks
 ): { scrollerProps: NativeChatReaderScrollInputHandlers; railWheel: (deltaY: number) => void } {
+  const onReaderScroll = useCallback(() => {
+    onScrollInput()
+    onTakeScroll?.()
+  }, [onScrollInput, onTakeScroll])
   const scrollerProps = useMemo(
     () => nativeChatReaderScrollInputHandlers({ onReaderScroll, onLeaveEnd }),
     [onLeaveEnd, onReaderScroll]

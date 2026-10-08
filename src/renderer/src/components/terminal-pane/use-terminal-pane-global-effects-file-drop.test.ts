@@ -194,59 +194,13 @@ describe('useTerminalPaneGlobalEffects', () => {
     cleanupGlobalEffectsTestWindow()
   })
 
-  it('ignores terminal file drops for another terminal tab', () => {
-    const { onFileDrop } = useMountForFileDrop()
-
-    onFileDrop({ paths: ['/tmp/image.png'], target: 'terminal', tabId: 'tab-2' })
-
-    expect(mocks.handleTerminalFileDrop).not.toHaveBeenCalled()
-  })
-
-  it('handles terminal file drops for the matching terminal tab', () => {
-    const { onFileDrop, manager, paneTransports } = useMountForFileDrop({
-      cwd: '/worktree'
-    })
-
-    const data = {
-      paths: ['/tmp/image.png'],
-      target: 'terminal',
-      tabId: 'tab-1',
-      paneLeafId: 'leaf-1'
-    }
-    onFileDrop(data)
-
-    expect(mocks.handleTerminalFileDrop).toHaveBeenCalledWith({
-      manager,
-      paneTransports,
-      worktreeId: 'wt-1',
-      tabId: 'tab-1',
-      cwd: '/worktree',
-      data
-    })
-  })
-
-  it('refuses terminal file drops without a terminal tab id even in the active tab', () => {
-    const { onFileDrop } = useMountForFileDrop()
-
-    const data = { paths: ['/tmp/image.png'], target: 'terminal' }
-    onFileDrop(data)
-
-    expect(mocks.handleTerminalFileDrop).not.toHaveBeenCalled()
-  })
-
-  it('handles terminal file drops for visible unfocused split-group terminals', () => {
-    const { onFileDrop } = useMountForFileDrop({ isActive: false, isVisible: true })
-
-    onFileDrop({ paths: ['/tmp/image.png'], target: 'terminal', tabId: 'tab-1' })
-
-    expect(mocks.handleTerminalFileDrop).toHaveBeenCalledTimes(1)
-  })
-
-  it('ignores legacy terminal file drops in visible unfocused split-group terminals', () => {
-    const { onFileDrop } = useMountForFileDrop({ isActive: false, isVisible: true })
-
-    onFileDrop({ paths: ['/tmp/image.png'], target: 'terminal' })
-
+  it.each([
+    { isActive: true, isVisible: true },
+    { isActive: false, isVisible: true },
+    { isActive: false, isVisible: false }
+  ])('never subscribes to legacy broadcasts (active=$isActive, visible=$isVisible)', (options) => {
+    useMountForFileDrop(options)
+    expect(window.api.ui.onFileDrop).not.toHaveBeenCalled()
     expect(mocks.handleTerminalFileDrop).not.toHaveBeenCalled()
   })
 })

@@ -6,6 +6,27 @@ import type { TerminalLayoutSnapshot } from './terminal-tab-types'
 import type { TuiAgent } from './tui-agent'
 import type { StructuredAgentId } from './agent-session-provider-handle'
 
+export const SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY = 'session-tabs.close-intent.v1' as const
+export const SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY =
+  'session-tabs.authoritative-inventory.v1' as const
+// This proves headed and runtime-owned host paths place after a complete split parent.
+export const SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY =
+  'session-tabs.split-group-placement.v1' as const
+// Clients retain each retirement proof until the surface is published live again.
+export const SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY =
+  'session-tabs.retirement-proof-delta.v1' as const
+// The host accepts mobile session-tab view-mode writes and republishes the adopted mode.
+export const SESSION_TABS_MOBILE_VIEW_MODE_RUNTIME_CAPABILITY =
+  'session-tabs.mobile-view-mode.v1' as const
+
+export const SESSION_TABS_RUNTIME_CAPABILITIES = [
+  SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
+  SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY,
+  SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY,
+  SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY,
+  SESSION_TABS_MOBILE_VIEW_MODE_RUNTIME_CAPABILITY
+] as const
+
 export type RuntimeMobileSessionTerminalTab = {
   type: 'terminal'
   id: string

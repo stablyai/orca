@@ -41,6 +41,9 @@ function slotsOf(messages: NativeChatMessage[]) {
   })
 }
 
+/** No test but the preview's reads the rows the slots came from. */
+const NO_ROWS = { messages: [], turnKeys: [] }
+
 const CONVERSATION = [
   message('u1', 'user'),
   message('a1', 'assistant'),
@@ -56,7 +59,8 @@ describe('message rail hook', () => {
     )
     const scrollRef = { current: document.createElement('div') }
     const { result, rerender, unmount } = renderHook(
-      ({ slots }) => useNativeChatMessageRail({ scrollRef, slots, virtualItems: [] }),
+      ({ slots }) =>
+        useNativeChatMessageRail({ scrollRef, slots, turnRows: NO_ROWS, virtualItems: [] }),
       { initialProps: { slots: slotsOf(conversation) } }
     )
     const initial = result.current
@@ -75,6 +79,36 @@ describe('message rail hook', () => {
     derive.mockRestore()
   })
 
+  it('keeps the previewed reply current while its turn streams', () => {
+    const scrollRef = { current: document.createElement('div') }
+    const streamed = (body: string) => {
+      const messages = [
+        ...CONVERSATION,
+        { ...message('a3', 'assistant'), blocks: [{ type: 'text' as const, text: body }] }
+      ]
+      return {
+        slots: slotsOf(messages),
+        turnRows: { messages, turnKeys: ['u1', 'u1', 'u2', 'u2', 'u3', 'u3'] }
+      }
+    }
+    const { result, rerender, unmount } = renderHook(
+      ({ slots, turnRows }) =>
+        useNativeChatMessageRail({ scrollRef, slots, turnRows, virtualItems: [] }),
+      { initialProps: streamed('Thinking') }
+    )
+    expect(result.current.previewReply).toBe('')
+    act(() => result.current.onPreview('u3'))
+    expect(result.current.previewReply).toBe('Thinking')
+    rerender(streamed('Thinking it through'))
+    expect(result.current.previewReply).toBe('Thinking it through')
+    // Closed, the rail's state stops following the stream.
+    act(() => result.current.onPreview(null))
+    const closed = result.current
+    rerender(streamed('Thinking it through, done'))
+    expect(result.current).toBe(closed)
+    unmount()
+  })
+
   it('removes its scroll listener and pending idle read on unmount', () => {
     vi.useFakeTimers()
     const element = document.createElement('div')
@@ -83,6 +117,7 @@ describe('message rail hook', () => {
       useNativeChatMessageRail({
         scrollRef: { current: element },
         slots: slotsOf(CONVERSATION),
+        turnRows: NO_ROWS,
         virtualItems: []
       })
     )
@@ -103,7 +138,8 @@ describe('message rail hook', () => {
     const addListener = vi.spyOn(element, 'addEventListener')
 
     const { rerender } = renderHook(
-      ({ slots }) => useNativeChatMessageRail({ scrollRef, slots, virtualItems: [] }),
+      ({ slots }) =>
+        useNativeChatMessageRail({ scrollRef, slots, turnRows: NO_ROWS, virtualItems: [] }),
       { initialProps: { slots: slotsOf(CONVERSATION) } }
     )
     // Same prompts, new array identity — exactly what a re-render produces.
@@ -119,7 +155,12 @@ describe('message rail hook', () => {
     const scrollRef = { current: element }
 
     const { result } = renderHook(() =>
-      useNativeChatMessageRail({ scrollRef, slots: slotsOf(CONVERSATION), virtualItems: [] })
+      useNativeChatMessageRail({
+        scrollRef,
+        slots: slotsOf(CONVERSATION),
+        turnRows: NO_ROWS,
+        virtualItems: []
+      })
     )
     expect(result.current.items.map((item) => item.id)).toEqual(['u1', 'u2', 'u3'])
     expect(result.current.visible).toBe(true)
@@ -128,13 +169,14 @@ describe('message rail hook', () => {
       useNativeChatMessageRail({
         scrollRef,
         slots: slotsOf([message('u1', 'user'), message('a1', 'assistant')]),
+        turnRows: NO_ROWS,
         virtualItems: []
       })
     )
     expect(single.current.visible).toBe(true)
 
     const { result: empty } = renderHook(() =>
-      useNativeChatMessageRail({ scrollRef, slots: [], virtualItems: [] })
+      useNativeChatMessageRail({ scrollRef, slots: [], turnRows: NO_ROWS, virtualItems: [] })
     )
     expect(empty.current.visible).toBe(false)
   })
@@ -148,7 +190,13 @@ describe('message rail hook', () => {
     }))
     const loaded = [message('u1', 'user'), message('a1', 'assistant')]
     const { result } = renderHook(() =>
-      useNativeChatMessageRail({ scrollRef, slots: slotsOf(loaded), virtualItems: [], outline })
+      useNativeChatMessageRail({
+        scrollRef,
+        slots: slotsOf(loaded),
+        turnRows: NO_ROWS,
+        virtualItems: [],
+        outline
+      })
     )
     expect(result.current.visible).toBe(true)
     expect(result.current.items.map((item) => item.id)).toEqual([
