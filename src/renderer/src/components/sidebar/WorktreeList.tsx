@@ -1,4 +1,5 @@
 import React, { useCallback, useMemo } from 'react'
+import { WorkspaceShortcutHints } from './WorkspaceShortcutHints'
 import { useAppStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
 import {
@@ -266,7 +267,7 @@ const WorktreeList = React.memo(function WorktreeList({
   }
 
   return (
-    <>
+    <WorkspaceShortcutHints workspaceIdentities={selection.renderedWorktreeIdentities}>
       <SidebarWorktreeListDialogs
         dialogs={projectGroupDialogs}
         repos={repos}
@@ -363,7 +364,7 @@ const WorktreeList = React.memo(function WorktreeList({
         scrollOffsetRef={scrollOffsetRef}
         scrollAnchorRef={scrollAnchorRef}
       />
-    </>
+    </WorkspaceShortcutHints>
   )
 })
 
