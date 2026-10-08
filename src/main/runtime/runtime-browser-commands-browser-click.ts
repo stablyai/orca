@@ -20,6 +20,7 @@ import type {
   BrowserTypeResult
 } from '../../shared/runtime-types'
 import type { BrowserScreencastSession } from '../browser/browser-screencast-stream-types'
+import { cancelScreencastSubscriberFrameRetry } from './browser-screencast-subscriber-frame-delivery'
 
 export class RuntimeBrowserCommandsWithBrowserClick extends RuntimeBrowserCommandsWithActiveScreencastsByPageId {
   async browserClick(
@@ -152,6 +153,7 @@ export class RuntimeBrowserCommandsWithBrowserClick extends RuntimeBrowserComman
       return
     }
     active.subscribers.delete(subscriptionId)
+    cancelScreencastSubscriberFrameRetry(subscriber)
     subscriber.resolveDone()
     if (active.viewportOwnerSubscriptionId === subscriptionId) {
       const fallback = Array.from(active.subscribers.entries()).findLast(([, candidate]) =>

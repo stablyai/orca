@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import type { WebSocket } from 'ws'
+import type { RpcBinarySendResult } from './rpc-binary-sender'
 import { E2EEChannel, type E2EEChannelOptions } from './e2ee-channel'
 import { generateKeyPair, deriveSharedKey, encrypt, decrypt, encryptBytes } from './e2ee-crypto'
 import {
@@ -308,7 +309,7 @@ describe('E2EEChannel', () => {
       const ctx = setup()
       const sharedKey = doHandshake(ctx)
       const sentBefore = ctx.ws.sent.length
-      let accepted: boolean | void = undefined
+      let accepted: RpcBinarySendResult = undefined
 
       ctx.channel.onMessage((_plaintext, _encryptedReply, encryptedBinaryReply) => {
         accepted = encryptedBinaryReply(

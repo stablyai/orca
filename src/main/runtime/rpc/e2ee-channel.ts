@@ -1,6 +1,6 @@
 // Why: this channel keeps E2EE framing out of RPC handlers, which consume plaintext across transports.
 import type { WebSocket } from 'ws'
-import { deriveSharedKey, encrypt, decrypt, encryptBytes, decryptBytes } from './e2ee-crypto'
+import { deriveSharedKey, encrypt, decrypt, decryptBytes } from './e2ee-crypto'
 import {
   DesktopMobileE2EEV2Session,
   type DesktopMobileE2EEV2Context
@@ -17,6 +17,11 @@ import { parseRemoteRuntimeJsonText } from '../../../shared/remote-runtime-reque
 import type { MobileE2EEOutboundMemoryBudget } from './mobile-e2ee-outbound-memory-budget'
 import { MobileE2EEDesktopOutboundOwner } from './mobile-e2ee-desktop-outbound-owner'
 import { parseRuntimeClientCapabilities } from './runtime-client-capabilities'
+import type {
+  RpcBinarySendOptions,
+  RpcBinarySendResult,
+  RpcBinarySender
+} from './rpc-binary-sender'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
 import type { EventProps } from '../../../shared/telemetry-events'
 import { track } from '../../telemetry/client'
@@ -61,7 +66,7 @@ export class E2EEChannel {
     | ((
         plaintext: string,
         encryptedReply: (response: string) => void,
-        encryptedBinaryReply: (response: Uint8Array<ArrayBufferLike>) => boolean | void
+        encryptedBinaryReply: RpcBinarySender
       ) => void)
     | null = null
   private binaryMessageHandler: ((plaintext: Uint8Array<ArrayBufferLike>) => void) | null = null
@@ -78,7 +83,12 @@ export class E2EEChannel {
     this.onError = options.onError
     this.transportContext = options.transportContext ?? { transport: 'direct' }
     this.requireV2 = options.requireV2 ?? false
-    this.outbound = new MobileE2EEDesktopOutboundOwner(ws, options.outboundMemoryBudget)
+    this.outbound = new MobileE2EEDesktopOutboundOwner(
+      ws,
+      () => Boolean(this.sharedKey),
+      () => this.closeForOutboundBudget('queue'),
+      options.outboundMemoryBudget
+    )
 
     this.handshakeTimer = setTimeout(() => {
       this.onError(4002, 'E2EE handshake timeout')
@@ -89,7 +99,7 @@ export class E2EEChannel {
     handler: (
       plaintext: string,
       encryptedReply: (response: string) => void,
-      encryptedBinaryReply: (response: Uint8Array<ArrayBufferLike>) => boolean | void
+      encryptedBinaryReply: RpcBinarySender
     ) => void
   ): void {
     this.messageHandler = handler
@@ -154,13 +164,9 @@ export class E2EEChannel {
         this.closeForOutboundBudget('size')
         return
       }
-      this.outbound.enqueueLegacyText(
-        encrypt(response, this.sharedKey),
-        () => Boolean(this.sharedKey),
-        () => this.closeForOutboundBudget('queue')
-      )
+      this.outbound.enqueueLegacyText(encrypt(response, this.sharedKey))
     }
-    const encryptedBinaryReply = (response: Uint8Array<ArrayBufferLike>): boolean => {
+    const encryptedBinaryReply: RpcBinarySender = (response, options) => {
       if (!this.sharedKey || this.ws.readyState !== this.ws.OPEN) {
         return false
       }
@@ -168,11 +174,7 @@ export class E2EEChannel {
         this.closeForOutboundBudget('size')
         return false
       }
-      if (!this.outbound.canSend(response.byteLength + 40)) {
-        return false
-      }
-      this.ws.send(Buffer.from(encryptBytes(response, this.sharedKey)), { binary: true })
-      return true
+      return this.outbound.enqueueLegacyBinary(response, this.sharedKey, options)
     }
     this.messageHandler?.(plaintext, encryptedReply, encryptedBinaryReply)
   }
@@ -291,13 +293,13 @@ export class E2EEChannel {
         this.messageHandler?.(
           plaintext,
           (response) => this.enqueueV2({ kind: 'text', plaintext: response }),
-          (response) => this.enqueueV2({ kind: 'binary', plaintext: response })
+          (response, options) => this.enqueueV2({ kind: 'binary', plaintext: response }, options)
         ),
       onProtocolError: () => this.onError(4001, 'Invalid binary message before authentication')
     })
   }
 
-  private enqueueV2(item: V2OutboundItem): boolean {
+  private enqueueV2(item: V2OutboundItem, options?: RpcBinarySendOptions): RpcBinarySendResult {
     if (!this.v2Session || this.ws.readyState !== this.ws.OPEN) {
       return false
     }
@@ -305,7 +307,7 @@ export class E2EEChannel {
       this.closeForOutboundBudget('size')
       return false
     }
-    return this.outbound.enqueueV2(item, this.v2Session, () => this.closeForOutboundBudget('queue'))
+    return this.outbound.enqueueV2(item, this.v2Session, options)
   }
 
   // Why: this close kills the whole remote session. `size` means a producer emitted something
@@ -324,7 +326,7 @@ export class E2EEChannel {
       this.enqueueV2({ kind: 'text', plaintext: JSON.stringify(message) })
     } else if (this.ws.readyState === this.ws.OPEN && this.sharedKey) {
       const frame = encrypt(JSON.stringify(message), this.sharedKey)
-      this.outbound.sendLegacyFrame(frame, () => this.closeForOutboundBudget('queue'))
+      this.outbound.sendLegacyFrame(frame)
     }
   }
 

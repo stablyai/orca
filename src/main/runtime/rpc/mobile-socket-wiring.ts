@@ -5,6 +5,7 @@ import type { E2EEKeypair } from '../e2ee-keypair'
 import { E2EEChannel, type E2EEAuthenticatedDevice } from './e2ee-channel'
 import { createMobileE2EEOutboundMemoryBudget } from './mobile-e2ee-outbound-memory-budget'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
+import type { RpcBinarySender } from './rpc-binary-sender'
 
 type MobileSocketPayload = string | Uint8Array<ArrayBufferLike>
 
@@ -48,7 +49,7 @@ type MobileSocketWiringOptions = {
     socket: AuthenticatedMobileSocket,
     plaintext: string,
     reply: (response: string) => void,
-    sendBinary: (response: Uint8Array<ArrayBufferLike>) => boolean | void
+    sendBinary: RpcBinarySender
   ) => void
   onBinary: (socket: AuthenticatedMobileSocket, bytes: Uint8Array<ArrayBufferLike>) => void
   onClose: (socket: AuthenticatedMobileSocket | null, hasOtherConnections: boolean) => void

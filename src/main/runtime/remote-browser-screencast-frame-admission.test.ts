@@ -7,6 +7,7 @@ import { REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES } from '../../shared/rem
 import { startBrowserScreencast } from '../browser/browser-screencast-stream'
 import { E2EEChannel } from './rpc/e2ee-channel'
 import { sendRemoteBrowserScreencastFrame } from './remote-browser-screencast-frame-admission'
+import type { RpcBinarySender } from './rpc/rpc-binary-sender'
 
 function createMockWebContents() {
   let attached = false
@@ -58,7 +59,7 @@ function createRuntimeBinarySender() {
   channel.handleRawMessage(
     encrypt(JSON.stringify({ type: 'e2ee_auth', deviceToken: 'valid-token' }), sharedKey)
   )
-  let sendBinary: ((bytes: Uint8Array<ArrayBufferLike>) => boolean | void) | undefined
+  let sendBinary: RpcBinarySender | undefined
   channel.onMessage((_plaintext, _sendText, sendBinaryReply) => {
     sendBinary = sendBinaryReply
   })
@@ -74,7 +75,7 @@ describe('sendRemoteBrowserScreencastFrame', () => {
     const sendBinary = vi.fn(() => true)
     const oversized = new Uint8Array(REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES + 1)
 
-    expect(sendRemoteBrowserScreencastFrame(sendBinary, oversized)).toBe(true)
+    expect(sendRemoteBrowserScreencastFrame(sendBinary, oversized)).toBe('handled')
     expect(sendBinary).not.toHaveBeenCalled()
   })
 
@@ -86,14 +87,20 @@ describe('sendRemoteBrowserScreencastFrame', () => {
         vi.fn(() => false),
         withinLimit
       )
-    ).toBe(false)
+    ).toBe('refused')
     expect(
       sendRemoteBrowserScreencastFrame(
         vi.fn(() => true),
         withinLimit
       )
-    ).toBe(true)
-    expect(sendRemoteBrowserScreencastFrame(vi.fn(), withinLimit)).toBe(true)
+    ).toBe('handled')
+    expect(sendRemoteBrowserScreencastFrame(vi.fn(), withinLimit)).toBe('handled')
+    expect(
+      sendRemoteBrowserScreencastFrame(
+        vi.fn(() => 'backlogged' as const),
+        withinLimit
+      )
+    ).toBe('backlogged')
   })
 
   it('drops an oversized encoded frame without closing or stalling the paired stream', async () => {
@@ -107,7 +114,8 @@ describe('sendRemoteBrowserScreencastFrame', () => {
       maxHeight: 2160,
       everyNthFrame: 1,
       minFrameIntervalMs: 0,
-      onFrame: (bytes) => sendRemoteBrowserScreencastFrame(transport.sendBinary, bytes)
+      onFrame: (bytes) =>
+        sendRemoteBrowserScreencastFrame(transport.sendBinary, bytes) !== 'refused'
     })
 
     try {

@@ -41,17 +41,18 @@ export function isMobileE2EEOutboundItemWithinLimit(
     : isMobileE2EEBinaryPayloadWithinLimit(item.plaintext)
 }
 
-export function createLegacyMobileE2EETextReplyQueue(args: {
+export function createLegacyMobileE2EEReplyQueue(args: {
   ws: WebSocket
   isKeyed: () => boolean
   onOverflow: () => void
   memoryBudget: MobileE2EEOutboundMemoryBudget
   socketMemory: MobileE2EEOutboundSocketMemory
-}): WsOutboundBackpressureQueue<string> {
-  return createWsOutboundBackpressureQueue<string>({
-    send: (frame) => args.ws.send(frame),
-    // Encrypted replies are base64 ASCII strings, so length === byte count.
-    byteLengthOf: (frame) => frame.length,
+}): WsOutboundBackpressureQueue<string | Buffer> {
+  return createWsOutboundBackpressureQueue<string | Buffer>({
+    send: (frame) =>
+      typeof frame === 'string' ? args.ws.send(frame) : args.ws.send(frame, { binary: true }),
+    // Encrypted text replies are base64 ASCII strings, so length === byte count.
+    byteLengthOf: (frame) => (typeof frame === 'string' ? frame.length : frame.byteLength),
     getBufferedAmount: () => args.ws.bufferedAmount,
     isWritable: () => args.isKeyed() && args.ws.readyState === args.ws.OPEN,
     canSend: (bytes) => args.socketMemory.canSend(bytes),

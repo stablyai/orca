@@ -18,19 +18,22 @@ import { BrowserError } from '../browser/browser-error'
 import { randomUUID } from 'node:crypto'
 import { startBrowserScreencast } from '../browser/browser-screencast-stream'
 import { rendererPublicationThrottle } from '../window/renderer-publication-throttle'
-import { sendRemoteBrowserScreencastFrame } from './remote-browser-screencast-frame-admission'
+import {
+  cancelScreencastSubscriberFrameRetry,
+  deliverScreencastSubscriberFrame
+} from './browser-screencast-subscriber-frame-delivery'
 import {
   INITIAL_SCREENCAST_SUBSCRIBER_DELIVERY,
-  recordScreencastSubscriberSend,
   screencastSubscriberIsGhost
 } from './browser-screencast-ghost-subscriber-eviction'
 import type { BrowserScreencastSession } from '../browser/browser-screencast-stream-types'
+import type { RpcBinarySender } from './rpc/rpc-binary-sender'
 
 export class RuntimeBrowserCommandsWithBrowserScreencast extends RuntimeBrowserCommandsWithBrowserClick {
   async browserScreencast(
     params: BrowserScreencastParams,
     stream: {
-      sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => boolean | void
+      sendBinary: RpcBinarySender
       emit?: (event: BrowserScreencastResult) => void
       pairedDeviceId?: string
     }
@@ -80,11 +83,8 @@ export class RuntimeBrowserCommandsWithBrowserScreencast extends RuntimeBrowserC
         onFrame: (bytes) => {
           const ghosts: string[] = []
           for (const [subscriptionId, subscriber] of record.subscribers) {
-            // A slow viewer drops this frame without stalling every other viewer, but the
-            // newest refusal is retained so a gate that opens later can still be filled.
-            const delivered = sendRemoteBrowserScreencastFrame(subscriber.sendBinary, bytes)
-            subscriber.pendingFrame = delivered ? null : bytes
-            subscriber.delivery = recordScreencastSubscriberSend(subscriber.delivery, delivered)
+            // A slow viewer drops this frame without stalling every other viewer.
+            deliverScreencastSubscriberFrame(subscriber, bytes)
             if (screencastSubscriberIsGhost(subscriber.delivery)) {
               ghosts.push(subscriptionId)
             }
@@ -128,6 +128,7 @@ export class RuntimeBrowserCommandsWithBrowserScreencast extends RuntimeBrowserC
             this.activeScreencastsByPageId.delete(browserPageId)
           }
           for (const subscriber of record.subscribers.values()) {
+            cancelScreencastSubscriberFrameRetry(subscriber)
             subscriber.resolveDone()
           }
           record.subscribers.clear()
@@ -142,6 +143,7 @@ export class RuntimeBrowserCommandsWithBrowserScreencast extends RuntimeBrowserC
       viewport,
       budget,
       pendingFrame: null,
+      pendingFrameRetry: null,
       pairedDeviceId: stream.pairedDeviceId,
       delivery: INITIAL_SCREENCAST_SUBSCRIBER_DELIVERY
     })
@@ -177,17 +179,16 @@ export class RuntimeBrowserCommandsWithBrowserScreencast extends RuntimeBrowserC
     }
     return {
       subscriptionId,
+      // Why: the frame the pre-ready gate refused goes out with ready, not a retry tick later.
       flushPendingFrame: () => {
         const subscriber = active.subscribers.get(subscriptionId)
         const bytes = subscriber?.pendingFrame
         if (!subscriber || !bytes) {
           return
         }
-        const delivered = sendRemoteBrowserScreencastFrame(subscriber.sendBinary, bytes)
-        subscriber.pendingFrame = delivered ? null : bytes
         // The replay is this subscriber's first chance to reach its socket, so it is also where
         // an eviction-eligible delivery history starts.
-        subscriber.delivery = recordScreencastSubscriberSend(subscriber.delivery, delivered)
+        deliverScreencastSubscriberFrame(subscriber, bytes)
       },
       session: {
         done: subscriberDone,
