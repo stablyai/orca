@@ -107,7 +107,7 @@ async function renderTerminalStrip(): Promise<Record<string, unknown> | null> {
       onSetTabColor: () => {},
       onTogglePaneExpand: () => {}
     }),
-    'SortableTab'
+    'TabBarItemRow'
   )
 }
 

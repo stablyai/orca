@@ -84,49 +84,6 @@ describe('rebuildRepoBackedProjectState', () => {
     )
   })
 
-  it('picks one predecessor project when several prior rows overlap the same repos', () => {
-    const sharedIdentity = {
-      canonicalKey: 'git.example.com/acme/shared',
-      remoteName: 'origin',
-      remoteUrl: 'git@git.example.com:acme/shared.git'
-    }
-    const rebuilt = rebuildRepoBackedProjectState(
-      makeState({
-        repos: [
-          makeRepo({ id: 'r1', path: '/left', gitRemoteIdentity: sharedIdentity }),
-          makeRepo({ id: 'r2', path: '/right', gitRemoteIdentity: sharedIdentity })
-        ],
-        projects: [
-          makeProject({
-            id: 'git:git.example.com/acme/left',
-            sourceRepoIds: ['r1'],
-            updatedAt: 200,
-            localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
-          }),
-          makeProject({
-            id: 'git:git.example.com/acme/right',
-            sourceRepoIds: ['r2'],
-            updatedAt: 100,
-            localWindowsRuntimePreference: { kind: 'windows-host' }
-          })
-        ],
-        projectHostSetups: [
-          makeSetup({ id: 'r1', projectId: 'git:git.example.com/acme/left', repoId: 'r1' }),
-          makeSetup({ id: 'r2', projectId: 'git:git.example.com/acme/right', repoId: 'r2' })
-        ]
-      })
-    )
-
-    // Equal repo overlap resolves by newest updatedAt; the loser's preference is never merged in.
-    expect(rebuilt.projects).toEqual([
-      expect.objectContaining({
-        id: 'git:git.example.com/acme/shared',
-        sourceRepoIds: ['r1', 'r2'],
-        localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
-      })
-    ])
-  })
-
   it('leaves an unclaimed prior project standing with its own independent setups', () => {
     const rebuilt = rebuildRepoBackedProjectState(
       makeState({

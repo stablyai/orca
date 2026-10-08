@@ -20,6 +20,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdirSync, realpathSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { seedFreshProfile } from './onboarding-profile.mjs'
+import { isPidAlive } from './daemon-processes.mjs'
 
 const NEW_TAB_BUTTON = { role: 'button', name: 'New tab' }
 const NEW_TERMINAL_ITEM = /New Terminal/i
@@ -237,7 +238,7 @@ export async function waitForTerminalReady(page, timeoutMs = 60_000, terminalTab
  *     workspace (which would mask a broken restore).
  */
 export async function ensureTerminal(page, { allowCreate = true, timeoutMs = 60_000 } = {}) {
-  // Why: the agent-CLI feature-wall modal can already be up at first interaction
+  // Why: a feature-tip modal can already be up at first interaction
   // (it renders off an async capability check that races app launch). Use the
   // Escape-free dismissal so we never inject a keypress into a restored terminal.
   await dismissKnownOverlays(page)
@@ -295,14 +296,20 @@ async function createWorkspaceFromSeededRepo(page, timeoutMs) {
 }
 
 const OVERLAY_DISMISS_LABELS = ['Got it', 'Dismiss setup scripts', 'Dismiss tip', 'Dismiss update']
-const CLI_FEATURE_TIP_TITLE = 'Let agents drive Orca with the Orca CLI'
+const FEATURE_TIP_DIALOG_TITLES = [
+  'Let agents drive Orca with the Orca CLI',
+  'Search every agent session'
+]
 
 async function dismissKnownOverlays(page) {
   let acted = false
-  const cliFeatureTip = page.getByRole('dialog', { name: CLI_FEATURE_TIP_TITLE }).first()
-  if (await cliFeatureTip.isVisible().catch(() => false)) {
+  for (const name of FEATURE_TIP_DIALOG_TITLES) {
+    const featureTip = page.getByRole('dialog', { name }).first()
+    if (!(await featureTip.isVisible().catch(() => false))) {
+      continue
+    }
     // Why: a global "Close" role also matches the Windows/Linux title-bar button.
-    const dialogClose = cliFeatureTip.locator('[data-slot="dialog-close"]').first()
+    const dialogClose = featureTip.locator('[data-slot="dialog-close"]').first()
     if (await dialogClose.isVisible().catch(() => false)) {
       const clicked = await dialogClose
         .click({ timeout: 3_000 })
@@ -484,30 +491,84 @@ export async function readTerminalTextBestEffort(page) {
   })
 }
 
-/**
- * Close the app gracefully; force-kill its process tree on timeout. Mirrors
- * tests/e2e/helpers/electron-process-shutdown.ts so the daemon (detached) is
- * left alive exactly as a normal quit would.
- */
-export async function closeApp(app, timeoutMs = 10_000) {
+const appShutdownProcesses = {
+  isPidAlive,
+  killTree(pid) {
+    execFileSync('taskkill', ['/pid', String(pid), '/T', '/F'], { stdio: 'ignore' })
+  }
+}
+
+/** Cleanup may kill the tree; survival proofs must disable that fallback. */
+export async function closeApp(
+  app,
+  timeoutMs = 10_000,
+  { allowForceKill = true, processes = appShutdownProcesses } = {}
+) {
   // A partially-created session (launch failed before assignment) passes undefined.
   if (!app) {
     return
   }
-  const mainPid = await resolveElectronMainPid(app)
+  const mainPid = await resolveElectronMainPid(app, { allowLauncherFallback: allowForceKill })
+  const launcher = app.process()
+  let closeStatus = 'not-started'
   let closeTimeout
   try {
+    if (!allowForceKill && mainPid === null) {
+      throw new Error('Cannot verify graceful close without the authoritative Electron PID')
+    }
+    closeStatus = 'pending'
+    const closePromise = app.close().then(
+      () => {
+        closeStatus = 'resolved'
+      },
+      (error) => {
+        closeStatus = 'rejected'
+        throw error
+      }
+    )
     await Promise.race([
-      app.close(),
+      closePromise,
       new Promise((_, reject) => {
         closeTimeout = setTimeout(() => reject(new Error('close timeout')), timeoutMs)
         closeTimeout.unref?.()
       })
     ])
-  } catch {
+    if (!allowForceKill && processes.isPidAlive(mainPid)) {
+      throw new Error('Playwright close resolved while the authoritative Electron PID remains live')
+    }
+  } catch (error) {
+    if (!allowForceKill) {
+      const evidence = {
+        closeStatus,
+        error: error instanceof Error ? error.message : String(error),
+        main: readClosePidEvidence(mainPid, processes),
+        launcher: {
+          ...readClosePidEvidence(launcher?.pid, processes),
+          exitCode: launcher?.exitCode ?? null,
+          signalCode: launcher?.signalCode ?? null,
+          stdio:
+            launcher?.stdio.map((pipe, fd) => ({
+              fd,
+              destroyed: pipe?.destroyed ?? null,
+              readableEnded: pipe?.readableEnded ?? null
+            })) ?? []
+        }
+      }
+      // A surviving daemon can keep the launcher's pipes open after both app processes exit.
+      if (
+        closeStatus === 'pending' &&
+        evidence.main.state === 'exited' &&
+        evidence.launcher.state === 'exited'
+      ) {
+        console.log(`[win-update-e2e] close-verified-by-pids: ${JSON.stringify(evidence)}`)
+        return
+      }
+      console.error(`[win-update-e2e] strict-close-failed: ${JSON.stringify(evidence)}`)
+      throw error
+    }
     if (mainPid) {
       try {
-        execFileSync('taskkill', ['/pid', String(mainPid), '/T', '/F'], { stdio: 'ignore' })
+        processes.killTree(mainPid)
       } catch {
         /* already gone */
       }
@@ -516,5 +577,20 @@ export async function closeApp(app, timeoutMs = 10_000) {
     // Why: successful closes must not retain a timeout closure or keep a shared
     // harness process alive until the failure deadline expires.
     clearTimeout(closeTimeout)
+  }
+}
+
+function readClosePidEvidence(pid, processes) {
+  if (!Number.isInteger(pid) || pid <= 0) {
+    return { pid: pid ?? null, state: 'unverifiable', error: 'PID unavailable' }
+  }
+  try {
+    return { pid, state: processes.isPidAlive(pid) ? 'live' : 'exited' }
+  } catch (error) {
+    return {
+      pid,
+      state: 'unverifiable',
+      error: error instanceof Error ? error.message : String(error)
+    }
   }
 }

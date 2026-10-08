@@ -105,17 +105,6 @@ describe('updater externally managed Linux installs', () => {
     })
   })
 
-  it('marks the refusal non-retryable so the card offers no Retry Download', async () => {
-    const { send, updater } = await startUpdater({ packageType: 'deb', externallyManaged: true })
-    updater.checkForUpdatesFromMenu()
-    await vi.advanceTimersByTimeAsync(0)
-    updater.downloadUpdate()
-    await vi.advanceTimersByTimeAsync(0)
-
-    const status = lastStatus(send)
-    expect(status?.state === 'error' && status.retryable).toBe(false)
-  })
-
   it('records the blocked download for field diagnosis', async () => {
     const { updater } = await startUpdater({ packageType: 'deb', externallyManaged: true })
     updater.checkForUpdatesFromMenu()

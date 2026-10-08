@@ -150,11 +150,12 @@ describe('sandboxed SFTP subsystem diagnosis', () => {
       writeFile: () => Promise.reject(sftpNoSuchFileError())
     } as unknown as SshConnection
 
+    // Windows hosts have no exec-stdin fallback; POSIX hosts stream instead (exec-fallback tests).
     await expect(
       writeRelayFile(
         conn,
-        getRemoteHostPlatform('linux-x64'),
-        '/home/user/.orca-remote/relay-1/.version',
+        getRemoteHostPlatform('win32-x64'),
+        'C:/Users/user/.orca-remote/relay-1/.version',
         'v1'
       )
     ).rejects.toThrow(/SFTP subsystem sees a different filesystem/)

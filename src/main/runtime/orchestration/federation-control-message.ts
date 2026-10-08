@@ -58,11 +58,20 @@ export function importFederatedControlMessage(
     payload: string
   }
 ): { imported: boolean; type: MessageType } {
+  const attachment = db.getRemoteDispatchAttachment(params.dispatchId)
+  if (!attachment) {
+    throw new OrchestrationError(
+      'dispatch_not_found',
+      `Remote Dispatch ${params.dispatchId} was not found.`
+    )
+  }
+  db.requireRun(attachment.home_run_id)
   const message = parseFederatedControlMessage(params.payload)
   const recipient = `dispatch:${params.dispatchId}`
   const existing = db.getMessageById(params.messageId)
   if (existing) {
     if (
+      existing.run_id !== attachment.home_run_id ||
       existing.to_handle !== recipient ||
       existing.from_handle !== message.from ||
       existing.subject !== message.subject ||
@@ -81,6 +90,7 @@ export function importFederatedControlMessage(
   }
   db.insertMessage({
     id: params.messageId,
+    runId: attachment.home_run_id,
     from: message.from,
     to: recipient,
     subject: message.subject,

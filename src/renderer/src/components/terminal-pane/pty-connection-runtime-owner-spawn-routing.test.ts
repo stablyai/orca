@@ -131,14 +131,14 @@ function createDeps(overrides: Record<string, unknown> = {}) {
 }
 
 describe('connectPanePty', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetModules()
     vi.clearAllMocks()
     transportFactoryQueue = []
     createdTransportOptions = []
     storeSubscribers = []
     mockStoreState = createInitialStoreState(() => mockStoreState)
-    installTerminalTestGlobals()
+    await installTerminalTestGlobals()
   })
 
   afterEach(async () => {
@@ -438,8 +438,11 @@ describe('connectPanePty', () => {
     bellHandler()
 
     expect(deps.markWorktreeUnread).toHaveBeenCalledTimes(1)
-    expect(deps.markTerminalTabUnread).toHaveBeenCalledWith('tab-1')
-    expect(deps.markTerminalPaneUnread).toHaveBeenCalledWith(makePaneKey('tab-1', LEAF_1))
+    expect(deps.markTerminalTabUnread).toHaveBeenCalledWith('tab-1', 'terminal-bell')
+    expect(deps.markTerminalPaneUnread).toHaveBeenCalledWith(
+      makePaneKey('tab-1', LEAF_1),
+      'terminal-bell'
+    )
     expect(deps.dispatchNotification).not.toHaveBeenCalled()
     vi.advanceTimersByTime(250)
     expect(deps.dispatchNotification).toHaveBeenCalledWith(
@@ -473,7 +476,7 @@ describe('connectPanePty', () => {
     bellHandler()
 
     expect(deps.markWorktreeUnread).toHaveBeenCalledTimes(1)
-    expect(deps.markTerminalTabUnread).toHaveBeenCalledWith('tab-1')
+    expect(deps.markTerminalTabUnread).toHaveBeenCalledWith('tab-1', 'terminal-bell')
     expect(deps.markTerminalPaneUnread).not.toHaveBeenCalled()
   })
 

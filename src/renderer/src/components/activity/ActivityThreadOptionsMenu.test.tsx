@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
-import { ActivityThreadOptionsMenu } from './ActivityPrototypePage'
+import { ActivityThreadOptionsMenu } from './activity-thread-controls'
 import type { ActivityGroupBy } from './activity-thread-types'
 import { makeRepo } from './ActivityPrototypePage-test-fixtures'
 
@@ -48,7 +48,13 @@ describe('ActivityThreadOptionsMenu', () => {
   let root: Root
 
   beforeEach(() => {
-    useAppStore.setState({ agentsVisibleHostIds: null, agentsFilterRepoIds: [] })
+    useAppStore.setState({
+      agentsVisibleHostIds: null,
+      agentsFilterRepoIds: [],
+      agentsHideWorkspacesFromOtherDevices: false,
+      agentsHideAutomationGeneratedWorkspaces: false,
+      agentsHideCliCreatedWorkspaces: false
+    })
     container = document.createElement('div')
     document.body.appendChild(container)
     root = createRoot(container)
@@ -68,10 +74,80 @@ describe('ActivityThreadOptionsMenu', () => {
     })
 
     const trigger = container.querySelector<HTMLButtonElement>(
-      'button[aria-label="Thread list options, filters active"]'
+      'button[aria-label="Thread list options (1 filter active)"]'
     )
     expect(trigger).not.toBeNull()
-    expect(trigger?.querySelector('[data-scope-filter-dot]')).not.toBeNull()
+    expect(trigger?.querySelector('[data-options-filter-count]')?.textContent).toBe('1')
+  })
+
+  it('counts every active activity filter in the badge', async () => {
+    useAppStore.setState({
+      agentsVisibleHostIds: ['local'],
+      agentsFilterRepoIds: ['repo-1'],
+      agentsHideWorkspacesFromOtherDevices: true,
+      agentsHideAutomationGeneratedWorkspaces: true,
+      agentsHideCliCreatedWorkspaces: true
+    })
+
+    await act(async () => {
+      root.render(
+        <TooltipProvider>
+          <ActivityThreadOptionsMenu
+            compactMode={false}
+            hasUnreadThreads={false}
+            onCompactModeChange={vi.fn()}
+            unreadOnly
+            onUnreadOnlyChange={vi.fn()}
+          />
+        </TooltipProvider>
+      )
+    })
+
+    const trigger = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Thread list options (6 filters active)"]'
+    )
+    expect(trigger?.querySelector('[data-options-filter-count]')?.textContent).toBe('6')
+  })
+
+  it('persists the workspace-origin toggles separately from the workspace-nav filters', async () => {
+    const originalState = useAppStore.getState()
+    const persist = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('api', { ui: { set: persist } })
+    useAppStore.setState({
+      runtimeEnvironmentCatalogHydrated: true,
+      runtimeEnvironments: [],
+      agentsHideCliCreatedWorkspaces: false,
+      hideCliCreatedWorkspaces: false
+    })
+    try {
+      await act(async () => root.render(<Harness />))
+      const trigger = container.querySelector<HTMLButtonElement>(
+        'button[aria-label="Thread list options"]'
+      )
+      await act(async () => {
+        trigger?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }))
+      })
+      const labels = Array.from(
+        document.querySelectorAll<HTMLElement>('[role="menuitemcheckbox"]')
+      ).map((item) => item.textContent)
+      expect(labels).toContain('Hide automation-created')
+      // Without paired runtimes there is no other-client provenance to filter on.
+      expect(labels).not.toContain('Hide other-client agents')
+
+      const cliItem = Array.from(
+        document.querySelectorAll<HTMLElement>('[role="menuitemcheckbox"]')
+      ).find((item) => item.textContent === 'Hide CLI-created')
+      await act(async () => {
+        cliItem?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }))
+      })
+
+      expect(useAppStore.getState().agentsHideCliCreatedWorkspaces).toBe(true)
+      expect(useAppStore.getState().hideCliCreatedWorkspaces).toBe(false)
+      expect(persist).toHaveBeenCalledWith({ agentsHideCliCreatedWorkspaces: true })
+    } finally {
+      act(() => useAppStore.setState(originalState))
+      vi.unstubAllGlobals()
+    }
   })
 
   it('opens without recursively updating composed Radix trigger refs', async () => {
@@ -108,7 +184,7 @@ describe('ActivityThreadOptionsMenu', () => {
       try {
         await act(async () => root.render(<Harness />))
         const trigger = container.querySelector<HTMLButtonElement>(
-          'button[aria-label="Thread list options, filters active"]'
+          'button[aria-label="Thread list options (1 filter active)"]'
         )
         expect(trigger).not.toBeNull()
         await act(async () => {
@@ -128,7 +204,7 @@ describe('ActivityThreadOptionsMenu', () => {
         expect(useAppStore.getState().filterRepoIds).toEqual(['workspace-nav-filter'])
         expect(persist).toHaveBeenCalledWith({ agentsVisibleHostIds: null })
         expect(persist).toHaveBeenCalledWith({ agentsFilterRepoIds: [] })
-        expect(container.querySelector('[data-scope-filter-dot]')).toBeNull()
+        expect(container.querySelector('[data-options-filter-count]')).toBeNull()
       } finally {
         act(() => useAppStore.setState(originalState))
         vi.unstubAllGlobals()
@@ -167,9 +243,18 @@ describe('ActivityThreadOptionsMenu', () => {
     expect(document.body.textContent).toContain('Agent')
   })
 
-  it('explains compact mode on hover', async () => {
+  it('updates compact mode without closing the menu', async () => {
+    const onCompactModeChange = vi.fn()
     await act(async () => {
-      root.render(<Harness />)
+      root.render(
+        <TooltipProvider>
+          <ActivityThreadOptionsMenu
+            compactMode={false}
+            hasUnreadThreads={false}
+            onCompactModeChange={onCompactModeChange}
+          />
+        </TooltipProvider>
+      )
     })
 
     const trigger = container.querySelector<HTMLButtonElement>(
@@ -179,19 +264,20 @@ describe('ActivityThreadOptionsMenu', () => {
       trigger?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }))
     })
 
-    const compactMode = document.querySelector<HTMLElement>('[role="menuitemcheckbox"]')
+    const compactMode = Array.from(
+      document.querySelectorAll<HTMLElement>('[role="menuitemcheckbox"]')
+    ).find((item) => item.textContent === 'Compact mode')
     await act(async () => {
-      compactMode?.dispatchEvent(new Event('pointermove', { bubbles: true }))
+      compactMode?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }))
     })
 
-    expect(document.body.textContent).toContain(
-      'Shows shorter thread rows with one-line titles and two-line status messages.'
-    )
+    expect(onCompactModeChange).toHaveBeenCalledWith(true)
+    expect(document.body.textContent).toContain('Compact mode')
   })
 
   it('puts persisted search visibility and unread actions in the menu', async () => {
     const onShowSearchChange = vi.fn()
-    const onToggleUnread = vi.fn()
+    const onUnreadOnlyChange = vi.fn()
     await act(async () => {
       root.render(
         <TooltipProvider>
@@ -203,7 +289,7 @@ describe('ActivityThreadOptionsMenu', () => {
             showSearch
             onShowSearchChange={onShowSearchChange}
             unreadOnly={false}
-            onToggleUnread={onToggleUnread}
+            onUnreadOnlyChange={onUnreadOnlyChange}
           />
         </TooltipProvider>
       )
@@ -230,8 +316,8 @@ describe('ActivityThreadOptionsMenu', () => {
     expect(onShowSearchChange).toHaveBeenCalledWith(false)
   })
 
-  it('explains show unread threads only on hover without a second unread state marker', async () => {
-    const onToggleUnread = vi.fn()
+  it('updates the unread filter without closing the menu', async () => {
+    const onUnreadOnlyChange = vi.fn()
     await act(async () => {
       root.render(
         <TooltipProvider>
@@ -241,7 +327,7 @@ describe('ActivityThreadOptionsMenu', () => {
             onCompactModeChange={vi.fn()}
             onMarkAllThreadsRead={vi.fn()}
             unreadOnly={false}
-            onToggleUnread={onToggleUnread}
+            onUnreadOnlyChange={onUnreadOnlyChange}
           />
         </TooltipProvider>
       )
@@ -254,15 +340,15 @@ describe('ActivityThreadOptionsMenu', () => {
       trigger?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }))
     })
 
-    const unreadItem = document.querySelector<HTMLElement>('[role="menuitemcheckbox"]')
+    const unreadItem = Array.from(
+      document.querySelectorAll<HTMLElement>('[role="menuitemcheckbox"]')
+    ).find((item) => item.textContent === 'Show unread only')
     await act(async () => {
-      unreadItem?.dispatchEvent(new Event('pointermove', { bubbles: true }))
+      unreadItem?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }))
     })
 
-    expect(document.body.textContent).toContain(
-      'Filters the activity list to show only threads with unread updates.'
-    )
-    expect(document.querySelector('[data-unread-dot]')).toBeNull()
+    expect(onUnreadOnlyChange).toHaveBeenCalledWith(true)
+    expect(document.body.textContent).toContain('Show unread only')
   })
 
   it('renders show child agents checkbox when onShowChildAgentsChange is provided', async () => {
@@ -281,6 +367,14 @@ describe('ActivityThreadOptionsMenu', () => {
       trigger?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }))
     })
 
+    const childAgentsItem = Array.from(
+      document.querySelectorAll<HTMLElement>('[role="menuitemcheckbox"]')
+    ).find((item) => item.textContent === 'Show child agents')
+    await act(async () => {
+      childAgentsItem?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }))
+    })
+
+    expect(onShowChildAgentsChange).toHaveBeenCalledWith(true)
     expect(document.body.textContent).toContain('Show child agents')
   })
 })

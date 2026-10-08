@@ -27,6 +27,11 @@ import {
   runEffects
 } from './floating-terminal-panel-render-probe'
 
+vi.mock('zustand/react/shallow', () => ({
+  // Why: zustand resolves the real react (unmocked in node_modules); the memo wrapper is inert here.
+  useShallow: (selector: unknown) => selector
+}))
+
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
   const { createReactHookOverrides } = await import('./floating-terminal-panel-test-module-mocks')
@@ -202,10 +207,9 @@ describe('FloatingTerminalPanel close behavior', () => {
     expect(mocks.createTab).toHaveBeenCalledWith(
       FLOATING_TERMINAL_WORKTREE_ID,
       'floating-group',
-      undefined,
-      { activate: false }
+      undefined
     )
-    expect(mocks.activateTab).toHaveBeenCalledWith('created-tab')
+    expect(mocks.activateTab).not.toHaveBeenCalled()
   })
 
   it('routes titlebar Cmd+Shift+O to the floating markdown picker', async () => {
@@ -299,10 +303,9 @@ describe('FloatingTerminalPanel close behavior', () => {
     expect(mocks.createTab).toHaveBeenCalledWith(
       FLOATING_TERMINAL_WORKTREE_ID,
       'floating-group',
-      undefined,
-      { activate: false }
+      undefined
     )
-    expect(mocks.activateTab).toHaveBeenCalledWith('created-tab')
+    expect(mocks.activateTab).not.toHaveBeenCalled()
   })
 
   it('resets focused floating terminal double-tap detection on window blur', async () => {
@@ -549,6 +552,8 @@ describe('FloatingTerminalPanel close behavior', () => {
     }
     state.activeGroupIdByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: groupId }
     state.activeTabIdByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: terminalTab.id }
+    // Real state keeps tabs and layout together; the surface mounts only with both.
+    state.layoutByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: { type: 'leaf', groupId } }
     state.tabBarOrderByWorktree = {
       [FLOATING_TERMINAL_WORKTREE_ID]: [
         terminalUnifiedTab.id,

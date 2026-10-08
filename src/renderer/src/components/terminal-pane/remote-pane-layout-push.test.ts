@@ -65,8 +65,30 @@ describe('createRemotePaneLayoutPusher', () => {
       tabId: 'tab-1',
       root: layout.root,
       expandedLeafId: layout.expandedLeafId,
+      chatLeafId: null,
       titlesByLeafId: layout.titlesByLeafId
     })
+  })
+
+  it('adds only the intent field to a gesture push', () => {
+    const layout = makeLayout()
+    createRemotePaneLayoutPusher().push({ worktreeId: 'wt-1', tabId: 'tab-1', layout })
+    createRemotePaneLayoutPusher().push({
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      layout,
+      intent: 'gesture'
+    })
+    const [[unmarked], [marked]] = updateWebRuntimePaneLayout.mock.calls
+    expect(unmarked).not.toHaveProperty('intent')
+    expect(marked).toEqual({ ...unmarked, intent: 'gesture' })
+  })
+
+  it('dedupes a gesture push of an unchanged layout like any other push', () => {
+    const pusher = createRemotePaneLayoutPusher()
+    pusher.push({ worktreeId: 'wt-1', tabId: 'tab-1', layout: makeLayout() })
+    pusher.push({ worktreeId: 'wt-1', tabId: 'tab-1', layout: makeLayout(), intent: 'gesture' })
+    expect(updateWebRuntimePaneLayout).toHaveBeenCalledTimes(1)
   })
 
   it('omits titlesByLeafId when the layout carries no titles', () => {
@@ -77,6 +99,18 @@ describe('createRemotePaneLayoutPusher', () => {
       layout: makeLayout({ titlesByLeafId: undefined })
     })
     expect(updateWebRuntimePaneLayout.mock.calls[0][0]).not.toHaveProperty('titlesByLeafId')
+  })
+
+  it('publishes owner changes and an explicit clear without a geometry change', () => {
+    const pusher = createRemotePaneLayoutPusher()
+    for (const chatLeafId of ['leaf-a', 'leaf-b', undefined]) {
+      pusher.push({ worktreeId: 'wt-1', tabId: 'tab-1', layout: makeLayout({ chatLeafId }) })
+    }
+    expect(updateWebRuntimePaneLayout.mock.calls.map(([args]) => args.chatLeafId)).toEqual([
+      'leaf-a',
+      'leaf-b',
+      null
+    ])
   })
 
   it('pushes again for every host-visible change', () => {

@@ -20,7 +20,7 @@ const CONTAINERS: [string, () => z.ZodType, unknown][] = [
   ['salvagingArray', () => salvagingArray(z.string()), ['v']]
 ]
 
-describe('salvaging containers used bare in an object shape', () => {
+describe('salvaging containers used bare in an object schema', () => {
   it.each(CONTAINERS)('%s is neither optional-in nor optional-out', (_name, build) => {
     const { optin, optout } = optionalityOf(build())
     expect(optin).toBeUndefined()
@@ -28,12 +28,12 @@ describe('salvaging containers used bare in an object shape', () => {
   })
 
   it.each(CONTAINERS)('%s rejects an absent key and an explicit undefined', (_name, build, ok) => {
-    const shape = z.object({ a: build() })
+    const schema = z.object({ a: build() })
 
-    expect(shape.safeParse({}).success).toBe(false)
-    expect(shape.safeParse({ a: undefined }).success).toBe(false)
+    expect(schema.safeParse({}).success).toBe(false)
+    expect(schema.safeParse({ a: undefined }).success).toBe(false)
     // Why: a positive control, so the two rejections above cannot pass by rejecting everything.
-    expect(shape.safeParse({ a: ok })).toMatchObject({ success: true })
+    expect(schema.safeParse({ a: ok })).toMatchObject({ success: true })
   })
 
   it.each(CONTAINERS)(

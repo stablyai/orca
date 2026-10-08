@@ -8,6 +8,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import { hasWorktreeRemovalRepoOwnerOnOtherHost } from '../../../worktree-removal-repo-owner'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { advertisedUrlWatcher } from '../../../ports/advertised-url-watcher'
+import { agentHookServer } from '../../../agent-hooks/server'
 import { localhostWorktreeLabelProxy } from '../../../localhost-worktree-label-proxy'
 import { deleteWorktreeHistoryDir } from '../../../terminal-history-deletion'
 import { pruneWorktreePRRefreshAliases } from '../../../github/pr-refresh-coordinator'
@@ -40,11 +41,17 @@ export async function stopPtysForDestructiveWorktreeRemoval(
     ...(allowUnverifiedStop ? { allowUnverifiedStop: true } : {}),
     ...(connectionId ? { includeLocalRegistry: false } : {})
   })
+  // Structured sessions are counted here too: closing a user's chat is now an ordinary outcome
+  // of this verb, and a removal that closed one but no PTY would otherwise log nothing at all.
+  const structuredStopped = teardownResult.structuredStopped ?? 0
   const total =
-    teardownResult.runtimeStopped + teardownResult.providerStopped + teardownResult.registryStopped
+    teardownResult.runtimeStopped +
+    teardownResult.providerStopped +
+    teardownResult.registryStopped +
+    structuredStopped
   if (total > 0) {
     console.info(
-      `[worktree-teardown] ${worktreeId} killed runtime=${teardownResult.runtimeStopped} provider=${teardownResult.providerStopped} registry=${teardownResult.registryStopped}`
+      `[worktree-teardown] ${worktreeId} killed runtime=${teardownResult.runtimeStopped} provider=${teardownResult.providerStopped} registry=${teardownResult.registryStopped} structured=${structuredStopped}`
     )
   }
 }
@@ -82,6 +89,8 @@ export function removeWorktreeMetadataAndTransientState(
   } else {
     store.removeWorktreeMeta(worktreeId)
   }
+  // Why outside the same-id gate: retirement is per host and per pane, so a surviving owner keeps its own.
+  agentHookServer.dropStatusEntriesForRemovedWorktree(worktreeId, hostId ?? persistedHostId)
   if (!preservesSameIdOwner) {
     advertisedUrlWatcher.forgetWorktree(worktreeId)
     // Why: drop this worktree's localhost label routes so they don't accumulate in the proxy's route maps all session.

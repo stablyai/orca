@@ -3,6 +3,7 @@ import {
   normalizeSubagentState
 } from '../../../../shared/native-chat-subagent-summary'
 import type { NativeChatBlock, NativeChatSubagentState } from '../../../../shared/native-chat-types'
+import { boundSubagentEntryId } from '../../../native-chat/subagent-entry-id-bounds'
 import type { RpcContext } from '../core'
 import { sanitizeNativeChatRpcImageBlock } from './native-chat-rpc-image-block'
 
@@ -63,7 +64,9 @@ export function sanitizeNativeChatRpcBlock(
       groupId: clip(block.groupId, MAX_SUBAGENT_FIELD_CHARS),
       agents: block.agents.slice(0, MOBILE_SUBAGENT_CAP).map((agent) => ({
         ...agent,
-        id: clip(agent.id, MAX_SUBAGENT_FIELD_CHARS),
+        // The id is the roster KEY: a prefix clip would merge two children, so
+        // it takes the shared digest bound the other wires use.
+        id: boundSubagentEntryId(agent.id),
         label: clip(agent.label, MAX_SUBAGENT_FIELD_CHARS),
         state: clipSubagentState(agent.state)
       }))

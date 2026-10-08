@@ -42,4 +42,36 @@ describe('worktree card active styling', () => {
     expect(secondary).toContain('var(--sidebar-ring) 15%')
     expect(darkSecondary).toContain('var(--sidebar-ring) 18%')
   })
+
+  it('styles multi-selected cards through one rule that skips the active card', () => {
+    const selected = getCssRuleBody(
+      '[data-worktree-card-surface][data-worktree-card-selected]:not([data-worktree-card-active])'
+    )
+
+    expect(selected).toContain('var(--worktree-sidebar-ring) 35%')
+    expect(selected).toContain('var(--worktree-sidebar-accent) 70%')
+    expect(selected).toContain('var(--worktree-sidebar-ring) 30%')
+    // Why after hover: equal-specificity dark hover must not repaint a selected card.
+    expect(mainCss.indexOf('[data-worktree-card-selected]')).toBeGreaterThan(
+      mainCss.indexOf('.dark .worktree-sidebar-card-hover:hover')
+    )
+  })
+
+  it('dims sleeping cards through theme tokens so the cue survives any surface', () => {
+    const sleeping = getCssRuleBody('[data-worktree-sleeping-dim]')
+
+    // Why oklab: a fixed perceptual step. An sRGB alpha over the painted backdrop
+    // shrank as the surface lightened, so slept and awake read alike (#19624).
+    expect(sleeping).toContain('in oklab')
+    // Why token-anchored: the mix is defined by the theme's own foreground and
+    // surface, so a custom background or tint scales it instead of cancelling it.
+    expect(sleeping).toContain('var(--worktree-sidebar-foreground)')
+    expect(sleeping).toContain('var(--worktree-sidebar)')
+    // Why these two: title text and the muted lane (Moon, host badge) carry the cue.
+    expect(sleeping).toContain('--foreground:')
+    expect(sleeping).toContain('--muted-foreground:')
+    // Why not opacity/filter: both dim toward the backdrop or strip themed hues.
+    expect(sleeping).not.toContain('opacity:')
+    expect(sleeping).not.toContain('filter:')
+  })
 })

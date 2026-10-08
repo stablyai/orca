@@ -44,6 +44,7 @@ it(
       ]
     })
     const runtime = {
+      configureNotificationDismissalStore: () => {},
       getRuntimeId: () => 'close-intent-runtime-test',
       getStartedAt: () => 1,
       cleanupSubscriptionsForConnection: () => {},

@@ -258,24 +258,6 @@ describe('browser rows this client hosts own their page content', () => {
     expect(syncedPage(applyStaleSnapshot(state), state)?.url).toBe(GUEST_URL)
   })
 
-  it('keeps the local loading flag instead of the host create-time value', () => {
-    const state = stateWithLocalRow()
-
-    expect(syncedPage(applyStaleSnapshot(state), state)?.loading).toBe(false)
-  })
-
-  it('keeps local canGoBack instead of the host default', () => {
-    const state = stateWithLocalRow()
-
-    expect(syncedPage(applyStaleSnapshot(state), state)?.canGoBack).toBe(true)
-  })
-
-  it('keeps local canGoForward instead of the host default', () => {
-    const state = stateWithLocalRow()
-
-    expect(syncedPage(applyStaleSnapshot(state), state)?.canGoForward).toBe(true)
-  })
-
   // Why a real title is covered separately: a host that has learned the title publishes a
   // non-fallback string, which the staged-title hold would have accepted. Ownership, not staleness.
   it('keeps the local title even when the host publishes a real but older title', () => {

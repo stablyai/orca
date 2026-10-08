@@ -5,7 +5,7 @@ import { buildObservedSetupCommand } from './orchestration/setup-completion-sign
 import { buildSetupRunnerCommand } from '../../shared/setup-runner-command'
 import type { RuntimeStore } from './runtime-store-contract'
 
-type TerminalResult = { handle: string; tabId?: string | null }
+type TerminalResult = { handle: string }
 export type WorktreeProvisionTerminalOptions = {
   title?: string
   command?: string
@@ -25,7 +25,10 @@ export type WorktreeTerminalProvisioningHost = {
     handle: string,
     options: WorktreeProvisionTerminalOptions
   ) => Promise<TerminalResult>
-  setTabColor: (worktreeId: string, tabId: string, color: string) => Promise<void>
+  // Why: keyed by the terminal; the host resolves its tab, so no create path can forget to pass it.
+  // The title is the tab's own, as the window's setTabCustomTitle sets it, never the pane's title.
+  setTabTitle: (handle: string, title: string) => Promise<void>
+  setTabColor: (handle: string, color: string) => Promise<void>
   getSettings: () => ReturnType<RuntimeStore['getSettings']>
   getPtyId: (handle: string) => string | undefined
   recordSetupCompletionToken: (ptyId: string, token: string) => void
@@ -51,13 +54,20 @@ export async function createWorktreeDefaultTabTerminals(
   selector: string,
   worktreeId: string,
   defaultTabs: CreateWorktreeResult['defaultTabs'] | undefined,
-  surfacing: { surfaceOwner?: false } = {}
+  surfacing: { surfaceOwner?: false } = {},
+  startupHandle?: string
 ): Promise<string[]> {
   if (!defaultTabs || defaultTabs.tabs.length === 0 || !host.canSpawn()) {
     return []
   }
+  const [first, ...rest] = defaultTabs.tabs
+  // The agent the create started is the workspace's first tab, as the window lays it out: it takes
+  // the first template's title and color, and that template's command does not run beside it.
+  if (startupHandle && first) {
+    await dressAsDefaultTab(host, worktreeId, startupHandle, first)
+  }
   const handles: string[] = []
-  for (const template of defaultTabs.tabs) {
+  for (const template of startupHandle ? rest : defaultTabs.tabs) {
     try {
       const command = template.command?.trim()
       const terminal = await host.createTerminal(selector, {
@@ -66,14 +76,36 @@ export async function createWorktreeDefaultTabTerminals(
         ...surfacing
       })
       handles.push(terminal.handle)
-      if (template.color && terminal.tabId) {
-        await host.setTabColor(worktreeId, terminal.tabId, template.color)
-      }
+      await dressAsDefaultTab(host, worktreeId, terminal.handle, template)
     } catch (error) {
       console.warn(`[worktree-create] Failed to create default tab for ${worktreeId}:`, error)
     }
   }
   return handles
+}
+
+// Why: a tab's look is bookkeeping; a failure is logged and never costs the tab, the other field,
+// or the create.
+async function dressAsDefaultTab(
+  host: WorktreeTerminalProvisioningHost,
+  worktreeId: string,
+  handle: string,
+  template: NonNullable<CreateWorktreeResult['defaultTabs']>['tabs'][number]
+): Promise<void> {
+  if (template.title) {
+    try {
+      await host.setTabTitle(handle, template.title)
+    } catch (error) {
+      console.warn(`[worktree-create] Failed to title a default tab for ${worktreeId}:`, error)
+    }
+  }
+  if (template.color) {
+    try {
+      await host.setTabColor(handle, template.color)
+    } catch (error) {
+      console.warn(`[worktree-create] Failed to color a default tab for ${worktreeId}:`, error)
+    }
+  }
 }
 
 export async function provisionWorktreeTerminals(
@@ -92,7 +124,8 @@ export async function provisionWorktreeTerminals(
       args.worktreeSelector,
       args.worktreeId,
       args.defaultTabs,
-      surfacing
+      surfacing,
+      args.hasStartupTerminal ? (args.primaryTerminalHandle ?? undefined) : undefined
     )
     let primaryHandle = args.primaryTerminalHandle ?? defaultHandles[0] ?? null
     const setupLaunchMode =

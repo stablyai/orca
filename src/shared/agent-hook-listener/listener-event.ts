@@ -1,13 +1,17 @@
+import type { AgentProcessPresence } from '../agent-process-presence'
 import type { ParsedAgentStatusPayload } from '../agent-status-types'
 import type { AgentHookSource } from '../agent-hook-relay'
 import type { AgentProviderSessionMetadata } from '../agent-session-resume'
 
 export type AgentHookEventPayload = {
   paneKey: string
+  agentPresence?: AgentProcessPresence
   /** Authenticated hook route that produced this event. */
   source?: AgentHookSource
   /** Ephemeral Orca launch identity stamped into the PTY env for this process. */
   launchToken?: string
+  /** Host-minted live turn revision for guarded interrupt commands; never persisted. */
+  hostTurnRevision?: string
   tabId?: string
   worktreeId?: string
   /** SSH connection the event arrived on, or null for local. Only `ingestRemote` can stamp it — the loopback HTTP path has no mux identity — and receivers key off it to drop
@@ -21,8 +25,10 @@ export type AgentHookEventPayload = {
   promptInteractionKey?: string
   /** Raw agent hook event name, used by main-process transition guards. */
   hookEventName?: string
-  /** Claude's provider-owned user-prompt UUID. */
+  /** Provider-owned turn identity (Claude UUID or opaque Grok prompt id). */
   providerPromptId?: string
+  /** This row belongs to an observed Grok prompt boundary even when its opaque id is absent. */
+  grokPromptBoundary?: true
   /** Active Claude compact generation, keyed by provider prompt identity. */
   compactTrigger?: 'manual' | 'auto'
   /** Claude tool-use identifier when the hook source exposes one. */
@@ -39,10 +45,21 @@ export type AgentHookEventPayload = {
   providerSessionOnly?: boolean
   /** True when this event is a relay cache replay rather than a live hook. */
   isReplay?: boolean
-  /** Transport-only Claude background-work evidence used to reject false input-based interrupts. */
+  /** Claude live work the child list does not show (a shell, a cron, an owed task notification); rejects false input-based interrupts. */
   claudeRunningNonAgentTask?: boolean
+  /** Row projected from a structured session the host holds: `owned` while its provider child
+   *  runs here, `held` once the child is gone but the session is still open. Never persisted. */
+  structuredHost?: StructuredHostStatus
+  /** Runtime terminal handle the pane resolved to when main parsed this status off the PTY.
+   *  Lets a reader rejoin the row to its terminal after the pane key moved. Never persisted:
+   *  a handle belongs to the runtime that issued it. */
+  terminalHandle?: string
+  /** Execution-host clock retained for age-preserving projection replay; never sent verbatim. */
+  hostEvidenceObservedAt?: number
   payload: ParsedAgentStatusPayload
 }
+
+export type StructuredHostStatus = 'held' | 'owned'
 export type ToolSnapshot = {
   toolName?: string
   toolInput?: string

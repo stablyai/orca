@@ -2,9 +2,10 @@
 
 import { cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as AgentAutoAckPresence from './agent-auto-ack-presence'
 import { useAutoAckViewedAgent } from './useAutoAckViewedAgent'
 import { useAppStore } from '../store'
-import { makeTab } from '../store/slices/store-test-helpers'
+import { makeTab, makeTabGroup, makeUnifiedTab } from '../store/slices/store-session-test-harness'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 
@@ -13,7 +14,17 @@ import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 // acknowledgeAgents returned the same object within one millisecond — a scan costing >=1ms with a
 // turn stamped ahead of the local clock (SSH/remote host) re-acked forever (React #185).
 
+// These suites isolate synchronous acknowledgement and layout behavior.
+vi.mock('./agent-auto-ack-presence', async (importOriginal) => ({
+  ...(await importOriginal<typeof AgentAutoAckPresence>()),
+  createAutoAckPresenceCheck: (_read: unknown, onPresent: () => void) => ({
+    request: onPresent,
+    dispose() {}
+  })
+}))
+
 const TAB_ID = 'tab-main'
+const GROUP_ID = 'group-main'
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const PANE_KEY = makePaneKey(TAB_ID, LEAF_ID)
 const NOW = new Date('2026-06-02T12:00:00Z').getTime()
@@ -34,10 +45,23 @@ function seedFutureStampedTurn(stateStartedAt: number): void {
     activeView: 'terminal',
     activeTabId: TAB_ID,
     activeWorktreeId: 'wt-1',
-    activeTabIdByWorktree: {},
+    activeTabIdByWorktree: { 'wt-1': TAB_ID },
+    activeGroupIdByWorktree: { 'wt-1': GROUP_ID },
     tabsByWorktree: { 'wt-1': [makeTab({ id: TAB_ID, worktreeId: 'wt-1' })] },
+    unifiedTabsByWorktree: {
+      'wt-1': [makeUnifiedTab({ id: TAB_ID, worktreeId: 'wt-1', groupId: GROUP_ID })]
+    },
+    groupsByWorktree: {
+      'wt-1': [
+        makeTabGroup({ id: GROUP_ID, worktreeId: 'wt-1', activeTabId: TAB_ID, tabOrder: [TAB_ID] })
+      ]
+    },
     terminalLayoutsByTabId: {
-      [TAB_ID]: { root: null, activeLeafId: LEAF_ID, expandedLeafId: null }
+      [TAB_ID]: {
+        root: { type: 'leaf', leafId: LEAF_ID },
+        activeLeafId: LEAF_ID,
+        expandedLeafId: null
+      }
     },
     agentStatusByPaneKey: { [PANE_KEY]: entry },
     retainedAgentsByPaneKey: {},
@@ -84,7 +108,7 @@ describe('useAutoAckViewedAgent — clock-skewed execution host', () => {
     seedFutureStampedTurn(NOW + SKEW_MS)
     const calls = instrumentAcknowledgeAgents()
 
-    renderHook(() => useAutoAckViewedAgent(false))
+    renderHook(() => useAutoAckViewedAgent())
 
     expect(calls).toEqual([[PANE_KEY]])
     const ackAt = useAppStore.getState().acknowledgedAgentsByPaneKey[PANE_KEY] ?? 0
@@ -93,10 +117,10 @@ describe('useAutoAckViewedAgent — clock-skewed execution host', () => {
 
   it('leaves nothing to re-scan for a future-stamped turn on the next store write', () => {
     seedFutureStampedTurn(NOW + SKEW_MS)
-    renderHook(() => useAutoAckViewedAgent(false))
+    renderHook(() => useAutoAckViewedAgent())
 
     const calls = instrumentAcknowledgeAgents()
-    useAppStore.getState().markTerminalTabUnread('tab-unrelated')
+    useAppStore.getState().markTerminalTabUnread('tab-unrelated', 'terminal-bell')
 
     expect(calls).toEqual([])
   })
@@ -105,7 +129,7 @@ describe('useAutoAckViewedAgent — clock-skewed execution host', () => {
     seedFutureStampedTurn(NOW - 5_000)
     const calls = instrumentAcknowledgeAgents()
 
-    renderHook(() => useAutoAckViewedAgent(false))
+    renderHook(() => useAutoAckViewedAgent())
 
     expect(calls).toEqual([[PANE_KEY]])
   })
@@ -114,7 +138,7 @@ describe('useAutoAckViewedAgent — clock-skewed execution host', () => {
     seedFutureStampedTurn(NOW - 5_000)
     useAppStore.getState().acknowledgeAgents([PANE_KEY])
 
-    renderHook(() => useAutoAckViewedAgent(false))
+    renderHook(() => useAutoAckViewedAgent())
     useAppStore.getState().unacknowledgeAgents([PANE_KEY])
 
     expect(useAppStore.getState().acknowledgedAgentsByPaneKey[PANE_KEY]).toBeUndefined()

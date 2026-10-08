@@ -44,8 +44,8 @@ describe('Coordinator drift probe coalescing', () => {
           : { base: 'origin/main', behind: 0, recentSubjects: [] }
       }
     }
-    const first = db.createTask({ spec: 'first task' })
-    const second = db.createTask({ spec: 'second task' })
+    const first = db.createTask({ runId: 'run_legacy_local', spec: 'first task' })
+    const second = db.createTask({ runId: 'run_legacy_local', spec: 'second task' })
     const coordinator = new Coordinator(db, runtime, {
       spec: 'go',
       coordinatorHandle: 'coord',
@@ -65,6 +65,7 @@ describe('Coordinator drift probe coalescing', () => {
         throw new Error(`missing dispatch for ${task.id}`)
       }
       db.insertMessage({
+        runId: 'run_legacy_local',
         from: dispatch.assignee_handle,
         to: 'coord',
         subject: 'Done',
@@ -105,8 +106,14 @@ describe('Coordinator drift probe coalescing', () => {
         }
       }
     }
-    const refused = db.createTask({ spec: 'requires a current base' })
-    const allowed = db.createTask({ spec: 'can use stale base\nallow-stale-base: true' })
+    const refused = db.createTask({
+      runId: 'run_legacy_local',
+      spec: 'requires a current base'
+    })
+    const allowed = db.createTask({
+      runId: 'run_legacy_local',
+      spec: 'can use stale base\nallow-stale-base: true'
+    })
     const coordinator = new Coordinator(db, runtime, {
       spec: 'go',
       coordinatorHandle: 'coord',

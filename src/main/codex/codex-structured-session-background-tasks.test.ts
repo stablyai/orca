@@ -1,0 +1,260 @@
+import { describe, expect, it, vi } from 'vitest'
+import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
+import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
+import type {
+  CodexAppServerConnection,
+  CodexAppServerConnectionHandlers,
+  openCodexAppServerConnection
+} from './codex-app-server-connection'
+import { CodexStructuredSessionAdapter } from './codex-structured-session-adapter'
+import { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
+import type { CodexStructuredSessionEvent } from './codex-structured-session-state'
+import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+
+// Proves the host's child records are actually REACHED from provider traffic: the tracker is
+// unit-tested separately, and a producer that is correct but unwired publishes nothing while
+// every one of its own tests stays green. Every surface, the strip included, reads those records.
+
+type Published = { sessionId: string; evidence: AgentChildWorkEvidence['type'][] }
+
+const THREAD_ID = '01a07d54-3785-71d0-b065-82c8ebbc572a'
+const PARENT_TURN = '01a07d54-37be-72e1-8206-8f0c23dd2cef'
+const CHILD_ID = '01a07d54-5523-78a3-91f5-e0acb1dab065'
+
+/** A three-route stand-in, deliberately smaller than the full adapter harness:
+ *  this suite only needs a thread and a notification pipe. */
+function fakeCodex(close: () => Promise<boolean> = async () => true): {
+  handlers: () => CodexAppServerConnectionHandlers
+  openConnection: typeof openCodexAppServerConnection
+} {
+  let live: CodexAppServerConnectionHandlers = {}
+  const openConnection = (async (_launch, handlers = {}) => {
+    live = handlers
+    const connection: CodexAppServerConnection = {
+      pid: 4321,
+      closed: false,
+      request: async (method) =>
+        method === 'thread/start' ? { thread: { id: THREAD_ID, path: null } } : {},
+      notify: () => {},
+      respond: () => {},
+      respondWithError: () => {},
+      close
+    } as unknown as CodexAppServerConnection
+    return connection
+  }) as typeof openCodexAppServerConnection
+  return { handlers: () => live, openConnection }
+}
+
+function identity(sessionId: string): AgentSessionJournalIdentity {
+  return {
+    sessionId,
+    workspaceId: 'ws-1',
+    hostId: 'host-1',
+    agent: 'codex',
+    providerHandle: codexProviderHandle(THREAD_ID)
+  }
+}
+
+function subagentNotification(kind: string): { method: string; params: unknown } {
+  return {
+    method: 'item/started',
+    params: {
+      item: {
+        type: 'subAgentActivity',
+        id: 'call_1',
+        kind,
+        agentThreadId: CHILD_ID,
+        agentPath: '/root/count_a'
+      },
+      threadId: THREAD_ID,
+      turnId: PARENT_TURN
+    }
+  }
+}
+
+const TURN_COMPLETED = {
+  method: 'turn/completed',
+  params: { threadId: THREAD_ID, turn: { id: PARENT_TURN, status: 'completed' } }
+}
+
+async function adapterWithSession(
+  published: Published[],
+  events?: StructuredAgentSessionEventSink,
+  onEvent?: (event: CodexStructuredSessionEvent) => void,
+  close?: () => Promise<boolean>
+): Promise<{ adapter: CodexStructuredSessionAdapter; codex: ReturnType<typeof fakeCodex> }> {
+  const codex = fakeCodex(close)
+  const adapter = new CodexStructuredSessionAdapter({
+    resolveLaunch: async () => ({
+      command: 'codex',
+      args: ['app-server'],
+      cwd: '/work/repo',
+      codexHome: null,
+      resumeThreadId: null
+    }),
+    openConnection: codex.openConnection,
+    readProcessStartTime: async () => 1_700_000_000_000,
+    onEvent,
+    onChildWorkEvidence: (sessionId, evidence) =>
+      published.push({ sessionId, evidence: evidence.map((edge) => edge.type) })
+  })
+  await adapter.acquire({
+    identity: identity('session-1'),
+    fence: 7,
+    spawnToken: 'spawn-9',
+    events
+  })
+  codex.handlers().onNotification?.('turn/started', {
+    threadId: THREAD_ID,
+    turn: { id: PARENT_TURN, status: 'inProgress' }
+  })
+  codex.handlers().onNotification?.('turn/started', {
+    threadId: CHILD_ID,
+    turn: { id: 'child-turn', status: 'inProgress' }
+  })
+  return { adapter, codex }
+}
+
+describe("codex background tasks reach the host's child records", () => {
+  it('clears natural-exit state before lifecycle observers can read it', async () => {
+    const published: Published[] = []
+    const onEvent = vi.fn()
+    const { adapter, codex } = await adapterWithSession(published, undefined, onEvent)
+    const spawn = subagentNotification('started')
+    codex.handlers().onNotification?.(spawn.method, spawn.params)
+    codex.handlers().onNotification?.(TURN_COMPLETED.method, TURN_COMPLETED.params)
+    expect(adapter.backgroundTaskState('session-1')?.tasks).toHaveLength(1)
+    published.length = 0
+    onEvent.mockImplementation((event: CodexStructuredSessionEvent) => {
+      if (event.type === 'ended') {
+        expect(adapter.backgroundTaskState('session-1')).toBeNull()
+      }
+    })
+    codex.handlers().onExit?.(new Error('provider exited'))
+    expect(adapter.backgroundTaskState('session-1')).toBeNull()
+    expect(published).toEqual([{ sessionId: 'session-1', evidence: ['session-ended'] }])
+    await adapter.closeSession('session-1')
+  })
+
+  it('keeps live tasks when close is refused', async () => {
+    const published: Published[] = []
+    const close = vi.fn(async () => false)
+    const { adapter, codex } = await adapterWithSession(published, undefined, undefined, close)
+    const spawn = subagentNotification('started')
+    codex.handlers().onNotification?.(spawn.method, spawn.params)
+    codex.handlers().onNotification?.(TURN_COMPLETED.method, TURN_COMPLETED.params)
+    const before = adapter.backgroundTaskState('session-1')
+    published.length = 0
+    expect(await adapter.closeSession('session-1')).toBe(false)
+    expect(adapter.backgroundTaskState('session-1')).toEqual(before)
+    expect(published).toEqual([])
+    close.mockResolvedValue(true)
+    await adapter.closeSession('session-1')
+  })
+
+  it('does not let an old exit callback clear a replacement roster', async () => {
+    const published: Published[] = []
+    const { adapter, codex } = await adapterWithSession(published)
+    const oldExit = codex.handlers().onExit
+    await adapter.acquire({ identity: identity('session-1'), fence: 8, spawnToken: 'spawn-10' })
+    codex.handlers().onNotification?.('turn/started', {
+      threadId: CHILD_ID,
+      turn: { id: 'replacement-child-turn' }
+    })
+    const spawn = subagentNotification('started')
+    codex.handlers().onNotification?.(spawn.method, spawn.params)
+    const before = adapter.backgroundTaskState('session-1')
+    expect(before?.tasks).toHaveLength(1)
+    published.length = 0
+    oldExit?.(new Error('old provider exited late'))
+    expect(adapter.backgroundTaskState('session-1')).toEqual(before)
+    expect(published).toEqual([])
+    await adapter.closeSession('session-1')
+  })
+
+  it('recovers the exact provider generation when command metadata cannot be admitted', async () => {
+    const published: Published[] = []
+    const observed: CodexStructuredSessionEvent[] = []
+    const appendItem = vi.fn()
+    const { adapter, codex } = await adapterWithSession(
+      published,
+      { appendItem, appendTombstone: () => {}, publish: () => {} },
+      (event) => observed.push(event)
+    )
+    appendItem.mockClear()
+    observed.length = 0
+    const admission = vi
+      .spyOn(CodexBackgroundTaskTracker.prototype, 'canObserve')
+      .mockReturnValue(false)
+    try {
+      codex.handlers().onNotification?.('item/started', {
+        threadId: THREAD_ID,
+        turnId: PARENT_TURN,
+        item: {
+          type: 'commandExecution',
+          id: 'over-budget',
+          command: 'sleep 1',
+          source: 'unifiedExecStartup',
+          status: 'inProgress'
+        }
+      })
+      await vi.waitFor(() => expect(adapter.backgroundTaskState('session-1')).toBeUndefined())
+      // The open turn's lifecycle row is revised to interrupted, never tombstoned.
+      expect(appendItem.mock.calls.map((call) => call[1])).toEqual([
+        expect.objectContaining({ kind: 'turn', state: 'interrupted' })
+      ])
+      expect(observed).toEqual([
+        expect.objectContaining({
+          type: 'ended',
+          cause: 'unexpected-exit',
+          fence: 7,
+          acquisitionGeneration: expect.any(String),
+          reason: 'notification admission failed (failed)'
+        })
+      ])
+      expect(published).toEqual([{ sessionId: 'session-1', evidence: ['session-ended'] }])
+    } finally {
+      admission.mockRestore()
+      await adapter.closeSession('session-1')
+    }
+  })
+
+  it('publishes the fan-out while it runs and keeps it past the spawning turn', async () => {
+    const published: Published[] = []
+    const { adapter, codex } = await adapterWithSession(published)
+    const running = {
+      state: 'monitoring',
+      supportsStopAll: false,
+      tasks: [{ id: `codex-agent:${CHILD_ID}`, kind: 'agent', description: 'count_a' }]
+    }
+
+    const spawn = subagentNotification('started')
+    codex.handlers().onNotification?.(spawn.method, spawn.params)
+    // Mid-turn: the child is running, so its record is live now.
+    expect(published).toEqual([{ sessionId: 'session-1', evidence: ['live'] }])
+    expect(adapter.backgroundTaskState('session-1')).toEqual(running)
+
+    published.length = 0
+    codex.handlers().onNotification?.(TURN_COMPLETED.method, TURN_COMPLETED.params)
+
+    // Turn end is not the child's outcome: nothing reaches its record.
+    expect(published).toEqual([])
+    expect(adapter.backgroundTaskState('session-1')).toEqual(running)
+  })
+
+  it("hands the session's end to its child records when the session closes", async () => {
+    const published: Published[] = []
+    const { adapter, codex } = await adapterWithSession(published)
+    const spawn = subagentNotification('started')
+    codex.handlers().onNotification?.(spawn.method, spawn.params)
+    codex.handlers().onNotification?.(TURN_COMPLETED.method, TURN_COMPLETED.params)
+    published.length = 0
+
+    expect(await adapter.closeSession('session-1')).toBe(true)
+
+    // The records hear the session end, which settles the child still running.
+    expect(published).toEqual([{ sessionId: 'session-1', evidence: ['session-ended'] }])
+    expect(adapter.backgroundTaskState('session-1')).toBeUndefined()
+  })
+})

@@ -8,6 +8,7 @@ import {
   watcherLifecycleState
 } from './filesystem-watcher-lifecycle-state'
 import { cancelLocalBatchFlush } from './filesystem-watcher-batch-control'
+import { captureWatcherSenderLifetime } from './filesystem-watcher-sender-lifetime'
 
 export function rememberUnwatchableRoot(rootKey: string): void {
   const { unwatchableRoots } = watcherLifecycleState
@@ -172,13 +173,8 @@ export function releaseRemoteWatchListener(key: string, senderId: number): void 
   watcherLifecycleState.remoteWatchers.delete(key)
 }
 
-export function registerWatcherSenderCleanup(sender: WebContents): void {
-  if (watcherLifecycleState.senderCleanupRegistered.has(sender.id)) {
-    return
-  }
-  watcherLifecycleState.senderCleanupRegistered.add(sender.id)
-  sender.once('destroyed', () => {
-    watcherLifecycleState.senderCleanupRegistered.delete(sender.id)
+export function registerWatcherSenderCleanup(sender: WebContents): AbortSignal {
+  return captureWatcherSenderLifetime(sender, () => {
     cleanupLocalWatchersForSender(sender.id)
     cleanupRemoteWatchersForSender(sender.id)
   })
@@ -214,6 +210,9 @@ function cleanupLocalWatchersForSender(senderId: number): void {
 function cleanupRemoteWatchersForSender(senderId: number): void {
   for (const key of Array.from(watcherLifecycleState.desiredRemoteWatchers.keys())) {
     forgetDesiredRemoteWatcher(key, senderId)
+  }
+  for (const resync of watcherLifecycleState.remoteWatcherResyncStates.values()) {
+    resync.listeners.delete(senderId)
   }
   for (const [key, suspended] of watcherLifecycleState.suspendedRemoteWatcherListeners) {
     suspended.listeners.delete(senderId)

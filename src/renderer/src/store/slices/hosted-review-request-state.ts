@@ -10,12 +10,12 @@ export const inflightHostedReviewRequests = new Map<
     promise: Promise<HostedReviewInfo | null>
     force: boolean
     currentHeadOid: string | null
-    generation: symbol
+    generation: number
     startedAt: number
   }
 >()
 
-export const hostedReviewRequestGenerations = new Map<string, symbol>()
+export const hostedReviewRequestGenerations = new Map<string, number>()
 type HostedReviewRevalidationLane = {
   inFlight: Promise<HostedReviewInfo | null> | null
   lastRunDurationMs: number
@@ -44,7 +44,7 @@ export function finishInflightHostedReviewRequest(
   requestKey: string,
   currentHeadOid: string | null | undefined,
   cacheKey: string,
-  generation: symbol
+  generation: number
 ): void {
   const inflightKey = inflightHostedReviewRequestKey(requestKey, currentHeadOid)
   if (inflightHostedReviewRequests.get(inflightKey)?.generation === generation) {
@@ -205,7 +205,7 @@ export function registerInflightHostedReviewRequest(
     promise: Promise<HostedReviewInfo | null>
     force: boolean
     currentHeadOid: string | null
-    generation: symbol
+    generation: number
     startedAt: number
   }
 ): Promise<HostedReviewInfo | null> {

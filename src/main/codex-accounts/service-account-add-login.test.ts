@@ -17,6 +17,12 @@ import {
 } from './service-test-harness'
 import { createCanonicalHookTrustFixture } from './service-hook-trust-test-fixtures'
 
+// Why: temp homes exceed sun_path on macOS but not on Linux; keep asserted config bytes host-independent.
+vi.mock('../codex/codex-daemon-socket-path-guard', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  applyCodexDaemonSocketGuard: (config: string) => config
+}))
+
 vi.mock('electron', () => ({
   app: {
     getPath: () => testState.userDataDir
@@ -76,6 +82,8 @@ describe('CodexAccountService config sync', () => {
     )
 
     vi.doMock('node:child_process', () => ({
+      // The supervised Codex teardown's process-table reader binds execFile when it loads.
+      execFile: vi.fn(),
       execFileSync: vi.fn(),
       spawn: spawnMock
     }))
@@ -140,6 +148,8 @@ describe('CodexAccountService config sync', () => {
     )
 
     vi.doMock('node:child_process', () => ({
+      // The supervised Codex teardown's process-table reader binds execFile when it loads.
+      execFile: vi.fn(),
       execFileSync: vi.fn(),
       spawn: spawnMock
     }))
@@ -248,6 +258,8 @@ describe('CodexAccountService config sync', () => {
     )
 
     vi.doMock('node:child_process', () => ({
+      // The supervised Codex teardown's process-table reader binds execFile when it loads.
+      execFile: vi.fn(),
       execFileSync: vi.fn(),
       spawn: spawnMock
     }))
@@ -405,6 +417,8 @@ describe('CodexAccountService config sync', () => {
       }
     )
     vi.doMock('node:child_process', () => ({
+      // The supervised Codex teardown's process-table reader binds execFile when it loads.
+      execFile: vi.fn(),
       execFileSync: vi.fn(),
       spawn: spawnMock
     }))
@@ -480,6 +494,8 @@ describe('CodexAccountService config sync', () => {
     const spawnMock = vi.fn()
 
     vi.doMock('node:child_process', () => ({
+      // The supervised Codex teardown's process-table reader binds execFile when it loads.
+      execFile: vi.fn(),
       execFileSync: vi.fn(),
       spawn: spawnMock
     }))
@@ -526,6 +542,8 @@ describe('CodexAccountService config sync', () => {
     const spawnMock = vi.fn()
 
     vi.doMock('node:child_process', () => ({
+      // The supervised Codex teardown's process-table reader binds execFile when it loads.
+      execFile: vi.fn(),
       execFileSync: vi.fn(),
       spawn: spawnMock
     }))

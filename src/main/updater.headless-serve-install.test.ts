@@ -31,6 +31,10 @@ const {
       appHandlers.set(event, [...(appHandlers.get(event) ?? []), handler])
       return appMock
     }),
+    prependListener: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
+      appHandlers.set(event, [handler, ...(appHandlers.get(event) ?? [])])
+      return appMock
+    }),
     emit: (event: string, ...args: unknown[]) => emit(appHandlers, event, ...args),
     quit: vi.fn()
   }

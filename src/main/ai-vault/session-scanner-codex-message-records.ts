@@ -1,3 +1,7 @@
+import {
+  publishCodexResponseTool,
+  publishCodexCompletedTool
+} from './session-scanner-codex-tool-records'
 import { normalizePromptField } from '../../shared/agent-status-field-normalization'
 import { addPreviewContent } from './session-scanner-accumulator'
 import type { SessionAccumulator } from './session-scanner-types'
@@ -8,6 +12,10 @@ export function consumeCodexResponseMessage(
   payload: Record<string, unknown>,
   timestamp: unknown
 ): boolean {
+  publishCodexResponseTool(accumulator, payload, timestamp)
+  if (payload.type !== 'message') {
+    return false
+  }
   accumulator.messageCount++
   const role =
     payload.role === 'assistant' ? 'assistant' : payload.role === 'user' ? 'user' : 'unknown'
@@ -24,6 +32,7 @@ export function consumeCodexCompletedMessage(
   payload: Record<string, unknown>,
   timestamp: unknown
 ): boolean {
+  publishCodexCompletedTool(accumulator, payload, timestamp)
   const item = asRecord(payload.item)
   if (!item) {
     return false

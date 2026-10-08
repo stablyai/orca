@@ -16,8 +16,15 @@ const testState = vi.hoisted(() => ({
   runtimeEnvironments: [] as { id: string; createdAt: number; pairingRevision?: number }[]
 }))
 
+type MockedAppStoreState = {
+  settings: GlobalSettings | null
+  updateSettings: (settings: Partial<GlobalSettings>) => void
+  runtimeEnvironments: { id: string; createdAt: number; pairingRevision?: number }[]
+  runtimeStatusByEnvironmentId: Map<string, unknown>
+}
+
 vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: object) => unknown) =>
+  useAppStore: (selector: (state: MockedAppStoreState) => unknown) =>
     selector({
       settings: testState.settings,
       updateSettings: testState.updateSettings,

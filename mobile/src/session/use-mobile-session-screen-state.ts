@@ -77,7 +77,8 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     useState<DiffNotesDelivery | null>(null)
   const [creating, setCreating] = useState(false)
   // Why: React state isn't a synchronous lock; this ref blocks a double-tap's second create in the same tick before `creating` re-renders.
-  const creatingTerminalRef = useRef(false)
+  // It holds the create's id, so an older launch can't free a newer one's lock.
+  const creatingTerminalRef = useRef<string | null>(null)
   const [creatingBrowser, setCreatingBrowser] = useState(false)
   const [creatingMarkdown, setCreatingMarkdown] = useState(false)
   const [createError, setCreateError] = useState('')
@@ -119,7 +120,9 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   const [canPaste, setCanPaste] = useState(false)
   const [showDictationSetup, setShowDictationSetup] = useState(false)
   // 'hold' = press-and-hold mic, 'toggle' = tap-to-start/stop; mirrors Settings ▸ Voice ▸ Dictation Mode.
-  const [dictationMode, setDictationMode] = useState<'toggle' | 'hold'>('toggle')
+  // Holds the host's spelling verbatim, and undefined once a setup reply arrives without one: only
+  // the two arms below bind mic handlers, so anything else leaves the button as inert as it starts.
+  const [dictationMode, setDictationMode] = useState<string | undefined>('toggle')
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const toastOpacityRef = useRef(new Animated.Value(0))
   const toastHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)

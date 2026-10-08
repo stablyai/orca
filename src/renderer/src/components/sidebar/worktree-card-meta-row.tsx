@@ -5,6 +5,7 @@ import { DetachedHeadBadge } from '@/components/DetachedHeadBadge'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import { Badge } from '@/components/ui/badge'
 import CacheTimer from './CacheTimer'
+import { WorktreeHostContextBadge } from './WorktreeHostContextBadge'
 import { CONFLICT_OPERATION_LABELS } from './WorktreeCardHelpers'
 import { TruncatedSidebarLabel } from './truncated-sidebar-label'
 import { getDirectoryName } from './worktree-card-model'
@@ -55,14 +56,7 @@ export function WorktreeCardMetaRow({
           </div>
         )}
 
-        {showHostContextBadge && (
-          <Badge
-            variant="secondary"
-            className="h-[16px] max-w-[7rem] shrink-0 rounded border border-border bg-accent px-1.5 text-[10px] font-medium leading-none text-muted-foreground dark:bg-accent/80 dark:border-border/50"
-          >
-            <span className="truncate">{hostContextLabel}</span>
-          </Badge>
-        )}
+        {showHostContextBadge && <WorktreeHostContextBadge label={hostContextLabel!} />}
 
         {showIdentityInNewCard ? (
           <TruncatedSidebarLabel

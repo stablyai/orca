@@ -1,5 +1,8 @@
 import type { PreloadApi } from '../../../../preload/api-types'
-import { ONBOARDING_FLOW_VERSION, getDefaultOnboardingState } from '../../../../shared/constants'
+import {
+  ONBOARDING_FLOW_VERSION,
+  getDefaultOnboardingState
+} from '../../../../shared/onboarding-defaults'
 import type { OnboardingState } from '../../../../shared/onboarding-state-types'
 import { ONBOARDING_STORAGE_KEY, readJson, writeJson } from './web-storage'
 

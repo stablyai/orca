@@ -142,7 +142,7 @@ describe('useMobileNativeChatDrafts', () => {
     expect(state?.composerText).toBe('ping')
   })
 
-  it('does not clobber newer edits when restoring a rejected send', async () => {
+  it('appends a rejected send after edits typed while it was in flight', async () => {
     await mount('a')
     act(() => state?.setComposerText('ping'))
     const origin = state?.captureSendOrigin('ping')
@@ -157,10 +157,10 @@ describe('useMobileNativeChatDrafts', () => {
         state?.restoreRejectedDraft(origin, 'ping')
       }
     })
-    expect(state?.composerText).toBe('newer edit')
+    expect(state?.composerText).toBe('newer edit\n\nping')
   })
 
-  it('preserves an intentional clear after a newer edit while a rejection is pending', async () => {
+  it('returns a rejected send even after a newer edit was cleared', async () => {
     await mount('a')
     act(() => state?.setComposerText('ping'))
     const origin = state?.captureSendOrigin('ping')
@@ -177,7 +177,7 @@ describe('useMobileNativeChatDrafts', () => {
       }
     })
 
-    expect(state?.composerText).toBe('')
+    expect(state?.composerText).toBe('ping')
   })
 
   it('restores a rejected send onto its originating tab only', async () => {
@@ -219,7 +219,9 @@ describe('useMobileNativeChatDrafts', () => {
 
       // A relay drop can stall the transcript stream past the deadline; the
       // delivered prompt must not reappear in the composer when it recovers.
-      act(() => vi.advanceTimersByTime(25_000))
+      act(() => {
+        vi.advanceTimersByTime(25_000)
+      })
       await act(async () =>
         renderer?.update(
           createElement(Harness, { tabId: 'a', messages: [userTextMessage('m1', 'ping')] })
@@ -510,7 +512,9 @@ describe('useMobileNativeChatDrafts', () => {
         )
       )
 
-      act(() => vi.advanceTimersByTime(30_000))
+      act(() => {
+        vi.advanceTimersByTime(30_000)
+      })
       expect(onUnconfirmed).not.toHaveBeenCalled()
     } finally {
       vi.useRealTimers()
@@ -557,7 +561,9 @@ describe('useMobileNativeChatDrafts', () => {
           })
         )
       )
-      act(() => vi.advanceTimersByTime(30_000))
+      act(() => {
+        vi.advanceTimersByTime(30_000)
+      })
       expect(onUnconfirmed).not.toHaveBeenCalled()
     } finally {
       vi.useRealTimers()
@@ -614,7 +620,9 @@ describe('useMobileNativeChatDrafts', () => {
       })
 
       expect(vi.getTimerCount()).toBe(0)
-      act(() => vi.advanceTimersByTime(30_000))
+      act(() => {
+        vi.advanceTimersByTime(30_000)
+      })
       expect(onUnconfirmed).not.toHaveBeenCalled()
     } finally {
       vi.useRealTimers()
@@ -633,9 +641,13 @@ describe('useMobileNativeChatDrafts', () => {
         }
       })
 
-      act(() => vi.advanceTimersByTime(19_999))
+      act(() => {
+        vi.advanceTimersByTime(19_999)
+      })
       expect(onUnconfirmed).not.toHaveBeenCalled()
-      act(() => vi.advanceTimersByTime(1))
+      act(() => {
+        vi.advanceTimersByTime(1)
+      })
       expect(onUnconfirmed).toHaveBeenCalledTimes(1)
     } finally {
       vi.useRealTimers()
@@ -670,7 +682,9 @@ describe('useMobileNativeChatDrafts', () => {
       )
       expect(state?.composerText).toBe('ping')
 
-      act(() => vi.advanceTimersByTime(30_000))
+      act(() => {
+        vi.advanceTimersByTime(30_000)
+      })
       expect(onUnconfirmed).toHaveBeenCalledTimes(1)
     } finally {
       vi.useRealTimers()
@@ -704,7 +718,9 @@ describe('useMobileNativeChatDrafts', () => {
       )
       expect(state?.composerText).toBe('ping')
 
-      act(() => vi.advanceTimersByTime(30_000))
+      act(() => {
+        vi.advanceTimersByTime(30_000)
+      })
       expect(onUnconfirmed).toHaveBeenCalledTimes(1)
     } finally {
       vi.useRealTimers()
@@ -731,7 +747,9 @@ describe('useMobileNativeChatDrafts', () => {
           createElement(Harness, { tabId: 'a', messages: [userTextMessage('echo-1', 'ping')] })
         )
       )
-      act(() => vi.advanceTimersByTime(30_000))
+      act(() => {
+        vi.advanceTimersByTime(30_000)
+      })
 
       expect(firstUnconfirmed).not.toHaveBeenCalled()
       expect(secondUnconfirmed).toHaveBeenCalledTimes(1)
@@ -757,7 +775,9 @@ describe('useMobileNativeChatDrafts', () => {
       })
 
       expect(vi.getTimerCount()).toBe(0)
-      act(() => vi.advanceTimersByTime(30_000))
+      act(() => {
+        vi.advanceTimersByTime(30_000)
+      })
       expect(onUnconfirmed).not.toHaveBeenCalled()
     } finally {
       vi.useRealTimers()
@@ -807,7 +827,9 @@ describe('useMobileNativeChatDrafts', () => {
       )
 
       expect(state?.composerText).toBe('ping')
-      act(() => vi.advanceTimersByTime(30_000))
+      act(() => {
+        vi.advanceTimersByTime(30_000)
+      })
       expect(onUnconfirmed).toHaveBeenCalledTimes(1)
     } finally {
       vi.useRealTimers()

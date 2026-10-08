@@ -29,7 +29,7 @@ const materializations = new Map<string, Promise<void>>()
 export async function prepareLegacySharedCodexSessionResume(
   args: AiVaultPrepareSessionResumeArgs,
   options: {
-    isHostSystemDefaultRealHome: () => boolean
+    isHostSystemDefaultRealHomeSelected: () => boolean
     getSelectedHostAccountCodexHomePath?: () => string | null
     legacyCodexHomePath?: string
     systemCodexHomePath?: string
@@ -47,7 +47,7 @@ export async function prepareLegacySharedCodexSessionResume(
     args.executionHostId !== LOCAL_EXECUTION_HOST_ID ||
     !args.codexHome ||
     !sameRuntimePath(args.codexHome, legacyCodexHomePath) ||
-    !options.isHostSystemDefaultRealHome()
+    !options.isHostSystemDefaultRealHomeSelected()
   ) {
     return { useRealCodexHome: false }
   }
@@ -84,6 +84,32 @@ export async function prepareLegacySharedCodexSessionResume(
     throw new Error(RETRYABLE_RESUME_ERROR, { cause: error })
   }
   return { useRealCodexHome: true }
+}
+
+/** Explicit account restarts must move the verified rollout before changing credentials. */
+export async function prepareCodexAccountRestartResume(args: {
+  sourceHome: string
+  transcriptPath: string
+  targetHome: string
+  systemCodexHomePath: string
+}): Promise<string> {
+  if (sameRuntimePath(args.sourceHome, args.targetHome)) {
+    return args.targetHome
+  }
+  const relativePath = relative(
+    resolve(join(args.sourceHome, 'sessions')),
+    resolve(args.transcriptPath)
+  )
+  if (!isDatedRolloutRelativePath(relativePath)) {
+    throw new Error(RETRYABLE_RESUME_ERROR)
+  }
+  const paths = resolveCodexSessionBackfillPaths(args.systemCodexHomePath)
+  await materializeLegacyRollout(
+    args.transcriptPath,
+    join(args.targetHome, 'sessions', relativePath),
+    paths.auditLogPath
+  )
+  return args.targetHome
 }
 
 /**

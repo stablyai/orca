@@ -53,7 +53,7 @@ export function createTabsFocusActions(
           found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
         }
         if (!found) {
-          return {}
+          return state
         }
         const { tab, worktreeId } = found
         // Why: activating a terminal tab dismisses its tab-level bell — the user has moved their eyes here.
@@ -77,7 +77,7 @@ export function createTabsFocusActions(
                 ? {
                     ...item,
                     isPreview: opts?.preservePreview ? item.isPreview : false,
-                    lastFocusedAt: Date.now()
+                    ...(opts?.recordFocus === false ? {} : { lastFocusedAt: Date.now() })
                   }
                 : item
             )

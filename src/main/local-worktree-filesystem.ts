@@ -18,8 +18,6 @@ type LocalWorktreePathAccess = {
 }
 
 const WSL_FILE_OPERATION_TIMEOUT_MS = 30_000
-/** The stat probe's explicit "missing path" branch. */
-const WSL_MISSING_PATH_EXIT_CODE = 2
 
 function shouldUseWslFilesystem(options: LocalWorktreeFilesystemOptions): boolean {
   return process.platform === 'win32' && !!options.wslDistro?.trim()
@@ -48,18 +46,27 @@ async function runWslCommand(distro: string, command: string): Promise<string> {
   }
   if (result.code !== 0) {
     throw Object.assign(new Error(result.stderr.trim() || `wsl.exe exited ${result.code}`), {
-      exitCode: result.code
+      exitCode: result.code,
+      stderr: result.stderr
     })
   }
   return result.stdout
 }
 
+/**
+ * Only stat's trailing strerror text is portable: GNU coreutils says `cannot statx`,
+ * BusyBox says `can't stat`, so matching the verb made a BusyBox distro report a
+ * successful cleanup as a permanent failure. The tail stays English because the probe
+ * pins LC_ALL=C, and stat is the only thing in that probe that writes to stderr.
+ */
+const WSL_MISSING_PATH_STDERR = /: (?:No such file or directory|Not a directory)\r?\n?$/
+
 function isWslMissingPathError(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    (error as { exitCode?: unknown }).exitCode === WSL_MISSING_PATH_EXIT_CODE
-  )
+  if (typeof error !== 'object' || error === null || !('exitCode' in error)) {
+    return false
+  }
+  const stderr = 'stderr' in error && typeof error.stderr === 'string' ? error.stderr : ''
+  return error.exitCode === 1 && WSL_MISSING_PATH_STDERR.test(stderr)
 }
 
 export function toLocalWorktreeRuntimePath(
@@ -83,19 +90,26 @@ export function getLocalWorktreePathAccess(
   return {
     statPath: async (path) => {
       const target = quotePosixShell(toLinuxPath(path))
-      const stdout = await runWslCommand(
-        distro,
-        [
-          `target=${target}`,
-          'if [ -L "$target" ]; then printf symlink; elif [ -f "$target" ]; then printf file; elif [ -d "$target" ]; then printf directory; else exit 2; fi'
-        ].join('\n')
-      ).catch((error) => {
-        if (isWslMissingPathError(error)) {
-          throw Object.assign(new Error(`missing ${path}`), { code: 'ENOENT' })
+      // Shell file tests conflate permission failures with absence; stat preserves the reason.
+      const stdout = await runWslCommand(distro, `LC_ALL=C stat -c %F -- ${target}`).catch(
+        (error: unknown) => {
+          if (isWslMissingPathError(error)) {
+            throw Object.assign(new Error(`missing ${path}`), { code: 'ENOENT' })
+          }
+          throw error
         }
-        throw error
-      })
-      return { type: stdout.trim() }
+      )
+      const kind = stdout.trim()
+      return {
+        type:
+          kind === 'symbolic link'
+            ? 'symlink'
+            : kind === 'regular file' || kind === 'regular empty file'
+              ? 'file'
+              : kind === 'directory'
+                ? 'directory'
+                : 'other'
+      }
     },
     readPath: async (path) => {
       const target = quotePosixShell(toLinuxPath(path))

@@ -39,6 +39,13 @@ vi.mock('./popup-origin-bar-window', () => ({
   openPopupWithOriginBar: browserMocks.openPopupWithOriginBarMock
 }))
 
+vi.mock('./browser-process-user-agent', () => ({
+  getBrowserProcessUserAgentIdentity: () => ({
+    mode: 'clean',
+    userAgent: 'Mozilla/5.0 (Test) Chrome/140.0.0.0'
+  })
+}))
+
 import { browserManager } from './browser-manager'
 import {
   guestUaMethods,

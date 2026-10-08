@@ -43,10 +43,14 @@ import type { StoreRuntimeState } from './store-runtime-state'
 import type { WriteFlushBarrierOperations } from './write-flush-barriers'
 import type { TerminalBindingRecoveryOperations } from './terminal-binding-recovery'
 import type { WriteSchedulingOperations } from './write-scheduling'
-import { flushDurableStateOrThrowAsync } from './write-flush-barriers'
 import { scheduleSave } from './write-scheduling'
+import {
+  runSshLeaseDurableMutation,
+  type SshLeaseDurableMutationRuntime
+} from './ssh-lease-durable-mutation'
 
-type SshLeaseRecoveryOperationsRuntime = Pick<StoreRuntimeState, 'protectedSecrets' | 'state'>
+type SshLeaseRecoveryOperationsRuntime = SshLeaseDurableMutationRuntime &
+  Pick<StoreRuntimeState, 'protectedSecrets' | 'state'>
 
 const sshLeaseRecoveryOperationsContext = Symbol('SshLeaseRecoveryOperations')
 type SshLeaseRecoveryOperationsContext = {
@@ -81,8 +85,15 @@ export class SshLeaseRecoveryOperations {
     await upsertSshPtyConsumerRecoveryOperation(getSshPtyConsumerRecoveryOperations(this), record)
   }
 
-  async removeSshPtyConsumerRecovery(targetId: string): Promise<void> {
-    await removeSshPtyConsumerRecoveryOperation(getSshPtyConsumerRecoveryOperations(this), targetId)
+  async removeSshPtyConsumerRecovery(
+    targetId: string,
+    expectedClientInstanceId?: string
+  ): Promise<void> {
+    await removeSshPtyConsumerRecoveryOperation(
+      getSshPtyConsumerRecoveryOperations(this),
+      targetId,
+      expectedClientInstanceId
+    )
   }
 
   getSshRemotePtyLeases(targetId?: string): SshRemotePtyLease[] {
@@ -127,6 +138,9 @@ export class SshLeaseRecoveryOperations {
 
   markSshRemotePtyLeasesForShutdown(targetId: string, state: SshRemotePtyLease['state']): void {
     markSshRemotePtyLeasesForShutdownOperation(getSshPtyLeaseOperations(this), targetId, state)
+    this[sshLeaseRecoveryOperationsContext].runtime.dirtyProfileStateDomains?.add(
+      'sshRemotePtyLeases'
+    )
   }
 
   async markSshRemotePtyLeasesAsync(
@@ -195,8 +209,13 @@ export function getSshPtyConsumerRecoveryOperations(
   return {
     state: owner[sshLeaseRecoveryOperationsContext].runtime.state,
     protectedSecrets: owner[sshLeaseRecoveryOperationsContext].runtime.protectedSecrets,
-    flushDurableStateOrThrowAsync: () =>
-      flushDurableStateOrThrowAsync(owner[sshLeaseRecoveryOperationsContext].flushBarriers)
+    runDurableMutation: (mutate) =>
+      runSshLeaseDurableMutation(
+        owner[sshLeaseRecoveryOperationsContext].runtime,
+        owner[sshLeaseRecoveryOperationsContext].flushBarriers,
+        'sshPtyConsumerRecoveries',
+        mutate
+      )
   }
 }
 
@@ -238,14 +257,24 @@ export function getSshPtyLeaseOperations(owner: SshLeaseRecoveryOperations): Ssh
         targetId,
         leases
       ),
-    flush: () => owner[sshLeaseRecoveryOperationsContext].flushBarriers.flush(),
-    flushDurableStateOrThrowAsync: () =>
-      flushDurableStateOrThrowAsync(owner[sshLeaseRecoveryOperationsContext].flushBarriers)
+    flush: () => {
+      owner[sshLeaseRecoveryOperationsContext].runtime.dirtyProfileStateDomains?.add(
+        'sshRemotePtyLeases'
+      )
+      owner[sshLeaseRecoveryOperationsContext].flushBarriers.flush()
+    },
+    runDurableMutation: (mutate) =>
+      runSshLeaseDurableMutation(
+        owner[sshLeaseRecoveryOperationsContext].runtime,
+        owner[sshLeaseRecoveryOperationsContext].flushBarriers,
+        'sshRemotePtyLeases',
+        mutate
+      )
   }
 }
 
 export function installSshLeaseRecoveryOperationsContext(
-  target: object,
+  target: SshLeaseRecoveryOperations,
   source: SshLeaseRecoveryOperations
 ): void {
   Object.defineProperty(target, sshLeaseRecoveryOperationsContext, {

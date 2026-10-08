@@ -9,8 +9,13 @@ vi.mock('../ssh/ssh-config-host-picker', () => mocks.sshConfigHostPicker)
 vi.mock('electron', () => mocks.electron)
 vi.mock('./ssh-pty-output-intake-registry', () => mocks.sshPtyOutputIntakeRegistry)
 vi.mock('../ssh/ssh-connection-store', () => mocks.sshConnectionStore)
+vi.mock('./ssh-host-server-connect', () => mocks.hostServerConnect)
 vi.mock('../ssh/ssh-connection-manager', () => mocks.sshConnectionManager)
 vi.mock('../ssh/ssh-relay-deploy', () => mocks.sshRelayDeploy)
+vi.mock(
+  '../ssh/ssh-previous-relay-terminals',
+  () => import('../ssh/ssh-previous-relay-census-test-double')
+)
 vi.mock('../ssh/ssh-relay-reset', () => mocks.sshRelayReset)
 vi.mock('../ssh/ssh-channel-multiplexer', () => mocks.sshChannelMultiplexer)
 vi.mock('../providers/ssh-pty-provider', () => mocks.sshPtyProvider)
@@ -23,6 +28,7 @@ vi.mock('../ssh/ssh-port-forward', () => mocks.sshPortForward)
 vi.mock('../ssh/ssh-port-scanner', () => mocks.sshPortScanner)
 
 import { SSH_TERMINATE_RECONNECT_REQUIRED } from '../../shared/constants'
+import { SshPtyHeldByPreviousRelayError } from '../providers/ssh-pty-errors'
 import type { SshConnectionState, SshTarget } from '../../shared/ssh-types'
 import {
   clearProviderPtyState,
@@ -31,6 +37,7 @@ import {
   getPtyIdsForConnection
 } from './pty'
 import { createSshIpcHarness } from './ssh-ipc-test-harness'
+import { setCurrentRuntime } from './ssh-ipc-context'
 
 const { mockSshStore, mockConnectionManager, mockPtyProvider, mockPortForwardManager } = mocks
 
@@ -39,6 +46,23 @@ describe('SSH IPC handlers', () => {
   const { handlers, mockStore } = harness
 
   beforeEach(harness.reset)
+
+  it('ssh:terminateSessions refuses a removal of a managed server host before ending anything', async () => {
+    mockSshStore.getTarget.mockReturnValue({
+      id: 'ssh-1',
+      label: 'Server',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy',
+      orcadFence: { environmentId: 'env-1' }
+    })
+    vi.mocked(getSshPtyProvider).mockReturnValue(mockPtyProvider as never)
+    vi.mocked(getPtyIdsForConnection).mockReturnValue(['pty-1'])
+    expect(() =>
+      handlers.get('ssh:terminateSessions')!(null, { targetId: 'ssh-1', forRemoval: true })
+    ).toThrow('Settings › Managed servers')
+    expect(mockPtyProvider.shutdown).not.toHaveBeenCalled()
+  })
 
   it('ssh:terminateSessions preserves tracking when relay shutdown fails', async () => {
     const target: SshTarget = {
@@ -279,6 +303,33 @@ describe('SSH IPC handlers', () => {
     )
   })
 
+  it('ssh:terminateSessions stops a shell the relay runs without any lease here', async () => {
+    mockSshStore.getTarget.mockReturnValue({
+      id: 'ssh-1',
+      label: 'Server',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy'
+    })
+    mockConnectionManager.connect.mockResolvedValue({})
+    mockStore.getSshRemotePtyLeases.mockReturnValue([])
+    vi.mocked(getSshPtyProvider).mockReturnValue(mockPtyProvider as never)
+    vi.mocked(getPtyIdsForConnection).mockReturnValue([])
+    // A CLI-created terminal: the relay lists it, but no lease or local pane knows it.
+    mockPtyProvider.listProcesses.mockResolvedValue([{ id: 'ssh:ssh-1@@pty-cli' }])
+    mockPtyProvider.shutdown.mockResolvedValue(undefined)
+
+    await handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' })
+    await expect(
+      handlers.get('ssh:terminateSessions')!(null, { targetId: 'ssh-1' })
+    ).resolves.toMatchObject({ terminated: 1, unverifiable: 0 })
+
+    expect(mockPtyProvider.shutdown).toHaveBeenCalledWith('ssh:ssh-1@@pty-cli', {
+      immediate: true,
+      keepHistory: false
+    })
+  })
+
   it('ssh:terminateSessions tombstones an expired lease the relay reports gone', async () => {
     const target: SshTarget = {
       id: 'ssh-1',
@@ -308,6 +359,39 @@ describe('SSH IPC handlers', () => {
     expect(mockStore.markSshRemotePtyLease).toHaveBeenCalledWith(
       'ssh-1',
       'pty-abandoned',
+      'terminated'
+    )
+  })
+
+  it('ssh:terminateSessions keeps a lease an older relay holds but no route can stop', async () => {
+    mockSshStore.getTarget.mockReturnValue({
+      id: 'ssh-1',
+      label: 'Server',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy'
+    })
+    mockConnectionManager.connect.mockResolvedValue({})
+    mockConnectionManager.getState.mockReturnValue({
+      targetId: 'ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0
+    })
+    mockStore.getSshRemotePtyLeases.mockReturnValue([
+      { targetId: 'ssh-1', ptyId: 'pty2:old:1', state: 'detached' }
+    ])
+    vi.mocked(getSshPtyProvider).mockReturnValue(mockPtyProvider as never)
+    vi.mocked(getPtyIdsForConnection).mockReturnValue([])
+    mockPtyProvider.shutdown.mockRejectedValue(new SshPtyHeldByPreviousRelayError('pty2:old:1'))
+
+    await handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' })
+    await expect(
+      handlers.get('ssh:terminateSessions')!(null, { targetId: 'ssh-1' })
+    ).resolves.toEqual({ terminated: 0, unverifiable: 1 })
+    expect(mockStore.markSshRemotePtyLease).not.toHaveBeenCalledWith(
+      'ssh-1',
+      'pty2:old:1',
       'terminated'
     )
   })
@@ -374,5 +458,38 @@ describe('SSH IPC handlers', () => {
       'pty-abandoned',
       'terminated'
     )
+  })
+
+  it('ssh:terminateSessions tells the runtime a stopped shell is no longer connected', async () => {
+    mockSshStore.getTarget.mockReturnValue({
+      id: 'ssh-1',
+      label: 'Server',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy'
+    })
+    mockStore.getSshRemotePtyLeases.mockReturnValue([])
+    vi.mocked(getSshPtyProvider).mockReturnValue(mockPtyProvider as never)
+    vi.mocked(getPtyIdsForConnection).mockReturnValue([
+      'ssh:ssh-1@@pty-lost-exit',
+      'ssh:ssh-1@@pty-reported-exit'
+    ])
+    mockPtyProvider.shutdown.mockResolvedValue(undefined)
+    const runtime = {
+      getPtyLivenessVerdict: vi.fn((ptyId: string) =>
+        ptyId.endsWith('pty-reported-exit') ? { status: 'exited' } : null
+      ),
+      onPtyExit: vi.fn()
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: terminate reads only these two runtime methods.
+    setCurrentRuntime(runtime as never)
+
+    await expect(
+      handlers.get('ssh:terminateSessions')!(null, { targetId: 'ssh-1' })
+    ).resolves.toEqual({ terminated: 2, unverifiable: 0 })
+
+    // The stop sentinel, never a certified death; an exit the relay already reported stands.
+    expect(runtime.onPtyExit.mock.calls).toEqual([['ssh:ssh-1@@pty-lost-exit', -1]])
+    setCurrentRuntime(undefined)
   })
 })

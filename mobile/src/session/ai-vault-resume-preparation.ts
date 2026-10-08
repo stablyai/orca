@@ -5,14 +5,15 @@ import {
   isPerAccountManagedCodexHome
 } from '../../../src/shared/ai-vault-resume-preparation'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../src/shared/execution-host'
-import type { RpcClient } from '../transport/rpc-client'
+import { aiVaultResumePreparationRun } from './mobile-session-launch-operations'
+import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 
 // Why: without an explicit timeout, a socket drop mid-resume parks the request
 // on the reconnect waiter for the full reconnect budget, pinning the spinner.
 export const RESUME_RPC_TIMEOUT_MS = 30_000
 
 export async function prepareMobileAiVaultSessionResume(
-  client: Pick<RpcClient, 'sendRequest'>,
+  client: RpcOperationSender,
   session: AiVaultSession
 ): Promise<AiVaultSession> {
   // Why: per-account repinning runs on the serving host, whose account
@@ -26,8 +27,8 @@ export async function prepareMobileAiVaultSessionResume(
   ) {
     return session
   }
-  const response = await client.sendRequest(
-    'aiVault.prepareSessionResume',
+  const response = await aiVaultResumePreparationRun.request(
+    client,
     {
       agent: session.agent,
       filePath: session.filePath,
@@ -45,15 +46,12 @@ export async function prepareMobileAiVaultSessionResume(
       response.error?.message || 'Could not prepare this legacy Codex session. Retry resume.'
     )
   }
-  const result = response.result as {
-    useRealCodexHome?: unknown
-    substituteCodexHome?: unknown
-  } | null
+  const result = aiVaultResumePreparationRun.interpret(response)
   if (result?.useRealCodexHome === true) {
     return { ...session, codexHome: null }
   }
   // Why: older hosts never send a repin home, so absence keeps the session's own home.
-  if (typeof result?.substituteCodexHome === 'string' && result.substituteCodexHome) {
+  if (result?.substituteCodexHome) {
     return { ...session, codexHome: result.substituteCodexHome }
   }
   return session

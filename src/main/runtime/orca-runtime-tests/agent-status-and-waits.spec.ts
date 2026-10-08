@@ -41,6 +41,8 @@ describe('OrcaRuntimeService', () => {
         tabId: spawnedEnv.ORCA_TAB_ID,
         worktreeId: TEST_WORKTREE_ID,
         connectionId: null,
+        // The pane's handle rides the event so the store's row can rejoin its terminal.
+        terminalHandle: expect.stringMatching(/^term_/),
         payload: {
           state: 'done',
           prompt: 'ok'
@@ -148,10 +150,14 @@ describe('OrcaRuntimeService', () => {
       nextCursor: expect.any(String)
     })
 
-    const send = await runtime.sendTerminal(terminal.handle, {
-      text: 'continue',
-      enter: true
-    })
+    const send = await runtime.sendTerminal(
+      terminal.handle,
+      {
+        text: 'continue',
+        enter: true
+      },
+      { inputKind: 'driving' }
+    )
     expect(send).toMatchObject({
       handle: terminal.handle,
       accepted: true
@@ -247,7 +253,7 @@ describe('OrcaRuntimeService', () => {
       runtime.waitForTerminal(terminal.handle, { condition: 'tui-idle', timeoutMs: 1_000 })
     ).resolves.toMatchObject({
       satisfied: false,
-      blockedReason: 'codex-interactive-prompt'
+      blockedReason: 'agent-interactive-prompt'
     })
   })
 

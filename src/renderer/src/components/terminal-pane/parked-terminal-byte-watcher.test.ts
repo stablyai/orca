@@ -209,13 +209,14 @@ describe('startParkedTerminalByteWatcher', () => {
   })
 
   it('marks unread on BEL and schedules the delayed terminal-bell OS notification', async () => {
-    const { dispose } = await startWatcher()
+    const workspaceOwner = { executionHostId: 'ssh:qa' as const, runtimeEnvironmentId: 'hub' }
+    const { dispose } = await startWatcher({ workspaceOwner })
 
     emit('build finished\x07')
     flushSideEffects()
 
     expect(mockStoreState.markWorktreeUnread).toHaveBeenCalledWith(WORKTREE_ID)
-    expect(mockStoreState.markTerminalTabUnread).toHaveBeenCalledWith(TAB_ID)
+    expect(mockStoreState.markTerminalTabUnread).toHaveBeenCalledWith(TAB_ID, 'terminal-bell')
     expect(mockStoreState.markTerminalPaneUnread).not.toHaveBeenCalled()
     expect(dispatchTerminalNotification).not.toHaveBeenCalled()
 
@@ -224,7 +225,9 @@ describe('startParkedTerminalByteWatcher', () => {
     expect(dispatchTerminalNotification).toHaveBeenCalledTimes(1)
     expect(dispatchTerminalNotification).toHaveBeenCalledWith(WORKTREE_ID, {
       source: 'terminal-bell',
-      paneKey: PANE_KEY
+      paneKey: PANE_KEY,
+      ptyId: PTY_ID,
+      workspaceOwner
     })
     dispose()
   })
@@ -239,7 +242,7 @@ describe('startParkedTerminalByteWatcher', () => {
     emit('\x07')
     flushSideEffects()
 
-    expect(mockStoreState.markTerminalPaneUnread).toHaveBeenCalledWith(PANE_KEY)
+    expect(mockStoreState.markTerminalPaneUnread).toHaveBeenCalledWith(PANE_KEY, 'terminal-bell')
     dispose()
   })
 
@@ -278,7 +281,8 @@ describe('startParkedTerminalByteWatcher', () => {
     expect(dispatchTerminalNotification).toHaveBeenCalledWith(WORKTREE_ID, {
       source: 'agent-task-complete',
       terminalTitle: IDLE_TITLE,
-      paneKey: PANE_KEY
+      paneKey: PANE_KEY,
+      ptyId: PTY_ID
     })
     dispose()
   })
@@ -300,12 +304,12 @@ describe('startParkedTerminalByteWatcher', () => {
       source: 'agent-task-complete',
       terminalTitle: IDLE_TITLE,
       paneKey: PANE_KEY,
-      suppressOsNotification: true
+      ptyId: PTY_ID
     })
     dispose()
   })
 
-  it('skips completion dispatch when tracking is fully disabled, keeping the cache timer', async () => {
+  it('keeps mobile completion detection active when desktop notifications and attention are off', async () => {
     mockStoreState.settings = {
       ...mockStoreState.settings,
       experimentalTerminalAttention: false,
@@ -318,7 +322,10 @@ describe('startParkedTerminalByteWatcher', () => {
     flushSideEffects()
     vi.advanceTimersByTime(NOTIFICATION_GRACE_MS * 4)
 
-    expect(dispatchTerminalNotification).not.toHaveBeenCalled()
+    expect(dispatchTerminalNotification).toHaveBeenCalledWith(
+      WORKTREE_ID,
+      expect.objectContaining({ source: 'agent-task-complete' })
+    )
     expect(mockStoreState.setCacheTimerStartedAt).toHaveBeenLastCalledWith(
       PANE_KEY,
       expect.any(Number)
@@ -465,7 +472,8 @@ describe('startParkedTerminalByteWatcher', () => {
     expect(dispatchTerminalNotification).toHaveBeenCalledWith(WORKTREE_ID, {
       source: 'agent-task-complete',
       terminalTitle: IDLE_TITLE,
-      paneKey: PANE_KEY
+      paneKey: PANE_KEY,
+      ptyId: PTY_ID
     })
     dispose()
   })
@@ -771,13 +779,14 @@ describe('startParkedTerminalByteWatcher', () => {
       await dispatchFacts([{ kind: 'bell' }])
 
       expect(mockStoreState.markWorktreeUnread).toHaveBeenCalledWith(WORKTREE_ID)
-      expect(mockStoreState.markTerminalTabUnread).toHaveBeenCalledWith(TAB_ID)
+      expect(mockStoreState.markTerminalTabUnread).toHaveBeenCalledWith(TAB_ID, 'terminal-bell')
       expect(dispatchTerminalNotification).not.toHaveBeenCalled()
 
       vi.advanceTimersByTime(NOTIFICATION_GRACE_MS)
       expect(dispatchTerminalNotification).toHaveBeenCalledWith(WORKTREE_ID, {
         source: 'terminal-bell',
-        paneKey: PANE_KEY
+        paneKey: PANE_KEY,
+        ptyId: PTY_ID
       })
       dispose()
     })
@@ -805,7 +814,8 @@ describe('startParkedTerminalByteWatcher', () => {
       expect(dispatchTerminalNotification).toHaveBeenCalledWith(WORKTREE_ID, {
         source: 'agent-task-complete',
         terminalTitle: IDLE_TITLE,
-        paneKey: PANE_KEY
+        paneKey: PANE_KEY,
+        ptyId: PTY_ID
       })
       dispose()
     })

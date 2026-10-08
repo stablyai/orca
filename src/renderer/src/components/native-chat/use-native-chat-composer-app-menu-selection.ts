@@ -1,3 +1,4 @@
+import type { NativeChatComposerInput } from './native-chat-composer-input'
 import { useCallback, useEffect, useRef } from 'react'
 import {
   APP_MENU_SELECTION_ACTION_EVENT,
@@ -5,7 +6,7 @@ import {
 } from '@/lib/app-menu-selection-actions'
 
 export function useNativeChatComposerAppMenuSelection(isComposingOverride?: () => boolean) {
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const textareaRef = useRef<NativeChatComposerInput>(null)
   const isComposingRef = useRef(false)
   const isComposing = useCallback(
     () => isComposingOverride?.() ?? isComposingRef.current,
@@ -18,7 +19,7 @@ export function useNativeChatComposerAppMenuSelection(isComposingOverride?: () =
       if (
         (event as CustomEvent<AppMenuSelectionAction>).detail !== 'select-all' ||
         !textarea ||
-        document.activeElement !== textarea
+        !textarea.contains?.(document.activeElement)
       ) {
         return
       }

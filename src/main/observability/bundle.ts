@@ -167,7 +167,7 @@ export function collectBundle(opts: CollectBundleOptions): CollectedBundle {
   return {
     bundleSubmissionId,
     payload,
-    bytes: Buffer.byteLength(payload),
+    bytes: currentBytes,
     spanCount
   }
 }

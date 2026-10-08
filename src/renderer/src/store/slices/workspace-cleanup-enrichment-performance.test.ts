@@ -42,6 +42,7 @@ function countOpenFileScans(
           return target.filter(predicate)
         }
       }
+      // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy get trap default forward.
       return Reflect.get(target, property, receiver)
     }
   })

@@ -17,6 +17,14 @@ type RowRemovalFrame = {
   targetExists: boolean
 }
 
+declare global {
+  // oxlint-disable-next-line typescript-eslint/consistent-type-definitions -- declaration merging requires interface
+  interface Window {
+    // Frame sampling started in the page and awaited once the removal animation settles.
+    __activeDeleteRowRemovalFrames?: Promise<RowRemovalFrame[]>
+  }
+}
+
 async function pauseForVisualProof(page: Page): Promise<void> {
   if (process.env.ORCA_E2E_RECORD_VIDEO === '1') {
     await page.waitForTimeout(VISUAL_PROOF_PAUSE_MS)
@@ -215,7 +223,7 @@ async function startRowRemovalSampling(
 
 async function finishRowRemovalSampling(page: Page): Promise<RowRemovalFrame[]> {
   return page.evaluate(async () => {
-    const pending = Reflect.get(window, '__activeDeleteRowRemovalFrames')
+    const pending = window.__activeDeleteRowRemovalFrames
     if (!(pending instanceof Promise)) {
       throw new Error('Row removal sampling was not started')
     }

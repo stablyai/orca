@@ -2,6 +2,7 @@ import { useCallback } from 'react'
 import { isTerminalOscLinkRanges } from '../../../src/shared/terminal-osc-link-ranges'
 import * as nativeChatTerminalStream from './mobile-native-chat-terminal-stream'
 import { subscribeMobileTerminalSafely } from './mobile-terminal-stream-subscribe'
+import { mobileTerminalSnapshotByteBudget } from './terminal-snapshot-byte-budget'
 import {
   readTerminalViewportDims,
   runTerminalViewportFitPass
@@ -9,6 +10,9 @@ import {
 import { updateTerminalCwdFromStreamEvent } from './mobile-session-route-helpers'
 import type { MobileDisplayMode } from './mobile-session-route-types'
 import type { MobileSessionTerminalSubscriptionFoundationModel } from './use-mobile-session-terminal-subscription-foundation'
+
+/** Derived from constants, so it is read once rather than on every subscribe. */
+const snapshotByteBudget = mobileTerminalSnapshotByteBudget()
 
 export function useMobileSessionTerminalSubscription(
   scope: MobileSessionTerminalSubscriptionFoundationModel
@@ -30,7 +34,7 @@ export function useMobileSessionTerminalSubscription(
     activeHandleRef,
     subscribeSeqRef,
     layoutSeqRef,
-    terminalFrameHeightRef,
+    terminalFrameRef,
     scheduleDelayedAction,
     showToast,
     markNativeChatInputLeaseReady,
@@ -68,13 +72,29 @@ export function useMobileSessionTerminalSubscription(
       )
       // Why: a native-chat-covered terminal has no mounted webview, so only gate on the webview when not covered.
       if (!covered) {
-        if (!getTerminalRef(handle)) {
+        const ref = getTerminalRef(handle)
+        if (!ref) {
           logSkippedGate('no-webview-ref')
           return
         }
         if (!webReadyHandlesRef.current.has(handle)) {
           logSkippedGate('webview-not-ready')
           return
+        }
+        const frame = terminalFrameRef.current
+        if (!viewportMeasuredRef.current) {
+          // Why: the frame's first layout subscribes it; going now would miss the dims (page web-ready precedes it).
+          if (!frame) {
+            logSkippedGate('frame-not-laid-out')
+            return
+          }
+          // Why: sized from the box the ready document reported, the host serializes the snapshot at the phone's size.
+          const dims = ref.fitDimensions(frame)
+          diagnostics.viewportMeasured(handle, dims, frame.height)
+          if (dims) {
+            viewportRef.current = dims
+            viewportMeasuredRef.current = true
+          }
         }
       }
 
@@ -87,6 +107,10 @@ export function useMobileSessionTerminalSubscription(
       const seq = (subscribeSeqRef.current.get(handle) ?? 0) + 1
       subscribeSeqRef.current.set(handle, seq)
       diagnostics.streamArmed(handle, seq, viewportRef.current)
+      const sentViewport = nativeChatTerminalStream.mobileNativeChatSubscribeViewport(
+        covered,
+        viewportRef.current
+      )
 
       // Why: viewport is embedded in the subscribe params so the server auto-fits before serializing scrollback (no focus→safeFit race).
       const unsub = subscribeMobileTerminalSafely(
@@ -94,11 +118,11 @@ export function useMobileSessionTerminalSubscription(
         {
           terminal: handle,
           client: { id: clientId, type: 'mobile' as const },
-          viewport: nativeChatTerminalStream.mobileNativeChatSubscribeViewport(
-            covered,
-            viewportRef.current
-          ),
-          capabilities: nativeChatTerminalStream.mobileNativeChatTerminalCapabilities(covered)
+          viewport: sentViewport,
+          capabilities: nativeChatTerminalStream.mobileNativeChatTerminalCapabilities(covered),
+          // Undefined on a phone, where no per-message cap exists; omitted rather than sent as
+          // undefined so an older host sees the params it has always seen.
+          ...(snapshotByteBudget === undefined ? {} : { snapshotByteBudget })
         },
         (result) => {
           if (subscribeSeqRef.current.get(handle) !== seq) {
@@ -171,7 +195,7 @@ export function useMobileSessionTerminalSubscription(
               })
               return
             }
-            ref.init(cols, rows, initialData, false, oscLinks)
+            ref.init({ cols, rows, initialData, oscLinks, frame: terminalFrameRef.current })
             initializedHandlesRef.current.add(handle)
             if (data.displayMode) {
               const displayMode = data.displayMode as MobileDisplayMode
@@ -182,14 +206,15 @@ export function useMobileSessionTerminalSubscription(
             }
             // Why: cold-start refit — init()'s fit can run against a transient scrollWidth, so re-fire against a settled DOM.
             scheduleDelayedAction(() => getTerminalRef(handle)?.resetZoom(), 200)
-            // Why: first subscribe has no viewport (xterm not loaded yet), so measure after init
-            // and resubscribe so the server can phone-fit — bounded per handle so a
+            // Why: a subscribe without a viewport (no reported cell box) measures after init and
+            // resubscribes so the server can phone-fit — bounded per handle so a
             // non-converging host degrades visibly instead of hot-looping (STA-3337).
             runTerminalViewportFitPass({
               handle,
               seq,
               hostCols,
               hostRows,
+              sentViewport: sentViewport ?? null,
               budget: viewportResubscribeBudgetRef.current,
               diagnostics,
               viewportRef,
@@ -197,7 +222,7 @@ export function useMobileSessionTerminalSubscription(
               subscribeSeqRef,
               initializedHandlesRef,
               terminalUnsubsRef,
-              terminalFrameHeightRef,
+              terminalFrameRef,
               getTerminalRef,
               unsubscribeTerminal,
               subscribeToTerminal,
@@ -238,9 +263,16 @@ export function useMobileSessionTerminalSubscription(
             diagnostics.streamResized(handle, seq, eventSeq, data, getTerminalRef(handle) != null)
             const oscLinks = isTerminalOscLinkRanges(data.oscLinks) ? data.oscLinks : undefined
             if (serialized != null) {
-              getTerminalRef(handle)?.init(cols, rows, serialized, true, oscLinks)
+              getTerminalRef(handle)?.init({
+                cols,
+                rows,
+                initialData: serialized,
+                preserveScroll: true,
+                oscLinks,
+                frame: terminalFrameRef.current
+              })
             } else {
-              getTerminalRef(handle)?.resize(cols, rows)
+              getTerminalRef(handle)?.resize(cols, rows, terminalFrameRef.current)
             }
             if (data.displayMode) {
               const displayMode = data.displayMode as MobileDisplayMode
