@@ -73,6 +73,14 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     trackStart: input.trackStart,
     ensureProviderChild: async (sessionId, startedFor) => {
       await retireSignedOutStructuredAgentSessionChild(sessionId, sessions.get(sessionId), {
+        work: {
+          childWork: () => input.clientDelivery.readChildWork(sessionId),
+          hasOpenDispatch: () => {
+            const record = deps.store.getRecord(sessionId)
+            return record !== null && deps.hasOpenDispatch?.(record) === true
+          },
+          providerHoldsDispatch: () => deps.adapter.holdsDispatch?.(sessionId) === true
+        },
         stopAgent: input.stopSignedOutAgent,
         logger: deps.logger
       })

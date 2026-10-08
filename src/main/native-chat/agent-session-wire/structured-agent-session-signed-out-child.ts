@@ -2,14 +2,22 @@
 // read their saved login only when they start, so a sign-in made since reaches a new child only.
 
 import { readWholeAgentSessionFailureFact } from '../../../shared/agent-session-failure'
+import { isRootAgentJournalItem } from '../../../shared/agent-session-journal-producer'
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
+import {
+  structuredAgentSessionChildHasOpenWork,
+  type StructuredAgentSessionChildWorkReads
+} from './structured-agent-session-idle-sweep'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 /** What the check reads of a conversation; every read skips building a snapshot. */
 type SignedOutReading = Pick<StructuredAgentSessionHostSession, 'child'> & {
-  journal: Pick<AgentSessionJournal, 'visitItems' | 'itemFence' | 'activeTurnId'> & {
+  journal: Pick<
+    AgentSessionJournal,
+    'visitItems' | 'visitItemsWithLinkage' | 'itemFence' | 'activeTurnId'
+  > & {
     submissions(): readonly Pick<AgentJournalSubmission, 'dispatchState' | 'fence' | 'rejection'>[]
   }
 }
@@ -36,20 +44,26 @@ export function structuredAgentSessionChildReportedSignedOut(session: SignedOutR
   ) {
     return true
   }
+  // The session's own agent only: a subagent's sign-in failure says nothing about its parent.
   let found = false
-  journal.visitItems((itemId, _sequence, body) => {
+  journal.visitItemsWithLinkage((itemId, _sequence, body, attribution) => {
     found ||=
-      body.kind === 'status' && signedOut(body.failure) && journal.itemFence(itemId) === child.fence
+      body.kind === 'status' &&
+      isRootAgentJournalItem(attribution) &&
+      signedOut(body.failure) &&
+      journal.itemFence(itemId) === child.fence
   })
   return found
 }
 
-/** For a caller inside the session's serialize, before it hands the next send to the child. A turn
- *  still running keeps its child. A stop that fails leaves the close begun, which the start joins. */
+/** For a caller inside the session's serialize, before it hands the next send to the child. Work
+ *  the child still owes keeps it, as it keeps an idle one from the sweep. A stop that fails leaves
+ *  the close begun, which the start joins. */
 export async function retireSignedOutStructuredAgentSessionChild(
   sessionId: string,
   session: SignedOutReading | undefined,
   deps: {
+    work: StructuredAgentSessionChildWorkReads
     stopAgent: (sessionId: string) => Promise<void>
     logger: StructuredAgentSessionLogger
   }
@@ -57,7 +71,7 @@ export async function retireSignedOutStructuredAgentSessionChild(
   if (
     !session ||
     !structuredAgentSessionChildReportedSignedOut(session) ||
-    session.journal.activeTurnId() !== null
+    structuredAgentSessionChildHasOpenWork(session.journal, deps.work)
   ) {
     return
   }
