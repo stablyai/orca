@@ -2,9 +2,9 @@ import { describe, expect, it, vi } from 'vitest'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import {
   dedupeCodexRolloutCopyAliases,
-  dedupeCodexRolloutFileAliases,
-  dedupeCodexSessionsBySessionId
+  dedupeCodexRolloutFileAliases
 } from './codex-session-root-dedup'
+import { dedupeScannedSessions } from './session-root-dedup'
 
 const REAL_HOME_ROLLOUT =
   '/Users/ada/.codex/sessions/2026/07/01/rollout-2026-07-01T10-00-00-019f0000-1111-7222-8333-444444444444.jsonl'
@@ -305,7 +305,7 @@ describe('dedupeCodexRolloutCopyAliases', () => {
   })
 })
 
-describe('dedupeCodexSessionsBySessionId', () => {
+describe('dedupeScannedSessions', () => {
   it('collapses a both-roots session to the real-home row', () => {
     const managed = codexSession({
       filePath: MANAGED_HOME_ROLLOUT,
@@ -317,8 +317,8 @@ describe('dedupeCodexSessionsBySessionId', () => {
       codexHome: null,
       id: `local:codex:session-1:${REAL_HOME_ROLLOUT}`
     })
-    expect(dedupeCodexSessionsBySessionId([managed, real])).toEqual([real])
-    expect(dedupeCodexSessionsBySessionId([real, managed])).toEqual([real])
+    expect(dedupeScannedSessions([managed, real])).toEqual([real])
+    expect(dedupeScannedSessions([real, managed])).toEqual([real])
   })
 
   it('keeps managed-only and real-only sessions unchanged', () => {
@@ -332,7 +332,7 @@ describe('dedupeCodexSessionsBySessionId', () => {
       filePath: REAL_HOME_ROLLOUT,
       codexHome: null
     })
-    expect(dedupeCodexSessionsBySessionId([managedOnly, realOnly])).toEqual([managedOnly, realOnly])
+    expect(dedupeScannedSessions([managedOnly, realOnly])).toEqual([managedOnly, realOnly])
   })
 
   it('never collapses across execution hosts or agents', () => {
@@ -352,7 +352,7 @@ describe('dedupeCodexSessionsBySessionId', () => {
       agent: 'claude',
       filePath: '/home/ada/.codex/sessions/rollout-shared.jsonl'
     })
-    expect(dedupeCodexSessionsBySessionId([local, remote, claude])).toEqual([local, remote, claude])
+    expect(dedupeScannedSessions([local, remote, claude])).toEqual([local, remote, claude])
   })
 
   it('preserves same-host session-id collisions when rollout file names differ', () => {
@@ -370,7 +370,7 @@ describe('dedupeCodexSessionsBySessionId', () => {
       updatedAt: '2026-07-02T10:00:00.000Z',
       modifiedAt: '2026-07-02T10:00:00.000Z'
     })
-    expect(dedupeCodexSessionsBySessionId([older, newer])).toEqual([older, newer])
+    expect(dedupeScannedSessions([older, newer])).toEqual([older, newer])
   })
 
   it('resolves same-rollout aliases with a stable path tie-break', () => {
@@ -384,7 +384,7 @@ describe('dedupeCodexSessionsBySessionId', () => {
       filePath: '/Users/ada/b/.codex/sessions/2026/07/01/rollout-tie.jsonl',
       codexHome: null
     })
-    expect(dedupeCodexSessionsBySessionId([tieB, tieA])).toEqual([tieA])
+    expect(dedupeScannedSessions([tieB, tieA])).toEqual([tieA])
   })
 
   it('prefers the managed runtime home over a WSL real home when no host real-home row exists', () => {
@@ -399,7 +399,7 @@ describe('dedupeCodexSessionsBySessionId', () => {
       filePath: '\\\\wsl$\\Ubuntu\\home\\ada\\.codex\\sessions\\rollout-a.jsonl',
       codexHome: '\\\\wsl$\\Ubuntu\\home\\ada\\.codex'
     })
-    expect(dedupeCodexSessionsBySessionId([wslReal, wslManaged])).toEqual([wslManaged])
+    expect(dedupeScannedSessions([wslReal, wslManaged])).toEqual([wslManaged])
   })
 
   it('never collapses matching host and WSL session identities', () => {
@@ -416,6 +416,6 @@ describe('dedupeCodexSessionsBySessionId', () => {
         '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.local\\share\\orca\\codex-runtime-home\\home'
     })
 
-    expect(dedupeCodexSessionsBySessionId([host, wsl])).toEqual([host, wsl])
+    expect(dedupeScannedSessions([host, wsl])).toEqual([host, wsl])
   })
 })

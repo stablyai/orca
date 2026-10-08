@@ -106,7 +106,9 @@ describe('createFilePathLinkProvider range bounds', () => {
 
     expect(opened).toBe(true)
     expect(statMock).toHaveBeenCalledWith({
-      filePath: '\\\\wsl.localhost\\Ubuntu\\root\\workspace\\myrepo\\README.md'
+      filePath: '\\\\wsl.localhost\\Ubuntu\\root\\workspace\\myrepo\\README.md',
+      connectionId: undefined,
+      access: { kind: 'user-file' }
     })
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({

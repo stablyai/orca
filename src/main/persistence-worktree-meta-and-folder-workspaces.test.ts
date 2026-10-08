@@ -1,11 +1,5 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { rmSync, mkdtempSync } from 'node:fs'
-import { join } from 'node:path'
-import { tmpdir } from 'node:os'
-import type { PersistedState } from '../shared/persisted-state-types'
-import { getDefaultWorkspaceSession } from '../shared/constants'
-import { folderWorkspaceKey } from '../shared/workspace-scope'
 import {
+  closeTestStores,
   testState,
   createStore,
   writeDataFile,
@@ -13,6 +7,13 @@ import {
   makeRepo,
   makeTerminalTab
 } from './persistence-test-harness'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { rmSync, mkdtempSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+import type { PersistedState } from '../shared/persisted-state-types'
+import { getDefaultWorkspaceSession } from '../shared/constants'
+import { folderWorkspaceKey } from '../shared/workspace-scope'
 
 // Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
@@ -62,7 +63,8 @@ describe('Store', () => {
     getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 2 })
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
   // ── 8. setWorktreeMeta and getWorktreeMeta ─────────────────────────
@@ -650,5 +652,53 @@ describe('Store', () => {
     expect(session.terminalLayoutsByTabId['folder-tab']).toBeUndefined()
     expect(session.terminalLayoutsByTabId['repo-tab']).toBeDefined()
     expect(session.browserPagesByWorkspace?.['browser-workspace']).toBeUndefined()
+  })
+
+  it('removes an ssh folder workspace from the partition that owns it', async () => {
+    const store = await createStore()
+    const group = store.createProjectGroup({
+      name: 'Remote',
+      parentPath: '/remote/platform',
+      createdFrom: 'folder-scan',
+      connectionId: 'target-1'
+    })
+    const workspace = store.createFolderWorkspace({ projectGroupId: group.id, name: 'Remote fix' })
+    const key = folderWorkspaceKey(workspace.id)
+    store.setWorkspaceSession(
+      {
+        ...getDefaultWorkspaceSession(),
+        tabsByWorktree: { [key]: [makeTerminalTab({ id: 'remote-folder-tab', worktreeId: key })] }
+      },
+      'ssh:target-1'
+    )
+
+    expect(store.removeFolderWorkspace(workspace.id)).toBe(true)
+
+    // Boot enumerates partitions from persistence itself, so a row left in `ssh:target-1` comes
+    // back on the next launch as a workspace the user already deleted.
+    expect(store.getWorkspaceSession('ssh:target-1').tabsByWorktree[key]).toBeUndefined()
+  })
+
+  it('removes a deleted project group’s folder workspaces from every partition', async () => {
+    const store = await createStore()
+    const group = store.createProjectGroup({
+      name: 'Remote group',
+      parentPath: '/remote/group',
+      createdFrom: 'folder-scan',
+      connectionId: 'target-1'
+    })
+    const workspace = store.createFolderWorkspace({ projectGroupId: group.id, name: 'Group fix' })
+    const key = folderWorkspaceKey(workspace.id)
+    store.setWorkspaceSession(
+      {
+        ...getDefaultWorkspaceSession(),
+        tabsByWorktree: { [key]: [makeTerminalTab({ id: 'group-folder-tab', worktreeId: key })] }
+      },
+      'ssh:target-1'
+    )
+
+    expect(store.deleteProjectGroup(group.id)).toBe(true)
+
+    expect(store.getWorkspaceSession('ssh:target-1').tabsByWorktree[key]).toBeUndefined()
   })
 })

@@ -1,3 +1,5 @@
+import { isAntigravityReferenceSession } from '../../../../shared/antigravity-session-origin'
+import type { AiVaultSubagentResumeActions } from './AiVaultSessionSubagents'
 import type React from 'react'
 import {
   FileJson,
@@ -36,6 +38,7 @@ export function SessionInlineDetails({
   resumeActions,
   onResumeInWorktree,
   onResumeInNewTab,
+  subagentResume,
   onContinueInNewSession,
   onResumeInNewChat,
   onOpenLog
@@ -50,12 +53,14 @@ export function SessionInlineDetails({
   }
   onResumeInWorktree: () => void
   onResumeInNewTab: () => void
+  subagentResume?: AiVaultSubagentResumeActions
   onContinueInNewSession?: () => void
   onResumeInNewChat?: () => void
   onOpenLog?: () => void
 }): React.JSX.Element {
   // A zero-turn transcript would resume into an empty conversation, so the plain
   // resume affordances are withheld and a distinct "not saved" state is shown.
+  const referenceSession = isAntigravityReferenceSession(session)
   const hasResumableContent = isAiVaultSessionResumableContent(session)
   const showResumeInWorktree = hasResumableContent && Boolean(resumeActions.worktree.worktreeId)
   const showResumeInNewTab =
@@ -97,10 +102,12 @@ export function SessionInlineDetails({
               className="h-7 shrink-0 px-2.5 text-[11px]"
             >
               <Play className="size-3.5" />
-              {translate(
-                'auto.components.right.sidebar.AiVaultSessionDetails.resumeInWorktree',
-                'Resume in Worktree'
-              )}
+              {referenceSession
+                ? translate('aiVault.continueInCli', 'Continue in CLI')
+                : translate(
+                    'auto.components.right.sidebar.AiVaultSessionDetails.resumeInWorktree',
+                    'Resume in Worktree'
+                  )}
             </Button>
           ) : null}
           {showResumeInNewTab ? (
@@ -117,10 +124,12 @@ export function SessionInlineDetails({
               className="h-7 shrink-0 px-2.5 text-[11px]"
             >
               <Play className="size-3.5" />
-              {translate(
-                'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewTab',
-                'Resume in New Tab'
-              )}
+              {referenceSession
+                ? translate('aiVault.continueInCliNewTab', 'Continue in CLI in New Tab')
+                : translate(
+                    'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewTab',
+                    'Resume in New Tab'
+                  )}
             </Button>
           ) : null}
           {onResumeInNewChat ? (
@@ -217,7 +226,7 @@ export function SessionInlineDetails({
           <SessionUnsavedConversationNotice session={session} logAvailable={Boolean(onOpenLog)} />
         )}
 
-        <SessionSubagentsSection session={session} />
+        <SessionSubagentsSection session={session} resume={subagentResume} />
 
         {shouldShowAiVaultSessionWorktreeLine(worktreeDisplay, {
           vaultScope

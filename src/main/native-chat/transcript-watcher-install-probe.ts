@@ -1,4 +1,4 @@
-import { wslGatedStat } from './wsl-transcript-fs-access'
+import { transcriptFileStat } from './wsl-transcript-fs-access'
 import { WslTranscriptFsError } from './wsl-transcript-fs-gate'
 import { transcriptWatcherPathIsRunning } from './wsl-transcript-watcher-running-guard'
 
@@ -10,7 +10,7 @@ export async function transcriptWatcherPathIsInstallable(
     return false
   }
   try {
-    await wslGatedStat(filePath, 'exact', signal)
+    await transcriptFileStat(filePath, 'exact', signal)
     return true
   } catch (error) {
     if (error instanceof WslTranscriptFsError) {

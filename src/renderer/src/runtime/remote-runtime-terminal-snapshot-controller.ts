@@ -18,6 +18,7 @@ import {
 } from './remote-runtime-terminal-snapshot-state'
 import type {
   RemoteRuntimeMultiplexedTerminalState,
+  RemoteRuntimeSnapshotImage,
   RemoteRuntimeSnapshotOutcome
 } from './remote-runtime-terminal-multiplexer-types'
 
@@ -135,13 +136,7 @@ export abstract class RemoteRuntimeTerminalSnapshotController extends RemoteRunt
   protected async requestSnapshot(
     stream: RemoteRuntimeMultiplexedTerminalState,
     opts?: { scrollbackRows?: number }
-  ): Promise<{
-    data: string
-    cols: number
-    rows: number
-    seq?: number
-    source?: 'headless' | 'renderer'
-  } | null> {
+  ): Promise<RemoteRuntimeSnapshotImage | null> {
     const outcome = await this.requestSnapshotOutcome(stream, opts)
     // Why: the concurrent-request guard used to reject before the outcome existed; keep that contract for legacy callers.
     if (

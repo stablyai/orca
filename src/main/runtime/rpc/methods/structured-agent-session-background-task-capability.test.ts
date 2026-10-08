@@ -1,6 +1,11 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AgentSessionBackgroundTaskState } from '../../../../shared/agent-session-wire'
-import { AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY } from '../../../../shared/protocol-version'
+import type { AgentChildWorkView } from '../../../../shared/agent-status-child-work-view'
+import {
+  AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,
+  AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY
+} from '../../../../shared/protocol-version'
+import { AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY } from '../../../../shared/agent-session-background-task-child-views-capability'
 import { remoteRuntimeClientCapabilities } from '../../../../shared/remote-runtime-client-capabilities'
 import type { AgentSessionSubscribeInput } from '../../../native-chat/agent-session-wire/structured-agent-session-subscribers'
 import {
@@ -24,6 +29,20 @@ const CURRENT_CLIENT = {
   ...STRUCTURED_CLIENT,
   clientCapabilities: remoteRuntimeClientCapabilities(STRUCTURED_CLIENT.clientCapabilities)
 }
+/** Understands a stopless roster, but predates per-row stoppability. */
+const STOP_ONLY_CLIENT = {
+  ...STRUCTURED_CLIENT,
+  clientCapabilities: remoteRuntimeClientCapabilities(STRUCTURED_CLIENT.clientCapabilities).filter(
+    (capability) => capability !== AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY
+  )
+}
+const FOREGROUND_ROW = { id: 'fore', kind: 'agent', stoppable: false } as const
+const BACKGROUNDED_ROW = { id: 'back', kind: 'agent' } as const
+const MIXED_ROWS: AgentSessionBackgroundTaskState = {
+  state: 'monitoring',
+  supportsTaskStop: true,
+  tasks: [FOREGROUND_ROW, BACKGROUNDED_ROW]
+}
 
 describe('background-task stop capability at the RPC boundary', () => {
   it('advertises reader support on remote requests and subscriptions', () => {
@@ -46,7 +65,6 @@ describe('background-task stop capability at the RPC boundary', () => {
   it.each(['snapshot', 'batch', 'reset'] as const)(
     'gates the %s stream without changing the provider state',
     async (type) => {
-      hostCalls.hold = vi.fn(async () => undefined)
       hostCalls.subscribe.mockImplementation((input: AgentSessionSubscribeInput) => {
         const base = { sessionId: SESSION, fence: 1, backgroundTasks: TASKS }
         if (type === 'batch') {
@@ -93,6 +111,58 @@ describe('background-task stop capability at the RPC boundary', () => {
     }
   )
 
+  it('advertises row-stop support separately from stop support', () => {
+    // A client can advertise the stop capability and still predate `stoppable`,
+    // so the two must not be conflated.
+    expect(CURRENT_CLIENT.clientCapabilities).toContain(
+      AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY
+    )
+    expect(STOP_ONLY_CLIENT.clientCapabilities).not.toContain(
+      AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY
+    )
+  })
+
+  it.each([
+    ['row-stop reader', () => CURRENT_CLIENT, MIXED_ROWS],
+    [
+      'stop-only reader',
+      () => STOP_ONLY_CLIENT,
+      { state: 'monitoring', tasks: [BACKGROUNDED_ROW] }
+    ],
+    ['in-process reader', () => undefined, MIXED_ROWS]
+  ] as const)('projects unstoppable rows for a %s', async (_label, client, expected) => {
+    hostCalls.history.mockReturnValue({
+      ok: true,
+      page: { items: [], backgroundTasks: MIXED_ROWS }
+    })
+    expect(
+      await call('agentSession.history', { sessionId: SESSION, direction: 'tail' }, client())
+    ).toMatchObject({ ok: true, result: { page: { backgroundTasks: expected } } })
+  })
+
+  it('hands a reader that predates the field no strip when every row is unstoppable', async () => {
+    // Its pre-feature view exactly: the host published no foreground rows at all.
+    const foregroundOnly = {
+      state: 'monitoring' as const,
+      supportsTaskStop: true,
+      tasks: [{ id: 'fore', kind: 'agent' as const, stoppable: false }]
+    }
+    hostCalls.history.mockReturnValue({
+      ok: true,
+      page: { items: [], backgroundTasks: foregroundOnly }
+    })
+    expect(
+      await call(
+        'agentSession.history',
+        { sessionId: SESSION, direction: 'tail' },
+        STOP_ONLY_CLIENT
+      )
+    ).toMatchObject({ ok: true, result: { page: { backgroundTasks: null } } })
+    expect(
+      await call('agentSession.history', { sessionId: SESSION, direction: 'tail' }, CURRENT_CLIENT)
+    ).toMatchObject({ ok: true, result: { page: { backgroundTasks: foregroundOnly } } })
+  })
+
   it('preserves legacy stoppable state for both readers', async () => {
     const stoppable = { state: 'monitoring', tasks: TASKS.tasks }
     hostCalls.history.mockReturnValue({ ok: true, page: { items: [], backgroundTasks: stoppable } })
@@ -101,5 +171,82 @@ describe('background-task stop capability at the RPC boundary', () => {
         await call('agentSession.history', { sessionId: SESSION, direction: 'tail' }, client)
       ).toMatchObject({ ok: true, result: { page: { backgroundTasks: stoppable } } })
     }
+  })
+
+  it('advertises reading child views on remote requests and subscriptions', () => {
+    expect(CURRENT_CLIENT.clientCapabilities).toContain(
+      AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY
+    )
+  })
+})
+
+describe('child views at the RPC boundary', () => {
+  const view = (membership: 'live' | 'settled'): AgentChildWorkView => ({
+    id: `child-${membership}`,
+    providerId: `task-${membership}`,
+    kind: 'agent',
+    state: membership === 'live' ? 'working' : 'done',
+    membership,
+    ...(membership === 'settled' ? { outcome: 'succeeded' as const, settledAt: 2 } : {}),
+    firstObservedAt: 1,
+    observedAt: 2,
+    stoppable: true,
+    invocation: { invocationId: `toolu-${membership}`, generation: 1 }
+  })
+  const LIVE_ROW = { id: 'task-live', kind: 'agent', state: 'working' } as const
+  const SETTLED_ROW = { id: 'task-settled', kind: 'agent', state: 'done' } as const
+  /** Predates child views: reads any roster as live work. */
+  const PRE_VIEWS_CLIENT = {
+    ...STRUCTURED_CLIENT,
+    clientCapabilities: remoteRuntimeClientCapabilities(
+      STRUCTURED_CLIENT.clientCapabilities
+    ).filter((capability) => capability !== AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY)
+  }
+
+  async function historyFor(
+    backgroundTasks: AgentSessionBackgroundTaskState,
+    client: Parameters<typeof call>[2]
+  ) {
+    hostCalls.history.mockReturnValue({ ok: true, page: { items: [], backgroundTasks } })
+    return call('agentSession.history', { sessionId: SESSION, direction: 'tail' }, client)
+  }
+
+  it('hands a reader that predates views its live roster, without the views', async () => {
+    const mixed: AgentSessionBackgroundTaskState = {
+      state: 'monitoring',
+      supportsTaskStop: true,
+      tasks: [LIVE_ROW],
+      settledTasks: [SETTLED_ROW],
+      children: [view('live'), view('settled')]
+    }
+    const result = await historyFor(mixed, PRE_VIEWS_CLIENT)
+    expect(result).toMatchObject({
+      ok: true,
+      result: {
+        page: {
+          backgroundTasks: {
+            state: 'monitoring',
+            supportsTaskStop: true,
+            tasks: [LIVE_ROW],
+            settledTasks: [SETTLED_ROW]
+          }
+        }
+      }
+    })
+    expect(JSON.stringify(result)).not.toContain('children')
+  })
+
+  // A reader draws a per-row stop only when the host offers a targeted one, so a roster with no
+  // targeted stop (a Codex child, a persistent command) has no dead button to withhold.
+  it('keeps unstoppable rows for a stop-only reader when no targeted stop is offered', async () => {
+    const codexRoster: AgentSessionBackgroundTaskState = {
+      state: 'monitoring',
+      supportsStopAll: false,
+      tasks: [{ id: 'codex-agent:thread-a', kind: 'agent', state: 'working', stoppable: false }]
+    }
+    expect(await historyFor(codexRoster, STOP_ONLY_CLIENT)).toMatchObject({
+      ok: true,
+      result: { page: { backgroundTasks: codexRoster } }
+    })
   })
 })

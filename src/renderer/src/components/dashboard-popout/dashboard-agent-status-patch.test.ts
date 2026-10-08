@@ -99,6 +99,23 @@ describe('patchDashboardSnapshotFromAgentStatus', () => {
     })
   })
 
+  it('keeps an unverifiable child compatible with the pop-out wire vocabulary', () => {
+    const result = patchDashboardSnapshotFromAgentStatus(
+      snapshot(),
+      event({
+        subagents: [{ id: 'child-1', state: 'unverifiable', startedAt: 100 }]
+      })
+    )
+
+    expect(result.snapshot.cards[0].subagents).toEqual([
+      {
+        id: 'tab-1:leaf-1\u0000subagent:child-1',
+        name: 'unknown',
+        dotState: 'idle'
+      }
+    ])
+  })
+
   it('ignores stale, wrong-workspace, and session-only events', () => {
     const original = snapshot()
     expect(

@@ -111,6 +111,9 @@ export function buildBrowserAnnotationViewportBridgeScript({
       document.removeEventListener('scroll', state.requestUpdate, true);
       window.removeEventListener('resize', state.requestUpdate, true);
     }
+    if (state.onBeforeUnload) {
+      window.removeEventListener('beforeunload', state.onBeforeUnload);
+    }
     removeOverlay(state);
   };
 
@@ -234,7 +237,8 @@ export function buildBrowserAnnotationViewportBridgeScript({
     markerElements: new Map(),
     markers: [],
     shadowRoot: null,
-    requestUpdate: null
+    requestUpdate: null,
+    onBeforeUnload: null
   };
 
   state.requestUpdate = () => {
@@ -246,10 +250,17 @@ export function buildBrowserAnnotationViewportBridgeScript({
     });
   };
 
+  // Navigation can hold IPC cleanup until the next document finishes loading.
+  state.onBeforeUnload = () => {
+    cleanup(state);
+    delete globalThis[stateKey];
+  };
+
   updateMarkers(state, markers);
   window.addEventListener('scroll', state.requestUpdate, true);
   document.addEventListener('scroll', state.requestUpdate, true);
   window.addEventListener('resize', state.requestUpdate, true);
+  window.addEventListener('beforeunload', state.onBeforeUnload);
   globalThis[stateKey] = state;
   state.requestUpdate();
   return true;

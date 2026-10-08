@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   appendRetiredTerminalSurfaceProofs,
+  attachRetirementProofsToSnapshot,
   preserveTerminalRetirementProofs
 } from './mobile-session-terminal-retirement-proof'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-types'
@@ -121,6 +122,25 @@ describe('mobile session terminal retirement proofs', () => {
       terminal: 'term-new',
       incarnationId: 'inc-new'
     })
+  })
+
+  it('does not bump the version when a re-delivered proof only changes position', () => {
+    // The append moves a re-supplied proof to the tail, so [A,B] re-supplied with A becomes [B,A].
+    // Comparing by position called that a change and fanned a no-op version bump to every client.
+    const a = { ...retired, parentTabId: 'tab-a', leafId: 'leaf-a', ptyId: 'pty-a' }
+    const b = { ...retired, parentTabId: 'tab-b', leafId: 'leaf-b', ptyId: 'pty-b' }
+    const stored = snapshot({ retiredTerminalSurfaces: [a, b] })
+
+    expect(attachRetirementProofsToSnapshot(stored, [a])).toBeNull()
+  })
+
+  it('still bumps the version when a re-delivered proof names a new incarnation', () => {
+    const a = { ...retired, parentTabId: 'tab-a', leafId: 'leaf-a', ptyId: 'pty-a' }
+    const stored = snapshot({ retiredTerminalSurfaces: [a] })
+
+    expect(
+      attachRetirementProofsToSnapshot(stored, [{ ...a, incarnationId: 'inc-next' }])
+    ).toMatchObject({ snapshotVersion: stored.snapshotVersion + 1 })
   })
 
   it('preserves each retired leaf identity independently', () => {

@@ -16,13 +16,22 @@ import { normalizeAiVaultResumeFilePath } from '../../../src/shared/ai-vault-res
 import type { TuiAgent } from '../../../src/shared/tui-agent'
 import { parseWslUncPath } from '../../../src/shared/wsl-paths'
 import { resolveWindowsShellStartupFamily } from '../../../src/shared/windows-terminal-shell'
-import type { RpcClient } from '../transport/rpc-client'
-import {
-  readMobileReviewCreatedTerminal,
-  readMobileReviewTerminalSendAccepted,
-  type MobileReviewTerminalTab
-} from './mobile-diff-review-rpc'
+import type { RpcOperationSender } from '../transport/rpc-operation-sender'
+import { interpretOrThrowRefusalMessage } from '../transport/rpc-refusal-message'
+import { reviewTerminalCreateRun, reviewTerminalSendRun } from './mobile-review-terminal-operations'
+import type { MobileReviewTerminalTab } from './review-terminal-reply-schema'
 import type { MobileAiVaultResumeTargetStatus } from '../agent-history/agent-history-resume-target'
+import { QODER_OWNED_TERMINAL_CREATE_CAPABILITY } from '../../../src/shared/qoder-terminal-create-capability'
+import { agentHistoryHostStatusSchema } from '../agent-history/agent-history-reply-schema'
+import { readMobileRuntimeHostPlatform } from '../transport/mobile-runtime-host-platform'
+
+export function readMobileAiVaultResumeHost(statusResult: unknown) {
+  const status = agentHistoryHostStatusSchema.safeParse(statusResult)
+  return {
+    platform: readMobileRuntimeHostPlatform(statusResult),
+    capabilities: status.success ? status.data.capabilities : undefined
+  }
+}
 
 export function buildMobileAiVaultResumeCommand(args: {
   session: Pick<AiVaultSession, 'agent' | 'sessionId' | 'cwd' | 'codexHome'> &
@@ -151,14 +160,27 @@ function normalizeMobileAiVaultResumeCommandOverrides(
 }
 
 export async function resumeAiVaultSessionInTerminal(
-  client: Pick<RpcClient, 'sendRequest'>,
+  client: RpcOperationSender,
   worktreeId: string,
-  launch: MobileAiVaultResumeLaunch & { clientMutationId?: string }
+  launch: MobileAiVaultResumeLaunch & {
+    clientMutationId?: string
+    hostCapabilities?: readonly string[]
+  },
+  assertCurrentOwner?: () => void
 ): Promise<MobileReviewTerminalTab> {
-  const created = await client.sendRequest(
-    'session.tabs.createTerminal',
+  assertCurrentOwner?.()
+  // Qoder's execution host must select its installed executable before the resume starts.
+  const launchAtCreate =
+    launch.launchAgent === 'qoder' &&
+    Boolean(launch.clientMutationId) &&
+    launch.hostCapabilities?.includes(QODER_OWNED_TERMINAL_CREATE_CAPABILITY) === true
+  // Each request is awaited outside its catch so a transport drop propagates as the original error
+  // object; only a refusal is rewritten into this step's own copy.
+  const created = await reviewTerminalCreateRun.request(
+    client,
     {
       worktree: `id:${worktreeId}`,
+      ...(launchAtCreate ? { command: launch.command } : {}),
       ...(launch.env ? { env: launch.env } : {}),
       ...(launch.envToDelete ? { envToDelete: launch.envToDelete } : {}),
       ...(launch.launchConfig ? { launchConfig: launch.launchConfig } : {}),
@@ -170,15 +192,17 @@ export async function resumeAiVaultSessionInTerminal(
     },
     { timeoutMs: RESUME_RPC_TIMEOUT_MS }
   )
-  if (!created.ok) {
-    throw new Error(created.error?.message || 'Failed to create terminal')
+  let terminalTab
+  terminalTab = interpretOrThrowRefusalMessage(
+    () => reviewTerminalCreateRun.interpret(created),
+    'Failed to create terminal'
+  )
+  if (launchAtCreate) {
+    return terminalTab
   }
-  const terminalTab = readMobileReviewCreatedTerminal(created.result)
-  if (!terminalTab) {
-    throw new Error('Created terminal response was invalid')
-  }
-  const sent = await client.sendRequest(
-    'terminal.send',
+  assertCurrentOwner?.()
+  const sent = await reviewTerminalSendRun.request(
+    client,
     {
       terminal: terminalTab.terminal,
       text: launch.command,
@@ -186,10 +210,12 @@ export async function resumeAiVaultSessionInTerminal(
     },
     { timeoutMs: RESUME_RPC_TIMEOUT_MS }
   )
-  if (!sent.ok) {
-    throw new Error(sent.error?.message || 'Failed to send resume command')
-  }
-  if (!readMobileReviewTerminalSendAccepted(sent.result)) {
+  let accepted
+  accepted = interpretOrThrowRefusalMessage(
+    () => reviewTerminalSendRun.interpret(sent),
+    'Failed to send resume command'
+  )
+  if (!accepted) {
     throw new Error('Terminal input is locked')
   }
   return terminalTab

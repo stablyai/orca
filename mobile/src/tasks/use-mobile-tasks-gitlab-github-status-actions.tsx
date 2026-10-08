@@ -1,6 +1,11 @@
 import type { ProjectFileMergeActionsModel } from './use-mobile-tasks-project-file-merge-actions'
 import { useCallback } from './mobile-tasks-dependencies'
-import { type TaskItem, isSuccess } from './mobile-tasks-legacy-foundation'
+import type { TaskItem } from './mobile-tasks-legacy-foundation'
+import {
+  githubIssueUpdate,
+  gitlabIssueUpdate,
+  gitlabMergeRequestStateUpdate
+} from './mobile-task-item-state-operations'
 
 export function useMobileTasksGitlabGithubStatusActions(model: ProjectFileMergeActionsModel) {
   const {
@@ -27,26 +32,28 @@ export function useMobileTasksGitlabGithubStatusActions(model: ProjectFileMergeA
       setError('')
       const nextState = item.source.state === 'closed' ? 'opened' : 'closed'
       try {
-        const response =
+        // An issue edit and a merge-request state change are different methods, so each arm sends
+        // its own operation rather than one call picking a method string.
+        const updated =
           item.source.type === 'issue'
-            ? await client.sendRequest('gitlab.updateIssue', {
-                repo: `id:${item.source.repoId}`,
-                number: item.source.number,
-                updates: { state: nextState },
-                projectRef: item.source.projectRef
-              })
-            : await client.sendRequest('gitlab.updateMRState', {
-                repo: `id:${item.source.repoId}`,
-                iid: item.source.number,
-                state: nextState,
-                projectRef: item.source.projectRef
-              })
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as { ok?: boolean; error?: string }
-        if (result.ok === false) {
-          throw new Error(result.error ?? 'Failed to update GitLab item')
+            ? gitlabIssueUpdate.interpret(
+                await gitlabIssueUpdate.request(client, {
+                  repo: `id:${item.source.repoId}`,
+                  number: item.source.number,
+                  updates: { state: nextState },
+                  projectRef: item.source.projectRef
+                })
+              )
+            : gitlabMergeRequestStateUpdate.interpret(
+                await gitlabMergeRequestStateUpdate.request(client, {
+                  repo: `id:${item.source.repoId}`,
+                  iid: item.source.number,
+                  state: nextState,
+                  projectRef: item.source.projectRef
+                })
+              )
+        if (updated.ok === false) {
+          throw new Error(updated.error ?? 'Failed to update GitLab item')
         }
         setActionItem(null)
         await loadTasks({ silent: true })
@@ -77,8 +84,8 @@ export function useMobileTasksGitlabGithubStatusActions(model: ProjectFileMergeA
       setMutatingStatus(true)
       setError('')
       try {
-        const response = await client.sendRequest(
-          'github.updateIssue',
+        const reply = await githubIssueUpdate.request(
+          client,
           {
             repo: `id:${item.source.repoId}`,
             number: item.source.number,
@@ -86,10 +93,7 @@ export function useMobileTasksGitlabGithubStatusActions(model: ProjectFileMergeA
           },
           { timeoutMs: 30_000 }
         )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as { ok?: boolean; error?: string }
+        const result = githubIssueUpdate.interpret(reply)
         if (result.ok === false) {
           throw new Error(result.error ?? 'Failed to update GitHub issue')
         }

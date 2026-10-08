@@ -9,8 +9,8 @@ import {
 } from './browser-session-proxy'
 import { hasSystemMediaAccess, requestSystemMediaAccess } from './browser-media-access'
 import { isAutoGrantedBrowserSessionPermission } from './browser-session-permission-policy'
-import { setupGoogleAuthUserAgentOverride } from './browser-session-ua'
-import { setBrowserSessionUserAgentMode } from './browser-session-user-agent-mode'
+import { installBrowserSessionUserAgentPolicy } from './browser-session-ua'
+import { getBrowserProcessUserAgentIdentity } from './browser-process-user-agent'
 import {
   allowsBrowserWebAuthnPermission,
   clearBrowserWebAuthnAccessHandlers,
@@ -20,6 +20,33 @@ import { noticeDocPreviewDownloadBlocked } from './doc-preview-download-block-no
 
 // Why: one shared installer keeps every partition's deny-by-default permission/download policies from drifting apart.
 const configuredPartitions = new Set<string>()
+const userAgentPolicyDisposerBySession = new WeakMap<Session, () => void>()
+
+export function retireBrowserSessionUserAgentPolicy(sess: Session): void {
+  const dispose = userAgentPolicyDisposerBySession.get(sess)
+  if (!dispose) {
+    return
+  }
+  userAgentPolicyDisposerBySession.delete(sess)
+  dispose()
+}
+
+function configureBrowserSessionUserAgentPolicy(sess: Session, installExceptions: boolean): void {
+  sess.setUserAgent(getBrowserProcessUserAgentIdentity().userAgent)
+  if (!installExceptions) {
+    retireBrowserSessionUserAgentPolicy(sess)
+    return
+  }
+  if (userAgentPolicyDisposerBySession.has(sess)) {
+    return
+  }
+  userAgentPolicyDisposerBySession.set(
+    sess,
+    installBrowserSessionUserAgentPolicy(sess, (request) =>
+      browserManager.resolveBrowserGuestRequestUserAgent(request)
+    )
+  )
+}
 
 /** Drop only the installer memo; retired-session guards remain fail-closed. */
 export function forgetBrowserSessionPartitionConfiguration(partition: string): void {
@@ -69,17 +96,22 @@ function resolvePermissionNoticeUrl(
 export type BrowserPartitionDownloadPolicy = 'route' | 'deny'
 export type BrowserPartitionPermissionPolicy = 'browser' | 'deny'
 
-export function installBrowserSessionPartitionPolicies(
+// Why async despite no await: the user agent policy is configured before the first suspension, and
+// getBrowserProcessUserAgentIdentity throws when the process identity was never initialized. Callers
+// report failure through the promise (`void install(...).catch(...)`), so a synchronous throw would
+// escape every one of them and gate browser-session startup on bookkeeping that is allowed to fail.
+export async function installBrowserSessionPartitionPolicies(
   profile: BrowserSessionProfile,
   options: {
     downloads?: BrowserPartitionDownloadPolicy
     permissions?: BrowserPartitionPermissionPolicy
     applyAppWideProxy?: boolean
+    userAgentExceptions?: boolean
   } = {}
 ): Promise<void> {
   const { partition } = profile
   const sess = session.fromPartition(partition)
-  setBrowserSessionUserAgentMode(sess, profile.userAgentMode ?? 'clean')
+  configureBrowserSessionUserAgentPolicy(sess, options.userAgentExceptions !== false)
   // Why: route partitions own a SOCKS transport policy that the app proxy must not overwrite.
   const proxyReady = (
     options.applyAppWideProxy === false ? Promise.resolve() : applyProxyToBrowserSession(sess)
@@ -92,9 +124,6 @@ export function installBrowserSessionPartitionPolicies(
   }
 
   browserManager.installCertificateRequestGuard(sess)
-  if (profile.userAgentMode !== 'native') {
-    setupGoogleAuthUserAgentOverride(sess)
-  }
   if (options?.permissions === 'deny') {
     sess.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false))
     sess.setPermissionCheckHandler(() => false)
@@ -168,6 +197,7 @@ export function installBrowserSessionPartitionPolicies(
 export function clearBrowserSessionPartitionPolicies(partition: string, sess: Session): void {
   // Why: the Electron Session survives partition deletion; clear callbacks/listeners so removed profiles don't retain closures.
   invalidateBrowserSessionProxyApplication(sess)
+  retireBrowserSessionUserAgentPolicy(sess)
   configuredPartitions.delete(partition)
   browserManager.removeCertificateRequestGuard(sess)
   sess.removeListener('will-download', handleWillDownload)
@@ -176,22 +206,4 @@ export function clearBrowserSessionPartitionPolicies(partition: string, sess: Se
   sess.setPermissionRequestHandler(null)
   sess.setPermissionCheckHandler(null)
   sess.setDisplayMediaRequestHandler(null)
-}
-
-export function applyBrowserSessionUserAgentModes(profiles: BrowserSessionProfile[]): void {
-  for (const profile of profiles) {
-    const partition = profile.partition
-    try {
-      const sess = session.fromPartition(partition)
-      const userAgentMode = profile.userAgentMode ?? 'clean'
-      setBrowserSessionUserAgentMode(sess, userAgentMode)
-
-      if (profile.userAgentMode === 'native') {
-        continue
-      }
-      setupGoogleAuthUserAgentOverride(sess)
-    } catch {
-      /* session not available yet (e.g. unit tests or pre-ready) */
-    }
-  }
 }

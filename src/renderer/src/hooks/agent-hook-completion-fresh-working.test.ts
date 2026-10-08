@@ -12,7 +12,7 @@ type MockStoreState = {
   settings: {
     experimentalTerminalAttention: boolean
     notifications: { enabled: boolean; agentTaskComplete: boolean }
-  }
+  } | null
   ptyIdsByTabId: Record<string, string[]>
   suppressedPtyExitIds: Record<string, boolean>
   tabsByWorktree: Record<string, { id: string; ptyId: string }[]>
@@ -20,7 +20,6 @@ type MockStoreState = {
   agentLaunchConfigByPaneKey: Record<string, unknown>
   agentStatusByPaneKey: Record<string, unknown>
   getAgentLaunchConfigForStatusEntry: () => undefined
-  getAgentLaunchConfigForStatusMetadata: () => undefined
 }
 
 let mockStoreState: MockStoreState
@@ -64,19 +63,20 @@ describe('agent hook completion fresh-working gate', () => {
       terminalLayoutsByTabId: {},
       agentLaunchConfigByPaneKey: {},
       agentStatusByPaneKey: {},
-      getAgentLaunchConfigForStatusEntry: () => undefined,
-      getAgentLaunchConfigForStatusMetadata: () => undefined
+      getAgentLaunchConfigForStatusEntry: () => undefined
     }
   })
 
   afterEach(() => vi.useRealTimers())
 
-  it('stays gated through a stamped working completion after re-enable', async () => {
+  it('waits for fresh working after settings hydration before dispatching completion', async () => {
     const {
       observeAgentHookCompletionForNotification,
       syncAgentHookCompletionNotificationSettings
     } = await import('./agent-hook-completion-notifications')
 
+    const hydratedSettings = mockStoreState.settings
+    mockStoreState.settings = null
     syncAgentHookCompletionNotificationSettings()
     observeAgentHookCompletionForNotification({
       paneKey: PANE_KEY,
@@ -84,7 +84,7 @@ describe('agent hook completion fresh-working gate', () => {
       payload: { ...working(), stateStartedAt: 1_000 }
     })
 
-    mockStoreState.settings.notifications.agentTaskComplete = true
+    mockStoreState.settings = hydratedSettings
     syncAgentHookCompletionNotificationSettings()
     observeAgentHookCompletionForNotification({
       paneKey: PANE_KEY,

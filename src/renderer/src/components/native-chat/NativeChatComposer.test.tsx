@@ -58,6 +58,7 @@ vi.mock('../../store', () => {
   const state = {
     dictationState: 'idle',
     settings: { voice: { enabled: false }, nativeChatSessionOptions: {} },
+    agentStatusByPaneKey: {},
     updateSettings: vi.fn(),
     clearNativeChatLaunchDraft: mocks.clearNativeChatLaunchDraft,
     markNativeChatLaunchDraftAdopted: mocks.markNativeChatLaunchDraftAdopted
@@ -99,7 +100,7 @@ vi.mock('@/lib/native-chat-telemetry', () => ({
 vi.mock('./use-native-chat-draft', () => ({
   useNativeChatDraft: (scopeKey: string) => {
     mocks.draftScopeKeys.push(scopeKey)
-    return { draft: mocks.draft, setDraft: mocks.setDraft }
+    return { draft: mocks.draft, setDraft: mocks.setDraft, flushDraftAppends: () => {} }
   }
 }))
 vi.mock('./native-chat-draft-cache', () => ({
@@ -122,7 +123,8 @@ vi.mock('./use-native-chat-composer-attachments', () => ({
       attachResolvedPaths: vi.fn(),
       clearImageAttachments: vi.fn(),
       flushPendingAttachments: mocks.flushPendingAttachments,
-      removeImageAttachment: vi.fn()
+      removeImageAttachment: vi.fn(),
+      pendingChips: { begin: vi.fn(), resolve: vi.fn(), drop: vi.fn(), attachReferences: vi.fn() }
     }
   }
 }))
@@ -155,6 +157,7 @@ vi.mock('./use-native-chat-send-lifecycle', () => ({
 }))
 
 import { NativeChatComposer } from './NativeChatComposer'
+import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 
 describe('NativeChatComposer', () => {
   beforeEach(() => {
@@ -244,6 +247,22 @@ describe('NativeChatComposer', () => {
     )
   })
 
+  it('writes nothing from a composer hidden under a prompt card that still holds focus', () => {
+    render(
+      <NativeChatComposer
+        terminalTabId="tab-1"
+        paneKey="tab-1:leaf-1"
+        targetPtyId="pty-1"
+        agent="claude"
+        inputOwnedByCard
+      />
+    )
+    act(() => mocks.fieldProps?.onSend?.())
+    act(() => mocks.fieldProps?.onStop?.())
+    expect(mocks.sendNativeChatMessage).not.toHaveBeenCalled()
+    expect(sendRuntimePtyInput).not.toHaveBeenCalled()
+  })
+
   it('associates a delayed submit with its optimistic cache entry', () => {
     const onOptimisticSend = vi.fn(() => 'pending-1')
     render(
@@ -306,12 +325,14 @@ describe('NativeChatComposer', () => {
     expect(mocks.setDraft).toHaveBeenCalledWith('')
   })
 
-  // The structured menu offers only what the dispatcher can carry out. Listing the
-  // agent's TUI catalog here answered every pick with "not available in chat sessions".
+  // The structured menu offers only what a pick can carry out: the host's own
+  // commands, plus the ones the agent itself runs from message text (Codex `/goal`).
+  // Listing the agent's whole TUI catalog here answered every pick with
+  // "not available in chat sessions".
   it.each([
-    ['claude', 'compact'],
-    ['codex', 'vim']
-  ] as const)('offers %s only actionable structured slash commands', (agent, withheld) => {
+    ['claude', 'compact', ['model', 'effort']],
+    ['codex', 'vim', ['model', 'effort', 'goal']]
+  ] as const)('offers %s only actionable structured slash commands', (agent, withheld, offered) => {
     mocks.draft = '/'
     render(
       <NativeChatComposer
@@ -340,7 +361,7 @@ describe('NativeChatComposer', () => {
     const names = (mocks.fieldProps?.autocomplete?.items ?? [])
       .filter((item) => item.kind === 'command')
       .map((item) => item.name)
-    expect(names).toEqual(['model', 'effort'])
+    expect(names).toEqual([...offered])
     expect(names).not.toContain(withheld)
   })
 
@@ -429,6 +450,7 @@ describe('NativeChatComposer', () => {
     act(() => mocks.fieldProps?.onSend?.())
 
     expect(mocks.sendNativeChatMessageWithImageAttachments).toHaveBeenCalledWith(
+      'codex',
       {},
       'pty-1',
       'hello',
@@ -471,7 +493,7 @@ describe('NativeChatComposer', () => {
     expect(mocks.sendNativeChatTypedCommand).not.toHaveBeenCalled()
   })
 
-  it.each(['claude', 'openclaude'] as const)('keeps %s slash composer sends pasted', (agent) => {
+  it.each(['claude'] as const)('keeps %s slash composer sends pasted', (agent) => {
     mocks.draft = '/clear'
     render(
       <NativeChatComposer

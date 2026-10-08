@@ -3,8 +3,12 @@
 // have no structured signal, so we parse the text conservatively and only treat
 // it as a question when a clear option list is present.
 
+import type { AgentJournalFreeTextInput } from '../../../src/shared/agent-session-journal-types'
+
 export type MobileChatQuestion = {
   question: string
+  /** Structured prompt identity, present only for durable host prompts. */
+  prompt?: { itemId: string; expectedRevision: number }
   options: string[]
   multiSelect: boolean
   /** Structured questions hide the free-text row when the provider does not accept it. */
@@ -17,6 +21,7 @@ export type MobileChatQuestion = {
   optionDescriptions?: (string | undefined)[]
   /** Opaque prefix used when free-text answers must target a specific prompt. */
   freeTextToken?: string
+  freeTextInput?: AgentJournalFreeTextInput
 }
 
 export function mobileChatQuestionKey(question: MobileChatQuestion): string {
@@ -201,11 +206,13 @@ export function formatQuestionAnswer(question: MobileChatQuestion, selected: str
 }
 
 export function formatQuestionFreeTextAnswer(question: MobileChatQuestion, text: string): string {
-  const trimmed = text.trim()
-  if (trimmed.length === 0) {
+  const answer = question.freeTextInput?.allowEmpty ? text : text.trim()
+  if (answer.length === 0 && !question.freeTextInput?.allowEmpty) {
     return ''
   }
   return question.freeTextToken
-    ? `${question.freeTextToken}:${encodeURIComponent(trimmed)}`
-    : formatQuestionAnswer(question, [trimmed])
+    ? `${question.freeTextToken}:${encodeURIComponent(answer)}`
+    : question.freeTextInput?.allowEmpty
+      ? answer
+      : formatQuestionAnswer(question, [answer])
 }

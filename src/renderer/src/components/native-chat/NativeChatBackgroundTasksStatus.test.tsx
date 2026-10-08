@@ -3,7 +3,7 @@
 import '@testing-library/jest-dom/vitest'
 
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import { Profiler } from 'react'
+import { Profiler, useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionBackgroundTask } from '../../../../shared/agent-session-wire'
 import { NativeChatBackgroundTasksStatus } from './NativeChatBackgroundTasksStatus'
@@ -12,6 +12,24 @@ afterEach(() => {
   cleanup()
   vi.useRealTimers()
 })
+
+/** The strip's disclosure is parent-owned, because the strip unmounts whenever
+ *  live work momentarily drops to nothing; this stands in for that owner. */
+function DisclosureHost(
+  props: Omit<
+    Parameters<typeof NativeChatBackgroundTasksStatus>[0],
+    'expanded' | 'onExpandedChange'
+  >
+): React.JSX.Element {
+  const [expanded, setExpanded] = useState(false)
+  return (
+    <NativeChatBackgroundTasksStatus
+      {...props}
+      expanded={expanded}
+      onExpandedChange={setExpanded}
+    />
+  )
+}
 
 const TASKS: AgentSessionBackgroundTask[] = [
   { id: 'codex-agent:child-1', kind: 'agent', description: 'count_a' },
@@ -23,7 +41,7 @@ function renderStrip(props: { supportsTaskStop: boolean; supportsStopAll: boolea
 } {
   const onStop = vi.fn()
   render(
-    <NativeChatBackgroundTasksStatus
+    <DisclosureHost
       isVisible
       tasks={TASKS}
       settledTasks={[]}
@@ -51,6 +69,33 @@ describe('NativeChatBackgroundTasksStatus stop affordances', () => {
     expect(screen.getByLabelText('Stop background tasks')).toBeInTheDocument()
   })
 
+  it('withholds a row stop the host reported it cannot act on', () => {
+    // Claude publishes in-turn foreground rows with `stoppable: false`: the
+    // session accepts targeted stops, but `stopTask` has no target for this row,
+    // so a Stop here resolves to an empty list and reports nothing cancelled.
+    render(
+      <DisclosureHost
+        isVisible
+        tasks={[
+          { id: 'fore-1', kind: 'agent', description: 'in-turn subagent', stoppable: false },
+          { id: 'back-1', kind: 'agent', description: 'backgrounded subagent' }
+        ]}
+        settledTasks={[]}
+        indicatorActive
+        supportsTaskStop
+        supportsStopAll
+        stoppingTaskIds={new Set()}
+        stoppingAll={false}
+        onStop={vi.fn()}
+      />
+    )
+    fireEvent.click(screen.getByRole('button', { expanded: false }))
+
+    expect(screen.getByText('in-turn subagent')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Stop in-turn subagent')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Stop backgrounded subagent')).toBeInTheDocument()
+  })
+
   it('offers no stop at all when the provider exposes none', () => {
     // Codex: a Stop button here would be a control that cannot act.
     renderStrip({ supportsTaskStop: false, supportsStopAll: false })
@@ -64,7 +109,7 @@ describe('NativeChatBackgroundTasksStatus stop affordances', () => {
 describe('background-tasks strip header', () => {
   function renderHeader(tasks: AgentSessionBackgroundTask[]): HTMLElement {
     render(
-      <NativeChatBackgroundTasksStatus
+      <DisclosureHost
         isVisible
         tasks={tasks}
         settledTasks={[]}
@@ -111,7 +156,7 @@ describe('background-tasks strip header', () => {
 
   it('dims the monitor amber while a turn owns the voice', () => {
     render(
-      <NativeChatBackgroundTasksStatus
+      <DisclosureHost
         isVisible
         tasks={[{ id: 'm1', kind: 'monitor' }]}
         settledTasks={[]}
@@ -159,6 +204,31 @@ describe('background-tasks strip header', () => {
     expect(header.textContent).toBe('1 agent · 1 shell')
   })
 
+  describe('on a narrow strip', () => {
+    const wideWindow = window.innerWidth
+    afterEach(() => {
+      window.innerWidth = wideWindow
+    })
+
+    it('totals a breakdown across kinds', () => {
+      window.innerWidth = 320
+      const header = renderHeader([
+        { id: 'a1', kind: 'agent' },
+        { id: 'c1', kind: 'command' }
+      ])
+      expect(header).toHaveAttribute('aria-label', '2 background tasks')
+    })
+
+    it('keeps one kind in its attention form', () => {
+      window.innerWidth = 320
+      const header = renderHeader([
+        { id: 'a1', kind: 'agent', state: 'waiting' },
+        { id: 'a2', kind: 'agent', state: 'waiting' }
+      ])
+      expect(header).toHaveAttribute('aria-label', '2 agents waiting — needs approval')
+    })
+  })
+
   it('carries no icon on a collapsed total, which spans kinds', () => {
     const header = renderHeader([
       { id: 'a1', kind: 'agent' },
@@ -176,7 +246,7 @@ describe('settled rows beside their live siblings', () => {
   // usage it ended on, and stops claiming a clock or a stop control.
   it('keeps a settled row with its final usage, no clock and no stop', () => {
     render(
-      <NativeChatBackgroundTasksStatus
+      <DisclosureHost
         isVisible
         tasks={[
           {
@@ -220,7 +290,7 @@ describe('settled rows beside their live siblings', () => {
 describe('background-task row reasons', () => {
   function expandedRows(tasks: AgentSessionBackgroundTask[]): HTMLElement[] {
     render(
-      <NativeChatBackgroundTasksStatus
+      <DisclosureHost
         isVisible
         tasks={tasks}
         settledTasks={[]}
@@ -236,7 +306,7 @@ describe('background-task row reasons', () => {
     return screen.getAllByRole('listitem')
   }
 
-  // `unverifiable` is the SSH verdict for "no contact"; a row that hides it reads
+  // `unverifiable` is the SSH verdict for lost contact; a row that hides it reads
   // like a working child. `blocked` is the same class of loss.
   it('names the reason on every attention state, not only on waiting', () => {
     const rows = expandedRows([
@@ -246,7 +316,7 @@ describe('background-task row reasons', () => {
       { id: 'a4', kind: 'agent', description: 'busy child', state: 'working' }
     ])
     expect(rows).toHaveLength(4)
-    expect(rows[0].textContent).toContain('ssh child · no contact')
+    expect(rows[0].textContent).toContain('ssh child · status unavailable')
     expect(rows[1].textContent).toContain('flaky child · failed')
     expect(rows[2].textContent).toContain('approval child · needs approval')
     // A running row has nothing to explain.
@@ -261,6 +331,8 @@ it('stops elapsed renders in a hidden pane and catches up on reveal', () => {
   const view = (isVisible: boolean) => (
     <Profiler id="strip" onRender={committed}>
       <NativeChatBackgroundTasksStatus
+        expanded={false}
+        onExpandedChange={() => {}}
         isVisible={isVisible}
         tasks={[{ id: 'shell', kind: 'command', startedAt: 1_000 }]}
         settledTasks={[]}
@@ -286,5 +358,49 @@ it('stops elapsed renders in a hidden pane and catches up on reveal', () => {
   act(() => vi.advanceTimersByTime(1_000))
   expect(committed).toHaveBeenCalled()
   unmount()
+  expect(vi.getTimerCount()).toBe(0)
+})
+
+it('lets the 1 Hz tick sleep while every row has settled, with each run frozen', () => {
+  vi.useFakeTimers()
+  vi.setSystemTime(1_000_000)
+  const committed = vi.fn()
+  const finished = (id: string, firstObservedAt: number, settledAt: number) => ({
+    id,
+    providerId: `task-${id}`,
+    kind: 'agent' as const,
+    description: `child ${id}`,
+    state: 'done' as const,
+    membership: 'settled' as const,
+    outcome: 'succeeded' as const,
+    firstObservedAt,
+    observedAt: settledAt,
+    settledAt,
+    stoppable: false,
+    invocation: { invocationId: `spawn-${id}`, generation: 1 }
+  })
+  render(
+    <Profiler id="strip" onRender={committed}>
+      <NativeChatBackgroundTasksStatus
+        expanded
+        onExpandedChange={() => {}}
+        isVisible
+        tasks={[]}
+        settledTasks={[]}
+        childViews={[finished('a', 400_000, 520_000), finished('b', 700_000, 760_000)]}
+        indicatorActive
+        supportsTaskStop
+        supportsStopAll
+        stoppingTaskIds={new Set()}
+        stoppingAll={false}
+        onStop={() => {}}
+      />
+    </Profiler>
+  )
+  const rows = screen.getAllByRole('listitem').map((row) => row.textContent)
+  expect(rows).toEqual(['child a · Agent2m 0s', 'child b · Agent1m 0s'])
+  committed.mockClear()
+  act(() => vi.advanceTimersByTime(5_000))
+  expect(committed).not.toHaveBeenCalled()
   expect(vi.getTimerCount()).toBe(0)
 })

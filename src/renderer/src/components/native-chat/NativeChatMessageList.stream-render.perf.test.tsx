@@ -3,18 +3,19 @@
 import '@testing-library/jest-dom/vitest'
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import type * as NativeChatProseModule from './native-chat-prose'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import type * as NativeChatProseModule from '../../../../shared/native-chat-prose'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { projectStructuredAgentSessionMessages } from '../../../../shared/structured-agent-session-message-projection'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
 import type * as UnifiedPatchModule from '../../../../shared/native-chat-unified-patch'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
+import { installNativeChatMessageListTestViewport } from './native-chat-message-list-test-viewport'
 
 // Counting real per-row work rather than a render counter: a future refactor could keep the
 // render count low while still re-deriving every row's markdown.
 const proseCalls = vi.hoisted(() => ({ count: 0 }))
-vi.mock('./native-chat-prose', async (importOriginal) => {
+vi.mock('../../../../shared/native-chat-prose', async (importOriginal) => {
   const actual = await importOriginal<typeof NativeChatProseModule>()
   return {
     ...actual,
@@ -43,6 +44,11 @@ vi.mock('../../../../shared/native-chat-unified-patch', async (importOriginal) =
 
 const { NativeChatMessageList } = await import('./NativeChatMessageList')
 
+let restoreViewport = (): void => {}
+beforeAll(() => {
+  restoreViewport = installNativeChatMessageListTestViewport()
+})
+afterAll(() => restoreViewport())
 afterEach(cleanup)
 
 const TRANSCRIPT_LENGTH = 120
@@ -65,6 +71,7 @@ function sessionWith(messages: NativeChatMessage[]): NativeChatLiveSession {
     agent: 'codex',
     hasMore: false,
     loadingEarlier: false,
+    olderHistoryGeneration: 0,
     loadEarlier: vi.fn(),
     readPhase: 'ready'
   }
@@ -78,7 +85,6 @@ describe('native chat transcript re-render cost during a streaming turn', () => 
         session={sessionWith(messages)}
         isWorking={true}
         expandSignal={false}
-        fontScale={1}
       />
     )
 
@@ -97,7 +103,6 @@ describe('native chat transcript re-render cost during a streaming turn', () => 
           session={sessionWith(streaming)}
           isWorking={true}
           expandSignal={false}
-          fontScale={1}
         />
       )
     }
@@ -136,11 +141,12 @@ describe('native chat transcript re-render cost during a streaming turn', () => 
     }
     const view = (items: AgentJournalRenderItem[]) => (
       <NativeChatMessageList
-        session={sessionWith(projectStructuredAgentSessionMessages(items, [], []))}
+        session={sessionWith(
+          projectStructuredAgentSessionMessages(items, [], [], { rejectedInPlace: true })
+        )}
         journalItems={items}
         isWorking={false}
         expandSignal={false}
-        fontScale={1}
       />
     )
     const { rerender } = render(view([user, diff]))

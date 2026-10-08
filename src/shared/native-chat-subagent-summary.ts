@@ -1,11 +1,11 @@
 // One spawn group's roster → the numbers a single flat row needs.
 //
-// Shared because the producer and the desktop transcript must agree on what
-// "N working" means: the producer uses the same terminal predicate the renderer
-// does, so a state that reads terminal here latches terminal there. Mobile has
-// no roster renderer — it shows only the write-time-frozen fallback sentence,
-// which is why that sentence is built from this same summary, and why the
-// sentence itself may claim nothing that a later reader cannot still verify.
+// Shared because the producer and every transcript (desktop and the phone) must
+// agree on what "N working" means: the producer uses the same terminal predicate
+// the renderers do, so a state that reads terminal here latches terminal there.
+// A client without the block type shows only the write-time-frozen fallback
+// sentence, which is why that sentence is built from this same summary, and why
+// the sentence itself may claim nothing that a later reader cannot still verify.
 
 import {
   isSubagentGroupBlock,
@@ -104,8 +104,10 @@ export type NativeChatSubagentSummary = {
    *  Children's counters are disjoint from the parent's, so this never
    *  double-counts — and the parent's own usage is deliberately excluded. */
   tokens: number | null
-  /** Earliest child start, for the live elapsed clock. */
-  startedAt: number | null
+  /** Where the elapsed clock starts so that, run to now or to `settledAt`, it
+   *  reads the time the children's latest runs cover: overlaps once, idle gaps
+   *  not at all. Not a real start time. Null when no run can be measured. */
+  clockStartedAt: number | null
   /** Latest terminal timestamp, once the group has settled. */
   settledAt: number | null
 }
@@ -116,7 +118,6 @@ export function summarizeSubagentGroup(
   const counts = new Map<NativeChatSubagentState, number>()
   let working = 0
   let tokens: number | null = null
-  let startedAt: number | null = null
   let settledAt: number | null = null
   for (const agent of agents) {
     const state = normalizeSubagentState(agent.state)
@@ -127,9 +128,6 @@ export function summarizeSubagentGroup(
     }
     if (typeof agent.tokens === 'number' && Number.isFinite(agent.tokens)) {
       tokens = (tokens ?? 0) + agent.tokens
-    }
-    if (typeof agent.startedAt === 'number') {
-      startedAt = startedAt === null ? agent.startedAt : Math.min(startedAt, agent.startedAt)
     }
     if (typeof agent.settledAt === 'number') {
       settledAt = settledAt === null ? agent.settledAt : Math.max(settledAt, agent.settledAt)
@@ -146,9 +144,40 @@ export function summarizeSubagentGroup(
     adverseState,
     adverseCount: adverseState === null ? 0 : (counts.get(adverseState) ?? 0),
     tokens,
-    startedAt,
+    clockStartedAt: subagentClockStart(agents, working > 0 ? null : settledAt),
     settledAt: working > 0 ? null : settledAt
   }
+}
+
+/** Every working run ends at now, so together they cover one span from the
+ *  earliest of them; only settled time before that span adds to it. */
+function subagentClockStart(
+  agents: readonly NativeChatSubagentEntry[],
+  settledAt: number | null
+): number | null {
+  const runs: [number, number][] = []
+  let liveFrom: number | null = null
+  for (const agent of agents) {
+    if (typeof agent.startedAt !== 'number') {
+      continue
+    }
+    if (normalizeSubagentState(agent.state) === 'working') {
+      liveFrom = liveFrom === null ? agent.startedAt : Math.min(liveFrom, agent.startedAt)
+    } else if (typeof agent.settledAt === 'number') {
+      runs.push([agent.startedAt, Math.max(agent.startedAt, agent.settledAt)])
+    }
+  }
+  const cutoff = liveFrom ?? Infinity
+  let covered = 0
+  let reach = -Infinity
+  for (const [start, end] of runs.sort((a, b) => a[0] - b[0])) {
+    covered += Math.max(0, Math.min(end, cutoff) - Math.max(start, reach))
+    reach = Math.max(reach, end)
+  }
+  if (liveFrom !== null) {
+    return liveFrom - covered
+  }
+  return settledAt === null || runs.length === 0 ? null : settledAt - covered
 }
 
 /** A childless group draws nothing: `NativeChatSubagentRun` renders null for one,
@@ -167,6 +196,19 @@ export function subagentGroupBlocks(
     (block): block is NativeChatSubagentGroupBlock =>
       isSubagentGroupBlock(block) && isRenderableSubagentGroup(block)
   )
+}
+
+/** Whether `block` is the text twin of a roster the row draws (`drawsGroup`, from
+ *  `subagentGroupBlocks`): only a drawn roster replaces its sentence, and real text beside a group
+ *  is never matched. The one twin rule every transcript applies. */
+export function isReplacedSubagentGroupTwin(block: NativeChatBlock, drawsGroup: boolean): boolean {
+  return drawsGroup && block.type === 'text' && isSubagentGroupFallbackText(block.text)
+}
+
+/** The row's blocks less any roster twin a drawn group replaces. */
+export function withoutSubagentGroupTwins(blocks: readonly NativeChatBlock[]): NativeChatBlock[] {
+  const drawsGroup = subagentGroupBlocks(blocks).length > 0
+  return blocks.filter((block) => !isReplacedSubagentGroupTwin(block, drawsGroup))
 }
 
 /** Plain-text stand-in for the roster, frozen into the journal at write time for

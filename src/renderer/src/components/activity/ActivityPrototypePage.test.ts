@@ -8,13 +8,16 @@ import { makePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import {
   ACTIVITY_SEARCH_QUERY_MAX_BYTES,
-  activityThreadResponseRenderPreview,
   activityThreadMatchesSearchQuery,
-  buildActivityEvents,
-  buildAgentPaneThreads,
   buildActivityThreadGroups,
   isActivitySearchQueryTooLarge
-} from './ActivityPrototypePage'
+} from './activity-thread-grouping'
+import {
+  activityThreadResponseRenderPreview,
+  activityThreadStatusId
+} from './activity-thread-presentation'
+import { buildActivityEvents } from './activity-event-builder'
+import { buildAgentPaneThreads } from './activity-thread-builder'
 import {
   makeActivityResult,
   makeRepo,
@@ -134,6 +137,8 @@ describe('buildActivityEvents', () => {
 
     expect(result.events).toHaveLength(1)
     expect(result.liveAgentByPaneKey[PANE_KEY]).toBeUndefined()
+    // The pane's own row is still `working`, but only a fresh turn may say so.
+    expect(activityThreadStatusId(makeThreads(result)[0])).toBe('done')
   })
 
   it('creates a thread for a fresh running agent with no historical events', () => {

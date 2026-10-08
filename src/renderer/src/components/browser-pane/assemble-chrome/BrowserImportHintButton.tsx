@@ -26,10 +26,12 @@ import { translate } from '@/i18n/i18n'
 
 type BrowserImportHintButtonProps = {
   profileId: string | null
+  compact?: boolean
 }
 
 export function BrowserImportHintButton({
-  profileId
+  profileId,
+  compact = false
 }: BrowserImportHintButtonProps): React.JSX.Element | null {
   const [open, setOpen] = useState(false)
   const [importMenuOpen, setImportMenuOpen] = useState(false)
@@ -178,7 +180,12 @@ export function BrowserImportHintButton({
           data-contextual-tour-target="browser-import-hint"
         >
           <Import className="size-3.5" />
-          {translate('auto.components.browser.pane.BrowserImportHintButton.b24fef25be', 'Import')}
+          {compact
+            ? null
+            : translate(
+                'auto.components.browser.pane.BrowserImportHintButton.b24fef25be',
+                'Import'
+              )}
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" side="bottom" sideOffset={6} className="w-80 p-3">

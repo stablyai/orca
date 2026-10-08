@@ -32,6 +32,11 @@ import {
 } from '../omitted-host-scope-selectors'
 import { RuntimeClientError } from '../runtime-client'
 import {
+  isSupportedWindowsShellOverride,
+  listSupportedWindowsShellOverrides
+} from '../../shared/windows-terminal-shell'
+import { TERMINAL_CREATE_SHELL_SELECTION_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
+import {
   getBrowserWorktreeSelector,
   getOptionalWorktreeSelector,
   getRequiredWorktreeSelector,
@@ -153,9 +158,40 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
     const useRendererBackedInteractiveTerminal =
       !client.isRemote && shouldUseRendererBackedInteractiveTerminal(command)
     const focus = flags.get('focus') === true
+    const shell = getOptionalStringFlag(flags, 'shell')
+    if (shell !== undefined) {
+      if (!isSupportedWindowsShellOverride(shell)) {
+        throw new RuntimeClientError(
+          'invalid_argument',
+          `--shell must be one of: ${listSupportedWindowsShellOverrides().join(', ')}`
+        )
+      }
+      // Why refused rather than sent hopefully: an older host strips the unknown param and hands
+      // back a healthy terminal running its DEFAULT shell. Nothing in that reply says the shell
+      // was ignored, so a caller that wanted cmd would drive a PowerShell session believing it won.
+      const status = await client.getCliStatus()
+      // An unreachable host reports no capabilities at all; that is not evidence it lacks --shell.
+      if (!status.result.runtime.reachable) {
+        throw new RuntimeClientError(
+          'runtime_unavailable',
+          'Orca could not verify --shell support on the execution host, so no terminal was created. Wait for the execution host to become reachable and retry.'
+        )
+      }
+      if (
+        status.result.runtime.capabilities?.includes(
+          TERMINAL_CREATE_SHELL_SELECTION_RUNTIME_CAPABILITY
+        ) !== true
+      ) {
+        throw new RuntimeClientError(
+          'incompatible_runtime',
+          'This Orca host does not support --shell, and would silently create a terminal running its default shell instead. No terminal was created; update Orca on the execution host.'
+        )
+      }
+    }
     const result = await client.call<{ terminal: RuntimeTerminalCreate }>('terminal.create', {
       worktree: await getBrowserWorktreeSelector(flags, cwd, client),
       command,
+      ...(shell !== undefined ? { shell } : {}),
       title: getOptionalStringFlag(flags, 'title'),
       // Why: interactive local agent TUIs need the renderer-backed terminal
       // path for browser-side features, but CLI creates must stay backgrounded

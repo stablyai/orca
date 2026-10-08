@@ -35,6 +35,11 @@ const { AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS } = await import('./sync-runtime-
 
 // ── Reference implementations: the pre-change bodies, kept verbatim ────────────────────
 
+type MainAgentStatus = AppState['agentStatusByPaneKey'][string]['mainAgent']
+function mainAgentKey(mainAgent: MainAgentStatus) {
+  return mainAgent ? [mainAgent.state, mainAgent.outcome ?? null, mainAgent.stateStartedAt] : null
+}
+
 function referenceEditorDraftsProjection(editorDrafts: AppState['editorDrafts']): string {
   return JSON.stringify(
     Object.fromEntries(
@@ -106,20 +111,23 @@ function referenceAgentStatusProjection(map: AppState['agentStatusByPaneKey']): 
         prompt: entry.prompt,
         updatedAtBucket: Math.floor(entry.updatedAt / AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS),
         stateStartedAt: entry.stateStartedAt,
+        turnStartedAt: entry.turnStartedAt ?? null,
         agentType: entry.agentType ?? null,
         terminalTitle: entry.terminalTitle ?? null,
         stateHistory: entry.stateHistory.map((history) => ({
           state: history.state,
           prompt: history.prompt,
           startedAt: history.startedAt,
-          interrupted: history.interrupted ?? null
+          interrupted: history.interrupted ?? null,
+          mainAgent: mainAgentKey(history.mainAgent)
         })),
         toolName: entry.toolName ?? null,
         toolInput: entry.toolInput ?? null,
         interactivePrompt: entry.interactivePrompt ?? null,
         lastAssistantMessage: entry.lastAssistantMessage ?? null,
         lastAssistantMessageIsToolOutput: entry.lastAssistantMessageIsToolOutput ?? null,
-        interrupted: entry.interrupted ?? null
+        interrupted: entry.interrupted ?? null,
+        mainAgent: mainAgentKey(entry.mainAgent)
       }))
   )
 }
@@ -256,7 +264,7 @@ describe('editor draft projection on the typing path', () => {
   })
 
   it('matches the uncached projection byte for byte across draft shapes', () => {
-    const shapes: Record<string, string>[] = [
+    const draftCases: Record<string, string>[] = [
       {},
       { 'file-a': '' },
       { 'file-a': 'hello' },
@@ -267,10 +275,10 @@ describe('editor draft projection on the typing path', () => {
       { 'file-a': 'hello', 'file-b': 'world', 'file-c': 'third' },
       { 'file-a': 'HELLO', 'file-c': 'third' }
     ]
-    for (const [index, shape] of shapes.entries()) {
-      expect({ index, projection: buildRuntimeMobileEditorDraftsProjection(shape) }).toEqual({
+    for (const [index, draft] of draftCases.entries()) {
+      expect({ index, projection: buildRuntimeMobileEditorDraftsProjection(draft) }).toEqual({
         index,
-        projection: referenceEditorDraftsProjection(shape)
+        projection: referenceEditorDraftsProjection(draft)
       })
     }
   })
@@ -402,7 +410,7 @@ describe('open-files and browser projections', () => {
   })
 
   it('matches the uncached projections byte for byte across shapes', () => {
-    const openFileShapes: AppState['openFiles'][] = [
+    const openFileCases: AppState['openFiles'][] = [
       [] as unknown as AppState['openFiles'],
       [makeOpenFile(0)] as unknown as AppState['openFiles'],
       [makeOpenFile(0, { isDirty: true })] as unknown as AppState['openFiles'],
@@ -412,14 +420,14 @@ describe('open-files and browser projections', () => {
         makeOpenFile(2, { isUntitled: true, deleteUntouchedOnClose: true, language: undefined })
       ] as unknown as AppState['openFiles']
     ]
-    for (const [index, shape] of openFileShapes.entries()) {
-      expect({ index, projection: buildRuntimeMobileOpenFilesProjection(shape) }).toEqual({
+    for (const [index, openFiles] of openFileCases.entries()) {
+      expect({ index, projection: buildRuntimeMobileOpenFilesProjection(openFiles) }).toEqual({
         index,
-        projection: referenceOpenFilesProjection(shape)
+        projection: referenceOpenFilesProjection(openFiles)
       })
     }
 
-    const browserShapes: AppState[] = [
+    const browserCases: AppState[] = [
       makeState({}),
       makeState({ browserTabsByWorktree: { 'wt-1': [makeBrowserWorkspace(0)] } as never }),
       makeState({
@@ -437,10 +445,10 @@ describe('open-files and browser projections', () => {
         browserPagesByWorkspace: { 'ws-9': [makeBrowserPage(9, { url: 'a"b\\c' })] } as never
       })
     ]
-    for (const [index, shape] of browserShapes.entries()) {
-      expect({ index, projection: buildRuntimeMobileBrowserProjection(shape) }).toEqual({
+    for (const [index, state] of browserCases.entries()) {
+      expect({ index, projection: buildRuntimeMobileBrowserProjection(state) }).toEqual({
         index,
-        projection: referenceBrowserProjection(shape)
+        projection: referenceBrowserProjection(state)
       })
     }
   })

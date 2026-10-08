@@ -59,7 +59,7 @@ export async function readRelayDir(params: Record<string, unknown>) {
       symlinkEntries.push({ entry, mappedEntry })
     }
   }
-  if (symlinkEntries.length > 0) {
+  if (params.followSymlinks !== false && symlinkEntries.length > 0) {
     await forEachWithConcurrency(
       symlinkEntries,
       SYMLINK_DIRECTORY_PROBE_CONCURRENCY,

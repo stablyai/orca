@@ -1,8 +1,10 @@
+import { mergeCommandEnvironment } from '../../shared/command-environment'
 import type { CommandTemplateBackslash } from '../../shared/commit-message-prompt'
 import type { CommitMessagePlan } from '../../shared/commit-message-plan'
 import { getAgentModelProbeSpec } from '../../shared/agent-model-probe-spec'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { resolveCodexHomeProcessLockKeyForSpawnEnv } from '../codex-cli/codex-home-process-lock'
+import { supervisedProviderSpawnFailure } from '../provider-process/provider-spawn-failure-report'
 import { isSshRequestOutcomeUnverifiable } from '../ssh/ssh-channel-multiplexer'
 import { WINDOWS_BATCH_UNSAFE_ARGUMENTS_ERROR } from '../win32-utils'
 import {
@@ -46,6 +48,17 @@ export async function discoverModelsLocal(input: {
     return staticModelDiscoveryResult(spec)
   }
 
+  const planned = planModelDiscovery(spec, input.agentCommandOverride, input.backslash)
+  if (!planned.ok) {
+    return { success: false, error: planned.error }
+  }
+  const env = mergeCommandEnvironment(
+    input.env,
+    planned.plan.env,
+    input.options.wslDistro ? 'linux' : process.platform
+  )
+
+  const couldNotStart = `${spec.label} model discovery could not be started. Check the agent CLI configuration and try again.`
   const startDiscovery = (): LocalProcessExecution<DiscoverCommitMessageModelsResult> => {
     let markProcessClosed!: () => void
     const processClosed = new Promise<void>((resolve) => {
@@ -53,18 +66,13 @@ export async function discoverModelsLocal(input: {
     })
     const result = new Promise<DiscoverCommitMessageModelsResult>((resolve) => {
       let child: SpawnedSourceControlAgentProcess
-      const planned = planModelDiscovery(spec, input.agentCommandOverride, input.backslash)
-      if (!planned.ok) {
-        markProcessClosed()
-        resolve({ success: false, error: planned.error })
-        return
-      }
       try {
         child = input.spawnAgent({
           binary: planned.plan.binary,
           args: planned.plan.args,
           cwd: input.options.cwd,
-          env: input.env,
+          env: input.options.wslDistro ? input.env : env,
+          commandEnv: planned.plan.env,
           wslDistro: input.options.wslDistro,
           stdinMode: planned.plan.stdinPayload === null ? 'ignore' : 'pipe',
           useCwdForNative: false
@@ -76,10 +84,7 @@ export async function discoverModelsLocal(input: {
       } catch (error) {
         markProcessClosed()
         console.error('[commit-message] Failed to spawn model discovery:', error)
-        resolve({
-          success: false,
-          error: `${spec.label} model discovery could not be started. Check the agent CLI configuration and try again.`
-        })
+        resolve({ success: false, error: couldNotStart })
         return
       }
 
@@ -147,6 +152,19 @@ export async function discoverModelsLocal(input: {
       }
       const onClose = (code: number | null): void => {
         markClosedAfterTermination()
+        // A supervised spawn failure reads as the same failure a direct spawn reports.
+        const spawnFailure = outputLimitExceeded
+          ? null
+          : supervisedProviderSpawnFailure(code, stderr)
+        if (spawnFailure?.thrown) {
+          console.error('[commit-message] Failed to spawn model discovery:', spawnFailure.error)
+          finish({ success: false, error: couldNotStart })
+          return
+        }
+        if (spawnFailure) {
+          onError(spawnFailure.error)
+          return
+        }
         finish(
           outputLimitExceeded
             ? { success: false, error: `${spec.label} returned too much model data.` }
@@ -172,7 +190,7 @@ export async function discoverModelsLocal(input: {
   }
   return input.agentId === 'codex'
     ? runCodexProcessWithHomeLock(
-        resolveCodexHomeProcessLockKeyForSpawnEnv(input.env, input.options.wslDistro),
+        resolveCodexHomeProcessLockKeyForSpawnEnv(env, input.options.wslDistro, planned.plan.env),
         startDiscovery
       )
     : startDiscovery().result

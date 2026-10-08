@@ -13,7 +13,6 @@ import {
 } from '../synthetic-title-spinner'
 import { shouldSendSyntheticTitleFrame } from '../synthetic-title-visibility'
 import { shouldCopySyntheticTitleFrameToPtyData } from '../synthetic-title-frame-routing'
-import { resolveTuiAgentPermissionMode } from '../../shared/tui-agent-permissions'
 import { mainProcessState as state } from './main-process-state'
 
 // Why: cursor-agent re-emits its own OSC title on every redraw, overwriting a one-shot frame — so re-assert a working frame on an interval.
@@ -148,29 +147,6 @@ export function driveSyntheticTitleFromHook(
   const needsUserInput = agentState === 'blocked' || agentState === 'waiting'
   const label = needsUserInput ? profile.permissionLabel : profile.idleLabel
   sendSyntheticTitle(ptyId, `\x1b]0;${label}\x07${needsUserInput ? '\x07' : ''}`, { force: true })
-}
-
-export function shouldSuppressCodexAutoApprovalSyntheticTitleFromHook(args: {
-  agentType: string | null | undefined
-  state: AgentStatusState
-  launchConfig:
-    | { agentArgs?: string | null; agentEnv?: Record<string, string> | null }
-    | null
-    | undefined
-}): boolean {
-  if (args.agentType !== 'codex' || (args.state !== 'waiting' && args.state !== 'blocked')) {
-    return false
-  }
-  if (!args.launchConfig) {
-    return false
-  }
-  return (
-    resolveTuiAgentPermissionMode({
-      agent: 'codex',
-      agentArgs: args.launchConfig.agentArgs,
-      agentEnv: args.launchConfig.agentEnv
-    }) === 'yolo'
-  )
 }
 
 export function initializeSyntheticTitleRuntime(): void {

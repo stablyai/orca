@@ -50,7 +50,7 @@ function referenceBoundHistoryItemsByBytes(
   for (const group of ordered) {
     const bytes = group.reduce((sum, item) => sum + historyEntryBytes(item, submissionBytes), 0)
     if (kept.length === 0 && bytes > maxBytes) {
-      kept.push(group.map((item) => oversizedHistoryItem(item, bytes)))
+      kept.push(group.map((item) => oversizedHistoryItem(item)))
       break
     }
     if (total + bytes > maxBytes) {
@@ -75,14 +75,14 @@ function item(index: number, sequence: number): AgentJournalRenderItem {
   }
 }
 
-/** Every sequence-run shape of `length` items, as run-length compositions. */
-function* runShapes(length: number): Generator<number[]> {
+/** Every run-length composition of `length` items. */
+function* runLengthCompositions(length: number): Generator<number[]> {
   if (length === 0) {
     yield []
     return
   }
   for (let first = 1; first <= length; first += 1) {
-    for (const rest of runShapes(length - first)) {
+    for (const rest of runLengthCompositions(length - first)) {
       yield [first, ...rest]
     }
   }
@@ -105,7 +105,7 @@ function buildItems(runs: number[], repeatSequence: boolean): AgentJournalRender
 it('matches eager grouping at every newest-window limit for every run shape', () => {
   let cases = 0
   for (let length = 0; length <= 7; length += 1) {
-    for (const runs of runShapes(length)) {
+    for (const runs of runLengthCompositions(length)) {
       for (const repeatSequence of [false, true]) {
         const items = buildItems(runs, repeatSequence)
         // Every boundary, including 0, each exact group edge, and past the end.
@@ -127,7 +127,7 @@ it('matches eager byte bounding at every budget boundary in both directions', ()
   let truncatedCases = 0
   let partialCases = 0
   for (let length = 1; length <= 6; length += 1) {
-    for (const runs of runShapes(length)) {
+    for (const runs of runLengthCompositions(length)) {
       for (const repeatSequence of [false, true]) {
         const items = buildItems(runs, repeatSequence)
         const perItem = historyEntryBytes(items[0]!, submissionBytes)
@@ -153,7 +153,9 @@ it('matches eager byte bounding at every budget boundary in both directions', ()
             ).toEqual(expected)
             if (
               actual.items.some(
-                (entry) => entry.body.kind === 'status' && /truncated/.test(entry.body.text)
+                (entry) =>
+                  entry.body.kind === 'status' &&
+                  entry.body.presentation === 'history-item-too-large'
               )
             ) {
               truncatedCases += 1

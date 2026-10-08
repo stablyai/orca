@@ -55,8 +55,16 @@ export function NewWorktreeModal(props: NewWorktreeModalProps) {
 }
 
 function NewWorktreeModalContent(props: NewWorktreeModalProps) {
-  const { visible, client, hostId, existingWorktreePaths, existingWorktrees, onCreated, onClose } =
-    props
+  const {
+    visible,
+    client,
+    hostId,
+    existingWorktreePaths,
+    existingWorktrees,
+    openExternalUrl,
+    onCreated,
+    onClose
+  } = props
   const { repos, selectedRepo, setSelectedRepo, loading } = useNewWorkspaceRepositories({
     client,
     hostId,
@@ -66,7 +74,7 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
   const [note, setNote] = useState('')
   const [error, setError] = useState('')
   const runtime = useNewWorkspaceRuntimeContext(client, visible, hostId)
-  const { tasksSupported, hostPlatform, getWorktreeCreateCutoverSupport } =
+  const { tasksSupported, hostPlatform, getWorktreeCreateCutoverSupport, getAgentLaunchSupport } =
     useNewWorktreeRuntimeCapabilities(client, visible)
   const selectedRepoConnectionId = selectedRepo?.connectionId ?? null
   const executionTarget = useNewWorkspaceExecutionTarget({
@@ -121,6 +129,7 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     trustedOrcaHooks: runtime.trustedOrcaHooks,
     setTrustedOrcaHooks: runtime.setTrustedOrcaHooks,
     getWorktreeCreateCutoverSupport,
+    getAgentLaunchSupport,
     transitionDrawer: navigation.transitionDrawer,
     setError,
     onCreated,
@@ -217,6 +226,7 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
         creating={createSubmit.creating}
         canCreate={canCreate}
         onClose={onClose}
+        onOpenExternalUrl={openExternalUrl}
         onOpenProject={() => openPicker('project')}
         onOpenRunTarget={() => openPicker('runTarget')}
         onOpenSource={navigation.openSourceDrawer}

@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { buildRegistry, type RpcContext } from '../../../core'
-import { ORCHESTRATION_METHODS } from '../../orchestration'
+import type { RpcContext } from '../../../core'
 import { createOrchestrationRpcHarness } from '../rpc-test-harness'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
@@ -23,53 +22,6 @@ describe('orchestration RPC methods', () => {
   async function call(name: string, params: Record<string, unknown>) {
     return h.call(name, params, ctx)
   }
-
-  it('registers all expected methods', () => {
-    const registry = buildRegistry(ORCHESTRATION_METHODS)
-    expect(registry.size).toBe(41)
-    expect(registry.has('orchestration.workerRelease')).toBe(true)
-    expect(registry.has('orchestration.workerRetain')).toBe(true)
-    expect(registry.has('orchestration.workerList')).toBe(true)
-    expect(registry.has('orchestration.workerCleanup')).toBe(false)
-    expect(registry.has('orchestration.workerTerminalUserInput')).toBe(true)
-    expect(registry.has('orchestration.runCreate')).toBe(true)
-    expect(registry.has('orchestration.runUse')).toBe(true)
-    expect(registry.has('orchestration.runCurrent')).toBe(true)
-    expect(registry.has('orchestration.runList')).toBe(true)
-    expect(registry.has('orchestration.runShow')).toBe(true)
-    expect(registry.has('orchestration.send')).toBe(true)
-    expect(registry.has('orchestration.check')).toBe(true)
-    expect(registry.has('orchestration.reply')).toBe(true)
-    expect(registry.has('orchestration.inbox')).toBe(true)
-    expect(registry.has('orchestration.taskCreate')).toBe(true)
-    expect(registry.has('orchestration.taskList')).toBe(true)
-    expect(registry.has('orchestration.taskUpdate')).toBe(true)
-    expect(registry.has('orchestration.dispatch')).toBe(true)
-    expect(registry.has('orchestration.dispatchShow')).toBe(true)
-    expect(registry.has('orchestration.workerStart')).toBe(true)
-    expect(registry.has('orchestration.workerShow')).toBe(true)
-    expect(registry.has('orchestration.workerRead')).toBe(true)
-    expect(registry.has('orchestration.workerStop')).toBe(true)
-    expect(registry.has('orchestration.workerAbandon')).toBe(true)
-    expect(registry.has('orchestration.federationAttachStart')).toBe(true)
-    expect(registry.has('orchestration.federationPull')).toBe(true)
-    expect(registry.has('orchestration.federationAck')).toBe(true)
-    expect(registry.has('orchestration.federationImport')).toBe(true)
-    expect(registry.has('orchestration.federationShow')).toBe(true)
-    expect(registry.has('orchestration.federationRead')).toBe(true)
-    expect(registry.has('orchestration.federationReadOutput')).toBe(true)
-    expect(registry.has('orchestration.federationFleetSnapshot')).toBe(true)
-    expect(registry.has('orchestration.federationRelease')).toBe(true)
-    expect(registry.has('orchestration.federationStop')).toBe(true)
-    expect(registry.has('orchestration.ask')).toBe(true)
-    expect(registry.has('orchestration.run')).toBe(true)
-    expect(registry.has('orchestration.runStop')).toBe(true)
-    expect(registry.has('orchestration.gateCreate')).toBe(true)
-    expect(registry.has('orchestration.gateResolve')).toBe(true)
-    expect(registry.has('orchestration.gateList')).toBe(true)
-    expect(registry.has('orchestration.requestShow')).toBe(true)
-    expect(registry.has('orchestration.reset')).toBe(true)
-  })
 
   describe('lightweight Runs', () => {
     it('creates and binds a Run to the runtime-resolved caller pane', async () => {

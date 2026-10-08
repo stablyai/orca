@@ -7,6 +7,7 @@ import { getNativeChatAgentProfile } from '../../../../shared/native-chat-agent-
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { emitNativeChatSkillDiscovery } from '@/lib/native-chat-telemetry'
 import {
+  isNativeChatSkillDiscoveryAwaitingDirectory,
   resolveNativeChatSkillDiscoveryContext,
   selectNativeChatSkillStateInputs,
   type NativeChatSkillDiscoveryContext
@@ -39,6 +40,13 @@ type StoredDiscoveryState = Omit<NativeChatSkillDiscovery, 'retry'> & {
 
 const IDLE_STATE: StoredDiscoveryState = {
   status: 'idle',
+  skills: [],
+  error: null,
+  contextKey: null
+}
+// No context yet, but one is on its way: reads as loading rather than as a failed scan.
+const AWAITING_CONTEXT_STATE: StoredDiscoveryState = {
+  status: 'loading',
   skills: [],
   error: null,
   contextKey: null
@@ -86,6 +94,10 @@ export function useNativeChatSkills(
   const context = useMemo(
     () => resolveNativeChatSkillDiscoveryContext(inputs, terminalTabId),
     [inputs, terminalTabId]
+  )
+  const awaitingContext = useMemo(
+    () => !context && isNativeChatSkillDiscoveryAwaitingDirectory(inputs, terminalTabId),
+    [context, inputs, terminalTabId]
   )
   const [state, setState] = useState<StoredDiscoveryState>(IDLE_STATE)
   const [retryGeneration, setRetryGeneration] = useState(0)
@@ -185,11 +197,13 @@ export function useNativeChatSkills(
       !profile || !enabled
         ? IDLE_STATE
         : !context
-          ? MISSING_CONTEXT_STATE
+          ? awaitingContext
+            ? AWAITING_CONTEXT_STATE
+            : MISSING_CONTEXT_STATE
           : state.contextKey === context.key
             ? state
             : { status: 'loading' as const, skills: [], error: null, contextKey: context.key },
-    [context, enabled, profile, state]
+    [awaitingContext, context, enabled, profile, state]
   )
   const visibleSkills = useMemo(() => {
     if (!profile || effectiveState.status !== 'ready') {

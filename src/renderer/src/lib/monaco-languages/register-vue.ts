@@ -1,4 +1,8 @@
 import type * as Monaco from 'monaco-editor'
+import {
+  restOfLineWithinEmbedBudget,
+  tagCloseWithinEmbedBudget
+} from './monarch-embed-entry-budget'
 
 type MonacoModule = typeof Monaco
 
@@ -28,31 +32,72 @@ export const vueMonarchLanguage: Monaco.languages.IMonarchLanguage = {
     ],
     templateOpen: [
       [/\/>/, 'tag', '@pop'],
-      [/>/, { token: 'tag', switchTo: '@templateBody', nextEmbedded: 'html' }],
+      [
+        tagCloseWithinEmbedBudget,
+        { token: 'tag', switchTo: '@templateBody', nextEmbedded: 'html' }
+      ],
+      [/>/, { token: 'tag', switchTo: '@templateBodyPlain' }],
       { include: '@tagAttributes' }
     ],
+    // INVARIANT: the html embed is active whenever this state is. Leaving an
+    // interpolation routes back through `templateBodyReenter`, never straight
+    // here, or the next `{{` would pop an embed that is no longer on the stack.
+    // Transitions are flat (`switchTo`) so the monarch stack stays at the depth
+    // `<template>` pushed and `</template>` still pops back to `root`.
     templateBody: [
       [
         /\{\{/,
-        { token: 'delimiter.curly', next: '@templateExpressionEnter', nextEmbedded: '@pop' }
+        { token: 'delimiter.curly', switchTo: '@templateExpressionEnter', nextEmbedded: '@pop' }
       ],
-      [/<\/template\s*>/, { token: 'tag', next: '@pop', nextEmbedded: '@pop' }],
-      // After a `{{ ... }}` interpolation returns here, the html embed
-      // has been popped alongside the typescript expression embed. Re-enter
-      // html so the remaining template markup is tokenized by Monaco's html
-      // tokenizer instead of falling back to the empty default token.
-      [/(?=.)/, { token: '', nextEmbedded: 'html' }]
+      [/<\/template\s*>/, { token: 'tag', next: '@pop', nextEmbedded: '@pop' }]
+    ],
+    // Re-entry shim. `@rematch` is required: on a zero-width match Monarch's
+    // progress check rejects any other token and drops the pending embed with
+    // it, leaving `templateBody` without the html embed its pop rules assume.
+    templateBodyReenter: [
+      [
+        restOfLineWithinEmbedBudget,
+        { token: '@rematch', switchTo: '@templateBody', nextEmbedded: 'html' }
+      ],
+      [/(?=.)/, { token: '@rematch', switchTo: '@templateBodyPlain' }]
+    ],
+    // Same body with no embeds, so the rest of an over-budget line cannot
+    // deepen the recursion. Its rules must not touch the embed stack.
+    templateBodyPlain: [
+      [/\{\{/, { token: 'delimiter.curly', switchTo: '@templateExpressionEnter' }],
+      [/<\/template\s*>/, { token: 'tag', next: '@pop' }],
+      [
+        restOfLineWithinEmbedBudget,
+        { token: '@rematch', switchTo: '@templateBody', nextEmbedded: 'html' }
+      ],
+      [/<\/?[A-Za-z][^>]*>/, 'tag'],
+      [/[^<{]+/, ''],
+      [/./, '']
     ],
     templateExpressionEnter: [
-      [/\}\}/, { token: 'delimiter.curly', next: '@pop' }],
-      [/(?=.)/, { token: '', switchTo: '@templateExpression', nextEmbedded: 'typescript' }]
+      [/\}\}/, { token: 'delimiter.curly', switchTo: '@templateBodyReenter' }],
+      [
+        restOfLineWithinEmbedBudget,
+        { token: '@rematch', switchTo: '@templateExpression', nextEmbedded: 'typescript' }
+      ],
+      [/(?=.)/, { token: '@rematch', switchTo: '@templateExpressionPlain' }]
     ],
     templateExpression: [
-      [/\}\}/, { token: 'delimiter.curly', next: '@pop', nextEmbedded: '@pop' }]
+      [/\}\}/, { token: 'delimiter.curly', switchTo: '@templateBodyReenter', nextEmbedded: '@pop' }]
+    ],
+    // Same expression, no typescript embed: reached only past the budget.
+    templateExpressionPlain: [
+      [/\}\}/, { token: 'delimiter.curly', switchTo: '@templateBodyReenter' }],
+      [/[^}]+/, ''],
+      [/./, '']
     ],
     scriptOpen: [
       [/\/>/, 'tag', '@pop'],
-      [/>/, { token: 'tag', switchTo: '@scriptBody.$S2', nextEmbedded: '$S2' }],
+      [
+        tagCloseWithinEmbedBudget,
+        { token: 'tag', switchTo: '@scriptBody.$S2', nextEmbedded: '$S2' }
+      ],
+      [/>/, { token: 'tag', switchTo: '@scriptBodyPlain.$S2' }],
       [/lang(?=\s*=)/, { token: 'attribute.name', switchTo: '@scriptLangBeforeEquals.$S2' }],
       { include: '@tagAttributes' }
     ],
@@ -80,9 +125,24 @@ export const vueMonarchLanguage: Monaco.languages.IMonarchLanguage = {
       [/\s+/, 'white']
     ],
     scriptBody: [[/<\/script\s*>/, { token: 'tag', next: '@pop', nextEmbedded: '@pop' }]],
+    // Over-budget mirror of the body: re-enters `$S2` as soon as the rest of
+    // the line fits, so a long opening line does not grey out the whole block.
+    scriptBodyPlain: [
+      [/<\/script\s*>/, { token: 'tag', next: '@pop' }],
+      [
+        restOfLineWithinEmbedBudget,
+        { token: '@rematch', switchTo: '@scriptBody.$S2', nextEmbedded: '$S2' }
+      ],
+      [/[^<]+/, ''],
+      [/./, '']
+    ],
     styleOpen: [
       [/\/>/, 'tag', '@pop'],
-      [/>/, { token: 'tag', switchTo: '@styleBody.$S2', nextEmbedded: '$S2' }],
+      [
+        tagCloseWithinEmbedBudget,
+        { token: 'tag', switchTo: '@styleBody.$S2', nextEmbedded: '$S2' }
+      ],
+      [/>/, { token: 'tag', switchTo: '@styleBodyPlain.$S2' }],
       [/lang(?=\s*=)/, { token: 'attribute.name', switchTo: '@styleLangBeforeEquals.$S2' }],
       { include: '@tagAttributes' }
     ],
@@ -110,6 +170,15 @@ export const vueMonarchLanguage: Monaco.languages.IMonarchLanguage = {
       [/\s+/, 'white']
     ],
     styleBody: [[/<\/style\s*>/, { token: 'tag', next: '@pop', nextEmbedded: '@pop' }]],
+    styleBodyPlain: [
+      [/<\/style\s*>/, { token: 'tag', next: '@pop' }],
+      [
+        restOfLineWithinEmbedBudget,
+        { token: '@rematch', switchTo: '@styleBody.$S2', nextEmbedded: '$S2' }
+      ],
+      [/[^<]+/, ''],
+      [/./, '']
+    ],
     tagAttributes: [
       [/[^\s/>=]+/, 'attribute.name'],
       [/=/, 'delimiter'],

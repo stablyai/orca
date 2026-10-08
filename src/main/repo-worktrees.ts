@@ -1,3 +1,4 @@
+import { preserveFolderUpgradeWorktreePath } from './folder-upgrade-worktree-path'
 import type { Repo } from '../shared/repo-types'
 import type { GitWorktreeInfo } from '../shared/worktree/types'
 import {
@@ -93,9 +94,10 @@ async function listRoutedRepoWorktrees(
     }
     return await route.provider.listWorktrees(repo.path)
   }
-  return hasLocalRepoWorktreeListOptions(options)
+  const worktrees = hasLocalRepoWorktreeListOptions(options)
     ? await listLocal(repo.path, options)
     : await listLocal(repo.path)
+  return preserveFolderUpgradeWorktreePath(repo, worktrees)
 }
 
 /**
@@ -122,9 +124,10 @@ export async function listRepoWorktreeGraph(
   if (route.kind === 'ssh') {
     return route.provider ? await route.provider.listWorktrees(repo.path) : []
   }
-  return hasLocalRepoWorktreeListOptions(options)
+  const worktrees = hasLocalRepoWorktreeListOptions(options)
     ? await listWorktreeGraph(repo.path, options)
     : await listWorktreeGraph(repo.path)
+  return preserveFolderUpgradeWorktreePath(repo, worktrees)
 }
 
 export async function listLocalRepoWorktreesStrict(
@@ -137,7 +140,8 @@ export async function listLocalRepoWorktreesStrict(
   if (isFolderRepo(repo)) {
     return [createFolderWorktree(repo)]
   }
-  return hasLocalRepoWorktreeListOptions(options)
+  const worktrees = hasLocalRepoWorktreeListOptions(options)
     ? await listWorktreesStrict(repo.path, options)
     : await listWorktreesStrict(repo.path)
+  return preserveFolderUpgradeWorktreePath(repo, worktrees)
 }

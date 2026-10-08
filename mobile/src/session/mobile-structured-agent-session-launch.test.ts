@@ -228,6 +228,34 @@ describe('mobile structured agent-session launch', () => {
     })
   })
 
+  describe.each(['top-level', 'nested'])('%s refusal messages', (location) => {
+    function refusalClient(message: unknown) {
+      const refusal = { code: 'method_not_found', ...(message === undefined ? {} : { message }) }
+      return clientReturning(
+        { ok: true, result: { supported: true } },
+        location === 'top-level'
+          ? { ok: false, error: refusal }
+          : { ok: true, result: { ok: false, refusal } }
+      )
+    }
+
+    it.each(
+      [undefined, null, 42, false, { text: 'unavailable' }, ['unavailable']].map((message) => ({
+        message
+      }))
+    )('keeps a malformed message $message unknown', async ({ message }) => {
+      await expect(
+        createMobileStructuredAgentSession(refusalClient(message), 'workspace-1', 'codex')
+      ).resolves.toMatchObject({ kind: 'unknown' })
+    })
+
+    it('preserves the fallback for an empty string message', async () => {
+      await expect(
+        createMobileStructuredAgentSession(refusalClient(''), 'workspace-1', 'codex')
+      ).resolves.toEqual({ kind: 'failed', message: 'Could not open Codex chat.' })
+    })
+  })
+
   it.each(['structured_agent_session_unsupported', 'method_not_found'])(
     'treats a top-level %s as a definitive refusal',
     async (code) => {

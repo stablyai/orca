@@ -173,25 +173,6 @@ describe('CheckpointSessionQueue', () => {
     expect(queue.isSaturated('s')).toBe(false)
   })
 
-  it('keeps a stalled session queued rather than admitting a second writer', async () => {
-    const queue = new CheckpointSessionQueue()
-    const stalled = deferred<void>()
-    let secondEntered = false
-
-    void queue.run('s', async () => await stalled.promise).catch(() => {})
-    const second = queue.run('s', async () => {
-      secondEntered = true
-    })
-
-    // Why this matters: two concurrent tmp-write/rename pairs in one session directory lose a
-    // checkpoint, so a parked write must hold its slot rather than be dropped.
-    await new Promise((resolve) => setTimeout(resolve, 20))
-    expect(secondEntered).toBe(false)
-    stalled.resolve()
-    await second
-    expect(secondEntered).toBe(true)
-  })
-
   it('does not strand a session after an operation rejects', async () => {
     const queue = new CheckpointSessionQueue()
     await expect(

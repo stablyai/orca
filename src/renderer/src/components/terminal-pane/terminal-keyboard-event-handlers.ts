@@ -3,6 +3,7 @@ import type { KeyboardHandlersDeps } from './terminal-keyboard-dependencies'
 import type { createTerminalKeyboardRuntime } from './terminal-keyboard-runtime'
 import { normalizeSelectedTextForFileSearch } from '@/lib/file-search-selection'
 import { handleEmptyFloatingWorkspacePanelCloseShortcut } from '@/lib/floating-workspace-terminal-actions'
+import { useAppStore } from '@/store'
 import { hasPendingTerminalImeComposition } from './terminal-ime-composition-route'
 import {
   isTerminalImeConsumedKey,
@@ -63,6 +64,7 @@ export function createTerminalKeyboardEventHandlers(context: EventContext) {
     persistLayoutSnapshot,
     toggleExpandPane,
     setSearchOpen,
+    focusSearchInput,
     onSearchSelectedText,
     onRequestClosePane,
     onClearPaneScrollback,
@@ -178,10 +180,29 @@ export function createTerminalKeyboardEventHandlers(context: EventContext) {
     }
 
     if (isEditableTarget(e.target)) {
+      if (
+        searchOpenRef.current &&
+        e.target instanceof HTMLElement &&
+        e.target.closest('[data-terminal-search-root]') &&
+        resolveShortcutEvent(e)?.type === 'toggleSearch'
+      ) {
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        if (!e.repeat) {
+          focusSearchInput()
+        }
+      }
       return
     }
 
-    if (handleEmptyFloatingWorkspacePanelCloseShortcut(e, shortcutPlatform, keybindings)) {
+    if (
+      handleEmptyFloatingWorkspacePanelCloseShortcut(
+        useAppStore.getState(),
+        e,
+        shortcutPlatform,
+        keybindings
+      )
+    ) {
       return
     }
 
@@ -275,6 +296,8 @@ export function createTerminalKeyboardEventHandlers(context: EventContext) {
       persistLayoutSnapshot,
       toggleExpandPane,
       setSearchOpen,
+      focusSearchInput,
+      searchOpenRef,
       onRequestClosePane,
       onClearPaneScrollback,
       onSetTitle,

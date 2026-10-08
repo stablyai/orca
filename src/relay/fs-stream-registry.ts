@@ -1,4 +1,5 @@
 import type { FileHandle } from 'node:fs/promises'
+import { settlesWithin } from './settles-within'
 import { MAX_CONCURRENT_STREAMS, RelayErrorCode, STREAM_ACK_STALL_RECHECK_MS } from './protocol'
 
 type StreamEntry = {
@@ -11,6 +12,9 @@ type StreamEntry = {
   ackWaiters: Set<() => void>
 }
 
+// Why: a stalled but connected client can hold a terminal-frame slot open indefinitely.
+const OPERATION_SETTLE_DEADLINE_MS = 10_000
+
 export class TooManyStreamsError extends Error {
   readonly code = RelayErrorCode.TooManyStreams
   constructor() {
@@ -21,11 +25,46 @@ export class TooManyStreamsError extends Error {
 export class RelayStreamRegistry {
   private streams = new Map<number, StreamEntry>()
   private nextId = 1
+  private disposed = false
+  private closing = new Map<number, Promise<void>>()
+  private closeFailures = new Map<number, unknown>()
+  private operations = new Set<Promise<void>>()
+
+  constructor(private readonly operationDeadlineMs = OPERATION_SETTLE_DEADLINE_MS) {}
+
+  /** Tracks work that may still open or release a handle; disposeAll waits for it. */
+  beginOperation(): () => void {
+    if (this.disposed) {
+      throw new Error('relay_file_stream_shutdown_fenced')
+    }
+    // Why: no Promise.withResolvers — the relay bundle still targets Node 18 hosts.
+    let resolve!: () => void
+    const pending = new Promise<void>((settle) => {
+      resolve = settle
+    })
+    this.operations.add(pending)
+    return () => {
+      this.operations.delete(pending)
+      resolve()
+    }
+  }
 
   register(handle: FileHandle): number {
+    if (this.disposed) {
+      throw new Error('relay_file_stream_shutdown_fenced')
+    }
     if (this.streams.size >= MAX_CONCURRENT_STREAMS) {
       throw new TooManyStreamsError()
     }
+    return this.retainHandle(handle)
+  }
+
+  /** Closes a handle opened outside a stream; a failed close stays retained for disposal retry. */
+  releaseUnregisteredHandle(handle: FileHandle): Promise<void> {
+    return this.release(this.retainHandle(handle))
+  }
+
+  private retainHandle(handle: FileHandle): number {
     const streamId = this.nextId++
     this.streams.set(streamId, {
       handle,
@@ -105,26 +144,43 @@ export class RelayStreamRegistry {
     }
   }
 
-  async release(streamId: number): Promise<void> {
+  /** Concurrent callers share one close; only EBADF counts as already closed. */
+  release(streamId: number): Promise<void> {
+    const pending = this.closing.get(streamId)
+    if (pending) {
+      return pending
+    }
     const entry = this.streams.get(streamId)
     if (!entry) {
-      return
+      return Promise.resolve()
     }
-    this.wakeAckWaiters(entry)
-    this.streams.delete(streamId)
-    try {
-      await entry.handle.close()
-    } catch {
-      // release runs from multiple exit paths (pump, cancel, dispose); a
-      // second close throws EBADF — swallow it.
-    }
+    this.abort(streamId)
+    const close = Promise.resolve()
+      .then(() => entry.handle.close())
+      .catch((error: unknown) => {
+        if (!isErrorWithCode(error, 'EBADF')) {
+          this.closeFailures.set(streamId, error)
+          throw error
+        }
+      })
+      .then(() => {
+        this.streams.delete(streamId)
+        this.closeFailures.delete(streamId)
+      })
+      .finally(() => {
+        this.closing.delete(streamId)
+      })
+    this.closing.set(streamId, close)
+    return close
   }
 
   size(): number {
     return this.streams.size
   }
 
+  /** Fences new streams until {@link reopen}; rejects while any handle is unclosed so a retry can finish. */
   async disposeAll(): Promise<void> {
+    this.disposed = true
     // Why: flag every stream as aborted so any in-flight pump exits its loop
     // cleanly on the next iteration boundary instead of seeing EBADF when
     // release closes the handle out from under an in-flight read.
@@ -132,6 +188,27 @@ export class RelayStreamRegistry {
       this.abort(id)
     }
     const ids = Array.from(this.streams.keys())
-    await Promise.all(ids.map((id) => this.release(id)))
+    const results = await Promise.allSettled(ids.map((id) => this.release(id)))
+    const settled = await settlesWithin(Promise.all(this.operations), this.operationDeadlineMs)
+    const failures = results.flatMap((result) =>
+      result.status === 'rejected' ? [result.reason] : []
+    )
+    if (!settled) {
+      failures.push(new Error('relay_file_stream_operations_unsettled'))
+    }
+    if (failures.length > 0 || this.streams.size > 0) {
+      throw new AggregateError(
+        [...new Set([...failures, ...this.closeFailures.values()])],
+        'relay_file_stream_shutdown_incomplete'
+      )
+    }
   }
+
+  reopen(): void {
+    this.disposed = false
+  }
+}
+
+function isErrorWithCode(error: unknown, code: string): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === code
 }

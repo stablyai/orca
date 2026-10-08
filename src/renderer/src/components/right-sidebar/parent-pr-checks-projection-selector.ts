@@ -18,6 +18,15 @@ type CacheDependency = {
   value: unknown
 }
 
+function selectCacheReferences(state: ReviewCacheState): ReviewCacheState {
+  // Pick narrows the type, not the object received from the store.
+  return {
+    hostedReviewCache: state.hostedReviewCache,
+    prCache: state.prCache,
+    checksCache: state.checksCache
+  }
+}
+
 function trackCacheReads<K extends ReviewCacheName>(
   state: ReviewCacheState,
   cacheName: K,
@@ -25,6 +34,7 @@ function trackCacheReads<K extends ReviewCacheName>(
 ): ReviewCacheState[K] {
   return new Proxy(state[cacheName], {
     get: (target, property, receiver) => {
+      // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy get trap default forward.
       const value = Reflect.get(target, property, receiver)
       if (typeof property === 'string') {
         dependencies.push({ cacheName, key: property, value })
@@ -41,7 +51,7 @@ function dependenciesAreCurrent(
 ): boolean {
   return dependencies.every(
     ({ cacheName, key, value }) =>
-      state[cacheName] === previousState[cacheName] || Reflect.get(state[cacheName], key) === value
+      state[cacheName] === previousState[cacheName] || state[cacheName][key] === value
   )
 }
 
@@ -73,7 +83,7 @@ export function createParentPrChecksProjectionSelector(
       }
       if (dependenciesAreCurrent(state, cached.cacheReferences, cached.dependencies)) {
         // Why: adopting unrelated replacement maps keeps later store notifications O(1).
-        cached.cacheReferences = state
+        cached.cacheReferences = selectCacheReferences(state)
         return cached.projection
       }
     }
@@ -87,7 +97,7 @@ export function createParentPrChecksProjectionSelector(
       prCache: trackCacheReads(state, 'prCache', dependencies),
       checksCache: trackCacheReads(state, 'checksCache', dependencies)
     })
-    cached = { cacheReferences: state, dependencies, projection }
+    cached = { cacheReferences: selectCacheReferences(state), dependencies, projection }
     return projection
   }
 }

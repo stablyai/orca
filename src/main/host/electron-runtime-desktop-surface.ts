@@ -1,8 +1,12 @@
-import { BrowserWindow, ipcMain, Notification } from 'electron'
+import { BrowserWindow, ipcMain, Notification, powerMonitor } from 'electron'
+import { readDesktopAwayState } from '../notifications/desktop-away-state'
 import type { RuntimeDesktopSurface } from '../runtime/runtime-desktop-surface'
+import { translateMain } from '../i18n/main-i18n'
 
 /** The desktop implementation of the runtime's optional desktop facilities. */
 export const electronRuntimeDesktopSurface: RuntimeDesktopSurface = {
+  translateNotification: translateMain,
+  isAwayForMobileNotifications: () => readDesktopAwayState(powerMonitor),
   showNotification: ({ title, body }) => {
     if (!Notification.isSupported()) {
       return false

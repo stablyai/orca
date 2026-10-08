@@ -1,3 +1,5 @@
+import { remoteTypingLoadScript } from './helpers/remote-typing-load-script'
+import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
@@ -55,27 +57,6 @@ function encodedRemoteNodeCommand(script: string): string {
   return `node -e ${shellQuote(`eval(Buffer.from('${encoded}', 'base64').toString('utf8'))`)}`
 }
 
-function remoteTypingLoadScript(runId: string): string {
-  return [
-    "process.stdin.setEncoding('utf8')",
-    'if (process.stdin.isTTY) process.stdin.setRawMode(true)',
-    'process.stdin.resume()',
-    'let seq = 0',
-    'let frame = 0',
-    'let bg = null',
-    `process.stdout.write('REMOTE_TUI_READY_${runId}\\n')`,
-    "setTimeout(() => { bg = setInterval(() => { frame += 1; process.stdout.write('BG_' + frame + '_' + 'x'.repeat(4096) + '\\n') }, 8) }, 500)",
-    "process.stdin.on('data', (chunk) => {",
-    '  if (chunk.includes(String.fromCharCode(3))) { if (bg) clearInterval(bg); process.exit(0) }',
-    '  for (const char of chunk) {',
-    "    if (char === '\\r' || char === '\\n') continue",
-    '    seq += 1',
-    `    process.stdout.write('\\x1b[20;2HREMOTE_KEY_${runId}_' + seq + '_' + char + '\\n')`,
-    '  }',
-    '})'
-  ].join(';')
-}
-
 function remoteBackgroundFloodScript(runId: string): string {
   return [
     "process.stdin.setEncoding('utf8')",
@@ -105,9 +86,12 @@ async function measureRemoteTyping(
   const latencies: number[] = []
   for (let index = 0; index < KEY_LATENCY_SAMPLES.length; index += 1) {
     const char = KEY_LATENCY_SAMPLES[index]
-    const marker = `REMOTE_KEY_${runId}_${index + 1}_${char}`
+    const marker = `KEY_${runId}_${index + 1}_${char}`
     const started = performance.now()
-    await page.evaluate(({ ptyId, char }) => window.api.pty.write(ptyId, char), { ptyId, char })
+    await page.evaluate(({ ptyId, char }) => window.api.pty.write(ptyId, char, 'driving'), {
+      ptyId,
+      char
+    })
     await waitForTerminalOutput(page, marker, 10_000, 80_000)
     latencies.push(performance.now() - started)
   }
@@ -141,7 +125,7 @@ async function readSshPtyAckGate(page: Page): Promise<SshPtyAckGateSnapshot | nu
 }
 
 async function stopRemoteLoad(page: Page, ptyId: string): Promise<void> {
-  await page.evaluate((targetPtyId) => window.api.pty.write(targetPtyId, '\x03'), ptyId)
+  await page.evaluate((targetPtyId) => window.api.pty.write(targetPtyId, '\x03', 'driving'), ptyId)
 }
 
 test.describe('Docker SSH relay perf', () => {
@@ -163,7 +147,7 @@ test.describe('Docker SSH relay perf', () => {
       const ptyId = await waitForActivePanePtyId(orcaPage, 60_000)
 
       const runId = String(Date.now())
-      await execInTerminal(orcaPage, ptyId, `node -e ${shellQuote(remoteTypingLoadScript(runId))}`)
+      await execInTerminal(orcaPage, ptyId, encodedRemoteNodeCommand(remoteTypingLoadScript(runId)))
       await waitForTerminalOutput(orcaPage, `REMOTE_TUI_READY_${runId}`, 30_000, 80_000)
       const measurement = await measureRemoteTyping(orcaPage, ptyId, runId)
       const summary = `median=${measurement.medianLatencyMs.toFixed(
@@ -204,11 +188,14 @@ test.describe('Docker SSH relay perf', () => {
       await execInTerminal(
         orcaPage,
         backgroundPtyId,
-        `node -e ${shellQuote(remoteBackgroundFloodScript(runId))}`
+        encodedRemoteNodeCommand(remoteBackgroundFloodScript(runId))
       )
       await waitForTerminalOutput(orcaPage, `REMOTE_ACK_FLOOD_READY_${runId}`, 30_000, 80_000)
       await holdSshPtyAckGate(orcaPage, [backgroundPtyId])
-      await orcaPage.evaluate((ptyId) => window.api.pty.write(ptyId, 'g'), backgroundPtyId)
+      await orcaPage.evaluate(
+        (ptyId) => window.api.pty.write(ptyId, 'g', 'driving'),
+        backgroundPtyId
+      )
 
       await splitActiveTerminalPane(orcaPage, 'vertical')
       await focusLastTerminalPane(orcaPage)
@@ -219,7 +206,7 @@ test.describe('Docker SSH relay perf', () => {
       await execInTerminal(
         orcaPage,
         activePtyId,
-        `node -e ${shellQuote(remoteTypingLoadScript(activeRunId))}`
+        encodedRemoteNodeCommand(remoteTypingLoadScript(activeRunId))
       )
       await waitForTerminalOutput(orcaPage, `REMOTE_TUI_READY_${activeRunId}`, 30_000, 80_000)
       const heldAckPressure = expect.poll(
@@ -287,11 +274,11 @@ test.describe('Docker SSH relay perf', () => {
         orcaPage,
         ptyId,
         `dd if=/dev/urandom of=${shellQuote(loadFile)} bs=1M count=8 status=none && ` +
-          `echo LOAD_FILES_READY_${runId}`
+          `echo LOAD_FILES_READY_'${runId}'`
       )
       await waitForTerminalOutput(orcaPage, `LOAD_FILES_READY_${runId}`, 60_000, 80_000)
 
-      await execInTerminal(orcaPage, ptyId, `node -e ${shellQuote(remoteTypingLoadScript(runId))}`)
+      await execInTerminal(orcaPage, ptyId, encodedRemoteNodeCommand(remoteTypingLoadScript(runId)))
       await waitForTerminalOutput(orcaPage, `REMOTE_TUI_READY_${runId}`, 30_000, 80_000)
 
       // Background relay pressure: continuous large file reads plus git status

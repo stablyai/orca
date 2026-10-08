@@ -19,7 +19,6 @@ import {
 import {
   queryWindowsProcessDescendants,
   queryWindowsProcessLinksFresh,
-  queryWindowsProcessRowsFresh,
   resetWindowsProcessRowsSnapshotForTests
 } from './windows-foreground-process-rows'
 // A real snapshot always contains the process doing the querying; the reader
@@ -85,7 +84,7 @@ describe('windows process rows', () => {
     })
     resetWindowsProcessRowsSnapshotForTests()
 
-    await expect(queryWindowsProcessRowsFresh()).rejects.toThrow(/unreadable/)
+    expect(await queryWindowsProcessDescendants(100, { fresh: true })).toBeNull()
   })
 
   it('reports an unreadable table as unavailable, not as an empty machine', async () => {
@@ -96,7 +95,7 @@ describe('windows process rows', () => {
     })
     resetWindowsProcessRowsSnapshotForTests()
 
-    await expect(queryWindowsProcessRowsFresh()).rejects.toThrow()
+    expect(await queryWindowsProcessDescendants(100, { fresh: true })).toBeNull()
     expect(await queryWindowsProcessDescendants(100)).toBeNull()
   })
 
@@ -107,17 +106,19 @@ describe('windows process rows', () => {
 
   it('collapses a burst of concurrent identity probes into one scan', async () => {
     // A worktree delete tears down PTYs 32-wide.
-    const rows = await Promise.all(Array.from({ length: 32 }, () => queryWindowsProcessRowsFresh()))
+    const rows = await Promise.all(
+      Array.from({ length: 32 }, () => queryWindowsProcessDescendants(100, { fresh: true }))
+    )
 
     expect(scanCount()).toBe(1)
-    expect(rows[31]?.map((row) => row.pid)).toEqual([process.pid, 100, 200])
+    expect(rows[31]?.map((row) => row.pid)).toEqual([200])
   })
 
   it('never answers from the TTL cache, which can predate the recycle it detects', async () => {
     await queryWindowsProcessDescendants(100)
     expect(scanCount()).toBe(1)
 
-    await queryWindowsProcessRowsFresh()
+    await queryWindowsProcessDescendants(100, { fresh: true })
 
     expect(scanCount()).toBe(2)
   })

@@ -7,18 +7,8 @@ vi.mock('react-native', async () => {
   const Text = ({ children, ...props }: { children?: unknown }): unknown =>
     React.createElement('Text', props, children)
   return {
-    Animated: {
-      Text,
-      Value: class {
-        constructor(private value: number) {}
-        setValue(next: number): void {
-          this.value = next
-        }
-      },
-      loop: (animation: unknown) => animation,
-      sequence: () => ({ start: vi.fn(), stop: vi.fn() }),
-      timing: () => ({ start: vi.fn(), stop: vi.fn() })
-    },
+    ActivityIndicator: (props: Record<string, unknown>) =>
+      React.createElement('ActivityIndicator', props),
     Pressable: ({ children, ...props }: { children?: unknown }) =>
       React.createElement('Pressable', props, children),
     Text,
@@ -31,24 +21,30 @@ vi.mock('lucide-react-native', () => ({ ChevronRight: 'ChevronRight' }))
 
 import { MobileNativeChatTurnStatus } from './MobileNativeChatTurnStatus'
 
+const labels = (node: ReactTestInstance): string[] =>
+  node.findAllByType('Text' as never).map((text) => String(text.children.join('')))
+
+const spinners = (node: ReactTestInstance): ReactTestInstance[] =>
+  node.findAllByType('ActivityIndicator' as never)
+
+let renderer: ReactTestRenderer | null = null
+
+beforeEach(() => {
+  vi.useFakeTimers()
+  vi.setSystemTime(new Date('2026-09-04T00:00:00Z'))
+})
+
+afterEach(() => {
+  act(() => renderer?.unmount())
+  renderer = null
+  vi.useRealTimers()
+})
+
 describe('MobileNativeChatTurnStatus', () => {
-  let renderer: ReactTestRenderer | null = null
-
-  beforeEach(() => {
-    vi.useFakeTimers()
-    vi.setSystemTime(new Date('2026-09-04T00:00:00Z'))
-  })
-
-  afterEach(() => {
-    act(() => renderer?.unmount())
-    renderer = null
-    vi.useRealTimers()
-  })
-
   function render(props: {
     startedAt: number | null
-    thinking: boolean
     workedSeconds?: number | null
+    verdict?: 'interruption' | 'cancellation'
     expanded?: boolean
     onToggleExpanded?: () => void
   }): ReactTestRenderer {
@@ -58,32 +54,19 @@ describe('MobileNativeChatTurnStatus', () => {
     return renderer!
   }
 
-  const labels = (node: ReactTestInstance): string[] =>
-    node.findAllByType('Text' as never).map((text) => String(text.children.join('')))
-
-  it('reads "Thinking" before the turn produces output', () => {
-    const tree = render({ startedAt: Date.now(), thinking: true })
-    expect(labels(tree.root)).toEqual(['Thinking'])
-  })
-
-  it('counts up once the turn is producing output', () => {
-    const startedAt = Date.now()
-    const tree = render({ startedAt, thinking: false })
+  it('counts up from the first second while the turn runs, with no spinner', () => {
+    const tree = render({ startedAt: Date.now() })
     expect(labels(tree.root)).toEqual(['Working for 0s'])
     act(() => {
       vi.advanceTimersByTime(12_000)
     })
     expect(labels(tree.root)).toEqual(['Working for 12s'])
+    expect(spinners(tree.root)).toHaveLength(0)
   })
 
   it('settles to a tappable "Worked for" row that toggles the turn', () => {
     const onToggleExpanded = vi.fn()
-    const tree = render({
-      startedAt: Date.now(),
-      thinking: false,
-      workedSeconds: 184,
-      onToggleExpanded
-    })
+    const tree = render({ startedAt: Date.now(), workedSeconds: 184, onToggleExpanded })
     expect(labels(tree.root)).toEqual(['Worked for 3m 4s'])
     const button = tree.root.findByType('Pressable' as never)
     expect(button.props.accessibilityLabel).toBe('Toggle turn details')
@@ -92,21 +75,33 @@ describe('MobileNativeChatTurnStatus', () => {
     expect(onToggleExpanded).toHaveBeenCalledOnce()
   })
 
+  // The crash's notice row explains the cut; the turn bar reads like any finished turn.
+  it('heads a turn a crash cut off as worked, and a turn the user stopped as interrupted', () => {
+    const crashed = render({
+      startedAt: Date.now(),
+      workedSeconds: 12,
+      verdict: 'interruption',
+      onToggleExpanded: vi.fn()
+    })
+    expect(labels(crashed.root)).toEqual(['Worked for 12s'])
+    act(() => crashed.unmount())
+    const stopped = render({
+      startedAt: Date.now(),
+      workedSeconds: 12,
+      verdict: 'cancellation',
+      onToggleExpanded: vi.fn()
+    })
+    expect(labels(stopped.root)).toEqual(['Interrupted after 12s'])
+  })
+
   it('stays a plain row when the settled turn has nothing to disclose', () => {
-    const tree = render({ startedAt: Date.now(), thinking: false, workedSeconds: 5 })
+    const tree = render({ startedAt: Date.now(), workedSeconds: 5 })
     expect(tree.root.findAllByType('Pressable' as never)).toHaveLength(0)
     expect(labels(tree.root)).toEqual(['Worked for 5s'])
   })
 
   it('holds no interval once the turn has settled', () => {
-    render({ startedAt: Date.now(), thinking: false, workedSeconds: 5 })
+    render({ startedAt: Date.now(), workedSeconds: 5 })
     expect(vi.getTimerCount()).toBe(0)
-  })
-
-  it('announces the live row to assistive tech', () => {
-    const tree = render({ startedAt: Date.now(), thinking: true })
-    const row = tree.root.findByType('View' as never)
-    expect(row.props.accessibilityLiveRegion).toBe('polite')
-    expect(row.props.accessibilityLabel).toBe('Agent is responding')
   })
 })

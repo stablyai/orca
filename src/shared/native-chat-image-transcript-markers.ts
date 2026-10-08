@@ -1,3 +1,4 @@
+import { unwrapClaudePastedContent } from './claude-pasted-content'
 import {
   stripAnsiEscapeSequences,
   TERMINAL_CONTROL_CHARACTER_PATTERN
@@ -63,7 +64,10 @@ export function stripImagePromptMarker(text: string): string {
 export function normalizeNativeChatUserText(text: string): string {
   // Strip sequences first so their printable tails cannot survive a lone-control pass.
   return stripImagePromptMarker(
-    stripAnsiEscapeSequences(text).replace(TERMINAL_CONTROL_CHARACTER_PATTERN, '')
+    stripAnsiEscapeSequences(unwrapClaudePastedContent(text)).replace(
+      TERMINAL_CONTROL_CHARACTER_PATTERN,
+      ''
+    )
   )
     .trim()
     .replace(/\s+/g, ' ')
@@ -76,7 +80,7 @@ export function normalizedNativeChatUserMessageText(message: NativeChatMessage):
   const normalized = normalizeNativeChatUserText(
     message.blocks
       .filter(isTextBlock)
-      .map((block) => block.text)
+      .map((block) => unwrapClaudePastedContent(block.text))
       .join(' ')
   )
   return normalized || null

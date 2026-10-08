@@ -131,6 +131,46 @@ describe('StatsCollector async debounced save', () => {
     expect(JSON.parse(readFileSync(statsPath(), 'utf-8')).aggregates.totalAgentsSpawned).toBe(5)
   })
 
+  it('bounds retained events while a stalled write prevents serialization', async () => {
+    vi.useFakeTimers()
+    const { StatsCollector, initStatsPath } = await importCollector()
+    initStatsPath()
+    const collector = new StatsCollector()
+
+    gate.blocked = true
+    collector.record({ type: 'agent_start', at: 0 })
+    await vi.advanceTimersByTimeAsync(5_000)
+    await vi.waitFor(() => expect(gate.writeFileCalls).toBe(1))
+
+    const expectedEvents = Array.from({ length: 10_000 }, (_, index) => ({
+      type: 'agent_start',
+      at: index + 10_001
+    }))
+    try {
+      for (let at = 1; at <= 20_000; at += 1) {
+        collector.record({ type: 'agent_start', at })
+        if (at % 5_000 === 0) {
+          await vi.advanceTimersByTimeAsync(5_000)
+          expect(collector['events'].length).toBeLessThanOrEqual(10_000)
+        }
+      }
+      expect(gate.writeFileCalls).toBe(1)
+      expect(collector['events']).toEqual(expectedEvents)
+    } finally {
+      const flushed = collector.flushAsync()
+      gate.blocked = false
+      gate.waiters.splice(0).forEach((resolve) => resolve())
+      await flushed
+    }
+
+    const persisted = JSON.parse(readFileSync(statsPath(), 'utf-8'))
+    expect(persisted.events).toEqual(expectedEvents)
+    expect(persisted.aggregates).toMatchObject({
+      totalAgentsSpawned: 20_001,
+      firstEventAt: 0
+    })
+  })
+
   it('retries a queued final snapshot after the active write fails', async () => {
     const { StatsCollector, initStatsPath } = await importCollector()
     initStatsPath()

@@ -43,10 +43,13 @@ export class AiVaultServiceRestartPolicy {
     if (this.timer) {
       clearTimeout(this.timer)
     }
-    this.timer = setTimeout(() => {
-      this.timer = null
-      restart()
-    }, delay)
+    this.timer = setTimeout(
+      () => {
+        this.timer = null
+        restart()
+      },
+      Math.max(delay, this.circuitUntil - now)
+    )
     this.timer.unref?.()
   }
 

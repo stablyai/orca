@@ -18,13 +18,18 @@ export function applyPRCacheResult(
   pr: PRInfo | null,
   fetchedAt: number,
   accepted: boolean,
-  preserveExisting: boolean
+  preserveExisting: boolean,
+  fetchedHeadOid?: string | null
 ): AppState['prCache'] {
   if (preserveExisting) {
     return cache
   }
   if (accepted) {
-    return withBoundedCacheEntry(cache, cacheKey, { data: pr, fetchedAt })
+    return withBoundedCacheEntry(cache, cacheKey, {
+      data: pr,
+      fetchedAt,
+      ...(fetchedHeadOid ? { fetchedHeadOid } : {})
+    })
   }
   if (!cache[cacheKey]) {
     return cache
@@ -81,6 +86,7 @@ export function setGitHubPRResultCaches(
     fallbackPRNumber?: number | null
     fallbackPRSource?: GitHubPRFallbackSource | null
     requestStartedAt?: number
+    fetchedHeadOid?: string | null
     requestStartedEntry?: AppState['hostedReviewCache'][string]
   }
 ): Partial<AppState> {
@@ -132,7 +138,8 @@ export function setGitHubPRResultCaches(
       linkedPRNumber: args.linkedPRNumber,
       fallbackPRNumber: args.fallbackPRNumber
     }),
-    preserveExistingPRForFallbackMiss
+    preserveExistingPRForFallbackMiss,
+    args.fetchedHeadOid
   )
   return {
     ...(nextPRCache === state.prCache ? {} : { prCache: nextPRCache }),
@@ -161,6 +168,7 @@ export function applyGitHubPRResultToCaches(args: {
   fallbackPRNumber?: number | null
   fallbackPRSource?: GitHubPRFallbackSource | null
   requestStartedAt?: number
+  fetchedHeadOid?: string | null
   requestStartedEntry?: AppState['hostedReviewCache'][string]
 }): {
   prCache: AppState['prCache']
@@ -215,7 +223,8 @@ export function applyGitHubPRResultToCaches(args: {
         linkedPRNumber: args.linkedPRNumber,
         fallbackPRNumber: args.fallbackPRNumber
       }),
-      preserveExistingPRForFallbackMiss
+      preserveExistingPRForFallbackMiss,
+      args.fetchedHeadOid
     ),
     hostedReviewCache: hostedReviewSync.cache
   }

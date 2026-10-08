@@ -6,16 +6,10 @@ import type { FsChangedPayload } from '../../../shared/filesystem-entry-types'
 import {
   getEditorExternalWatchTargetKey,
   selectEditorExternalWatchTargets,
-  type EditorExternalWatchTarget,
-  type EditorExternalWatchTargetState as EditorExternalWatchTargetStateShape
+  type EditorExternalWatchTarget
 } from './editor-external-watch-targets'
-import {
-  buildEditorExternalWatchEventHandler,
-  collectOverflowEditorExternalReloadTargets
-} from './editor-external-watch-event-reconciliation'
+import { buildEditorExternalWatchEventHandler } from './editor-external-watch-event-reconciliation'
 import { verifyLatchedEditorMoveDestinations } from './editor-external-watch-disk-verification'
-
-export type EditorExternalWatchTargetState = EditorExternalWatchTargetStateShape
 
 function warnExternalWatchFailure(target: EditorExternalWatchTarget, err: unknown): void {
   console.warn('[filesystem-watch] failed to watch worktree', {
@@ -162,31 +156,8 @@ function subscribeRuntimeTarget(
     })
 }
 
-// Compatibility delegates keep existing direct imports stable without turning this module into an export barrel.
-export function getWatchedTargetKey(target: EditorExternalWatchTarget): string {
-  return getEditorExternalWatchTargetKey(target)
-}
-
-export function getEditorExternalWatchTargets(
-  state: EditorExternalWatchTargetState
-): ReturnType<typeof selectEditorExternalWatchTargets> {
-  return selectEditorExternalWatchTargets(state)
-}
-
-export function createExternalWatchEventHandler(
-  ...args: Parameters<typeof buildEditorExternalWatchEventHandler>
-): ReturnType<typeof buildEditorExternalWatchEventHandler> {
-  return buildEditorExternalWatchEventHandler(...args)
-}
-
 export function verifyLatchedMoveDestinations(
   ...args: Parameters<typeof verifyLatchedEditorMoveDestinations>
 ): void {
   verifyLatchedEditorMoveDestinations(...args)
-}
-
-export function getOverflowExternalReloadTargets(
-  ...args: Parameters<typeof collectOverflowEditorExternalReloadTargets>
-): ReturnType<typeof collectOverflowEditorExternalReloadTargets> {
-  return collectOverflowEditorExternalReloadTargets(...args)
 }

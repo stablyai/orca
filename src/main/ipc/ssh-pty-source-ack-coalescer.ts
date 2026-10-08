@@ -82,9 +82,16 @@ export class SshPtySourceAckCoalescer {
     }
     const providerGeneration = this.pending.values().next().value!.publication
       .identity.providerGeneration
-    const selected = Array.from(this.pending.entries())
-      .filter(([, entry]) => entry.publication.identity.providerGeneration === providerGeneration)
-      .slice(0, MAX_PTY_ACK_ENTRIES)
+    const selected: [string, CoalescedEntry][] = []
+    for (const pair of this.pending) {
+      if (pair[1].publication.identity.providerGeneration !== providerGeneration) {
+        continue
+      }
+      selected.push(pair)
+      if (selected.length === MAX_PTY_ACK_ENTRIES) {
+        break
+      }
+    }
     for (const [key] of selected) {
       this.pending.delete(key)
     }

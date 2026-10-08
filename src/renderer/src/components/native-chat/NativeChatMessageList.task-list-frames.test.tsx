@@ -3,13 +3,20 @@
 import '@testing-library/jest-dom/vitest'
 
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalStatusItem } from '../../../../shared/agent-session-journal-types'
 import { projectStructuredItemToNativeChat } from '../../../../shared/structured-agent-session-projection'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import { projectNativeChatTaskListFrames } from './native-chat-task-list-frames'
+import { installNativeChatMessageListTestViewport } from './native-chat-message-list-test-viewport'
+import { openToolRunMembers } from './native-chat-tool-run-members-test-support'
 
+let restoreViewport = (): void => {}
+beforeAll(() => {
+  restoreViewport = installNativeChatMessageListTestViewport()
+})
+afterAll(() => restoreViewport())
 afterEach(cleanup)
 
 function frame(id: number, status: string, overrides: { kind?: string; truncated?: boolean } = {}) {
@@ -57,13 +64,12 @@ function transcript(messages: NativeChatMessage[], sessionId = 'live-codex') {
         agent: 'codex',
         hasMore: false,
         loadingEarlier: false,
+        olderHistoryGeneration: 0,
         loadEarlier: vi.fn(),
         readPhase: 'ready'
       }}
       isWorking={false}
       expandSignal
-      fontScale={1}
-      showTurnStatus={false}
     />
   )
 }
@@ -106,6 +112,8 @@ describe('live Codex checklist frames', () => {
       role: 'assistant',
       timestamp: 1,
       source: 'transcript',
+      // Journalled like the frames it sits between.
+      journalPosition: { sequence: 1, index: 0 },
       blocks: [
         {
           type: 'tool-call',
@@ -141,8 +149,23 @@ describe('live Codex checklist frames', () => {
     const projected = projectNativeChatTaskListFrames(messages)
     projected.forEach((message, index) => expect(message).toBe(messages[index]))
     render(transcript([truncated]))
-    expect(screen.getByText('notification:turn/plan/updated')).toBeInTheDocument()
+    // Unreadable as a list and wordless, so it is neither a checklist nor a raw row.
+    expect(screen.queryByText('notification:turn/plan/updated')).toBeNull()
     expect(screen.queryByText('Tasks')).toBeNull()
+  })
+
+  // Stored for readers like the task list, drawn only when it has words of its own.
+  it('hides a wordless unrecognised frame while a plan update still becomes the checklist', () => {
+    const unknown = frame(1, 'pending', { kind: 'notification:future/event' })
+    const failure = frame(2, 'pending', { kind: 'notification:future/failure' })
+    const failureBlock = failure.blocks[0]
+    if (failureBlock.type === 'text') {
+      failureBlock.tone = 'error'
+    }
+    render(transcript([unknown, failure, frame(3, 'inProgress')]))
+    expect(screen.queryByText('notification:future/event')).toBeNull()
+    expect(screen.getByText('codex · notification:future/failure')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Tasks 0 of 1 tasks completed' })).toBeInTheDocument()
   })
 
   it('does not consume a neighboring tool failure as a notification result', () => {
@@ -158,6 +181,7 @@ describe('live Codex checklist frames', () => {
     }
     render(transcript([frame(1, 'pending'), command]))
     expect(screen.getByRole('button', { name: 'Tasks 0 of 1 tasks completed' })).toBeInTheDocument()
+    openToolRunMembers()
     expect(screen.getByText('Verification failed', { selector: 'pre' })).toHaveClass(
       'text-destructive'
     )

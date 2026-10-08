@@ -1,7 +1,5 @@
-import { z } from 'zod'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { defineMethod, type RpcMethod } from '../../../core'
-import { requiredString } from '../../../schemas'
+import { defineMethod } from '../../../core'
 import { describeUnconfirmedAgentStop } from '../../../../../../shared/pty-liveness-verdict'
 import { ORCHESTRATION_WORKER_STOP_VERDICT_RUNTIME_CAPABILITY } from '../../../../../../shared/protocol-version'
 import type { RuntimeStatus } from '../../../../../../shared/runtime-types'
@@ -12,10 +10,9 @@ import {
   stopStructuredWorker
 } from '../../orchestration-structured-worker-lifecycle'
 import { isStructuredWorkerHandle } from '../../../../structured-worker-identity'
+import { WorkerDispatchParams } from '../../../../../../shared/rpc-contract/orchestration-worker-stop-params'
 
-const WorkerDispatchParams = z.object({ dispatch: requiredString('Missing --dispatch') })
-
-export const ORCHESTRATION_WORKER_STOP_METHODS: RpcMethod[] = [
+export const ORCHESTRATION_WORKER_STOP_METHODS = [
   defineMethod({
     name: 'orchestration.workerStop',
     params: WorkerDispatchParams,
@@ -144,6 +141,7 @@ export const ORCHESTRATION_WORKER_STOP_METHODS: RpcMethod[] = [
           })
         }
         const observation = await inspectWorkerTerminal(runtime, db, params.dispatch)
+        const liveHandle = observation.terminalHandle ?? handle
         // The host exit can settle this stop while terminal inspection is awaiting inventory.
         if (db.getWorkerDispatch(params.dispatch)?.state === 'stopped') {
           runtime.notifyMessageArrived(`dispatch:${params.dispatch}`, 'status')
@@ -156,9 +154,15 @@ export const ORCHESTRATION_WORKER_STOP_METHODS: RpcMethod[] = [
         }
         // Why `unverifiable` still proceeds: losing contact is a reason to report
         // the outcome honestly, never a reason to stop trying to stop the worker.
+        // Why a structured worker's `exited` also proceeds: it is not final — the worker is still
+        // addressable and the next mail or typed message restarts it (a crashed agent's chat, or
+        // an old session mid-`/clear` before its successor exists). Its stop closes and hides
+        // whichever session runs it, as for a live structured worker.
         if (
           !observation.exact ||
-          (observation.status !== 'live' && observation.status !== 'unverifiable')
+          (observation.status !== 'live' &&
+            observation.status !== 'unverifiable' &&
+            !isStructuredWorkerHandle(handle))
         ) {
           return unknownReceipt(
             params.dispatch,
@@ -204,7 +208,7 @@ export const ORCHESTRATION_WORKER_STOP_METHODS: RpcMethod[] = [
           }
         }
         const closed = await runtime
-          .closeTerminal(handle)
+          .closeTerminal(liveHandle)
           .then((close) => ({ close }) as const)
           .catch(
             (error: unknown) =>

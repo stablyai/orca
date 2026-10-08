@@ -1,3 +1,4 @@
+import { withSftpDirectoryHandles } from './sftp-directory-test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtemp, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -83,7 +84,7 @@ describe('SshFilesystemProvider downloadFolder', () => {
       ),
       end: vi.fn()
     }
-    const createSftp = vi.fn(async () => sftp as never)
+    const createSftp = vi.fn(async () => withSftpDirectoryHandles(sftp))
     provider = new SshFilesystemProvider('conn-1', mux as never, createSftp)
     const destination = join(root, 'src')
 
@@ -113,7 +114,10 @@ describe('SshFilesystemProvider downloadFolder', () => {
       fastGet: vi.fn(),
       end: vi.fn()
     }
-    provider = new SshFilesystemProvider('conn-1', mux as never, async () => sftp as never)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fixture multiplexer implements the request and notification methods used by this provider.
+    provider = new SshFilesystemProvider('conn-1', mux as never, async () =>
+      withSftpDirectoryHandles(sftp)
+    )
 
     await expect(provider.downloadFolder!('/remote/src', join(root, 'src'))).rejects.toThrow(
       "Cannot download symbolic link 'linked-dir'"
@@ -136,7 +140,10 @@ describe('SshFilesystemProvider downloadFolder', () => {
       fastGet: vi.fn(),
       end: vi.fn()
     }
-    provider = new SshFilesystemProvider('conn-1', mux as never, async () => sftp as never)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fixture multiplexer implements the request and notification methods used by this provider.
+    provider = new SshFilesystemProvider('conn-1', mux as never, async () =>
+      withSftpDirectoryHandles(sftp)
+    )
 
     await expect(provider.downloadFolder!('/remote/src', join(root, 'src'))).rejects.toThrow(
       "Remote entries map to the same local name 'a_b.txt'"

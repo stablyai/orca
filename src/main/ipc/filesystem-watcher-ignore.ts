@@ -18,9 +18,7 @@ export const WATCHER_IGNORE_DIRS: string[] = [
 // closed — one entry over the cap and @parcel/watcher silently loses ALL
 // daemon-side exclusions, so fseventsd delivers every node_modules/.git event
 // to this process (measured ~29x client CPU plus daemon-side delivery load).
-// Keep the 8 highest-churn dirs as plain paths (daemon-excluded) and demote
-// the rest to globs (userspace-filtered). Ordering of WATCHER_IGNORE_DIRS is
-// therefore meaningful: the first 8 get true daemon-side exclusion on macOS.
+// The first 8 names get root-level daemon exclusions; the regex covers all names at every depth.
 export const MACOS_FSEVENTS_EXCLUSION_PATH_LIMIT = 8
 
 export type ParcelWatcherIgnoreOptions = {
@@ -37,10 +35,10 @@ function escapeRegex(value: string): string {
 function buildNestedDirectoryRegex(ignoreDirs: readonly string[]): string {
   const alternatives = ignoreDirs.map(escapeRegex).join('|')
   if (process.platform === 'win32') {
-    return `^(?:[^\\\\/]+[\\\\/])*(?:${alternatives})(?:[\\\\/].*)?$`
+    return `^(?:[^\\\\/]+[\\\\/])*(?:${alternatives})(?:[\\\\/][\\s\\S]*)?$`
   }
   // Why: backslash is a legal POSIX filename character, not a path separator.
-  return `^(?:[^/]+/)*(?:${alternatives})(?:/.*)?$`
+  return `^(?:[^/]+/)*(?:${alternatives})(?:/[\\s\\S]*)?$`
 }
 
 export function buildParcelWatcherIgnoreOptions(
@@ -56,9 +54,9 @@ export function buildParcelWatcherIgnoreOptions(
     return { ignoreGlobs: [buildNestedDirectoryRegex(ignoreDirs)] }
   }
   const daemonExcludedDirs = ignoreDirs.slice(0, MACOS_FSEVENTS_EXCLUSION_PATH_LIMIT)
-  const remainingDirs = ignoreDirs.slice(MACOS_FSEVENTS_EXCLUSION_PATH_LIMIT)
   return {
     ignore: [...daemonExcludedDirs],
-    ...(remainingDirs.length > 0 ? { ignoreGlobs: [buildNestedDirectoryRegex(remainingDirs)] } : {})
+    // Why: plain exclusions resolve under the root, leaving nested generated directories unfiltered.
+    ignoreGlobs: [buildNestedDirectoryRegex(ignoreDirs)]
   }
 }

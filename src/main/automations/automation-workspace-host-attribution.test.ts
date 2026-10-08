@@ -1,3 +1,10 @@
+import {
+  closeTestStores,
+  createSqliteTestStore,
+  createStore as createFreshStore,
+  testState
+} from '../persistence-test-harness'
+import { resetRetirementCollisionKeyCacheForTests } from '../worktree-name-retirement'
 /**
  * A folder workspace can pin its execution host while its repo stays local.
  * The desktop authority used to project only the repo, so those records listed
@@ -18,7 +25,7 @@ import { AUTOMATION_ORPHAN_ISSUES } from '../../shared/automation-list-scope'
 import { AutomationService } from './service'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 
-const testState = { dir: '' }
+let hasCreatedStoreInCase = false
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
@@ -115,18 +122,25 @@ async function createStore(
     }),
     'utf-8'
   )
+  if (!hasCreatedStoreInCase) {
+    hasCreatedStoreInCase = true
+    return createFreshStore()
+  }
   vi.resetModules()
   installFakeAppEnvironment({ getPath: () => testState.dir })
   const { Store, initDataPath } = await import('../persistence')
   initDataPath()
-  return new Store()
+  return createSqliteTestStore(Store, { dataFile: join(testState.dir, 'orca-data.json') })
 }
 
 beforeEach(() => {
+  hasCreatedStoreInCase = false
+  resetRetirementCollisionKeyCacheForTests()
   testState.dir = mkdtempSync(join(tmpdir(), 'automation-workspace-host-'))
 })
 
-afterEach(() => {
+afterEach(async () => {
+  await closeTestStores()
   rmSync(testState.dir, { recursive: true, force: true })
 })
 
@@ -218,7 +232,8 @@ describe('dispatch refused for an ambiguous workspace host', () => {
     vi.useFakeTimers()
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     vi.useRealTimers()
     rmSync(testState.dir, { recursive: true, force: true })
   })

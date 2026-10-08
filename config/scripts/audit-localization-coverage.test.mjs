@@ -41,6 +41,52 @@ describe('localization coverage candidates', () => {
 
     expect(reports).toEqual([])
   })
+
+  it('sees static templates and every dynamic template part in visible calls', () => {
+    const reports = candidates(
+      'Sample.ts',
+      'confirm(`Retry the sync`); alert(`Reconnect ${host} after ${attempts} attempts`);'
+    )
+
+    expect(reports.map(({ text, dynamic }) => ({ text, dynamic }))).toEqual([
+      { text: 'Retry the sync', dynamic: false },
+      { text: 'Reconnect', dynamic: true },
+      { text: 'after', dynamic: true },
+      { text: 'attempts', dynamic: true }
+    ])
+  })
+
+  it('ignores nested class properties and translations while seeing sibling copy', () => {
+    const reports = candidates(
+      'Sample.tsx',
+      [
+        'const config = {',
+        '  className: { label: "Hidden class copy" },',
+        '  classNames: ["Hidden token", { title: "Hidden nested token" }],',
+        '  title: `Connect ${host}`,',
+        '  message: "Reconnect the host",',
+        '  description: t("connection.ready", "Ready now")',
+        '};',
+        'export const view = <span>{t("connection.banner", { label: "Connection banner" })}</span>;'
+      ].join('\n')
+    )
+
+    expect(reports.map(({ text, dynamic }) => ({ text, dynamic }))).toEqual([
+      { text: 'Connect', dynamic: true },
+      { text: 'Reconnect the host', dynamic: false }
+    ])
+  })
+
+  it('keeps traversing calls and callbacks to find nested JSX attributes and text', () => {
+    const reports = candidates(
+      'Sample.tsx',
+      `export function Sample() {
+        return <div>{select(true, () => <button title={'Retry after reconnect'}>Reconnect now</button>)}</div>
+      }`
+    )
+
+    expect(reports.map((report) => report.text)).toEqual(['Retry after reconnect', 'Reconnect now'])
+  })
 })
 
 describe('localization coverage file skipping', () => {
@@ -50,6 +96,7 @@ describe('localization coverage file skipping', () => {
 
   it('skips test-only modules that sit beside their spec', () => {
     expect(skipped('src/renderer/src/components/browser-pane/stream-test-harness.ts')).toBe(true)
+    expect(skipped('src/renderer/src/runtime/browser-tab-creation-test-rig.ts')).toBe(true)
     expect(skipped('src/renderer/src/hooks/ipc-events-test-fixtures.ts')).toBe(true)
     expect(skipped('src/renderer/src/lib/session-test-state.ts')).toBe(true)
     expect(skipped('src/renderer/src/store/slices/routing-fixture.ts')).toBe(true)

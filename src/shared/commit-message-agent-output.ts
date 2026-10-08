@@ -1,10 +1,38 @@
+/** jcode's `run --json` envelope, narrowed to the field the answer lives in. */
+type JcodeJsonResult = { text?: unknown }
+
+function isJcodeJsonResult(value: unknown): value is JcodeJsonResult {
+  return typeof value === 'object' && value !== null && 'text' in value
+}
+
 /** Strips noise around the agent's output: surrounding whitespace, a single
- *  enclosing fenced code block, and lone "Generating…" preamble lines some
- *  CLIs print before the real answer. */
+ *  enclosing fenced code block, lone "Generating…" preamble lines some CLIs
+ *  print before the real answer, and a reasoning block the output opens with. */
 export function cleanGeneratedCommitMessage(raw: string): string {
   // Why: agent output can include very large generated bodies; normalize and
   // unwrap by scanning boundaries instead of building newline-sized arrays.
   let text = normalizeGeneratedCommitMessageLineFeeds(raw).trim()
+
+  // Why: jcode --json emits a `{"text": …}` envelope (its plain-text mode
+  // mixes thinking and a "[Tokens]…" usage line into stdout); extract the
+  // answer field when the output is such an envelope.
+  if (text.startsWith('{')) {
+    try {
+      const parsed: unknown = JSON.parse(text)
+      if (isJcodeJsonResult(parsed) && typeof parsed.text === 'string') {
+        text = parsed.text.trim()
+      }
+    } catch {
+      // not a JSON envelope; fall through to the plain-text cleanup
+    }
+  }
+
+  // Why: jcode prints a trailing "[Tokens] upload: …" usage line after the
+  // answer; strip it so the result stays clean for branch/commit naming.
+  const tokensUsageIndex = text.search(/\n\[Tokens\]\s/)
+  if (tokensUsageIndex !== -1) {
+    text = text.slice(0, tokensUsageIndex).trimEnd()
+  }
 
   // Why: real commit messages never start with an ellipsis or the word
   // "Generating"/"Thinking" — those leak from CLIs that print a status line
@@ -17,6 +45,8 @@ export function cleanGeneratedCommitMessage(raw: string): string {
     }
   }
 
+  text = stripLeadingReasoningBlock(text)
+
   const fenced = findEnclosingCommitMessageFenceBody(text)
   if (fenced !== null) {
     text = fenced.trim()
@@ -26,6 +56,38 @@ export function cleanGeneratedCommitMessage(raw: string): string {
   // prompt asks for raw text; a Git subject should not carry that marker.
   text = text.replace(/^(\s*)(?:[-*•●]\s+|\d+[.)]\s+)/, '$1').trim()
 
+  return text
+}
+
+// Why: reasoning models print their chain of thought before the answer.
+// DeepSeek-R1, Qwen3 and Kimi K2 use <think>; Kimi-VL-Thinking uses ◁think▷.
+const REASONING_TAGS = [
+  { open: '<think>', close: '</think>' },
+  { open: '◁think▷', close: '◁/think▷' }
+] as const
+
+function stripLeadingReasoningBlock(text: string): string {
+  for (const { open, close } of REASONING_TAGS) {
+    if (!text.startsWith(open)) {
+      continue
+    }
+    const closeIndex = text.indexOf(close, open.length)
+    return closeIndex === -1 ? text : text.slice(closeIndex + close.length).trim()
+  }
+  return text
+}
+
+/** Drops reasoning that ends in a closing tag with no opening tag before it.
+ *  Chat templates that prefill the opening tag in the prompt (Qwen3-Thinking,
+ *  DeepSeek-R1-0528, Kimi K2.5) keep it out of stdout. Only custom commands
+ *  should use this: any other message may legitimately mention the closing tag. */
+export function stripPrefilledReasoningPreamble(text: string): string {
+  for (const { open, close } of REASONING_TAGS) {
+    const closeIndex = text.indexOf(close)
+    if (closeIndex !== -1 && text.lastIndexOf(open, closeIndex) === -1) {
+      return text.slice(closeIndex + close.length).trim()
+    }
+  }
   return text
 }
 
