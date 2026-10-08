@@ -33,9 +33,11 @@ export function getKiroAgentsDir(): string {
   return join(resolveKiroHomeDir(), 'agents')
 }
 
-// Why: a remote $KIRO_HOME is unknown over SFTP; default matches the CLI's own fallback.
-export function getKiroRemoteAgentsDir(remoteHome: string): string {
-  return pathPosix.join(remoteHome.replace(/\/$/, ''), '.kiro', 'agents')
+/** Without a probed $KIRO_HOME the default matches the CLI's own fallback. */
+export function getKiroRemoteAgentsDir(remoteHome: string, kiroHomeDir?: string): string {
+  return kiroHomeDir
+    ? pathPosix.join(kiroHomeDir, 'agents')
+    : pathPosix.join(remoteHome.replace(/\/$/, ''), '.kiro', 'agents')
 }
 
 export function isKiroAgentConfigFileName(fileName: string): boolean {

@@ -195,8 +195,12 @@ export class KiroHookService {
   }
 
   /** Install on an SSH execution host, where Kiro runs hooks through sh. */
-  async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
-    const agentsDir = getKiroRemoteAgentsDir(remoteHome)
+  async installRemote(
+    sftp: SFTPWrapper,
+    remoteHome: string,
+    kiroHomeDir?: string
+  ): Promise<AgentHookInstallStatus> {
+    const agentsDir = getKiroRemoteAgentsDir(remoteHome, kiroHomeDir)
     const scriptPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/kiro-hook.sh`
     try {
       const fileNames = ((await listRemoteDirectory(sftp, agentsDir)) ?? [])

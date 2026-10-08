@@ -30,6 +30,8 @@ export type RemoteManagedHookInstallOptions = {
   deferTrustUntilConfigToml?: boolean
   /** Explicit GROK_HOME for remote runtimes that redirect Grok's config. */
   grokHomeDir?: string
+  /** Login-shell KIRO_HOME on the execution host; it replaces ~/.kiro outright. */
+  kiroHomeDir?: string
   /** Version reported by Claude on this execution host. */
   claudeVersion?: string
   /** Stops before starting the next installer when the owning relay request
@@ -89,7 +91,11 @@ const REMOTE_MANAGED_HOOK_INSTALLERS: readonly RemoteManagedHookInstaller[] = [
   ['zcode', (sftp, remoteHome) => zcodeHookService.installRemote(sftp, remoteHome)],
   ['dsh', (sftp, remoteHome) => dshHookService.installRemote(sftp, remoteHome)],
   ['jcode', (sftp, remoteHome) => jcodeHookService.installRemote(sftp, remoteHome)],
-  ['kiro', (sftp, remoteHome) => kiroHookService.installRemote(sftp, remoteHome)]
+  [
+    'kiro',
+    (sftp, remoteHome, options) =>
+      kiroHookService.installRemote(sftp, remoteHome, options?.kiroHomeDir)
+  ]
 ]
 
 /** Agents wired into the remote (SSH) hook installer. Exported so an invariant

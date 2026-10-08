@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { createManagedHookLocalFilesystem } from '../agent-hooks/managed-hook-local-filesystem'
 import { KiroHookService } from './hook-service'
 import { getKiroManagedCommandMatcher, KIRO_HOOK_EVENTS } from './hook-settings'
 
@@ -134,6 +135,37 @@ describe('KiroHookService', () => {
     process.env.KIRO_HOME = kiroHome
     expect(new KiroHookService().install().state).toBe('installed')
     expect(existsSync(agentsDir())).toBe(false)
+  })
+
+  it('patches the remote agents under the probed KIRO_HOME, not ~/.kiro', async () => {
+    const kiroHome = join(home, 'remote-kiro')
+    mkdirSync(join(kiroHome, 'agents'), { recursive: true })
+    writeFileSync(join(kiroHome, 'agents', 'remote.json'), JSON.stringify({ name: 'remote' }))
+    writeAgent('stale', { name: 'stale' })
+
+    const result = await new KiroHookService().installRemote(
+      createManagedHookLocalFilesystem(),
+      home,
+      kiroHome
+    )
+
+    expect(result.state).toBe('installed')
+    const remote = JSON.parse(readFileSync(join(kiroHome, 'agents', 'remote.json'), 'utf-8'))
+    expect(Object.keys(remote.hooks).sort()).toEqual([...KIRO_HOOK_EVENTS].sort())
+    // The inactive default home is left alone.
+    expect(readAgent('stale').hooks).toBeUndefined()
+  })
+
+  it('falls back to <remoteHome>/.kiro/agents when no KIRO_HOME was probed', async () => {
+    writeAgent('default', { name: 'default' })
+
+    const result = await new KiroHookService().installRemote(
+      createManagedHookLocalFilesystem(),
+      home
+    )
+
+    expect(result.state).toBe('installed')
+    expect(readAgent('default').hooks).toBeDefined()
   })
 
   it('ignores non-JSON files such as the shipped example config', () => {
