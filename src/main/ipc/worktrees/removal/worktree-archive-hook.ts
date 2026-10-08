@@ -2,6 +2,7 @@ import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-pat
 import type { OrcaHooks } from '../../../../shared/orca-yaml-hook-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { getEffectiveHooksFromConfig } from '../../../effective-hook-config'
+import { resolveArchiveHookCommandPathsWhere } from '../../../archive-hook-command-paths'
 import { getEffectiveHooks, parseOrcaYaml } from '../../../hooks'
 import { getSshFilesystemProvider } from '../../../providers/ssh-filesystem-dispatch'
 import { requireSshGitProvider } from '../../../providers/ssh-git-dispatch'
@@ -76,10 +77,28 @@ export async function runRemoteArchiveHook(
   const provider = requireSshGitProvider(repo.connectionId)
   const env = getSetupRunnerEnvVars(repo, worktreePath)
   const isWindowsRemote = isWindowsAbsolutePathLike(worktreePath)
+  const fsProvider = getSshFilesystemProvider(repo.connectionId)
+  const shell = isWindowsRemote ? 'cmd' : 'posix'
+  // Same anchor as the local archive hook: the command was read from repo.path, but cwd is the
+  // worktree. Stat on that host, and leave the command alone when its disk cannot be seen.
+  const command = fsProvider
+    ? await resolveArchiveHookCommandPathsWhere(
+        script,
+        { yamlRoot: repo.path, cwd: worktreePath, shell },
+        async (absolutePath) => {
+          try {
+            const stat = await fsProvider.stat(absolutePath)
+            return stat.type === 'file'
+          } catch {
+            return false
+          }
+        }
+      )
+    : script
   const result = await provider
     .execNonInteractive(
       isWindowsRemote ? 'cmd.exe' : '/bin/bash',
-      isWindowsRemote ? ['/d', '/s', '/c', script] : ['-lc', script],
+      isWindowsRemote ? ['/d', '/s', '/c', command] : ['-lc', command],
       worktreePath,
       ARCHIVE_HOOK_TIMEOUT_MS,
       undefined,
