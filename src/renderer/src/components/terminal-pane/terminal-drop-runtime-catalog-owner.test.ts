@@ -107,7 +107,8 @@ async function drop(lane: string, workspaceId: string, executionHostId: Executio
   if (lane === 'native') {
     await handleTerminalFileDrop({
       ...args,
-      data: { target: 'terminal', paneLeafId: 'leaf-1', paths: ['/client/file.txt'] }
+      pane: pane,
+      paths: ['/client/file.txt']
     })
   } else {
     result = await handleInternalTerminalFileDrop({

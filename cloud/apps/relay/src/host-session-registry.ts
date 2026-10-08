@@ -76,6 +76,9 @@ const CONTROL_ACTIVITY_LEASE_MS =
   CONTROL_ACTIVITY_RENEWAL_INTERVAL_MS -
   RELAY_PROTOCOL_LIMITS.controlPingIntervalMs
 
+// Past the 135-150 s liveness close, so a host that wakes briefly then sleeps never gets a move.
+export const IDLE_REHOME_MIN_CONTROL_AGE_MS = 180_000
+
 export type HostSession = {
   identity: RelayTokenClaims
   readonly relayHostId: string
@@ -88,6 +91,8 @@ export type HostSession = {
   appVersion: string
   state: HostState
   socket: WebSocket | null
+  // When the current control socket was wired; a rebind restarts it.
+  controlWiredAt: number
   leaseExpiresAt: number
   orphanTimer: ReturnType<typeof setTimeout> | null
   heartbeatTimer: ReturnType<typeof setInterval> | null
@@ -268,7 +273,8 @@ export class HostSessionRegistry {
       (this.idleWork.get(input.relayHostId) ?? 0) !== 0 ||
       session.activeConnIds.size !== 0 ||
       session.activeSplices.size !== 0 ||
-      session.pendingConns.size !== 0
+      session.pendingConns.size !== 0 ||
+      this.now() - session.controlWiredAt < IDLE_REHOME_MIN_CONTROL_AGE_MS
     )
       return { outcome: 'busy' }
     const revision = session.authorityRevision
@@ -1260,6 +1266,7 @@ export class HostSessionRegistry {
       appVersion,
       state: 'active',
       socket,
+      controlWiredAt: this.now(),
       leaseExpiresAt: this.controlLeaseExpiresAt(),
       orphanTimer: null,
       heartbeatTimer: null,
@@ -1290,6 +1297,7 @@ export class HostSessionRegistry {
   private wireActiveControl(session: HostSession): void {
     const socket = session.socket!
     const wiredAt = this.now()
+    session.controlWiredAt = wiredAt
     // Why: pin the build to THIS socket. A rebind refreshes session.appVersion and
     // only then closes the predecessor, whose close event always lands after that
     // write, so reading it at log time would stamp the successor's build.

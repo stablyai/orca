@@ -115,6 +115,24 @@ describe('transcript slots', () => {
     expect(slots.map((slot) => slot.message.id)).toEqual(['a', 'b'])
   })
 
+  it("marks a row as continuing its turn only when the agent's next step follows", () => {
+    const continuing = (messages: NativeChatMessage[]) =>
+      build(messages)
+        .filter((slot) => slot.continuesTurn)
+        .map((slot) => slot.message.id)
+
+    expect(continuing([text('u', 'go', 'user'), text('a', 'looking'), toolRun('b')])).toEqual([
+      'u',
+      'a'
+    ])
+    expect(
+      continuing([text('u', 'go', 'user'), text('answer', 'done'), text('n', 'notice', 'system')])
+    ).toEqual(['u'])
+    expect(
+      continuing([text('u', 'go', 'user'), text('answer', 'done'), text('u2', 'next', 'user')])
+    ).toEqual(['u'])
+  })
+
   it('keeps a message whose only content is a turn status under it', () => {
     const status: NativeChatTurnStatus = { startedAt: 1, thinking: false, workedSeconds: 4 }
     const slots = build([text('u', '', 'user')], {

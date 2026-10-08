@@ -100,6 +100,8 @@ export const ORCAD_EMOJI_SHORTCODE_DATASET =
   'node_modules/emojibase-data/en/shortcodes/emojibase.json'
 
 export const ORCAD_VERSION = '0.1.0'
+export const ORCAD_LAUNCHER_FILENAME = 'orcad.js'
+export const ORCAD_SERVER_ENTRY_FILENAME = 'orcad-server.js'
 
 // Equals FOREIGN_SQLITE_READER_ENTRY_FILENAME; that module is not loadable under type stripping.
 export const ORCAD_FOREIGN_SQLITE_READER_ENTRY = 'foreign-sqlite-reader-entry.js'
@@ -157,7 +159,8 @@ export type OrcadArtifact = {
 }
 
 export const ORCAD_ARTIFACTS: readonly OrcadArtifact[] = [
-  { filename: 'orcad.js' },
+  { filename: ORCAD_LAUNCHER_FILENAME },
+  { filename: ORCAD_SERVER_ENTRY_FILENAME },
   // Forked so a native @parcel/watcher fault kills the child, not the server.
   { filename: 'parcel-watcher-process-entry.js' },
   // Forked so PTYs outlive the runtime process; its absence makes every restart destructive.

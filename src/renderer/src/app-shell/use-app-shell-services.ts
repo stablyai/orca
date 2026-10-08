@@ -23,6 +23,7 @@ import { useTerminalViewerColorPublication } from './use-terminal-viewer-color-p
 import { useBrowserIdentityMigrationNotice } from '../components/browser-pane/browser-user-agent-migration-notice'
 import { useCodexTerminalServerIsolationNotice } from '../components/terminal-pane/codex-terminal-server-isolation-notice'
 import { useCodexSharedSettingsNotice } from '../components/terminal-pane/codex-shared-settings-notice'
+import { useClaudeAccountSignInNotice } from '../lib/claude-account-sign-in-notice'
 import { useVisibleReviewRefreshReporting } from './use-visible-review-refresh-reporting'
 import { useVisibleHostedReviewRefresh } from './use-visible-hosted-review-refresh'
 
@@ -64,4 +65,5 @@ export function useAppShellServices(): void {
   useBrowserIdentityMigrationNotice()
   useCodexTerminalServerIsolationNotice()
   useCodexSharedSettingsNotice()
+  useClaudeAccountSignInNotice()
 }

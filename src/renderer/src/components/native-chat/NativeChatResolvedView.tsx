@@ -132,13 +132,10 @@ export function NativeChatResolvedView({
   // replaces the composer.
   const questionAnswerInputRef = useRef<HTMLInputElement>(null)
   const fileLinkContext = useNativeChatFileLinkContext(terminalTabId)
-  const pasteClipboardIntoComposer = useNativeChatPasteBridge({
-    rootRef,
-    composerRef,
-    questionAnswerInputRef
-  })
+  const onPaste = useNativeChatPasteBridge({ rootRef, composerRef, questionAnswerInputRef })
   const contextMenu = useNativeChatContextMenu({
     rootRef,
+    composerRef,
     enabled: isVisible,
     onSwitchToTerminal,
     splitShortcutLabels: {
@@ -146,7 +143,7 @@ export function NativeChatResolvedView({
       down: formatShortcutLabel('terminal.splitDown', keybindings)
     },
     actions: {
-      onPaste: pasteClipboardIntoComposer,
+      onPaste,
       ...(contextMenuActions ?? emptyNativeChatContextMenuActions)
     }
   })

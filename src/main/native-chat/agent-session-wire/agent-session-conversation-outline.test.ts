@@ -77,6 +77,28 @@ describe('conversation outline read', () => {
     expect(replyBytes(trimmed.entries)).toBeLessThanOrEqual(budget)
   })
 
+  it('carries the reply to each prompt, and drops replies before it shortens a preview', () => {
+    const items = Array.from({ length: 10 }, (_, index): AgentJournalRenderItem[] => [
+      prompt(index * 2 + 1, 'x'.repeat(100)),
+      {
+        itemId: `reply-${index}`,
+        revision: 1,
+        sequence: index * 2 + 2,
+        observedAt: index * 2 + 2,
+        body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Answer' }] }
+      }
+    ]).flat()
+    const full = readAgentSessionConversationOutline(snapshot(items), Number.MAX_SAFE_INTEGER)
+    expect(full.entries.map((entry) => entry.reply)).toEqual(Array(10).fill('Answer'))
+
+    // One byte short: the budget counts a separator per entry, the array two brackets.
+    const tight = readAgentSessionConversationOutline(snapshot(items), replyBytes(full.entries) - 2)
+    expect(tight.entries.every((entry) => entry.reply === undefined)).toBe(true)
+    expect(tight.entries.map((entry) => entry.preview)).toEqual(
+      full.entries.map((entry) => entry.preview)
+    )
+  })
+
   it('stays inside the history page budget for a journal far past it', () => {
     // ~10k prompts of 1 KB each: an order of magnitude past the budget at full preview.
     const items = Array.from({ length: 10_000 }, (_, index) =>

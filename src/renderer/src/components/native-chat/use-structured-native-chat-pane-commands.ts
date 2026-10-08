@@ -58,6 +58,7 @@ export function useStructuredNativeChatPaneCommands({
     },
     enabled: isVisible,
     resolveOrcaSessionId,
+    composerRef,
     showTerminalPaneActions: terminalPaneActions !== undefined,
     splitShortcutLabels: {
       right: formatShortcutLabel('terminal.splitRight', keybindings),

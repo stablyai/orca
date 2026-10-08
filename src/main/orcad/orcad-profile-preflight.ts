@@ -11,7 +11,7 @@ import {
   type OrcadProfilePreflightResponse
 } from '../../shared/orcad-profile-preflight'
 import { readOrcadArtifactIdentity } from './orcad-artifact-identity'
-import { ORCAD_VERSION_FILENAME } from '../../shared/orcad-artifacts'
+import { ORCAD_SERVER_ENTRY_FILENAME, ORCAD_VERSION_FILENAME } from '../../shared/orcad-artifacts'
 import { ORCAD_NODE_RUNTIME_IDENTITY } from '../../shared/orcad-node-runtime-identity'
 import { runProcess } from '../../shared/child-process/run-process'
 import { preflightOrcadNativeRuntime } from './orcad-runtime-native-preflight'
@@ -32,7 +32,7 @@ export async function preflightBundledOrcadStartup(): Promise<void> {
   // Keep disposable SQLite ownership and native state out of the serving process.
   const result = await runProcess({
     program: process.execPath,
-    args: [join(directory, 'orcad.js'), ORCAD_STARTUP_PREFLIGHT_FLAG, nonce],
+    args: [join(directory, ORCAD_SERVER_ENTRY_FILENAME), ORCAD_STARTUP_PREFLIGHT_FLAG, nonce],
     env: { ...process.env, ORCA_BACKGROUND_LAUNCH: '1' },
     timeoutMs: ORCAD_PROFILE_PREFLIGHT_TIMEOUT_MS,
     maxOutputBytes: 64 * 1024,

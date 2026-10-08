@@ -3,7 +3,8 @@ import type {
   AgentJournalItemBody,
   AgentJournalPromptOption,
   AgentJournalQuestion,
-  AgentJournalQuestionItem
+  AgentJournalQuestionItem,
+  AgentJournalFreeTextInput
 } from '../../../shared/agent-session-journal-types'
 import { isPlanApprovalSubject } from '../../../shared/agent-session-approval-subject'
 import {
@@ -97,7 +98,8 @@ export function boundJournalPromptBody(
       : {}),
     ...(body.freeTextQuestionId
       ? { freeTextQuestionId: boundPromptIdentifier(body.freeTextQuestionId) }
-      : {})
+      : {}),
+    ...(body.freeTextInput ? { freeTextInput: boundFreeTextInput(body.freeTextInput) } : {})
   }
 }
 
@@ -110,7 +112,19 @@ function boundPromptQuestion(question: AgentJournalQuestion): AgentJournalQuesti
     options: boundPromptOptions(question.options),
     ...(question.freeTextQuestionId
       ? { freeTextQuestionId: boundPromptIdentifier(question.freeTextQuestionId) }
-      : {})
+      : {}),
+    ...(question.freeTextInput ? { freeTextInput: boundFreeTextInput(question.freeTextInput) } : {})
+  }
+}
+
+function boundFreeTextInput(input: AgentJournalFreeTextInput): AgentJournalFreeTextInput {
+  return {
+    ...(input.allowEmpty === undefined ? {} : { allowEmpty: input.allowEmpty }),
+    ...(input.multiline === undefined ? {} : { multiline: input.multiline }),
+    ...(input.initialValue === undefined
+      ? {}
+      : { initialValue: boundPromptText(input.initialValue) }),
+    ...(input.placeholder === undefined ? {} : { placeholder: boundPromptText(input.placeholder) })
   }
 }
 

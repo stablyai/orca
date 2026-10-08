@@ -12,6 +12,7 @@
  * the process's whole life; redirecting means the deploy can disconnect and the supervisor
  * still owns a running service.
  */
+import { ORCAD_LAUNCHER_FILENAME, ORCAD_SERVER_ENTRY_FILENAME } from '../../shared/orcad-artifacts'
 import { shellEscape } from './ssh-connection-utils'
 import {
   isWindowsRemoteHost,
@@ -89,7 +90,7 @@ export function orcadLaunchCommand(host: RemoteHostPlatform, spec: OrcadLaunchSp
   )
   const log = shellEscape(joinRemotePath(host, spec.remoteInstallDir, ORCAD_LOG_FILENAME))
   const pidFile = shellEscape(joinRemotePath(host, spec.remoteInstallDir, ORCAD_PID_FILENAME))
-  const entry = shellEscape(joinRemotePath(host, spec.remoteInstallDir, 'orcad.js'))
+  const entry = shellEscape(joinRemotePath(host, spec.remoteInstallDir, ORCAD_LAUNCHER_FILENAME))
   const baseDir = remoteDirname(spec.remoteInstallDir.replace(/\/+$/u, ''), host)
   // Only `~/.orca-remote` itself; never tighten an unrelated parent a custom slot path names.
   const privateDirs = [
@@ -116,6 +117,7 @@ export function orcadLaunchCommand(host: RemoteHostPlatform, spec: OrcadLaunchSp
     `ORCA_USER_DATA=${shellEscape(spec.userDataDir)}`,
     ...orcadManagedLaunchEnv(spec).map(([name, value]) => `${name}=${shellEscape(value)}`),
     // Keep $! equal to the runtime PID rather than a waiting shell's PID.
+    // Older clients identify the live PID by orcad.js; the pinned launcher loads the body in-place.
     `exec nohup "$orcad_runtime" ${entry}`,
     `--json --bind ${shellEscape(spec.bindHost)} --port ${String(spec.port)}`,
     `> ${readiness} 2>> ${log} < /dev/null &`,
@@ -151,14 +153,15 @@ export function orcadLivenessProbeCommand(
   }
   const pidFile = shellEscape(joinRemotePath(host, remoteInstallDir, ORCAD_PID_FILENAME))
   const readiness = shellEscape(joinRemotePath(host, remoteInstallDir, ORCAD_READINESS_FILENAME))
-  const entry = shellEscape(joinRemotePath(host, remoteInstallDir, 'orcad.js'))
+  const launcher = shellEscape(joinRemotePath(host, remoteInstallDir, ORCAD_LAUNCHER_FILENAME))
+  const server = shellEscape(joinRemotePath(host, remoteInstallDir, ORCAD_SERVER_ENTRY_FILENAME))
   return [
     posixProcessAliveShellFunction({ refuseUnverifiable: true }),
     // A PID is no identity once reused: a process whose command line does not run this slot's
-    // orcad.js is not it. No `ps` answer leaves the plain liveness check to decide.
-    `orcad_entry=${entry};`,
+    // entry is not it. No `ps` answer leaves the plain liveness check to decide.
+    `orcad_launcher=${launcher}; orcad_server=${server};`,
     'orcad_reused() { args=$(ps -o args= -p "$1" 2>/dev/null) && [ -n "$args" ] && ' +
-      'case "$args" in *"$orcad_entry"*) return 1;; *) return 0;; esac; };',
+      'case "$args" in *"$orcad_launcher"* | *"$orcad_server"*) return 1;; *) return 0;; esac; };',
     `pid=$(cat ${pidFile} 2>/dev/null);`,
     'case "$pid" in',
     `"" ) if [ -e ${pidFile} ] || [ -e ${readiness} ]; then echo UNKNOWN; else echo ${ORCAD_NEVER_LAUNCHED}; fi;;`,

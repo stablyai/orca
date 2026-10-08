@@ -157,6 +157,15 @@ export function createUiTrustActions(set: UISliceSet, _get: UISliceGet): Partial
         }
         window.api.ui.set({ codexSharedSettingsNoticeSeen: true }).catch(console.error)
         return { codexSharedSettingsNoticeSeen: true }
+      }),
+    claudeAccountSignInNoticeSeen: true,
+    markClaudeAccountSignInNoticeSeen: () =>
+      set((s) => {
+        if (s.claudeAccountSignInNoticeSeen) {
+          return s
+        }
+        window.api.ui.set({ claudeAccountSignInNoticeSeen: true }).catch(console.error)
+        return { claudeAccountSignInNoticeSeen: true }
       })
   }
 }

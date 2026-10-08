@@ -9,8 +9,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport'
 import TerminalPaneHeaderOverlay from './TerminalPaneHeaderOverlay'
-import { handleTerminalFileDrop } from './terminal-drop-handler'
-import { resolveNativeFileDropPath } from '../../../../shared/native-file-drop'
 import { encodeWorkspaceFilePaths, WORKSPACE_FILE_PATHS_MIME } from '@/lib/workspace-file-drag'
 
 vi.mock('@/components/ui/tooltip', () => ({
@@ -170,6 +168,7 @@ function pressInputKey(
 }
 
 afterEach(() => {
+  vi.unstubAllGlobals()
   for (const { container, root } of mounted.splice(0)) {
     act(() => root.unmount())
     container.remove()
@@ -304,9 +303,11 @@ describe('TerminalPaneHeaderOverlay', () => {
 
 function dispatchFileDrag(target: Element, type: 'dragover' | 'drop', internal: boolean): void {
   const event = new Event(type, { bubbles: true, cancelable: true })
+  Object.defineProperty(event, 'isTrusted', { value: true })
   Object.defineProperty(event, 'dataTransfer', {
     value: {
       types: internal ? [WORKSPACE_FILE_PATHS_MIME] : ['Files'],
+      files: [new File([], 'file.txt')],
       getData: () => encodeWorkspaceFilePaths(['/repo/file.txt']),
       dropEffect: 'none'
     }
@@ -350,47 +351,18 @@ describe('terminal title drop ownership', () => {
       if (!title) {
         throw new Error('Title A did not render')
       }
-      const deliveries: Promise<void>[] = []
-      const legacyCapture = (event: Event): void => {
-        if (internal) {
-          return
+      vi.stubGlobal('api', {
+        fs: {
+          getPathForFile: () => '/repo/file.txt',
+          prepareDroppedPaths: async ({ paths }: { paths: string[] }) => ({ paths, failures: [] })
         }
-        event.preventDefault()
-        event.stopPropagation()
-        const entries = event
-          .composedPath()
-          .filter((entry): entry is HTMLElement => entry instanceof HTMLElement)
-          .map((entry) => ({
-            nativeFileDropTarget: entry.dataset.nativeFileDropTarget,
-            terminalTabId: entry.dataset.terminalTabId,
-            terminalPaneLeafId: entry.dataset.terminalPaneLeafId
-          }))
-        const resolution = resolveNativeFileDropPath(entries)
-        if (resolution?.target === 'terminal') {
-          deliveries.push(
-            handleTerminalFileDrop({
-              manager,
-              paneTransports: transports,
-              worktreeId: 'wt-1',
-              tabId: 'tab-1',
-              cwd: '/repo',
-              data: { paths: ['/repo/file.txt'], ...resolution }
-            })
-          )
+      })
+      await act(async () => {
+        if (dragover) {
+          dispatchFileDrag(title, 'dragover', internal)
         }
-      }
-      document.addEventListener('drop', legacyCapture, true)
-      try {
-        await act(async () => {
-          if (dragover) {
-            dispatchFileDrag(title, 'dragover', internal)
-          }
-          dispatchFileDrag(title, 'drop', internal)
-          await Promise.all(deliveries)
-        })
-      } finally {
-        document.removeEventListener('drop', legacyCapture, true)
-      }
+        dispatchFileDrag(title, 'drop', internal)
+      })
       expect(sends[0]).toHaveBeenCalledExactlyOnceWith('/repo/file.txt ', 'driving')
       expect(sends[1]).not.toHaveBeenCalled()
       expect(activate).not.toHaveBeenCalled()

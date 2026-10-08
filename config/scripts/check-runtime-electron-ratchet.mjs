@@ -49,7 +49,9 @@ export const STRUCTURED_CHAT_LANES = [
   { directory: ['src', 'shared'] },
   { directory: ['src', 'main', 'runtime'], basename: /^(?:structured-|agent-session-)/ },
   { directory: ['src', 'main', 'provider-process'] },
-  { directory: ['src', 'main', 'acp'] }
+  { directory: ['src', 'main', 'acp'] },
+  { directory: ['src', 'main', 'jsonl-rpc'] },
+  { directory: ['src', 'main', 'pi'], basename: /^rpc-/ }
 ]
 
 export function collectStructuredChatEntryPoints(root = ROOT) {

@@ -123,6 +123,7 @@ function useReviewTranscript() {
     showsTailRow: true,
     isVisible: true,
     alignToViewportTop: vi.fn(),
+    isAlignPending: () => false,
     scrollToEnd,
     restoreScrollOffset: vi.fn(),
     consumeProgrammaticScroll: () => false,
