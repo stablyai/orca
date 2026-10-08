@@ -14,6 +14,7 @@ import {
   type CdpUserAgentOverrideState
 } from './browser-manager-types'
 import { BrowserManagerVisibility } from './browser-manager-visibility'
+import { sendGuestCdpCommand } from './guest-cdp-command'
 
 export abstract class BrowserManagerNavigation extends BrowserManagerVisibility {
   resolveBrowserGuestRequestUserAgent(
@@ -174,7 +175,7 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
     const operation = { sequence: ++state.nextSequence, override }
     state.pending.push(operation)
     this.cdpUserAgentOverrideStateByGuestId.set(guest.id, state)
-    return guest.debugger.sendCommand('Emulation.setUserAgentOverride', override).then(
+    return sendGuestCdpCommand(guest, 'Emulation.setUserAgentOverride', override).then(
       () => this.settleCdpUserAgentOverride(guest.id, state, operation, true),
       (error: unknown) => {
         this.settleCdpUserAgentOverride(guest.id, state, operation, false)

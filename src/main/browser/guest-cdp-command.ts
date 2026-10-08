@@ -1,5 +1,6 @@
 import type { WebContents } from 'electron'
 import { BrowserError } from './browser-error'
+import { browserCaptureIdle, type BrowserCaptureReservation } from './browser-capture-idle'
 
 // Why: Chromium resizes the page's view for these without checking the view still exists
 // (WebContentsImpl::SetDeviceEmulationSize). A crashed renderer takes its view with it until the
@@ -13,6 +14,10 @@ type GuestCdpTarget = Pick<WebContents, 'isDestroyed' | 'isCrashed'> & {
   debugger: Pick<WebContents['debugger'], 'sendCommand'>
 }
 
+export type GuestCdpAdmission = {
+  reservation?: BrowserCaptureReservation
+}
+
 /**
  * The gate for guest CDP commands: every viewport writer and every sender that forwards a caller's
  * method (agent bridge, CDP proxy) goes through here, so none can hand Chromium a command that
@@ -22,7 +27,8 @@ export function sendGuestCdpCommand(
   guest: GuestCdpTarget,
   method: string,
   params?: Record<string, unknown>,
-  sessionId?: string
+  sessionId?: string,
+  admission?: GuestCdpAdmission
 ): Promise<unknown> {
   // Why same task as the send: isCrashed() flips in the same Chromium task that drops the view,
   // so checking right before sendCommand leaves no gap for the renderer to die in between.
@@ -34,9 +40,15 @@ export function sendGuestCdpCommand(
       )
     )
   }
-  return Promise.resolve(
-    sessionId === undefined
-      ? guest.debugger.sendCommand(method, params)
-      : guest.debugger.sendCommand(method, params, sessionId)
-  )
+  const send = async (): Promise<unknown> => {
+    const raw = Promise.resolve(
+      sessionId === undefined
+        ? guest.debugger.sendCommand(method, params)
+        : guest.debugger.sendCommand(method, params, sessionId)
+    )
+    return await browserCaptureIdle.trackPrimary(guest, raw)
+  }
+  return admission?.reservation
+    ? browserCaptureIdle.runReservedCapture(guest, admission.reservation, async () => send())
+    : browserCaptureIdle.runCapture(guest, send)
 }

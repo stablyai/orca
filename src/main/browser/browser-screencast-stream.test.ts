@@ -166,7 +166,8 @@ describe('startBrowserScreencast', () => {
     })
 
     try {
-      await Promise.resolve()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(pendingCaptures).toHaveLength(1)
       webContents.debugger.emit('message', {}, 'Page.screencastFrame', {
         data: Buffer.from('first-live-frame').toString('base64'),
         sessionId: 42,
@@ -175,8 +176,7 @@ describe('startBrowserScreencast', () => {
       expect(onFrame).toHaveBeenCalledTimes(1)
 
       pendingCaptures[0]?.({ data: Buffer.from('stale-initial').toString('base64') })
-      await Promise.resolve()
-      await Promise.resolve()
+      await vi.advanceTimersByTimeAsync(0)
       expect(onFrame).toHaveBeenCalledTimes(1)
 
       webContents.debugger.emit('message', {}, 'Page.loadEventFired', {})
@@ -190,8 +190,7 @@ describe('startBrowserScreencast', () => {
         metadata: { deviceWidth: 800, deviceHeight: 600 }
       })
       pendingCaptures[1]?.({ data: Buffer.from('stale-navigation').toString('base64') })
-      await Promise.resolve()
-      await Promise.resolve()
+      await vi.advanceTimersByTimeAsync(0)
 
       expect(onFrame).toHaveBeenCalledTimes(2)
       const secondFrame = decodeBrowserScreencastFrame(onFrame.mock.calls[1][0])

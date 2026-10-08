@@ -1,4 +1,5 @@
 import { cn } from '@/lib/utils'
+import { useNativeViewOcclusionRef } from '@/hooks/useNativeViewOcclusion'
 
 export function BrowserPageZoomIndicator({
   state,
@@ -7,8 +8,10 @@ export function BrowserPageZoomIndicator({
   state: { ariaHidden: boolean; opacityClassName: string }
   percent: number
 }): React.JSX.Element {
+  const occlusionRef = useNativeViewOcclusionRef<HTMLDivElement>()
   return (
     <div
+      ref={state.ariaHidden ? undefined : occlusionRef}
       role="status"
       aria-live="polite"
       aria-hidden={state.ariaHidden}

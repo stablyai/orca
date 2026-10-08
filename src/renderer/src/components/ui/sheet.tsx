@@ -8,6 +8,7 @@ import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
 import { handleImeOverlayEscape } from '@/lib/ime-overlay-escape'
 import { translate } from '@/i18n/i18n'
+import { useNativeViewOcclusionRef } from '@/hooks/useNativeViewOcclusion'
 
 function Sheet({ ...props }: React.ComponentProps<typeof SheetPrimitive.Root>) {
   return <SheetPrimitive.Root data-slot="sheet" {...props} />
@@ -24,10 +25,13 @@ function SheetPortal({ ...props }: React.ComponentProps<typeof SheetPrimitive.Po
 function SheetOverlay({
   className,
   style,
+  ref,
   ...props
 }: React.ComponentProps<typeof SheetPrimitive.Overlay>) {
+  const occlusionRef = useNativeViewOcclusionRef(ref, true)
   return (
     <SheetPrimitive.Overlay
+      ref={occlusionRef}
       data-slot="sheet-overlay"
       // Why: same fix as DialogOverlay — a flat bg-black/50 scrim disappears
       // over the dark canvas. A deeper scrim + 2px backdrop blur lifts the

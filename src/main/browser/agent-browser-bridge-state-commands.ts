@@ -16,6 +16,7 @@ import { BrowserError } from './cdp-bridge'
 import { parseShellArgs, stripAgentBrowserTargetArgs } from './agent-browser-bridge-process'
 import { AgentBrowserBridgeInteractionCommands } from './agent-browser-bridge-interaction-commands'
 import { sendGuestCdpCommand } from './guest-cdp-command'
+import { browserCaptureIdle } from './browser-capture-idle'
 
 export abstract class AgentBrowserBridgeStateCommands extends AgentBrowserBridgeInteractionCommands {
   // ── Cookie commands ──
@@ -102,14 +103,16 @@ export abstract class AgentBrowserBridgeStateCommands extends AgentBrowserBridge
       }
 
       // Why: agent-browser's `set viewport` has no `mobile` flag, so apply the emulation directly via CDP to honor Orca's --mobile.
-      await sendGuestCdpCommand(wc, 'Emulation.setDeviceMetricsOverride', {
-        width,
-        height,
-        deviceScaleFactor: scale,
-        mobile
+      await browserCaptureIdle.runCapture(wc, async () => {
+        await sendGuestCdpCommand(wc, 'Emulation.setDeviceMetricsOverride', {
+          width,
+          height,
+          deviceScaleFactor: scale,
+          mobile
+        })
+        // Why: the physical compositor size belongs to the same metrics transaction.
+        await sendGuestCdpCommand(wc, 'Emulation.setVisibleSize', { width, height }).catch(() => {})
       })
-      // Why: BrowserView's compositor can keep the old host size after a metrics-only resize, cropping remote screencast clients.
-      await sendGuestCdpCommand(wc, 'Emulation.setVisibleSize', { width, height }).catch(() => {})
 
       return {
         width,

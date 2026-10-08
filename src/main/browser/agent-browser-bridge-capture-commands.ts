@@ -5,6 +5,7 @@ import { captureFullPageScreenshot } from './cdp-screenshot'
 import { acquireElectronDebugger } from './electron-debugger-lease'
 import { AgentBrowserBridgeUtilityCommands } from './agent-browser-bridge-utility-commands'
 import { ORCA_TAB_SESSION_PREFIX } from './agent-browser-orphan-sweep'
+import { sendGuestCdpCommand } from './guest-cdp-command'
 
 export abstract class AgentBrowserBridgeCaptureCommands extends AgentBrowserBridgeUtilityCommands {
   async screenshot(
@@ -12,11 +13,16 @@ export abstract class AgentBrowserBridgeCaptureCommands extends AgentBrowserBrid
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserScreenshotResult> {
+    const screenshotFormat = format === 'jpeg' ? 'jpeg' : 'png'
     // Why: agent-browser writes the screenshot to a temp file and returns its path; read it and return base64.
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
       return this.readScreenshotFromResult(
-        await this.execAgentBrowser(sessionName, ['screenshot']),
-        format
+        await this.execAgentBrowser(sessionName, [
+          'screenshot',
+          '--screenshot-format',
+          screenshotFormat
+        ]),
+        screenshotFormat
       )
     })
   }
@@ -63,7 +69,8 @@ export abstract class AgentBrowserBridgeCaptureCommands extends AgentBrowserBrid
         let releaseDebugger = (): void => {}
         try {
           releaseDebugger = acquireElectronDebugger(wc).release
-          const { result, exceptionDetails } = (await wc.debugger.sendCommand('Runtime.evaluate', {
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Chromium Runtime.evaluate returns a RemoteObject result and optional ExceptionDetails.
+          const { result, exceptionDetails } = (await sendGuestCdpCommand(wc, 'Runtime.evaluate', {
             expression,
             returnByValue: true,
             awaitPromise: true

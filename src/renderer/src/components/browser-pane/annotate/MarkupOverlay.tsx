@@ -1,5 +1,6 @@
 import { ImeInput } from '@/lib/ime-text-field'
 import React, { useCallback, useRef, useState } from 'react'
+import { useNativeViewOcclusionRef } from '@/hooks/useNativeViewOcclusion'
 import { Check, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -26,6 +27,7 @@ export function MarkupOverlay({
   const baseImgRef = useRef<HTMLImageElement | null>(null)
   const [baseLoaded, setBaseLoaded] = useState(false)
   const editor = useMarkupEditor(busy, onCancel)
+  const occlusionRef = useNativeViewOcclusionRef(editor.rootRef)
   const { pendingText } = editor
 
   const handleDone = useCallback(() => {
@@ -38,7 +40,7 @@ export function MarkupOverlay({
 
   return (
     <div
-      ref={editor.rootRef}
+      ref={occlusionRef}
       data-orca-markup-overlay
       className="absolute inset-0 z-20 overflow-hidden"
     >

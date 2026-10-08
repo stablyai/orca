@@ -16,12 +16,19 @@ export type MarkupBaseImage = {
 export type MarkupCaptureSource =
   | { kind: 'webview'; webview: Electron.WebviewTag }
   | { kind: 'image'; element: HTMLImageElement }
+  | {
+      kind: 'surface'
+      capture: () => Promise<{ dataUrl: string; width: number; height: number } | null>
+    }
 
 export async function captureMarkupBaseImage(
   source: MarkupCaptureSource
 ): Promise<MarkupBaseImage> {
   if (source.kind === 'webview') {
     return captureFromWebview(source.webview)
+  }
+  if (source.kind === 'surface') {
+    return captureFromSurface(source.capture)
   }
   return captureFromImage(source.element)
 }
@@ -38,6 +45,28 @@ async function captureFromWebview(webview: Electron.WebviewTag): Promise<MarkupB
   // base image is fully opaque.
   const image = await loadImage(native.toDataURL())
   return { dataUrl: flattenToOpaquePng(image, size.width, size.height), ...size }
+}
+
+async function captureFromSurface(
+  capture: () => Promise<{ dataUrl: string; width: number; height: number } | null>
+): Promise<MarkupBaseImage> {
+  const result = await capture()
+  if (
+    !result ||
+    !Number.isFinite(result.width) ||
+    !Number.isFinite(result.height) ||
+    result.width <= 0 ||
+    result.height <= 0 ||
+    !result.dataUrl.startsWith('data:image/')
+  ) {
+    throw new Error('markup: surface capture unavailable')
+  }
+  const image = await loadImage(result.dataUrl)
+  return {
+    dataUrl: flattenToOpaquePng(image, result.width, result.height),
+    height: result.height,
+    width: result.width
+  }
 }
 
 function captureFromImage(element: HTMLImageElement): MarkupBaseImage {

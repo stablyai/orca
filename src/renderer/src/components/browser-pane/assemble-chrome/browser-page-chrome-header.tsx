@@ -9,6 +9,7 @@ import type { useBrowserPageReloadActions } from '../navigate/use-browser-page-r
 import type { useBrowserPageNavigationDownloads } from '../navigate/use-browser-page-navigation-downloads'
 import type { useBrowserPageGrabAnnotations } from '../annotate/use-browser-page-grab-annotations'
 import type { useBrowserPageAnnotationSend } from '../annotate/use-browser-page-annotation-send'
+import type { BrowserPageSurface } from '../host-guest/browser-page-surface'
 
 export function BrowserPageChromeHeader({
   chromeHeaderRef,
@@ -17,7 +18,7 @@ export function BrowserPageChromeHeader({
   worktreeId,
   sessionProfileId,
   isActive,
-  webviewRef,
+  surface,
   addressBarInputRef,
   dismissAddressBarSuggestionsRef,
   reload,
@@ -42,7 +43,7 @@ export function BrowserPageChromeHeader({
   worktreeId: string
   sessionProfileId: string | null
   isActive: boolean
-  webviewRef: MutableRefObject<Electron.WebviewTag | null>
+  surface: BrowserPageSurface
   addressBarInputRef: MutableRefObject<HTMLInputElement | null>
   dismissAddressBarSuggestionsRef: MutableRefObject<(() => void) | null>
   reload: ReturnType<typeof useBrowserPageReloadActions>
@@ -75,7 +76,7 @@ export function BrowserPageChromeHeader({
         convertedFrom={browserTab.convertedFrom ?? null}
         convertedTo={browserTab.convertedTo ?? null}
         loading={browserTab.loading}
-        webviewRef={webviewRef}
+        surface={surface}
         reloadMenuOpen={reload.reloadMenuOpen}
         setReloadMenuOpen={reload.setReloadMenuOpen}
         reloadButtonLabel={reload.reloadButtonLabel}

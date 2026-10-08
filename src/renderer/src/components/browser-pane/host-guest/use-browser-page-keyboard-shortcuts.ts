@@ -6,6 +6,7 @@ import { browserChromeShortcutOwnsEvent } from '../describe-page/browser-overlay
 import type { BrowserChromeShortcutScope, GrabIntent } from '../describe-page/browser-page-types'
 import { isEditableKeyboardTarget } from './browser-keyboard'
 import { useBrowserPageWebviewShortcuts } from './use-browser-page-webview-shortcuts'
+import type { BrowserPageSurface } from './browser-page-surface'
 
 export function useBrowserPageKeyboardShortcuts({
   browserTabId,
@@ -14,7 +15,7 @@ export function useBrowserPageKeyboardShortcuts({
   chromeShortcutScope,
   isActiveRef,
   markupIsActive,
-  webviewRef,
+  surface,
   paneZoomLevelRef,
   setBrowserDefaultZoomLevel,
   showBrowserZoomFeedback,
@@ -29,7 +30,7 @@ export function useBrowserPageKeyboardShortcuts({
   chromeShortcutScope: BrowserChromeShortcutScope
   isActiveRef: MutableRefObject<boolean>
   markupIsActive: boolean
-  webviewRef: MutableRefObject<Electron.WebviewTag | null>
+  surface: BrowserPageSurface
   paneZoomLevelRef: MutableRefObject<number>
   setBrowserDefaultZoomLevel: (level: number) => void
   showBrowserZoomFeedback: (level: number) => void
@@ -46,7 +47,7 @@ export function useBrowserPageKeyboardShortcuts({
     isActive,
     chromeShortcutScope,
     isActiveRef,
-    webviewRef,
+    surface,
     paneZoomLevelRef,
     setBrowserDefaultZoomLevel,
     showBrowserZoomFeedback,

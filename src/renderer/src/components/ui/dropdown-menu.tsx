@@ -3,6 +3,7 @@ import { CheckIcon, ChevronRightIcon, CircleIcon } from 'lucide-react'
 import * as DropdownMenuPrimitive from 'radix-ui/dropdown-menu'
 
 import { cn } from '@/lib/utils'
+import { useNativeViewOcclusionRef } from '@/hooks/useNativeViewOcclusion'
 import { handleImeOverlayEscape } from '@/lib/ime-overlay-escape'
 
 function DropdownMenu({ ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.Root>) {
@@ -27,9 +28,11 @@ function DropdownMenuContent({
   style,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Content>) {
+  const occlusionRef = useNativeViewOcclusionRef<HTMLDivElement>()
   return (
     <DropdownMenuPrimitive.Portal>
       <DropdownMenuPrimitive.Content
+        ref={occlusionRef}
         data-slot="dropdown-menu-content"
         sideOffset={sideOffset}
         className={cn(
@@ -208,9 +211,11 @@ function DropdownMenuSubContent({
   style,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.SubContent>) {
+  const occlusionRef = useNativeViewOcclusionRef<HTMLDivElement>()
   return (
     <DropdownMenuPrimitive.Portal>
       <DropdownMenuPrimitive.SubContent
+        ref={occlusionRef}
         data-slot="dropdown-menu-sub-content"
         className={cn(
           'z-[70] min-w-[11rem] origin-(--radix-dropdown-menu-content-transform-origin) overflow-hidden rounded-[11px] border border-black/14 bg-[rgba(255,255,255,0.82)] p-[4px] text-black dark:text-white shadow-[0_12px_28px_rgba(0,0,0,0.22),inset_0_1px_0_rgba(255,255,255,0.14)] backdrop-blur-2xl dark:border-white/14 dark:bg-[rgba(0,0,0,0.72)] dark:shadow-[0_16px_34px_rgba(0,0,0,0.40),inset_0_1px_0_rgba(255,255,255,0.04)] data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:duration-150 data-[state=open]:zoom-in-[0.98]',

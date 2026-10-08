@@ -1,10 +1,13 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
+import { execFileSync } from 'node:child_process'
+import { tmpdir } from 'node:os'
 import { describe, expect, it } from 'vitest'
 import { runProcessSync } from '../../src/shared/child-process/run-process'
 import { resolveOxlintInvocation } from './oxlint-cli-invocation.mjs'
 import {
   OXLINT_SCANS,
+  collectAddedLineRanges,
   diagnosticTouchesAddedLines,
   isUnloadedPluginDirectiveUnusedWarning,
   isMovedCode,
@@ -14,6 +17,40 @@ import {
 } from './check-changed-code-quality.mjs'
 
 describe('changed-code quality line matching', () => {
+  it('excludes incoming base files during a pending merge but retains feature changes', () => {
+    const parent = path.resolve(tmpdir())
+    const root = mkdtempSync(path.join(parent, 'orca-pending-quality-'))
+    const git = (...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim()
+    try {
+      git('init')
+      git('checkout', '-b', 'main')
+      git('config', 'user.name', 'Fixture')
+      git('config', 'user.email', 'fixture@example.invalid')
+      writeFileSync(path.join(root, 'base.ts'), 'export const base = 1\n')
+      git('add', '.')
+      git('commit', '-m', 'base')
+      const originalBase = git('rev-parse', 'HEAD')
+      git('checkout', '-b', 'feature')
+      writeFileSync(path.join(root, 'feature.ts'), 'export const feature = 1\n')
+      git('add', '.')
+      git('commit', '-m', 'feature')
+      git('checkout', 'main')
+      writeFileSync(path.join(root, 'upstream.ts'), 'export const upstream = 1\n')
+      git('add', '.')
+      git('commit', '-m', 'upstream')
+      const incomingBase = git('rev-parse', 'HEAD')
+      git('checkout', 'feature')
+      expect(collectAddedLineRanges(root, 'main').comparisonBase).toBe(originalBase)
+      git('merge', '--no-commit', '--no-ff', 'main')
+      const pending = collectAddedLineRanges(root, 'main')
+      expect(git('rev-parse', pending.comparisonBase)).toBe(incomingBase)
+      expect([...pending.rangesByFile.keys()]).toEqual(['feature.ts'])
+    } finally {
+      expect(path.dirname(path.resolve(root))).toBe(parent)
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
   it('parses added and replaced hunk ranges while ignoring deletions', () => {
     const ranges = parseAddedLineRanges(
       ['@@ -10,2 +10,3 @@', '@@ -20 +21 @@', '@@ -40,4 +42,0 @@', '@@ -50 +48,2 @@'].join('\n')

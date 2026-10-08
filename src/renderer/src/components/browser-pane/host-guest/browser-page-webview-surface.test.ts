@@ -1,93 +1,113 @@
-// @vitest-environment happy-dom
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
-import { ensureBrowserPageWebview } from './browser-page-webview'
-import { webviewRegistry } from './webview-registry'
+import { describe, expect, it, vi } from 'vitest'
+import { createWebviewBrowserPageSurface } from './browser-page-webview-surface'
 
-vi.mock('./webview-registry', () => {
-  const webviewRegistry = new Map()
+function makeWebview(): Electron.WebviewTag {
+  const listeners = new Map<string, EventListener>()
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This fixture implements every webview member exercised by the surface adapter.
   return {
-    webviewRegistry,
-    registerPersistentWebview: vi.fn((id, guest) => webviewRegistry.set(id, guest)),
-    replacePersistentWebview: vi.fn(),
-    destroyPersistentWebview: vi.fn()
-  }
-})
-
-afterEach(() => {
-  document.body.replaceChildren()
-  webviewRegistry.clear()
-})
-
-function createGuest(): Electron.WebviewTag {
-  const container = document.createElement('div')
-  document.body.appendChild(container)
-  return ensureBrowserPageWebview({
-    browserTabId: 'surface-test',
-    container,
-    inputLocked: false,
-    webviewPartition: 'persist:browser-test',
-    resolveContainer: () => container
-  })!.webview
+    addEventListener: vi.fn((name: string, listener: EventListener) =>
+      listeners.set(name, listener)
+    ),
+    blur: vi.fn(),
+    canGoBack: vi.fn(() => true),
+    capturePage: vi.fn(async () => ({
+      getSize: () => ({ height: 10, width: 20 }),
+      isEmpty: () => false,
+      toDataURL: () => 'data:image/png;base64,AA=='
+    })),
+    canGoForward: vi.fn(() => false),
+    findInPage: vi.fn(),
+    focus: vi.fn(),
+    getBoundingClientRect: vi.fn(() => ({ height: 20, left: 1, top: 2, width: 30 })),
+    getTitle: vi.fn(() => 'Example'),
+    getURL: vi.fn(() => 'https://example.test/'),
+    getZoomLevel: vi.fn(() => 0),
+    goBack: vi.fn(),
+    goForward: vi.fn(),
+    isLoading: vi.fn(() => false),
+    reload: vi.fn(),
+    reloadIgnoringCache: vi.fn(),
+    removeEventListener: vi.fn((name: string) => listeners.delete(name)),
+    setZoomLevel: vi.fn(),
+    stop: vi.fn(),
+    stopFindInPage: vi.fn()
+  } as unknown as Electron.WebviewTag
 }
 
-function commit(guest: Electron.WebviewTag, url: string, isMainFrame = true): void {
-  guest.dispatchEvent(Object.assign(new Event('load-commit'), { url, isMainFrame }))
-}
+describe('createWebviewBrowserPageSurface', () => {
+  it('reads the current ref for each command after guest replacement', () => {
+    const first = makeWebview()
+    const second = makeWebview()
+    const webviewRef: { current: Electron.WebviewTag | null } = { current: first }
+    const surface = createWebviewBrowserPageSurface(webviewRef)
 
-describe('browser page surface ownership', () => {
-  it('themes the host before attach and uses an opaque native canvas for real pages', () => {
-    const guest = createGuest()
-    expect(guest.style.background).toBe('var(--background)')
-    expect(guest.getAttribute('webpreferences')).toContain('transparent=false')
-    expect(guest.getAttribute('webpreferences')).toContain('disableHtmlFullscreenWindowResize=true')
+    surface.goBack()
+    webviewRef.current = second
+    surface.goBack()
+    surface.navigate('https://next.test/')
+
+    expect(first.goBack).toHaveBeenCalledOnce()
+    expect(second.goBack).toHaveBeenCalledOnce()
+    expect(second.src).toBe('https://next.test/')
   })
 
-  it.each(['about:blank', ORCA_BROWSER_BLANK_URL])(
-    'keeps %s unavailable through first navigation, then reveals the committed page',
-    (url) => {
-      const guest = createGuest()
-      commit(guest, url)
-      expect(guest.style.visibility).toBe('hidden')
-      guest.dispatchEvent(new Event('did-start-loading'))
-      expect(guest.style.visibility).toBe('hidden')
-      commit(guest, 'https://example.test')
-      expect(guest.style.visibility).toBe('visible')
-      guest.dispatchEvent(new Event('did-start-loading'))
-      expect(guest.style.visibility).toBe('visible')
-      commit(guest, 'about:blank', false)
-      expect(guest.style.visibility).toBe('visible')
-    }
-  )
+  it('captures the current guest viewport and stops it', async () => {
+    const webview = makeWebview()
+    const surface = createWebviewBrowserPageSurface({ current: webview })
 
-  it('preserves a reused guest and initializes the same surface after a container remount', () => {
-    const guest = createGuest()
-    commit(guest, 'https://example.test')
-    const container = guest.parentElement as HTMLDivElement
-    const reused = ensureBrowserPageWebview({
-      browserTabId: 'surface-test',
-      container,
-      inputLocked: false,
-      webviewPartition: 'persist:browser-test',
-      resolveContainer: () => container
-    })!
-    expect(reused.created).toBe(false)
-    expect(reused.webview).toBe(guest)
-    expect(reused.webview.style.visibility).toBe('visible')
-    const replacement = createGuest()
-    expect(replacement).not.toBe(guest)
-    expect(replacement.style.background).toBe('var(--background)')
-    expect(replacement.getAttribute('webpreferences')).toContain('transparent=false')
-    commit(replacement, ORCA_BROWSER_BLANK_URL)
-    expect(replacement.style.visibility).toBe('hidden')
+    await expect(surface.captureViewport()).resolves.toEqual({
+      dataUrl: 'data:image/png;base64,AA==',
+      height: 10,
+      width: 20
+    })
+    surface.stop()
+    expect(webview.stop).toHaveBeenCalledOnce()
   })
 
-  it('exposes the themed host after renderer loss until a recovered document commits', () => {
-    const guest = createGuest()
-    commit(guest, 'https://example.test')
-    guest.dispatchEvent(new Event('render-process-gone'))
-    expect(guest.style.visibility).toBe('hidden')
-    commit(guest, 'https://example.test')
-    expect(guest.style.visibility).toBe('visible')
+  it('delegates snapshot, zoom, find events and detach safely', () => {
+    const webview = makeWebview()
+    const webviewRef: { current: Electron.WebviewTag | null } = { current: webview }
+    const surface = createWebviewBrowserPageSurface(webviewRef)
+    const listener = vi.fn()
+
+    expect(surface.getSnapshot()).toMatchObject({ canGoBack: true, zoomLevel: 0 })
+    expect(surface.stepZoom('in')).not.toBeNull()
+    expect(webview.setZoomLevel).toHaveBeenCalledOnce()
+    const remove = surface.subscribeFindResults(listener)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: makeWebview installs a vi.fn listener registry.
+    const foundListener = (webview.addEventListener as ReturnType<typeof vi.fn>).mock.calls[0][1]
+    foundListener({ result: { activeMatchOrdinal: 2, matches: 3 } })
+    expect(listener).toHaveBeenCalledWith({ activeMatchOrdinal: 2, matches: 3 })
+    remove()
+
+    webviewRef.current = null
+    expect(surface.getBounds()).toBeNull()
+    expect(surface.focus()).toBe(false)
+    expect(() => surface.runFind('needle')).not.toThrow()
+  })
+
+  it('rebinds a retained find subscription after old-to-null-to-new guest replacement', () => {
+    const first = makeWebview()
+    const second = makeWebview()
+    const webviewRef: { current: Electron.WebviewTag | null } = { current: first }
+    const surface = createWebviewBrowserPageSurface(webviewRef)
+    const callback = vi.fn()
+    const unsubscribe = surface.subscribeFindResults(callback)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: makeWebview installs a vi.fn listener registry.
+    const firstListener = (first.addEventListener as ReturnType<typeof vi.fn>).mock.calls[0][1]
+
+    webviewRef.current = null
+    surface.refresh()
+    expect(first.removeEventListener).toHaveBeenCalledWith('found-in-page', firstListener)
+
+    webviewRef.current = second
+    surface.refresh()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: makeWebview installs a vi.fn listener registry.
+    const secondListener = (second.addEventListener as ReturnType<typeof vi.fn>).mock.calls[0][1]
+    secondListener({ result: { activeMatchOrdinal: 4, matches: 5 } })
+    expect(callback).toHaveBeenCalledWith({ activeMatchOrdinal: 4, matches: 5 })
+
+    unsubscribe()
+    expect(second.removeEventListener).toHaveBeenCalledWith('found-in-page', secondListener)
   })
 })

@@ -5,6 +5,7 @@ import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from 'lucide-react'
 import * as SelectPrimitive from 'radix-ui/select'
 
 import { cn } from '@/lib/utils'
+import { useNativeViewOcclusionRef } from '@/hooks/useNativeViewOcclusion'
 
 function Select({ ...props }: React.ComponentProps<typeof SelectPrimitive.Root>) {
   return <SelectPrimitive.Root data-slot="select" {...props} />
@@ -64,9 +65,11 @@ function SelectContent({
 }: React.ComponentProps<typeof SelectPrimitive.Content> & {
   portalContainer?: HTMLElement | null
 }) {
+  const occlusionRef = useNativeViewOcclusionRef<HTMLDivElement>()
   return (
     <SelectPrimitive.Portal container={portalContainer ?? undefined}>
       <SelectPrimitive.Content
+        ref={occlusionRef}
         data-slot="select-content"
         // Why: matches the dropdown-menu recipe — translucent surface, solid
         // 14% border, dual shadow, and 2xl backdrop blur. The previous

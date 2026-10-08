@@ -13,6 +13,7 @@ import {
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
 import { closeRemoteBrowserPageInOwningEnvironment } from './browser-remote-close'
 import { releaseDocPreviewGrant } from '@/lib/doc-preview-grants'
+import { resolveNewDesktopBrowserBackend } from './browser-desktop-backend-selection'
 import {
   admitBrowserPageMount,
   releaseBrowserPageMount
@@ -35,7 +36,13 @@ export function createBrowserPageCreateActions(
         options?.title,
         options?.browserRuntimeEnvironmentId,
         undefined,
-        options?.docLocation
+        options?.docLocation,
+        resolveNewDesktopBrowserBackend(
+          get,
+          workspace.worktreeId,
+          options,
+          workspace.sessionPartition
+        )
       )
       if (!options?.browserRuntimeEnvironmentId && !options?.docLocation) {
         admitBrowserPageMount(page.id)

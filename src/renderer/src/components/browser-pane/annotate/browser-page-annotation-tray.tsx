@@ -1,5 +1,6 @@
 import { ImeTextarea } from '@/lib/ime-text-field'
 import { useEffect, useState } from 'react'
+import { useNativeViewOcclusionRef } from '@/hooks/useNativeViewOcclusion'
 import { CircleCheck, Copy, MessageSquarePlus, Pencil, Send, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -56,6 +57,7 @@ export function BrowserPageAnnotationTray({
     intent: BrowserAnnotationIntent
   ) => void
 }): React.JSX.Element {
+  const occlusionRef = useNativeViewOcclusionRef<HTMLDivElement>()
   const [editingAnnotationId, setEditingAnnotationId] = useState<string | null>(null)
   const [editComment, setEditComment] = useState('')
   const [editIntent, setEditIntent] = useState<BrowserAnnotationIntent>('change')
@@ -90,7 +92,10 @@ export function BrowserPageAnnotationTray({
   }
 
   return (
-    <div className="absolute right-3 bottom-3 z-30 flex max-h-[45%] w-[min(20rem,calc(100%-1.5rem))] flex-col overflow-hidden rounded-lg border border-border bg-popover text-popover-foreground shadow-[0_10px_24px_rgba(0,0,0,0.18)]">
+    <div
+      ref={occlusionRef}
+      className="absolute right-3 bottom-3 z-30 flex max-h-[45%] w-[min(20rem,calc(100%-1.5rem))] flex-col overflow-hidden rounded-lg border border-border bg-popover text-popover-foreground shadow-[0_10px_24px_rgba(0,0,0,0.18)]"
+    >
       <div className="flex items-center gap-2 border-b border-border px-3 py-2">
         <MessageSquarePlus className="size-4 text-muted-foreground" />
         <div className="min-w-0 flex-1 text-sm font-medium">

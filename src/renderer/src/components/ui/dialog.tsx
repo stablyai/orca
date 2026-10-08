@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils'
 import { handleImeOverlayEscape } from '@/lib/ime-overlay-escape'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
+import { useNativeViewOcclusionRef } from '@/hooks/useNativeViewOcclusion'
 
 function Dialog({ ...props }: React.ComponentProps<typeof DialogPrimitive.Root>) {
   return <DialogPrimitive.Root data-slot="dialog" {...props} />
@@ -27,10 +28,13 @@ function DialogClose({ ...props }: React.ComponentProps<typeof DialogPrimitive.C
 
 function DialogOverlay({
   className,
+  ref,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Overlay>) {
+  const occlusionRef = useNativeViewOcclusionRef(ref, true)
   return (
     <DialogPrimitive.Overlay
+      ref={occlusionRef}
       data-slot="dialog-overlay"
       // Why: in dark mode the canvas is already near-black, so a flat 50% black
       // scrim disappears into the background. A deeper scrim + 2px backdrop

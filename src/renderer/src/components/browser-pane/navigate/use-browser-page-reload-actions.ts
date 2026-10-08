@@ -9,17 +9,20 @@ import {
   resolveBrowserReloadIntent
 } from './browser-reload-action'
 import { retryBrowserTabLoad } from '../describe-page/browser-page-url-display'
+import type { BrowserPageSurface } from '../host-guest/browser-page-surface'
 import type { BrowserTabPageState } from '../describe-page/browser-page-types'
 
 export function useBrowserPageReloadActions({
   browserTab,
   webviewRef,
+  surface,
   trackNextLoadingEventRef,
   retryGuestRecoveryRef,
   onUpdatePageStateRef
 }: {
   browserTab: BrowserPageState
   webviewRef: MutableRefObject<Electron.WebviewTag | null>
+  surface?: BrowserPageSurface
   trackNextLoadingEventRef?: MutableRefObject<boolean>
   retryGuestRecoveryRef: MutableRefObject<() => void>
   onUpdatePageStateRef: MutableRefObject<(tabId: string, updates: BrowserTabPageState) => void>
@@ -43,13 +46,18 @@ export function useBrowserPageReloadActions({
   const reloadWebviewOrRecoverGuest = useCallback(
     (ignoreCache: boolean) => {
       const webview = webviewRef.current
-      if (!webview) {
+      if (!webview && !surface) {
         return
       }
       if (trackNextLoadingEventRef) {
         trackNextLoadingEventRef.current = true
       }
-      const result = reloadBrowserPageWebview(webview, { ignoreCache })
+      if (surface) {
+        void surface.reload(ignoreCache)
+        onUpdatePageStateRef.current(browserTab.id, { loading: true })
+        return
+      }
+      const result = reloadBrowserPageWebview(webview!, { ignoreCache })
       if (result === 'reloaded') {
         onUpdatePageStateRef.current(browserTab.id, { loading: true })
       } else if (result === 'guest-missing') {
@@ -68,25 +76,42 @@ export function useBrowserPageReloadActions({
       onUpdatePageStateRef,
       retryGuestRecoveryRef,
       trackNextLoadingEventRef,
-      webviewRef
+      webviewRef,
+      surface
     ]
   )
   const runReloadTrigger = useCallback(
     (trigger: BrowserReloadTrigger) => {
       const webview = webviewRef.current
-      if (!webview) {
+      if (!webview && !surface) {
         return
       }
       switch (resolveBrowserReloadIntent(trigger, reloadState)) {
         case 'stop':
-          webview.stop()
+          if (surface) {
+            void surface.stop()
+          } else {
+            webview?.stop()
+          }
           break
         case 'retry-guest-recovery':
           onUpdatePageStateRef.current(browserTab.id, { loading: true })
           retryGuestRecoveryRef.current()
           break
         case 'retry-load':
-          retryBrowserTabLoad(webview, browserTab, onUpdatePageStateRef.current)
+          if (surface) {
+            void surface.reload(false)
+          } else if (webview) {
+            retryBrowserTabLoad(
+              {
+                navigate: (url) => {
+                  webview.src = url
+                }
+              },
+              browserTab,
+              onUpdatePageStateRef.current
+            )
+          }
           break
         case 'hard-reload':
           reloadWebviewOrRecoverGuest(true)
@@ -102,7 +127,8 @@ export function useBrowserPageReloadActions({
       reloadState,
       reloadWebviewOrRecoverGuest,
       retryGuestRecoveryRef,
-      webviewRef
+      webviewRef,
+      surface
     ]
   )
 

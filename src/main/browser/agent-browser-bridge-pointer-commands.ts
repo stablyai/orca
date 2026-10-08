@@ -11,6 +11,8 @@ import {
 } from './cdp-pointer-input'
 import { acquireElectronDebugger } from './electron-debugger-lease'
 import { AgentBrowserBridgeInputCommands } from './agent-browser-bridge-input-commands'
+import { browserCaptureIdle } from './browser-capture-idle'
+import { sendGuestCdpCommand } from './guest-cdp-command'
 
 type CdpPointerEventParams = {
   type: 'mouseMoved' | 'mousePressed' | 'mouseReleased' | 'mouseWheel'
@@ -57,12 +59,14 @@ export abstract class AgentBrowserBridgePointerCommands extends AgentBrowserBrid
     let releaseDebugger = (): void => {}
     try {
       releaseDebugger = acquireElectronDebugger(wc).release
-      const { params, focus, result } = build(state)
-      if (focus) {
-        wc.focus()
-      }
-      await wc.debugger.sendCommand('Input.dispatchMouseEvent', params)
-      return result
+      return await browserCaptureIdle.runCapture(wc, async () => {
+        const { params, focus, result } = build(state)
+        if (focus) {
+          wc.focus()
+        }
+        await sendGuestCdpCommand(wc, 'Input.dispatchMouseEvent', params)
+        return result
+      })
     } catch (error) {
       Object.assign(state, preDispatch)
       // Why: attach/dispatch reject with plain Errors, which the RPC layer would report as

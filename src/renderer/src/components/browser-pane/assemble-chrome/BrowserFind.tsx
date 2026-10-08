@@ -4,11 +4,13 @@ import { ChevronUp, ChevronDown, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { getFindRequestQuery } from '@/lib/find-query-bounds'
+import type { BrowserPageSurface } from '../host-guest/browser-page-surface'
+import { useNativeViewOcclusionRef } from '@/hooks/useNativeViewOcclusion'
 
 type BrowserFindProps = {
   isOpen: boolean
   onClose: () => void
-  webviewRef: React.RefObject<Electron.WebviewTag | null>
+  surface: BrowserPageSurface
   /** Bumped whenever the pane swaps in a new guest under the same mount; rebinds the listener. */
   guestGeneration?: number | null
 }
@@ -16,10 +18,11 @@ type BrowserFindProps = {
 export default function BrowserFind({
   isOpen,
   onClose,
-  webviewRef,
+  surface,
   guestGeneration = null
 }: BrowserFindProps): React.JSX.Element | null {
   const inputRef = useRef<HTMLInputElement>(null)
+  const occlusionRef = useNativeViewOcclusionRef<HTMLDivElement>()
   const wasOpenRef = useRef(isOpen)
   const activeFindQueryRef = useRef<string | null>(null)
   const [query, setQuery] = useState('')
@@ -29,31 +32,17 @@ export default function BrowserFind({
 
   const safeFindInPage = useCallback(
     (text: string, opts?: Electron.FindInPageOptions): void => {
-      const webview = webviewRef.current
-      if (!webview || !text) {
+      if (!text) {
         return
       }
-      try {
-        webview.findInPage(text, opts)
-      } catch {
-        // Why: the webview can be mid-teardown during tab close or navigation
-        // races. Best-effort is better than crashing.
-      }
+      void surface.runFind(text, opts)
     },
-    [webviewRef]
+    [surface]
   )
 
   const safeStopFindInPage = useCallback((): void => {
-    const webview = webviewRef.current
-    if (!webview) {
-      return
-    }
-    try {
-      webview.stopFindInPage('clearSelection')
-    } catch {
-      // Why: same teardown race as safeFindInPage.
-    }
-  }, [webviewRef])
+    void surface.stopFind('clearSelection')
+  }, [surface])
 
   // Why: Electron's findNext means "start a NEW session" — follow-up requests that
   // advance the selection must pass false, or every Enter restarts at the first match.
@@ -114,30 +103,17 @@ export default function BrowserFind({
     return () => window.clearTimeout(id)
   }, [isOpen, requestQuery, safeFindInPage, safeStopFindInPage])
 
-  // Why the generation is a dependency: this effect captures `webviewRef.current` into a local
-  // variable, so a webview replaced while `isOpen` stays true would leave the listener on a dead
-  // node and find would silently stop counting. Navigation and tab deactivation close the bar and
-  // cover their own cases, but a client-hosted pane re-attaches a new guest in place on a host
-  // restart without either happening.
+  // A surface can replace its underlying guest while the find bar stays open.
   useEffect(() => {
-    const webview = webviewRef.current
-    if (!webview || !isOpen) {
+    if (!isOpen) {
       return
     }
-    const handleFoundInPage = (event: Electron.FoundInPageEvent): void => {
-      const { activeMatchOrdinal, matches } = event.result
+    surface.refresh()
+    return surface.subscribeFindResults(({ activeMatchOrdinal, matches }) => {
       setActiveMatch(activeMatchOrdinal)
       setTotalMatches(matches)
-    }
-    webview.addEventListener('found-in-page', handleFoundInPage)
-    return () => {
-      try {
-        webview.removeEventListener('found-in-page', handleFoundInPage)
-      } catch {
-        // Why: webview may be destroyed during cleanup.
-      }
-    }
-  }, [webviewRef, isOpen, guestGeneration])
+    })
+  }, [surface, isOpen, guestGeneration])
 
   if ((!isOpen || !requestQuery) && (activeMatch !== 0 || totalMatches !== 0)) {
     setActiveMatch(0)
@@ -165,6 +141,7 @@ export default function BrowserFind({
 
   return (
     <div
+      ref={occlusionRef}
       className="absolute top-2 right-2 z-50 flex items-center gap-1 rounded-lg border border-zinc-700 bg-zinc-800/95 px-2 py-1 shadow-lg backdrop-blur-sm"
       style={{ width: 300 }}
       onKeyDown={handleKeyDown}

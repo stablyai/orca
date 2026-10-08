@@ -1,4 +1,5 @@
 import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from 'react'
+import type { BrowserPageNavigationSource } from './browser-page-navigation-source'
 import {
   normalizeBrowserNavigationUrl,
   redactKagiSessionToken
@@ -23,7 +24,7 @@ import type {
 } from '../describe-page/browser-page-types'
 
 export type BrowserPageWebviewLoadingHandlersArgs = {
-  webview: Electron.WebviewTag
+  webview: BrowserPageNavigationSource
   browserTabId: string
   faviconUrlRef: MutableRefObject<string | null>
   browserTabUrlRef: MutableRefObject<string>

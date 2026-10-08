@@ -1,4 +1,5 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
+import { useNativeViewOcclusionRef } from '@/hooks/useNativeViewOcclusion'
 import { CircleCheck, Image, OctagonX } from 'lucide-react'
 import {
   DropdownMenu,
@@ -21,8 +22,10 @@ export function BrowserPageGrabToast({
   dismissGrabToast: () => void
   setGrabToast: Dispatch<SetStateAction<BrowserPageGrabToastState | null>>
 }): React.JSX.Element {
+  const occlusionRef = useNativeViewOcclusionRef<HTMLDivElement>()
   return (
     <div
+      ref={occlusionRef}
       className="absolute z-30 flex items-center animate-in fade-in zoom-in-95 duration-150"
       style={{
         left: grabToast.x,

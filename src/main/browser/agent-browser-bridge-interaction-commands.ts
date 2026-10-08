@@ -15,6 +15,8 @@ import { WAIT_PROCESS_TIMEOUT_GRACE_MS } from './agent-browser-bridge-types'
 import { acquireElectronDebugger } from './electron-debugger-lease'
 import { parseCdpKeyEvent, imeFallbackKeyEvent } from './cdp-keyboard-us-layout'
 import { AgentBrowserBridgeCaptureCommands } from './agent-browser-bridge-capture-commands'
+import { browserCaptureIdle } from './browser-capture-idle'
+import { sendGuestCdpCommand } from './guest-cdp-command'
 
 export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowserBridgeCaptureCommands {
   async hover(
@@ -202,20 +204,22 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
         let releaseDebugger = (): void => {}
         try {
           releaseDebugger = acquireElectronDebugger(wc).release
-          await wc.debugger.sendCommand('Input.dispatchKeyEvent', {
-            // Why: rawKeyDown is the no-character form; sending keyDown without text
-            // makes Blink synthesize an empty input for editing keys.
-            type: parsed.text === null ? 'rawKeyDown' : 'keyDown',
-            ...event,
-            ...(parsed.text === null ? {} : { text: parsed.text, unmodifiedText: parsed.text })
+          return await browserCaptureIdle.runCapture(wc, async () => {
+            await sendGuestCdpCommand(wc, 'Input.dispatchKeyEvent', {
+              // Why: rawKeyDown is the no-character form; sending keyDown without text
+              // makes Blink synthesize an empty input for editing keys.
+              type: parsed.text === null ? 'rawKeyDown' : 'keyDown',
+              ...event,
+              ...(parsed.text === null ? {} : { text: parsed.text, unmodifiedText: parsed.text })
+            })
+            await sendGuestCdpCommand(wc, 'Input.dispatchKeyEvent', {
+              type: 'keyUp',
+              ...event,
+              // Why: the self bit is keydown-only -- Blink reports shiftKey false on the Shift keyup.
+              modifiers: parsed.modifiers & ~parsed.selfModifier
+            })
+            return { pressed: key }
           })
-          await wc.debugger.sendCommand('Input.dispatchKeyEvent', {
-            type: 'keyUp',
-            ...event,
-            // Why: the self bit is keydown-only -- Blink reports shiftKey false on the Shift keyup.
-            modifiers: parsed.modifiers & ~parsed.selfModifier
-          })
-          return { pressed: key }
         } catch (error) {
           // Why: attach/dispatch reject with plain Errors, which the RPC layer would report as
           // runtime_error — the helper path this replaced always produced a browser_* code, and
@@ -246,10 +250,15 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
       if (!wc) {
         throw new BrowserError('browser_no_tab', 'Tab is no longer available')
       }
-      const buffer = await wc.printToPDF({
-        printBackground: true,
-        preferCSSPageSize: true
-      })
+      const buffer = await browserCaptureIdle.runCapture(wc, () =>
+        browserCaptureIdle.trackNative(
+          wc,
+          wc.printToPDF({
+            printBackground: true,
+            preferCSSPageSize: true
+          })
+        )
+      )
       return { data: buffer.toString('base64') }
     })
   }

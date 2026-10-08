@@ -54,6 +54,7 @@ vi.mock('../browser/browser-manager', () => ({
     proceed: proceedCertificateMock
   },
   browserManager: {
+    isOwnedViewPage: vi.fn(() => false),
     registerGuest: registerGuestMock,
     attachGuestPolicies: attachGuestPoliciesMock,
     unregisterGuest: unregisterGuestMock,
@@ -80,8 +81,7 @@ describe('registerBrowserHandlers', () => {
     vi.stubEnv('ELECTRON_RENDERER_URL', '')
     removeHandlerMock.mockReset()
     handleMock.mockReset()
-    registerGuestMock.mockReset()
-    registerGuestMock.mockReturnValue(true)
+    registerGuestMock.mockReset().mockReturnValue(true)
     attachGuestPoliciesMock.mockReset()
     unregisterGuestMock.mockReset()
     getGuestWebContentsIdMock.mockReset()

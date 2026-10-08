@@ -1,18 +1,12 @@
 import { windowDipToCssPx } from '@/lib/ui-zoom'
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type MutableRefObject
-} from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { normalizeExternalBrowserUrl } from '../../../../../shared/browser-url'
 import { resolveBrowserSourceUnifiedTab } from '@/lib/browser-workspace-source-resolution'
 import type { BrowserPageContextMenuState } from '../describe-page/browser-page-types'
+import type { BrowserPageSurface } from '../host-guest/browser-page-surface'
 
 // `focus:` rather than `focus-visible:` — items are only ever focused programmatically
 // while the menu is open, so every focus here is keyboard navigation.
@@ -24,14 +18,14 @@ export function BrowserPageContextMenu({
   worktreeId,
   canGoBack,
   canGoForward,
-  webviewRef,
+  surface,
   onReload
 }: {
   browserPageId: string
   worktreeId: string
   canGoBack: boolean
   canGoForward: boolean
-  webviewRef: MutableRefObject<Electron.WebviewTag | null>
+  surface: BrowserPageSurface
   onReload: () => void
 }): React.JSX.Element | null {
   const createBrowserTab = useAppStore((s) => s.createBrowserTab)
@@ -70,11 +64,11 @@ export function BrowserPageContextMenu({
   const closeMenu = useCallback((): void => {
     setContextMenu(null)
     try {
-      webviewRef.current?.focus()
+      void surface.focus()
     } catch {
       // The guest can be destroyed while its renderer-owned menu is open.
     }
-  }, [webviewRef])
+  }, [surface])
 
   const menuItems = useCallback((): HTMLButtonElement[] => {
     const el = contextMenuRef.current
@@ -260,7 +254,7 @@ export function BrowserPageContextMenu({
           disabled={!canGoBack}
           className={MENU_ITEM_CLASS}
           onClick={() => {
-            webviewRef.current?.goBack()
+            void surface.goBack()
             closeMenu()
           }}
         >
@@ -271,7 +265,7 @@ export function BrowserPageContextMenu({
           disabled={!canGoForward}
           className={MENU_ITEM_CLASS}
           onClick={() => {
-            webviewRef.current?.goForward()
+            void surface.goForward()
             closeMenu()
           }}
         >

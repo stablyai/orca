@@ -1,4 +1,4 @@
-import { useEffectEvent, useLayoutEffect, useRef, useState } from 'react'
+import { useEffectEvent, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { BrowserPageZoomIndicator } from './assemble-chrome/browser-page-zoom-indicator'
 import { useAppStore } from '@/store'
 import type {
@@ -37,6 +37,7 @@ import { getBrowserPageZoomIndicatorState } from './host-guest/browser-page-zoom
 import { useBrowserPageWebviewShortcuts } from './host-guest/use-browser-page-webview-shortcuts'
 import { useClientHostedGuestActivationFocus } from './host-guest/use-client-hosted-guest-activation-focus'
 import { useBrowserPageZoomFeedback } from './host-guest/use-browser-page-zoom-feedback'
+import { createWebviewBrowserPageSurface } from './host-guest/browser-page-webview-surface'
 import { BrowserLoadFailureOverlay } from './navigate/browser-load-failure-overlay'
 import { useClientHostedPageUrlSubmission } from './navigate/use-client-hosted-page-url-submission'
 import { convertBrowserPageToWorkspaceDoc } from '@/lib/file-preview'
@@ -78,6 +79,7 @@ export function ClientHostedBrowserPagePane({
 }): React.JSX.Element {
   const viewportRef = useRef<HTMLDivElement | null>(null)
   const webviewRef = useRef<Electron.WebviewTag | null>(null)
+  const surface = useMemo(() => createWebviewBrowserPageSurface(webviewRef), [])
   const addressBarInputRef = useRef<HTMLInputElement | null>(null)
   // Why: a worktree switch unmounts this pane while main keeps the guest, so the failure has to
   // be seeded from the stored page — a fresh null here reads as "no failure" and the next sync
@@ -152,7 +154,7 @@ export function ClientHostedBrowserPagePane({
   useBrowserPageWebviewShortcuts({
     ...shortcutOwner,
     isActiveRef,
-    webviewRef,
+    surface,
     paneZoomLevelRef: zoom.paneZoomLevelRef,
     setBrowserDefaultZoomLevel: zoom.setBrowserDefaultZoomLevel,
     showBrowserZoomFeedback: zoom.showBrowserZoomFeedback,
@@ -340,7 +342,7 @@ export function ClientHostedBrowserPagePane({
         worktreeId={worktreeId}
         canGoBack={browserTab.canGoBack}
         canGoForward={browserTab.canGoForward}
-        webviewRef={webviewRef}
+        surface={surface}
         onReload={() => reload.reloadWebviewOrRecoverGuest(false)}
       />
       <div data-contextual-tour-target="client-hosted-browser-controls">
@@ -389,7 +391,7 @@ export function ClientHostedBrowserPagePane({
         <BrowserFind
           isOpen={findOpen}
           onClose={() => setFindOpen(false)}
-          webviewRef={webviewRef}
+          surface={surface}
           guestGeneration={pageHostGeneration}
         />
         {showFailureOverlay && browserTab.loadError ? (

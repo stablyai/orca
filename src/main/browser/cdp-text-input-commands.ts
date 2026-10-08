@@ -180,7 +180,7 @@ const KEY_DEFINITIONS: Record<string, KeyDefinition> = {
   Space: { key: ' ', code: 'Space', windowsVirtualKeyCode: 32, text: ' ' }
 }
 
-function resolveKeyDefinition(key: string): KeyDefinition {
+export function resolveKeyDefinition(key: string): KeyDefinition {
   if (KEY_DEFINITIONS[key]) {
     return KEY_DEFINITIONS[key]
   }
