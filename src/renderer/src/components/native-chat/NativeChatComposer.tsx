@@ -174,8 +174,12 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       setDraft,
       setNotice
     })
-    const { imageAttachments, attachResolvedPaths, clearImageAttachments, removeImageAttachment } =
-      attachments
+    const {
+      imageAttachments,
+      attachResolvedPaths,
+      clearImageAttachments,
+      removeImageAttachment
+    } = attachments
     const imageBlock = nativeChatImageSendBlock(imageAttachments)
     const sendHeld = disabled || structuredTransport?.sendOut === true || imageBlock.holdsSend
     const sendButtonDisabled = isWorking

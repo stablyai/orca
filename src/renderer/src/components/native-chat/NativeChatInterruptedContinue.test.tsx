@@ -89,7 +89,9 @@ function Harness(props: Props): React.JSX.Element {
     <TooltipProvider delayDuration={0}>
       <span data-testid="offered">{continuation.offeredTurnItemId ?? 'none'}</span>
       <span data-testid="available">{String(continuation.view.continueAvailable)}</span>
-      <span data-testid="error">{composerError ?? continuation.continueError?.text ?? 'none'}</span>
+      <span data-testid="error">
+        {composerError ?? continuation.continueError?.text ?? 'none'}
+      </span>
       <button type="button" onClick={() => setComposerError(ATTACHMENTS)}>
         compose
       </button>
