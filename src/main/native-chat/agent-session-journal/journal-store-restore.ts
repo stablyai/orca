@@ -6,17 +6,20 @@
 // same host the collaborators use, so the store keeps the state and this owns
 // the sequence.
 
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import type { JournalEpochController } from './journal-epoch-controller'
 import { replayJournal } from './journal-open'
 import { journalOpenRefusalError } from './journal-open-failure'
 import type { JournalStoreHost } from './journal-store-collaborators'
 import { openJournalStoreState } from './journal-store-open'
 import { AgentSessionJournalError } from './journal-write-guards'
+import type { JournalReopenedLiveWork } from './journal-reopened-live-work'
 
 export async function restoreJournalStore(
   host: JournalStoreHost,
-  collaborators: { epochController: JournalEpochController }
+  collaborators: {
+    epochController: JournalEpochController
+    reopenedLiveWork: JournalReopenedLiveWork
+  }
 ): Promise<void> {
   const database = host.database()
   if (database.readOnly) {
@@ -32,10 +35,10 @@ export async function restoreJournalStore(
     sessionId: host.identity.sessionId,
     replay: () => replayJournal(database.db, host.identity.sessionId),
     start: () => collaborators.epochController.start('session_created', 0),
-    adopt: host.adopt,
-    // Roster notices are about the conversation, not any turn in it.
-    appendItem: (identity, body, fence) =>
-      host.journal().appendItem(identity, body, { fence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }),
-    highestFence: () => host.state().highestFence
+    adopt: (loaded) => {
+      collaborators.reopenedLiveWork.adopt(loaded)
+      host.adopt(loaded)
+    },
+    settleReopenedLiveWork: () => collaborators.reopenedLiveWork.settle()
   })
 }

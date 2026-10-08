@@ -74,6 +74,7 @@ import type { JournalItemAppender } from './journal-item-appender'
 import type { JournalLifecycleBatchAppender } from './journal-lifecycle-batch-appender'
 import type { JournalStepWriter } from './journal-step-writer'
 import type { JournalStopMarks } from './journal-stop-marks'
+import type { JournalReopenedLiveWork } from './journal-reopened-live-work'
 
 export { AgentSessionJournalError } from './journal-write-guards'
 
@@ -95,6 +96,7 @@ export class AgentSessionJournal {
   private readonly submissionWriter: JournalSubmissionWriter
   private readonly stepWriter: JournalStepWriter
   private readonly restore: () => Promise<void>
+  private readonly reopenedLiveWork: JournalReopenedLiveWork
   /** Draft rows queued while the agent works; never reducer input or owed work. */
   readonly queuedMessages: JournalQueuedMessages
   readonly stopMarks: JournalStopMarks
@@ -138,6 +140,7 @@ export class AgentSessionJournal {
     this.queuedMessages = collaborators.queuedMessages
     this.stopMarks = collaborators.stopMarks
     this.restore = collaborators.restore
+    this.reopenedLiveWork = collaborators.reopenedLiveWork
   }
 
   get epoch(): string {
@@ -188,6 +191,9 @@ export class AgentSessionJournal {
   })
 
   snapshot = (): AgentJournalSnapshot => renderJournalState(this.state)
+
+  /** A reopen verdict the fold shows but disk does not yet hold. */
+  hasUnpersistedReopenedLiveWork = (): boolean => this.reopenedLiveWork.hasUnpersisted()
 
   /** Visits reduced items without allocating and sorting a full snapshot. */
   visitItems = (

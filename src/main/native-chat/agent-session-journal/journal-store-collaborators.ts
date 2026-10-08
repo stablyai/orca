@@ -25,6 +25,7 @@ import type { AgentSessionJournal } from './journal-store'
 import type { JournalWriteBody } from './journal-write-queue'
 import type { JournalAttachmentClaim } from './journal-submission-hook'
 import { claimAgentSessionAttachmentsInTransaction } from '../agent-session-attachments/agent-session-attachment-claims'
+import { JournalReopenedLiveWork } from './journal-reopened-live-work'
 
 export type JournalStoreHost = {
   /** Fires the journal's commit listener for a durable change that appended no
@@ -54,12 +55,18 @@ export type JournalStoreCollaborators = {
   stepWriter: JournalStepWriter
   queuedMessages: JournalQueuedMessages
   stopMarks: JournalStopMarks
+  reopenedLiveWork: JournalReopenedLiveWork
   /** Restores the store's state from disk. Owned here because it needs the same
    *  collaborators the constructor just built. */
   restore: () => Promise<void>
 }
 
 export function createJournalStoreCollaborators(host: JournalStoreHost): JournalStoreCollaborators {
+  const reopenedLiveWork = new JournalReopenedLiveWork({
+    sessionId: host.identity.sessionId,
+    state: host.state,
+    journal: host.journal
+  })
   const epochController = new JournalEpochController({
     identity: host.identity,
     now: host.now,
@@ -105,7 +112,10 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
     readOnly: host.readOnly,
     highestFence: () => host.state().highestFence,
     nextSequence: () => host.state().lastSequence + 1,
-    commit: host.commit,
+    commit: (row) => {
+      host.commit(row)
+      reopenedLiveWork.afterCommit()
+    },
     // Every rejection is a dispatch row through this one writer; the draft
     // returned-transition rides it so no path can bypass the hook.
     inTransaction: (db, row) => queuedMessages.onRowInTransaction(db, row),
@@ -120,11 +130,12 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
   return {
     epochController,
     queuedMessages,
+    reopenedLiveWork,
     stopMarks: new JournalStopMarks({ state: host.state }),
     // Behind the stored fact: settles drafts whose consumed submission the loaded journal shows
     // refused (a downgrade wrote no hook), then prunes. Bookkeeping, never failing the open.
     restore: () =>
-      restoreJournalStore(host, { epochController }).then(() =>
+      restoreJournalStore(host, { epochController, reopenedLiveWork }).then(() =>
         queuedMessages.repairAndPruneAtOpen()
       ),
     rowWriter,

@@ -91,7 +91,8 @@ export class AgentSessionSubscribers {
     this.bySession.set(input.sessionId, session)
 
     const hostNow = this.now()
-    if (input.cursor) {
+    // A reopen verdict not yet on disk has no row past the client's cursor; a snapshot carries it.
+    if (input.cursor && !input.journal.hasUnpersistedReopenedLiveWork()) {
       this.deliver(subscriber, input.journal, hostNow, true)
       refreshDerivedStopNotes(
         {

@@ -16,6 +16,7 @@ import type { StructuredAgentSessionAdapter } from './structured-agent-session-a
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { CodexAppServerRequestError } from '../../codex/codex-app-server-request-error'
 import {
+  HOST_TEST_LOCATION as LOCATION,
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD,
@@ -25,6 +26,13 @@ import {
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import { isSubagentGroupBlock } from '../../../shared/native-chat-types'
+import {
+  codexSubagentGroupBody,
+  codexSubagentGroupIdentity
+} from '../../codex/codex-subagent-roster'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
@@ -197,6 +205,43 @@ describe('a send with no live owner', () => {
 
     await eventually(async () => expect(dispatch).toHaveBeenCalledOnce())
     expect(acquire).not.toHaveBeenCalled()
+  })
+
+  it('accepts a send whose reopen cannot write the cleanup of a stale subagent roster', async () => {
+    await loseOwner()
+    expect(host.hasSession(SESSION)).toBe(false)
+    const database = openTestJournalHostDatabase(root)
+    const previous = await openAgentSessionJournal({
+      identity: {
+        sessionId: SESSION,
+        workspaceId: LOCATION.workspaceId,
+        hostId: LOCATION.executionHostId,
+        agent: 'codex',
+        providerHandle: codexProviderHandle(THREAD)
+      },
+      database
+    })
+    await previous.appendItem(
+      codexSubagentGroupIdentity('group-1'),
+      codexSubagentGroupBody('group-1', [{ id: 'child-1', label: 'Read', state: 'working' }]),
+      { fence: 0, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    )
+    await previous.close()
+    database.db.exec(`
+      CREATE TRIGGER fail_roster_cleanup BEFORE INSERT ON journal_rows
+      WHEN NEW.row_json LIKE '%unverifiable%'
+      BEGIN SELECT RAISE(ABORT, 'roster cleanup unavailable'); END;
+    `)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    await accept(sendParams('after the cleanup failed'))
+
+    const roster = (await host.journalSnapshot(SESSION)).items.find(
+      (item) => item.body.kind === 'message' && item.body.blocks.some(isSubagentGroupBlock)
+    )
+    expect(JSON.stringify(roster?.body)).toContain('"state":"unverifiable"')
+    database.db.exec('DROP TRIGGER fail_roster_cleanup')
+    warn.mockRestore()
   })
 
   it('does not restart an owner for a send the session refuses anyway', async () => {
