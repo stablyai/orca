@@ -59,11 +59,12 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
     options: EnqueueTargetedCommandOptions = {}
   ): Promise<T> {
     this.assertCommandAdmission()
-    const { browserPageId: pageId } = this.resolveCommandTarget(
-      worktreeId,
-      browserPageId,
-      options.requireScopedTarget
-    )
+    // Why: enqueue must not yield before the entry is queued — a session teardown drains this queue to reject waiters,
+    // and an awaited resolution would let the command land on a fresh queue after the drain and execute anyway.
+    // Explicit ids skip validation here: executeQueuedCommand re-resolves (incl. waking sleeping serve pages).
+    const pageId =
+      browserPageId ??
+      this.resolveActiveTarget(worktreeId, options.requireScopedTarget ?? false).browserPageId
     const sessionName = `${ORCA_TAB_SESSION_PREFIX}${pageId}`
 
     return new Promise<T>((resolve, reject) => {
@@ -90,7 +91,7 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
     this.assertCommandAdmission()
     const sessionName = `${ORCA_TAB_SESSION_PREFIX}${browserPageId}`
     // Why: the page's guest can change while queued; bind to the one current at execution.
-    const target = this.resolveCommandTarget(worktreeId, browserPageId)
+    const target = await this.resolveCommandTarget(worktreeId, browserPageId)
     if (options.ensureSession !== false) {
       await this.ensureSession(sessionName, browserPageId, target.webContentsId)
     }

@@ -287,6 +287,23 @@
         "heading": "Remote browsing",
         "headingDescription": "Where remote workspace pages render, and where their network traffic leaves from."
       },
+      "serverMemory": {
+        "heading": "Server browser memory",
+        "headingDescription": "Applies to headless browser tabs that `orca serve` opens. Does not affect tabs in this app.",
+        "paintTitle": "Server tab rendering",
+        "paintDescription": "Auto keeps server tabs invisible until first shown; Always render paints them immediately so first view is instant.",
+        "paintOptionAuto": "Auto (recommended)",
+        "paintOptionAlways": "Always render",
+        "idleSleepTitle": "Sleep idle server browser tabs",
+        "idleSleepDescription": "Tabs with no activity for this long are put to sleep to free memory on the server.",
+        "idleSleepOptionNever": "Never",
+        "search": {
+          "paintTitle": "Server Browser Memory: Server tab rendering",
+          "paintDescription": "Applies to `orca serve`. Controls whether headless server browser tabs paint immediately or stay invisible until first shown.",
+          "idleSleepTitle": "Server Browser Memory: Sleep idle server browser tabs",
+          "idleSleepDescription": "Applies to `orca serve`. Puts server browser tabs to sleep after a period of inactivity to free memory."
+        }
+      },
       "userAgent": {
         "title": "Browser identity",
         "description": "Choose the user agent for every browser profile and page. Native mode disables Google sign-in. Changes take effect after a restart.",

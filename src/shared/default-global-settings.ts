@@ -189,6 +189,8 @@ export function buildDefaultSettings(args: {
     terminalSshViewParking: true,
     terminalHiddenWorktreeRetentionBudget: true,
     browserGuestWorktreeRetentionBudget: true,
+    serveBrowserPaintMode: 'auto',
+    serveBrowserIdleSleepSeconds: 600,
     terminalMainSideEffectAuthority: true,
     terminalHiddenDeliveryGate: true,
     terminalModelQueryAuthority: true,

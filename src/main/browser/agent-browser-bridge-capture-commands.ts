@@ -78,7 +78,7 @@ export abstract class AgentBrowserBridgeCaptureCommands extends AgentBrowserBrid
             )
           }
 
-          const currentTarget = this.resolveCommandTarget(worktreeId, target.browserPageId)
+          const currentTarget = await this.resolveCommandTarget(worktreeId, target.browserPageId)
           if (currentTarget.webContentsId !== target.webContentsId) {
             throw new BrowserError(
               'browser_tab_changed',

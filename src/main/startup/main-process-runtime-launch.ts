@@ -151,11 +151,11 @@ async function launchServeMode(
   await runtime.reconcileLegacyWorkerTerminals()
   // Why: headless servers can't mount <webview> panes; use offscreen WebContents, gated on a real display so browser.headless.v1 stays honest.
   if (state.headlessBrowserDisplayAvailable) {
-    runtime.setOffscreenBrowserBackend(
-      new OffscreenBrowserBackend(browserManager, {
-        getAgentBrowserBridge: () => state.agentBrowserBridge
-      })
-    )
+    state.offscreenBackend = new OffscreenBrowserBackend(browserManager, {
+      getAgentBrowserBridge: () => state.agentBrowserBridge
+    })
+    state.offscreenBackend.startIdleSweeper()
+    runtime.setOffscreenBrowserBackend(state.offscreenBackend)
   }
   publishHeadlessRuntimeGraph(runtime)
   await runtimeRpc.start().catch((error) => {

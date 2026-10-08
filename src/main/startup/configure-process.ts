@@ -304,7 +304,7 @@ export function installDevParentSignalQuit(isDev: boolean): void {
   process.once('SIGTERM', onSignal)
 }
 
-export function enableMainProcessGpuFeatures(): void {
+export function enableMainProcessGpuFeatures(options: { isServeMode?: boolean } = {}): void {
   if (process.platform === 'linux' && getMainE2EConfig().userDataDir) {
     // Why: Ubuntu/Xvfb runners fail Electron startup with "GPU process isn't usable"; E2E needs no GPU, so use the software path.
     app.disableHardwareAcceleration()
@@ -343,11 +343,23 @@ export function enableMainProcessGpuFeatures(): void {
   const features = [
     // Why: mirror VS Code's conservative GPU-channel flags instead of global Vulkan/SkiaGraphite/WebGPU; terminal accel is xterm WebGL.
     ...(isLinuxWaylandSession ? [] : ['EarlyEstablishGpuChannel', 'EstablishGpuChannelAsync']),
+    // Why: serve keeps hidden offscreen tabs alive indefinitely; PurgeAndSuspend lets Chromium
+    // reclaim their GPU-side caches instead of the GPU process growing unbounded.
+    ...(options.isServeMode ? ['PurgeAndSuspend'] : []),
     existingFeatures
   ]
     .filter(Boolean)
     .join(',')
   if (features) {
     app.commandLine.appendSwitch('enable-features', features)
+  }
+
+  if (options.isServeMode) {
+    // Why: bounds the GPU-process cache pressure that grows with hidden offscreen browser tabs; env override for experiments.
+    const gpuMemMb = Number.parseInt(process.env.ORCA_GPU_MEM_AVAILABLE_MB ?? '', 10)
+    app.commandLine.appendSwitch(
+      'force-gpu-mem-available-mb',
+      String(Number.isFinite(gpuMemMb) && gpuMemMb > 0 ? gpuMemMb : 512)
+    )
   }
 }

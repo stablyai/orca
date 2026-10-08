@@ -28,7 +28,9 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
     }
     const disposeDetachTracking = this.trackDebuggerDetachForCdpOverrides(guest)
     // Why: disable throttling so background screenshots still get frames; else the compositor stalls and capture returns empty.
-    guest.setBackgroundThrottling(false)
+    // Offscreen (serve) guests stay throttled instead — they have no visible surface, and every
+    // capture path lifts the throttle through a paint lease; otherwise each hidden tab burns GPU.
+    guest.setBackgroundThrottling(this.offscreenGuestIds.has(guest.id))
     const disposePopupPolicy = this.installGuestPopupPolicy(guest, !inheritedOwnerContext)
     const disposeNavigationPolicy = this.installGuestNavigationPolicy(guest)
 

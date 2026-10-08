@@ -62,4 +62,16 @@ export type EnqueueTargetedCommandOptions = {
 
 export type AgentBrowserBridgeOptions = {
   onTabsChanged?: (worktreeId?: string) => void
+  /** Recreates a sleeping serve page's window before a command resolves its WebContents. */
+  resolveSleepingPage?: (
+    browserPageId: string
+  ) => Promise<{ webContentsId: number } | null> | { webContentsId: number } | null
+  /** Marks a serve page recently used so the idle sweep leaves it alone. */
+  touchOffscreenPage?: (browserPageId: string) => void
+  /** Reports whether a page id is a sleeping serve page (still listed, no window). */
+  isOffscreenPageSleeping?: (browserPageId: string) => boolean
+  /** Last committed URL of a sleeping serve page, for listings while its window is gone. */
+  getSleepingPageUrl?: (browserPageId: string) => string
+  /** All sleeping serve page ids, for listings (they are not in the guest registry). */
+  listSleepingPageIds?: () => string[]
 }

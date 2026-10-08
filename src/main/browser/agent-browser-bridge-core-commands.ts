@@ -122,7 +122,7 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
         }
 
         // Why: cross-process navigation can replace the guest while retaining the same authoritative page id.
-        const navigatedTarget = this.resolveCommandTarget(worktreeId, target.browserPageId)
+        const navigatedTarget = await this.resolveCommandTarget(worktreeId, target.browserPageId)
         const navigatedWebContents = this.requireTargetWebContents(navigatedTarget)
         const loadError = navigationAborted
           ? this.browserManager.getBrowserPageLoadError(target.browserPageId)

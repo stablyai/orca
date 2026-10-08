@@ -59,7 +59,25 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   state.starNag.start()
   state.starNag.registerIpcHandlers()
   state.agentBrowserBridge = new AgentBrowserBridge(browserManager, {
-    onTabsChanged: (worktreeId) => runtime.notifyMobileSessionTabsChanged(worktreeId)
+    onTabsChanged: (worktreeId) => runtime.notifyMobileSessionTabsChanged(worktreeId),
+    // Why: the offscreen backend only exists on headless serve; the hooks no-op on desktop (state.offscreenBackend stays null).
+    resolveSleepingPage: (browserPageId) => {
+      const backend = state.offscreenBackend
+      if (!backend || !backend.isPageSleeping(browserPageId)) {
+        return null
+      }
+      return backend
+        .wakePage(browserPageId)
+        .then((woken) =>
+          woken ? { webContentsId: backend.getWebContentsId(browserPageId)! } : null
+        )
+    },
+    touchOffscreenPage: (browserPageId) => state.offscreenBackend?.touchPage(browserPageId),
+    isOffscreenPageSleeping: (browserPageId) =>
+      state.offscreenBackend?.isPageSleeping(browserPageId) ?? false,
+    getSleepingPageUrl: (browserPageId) =>
+      state.offscreenBackend?.getSleepingPage(browserPageId)?.url ?? '',
+    listSleepingPageIds: () => state.offscreenBackend?.listSleepingPageIds() ?? []
   })
   runtime.setAgentBrowserBridge(state.agentBrowserBridge)
   // Why: daemons a crashed or SIGKILL'd previous run left behind answer to nobody; nothing else reclaims them.

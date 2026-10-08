@@ -378,7 +378,7 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
   configureLinuxDevShmUsage()
   maybeApplyGpuFallbackForThisLaunch()
   if (!state.gpuFallbackActiveThisLaunch) {
-    enableMainProcessGpuFeatures()
+    enableMainProcessGpuFeatures({ isServeMode: state.isServeMode })
   }
   // Why: headless serve's offscreen BrowserWindows need an X display (Xvfb) on Linux; the result gates whether the offscreen backend is installed.
   state.headlessBrowserDisplayAvailable = ensureVirtualDisplayForHeadlessServe({

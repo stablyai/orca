@@ -7,13 +7,15 @@ import type { BrowserBackend, BrowserBackendCreateTab } from './browser-backend'
 import type { BrowserManager } from './browser-manager'
 import type { AgentBrowserBridge } from './agent-browser-bridge'
 import { browserSessionRegistry } from './browser-session-registry'
+import { resolveServeBrowserPaintMode } from './serve-browser-settings'
+import { OffscreenTabSweeper } from './offscreen-tab-sweeper'
+import {
+  OffscreenPageSleeper,
+  type OffscreenPageInventoryEntry,
+  type SleepingOffscreenPage
+} from './offscreen-page-sleeper'
 
-// Why: headless orca serve has no renderer window to host a <webview>, so each
-// browser page is backed by a main-process offscreen BrowserWindow. The window
-// is never shown — it exists only so its WebContents can be driven over CDP and
-// streamed via the existing screencast path. Verified on macOS and on headless
-// Linux under Xvfb (Electron --headless segfaults; a virtual display is
-// required there — provisioned in the serve image, not by this code).
+export type { OffscreenPageInventoryEntry, SleepingOffscreenPage } from './offscreen-page-sleeper'
 
 const DEFAULT_VIEWPORT_WIDTH = 1280
 const DEFAULT_VIEWPORT_HEIGHT = 800
@@ -22,6 +24,8 @@ const OWNER_RETIREMENT_CONCURRENCY = 4
 
 export class OffscreenBrowserBackend implements BrowserBackend {
   private readonly windowsByPageId = new Map<string, BrowserWindow>()
+  private readonly sleeper: OffscreenPageSleeper
+  private readonly sweeper: OffscreenTabSweeper
   // Shutdown is terminal for this backend; rejecting creates closes the race
   // where destroyAll snapshots ownership and a new page appears afterward.
   private shutdownStarted = false
@@ -32,7 +36,18 @@ export class OffscreenBrowserBackend implements BrowserBackend {
     private readonly options: {
       getAgentBrowserBridge?: () => Pick<AgentBrowserBridge, 'onPageClosed'> | null
     } = {}
-  ) {}
+  ) {
+    this.sleeper = new OffscreenPageSleeper(browserManager, {
+      windowsByPageId: this.windowsByPageId,
+      retirePageOwner: (pageId) => this.retirePageOwner(pageId),
+      createTab: (params) => this.createTab(params),
+      isShuttingDown: () => this.shutdownStarted
+    })
+    this.sweeper = new OffscreenTabSweeper({
+      getInventory: () => this.sleeper.listPageInventory(),
+      sleepPage: (pageId) => this.sleeper.sleepPage(pageId)
+    })
+  }
 
   async createTab(params: BrowserBackendCreateTab): Promise<{ browserPageId: string }> {
     if (this.shutdownStarted) {
@@ -57,6 +72,9 @@ export class OffscreenBrowserBackend implements BrowserBackend {
         // Why: offscreen pages are the SSH/headless browser backend; keep their
         // HTML fullscreen behavior aligned with desktop <webview> guests.
         ...ORCA_BROWSER_GUEST_WEB_PREFERENCES,
+        // Why: in auto mode the page starts throttled; a paint lease lifts it while
+        // screencast/screenshot needs frames. 'always' keeps legacy painting.
+        ...(resolveServeBrowserPaintMode() === 'auto' ? { paintWhenInitiallyHidden: false } : {}),
         partition,
         sandbox: true,
         contextIsolation: true,
@@ -65,6 +83,7 @@ export class OffscreenBrowserBackend implements BrowserBackend {
     })
 
     this.windowsByPageId.set(browserPageId, win)
+    this.sleeper.onPageCreated(browserPageId)
 
     // Why: register the guest and return immediately so the new tab appears
     // without waiting for the page to finish loading. Previously createTab
@@ -117,6 +136,7 @@ export class OffscreenBrowserBackend implements BrowserBackend {
   async closeTab(browserPageId: string): Promise<void> {
     const win = this.windowsByPageId.get(browserPageId)
     this.windowsByPageId.delete(browserPageId)
+    this.sleeper.onPageRemoved(browserPageId)
     this.browserManager.unregisterGuest(browserPageId)
     try {
       if (win) {
@@ -134,8 +154,48 @@ export class OffscreenBrowserBackend implements BrowserBackend {
     return win && !win.isDestroyed() ? win.webContents.id : null
   }
 
+  /** True while the page's window is torn down but its id is restorable. */
+  isPageSleeping(browserPageId: string): boolean {
+    return this.sleeper.isPageSleeping(browserPageId)
+  }
+
+  /** Marks the page recently used so the idle sweep leaves it alone. */
+  touchPage(browserPageId: string): void {
+    this.sleeper.touchPage(browserPageId)
+  }
+
+  /**
+   * Starts the periodic idle sweep. Explicit rather than createTab-driven so a
+   * backend used without serve (tests, desktop) never arms a timer.
+   */
+  startIdleSweeper(): void {
+    this.sweeper.start()
+  }
+
+  getSleepingPage(browserPageId: string): SleepingOffscreenPage | undefined {
+    return this.sleeper.getSleepingPage(browserPageId)
+  }
+
+  listSleepingPageIds(): string[] {
+    return this.sleeper.listSleepingPageIds()
+  }
+
+  listPageInventory(): Map<string, OffscreenPageInventoryEntry> {
+    return this.sleeper.listPageInventory()
+  }
+
+  async sleepPage(browserPageId: string): Promise<void> {
+    return this.sleeper.sleepPage(browserPageId)
+  }
+
+  /** Recreates a sleeping page's window in place; returns false when the id was not sleeping. */
+  async wakePage(browserPageId: string): Promise<boolean> {
+    return this.sleeper.wakePage(browserPageId)
+  }
+
   async destroyAll(): Promise<void> {
     this.shutdownStarted = true
+    this.sweeper.stop()
     const pageIds = [...this.windowsByPageId.keys()]
     await mapSettledWithConcurrency(pageIds, OWNER_RETIREMENT_CONCURRENCY, (pageId) =>
       this.closeTab(pageId)

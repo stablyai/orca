@@ -11,6 +11,7 @@ import type { CodexRuntimeHomeService } from '../codex-accounts/runtime-home-ser
 import type { ClaudeAccountService } from '../claude-accounts/service'
 import type { ClaudeRuntimeAuthService } from '../claude-accounts/runtime-auth-service'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import type { OffscreenBrowserBackend } from '../browser/offscreen-browser-backend'
 import type { RateLimitService } from '../rate-limits/service'
 import type { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
 import type { DesktopRelayService } from '../runtime/relay/desktop-relay-service'
@@ -155,6 +156,9 @@ export const mainProcessState = {
   serveOptions: null as ServeOptions | null,
   desktopWindow: null as BrowserWindow | null,
   agentBrowserBridge: null as AgentBrowserBridge | null,
+  // Why: bridge commands consult the backend while it's constructed in a later launch step; null on desktop.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: null literal widened to the field type so later assignment typechecks.
+  offscreenBackend: null as OffscreenBrowserBackend | null,
   emulatorBridge: null as EmulatorBridge | null,
   tray: null as Tray | null
 }

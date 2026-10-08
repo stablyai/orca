@@ -27,6 +27,7 @@ import { normalizeClaudeRuntimeSelection } from '../claude-accounts/runtime-sele
 import { agentHookServer } from '../agent-hooks/server'
 import { resolveHostCodexSessionSourceHome } from '../codex/codex-session-source-home'
 import { browserManager } from '../browser/browser-manager'
+import { setServeBrowserSettingsResolver } from '../browser/serve-browser-settings'
 import { mainProcessState as state } from './main-process-state'
 
 export function initializeMainProcessAccountServices(): void {
@@ -167,6 +168,7 @@ export function initializeMainProcessAccountServices(): void {
     }
   })
   browserManager.setSettingsResolver(() => ({ keybindings: state.keybindings?.getOverrides() }))
+  setServeBrowserSettingsResolver(() => store.getSettings())
   state.rateLimits.setInactiveClaudeAccountsResolver(() => {
     const settings = store.getSettings()
     const activeIds = new Set(
