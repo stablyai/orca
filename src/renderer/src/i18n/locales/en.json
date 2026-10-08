@@ -12677,6 +12677,10 @@
           "offCount": "{{count}} off",
           "machines": "Machines",
           "machinesDescription": "Choose which machines can show notifications on this computer. A paired server’s switch also covers work reached through it."
+        },
+        "StatusBarProviderColorSetting": {
+          "title": "Color usage by provider",
+          "description": "Tint each usage meter in the status bar with its AI provider’s color."
         }
       },
       "right": {

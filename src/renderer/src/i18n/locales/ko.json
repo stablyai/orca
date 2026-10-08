@@ -12443,6 +12443,10 @@
           "description": "이 호스트는 현재 상태 그대로 관리형 서버로 돌아갑니다. 이전 버전의 Orca가 여기에서 추가하거나 변경한 내용은 이동되지 않으며, 정리될 때까지 이 컴퓨터의 저장된 설정에만 남습니다.",
           "cancel": "취소",
           "confirm": "서버 버전 유지"
+        },
+        "StatusBarProviderColorSetting": {
+          "title": "AI별 사용량 색상",
+          "description": "상태 바의 사용량 표시에 AI 제공자별 색을 입힙니다."
         }
       },
       "right": {

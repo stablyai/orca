@@ -30,6 +30,8 @@ import { ProviderSegment, UsageOverflowChip, getUsageTone } from './StatusBarPro
 import { useStatusBarController } from './use-status-bar-controller'
 import { StatusBarVisibilityMenu } from './StatusBarVisibilityMenu'
 import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
+import { useAppStore } from '../../store'
+import { resolveProviderTint } from './status-bar-provider-colors'
 
 const PetStatusSegment = lazyWithRetry(() =>
   import('./PetStatusSegment').then((module) => ({ default: module.PetStatusSegment }))
@@ -54,6 +56,8 @@ export function StatusBarSurface({
   floatingTerminalOpen
 }: StatusBarProps): React.JSX.Element | null {
   const controller = useStatusBarController(floatingTerminalOpen)
+  const providerColorsEnabled = useAppStore((s) => s.settings?.statusBarProviderColorsEnabled)
+  const providerColors = useAppStore((s) => s.settings?.statusBarProviderColors)
   if (!controller) {
     return null
   }
@@ -141,24 +145,35 @@ export function StatusBarSurface({
                       'Usage'
                     )}
                   >
-                    {rosterProviders.map((p) => (
-                      // Why: collapsed chips leave the row but stay measurable, so the density hook can bring them back.
-                      <span
-                        key={p.provider}
-                        data-usage-chip={p.provider}
-                        data-usage-urgent={getUsageTone(p) === 'urgent'}
-                        data-usage-collapsed={collapsedUsageProviders.includes(p.provider)}
-                        aria-hidden={collapsedUsageProviders.includes(p.provider)}
-                        className="inline-flex data-[usage-collapsed=true]:invisible data-[usage-collapsed=true]:absolute"
-                      >
-                        <ProviderSegment
-                          p={p}
-                          compact={compact}
-                          display={usagePercentageDisplay}
-                          mode={usageTightestOnly ? 'compact' : statusBarUsageMode}
-                        />
-                      </span>
-                    ))}
+                    {rosterProviders.map((p) => {
+                      const tint = resolveProviderTint(
+                        {
+                          statusBarProviderColorsEnabled: providerColorsEnabled,
+                          statusBarProviderColors: providerColors
+                        },
+                        p.provider
+                      )
+                      return (
+                        // Why: collapsed chips leave the row but stay measurable, so the density hook can bring them back.
+                        <span
+                          key={p.provider}
+                          data-usage-chip={p.provider}
+                          data-usage-urgent={getUsageTone(p) === 'urgent'}
+                          data-usage-collapsed={collapsedUsageProviders.includes(p.provider)}
+                          aria-hidden={collapsedUsageProviders.includes(p.provider)}
+                          className="inline-flex rounded data-[usage-collapsed=true]:invisible data-[usage-collapsed=true]:absolute"
+                          // Why: padding only when tinted, so the default bar keeps its exact spacing.
+                          style={tint ? { backgroundColor: tint, paddingInline: 4 } : undefined}
+                        >
+                          <ProviderSegment
+                            p={p}
+                            compact={compact}
+                            display={usagePercentageDisplay}
+                            mode={usageTightestOnly ? 'compact' : statusBarUsageMode}
+                          />
+                        </span>
+                      )
+                    })}
                     {collapseUsage ? (
                       <UsageOverflowChip
                         hidden={rosterProviders.filter((p) =>
