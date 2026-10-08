@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import * as runtimePaths from '../../../src/shared/cross-platform-path'
 import type { Worktree } from '../worktree/workspace-list-types'
 import { deriveMobileAiVaultScopePaths } from './agent-history-scope-paths'
 
@@ -56,5 +57,52 @@ describe('deriveMobileAiVaultScopePaths', () => {
     expect(deriveMobileAiVaultScopePaths('project', active, [active, dupe, relative])).toEqual([
       '/Users/ada/repo/app'
     ])
+  })
+
+  it('retains first spelling and host-specific path equivalence', () => {
+    const paths = [
+      ' /repo/café/ ',
+      '/repo/cafe\u0301',
+      '/repo//café',
+      '/repo/Café',
+      'C:\\Repo\\App',
+      'c:/repo/app/',
+      '\\\\server\\share\\App',
+      '//SERVER/share/app/',
+      '\\\\wsl.localhost\\Ubuntu\\home\\App',
+      '//wsl$/ubuntu/home/App/',
+      '//wsl$/ubuntu/home/app',
+      '//wsl$/Debian/home/App',
+      '/repo/back\\slash',
+      '/repo/back/slash',
+      'relative/path',
+      ' '
+    ]
+    const rows = paths.map((path, index) => worktree({ path, worktreeId: `w-${index}` }))
+    expect(deriveMobileAiVaultScopePaths('project', rows[0], rows)).toEqual([
+      '/repo/café/',
+      '/repo/Café',
+      'C:\\Repo\\App',
+      '\\\\server\\share\\App',
+      '\\\\wsl.localhost\\Ubuntu\\home\\App',
+      '//wsl$/ubuntu/home/app',
+      '//wsl$/Debian/home/App',
+      '/repo/back\\slash',
+      '/repo/back/slash'
+    ])
+  })
+
+  it('normalizes each candidate once even with many duplicate siblings below the cap', () => {
+    const rows = Array.from({ length: 1000 }, (_, index) =>
+      worktree({ path: `/repo/app-${index % 32}`, worktreeId: `w-${index}` })
+    )
+    const normalize = vi.spyOn(runtimePaths, 'normalizeRuntimePathForComparison')
+    try {
+      const result = deriveMobileAiVaultScopePaths('project', rows[0], rows)
+      expect(result).toEqual(Array.from({ length: 32 }, (_, index) => `/repo/app-${index}`))
+      expect(normalize).toHaveBeenCalledTimes(rows.length + 1)
+    } finally {
+      normalize.mockRestore()
+    }
   })
 })

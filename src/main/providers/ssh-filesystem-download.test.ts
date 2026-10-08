@@ -1,3 +1,5 @@
+import { DirectoryTransferBudget } from '../ssh/ssh-directory-transfer-budget'
+import { withSftpDirectoryHandles } from './sftp-directory-test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -64,7 +66,7 @@ describe('downloadFolderViaSftp', () => {
     }
 
     await expect(
-      downloadFolderViaSftp(async () => sftp as never, '/remote/src', destination)
+      downloadFolderViaSftp(async () => withSftpDirectoryHandles(sftp), '/remote/src', destination)
     ).rejects.toThrow("Remote entries map to the same local name 'a.txt'")
     expect(sftp.fastGet).toHaveBeenCalledTimes(1)
   })
@@ -83,7 +85,7 @@ describe('downloadFolderViaSftp', () => {
     }
 
     await expect(
-      downloadFolderViaSftp(async () => sftp as never, '/remote/src', destination)
+      downloadFolderViaSftp(async () => withSftpDirectoryHandles(sftp), '/remote/src', destination)
     ).rejects.toThrow("Cannot download unsupported remote entry 'build.pipe'")
     expect(sftp.fastGet).not.toHaveBeenCalled()
   })
@@ -103,7 +105,7 @@ describe('downloadFolderViaSftp', () => {
     }
 
     await expect(
-      downloadFolderViaSftp(async () => sftp as never, '/remote/src', destination)
+      downloadFolderViaSftp(async () => withSftpDirectoryHandles(sftp), '/remote/src', destination)
     ).rejects.toThrow("Cannot download symbolic link 'creds'")
     // The link target could be /etc/passwd; rejecting from directory-entry
     // metadata means it is never followed with stat or opened by fastGet.
@@ -113,6 +115,8 @@ describe('downloadFolderViaSftp', () => {
 
   it('sanitizes extended Windows device names in nested entries', async () => {
     const destination = await createDestination()
+    const records = vi.spyOn(DirectoryTransferBudget.prototype, 'record')
+    const releases = vi.spyOn(DirectoryTransferBudget.prototype, 'release')
     const sftp = {
       stat: vi.fn((_path: string, callback: (err: Error | undefined, value: unknown) => void) =>
         callback(undefined, sftpStats('directory'))
@@ -125,9 +129,16 @@ describe('downloadFolderViaSftp', () => {
     }
 
     await expect(
-      downloadFolderViaSftp(async () => sftp as never, '/remote/src', destination)
+      downloadFolderViaSftp(async () => withSftpDirectoryHandles(sftp), '/remote/src', destination)
     ).rejects.toThrow("Remote entries map to the same local name 'download'")
     expect(sftp.fastGet).not.toHaveBeenCalled()
+    expect(records).toHaveBeenCalledTimes(3)
+    expect(releases).toHaveBeenCalledWith(
+      records.mock.results.reduce((bytes, record) => bytes + record.value, 0),
+      3
+    )
+    records.mockRestore()
+    releases.mockRestore()
   })
 
   it('preserves legal POSIX backslashes in opaque SFTP child names', async () => {
@@ -146,9 +157,14 @@ describe('downloadFolderViaSftp', () => {
       end: vi.fn()
     }
 
-    await downloadFolderViaSftp(async () => sftp as never, sourcePath, destination, {
-      windowsRemotePaths: false
-    })
+    await downloadFolderViaSftp(
+      async () => withSftpDirectoryHandles(sftp),
+      sourcePath,
+      destination,
+      {
+        windowsRemotePaths: false
+      }
+    )
 
     expect(sftp.fastGet).toHaveBeenCalledWith(
       '/remote/parent\\literal/..\\secret.txt',
@@ -171,9 +187,14 @@ describe('downloadFolderViaSftp', () => {
     }
 
     await expect(
-      downloadFolderViaSftp(async () => sftp as never, 'C:/remote/src', destination, {
-        windowsRemotePaths: true
-      })
+      downloadFolderViaSftp(
+        async () => withSftpDirectoryHandles(sftp),
+        'C:/remote/src',
+        destination,
+        {
+          windowsRemotePaths: true
+        }
+      )
     ).rejects.toThrow("Invalid remote directory entry '..\\secret.txt'")
     expect(sftp.fastGet).not.toHaveBeenCalled()
   })
@@ -195,9 +216,14 @@ describe('downloadFolderViaSftp', () => {
     }
     const controller = new AbortController()
 
-    const result = downloadFolderViaSftp(async () => sftp as never, '/remote/src', destination, {
-      signal: controller.signal
-    })
+    const result = downloadFolderViaSftp(
+      async () => withSftpDirectoryHandles(sftp),
+      '/remote/src',
+      destination,
+      {
+        signal: controller.signal
+      }
+    )
     await vi.waitFor(() => expect(sftp.fastGet).toHaveBeenCalledTimes(1))
     controller.abort(new Error('renderer closed'))
 
@@ -234,9 +260,14 @@ describe('downloadFolderViaSftp', () => {
     }
     const controller = new AbortController()
 
-    const result = downloadFolderViaSftp(async () => sftp as never, '/remote/src', destination, {
-      signal: controller.signal
-    })
+    const result = downloadFolderViaSftp(
+      async () => withSftpDirectoryHandles(sftp),
+      '/remote/src',
+      destination,
+      {
+        signal: controller.signal
+      }
+    )
     await vi.waitFor(() => expect(sftp.readdir).toHaveBeenCalledTimes(1))
     controller.abort(new Error('renderer closed'))
     readDirCallback?.(new Error('channel closed'))
@@ -246,3 +277,45 @@ describe('downloadFolderViaSftp', () => {
     expect(sftp.end).toHaveBeenCalledTimes(1)
   })
 })
+
+it.each(['EOF', 'CLOSE'])(
+  'does not create an empty destination when cancelled at %s',
+  async (boundary) => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-sftp-final-abort-'))
+    const destination = join(root, 'target')
+    const controller = new AbortController()
+    const reason = new Error('cancel at final boundary')
+    const sftp = withSftpDirectoryHandles({
+      stat: (_path: string, callback: (error: undefined, stats: unknown) => void) =>
+        callback(undefined, sftpStats('directory')),
+      readdir: (_path: string, callback: (error: undefined, entries: unknown) => void) =>
+        callback(undefined, []),
+      end: vi.fn()
+    })
+    sftp.readdir = (_handle, callback) => {
+      callback(Object.assign(new Error('EOF'), { code: 1 }), [])
+    }
+    if (boundary === 'EOF') {
+      sftp.readdir = (_handle, callback) => {
+        callback(Object.assign(new Error('EOF'), { code: 1 }), [])
+        controller.abort(reason)
+      }
+    } else {
+      sftp.close = (_handle, callback) => {
+        controller.abort(reason)
+        callback(null)
+      }
+    }
+    try {
+      await expect(
+        downloadFolderViaSftp(async () => sftp, '/empty', destination, {
+          signal: controller.signal
+        })
+      ).rejects.toBe(reason)
+      const { access } = await import('node:fs/promises')
+      await expect(access(destination)).rejects.toMatchObject({ code: 'ENOENT' })
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  }
+)

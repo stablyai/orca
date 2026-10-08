@@ -14,7 +14,10 @@ vi.mock('react-native', () => ({
 vi.mock('lucide-react-native', () => ({
   ArrowUp: 'ArrowUp',
   Check: 'Check',
-  CircleHelp: 'CircleHelp'
+  ChevronDown: 'ChevronDown',
+  ChevronUp: 'ChevronUp',
+  CircleHelp: 'CircleHelp',
+  X: 'X'
 }))
 
 describe('MobileNativeChatQuestion', () => {
@@ -102,5 +105,95 @@ describe('MobileNativeChatQuestion', () => {
     await act(async () => submit.props.onPress())
 
     expect(onAnswer).toHaveBeenCalledWith('east-token, other-token:ap-south')
+  })
+
+  it('passes the rendered prompt identity to cancel', async () => {
+    const onCancel = vi.fn(async () => true)
+    await act(async () => {
+      renderer = create(
+        createElement(MobileNativeChatQuestion, {
+          question: {
+            question: 'Pick one',
+            prompt: { itemId: 'question-1', expectedRevision: 7 },
+            options: ['Choice'],
+            multiSelect: false,
+            allowOther: false,
+            optionTokens: ['choice-token']
+          },
+          onAnswer: vi.fn(async () => true),
+          onCancel
+        })
+      )
+    })
+    const cancel = renderer.root.findByProps({ accessibilityLabel: 'Cancel' })
+    await act(async () => cancel.props.onPress())
+    expect(onCancel).toHaveBeenCalledWith({ itemId: 'question-1', expectedRevision: 7 })
+  })
+
+  it('prefills an editor and sends its whitespace unchanged', async () => {
+    const onAnswer = vi.fn(async () => true)
+    await act(async () => {
+      renderer = create(
+        createElement(MobileNativeChatQuestion, {
+          question: {
+            question: 'Edit the draft',
+            options: [],
+            multiSelect: false,
+            optionTokens: [],
+            freeTextToken: 'editor-token',
+            freeTextInput: {
+              allowEmpty: true,
+              multiline: true,
+              initialValue: '  draft\n',
+              placeholder: 'Write here'
+            }
+          },
+          onAnswer
+        })
+      )
+    })
+
+    const input = renderer.root.findByType('TextInput')
+    expect(input.props).toMatchObject({
+      value: '  draft\n',
+      placeholder: 'Write here',
+      multiline: true
+    })
+    await act(async () => input.props.onChangeText('  \n '))
+    const send = renderer.root.findByProps({ accessibilityLabel: 'Send reply' })
+    expect(send.props.disabled).toBe(false)
+    await act(async () => send.props.onPress())
+    expect(onAnswer).toHaveBeenCalledWith(`editor-token:${encodeURIComponent('  \n ')}`)
+  })
+
+  it('sends an empty allowed answer and still disables an empty legacy answer', async () => {
+    const onAnswer = vi.fn(async () => true)
+    const question = {
+      question: 'Input',
+      options: [],
+      multiSelect: false,
+      optionTokens: [],
+      freeTextToken: 'input-token'
+    }
+    await act(async () => {
+      renderer = create(
+        createElement(MobileNativeChatQuestion, {
+          question: { ...question, freeTextInput: { allowEmpty: true, multiline: false } },
+          onAnswer
+        })
+      )
+    })
+    const send = renderer.root.findByProps({ accessibilityLabel: 'Send reply' })
+    expect(renderer.root.findByType('TextInput').props.multiline).toBe(false)
+    expect(send.props.disabled).toBe(false)
+    await act(async () => send.props.onPress())
+    expect(onAnswer).toHaveBeenCalledWith('input-token:')
+
+    await act(async () =>
+      renderer.update(createElement(MobileNativeChatQuestion, { question, onAnswer }))
+    )
+    expect(renderer.root.findByProps({ accessibilityLabel: 'Send reply' }).props.disabled).toBe(
+      true
+    )
   })
 })

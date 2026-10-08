@@ -1,3 +1,4 @@
+import { closeTestStores, createStore, testState } from '../persistence-test-harness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
@@ -13,9 +14,6 @@ import type {
   AutomationRunCompletionObservation,
   AutomationRunTerminalObserver
 } from './run-completion-watcher'
-import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
-
-const testState = { dir: '' }
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
@@ -26,14 +24,6 @@ vi.mock('electron', () => ({
     decryptString: (ciphertext: Buffer) => ciphertext.toString('utf-8').slice('encrypted:'.length)
   }
 }))
-
-async function createStore() {
-  vi.resetModules()
-  installFakeAppEnvironment({ getPath: () => testState.dir })
-  const { Store, initDataPath } = await import('../persistence')
-  initDataPath()
-  return new Store()
-}
 
 type TestStore = Awaited<ReturnType<typeof createStore>>
 
@@ -125,7 +115,8 @@ describe('reconciling retained runs against a graph that has not published yet',
     vi.setSystemTime(new Date('2026-06-01T12:00:00Z'))
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     vi.useRealTimers()
     rmSync(testState.dir, { recursive: true, force: true })
   })

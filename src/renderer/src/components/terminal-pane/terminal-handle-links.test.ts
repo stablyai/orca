@@ -241,7 +241,7 @@ describe('focusRendererTerminalHandle', () => {
 
     expect(mocks.storeState.setActiveWorktree).toHaveBeenCalledWith('wt-1')
     expect(mocks.storeState.setActiveView).toHaveBeenCalledWith('terminal')
-    expect(mocks.storeState.setActiveTabType).toHaveBeenCalledWith('terminal')
+    expect(mocks.storeState.setActiveTabType).toHaveBeenCalledWith('terminal', 'wt-1')
     expect(mocks.storeState.setActiveTab).toHaveBeenCalledWith('tab-1')
     expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('tab-1')
   })
@@ -471,7 +471,7 @@ describe('createTerminalHandleLinkProvider', () => {
     expect(mocks.storeState.setActiveWorktree).toHaveBeenCalledWith('wt-1')
     expect(mocks.storeState.markWorktreeVisited).toHaveBeenCalledWith('wt-1')
     expect(mocks.storeState.setActiveView).toHaveBeenCalledWith('terminal')
-    expect(mocks.storeState.setActiveTabType).toHaveBeenCalledWith('terminal')
+    expect(mocks.storeState.setActiveTabType).toHaveBeenCalledWith('terminal', 'wt-1')
     expect(mocks.storeState.revealWorktreeInSidebar).toHaveBeenCalledWith('wt-1')
     expect(mocks.storeState.setActiveTab).toHaveBeenCalledWith('tab-1')
     expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('tab-1')

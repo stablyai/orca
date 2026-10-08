@@ -76,7 +76,6 @@ export class OffscreenBrowserBackend implements BrowserBackend {
       browserPageId,
       worktreeId: params.worktreeId,
       sessionProfileId: profile?.id ?? null,
-      userAgentMode: profile?.userAgentMode,
       webContentsId: win.webContents.id
     })
     if (!registered) {

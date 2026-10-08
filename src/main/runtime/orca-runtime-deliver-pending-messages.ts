@@ -111,7 +111,8 @@ export class OrcaRuntimeWithDeliverPendingMessages extends OrcaRuntimeWithResolv
               if (
                 currentLeaf?.ptyId === probedPtyId &&
                 currentLeaf.lastAgentStatus === 'idle' &&
-                currentLeaf.lastAgentStatusObservedLive
+                currentLeaf.lastAgentStatusObservedLive &&
+                this.checkDeliverySettledAndArmRecheck(currentLeaf)
               ) {
                 this.deliverPendingMessages(currentLeaf, {
                   mailboxHandle,
@@ -136,7 +137,7 @@ export class OrcaRuntimeWithDeliverPendingMessages extends OrcaRuntimeWithResolv
     let settlesInEnterCallback = false
     try {
       const payload = formatMessagePointer(unread.length, mailboxHandle)
-      const wrote = this.ptyController?.write(deliveryPtyId, payload) ?? false
+      const wrote = this.ptyController?.write(deliveryPtyId, payload, 'driving') ?? false
       if (!wrote) {
         return
       }
@@ -170,7 +171,7 @@ export class OrcaRuntimeWithDeliverPendingMessages extends OrcaRuntimeWithResolv
           if (!currentLeaf || currentLeaf.ptyId !== deliveryPtyId || !currentLeaf.writable) {
             return
           }
-          this.ptyController?.write(deliveryPtyId, '\r')
+          this.ptyController?.write(deliveryPtyId, '\r', 'driving')
         } catch {
           // Terminal may have closed during the delay; mail remains queued for check.
         } finally {

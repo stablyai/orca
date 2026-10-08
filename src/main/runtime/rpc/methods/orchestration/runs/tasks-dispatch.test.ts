@@ -5,6 +5,7 @@ import type { OrchestrationDb } from '../../../../orchestration/db'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { buildInjectRejectionMessage } from '../../../../../../shared/orchestration-dispatch-refusal-contract'
 import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-test-fixture'
+import { dispatchPreambleSendOptions } from '../../../../orchestration/preamble'
 
 describe('orchestration RPC methods', () => {
   const h = createOrchestrationRpcHarness()
@@ -348,11 +349,7 @@ describe('orchestration RPC methods', () => {
       expect(send).toHaveBeenCalledWith(
         'term_a',
         expect.stringContaining('orca-dev orchestration send'),
-        expect.objectContaining({
-          acceptQueued: true,
-          observationTimeoutMs: 0,
-          requestId: expect.any(String)
-        })
+        expect.objectContaining(dispatchPreambleSendOptions(expect.any(String)))
       )
     })
 
@@ -394,12 +391,12 @@ describe('orchestration RPC methods', () => {
       expect(agentPrompt).toHaveBeenCalledWith(
         'term_a',
         expect.stringContaining('line one\nline two'),
-        expect.objectContaining({
-          acceptQueued: true,
-          observationTimeoutMs: 0,
-          requestId: expect.any(String)
-        })
+        expect.objectContaining(dispatchPreambleSendOptions(expect.any(String)))
       )
+      const preamble = agentPrompt.mock.calls[0]![1]
+      expect(preamble).toContain('The coordinator cannot see this terminal')
+      expect(preamble).toContain('Do not exit the shell. Your terminal stays available')
+      expect(preamble).not.toContain('this chat')
       expect(rawSend).not.toHaveBeenCalled()
     })
 

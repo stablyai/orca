@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { structuredAgentSessionPayloadFingerprint } from './structured-agent-session-mutation'
+import {
+  structuredAgentSessionDomainFingerprint,
+  structuredAgentSessionPayloadFingerprint
+} from './structured-agent-session-mutation'
 import { computeAgentSessionPayloadFingerprint } from './agent-session-mutation-envelope'
 
 describe('structured agent session client mutations', () => {
@@ -28,6 +31,24 @@ describe('structured agent session client mutations', () => {
 
     expect(structuredAgentSessionPayloadFingerprint(input)).toBe(
       computeAgentSessionPayloadFingerprint(input)
+    )
+  })
+
+  it('preserves the digest when a local fingerprint domain is not an RPC method', () => {
+    const fields = { text: 'hello' }
+
+    expect(
+      structuredAgentSessionDomainFingerprint({
+        domain: 'mobile.agentSession.send.intent',
+        sessionId: 'session-1',
+        fields
+      })
+    ).toBe(
+      structuredAgentSessionPayloadFingerprint({
+        method: 'mobile.agentSession.send.intent',
+        sessionId: 'session-1',
+        fields
+      })
     )
   })
 })

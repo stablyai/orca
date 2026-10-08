@@ -23,8 +23,8 @@ describe('CdpWsProxy DOM.focus replay', () => {
 
   beforeEach(async () => {
     mock = createMockWebContents()
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    proxy = new CdpWsProxy(mock.webContents as any)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mock implements every WebContents member the proxy calls.
+    proxy = new CdpWsProxy(mock.webContents as never, () => () => {})
     endpoint = await proxy.start()
   })
 

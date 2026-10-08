@@ -249,3 +249,25 @@ describe('getEditorPanelRenderModel markdown export affordance', () => {
     ).toBe(false)
   })
 })
+
+describe('virtual Markdown preview PDF export', () => {
+  it('disables export for large previews, including unsaved drafts', () => {
+    for (const useDraft of [false, true]) {
+      const content = 'x'.repeat(RICH_MARKDOWN_MAX_SIZE_BYTES + 1)
+      expect(
+        renderModel({
+          activeFile: markdownFile({
+            id: 'preview:/repo/README.md',
+            mode: 'markdown-preview',
+            markdownPreviewSourceFileId: '/repo/README.md'
+          }),
+          fileContents: {
+            'preview:/repo/README.md': textContent({ content: useDraft ? '# Small' : content })
+          },
+          editorDrafts: useDraft ? { '/repo/README.md': content } : {},
+          markdownRichModeSizeOverridden: true
+        }).canExportMarkdownToPdf
+      ).toBe(false)
+    }
+  })
+})

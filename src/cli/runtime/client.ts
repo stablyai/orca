@@ -245,7 +245,13 @@ export class RuntimeClient {
 
   private async ensureOrchestrationContractCompatible(timeoutMs: number): Promise<void> {
     if (!this.orchestrationContractCheck) {
-      this.orchestrationContractCheck = this.checkOrchestrationContractCompatibility(timeoutMs)
+      this.orchestrationContractCheck = this.checkOrchestrationContractCompatibility(
+        timeoutMs
+      ).catch((error: unknown) => {
+        // Why: a failed probe must not be cached, or a retry after a brief outage never reaches the app.
+        this.orchestrationContractCheck = null
+        throw error
+      })
     }
     await this.orchestrationContractCheck
   }

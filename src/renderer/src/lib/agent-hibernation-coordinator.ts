@@ -30,6 +30,7 @@ import type {
   RuntimeTerminalSummary
 } from '../../../shared/runtime-types'
 import { getWindowParkVisible, subscribeWindowParkVisibility } from './window-park-visibility'
+import { getEntryTabId } from './agent-hibernation-pane-eligibility'
 
 export const AGENT_HIBERNATION_TICK_MS = 60 * 1000
 
@@ -79,7 +80,17 @@ function snapshotFromState(
     terminalLayoutsByTabId: state.terminalLayoutsByTabId,
     ptyIdsByTabId: state.ptyIdsByTabId,
     runtimeLivePtyIdsByWorktreeId: runtimeLiveness.runtimeLivePtyIdsByWorktreeId,
-    runtimeLivenessRequiredWorktreeIds: runtimeLiveness.runtimeLivenessRequiredWorktreeIds,
+    // Why: a workspace can gain tabs or resolve its runtime owner while the inventory above
+    // is in flight, and the plan is built from this later state. Union the fresh targets in
+    // so such a workspace is required-but-absent and the planner skips it, rather than
+    // answering for the execution host from client PTYs. Union, never replace: dropping a
+    // pre-await target would narrow the fail-closed set instead of widening it.
+    runtimeLivenessRequiredWorktreeIds: [
+      ...new Set([
+        ...runtimeLiveness.runtimeLivenessRequiredWorktreeIds,
+        ...getRuntimeLivenessTargetWorktrees(state, targetWorktreeId).keys()
+      ])
+    ],
     mobileLockedPtyIds: [...getAllDrivers()]
       .filter(([, driver]) => driver.kind === 'mobile')
       .map(([ptyId]) => ptyId),
@@ -132,8 +143,23 @@ async function collectRuntimePtyLiveness(
   const targets = getRuntimeLivenessTargetWorktrees(state, targetWorktreeId)
   const runtimeLivePtyIdsByWorktreeId: Record<string, string[]> = {}
   const runtimeLivenessRequiredWorktreeIds = [...targets.keys()]
+  if (targets.size === 0) {
+    // Why: an all-local install has nothing to ask, so it must not pay the status scan below.
+    return { runtimeLivePtyIdsByWorktreeId, runtimeLivenessRequiredWorktreeIds }
+  }
+  const completedTabIds = new Set<string>()
+  for (const entry of Object.values(state.agentStatusByPaneKey)) {
+    const tabId = entry?.state === 'done' ? getEntryTabId(entry) : null
+    if (tabId) {
+      completedTabIds.add(tabId)
+    }
+  }
   await Promise.all(
     [...targets].map(async ([worktreeId, runtimeEnvironmentId]) => {
+      if (!state.tabsByWorktree[worktreeId]?.some((tab) => completedTabIds.has(tab.id))) {
+        // Skipped owners still require host evidence if an agent completes during this pass.
+        return
+      }
       try {
         const result = await callRuntimeRpc<RuntimeTerminalListResult>(
           { kind: 'environment', environmentId: runtimeEnvironmentId },

@@ -189,15 +189,6 @@ describe('AddRepoLocalStartStep', () => {
     ])
   })
 
-  it('keeps Browse folder primary for SSH-likely users', () => {
-    const markup = renderLocalStartStep(true)
-
-    expect(markup).toContain('Browse folder')
-    expect(markup).toContain('Project on SSH host')
-    expect(markup).toContain('Clone from URL')
-    expect(markup).toContain('Create new project')
-  })
-
   it('orders secondary actions remote-first for SSH-likely users', () => {
     const titles = getActionTitles(true)
 

@@ -12,6 +12,8 @@ function structuredTab(sessionId: string, sortOrder: number): Tab {
     entityId: sessionId,
     groupId: GROUP_ID,
     worktreeId: WORKTREE_ID,
+    // Stamped by the mirror of the server that published it.
+    executionHostId: 'runtime:environment-1',
     contentType: 'agent-session',
     agentSessionAgent: 'codex',
     label: 'Codex Chat',

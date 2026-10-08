@@ -2,6 +2,7 @@ import type { ClassifiedError } from '../../../../shared/classified-error'
 import type { IssueSourcePreference } from '../../../../shared/repo-types'
 import type { ParsedTaskQuery } from '../../../../shared/task-query'
 import { GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE } from '../../../../shared/work-items'
+import { shouldProbeGitRemote } from '../../../git/remote-name-listing'
 import type { LocalGitExecOptions, OwnerRepo } from '../../gh-utils'
 import {
   getGitHubApiRepositoryForRemote,
@@ -134,9 +135,27 @@ export async function resolvePrWorkItemSource(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<ResolvedPrWorkItemSource> {
+  const originCandidatePromise = getOriginGitHubApiRepository(
+    repoPath,
+    connectionId,
+    localGitOptions
+  )
+  // Why: PR list/count polling must not spawn a failing upstream lookup on
+  // origin-only clones, while still preserving upstream-first resolution when
+  // the remote is configured or remote discovery fails open.
+  const upstreamCandidatePromise = shouldProbeGitRemote(
+    repoPath,
+    'upstream',
+    connectionId,
+    localGitOptions
+  ).then((shouldProbe) =>
+    shouldProbe
+      ? getGitHubApiRepositoryForRemote(repoPath, 'upstream', connectionId, localGitOptions)
+      : null
+  )
   const [originCandidate, upstreamCandidate] = await Promise.all([
-    getOriginGitHubApiRepository(repoPath, connectionId, localGitOptions),
-    getGitHubApiRepositoryForRemote(repoPath, 'upstream', connectionId, localGitOptions)
+    originCandidatePromise,
+    upstreamCandidatePromise
   ])
   // Why: fork-contribution PRs live on the upstream repo (the fork's own PR
   // list is almost always empty), so 'auto' resolves upstream-first exactly

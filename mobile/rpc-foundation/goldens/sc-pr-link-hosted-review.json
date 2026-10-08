@@ -1,0 +1,123 @@
+{
+  "goldenFormatVersion": 6,
+  "operation": "source-control.pr-link",
+  "family": "worktree.review-link",
+  "namedDeltas": [],
+  "values": {
+    "1852c739af4f": {
+      "linkedPR": "unread",
+      "outcome": {
+        "ok": true
+      }
+    },
+    "1a49e1912509": {
+      "name": "worktree.set#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.set"
+        },
+        {
+          "name": "params",
+          "value": {
+            "baseRef": "origin/release",
+            "linkedGitLabMR": 12,
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        }
+      }
+    },
+    "50fb59f18a34": {
+      "name": "worktree.set#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.set\",\"params\":{\"worktree\":\"id:repo42::/p\",\"baseRef\":\"origin/release\",\"linkedGitLabMR\":12}}"
+    },
+    "6fa372edf1b7": {
+      "name": "worktree.set#2",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.set"
+        },
+        {
+          "name": "params",
+          "value": {
+            "linkedPR": {
+              "$rpc": "null"
+            },
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        }
+      }
+    },
+    "e1c0c9544ebb": {
+      "name": "worktree.set#2",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.set\",\"params\":{\"worktree\":\"id:repo42::/p\",\"linkedPR\":null}}"
+    },
+    "fbc958e4d46e": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "ok": true
+      }
+    }
+  },
+  "recording": {
+    "scenario": "sc-pr-link-hosted-review",
+    "checkpoints": [
+      {
+        "id": "settled",
+        "observation": {
+          "sender": ["1a49e1912509", "6fa372edf1b7"],
+          "payloads": ["50fb59f18a34", "e1c0c9544ebb"],
+          "settlements": {
+            "link-review": "fbc958e4d46e",
+            "unlink": "fbc958e4d46e"
+          },
+          "state": "1852c739af4f",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

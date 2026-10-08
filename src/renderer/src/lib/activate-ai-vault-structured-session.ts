@@ -44,10 +44,12 @@ type StructuredSessionActivationDeps = {
   hostCannotOpen: () => void
 }
 
-const defaultDeps: StructuredSessionActivationDeps = {
-  activate: activateStructuredAgentSessionById,
-  refresh: refreshStructuredSessionTabs,
-  reveal: revealStructuredSession,
+/** The feedback a click that opens a chat gives when it cannot, shared by every surface that
+ *  opens one. */
+export const structuredSessionOpenFeedback: Pick<
+  StructuredSessionActivationDeps,
+  'unavailable' | 'gone' | 'hostCannotOpen'
+> = {
   unavailable: () => {
     toast.error(
       translate(
@@ -79,6 +81,13 @@ const defaultDeps: StructuredSessionActivationDeps = {
       )
     )
   }
+}
+
+const defaultDeps: StructuredSessionActivationDeps = {
+  activate: activateStructuredAgentSessionById,
+  refresh: refreshStructuredSessionTabs,
+  reveal: revealStructuredSession,
+  ...structuredSessionOpenFeedback
 }
 
 /**

@@ -24,7 +24,7 @@ async function activateTerminalTab(page: Page, tabId: string): Promise<void> {
   await page.evaluate((id) => {
     const state = window.__store?.getState()
     state?.setActiveTab(id)
-    state?.setActiveTabType('terminal')
+    state?.setActiveTabType('terminal', state.activeWorktreeId)
   }, tabId)
   await expect
     .poll(() =>
@@ -70,7 +70,7 @@ for (const exitMode of ['normal', 'sigkill'] as const) {
         const tab = state.createTab(worktreeId)
         state.queueTabStartupCommand(tab.id, { command })
         state.setActiveTab(tab.id)
-        state.setActiveTabType('terminal')
+        state.setActiveTabType('terminal', window.__store?.getState().activeWorktreeId ?? null)
         return tab.id
       },
       { command }

@@ -18,6 +18,14 @@ on:
         required: false
         default: true
         type: boolean
+      shell:
+        description: 'Which shell the binary mounts: native screens, or the web page delivered over the air. Default native; `ota` is the only value that changes it.'
+        required: false
+        default: native
+        type: choice
+        options:
+          - native
+          - ota
 
 jobs:
   android-build:
@@ -68,13 +76,53 @@ jobs:
         run: npx expo prebuild --platform android --no-install
 
       - name: Build Android release APK
-        run: cd android && ./gradlew assembleRelease
+        env:
+          # The one build-time constant that decides whether this binary mounts the web page or
+          # the native screens. A tag push and a schedule carry no inputs, so both read native.
+          EXPO_PUBLIC_MOBILE_SHELL: ${{ inputs.shell || 'native' }}
+        run: |
+          set -euo pipefail
+          echo "Mobile shell: $EXPO_PUBLIC_MOBILE_SHELL"
+          cd android && ./gradlew assembleRelease
+
+      # Why: an install that fails with a missing certificate or a package-parse error is
+      # usually a download that died near the end, and the signature block sits in the last
+      # ~100 KB. Publishing the size and digest is what lets a reporter tell a truncated
+      # download apart from a bad build without anyone re-deriving them from the asset.
+      - name: Checksum the APK
+        id: apk
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          apks=(android/app/build/outputs/apk/release/*.apk)
+          if [ "${#apks[@]}" -ne 1 ]; then
+            echo "Expected exactly one release APK, found ${#apks[@]}" >&2
+            exit 1
+          fi
+
+          apk="${apks[0]}"
+          bytes="$(wc -c < "$apk" | tr -d ' ')"
+          sha256="$(sha256sum "$apk" | cut -d ' ' -f 1)"
+          # A sibling file in `sha256sum -c` format, so verifying a download is one command
+          # and no retyped digest. The asset globs below match *.apk and skip it. The ` *`
+          # marker is binary mode: Git Bash's sha256sum reads text mode as a licence to
+          # translate line endings while hashing, which would fail on a valid APK.
+          printf '%s *%s\n' "$sha256" "$(basename "$apk")" > "$apk.sha256"
+
+          {
+            echo "checksum=$apk.sha256"
+            echo "bytes=$bytes"
+            echo "sha256=$sha256"
+          } >> "$GITHUB_OUTPUT"
+          echo "APK is $bytes bytes, sha256 $sha256"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v7
         with:
           name: orca-mobile-apk
-          path: mobile/android/app/build/outputs/apk/release/*.apk
+          path: |
+            mobile/android/app/build/outputs/apk/release/*.apk
+            mobile/android/app/build/outputs/apk/release/*.apk.sha256
 
       - name: Ensure GitHub release tag
         if: steps.release.outputs.publish_release == 'true' && !startsWith(github.ref, 'refs/tags/mobile-android-v')
@@ -97,18 +145,62 @@ jobs:
         run: |
           set -euo pipefail
           tag="${{ steps.release.outputs.tag }}"
+          notes_file="$RUNNER_TEMP/android-release-notes.md"
+
+          # printf rather than a heredoc: YAML block indentation would leak into the Markdown.
+          # Both platforms' commands are named because a reader on macOS has no sha256sum.
+          verification_section() {
+            printf '\n### Verify your download\n\n- Size: `%s` bytes\n- SHA-256: `%s`\n\nA "no certificate" or "problem parsing the package" install failure is usually a truncated download — check the size first, then `sha256sum -c app-release.apk.sha256` (`shasum -a 256 -c` on macOS).\n' \
+              '${{ steps.apk.outputs.bytes }}' '${{ steps.apk.outputs.sha256 }}'
+          }
+
+          # The section is always last, so dropping from its heading to EOF leaves the
+          # generated notes intact. \r* because a body round-tripped through the API has CRLFs.
+          drop_verification_section() {
+            sed '/^### Verify your download\r*$/,$d'
+          }
+
+          # Why: reuse the desktop release path's character-safe truncation so a multi-byte
+          # character cannot be split at the cap. The section's own length is reserved out of
+          # that cap, because appending after truncating would push a near-limit body past
+          # GitHub's API limit and fail the call — on the upload path, after --clobber has
+          # already replaced the assets. `wc -c` counts bytes, so the section's multi-byte
+          # characters over-reserve, which errs toward a shorter body.
+          write_notes_with_verification() {
+            NOTES_FILE="$notes_file" \
+            NOTES_RESERVE="$(verification_section | wc -c | tr -d ' ')" \
+            NOTES_MODULE="$GITHUB_WORKSPACE/config/scripts/create-draft-release.mjs" \
+            node --input-type=module -e '
+              const { readFileSync, writeFileSync } = await import("node:fs")
+              const { pathToFileURL } = await import("node:url")
+              const { MAX_RELEASE_BODY_LENGTH, truncateReleaseBody } = await import(
+                pathToFileURL(process.env.NOTES_MODULE).href
+              )
+              const file = process.env.NOTES_FILE
+              const max = MAX_RELEASE_BODY_LENGTH - Number(process.env.NOTES_RESERVE)
+              writeFileSync(file, truncateReleaseBody(readFileSync(file, "utf8"), max))
+            '
+            verification_section >> "$notes_file"
+          }
 
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$tag" \
               --repo "$GITHUB_REPOSITORY" \
               --clobber \
-              android/app/build/outputs/apk/release/*.apk
+              android/app/build/outputs/apk/release/*.apk \
+              "${{ steps.apk.outputs.checksum }}"
+            # Why the body is rewritten too: --clobber replaced the APK, so a digest left
+            # over from the previous build now describes a file nobody can download, and a
+            # reader comparing against it would reject a good APK.
+            gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json body --jq .body \
+              | drop_verification_section > "$notes_file"
+            write_notes_with_verification
+            gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --notes-file "$notes_file"
           else
             # Why: release tags live on side branches, so GitHub's automatic
             # previous-tag detection reaches back several releases; that body
             # already exceeds the 125000-character API limit and grows each
             # release. Pin the comparison base and cap the size.
-            notes_file="$RUNNER_TEMP/android-release-notes.md"
             previous_tag="$(
               gh release list --repo "$GITHUB_REPOSITORY" --limit 200 --json tagName --jq '.[].tagName' \
                 | grep '^mobile-android-v' | grep -Fxv "$tag" | sort -V | tail -1 || true
@@ -128,17 +220,7 @@ jobs:
             if [ ! -s "$notes_file" ]; then
               printf 'Orca Mobile Android %s\n' "$tag" > "$notes_file"
             fi
-            # Why: reuse the desktop release path's character-safe truncation so a
-            # multi-byte character cannot be split at the cap.
-            NOTES_FILE="$notes_file" \
-            NOTES_MODULE="$GITHUB_WORKSPACE/config/scripts/create-draft-release.mjs" \
-            node --input-type=module -e '
-              const { readFileSync, writeFileSync } = await import("node:fs")
-              const { pathToFileURL } = await import("node:url")
-              const { truncateReleaseBody } = await import(pathToFileURL(process.env.NOTES_MODULE).href)
-              const file = process.env.NOTES_FILE
-              writeFileSync(file, truncateReleaseBody(readFileSync(file, "utf8")))
-            '
+            write_notes_with_verification
 
             gh release create "$tag" \
               --repo "$GITHUB_REPOSITORY" \
@@ -146,5 +228,6 @@ jobs:
               --prerelease \
               --latest=false \
               --notes-file "$notes_file" \
-              android/app/build/outputs/apk/release/*.apk
+              android/app/build/outputs/apk/release/*.apk \
+              "${{ steps.apk.outputs.checksum }}"
           fi

@@ -99,8 +99,13 @@ export function expandCodexSessionBackfillDatesThroughToday(
     return []
   }
   const bounds = mergeCodexSessionBackfillDates(dates, [today])
-  const range = getCodexSessionBackfillDatesBetween(toUtcDate(bounds[0]), toUtcDate(bounds.at(-1)!))
-  return range.length > maxDates ? null : range
+  const first = toUtcDate(bounds[0])
+  const last = toUtcDate(bounds.at(-1)!)
+  const dateCount = (last.getTime() - first.getTime()) / 86_400_000 + 1
+  if (dateCount > maxDates) {
+    return null
+  }
+  return getCodexSessionBackfillDatesBetween(first, last)
 }
 
 function toUtcDate([year, month, day]: readonly string[]): Date {

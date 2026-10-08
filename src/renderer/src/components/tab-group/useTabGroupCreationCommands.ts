@@ -60,7 +60,7 @@ export function useTabGroupCreationCommands({
       const terminal = createTab(worktreeId, newGroupId)
       recordTerminalTabGroupSplit(terminal)
       setActiveTab(terminal.id)
-      setActiveTabType('terminal')
+      setActiveTabType('terminal', worktreeId)
     },
     [
       createEmptySplitGroup,
@@ -99,7 +99,7 @@ export function useTabGroupCreationCommands({
     openEntry: async (args: TabCreateEntryArgs) => {
       await openTabBarEntry(args)
     },
-    duplicateBrowserTab: (browserTabId: string) => {
+    duplicateBrowserTab: (browserTabId: string, sourceUnifiedTabId: string) => {
       void (async () => {
         const state = useAppStore.getState()
         const tabs = state.browserTabsByWorktree[worktreeId] ?? []
@@ -123,17 +123,19 @@ export function useTabGroupCreationCommands({
             environmentId: runtimeEnvironmentId,
             url: source.url,
             profileId: source.sessionProfileId,
-            targetGroupId: groupId
+            targetGroupId: groupId,
+            clientAfterTabId: sourceUnifiedTabId
           })
           if (created) {
             return
           }
           throw new Error('The paired runtime could not duplicate the managed browser tab.')
         }
+        // Why no targetGroupId: a source-following duplicate joins the source's live group.
         createBrowserTab(worktreeId, source.url, {
           ...buildDuplicatedBrowserTabOptions(source),
           ...(runtimeEnvironmentId ? { browserRuntimeEnvironmentId: null } : {}),
-          targetGroupId: groupId
+          afterTabId: sourceUnifiedTabId
         })
       })().catch((error) => {
         toast.error(error instanceof Error ? error.message : String(error))
@@ -161,7 +163,7 @@ export function useTabGroupCreationCommands({
         }
         const terminal = createTab(worktreeId, groupId, shellOverride)
         setActiveTab(terminal.id)
-        setActiveTabType('terminal')
+        setActiveTabType('terminal', worktreeId)
         focusTerminalTabSurface(terminal.id)
       })()
     }

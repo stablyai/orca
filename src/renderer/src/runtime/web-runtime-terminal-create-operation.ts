@@ -1,9 +1,7 @@
+import { buildDefaultTerminalOptions } from '@/lib/pane-manager/pane-terminal-options'
+import { createAgentSessionKeyboardOptions } from './agent-session-keyboard-capability'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { RuntimeMobileSessionCreateTerminalResult } from '../../../shared/runtime-types'
-import type {
-  RuntimeCreateAgentSessionResult,
-  RuntimeEnsureAgentSessionResult
-} from '../../../shared/agent-session-host-authority'
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
 import { translate } from '../i18n/i18n'
 import { useAppStore } from '../store'
@@ -41,7 +39,10 @@ import {
   selectWebRuntimeSessionWorktree,
   type WebRuntimeSessionWorkspaceSelectionRollback
 } from './web-runtime-session-workspace-selection'
-import { createdTerminalLeafId } from './web-runtime-terminal-identity'
+import {
+  createdTerminalLeafId,
+  readCreatedAgentTerminalIdentity
+} from './web-runtime-terminal-identity'
 import { settleWebRuntimeTerminalPlacement } from './web-runtime-terminal-placement-settlement'
 
 export async function createWebRuntimeSessionTerminalResult(
@@ -85,60 +86,73 @@ export async function createWebRuntimeSessionTerminalResult(
     const agentArgsOverride =
       args.agentArgs !== undefined ? args.agentArgs : args.launchConfig?.agentArgs
     if (agent) {
+      // Paired panes retain the default keyboard advertisement, including on Windows clients.
+      const keyboardProtocol = buildDefaultTerminalOptions().vtExtensions?.kittyKeyboard
+      const keyboardOptions = createAgentSessionKeyboardOptions(keyboardProtocol)
       let legacyAlreadyPlacedInGroup = false
       // Why: structured creation cannot yet express afterTabId; keep the exact legacy placement contract until it can.
       // Why: focus belongs to the paired client; a headless execution host has no renderer to focus.
-      const hostAuthority = args.afterTabId
+      // Why: rebuilding a prepared command through host authority can discard its embedded prompt and delivery flags.
+      const mustUseLegacyAgentCreate = args.preparedAgentCommand || args.afterTabId
+      const hostAuthority = mustUseLegacyAgentCreate
         ? undefined
         : args.agentSessionKind === 'resume'
           ? args.providerSession
             ? async () =>
-                unwrapRuntimeRpcResult(
-                  (await callEnvironment({
-                    method: 'terminal.ensureAgentSession',
-                    params: {
-                      kind: 'explicit',
-                      worktree: toRuntimeWorktreeSelector(args.worktreeId),
-                      agent,
-                      providerSession: args.providerSession!,
-                      ...(args.launchConfig?.ompResumeFilePath
-                        ? { ompResumeFilePath: args.launchConfig.ompResumeFilePath }
-                        : {}),
-                      ...(agentArgsOverride !== undefined ? { agentArgs: agentArgsOverride } : {}),
-                      ...(args.launchPreferences
-                        ? { launchPreferences: args.launchPreferences }
-                        : {}),
-                      presentation: 'background'
-                    },
-                    timeoutMs: 15_000
-                  })) as RuntimeRpcResponse<RuntimeEnsureAgentSessionResult>
-                )
-            : undefined
-          : async () =>
-              await createAgentSessionCreateOperation().run(async (clientOperationId) =>
-                unwrapRuntimeRpcResult(
-                  (await callEnvironment({
-                    method: 'terminal.createAgentSession',
-                    params: withAgentSessionCreateOperationId(
-                      {
+                readCreatedAgentTerminalIdentity(
+                  unwrapRuntimeRpcResult(
+                    await callEnvironment({
+                      method: 'terminal.ensureAgentSession',
+                      params: {
+                        ...(await keyboardOptions(environmentId)),
+                        kind: 'explicit',
                         worktree: toRuntimeWorktreeSelector(args.worktreeId),
                         agent,
-                        ...(args.prompt ? { prompt: args.prompt } : {}),
-                        ...(args.promptDelivery ? { promptDelivery: args.promptDelivery } : {}),
+                        providerSession: args.providerSession!,
+                        ...(args.launchConfig?.ompResumeFilePath
+                          ? { ompResumeFilePath: args.launchConfig.ompResumeFilePath }
+                          : {}),
                         ...(agentArgsOverride !== undefined
                           ? { agentArgs: agentArgsOverride }
                           : {}),
                         ...(args.launchPreferences
                           ? { launchPreferences: args.launchPreferences }
                           : {}),
-                        ...(args.cwd ? { startupCwd: args.cwd } : {}),
-                        ...(args.viewMode ? { viewMode: args.viewMode } : {}),
                         presentation: 'background'
                       },
-                      clientOperationId
-                    ),
-                    timeoutMs: 15_000
-                  })) as RuntimeRpcResponse<RuntimeCreateAgentSessionResult>
+                      timeoutMs: 15_000
+                    })
+                  )
+                )
+            : undefined
+          : async () =>
+              await createAgentSessionCreateOperation().run(async (clientOperationId) =>
+                readCreatedAgentTerminalIdentity(
+                  unwrapRuntimeRpcResult(
+                    await callEnvironment({
+                      method: 'terminal.createAgentSession',
+                      params: withAgentSessionCreateOperationId(
+                        {
+                          ...(await keyboardOptions(environmentId)),
+                          worktree: toRuntimeWorktreeSelector(args.worktreeId),
+                          agent,
+                          ...(args.prompt ? { prompt: args.prompt } : {}),
+                          ...(args.promptDelivery ? { promptDelivery: args.promptDelivery } : {}),
+                          ...(agentArgsOverride !== undefined
+                            ? { agentArgs: agentArgsOverride }
+                            : {}),
+                          ...(args.launchPreferences
+                            ? { launchPreferences: args.launchPreferences }
+                            : {}),
+                          ...(args.cwd ? { startupCwd: args.cwd } : {}),
+                          ...(args.viewMode ? { viewMode: args.viewMode } : {}),
+                          presentation: 'background'
+                        },
+                        clientOperationId
+                      ),
+                      timeoutMs: 15_000
+                    })
+                  )
                 )
               )
       const resumeHostAuthorityCapability =

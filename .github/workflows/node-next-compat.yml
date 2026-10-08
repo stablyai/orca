@@ -1,8 +1,8 @@
-name: Node next compatibility
+name: Scheduled x86 unit compatibility
 
 on:
   schedule:
-    # Full future-runtime coverage is useful, but not worth doubling every PR matrix.
+    # Keep current and future Node coverage on x86 while PR unit shards use ARM.
     - cron: '0 10 * * *'
   workflow_dispatch:
 
@@ -14,9 +14,13 @@ permissions:
   contents: read
 
 jobs:
-  # A cold cache would otherwise make all eight Node 26 shards compile the same native addons.
+  # Prime each Node ABI before its shards restore native modules.
   test_native_cache:
-    name: prepare test native cache node 26
+    name: prepare test native cache node ${{ matrix.node }}
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['24', '26']
     runs-on: ubuntu-latest
 
     steps:
@@ -28,10 +32,14 @@ jobs:
       - uses: ./.github/actions/install-node-dependencies
         with:
           native-runtime: node
-          node-version: '26'
+          node-version: ${{ matrix.node }}
+
+  unit_plan:
+    uses: ./.github/workflows/unit-plan.yml
 
   test:
-    needs: [test_native_cache]
+    needs: [test_native_cache, unit_plan]
     uses: ./.github/workflows/unit-tests.yml
     with:
-      node_versions: '["26"]'
+      node_versions: '["24", "26"]'
+      shards: ${{ needs.unit_plan.outputs.shards }}

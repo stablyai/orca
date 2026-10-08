@@ -44,6 +44,7 @@ describe('remote runtime request connection integration', () => {
         }
       ]
       const runtime = {
+        configureNotificationDismissalStore: () => {},
         getRuntimeId: () => 'fetch-runtime-test',
         getStartedAt: () => 1,
         cleanupSubscriptionsForConnection: () => {},
@@ -115,6 +116,7 @@ describe('remote runtime request connection integration', () => {
       const clientEventListeners = new Set<(event: RuntimeClientEvent) => void>()
       const subscriptionCleanups = new Map<string, () => void>()
       const runtime = {
+        configureNotificationDismissalStore: () => {},
         getRuntimeId: () => 'events-runtime-test',
         getStartedAt: () => 1,
         cleanupSubscriptionsForConnection: (connectionId: string) => {
@@ -280,6 +282,7 @@ describe('remote runtime request connection integration', () => {
         }
       }
       const runtime = {
+        configureNotificationDismissalStore: () => {},
         getRuntimeId: () => 'remote-sleep-runtime-test',
         getStartedAt: () => 1,
         cleanupSubscriptionsForConnection: (connectionId: string) => {
@@ -505,9 +508,12 @@ describe('remote runtime request connection integration', () => {
         activeTabType: null,
         tabs: []
       }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake carries only the surface the shared-control and status paths under test read.
       const runtime = {
+        configureNotificationDismissalStore: () => {},
         getRuntimeId: () => 'shared-runtime-test',
         getStartedAt: () => 1,
+        machineNameReady: async () => undefined,
         getStatus: () => ({
           runtimeId: 'shared-runtime-test',
           startedAt: 1,

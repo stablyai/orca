@@ -27,15 +27,17 @@ function escapeForCharacterClass(marker: string): string {
   return marker.replace(/[\\\]^-]/g, '\\$&')
 }
 
-// Why: `π` must sit at a token boundary so wrapper prefixes of any shape (`zsh | π : cwd`,
+// Why: the brand must sit at a token boundary so wrapper prefixes (`zsh | OMP : cwd`,
 // `tmux: π : cwd`) still expose the marker, and whitespace must separate the marker so the
 // legacy no-space `π: cwd` disabled title keeps its historical idle classification.
 const PI_STATE_TITLE_RE = new RegExp(
-  `(?:^|[\\s|])π[ \\t]+([${PI_STATE_MARKERS.map(escapeForCharacterClass).join('')}])(?=\\s|$)`,
+  `(?:^|[\\s|])(π|Pi|OMP)[ \\t]+([${PI_STATE_MARKERS.map(escapeForCharacterClass).join('')}])(?=\\s|$)`,
   'u'
 )
 
 type PiStateTitleMatch = {
+  brand: string
+  brandIndex: number
   marker: PiStateMarker
   markerIndex: number
 }
@@ -49,8 +51,14 @@ function matchPiStateTitle(title: string): PiStateTitleMatch | null {
   if (!match) {
     return null
   }
+  const marker = match[2]
+  if (marker !== ':' && marker !== '!' && marker !== '>') {
+    return null
+  }
   return {
-    marker: match[1] as PiStateMarker,
+    brand: match[1],
+    brandIndex: match.index + match[0].indexOf(match[1]),
+    marker,
     markerIndex: match.index + match[0].length - 1
   }
 }
@@ -72,4 +80,21 @@ export function clearPiStateWorkingMarker(title: string): string | null {
     return null
   }
   return `${title.slice(0, match.markerIndex)}${PI_IDLE_MARKER}${title.slice(match.markerIndex + 1)}`
+}
+
+/** The state marker owns identity too; its label may mention another agent. */
+export function getPiStateTitleBrand(title: string): 'Pi' | 'OMP' | null {
+  const match = matchPiStateTitle(title)
+  return match ? (match.brand === 'OMP' ? 'OMP' : 'Pi') : null
+}
+
+/** Rebrand only the protocol prefix, preserving wrappers and the opaque session label. */
+export function rebrandPiStateTitle(title: string, brand: string): string | null {
+  const match = matchPiStateTitle(title)
+  if (!match) {
+    return null
+  }
+  return (
+    title.slice(0, match.brandIndex) + brand + title.slice(match.brandIndex + match.brand.length)
+  )
 }

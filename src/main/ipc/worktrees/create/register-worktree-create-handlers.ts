@@ -1,4 +1,5 @@
 import { ipcMain, app } from 'electron'
+import { getLocalWorktreeCatalogVersion } from '../../../local-worktree-scan-generation'
 import type {
   CreateWorktreeArgs,
   CreateWorktreeResult,
@@ -31,6 +32,7 @@ import { createFolderWorkspace } from './folder-workspace-creation'
 import { findExactRepoOwner, isCapturedRepoCurrent } from '../listing/worktree-host-ownership'
 import { requireWorktreeCreateRoute } from '../../../worktree-create-execution-host-route'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
+import { beginWorkspaceCreateTelemetry } from '../../../workspace-create-telemetry'
 
 export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): void {
   const { mainWindow, store, runtime, options } = context
@@ -46,9 +48,6 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
           throw new Error(`Repo not found: ${args.repoId}`)
         }
 
-        const sourceParse = workspaceSourceSchema.safeParse(args.telemetrySource)
-        const source: WorkspaceSource = sourceParse.success ? sourceParse.data : 'unknown'
-
         const automationProvenance = resolveAutomationWorkspaceProvenance({
           authority: runtime,
           repoSelector: args.repoId,
@@ -61,6 +60,14 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
         }
 
         let result: CreateWorktreeResult
+        // The handler owns the events so a failed create can still say where it died.
+        const telemetry = beginWorkspaceCreateTelemetry({
+          source: args.telemetrySource,
+          entryPoint: 'app',
+          repoPath: repo.path,
+          fromExistingBranch: typeof args.baseBranch === 'string' && args.baseBranch.length > 0,
+          isFolder: isFolderRepo(repo)
+        })
         try {
           // Why: wrap only the helpers; the pre-validation throws above are IPC-shape bugs, not the git/filesystem failures the funnel tracks.
           if (isFolderRepo(repo)) {
@@ -73,16 +80,25 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
             const createRoute = requireWorktreeCreateRoute(repo)
             result =
               createRoute.kind === 'ssh'
-                ? await createRemoteWorktree(createArgs, createRoute.repo, store, mainWindow)
-                : await createLocalWorktree(createArgs, repo, store, mainWindow, runtime)
+                ? await createRemoteWorktree(
+                    createArgs,
+                    createRoute.repo,
+                    store,
+                    mainWindow,
+                    telemetry.timing
+                  )
+                : await createLocalWorktree(
+                    createArgs,
+                    repo,
+                    store,
+                    mainWindow,
+                    runtime,
+                    telemetry.timing
+                  )
           }
         } catch (error) {
           releaseAutomationWorkspaceProvenanceRequest(args.automationProvenanceRequest)
-          track('workspace_create_failed', {
-            source,
-            error_class: classifyWorkspaceCreateError(error),
-            ...getCohortAtEmit()
-          })
+          telemetry.failed(error)
           throw error
         }
         finishAutomationWorkspaceProvenanceRequest(args.automationProvenanceRequest)
@@ -91,14 +107,7 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
         }
 
         // Why: reaching here means create succeeded (helpers throw); skip a separate workspace_initialized (telemetry-plan.md§Deferred); never send the branch name.
-        track('workspace_created', {
-          source,
-          from_existing_branch:
-            !isFolderRepo(repo) &&
-            typeof args.baseBranch === 'string' &&
-            args.baseBranch.length > 0,
-          ...getCohortAtEmit()
-        })
+        telemetry.succeeded(result.timing)
 
         if (isFolderRepo(repo)) {
           notifyWorktreesChanged(mainWindow, repo.id)
@@ -111,7 +120,9 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
           branch: result.worktree.branch
         })
 
-        return result
+        // Why stamped last: the create's own change notification bumped the generation, so this
+        // names the catalog that contains the new worktree.
+        return { ...result, catalogVersion: getLocalWorktreeCatalogVersion(repo.id) }
       })
     }
   )
@@ -164,7 +175,7 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
           path: result.worktree.path,
           branch: result.worktree.branch
         })
-        return result
+        return { ...result, catalogVersion: getLocalWorktreeCatalogVersion(repo.id) }
       })
     }
   )

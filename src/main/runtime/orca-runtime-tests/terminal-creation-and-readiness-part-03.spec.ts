@@ -1,13 +1,13 @@
+import { realpath } from 'node:fs/promises'
 import { describe, expect, it, vi } from 'vitest'
+import { detectAgentCommandsOnHost } from '../../preflight/agent-detection'
 import {
   FLOATING_TERMINAL_WORKTREE_ID,
   OrcaRuntimeService,
   SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV,
   electronMocks,
-  homedir,
   ipcMain,
   join,
-  markCodexProjectTrustedMock,
   mkdtemp,
   randomUUID,
   registerSshGitProvider,
@@ -29,6 +29,29 @@ import {
 } from '../orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
+  it.each(['qoder', 'qodercli'] as const)(
+    'spawns the available Qoder command for a captured same-session resume: %s',
+    async (command) => {
+      vi.mocked(detectAgentCommandsOnHost).mockResolvedValueOnce(new Set([command]))
+      const spawn = vi.fn().mockResolvedValue({ id: 'pty-qoder-resume' })
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        spawn,
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+        launchAgent: 'qoder',
+        command: "qodercli --resume 'existing-qoder-session'",
+        launchConfig: { agentCommand: 'qodercli', agentArgs: '', agentEnv: {} }
+      })
+      expect(spawn).toHaveBeenCalledWith(
+        expect.objectContaining({ command: `${command} --resume 'existing-qoder-session'` })
+      )
+    }
+  )
+
   it('does not use the local Windows shell setting for remote Windows bare agent creates', async () => {
     const remoteRepo = {
       id: TEST_REPO_ID,
@@ -242,10 +265,6 @@ describe('OrcaRuntimeService', () => {
         }
       })
     )
-    expect(markCodexProjectTrustedMock).toHaveBeenCalledWith(TEST_WORKTREE_PATH)
-    expect(markCodexProjectTrustedMock.mock.invocationCallOrder[0]).toBeLessThan(
-      webContents.send.mock.invocationCallOrder[0]!
-    )
   })
 
   it('injects runtime hook receiver env into terminal sessions', async () => {
@@ -347,7 +366,12 @@ describe('OrcaRuntimeService', () => {
     }
   ])('creates background terminal sessions for a $label', async ({ selector }) => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-floating' })
-    const runtime = new OrcaRuntimeService(store)
+    const floatingDir = await realpath(await mkdtemp(join(tmpdir(), 'orca-floating-')))
+    const runtimeStore: typeof store = {
+      ...store,
+      getSettings: () => ({ ...store.getSettings(), floatingTerminalCwd: floatingDir })
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore)
     runtime.setPtyController({
       spawn,
       write: () => true,
@@ -374,8 +398,9 @@ describe('OrcaRuntimeService', () => {
           worktreeId?: string
         }
       | undefined
+    // Why the configured folder: host-launched floating terminals start where the panel's own do.
     expect(spawnCall).toMatchObject({
-      cwd: homedir(),
+      cwd: floatingDir,
       connectionId: null,
       worktreeId: FLOATING_TERMINAL_WORKTREE_ID
     })

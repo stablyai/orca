@@ -1,3 +1,8 @@
+// Takeover RPCs have their own send-site integration tests; these fixtures script PTY acknowledgements.
+vi.mock('../terminal/worker-terminal-takeover-report', () => ({
+  reportWorkerTerminalUserInput: vi.fn()
+}))
+
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -40,6 +45,7 @@ describe('sendMobileNativeChatPermissionResponse', () => {
         terminal: 'terminal',
         text: '1',
         enter: false,
+        requireWriteSettlement: true,
         client: { id: 'phone', type: 'mobile' }
       },
       { timeoutMs: MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS, budgetSpansConnect: true }

@@ -2,12 +2,22 @@
 
 import { cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as AgentAutoAckPresence from './agent-auto-ack-presence'
 import { useAutoAckViewedAgent } from './useAutoAckViewedAgent'
 import { useAppStore } from '../store'
 import { selectFloatingWorkspaceHasUnread } from '../store/selectors'
-import { makeTab } from '../store/slices/store-test-helpers'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+import { makeTab, makeTabGroup, makeUnifiedTab } from '../store/slices/store-session-test-harness'
+import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../shared/constants'
 import { makePaneKey } from '../../../shared/stable-pane-id'
+
+// These suites isolate synchronous acknowledgement and layout behavior.
+vi.mock('./agent-auto-ack-presence', async (importOriginal) => ({
+  ...(await importOriginal<typeof AgentAutoAckPresence>()),
+  createAutoAckPresenceCheck: (_read: unknown, onPresent: () => void) => ({
+    request: onPresent,
+    dispose() {}
+  })
+}))
 
 const FLOATING_TAB_ID = 'tab-floating'
 const MAIN_TAB_ID = 'tab-main'
@@ -27,13 +37,38 @@ function seedFloatingCompletion(): void {
         makeTab({ id: FLOATING_TAB_ID, worktreeId: FLOATING_TERMINAL_WORKTREE_ID })
       ]
     },
+    activeGroupIdByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: 'floating-group' },
+    unifiedTabsByWorktree: {
+      [FLOATING_TERMINAL_WORKTREE_ID]: [
+        makeUnifiedTab({
+          id: FLOATING_TAB_ID,
+          worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+          groupId: 'floating-group'
+        })
+      ]
+    },
+    groupsByWorktree: {
+      [FLOATING_TERMINAL_WORKTREE_ID]: [
+        makeTabGroup({
+          id: 'floating-group',
+          worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+          activeTabId: FLOATING_TAB_ID
+        })
+      ]
+    },
     terminalLayoutsByTabId: {
       [FLOATING_TAB_ID]: { root: null, activeLeafId: LEAF_ID, expandedLeafId: null }
     },
     unreadTerminalTabs: {},
     unreadAgentCompletionPanes: {},
-    acknowledgedAgentsByPaneKey: {}
+    acknowledgedAgentsByPaneKey: {},
+    settings: { ...getDefaultSettings('/home/test'), floatingTerminalEnabled: true },
+    floatingWorkspacePanelOpen: false
   })
+}
+
+function openFloatingPanel(): void {
+  useAppStore.getState().setFloatingWorkspacePanelOpen(true)
 }
 
 describe('useAutoAckViewedAgent — floating workspace panel visibility', () => {
@@ -48,17 +83,13 @@ describe('useAutoAckViewedAgent — floating workspace panel visibility', () => 
   })
 
   it('keeps the attention dot lit while the panel is closed and clears it once it opens', () => {
-    const hook = renderHook(
-      ({ floatingPanelVisible }: { floatingPanelVisible: boolean }) =>
-        useAutoAckViewedAgent(floatingPanelVisible),
-      { initialProps: { floatingPanelVisible: false } }
-    )
+    renderHook(() => useAutoAckViewedAgent())
 
     // The dot is the only signal a closed panel has, so a store write while hidden must not ack it.
-    useAppStore.getState().markAgentCompletionPaneUnread(FLOATING_PANE_KEY)
+    useAppStore.getState().markAgentCompletionPaneUnread(FLOATING_PANE_KEY, 'agent-completion')
     expect(selectFloatingWorkspaceHasUnread(useAppStore.getState())).toBe(true)
 
-    hook.rerender({ floatingPanelVisible: true })
+    openFloatingPanel()
 
     expect(selectFloatingWorkspaceHasUnread(useAppStore.getState())).toBe(false)
   })
@@ -76,27 +107,67 @@ describe('useAutoAckViewedAgent — floating workspace panel visibility', () => 
           makeTab({ id: FLOATING_TAB_ID, worktreeId: FLOATING_TERMINAL_WORKTREE_ID })
         ]
       },
+      activeGroupIdByWorktree: {
+        'wt-1': 'main-group',
+        [FLOATING_TERMINAL_WORKTREE_ID]: 'floating-group'
+      },
+      unifiedTabsByWorktree: {
+        'wt-1': [makeUnifiedTab({ id: MAIN_TAB_ID, worktreeId: 'wt-1', groupId: 'main-group' })],
+        [FLOATING_TERMINAL_WORKTREE_ID]: [
+          makeUnifiedTab({
+            id: FLOATING_TAB_ID,
+            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+            groupId: 'floating-group'
+          })
+        ]
+      },
+      groupsByWorktree: {
+        'wt-1': [makeTabGroup({ id: 'main-group', worktreeId: 'wt-1', activeTabId: MAIN_TAB_ID })],
+        [FLOATING_TERMINAL_WORKTREE_ID]: [
+          makeTabGroup({
+            id: 'floating-group',
+            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+            activeTabId: FLOATING_TAB_ID
+          })
+        ]
+      },
       terminalLayoutsByTabId: {
         [MAIN_TAB_ID]: { root: null, activeLeafId: MAIN_LEAF_ID, expandedLeafId: null },
         [FLOATING_TAB_ID]: { root: null, activeLeafId: LEAF_ID, expandedLeafId: null }
       }
     })
 
-    const hook = renderHook(
-      ({ floatingPanelVisible }: { floatingPanelVisible: boolean }) =>
-        useAutoAckViewedAgent(floatingPanelVisible),
-      { initialProps: { floatingPanelVisible: false } }
-    )
+    renderHook(() => useAutoAckViewedAgent())
 
-    useAppStore.getState().markAgentCompletionPaneUnread(MAIN_PANE_KEY)
-    useAppStore.getState().markAgentCompletionPaneUnread(FLOATING_PANE_KEY)
+    useAppStore.getState().markAgentCompletionPaneUnread(MAIN_PANE_KEY, 'agent-completion')
+    useAppStore.getState().markAgentCompletionPaneUnread(FLOATING_PANE_KEY, 'agent-completion')
     expect(selectFloatingWorkspaceHasUnread(useAppStore.getState())).toBe(true)
 
-    hook.rerender({ floatingPanelVisible: true })
+    openFloatingPanel()
 
     const state = useAppStore.getState()
     expect(state.unreadAgentCompletionPanes[MAIN_PANE_KEY]).toBeUndefined()
     expect(state.unreadAgentCompletionPanes[FLOATING_PANE_KEY]).toBeUndefined()
     expect(selectFloatingWorkspaceHasUnread(state)).toBe(false)
   })
+})
+
+it('does not acknowledge the regular workspace for a colliding floating tab', () => {
+  vi.spyOn(document, 'hasFocus').mockReturnValue(true)
+  seedFloatingCompletion()
+  useAppStore.setState({
+    activeView: 'terminal',
+    activeTabId: FLOATING_TAB_ID,
+    activeWorktreeId: 'regular',
+    unreadAgentCompletionPanes: { [FLOATING_PANE_KEY]: true }
+  })
+  openFloatingPanel()
+  const cleared = vi.spyOn(useAppStore.getState(), 'clearWorktreeUnread')
+  try {
+    renderHook(() => useAutoAckViewedAgent())
+    expect(cleared).not.toHaveBeenCalledWith('regular')
+  } finally {
+    cleanup()
+    vi.restoreAllMocks()
+  }
 })

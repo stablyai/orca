@@ -36,7 +36,12 @@ describe('orchestration migration from every prior version stamp', () => {
       expect(reopened.db.pragma('user_version', { simple: true }), `reopen v${version}`).toBe(
         SCHEMA_VERSION
       )
-      expect(() => reopened.createTask({ spec: `migration v${version}` })).not.toThrow()
+      expect(() =>
+        reopened.createTask({
+          runId: 'run_legacy_local',
+          spec: `migration v${version}`
+        })
+      ).not.toThrow()
       reopened.close()
     }
   })

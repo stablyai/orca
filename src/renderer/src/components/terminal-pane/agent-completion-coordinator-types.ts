@@ -42,6 +42,8 @@ export type AgentCompletionCoordinatorOptions = {
     replacement: RecognizedAgentProcess
   ) => boolean
   shouldSuppressConfirmedProcessExitCompletion?: (exited: RecognizedAgentProcess) => boolean
+  /** Fired once per confirmed exit (settled local absence, or the host's `exited` verdict). */
+  onForegroundAgentExited?: (exited: RecognizedAgentProcess) => void
   isLive: () => boolean
   shouldPollProcessCadence?: () => boolean
   // Why: a host that publishes foreground evidence with its inventory lets a
@@ -55,7 +57,6 @@ export type AgentCompletionCoordinatorOptions = {
   // panes without agent evidence relax to a slow cadence and re-arm from
   // output/title/hook activity. See agent-process-inspection-cost.ts.
   isProcessInspectionCostly?: () => boolean
-  shouldSuppressHookCompletion?: (payload: AgentCompletionStatusSnapshot) => boolean
 }
 
 export type AgentCompletionCoordinator = {
@@ -66,6 +67,8 @@ export type AgentCompletionCoordinator = {
   observeHookStatus: (payload: AgentCompletionStatusSnapshot) => void
   seedHookStatus: (payload: AgentCompletionStatusSnapshot) => void
   startProcessTracking: () => void
+  /** Another reader saw this agent in the foreground; lets the monitor confirm its exit. */
+  observeForegroundAgentProcess: (process: RecognizedAgentProcess) => void
   hasPendingHookDoneCompletion: () => boolean
   resetCompletionState: (options?: { requireFreshWorking?: boolean }) => void
   dispose: () => void

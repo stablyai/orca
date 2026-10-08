@@ -9,6 +9,7 @@
 // same rule here, and pin that the marked half — the one refusal the relay backed with a pid probe
 // — still earns the certificate, so a genuinely dead PTY is not left `unverifiable` forever.
 import { describe, expect, it, vi } from 'vitest'
+import { withDurableRuntimeStore } from '../../../runtime/runtime-durable-store-fixture'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { SSH_EXIT_UNCONFIRMED_REASON } from '../../../../shared/pty-liveness-verdict'
@@ -54,7 +55,8 @@ function paneStore(): { store: Store; read: () => WorkspaceSessionState } {
   } as unknown as WorkspaceSessionState
   return {
     read: () => session,
-    store: {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This fixture supplies the persistence methods used by stable-pane retirement and exit bookkeeping.
+    store: withDurableRuntimeStore({
       getWorkspaceSession: () => session,
       setWorkspaceSession: (next: WorkspaceSessionState) => {
         session = next
@@ -75,7 +77,7 @@ function paneStore(): { store: Store; read: () => WorkspaceSessionState } {
       removeWorktreeMeta: () => {},
       getSettings: () => ({ workspaceDir: '/tmp/workspaces' }),
       getProjects: () => []
-    } as unknown as Store
+    }) as unknown as Store
   }
 }
 

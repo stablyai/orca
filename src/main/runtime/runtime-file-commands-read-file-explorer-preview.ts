@@ -13,7 +13,7 @@ import {
   readPreviewFileWithinCap
 } from './runtime-file-commands-mobile-file-list-limit'
 import { requireRuntimeFileProvider } from './runtime-file-command-target'
-import { open, stat } from 'node:fs/promises'
+import { readLocalFileRange } from '../ipc/filesystem/local-file-range-read'
 import { resolveAuthorizedPath } from '../ipc/filesystem-auth'
 import { extname } from 'node:path'
 import {
@@ -161,22 +161,6 @@ export class RuntimeFileCommandsWithReadFileExplorerPreview extends RuntimeFileC
     }
 
     const filePath = await resolveAuthorizedPath(target.path, this.host.requireStore())
-    const fileStats = await stat(filePath)
-    if (fileStats.isDirectory()) {
-      throw new Error('Cannot download a directory')
-    }
-    const handle = await open(filePath, 'r')
-    try {
-      const buffer = Buffer.alloc(Math.min(length, Math.max(0, fileStats.size - offset)))
-      const { bytesRead } = await handle.read(buffer, 0, buffer.byteLength, offset)
-      const chunk = buffer.subarray(0, bytesRead)
-      return {
-        contentBase64: chunk.toString('base64'),
-        bytesRead,
-        eof: offset + bytesRead >= fileStats.size
-      }
-    } finally {
-      await handle.close()
-    }
+    return readLocalFileRange(filePath, offset, length)
   }
 }

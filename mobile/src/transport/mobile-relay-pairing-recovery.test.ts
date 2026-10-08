@@ -6,7 +6,7 @@ import {
   resetMobileRelayPairingRecoveryForTests
 } from './mobile-relay-pairing-recovery'
 import type { PairingCandidateClient } from './mobile-relay-physical-client'
-import type { PairingOffer, RpcResponse } from './types'
+import type { HostProfile, PairingOffer, RpcResponse } from './types'
 
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
 vi.mock('expo-crypto', () => ({ getRandomBytes: vi.fn() }))
@@ -92,6 +92,7 @@ function dependencies(args: {
   journal: ReturnType<typeof journal>
   connectRelay: ReturnType<typeof vi.fn>
   bundle?: MobileRelayCredentialBundle | null
+  hosts?: HostProfile[]
 }) {
   return {
     loadJournal: vi.fn(async () => args.journal),
@@ -101,8 +102,8 @@ function dependencies(args: {
     clearJournal: vi.fn(async () => {}),
     readCredentialBundle: vi.fn(async () => args.bundle ?? null),
     writeCredentialBundle: vi.fn(async () => {}),
-    loadHosts: vi.fn(async () => []),
-    saveHost: vi.fn(async () => {}),
+    loadHosts: vi.fn(async (): Promise<HostProfile[]> => args.hosts ?? []),
+    savePairedHost: vi.fn(async () => {}),
     connectRelay: args.connectRelay,
     resolveInviteDirector: vi.fn(async () => {
       throw new Error('director not needed')
@@ -139,7 +140,26 @@ describe('mobile relay pairing recovery', () => {
       })
     )
     expect(deps.writeCredentialBundle).toHaveBeenCalledOnce()
-    expect(deps.saveHost).toHaveBeenCalledOnce()
+    expect(deps.savePairedHost).toHaveBeenCalledOnce()
+    expect(deps.clearJournal).toHaveBeenCalledOnce()
+  })
+
+  it('clears a journal whose relay routing the host already carries, without dialing', async () => {
+    const saved = journal()
+    const connectRelay = vi.fn()
+    const bundle: MobileRelayCredentialBundle = {
+      v: 1,
+      hostId: 'host-1',
+      deviceToken: offer.deviceToken,
+      current: { token: 'C'.repeat(43), hash: 'D'.repeat(43), version: 1, expiresAt: now + 60_000 }
+    }
+    const { relay } = endpoints(saved, { state: 'not-found' })
+    const hosts = [{ ...saved.metadata.host, deviceToken: offer.deviceToken, relay }]
+    const deps = dependencies({ journal: saved, connectRelay, bundle, hosts })
+
+    await expect(recoverMobileRelayPairing(deps)).resolves.toBe('recovered')
+    expect(connectRelay).not.toHaveBeenCalled()
+    expect(deps.savePairedHost).not.toHaveBeenCalled()
     expect(deps.clearJournal).toHaveBeenCalledOnce()
   })
 

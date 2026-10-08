@@ -13,6 +13,8 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   getEphemeralVmRuntimeFeatureStorePath,
+  featureIdentity,
+  restoreRuntimeFeatureList,
   MAX_EPHEMERAL_VM_RUNTIME_FEATURE_STORE_FILE_BYTES
 } from './ephemeral-vm-runtime-feature-store'
 import {
@@ -284,5 +286,39 @@ describe('ephemeral VM runtime store rollback projection', () => {
       'provisioned-runtime',
       'ordinary-runtime'
     ])
+  })
+})
+
+describe('runtime feature restoration scaling', () => {
+  it('indexes feature identities once and preserves unmatched runtime references', () => {
+    let reads = 0
+    const runtimes = Array.from({ length: 1000 }, (_, i) => runtimeRecord({ id: `runtime-${i}` }))
+    const features = runtimes.map((runtime) => ({
+      get id() {
+        reads++
+        return runtime.id
+      },
+      recipeId: runtime.recipeId,
+      createdAt: runtime.createdAt,
+      recipeCheckoutMode: 'provisioned-root' as const
+    }))
+    for (const runtime of runtimes) {
+      expect(
+        features.find((entry) => featureIdentity(entry) === featureIdentity(runtime))
+      ).toBeDefined()
+    }
+    expect(reads).toBe(500_500)
+    reads = 0
+    const restored = restoreRuntimeFeatureList(runtimes, features)
+    expect(reads).toBe(1000)
+    expect(restored.map((runtime) => runtime.id)).toEqual(runtimes.map((runtime) => runtime.id))
+    expect(restored.every((runtime) => runtime.recipe?.checkoutMode === 'provisioned-root')).toBe(
+      true
+    )
+    expect(restoreRuntimeFeatureList([runtimes[0]], [])[0]).toBe(runtimes[0])
+    const first = { ...features[0], recipeCheckoutMode: 'orca-worktree' as const }
+    expect(
+      restoreRuntimeFeatureList([runtimes[0]], [first, features[0]])[0].recipe?.checkoutMode
+    ).toBe('orca-worktree')
   })
 })

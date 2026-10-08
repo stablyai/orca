@@ -5,7 +5,7 @@ import {
   readSourceControlActionDefault,
   type SourceControlActionRecipe
 } from './source-control-ai-actions'
-import type { SourceControlAiOperation, SourceControlAiSettings } from './source-control-ai-types'
+import type { AiTextOperation, SourceControlAiSettings } from './source-control-ai-types'
 import type { TuiAgent } from './tui-agent'
 
 export function commandTemplateFromInstruction(instruction: string | null | undefined): string {
@@ -14,7 +14,7 @@ export function commandTemplateFromInstruction(instruction: string | null | unde
 }
 
 export function commandTemplateFromOperationInstruction(
-  operation: SourceControlAiOperation,
+  operation: AiTextOperation,
   instruction: string | null | undefined
 ): string {
   const trimmed = instruction?.trim()
@@ -27,7 +27,7 @@ export function commandTemplateFromOperationInstruction(
 }
 
 export function isLegacyBranchInstructionTemplate(
-  operation: SourceControlAiOperation,
+  operation: AiTextOperation,
   instruction: string | null | undefined,
   template: string | null | undefined
 ): boolean {

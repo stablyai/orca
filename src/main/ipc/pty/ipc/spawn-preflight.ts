@@ -1,10 +1,9 @@
+import { withClaudeProfileTerminalEnv } from '../../../claude-accounts/claude-profile-installed-router'
 import {
   isWslShellName,
   resolveLocalWindowsTerminalRuntimeOptions
 } from '../../../../shared/local-windows-terminal-runtime'
 import { isWslUncPath, toWindowsWslPath } from '../../../../shared/wsl-paths'
-import { isClaudeAuthSwitchInProgress } from '../../../claude-accounts/live-pty-gate'
-import { CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE } from '../../../claude-accounts/environment'
 import { mintPtySessionId } from '../../../daemon/pty-session-id'
 import { resolveWslSessionContext } from '../../../daemon/wsl-session-context'
 import { LocalPtyProvider } from '../../../providers/local-pty-provider'
@@ -193,9 +192,6 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
   }
   ctx.isClaudeLaunch =
     !ctx.preAdoptedStablePane && !args.connectionId && isClaudeLaunchCommand(args.command)
-  if (ctx.isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
-    throw new Error(CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE)
-  }
   ctx.terminalRuntimeOptions =
     process.platform === 'win32' && !args.connectionId
       ? resolveLocalWindowsTerminalRuntimeOptions({
@@ -204,7 +200,12 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
           projectRuntime: args.projectRuntime,
           fallbackHostShell: process.env.COMSPEC || 'powershell.exe'
         })
-      : { shellOverride: args.shellOverride, terminalWindowsWslDistro: null }
+      : {
+          shellOverride:
+            args.shellOverride ??
+            (ctx.deps.getSettings?.()?.terminalDefaultShell?.trim() || undefined),
+          terminalWindowsWslDistro: null
+        }
   const initialShellOverride = ctx.terminalRuntimeOptions.shellOverride
   // Why: daemon host-env setup needs a stable id BEFORE provider.spawn so buildPtyHostEnv hooks/Pi cleanup can run; daemon still honors opts.sessionId ?? mint().
   // Note: sessionId is STABLE across daemon restarts by design — do NOT simplify to a fresh UUID per spawn; that orphans reconnectable state.
@@ -222,6 +223,7 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
     ctx.cwd,
     ctx.expectedWslDistro
   )
+  args.env = withClaudeProfileTerminalEnv(args.env, args.connectionId, initialSelectionTarget)
   ctx.claudeAuth =
     ctx.isClaudeLaunch && ctx.deps.prepareClaudeAuth
       ? await ctx.deps.prepareClaudeAuth(initialSelectionTarget)

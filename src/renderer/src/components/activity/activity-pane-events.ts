@@ -1,3 +1,4 @@
+import { isHistoricalActivityState } from './activity-event-state'
 import type {
   AgentStateHistoryEntry,
   AgentStatusEntry
@@ -5,14 +6,12 @@ import type {
 import type { Repo } from '../../../../shared/repo-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import type { ActivityEvent, ActivityEventState } from './activity-thread-types'
+import type {
+  ActivityEvent,
+  ActivityEventState,
+  ActivityLiveAgentState
+} from './activity-thread-types'
 import { EVENTS_PER_PANE_CAP } from './activity-event-cap'
-
-export function isActivityEventState(
-  state: AgentStatusEntry['state']
-): state is ActivityEventState {
-  return state === 'done' || state === 'blocked' || state === 'waiting'
-}
 
 function historyEntrySnapshot(
   entry: AgentStatusEntry,
@@ -28,7 +27,9 @@ function historyEntrySnapshot(
     toolName: undefined,
     toolInput: undefined,
     lastAssistantMessage: undefined,
-    interrupted: history.interrupted
+    interrupted: history.interrupted,
+    // The live row's main agent belongs to its current state, not to this snapshot.
+    mainAgent: history.mainAgent
   }
 }
 
@@ -39,7 +40,7 @@ export function newestActivityHistoryEntries(
 ): AgentStateHistoryEntry[] {
   const newest: AgentStateHistoryEntry[] = []
   for (let i = history.length - 1; i >= 0 && newest.length < cap; i -= 1) {
-    if (isActivityEventState(history[i].state)) {
+    if (isHistoricalActivityState(history[i].state)) {
       newest.push(history[i])
     }
   }
@@ -55,6 +56,7 @@ type PaneEventInputs = {
   agentAlive: boolean
   acknowledgedAt: number
   clearedAt: number
+  liveState: ActivityLiveAgentState | null
   migrationUnsupportedPtyId?: string
 }
 
@@ -62,8 +64,14 @@ type PaneEventInputs = {
 export function buildPaneActivityEvents(args: PaneEventInputs): ActivityEvent[] {
   const events: ActivityEvent[] = []
   const seenIds = new Set<string>()
-  const append = (state: ActivityEventState, timestamp: number, entry: AgentStatusEntry): void => {
-    const id = `agent:${entry.paneKey}:${state}:${timestamp}`
+  const append = (
+    state: ActivityEventState,
+    timestamp: number,
+    observedAt: number,
+    entry: AgentStatusEntry
+  ): void => {
+    // Why observedAt: an answered ask returns done to its turn's end, repeating that done's time.
+    const id = `agent:${entry.paneKey}:${state}:${observedAt}`
     if (seenIds.has(id)) {
       return
     }
@@ -72,6 +80,7 @@ export function buildPaneActivityEvents(args: PaneEventInputs): ActivityEvent[] 
       id,
       state,
       timestamp,
+      observedAt,
       worktree: args.worktree,
       repo: args.repo,
       entry,
@@ -93,16 +102,27 @@ export function buildPaneActivityEvents(args: PaneEventInputs): ActivityEvent[] 
     append(
       history.state as ActivityEventState,
       history.startedAt,
+      history.observedAt ?? history.startedAt,
       historyEntrySnapshot(args.entry, history)
     )
   }
 
-  if (!isActivityEventState(args.entry.state) || args.entry.sessionBoundary === true) {
+  // Monitoring live turns surface only via the 'monitoring' snapshot, never as a working event.
+  const currentState =
+    args.liveState === 'working' || isHistoricalActivityState(args.entry.state)
+      ? args.entry.state
+      : null
+  if (currentState === null || args.entry.sessionBoundary === true) {
     return events
   }
   if (args.entry.stateStartedAt <= args.clearedAt) {
     return events
   }
-  append(args.entry.state, args.entry.stateStartedAt, args.entry)
+  append(
+    currentState,
+    args.entry.stateStartedAt,
+    args.entry.stateObservedAt ?? args.entry.stateStartedAt,
+    args.entry
+  )
   return events
 }

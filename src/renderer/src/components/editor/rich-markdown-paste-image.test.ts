@@ -1,6 +1,8 @@
 // @vitest-environment happy-dom
 
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { Editor } from '@tiptap/react'
+import StarterKit from '@tiptap/starter-kit'
 import { clipboardHasImage, handleRichMarkdownImagePaste } from './rich-markdown-paste-image'
 import { insertRichMarkdownImageFromPath } from './rich-markdown-image-insert'
 
@@ -31,27 +33,38 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
 }))
 
 vi.mock('sonner', () => ({
-  toast: { error: vi.fn() }
+  toast: { error: vi.fn(), info: vi.fn() }
 }))
 
 function pasteEvent(items: Partial<DataTransferItem>[]): ClipboardEvent {
-  return {
-    clipboardData: { items },
-    preventDefault: vi.fn()
-  } as unknown as ClipboardEvent
+  const clipboardData = new DataTransfer()
+  items.forEach((item) => {
+    if (item.kind === 'file') {
+      clipboardData.items.add(new File(['image'], 'image.png', { type: item.type }))
+    } else {
+      clipboardData.items.add('', item.type ?? 'text/plain')
+    }
+  })
+  const event = new ClipboardEvent('paste', { clipboardData, cancelable: true })
+  vi.spyOn(event, 'preventDefault')
+  return event
 }
 
+const openEditors: Editor[] = []
+
 function editorAt(position: number, destroyedRef: { current: boolean } = { current: false }) {
-  const dom = document.createElement('div')
-  document.body.appendChild(dom)
-  return {
-    get isDestroyed() {
-      return destroyedRef.current
-    },
-    state: { selection: { from: position } },
-    view: { dom }
-  }
+  const editor = new Editor({ extensions: [StarterKit], content: `<p>${'x'.repeat(position)}</p>` })
+  document.body.appendChild(editor.view.dom)
+  editor.commands.setTextSelection(position)
+  vi.spyOn(editor, 'isDestroyed', 'get').mockImplementation(() => destroyedRef.current)
+  openEditors.push(editor)
+  return editor
 }
+
+afterEach(() => {
+  openEditors.splice(0).forEach((editor) => editor.destroy())
+  vi.restoreAllMocks()
+})
 
 async function flushPromises(): Promise<void> {
   await Promise.resolve()
@@ -62,8 +75,9 @@ describe('rich markdown image paste', () => {
   beforeEach(() => {
     document.body.replaceChildren()
     vi.clearAllMocks()
-    vi.stubGlobal('window', {
-      api: {
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
         ui: {
           saveClipboardImageAsTempFile: vi.fn().mockResolvedValue('/tmp/orca-paste-image.png')
         }
@@ -89,7 +103,7 @@ describe('rich markdown image paste', () => {
 
     expect(
       handleRichMarkdownImagePaste({
-        editor: editor as never,
+        editor,
         event,
         filePath: '/repo/note.md',
         worktreeId: 'wt-1'
@@ -107,8 +121,7 @@ describe('rich markdown image paste', () => {
       sourcePath: '/tmp/orca-paste-image.png',
       worktreeId: 'wt-1',
       runtimeEnvironmentId: undefined,
-      insertPos: 7,
-      canInsert: expect.any(Function)
+      getInsertionRange: expect.any(Function)
     })
   })
 
@@ -116,7 +129,7 @@ describe('rich markdown image paste', () => {
     const event = pasteEvent([{ kind: 'file', type: 'image/png' }])
 
     handleRichMarkdownImagePaste({
-      editor: editorAt(3) as never,
+      editor: editorAt(3),
       event,
       filePath: '/repo/note.md',
       worktreeId: 'wt-1',
@@ -140,7 +153,7 @@ describe('rich markdown image paste', () => {
 
     expect(
       handleRichMarkdownImagePaste({
-        editor: editor as never,
+        editor,
         event,
         filePath: '/repo/note.md',
         worktreeId: 'wt-1'

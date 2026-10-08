@@ -14,7 +14,7 @@ export function deliverPluginEvent(options: {
   eventBus: PluginEventBus
   workerController: PluginWorkerController
   isRuntimeApproved: (plugin: ValidDiscoveredPlugin) => boolean
-  logWarning: (pluginKey: string, line: string) => void
+  logWarning: (pluginKey: string) => (line: string) => void
 }): void {
   const projected = options.eventBus.projectPayload(options.event, options.payload)
   if (!projected.ok) {
@@ -28,12 +28,12 @@ export function deliverPluginEvent(options: {
       (subscription) => subscription.on === options.event
     )
     if (manifestSubscribed && plugin.manifest.main) {
+      const logWarning = options.logWarning(plugin.pluginKey)
       void options.workerController
         .ensure(plugin)
         .then((handle) => handle.deliverEvent(options.event, projected.payload))
         .catch((error) => {
-          options.logWarning(
-            plugin.pluginKey,
+          logWarning(
             `event ${options.event} dropped: ${error instanceof Error ? error.message : String(error)}`
           )
         })

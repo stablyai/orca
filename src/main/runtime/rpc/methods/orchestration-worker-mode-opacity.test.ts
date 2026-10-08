@@ -3,8 +3,8 @@
  *
  * Two properties are pinned here, because both were false at some point in this lane:
  *
- * - a worker is TAUGHT the same thing whichever mode it runs in, byte for byte once the handle and
- *   dispatch id are normalised. The sub-dispatch section used to be withheld from a structured
+ * - a worker is TAUGHT the same thing whichever mode it runs in, byte for byte once how it is named,
+ *   where it runs (chat or terminal) and the dispatch id are normalised. The sub-dispatch section used to be withheld from a structured
  *   worker, which is a two-tier capability model dressed as a preamble tweak;
  * - a structured worker can actually BE a coordinator. `worker-start` used to resolve `--from`
  *   through `showTerminal`, which needs a PTY, so the capability the preamble withheld was in fact
@@ -12,7 +12,6 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { OrchestrationDb } from '../../orchestration/db'
 import {
@@ -20,6 +19,10 @@ import {
   structuredWorkerIdentities,
   structuredWorkerProcessIncarnation
 } from '../../structured-worker-identity'
+import {
+  CHAT_REDISPATCH_PARAGRAPH,
+  TERMINAL_REDISPATCH_PARAGRAPH
+} from '../../orchestration/preamble'
 import { ORCHESTRATION_METHODS } from './orchestration'
 import { readStructuredWorkerOutput } from './orchestration-structured-worker-lifecycle'
 import { inspectWorkerTerminal } from './orchestration/worker/worker-observation'
@@ -27,8 +30,15 @@ import { inspectWorkerTerminal } from './orchestration/worker/worker-observation
 const WORKTREE = 'repo::wt'
 const STRUCTURED_HANDLE = 'structworker_worker'
 const TERMINAL_HANDLE = 'term_worker'
+const STRUCTURED_ORCA_SESSION_ID = 'orca_session_id:sess_worker'
 
 const structuredPreambles: string[] = []
+// The session host the code under test reads; a structural fake, so no host type is claimed.
+const hostRef = vi.hoisted((): { current: unknown } => ({ current: null }))
+
+vi.mock('../../../native-chat/agent-session-wire/structured-agent-session-registry', () => ({
+  getStructuredAgentSessionHost: () => hostRef.current
+}))
 
 vi.mock('./orchestration/worker/worker-topology', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -42,6 +52,7 @@ vi.mock('./orchestration-structured-worker-session', async (importOriginal) => (
   ...(await importOriginal<Record<string, unknown>>()),
   sendStructuredWorkerPreamble: async (args: { preamble: string }) => {
     structuredPreambles.push(args.preamble)
+    return 'accepted'
   },
   releaseStructuredWorkerSession: () => {},
   discardStructuredWorkerSession: async () => {}
@@ -69,7 +80,7 @@ function installStructuredCoordinator(handle: string, sessionId: string): string
     worktreeId: WORKTREE,
     hostScope: { kind: 'local', hostId: 'local' }
   })
-  setStructuredAgentSessionHost({
+  hostRef.current = {
     hasSession: () => true,
     deps: {
       store: {
@@ -82,10 +93,12 @@ function installStructuredCoordinator(handle: string, sessionId: string): string
             deathEvidence: null,
             runtimeFence: 1
           }
-        })
+        }),
+        // No committed /clear: each session is its own lineage's root.
+        listRecords: () => []
       }
     }
-  } as never)
+  }
   return paneKey
 }
 
@@ -98,6 +111,11 @@ function normalizePreamble(preamble: string, handle: string, dispatchId: string)
     .join('<dispatch>')
     .replace(/dcap_[\w-]+/g, '<capability>')
     .replace(/task_[0-9a-f]+/g, '<task>')
+    .split(CHAT_REDISPATCH_PARAGRAPH)
+    .join('<redispatch>')
+    .split(TERMINAL_REDISPATCH_PARAGRAPH)
+    .join('<redispatch>')
+    .replace(/\bthis (chat|terminal)\b/g, 'this <surface>')
 }
 
 describe('a worker cannot tell which mode it is running in', () => {
@@ -149,7 +167,7 @@ describe('a worker cannot tell which mode it is running in', () => {
 
   afterEach(() => {
     db.close()
-    setStructuredAgentSessionHost(null)
+    hostRef.current = null
     structuredWorkerIdentities.clear()
     vi.restoreAllMocks()
   })
@@ -203,9 +221,22 @@ describe('a worker cannot tell which mode it is running in', () => {
     expect(terminal.mode.mode).toBe('terminal')
     const structuredPreamble = structuredPreambles[0] as string
     const terminalPreamble = vi.mocked(runtime.sendTerminalAgentPrompt).mock.calls[0]?.[1] as string
-    expect(normalizePreamble(structuredPreamble, STRUCTURED_HANDLE, structured.dispatchId)).toBe(
-      normalizePreamble(terminalPreamble, TERMINAL_HANDLE, terminal.dispatchId)
-    )
+    const selfLine = `\nYour Orca session ID is: ${STRUCTURED_ORCA_SESSION_ID}`
+    expect(
+      normalizePreamble(
+        structuredPreamble.replace(selfLine, ''),
+        STRUCTURED_ORCA_SESSION_ID,
+        structured.dispatchId
+      )
+    ).toBe(normalizePreamble(terminalPreamble, TERMINAL_HANDLE, terminal.dispatchId))
+    // A session worker is named by its Orca session ID; a terminal worker's text is main's.
+    expect(structuredPreamble).toContain(`${selfLine}\n`)
+    expect(structuredPreamble).not.toContain(STRUCTURED_HANDLE)
+    expect(terminalPreamble).not.toContain('Orca session ID')
+    // Only the surface words differ: a chat is told about its chat, a terminal keeps main's text.
+    expect(structuredPreamble).toContain(CHAT_REDISPATCH_PARAGRAPH)
+    expect(terminalPreamble).toContain(TERMINAL_REDISPATCH_PARAGRAPH)
+    expect(structuredPreamble).not.toContain('this terminal')
     // The section the structured lane used to withhold, asserted by name so the equality above
     // cannot pass by both preambles losing it.
     expect(structuredPreamble).toContain('=== SUB-DISPATCH ===')
@@ -226,6 +257,10 @@ describe('a worker cannot tell which mode it is running in', () => {
 
     expect(result).toMatchObject({ state: 'ready' })
     expect(showTerminal).not.toHaveBeenCalled()
+    // Its sub-worker is told the coordinator's Orca session ID, not the handle it was minted.
+    expect(vi.mocked(runtime.sendTerminalAgentPrompt).mock.calls[0]?.[1]).toContain(
+      "Your coordinator's Orca session ID is: orca_session_id:sess_coord\n"
+    )
     expect(vi.mocked(runtime.sendTerminalAgentPrompt).mock.calls[0]?.[1]).toContain(
       '=== SUB-DISPATCH ==='
     )
@@ -253,10 +288,14 @@ describe('a worker cannot tell which mode it is running in', () => {
         source: 'terminal'
       })
 
-    expect(read).toThrow(/has no terminal output/)
+    const refusal = await read().then(
+      () => '',
+      (error: unknown) => (error instanceof Error ? error.message : String(error))
+    )
+    expect(refusal).toMatch(/has no terminal output/)
     // The refusal names a source that works instead of naming the worker's kind.
-    expect(read).toThrow(/--source auto or --source transcript/)
-    expect(read).not.toThrow(/structured/i)
+    expect(refusal).toMatch(/--source auto or --source transcript/)
+    expect(refusal).not.toMatch(/structured/i)
   })
 
   it('never claims a structured worker was checked for a human-answerable prompt', async () => {

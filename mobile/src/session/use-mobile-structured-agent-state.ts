@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import type { AgentJournalCursor } from '../../../src/shared/agent-session-journal-types'
+import { isRootAgentJournalItem } from '../../../src/shared/agent-session-journal-producer'
 import type {
+  AgentSessionHistoryPage,
   AgentSessionHistoryResult,
   AgentSessionSubscribeEvent
 } from '../../../src/shared/agent-session-wire'
@@ -13,9 +16,53 @@ import {
   type StructuredAgentSessionState
 } from '../../../src/shared/structured-agent-session-reducer'
 import type { RpcClient } from '../transport/rpc-client'
-import { callAgentSession } from './mobile-structured-agent-session-rpc'
+import {
+  agentSessionReadFailureRefusal,
+  agentSessionReadFailureText,
+  callAgentSession
+} from './mobile-structured-agent-session-rpc'
+import {
+  reduceMobileQueuePause,
+  reduceMobileQueuedMessageFeed,
+  type MobileQueuedMessageFeed,
+  type MobileQueuePause
+} from './mobile-structured-queued-message-feed'
+
+type QueuedFeed = { messages: MobileQueuedMessageFeed; pause: MobileQueuePause }
+const NO_QUEUED_FEED: QueuedFeed = { messages: null, pause: null }
 
 const MAX_RETAINED_SESSION_STATES = 32
+/** Bounded so a busy stream cannot turn one Load-earlier tap into an endless read chain. */
+const OLDER_PAGE_ANCHOR_ATTEMPTS = 3
+/** Bounds the pages one Load-earlier reads past that hold only subagent rows. */
+const OLDER_PAGES_PER_LOAD = 8
+
+/**
+ * Opens the transcript stream once the hold settles, either way: a refused hold is an older host
+ * saying it could not start the agent — which the next send does — never a reason to hide the
+ * transcript. Returns what ends the stream, opened or not yet. Outside the effect so its cleanup
+ * rule can see the stream is owned.
+ */
+function openTranscriptAfterHold(
+  client: RpcClient,
+  sessionId: string,
+  held: Promise<unknown>,
+  onFrame: (raw: unknown) => void
+): () => void {
+  let ended = false
+  let close = (): void => {}
+  void held
+    .catch(() => undefined)
+    .then(() => {
+      if (!ended) {
+        close = client.subscribe('agentSession.subscribe', { sessionId }, onFrame)
+      }
+    })
+  return () => {
+    ended = true
+    close()
+  }
+}
 
 function isSubscribeEvent(value: unknown): value is AgentSessionSubscribeEvent {
   if (typeof value !== 'object' || value === null) {
@@ -36,6 +83,10 @@ export function useMobileStructuredAgentState(args: {
 }): {
   state: StructuredAgentSessionState
   stateRef: { readonly current: StructuredAgentSessionState }
+  /** Host-held queued drafts from the live stream; null until the host claims any. */
+  queuedMessages: MobileQueuedMessageFeed
+  /** The whole queue's pause, published with the drafts. */
+  queuePause: MobileQueuePause
   loadingOlder: boolean
   loadEarlier: () => void
 } {
@@ -45,10 +96,14 @@ export function useMobileStructuredAgentState(args: {
   const [sessionStates, setSessionStates] = useState<Map<string, StructuredAgentSessionState>>(
     () => new Map()
   )
+  const [queuedBySession, setQueuedBySession] = useState<Map<string, QueuedFeed>>(() => new Map())
   const state =
     enabled && sessionKey
       ? (sessionStates.get(sessionKey) ?? EMPTY_STRUCTURED_AGENT_SESSION)
       : EMPTY_STRUCTURED_AGENT_SESSION
+  const queued =
+    (enabled && sessionKey ? queuedBySession.get(sessionKey) : undefined) ?? NO_QUEUED_FEED
+  const queuedMessages = queued.messages
   const [loadingOlder, setLoadingOlder] = useState(false)
   const stateRef = useRef(state)
   const sessionKeyRef = useRef(sessionKey)
@@ -65,13 +120,53 @@ export function useMobileStructuredAgentState(args: {
       }
       setSessionStates((current) => {
         const previous = current.get(sessionKey) ?? EMPTY_STRUCTURED_AGENT_SESSION
-        const next = reduceStructuredAgentSession(previous, action)
+        const next = reduceStructuredAgentSession(previous, action, Date.now())
         if (next === previous) {
           return current
         }
         const updated = new Map(current)
         updated.delete(sessionKey)
         updated.set(sessionKey, next)
+        while (updated.size > MAX_RETAINED_SESSION_STATES) {
+          const oldest = updated.keys().next().value
+          if (oldest === undefined) {
+            break
+          }
+          updated.delete(oldest)
+        }
+        return updated
+      })
+    },
+    [sessionKey]
+  )
+  // The refusal rides beside its words, so the view can tell a failure no retry gets past.
+  const applyReadFailure = useCallback(
+    (failure: unknown) => {
+      const refusal = agentSessionReadFailureRefusal(failure)
+      apply({
+        type: 'error',
+        message: agentSessionReadFailureText(failure),
+        ...(refusal ? { refusal } : {})
+      })
+    },
+    [apply]
+  )
+
+  const applyQueued = useCallback(
+    (event: AgentSessionSubscribeEvent) => {
+      if (!sessionKey) {
+        return
+      }
+      setQueuedBySession((current) => {
+        const previous = current.get(sessionKey) ?? NO_QUEUED_FEED
+        const messages = reduceMobileQueuedMessageFeed(previous.messages, event)
+        const pause = reduceMobileQueuePause(previous.pause, event)
+        if (messages === previous.messages && pause === previous.pause) {
+          return current
+        }
+        const updated = new Map(current)
+        updated.delete(sessionKey)
+        updated.set(sessionKey, { messages, pause })
         while (updated.size > MAX_RETAINED_SESSION_STATES) {
           const oldest = updated.keys().next().value
           if (oldest === undefined) {
@@ -99,39 +194,22 @@ export function useMobileStructuredAgentState(args: {
     }
     apply({ type: 'loading' })
     const holderId = structuredAgentSessionHolderId('mobile-chat')
-    let cancelled = false
-    let unsubscribe = (): void => {}
     const held = callAgentSession(client, 'agentSession.hold', {
       sessionId,
       holderId
     })
-    void held
-      .then(() => {
-        if (cancelled) {
-          return
-        }
-        unsubscribe = client.subscribe('agentSession.subscribe', { sessionId }, (raw) => {
-          if (
-            typeof raw === 'object' &&
-            raw !== null &&
-            (raw as { type?: unknown }).type === 'error'
-          ) {
-            apply({ type: 'error', message: String((raw as { message?: unknown }).message ?? '') })
-            return
-          }
-          if (isSubscribeEvent(raw)) {
-            apply({ type: 'event', event: raw })
-          }
-        })
-      })
-      .catch((error: unknown) => {
-        if (!cancelled) {
-          apply({ type: 'error', message: error instanceof Error ? error.message : String(error) })
-        }
-      })
+    const endStream = openTranscriptAfterHold(client, sessionId, held, (raw) => {
+      if (typeof raw === 'object' && raw !== null && 'type' in raw && raw.type === 'error') {
+        applyReadFailure(raw)
+        return
+      }
+      if (isSubscribeEvent(raw)) {
+        apply({ type: 'event', event: raw })
+        applyQueued(raw)
+      }
+    })
     return () => {
-      cancelled = true
-      unsubscribe()
+      endStream()
       void held
         .then(() =>
           callAgentSession(
@@ -147,52 +225,99 @@ export function useMobileStructuredAgentState(args: {
         )
         .catch(() => undefined)
     }
-  }, [apply, client, connected, enabled, sessionId, sessionKey])
+  }, [apply, applyQueued, applyReadFailure, client, connected, enabled, sessionId, sessionKey])
 
   const loadEarlier = useCallback(() => {
     const current = stateRef.current
     if (!client || !sessionId || !sessionKey || loadingOlder || !current.hasOlder) {
       return
     }
-    const cursor = oldestStructuredAgentSessionCursor(current)
-    if (!cursor) {
+    if (!oldestStructuredAgentSessionCursor(current)) {
       return
     }
     const requestSessionKey = sessionKey
     const requestGeneration = streamGenerationRef.current
+    const isCurrentRead = (): boolean =>
+      sessionKeyRef.current === requestSessionKey &&
+      streamGenerationRef.current === requestGeneration
     setLoadingOlder(true)
-    void callAgentSession<AgentSessionHistoryResult>(client, 'agentSession.history', {
-      sessionId,
-      direction: 'before',
-      cursor,
-      limit: AGENT_SESSION_HISTORY_MAX_LIMIT
-    })
-      .then((result) => {
-        if (
-          result.ok &&
-          sessionKeyRef.current === requestSessionKey &&
-          streamGenerationRef.current === requestGeneration
-        ) {
-          apply({ type: 'older-page', requestedEpoch: cursor.epoch, page: result.page })
+    void (async () => {
+      // A live batch can head-trim past the anchor mid-read, and the reducer drops that
+      // page rather than leave a hole in the transcript. Re-anchor and retry.
+      for (let attempt = 0; attempt < OLDER_PAGE_ANCHOR_ATTEMPTS; attempt += 1) {
+        const cursor = oldestStructuredAgentSessionCursor(stateRef.current)
+        if (!cursor || !isCurrentRead()) {
+          return
         }
-      })
+        // Mobile draws only the session's own rows, so a page of a subagent's rows alone
+        // would land as nothing; read on until a page adds a row the reader can see. Older
+        // hosts send one for any burst; current ones when the page's byte bound cuts it short.
+        const pages: { requestedCursor: AgentJournalCursor; page: AgentSessionHistoryPage }[] = []
+        let requestedCursor = cursor
+        while (pages.length < OLDER_PAGES_PER_LOAD) {
+          const result = await callAgentSession<AgentSessionHistoryResult>(
+            client,
+            'agentSession.history',
+            {
+              sessionId,
+              direction: 'before',
+              cursor: requestedCursor,
+              limit: AGENT_SESSION_HISTORY_MAX_LIMIT
+            }
+          )
+          if (!result.ok || !isCurrentRead()) {
+            break
+          }
+          pages.push({ requestedCursor, page: result.page })
+          if (
+            !result.page.hasOlder ||
+            result.page.items.length === 0 ||
+            result.page.items.some(isRootAgentJournalItem)
+          ) {
+            break
+          }
+          requestedCursor = result.page.window.nextCursor
+        }
+        if (pages.length === 0 || !isCurrentRead()) {
+          return
+        }
+        // The reducer drops a page whose anchor slid, so only an intact anchor lands;
+        // each later page abuts the one before it.
+        if (oldestStructuredAgentSessionCursor(stateRef.current)?.sequence === cursor.sequence) {
+          for (const { requestedCursor: pageCursor, page } of pages) {
+            apply({ type: 'older-page', requestedCursor: pageCursor, page })
+          }
+          return
+        }
+      }
+    })()
       .catch((error: unknown) => {
-        if (
-          sessionKeyRef.current === requestSessionKey &&
-          streamGenerationRef.current === requestGeneration
-        ) {
-          apply({ type: 'error', message: error instanceof Error ? error.message : String(error) })
+        if (isCurrentRead()) {
+          applyReadFailure(error)
         }
       })
       .finally(() => {
-        if (
-          sessionKeyRef.current === requestSessionKey &&
-          streamGenerationRef.current === requestGeneration
-        ) {
+        if (isCurrentRead()) {
           setLoadingOlder(false)
         }
       })
-  }, [apply, client, loadingOlder, sessionId, sessionKey])
+  }, [apply, applyReadFailure, client, loadingOlder, sessionId, sessionKey])
 
-  return { state, stateRef, loadingOlder, loadEarlier }
+  // A window of only a subagent's rows draws nothing, and an empty list cannot be scrolled
+  // to ask for more, so it reads back once from each such head. A first page can be one: an
+  // older host's for any burst, a current host's when a burst fills its byte bound.
+  const drawsNothingFrom =
+    state.status === 'ready' && state.hasOlder && !state.items.some(isRootAgentJournalItem)
+      ? `${sessionKey}:${state.epoch}:${state.items[0]?.sequence}`
+      : null
+  const readBackFromRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (drawsNothingFrom === null || loadingOlder || readBackFromRef.current === drawsNothingFrom) {
+      return
+    }
+    readBackFromRef.current = drawsNothingFrom
+    loadEarlier()
+  }, [drawsNothingFrom, loadEarlier, loadingOlder])
+
+  return { state, stateRef, queuedMessages, queuePause: queued.pause, loadingOlder, loadEarlier }
 }

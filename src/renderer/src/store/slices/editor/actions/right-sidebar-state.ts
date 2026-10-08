@@ -5,6 +5,31 @@ import type {
   RightSidebarExplorerView
 } from '../../../../../../shared/ui-chrome-types'
 import { defaultFileSearchState } from '../search/file-search-state'
+import type { RuntimeClientTarget } from '../../../../runtime/runtime-client-target'
+
+/** A chat visual shown in place of the active tab. Identity only, never the HTML. */
+export type RightSidebarVisualRoute = {
+  target: RuntimeClientTarget
+  sessionId: string
+  messageId: string
+  file: string
+  title: string | null
+  /** The chat tab and workspace that own it; the panel closes once either is gone or left. */
+  tabId: string
+  worktreeId: string
+}
+
+/**
+ * In memory only: never persisted or mirrored to other clients. Shown while no later tab route was
+ * requested, so picking any tab returns the sidebar to it without clearing this explicitly.
+ */
+export type RightSidebarVisualState = RightSidebarVisualRoute & {
+  routeRequestId: number
+  /** The sidebar was closed before the visual opened it; closing the visual closes it again. */
+  reopenedSidebar: boolean
+  /** The sidebar's width while it shows the visual; the stored width is left untouched. */
+  width: number | null
+}
 
 export type RightSidebarState = {
   rightSidebarOpen: boolean
@@ -12,8 +37,11 @@ export type RightSidebarState = {
   rightSidebarTab: ActiveRightSidebarTab
   rightSidebarExplorerView: RightSidebarExplorerView
   rightSidebarRouteRequestId: number
+  /** Set to ask the Agent Session Search panel to widen to all computers and focus its box. */
+  aiVaultSearchFocusRequested: boolean
   rightSidebarTabByWorktree: Record<string, ActiveRightSidebarTab>
   rightSidebarExplorerViewByWorktree: Record<string, RightSidebarExplorerView>
+  rightSidebarVisual: RightSidebarVisualState | null
   activityBarPosition: ActivityBarPosition
   toggleRightSidebar: () => void
   setRightSidebarOpen: (open: boolean) => void
@@ -25,6 +53,11 @@ export type RightSidebarState = {
     query?: string | null
     includePattern?: string | null
   }) => void
+  showAiVaultSearch: () => void
+  clearAiVaultSearchFocusRequest: () => void
+  openRightSidebarVisual: (route: RightSidebarVisualRoute) => void
+  closeRightSidebarVisual: () => void
+  setRightSidebarVisualWidth: (width: number) => void
   setActivityBarPosition: (position: ActivityBarPosition) => void
 }
 
@@ -35,11 +68,18 @@ export function createRightSidebarState(set: EditorSet, _get: EditorGet): RightS
     rightSidebarTab: 'explorer',
     rightSidebarExplorerView: 'files',
     rightSidebarRouteRequestId: 0,
+    aiVaultSearchFocusRequested: false,
     rightSidebarTabByWorktree: {},
     rightSidebarExplorerViewByWorktree: {},
+    rightSidebarVisual: null,
     activityBarPosition: 'top',
-    toggleRightSidebar: () => set((s) => ({ rightSidebarOpen: !s.rightSidebarOpen })),
-    setRightSidebarOpen: (open) => set({ rightSidebarOpen: open }),
+    toggleRightSidebar: () =>
+      set((s) => ({
+        rightSidebarOpen: !s.rightSidebarOpen,
+        ...(s.rightSidebarOpen ? { rightSidebarVisual: null } : {})
+      })),
+    setRightSidebarOpen: (open) =>
+      set({ rightSidebarOpen: open, ...(open ? {} : { rightSidebarVisual: null }) }),
     setRightSidebarWidth: (width) => set({ rightSidebarWidth: width }),
     setRightSidebarTab: (tab) =>
       set((s) => ({
@@ -124,6 +164,53 @@ export function createRightSidebarState(set: EditorSet, _get: EditorGet): RightS
           }
         }
       }),
+    // Settings sends the user here; the panel owns scope, so this asks rather than writes.
+    showAiVaultSearch: () =>
+      set((s) => ({
+        rightSidebarOpen: true,
+        rightSidebarTab: 'vault' as const,
+        rightSidebarRouteRequestId: s.rightSidebarRouteRequestId + 1,
+        aiVaultSearchFocusRequested: true
+      })),
+    clearAiVaultSearchFocusRequest: () => set({ aiVaultSearchFocusRequested: false }),
+    openRightSidebarVisual: (route) =>
+      set((s) => {
+        const current = selectVisibleRightSidebarVisual(s)
+        return {
+          rightSidebarOpen: true,
+          rightSidebarVisual: {
+            ...route,
+            routeRequestId: s.rightSidebarRouteRequestId,
+            reopenedSidebar: current ? current.reopenedSidebar : !s.rightSidebarOpen,
+            width: current?.width ?? null
+          }
+        }
+      }),
+    closeRightSidebarVisual: () =>
+      set((s) => ({
+        rightSidebarVisual: null,
+        ...(selectVisibleRightSidebarVisual(s)?.reopenedSidebar ? { rightSidebarOpen: false } : {})
+      })),
+    setRightSidebarVisualWidth: (width) =>
+      set((s) => {
+        const visual = selectVisibleRightSidebarVisual(s)
+        return visual ? { rightSidebarVisual: { ...visual, width } } : {}
+      }),
     setActivityBarPosition: (position) => set({ activityBarPosition: position })
   }
+}
+
+/** The visual the sidebar shows now, or null once a tab route superseded it or it was closed. */
+export function selectVisibleRightSidebarVisual(
+  state: Pick<
+    RightSidebarState,
+    'rightSidebarVisual' | 'rightSidebarRouteRequestId' | 'rightSidebarOpen'
+  >
+): RightSidebarVisualState | null {
+  const visual = state.rightSidebarVisual
+  return visual &&
+    state.rightSidebarOpen &&
+    visual.routeRequestId === state.rightSidebarRouteRequestId
+    ? visual
+    : null
 }

@@ -9,12 +9,15 @@ import { DISPATCH_CIRCUIT_BREAK_FAILURES } from '../dispatch-context/dispatch-ci
 import type { OrchestrationDb } from '../orchestration-db'
 import { reconcileTaskAfterDispatchInterruption } from '../dispatch-context/task-dispatch-reconciliation'
 import { transitionLifecycleWithDb } from '../lifecycle-transition'
-import { WORKER_SETTLED_STATES } from '../../worker-terminal-ownership'
 
 export function listLegacyWorkerTerminalRecoveryRows(
-  this: OrchestrationDb
+  this: OrchestrationDb,
+  dispatchIds?: readonly string[]
 ): LegacyWorkerTerminalRecoveryRow[] {
-  return this.db
+  if (dispatchIds?.length === 0) {
+    return []
+  }
+  const rows = this.db
     .prepare(
       `SELECT dc.id AS dispatch_id, dc.task_id, dc.status AS dispatch_status,
               dc.contract_version, dc.assignee_handle, dc.assignee_pane_key,
@@ -23,18 +26,12 @@ export function listLegacyWorkerTerminalRecoveryRows(
        FROM dispatch_contexts dc
        INNER JOIN worker_dispatches wd ON wd.dispatch_id = dc.id
        WHERE wd.state IN ('starting', 'ready', 'start_unknown', 'stopping', 'stop_unknown')
-          -- A settled worker whose terminal orchestration still owns keeps a resumable agent
-          -- session; it needs the resume fence until release or retain retires the pane.
-          OR (wd.state IN (${WORKER_SETTLED_STATES.map(() => '?').join(', ')})
-              AND EXISTS (
-                SELECT 1 FROM worker_terminal_resources wtr
-                 WHERE wtr.owner_dispatch_id = dc.id
-                   AND wtr.ownership_state = 'owned'
-                   AND wtr.release_state NOT IN ('released', 'retained')
-              ))
+       ${dispatchIds ? 'AND wd.dispatch_id IN (SELECT value FROM json_each(?))' : ''}
        ORDER BY dc.rowid`
     )
-    .all(...WORKER_SETTLED_STATES) as LegacyWorkerTerminalRecoveryRow[]
+    .all(...(dispatchIds ? [JSON.stringify(dispatchIds)] : []))
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Static SQL aliases match the recovery row contract; the planner validates terminal identity before use.
+  return rows as LegacyWorkerTerminalRecoveryRow[]
 }
 
 export function reconcileMissingWorkerTerminal(

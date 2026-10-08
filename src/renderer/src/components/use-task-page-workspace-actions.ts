@@ -60,7 +60,9 @@ export function useTaskPageWorkspaceActions(model: TaskPageSearchActionsModel) {
         handleUseWorkItem(item)
         return
       }
-      const result = activateAndRevealWorktree(currentAttached.id)
+      const result = activateAndRevealWorktree(currentAttached.id, {
+        navigationIntent: 'user-open'
+      })
       if (result === false) {
         toast.error(
           item.type === 'pr'

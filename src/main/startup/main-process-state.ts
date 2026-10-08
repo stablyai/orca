@@ -5,6 +5,7 @@ import type { StatsCollector } from '../stats/collector'
 import type { ClaudeUsageStore } from '../claude-usage/store'
 import type { CodexUsageStore } from '../codex-usage/store'
 import type { OpenCodeUsageStore } from '../opencode-usage/store'
+import type { MuseUsageStore } from '../muse-usage/store'
 import type { CodexAccountService } from '../codex-accounts/service'
 import type { CodexRuntimeHomeService } from '../codex-accounts/runtime-home-service'
 import type { ClaudeAccountService } from '../claude-accounts/service'
@@ -13,6 +14,7 @@ import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { RateLimitService } from '../rate-limits/service'
 import type { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
 import type { DesktopRelayService } from '../runtime/relay/desktop-relay-service'
+import type { DesktopPushService } from '../runtime/push/desktop-push-service'
 import type { StarNagService } from '../star-nag/service'
 import type { AgentAwakeService } from '../agent-awake-service'
 import type { CrashReportStore } from '../crash-reporting/crash-report-store'
@@ -24,7 +26,6 @@ import type { PluginMarketplaceInstaller } from '../plugins/plugin-marketplace-i
 import type { KeybindingService } from '../keybindings/keybinding-service'
 import type { RelayBrokerStatus } from '../runtime/relay/relay-session-broker'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
-import type { AgentHookProviderSessionIdentity } from '../agent-hooks/server'
 import type { EmulatorBridge } from '../emulator/emulator-bridge'
 import type { GpuFallbackMarker, GpuFallbackEnvironment } from './gpu-fallback-marker'
 import type { createCodexSessionMigrationScheduler } from '../codex/codex-session-migration-scheduler'
@@ -36,7 +37,7 @@ import type { ServeOptions } from './main-process-serve'
 import type { HangDetectionMarker } from '../hang-watchdog/hang-detection-marker'
 import { ServeReadinessPublisher } from '../server/serve-readiness'
 import { SkillShareDeepLinkState } from './skill-share-deep-link-state'
-import { OsOpenedMarkdownFileState } from './os-opened-markdown-files'
+import { OsOpenedDocumentState } from './os-opened-documents'
 import {
   DEFAULT_GPU_CRASH_FALLBACK_THRESHOLD,
   DEFAULT_GPU_CRASH_FALLBACK_WINDOW_MS,
@@ -44,6 +45,23 @@ import {
 } from '../crash-reporting/gpu-crash-fallback-decision'
 import type { GpuCrashDiagnosticsRecorder } from '../crash-reporting/gpu-crash-diagnostics'
 import { createWebContentsTimedFlag } from './web-contents-timed-flag'
+import type { ProfileStateStorageClassification } from '../persistence/profile-state/profile-state-storage-classification'
+import type { ProfileStateRuntimeAdmission } from '../persistence/profile-state/profile-state-access'
+
+export type ProfileStateStartupMetadata = {
+  backend: 'sqlite'
+  classification: ProfileStateStorageClassification
+  runtime: 'desktop' | 'orcad'
+  migrated: boolean
+}
+
+function createInitialProfileStateStartup(): ProfileStateStartupMetadata | null {
+  return null
+}
+
+function createInitialProfileStateAdmission(): ProfileStateRuntimeAdmission | undefined {
+  return undefined
+}
 
 /** Mutable composition-root state shared by startup, window, serve, and quit phases. */
 export const mainProcessState = {
@@ -51,10 +69,14 @@ export const mainProcessState = {
   /** Whether a manual app.quit() (Cmd+Q) is in progress; lets the close handler skip the running-process confirmation and go straight to close. */
   isQuitting: false,
   store: null as Store | null,
+  profileStateStartup: createInitialProfileStateStartup(),
+  profileStateAdmission: createInitialProfileStateAdmission(),
   stats: null as StatsCollector | null,
   claudeUsage: null as ClaudeUsageStore | null,
   codexUsage: null as CodexUsageStore | null,
   openCodeUsage: null as OpenCodeUsageStore | null,
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: widens the null slot to the store type assigned by main-process-observers.
+  museUsage: null as MuseUsageStore | null,
   codexAccounts: null as CodexAccountService | null,
   codexRuntimeHome: null as CodexRuntimeHomeService | null,
   codexSessionMigration: null as ReturnType<typeof createCodexSessionMigrationScheduler> | null,
@@ -65,6 +87,7 @@ export const mainProcessState = {
   runtimeRpc: null as OrcaRuntimeRpcServer | null,
   serveReadinessPublisher: new ServeReadinessPublisher(),
   desktopRelayService: null as DesktopRelayService | null,
+  desktopPushService: null as DesktopPushService | null,
   desktopRelayStatus: 'offline' as RelayBrokerStatus,
   desktopRelayCellUrl: undefined as string | undefined,
   pendingUnpairedDeviceAuthFailure: false,
@@ -76,9 +99,6 @@ export const mainProcessState = {
   repoMaintenanceShutdown: Promise.resolve() as Promise<void>,
   crashReports: null as CrashReportStore | null,
   unsubscribeAgentAwakeStatusChanges: null as (() => void) | null,
-  publishProviderSessionChanges: null as
-    | ((identities: AgentHookProviderSessionIdentity[]) => void)
-    | null,
   unsubscribeSystemResumeBroadcast: null as (() => void) | null,
   watcherShutdownPromise: null as Promise<void> | null,
   watcherShutdownDone: false,
@@ -95,11 +115,11 @@ export const mainProcessState = {
   pendingOpenSettings: createWebContentsTimedFlag(),
   skillShareDeepLinks: new SkillShareDeepLinkState(),
   // Why: a Finder/Explorer "Open With" can land before any window exists; the renderer pulls this buffer on mount.
-  osOpenedMarkdownFiles: new OsOpenedMarkdownFileState(),
+  osOpenedDocuments: new OsOpenedDocumentState(),
   // Why a latch and not just "a window exists": a window can be up while its renderer has not
   // attached the ui:openMarkdownFiles listener yet, and a push into that gap is dropped by
   // Electron with no error. Only the renderer's own pull proves the listener is live.
-  markdownFileOpenListenerReady: false,
+  osDocumentOpenListenerReady: false,
   firstWindowStartupServicesReady: Promise.resolve(),
   // Why published: the default-session proxy must be applied before the first app-owned fetcher,
   // but window creation has no reason to queue behind it (the request guard already fences it).

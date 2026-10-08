@@ -1,3 +1,4 @@
+import { openSidebarWorkspaceComposer } from './helpers/sidebar-project-dialog'
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
@@ -85,7 +86,7 @@ test('keeps long repository names inside the cross-project confirmation dialog',
 
     // Why: 640px is the narrowest desktop layout, where the footer switches to a row.
     await orcaPage.setViewportSize({ width: 640, height: 720 })
-    await orcaPage.getByRole('button', { name: 'New workspace', exact: true }).click()
+    await openSidebarWorkspaceComposer(orcaPage)
 
     const composer = orcaPage.getByRole('dialog', { name: /Create (Workspace|Worktree)/i })
     await expect(composer).toBeVisible()

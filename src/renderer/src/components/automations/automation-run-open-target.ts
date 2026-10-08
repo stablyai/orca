@@ -1,9 +1,7 @@
 import type { AutomationRun } from '../../../../shared/automations-types'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
-import type {
-  TerminalLayoutSnapshot,
-  TerminalPaneLayoutNode
-} from '../../../../shared/terminal-tab-types'
+import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
+import { terminalLayoutContainsLeaf } from '../../../../shared/workspace-session-pane-ownership'
 
 export type AutomationRunPaneTarget = {
   tabId: string
@@ -83,14 +81,4 @@ export function buildAutomationRunOpenLayout({
       [target.leafId]: target.ptyId
     }
   }
-}
-
-function terminalLayoutContainsLeaf(node: TerminalPaneLayoutNode, leafId: string): boolean {
-  if (node.type === 'leaf') {
-    return node.leafId === leafId
-  }
-  return (
-    terminalLayoutContainsLeaf(node.first, leafId) ||
-    terminalLayoutContainsLeaf(node.second, leafId)
-  )
 }

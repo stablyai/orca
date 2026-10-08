@@ -66,6 +66,7 @@ describe('OrcaRuntimeRpcServer', () => {
       params: {
         worktree: 'id:repo-1::/tmp/worktree-a',
         command: "claude 'work on the issue'",
+        terminalKittyKeyboardProtocol: true,
         terminalColorQueryReplies: { foreground: '#ffffff', background: '#282c34' },
         tabId: 'laptop-tab',
         leafId,
@@ -88,6 +89,7 @@ describe('OrcaRuntimeRpcServer', () => {
     ).toBeUndefined()
     expect(spawn).toHaveBeenCalledWith(
       expect.objectContaining({
+        terminalKittyKeyboardProtocol: true,
         terminalColorQueryReplies: { foreground: '#ffffff', background: '#282c34' }
       })
     )
@@ -403,9 +405,12 @@ describe('OrcaRuntimeRpcServer', () => {
     // Why: a remote-host runtime proxy only implements RPC-forwarded methods;
     // activation is a local-host concern, so the proxy legitimately lacks
     // activateRecentPtyPathCandidateTracking and onReady must not throw.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the proxy fake carries only the surface the auth and status paths under test read.
     const runtimeProxy = {
+      configureNotificationDismissalStore: () => {},
       getRuntimeId: () => 'proxy-runtime-test',
       getStartedAt: () => 1,
+      machineNameReady: async () => undefined,
       getStatus: () => ({ graphStatus: 'unavailable' }),
       cleanupSubscriptionsForConnection: () => {},
       cancelMobileDictationForConnection: () => {},

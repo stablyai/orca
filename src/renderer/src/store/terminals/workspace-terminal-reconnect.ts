@@ -51,10 +51,11 @@ export function createWorkspaceTerminalReconnectActions(
       for (const worktreeId of ids) {
         const tabs = tabsByWorktree[worktreeId] ?? []
         const targetTabIds = pendingReconnectTabByWorktree[worktreeId] ?? []
+        const tabById = targetTabIds.length > 1 ? buildByIdIndex(tabs) : null
         const tabsToReconnect: TerminalTab[] =
           targetTabIds.length > 0
             ? targetTabIds
-                .map((id) => tabs.find((t) => t.id === id))
+                .map((id) => (tabById ? tabById.get(id) : tabs.find((t) => t.id === id)))
                 .filter((t): t is TerminalTab => t != null)
             : tabs.slice(0, 1)
         if (tabsToReconnect.length === 0) {

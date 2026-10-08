@@ -22,16 +22,16 @@ export function createTabsMoveActions(
         const foundTab = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
         const foundTarget = findGroupAndWorktree(state.groupsByWorktree, targetGroupId)
         if (!foundTab || !foundTarget || foundTab.worktreeId !== foundTarget.worktreeId) {
-          return {}
+          return state
         }
         const { tab, worktreeId } = foundTab
         if (tab.groupId === targetGroupId) {
-          return {}
+          return state
         }
         const sourceGroup = findGroupForTab(state.groupsByWorktree, worktreeId, tab.groupId)
         const targetGroup = foundTarget.group
         if (!sourceGroup) {
-          return {}
+          return state
         }
         moved = true
 

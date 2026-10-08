@@ -1,10 +1,12 @@
 import { ipcMain } from 'electron'
+import { isCurrentWatcherSender } from './filesystem-watcher-sender-lifetime'
 import { onSshFilesystemProviderRegistered } from '../providers/ssh-filesystem-dispatch'
 import { watcherLifecycleState } from './filesystem-watcher-lifecycle-state'
 import { getRemoteWatcherKey } from './filesystem-watcher-paths'
 import {
   cancelInFlightRemoteInstallIfUnowned,
   forgetDesiredRemoteWatcher,
+  registerWatcherSenderCleanup,
   releaseRemoteWatchListener
 } from './filesystem-watcher-listener-lifecycle'
 import {
@@ -30,6 +32,7 @@ export function registerFilesystemWatcherHandlers(): void {
   ipcMain.handle(
     'fs:watchWorktree',
     async (event, args: { worktreePath: string; connectionId?: string }): Promise<void> => {
+      const senderSignal = registerWatcherSenderCleanup(event.sender)
       if (args.connectionId) {
         // Why: a real new watch reopens the subsystem after closeAllWatchers latched it shut (also resets tests between cases).
         watcherLifecycleState.remoteWatchersClosed = false
@@ -42,6 +45,9 @@ export function registerFilesystemWatcherHandlers(): void {
           args.connectionId,
           args.worktreePath
         )
+        if (!isCurrentWatcherSender(event.sender, senderSignal)) {
+          return
+        }
         if (result === 'capacity') {
           // Why straight to the dormant backoff: the cap is full until some other root is released,
           // which a 1 Hz reinstall cannot bring about — it only adds relay load per refused root.

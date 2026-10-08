@@ -2,14 +2,19 @@
 title: Browser-use profiles
 ---
 
-Browser-use profiles let you run the Orca browser with a specific identity — a logged-in user, a particular cookie jar, a custom user-agent. Useful when an agent needs to log in, reproduce a session-specific bug, or emulate multiple users.
+Browser-use profiles let you run the Orca browser with a specific identity — a logged-in user or a particular cookie jar. Useful when an agent needs to log in, reproduce a session-specific bug, or emulate multiple users.
 
 ## Create a profile
 
 1. Open [Settings → Browser → Profiles](/docs/settings).
 1. Click **Add profile**, give it a name.
-1. Optionally seed it with cookies, a user-agent, and a viewport size.
-1. Every profile presents Electron's own user agent. Orca no longer rewrites it to look like Chrome, because Cloudflare Turnstile rejects a Chrome-shaped UA that sends no client hints and accepts a declared Electron client. The only exception is Google's sign-in hosts, where Orca presents a Firefox identity so Google issues cookies bound to the embedded browser. A **native user agent** profile (`orca tab profile create --no-ua-spoof`) also skips that Google exception.
+1. Optionally seed it with cookies and a viewport size.
+
+## Browser identity
+
+The browser user agent is an app-wide choice because documents and web workers must present one coherent identity. Open **Settings → Browser → Browser identity** to choose between the cleaned identity and Electron's native identity. The change takes effect after you restart Orca.
+
+The cleaned identity removes Orca and Electron tokens from the browser engine's user agent, preserving the Chrome-shaped identity expected by imported sessions. This focused compatibility measure does not make the embedded browser identical to Chrome. In **Cleaned** mode, Google sign-in hosts use a scoped Firefox identity. **Native** mode keeps Electron's identity for sites that reject the cleaned identity, including some Cloudflare-protected sites, but Google sign-in is unavailable; switch back to **Cleaned** and restart Orca to sign in.
 
 ## Cookie import and Google sign-in
 

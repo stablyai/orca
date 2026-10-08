@@ -15,7 +15,6 @@ import {
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { getDeleteStateForWorktreeHost } from './worktree-delete-state-host-match'
 import {
-  CLOSE_ALL_CONTEXT_MENUS_EVENT,
   EMPTY_BROWSER_TABS_BY_WORKTREE,
   EMPTY_CYCLIC_LINEAGE_IDS,
   EMPTY_DELETE_STATE_BY_WORKTREE_ID,
@@ -31,6 +30,7 @@ import {
 import { useWorktreeContextMenuCommands } from './use-worktree-context-menu-commands'
 import { useWorktreeParentPickerTransition } from './use-worktree-parent-picker-transition'
 import { useWorktreeContextMenuSecondaryActions } from './use-worktree-context-menu-secondary-actions'
+import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
 
 export type WorktreeContextMenuProps = {
   worktree: Worktree
@@ -282,22 +282,7 @@ export function useWorktreeContextMenuModel({
     []
   )
 
-  const {
-    handleAssignWorkspaceStatus,
-    handleCloseTerminals,
-    handleCopyPath,
-    handleCreateGroupDialogOpenChange,
-    handleCreateGroupFromRepo,
-    handleDelete,
-    handleMoveProjectToGroup,
-    handleOpenParent,
-    handleRemoveProjectFromGroup,
-    handleRename,
-    handleSleepSubtree,
-    handleSubmitNewProjectGroup,
-    handleTogglePin,
-    handleToggleRead
-  } = useWorktreeContextMenuCommands({
+  const commands = useWorktreeContextMenuCommands({
     activeContextWorktrees,
     batchDeleteWorktrees,
     createGroupDialogActiveRef,
@@ -357,6 +342,7 @@ export function useWorktreeContextMenuModel({
   )
 
   return {
+    ...commands,
     activeContextWorktrees,
     allWorktrees,
     batchDeleteWorktrees,
@@ -375,24 +361,10 @@ export function useWorktreeContextMenuModel({
     eligibleParentCount,
     effectiveSelectedWorktrees,
     folderWorkspaceId,
-    handleAssignWorkspaceStatus,
     handleCloseAutoFocus,
-    handleCloseTerminals,
-    handleCopyPath,
-    handleCreateGroupDialogOpenChange,
-    handleCreateGroupFromRepo,
-    handleDelete,
-    handleMoveProjectToGroup,
-    handleOpenParent,
     handleOpenParentPicker,
     handleParentPickerOpenChange,
     handleRemoveParentLink,
-    handleRemoveProjectFromGroup,
-    handleRename,
-    handleSleepSubtree,
-    handleSubmitNewProjectGroup,
-    handleTogglePin,
-    handleToggleRead,
     hasAnyContextLineage,
     hasParentLink,
     isDeleting,
