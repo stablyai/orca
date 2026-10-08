@@ -15,9 +15,12 @@ vi.mock('../browser/browser-manager', async () =>
 )
 
 import { createMainWindow } from './createMainWindow'
+import { ipcMain, app } from 'electron'
+import * as ui from '../ipc/ui'
 import { resetExpectedTeardownStateForTest } from '../crash-reporting/expected-teardown-state'
 import {
   browserWindowMock,
+  powerMonitorRemoveListenerMock,
   resetMainWindowMocks,
   withPlatform
 } from './createMainWindow-test-harness'
@@ -65,6 +68,7 @@ describe('createMainWindow', () => {
       setWindowButtonPosition: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
+      destroy: vi.fn(),
       loadFile: vi.fn(() => Promise.resolve()),
       loadURL: vi.fn(() => Promise.resolve())
     }
@@ -85,6 +89,42 @@ describe('createMainWindow', () => {
       updateUI: vi.fn()
     }
   }
+
+  it('discards a window whose IPC registration fails before it can reappear', () => {
+    vi.useFakeTimers()
+    const { browserWindowInstance } = createStartupRevealWindowFixture()
+    const trustRenderer = vi.spyOn(ui, 'setTrustedUIRendererWebContentsId')
+    const failure = new Error("Attempted to register a second handler for 'window:isMaximized'")
+    vi.mocked(ipcMain.handle).mockImplementationOnce(() => {
+      throw failure
+    })
+
+    try {
+      withPlatform('win32', () => {
+        expect(() => createMainWindow(null)).toThrow(failure)
+        expect(browserWindowInstance.destroy).toHaveBeenCalledOnce()
+        expect(trustRenderer).not.toHaveBeenCalled()
+        expect(ipcMain.removeHandler).not.toHaveBeenCalled()
+        for (const channel of [
+          'ui:sync-traffic-lights',
+          'window:minimize',
+          'window:maximize',
+          'window:request-close',
+          'menu:popup'
+        ]) {
+          expect(ipcMain.on).not.toHaveBeenCalledWith(channel, expect.any(Function))
+        }
+        expect(app.removeListener).toHaveBeenCalledWith('before-quit', expect.any(Function))
+        expect(powerMonitorRemoveListenerMock).toHaveBeenCalledWith('resume', expect.any(Function))
+        expect(vi.getTimerCount()).toBe(0)
+        vi.advanceTimersByTime(10_000)
+        expect(browserWindowInstance.show).not.toHaveBeenCalled()
+        expect(browserWindowInstance.loadFile).not.toHaveBeenCalled()
+      })
+    } finally {
+      trustRenderer.mockRestore()
+    }
+  })
 
   it.each(['darwin', 'linux', 'win32'] as const)(
     'keeps explicit background startup hidden through ready/load/fallback on %s',

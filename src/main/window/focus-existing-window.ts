@@ -122,11 +122,7 @@ function openWindowWithRetry(
       return null
     }
     setTimer(() => {
-      // Why: openWindow() (openMainWindow) is not idempotent — it constructs and
-      // registers a fresh BrowserWindow on every call. Between attempts another
-      // path (or a first attempt that threw after creating its window) may have
-      // produced a live window, so adopt it instead of opening a duplicate that
-      // would orphan the one already on screen.
+      // Another activation may open a window while this retry waits; adopt it.
       const existing = opts.getWindow()
       const window =
         existing && !existing.isDestroyed()

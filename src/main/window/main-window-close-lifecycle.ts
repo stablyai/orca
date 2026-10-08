@@ -19,6 +19,12 @@ export function installMainWindowCloseLifecycle(args: {
   store: Store | null
 }): { dispose: () => void } {
   const { focus, mainWindow, opts, rendererWebContentsId, state, store } = args
+  const isMaximizedChannel = 'window:isMaximized'
+  const onIsMaximized = (): boolean => {
+    return !mainWindow.isDestroyed() && mainWindow.isMaximized()
+  }
+  // Reject duplicate ownership before installing listeners on the new window.
+  ipcMain.handle(isMaximizedChannel, onIsMaximized)
   // Intercept close so the renderer can confirm killing running-process terminals (replies window:confirm-close to proceed).
   let windowCloseConfirmed = false
   const confirmCloseChannel = 'window:confirm-close'
@@ -180,16 +186,10 @@ export function installMainWindowCloseLifecycle(args: {
   const onPopupMenu = (): void => {
     Menu.getApplicationMenu()?.popup({ window: mainWindow })
   }
-  // Why: WindowControls mounts after window:maximize-changed already fired, so expose a synchronous getter to init its icon.
-  const isMaximizedChannel = 'window:isMaximized'
-  const onIsMaximized = (): boolean => {
-    return !mainWindow.isDestroyed() && mainWindow.isMaximized()
-  }
   ipcMain.on(minimizeChannel, onMinimize)
   ipcMain.on(maximizeChannel, onMaximize)
   ipcMain.on(requestCloseChannel, onRequestClose)
   ipcMain.on(popupMenuChannel, onPopupMenu)
-  ipcMain.handle(isMaximizedChannel, onIsMaximized)
 
   ipcMain.on(confirmCloseChannel, onConfirmClose)
   ipcMain.on(closeRequestReceivedChannel, onCloseRequestReceived)

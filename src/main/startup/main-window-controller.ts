@@ -50,6 +50,10 @@ const TRAY_CREATE_FALLBACK_MS = 12_000
 const AGENT_STATE_CRASH_BREADCRUMB_MIN_INTERVAL_MS = 30_000
 
 export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): BrowserWindow {
+  // Activation can open the window while deferred startup is still waiting.
+  if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+    return state.mainWindow
+  }
   logStartupMilestone('open-main-window-start')
   const { store, keybindings } = requireMainWindowServices({
     store: state.store,
