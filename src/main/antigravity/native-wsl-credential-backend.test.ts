@@ -1,6 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
-const mocks = vi.hoisted(() => ({ resolve: vi.fn(), run: vi.fn() }))
-vi.mock('./native-wsl-account-target', () => ({ resolveAntigravityWslTarget: mocks.resolve }))
+const mocks = vi.hoisted(() => ({ run: vi.fn() }))
 vi.mock('../wsl/wsl-runner', () => ({ runWslProcess: mocks.run }))
 import { createAntigravityWslCredentialBackend } from './native-wsl-credential-backend'
 import { credential } from './native-account-test-fixtures'
@@ -14,7 +13,6 @@ const authority = {
 }
 afterEach(() => vi.resetAllMocks())
 it('sends credentials only on stdin and verifies the nonce on readback', async () => {
-  mocks.resolve.mockResolvedValue(authority)
   mocks.run.mockImplementation(async (spec: { args: string[] }) => ({
     code: 0,
     stdout: `ORCA_AGY_WSL_REPLY_V1 ${spec.args[4]}\nwritten\n${Buffer.from(credential('b')).toString('base64')}\n`,
@@ -30,16 +28,14 @@ it('sends credentials only on stdin and verifies the nonce on readback', async (
   expect(spec.distro).toBe('Ubuntu')
 })
 it('fails closed on system errors and hides captured credential stderr', async () => {
-  mocks.resolve.mockResolvedValue(authority)
   mocks.run.mockResolvedValue({ code: 1, stderr: 'private-token', stdout: 'private-token' })
   await expect(createAntigravityWslCredentialBackend(authority).read()).rejects.toThrow(
     'could not be verified'
   )
 })
-it('rejects a changed guest user before accessing credentials', async () => {
-  mocks.resolve.mockResolvedValue({ ...authority, authorityId: 'b'.repeat(64) })
+it('rejects a guest identity verification failure', async () => {
+  mocks.run.mockResolvedValue({ code: 74, stdout: '', stderr: '', timedOut: false })
   await expect(createAntigravityWslCredentialBackend(authority).read()).rejects.toThrow(
-    'authority changed'
+    'could not be verified'
   )
-  expect(mocks.run).not.toHaveBeenCalled()
 })

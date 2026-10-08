@@ -6,10 +6,7 @@ import {
   withAntigravityAccountOperation,
   type AntigravityAccountOperation
 } from './native-account-service'
-import {
-  resolveAntigravityWslTarget,
-  type ResolvedAntigravityWslTarget
-} from './native-wsl-account-target'
+import type { ResolvedAntigravityWslTarget } from './native-wsl-account-target'
 import { parseAntigravityNativeCredential } from './native-credential-codec'
 import {
   buildAntigravityWslCredentialCommand,
@@ -26,13 +23,6 @@ export function createAntigravityWslCredentialBackend(
     operation: AntigravityAccountOperation,
     input?: string
   ) {
-    const current = await resolveAntigravityWslTarget(
-      { runtime: 'wsl', wslDistro: authority.distro },
-      operation
-    )
-    if (current.authorityId !== authority.authorityId) {
-      throw new Error('Antigravity WSL credential authority changed; reload Accounts')
-    }
     const nonce = randomBytes(16).toString('hex')
     let result
     try {

@@ -50,8 +50,10 @@ it('publishes complete binary ciphertext with private permissions', async () => 
   const contents = Buffer.from([0, 255, 0, 128, 10])
   await writeProtectedFileAtomic(path, contents, operation())
   expect(await readFile(path)).toEqual(contents)
-  expect((await stat(path)).mode & 0o777).toBe(0o600)
-  expect((await stat(directory)).mode & 0o777).toBe(0o700)
+  if (process.platform !== 'win32') {
+    expect((await stat(path)).mode & 0o777).toBe(0o600)
+    expect((await stat(directory)).mode & 0o777).toBe(0o700)
+  }
 })
 it('does not replace existing ciphertext after cancellation', async () => {
   await writeFile(path, 'old')

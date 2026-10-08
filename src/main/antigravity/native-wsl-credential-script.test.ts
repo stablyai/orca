@@ -78,6 +78,20 @@ describe.runIf(process.platform === 'linux')('isolated POSIX guest script eviden
     expect(await readFile(guest.path, 'utf8')).toBe(credential('b'))
     expect((await stat(guest.path)).mode & 0o777).toBe(0o600)
   })
+  it.each([
+    ['read', 'id() { printf %s 4294967295; }\n'],
+    ['write', 'id() { printf %s 4294967295; }\n'],
+    ['read', 'WSL_DISTRO_NAME=Other\n'],
+    ['write', 'WSL_DISTRO_NAME=Other\n'],
+    ['read', 'readlink() { printf %s /other; }\n'],
+    ['write', 'readlink() { printf %s /other; }\n']
+  ] as const)('refuses %s when guest identity changes (%s)', async (action, prefix) => {
+    await guest.put(credential('a'))
+    const result = await guest.run(action, credential('b'), credential('a'), prefix)
+    expect(result.code).toBe(74)
+    expect(result.stdout).toBe('')
+    expect(await readFile(guest.path, 'utf8')).toBe(credential('a'))
+  })
   it.each([-300, 300])(
     'reads credentials with a guest clock offset of %i seconds',
     async (offset) => {
