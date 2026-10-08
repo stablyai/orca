@@ -18,7 +18,7 @@ import type { NativeChatBlock, NativeChatMessage } from './native-chat-types'
 /** The row after a send a Stop took back before the agent started it; a client words it by this. */
 export const NATIVE_CHAT_STOPPED_BEFORE_START_PRESENTATION = 'stopped-before-start'
 /** Its words where a client has no catalog of its own (the phone). */
-export const NATIVE_CHAT_STOPPED_BEFORE_START_TEXT = 'Stopped'
+export const NATIVE_CHAT_STOPPED_BEFORE_START_TEXT = 'Stopped manually'
 
 /** That row: it outlives any turn it sits in, as the send it follows does. */
 export function isStoppedBeforeStartBlock(block: NativeChatBlock): boolean {

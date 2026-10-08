@@ -18119,7 +18119,7 @@
         "plan": "Plan",
         "historyRepaired": "Part of this chat's history couldn't be loaded.",
         "historyItemTooLarge": "This part of the chat was too large to show.",
-        "stoppedBeforeStart": "Stopped",
+        "stoppedBeforeStart": "Stopped manually",
         "dismiss": "Dismiss",
         "copyError": "Copy error",
         "orcaStopUpdate": "Orca on {{machine}} restarted for an update while this response was in progress.",
