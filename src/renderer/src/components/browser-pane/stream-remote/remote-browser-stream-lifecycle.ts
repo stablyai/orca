@@ -1,9 +1,9 @@
-import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import type { RuntimeStatus } from '../../../../../shared/runtime-types'
 import { RemoteBrowserPageSession } from './remote-browser-page-session'
 import { openRemoteBrowserScreencastStream } from './remote-browser-screencast-subscription'
 import { RemoteBrowserStreamRestartScheduler } from './remote-browser-stream-restart-scheduler'
 import { RemoteBrowserStreamLiveness } from './remote-browser-stream-liveness'
+import { RemoteBrowserFramePacer } from './remote-browser-frame-pacer'
 import { createRemoteBrowserStreamRestartAttempt } from './remote-browser-stream-restart-attempt'
 import {
   REMOTE_BROWSER_STREAM_LIVE,
@@ -40,9 +40,14 @@ export class RemoteBrowserStreamLifecycle {
   private subscription: RemoteBrowserStreamSubscription | null = null
   private streamViewportSize: RemoteBrowserViewportSize | null = null
   private readonly liveness = new RemoteBrowserStreamLiveness()
+  private readonly frames: RemoteBrowserFramePacer
 
   constructor(private readonly deps: RemoteBrowserStreamLifecycleDeps) {
     this.tokens = new RemoteBrowserOperationTokens(deps.identity)
+    this.frames = new RemoteBrowserFramePacer({
+      isCurrent: (token) => this.tokens.isCurrentStreamToken(token),
+      renderFrame: deps.handleFrameBytes
+    })
     this.session = new RemoteBrowserPageSession({ ...deps, tokens: this.tokens })
     // Why exhaustion publishes a message too: a budget can drain without any attempt throwing —
     // each restart subscribes fine, then the stream ends before 'ready', so the catch that normally
@@ -195,6 +200,7 @@ export class RemoteBrowserStreamLifecycle {
 
   // Unmount: retire in-flight work without unsubscribing, which the stream effect's own teardown owns.
   dispose(): void {
+    this.frames.clear()
     this.tokens.supersedeOperations()
     this.tokens.supersedeStream()
     this.tokens.releaseStreamToken()
@@ -207,6 +213,7 @@ export class RemoteBrowserStreamLifecycle {
   // Retires every in-flight guard token and the pending retry, and hands back the subscription the
   // caller is displacing so it can be released at the point the original code released it.
   private retireInFlightWork(): RemoteBrowserStreamSubscription | null {
+    this.frames.clear()
     this.tokens.supersedeOperations()
     this.tokens.supersedeStream()
     this.tokens.releaseStreamToken()
@@ -231,10 +238,7 @@ export class RemoteBrowserStreamLifecycle {
     if (!operationToken || !tokens.isCurrent(operationToken)) {
       return null
     }
-    const target: RuntimeClientTarget = {
-      kind: 'environment',
-      environmentId: operationToken.environmentId
-    }
+    const target = { kind: 'environment', environmentId: operationToken.environmentId } as const
     const status = await deps.callRpc<RuntimeStatus>(target, 'status.get', undefined, {
       timeoutMs: 15_000
     })
@@ -305,17 +309,19 @@ export class RemoteBrowserStreamLifecycle {
           // reopening the strand this whole feature exists to remove. Not clear(): a close that
           // does follow must still refill the budget for a stream that had been healthy.
           onTransportError: () => {
+            this.frames.clear()
             this.liveness.stopWaitingForReady()
             deps.setStatus(remoteBrowserStreamStopped(remoteBrowserStreamLostNotice()))
           },
           onPageMissing: () => deps.closeMissingRemotePage(pageId),
-          onFrame: (bytes) => deps.handleFrameBytes(token, bytes),
+          onFrame: (bytes) => this.frames.push(token, bytes),
           onClosed: () => this.handleStreamClosed(token, true)
         }
       )
       return { token, unsubscribe: subscription.unsubscribe }
     } catch (error) {
       if (tokens.isCurrentStreamToken(token)) {
+        this.frames.clear()
         this.liveness.clear()
         tokens.releaseStreamToken()
       }
@@ -327,6 +333,7 @@ export class RemoteBrowserStreamLifecycle {
     if (!this.tokens.isCurrentStreamToken(token)) {
       return
     }
+    this.frames.clear()
     // Only a stream that proved itself refills the budget; see REMOTE_BROWSER_STREAM_HEALTHY_MS.
     const wasHealthy = this.liveness.settle()
     if (restart && wasHealthy) {

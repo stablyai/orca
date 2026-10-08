@@ -22,5 +22,9 @@ export type RemoteBrowserStreamLifecycleDeps = Omit<RemoteBrowserPageSessionDeps
   // the state and the pane derives every visual from it. See remote-browser-stream-status.ts.
   setStatus: (status: RemoteBrowserStreamStatus) => void
   clearFrame: () => void
-  handleFrameBytes: (token: RemoteBrowserStreamToken, bytes: Uint8Array<ArrayBufferLike>) => void
+  handleFrameBytes: (
+    token: RemoteBrowserStreamToken,
+    bytes: Uint8Array<ArrayBufferLike>,
+    signal?: AbortSignal
+  ) => void | Promise<void>
 }

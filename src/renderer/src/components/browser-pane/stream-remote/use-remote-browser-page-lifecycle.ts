@@ -115,7 +115,8 @@ export function useRemoteBrowserPageLifecycle({
       },
       applyTabInfo: (tab) => streamBridgeRef.current.applyTabInfo(tab),
       clearFrame: () => streamBridgeRef.current.clearFrame(),
-      handleFrameBytes: (token, bytes) => streamBridgeRef.current.handleFrameBytes(token, bytes),
+      handleFrameBytes: (token, bytes, signal) =>
+        streamBridgeRef.current.handleFrameBytes(token, bytes, signal),
       closeMissingRemotePage: (remotePageId) =>
         streamBridgeRef.current.closeMissingRemotePage(remotePageId),
       waitForViewportSize: () => streamBridgeRef.current.waitForViewportSize(),

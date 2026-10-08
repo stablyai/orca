@@ -9,16 +9,44 @@ import type {
 
 export type RemoteBrowserRuntimeTarget = Extract<RuntimeClientTarget, { kind: 'environment' }>
 
-export function decodeRemoteBrowserFrameUrl(url: string): Promise<void> {
+export function decodeRemoteBrowserFrameUrl(url: string, signal?: AbortSignal): Promise<void> {
   const image = new window.Image()
   image.decoding = 'async'
-  image.src = url
-  if (typeof image.decode === 'function') {
-    return image.decode()
-  }
   return new Promise((resolve, reject) => {
-    image.onload = () => resolve()
-    image.onerror = () => reject(new Error('Remote browser frame failed to decode.'))
+    const cleanup = (): void => {
+      signal?.removeEventListener('abort', abort)
+      image.onload = null
+      image.onerror = null
+    }
+    const finish = (): void => {
+      cleanup()
+      resolve()
+    }
+    const fail = (error: unknown): void => {
+      cleanup()
+      reject(error)
+    }
+    const abort = (): void => {
+      image.removeAttribute('src')
+      fail(new Error('Remote browser frame decode was cancelled.'))
+    }
+    if (signal?.aborted) {
+      abort()
+      return
+    }
+    signal?.addEventListener('abort', abort, { once: true })
+    image.onload = finish
+    image.onerror = () => fail(new Error('Remote browser frame failed to decode.'))
+    image.src = url
+    if (typeof image.decode === 'function') {
+      // Why: load alone does not mean the bitmap is ready to paint.
+      image.onload = null
+      try {
+        image.decode().then(finish, fail)
+      } catch (error) {
+        fail(error)
+      }
+    }
   })
 }
 
@@ -62,7 +90,11 @@ export const WHEEL_DELTA_PAGE = 2
 export type RemoteBrowserStreamBridge = {
   applyTabInfo: (tab: Pick<BrowserTabInfo, 'url' | 'title'>) => void
   clearFrame: () => void
-  handleFrameBytes: (token: RemoteBrowserStreamToken, bytes: Uint8Array<ArrayBufferLike>) => void
+  handleFrameBytes: (
+    token: RemoteBrowserStreamToken,
+    bytes: Uint8Array<ArrayBufferLike>,
+    signal?: AbortSignal
+  ) => void | Promise<void>
   closeMissingRemotePage: (remotePageId: string | null) => void
   waitForViewportSize: () => Promise<RemoteBrowserViewportSize | null>
   syncViewport: (pageId: string) => Promise<void>

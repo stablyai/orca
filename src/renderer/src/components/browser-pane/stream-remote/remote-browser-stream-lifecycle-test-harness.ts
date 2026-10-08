@@ -1,5 +1,6 @@
 import { vi } from 'vitest'
 import { RemoteBrowserStreamLifecycle } from './remote-browser-stream-lifecycle'
+import type { RemoteBrowserStreamLifecycleDeps } from './remote-browser-stream-lifecycle-deps'
 import type { RemoteBrowserPageHandle, RemoteBrowserRpcCall } from './remote-browser-page-session'
 import type { RemoteBrowserScreencastSubscribe } from './remote-browser-screencast-subscription'
 import type { RemoteBrowserViewportSize } from './remote-browser-stream-tokens'
@@ -40,13 +41,16 @@ export type FakeScreencastStream = {
   emitResponseFailure: (code: string, message: string) => void
   emitTransportError: (code: string, message: string) => void
   emitClose: () => void
+  emitFrame: (bytes: Uint8Array<ArrayBufferLike>) => void
 }
 
 export function rpcError(code: string, message: string): Error {
   return Object.assign(new Error(message), { code })
 }
 
-export function createHarness() {
+export function createHarness(
+  frameDeps: Partial<Pick<RemoteBrowserStreamLifecycleDeps, 'handleFrameBytes' | 'clearFrame'>> = {}
+) {
   const identity = {
     mounted: true,
     active: true,
@@ -148,7 +152,8 @@ export function createHarness() {
           _meta: { runtimeId: 'runtime-1' }
         }),
       emitTransportError: (code, message) => callbacks.onError?.({ code, message }),
-      emitClose: () => callbacks.onClose?.()
+      emitClose: () => callbacks.onClose?.(),
+      emitFrame: (bytes) => callbacks.onBinary?.(bytes)
     }
     streams.push(stream)
     return {
@@ -191,8 +196,8 @@ export function createHarness() {
     syncViewport: async () => {},
     getDeviceScaleFactor: () => 1,
     setStatus: (status) => statusLog.push(status),
-    clearFrame: () => {},
-    handleFrameBytes: () => {}
+    clearFrame: frameDeps.clearFrame ?? (() => {}),
+    handleFrameBytes: frameDeps.handleFrameBytes ?? (() => {})
   })
 
   return {

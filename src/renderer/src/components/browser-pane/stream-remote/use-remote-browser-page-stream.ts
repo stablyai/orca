@@ -208,7 +208,11 @@ export function useRemoteBrowserPageStream({
   ])
 
   const updateStreamFrame = useCallback(
-    (token: RemoteBrowserStreamToken, bytes: Uint8Array<ArrayBufferLike>): void => {
+    (
+      token: RemoteBrowserStreamToken,
+      bytes: Uint8Array<ArrayBufferLike>,
+      signal?: AbortSignal
+    ): void | Promise<void> => {
       if (!lifecycle.tokens.isCurrentStreamToken(token)) {
         return
       }
@@ -225,9 +229,10 @@ export function useRemoteBrowserPageStream({
       )
       const decodeGeneration = pendingFrameDecodeRef.current + 1
       pendingFrameDecodeRef.current = decodeGeneration
-      void decodeRemoteBrowserFrameUrl(nextUrl)
+      return decodeRemoteBrowserFrameUrl(nextUrl, signal)
         .then(() => {
           if (
+            signal?.aborted ||
             pendingFrameDecodeRef.current !== decodeGeneration ||
             !lifecycle.tokens.isCurrentStreamToken(token)
           ) {
