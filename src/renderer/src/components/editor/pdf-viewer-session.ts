@@ -5,7 +5,11 @@ import {
   PDFLinkService,
   PDFViewer as PdfJsViewer
 } from 'pdfjs-dist/web/pdf_viewer.mjs'
-import { applyPdfScalePreference, type PdfScalePreference } from './pdf-scale-preference'
+import {
+  applyPdfScalePreference,
+  zoomPdfViewerWithWheel,
+  type PdfScalePreference
+} from './pdf-scale-preference'
 import { pdfViewPositionCache, setWithLRU } from '@/lib/scroll-cache'
 import {
   buildPdfScrollDestination,
@@ -33,7 +37,8 @@ export function createPdfViewerSession({
   scrollCacheKey,
   scalePreference,
   scaleBounds,
-  onScaleChanging
+  onScaleChanging,
+  onWheelZoom
 }: {
   container: HTMLDivElement
   viewerDiv: HTMLDivElement
@@ -42,6 +47,7 @@ export function createPdfViewerSession({
   scalePreference: PdfScalePreference
   scaleBounds: { min: number; max: number }
   onScaleChanging: (scale: number) => void
+  onWheelZoom: (scale: number) => void
 }): {
   viewer: InstanceType<typeof PdfJsViewer>
   eventBus: InstanceType<typeof EventBus>
@@ -76,6 +82,18 @@ export function createPdfViewerSession({
     }
   }
   eventBus.on('scalechanging', handleScaleChanging)
+
+  // Why: Chromium reports trackpad pinch as ctrl-wheel; unclaimed, it only scrolls the PDF.
+  container.addEventListener(
+    'wheel',
+    (event) => {
+      const scale = zoomPdfViewerWithWheel(viewer, event, scaleBounds)
+      if (scale !== null) {
+        onWheelZoom(scale)
+      }
+    },
+    { passive: false, signal: abortController.signal }
+  )
 
   // Why: each displayed document owns its scroll recorder and cache key.
   const recorder = scrollCacheKey

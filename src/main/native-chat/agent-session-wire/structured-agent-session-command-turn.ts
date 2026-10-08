@@ -17,7 +17,6 @@ import {
   type AgentSessionFailureWordsContext
 } from '../../../shared/agent-session-failure-words'
 import {
-  agentJournalItemKey,
   agentJournalSubmissionKey,
   parseAgentJournalItemKey
 } from '../../../shared/agent-session-journal-item-key'
@@ -43,6 +42,10 @@ import type {
 } from './structured-agent-session-adapter'
 import type { StructuredAgentRegistry } from './structured-agent-registry'
 import { conversationCommandBlocked } from './structured-conversation-command-admission'
+import { structuredAgentSessionCommandTurn } from '../../../shared/structured-agent-session-command-turn-identity'
+import { refuseQueuedCommand } from './structured-agent-session-queued-command-refusal'
+
+export { structuredAgentSessionCommandTurn } from '../../../shared/structured-agent-session-command-turn-identity'
 
 export const STRUCTURED_AGENT_SESSION_COMPACT_COMMAND = 'compact'
 
@@ -85,24 +88,6 @@ export function structuredAgentSessionAwaitedCommand(
   return body?.kind === 'message' && body.command?.name === STRUCTURED_AGENT_SESSION_COMPACT_COMMAND
     ? STRUCTURED_AGENT_SESSION_COMPACT_COMMAND
     : undefined
-}
-
-/** The command's turn: its record and the `turnId` a Stop names. The `compact:` prefix is how the
- *  host's Stop and delivery gate tell a command's turn from any other. */
-export function structuredAgentSessionCommandTurn(clientMessageId: string): {
-  identity: AgentJournalItemIdentity
-  itemId: string
-  turnId: string
-  /** The command's one result row, inside its turn. */
-  resultIdentity: AgentJournalItemIdentity
-} {
-  const identity = { provider: 'orca' as const, clientMessageId: `command-turn:${clientMessageId}` }
-  return {
-    identity,
-    itemId: agentJournalItemKey(identity),
-    turnId: `compact:${clientMessageId}`,
-    resultIdentity: { provider: 'orca', clientMessageId: `command-result:${clientMessageId}` }
-  }
 }
 
 /** Whether the journal's running turn is a command's, which takes no input while it runs. */
@@ -171,34 +156,30 @@ export async function handOverStructuredAgentSessionCommand(
   // Provider frames already received decide whether a turn is running: each landed at its call.
   const blocked = commandBlocked(ctx, body)
   if (blocked) {
-    await ctx.journal.resolveDispatch({
-      clientMessageId,
-      state: 'rejected',
-      ...agentSessionFailureWords(blocked, { ...ctx.failureTextContext, surface: 'rejection' }),
-      fence: ctx.fence
-    })
+    const refused = {
+      state: 'rejected' as const,
+      ...agentSessionFailureWords(blocked, {
+        ...ctx.failureTextContext,
+        command: STRUCTURED_AGENT_SESSION_COMPACT_COMMAND,
+        surface: 'rejection'
+      })
+    }
+    if (submission.queuedMessageId === undefined) {
+      // The command RPC that sent it is still waiting, and its answer says why.
+      await ctx.journal.resolveDispatch({ clientMessageId, ...refused, fence: ctx.fence })
+      return
+    }
+    // A queued card's refusal has nobody waiting on it: its turn's one row says why.
+    await refuseQueuedCommand(
+      ctx,
+      submission,
+      blocked,
+      refused,
+      STRUCTURED_AGENT_SESSION_COMPACT_COMMAND
+    )
     return
   }
-  const turn = structuredAgentSessionCommandTurn(clientMessageId)
-  await ctx.journal.resolveDispatch({
-    clientMessageId,
-    state: 'pending',
-    fence: ctx.fence,
-    turnScope: ctx.journal.liveTurnScope()
-  })
-  const startedAt = ctx.now()
-  const running = agentJournalTurnBody({
-    turnId: turn.turnId,
-    state: 'running',
-    userItemId: agentJournalSubmissionKey(clientMessageId),
-    requestedAt: structuredAgentSessionHandoverOrigin(ctx.journal, submission),
-    startedAt
-  })
-  await ctx.journal.appendItem(turn.identity, running, {
-    fence: ctx.fence,
-    observedAt: startedAt,
-    turnScope: AGENT_JOURNAL_THREAD_SCOPE
-  })
+  const { turn, running } = await openCommandTurn(ctx, submission)
   let admission: AgentSessionCommandAdmission
   try {
     admission = await ctx.adapter.compact!({
@@ -226,6 +207,35 @@ export async function handOverStructuredAgentSessionCommand(
     // An unknown write leaves the turn to the provider's end or the child's: it may have run.
     await ctx.journal.resolveDispatch({ clientMessageId, ...admission, fence: ctx.fence })
   }
+}
+
+/** Hands the command over and opens its own turn. */
+async function openCommandTurn(
+  ctx: StructuredAgentSessionCommandHandoverContext,
+  submission: AgentJournalSubmission
+) {
+  const { clientMessageId } = submission
+  const turn = structuredAgentSessionCommandTurn(clientMessageId)
+  await ctx.journal.resolveDispatch({
+    clientMessageId,
+    state: 'pending',
+    fence: ctx.fence,
+    turnScope: ctx.journal.liveTurnScope()
+  })
+  const startedAt = ctx.now()
+  const running = agentJournalTurnBody({
+    turnId: turn.turnId,
+    state: 'running',
+    userItemId: agentJournalSubmissionKey(clientMessageId),
+    requestedAt: structuredAgentSessionHandoverOrigin(ctx.journal, submission),
+    startedAt
+  })
+  await ctx.journal.appendItem(turn.identity, running, {
+    fence: ctx.fence,
+    observedAt: startedAt,
+    turnScope: AGENT_JOURNAL_THREAD_SCOPE
+  })
+  return { turn, running }
 }
 
 /** Where the turn a handed-over submission runs in starts counting: its handover, so time spent

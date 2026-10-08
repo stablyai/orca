@@ -1,5 +1,6 @@
 import type { AgentSessionFailureFact } from './agent-session-failure'
 import type { AgentSessionFailureSentence } from './agent-session-failure-words'
+import type { AgentSessionQueuedSendReceipt } from './agent-session-wire'
 
 export type AgentSessionConversationCommand = 'clear' | 'compact'
 
@@ -10,6 +11,9 @@ export type AgentSessionConversationCommandResult = {
   command: AgentSessionConversationCommand
   state: 'completed' | 'unknown'
   replacementSessionId?: string
+  /** A /compact the host holds as a card behind work in flight, with `state: 'completed'`: the
+   *  card is its one surface from here. Only clients that sent `delivery` receive it. */
+  queued?: AgentSessionQueuedSendReceipt
 } &
   /** `error`: a sentence for a person; released clients print it as it is. */
   (

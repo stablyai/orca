@@ -9,19 +9,27 @@
 
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
+import type {
+  AgentJournalRenderItem,
+  AgentJournalSubmission
+} from '../../../../shared/agent-session-journal-types'
 import type { AgentSessionQueuedMessage } from '../../../../shared/agent-session-wire'
 import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
+import { agentJournalSubmissionKey } from '../../../../shared/agent-session-journal-item-key'
+import { structuredAgentSessionDeliveryNotices } from './structured-agent-session-delivery-notices'
+import type * as RewindModule from './use-native-chat-rewind'
 
 const mocks = vi.hoisted(() => ({
   call: vi.fn(),
-  outboxArgs: Array.of<{ queue?: { capability: string; enabled: boolean } }>(),
-  operations: 0
+  sendArgs: Array.of<{ queue?: { capability: string; enabled: boolean } }>(),
+  operations: 0,
+  rewindPending: false
 }))
 let items: AgentJournalRenderItem[] = []
 let queuedMessages: AgentSessionQueuedMessage[] | undefined
+let submissions: AgentJournalSubmission[] = []
 let nextQueuedMessageId: string | null = null
-let outboxEntries: StructuredAgentSessionPendingSend[] = []
+let pendingSends: StructuredAgentSessionPendingSend[] = []
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: mocks.call,
@@ -33,7 +41,7 @@ vi.mock('./use-structured-agent-session-read', () => ({
     state: {
       fence: 3,
       items,
-      submissions: [],
+      submissions,
       status: 'ready',
       error: null,
       hasOlder: false,
@@ -44,11 +52,25 @@ vi.mock('./use-structured-agent-session-read', () => ({
   })
 }))
 
+// The real rewind hook, with only its in-flight latch forced when a test says so.
+vi.mock('./use-native-chat-rewind', async (importOriginal) => {
+  const actual = await importOriginal<typeof RewindModule>()
+  return {
+    ...actual,
+    useStructuredAgentSessionRewind: (
+      ...args: Parameters<typeof actual.useStructuredAgentSessionRewind>
+    ) => {
+      const rewind = actual.useStructuredAgentSessionRewind(...args)
+      return mocks.rewindPending ? { ...rewind, blockedRef: { current: true } } : rewind
+    }
+  }
+})
+
 vi.mock('./use-structured-agent-session-sends', () => ({
   useStructuredAgentSessionSends: (args: { queue?: { capability: string; enabled: boolean } }) => {
-    mocks.outboxArgs.push(args)
+    mocks.sendArgs.push(args)
     return {
-      pending: outboxEntries,
+      pending: pendingSends,
       error: null,
       send: vi.fn(),
       stopSends: vi.fn()
@@ -58,6 +80,7 @@ vi.mock('./use-structured-agent-session-sends', () => ({
 
 import {
   AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY,
+  AGENT_SESSION_QUEUED_COMMANDS_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
@@ -130,7 +153,8 @@ function cancels(): unknown[] {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mocks.outboxArgs.length = 0
+  mocks.sendArgs.length = 0
+  mocks.rewindPending = false
   mocks.call.mockImplementation(async (_target, method) =>
     method === 'agentSession.cancel'
       ? {
@@ -144,8 +168,9 @@ beforeEach(() => {
   )
   items = [RUNNING_TURN]
   queuedMessages = undefined
+  submissions = []
   nextQueuedMessageId = null
-  outboxEntries = []
+  pendingSends = []
   localStorage.clear()
   clearNativeChatDraftCacheForTests()
 })
@@ -164,13 +189,13 @@ describe('against a capable host', () => {
 
   it('queues sends while the setting is on, immediately when it is off', () => {
     render()
-    expect(mocks.outboxArgs.at(-1)?.queue).toEqual({
+    expect(mocks.sendArgs.at(-1)?.queue).toEqual({
       capability: 'supported',
       enabled: true
     })
-    mocks.outboxArgs.length = 0
+    mocks.sendArgs.length = 0
     render(false)
-    expect(mocks.outboxArgs.at(-1)?.queue).toEqual({
+    expect(mocks.sendArgs.at(-1)?.queue).toEqual({
       capability: 'supported',
       enabled: false
     })
@@ -202,14 +227,14 @@ describe('against a capable host', () => {
     const newer = newerApproval()
     items = [newer]
     render()
-    expect(mocks.outboxArgs.at(-1)?.queue).toEqual({
+    expect(mocks.sendArgs.at(-1)?.queue).toEqual({
       capability: 'supported',
       enabled: false
     })
-    mocks.outboxArgs.length = 0
+    mocks.sendArgs.length = 0
     items = [newer, approval({ kind: 'plan', text: 'do it' })]
     render()
-    expect(mocks.outboxArgs.at(-1)?.queue).toEqual({
+    expect(mocks.sendArgs.at(-1)?.queue).toEqual({
       capability: 'supported',
       enabled: true
     })
@@ -310,7 +335,7 @@ describe('against a capable host', () => {
       issued: true,
       ...(delivery ? { delivery } : {})
     })
-    outboxEntries = [
+    pendingSends = [
       // On its way asking to be queued: its card, not a bubble, shows it.
       entry('pending-queue', 'awaiting the answer', 'queue-if-active'),
       // Sent plain: a bubble.
@@ -338,10 +363,13 @@ describe('against a capable host', () => {
     const { result } = render()
     expect(result.current).toMatchObject({ isWorking: true, queueSendsNext: true, canStop: false })
     expect(result.current.queuedMessages.cards.map((card) => card.hold)).toEqual(['turn'])
+    // A command refused now is said while the pane reads working, and no longer.
+    expect(result.current.commandRefusalCauses.working).toBe(true)
     // Where the host would refuse that send, it names none: the chat reads idle.
     nextQueuedMessageId = null
     const refused = render()
     expect(refused.result.current).toMatchObject({ isWorking: false, queueSendsNext: false })
+    expect(refused.result.current.commandRefusalCauses.working).toBe(false)
   })
 
   it('shows host-held drafts as cards, never as transcript bubbles', () => {
@@ -353,6 +381,358 @@ describe('against a capable host', () => {
   })
 })
 
+function commandCalls(): unknown[] {
+  return mocks.call.mock.calls
+    .filter(([, method]) => method === 'agentSession.conversationCommand')
+    .map(([, , params]) => params)
+}
+
+function answerCommands(value: Record<string, unknown>): void {
+  mocks.call.mockImplementation(async (_target, method) =>
+    method === 'agentSession.conversationCommand'
+      ? { ok: true, replayed: false, fence: 3, cursor: { epoch: 'e', sequence: 1 }, value }
+      : method === 'agentSession.cancel'
+        ? {
+            ok: true,
+            replayed: false,
+            fence: 3,
+            cursor: { epoch: 'e', sequence: 1 },
+            value: { cancelled: true }
+          }
+        : null
+  )
+}
+
+describe('a /compact against a host that holds commands in line', () => {
+  beforeEach(() => {
+    setLocalRuntimeCapabilitiesForTests([
+      AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY,
+      AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY,
+      AGENT_SESSION_QUEUED_COMMANDS_RUNTIME_CAPABILITY
+    ])
+  })
+
+  it('mid-turn, goes to the host asking to wait, and its queued answer shows no notice', async () => {
+    answerCommands({
+      command: 'compact',
+      state: 'completed',
+      queued: { messageId: 'operation-1', position: 1, state: 'waiting' }
+    })
+    const { result } = render()
+    let outcome: unknown
+    await act(async () => {
+      outcome = await result.current.runConversationCommand('compact')
+    })
+    expect(outcome).toEqual({ accepted: true, error: null })
+    const parsed = ConversationCommandParams.parse(commandCalls()[0])
+    expect(parsed).toMatchObject({ command: 'compact', delivery: 'queue-if-active' })
+    expect(parsed.envelope.payloadFingerprint).toBe(
+      structuredAgentSessionPayloadFingerprint({
+        method: 'agentSession.conversationCommand',
+        sessionId: 'session-1',
+        fields: { command: 'compact', delivery: 'queue-if-active' }
+      })
+    )
+  })
+
+  function unsent(
+    id: string,
+    overrides: Partial<StructuredAgentSessionPendingSend> = {}
+  ): StructuredAgentSessionPendingSend {
+    return {
+      clientMessageId: id,
+      sessionId: 'session-1',
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: `message ${id}` }] },
+      previewUris: [],
+      queuedAt: 1,
+      phase: 'sending',
+      issued: true,
+      ...overrides
+    }
+  }
+
+  it('behind a message still on its way: Send is busy, the message reads Sending, nothing is armed', async () => {
+    items = []
+    answerCommands({ command: 'compact', state: 'completed' })
+    pendingSends = [unsent('on-its-way')]
+    const { result, rerender } = render()
+    // The composer's send control is Stop while a send is on its way: the existing busy state.
+    expect(result.current.canStop).toBe(true)
+    // Its row reads "Sending…" (`NativeChatMessageRow`), from the same outbox.
+    expect(
+      structuredAgentSessionDeliveryNotices({
+        pending: pendingSends,
+        agentName: 'Claude',
+        submissions: [],
+        startFailures: []
+      }).get(agentJournalSubmissionKey('on-its-way'))
+    ).toEqual({ sending: true })
+    let outcome: unknown
+    await act(async () => {
+      outcome = await result.current.runConversationCommand('compact')
+    })
+    expect(outcome).toEqual({ accepted: false, error: null })
+    // The host has it now: nothing goes out on its own; the next press does.
+    pendingSends = []
+    rerender()
+    expect(commandCalls()).toHaveLength(0)
+    expect(result.current.canStop).toBe(false)
+    await act(async () => {
+      outcome = await result.current.runConversationCommand('compact')
+    })
+    expect(outcome).toEqual({ accepted: true, error: null })
+    expect(commandCalls()).toHaveLength(1)
+  })
+
+  it('Stop settles the pending send and leaves no command armed behind it', async () => {
+    items = []
+    answerCommands({ command: 'compact', state: 'completed' })
+    pendingSends = [unsent('on-its-way')]
+    const { result, rerender } = render()
+    await act(async () => {
+      expect(await result.current.runConversationCommand('compact')).toEqual({
+        accepted: false,
+        error: null
+      })
+      await result.current.stop()
+    })
+    pendingSends = []
+    rerender()
+    expect(result.current.canStop).toBe(false)
+    expect(commandCalls()).toHaveLength(0)
+    await act(async () => {
+      expect(await result.current.runConversationCommand('compact')).toEqual({
+        accepted: true,
+        error: null
+      })
+    })
+  })
+
+  it('mid-turn, behind a queue send on its way: it reads Sending as a card, and nothing is armed', async () => {
+    answerCommands({ command: 'compact', state: 'completed' })
+    pendingSends = [
+      unsent('on-its-way', {
+        delivery: 'queue-if-active'
+      })
+    ]
+    const { result } = render()
+    // Not a transcript bubble mid-turn; the card it is about to become reads as sending.
+    expect(JSON.stringify(result.current.messages)).not.toContain('message on-its-way')
+    expect(result.current.queuedMessages.cards).toEqual([
+      expect.objectContaining({
+        messageId: 'on-its-way',
+        text: 'message on-its-way',
+        hold: 'sending'
+      })
+    ])
+    await act(async () => {
+      expect(await result.current.runConversationCommand('compact')).toEqual({
+        accepted: false,
+        error: null
+      })
+    })
+    expect(commandCalls()).toHaveLength(0)
+  })
+
+  it('an idle send the host has recorded is its transcript row only, never a sending card too', () => {
+    items = []
+    pendingSends = [
+      unsent('recorded', {
+        delivery: 'queue-if-active'
+      })
+    ]
+    // The host took it straight through: its own submission, unanswered, makes the chat working.
+    submissions = [
+      {
+        clientMessageId: 'recorded',
+        fence: 3,
+        payloadFingerprint: 'fingerprint',
+        dispatchState: 'pending',
+        providerItemId: null,
+        reason: null,
+        submittedAt: 2,
+        resolvedAt: null,
+        handoverRecorded: true,
+        handedOverAt: 3
+      }
+    ]
+    const { result } = render()
+    expect(result.current.isWorking).toBe(true)
+    expect(result.current.queuedMessages.cards).toEqual([])
+  })
+
+  it('/clear right after a Stop kept a send on its way names no Retry it does not show', async () => {
+    items = []
+    pendingSends = [
+      unsent('kept', {
+        delivery: 'queue-if-active'
+      })
+    ]
+    const { result } = render()
+    let outcome: unknown
+    await act(async () => {
+      outcome = await result.current.runConversationCommand('clear')
+    })
+    expect(outcome).toEqual({
+      accepted: false,
+      error: 'Your earlier message is still being sent. Run /clear once it has gone.',
+      refusedWhile: 'sending'
+    })
+  })
+
+  it('/clear with the agent idle behind its own unsent message says it is still being sent', async () => {
+    items = []
+    pendingSends = [unsent('on-its-way')]
+    const { result, rerender } = render()
+    let outcome: unknown
+    await act(async () => {
+      outcome = await result.current.runConversationCommand('clear')
+    })
+    expect(outcome).toEqual({
+      accepted: false,
+      error: 'Your earlier message is still being sent. Run /clear once it has gone.',
+      refusedWhile: 'sending'
+    })
+    expect(commandCalls()).toHaveLength(0)
+    // A failed send returns to the composer and no longer blocks another command.
+    pendingSends = []
+    rerender()
+    expect(result.current.commandRefusalCauses).toMatchObject({ sending: false, retry: false })
+  })
+
+  it('a recorded message no longer blocks /clear or /compact', async () => {
+    items = []
+    pendingSends = [unsent('recorded', { phase: 'recorded' })]
+    const { result } = render()
+    for (const command of ['clear', 'compact'] as const) {
+      answerCommands({ command, state: 'completed' })
+      await act(async () => {
+        expect(await result.current.runConversationCommand(command)).toEqual({
+          accepted: true,
+          error: null
+        })
+      })
+    }
+    expect(commandCalls()).toHaveLength(2)
+    expect(result.current.commandRefusalCauses).toMatchObject({ sending: false, retry: false })
+  })
+
+  it('/clear mid-turn is still refused here, and never asks to wait', async () => {
+    const { result } = render()
+    await act(async () => {
+      await result.current.runConversationCommand('clear')
+    })
+    expect(commandCalls()).toHaveLength(0)
+    items = []
+    answerCommands({ command: 'clear', state: 'completed' })
+    const idle = render()
+    await act(async () => {
+      await idle.result.current.runConversationCommand('clear')
+    })
+    expect(ConversationCommandParams.parse(commandCalls()[0])).not.toHaveProperty('delivery')
+  })
+
+  it('a rewind on its way holds /clear and /compact alike, in the same words, and writes nothing', async () => {
+    items = []
+    mocks.rewindPending = true
+    const { result } = render()
+    for (const command of ['clear', 'compact'] as const) {
+      let outcome: unknown
+      await act(async () => {
+        outcome = await result.current.runConversationCommand(command)
+      })
+      expect(outcome).toEqual({
+        accepted: false,
+        error: 'Wait for pending work and messages to finish before using this command.'
+      })
+    }
+    expect(commandCalls()).toHaveLength(0)
+  })
+
+  const compactCard = (held: boolean) => ({
+    ...draft('compact-1'),
+    body: {
+      kind: 'message' as const,
+      role: 'user' as const,
+      blocks: [{ type: 'text' as const, text: '/compact' }],
+      command: { name: 'compact' as const }
+    },
+    ...(held ? { paused: true as const, pausedReason: 'send_failed' as const } : {})
+  })
+
+  it('a send behind a waiting command card queues, even with follow-ups off', () => {
+    queuedMessages = [compactCard(false)]
+    render(false)
+    expect(mocks.sendArgs.at(-1)?.queue).toEqual({
+      capability: 'supported',
+      enabled: true
+    })
+  })
+
+  it('a send-failed command card, which the queue skips, does not force a send to queue', () => {
+    queuedMessages = [compactCard(true)]
+    render(false)
+    expect(mocks.sendArgs.at(-1)?.queue).toEqual({
+      capability: 'supported',
+      enabled: false
+    })
+  })
+})
+
+describe('a /compact against a host that queues messages but not commands', () => {
+  beforeEach(() => {
+    setLocalRuntimeCapabilitiesForTests([
+      AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY,
+      AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY
+    ])
+  })
+
+  it('mid-turn, is held back here as today, and idle goes out without `delivery`', async () => {
+    const { result } = render()
+    await act(async () => {
+      await result.current.runConversationCommand('compact')
+    })
+    expect(commandCalls()).toHaveLength(0)
+    items = []
+    answerCommands({ command: 'compact', state: 'completed' })
+    const idle = render()
+    await act(async () => {
+      await idle.result.current.runConversationCommand('compact')
+    })
+    expect(ConversationCommandParams.parse(commandCalls()[0])).not.toHaveProperty('delivery')
+  })
+})
+
+describe('a /compact against a host that holds commands but has its queue dark', () => {
+  beforeEach(() => {
+    setLocalRuntimeCapabilitiesForTests([
+      AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY,
+      AGENT_SESSION_QUEUED_COMMANDS_RUNTIME_CAPABILITY
+    ])
+  })
+
+  it("is exactly today's: held back mid-turn, and idle goes out without `delivery`", async () => {
+    const { result } = render()
+    let outcome: unknown
+    await act(async () => {
+      outcome = await result.current.runConversationCommand('compact')
+    })
+    expect(outcome).toEqual({
+      accepted: false,
+      error: "The agent is still working. Run /compact when it's done.",
+      refusedWhile: 'working'
+    })
+    expect(commandCalls()).toHaveLength(0)
+    items = []
+    answerCommands({ command: 'compact', state: 'completed' })
+    const idle = render()
+    await act(async () => {
+      await idle.result.current.runConversationCommand('compact')
+    })
+    expect(ConversationCommandParams.parse(commandCalls()[0])).not.toHaveProperty('delivery')
+  })
+})
+
 describe('against a host without the capability', () => {
   beforeEach(() => {
     setLocalRuntimeCapabilitiesForTests([AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY])
@@ -360,7 +740,7 @@ describe('against a host without the capability', () => {
 
   it('never asks for queue delivery, whatever the setting says', () => {
     render()
-    expect(mocks.outboxArgs.at(-1)?.queue?.capability).toBe('unsupported')
+    expect(mocks.sendArgs.at(-1)?.queue?.capability).toBe('unsupported')
   })
 
   it("Stop stays exactly today's conversation Stop — no withdrawQueued key at all", async () => {

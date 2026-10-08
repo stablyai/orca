@@ -187,6 +187,8 @@ async function params(itemId: string, epoch?: string) {
   }
 }
 
+const LATE = { provider: 'codex' as const, threadId: HOST_TEST_THREAD, turnId: 'late', ordinal: 0 }
+
 describe('host rewind', () => {
   it('retains the raw Stop failure and recovers a committed rewind against raw bodies', async () => {
     await expectRawStopNoteRewindRecovery({ host, store, rewind })
@@ -322,6 +324,41 @@ describe('host rewind', () => {
       refusal: { rewindReason: 'busy' }
     })
     expect(rewind).not.toHaveBeenCalled()
+  })
+  it('is busy exactly while the chat shows a sent message unanswered', async () => {
+    const target = await seed()
+    const body = hostTestMessage('unanswered')
+    const clientOperationId = hostTestOperationId()
+    // Accepted: the wait below sees its submission settle in doubt.
+    await host.send(caller, {
+      body,
+      envelope: {
+        ...(await params(target)).envelope,
+        clientOperationId,
+        payloadFingerprint: computeAgentSessionPayloadFingerprint({
+          method: 'agentSession.send',
+          sessionId: HOST_TEST_SESSION,
+          fields: { body }
+        })
+      }
+    })
+    // The adapter's reply is lost: a live doubt, which the chat shows as working.
+    const sent = async () =>
+      (await host.journalSnapshot(HOST_TEST_SESSION)).submissions.find(
+        (entry) => entry.clientMessageId === clientOperationId
+      )
+    await vi.waitFor(async () => expect((await sent())?.dispatchState).toBe('unknown'))
+    expect(await host.rewind(caller, await params(target))).toMatchObject({
+      ok: false,
+      refusal: { rewindReason: 'busy' }
+    })
+    await host.settleLateDispatch({
+      sessionId: HOST_TEST_SESSION,
+      clientMessageId: clientOperationId,
+      providerIdentity: LATE
+    })
+    expect(await host.rewind(caller, await params(target))).toMatchObject({ ok: true })
+    expect(rewind).toHaveBeenCalledOnce()
   })
   it('refuses stale epochs and targets from another provider', async () => {
     const target = await seed()

@@ -16150,7 +16150,6 @@
             "deb5293610": "원격 런타임에서는 브라우저 주석을 사용할 수 없습니다.",
             "90d021f2ad": "추가",
             "0cb3bd6221": "주석 의도",
-            "8f87e6c2e5": "의도",
             "532bac48c5": "여기에서 agent가 무엇을 변경해야 하는지 설명하세요...",
             "d2a7092e6e": "주석 코멘트",
             "b472c5fe03": "브라우저 주석 추가",
@@ -16849,6 +16848,16 @@
         "runHistory": {
           "occurrencesWithLatest": "{{times}}회, 가장 최근에는 {{date}}",
           "occurrences": "{{times}}회"
+        },
+        "extraAgentArgs": {
+          "advanced": "고급",
+          "clear": "인수 지우기",
+          "unsupported": "이 에이전트는 아직 추가 인수를 지원하지 않습니다.",
+          "label": "추가 에이전트 인수",
+          "needsFreshSession": "추가 인수를 사용하려면 실행할 때마다 새 세션이 필요합니다.",
+          "useFreshSessions": "새 세션 사용",
+          "helper": "새 세션마다 이 호스트의 기본 인수 뒤에 추가됩니다.",
+          "detailLabel": "추가 인수"
         }
       },
       "agent": {
@@ -17884,7 +17893,10 @@
         "agentCommandNotSignedIn": "이 채팅을 실행하는 컴퓨터에서 `{{loginCommand}}`으로 {{agent}}에 로그인하세요.",
         "interactiveAgentNotSignedIn": "이 채팅을 실행하는 컴퓨터에서 `{{loginCommand}}`을 실행하고 `{{slashCommand}}`을 사용해 {{agent}}에 로그인하세요.",
         "agentNotSignedIn": "{{agent}}에 로그인하세요.",
-        "thenSendAgain": "그런 다음 메시지를 다시 보내세요."
+        "thenSendAgain": "그런 다음 메시지를 다시 보내세요.",
+        "runCommandWhenDone": "작업이 끝나면 /{{command}}을(를) 실행하세요.",
+        "commandAfterAnswer": "에이전트의 질문 또는 승인에 응답한 다음 /{{command}}을(를) 실행하세요.",
+        "sessionNotRestored": "{{agent}}이(가) 이전 세션을 다시 열 수 없어 이 채팅은 새 세션에서 계속됩니다. {{agent}}은(는) 이전 메시지를 기억하지 않습니다."
       },
       "writeNotice": {
         "notDoneReadHistory": "이 채팅의 기록을 불러오지 못했습니다.",
@@ -17946,7 +17958,16 @@
         "recordUnreadable": "Orca가 이 채팅의 저장된 상태를 읽지 못했습니다.",
         "chatNotFound": "Orca에서 이 채팅을 찾을 수 없습니다.",
         "startNewChat": "계속하려면 새 채팅을 시작하세요.",
-        "tryAgain": "다시 시도하세요."
+        "tryAgain": "다시 시도하세요.",
+        "agentStillWorking": "에이전트가 아직 작업 중입니다.",
+        "runClearWhenDone": "작업이 끝나면 /clear를 실행하세요.",
+        "clearAfterAnswer": "에이전트의 질문 또는 승인에 응답한 다음 /clear를 실행하세요.",
+        "runCompactWhenDone": "작업이 끝나면 /compact를 실행하세요.",
+        "compactAfterAnswer": "에이전트의 질문 또는 승인에 응답한 다음 /compact를 실행하세요.",
+        "clearAfterRetry": "이전 메시지를 다시 시도한 다음 /clear를 실행하세요.",
+        "compactAfterRetry": "이전 메시지를 다시 시도한 다음 /compact를 실행하세요.",
+        "clearAfterSending": "이전 메시지를 아직 보내는 중입니다. 전송이 끝나면 /clear를 실행하세요.",
+        "compactAfterSending": "이전 메시지를 아직 보내는 중입니다. 전송이 끝나면 /compact를 실행하세요."
       },
       "composer": {
         "imageUnsupported": "이 에이전트는 이미지 붙여넣기를 지원하지 않습니다.",
@@ -18405,7 +18426,8 @@
         "sendConfirmBody_other": "메시지를 보내려고 합니다. 대기열에 있는 메시지 {{count}}개를 지울까요?",
         "sendConfirmClear": "대기열 지우기",
         "sendConfirmSend": "메시지 보내기",
-        "from": "보낸 사람: {{names}}"
+        "from": "보낸 사람: {{names}}",
+        "pausedSendFailedWaiting": "보낼 수 없습니다. 에이전트가 끝나면 보내기를 눌러 다시 시도하세요."
       },
       "thought": "생각함",
       "thoughtForDuration": "{{duration}} 동안 생각함",

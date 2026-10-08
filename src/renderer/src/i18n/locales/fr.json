@@ -16255,7 +16255,6 @@
             "deb5293610": "Annotations du navigateur indisponibles dans un runtime distant",
             "90d021f2ad": "Ajouter",
             "0cb3bd6221": "Intention d'annotation",
-            "8f87e6c2e5": "Intention",
             "532bac48c5": "Décrivez ce que l'agent doit modifier ici...",
             "d2a7092e6e": "Commentaire d'annotation",
             "b472c5fe03": "Ajouter une annotation au navigateur",
@@ -16954,6 +16953,16 @@
         "AutomationsPageBreadcrumb": {
           "ariaLabel": "Fil d'Ariane des automatisations",
           "runDetails": "Détails de l'exécution"
+        },
+        "extraAgentArgs": {
+          "advanced": "Avancé",
+          "clear": "Effacer les arguments",
+          "unsupported": "Cet agent ne prend pas encore en charge les arguments supplémentaires.",
+          "label": "Arguments supplémentaires de l'agent",
+          "needsFreshSession": "Les arguments supplémentaires exigent une nouvelle session à chaque exécution.",
+          "useFreshSessions": "Utiliser de nouvelles sessions",
+          "helper": "Ajoutés aux arguments par défaut de cet hôte à chaque nouvelle session.",
+          "detailLabel": "Arguments supplémentaires"
         }
       },
       "agent": {
@@ -17950,7 +17959,10 @@
         "agentCommandNotSignedIn": "Connectez-vous à {{agent}} avec `{{loginCommand}}` sur l’ordinateur qui exécute ce chat.",
         "interactiveAgentNotSignedIn": "Connectez-vous à {{agent}} en exécutant `{{loginCommand}}` puis en utilisant `{{slashCommand}}` sur l’ordinateur qui exécute ce chat.",
         "agentNotSignedIn": "Connectez-vous à {{agent}}.",
-        "thenSendAgain": "Puis envoyez à nouveau votre message."
+        "thenSendAgain": "Puis envoyez à nouveau votre message.",
+        "runCommandWhenDone": "Lancez /{{command}} quand il aura terminé.",
+        "commandAfterAnswer": "Répondez à la question ou à la demande d'approbation de l'agent, puis lancez /{{command}}.",
+        "sessionNotRestored": "{{agent}} n'a pas pu rouvrir sa session précédente, cette discussion continue donc dans une nouvelle. {{agent}} ne se souvient pas des messages précédents."
       },
       "writeNotice": {
         "notDoneReadHistory": "L'historique de ce chat n'a pas pu être chargé.",
@@ -18012,7 +18024,16 @@
         "recordUnreadable": "Orca n'a pas pu lire l'état enregistré de ce chat.",
         "chatNotFound": "Orca ne trouve pas ce chat.",
         "startNewChat": "Démarrez un nouveau chat pour continuer.",
-        "tryAgain": "Réessayez."
+        "tryAgain": "Réessayez.",
+        "agentStillWorking": "L'agent est encore en train de travailler.",
+        "runClearWhenDone": "Lancez /clear quand il aura terminé.",
+        "clearAfterAnswer": "Répondez à la question ou à la demande d'approbation de l'agent, puis lancez /clear.",
+        "runCompactWhenDone": "Lancez /compact quand il aura terminé.",
+        "compactAfterAnswer": "Répondez à la question ou à la demande d'approbation de l'agent, puis lancez /compact.",
+        "clearAfterRetry": "Réessayez votre message précédent, puis lancez /clear.",
+        "compactAfterRetry": "Réessayez votre message précédent, puis lancez /compact.",
+        "clearAfterSending": "Votre message précédent est encore en cours d'envoi. Lancez /clear une fois qu'il est parti.",
+        "compactAfterSending": "Votre message précédent est encore en cours d'envoi. Lancez /compact une fois qu'il est parti."
       },
       "composer": {
         "imageUnsupported": "Le collage d'image n'est pas pris en charge pour cet agent.",
@@ -18471,7 +18492,8 @@
         "sendConfirmBody_other": "Vous êtes sur le point d'envoyer un message. Voulez-vous effacer les {{count}} messages déjà en file d'attente ?",
         "sendConfirmClear": "Vider la file d'attente",
         "sendConfirmSend": "Envoyer le message",
-        "from": "De {{names}}"
+        "from": "De {{names}}",
+        "pausedSendFailedWaiting": "Envoi impossible. Quand l'agent aura terminé, appuyez sur Envoyer pour réessayer."
       },
       "thought": "A réfléchi",
       "thoughtForDuration": "A réfléchi pendant {{duration}}",

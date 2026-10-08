@@ -8,6 +8,8 @@ export type LaunchAgentBackgroundSessionArgs = {
   agent: TuiAgent
   worktreeId: string
   prompt?: string
+  /** An automation's saved extras, merged over this host's default Arguments. */
+  extraAgentArgs?: string
   launchSource?: LaunchSource
   title?: string
   onData?: (chunk: string) => void

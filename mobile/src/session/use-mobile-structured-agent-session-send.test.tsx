@@ -10,10 +10,10 @@ import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { structuredSendResultFixture } from './structured-agent-send-result.test-fixture'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
 import { agentSessionFailureWords } from '../../../src/shared/agent-session-failure-words'
-import type { AgentSessionFailureFact } from '../../../src/shared/agent-session-failure'
 import {
   useMobileNativeChatSendError,
-  mobileNativeChatSendErrorMessage
+  mobileNativeChatSendErrorMessage,
+  type MobileNativeChatSendErrorDetails
 } from './use-mobile-native-chat-send-error'
 
 const asyncStorage = vi.hoisted(() => ({
@@ -123,8 +123,8 @@ describe('mobile structured send actions', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    onSendError.mockImplementation((message: string, failure?: AgentSessionFailureFact) =>
-      banner?.show(message, failure)
+    onSendError.mockImplementation((message: string, details?: MobileNativeChatSendErrorDetails) =>
+      banner?.show(message, details)
     )
 
     storedOperations = new Map()
@@ -239,7 +239,7 @@ describe('mobile structured send actions', () => {
       await act(async () => {
         expect(await hook!.sendWithOutcome('my message')).toBe('rejected')
       })
-      expect(onSendError).toHaveBeenCalledExactlyOnceWith(words.text, fact)
+      expect(onSendError).toHaveBeenCalledExactlyOnceWith(words.text, { failure: fact })
       if (order === 'reply-before-row') {
         expect(renderer!.root.findByType('span').children.join('')).toBe(words.text)
         act(() => listener?.(event))

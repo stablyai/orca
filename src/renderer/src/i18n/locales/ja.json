@@ -16150,7 +16150,6 @@
             "deb5293610": "ブラウザの注釈はリモートランタイムでは使用できません",
             "90d021f2ad": "追加",
             "0cb3bd6221": "注釈の意図",
-            "8f87e6c2e5": "意図",
             "532bac48c5": "Agent がここで何を変更する必要があるかを説明してください…",
             "d2a7092e6e": "注釈コメント",
             "b472c5fe03": "ブラウザの注釈を追加する",
@@ -16849,6 +16848,16 @@
         "runHistory": {
           "occurrencesWithLatest": "{{times}} 回、最近では {{date}}",
           "occurrences": "{{times}}回"
+        },
+        "extraAgentArgs": {
+          "advanced": "詳細設定",
+          "clear": "引数をクリア",
+          "unsupported": "この Agent は追加の引数にまだ対応していません。",
+          "label": "追加の Agent 引数",
+          "needsFreshSession": "追加の引数を使うには、実行ごとに新しいセッションが必要です。",
+          "useFreshSessions": "新しいセッションを使用",
+          "helper": "新しいセッションごとに、このホストのデフォルト引数に追加されます。",
+          "detailLabel": "追加の引数"
         }
       },
       "agent": {
@@ -17884,7 +17893,10 @@
         "agentCommandNotSignedIn": "このチャットを実行しているコンピューターで `{{loginCommand}}` を使って {{agent}} にサインインしてください。",
         "interactiveAgentNotSignedIn": "このチャットを実行しているコンピューターで `{{loginCommand}}` を起動し、`{{slashCommand}}` を使って {{agent}} にサインインしてください。",
         "agentNotSignedIn": "{{agent}} にサインインしてください。",
-        "thenSendAgain": "その後、メッセージをもう一度送信してください。"
+        "thenSendAgain": "その後、メッセージをもう一度送信してください。",
+        "runCommandWhenDone": "終わったら /{{command}} を実行してください。",
+        "commandAfterAnswer": "Agent の質問または承認に回答してから、/{{command}} を実行してください。",
+        "sessionNotRestored": "{{agent}} は以前のセッションを再開できなかったため、このチャットは新しいセッションで続行します。{{agent}} は以前のメッセージを覚えていません。"
       },
       "writeNotice": {
         "notDoneReadHistory": "このチャットの履歴を読み込めませんでした。",
@@ -17946,7 +17958,16 @@
         "recordUnreadable": "Orca はこのチャットの保存済みの状態を読み取れませんでした。",
         "chatNotFound": "Orca はこのチャットを見つけられません。",
         "startNewChat": "続けるには、新しいチャットを開始してください。",
-        "tryAgain": "もう一度お試しください。"
+        "tryAgain": "もう一度お試しください。",
+        "agentStillWorking": "Agent はまだ作業中です。",
+        "runClearWhenDone": "終わったら /clear を実行してください。",
+        "clearAfterAnswer": "Agent の質問または承認に回答してから、/clear を実行してください。",
+        "runCompactWhenDone": "終わったら /compact を実行してください。",
+        "compactAfterAnswer": "Agent の質問または承認に回答してから、/compact を実行してください。",
+        "clearAfterRetry": "以前のメッセージを再試行してから、/clear を実行してください。",
+        "compactAfterRetry": "以前のメッセージを再試行してから、/compact を実行してください。",
+        "clearAfterSending": "以前のメッセージはまだ送信中です。送信が終わったら /clear を実行してください。",
+        "compactAfterSending": "以前のメッセージはまだ送信中です。送信が終わったら /compact を実行してください。"
       },
       "composer": {
         "imageUnsupported": "この Agent では画像の貼り付けはサポートされていません。",
@@ -18405,7 +18426,8 @@
         "sendConfirmBody_other": "メッセージを送信しようとしています。キューに入っている {{count}} 件のメッセージを消去しますか？",
         "sendConfirmClear": "キューを消去",
         "sendConfirmSend": "メッセージを送信",
-        "from": "送信元: {{names}}"
+        "from": "送信元: {{names}}",
+        "pausedSendFailedWaiting": "送信できませんでした。Agent の処理が終わったら「送信」を押して再試行してください。"
       },
       "thought": "考えました",
       "thoughtForDuration": "{{duration}} 考えました",

@@ -44,7 +44,7 @@ export class CodexBackgroundTaskTracker {
   ) {
     this.commands = new CodexBackgroundCommandTracker(primaryThreadId)
     this.childWork = new CodexChildWorkEvidence(primaryThreadId, executions, (threadId) =>
-      this.commands.threadTasks(threadId)
+      this.commands.threadCommands(threadId)
     )
   }
 
@@ -64,15 +64,18 @@ export class CodexBackgroundTaskTracker {
   ): boolean {
     const itemEvent = event.method === 'item/started' || event.method === 'item/completed'
     const command = itemEvent ? this.commands.observe(event) : null
+    const frame = readCodexBackgroundTaskFrame(event, this.primaryThreadId)
     const commands = [
       ...unapproved.flatMap((abandoned) => this.commands.endUnapproved(abandoned) ?? []),
+      ...(frame?.kind === 'turn' && frame.state !== 'working'
+        ? this.commands.endTurn(frame.threadId, frame.turnId)
+        : []),
       ...(event.method === 'thread/closed'
         ? this.commands.endThread(event.threadId)
         : command
           ? [command]
           : [])
     ]
-    const frame = readCodexBackgroundTaskFrame(event, this.primaryThreadId)
     if (frame?.kind === 'subagents') {
       for (const child of frame.children) {
         this.executions.register(

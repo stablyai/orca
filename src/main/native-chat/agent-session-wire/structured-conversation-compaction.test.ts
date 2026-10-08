@@ -392,7 +392,12 @@ it('refuses the command at handover when the provider opened a turn meanwhile (B
   }
   await expect(commanded).resolves.toMatchObject({
     ok: true,
-    value: { state: 'completed', error: "This command didn't run. Try it again.", failure: refused }
+    // The reason, said as its refusal is everywhere, not a bare "try it again".
+    value: {
+      state: 'completed',
+      error: "The agent is still working. Run /compact when it's done.",
+      failure: refused
+    }
   })
   expect(compact).not.toHaveBeenCalled()
   expect(await commandTurn(params.envelope.clientOperationId)).toBeUndefined()
@@ -402,7 +407,7 @@ it('refuses the command at handover when the provider opened a turn meanwhile (B
     )
   ).toMatchObject({
     dispatchState: 'rejected',
-    reason: "This command didn't run. Try it again.",
+    reason: "The agent is still working. Run /compact when it's done.",
     rejection: refused
   })
 })

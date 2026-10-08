@@ -209,6 +209,7 @@ export const SQLITE_RUNTIME_INCLUDE = [
   'src/main/runtime/structured-agent-session-startup-reconcile.test.ts',
   'src/main/runtime/structured-claude-attachment-grant.test.ts',
   'src/main/runtime/structured-claude-pending-rewind.test.ts',
+  'src/main/runtime/structured-foreground-command-strip.test.ts',
   'src/main/ssh-expired-lease-pane-readoption.test.ts',
   'src/main/ssh-reattach-pane-cardinality.test.ts',
   'src/main/ssh/orcad-migration-cutover-coordinator.test.ts',

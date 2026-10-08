@@ -80,7 +80,8 @@ export function createRuntimeAutomationService(input: {
             const terminal = await runtime.launchAgentTerminal(`id:${automation.workspaceId}`, {
               agent: automation.agentId,
               prompt: automation.prompt,
-              title: run.title
+              title: run.title,
+              ...(automation.extraAgentArgs ? { extraAgentArgs: automation.extraAgentArgs } : {})
             })
             terminalHandle = terminal.handle
             terminalSessionId = terminal.tabId ?? null

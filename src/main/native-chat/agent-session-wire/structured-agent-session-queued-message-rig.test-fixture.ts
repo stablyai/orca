@@ -285,6 +285,7 @@ export async function createQueuedMessageTestRig(
     compact,
     starts: provider.starts,
     holdNextStart: provider.holdNextStart,
+    failNextStart: provider.failNextStart,
     finishCompact: provider.finishCompact,
     providerEvents: provider.providerEvents,
     envelope,

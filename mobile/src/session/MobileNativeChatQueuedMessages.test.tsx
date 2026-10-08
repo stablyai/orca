@@ -157,6 +157,48 @@ describe('MobileNativeChatQueuedMessages', () => {
     expect(nodeTypes(rows[1]!)).toContain('CornerDownRight')
   })
 
+  it('a command card never steers: Send only while the agent is idle, and no menu', async () => {
+    const onSend = vi.fn(async () => true)
+    const mounted = await mount({
+      cards: [
+        card({ messageId: 'working', text: '/compact', command: true, waitsForAgent: true }),
+        card({ messageId: 'idle', text: '/compact', command: true })
+      ],
+      onSend
+    })
+    expect(texts(mounted).filter((text) => text === 'Send' || text === 'Steer')).toEqual(['Send'])
+    await act(async () => {
+      mounted.root.findByProps({ accessibilityLabel: 'Send this message' }).props.onPress()
+    })
+    expect(onSend).toHaveBeenCalledWith('idle')
+    // Its menu holds only Edit, which a command does not take.
+    expect(mounted.root.findAllByProps({ accessibilityLabel: 'More actions' })).toHaveLength(0)
+    expect(
+      mounted.root.findAllByProps({ accessibilityLabel: 'Delete this queued message' })
+    ).toHaveLength(2)
+  })
+
+  it("a paused command card's ways out are Delete and the queue's Resume", async () => {
+    const onResume = vi.fn(async () => true)
+    const onDelete = vi.fn(async () => true)
+    const mounted = await mount({
+      cards: [card({ messageId: 'compact', text: '/compact', command: true })],
+      pause: { reason: 'stopped' },
+      onResume,
+      onDelete
+    })
+    await act(async () => {
+      mounted.root
+        .findByProps({ accessibilityLabel: 'Resume sending the queued messages' })
+        .props.onPress()
+    })
+    expect(onResume).toHaveBeenCalledOnce()
+    await act(async () => {
+      mounted.root.findByProps({ accessibilityLabel: 'Delete this queued message' }).props.onPress()
+    })
+    expect(onDelete).toHaveBeenCalledWith('compact')
+  })
+
   it("holds Steer while a person's Stop ends the turn; Delete still works", async () => {
     const onSend = vi.fn(async () => true)
     const onDelete = vi.fn(async () => true)

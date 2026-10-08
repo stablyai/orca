@@ -37,7 +37,12 @@ const IDS = Object.keys(AGENT_SESSION_FAILURE_COPY).filter(
 const NOTICE_PIECES: readonly AgentSessionFailureCopyId[] = [
   'terminalAgentHoldsChat',
   'quitTerminalAgent',
-  'startNewChat'
+  'startNewChat',
+  'backgroundTasksRunning',
+  'waitForBackgroundTasks',
+  'agentStarting',
+  'waitForStart',
+  'agentStillWorking'
 ]
 // Kana, and kanji whose simplified Chinese form differs (続 is 续, 読 is 读, ...).
 const JAPANESE_ONLY = /[\u3040-\u30ff続読変済図気帰戻検択転権単圧応対発処実証覧関専]/u
