@@ -127,10 +127,52 @@ describe('preflight', () => {
   })
 
   afterEach(() => {
+    vi.unstubAllEnvs()
     Object.defineProperty(process, 'platform', {
       configurable: true,
       value: originalPlatform
     })
+  })
+
+  it('detects Kiro through its configured local command outside PATH', async () => {
+    const command = '/custom/bin/kiro-cli'
+    vi.stubEnv('KIRO_CLI_PATH', command)
+    execFileAsyncMock.mockImplementation(async (program) => {
+      if (program !== command) {
+        throw new Error('not found')
+      }
+      return { stdout: 'kiro-cli 1.0', stderr: '' }
+    })
+
+    await expect(detectInstalledAgents()).resolves.toContain('kiro')
+    expect(execFileAsyncMock).toHaveBeenCalledWith(command, ['--version'], expect.anything())
+  })
+
+  it('does not detect Kiro when its configured command fails, even if PATH has another copy', async () => {
+    const command = '/custom/bin/broken-kiro-cli'
+    vi.stubEnv('KIRO_CLI_PATH', command)
+    execFileAsyncMock.mockImplementation(async (program, args) => {
+      if (program === 'which' && args[0] === 'kiro-cli') {
+        return { stdout: '/usr/bin/kiro-cli\n', stderr: '' }
+      }
+      throw new Error('not found')
+    })
+
+    await expect(detectInstalledAgents()).resolves.not.toContain('kiro')
+  })
+
+  it('does not apply the local Kiro command to WSL detection', async () => {
+    vi.stubEnv('KIRO_CLI_PATH', 'C:\\custom\\kiro-cli.cmd')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    runWslProcessMock.mockResolvedValue({
+      code: 0,
+      stdout: '',
+      stderr: '',
+      timedOut: false
+    })
+
+    await expect(detectInstalledAgents({ wslDistro: 'Ubuntu' })).resolves.not.toContain('kiro')
+    expect(execFileAsyncMock).not.toHaveBeenCalled()
   })
 
   it('only reports agents when which/where resolves to a real executable path', async () => {

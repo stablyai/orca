@@ -1,6 +1,6 @@
-import { runProcess } from '../../shared/child-process/run-process'
 import { stripAnsiEscapeSequences } from '../../shared/ansi-escape-sequences'
 import { resolveCliCommand, withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
+import { runProcess } from '../../shared/child-process/run-process'
 import type { ProviderRateLimits, RateLimitWindow } from '../../shared/rate-limit-types'
 
 const CLI_TIMEOUT_MS = 20_000
@@ -57,9 +57,10 @@ const runCommand: CommandRunner = async (command, args, signal) => {
     env: withCliRuntimeOnPath(command, { ...process.env }),
     timeoutMs: CLI_TIMEOUT_MS,
     maxOutputBytes: 1024 * 1024,
+    killOnOutputLimit: true,
     signal
   })
-  if (result.code !== 0 || result.timedOut || result.signal !== null) {
+  if (result.code !== 0 || result.timedOut || result.signal || result.outputTruncated) {
     throw new Error('Kiro usage command failed')
   }
   return { stdout: result.stdout, stderr: result.stderr }
@@ -67,9 +68,8 @@ const runCommand: CommandRunner = async (command, args, signal) => {
 
 export function parseKiroUsageOutput(output: string): ProviderRateLimits {
   const readable = stripAnsiEscapeSequences(output).replace(/\r/g, '')
-  const header = readable.match(
-    /Estimated Usage\s*\|\s*resets on (\d{4}-\d{2}-\d{2})\s*\|\s*([^\n]+)/i
-  )
+  const header = readable.match(/Estimated Usage\s*\|\s*resets on\s+([^|\n]+?)\s*\|\s*([^\n]+)/i)
+  const resetDescription = header?.[1].trim()
   const credits = readable.match(/Credits\s*\(([\d,.]+)\s+of\s+([\d,.]+)\s+covered in plan\)/i)
   const percent = readable.match(/(?:^|\s)(\d+(?:\.\d+)?)%\s*$/m)
   const used = credits ? Number(credits[1].replaceAll(',', '')) : Number.NaN
@@ -80,7 +80,7 @@ export function parseKiroUsageOutput(output: string): ProviderRateLimits {
       : percent
         ? Math.min(100, Math.max(0, Number(percent[1])))
         : null
-  if (!header || usedPercent === null || !Number.isFinite(usedPercent)) {
+  if (!header || !resetDescription || usedPercent === null || !Number.isFinite(usedPercent)) {
     return result('error', 'Could not parse Kiro usage output', null, null, 'parse')
   }
   return result(
@@ -89,10 +89,9 @@ export function parseKiroUsageOutput(output: string): ProviderRateLimits {
     {
       usedPercent,
       windowMinutes: MONTHLY_WINDOW_MINUTES,
-      // Kiro reports a calendar date without a time zone or time of day. Keep it as
-      // display metadata instead of inventing a UTC-midnight countdown.
+      // Kiro supplies no exact reset time or zone, so keep its text as display metadata.
       resetsAt: null,
-      resetDescription: header[1]
+      resetDescription
     },
     header[2].trim()
   )

@@ -41,6 +41,17 @@ Credits (1233.74 of 2000 covered in plan)
     })
   })
 
+  it('accepts a Kiro reset description without an ISO date', () => {
+    const output =
+      'Estimated Usage | resets on 01/01 | KIRO PRO\nCredits (10 of 100 covered in plan)\n10%'
+
+    expect(parseKiroUsageOutput(output)).toMatchObject({
+      status: 'ok',
+      planType: 'KIRO PRO',
+      monthly: { usedPercent: 10, resetsAt: null, resetDescription: '01/01' }
+    })
+  })
+
   it('runs the local non-model usage command', async () => {
     const runner = vi.fn().mockResolvedValue({
       stdout: KIRO_USAGE_OUTPUT,
@@ -74,6 +85,7 @@ Credits (1233.74 of 2000 covered in plan)
         args: ['chat', '/usage', '--no-interactive', '--wrap', 'never'],
         timeoutMs: 20_000,
         maxOutputBytes: 1024 * 1024,
+        killOnOutputLimit: true,
         signal
       })
     )
@@ -83,7 +95,9 @@ Credits (1233.74 of 2000 covered in plan)
   it.each([
     { code: 1, signal: null, timedOut: false },
     { code: 0, signal: null, timedOut: true },
-    { code: null, signal: 'SIGTERM' as const, timedOut: false }
+    { code: null, signal: 'SIGTERM' as const, timedOut: false },
+    // Why: a capped read can end on a valid-looking line that is not the real total.
+    { code: 0, signal: null, timedOut: false, outputTruncated: true }
   ])('rejects unsuccessful process results even with valid output: %j', async (failure) => {
     vi.mocked(runProcess).mockResolvedValue({ ...failure, stdout: KIRO_USAGE_OUTPUT, stderr: '' })
     expect(await fetchKiroRateLimits({ command: '/tmp/kiro-cli' })).toMatchObject({
