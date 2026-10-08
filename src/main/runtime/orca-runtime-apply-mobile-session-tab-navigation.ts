@@ -1,5 +1,6 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh } from './orca-runtime-perform-mobile-session-pty-records-refresh'
+import { resolveEditorAuthority } from './editor-authority'
 import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot,
@@ -228,6 +229,16 @@ export class OrcaRuntimeWithApplyMobileSessionTabNavigation extends OrcaRuntimeW
         ...session.activeTabIdByWorktree,
         [worktreeId]: tab.parentTabId
       },
+      // Why: host-owned editor focus is persisted; a terminal activation must hand focus back.
+      ...(session.activeTabTypeByWorktree?.[worktreeId] === 'editor' &&
+      resolveEditorAuthority(this) === 'host'
+        ? {
+            activeTabTypeByWorktree: {
+              ...session.activeTabTypeByWorktree,
+              [worktreeId]: 'terminal'
+            }
+          }
+        : {}),
       terminalLayoutsByTabId: nextLayouts
     })
   }

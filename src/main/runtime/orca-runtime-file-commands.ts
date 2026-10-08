@@ -21,6 +21,13 @@ import { ClientHostedBrowserRowPublisher } from './client-hosted-browser-row-pub
 import { getRuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 import { getBrowserHostLeaseRegistry } from './browser-host-lease-registry-instance'
 import type { RuntimeLeafRecord } from './runtime-terminal-state-records'
+import { resolveEditorAuthority } from './editor-authority'
+import { openHostDiffTab, openHostEditFileTab } from './host-editor-tab-commands'
+import { getHostEditorTabState } from './host-editor-tab-state'
+import { getRuntimeDesktopSurface } from './runtime-desktop-surface'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../shared/runtime-types'
+import { parseWorkspaceKey } from '../../shared/workspace-scope'
+import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 
 export class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreservedBranchCleanup {
   protected readonly fileCommands = new RuntimeFileCommands({
@@ -44,13 +51,43 @@ export class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreservedBranchC
         absolutePath
       }),
     resolveRuntimeGitTarget: (selector) => this.resolveRuntimeGitTarget(selector),
-    openFile: (worktreeId, filePath, relativePath, runtimeEnvironmentId, navigation) => {
+    captureEditorAuthority: () => resolveEditorAuthority(this),
+    openFile: (worktreeId, filePath, relativePath, runtimeEnvironmentId, navigation, context) => {
+      if (context?.authority === 'host') {
+        openHostEditFileTab(this, {
+          worktreeId,
+          filePath,
+          relativePath,
+          executionHostId: context.executionHostId,
+          navigation
+        })
+        return
+      }
       if (!this.notifier?.openFile) {
         throw new Error('renderer_unavailable')
       }
       this.notifier.openFile(worktreeId, filePath, relativePath, runtimeEnvironmentId, navigation)
     },
-    openDiff: (worktreeId, filePath, relativePath, staged, runtimeEnvironmentId, navigation) => {
+    openDiff: (
+      worktreeId,
+      filePath,
+      relativePath,
+      staged,
+      runtimeEnvironmentId,
+      navigation,
+      context
+    ) => {
+      if (context?.authority === 'host') {
+        openHostDiffTab(this, {
+          worktreeId,
+          filePath,
+          relativePath,
+          staged,
+          executionHostId: context.executionHostId,
+          navigation
+        })
+        return
+      }
       if (!this.notifier?.openDiff) {
         throw new Error('renderer_unavailable')
       }
@@ -64,6 +101,73 @@ export class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreservedBranchC
       )
     }
   })
+
+  protected async writeHostMarkdownFile(args: {
+    worktreeId: string
+    relativePath: string
+    content: string
+    executionHostId: string
+    sshTargetId: string | undefined
+    sshConnectionGeneration: number | undefined
+    beforeWrite: () => void
+  }): Promise<void> {
+    await this.fileCommands.writeFileExplorerFile(
+      `id:${args.worktreeId}`,
+      args.relativePath,
+      args.content,
+      args.sshConnectionGeneration,
+      args.sshTargetId,
+      args.executionHostId,
+      args.beforeWrite
+    )
+  }
+
+  // Why: a promoted window whose hand-over timed out or failed keeps a live document that may still
+  // persist the session it read; only a closed window or a gone renderer cannot.
+  hasLiveWindowDocument(): boolean {
+    for (const windowId of [this.authoritativeWindowId, this.pendingHeadlessPromotionWindowId]) {
+      if (windowId === null || windowId === HEADLESS_RUNTIME_WINDOW_ID) {
+        continue
+      }
+      const win = getRuntimeDesktopSurface().findWindowById(windowId)
+      if (
+        win &&
+        !win.isDestroyed() &&
+        win.webContents?.isDestroyed?.() !== true &&
+        win.webContents?.isCrashed?.() !== true
+      ) {
+        return true
+      }
+    }
+    return false
+  }
+
+  // Why: projection is synchronous, so the root comes from the workspace id or its folder record.
+  getHostEditorWorkspaceRoot(worktreeId: string): string | null {
+    const scope = parseWorkspaceKey(worktreeId)
+    if (scope?.type === 'folder') {
+      return (
+        this.store
+          ?.getFolderWorkspaces?.()
+          .find((workspace) => workspace.id === scope.folderWorkspaceId)?.folderPath ?? null
+      )
+    }
+    return splitWorktreeIdForFilesystem(worktreeId)?.worktreePath ?? null
+  }
+
+  // Why: diffs are never persisted, so a window taking editor authority starts without them.
+  protected retireHostEditorDiffTabsForWindowTakeover(): void {
+    for (const worktreeId of getHostEditorTabState(this).clearAllDiffs()) {
+      const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+      if (snapshot) {
+        this.storeMobileSessionSnapshot(worktreeId, {
+          ...snapshot,
+          snapshotVersion: snapshot.snapshotVersion + 1,
+          tabs: snapshot.tabs.filter((tab) => tab.type !== 'file' || tab.mode !== 'diff')
+        })
+      }
+    }
+  }
 
   protected readonly fileWatcherRemoval = createRuntimeFileWatcherRemoval(this.fileCommands)
 

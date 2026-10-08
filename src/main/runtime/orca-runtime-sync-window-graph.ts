@@ -52,6 +52,9 @@ export class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAttachWindow 
     if (windowId !== this.authoritativeWindowId) {
       throw new Error('Runtime graph publisher does not match the authoritative window')
     }
+    if (windowId !== HEADLESS_RUNTIME_WINDOW_ID) {
+      this.retireHostEditorDiffTabsForWindowTakeover()
+    }
     const rendererGeneration =
       windowId === HEADLESS_RUNTIME_WINDOW_ID
         ? null

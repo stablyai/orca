@@ -12,6 +12,12 @@ import {
 } from './headless-tab-group-split-layout'
 import { randomUUID } from 'node:crypto'
 import type { TabGroupLayoutNode } from '../../shared/tab-types'
+import { resolveEditorAuthority } from './editor-authority'
+import {
+  hostEditsPersistedTabGroups,
+  hostRefusesSplitOfTransientTab,
+  persistHostEditorLayout
+} from './host-editor-tab-move-persistence'
 
 export class OrcaRuntimeWithMoveHeadlessMobileSessionTab extends OrcaRuntimeWithPersistHeadlessSessionTabProps {
   protected moveHeadlessMobileSessionTab(
@@ -69,9 +75,14 @@ export class OrcaRuntimeWithMoveHeadlessMobileSessionTab extends OrcaRuntimeWith
       tabs: nextTabs
     }
     this.persistHeadlessTerminalTabOrder(worktreeId, tabOrder)
-    if (nextGroups.length > 1 && snapshot.tabGroupLayout) {
+    if (
+      nextGroups.length > 1 &&
+      snapshot.tabGroupLayout &&
+      !hostEditsPersistedTabGroups(this, worktreeId, snapshot)
+    ) {
       this.persistHeadlessTabGroups(worktreeId, nextGroups, snapshot.tabGroupLayout)
     }
+    this.persistHostEditorLayoutIfHostOwned(worktreeId, nextSnapshot)
     this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
     this.emitMobileSessionTabsSnapshot(nextSnapshot)
     return { moved: true }
@@ -88,6 +99,9 @@ export class OrcaRuntimeWithMoveHeadlessMobileSessionTab extends OrcaRuntimeWith
     const hostTabId = this.resolveMobileSessionHostTabId(snapshot, move.tabId)
     if (!hostTabId) {
       throw new Error('tab_not_found')
+    }
+    if (hostRefusesSplitOfTransientTab(this, worktreeId, snapshot, hostTabId)) {
+      return { moved: true }
     }
     const split = buildHeadlessTabGroupSplit({
       groups: snapshot.tabGroups ?? [],
@@ -110,7 +124,11 @@ export class OrcaRuntimeWithMoveHeadlessMobileSessionTab extends OrcaRuntimeWith
       tabGroups: split.groups,
       tabGroupLayout: split.layout
     }
-    this.persistHeadlessTabGroups(worktreeId, split.groups, split.layout)
+    // Why: a host that owns editors edits the persisted groups; this snapshot shows only some of them.
+    if (!hostEditsPersistedTabGroups(this, worktreeId, snapshot)) {
+      this.persistHeadlessTabGroups(worktreeId, split.groups, split.layout)
+    }
+    this.persistHostEditorLayoutIfHostOwned(worktreeId, nextSnapshot)
     this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
     this.emitMobileSessionTabsSnapshot(nextSnapshot)
     return { moved: true }
@@ -146,10 +164,23 @@ export class OrcaRuntimeWithMoveHeadlessMobileSessionTab extends OrcaRuntimeWith
       tabGroups: moved.groups,
       tabGroupLayout: layout
     }
-    this.persistHeadlessTabGroups(worktreeId, moved.groups, layout)
+    if (!hostEditsPersistedTabGroups(this, worktreeId, snapshot)) {
+      this.persistHeadlessTabGroups(worktreeId, moved.groups, layout)
+    }
+    this.persistHostEditorLayoutIfHostOwned(worktreeId, nextSnapshot)
     this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
     this.emitMobileSessionTabsSnapshot(nextSnapshot)
     return { moved: true }
+  }
+
+  // Why: editor wrappers carry their own group and order, which a window restore trusts over tabOrder.
+  protected persistHostEditorLayoutIfHostOwned(
+    worktreeId: string,
+    snapshot: RuntimeMobileSessionTabsSnapshot
+  ): void {
+    if (resolveEditorAuthority(this) === 'host') {
+      persistHostEditorLayout(this, worktreeId, snapshot)
+    }
   }
 
   // Persist the headless tab-GROUP layout so snapshot rebuilds keep the split.

@@ -29,6 +29,8 @@ import { joinWorktreeRelativePath } from './runtime-relative-paths'
 import { resolveAuthorizedPath } from '../ipc/filesystem-auth'
 import { isENOENT } from '../ipc/filesystem-path-containment'
 import { runtimeFileRouteForTarget, type RuntimeFileRoute } from './runtime-file-command-target'
+import { parseWorkspaceKey } from '../../shared/workspace-scope'
+import { assertEditorAuthorityAvailable } from './editor-authority'
 
 export class RuntimeFileCommandsWithConstructor extends RuntimeFileCommandsWithActiveRuntimeTextSearches {
   constructor(private readonly host: RuntimeFileCommandHost) {
@@ -191,6 +193,8 @@ export class RuntimeFileCommandsWithConstructor extends RuntimeFileCommandsWithA
     relativePath: string,
     navigation?: RuntimeNavigationTarget
   ): Promise<RuntimeFileOpenResult> {
+    const authority = this.host.captureEditorAuthority?.() ?? 'window'
+    assertEditorAuthorityAvailable(authority)
     const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
     const { worktree } = target
     if (!isSafeMobileRelativePath(relativePath)) {
@@ -208,7 +212,11 @@ export class RuntimeFileCommandsWithConstructor extends RuntimeFileCommandsWithA
     // Why: CLI/agents treat opened:true as success; stat first so missing paths and directories fail the RPC instead of opening a ghost tab.
     await this.assertOpenTargetIsFile(filePath, runtimeFileRouteForTarget(target))
     // Why: the internal runtimeId isn't a valid env selector; pass undefined so openFile falls back to activeRuntimeEnvironmentId.
-    this.host.openFile(worktree.id, filePath, relativePath, undefined, navigation)
+    // Why awaited: opened:true must mean the tab is already listed, and a failed open must fail the RPC.
+    await this.host.openFile(worktree.id, filePath, relativePath, undefined, navigation, {
+      authority,
+      executionHostId: target.executionHostId
+    })
     return { worktree: worktree.id, relativePath, kind, opened: true }
   }
 
@@ -238,9 +246,15 @@ export class RuntimeFileCommandsWithConstructor extends RuntimeFileCommandsWithA
     staged: boolean,
     navigation?: RuntimeNavigationTarget
   ): Promise<RuntimeFileOpenResult> {
-    const { worktree } = await this.host.resolveRuntimeFileTarget(worktreeSelector)
+    const authority = this.host.captureEditorAuthority?.() ?? 'window'
+    assertEditorAuthorityAvailable(authority)
+    const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
+    const { worktree } = target
     if (!isSafeMobileRelativePath(relativePath)) {
       throw new Error('invalid_relative_path')
+    }
+    if (authority === 'host') {
+      await this.assertHostDiffGitTarget(worktreeSelector, worktree.id)
     }
     const kind = isMobileBinaryPath(relativePath)
       ? 'binary'
@@ -249,7 +263,26 @@ export class RuntimeFileCommandsWithConstructor extends RuntimeFileCommandsWithA
         : 'text'
     const filePath = joinWorktreeRelativePath(worktree.path, relativePath)
     // Why: see openMobileFile; avoid stamping internal runtimeId as runtimeEnvironmentId.
-    this.host.openDiff(worktree.id, filePath, relativePath, staged, undefined, navigation)
+    // Why no existence stat: a deletion's diff must still open.
+    await this.host.openDiff(worktree.id, filePath, relativePath, staged, undefined, navigation, {
+      authority,
+      executionHostId: target.executionHostId
+    })
     return { worktree: worktree.id, relativePath, kind, opened: true }
+  }
+
+  // Why: with no window the host publishes the diff tab itself, so it must prove a Git target first.
+  protected async assertHostDiffGitTarget(
+    worktreeSelector: string,
+    worktreeId: string
+  ): Promise<void> {
+    try {
+      await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    } catch (error) {
+      if (parseWorkspaceKey(worktreeId)?.type === 'folder') {
+        throw new Error("This folder isn't a Git repository.")
+      }
+      throw error
+    }
   }
 }

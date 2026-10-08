@@ -5,6 +5,7 @@ import type {
   ResolvedRuntimeFileWorktree
 } from './runtime-file-command-target'
 import type { ExecutionHostId } from '../../shared/execution-host'
+import type { EditorAuthority } from './editor-authority'
 import type { RuntimeNativeChatFileContext } from '../../shared/runtime-types'
 import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
 import type { FsChangeEvent } from '../../shared/filesystem-entry-types'
@@ -49,21 +50,30 @@ export type RuntimeFileCommandHost = {
   resolveRuntimeGitTarget(
     selector: string
   ): Promise<{ worktree: ResolvedRuntimeFileWorktree; executionHostId: ExecutionHostId }>
+  /** Captured before any await so an open that crosses a window attach refuses instead of re-routing. */
+  captureEditorAuthority?(): EditorAuthority
   openFile(
     worktreeId: string,
     filePath: string,
     relativePath: string,
     runtimeEnvironmentId?: string | null,
-    navigation?: RuntimeNavigationTarget
-  ): void
+    navigation?: RuntimeNavigationTarget,
+    context?: RuntimeEditorOpenContext
+  ): void | Promise<void>
   openDiff(
     worktreeId: string,
     filePath: string,
     relativePath: string,
     staged: boolean,
     runtimeEnvironmentId?: string | null,
-    navigation?: RuntimeNavigationTarget
-  ): void
+    navigation?: RuntimeNavigationTarget,
+    context?: RuntimeEditorOpenContext
+  ): void | Promise<void>
+}
+
+export type RuntimeEditorOpenContext = {
+  authority: EditorAuthority
+  executionHostId: ExecutionHostId
 }
 
 export function watchWindowsRuntimeFileExplorer(

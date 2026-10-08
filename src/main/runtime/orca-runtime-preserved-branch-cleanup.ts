@@ -42,6 +42,7 @@ import { RuntimeRepositorySparsePresets } from './runtime-repository-sparse-pres
 import { RuntimeRepositoryRefQueries } from './runtime-repository-ref-queries'
 import { RuntimeServerEnvironmentCommands } from './runtime-server-environment-commands'
 import { RuntimeRepositoryForkBackfill } from './runtime-repository-fork-backfill'
+import { resolveEditorAuthority } from './editor-authority'
 import { RuntimeWorkspaceSessionController } from './runtime-workspace-session-controller'
 import { RuntimeAiVaultCommands } from './runtime-ai-vault-commands'
 import { ClaudeAgentTeamsService } from './claude-agent-teams-service'
@@ -344,7 +345,8 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
     getStore: () => this.store,
     resolveFolderConnectionId: (workspace) => this.resolveFolderWorkspaceConnectionId(workspace),
     hasRuntimeOwnedPtyCandidate: (session, worktreeId, tabs) =>
-      this.workspaceSessionWorktreeHasRuntimeOwnedPtyCandidate(session, worktreeId, tabs)
+      this.workspaceSessionWorktreeHasRuntimeOwnedPtyCandidate(session, worktreeId, tabs),
+    hostOwnsEditorTabs: () => resolveEditorAuthority(this) === 'host'
   })
 
   protected readonly aiVault = new RuntimeAiVaultCommands(() => this.prepareAiVaultSessionResumeFn)

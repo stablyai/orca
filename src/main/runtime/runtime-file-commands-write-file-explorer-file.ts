@@ -18,7 +18,9 @@ export class RuntimeFileCommandsWithWriteFileExplorerFile extends RuntimeFileCom
     content: string,
     expectedSshConnectionGeneration?: number,
     expectedSshTargetId?: string,
-    expectedExecutionHostId?: string
+    expectedExecutionHostId?: string,
+    /** Synchronous last check run immediately before the bytes are written; throwing aborts. */
+    beforeWrite?: () => void
   ): Promise<{ ok: true }> {
     const target = await this.resolveFileExplorerPath(worktreeSelector, relativePath)
     assertRuntimeFileMutationExpectation(
@@ -29,6 +31,7 @@ export class RuntimeFileCommandsWithWriteFileExplorerFile extends RuntimeFileCom
     )
     const provider = requireRuntimeFileProvider(target)
     if (provider) {
+      beforeWrite?.()
       await provider.writeFile(target.path, content)
       return { ok: true }
     }
@@ -44,6 +47,7 @@ export class RuntimeFileCommandsWithWriteFileExplorerFile extends RuntimeFileCom
         throw error
       }
     }
+    beforeWrite?.()
     await writeFile(filePath, content, 'utf-8')
     return { ok: true }
   }

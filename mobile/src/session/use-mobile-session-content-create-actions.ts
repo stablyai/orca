@@ -1,5 +1,12 @@
 import { normalizeBrowserUrl } from '../browser/browser-url'
-import { captureMobileFileMutationOwnership } from '../files/mobile-file-mutation-ownership'
+import {
+  captureMobileFileMutationOwnershipForStatus,
+  readMobileFileMutationRuntimeStatus
+} from '../files/mobile-file-mutation-ownership'
+import {
+  createMobileFilePreviewHref,
+  displayNameFromPreviewPath
+} from '../files/mobile-file-preview-route'
 import {
   browserGoBack,
   browserGoForward,
@@ -11,6 +18,12 @@ import {
   sessionMarkdownNoteCreate
 } from './mobile-session-launch-operations'
 import { interpretOrThrowRefusalMessage } from '../transport/rpc-refusal-message'
+import { isRendererUnavailableRefusal } from '../transport/renderer-unavailable-refusal'
+import {
+  hostRefusesMarkdownNoteTab,
+  markdownNoteOpenedOnDeviceMessage,
+  MARKDOWN_NOTE_NEEDS_HOST_UPDATE_MESSAGE
+} from './markdown-note-host-editor-tabs'
 import type { MobileBrowserNavigationMethod } from './MobileBrowserTabActionSheet'
 import { isFileExistsErrorMessage } from './mobile-session-route-helpers'
 import type { MobileSessionTab } from './mobile-session-route-types'
@@ -27,7 +40,10 @@ export function useMobileSessionContentCreateActions(
   scope: MobileSessionTerminalCreateActionsModel
 ) {
   const {
+    hostId,
     worktreeId,
+    worktreeName,
+    router,
     client,
     creatingBrowser,
     setCreatingBrowser,
@@ -52,7 +68,17 @@ export function useMobileSessionContentCreateActions(
 
     try {
       const worktree = `id:${worktreeId}`
-      const mutationOwnership = await captureMobileFileMutationOwnership(client, worktree)
+      // Why: read on every tap, never cached; the host's window can close or reopen on one connection.
+      const status = await readMobileFileMutationRuntimeStatus(client)
+      if (hostRefusesMarkdownNoteTab(status)) {
+        showToast(MARKDOWN_NOTE_NEEDS_HOST_UPDATE_MESSAGE, 1800)
+        return
+      }
+      const mutationOwnership = await captureMobileFileMutationOwnershipForStatus(
+        client,
+        worktree,
+        status
+      )
       for (let attempt = 1; attempt <= 100; attempt += 1) {
         const relativePath = attempt === 1 ? 'untitled.md' : `untitled-${attempt}.md`
         const createResponse = await sessionMarkdownNoteCreate.request(
@@ -68,12 +94,39 @@ export function useMobileSessionContentCreateActions(
           throw new Error(message || 'Failed to create markdown note')
         }
 
-        const openResponse = await sourceFileOpenRun.request(
-          client,
-          { worktree, relativePath },
-          { timeoutMs: 15_000 }
-        )
-        interpretOrThrowRefusalMessage(() => sourceFileOpenRun.interpret(openResponse), '')
+        const previewCreatedNote = () =>
+          router.push(
+            createMobileFilePreviewHref({
+              hostId,
+              worktreeId,
+              source: 'worktree',
+              relativePath,
+              name: displayNameFromPreviewPath(relativePath),
+              ...(worktreeName ? { worktreeName } : {})
+            })
+          )
+        try {
+          const openResponse = await sourceFileOpenRun.request(
+            client,
+            { worktree, relativePath },
+            { timeoutMs: 15_000 }
+          )
+          // Why: a host whose window state was unknown still refused the tab; show the note it
+          // just created on the device rather than leave a file the user never sees.
+          if (isRendererUnavailableRefusal(openResponse)) {
+            previewCreatedNote()
+            return
+          }
+          interpretOrThrowRefusalMessage(() => sourceFileOpenRun.interpret(openResponse), '')
+        } catch {
+          // Why: the note exists now, so show it rather than leave a stray file; the toast is the one notice.
+          previewCreatedNote()
+          showToast(
+            markdownNoteOpenedOnDeviceMessage(displayNameFromPreviewPath(relativePath)),
+            2400
+          )
+          return
+        }
         scheduleDelayedAction(() => void fetchSessionTabs(), 300)
         return
       }

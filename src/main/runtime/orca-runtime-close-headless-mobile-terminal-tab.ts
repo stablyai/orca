@@ -1,5 +1,7 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithCloseStructuredAgentSessionTab } from './orca-runtime-close-structured-agent-session-tab'
+import { assertEditorAuthorityAvailable, resolveEditorAuthority } from './editor-authority'
+import { listHostEditorMobileTabs } from './host-editor-tab-publication'
 import type {
   RuntimeMobileSessionTabMove,
   RuntimeMobileSessionTabMoveResult,
@@ -139,7 +141,7 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
     if (!snapshot) {
       throw new Error('tab_not_found')
     }
-    if (!this.notifier?.moveSessionTab) {
+    if (!this.notifier?.moveSessionTab || this.isHostOwnedEditorTabMove(snapshot, move)) {
       return this.moveHeadlessMobileSessionTab(worktreeId, snapshot, move)
     }
     const hostTabId = this.resolveMobileSessionHostTabId(snapshot, move.tabId)
@@ -171,6 +173,27 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
       tabId: hostTabId
     })
     return { moved: true }
+  }
+
+  // Why: a crashed window's notifier outlives its document; the host's own editor tabs then move on the host.
+  protected isHostOwnedEditorTabMove(
+    snapshot: RuntimeMobileSessionTabsSnapshot,
+    move: RuntimeMobileSessionTabMove
+  ): boolean {
+    const tab = snapshot.tabs.find((candidate) => candidate.id === move.tabId)
+    if (tab?.type !== 'markdown' && tab?.type !== 'file') {
+      return false
+    }
+    const authority = resolveEditorAuthority(this)
+    assertEditorAuthorityAvailable(authority)
+    return (
+      authority === 'host' &&
+      listHostEditorMobileTabs(
+        this,
+        snapshot.worktree,
+        this.getWorkspaceSessionForWorktree(snapshot.worktree)
+      ).some((editor) => editor.tab.id === tab.id)
+    )
   }
 
   // Why: pane geometry inside a tab (split ratios, expanded pane, pane titles)

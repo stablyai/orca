@@ -39,6 +39,22 @@ describe('shouldReadMarkdownFromDiskAfterReadTabFailure', () => {
       shouldReadMarkdownFromDiskAfterReadTabFailure(failure('invalid_argument', 'bad tab'))
     ).toBe(false)
   })
+
+  it('does not read from disk for a neighbouring unavailable failure', () => {
+    expect(
+      shouldReadMarkdownFromDiskAfterReadTabFailure(failure('runtime_error', 'runtime_unavailable'))
+    ).toBe(false)
+    expect(
+      shouldReadMarkdownFromDiskAfterReadTabFailure(
+        failure('browser_client_page_renderer_unavailable', 'renderer_unavailable')
+      )
+    ).toBe(false)
+    expect(
+      shouldReadMarkdownFromDiskAfterReadTabFailure(
+        failure('runtime_error', 'renderer_unavailable: window closed')
+      )
+    ).toBe(false)
+  })
 })
 
 describe('buildMarkdownDiskFallbackDoc', () => {
@@ -57,7 +73,7 @@ describe('buildMarkdownDiskFallbackDoc', () => {
       isDirty: false,
       editable: false,
       stale: false,
-      readOnlyReason: 'Editing needs Orca desktop running.'
+      readOnlyReason: 'Update Orca on this computer to edit here.'
     })
   })
 

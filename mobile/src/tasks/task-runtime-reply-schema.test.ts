@@ -37,6 +37,25 @@ describe('the runtime status', () => {
       )
     }
   })
+
+  it('reads the four known desktop window statuses', () => {
+    for (const desktopWindowStatus of ['available', 'openable', 'initializing', 'blocked']) {
+      const parsed = taskRuntimeStatusSchema.safeParse({ desktopWindowStatus })
+      expect(parsed.success && parsed.data.desktopWindowStatus).toBe(desktopWindowStatus)
+    }
+  })
+
+  it('reads an absent, future or malformed desktop window status as unknown, keeping the rest', () => {
+    for (const desktopWindowStatus of [undefined, 'detached', 7, null, { kind: 'available' }]) {
+      const parsed = taskRuntimeStatusSchema.safeParse({
+        capabilities: ['files.mutation-ownership.v1'],
+        desktopWindowStatus
+      })
+      expect(parsed.success).toBe(true)
+      expect(parsed.success && parsed.data.desktopWindowStatus).toBe(undefined)
+      expect(parsed.success && parsed.data.capabilities).toEqual(['files.mutation-ownership.v1'])
+    }
+  })
 })
 
 describe('the persisted UI state', () => {

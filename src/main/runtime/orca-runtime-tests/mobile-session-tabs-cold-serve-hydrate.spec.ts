@@ -5,6 +5,7 @@ import {
   HEADLESS_LEAF_ID,
   HEADLESS_SECOND_LEAF_ID,
   TEST_WORKTREE_ID,
+  TEST_WORKTREE_PATH,
   makeHeadlessTerminalLayout,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
@@ -106,7 +107,7 @@ describe('OrcaRuntimeService', () => {
       openFilesByWorktree: {
         [TEST_WORKTREE_ID]: [
           {
-            filePath: '/repo/README.md',
+            filePath: `${TEST_WORKTREE_PATH}/README.md`,
             relativePath: 'README.md',
             worktreeId: TEST_WORKTREE_ID,
             language: 'markdown',
@@ -120,7 +121,7 @@ describe('OrcaRuntimeService', () => {
 
     expect(terminalPtyIds(listed.tabs)).toEqual([DAEMON_PTY_ID, SERVE_PTY_ID].sort())
     expect(listed.tabs.filter((tab) => tab.type === 'markdown').map((tab) => tab.id)).toEqual([
-      '/repo/README.md'
+      `${TEST_WORKTREE_PATH}/README.md`
     ])
   })
 

@@ -98,7 +98,8 @@ describe('RuntimeFileCommands', () => {
       'docs/readme.md',
       true,
       undefined,
-      undefined
+      undefined,
+      { authority: 'window', executionHostId: 'local' }
     )
     expect(result).toEqual({
       worktree: 'wt-1',
@@ -121,7 +122,8 @@ describe('RuntimeFileCommands', () => {
       '/repo/docs/readme.md',
       'docs/readme.md',
       undefined,
-      undefined
+      undefined,
+      { authority: 'window', executionHostId: 'local' }
     )
     expect(result).toEqual({
       worktree: 'wt-1',
@@ -144,7 +146,8 @@ describe('RuntimeFileCommands', () => {
       '/repo/assets/logo.png',
       'assets/logo.png',
       undefined,
-      undefined
+      undefined,
+      { authority: 'window', executionHostId: 'local' }
     )
     expect(result).toEqual({
       worktree: 'wt-1',
@@ -169,7 +172,8 @@ describe('RuntimeFileCommands', () => {
       '/repo/docs/readme.md',
       'docs/readme.md',
       undefined,
-      'all'
+      'all',
+      { authority: 'window', executionHostId: 'local' }
     )
     expect(openDiff).toHaveBeenCalledWith(
       'wt-1',
@@ -177,7 +181,8 @@ describe('RuntimeFileCommands', () => {
       'docs/readme.md',
       false,
       undefined,
-      'host'
+      'host',
+      { authority: 'window', executionHostId: 'local' }
     )
   })
 
@@ -196,7 +201,8 @@ describe('RuntimeFileCommands', () => {
         `/repo/${relativePath}`,
         relativePath,
         undefined,
-        undefined
+        undefined,
+        { authority: 'window', executionHostId: 'local' }
       )
       expect(result).toEqual({ worktree: 'wt-1', relativePath, kind: 'binary', opened: true })
     }

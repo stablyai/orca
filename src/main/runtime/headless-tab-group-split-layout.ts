@@ -29,7 +29,7 @@ function buildSplitNode(
   }
 }
 
-function replaceLeaf(
+export function replaceTabGroupLayoutLeaf(
   root: TabGroupLayoutNode,
   targetGroupId: string,
   replacement: TabGroupLayoutNode
@@ -39,8 +39,8 @@ function replaceLeaf(
   }
   return {
     ...root,
-    first: replaceLeaf(root.first, targetGroupId, replacement),
-    second: replaceLeaf(root.second, targetGroupId, replacement)
+    first: replaceTabGroupLayoutLeaf(root.first, targetGroupId, replacement),
+    second: replaceTabGroupLayoutLeaf(root.second, targetGroupId, replacement)
   }
 }
 
@@ -181,7 +181,7 @@ export function buildHeadlessTabGroupSplit(args: {
     type: 'leaf',
     groupId: args.targetGroupId
   }
-  const layout = replaceLeaf(
+  const layout = replaceTabGroupLayoutLeaf(
     baseLayout,
     args.targetGroupId,
     buildSplitNode(args.targetGroupId, args.newGroupId, direction, position)

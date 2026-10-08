@@ -36,7 +36,10 @@ export function sessionScreenTabMountAdapters(
       const hook = hookMount(() => {
         actions = useCreate(
           mountFixture<Parameters<typeof useCreate>[0]>({
+            hostId: 'host-1',
             worktreeId: WORKSPACE,
+            // Why: a note the host could not open as a tab is shown on the device by navigation.
+            router: { push: (href: unknown) => effect('router-push', href) },
             client,
             creatingBrowser,
             setCreatingBrowser: (value) => {

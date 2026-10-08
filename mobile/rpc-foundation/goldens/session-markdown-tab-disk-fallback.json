@@ -9,21 +9,6 @@
       "ordinal": 2,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"markdown.readTab\",\"params\":{\"worktree\":\"id:workspace-1\",\"tabId\":\"tab-md\"}}"
     },
-    "c6cea5310098": {
-      "file": {},
-      "markdown": {
-        "tab-md": {
-          "baseVersion": "",
-          "content": "# disk",
-          "editable": false,
-          "isDirty": false,
-          "localContent": "# disk",
-          "readOnlyReason": "Editing needs Orca desktop running.",
-          "stale": false,
-          "status": "ready"
-        }
-      }
-    },
     "d4be01606497": {
       "name": "files.read#1",
       "ordinal": 4,
@@ -109,6 +94,21 @@
       "value": {
         "$rpc": "undefined"
       }
+    },
+    "fa5fd66def52": {
+      "file": {},
+      "markdown": {
+        "tab-md": {
+          "baseVersion": "",
+          "content": "# disk",
+          "editable": false,
+          "isDirty": false,
+          "localContent": "# disk",
+          "readOnlyReason": "Update Orca on this computer to edit here.",
+          "stale": false,
+          "status": "ready"
+        }
+      }
     }
   },
   "recording": {
@@ -122,7 +122,7 @@
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
-          "state": "c6cea5310098",
+          "state": "fa5fd66def52",
           "effects": []
         }
       }

@@ -44,14 +44,37 @@ export function buildMobileFileMutationOwnership(
   }
 }
 
+export type MobileFileMutationRuntimeStatus = ReturnType<
+  typeof fileOwnershipRuntimeStatusRead.interpret
+>
+
+/** A fresh `status.get` on this connection; a refusal or unreadable reply throws. */
+export async function readMobileFileMutationRuntimeStatus(
+  client: MobileFileOwnershipRpcSender
+): Promise<MobileFileMutationRuntimeStatus> {
+  const statusReply = await fileOwnershipRuntimeStatusRead.request(client, undefined, {
+    timeoutMs: FILE_MUTATION_TIMEOUT_MS
+  })
+  return fileOwnershipRuntimeStatusRead.interpret(statusReply)
+}
+
 export async function captureMobileFileMutationOwnership(
   client: MobileFileOwnershipRpcSender,
   worktree: string
 ): Promise<MobileFileMutationOwnership> {
-  const statusReply = await fileOwnershipRuntimeStatusRead.request(client, undefined, {
-    timeoutMs: FILE_MUTATION_TIMEOUT_MS
-  })
-  const status = fileOwnershipRuntimeStatusRead.interpret(statusReply)
+  return captureMobileFileMutationOwnershipForStatus(
+    client,
+    worktree,
+    await readMobileFileMutationRuntimeStatus(client)
+  )
+}
+
+/** The capture for a caller that already read this connection's status for its own decision. */
+export async function captureMobileFileMutationOwnershipForStatus(
+  client: MobileFileOwnershipRpcSender,
+  worktree: string,
+  status: MobileFileMutationRuntimeStatus
+): Promise<MobileFileMutationOwnership> {
   assertFileMutationOwnershipCapability(status)
 
   const worktreeReply = await fileOwnershipWorktreeRead.request(

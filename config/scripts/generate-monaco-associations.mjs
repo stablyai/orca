@@ -7,7 +7,7 @@ import ts from 'typescript-api'
 const require = createRequire(import.meta.url)
 const editorEntry = require.resolve('monaco-editor/esm/vs/editor/editor.main.js')
 export const associationsPath = fileURLToPath(
-  new URL('../../src/renderer/src/lib/monaco-language-associations.json', import.meta.url)
+  new URL('../../src/shared/monaco-language-associations.json', import.meta.url)
 )
 
 // Monaco omits common Ruby task, template and configuration files.

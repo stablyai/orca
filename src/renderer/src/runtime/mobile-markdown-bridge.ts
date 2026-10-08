@@ -16,6 +16,7 @@ import {
   hashMarkdownContent,
   isMarkdownContentByteLengthOverLimit,
   MOBILE_MARKDOWN_EDIT_MAX_BYTES,
+  resolveMobileMarkdownReadOnlyReason,
   truncateMobileMarkdownRead,
   type RuntimeMarkdownReadTabResult,
   type RuntimeMarkdownSaveTabResult,
@@ -219,16 +220,11 @@ function getReadOnlyReason(
   sourceFile: OpenFile,
   content: string
 ): RuntimeMarkdownReadTabResult['readOnlyReason'] {
-  if (tab.mode === 'markdown-preview') {
-    return 'unsupported_preview'
-  }
-  if (sourceFile.isUntitled) {
-    return 'unsupported_untitled'
-  }
-  if (isMarkdownContentByteLengthOverLimit(content, MOBILE_MARKDOWN_EDIT_MAX_BYTES)) {
-    return 'file_too_large'
-  }
-  return undefined
+  return resolveMobileMarkdownReadOnlyReason({
+    mode: tab.mode === 'markdown-preview' ? 'markdown-preview' : 'edit',
+    isUntitled: sourceFile.isUntitled,
+    content
+  })
 }
 
 async function readCurrentContent(

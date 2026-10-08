@@ -7,6 +7,7 @@ import {
 } from '../orca-runtime-test-fixtures.spec'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import { HOST_EDITOR_DRAFT_CLOSE_REFUSAL } from '../host-editor-tab-commands'
 
 const README = `${TEST_WORKTREE_PATH}/README.md`
 
@@ -107,7 +108,7 @@ describe('editor tabs a headless host persisted', () => {
 
     await expect(
       runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'tab-readme')
-    ).rejects.toThrow('editor_tab_has_unsaved_draft')
+    ).rejects.toThrow(HOST_EDITOR_DRAFT_CLOSE_REFUSAL)
     expect(getSession().openFilesByWorktree?.[TEST_WORKTREE_ID]?.[0]?.dirtyDraftContent).toBe(
       'draft'
     )

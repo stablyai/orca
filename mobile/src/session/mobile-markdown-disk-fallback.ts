@@ -1,13 +1,9 @@
 import type { RpcFailure } from '../transport/types'
 import type { MarkdownDocState } from './mobile-session-route-types'
-
-const RENDERER_UNAVAILABLE = 'renderer_unavailable'
+import { isRendererUnavailableRefusal } from '../transport/renderer-unavailable-refusal'
 
 export function shouldReadMarkdownFromDiskAfterReadTabFailure(response: RpcFailure): boolean {
-  return (
-    response.error.code === RENDERER_UNAVAILABLE ||
-    (response.error.code === 'runtime_error' && response.error.message === RENDERER_UNAVAILABLE)
-  )
+  return isRendererUnavailableRefusal(response)
 }
 
 export function buildMarkdownDiskFallbackDoc(args: {
@@ -18,7 +14,7 @@ export function buildMarkdownDiskFallbackDoc(args: {
 }): Extract<MarkdownDocState, { status: 'ready' }> {
   const readOnlyReason = args.tabIsDirty
     ? 'Desktop has unsaved changes. Showing disk content.'
-    : 'Editing needs Orca desktop running.'
+    : 'Update Orca on this computer to edit here.'
   return {
     status: 'ready',
     content: args.content,

@@ -9,6 +9,9 @@ import { getMobileSessionSnapshotTabIdentityKeys } from './mobile-session-tab-me
 import { getRuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 import { sameRuntimeBrowserPlacement } from '../../shared/runtime-browser-placement'
 import type { ClientHostedBrowserRowsEvent } from '../../shared/client-hosted-browser-rows'
+import { resolveEditorAuthority } from './editor-authority'
+import { listHostEditorMobileTabs } from './host-editor-tab-publication'
+import { getHostEditorTabState } from './host-editor-tab-state'
 
 export class OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab extends OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs {
   // Why: the accepted-revision no-op gate must not fossilize preserved runtime
@@ -76,6 +79,17 @@ export class OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab extends Orc
           this.getLiveBrowserTabsByPageId(snapshot.worktree).has(tab.browserPageId))
       )
     }
+    if (tab.type === 'markdown' || tab.type === 'file') {
+      // Why: only while the host owns editors; a window's publication is authoritative for its own closes.
+      return (
+        resolveEditorAuthority(this) === 'host' &&
+        listHostEditorMobileTabs(
+          this,
+          snapshot.worktree,
+          this.getWorkspaceSessionForWorktree(snapshot.worktree)
+        ).some((editor) => editor.tab.id === tab.id)
+      )
+    }
     if (tab.type !== 'terminal') {
       return false
     }
@@ -130,6 +144,7 @@ export class OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab extends Orc
   }
 
   protected notifyMobileSessionTabsRemoved(worktreeId: string): void {
+    getHostEditorTabState(this).clearWorktree(worktreeId)
     const removed: RuntimeMobileSessionTabsRemovedResult = {
       worktree: worktreeId,
       publicationEpoch: `removed:${Date.now().toString(36)}`,

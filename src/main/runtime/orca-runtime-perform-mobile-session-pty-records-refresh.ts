@@ -1,5 +1,7 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs } from './orca-runtime-build-headless-mobile-session-browser-tabs'
+import { assertEditorAuthorityAvailable, resolveEditorAuthority } from './editor-authority'
+import { activateHostEditorTab, releaseHostEditorFocus } from './host-editor-tab-commands'
 import type { PtyControllerInventory } from './runtime-pty-controller-contract'
 import { isAgentLaunchRunningIn } from '../agent-launch/agent-launch-pane-attachment'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
@@ -130,6 +132,14 @@ export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRu
     if (!tab) {
       throw new Error('tab_not_found')
     }
+    if (
+      targetsHost &&
+      tab.type !== 'markdown' &&
+      tab.type !== 'file' &&
+      resolveEditorAuthority(this) === 'host'
+    ) {
+      releaseHostEditorFocus(this, worktreeId, tab.type)
+    }
 
     if (tab.type === 'terminal') {
       const publicTab = this.toMobileSessionTabsResult(snapshot!).tabs.find(
@@ -239,15 +249,21 @@ export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRu
         navigation,
         opts.clientNavigationId
       )
-    } else if (tab.type === 'browser') {
-      // Why: browser mobile tabs are renderer-owned unified tabs; focusing the
+    } else if (tab.type === 'browser' || tab.type === 'agent-session') {
+      // Why: browser and chat mobile tabs are renderer-owned unified tabs; focusing the
       // session tab keeps desktop tab order/group state authoritative.
       if (targetsHost) {
         this.notifier?.focusEditorTab?.(tab.id, worktreeId)
       }
     } else {
       if (targetsHost) {
-        this.notifier?.focusEditorTab?.(tab.id, worktreeId)
+        const editorAuthority = resolveEditorAuthority(this)
+        assertEditorAuthorityAvailable(editorAuthority)
+        if (editorAuthority === 'host') {
+          activateHostEditorTab(this, worktreeId, tab.id)
+        } else {
+          this.notifier?.focusEditorTab?.(tab.id, worktreeId)
+        }
       }
     }
     return this.applyMobileSessionTabNavigation(

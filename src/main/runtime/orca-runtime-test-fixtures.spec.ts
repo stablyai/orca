@@ -583,7 +583,8 @@ function makeRuntimeStoreWithWorkspaceSession(
   const runtimeStore = withDurableRuntimeStore({
     ...store,
     getWorkspaceSession: (hostId?: string) =>
-      hostId === undefined || hostId === ownerHostId ? session : getDefaultWorkspaceSession(),
+      // Why: production reads the local partition when no host id is given.
+      (hostId ?? 'local') === ownerHostId ? session : getDefaultWorkspaceSession(),
     setWorkspaceSession: vi.fn(setSession),
     // Headless close is a durable transaction; keep the in-memory fixture's
     // persistence contract equivalent to the production store.

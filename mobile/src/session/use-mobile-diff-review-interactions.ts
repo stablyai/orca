@@ -17,6 +17,7 @@ import type {
 import type { ReviewSheetIntents } from './mobile-diff-review-sheets'
 import { sourceFileDiffOpenRun } from '../source-control/mobile-source-file-open-operations'
 import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
+import { isRendererUnavailableRefusal } from '../transport/renderer-unavailable-refusal'
 import { useMobileDiffReviewCommentActions } from './use-mobile-diff-review-comment-actions'
 import { useMobileDiffReviewGitActions } from './use-mobile-diff-review-git-actions'
 import { useMobileDiffReviewSendActions } from './use-mobile-diff-review-send-actions'
@@ -51,6 +52,9 @@ type InteractionInput = {
   onOpenSession: () => void
   onReconnect: ((hostId: string) => void | Promise<void>) | null
 }
+
+export const OPEN_IN_SESSION_NEEDS_HOST_UPDATE_MESSAGE =
+  'Update Orca on this computer to open this as a tab.'
 
 export function useMobileDiffReviewInteractions(input: InteractionInput) {
   const {
@@ -188,6 +192,12 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
         relativePath: currentItem.filePath,
         staged: currentItem.scope === 'staged'
       })
+      // Why: an older host with no desktop window refuses tabs; this screen already shows the diff.
+      // Not latched: the host can gain a window or be updated while this screen is open.
+      if (isRendererUnavailableRefusal(response)) {
+        setActionError(OPEN_IN_SESSION_NEEDS_HOST_UPDATE_MESSAGE)
+        return
+      }
       try {
         sourceFileDiffOpenRun.interpret(response)
       } catch (error) {

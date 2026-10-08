@@ -96,3 +96,21 @@ export function truncateMobileMarkdownRead(
     byteLength
   }
 }
+
+/** Read-only rules shared by the desktop window and a host with no window. */
+export function resolveMobileMarkdownReadOnlyReason(document: {
+  mode: 'edit' | 'markdown-preview'
+  isUntitled?: boolean
+  content: string
+}): RuntimeMarkdownReadOnlyReason | undefined {
+  if (document.mode === 'markdown-preview') {
+    return 'unsupported_preview'
+  }
+  if (document.isUntitled) {
+    return 'unsupported_untitled'
+  }
+  if (isMarkdownContentByteLengthOverLimit(document.content, MOBILE_MARKDOWN_EDIT_MAX_BYTES)) {
+    return 'file_too_large'
+  }
+  return undefined
+}

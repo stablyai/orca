@@ -20,6 +20,23 @@ type RuntimeWorkspaceSessionDependencies = {
     worktreeId: string,
     tabs: WorkspaceSessionState['tabsByWorktree'][string]
   ) => boolean
+  /** True while the host, not a window, owns editor tabs; their rows then need hydrating too. */
+  hostOwnsEditorTabs?: () => boolean
+}
+
+// Why: a document-only workspace has editor rows but no terminal rows.
+function listSessionWorkspaceKeys(
+  session: WorkspaceSessionState | undefined,
+  includeEditorRows: boolean
+): string[] {
+  const keys = Object.keys(session?.tabsByWorktree ?? {})
+  if (!includeEditorRows) {
+    return keys
+  }
+  const editorKeys = Object.entries(session?.openFilesByWorktree ?? {})
+    .filter(([, rows]) => rows.length > 0)
+    .map(([worktreeId]) => worktreeId)
+  return [...new Set([...keys, ...editorKeys])]
 }
 
 export class RuntimeWorkspaceSessionController {
@@ -128,11 +145,40 @@ export class RuntimeWorkspaceSessionController {
     for (const repo of repos) {
       hostIds.add(getRepoExecutionHostId(repo))
     }
+    const includeEditorRows = this.deps.hostOwnsEditorTabs?.() === true
+    const folderWorkspaceIds = includeEditorRows
+      ? new Set((store?.getFolderWorkspaces?.() ?? []).map((workspace) => workspace.id))
+      : new Set<string>()
     const worktreeIds = new Set<string>()
+    if (includeEditorRows) {
+      // Why: an SSH folder workspace's partition is named by no repo; only the stored census has it.
+      for (const hostId of store?.getWorkspaceSessionHostIds?.() ?? []) {
+        if (hostIds.has(hostId)) {
+          continue
+        }
+        const session = store?.getWorkspaceSession?.(hostId)
+        for (const [worktreeId, rows] of Object.entries(session?.openFilesByWorktree ?? {})) {
+          const scope = parseWorkspaceKey(worktreeId)
+          if (
+            scope?.type === 'folder' &&
+            folderWorkspaceIds.has(scope.folderWorkspaceId) &&
+            rows.length > 0
+          ) {
+            worktreeIds.add(worktreeId)
+          }
+        }
+      }
+    }
     for (const hostId of hostIds) {
       const session = store?.getWorkspaceSession?.(hostId)
-      for (const worktreeId of Object.keys(session?.tabsByWorktree ?? {})) {
-        if (repoIds.has(getRepoIdFromWorktreeId(worktreeId))) {
+      for (const worktreeId of listSessionWorkspaceKeys(session, includeEditorRows)) {
+        const scope = parseWorkspaceKey(worktreeId)
+        if (
+          scope?.type === 'folder'
+            ? folderWorkspaceIds.has(scope.folderWorkspaceId) &&
+              (session?.openFilesByWorktree?.[worktreeId]?.length ?? 0) > 0
+            : repoIds.has(getRepoIdFromWorktreeId(worktreeId))
+        ) {
           worktreeIds.add(worktreeId)
         }
       }
@@ -163,6 +209,7 @@ export class RuntimeWorkspaceSessionController {
         ] as const
       })
     )
+    const includeEditorRows = this.deps.hostOwnsEditorTabs?.() === true
     const hostIds = new Set<ExecutionHostId>(['local'])
     for (const repo of repos) {
       hostIds.add(getRepoExecutionHostId(repo))
@@ -181,7 +228,8 @@ export class RuntimeWorkspaceSessionController {
       sessionsByHostId.set(hostId, session)
     }
     for (const [hostId, session] of sessionsByHostId) {
-      for (const [worktreeId, tabs] of Object.entries(session.tabsByWorktree ?? {})) {
+      for (const worktreeId of listSessionWorkspaceKeys(session, includeEditorRows)) {
+        const tabs = session.tabsByWorktree[worktreeId] ?? []
         const scope = parseWorkspaceKey(worktreeId)
         const catalogOwnerHostId =
           scope?.type === 'folder'
@@ -199,6 +247,7 @@ export class RuntimeWorkspaceSessionController {
         if (
           ownerHostId === hostId &&
           (includeAllPersistedWorktrees ||
+            (includeEditorRows && (session.openFilesByWorktree?.[worktreeId]?.length ?? 0) > 0) ||
             this.deps.hasRuntimeOwnedPtyCandidate(session, worktreeId, tabs))
         ) {
           targets.set(worktreeId, session)

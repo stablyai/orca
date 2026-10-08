@@ -1,15 +1,30 @@
 import { z } from 'zod'
-import { salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
+import type { RuntimeDesktopWindowStatus } from '../../../src/shared/runtime-session-contracts'
+import {
+  hostUnionArms,
+  openEnum,
+  salvagedOptional,
+  salvagingArray
+} from '../../../src/shared/zod-salvage'
 
 // What the Tasks screen reads once per host to hydrate, and the preferences it writes back.
 // Checked against src/main/runtime/rpc/methods/status.ts:6-16 (RuntimeStatus, declared in
 // src/shared/runtime-session-contracts.ts:64), client-ui.ts:22-74 (the `{ settings }` / `{ ui }`
 // envelopes), preflight.ts:17 (PreflightStatus) and linear.ts:35-42 (the connection status).
 
+// Pinned to the host's own union through hostUnionArms: an arm added or dropped host-side fails tsc.
+export const DESKTOP_WINDOW_STATUS = hostUnionArms<RuntimeDesktopWindowStatus>({
+  available: true,
+  openable: true,
+  initializing: true,
+  blocked: true
+})
+
 /**
- * The runtime status, read for a capability list and nothing else.
+ * The runtime status, read for a capability list, plus the desktop window status the Markdown Note
+ * check reads.
  *
- * `capabilities` is the only member any consumer here reaches for, and every one of them guards it
+ * `capabilities` is the member every consumer here reaches for, and every one of them guards it
  * — `status.capabilities?.includes(…)` in use-mobile-tasks-runtime-hydration.tsx:205 and in
  * src/shared/file-mutation-ownership.ts:10, `result.capabilities ?? []` in
  * worktree-create-capability.ts:51. So the requirement is the container: main read `.capabilities`
@@ -28,7 +43,13 @@ import { salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvag
 export const taskRuntimeStatusSchema = z.looseObject({
   capabilities: salvagedOptional('capabilities', salvagingArray(z.string())),
   worktreeCreateIdempotency: z.unknown().optional(),
-  hostPlatform: salvagedOptional('hostPlatform', z.string())
+  hostPlatform: salvagedOptional('hostPlatform', z.string()),
+  // Why: absent on older hosts, and an arm this build has never heard of reads as absent (unknown),
+  // so neither fails the capability read beside it.
+  desktopWindowStatus: salvagedOptional(
+    'desktopWindowStatus',
+    openEnum(DESKTOP_WINDOW_STATUS, undefined)
+  )
 })
 
 /**

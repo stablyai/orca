@@ -1,14 +1,17 @@
 import type { AppState } from '../../../types'
 import type { EditorSlice } from '../types/editor-slice'
-import type { DiffSource, EditorOpenTargetOptions, OpenFile } from '../types/open-file'
+import type { EditorOpenTargetOptions, OpenFile } from '../types/open-file'
 import { toSshExecutionHostId } from '../../../../../../shared/execution-host'
 import { areLocalWindowsWslPathAliases } from '../../../../../../shared/cross-platform-path'
 import { getConnectionIdForFileFromState } from '@/lib/connection-owner-resolution'
 import { isLocalWindowsDesktopClient } from '@/lib/desktop-window-chrome'
+import {
+  buildDiffEditorFileId,
+  buildOwnedEditorFileId,
+  runtimeOwnerKey
+} from '../../../../../../shared/editor-file-identity'
 
-export function runtimeOwnerKey(runtimeEnvironmentId: string | null | undefined): string | null {
-  return runtimeEnvironmentId?.trim() || null
-}
+export { buildDiffEditorFileId, buildOwnedEditorFileId, runtimeOwnerKey }
 
 export function isSameEditorOwner(
   file: Pick<OpenFile, 'worktreeId' | 'runtimeEnvironmentId'>,
@@ -55,28 +58,6 @@ export function canReuseLocalWslAlias(
     getConnectionIdForFileFromState(state, file.worktreeId, file.filePath) === null &&
     getConnectionIdForFileFromState(state, existing.worktreeId, existing.filePath) === null
   )
-}
-
-export function buildOwnedEditorFileId(
-  filePath: string,
-  worktreeId: string,
-  runtimeEnvironmentId: string | null | undefined
-): string {
-  const runtimeKey = runtimeOwnerKey(runtimeEnvironmentId) ?? 'local'
-  return `editor:${encodeURIComponent(worktreeId)}:${encodeURIComponent(runtimeKey)}:${encodeURIComponent(filePath)}`
-}
-
-export function buildDiffEditorFileId(
-  worktreeId: string,
-  diffSource: DiffSource,
-  relativePath: string,
-  runtimeEnvironmentId: string | null | undefined
-): string {
-  const legacyId = `${worktreeId}::diff::${diffSource}::${relativePath}`
-  const runtimeKey = runtimeOwnerKey(runtimeEnvironmentId)
-  return runtimeKey
-    ? `editor-diff:${encodeURIComponent(worktreeId)}:${encodeURIComponent(runtimeKey)}:${encodeURIComponent(diffSource)}:${encodeURIComponent(relativePath)}`
-    : legacyId
 }
 
 export function withDiffContentReloadRequest(file: OpenFile): OpenFile {
