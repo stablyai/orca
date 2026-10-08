@@ -18,6 +18,9 @@ describe('parenthesized hard-wrapped terminal file targets', () => {
     '文档(/tmp/产物/file.md)',
     'label(/tmp/产物/file.md)',
     '文档:(/tmp/产物/file.md)',
+    '文档/链接:(/tmp/产物/file.md)',
+    'docs/guide.md:(/tmp/产物/file.md)',
+    'docs/guide.md(/tmp/产物/file.md)',
     '文档(/tmp/产物/file(版).md)',
     '文档(./产物/file.md)',
     '文档(~/产物/file.md)',
@@ -29,7 +32,7 @@ describe('parenthesized hard-wrapped terminal file targets', () => {
       for (const row of [1, 2]) {
         expect(
           buildHardWrappedPathLogicalLineCandidates(terminal.buffer.active, row).some(
-            (logical) => logical.text.includes('/tmp/') && logical.text.includes('next.md')
+            (logical) => logical.rows.length > 1 && logical.text.includes('next.md')
           )
         ).toBe(false)
       }

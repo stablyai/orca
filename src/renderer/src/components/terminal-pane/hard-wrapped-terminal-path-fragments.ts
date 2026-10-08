@@ -34,10 +34,13 @@ export function isClosedPathWrapper(text: string): boolean {
       depth--
       if (depth === 0) {
         // Why: a label may touch the wrapper, but parentheses inside a path are not wrappers.
+        const prefix = text.slice(0, index)
+        const target = text.slice(index + 1, -1)
         return (
           index === 0 ||
-          (!canStartHardWrappedPath(text.slice(0, index)) &&
-            canStartHardWrappedPath(text.slice(index + 1, -1)))
+          /^(?:[/\\]|\.{1,2}[/\\]|~[/\\]|[A-Za-z]:[/\\])/.test(target) ||
+          ((!canStartHardWrappedPath(prefix) || prefix.endsWith(':')) &&
+            canStartHardWrappedPath(target))
         )
       }
     }
