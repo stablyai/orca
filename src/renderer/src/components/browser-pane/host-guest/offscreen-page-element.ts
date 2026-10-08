@@ -3,6 +3,7 @@ import type {
   OffscreenPageGuestEvent,
   OffscreenPageGuestState
 } from '../../../../../shared/offscreen-page-protocol'
+import { bindOffscreenPageFileDrop } from './offscreen-page-file-drop'
 import { OFFSCREEN_PAGE_TAG } from './browser-page-guest-element-kind'
 import { dispatchBrowserPageZoomEvent } from './browser-page-zoom'
 import { bindOffscreenPageInputSurface } from './offscreen-page-input-surface'
@@ -62,6 +63,9 @@ export class OrcaOffscreenPageElement extends HTMLElement {
     this.canvas.addEventListener('mousemove', (event) => {
       this.lastPointer = { x: event.clientX, y: event.clientY }
     })
+    bindOffscreenPageFileDrop(this, (point, files) =>
+      window.api.offscreenPage.dropFiles(this.browserPageId, { ...point, files })
+    )
   }
 
   get browserPageId(): string {

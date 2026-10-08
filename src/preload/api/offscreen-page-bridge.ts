@@ -1,5 +1,4 @@
 import { ipcRenderer, sharedTexture, webUtils } from 'electron'
-import { OFFSCREEN_PAGE_TAG } from '../../shared/offscreen-page-protocol'
 import type {
   OffscreenPageCaret,
   OffscreenPageCommand,
@@ -44,8 +43,12 @@ export type OffscreenPageApi = {
   readCaret(browserPageId: string): Promise<OffscreenPageCaret | null>
   /** Replays a pointer move at `point` (window-client CSS px) so Orca shows a changed tooltip. */
   refreshHover(browserPageId: string, point: { x: number; y: number }): void
+  /** Hands OS files dropped at `x`,`y` (page CSS px) to the page, as a <webview> receives them. */
+  dropFiles(browserPageId: string, drop: { x: number; y: number; files: File[] }): void
   close(browserPageId: string): void
 }
+
+const MAX_DROPPED_FILES = 256
 
 type Attachment = {
   canvas: HTMLCanvasElement
@@ -122,43 +125,17 @@ export const offscreenPageApi: OffscreenPageApi = {
   showSelectMenu: (id, point) => ipcRenderer.send('offscreenPage:selectMenu', id, point),
   readCaret: (id) => ipcRenderer.invoke('offscreenPage:caret', id),
   refreshHover: (id, point) => ipcRenderer.send('offscreenPage:refreshHover', id, point),
+  dropFiles(id, { x, y, files }) {
+    const paths = files
+      .slice(0, MAX_DROPPED_FILES)
+      .map((file) => webUtils.getPathForFile(file))
+      .filter((path) => path.length > 0)
+    if (paths.length > 0) {
+      ipcRenderer.send('offscreenPage:dropFiles', id, { x, y, files: paths })
+    }
+  },
   close: (id) => {
     attachments.delete(id)
     ipcRenderer.send('offscreenPage:close', id)
   }
-}
-
-const MAX_DROPPED_FILES = 256
-
-/**
- * Hands an OS file drop that landed on an offscreen page to that page, as a <webview> receives it
- * natively. Returns true when the drop was the page's, so the generic file-drop routing skips it.
- */
-export function claimOffscreenPageFileDrop(event: DragEvent): boolean {
-  const host = event
-    .composedPath()
-    .find(
-      (entry): entry is HTMLElement =>
-        entry instanceof HTMLElement && entry.tagName === OFFSCREEN_PAGE_TAG.toUpperCase()
-    )
-  const browserPageId = host?.dataset.browserPageId
-  const files = event.dataTransfer?.files
-  if (!host || !browserPageId || !files || files.length === 0) {
-    return false
-  }
-  event.preventDefault()
-  event.stopImmediatePropagation()
-  const paths = [...files]
-    .slice(0, MAX_DROPPED_FILES)
-    .map((file) => webUtils.getPathForFile(file))
-    .filter((path) => path.length > 0)
-  if (paths.length > 0) {
-    const box = host.getBoundingClientRect()
-    ipcRenderer.send('offscreenPage:dropFiles', browserPageId, {
-      x: event.clientX - box.left,
-      y: event.clientY - box.top,
-      files: paths
-    })
-  }
-  return true
 }
