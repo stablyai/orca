@@ -27,9 +27,14 @@ export type DocPreviewFileAccessResult = {
   mimeType?: string
 }
 
+// Why fonts: a previewed page's @font-face files must come back as bytes, or the preview 415s them.
 const DOC_PREVIEW_BINARY_MIME_TYPES: Record<string, string> = {
   ...IMAGE_FILE_MIME_TYPES,
-  '.pdf': 'application/pdf'
+  '.pdf': 'application/pdf',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.ttf': 'font/ttf',
+  '.otf': 'font/otf'
 }
 const DOC_PREVIEW_MAX_TEXT_BYTES = 10 * 1024 * 1024
 const DOC_PREVIEW_MAX_BINARY_BYTES = 50 * 1024 * 1024

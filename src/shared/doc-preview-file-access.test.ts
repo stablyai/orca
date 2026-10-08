@@ -162,4 +162,29 @@ describe('readAuthorizedDocPreviewFile', () => {
       'file_too_large'
     )
   })
+
+  it('returns web fonts as typed binary bytes so a previewed page keeps its @font-face', async () => {
+    const fixture = await createFixture()
+    const bytes = Buffer.from('wOF2\0\x01\0\0', 'latin1')
+    const request = {
+      boundaryPath: fixture.workspace,
+      entryPath: fixture.entry,
+      implicitRootPath: fixture.docs,
+      authorizedRootPaths: [fixture.assets],
+      maxTextBytes: 1024,
+      maxBinaryBytes: 1024
+    }
+    for (const [name, mimeType] of [
+      ['inter.woff2', 'font/woff2'],
+      ['inter.woff', 'font/woff'],
+      ['inter.ttf', 'font/ttf'],
+      ['inter.otf', 'font/otf']
+    ]) {
+      const font = join(fixture.assets, name)
+      await writeFile(font, bytes)
+      await expect(readAuthorizedDocPreviewFile({ ...request, targetPath: font })).resolves.toEqual(
+        { content: bytes.toString('base64'), isBinary: true, mimeType }
+      )
+    }
+  })
 })
