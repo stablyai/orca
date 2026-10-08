@@ -23,17 +23,22 @@ export function isHardWrappedPathContinuation(text: string): boolean {
 }
 
 export function isClosedPathWrapper(text: string): boolean {
-  if (!text.startsWith('(')) {
+  if (!text.endsWith(')')) {
     return false
   }
   let depth = 0
-  for (let index = 0; index < text.length; index++) {
-    if (text[index] === '(') {
+  for (let index = text.length - 1; index >= 0; index--) {
+    if (text[index] === ')') {
       depth++
-    } else if (text[index] === ')') {
+    } else if (text[index] === '(') {
       depth--
       if (depth === 0) {
-        return index === text.length - 1
+        // Why: a label may touch the wrapper, but parentheses inside a path are not wrappers.
+        return (
+          index === 0 ||
+          (!canStartHardWrappedPath(text.slice(0, index)) &&
+            canStartHardWrappedPath(text.slice(index + 1, -1)))
+        )
       }
     }
   }
