@@ -29,6 +29,7 @@ import { joinWorktreeRelativePath } from './runtime-relative-paths'
 import { resolveAuthorizedPath } from '../ipc/filesystem-auth'
 import { isENOENT } from '../ipc/filesystem-path-containment'
 import { runtimeFileRouteForTarget, type RuntimeFileRoute } from './runtime-file-command-target'
+import type { ServerWorkspaceFileTarget } from './server-workspace-file-target'
 
 export class RuntimeFileCommandsWithConstructor extends RuntimeFileCommandsWithActiveRuntimeTextSearches {
   constructor(private readonly host: RuntimeFileCommandHost) {
@@ -189,10 +190,37 @@ export class RuntimeFileCommandsWithConstructor extends RuntimeFileCommandsWithA
   async openMobileFile(
     worktreeSelector: string,
     relativePath: string,
-    navigation?: RuntimeNavigationTarget
+    navigation?: RuntimeNavigationTarget,
+    server?: ServerWorkspaceFileTarget
   ): Promise<RuntimeFileOpenResult> {
+    if (server) {
+      // Why: a server workspace's file was checked on its server, which holds it.
+      return this.openMobileFileTab(
+        { id: server.worktreeId, path: server.worktreePath },
+        relativePath,
+        server.environmentId,
+        navigation
+      )
+    }
     const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
-    const { worktree } = target
+    if (!isSafeMobileRelativePath(relativePath)) {
+      throw new Error('invalid_relative_path')
+    }
+    // Why: CLI/agents treat opened:true as success; stat first so missing paths and directories fail the RPC instead of opening a ghost tab.
+    await this.assertOpenTargetIsFile(
+      joinWorktreeRelativePath(target.worktree.path, relativePath),
+      runtimeFileRouteForTarget(target)
+    )
+    // Why: the internal runtimeId isn't a valid env selector; pass undefined so openFile falls back to activeRuntimeEnvironmentId.
+    return this.openMobileFileTab(target.worktree, relativePath, undefined, navigation)
+  }
+
+  private openMobileFileTab(
+    worktree: { id: string; path: string },
+    relativePath: string,
+    runtimeEnvironmentId: string | undefined,
+    navigation: RuntimeNavigationTarget | undefined
+  ): RuntimeFileOpenResult {
     if (!isSafeMobileRelativePath(relativePath)) {
       throw new Error('invalid_relative_path')
     }
@@ -205,10 +233,7 @@ export class RuntimeFileCommandsWithConstructor extends RuntimeFileCommandsWithA
           : 'text'
     // Why: `kind` only describes the file; the desktop editor opens binaries (e.g. PDFs) like the File Explorer.
     const filePath = joinWorktreeRelativePath(worktree.path, relativePath)
-    // Why: CLI/agents treat opened:true as success; stat first so missing paths and directories fail the RPC instead of opening a ghost tab.
-    await this.assertOpenTargetIsFile(filePath, runtimeFileRouteForTarget(target))
-    // Why: the internal runtimeId isn't a valid env selector; pass undefined so openFile falls back to activeRuntimeEnvironmentId.
-    this.host.openFile(worktree.id, filePath, relativePath, undefined, navigation)
+    this.host.openFile(worktree.id, filePath, relativePath, runtimeEnvironmentId, navigation)
     return { worktree: worktree.id, relativePath, kind, opened: true }
   }
 
@@ -236,9 +261,12 @@ export class RuntimeFileCommandsWithConstructor extends RuntimeFileCommandsWithA
     worktreeSelector: string,
     relativePath: string,
     staged: boolean,
-    navigation?: RuntimeNavigationTarget
+    navigation?: RuntimeNavigationTarget,
+    server?: ServerWorkspaceFileTarget
   ): Promise<RuntimeFileOpenResult> {
-    const { worktree } = await this.host.resolveRuntimeFileTarget(worktreeSelector)
+    const worktree = server
+      ? { id: server.worktreeId, path: server.worktreePath }
+      : (await this.host.resolveRuntimeFileTarget(worktreeSelector)).worktree
     if (!isSafeMobileRelativePath(relativePath)) {
       throw new Error('invalid_relative_path')
     }
@@ -248,8 +276,15 @@ export class RuntimeFileCommandsWithConstructor extends RuntimeFileCommandsWithA
         ? 'markdown'
         : 'text'
     const filePath = joinWorktreeRelativePath(worktree.path, relativePath)
-    // Why: see openMobileFile; avoid stamping internal runtimeId as runtimeEnvironmentId.
-    this.host.openDiff(worktree.id, filePath, relativePath, staged, undefined, navigation)
+    // Why: see openMobileFile; only a server workspace names its environment.
+    this.host.openDiff(
+      worktree.id,
+      filePath,
+      relativePath,
+      staged,
+      server?.environmentId,
+      navigation
+    )
     return { worktree: worktree.id, relativePath, kind, opened: true }
   }
 }

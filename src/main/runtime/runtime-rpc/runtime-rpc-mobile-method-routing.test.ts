@@ -21,6 +21,14 @@ describe('mobile RPC method routing census', () => {
     expect(MOBILE_RPC_METHOD_ROUTES.get('status.get')).toBe('execution-host')
   })
 
+  it("opens a file on the desktop, whose window holds a server workspace's editor tabs", () => {
+    expect(MOBILE_RPC_METHOD_ROUTES.get('files.open')).toBe('paired-desktop')
+    expect(MOBILE_RPC_METHOD_ROUTES.get('files.openDiff')).toBe('paired-desktop')
+    // A tab's own calls follow the tab: the phone names the desktop only for a desktop tab.
+    expect(MOBILE_RPC_METHOD_ROUTES.get('markdown.readTab')).toBe('execution-host')
+    expect(MOBILE_RPC_METHOD_ROUTES.get('markdown.saveTab')).toBe('execution-host')
+  })
+
   it('tags nothing outside the allowlist', () => {
     const stale = [...MOBILE_RPC_METHOD_ROUTES.keys()].filter(
       (method) => !MOBILE_RPC_METHOD_ALLOWLIST.has(method)

@@ -5,6 +5,7 @@ import {
   getGroupVisibleTabOrder,
   type VisibleTabRef
 } from '../../components/tab-bar/group-tab-order'
+import { toHostSessionTabId } from '../../../../shared/terminal-surface-id'
 import type { MobileSessionWorktreeInputs } from './types'
 import { isEditorSurfaceTab } from './mobile-session-surfaces'
 
@@ -190,12 +191,16 @@ export function buildMobileSessionGroupProjection(
     for (const item of visibleOrder) {
       order.push(item)
     }
+    const desktopTabOrder = inputs.serverHosted
+      ? buildDesktopTabOrder(group, groupTabs, tabOrder)
+      : undefined
     tabGroups.push({
       id: group.id,
       activeTabId:
         group.activeTabId && tabOrderSet.has(group.activeTabId) ? group.activeTabId : null,
       tabOrder,
-      recentTabIds: group.recentTabIds?.filter((tabId) => tabOrderSet.has(tabId)) ?? []
+      recentTabIds: group.recentTabIds?.filter((tabId) => tabOrderSet.has(tabId)) ?? [],
+      ...(desktopTabOrder ? { desktopTabOrder } : {})
     })
   }
   const validGroupIds = new Set(tabGroups.map((group) => group.id))
@@ -204,6 +209,27 @@ export function buildMobileSessionGroupProjection(
     tabGroups,
     tabGroupLayout: pruneTabGroupLayout(inputs.tabGroupLayout, validGroupIds)
   }
+}
+
+// Why: a server workspace's strip mixes this desktop's tabs with tabs the server publishes, so
+// each tab goes by an id both lists share: a mirrored terminal by its host tab, others by entity.
+function buildDesktopTabOrder(
+  group: TabGroup,
+  groupTabs: readonly Tab[],
+  tabOrder: readonly string[]
+): string[] {
+  const published = new Set(tabOrder)
+  const tabsById = new Map(groupTabs.map((tab) => [tab.id, tab]))
+  return group.tabOrder.map((tabId) => {
+    const tab = tabsById.get(tabId)
+    if (!tab) {
+      return tabId
+    }
+    if (tab.contentType === 'terminal') {
+      return toHostSessionTabId(tab.entityId)
+    }
+    return isEditorSurfaceTab(tab) && published.has(tabId) ? tabId : tab.entityId
+  })
 }
 
 export function collectTabGroupLayoutIds(layout: TabGroupLayoutNode | undefined): string[] {

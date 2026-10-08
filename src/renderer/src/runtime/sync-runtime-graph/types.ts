@@ -150,6 +150,8 @@ export type MountedTerminalSurfaceCapture = {
 export type MobileSessionWorktreeInputs = {
   worktreeId: string
   worktreeInstanceId: string | undefined
+  /** A server's workspace, whose strip also holds tabs the server publishes itself. */
+  serverHosted: boolean
   terminalTabs: AppState['tabsByWorktree'][string]
   browserWorkspaces: AppState['browserTabsByWorktree'][string]
   unifiedTabs: AppState['unifiedTabsByWorktree'][string]

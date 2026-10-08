@@ -425,4 +425,68 @@ describe('mobile relay host catalog', () => {
     ])
     expect(call).toHaveBeenCalledTimes(1)
   })
+  describe('a server workspace file the desktop opens in its own window', () => {
+    const SERVER = { kind: 'runtime' as const, id: 'runtime:env' as const, environmentId: 'env' }
+    function serverWithWorkspace(stat: RuntimeRpcResponse<unknown>) {
+      const { hosts, call } = fakeHosts([
+        { id: 'env', name: 'Box', snapshot: snapshot('env', 'live') }
+      ])
+      call.mockImplementation(async (_host, method) =>
+        method === 'worktree.ps' ? psReply([{ worktreeId: 'w', path: '/srv/repo' }]) : stat
+      )
+      return { hostCatalog: catalog(hosts).catalog, call }
+    }
+    const statReply = (isDirectory: boolean): RuntimeRpcResponse<unknown> => ({
+      id: 'stat',
+      ok: true,
+      result: { size: 1, isDirectory, mtime: 1 },
+      _meta: { runtimeId: 'runtime-a' }
+    })
+
+    it("takes the server's path for it, and asks the server that it is a file", async () => {
+      const { hostCatalog, call } = serverWithWorkspace(statReply(false))
+
+      await expect(hostCatalog.resolveWorkspace(SERVER, 'w')).resolves.toEqual({
+        environmentId: 'env',
+        worktreeId: 'w',
+        worktreePath: '/srv/repo'
+      })
+      await hostCatalog.assertWorkspaceFile(SERVER, 'w', 'src/a.ts')
+      expect(call).toHaveBeenCalledWith(
+        expect.objectContaining({ environmentId: 'env' }),
+        'files.stat',
+        { worktree: 'id:w', relativePath: 'src/a.ts' },
+        { timeoutMs: 5_000 }
+      )
+    })
+
+    it("refuses a directory, and a missing file with the server's own error", async () => {
+      await expect(
+        serverWithWorkspace(statReply(true)).hostCatalog.assertWorkspaceFile(SERVER, 'w', 'src')
+      ).rejects.toThrow(/^EISDIR/)
+      const missing = serverWithWorkspace({
+        id: 'stat',
+        ok: false,
+        error: { code: 'runtime_error', message: "ENOENT: no such file or directory, open 'x'" }
+      })
+      await expect(missing.hostCatalog.assertWorkspaceFile(SERVER, 'w', 'x')).rejects.toThrow(
+        /^ENOENT/
+      )
+    })
+
+    it('refuses an escaping path before asking the server anything', async () => {
+      const { hostCatalog, call } = serverWithWorkspace(statReply(false))
+      await expect(hostCatalog.assertWorkspaceFile(SERVER, 'w', '../etc/passwd')).rejects.toThrow(
+        'invalid_relative_path'
+      )
+      expect(call).not.toHaveBeenCalled()
+    })
+
+    it('refuses a workspace the server does not list', async () => {
+      const { hostCatalog } = serverWithWorkspace(statReply(false))
+      await expect(hostCatalog.resolveWorkspace(SERVER, 'gone')).rejects.toThrow(
+        'selector_not_found'
+      )
+    })
+  })
 })

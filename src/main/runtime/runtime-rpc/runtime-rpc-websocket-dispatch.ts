@@ -12,7 +12,7 @@ import { RuntimeRpcMobileDevices } from './runtime-rpc-mobile-devices'
 import { classifyRuntimeLongPoll } from './runtime-rpc-long-poll'
 import { MOBILE_RPC_METHOD_ALLOWLIST } from './runtime-rpc-mobile-method-allowlist'
 import { MOBILE_RPC_METHOD_ROUTES } from './runtime-rpc-mobile-method-routing'
-import { parseExecutionHostId } from '../../../shared/execution-host'
+import { parseExecutionHostId, type ParsedExecutionHost } from '../../../shared/execution-host'
 
 // Why: status.get has no per-connection context in the dispatcher, so stamp the scope here at the transport boundary.
 function injectDeviceScope(response: string, scope: DeviceScope): string {
@@ -216,6 +216,7 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
               }
             : undefined,
         pairing: pairingContext,
+        executionHost: device.scope === 'mobile' ? runtimeExecutionHostOf(request) : undefined,
         mobileRelayHosts: this.mobileRelayHostCatalog ?? undefined,
         delegatedMobileDevices:
           device.scope === 'runtime'
@@ -233,4 +234,14 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
       this.releaseLongPoll(longPoll, device.deviceId)
     }
   }
+}
+
+// Why: only a call this desktop answers itself reaches dispatch with a server target still on it.
+function runtimeExecutionHostOf(
+  request: RpcRequest
+): Extract<ParsedExecutionHost, { kind: 'runtime' }> | undefined {
+  const target = parseExecutionHostId(
+    typeof request.executionHost === 'string' ? request.executionHost : null
+  )
+  return target?.kind === 'runtime' ? target : undefined
 }

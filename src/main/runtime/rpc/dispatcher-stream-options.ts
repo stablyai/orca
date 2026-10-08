@@ -15,6 +15,7 @@ export type RpcDispatchStreamingOptions = {
   clientCapabilities?: readonly RuntimeCapability[]
   updateClientCapabilities?: (capabilities: readonly RuntimeCapability[]) => void
   pairing?: PairingRpcContext
+  executionHost?: RpcContext['executionHost']
   mobileRelayHosts?: RpcContext['mobileRelayHosts']
   delegatedMobileDevices?: RpcContext['delegatedMobileDevices']
   sendBinary?: (bytes: Uint8Array<ArrayBufferLike>) => boolean | void

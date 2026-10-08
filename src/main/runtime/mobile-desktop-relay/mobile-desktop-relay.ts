@@ -53,6 +53,7 @@ class RelayLink {
  * - The desktop never interprets replies; it renumbers only host stream ids (RELAYED_STREAM_CARRIERS).
  * - Upstream, the phone's desktop token is swapped wherever it appears, not per field.
  * - Only `execution-host` methods (MOBILE_RPC_METHOD_ROUTES) reach here; `paired-desktop` ones run locally.
+ *   A paired-desktop handler may read the target as context (RpcContext.executionHost), never relay on it.
  * - A server without the delegated-devices capability is `update-needed`; nothing relays to it.
  * - A server-side revoke of a phone is final until the next sync.
  */

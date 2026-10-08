@@ -225,7 +225,8 @@ export class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends OrcaRuntime
           id: group.id,
           activeTabId,
           tabOrder,
-          ...(recentTabIds && recentTabIds.length > 0 ? { recentTabIds } : {})
+          ...(recentTabIds && recentTabIds.length > 0 ? { recentTabIds } : {}),
+          ...(group.desktopTabOrder ? { desktopTabOrder: group.desktopTabOrder } : {})
         }
       })
       .filter((group): group is RuntimeMobileSessionTabGroup => group !== null)

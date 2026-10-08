@@ -1,4 +1,5 @@
-import { defineMethod, defineStreamingMethod } from '../core'
+import { defineMethod, defineStreamingMethod, type RpcContext } from '../core'
+import { getExplicitWorktreeIdSelector } from '../../runtime-worktree-selection'
 import { runFileWatchStream } from './file-watch-stream-lifecycle'
 import { FILE_MUTATION_METHODS } from './files-mutation-methods'
 import { remoteFileContentBudget } from './files-remote-content-budget'
@@ -21,6 +22,25 @@ import {
 } from '../../../../shared/rpc-contract/files-params'
 
 let filesWatchSubscriptionSeq = 0
+
+/** A phone's server workspace, whose editor tabs this desktop's own window holds. */
+function serverWorkspaceOf(
+  { executionHost, mobileRelayHosts }: RpcContext,
+  worktreeSelector: string
+) {
+  if (!executionHost) {
+    return undefined
+  }
+  const worktreeId = getExplicitWorktreeIdSelector(worktreeSelector)
+  if (!worktreeId || !mobileRelayHosts) {
+    throw new Error('selector_not_found')
+  }
+  return {
+    resolve: () => mobileRelayHosts.resolveWorkspace(executionHost, worktreeId),
+    assertFile: (relativePath: string) =>
+      mobileRelayHosts.assertWorkspaceFile(executionHost, worktreeId, relativePath)
+  }
+}
 
 export const FILE_METHODS = [
   defineMethod({
@@ -59,19 +79,35 @@ export const FILE_METHODS = [
   defineMethod({
     name: 'files.open',
     params: FileOpenTab,
-    handler: async (params, { runtime }) =>
-      runtime.openMobileFile(params.worktree, params.relativePath, params.navigation)
+    handler: async (params, context) => {
+      const { worktree, relativePath, navigation } = params
+      const server = serverWorkspaceOf(context, worktree)
+      if (!server) {
+        return context.runtime.openMobileFile(worktree, relativePath, navigation)
+      }
+      const target = await server.resolve()
+      // Why: CLI/agents treat opened:true as success, so the server checks it is a file first.
+      await server.assertFile(relativePath)
+      return context.runtime.openMobileFile(worktree, relativePath, navigation, target)
+    }
   }),
   defineMethod({
     name: 'files.openDiff',
     params: FileOpenDiff,
-    handler: async (params, { runtime }) =>
-      runtime.openMobileDiff(
-        params.worktree,
-        params.relativePath,
-        params.staged === true,
-        params.navigation
-      )
+    handler: async (params, context) => {
+      const { worktree, relativePath, navigation } = params
+      const staged = params.staged === true
+      const server = serverWorkspaceOf(context, worktree)
+      return server
+        ? context.runtime.openMobileDiff(
+            worktree,
+            relativePath,
+            staged,
+            navigation,
+            await server.resolve()
+          )
+        : context.runtime.openMobileDiff(worktree, relativePath, staged, navigation)
+    }
   }),
   defineMethod({
     name: 'files.read',

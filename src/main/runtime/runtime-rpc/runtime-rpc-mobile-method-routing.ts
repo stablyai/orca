@@ -35,8 +35,6 @@ export const EXECUTION_HOST_METHODS = [
   'files.browseServerDir',
   'files.createFile',
   'files.list',
-  'files.open',
-  'files.openDiff',
   'files.read',
   'files.readChunk',
   'files.readDir',

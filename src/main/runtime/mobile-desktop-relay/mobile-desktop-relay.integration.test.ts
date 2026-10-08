@@ -25,6 +25,7 @@ import { readRuntimeMetadata } from '../runtime-metadata'
 import { OrcaRuntimeRpcServer } from '../runtime-rpc'
 import { sendRequest } from '../runtime-rpc-test-harness'
 import { makeStore } from '../runtime-rpc-worktree-store-fixtures'
+import { runtimeEnvironmentStatusFromSnapshot } from '../../../shared/runtime-host-status'
 import type { MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
 import type * as PassthroughSocketModule from '../../../shared/remote-runtime-passthrough-socket'
 
@@ -152,8 +153,21 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
     }
     const hosts: MobileDesktopRelayHosts = {
       list: () => ({
-        environments: [],
-        statusByEnvironmentId: new Map(),
+        environments: [{ id: 'env-1', name: 'Box', pairingRevision: 1, runtimeId: null }],
+        statusByEnvironmentId: new Map([
+          [
+            'env-1',
+            runtimeEnvironmentStatusFromSnapshot({
+              environmentId: 'env-1',
+              pairingRevision: 1,
+              sequence: 1,
+              checkedAt: 1,
+              status: host.runtime.getStatus(),
+              verification: 'verified',
+              transport: 'ready'
+            })
+          ]
+        ]),
         sshTargetLabels: new Map(),
         sshConnectionStates: new Map()
       }),
@@ -433,7 +447,7 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
     expect(isOk(await phone.next('after-sync'))).toBe(true)
   })
 
-  it('answers a targeted desktop-owned call on the desktop, exactly as the untargeted one', async () => {
+  it('answers a targeted paired-desktop call on the desktop: the target is context, never a relay', async () => {
     const { desktop } = await startTopology()
     const phone = await connectPhone(desktop.server, 'iPhone')
     const opensBefore = passthroughOpens.count
@@ -448,6 +462,32 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
     phone.send('list', 'terminal.list', {})
     expect(isOk(await phone.next('list'))).toBe(true)
     expect(passthroughOpens.count).toBe(opensBefore + 1)
+  })
+
+  it("opens a server workspace's editor tab in the desktop's own window, on that server", async () => {
+    const { desktop } = await startTopology()
+    const openFile = vi.fn()
+    const openDiff = vi.fn()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: files.open reads only these two notifier members.
+    desktop.runtime.setNotifier({ openFile, openDiff } as never)
+    const phone = await connectPhone(desktop.server, 'iPhone')
+    const opensBefore = passthroughOpens.count
+
+    phone.send('diff', 'files.openDiff', { worktree: WORKTREE, relativePath: 'a.ts' })
+    expect(await phone.next('diff')).toMatchObject({ ok: true, result: { opened: true } })
+    expect(openDiff).toHaveBeenCalledWith(
+      'repo-1::/tmp/worktree-a',
+      '/tmp/worktree-a/a.ts',
+      'a.ts',
+      false,
+      'env-1',
+      undefined
+    )
+    // The server checks the file before the desktop opens a tab for it; this fixture's has none.
+    phone.send('open', 'files.open', { worktree: WORKTREE, relativePath: 'missing.ts' })
+    expect(await phone.next('open')).toMatchObject({ ok: false })
+    expect(openFile).not.toHaveBeenCalled()
+    expect(passthroughOpens.count).toBe(opensBefore)
   })
 
   it('answers a targeted status from the server, so a server workspace gates on its own features', async () => {

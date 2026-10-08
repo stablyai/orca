@@ -2,6 +2,7 @@ import type { AppState } from '@/store/types'
 import { parsePaneKey, makePaneKey } from '../../../../shared/stable-pane-id'
 import { nativeChatLaunchAgentForLeaf } from '../../components/native-chat/native-chat-leaf-routing'
 import { getIndexedWorktreesById } from '@/store/worktree-repo-index'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import {
   EMPTY_NARROWED_BY_KEY,
   EMPTY_WORKTREE_BROWSER_WORKSPACES,
@@ -133,6 +134,7 @@ export function buildMobileSessionWorktreeInputs(
   return {
     worktreeId,
     worktreeInstanceId: resolveWorktreeInstanceId(state, worktreeId),
+    serverHosted: getRuntimeEnvironmentIdForWorktree(state, worktreeId) !== null,
     terminalTabs,
     browserWorkspaces,
     unifiedTabs: state.unifiedTabsByWorktree[worktreeId] ?? EMPTY_WORKTREE_UNIFIED_TABS,

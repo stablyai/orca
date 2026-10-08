@@ -181,6 +181,9 @@ export type RuntimeMobileSessionTabGroup = {
   activeTabId: string | null
   tabOrder: string[]
   recentTabIds?: string[]
+  /** The desktop's whole strip for this group, naming tabs its server owns by their server ids; set
+   *  only when it holds tabs `tabOrder` leaves out, so a phone can place desktop tabs among them. */
+  desktopTabOrder?: string[]
 }
 
 type RuntimeMobileSessionTabMoveBase = {

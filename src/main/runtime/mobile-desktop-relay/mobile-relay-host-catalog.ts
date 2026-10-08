@@ -3,7 +3,8 @@ import { DELEGATED_MOBILE_DEVICES_RUNTIME_CAPABILITY } from '../../../shared/del
 import {
   parseExecutionHostId,
   toRuntimeExecutionHostId,
-  type ExecutionHostId
+  type ExecutionHostId,
+  type ParsedExecutionHost
 } from '../../../shared/execution-host'
 import { buildExecutionHostRegistry } from '../../../shared/execution-host-registry'
 import { pickerExecutionHosts } from '../../../shared/managed-orcad-execution-host'
@@ -20,11 +21,15 @@ import type {
   MobileDesktopRelayHostListing,
   MobileDesktopRelayHosts
 } from './mobile-desktop-relay-hosts'
+import type { ServerWorkspaceFileTarget } from '../server-workspace-file-target'
+import { isSafeMobileRelativePath } from '../runtime-file-command-host'
 
 // Why the phone's own full-catalog limit: the server's default page is 200 and nothing pages on.
 const SERVER_WORKTREE_LIMIT = 10_000
 // Why well under the phone's 30s request timeout: a hung server must answer with its last rows.
 const SERVER_FETCH_TIMEOUT_MS = 5_000
+
+const FileStatReplySchema = z.looseObject({ isDirectory: z.boolean() })
 
 const WorktreePsReplySchema = z.object({
   worktrees: z.array(z.looseObject({})),
@@ -85,12 +90,9 @@ export class MobileRelayHostCatalog {
       return { worktrees: null }
     }
     const refreshed = host.health === 'available' && (await withinFetchBound(this.refresh(host)))
-    const cached = this.cached.get(host.environmentId)
-    const current = this.options.hosts
-      .list()
-      .environments.find((environment) => environment.id === host.environmentId)
     // Why the identity read after the fetch: one answered after a re-pair stored the old server's rows.
-    if (!cached || !current || cached.fence !== fenceOf(current)) {
+    const cached = this.currentEntry(host.environmentId)
+    if (!cached) {
       return { worktrees: null }
     }
     // Why: the desktop asks with background-removal support; a phone asking itself never sees these rows.
@@ -102,6 +104,57 @@ export class MobileRelayHostCatalog {
       fetchedAt: cached.fetchedAt,
       stale: !refreshed
     }
+  }
+
+  /** A server workspace as the desktop's window opens files in it: its path, from the fetched rows. */
+  async resolveWorkspace(
+    host: Extract<ParsedExecutionHost, { kind: 'runtime' }>,
+    worktreeId: string
+  ): Promise<ServerWorkspaceFileTarget> {
+    const rowPath = (rows: readonly MobileRelayServerWorktreeRow[] | null | undefined) => {
+      const path = rows?.find((row) => row.worktreeId === worktreeId)?.path
+      return typeof path === 'string' ? path : null
+    }
+    // Why: refetch only for a workspace the last rows lack, not on every open.
+    const worktreePath =
+      rowPath(this.currentEntry(host.environmentId)?.worktrees) ??
+      rowPath((await this.worktrees(host.id)).worktrees)
+    if (!worktreePath) {
+      throw new Error('selector_not_found')
+    }
+    return { environmentId: host.environmentId, worktreeId, worktreePath }
+  }
+
+  /** Throws unless the server itself says this path in its workspace is a file. */
+  async assertWorkspaceFile(
+    host: Extract<ParsedExecutionHost, { kind: 'runtime' }>,
+    worktreeId: string,
+    relativePath: string
+  ): Promise<void> {
+    if (!isSafeMobileRelativePath(relativePath)) {
+      throw new Error('invalid_relative_path')
+    }
+    const response = await this.options.hosts.call(
+      host,
+      'files.stat',
+      { worktree: `id:${worktreeId}`, relativePath },
+      { timeoutMs: SERVER_FETCH_TIMEOUT_MS }
+    )
+    if (!response.ok) {
+      throw new Error(response.error.message)
+    }
+    if (FileStatReplySchema.safeParse(response.result).data?.isDirectory === true) {
+      throw new Error(`EISDIR: illegal operation on a directory, open '${relativePath}'`)
+    }
+  }
+
+  /** The rows last fetched from this server, unless it was re-paired or removed since. */
+  private currentEntry(environmentId: string): CachedServerWorktrees | null {
+    const cached = this.cached.get(environmentId)
+    const current = this.options.hosts
+      .list()
+      .environments.find((environment) => environment.id === environmentId)
+    return cached && current && cached.fence === fenceOf(current) ? cached : null
   }
 
   private describe(): DescribedHost[] {

@@ -1,5 +1,6 @@
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import {
+  composesDesktopTabs,
   scopeRpcClientToExecutionHost,
   workspaceRouteExecutionHost
 } from './execution-host-scoped-rpc-client'
@@ -23,7 +24,10 @@ export function useWorkspaceServer(args: {
 } {
   const { client, connState, desktopCapabilities, executionHost } = args
   const routeHost = workspaceRouteExecutionHost(client, desktopCapabilities, executionHost)
-  const serverClient = client && routeHost ? scopeRpcClientToExecutionHost(client, routeHost) : null
+  const serverClient =
+    client && routeHost
+      ? scopeRpcClientToExecutionHost(client, routeHost, composesDesktopTabs(desktopCapabilities))
+      : null
   // No hostId: the desktop's recorded version and descriptor must not take the server's.
   const gates = useHostStatusGates({ hostId: undefined, client: serverClient, connState })
   return { routeHost, server: routeHost === undefined ? null : { client: serverClient, gates } }
