@@ -1,5 +1,6 @@
 import type { GlobalSettings } from './global-settings-types'
-import { getDefaultNotificationSettings, getDefaultVoiceSettings } from './constants'
+import { getDefaultVoiceSettings } from './constants'
+import { getDefaultNotificationSettings } from './notification-settings-defaults'
 import { buildDefaultSettings } from './default-global-settings'
 
 // Why: tests need a complete GlobalSettings without hand-copying every field, so

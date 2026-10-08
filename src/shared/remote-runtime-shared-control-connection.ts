@@ -18,12 +18,7 @@ import { refreshRemoteRuntimeSharedControl } from './remote-runtime-shared-contr
 import { SharedControlDiagnosticsTracker } from './remote-runtime-shared-control-diagnostics'
 import { ensureSharedControlReady } from './remote-runtime-shared-control-ready-wait'
 import { handleRuntimeControlTextFrame } from './remote-runtime-shared-control-connection-frame'
-import {
-  closeSharedControlSubscription,
-  replayRuntimeControlSubscriptions,
-  sendSharedControlRequest,
-  sendSharedControlSubscription
-} from './remote-runtime-shared-control-connection-actions'
+import * as sharedControlActions from './remote-runtime-shared-control-connection-actions'
 import type * as SharedControlTypes from './remote-runtime-shared-control-types'
 type PendingRequest = SharedControlTypes.SharedControlPendingRequest<unknown>
 type LogicalSubscription = SharedControlTypes.SharedControlLogicalSubscription<unknown>
@@ -69,7 +64,7 @@ export class RemoteRuntimeSharedControlConnection {
       envelope,
       ensureReady: () => this.ensureReadyWithTimeout(timeoutMs, signal),
       send: (requestId) =>
-        sendSharedControlRequest({
+        sharedControlActions.sendSharedControlRequest({
           pendingRequests: this.pendingRequests,
           requestId,
           state: this.state,
@@ -84,7 +79,8 @@ export class RemoteRuntimeSharedControlConnection {
     method: string,
     params: unknown,
     timeoutMs: number,
-    callbacks: SharedControlTypes.SharedControlSubscriptionCallbacks<TResult>
+    callbacks: SharedControlTypes.SharedControlSubscriptionCallbacks<TResult>,
+    signal?: AbortSignal
   ): Promise<SharedControlTypes.RemoteRuntimeSharedSubscription> {
     return startSharedControlSubscription({
       subscriptions: this.subscriptions,
@@ -92,9 +88,10 @@ export class RemoteRuntimeSharedControlConnection {
       method,
       params,
       callbacks,
-      ensureReady: () => this.ensureReadyWithTimeout(timeoutMs),
+      signal,
+      ensureReady: () => this.ensureReadyWithTimeout(timeoutMs, signal),
       sendSubscription: (subscription) =>
-        sendSharedControlSubscription({
+        sharedControlActions.sendSharedControlSubscription({
           subscriptions: this.subscriptions,
           subscription,
           deviceToken: this.pairing.deviceToken,
@@ -240,7 +237,7 @@ export class RemoteRuntimeSharedControlConnection {
   }
 
   private replaySubscriptions(): void {
-    this.everReady = replayRuntimeControlSubscriptions({
+    this.everReady = sharedControlActions.replayRuntimeControlSubscriptions({
       subscriptions: this.subscriptions,
       deviceToken: this.pairing.deviceToken,
       send: (payload) => this.sendEncrypted(payload),
@@ -249,7 +246,7 @@ export class RemoteRuntimeSharedControlConnection {
   }
 
   private closeSubscription(requestId: string): void {
-    closeSharedControlSubscription({
+    sharedControlActions.closeSharedControlSubscription({
       subscriptions: this.subscriptions,
       retiredRequestIds: this.retiredRequestIds,
       requestId,

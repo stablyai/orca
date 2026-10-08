@@ -61,6 +61,9 @@ function toolResultText(content: unknown): string | null {
       }
     }
   }
+  if (length + parts.length - 1 > TRANSCRIPT_MESSAGE_TEXT_LIMIT) {
+    return boundedJoinedText(parts)
+  }
   const joined = parts.join('\n')
   return joined.trim() ? joined : null
 }
@@ -93,7 +96,8 @@ export function transcriptMessagesFromContent(
     if (!item) {
       continue
     }
-    const type = typeof item.type === 'string' ? item.type : null
+    // Codex 0.153+ item_completed blocks are typed `Text`; the set is lowercase.
+    const type = typeof item.type === 'string' ? item.type.toLowerCase() : null
     if (type === 'tool_use') {
       pushMessage(messages, 'tool', toolCallText(item.name, item.input), timestamp)
       continue
@@ -112,12 +116,33 @@ export function transcriptMessagesFromContent(
   }
   if (textRole && textParts.length > 0) {
     // The record's own words lead; its tool blocks follow in transcript order.
-    const text = boundedText(textParts.join('\n'))
+    const text = boundedJoinedText(textParts)
     if (text) {
       messages.unshift({ role: textRole, text, timestamp })
     }
   }
   return messages
+}
+
+function boundedJoinedText(parts: readonly string[]): string | null {
+  if (parts.length === 1) {
+    return boundedText(parts[0])
+  }
+  const prefixes: string[] = []
+  // One extra code unit preserves truncation at a trailing high surrogate.
+  let remaining = TRANSCRIPT_MESSAGE_TEXT_LIMIT + 1
+  for (const part of parts) {
+    if (prefixes.length > 0) {
+      remaining--
+    }
+    const prefix = part.slice(0, remaining)
+    prefixes.push(prefix)
+    remaining -= prefix.length
+    if (remaining === 0) {
+      break
+    }
+  }
+  return boundedText(prefixes.join('\n'))
 }
 
 function pushMessage(

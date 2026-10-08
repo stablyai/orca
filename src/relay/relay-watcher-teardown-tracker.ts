@@ -47,7 +47,7 @@ export class RelayWatcherTeardownTracker {
         },
         (error) => {
           const physicalExit = isWatcherProcessFailure(error) ? error.physicalExit : undefined
-          if (!subscription && !physicalExit) {
+          if (!subscription && !state.subscription && !physicalExit) {
             this.failed.delete(state.rootKey)
             this.forgetRoot(state.rootPath)
             return

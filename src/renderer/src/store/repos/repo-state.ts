@@ -1,3 +1,4 @@
+import type { GhAccountBinding } from '../../../../shared/github/account-binding'
 import type { SshRepoReadoption } from '../../../../shared/ssh-types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type {
@@ -55,6 +56,7 @@ export type RepoUpdate = Partial<
   agentWorktreeVisibility?: Repo['agentWorktreeVisibility'] | null
   sourceControlAi?: Repo['sourceControlAi'] | null
   externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
+  ghAccount?: GhAccountBinding | null
 }
 
 export type ProjectUpdate = ProjectUpdateArgs['updates']
@@ -145,6 +147,9 @@ export type RepoSlice = {
   projectGroups: readonly ProjectGroup[]
   folderWorkspaces: readonly FolderWorkspace[]
   folderWorkspacePathStatuses: Record<string, FolderWorkspacePathStatusCacheEntry>
+  /** Host-resolved floating workspace directory; null until the host has answered. */
+  floatingWorkspacePath: string | null
+  setFloatingWorkspacePath: (path: string) => void
   activeRepoId: string | null
   // Monotonic sequence so overlapping catalog fetches can drop stale same-host results (#7020).
   reposFetchGeneration: number

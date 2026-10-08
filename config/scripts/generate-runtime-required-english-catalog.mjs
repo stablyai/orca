@@ -3,11 +3,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 
-import {
-  collectLocalizationKeyReferences,
-  collectSourceFiles,
-  LOCALIZATION_SOURCE_ROOTS
-} from './verify-localization-catalog.mjs'
+import { collectLocalizationReferences } from './verify-localization-catalog.mjs'
 
 export const EN_CATALOG_RELATIVE_PATH = path.join(
   'src',
@@ -103,19 +99,6 @@ export function buildRuntimeRequiredCatalog(catalogEntries, requiredKeys) {
   return catalog
 }
 
-async function collectReferences(root) {
-  const references = []
-  for (const sourceRoot of LOCALIZATION_SOURCE_ROOTS) {
-    const files = await collectSourceFiles(root, path.join(root, sourceRoot))
-    for (const filePath of files) {
-      references.push(
-        ...collectLocalizationKeyReferences(filePath, await fs.readFile(filePath, 'utf8'), root)
-      )
-    }
-  }
-  return references
-}
-
 /**
  * Why not a byte-for-byte comparison: the shipped subset only has to be *safe*,
  * and safety is "every required entry is present, and nothing it ships
@@ -144,12 +127,12 @@ function reportKeys(label, keys) {
   }
 }
 
-export async function main(root = process.cwd(), argv = process.argv.slice(2)) {
+export async function main(root = process.cwd(), argv = process.argv.slice(2), sharedReferences) {
   const fix = argv.includes('--fix')
   const catalogEntries = flattenCatalogEntries(
     JSON.parse(await fs.readFile(path.join(root, EN_CATALOG_RELATIVE_PATH), 'utf8'))
   )
-  const references = await collectReferences(root)
+  const references = sharedReferences ?? (await collectLocalizationReferences(root))
   const requiredKeys = collectRuntimeRequiredKeys(catalogEntries, references)
   const outputPath = path.join(root, RUNTIME_REQUIRED_RELATIVE_PATH)
 

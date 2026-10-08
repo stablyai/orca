@@ -164,36 +164,34 @@ describe('orchestration RPC methods', () => {
       )
     })
 
-    it('requires the Dispatch capability before creating a question', async () => {
+    it('creates a question only from the exact process that owns the Dispatch', async () => {
       setup()
-      const { dispatch } = createAskingDispatch()
-      const capability = db.mintDispatchCapability({
-        dispatchId: dispatch.id,
-        paneKey: 'tab_worker:leaf_worker',
-        processIncarnation: 'runtime_test:term_worker:1'
-      })
+      const task = db.createTask({ spec: 'question work' })
+      createRootDispatch(
+        db,
+        task.id,
+        'term_worker',
+        'tab_worker:leaf_worker',
+        undefined,
+        'runtime_test:term_worker:1'
+      )
       vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
         handle === 'term_worker' ? 'tab_worker:leaf_worker' : coordinatorPaneKey
       )
+      vi.spyOn(runtime, 'waitForMessage').mockResolvedValue('timed_out')
+      const incarnation = vi
+        .spyOn(runtime, 'getTerminalProcessIncarnation')
+        .mockReturnValue('runtime_test:term_worker:2')
 
       await expect(
-        call('orchestration.ask', {
-          from: 'term_worker',
-          question: 'unauthorized',
-          timeoutMs: 1
-        })
-      ).rejects.toMatchObject({ code: 'dispatch_capability_invalid' })
+        call('orchestration.ask', { from: 'term_worker', question: 'stale', timeoutMs: 1 })
+      ).rejects.toMatchObject({ code: 'worker_identity_changed' })
       expect(db.getInbox(100).filter((message) => message.type === 'question')).toHaveLength(0)
 
-      ctx = { runtime, orchestrationCapability: capability }
-      vi.spyOn(runtime, 'waitForMessage').mockResolvedValue('timed_out')
-      const accepted = (await call('orchestration.ask', {
-        from: 'term_worker',
-        question: 'authorized',
-        timeoutMs: 1
-      })) as { messageId: string; timedOut: boolean }
-      expect(accepted.messageId).toMatch(/^msg_/)
-      expect(accepted.timedOut).toBe(true)
+      incarnation.mockReturnValue('runtime_test:term_worker:1')
+      expect(
+        await call('orchestration.ask', { from: 'term_worker', question: 'current', timeoutMs: 1 })
+      ).toMatchObject({ messageId: expect.stringMatching(/^msg_/), timedOut: true })
     })
 
     it('returns timedOut when no reply arrives in the window', async () => {

@@ -200,7 +200,8 @@ export function registerWorktreeForgetHandlers(context: WorktreeIpcContext): voi
               repo.path,
               cleanupTarget.branchName,
               cleanupTarget.head,
-              (argv, cwd) => gitExecFileAsync(argv, { cwd, ...localWorktreeGitOptions })
+              (argv, cwd) => gitExecFileAsync(argv, { cwd, ...localWorktreeGitOptions }),
+              localWorktreeGitOptions
             )
           : forceDeleteLocalBranch(repo.path, cleanupTarget.branchName, cleanupTarget.head))
         await cleanupUnusedWorktreePushTargetRemote(

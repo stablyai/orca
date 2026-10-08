@@ -1,3 +1,9 @@
+import {
+  closeTestStores,
+  createSqliteTestStore,
+  createStore as createFreshStore,
+  testState
+} from './persistence-test-harness'
 /**
  * The same repo id may be registered on two execution hosts (see `removeProjectForHost`).
  * Every deletion that resolves a *row* must therefore delete only that row: `removeProject`
@@ -13,8 +19,9 @@ import type { Repo } from '../shared/repo-types'
 import { getDefaultPersistedState } from '../shared/constants'
 import { toRuntimeExecutionHostId } from '../shared/execution-host'
 import { installFakeAppEnvironment } from '../../config/scripts/vitest-host-ports-setup'
+import { resetRetirementCollisionKeyCacheForTests } from './worktree-name-retirement'
 
-const testState = { dir: '' }
+let hasCreatedStoreInCase = false
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
@@ -51,13 +58,17 @@ async function createStoreFromState(state: Record<string, unknown>) {
     JSON.stringify({ ...getDefaultPersistedState(testState.dir), ...state }),
     'utf-8'
   )
+  if (!hasCreatedStoreInCase) {
+    hasCreatedStoreInCase = true
+    return createFreshStore()
+  }
   vi.resetModules()
   const { Store, initDataPath } = await import('./persistence')
   // Why here: userData resolves through AppEnvironment, and this must point at this
   // file's temp dir rather than the global fake's shared one, after resetModules.
   installFakeAppEnvironment({ getPath: () => testState.dir })
   initDataPath()
-  return new Store()
+  return createSqliteTestStore(Store, { dataFile: join(testState.dir, 'orca-data.json') })
 }
 
 function createStoreWithDuplicateRepoId() {
@@ -95,10 +106,13 @@ function staleLocalSetupState() {
 }
 
 beforeEach(() => {
+  hasCreatedStoreInCase = false
+  resetRetirementCollisionKeyCacheForTests()
   testState.dir = mkdtempSync(join(tmpdir(), 'orca-dup-repo-id-'))
 })
 
-afterEach(() => {
+afterEach(async () => {
+  await closeTestStores()
   rmSync(testState.dir, { recursive: true, force: true })
 })
 

@@ -4,6 +4,7 @@ import type {
   CliWorkspaceProvenance
 } from '../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { NestedWorktreeRemovalApproval } from '../../../shared/worktree/nested-removal'
 import type { ListDetectedWorktreesArgs } from '../../../shared/detected-worktree-provider-contract'
 import { WorkspaceLinkedItemSchema } from '../../../shared/workspace-linked-item-schema'
 import { TaskSourceContextSchema } from '../../../shared/task-source-context-schema'
@@ -18,6 +19,8 @@ export type RemoveWorktreeArgs = {
   worktreeId: string
   hostId?: ExecutionHostId
   force?: boolean
+  approvedNestedWorktrees?: NestedWorktreeRemovalApproval[]
+  expectedCheckout?: NestedWorktreeRemovalApproval
   /** Explicit Force Delete only — `force` alone is set by the ordinary confirmation (#11960). */
   allowUnverifiedPtyStop?: boolean
   skipArchive?: boolean

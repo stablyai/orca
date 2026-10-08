@@ -30,7 +30,6 @@ export type ScenarioStep =
 export type RecordingScenario = DeclaredDeviceState & {
   id: string
   operation: string
-  version: number
   family: string
   sites: string[]
   schedules: string[]
@@ -48,7 +47,8 @@ export type MountContext = {
 }
 export type MountAdapter = (context: MountContext) => MountedOperation
 export type RecordingScheduler = {
-  start: () => void
+  /** Awaited: the scheduler pays React's one lazy `Math.random()` draw here, off the seeded run. */
+  start: () => Promise<void>
   flush: () => Promise<void>
   advance: (ms: number) => Promise<void>
   /** Virtual milliseconds since the pinned recording epoch. */

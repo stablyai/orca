@@ -13,6 +13,8 @@ import {
   resolveWorkerStartReadinessTimeoutMs
 } from '../../../../../../shared/orchestration-timing-budgets'
 import { assertWorkerStartTaskSpecWithinPromptBudget } from './worker-start-prompt-budget'
+import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../../shared/orca-session-address'
+import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as SESSION_CODES } from '../../../../../../shared/orchestration-session-caller-codes'
 
 export const ORCHESTRATION_WORKER_START_METHODS = [
   defineMethod({
@@ -20,7 +22,7 @@ export const ORCHESTRATION_WORKER_START_METHODS = [
     params: WorkerStartParams,
     handler: async (
       params,
-      { runtime, orchestrationMutation, orchestrationCompatibilityEvidence }
+      { runtime, orchestrationMutation, orchestrationCompatibilityEvidence, orchestrationCaller }
     ) => {
       if (!isWorkerStartTimeoutWithinTimerLimit(params.timeoutMs)) {
         throw new OrchestrationError(
@@ -30,11 +32,12 @@ export const ORCHESTRATION_WORKER_START_METHODS = [
       }
       const readinessTimeoutMs = resolveWorkerStartReadinessTimeoutMs(params.timeoutMs)
       const db = runtime.getOrchestrationDb()
-      const coordinatorPane = resolveOrchestrationCaller(runtime, {
+      const coordinator = resolveOrchestrationCaller(runtime, {
         callerTerminalHandle: params.from,
-        callerEvidence: orchestrationCompatibilityEvidence
+        callerEvidence: orchestrationCompatibilityEvidence,
+        callerSession: orchestrationCaller
       })
-      const run = coordinatorPane ? db.getCurrentRunForPane(coordinatorPane) : undefined
+      const run = coordinator ? db.getCurrentRunForCoordinator(coordinator) : undefined
       if (!run || (params.run && params.run !== run.id)) {
         throw new OrchestrationError(
           'consumer_fenced',
@@ -53,6 +56,14 @@ export const ORCHESTRATION_WORKER_START_METHODS = [
         params,
         settings: readWorkerStartModeSettings(runtime)
       })
+      if (params.on && params.terminal?.startsWith(ORCA_SESSION_ADDRESS_PREFIX)) {
+        // Refused here, before any remote call: an Orca session ID names a chat only on its own host.
+        throw new OrchestrationError(
+          SESSION_CODES.hostBoundary,
+          `${params.terminal} names a chat by its Orca session ID, which identifies it only on the host that runs it. Run worker-start on that host. No effects were applied.`,
+          { effectsApplied: false }
+        )
+      }
       if (params.on) {
         // A remote worker is always a terminal agent; the mode receipt rides along so the
         // coordinator still learns why its structured default did not apply.
@@ -62,7 +73,8 @@ export const ORCHESTRATION_WORKER_START_METHODS = [
           db,
           runId: run.id,
           task: existingTask,
-          orchestrationMutation
+          orchestrationMutation,
+          callerSession: orchestrationCaller
         })
         return receipt && typeof receipt === 'object' ? { ...receipt, mode } : receipt
       }
@@ -71,7 +83,8 @@ export const ORCHESTRATION_WORKER_START_METHODS = [
         runtime,
         db,
         run,
-        coordinatorPane,
+        coordinator,
+        callerSession: orchestrationCaller,
         existingTask,
         orchestrationMutation,
         mode

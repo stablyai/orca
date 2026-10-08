@@ -13,6 +13,7 @@ import type {
 } from '../../shared/notification-settings-types'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { buildNotificationOptions } from '../ipc/notification-options'
+import { translateMain } from '../i18n/main-i18n'
 import { reserveNotificationCooldown } from '../ipc/notification-burst-cooldown'
 
 export type NotificationDeliveryDependencies = {
@@ -35,6 +36,8 @@ export type NotificationDeliveryDependencies = {
   ) => NotificationDispatchResult | Promise<NotificationDispatchResult>
   platform: NodeJS.Platform
   now: () => number
+  /** Told once per path that actually announced the request: a desktop banner shown, or a mobile alert sent. */
+  recordAnnounced?: (request: NotificationDispatchRequest) => void
 }
 
 export type NotificationDeliveryService = {
@@ -49,8 +52,24 @@ export function createNotificationDeliveryService(
   const recentDesktopNotifications = new Map<string, number>()
   const recentMobileNotifications = new Map<string, number>()
 
+  // Keyed news is announced once by its producer, so only its own repeat may collapse it.
   const dedupeKeyFor = (request: NotificationDispatchRequest): string =>
-    request.worktreeId ?? request.worktreeLabel ?? 'global'
+    request.attentionKey ?? request.worktreeId ?? request.worktreeLabel ?? 'global'
+
+  const deliverNativeAndRecord = (
+    request: NotificationDispatchRequest,
+    options: ReturnType<typeof buildNotificationOptions>,
+    settings: NotificationSettings
+  ): NotificationDispatchResult | Promise<NotificationDispatchResult> => {
+    const recordIfDelivered = (result: NotificationDispatchResult): NotificationDispatchResult => {
+      if (result.delivered) {
+        deps.recordAnnounced?.(request)
+      }
+      return result
+    }
+    const result = deps.deliverNative(request, options, settings)
+    return result instanceof Promise ? result.then(recordIfDelivered) : recordIfDelivered(result)
+  }
 
   return {
     dispatch: (request) => {
@@ -63,15 +82,24 @@ export function createNotificationDeliveryService(
       }
 
       const settings = deps.readNotificationSettings()
+      const hostMuted =
+        request.notificationSourceId !== undefined &&
+        settings.mutedNotificationSourceIds.includes(request.notificationSourceId)
+      // Machine mutes leave mobile eligibility and its cooldown unchanged.
       const desktopAllowed =
         settings.enabled &&
         (request.source !== 'agent-task-complete' || settings.agentTaskComplete) &&
         (request.source !== 'terminal-bell' || settings.terminalBell)
 
-      const notificationOptions = buildNotificationOptions(request)
+      const notificationOptions = buildNotificationOptions(request, translateMain)
 
       // Why: desktop focus only means this computer sees the worktree; the paired phone may still need the alert.
-      if (deps.dispatchMobileNotification && request.source !== 'test') {
+      // The execution host pushed its own phones and retires them itself on acknowledgement.
+      if (
+        !request.mobileDeliveredByHost &&
+        deps.dispatchMobileNotification &&
+        request.source !== 'test'
+      ) {
         if (
           reserveNotificationCooldown(
             recentMobileNotifications,
@@ -95,13 +123,19 @@ export function createNotificationDeliveryService(
             ...(request.notificationId ? { notificationId: request.notificationId } : {}),
             // Why: background push needs the agent's real state to pick "needs input"
             // vs "finished" — and to stay silent while the agent is still working.
-            ...(request.agentState ? { agentState: request.agentState } : {})
+            ...(request.agentState ? { agentState: request.agentState } : {}),
+            ...(request.attentionKey ? { attentionKey: request.attentionKey } : {}),
+            ...(request.structuredOrigin ? { structuredOrigin: request.structuredOrigin } : {})
           })
+          deps.recordAnnounced?.(request)
         }
       }
 
-      if (!desktopAllowed) {
-        return { delivered: false, reason: settings.enabled ? 'source-disabled' : 'disabled' }
+      if (!desktopAllowed || hostMuted) {
+        return {
+          delivered: false,
+          reason: !settings.enabled ? 'disabled' : hostMuted ? 'host-muted' : 'source-disabled'
+        }
       }
 
       const browserWindow = deps.findActiveWindow()
@@ -133,7 +167,7 @@ export function createNotificationDeliveryService(
       }
 
       if (deps.platform !== 'darwin') {
-        return deps.deliverNative(request, notificationOptions, settings)
+        return deliverNativeAndRecord(request, notificationOptions, settings)
       }
       // Why: macOS silently swallows notifications while permission is denied/undecided (verified macOS 26); skip so the renderer can show a fallback.
       return deps.readAuthorizationStatus().then((authorization) => {
@@ -141,7 +175,7 @@ export function createNotificationDeliveryService(
           deps.recordDeliveryOutcome('failed')
           return { delivered: false, reason: 'blocked-by-system' }
         }
-        return deps.deliverNative(request, notificationOptions, settings)
+        return deliverNativeAndRecord(request, notificationOptions, settings)
       })
     }
   }

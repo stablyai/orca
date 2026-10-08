@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { getExecutionHostLabel, type ExecutionHostId } from '../../../shared/execution-host'
-import type {
-  ExecutionHostHealth,
-  ExecutionHostRegistryEntry
+import {
+  buildExecutionHostRegistry,
+  type ExecutionHostHealth,
+  type ExecutionHostRegistryEntry
 } from '../../../shared/execution-host-registry'
 import {
   PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
@@ -585,5 +586,30 @@ describe('buildProjectHostSetupOptions', () => {
       detail: 'Checking host capabilities',
       isAvailable: false
     })
+  })
+
+  it('offers an SSH host with a managed server once, routed to the server', () => {
+    const options = buildProjectHostSetupOptions({
+      projectId: 'project-1',
+      eligibleRepos: [repo('local-repo')],
+      hosts: buildExecutionHostRegistry({
+        repos: [],
+        settings: null,
+        hostSource: 'configured-only',
+        sshTargetLabels: new Map([['omarchy-target', 'Omarchy']]),
+        runtimeEnvironments: [
+          {
+            id: 'omarchy-server',
+            name: 'Omarchy',
+            orcadDeployment: { sshTargetId: 'omarchy-target' }
+          }
+        ]
+      }),
+      projectHostSetups: [setup('local', 'project-1', 'local', 'local-repo')]
+    })
+
+    expect(options.filter((option) => option.label === 'Omarchy')).toEqual([
+      expect.objectContaining({ kind: 'needs-setup', hostId: 'runtime:omarchy-server' })
+    ])
   })
 })

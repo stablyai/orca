@@ -1,6 +1,5 @@
 import type { RpcSendParams } from '../transport/rpc-params-contract'
 import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
-import type { HostedReviewProvider } from '../../../src/shared/hosted-review'
 import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 import { worktreeLinkSet, worktreeSummaryRead } from './mobile-worktree-metadata-operations'
 
@@ -21,7 +20,7 @@ export function buildWorktreeSetLinkParams(
 
 export function buildWorktreeSetHostedReviewLinkParams(
   worktreeId: string,
-  provider: HostedReviewProvider,
+  provider: string,
   number: number | null,
   options?: { baseRef?: string | null }
 ): RpcSendParams<'worktree.set'> {
@@ -41,7 +40,8 @@ export function buildWorktreeSetHostedReviewLinkParams(
       return { ...base, linkedAzureDevOpsPR: number }
     case 'gitea':
       return { ...base, linkedGiteaPR: number }
-    case 'unsupported':
+    // 'unsupported', and any token this build does not know: no linked* field to write.
+    default:
       return base
   }
 }
@@ -84,7 +84,7 @@ export function linkMobilePr(
 export async function linkMobileHostedReview(
   client: RpcOperationSender,
   worktreeId: string,
-  provider: HostedReviewProvider,
+  provider: string,
   number: number,
   options?: { baseRef?: string | null }
 ): Promise<MobilePrLinkOutcome> {

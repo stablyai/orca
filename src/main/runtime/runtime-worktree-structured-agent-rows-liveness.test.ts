@@ -1,14 +1,18 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
+import { makeStructuredAgentStatusSubject } from '../../shared/agent-status-subject'
 import { collectRuntimeWorktreeAgentSources } from './runtime-worktree-agent-sources'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { StructuredAgentSessionStatusFeed } from '../native-chat/agent-session-wire/structured-agent-session-status-feed'
-import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-store-test-open'
+import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import type { AgentSessionStatusSummary } from '../../shared/agent-session-wire'
 import type { RuntimeWorktreePsSummary } from '../../shared/runtime-types'
 import { AgentHookServer, _internals } from '../agent-hooks/server'
 import { attachRuntimeWorktreeAgentRows } from './runtime-worktree-agent-rows'
+import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({
@@ -26,6 +30,15 @@ vi.mock('../telemetry/cohort-classifier', () => ({
  */
 const WORKTREE_ID = 'repo-1::/workspace/app'
 const SESSION = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'
+const SUBJECT = makeStructuredAgentStatusSubject(
+  {
+    executionHostId: 'local',
+    wslDistro: null,
+    workspaceId: WORKTREE_ID,
+    workspaceKind: 'git-worktree'
+  },
+  SESSION
+)
 const IDENTITY = {
   provider: 'codex',
   threadId: 'thread-1',
@@ -54,14 +67,14 @@ async function awaitingApproval() {
       workspaceId: WORKTREE_ID,
       hostId: 'local',
       agent: 'codex',
-      providerHandle: { kind: 'codex', threadId: 'thread-1' }
+      providerHandle: codexProviderHandle('thread-1')
     },
-    journalDir: join(root, SESSION)
+    stateDirectory: join(root, SESSION)
   })
   await journal.appendItem(
     { ...IDENTITY, ordinal: 1 },
     { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'rm the branch' }] },
-    { fence: 1 }
+    { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   )
   await journal.appendItem(
     { ...IDENTITY, ordinal: 2 },
@@ -72,28 +85,37 @@ async function awaitingApproval() {
       options: [{ id: 'allow', label: 'Allow' }],
       resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
     },
-    { fence: 1 }
+    { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   )
   const sessions = new Map([
     [
       SESSION,
       {
         journal,
-        hasProviderChild: true,
-        params: { location: { workspaceId: WORKTREE_ID }, provider: 'codex' as const }
+        child: { phase: 'ready' as const, generation: 'child-1', fence: 1 },
+        params: {
+          location: {
+            executionHostId: 'local' as const,
+            wslDistro: null,
+            workspaceId: WORKTREE_ID,
+            workspaceKind: 'git-worktree' as const
+          },
+          provider: 'codex' as const
+        }
       }
     ]
   ])
   const store = new AgentHookServer()
   const published: AgentSessionStatusSummary[] = []
   const feed = new StructuredAgentSessionStatusFeed({
+    logger: createStructuredAgentSessionLogger(),
     sessions,
     getRecord: () => null,
     now: () => Date.now(),
     statusSink: () => ({
-      publish: (summary) => {
+      publish: (summary, subject) => {
         published.push(summary)
-        store.ingestStructuredStatus(summary)
+        store.ingestStructuredStatus(summary, subject)
       },
       forget: (sessionId) => store.dropStructuredStatus(sessionId)
     })
@@ -156,7 +178,7 @@ describe('worktree ps and a closed structured chat', () => {
       updatedAt: Date.now() - 30 * 60 * 1000 - 1,
       status: 'working' as const
     }
-    store.ingestStructuredStatus(aged)
+    store.ingestStructuredStatus(aged, SUBJECT)
     const row = worktreeFor(store)
     expect(row.agents).toHaveLength(1)
     expect(row.agents[0]?.state).toBe('working')
@@ -171,7 +193,7 @@ describe('worktree ps and a closed structured chat', () => {
       hostExecutionOwned: true as const,
       updatedAt: Date.now() - 30 * 60 * 1000 - 1
     }
-    store.ingestStructuredStatus(aged)
+    store.ingestStructuredStatus(aged, SUBJECT)
     const row = worktreeFor(store)
     expect(row.agents).toHaveLength(1)
     expect(row.agents[0]?.state).toBe('blocked')
@@ -182,7 +204,7 @@ describe('worktree ps and a closed structured chat', () => {
   it('lets an aged approval decay once the host no longer owns the child', async () => {
     const { store, published } = await awaitingApproval()
     const { hostExecutionOwned: _owned, ...held } = published.at(-1)!
-    store.ingestStructuredStatus({ ...held, updatedAt: Date.now() - 30 * 60 * 1000 - 1 })
+    store.ingestStructuredStatus({ ...held, updatedAt: Date.now() - 30 * 60 * 1000 - 1 }, SUBJECT)
     const row = worktreeFor(store)
     expect(row.agents).toHaveLength(1)
     expect(row.agents[0]?.state).toBe('blocked')

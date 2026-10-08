@@ -160,6 +160,84 @@ describe('workspace terminal seeding authority', () => {
     expect(terminalTabCount(store, SSH_WORKTREE_ID)).toBe(0)
   })
 
+  it('seeds a worktree the conflicting snapshot placed, and only that one', () => {
+    const store = createTestStore()
+    seedDirectSsh(store)
+    store.getState().setRemoteWorkspaceSyncStatus(TARGET_ID, {
+      phase: 'conflict',
+      direction: 'pull',
+      unplacedTabWorktreePaths: ['/srv/proj/another-machines-worktree']
+    })
+
+    expect(resolveWorkspaceTerminalHostAuthority(store.getState(), SSH_WORKTREE_ID)).toBe('none')
+    expect(ensureWorktreeHasInitialTerminal(store.getState(), SSH_WORKTREE_ID)).toBeTruthy()
+    expect(terminalTabCount(store, SSH_WORKTREE_ID)).toBe(1)
+  })
+
+  it('leaves a worktree emptied on purpose empty at startup, even once the host answered for it', () => {
+    const store = createTestStore()
+    seedDirectSsh(store)
+    store.getState().setRemoteWorkspaceSyncStatus(TARGET_ID, {
+      phase: 'conflict',
+      direction: 'pull',
+      unplacedTabWorktreePaths: ['/srv/proj/another-machines-worktree']
+    })
+    store.setState({
+      tabsByWorktree: { [SSH_WORKTREE_ID]: [] },
+      closedTerminalTabTombstonesByTabId: {
+        closed: { closedAt: Date.now(), worktreeId: SSH_WORKTREE_ID }
+      }
+    })
+
+    // Startup restore passes no reseed option; only an explicit activation does.
+    expect(ensureWorktreeHasInitialTerminal(store.getState(), SSH_WORKTREE_ID)).toBeNull()
+    expect(terminalTabCount(store, SSH_WORKTREE_ID)).toBe(0)
+    expect(
+      ensureWorktreeHasInitialTerminal(
+        store.getState(),
+        SSH_WORKTREE_ID,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { reseedEmptiedWorkspace: true }
+      )
+    ).toBeTruthy()
+  })
+
+  it.each([
+    ['its own path', '/srv/proj/feature'],
+    ['another spelling of its path', '/srv/proj//feature/']
+  ])('keeps waiting when the host named tabs it could not place on %s', (_label, unplacedPath) => {
+    const store = createTestStore()
+    seedDirectSsh(store)
+    store.getState().setRemoteWorkspaceSyncStatus(TARGET_ID, {
+      phase: 'conflict',
+      direction: 'pull',
+      unplacedTabWorktreePaths: [unplacedPath]
+    })
+
+    expect(resolveWorkspaceTerminalHostAuthority(store.getState(), SSH_WORKTREE_ID)).toBe(
+      'unverifiable'
+    )
+  })
+
+  it('stops trusting a placed worktree once a later sync event replaces the conflict', () => {
+    const store = createTestStore()
+    seedDirectSsh(store)
+    store.getState().setRemoteWorkspaceSyncStatus(TARGET_ID, {
+      phase: 'conflict',
+      direction: 'pull',
+      unplacedTabWorktreePaths: []
+    })
+    // What a snapshot that could not be applied, or a rejected upload, writes.
+    store.getState().setRemoteWorkspaceSyncStatus(TARGET_ID, { phase: 'conflict' })
+
+    expect(resolveWorkspaceTerminalHostAuthority(store.getState(), SSH_WORKTREE_ID)).toBe(
+      'unverifiable'
+    )
+  })
+
   it('leaves terminal creation to the host of a paired runtime workspace', () => {
     const store = createTestStore()
     store.setState({

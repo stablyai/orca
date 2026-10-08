@@ -1,0 +1,37 @@
+{
+  "reports": [
+    {
+      "phase": "baseline",
+      "passed": 68,
+      "failed": 0,
+      "files": [
+        "src/main/native-chat/session-file-resolver.test.ts",
+        "src/main/claude/claude-transcript-rewind-proof.test.ts",
+        "src/main/claude/claude-structured-session-recovery.test.ts",
+        "src/main/claude/claude-structured-history-window.test.ts"
+      ]
+    },
+    {
+      "phase": "candidate",
+      "passed": 68,
+      "failed": 0,
+      "files": [
+        "src/main/native-chat/session-file-resolver.test.ts",
+        "src/main/claude/claude-transcript-rewind-proof.test.ts",
+        "src/main/claude/claude-structured-session-recovery.test.ts",
+        "src/main/claude/claude-structured-history-window.test.ts"
+      ]
+    },
+    {
+      "phase": "windowCandidate",
+      "passed": 68,
+      "failed": 0,
+      "files": [
+        "src/main/native-chat/session-file-resolver.test.ts",
+        "src/main/claude/claude-transcript-rewind-proof.test.ts",
+        "src/main/claude/claude-structured-session-recovery.test.ts",
+        "src/main/claude/claude-structured-history-window.test.ts"
+      ]
+    }
+  ]
+}

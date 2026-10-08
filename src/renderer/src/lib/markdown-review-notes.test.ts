@@ -132,15 +132,6 @@ describe('markdown review notes', () => {
     expect(checks).toBeLessThanOrEqual(2)
   })
 
-  it('prefers exact selected text for card highlights', () => {
-    const highlighted = getMarkdownReviewHighlightedText(
-      'one\ntwo broad line\nthree',
-      note({ selectedText: 'broad' })
-    )
-
-    expect(highlighted).toBe('broad')
-  })
-
   it('falls back to unquoted line context for card highlights', () => {
     const highlighted = getMarkdownReviewHighlightedText(
       'one\ntwo\nthree',

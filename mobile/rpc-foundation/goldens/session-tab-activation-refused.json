@@ -1,20 +1,25 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "session.tab-activation",
   "family": "session.tab-activation",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
-  "adapterSha256": "4a1e81ab3229c8fd10b3ad435568efec11a944e0f02a183f94e4b1f44a7e5de0",
-  "scenarioSha256": "e5049c9ee2aef93194adf1b9540c1eb4b085e6f975648c5ed605718d19fc6afa",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
-    "21ff36a206dc": {
+    "7a0a4e34e537": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": {
+          "code": "tab_not_found",
+          "message": "No such tab"
+        },
+        "id": "frame-1",
+        "ok": false
+      }
+    },
+    "80b6a2c3dc17": {
       "name": "session.tabs.activate#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -51,19 +56,6 @@
         }
       }
     },
-    "7a0a4e34e537": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "error": {
-          "code": "tab_not_found",
-          "message": "No such tab"
-        },
-        "id": "frame-1",
-        "ok": false
-      }
-    },
     "97f1e4150cc6": {
       "activate": {
         "error": {
@@ -77,10 +69,10 @@
         "$rpc": "null"
       }
     },
-    "ff61d2f9964f": {
+    "af35a6da041d": {
       "name": "session.tabs.activate#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.activate\",\"params\":{\"worktree\":\"id:workspace-1\",\"tabId\":\"tab-1\",\"notifyClients\":false,\"navigation\":\"caller\",\"intent\":\"user\"}}",
-      "sent": 1
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.activate\",\"params\":{\"worktree\":\"id:workspace-1\",\"tabId\":\"tab-1\",\"notifyClients\":false,\"navigation\":\"caller\",\"intent\":\"user\"}}"
     }
   },
   "recording": {
@@ -89,8 +81,8 @@
       {
         "id": "refused",
         "observation": {
-          "sender": ["21ff36a206dc"],
-          "payloads": ["ff61d2f9964f"],
+          "sender": ["80b6a2c3dc17"],
+          "payloads": ["af35a6da041d"],
           "settlements": {
             "activate": "7a0a4e34e537"
           },

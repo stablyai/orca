@@ -51,7 +51,7 @@ export function launchAiVaultSessionInNewTab(args: {
     })
     const observedRuntimeLaunch = runtimeLaunch.then((outcome) => {
       if (outcome.status === 'created') {
-        useAppStore.getState().setActiveTabType('terminal')
+        useAppStore.getState().setActiveTabType('terminal', args.worktreeId)
       }
       return outcome
     })
@@ -83,7 +83,7 @@ export function launchAiVaultSessionInNewTab(args: {
       request_kind: 'resume'
     }
   })
-  store.setActiveTabType('terminal')
+  store.setActiveTabType('terminal', args.worktreeId)
 
   const fresh = useAppStore.getState()
   const termIds = (fresh.tabsByWorktree[args.worktreeId] ?? []).map((t) => t.id)

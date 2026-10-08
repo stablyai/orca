@@ -6,7 +6,8 @@ import type {
   GitHubProjectViewLayout
 } from '../../../shared/github/project-types'
 import type { GitHubProjectViewError } from '../../../shared/github/project-result-types'
-import { driftError } from './project-error-classification'
+import { githubProjectHost } from '../../../shared/github/project-identity'
+import { driftError, extractGraphqlErrors } from './project-error-classification'
 import { projectGhExecOptions, runGraphql, type GraphqlVars } from './internals'
 import { normalizeField, type RawProjectV2Field } from './project-view-field-normalization'
 import { FIELD_CONFIG_FRAGMENT } from './project-view-query-fragments'
@@ -37,9 +38,35 @@ export type RawProjectView = {
     nodes?: (RawProjectV2Field | null)[]
   }
   groupByFields?: { nodes?: (RawProjectV2Field | null)[] }
+  verticalGroupByFields?: { nodes?: (RawProjectV2Field | null)[] }
   sortByFields?: {
     nodes?: ({ direction?: string; field?: RawProjectV2Field | null } | null)[]
   }
+}
+
+// Older GHES hosts omit vertical grouping so one missing field cannot break all views.
+const hostsWithoutVerticalGroupBy = new Set<string>()
+
+/** Test-only: capability state is module-level so real runs memoize per host. */
+export function resetVerticalGroupByCapabilityForTests(): void {
+  hostsWithoutVerticalGroupBy.clear()
+}
+
+function verticalGroupBySelection(host: string | undefined): string {
+  return hostsWithoutVerticalGroupBy.has(githubProjectHost(host))
+    ? ''
+    : 'verticalGroupByFields(first:10) { nodes { ...FieldConfig } }'
+}
+
+function errorsIndicateVerticalGroupBy(raw: { stderr: string; stdout: string }): boolean {
+  // Partial-error data can echo the field name even when the schema supports it.
+  return extractGraphqlErrors(raw.stderr, raw.stdout).some(
+    (error) =>
+      /\bverticalGroupByFields\b/.test(error.message ?? '') &&
+      /(?:doesn't exist|does not exist|cannot query field|unknown field|undefined field)/i.test(
+        error.message ?? ''
+      )
+  )
 }
 
 export function ownerQueryRoot(ownerType: GitHubProjectOwnerType): string {
@@ -65,7 +92,7 @@ export async function fetchProjectViewsPage(args: {
   const root = ownerQueryRoot(args.ownerType)
   const afterArg = args.after ? `, after: $after` : ''
   const afterVar = args.after ? `$after:String!, ` : ''
-  const query = `
+  const buildQuery = (): string => `
     query(${afterVar}$owner:String!, $num:Int!) {
       ${root}(login:$owner) {
         projectV2(number:$num) {
@@ -79,6 +106,7 @@ export async function fetchProjectViewsPage(args: {
                 nodes { ...FieldConfig }
               }
               groupByFields(first:10) { nodes { ...FieldConfig } }
+              ${verticalGroupBySelection(args.host)}
               sortByFields(first:10) {
                 nodes { direction field { ...FieldConfig } }
               }
@@ -93,11 +121,19 @@ export async function fetchProjectViewsPage(args: {
   if (args.after) {
     vars.after = args.after
   }
-  const res = await runGraphql<Record<string, { projectV2?: RawProjectConfig | null } | null>>(
-    query,
+  let res = await runGraphql<Record<string, { projectV2?: RawProjectConfig | null } | null>>(
+    buildQuery(),
     vars,
     projectGhExecOptions(args.host)
   )
+  if (!res.ok && verticalGroupBySelection(args.host) && errorsIndicateVerticalGroupBy(res.raw)) {
+    hostsWithoutVerticalGroupBy.add(githubProjectHost(args.host))
+    res = await runGraphql<Record<string, { projectV2?: RawProjectConfig | null } | null>>(
+      buildQuery(),
+      vars,
+      projectGhExecOptions(args.host)
+    )
+  }
   if (!res.ok) {
     return res
   }
@@ -189,6 +225,13 @@ export function finalizeView(
       groupByFields.push(n)
     }
   }
+  const verticalGroupByFields: GitHubProjectField[] = []
+  for (const f of raw.verticalGroupByFields?.nodes ?? []) {
+    const n = normalizeField(f)
+    if (n) {
+      verticalGroupByFields.push(n)
+    }
+  }
   const sortByFields: GitHubProjectSort[] = []
   for (const s of raw.sortByFields?.nodes ?? []) {
     if (!s || (s.direction !== 'ASC' && s.direction !== 'DESC')) {
@@ -210,7 +253,9 @@ export function finalizeView(
       filter: typeof raw.filter === 'string' ? raw.filter : '',
       fields,
       groupByFields,
-      sortByFields
+      sortByFields,
+      // Preserve absence for older hosts and cached payloads.
+      ...(raw.verticalGroupByFields ? { verticalGroupByFields } : {})
     }
   }
 }

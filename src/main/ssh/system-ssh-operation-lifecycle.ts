@@ -3,6 +3,18 @@ import type { SystemSshCommandChannel } from './system-ssh-command'
 
 export type ProcessResult = { label: string; stderr: string }
 
+export class SystemSshCommandExitError extends Error {
+  constructor(
+    label: string,
+    readonly exitCode: number | null,
+    readonly stderr: string,
+    signal?: NodeJS.Signals | null
+  ) {
+    const detail = exitCode === null ? `signal ${signal ?? 'unknown'}` : `exit ${exitCode}`
+    super(`${label} failed (${detail}): ${stderr.trim()}`)
+  }
+}
+
 /**
  * `timeoutMs` bounds a remote consumer that never returns. Windows PowerShell 5.1 cannot drain a
  * large redirected stdin over a non-pty ssh exec (#16432): the remote process stays alive at idle
@@ -52,8 +64,7 @@ export function waitForChannelClose(
     }
     const onClose = (code: number | null, signal?: NodeJS.Signals | null): void => {
       if (code !== 0) {
-        const detail = code === null ? `signal ${signal ?? 'unknown'}` : `exit ${code}`
-        settle(reject, new Error(`${label} failed (${detail}): ${stderr.trim()}`))
+        settle(reject, new SystemSshCommandExitError(label, code, stderr, signal))
         return
       }
       settle(resolve)

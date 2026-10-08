@@ -40,6 +40,7 @@ const session: NativeChatLiveSession = {
   agent: 'codex',
   hasMore: false,
   loadingEarlier: false,
+  olderHistoryGeneration: 0,
   loadEarlier: vi.fn(),
   readPhase: 'ready'
 }
@@ -58,7 +59,6 @@ describe('NativeChatMessageList host-settled turn timing', () => {
           workingStartedAt={1_000}
           settledTurns={unknownTurns}
           expandSignal={false}
-          fontScale={1}
         />
       )
       now.mockReturnValue(60_000)
@@ -69,7 +69,6 @@ describe('NativeChatMessageList host-settled turn timing', () => {
           workingStartedAt={null}
           settledTurns={unknownTurns}
           expandSignal={false}
-          fontScale={1}
         />
       )
       expect(screen.queryByText(/Worked for/)).not.toBeInTheDocument()
@@ -89,7 +88,6 @@ describe('NativeChatMessageList host-settled turn timing', () => {
           workingStartedAt={null}
           settledTurns={settledTurns}
           expandSignal={false}
-          fontScale={1}
         />
       )
       expect(screen.getByText('Worked for 3m 17s')).toBeInTheDocument()
@@ -101,7 +99,6 @@ describe('NativeChatMessageList host-settled turn timing', () => {
           workingStartedAt={null}
           settledTurns={settledTurns}
           expandSignal={false}
-          fontScale={1}
         />
       )
       expect(screen.getByText('Worked for 3m 17s')).toBeInTheDocument()

@@ -205,6 +205,9 @@ export function normalizeTerminalLayoutPtyOwnership(
   const ptyIdsByLeafId = coalesceLeafRecord(snapshot.ptyIdsByLeafId, retainedLeafIdByRemovedLeafId)
   const rootLeafIds = collectLeafIds(root)
   const activeLeafId = resolveOwnedActiveLeafId(rootLeafIds, mappedActiveLeafId, ptyIdsByLeafId)
+  const remappedChatLeafId = snapshot.chatLeafId
+    ? resolveRetainedLeafId(snapshot.chatLeafId, retainedLeafIdByRemovedLeafId)
+    : null
   const { buffersByLeafId, scrollbackRefsByLeafId } = coalesceScrollbackRecords(
     snapshot.buffersByLeafId,
     snapshot.scrollbackRefsByLeafId,
@@ -217,6 +220,7 @@ export function normalizeTerminalLayoutPtyOwnership(
     buffersByLeafId: _oldBuffersByLeafId,
     scrollbackRefsByLeafId: _oldScrollbackRefsByLeafId,
     titlesByLeafId: _oldTitlesByLeafId,
+    chatLeafId: _oldChatLeafId,
     ...snapshotWithoutLeafRecords
   } = snapshot
 
@@ -231,6 +235,9 @@ export function normalizeTerminalLayoutPtyOwnership(
         rootLeafIds.includes(snapshot.expandedLeafId)
           ? snapshot.expandedLeafId
           : null,
+      ...(remappedChatLeafId && rootLeafIds.includes(remappedChatLeafId)
+        ? { chatLeafId: remappedChatLeafId }
+        : {}),
       ...(ptyIdsByLeafId ? { ptyIdsByLeafId } : {}),
       ...(buffersByLeafId ? { buffersByLeafId } : {}),
       ...(scrollbackRefsByLeafId ? { scrollbackRefsByLeafId } : {}),

@@ -1,3 +1,4 @@
+import { warnIfZCodeCannotOpenSession } from '@/components/terminal-pane/zcode-missing-tui-notice'
 import { clearWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { isValidHostTerminalTabId } from '../../../../shared/terminal-tab-id'
@@ -16,6 +17,7 @@ import {
   updateGroup
 } from '../slices/tab-group-state'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import { ownsGlobalSelection } from '../global-selection-owner'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import {
@@ -86,8 +88,9 @@ export function createTerminalTabCreationActions(
             ? options.initialLeafId
             : undefined
         // Why: startup delivery is pane-owned; pin its first leaf so an aborted/remounted renderer retries against the same spawn reservation.
+        // Why a bare leaf id too: a host launch lays out its pane before the process it attaches to exists.
         const initialLeafId =
-          options?.initialPtyId || options?.pendingStartup
+          options?.initialPtyId || options?.pendingStartup || requestedInitialLeafId
             ? (requestedInitialLeafId ?? createBrowserUuid())
             : undefined
         const shouldActivate = options?.activate !== false
@@ -130,8 +133,14 @@ export function createTerminalTabCreationActions(
           ...(startupCwd && startupCwd.length > 0 ? { startupCwd } : {}),
           ...(options?.forceHostRuntime ? { forceHostRuntime: true } : {}),
           ...(options?.launchAgent ? { launchAgent: options.launchAgent } : {}),
+          ...(options?.agentLaunchPane ? { agentLaunchPane: options.agentLaunchPane } : {}),
           // Why: mark click-caused (not work-caused) spawns so updateTabPtyId skips the activity/sortEpoch bump that would reorder Recent/Smart on click.
           ...(options?.pendingActivationSpawn ? { pendingActivationSpawn: true } : {})
+        }
+        if (options?.launchAgent === 'zcode') {
+          // Why here: this is where a ZCode launch is first known, and it runs before the
+          // pane connects, so the explanation can beat the stack trace to the screen.
+          void warnIfZCodeCannotOpenSession()
         }
         const validTargetGroupId =
           targetGroupId &&
@@ -243,7 +252,10 @@ export function createTerminalTabCreationActions(
             ...s.layoutByWorktree,
             [worktreeId]: s.layoutByWorktree[worktreeId] ?? { type: 'leaf', groupId: group.id }
           },
-          activeTabId: shouldActivate ? tab.id : orphanCleanupPatch.activeTabId,
+          activeTabId:
+            shouldActivate && ownsGlobalSelection(s, worktreeId)
+              ? tab.id
+              : orphanCleanupPatch.activeTabId,
           activeTabIdByWorktree: {
             ...orphanCleanupPatch.activeTabIdByWorktree,
             [worktreeId]: nextActiveTabIdForWorktree

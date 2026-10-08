@@ -31,6 +31,7 @@ import {
 } from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
 import { getJiraCreateAllowedValueLabel } from '@/components/task-page-jira-create-fields'
+import { TaskPageJiraIssueAssigneeField } from './IssueAssigneeField'
 export function TaskPageJiraIssueDialog({
   model
 }: {
@@ -260,6 +261,7 @@ export function TaskPageJiraIssueDialog({
               className="w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 resize-none max-h-60 overflow-y-auto scrollbar-sleek"
             />
           </div>
+          <TaskPageJiraIssueAssigneeField model={model} />
           {jiraCreateFieldsLoading ? (
             <div className="flex items-center gap-2 rounded-md border border-border/50 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
               <LoaderCircle className="size-3.5 animate-spin" />

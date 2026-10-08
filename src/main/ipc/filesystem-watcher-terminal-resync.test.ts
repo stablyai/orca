@@ -41,6 +41,7 @@ const OVERFLOW_PAYLOAD = {
 type MockSender = {
   isDestroyed: () => boolean
   send: ReturnType<typeof vi.fn>
+  removeListener: ReturnType<typeof vi.fn>
   once: ReturnType<typeof vi.fn>
   id: number
   destroy: () => void
@@ -52,6 +53,7 @@ function createSender(id: number): MockSender {
   return {
     isDestroyed: () => destroyed,
     send: vi.fn(),
+    removeListener: vi.fn(),
     once: vi.fn((event: string, handler: () => void) => {
       if (event === 'destroyed') {
         destroyedHandlers.push(handler)

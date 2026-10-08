@@ -77,9 +77,7 @@ export function useNewWorkspaceRuntimeContext(
       if (uiRes.status === 'fulfilled') {
         const ui = newWorkspaceUiStateRead.interpret(uiRes.value)
         if (ui.accepted) {
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary; a missing result reads as untrusted.
-          const trust = ui.value as { trustedOrcaHooks?: PersistedTrustedOrcaHooks } | undefined
-          setTrustedOrcaHooks(trust?.trustedOrcaHooks ?? {})
+          setTrustedOrcaHooks(ui.value?.trustedOrcaHooks ?? {})
         }
       }
 

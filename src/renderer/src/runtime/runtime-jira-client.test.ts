@@ -6,6 +6,7 @@ import {
   jiraGetIssue,
   jiraIssueComments,
   jiraListAssignableUsers,
+  jiraListAssignableUsersForProject,
   jiraLookupIssueSummary,
   jiraReadStatus,
   jiraSearchIssues,
@@ -24,6 +25,7 @@ type RuntimeSubscribeCallbacks = Parameters<typeof window.api.runtimeEnvironment
 const jiraSearchIssuesLocal = vi.fn()
 const jiraListAssignableUsersLocal = vi.fn()
 const jiraSearchUsersLocal = vi.fn()
+const jiraProjectUsersLocal = vi.fn()
 const jiraCreateIssueLocal = vi.fn()
 const jiraReadStatusLocal = vi.fn()
 const jiraLookupIssueSummaryLocal = vi.fn()
@@ -36,6 +38,7 @@ beforeEach(() => {
   jiraSearchIssuesLocal.mockReset()
   jiraListAssignableUsersLocal.mockReset()
   jiraSearchUsersLocal.mockReset()
+  jiraProjectUsersLocal.mockReset()
   jiraCreateIssueLocal.mockReset()
   jiraReadStatusLocal.mockReset()
   jiraLookupIssueSummaryLocal.mockReset()
@@ -51,6 +54,7 @@ beforeEach(() => {
         searchIssues: jiraSearchIssuesLocal,
         listAssignableUsers: jiraListAssignableUsersLocal,
         searchUsers: jiraSearchUsersLocal,
+        listAssignableUsersForProject: jiraProjectUsersLocal,
         createIssue: jiraCreateIssueLocal
       },
       runtimeEnvironments: {
@@ -329,6 +333,54 @@ describe('runtime Jira client search bounds', () => {
         },
         selector: 'env-1'
       })
+    )
+  })
+
+  it('uses project-scoped search locally and rejects oversized queries before IPC', async () => {
+    jiraProjectUsersLocal.mockResolvedValue([])
+    await jiraListAssignableUsersForProject(null, '100', 'Ada', 'site-1')
+    expect(jiraProjectUsersLocal).toHaveBeenCalledWith({
+      projectIdOrKey: '100',
+      query: 'Ada',
+      siteId: 'site-1'
+    })
+    await jiraListAssignableUsersForProject(null, '100', 'x'.repeat(20_000), 'site-1')
+    expect(jiraProjectUsersLocal).toHaveBeenCalledTimes(1)
+  })
+
+  it('falls back to site-wide remote search only when the host supports user fields', async () => {
+    runtimeCall.mockImplementation(async (args: { method: string }) =>
+      args.method === 'status.get'
+        ? createCompatibleRuntimeStatusResponse()
+        : { id: 'rpc-1', ok: true, result: [], _meta: { runtimeId: 'remote-runtime' } }
+    )
+    await jiraListAssignableUsersForProject(
+      { activeRuntimeEnvironmentId: 'env-1' },
+      '100',
+      'Ada',
+      'site-1'
+    )
+    expect(runtimeCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'jira.searchUsers',
+        selector: 'env-1',
+        params: { query: 'Ada', siteId: 'site-1' }
+      })
+    )
+    expect(jiraProjectUsersLocal).not.toHaveBeenCalled()
+    clearRuntimeCompatibilityCacheForTests()
+    runtimeCall.mockReset().mockResolvedValue(createRuntimeStatusWithoutJiraUserFieldsCapability())
+    await expect(
+      jiraListAssignableUsersForProject(
+        { activeRuntimeEnvironmentId: 'env-1' },
+        '100',
+        'Ada',
+        'site-1'
+      )
+    ).resolves.toEqual([])
+    expect(runtimeCall).toHaveBeenCalledTimes(1)
+    expect(runtimeCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'jira.searchUsers' })
     )
   })
 

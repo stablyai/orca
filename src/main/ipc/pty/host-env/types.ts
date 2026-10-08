@@ -23,11 +23,14 @@ export type BuildPtyHostEnvOptions = {
   launchCommand?: string
   /** Trusted agent identity for wrapped commands that cannot be recognized from text. */
   launchAgent?: TuiAgent
+  /** Selected execution shell, which may differ from inherited SHELL. */
+  shellPath?: string
   isWsl?: boolean
   /** Distro for WSL spawns (null = Windows default distro); drives the WSL hook relay + endpoint repoint. Only read when isWsl. */
   wslDistro?: string | null
   agentStatusHooksEnabled: boolean
-  codexStatusHooksEnabled?: boolean
+  /** Per-agent opt-out; disabled agents must not receive managed extensions. */
+  disabledTuiAgents?: Iterable<unknown> | null
   networkProxySettings?: NetworkProxySettings
   /** Headless paired runtimes hand browser launches to the client-hosted Orca browser. */
   routeBrowserOpensToClient?: boolean
@@ -36,9 +39,9 @@ export type BuildPtyHostEnvOptions = {
 }
 
 export type CodexHomeLaunchContext = {
-  workspacePath?: string
-  launchAgent?: TuiAgent
   unavailableManagedHomePath?: string
+  /** An Orca-launched Codex, which may wait briefly for its status hook; other spawns never do. */
+  launchesCodex?: boolean
 }
 
 // Why (#16441): Codex launch prep grants hook trust through a codex app-server
@@ -54,7 +57,7 @@ export type PrepareCodexSessionResume = (args: {
   providerSession: AgentProviderSessionMetadata
   target: CodexAccountSelectionTarget
   launchEnv?: NodeJS.ProcessEnv
-  workspacePath?: string
+  useSelectedAccount?: boolean
 }) => Promise<CodexSessionResumePreparation | null>
 
 export type CodexHomePtySpawnedLifecycleArgs = {

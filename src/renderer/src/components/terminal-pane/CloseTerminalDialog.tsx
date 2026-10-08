@@ -128,6 +128,14 @@ function CloseTerminalDialogBody({
               )}
         </DialogDescription>
       </DialogHeader>
+      {isAgent ? (
+        <p className="text-xs text-muted-foreground">
+          {translate(
+            'auto.components.terminal.pane.CloseTerminalDialog.automatic_resume_warning',
+            'This terminal will not resume automatically. Cancel and put the workspace to sleep to resume it later.'
+          )}
+        </p>
+      ) : null}
       {trimmedTabLabel ? (
         <p className="truncate text-xs font-medium text-foreground" title={trimmedTabLabel}>
           {trimmedTabLabel}

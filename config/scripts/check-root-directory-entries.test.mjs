@@ -114,6 +114,17 @@ describe('root directory guard', () => {
     expect(result.status).toBe(0)
   })
 
+  it('allows the reviewed repository OpenCode permission config', () => {
+    const fixture = makeFixture()
+    const head = commitFiles(fixture.root, [
+      ['opencode.json', '{"permission":{"*":{"*":"allow"}}}\n']
+    ])
+
+    const result = runGuard({ ...fixture, head })
+
+    expect(result.status).toBe(0)
+  })
+
   it('rejects a new top-level directory', () => {
     const fixture = makeFixture()
     const head = commitFiles(fixture.root, [['new-folder/file.txt', 'too prominent\n']])
@@ -221,14 +232,21 @@ describe('root directory guard', () => {
 
   it('is wired into the PR verify gate', () => {
     const workflow = parse(readFileSync(join(projectDir, '.github/workflows/pr.yml'), 'utf8'))
-    const guardJob = workflow.jobs.root_directory_guard
+    const guardJob = workflow.jobs.code_paths
     const guardStep = guardJob.steps.find(
       (step) => step.name === 'Reject new root-level files and folders'
     )
 
-    expect(guardJob.name).toBe('root directory guard')
-    expect(guardJob.steps[0].with['fetch-depth']).toBe(0)
+    expect(guardJob.if).toBeUndefined()
+    expect(guardStep.if).toBeUndefined()
+    // Why >= 2 rather than 0: the guard compares the merge commit's first parent against the
+    // merged tree, so it needs both parents present but no history beyond them. Depth 1 would
+    // leave HEAD^1 unreachable and the guard would fail closed on every run.
+    expect(guardJob.steps[0].with['fetch-depth']).toBeGreaterThanOrEqual(2)
     expect(guardStep.run).toContain('node .github/scripts/check-root-directory-entries.mjs')
-    expect(workflow.jobs.verify.needs).toContain('root_directory_guard')
+    // The base side must come from the merge ref, not the event payload, or a shallow checkout
+    // cannot resolve it.
+    expect(guardStep.run).toContain('git-pull-request-diff-base.mjs')
+    expect(workflow.jobs.verify.needs).toContain('code_paths')
   })
 })

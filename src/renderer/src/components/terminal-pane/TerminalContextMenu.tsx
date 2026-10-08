@@ -12,6 +12,7 @@ import {
   PanelsTopLeft,
   PanelRightClose,
   Pencil,
+  RotateCcw,
   SquareTerminal,
   TextSelect,
   X
@@ -53,6 +54,7 @@ type TerminalContextMenuProps = {
   onEqualizePaneSizes: () => void
   onClosePane: () => void
   onClearScreen: () => void
+  onResetTerminal: () => void
   canContinueAgentSessionInNewSession: boolean
   onContinueAgentSessionInNewSession: () => void
   onForkAgentSession: () => void
@@ -144,6 +146,7 @@ function TerminalContextMenuItems({
   onEqualizePaneSizes,
   onClosePane,
   onClearScreen,
+  onResetTerminal,
   canContinueAgentSessionInNewSession,
   onContinueAgentSessionInNewSession,
   onForkAgentSession,
@@ -349,6 +352,13 @@ function TerminalContextMenuItems({
       <DropdownMenuItem onSelect={onClearScreen}>
         <Eraser />
         {translate('auto.components.terminal.pane.TerminalContextMenu.b4cdd9314e', 'Clear Screen')}
+      </DropdownMenuItem>
+      <DropdownMenuItem onSelect={onResetTerminal}>
+        <RotateCcw />
+        {translate(
+          'auto.components.terminal.pane.TerminalContextMenu.resetTerminal',
+          'Reset Terminal'
+        )}
       </DropdownMenuItem>
     </>
   )

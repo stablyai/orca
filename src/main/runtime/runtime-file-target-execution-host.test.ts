@@ -64,7 +64,7 @@ function makeRuntime(repos: readonly Record<string, unknown>[], hostId?: string)
 }
 
 function stubProvider() {
-  return { listFiles: vi.fn().mockResolvedValue(['README.md']) }
+  return { listMarkdownDocuments: vi.fn().mockResolvedValue([]) }
 }
 
 describe('runtime file target execution host', () => {
@@ -103,8 +103,8 @@ describe('runtime file target execution host', () => {
 
     await runtime.listRuntimeMarkdownDocuments(`id:${WORKTREE_ID}`)
 
-    expect(m4air.listFiles).toHaveBeenCalledWith(REMOTE_PATH)
-    expect(openclaw.listFiles).not.toHaveBeenCalled()
+    expect(m4air.listMarkdownDocuments).toHaveBeenCalledWith(REMOTE_PATH)
+    expect(openclaw.listMarkdownDocuments).not.toHaveBeenCalled()
     expect(mocks.listMarkdownDocuments).not.toHaveBeenCalled()
   })
 
@@ -118,8 +118,8 @@ describe('runtime file target execution host', () => {
 
     await runtime.listRuntimeMarkdownDocuments(`id:${WORKTREE_ID}`)
 
-    expect(m4air.listFiles).toHaveBeenCalledWith(REMOTE_PATH)
-    expect(openclaw.listFiles).not.toHaveBeenCalled()
+    expect(m4air.listMarkdownDocuments).toHaveBeenCalledWith(REMOTE_PATH)
+    expect(openclaw.listMarkdownDocuments).not.toHaveBeenCalled()
   })
 
   // `local` has no SSH namespace to nest in, so a surviving `connectionId` is a row contradicting
@@ -140,8 +140,8 @@ describe('runtime file target execution host', () => {
 
     await runtime.listRuntimeMarkdownDocuments(`id:${WORKTREE_ID}`)
 
-    expect(m4air.listFiles).not.toHaveBeenCalled()
-    expect(mocks.listMarkdownDocuments).toHaveBeenCalledWith(REMOTE_PATH)
+    expect(m4air.listMarkdownDocuments).not.toHaveBeenCalled()
+    expect(mocks.listMarkdownDocuments).toHaveBeenCalledWith(REMOTE_PATH, {})
   })
 
   // A `runtime:` row's `connectionId` names a target in the *server's* namespace. Reading it here
@@ -164,7 +164,7 @@ describe('runtime file target execution host', () => {
     await expect(runtime.listRuntimeMarkdownDocuments(`id:${WORKTREE_ID}`)).rejects.toThrow(
       ExecutionHostNotDispatchableError
     )
-    expect(impostor.listFiles).not.toHaveBeenCalled()
+    expect(impostor.listMarkdownDocuments).not.toHaveBeenCalled()
     expect(mocks.listMarkdownDocuments).not.toHaveBeenCalled()
   })
 
@@ -205,7 +205,7 @@ describe('runtime file target execution host', () => {
 
     await runtime.listRuntimeMarkdownDocuments(`id:${WORKTREE_ID}`)
 
-    expect(m4air.listFiles).toHaveBeenCalledWith(REMOTE_PATH)
+    expect(m4air.listMarkdownDocuments).toHaveBeenCalledWith(REMOTE_PATH)
   })
 
   // Losing contact with a remote host is never evidence that its files are here

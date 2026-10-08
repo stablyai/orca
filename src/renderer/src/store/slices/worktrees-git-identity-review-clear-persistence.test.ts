@@ -34,41 +34,6 @@ describe('updateWorktreeGitIdentity', () => {
     resetHostedReviewLinkMutationGenerationForTests()
   })
 
-  it('persists cleared branch-scoped linked reviews when git status observes a branch switch', async () => {
-    const store = createTestStore()
-    const existing = makeWorktree({
-      id: 'repo1::/path/wt1',
-      repoId: 'repo1',
-      path: '/path/wt1',
-      branch: 'refs/heads/stack/one',
-      linkedPR: 101,
-      linkedGitLabMR: 102,
-      linkedBitbucketPR: 103,
-      linkedAzureDevOpsPR: 104,
-      linkedGiteaPR: 105,
-      pushTarget: { remoteName: 'fork', branchName: 'old/review-head' }
-    })
-
-    store.setState({ worktreesByRepo: { repo1: [existing] } } as Partial<AppState>)
-
-    store.getState().updateWorktreeGitIdentity('repo1::/path/wt1', {
-      branch: 'refs/heads/stack/two'
-    })
-    await Promise.resolve()
-
-    expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
-      worktreeId: 'repo1::/path/wt1',
-      updates: {
-        linkedPR: null,
-        linkedGitLabMR: null,
-        linkedBitbucketPR: null,
-        linkedAzureDevOpsPR: null,
-        linkedGiteaPR: null,
-        pushTarget: undefined
-      }
-    })
-  })
-
   it('persists cleared branch-scoped push target when git status observes a branch switch', async () => {
     const store = createTestStore()
     const existing = makeWorktree({

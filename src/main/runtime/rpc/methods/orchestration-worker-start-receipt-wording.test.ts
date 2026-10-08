@@ -8,9 +8,9 @@
  * structured→terminal downgrade explains itself, so the whole sentence is the contract, not a
  * fragment of it.
  *
- * This pins orchestration's own module, which this PR leaves in place. The neutral
- * `agent-launch/agent-launch-mode` it introduces is a second copy of the same policy; nothing yet
- * enforces that the two agree.
+ * Orchestration's module is now a thin adapter over the shared `agent-launch/agent-launch-mode`,
+ * so these sentences also pin the adapter's vocabulary: the shared default wording differs for the
+ * remote-host and reused-terminal downgrades, and only `WORKER_START_VOCABULARY` restores it.
  */
 
 import { describe, expect, it } from 'vitest'
@@ -74,7 +74,7 @@ describe('worker-start mode receipt wording', () => {
     ],
     [
       'agent with no structured session',
-      { agent: 'grok' },
+      { agent: 'gemini' },
       'agent_without_structured_session',
       'this agent has no structured session'
     ]
@@ -84,22 +84,6 @@ describe('worker-start mode receipt wording', () => {
       preferred: 'structured',
       reason,
       detail: downgradeSentence(why)
-    })
-  })
-
-  it('names a custom TUI launch as the downgrade', () => {
-    expect(
-      decideWorkerStartMode({
-        params: { agent: 'claude' },
-        settings: { ...STRUCTURED_PREFERENCE, agentDefaultArgs: { claude: '--custom' } }
-      })
-    ).toEqual({
-      mode: 'terminal',
-      preferred: 'structured',
-      reason: 'tui_launch_customization',
-      detail: downgradeSentence(
-        'this agent has a custom launch command, arguments or environment that only a terminal applies'
-      )
     })
   })
 

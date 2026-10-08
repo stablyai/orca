@@ -1,76 +1,46 @@
 import { format } from 'oxfmt'
-import { createHash } from 'node:crypto'
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
-  canonicalJson,
-  internRecording,
-  OBSERVATION_FIELDS,
-  resolveRecording,
-  type InternedRecording,
-  type ValuePool
-} from './golden-value-pool'
-import { adapterSha256 } from './adapter-digest'
-import { MOUNTED_OPERATION_MODULES } from './adapters/mounted-operation-modules'
-import { recorderSha256 } from './recorder-digest'
-import { scenarioSha256 } from './scenario-digest'
-import type { MountedOperationModule } from './mounted-operation-module'
+  checkpointListDifference,
+  decodeGoldenFile,
+  excerpt,
+  groupDifferences,
+  identityDifferences,
+  recordingDifferences
+} from './golden-difference'
+import { internRecording } from './golden-value-pool'
 import type { Recording, RecordingScenario } from './recording-scenario'
-import type { RecordedValue } from './recording-values'
 
-export const RUNNER_VERSION = 1
-// 2 stamps every settlement with startedAt/settledAt on the pinned virtual clock.
-export const PROJECTION_VERSION = 2
-// 5 splits the mount adapters out of recorderSha256 into adapterSha256. As with 4, the byte compare
-// would fail a stale golden anyway; the bump buys the diagnosis instead of an opaque `(encoding)`.
-export const GOLDEN_FORMAT_VERSION = 5
+// 6 drops the provenance header (baseline pin, input digests, lockfile, platform, runner, projection
+// and scenario versions): every run re-derives the recording from the current tree and compares it.
+export const GOLDEN_FORMAT_VERSION = 6
+/** How many grouped differences one failure prints in full. */
+const REPORTED_DIFFERENCES = 8
 export type GoldenRecording = {
+  goldenFormatVersion: number
   operation: string
   family: string
   namedDeltas: string[]
-  runnerVersion: number
-  baseline: string
-  lockfileSha256: string
-  recorderSha256: string
-  adapterSha256: string
-  scenarioSha256: string
-  platform: string
-  scenarioVersion: number
-  projectionVersion: number
-  goldenFormatVersion: number
   recording: Recording
 }
-type GoldenFile = Omit<GoldenRecording, 'recording'> & {
-  values: ValuePool
-  recording: InternedRecording
+
+export function recordHint(id: string): string {
+  return `If the change is intended, re-record it: pnpm --dir mobile rpc:record ${id}`
 }
 export function goldenRecording(
-  root: string,
-  baseline: string,
   scenarios: readonly RecordingScenario[],
-  recording: Recording,
-  registered: readonly MountedOperationModule[] = MOUNTED_OPERATION_MODULES
+  recording: Recording
 ): GoldenRecording {
   const [scenario] = scenarios
   if (!scenario) {
     throw new Error('A golden records at least one scenario')
   }
   return {
+    goldenFormatVersion: GOLDEN_FORMAT_VERSION,
     operation: scenario.operation,
     family: scenario.family,
     namedDeltas: scenario.namedDeltas ?? [],
-    runnerVersion: RUNNER_VERSION,
-    baseline,
-    lockfileSha256: createHash('sha256')
-      .update(readFileSync(join(root, 'mobile/pnpm-lock.yaml')))
-      .digest('hex'),
-    recorderSha256: recorderSha256(root),
-    adapterSha256: adapterSha256(root, scenarios, registered),
-    scenarioSha256: scenarioSha256(scenarios),
-    platform: process.platform,
-    scenarioVersion: scenario.version,
-    projectionVersion: PROJECTION_VERSION,
-    goldenFormatVersion: GOLDEN_FORMAT_VERSION,
     recording
   }
 }
@@ -80,35 +50,56 @@ export function goldenBytes(golden: GoldenRecording): string {
   return `${JSON.stringify({ ...header, values: interned.values, recording: interned.recording }, null, 2)}\n`
 }
 export function readGolden(directory: string, id: string): GoldenRecording {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the file is validated against GoldenFile on the next lines.
-  const file = JSON.parse(readFileSync(goldenPath(directory, id), 'utf8')) as Partial<GoldenFile>
-  if (file.goldenFormatVersion !== GOLDEN_FORMAT_VERSION) {
+  const path = goldenPath(directory, id)
+  if (!existsSync(path)) {
+    throw new Error(`No golden recorded for ${id}. Record it: pnpm --dir mobile rpc:record ${id}`)
+  }
+  const file: unknown = withRecordHint(id, () => JSON.parse(readFileSync(path, 'utf8')))
+  const version =
+    file && typeof file === 'object' && 'goldenFormatVersion' in file
+      ? file.goldenFormatVersion
+      : undefined
+  if (version !== GOLDEN_FORMAT_VERSION) {
     throw new Error(
-      `Golden ${id} has format version ${JSON.stringify(file.goldenFormatVersion)}; this reader requires ${GOLDEN_FORMAT_VERSION}. Re-record with --record.`
+      `Golden ${id} has format version ${JSON.stringify(version)}; this reader requires ${GOLDEN_FORMAT_VERSION}.\n${recordHint(id)}`
     )
   }
-  if (!file.values || !file.recording) {
-    throw new Error(`Golden ${id} is missing its value pool or recording`)
+  return withRecordHint(id, () => ({
+    goldenFormatVersion: GOLDEN_FORMAT_VERSION,
+    ...decodeGoldenFile(file, id)
+  }))
+}
+/** A corrupt or hand-edited golden names itself and the command that rewrites it. */
+function withRecordHint<T>(id: string, read: () => T): T {
+  try {
+    return read()
+  } catch (error) {
+    throw new Error(
+      `Golden ${id}: ${error instanceof Error ? error.message : String(error)}\n${recordHint(id)}`
+    )
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: goldenFormatVersion was just checked, so the pool is present.
-  const { values: _pool, ...header } = file as GoldenFile
-  return { ...header, recording: resolveRecording(file.values, file.recording) }
 }
 export async function writeGolden(
   directory: string,
   golden: GoldenRecording,
   mode: string
 ): Promise<void> {
-  if (mode !== '--record' || process.env.RPC_FOUNDATION_RECORD !== '1') {
-    throw new Error('Golden writes require --record and RPC_FOUNDATION_RECORD=1')
+  if (mode !== '--record') {
+    throw new Error('Golden writes require --record')
   }
   mkdirSync(directory, { recursive: true })
-  const path = goldenPath(directory, golden.recording.scenario)
-  const result = await format(path, goldenBytes(golden), { printWidth: 100, trailingComma: 'none' })
+  writeFileSync(goldenPath(directory, golden.recording.scenario), await goldenFileText(golden))
+}
+/** The exact file text `rpc:record` writes for a golden. */
+async function goldenFileText(golden: GoldenRecording): Promise<string> {
+  const result = await format(`${golden.recording.scenario}.json`, goldenBytes(golden), {
+    printWidth: 100,
+    trailingComma: 'none'
+  })
   if (result.errors.length) {
     throw new Error('Cannot format golden')
   }
-  writeFileSync(path, result.code)
+  return result.code
 }
 function goldenPath(directory: string, id: string): string {
   if (!/^[a-z0-9][a-z0-9._-]*$/.test(id)) {
@@ -116,93 +107,68 @@ function goldenPath(directory: string, id: string): string {
   }
   return join(directory, `${id}.json`)
 }
+/**
+ * Replay passes only if the committed file is exactly what `rpc:record` would write for this run, so
+ * nothing the file carries (a leftover key, a stale pool entry, a hand edit) goes uncompared.
+ */
+export async function expectGoldenFile(
+  directory: string,
+  id: string,
+  actual: GoldenRecording
+): Promise<void> {
+  const path = goldenPath(directory, id)
+  if (existsSync(path) && readFileSync(path, 'utf8') === (await goldenFileText(actual))) {
+    return
+  }
+  const problems = recordingProblems(readGolden(directory, id), actual)
+  throw problems.length
+    ? recordingDiffers(id, problems)
+    : new Error(
+        `Golden ${id} holds the same recording but is not the file rpc:record writes for it (a hand edit, a leftover key, a stale pool entry, or keys in another order).\n${recordHint(id)}`
+      )
+}
+/** Value-based compare for a run checked against decoded values rather than a committed file. */
 export function compareGolden(expected: GoldenRecording, actual: GoldenRecording): void {
-  const scenario = actual.recording.scenario
-  // Platform and lockfile are provenance: a dependency that changes behaviour changes the trace
-  // below, and one that does not must not fail the compare on every unrelated bump.
-  const pinned = { ...expected, platform: actual.platform, lockfileSha256: actual.lockfileSha256 }
-  const { recording: _expectedRecording, ...expectedHeader } = pinned
-  const { recording: _actualRecording, ...actualHeader } = actual
-  for (const [key, value] of Object.entries(expectedHeader)) {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: header keys are compared as data, not consumed as fields.
-    const found = (actualHeader as Record<string, unknown>)[key]
-    if (JSON.stringify(found) !== JSON.stringify(value)) {
-      throw new Error(
-        `Recording differs: ${scenario} header ${key}\n  expected ${JSON.stringify(value)}\n  actual   ${JSON.stringify(found)}`
-      )
-    }
+  const problems = recordingProblems(expected, actual)
+  // The field compares ignore key order and the re-encoded bytes do not, so the bytes decide last.
+  if (!problems.length && goldenBytes(expected) !== goldenBytes(actual)) {
+    problems.push('encoding: every field matches but the encoded bytes do not')
   }
-  const expectedIds = pinned.recording.checkpoints.map((checkpoint) => checkpoint.id)
-  const actualIds = actual.recording.checkpoints.map((checkpoint) => checkpoint.id)
-  if (JSON.stringify(expectedIds) !== JSON.stringify(actualIds)) {
-    const index = expectedIds.findIndex((id, at) => id !== actualIds[at])
-    throw new Error(
-      `Recording differs: ${scenario} checkpoint list (${expectedIds.length} expected, ${actualIds.length} actual)\n  first divergence at index ${index}: expected ${JSON.stringify(expectedIds[index])}, actual ${JSON.stringify(actualIds[index])}`
-    )
-  }
-  for (const [index, checkpoint] of pinned.recording.checkpoints.entries()) {
-    const found = actual.recording.checkpoints[index]!
-    for (const field of OBSERVATION_FIELDS) {
-      if (
-        canonicalJson(checkpoint.observation[field]) === canonicalJson(found.observation[field])
-      ) {
-        continue
-      }
-      const path = firstDifference(checkpoint.observation[field], found.observation[field])
-      throw new Error(
-        `Recording differs: ${scenario} checkpoint ${checkpoint.id} field ${field}${path.path}\n  expected ${excerpt(path.expected)}\n  actual   ${excerpt(path.actual)}`
-      )
-    }
-  }
-  if (goldenBytes(pinned) !== goldenBytes(actual)) {
-    throw new Error(`Recording differs: ${scenario} (encoding)`)
+  if (problems.length) {
+    throw recordingDiffers(actual.recording.scenario, problems)
   }
 }
-function firstDifference(
-  expected: RecordedValue,
-  actual: RecordedValue,
-  path = ''
-): { path: string; expected: RecordedValue; actual: RecordedValue } {
-  const here = { path, expected, actual }
-  if (
-    expected === null ||
-    actual === null ||
-    typeof expected !== 'object' ||
-    typeof actual !== 'object' ||
-    Array.isArray(expected) !== Array.isArray(actual)
-  ) {
-    return here
-  }
-  if (Array.isArray(expected) && Array.isArray(actual)) {
-    const index = expected.findIndex(
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: both sides are recorded observations, so every member is a RecordedValue.
-      (entry, at) => canonicalJson(entry) !== canonicalJson(actual[at] as RecordedValue)
-    )
-    return index === -1 || index >= actual.length
-      ? here
-      : firstDifference(
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: both sides are recorded observations, so every member is a RecordedValue.
-          expected[index] as RecordedValue,
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: both sides are recorded observations, so every member is a RecordedValue.
-          actual[index] as RecordedValue,
-          `${path}[${index}]`
-        )
-  }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the array branch above already rejected a non-object pair.
-  const left = expected as Record<string, RecordedValue>
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the array branch above already rejected a non-object pair.
-  const right = actual as Record<string, RecordedValue>
-  const key = [...new Set([...Object.keys(left), ...Object.keys(right)])].sort().find(
-    (name) =>
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: both sides are recorded observations, so every member is a RecordedValue.
-      canonicalJson(left[name] as RecordedValue) !== canonicalJson(right[name] as RecordedValue)
+function recordingDiffers(scenario: string, problems: readonly string[]): Error {
+  return new Error(
+    `Recording differs: ${scenario}\n  ${problems.join('\n  ')}\n${recordHint(scenario)}`
   )
-  return key === undefined || !(key in left) || !(key in right)
-    ? here
-    : // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: both sides are recorded observations, so every member is a RecordedValue.
-      firstDifference(left[key] as RecordedValue, right[key] as RecordedValue, `${path}.${key}`)
 }
-function excerpt(value: RecordedValue): string {
-  const json = JSON.stringify(value)
-  return json === undefined ? 'absent' : json.length > 600 ? `${json.slice(0, 600)}…` : json
+function recordingProblems(expected: GoldenRecording, actual: GoldenRecording): string[] {
+  const problems: string[] = identityDifferences(expected, actual).map(
+    (moved) =>
+      `${moved.field}\n    expected ${JSON.stringify(moved.expected)}\n    actual   ${JSON.stringify(moved.actual)}`
+  )
+  const list = checkpointListDifference(expected.recording, actual.recording)
+  if (list.missing.length || list.extra.length || list.reordered) {
+    problems.push(
+      [
+        'checkpoint list',
+        ...(list.missing.length ? [`    no longer recorded: ${list.missing.join(', ')}`] : []),
+        ...(list.extra.length ? [`    newly recorded: ${list.extra.join(', ')}`] : []),
+        ...(list.reordered ? ['    shared checkpoints recorded in a different order'] : [])
+      ].join('\n')
+    )
+  }
+  const differences = groupDifferences(recordingDifferences(expected.recording, actual.recording))
+  for (const difference of differences.slice(0, REPORTED_DIFFERENCES)) {
+    const [first, ...rest] = difference.checkpoints
+    const also = rest.length ? ` (and ${rest.length} later)` : ''
+    problems.push(
+      `checkpoint ${first} field ${difference.field}${difference.path}${also}\n    expected ${excerpt(difference.expected)}\n    actual   ${excerpt(difference.actual)}`
+    )
+  }
+  if (differences.length > REPORTED_DIFFERENCES) {
+    problems.push(`… ${differences.length - REPORTED_DIFFERENCES} more differences`)
+  }
+  return problems
 }

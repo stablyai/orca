@@ -251,6 +251,32 @@ describe('createUISlice browser import hint dismissal', () => {
   })
 })
 
+describe('createUISlice Codex shared-settings notice', () => {
+  it('counts as seen until hydration, then follows the persisted flag', () => {
+    const store = createUIStore()
+    expect(store.getState().codexSharedSettingsNoticeSeen).toBe(true)
+
+    store.getState().hydratePersistedUI(makePersistedUI({}))
+    expect(store.getState().codexSharedSettingsNoticeSeen).toBe(false)
+
+    store.getState().hydratePersistedUI(makePersistedUI({ codexSharedSettingsNoticeSeen: true }))
+    expect(store.getState().codexSharedSettingsNoticeSeen).toBe(true)
+  })
+})
+
+describe('createUISlice Claude account sign-in notice', () => {
+  it('counts as seen until hydration, then follows the persisted flag, and persists marking', () => {
+    vi.stubGlobal('window', { api: { ui: { set: vi.fn(() => Promise.resolve()) } } })
+    const store = createUIStore()
+    expect(store.getState().claudeAccountSignInNoticeSeen).toBe(true)
+    store.getState().hydratePersistedUI(makePersistedUI({}))
+    expect(store.getState().claudeAccountSignInNoticeSeen).toBe(false)
+    store.getState().markClaudeAccountSignInNoticeSeen()
+    expect(store.getState().claudeAccountSignInNoticeSeen).toBe(true)
+    expect(window.api.ui.set).toHaveBeenCalledWith({ claudeAccountSignInNoticeSeen: true })
+  })
+})
+
 describe('createUISlice clearOsc52ClipboardDefaultOnNotice', () => {
   it('restores the armed notice from persisted UI', () => {
     const store = createUIStore()

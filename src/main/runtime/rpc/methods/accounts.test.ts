@@ -16,20 +16,6 @@ function method(name: string) {
 describe('account RPC methods', () => {
   it.each([
     {
-      methodName: 'accounts.addClaudeFromConfigDir',
-      params: {
-        configDir: join(tmpdir(), 'claude-login'),
-        previousLegacyCredentialsSha256: 'a'.repeat(64)
-      },
-      runtimeMethod: 'addClaudeAccountFromConfigDir',
-      expectedSource: join(tmpdir(), 'claude-login'),
-      expectedOptions: {
-        runtime: undefined,
-        wslDistro: null,
-        previousLegacyCredentialsSha256: 'a'.repeat(64)
-      }
-    },
-    {
       methodName: 'accounts.addCodexFromHome',
       params: { sourceHome: join(tmpdir(), 'codex-login') },
       runtimeMethod: 'addCodexAccountFromHome',
@@ -50,25 +36,37 @@ describe('account RPC methods', () => {
   })
 
   it.each([
-    ['accounts.addClaudeFromConfigDir', { configDir: join(tmpdir(), 'claude-login') }],
-    ['accounts.addCodexFromHome', { sourceHome: join(tmpdir(), 'codex-login') }]
-  ])('rejects paired-device calls to %s', async (methodName, params) => {
+    ['accounts.addCodexFromHome', { sourceHome: join(tmpdir(), 'codex-login') }, /only available/],
+    [
+      'accounts.addDataFromHome',
+      { provider: 'opencode', sourceDataHome: join(tmpdir(), 'login'), label: 'Work' },
+      /only available/
+    ],
+    ['accounts.beginClaudeSignIn', {}, /Sign in on the Orca execution host/],
+    ['accounts.finishClaudeSignIn', { accountId: 'a' }, /Sign in on the Orca execution host/]
+  ] as const)('rejects paired-device calls to %s', async (methodName, params, refusal) => {
     const runtime = {
-      addClaudeAccountFromConfigDir: vi.fn(),
-      addCodexAccountFromHome: vi.fn()
-    } as unknown as OrcaRuntimeService
+      addCodexAccountFromHome: vi.fn(),
+      addDataAccountFromHome: vi.fn(),
+      beginClaudeSignIn: vi.fn(),
+      finishClaudeSignIn: vi.fn()
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: refused calls never reach the runtime; only these stubs are asserted.
+    const runtimeService = runtime as unknown as OrcaRuntimeService
     const addMethod = method(methodName)
     if (isStreamingMethod(addMethod)) {
       throw new Error(`${methodName} must be a request method`)
     }
 
     for (const clientKind of ['mobile', 'runtime'] as const) {
-      await expect(addMethod.handler(params, { runtime, clientKind })).rejects.toThrow(
-        /only available on the Orca host runtime/
-      )
+      await expect(
+        addMethod.handler(params, { runtime: runtimeService, clientKind })
+      ).rejects.toThrow(refusal)
     }
-    expect(runtime.addClaudeAccountFromConfigDir).not.toHaveBeenCalled()
     expect(runtime.addCodexAccountFromHome).not.toHaveBeenCalled()
+    expect(runtime.addDataAccountFromHome).not.toHaveBeenCalled()
+    expect(runtime.beginClaudeSignIn).not.toHaveBeenCalled()
+    expect(runtime.finishClaudeSignIn).not.toHaveBeenCalled()
   })
 
   it('keeps explicit account-list refreshes on the forced refresh lane', async () => {
@@ -222,4 +220,15 @@ describe('account RPC methods', () => {
     cleanup?.()
     await running
   })
+})
+
+it('rejects the retired Claude import even for a local socket, before touching its supplied path', async () => {
+  const old = method('accounts.addClaudeFromConfigDir')
+  if (isStreamingMethod(old)) {
+    throw new Error('Unexpected stream')
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Rejection happens before the handler accesses its context.
+  await expect(old.handler({ configDir: '/never-read' }, {} as never)).rejects.toThrow(
+    'Update the Orca CLI to add accounts'
+  )
 })

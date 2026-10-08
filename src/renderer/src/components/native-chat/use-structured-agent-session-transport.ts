@@ -18,6 +18,7 @@ export function useStructuredAgentSessionTransport(args: {
     surface: 'desktop-chat',
     enabled: providerVisible
   })
+  // A message sent from here is settled by its own reply, so a hidden pane reads nothing.
   const read = useStructuredAgentSessionRead({ sessionId, target, isVisible: providerVisible })
   const stateRef = useRef(read.state)
   const mutation = useStructuredAgentSessionMutate({
@@ -29,5 +30,6 @@ export function useStructuredAgentSessionTransport(args: {
   useEffect(() => {
     stateRef.current = read.state
   }, [read.state])
-  return { ...read, ...mutation, providerVisible }
+  // `stateRef`: the read state now, for a reply that lands after the render that sent it.
+  return { ...read, ...mutation, providerVisible, stateRef }
 }

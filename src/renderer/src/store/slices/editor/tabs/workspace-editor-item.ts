@@ -1,8 +1,10 @@
 import type { AppState } from '../../../types'
 import type { EditorSlice } from '../types/editor-slice'
-import type { OpenFile } from '../types/open-file'
+import type { EditorTabSelection, OpenFile } from '../types/open-file'
 import { resolveEditorOpenTargetGroupId } from './editor-open-target-group'
+import { areEditorPreviewTabsEnabled } from './editor-preview-tab-setting'
 import { isEditorTabContentType } from './editor-tab-content-type'
+import { getOpenFileExecutionHostId } from '@/lib/unified-tab-host-ownership'
 
 export function openWorkspaceEditorItem(
   state: AppState,
@@ -11,7 +13,8 @@ export function openWorkspaceEditorItem(
   label: string,
   contentType: 'editor' | 'diff' | 'conflict-review' | 'check-details',
   isPreview?: boolean,
-  targetGroupId?: string
+  targetGroupId?: string,
+  selection: EditorTabSelection = 'focus'
 ): string {
   const resolvedGroupId = resolveEditorOpenTargetGroupId(state, worktreeId, targetGroupId)
   if (resolvedGroupId) {
@@ -22,24 +25,41 @@ export function openWorkspaceEditorItem(
       contentType
     )
     if (existing) {
-      // Why: sidebar preview reopens focus the tab without promoting it; explicit activation still promotes previews by default.
-      state.activateTab?.(existing.id, { preservePreview: isPreview })
+      if (selection !== 'none') {
+        // Why: sidebar preview reopens focus the tab without promoting it; explicit activation still promotes previews by default.
+        state.activateTab?.(existing.id, {
+          preservePreview: isPreview,
+          ...(selection === 'background' ? { recordFocus: false } : {})
+        })
+      }
       return existing.id
     }
   }
+  const file =
+    contentType === 'editor'
+      ? state.openFiles.find((entry) => entry.id === fileId && entry.worktreeId === worktreeId)
+      : undefined
   const created = state.createUnifiedTab?.(worktreeId, contentType, {
     entityId: fileId,
     label,
     isPreview,
-    ...(resolvedGroupId ? { targetGroupId: resolvedGroupId } : {})
+    // The tab follows the captured file owner even when another host has UI focus.
+    ...(file ? { executionHostId: getOpenFileExecutionHostId(file) } : {}),
+    ...(resolvedGroupId ? { targetGroupId: resolvedGroupId } : {}),
+    ...(selection === 'none' ? { activate: false } : {}),
+    ...(selection === 'background' ? { recordFocus: false } : {})
   })
   return created?.id ?? fileId
 }
 export function getReplaceablePreviewFileId(
-  state: Pick<AppState, 'openFiles' | 'unifiedTabsByWorktree'>,
+  state: Pick<AppState, 'openFiles' | 'unifiedTabsByWorktree' | 'settings'>,
   worktreeId: string,
   targetGroupId: string | undefined
 ): string | null {
+  // Why: callers resolve intent first, but this helper is shared by five open paths — keep it correct for a caller that doesn't.
+  if (!areEditorPreviewTabsEnabled(state)) {
+    return null
+  }
   const tabsForWorktree = state.unifiedTabsByWorktree?.[worktreeId] ?? []
   if (targetGroupId) {
     const previewTab = tabsForWorktree.find(

@@ -66,9 +66,6 @@ export async function readWindowsTerminalCapabilities(
       pwshAvailable,
       gitBashAvailable,
       hostPlatform: runtimeStatus?.hostPlatform ?? null,
-      ...(runtimeStatus?.windowsProcessStartTimeAvailable !== undefined
-        ? { windowsProcessStartTimeAvailable: runtimeStatus.windowsProcessStartTimeAvailable }
-        : {}),
       isLoading: false
     }
   }

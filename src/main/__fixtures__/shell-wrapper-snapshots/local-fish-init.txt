@@ -6,10 +6,45 @@ end
 # absent, leaving "test = file" — fish then errors instead of failing closed.
 # Quoting in place is not the fix; fish never substitutes inside double quotes.
 set -l __orca_codex_type (type -t codex 2>/dev/null)
-if test -x "$ORCA_CODEX_LAUNCH_PREFLIGHT"; and test "$__orca_codex_type" = file
+if test "$__orca_codex_type" = file
   function codex
-    command "$ORCA_CODEX_LAUNCH_PREFLIGHT" agent hooks prepare-codex >/dev/null 2>&1; or true
+    if test -x "$ORCA_CODEX_LAUNCH_PREFLIGHT"
+      command "$ORCA_CODEX_LAUNCH_PREFLIGHT" agent hooks prepare-codex >/dev/null 2>&1; or true
+    end
+    if test "$ORCA_CODEX_ISOLATE" != 0; and not string match -qr -- '^(agents|queue|--no-daemon|--remote|--remote=.*)$' $argv; and command codex --help 2>/dev/null </dev/null | string match -q -- '*--no-daemon*'
+      set argv --no-daemon $argv
+    end
     command codex $argv
   end
 end
 set -e __orca_codex_type
+set -l __orca_claude_type (type -t claude 2>/dev/null)
+if test -n "$ORCA_CLAUDE_PROFILE_POINTER"; and test "$__orca_claude_type" = file
+  function claude
+    # Why: a WSL pane's pointer is relative to the guest home, which the host cannot know at spawn.
+    set -l pointer (string replace -r '^~/' "$HOME/" -- "$ORCA_CLAUDE_PROFILE_POINTER")
+    set -l profile (cat "$pointer" 2>/dev/null)
+    if test -n "$CLAUDE_CONFIG_DIR"; and test "$CLAUDE_CONFIG_DIR" != "$ORCA_CLAUDE_INJECTED_CONFIG_DIR"
+      command claude $argv
+      return $status
+    end
+    if test -z "$profile"; and test -n "$CLAUDE_CONFIG_DIR"; and test -n "$ORCA_CLAUDE_USER_CONFIG_DIR"
+      env -u ORCA_CLAUDE_INJECTED_CONFIG_DIR CLAUDE_CONFIG_DIR="$ORCA_CLAUDE_USER_CONFIG_DIR" claude $argv
+      return $status
+    end
+    if test -z "$profile"
+      env -u CLAUDE_CONFIG_DIR -u ORCA_CLAUDE_INJECTED_CONFIG_DIR claude $argv
+      return $status
+    end
+    if not string match -qr '^(/|[A-Za-z]:)' -- "$profile"
+      return 1
+    end
+    test -d "$profile"; or mkdir -p -m 700 -- "$profile" 2>/dev/null
+    set -l headers
+    if string match -irq 'authorization|x-api-key|api-key|bearer' -- "$ANTHROPIC_CUSTOM_HEADERS"
+      set headers -u ANTHROPIC_CUSTOM_HEADERS
+    end
+    env $headers -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN -u CLAUDE_CODE_OAUTH_TOKEN -u AWS_BEARER_TOKEN_BEDROCK CLAUDE_CONFIG_DIR="$profile" ORCA_CLAUDE_INJECTED_CONFIG_DIR="$profile" claude $argv
+  end
+end
+set -e __orca_claude_type

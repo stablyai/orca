@@ -1,3 +1,4 @@
+import { getAiVaultResumeWorkspaceWslDistro } from '@/lib/ai-vault-resume-shell'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
@@ -22,7 +23,8 @@ import {
 export type AiVaultSessionResumeTargetState = Pick<
   AppState,
   'folderWorkspaces' | 'projectGroups' | 'repos' | 'worktreesByRepo'
->
+> &
+  Partial<Pick<AppState, 'activeRepoId' | 'activeWorktreeId' | 'projects' | 'settings'>>
 
 export type AiVaultSessionResumeState = {
   blocked: boolean
@@ -201,7 +203,8 @@ function resolveSupportedResumeWorktreeId(args: {
       sessionFilePath: args.sessionFilePath,
       sessionExecutionHostId: args.sessionExecutionHostId,
       targetStatus,
-      targetExecutionHostId
+      targetExecutionHostId,
+      targetWslDistro: getAiVaultResumeWorkspaceWslDistro(args.targetState, args.worktreeId)
     })
   ) {
     return null
@@ -231,17 +234,16 @@ function resolveAiVaultResumeTargetState(args: {
 }
 
 // Resume needs actual conversation content: a zero-turn transcript would resume
-// into an empty session. Workspace-target blocking only disables in-app resume;
-// copying the command stays available for blocked-but-real sessions, so the copy
-// affordance is gated on content alone.
+// into an empty session. Copy stays available for blocked CLI sessions, while a
+// structured owner reopens natively and must never expose a legacy command.
 export function aiVaultSessionRowResumeGating(
-  session: Pick<AiVaultSession, 'messageCount' | 'previewMessages'>,
+  session: Pick<AiVaultSession, 'messageCount' | 'previewMessages' | 'structuredSession'>,
   state: Pick<AiVaultSessionResumeState, 'blocked'> | null
 ): { resumeDisabled: boolean; canCopyResumeCommand: boolean } {
   const hasResumableContent = isAiVaultSessionResumableContent(session)
   return {
     resumeDisabled: (state?.blocked ?? true) || !hasResumableContent,
-    canCopyResumeCommand: hasResumableContent
+    canCopyResumeCommand: hasResumableContent && !session.structuredSession
   }
 }
 

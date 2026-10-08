@@ -90,7 +90,7 @@ export async function scanNestedRepos(args: {
     return buildResult('non_git_folder')
   }
 
-  const foldersToTraverse: TraversalFolder[] = [
+  const foldersToTraverse: (TraversalFolder | undefined)[] = [
     { path: args.path, depth: 0, segments: [], ignoreRules: [] }
   ]
   let nextFolderIndex = 0
@@ -107,7 +107,13 @@ export async function scanNestedRepos(args: {
     if (noteAbort()) {
       break
     }
-    const currentFolder = foldersToTraverse[nextFolderIndex++]
+    const currentFolder = foldersToTraverse[nextFolderIndex++]!
+    // Release processed paths and inherited ignore rules before the next filesystem await.
+    foldersToTraverse[nextFolderIndex - 1] = undefined
+    if (nextFolderIndex >= 64 && nextFolderIndex * 2 >= foldersToTraverse.length) {
+      foldersToTraverse.splice(0, nextFolderIndex)
+      nextFolderIndex = 0
+    }
     if (currentFolder.depth > options.maxDepth) {
       continue
     }

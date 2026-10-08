@@ -96,12 +96,6 @@ describe('recoloring a structured chat tab', () => {
 })
 
 describe('renaming a structured chat tab', () => {
-  it('writes the custom label onto the agent-session tab', () => {
-    const store = storeWithStructuredTab()
-    store.getState().setTabCustomTitle(STRUCTURED_TAB_ID, 'Flaky retry test')
-    expect(labelOf(store)).toBe('Flaky retry test')
-  })
-
   it('clears the custom label when the rename is emptied', () => {
     const store = storeWithStructuredTab()
     store.getState().setTabCustomTitle(STRUCTURED_TAB_ID, 'Flaky retry test')

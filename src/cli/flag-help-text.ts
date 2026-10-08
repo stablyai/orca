@@ -1,5 +1,7 @@
 /** One-line flag descriptions shared by every command's help output. */
 export const FLAG_HELP_TEXT: Record<string, string> = {
+  'external-worktree-visibility':
+    '--external-worktree-visibility show|hide|inherit  Override or inherit non-Orca worktree visibility',
   agent: '--agent <id>          Launch a known TUI agent in the first terminal',
   'base-branch': '--base-branch <ref>    Base branch/ref to create the worktree from',
   command: '--command <text>       Command to run in the terminal on startup',
@@ -26,6 +28,10 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   interrupt: '--interrupt            Send as an interrupt-style input when supported',
   id: '--id <id>             Identifier for a target item or permission',
   issue: '--issue <number|null>  Linked GitHub issue number',
+  'gitlab-issue':
+    '--gitlab-issue <number|url|null> Linked GitLab issue number or URL; null clears on set',
+  'gitlab-mr':
+    '--gitlab-mr <number|url|null> Linked GitLab merge request number or URL; null clears on set',
   'linear-issue':
     '--linear-issue <id|url|null> Linked Linear issue identifier or URL; null clears on set',
   json: '--json                 Emit machine-readable JSON',
@@ -45,6 +51,7 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   'parent-worktree':
     '--parent-worktree <selector> Parent worktree selector such as identity:<identity>, id:<repo-id>::<path>, branch:<branch>, issue:<number>, path:<path>, or active/current',
   path: '--path <path>          Path argument for the command',
+  pr: '--pr <number|null>     Linked GitHub pull request number; null clears on set',
   prompt: '--prompt <text>        Prompt text for agent-backed commands',
   query: '--query <text>        Search text for matching refs',
   ref: '--ref <ref>            Base ref to persist for the repo',
@@ -82,6 +89,14 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   timezone: '--timezone <tz>       IANA timezone for the automation',
   enabled: '--enabled              Enable the automation',
   disabled: '--disabled             Disable the automation',
+  current: '--current              Use the current Orca worktree linked Linear issue',
+  comments: '--comments             Include threaded Linear comments',
+  children: '--children             Include recursive child issues',
+  depth: '--depth <n>            Child issue depth for --children/--full',
+  attachments: '--attachments          Include attachment metadata and URLs',
+  relations: '--relations            Include blocking, related, and duplicate links',
+  activity: '--activity             Include issue field-change history',
+  full: '--full                 Include all supported V1 issue context within caps',
   'reuse-session':
     '--reuse-session        Reuse the previous live session for existing-workspace runs',
   'fresh-session': '--fresh-session        Disable session reuse for future runs',
@@ -101,6 +116,5 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   page: '--page <id>            Stable browser page id from `orca tab list --json`',
   profile: '--profile <id>        Browser profile id',
   'show-profile': '--show-profile        Include tab profile in text output',
-  'no-ua-spoof': "--no-ua-spoof         Keep Electron's native user agent",
   format: '--format <png|jpeg>    Screenshot image format'
 }

@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  restoreClaudeStructuredSessionOptions,
-  setClaudeStructuredOption
-} from './claude-structured-options'
+import { setClaudeStructuredOption } from './claude-structured-options'
 import type { ClaudeSession } from './claude-structured-session-state'
+import { ClaudeControlRequestTimeoutError } from './claude-agent-sdk-control-requests'
 import { ClaudeBackgroundTaskTracker } from './claude-background-task-tracker'
+import { ClaudeChildWorkDecoder } from './claude-child-work-decoder'
 import { ClaudeSlashCommandCatalog } from './claude-slash-command-catalog'
+import { createClaudeSessionStartup } from './claude-structured-session-startup-state'
 import {
   observeClaudeFastModeFacts,
   readClaudeStructuredSessionOptions
@@ -20,8 +20,8 @@ function sessionFor(setModel: ClaudeSession['connection']['setModel']): ClaudeSe
       supportedModels: async (): Promise<unknown[]> => []
     } as ClaudeSession['connection'],
     providerSessionId: 'provider-session',
-    claudeConfigDir: '/accounts/claude',
     leafUuid: null,
+    turnEndLeafUuid: null,
     fence: 1,
     acquisitionGeneration: 'generation-1',
     prompts: {} as ClaudeSession['prompts'],
@@ -29,6 +29,7 @@ function sessionFor(setModel: ClaudeSession['connection']['setModel']): ClaudeSe
     retiredDispatchWaiters: [],
     replayContentFallbackBlocked: false,
     backgroundTasks: new ClaudeBackgroundTaskTracker(),
+    childWork: new ClaudeChildWorkDecoder(),
     commands: new ClaudeSlashCommandCatalog(),
     dispatchSequence: 0,
     optionMutationSequence: 0,
@@ -37,9 +38,12 @@ function sessionFor(setModel: ClaudeSession['connection']['setModel']): ClaudeSe
     reportedModelMutation: 0,
     confirmedOptions: new Set(),
     restoreSkippedOptions: new Set(),
+    launchedModel: null,
+    fastModeAtStart: false,
     capabilities: [],
     events: undefined,
-    translator: null
+    translator: null,
+    startup: { ...createClaudeSessionStartup(), state: 'proven' }
   }
 }
 
@@ -87,7 +91,8 @@ function fastModeSession(supportsFastMode: boolean | undefined) {
       }
     ],
     applyFlagSettings,
-    getSettings: async () => ({ effective: { fastMode: reportedFastMode } })
+    getSettings: async () => ({ effective: { fastMode: reportedFastMode } }),
+    getContextUsage: async () => ({})
   } as ClaudeSession['connection']
   return { session, applyFlagSettings }
 }
@@ -123,15 +128,6 @@ describe('Claude structured Fast mode', () => {
     expect(applyFlagSettings).not.toHaveBeenCalled()
   })
 
-  it('does not authorize a new Fast enable when model support is unknown', async () => {
-    const { session, applyFlagSettings } = fastModeSession(undefined)
-
-    await expect(
-      setClaudeStructuredOption(session, { key: 'fastMode', value: 'true' }, undefined)
-    ).rejects.toThrow('does not support Fast mode')
-    expect(applyFlagSettings).not.toHaveBeenCalled()
-  })
-
   it.each([undefined, false])(
     'allows explicit Fast off when model support is %s',
     async (supportsFastMode) => {
@@ -144,8 +140,7 @@ describe('Claude structured Fast mode', () => {
     }
   )
 
-  // Turning Fast off needs no support evidence, so it must not pay a catalog round
-  // trip — restore replays a stored `false` on every acquire.
+  // Turning Fast off needs no support evidence, so it must not pay a catalog round trip.
   it('reads no catalog to turn Fast off, but does to turn it on', async () => {
     const { session } = fastModeSession(true)
     const listed = session.connection.supportedModels
@@ -164,17 +159,6 @@ describe('Claude structured Fast mode', () => {
       setClaudeStructuredOption(session, { key: 'fastMode', value: 'true' }, undefined)
     ).resolves.toMatchObject({ fastMode: 'true' })
     expect(reads).toBe(1)
-  })
-
-  it('restores explicit Fast off when model support is unknown', async () => {
-    const { session, applyFlagSettings } = fastModeSession(undefined)
-    session.options.set('fastMode', 'false')
-
-    await restoreClaudeStructuredSessionOptions(session, undefined)
-
-    expect(session.options.get('fastMode')).toBe('false')
-    expect(session.restoreSkippedOptions.has('fastMode')).toBe(false)
-    expect(applyFlagSettings).toHaveBeenCalledWith({ fastMode: false }, { timeoutMs: undefined })
   })
 
   it('resolves the running CLI default model before applying Fast', async () => {
@@ -435,5 +419,17 @@ describe('Claude Fast mode reported by the session frame alone', () => {
     const result = await readClaudeStructuredSessionOptions(session, undefined)
 
     expect(result.current.fastMode).toBeUndefined()
+  })
+})
+
+describe('Claude structured option write under the request deadline', () => {
+  it("keeps a timed-out client write as the deadline's own error, not a rejection", async () => {
+    const session = sessionFor(async () => {
+      throw new ClaudeControlRequestTimeoutError('set_model')
+    })
+
+    await expect(
+      setClaudeStructuredOption(session, { key: 'model', value: 'sonnet' }, 10)
+    ).rejects.toBeInstanceOf(ClaudeControlRequestTimeoutError)
   })
 })

@@ -1,0 +1,137 @@
+{
+  "comparison": "Actual history reader and bounded file reader with real files; growth injected after stat; before reverses only fix.patch in a temporary Vite transform",
+  "sourceHashes": {
+    "src/main/claude/claude-structured-history-window.ts": {
+      "before": "43a9868f6bb87bfda620ace31f680f36b3ecd88851ad98c24be5320a9814358b",
+      "after": "77098508b3f5ab5cf4a53163a14da2fa74b1de38859c4717496f7a97e2cd50ea"
+    },
+    "src/main/claude/claude-history-window-source-budget.test.ts": {
+      "current": "88f7a9a9ad9669c636bd7369fdd9a1263325848971f67b499278bf78eb17681e"
+    },
+    "src/shared/node-bounded-file-reader.ts": {
+      "current": "2cffa451b72d059226e0c2d4b6d2a5203cb8ddafb358d5e828dcd3436d197ecb"
+    },
+    "src/main/claude/claude-transcript-branch-proof.ts": {
+      "current": "3224594befe1edae514724caf5eff6a4cda85212e2985be4920b6164b088b82c"
+    }
+  },
+  "before": {
+    "observations": [
+      {
+        "test": "reads a stable history without changing prompt evidence",
+        "bytesRead": 305,
+        "observedStatBytes": 305,
+        "opens": 0,
+        "closes": 0
+      },
+      {
+        "test": "accepts a complete source at the existing byte limit",
+        "bytesRead": 16777216,
+        "observedStatBytes": 16777216,
+        "opens": 0,
+        "closes": 0
+      },
+      {
+        "test": "rejects an initially oversized source before reading its contents",
+        "bytesRead": 0,
+        "observedStatBytes": 16777217,
+        "opens": 0,
+        "closes": 0
+      },
+      {
+        "test": "refuses concurrent growth beyond the existing source quota",
+        "bytesRead": 17825792,
+        "observedStatBytes": 305,
+        "opens": 0,
+        "closes": 0
+      },
+      {
+        "test": "accepts concurrent growth that stays within the quota",
+        "bytesRead": 369,
+        "observedStatBytes": 305,
+        "opens": 0,
+        "closes": 0
+      },
+      {
+        "test": "preserves the inconsistent result on a read error",
+        "bytesRead": 0,
+        "observedStatBytes": 305,
+        "opens": 0,
+        "closes": 0
+      },
+      {
+        "test": "does not open a source without an anchor",
+        "bytesRead": 0,
+        "observedStatBytes": 0,
+        "opens": 0,
+        "closes": 0
+      }
+    ],
+    "exitCode": 1,
+    "timedOut": false,
+    "passed": 6,
+    "failed": 1,
+    "failedCases": [
+      "Claude provider history source budget refuses concurrent growth beyond the existing source quota"
+    ]
+  },
+  "after": {
+    "observations": [
+      {
+        "test": "reads a stable history without changing prompt evidence",
+        "bytesRead": 305,
+        "observedStatBytes": 305,
+        "opens": 1,
+        "closes": 1
+      },
+      {
+        "test": "accepts a complete source at the existing byte limit",
+        "bytesRead": 16777216,
+        "observedStatBytes": 16777216,
+        "opens": 1,
+        "closes": 1
+      },
+      {
+        "test": "rejects an initially oversized source before reading its contents",
+        "bytesRead": 0,
+        "observedStatBytes": 16777217,
+        "opens": 1,
+        "closes": 1
+      },
+      {
+        "test": "refuses concurrent growth beyond the existing source quota",
+        "bytesRead": 16777217,
+        "observedStatBytes": 305,
+        "opens": 1,
+        "closes": 1
+      },
+      {
+        "test": "accepts concurrent growth that stays within the quota",
+        "bytesRead": 369,
+        "observedStatBytes": 305,
+        "opens": 1,
+        "closes": 1
+      },
+      {
+        "test": "preserves the inconsistent result on a read error",
+        "bytesRead": 0,
+        "observedStatBytes": 305,
+        "opens": 1,
+        "closes": 1
+      },
+      {
+        "test": "does not open a source without an anchor",
+        "bytesRead": 0,
+        "observedStatBytes": 0,
+        "opens": 0,
+        "closes": 0
+      }
+    ],
+    "exitCode": 0,
+    "timedOut": false,
+    "passed": 7,
+    "failed": 0,
+    "failedCases": []
+  },
+  "passed": true
+}

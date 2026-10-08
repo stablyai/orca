@@ -30,7 +30,6 @@
           "error",
           {
             "allow": [
-              "agent-map-*",
               "comment-md-*",
               "compact-agent-*",
               "feature-wall-*",

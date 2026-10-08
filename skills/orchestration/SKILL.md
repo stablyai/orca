@@ -7,12 +7,7 @@ description: >-
   ownership handoffs — "hand off", "handoff", "handover", "give this to another
   agent", "another worktree" — unless asked to supervise, monitor, or coordinate
   a DAG, and for terminal control, lightweight terminal prompts, shell commands,
-  Orca worktree management, and reading or waiting on terminals. Use Computer
-  Use for external browser windows, webviews, Orca app UI, or desktop UI outside
-  Orca's embedded browser only when the task requires OS/window-level control
-  such as focus, menus, dialogs, coordinates, or screenshots. Use `orca-cli` for
-  Orca's embedded pages and a page-automation tool such as Playwright or CDP for
-  external pages.
+  Orca worktree management, and reading or waiting on terminals.
 ---
 
 # Orca Orchestration
@@ -65,5 +60,7 @@ reference that gate names with
 
 Prefer `--json`. Use the selected executable's `--help` for commands or flags the guide does
 not cover. If a command reports that Orca is not running, start it with `ORCA open --json`
-and retry. If `skills get` is unknown, explain that updating Orca restores the guide; use
-`--help` for read-only discovery and do not guess unsupported commands.
+and retry. If it fails with `runtime_access_denied`, your sandbox blocked the connection:
+re-run it with escalated permissions, and do not run `ORCA open` or restart Orca. If
+`skills get` is unknown, explain that updating Orca restores the guide; use `--help` for
+read-only discovery and do not guess unsupported commands.

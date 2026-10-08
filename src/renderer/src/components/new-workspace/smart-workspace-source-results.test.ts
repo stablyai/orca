@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  buildJiraIssueSearchJql,
+  getJiraIssueSearchQuery,
   buildSmartWorkspaceSourceRows,
   getBranchSearchRequest,
   getSmartWorkspaceEmptyHint,
@@ -729,12 +729,13 @@ describe('Jira issue search', () => {
     expect(isBlockingJiraUrlIntent('jira', 'ordinary workspace name')).toBe(false)
   })
 
-  it('builds text and exact-key JQL without accepting oversized input', () => {
-    expect(buildJiraIssueSearchJql('test')).toBe('text ~ "test*"')
-    expect(buildJiraIssueSearchJql('orca-123')).toBe('key = "ORCA-123"')
-    expect(buildJiraIssueSearchJql('say "hello"')).toBe('text ~ "say \\"hello\\"*"')
+  it('accepts a Jira query only when it is short enough and has words to search', () => {
+    expect(getJiraIssueSearchQuery('  orca-123 ')).toBe('orca-123')
+    expect(getJiraIssueSearchQuery('say "hello"')).toBe('say "hello"')
+    expect(getJiraIssueSearchQuery('()')).toBeNull()
+    expect(getJiraIssueSearchQuery('   ')).toBeNull()
     expect(
-      buildJiraIssueSearchJql('x'.repeat(SMART_WORKSPACE_SOURCE_QUERY_MAX_BYTES + 1))
+      getJiraIssueSearchQuery('x'.repeat(SMART_WORKSPACE_SOURCE_QUERY_MAX_BYTES + 1))
     ).toBeNull()
   })
 

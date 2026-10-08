@@ -28,7 +28,7 @@ import { parseAgentStatusSubject } from './agent-status-subject'
 import { measureUtf8ByteLength } from './utf8-byte-limits'
 
 const MAX_EPOCH_LENGTH = 256
-const MAX_TOMBSTONE_KEY_LENGTH = 4_096
+const MAX_TOMBSTONE_KEY_LENGTH = 32_768
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)

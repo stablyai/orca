@@ -42,6 +42,8 @@ describe('FsHandler', () => {
     handler = new FsHandler(dispatcher as unknown as RelayDispatcher, ctx, {
       dispose: vi.fn(),
       forgetRoot: vi.fn(),
+      disposeAndWait: vi.fn(async () => {}),
+      reopen: vi.fn(),
       subscribe: subscribeWithInProcessWatcher
     })
   })
@@ -714,6 +716,8 @@ describe('FsHandler', () => {
     handler = new FsHandler(dispatcher as unknown as RelayDispatcher, new RelayContext(), {
       dispose: vi.fn(),
       forgetRoot: vi.fn(),
+      disposeAndWait: vi.fn(async () => {}),
+      reopen: vi.fn(),
       subscribe
     })
 

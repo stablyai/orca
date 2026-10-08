@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-10-04T05:13:03.308914Z",
+  "platform": "darwin",
+  "command": ["opencode", "--standalone"],
+  "cols": 120,
+  "rows": 40,
+  "note": "opencode v2.0.21 (Homebrew opencode-v2) on macOS 26 arm64, 120x40, alternate screen. Recorded with the timed Python PTY driver (each read stamped with ms since spawn; terminal queries answered like Orca's pane), env -i with an isolated HOME and XDG dirs (no credentials; OpenCode Zen's free models), OPENCODE_DISABLE_AUTOUPDATE=1, OPENCODE_CONFIG_CONTENT {\"autoupdate\":false}, no ORCA_* vars; version and binary sha256 unchanged before and after. <name>.timing.json holds each PTY read as [ms since spawn, UTF-16 length] and recordedUntilMs. Why this run: the same cold --standalone start answered like a hidden Orca pane (responder 'headless': silent on OSC colour queries). No input typed.",
+  "exitCode": null
+}

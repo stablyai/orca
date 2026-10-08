@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { canSwitchNativeChatView, canToggleNativeChat } from './native-chat-availability'
+import { canToggleNativeChat } from './native-chat-availability'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 
 describe('canToggleNativeChat', () => {
@@ -117,19 +117,16 @@ describe('canToggleNativeChat', () => {
     ).toBe(true)
   })
 
-  it.each(['gemini', 'opencode'] as const)(
-    'rejects unsupported agent %s detected live',
-    (agent) => {
-      expect(
-        canToggleNativeChat({
-          experimentalNativeChatEnabled: true,
-          contentType: 'terminal',
-          launchAgent: null,
-          detectedAgent: agent
-        })
-      ).toBe(false)
-    }
-  )
+  it.each(['gemini'] as const)('rejects unsupported agent %s detected live', (agent) => {
+    expect(
+      canToggleNativeChat({
+        experimentalNativeChatEnabled: true,
+        contentType: 'terminal',
+        launchAgent: null,
+        detectedAgent: agent
+      })
+    ).toBe(false)
+  })
 
   it('accepts Grok when resolved from the title', () => {
     expect(
@@ -221,40 +218,6 @@ describe('canToggleNativeChat', () => {
         experimentalNativeChatEnabled: true,
         contentType: 'browser',
         detectedAgent: 'claude'
-      })
-    ).toBe(false)
-  })
-})
-
-describe('canSwitchNativeChatView', () => {
-  it('allows bridge chat to expose a terminal/chat switcher', () => {
-    expect(
-      canSwitchNativeChatView({
-        experimentalNativeChatEnabled: true,
-        contentType: 'terminal',
-        launchAgent: 'claude'
-      })
-    ).toBe(true)
-  })
-
-  it('keeps structured sessions free of terminal/chat switchers', () => {
-    expect(
-      canSwitchNativeChatView({
-        experimentalNativeChatEnabled: true,
-        contentType: 'terminal',
-        launchAgent: 'codex',
-        structuredSessionId: 'thread-1'
-      })
-    ).toBe(false)
-  })
-
-  it('keeps structured sessions hidden even when toggling back', () => {
-    expect(
-      canSwitchNativeChatView({
-        experimentalNativeChatEnabled: true,
-        contentType: 'terminal',
-        isChatViewMode: true,
-        structuredSessionId: 'thread-1'
       })
     ).toBe(false)
   })

@@ -1,20 +1,17 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "workspace.repositories",
   "family": "components.new-workspace-repositories",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
-  "adapterSha256": "64c1772f0f95a3c43fbb14398a8804b2b4784f7f18874e4fd79767ae634c7faa",
-  "scenarioSha256": "41ac47445191a24de5e48877478bdab6fd9c030f48024ea43e053de7b6b68bb5",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
-    "26accd69bc48": {
+    "19b2979d7fc2": {
       "name": "repo.list#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
+    },
+    "35f85fe3b71c": {
+      "name": "repo.list#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -38,8 +35,9 @@
         "startedAt": 0
       }
     },
-    "288dd3529eaf": {
+    "413e29f6e78e": {
       "name": "repo.list#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -92,11 +90,6 @@
         "$rpc": "null"
       }
     },
-    "5730368193ee": {
-      "name": "repo.list#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}",
-      "sent": 1
-    },
     "eac6e56c2d2c": {
       "crash": {
         "$rpc": "null"
@@ -120,8 +113,8 @@
       {
         "id": "loading",
         "observation": {
-          "sender": ["26accd69bc48"],
-          "payloads": ["5730368193ee"],
+          "sender": ["35f85fe3b71c"],
+          "payloads": ["19b2979d7fc2"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -132,8 +125,8 @@
       {
         "id": "selected",
         "observation": {
-          "sender": ["288dd3529eaf"],
-          "payloads": ["5730368193ee"],
+          "sender": ["413e29f6e78e"],
+          "payloads": ["19b2979d7fc2"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },

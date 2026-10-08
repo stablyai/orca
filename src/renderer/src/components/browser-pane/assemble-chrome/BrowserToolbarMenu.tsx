@@ -12,6 +12,7 @@ import {
 import { BrowserToolbarMenuDropdown } from './browser-toolbar-menu-dropdown'
 import { BrowserToolbarProfileDialogs } from './browser-toolbar-profile-dialogs'
 import { translate } from '@/i18n/i18n'
+import type { BrowserChromeOverflowMenuProps } from './browser-chrome-folded-tools'
 
 type BrowserToolbarMenuProps = {
   currentProfileId: string | null
@@ -20,6 +21,7 @@ type BrowserToolbarMenuProps = {
   viewportPresetId: BrowserViewportPresetId | null
   onDestroyWebview: () => void
   isActive: boolean
+  overflow: BrowserChromeOverflowMenuProps
 }
 
 export function BrowserToolbarMenu({
@@ -28,7 +30,8 @@ export function BrowserToolbarMenu({
   browserPageId,
   viewportPresetId,
   onDestroyWebview,
-  isActive
+  isActive,
+  overflow
 }: BrowserToolbarMenuProps): React.JSX.Element {
   const browserSessionProfiles = useAppStore((s) => s.browserSessionProfiles)
   const detectedBrowsers = useAppStore((s) => s.detectedBrowsers)
@@ -61,7 +64,6 @@ export function BrowserToolbarMenu({
 
   const [newProfileDialogOpen, setNewProfileDialogOpen] = useState(false)
   const [newProfileName, setNewProfileName] = useState('')
-  const [useNativeUserAgent, setUseNativeUserAgent] = useState(false)
   const [isCreatingProfile, setIsCreatingProfile] = useState(false)
   const [pendingSwitchProfileId, setPendingSwitchProfileId] = useState<string | null | undefined>(
     undefined
@@ -86,7 +88,6 @@ export function BrowserToolbarMenu({
     setNewProfileDialogOpen(open)
     if (!open) {
       setNewProfileName('')
-      setUseNativeUserAgent(false)
     }
   }
 
@@ -138,11 +139,7 @@ export function BrowserToolbarMenu({
 
     setIsCreatingProfile(true)
     try {
-      const profile = await createBrowserSessionProfile(
-        'isolated',
-        trimmed,
-        useNativeUserAgent ? { userAgentMode: 'native' } : undefined
-      )
+      const profile = await createBrowserSessionProfile('isolated', trimmed)
       if (!profile) {
         if (mountedRef.current) {
           toast.error(
@@ -161,7 +158,6 @@ export function BrowserToolbarMenu({
 
       setNewProfileDialogOpen(false)
       setNewProfileName('')
-      setUseNativeUserAgent(false)
 
       onDestroyWebview()
       switchBrowserTabProfile(workspaceId, profile.id, profile.partition)
@@ -248,6 +244,7 @@ export function BrowserToolbarMenu({
         onImportFromFile={() => void handleImportFromFile()}
         viewportPresetId={viewportPresetId}
         onApplyViewportPreset={applyViewportPreset}
+        overflow={overflow}
       />
 
       <BrowserToolbarProfileDialogs
@@ -258,14 +255,11 @@ export function BrowserToolbarMenu({
         onNewProfileDialogOpenChange={handleNewProfileDialogOpenChange}
         newProfileName={newProfileName}
         onNewProfileNameChange={setNewProfileName}
-        useNativeUserAgent={useNativeUserAgent}
-        onUseNativeUserAgentChange={setUseNativeUserAgent}
         isCreatingProfile={isCreatingProfile}
         onCreateProfile={() => void handleCreateProfile()}
         onCancelNewProfile={() => {
           setNewProfileDialogOpen(false)
           setNewProfileName('')
-          setUseNativeUserAgent(false)
         }}
       />
     </>

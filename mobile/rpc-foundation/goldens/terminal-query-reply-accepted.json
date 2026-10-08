@@ -1,23 +1,26 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "terminal.query-reply",
   "family": "terminal.query-reply",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
-  "adapterSha256": "7588d30f33a8bb846c48f160aa9a4a8138176662bb2fb6be7bbdf352f553d05f",
-  "scenarioSha256": "bfa1d5f83b4112d3cce6a19e9dc27daf9281ed99745bc01bd19226dd7b268c71",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "11a49f853eb8": {
       "accepted": true
     },
-    "4ed60727a7ff": {
+    "84e5ca07cb7a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": true
+    },
+    "ccb884e12d95": {
       "name": "terminal.send#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b[0n\",\"enter\":false,\"inputKind\":\"query-reply\",\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
+    },
+    "cd7cf7b1f566": {
+      "name": "terminal.send#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -57,17 +60,6 @@
           }
         }
       }
-    },
-    "84e5ca07cb7a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": true
-    },
-    "a766e4175d1c": {
-      "name": "terminal.send#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b[0n\",\"enter\":false,\"inputKind\":\"query-reply\",\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}",
-      "sent": 1
     }
   },
   "recording": {
@@ -76,8 +68,8 @@
       {
         "id": "accepted",
         "observation": {
-          "sender": ["4ed60727a7ff"],
-          "payloads": ["a766e4175d1c"],
+          "sender": ["cd7cf7b1f566"],
+          "payloads": ["ccb884e12d95"],
           "settlements": {
             "send": "84e5ca07cb7a"
           },

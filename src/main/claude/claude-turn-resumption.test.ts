@@ -22,7 +22,7 @@ import {
   projectStructuredAgentSessionStatus,
   projectStructuredAgentSessionStatusSummary
 } from '../../shared/structured-agent-session-projection'
-import { activeStructuredAgentSessionToolCall } from '../../shared/structured-agent-session-live-turn'
+import { statusStructuredAgentSessionToolCall } from '../../shared/structured-agent-session-live-turn'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
 
@@ -268,7 +268,7 @@ describe('a Claude turn the provider resumed on its own', () => {
     )
 
     expect(projected(items())).toBe('working')
-    expect(activeStructuredAgentSessionToolCall(items())?.name).toBe('Bash')
+    expect(statusStructuredAgentSessionToolCall(items())?.name).toBe('Bash')
     expect(projectStructuredAgentSessionStatusSummary(items(), [], null).toolName).toBe('Bash')
   })
 

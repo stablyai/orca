@@ -7,6 +7,7 @@ import { canToggleNativeChat } from './native-chat-availability'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { isMacPlatform, matchesNativeChatToggleShortcut } from './native-chat-shortcut'
 import { getConnectionIdFromState } from '@/lib/connection-context'
+import { resolveKeyboardWorkspaceId } from '@/lib/floating-workspace-terminal-actions'
 import {
   isNativeChatTabWideFallbackSafe,
   resolveNativeChatActiveLayoutLeafId
@@ -35,10 +36,10 @@ export function resolveNativeChatToggleShortcutDetectedAgent({
   )
 }
 
-/** Toggles the active worktree's focused agent-terminal tab between the terminal
- *  and native chat views via the keyboard. Gated to the active worktree so only
- *  one listener acts at a time, and to agent terminals so the chord is inert on
- *  plain shells / non-terminal surfaces. */
+/** Toggles a workspace's focused agent-terminal tab between the terminal and native
+ *  chat views via the keyboard. Gated to the surface the key press came from (main
+ *  window or floating panel) so only one listener acts, and to agent terminals so
+ *  the chord is inert on plain shells / non-terminal surfaces. */
 export function useNativeChatToggleShortcut(worktreeId: string, isWorktreeActive: boolean): void {
   useEffect(() => {
     if (!isWorktreeActive) {
@@ -50,6 +51,11 @@ export function useNativeChatToggleShortcut(worktreeId: string, isWorktreeActive
         return
       }
       const state = useAppStore.getState()
+      // Why: the floating panel and the main window can both be on screen; only the one the key
+      // press came from toggles.
+      if (resolveKeyboardWorkspaceId(e.target, state.activeWorktreeId) !== worktreeId) {
+        return
+      }
       const activeGroupId = state.activeGroupIdByWorktree[worktreeId]
       const group = (state.groupsByWorktree[worktreeId] ?? []).find((g) => g.id === activeGroupId)
       if (!group?.activeTabId) {
@@ -58,10 +64,8 @@ export function useNativeChatToggleShortcut(worktreeId: string, isWorktreeActive
       const tab = (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
         (candidate) => candidate.id === group.activeTabId
       )
-      // contentType gates out standalone structured (agent-session) tabs;
-      // structuredSessionId gates out a terminal tab that adopted one, which
-      // renders the structured surface with no TUI to switch back to.
-      if (!tab || tab.contentType !== 'terminal' || tab.structuredSessionId) {
+      // contentType gates out standalone structured (agent-session) tabs.
+      if (!tab || tab.contentType !== 'terminal') {
         return
       }
       const terminalTab = (state.tabsByWorktree[worktreeId] ?? []).find(
