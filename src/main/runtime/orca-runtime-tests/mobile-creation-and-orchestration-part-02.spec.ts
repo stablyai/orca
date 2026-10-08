@@ -216,7 +216,10 @@ describe('OrcaRuntimeService', () => {
           runtime as unknown as {
             leaves: Map<
               string,
-              { lastAgentStatus: string | null; lastAgentStatusObservedLive: boolean }
+              {
+                lastAgentStatus: string | null
+                lastAgentStatusObservedLive: boolean
+              }
             >
           }
         ).leaves.values()
@@ -415,7 +418,12 @@ describe('OrcaRuntimeService', () => {
 
       const [terminal] = (await runtime.listTerminals()).terminals
       runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
-      db.insertMessage({ from: 'term_worker', to: terminal.handle, subject: 'pending' })
+      db.insertMessage({
+        runId: 'run_legacy_local',
+        from: 'term_worker',
+        to: terminal.handle,
+        subject: 'pending'
+      })
       runtime.notifyMessageArrived(terminal.handle, 'status')
       db.close()
 

@@ -41,6 +41,7 @@ describe('detectLocalManagedAgentCliPresence', () => {
     )
 
     expect(result.codex?.state).toBe('found')
+    expect(result.codex).toEqual({ state: 'found', executablePath: '/bin/codex' })
     expect(result.claude?.state).toBe('missing')
     expect(probe.mock.calls.map(([filePath]) => filePath)).toEqual([
       '/bin/codex',
@@ -63,6 +64,7 @@ describe('detectLocalManagedAgentCliPresence', () => {
     )
 
     expect(result.codex?.state).toBe('found')
+    expect(result.codex).toEqual({ state: 'found', executablePath: '/custom/bin/codex' })
     expect(probe).toHaveBeenCalledWith('/custom/bin/codex')
   })
 
@@ -81,6 +83,7 @@ describe('detectLocalManagedAgentCliPresence', () => {
     )
 
     expect(result.claude?.state).toBe('found')
+    expect(result.claude).toEqual({ state: 'found', executablePath: overridePath })
     expect(probe).toHaveBeenCalledWith(overridePath)
   })
 

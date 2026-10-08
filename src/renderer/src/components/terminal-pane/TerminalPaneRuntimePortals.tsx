@@ -1,5 +1,8 @@
 import { createPortal } from 'react-dom'
+import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import CodexRestartChip from '../CodexRestartChip'
+import { CodexSharedServerBanner } from './CodexSharedServerBanner'
+import { ClaudeOldTerminalBanner } from './ClaudeOldTerminalBanner'
 import { TerminalSshReconnectOverlay } from './TerminalSshReconnectOverlay'
 import { TerminalRemoteRuntimeReconnectBanner } from './TerminalRemoteRuntimeReconnectBanner'
 import { TerminalProcessExitOverlay } from './TerminalProcessExitOverlay'
@@ -15,11 +18,20 @@ export function TerminalPaneCodexRestartPortals({
 }: {
   controller: TerminalPaneController
 }): React.JSX.Element {
-  const { activePane, isActive, isVisible, managedPanes, paneTransportsRef, savedLayout } =
-    controller
+  const {
+    activePane,
+    isActive,
+    isVisible,
+    managedPanes,
+    managerRef,
+    paneTransportsRef,
+    savedLayout,
+    tabId
+  } = controller
   return (
     <>
       {managedPanes.map((pane) => {
+        // Why the saved fallback: a restored pane's transport has no pty id until it reattaches.
         const ptyId =
           paneTransportsRef.current.get(pane.id)?.getPtyId() ??
           savedLayout.ptyIdsByLeafId?.[pane.leafId]
@@ -27,12 +39,30 @@ export function TerminalPaneCodexRestartPortals({
           return null
         }
         return createPortal(
-          <CodexRestartChip
-            key={`codex-restart-${pane.id}-${ptyId}`}
-            isVisible={isVisible}
-            ptyId={ptyId}
-            shouldFocus={isActive && isVisible && activePane?.id === pane.id}
-          />,
+          <>
+            <CodexRestartChip
+              key={`codex-restart-${pane.id}-${ptyId}`}
+              isVisible={isVisible}
+              ptyId={ptyId}
+              onReturnFocus={() => {
+                managerRef.current?.setActivePane(pane.id, { focus: false })
+                focusTerminalTabSurface(tabId, pane.leafId)
+              }}
+              shouldFocus={isActive && isVisible && activePane?.id === pane.id}
+            />
+            <CodexSharedServerBanner
+              key={`codex-shared-server-${pane.id}-${ptyId}`}
+              ptyId={ptyId}
+              tabId={tabId}
+              leafId={pane.leafId}
+            />
+            <ClaudeOldTerminalBanner
+              key={`claude-old-terminal-${pane.id}-${ptyId}`}
+              ptyId={ptyId}
+              tabId={tabId}
+              leafId={pane.leafId}
+            />
+          </>,
           pane.container,
           `codex-restart-${pane.id}`
         )

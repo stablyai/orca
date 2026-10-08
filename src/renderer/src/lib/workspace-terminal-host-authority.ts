@@ -1,6 +1,8 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { parseExecutionHostId } from '../../../shared/execution-host'
+import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { splitWorktreeId } from '../../../shared/worktree/id'
 import type { HostLiveTerminalProbeVerdict } from '@/runtime/host-live-terminal-probe'
 import type { RemoteWorkspaceSyncStatus } from '@/store/slices/ssh'
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session'
@@ -16,9 +18,10 @@ import {
  * than restated so the two cannot drift:
  *
  * - `live` — a remote execution host owns terminal creation here. It supplies the surface itself.
- * - `unverifiable` — the workspace has a remote execution host with a sync still in flight or not
- *   yet attempted. It is bounded: a sync that terminates without an answer resolves `none` rather
- *   than refusing forever (see resolveDirectSshAuthority).
+ * - `unverifiable` — the workspace has a remote execution host that has not answered for it: a sync
+ *   still in flight or not yet attempted, or a snapshot naming tabs here that could not be placed.
+ *   It is bounded: a sync that terminates without an answer resolves `none` rather than refusing
+ *   forever (see resolveDirectSshAuthority).
  * - `none` — no remote host holds terminals here: either the workspace is local (this client *is*
  *   the execution host, and its own tab rows are the whole truth) or the host answered and holds
  *   nothing.
@@ -57,9 +60,11 @@ const TERMINATED_WITHOUT_ANSWER_PHASES = new Set(['offline', 'error'])
 
 function resolveDirectSshAuthority(
   state: WorkspaceTerminalHostAuthorityState,
-  targetId: string
+  targetId: string,
+  worktreeId: string
 ): WorkspaceTerminalHostAuthority {
-  const phase = state.remoteWorkspaceSyncStatusByTargetId?.[targetId]?.phase
+  const status = state.remoteWorkspaceSyncStatusByTargetId?.[targetId]
+  const phase = status?.phase
   if (state.remoteWorkspaceHydratedTargetIds?.has(targetId)) {
     // Why: the same pair use-app-session-persistence.ts gates uploads on. A conflicting snapshot
     // means the client's picture is not the host's, so it is no basis for deciding the host holds
@@ -72,6 +77,16 @@ function resolveDirectSshAuthority(
     // worse than the pre-gate behaviour, and only escapable by creating a tab by hand. Declining to
     // seed is meant to be a wait, not a permanent refusal.
     return 'none'
+  }
+  const unplacedPaths = status?.unplacedTabWorktreePaths
+  const worktreePath = splitWorktreeId(worktreeId)?.worktreePath
+  if (phase === 'conflict' && unplacedPaths && worktreePath) {
+    // Why: that snapshot was applied to every worktree it could place, so the host has answered for
+    // this one. Refusing the whole target strands it on one path this client never had (#22015).
+    const comparablePath = normalizeRuntimePathForComparison(worktreePath)
+    return unplacedPaths.some((path) => normalizeRuntimePathForComparison(path) === comparablePath)
+      ? 'unverifiable'
+      : 'none'
   }
   // Not connected, still pulling, or not yet attempted — "we could not ask", never "nothing there".
   return 'unverifiable'
@@ -104,7 +119,7 @@ export function resolveWorkspaceTerminalHostAuthority(
     // Why the git-worktree narrowing: the snapshot replaces exactly DirectSshTargetScope.gitWorktreeIds
     // (remote-workspace-snapshot-apply.ts). A folder workspace's rows are never replaced by the host,
     // so waiting on an answer that will never name them would leave it terminal-less for good.
-    return resolveDirectSshAuthority(state, host.targetId)
+    return resolveDirectSshAuthority(state, host.targetId, worktreeId)
   }
   // Local, or outside the host's replace scope: this client is the execution host and its own rows are
   // the whole truth. Absence of a catalog row is not evidence of a remote owner, and refusing to act

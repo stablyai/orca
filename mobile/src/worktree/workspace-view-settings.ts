@@ -7,7 +7,7 @@ import type { WorkspaceStatusDefinition } from '../../../src/shared/worktree/typ
 import { coerceMobileWorkspaceStatuses } from './mobile-workspace-statuses'
 
 export type MobileGroupMode = 'none' | 'workspaceStatus' | 'repo' | 'prStatus'
-// Desktop sort adds 'manual'; mobile renders it but sorts by server order.
+// Desktop sort adds 'manual'; mobile orders it by the desktop's drag ranks.
 export type MobileSortMode = 'smart' | 'name' | 'recent' | 'repo' | 'manual'
 
 // Desktop PersistedUIState fields this screen syncs (a structural subset).

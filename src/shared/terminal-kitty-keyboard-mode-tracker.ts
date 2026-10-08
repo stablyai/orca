@@ -1,3 +1,4 @@
+import { ownRetainedString } from './own-retained-string'
 import { parseTerminalKittyKeyboardFlags } from './terminal-kitty-keyboard-flags'
 
 // Why: PTY/SSH chunks can split an escape sequence before its final byte.
@@ -18,14 +19,13 @@ type KittyStackFrame = { flags: number; known: boolean }
  * DECSET/DECRST 47/1047/1049, the full reset on RIS, and the soft reset on
  * DECSTR (CSI ! p).
  *
- * Why a mirror instead of reading xterm's internal state: Orca defensively
- * wipes the renderer terminal's kitty flags at moments when the TUI may have
- * died (Ctrl+C interrupts, reattach resets) while the TUI is usually still
- * alive and expecting protocol-encoded input. This tracker is fed only by
- * application output, so it reflects what the *application* negotiated,
- * independent of renderer-side defensive writes. The daemon reuses it to
- * carry flags into snapshots (xterm's SerializeAddon does not serialize kitty
- * state).
+ * Why a mirror instead of reading xterm's internal state: xterm's public API
+ * exposes no kitty flags. The renderer scans application output as it queues
+ * it and every mode write of its own; wherever xterm may skip or discard
+ * scanned bytes (snapshot replays, abandoned restores) the renderer re-asserts
+ * the mirror's flags into xterm, so their active-screen flags converge.
+ * The daemon reuses it to carry flags into snapshots (xterm's SerializeAddon does
+ * not serialize kitty state).
  */
 export class TerminalKittyKeyboardModeTracker {
   private scanTail = ''
@@ -47,6 +47,12 @@ export class TerminalKittyKeyboardModeTracker {
   // one. Grounding flips on evidence only: an explicit fresh-PTY reset, a
   // proven snapshot restore, or scanned bytes that state flags absolutely.
   private baselineProven = false
+  private readonly kittyKeyboard: boolean
+
+  /** `kittyKeyboard: false` mirrors an xterm with the protocol withheld, which ignores `CSI u`. */
+  constructor(options: { kittyKeyboard?: boolean } = {}) {
+    this.kittyKeyboard = options.kittyKeyboard ?? true
+  }
 
   /**
    * Current effective kitty keyboard flags. `0` doubles as the conservative
@@ -127,7 +133,7 @@ export class TerminalKittyKeyboardModeTracker {
    */
   restoreSnapshotFlags(flags: number): void {
     const parsed = parseTerminalKittyKeyboardFlags(flags)
-    if (parsed === undefined) {
+    if (parsed === undefined || !this.kittyKeyboard) {
       return
     }
     this.currentFlags = parsed
@@ -155,7 +161,12 @@ export class TerminalKittyKeyboardModeTracker {
   }
 
   private scanInternal(data: string, replay: boolean): void {
-    const input = this.scanTail + data
+    // Why: unchecked main-process callers can pass a snapshot field that is absent.
+    const chunk = typeof data === 'string' ? data : ''
+    if (this.scanTail.length === 0 && !chunk.includes('\x1b') && !chunk.includes('\x9b')) {
+      return
+    }
+    const input = this.scanTail + chunk
     this.scanTail = this.extractScanTail(input)
     // oxlint-disable-next-line no-control-regex -- terminal escape sequences require control chars
     const kittyModeRe = /\x1bc|(?:\x1b\[|\x9b)(?:!p|\?([0-9;]+)([hl])|([<>=])([0-9;]*)u)/g
@@ -177,7 +188,9 @@ export class TerminalKittyKeyboardModeTracker {
         this.applyScreenSwitch(match[1], match[2] === 'h')
         continue
       }
-      this.applyKittySequence(match[3], match[4] ?? '', replay)
+      if (this.kittyKeyboard) {
+        this.applyKittySequence(match[3], match[4] ?? '', replay)
+      }
     }
   }
 
@@ -308,7 +321,7 @@ export class TerminalKittyKeyboardModeTracker {
     if (body === null) {
       return ''
     }
-    return this.isIncompleteSequenceBody(body) ? tail : ''
+    return this.isIncompleteSequenceBody(body) ? ownRetainedString(tail) : ''
   }
 
   private isIncompleteSequenceBody(body: string): boolean {

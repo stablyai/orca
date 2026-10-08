@@ -1,0 +1,6 @@
+{
+  "version": "2.159.0",
+  "platform": "darwin",
+  "model": "fast-model",
+  "description": "Live CLI: question notification precedes PreToolUse; PreToolUse follows the answer; SessionStart follows UserPromptSubmit. Host paths and session identifiers replaced."
+}

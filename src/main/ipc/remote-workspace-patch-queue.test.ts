@@ -123,7 +123,7 @@ describe('remoteWorkspace:setForConnectedTargets patch queue', () => {
     getActiveMultiplexerMock.mockImplementation((targetId: string) => muxByTargetId.get(targetId))
     registerRemoteWorkspaceNotificationHandlerMock.mockClear()
 
-    registerRemoteWorkspaceHandlers(store, () => null)
+    registerRemoteWorkspaceHandlers(store, () => null, { readMachineName: () => 'Build server' })
   })
 
   async function callSetForConnectedTargets(args: {

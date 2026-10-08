@@ -15,6 +15,7 @@ import type {
 } from './filesystem-watcher-lifecycle-state'
 import { watcherLifecycleState } from './filesystem-watcher-lifecycle-state'
 import { getRemoteWatcherKey } from './filesystem-watcher-paths'
+import { isCurrentWatcherSender } from './filesystem-watcher-sender-lifetime'
 import {
   addInFlightRemoteInstallListener,
   addRemoteWatchListener,
@@ -34,10 +35,12 @@ export async function installRemoteWatcherCore(
   connectionId: string,
   worktreePath: string,
   onTerminalError: RemoteWatcherTerminalErrorHandler,
-  generation = watcherLifecycleState.remoteWatcherLifecycleGeneration
+  generation = watcherLifecycleState.remoteWatcherLifecycleGeneration,
+  senderSignal = registerWatcherSenderCleanup(sender)
 ): Promise<RemoteWatcherInstallResult> {
   // Why: refuse installs racing in after teardown (or a waiter from an earlier lifecycle) so provider.watch() isn't called post-shutdown.
   if (
+    !isCurrentWatcherSender(sender, senderSignal) ||
     watcherLifecycleState.remoteWatchersClosed ||
     generation !== watcherLifecycleState.remoteWatcherLifecycleGeneration
   ) {
@@ -50,7 +53,8 @@ export async function installRemoteWatcherCore(
       connectionId,
       worktreePath,
       onTerminalError,
-      generation
+      generation,
+      senderSignal
     )
   } finally {
     finishInstall()
@@ -62,7 +66,8 @@ async function installRemoteWatcherWhileRemovalAllowed(
   connectionId: string,
   worktreePath: string,
   onTerminalError: RemoteWatcherTerminalErrorHandler,
-  generation: number
+  generation: number,
+  senderSignal: AbortSignal
 ): Promise<RemoteWatcherInstallResult> {
   const provider = getSshFilesystemProvider(connectionId)
   if (!provider || sender.isDestroyed()) {
@@ -85,6 +90,9 @@ async function installRemoteWatcherWhileRemovalAllowed(
       addInFlightRemoteInstallListener(inFlight, sender)
     }
     const result = await pendingInstall
+    if (!isCurrentWatcherSender(sender, senderSignal)) {
+      return 'cancelled'
+    }
     if (
       result === 'installed' &&
       watcherLifecycleState.remoteWatchers.has(key) &&
@@ -108,7 +116,8 @@ async function installRemoteWatcherWhileRemovalAllowed(
         connectionId,
         worktreePath,
         onTerminalError,
-        generation
+        generation,
+        senderSignal
       )
     }
     return result

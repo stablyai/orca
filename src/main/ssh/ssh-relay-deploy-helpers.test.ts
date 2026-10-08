@@ -232,9 +232,9 @@ describe('waitForSentinel', () => {
 
   it.each(['ssh2 channel', 'system-SSH child stdio'])(
     'forwards write(false), callback settlement, and drain for a %s',
-    async (shape) => {
+    async (channelKind) => {
       const channel = createMockChannel()
-      if (shape.startsWith('system')) {
+      if (channelKind.startsWith('system')) {
         Object.assign(channel, { _process: new EventEmitter() })
       }
       const callback = vi.fn()

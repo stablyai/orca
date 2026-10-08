@@ -28,6 +28,7 @@ import {
   clearForegroundHoldSafety,
   clearForegroundRelease,
   createQueueEntry,
+  inheritRecentForegroundSafetyFlush,
   scheduleForegroundCoalesceRelease,
   scheduleForegroundHoldSafety
 } from './pane-terminal-foreground-queue-state'
@@ -64,6 +65,9 @@ export function writeTerminalOutputImpl(
     const entry = queuedByTerminal.get(terminal)
     if (entry?.highPriority || options.coalesceForeground || options.holdForeground) {
       const queued = entry ?? createQueueEntry(terminal, options)
+      if (entry === undefined && options.coalesceForeground) {
+        inheritRecentForegroundSafetyFlush(queued)
+      }
       queued.onBackgroundBacklogDropped = options.onBackgroundBacklogDropped
       queued.highPriority = true
       queuedByTerminal.set(terminal, queued)

@@ -39,7 +39,7 @@ export abstract class CodexRuntimeHomePaths extends CodexRuntimeHomeState {
       }
       return { kind: 'ready', homePath: resolved.kind === 'owned' ? resolved.homePath : null }
     }
-    if (this.isHostSystemDefaultRealHome()) {
+    if (this.isHostSystemDefaultRealHomeSelected()) {
       return { kind: 'ready', homePath: null }
     }
     return {

@@ -8,6 +8,22 @@ import type {
   LegacyWorkerRecoveryWorkspace
 } from './runtime-legacy-worker-terminal-recovery-types'
 
+export async function isAbsentLegacyWorkerTerminalProvenExited(
+  ports: LegacyWorkerRecoveryPorts,
+  candidate: LegacyWorkerRecoveryCandidate,
+  connectionId: string | null
+): Promise<boolean> {
+  // A restarted relay's session map cannot speak for the previous relay's processes.
+  if (connectionId === null) {
+    return true
+  }
+  try {
+    return (await ports.isTerminalProvenAbsent?.(candidate)) === true
+  } catch {
+    return false
+  }
+}
+
 export async function reconcileLegacyWorkerCandidate(args: {
   controller: RuntimeLegacyWorkerTerminalRecoveryController
   ports: LegacyWorkerRecoveryPorts
@@ -21,7 +37,13 @@ export async function reconcileLegacyWorkerCandidate(args: {
 }): Promise<void> {
   const { controller, ports, options, candidate, workspace, resolvedWorktrees } = args
   if (!args.inventory.livePtyIds.has(candidate.ptyId)) {
-    args.pendingResolutions.push({ candidate, resolution: 'exited' })
+    if (
+      await isAbsentLegacyWorkerTerminalProvenExited(ports, candidate, workspace.scope.connectionId)
+    ) {
+      args.pendingResolutions.push({ candidate, resolution: 'exited' })
+    } else {
+      args.deferredDispatchIds.add(candidate.dispatchId)
+    }
     return
   }
   const controllerIdentity = args.inventory.terminalIdentityByPtyId.get(candidate.ptyId)
@@ -47,7 +69,13 @@ export async function reconcileLegacyWorkerCandidate(args: {
         return 'unverifiable'
       }
       if (!preAdoptionInventory.livePtyIds.has(candidate.ptyId)) {
-        return 'exited'
+        return (await isAbsentLegacyWorkerTerminalProvenExited(
+          ports,
+          candidate,
+          workspace.scope.connectionId
+        ))
+          ? 'exited'
+          : 'unverifiable'
       }
       const preAdoptionIdentity = preAdoptionInventory.terminalIdentityByPtyId.get(candidate.ptyId)
       if (!preAdoptionIdentity) {
@@ -133,8 +161,14 @@ export async function reconcileLegacyWorkerCandidate(args: {
   }
   if (!finalInventory.livePtyIds.has(candidate.ptyId)) {
     controller.deleteReceipt(candidate.paneKey)
-    ports.onPtyExit(candidate)
-    args.pendingResolutions.push({ candidate, resolution: 'exited' })
+    if (
+      await isAbsentLegacyWorkerTerminalProvenExited(ports, candidate, workspace.scope.connectionId)
+    ) {
+      ports.onPtyExit(candidate)
+      args.pendingResolutions.push({ candidate, resolution: 'exited' })
+    } else {
+      args.deferredDispatchIds.add(candidate.dispatchId)
+    }
     return
   }
   const finalIdentity = finalInventory.terminalIdentityByPtyId.get(candidate.ptyId)

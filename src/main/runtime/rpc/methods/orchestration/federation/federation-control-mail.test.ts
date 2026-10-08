@@ -1,3 +1,4 @@
+import '../../../unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/protocol-version'
 import type { RuntimeRpcResponse } from '../../../../../../shared/runtime-rpc-envelope'
@@ -107,6 +108,7 @@ describe('orchestration federation control mail', () => {
     homeDb.markWorkerDispatchReady(dispatchId)
 
     workerDb.createRemoteDispatchAttachment({
+      runId: 'run-home',
       dispatchId,
       taskId: task.id,
       homePeerFingerprint: homeFingerprint,

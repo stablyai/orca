@@ -1,0 +1,120 @@
+name: Release JavaScript comparison
+
+on:
+  pull_request:
+    paths: ['.github/workflows/release-javascript-benchmark.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-javascript-comparison-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  ORCA_BACKGROUND_LAUNCH: '1'
+  ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
+  ORCA_POSTHOG_WRITE_KEY: ci-build-comparison
+  NODE_OPTIONS: --max-old-space-size=4096
+
+jobs:
+  bundle:
+    uses: ./.github/workflows/release-javascript.yml
+    with:
+      ref: ${{ github.sha }}
+    secrets:
+      ORCA_POSTHOG_WRITE_KEY: ci-build-comparison
+
+  measure:
+    needs: bundle
+    name: ${{ matrix.mode }} ${{ matrix.host.platform }} ${{ matrix.host.arch }}
+    runs-on: ${{ matrix.host.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix:
+        mode: [baseline, shared]
+        host:
+          - os: ubuntu-latest
+            platform: linux
+            arch: x64
+          - os: ubuntu-24.04-arm
+            platform: linux
+            arch: arm64
+          - os: windows-2022
+            platform: win32
+            arch: x64
+          - os: macos-15
+            platform: darwin
+            arch: arm64
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.bundle.outputs.source_sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+          persist-native-cache: 'false'
+      - uses: ./.github/actions/install-mobile-dependencies
+      - name: Install Linux provider dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y python3-gi gir1.2-atspi-2.0 at-spi2-core xclip xdotool
+      - name: Resolve build identity
+        shell: bash
+        run: |
+          RELEASE_TAG="v$(node -p 'require("./package.json").version')"
+          export RELEASE_TAG
+          echo "ORCA_BUILD_IDENTITY=$(node config/scripts/release-javascript-artifact.mjs identity)" >> "$GITHUB_ENV"
+      - name: Download shared JavaScript
+        if: matrix.mode == 'shared'
+        uses: actions/download-artifact@v8
+        with:
+          name: release-javascript
+          path: .build/release-javascript
+      - name: Measure release build
+        shell: bash
+        env:
+          MEASUREMENT_MODE: ${{ matrix.mode }}
+          ORCA_RELEASE_JAVASCRIPT_SOURCE_SHA: ${{ needs.bundle.outputs.source_sha }}
+        run: node config/scripts/release-javascript-benchmark.mjs "$MEASUREMENT_MODE"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-javascript-measurement-${{ matrix.mode }}-${{ matrix.host.platform }}-${{ matrix.host.arch }}
+          path: .build/release-javascript-measurements/
+          retention-days: 7
+
+  comparison:
+    needs: [bundle, measure]
+    runs-on: ubuntu-slim
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.bundle.outputs.source_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+      - uses: ./.github/actions/install-node-dependencies
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: release-javascript-measurement-*
+          path: .build/release-javascript-measurements
+      - name: Compare build and transfer timings
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs?per_page=100" > .build/release-javascript-measurements/jobs.json
+          node config/scripts/release-javascript-benchmark.mjs summary
+          cat .build/release-javascript-measurements/comparison.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: release-javascript-comparison
+          path: .build/release-javascript-measurements/comparison.md
+          retention-days: 30

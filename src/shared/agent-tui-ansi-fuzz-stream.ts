@@ -29,9 +29,9 @@ export function mulberry32(seed: number): () => number {
 export type AgentTuiStreamDims = { cols: number; rows: number }
 
 export type AgentTuiStreamProfile = {
-  /** Mouse-mode toggles require mirroring TerminalMouseModeMirror to build
-   *  rehydrate parity; the renderer-side fuzz cannot import that main-only
-   *  module (tsconfig.tc.web.json excludes src/main/daemon), so it opts out. */
+  /** Mouse-mode toggles need the daemon's rehydrate for parity; the
+   *  renderer-side fuzz cannot import that main-only module
+   *  (tsconfig.tc.web.json excludes src/main/daemon), so it opts out. */
   includeMouseModes: boolean
   /** OSC 8 hyperlinks mark their cells underlined in the xterm buffer, but
    *  SerializeAddon never re-emits OSC 8 — production restores link ranges

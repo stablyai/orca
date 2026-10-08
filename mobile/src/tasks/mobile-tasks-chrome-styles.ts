@@ -28,6 +28,7 @@ export const mobileTasksChromeStyles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.sm,
     minWidth: 0
   },
   title: {

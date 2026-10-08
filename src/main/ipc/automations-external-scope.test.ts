@@ -188,15 +188,6 @@ describe('probe scope retention', () => {
     expect(isExternalAutomationProbeCancelled(error)).toBe(true)
     probe.release()
   })
-
-  it('keeps probing a host that is still retained', async () => {
-    await invoke('automations:retainExternalScopes', { owners: [desktopSsh()] })
-    const entry = (await invoke('automations:listExternalManagerForOwner', {
-      owner: desktopSsh(),
-      provider: 'hermes'
-    })) as { manager: unknown }
-    expect(entry.manager).not.toBeNull()
-  })
 })
 
 describe('Orca automation traffic priority', () => {

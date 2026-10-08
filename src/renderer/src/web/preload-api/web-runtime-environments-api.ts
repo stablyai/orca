@@ -1,3 +1,4 @@
+const pendingSubscriptions = new Map<string, AbortController>()
 import type { PreloadApi } from '../../../../preload/api-types'
 import { parseHostAccessLink } from '../../../../shared/remote-pairing-address'
 import { verifyRemotePairingRuntimeStatus } from '../../../../shared/remote-pairing-verification'
@@ -16,6 +17,9 @@ import { translateHostAccessLinkError } from '@/lib/remote-pairing-copy'
 import { callEnvironmentEnvelope } from './web-runtime-calls'
 import {
   closeActiveRuntimeClients,
+  subscribeWebRuntimeStatus,
+  readWebRuntimeStatusSnapshots,
+  observeWebRuntimeStatus,
   disconnectActiveRuntimeEnvironment,
   getClientForEnvironment,
   manuallyDisconnectedEnvironmentIds,
@@ -29,6 +33,8 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
   Partial<PreloadApi>['runtimeEnvironments']
 > {
   return {
+    onStatusChanged: subscribeWebRuntimeStatus,
+    getStatusSnapshots: async () => readWebRuntimeStatusSnapshots(),
     list: async () => {
       const environment = requireActiveEnvironmentOrNull()
       return environment ? [redactStoredWebRuntimeEnvironment(environment)] : []
@@ -146,6 +152,12 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
       manuallyDisconnectedEnvironmentIds.clear()
       closeActiveRuntimeClients()
       webRuntimeState.activeEnvironment = nextEnvironment
+      getClientForEnvironment(nextEnvironment).statusOwner?.acceptVerified({
+        id: 'status.get',
+        ok: true,
+        result: runtimeStatus,
+        _meta: { runtimeId: runtimeStatus.runtimeId }
+      })
       return {
         ok: true,
         environment: redactStoredWebRuntimeEnvironment(nextEnvironment),
@@ -173,6 +185,7 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
     connect: ({ selector, timeoutMs }) => {
       const environment = resolveEnvironment(selector)
       manuallyDisconnectedEnvironmentIds.delete(environment.id)
+      closeActiveRuntimeClients()
       return callEnvironmentEnvelope<RuntimeStatus>(
         environment.id,
         'status.get',
@@ -180,16 +193,38 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
         timeoutMs
       )
     },
-    getStatus: ({ selector, timeoutMs }) =>
-      callEnvironmentEnvelope<RuntimeStatus>(selector, 'status.get', undefined, timeoutMs),
+    getStatus: ({ selector, timeoutMs, observeOnly }) =>
+      observeOnly
+        ? observeWebRuntimeStatus(selector, timeoutMs)
+        : callEnvironmentEnvelope<RuntimeStatus>(selector, 'status.get', undefined, timeoutMs),
     retryControlConnection: () => Promise.resolve(),
     prepareBrowserClientHostPlacement: async () => ({ kind: 'server' }),
     call: ({ selector, method, params, timeoutMs }) =>
       callEnvironmentEnvelope(selector, method, params, timeoutMs),
-    subscribe: async ({ selector, method, params, timeoutMs }, callbacks) => {
+    cancelSubscription: async ({ subscriptionId }) => {
+      pendingSubscriptions.get(subscriptionId)?.abort()
+    },
+    subscribe: async ({ selector, method, params, timeoutMs, subscriptionId }, callbacks) => {
       const environment = resolveEnvironment(selector)
       const client = getClientForEnvironment(environment)
-      const subscription = await client.subscribe(method, params, callbacks, { timeoutMs })
+      const controller = new AbortController()
+      if (subscriptionId) {
+        if (pendingSubscriptions.has(subscriptionId)) {
+          throw new Error('Subscription id already exists')
+        }
+        pendingSubscriptions.set(subscriptionId, controller)
+      }
+      let subscription
+      try {
+        subscription = await client.subscribe(method, params, callbacks, {
+          timeoutMs,
+          signal: controller.signal
+        })
+      } finally {
+        if (subscriptionId && pendingSubscriptions.get(subscriptionId) === controller) {
+          pendingSubscriptions.delete(subscriptionId)
+        }
+      }
       if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
         subscription.unsubscribe()
         throw new Error('runtime_manually_disconnected')

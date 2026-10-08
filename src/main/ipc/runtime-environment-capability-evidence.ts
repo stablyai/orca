@@ -64,12 +64,14 @@ export function advanceRuntimeEnvironmentCapabilityIncarnation(environmentId: st
   state.accepted = null
 }
 
+export function getRuntimeEnvironmentCapabilityIncarnation(environmentId: string): number {
+  return stateFor(environmentId).epoch
+}
+
 export function applyRuntimeEnvironmentCapabilityVerdict(args: {
   evidence: RuntimeEnvironmentCapabilityEvidence
   verdict: RuntimeEnvironmentCapabilityVerdict
   runtimeId: string
-  onCapable?: () => void
-  onAbsent?: () => void
 }): boolean {
   const state = stateFor(args.evidence.environmentId)
   if (
@@ -82,11 +84,6 @@ export function applyRuntimeEnvironmentCapabilityVerdict(args: {
     evidence: args.evidence,
     verdict: args.verdict,
     runtimeId: args.runtimeId
-  }
-  if (args.verdict === 'capable') {
-    args.onCapable?.()
-  } else {
-    args.onAbsent?.()
   }
   return true
 }

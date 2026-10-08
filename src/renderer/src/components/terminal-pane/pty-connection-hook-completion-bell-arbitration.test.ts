@@ -141,14 +141,14 @@ function enableActiveRuntimeEnvironment(environmentId = 'env-1'): void {
 }
 
 describe('connectPanePty', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetModules()
     vi.clearAllMocks()
     transportFactoryQueue = []
     createdTransportOptions = []
     storeSubscribers = []
     mockStoreState = createInitialStoreState(() => mockStoreState)
-    installTerminalTestGlobals()
+    await installTerminalTestGlobals()
   })
 
   afterEach(async () => {
@@ -441,7 +441,8 @@ describe('connectPanePty', () => {
     expect(deps.dispatchNotification).toHaveBeenCalledWith({
       source: 'agent-task-complete',
       terminalTitle: '* Codex done',
-      paneKey: makePaneKey('tab-1', LEAF_1)
+      paneKey: makePaneKey('tab-1', LEAF_1),
+      ptyId: 'tab-pty'
     })
   })
 
@@ -523,9 +524,12 @@ describe('connectPanePty', () => {
     bellHandler()
     ;(onDataHandler as (data: string) => void)('a')
 
-    expect(deps.markTerminalPaneUnread).toHaveBeenCalledWith(makePaneKey('tab-1', LEAF_1))
+    expect(deps.markTerminalPaneUnread).toHaveBeenCalledWith(
+      makePaneKey('tab-1', LEAF_1),
+      'terminal-bell'
+    )
     expect(deps.clearTerminalPaneUnread).not.toHaveBeenCalled()
-    expect(transport.sendInput).toHaveBeenCalledWith('a')
+    expect(transport.sendInput).toHaveBeenCalledWith('a', 'query-reply')
   })
 
   // Why: xterm auto-replies during replay must not count as user interaction, or a BELed pane would self-dismiss unseen.

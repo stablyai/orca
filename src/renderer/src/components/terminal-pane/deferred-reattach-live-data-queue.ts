@@ -1,4 +1,5 @@
 import type { PtyDataMeta } from './pty-dispatcher'
+import { flattenRetainedSlice } from '../../lib/flatten-retained-slice'
 
 export const MAX_DEFERRED_REATTACH_LIVE_CHARS = 512 * 1024
 export const MAX_DEFERRED_REATTACH_LIVE_CHUNKS = 1_024
@@ -35,7 +36,9 @@ export class DeferredReattachLiveDataQueue {
     const oversized = chunk.data.length > MAX_DEFERRED_REATTACH_LIVE_CHARS
     const queuedChunk = {
       ...chunk,
-      data: oversized ? chunk.data.slice(-MAX_DEFERRED_REATTACH_LIVE_CHARS) : chunk.data
+      data: oversized
+        ? flattenRetainedSlice(chunk.data.slice(-MAX_DEFERRED_REATTACH_LIVE_CHARS))
+        : chunk.data
     }
     this.chunks.push(queuedChunk)
     this.retainedChars += queuedChunk.data.length

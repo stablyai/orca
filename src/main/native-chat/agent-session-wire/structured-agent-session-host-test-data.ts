@@ -1,6 +1,12 @@
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
+import type {
+  AgentJournalMessageItem,
+  AgentJournalSnapshot
+} from '../../../shared/agent-session-journal-types'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import type { AgentSessionExecutionLocation } from '../../../shared/agent-session-record'
+import { projectNativeChatTranscriptMessages } from '../../../shared/native-chat-transcript-projection'
+import { projectStructuredAgentSessionMessages } from '../../../shared/structured-agent-session-message-projection'
+import { structuredAgentSessionSendBody } from '../../../shared/structured-agent-session-send-mutation'
 import { attachFingerprintFields } from './structured-agent-session-attach'
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
 
@@ -60,4 +66,22 @@ export function hostTestAttachParams(
       })
     }
   }
+}
+
+/** The row ids a chat draws from `snapshot`, top to bottom, while its composer still holds `sent`
+ *  as dispatched, as it does until the journal accepts them. */
+export function hostTestDrawnRowIds(
+  snapshot: AgentJournalSnapshot,
+  sent: readonly { clientMessageId: string; text: string }[]
+): string[] {
+  const optimistic = sent.map((message) => ({
+    clientMessageId: message.clientMessageId,
+    body: structuredAgentSessionSendBody(message.text, []),
+    queuedAt: HOST_TEST_NOW
+  }))
+  return projectNativeChatTranscriptMessages(
+    projectStructuredAgentSessionMessages(snapshot.items, optimistic, snapshot.submissions, {
+      rejectedInPlace: true
+    })
+  ).map(({ id }) => id)
 }

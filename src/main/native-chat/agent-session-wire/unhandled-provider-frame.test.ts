@@ -50,9 +50,6 @@ describe('unhandled provider frame journal fallback', () => {
     expect(
       unhandledProviderFrameJournalItem('codex', 'notification:thread/tokenUsage/updated', {})
     ).toBeNull()
-    expect(
-      unhandledProviderFrameJournalItem('codex', 'notification:thread/goal/cleared', {})
-    ).toBeNull()
     expect(unhandledProviderFrameJournalItem('claude', 'message:system:init', {})).toBeNull()
     expect(
       unhandledProviderFrameJournalItem('claude', 'message:result', {
@@ -90,7 +87,7 @@ describe('unhandled provider frame journal fallback', () => {
     })
   })
 
-  it('renders codex systemError and Claude error result variants', () => {
+  it('renders codex systemError and Claude error result variants when no typed translator covers the frame', () => {
     const codex = unhandledProviderFrameJournalItem('codex', 'notification:thread/status/changed', {
       threadId: 'thread-1',
       status: { type: 'systemError' }
@@ -172,6 +169,21 @@ describe('unhandled provider frame journal fallback', () => {
     expect(unhandledProviderFrameJournalItem('claude', 'message:future/event', {})).not.toBeNull()
   })
 
+  it("leads with a local slash command's output, which Claude sends as the frame's content", () => {
+    expect(
+      unhandledProviderFrameJournalItem('claude', 'message:system:local_command_output', {
+        type: 'system',
+        subtype: 'local_command_output',
+        content: 'Session usage: 12% of your limit'
+      })?.body.text
+    ).toBe('Session usage: 12% of your limit')
+    // Scoped to that frame: another frame's `content` is not its sentence.
+    expect(
+      unhandledProviderFrameJournalItem('claude', 'message:future/event', { content: 'raw' })?.body
+        .text
+    ).toBe('claude \u00b7 message:future/event')
+  })
+
   it('leads with the provider sentence instead of naming the opcode', () => {
     const row = unhandledProviderFrameJournalItem('codex', 'notification:warning', {
       message: 'Your plan limit resets in 2 hours.'
@@ -233,5 +245,43 @@ describe('a failed provider dependency', () => {
         status: 'starting'
       })
     ).toBeNull()
+  })
+})
+
+describe('typed notice metadata', () => {
+  it('publishes readable compaction statuses for both provider forms', () => {
+    expect(
+      unhandledProviderFrameJournalItem('codex', 'notification:thread/compacted', {})
+    ).toMatchObject({
+      classification: 'timeline-substantive',
+      body: { kind: 'status', text: 'Context compacted', presentation: 'compaction' }
+    })
+    expect(unhandledProviderFrameJournalItem('codex', 'item:contextCompaction', {})).toMatchObject({
+      body: { kind: 'status', text: 'Context compacted', presentation: 'compaction' }
+    })
+  })
+  it.each([
+    ['warning', { message: 'Check this' }, 'warning', 'Check this'],
+    ['guardianWarning', { message: 'Review required' }, 'warning', 'Review required'],
+    [
+      'configWarning',
+      { summary: 'Invalid option', details: 'Remove the option' },
+      'warning',
+      'Invalid option\n\nRemove the option'
+    ],
+    [
+      'deprecationNotice',
+      { summary: 'Old option', details: 'Use its replacement' },
+      'notice',
+      'Old option\n\nUse its replacement'
+    ],
+    ['error', { error: { message: 'Connection failed' } }, 'error', 'Connection failed']
+  ])('assigns the tone and readable text for %s', (method, payload, tone, text) => {
+    expect(
+      unhandledProviderFrameJournalItem('codex', `notification:${method}`, payload)
+    ).toMatchObject({
+      classification: 'error-surface',
+      body: { kind: 'status', text, tone }
+    })
   })
 })

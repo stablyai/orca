@@ -91,7 +91,7 @@ export async function captureWorkerOutputArchive(args: {
   structuredWorker?: StructuredWorkerIdentity | null
 }): Promise<WorkerOutputArchiveCapture> {
   if (args.structuredWorker) {
-    const content = captureStructuredWorkerArchive(
+    const content = await captureStructuredWorkerArchive(
       args.structuredWorker,
       structuredWorkerAgent(args.structuredWorker)
     )
@@ -190,6 +190,9 @@ export function boundArchiveLines(lines: string[]): { lines: string[]; truncated
   let total = 0
   for (const line of lines) {
     total += line.length + 1
+    if (total > TERMINAL_ARCHIVE_MAX_CHARS) {
+      break
+    }
   }
   if (total <= TERMINAL_ARCHIVE_MAX_CHARS) {
     return { lines, truncated: false }

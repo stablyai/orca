@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { CodexUsagePersistedState } from './types'
-import { createStoreWithState, setupCodexUsageStoreEnv } from './store-test-harness'
+import { scanCodexUsageFilesViaWorker } from '../usage/usage-scan-worker-spawn'
+import {
+  createStoreWithState,
+  createWorktreeUsageSession,
+  setupCodexUsageStoreEnv
+} from './store-test-harness'
 
 const { getPathMock } = vi.hoisted(() => ({
   getPathMock: vi.fn(() => '/tmp/orca-test-userdata')
@@ -12,8 +17,8 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('./scanner', () => ({
-  scanCodexUsageFiles: vi.fn()
+vi.mock('../usage/usage-scan-worker-spawn', () => ({
+  scanCodexUsageFilesViaWorker: vi.fn()
 }))
 
 describe('CodexUsageStore', () => {
@@ -28,70 +33,7 @@ describe('CodexUsageStore', () => {
         lastScanCompletedAt: 2,
         lastScanError: null
       },
-      sessions: [
-        {
-          sessionId: 'session-1',
-          firstTimestamp: '2026-04-10T15:00:00.000Z',
-          lastTimestamp: '2026-04-10T15:05:00.000Z',
-          primaryModel: 'gpt-5',
-          hasMixedModels: false,
-          primaryProjectLabel: 'Repo',
-          hasMixedLocations: false,
-          primaryWorktreeId: worktreeId,
-          primaryRepoId: 'repo-1',
-          eventCount: 1,
-          totalInputTokens: 1000,
-          totalCachedInputTokens: 400,
-          totalOutputTokens: 250,
-          totalReasoningOutputTokens: 100,
-          totalTokens: 1250,
-          hasInferredPricing: false,
-          locationBreakdown: [
-            {
-              locationKey: `worktree:${worktreeId}`,
-              projectLabel: 'Repo',
-              repoId: 'repo-1',
-              worktreeId,
-              eventCount: 1,
-              inputTokens: 1000,
-              cachedInputTokens: 400,
-              outputTokens: 250,
-              reasoningOutputTokens: 100,
-              totalTokens: 1250,
-              hasInferredPricing: false
-            }
-          ],
-          modelBreakdown: [
-            {
-              modelKey: 'gpt-5',
-              modelLabel: 'gpt-5',
-              eventCount: 1,
-              inputTokens: 1000,
-              cachedInputTokens: 400,
-              outputTokens: 250,
-              reasoningOutputTokens: 100,
-              totalTokens: 1250,
-              hasInferredPricing: false
-            }
-          ],
-          locationModelBreakdown: [
-            {
-              locationKey: `worktree:${worktreeId}`,
-              modelKey: 'gpt-5',
-              modelLabel: 'gpt-5',
-              repoId: 'repo-1',
-              worktreeId,
-              eventCount: 1,
-              inputTokens: 1000,
-              cachedInputTokens: 400,
-              outputTokens: 250,
-              reasoningOutputTokens: 100,
-              totalTokens: 1250,
-              hasInferredPricing: false
-            }
-          ]
-        }
-      ]
+      sessions: [createWorktreeUsageSession(worktreeId)]
     })
     const refreshMock = vi.fn().mockResolvedValue({
       enabled: true,
@@ -125,5 +67,98 @@ describe('CodexUsageStore', () => {
     await store.getAutomationRunUsage(request)
 
     expect(refreshMock).toHaveBeenCalledWith(false)
+  })
+  it('forces one scan per run and stops re-forcing after a failed attempt', async () => {
+    const completedAt = new Date('2026-04-10T15:06:00.000Z').getTime()
+    const scanError = 'EMFILE: too many open files'
+    const failedScanState = (lastScanStartedAt: number) => ({
+      enabled: true,
+      lastScanStartedAt,
+      lastScanCompletedAt: completedAt - 60_000,
+      lastScanError: scanError
+    })
+    const scanStateResult = {
+      enabled: true,
+      isScanning: false,
+      lastScanStartedAt: completedAt - 60_000,
+      lastScanCompletedAt: completedAt - 60_000,
+      lastScanError: scanError,
+      hasAnyCodexData: false
+    }
+    const request = {
+      worktreeId: 'repo-1::/workspace/repo',
+      terminalSessionId: 'tab-1',
+      startedAt: completedAt - 120_000,
+      completedAt
+    }
+
+    const beforeAttempt = createStoreWithState({
+      scanState: failedScanState(completedAt - 60_000)
+    })
+    const beforeRefresh = vi.spyOn(beforeAttempt, 'refresh').mockResolvedValue(scanStateResult)
+    await beforeAttempt.getAutomationRunUsage(request)
+
+    expect(beforeRefresh).toHaveBeenCalledWith(true)
+
+    // That forced scan failed: it recorded an attempt but no completion. Later
+    // lookups must not keep forcing a full rescan of all Codex history.
+    const afterAttempt = createStoreWithState({ scanState: failedScanState(completedAt + 1000) })
+    const afterRefresh = vi.spyOn(afterAttempt, 'refresh').mockResolvedValue(scanStateResult)
+    const usage = await afterAttempt.getAutomationRunUsage(request)
+
+    expect(afterRefresh).toHaveBeenCalledWith(false)
+    expect(usage.unavailableReason).toBe('scan_failed')
+  })
+
+  it('joins a scan that is already in flight when the run finished before it started', async () => {
+    const worktreeId = 'repo-1::/workspace/repo'
+    const store = createStoreWithState({
+      scanState: {
+        enabled: true,
+        lastScanStartedAt: null,
+        lastScanCompletedAt: null,
+        lastScanError: null
+      }
+    })
+    // Prime the worktree fingerprint so an unforced refresh can return early.
+    await store.refresh(true)
+
+    const completedAt = Date.now() + 10_000
+    vi.setSystemTime(new Date(completedAt + 1_000))
+
+    let startScan = () => {}
+    let finishScan = () => {}
+    const scanStarted = new Promise<void>((resolve) => {
+      startScan = resolve
+    })
+    const scanFinished = new Promise<void>((resolve) => {
+      finishScan = resolve
+    })
+    vi.mocked(scanCodexUsageFilesViaWorker).mockImplementationOnce(async () => {
+      startScan()
+      await scanFinished
+      return {
+        processedFiles: [],
+        sessions: [createWorktreeUsageSession(worktreeId)],
+        dailyAggregates: []
+      }
+    })
+
+    const inFlight = store.refresh(true)
+    await scanStarted
+
+    const usage = store.getAutomationRunUsage({
+      worktreeId,
+      terminalSessionId: 'session-1',
+      startedAt: completedAt - 60_000,
+      completedAt
+    })
+    finishScan()
+    await inFlight
+
+    // The in-flight scan's start time is not a finished attempt, so the lookup
+    // forces and rides that scan instead of reading a pre-run cache.
+    expect((await usage).status).toBe('known')
+    expect((await usage).providerSessionId).toBe('session-1')
   })
 })

@@ -10,7 +10,6 @@ import { getWorkspaceStatus } from './workspace-status'
 import { translate } from '@/i18n/i18n'
 import { worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
 
-export const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
 export const WORKTREE_CONTEXT_MENU_SCOPE_ATTR = 'data-worktree-context-menu-scope'
 export const WORKTREE_NATIVE_CONTEXT_MENU_ATTR = 'data-worktree-native-context-menu'
 const CONTEXT_MENU_CLICK_SUPPRESSION_MS = 500
@@ -171,9 +170,10 @@ export function preserveDeleteSiblingPosition(scope: HTMLElement | null): () => 
   if (!(sidebar instanceof HTMLElement) || !(row instanceof HTMLElement)) {
     return () => {}
   }
-  const rows = Array.from(
-    sidebar.querySelectorAll<HTMLElement>('[data-worktree-virtual-row]')
-  ).sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top)
+  const rows = Array.from(sidebar.querySelectorAll<HTMLElement>('[data-worktree-virtual-row]'))
+    .map((element) => ({ element, top: element.getBoundingClientRect().top }))
+    .sort((a, b) => a.top - b.top)
+    .map(({ element }) => element)
   const rowIndex = rows.indexOf(row)
   const anchorRow = rows[rowIndex + 1] ?? rows[rowIndex - 1] ?? null
   const anchorKey = anchorRow?.getAttribute('data-worktree-virtual-row-key')

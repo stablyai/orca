@@ -20,6 +20,7 @@ import {
   _setWslCachesForTests,
   getCachedWslAvailability,
   getCachedWslDistros,
+  getWslHome,
   hasCachedWslAvailability,
   hasCachedWslDistros,
   isWslAvailable,
@@ -311,6 +312,28 @@ describe('WSL distro discovery cache', () => {
   })
 })
 
+describe('WSL home cache', () => {
+  afterEach(() => {
+    execFileMock.mockReset()
+    execFileSyncMock.mockReset()
+    _resetWslCachesForTests()
+  })
+
+  it('bounds cached homes while retaining the most recently used distros', () => {
+    execFileSyncMock.mockImplementation((_command, args) => `/home/${args[1]}\n`)
+
+    withPlatform('win32', () => {
+      for (let index = 0; index < 68; index += 1) {
+        expect(getWslHome(`Distro-${index}`)).toContain(`Distro-${index}`)
+      }
+      expect(getWslHome('Distro-4')).toContain('Distro-4')
+      expect(execFileSyncMock).toHaveBeenCalledTimes(68)
+      expect(getWslHome('Distro-0')).toContain('Distro-0')
+      expect(execFileSyncMock).toHaveBeenCalledTimes(69)
+    })
+  })
+})
+
 describe('WSL availability cache', () => {
   afterEach(() => {
     execFileMock.mockReset()
@@ -547,10 +570,10 @@ describe('WSL availability cache', () => {
   it.each([
     ['wsl.exe reports WSL unusable', { status: 1 }],
     ['wsl.exe is not installed', { code: 'ENOENT' }]
-  ])('holds a definitive failure far longer than a timeout when %s', (_label, errorShape) => {
+  ])('holds a definitive failure far longer than a timeout when %s', (_label, errorFields) => {
     vi.useFakeTimers()
     execFileSyncMock.mockImplementationOnce(() => {
-      throw Object.assign(new Error('definitive failure'), errorShape)
+      throw Object.assign(new Error('definitive failure'), errorFields)
     })
     execFileSyncMock.mockReturnValueOnce('')
 
@@ -621,10 +644,10 @@ describe('WSL availability cache', () => {
   it.each([
     ['a definitive failure', { status: 1 }],
     ['a timeout', { code: 'ETIMEDOUT', status: null, signal: 'SIGTERM' }]
-  ])('re-probes availability once a distro list succeeds after %s', (_label, errorShape) => {
+  ])('re-probes availability once a distro list succeeds after %s', (_label, errorFields) => {
     vi.useFakeTimers()
     execFileSyncMock.mockImplementationOnce(() => {
-      throw Object.assign(new Error('probe failed'), errorShape)
+      throw Object.assign(new Error('probe failed'), errorFields)
     })
 
     try {

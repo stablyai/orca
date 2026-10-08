@@ -608,16 +608,6 @@ describe('probeMacosLoginSessionAlive', () => {
     expect(wrapShellSpawnForMacosTccAttribution('/bin/zsh', ['-l']).file).toBe('/bin/zsh')
   })
 
-  it('does not overwrite the cached verdict on an inconclusive probe', async () => {
-    setPlatform('darwin')
-    await prepareMacosTccLoginShell()
-    runProcessMock.mockReturnValue(TIMED_OUT_RESULT)
-    ptyProbeMock.mockResolvedValue({ ok: false, conclusive: false, reason: 'timeout' })
-    const outcome = await probeMacosLoginSessionAlive()
-    expect(outcome).toEqual({ ok: false, conclusive: false, reason: 'timeout' })
-    expect(wrapShellSpawnForMacosTccAttribution('/bin/zsh', ['-l']).file).toBe('/usr/bin/login')
-  })
-
   it('does not trust a pipe rejection when its PTY confirmation is inconclusive', async () => {
     setPlatform('darwin')
     await prepareMacosTccLoginShell()

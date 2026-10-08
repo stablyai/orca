@@ -36,6 +36,7 @@ const EMPTY_TREE_ROWS: CombinedDiffTreeNode[] = []
 export function CombinedDiffFileTree({
   mode,
   worktreePath,
+  sourceWorkspaceId,
   entries,
   sectionIndexByKey,
   activeSectionKey,
@@ -46,6 +47,7 @@ export function CombinedDiffFileTree({
 }: {
   mode: CombinedDiffFileTreeMode
   worktreePath: string
+  sourceWorkspaceId?: string
   entries: readonly CombinedDiffFileTreeEntry[]
   sectionIndexByKey: ReadonlyMap<string, number>
   activeSectionKey: string | null
@@ -200,6 +202,7 @@ export function CombinedDiffFileTree({
   const sharedRowProps = {
     mode,
     worktreePath,
+    sourceWorkspaceId,
     activeSectionKey,
     sectionIndexByKey,
     collapsedDirectoryKeys,

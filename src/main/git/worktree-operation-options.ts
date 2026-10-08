@@ -4,6 +4,7 @@ import type {
 } from '../../shared/worktree/base-ref-drift-types'
 import { readGitCommandFailureText } from '../../shared/git-command-failure-text'
 import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
+import type { GitAdmissionTier } from '../../shared/rpc-contract/git-admission-tier-params'
 import type { GitWorktreeInfo } from '../../shared/worktree/types'
 
 export type AddWorktreeResult = {
@@ -20,6 +21,7 @@ export type GitWorktreeExecOptions = {
   signal?: AbortSignal
   timeout?: number
   includeCreatePreparations?: boolean
+  admissionTier?: GitAdmissionTier
 }
 
 export type WorktreeRemovalPreflightOptions = GitWorktreeExecOptions & {
@@ -40,6 +42,8 @@ export type RemoveWorktreeOptions = GitWorktreeExecOptions & {
   deleteBranch?: boolean
   forceBranchDelete?: boolean
   knownRemovedWorktree?: Pick<GitWorktreeInfo, 'branch' | 'head' | 'locked' | 'lockReason'>
+  /** Stops only `git worktree remove`; a killed branch cleanup could strand a ref lock. */
+  checkoutDeleteSignal?: AbortSignal
 }
 
 // Why: bound `git worktree add` so a OneDrive cloud-placeholder stall fails fast (STA-1292); ample for an ordinary large checkout, but not one behind a slow content filter (#12696).
@@ -78,15 +82,24 @@ export function resolveWorktreeAddTimeoutMs(env: NodeJS.ProcessEnv = process.env
   return resolved
 }
 
+export type GitExecOptionsForWorktree = {
+  cwd: string
+  wslDistro?: string
+  signal?: AbortSignal
+  timeout?: number
+  admissionTier?: GitAdmissionTier
+}
+
 export function gitExecOptions(
   cwd: string,
   options: GitWorktreeExecOptions = {}
-): { cwd: string; wslDistro?: string; signal?: AbortSignal; timeout?: number } {
+): GitExecOptionsForWorktree {
   return {
     cwd,
     ...(options.wslDistro ? { wslDistro: options.wslDistro } : {}),
     ...(options.signal ? { signal: options.signal } : {}),
-    ...(options.timeout ? { timeout: options.timeout } : {})
+    ...(options.timeout ? { timeout: options.timeout } : {}),
+    ...(options.admissionTier ? { admissionTier: options.admissionTier } : {})
   }
 }
 

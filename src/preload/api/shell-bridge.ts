@@ -23,9 +23,13 @@ export const shellApi = {
 
   openFileUri: (uri: string): Promise<void> => ipcRenderer.invoke('shell:openFileUri', uri),
 
+  pathsExist: (paths: string[]): Promise<boolean[]> =>
+    ipcRenderer.invoke('shell:pathsExist', paths),
   pathExists: (path: string): Promise<boolean> => ipcRenderer.invoke('shell:pathExists', path),
 
   pickAttachment: (): Promise<string | null> => ipcRenderer.invoke('shell:pickAttachment'),
+
+  pickAttachments: (): Promise<string[]> => ipcRenderer.invoke('shell:pickAttachments'),
 
   pickImage: (): Promise<string | null> => ipcRenderer.invoke('shell:pickImage'),
 

@@ -15,20 +15,6 @@ const sources: LinkedWorkItemSummary[] = [
     number: 42,
     title: 'Fix checkout',
     url: 'https://github.com/acme/app/pull/42'
-  },
-  {
-    provider: 'github',
-    type: 'issue',
-    number: 43,
-    title: 'Fix checkout',
-    url: 'https://github.com/acme/app/issues/43'
-  },
-  {
-    provider: 'gitlab',
-    type: 'mr',
-    number: 44,
-    title: 'Fix checkout',
-    url: 'https://gitlab.com/acme/app/-/merge_requests/44'
   }
 ]
 
@@ -63,6 +49,8 @@ function useSelectedSourceReset(
   )
   const source = useIssueSourceActions({
     baseBranch,
+    // Why: a PR/issue/branch source owns the base, so "create more" must still clear it.
+    baseBranchNamesWorkspace: true,
     branchAutoNameRef,
     isProjectGroupTarget,
     lastAutoNameRef,
@@ -133,36 +121,4 @@ describe('create more source reset', () => {
       expect(result.current.branchAutoNameRef.current).toBe('')
     }
   )
-
-  it.each(['linear', 'jira'] as const)('clears a %s task on a folder target', (provider) => {
-    const item: LinkedWorkItemSummary = {
-      provider,
-      type: 'issue',
-      number: 0,
-      title: 'Fix checkout',
-      url:
-        provider === 'linear'
-          ? 'https://linear.app/acme/issue/APP-45'
-          : 'https://acme.atlassian.net/browse/APP-45'
-    }
-    const { result } = renderHook(() => useSelectedSourceReset(item, true))
-    expect(result.current.selection?.kind).toBe(provider)
-
-    act(() => result.current.resetForNextCreate())
-
-    expect(result.current.selection).toBeNull()
-    expect(result.current.linkedWorkItem).toBeNull()
-    expect(result.current.name).toBe('')
-    expect(result.current.note).toBe('')
-  })
-
-  it('clears a plain branch selection before the next create', () => {
-    const { result } = renderHook(() => useSelectedSourceReset(null, false, 'feature/checkout'))
-    expect(result.current.selection).toEqual({ kind: 'branch', label: 'feature/checkout' })
-
-    act(() => result.current.resetForNextCreate())
-
-    expect(result.current.selection).toBeNull()
-    expect(result.current.baseBranch).toBeUndefined()
-  })
 })

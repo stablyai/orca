@@ -98,7 +98,7 @@ function validateGrant(
 }
 
 export async function openSshPtyConsumerSession(
-  mux: SshChannelMultiplexer,
+  mux: Pick<SshChannelMultiplexer, 'request'>,
   options: OpenSshPtyConsumerSessionOptions
 ): Promise<SshPtyConsumerAdmission> {
   let result: unknown

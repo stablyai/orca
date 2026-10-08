@@ -1,4 +1,7 @@
-import { remoteSessionContentLines } from './remote-session-content-lines'
+import {
+  remoteSessionContentLines,
+  type RemoteSessionContent
+} from './remote-session-content-lines'
 import { openTranscriptReadStream } from '../native-chat/wsl-transcript-fs-access'
 import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
@@ -8,6 +11,7 @@ import type {
   ResumableSessionParseState,
   SessionAccumulator
 } from './session-scanner-types'
+import type { TranscriptMessageSink } from './session-transcript-consumers'
 import {
   accumulatorFoldResumeState,
   addPreviewMessage,
@@ -32,18 +36,19 @@ type ParserSessionOptions = {
 
 export async function parseCopilotSessionFile(
   file: FileWithMtime,
-  platform: NodeJS.Platform = process.platform
+  platform: NodeJS.Platform = process.platform,
+  messages?: TranscriptMessageSink
 ): Promise<AiVaultSession | null> {
   const lines = createInterface({
     input: openTranscriptReadStream(file.path, { encoding: 'utf-8' }, 'scan'),
     crlfDelay: Infinity
   })
-  return parseCopilotSessionLines({ file, lines, platform })
+  return parseCopilotSessionLines({ file, lines, platform, messages })
 }
 
 export async function parseCopilotSessionContent(
   file: FileWithMtime,
-  content: string,
+  content: RemoteSessionContent,
   platform: NodeJS.Platform = process.platform,
   options: ParserSessionOptions = {},
   signal?: AbortSignal
@@ -107,9 +112,17 @@ function consumeCopilotRecordLine(accumulator: SessionAccumulator, line: string)
   }
 }
 
-export function createCopilotSessionResumeState(file: FileWithMtime): ResumableSessionParseState {
+export function createCopilotSessionResumeState(
+  file: FileWithMtime,
+  messages?: TranscriptMessageSink
+): ResumableSessionParseState {
   return accumulatorFoldResumeState(
-    createAccumulator({ agent: 'copilot', file, sessionId: sessionIdFromFileName(file.path) }),
+    createAccumulator({
+      agent: 'copilot',
+      file,
+      sessionId: sessionIdFromFileName(file.path),
+      messages
+    }),
     consumeCopilotRecordLine
   )
 }
@@ -119,8 +132,9 @@ async function parseCopilotSessionLines(args: {
   lines: AsyncIterable<string> | Iterable<string>
   platform: NodeJS.Platform
   options?: ParserSessionOptions
+  messages?: TranscriptMessageSink
 }): Promise<AiVaultSession | null> {
-  const state = createCopilotSessionResumeState(args.file)
+  const state = createCopilotSessionResumeState(args.file, args.messages)
   for await (const line of args.lines) {
     state.consumeLine(line)
   }

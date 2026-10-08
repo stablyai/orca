@@ -14,6 +14,7 @@ import {
   mergeFetchedFolderWorkspaceCatalog
 } from './folder-workspace-catalog'
 import { listRuntimeEnvironmentsForAllHostLoad } from '../runtime-catalog-hosts'
+import { reuseEqualRecordMap } from '../slices/repo-identity-reconcile'
 import { getFolderWorkspaceUpdateCoordinator } from './folder-workspace-mutations'
 
 export function createFolderWorkspaceCatalogActions(
@@ -48,11 +49,12 @@ export function createFolderWorkspaceCatalogActions(
             current.folderWorkspaces,
             current.projectGroups
           )
+          if (arrayElementsUnchanged(folderWorkspaces, current.folderWorkspaces)) {
+            return current
+          }
           return {
             folderWorkspaces,
-            ...(arrayElementsUnchanged(folderWorkspaces, current.folderWorkspaces)
-              ? {}
-              : { folderWorkspacePathStatuses: {} })
+            folderWorkspacePathStatuses: {}
           }
         })
       } catch (err) {
@@ -88,11 +90,12 @@ export function createFolderWorkspaceCatalogActions(
             current.folderWorkspaces,
             current.projectGroups
           )
+          if (arrayElementsUnchanged(folderWorkspaces, current.folderWorkspaces)) {
+            return current
+          }
           return {
             folderWorkspaces,
-            ...(arrayElementsUnchanged(folderWorkspaces, current.folderWorkspaces)
-              ? {}
-              : { folderWorkspacePathStatuses: {} })
+            folderWorkspacePathStatuses: {}
           }
         })
         return applied
@@ -105,13 +108,20 @@ export function createFolderWorkspaceCatalogActions(
             .filter(([, fence]) => isHostCatalogFenceCurrent(get, fence))
             .map(([hostId]) => hostId)
         )
-        set((s) => ({
-          restoredRuntimeHostIdByWorkspaceSessionKey: clearRestoredFolderWorkspaceSessionOwners(
+        set((s) => {
+          const restoredRuntimeHostIdByWorkspaceSessionKey = reuseEqualRecordMap(
             s.restoredRuntimeHostIdByWorkspaceSessionKey,
-            s,
-            { hydratedFolderWorkspaceHostIds }
+            clearRestoredFolderWorkspaceSessionOwners(
+              s.restoredRuntimeHostIdByWorkspaceSessionKey,
+              s,
+              { hydratedFolderWorkspaceHostIds }
+            )
           )
-        }))
+          return restoredRuntimeHostIdByWorkspaceSessionKey ===
+            s.restoredRuntimeHostIdByWorkspaceSessionKey
+            ? s
+            : { restoredRuntimeHostIdByWorkspaceSessionKey }
+        })
       }
       try {
         const target = { kind: 'local' as const }

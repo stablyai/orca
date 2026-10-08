@@ -1,11 +1,5 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { writeFileSync, rmSync, mkdtempSync, mkdirSync } from 'node:fs'
-import { join } from 'node:path'
-import { tmpdir } from 'node:os'
-import type { WorkspaceSessionState } from '../shared/workspace-session-state-types'
-import { getDefaultWorkspaceSession } from '../shared/constants'
-import { folderWorkspaceKey, worktreeWorkspaceKey } from '../shared/workspace-scope'
 import {
+  closeTestStores,
   testState,
   createStore,
   dataFile,
@@ -15,6 +9,14 @@ import {
   makeWorktreeLineage,
   makeWorkspaceLineage
 } from './persistence-test-harness'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { writeFileSync, rmSync, mkdtempSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+import type { WorkspaceSessionState } from '../shared/workspace-session-state-types'
+import { getDefaultWorkspaceSession } from '../shared/constants'
+import { folderWorkspaceKey, worktreeWorkspaceKey } from '../shared/workspace-scope'
+import { createProfileStateStore } from './persistence/profile-state/profile-state-store-factory'
 
 // Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
@@ -64,7 +66,8 @@ describe('Store', () => {
     getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 2 })
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
   // ── Telemetry cohort migration ─────────────────────────────────────
@@ -105,19 +108,16 @@ describe('Store', () => {
     expect(store.getSettings().theme).toBe('dark')
   })
 
-  it('still classifies as existing-user cohort when the data file is corrupt', async () => {
-    // Load-bearing: the corrupt-file catch path keeps `fileExistedOnLoad` true so a corrupted install isn't silently opted in as fresh.
-    mkdirSync(testState.dir, { recursive: true })
-    writeFileSync(dataFile(), '{{{corrupt json', 'utf-8')
-    const store = await createStore()
-    const t = store.getSettings().telemetry
-    expect(t).toBeDefined()
-    expect(t!.existedBeforeTelemetryRelease).toBe(true)
-    expect(t!.optedIn).toBeNull()
-    expect(t!.installId).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
-    )
-    expect(store.getSettings().experimentalNewWorktreeCardStyle).toBe(false)
+  it('retains the existing-user cohort when a corrupt legacy primary recovers from backup', async () => {
+    await withRecoveredLegacyProfile((store) => {
+      const telemetry = store.getSettings().telemetry
+      expect(telemetry?.existedBeforeTelemetryRelease).toBe(true)
+      expect(telemetry?.optedIn).toBeNull()
+      expect(telemetry?.installId).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+      )
+      expect(store.getSettings().experimentalNewWorktreeCardStyle).toBe(false)
+    })
   })
 
   it('preserves an already-migrated telemetry block on subsequent launches', async () => {
@@ -152,7 +152,8 @@ describe('Store.migrateTabSwitchKeybindings', () => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
@@ -176,11 +177,10 @@ describe('Store.migrateTabSwitchKeybindings', () => {
     expect(store.getSettings().theme).toBe('dark')
   })
 
-  it('treats a corrupt data file as a pre-existing install', async () => {
-    mkdirSync(testState.dir, { recursive: true })
-    writeFileSync(dataFile(), '{{{corrupt json', 'utf-8')
-    const store = await createStore()
-    expect(store.getSettings().tabSwitchKeybindingSeed).toBe('pending')
+  it('retains the existing keybinding cohort when recovering a legacy backup', async () => {
+    await withRecoveredLegacyProfile((store) => {
+      expect(store.getSettings().tabSwitchKeybindingSeed).toBe('pending')
+    })
   })
 
   it('preserves an already-frozen cohort on subsequent launches', async () => {
@@ -209,7 +209,8 @@ describe('Store.migrateWorktreeIdentity', () => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
@@ -442,3 +443,21 @@ describe('Store.migrateWorktreeIdentity', () => {
     expect(store.getWorktreeMeta(OLD)?.priorWorktreeIds).toBeUndefined()
   })
 })
+
+async function withRecoveredLegacyProfile(
+  verify: (store: ReturnType<typeof createProfileStateStore>['store']) => void
+): Promise<void> {
+  writeDataFile({ schemaVersion: 1, repos: [], worktreeMeta: {}, settings: {}, ui: {} })
+  writeFileSync(`${dataFile()}.bak.0`, readFileSync(dataFile()))
+  writeFileSync(dataFile(), '{{{corrupt json')
+  const { store } = createProfileStateStore({
+    dataFile: dataFile(),
+    databaseFile: join(testState.dir, 'profile-state.db'),
+    profileId: 'cohort-recovery'
+  })
+  try {
+    verify(store)
+  } finally {
+    await store.freezeWritesAsync()
+  }
+}

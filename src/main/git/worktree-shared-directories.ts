@@ -10,6 +10,7 @@ import { mapWithConcurrency } from '../../shared/map-with-concurrency'
 // duplicates disk; `orca.yaml` names the ones every worktree should share instead.
 
 const CONFIGURED_SHARED_DIRECTORIES_CACHE_TTL_MS = 30_000
+export const MAX_CONFIGURED_SHARED_DIRECTORIES_CACHE_ENTRIES = 512
 // Why: resolving a worktree may list many generated directories; overlap
 // independent local probes without flooding the filesystem threadpool.
 const SHARED_DIRECTORY_STAT_CONCURRENCY = 8
@@ -33,6 +34,8 @@ export function getConfiguredWorktreeSharedDirectories(repoPath: string): readon
   const cached = configuredSharedDirectoriesByRepoPath.get(repoPath)
   const now = Date.now()
   if (cached && cached.expiresAt > now) {
+    configuredSharedDirectoriesByRepoPath.delete(repoPath)
+    configuredSharedDirectoriesByRepoPath.set(repoPath, cached)
     return cached.directories
   }
   const configured = loadHooks(repoPath)?.worktree?.sharedDirectories ?? []
@@ -40,12 +43,25 @@ export function getConfiguredWorktreeSharedDirectories(repoPath: string): readon
     directories: configured,
     expiresAt: now + CONFIGURED_SHARED_DIRECTORIES_CACHE_TTL_MS
   })
+  while (
+    configuredSharedDirectoriesByRepoPath.size > MAX_CONFIGURED_SHARED_DIRECTORIES_CACHE_ENTRIES
+  ) {
+    const oldest = configuredSharedDirectoriesByRepoPath.keys().next()
+    if (oldest.done || oldest.value === repoPath) {
+      break
+    }
+    configuredSharedDirectoriesByRepoPath.delete(oldest.value)
+  }
   return configured
 }
 
 /** Reset the process cache between tests. */
 export function clearConfiguredWorktreeSharedDirectoriesCacheForTests(): void {
   configuredSharedDirectoriesByRepoPath.clear()
+}
+
+export function getConfiguredWorktreeSharedDirectoriesCacheSizeForTests(): number {
+  return configuredSharedDirectoriesByRepoPath.size
 }
 
 /** Every path Orca may have symlinked into a worktree: the per-user Worktree

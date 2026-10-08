@@ -16,6 +16,7 @@ export function getPinnedWorktreeDisplayPolicy(
 
 export type GroupHeaderRow = {
   type: 'header'
+  collapseKey?: string
   key: string
   label: string
   count: number

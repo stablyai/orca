@@ -6,7 +6,6 @@ type Listener<T> = (event: T) => void
 export type PaneChannel<T> = {
   subscribe: (callback: Listener<T>) => () => void
   emit: (event: T) => void
-  listenerCount: () => number
 }
 
 export function paneChannel<T>(): PaneChannel<T> {
@@ -23,8 +22,7 @@ export function paneChannel<T>(): PaneChannel<T> {
       for (const listener of listeners.slice()) {
         listener(event)
       }
-    },
-    listenerCount: () => listeners.length
+    }
   }
 }
 

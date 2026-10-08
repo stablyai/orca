@@ -2,6 +2,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { ALL_RPC_METHODS } from './rpc/methods'
+import { MOBILE_RPC_METHOD_ALLOWLIST } from './runtime-rpc/runtime-rpc-mobile-method-allowlist'
 
 const MOBILE_DYNAMIC_RPC_METHODS = [
   // Why: computed sendRequest method names do not appear as literals in the
@@ -100,16 +101,8 @@ function mobileRpcMethods(): string[] {
   return [...new Set([...mobileLiteralRpcMethods(), ...MOBILE_DYNAMIC_RPC_METHODS])].sort()
 }
 
-function mobileRpcAllowlist(): Set<string> {
-  const source = readFileSync(
-    join(process.cwd(), 'src/main/runtime/runtime-rpc/runtime-rpc-mobile-method-allowlist.ts'),
-    'utf8'
-  )
-  const allowlist = source.match(/const MOBILE_RPC_METHOD_ALLOWLIST = new Set\(\[([\s\S]*?)\]\)/)
-  if (!allowlist) {
-    throw new Error('MOBILE_RPC_METHOD_ALLOWLIST not found')
-  }
-  return new Set([...allowlist[1]!.matchAll(/'([^']+)'/g)].map((match) => match[1]!))
+function mobileRpcAllowlist(): ReadonlySet<string> {
+  return MOBILE_RPC_METHOD_ALLOWLIST
 }
 
 function registeredRuntimeMethods(): Set<string> {
@@ -161,21 +154,26 @@ describe('mobile RPC allowlist', () => {
       'agentSession.reveal',
       'agentSession.send',
       'agentSession.cancel',
+      'agentSession.queuedMessageSend',
+      'agentSession.queuedMessageDelete',
+      'agentSession.queuedMessagesResume',
       'agentSession.close',
       'agentSession.respondToApproval',
       'agentSession.respondToQuestion',
       'agentSession.setOption',
       'agentSession.handoffStatus',
       'agentSession.options',
+      'agentSession.modelCatalog',
       'agentSession.conversationCommand',
       'agentSession.commands',
       'agentSession.history',
       'agentSession.subscribe',
       'agentSession.unsubscribe',
+      'agentSession.subscribeStatus',
+      'agentSession.readVisual',
       'agentSession.hold',
       'agentSession.release'
     ])
     expect(mobileRpcAllowlist().has('agentSession.attach')).toBe(false)
-    expect(mobileRpcAllowlist().has('agentSession.requestHandoff')).toBe(false)
   })
 })

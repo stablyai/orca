@@ -5,11 +5,16 @@ import { getConnectionId } from '@/lib/connection-context'
 import { useAppStore } from '@/store'
 import { importExternalPathsToRuntime } from '@/runtime/runtime-file-client'
 import { getEditorFileOperationContext } from '@/lib/editor-file-operation-owner'
+import { editorTabDocumentFolderAccess } from '@/lib/local-file-access'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import { captureDirectSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
 import { translate } from '@/i18n/i18n'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { extractIpcErrorMessage } from './rich-markdown-ipc-error-message'
+import { buildRichMarkdownImageInsertContent } from './rich-markdown-image-insert-content'
+import { showRichMarkdownImageInsertionCanceled } from './rich-markdown-image-insertion-feedback'
+import type { RichMarkdownImageInsertionRange } from './rich-markdown-image-insertion-target'
+import { richMarkdownClipboardInsertionOrderKey } from './rich-markdown-clipboard-insertion-order'
 
 export type RichMarkdownImageInsertArgs = {
   editor: Editor
@@ -17,8 +22,7 @@ export type RichMarkdownImageInsertArgs = {
   sourcePath: string
   worktreeId: string | null
   runtimeEnvironmentId?: string | null
-  insertPos: number
-  canInsert?: (editor: Editor) => boolean
+  getInsertionRange: () => RichMarkdownImageInsertionRange | null
 }
 
 export async function insertRichMarkdownImageFromPath({
@@ -27,8 +31,7 @@ export async function insertRichMarkdownImageFromPath({
   sourcePath,
   worktreeId,
   runtimeEnvironmentId,
-  insertPos,
-  canInsert
+  getInsertionRange
 }: RichMarkdownImageInsertArgs): Promise<void> {
   try {
     const state = useAppStore.getState()
@@ -67,10 +70,15 @@ export async function insertRichMarkdownImageFromPath({
 
     // Why: image bytes should live beside the note instead of inside markdown;
     // this keeps rich-mode size checks based on document text, not binary data.
+    // Why: a document opened outside every project still gets its image beside it.
+    const openDocument = state.openFiles.find(
+      (file) => file.filePath === filePath && file.worktreeId === worktreeId
+    )
     const { results } = await importExternalPathsToRuntime(
       fileContext,
       [sourcePath],
-      dirname(filePath)
+      dirname(filePath),
+      { access: openDocument ? editorTabDocumentFolderAccess(state, openDocument) : undefined }
     )
     const imported = results.find((result) => result.status === 'imported')
     if (!imported) {
@@ -80,16 +88,35 @@ export async function insertRichMarkdownImageFromPath({
       return
     }
 
-    if (canInsert && !canInsert(editor)) {
+    const range = getInsertionRange()
+    if (!range) {
+      showRichMarkdownImageInsertionCanceled(true)
       return
     }
 
     const imageSrc = encodeMarkdownImageBasename(imported.destPath)
-    const inserted = editor
-      .chain()
-      .focus()
-      .insertContentAt(insertPos, { type: 'image', attrs: { src: imageSrc } })
-      .run()
+    const selection = editor.state.selection
+    const cellSelection = range.cellSelection
+    const selectionStillAtTarget = cellSelection
+      ? selection.eq(cellSelection)
+      : selection.from === range.from && selection.to === range.to
+    const chain = cellSelection
+      ? editor.chain().command(({ tr }) => {
+          const liveSelection = tr.selection
+          cellSelection.replaceWith(tr, editor.schema.nodes.image.create({ src: imageSrc }))
+          if (!selectionStillAtTarget) {
+            tr.setSelection(liveSelection.map(tr.doc, tr.mapping))
+          }
+          return true
+        })
+      : editor
+          .chain()
+          .insertContentAt(
+            range.from === range.to ? range.from : range,
+            buildRichMarkdownImageInsertContent(editor, range.from, { src: imageSrc }),
+            { updateSelection: selectionStillAtTarget }
+          )
+    const inserted = chain.setMeta(richMarkdownClipboardInsertionOrderKey, range.requestOrder).run()
     if (!inserted) {
       toast.error(
         translate('auto.components.editor.useLocalImagePick.175cb8b8ce', 'Failed to insert image.')

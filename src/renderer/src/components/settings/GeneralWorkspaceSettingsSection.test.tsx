@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { GeneralWorkspaceSettingsSection } from './GeneralWorkspaceSettingsSection'
 import type { ReactNode } from 'react'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
 vi.mock('./WorkspaceDirectorySetting', () => ({ WorkspaceDirectorySetting: () => null }))
 vi.mock('./OpenInMenuSetting', () => ({ OpenInMenuSetting: () => null }))
@@ -30,7 +31,7 @@ afterEach(() => {
 })
 
 function renderSection(
-  updateSettings: (updates: object) => void | Promise<void>,
+  updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>,
   options: {
     defaultsSupported?: boolean
     sourceDefaultsSupported?: boolean

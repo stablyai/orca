@@ -1,54 +1,52 @@
+import { conversationCommandInFlight } from './structured-conversation-command-admission'
 import { sendStructuredAgentSessionTurn } from './structured-agent-session-host-mutations'
 import {
   runStructuredConversationCommand,
   type ConversationCommandParams
 } from './structured-conversation-command'
+import { runStructuredCompaction } from './structured-conversation-compaction'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
 import type { StructuredAgentSessionCaller } from './structured-agent-session-host-types'
 import type { StructuredAgentSessionHost } from './structured-agent-session-host'
 
 export class StructuredConversationCommandController {
+  /** Held only by a clear, which replaces the conversation a send would land in. A compaction is
+   *  a queued message, and sends accepted behind it wait for it in the queue. */
   readonly pending = new Map<string, { key: string; count: number }>()
   constructor(
     private readonly context: () => StructuredAgentSessionMutationContext,
-    private readonly host: Pick<StructuredAgentSessionHost, 'attach' | 'flushStreamedEvents'>
+    private readonly host: Pick<StructuredAgentSessionHost, 'waitForSendSettlement'>
   ) {}
+  /** Whether a clear is in flight is read as the send arrives; it refuses only a first run, so an
+   *  id with a recorded answer by the send's turn gets that answer, behind the clear. */
   send = (
     caller: StructuredAgentSessionCaller,
     params: Parameters<typeof sendStructuredAgentSessionTurn>[2]
   ): ReturnType<typeof sendStructuredAgentSessionTurn> =>
-    this.pending.has(params.envelope.sessionId)
-      ? Promise.resolve({
-          ok: false,
-          refusal: {
-            code: 'agent_session_operation_invalid',
-            message: 'Wait for the conversation operation to finish.'
-          }
-        })
-      : sendStructuredAgentSessionTurn(this.context(), caller, params)
+    sendStructuredAgentSessionTurn(this.context(), caller, params, {
+      clearInFlight: this.pending.has(params.envelope.sessionId)
+    })
 
   run = (caller: StructuredAgentSessionCaller, params: ConversationCommandParams) => {
+    if (params.command === 'compact') {
+      return runStructuredCompaction(this.context(), this.host, caller, params)
+    }
     const key = JSON.stringify([caller.callerKey, params.envelope.clientOperationId])
     const pending = this.pending.get(params.envelope.sessionId)
     if (pending && pending.key !== key) {
-      return Promise.resolve({
-        ok: false as const,
-        refusal: {
-          code: 'agent_session_operation_invalid' as const,
-          message: 'Wait for the conversation operation to finish.'
-        }
-      })
+      return Promise.resolve({ ok: false as const, refusal: conversationCommandInFlight() })
     }
     const entry = pending ?? { key, count: 0 }
     entry.count++
     this.pending.set(params.envelope.sessionId, entry)
-    return runStructuredConversationCommand(this.context(), this.host, caller, params).finally(
-      () => {
-        if (--entry.count === 0 && this.pending.get(params.envelope.sessionId) === entry) {
-          this.pending.delete(params.envelope.sessionId)
-        }
+    return runStructuredConversationCommand(this.context(), caller, params).finally(() => {
+      if (--entry.count === 0 && this.pending.get(params.envelope.sessionId) === entry) {
+        this.pending.delete(params.envelope.sessionId)
       }
-    )
+      // A clear can settle with no journal commit (a refusal), and drafts held behind it
+      // would otherwise wait for an unrelated commit.
+      this.context().wakeQueuedDrain?.(params.envelope.sessionId)
+    })
   }
 
   replacements = () => {

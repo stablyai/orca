@@ -1,0 +1,100 @@
+name: Clean closed PR work
+
+on:
+  pull_request_target:
+    types: [closed]
+
+permissions:
+  actions: write
+  pull-requests: read
+
+jobs:
+  clean:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Cancel checks for an unmerged closed PR
+        if: github.event.pull_request.merged == false
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const closed = context.payload.pull_request
+            const targets = [
+              ['pr-checks', 'pr.yml'],
+              ['node-server', 'node-server-tests.yml'],
+              ['ssh-windows-hosts', 'ssh-windows-hosts.yml'],
+              ['ssh-hostile-hosts', 'ssh-hostile-hosts.yml'],
+              ['mobile', 'mobile.yml'],
+              ['computer-e2e', 'computer-e2e.yml']
+            ]
+            const stillClosed = async () => {
+              const { data: current } = await github.rest.pulls.get({
+                ...context.repo, pull_number: closed.number
+              })
+              return current.state === 'closed' && current.merged_at === null &&
+                current.closed_at === closed.closed_at
+            }
+            if (!Number.isSafeInteger(closed.number) || closed.number <= 0 ||
+                !Number.isFinite(Date.parse(closed.closed_at))) {
+              throw new Error('Missing closed PR identity')
+            }
+            if (!await stillClosed()) return
+            for (const [prefix, workflow] of targets) {
+              const group = `${prefix}-${closed.number}`
+              let data
+              try {
+                const response = await github.request(
+                  'GET /repos/{owner}/{repo}/actions/concurrency_groups/{concurrency_group_name}', {
+                    ...context.repo, concurrency_group_name: group,
+                    headers: { 'X-GitHub-Api-Version': '2026-03-10' }
+                  }
+                )
+                data = response.data
+              } catch (error) {
+                if (error.status === 404) continue
+                throw error
+              }
+              if (data.group_name !== group || !Array.isArray(data.group_members)) {
+                throw new Error(`Unexpected concurrency group: ${group}`)
+              }
+              for (const member of data.group_members) {
+                // Only whole PR runs; release/manual jobs never share this identity.
+                if (member.job_id !== undefined || !Number.isSafeInteger(member.run_id)) continue
+                const { data: run } = await github.rest.actions.getWorkflowRun({
+                  ...context.repo, run_id: member.run_id
+                })
+                if (run.event !== 'pull_request' || run.path !== `.github/workflows/${workflow}` ||
+                    run.status === 'completed' ||
+                    !Number.isFinite(Date.parse(run.created_at)) ||
+                    Date.parse(run.created_at) > Date.parse(closed.closed_at)) continue
+                if (!await stillClosed()) return
+                try {
+                  await github.rest.actions.cancelWorkflowRun({
+                    ...context.repo, run_id: member.run_id
+                  })
+                  core.info(`Requested cancellation of ${group}: ${member.run_id}`)
+                } catch (error) {
+                  if (error.status !== 409) throw error
+                }
+              }
+            }
+      # No checkout: this runs trusted default-branch code, including for fork PRs.
+      - uses: actions/github-script@v8
+        if: '!cancelled()'
+        with:
+          script: |
+            const ref = `refs/pull/${context.payload.pull_request.number}/merge`
+            const caches = await github.paginate(github.rest.actions.getActionsCacheList, {
+              ...context.repo, ref, per_page: 100
+            })
+            for (const cache of caches) {
+              if (cache.ref !== ref) throw new Error(`Unexpected cache ref: ${cache.ref}`)
+              try {
+                await github.rest.actions.deleteActionsCacheById({
+                  ...context.repo, cache_id: cache.id
+                })
+              } catch (error) {
+                if (error.status !== 404) throw error
+              }
+            }
+            core.info(`Removed ${caches.length} caches scoped to ${ref}`)

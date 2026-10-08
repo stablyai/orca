@@ -74,6 +74,18 @@ export function claudeMessageIdentity(
   return { provider: 'claude', sessionId: envelope.sessionId, uuid: envelope.uuid }
 }
 
+/** User bubbles belong to the submitted message; SDK user frames carry echoes
+ *  and tool results, so a user envelope keeps only its tool results. */
+export function claudeOutputEnvelope(envelope: ClaudeMessageEnvelope): ClaudeMessageEnvelope {
+  if (envelope.role !== 'user') {
+    return envelope
+  }
+  return {
+    ...envelope,
+    content: envelope.content.filter((part) => claudeRecord(part)?.type === 'tool_result')
+  }
+}
+
 function messageBlocks(envelope: ClaudeMessageEnvelope): NativeChatBlock[] {
   const blocks: NativeChatBlock[] = []
   for (const value of envelope.content) {
@@ -134,11 +146,16 @@ function resultText(value: unknown): string {
     .join('\n')
 }
 
+export function claudeToolResultId(part: Record<string, unknown> | null): string | null {
+  const toolUseId = claudeText(part?.tool_use_id)
+  return part?.type === 'tool_result' ? toolUseId : null
+}
+
 export function claudeToolResults(envelope: ClaudeMessageEnvelope): ClaudeToolResult[] {
   return envelope.content.flatMap((value) => {
     const part = claudeRecord(value)
-    const toolUseId = claudeText(part?.tool_use_id)
-    return part?.type === 'tool_result' && toolUseId
+    const toolUseId = claudeToolResultId(part)
+    return part && toolUseId
       ? [
           {
             toolUseId,
@@ -167,6 +184,7 @@ export function claudeToolBody(input: {
     kind: 'tool-call',
     name: input.tool.name,
     input: input.tool.input,
+    callId: input.tool.id,
     state: input.result ? (input.result.failed ? 'failed' : 'completed') : 'running',
     ...(input.result
       ? { output: boundInlineText(input.result.output, DEFAULT_JOURNAL_PAYLOAD_LIMITS).bounded }

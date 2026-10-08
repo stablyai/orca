@@ -42,6 +42,11 @@ export class PtyShellOwnershipMirror {
     }
   }
 
+  /** Reset Terminal: the ground for this mirror's view of mode ownership, already scanned. */
+  groundInputModes(): string {
+    return this.scanner.groundProcessBoundary()
+  }
+
   get owner(): TerminalOwner | undefined {
     return this.scanner.owner
   }

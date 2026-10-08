@@ -327,7 +327,7 @@ describe('generateCommitMessageFromContext', () => {
       '401: {"message":"slot 1:/Users/name/alt failed"}',
       'Pi CLI command failed with code 1: 401: {"message":"slot 1:[path] failed"}'
     ]
-  ])('redacts a %s in provider bodies', async (_shape, stderr, expected) => {
+  ])('redacts a %s in provider bodies', async (_variant, stderr, expected) => {
     const result = await generateCommitMessageFromContext(
       {
         branch: 'main',

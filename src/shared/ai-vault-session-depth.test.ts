@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { AiVaultListResult, AiVaultSession } from './ai-vault-types'
+import { isPathInsideOrEqual } from './cross-platform-path'
 import {
   aiVaultScanLimit,
   aiVaultSessionDepthCovers,
@@ -81,5 +82,45 @@ describe('Agent Session History depth', () => {
       'scoped-2'
     ])
     expect(truncateAiVaultListResult(loaded, 'unlimited')).toBe(loaded)
+  })
+})
+
+describe('Agent Session History scope truncation', () => {
+  it('normalizes scope roots and candidate cwd once per truncation pass', () => {
+    const loaded = result(
+      Array.from({ length: 1000 }, (_, i) => session(`id-${i}`, `/other/${i}`, i))
+    )
+    const scopes = Array.from({ length: 100 }, (_, i) => `/repo/${i}`)
+    const normalize = vi.spyOn(String.prototype, 'normalize')
+    let selected: AiVaultListResult
+    try {
+      selected = truncateAiVaultListResult(loaded, 10, scopes)
+      expect(normalize.mock.calls.length).toBeLessThanOrEqual(1100)
+    } finally {
+      normalize.mockRestore()
+    }
+    expect(selected.sessions).toEqual(loaded.sessions.slice(0, 10))
+  })
+
+  it('selects scoped sessions identically to the pre-hoist path predicate', () => {
+    const cases = [
+      ['C:\\Users\\Ada\\repo', 'c:/users/ada/repo/app'],
+      ['C:/Users/Ada/repo/', 'C:\\Users\\Ada\\repo'],
+      ['C:\\Users\\Ada\\repo', 'C:\\Users\\Ada\\repo-other'],
+      ['//wsl.localhost/Ubuntu/home/Ada/Repo', '//wsl$/Ubuntu/home/Ada/Repo/App'],
+      ['//wsl.localhost/Ubuntu/home/ada/repo', '//wsl.localhost/Debian/home/ada/repo'],
+      ['/Users/ada/repo', '/Users/ada/repo//app/'],
+      ['/Users/ada/repo', '/Users/ada/repository'],
+      ['/', '/anywhere']
+    ]
+    for (const [scope, cwd] of cases) {
+      const loaded = result([session('scoped', cwd!, 0)])
+      const selected = truncateAiVaultListResult(loaded, 0, [scope!])
+      expect({ scope, cwd, kept: selected.sessions.length === 1 }).toEqual({
+        scope,
+        cwd,
+        kept: isPathInsideOrEqual(scope!, cwd!)
+      })
+    }
   })
 })

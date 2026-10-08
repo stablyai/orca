@@ -48,15 +48,11 @@ async function waitForRelayWatcherProcessGroup(
   target: DockerSshRelayTarget
 ): Promise<DockerSshRelayProcessSnapshot> {
   let snapshot: DockerSshRelayProcessSnapshot | null = null
-  await expect
-    .poll(
-      () => {
-        snapshot = readDockerSshRelayProcessSnapshot(target)
-        return snapshot !== null
-      },
-      { timeout: 30_000, message: 'remote relay/watcher process group did not appear' }
-    )
-    .toBe(true)
+  // A process can exit between /proc reads; retry the rejected snapshot, never accept it.
+  await expect(() => {
+    snapshot = readDockerSshRelayProcessSnapshot(target)
+    expect(snapshot, 'remote relay/watcher process group did not appear').not.toBeNull()
+  }).toPass({ timeout: 30_000 })
   if (!snapshot) {
     throw new Error('remote relay/watcher process group disappeared after polling')
   }
@@ -130,24 +126,17 @@ test.describe('Docker SSH relay watcher isolation', () => {
       signalDockerSshRelayWatchers(target, beforeCrash)
 
       let afterCrash: DockerSshRelayProcessSnapshot | null = null
-      await expect
-        .poll(
-          () => {
-            afterCrash = readDockerSshRelayProcessSnapshot(target!)
-            return Boolean(
-              afterCrash &&
-              afterCrash.relayPid === beforeCrash.relayPid &&
-              afterCrash.watcherPids.every(
-                (watcherPid) => !beforeCrash.watcherPids.includes(watcherPid)
-              )
-            )
-          },
-          {
-            timeout: 30_000,
-            message: 'watcher children were not replaced under the same relay PID'
-          }
-        )
-        .toBe(true)
+      await expect(() => {
+        afterCrash = readDockerSshRelayProcessSnapshot(target!)
+        expect(
+          afterCrash &&
+            afterCrash.relayPid === beforeCrash.relayPid &&
+            afterCrash.watcherPids.every(
+              (watcherPid) => !beforeCrash.watcherPids.includes(watcherPid)
+            ),
+          'watcher children were not replaced under the same relay PID'
+        ).toBe(true)
+      }).toPass({ timeout: 30_000 })
 
       const terminalMarker = `SSH_WATCHER_CRASH_SURVIVED_${Date.now()}`
       // Why: the shell echoes input before executing it. Encoding keeps the

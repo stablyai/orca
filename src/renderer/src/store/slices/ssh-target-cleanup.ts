@@ -1,24 +1,8 @@
 import type { AppState } from '../types'
-import type { SshConnectionState, SshTarget, SshTargetSummary } from '../../../../shared/ssh-types'
+import type { SshTarget, SshTargetSummary } from '../../../../shared/ssh-types'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { sanitizeSshTargetGeneration } from '../../../../shared/ssh-target-generation'
 import { resolveDirectSshTargetScope } from '../../lib/direct-ssh-target-scope'
-
-export function sshConnectionStatesEqual(
-  a: SshConnectionState | undefined,
-  b: SshConnectionState
-): boolean {
-  return (
-    a?.targetId === b.targetId &&
-    a?.status === b.status &&
-    a?.error === b.error &&
-    a?.reconnectAttempt === b.reconnectAttempt &&
-    a?.providerEpoch === b.providerEpoch &&
-    a?.connectionGeneration === b.connectionGeneration &&
-    a?.supportsFolderDownload === b.supportsFolderDownload &&
-    a?.remotePlatform === b.remotePlatform
-  )
-}
 
 export function sshTargetLabelsEqual(
   labels: Map<string, string>,
@@ -182,7 +166,10 @@ function clearSshTargetTabPtyState(
       }
     }
     if (nextTabs !== tabs) {
-      nextTabsByWorktree = { ...nextTabsByWorktree, [worktreeId]: nextTabs }
+      if (nextTabsByWorktree === state.tabsByWorktree) {
+        nextTabsByWorktree = { ...nextTabsByWorktree }
+      }
+      nextTabsByWorktree[worktreeId] = nextTabs
     }
   }
 
@@ -224,6 +211,14 @@ export function buildRemovedSshTargetCleanupPatch(
     targetId,
     targetTabIds
   )
+  const nextPendingLayoutEdits = Object.fromEntries(
+    Object.entries(state.pendingDirectSshLayoutEditsByTabId ?? {}).filter(
+      ([, entry]) => entry.targetId !== targetId
+    )
+  )
+  const removedPendingLayoutEdits =
+    Object.keys(nextPendingLayoutEdits).length !==
+    Object.keys(state.pendingDirectSshLayoutEditsByTabId ?? {}).length
 
   const nextDeferredTargets = state.deferredSshReconnectTargets.filter((id) => id !== targetId)
   const nextTransientClearedConnections = {
@@ -270,7 +265,8 @@ export function buildRemovedSshTargetCleanupPatch(
     removedPendingReconnect ||
     removedPaneRetries ||
     removedLiveBindings ||
-    removedRetryHistory
+    removedRetryHistory ||
+    removedPendingLayoutEdits
   if (!changed) {
     return null
   }
@@ -301,6 +297,9 @@ export function buildRemovedSshTargetCleanupPatch(
     ...(removedPendingReconnect ? { pendingReconnectPtyIdByTabId: nextPendingReconnect } : {}),
     ...(removedPaneRetries ? { directSshPaneRetryByTabId: nextPaneRetries } : {}),
     ...(removedLiveBindings ? { directSshLivePtyBindingByTabId: nextLiveBindings } : {}),
-    ...(removedRetryHistory ? { directSshPaneRetryHistoryByTabId: nextRetryHistory } : {})
+    ...(removedRetryHistory ? { directSshPaneRetryHistoryByTabId: nextRetryHistory } : {}),
+    ...(removedPendingLayoutEdits
+      ? { pendingDirectSshLayoutEditsByTabId: nextPendingLayoutEdits }
+      : {})
   }
 }

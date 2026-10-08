@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { createUntitledMarkdownFileWithTemplateSelection } from '@/lib/create-untitled-markdown'
+import { ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT } from '@/components/editor/editor-autosave'
 import {
   makeFile,
   makeTab,
@@ -10,16 +11,29 @@ import {
 import {
   hookRuntime,
   mocks,
-  saveDialogBox,
   setupFloatingTerminalPanelTest
 } from './floating-terminal-panel-test-harness'
 import {
-  findByProp,
   findByTypeName,
   flushAsyncWork,
   renderPanel,
   runEffects
 } from './floating-terminal-panel-render-probe'
+
+function requestedEditorCloses(): string[] {
+  return vi
+    .mocked(window.dispatchEvent)
+    .mock.calls.flatMap(([event]) =>
+      event.type === ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT && event instanceof CustomEvent
+        ? [event.detail.fileId]
+        : []
+    )
+}
+
+vi.mock('zustand/react/shallow', () => ({
+  // Why: zustand resolves the real react (unmocked in node_modules); the memo wrapper is inert here.
+  useShallow: (selector: unknown) => selector
+}))
 
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
@@ -224,23 +238,23 @@ describe('FloatingTerminalPanel close behavior', () => {
     setFloatingEditorTabs([makeFile({ id: 'notes' })])
 
     const element = await renderPanel(true)
-    const editorPanel = findByProp(element, 'activeFileId')
+    // The editor renders inside the shared group tree; the panel's contract is the policy
+    // it passes down (scratch markdown exposes no agent annotations).
+    const tree = findByTypeName(element, 'TabGroupSplitNodeTree')
 
-    expect(editorPanel.props.markdownAnnotationsEnabled).toBe(false)
-    expect(editorPanel.props.activeFileId).toBe('notes')
-    expect(editorPanel.props.isVisible).toBe(true)
+    expect(tree.props.markdownAnnotationsEnabled).toBe(false)
+    expect(tree.props.isWorktreeActive).toBe(true)
   })
 
   it('marks the retained floating editor hidden when the panel is closed', async () => {
     setFloatingEditorTabs([makeFile({ id: 'notes' })])
 
     const element = await renderPanel(false)
-    const editorPanel = findByProp(element, 'activeFileId')
 
-    expect(editorPanel.props.isVisible).toBe(false)
+    expect(findByTypeName(element, 'TabGroupSplitNodeTree').props.isWorktreeActive).toBe(false)
   })
 
-  it('queues dirty editor closes from close-all-files instead of overwriting the dialog id', async () => {
+  it('routes every dirty editor from close-all-files to the central save queue', async () => {
     setFloatingEditorTabs([
       makeFile({ id: 'file-a', isDirty: true }),
       makeFile({ id: 'file-b', isDirty: true })
@@ -250,12 +264,12 @@ describe('FloatingTerminalPanel close behavior', () => {
     const tabBar = findByTypeName(element, 'TabBar')
     ;(tabBar.props.onCloseAllFiles as () => void)()
 
-    expect(saveDialogBox.fileId).toBe('file-a')
+    expect(requestedEditorCloses()).toEqual(['file-a', 'file-b'])
     expect(mocks.closeFile).not.toHaveBeenCalledWith('file-a')
     expect(mocks.closeFile).not.toHaveBeenCalledWith('file-b')
   })
 
-  it('queues dirty editor closes from close-others and close-to-right one file at a time', async () => {
+  it('routes close-others and close-to-right through the central save queue', async () => {
     setFloatingEditorTabs([
       makeFile({ id: 'file-a', isDirty: true }),
       makeFile({ id: 'file-b', isDirty: true }),
@@ -265,15 +279,15 @@ describe('FloatingTerminalPanel close behavior', () => {
     const element = await renderPanel(true)
     const tabBar = findByTypeName(element, 'TabBar')
     ;(tabBar.props.onCloseOthers as (tabId: string) => void)('tab-file-b')
-    expect(saveDialogBox.fileId).toBe('file-a')
+    expect(requestedEditorCloses()).toEqual(['file-a', 'file-c'])
 
-    saveDialogBox.fileId = null
+    vi.mocked(window.dispatchEvent).mockClear()
     mocks.closeFile.mockClear()
     hookRuntime.values = []
     const nextElement = await renderPanel(true)
     const nextTabBar = findByTypeName(nextElement, 'TabBar')
     ;(nextTabBar.props.onCloseToRight as (tabId: string) => void)('tab-file-a')
-    expect(saveDialogBox.fileId).toBe('file-b')
+    expect(requestedEditorCloses()).toEqual(['file-b', 'file-c'])
     expect(mocks.closeFile).not.toHaveBeenCalledWith('file-c')
   })
 })
