@@ -12581,6 +12581,8 @@
             "3161c4e425": "文件夹",
             "e887fa4b2e": "在终端中打开",
             "1d8e182c32": "查看文件",
+            "d40c3303f4": "无法在默认应用中打开“{{value0}}”。",
+            "288a8e8081": "在默认应用中打开",
             "clipboardStagingUnavailable": "无法复制文件，因为 Orca 的临时存储不可用",
             "revealInFinder": "在 Finder 中显示",
             "openContainingFolder": "打开包含的文件夹",

@@ -47,6 +47,7 @@ export function useFileExplorerKeys(opts: {
   moveSelection: (targetPath: string, mode: SelectionMode) => void
   toggleDir: (worktreeId: string, dirPath: string) => void
   startRename: (node: TreeNode) => void
+  openInDefaultApp: (node: TreeNode) => boolean
   requestDelete: (node: TreeNode) => void
   requestDeleteAll: (nodes: TreeNode[]) => void
   scrollToIndex: (index: number) => void
@@ -71,6 +72,8 @@ export function useFileExplorerKeys(opts: {
   selectedNodeRef.current = opts.selectedNode
   const startRenameRef = useRef(opts.startRename)
   startRenameRef.current = opts.startRename
+  const openInDefaultAppRef = useRef(opts.openInDefaultApp)
+  openInDefaultAppRef.current = opts.openInDefaultApp
   const requestDeleteRef = useRef(opts.requestDelete)
   requestDeleteRef.current = opts.requestDelete
   const requestDeleteAllRef = useRef(opts.requestDeleteAll)
@@ -258,7 +261,13 @@ export function useFileExplorerKeys(opts: {
         platform,
         keybindings
       )
-      if (!wantsCopyRelativePath && !wantsCopyPath) {
+      const wantsOpenInDefaultApp = keybindingMatchesAction(
+        'fileExplorer.openInDefaultApp',
+        e,
+        platform,
+        keybindings
+      )
+      if (!wantsCopyRelativePath && !wantsCopyPath && !wantsOpenInDefaultApp) {
         return
       }
 
@@ -266,6 +275,15 @@ export function useFileExplorerKeys(opts: {
       const node =
         (focused !== null ? rowProjectionRef.current.getRowAtIndex(focused) : null) ??
         selectedNodeRef.current
+      if (wantsOpenInDefaultApp) {
+        if (node && !node.isDirectory) {
+          if (openInDefaultAppRef.current(node)) {
+            e.preventDefault()
+          }
+        }
+        return
+      }
+
       const selectedNodes = rowProjectionRef.current.getRowsByPaths(selectedPathsRef.current)
       const fallbackNodes = selectedNodes.length > 0 ? selectedNodes : node ? [node] : []
       if (fallbackNodes.length === 0) {

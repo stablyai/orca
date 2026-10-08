@@ -3,6 +3,18 @@ import { platformBindings } from './definitions-support'
 
 export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
   {
+    id: 'fileExplorer.openInDefaultApp',
+    title: 'Open file in default app',
+    group: 'File Explorer',
+    scope: 'fileExplorer',
+    searchKeywords: ['shortcut', 'file explorer', 'open', 'default', 'app'],
+    defaultBindings: {
+      darwin: ['Mod+ArrowDown'],
+      linux: [],
+      win32: []
+    }
+  },
+  {
     id: 'sidebar.childWorkspaces.toggle',
     title: 'Toggle Child Workspaces',
     group: 'Global',

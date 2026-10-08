@@ -99,6 +99,7 @@ export type KeybindingActionId =
   | 'fileExplorer.redo'
   | 'fileExplorer.copyPath'
   | 'fileExplorer.copyRelativePath'
+  | 'fileExplorer.openInDefaultApp'
   | 'fileExplorer.delete'
   | 'settings.search'
   | 'terminal.copySelection'
