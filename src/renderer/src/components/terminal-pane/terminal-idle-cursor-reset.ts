@@ -17,6 +17,11 @@ export class TerminalIdleCursorReset {
     return reset ? `${data}${reset}` : data
   }
 
+  cancelSequence(): string {
+    this.escapeState = ''
+    return this.takeReadyReset()
+  }
+
   private takeReadyReset(): string {
     if (!this.pending || this.escapeState) {
       return ''

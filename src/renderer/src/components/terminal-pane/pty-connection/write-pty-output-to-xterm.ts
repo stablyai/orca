@@ -17,6 +17,16 @@ import type { ConnectPanePtySession } from './connect-pane-pty-session'
 /** The xterm write path for PTY output, including the queued agent-idle mode reset. */
 export function bindWritePtyOutputToXterm(session: ConnectPanePtySession): void {
   const idleCursorReset = (session.idleCursorReset ??= new TerminalIdleCursorReset())
+  const onBacklogReplaced = (): void => {
+    // Why: the replacement warning starts with CAN, so discarded parser state must not block a reset.
+    const reset = idleCursorReset.cancelSequence()
+    if (reset && !session.disposed) {
+      session.writePtyOutputToXterm(
+        reset,
+        shouldWritePtyOutputForeground(session.deps.isVisibleRef.current)
+      )
+    }
+  }
   session.writePtyOutputToXterm = function (
     data: string,
     foreground: boolean,
@@ -106,6 +116,7 @@ export function bindWritePtyOutputToXterm(session: ConnectPanePtySession): void 
       // Why: every scheduler write claims one child so a split delivery is credited only after all children parse or discard.
       ackCredit: takeCurrentTerminalDeliveryCredit() ?? undefined,
       onBackgroundBacklogDropped: session.markHiddenOutputRestoreNeeded,
+      onBacklogReplaced,
       latencySensitive:
         !foreground || parseHiddenStartupOutput
           ? true

@@ -30,6 +30,8 @@ export type WriteTerminalOutputOptions = {
   /** Parse-deferred delivery ACK (terminal-pty-ack-gate). MUST be invoked when the chunk is parsed OR discarded by any drop path; fire-once, so double invocation is safe but omission permanently shrinks main's in-flight window. */
   ackCredit?: () => void
   onBackgroundBacklogDropped?: () => void
+  /** Runs for each CAN-prefixed backlog replacement, including repeated drops. */
+  onBacklogReplaced?: () => void
   latencySensitive?: boolean
   forceForegroundRefresh?: boolean
   followupForegroundRefresh?: boolean
@@ -71,6 +73,7 @@ export type QueueEntry = {
   chunkIndex: number
   queuedChars: number
   onBackgroundBacklogDropped?: () => void
+  onBacklogReplaced?: () => void
   backgroundBacklogDropped: boolean
   highPriority: boolean
   foregroundHold: boolean
