@@ -10,6 +10,7 @@ import {
   hasClientEnvironmentFooter,
   stripClientEnvironmentFooter
 } from '../../../../shared/client-environment-info'
+import { describeClaudePinnedLaunchError } from './claude-pinned-launch-error-copy'
 import {
   localizeTerminalSpawnHints,
   withoutTerminalSpawnIssueRequest
@@ -102,6 +103,9 @@ export function shouldOfferDaemonRestart(error: string): boolean {
 }
 
 export function isExplainedTerminalError(error: string): boolean {
+  if (describeClaudePinnedLaunchError(error)) {
+    return true
+  }
   return error
     .split('\n')
     .some(
@@ -152,6 +156,10 @@ function humanizeFolderWorkspacePathErrors(error: string): string {
 
 /** Swaps raw daemon-boundary codes for copy a user can act on. */
 export function humanizeTerminalError(error: string): string {
+  const pinnedLaunch = describeClaudePinnedLaunchError(error)
+  if (pinnedLaunch) {
+    return pinnedLaunch.message
+  }
   let humanized = humanizeFolderWorkspacePathErrors(localizeTerminalSpawnHints(error))
   if (humanized.includes(PANE_OWNER_UNVERIFIED_MARKER)) {
     const explanation = isPaneOwnerUnverifiedError(humanized)
@@ -218,7 +226,8 @@ export function TerminalErrorToast({
   paneOnClient = true,
   onDismiss,
   onRestartDaemon,
-  onRetry
+  onRetry,
+  onStartOnActiveAccount
 }: {
   error: string
   /** False for a pane on an SSH or remote host, or one whose host is not yet known. */
@@ -226,11 +235,16 @@ export function TerminalErrorToast({
   onDismiss: () => void
   onRestartDaemon?: () => void
   onRetry?: () => Promise<boolean>
+  onStartOnActiveAccount?: () => void
 }): React.JSX.Element {
   const ssh = isSshError(error)
   // Why: the client's OS and shell describe neither the host nor its shell, and the renderer knows neither.
   const showClientEnvironment = paneOnClient && !ssh && !isHeldByPreviousRelayError(error)
   const paneOwnerUnverified = isPaneOwnerUnverifiedError(error)
+  const pinnedLaunch = describeClaudePinnedLaunchError(error)
+  const showStartOnActiveAccount = Boolean(
+    pinnedLaunch?.offerActiveAccount && onStartOnActiveAccount
+  )
   const showDaemonRestart = !ssh && onRestartDaemon && shouldOfferDaemonRestart(error)
   // Restart cannot recover a session after its owning daemon exits.
   const showIssueLink =
@@ -386,6 +400,14 @@ export function TerminalErrorToast({
             {retrying
               ? translate('auto.components.terminal.pane.TerminalErrorToast.retrying', 'Retrying…')
               : translate('auto.components.terminal.pane.TerminalErrorToast.retry', 'Retry')}
+          </Button>
+        ) : null}
+        {showStartOnActiveAccount ? (
+          <Button variant="outline" size="xs" onClick={onStartOnActiveAccount} className="ml-3">
+            {translate(
+              'auto.components.terminal.pane.TerminalErrorToast.startOnActiveAccount',
+              'Start on active account'
+            )}
           </Button>
         ) : null}
         <button

@@ -12,6 +12,7 @@ import {
 import { resolveInitialNativeChatSessionOptions } from '@/components/native-chat/native-chat-launch-session-options'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
+import { withClaudeLaunchAccount } from '@/lib/claude-launch-account'
 
 export type QuickComposerStartupInput = {
   agent: TuiAgent | null
@@ -23,6 +24,7 @@ export type QuickComposerStartupInput = {
   shell: AgentStartupShell | null | undefined
   isRemote: boolean
   telemetrySource: WorktreeCreationRequest['telemetrySource']
+  claudeAccountId?: string
 }
 
 export type QuickComposerStartup = {
@@ -95,6 +97,13 @@ export function buildQuickComposerStartup(input: QuickComposerStartupInput): Qui
     })
     if (startupPlan && draftPrompt) {
       startupPlan.draftPrompt = draftPrompt
+    }
+  }
+  // Why: stamped before `backendStartup` is derived so the backend and renderer lanes pin alike.
+  if (startupPlan && agent === 'claude') {
+    startupPlan = {
+      ...startupPlan,
+      launchConfig: withClaudeLaunchAccount(startupPlan.launchConfig, input.claudeAccountId)
     }
   }
   const telemetry: AgentStartedTelemetry | null =

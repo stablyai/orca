@@ -110,6 +110,31 @@ export function getRepositoryPaneSearchEntries(
           }
         ]
       : []),
+    {
+      title: translate(
+        'auto.components.settings.repository.search.claudeAccount',
+        'Claude Account'
+      ),
+      description: translate(
+        'auto.components.settings.repository.search.claudeAccountDescription',
+        'Choose which Claude account starts in this project.'
+      ),
+      keywords: [
+        repo.displayName,
+        ...translateSearchKeyword(
+          'auto.components.settings.repository.search.claudeAccountKeyword',
+          'claude account'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.repository.search.claudeAccountsKeyword',
+          'claude accounts'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.repository.search.accountsKeyword',
+          'accounts'
+        )
+      ]
+    },
     ...(repo.upstream && !isFolder
       ? [
           {

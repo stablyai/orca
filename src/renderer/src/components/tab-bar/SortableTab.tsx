@@ -30,6 +30,7 @@ import {
   resolveTerminalTabActivityStatus,
   terminalTabHasUnreadActivity
 } from './terminal-tab-activity-status'
+import { useClaudeTabAccountLabel } from './use-claude-tab-account-label'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
 
 type SortableTabProps = {
@@ -175,6 +176,8 @@ export default function SortableTab({
   })
   const slotProps = useTabStripSlotProps(tab.id, isActive)
   const tabTitle = tab.customTitle ?? tab.title
+  const { label: claudeAccountLabel, onTooltipOpenChange } = useClaudeTabAccountLabel(tab)
+  const tooltipText = claudeAccountLabel ? `${displayTitle} · ${claudeAccountLabel}` : displayTitle
   const tabRoot = (
     <div
       ref={setNodeRef}
@@ -282,7 +285,7 @@ export default function SortableTab({
       ) : isEditing || menuOpen ? (
         <span className={`${TAB_LABEL_WIDTH_CLASSES} mr-1`}>{displayTitle}</span>
       ) : (
-        <Tooltip>
+        <Tooltip onOpenChange={onTooltipOpenChange}>
           <TooltipTrigger asChild>
             <span className={`${TAB_LABEL_WIDTH_CLASSES} mr-1`}>{displayTitle}</span>
           </TooltipTrigger>
@@ -291,7 +294,7 @@ export default function SortableTab({
             sideOffset={6}
             className="max-w-80 whitespace-normal break-words text-left"
           >
-            {displayTitle}
+            {tooltipText}
           </TooltipContent>
         </Tooltip>
       )}

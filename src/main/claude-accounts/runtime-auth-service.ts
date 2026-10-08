@@ -7,10 +7,21 @@ import { getDefaultWslDistro, getWslHome } from '../wsl'
 import { ClaudeProfileRouter } from './claude-profile-router'
 import { ClaudeWslProfileRouter } from './claude-profile-wsl-router'
 import { installClaudeProfileRouter } from './claude-profile-installed-router'
-import type { ClaudeAccountSelectionTarget } from './runtime-selection'
-import type { ClaudeRuntimeAuthPreparation } from './runtime-auth/runtime-auth-types'
+import {
+  getSelectedClaudeAccountIdForTarget,
+  type ClaudeAccountSelectionTarget
+} from './runtime-selection'
+import type {
+  ClaudeLaunchAuthOptions,
+  ClaudeRuntimeAuthPreparation
+} from './runtime-auth/runtime-auth-types'
+import { CLAUDE_INJECTED_CONFIG_DIR_ENV } from '../../shared/claude-profile-routing'
+import { claudePinnedLaunchError } from '../../shared/claude/claude-pinned-launch-error'
 
-export type { ClaudeRuntimeAuthPreparation } from './runtime-auth/runtime-auth-types'
+export type {
+  ClaudeLaunchAuthOptions,
+  ClaudeRuntimeAuthPreparation
+} from './runtime-auth/runtime-auth-types'
 
 /** `configDir` is the CLAUDE_CONFIG_DIR value; `readPath` is where this host reads it (UNC for WSL). */
 export type ClaudeAccountFolder = { configDir: string; readPath: string }
@@ -33,10 +44,52 @@ export class ClaudeRuntimeAuthService {
   }
 
   prepareForClaudeLaunch(
-    target?: ClaudeAccountSelectionTarget
+    target?: ClaudeAccountSelectionTarget,
+    options?: ClaudeLaunchAuthOptions
   ): Promise<ClaudeRuntimeAuthPreparation> {
+    if (options?.accountId) {
+      return this.prepareRequestedAccountLaunch(options.accountId, target)
+    }
     const wsl = this.wslRouteFor(target)
     return wsl ? wsl.router.prepareLaunch(wsl.distro) : this.router.prepareLaunch()
+  }
+
+  /**
+   * A `--account` launch: Claude runs straight from that account's own folder, with no pointer, so
+   * a later switch of the selected account never moves it. The selected account takes the normal path.
+   */
+  private async prepareRequestedAccountLaunch(
+    accountId: string,
+    target?: ClaudeAccountSelectionTarget
+  ): Promise<ClaudeRuntimeAuthPreparation> {
+    const settings = this.store.getSettings()
+    const account = settings.claudeManagedAccounts.find((entry) => entry.id === accountId)
+    if (!account) {
+      throw claudePinnedLaunchError(
+        'account-missing',
+        'That Claude account no longer exists. Run `orca account list` and retry.'
+      )
+    }
+    if (this.wslRouteFor(target) || account.managedAuthRuntime === 'wsl') {
+      throw claudePinnedLaunchError(
+        'unsupported-host',
+        'Claude --account launches are not supported for WSL terminals yet.'
+      )
+    }
+    if (getSelectedClaudeAccountIdForTarget(settings, { runtime: 'host' }) === accountId) {
+      return this.router.prepareLaunch()
+    }
+    const home = await this.router.prepareAccountLaunch(accountId)
+    return {
+      configDir: home,
+      runtime: 'host',
+      wslDistro: null,
+      wslLinuxConfigDir: null,
+      envPatch: { CLAUDE_CONFIG_DIR: home, [CLAUDE_INJECTED_CONFIG_DIR_ENV]: home },
+      stripAuthEnv: true,
+      pinnedAccountId: accountId,
+      provenance: `profile:${accountId}:pinned`
+    }
   }
 
   async prepareForRateLimitFetch(

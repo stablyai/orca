@@ -15,11 +15,16 @@ vi.mock('./settings-search-keywords', () => ({
   translateSearchKeyword: (_key: string, fallback: string) => [fallback]
 }))
 
+import { matchesSettingsSearch } from './settings-search'
 import {
   getAccountsMiniMaxSearchEntries,
   getAccountsOpencodeSearchEntries,
   getAccountsPaneSearchEntries
 } from './accounts-search'
+import {
+  getAccountsClaudeSearchEntries,
+  getAskClaudeAccountPerProjectSearchKeywords
+} from './accounts-claude-search'
 
 describe('getAccountsPaneSearchEntries', () => {
   it('keeps Antigravity and GLM plan settings discoverable in pane order', () => {
@@ -62,6 +67,26 @@ describe('getAccountsMiniMaxSearchEntries', () => {
     const allEntries = getAccountsPaneSearchEntries()
     const titles = allEntries.map((entry) => entry.title)
     expect(titles).toContain('MiniMax Usage')
+  })
+})
+
+describe('getAccountsClaudeSearchEntries ask-per-project entry', () => {
+  it('stays visible under the same query that opens the Claude section', () => {
+    const toggleEntry = getAccountsClaudeSearchEntries().find(
+      (entry) => entry.title === 'Ask which Claude account to use for each project'
+    )
+    expect(toggleEntry).toBeDefined()
+
+    // Why: "Accounts" matches the sibling "Claude Accounts" entry and used to
+    // hide this toggle because its own keywords lacked the plural form.
+    expect(matchesSettingsSearch('Accounts', toggleEntry!)).toBe(true)
+    expect(matchesSettingsSearch('ask which', toggleEntry!)).toBe(true)
+  })
+
+  it('exposes the same keywords to the toggle SearchableSetting', () => {
+    expect(getAskClaudeAccountPerProjectSearchKeywords()).toEqual(
+      expect.arrayContaining(['accounts', 'ask which', 'per project', 'prompt'])
+    )
   })
 })
 

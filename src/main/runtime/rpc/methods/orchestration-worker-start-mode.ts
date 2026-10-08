@@ -46,6 +46,8 @@ type WorkerStartModePlacement = {
   worktree?: string
   model?: string
   effort?: string
+  /** Read: `--account` is only honoured by a terminal worker. */
+  account?: string
 }
 
 export function decideWorkerStartMode(args: {
@@ -53,7 +55,10 @@ export function decideWorkerStartMode(args: {
   settings: AgentLaunchModeSettings | null | undefined
 }): WorkerStartModeReceipt {
   return decideAgentLaunchMode({
-    placement: args.params,
+    placement: {
+      ...args.params,
+      ...(args.params.account ? { claudeAccount: args.params.account } : {})
+    },
     settings: args.settings,
     vocabulary: WORKER_START_VOCABULARY,
     // The structured worker factory creates Claude and Codex only; any other agent (Grok included)
@@ -63,7 +68,8 @@ export function decideWorkerStartMode(args: {
 }
 
 export async function resolveWorkerStartModeOnHost(
-  runtime: Pick<OrcaRuntimeService, 'getStructuredAgentSessionCreateSupport'>,
+  runtime: Pick<OrcaRuntimeService, 'getStructuredAgentSessionCreateSupport'> &
+    Partial<Pick<OrcaRuntimeService, 'listRepos'>>,
   mode: WorkerStartModeReceipt,
   worktreeId: string | undefined,
   agent: TuiAgent | undefined

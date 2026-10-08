@@ -136,6 +136,18 @@ export class ClaudeProfileRouter {
     return this.describe(accountId).home
   }
 
+  /** prepareLaunch for a named account, which a `--account` launch runs on instead of the selection. */
+  async prepareAccountLaunch(accountId: string): Promise<string> {
+    const profile = this.describe(accountId)
+    if (!existsSync(claudeProfileMarkerPath(profile))) {
+      const report = await this.setUp(profile).catch(() => null)
+      if (report?.outcome !== 'prepared') {
+        throw claudeProfileSetupFailed()
+      }
+    }
+    return profile.home
+  }
+
   /** Creates and sets up an account's folder for sign-in; the login itself is Claude's. */
   async prepareAccount(accountId: string): Promise<string> {
     const profile = this.describe(accountId)

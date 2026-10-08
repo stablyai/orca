@@ -7,6 +7,7 @@ import {
   recordCodexPaneAccountForSpawn,
   codexReattachedHomeRouteField
 } from '../host-env/codex-home'
+import { markRuntimeClaudePtySpawned } from './spawn-claude-account'
 import { registerPty } from '../../../memory/pty-registry'
 import { rememberPaneKeyForPty } from '../pane/key-state'
 import {
@@ -133,6 +134,9 @@ async function commitReservedRuntimePtySpawn(ctx: RuntimePtySpawnState) {
       ...(ctx.result.incarnationId ? { incarnationId: ctx.result.incarnationId } : {}),
       agentSessionEnsure: ctx.result.agentSessionEnsure
     }
+  }
+  if (ctx.isClaudeLaunch && !ctx.stablePaneOwner) {
+    markRuntimeClaudePtySpawned(ctx.result.id, ctx.claudeAuth)
   }
   if (ctx.hostSessionBinding && !ctx.stablePaneBindingPersisted) {
     try {

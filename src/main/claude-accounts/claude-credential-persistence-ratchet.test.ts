@@ -60,7 +60,9 @@ const fsAllowances: Record<string, readonly string[]> = {
     'writeFileAtomically'
   ],
   // The guest helper answers the host on stdout.
-  'claude-accounts/claude-profile-wsl-entry.ts': ['write']
+  'claude-accounts/claude-profile-wsl-entry.ts': ['write'],
+  // Which PTY runs which `--account` account, for labels: ids only, never a login.
+  'claude-accounts/claude-pinned-pty-registry.ts': ['mkdirSync', 'write', 'writeFileAtomically']
 }
 const mutation =
   /^(?:write(?:File|Json|Sync|v|.*Credentials|.*Keychain)?$|write(?:File|Json)|appendFile|copyFile|cp(?:Sync)?$|rename(?:Sync)?$|unlink(?:Sync)?$|rm(?:dir)?(?:Sync)?$|truncate(?:Sync)?$|createWriteStream|symlink(?:Sync)?$|link(?:Sync)?$|chmod(?:Sync)?$|mkdir(?:Sync)?$|mkdtemp(?:Sync)?$|open(?:Sync)?$|delete.*Keychain|refreshClaudeOauth)/

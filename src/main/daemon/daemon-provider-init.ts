@@ -1,4 +1,8 @@
 import { getLocalPtyProvider, rebindLocalProviderListeners } from '../ipc/pty'
+import {
+  confirmSeededPinnedClaudePtys,
+  hasSeededUnconfirmedPinnedClaudePtys
+} from '../claude-accounts/claude-pinned-pty-registry'
 import { isStartupDiagnosticsEnabled, logStartupDiagnostic } from '../startup/startup-diagnostics'
 import { checkDaemonHealth } from './daemon-health'
 import { collectPinnedDaemonVersions, pruneOldDaemonHosts } from './daemon-host-relocation'
@@ -159,6 +163,7 @@ export async function initDaemonPtyProvider(
   if (process.platform === 'darwin' && newSpawner.getHandle()?.adopted) {
     void reportDaemonAdoption(runtimeDir, info.socketPath, info.tokenPath, newAdapter)
   }
+  await reconcileSeededPinnedClaudePtys(routedAdapter)
 }
 
 // Why off the init path: this is measurement of an adopted daemon (#17696), and neither its probes nor their failure may delay or fail startup.
@@ -183,5 +188,29 @@ async function reportDaemonAdoption(
     )
   } catch {
     // Best-effort measurement only.
+  }
+}
+
+// Why: drop restored `--account` labels only for sessions the daemon confirmed dead; a failed listing keeps them.
+async function reconcileSeededPinnedClaudePtys(provider: DaemonProvider): Promise<void> {
+  if (!hasSeededUnconfirmedPinnedClaudePtys()) {
+    return
+  }
+  try {
+    const adapters =
+      provider instanceof DaemonPtyRouter || provider instanceof DegradedDaemonPtyProvider
+        ? provider.getAllAdapters()
+        : [provider]
+    const results = await Promise.allSettled(adapters.map((entry) => entry.listSessions()))
+    if (results.some((result) => result.status === 'rejected')) {
+      return
+    }
+    confirmSeededPinnedClaudePtys(
+      results.flatMap((result) =>
+        result.status === 'fulfilled' ? result.value.map((session) => session.sessionId) : []
+      )
+    )
+  } catch (error) {
+    console.warn('[daemon] Failed to reconcile restored pinned Claude PTYs:', error)
   }
 }

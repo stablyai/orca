@@ -5,6 +5,7 @@ import type { WorktreeStartupReadinessHost } from './runtime-worktree-startup-re
 import { prefetchWorktreeCreateBase } from '../worktree-create-base-prefetch'
 import { prepareWorktreeCreateForRepo } from '../worktree-create-preparation'
 import { getWorktreeCreatePrefetchGitOptions } from '../project-runtime-git-options'
+import { resolveWorktreeStartupClaudeAccount } from './runtime-worktree-startup-claude-account'
 import type { Worktree } from '../../shared/worktree/types'
 import {
   navigationTargetsHost,
@@ -46,6 +47,18 @@ export class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends OrcaRunt
       recordSetupCompletionToken: (ptyId, token) =>
         this.setupCompletionTokenByPtyId.set(ptyId, token)
     }
+  }
+
+  protected resolveStartupClaudeAccount(
+    request: Parameters<typeof resolveWorktreeStartupClaudeAccount>[0]['request'],
+    createRouteKind: Parameters<typeof resolveWorktreeStartupClaudeAccount>[0]['createRouteKind']
+  ): string | undefined {
+    return resolveWorktreeStartupClaudeAccount({
+      request,
+      createRouteKind,
+      canSpawn: Boolean(this.ptyController?.spawn),
+      listClaudeAccounts: () => this.getAccountsSnapshot().claude
+    })
   }
 
   protected getProvisionedTerminalTab(handle: string): { worktreeId: string; tabId: string } {

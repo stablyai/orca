@@ -419,6 +419,8 @@ export type GlobalSettings = NativeChatGlobalSettings & {
   agentYoloDefaultsMigrated?: boolean
   /** Why: disabling must persist so startup doesn't reinstall global agent hook entries the user just removed. */
   agentStatusHooksEnabled: boolean
+  /** When true, projects without a saved Claude account prompt for one before launching Claude. */
+  askClaudeAccountPerProject?: boolean
   /** A local agent-state-rules.json that replaces downloaded and bundled rules, for testing a rule
    *  change. */
   agentStateRulesPath?: string | null
@@ -536,7 +538,7 @@ export type GlobalSettings = NativeChatGlobalSettings & {
   aiVaultSearch?: AiVaultSearchSettings
 }
 
-// Re-exported so existing importers keep one entry point; the shape lives in its
-// own file because this one is at the max-lines ceiling.
+// Re-exported so existing importers keep one entry point; these shapes live in
+// their own files because this one is at the max-lines ceiling.
 export type { GhosttyImportPreview } from './ghostty-import-preview'
 export type { OrcaWorkspaceLayout } from './orca-workspace-layout'

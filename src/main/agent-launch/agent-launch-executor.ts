@@ -53,6 +53,7 @@ import {
   decideAgentLaunchMode,
   readAgentLaunchModeSettings,
   resolveAgentLaunchModeOnHost,
+  type AgentLaunchModeHostRuntime,
   type AgentLaunchModeReceipt,
   type AgentLaunchModeVocabulary,
   DEFAULT_LAUNCH_VOCABULARY,
@@ -66,7 +67,7 @@ import {
 } from './agent-launch-surface-factories'
 
 export type AgentLaunchExecution = {
-  runtime: Pick<OrcaRuntimeService, 'getStructuredAgentSessionCreateSupport' | 'getClientSettings'>
+  runtime: AgentLaunchModeHostRuntime & Pick<OrcaRuntimeService, 'getClientSettings'>
   intent: AgentLaunchIntent
   surfaces: AgentLaunchSurfaceFactory
   workspaces?: AgentLaunchWorkspaceFactory

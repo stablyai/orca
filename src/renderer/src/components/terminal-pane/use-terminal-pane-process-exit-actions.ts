@@ -257,7 +257,11 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
     pendingCodexPaneRestartIds
   ])
 
-  return { handleRestartExitedPane, handleCloseExitedPane }
+  return {
+    handleRestartExitedPane,
+    handleCloseExitedPane,
+    restartPaneWithStartup: handleRestartCodexPane
+  }
 }
 
 export type TerminalPaneProcessExitController = ReturnType<typeof useTerminalPaneProcessExitActions>

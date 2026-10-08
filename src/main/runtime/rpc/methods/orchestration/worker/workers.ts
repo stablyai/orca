@@ -57,6 +57,12 @@ export const ORCHESTRATION_WORKER_START_METHODS = [
         params,
         settings: readWorkerStartModeSettings(runtime)
       })
+      if (params.on && params.account) {
+        throw new OrchestrationError(
+          'invalid_argument',
+          "--account runs Claude on this host's accounts and cannot combine with --on."
+        )
+      }
       if (params.on && params.terminal?.startsWith(ORCA_SESSION_ADDRESS_PREFIX)) {
         // Refused here, before any remote call: an Orca session ID names a chat only on its own host.
         throw new OrchestrationError(

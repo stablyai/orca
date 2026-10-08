@@ -12,6 +12,10 @@ export async function createDesktopTerminal(
   rendererWindow: Electron.BrowserWindow | null,
   createdWorktree?: Worktree
 ): Promise<dependencies.RuntimeTerminalCreate> {
+  if (opts.claudeAccountId) {
+    // Why: only the background lane reaches the PTY spawn that honours the pinned account.
+    throw new Error('A Claude --account launch requires a workspace selector.')
+  }
   runtime.assertGraphReady()
   const win = rendererWindow ?? runtime.getAuthoritativeWindow()
   const workspace = worktreeSelector

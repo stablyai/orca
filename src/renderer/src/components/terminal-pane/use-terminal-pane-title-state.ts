@@ -11,6 +11,11 @@ import { stripSshReconnectOwnedErrorLines } from './TerminalErrorToast'
 import { updateTerminalRemoteRuntimeRecoveryUiState } from './terminal-remote-runtime-recovery-ui-state'
 import type { PtyTransportRecoveryState } from './pty-transport-types'
 import type { TerminalPaneFoundation } from './use-terminal-pane-foundation'
+import type { PtyPaneStartup } from './pty-connection-types'
+import {
+  recordRefusedClaudeLaunchStartup,
+  refusedClaudeLaunchStartupsFor
+} from './refused-claude-launch-recovery'
 
 export function useTerminalPaneTitleState(controller: TerminalPaneFoundation) {
   const {
@@ -86,7 +91,13 @@ export function useTerminalPaneTitleState(controller: TerminalPaneFoundation) {
     },
     [cancelPendingRenameFrames]
   )
-  const onPtyErrorRef = useRef((paneId: number, message: string) => {
+  const onPtyErrorRef = useRef((paneId: number, message: string, startup?: PtyPaneStartup) => {
+    recordRefusedClaudeLaunchStartup(
+      refusedClaudeLaunchStartupsFor(paneTransportsRef),
+      paneId,
+      message,
+      startup
+    )
     if (message.includes(AGENT_LAUNCH_PANE_REFUSED_CODE)) {
       // A launch pane's verdict reached the tab typed; its notice shows it, not an error.
       return

@@ -33,6 +33,7 @@ import { recordCreatedWorkerTerminalCustody } from './created-worker-terminal-cu
 import { tearDownFailedWorkerStart } from './failed-worker-start-teardown'
 import { requireWorkerAuthority, type WorkerEffect } from './worker-topology'
 import { prepareLocalWorkerStart } from './worker-start-validation'
+import { assertClaudeAccountWorktreeIsLocal } from './worker-claude-account-placement'
 import { deliverAndSettleWorkerStartReadiness } from './worker-start-readiness-settlement'
 
 type WorkerStartMutation = {
@@ -61,14 +62,12 @@ export async function startLocalWorker(args: {
   const params = terminal ? { ...args.params, terminal: terminal.address } : args.params
   const chat = terminal ? chatAssigneeOf(terminal) : null
   const coordinatorPane = coordinator?.paneKey ?? null
+  const resolveCallerWorktreeId = () =>
+    resolveDispatchCallerWorktreeId(runtime, params.from, callerSession)
   const requestedWorktree = params.worktree ?? 'current'
   const createsWorktree = requestedWorktree === 'new-child' || requestedWorktree === 'new-top-level'
   const launchParams = await resolveWorkerConfiguredAgentParams(runtime, params, async () => {
-    const callerWorkspaceId = await resolveDispatchCallerWorktreeId(
-      runtime,
-      params.from,
-      callerSession
-    )
+    const callerWorkspaceId = await resolveCallerWorktreeId()
     const parent = createsWorktree
       ? await runtime.showManagedWorktree(`id:${callerWorkspaceId}`)
       : undefined
@@ -80,11 +79,7 @@ export async function startLocalWorker(args: {
   })
   let openCodeModelLaunchSupported = false
   if (!createsWorktree && launchParams.agent === 'opencode' && launchParams.model) {
-    const callerWorkspaceId = await resolveDispatchCallerWorktreeId(
-      runtime,
-      params.from,
-      callerSession
-    )
+    const callerWorkspaceId = await resolveCallerWorktreeId()
     openCodeModelLaunchSupported = await probeWorkerOpenCodeModelLaunchSupport(
       runtime,
       launchParams,
@@ -92,18 +87,14 @@ export async function startLocalWorker(args: {
     )
   }
 
-  const { agent, launch } = prepareLocalWorkerStart({
+  const { agent, launch, claudeAccount } = prepareLocalWorkerStart({
     params: launchParams,
     createsWorktree,
     runtime,
     openCodeModelLaunchSupported
   })
 
-  const coordinatorWorktreeId = await resolveDispatchCallerWorktreeId(
-    runtime,
-    params.from,
-    callerSession
-  )
+  const coordinatorWorktreeId = await resolveCallerWorktreeId()
   const creationWorktree = createsWorktree
     ? await runtime.showManagedWorktree(`id:${coordinatorWorktreeId}`)
     : undefined
@@ -128,6 +119,9 @@ export async function startLocalWorker(args: {
       coordinator,
       resolvedWorktreeId: resolvedWorktree?.id
     })
+  }
+  if (claudeAccount && resolvedWorktree) {
+    await assertClaudeAccountWorktreeIsLocal(runtime, resolvedWorktree.id)
   }
   const hostMode = resolveWorkerStartModeOnHost(runtime, args.mode, resolvedWorktree?.id, agent)
   let mode = chatWorkerMode(await hostMode, chat)
@@ -195,6 +189,7 @@ export async function startLocalWorker(args: {
       mode,
       agent,
       launchPreferences: launch.preferences,
+      ...(claudeAccount ? { claudeAccountId: claudeAccount.accountId } : {}),
       effects,
       onStage: (stage) => {
         failedStage = stage
