@@ -42,7 +42,9 @@ export function createAntigravityWslCredentialBackend(
     remainingAccountOperationMs(operation)
     if (result.code === 73) {
       throw new Error(
-        'The native Antigravity credential changed during selection; refresh before retrying.'
+        action === 'write'
+          ? 'The native Antigravity credential changed during selection; refresh before retrying.'
+          : 'The native Antigravity credential changed while it was read; refresh before retrying.'
       )
     }
     if (result.code !== 0 || result.timedOut || result.outputTruncated) {

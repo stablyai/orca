@@ -39,3 +39,29 @@ it('rejects a guest identity verification failure', async () => {
     'could not be verified'
   )
 })
+it('reports a read conflict without implying an account selection', async () => {
+  mocks.run.mockResolvedValue({
+    code: 73,
+    stdout: '',
+    stderr: '',
+    timedOut: false,
+    outputTruncated: false
+  })
+  await expect(createAntigravityWslCredentialBackend(authority).read()).rejects.toThrow(
+    'The native Antigravity credential changed while it was read; refresh before retrying.'
+  )
+})
+it('reports a write conflict during account selection', async () => {
+  mocks.run.mockResolvedValue({
+    code: 73,
+    stdout: '',
+    stderr: '',
+    timedOut: false,
+    outputTruncated: false
+  })
+  await expect(
+    createAntigravityWslCredentialBackend(authority).write(credential('b'), credential('a'))
+  ).rejects.toThrow(
+    'The native Antigravity credential changed during selection; refresh before retrying.'
+  )
+})
