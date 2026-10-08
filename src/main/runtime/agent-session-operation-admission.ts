@@ -187,7 +187,12 @@ export function admitAgentSessionGlobalOperationInto(
 
 export function claimAgentSessionOperationInto(
   state: { operations: Map<string, AgentSessionOperationRow> },
-  args: { callerKey: string; operationId: string; ownedPane?: AgentSessionOperationOwnedPane }
+  args: {
+    callerKey: string
+    operationId: string
+    ownedPane?: AgentSessionOperationOwnedPane
+    terminalTarget?: unknown
+  }
 ): AgentSessionOperationClaim {
   const claimed = claimAgentSessionOperation(state.operations, args)
   state.operations = claimed.rows
@@ -200,6 +205,7 @@ export type ClaimAfterAdmission = (decision: AgentSessionOperationDecision) => b
 /** An admission whose claimant laid out a pane before its effect; recorded only if the claim wins. */
 export type AgentSessionOperationClaimingAdmission = AgentSessionOperationAdmission & {
   ownedPane?: AgentSessionOperationOwnedPane
+  terminalTarget?: unknown
 }
 
 /** Admission and, when `claimAfter` says so, the claim, in one transaction: the same swap as

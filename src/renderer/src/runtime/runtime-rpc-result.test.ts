@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { hasRuntimeRpcErrorCode, RuntimeRpcCallError } from './runtime-rpc-result'
+import {
+  hasRuntimeRpcErrorCode,
+  RuntimeRpcCallError,
+  runtimeCallFailure
+} from './runtime-rpc-result'
 
 describe('hasRuntimeRpcErrorCode', () => {
   it('matches structured runtime failures through wrapped causes', () => {
@@ -113,5 +117,20 @@ describe('hasRuntimeRpcErrorCode', () => {
     expect(
       hasRuntimeRpcErrorCode(new Error('stale_selector_not_found'), 'selector_not_found')
     ).toBe(false)
+  })
+})
+
+describe('runtimeCallFailure', () => {
+  it("keeps the host's code beside its message, and only a host answer has one", () => {
+    const refused = new RuntimeRpcCallError({
+      id: 'rpc-1',
+      ok: false,
+      error: { code: 'agent_session_operation_unknown', message: 'agent_session_operation_unknown' }
+    })
+    expect(runtimeCallFailure(refused)).toEqual({
+      message: 'agent_session_operation_unknown',
+      code: 'agent_session_operation_unknown'
+    })
+    expect(runtimeCallFailure(new Error('socket closed'))).toEqual({ message: 'socket closed' })
   })
 })

@@ -114,7 +114,7 @@ describe('structured mailbox pointer host', () => {
         body: { kind: 'message', role: 'user', blocks: [] }
       } as never)
     ).resolves.toEqual({ kind: 'sent', state: expected })
-    // Per-dispatch, so one worker's nudges cannot exhaust the shared operation-ledger budget.
+    // Per-dispatch caller key: names the dispatch the nudge is for.
     expect(send.mock.calls[0]![0]).toEqual({ callerKey: structuredPointerCallerKey('d1') })
     expect(send.mock.calls[0]![1]!.retryUnknown).toBeUndefined()
   })

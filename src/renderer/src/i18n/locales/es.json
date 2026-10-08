@@ -3351,6 +3351,8 @@
             "exitedDuringStart": "Se cerró mientras se iniciaba.",
             "notStarted": "El agente no pudo iniciarse.",
             "unconfirmed": "No se pudo confirmar que el agente se iniciara.",
+            "unconfirmedAgent": "No se pudo confirmar que {{agent}} se iniciara. Revisa las pestañas de este espacio de trabajo antes de volver a iniciarlo.",
+            "unconfirmedCheckTabs": "No se pudo confirmar que el agente se iniciara. Revisa las pestañas de este espacio de trabajo antes de volver a iniciarlo.",
             "workspaceGone": "Su espacio de trabajo ya no está disponible."
           }
         }
@@ -17840,7 +17842,7 @@
         "notDoneCommand": "El comando no se ejecutó.",
         "notDoneGoal": "El objetivo no se cambió.",
         "restartFailed": "El agente no pudo reiniciarse.",
-        "capacity": "Orca ha recibido demasiadas solicitudes en el último día.",
+        "capacity": "Orca en el equipo que ejecuta este chat alcanzó un límite de solicitudes. Actualice Orca en ese equipo y vuelva a intentarlo.",
         "outcomeUnknown": "Orca no pudo confirmar qué pasó. Revise el chat.",
         "sendOutcomeLost": "Orca no pudo confirmar que su mensaje llegó al agente. Revise el chat y vuelva a enviarlo si es necesario.",
         "questionChanged": "Esta pregunta ya se respondió o ha cambiado.",

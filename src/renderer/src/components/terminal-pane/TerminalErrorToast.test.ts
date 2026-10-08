@@ -262,6 +262,13 @@ describe('isExplainedTerminalError', () => {
     expect(humanized).not.toContain('terminal_pane_owner_host_mismatch')
   })
 
+  it("says an agent start couldn't be confirmed, without a code or an issue link", () => {
+    const raw = 'agent_session_operation_unknown'
+    expect(isExplainedTerminalError(raw)).toBe(true)
+    expect(humanizeTerminalError(raw)).toBe("Couldn't confirm the agent started.")
+    expect(isExplainedTerminalError('agent_session_operation_unknown_extra')).toBe(false)
+  })
+
   it('keeps the issue link for errors Orca cannot explain', () => {
     expect(isExplainedTerminalError('Paste failed.')).toBe(false)
     expect(isExplainedTerminalError('node-pty: open_slave failed: EMFILE')).toBe(false)

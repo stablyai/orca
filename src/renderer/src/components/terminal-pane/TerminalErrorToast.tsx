@@ -14,6 +14,7 @@ import {
   localizeTerminalSpawnHints,
   withoutTerminalSpawnIssueRequest
 } from './terminal-spawn-error-display'
+import { agentLaunchPaneNoticeText } from './agent-launch-pane-notice-text'
 
 const SSH_PREFIX = 'SSH connection is not active'
 // Produced by pty-connection.ts reportError() when a PTY reattach can't reach its SSH host.
@@ -66,6 +67,11 @@ const OWNER_HOST_MISMATCH_SOURCE = 'terminal_pane_owner_host_mismatch'
 const OWNER_HOST_MISMATCH_PATTERN = new RegExp(OWNER_HOST_MISMATCH_SOURCE)
 const OWNER_HOST_MISMATCH_REPLACE_PATTERN = new RegExp(OWNER_HOST_MISMATCH_SOURCE, 'g')
 const HELD_BY_PREVIOUS_RELAY_REPLACE_PATTERN = new RegExp(HELD_BY_PREVIOUS_RELAY_SOURCE, 'g')
+// The host couldn't confirm whether a retried agent start ran the first time.
+const CREATE_OUTCOME_UNKNOWN_SOURCE =
+  '(^|[^a-z0-9_])agent_session_operation_unknown(?=$|[^a-z0-9_])'
+const CREATE_OUTCOME_UNKNOWN_PATTERN = new RegExp(CREATE_OUTCOME_UNKNOWN_SOURCE)
+const CREATE_OUTCOME_UNKNOWN_REPLACE_PATTERN = new RegExp(CREATE_OUTCOME_UNKNOWN_SOURCE, 'g')
 const UNREATTACHABLE_SESSION_PATTERNS = UNREATTACHABLE_SESSION_SOURCES.map(
   (source) => new RegExp(source)
 )
@@ -111,6 +117,7 @@ export function isExplainedTerminalError(error: string): boolean {
         SOURCE_RESTORE_REQUIRED_PATTERN.test(line) ||
         HELD_BY_PREVIOUS_RELAY_PATTERN.test(line) ||
         OWNER_HOST_MISMATCH_PATTERN.test(line) ||
+        CREATE_OUTCOME_UNKNOWN_PATTERN.test(line) ||
         UNREATTACHABLE_SESSION_PATTERNS.some((pattern) => pattern.test(line))
     )
 }
@@ -182,6 +189,10 @@ export function humanizeTerminalError(error: string): string {
       'auto.components.terminal.pane.TerminalErrorToast.ownerHostMismatch',
       "This terminal's saved session belongs to another host connection, so Orca can't reattach it here. Open a new terminal to continue."
     )
+  )
+  humanized = humanized.replace(
+    CREATE_OUTCOME_UNKNOWN_REPLACE_PATTERN,
+    (_match, prefix: string) => `${prefix}${agentLaunchPaneNoticeText({ kind: 'unconfirmed' })}`
   )
   if (humanized.includes(REMOTE_TERMINAL_CLOSED_MARKER)) {
     humanized = humanized.replaceAll(REMOTE_TERMINAL_CLOSED_MARKER, () =>

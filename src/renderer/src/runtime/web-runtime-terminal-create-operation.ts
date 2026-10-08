@@ -11,7 +11,7 @@ import {
   withAgentSessionCreateOperationId
 } from './agent-session-create-operation'
 import { runRemoteAgentSessionLaunch } from './remote-agent-session-launch'
-import { unwrapRuntimeRpcResult } from './runtime-rpc-client'
+import { runtimeCallFailure, unwrapRuntimeRpcResult } from './runtime-rpc-result'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import { resolveWebRuntimeSessionEnvironmentId } from './web-runtime-session-workspace-routing'
 import { recordWebSessionFocusIntent } from './web-session-focus-intent'
@@ -289,12 +289,12 @@ export async function createWebRuntimeSessionTerminalResult(
       ...(createdTabId ? { hostTabId: createdTabId } : {})
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
+    const failure = runtimeCallFailure(error)
     console.warn(
       hostCreated
         ? '[web-runtime-session] terminal created but reconciliation failed:'
         : '[web-runtime-session] failed to create terminal:',
-      message
+      failure.message
     )
     if (createdTabId) {
       // Why: a record that outlives the create flow could yank a user-dragged tab back later.
@@ -310,7 +310,7 @@ export async function createWebRuntimeSessionTerminalResult(
     // Why: once the host accepted creation, reporting failure invites the user
     // to retry with a new operation ID and can duplicate a fresh agent.
     return {
-      outcome: hostCreated ? { status: 'created' } : { status: 'failed', message },
+      outcome: hostCreated ? { status: 'created' } : { status: 'failed', ...failure },
       ...(createdTabId ? { hostTabId: createdTabId } : {})
     }
   }

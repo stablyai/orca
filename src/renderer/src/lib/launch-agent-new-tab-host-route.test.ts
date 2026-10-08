@@ -83,6 +83,19 @@ describe('an AI button launched through the host', () => {
     expect(toast.error).toHaveBeenCalledOnce()
   })
 
+  it("names the agent and says what to check when the host couldn't confirm it started", async () => {
+    deferredOutcome()({
+      kind: 'not-started',
+      unconfirmed: true,
+      code: 'agent_session_operation_unknown'
+    })
+    await launch().promptDeliveryResult
+    expect(toast.error).toHaveBeenCalledWith(
+      "Couldn't confirm Claude started. Check this workspace's tabs before starting it again.",
+      expect.anything()
+    )
+  })
+
   it('says nothing and pastes nothing when the user closed the tab, or its pane explains', async () => {
     for (const outcome of [{ kind: 'closed-by-user' }, { kind: 'pane-says' }] as const) {
       deferredOutcome()(outcome)

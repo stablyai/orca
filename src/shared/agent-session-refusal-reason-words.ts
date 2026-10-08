@@ -150,7 +150,7 @@ const REASON_WORDS = {
     handoffInFlight: codeWords('retry')
   },
   agent_session_operation_expired: { operationExpired: codeWords('retry') },
-  agent_session_operation_capacity: { operationCapacity: codeWords('wait') },
+  agent_session_operation_capacity: { operationCapacity: codeWords('updateOrca') },
   agent_session_operation_unknown: {
     outcomeUnknown: codeWords('checkChat'),
     resultLost: codeWords('checkChat'),

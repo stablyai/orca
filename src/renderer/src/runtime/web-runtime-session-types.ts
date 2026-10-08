@@ -12,7 +12,7 @@ import type { TuiAgent } from '../../../shared/tui-agent'
 
 export type WebRuntimeTerminalCreateOutcome =
   | { status: 'created' }
-  | { status: 'failed'; message: string }
+  | { status: 'failed'; message: string; code?: string }
 
 export type CreateWebRuntimeSessionTerminalArgs = {
   worktreeId: string

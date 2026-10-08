@@ -8,6 +8,8 @@ import {
   type HostAgentLaunchOutcome
 } from '@/lib/agent-launch-through-host'
 import { pasteAgentLaunchPromptOnceReady } from '@/lib/launch-agent-tab-prompt-paste'
+import { getAgentLabel } from '@/lib/agent-catalog'
+import type { TuiAgent } from '../../../shared/tui-agent'
 
 /**
  * Whether a new agent tab starts through the host's `agent.launch`: an AI button's launch, whose
@@ -25,16 +27,21 @@ export function newTabPromptLaunchesThroughHost(args: {
 }
 
 /** The tab is gone, so the pane's own words go in a notice, with its prompt to copy. */
-function showLaunchNotStartedNotice(outcome: HostAgentLaunchOutcome, prompt: string): void {
+function showLaunchNotStartedNotice(
+  outcome: HostAgentLaunchOutcome,
+  prompt: string,
+  agent: TuiAgent
+): void {
   if (outcome.kind !== 'not-started') {
     return
   }
   toast.error(
-    agentLaunchPaneNoticeText(
-      outcome.unconfirmed
-        ? { kind: 'unconfirmed' }
-        : { kind: 'not-started', code: outcome.code ?? '' }
-    ),
+    outcome.unconfirmed
+      ? agentLaunchPaneNoticeText(
+          { kind: 'unconfirmed' },
+          { agentLabel: getAgentLabel(agent), checkTabs: true }
+        )
+      : agentLaunchPaneNoticeText({ kind: 'not-started', code: outcome.code ?? '' }),
     {
       action: {
         label: translate(
@@ -87,7 +94,7 @@ export function launchNewTabPromptThroughHost(
       return pasted
     }
     // The pane, or this notice for a tab that went, already says why: never a second notice.
-    showLaunchNotStartedNotice(launched, args.prompt)
+    showLaunchNotStartedNotice(launched, args.prompt, args.agent)
     return { delivered: false, failureNotified: true }
   })
   return { tabId, promptDeliveryResult }

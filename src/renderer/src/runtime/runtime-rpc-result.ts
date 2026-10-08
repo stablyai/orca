@@ -15,6 +15,14 @@ export class RuntimeRpcCallError extends Error {
   }
 }
 
+/** A failed call's words, plus the host's code when it answered with one. */
+export function runtimeCallFailure(error: unknown): { message: string; code?: string } {
+  return {
+    message: error instanceof Error ? error.message : String(error),
+    ...(error instanceof RuntimeRpcCallError ? { code: error.code } : {})
+  }
+}
+
 export function unwrapRuntimeRpcResult<TResult>(response: RuntimeRpcResponse<TResult>): TResult {
   if (response.ok === false) {
     throw new RuntimeRpcCallError(response)

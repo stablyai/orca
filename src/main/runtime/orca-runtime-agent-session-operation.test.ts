@@ -2,12 +2,31 @@ import {
   CreateAgentSessionParams,
   EnsureAgentSessionParams
 } from '../../shared/rpc-contract/agent-session-params'
-import { describe, expect, it, vi } from 'vitest'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { closeTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import { openTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
+import type { AgentSessionRecordStore } from './agent-session-record-store'
 import type {
   RuntimeCreateAgentSessionRequest,
   RuntimeCreateAgentSessionResult
 } from '../../shared/agent-session-host-authority'
 import { OrcaRuntimeService } from './orca-runtime'
+
+let stateDirectory: string
+// Why: one store per test, as the process holds one; reopening per create would read as a restart.
+let recordStore: AgentSessionRecordStore
+beforeEach(async () => {
+  stateDirectory = await mkdtemp(join(tmpdir(), 'orca-create-operation-'))
+  recordStore = await openTestAgentSessionRecordStore(stateDirectory)
+})
+afterEach(async () => {
+  closeTestJournalHostDatabase(stateDirectory)
+  vi.restoreAllMocks()
+  await rm(stateDirectory, { recursive: true, force: true })
+})
 
 function operationId(now = Date.now()): string {
   return `${now}-0123456789abcdef0123456789abcdef`
@@ -63,6 +82,7 @@ function createRuntime(provider?: {
     path: '/tmp/worktree-1',
     connectionId: null
   }))
+  vi.spyOn(runtime, 'openAgentSessionRecordStore').mockResolvedValue(recordStore)
   return runtime
 }
 
@@ -320,6 +340,7 @@ describe('agent-session create operation ledger', () => {
         clientId: 'device-a'
       })
     ).rejects.toThrow('agent_session_operation_conflict')
+    await vi.waitFor(() => expect(createTerminal).toHaveBeenCalledOnce())
     finish(terminal())
     await expect(first).resolves.toMatchObject({ disposition: 'created' })
     await expect(joined).resolves.toMatchObject({ disposition: 'replayed' })
@@ -334,6 +355,28 @@ describe('agent-session create operation ledger', () => {
     await runtime.createAgentSession(request(id), { clientId: 'device-a' })
     await runtime.createAgentSession(request(id), { clientId: 'device-b' })
     expect(createTerminal).toHaveBeenCalledTimes(2)
+  })
+
+  it('starts a create however many unexpired operations are held, and still replays the first', async () => {
+    // Why: a count limit (512 per caller, 4,096 in all) refused a user's create for unrelated traffic.
+    const runtime = createRuntime()
+    const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue(terminal())
+    const now = Date.now()
+    const ids = Array.from(
+      { length: 4_097 },
+      (_, index) => `${now}-${index.toString(16).padStart(32, '0')}`
+    )
+    const dispositions = new Set<string>()
+    for (const id of ids) {
+      const created = await runtime.createAgentSession(request(id), { clientId: 'device-a' })
+      dispositions.add(created.disposition)
+    }
+
+    expect([...dispositions]).toEqual(['created'])
+    await expect(
+      runtime.createAgentSession(request(ids[0]!), { clientId: 'device-a' })
+    ).resolves.toMatchObject({ disposition: 'replayed' })
+    expect(createTerminal).toHaveBeenCalledTimes(4_097)
   })
 
   it('rejects an expired unseen operation before terminal creation', async () => {
@@ -375,27 +418,35 @@ describe('agent-session create operation ledger', () => {
   })
 
   it.each([
-    ['controller admission fails', 'agent_session_exited_during_start'],
-    ['publication fails', 'post-spawn publication failure']
-  ])('retains a replay fence when %s after physical spawn commit', async (_case, message) => {
-    const runtime = createRuntime()
-    const failure = new Error(message)
-    const createTerminal = vi
-      .spyOn(runtime, 'createTerminal')
-      .mockImplementation(async (_worktree, opts) => {
-        opts?.onPtySpawnCommitted?.()
-        throw failure
-      })
-    const id = operationId()
+    [
+      'controller admission fails',
+      'agent_session_exited_during_start',
+      'agent_session_exited_during_start'
+    ],
+    // A replay can be hours old, so raw first-attempt text replays as unconfirmed.
+    ['publication fails', 'post-spawn publication failure', 'agent_session_operation_unknown']
+  ])(
+    'retains a replay fence when %s after physical spawn commit',
+    async (_case, message, replayed) => {
+      const runtime = createRuntime()
+      const failure = new Error(message)
+      const createTerminal = vi
+        .spyOn(runtime, 'createTerminal')
+        .mockImplementation(async (_worktree, opts) => {
+          opts?.onPtySpawnCommitted?.()
+          throw failure
+        })
+      const id = operationId()
 
-    await expect(runtime.createAgentSession(request(id), { clientId: 'device-a' })).rejects.toThrow(
-      failure.message
-    )
-    await expect(runtime.createAgentSession(request(id), { clientId: 'device-a' })).rejects.toThrow(
-      failure.message
-    )
-    expect(createTerminal).toHaveBeenCalledOnce()
-  })
+      await expect(
+        runtime.createAgentSession(request(id), { clientId: 'device-a' })
+      ).rejects.toThrow(failure.message)
+      await expect(
+        runtime.createAgentSession(request(id), { clientId: 'device-a' })
+      ).rejects.toThrow(replayed)
+      expect(createTerminal).toHaveBeenCalledOnce()
+    }
+  )
 
   it('reclaims a fenced remote spawn the host is still holding', async () => {
     const runtime = createRuntime()
@@ -486,7 +537,7 @@ describe('agent-session create operation ledger', () => {
     ]
     await expect(Promise.all(attempts)).rejects.toThrow(failure.message)
     await expect(runtime.createAgentSession(request(id), { clientId: 'device-a' })).rejects.toThrow(
-      failure.message
+      'agent_session_operation_unknown'
     )
     expect(createTerminal).toHaveBeenCalledOnce()
   })

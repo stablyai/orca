@@ -26,7 +26,8 @@ export const AGENT_SESSION_WRITE_NOTICE_COPY = {
   notDoneCommand: "The command didn't run.",
   notDoneGoal: "The goal wasn't changed.",
   restartFailed: "The agent couldn't restart.",
-  capacity: 'Orca has received too many requests in the last day.',
+  capacity:
+    'Orca on the computer running this chat has hit a request limit. Update Orca there, then try again.',
   outcomeUnknown: "Orca couldn't confirm what happened. Check the chat.",
   sendOutcomeLost:
     "Orca couldn't confirm your message reached the agent. Check the chat, then send it again if needed.",

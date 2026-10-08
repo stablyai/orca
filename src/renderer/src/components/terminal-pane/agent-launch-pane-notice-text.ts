@@ -34,12 +34,28 @@ function notStartedReason(code: string): string | null {
   return null
 }
 
-export function agentLaunchPaneNoticeText(refusal: AgentLaunchPaneOutcome): string {
+/** `checkTabs` is for a toast only: inside the agent's own pane it would point away from it. */
+export function agentLaunchPaneNoticeText(
+  refusal: AgentLaunchPaneOutcome,
+  options: { agentLabel?: string; checkTabs?: boolean } = {}
+): string {
   if (refusal.kind === 'unconfirmed') {
-    return translate(
-      'auto.components.terminal.pane.AgentLaunchPaneNotice.unconfirmed',
-      "Couldn't confirm the agent started."
-    )
+    if (!options.checkTabs) {
+      return translate(
+        'auto.components.terminal.pane.AgentLaunchPaneNotice.unconfirmed',
+        "Couldn't confirm the agent started."
+      )
+    }
+    return options.agentLabel
+      ? translate(
+          'auto.components.terminal.pane.AgentLaunchPaneNotice.unconfirmedAgent',
+          "Couldn't confirm {{agent}} started. Check this workspace's tabs before starting it again.",
+          { agent: options.agentLabel }
+        )
+      : translate(
+          'auto.components.terminal.pane.AgentLaunchPaneNotice.unconfirmedCheckTabs',
+          "Couldn't confirm the agent started. Check this workspace's tabs before starting it again."
+        )
   }
   const lead = translate(
     'auto.components.terminal.pane.AgentLaunchPaneNotice.notStarted',

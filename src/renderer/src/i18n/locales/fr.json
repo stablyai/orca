@@ -3456,6 +3456,8 @@
             "exitedDuringStart": "Il s'est arrêté pendant le démarrage.",
             "notStarted": "L'agent n'a pas pu démarrer.",
             "unconfirmed": "Impossible de confirmer que l'agent a démarré.",
+            "unconfirmedAgent": "Impossible de confirmer que {{agent}} a démarré. Vérifiez les onglets de cet espace de travail avant de le relancer.",
+            "unconfirmedCheckTabs": "Impossible de confirmer que l'agent a démarré. Vérifiez les onglets de cet espace de travail avant de le relancer.",
             "workspaceGone": "Son espace de travail n'est plus disponible."
           }
         }
@@ -17941,7 +17943,7 @@
         "notDoneCommand": "La commande n'a pas été exécutée.",
         "notDoneGoal": "L'objectif n'a pas été modifié.",
         "restartFailed": "L'agent n'a pas pu redémarrer.",
-        "capacity": "Orca a reçu trop de requêtes au cours de la dernière journée.",
+        "capacity": "Orca sur l'ordinateur qui exécute ce chat a atteint une limite de requêtes. Mettez à jour Orca sur cet ordinateur, puis réessayez.",
         "outcomeUnknown": "Orca n'a pas pu confirmer ce qui s'est passé. Vérifiez le chat.",
         "sendOutcomeLost": "Orca n'a pas pu confirmer que votre message est parvenu à l'agent. Vérifiez le chat, puis renvoyez-le si nécessaire.",
         "questionChanged": "Cette question a déjà reçu une réponse ou a changé.",

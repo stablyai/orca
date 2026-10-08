@@ -3564,6 +3564,8 @@
             "exitedDuringStart": "It exited while starting.",
             "notStarted": "The agent couldn't start.",
             "unconfirmed": "Couldn't confirm the agent started.",
+            "unconfirmedAgent": "Couldn't confirm {{agent}} started. Check this workspace's tabs before starting it again.",
+            "unconfirmedCheckTabs": "Couldn't confirm the agent started. Check this workspace's tabs before starting it again.",
             "workspaceGone": "Its workspace is no longer available."
           }
         }
@@ -18073,7 +18075,7 @@
         "notDoneCommand": "The command didn't run.",
         "notDoneGoal": "The goal wasn't changed.",
         "restartFailed": "The agent couldn't restart.",
-        "capacity": "Orca has received too many requests in the last day.",
+        "capacity": "Orca on the computer running this chat has hit a request limit. Update Orca there, then try again.",
         "outcomeUnknown": "Orca couldn't confirm what happened. Check the chat.",
         "sendOutcomeLost": "Orca couldn't confirm your message reached the agent. Check the chat, then send it again if needed.",
         "questionChanged": "This question was already answered or has changed.",

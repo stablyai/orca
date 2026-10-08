@@ -430,7 +430,7 @@ describe('useStructuredAgentSessionOptions', () => {
       })
       await waitFor(() =>
         expect(mocks.toastError).toHaveBeenCalledWith(
-          "Orca has received too many requests in the last day. The setting wasn't changed."
+          "The setting wasn't changed. Orca on the computer running this chat has hit a request limit. Update Orca there, then try again."
         )
       )
       expect(mocks.enqueue).not.toHaveBeenCalled()

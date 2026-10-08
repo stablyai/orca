@@ -3,10 +3,16 @@ import { describe, expect, it, vi } from 'vitest'
 const CATALOG: Record<string, string> = {
   'auto.components.terminal.pane.AgentLaunchPaneNotice.notStarted': '智能体无法启动。',
   'auto.components.terminal.pane.AgentLaunchPaneNotice.unconfirmed': '无法确认智能体已启动。',
+  'auto.components.terminal.pane.AgentLaunchPaneNotice.unconfirmedCheckTabs':
+    '无法确认智能体已启动。再次启动前，请检查此工作区的标签页。',
   'auto.components.terminal.pane.AgentLaunchPaneNotice.exitedDuringStart': '它在启动时退出了。'
 }
 vi.mock('@/i18n/i18n', () => ({
-  translate: (key: string, fallback: string) => CATALOG[key] ?? fallback
+  translate: (key: string, fallback: string, values?: Record<string, string>) =>
+    (CATALOG[key] ?? fallback).replace(
+      /\{\{(\w+)\}\}/g,
+      (_match, name: string) => values?.[name] ?? ''
+    )
 }))
 
 const { agentLaunchPaneNoticeText, agentLaunchPaneOutcomeForLeaf } =
@@ -27,6 +33,18 @@ describe("the pane of a launch whose agent isn't running", () => {
 
   it("says it can't confirm, never that it failed, when nobody knows", () => {
     expect(agentLaunchPaneNoticeText({ kind: 'unconfirmed' })).toBe('无法确认智能体已启动。')
+  })
+
+  it('adds what to check only for a toast, naming the agent when the caller knows it', () => {
+    expect(agentLaunchPaneNoticeText({ kind: 'unconfirmed' }, { checkTabs: true })).toBe(
+      '无法确认智能体已启动。再次启动前，请检查此工作区的标签页。'
+    )
+    expect(
+      agentLaunchPaneNoticeText({ kind: 'unconfirmed' }, { agentLabel: 'Codex', checkTabs: true })
+    ).toBe("Couldn't confirm Codex started. Check this workspace's tabs before starting it again.")
+    expect(agentLaunchPaneNoticeText({ kind: 'unconfirmed' }, { agentLabel: 'Codex' })).toBe(
+      '无法确认智能体已启动。'
+    )
   })
 })
 

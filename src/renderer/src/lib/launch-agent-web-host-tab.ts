@@ -12,6 +12,8 @@ import type { TuiAgent } from '../../../shared/tui-agent'
 import type { AgentPromptDelivery } from '../../../shared/agent-session-host-authority'
 import { translate } from '@/i18n/i18n'
 import { toAgentLaunchPreferences } from '../../../shared/agent-launch-preferences'
+import { agentLaunchPaneNoticeText } from '@/components/terminal-pane/agent-launch-pane-notice-text'
+import { getAgentLabel } from '@/lib/agent-catalog'
 
 function removeStaleLocalAgentTabsForWebHostLaunch(worktreeId: string): void {
   const state = useAppStore.getState()
@@ -106,7 +108,12 @@ export function launchAgentInWebHostTab(args: {
     removeStaleLocalAgentTabsForWebHostLaunch(worktreeId)
     if (outcome.status === 'failed') {
       toast.error(
-        outcome.message ||
+        (outcome.code === 'agent_session_operation_unknown'
+          ? agentLaunchPaneNoticeText(
+              { kind: 'unconfirmed' },
+              { agentLabel: getAgentLabel(agent), checkTabs: true }
+            )
+          : outcome.message) ||
           translate(
             'auto.lib.launch.agent.in.new.tab.11cce5cc77',
             'Could not launch {{value0}} in a new terminal.',
