@@ -1,13 +1,7 @@
-import {
-  Platform,
-  Pressable,
-  TextInput,
-  View,
-  type StyleProp,
-  type ViewStyle
-} from 'react-native'
+import { Pressable, TextInput, View, type StyleProp, type ViewStyle } from 'react-native'
 import { Keyboard as KeyboardIcon } from 'lucide-react-native'
 import { HardwareKeyboardCaptureView } from '@orca/expo-hardware-keyboard'
+import { hostOs } from '../platform/host-os'
 import { getTerminalLiveInputKeyboardType } from '../terminal/terminal-keyboard-type'
 import type { TerminalLiveHardwareKeyEvent } from '../terminal/terminal-live-hardware-key-mapping'
 import { colors } from '../theme/mobile-theme'
@@ -28,7 +22,7 @@ type Props = {
   readonly showSoftInputOnFocus: boolean
   readonly isAttaching: boolean
   readonly dictation: DictationState
-  readonly dictationMode: 'toggle' | 'hold'
+  readonly dictationMode: string | undefined
   readonly styles: {
     readonly inputBar: StyleProp<ViewStyle>
     readonly liveInputBar: StyleProp<ViewStyle>
@@ -41,9 +35,7 @@ type Props = {
     readonly sendButtonDisabled: StyleProp<ViewStyle>
   }
   readonly onFocusPress: () => void
-  readonly onChange: (event: {
-    nativeEvent: { text: string; isComposing?: boolean }
-  }) => void
+  readonly onChange: (event: { nativeEvent: { text: string; isComposing?: boolean } }) => void
   readonly onKeyPress: (event: { nativeEvent: { key: string } }) => void
   readonly onSubmitEditing: () => void
   readonly onHardwareKey: (event: { nativeEvent: TerminalLiveHardwareKeyEvent }) => void
@@ -133,7 +125,7 @@ export function MobileTerminalLiveInputBar({
           smartInsertDelete={false}
           // Why: iOS textContentType overrides autoComplete and can narrow the keyboard.
           autoComplete="off"
-          keyboardType={getTerminalLiveInputKeyboardType(Platform.OS)}
+          keyboardType={getTerminalLiveInputKeyboardType(hostOs())}
           returnKeyType="default"
           blurOnSubmit={false}
           editable={canSend}

@@ -1,6 +1,7 @@
 import { extname, isAbsolute } from 'node:path'
 
 import { readJsonlCursor, type JsonRecord } from './codex-rollout-jsonl-cursor'
+import { isCodexStatusTranscriptLine } from './codex-status-transcript-line'
 import type { CodexSubagentTranscriptState } from './codex-subagent-transcript'
 
 const REVIEWER_CURSOR_MAX_PATHS = 64
@@ -78,7 +79,7 @@ export function reconcileCodexSubagentReviewer(
     cursor = { filePath: normalizedPath, offset: 0, carry: '' }
     state.reviewerCursorsByPath.set(normalizedPath, cursor)
   }
-  const records = readJsonlCursor(cursor)
+  const records = readJsonlCursor(cursor, isCodexStatusTranscriptLine)
   if (records === undefined) {
     state.reviewerCursorsByPath.delete(normalizedPath)
     state.reviewersByPath.delete(normalizedPath)

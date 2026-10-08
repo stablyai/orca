@@ -141,6 +141,7 @@ describe('runQuickCommandInNewTab', () => {
 
     expect(result).toEqual({ tabId: 'tab-agent' })
     expect(mocks.launchAgentInNewTab).toHaveBeenCalledWith({
+      requestId: expect.any(String),
       agent: 'codex',
       prompt: 'Review this diff',
       worktreeId: 'repo::worktree',
@@ -173,6 +174,7 @@ describe('runQuickCommandInNewTab', () => {
     })
 
     expect(mocks.launchAgentInNewTab).toHaveBeenCalledWith({
+      requestId: expect.any(String),
       agent: 'opencode2',
       prompt: 'Review this diff',
       promptDelivery: 'submit-after-ready',
@@ -228,6 +230,7 @@ describe('runQuickCommandInNewTab', () => {
 
     expect(result).toEqual({ tabId: 'tab-agent' })
     expect(mocks.launchAgentInNewTab).toHaveBeenCalledWith({
+      requestId: expect.any(String),
       agent: 'codex',
       prompt: 'Review this diff',
       worktreeId: 'repo::worktree',
@@ -242,13 +245,7 @@ describe('runQuickCommandInNewTab', () => {
   })
 
   it('records history while a structured agent quick command publishes asynchronously', () => {
-    mocks.launchAgentInNewTab.mockReturnValue({
-      surface: {
-        kind: 'local-agent-session',
-        tabId: 'agent-session:codex-session-1',
-        sessionId: 'codex-session-1'
-      }
-    })
+    mocks.launchAgentInNewTab.mockReturnValue({ surface: { kind: 'host-published' } })
 
     const result = runQuickCommandInNewTab({
       command: {
@@ -263,7 +260,8 @@ describe('runQuickCommandInNewTab', () => {
       historyId: 'runtime:local\u0000agent-review'
     })
 
-    expect(result).toEqual({ tabId: 'agent-session:codex-session-1' })
+    // The chat opens once its host admits it, so there is no tab to hand back yet.
+    expect(result).toBeNull()
     expect(mockState.setRecentQuickCommandForGroup).toHaveBeenCalledWith(
       'group-1',
       'runtime:local\u0000agent-review'
@@ -271,13 +269,7 @@ describe('runQuickCommandInNewTab', () => {
   })
 
   it('uses the active group for structured history when the caller has no group', () => {
-    mocks.launchAgentInNewTab.mockReturnValue({
-      surface: {
-        kind: 'local-agent-session',
-        tabId: 'agent-session:codex-session-1',
-        sessionId: 'codex-session-1'
-      }
-    })
+    mocks.launchAgentInNewTab.mockReturnValue({ surface: { kind: 'host-published' } })
     mockState.activeGroupIdByWorktree['repo::worktree'] = 'active-group'
 
     runQuickCommandInNewTab({

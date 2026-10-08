@@ -15,6 +15,7 @@ import { fetchOpenCodeGoRateLimits, normalizeCookieInput } from './opencode-go-u
 
 const WORKSPACES_SERVER_ID = 'def39973159c7f0483d8793a822b8dbb10d067e12c65455fcb4608459ba0234f'
 const CONSOLE_STATUS_URL = 'https://opencode.ai/console/api/go/status'
+const CONSOLE_BILLING_STATUS_URL = 'https://opencode.ai/console/api/billing/status'
 const LEGACY_WORKSPACE_GO_URL = /https:\/\/opencode\.ai\/workspace\/[^/]+\/go/
 
 function makeResponse(body: string, status = 200): Response {
@@ -259,8 +260,10 @@ describe('fetchOpenCodeGoRateLimits', () => {
     netFetchMock
       .mockResolvedValueOnce(makeResponse(WORKSPACES_RESPONSE))
       .mockResolvedValueOnce(makeJsonResponse(STATUS_WITH_MONTHLY))
+      .mockResolvedValueOnce(makeResponse('unavailable', 503))
       .mockResolvedValueOnce(makeResponse(WORKSPACES_RESPONSE))
       .mockResolvedValueOnce(makeJsonResponse(STATUS_WITH_MONTHLY))
+      .mockResolvedValueOnce(makeResponse('unavailable', 503))
 
     const proxySettings = {
       httpProxyUrl: 'http://proxy.example:8080',
@@ -343,6 +346,265 @@ describe('fetchOpenCodeGoRateLimits', () => {
     })
   })
 
+  it.each(['discovery', 'override'])('accepts an org_ workspace from %s', async (source) => {
+    netFetchMock.mockImplementation(async (url) => {
+      if (String(url).startsWith('https://opencode.ai/_server')) {
+        return makeResponse('id: "org_CONSOLE123"')
+      }
+      return url === CONSOLE_STATUS_URL
+        ? makeJsonResponse(STATUS_WITH_MONTHLY)
+        : makeJsonResponse({
+            billingMode: 'prepaid',
+            mode: 'pay-as-you-go',
+            balanceMicroCents: '2786781005'
+          })
+    })
+
+    const result = await fetchOpenCodeGoRateLimits(
+      '__Host-console_session=placeholder',
+      source === 'override' ? 'org_CONSOLE123' : undefined
+    )
+
+    expect(result.status).toBe('ok')
+    expect(result.session?.usedPercent).toBe(30)
+    expect(result.extraUsage?.balance).toBe(27.86781005)
+    expect(netFetchMock).toHaveBeenCalledWith(
+      CONSOLE_BILLING_STATUS_URL,
+      expect.objectContaining({
+        headers: expect.objectContaining({ 'x-org-id': 'org_CONSOLE123' })
+      })
+    )
+  })
+
+  it('enriches the selected cookie workspace with its verified PAYG Zen balance', async () => {
+    netFetchMock.mockResolvedValueOnce(makeJsonResponse(STATUS_WITH_MONTHLY)).mockResolvedValueOnce(
+      makeJsonResponse({
+        billingMode: 'prepaid',
+        mode: 'pay-as-you-go',
+        balanceMicroCents: '2786781005'
+      })
+    )
+
+    const result = await fetchOpenCodeGoRateLimits(
+      '__Host-console_session=consoleTok',
+      'wrk_OVERRIDE123'
+    )
+
+    expect(netFetchMock).toHaveBeenNthCalledWith(
+      2,
+      CONSOLE_BILLING_STATUS_URL,
+      expect.objectContaining({
+        method: 'GET',
+        headers: expect.objectContaining({
+          'x-org-id': 'wrk_OVERRIDE123',
+          Accept: 'application/json'
+        })
+      })
+    )
+    expect(netFetchMock.mock.calls[1][1].headers).not.toHaveProperty('Cookie')
+    expect(result.extraUsage).toEqual({
+      balance: 27.86781005,
+      unit: 'currency',
+      currencyCode: 'USD',
+      enabled: true,
+      disabledReason: null,
+      spent: null,
+      spendLimit: null,
+      spentPercent: null,
+      resetsAt: null
+    })
+  })
+
+  it.each([
+    [
+      'unsupported mode',
+      makeJsonResponse({ billingMode: 'seat', mode: 'pay-as-you-go' }),
+      'billing-unavailable'
+    ],
+    ['billing failure', makeResponse('unavailable', 503), 'refresh-failed']
+  ])(
+    'keeps valid quota when optional billing has an %s',
+    async (_label, billingResponse, disabledReason) => {
+      const billingSignals: AbortSignal[] = []
+      netFetchMock
+        .mockResolvedValueOnce(makeJsonResponse(STATUS_WITH_MONTHLY))
+        .mockImplementationOnce((_url, init: RequestInit) => {
+          if (init.signal) {
+            billingSignals.push(init.signal)
+          }
+          return Promise.resolve(billingResponse)
+        })
+      const readBody = vi.spyOn(billingResponse, 'text')
+
+      const result = await fetchOpenCodeGoRateLimits('auth=mytoken', 'wrk_OVERRIDE123')
+
+      expect(result.status).toBe('ok')
+      expect(result.session?.usedPercent).toBe(30)
+      expect(result.extraUsage).toEqual(
+        expect.objectContaining({ balance: null, enabled: false, disabledReason })
+      )
+      expect(billingSignals).toHaveLength(1)
+      expect(billingSignals[0]?.aborted).toBe(!billingResponse.ok)
+      expect(readBody).toHaveBeenCalledTimes(billingResponse.ok ? 1 : 0)
+      expect(clearStorageDataMock).toHaveBeenCalledTimes(2)
+    }
+  )
+
+  it('returns a verified balance-only snapshot for explicit access:null', async () => {
+    netFetchMock.mockResolvedValueOnce(makeJsonResponse({ access: null })).mockResolvedValueOnce(
+      makeJsonResponse({
+        billingMode: 'prepaid',
+        mode: 'pay-as-you-go',
+        balanceMicroCents: '0'
+      })
+    )
+
+    const result = await fetchOpenCodeGoRateLimits('auth=mytoken', 'wrk_OVERRIDE123')
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        provider: 'opencode-go',
+        session: null,
+        weekly: null,
+        monthly: null,
+        error: null,
+        status: 'ok',
+        extraUsage: expect.objectContaining({ balance: 0, currencyCode: 'USD' })
+      })
+    )
+  })
+
+  it('returns a verified balance-only snapshot for an explicit JSON null status', async () => {
+    netFetchMock.mockResolvedValueOnce(makeJsonResponse(null)).mockResolvedValueOnce(
+      makeJsonResponse({
+        billingMode: 'prepaid',
+        mode: 'pay-as-you-go',
+        balanceMicroCents: '-125000000'
+      })
+    )
+
+    const result = await fetchOpenCodeGoRateLimits('auth=mytoken', 'wrk_OVERRIDE123')
+
+    expect(result.status).toBe('ok')
+    expect(result.session).toBeNull()
+    expect(result.extraUsage).toEqual(expect.objectContaining({ balance: -1.25 }))
+  })
+
+  it('aborts billing before returning a generic malformed-usage error', async () => {
+    let billingSignal: AbortSignal | undefined
+    netFetchMock
+      .mockResolvedValueOnce(makeJsonResponse({ access: {} }))
+      .mockImplementationOnce((_url, init: RequestInit) => {
+        billingSignal = init.signal ?? undefined
+        return new Promise<Response>((resolve, reject) => {
+          billingSignal?.addEventListener('abort', () => reject(new Error('aborted')), {
+            once: true
+          })
+          setTimeout(
+            () =>
+              resolve(
+                makeJsonResponse({
+                  billingMode: 'prepaid',
+                  mode: 'pay-as-you-go',
+                  balanceMicroCents: '100000000'
+                })
+              ),
+            100
+          )
+        })
+      })
+
+    const resultPromise = fetchOpenCodeGoRateLimits('auth=mytoken', 'wrk_OVERRIDE123')
+    await vi.advanceTimersByTimeAsync(0)
+    const abortedBeforeBillingResponse = billingSignal?.aborted
+    await vi.advanceTimersByTimeAsync(100)
+    const result = await resultPromise
+
+    expect(abortedBeforeBillingResponse).toBe(true)
+    expect(result.status).toBe('error')
+    expect(result.error).toBe('Could not parse usage data')
+    expect(clearStorageDataMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('prefers a later valid Go workspace over an earlier balance-only candidate', async () => {
+    netFetchMock
+      .mockResolvedValueOnce(makeResponse('id: "wrk_FIRST" id: "wrk_SECOND"'))
+      .mockResolvedValueOnce(makeJsonResponse({ access: null }))
+      .mockResolvedValueOnce(
+        makeJsonResponse({
+          billingMode: 'prepaid',
+          mode: 'pay-as-you-go',
+          balanceMicroCents: '900000000'
+        })
+      )
+      .mockResolvedValueOnce(makeJsonResponse(STATUS_NO_MONTHLY))
+      .mockResolvedValueOnce(makeResponse('unavailable', 503))
+
+    const result = await fetchOpenCodeGoRateLimits('auth=mytoken')
+
+    expect(result.status).toBe('ok')
+    expect(result.session?.usedPercent).toBe(10)
+    expect(result.extraUsage).toEqual(
+      expect.objectContaining({ balance: null, enabled: false, disabledReason: 'refresh-failed' })
+    )
+    expect(netFetchMock).toHaveBeenNthCalledWith(
+      4,
+      CONSOLE_STATUS_URL,
+      expect.objectContaining({ headers: expect.objectContaining({ 'x-org-id': 'wrk_SECOND' }) })
+    )
+  })
+
+  it('aborts and settles an optional billing timeout before clearing the cookie jar', async () => {
+    let billingSignal: AbortSignal | undefined
+    netFetchMock
+      .mockResolvedValueOnce(makeJsonResponse(STATUS_WITH_MONTHLY))
+      .mockImplementationOnce((_url, init: RequestInit) => {
+        billingSignal = init.signal ?? undefined
+        return new Promise<Response>((_resolve, reject) => {
+          billingSignal?.addEventListener('abort', () => reject(new Error('aborted')), {
+            once: true
+          })
+        })
+      })
+
+    const resultPromise = fetchOpenCodeGoRateLimits('auth=mytoken', 'wrk_OVERRIDE123')
+    await vi.advanceTimersByTimeAsync(5_000)
+    const result = await resultPromise
+
+    expect(result.status).toBe('ok')
+    expect(result.session?.usedPercent).toBe(30)
+    expect(billingSignal?.aborted).toBe(true)
+    expect(clearStorageDataMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('aborts and settles billing before continuing after a non-ok usage response', async () => {
+    let billingSignal: AbortSignal | undefined
+    let billingSettled = false
+    netFetchMock
+      .mockResolvedValueOnce(makeResponse('Unauthorized', 401))
+      .mockImplementationOnce((_url, init: RequestInit) => {
+        billingSignal = init.signal ?? undefined
+        return new Promise<Response>((_resolve, reject) => {
+          billingSignal?.addEventListener(
+            'abort',
+            () => {
+              billingSettled = true
+              reject(new Error('aborted'))
+            },
+            { once: true }
+          )
+        })
+      })
+
+    const result = await fetchOpenCodeGoRateLimits('auth=mytoken', 'wrk_OVERRIDE123')
+
+    expect(result.status).toBe('error')
+    expect(result.error).toContain('Usage fetch failed (401)')
+    expect(billingSignal?.aborted).toBe(true)
+    expect(billingSettled).toBe(true)
+    expect(clearStorageDataMock).toHaveBeenCalledTimes(2)
+  })
+
   it('returns ok with null monthly when the month meter is absent', async () => {
     netFetchMock
       .mockResolvedValueOnce(makeResponse(WORKSPACES_RESPONSE))
@@ -400,7 +662,7 @@ describe('fetchOpenCodeGoRateLimits', () => {
 
     const result = await fetchOpenCodeGoRateLimits('auth=mytoken', 'wrk_OVERRIDE123')
 
-    expect(netFetchMock).toHaveBeenCalledTimes(1)
+    expect(netFetchMock).toHaveBeenCalledTimes(2)
     expect(requestedUrls().some((url) => LEGACY_WORKSPACE_GO_URL.test(url))).toBe(false)
     expect(netFetchMock).toHaveBeenCalledWith(
       CONSOLE_STATUS_URL,

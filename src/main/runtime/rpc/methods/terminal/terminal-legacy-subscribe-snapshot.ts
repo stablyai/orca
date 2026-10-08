@@ -46,6 +46,13 @@ export async function publishLegacyBinaryInitialSnapshot(
     return
   }
 
+  // Why after the fit: the seed reflows the pane's screen onto the grid the phone now owns.
+  const hydratedFromRenderer =
+    missingHeadlessStateBeforeMobileFit &&
+    (await runtime.maybeHydrateHeadlessFromRenderer?.(ptyId)) === true
+  if (state.closed) {
+    return
+  }
   let read = await runtime.readTerminal(params.terminal)
   // One object for the budget and the frame it approves. Written out twice, the two drifted: the
   // budget measured a `scrollback` and the publication sent a `resized` with a `reason` beside it.
@@ -63,7 +70,9 @@ export async function publishLegacyBinaryInitialSnapshot(
   }
   // Why: missing model state (not blank snapshot text) signals a never-attached PTY; any renderer answer proves a pane, and the answer is null when the host's flag is unset or stale after a pane closed over a live PTY, which falls back to the mount wait.
   const needsRendererScreen =
-    missingHeadlessStateBeforeMobileFit && serialized?.source !== 'renderer'
+    missingHeadlessStateBeforeMobileFit &&
+    !hydratedFromRenderer &&
+    serialized?.source !== 'renderer'
   let rendererReady =
     needsRendererScreen &&
     (await runtime.serializeRendererTerminalBuffer(ptyId, { scrollbackRows: 0 })) !== null

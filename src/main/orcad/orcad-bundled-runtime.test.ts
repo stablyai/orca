@@ -1,15 +1,35 @@
 import { EventEmitter } from 'node:events'
+import { join, resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { handoffToBundledOrcad } from './orcad-bundled-runtime'
-import { ORCAD_BUN_VERSION } from '../../shared/orcad-bun-runtime'
-import { ORCAD_VERSION_FILENAME } from '../../shared/orcad-artifacts'
+import {
+  assertOrcadServerRuntime,
+  handoffToBundledOrcad,
+  resolveBundledOrcadSlot
+} from './orcad-bundled-runtime'
+import {
+  NODE_RUNTIME_ASSETS,
+  NODE_RUNTIME_COMPAT_ASSETS,
+  NODE_RUNTIME_PIN
+} from '../../shared/node-runtime-pin'
+import {
+  ORCAD_NODE_RUNTIME_MARKER_FILENAME,
+  ORCAD_SERVER_TARGET_FILENAME,
+  ORCAD_VERSION_FILENAME
+} from '../../shared/orcad-artifacts'
 
+const TARGET = 'linux-x64-glibc'
+const SHA = NODE_RUNTIME_ASSETS[TARGET].executableSha256
 const fixture = vi.hoisted(() => ({
   exists: vi.fn<(path: string) => boolean>(),
+  read: vi.fn<(path: string) => string>(),
   realpath: vi.fn<(path: string) => string>(),
   spawn: vi.fn()
 }))
-vi.mock('node:fs', () => ({ existsSync: fixture.exists, realpathSync: fixture.realpath }))
+vi.mock('node:fs', () => ({
+  existsSync: fixture.exists,
+  readFileSync: fixture.read,
+  realpathSync: fixture.realpath
+}))
 vi.mock('../../shared/child-process/run-process', () => ({ spawnProcess: fixture.spawn }))
 
 class RuntimeChild extends EventEmitter {
@@ -26,6 +46,9 @@ beforeEach(() => {
   oldListeners = new Map(signalNames.map((signal) => [signal, process.rawListeners(signal)]))
   child = new RuntimeChild()
   fixture.exists.mockReturnValue(true)
+  fixture.read.mockImplementation((path) =>
+    path.endsWith(ORCAD_SERVER_TARGET_FILENAME) ? `${TARGET}\n` : `${SHA}\n`
+  )
   fixture.realpath.mockImplementation((path) => path)
   fixture.spawn.mockReturnValue(child)
   vi.spyOn(process, 'exit').mockImplementation(() => {
@@ -55,9 +78,43 @@ describe('bundled Orca runtime handoff', () => {
     expect(fixture.spawn).not.toHaveBeenCalled()
   })
 
-  it('refuses an incomplete slot before starting a process', () => {
-    fixture.exists.mockImplementation((path) => path.endsWith('.build-target'))
+  it('refuses a slot whose shared runtime is missing before starting a process', () => {
+    fixture.exists.mockImplementation((path) => !path.includes(`node-${SHA}`))
     expect(() => handoffToBundledOrcad()).toThrow('bundled Orca runtime is missing')
+    expect(fixture.spawn).not.toHaveBeenCalled()
+  })
+
+  it('refuses a slot that names a runtime other than the pinned Node', () => {
+    fixture.read.mockImplementation((path) =>
+      path.endsWith(ORCAD_SERVER_TARGET_FILENAME) ? `${TARGET}\n` : `${'0'.repeat(64)}\n`
+    )
+    expect(() => handoffToBundledOrcad()).toThrow(`does not name Node ${NODE_RUNTIME_PIN.version}`)
+    expect(fixture.spawn).not.toHaveBeenCalled()
+  })
+
+  it('hands a glibc 2.17 compat slot to the compat runtime it names', () => {
+    const compatSha = NODE_RUNTIME_COMPAT_ASSETS['linux-x64-glibc217'].executableSha256
+    fixture.read.mockImplementation((path) =>
+      path.endsWith(ORCAD_SERVER_TARGET_FILENAME) ? 'linux-x64-glibc217\n' : `${compatSha}\n`
+    )
+    expect(handoffToBundledOrcad()).toBe(true)
+    expect(fixture.spawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        program: join('/slot', '..', 'runtimes', `node-${compatSha}`, 'bin', 'node')
+      })
+    )
+  })
+
+  it('refuses a compat slot that names the default runtime', () => {
+    fixture.read.mockImplementation((path) =>
+      path.endsWith(ORCAD_SERVER_TARGET_FILENAME) ? 'linux-x64-glibc217\n' : `${SHA}\n`
+    )
+    expect(() => handoffToBundledOrcad()).toThrow(`does not name Node ${NODE_RUNTIME_PIN.version}`)
+  })
+
+  it('refuses a slot without its runtime reference', () => {
+    fixture.exists.mockImplementation((path) => !path.endsWith(ORCAD_NODE_RUNTIME_MARKER_FILENAME))
+    expect(() => handoffToBundledOrcad()).toThrow('bundled Orca runtime reference is missing')
     expect(fixture.spawn).not.toHaveBeenCalled()
   })
 
@@ -67,27 +124,31 @@ describe('bundled Orca runtime handoff', () => {
     expect(fixture.spawn).not.toHaveBeenCalled()
   })
 
-  it('refuses a remaining bundled runtime without its target marker', () => {
-    fixture.exists.mockImplementation((path) => !path.endsWith('.build-target'))
+  it('refuses a remaining runtime reference without its target marker', () => {
+    fixture.exists.mockImplementation((path) => !path.endsWith(ORCAD_SERVER_TARGET_FILENAME))
     expect(() => handoffToBundledOrcad()).toThrow('bundled Orca runtime target is missing')
     expect(fixture.realpath).toHaveBeenCalledExactlyOnceWith('/slot/orcad.js')
     expect(fixture.spawn).not.toHaveBeenCalled()
   })
 
   it('accepts only the pinned version when already executing the bundled runtime', () => {
-    fixture.realpath.mockReturnValue('/real/runtime')
+    fixture.realpath.mockImplementation((path) =>
+      path === '/slot/orcad.js' ? path : '/real/runtime'
+    )
     vi.spyOn(process, 'versions', 'get').mockReturnValue({
       ...process.versions,
-      bun: ORCAD_BUN_VERSION
+      node: NODE_RUNTIME_PIN.version
     })
     expect(handoffToBundledOrcad()).toBe(false)
     expect(fixture.spawn).not.toHaveBeenCalled()
   })
 
-  it('refuses an adjacent runtime that reports the wrong Bun version', () => {
-    fixture.realpath.mockReturnValue('/real/runtime')
-    vi.spyOn(process, 'versions', 'get').mockReturnValue({ ...process.versions, bun: '0.0.0' })
-    expect(() => handoffToBundledOrcad()).toThrow(`must be Bun ${ORCAD_BUN_VERSION}`)
+  it('refuses a runtime path that reports another Node version', () => {
+    fixture.realpath.mockImplementation((path) =>
+      path === '/slot/orcad.js' ? path : '/real/runtime'
+    )
+    vi.spyOn(process, 'versions', 'get').mockReturnValue({ ...process.versions, node: '18.0.0' })
+    expect(() => handoffToBundledOrcad()).toThrow(`must be Node ${NODE_RUNTIME_PIN.version}`)
   })
 
   it.each(['linux', 'darwin', 'win32'] as const)(
@@ -96,7 +157,7 @@ describe('bundled Orca runtime handoff', () => {
       vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
       expect(handoffToBundledOrcad()).toBe(true)
       expect(fixture.spawn).toHaveBeenCalledWith({
-        program: expect.stringMatching(/bun-runtime(?:\.exe)?$/),
+        program: join('/slot', '..', 'runtimes', `node-${SHA}`, 'bin', 'node'),
         args: ['/slot/orcad.js', '--port', '0'],
         env: expect.objectContaining({ ORCA_BUNDLED_LAUNCHER_CHANNEL: '1' }),
         detached: true,
@@ -143,10 +204,17 @@ describe('bundled Orca runtime handoff', () => {
     handoffToBundledOrcad()
     expect(fixture.spawn).toHaveBeenCalledWith(
       expect.objectContaining({
-        program: expect.stringMatching(/real\/slot\/bun-runtime(?:\.exe)?$/),
+        program: join('/real/slot', '..', 'runtimes', `node-${SHA}`, 'bin', 'node'),
         args: ['/real/slot/orcad.js', '--port', '0']
       })
     )
+  })
+
+  it('resolves the slot a symlinked entry lives in, as the handoff does', () => {
+    fixture.realpath.mockImplementation((path) =>
+      path === '/bin/orcad.js' ? '/real/slot/orcad.js' : path
+    )
+    expect(resolveBundledOrcadSlot('/bin/orcad.js')).toBe(resolve('/real/slot'))
   })
 
   it('reports failed spawn as a configuration failure and removes listeners', () => {
@@ -172,5 +240,38 @@ describe('bundled Orca runtime handoff', () => {
     expect(() => child.emit('exit', null, 'SIGTERM')).toThrow('test process exit')
     expect(process.exit).toHaveBeenCalledWith(143)
     expect(process.kill).not.toHaveBeenCalled()
+  })
+})
+
+describe('server runtime admission', () => {
+  it.each(['14.21.3', '16.20.2'])('refuses host Node %s before loading profile state', (node) => {
+    fixture.exists.mockReturnValue(false)
+    vi.spyOn(process, 'versions', 'get').mockReturnValue({ ...process.versions, node })
+    expect(() => assertOrcadServerRuntime()).toThrow('requires Node.js 18')
+  })
+
+  it.each(['18.20.8', '20.19.0', '22.14.0', '23.0.0', '24.0.0', '26.0.0'])(
+    'accepts unpackaged host Node %s',
+    (node) => {
+      fixture.exists.mockReturnValue(false)
+      vi.spyOn(process, 'versions', 'get').mockReturnValue({ ...process.versions, node })
+      expect(() => assertOrcadServerRuntime()).not.toThrow()
+    }
+  )
+
+  it('refuses host Node 24 for a packaged slot that owns a bundled runtime', () => {
+    vi.spyOn(process, 'versions', 'get').mockReturnValue({ ...process.versions, node: '24.0.0' })
+    expect(() => assertOrcadServerRuntime()).toThrow('Start the Orca server with its bundled')
+  })
+
+  it('accepts the packaged runtime only at its pinned version', () => {
+    fixture.realpath.mockImplementation((path) =>
+      path === '/slot/orcad.js' ? path : '/real/runtime'
+    )
+    const versions = vi.spyOn(process, 'versions', 'get')
+    versions.mockReturnValue({ ...process.versions, node: '24.0.0' })
+    expect(() => assertOrcadServerRuntime()).toThrow(`must be Node ${NODE_RUNTIME_PIN.version}`)
+    versions.mockReturnValue({ ...process.versions, node: NODE_RUNTIME_PIN.version })
+    expect(() => assertOrcadServerRuntime()).not.toThrow()
   })
 })

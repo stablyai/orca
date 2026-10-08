@@ -4,13 +4,19 @@ import {
   AGENT_SESSION_LEASE_TTL_MS,
   type AgentSessionRecordStore
 } from '../../runtime/agent-session-record-store'
+import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 const RENEW_INTERVAL_MS = Math.floor(AGENT_SESSION_LEASE_TTL_MS / 3)
+
+const HELD_CHILD: AgentSessionOwnerProbe = {
+  outcome: 'identity-matched',
+  matchedOn: ['held-child']
+}
 
 export class StructuredAgentSessionLeaseRenewer {
   private timer: ReturnType<typeof setInterval> | null = null
   private running = false
-  /** The tick in flight. Never rejects: the timer path reports renewal failures through `onError`,
+  /** The tick in flight. Never rejects: the timer path logs renewal failures,
    *  and stopping must not turn one into a teardown failure as well. */
   private inFlight: Promise<void> = Promise.resolve()
 
@@ -21,8 +27,10 @@ export class StructuredAgentSessionLeaseRenewer {
       probeMany?: (
         records: readonly AgentSessionRecord[]
       ) => Promise<Map<string, AgentSessionOwnerProbe>>
+      /** Whether this runtime holds the session's child at `fence` and has not seen it exit. */
+      holdsLiveChild: (sessionId: string, fence: number) => boolean
       now: () => number
-      onError?: (input: { sessionId: string; error: unknown }) => void
+      logger: StructuredAgentSessionLogger
       intervalMs?: number
     }
   ) {}
@@ -36,8 +44,8 @@ export class StructuredAgentSessionLeaseRenewer {
   }
 
   /** Clearing the interval only stops the NEXT tick. A tick already past its guard still has a
-   *  store transaction to commit, and that transaction re-creates the store directory, so a stop
-   *  that returned before it landed would let the write outlive whatever tore the host down. */
+   *  store transaction to commit, so a stop that returned before it landed would let the write
+   *  outlive whatever tore the host down. */
   stop(): Promise<void> {
     if (this.timer) {
       clearInterval(this.timer)
@@ -71,7 +79,20 @@ export class StructuredAgentSessionLeaseRenewer {
         // keeps an orphan pid's lease reading as a healthy owner.
         record.lease.handoffStage !== 'recovering'
     )
-    const probes = await this.probe(records)
+    // A child this runtime holds proves itself; a PID probe can be indeterminate for it (no start
+    // time, no token echo), which would freeze the lease at its last proof.
+    const holds = (record: AgentSessionRecord): boolean =>
+      this.input.holdsLiveChild(record.sessionId, record.lease.runtimeFence)
+    const held = records.filter(holds)
+    const unheld = records.filter((record) => !held.includes(record))
+    const probes =
+      unheld.length > 0 ? await this.probe(unheld) : new Map<string, AgentSessionOwnerProbe>()
+    for (const record of held) {
+      // Re-read after the probes: an exit received meanwhile ends the child's proof.
+      if (holds(record)) {
+        probes.set(record.sessionId, HELD_CHILD)
+      }
+    }
     const renewals: {
       sessionId: string
       fence: number
@@ -91,8 +112,8 @@ export class StructuredAgentSessionLeaseRenewer {
         now
       })
     }
-    // The store persists the whole record file per transaction, so keep the healthy path to
-    // one commit. If one renewal is superseded, retrying individually preserves isolation.
+    // One transaction for every renewal on the healthy path. If one renewal is superseded,
+    // retrying individually preserves isolation.
     let results: PromiseSettledResult<AgentSessionRecord>[]
     try {
       const renewed = await this.input.store.renewLeases(renewals)
@@ -106,7 +127,7 @@ export class StructuredAgentSessionLeaseRenewer {
       if (result.status === 'rejected') {
         const renewal = renewals[index]
         if (renewal) {
-          this.input.onError?.({ sessionId: renewal.sessionId, error: result.reason })
+          this.reportFailure(renewal.sessionId, result.reason)
         }
       }
     })
@@ -126,15 +147,24 @@ export class StructuredAgentSessionLeaseRenewer {
         if (result.status === 'fulfilled') {
           probes.set(record.sessionId, result.value)
         } else {
-          this.input.onError?.({ sessionId: record.sessionId, error: result.reason })
+          this.reportFailure(record.sessionId, result.reason)
         }
       }
       return probes
     } catch (error) {
       for (const record of records) {
-        this.input.onError?.({ sessionId: record.sessionId, error })
+        this.reportFailure(record.sessionId, error)
       }
       return new Map()
     }
+  }
+
+  /** Lease and ownership failures are transient: the next tick, attach or send retries them. */
+  private reportFailure(sessionId: string, error: unknown): void {
+    this.input.logger.warn('renewing a chat lease failed', {
+      scope: 'lease-renewal',
+      sessionId,
+      error
+    })
   }
 }

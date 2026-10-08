@@ -32,6 +32,7 @@ export type PersistedUIState = {
   /** Active top-level view at save time, restored on relaunch; sanitized to 'terminal' if unknown or now-gated. */
   activeView: TopLevelView
   sidebarWidth: number
+  sidebarOpen?: boolean
   rightSidebarOpen: boolean
   rightSidebarTab: RightSidebarTab
   rightSidebarExplorerView: RightSidebarExplorerView
@@ -73,12 +74,18 @@ export type PersistedUIState = {
   /** Keep each project's main workspace out of the "Hide sleeping" sweep. Absent means on (#8873). */
   alwaysShowDefaultBranchWorkspace?: boolean
   /** Per-worktree Explorer dotfile visibility. Missing entries inherit the default: show. */
+  _explorerDisplayRootMigrated?: boolean
+  explorerDisplayRootByWorktree?: Record<string, string>
   showDotfilesByWorktree?: Record<string, boolean>
   filterRepoIds: string[]
   /** Agents-view host scope; deliberately separate from visibleWorkspaceHostIds so a monitoring surface never inherits nav filters silently. `null` = all hosts. */
   agentsVisibleHostIds?: VisibleWorkspaceHostIds
   /** Agents-view project filter; empty = all projects. Separate from filterRepoIds (workspace nav). */
   agentsFilterRepoIds?: string[]
+  /** Agents-view workspace-origin filters; separate from the workspace-nav hide flags. Absent means off. */
+  agentsHideWorkspacesFromOtherDevices?: boolean
+  agentsHideAutomationGeneratedWorkspaces?: boolean
+  agentsHideCliCreatedWorkspaces?: boolean
   /** Agents-view: include child (orchestration-dispatched) agent threads. Absent means off. */
   agentsShowChildAgents?: boolean
   /** Agents-view compact thread rows. Absent means on. */
@@ -168,6 +175,12 @@ export type PersistedUIState = {
   usagePercentageDisplayChangeNoticeDismissed?: boolean
   /** User-hidden empty-state usage CTA; permanently hides the "Connect AI accounts" prompt even if providers are later disconnected. */
   usageEmptyStateDismissed?: boolean
+  /** One-shot toast announcing per-terminal Codex servers; set when shown, so absent means not yet seen. */
+  codexTerminalServerIsolationNoticeSeen?: boolean
+  /** Windows one-shot toast for Codex moving onto ~/.codex; set when shown, so absent means not yet seen. */
+  codexSharedSettingsNoticeSeen?: boolean
+  /** One-shot toast asking for one sign-in to each Claude account saved before per-account folders. */
+  claudeAccountSignInNoticeSeen?: boolean
   /** URL for new browser tabs; null = blank tab. */
   browserDefaultUrl?: string | null
   browserDefaultSearchEngine?: 'google' | 'duckduckgo' | 'bing' | 'kagi' | null
@@ -192,6 +205,8 @@ export type PersistedUIState = {
   _expandedWorktreeCardPropertiesDefaulted?: boolean
   /** One-shot backfill flag for 'jira-issue', which joined the defaults after the expansion migration had already stamped upgraded profiles. */
   _jiraIssueWorktreeCardPropertyDefaulted?: boolean
+  /** One-shot backfill flag for 'host', which became a toggleable property after earlier profiles were already stamped. */
+  _hostWorktreeCardPropertyDefaulted?: boolean
   /** totalAgentsSpawned snapshot at first sighting of the current app version, so the nag counts agents since last update (not from zero). */
   starNagBaselineAgents?: number | null
   /** App version that set the current baseline; a version change re-captures the baseline on next spawn, restarting the nag countdown. */

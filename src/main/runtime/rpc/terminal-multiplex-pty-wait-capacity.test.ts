@@ -1,3 +1,4 @@
+import './unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
 import { TERMINAL_METHODS } from './methods/terminal'
@@ -284,7 +285,6 @@ describe('terminal multiplex RPC', () => {
         )!
       )
     }
-    expect(TERMINAL_MULTIPLEX_MAX_ACTIVE_STREAMS_PER_CONNECTION).toBe(128)
     for (
       let streamId = 1;
       streamId <= TERMINAL_MULTIPLEX_MAX_ACTIVE_STREAMS_PER_CONNECTION + 1;

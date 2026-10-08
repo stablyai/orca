@@ -45,8 +45,7 @@ const BASE64_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz012
 /**
  * `Uint8Array` to base64, three bytes at a time.
  *
- * Its own rather than `e2ee.ts`'s, which is not exported and belongs to a subsystem this one has
- * nothing to do with. Measured on Node against that module's shape and two chunked `fromCharCode`
+ * Measured on Node against a per-byte encoder and two chunked `fromCharCode`
  * variants, all four agreeing with `Buffer.from(image).toString('base64')` byte for byte: at the
  * measured 77 KB phone frame 0.52 ms here against 0.27 ms per-byte and 0.87 ms chunked, and at the
  * largest frame the envelope admits 3.43 / 3.15 / 5.18 ms. So the per-byte form is not the

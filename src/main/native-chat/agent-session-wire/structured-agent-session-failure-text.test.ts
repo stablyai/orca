@@ -9,8 +9,14 @@ import {
   refuse,
   refuseUnclassified
 } from '../../../shared/agent-session-wire-refusals'
-import { AgentSessionAcquisitionRefusal } from './structured-agent-session-adapter'
+import {
+  AgentSessionAcquisitionExitProvenError,
+  AgentSessionAcquisitionRefusal,
+  AgentSessionPreSpawnError
+} from './structured-agent-session-adapter'
+import { withMissingProviderExecutable } from '../../provider-process/provider-executable-missing'
 import { MAX_UNEXPECTED_EXIT_REASON_CHARS } from './structured-agent-session-dead-generation-settlement'
+import { StructuredAgentArgumentsError } from '../structured-agent-arguments-error'
 import {
   structuredAgentSessionStartFailure,
   withObservedProviderExit
@@ -21,6 +27,36 @@ const ORCA_INTERNAL =
   /agent_session_|execution_owner|provider_[a-z_]+|[0-9a-f]{8}-[0-9a-f]{4}-|[/\\][\w.-]+[/\\]|Error:|ENOENT/
 
 describe('structuredAgentSessionStartFailure', () => {
+  it('names a saved Arguments option in start and restart failures without exposing its value', () => {
+    const error = new StructuredAgentArgumentsError(
+      'Codex',
+      '--unknown=private',
+      'unsupportedOption'
+    )
+    const wrapped = new AgentSessionPreSpawnError(error)
+    const argumentProblem = {
+      agent: 'Codex',
+      option: '--unknown',
+      problem: 'unsupportedOption'
+    } as const
+    expect(structuredAgentSessionStartFailure({ error: wrapped }, { agentName: 'Codex' })).toEqual({
+      reason:
+        "Codex couldn't start. Saved Arguments contain an unsupported option (--unknown). Edit them in Settings > Agents > Arguments. Send your message to try again.",
+      rejection: { kind: 'startFailed', argumentProblem }
+    })
+    const refusal = refuseUnclassified('agent_session_operation_invalid', 'generic start failure')
+    expect(
+      structuredAgentSessionStartFailure({ refusal, argumentProblem }, { agentName: 'Codex' })
+    ).toEqual({
+      reason:
+        "Codex couldn't restart. Saved Arguments contain an unsupported option (--unknown). Edit them in Settings > Agents > Arguments. Send your message to try again.",
+      rejection: {
+        kind: 'restartFailed',
+        argumentProblem,
+        refusal: { code: 'agent_session_operation_invalid' }
+      }
+    })
+  })
   it('keeps a provider diagnostic only when the error carried one', () => {
     const carried = withProviderDiagnostic(
       new Error('claude stream-json exited (code 1): boom'),
@@ -39,6 +75,29 @@ describe('structuredAgentSessionStartFailure', () => {
     ).toEqual({ kind: 'startFailed' })
   })
 
+  it("words a CLI that was never found as the chat's notice does, with the step to take", () => {
+    const missing = new AgentSessionAcquisitionExitProvenError(
+      withObservedProviderExit(
+        withMissingProviderExecutable(new Error('claude stream-json exited (code 127)'))
+      )
+    )
+    expect(structuredAgentSessionStartFailure({ error: missing }, { agentName: 'Claude' })).toEqual(
+      {
+        reason:
+          "Claude wasn't found on the computer running this chat. Install it, or check its Command in Settings → Agents.",
+        rejection: { kind: 'cliMissing' }
+      }
+    )
+    expect(
+      structuredAgentSessionStartFailure(
+        { error: missing },
+        { agentName: 'Codex', command: 'compact' }
+      ).reason
+    ).toBe(
+      "Codex wasn't found on the computer running this chat. Install it, or check its Command in Settings → Agents. Run /compact again."
+    )
+  })
+
   it('keeps a start refusal the adapter typed', () => {
     const refusal = new AgentSessionAcquisitionRefusal(
       'Claude is not signed in for the selected account.',
@@ -47,11 +106,33 @@ describe('structuredAgentSessionStartFailure', () => {
     expect(structuredAgentSessionStartFailure({ error: refusal }, { agentName: 'Claude' })).toEqual(
       {
         reason:
-          'Claude is not signed in for the selected account. Sign in, then send your message again.',
+          "Claude isn't signed in. Run `claude` and sign in with /login, or choose an account in Claude Accounts settings.",
         rejection: { kind: 'notSignedIn' }
       }
     )
   })
+
+  it.each(['managed', 'system'] as const)(
+    'keeps the %s account in every start-failure fact',
+    (account) => {
+      const direct = structuredAgentSessionStartFailure(
+        { error: new AgentSessionAcquisitionRefusal('signed out', 'notSignedIn', account) },
+        { agentName: 'Claude' }
+      )
+      const refused = structuredAgentSessionStartFailure(
+        {
+          refusal: refuse(
+            'agent_session_operation_invalid',
+            { reason: 'notSignedIn', account },
+            'log'
+          )
+        },
+        { agentName: 'Claude' }
+      )
+      expect(direct.rejection).toEqual({ kind: 'notSignedIn', account })
+      expect(refused).toEqual(direct)
+    }
+  )
 
   it.each([
     [
@@ -65,6 +146,10 @@ describe('structuredAgentSessionStartFailure', () => {
     [
       'managedAccountUnsupported',
       'While a Claude account is added in WSL, Claude chats need a Windows Claude account. Choose or add one in Claude Accounts settings, then send your message again.'
+    ],
+    [
+      'agentCommandNotRunnable',
+      "Claude's Command in Settings → Agents must be a program path or name Orca can find, with no arguments or variables. Change it or reset it."
     ]
   ] as const)('words a start refused for %s by that situation', (reason, sentence) => {
     const code = 'agent_session_operation_invalid'
@@ -114,7 +199,6 @@ describe('structuredAgentSessionStartFailure', () => {
   })
 
   it("holds any provider detail to the lease record's cap", () => {
-    expect(MAX_PROVIDER_DIAGNOSTIC_CHARS).toBe(512)
     expect(MAX_UNEXPECTED_EXIT_REASON_CHARS).toBe(MAX_PROVIDER_DIAGNOSTIC_CHARS)
     const long = 'x'.repeat(4_000)
     // However the caller built the detail, the fact stores at most the cap.

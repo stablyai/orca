@@ -8,6 +8,7 @@ import { createDefaultWorkspaceCleanupBrowseState } from '../shared/workspace-cl
 import {
   closeTestStores,
   createSqliteTestStore,
+  createStore as createFreshStore,
   readPersistedStateJson,
   testState,
   dataFile,
@@ -38,8 +39,12 @@ vi.mock('electron', () => ({
   }
 }))
 
+let hasCreatedStoreInCase = false
+
 async function createStore() {
-  vi.resetModules()
+  if (hasCreatedStoreInCase) {
+    vi.resetModules()
+  }
   const { setSecretStore } = await import('../shared/secret-store')
   setSecretStore({
     isEncryptionAvailable: () => true,
@@ -53,6 +58,10 @@ async function createStore() {
     },
     describeProtectionGap: () => null
   })
+  if (!hasCreatedStoreInCase) {
+    hasCreatedStoreInCase = true
+    return createFreshStore()
+  }
   const { Store, initDataPath } = await import('./persistence')
   // Why here: userData resolves through AppEnvironment, and this must point at this
   // file's temp dir rather than the global fake's shared one, after resetModules.
@@ -71,6 +80,7 @@ vi.mock('./telemetry/cohort-classifier', () => ({
 
 describe('Store', () => {
   beforeEach(() => {
+    hasCreatedStoreInCase = false
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
     trackMock.mockReset()
     getCohortAtEmitMock.mockReset()
@@ -91,6 +101,19 @@ describe('Store', () => {
     expect(ui.groupBy).toBe('repo') // default preserved
     expect(ui.dismissedUpdateVersion).toBeNull()
   })
+
+  it.each([false, true])(
+    'restores sidebarOpen=%s from disk without changing the right sidebar',
+    async (sidebarOpen) => {
+      const store = await createStore()
+      store.updateUI({ sidebarOpen, rightSidebarOpen: false })
+      store.flush()
+
+      const reloaded = await createStore()
+      expect(reloaded.getUI().sidebarOpen).toBe(sidebarOpen)
+      expect(reloaded.getUI().rightSidebarOpen).toBe(false)
+    }
+  )
 
   it('round-trips and normalizes the host-qualified manual repo order', async () => {
     const store = await createStore()
@@ -134,6 +157,25 @@ describe('Store', () => {
     ])
     expect(store.getUI().workspaceHostOrder).toEqual(['ssh:box', 'local'])
     expect(store.getUI().sidebarWidth).toBe(400)
+  })
+
+  it('updateUI persists sanitized per-worktree explorer roots', async () => {
+    const store = await createStore()
+    store.updateUI({
+      explorerDisplayRootByWorktree: {
+        'repo-1::/repo': '/',
+        'repo-2::/repo': 'packages/app',
+        // @ts-expect-error Deliberately malformed input exercises runtime sanitization.
+        'repo-3::/repo': false,
+        // @ts-expect-error Deliberately malformed prototype key exercises runtime sanitization.
+        constructor: false
+      }
+    })
+
+    expect(store.getUI().explorerDisplayRootByWorktree).toEqual({
+      'repo-1::/repo': '/',
+      'repo-2::/repo': 'packages/app'
+    })
   })
 
   it('updateUI persists sanitized per-worktree dotfile visibility', async () => {

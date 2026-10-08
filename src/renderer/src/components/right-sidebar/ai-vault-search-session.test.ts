@@ -32,6 +32,18 @@ describe('aiVaultSearchHitToSession', () => {
     expect(hasAiVaultSearchHitPath(hit)).toBe(false)
   })
 
+  it('opens a native chat hit through its owner when transport withholds the command', () => {
+    const hit = {
+      ...searchHit(),
+      source: { presence: 'present' as const },
+      resumeCommand: undefined,
+      structuredSession: { sessionId: 'native-session', workspaceId: 'host-workspace' }
+    }
+
+    expect(canResumeAiVaultSearchHit(hit)).toBe(true)
+    expect(hasAiVaultSearchHitPath(hit)).toBe(false)
+  })
+
   it('gates resume and path actions on their own source fields', () => {
     const withoutResume = { ...searchHit(), resumeCommand: undefined }
 

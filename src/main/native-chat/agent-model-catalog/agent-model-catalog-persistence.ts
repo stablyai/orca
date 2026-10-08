@@ -5,6 +5,7 @@ import type {
   AgentSessionOptionChoice
 } from '../../../shared/agent-session-wire'
 import type { AgentModelCatalogEntry } from './agent-model-catalog-store'
+import { isStructuredAgentId } from '../../../shared/agent-session-provider-handle-encoding'
 
 const SCHEMA_VERSION = 1
 const SAVE_COALESCE_MS = 500
@@ -67,7 +68,7 @@ function parseEntry(value: unknown): AgentModelCatalogEntry | null {
   const row = asRecord(value)
   if (
     !row ||
-    (row.agent !== 'claude' && row.agent !== 'codex') ||
+    !isStructuredAgentId(row.agent) ||
     typeof row.fingerprint !== 'string' ||
     (row.origin !== 'live-session' && row.origin !== 'probe') ||
     typeof row.fetchedAt !== 'number' ||

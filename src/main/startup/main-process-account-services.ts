@@ -15,15 +15,20 @@ import { getInitialClaudeRateLimitTarget } from '../rate-limits/claude-rate-limi
 import { getKimiRuntimeTarget, resolveKimiHome } from '../kimi/kimi-runtime-home'
 import { readMiniMaxSessionCookie } from '../minimax/minimax-cookie-store'
 import { readMiniMaxApiKey } from '../minimax/minimax-api-key-store'
+import { readZcodePlanApiKey } from '../zcode/zcode-plan-api-key-store'
+import {
+  hasOpenCodeGoApiKey,
+  readOpenCodeGoApiKey,
+  saveOpenCodeGoApiKey
+} from '../opencode/opencode-go-api-key-store'
 import { createAccountRuntimeTargetSettingsSync } from '../rate-limits/account-runtime-target-sync'
 import { normalizeCodexRuntimeSelection } from '../codex-accounts/runtime-selection'
 import { normalizeClaudeRuntimeSelection } from '../claude-accounts/runtime-selection'
-import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
 import { agentHookServer } from '../agent-hooks/server'
-import { setSystemCodexHomeHookSweepSuppressed } from '../codex/hook-service'
-import { isRealHomeCodexHookLaneUsable } from '../codex/codex-real-home-hook-install'
 import { resolveHostCodexSessionSourceHome } from '../codex/codex-session-source-home'
 import { browserManager } from '../browser/browser-manager'
+import { agentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
+import { expireAgentModelCatalogFailuresForSettings } from '../native-chat/agent-model-catalog/agent-model-catalog-account-expiry'
 import { mainProcessState as state } from './main-process-state'
 
 export function initializeMainProcessAccountServices(): void {
@@ -40,19 +45,6 @@ export function initializeMainProcessAccountServices(): void {
   state.rateLimits = new RateLimitService()
   state.codexRuntimeHome = new CodexRuntimeHomeService(store)
   void startCodexStateDbBackfillRecoveryInBackground(getOrcaManagedCodexHomePath())
-  // Why: an incapable trust-grant host must fall back to the managed home for
-  // every consumer (PTY env, rate limits, commit messages) in one place.
-  state.codexRuntimeHome.setRealHomeLaneGate(() => isRealHomeCodexHookLaneUsable())
-  // Why: while the real-home lane owns ~/.codex/hooks.json, the legacy
-  // system-home sweep inside managed installs would delete the entry the
-  // real-home installer just appended. Flag OFF, hooks off, or an incapable
-  // trust lane re-arms the sweep so downgrade, opt-out, and rollback converge.
-  setSystemCodexHomeHookSweepSuppressed(
-    () =>
-      state.codexRuntimeHome !== null &&
-      state.codexRuntimeHome.isHostSystemDefaultRealHome() &&
-      isAgentStatusHooksEnabled(state.store?.getSettings())
-  )
   state.codexSessionMigration = createCodexSessionMigrationScheduler({
     isEligible: () =>
       state.codexRuntimeHome?.isHostSystemDefaultSessionMigrationEligible() === true,
@@ -88,10 +80,20 @@ export function initializeMainProcessAccountServices(): void {
     store.getSettings()
   )
   store.onSettingsChanged((updates, settings) => {
+    expireAgentModelCatalogFailuresForSettings(agentModelCatalogStore, updates)
     // Why: auto is a live policy; retarget only providers whose settings-derived runtime changed.
     void syncAccountRuntimeTargets(updates, settings).catch((error) =>
       console.warn('[rate-limits] Failed to apply account runtime target:', error)
     )
+    if ('opencodeSessionCookie' in updates || 'opencodeWorkspaceId' in updates) {
+      state.rateLimits?.invalidateOpenCodeGoCredentialState()
+      void state.rateLimits?.refresh().catch((error: unknown) => {
+        console.warn(
+          '[rate-limits] Failed to refresh OpenCode Go usage after a settings change:',
+          error
+        )
+      })
+    }
     // Why: these three pick the MiniMax host and quota bucket, so a stale snapshot from the
     // previous endpoint would otherwise sit in the status bar until the next poll.
     if (
@@ -107,6 +109,17 @@ export function initializeMainProcessAccountServices(): void {
         )
       })
     }
+    // Why: the site picks the GLM Coding Plan quota host, so a stale snapshot from
+    // the previous site would otherwise sit in the status bar until the next poll.
+    if ('zcodePlanSite' in updates) {
+      state.rateLimits?.invalidateZcodeCredentialState()
+      void state.rateLimits?.refresh().catch((error: unknown) => {
+        console.warn(
+          '[rate-limits] Failed to refresh GLM Coding Plan usage after a settings change:',
+          error
+        )
+      })
+    }
   })
   state.rateLimits.setClaudeAuthPreparationResolver((target) =>
     state.claudeRuntimeAuth!.prepareForRateLimitFetch(target)
@@ -115,14 +128,18 @@ export function initializeMainProcessAccountServices(): void {
   agentHookServer.setClaudeStatusLineListener((event) => {
     state.rateLimits!.ingestLiveClaudeRateLimits(event)
   })
+  store.migrateLegacyOpenCodeGoApiKey({
+    has: hasOpenCodeGoApiKey,
+    read: readOpenCodeGoApiKey,
+    save: saveOpenCodeGoApiKey
+  })
   state.rateLimits.setOpenCodeGoConfigResolver(() => {
     const settings = store.getSettings()
     return {
       sessionCookie: settings.opencodeSessionCookie,
-      workspaceIdOverride: settings.opencodeWorkspaceId,
-      apiKey: settings.opencodeGoApiKey
+      workspaceIdOverride: settings.opencodeWorkspaceId
     }
-  })
+  }, readOpenCodeGoApiKey)
   state.rateLimits.setMiniMaxConfigResolver(() => {
     const settings = store.getSettings()
     const apiKey = readMiniMaxApiKey() ?? ''
@@ -134,7 +151,15 @@ export function initializeMainProcessAccountServices(): void {
       apiKey
     }
   })
+  state.rateLimits.setZcodePlanConfigResolver(() => ({
+    site: store.getSettings().zcodePlanSite ?? 'zai',
+    apiKey: readZcodePlanApiKey() ?? ''
+  }))
   state.rateLimits.setGeminiCliOAuthEnabledResolver(() => store.getSettings().geminiCliOAuthEnabled)
+  // Reuse the meter switch so hidden Antigravity usage does not spawn agy.
+  state.rateLimits.setAntigravityUsageEnabledResolver(() =>
+    store.getUI().statusBarItems.includes('antigravity')
+  )
   state.rateLimits.setNetworkProxySettingsResolver(() => store.getSettings())
   state.keybindings = new KeybindingService({
     homePath: app.getPath('home'),
@@ -157,7 +182,6 @@ export function initializeMainProcessAccountServices(): void {
       .filter((account) => !activeIds.has(account.id))
       .map((account) => ({
         id: account.id,
-        managedAuthPath: account.managedAuthPath,
         managedAuthRuntime: account.managedAuthRuntime,
         wslDistro: account.wslDistro,
         wslLinuxAuthPath: account.wslLinuxAuthPath

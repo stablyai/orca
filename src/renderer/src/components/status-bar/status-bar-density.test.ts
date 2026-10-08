@@ -70,6 +70,17 @@ describe('recordStatusBarDensityWidth', () => {
     ).toEqual([w(700), w(600), w(500), w(600, 430), undefined])
   })
 
+  it('re-probes a roomier collapsing level once the tightest level sees its fit move', () => {
+    // Level 3's stale fit (450) kept the bar at level 4; fewer urgent chips now let it fit.
+    const settled = [w(700), w(600), w(500), w(600, 450), w(500, 400)]
+    expect(pickStatusBarDensityLevel(settled, 420)).toBe(TIGHTEST)
+    const remeasured = recordStatusBarDensityWidth(settled, TIGHTEST, w(500, 380))
+    expect(remeasured).toEqual([w(700), w(600), w(500), undefined, w(500, 380)])
+    expect(pickStatusBarDensityLevel(remeasured, 420)).toBe(3)
+    const probed = recordStatusBarDensityWidth(remeasured, 3, w(600, 410))
+    expect(pickStatusBarDensityLevel(probed, 420)).toBe(3)
+  })
+
   it('keeps other levels on a sub-pixel re-measure', () => {
     expect(recordStatusBarDensityWidth([w(700), w(600), w(500)], 1, w(600.5))).toEqual([
       w(700),

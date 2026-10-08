@@ -12,10 +12,9 @@ import {
 import { triggerMediumImpact } from '../platform/haptics'
 import { MobileTerminalLiveInputBar } from './MobileTerminalLiveInputBar'
 import { createTerminalLiveAccessoryInput } from '../terminal/terminal-live-accessory-input'
-import {
-  getTerminalCommandKeyboardType
-} from '../terminal/terminal-keyboard-type'
+import { getTerminalCommandKeyboardType } from '../terminal/terminal-keyboard-type'
 import { MobileTerminalInputActions } from './MobileTerminalInputActions'
+import { keepHeldPressThroughLongPress } from './held-press-long-press'
 import { isTerminalPhoneDisplayMode } from './mobile-session-route-helpers'
 import { colors } from '../theme/mobile-theme'
 import { styles } from './mobile-session-styles'
@@ -210,6 +209,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
                   }
                   void handleAccessoryKey(createTerminalLiveAccessoryInput(key))
                 }}
+                onLongPress={key.repeatable ? keepHeldPressThroughLongPress : undefined}
                 accessibilityLabel={key.accessibilityLabel ?? `Send ${key.label}`}
               >
                 <Text
@@ -264,7 +264,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
             showSoftInputOnFocus
             isAttaching={isAttaching}
             dictation={dictation}
-            dictationMode={dictationMode === 'hold' ? 'hold' : 'toggle'}
+            dictationMode={dictationMode}
             styles={styles}
             onFocusPress={focusLiveInput}
             onChange={handleLiveInputChange}

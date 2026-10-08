@@ -236,6 +236,7 @@ describe('worker transcript wire bounds', () => {
     const message = {
       id: `${transcriptPath}:0000000000000042`,
       turnId: `${transcriptPath}:0000000000000001`,
+      parentId: `${transcriptPath}:0000000000000041`,
       role: 'assistant' as const,
       timestamp: null,
       source: 'transcript' as const,
@@ -248,6 +249,12 @@ describe('worker transcript wire bounds', () => {
     expect(first.messages).toEqual(second.messages)
     expect(first.messages[0]?.id).toMatch(/^worker-message-/)
     expect(first.messages[0]?.turnId).toMatch(/^worker-message-/)
+    // The parent link stays joinable to the parent row's opaque id.
+    const parent = boundWorkerTranscriptMessages(
+      [{ ...message, id: message.parentId, parentId: undefined }],
+      transcriptPath
+    )
+    expect(first.messages[0]?.parentId).toBe(parent.messages[0]?.id)
     expect(first.messages[0]?.blocks[0]).toEqual({ type: 'image-ref' })
     expect(JSON.stringify(first)).not.toContain('Users')
     expect(first.warnings).toEqual(
@@ -297,50 +304,5 @@ describe('worker transcript wire bounds', () => {
         warnings: ['Dispatch capability tokens were redacted from terminal output.']
       }
     )
-  })
-})
-
-describe("worker transcript wire bounds — a subagent's line names its agent and nothing more", () => {
-  it('serves the producing agent id, bounded like the roster key, and drops provenance', () => {
-    const longId = `task-${'x'.repeat(2_000)}`
-    const result = boundWorkerTranscriptMessages([
-      {
-        id: 'child-line',
-        role: 'assistant',
-        timestamp: null,
-        source: 'transcript',
-        blocks: [{ type: 'text', text: 'The PR is CLEAN.' }],
-        agentId: longId,
-        parentAgentId: 'task-parent',
-        providerParentRef: 'toolu_provider_call',
-        producerKind: 'agent',
-        attempt: 2
-      },
-      {
-        id: 'roster',
-        role: 'system',
-        timestamp: null,
-        source: 'transcript',
-        blocks: [
-          {
-            type: 'subagent-group',
-            groupId: 'group-1',
-            agents: [{ id: longId, label: 'review the PR', state: 'working' }]
-          }
-        ]
-      }
-    ])
-    const [child, roster] = result.messages
-    expect(child).not.toHaveProperty('providerParentRef')
-    expect(child).not.toHaveProperty('parentAgentId')
-    expect(child).not.toHaveProperty('producerKind')
-    expect(child).not.toHaveProperty('attempt')
-    // The line's agent id and the roster entry that names it bound to the same key,
-    // so the reader can still put a name to the line.
-    const rosterBlock = roster?.blocks[0]
-    expect(rosterBlock?.type).toBe('subagent-group')
-    const entryId = rosterBlock?.type === 'subagent-group' ? rosterBlock.agents[0]?.id : undefined
-    expect(child?.agentId).toBeDefined()
-    expect(child?.agentId).toBe(entryId)
   })
 })

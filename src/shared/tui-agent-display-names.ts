@@ -25,6 +25,7 @@ export const TUI_AGENT_DISPLAY_NAMES: Record<TuiAgent, string> = {
   omp: 'OMP',
   'prime-agent': 'Prime Agent',
   qoder: 'Qoder CLI',
+  'qoder-cn': 'Qoder CLI China',
   gemini: 'Gemini',
   antigravity: 'Antigravity',
   aider: 'Aider',
@@ -48,9 +49,15 @@ export const TUI_AGENT_DISPLAY_NAMES: Record<TuiAgent, string> = {
   hermes: 'Hermes',
   openclaw: 'OpenClaw',
   copilot: 'GitHub Copilot',
-  grok: 'Grok'
+  grok: 'Grok',
+  jcode: 'Jcode'
 }
 
 /** Canonical agent id list derived from the exhaustive display-name record,
  * so shared modules can enumerate agents without importing renderer code. */
 export const ALL_TUI_AGENTS = Object.keys(TUI_AGENT_DISPLAY_NAMES) as readonly TuiAgent[]
+
+/** The display name of `agent`, or null when it names no TUI agent. */
+export function tuiAgentDisplayName(agent: string): string | null {
+  return Object.entries(TUI_AGENT_DISPLAY_NAMES).find(([id]) => id === agent)?.[1] ?? null
+}

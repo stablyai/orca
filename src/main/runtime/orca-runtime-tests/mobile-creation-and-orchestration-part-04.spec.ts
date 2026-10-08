@@ -162,6 +162,7 @@ describe('OrcaRuntimeService', () => {
           unread: false,
           liveTerminalCount: 1,
           hasAttachedPty: true,
+          unverifiableTerminalCount: 0,
           lastActivityAt: 0,
           lastOutputAt: 321,
           preview: 'build green',

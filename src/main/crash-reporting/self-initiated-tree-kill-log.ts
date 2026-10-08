@@ -60,8 +60,8 @@ export type SelfInitiatedTreeKill = {
   at: number
 }
 
-// Why 32 and not the sibling ring's 16: one teardown fans out over every root of
-// a codex turn, so a single incident can spend a dozen entries on its own.
+// Why 32 and not the sibling ring's 16: a window close tears down every session at once,
+// a burst of 30+ group kills (see the eviction note below).
 const MAX_TRACKED_SELF_KILLS = 32
 
 // Why asymmetric: a kill older than this cannot plausibly explain the death,

@@ -4,7 +4,10 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
-import { structuredAgentSessionRestartResumeSurfaces } from './structured-agent-session-restart-resume-wiring'
+import {
+  STRUCTURED_AGENT_SESSION_RESTART_CONTINUATION_CALLER,
+  structuredAgentSessionRestartResumeSurfaces
+} from './structured-agent-session-restart-resume-wiring'
 import { StructuredAgentSessionSendSettlement } from './structured-agent-session-send-settlement'
 
 const SESSION = 'session-1'
@@ -13,7 +16,8 @@ const MESSAGE = 'continuation-1'
 let submission: AgentJournalSubmission
 const journal = {
   submissions: (): AgentJournalSubmission[] => [submission],
-  cursor: () => ({ epoch: 'epoch-1', sequence: 1 })
+  cursor: () => ({ epoch: 'epoch-1', sequence: 1 }),
+  activeTurnId: () => null
 }
 
 beforeEach(() => {
@@ -109,4 +113,32 @@ describe('a restart batch holds a chat until its continuation is handed over', (
     settlement.closeSession(SESSION)
     await expect(handedOver).resolves.toBeUndefined()
   })
+})
+
+// No source: Orca's own instruction is no person's, so a restart or a close rejects it, never keeps
+// it as a card; the next restart offers the continuation again.
+it('sends the continuation with no source, as Orca’s and no person’s', async () => {
+  const send = vi.fn(async () => {
+    throw new Error('refused')
+  })
+  const surfaces = structuredAgentSessionRestartResumeSurfaces(
+    {
+      revealSession: async () => ({ readable: true }),
+      send,
+      waitForSendSettlement: async () => undefined
+    },
+    () => 0
+  )
+  const envelope = {
+    sessionId: SESSION,
+    clientOperationId: MESSAGE,
+    expectedRuntimeFence: 2,
+    payloadFingerprint: 'fingerprint'
+  }
+  const body = { kind: 'message' as const, role: 'user' as const, blocks: [] }
+  await expect(surfaces.send({ envelope, body })).rejects.toThrow('refused')
+  expect(send.mock.calls[0]).toEqual([
+    { callerKey: STRUCTURED_AGENT_SESSION_RESTART_CONTINUATION_CALLER },
+    { envelope, body }
+  ])
 })

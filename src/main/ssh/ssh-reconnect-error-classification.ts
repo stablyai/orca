@@ -23,6 +23,9 @@ const NETWORK_LIKE_ERROR_FRAGMENTS = [
   // Pre-7.x OpenSSH wording for the same banner-exchange failure.
   'ssh_exchange_identification',
   'lost connection',
+  // ssh2's wording when TCP connects but the socket closes before the server's banner, as it does
+  // while a port forwarder or NAT still accepts connections for a host it can no longer reach.
+  'connection lost before handshake',
   'remote end closed',
   // Deliberately not the bare 'connection closed by': OpenSSH prints "Connection closed by <ip> port 22"
   // for server-side rejections (MaxStartups, DenyUsers) too, and those must stay permanent.

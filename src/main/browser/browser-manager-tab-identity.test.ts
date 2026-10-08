@@ -107,6 +107,29 @@ function failLoad(url: string): void {
   didFailLoad(null, -102, 'ERR_CONNECTION_REFUSED', url, true)
 }
 
+function failDeviceMetrics(handle: ViewportGuestHandle): void {
+  handle.debuggerSendCommand.mockImplementation((method: string) =>
+    method === 'Emulation.setDeviceMetricsOverride' ||
+    method === 'Emulation.clearDeviceMetricsOverride'
+      ? Promise.reject(new Error('Inspected target navigated or closed'))
+      : Promise.resolve(undefined)
+  )
+}
+
+function debuggerDetachHandler(handle: ViewportGuestHandle): () => void {
+  const debuggerApi = handle.guest.debugger
+  const on =
+    debuggerApi && typeof debuggerApi === 'object' && 'on' in debuggerApi ? debuggerApi.on : null
+  if (!vi.isMockFunction(on)) {
+    throw new Error('Expected a mocked debugger.on')
+  }
+  const handler: unknown = on.mock.calls.findLast(([event]) => event === 'detach')?.[1]
+  if (typeof handler !== 'function') {
+    throw new Error('Expected a debugger detach handler')
+  }
+  return () => handler()
+}
+
 async function observe(
   { id, handle }: { id: number; handle: ViewportGuestHandle },
   url: string
@@ -255,21 +278,101 @@ describe('tab identity ownership', () => {
     )
   })
 
-  it('still presents the requested mobile identity when device metrics fail', async () => {
+  // Why: identity follows the viewport Chromium holds, so a phone identity never stands on a desktop
+  // viewport. The renderer re-sends the preset on the next page load, which heals the tab.
+  it('keeps the process identity when a mobile preset cannot apply its device metrics', async () => {
     mocks.processUserAgentMode = 'clean'
     mocks.processUserAgent = GUEST_CLEAN_UA
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     const opened = openTab(ORDINARY_URL)
-    opened.handle.debuggerSendCommand.mockImplementation((method: string) =>
-      method === 'Emulation.setDeviceMetricsOverride'
-        ? Promise.reject(new Error('metrics failed'))
-        : Promise.resolve(undefined)
-    )
+    failDeviceMetrics(opened.handle)
 
     await expect(browserManager.setViewportOverride(opened.tab, PRESETS.mobile)).resolves.toBe(
       false
     )
-    expect((await observe(opened, ORDINARY_URL)).presented).toContain('iPhone')
+    const failed = await observe(opened, ORDINARY_URL)
+    expect(failed.presented).toBe(GUEST_CLEAN_UA)
+    expect(failed.standingOverride).toBeNull()
+    expect(failed.requestIdentity).toEqual({ kind: 'process', userAgent: GUEST_CLEAN_UA })
+    navigate('https://example.org/')
+    expect((await observe(opened, 'https://example.org/')).presented).toBe(GUEST_CLEAN_UA)
+
+    opened.handle.debuggerSendCommand.mockResolvedValue(undefined)
+    await expect(browserManager.setViewportOverride(opened.tab, PRESETS.mobile)).resolves.toBe(true)
+    expect((await observe(opened, 'https://example.org/')).requestIdentity.kind).toBe('mobile')
+  })
+
+  it.each(['desktop', 'none'] as const)(
+    'keeps the mobile identity while the phone viewport stands when switching to %s fails',
+    async (next) => {
+      mocks.processUserAgentMode = 'clean'
+      mocks.processUserAgent = GUEST_CLEAN_UA
+      vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const opened = openTab(ORDINARY_URL)
+      await browserManager.setViewportOverride(opened.tab, PRESETS.mobile)
+      failDeviceMetrics(opened.handle)
+
+      await expect(browserManager.setViewportOverride(opened.tab, PRESETS[next])).resolves.toBe(
+        false
+      )
+      const failed = await observe(opened, ORDINARY_URL)
+      expect(failed.presented).toContain('iPhone')
+      expect(failed.requestIdentity.kind).toBe('mobile')
+      navigate('https://example.org/')
+      const reloaded = await observe(opened, 'https://example.org/')
+      expect(reloaded.presented).toContain('iPhone')
+      expect(reloaded.requestIdentity.kind).toBe('mobile')
+    }
+  )
+
+  // Why: a detach clears the device metrics along with the UA override, so the next page must not
+  // reinstall a phone identity on the desktop viewport that remains.
+  it('drops the mobile identity once a debugger detach clears the device metrics', async () => {
+    mocks.processUserAgentMode = 'clean'
+    mocks.processUserAgent = GUEST_CLEAN_UA
+    const opened = openTab(ORDINARY_URL)
+    await browserManager.setViewportOverride(opened.tab, PRESETS.mobile)
+    expect(opened.handle.presentedUserAgent()).toContain('iPhone')
+
+    debuggerDetachHandler(opened.handle)()
+    opened.handle.debuggerSendCommand.mockClear()
+    navigate('https://example.org/')
+    const observed = await observe(opened, 'https://example.org/')
+    expect(opened.handle.debuggerSendCommand).not.toHaveBeenCalledWith(
+      'Emulation.setUserAgentOverride',
+      expect.anything()
+    )
+    expect(observed.requestIdentity).toEqual({ kind: 'process', userAgent: GUEST_CLEAN_UA })
+  })
+
+  it('does not let a mid-apply debugger detach leave a mobile identity to reinstall', async () => {
+    mocks.processUserAgentMode = 'clean'
+    mocks.processUserAgent = GUEST_CLEAN_UA
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const opened = openTab(ORDINARY_URL)
+    const detach = debuggerDetachHandler(opened.handle)
+    opened.handle.debuggerSendCommand.mockImplementation((method: string) => {
+      if (method !== 'Emulation.setTouchEmulationEnabled') {
+        return Promise.resolve(undefined)
+      }
+      opened.handle.debuggerIsAttached.mockReturnValue(false)
+      detach()
+      return Promise.reject(new Error('Debugger is not attached'))
+    })
+
+    await expect(browserManager.setViewportOverride(opened.tab, PRESETS.mobile)).resolves.toBe(
+      false
+    )
+    // Another CDP client (the agent bridge) re-attaches before the preset is sent again.
+    opened.handle.debuggerIsAttached.mockReturnValue(true)
+    opened.handle.debuggerSendCommand.mockClear()
+    navigate('https://example.org/')
+    const observed = await observe(opened, 'https://example.org/')
+    expect(opened.handle.debuggerSendCommand).not.toHaveBeenCalledWith(
+      'Emulation.setUserAgentOverride',
+      expect.anything()
+    )
+    expect(observed.requestIdentity).toEqual({ kind: 'process', userAgent: GUEST_CLEAN_UA })
   })
 
   it('heals a mid-redirect process override on the next navigation', async () => {

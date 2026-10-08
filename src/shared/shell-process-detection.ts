@@ -24,10 +24,19 @@ export function isShellProcess(processName: string): boolean {
   )
 }
 
-/** A shell name or the tab's neutral default title; blank titles are no evidence. */
+// Why: Git for Windows' prompt titles the pane `$MSYSTEM:$PWD` (`MINGW64:/c/repo`), and Git Bash
+// has no command marks, so that repaint is the only sign an agent there handed back to the shell.
+const MSYS_PROMPT_TITLE_RE = /^(?:MINGW(?:32|64)|MSYS|UCRT64|CLANG(?:32|64|ARM64)):\//
+
+/** A shell name, a Git Bash prompt title, or the tab's neutral default title; blank is no evidence. */
 export function titleShowsNoAgent(title: string, defaultTitle?: string): boolean {
   const trimmed = title.trim()
-  return trimmed.length > 0 && (isShellProcess(trimmed) || trimmed === defaultTitle?.trim())
+  return (
+    trimmed.length > 0 &&
+    (isShellProcess(trimmed) ||
+      MSYS_PROMPT_TITLE_RE.test(trimmed) ||
+      trimmed === defaultTitle?.trim())
+  )
 }
 
 // Why: a ConPTY-side buffer clear cannot reach PSReadLine's cached cursor

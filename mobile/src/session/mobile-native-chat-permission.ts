@@ -1,7 +1,5 @@
-import type {
-  AgentJournalApprovalMatchedAskRule,
-  AgentJournalApprovalSubject
-} from '../../../src/shared/agent-session-journal-types'
+import { nativeChatApprovalAcceptKey } from '../../../src/shared/native-chat-agent-support'
+import type { AgentJournalApprovalSubject } from '../../../src/shared/agent-session-journal-types'
 
 // Agent permission asks (e.g. Claude/Codex "Do you want to proceed?") surface
 // as plain TUI text in the agent's last assistant message — there is no
@@ -19,7 +17,6 @@ export type MobileChatPermission = {
   description?: string
   decisionReason?: string
   blockedPath?: string
-  matchedAskRule?: AgentJournalApprovalMatchedAskRule
   subject?: AgentJournalApprovalSubject
   detail?: string
   /** Structured prompt identity, present only when the host can cancel it exactly. */
@@ -37,7 +34,8 @@ const ESCAPE = String.fromCharCode(27)
  *  detectAgentPermission still takes precedence when it can read the real numbered
  *  options from the prompt text. */
 export function parseApprovalFromStatus(
-  interactivePrompt: string | undefined | null
+  interactivePrompt: string | undefined | null,
+  agent?: string
 ): MobileChatPermission | null {
   if (!interactivePrompt) {
     return null
@@ -64,7 +62,7 @@ export function parseApprovalFromStatus(
     title: `Allow ${tool}?`,
     detail: typeof summary === 'string' && summary.length > 0 ? summary : undefined,
     options: [
-      { label: 'Allow', send: '1' },
+      { label: 'Allow', send: nativeChatApprovalAcceptKey(agent) },
       { label: 'Deny', send: ESCAPE }
     ]
   }

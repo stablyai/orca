@@ -191,7 +191,7 @@ export function reserveTerminalPaneSplitTelemetry(
   }
 }
 
-export function getSetupGuideStepSection(id: FeatureWallSetupStepId): 'parallel-work' | 'setup' {
+function getSetupGuideStepSection(id: FeatureWallSetupStepId): 'parallel-work' | 'setup' {
   return getFeatureWallSetupSectionId(id)
 }
 

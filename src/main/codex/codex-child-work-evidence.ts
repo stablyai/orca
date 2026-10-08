@@ -100,15 +100,13 @@ export class CodexChildWorkEvidence {
     commands: readonly CodexBackgroundCommandChange[]
   ): void {
     this.queueCommands(commands)
-    const threadId = this.childThread(event, frame)
-    if (threadId === null) {
-      return
+    for (const threadId of this.childThreads(event, frame)) {
+      const facts = this.factsFor(threadId)
+      if (facts && event.threadId === threadId) {
+        this.record(facts, event)
+      }
+      this.queueChild(threadId)
     }
-    const facts = this.factsFor(threadId)
-    if (facts && event.threadId === threadId) {
-      this.record(facts, event)
-    }
-    this.queueChild(threadId)
   }
 
   /** The provider session is gone, with the commands it ended: no child it still ran can report
@@ -125,17 +123,17 @@ export class CodexChildWorkEvidence {
     return pending.map((edge) => edge(observedAt))
   }
 
-  private childThread(
+  private childThreads(
     event: CodexBackgroundTaskEvent,
     frame: CodexBackgroundTaskFrame | null
-  ): string | null {
-    const threadId =
-      frame?.kind === 'subagent'
-        ? frame.agentThreadId
+  ): string[] {
+    const threadIds =
+      frame?.kind === 'subagents'
+        ? frame.children.map((child) => child.agentThreadId)
         : frame || CHILD_FRAME_METHODS.has(event.method)
-          ? event.threadId
-          : null
-    return threadId === this.primaryThreadId ? null : threadId
+          ? [event.threadId]
+          : []
+    return threadIds.filter((threadId) => threadId !== this.primaryThreadId)
   }
 
   /** A command belongs to the child thread that launched it; the session's own agent is no owner.

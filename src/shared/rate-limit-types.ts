@@ -11,6 +11,32 @@ export type RateLimitWindow = {
 
 export type ProviderRateLimitStatus = 'idle' | 'fetching' | 'ok' | 'error' | 'unavailable'
 
+type ExtraUsageBalanceBase = {
+  enabled: boolean
+  disabledReason: string | null
+  resetsAt: number | null
+}
+
+type CurrencyExtraUsageBalance = ExtraUsageBalanceBase & {
+  unit: 'currency'
+  /** Null when the current balance is unavailable. */
+  balance: number | null
+  currencyCode: string
+  spent: number | null
+  spendLimit: number | null
+  spentPercent: number | null
+}
+
+type CreditExtraUsageBalance = ExtraUsageBalanceBase & {
+  unit: 'credits'
+  balance: number
+  unlimited: boolean
+}
+
+// Why: currency and unitless credits have different metadata; the discriminator
+// prevents consumers from inventing dummy currency or spend-limit values.
+export type ExtraUsageBalance = CurrencyExtraUsageBalance | CreditExtraUsageBalance
+
 export type RateLimitBucket = RateLimitWindow & {
   name: string
 }
@@ -41,7 +67,6 @@ export type UsageRateLimitMetadata = {
   failureKind?: UsageRateLimitFailureKind
   credentialSource?: string
   authProvenance?: string
-  deferredByLiveClaudeSession?: boolean
   lastSuccessfulSource?: UsageRateLimitSource
   /** Unix ms timestamp before which usage refetches should not be attempted (from HTTP Retry-After). */
   retryAtMs?: number
@@ -67,6 +92,8 @@ export type ProviderRateLimits = {
   fableWeekly?: RateLimitWindow | null
   /** 30-day monthly window (OpenCode Go, Grok unified billing, Cursor plan pools), null if not available. */
   monthly?: RateLimitWindow | null
+  /** Overage / pay-as-you-go balance the plan spends into once its windows cap. */
+  extraUsage?: ExtraUsageBalance | null
   /** Named per-model buckets (Gemini models, Cursor plan pools). */
   buckets?: RateLimitBucket[]
   /** Available earned Codex rate-limit reset credits, if reported. */
@@ -170,6 +197,12 @@ export type RateLimitState = {
    * stored login. The token itself never leaves main.
    */
   cursorAuthConfigured: boolean
+  /**
+   * True when a GLM Coding Plan API key is saved in Orca's AI Provider
+   * Accounts. The key itself never leaves main; the status bar uses this to
+   * keep the ZCode bar visible across reloads between snapshot refreshes.
+   */
+  zcodePlanApiKeyConfigured?: boolean
   claudeTarget: RateLimitRuntimeTarget
   codexTarget: RateLimitRuntimeTarget
   inactiveClaudeAccounts: InactiveAccountUsage[]

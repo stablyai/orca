@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { startTerminalDocument, stopTerminalDocument } from './create-terminal-document'
 import { createTerminalDocumentScope, type TerminalDocumentScope } from './document-scope'
 import type { TerminalDocumentHost, TerminalViewportChange } from './document-host-seams'
@@ -49,6 +49,7 @@ afterEach(() => {
   while (started.length > 0) {
     stopTerminalDocument(started.pop()!)
   }
+  vi.restoreAllMocks()
 })
 
 /** A started document over a grid, with the page's seams the case names. */
@@ -128,9 +129,13 @@ describe("the document's frame on the page", () => {
     })
     const scales: string[] = []
     const style = scope.surface!.style
-    Object.defineProperty(style, 'transform', {
-      set: (value: string) => scales.push(/scale\(([^)]*)\)/.exec(value)?.[1] ?? value),
-      get: () => ''
+    const write = style.setProperty
+    vi.spyOn(style, 'setProperty').mockImplementation((name, value, priority) => {
+      if (name === 'transform') {
+        const transform = String(value)
+        scales.push(/scale\(([^)]*)\)/.exec(transform)?.[1] ?? transform)
+      }
+      write.call(style, name, value, priority)
     })
     // The fit's attempt ran and read the hidden host, and committed nothing.
     await framesUntil(() => widthsRead.includes(0))

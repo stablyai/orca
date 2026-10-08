@@ -1,3 +1,9 @@
+import { mirrorOpenCodeConfig } from './opencode-overlay-mirror'
+import {
+  writeOpenCodeStartupPromptPlugin,
+  OPENCODE_STARTUP_PROMPT_PLUGIN_DIRECTORY
+} from '../shared/opencode-startup-prompt-install'
+import { resolveOpenCodeConfigDirectory } from '../shared/opencode-config-directory'
 import { materializeOmpFreshConfig } from '../shared/omp-fresh-config'
 // Why: relay-side equivalent of Orca's local agent integration installers.
 // OpenCode still needs a config overlay, while Pi/OMP now get Orca-managed
@@ -17,19 +23,11 @@ import { materializeOmpFreshConfig } from '../shared/omp-fresh-config'
 // implementation rooted at $HOME/.orca-relay/ for OpenCode and at the remote
 // Pi/OMP homes for those agents.
 import { createHash } from 'node:crypto'
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  realpathSync,
-  statSync,
-  unlinkSync,
-  writeFileSync
-} from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { writeOverlayOpenCodePluginAtomically } from '../shared/opencode-plugin-atomic-write'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { mirrorEntry, safeRemoveOverlay } from '../main/pty/overlay-mirror'
+import { safeRemoveOverlay } from '../main/pty/overlay-mirror'
 import type { PiAgentKind } from '../shared/pi-agent-kind'
 import {
   installOpenCodePluginInCanonicalConfig,
@@ -37,6 +35,10 @@ import {
   type OpenCodeAgent
 } from './opencode-canonical-config'
 import { writeRelayOmpStatusExtension } from './omp-status-extension'
+import {
+  openCodeTuiPluginDirName,
+  writeOpenCodeTuiPlugin
+} from '../shared/opencode-tui-plugin-install'
 type LegacyOverlayAgentKind = Exclude<PiAgentKind, 'prime-agent'>
 const RELAY_HOOKS_DIR = '.orca-relay'
 const OPENCODE_OVERLAY_SUBDIR = 'opencode-overlays'
@@ -47,6 +49,11 @@ const PI_OVERLAY_SUBDIR_BY_KIND: Record<LegacyOverlayAgentKind, string> = {
 }
 const OPENCODE_PLUGIN_FILE = 'orca-opencode-status.js'
 const OPENCODE2_PLUGIN_FILE = 'orca-opencode2-status.js'
+// Orca's own entries (either major, file and TUI copy) are never mirrored from user config.
+const ORCA_OPENCODE_PLUGIN_ENTRIES = new Set([
+  OPENCODE_STARTUP_PROMPT_PLUGIN_DIRECTORY,
+  ...[OPENCODE_PLUGIN_FILE, OPENCODE2_PLUGIN_FILE].flatMap((f) => [f, openCodeTuiPluginDirName(f)])
+])
 const PI_EXTENSION_FILE = 'orca-agent-status.ts'
 const PI_AGENT_SUBDIR = 'agent'
 const OMP_MANAGED_STATUS_EXTENSION_DIR = 'omp-managed-status-extension'
@@ -79,6 +86,7 @@ function isUsableId(id: string): boolean {
   return typeof id === 'string' && id.length > 0 && id.length <= 1024
 }
 export type PluginSources = {
+  opencodeStartupPromptSource?: string
   /** Empty string revokes future installs; omission preserves the cached source. */
   opencodePluginSource?: string
   /** Source body of OpenCode 2's status plugin. */
@@ -110,6 +118,7 @@ export function getRelayOpenCodePluginPath(
   )
 }
 export class PluginOverlayManager {
+  private opencodeStartupPromptSource: string | null = null
   private opencodePluginSource: string | null = null
   private opencode2PluginSource: string | null = null
   private piExtensionSources: Record<PiAgentKind, string | null> = {
@@ -139,6 +148,9 @@ export class PluginOverlayManager {
    *  process start. Future PTYs pick up the refreshed source when the relay
    *  writes plugin/extension files before spawn. */
   setSources(sources: PluginSources): void {
+    if (typeof sources.opencodeStartupPromptSource === 'string') {
+      this.opencodeStartupPromptSource = sources.opencodeStartupPromptSource
+    }
     if (typeof sources.opencodePluginSource === 'string') {
       this.opencodePluginSource = sources.opencodePluginSource
     }
@@ -170,56 +182,12 @@ export class PluginOverlayManager {
     const source = this.piExtensionSources[kind]
     return source ?? (kind === 'omp' ? this.piExtensionSources.pi : null)
   }
-  private mirrorOpenCodeConfig(
-    sourceDir: string,
-    overlayDir: string,
-    pluginFileName: string
-  ): void {
-    for (const entry of readdirSync(sourceDir, { withFileTypes: true })) {
-      const sourcePath = join(sourceDir, entry.name)
-      if (entry.name === 'plugins') {
-        const isSymlink = entry.isSymbolicLink()
-        let isLinkPointingToDir = false
-        if (isSymlink) {
-          try {
-            isLinkPointingToDir = statSync(sourcePath).isDirectory()
-          } catch {
-            isLinkPointingToDir = false
-          }
-        }
-        if ((!isSymlink && entry.isDirectory()) || isLinkPointingToDir) {
-          const resolvedSource = isLinkPointingToDir ? realpathSync(sourcePath) : sourcePath
-          const overlayPluginsDir = join(overlayDir, 'plugins')
-          mkdirSync(overlayPluginsDir, { recursive: true })
-          for (const pluginEntry of readdirSync(resolvedSource, { withFileTypes: true })) {
-            if (
-              pluginEntry.name === pluginFileName ||
-              pluginEntry.name === OPENCODE_PLUGIN_FILE ||
-              pluginEntry.name === OPENCODE2_PLUGIN_FILE
-            ) {
-              continue
-            }
-            mirrorEntry(
-              join(resolvedSource, pluginEntry.name),
-              join(overlayPluginsDir, pluginEntry.name)
-            )
-          }
-          continue
-        }
-      }
-      mirrorEntry(sourcePath, join(overlayDir, entry.name))
-    }
-  }
   private writeOpenCodePlugin(overlayDir: string, pluginFileName: string, source: string): void {
     const pluginsDir = join(overlayDir, 'plugins')
     mkdirSync(pluginsDir, { recursive: true })
     const pluginPath = join(pluginsDir, pluginFileName)
-    try {
-      unlinkSync(pluginPath)
-    } catch {
-      // Fresh overlay or no same-named stale symlink.
-    }
-    writeFileSync(pluginPath, source)
+    writeOpenCodeTuiPlugin(pluginsDir, pluginFileName, source, 'overlay')
+    writeOverlayOpenCodePluginAtomically(pluginPath, source)
   }
 
   /** Materialize the OpenCode plugin overlay for `id` (typically the
@@ -234,7 +202,7 @@ export class PluginOverlayManager {
     agent: 'opencode' | 'opencode2' = 'opencode'
   ): string | null {
     const source = agent === 'opencode2' ? this.opencode2PluginSource : this.opencodePluginSource
-    if (!source || !isUsableId(id)) {
+    if ((!source && !this.opencodeStartupPromptSource) || !isUsableId(id)) {
       return null
     }
     const pluginFileName = agent === 'opencode2' ? OPENCODE2_PLUGIN_FILE : OPENCODE_PLUGIN_FILE
@@ -250,15 +218,43 @@ export class PluginOverlayManager {
         // Why: OPENCODE_CONFIG_DIR is a single config root. Mirror the user's
         // remote root into the overlay before adding Orca's plugin so status
         // reporting does not hide their auth, models, keybinds, or plugins.
-        this.mirrorOpenCodeConfig(existingConfigDir, dir, pluginFileName)
+        mirrorOpenCodeConfig(existingConfigDir, dir, ORCA_OPENCODE_PLUGIN_ENTRIES)
       }
-      this.writeOpenCodePlugin(dir, pluginFileName, source)
+      if (source) {
+        this.writeOpenCodePlugin(dir, pluginFileName, source)
+      }
+      if (this.opencodeStartupPromptSource) {
+        writeOpenCodeStartupPromptPlugin(dir, this.opencodeStartupPromptSource, 'overlay')
+      }
       return dir
     } catch (err) {
       process.stderr.write(
         `[plugin-overlay] failed to materialize OpenCode overlay: ${err instanceof Error ? err.message : String(err)}\n`
       )
       return null
+    }
+  }
+
+  installOpenCodeStartupPromptPlugin(
+    environment: NodeJS.ProcessEnv | Record<string, string>,
+    configDir?: string
+  ): boolean {
+    if (!this.opencodeStartupPromptSource) {
+      return false
+    }
+    try {
+      writeOpenCodeStartupPromptPlugin(
+        configDir ??
+          environment.OPENCODE_CONFIG_DIR ??
+          resolveOpenCodeConfigDirectory(environment, this.homeDir),
+        this.opencodeStartupPromptSource
+      )
+      return true
+    } catch (error) {
+      process.stderr.write(
+        `[plugin-overlay] failed to install OpenCode startup prompt: ${error instanceof Error ? error.message : String(error)}\n`
+      )
+      return false
     }
   }
 

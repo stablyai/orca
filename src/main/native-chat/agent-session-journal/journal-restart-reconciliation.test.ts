@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 // Wiring the restart reconciler: what provider history is allowed to decide
 // about a submission the crash boundary could only doubt.
 
@@ -14,17 +15,18 @@ import type {
 import { digestPayload } from './journal-payload-bounds'
 import { reconcileJournalSubmissionsAgainstHistory } from './journal-restart-reconciliation'
 import type { ProviderHistoryItem, ProviderHistoryWindow } from './journal-submission-reconciler'
-import { createTrackedJournalOpener } from './journal-store-test-open'
+import { createTrackedJournalOpener } from './journal-host-database-test-support'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import { classifyDispatchRejection } from '../../../shared/structured-agent-session-dispatch-rejection'
+import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-1',
   workspaceId: 'ws-1',
   hostId: 'host-1',
   agent: 'claude',
-  providerHandle: { kind: 'claude', sessionId: 'provider-1', leafUuid: null }
+  providerHandle: claudeProviderHandle('provider-1', null)
 }
 
 function claudeIdentity(uuid: string): AgentJournalItemIdentity {
@@ -48,7 +50,7 @@ const journals = createTrackedJournalOpener()
 async function open() {
   return journals.open({
     identity: IDENTITY,
-    journalDir: root,
+    stateDirectory: root,
     now: tick,
     mintEpoch: () => `epoch-${clock}`
   })
@@ -215,7 +217,8 @@ describe('reconcileJournalSubmissionsAgainstHistory', () => {
     const journal = await open()
     // An identical message, delivered and committed BEFORE the one that crashed.
     await journal.appendItem(claudeIdentity('uuid-old'), userMessage('deploy the thing'), {
-      fence: 1
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
     })
     await journal.appendSubmission({
       clientMessageId: 'cm_1',

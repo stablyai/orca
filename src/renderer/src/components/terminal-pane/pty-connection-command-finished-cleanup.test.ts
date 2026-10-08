@@ -141,14 +141,14 @@ function createDeps(overrides: Record<string, unknown> = {}) {
 }
 
 describe('connectPanePty', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetModules()
     vi.clearAllMocks()
     transportFactoryQueue = []
     createdTransportOptions = []
     storeSubscribers = []
     mockStoreState = createInitialStoreState(() => mockStoreState)
-    installTerminalTestGlobals()
+    await installTerminalTestGlobals()
   })
 
   afterEach(async () => {
@@ -286,6 +286,7 @@ describe('connectPanePty', () => {
     expect(mockStoreState.clearAgentLaunchConfig).not.toHaveBeenCalled()
     expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
       agent: 'droid',
+      agentEvidence: 'process-read',
       routingTrusted: true,
       shellForeground: false
     })
@@ -383,7 +384,8 @@ describe('connectPanePty', () => {
   it('keeps sleeping identity when the foreground check still sees the agent', async () => {
     vi.useFakeTimers()
     const { connectPanePty } = await import('./pty-connection')
-    vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('codex')
+    // Why both: the pane's process monitor reads the same foreground the confirm read sees.
+    vi.mocked(window.api.pty.getForegroundProcess).mockResolvedValue('codex')
     const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
     const ptyId = 'pty-sleeping-leaked-shell-marker'
     const transport = createMockTransport(ptyId)
@@ -623,7 +625,8 @@ describe('connectPanePty', () => {
   it('keeps armed modes while the agent still owns the foreground after a leaked 133;D', async () => {
     vi.useFakeTimers()
     const { connectPanePty } = await import('./pty-connection')
-    vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('droid')
+    // Why both: the pane's process monitor reads the same foreground the confirm read sees.
+    vi.mocked(window.api.pty.getForegroundProcess).mockResolvedValue('droid')
     const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
     const ptyId = 'pty-stale-mode-live-agent'
     const transport = createMockTransport(ptyId)
@@ -694,6 +697,7 @@ describe('connectPanePty', () => {
 
     dataCallbackRef.current?.('\x1b]133;D;0\x07')
     await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
+    await flushAsyncTicks()
 
     expect(mockStoreState.clearAgentLaunchConfig).toHaveBeenCalledExactlyOnceWith(paneKey)
     expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
@@ -743,96 +747,107 @@ describe('connectPanePty', () => {
     expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('alt-enter')
   })
 
-  it('pins interrupt inference before acknowledged input and command exit cleanup', async () => {
-    const { connectPanePty } = await import('./pty-connection')
+  it.each(['gemini', 'codex'] as const)(
+    'pins %s interrupt policy before acknowledged input and command exit cleanup',
+    async (agentType) => {
+      const { connectPanePty } = await import('./pty-connection')
 
-    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
-    const transport = createMockTransport()
-    const writeAccepted = createDeferred<boolean>()
-    transport.sendInputAccepted = vi.fn(() => writeAccepted.promise)
-    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
-      capturedDataCallback.current = callbacks.onData ?? null
-      return { id: 'tab-pty' }
-    })
-    transport.attach.mockImplementation(({ callbacks }: { callbacks: ConnectCallbacks }) => {
-      capturedDataCallback.current = callbacks.onData ?? null
-    })
-    transportFactoryQueue.push(transport)
-    vi.useFakeTimers()
-    vi.setSystemTime(1_100)
-    const paneKey = makePaneKey('tab-1', LEAF_1)
-    mockStoreState = {
-      ...mockStoreState,
-      agentStatusByPaneKey: {
-        [paneKey]: {
-          paneKey,
-          state: 'working',
-          prompt: 'stop quickly',
-          updatedAt: 1_000,
-          stateStartedAt: 900,
-          agentType: 'codex',
-          terminalTitle: 'Codex',
-          stateHistory: []
+      const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+      const transport = createMockTransport()
+      const writeAccepted = createDeferred<boolean>()
+      transport.sendInputAccepted = vi.fn(() => writeAccepted.promise)
+      transport.connect.mockImplementation(
+        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+          capturedDataCallback.current = callbacks.onData ?? null
+          return { id: 'tab-pty' }
         }
-      }
-    }
-    vi.mocked(window.api.agentStatus.inferInterrupt).mockImplementation(async () => {
-      mockStoreState.agentStatusByPaneKey[paneKey] = {
-        paneKey,
-        state: 'done',
-        prompt: 'stop quickly',
-        updatedAt: 1_100,
-        stateStartedAt: 1_100,
-        agentType: 'codex',
-        terminalTitle: 'Codex',
-        interrupted: true,
-        stateHistory: [
-          {
+      )
+      transport.attach.mockImplementation(({ callbacks }: { callbacks: ConnectCallbacks }) => {
+        capturedDataCallback.current = callbacks.onData ?? null
+      })
+      transportFactoryQueue.push(transport)
+      vi.useFakeTimers()
+      vi.setSystemTime(1_100)
+      const paneKey = makePaneKey('tab-1', LEAF_1)
+      mockStoreState = {
+        ...mockStoreState,
+        agentStatusByPaneKey: {
+          [paneKey]: {
+            paneKey,
             state: 'working',
             prompt: 'stop quickly',
-            startedAt: 900
+            updatedAt: 1_000,
+            stateStartedAt: 900,
+            agentType,
+            terminalTitle: agentType,
+            stateHistory: []
           }
-        ]
+        }
       }
-      return true
-    })
-    const terminalTarget = createKeyboardEventTarget()
-    const pane = createPane(1)
-    ;(pane.terminal as { element?: unknown }).element = terminalTarget.target
-    let onDataHandler: ((data: string) => void) | null = null
-    pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
-      onDataHandler = handler
-      return { dispose: vi.fn() }
-    }) as typeof pane.terminal.onData)
+      vi.mocked(window.api.agentStatus.inferInterrupt).mockImplementation(async () => {
+        mockStoreState.agentStatusByPaneKey[paneKey] = {
+          paneKey,
+          state: 'done',
+          prompt: 'stop quickly',
+          updatedAt: 1_100,
+          stateStartedAt: 1_100,
+          agentType,
+          terminalTitle: agentType,
+          interrupted: true,
+          stateHistory: [
+            {
+              state: 'working',
+              prompt: 'stop quickly',
+              startedAt: 900
+            }
+          ]
+        }
+        return true
+      })
+      const terminalTarget = createKeyboardEventTarget()
+      const pane = createPane(1)
+      ;(pane.terminal as { element?: unknown }).element = terminalTarget.target
+      let onDataHandler: ((data: string) => void) | null = null
+      pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
+        onDataHandler = handler
+        return { dispose: vi.fn() }
+      }) as typeof pane.terminal.onData)
 
-    connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
-    vi.advanceTimersByTime(1_000)
-    await flushAsyncTicks()
-    expect(capturedDataCallback.current).not.toBeNull()
-    if (!onDataHandler) {
-      throw new Error('expected onData handler to be registered')
+      connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+      vi.advanceTimersByTime(1_000)
+      await flushAsyncTicks()
+      expect(capturedDataCallback.current).not.toBeNull()
+      if (!onDataHandler) {
+        throw new Error('expected onData handler to be registered')
+      }
+      terminalTarget.dispatch(keyEvent({ key: 'Escape' }))
+      ;(onDataHandler as unknown as (data: string) => void)('\x1b')
+
+      capturedDataCallback.current?.('\x1b]133;D;130\x07thebr ~/repo $ ')
+      expect(window.api.agentStatus.inferInterrupt).not.toHaveBeenCalled()
+      expect(mockStoreState.dropAgentStatus).not.toHaveBeenCalled()
+
+      delete mockStoreState.agentStatusByPaneKey[paneKey]
+      writeAccepted.resolve(true)
+      await flushAsyncTicks()
+
+      if (agentType === 'codex') {
+        expect(window.api.agentStatus.inferInterrupt).not.toHaveBeenCalled()
+        expect(mockStoreState.dropAgentStatus).not.toHaveBeenCalled()
+        expect(mockStoreState.clearAgentLaunchConfig).toHaveBeenCalledWith(paneKey)
+      } else {
+        expect(window.api.agentStatus.inferInterrupt).toHaveBeenCalledWith({
+          paneKey,
+          baselineUpdatedAt: 1_000,
+          baselineStateStartedAt: 900,
+          baselinePrompt: 'stop quickly',
+          baselineAgentType: agentType,
+          intent: 'plain-escape'
+        })
+        expect(mockStoreState.dropAgentStatus).toHaveBeenCalledWith(paneKey)
+      }
     }
-    terminalTarget.dispatch(keyEvent({ key: 'Escape' }))
-    ;(onDataHandler as unknown as (data: string) => void)('\x1b')
-
-    capturedDataCallback.current?.('\x1b]133;D;130\x07thebr ~/repo $ ')
-    expect(window.api.agentStatus.inferInterrupt).not.toHaveBeenCalled()
-    expect(mockStoreState.dropAgentStatus).not.toHaveBeenCalled()
-
-    delete mockStoreState.agentStatusByPaneKey[paneKey]
-    writeAccepted.resolve(true)
-    await flushAsyncTicks()
-
-    expect(window.api.agentStatus.inferInterrupt).toHaveBeenCalledWith({
-      paneKey,
-      baselineUpdatedAt: 1_000,
-      baselineStateStartedAt: 900,
-      baselinePrompt: 'stop quickly',
-      baselineAgentType: 'codex',
-      intent: 'plain-escape'
-    })
-    expect(mockStoreState.dropAgentStatus).toHaveBeenCalledWith(paneKey)
-  })
+  )
 
   it('drops the command-finished status when pending interrupt inference is rejected', async () => {
     const { connectPanePty } = await import('./pty-connection')
@@ -857,7 +872,7 @@ describe('connectPanePty', () => {
           prompt: 'stop quickly',
           updatedAt: 1_000,
           stateStartedAt: 900,
-          agentType: 'codex',
+          agentType: 'custom-agent',
           terminalTitle: 'Codex',
           stateHistory: []
         }

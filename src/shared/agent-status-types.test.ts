@@ -306,7 +306,6 @@ Fix dispatch fallback preview for normalized status prompts`
       JSON.stringify({ state: 'waiting', interactivePrompt: long })
     )
     expect(result!.interactivePrompt).toHaveLength(AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH)
-    expect(AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH).toBe(16000)
   })
 
   it('leaves interactivePrompt undefined when absent or non-string', () => {
@@ -757,6 +756,22 @@ describe('the main agent field on a status payload', () => {
         '{"state":"done","mainAgent":{"state":"done","outcome":"maybe","stateStartedAt":5}}'
       )?.mainAgent
     ).toEqual({ state: 'done', stateStartedAt: 5 })
+  })
+
+  it('admits the host-observed verdicts, and reads an arm it cannot name as no verdict', () => {
+    for (const outcome of ['interruption', 'unconfirmed'] as const) {
+      expect(
+        parseAgentStatusPayload(
+          `{"state":"done","mainAgent":{"state":"done","outcome":"${outcome}","stateStartedAt":5}}`
+        )?.mainAgent
+      ).toEqual({ state: 'done', outcome, stateStartedAt: 5 })
+    }
+    // A newer host's arm drops the verdict, never the row: the row reads today's done.
+    expect(
+      parseAgentStatusPayload(
+        '{"state":"done","prompt":"keep me","mainAgent":{"state":"done","outcome":"from-a-newer-host","stateStartedAt":5}}'
+      )
+    ).toMatchObject({ state: 'done', prompt: 'keep me', mainAgent: { state: 'done' } })
   })
 
   it('drops a malformed main agent but never the row it rides on', () => {

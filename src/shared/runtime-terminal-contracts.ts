@@ -10,13 +10,24 @@ import type { RuntimeMobileSessionTabsResult } from './runtime-session-contracts
 import type { TabGroupLayoutNode } from './tab-types'
 import type { TerminalExitCause } from './terminal-exit-cause'
 import type { TerminalPaneLayoutNode } from './terminal-tab-types'
-import type { TuiAgent } from './tui-agent'
+import type { TerminalAgent, TuiAgent } from './terminal-agent'
+export type {
+  RuntimeTerminalSend,
+  RuntimeTerminalPromptStage,
+  RuntimeTerminalPromptDelivery
+} from './runtime-terminal-send-contract'
 
 export type RuntimeTerminalSummary = {
   handle: string
   ptyId: string | null
   incarnationId?: string | null
   orphaned?: boolean
+  /**
+   * Orphaned only: the pane the host last recorded for this PTY, which the renderer owning it can
+   * still hold even when its graph omitted that pane. Absent when none was recorded or the host
+   * predates the field.
+   */
+  recordedPaneKey?: string
   worktreeId: string
   worktreePath: string
   branch: string
@@ -27,8 +38,8 @@ export type RuntimeTerminalSummary = {
   writable: boolean
   lastOutputAt: number | null
   preview: string
-  /** Host-resolved agent identity for action consumers; absent when unknown or unsupported. */
-  agentIdentity?: TuiAgent
+  /** Host-resolved observed agent identity; absent when unknown. Does not imply launch support. */
+  agentIdentity?: TerminalAgent
   /** Absent while running or when the host predates the field; never infer a clean finish. */
   exitCause?: TerminalExitCause
   /** Absent when the host predates the field or could not name the execution host. */
@@ -202,30 +213,6 @@ export type RuntimeTerminalRename = {
   handle: string
   tabId: string
   title: string | null
-}
-
-export type RuntimeTerminalSend = {
-  handle: string
-  accepted: boolean
-  bytesWritten: number
-  refusedReason?: 'no-agent' | 'permission'
-  prompt?: RuntimeTerminalPromptDelivery
-}
-
-export type RuntimeTerminalPromptStage = 'input_accepted' | 'turn_started'
-
-export type RuntimeTerminalPromptDelivery = {
-  requestId: string
-  stages: RuntimeTerminalPromptStage[]
-  provider: 'claude' | 'codex' | 'unsupported' | 'old-host'
-  observation: 'supported' | 'unsupported' | 'incarnation_replaced' | 'permission'
-  processIncarnation: string
-  generation: number
-  baselineWorkingSequence: number
-  /** Hook turn-start timestamp before this prompt was accepted. */
-  baselineExplicitWorkingStartedAt?: number | null
-  /** Permission observations seen before this prompt was accepted. */
-  baselinePermissionSequence?: number
 }
 
 export type RuntimeTerminalAgentStatusState = 'working' | 'permission' | 'idle' | null

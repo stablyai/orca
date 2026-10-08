@@ -1,8 +1,6 @@
 import { translate } from '@/i18n/i18n'
-import {
-  joinNativeChatToolRunClauses,
-  nativeChatToolRunClauses
-} from '../../../../shared/native-chat-tool-run-sentence'
+import { joinNativeChatToolRunClauses } from '../../../../shared/native-chat-tool-run-sentence'
+import { nativeChatToolRunClauses } from './native-chat-tool-category'
 import type { NativeChatToolCategory } from '../../../../shared/native-chat-tool-icon'
 import { isToolCallBlock, type NativeChatBlock } from '../../../../shared/native-chat-types'
 import { toolInputCommand } from '../../../../shared/native-chat-tool-summary'

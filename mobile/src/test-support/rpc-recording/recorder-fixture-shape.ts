@@ -41,9 +41,8 @@ export function mountFixture<T>(value: PartialRecorderFixture<NoInfer<T>>): T {
 
 /**
  * What the type above accepts and refuses, as compile errors rather than as a claim. It lives in
- * this file rather than its own because `recorderSha256` pins every file in this directory and
- * `mutant-seam.test.ts` refuses one no recording driver can reach: a compile fence reaches nothing,
- * so on its own it would re-digest every golden while being unable to move one.
+ * this file rather than its own because `mutant-seam.test.ts` refuses a file no recording driver
+ * can reach, and a compile fence on its own reaches nothing.
  * `pnpm --dir mobile typecheck` covers this file and excludes every `.test.ts`, so these cases are
  * the only thing holding the branches up — without them the type records zero errors either way,
  * because no fixture in the tree happens to carry a callback, a set or a map.

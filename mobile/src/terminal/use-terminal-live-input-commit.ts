@@ -71,7 +71,6 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
   setLiveInputCapture
 }: TerminalLiveInputCommitOptions<TTabType>): TerminalLiveInputCommitHandlers {
   const liveInputInteractionGenerationRef = useRef(0)
-  const hardwareLocalEditQueueRef = useRef<Promise<void>>(Promise.resolve())
   const advanceLiveInputInteractionGeneration = useCallback(() => {
     liveInputInteractionGenerationRef.current += 1
   }, [])
@@ -238,7 +237,14 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
 
   const handleLiveInputHardwareKey = useCallback(
     (event: TerminalLiveHardwareKeyEvent) => {
-      if (!activeHandle || !liveInputTerminalHandles.has(activeHandle)) {
+      if (
+        !connected ||
+        !activeHandle ||
+        activeHandleRef.current !== activeHandle ||
+        (activeSessionTabTypeRef.current != null &&
+          activeSessionTabTypeRef.current !== 'terminal') ||
+        !liveInputTerminalHandles.has(activeHandle)
+      ) {
         return
       }
       const ownsPendingState = pendingLiveInputHandleRef.current === activeHandle
@@ -253,22 +259,20 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
         case 'ignore':
           return
         case 'local-edit':
-          // Native consumed the key; mirror the same local edit as the accessory bar.
-          hardwareLocalEditQueueRef.current = hardwareLocalEditQueueRef.current
-            .then(async () => {
-              await handleLiveInputAccessoryBytes({
-                bytes: '',
-                localEdit: decision.localEdit
-              })
-            })
-            .catch(() => {})
+          // Update the baseline now; the existing mirror queue orders the PTY erases.
+          void handleLiveInputAccessoryBytes({
+            bytes: '',
+            localEdit: decision.localEdit
+          })
           return
         case 'send-bytes':
+          advanceLiveInputInteractionGeneration()
           void sendTerminalLiveControlAfterPendingFlush(waitForPendingLiveInputFlush, () =>
             sendLiveTerminalInputRef.current(activeHandle, decision.bytes)
           )
           return
         case 'flush-field-then-send':
+          advanceLiveInputInteractionGeneration()
           void sendTerminalLiveControlAfterPendingFlush(
             () => flushPendingLiveInputText(activeHandle),
             () => sendLiveTerminalInputRef.current(activeHandle, decision.bytes)
@@ -280,10 +284,13 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
     },
     [
       activeHandle,
+      activeHandleRef,
+      activeSessionTabTypeRef,
+      advanceLiveInputInteractionGeneration,
       clearPendingLiveInputCommit,
+      connected,
       flushPendingLiveInputText,
       handleLiveInputAccessoryBytes,
-      hardwareLocalEditQueueRef,
       liveInputTerminalHandles,
       sendLiveTerminalInputRef,
       waitForPendingLiveInputFlush

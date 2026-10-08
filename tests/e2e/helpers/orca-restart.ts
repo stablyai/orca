@@ -30,22 +30,11 @@ import {
   createElectronHomeIsolation,
   type ElectronHomeIsolation
 } from './electron-home-isolation'
+import type { LaunchOptions } from './orca-restart-launch-options'
 
 type LaunchedOrca = {
   app: ElectronApplication
   page: Page
-}
-
-type LaunchOptions = {
-  /**
-   * Called for each chunk the relaunched main process writes to stderr. The
-   * listener is attached before `firstWindow()` resolves so main-process
-   * startup logs (e.g. the daemon health-check guard) can't be emitted before
-   * the test starts capturing.
-   */
-  onStderr?: (chunk: string) => void
-  /** Merged into this launch only (not baked into the session's shared env). */
-  extraEnv?: Record<string, string>
 }
 
 type RestartSession = {
@@ -177,7 +166,7 @@ export function createRestartSession(
   const launch = async (options?: LaunchOptions): Promise<LaunchedOrca> => {
     runtimeWsPort ??= await reserveRestartRuntimeWsPort()
     const app = await electron.launch({
-      args: getOrcaElectronLaunchArgs(mainPath, headful),
+      args: [...getOrcaElectronLaunchArgs(mainPath, headful), ...(options?.extraArgs ?? [])],
       env: {
         ...homeIsolation.env,
         ...options?.extraEnv,
@@ -199,6 +188,7 @@ export function createRestartSession(
         })
       )
       assertElectronResolvedIsolatedHome(resolvedHome, homeIsolation)
+      await options?.beforeFirstWindow?.(app)
       const page = await app.firstWindow({ timeout: 120_000 })
       await page.waitForLoadState('domcontentloaded')
       await page.waitForFunction(() => Boolean(window.__store), null, { timeout: 30_000 })

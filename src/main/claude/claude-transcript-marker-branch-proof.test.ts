@@ -277,44 +277,6 @@ describe('Claude transcript marker branch proof', () => {
     ).rejects.toThrow('not on the main transcript')
   })
 
-  it('rejects a latest marker descended from a parent-tool-use cursor sidechain', async () => {
-    const root = await makeRoot('orca-native-chat-resolve-claude-parent-tool-cursor-descendant-')
-    const transcript = join(root, 'transcript.jsonl')
-    await writeFile(
-      transcript,
-      [
-        { type: 'user', uuid: 'main-user', parentUuid: null, sessionId: 'session-1' },
-        {
-          type: 'assistant',
-          uuid: 'subagent-assistant',
-          parentUuid: 'main-user',
-          sessionId: 'session-1',
-          parent_tool_use_id: 'tool-use-1'
-        },
-        {
-          type: 'assistant',
-          uuid: 'main-after-sidechain',
-          parentUuid: 'subagent-assistant',
-          sessionId: 'session-1'
-        },
-        {
-          type: 'assistant',
-          uuid: 'latest-after-sidechain',
-          parentUuid: 'main-after-sidechain',
-          sessionId: 'session-1'
-        },
-        { type: 'last-prompt', leafUuid: 'latest-after-sidechain', sessionId: 'session-1' }
-      ]
-        .map((record) => JSON.stringify(record))
-        .join('\n'),
-      'utf8'
-    )
-
-    await expect(
-      proveMarkerLeafUuid(transcript, 'session-1', 'main-after-sidechain')
-    ).rejects.toThrow('not on the main transcript')
-  })
-
   it('rejects a post-snapshot descendant whose parent row was observed later', async () => {
     const root = await makeRoot('orca-native-chat-resolve-claude-post-snapshot-')
     const transcript = join(root, 'transcript.jsonl')

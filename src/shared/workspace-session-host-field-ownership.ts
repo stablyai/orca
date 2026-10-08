@@ -68,6 +68,15 @@ type MissingOwnership = Exclude<
 const exhaustive: [MissingOwnership] extends [never] ? true : never = true
 void exhaustive
 
+/** The global fields that name what the client is focused on. */
+export const SESSION_FOCUS_FIELDS = [
+  'activeRepoId',
+  'activeWorktreeId',
+  'activeWorkspaceKey',
+  'activeWorkspaceExecutionHostId',
+  'activeTabId'
+] as const satisfies readonly (keyof WorkspaceSessionState)[]
+
 export const GLOBAL_WORKSPACE_SESSION_FIELDS = (
   Object.keys(WORKSPACE_SESSION_FIELD_OWNERSHIP) as (keyof WorkspaceSessionState)[]
 ).filter((field) => WORKSPACE_SESSION_FIELD_OWNERSHIP[field] === 'global')

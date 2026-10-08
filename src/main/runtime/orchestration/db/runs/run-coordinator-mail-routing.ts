@@ -1,3 +1,4 @@
+import type Database from '../../../../sqlite/sync-database'
 import type { OrchestrationDb } from '../orchestration-db'
 import { currentRunCoordinatorSessionAddressSql } from './run-coordinator-orca-session'
 
@@ -24,8 +25,51 @@ export function rememberRunCoordinatorHandle(
 }
 
 const CURRENT_COORDINATOR_SESSION_ADDRESS_SQL = currentRunCoordinatorSessionAddressSql('runs')
+const NEW_COORDINATOR_SESSION_ADDRESS_SQL = currentRunCoordinatorSessionAddressSql('NEW')
 
-// Every address the coordinator has, its handle and its session address, as the migrate-v42 triggers.
+/**
+ * Remembers every address the coordinator has, as bindRun does: its handle and its session address,
+ * so every reader of this cache matches either by string equality and neither takes precedence.
+ * Recreated on every open, after migrate: the address prefix is compiled into the trigger body,
+ * so a trigger stamped once would keep an older build's prefix. The static createTables SQL stays
+ * handle-only (see create-core-tables-sql), since it must compile against a pre-v42 runs table.
+ */
+export function createRunCoordinatorAddressTriggers(db: Database.Database): void {
+  db.exec('BEGIN IMMEDIATE')
+  try {
+    db.exec(`
+      DROP TRIGGER IF EXISTS trg_runs_remember_coordinator_insert;
+      DROP TRIGGER IF EXISTS trg_runs_remember_coordinator_update;
+      CREATE TRIGGER trg_runs_remember_coordinator_insert
+      AFTER INSERT ON runs
+      WHEN NEW.legacy = 0
+      BEGIN
+        INSERT OR IGNORE INTO run_coordinator_handles (run_id, terminal_handle)
+        SELECT NEW.id, NEW.coordinator_handle WHERE NEW.coordinator_handle IS NOT NULL;
+        INSERT OR IGNORE INTO run_coordinator_handles (run_id, terminal_handle)
+        SELECT NEW.id, ${NEW_COORDINATOR_SESSION_ADDRESS_SQL}
+        WHERE ${NEW_COORDINATOR_SESSION_ADDRESS_SQL} IS NOT NULL;
+      END;
+      CREATE TRIGGER trg_runs_remember_coordinator_update
+      AFTER UPDATE OF coordinator_handle, coordinator_orca_session_id,
+        coordinator_orca_session_id_generation ON runs
+      WHEN NEW.legacy = 0
+      BEGIN
+        INSERT OR IGNORE INTO run_coordinator_handles (run_id, terminal_handle)
+        SELECT NEW.id, NEW.coordinator_handle WHERE NEW.coordinator_handle IS NOT NULL;
+        INSERT OR IGNORE INTO run_coordinator_handles (run_id, terminal_handle)
+        SELECT NEW.id, ${NEW_COORDINATOR_SESSION_ADDRESS_SQL}
+        WHERE ${NEW_COORDINATOR_SESSION_ADDRESS_SQL} IS NOT NULL;
+      END;
+    `)
+    db.exec('COMMIT')
+  } catch (error) {
+    db.exec('ROLLBACK')
+    throw error
+  }
+}
+
+// Every address the coordinator has, its handle and its session address, as the triggers above.
 export function rememberCurrentRunCoordinatorHandles(this: OrchestrationDb): void {
   this.db.exec(`
     INSERT OR IGNORE INTO run_coordinator_handles (run_id, terminal_handle)

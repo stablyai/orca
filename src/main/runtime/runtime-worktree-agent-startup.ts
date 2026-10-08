@@ -1,4 +1,3 @@
-import { markQoderWorkspaceTrusted } from '../qoder/workspace-trust'
 import { agentStartedTelemetry } from '../agent-launch/agent-started-telemetry'
 import type { AgentLaunchPreferences } from '../../shared/agent-session-host-authority'
 import type { Repo } from '../../shared/repo-types'
@@ -6,23 +5,21 @@ import type { TuiAgent } from '../../shared/tui-agent'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import { repoIsRemote } from '../../shared/agent-launch-remote'
 import { getRepoSshConnectionId } from '../../shared/execution-host'
-import { isTuiAgent, TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
+import { isTuiAgent } from '../../shared/tui-agent-config'
 import { isTuiAgentEnabled, pickTuiAgent } from '../../shared/tui-agent-selection'
 import { resolveAgentStartupPlanInputs } from '../../shared/agent-startup-plan-inputs'
 import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '../../shared/tui-agent-startup'
+import { planStartupWithPromptCandidate } from '../../shared/startup-line-prompt-carry'
 import {
-  markAntigravityWorkspaceTrusted,
-  markCodexProjectTrusted,
-  markCopilotFolderTrusted,
-  markCursorWorkspaceTrusted
-} from '../agent-trust-presets'
-import { awaitAgentTrustWriteWithinDeadline } from '../agent-trust-write-deadline'
+  launchHostProvesAgentInFront,
+  nameLocalTypedLineShell
+} from './agent-launch-typed-line-shell'
 import {
   detectInstalledAgentsWithShellPathHydration,
   detectRemoteAgents
 } from '../preflight/agent-detection'
-import { markRemoteAgentWorkspaceTrusted } from '../remote-agent-trust-presets'
 import type { RuntimeStore } from './runtime-store-contract'
+import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 
 export type WorktreeStartupDraftPaste = { agent: TuiAgent; content: string }
 export type WorktreeStartupFollowup = { expectedProcess: string; prompt: string }
@@ -136,6 +133,9 @@ export function buildWorktreeStartupForAgent(
     toSessionOptions: (
       preferences?: AgentLaunchPreferences
     ) => Parameters<typeof buildAgentStartupPlan>[0]['sessionOptions'] | undefined
+    /** Set by a caller that delivers an uncarried prompt itself: the prompt then rides only a typed
+     *  line that can carry it, and this reports whether it did. Absent keeps the CLI's fold. */
+    onPromptCarry?: (carried: boolean) => void
   }
 ): {
   agent: TuiAgent
@@ -146,18 +146,36 @@ export function buildWorktreeStartupForAgent(
   if (!isTuiAgentEnabled(agent, settings.disabledTuiAgents)) {
     throw new Error('Selected agent is disabled. Choose an enabled agent before creating.')
   }
-  const startupPlan = buildAgentStartupPlan({
-    ...resolveAgentStartupPlanInputs({
-      agent,
-      settings,
-      platform: environment.getLaunchPlatform(),
-      isRemote: repoIsRemote(repo),
-      ...(environment.agentArgs !== undefined ? { agentArgs: environment.agentArgs } : {}),
-      sessionOptions: environment.toSessionOptions(environment.launchPreferences)
-    }),
-    prompt: environment.prompt ?? '',
-    allowEmptyPromptLaunch: true
+  const planInputs = resolveAgentStartupPlanInputs({
+    agent,
+    settings,
+    platform: environment.getLaunchPlatform(),
+    isRemote: repoIsRemote(repo),
+    ...(environment.agentArgs !== undefined ? { agentArgs: environment.agentArgs } : {}),
+    sessionOptions: environment.toSessionOptions(environment.launchPreferences)
   })
+  const prompt = environment.prompt ?? ''
+  let startupPlan: ReturnType<typeof buildAgentStartupPlan>
+  if (environment.onPromptCarry) {
+    const offered = planStartupWithPromptCandidate(planInputs, prompt, {
+      shellName: nameLocalTypedLineShell({
+        isRemote: repoIsRemote(repo),
+        ...(settings.terminalDefaultShell
+          ? { defaultShellSetting: settings.terminalDefaultShell }
+          : {})
+      }),
+      provesAgentInFront: launchHostProvesAgentInFront({
+        isRemote: repoIsRemote(repo),
+        launchPlatform: environment.getLaunchPlatform()
+      })
+    })
+    startupPlan = offered.plan
+    if (startupPlan && prompt.trim()) {
+      environment.onPromptCarry(offered.promptCarried)
+    }
+  } else {
+    startupPlan = buildAgentStartupPlan({ ...planInputs, prompt, allowEmptyPromptLaunch: true })
+  }
   if (!startupPlan) {
     throw new Error(`Could not build launch command for ${agent}.`)
   }
@@ -183,47 +201,25 @@ export function buildWorktreeStartupForAgent(
   }
 }
 
-export async function markLocalWorktreeTrusted(
-  agent: TuiAgent,
-  workspacePath: string
-): Promise<void> {
-  const preset = TUI_AGENT_CONFIG[agent].preflightTrust
-  if (!preset) {
-    return
-  }
-  try {
-    if (preset === 'qoder') {
-      markQoderWorkspaceTrusted(workspacePath)
-    } else if (preset === 'cursor') {
-      markCursorWorkspaceTrusted(workspacePath)
-    } else if (preset === 'copilot') {
-      markCopilotFolderTrusted(workspacePath)
-    } else if (preset === 'codex') {
-      // Why: the Codex write queues behind any in-flight hook grant, so the agent must not launch until it lands. Bounded so a wedged lane degrades to the agent's own prompt instead of stalling the launch.
-      await awaitAgentTrustWriteWithinDeadline(markCodexProjectTrusted(workspacePath), {
-        preset,
-        workspacePath
-      })
-    } else if (preset === 'antigravity') {
-      markAntigravityWorkspaceTrusted(workspacePath)
+export function resolveWorktreeCreateAgentStartup(
+  args: RuntimeManagedWorktreeCreateArgs,
+  build: (
+    agent: TuiAgent,
+    prompt: string | undefined,
+    preferences: AgentLaunchPreferences | undefined,
+    inputs: {
+      agentArgs?: string | null
+      launchSource?: string
+      onPromptCarry?: (carried: boolean) => void
     }
-  } catch {
-    // Best-effort: the user can still accept the agent trust prompt manually.
+  ) => { agent: TuiAgent; startup: WorktreeStartupLaunch; followup?: WorktreeStartupFollowup }
+) {
+  if (args.startup || !args.startupAgent) {
+    return null
   }
-}
-
-export async function markRemoteWorktreeTrusted(
-  agent: TuiAgent,
-  connectionId: string,
-  workspacePath: string
-): Promise<void> {
-  const preset = TUI_AGENT_CONFIG[agent].preflightTrust
-  if (!preset) {
-    return
-  }
-  try {
-    await markRemoteAgentWorkspaceTrusted({ preset, connectionId, workspacePath })
-  } catch {
-    // Best-effort: the user can still accept the remote agent trust prompt manually.
-  }
+  return build(args.startupAgent, args.startupPrompt, args.startupLaunchPreferences, {
+    ...(args.startupAgentArgs !== undefined ? { agentArgs: args.startupAgentArgs } : {}),
+    ...(args.startupLaunchSource ? { launchSource: args.startupLaunchSource } : {}),
+    ...(args.onStartupPromptCarry ? { onPromptCarry: args.onStartupPromptCarry } : {})
+  })
 }

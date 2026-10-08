@@ -58,6 +58,21 @@ export const POST_REPLAY_LIVE_AGENT_SNAPSHOT_RESET = RESET_TERMINAL_CURSOR_STYLE
 // writes the clipboard.
 export const ABORT_TRUNCATED_CONTROL_STRING = '\x18'
 
+// Trade-off, stated because it is not free: the pane was FROZEN on its last
+// coherent frame, not blank (bufferRows records a row range and clears nothing).
+// Releasing the latch where no repaint follows in the same write — RESET_AFTER_BYTE_GAP
+// is written alone — can flash a partial frame in place of that coherent one. A byte
+// gap already means the stream is damaged and a restore follows, so a stale frame that
+// outlives the damage is the worse option.
+// Why this is grounded everywhere a byte gap or a repaint happens: xterm renders
+// NOTHING while DEC 2026 is open and only force-flushes after 1000ms, so a gap
+// that swallowed a TUI's closing \x1b[?2026l leaves the pane blank for a full
+// second per frame — and Orca is otherwise incapable of closing a latch it
+// opened. Unlike the modes deliberately left ungrounded below, a snapshot never
+// re-asserts 2026, and closing a frame early costs one premature repaint against
+// a second of frozen, increasingly stale output.
+export const RELEASE_SYNCHRONIZED_OUTPUT = '\x1b[?2026l'
+
 // Why the DECSC first: xterm's `?1049l` runs restoreCursor() even on the normal
 // buffer, so saving in place keeps the cursor put there; on the alt buffer the
 // save lands in the alt register and `?1049l` restores the shell's position.
@@ -78,7 +93,9 @@ const SHOW_CURSOR = '\x1b[?25h'
  */
 export function buildProcessBoundaryGround(opts: { keepFocusReporting: boolean }): string {
   const focus = opts.keepFocusReporting ? '' : RESET_FOCUS_REPORTING
-  return `${RESET_KITTY_KEYBOARD_PROTOCOL}${LEAVE_ALTERNATE_SCREEN_KEEPING_NORMAL_CURSOR}${RESET_MOUSE_REPORTING}${RESET_LEGACY_MOUSE_ENCODINGS}${focus}${RESET_BRACKETED_PASTE}${RESET_APPLICATION_CURSOR_AND_KEYPAD}${SHOW_CURSOR}${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}${RESET_GRAPHIC_RENDITION}${SAVE_GROUNDED_CURSOR}`
+  // RELEASE_SYNCHRONIZED_OUTPUT first: the process that opened a 2026 frame is
+  // gone, so nothing will ever close it, and xterm stops repainting until it does.
+  return `${RELEASE_SYNCHRONIZED_OUTPUT}${RESET_KITTY_KEYBOARD_PROTOCOL}${LEAVE_ALTERNATE_SCREEN_KEEPING_NORMAL_CURSOR}${RESET_MOUSE_REPORTING}${RESET_LEGACY_MOUSE_ENCODINGS}${focus}${RESET_BRACKETED_PASTE}${RESET_APPLICATION_CURSOR_AND_KEYPAD}${SHOW_CURSOR}${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}${RESET_GRAPHIC_RENDITION}${SAVE_GROUNDED_CURSOR}`
 }
 
 export const PROCESS_BOUNDARY_GROUND = buildProcessBoundaryGround({ keepFocusReporting: false })
@@ -87,7 +104,7 @@ export const PROCESS_BOUNDARY_GROUND = buildProcessBoundaryGround({ keepFocusRep
 // queued chunks instead of repainting. Parser + pen only — a live TUI keeps
 // writing here and owns its charset and margins. Not DECSTR: xterm's soft reset
 // wipes the kitty flags agents negotiate only at startup.
-export const RESET_AFTER_BYTE_GAP = `${ABORT_TRUNCATED_CONTROL_STRING}${RESET_GRAPHIC_RENDITION}`
+export const RESET_AFTER_BYTE_GAP = `${ABORT_TRUNCATED_CONTROL_STRING}${RELEASE_SYNCHRONIZED_OUTPUT}${RESET_GRAPHIC_RENDITION}`
 
 // The baseline a serialized snapshot assumes it lands on: SerializeAddon diffs
 // cells against DEFAULT attributes and emits no charset at all.
@@ -100,7 +117,7 @@ export const RESET_AFTER_BYTE_GAP = `${ABORT_TRUNCATED_CONTROL_STRING}${RESET_GR
 // resetting is unilateral. `enacs=\E(B\E)0` (screen/tmux/vt100 terminfo)
 // designates G1 once at init and then uses bare SO/SI, so grounding G1 would
 // render a live app's box drawing as letters.
-const REPLAY_BASELINE_TERMINAL_RESET = `${RESET_GRAPHIC_RENDITION}\x0f\x1b(B\x1b[?6l\x1b[?7h\x1b[?45l\x1b[4l`
+const REPLAY_BASELINE_TERMINAL_RESET = `${RELEASE_SYNCHRONIZED_OUTPUT}${RESET_GRAPHIC_RENDITION}\x0f\x1b(B\x1b[?6l\x1b[?7h\x1b[?45l\x1b[4l`
 
 // Buffer-scoped: margins live on the xterm buffer, and `?1049` neither carries
 // them across nor clears them unless it actually swaps.

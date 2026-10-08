@@ -12,7 +12,8 @@ const TERMINAL_TAB_CLOSE_REASONS = [
  *  Why it must exist: absence alone cannot distinguish "never told" from "closed", so without it a
  *  host snapshot or a late spawn commit brings the tab back, and an emptied workspace reads as one
  *  that was never initialized. Safe because tab ids are uuids: a closed id never legitimately
- *  returns. Nothing acknowledges it away; it dies by TTL or the per-host cap. */
+ *  returns. Nothing acknowledges it away; it dies by TTL, the per-host cap, or when its workspace's
+ *  session rows are removed. */
 export type ClosedTerminalTabTombstone = {
   closedAt: number
   worktreeId: string

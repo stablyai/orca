@@ -21,6 +21,7 @@ import type { PtyPreconnectInputEntry } from './pty-preconnect-input-buffer'
 import { guardParserHandler } from './terminal-parser-handler-guard'
 import { isPaneReplaying } from './replay-guard'
 import { connectPanePty } from './pty-connection'
+import { completePaneSpawnPlacement } from './terminal-pane-spawn-placement'
 import {
   createQueuedStartupConsumer,
   resolvePaneSeedCwd,
@@ -202,6 +203,15 @@ export function createTerminalPaneCreatedHandler(
         : {}),
       ...(effectiveSpawnHints?.cwd ? { cwd: effectiveSpawnHints.cwd } : {}),
       ...(effectiveSpawnHints?.cwdPromise ? { cwdPromise: effectiveSpawnHints.cwdPromise } : {}),
+      ...(effectiveSpawnHints?.placement
+        ? {
+            placement: completePaneSpawnPlacement(effectiveSpawnHints.placement, {
+              worktreeId: deps.worktreeId,
+              tabId: deps.tabId,
+              container: deps.containerRef.current
+            })
+          }
+        : {}),
       restoredPtyIdByLeafId: effectiveSpawnHints?.ptyId
         ? {
             ...ptyDeps.restoredPtyIdByLeafId,

@@ -6,7 +6,6 @@ import {
 import { constants } from 'node:fs'
 import { lstat, open, readdir, realpath } from 'node:fs/promises'
 import { basename, isAbsolute, join, relative, resolve, sep } from 'node:path'
-import { authorizeExternalPath } from './filesystem-auth'
 import { isENOENT } from './filesystem-path-containment'
 import type {
   StagedExternalImportEntry,
@@ -35,10 +34,6 @@ export async function stageOneSourceForRuntimeUpload(
   totalBytesBefore = 0
 ): Promise<StagedExternalImportSource> {
   const resolvedSource = resolve(sourcePath)
-
-  // Why: runtime uploads read client-local paths in the client main process;
-  // authorize before lstat just like local copy imports.
-  authorizeExternalPath(resolvedSource)
 
   let sourceStat: Awaited<ReturnType<typeof lstat>>
   try {

@@ -59,7 +59,12 @@ export function notifyTerminalSurfaceTap(
     notify(scope, { type: 'terminal-input', bytes: clickInput })
   }
   // Touch still needs native input focus after the TUI consumes its mouse click.
-  if (focusKeyboard || !isClickMouseTrackingMode(getMouseTrackingMode(scope))) {
+  // A click with an unproven encoding reached no program, so it acts as a plain tap.
+  if (
+    focusKeyboard ||
+    !isClickMouseTrackingMode(getMouseTrackingMode(scope)) ||
+    !scope.mouseEncodingKnown
+  ) {
     notify(scope, { type: 'terminal-tap' })
   }
 }

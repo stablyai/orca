@@ -9,6 +9,9 @@ vi.mock('./ssh-relay-install-transfers', () => ({
   uploadRelayDirectory: vi.fn(),
   writeRelayFile: vi.fn()
 }))
+vi.mock('./orcad-remote-node-runtime', () => ({
+  ensureRemoteOrcadNodeRuntime: vi.fn().mockResolvedValue(undefined)
+}))
 
 import type { SshConnection } from './ssh-connection'
 import { execCommand } from './ssh-relay-deploy-helpers'
@@ -16,6 +19,14 @@ import { uploadRelayDirectory, writeRelayFile } from './ssh-relay-install-transf
 import { installOrcadBundle } from './orcad-remote-install'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 import { decodeRemotePowerShellScript } from './ssh-remote-powershell'
+import { acquireInstallLock } from './ssh-relay-install-lock'
+import {
+  initOrcadHeldFenceTokenFile,
+  ORCAD_HELD_FENCE_TOKENS_FILE_NAME
+} from './orcad-held-fence-tokens'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: All connection operations are mocked.
 const conn = {} as SshConnection
@@ -49,7 +60,14 @@ describe.each([
   ]
   const install = (signal?: AbortSignal): Promise<void> =>
     installOrcadBundle(
-      { conn, host, localOrcadDir: '/local/orcad', signal },
+      {
+        conn,
+        host,
+        localOrcadDir: '/local/orcad',
+        target: host.os === 'win32' ? 'win32-x64' : 'linux-x64-glibc',
+        nodeRuntimeArchive: async () => '/cache/node-archive',
+        signal
+      },
       fullVersion,
       remoteDir
     )
@@ -155,4 +173,57 @@ describe.each([
       expect(mockWrite).not.toHaveBeenCalled()
     }
   )
+})
+
+// BUG-23: the relaunch proves a lock its own quit left only while the token is still recorded.
+describe('the install lock token', () => {
+  const host = getRemoteHostPlatform('linux-x64')
+  const install = (): Promise<void> =>
+    installOrcadBundle(
+      {
+        conn,
+        host,
+        localOrcadDir: '/local/orcad',
+        target: 'linux-x64-glibc',
+        nodeRuntimeArchive: async () => '/cache/node-archive'
+      },
+      fullVersion,
+      '/home/u/.orca-remote/orcad-version'
+    )
+
+  function bindStore(): () => string {
+    const dir = mkdtempSync(join(tmpdir(), 'orcad-install-token-'))
+    initOrcadHeldFenceTokenFile(join(dir, 'orca-data.json'))
+    return () => {
+      try {
+        return readFileSync(join(dir, ORCAD_HELD_FENCE_TOKENS_FILE_NAME), 'utf-8')
+      } finally {
+        rmSync(dir, { recursive: true, force: true })
+      }
+    }
+  }
+
+  function lockToken(): string {
+    return vi.mocked(acquireInstallLock).mock.calls.at(-1)?.[3]?.owner?.token ?? ''
+  }
+
+  it('is written into the lock and dropped once the lock is removed', async () => {
+    const read = bindStore()
+    await install()
+    expect(lockToken()).not.toBe('')
+    expect(read()).not.toContain(lockToken())
+  })
+
+  it('is kept when a quit cut the lock removal short', async () => {
+    const read = bindStore()
+    mockUpload.mockRejectedValueOnce(new Error('aborted by quit'))
+    mockExec.mockImplementation(async (_conn, command) => {
+      if (command.includes('.install-lock')) {
+        throw new Error('Not connected')
+      }
+      return ''
+    })
+    await expect(install()).rejects.toThrow('aborted by quit')
+    expect(read()).toContain(lockToken())
+  })
 })

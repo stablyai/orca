@@ -7,7 +7,6 @@ import {
   recordCodexPaneAccountForSpawn,
   codexReattachedHomeRouteField
 } from '../host-env/codex-home'
-import { markClaudePtySpawned } from '../../../claude-accounts/live-pty-gate'
 import { registerPty } from '../../../memory/pty-registry'
 import { rememberPaneKeyForPty } from '../pane/key-state'
 import {
@@ -30,6 +29,7 @@ import { resolvePaneSpawnReservation } from '../pane/spawn-reservation'
 import { admitProviderReattachLaunchIdentity } from '../pane/launch-authority'
 import { spawnCommitBindingOrigin } from '../../../persistence/loading-store/pty-binding-span'
 import type { RuntimePtySpawnState } from './spawn-state'
+import { commitPtyWithOpenCodePromptIntent } from '../../../opencode/opencode-startup-prompt-owner'
 import {
   admitPtyReattachOwnership,
   discardUnpersistedPtySpawn,
@@ -37,6 +37,10 @@ import {
 } from '../pane/spawn-registration'
 
 export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
+  return commitPtyWithOpenCodePromptIntent(ctx, () => commitReservedRuntimePtySpawn(ctx))
+}
+
+async function commitReservedRuntimePtySpawn(ctx: RuntimePtySpawnState) {
   const args = ctx.args
   admitPtyReattachOwnership(ctx.deps.runtime, ctx.result, args.connectionId)
   const providerReattachLaunchIdentity = admitProviderReattachLaunchIdentity(ctx.result)
@@ -66,7 +70,7 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
       throw error
     }
     console.error('[pty] failed to persist runtime PTY binding after attach:', error)
-    throw Object.assign(new Error(createTerminalSessionStateSaveFailureMessage()), {
+    throw Object.assign(new Error(createTerminalSessionStateSaveFailureMessage(error)), {
       agentSessionOperationOutcome: 'unknown' as const
     })
   }
@@ -132,7 +136,8 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
   }
   if (ctx.hostSessionBinding && !ctx.stablePaneBindingPersisted) {
     try {
-      const { store, worktreeId, tabId, leafId, expectedSourceBinding } = ctx.hostSessionBinding
+      const { store, worktreeId, tabId, leafId, expectedSourceBinding, placement } =
+        ctx.hostSessionBinding
       const binding = {
         worktreeId,
         tabId,
@@ -142,6 +147,7 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
         ...(ctx.result.incarnationId ? { incarnationId: ctx.result.incarnationId } : {}),
         ...(ctx.cwd ? { startupCwd: ctx.cwd } : {}),
         ...(expectedSourceBinding ? { expectedSourceBinding } : {}),
+        ...(placement ? { placement } : {}),
         origin: spawnCommitBindingOrigin(ctx.result, expectedSourceBinding)
       }
       const persisted = args.connectionId
@@ -156,7 +162,7 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
       if (err instanceof Error && err.message === 'terminal_split_source_not_found') {
         throw err
       }
-      throw Object.assign(new Error(createTerminalSessionStateSaveFailureMessage()), {
+      throw Object.assign(new Error(createTerminalSessionStateSaveFailureMessage(err)), {
         agentSessionOperationOutcome: 'unknown' as const
       })
     }
@@ -205,6 +211,7 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
   if (ctx.result.incarnationId) {
     ptyIncarnationById.set(ctx.result.id, ctx.result.incarnationId)
   }
+
   claimSshPaneLease({
     store: ctx.deps.store,
     connectionId: args.connectionId,
@@ -223,7 +230,6 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
     isReattach: ctx.result.isReattach === true,
     pinnedByResume: ctx.codexResumeHomeSelected,
     launchCodexHomePath: ctx.selectedCodexHomePath,
-    launchEnv: args.env,
     target: ctx.codexSelectionTarget,
     settings: ctx.deps.getSettings?.()
   })
@@ -232,9 +238,6 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
   // Why: arms main's per-PTY Command Code output detector from the launch command (renderer startupCommand parity).
   if (!ctx.stablePaneOwner) {
     ctx.deps.runtime?.noteTerminalSpawnCommand?.(ctx.result.id, ctx.launchCommand ?? null)
-  }
-  if (ctx.isClaudeLaunch && !ctx.stablePaneOwner) {
-    markClaudePtySpawned(ctx.result.id)
   }
   if (args.telemetry && !ctx.stablePaneOwner) {
     recordPtySpawnTelemetry(args.telemetry)

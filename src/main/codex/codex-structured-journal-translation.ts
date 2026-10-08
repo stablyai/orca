@@ -7,10 +7,14 @@ import {
   type CodexJournalTranslatorDeps
 } from './codex-structured-journal-contracts'
 import { settleCodexJournalSession } from './codex-structured-journal-settlement'
-import { restoreCodexJournalThread } from './codex-structured-journal-translation-restore'
+import {
+  restoreCodexHistoryItem,
+  restoreCodexJournalThread
+} from './codex-structured-journal-translation-restore'
 import { CodexJournalTurnBoundaries } from './codex-structured-journal-translation-turn-boundaries'
 import { createCodexJournalTranslatorWriters } from './codex-structured-journal-translation-writers'
 import { publishCodexTurnLifecycle } from './codex-structured-journal-translation-turns'
+import { codexProviderRetryRowBody, isCodexProviderRetryFrame } from './codex-provider-retry-row'
 import { createCodexThreadItemRouter } from './codex-structured-journal-thread-item-routing'
 import { codexThreadStoppedRunning, readCodexTurnId } from './codex-structured-thread-facts'
 import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
@@ -35,8 +39,17 @@ export {
 export function createCodexJournalTranslator(
   deps: CodexJournalTranslatorDeps
 ): CodexJournalTranslator {
-  const { activeTurns, subagents, linkageFor, genericFrames, items, compactions, goals, prompts } =
-    createCodexJournalTranslatorWriters(deps)
+  const {
+    activeTurns,
+    commands,
+    subagents,
+    attributionFor,
+    genericFrames,
+    items,
+    compactions,
+    goals,
+    prompts
+  } = createCodexJournalTranslatorWriters(deps)
   const flushStreams = (): CodexJournalTranslationAdmission =>
     items.streams.flush() ? CODEX_JOURNAL_ADMITTED : { accepted: false, reason: 'backpressure' }
   let readActivity = createCodexProviderActivityReader()
@@ -55,7 +68,8 @@ export function createCodexJournalTranslator(
     ...(deps.clearPromptTurn ? { clearPromptTurn: deps.clearPromptTurn } : {}),
     flushSuppression: () => genericFrames.flush(),
     resetActivity,
-    linkageFor,
+    attributionFor,
+    commands,
     ...(deps.now ? { now: deps.now } : {})
   })
   let primaryThreadStoppedRunning = false
@@ -103,16 +117,13 @@ export function createCodexJournalTranslator(
         thread,
         currentTurnIds: activeTurns.byThread,
         ordinals: items.ordinals,
-        handleItem: (event) => {
-          const compaction = compactions.handle(event)
-          if (compaction) {
-            return compaction
-          }
-          const translated = items.handle(event, 'history')
-          return translated.handled
-            ? translated.admission
-            : { accepted: false, reason: 'untranslated' }
-        },
+        handleItem: (event) =>
+          restoreCodexHistoryItem(event, {
+            primaryThreadId: deps.primaryThreadId?.() ?? null,
+            compactions,
+            items,
+            executions: subagents.executions
+          }),
         ...(deps.sessionId !== undefined
           ? {
               restoreTurnLifecycle: (turnLifecycle) =>
@@ -147,14 +158,17 @@ export function createCodexJournalTranslator(
           currentTurnIds: activeTurns.byThread,
           primaryThreadId: deps.primaryThreadId?.() ?? null,
           ordinals: items.ordinals,
-          // The host saw the child go, not what Codex made of the turn, so the row
-          // carries no outcome: the end is observed, the verdict is unknown.
+          // The host saw the child go, not what Codex made of the turn: whether it was a person's
+          // Stop is the journal's Stop event to say (`turnEndAfterStop`), else it is news.
           settledTurnLifecycle: (threadId, turnId) =>
-            turnBoundaries.settled(threadId, turnId, {
-              state: 'interrupted',
-              completedAt: event.observedAt ?? deps.now?.() ?? Date.now()
-            }),
-          linkageFor
+            turnBoundaries.ownsRecord(threadId, turnId)
+              ? turnBoundaries.settled(threadId, turnId, {
+                  state: 'interrupted',
+                  completedAt: event.observedAt ?? deps.now?.() ?? Date.now()
+                })
+              : null,
+          attributionFor,
+          ...(deps.now ? { now: deps.now } : {})
         })
         if (!admission.accepted) {
           return admission
@@ -235,6 +249,17 @@ export function createCodexJournalTranslator(
           return publishActivity(event, routed)
         }
       }
+      if (isCodexProviderRetryFrame(event)) {
+        // Always journaled, like any error frame: each attempt is evidence, and its publish is
+        // the activity the idle sweep reads.
+        return publishActivity(
+          event,
+          genericFrames.appendFrameRow(event.threadId, event.params, {
+            body: codexProviderRetryRowBody(event.params),
+            classification: 'error-surface'
+          })
+        )
+      }
       // A thread that stopped running settles no open turn: Codex clears `running`
       // on every error, and an open turn ends on its `turn/completed`. It releases
       // a send whose dispatch was never answered, which nothing else re-derives live.
@@ -247,14 +272,22 @@ export function createCodexJournalTranslator(
         reportPrimaryThreadStoppedRunning()
       }
       // A turn-ending `error` is a row inside the turn it names; the failed
-      // `turn/completed` Codex sends after it is that turn's end.
+      // `turn/completed` Codex sends after it is that turn's end. The thread
+      // status was read for state above and prints nothing.
       const unhandled = genericFrames.appendUnhandled(
         `notification:${event.method}`,
         event.params,
-        event.threadId
+        event.threadId,
+        { coveredByTypedTranslator: event.method === 'thread/status/changed' }
       )
+      if (unhandled.accepted && event.method === 'error') {
+        commands.errorShown(event.params)
+      }
       return publishActivity(event, unhandled)
     },
+    beginCommand: (command) => commands.begin(command),
+    forgetCommand: (turnId) => commands.forget(turnId),
+    commandProviderTurnId: (turnId) => commands.providerTurnId(turnId),
     cancelPrompt: (journalItemId) => prompts.cancel(journalItemId),
     resolvePrompt: (journalItemId) => prompts.resolve(journalItemId),
     flush: () => {

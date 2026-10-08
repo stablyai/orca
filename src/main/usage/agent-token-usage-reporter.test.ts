@@ -25,7 +25,7 @@ let directory: string
 let file: string
 let telemetry: TelemetryClientTestState
 let reporters: AgentTokenUsageReporter[]
-const identity = vi.fn(async () => ID)
+const identity = vi.fn(async (ids: readonly string[]) => ids.map(() => ID))
 function reporter(): AgentTokenUsageReporter {
   const instance = new AgentTokenUsageReporter(file, 'claude', identity)
   reporters.push(instance)
@@ -39,7 +39,7 @@ beforeEach(() => {
   file = join(directory, 'tokens.json')
   telemetry = setupTelemetryClientTest()
   reporters = []
-  identity.mockReset().mockResolvedValue(ID)
+  identity.mockReset().mockImplementation(async (ids) => ids.map(() => ID))
 })
 afterEach(async () => {
   await Promise.all(reporters.map((instance) => instance.flush()))
@@ -97,14 +97,32 @@ describe('agent token usage', () => {
   )
 
   it('rechecks consent after asynchronous identity persistence', async () => {
-    identity.mockImplementation(async () => {
+    identity.mockImplementation(async (ids) => {
       if (telemetry.settings.telemetry) {
         telemetry.settings.telemetry.optedIn = false
       }
-      return ID
+      return ids.map(() => ID)
     })
     await reporter().report([row])
     expect(captures()).toEqual([])
+  })
+
+  it('resolves every session identity in one batch', async () => {
+    const second = '00000000-0000-4000-8000-000000000002'
+    identity.mockImplementation(async (ids) =>
+      ids.map((id) => (id === 'second-session' ? second : ID))
+    )
+    await reporter().report([
+      row,
+      { ...row, providerSessionId: 'invalid-session', input_tokens: -1 },
+      { ...row, providerSessionId: 'second-session', input_tokens: 7 }
+    ])
+    expect(identity).toHaveBeenCalledOnce()
+    expect(identity).toHaveBeenCalledWith([row.providerSessionId, 'second-session'])
+    expect(captures()).toEqual([
+      expect.objectContaining({ analytics_session_id: ID, input_tokens: 100 }),
+      expect.objectContaining({ analytics_session_id: second, input_tokens: 7 })
+    ])
   })
 
   it('does not publish a revision whose write failed and retries it', async () => {
@@ -120,6 +138,7 @@ describe('agent token usage', () => {
   })
 
   it('retries rate-limited snapshots without incrementing their revision', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000)
     const instance = reporter()
     for (let count = 1; count <= 31; count++) {
       await instance.report([{ ...row, input_tokens: count }])
@@ -127,6 +146,7 @@ describe('agent token usage', () => {
     expect(captures()).toHaveLength(30)
     resetBurstCapsForSession()
     await instance.report([{ ...row, input_tokens: 31 }])
+    expect(captures()).toHaveLength(31)
     expect(captures().at(-1)).toMatchObject({ revision: 31, input_tokens: 31 })
   })
 
@@ -139,7 +159,6 @@ describe('agent token usage', () => {
 
   it('rejects invalid counts and unexpected content fields', async () => {
     await reporter().report([{ ...row, input_tokens: -1 }])
-    expect(identity).not.toHaveBeenCalled()
     const payload = { ...row, analytics_session_id: ID, revision: 1, provider: 'claude' }
     expect(agentTokenUsageSchema.safeParse(payload).success).toBe(false)
     const { providerSessionId: _, ...valid } = payload

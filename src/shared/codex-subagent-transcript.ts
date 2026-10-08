@@ -8,6 +8,10 @@ import {
   type JsonRecord
 } from './codex-rollout-jsonl-cursor'
 
+import { reconcileCodexTranscriptTurn, type CodexTranscriptTurn } from './codex-turn-transcript'
+
+import { isCodexStatusTranscriptLine } from './codex-status-transcript-line'
+
 import { readApprovalsReviewer } from './codex-subagent-reviewer'
 import type { CodexApprovalsReviewer } from './codex-subagent-reviewer'
 
@@ -34,6 +38,7 @@ type TrackedTranscriptSubagent = JsonlCursor & {
 
 export type CodexSubagentTranscriptState = {
   parent: JsonlCursor
+  rootTurn: CodexTranscriptTurn
   subagents: Map<string, TrackedTranscriptSubagent>
   /** Incremental reviewer cursors for child rollouts, which must not replace the parent cursor. */
   reviewerCursorsByPath: Map<string, JsonlCursor>
@@ -175,6 +180,7 @@ function childIsComplete(records: JsonRecord[]): boolean {
 export function createCodexSubagentTranscriptState(): CodexSubagentTranscriptState {
   return {
     parent: { offset: 0, carry: '' },
+    rootTurn: { interrupted: false },
     subagents: new Map(),
     reviewerCursorsByPath: new Map(),
     reviewersByPath: new Map()
@@ -191,23 +197,30 @@ export function reconcileCodexSubagentTranscript(
   state: CodexSubagentTranscriptState,
   roster: CodexSubagentRoster,
   transcriptPath: string | undefined
-): void {
+): boolean {
   const normalizedPath = normalizedTranscriptPath(transcriptPath)
   if (!normalizedPath) {
-    return
+    return false
   }
+  let changed = false
   if (state.parent.filePath !== normalizedPath) {
     for (const id of state.subagents.keys()) {
       finishCodexSubagent(roster, id)
     }
+    changed = true
     state.parent = { filePath: normalizedPath, offset: 0, carry: '' }
+    state.rootTurn = { interrupted: false }
     state.subagents.clear()
     state.reviewerCursorsByPath.clear()
     state.reviewersByPath.clear()
     // Why: a different rollout is a different session, so its predecessor's reviewer is void.
     state.approvalsReviewer = undefined
   }
-  const parentRecords = readJsonlCursor(state.parent)
+  const parentRecords = readJsonlCursor(state.parent, isCodexStatusTranscriptLine)
+  changed ||=
+    Boolean(parentRecords?.length) ||
+    (parentRecords === undefined && state.approvalsReviewer !== undefined)
+  reconcileCodexTranscriptTurn(state.rootTurn, parentRecords ?? [])
   // A stale reviewer must never turn an unreadable rollout into a hidden prompt.
   state.approvalsReviewer =
     parentRecords === undefined
@@ -248,7 +261,8 @@ export function reconcileCodexSubagentTranscript(
         entriesByDirectory
       )
     }
-    const records = readJsonlCursor(tracked)
+    const records = readJsonlCursor(tracked, isCodexStatusTranscriptLine)
+    changed ||= Boolean(records?.length)
     if (!records) {
       // Why: a rollout that never appears (or is deleted) has no completion event, so time-box it instead of leaking a working row.
       tracked.filePath = undefined
@@ -267,7 +281,9 @@ export function reconcileCodexSubagentTranscript(
         continue
       }
     }
+    changed = true
     finishCodexSubagent(roster, id)
     state.subagents.delete(id)
   }
+  return changed
 }

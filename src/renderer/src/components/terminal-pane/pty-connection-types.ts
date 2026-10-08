@@ -1,3 +1,4 @@
+import type { NotificationWorkspaceOwner } from '../../../../shared/notification-source'
 import type { AgentAttentionUnreadReason } from '@/attention/agent-attention-contract'
 import type { PtyTransport } from './pty-transport'
 import type { SessionRestoredBannerReason } from './session-restored-banner-pane-state'
@@ -8,6 +9,7 @@ import type { EventProps } from '../../../../shared/telemetry-events'
 import type { TerminalColorSchemeMode } from '../../../../shared/terminal-color-scheme-protocol'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
 import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TerminalPanePlacement } from '../../../../shared/terminal-pane-placement'
 import type { SetupSplitDirection } from '../../../../shared/worktree/launch-types'
 import type {
   AgentProviderSessionMetadata,
@@ -59,6 +61,7 @@ export type PtyConnectionDeps = {
   cwd?: string
   /** Delays a fresh split's spawn without delaying its renderer pane. */
   cwdPromise?: Promise<string>
+  placement?: TerminalPanePlacement
   /** Input handed off from a predecessor mount of the same deferred split. */
   preconnectInput?: readonly PtyPreconnectInputEntry[]
   /** Captures newly retained input for a remount-safe deferred split handoff. */
@@ -122,6 +125,8 @@ export type PtyConnectionDeps = {
   // main process can also emit `'test'` from the settings-pane button.
   dispatchNotification: (event: {
     source: 'terminal-bell' | 'agent-task-complete'
+    ptyId?: string | null
+    workspaceOwner?: NotificationWorkspaceOwner
     terminalTitle?: string
     paneKey?: string
     agentStatusSnapshot?: AgentCompletionStatusSnapshot

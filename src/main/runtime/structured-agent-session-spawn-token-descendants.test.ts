@@ -9,13 +9,16 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CODEX_SPAWN_TOKEN_ENV } from '../codex/codex-structured-owner-identity'
-import { AgentSessionRecordStore } from './agent-session-record-store'
+import type { AgentSessionRecordStore } from './agent-session-record-store'
+import { openTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
 import type { AgentSessionReserveRequest } from './agent-session-reservation-admission'
 import { createStructuredAgentSessionOwnerProbe } from './structured-agent-session-owner-probe'
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
+import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 /** pid -> the NUL-separated environment block `/proc/<pid>/environ` serves. */
 const fakeProc = vi.hoisted(() => ({ environs: new Map<number, string>() }))
@@ -89,8 +92,7 @@ afterEach(async () => {
 })
 
 function openStore(): Promise<AgentSessionRecordStore> {
-  return AgentSessionRecordStore.open({
-    directory: join(stateDirectory, 'agent-sessions'),
+  return openTestAgentSessionRecordStore(stateDirectory, {
     hostId: HOST_ID
   })
 }
@@ -112,7 +114,7 @@ describe('a process that inherited a spawn token', () => {
       fence,
       link: {
         linkId: 'link-1',
-        handle: { provider: 'codex', threadId: 'thread-1' },
+        handle: codexProviderHandle('thread-1'),
         origin: 'created',
         mintedAtFence: fence,
         observedAt: NOW
@@ -135,13 +137,17 @@ describe('a process that inherited a spawn token', () => {
     const kill = vi.spyOn(process, 'kill').mockImplementation(() => true)
 
     const host = await ensureStructuredAgentSessionHost({
+      logger: createStructuredAgentSessionLogger(),
       stateDirectory,
       hostId: HOST_ID,
       claimKeyId: 'key-1',
       resolveWorkspacePath: async () => stateDirectory,
+      resolveLaunchArgs: () => [],
       resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
       resolveEnvironment: async () => ({})
     })
+    // The installed host reads the record the seed wrote, so the check below has a lease to act on.
+    expect(host.deps.store.getRecord(SESSION)?.lease.claimStatus).toBe('released')
     await host.reconcileRestartLeases()
     // Install work that is not awaited would have run by now; nothing here waits on a timer.
     await new Promise((resolve) => setTimeout(resolve, 50))

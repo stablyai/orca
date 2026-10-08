@@ -13,6 +13,7 @@ export type TuiAgent =
   | 'pi' // Pi (pi.dev)
   | 'omp' // OMP (omp.sh)
   | 'qoder' // Qoder CLI
+  | 'qoder-cn' // Qoder CLI China
   | 'gemini' // Gemini CLI
   | 'antigravity' // Google Antigravity CLI
   | 'aider' // Aider
@@ -44,3 +45,4 @@ export type TuiAgent =
   | 'zcode' // ZCode (Z.ai `zcode` CLI)
   | 'prime-agent' // Prime Agent (Prime Intellect)
   | 'dsh' // DeepSeek Harness (`dsh`, launched through its `dsh-tui` terminal profile)
+  | 'jcode' // Jcode

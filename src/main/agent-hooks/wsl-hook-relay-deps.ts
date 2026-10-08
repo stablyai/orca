@@ -1,6 +1,7 @@
 // DI seam for WslHookRelayManager: the full dependency contract plus the
 // production wiring. Tests construct the manager with fakes for everything
 // that spawns wsl.exe or touches the live agentHookServer.
+import { bindRemoteClaudeInterruptReconciliation } from '../ssh/ssh-agent-hook-interrupt-reconciliation'
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 
@@ -64,6 +65,11 @@ export type WslHookRelayManagerDeps = {
   runInstall: typeof runWslInstallProcess
   waitForSentinel: typeof waitForWslRelaySentinel
   ingest: (envelope: Record<string, unknown>, connectionId: string) => void
+  bindInterruptReconciliation?: (
+    mux: Parameters<typeof bindRemoteClaudeInterruptReconciliation>[1],
+    connectionId: string,
+    isCurrent: () => boolean
+  ) => () => void
   installHooks: typeof installRemoteManagedAgentHooks
   installCodex: (runtimeHomePath: string, distro: string) => Promise<AgentHookInstallStatus | null>
   managedHookSettings: () => ManagedHookDetectionSettings
@@ -112,6 +118,8 @@ export const defaultWslHookRelayDeps: WslHookRelayManagerDeps = {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: envelope is the wire-deserialized notification; ingestRemote independently re-validates paneKey's type before trusting anything here.
     return agentHookServer.ingestRemote(capped as IngestEnvelope, connectionId)
   },
+  bindInterruptReconciliation: (mux, connectionId, isCurrent) =>
+    bindRemoteClaudeInterruptReconciliation(agentHookServer, mux, connectionId, isCurrent),
   installHooks: installRemoteManagedAgentHooks,
   installCodex: (runtimeHomePath, distro) =>
     codexHookService.installForRuntimeHomeSerialized(runtimeHomePath, {

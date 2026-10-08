@@ -14,11 +14,29 @@ export async function flushViewportOps(): Promise<void> {
   }
 }
 
+// Why: mirrors Chromium, which rejects an out-of-range maxTouchPoints even when disabling touch.
+async function rejectInvalidTouchPoints(
+  method: string,
+  params?: { maxTouchPoints?: number }
+): Promise<undefined> {
+  const points = params?.maxTouchPoints
+  if (
+    method === 'Emulation.setTouchEmulationEnabled' &&
+    points !== undefined &&
+    (points < 1 || points > 16)
+  ) {
+    throw new Error('Touch points must be between 1 and 16')
+  }
+  return undefined
+}
+
 export type ViewportGuestHandle = {
   guest: Record<string, unknown>
   debuggerSendCommand: ReturnType<typeof vi.fn>
   debuggerIsAttached: ReturnType<typeof vi.fn>
   debuggerAttach: ReturnType<typeof vi.fn>
+  /** Flips what isCrashed() reports, as a renderer death and its reload do. */
+  setRendererCrashed: (crashed: boolean) => void
   setGuestUserAgent: (ua: string) => void
   commitNavigationTo: (nextUrl: string) => void
   webContentsUserAgent: () => string
@@ -35,10 +53,11 @@ export function createViewportGuestFactory(
   mocks: BrowserManagerMocks & { processUserAgent?: string }
 ): (id: number, url?: string) => ViewportGuestHandle {
   return function makeGuest(id: number, url = 'https://example.com/'): ViewportGuestHandle {
-    const debuggerSendCommand = vi.fn().mockResolvedValue(undefined)
+    const debuggerSendCommand = vi.fn(rejectInvalidTouchPoints)
     const debuggerIsAttached = vi.fn(() => true)
     const debuggerAttach = vi.fn()
     let currentUa = mocks.processUserAgent ?? GUEST_ELECTRON_UA
+    let rendererCrashed = false
     // Why: getURL() reports the last COMMITTED url — it does not move at did-start-navigation.
     let committedUrl = url
     // Chromium applies CDP commands in issue order, so a later-issued write wins however they settle,
@@ -65,6 +84,7 @@ export function createViewportGuestFactory(
     const guest = {
       id,
       isDestroyed: vi.fn(() => false),
+      isCrashed: vi.fn(() => rendererCrashed),
       getType: vi.fn(() => 'webview'),
       getURL: vi.fn(() => committedUrl),
       getUserAgent: vi.fn(() => currentUa),
@@ -91,6 +111,9 @@ export function createViewportGuestFactory(
       debuggerSendCommand,
       debuggerIsAttached,
       debuggerAttach,
+      setRendererCrashed: (crashed: boolean) => {
+        rendererCrashed = crashed
+      },
       setGuestUserAgent: (ua: string) => {
         currentUa = ua
       },

@@ -43,6 +43,33 @@ describe('omp model list probe', () => {
     ])
   })
 
+  it('keeps the context window each row states', () => {
+    // Row shape as `omp models --json` prints it (OMP 17.0.5).
+    const listing = JSON.stringify({
+      models: [
+        {
+          provider: 'openai-codex',
+          id: 'gpt-5.5',
+          selector: 'openai-codex/gpt-5.5',
+          name: 'GPT-5.5',
+          contextWindow: 272000,
+          maxTokens: 128000
+        },
+        { provider: 'openai-codex', id: 'gpt-5.4', name: 'GPT-5.4', contextWindow: 1000000 },
+        { provider: 'zai', id: 'glm', name: 'GLM', contextWindow: 0 },
+        { provider: 'zai', id: 'glm-air', name: 'GLM Air', contextWindow: '128000' }
+      ]
+    })
+    expect(
+      parseOmpModelList(listing).map(({ id, contextWindowTokens }) => ({ id, contextWindowTokens }))
+    ).toEqual([
+      { id: 'openai-codex/gpt-5.5', contextWindowTokens: 272000 },
+      { id: 'openai-codex/gpt-5.4', contextWindowTokens: 1000000 },
+      { id: 'zai/glm', contextWindowTokens: undefined },
+      { id: 'zai/glm-air', contextWindowTokens: undefined }
+    ])
+  })
+
   it('tolerates an update notice printed ahead of the JSON', () => {
     const noisy = `Package updates are available. Run omp update\n${LISTING}\n`
     expect(parseOmpModelList(noisy).map(({ id }) => id)).toEqual([
@@ -116,13 +143,16 @@ describe('omp session option catalog', () => {
   })
 
   it('yields to a user --model in the launch args, in either spelling', () => {
-    const override = OMP_SESSION_OPTION_CATALOG.modelApply.agentArgsOverride!
-    expect(override(['--model', 'opus'])).toBe(true)
-    expect(override(['--model=openai/gpt-5.5'])).toBe(true)
-    expect(override(['--no-extensions'])).toBe(false)
+    const remove = OMP_SESSION_OPTION_CATALOG.modelApply.removeAgentArgs!
+    expect(remove(['--model', 'opus', '--model=openai/gpt-5.5', '--no-extensions'])).toEqual([
+      '--no-extensions'
+    ])
     // `--models` scopes Ctrl+P cycling; it does not pick a model. omp has no `-m`.
-    expect(override(['--models=anthropic/*'])).toBe(false)
-    expect(override(['-m', 'opus'])).toBe(false)
+    expect(remove(['--models=anthropic/*', '-m', 'opus'])).toEqual([
+      '--models=anthropic/*',
+      '-m',
+      'opus'
+    ])
   })
 
   it('switches mid-session with /orca-model <selector>, which omp resolves exactly', () => {

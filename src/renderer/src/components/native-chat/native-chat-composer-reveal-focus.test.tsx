@@ -51,9 +51,12 @@ function Harness(props: HarnessProps): React.JSX.Element {
       return true
     },
     insertTypedText: () => true,
+    appendText: () => {},
+    acceptsText: () => true,
     handlePasteEvent: () => {},
-    pasteFromClipboard: () => {}
-  } as NativeChatComposerHandle
+    pasteFromClipboard: () => {},
+    contains: () => false
+  }
   useNativeChatComposerRevealFocus({
     rootRef,
     composerRef,

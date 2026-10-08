@@ -139,7 +139,7 @@ describe('ready-for-review required check reuse', () => {
     expect(detector.steps[0].with['sparse-checkout']).toContain(
       '/config/scripts/pr-ready-check-reuse.mjs'
     )
-    for (const job of ['native_cache_changed', ...PR_CHECK_JOBS]) {
+    for (const job of PR_CHECK_JOBS) {
       expect(detector.outputs[job]).toBe(
         `\${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.${job} }}`
       )
@@ -157,7 +157,11 @@ describe('ready-for-review required check reuse', () => {
       "github.event.pull_request.draft != true && steps.filter.outputs.should_run == 'true'"
     )
     expect(workflow.jobs.verify.if).toBe('${{ !cancelled() }}')
-    expect(workflow.jobs.verify.needs).toEqual(['code_paths', ...PR_CHECK_JOBS])
+    expect(workflow.jobs.verify.needs).toEqual([
+      'code_paths',
+      'preflight',
+      ...PR_CHECK_JOBS.filter((job) => job !== 'static_analysis' && job !== 'typecheck')
+    ])
   })
 
   it.each(['pr-test-loc.yml', 'mobile.yml'])(

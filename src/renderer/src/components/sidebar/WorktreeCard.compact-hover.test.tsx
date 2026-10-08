@@ -31,38 +31,42 @@ let settings: Partial<GlobalSettings> | null = { compactWorktreeCards: true }
 let agentActivityDisplayMode: 'compact' | 'full' | undefined
 let mockInlineAgentRows: DashboardAgentRowData[] = []
 
-vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: unknown) => unknown) =>
-    selector({
-      browserTabsByWorktree: {},
-      agentActivityDisplayMode,
-      createBrowserTab: vi.fn(),
-      deleteStateByWorktreeId: {},
-      fetchHostedReviewForBranch,
-      fetchIssue,
-      fetchLinearIssue,
-      gitConflictOperationByWorktree: {},
-      hostedReviewCache,
-      issueCache,
-      linearIssueCache: {},
-      openModal,
-      openTaskPage,
-      projectGroups,
-      ptyIdsByTabId: {},
-      recordFeatureInteraction,
-      remoteBranchConflictByWorktreeId: {},
-      setRemoteBrowserPageHandle: vi.fn(),
-      replaceWorkspacePortScans,
-      setWorkspacePortScanRefreshing,
-      settings,
-      sshConnectionStates: new Map(),
-      sshTargetLabels: new Map(),
-      tabsByWorktree: {},
-      updateWorktreeMeta,
-      workspacePortScan,
-      worktreeCardProperties
+vi.mock('@/store', () => {
+  const getState = () => ({
+    browserTabsByWorktree: {},
+    agentActivityDisplayMode,
+    createBrowserTab: vi.fn(),
+    deleteStateByWorktreeId: {},
+    fetchHostedReviewForBranch,
+    fetchIssue,
+    fetchLinearIssue,
+    gitConflictOperationByWorktree: {},
+    hostedReviewCache,
+    issueCache,
+    linearIssueCache: {},
+    openModal,
+    openTaskPage,
+    projectGroups,
+    ptyIdsByTabId: {},
+    recordFeatureInteraction,
+    remoteBranchConflictByWorktreeId: {},
+    setRemoteBrowserPageHandle: vi.fn(),
+    replaceWorkspacePortScans,
+    setWorkspacePortScanRefreshing,
+    settings,
+    sshConnectionStates: new Map(),
+    sshTargetLabels: new Map(),
+    tabsByWorktree: {},
+    updateWorktreeMeta,
+    workspacePortScan,
+    worktreeCardProperties
+  })
+  return {
+    useAppStore: Object.assign((selector: (state: unknown) => unknown) => selector(getState()), {
+      getState
     })
-}))
+  }
+})
 
 vi.mock('@/components/ui/hover-card', () => ({
   HoverCard: ({ children, openDelay }: { children: ReactNode; openDelay?: number }) => (
@@ -120,7 +124,6 @@ vi.mock('./WorktreeCardAgents', () => ({
 
 vi.mock('./WorktreeContextMenu', () => ({
   default: ({ children }: { children: ReactNode }) => <>{children}</>,
-  CLOSE_ALL_CONTEXT_MENUS_EVENT: 'orca:test-close-context-menus',
   WORKTREE_CONTEXT_MENU_SCOPE_ATTR: 'data-orca-context-menu-scope',
   WORKTREE_NATIVE_CONTEXT_MENU_ATTR: 'data-worktree-native-context-menu'
 }))
@@ -294,7 +297,7 @@ describe('WorktreeCard compact hover details', () => {
     expect(markup).toContain('data-hover-open-delay="100"')
     expectIdentityBodyIsHoverTrigger(markup)
     expect(markup).toContain('Issue #123')
-    expect(markup).toContain('Linear ENG-123')
+    expect(markup).toContain('ENG-123 · Linear')
     expect(markup).toContain('Reviewer handoff note')
     expect(markup).toContain('Live Ports')
     expect(markup).toContain('58941')

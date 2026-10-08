@@ -376,7 +376,7 @@ describe('runRemoteOrcaCli', () => {
     }
   })
 
-  it('carries the Dispatch capability through the SSH envelope', async () => {
+  it("still accepts an older host's --dispatch-capability through the SSH bridge", async () => {
     const db = new OrchestrationDb(':memory:')
     const runtime = new OrcaRuntimeService()
     runtime.setOrchestrationDb(db)
@@ -396,7 +396,7 @@ describe('runRemoteOrcaCli', () => {
       taskId: task.id,
       startOptions: {}
     })
-    const capability = db.prepareStartingWorkerAuthority({
+    db.prepareStartingWorkerAuthority({
       dispatchId: started.dispatch.id,
       handle: 'term_ssh',
       paneKey: 'tab_ssh:leaf_ssh',
@@ -425,7 +425,7 @@ describe('runRemoteOrcaCli', () => {
             '--outcome',
             'succeeded',
             '--dispatch-capability',
-            capability,
+            'dcap_from_an_old_host',
             '--json'
           ],
           cwd: '/home/alice/repo',

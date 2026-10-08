@@ -188,11 +188,15 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
     this.settingsResolver = resolver
   }
 
-  // Why: a debugger detach clears every CDP override Chromium holds, including the UA override, so
-  // the confirmed-override record must be dropped or navigation believes an override still stands.
-  protected trackDebuggerDetachForUserAgentOverride(guest: Electron.WebContents): () => void {
+  // Why: a debugger detach clears every CDP override Chromium holds, including the UA override and
+  // device metrics, so both records must be dropped or navigation believes they still stand.
+  protected trackDebuggerDetachForCdpOverrides(guest: Electron.WebContents): () => void {
     const onDetach = (): void => {
       this.cdpUserAgentOverrideStateByGuestId.delete(guest.id)
+      const browserTabId = this.tabIdByWebContentsId.get(guest.id)
+      if (browserTabId) {
+        this.recordAppliedViewportOverride(browserTabId, guest.id, null)
+      }
     }
     try {
       guest.debugger.on('detach', onDetach)

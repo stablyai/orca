@@ -62,10 +62,12 @@ fs.renameSync = (from, to) => {
   if (to === options.dataFile) barrier('json-publish:before')
   if (to === options.databasePath) barrier('sqlite-publish:before')
   if (to === options.markerPath) barrier('marker-publish:before')
+  if (to === options.databasePath + '.authority') barrier('authority-publish:before')
   rename(from, to)
   if (to === options.dataFile) barrier('json-publish:after')
   if (to === options.databasePath) barrier('sqlite-publish:after')
   if (to === options.markerPath) barrier('marker-publish:after')
+  if (to === options.databasePath + '.authority') barrier('authority-publish:after')
 }
 const rm = fs.rmSync
 fs.rmSync = (target, ...rest) => {

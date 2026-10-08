@@ -34,6 +34,10 @@ import {
   type RecognizedAgentProcess
 } from '../../../shared/agent-process-recognition'
 import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../../shared/hermes-startup-query'
+import {
+  CLAUDE_INJECTED_CONFIG_DIR_ENV,
+  CLAUDE_PROFILE_POINTER_ENV
+} from '../../../shared/claude-profile-routing'
 import { WINDOWS_GIT_BASH_SHELL } from '../../../shared/windows-terminal-shell'
 import { getShellLaunchConfig, resolvePtyShellPath } from '../shell-ready'
 import { resolveWslSessionContext } from '../wsl-session-context'
@@ -169,6 +173,9 @@ export function createPtyShellLaunchPlan(
       if (env.CLAUDE_CONFIG_DIR) {
         addWslEnvKeys(env, ['CLAUDE_CONFIG_DIR'])
       }
+      if (env[CLAUDE_PROFILE_POINTER_ENV]) {
+        addWslEnvKeys(env, [CLAUDE_PROFILE_POINTER_ENV, CLAUDE_INJECTED_CONFIG_DIR_ENV])
+      }
       if (env[ORCA_HERMES_STARTUP_QUERY_ENV] !== undefined) {
         addWslEnvKeys(env, [ORCA_HERMES_STARTUP_QUERY_ENV])
       }
@@ -198,6 +205,7 @@ export function createPtyShellLaunchPlan(
           shellPath
         }))
     delete env.ORCA_SHELL_FEATURES
+    const userShellArgs = !opts.command && !opts.launchAgent ? opts.terminalShellArgs : undefined
     const shellLaunch = getShellLaunchConfig(
       shellPath,
       selectShellStartupFeatures({
@@ -206,13 +214,15 @@ export function createPtyShellLaunchPlan(
         hasStartupCommand: Boolean(opts.command),
         waitsForShellReady,
         emitsStartupIdentity: waitsForShellReady
-      })
+      }),
+      {
+        hasStartupCommand: Boolean(opts.command),
+        inheritedXdgDataDirs: env.XDG_DATA_DIRS,
+        shellArgs: userShellArgs
+      }
     )
     Object.assign(env, shellLaunch.env)
-    shellArgs =
-      !opts.command && !opts.launchAgent && opts.terminalShellArgs !== undefined
-        ? opts.terminalShellArgs
-        : (shellLaunch.args ?? ['-l'])
+    shellArgs = userShellArgs ?? shellLaunch.args ?? ['-l']
   }
 
   seedPowerlevel10kWizardEnv(env, { envToDelete: opts.envToDelete })

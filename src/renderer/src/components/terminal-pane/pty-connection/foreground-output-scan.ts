@@ -1,14 +1,20 @@
 import { isDocumentVisibilityProvenStale } from '../stale-document-visibility'
 import {
+  scanSynchronizedOutput,
+  type SynchronizedOutputScan
+} from '../../../../../shared/terminal-synchronized-output-scan'
+import {
   INACTIVE_FOREGROUND_IMMEDIATE_BUDGET_CHARS,
   consumeForegroundImmediateBudget,
   createForegroundImmediateBudget
 } from './foreground-output-budgets'
 
 export const TERMINAL_RENDERER_RISK_SCAN_TAIL_CHARS = 256
-export const SYNCHRONIZED_OUTPUT_START_SEQUENCE = '\x1b[?2026h'
-export const SYNCHRONIZED_OUTPUT_END_SEQUENCE = '\x1b[?2026l'
-export const SYNCHRONIZED_OUTPUT_MARKER_TAIL_CHARS = SYNCHRONIZED_OUTPUT_START_SEQUENCE.length - 1
+export {
+  SYNCHRONIZED_OUTPUT_START_SEQUENCE,
+  SYNCHRONIZED_OUTPUT_END_SEQUENCE,
+  SYNCHRONIZED_OUTPUT_MARKER_TAIL_CHARS
+} from '../../../../../shared/terminal-synchronized-output-scan'
 export const CURSOR_SHOW_SEQUENCE = '\x1b[?25h'
 export const CURSOR_HIDE_SEQUENCE = '\x1b[?25l'
 export const TERMINAL_FOCUS_IN_SEQUENCE = '\x1b[I'
@@ -38,59 +44,15 @@ export function shouldWritePtyOutputForeground(isPaneVisible: boolean): boolean 
   return isDocumentVisibilityProvenStale()
 }
 
-export type SynchronizedForegroundScan = {
-  started: boolean
-  ended: boolean
-  active: boolean
-  markerTail: string
-}
+export type SynchronizedForegroundScan = SynchronizedOutputScan
 
-// Why the carried tail: ConPTY can split \x1b[?2026l across chunks; scanning the raw
-// chunk alone left the foreground DEC 2026 latch stuck open so every later chunk was
-// held instead of coalesced, freezing the visible pane (#8754). Mirrors the hidden path.
+/** Renderer-facing name for the shared latch scan; the logic is protocol, not view. */
 export function scanSynchronizedForegroundOutput(
   data: string,
   markerTail: string,
   wasActive: boolean
 ): SynchronizedForegroundScan {
-  const scanData = markerTail ? `${markerTail}${data}` : data
-  const currentChunkStartIndex = scanData.length - data.length
-  let active = wasActive
-  let started = false
-  let ended = false
-  let startIndex = scanData.indexOf(SYNCHRONIZED_OUTPUT_START_SEQUENCE)
-  let endIndex = scanData.indexOf(SYNCHRONIZED_OUTPUT_END_SEQUENCE)
-
-  // Each marker search advances independently, so a missing counterpart is scanned only once.
-  while (startIndex !== -1 || endIndex !== -1) {
-    if (endIndex !== -1 && (startIndex === -1 || endIndex < startIndex)) {
-      active = false
-      if (endIndex + SYNCHRONIZED_OUTPUT_END_SEQUENCE.length > currentChunkStartIndex) {
-        ended = true
-      }
-      endIndex = scanData.indexOf(
-        SYNCHRONIZED_OUTPUT_END_SEQUENCE,
-        endIndex + SYNCHRONIZED_OUTPUT_END_SEQUENCE.length
-      )
-      continue
-    }
-    active = true
-    if (startIndex + SYNCHRONIZED_OUTPUT_START_SEQUENCE.length > currentChunkStartIndex) {
-      started = true
-    }
-    startIndex = scanData.indexOf(
-      SYNCHRONIZED_OUTPUT_START_SEQUENCE,
-      startIndex + SYNCHRONIZED_OUTPUT_START_SEQUENCE.length
-    )
-  }
-
-  return {
-    started,
-    ended,
-    active,
-    // Why length-1: a full marker can never hide in the tail, so no marker is counted twice.
-    markerTail: scanData.slice(-SYNCHRONIZED_OUTPUT_MARKER_TAIL_CHARS)
-  }
+  return scanSynchronizedOutput(data, markerTail, wasActive)
 }
 
 export function containsCursorPositionSequence(data: string): boolean {

@@ -107,25 +107,20 @@ describe('repos:getBaseRefDefault envelope', () => {
       return Promise.reject(new Error(`unexpected exec call: ${argv.join(' ')}`))
     }
   }
-  const isSymbolicRef = (argv: string[]): boolean =>
-    argv[0] === 'symbolic-ref' && argv.includes('refs/remotes/origin/HEAD')
-  const isRevParseFor =
-    (ref: string) =>
-    (argv: string[]): boolean =>
-      argv[0] === 'rev-parse' && argv.includes(ref)
+  const isRefSnapshot = (argv: string[]): boolean =>
+    argv[0] === 'for-each-ref' && argv.includes('--format=%(refname)%00%(symref)')
   const isRemoteList = (argv: string[]): boolean => argv.length === 1 && argv[0] === 'remote'
 
   it('returns envelope over SSH relay for remote repos', async () => {
     mockGitProvider.exec = vi.fn().mockImplementation(
       dispatchExec([
         {
-          matches: isSymbolicRef,
-          respond: () => Promise.resolve({ stdout: 'refs/remotes/origin/main\n', stderr: '' })
-        },
-        // origin/HEAD is verified before trusted, so it must also resolve via rev-parse.
-        {
-          matches: isRevParseFor('refs/remotes/origin/main'),
-          respond: () => Promise.resolve({ stdout: '', stderr: '' })
+          matches: isRefSnapshot,
+          respond: () =>
+            Promise.resolve({
+              stdout: 'refs/remotes/origin/HEAD\0refs/remotes/origin/main\n',
+              stderr: ''
+            })
         },
         {
           matches: isRemoteList,
@@ -154,13 +149,12 @@ describe('repos:getBaseRefDefault envelope', () => {
     mockGitProvider.exec = vi.fn().mockImplementation(
       dispatchExec([
         {
-          matches: isSymbolicRef,
-          respond: () => Promise.resolve({ stdout: 'refs/remotes/origin/main\n', stderr: '' })
-        },
-        // origin/HEAD is verified before trusted, so it must also resolve via rev-parse.
-        {
-          matches: isRevParseFor('refs/remotes/origin/main'),
-          respond: () => Promise.resolve({ stdout: '', stderr: '' })
+          matches: isRefSnapshot,
+          respond: () =>
+            Promise.resolve({
+              stdout: 'refs/remotes/origin/HEAD\0refs/remotes/origin/main\n',
+              stderr: ''
+            })
         },
         {
           matches: isRemoteList,
@@ -186,20 +180,12 @@ describe('repos:getBaseRefDefault envelope', () => {
     expect(result.remoteCount).toBe(0)
   })
 
-  it('falls back through probes over SSH when symbolic-ref fails', async () => {
+  it('uses the primary fallback over SSH when origin/HEAD is absent', async () => {
     mockGitProvider.exec = vi.fn().mockImplementation(
       dispatchExec([
-        // symbolic-ref rejects (no origin/HEAD on the remote)
-        { matches: isSymbolicRef, respond: () => Promise.reject(new Error('no symbolic-ref')) },
-        // probe 1: refs/remotes/origin/main — rejects
         {
-          matches: isRevParseFor('refs/remotes/origin/main'),
-          respond: () => Promise.reject(new Error('missing'))
-        },
-        // probe 2: refs/remotes/origin/master — succeeds
-        {
-          matches: isRevParseFor('refs/remotes/origin/master'),
-          respond: () => Promise.resolve({ stdout: 'abc123\n', stderr: '' })
+          matches: isRefSnapshot,
+          respond: () => Promise.resolve({ stdout: 'refs/remotes/origin/master\0\n', stderr: '' })
         },
         {
           matches: isRemoteList,
@@ -220,7 +206,6 @@ describe('repos:getBaseRefDefault envelope', () => {
       remoteCount: number
     }
 
-    // Why: when symbolic-ref fails, the probe chain resolves origin/master, matching the local path.
     expect(result.defaultBaseRef).toBe('origin/master')
     expect(result.remoteCount).toBe(1)
   })

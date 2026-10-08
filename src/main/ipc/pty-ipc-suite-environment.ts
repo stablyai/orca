@@ -58,6 +58,7 @@ import { _resetWslCachesForTests } from '../wsl'
 
 /** The mocked webContents each suite asserts sends against. */
 export type PtyIpcTestWebContents = {
+  id: number
   on: Mock
   send: Mock
   removeListener: Mock
@@ -92,6 +93,7 @@ export function createPtyIpcSuiteEnvironment(): PtyIpcSuiteEnvironment {
     isVisible: () => true,
     isMinimized: () => false,
     webContents: {
+      id: 1,
       on: vi.fn(),
       send: vi.fn(),
       removeListener: vi.fn(),
@@ -101,6 +103,7 @@ export function createPtyIpcSuiteEnvironment(): PtyIpcSuiteEnvironment {
   const mainWindowIpcEvent = { sender: mainWindow.webContents }
   const foreignWindowIpcEvent = {
     sender: {
+      id: 2,
       on: vi.fn(),
       send: vi.fn(),
       removeListener: vi.fn(),

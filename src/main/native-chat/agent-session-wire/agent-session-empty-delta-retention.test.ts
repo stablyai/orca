@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { describe, expect, it, vi } from 'vitest'
 import { createCodexStructuredItemStreams } from '../../codex/codex-structured-item-streams'
 import { createAgentSessionDeltaCoalescer } from './agent-session-delta-coalescer'
@@ -9,7 +10,7 @@ describe('empty streamed deltas', () => {
       sink: { appendItem() {}, appendTombstone() {}, publish() {} },
       turnIdFor: () => 'turn',
       identityFor: () => ({ provider: 'codex', threadId: 'thread', turnId: 'turn', ordinal: 0 }),
-      linkageFor: () => ({}),
+      attributionFor: () => ({ turnScope: AGENT_JOURNAL_THREAD_SCOPE }),
       schedule: () => () => {}
     })
     const append = (delta: string) =>

@@ -18,13 +18,14 @@
 
 import {
   withoutReservedAgentCreateFields,
+  type AgentLaunchPlacement,
   type AgentLaunchPrompt,
   type AgentLaunchResult
 } from '../../../src/shared/agent-launch-intent'
 import {
   AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_RUNTIME_CAPABILITY
-} from '../../../src/shared/protocol-version'
+} from '../../../src/shared/agent-launch-runtime-capability'
 import type { TuiAgent } from '../../../src/shared/tui-agent'
 import type { RpcSendParams } from '../transport/rpc-params-contract'
 import type { WorkspaceCreateParams } from './workspace-create-params'
@@ -82,13 +83,20 @@ export function agentLaunchExistingParams(args: {
   operationId: string
   prompt?: AgentLaunchPrompt
   launchSource?: string
+  paneKey?: string
+  sessionId?: string
+  placement?: AgentLaunchPlacement
 }): RpcSendParams<'agent.launchReplay'> {
   return {
     agent: args.agent,
     operationId: args.operationId,
     target: { kind: 'existing', worktree: `id:${args.worktreeId}` },
     ...(args.prompt ? { prompt: args.prompt } : {}),
-    ...(args.launchSource ? { launchSource: args.launchSource } : {})
+    ...(args.launchSource ? { launchSource: args.launchSource } : {}),
+    ...(args.paneKey ? { paneKey: args.paneKey } : {}),
+    ...(args.sessionId ? { sessionId: args.sessionId } : {}),
+    // An older host drops it and the tab lands in its active group, as before.
+    ...(args.placement ? { placement: args.placement } : {})
   }
 }
 
@@ -138,11 +146,5 @@ export function isAgentLaunchUnsupportedRefusal(error: {
   return (error.message ?? '').includes('agent_launch_unsupported')
 }
 
-/** The `agent.launchReplay` twin: an older host rejects the method rather than a field. */
-export function isAgentLaunchReplayUnsupportedRefusal(error: { code?: string }): boolean {
-  return (
-    error.code === 'method_not_found' ||
-    error.code === 'forbidden' ||
-    error.code === 'agent_launch_replay_unsupported'
-  )
-}
+// The `agent.launchReplay` twin lives in shared so the desktop classifies refusals the same way.
+export { isAgentLaunchReplayUnsupportedRefusal } from '../../../src/shared/agent-launch-replay-refusal'

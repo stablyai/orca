@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import './mock-descendant-sweep'
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { PTY_STARTUP_INGRESS_VERSION } from '../shared/pty-startup-ingress'
+import { _resetPtyOwnerHostColorsForTest } from '../shared/pty-owner-color-query-colors'
 
 const { mockPtySpawn, mockPtyInstance, mockCreateShellPromptReadinessProbe } = vi.hoisted(() => ({
   mockPtySpawn: vi.fn(),
@@ -167,13 +168,16 @@ describe('PtyHandler', () => {
     )
     onData!(raw)
     vi.advanceTimersByTime(8)
-    expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', {
-      id: PTY_1,
-      data: expect.stringContaining('"state":"blocked"'),
-      rawLength: raw.length,
-      seq: raw.length,
-      transformed: true
-    })
+    // The capture opens with Freebuff's OSC 10/11 probes, which the relay answers and strips.
+    expect(dispatcher.notify).toHaveBeenCalledWith(
+      'pty.data',
+      expect.objectContaining({
+        id: PTY_1,
+        data: expect.stringContaining('"state":"blocked"'),
+        seq: raw.length,
+        transformed: true
+      })
+    )
     dispatcher.notify.mockClear()
     onData!('more output')
     vi.advanceTimersByTime(8)
@@ -389,7 +393,7 @@ describe('PtyHandler', () => {
     })
   })
 
-  it('leaves startup queries untouched for an unsupported relay capability version', async () => {
+  it('ignores an intent from another ingress version and answers from the default theme', async () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
     try {
@@ -414,8 +418,8 @@ describe('PtyHandler', () => {
       dataCallback!(query)
       vi.advanceTimersByTime(8)
 
-      expect(term.write).not.toHaveBeenCalled()
-      expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', { id: PTY_1, data: query })
+      expect(term.write).toHaveBeenCalledWith('\x1b]10;rgb:ffff/ffff/ffff\x1b\\')
+      expect(dispatcher.notify).not.toHaveBeenCalledWith('pty.data', { id: PTY_1, data: query })
     } finally {
       if (originalPlatform) {
         Object.defineProperty(process, 'platform', originalPlatform)
@@ -423,7 +427,7 @@ describe('PtyHandler', () => {
     }
   })
 
-  it('consumes a color query at a native Windows SSH relay owner', async () => {
+  it('answers a color query at a native Windows SSH relay owner', async () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     try {
@@ -441,7 +445,7 @@ describe('PtyHandler', () => {
       dataCallback!('\x1b]10;?\x07')
       vi.advanceTimersByTime(8)
 
-      expect(term.write).not.toHaveBeenCalled()
+      expect(term.write).toHaveBeenCalledWith('\x1b]10;rgb:ffff/ffff/ffff\x1b\\')
       expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', {
         id: PTY_1,
         data: '',
@@ -456,33 +460,45 @@ describe('PtyHandler', () => {
     }
   })
 
-  it('forwards color queries from a POSIX SSH relay owner', async () => {
+  it('answers a POSIX SSH relay query from the latest relay-wide colours', async () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
     try {
       let dataCallback: ((data: string) => void) | undefined
-      mockPtySpawn.mockReturnValue({
+      const term = {
         ...mockPtyInstance,
         onData: vi.fn((cb: (data: string) => void) => {
           dataCallback = cb
         }),
         onExit: vi.fn()
-      })
+      }
+      mockPtySpawn.mockReturnValue(term)
       await dispatcher.callRequest('pty.spawn', { shellOverride: '/bin/bash' })
-      const query = '\x1b]10;?\x07'
+      const query = '\x1b]11;?\x07'
 
+      dispatcher.callNotification('pty.setColorQueryReplyColors', {
+        colors: { foreground: '#000000', background: '#123456' }
+      })
+      dataCallback!(query)
+      // A malformed push keeps the previous colours rather than blanking them.
+      dispatcher.callNotification('pty.setColorQueryReplyColors', { colors: { background: 7 } })
       dataCallback!(query)
       vi.advanceTimersByTime(8)
 
-      expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', { id: PTY_1, data: query })
+      expect(term.write.mock.calls).toEqual([
+        ['\x1b]11;rgb:1212/3434/5656\x1b\\'],
+        ['\x1b]11;rgb:1212/3434/5656\x1b\\']
+      ])
+      expect(dispatcher.notify).not.toHaveBeenCalledWith('pty.data', { id: PTY_1, data: query })
     } finally {
+      _resetPtyOwnerHostColorsForTest()
       if (originalPlatform) {
         Object.defineProperty(process, 'platform', originalPlatform)
       }
     }
   })
 
-  it('keeps renderer color replies for a Windows SSH relay that owns WSL', async () => {
+  it('answers a Windows SSH relay query for a WSL shell at the owner too', async () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     try {
@@ -499,17 +515,15 @@ describe('PtyHandler', () => {
         shellOverride: 'wsl.exe',
         terminalWindowsWslDistro: 'Ubuntu'
       })
-      const reply = '\x1b]11;rgb:ffff/ffff/ffff\x1b\\'
 
       dataCallback!('\x1b]11;?\x07')
       vi.advanceTimersByTime(8)
-      dispatcher.callNotification('pty.data', { id: PTY_1, data: reply })
 
-      expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', {
+      expect(term.write).toHaveBeenCalledWith('\x1b]11;rgb:2828/2c2c/3434\x1b\\')
+      expect(dispatcher.notify).not.toHaveBeenCalledWith('pty.data', {
         id: PTY_1,
         data: '\x1b]11;?\x07'
       })
-      expect(term.write).toHaveBeenCalledWith(reply)
     } finally {
       if (originalPlatform) {
         Object.defineProperty(process, 'platform', originalPlatform)
@@ -696,6 +710,41 @@ describe('PtyHandler', () => {
     expect(dispatcher.notify).toHaveBeenNthCalledWith(2, 'pty.data', {
       id: PTY_1,
       data: 'tail'
+    })
+  })
+
+  it('does not split a bounded slice inside an open DEC 2026 frame', async () => {
+    let dataCallback: ((data: string) => void) | undefined
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      onData: vi.fn((cb: (data: string) => void) => {
+        dataCallback = cb
+      }),
+      onExit: vi.fn()
+    })
+
+    await dispatcher.callRequest('pty.spawn', {})
+    // A frame that closes just before the 16KB boundary, then a second frame
+    // that straddles it. Cutting at the raw boundary would strand the second
+    // frame's \x1b[?2026l, and xterm paints nothing while the latch is open.
+    const open = '\x1b[?2026h'
+    const close = '\x1b[?2026l'
+    const firstFrame = `${open}${'x'.repeat(16 * 1024 - 2 * open.length - close.length)}${close}`
+    const secondFrame = `${open}${'y'.repeat(64)}${close}`
+    dataCallback!(`${firstFrame}${secondFrame}`)
+
+    vi.advanceTimersByTime(8)
+    expect(dispatcher.notify).toHaveBeenCalledTimes(1)
+    expect(dispatcher.notify).toHaveBeenNthCalledWith(1, 'pty.data', {
+      id: PTY_1,
+      data: firstFrame
+    })
+
+    vi.advanceTimersByTime(1)
+    expect(dispatcher.notify).toHaveBeenCalledTimes(2)
+    expect(dispatcher.notify).toHaveBeenNthCalledWith(2, 'pty.data', {
+      id: PTY_1,
+      data: secondFrame
     })
   })
 

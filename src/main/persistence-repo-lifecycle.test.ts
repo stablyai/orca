@@ -15,6 +15,7 @@ import { tmpdir } from 'node:os'
 import type { PersistedState } from '../shared/persisted-state-types'
 import type { ProjectGroup } from '../shared/project-group-types'
 import { getDefaultWorkspaceSession } from '../shared/constants'
+import { makeTerminalTab as makeSessionTerminalTab } from './persistence-session-fixtures'
 
 import {
   advanceSshConnectionGeneration,
@@ -80,6 +81,10 @@ describe('Store', () => {
     await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
+  it('keeps the persistence harness terminal-tab fixture as the same public function', () => {
+    expect(makeTerminalTab).toBe(makeSessionTerminalTab)
+  })
+
   // ── 5. addRepo and getRepo ──────────────────────────────────────────
 
   it('addRepo stores a repo retrievable by getRepo', async () => {

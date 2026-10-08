@@ -1,17 +1,8 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "settings.new-tab-agents",
   "family": "settings-agent-read",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "ccdb324b63e4942891942edde1216586a51774bd",
-  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
-  "recorderSha256": "0317fe2aebe4743ce5e7ae194531aa91b4fe0a84df457640851fe6dfdb9362af",
-  "adapterSha256": "448cdbd12f4f6a14bb33947bfbbb1837aebeb28979db70c62f2ba2fbb4d89c8f",
-  "scenarioSha256": "46c4e32a921612c736c8cf45ff72ed513431c917ed3dd03f289c0ba4c28d6adb",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "02188f091419": {
       "name": "settings.get#1",

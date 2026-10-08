@@ -134,7 +134,8 @@ export async function seedCreatePrComposer(page: Page): Promise<{
       // Ignore provider work queued before this generation-only fixture was installed.
       getEffectiveGitHubPRRefreshState: () => undefined,
       prRefreshStates: {},
-      fetchUpstreamStatus: async () => undefined,
+      fetchUpstreamStatus: async (worktreeId) =>
+        store.getState().remoteStatusesByWorktree[worktreeId] ?? null,
       setUpstreamStatus: () => undefined
     }))
 
@@ -222,8 +223,8 @@ export async function seedCommitMessageComposer(page: Page): Promise<{
           status: 'ready' as const
         }
       },
-      gitBranchCompareEntriesByWorktree: {
-        ...current.gitBranchCompareEntriesByWorktree,
+      gitBranchChangesByWorktree: {
+        ...current.gitBranchChangesByWorktree,
         [primaryWorktree.id]: []
       }
     }))
@@ -290,8 +291,8 @@ export async function seedCleanBranchEmptyState(
           status: 'ready' as const
         }
       },
-      gitBranchCompareEntriesByWorktree: {
-        ...current.gitBranchCompareEntriesByWorktree,
+      gitBranchChangesByWorktree: {
+        ...current.gitBranchChangesByWorktree,
         [primaryWorktree.id]: []
       }
     }))

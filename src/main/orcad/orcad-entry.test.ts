@@ -21,9 +21,10 @@ describe('orcad profile-state shutdown', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     const stop = vi.fn(() => new Promise<void>(() => {}))
     try {
-      installOrcadShutdownSignals(stop)
+      const shutdown = installOrcadShutdownSignals(stop)
       signal?.()
       signal?.()
+      expect(shutdown('idle')).toBe(false)
       expect(stop).toHaveBeenCalledOnce()
       expect(exit).not.toHaveBeenCalled()
       expect(() => vi.advanceTimersByTime(ORCAD_SHUTDOWN_DEADLINE_MS)).toThrow('shutdown deadline')
@@ -31,6 +32,28 @@ describe('orcad profile-state shutdown', () => {
     } finally {
       vi.restoreAllMocks()
       vi.useRealTimers()
+    }
+  })
+
+  it('retracts a clean-stop record only when the stop fails', async () => {
+    vi.spyOn(process, 'on').mockImplementation(() => process)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub only records the code; nothing after process.exit runs in these paths.
+    const exit = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never)
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const onFailed = vi.fn()
+      installOrcadShutdownSignals(async () => {
+        throw new Error('flush failed')
+      })('idle', onFailed)
+      await vi.waitFor(() => expect(exit).toHaveBeenCalled())
+      expect(onFailed).toHaveBeenCalledOnce()
+
+      const notFailed = vi.fn()
+      installOrcadShutdownSignals(async () => {})('idle', notFailed)
+      await vi.waitFor(() => expect(exit).toHaveBeenLastCalledWith(0))
+      expect(notFailed).not.toHaveBeenCalled()
+    } finally {
+      vi.restoreAllMocks()
     }
   })
 
@@ -47,9 +70,7 @@ describe('orcad profile-state shutdown', () => {
 
     await flushOrcadProfileStoreForShutdown(store)
 
-    expect(store.flushFinalOrThrowAsync).toHaveBeenCalledExactlyOnceWith({
-      exportJsonCompatibility: true
-    })
+    expect(store.flushFinalOrThrowAsync).toHaveBeenCalledExactlyOnceWith()
     expect(store.freezeWritesAsync).toHaveBeenCalledOnce()
     expect(events).toEqual(['flush', 'freeze'])
   })

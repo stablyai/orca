@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
-import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { abandonStructuredAgentSessionHost } from './structured-agent-session-host-test-abandon'
@@ -18,16 +18,17 @@ import {
   hostTestAttachParams,
   hostTestMessage
 } from './structured-agent-session-host-test-data'
+import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const CALLER = { callerKey: 'client-1' }
 
 describe('abandoning a structured agent-session host', () => {
   it('waits for the restart the delivery loop woke for an accepted send', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-abandon-'))
-    const store = await AgentSessionRecordStore.open({
-      directory: join(root, 'store'),
-      hostId: 'local'
-    })
+    const store = await openTestAgentSessionRecordStore(root)
     // Holds the restart inside its provider acquisition, so the point teardown must not run past
     // is exact rather than a timing window.
     let gate: Promise<void> | null = null
@@ -51,7 +52,7 @@ describe('abandoning a structured agent-session host', () => {
           },
           link: {
             linkId: `link-${fence}`,
-            handle: { provider: 'codex', threadId: THREAD },
+            handle: codexProviderHandle(THREAD),
             origin: 'created',
             mintedAtFence: fence,
             observedAt: NOW
@@ -68,13 +69,15 @@ describe('abandoning a structured agent-session host', () => {
       setOption: async () => undefined
     }
     const host = new StructuredAgentSessionHost({
+      agents: NO_STRUCTURED_AGENTS,
+      logger: createStructuredAgentSessionLogger(),
       store,
       adapter,
       probeOwner: async () => ({
         outcome: 'identity-matched',
         matchedOn: ['process-start-time']
       }),
-      journalRoot: root,
+      journalDatabase: openTestJournalHostDatabase(root),
       claimKeyId: 'key-1',
       mintSpawnToken: () => 'spawn-a',
       now: () => NOW
@@ -82,7 +85,7 @@ describe('abandoning a structured agent-session host', () => {
     expect(await host.attach(CALLER, hostTestAttachParams(null))).toMatchObject({ ok: true })
     // The conversation stays and its provider child does not, so the next send makes the delivery
     // loop start one — the shape the refusal-oracle spec ends on.
-    await host.close(SESSION)
+    await host.close(SESSION, 'evict')
     gate = new Promise<void>((resolve) => {
       openGate = resolve
     })

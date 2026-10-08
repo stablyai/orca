@@ -82,6 +82,8 @@ describe('CodexAccountService config sync', () => {
     )
 
     vi.doMock('node:child_process', () => ({
+      // The supervised Codex teardown's process-table reader binds execFile when it loads.
+      execFile: vi.fn(),
       execFileSync: vi.fn(),
       spawn: spawnMock
     }))
@@ -146,6 +148,8 @@ describe('CodexAccountService config sync', () => {
     )
 
     vi.doMock('node:child_process', () => ({
+      // The supervised Codex teardown's process-table reader binds execFile when it loads.
+      execFile: vi.fn(),
       execFileSync: vi.fn(),
       spawn: spawnMock
     }))
@@ -254,6 +258,8 @@ describe('CodexAccountService config sync', () => {
     )
 
     vi.doMock('node:child_process', () => ({
+      // The supervised Codex teardown's process-table reader binds execFile when it loads.
+      execFile: vi.fn(),
       execFileSync: vi.fn(),
       spawn: spawnMock
     }))
@@ -411,6 +417,8 @@ describe('CodexAccountService config sync', () => {
       }
     )
     vi.doMock('node:child_process', () => ({
+      // The supervised Codex teardown's process-table reader binds execFile when it loads.
+      execFile: vi.fn(),
       execFileSync: vi.fn(),
       spawn: spawnMock
     }))
@@ -486,6 +494,8 @@ describe('CodexAccountService config sync', () => {
     const spawnMock = vi.fn()
 
     vi.doMock('node:child_process', () => ({
+      // The supervised Codex teardown's process-table reader binds execFile when it loads.
+      execFile: vi.fn(),
       execFileSync: vi.fn(),
       spawn: spawnMock
     }))
@@ -532,6 +542,8 @@ describe('CodexAccountService config sync', () => {
     const spawnMock = vi.fn()
 
     vi.doMock('node:child_process', () => ({
+      // The supervised Codex teardown's process-table reader binds execFile when it loads.
+      execFile: vi.fn(),
       execFileSync: vi.fn(),
       spawn: spawnMock
     }))

@@ -28,8 +28,7 @@ const owned: AgentSessionStatusSummary = {
   latestPrompt: 'work',
   updatedAt: 1,
   hostExecutionOwned: true,
-  hostExecutionPhase: 'starting',
-  hostExecutionChild: { generation: 'child-1', fence: 1 }
+  hostExecutionPhase: 'starting'
 }
 const done: AgentSessionStatusSummary = {
   ...owned,
@@ -74,8 +73,7 @@ describe('structured status feed execution authority lifecycle', () => {
     expect(feed.getSnapshot().get('running')).toEqual({
       ...owned,
       hostExecutionOwned: undefined,
-      hostExecutionPhase: undefined,
-      hostExecutionChild: undefined
+      hostExecutionPhase: undefined
     })
     expect(feed.getSnapshot().get('completed')).toBe(done)
     subscription().emit({ type: 'status', session: owned })
@@ -86,6 +84,27 @@ describe('structured status feed execution authority lifecycle', () => {
     expect(feed.getSnapshot().get('running')?.hostExecutionOwned).toBeUndefined()
     subscription(1).emit({ type: 'status', session: owned })
     expect(feed.getSnapshot().get('running')?.hostExecutionOwned).toBe(true)
+  })
+
+  it('drops a Stop the host was ending once contact is lost, owned or not', async () => {
+    const feed = getStructuredAgentSessionStatusFeed({ kind: 'local' })
+    feed.activate()
+    await vi.advanceTimersByTimeAsync(0)
+    const unowned = { ...owned, sessionId: 'unowned', hostExecutionOwned: undefined }
+    subscription().emit({
+      type: 'snapshot',
+      sessions: [
+        { ...owned, stopping: true },
+        { ...unowned, stopping: true }
+      ]
+    })
+    expect(feed.getSnapshot().get('running')?.stopping).toBe(true)
+
+    subscription().emit({ type: 'end' })
+
+    expect(feed.getSnapshot().get('running')).not.toHaveProperty('stopping')
+    expect(feed.getSnapshot().get('unowned')).not.toHaveProperty('stopping')
+    expect(feed.getSnapshot().get('unowned')?.status).toBe('working')
   })
 
   it('retains history without ownership while stopped and until remount receives fresh evidence', async () => {

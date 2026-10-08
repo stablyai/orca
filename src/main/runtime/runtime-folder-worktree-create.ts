@@ -22,11 +22,11 @@ import type {
 type RuntimeFolderWorktreeCreateDeps = {
   store: RuntimeStore
   ptySpawnAvailable: boolean
+  provisionInBackground?: () => boolean
   createTerminal: (
     selector: string,
     options: TerminalCreateOptions
   ) => Promise<RuntimeTerminalCreate>
-  markTrusted: (agent: TuiAgent, path: string) => Promise<void>
   pasteDraft: (handle: string, draft: WorktreeStartupDraftPaste) => void
   sendFollowup: (handle: string, followup: WorktreeStartupFollowup) => void
   invalidateResolvedWorktrees: () => void
@@ -108,6 +108,7 @@ export async function createRuntimeFolderWorktree(args: {
       : {}),
     ...(request.linkedGiteaPR !== undefined ? { linkedGiteaPR: request.linkedGiteaPR } : {}),
     ...(request.linkedWorkItem !== undefined ? { linkedWorkItem: request.linkedWorkItem } : {}),
+    ...(request.linkedItems !== undefined ? { linkedItems: request.linkedItems } : {}),
     ...(request.linkedTaskSourceContext !== undefined
       ? { linkedTaskSourceContext: request.linkedTaskSourceContext }
       : {}),
@@ -131,10 +132,6 @@ export async function createRuntimeFolderWorktree(args: {
   let startupTerminal: CreateWorktreeResult['startupTerminal']
   if (args.startup && deps.ptySpawnAvailable) {
     try {
-      const trustAgent = args.draftPaste?.agent ?? args.createdWithAgent
-      if (trustAgent) {
-        await deps.markTrusted(trustAgent, worktree.path)
-      }
       const terminal = await deps.createTerminal(`id:${worktree.id}`, {
         command: args.startup.command,
         ...(request.startupCwd ? { cwd: request.startupCwd } : {}),
@@ -175,7 +172,13 @@ export async function createRuntimeFolderWorktree(args: {
       undefined,
       args.startup && !didSpawnStartup ? args.startup : undefined
     )
-  } else if (deps.ptySpawnAvailable && !didSpawnStartup && !args.createdWithAgent) {
+  }
+  if (
+    (!shouldActivate || deps.provisionInBackground?.() === true) &&
+    deps.ptySpawnAvailable &&
+    !didSpawnStartup &&
+    !args.createdWithAgent
+  ) {
     try {
       await deps.createTerminal(`id:${worktree.id}`, { surfaceOwner: false })
     } catch (error) {

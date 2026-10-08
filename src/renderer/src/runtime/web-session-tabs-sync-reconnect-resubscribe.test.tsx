@@ -10,7 +10,14 @@ import type * as WorktreeRuntimeOwnerModule from '@/lib/worktree-runtime-owner'
 
 vi.mock('sonner', () => ({ toast: { warning: vi.fn(), dismiss: vi.fn() } }))
 
-const mocks = vi.hoisted(() => ({ getExplicitRuntimeEnvironmentIdForWorktree: vi.fn() }))
+const mocks = vi.hoisted(() => ({
+  getExplicitRuntimeEnvironmentIdForWorktree: vi.fn(),
+  recheckUnconfirmedLaunches: vi.fn()
+}))
+
+vi.mock('@/lib/structured-agent-session-launch-unconfirmed-recheck', () => ({
+  recheckUnconfirmedStructuredAgentLaunches: mocks.recheckUnconfirmedLaunches
+}))
 
 vi.mock('@/lib/worktree-runtime-owner', async (importOriginal) => {
   const actual = await importOriginal<typeof WorktreeRuntimeOwnerModule>()
@@ -144,6 +151,7 @@ describe('session-tabs mirror across an outage and its recovery', () => {
     runtimeCall.mockClear()
     runtimeSubscribe.mockClear()
     mocks.getExplicitRuntimeEnvironmentIdForWorktree.mockReset().mockReturnValue(ENV_A)
+    mocks.recheckUnconfirmedLaunches.mockClear()
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { runtimeEnvironments: { call: runtimeCall, subscribe: runtimeSubscribe } }
@@ -193,6 +201,32 @@ describe('session-tabs mirror across an outage and its recovery', () => {
     expect(mirrorKeys().resubscribeSignal).not.toBe(stranded.signal)
     expect(mirroredSubscriptions('session.tabs.subscribeAll')).toHaveLength(stranded.all + 1)
     expect(mirroredSubscriptions('session.tabs.subscribe')).toHaveLength(stranded.active + 1)
+  })
+
+  // A create whose reply was lost may have landed: the host's census on the new stream is when
+  // this client can ask it again, once per return.
+  it('re-checks unconfirmed chat starts on that host when its reinstalled stream opens', async () => {
+    await connectThenLoseContact()
+    const census = async (): Promise<void> => {
+      const [reopened] = mirroredSubscriptions('session.tabs.subscribeAll').slice(-1)
+      await act(async () => {
+        reopened?.callbacks.onResponse({
+          id: 'census',
+          ok: true,
+          result: { type: 'snapshots', snapshots: [], authoritative: true },
+          _meta: { runtimeId: 'runtime-a' }
+        })
+        await settle()
+      })
+    }
+    mocks.recheckUnconfirmedLaunches.mockClear()
+
+    await regainContact()
+    expect(mocks.recheckUnconfirmedLaunches).not.toHaveBeenCalled()
+    await census()
+
+    expect(mocks.recheckUnconfirmedLaunches).toHaveBeenCalledOnce()
+    expect(mocks.recheckUnconfirmedLaunches).toHaveBeenCalledWith(`runtime:${ENV_A}`)
   })
 
   // Direction 2: the mirror's cache key. #19647 -- recovery is not a second connection, so every

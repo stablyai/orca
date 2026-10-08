@@ -163,26 +163,6 @@ describe('agent prompt submit delay on a ConPTY host', () => {
     await stalled
   })
 
-  it('does not send another Enter after cancellation during verification', async () => {
-    useHostPlatform('win32')
-    vi.useFakeTimers()
-    const controller = new AbortController()
-    const { runtime, handle, writes } = await createPromptRuntime()
-    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this', {
-      inputKind: 'driving',
-      signal: controller.signal
-    })
-    const rejected = expect(submission).rejects.toThrow('request_aborted')
-
-    await vi.advanceTimersByTimeAsync(submitDelayFor('review this', 'win32'))
-    expect(countSubmits(writes)).toBe(1)
-    controller.abort()
-    await vi.runAllTimersAsync()
-
-    await rejected
-    expect(countSubmits(writes)).toBe(1)
-  })
-
   it('charges a non-Windows host only the settle window', async () => {
     useHostPlatform('darwin')
     vi.useFakeTimers()

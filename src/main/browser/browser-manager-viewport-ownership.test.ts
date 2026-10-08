@@ -161,7 +161,8 @@ describe('browser viewport operation ownership', () => {
     expect(registeredGuests.get('replacement')).toBe(103)
     expect(presetIntents.get('replacement')).toEqual({
       guestWebContentsId: 103,
-      override: desktop
+      requested: desktop,
+      applied: desktop
     })
   })
 
@@ -176,7 +177,11 @@ describe('browser viewport operation ownership', () => {
     await browserManager.setViewportOverride('late-delete', mobile)
     gate.resolve()
     await expect(result).resolves.toBe(false)
-    expect(presetIntents.get('late-delete')).toEqual({ guestWebContentsId: 105, override: mobile })
+    expect(presetIntents.get('late-delete')).toEqual({
+      guestWebContentsId: 105,
+      requested: mobile,
+      applied: mobile
+    })
     expect(registeredGuests.get('late-delete')).toBe(105)
   })
 
@@ -190,7 +195,11 @@ describe('browser viewport operation ownership', () => {
     await gate.entered
     gate.reject(new Error('Protocol error'))
     await expect(result).resolves.toBe(false)
-    expect(presetIntents.get('same-owner')).toEqual({ guestWebContentsId: 106, override: null })
+    expect(presetIntents.get('same-owner')).toEqual({
+      guestWebContentsId: 106,
+      requested: null,
+      applied: null
+    })
     expect(handle.presentedUserAgent()).toContain('iPhone')
     expect(cdpUserAgentOverrides.has(106)).toBe(true)
   })
@@ -205,7 +214,11 @@ describe('browser viewport operation ownership', () => {
     await browserManager.setViewportOverride('late-apply', desktop)
     gate.resolve()
     await expect(pending).resolves.toBe(false)
-    expect(presetIntents.get('late-apply')).toEqual({ guestWebContentsId: 111, override: desktop })
+    expect(presetIntents.get('late-apply')).toEqual({
+      guestWebContentsId: 111,
+      requested: desktop,
+      applied: desktop
+    })
     expect(old.debuggerSendCommand).not.toHaveBeenCalledWith(
       'Emulation.setUserAgentOverride',
       expect.anything()
@@ -253,7 +266,8 @@ describe('browser viewport operation ownership', () => {
     expect(pendingOperations.size).toBe(0)
     expect(presetIntents.get('queued-replacement')).toEqual({
       guestWebContentsId: 115,
-      override: mobile
+      requested: mobile,
+      applied: mobile
     })
     expect(replacement.presentedUserAgent()).toContain('iPhone')
   })
@@ -267,18 +281,25 @@ describe('browser viewport operation ownership', () => {
     const third = browserManager.setViewportOverride('serialized', null)
     gate.resolve()
     expect(await Promise.all([first, second, third])).toEqual([true, true, true])
-    // Identity follows the last request, which was "no preset" before any identity write ran, so the
-    // mobile UA is never installed at all.
+    // Identity follows each viewport as it is applied, so the mobile UA stands only while the mobile
+    // metrics do and is cleared once the desktop metrics land.
     expect(handle.debuggerSendCommand.mock.calls.map(([method]) => method)).toEqual([
       'Emulation.setDeviceMetricsOverride',
       'Emulation.setTouchEmulationEnabled',
+      'Emulation.setUserAgentOverride',
       'Emulation.setDeviceMetricsOverride',
       'Emulation.setTouchEmulationEnabled',
+      'Emulation.setUserAgentOverride',
       'Emulation.clearDeviceMetricsOverride',
       'Emulation.setTouchEmulationEnabled'
     ])
+    expect(handle.presentedUserAgent()).toBe(GUEST_CLEAN_UA)
     expect(pendingOperations.size).toBe(0)
-    expect(presetIntents.get('serialized')).toEqual({ guestWebContentsId: 116, override: null })
+    expect(presetIntents.get('serialized')).toEqual({
+      guestWebContentsId: 116,
+      requested: null,
+      applied: null
+    })
   })
 
   it.each([false, true])(

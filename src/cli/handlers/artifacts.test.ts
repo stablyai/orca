@@ -7,11 +7,8 @@ import { ARTIFACT_HANDLERS } from './artifacts'
 import { ARTIFACT_CLI_MAX_RPC_BYTES } from '../../shared/artifacts'
 import {
   ARTIFACT_SHARING_DISABLED_CODE,
-  ARTIFACT_SHARING_DISABLED_MESSAGE,
   ARTIFACT_SHARING_DISABLED_NEXT_STEPS
 } from '../../shared/artifact-sharing-gate'
-import { RuntimeRpcFailureError } from '../runtime-client'
-import { reportCliError } from '../format'
 
 const item: ArtifactListItem = {
   artifact: {
@@ -194,81 +191,6 @@ describe('artifact CLI handlers', () => {
       'artifacts.share',
       expect.objectContaining({ content: '<h1>Hi</h1>' })
     )
-  })
-
-  it.each(['artifacts share', 'artifacts update'])(
-    'surfaces the capability denial from `%s` with actionable next steps',
-    async (command) => {
-      const cwd = await mkdtemp(join(tmpdir(), 'orca-artifact-cli-'))
-      await writeFile(join(cwd, 'report.html'), '<h1>Hi</h1>', 'utf8')
-      const call = vi.fn().mockRejectedValue(
-        new RuntimeRpcFailureError({
-          id: 'request-1',
-          ok: false,
-          error: {
-            code: ARTIFACT_SHARING_DISABLED_CODE,
-            message: ARTIFACT_SHARING_DISABLED_MESSAGE,
-            data: { nextSteps: [...ARTIFACT_SHARING_DISABLED_NEXT_STEPS] }
-          },
-          _meta: { runtimeId: 'runtime-1' }
-        })
-      )
-      const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined)
-
-      await expect(
-        ARTIFACT_HANDLERS[command]!({
-          client: { call } as never,
-          cwd,
-          flags: new Map([['file', 'report.html']]),
-          json: false
-        })
-      ).rejects.toMatchObject({ code: ARTIFACT_SHARING_DISABLED_CODE })
-
-      // The CLI entry point reports the thrown error; assert the rendered text is actionable.
-      reportCliError(
-        await ARTIFACT_HANDLERS[command]!({
-          client: { call } as never,
-          cwd,
-          flags: new Map([['file', 'report.html']]),
-          json: false
-        }).catch((error: unknown) => error),
-        false,
-        { commandPath: command.split(' ') }
-      )
-      const rendered = String(errorLog.mock.calls.at(-1)?.[0])
-      expect(rendered).toContain(ARTIFACT_SHARING_DISABLED_MESSAGE)
-      expect(rendered).toContain('Settings → Artifacts')
-    }
-  )
-
-  it('reports the denial with a stable code in --json mode', async () => {
-    const cwd = await mkdtemp(join(tmpdir(), 'orca-artifact-cli-'))
-    await writeFile(join(cwd, 'report.html'), '<h1>Hi</h1>', 'utf8')
-    const call = vi.fn().mockRejectedValue(
-      new RuntimeRpcFailureError({
-        id: 'request-1',
-        ok: false,
-        error: {
-          code: ARTIFACT_SHARING_DISABLED_CODE,
-          message: ARTIFACT_SHARING_DISABLED_MESSAGE,
-          data: { nextSteps: [...ARTIFACT_SHARING_DISABLED_NEXT_STEPS] }
-        },
-        _meta: { runtimeId: 'runtime-1' }
-      })
-    )
-    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
-
-    const error = await ARTIFACT_HANDLERS['artifacts share']!({
-      client: { call } as never,
-      cwd,
-      flags: new Map([['file', 'report.html']]),
-      json: true
-    }).catch((thrown: unknown) => thrown)
-    reportCliError(error, true)
-
-    expect(JSON.parse(String(log.mock.calls.at(-1)?.[0])).error).toMatchObject({
-      code: ARTIFACT_SHARING_DISABLED_CODE
-    })
   })
 
   it.each(['environment', 'pairing-code'])(

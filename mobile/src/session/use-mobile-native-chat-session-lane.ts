@@ -1,3 +1,4 @@
+import { useCallback } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
@@ -15,11 +16,12 @@ export function useMobileNativeChatSessionLane({
   transcriptPath,
   sessionId,
   sourceIdentity,
-  callerIdentity,
   hostSupport,
+  appendComposerTextRef,
   enabled,
   connState,
-  onSendError
+  onSendError,
+  onActionResolved
 }: {
   client: RpcClient | null
   structured: boolean
@@ -30,15 +32,23 @@ export function useMobileNativeChatSessionLane({
   transcriptPath: string | null
   sessionId: string | null
   sourceIdentity: Parameters<typeof useMobileNativeChatSession>[0]['sourceIdentity']
-  callerIdentity: string
   hostSupport: StructuredAgentSessionHostSupport | null
+  /** The active pane's live composer; a queued card's Edit copies through it.
+   *  A ref because the drafts (and their append) mount after this lane. */
+  appendComposerTextRef: { readonly current: (text: string) => boolean }
   enabled: boolean
   connState: ConnectionState
   onSendError: (message: string) => void
+  /** Called on any accepted queued-card action; retires the route's failure banner. */
+  onActionResolved?: () => void
 }): {
   structuredSession: ReturnType<typeof useMobileStructuredAgentSession>
   session: ReturnType<typeof useMobileNativeChatSession>
 } {
+  const appendComposerText = useCallback(
+    (text: string) => appendComposerTextRef.current(text),
+    [appendComposerTextRef]
+  )
   const bridgeSession = useMobileNativeChatSession({
     client,
     sourceIdentity,
@@ -50,14 +60,15 @@ export function useMobileNativeChatSessionLane({
     client,
     sessionId: structured ? sessionId : null,
     sourceIdentity,
-    callerIdentity,
     hostSupport,
+    appendComposerText,
     enabled,
     // Holds are connection-scoped; dropping this on transport loss lets the hook
     // reacquire the provider without clearing the cached transcript.
     connected: connState === 'connected',
     agent: structured ? agent : null,
-    onSendError
+    onSendError,
+    ...(onActionResolved ? { onActionResolved } : {})
   })
   return {
     structuredSession,

@@ -20,6 +20,7 @@ import { defineMethod } from '../core'
 import {
   ensureStructuredHostInstalled,
   requireStructuredCapability,
+  requireStructuredAgentAudience,
   requireStructuredHost
 } from './structured-agent-session-gate'
 import { OptionsParams } from './structured-agent-session-schemas'
@@ -33,7 +34,9 @@ export const STRUCTURED_AGENT_SESSION_REVEAL_METHODS = [
       await ensureStructuredHostInstalled(ctx)
       let revealed: StructuredAgentSessionReveal
       try {
-        revealed = await requireStructuredHost(ctx).revealSession(params.sessionId)
+        const host = requireStructuredHost(ctx)
+        requireStructuredAgentAudience(ctx, host.sessionAgent(params.sessionId) ?? '')
+        revealed = await host.revealSession(params.sessionId)
       } catch (error) {
         // The host raises its refusal as the code itself; anything else is a genuine fault and
         // must not be laundered into a tidy "no such chat".
@@ -56,7 +59,9 @@ export const STRUCTURED_AGENT_SESSION_REVEAL_METHODS = [
         agent: revealed.agent,
         activate: true
       })
-      return { ok: true as const, ...revealed }
+      // Named fields only: the host's reasons a journal did not open stay on the host.
+      const { sessionId, workspaceId, agent, readable } = revealed
+      return { ok: true as const, sessionId, workspaceId, agent, readable }
     }
   })
 ]

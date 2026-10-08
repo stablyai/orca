@@ -2,7 +2,7 @@
 import { OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal } from './orca-runtime-publish-pty-backed-mobile-session-terminal'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import { parsePaneKey } from '../../shared/stable-pane-id'
-import { hasHostAuthoritativeTerminalMembership } from './workspace-session-terminal-membership-authority'
+import { hasHostAuthoritativeTerminalMembership } from '../persistence/terminal-topology/terminal-topology-membership'
 import type {
   RuntimeMobileSessionTabsSnapshot,
   RuntimeSyncedLeaf

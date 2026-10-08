@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -8,8 +8,12 @@ import {
   agentSessionRecordFixture
 } from '../../shared/agent-session-record.test-fixture'
 import type { AgentSessionFailedAcquisitionSettlement } from './agent-session-acquisition-failure-settlement'
-import { AgentSessionRecordStore } from './agent-session-record-store'
-import { agentSessionStorePath } from './agent-session-record-store-file'
+import type { AgentSessionRecordStore } from './agent-session-record-store'
+import {
+  openTestAgentSessionRecordStore,
+  seedTestAgentSessionRecordStore
+} from './agent-session-record-store-test-harness'
+import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const SESSION = 'session-alpha-1'
 /** The fixture lease's last renewal. */
@@ -27,21 +31,11 @@ async function seed(deathEvidence: AgentSessionDeathEvidence | null): Promise<vo
           claimStatus: 'released',
           deathEvidence
         })
-  await writeFile(
-    agentSessionStorePath(directory),
-    JSON.stringify({
-      schemaVersion: 2,
-      hostId: 'local',
-      records: { [SESSION]: agentSessionRecordFixture(lease) },
-      operations: {},
-      retiredClaimKeys: [],
-      unusableRecords: {}
-    })
-  )
+  await seedTestAgentSessionRecordStore(directory, { records: [agentSessionRecordFixture(lease)] })
 }
 
 function open(): Promise<AgentSessionRecordStore> {
-  return AgentSessionRecordStore.open({ directory, hostId: 'local' })
+  return openTestAgentSessionRecordStore(directory)
 }
 
 beforeEach(async () => {
@@ -170,7 +164,7 @@ describe('a failed acquisition', () => {
           fence,
           link: {
             linkId: 'link-1',
-            handle: { provider: 'claude', sessionId: 'provider-session-1', leafUuid: null },
+            handle: claudeProviderHandle('provider-session-1', null),
             origin: 'created',
             mintedAtFence: fence,
             observedAt: NOW
@@ -210,7 +204,7 @@ describe('a failed acquisition', () => {
                 fence,
                 link: {
                   linkId: 'link-1',
-                  handle: { provider: 'claude', sessionId: 'provider-session-1', leafUuid: null },
+                  handle: claudeProviderHandle('provider-session-1', null),
                   origin: 'created',
                   mintedAtFence: fence,
                   observedAt: NOW

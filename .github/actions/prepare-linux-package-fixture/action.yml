@@ -32,7 +32,7 @@ runs:
       run: |
         set -euo pipefail
         case "$FIXTURE" in
-          headless-serve-shutdown|cli-launch-contract) ;;
+          headless-serve-shutdown|cli-launch-contract|daemon-shutdown-descendants) ;;
           *) echo "Unsupported package fixture: $FIXTURE" >&2; exit 1 ;;
         esac
         archive="$RUNNER_TEMP/orca-package-fixtures/$FIXTURE.tar"

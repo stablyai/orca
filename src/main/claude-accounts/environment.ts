@@ -1,4 +1,9 @@
 import type { ClaudeManagedAccount } from '../../shared/managed-account-types'
+import {
+  CLAUDE_INJECTED_CONFIG_DIR_ENV,
+  CLAUDE_PROFILE_POINTER_ENV,
+  CLAUDE_USER_CONFIG_DIR_ENV
+} from '../../shared/claude-profile-routing'
 
 export const CLAUDE_AUTH_ENV_VARS = [
   'ANTHROPIC_API_KEY',
@@ -8,6 +13,9 @@ export const CLAUDE_AUTH_ENV_VARS = [
 ] as const
 
 export type ClaudeEnvPatch = {
+  [CLAUDE_PROFILE_POINTER_ENV]?: string
+  [CLAUDE_INJECTED_CONFIG_DIR_ENV]?: string
+  [CLAUDE_USER_CONFIG_DIR_ENV]?: string
   CLAUDE_CONFIG_DIR?: string
   ANTHROPIC_CUSTOM_HEADERS?: string
 }
@@ -33,6 +41,16 @@ export function applyClaudeEnvPatch(
     }
   }
 
+  for (const key of [
+    CLAUDE_PROFILE_POINTER_ENV,
+    CLAUDE_INJECTED_CONFIG_DIR_ENV,
+    CLAUDE_USER_CONFIG_DIR_ENV
+  ] as const) {
+    const value = patch[key]
+    if (value) {
+      baseEnv[key] = value
+    }
+  }
   if (patch.CLAUDE_CONFIG_DIR) {
     baseEnv.CLAUDE_CONFIG_DIR = patch.CLAUDE_CONFIG_DIR
   }
@@ -47,9 +65,6 @@ export function applyClaudeEnvPatch(
  *  cannot drift into telling the user two different things about one refusal. */
 export const CLAUDE_AUTH_ENV_CONFLICT_MESSAGE =
   'This Claude launch defines explicit Anthropic auth environment variables. Remove those overrides before using a managed Claude account.'
-
-export const CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE =
-  'A Claude account switch is in progress. Try again after it finishes.'
 
 /**
  * Whether a launch on the host runtime must drop inherited Anthropic auth.

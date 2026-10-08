@@ -5,6 +5,7 @@ import {
   type AgentSessionLease,
   type AgentSessionRecord
 } from './agent-session-record'
+import { claudeProviderHandle } from './agent-session-provider-handle-encoding'
 
 const OWNER_PROCESS = {
   hostId: 'local',
@@ -56,7 +57,7 @@ export function agentSessionRecordFixture(
         origin: 'created',
         mintedAtFence: lease.runtimeFence,
         observedAt: 1_000,
-        handle: { provider: 'claude', sessionId: 'provider-session-alpha-1', leafUuid: null }
+        handle: claudeProviderHandle('provider-session-alpha-1', null)
       }
     ],
     accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/home/user/.claude' },

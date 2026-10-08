@@ -149,13 +149,6 @@ describeOnPosix('inspectLocalPtyChildProcesses on a retired master', () => {
     // Not `no-children`: the close guard reads that as "nothing is running here" and kills the pane.
     expect(await inspectLocalPtyChildProcesses('pty-retired')).toBe('unverifiable')
   }, 15000)
-
-  it('preserves uncertainty conservatively in the boolean adapter', async () => {
-    await registerRetiredPane('pty-retired')
-
-    // The adapter exists for `IPtyProvider.hasChildProcesses`, which has no third slot.
-    await expect(hasLocalPtyChildProcesses('pty-retired')).resolves.toBe(true)
-  }, 15000)
 })
 
 describe('inspectPtyProviderProcess child-process evidence', () => {

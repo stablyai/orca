@@ -6,6 +6,7 @@ import {
   planAgentSessionLaunch,
   type AgentSessionLaunchPlan
 } from '@/lib/agent-session-launch-plan'
+import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import {
   buildDismissedOnboardingFolderAgentStartup,
   type OnboardingFolderAgentStartup
@@ -39,7 +40,9 @@ export function resolveDismissedOnboardingFolderAgentLaunch(args: {
   if (!startup || !agent) {
     return { agent: null, plan: null }
   }
+  // Resolved once per added folder: adding it is the one action this chat serves.
   const plan = planAgentSessionLaunch(args.store, {
+    requestId: newAgentLaunchRequestId(),
     agent,
     workspace: { kind: 'folder', executionHostId: args.executionHostId },
     initialSessionOptions: startup.sessionOptions

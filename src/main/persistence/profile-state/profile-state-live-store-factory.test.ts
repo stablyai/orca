@@ -1,5 +1,5 @@
 import { build } from 'esbuild'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -203,9 +203,11 @@ describe('live profile authority admission', () => {
       JSON.parse(readFileSync(profileStateJsonExportPath(input.dataFile, revision), 'utf8'))
         .workspaceSession.activeTabId
     ).toBe('getter-export')
+    const retainedExports = profileStateJsonExportPaths(input.dataFile)
     store.updateSettings({ theme: 'light' })
-    await store.flushFinalOrThrowAsync({ exportJsonCompatibility: true })
-    expect(JSON.parse(readFileSync(input.dataFile, 'utf8')).settings.theme).toBe('light')
+    await store.flushFinalOrThrowAsync()
+    expect(existsSync(input.dataFile)).toBe(false)
+    expect(profileStateJsonExportPaths(input.dataFile)).toEqual(retainedExports)
     expect(profileStateJsonExportPaths(input.dataFile).length).toBeGreaterThan(0)
     expect(readState(input).settings.theme).toBe('light')
     await expect(store.flushPendingOrThrowAsync()).rejects.toThrow('finalized')

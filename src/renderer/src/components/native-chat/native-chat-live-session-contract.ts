@@ -27,6 +27,9 @@ export function isNativeChatTranscriptUnsettled(phase: ReadState['phase']): bool
 export type NativeChatLiveSession = NativeChatSession & {
   /** Latest provider turn boundary, used to settle orphaned running tool rows. */
   transcriptLifecycle?: NativeChatTurnLifecycle
+  /** The pane's hook says the agent stopped mid-turn for the reader, and the transcript
+   *  has not since ended that turn. Absent on lanes with no hook status. */
+  hookAwaitingInput?: boolean
   /** True when an older page may still exist (the last read filled the window). */
   hasMore: boolean
   /** Whether an older-history page is currently loading. */

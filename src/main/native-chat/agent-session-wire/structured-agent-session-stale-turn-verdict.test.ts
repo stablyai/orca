@@ -1,19 +1,25 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
+import type {
+  AgentJournalItemIdentity,
+  AgentJournalRenderItem,
+  AgentJournalTurnScope
+} from '../../../shared/agent-session-journal-types'
 import type { AgentSessionDeathEvidence } from '../../../shared/agent-session-record'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
+import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import { settleStaleStructuredAgentSessionState } from './structured-agent-session-dead-generation-settlement'
 import {
   runningTurnLifecycleRevisions,
   turnVerdictFromDeathEvidence,
   UNVERIFIABLE_TURN_VERDICT
 } from './structured-agent-session-stale-turn-verdict'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const THREAD = 'thread-1'
 const RUNNING_IDENTITY = {
@@ -21,6 +27,10 @@ const RUNNING_IDENTITY = {
   threadId: THREAD,
   turnId: 'turn-2',
   ordinal: 0
+}
+
+function turnScopeOf(identity: AgentJournalItemIdentity): AgentJournalTurnScope {
+  return { kind: 'turn', turnItemId: agentJournalItemKey(identity) }
 }
 
 function lifecycleItem(
@@ -169,7 +179,8 @@ describe('running turn lifecycle revisions', () => {
             state: 'interrupted',
             startedAt: 30,
             completedAt: 40
-          }
+          },
+          turnScope: { kind: 'thread' }
         }
       ]
     )
@@ -238,7 +249,8 @@ describe('running turn lifecycle revisions', () => {
       {
         kind: 'item',
         identity: RUNNING_IDENTITY,
-        body: { kind: 'turn', turnId: 'turn-2', state: 'unverifiable', startedAt: 30 }
+        body: { kind: 'turn', turnId: 'turn-2', state: 'unverifiable', startedAt: 30 },
+        turnScope: { kind: 'thread' }
       }
     ])
   })
@@ -265,6 +277,7 @@ describe('stale session state on a cold acquire', () => {
     const journal = {
       snapshot: () => ({ items }),
       itemFence: () => 1,
+      stopMarks: { latest: () => null },
       cursor: () => ({ epoch: 'epoch-1', sequence: 8 }),
       appendLifecycleBatch
     } as unknown as AgentSessionJournal
@@ -295,7 +308,8 @@ describe('stale session state on a cold acquire', () => {
         {
           kind: 'item',
           identity: RUNNING_IDENTITY,
-          body: { kind: 'turn', turnId: 'turn-2', state: 'unverifiable', startedAt: 30 }
+          body: { kind: 'turn', turnId: 'turn-2', state: 'unverifiable', startedAt: 30 },
+          turnScope: { kind: 'thread' }
         }
       ]
     })
@@ -337,7 +351,8 @@ describe('stale session state on a cold acquire', () => {
               resolvedBy: null,
               resolvedAt: null
             }
-          }
+          },
+          turnScope: { kind: 'thread' }
         }
       ]
     })
@@ -354,9 +369,9 @@ describe('stale session state on a cold acquire', () => {
           workspaceId: 'workspace-1',
           hostId: 'local',
           agent: 'codex',
-          providerHandle: { kind: 'codex', threadId: THREAD }
+          providerHandle: codexProviderHandle(THREAD)
         },
-        journalDir: root,
+        stateDirectory: root,
         now: () => 1_000
       })
       const child = { agentId: 'thread-child', producerKind: 'agent' as const }
@@ -367,8 +382,15 @@ describe('stale session state on a cold acquire', () => {
         turnId: 'turn-1',
         ordinal: 1
       })
-      await journal.appendItem(prompt('thread-child'), body, { fence: 1, ...child })
-      await journal.appendItem(prompt(THREAD), body, { fence: 1 })
+      await journal.appendItem(prompt('thread-child'), body, {
+        fence: 1,
+        ...child,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
+      })
+      await journal.appendItem(prompt(THREAD), body, {
+        fence: 1,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
+      })
 
       await settleStaleStructuredAgentSessionState({
         journal,
@@ -401,26 +423,27 @@ describe('stale session state on a cold acquire', () => {
           workspaceId: 'workspace-1',
           hostId: 'local',
           agent: 'codex',
-          providerHandle: { kind: 'codex', threadId: THREAD }
+          providerHandle: codexProviderHandle(THREAD)
         },
-        journalDir: root,
+        stateDirectory: root,
         now: () => now
       })
       const command = { provider: 'codex' as const, threadId: THREAD, turnId: 'turn-1', ordinal: 1 }
       const shell = { kind: 'tool-call' as const, name: 'shell', input: { command: 'pnpm test' } }
+      const turnScope = turnScopeOf({ ...command, ordinal: 0 })
       await journal.appendItem(
         { ...command, ordinal: 0 },
         { kind: 'turn', turnId: 'turn-1', state: 'running', startedAt: 100 },
-        { fence: 1 }
+        { fence: 1, turnScope }
       )
       now = 200
-      await journal.appendItem(command, { ...shell, state: 'running' }, { fence: 1 })
+      await journal.appendItem(command, { ...shell, state: 'running' }, { fence: 1, turnScope })
       // Rows can outlast the last renewal; only the renewal is proof of life.
       now = 700
       await journal.appendItem(
         command,
         { ...shell, input: { command: 'pnpm test', streamed: 'ok' }, state: 'running' },
-        { fence: 1 }
+        { fence: 1, turnScope }
       )
       now = 9_000
 
@@ -466,21 +489,21 @@ describe('stale session state on a cold acquire', () => {
           workspaceId: 'workspace-1',
           hostId: 'local',
           agent: 'codex',
-          providerHandle: { kind: 'codex', threadId: THREAD }
+          providerHandle: codexProviderHandle(THREAD)
         },
-        journalDir: root,
+        stateDirectory: root,
         now: () => now
       })
       await journal.appendItem(
         RUNNING_IDENTITY,
         { kind: 'turn', turnId: 'turn-2', state: 'running', startedAt: 100 },
-        { fence: 1 }
+        { fence: 1, turnScope: turnScopeOf(RUNNING_IDENTITY) }
       )
       now = 200
       await journal.appendItem(
         { ...RUNNING_IDENTITY, ordinal: 1 },
         { kind: 'tool-call', name: 'shell', input: { command: 'pnpm test' }, state: 'running' },
-        { fence: 1 }
+        { fence: 1, turnScope: turnScopeOf(RUNNING_IDENTITY) }
       )
       const settle = (deathEvidence: AgentSessionDeathEvidence | null) =>
         settleStaleStructuredAgentSessionState({
@@ -503,7 +526,12 @@ describe('stale session state on a cold acquire', () => {
         fence: 1,
         handoverRecorded: true
       })
-      await journal.resolveDispatch({ clientMessageId: 'send-1', state: 'pending', fence: 1 })
+      await journal.resolveDispatch({
+        clientMessageId: 'send-1',
+        state: 'pending',
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE,
+        fence: 1
+      })
       now = 3_606_000
 
       await settle({
@@ -532,15 +560,15 @@ describe('stale session state on a cold acquire', () => {
           workspaceId: 'workspace-1',
           hostId: 'local',
           agent: 'codex',
-          providerHandle: { kind: 'codex', threadId: THREAD }
+          providerHandle: codexProviderHandle(THREAD)
         },
-        journalDir: root,
+        stateDirectory: root,
         now: () => now
       })
       await journal.appendItem(
         RUNNING_IDENTITY,
         { kind: 'turn', turnId: 'turn-2', state: 'running', startedAt: 100 },
-        { fence: 1 }
+        { fence: 1, turnScope: turnScopeOf(RUNNING_IDENTITY) }
       )
       now = 400
       // The open, before anything proved the fence-1 owner gone.
@@ -592,9 +620,9 @@ describe('stale session state on a cold acquire', () => {
           workspaceId: 'workspace-1',
           hostId: 'local',
           agent: 'codex',
-          providerHandle: { kind: 'codex', threadId: THREAD }
+          providerHandle: codexProviderHandle(THREAD)
         },
-        journalDir: root,
+        stateDirectory: root,
         now: () => now
       })
       // Enough running turns that the settle writes two batches, and its retry two again.
@@ -603,7 +631,7 @@ describe('stale session state on a cold acquire', () => {
         await journal.appendItem(
           { ...RUNNING_IDENTITY, turnId },
           { kind: 'turn', turnId, state: 'running', startedAt: 100 },
-          { fence: 1 }
+          { fence: 1, turnScope: turnScopeOf({ ...RUNNING_IDENTITY, turnId }) }
         )
       }
       now = 9_000

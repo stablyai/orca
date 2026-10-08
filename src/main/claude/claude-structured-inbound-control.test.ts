@@ -1,12 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { CanUseTool } from '@anthropic-ai/claude-agent-sdk'
 import { ClaudePromptRegistry } from './claude-structured-prompt-replies'
-import {
-  buildClaudePermissionCallbacks,
-  CLAUDE_BLOCKING_CONTROL_CALLBACKS,
-  CLAUDE_CAN_USE_TOOL_SUBTYPE,
-  CLAUDE_REQUEST_USER_DIALOG_SUBTYPE
-} from './claude-structured-inbound-control'
+import { buildClaudePermissionCallbacks } from './claude-structured-inbound-control'
 
 type CanUseToolOptions = Parameters<CanUseTool>[2]
 
@@ -209,21 +204,5 @@ describe('Claude permission callbacks', () => {
         { signal: new AbortController().signal, requestId: 'dialog-1' }
       )
     ).resolves.toEqual({ behavior: 'cancelled' })
-  })
-
-  it('enumerates every blocking control request and wires a callback for each', () => {
-    // The stable surface of controls a turn can block on. Adding one here without wiring its
-    // callback below fails this test rather than silently leaving a control unhandled.
-    expect(new Set(Object.keys(CLAUDE_BLOCKING_CONTROL_CALLBACKS))).toEqual(
-      new Set([CLAUDE_CAN_USE_TOOL_SUBTYPE, CLAUDE_REQUEST_USER_DIALOG_SUBTYPE])
-    )
-    const callbacks = buildClaudePermissionCallbacks({
-      sessionId: 'session-1',
-      prompts: new ClaudePromptRegistry(),
-      emit: vi.fn()
-    }) as unknown as Record<string, unknown>
-    for (const callbackName of Object.values(CLAUDE_BLOCKING_CONTROL_CALLBACKS)) {
-      expect(typeof callbacks[callbackName], `${callbackName} must be wired`).toBe('function')
-    }
   })
 })

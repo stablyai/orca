@@ -29,7 +29,8 @@ vi.mock('../ipc/worktree-logic', async (importOriginal) => {
   return { ...actual, computeWorktreePath: vi.fn(), ensurePathWithinWorkspace: vi.fn() }
 })
 vi.mock('../ipc/registered-worktree-roots-cache', () => ({
-  invalidateAuthorizedRootsCache: vi.fn()
+  invalidateAuthorizedRootsCache: vi.fn(),
+  invalidateAuthorizedRootsCacheForRepo: vi.fn()
 }))
 vi.mock('../git/repo', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
@@ -151,6 +152,16 @@ describe('remote desktop viewer width driver', () => {
     // its cross-layer driver-change notifications stay untouched.
     expect(runtime.getDriver('pty-1')).toEqual({ kind: 'idle' })
     expect(driverEvents).toHaveLength(0)
+  })
+
+  it('keeps a wide desktop viewport through resize', async () => {
+    const { runtime } = createRuntime()
+    await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 500, 40)
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 500, rows: 40 })
+    await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 800, 40)
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 800, rows: 40 })
+    await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 2000, 40)
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 1024, rows: 40 })
   })
 
   it('sizes the PTY to the latest active desktop viewer', async () => {

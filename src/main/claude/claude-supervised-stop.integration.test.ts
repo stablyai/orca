@@ -10,7 +10,7 @@ import {
   PROVIDER_SIGTERM_GRACE_MS,
   PROVIDER_STDIN_END_GRACE_MS,
   PROVIDER_SUPERVISOR_MAX_STOP_MS
-} from '../codex/codex-app-server-posix-supervisor'
+} from '../provider-process/provider-process-supervisor'
 import { proveClaudeChildExit } from './claude-agent-sdk-exit-proof'
 import { createClaudeCodeProcessSpawn } from './claude-agent-sdk-process-spawn'
 
@@ -140,22 +140,16 @@ async function spawnClaude(env: Record<string, string> = {}) {
   const options = sdkOptions(env)
   const child = spawner.spawn(options)
   recordedPids.add(child.pid!)
-  let exited = false
+  const managed = spawner.managed
+  if (!managed) {
+    throw new Error('Claude spawner did not retain its managed child')
+  }
   const exit = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve) =>
-    child.once('exit', (code, signal) => {
-      exited = true
-      resolve({ code, signal })
-    })
+    managed.onExit(resolve)
   )
   const pids = await readPids(child, ['claude', 'tool', 'daemon'])
-  const close = (): Promise<boolean> =>
-    proveClaudeChildExit({
-      child,
-      exitPromise: exit.then(() => undefined),
-      exited: () => exited,
-      supervised: spawner.supervised
-    })
-  return { child, exit, pids, close, marker: String(options.env.ORCA_TEST_SIGTERM_MARKER) }
+  const close = (): Promise<boolean> => proveClaudeChildExit({ managed })
+  return { child, managed, exit, pids, close, marker: String(options.env.ORCA_TEST_SIGTERM_MARKER) }
 }
 
 afterEach(() => {
@@ -172,31 +166,37 @@ afterEach(() => {
 
 describe.runIf(process.platform !== 'win32')('Claude under the POSIX provider supervisor', () => {
   it('stops a mid-turn Claude on close instead of letting stdin end finish its turn', async () => {
-    const { child, exit, pids, close, marker } = await spawnClaude()
+    const { child, managed, exit, pids, close, marker } = await spawnClaude()
     expect(child.pid).not.toBe(pids.claude)
 
     const startedAt = Date.now()
+    await expect(close()).resolves.toBe(true)
+    expect(managed.lastCloseResult).toEqual({ root: 'exited', tree: 'exited' })
     await expect(close()).resolves.toBe(true)
 
     // Claude's own SIGTERM reap ran at once, not after the supervisor's stdin-end grace.
     expect(Date.now() - startedAt).toBeLessThan(PROVIDER_STDIN_END_GRACE_MS)
     expect(existsSync(marker)).toBe(true)
-    await expect(exit).resolves.toEqual({ code: null, signal: 'SIGTERM' })
+    await expect(exit).resolves.toEqual({ code: null, signal: 'SIGTERM', processless: false })
     expect(alive(pids.claude)).toBe(false)
     expect(alive(pids.tool)).toBe(false)
   })
 
   it('lets the supervisor escalate a Claude that ignores SIGTERM, and exits only after it', async () => {
-    const { exit, pids, close } = await spawnClaude({ ORCA_TEST_CLAUDE_IGNORES_SIGTERM: '1' })
+    const { managed, exit, pids, close } = await spawnClaude({
+      ORCA_TEST_CLAUDE_IGNORES_SIGTERM: '1'
+    })
 
     const startedAt = Date.now()
+    await expect(close()).resolves.toBe(true)
+    expect(managed.lastCloseResult).toEqual({ root: 'exited', tree: 'exited' })
     await expect(close()).resolves.toBe(true)
 
     const elapsed = Date.now() - startedAt
     expect(elapsed).toBeGreaterThanOrEqual(PROVIDER_SIGTERM_GRACE_MS)
     expect(elapsed).toBeLessThan(PROVIDER_SUPERVISOR_MAX_STOP_MS + 1_000)
     // The supervisor's own SIGTERM stop finished the job; nothing forced the supervisor itself.
-    await expect(exit).resolves.toEqual({ code: null, signal: 'SIGTERM' })
+    await expect(exit).resolves.toEqual({ code: null, signal: 'SIGTERM', processless: false })
     expect(alive(pids.claude)).toBe(false)
   })
 

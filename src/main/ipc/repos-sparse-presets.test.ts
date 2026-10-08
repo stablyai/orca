@@ -43,7 +43,8 @@ vi.mock('../git/repo', () => ({
 }))
 
 vi.mock('./registered-worktree-roots-cache', () => ({
-  invalidateAuthorizedRootsCache: vi.fn()
+  invalidateAuthorizedRootsCache: vi.fn(),
+  invalidateAuthorizedRootsCacheForRepo: vi.fn()
 }))
 
 vi.mock('../providers/ssh-git-dispatch', () => ({

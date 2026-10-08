@@ -15,13 +15,16 @@ import type { ProjectExecutionRuntimeResolution } from '../../shared/project-exe
 import { resolveLocalProjectRuntimeForWorktreeId } from '../local-project-runtime-resolution'
 import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import {
+  localOrchestrationCliCommand,
   resolveTerminalOrchestrationCliCommand,
+  runtimeOrchestrationCliCommand,
   type OrchestrationCliCommand
 } from './orchestration/cli-command'
-import { getAppEnvironment } from '../../shared/app-environment'
 import type { FleetAgentStatusEvidence } from '../../shared/orchestration-fleet-agent-status-evidence'
 import { readOrchestrationFleetAgentStatusSnapshot } from './orchestration-fleet-agent-status-snapshot'
 import { resolveStructuredWorkerAuthority } from './structured-worker-authority'
+import { isStructuredWorkerHandle } from './structured-worker-identity'
+import { parseOrcaSessionAddress } from '../../shared/orca-session-address'
 import { matchesProcessIncarnation } from './orchestration/worker-terminal-process-liveness'
 
 export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller {
@@ -250,6 +253,10 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
   }
 
   getTerminalOrchestrationCliCommand(handle: string): OrchestrationCliCommand {
+    // A structured session runs in this process: it is told what the structured mail lane types.
+    if (isStructuredWorkerHandle(handle) || parseOrcaSessionAddress(handle)) {
+      return localOrchestrationCliCommand()
+    }
     let pty: RuntimePtyWorktreeRecord | null = null
     try {
       const ptyId = this.resolveLeafForHandle(handle)?.ptyId
@@ -264,8 +271,7 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
       connectionId: pty.connectionId,
       isWsl: pty.isWsl,
       worktreeId: pty.worktreeId,
-      // Dev builds run the CLI as `orca-dev`; a packaged app must not advertise it.
-      runtimeCliCommand: getAppEnvironment().isPackaged() ? undefined : 'orca-dev',
+      runtimeCliCommand: runtimeOrchestrationCliCommand(),
       projectRuntime: this.store
         ? resolveLocalProjectRuntimeForWorktreeId(this.requireStore(), pty.worktreeId)
         : undefined

@@ -1,17 +1,8 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "session.diff-review-actions",
   "family": "session.diff-review-actions",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "ccdb324b63e4942891942edde1216586a51774bd",
-  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
-  "recorderSha256": "0317fe2aebe4743ce5e7ae194531aa91b4fe0a84df457640851fe6dfdb9362af",
-  "adapterSha256": "dc3a746274b4197b02b0b3060bbf8ab0f67eb54355c8b9888e1f061e37f777af",
-  "scenarioSha256": "9f1c39e91a97266b0a550d2b2d061592ae050078401ef23177dd2e00db67bf04",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "02c4a9358dee": {
       "actionError": {

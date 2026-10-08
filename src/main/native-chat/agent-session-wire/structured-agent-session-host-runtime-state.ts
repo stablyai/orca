@@ -6,16 +6,24 @@ import {
   type StructuredAgentSessionSinkBarrier
 } from './structured-agent-session-event-sink'
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host'
+import { StructuredAgentSessionAcquireAborts } from './structured-agent-session-acquire-aborts'
 import { StructuredAgentSessionLeaseRenewer } from './structured-agent-session-lease-renewer'
+import {
+  heldProviderChildReader,
+  type ProviderChildSessions
+} from './structured-agent-session-provider-child'
 import { resolveStructuredSessionRecovery } from './structured-agent-session-recovery-resolution'
 
 export class StructuredAgentSessionHostRuntimeState {
   private readonly eventSinks = new Map<string, DeferredStructuredAgentSessionEventSink>()
+  readonly acquireAborts = new StructuredAgentSessionAcquireAborts()
   private readonly leaseRenewer: StructuredAgentSessionLeaseRenewer
   private readonly onEventSinkFailure?: (sessionId: string, error: unknown) => void
 
   constructor(
     private readonly deps: StructuredAgentSessionHostDeps,
+    /** Required: a child held here renews its lease without a PID probe. */
+    sessions: ProviderChildSessions,
     onEventSinkFailure?: (sessionId: string, error: unknown) => void
   ) {
     this.onEventSinkFailure = onEventSinkFailure
@@ -23,10 +31,11 @@ export class StructuredAgentSessionHostRuntimeState {
       store: deps.store,
       probe: (record) => this.probeRecord(record),
       ...(deps.probeOwners ? { probeMany: deps.probeOwners } : {}),
+      holdsLiveChild: heldProviderChildReader(sessions, deps.adapter),
       now: () => deps.now?.() ?? Date.now(),
       // Lease/ownership failures are transient and stay on the visible lease-error path.
       // Only deferred sink I/O failures are terminal and may force-close a provider.
-      onError: ({ sessionId, error }) => deps.onEventSinkError?.({ sessionId, error })
+      logger: deps.logger
     })
   }
 
@@ -67,8 +76,9 @@ export class StructuredAgentSessionHostRuntimeState {
   mintEventSink(sessionId: string): DeferredStructuredAgentSessionEventSink {
     const minted: DeferredStructuredAgentSessionEventSink =
       createDeferredStructuredAgentSessionEventSink({
-        onError: (error) => {
-          this.deps.onEventSinkError?.({ sessionId, error })
+        sessionId,
+        logger: this.deps.logger,
+        onFailed: (error) => {
           // Only the session's own sink may force its provider down; an attempt's never is.
           if (this.eventSinks.get(sessionId) === minted) {
             this.onEventSinkFailure?.(sessionId, error)
@@ -91,9 +101,11 @@ export class StructuredAgentSessionHostRuntimeState {
     this.eventSinks.delete(sessionId)
   }
 
+  /** Through `currentEventSink`: a failed sink is terminal, so its old error never fails a later
+   *  caller's barrier. */
   flushEventSink(sessionId: string): Promise<void> {
     return this.requireSuccessfulBarrier(
-      this.eventSinks.get(sessionId)?.drained() ?? Promise.resolve({ ok: true } as const)
+      this.currentEventSink(sessionId)?.drained() ?? Promise.resolve({ ok: true } as const)
     )
   }
 

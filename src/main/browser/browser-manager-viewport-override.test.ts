@@ -840,8 +840,7 @@ describe('browserManager', () => {
 
       expect(debuggerSendCommand).toHaveBeenCalledWith('Emulation.clearDeviceMetricsOverride', {})
       expect(debuggerSendCommand).toHaveBeenCalledWith('Emulation.setTouchEmulationEnabled', {
-        enabled: false,
-        maxTouchPoints: 0
+        enabled: false
       })
       // Nothing overrode the identity, so there is nothing to clear.
       expect(lastUserAgentOverride(debuggerSendCommand)).toBeUndefined()

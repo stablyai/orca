@@ -19,7 +19,7 @@ import {
   WORKTREE_PATH,
   makeSession
 } from './__fixtures__/orca-runtime-terminal-close-continuity-fixtures'
-import { advanceTerminalTopologyRevision } from './workspace-session-terminal-membership-authority'
+import { advanceTerminalTopologyRevision } from '../persistence/terminal-topology/terminal-topology-membership'
 
 const SSH_REPO_ID = 'ssh-repo'
 const SSH_HOST_ID = 'ssh:target-1'

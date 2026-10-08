@@ -4,7 +4,10 @@ import type {
   AgentSessionExecutionClaim,
   RuntimeCreateAgentSessionResult
 } from '../../shared/agent-session-host-authority'
-import type { AgentProviderSessionMetadata } from '../../shared/agent-session-resume'
+import type {
+  AgentProviderSessionMetadata,
+  SleepingAgentLaunchConfig
+} from '../../shared/agent-session-resume'
 import type { OrchestrationCompatibilityHostStamp } from '../../shared/orchestration-compatibility-evidence'
 import type { TerminalOscColorQueryReplyColors } from '../../shared/terminal-osc-color-reply'
 import type {
@@ -42,12 +45,16 @@ export type TerminalCreateOptions = {
   launchAgent?: TuiAgent
   startupAgent?: TuiAgent
   /**
-   * Initial text folded into `startupAgent`'s launch command, for an agent whose CLI takes a prompt
+   * Initial text offered to `startupAgent`'s launch command, for an agent whose CLI takes a prompt
    * argument. Not a general prompt channel: an agent that takes its text only after start has no
    * launch command to carry it, and a caller that sets this for one is refused rather than having
-   * the prompt silently dropped. Post-start delivery belongs to whoever owns the live PTY.
+   * the prompt silently dropped. The text rides only when the typed line can carry it
+   * (`startup-line-prompt-carry`); otherwise the agent starts clean, `onStartupPromptCarry` says so,
+   * and post-start delivery belongs to whoever owns the live PTY.
    */
   startupPrompt?: string
+  /** Main-internal: whether `startupPrompt` rode the launch command. Called once the plan is built. */
+  onStartupPromptCarry?: (carried: boolean) => void
   /**
    * Replaces the Settings launch arguments for this `startupAgent` only; `null` means none at all.
    *
@@ -84,7 +91,10 @@ export type TerminalCreateOptions = {
   signal?: AbortSignal
   onPtySpawnCommitted?: () => void
   /** Called before the spawn request leaves this process; a throw before it proves nothing spawned. */
-  onPtySpawnDispatched?: () => void
+  onPtySpawnDispatched?: (launch?: {
+    launchConfig?: SleepingAgentLaunchConfig
+    launchAgent?: TuiAgent
+  }) => void
   deferMobileSessionPublish?: boolean
 }
 
@@ -132,6 +142,9 @@ export type RuntimeTerminalAgentStatusEvent = {
    *  reader can rejoin it to the terminal after the pane key moved. */
   terminalHandle?: string
   payload: ParsedAgentStatusPayload
+  /** Set by the process-lifetime producer; see AgentHookServer.ingestTerminalStatus. */
+  origin?: 'process'
+  yieldsToHookSince?: number
 }
 
 export type HookLiveAgentRow = Pick<
@@ -197,6 +210,9 @@ export type TerminalWaiter = {
   /** Retires this waiter from the shared idle-poll sweep; null when not polling. */
   cancelIdlePoll: (() => void) | null
   abortCleanup: (() => void) | null
+  /** Main-internal: waiting for a just-launched agent, so a name-only title must be held to a
+   *  quiet stream (`TuiIdleEvaluationInput.launchReadiness`). */
+  launchReadiness?: boolean
 }
 
 /** How a provider-held screen should be fetched when runtime bytes are absent. */
@@ -212,6 +228,9 @@ export type RuntimeAgentPromptWriteOptions = Omit<RuntimeTerminalWriteOptions, '
   inputKind: Exclude<TerminalInputKind, 'query-reply'>
   /** Raw prompt text for submit scheduling; not written, only used for line-aware delays. */
   promptForSchedule?: string
+  /** The caller just saw this agent's composer accept input, so Enter follows the paste on the
+   *  desktop draft paste's timing instead of waiting for the render to settle. */
+  composerReady?: boolean
   /** See buildAgentPromptPasteBytes. */
   leadLine?: string
   /** Return an accepted receipt as soon as input lands, instead of waiting for the turn. */

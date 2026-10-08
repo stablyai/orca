@@ -16,9 +16,8 @@ const { acceptOutputDataMock, muxRequestMock, openConsumerSessionMock, pauseAdap
     pauseAdapterMock: vi.fn()
   }))
 
-vi.mock('./ssh-relay-deploy', () => ({
-  deployAndLaunchRelay: vi.fn()
-}))
+vi.mock('./ssh-relay-deploy', () => ({ deployAndLaunchRelay: vi.fn() }))
+vi.mock('./ssh-previous-relay-terminals', () => import('./ssh-previous-relay-census-test-double'))
 
 vi.mock('./ssh-pty-consumer-session', () => ({
   openSshPtyConsumerSession: openConsumerSessionMock

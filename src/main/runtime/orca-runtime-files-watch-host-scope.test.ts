@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { EventEmitter } from 'node:events'
+import type { FsChangeEvent } from '../../shared/filesystem-entry-types'
 import {
+  getSshFilesystemProviderMock,
   resolveAuthorizedPathMock,
   statMock,
   watchInWatcherProcessMock,
@@ -102,7 +104,9 @@ describe('RuntimeFileCommands', () => {
 
   it('keeps SSH runtime watches on the remote filesystem provider', async () => {
     const remoteDispose = vi.fn()
-    const providerWatch = vi.fn(() => remoteDispose)
+    const providerWatch = vi.fn(
+      (_rootPath: string, _callback: (events: FsChangeEvent[]) => void) => remoteDispose
+    )
     vi.mocked(getSshFilesystemProvider).mockReturnValue({ watch: providerWatch } as never)
     const { commands, store } = createRuntimeFileCommands({ path: '/remote/repo' })
     store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
@@ -110,10 +114,15 @@ describe('RuntimeFileCommands', () => {
 
     const unsubscribe = await commands.watchFileExplorer('id:wt-1', onEvents)
 
-    expect(providerWatch).toHaveBeenCalledWith('/remote/repo', onEvents, {
+    expect(providerWatch).toHaveBeenCalledWith('/remote/repo', expect.any(Function), {
       signal: undefined,
       onTerminalError: expect.any(Function)
     })
+    const callback = providerWatch.mock.calls[0]?.[1]
+    callback?.([{ kind: 'update', absolutePath: '/remote/repo/current.ts' }])
+    expect(onEvents).toHaveBeenCalledWith([
+      { kind: 'update', absolutePath: '/remote/repo/current.ts' }
+    ])
     expect(watchInWatcherProcessMock).not.toHaveBeenCalled()
     await unsubscribe()
     expect(remoteDispose).toHaveBeenCalledTimes(1)
@@ -149,11 +158,10 @@ describe('RuntimeFileCommands', () => {
   it('scopes same-path runtime watcher teardown to its SSH execution host', async () => {
     const firstDispose = vi.fn()
     const secondDispose = vi.fn()
-    vi.mocked(getSshFilesystemProvider).mockImplementation(
-      (connectionId) =>
-        ({
-          watch: vi.fn(() => (connectionId === 'ssh-1' ? firstDispose : secondDispose))
-        }) as never
+    const firstProvider = { watch: vi.fn(() => firstDispose) }
+    const secondProvider = { watch: vi.fn(() => secondDispose) }
+    getSshFilesystemProviderMock.mockImplementation((connectionId) =>
+      connectionId === 'ssh-1' ? firstProvider : secondProvider
     )
     const first = createRuntimeFileCommands({ path: '/same/repo' })
     const second = createRuntimeFileCommands({ path: '/same/repo' })

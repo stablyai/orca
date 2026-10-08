@@ -37,6 +37,8 @@ export type ActivityThreadHoverCardProps = {
   closeDelay?: number
   onJumpToWorkspace?: (thread: AgentPaneThread) => void
   canJumpToWorkspace?: boolean
+  /** Keeps the preview closed, e.g. while the row's right-click menu covers it. */
+  suppressed?: boolean
 }
 
 export function ActivityThreadHoverCard({
@@ -45,19 +47,21 @@ export function ActivityThreadHoverCard({
   openDelay = 200,
   closeDelay = 120,
   onJumpToWorkspace,
-  canJumpToWorkspace
+  canJumpToWorkspace,
+  suppressed = false
 }: ActivityThreadHoverCardProps): React.JSX.Element {
   const detailsHoverControl = useWorktreeCardDetailsHoverControl()
+  const open = detailsHoverControl.hoverOpen && !suppressed
 
   return (
     <HoverCard
-      open={detailsHoverControl.hoverOpen}
+      open={open}
       onOpenChange={detailsHoverControl.handleHoverOpenChange}
       openDelay={openDelay}
       closeDelay={closeDelay}
     >
       <HoverCardTrigger asChild>{children}</HoverCardTrigger>
-      {detailsHoverControl.hoverOpen ? (
+      {open ? (
         <ActivityThreadHoverCardContent
           thread={thread}
           detailsHoverControl={detailsHoverControl}
@@ -122,7 +126,9 @@ function ActivityThreadHoverCardContent({
     issueCacheKey: review.issueCacheKey,
     fetchIssue: foundation.fetchIssue,
     showLinearIssue: true,
-    fetchLinearIssue: foundation.fetchLinearIssue
+    fetchLinearIssue: foundation.fetchLinearIssue,
+    linearSourceContext: review.linearSourceContext,
+    linearWorkspaceId: review.linearWorkspaceId
   })
 
   const secondary = useWorktreeCardSecondaryDetails({

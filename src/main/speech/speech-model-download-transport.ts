@@ -6,11 +6,10 @@ import {
   MAX_RETRY_AFTER_MS,
   MAX_TOTAL_DOWNLOAD_REQUESTS,
   describeInterruptedDownload,
-  isRetryableDownloadError,
   sleepUnlessAborted,
-  type DownloadTotals,
-  type HttpStatusError
+  type DownloadTotals
 } from './speech-model-download-response'
+import { isRetryableDownloadError, type HttpStatusError } from '../network/transient-download-error'
 import { SpeechModelHttpDownload } from './speech-model-http-download'
 
 export abstract class SpeechModelDownloadTransport extends SpeechModelHttpDownload {

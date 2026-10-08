@@ -6,6 +6,11 @@ import {
 } from '../../shared/browser-annotation-viewport-bridge'
 import type { BrowserViewportOverride } from '../../shared/browser-workspace-types'
 import { BrowserManagerDownloadLifecycle } from './browser-manager-download-lifecycle'
+import { sendGuestCdpCommand } from './guest-cdp-command'
+
+// Why no maxTouchPoints: Chromium rejects values outside 1..16 even when disabling, which left
+// touch emulation (and no-hover media features) on after leaving a mobile preset (#22749).
+const TOUCH_EMULATION_DISABLED = { enabled: false } as const
 
 export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifecycle {
   // Why: guests are isolated from Orca's preload bridge, so main owns the devtools escape hatch after a tab→guest lookup.
@@ -37,11 +42,13 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
     // Why: chain per-tab so rapid toggles don't interleave CDP commands and the last-requested override wins.
     const expectedWebContentsId = this.webContentsIdByTabId.get(browserTabId)
     if (expectedWebContentsId !== undefined) {
-      // Record the request before CDP runs: host panning and the tab's identity both follow it, so a
-      // navigation mid-apply already sees it. The guest id fence keeps it off a replacement guest.
+      // Record the request before CDP runs so host panning follows it at once. What is applied only
+      // moves once Chromium accepts it. The guest id fence keeps both off a replacement guest.
+      const previous = this.viewportPresetByTabId.get(browserTabId)
       this.viewportPresetByTabId.set(browserTabId, {
         guestWebContentsId: expectedWebContentsId,
-        override
+        requested: override,
+        applied: previous?.guestWebContentsId === expectedWebContentsId ? previous.applied : null
       })
     }
     // The renderer resizes the host before CDP completes; discard the old geometry until it
@@ -70,7 +77,13 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
     const prev = this.annotationViewportBridgeOpsByTabId.get(browserTabId) ?? Promise.resolve()
     const next = prev
       .catch(() => {})
-      .then(() => this.doSetAnnotationViewportBridgeImpl(options, resolveGuest))
+      .then(() => {
+        // A newer document invalidation retires geometry still waiting in the queue.
+        if (this.annotationViewportBridgeOpsByTabId.get(browserTabId) !== next) {
+          return false
+        }
+        return this.doSetAnnotationViewportBridgeImpl(options, resolveGuest)
+      })
     this.annotationViewportBridgeOpsByTabId.set(browserTabId, next)
     try {
       return await next
@@ -149,7 +162,7 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
       'device metrics',
       () =>
         override
-          ? dbg.sendCommand('Emulation.setDeviceMetricsOverride', {
+          ? sendGuestCdpCommand(guest, 'Emulation.setDeviceMetricsOverride', {
               width: override.width,
               height: override.height,
               deviceScaleFactor: override.deviceScaleFactor,
@@ -157,17 +170,22 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
             })
           : dbg.sendCommand('Emulation.clearDeviceMetricsOverride', {})
     )
+    // Why record before any further await: a debugger detach clears the metrics, and its handler
+    // must land after this write, not be overwritten by it.
+    if (metricsApplied) {
+      this.recordAppliedViewportOverride(browserTabId, webContentsId, override)
+    }
     const touchApplied = await this.runViewportEmulationStep(browserTabId, 'touch emulation', () =>
-      dbg.sendCommand('Emulation.setTouchEmulationEnabled', {
-        enabled: override?.mobile ?? false,
-        maxTouchPoints: override?.mobile ? 5 : 0
-      })
+      dbg.sendCommand(
+        'Emulation.setTouchEmulationEnabled',
+        override?.mobile ? { enabled: true, maxTouchPoints: 5 } : TOUCH_EMULATION_DISABLED
+      )
     )
     if (this.webContentsIdByTabId.get(browserTabId) !== webContentsId) {
       return false
     }
-    // Why: identity is not an emulation step. It follows the requested preset whatever the steps
-    // above did, so a failed metrics or touch write can never strand a mobile identity on the tab.
+    // Why: identity follows the device metrics Chromium actually holds, not the request, so a failed
+    // metrics write never pairs a phone identity with a desktop viewport, or the reverse.
     const identityApplied = await this.runViewportEmulationStep(browserTabId, 'identity', () =>
       this.retargetTabIdentity(guest, this.resolveTabNavigationUrl(guest))
     )

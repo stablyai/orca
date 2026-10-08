@@ -1,17 +1,8 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "notifications.desktop-stream",
   "family": "notifications.desktop-stream",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "ccdb324b63e4942891942edde1216586a51774bd",
-  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
-  "recorderSha256": "0317fe2aebe4743ce5e7ae194531aa91b4fe0a84df457640851fe6dfdb9362af",
-  "adapterSha256": "eacf859143588ae6bee2804975d642b6c1088d57ae77ffe298620250d9a9f0e4",
-  "scenarioSha256": "53c8aa2ecfc045a50180dc707e353e22eef8511c0815ebacd3bda8cfb69d65c0",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "18a100fb6bae": {
       "name": "notifications.getMissedSince#1",
@@ -82,65 +73,10 @@
       "ordinal": 8,
       "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"notifications.unsubscribe\",\"params\":{\"subscriptionId\":\"sub-1\"}}"
     },
-    "41b12aedee99": {
-      "name": "notifications.unsubscribe#1",
-      "ordinal": 7,
-      "args": [
-        {
-          "name": "method",
-          "value": "notifications.unsubscribe"
-        },
-        {
-          "name": "params",
-          "value": {
-            "subscriptionId": "sub-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "4510854e3d64": {
+    "2920ec417a8b": {
       "name": "notifications.unsubscribe#1",
       "ordinal": 6,
-      "args": [
-        {
-          "name": "method",
-          "value": "notifications.unsubscribe"
-        },
-        {
-          "name": "params",
-          "value": {
-            "subscriptionId": "sub-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-3",
-          "ok": true,
-          "result": {
-            "unsubscribed": true
-          }
-        }
-      }
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"notifications.unsubscribe\",\"params\":{\"subscriptionId\":\"sub-1\"}}"
     },
     "45aca32cac62": {
       "name": "notification-tray.dismiss",
@@ -156,11 +92,6 @@
         "key": "orca:pushDismissalWatermarks:v1",
         "value": "[{\"key\":\"[\\\"Yw3NKWbEM2aRElRI\\\",\\\"epoch-1\\\",\\\"note-2\\\"]\",\"seq\":8,\"expiresAt\":1767312000000}]"
       }
-    },
-    "4c376c5d53ac": {
-      "name": "notifications.unsubscribe#1",
-      "ordinal": 9,
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"notifications.unsubscribe\",\"params\":{\"subscriptionId\":\"sub-1\"}}"
     },
     "5359579cc62d": {
       "running": true
@@ -215,92 +146,6 @@
         "frame": "notifications.subscribe#1"
       }
     },
-    "6efd92e320ef": {
-      "name": "notifications.unsubscribe#1",
-      "ordinal": 6,
-      "args": [
-        {
-          "name": "method",
-          "value": "notifications.unsubscribe"
-        },
-        {
-          "name": "params",
-          "value": {
-            "subscriptionId": "sub-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "96f940529e7e": {
-      "name": "notifications.unsubscribe#1",
-      "ordinal": 8,
-      "args": [
-        {
-          "name": "method",
-          "value": "notifications.unsubscribe"
-        },
-        {
-          "name": "params",
-          "value": {
-            "subscriptionId": "sub-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "97d75ba51dcd": {
-      "name": "notifications.unsubscribe#1",
-      "ordinal": 8,
-      "args": [
-        {
-          "name": "method",
-          "value": "notifications.unsubscribe"
-        },
-        {
-          "name": "params",
-          "value": {
-            "subscriptionId": "sub-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-3",
-          "ok": true,
-          "result": {
-            "unsubscribed": true
-          }
-        }
-      }
-    },
     "a0b2bcfcde77": {
       "running": false
     },
@@ -326,40 +171,6 @@
       "name": "notifications.subscribe#1",
       "ordinal": 1,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"notifications.subscribe\",\"params\":{\"includeDesktopSuppressed\":true}}"
-    },
-    "f56cd17671f6": {
-      "name": "notifications.unsubscribe#1",
-      "ordinal": 7,
-      "args": [
-        {
-          "name": "method",
-          "value": "notifications.unsubscribe"
-        },
-        {
-          "name": "params",
-          "value": {
-            "subscriptionId": "sub-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-3",
-          "ok": true,
-          "result": {
-            "unsubscribed": true
-          }
-        }
-      }
     },
     "f79cc42f0819": {
       "name": "notification-tray.dismiss",
@@ -431,8 +242,8 @@
       {
         "id": "notifications-desktop-stream.normal:unsubscribing",
         "observation": {
-          "sender": ["18a100fb6bae", "96f940529e7e"],
-          "payloads": ["f552b5040ec7", "e074c0b6fa0a", "4c376c5d53ac"],
+          "sender": ["18a100fb6bae"],
+          "payloads": ["f552b5040ec7", "e074c0b6fa0a", "2637263140a2"],
           "settlements": {
             "start": "eb79a9b3682a",
             "stop": "eb79a9b3682a"
@@ -444,8 +255,8 @@
       {
         "id": "notifications-desktop-stream.normal:stopped",
         "observation": {
-          "sender": ["18a100fb6bae", "97d75ba51dcd"],
-          "payloads": ["f552b5040ec7", "e074c0b6fa0a", "4c376c5d53ac"],
+          "sender": ["18a100fb6bae"],
+          "payloads": ["f552b5040ec7", "e074c0b6fa0a", "2637263140a2"],
           "settlements": {
             "start": "eb79a9b3682a",
             "stop": "eb79a9b3682a"
@@ -469,8 +280,8 @@
       {
         "id": "notifications-desktop-stream.result-absent:unsubscribing",
         "observation": {
-          "sender": ["18a100fb6bae", "41b12aedee99"],
-          "payloads": ["f552b5040ec7", "e074c0b6fa0a", "2637263140a2"],
+          "sender": ["18a100fb6bae"],
+          "payloads": ["f552b5040ec7", "e074c0b6fa0a", "ab0e4b79457f"],
           "settlements": {
             "start": "eb79a9b3682a",
             "stop": "eb79a9b3682a"
@@ -482,8 +293,8 @@
       {
         "id": "notifications-desktop-stream.result-absent:stopped",
         "observation": {
-          "sender": ["18a100fb6bae", "f56cd17671f6"],
-          "payloads": ["f552b5040ec7", "e074c0b6fa0a", "2637263140a2"],
+          "sender": ["18a100fb6bae"],
+          "payloads": ["f552b5040ec7", "e074c0b6fa0a", "ab0e4b79457f"],
           "settlements": {
             "start": "eb79a9b3682a",
             "stop": "eb79a9b3682a"
@@ -507,8 +318,8 @@
       {
         "id": "notifications-desktop-stream.result-null:unsubscribing",
         "observation": {
-          "sender": ["18a100fb6bae", "41b12aedee99"],
-          "payloads": ["f552b5040ec7", "e074c0b6fa0a", "2637263140a2"],
+          "sender": ["18a100fb6bae"],
+          "payloads": ["f552b5040ec7", "e074c0b6fa0a", "ab0e4b79457f"],
           "settlements": {
             "start": "eb79a9b3682a",
             "stop": "eb79a9b3682a"
@@ -520,8 +331,8 @@
       {
         "id": "notifications-desktop-stream.result-null:stopped",
         "observation": {
-          "sender": ["18a100fb6bae", "f56cd17671f6"],
-          "payloads": ["f552b5040ec7", "e074c0b6fa0a", "2637263140a2"],
+          "sender": ["18a100fb6bae"],
+          "payloads": ["f552b5040ec7", "e074c0b6fa0a", "ab0e4b79457f"],
           "settlements": {
             "start": "eb79a9b3682a",
             "stop": "eb79a9b3682a"
@@ -545,8 +356,8 @@
       {
         "id": "notifications-desktop-stream.inner-ok-missing:unsubscribing",
         "observation": {
-          "sender": ["18a100fb6bae", "6efd92e320ef"],
-          "payloads": ["f552b5040ec7", "e074c0b6fa0a", "ab0e4b79457f"],
+          "sender": ["18a100fb6bae"],
+          "payloads": ["f552b5040ec7", "e074c0b6fa0a", "2920ec417a8b"],
           "settlements": {
             "start": "eb79a9b3682a",
             "stop": "eb79a9b3682a"
@@ -558,8 +369,8 @@
       {
         "id": "notifications-desktop-stream.inner-ok-missing:stopped",
         "observation": {
-          "sender": ["18a100fb6bae", "4510854e3d64"],
-          "payloads": ["f552b5040ec7", "e074c0b6fa0a", "ab0e4b79457f"],
+          "sender": ["18a100fb6bae"],
+          "payloads": ["f552b5040ec7", "e074c0b6fa0a", "2920ec417a8b"],
           "settlements": {
             "start": "eb79a9b3682a",
             "stop": "eb79a9b3682a"
@@ -583,8 +394,8 @@
       {
         "id": "notifications-desktop-stream.inner-false-string-error:unsubscribing",
         "observation": {
-          "sender": ["18a100fb6bae", "6efd92e320ef"],
-          "payloads": ["f552b5040ec7", "e074c0b6fa0a", "ab0e4b79457f"],
+          "sender": ["18a100fb6bae"],
+          "payloads": ["f552b5040ec7", "e074c0b6fa0a", "2920ec417a8b"],
           "settlements": {
             "start": "eb79a9b3682a",
             "stop": "eb79a9b3682a"
@@ -596,8 +407,8 @@
       {
         "id": "notifications-desktop-stream.inner-false-string-error:stopped",
         "observation": {
-          "sender": ["18a100fb6bae", "4510854e3d64"],
-          "payloads": ["f552b5040ec7", "e074c0b6fa0a", "ab0e4b79457f"],
+          "sender": ["18a100fb6bae"],
+          "payloads": ["f552b5040ec7", "e074c0b6fa0a", "2920ec417a8b"],
           "settlements": {
             "start": "eb79a9b3682a",
             "stop": "eb79a9b3682a"
@@ -621,8 +432,8 @@
       {
         "id": "notifications-desktop-stream.inner-false-object-error:unsubscribing",
         "observation": {
-          "sender": ["18a100fb6bae", "6efd92e320ef"],
-          "payloads": ["f552b5040ec7", "e074c0b6fa0a", "ab0e4b79457f"],
+          "sender": ["18a100fb6bae"],
+          "payloads": ["f552b5040ec7", "e074c0b6fa0a", "2920ec417a8b"],
           "settlements": {
             "start": "eb79a9b3682a",
             "stop": "eb79a9b3682a"
@@ -634,8 +445,8 @@
       {
         "id": "notifications-desktop-stream.inner-false-object-error:stopped",
         "observation": {
-          "sender": ["18a100fb6bae", "4510854e3d64"],
-          "payloads": ["f552b5040ec7", "e074c0b6fa0a", "ab0e4b79457f"],
+          "sender": ["18a100fb6bae"],
+          "payloads": ["f552b5040ec7", "e074c0b6fa0a", "2920ec417a8b"],
           "settlements": {
             "start": "eb79a9b3682a",
             "stop": "eb79a9b3682a"
@@ -659,8 +470,8 @@
       {
         "id": "notifications-desktop-stream.outer-refused:unsubscribing",
         "observation": {
-          "sender": ["18a100fb6bae", "6efd92e320ef"],
-          "payloads": ["f552b5040ec7", "e074c0b6fa0a", "ab0e4b79457f"],
+          "sender": ["18a100fb6bae"],
+          "payloads": ["f552b5040ec7", "e074c0b6fa0a"],
           "settlements": {
             "start": "eb79a9b3682a",
             "stop": "eb79a9b3682a"
@@ -672,8 +483,8 @@
       {
         "id": "notifications-desktop-stream.outer-refused:stopped",
         "observation": {
-          "sender": ["18a100fb6bae", "4510854e3d64"],
-          "payloads": ["f552b5040ec7", "e074c0b6fa0a", "ab0e4b79457f"],
+          "sender": ["18a100fb6bae"],
+          "payloads": ["f552b5040ec7", "e074c0b6fa0a"],
           "settlements": {
             "start": "eb79a9b3682a",
             "stop": "eb79a9b3682a"
@@ -697,8 +508,8 @@
       {
         "id": "notifications-desktop-stream.outer-refused-no-message:unsubscribing",
         "observation": {
-          "sender": ["18a100fb6bae", "6efd92e320ef"],
-          "payloads": ["f552b5040ec7", "e074c0b6fa0a", "ab0e4b79457f"],
+          "sender": ["18a100fb6bae"],
+          "payloads": ["f552b5040ec7", "e074c0b6fa0a"],
           "settlements": {
             "start": "eb79a9b3682a",
             "stop": "eb79a9b3682a"
@@ -710,8 +521,8 @@
       {
         "id": "notifications-desktop-stream.outer-refused-no-message:stopped",
         "observation": {
-          "sender": ["18a100fb6bae", "4510854e3d64"],
-          "payloads": ["f552b5040ec7", "e074c0b6fa0a", "ab0e4b79457f"],
+          "sender": ["18a100fb6bae"],
+          "payloads": ["f552b5040ec7", "e074c0b6fa0a"],
           "settlements": {
             "start": "eb79a9b3682a",
             "stop": "eb79a9b3682a"
@@ -735,8 +546,8 @@
       {
         "id": "notifications-desktop-stream.method-not-found:unsubscribing",
         "observation": {
-          "sender": ["18a100fb6bae", "6efd92e320ef"],
-          "payloads": ["f552b5040ec7", "e074c0b6fa0a", "ab0e4b79457f"],
+          "sender": ["18a100fb6bae"],
+          "payloads": ["f552b5040ec7", "e074c0b6fa0a"],
           "settlements": {
             "start": "eb79a9b3682a",
             "stop": "eb79a9b3682a"
@@ -748,8 +559,8 @@
       {
         "id": "notifications-desktop-stream.method-not-found:stopped",
         "observation": {
-          "sender": ["18a100fb6bae", "4510854e3d64"],
-          "payloads": ["f552b5040ec7", "e074c0b6fa0a", "ab0e4b79457f"],
+          "sender": ["18a100fb6bae"],
+          "payloads": ["f552b5040ec7", "e074c0b6fa0a"],
           "settlements": {
             "start": "eb79a9b3682a",
             "stop": "eb79a9b3682a"

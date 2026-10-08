@@ -1,6 +1,14 @@
 import type { IpcPtyTransportOptions, PtyConnectResult, PtyTransport } from './pty-transport-types'
+import type { RuntimeCreateAgentSessionResult } from '../../../../shared/agent-session-host-authority'
+import {
+  createAgentSessionCreateOperation,
+  type AgentSessionCreateOperation
+} from '../../runtime/agent-session-create-operation'
+import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
+import { toRuntimeTerminalWorktreeSelector } from '../../runtime/runtime-worktree-selector'
 
 type PtyConnectOptions = Parameters<PtyTransport['connect']>[0]
+const modelLaunchOperations = new WeakMap<IpcPtyTransportOptions, AgentSessionCreateOperation>()
 
 /** `incarnationId` names which lifetime of the returned id this spawn owns; absent when the
  *  execution host predates the field. It is deliberately NOT on `PtyConnectResult` — only the
@@ -15,6 +23,52 @@ export async function spawnIpcPty(
   connectOptions: PtyConnectOptions,
   admittedSessionId?: string
 ): Promise<IpcPtySpawnResponse> {
+  if (
+    !admittedSessionId &&
+    transportOptions.launchAgent === 'opencode' &&
+    Object.values(transportOptions.agentLaunchPreferences ?? {}).some(
+      (value) => value !== undefined
+    )
+  ) {
+    const { worktreeId, tabId, leafId, connectionId, resumeProviderSession } = transportOptions
+    if (!worktreeId || !tabId || !leafId || connectionId || resumeProviderSession) {
+      throw new Error('capability_unsupported')
+    }
+    let operation = modelLaunchOperations.get(transportOptions)
+    if (!operation) {
+      operation = createAgentSessionCreateOperation()
+      modelLaunchOperations.set(transportOptions, operation)
+    }
+    const created = await operation.run((clientOperationId) =>
+      callRuntimeRpc<RuntimeCreateAgentSessionResult>(
+        { kind: 'local' },
+        'terminal.createAgentSession',
+        {
+          clientOperationId,
+          worktree: toRuntimeTerminalWorktreeSelector(worktreeId),
+          agent: 'opencode',
+          prompt: transportOptions.agentPrompt,
+          promptDelivery: transportOptions.agentPromptDelivery,
+          agentArgs: transportOptions.agentArgsOverride,
+          launchPreferences: transportOptions.agentLaunchPreferences,
+          startupCwd: transportOptions.cwd,
+          placement: { tabId, leafId },
+          presentation: 'background',
+          ...(transportOptions.terminalKittyKeyboardProtocol === true
+            ? { terminalKittyKeyboardProtocol: true }
+            : {})
+        }
+      )
+    )
+    if (!created.terminal.ptyId) {
+      throw new Error('agent_session_operation_unknown')
+    }
+    return spawnIpcPty(
+      { ...transportOptions, command: undefined, launchConfig: undefined },
+      { ...connectOptions, command: undefined, launchConfig: undefined },
+      created.terminal.ptyId
+    )
+  }
   const {
     cwd,
     cwdFallback,
@@ -31,6 +85,7 @@ export async function spawnIpcPty(
     worktreeId,
     tabId,
     leafId,
+    placement,
     shellOverride,
     projectRuntime,
     terminalColorQueryReplies,
@@ -77,6 +132,7 @@ export async function spawnIpcPty(
     worktreeId,
     ...(tabId ? { tabId } : {}),
     ...(leafId ? { leafId } : {}),
+    ...(placement && !admittedSessionId ? { placement } : {}),
     ...(replacesPtyId ? { replacesPtyId } : {}),
     ...(shellOverride ? { shellOverride } : {}),
     ...(projectRuntime ? { projectRuntime } : {}),

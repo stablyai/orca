@@ -42,9 +42,14 @@ export function buildUnitDependencyGraph(sources) {
       if (path === null) {
         continue
       }
-      const resolved = EXTENSIONS.map((extension) => path + extension).find((candidate) =>
-        sources.has(candidate)
-      )
+      let resolved
+      for (const extension of EXTENSIONS) {
+        const candidate = path + extension
+        if (sources.has(candidate)) {
+          resolved = candidate
+          break
+        }
+      }
       if (!resolved) {
         opaque.add(file)
         continue

@@ -3,10 +3,15 @@ import { pathToFileURL } from 'node:url'
 import { runProcessSync } from './script-child-process.mjs'
 import { collectUnitDependencyGraph } from './ci-unit-dependency-graph.mjs'
 import { discoverUnitFiles } from './ci-unit-files.mjs'
-import { planUnitSelection } from './ci-unit-selection.mjs'
+import { FULL_SHARD_COUNT, planUnitSelection } from './ci-unit-selection.mjs'
 import { readTimingBaseline, writeAssignment } from './ci-shard-assignment.mjs'
 
 export function prepareUnitPlan(env = process.env) {
+  const requestedCount = env.ORCA_UNIT_FULL_SHARD_COUNT ?? String(FULL_SHARD_COUNT)
+  if (!['5', '10'].includes(requestedCount)) {
+    throw new Error('ORCA_UNIT_FULL_SHARD_COUNT must be 5 or 10')
+  }
+  const fullShardCount = Number(requestedCount)
   const files = discoverUnitFiles()
   let plan
   try {
@@ -25,10 +30,11 @@ export function prepareUnitPlan(env = process.env) {
     plan = planUnitSelection({
       files,
       changed: diff.stdout.split('\0').filter(Boolean),
-      graph: collectUnitDependencyGraph(),
+      graph: collectUnitDependencyGraph,
       timings: readTimingBaseline('unit').timings,
       event,
-      mode: env.ORCA_UNIT_SELECTION_MODE
+      mode: env.ORCA_UNIT_SELECTION_MODE,
+      fullShardCount
     })
   } catch (error) {
     plan = {
@@ -39,7 +45,10 @@ export function prepareUnitPlan(env = process.env) {
       files,
       candidateFiles: files,
       executionFiles: files,
-      shards: Array.from({ length: 8 }, (_, index) => ({ index: index + 1, count: 8 }))
+      shards: Array.from({ length: fullShardCount }, (_, index) => ({
+        index: index + 1,
+        count: fullShardCount
+      }))
     }
   }
   writeAssignment('ci-shards/unit-selection.json', plan)

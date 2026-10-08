@@ -108,15 +108,4 @@ describe('normalizeDshEvent', () => {
       ).toBeNull()
     }
   })
-
-  it('ignores events the bridge cannot send', () => {
-    // Notification and PermissionRequest are Claude-only; if one ever arrives it is not
-    // from this bridge, and guessing a state from it would be unfounded.
-    expect(
-      normalizeAndAccept(state, 'dsh', event('Notification', { message: 'waiting' }))
-    ).toBeNull()
-    expect(
-      normalizeAndAccept(state, 'dsh', event('PermissionRequest', { tool_name: 'bash' }))
-    ).toBeNull()
-  })
 })

@@ -154,7 +154,6 @@ function paging({
       isVisible={isVisible}
       isWorking={false}
       expandSignal={false}
-      fontScale={1}
     />
   )
 }
@@ -253,6 +252,46 @@ describe('older history auto-load', () => {
     paint(container)
     deliverIntersections()
     expect(loadEarlier).toHaveBeenCalledTimes(3)
+  })
+
+  // A page of a subagent's rows lands in its closed section and adds no row the
+  // reader can see; paging must continue the same way.
+  it("keeps paging after a page that holds only a settled subagent's rows", async () => {
+    const loadEarlier = lands()
+    const spawn: NativeChatMessage = {
+      id: 'spawn',
+      role: 'system',
+      blocks: [
+        {
+          type: 'subagent-group',
+          groupId: 'group-1',
+          agents: [{ id: 'task-1', label: 'explore the lane', state: 'completed' }]
+        }
+      ],
+      timestamp: 100.5,
+      source: 'transcript'
+    }
+    const base = [spawn, ...markers(100, 150)]
+    const { container, rerender } = render(paging({ messages: base, loadEarlier }))
+    sentinelInRange = true
+    deliverIntersections()
+    expect(loadEarlier).toHaveBeenCalledTimes(1)
+
+    rerender(paging({ messages: base, loadEarlier, loadingEarlier: true }))
+    await settle()
+    const subagentPage = [
+      ...Array.from({ length: 20 }, (_, index) => ({
+        ...marker(index),
+        id: `child-${index}`,
+        agentId: 'task-1'
+      })),
+      ...base
+    ]
+    rerender(paging({ messages: subagentPage, loadEarlier }))
+    paint(container)
+    deliverIntersections()
+    expect(screen.queryByText('marker-0')).toBeNull()
+    expect(loadEarlier).toHaveBeenCalledTimes(2)
   })
 
   it('stops once a page pushes the sentinel out of range', async () => {

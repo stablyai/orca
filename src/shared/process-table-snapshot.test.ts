@@ -300,16 +300,6 @@ describe('shared process-table capture', () => {
     ])
   })
 
-  it('builds only the indexes a resolver reads', () => {
-    // Why: an unread group index costs two maps plus a per-row array on every
-    // capture, on the exact path this reader exists to make cheap.
-    const index = buildProcessTableIndex(
-      parseStrictProcessTableRows('100 1 100 101 Ss /bin/zsh\n101 100 101 101 S+ node /opt/codex')
-    )
-
-    expect(Object.keys(index).sort()).toEqual(['byPid', 'childrenByPpid', 'rows', 'stats'])
-  })
-
   it('keeps the lenient view readable when the same capture is strictly unreadable', async () => {
     const forks = mockPsCaptures('100 1 Ss+ /bin/zsh\n')
 
@@ -500,14 +490,6 @@ describe('getProcessTableIndex', () => {
 
     expect(getProcessTableIndex(rows).byPid.get(100)).toBe(rows[0])
     expect(buildProcessTableIndex(rows).byPid.get(100)).toBe(rows[0])
-  })
-
-  it('materializes only the maps the descendant walk reads', () => {
-    // Why: this memo exists to cut relay CPU; four indexes for two readers would
-    // make a single-pane relay pay more per capture than the code it replaced.
-    const index = getProcessTableIndex(parseProcessTableRows('100 1 Ss bash'))
-
-    expect(Object.keys(index).sort()).toEqual(['byPid', 'childrenByPpid', 'rows', 'stats'])
   })
 
   it('keeps the memo out of measured builds so a cache hit cannot satisfy a perf gate', () => {

@@ -141,14 +141,14 @@ function enableActiveRuntimeEnvironment(environmentId = 'env-1'): void {
 }
 
 describe('connectPanePty', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetModules()
     vi.clearAllMocks()
     transportFactoryQueue = []
     createdTransportOptions = []
     storeSubscribers = []
     mockStoreState = createInitialStoreState(() => mockStoreState)
-    installTerminalTestGlobals()
+    await installTerminalTestGlobals()
   })
 
   afterEach(async () => {
@@ -441,7 +441,8 @@ describe('connectPanePty', () => {
     expect(deps.dispatchNotification).toHaveBeenCalledWith({
       source: 'agent-task-complete',
       terminalTitle: '* Codex done',
-      paneKey: makePaneKey('tab-1', LEAF_1)
+      paneKey: makePaneKey('tab-1', LEAF_1),
+      ptyId: 'tab-pty'
     })
   })
 

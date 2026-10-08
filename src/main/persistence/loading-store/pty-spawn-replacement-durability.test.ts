@@ -1,3 +1,4 @@
+import { isTerminalSessionStorageCapacityFailure } from '../../../shared/terminal-session-state-save-failure'
 import { afterEach, expect, it, vi } from 'vitest'
 import { deferred, fixture } from './profile-state-delayed-authority-fixture'
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
@@ -36,11 +37,17 @@ afterEach(() => {
 
 it.each(
   ['ipc', 'runtime'].flatMap((controller) =>
-    ['save', 'shutdown'].map((replacementDuring) => ({ controller, replacementDuring }))
+    ['save', 'shutdown'].flatMap((replacementDuring) =>
+      ['profile-state-writer-exit', 'ENOSPC'].map((code) => ({
+        controller,
+        replacementDuring,
+        code
+      }))
+    )
   )
 )(
-  'preserves a successor during $replacementDuring when the predecessor $controller save fails',
-  async ({ controller, replacementDuring }) => {
+  'preserves a successor during $replacementDuring when the predecessor $controller save fails with $code',
+  async ({ controller, replacementDuring, code }) => {
     const { store, authority } = await fixture()
     const runtime = new OrcaRuntimeService(store)
     runtime.onPtySpawned(binding.ptyId, binding.incarnationId)
@@ -70,10 +77,18 @@ it.each(
       commit = () => commitRuntimePtySpawn(ctx)
     }
     const gate = authority.pause()
-    const pending = expect(commit()).rejects.toThrow('ORCA_TERMINAL_SESSION_STATE_SAVE_FAILED')
+    const pending = commit().catch((error: unknown) => {
+      expect(error).toBeInstanceOf(Error)
+      if (!(error instanceof Error)) {
+        throw error
+      }
+      expect(error.message).toContain('ORCA_TERMINAL_SESSION_STATE_SAVE_FAILED')
+      expect(isTerminalSessionStorageCapacityFailure(error.message)).toBe(code === 'ENOSPC')
+      return 'rejected'
+    })
     await gate.started.promise
     if (replacementDuring === 'shutdown') {
-      gate.finish.reject(new Error('disk full'))
+      gate.finish.reject(Object.assign(new Error('worker exited'), { code }))
       await shutdownStarted.promise
     }
     await runtime.onPtyExit(binding.ptyId, 0, binding.incarnationId, { providerExitObserved: true })
@@ -81,10 +96,10 @@ it.each(
     ptyIncarnationById.set(binding.ptyId, replacementIncarnation)
     ptyOwnership.set(binding.ptyId, 'successor-host')
     if (replacementDuring === 'save') {
-      gate.finish.reject(new Error('disk full'))
+      gate.finish.reject(Object.assign(new Error('worker exited'), { code }))
     }
     shutdownFinished.resolve()
-    await pending
+    expect(await pending).toBe('rejected')
     if (replacementDuring === 'save') {
       expect(shutdown).not.toHaveBeenCalled()
     } else {
@@ -144,3 +159,14 @@ it.each(['ipc', 'runtime'])(
     })
   }
 )
+
+it('does not label an IPC binding ownership refusal as a storage failure', async () => {
+  const { store } = await fixture()
+  const runtime = new OrcaRuntimeService(store)
+  const deps = createPtySpawnCommitDependencies(runtime, store)
+  const ctx = createPtyIpcSpawnState(deps, { ...binding, cols: 80, rows: 24 })
+  ctx.result = { id: binding.ptyId, incarnationId: binding.incarnationId }
+  ctx.validatedLeafId = binding.leafId
+  vi.spyOn(store, 'persistPtyBinding').mockResolvedValue(false)
+  await expect(commitPtyIpcSpawn(ctx)).rejects.toThrow('terminal_pane_owner_changed')
+})

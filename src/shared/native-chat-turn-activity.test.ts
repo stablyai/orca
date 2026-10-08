@@ -13,7 +13,7 @@ const turnStart = item(1, {
 })
 
 describe('selectStructuredAgentTurnActivity', () => {
-  it('prefers the latest provider-authored activity line in the active turn', () => {
+  it('shows the latest line of the live provider activity in the active turn', () => {
     const activity = selectStructuredAgentTurnActivity(
       [
         turnStart,
@@ -22,14 +22,51 @@ describe('selectStructuredAgentTurnActivity', () => {
           name: 'shell',
           input: { command: 'pnpm test' },
           state: 'completed'
-        }),
-        item(3, { kind: 'status', text: 'Checking the results\nPreparing the answer' })
+        })
       ],
-      'turn-1'
+      'turn-1',
+      { turnId: 'turn-1', text: 'Checking the results\nPreparing the answer' }
     )
 
     expect(activity).toEqual({ kind: 'description', text: 'Preparing the answer' })
   })
+
+  it.each([
+    [
+      'a provider retry warning',
+      {
+        kind: 'status',
+        tone: 'warning',
+        text: 'Claude hit a temporary problem and is retrying.'
+      }
+    ],
+    [
+      'a compaction marker',
+      { kind: 'status', text: 'Context compacted', presentation: 'compaction' }
+    ],
+    ['a cancellation note', { kind: 'status', text: 'Cancellation requested.' }],
+    [
+      'a suppressed-notification summary',
+      { kind: 'status', text: '3 more provider notifications not shown for this turn' }
+    ]
+  ] satisfies [string, AgentJournalItemBody][])(
+    'never turns %s from earlier in the turn into the live line',
+    (_name, body) => {
+      const later = item(3, {
+        kind: 'tool-call',
+        name: 'shell',
+        input: { command: 'pnpm test' },
+        state: 'running'
+      })
+
+      expect(
+        selectStructuredAgentTurnActivity([turnStart, item(2, body), later], 'turn-1')
+      ).toBeNull()
+      expect(
+        selectStructuredAgentTurnActivity([turnStart, later, item(4, body)], 'turn-1')
+      ).toBeNull()
+    }
+  )
 
   it("never puts the model's reasoning on the indicator line", () => {
     const reasoning = item(2, {
@@ -40,13 +77,6 @@ describe('selectStructuredAgentTurnActivity', () => {
 
     // Reasoning is the turn's content; the row says the turn is thinking instead.
     expect(selectStructuredAgentTurnActivity([turnStart, reasoning], 'turn-1')).toBeNull()
-    // An ordinary status row is still a description of what the turn is doing.
-    expect(
-      selectStructuredAgentTurnActivity(
-        [turnStart, reasoning, item(3, { kind: 'status', text: 'Updating the plan' })],
-        'turn-1'
-      )
-    ).toEqual({ kind: 'description', text: 'Updating the plan' })
     // Provider-authored copy is unaffected, so Codex keeps its line.
     expect(
       selectStructuredAgentTurnActivity([turnStart, reasoning], 'turn-1', {
@@ -74,7 +104,7 @@ describe('selectStructuredAgentTurnActivity', () => {
     ).toBeNull()
   })
 
-  it('prefers matching ephemeral provider activity over journal-derived status', () => {
+  it('shows matching ephemeral provider activity, never an older journal status', () => {
     const activity = selectStructuredAgentTurnActivity(
       [turnStart, item(2, { kind: 'status', text: 'Older journal status' })],
       'turn-1',
@@ -118,7 +148,7 @@ describe('selectStructuredAgentTurnActivity', () => {
     expect(activity).toBeNull()
   })
 
-  it('does not fall through to a journal status that repeats a recent tool label', () => {
+  it('does not read a journal status that repeats a recent tool label', () => {
     const activity = selectStructuredAgentTurnActivity(
       [
         turnStart,
@@ -201,15 +231,6 @@ describe('selectStructuredAgentTurnActivity — which agent it answers for', () 
         turnId: 'turn-1',
         text: 'pnpm test'
       })
-    ).toEqual({ kind: 'description', text: 'pnpm test' })
-  })
-
-  it("does not let a child's tool label suppress the parent's own status line", () => {
-    expect(
-      selectStructuredAgentTurnActivity(
-        [turnStart, childRunningBash, item(3, { kind: 'status', text: 'pnpm test' })],
-        'turn-1'
-      )
     ).toEqual({ kind: 'description', text: 'pnpm test' })
   })
 
