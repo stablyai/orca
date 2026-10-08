@@ -72,6 +72,9 @@ export type StructuredAgentSessionProviderChild = StructuredAgentSessionProvider
   /** The queued message whose delivery started this child, fixed when the start is made; absent
    *  for any other start. In memory only: it tells a restart offer its own start from another. */
   readonly startedFor?: string
+  /** Where the journal stood when this child's process started; a re-attach keeps it. In memory
+   *  only: it scopes what the child itself reported, such as a sign-in failure. */
+  readonly startedAt?: AgentJournalCursor
   close?: StructuredAgentSessionChildClose
 }
 
