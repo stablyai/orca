@@ -1,4 +1,5 @@
 import { Buffer } from 'buffer/index.js'
+import type { RpcFailure } from '../transport/types'
 import type { MobileFilePreviewRpcSender } from './mobile-file-preview-operations'
 import { fileMediaChunkRead, fileMediaStatRead } from './mobile-file-preview-operations'
 
