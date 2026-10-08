@@ -9446,7 +9446,12 @@
             "yolo": "yolo",
             "manual": "manual",
             "skip": "skip",
-            "checks": "checks"
+            "checks": "checks",
+            "ea6ec81e98": "startup",
+            "16815561cc": "blank terminal",
+            "2cf0f50b9a": "new terminal",
+            "356ba2a82d": "shell",
+            "f0d2803403": "alias"
           }
         },
         "appearance": {
@@ -12681,6 +12686,14 @@
           "offCount": "{{count}} off",
           "machines": "Machines",
           "machinesDescription": "Choose which machines can show notifications on this computer. A paired server’s switch also covers work reached through it."
+        },
+        "BlankTerminalStartupCommandSetting": {
+          "46cd88e30c": "e.g. tc",
+          "15ee1eaa3e": "Reset"
+        },
+        "blank-terminal-startup-command-copy": {
+          "b19b745e02": "Blank terminal startup command",
+          "0b75fc54bd": "Typed into every new terminal that opens without an agent, after the shell is ready (for example a shell alias like tc). Leave empty to start a plain shell."
         }
       },
       "right": {

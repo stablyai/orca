@@ -5,6 +5,7 @@ import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner
 import { resolveWorktreeOperationRouteResult } from '@/lib/worktree-operation-route'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
+import { queueBlankTerminalStartupCommand } from '@/lib/blank-terminal-startup-command'
 
 export function createActiveWorkspaceTerminalActions(
   _set: TerminalStoreSet,
@@ -42,6 +43,7 @@ export function createActiveWorkspaceTerminalActions(
         return
       }
       const terminal = get().createTab(worktreeId, groupId)
+      queueBlankTerminalStartupCommand(get(), terminal.id)
       get().setActiveTab(terminal.id)
       get().setActiveTabType('terminal', worktreeId)
       const latest = get()

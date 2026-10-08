@@ -12,6 +12,7 @@ import { useAppStore } from '@/store'
 import { queueHookCommandsForFirstWorktreeTab } from '@/lib/hook-command-delayed-delivery'
 import { resolveWorkspaceTerminalHostAuthority } from '@/lib/workspace-terminal-host-authority'
 import { initialAgentTabViewModeProps } from './native-chat-initial-view-mode'
+import { queueBlankTerminalStartupCommand } from './blank-terminal-startup-command'
 import { getConnectionId } from '@/lib/connection-context'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
@@ -289,6 +290,8 @@ export function ensureWorktreeHasInitialTerminal(
       )
     }
     store.queueTabStartupCommand(terminalTab.id, sequencedStartup)
+  } else {
+    queueBlankTerminalStartupCommand(store, terminalTab.id)
   }
   queueSetupAndIssueCommands(
     store,

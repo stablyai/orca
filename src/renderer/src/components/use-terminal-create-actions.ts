@@ -10,6 +10,7 @@ import {
 } from '@/runtime/web-runtime-session'
 import { openMobileEmulatorTab } from '@/lib/open-mobile-emulator-tab'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
+import { queueBlankTerminalStartupCommand } from '@/lib/blank-terminal-startup-command'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { buildDuplicatedBrowserTabOptions } from '@/lib/duplicate-browser-tab-options'
 import { browserWorkspaceHasRemoteOwner } from '@/runtime/remote-browser-tab-ownership'
@@ -55,8 +56,9 @@ export function useTerminalCreateActions(controller: TerminalColdActivationContr
         return
       }
       const newTab = createTab(activeWorktreeId, undefined, shellOverride)
-      setActiveTabType('terminal', activeWorktreeId)
       const state = useAppStore.getState()
+      queueBlankTerminalStartupCommand(state, newTab.id)
+      setActiveTabType('terminal', activeWorktreeId)
       const currentTerminals = state.tabsByWorktree[activeWorktreeId] ?? []
       const currentEditors = state.openFiles.filter((file) => file.worktreeId === activeWorktreeId)
       const currentBrowsers = state.browserTabsByWorktree[activeWorktreeId] ?? []
