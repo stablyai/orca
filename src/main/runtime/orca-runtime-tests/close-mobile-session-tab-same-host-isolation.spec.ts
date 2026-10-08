@@ -251,6 +251,63 @@ for (const connectionId of [null, 'ssh-1']) {
       expect(runtime['ptysById'].get(siblingPtyId)).toEqual(siblingBefore)
     })
 
+    it('leaves a PTY tracked in a sibling workspace for a global refresh to adopt', async () => {
+      const movedPtyId = ptyId('moved-from-sibling')
+      const remoteRepo = connectionId ? { ...store.getRepo(TEST_REPO_ID)!, connectionId } : null
+      const runtime = new OrcaRuntimeService(
+        (remoteRepo
+          ? {
+              ...store,
+              getRepos: () => [remoteRepo],
+              getRepo: (id: string) => (id === TEST_REPO_ID ? remoteRepo : undefined)
+            }
+          : store) as never
+      )
+      const hostScope: RestoredOrchestrationAuthorityReceipt['hostScope'] = connectionId
+        ? { kind: 'ssh', targetId: connectionId }
+        : { kind: 'local', hostId: LOCAL_EXECUTION_HOST_ID }
+      const siblingReceipt: RestoredOrchestrationAuthorityReceipt = {
+        ptyId: movedPtyId,
+        worktreeId: siblingWorktreeId,
+        terminalHandle: 'sibling-handle',
+        paneKey: 'sibling-tab:leaf',
+        processIncarnation: 'sibling-incarnation',
+        hostScope
+      }
+      runtime.setPtyController({
+        write: () => true,
+        kill: () => true,
+        // Controller reports this PTY at the target; it's still tracked under the sibling.
+        listProcesses: async () => [
+          {
+            id: movedPtyId,
+            cwd: TEST_WORKTREE_PATH,
+            title: 'Moved terminal',
+            worktreeId: TEST_WORKTREE_ID,
+            incarnationId: 'new-incarnation',
+            agentSessionOwners: []
+          }
+        ],
+        hasPty: () => true,
+        getForegroundProcess: async () => null
+      })
+      runtime.registerPty(movedPtyId, siblingWorktreeId, connectionId)
+      runtime['restoredOrchestrationAuthorityByPtyId'].set(movedPtyId, siblingReceipt)
+      const siblingTrackedBefore = structuredClone(runtime['ptysById'].get(movedPtyId))
+
+      await runtime['refreshMobileSessionPtyRecords'](TEST_WORKTREE_ID)
+
+      expect(runtime['ptysById'].get(movedPtyId)).toEqual(siblingTrackedBefore)
+      expect(runtime['restoredOrchestrationAuthorityByPtyId'].get(movedPtyId)).toEqual(
+        siblingReceipt
+      )
+
+      await runtime['refreshMobileSessionPtyRecords']()
+
+      expect(runtime['ptysById'].get(movedPtyId)).toMatchObject({ worktreeId: TEST_WORKTREE_ID })
+      expect(runtime['restoredOrchestrationAuthorityByPtyId'].has(movedPtyId)).toBe(false)
+    })
+
     it('still reconciles all workspaces in an explicitly global inventory', async () => {
       const workingPtyId = ptyId('global-working')
       const idlePtyId = ptyId('global-idle')

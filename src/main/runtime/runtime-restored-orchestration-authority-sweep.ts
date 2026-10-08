@@ -66,6 +66,8 @@ export function skipSessionOutsideTargetWorktree(
     targetWorktreeId &&
     (!worktreeId ||
       !runtimeWorktreeIdsEqual(worktreeId, targetWorktreeId) ||
+      // Why: adopting a PTY still tracked by another workspace would mutate that
+      // workspace's record from this scope; a global refresh adopts it normally.
       (trackedWorktreeId && !runtimeWorktreeIdsEqual(trackedWorktreeId, targetWorktreeId)))
   if (!outsideTarget) {
     return false
