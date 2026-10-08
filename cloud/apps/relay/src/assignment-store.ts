@@ -71,6 +71,7 @@ import {
 } from './database.js'
 import type { RelayCellConfig } from './config.js'
 import type { CellLockHoldSite } from './cell-inventory-hold-samples.js'
+import { isPostgresPoolConnectFailure } from './postgres-pool-pressure.js'
 import type {
   RelayDatabase,
   RelayLockOptions,
@@ -4061,7 +4062,7 @@ export class RelayAssignmentStore {
     rows: readonly ControlRenewalRequest[],
     now: number
   ): Promise<ControlRenewalOutcome[]> {
-    if (rows.length === 1) return [await this.renewOneControlActivity(rows[0]!, now)]
+    if (rows.length === 1) return [await this.renewOneControlActivity(rows[0]!, now, 'priority')]
     if (this.database.dialect !== 'postgres') {
       // Correctness over throughput: the SQLite writer is serialized anyway, and
       // this is the dialect the unit suites run on.
@@ -4071,7 +4072,7 @@ export class RelayAssignmentStore {
     const outcomes = new Array<ControlRenewalOutcome>(rows.length)
     try {
       const parsed = readControlRenewalOutcomes(
-        await this.database.query(
+        await this.priorityQuery(
           CONTROL_RENEWAL_BATCH_SQL,
           controlRenewalBatchParams(ordered, now)
         ),
@@ -4090,6 +4091,9 @@ export class RelayAssignmentStore {
           message: String((error as { message?: unknown }).message)
         })
       )
+      // No connection at all: per-host statements would only queue up behind the
+      // same saturated pool, multiplying the load that starved this flush.
+      if (isPostgresPoolConnectFailure(error)) return outcomes.fill('database_error')
       await Promise.all(
         ordered.map(async (row) => {
           try {
@@ -4101,6 +4105,12 @@ export class RelayAssignmentStore {
       )
       return outcomes
     }
+  }
+
+  private async priorityQuery(sql: string, params: unknown[]): Promise<SqlRow[]> {
+    return this.database.queryPriority
+      ? await this.database.queryPriority(sql, params)
+      : await this.database.query(sql, params)
   }
 
   private async renewControlActivitiesInSeries(
@@ -4121,14 +4131,15 @@ export class RelayAssignmentStore {
   // Returns the outcome; a driver or pool failure reaches the caller unchanged.
   private async renewOneControlActivity(
     row: ControlRenewalRequest,
-    now: number
+    now: number,
+    lane: 'general' | 'priority' = 'general'
   ): Promise<ControlRenewalOutcome> {
     if (this.database.dialect === 'postgres') {
+      const params = controlRenewalBatchParams([row], now)
       return readControlRenewalOutcomes(
-        await this.database.query(
-          CONTROL_RENEWAL_BATCH_SQL,
-          controlRenewalBatchParams([row], now)
-        ),
+        lane === 'priority'
+          ? await this.priorityQuery(CONTROL_RENEWAL_BATCH_SQL, params)
+          : await this.database.query(CONTROL_RENEWAL_BATCH_SQL, params),
         1
       )[0]!
     }

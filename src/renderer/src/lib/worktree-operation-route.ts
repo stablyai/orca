@@ -5,6 +5,7 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { getRepoIdFromWorktreeId } from '@/store/slices/worktree-helpers'
 import { resolveExactWorktreeRoute } from './worktree-owner-route'
 import {
@@ -24,6 +25,15 @@ export { resolveExplicitWorktreeOperationRouteResult } from './worktree-operatio
 export type WorktreeOperationRoute = {
   executionHostId: ExecutionHostId | null
   runtimeEnvironmentId: string | null
+}
+
+/** The floating workspace has no host record; its files always live on this machine. */
+export function getFloatingWorkspaceOperationRoute(
+  worktreeId: string
+): WorktreeOperationRoute | null {
+  return worktreeId === FLOATING_TERMINAL_WORKTREE_ID
+    ? { executionHostId: LOCAL_EXECUTION_HOST_ID, runtimeEnvironmentId: null }
+    : null
 }
 
 export type WorktreeOperationRouteResolution =

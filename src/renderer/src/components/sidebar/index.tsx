@@ -95,7 +95,7 @@ function Sidebar({
     () => resolveLeftSidebarStyleVariables(settings, systemPrefersDark),
     [settings, systemPrefersDark]
   ) as React.CSSProperties | undefined
-  const { nativeDropTarget, dropHandlers, affordance } = useSidebarProjectDrop()
+  const { dropOwnerRef, dropHandlers, affordance } = useSidebarProjectDrop()
   const {
     workspaceBoardOpen,
     workspaceBoardRenderedOpen,
@@ -148,12 +148,19 @@ function Sidebar({
   })
 
   useWorkspaceRevealBodyRedirect(sidebarOpen && sidebarBody === 'agents')
+  // A collapsed sidebar takes no drops.
+  const sidebarRef = React.useCallback(
+    (node: HTMLDivElement | null) => {
+      containerRef.current = node
+      dropOwnerRef(sidebarOpen ? node : null)
+    },
+    [containerRef, dropOwnerRef, sidebarOpen]
+  )
 
   return (
     <TooltipProvider delayDuration={400}>
       <div
-        ref={containerRef}
-        data-native-file-drop-target={sidebarOpen ? nativeDropTarget : undefined}
+        ref={sidebarRef}
         className="relative min-h-0 flex-shrink-0 bg-worktree-sidebar flex flex-col overflow-hidden scrollbar-sleek-parent"
         style={leftSidebarStyle}
         {...dropHandlers}

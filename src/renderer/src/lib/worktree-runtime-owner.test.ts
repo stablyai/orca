@@ -50,10 +50,25 @@ describe('getSettingsForWorktreeRuntimeOwner', () => {
   })
 
   it('keeps the synthetic floating workspace local while a runtime is focused', () => {
-    expect(getSettingsForWorktreeRuntimeOwner(state, FLOATING_TERMINAL_WORKTREE_ID)).toEqual({
+    const floatingState: WorktreeRuntimeOwnerState = {
+      ...state,
+      activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      activeWorkspaceExecutionHostId: 'runtime:focused-env'
+    }
+    expect(
+      getSettingsForWorktreeRuntimeOwner(floatingState, FLOATING_TERMINAL_WORKTREE_ID)
+    ).toEqual({
       activeRuntimeEnvironmentId: null
     })
-    expect(getExecutionHostIdForWorktree(state, FLOATING_TERMINAL_WORKTREE_ID)).toBe('local')
+    expect(
+      getRuntimeEnvironmentIdForWorktree(floatingState, FLOATING_TERMINAL_WORKTREE_ID)
+    ).toBeNull()
+    expect(getKnownExecutionHostIdForWorktree(floatingState, FLOATING_TERMINAL_WORKTREE_ID)).toBe(
+      'local'
+    )
+    expect(getExecutionHostIdForWorktree(floatingState, FLOATING_TERMINAL_WORKTREE_ID)).toBe(
+      'local'
+    )
   })
 
   it('routes folder workspaces to their project group runtime owner', () => {

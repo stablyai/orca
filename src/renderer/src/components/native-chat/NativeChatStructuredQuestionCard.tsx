@@ -7,11 +7,15 @@ export function NativeChatStructuredQuestionCard({
   questions,
   onAnswer,
   onCancel,
+  isSubmitting,
+  shouldFocus,
   answerInputRef
 }: {
   questions: readonly AgentJournalQuestion[]
   onAnswer: (response: AgentSessionPromptResponse) => void
   onCancel: () => void
+  isSubmitting?: boolean
+  shouldFocus?: boolean
   answerInputRef?: RefObject<HTMLInputElement | null>
 }): React.JSX.Element {
   return (
@@ -49,6 +53,8 @@ export function NativeChatStructuredQuestionCard({
         }
       }}
       onCancel={onCancel}
+      isSubmitting={isSubmitting}
+      shouldFocus={shouldFocus}
       answerInputRef={answerInputRef}
     />
   )

@@ -227,6 +227,7 @@ const DOCUMENT_FOLDER_ACCESS_BUILDERS = [
 
 const USER_NAMED_TAB_OPENERS = [
   'components/browser-pane/navigate/navigate-browser-page-url.ts',
+  'components/editor/editor-dropped-file-open.ts',
   'components/editor/markdown-preview-link-actions.ts',
   'components/floating-terminal/use-floating-terminal-create-actions.ts',
   'components/quick-open-file-navigation.ts',
@@ -236,7 +237,6 @@ const USER_NAMED_TAB_OPENERS = [
   'components/settings/KeybindingsFileActions.tsx',
   'components/tab-bar/tab-create-entry-absolute-file.ts',
   'components/terminal-pane/terminal-file-open-routing.ts',
-  'hooks/useGlobalFileDrop.ts',
   'lib/floating-workspace-tab-creation.ts',
   'lib/open-document-in-floating-workspace.ts',
   'store/slices/editor/actions/markdown-link-action.ts'

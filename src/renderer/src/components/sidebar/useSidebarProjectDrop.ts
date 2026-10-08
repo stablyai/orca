@@ -1,9 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import {
-  NATIVE_FILE_DROP_TARGET,
-  hasNativeFileDragTypes
-} from '../../../../shared/native-file-drop'
+import { hasNativeFileDragTypes } from '../../../../shared/native-file-drop'
+import { createOsFileDropSequence, useOsFileDropOwner } from '@/hooks/use-os-file-drop-owner'
+import { getNativeFileDropRejectionMessage } from '@/hooks/useGlobalFileDrop'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
 import {
@@ -16,12 +15,12 @@ import { userNamedFileAccess } from '@/lib/local-file-access'
 
 type SidebarProjectDropHandlers = {
   onDragEnter: (event: React.DragEvent<HTMLElement>) => void
-  onDragOver: (event: React.DragEvent<HTMLElement>) => void
   onDragLeave: (event: React.DragEvent<HTMLElement>) => void
 }
 
+/** The sidebar owns OS folder drops and offers to add the dropped folder as a project. */
 export function useSidebarProjectDrop(): {
-  nativeDropTarget: typeof NATIVE_FILE_DROP_TARGET.projectSidebar
+  dropOwnerRef: (root: HTMLElement | null) => void
   dropHandlers: SidebarProjectDropHandlers
   affordance: ReturnType<typeof getSidebarProjectDropAffordance>
 } {
@@ -62,7 +61,8 @@ export function useSidebarProjectDrop(): {
         )
         return
       }
-      if (remoteRuntimeActive) {
+      // Why: re-read live settings; a runtime can be focused while the drop is prepared.
+      if (isRemoteRuntimeActive(useAppStore.getState().settings)) {
         toast.error(
           translate(
             'auto.components.sidebar.useSidebarProjectDrop.849ef13dc0',
@@ -115,17 +115,24 @@ export function useSidebarProjectDrop(): {
         }
       }
     },
-    [mountedRef, openModal, remoteRuntimeActive]
+    [mountedRef, openModal]
   )
 
-  useEffect(() => {
-    return window.api.ui.onFileDrop((data) => {
-      if (data.target !== NATIVE_FILE_DROP_TARGET.projectSidebar) {
-        return
+  const ownerRef = useRef<HTMLElement | null>(null)
+  const [sequence] = useState(createOsFileDropSequence)
+  const dropOwnerRef = useOsFileDropOwner(ownerRef, {
+    consumer: 'main-reader',
+    sequence,
+    // A remote runtime cannot add a local folder, so the drag shows "not allowed".
+    canAccept: !remoteRuntimeActive,
+    onDrop: async (prepared) => {
+      for (const failure of prepared.failures) {
+        const message = getNativeFileDropRejectionMessage(failure)
+        toast.error(message.title, { description: message.description })
       }
-      void handleProjectDropPaths(data.paths)
-    })
-  }, [handleProjectDropPaths])
+      await handleProjectDropPaths(prepared.paths)
+    }
+  })
 
   const dropHandlers = useMemo<SidebarProjectDropHandlers>(
     () => ({
@@ -134,14 +141,6 @@ export function useSidebarProjectDrop(): {
           return
         }
         dragDepthRef.current += 1
-        setIsDragOver(true)
-      },
-      onDragOver: (event) => {
-        if (!hasNativeFileDragTypes(event.dataTransfer.types)) {
-          return
-        }
-        event.preventDefault()
-        event.dataTransfer.dropEffect = remoteRuntimeActive ? 'none' : 'copy'
         setIsDragOver(true)
       },
       onDragLeave: (event) => {
@@ -154,11 +153,11 @@ export function useSidebarProjectDrop(): {
         }
       }
     }),
-    [remoteRuntimeActive]
+    []
   )
 
   return {
-    nativeDropTarget: NATIVE_FILE_DROP_TARGET.projectSidebar,
+    dropOwnerRef,
     dropHandlers,
     affordance: getSidebarProjectDropAffordance({
       isDragOver,

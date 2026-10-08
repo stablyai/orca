@@ -1,8 +1,4 @@
-// @vitest-environment happy-dom
-
-import { cleanup, renderHook } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { NativeFileDropPayload } from '../../../shared/native-file-drop'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   statUserOpenedPath: vi.fn(),
@@ -31,33 +27,15 @@ vi.mock('@/store', () => ({
   }
 }))
 
-import { useGlobalFileDrop } from './useGlobalFileDrop'
-
-let dropListener: ((data: NativeFileDropPayload) => void) | null = null
+import { captureEditorFileDropOpen } from './editor-dropped-file-open'
 
 beforeEach(() => {
   mocks.statUserOpenedPath.mockReset()
   mocks.openFile.mockReset()
-  vi.stubGlobal('api', {
-    ui: {
-      onFileDrop: (listener: (data: NativeFileDropPayload) => void) => {
-        dropListener = listener
-        return () => {
-          dropListener = null
-        }
-      }
-    }
-  })
-})
-
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
 })
 
 async function dropOnTabStrip(path: string): Promise<void> {
-  renderHook(() => useGlobalFileDrop())
-  dropListener?.({ target: 'editor', paths: [path] })
+  await captureEditorFileDropOpen({ worktreeId: 'wt-1' })([path])
   await vi.waitFor(() => expect(mocks.openFile).toHaveBeenCalledTimes(1))
 }
 

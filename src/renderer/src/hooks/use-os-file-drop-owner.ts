@@ -27,8 +27,10 @@ type OsFileDropContext<Destination> = {
 type OsFileDropOwnerOptions<Destination> = {
   consumer: DroppedPathConsumer
   sequence: OsFileDropSequence
-  canAccept?: boolean | (() => boolean)
+  canAccept?: boolean | ((event: DragEvent) => boolean)
   captureDestination?: (event: DragEvent) => Destination
+  /** Replaces root liveness for paths; preparation failures still reach onDrop. */
+  isDestinationLive?: (context: OsFileDropContext<Destination>) => boolean
   onDrop: (
     prepared: PreparedDroppedPaths,
     context: OsFileDropContext<Destination>
@@ -76,9 +78,9 @@ export function useOsFileDropOwner<Destination = undefined>(
       }
 
       let attached = true
-      const canAccept = (): boolean => {
+      const canAccept = (event: DragEvent): boolean => {
         const availability = optionsRef.current.canAccept
-        return typeof availability === 'function' ? availability() : availability !== false
+        return typeof availability === 'function' ? availability(event) : availability !== false
       }
 
       const onDragOver = (event: DragEvent): void => {
@@ -88,7 +90,7 @@ export function useOsFileDropOwner<Destination = undefined>(
         event.preventDefault()
         event.stopPropagation()
         if (event.dataTransfer) {
-          event.dataTransfer.dropEffect = canAccept() ? 'copy' : 'none'
+          event.dataTransfer.dropEffect = canAccept(event) ? 'copy' : 'none'
         }
       }
 
@@ -101,11 +103,17 @@ export function useOsFileDropOwner<Destination = undefined>(
         if (!event.isTrusted) {
           return
         }
-        if (!canAccept()) {
+        if (!canAccept(event)) {
           return
         }
 
-        const { consumer, sequence, onDrop: deliver, captureDestination } = optionsRef.current
+        const {
+          consumer,
+          sequence,
+          onDrop: deliver,
+          captureDestination,
+          isDestinationLive
+        } = optionsRef.current
         const context: OsFileDropContext<Destination> = { target: event.target }
         if (captureDestination) {
           context.destination = captureDestination(event)
@@ -116,8 +124,13 @@ export function useOsFileDropOwner<Destination = undefined>(
           sequence.deliveryTail = sequence.deliveryTail
             .then(async () => {
               const result = await prepared
-              if (attached) {
-                await deliver(result, context)
+              if (isDestinationLive || attached) {
+                await deliver(
+                  isDestinationLive && !isDestinationLive(context)
+                    ? { ...result, paths: [] }
+                    : result,
+                  context
+                )
               }
             })
             .catch((error: unknown) => console.error('OS file drop owner callback failed', error))
