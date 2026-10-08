@@ -82,6 +82,7 @@ describe('OrcaRuntimeService', () => {
     if (!mobileHandle) {
       throw new Error('expected mobile terminal handle')
     }
+    expect(mobileHandle).toBe(terminals.terminals[0].handle)
 
     const processLists = [[{ id: 'pty-1', cwd: '/tmp/worktree-a', title: 'Claude' }], []]
     runtime.setPtyController({
@@ -101,7 +102,7 @@ describe('OrcaRuntimeService', () => {
         (event) => event.type === 'worktreeTerminalSleepState' && event.phase === 'started'
       )
     ).toMatchObject({
-      terminalHandles: [terminals.terminals[0].handle, mobileHandle].sort()
+      terminalHandles: [...new Set([terminals.terminals[0].handle, mobileHandle])].sort()
     })
   })
 

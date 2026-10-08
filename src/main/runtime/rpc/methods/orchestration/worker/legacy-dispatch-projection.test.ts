@@ -117,6 +117,6 @@ describe('pre-v3 dispatch rows in worker-list', () => {
     })
     expect(worker.projection.attention.categories).toContain('unverifiable')
     expect(worker.projection.attention.requiresAction).toBe(true)
-    expect(worker.projection.nextAction.kind).toBe('inspect')
+    expect(worker.projection.nextAction).toEqual({ kind: 'none', argv: [] })
   })
 })

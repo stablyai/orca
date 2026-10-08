@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { RelayAssignment } from './assignment-store.js'
+import { RelayAssignmentRowBusyError, type RelayAssignment } from './assignment-store.js'
 import type { RelayConfig } from './config.js'
 
 const fakes = vi.hoisted(() => ({
@@ -54,7 +54,10 @@ describe('public assignment reconnect lane', () => {
     )
 
     expect(reconnected.status).toBe(200)
-    expect(resolve).toHaveBeenCalledWith({ userId: 'user-1', relayHostId: reconnecting })
+    expect(resolve).toHaveBeenCalledWith(
+      { userId: 'user-1', relayHostId: reconnecting },
+      { classifyHomeRollIsolation: true }
+    )
     expect(assign).toHaveBeenCalledWith({ userId: 'user-1', relayHostId: reconnecting })
     expect(outcomes).toContain('sticky')
 
@@ -124,6 +127,70 @@ describe('public assignment reconnect lane', () => {
     expect(response.status).toBe(503)
     expect(response.headers.get('retry-after')).toBe('2')
     expect(assign).not.toHaveBeenCalled()
+  })
+
+  it('refuses a dial whose assignment row is busy at once, and frees the fast lane', async () => {
+    const busy = 'bbbbbbbbbbbbbbbb'
+    const next = 'nnnnnnnnnnnnnnnn'
+    const assign = vi.fn(async ({ relayHostId }: { relayHostId: string }) => {
+      if (relayHostId === busy) throw new RelayAssignmentRowBusyError()
+      return assignment('cell-n', next)
+    })
+    const resolve = vi.fn(async ({ relayHostId }: { relayHostId: string }) =>
+      assignment('cell-r', relayHostId)
+    )
+    const app = createRelayApp(config(), {
+      store: {} as never,
+      assignments: { assign, resolve } as never,
+      drain: vi.fn(),
+      ready: vi.fn(async () => true)
+    })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const refused = await app.request('/v1/assign', assignmentRequest(busy, { reconnect: true }))
+
+    expect(refused.status).toBe(503)
+    expect(refused.headers.get('retry-after')).toBe('1')
+    expect(await refused.json()).toEqual({ error: 'assignment_row_busy' })
+    expect(warn.mock.calls.flat().join('\n')).toContain('reason=relay_assignment_row_busy')
+    // The single fast-lane slot went back with the refusal.
+    expect(
+      (await app.request('/v1/assign', assignmentRequest(next, { reconnect: true }))).status
+    ).toBe(200)
+    warn.mockRestore()
+  })
+
+  it('asks a busy resume to retry in a second', async () => {
+    const host = 'rrrrrrrrrrrrrrrr'
+    const app = createRelayApp(config(), {
+      store: {
+        resolveResume: vi.fn(async () => ({ userId: 'user-1', relayDeviceId: 'device-1' }))
+      } as never,
+      assignments: {
+        assign: vi.fn(async () => {
+          throw new RelayAssignmentRowBusyError()
+        }),
+        resolve: vi.fn(async () => null)
+      } as never,
+      drain: vi.fn(),
+      ready: vi.fn(async () => true)
+    })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const response = await app.request('/v1/resolve', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        v: 1,
+        relayHostId: host,
+        resumeToken: Buffer.alloc(32, 1).toString('base64url')
+      })
+    })
+
+    expect(response.status).toBe(503)
+    expect(response.headers.get('retry-after')).toBe('1')
+    expect(await response.json()).toEqual({ error: 'relay_assignment_row_busy' })
+    warn.mockRestore()
   })
 
   it('never probes for unhinted requests', async () => {

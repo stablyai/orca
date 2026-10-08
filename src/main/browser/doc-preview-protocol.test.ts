@@ -267,7 +267,7 @@ describe('installDocPreviewProtocolHandler', () => {
     installDocPreviewProtocolHandler()
 
     expect(mocks.installBrowserSessionPartitionPolicies).toHaveBeenCalledWith(
-      expect.objectContaining({ partition: 'orca-doc-preview', userAgentMode: 'clean' }),
+      expect.objectContaining({ partition: 'orca-doc-preview' }),
       expect.anything()
     )
   })
@@ -283,6 +283,28 @@ describe('installDocPreviewProtocolHandler', () => {
 })
 
 describe('registerDocPreviewSchemePrivileges', () => {
+  it('registers additional preview schemes in the same Electron call', () => {
+    const media = {
+      scheme: 'orca-media',
+      privileges: { standard: true, secure: true, stream: true }
+    }
+    registerDocPreviewSchemePrivileges([media])
+    expect(protocol.registerSchemesAsPrivileged).toHaveBeenCalledTimes(1)
+    expect(protocol.registerSchemesAsPrivileged).toHaveBeenCalledWith([
+      {
+        scheme: 'orca-preview',
+        privileges: {
+          standard: true,
+          secure: true,
+          supportFetchAPI: true,
+          corsEnabled: true,
+          stream: true
+        }
+      },
+      media
+    ])
+  })
+
   // Why the whole literal and not a subset: every privilege this scheme does not claim is one the
   // document cannot use to escape it. `allowServiceWorkers` would outlive the tab that was granted
   // the read, and `bypassCSP` would undo the self-only policy the handler serves with.

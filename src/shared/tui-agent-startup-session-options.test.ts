@@ -7,7 +7,7 @@ import {
 import { resolveAgentLaunchCommand } from './tui-agent-launch-command'
 
 describe('tui agent startup session options', () => {
-  it('emits catalog options before user arguments without recording an overridden model', () => {
+  it('sends neither the picked model nor its options when user arguments set the model', () => {
     const plan = buildAgentStartupPlan({
       agent: 'claude',
       prompt: '',
@@ -17,7 +17,7 @@ describe('tui agent startup session options', () => {
       sessionOptions: { model: 'opus', effort: 'xhigh', fastMode: true },
       agentArgs: '--model haiku'
     })
-    expect(plan?.launchCommand).toBe("claude '--model' 'opus' '--effort' 'xhigh' '--model' 'haiku'")
+    expect(plan?.launchCommand).toBe("claude '--model' 'haiku'")
     expect(plan?.sessionOptions).toBeUndefined()
   })
 
@@ -52,6 +52,59 @@ describe('tui agent startup session options', () => {
       "codex '-m' 'gpt-5.5' '-c' 'model_reasoning_effort=low'"
     )
     expect(plan?.sessionOptions).toEqual({ model: 'custom-codex-model', effort: 'high' })
+  })
+
+  it('forwards Antigravity worker model and effort without dropping permission defaults', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'antigravity',
+      prompt: '',
+      cmdOverrides: {},
+      platform: 'linux',
+      allowEmptyPromptLaunch: true,
+      sessionOptions: { model: 'gemini-3.1-pro-high', effort: 'high' },
+      sessionOptionsOverrideAgentArgs: true,
+      agentArgs: '--dangerously-skip-permissions'
+    })
+    expect(plan?.launchCommand).toBe(
+      "agy '--dangerously-skip-permissions' '--model' 'gemini-3.1-pro-high' '--effort' 'high'"
+    )
+    expect(plan?.launchConfig.agentCommand).toBe("agy '--dangerously-skip-permissions'")
+    expect(plan?.sessionOptions).toEqual({ model: 'gemini-3.1-pro-high', effort: 'high' })
+  })
+
+  it('forwards Muse worker model and effort after its workspace-trust default', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'muse',
+      prompt: '',
+      cmdOverrides: {},
+      platform: 'linux',
+      allowEmptyPromptLaunch: true,
+      sessionOptions: { model: 'muse-spark-1.3', effort: 'xhigh' },
+      sessionOptionsOverrideAgentArgs: true,
+      agentArgs: '--model muse-spark-1.2'
+    })
+    expect(plan?.launchCommand).toBe(
+      "muse --trust-workspace '--model' 'muse-spark-1.3' '--reasoning-effort' 'xhigh'"
+    )
+    expect(plan?.sessionOptions).toEqual({ model: 'muse-spark-1.3', effort: 'xhigh' })
+  })
+
+  it('keeps OpenCode agent arguments while replacing only the per-launch model', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'opencode',
+      prompt: '',
+      cmdOverrides: {},
+      platform: 'linux',
+      allowEmptyPromptLaunch: true,
+      sessionOptions: { model: 'zai-coding-plan/glm-5.3-flash' },
+      sessionOptionsOverrideAgentArgs: true,
+      agentArgs: '--share --model opencode/global-default'
+    })
+    expect(plan?.launchCommand).toBe("opencode '--share' '--model' 'zai-coding-plan/glm-5.3-flash'")
+    expect(plan?.launchConfig.agentCommand).toBe(
+      "opencode '--share' '--model' 'opencode/global-default'"
+    )
+    expect(plan?.sessionOptions).toEqual({ model: 'zai-coding-plan/glm-5.3-flash' })
   })
 
   it('inserts worker preferences before an argument terminator', () => {
@@ -138,6 +191,24 @@ describe('tui agent startup session options', () => {
     })
     expect(plan?.launchCommand).toContain("claude '--model' 'opus' '--effort' 'high'")
     expect(plan?.sessionOptions).toEqual({ model: 'opus', effort: 'high' })
+  })
+
+  it('lets explicit worker preferences override configured arguments in draft launches', () => {
+    const plan = buildAgentDraftLaunchPlan({
+      agent: 'claude',
+      draft: 'review this',
+      cmdOverrides: {},
+      platform: 'linux',
+      agentArgs: '--model haiku --effort low',
+      sessionOptions: { model: 'opus', effort: 'high' },
+      sessionOptionsOverrideAgentArgs: true
+    })
+
+    expect(plan?.launchCommand).toContain(
+      "claude '--model' 'opus' '--effort' 'high' --prefill 'review this'"
+    )
+    expect(plan?.launchCommand).not.toContain('haiku')
+    expect(plan?.launchCommand).not.toContain("'low'")
   })
 
   it('applies explicit session options to resume commands', () => {

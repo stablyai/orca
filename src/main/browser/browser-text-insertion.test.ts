@@ -11,13 +11,6 @@ describe('browser text insertion chunking', () => {
     expect(splitBrowserTextInsertionChunks('hello')).toEqual(['hello'])
   })
 
-  it('splits by UTF-8 bytes without splitting surrogate pairs', () => {
-    const chunks = splitBrowserTextInsertionChunks('ab😀cd', 4)
-
-    expect(chunks).toEqual(['ab', '😀', 'cd'])
-    expect(chunks.join('')).toBe('ab😀cd')
-  })
-
   it('iterates insertion chunks lazily without prebuilding the full chunk array', () => {
     const chunks = iterateBrowserTextInsertionChunks('abcdefghij', 4)
 

@@ -47,10 +47,17 @@ export function writeToTerminal(terminal: Terminal, data: string): Promise<void>
   return new Promise((resolve) => terminal.write(data, resolve))
 }
 
-export async function writeChunksToTerminal(terminal: Terminal, chunks: string[]): Promise<void> {
-  for (const chunk of chunks) {
-    await writeToTerminal(terminal, chunk)
-  }
+export function writeChunksToTerminal(terminal: Terminal, chunks: string[]): Promise<void> {
+  return new Promise((resolve) => {
+    if (chunks.length === 0) {
+      resolve()
+      return
+    }
+    // The final FIFO callback also fences async parser handlers in earlier chunks.
+    for (let index = 0; index < chunks.length; index++) {
+      terminal.write(chunks[index]!, index === chunks.length - 1 ? resolve : undefined)
+    }
+  })
 }
 
 /** Bottom-anchored visible screen rows (baseY, not viewportY — scroll intent
@@ -255,8 +262,8 @@ export function buildParityMainBufferSnapshot(
   if (!alternateScreen && terminal.modes.applicationCursorKeysMode) {
     seqs.push('\x1b[?1h')
   }
-  // Mouse-mode rehydrate omitted: TerminalMouseModeMirror is main-only and
-  // mouse reporting is input encoding — it cannot alter rendered output.
+  // Mouse-mode rehydrate omitted: mouse reporting is input encoding — it
+  // cannot alter rendered output.
   const snapshot: ParityMainSnapshot = {
     data: seqs.join('') + snapshotAnsi,
     cols: terminal.cols,

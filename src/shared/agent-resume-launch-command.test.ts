@@ -17,7 +17,7 @@ const SHELLS: { platform: NodeJS.Platform; shell: AgentStartupShell }[] = [
 /** Independent selector oracle — deliberately NOT the implementation's own
  * predicate, so a regression that shrinks the stripped set cannot also blind
  * this assertion. */
-function isSelectorShapedToken(token: string): boolean {
+function isResumeSelectorToken(token: string): boolean {
   return (
     ['--resume', '--continue', '-r', '-c'].includes(token) ||
     ['--resume=', '--continue=', '-r=', '-c='].some((prefix) => token.startsWith(prefix))
@@ -31,7 +31,7 @@ function expectSingleAuthoritativeResume(command: string, shell: AgentStartupShe
   if (!tokenized.ok) {
     return
   }
-  const selectors = tokenized.tokens.filter(isSelectorShapedToken)
+  const selectors = tokenized.tokens.filter(isResumeSelectorToken)
   expect(selectors).toEqual(['--resume'])
   const index = tokenized.tokens.indexOf('--resume')
   expect(tokenized.tokens[index + 1]).toBe(SESSION_ID)

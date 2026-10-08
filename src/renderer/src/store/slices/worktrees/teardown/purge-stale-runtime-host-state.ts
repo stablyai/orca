@@ -11,6 +11,7 @@ import {
 import { getRepoIdFromWorktreeId } from '../../worktree-helpers'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import {
+  dropRuntimeHostedCatalogRows,
   dropWorktreeRowsForRemovedRuntimeEnvironments,
   isRemovedRuntimeHostId
 } from '../../stale-runtime-host-rows'
@@ -57,6 +58,10 @@ export function createPurgeStaleRuntimeHostState(
         }
       }
       const setupsChanged = survivingSetups.length !== s.projectHostSetups.length
+      const projectGroups = dropRuntimeHostedCatalogRows(s.projectGroups, removed)
+      const folderWorkspaces = dropRuntimeHostedCatalogRows(s.folderWorkspaces, removed)
+      const groupsChanged =
+        projectGroups !== s.projectGroups || folderWorkspaces !== s.folderWorkspaces
       const detectedRows: Record<string, DetectedWorktreeListResult['worktrees']> =
         Object.fromEntries(
           Object.entries(s.detectedWorktreesByRepo).map(([repoId, result]) => [
@@ -263,6 +268,7 @@ export function createPurgeStaleRuntimeHostState(
       if (
         !reposChanged &&
         !setupsChanged &&
+        !groupsChanged &&
         !worktreesChanged &&
         !detectedChanged &&
         !restoredSessionOwnersChanged &&
@@ -288,6 +294,7 @@ export function createPurgeStaleRuntimeHostState(
         ...purgeState,
         ...(reposChanged ? { repos: survivingRepos } : {}),
         ...(setupsChanged ? { projectHostSetups: survivingSetups } : {}),
+        ...(groupsChanged ? { projectGroups, folderWorkspaces } : {}),
         ...(worktreesChanged ? { worktreesByRepo: worktreeDrop.rowsByRepo } : {}),
         ...(detectedChanged ? { detectedWorktreesByRepo } : {}),
         ...(restoredSessionOwnersChanged

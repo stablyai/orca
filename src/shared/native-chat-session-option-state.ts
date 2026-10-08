@@ -151,6 +151,9 @@ export function applyNativeChatReportedSessionOptions(
   return changed
 }
 
+/** Resolves a hook-reported model string to a catalog id: exact id, then label,
+ *  then the longest id the report contains. A catalog that seeds no models keeps
+ *  the report itself. Null when nothing matches. */
 export function matchNativeChatCatalogModelId(
   catalog: AgentSessionOptionCatalog,
   reported: string
@@ -158,6 +161,11 @@ export function matchNativeChatCatalogModelId(
   const normalized = reported.trim().toLowerCase()
   if (!normalized) {
     return null
+  }
+  // Why: a catalog with no seed (OMP) has nothing to match against, yet the hook's
+  // `provider/id` IS the selector the CLI accepts back — keep it as the tracked row.
+  if (catalog.models.length === 0) {
+    return reported.trim()
   }
   const exact = catalog.models.find((model) => model.id.toLowerCase() === normalized)
   if (exact) {
@@ -167,8 +175,14 @@ export function matchNativeChatCatalogModelId(
   if (byLabel) {
     return byLabel.id
   }
-  const containing = [...catalog.models]
-    .sort((left, right) => right.id.length - left.id.length)
-    .find((model) => normalized.includes(model.id.toLowerCase()))
-  return containing?.id ?? null
+  let containingId: string | null = null
+  for (const model of catalog.models) {
+    if (
+      (containingId === null || model.id.length > containingId.length) &&
+      normalized.includes(model.id.toLowerCase())
+    ) {
+      containingId = model.id
+    }
+  }
+  return containingId
 }

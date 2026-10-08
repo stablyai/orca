@@ -1,3 +1,4 @@
+import './unused-default-rpc-methods.test-fixture'
 import { createHash } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -44,7 +45,7 @@ describe('durable orchestration mutation ledger', () => {
     const runtime = new OrcaRuntimeService()
     runtime.setOrchestrationDb(db)
     const effect = vi.fn((subject: string) =>
-      db.insertMessage({ from: 'caller', to: 'recipient', subject })
+      db.insertMessage({ runId: 'run_legacy_local', from: 'caller', to: 'recipient', subject })
     )
     const dispatcher = new RpcDispatcher({
       runtime,
@@ -299,7 +300,10 @@ describe('durable orchestration mutation ledger', () => {
     const db = new OrchestrationDb(':memory:')
     const runtime = new OrcaRuntimeService()
     runtime.setOrchestrationDb(db)
-    const params = { from: 'term_coord', task: db.createTask({ spec: 'restart' }).id }
+    const params = {
+      from: 'term_coord',
+      task: db.createTask({ runId: 'run_legacy_local', spec: 'restart' }).id
+    }
     const callerFingerprint = db.getOrCreateLocalMutationCallerFingerprint()
     const payloadHash = createHash('sha256')
       .update(JSON.stringify({ method: 'orchestration.workerStart', params }))
@@ -374,18 +378,19 @@ describe('durable orchestration mutation ledger', () => {
       coordinatorPaneKey: 'tab_coord:leaf_coord'
     })
     const task = db.createTask({ spec: 'ask', runId: run.id })
-    const dispatch = createRootDispatch(db, task.id, 'term_worker', 'tab_worker:leaf_worker')
-    const capability = db.mintDispatchCapability({
-      dispatchId: dispatch.id,
-      paneKey: 'tab_worker:leaf_worker',
-      processIncarnation: 'runtime:pty:1'
-    })
+    createRootDispatch(
+      db,
+      task.id,
+      'term_worker',
+      'tab_worker:leaf_worker',
+      undefined,
+      'runtime:pty:1'
+    )
     const askRequest: RpcRequest = {
       id: 'rpc_ask_1',
       authToken: 'caller-token',
       method: 'orchestration.ask',
       params: { from: 'term_worker', question: 'Proceed?', timeoutMs: 60_000 },
-      orchestrationCapability: capability,
       orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
       orchestrationRequestId: 'mutation_ask'
     }

@@ -119,6 +119,35 @@ describe('GitHandler', () => {
     )
 
     it.skipIf(process.platform === 'win32')(
+      'leaves a bare main entry unchanged when scanned via its linked worktree',
+      async () => {
+        // A bare main entry IS the git-common-dir; only the repo path's own git dir shows it is linked.
+        const sourcePath = path.join(tmpDir, 'source')
+        mkdirSync(sourcePath)
+        gitInit(sourcePath)
+        writeFileSync(path.join(sourcePath, 'file.txt'), 'hello')
+        gitCommit(sourcePath, 'initial')
+        const barePath = path.join(tmpDir, 'project.git')
+        execFileSync('git', ['clone', '--bare', '--quiet', sourcePath, barePath], { stdio: 'pipe' })
+        const linkedWorktreePath = path.join(tmpDir, 'linked-wt')
+        execFileSync('git', ['worktree', 'add', '--quiet', linkedWorktreePath, '-b', 'feature'], {
+          cwd: barePath,
+          stdio: 'pipe'
+        })
+        const resolvedLinked = await fs.realpath(linkedWorktreePath)
+
+        const result = (await dispatcher.callRequest('git.listWorktrees', {
+          repoPath: resolvedLinked
+        })) as Record<string, unknown>[]
+
+        expect(result.find((worktree) => worktree.isMainWorktree === true)?.path).toBe(
+          await fs.realpath(barePath)
+        )
+        expect(result.filter((worktree) => worktree.path === resolvedLinked)).toHaveLength(1)
+      }
+    )
+
+    it.skipIf(process.platform === 'win32')(
       'leaves the main entry unchanged when scanned via a linked worktree',
       async () => {
         // The git-common-dir gate must skip rewrite so a linked worktree's main entry isn't overwritten with its own toplevel.

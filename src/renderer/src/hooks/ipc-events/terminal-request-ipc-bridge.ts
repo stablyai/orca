@@ -51,9 +51,6 @@ export function registerTerminalRequestIpcBridge(unsubs: (() => void)[]): void {
         const shouldActivate = terminalPresentation === 'focused'
         const shouldSurfaceOwner =
           terminalPresentation !== 'background' && data.surfaceOwner !== false
-        if (shouldActivate) {
-          activateTerminalInitiatedWorktree(store, worktreeId)
-        }
         // Why: the paired launch client already resolved the mode, so its choice wins over the host renderer's local default.
         const tabOptions = data.launchAgent
           ? {
@@ -78,7 +75,7 @@ export function registerTerminalRequestIpcBridge(unsubs: (() => void)[]): void {
                 recordInteraction: false,
                 ...(data.cwd ? { startupCwd: data.cwd } : {})
               }
-        const tab = store.createTab(worktreeId, data.targetGroupId, undefined, tabOptions)
+        const tab = store.createTab(worktreeId, data.targetGroupId, data.shellOverride, tabOptions)
         if (!shouldActivate) {
           // Why: renderer-backed Codex startup must mount its new TerminalPane without switching UI or connecting every saved tab.
           requestBackgroundTerminalWorktreeMount({ worktreeId, tabIds: [tab.id] })
@@ -92,7 +89,9 @@ export function registerTerminalRequestIpcBridge(unsubs: (() => void)[]): void {
           }
         }
         if (shouldActivate) {
-          store.setActiveTabType('terminal')
+          // After the tab lands: activating prunes the workspace's empty groups, the requested one too.
+          activateTerminalInitiatedWorktree(store, worktreeId, [tab.id])
+          store.setActiveTabType('terminal', worktreeId)
           store.setActiveTab(tab.id)
         }
         if (shouldSurfaceOwner) {

@@ -30,7 +30,9 @@ describe('launchDashboardAgent', () => {
     vi.clearAllMocks()
     mocks.getExecutionHostIdForWorktree.mockReturnValue('ssh:docs')
     mocks.getKnownWorktreeById.mockReturnValue({ id: 'folder:docs' })
-    mocks.launchAgentInNewTab.mockReturnValue({ tabId: 'tab-1' })
+    mocks.launchAgentInNewTab.mockReturnValue({
+      surface: { kind: 'local-terminal', tabId: 'tab-1' }
+    })
   })
 
   it('activates a folder or git workspace on its execution host before launching', () => {
@@ -38,6 +40,7 @@ describe('launchDashboardAgent', () => {
     expect(mocks.getKnownWorktreeById).toHaveBeenCalledWith('folder:docs', 'ssh:docs')
     expect(mocks.setActiveWorktree).toHaveBeenCalledWith('folder:docs', 'ssh:docs')
     expect(mocks.launchAgentInNewTab).toHaveBeenCalledWith({
+      requestId: expect.any(String),
       agent: 'codex',
       worktreeId: 'folder:docs',
       launchSource: 'unknown'

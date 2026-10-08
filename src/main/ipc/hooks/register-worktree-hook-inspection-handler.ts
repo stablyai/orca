@@ -1,3 +1,4 @@
+import { getStoredRepoSshConnectionId } from '../../repo-execution-host'
 import { ipcMain } from 'electron'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { isFolderRepo } from '../../../shared/repo-kind'
@@ -23,8 +24,9 @@ export function registerWorktreeHookInspectionHandler(context: WorktreeIpcContex
       return inspectSetupScriptImportCandidates(
         async (relativePath) => {
           const filePath = joinWorktreeRelativePath(repo.path, relativePath)
-          if (repo.connectionId) {
-            const fsProvider = getSshFilesystemProvider(repo.connectionId)
+          const connectionId = getStoredRepoSshConnectionId(repo)
+          if (connectionId) {
+            const fsProvider = getSshFilesystemProvider(connectionId)
             if (!fsProvider) {
               return null
             }
@@ -48,8 +50,9 @@ export function registerWorktreeHookInspectionHandler(context: WorktreeIpcContex
         {
           fileExists: async (relativePath) => {
             const filePath = joinWorktreeRelativePath(repo.path, relativePath)
-            if (repo.connectionId) {
-              const fsProvider = getSshFilesystemProvider(repo.connectionId)
+            const connectionId = getStoredRepoSshConnectionId(repo)
+            if (connectionId) {
+              const fsProvider = getSshFilesystemProvider(connectionId)
               if (!fsProvider) {
                 return false
               }

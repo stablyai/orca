@@ -303,6 +303,33 @@ describe('GitHandler', () => {
       await expect(fs.access(path.join(tmpDir, 'new.txt'))).rejects.toThrow()
     })
 
+    it('preserves bulk discard action selection and original path order for path edges', async () => {
+      const filePaths = ['new', 'docs\\', '[ab].txt', 'docs///', 'new', 'src/file', 'docs\\']
+      const gitMock = vi
+        .spyOn(
+          handler as unknown as {
+            git: (args: string[], cwd: string) => Promise<{ stdout: string; stderr: string }>
+          },
+          'git'
+        )
+        .mockResolvedValueOnce({ stdout: 'docs/readme\0src/file-extra\0[ab].txt\0', stderr: '' })
+        .mockResolvedValue({ stdout: '', stderr: '' })
+
+      await dispatcher.callRequest('git.bulkDiscard', { worktreePath: tmpDir, filePaths })
+
+      expect(gitMock.mock.calls.map(([args]) => args)).toEqual([
+        ['ls-files', '-z', '--', ...filePaths.map((filePath) => `:(literal)${filePath}`)],
+        ['restore', '--worktree', '--pathspec-from-file=-', '--pathspec-file-nul'],
+        ['clean', '-ffdx', '--', ':(literal)new', ':(literal)new', ':(literal)src/file']
+      ])
+      expect(gitMock).toHaveBeenNthCalledWith(
+        2,
+        ['restore', '--worktree', '--pathspec-from-file=-', '--pathspec-file-nul'],
+        tmpDir,
+        { stdin: ':(literal)docs\\\0:(literal)[ab].txt\0:(literal)docs///\0:(literal)docs\\\0' }
+      )
+    })
+
     it('handles large tracked path lists during bulk discard classification', async () => {
       const trackedStdout = Array.from({ length: 150_000 }, (_, index) => `docs/file-${index}.ts`)
         .join('\0')
@@ -324,8 +351,9 @@ describe('GitHandler', () => {
 
       expect(gitMock).toHaveBeenNthCalledWith(
         2,
-        ['restore', '--worktree', '--source=HEAD', '--', ':(literal)docs'],
-        tmpDir
+        ['restore', '--worktree', '--pathspec-from-file=-', '--pathspec-file-nul'],
+        tmpDir,
+        { stdin: ':(literal)docs\0' }
       )
     })
 

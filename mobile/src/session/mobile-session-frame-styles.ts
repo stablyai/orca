@@ -70,6 +70,7 @@ export const mobileSessionFrameStyles = StyleSheet.create({
   sessionMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.sm,
     marginTop: 2
   },
   sessionMetaText: {
@@ -141,6 +142,11 @@ export const mobileSessionFrameStyles = StyleSheet.create({
     width: StyleSheet.hairlineWidth,
     height: 18,
     backgroundColor: colors.borderSubtle
+  },
+  // The content slot every branch renders in, measured as the terminal's frame; clips nothing.
+  contentFrame: {
+    flex: 1,
+    minHeight: 0
   },
   terminalFrame: {
     flex: 1,

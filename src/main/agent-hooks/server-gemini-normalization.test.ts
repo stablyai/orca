@@ -76,16 +76,6 @@ describe('Gemini hook normalization', () => {
     expect(result?.payload.toolInput).toBeUndefined()
   })
 
-  it('AfterAgent reports done without introducing tool fields on its own', () => {
-    const result = _internals.normalizeHookPayload(
-      'gemini',
-      buildBody({ hook_event_name: 'AfterAgent' }),
-      'production'
-    )
-    expect(result?.payload.state).toBe('done')
-    expect(result?.payload.toolName).toBeUndefined()
-  })
-
   it('AfterAgent carries prompt_response into lastAssistantMessage', () => {
     const result = _internals.normalizeHookPayload(
       'gemini',

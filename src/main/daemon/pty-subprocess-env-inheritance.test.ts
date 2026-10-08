@@ -104,6 +104,7 @@ describe('createPtySubprocess', () => {
         cwd: 'C:\\repo',
         env: {
           ORCA_AGENT_TEAMS_TEAM_ID: 'team-test',
+          orca_agent_hook_node: 'C:\\Stale\\node.exe',
           ORCA_PATH_ROOT: 'C:\\Users\\orca\\AppData\\Local',
           PATH: '%orca_path_root%\\agy\\bin;C:\\Windows'
         }
@@ -114,6 +115,8 @@ describe('createPtySubprocess', () => {
       }
     }
 
+    expect(spawnMock.mock.calls.at(-1)?.[2].env.ORCA_AGENT_HOOK_NODE).toBe(process.execPath)
+    expect(spawnMock.mock.calls.at(-1)?.[2].env.orca_agent_hook_node).toBeUndefined()
     expect(spawnMock.mock.calls.at(-1)?.[2].env.PATH).toBe(
       'C:\\Users\\orca\\AppData\\Local\\agy\\bin;C:\\Windows'
     )
@@ -125,11 +128,13 @@ describe('createPtySubprocess', () => {
     const saved = {
       ORCA_PANE_KEY: process.env.ORCA_PANE_KEY,
       ORCA_TAB_ID: process.env.ORCA_TAB_ID,
-      ORCA_WORKTREE_ID: process.env.ORCA_WORKTREE_ID
+      ORCA_WORKTREE_ID: process.env.ORCA_WORKTREE_ID,
+      ORCA_WSL_CLI_DIR: process.env.ORCA_WSL_CLI_DIR
     }
     process.env.ORCA_PANE_KEY = 'parent-tab:parent-leaf'
     process.env.ORCA_TAB_ID = 'parent-tab'
     process.env.ORCA_WORKTREE_ID = 'parent-worktree'
+    process.env.ORCA_WSL_CLI_DIR = 'C:/parent/wsl-managed-cli'
 
     try {
       await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
@@ -147,6 +152,7 @@ describe('createPtySubprocess', () => {
     expect(env.ORCA_PANE_KEY).toBeUndefined()
     expect(env.ORCA_TAB_ID).toBeUndefined()
     expect(env.ORCA_WORKTREE_ID).toBeUndefined()
+    expect(env.ORCA_WSL_CLI_DIR).toBeUndefined()
   })
 
   it('preserves explicit child Orca pane identity over parent env', async () => {

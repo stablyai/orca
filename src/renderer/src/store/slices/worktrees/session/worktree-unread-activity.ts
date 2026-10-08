@@ -59,7 +59,7 @@ export function createMarkWorktreeUnread(
     set((s) => {
       const worktree = findKnownWorktreeById(s, worktreeId)
       if (!worktree || worktree.isUnread) {
-        return {}
+        return s
       }
       shouldPersist = true
       const nextWorktrees = applyWorktreeUpdates(s.worktreesByRepo, worktreeId, {
@@ -266,7 +266,7 @@ export function createBumpWorktreeActivity(
     set((s) => {
       const worktree = findKnownWorktreeById(s, worktreeId)
       if (!worktree) {
-        return {}
+        return s
       }
       shouldPersist = true
       // Why: skip sortEpoch bump for the active worktree — its PTY events are click side-effects (reorder-on-click bug, PR #209).

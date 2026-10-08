@@ -30,7 +30,7 @@ function mapOf(indices: readonly number[]): AppState['agentStatusByPaneKey'] {
   return map
 }
 
-/** Re-spread with the same entry objects, as a status ping does. */
+/** A collection refresh can replace its container while preserving the rows. */
 function respread(map: AppState['agentStatusByPaneKey']): AppState['agentStatusByPaneKey'] {
   return { ...map }
 }
@@ -76,7 +76,7 @@ describe('agent-status projection join short circuit', () => {
     const map = mapOf([0, 1, 2])
     const first = buildRuntimeMobileAgentStatusProjectionForTests(map)
 
-    // A new map identity with identical entry references — the common ping shape.
+    // A new map identity with identical entry references.
     const { result, joins, sorts } = countJoins(() =>
       buildRuntimeMobileAgentStatusProjectionForTests(respread(map))
     )
@@ -99,6 +99,41 @@ describe('agent-status projection join short circuit', () => {
     )
     expect(joins).toBe(0)
     expect(sorts).toBe(0)
+  })
+
+  it('does not rejoin accumulated previews for timestamp-only heartbeats', () => {
+    let map = mapOf(Array.from({ length: 500 }, (_, index) => index))
+    for (const paneKey of Object.keys(map)) {
+      map[paneKey] = {
+        ...map[paneKey],
+        updatedAt: 30_000_000,
+        lastAssistantMessage: 'answer '.repeat(1_000)
+      }
+    }
+    const first = buildRuntimeMobileAgentStatusProjectionForTests(map)
+
+    const { result, joins } = countJoins(() => {
+      let projection = first
+      for (let index = 0; index < 50; index++) {
+        const paneKey = `tab-${index}:leaf-0`
+        map = { ...map, [paneKey]: { ...map[paneKey], updatedAt: 30_000_001 + index } }
+        projection = buildRuntimeMobileAgentStatusProjectionForTests(map)
+      }
+      return projection
+    })
+
+    expect(result).toBe(first)
+    expect(joins).toBe(0)
+
+    const paneKey = 'tab-0:leaf-0'
+    const nextBucket = { ...map, [paneKey]: { ...map[paneKey], updatedAt: 30_030_000 } }
+    expect(buildRuntimeMobileAgentStatusProjectionForTests(nextBucket)).not.toBe(first)
+    expect(
+      buildRuntimeMobileAgentStatusProjectionForTests({
+        ...map,
+        [paneKey]: { ...map[paneKey], lastAssistantMessage: 'A new answer' }
+      })
+    ).not.toBe(first)
   })
 
   it('still rebuilds when an entry changes', () => {
@@ -130,6 +165,20 @@ describe('agent-status projection join short circuit', () => {
         'tab-0:leaf-0': map['tab-0:leaf-0']
       })
     )
+  })
+
+  it('still rebuilds when key membership swaps at a constant entry count', () => {
+    // The entry-count check cannot see a same-size swap; only the per-key lookup does.
+    resetRuntimeMobileAgentStatusProjectionCacheForTests()
+    const map = mapOf([0, 1])
+    const first = buildRuntimeMobileAgentStatusProjectionForTests(map)
+
+    const swapped = { 'tab-0:leaf-0': map['tab-0:leaf-0'], 'tab-9:leaf-0': makeEntry(9) }
+    const result = buildRuntimeMobileAgentStatusProjectionForTests(swapped)
+
+    expect(result).not.toBe(first)
+    expect(result).toContain('tab-9:leaf-0')
+    expect(result).not.toContain('tab-1:leaf-0')
   })
 
   it('still rebuilds when a pane is added', () => {

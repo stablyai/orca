@@ -167,9 +167,9 @@ describe('what the host publishes about a pane, read by the sweep', () => {
   it('records that a backgrounded and a suspended shell are indistinguishable at tpgid/pgid', () => {
     // The premise of the whole file. If this ever fails, the fixtures drifted and every verdict
     // below is testing something other than the defect. Pids differ between captures, so the
-    // comparison is of the shell row's shape: who its parent is, whether it leads its own process
-    // group, whether that group owns the terminal, and its state flags.
-    const shellShape = (capture: { rootPid: number; table: readonly string[] }): string => {
+    // comparison is of the shell row's signature: who its parent is, whether it leads its own
+    // process group, whether that group owns the terminal, and its state flags.
+    const shellRowSignature = (capture: { rootPid: number; table: readonly string[] }): string => {
       const row = parseStrictProcessTableRows(capture.table.join('\n')).find(
         (candidate) => candidate.pid === capture.rootPid
       )!
@@ -181,19 +181,21 @@ describe('what the host publishes about a pane, read by the sweep', () => {
       ].join(' ')
     }
 
-    expect(shellShape(CAPTURES.idle)).toBe('ppid=1 leadsOwnGroup=true ownsTerminal=true stat=Ss+')
-    expect(shellShape(CAPTURES.background)).toBe(shellShape(CAPTURES.idle))
-    expect(shellShape(CAPTURES.ctrlz)).toBe(shellShape(CAPTURES.idle))
-    expect(shellShape(CAPTURES.foreground)).not.toBe(shellShape(CAPTURES.idle))
+    expect(shellRowSignature(CAPTURES.idle)).toBe(
+      'ppid=1 leadsOwnGroup=true ownsTerminal=true stat=Ss+'
+    )
+    expect(shellRowSignature(CAPTURES.background)).toBe(shellRowSignature(CAPTURES.idle))
+    expect(shellRowSignature(CAPTURES.ctrlz)).toBe(shellRowSignature(CAPTURES.idle))
+    expect(shellRowSignature(CAPTURES.foreground)).not.toBe(shellRowSignature(CAPTURES.idle))
 
     // Same premise for the `set +m` captures, minus `ppid`: their harness keeps its parent alive
-    // rather than reparenting the shell to init, and the ppid is the one field of the shape the
-    // predicate never reads.
-    const paneShape = (capture: { rootPid: number; table: readonly string[] }): string =>
-      shellShape(capture).split(' ').slice(1).join(' ')
-    expect(paneShape(CAPTURES.setMinusMBackground)).toBe(paneShape(CAPTURES.idle))
-    expect(paneShape(CAPTURES.nottyGroupMember)).toBe(paneShape(CAPTURES.idle))
-    expect(paneShape(CAPTURES.doubleForkedGroupMember)).toBe(paneShape(CAPTURES.idle))
+    // rather than reparenting the shell to init, and the ppid is the one field of the signature
+    // the predicate never reads.
+    const paneRowSignature = (capture: { rootPid: number; table: readonly string[] }): string =>
+      shellRowSignature(capture).split(' ').slice(1).join(' ')
+    expect(paneRowSignature(CAPTURES.setMinusMBackground)).toBe(paneRowSignature(CAPTURES.idle))
+    expect(paneRowSignature(CAPTURES.nottyGroupMember)).toBe(paneRowSignature(CAPTURES.idle))
+    expect(paneRowSignature(CAPTURES.doubleForkedGroupMember)).toBe(paneRowSignature(CAPTURES.idle))
   })
 
   it('sweeps an idle shell', async () => {

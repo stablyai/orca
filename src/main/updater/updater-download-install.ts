@@ -1,4 +1,9 @@
-import { beginMacUpdateDownload, deferMacQuitUntilInstallerReady } from '../updater-mac-install'
+import {
+  beginMacUpdateDownload,
+  deferMacQuitUntilInstallerReady,
+  isMacInstallRequested,
+  setMacInstallPreflightInProgress
+} from '../updater-mac-install'
 import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
 import { isExternallyManagedLinuxInstall } from '../linux-update-package-type'
 import { LINUX_PACKAGE_EXTERNALLY_MANAGED_MESSAGE } from '../linux-package-downloaded-status'
@@ -12,7 +17,8 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
       this.localBuildSelectionInProgress ||
       this.pinnedBuildSelectionInProgress ||
       this.pendingQuitAndInstallTimer ||
-      this.quitAndInstallInProgress
+      this.quitAndInstallInProgress ||
+      isMacInstallRequested()
     ) {
       return
     }
@@ -20,6 +26,9 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
     if (this.deferHeadlessServeInstall('install', this.getPendingInstallVersion())) {
       return
     }
+    // A queued check must not repoint the feed while native staging or installation is pending.
+    this.finishActiveUpdateCheckAttempt()
+    this.clearBackgroundCheckLaunchPending()
     if (
       deferMacQuitUntilInstallerReady(
         this.currentStatus,
@@ -31,6 +40,9 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
       return
     }
 
+    if (process.platform === 'darwin') {
+      setMacInstallPreflightInProgress(true)
+    }
     // Why: defer the quit a tick so the renderer can flush dismissals/state before windows start closing.
     this.pendingQuitAndInstallTimer = setTimeout(() => {
       void this.performQuitAndInstall()
@@ -41,6 +53,9 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
     if (
       this.localBuildSelectionInProgress ||
       this.pinnedBuildSelectionInProgress ||
+      this.pendingQuitAndInstallTimer ||
+      this.quitAndInstallInProgress ||
+      isMacInstallRequested() ||
       this.downloadInFlight
     ) {
       return

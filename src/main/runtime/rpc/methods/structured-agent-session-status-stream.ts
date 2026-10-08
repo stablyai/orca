@@ -3,9 +3,10 @@
 // Session lists read turn state from here instead of replaying transcripts: one stream per client
 // covers every session, and unlike a transcript subscription it retains none of them.
 
-import { defineStreamingMethod, type RpcAnyMethod, type RpcContext } from '../core'
+import { defineStreamingMethod, type RpcContext } from '../core'
 import { requireStructuredHost as requireHost } from './structured-agent-session-gate'
 import { structuredAgentSessionStatusSubscriptionId } from './structured-agent-session-subscription-id'
+import { clientReadsStructuredSessionAgent } from './structured-agent-session-policy'
 
 /** Ties a stream to both ends that can close it — the runtime's subscription registry and the
  *  transport abort — so either one runs `onClose` exactly once. */
@@ -41,7 +42,7 @@ export function bindStructuredAgentSessionStream(
   return { isClosed: () => closed }
 }
 
-export const STRUCTURED_AGENT_SESSION_STATUS_METHODS: RpcAnyMethod[] = [
+export const STRUCTURED_AGENT_SESSION_STATUS_METHODS = [
   defineStreamingMethod({
     name: 'agentSession.subscribeStatus',
     params: null,
@@ -53,7 +54,24 @@ export const STRUCTURED_AGENT_SESSION_STATUS_METHODS: RpcAnyMethod[] = [
       if (stream.isClosed()) {
         return
       }
-      dispose = host.subscribeStatus({ id: subscriptionId, emit })
+      dispose = host.subscribeStatus({
+        id: subscriptionId,
+        emit: (event) => {
+          if (event.type === 'snapshot') {
+            emit({
+              ...event,
+              sessions: event.sessions.filter((session) =>
+                clientReadsStructuredSessionAgent(ctx, session.agent)
+              )
+            })
+          } else if (
+            event.type !== 'status' ||
+            clientReadsStructuredSessionAgent(ctx, event.session.agent)
+          ) {
+            emit(event)
+          }
+        }
+      })
       if (stream.isClosed()) {
         dispose()
       }

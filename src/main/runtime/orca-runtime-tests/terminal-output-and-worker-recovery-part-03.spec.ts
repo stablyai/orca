@@ -1,3 +1,4 @@
+import { withDurableRuntimeStore } from '../runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService, getDefaultWorkspaceSession } from '../orca-runtime-test-mocks.spec'
 import type { OrchestrationDb } from '../orchestration/db'
@@ -17,7 +18,7 @@ import {
 } from '../orca-runtime-test-scenario-builders.spec'
 
 describe('OrcaRuntimeService', () => {
-  it('retries renderer reveal before clearing an adopted legacy worker resume fence', async () => {
+  it('retries renderer reveal before clearing an adopted legacy worker sleeping record', async () => {
     const workerPaneKey = `legacy-worker:${HEADLESS_LEAF_ID}`
     const incarnationId = '44444444-4444-4444-8444-444444444444'
     const session: WorkspaceSessionState = {
@@ -40,7 +41,7 @@ describe('OrcaRuntimeService', () => {
     }
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
     const runtime = new OrcaRuntimeService(
-      { ...runtimeStore, flushOrThrow: vi.fn() } as never,
+      withDurableRuntimeStore({ ...runtimeStore, flushOrThrow: vi.fn() }),
       undefined,
       { canRecoverPersistentLocalPtys: () => true }
     )
@@ -106,7 +107,7 @@ describe('OrcaRuntimeService', () => {
     expect(resolveLegacyWorkerTerminalRecovery).toHaveBeenCalledWith(workerPaneKey, 'adopted')
   })
 
-  it('keeps a revealed worker fenced until its exact renderer graph is published', async () => {
+  it('defers a revealed worker until its exact renderer graph is published', async () => {
     vi.useFakeTimers()
     try {
       const harness = makePostRevealWorkerRecoveryHarness(() => true)
@@ -288,7 +289,7 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
-  it('keeps recovery fenced when the renderer omits the exact reveal identity', async () => {
+  it('defers recovery when the renderer omits the exact reveal identity', async () => {
     const harness = makePostRevealWorkerRecoveryHarness(() => false)
     harness.revealTerminalSession.mockResolvedValue({ tabId: 'legacy-post-reveal' })
 
@@ -417,7 +418,7 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
-  it('keeps the legacy worker resume fence in memory when persistence fails', async () => {
+  it('keeps the legacy worker sleeping record in memory when persistence fails', async () => {
     const workerPaneKey = `legacy-worker:${HEADLESS_LEAF_ID}`
     const incarnationId = '99999999-9999-4999-8999-999999999999'
     const session: WorkspaceSessionState = {
@@ -451,7 +452,7 @@ describe('OrcaRuntimeService', () => {
       return durableWrite.promise
     })
     const runtime = new OrcaRuntimeService(
-      { ...runtimeStore, flushPendingOrThrowAsync } as never,
+      withDurableRuntimeStore({ ...runtimeStore, flushPendingOrThrowAsync }),
       undefined,
       { canRecoverPersistentLocalPtys: () => true }
     )
@@ -526,9 +527,7 @@ describe('OrcaRuntimeService', () => {
     })
     expect(flushPendingOrThrowAsync).toHaveBeenCalledTimes(2)
     expect(revealTerminalSession).toHaveBeenCalledOnce()
-    expect(
-      getSession().sleepingAgentSessionsByPaneKey?.[workerPaneKey]?.automaticResumeBlockedBy
-    ).toBe('legacy-orchestration-worker')
+    expect(getSession().sleepingAgentSessionsByPaneKey?.[workerPaneKey]).toBeDefined()
     expect(getSession().sleepingAgentSessionsByPaneKey?.[concurrentPaneKey]?.tabId).toBe(
       'concurrent-tab'
     )

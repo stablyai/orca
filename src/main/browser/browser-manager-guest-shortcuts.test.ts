@@ -304,9 +304,15 @@ describe('browserManager', () => {
     expect(rendererSendMock).toHaveBeenNthCalledWith(5, 'ui:switchTab', 1)
     expect(rendererSendMock).toHaveBeenNthCalledWith(6, 'ui:switchTerminalTab', 1)
     expect(rendererSendMock).toHaveBeenNthCalledWith(7, 'ui:openQuickOpen')
-    expect(rendererSendMock).toHaveBeenNthCalledWith(8, 'ui:focusBrowserAddressBar')
-    expect(rendererSendMock).toHaveBeenNthCalledWith(9, 'ui:reloadBrowserPage')
-    expect(rendererSendMock).toHaveBeenNthCalledWith(10, 'ui:hardReloadBrowserPage')
+    expect(rendererSendMock).toHaveBeenNthCalledWith(8, 'ui:focusBrowserAddressBar', {
+      browserPageId: 'browser-1'
+    })
+    expect(rendererSendMock).toHaveBeenNthCalledWith(9, 'ui:reloadBrowserPage', {
+      browserPageId: 'browser-1'
+    })
+    expect(rendererSendMock).toHaveBeenNthCalledWith(10, 'ui:hardReloadBrowserPage', {
+      browserPageId: 'browser-1'
+    })
   })
 
   it('uses customized keybindings when forwarding browser guest shortcuts', () => {

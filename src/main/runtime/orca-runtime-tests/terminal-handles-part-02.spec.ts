@@ -9,10 +9,10 @@ import {
 import { makePaneKey } from '../orca-runtime-test-mocks.spec'
 
 describe('OrcaRuntimeService', () => {
-  it('invalidates a re-keyed leaf-unique handle so in-flight waiters fail fast', async () => {
+  it('keeps a no-incarnation handle across an in-graph pane remint', async () => {
     const runtime = createRuntime()
     const tabId = 'tab-1'
-    // No preAllocateHandleForPty: a plain terminal's handle is leaf-unique, so a re-key leaves it with no next owner and it goes stale immediately.
+    // No preallocated handle or incarnation id: the live PTY itself is the continuity proof within this graph.
     runtime.attachWindow(TEST_WINDOW_ID)
     runtime.syncWindowGraph(TEST_WINDOW_ID, {
       tabs: [
@@ -36,8 +36,8 @@ describe('OrcaRuntimeService', () => {
     })
     const before = await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)
     expect(before.terminals).toHaveLength(1)
-    const staleHandle = before.terminals[0].handle
-    const waiting = runtime.waitForTerminal(staleHandle, { condition: 'exit', timeoutMs: 30_000 })
+    const stableHandle = before.terminals[0].handle
+    const waiting = runtime.waitForTerminal(stableHandle, { condition: 'exit', timeoutMs: 30_000 })
 
     // Re-key WITHOUT a renderer reload (e.g. a pane moved across tabs) while the same PTY stays live under a new leaf.
     runtime.syncWindowGraph(TEST_WINDOW_ID, {
@@ -61,11 +61,11 @@ describe('OrcaRuntimeService', () => {
       ]
     })
 
-    // The waiter must fail fast, not hang until timeout on a dead leaf.
-    await expect(waiting).rejects.toThrow('terminal_handle_stale')
     const after = await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)
     expect(after.terminals).toHaveLength(1)
-    expect(after.terminals[0].handle).not.toBe(staleHandle)
+    expect(after.terminals[0].handle).toBe(stableHandle)
+    runtime.onPtyExit('pty-plain', 0)
+    await expect(waiting).resolves.toMatchObject({ handle: stableHandle, status: 'exited' })
   })
 
   it('keeps a live CLI waiter pending when a re-keyed shared handle transfers to the live leaf', async () => {

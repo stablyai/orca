@@ -1,4 +1,10 @@
+import {
+  hostAnsweredStatusProbe,
+  hostStatusProbe,
+  readPairingCandidateStatus
+} from './host-status-probe-operations'
 import type { PairingCandidateClient } from './mobile-relay-physical-client'
+import type { HostStatusReply } from './host-status-reply-schema'
 
 export type PairingCandidatePath = 'direct' | 'relay'
 
@@ -7,23 +13,27 @@ export type PairingCandidate = {
   client: PairingCandidateClient
 }
 
+export type PairingCandidateWinner = PairingCandidate & {
+  status: HostStatusReply | null
+}
+
 export function racePairingCandidates(
   candidates: readonly PairingCandidate[]
-): Promise<PairingCandidate> {
+): Promise<PairingCandidateWinner> {
   return new Promise((resolve, reject) => {
-    const successes: PairingCandidate[] = []
+    const successes: PairingCandidateWinner[] = []
     let failures = 0
     let settled = false
     let selectionQueued = false
     for (const candidate of candidates) {
-      void candidate.client.sendRequest('status.get').then(
-        (response) => {
-          if (!response.ok) {
+      void hostStatusProbe.request(candidate.client).then(
+        (reply) => {
+          if (!hostAnsweredStatusProbe(reply)) {
             failures++
             rejectIfFinished()
             return
           }
-          successes.push(candidate)
+          successes.push({ ...candidate, status: readPairingCandidateStatus(reply) })
           if (selectionQueued) {
             return
           }
@@ -37,7 +47,7 @@ export function racePairingCandidates(
             settled = true
             const winner = successes.find(({ path }) => path === 'direct') ?? successes[0]!
             for (const loser of candidates) {
-              if (loser !== winner) {
+              if (loser.client !== winner.client) {
                 loser.client.close()
               }
             }

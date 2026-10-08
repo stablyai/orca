@@ -180,6 +180,7 @@ export function useFileExplorerWatch({
         worktreeId: currentWorktreeId,
         cache: dirCacheRef.current,
         expanded: expandedRef.current,
+        followSymlinks: useAppStore.getState().settings?.followSymlinkedDirectories ?? false,
         setDirCache,
         setSelectedPath,
         refreshDir: scheduler.requestDirRefresh,

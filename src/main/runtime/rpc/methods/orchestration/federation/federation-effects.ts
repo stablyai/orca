@@ -29,7 +29,9 @@ export function appendFederationTerminalEffects(
           : terminal.handle === setupHandle
             ? 'setup'
             : 'configured_tab',
-      action: terminal.handle === agentHandle ? 'reused_agent_terminal' : 'created',
+      // Remote agent-first worktree creation made every listed terminal, the agent one included;
+      // the verb is a lifecycle fact, not a role marker.
+      action: 'created',
       id: terminal.handle,
       tabId: terminal.tabId,
       leafId: terminal.leafId

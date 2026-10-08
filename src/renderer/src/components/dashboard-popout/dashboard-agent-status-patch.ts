@@ -6,6 +6,7 @@ import {
   type DashboardSnapshot
 } from '../../../../shared/dashboard-snapshot'
 import { dashboardBucketForDotState } from '../dashboard/dashboard-card-bucket'
+import { dashboardCardDotState } from '../dashboard/dashboard-row-bucket'
 
 export type DashboardAgentStatusPatchResult = {
   matched: boolean
@@ -22,7 +23,7 @@ function patchedSubagents(
   return event.subagents.map((subagent) => ({
     id: `${card.paneKey}\u0000subagent:${subagent.id}`,
     name: subagent.description || subagent.agentType || 'unknown',
-    dotState: subagent.state
+    dotState: dashboardCardDotState(subagent.state)
   }))
 }
 

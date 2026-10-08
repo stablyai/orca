@@ -1,10 +1,15 @@
+import {
+  projectWslSkillDiscovery,
+  type WslSkillDiscoveryObservation
+} from './skill-discovery-wsl-observation'
 import type { Repo } from '../../shared/repo-types'
 import type { SkillDiscoveryResult, SkillDiscoveryTarget } from '../../shared/skills'
 import { getDefaultWslDistro, getWslHome, parseWslPath, toLinuxPath } from '../wsl'
 import { clearSkillRootScanCache, discoverSkills } from './discovery'
-import { discoverSkillsInWsl } from './skill-discovery-wsl'
+import { discoverSkillObservationInWsl } from './skill-discovery-wsl'
 import type { SkillProviderRootOverrides } from './skill-provider-destinations'
 import { stablePathId } from './skill-discovery-sources'
+import { skillScanSourceKinds } from './skill-discovery-source-filter'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
 import { isSkillRootUnavailableError, SkillScanCoalescer } from './skill-scan-coalescer'
 
@@ -14,7 +19,10 @@ import { isSkillRootUnavailableError, SkillScanCoalescer } from './skill-scan-co
 const WSL_RESULT_TTL_MS = 10_000
 const MAX_CACHED_SKILL_TARGETS = 32
 
-const targetScans = new SkillScanCoalescer<SkillDiscoveryResult>(MAX_CACHED_SKILL_TARGETS)
+type TargetScanObservation =
+  | { kind: 'native'; result: SkillDiscoveryResult }
+  | { kind: 'wsl'; observation: WslSkillDiscoveryObservation }
+const targetScans = new SkillScanCoalescer<TargetScanObservation>(MAX_CACHED_SKILL_TARGETS)
 
 /** Drop every shared scan; used when a skill update run has rewritten disk. */
 export function clearSkillDiscoveryCaches(): void {
@@ -23,8 +31,20 @@ export function clearSkillDiscoveryCaches(): void {
 }
 
 export type ResolvedSkillDiscoveryTarget =
-  | { kind: 'native-host'; cwd: string | undefined }
-  | { kind: 'wsl'; distro: string; homeDir: string; cwd: string }
+  | {
+      kind: 'native-host'
+      cwd: string | undefined
+      names?: string[]
+      sourceKinds?: SkillDiscoveryTarget['sourceKinds']
+    }
+  | {
+      kind: 'wsl'
+      distro: string
+      homeDir: string
+      cwd: string | undefined
+      names?: string[]
+      sourceKinds?: SkillDiscoveryTarget['sourceKinds']
+    }
 
 export function resolveSkillDiscoveryTarget(
   target: SkillDiscoveryTarget | undefined
@@ -49,7 +69,12 @@ export function resolveSkillDiscoveryTarget(
     throw new Error('No WSL distribution is available for skill discovery.')
   }
   if (!wslDistro) {
-    return { kind: 'native-host', cwd: target?.cwd?.trim() || undefined }
+    return {
+      kind: 'native-host',
+      cwd: target?.cwd?.trim() || undefined,
+      ...(target?.names ? { names: target.names } : {}),
+      ...(target?.sourceKinds ? { sourceKinds: target.sourceKinds } : {})
+    }
   }
   if (process.platform !== 'win32') {
     throw new Error('WSL skill discovery is only available on Windows.')
@@ -67,8 +92,15 @@ export function resolveSkillDiscoveryTarget(
     )
   }
   const linuxHomeDir = toLinuxPath(homeDir)
-  const cwd = parsedCwd?.linuxPath ?? (requestedCwd ? toLinuxPath(requestedCwd) : linuxHomeDir)
-  return { kind: 'wsl', distro: wslDistro, homeDir: linuxHomeDir, cwd }
+  const cwd = parsedCwd?.linuxPath ?? (requestedCwd ? toLinuxPath(requestedCwd) : undefined)
+  return {
+    kind: 'wsl',
+    distro: wslDistro,
+    homeDir: linuxHomeDir,
+    cwd,
+    ...(target?.names ? { names: target.names } : {}),
+    ...(target?.sourceKinds ? { sourceKinds: target.sourceKinds } : {})
+  }
 }
 
 // Why: repos widen the native root set, so two targets that differ only by the
@@ -93,17 +125,28 @@ function scanKey(
   repos: readonly Repo[],
   providerRootOverrides: SkillProviderRootOverrides | undefined
 ): string {
-  const providerRoots = stablePathId(
-    Object.entries(providerRootOverrides ?? {})
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([provider, root]) => `${provider}\0${root}`)
-      .join('\0')
+  const providerRoots = Object.entries(providerRootOverrides ?? {}).sort(([left], [right]) =>
+    left.localeCompare(right)
   )
-  const targetKey =
-    target.kind === 'wsl'
-      ? `wsl\0${target.distro}\0${target.homeDir}\0${target.cwd}`
-      : `native\0${target.cwd ?? ''}\0${target.cwd ? '' : repoDigest(repos)}`
-  return `${targetKey}\0${providerRoots}`
+  const names = target.names?.slice().sort() ?? null
+  const sourceKinds = target.sourceKinds?.slice().sort() ?? null
+  return target.kind === 'wsl'
+    ? JSON.stringify([
+        'wsl',
+        target.distro,
+        target.homeDir,
+        target.cwd ?? null,
+        providerRoots,
+        skillScanSourceKinds(target.sourceKinds) ?? null
+      ])
+    : JSON.stringify([
+        'native',
+        target.cwd ?? null,
+        target.cwd ? null : repoDigest(repos),
+        providerRoots,
+        names,
+        sourceKinds
+      ])
 }
 
 export async function discoverSkillsOnTarget(
@@ -116,30 +159,41 @@ export async function discoverSkillsOnTarget(
     const outcome = await targetScans.run(
       scanKey(target, repos, options.providerRootOverrides),
       { ttlMs: target.kind === 'wsl' ? WSL_RESULT_TTL_MS : 0, refresh },
-      async () => {
+      async (): Promise<TargetScanObservation> => {
         if (target.kind === 'wsl') {
-          return discoverSkillsInWsl({
-            distro: target.distro,
-            homeDir: target.homeDir,
-            cwd: target.cwd,
-            providerRootOverrides: options.providerRootOverrides
-          })
+          return {
+            kind: 'wsl',
+            observation: await discoverSkillObservationInWsl({
+              distro: target.distro,
+              homeDir: target.homeDir,
+              ...(target.cwd ? { cwd: target.cwd } : {}),
+              sourceKinds: skillScanSourceKinds(target.sourceKinds),
+              providerRootOverrides: options.providerRootOverrides
+            })
+          }
         }
-        return target.cwd
+        const result = await (target.cwd
           ? discoverSkills({
               repos: [],
               cwd: target.cwd,
               refresh,
+              ...(target.names ? { names: target.names } : {}),
+              ...(target.sourceKinds ? { sourceKinds: target.sourceKinds } : {}),
               providerRootOverrides: options.providerRootOverrides
             })
           : discoverSkills({
               repos: [...repos],
               refresh,
+              ...(target.names ? { names: target.names } : {}),
+              ...(target.sourceKinds ? { sourceKinds: target.sourceKinds } : {}),
               providerRootOverrides: options.providerRootOverrides
-            })
+            }))
+        return { kind: 'native', result }
       }
     )
-    return outcome.value
+    return outcome.value.kind === 'wsl'
+      ? projectWslSkillDiscovery(outcome.value.observation, target.sourceKinds, target.names)
+      : outcome.value.result
   } catch (error) {
     if (!isSkillRootUnavailableError(error)) {
       throw error

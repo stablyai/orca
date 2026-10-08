@@ -73,22 +73,10 @@ describe('reconcileEndedProcessForPaneKeys', () => {
     }
   })
 
-  it('retires a waiting row — a wait whose owner is dead is not a wait', async () => {
-    const server = await startServer()
-    try {
-      claudeRow(server, 'waiting')
-
-      expect(server.reconcileEndedProcessForPaneKeys([PANE])).toBe(1)
-
-      expect(paneState(server)).toBe('missing')
-    } finally {
-      server.stop()
-    }
-  })
-
   it('clears Claude latches even when the stored row already reads done', async () => {
-    // An interrupted lead suppresses the gate while leaving the latch set, so a row can read `done`
-    // with a latch that would re-gate `working` on the pane's very next event.
+    // A latch can outlive the row it gated (a restored row, or one written before the inventory
+    // arrived), so a row can read `done` with a latch that would re-gate `working` on the pane's
+    // very next event.
     const server = await startServer()
     try {
       claudeRow(server, 'done')

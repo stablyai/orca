@@ -1,3 +1,4 @@
+import { openCodeHookServiceModuleMock } from './pty-ipc-mock-registry'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const { handleMock, onMock, removeHandlerMock, removeAllListenersMock } = vi.hoisted(() => ({
@@ -46,9 +47,7 @@ vi.mock('node-pty', () => ({
   })
 }))
 
-vi.mock('../opencode/hook-service', () => ({
-  openCodeHookService: { buildPtyEnv: () => ({}), clearPty: vi.fn() }
-}))
+vi.mock('../opencode/hook-service', () => openCodeHookServiceModuleMock())
 
 vi.mock('../pi/titlebar-extension-service', () => ({
   piTitlebarExtensionService: { buildPtyEnv: () => ({}), clearPty: vi.fn() }

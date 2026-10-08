@@ -1,11 +1,11 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { createRequire } from 'node:module'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
 import {
   query,
   type CanUseTool,
   type Options,
+  type PermissionMode,
   type SDKUserMessage,
   type SpawnedProcess as SdkSpawnedProcess,
   type SpawnOptions as SdkSpawnOptions
@@ -14,7 +14,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { spawnProcess } from '../../shared/child-process/run-process'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
-import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
 import { claudeQuerySettingsReader } from './claude-agent-sdk-control-requests'
 import { createClaudeStructuredLaunchResolver } from './claude-structured-launch-resolution'
 
@@ -27,17 +26,6 @@ import { createClaudeStructuredLaunchResolver } from './claude-structured-launch
 const FAKE_CLI = join(__dirname, '__fixtures__', 'claude-agent-sdk-scripted-cli.mjs')
 const SESSION_ID = '5348c19f-6a54-4c2e-9c68-9c2b1a3d4e5f'
 const LEAF_UUID = 'ad0f7c9e-1b2c-4d3e-8f90-abc123def456'
-const PINNED_SDK_VERSION = '0.3.251'
-const SDK_PLATFORM_PACKAGE_BASENAMES = [
-  'claude-agent-sdk-darwin-arm64',
-  'claude-agent-sdk-darwin-x64',
-  'claude-agent-sdk-linux-arm64',
-  'claude-agent-sdk-linux-arm64-musl',
-  'claude-agent-sdk-linux-x64',
-  'claude-agent-sdk-linux-x64-musl',
-  'claude-agent-sdk-win32-arm64',
-  'claude-agent-sdk-win32-x64'
-]
 
 /**
  * The exact argv the hand-rolled transport built before the SDK swap. Frozen here
@@ -143,7 +131,7 @@ function recordingSpawner(spawns: SpawnSeen[]) {
   }
 }
 
-function resolvedLaunch(launchArgs: string[]) {
+function resolvedLaunch(permissionMode: PermissionMode, launchArgs: string[] = []) {
   const record = {
     sessionId: 'contract-pin-session',
     provider: 'claude',
@@ -158,10 +146,12 @@ function resolvedLaunch(launchArgs: string[]) {
     launchArgs
   } as unknown as AgentSessionRecord
   return createClaudeStructuredLaunchResolver({
-    store: { getRecord: () => record } as unknown as AgentSessionRecordStore,
+    resolveLaunchArgs: () => launchArgs,
+    store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
     resolveWorkspacePath: async () => '/repos/workspace-1',
     resolveCommand: () => FAKE_CLI,
-    resolveAuthPolicy: () => ({ stripAuthEnv: true })
+    resolveAuthPolicy: () => ({ stripAuthEnv: true }),
+    resolvePermissionMode: () => permissionMode
   })({ identity: { sessionId: record.sessionId } as never })
 }
 
@@ -338,9 +328,20 @@ describe('Claude Agent SDK contract pins', () => {
   it('produces a matching CLI flag for every pre-SDK argv entry', async () => {
     const scenario = scriptScenario([{ awaitUserMessage: true }, { emit: RESULT_FRAME }])
     const spawns: SpawnSeen[] = []
-    // Driven by the real resolver, so the argv walk covers the durable-launchArgs
-    // translation and its merge order, not a hand-written options literal.
-    const launch = await resolvedLaunch(['--model', 'claude-sonnet-4-5', '--effort', 'high'])
+    // Driven by the real resolver, so the argv walk covers its option set and merge order,
+    // not a hand-written options literal.
+    const launch = await resolvedLaunch('bypassPermissions', [
+      '--model',
+      'claude-sonnet-4-5',
+      '--dangerously-skip-permissions',
+      '--output-format',
+      'text',
+      '--session-id=wrong-session',
+      '--add-dir',
+      '/repo/one',
+      '/repo/two',
+      '--add-dir=/repo/three'
+    ])
     await drainQuery({
       ...launch.options,
       pathToClaudeCodeExecutable: FAKE_CLI,
@@ -352,15 +353,20 @@ describe('Claude Agent SDK contract pins', () => {
 
     expect(spawns).toHaveLength(1)
     const argv = normalizeArgv(spawns[0]!.args)
-    // Typed-first translation must not also spell the flag through extraArgs.
-    for (const flag of ['--model', '--effort']) {
-      expect(
-        argv.filter((arg) => arg === flag),
-        `${flag} occurrences`
-      ).toHaveLength(1)
-    }
+    // The SDK's typed bypass option emits a newer allow flag that older user-installed Claude
+    // binaries reject. Keep the older owned flag until Orca establishes a minimum CLI version.
+    expect(argv.filter((arg) => arg === '--dangerously-skip-permissions')).toHaveLength(1)
+    expect(argv).not.toContain('--allow-dangerously-skip-permissions')
+    expect(argv[argv.indexOf('--permission-mode') + 1]).toBe('default')
     expect(argv[argv.indexOf('--model') + 1]).toBe('claude-sonnet-4-5')
-    expect(argv[argv.indexOf('--effort') + 1]).toBe('high')
+    expect(argv.flatMap((arg, index) => (arg === '--add-dir' ? [argv[index + 1]] : []))).toEqual([
+      '/repo/one',
+      '/repo/two',
+      '/repo/three'
+    ])
+    expect(argv.filter((arg) => arg === '--model')).toHaveLength(1)
+    expect(argv.filter((arg) => arg === '--output-format')).toHaveLength(1)
+    expect(argv[argv.indexOf('--output-format') + 1]).toBe('stream-json')
     // Headless print mode is the SDK's only mode; `query()` never passes `-p`,
     // and if the SDK ever started passing it this pin would notice.
     const impliedByHeadlessQuery = new Set(['-p'])
@@ -494,26 +500,5 @@ describe('Claude Agent SDK contract pins', () => {
     expect(report.controlRequests.some((frame) => frame.request.subtype === 'initialize')).toBe(
       true
     )
-  })
-
-  it('pins the SDK version the contract was verified against', () => {
-    const sdkEntry = createRequire(__filename).resolve('@anthropic-ai/claude-agent-sdk')
-    const manifest = JSON.parse(readFileSync(join(dirname(sdkEntry), 'package.json'), 'utf8')) as {
-      version: string
-    }
-    expect(manifest.version).toBe(PINNED_SDK_VERSION)
-  })
-
-  it('keeps the eight bundled CLI platform binaries out of the install', () => {
-    const sdkEntry = createRequire(__filename).resolve('@anthropic-ai/claude-agent-sdk')
-    // The SDK's own scoped directory is where pnpm would link its optional
-    // platform packages; ignoredOptionalDependencies must keep them all absent.
-    const scopeDir = dirname(dirname(sdkEntry))
-    for (const basename of SDK_PLATFORM_PACKAGE_BASENAMES) {
-      expect(
-        existsSync(join(scopeDir, basename, 'package.json')),
-        `${basename} must not be installed`
-      ).toBe(false)
-    }
   })
 })

@@ -6,11 +6,13 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { spawnProcess } from '../../../shared/child-process/run-process'
 import { CODEX_SPAWN_TOKEN_ENV } from '../../codex/codex-structured-owner-identity'
-import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import { readProcessStartTimeMs } from '../../runtime/agent-session-process-identity-probe'
 import { createStructuredAgentSessionOwnerProbe } from '../../runtime/structured-agent-session-owner-probe'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
+import { abandonStructuredAgentSessionHost } from './structured-agent-session-host-test-abandon'
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 import {
   HOST_TEST_NOW as NOW,
@@ -19,6 +21,10 @@ import {
   hostTestAttachParams,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
+import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const CALLER = { callerKey: 'client-1' }
 
@@ -59,6 +65,12 @@ async function stopOwner(child: ReturnType<typeof spawnProcess>): Promise<void> 
   spawnedOwners.delete(child)
 }
 
+/** What a send's delivery or `agentSession.ensure` does: attach at the record's current fence. */
+async function startAgent(): Promise<void> {
+  const fence = store.getRecord(SESSION)?.lease.runtimeFence ?? null
+  expect((await host.attach(CALLER, hostTestAttachParams(fence))).ok).toBe(true)
+}
+
 function adapter(): StructuredAgentSessionAdapter {
   return {
     acquire,
@@ -72,9 +84,11 @@ function adapter(): StructuredAgentSessionAdapter {
 
 function openHost(overrides: Partial<StructuredAgentSessionHostDeps> = {}): void {
   host = new StructuredAgentSessionHost({
+    agents: NO_STRUCTURED_AGENTS,
+    logger: createStructuredAgentSessionLogger(),
     store,
     adapter: adapter(),
-    journalRoot: root,
+    journalDatabase: openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-a',
     now: () => NOW,
@@ -83,8 +97,8 @@ function openHost(overrides: Partial<StructuredAgentSessionHostDeps> = {}): void
 }
 
 async function reopenStore(): Promise<void> {
-  await host.flushAllStreamedEvents()
-  store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
+  await abandonStructuredAgentSessionHost(host)
+  store = await openTestAgentSessionRecordStore(root)
 }
 
 beforeEach(async () => {
@@ -99,48 +113,46 @@ beforeEach(async () => {
     },
     link: {
       linkId: `link-${fence}`,
-      handle: { provider: 'codex', threadId: THREAD },
+      handle: codexProviderHandle(THREAD),
       origin: store.getRecord(SESSION)?.providerHandleChain.length ? 'resumed' : 'created',
       mintedAtFence: fence,
       observedAt: NOW
     }
   }))
-  store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
+  store = await openTestAgentSessionRecordStore(root)
   openHost()
 })
 
 afterEach(async () => {
-  await host.flushAllStreamedEvents()
-  await Promise.all([...supersededHosts].map((superseded) => superseded.flushAllStreamedEvents()))
+  await abandonStructuredAgentSessionHost(host)
+  await Promise.all([...supersededHosts].map(abandonStructuredAgentSessionHost))
   supersededHosts.clear()
   await Promise.all([...spawnedOwners].map((child) => stopOwner(child)))
   await rm(root, { recursive: true, force: true })
 })
 
 describe('recovery exits', () => {
-  it('keeps an ownerless unproven acquisition in manual recovery across restart', async () => {
+  it('releases an ownerless unproven acquisition, so the next start goes ahead', async () => {
     acquire.mockRejectedValueOnce(new Error('simulated crash before identity commit'))
     await expect(host.attach(CALLER, hostTestAttachParams(null))).rejects.toThrow(
       'agent_session_acquisition_exit_unproven'
     )
+    // No owner was recorded, and the adapter closed the stdio of anything it spawned.
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
-      claimStatus: 'reserved',
-      handoffStage: 'manual-recovery',
+      claimStatus: 'released',
+      handoffStage: null,
       handoffOperationId: null,
       ownerProcess: null,
-      runtimeFence: 1,
-      reservedSpawnToken: 'spawn-a'
+      runtimeFence: 2,
+      reservedSpawnToken: null,
+      deathEvidence: null
     })
 
     await reopenStore()
     openHost({ mintSpawnToken: () => 'spawn-b' })
 
-    const refused = await host.attach(CALLER, hostTestAttachParams(1))
-    expect(refused).toMatchObject({
-      ok: false,
-      refusal: { code: 'agent_session_ownership_unknown' }
-    })
-    expect(acquire).toHaveBeenCalledOnce()
+    expect(await host.attach(CALLER, hostTestAttachParams(2))).toMatchObject({ ok: true })
+    expect(acquire).toHaveBeenCalledTimes(2)
   })
 
   it('releases an unproven acquisition whose owner later dies, without replaying it as a handoff', async () => {
@@ -188,8 +200,8 @@ describe('recovery exits', () => {
       runtimeFence: 4
     })
 
-    // The ordinary native recovery path remains: the first surface hold resumes it.
-    await host.hold(SESSION, 'surface-1')
+    // The ordinary native recovery path remains: the next start resumes it.
+    await startAgent()
     expect(acquire).toHaveBeenCalledTimes(3)
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       claimStatus: 'live',
@@ -233,7 +245,7 @@ describe('recovery exits', () => {
     })
   })
 
-  it('heals a stranded native owner during startup restore, and spawns nothing until a surface asks', async () => {
+  it('heals a stranded native owner during startup restore, and spawns nothing until work asks', async () => {
     expect((await host.attach(CALLER, hostTestAttachParams(null))).ok).toBe(true)
     await reopenStore()
 
@@ -253,7 +265,7 @@ describe('recovery exits', () => {
     await host.restoreReadableSessions()
 
     // Healing is startup's job; spawning is not. The orphan is stopped and the lease is free, but
-    // nothing has asked to look at this session, so no replacement child exists yet.
+    // nothing has asked this session for work, so no replacement child exists yet.
     expect(stopOwnerProcess).toHaveBeenCalledWith(4242, 'SIGTERM')
     expect(acquire).toHaveBeenCalledTimes(1)
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
@@ -262,7 +274,7 @@ describe('recovery exits', () => {
       ownerProcess: null
     })
 
-    await host.hold(SESSION, 'surface-1')
+    await startAgent()
 
     expect(acquire).toHaveBeenCalledTimes(2)
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
@@ -279,7 +291,7 @@ describe('recovery exits', () => {
       process: outgoing.process,
       link: {
         linkId: 'link-outgoing',
-        handle: { provider: 'codex', threadId: THREAD },
+        handle: codexProviderHandle(THREAD),
         origin: 'created',
         mintedAtFence: 1,
         observedAt: NOW
@@ -290,7 +302,7 @@ describe('recovery exits', () => {
     const outgoingHost = host
     const outgoingStore = store
     supersededHosts.add(outgoingHost)
-    store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
+    store = await openTestAgentSessionRecordStore(root)
     const realProbe = createStructuredAgentSessionOwnerProbe('local')
     let overlapDriven = false
     openHost({
@@ -324,14 +336,14 @@ describe('recovery exits', () => {
       process: replacement.process,
       link: {
         linkId: 'link-replacement',
-        handle: { provider: 'codex', threadId: THREAD },
+        handle: codexProviderHandle(THREAD),
         origin: 'resumed',
         mintedAtFence: 3,
         observedAt: NOW + 2
       }
     })
 
-    await host.hold(SESSION, 'surface-overlap')
+    await startAgent()
 
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       runtimeFence: 3,
@@ -339,6 +351,6 @@ describe('recovery exits', () => {
       handoffStage: null,
       ownerProcess: { pid: replacement.process.pid, spawnToken: 'spawn-b' }
     })
-    expect(host.history({ sessionId: SESSION, direction: 'tail' }).ok).toBe(true)
+    expect((await host.history({ sessionId: SESSION, direction: 'tail' })).ok).toBe(true)
   })
 })

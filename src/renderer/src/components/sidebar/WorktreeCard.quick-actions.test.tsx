@@ -61,6 +61,10 @@ vi.mock('./use-worktree-activity-status', () => ({
   useWorktreeActivityStatus: () => 'idle'
 }))
 
+vi.mock('./use-worktree-sleep-state', () => ({
+  useIsSleepingWorktree: () => false
+}))
+
 vi.mock('./CacheTimer', () => ({
   default: () => null,
   usePromptCacheCountdownStartedAt: () => null
@@ -72,7 +76,6 @@ vi.mock('./WorktreeCardAgents', () => ({
 
 vi.mock('./WorktreeContextMenu', () => ({
   default: ({ children }: { children: ReactNode }) => <>{children}</>,
-  CLOSE_ALL_CONTEXT_MENUS_EVENT: 'orca:test-close-context-menus',
   WORKTREE_CONTEXT_MENU_SCOPE_ATTR: 'data-orca-context-menu-scope',
   WORKTREE_NATIVE_CONTEXT_MENU_ATTR: 'data-worktree-native-context-menu'
 }))
@@ -191,6 +194,18 @@ describe('WorktreeCard quick actions', () => {
     expect(markup).not.toContain('bg-black/[0.08]')
     expect(markup).not.toContain('dark:bg-white/[0.10]')
     expect(markup).not.toContain('border-black/[0.015]')
+  })
+
+  it('marks multi-selected workspaces for the shared selected style, except the active one', () => {
+    const selected = renderToStaticMarkup(
+      <WorktreeCard worktree={makeWorktree()} repo={makeRepo()} isActive={false} isMultiSelected />
+    )
+    const activeSelected = renderToStaticMarkup(
+      <WorktreeCard worktree={makeWorktree()} repo={makeRepo()} isActive isMultiSelected />
+    )
+
+    expect(selected).toContain('data-worktree-card-selected="true"')
+    expect(activeSelected).not.toContain('data-worktree-card-selected')
   })
 
   it('renders folder directory name in the detailed metadata row without a Folder badge', () => {

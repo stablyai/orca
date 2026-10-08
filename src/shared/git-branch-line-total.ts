@@ -65,7 +65,18 @@ export async function settleGitBranchLineTotalWithinSoftDeadline(input: {
  * OID parsed as a rev even if a path of the same name exists.
  */
 export function buildGitBranchLineTotalDiffArgs(mergeBase: string): string[] {
-  return ['-c', 'core.quotePath=false', 'diff', '-z', '--numstat', '-M', mergeBase, '--']
+  return [
+    '-c',
+    'core.quotePath=false',
+    '-c',
+    'diff.autoRefreshIndex=false',
+    'diff',
+    '-z',
+    '--numstat',
+    '-M',
+    mergeBase,
+    '--'
+  ]
 }
 
 /**

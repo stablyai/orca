@@ -8,9 +8,11 @@ import type {
 } from '../../../shared/agent-session-resume'
 import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner'
 import type { AgentStartedTelemetry } from '@/lib/worktree-startup-payload'
+import type { ClosedTerminalTabTombstonesByTabId } from '../../../shared/closed-terminal-tab-tombstones'
 
 export type WorktreeActivationStore = Partial<WorktreeRuntimeOwnerState> & {
   tabsByWorktree: Record<string, { id: string }[]>
+  closedTerminalTabTombstonesByTabId?: ClosedTerminalTabTombstonesByTabId
   defaultTerminalTabsAppliedByWorktreeId: Record<string, true>
   createTab: (
     worktreeId: string,
@@ -75,4 +77,7 @@ export type InitialTerminalOptions = {
    *  Setup/issue work still runs, but work that needs no host terminal must not seed a shell
    *  beside the chat the caller is about to create. */
   callerProvidesSurface?: boolean
+  /** The user deliberately opened this workspace with no surface choice, so it may open their
+   *  default agent chat instead of a bare shell. */
+  seedUserDefaultSurface?: boolean
 }

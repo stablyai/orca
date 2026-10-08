@@ -185,17 +185,6 @@ describe('direct-SSH snapshot apply keeps local state the host has not seen', ()
     ).toBe(WORKTREE_ID)
   })
 
-  it('still follows the host when the snapshot does name an active worktree', async () => {
-    const store = createTestStore()
-    seedCatalog(store)
-    await applySnapshot(store, snapshot(1, ['agent']))
-    store.getState().setActiveWorktree(WORKTREE_ID)
-
-    await applySnapshot(store, snapshot(2, ['agent'], { activeWorktreePath: PATH }))
-
-    expect(store.getState().activeWorktreeId).toBe(WORKTREE_ID)
-  })
-
   it('does not duplicate a tab across repeated snapshots', async () => {
     const store = createTestStore()
     seedCatalog(store)

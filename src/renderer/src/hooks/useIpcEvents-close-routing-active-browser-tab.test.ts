@@ -94,7 +94,7 @@ describe('useIpcEvents Close Tab on the active browser tab', () => {
 
     expect(closeWebRuntimeSessionTab).toHaveBeenCalledWith({
       worktreeId: 'wt-1',
-      tabId: 'workspace-1',
+      tabId: 'unified-1',
       environmentId: 'env-a',
       reason: 'user'
     })
@@ -146,11 +146,11 @@ describe('useIpcEvents Close Tab on the active browser tab', () => {
 
     expect(closeWebRuntimeSessionTab).toHaveBeenCalledWith({
       worktreeId: 'wt-1',
-      tabId: 'workspace-1',
+      tabId: 'unified-1',
       environmentId: 'env-a',
       reason: 'user'
     })
-    expect(closeUnifiedTab).toHaveBeenCalledWith('unified-1')
+    expect(closeUnifiedTab).toHaveBeenCalledWith('unified-1', undefined)
     expect(closeBrowserTab).not.toHaveBeenCalled()
   })
 
@@ -181,7 +181,7 @@ describe('useIpcEvents Close Tab on the active browser tab', () => {
     requireListener(listenerRef)()
 
     expect(closeWebRuntimeSessionTab).not.toHaveBeenCalled()
-    expect(closeUnifiedTab).not.toHaveBeenCalled()
+    expect(closeUnifiedTab).toHaveBeenCalledWith('unified-1', undefined)
     expect(closeBrowserTab).toHaveBeenCalledWith('workspace-1', undefined)
   })
 

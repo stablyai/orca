@@ -142,9 +142,9 @@ describe('TabsSlice', () => {
       })
 
       // Fire a bell on Group A's visible tab: under ghostty semantics the indicator still appears — only clearTerminalTabUnread dismisses it.
-      store.getState().markTerminalTabUnread(tabA.entityId)
+      store.getState().markTerminalTabUnread(tabA.entityId, 'terminal-bell')
 
-      expect(store.getState().unreadTerminalTabs[tabA.entityId]).toBe(true)
+      expect(store.getState().unreadTerminalTabs[tabA.entityId]).toBe('terminal-bell')
     })
 
     it('does mark a tab that is not the active tab of any visible group', () => {
@@ -181,9 +181,9 @@ describe('TabsSlice', () => {
       })
 
       // tabA2 is NOT the active tab of any group — a bell on it is legitimate.
-      store.getState().markTerminalTabUnread(tabA2.entityId)
+      store.getState().markTerminalTabUnread(tabA2.entityId, 'terminal-bell')
 
-      expect(store.getState().unreadTerminalTabs[tabA2.entityId]).toBe(true)
+      expect(store.getState().unreadTerminalTabs[tabA2.entityId]).toBe('terminal-bell')
     })
 
     // Why: under show-until-interact, BEL fires unconditionally even on a non-terminal/offscreen surface — a legitimate unread.
@@ -211,9 +211,9 @@ describe('TabsSlice', () => {
         }
       })
 
-      store.getState().markTerminalTabUnread(tab.entityId)
+      store.getState().markTerminalTabUnread(tab.entityId, 'terminal-bell')
 
-      expect(store.getState().unreadTerminalTabs[tab.entityId]).toBe(true)
+      expect(store.getState().unreadTerminalTabs[tab.entityId]).toBe('terminal-bell')
     })
 
     it('is a no-op when the tab is already flagged', () => {
@@ -241,7 +241,7 @@ describe('TabsSlice', () => {
       })
       const before = store.getState().unreadTerminalTabs
 
-      store.getState().markTerminalTabUnread(tab.entityId)
+      store.getState().markTerminalTabUnread(tab.entityId, 'terminal-bell')
 
       // Same object reference => no state mutation occurred.
       expect(store.getState().unreadTerminalTabs).toBe(before)
@@ -270,9 +270,9 @@ describe('TabsSlice', () => {
         }
       })
 
-      store.getState().markTerminalTabUnread(agentTabId)
+      store.getState().markTerminalTabUnread(agentTabId, 'terminal-bell')
 
-      expect(store.getState().unreadTerminalTabs[agentTabId]).toBe(true)
+      expect(store.getState().unreadTerminalTabs[agentTabId]).toBe('terminal-bell')
     })
   })
 

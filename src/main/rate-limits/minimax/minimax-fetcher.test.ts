@@ -19,12 +19,7 @@ vi.mock('electron', () => ({
   session: { fromPartition: sessionFromPartitionMock }
 }))
 
-import {
-  extractMiniMaxCookieValue,
-  fetchMiniMaxRateLimits,
-  normalizeMiniMaxCookieHeader,
-  redactMiniMaxSecret
-} from './minimax-fetcher'
+import { fetchMiniMaxRateLimits } from './minimax-fetcher'
 
 const MINIMAX_URL = 'https://platform.minimax.io/v1/api/openplatform/coding_plan/remains'
 
@@ -644,56 +639,5 @@ describe('fetchMiniMaxRateLimits', () => {
       windowMinutes: 10080,
       resetsAt: null
     })
-  })
-})
-
-describe('normalizeMiniMaxCookieHeader', () => {
-  it('preserves all cookie pairs from a browser Cookie header', () => {
-    const normalized = normalizeMiniMaxCookieHeader(
-      '_token=tok; session=other; ak_bmsc=ak; minimax_group_id_v2=42; random=xyz'
-    )
-    expect(normalized).toBe(
-      '_token=tok; session=other; ak_bmsc=ak; minimax_group_id_v2=42; random=xyz'
-    )
-  })
-
-  it('normalizes quoted MiniMax cookie storage syntax', () => {
-    expect(normalizeMiniMaxCookieHeader('_token:"tok" minimax_group_id_v2:"42"')).toBe(
-      '_token=tok; minimax_group_id_v2=42'
-    )
-  })
-
-  it('accepts a copied Cookie header line', () => {
-    expect(normalizeMiniMaxCookieHeader('Cookie: session=abc; other=xyz')).toBe(
-      'session=abc; other=xyz'
-    )
-  })
-})
-
-describe('extractMiniMaxCookieValue', () => {
-  it('returns the value for a given cookie name', () => {
-    expect(extractMiniMaxCookieValue(FULL_COOKIE, 'minimax_group_id_v2')).toBe('12345')
-  })
-  it('returns null when the name is absent', () => {
-    expect(extractMiniMaxCookieValue('_token=tok', 'minimax_group_id_v2')).toBeNull()
-  })
-})
-
-describe('redactMiniMaxSecret', () => {
-  it('redacts _token values', () => {
-    expect(redactMiniMaxSecret('cookie _token=eyJhABCDEF')).toContain('_token=[REDACTED]')
-    expect(redactMiniMaxSecret('cookie _token=eyJhABCDEF')).not.toContain('eyJhABCDEF')
-  })
-  it('redacts minimax_group_id_v2 values', () => {
-    expect(redactMiniMaxSecret('minimax_group_id_v2=99999 trailing')).not.toContain('99999')
-  })
-  it('redacts MiniMax anti-bot cookie values', () => {
-    const redacted = redactMiniMaxSecret('ak_bmsc=secret bm_sv:"secret2"')
-    expect(redacted).not.toContain('secret')
-    expect(redacted).toContain('ak_bmsc=[REDACTED]')
-    expect(redacted).toContain('bm_sv:[REDACTED]')
-  })
-  it('redacts Cookie: header lines', () => {
-    expect(redactMiniMaxSecret('X-Cookie: _token=secret')).toContain('[REDACTED]')
   })
 })

@@ -267,6 +267,7 @@ describe('AgentHookServer ingestTerminalStatus', () => {
           worktreeId: 'wt-1',
           connectionId: null,
           receivedAt: 1_000,
+          evidenceObservedAt: 1_000,
           stateStartedAt: 1_000,
           payload: {
             state: 'working',
@@ -282,6 +283,7 @@ describe('AgentHookServer ingestTerminalStatus', () => {
           worktreeId: 'wt-1',
           connectionId: null,
           receivedAt: 1_000,
+          evidenceObservedAt: 1_000,
           stateStartedAt: 1_000,
           state: 'working',
           prompt: 'ship it',
@@ -292,6 +294,49 @@ describe('AgentHookServer ingestTerminalStatus', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('accepts a runtime-owned legacy pane without opening legacy relay ingress', () => {
+    const server = new AgentHookServer()
+    const event = {
+      paneKey: 'legacy-tab:7',
+      tabId: 'legacy-tab',
+      ptyId: 'legacy-pty',
+      terminalHandle: 'term_legacy',
+      worktreeId: 'wt-1',
+      payload: { state: 'working' as const, prompt: 'legacy task', agentType: 'codex' as const }
+    }
+
+    server.ingestTerminalStatus(event)
+
+    expect(server.getStatusSnapshot()).toEqual([
+      expect.objectContaining({
+        paneKey: 'legacy-tab:7',
+        tabId: 'legacy-tab',
+        terminalHandle: 'term_legacy',
+        prompt: 'legacy task'
+      })
+    ])
+    server.stop()
+  })
+
+  it.each([
+    ['PTY id', { ptyId: undefined }],
+    ['terminal handle', { terminalHandle: undefined }],
+    ['matching tab', { tabId: 'other-tab' }]
+  ])('rejects a legacy terminal row without its runtime-owned %s', (_label, overrides) => {
+    const server = new AgentHookServer()
+    server.ingestTerminalStatus({
+      paneKey: 'legacy-tab:7',
+      tabId: 'legacy-tab',
+      ptyId: 'legacy-pty',
+      terminalHandle: 'term_legacy',
+      payload: { state: 'working', prompt: 'legacy task', agentType: 'codex' },
+      ...overrides
+    })
+
+    expect(server.getStatusSnapshot()).toEqual([])
+    server.stop()
   })
 
   it('suppresses exact duplicate runtime terminal status observations', () => {
@@ -320,7 +365,8 @@ describe('AgentHookServer ingestTerminalStatus', () => {
       expect(server.getStatusSnapshot()).toEqual([
         expect.objectContaining({
           paneKey: PANE,
-          receivedAt: 1_000,
+          receivedAt: 1_250,
+          evidenceObservedAt: 1_250,
           stateStartedAt: 1_000,
           state: 'working',
           prompt: 'same turn'
@@ -395,5 +441,50 @@ describe('AgentHookServer ingestTerminalStatus', () => {
 
     expect(listener).not.toHaveBeenCalled()
     expect(server.getStatusSnapshot()).toEqual([])
+  })
+})
+
+describe('the main agent fact across an OSC repaint', () => {
+  it('carries the hook row main agent while OSC repaints the same state, and drops it on a state edge', () => {
+    const server = new AgentHookServer()
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        source: 'claude',
+        hookEventName: 'Stop',
+        payload: {
+          state: 'working',
+          workingMode: 'monitoring',
+          prompt: 'watch the build',
+          agentType: 'claude',
+          mainAgent: { state: 'done', stateStartedAt: 10 }
+        }
+      },
+      'conn-1'
+    )
+    server.ingestTerminalStatus({
+      paneKey: PANE,
+      connectionId: 'conn-1',
+      payload: {
+        state: 'working',
+        prompt: 'watch the build',
+        agentType: 'claude',
+        toolName: 'Bash'
+      }
+    })
+    expect(server.getStatusSnapshot()[0]).toMatchObject({
+      state: 'working',
+      toolName: 'Bash',
+      mainAgent: { state: 'done', stateStartedAt: 10 }
+    })
+
+    // OSC cannot date a turn edge: a different state is a main agent it has no fact about.
+    server.ingestTerminalStatus({
+      paneKey: PANE,
+      connectionId: 'conn-1',
+      payload: { state: 'done', prompt: 'watch the build', agentType: 'claude' }
+    })
+    expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'done' })
+    expect(server.getStatusSnapshot()[0]).not.toHaveProperty('mainAgent')
   })
 })

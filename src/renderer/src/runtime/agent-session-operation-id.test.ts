@@ -1,9 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createAgentSessionOperationId } from './agent-session-operation-id'
-import {
-  createAgentSessionCreateOperation,
-  toAgentLaunchPreferences
-} from './agent-session-create-operation'
+import { createAgentSessionCreateOperation } from './agent-session-create-operation'
 import { RuntimeRpcCallError } from './runtime-rpc-client'
 
 describe('createAgentSessionOperationId', () => {
@@ -62,16 +59,5 @@ describe('agent session create operation', () => {
     await expect(operation.run(invoke)).rejects.toBe(failure)
     expect(invoke).toHaveBeenCalledOnce()
     vi.unstubAllGlobals()
-  })
-
-  it('keeps only supported string launch preferences', () => {
-    expect(
-      toAgentLaunchPreferences({
-        model: ' gpt-5 ',
-        effort: 'high',
-        mode: 'plan',
-        fastMode: true
-      })
-    ).toEqual({ model: 'gpt-5', effort: 'high', mode: 'plan' })
   })
 })

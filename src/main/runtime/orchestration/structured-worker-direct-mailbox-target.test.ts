@@ -93,7 +93,7 @@ describe('the mailbox target for direct peer mail to a structured worker', () =>
     // claimed the mailbox — the PTY lane refuses a structured handle outright and this resolver
     // answered only `dispatch:` addresses. The worker never reacted and the peer waiting on a
     // reply hung, with nothing logged. A dispatch says nothing about whether delivery is safe;
-    // the idle gate and the lease fence do, and both still run downstream.
+    // the idle gate and the writer lease do, and both still run downstream.
     const handle = registerWorker()
     installRecord({ runtimeKind: 'native', claimStatus: 'live' })
     expect(probe(undefined).instance.probeResolveTarget(handle)).toEqual({
@@ -104,7 +104,8 @@ describe('the mailbox target for direct peer mail to a structured worker', () =>
 
   it('leaves a handle whose session this runtime no longer owns to the PTY lane', () => {
     const handle = registerWorker()
-    installRecord({ runtimeKind: 'tui', claimStatus: 'live' })
+    // How a terminal owner an older build recorded loads; its mail must not park on the session.
+    installRecord({ runtimeKind: 'native', claimStatus: 'conflicted' })
     expect(probe({ id: 'd1' }).instance.probeResolveTarget(handle)).toBeNull()
     installRecord({ runtimeKind: 'native', claimStatus: 'released' })
     expect(probe({ id: 'd1' }).instance.probeResolveTarget(handle)).toBeNull()

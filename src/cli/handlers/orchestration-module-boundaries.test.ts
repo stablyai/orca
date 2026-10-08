@@ -3,8 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('../format', () => ({ printResult: vi.fn() }))
 
 import { printResult } from '../format'
-import { HANDLER_GROUPS } from '../handler-group-manifest'
-import { ORCHESTRATION_HANDLERS } from './orchestration'
 import {
   ORCHESTRATION_DISPATCH_HANDLER,
   ORCHESTRATION_DISPATCH_INSPECTION_HANDLERS
@@ -36,11 +34,6 @@ describe('extracted orchestration flag parsing', () => {
       )
     ).toThrow('Invalid positive safe integer for --timeout-ms')
   })
-})
-
-it('composes handlers in the canonical command order', () => {
-  const declared = HANDLER_GROUPS.find((group) => group.name === 'orchestration')?.keys
-  expect(Object.keys(ORCHESTRATION_HANDLERS)).toEqual(declared)
 })
 
 describe('extracted orchestration worker formatting', () => {

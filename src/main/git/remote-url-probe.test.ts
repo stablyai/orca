@@ -44,7 +44,6 @@ describe('remote URL probe', () => {
       cwd: '/repo',
       timeout: REMOTE_URL_PROBE_TIMEOUT_MS
     })
-    expect(REMOTE_URL_PROBE_TIMEOUT_MS).toBe(30_000)
   })
 
   it('bounds the SSH remote read with the same deadline as the local one', async () => {

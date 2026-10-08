@@ -1,7 +1,10 @@
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { useLocalStructuredAgentSessionsHeld } from '@/runtime/local-structured-chats'
 import { translate } from '@/i18n/i18n'
 import { Label } from '../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
+import { NativeChatQueueFollowUpsSetting } from './NativeChatQueueFollowUpsSetting'
+import { NativeChatShellEnvironmentSetting } from './NativeChatShellEnvironmentSetting'
 import { NativeChatSupportedAgents } from './NativeChatSupportedAgents'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsSwitch } from './SettingsFormControls'
@@ -20,8 +23,14 @@ export function NativeChatExperimentalSetting({
 }: NativeChatExperimentalSettingProps): React.JSX.Element {
   const nativeChatEnabled = settings.experimentalNativeChat === true
   const structuredNativeChatEnabled = settings.experimentalStructuredNativeChat === true
+  const resumeOnRestartEnabled = settings.nativeChatResumeWorkOnRestart === true
   const defaultView: NativeChatDefaultView =
     settings.openAgentTabsInChatByDefault === true ? 'native-chat' : 'terminal-chat'
+  // Structured-only settings; terminal-backed chat never reads them. They govern the chats this
+  // machine holds too, which keep running whatever the setting says.
+  const holdsStructuredChats = useLocalStructuredAgentSessionsHeld()
+  const structuredChatActive =
+    (defaultView === 'native-chat' && structuredNativeChatEnabled) || holdsStructuredChats
 
   return (
     <SearchableSetting
@@ -126,13 +135,13 @@ export function NativeChatExperimentalSetting({
                 <p className="text-xs text-muted-foreground">
                   {translate(
                     'auto.components.settings.ExperimentalPane.nativeChat.structuredCopy',
-                    'Opt in to the host-owned structured chat runtime for Codex and Claude. Off keeps the existing terminal-backed chat path.'
+                    'Open new agents as structured chats where supported. Off opens them in the terminal-backed chat. Chats that already exist stay as they are.'
                   )}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   {translate(
                     'auto.components.settings.ExperimentalPane.nativeChat.structuredScope',
-                    'Local sessions only for now. WSL and remote execution hosts (including SSH) continue to use terminal chat, and Windows falls back to it unless Orca can read process start times.'
+                    'Runs on this machine and on paired Orca servers running a version that supports it; older servers keep terminal chat. WSL and SSH hosts continue to use terminal chat.'
                   )}
                 </p>
               </div>
@@ -149,6 +158,47 @@ export function NativeChatExperimentalSetting({
                 }
               />
             </div>
+          ) : null}
+
+          {/* Only structured sessions have a resume cursor to continue from. */}
+          {structuredChatActive ? (
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0 shrink space-y-0.5">
+                <Label>
+                  {translate(
+                    'auto.components.settings.ExperimentalPane.nativeChat.resumeTitle',
+                    'Resume working chats automatically after a restart'
+                  )}
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  {translate(
+                    'auto.components.settings.ExperimentalPane.nativeChat.resumeCopy',
+                    'When Orca quits or installs an update, chats that were working are automatically resumed when Orca is reopened.'
+                  )}
+                </p>
+              </div>
+              <SettingsSwitch
+                checked={resumeOnRestartEnabled}
+                ariaLabel={translate(
+                  'auto.components.settings.ExperimentalPane.nativeChat.resumeToggleLabel',
+                  'Toggle automatic resume after a restart'
+                )}
+                onChange={() =>
+                  updateSettings({ nativeChatResumeWorkOnRestart: !resumeOnRestartEnabled })
+                }
+              />
+            </div>
+          ) : null}
+
+          {structuredChatActive ? (
+            <NativeChatQueueFollowUpsSetting settings={settings} updateSettings={updateSettings} />
+          ) : null}
+
+          {structuredChatActive ? (
+            <NativeChatShellEnvironmentSetting
+              settings={settings}
+              updateSettings={updateSettings}
+            />
           ) : null}
         </div>
       ) : null}

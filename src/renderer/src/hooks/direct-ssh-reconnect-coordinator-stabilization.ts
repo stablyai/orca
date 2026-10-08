@@ -5,7 +5,7 @@ export type DirectSshReconnectTargetState = {
   authority: DirectSshAuthority
   installedAt: number
   dampUntil: number | null
-  timer: DirectSshReconnectTimer
+  timer: DirectSshReconnectTimer | null
 }
 
 export function createDirectSshReconnectTargetState(

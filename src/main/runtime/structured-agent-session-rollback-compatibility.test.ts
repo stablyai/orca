@@ -1,12 +1,14 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
 import { safeParseWorkspaceSession } from '../../shared/workspace-session-schema'
-import { journalDirectoryFor } from '../native-chat/agent-session-journal/journal-paths'
-import { AgentSessionRecordStore } from './agent-session-record-store'
-import { AGENT_SESSION_STORE_FILE_NAME } from './agent-session-record-store-file'
+import {
+  openTestAgentSessionRecordStore,
+  readPersistedTestAgentSessionStore,
+  seedTestAgentSessionRecordStore
+} from './agent-session-record-store-test-harness'
 import { collectSavedStructuredAgentSessionIds } from './saved-structured-agent-session-restoration'
 
 const WORKSPACE = 'workspace-1'
@@ -77,29 +79,14 @@ afterEach(async () => {
 describe('structured session rollback compatibility', () => {
   it('keeps the visible session reference through target → base → target', async () => {
     root = await mkdtemp(join(tmpdir(), 'orca-structured-rollback-'))
-    const storeDir = join(root, 'agent-store')
-    await mkdir(storeDir, { recursive: true })
     const record = agentSessionRecordFixture({
       ...agentSessionRecordFixture().lease,
       sessionId: SESSION,
       runtimeKind: 'native'
     })
-    await writeFile(
-      join(storeDir, AGENT_SESSION_STORE_FILE_NAME),
-      JSON.stringify({
-        schemaVersion: 2,
-        hostId: 'local',
-        records: { [SESSION]: record },
-        operations: {},
-        retiredClaimKeys: [],
-        unusableRecords: {}
-      })
-    )
-    const journalDir = journalDirectoryFor(root, { workspaceId: WORKSPACE, sessionId: SESSION })
-    await mkdir(journalDir, { recursive: true })
-    await writeFile(join(journalDir, 'journal.log'), 'durable-journal-fixture\n')
+    await seedTestAgentSessionRecordStore(root, { records: [record] })
 
-    const target = await AgentSessionRecordStore.open({ directory: storeDir, hostId: 'local' })
+    const target = await openTestAgentSessionRecordStore(root)
     expect(target.getVisibleSessionTabIndex()).toEqual({ present: false, sessionIds: [] })
     await target.setSessionTabVisibility(SESSION, true)
     expect(target.getVisibleSessionTabIndex()).toEqual({ present: true, sessionIds: [SESSION] })
@@ -126,18 +113,15 @@ describe('structured session rollback compatibility', () => {
         targetReloadedProfile?.success ? targetReloadedProfile.data : null
       )
     ).toEqual([])
-    const reloaded = await AgentSessionRecordStore.open({ directory: storeDir, hostId: 'local' })
+    const reloaded = await openTestAgentSessionRecordStore(root)
     expect(reloaded.listVisibleSessionIds()).toEqual([SESSION])
     expect(reloaded.getRecord(SESSION)?.providerHandleChain).toHaveLength(1)
-    await expect(readFile(join(journalDir, 'journal.log'), 'utf8')).resolves.toBe(
-      'durable-journal-fixture\n'
-    )
-    expect(
-      JSON.parse(await readFile(join(storeDir, AGENT_SESSION_STORE_FILE_NAME), 'utf8'))
-    ).toMatchObject({ visibleSessionIds: [SESSION] })
+    expect((await readPersistedTestAgentSessionStore(root)).sessionTabs).toEqual([
+      { tabId: expect.any(String), sessionId: SESSION }
+    ])
 
     await reloaded.setSessionTabVisibility(SESSION, false)
-    const afterClose = await AgentSessionRecordStore.open({ directory: storeDir, hostId: 'local' })
+    const afterClose = await openTestAgentSessionRecordStore(root)
     expect(afterClose.getVisibleSessionTabIndex()).toEqual({ present: true, sessionIds: [] })
     expect(afterClose.listVisibleSessionIds()).toEqual([])
     expect(afterClose.getRecord(SESSION)?.providerHandleChain).toHaveLength(1)

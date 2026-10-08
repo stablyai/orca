@@ -18,6 +18,7 @@ import { PickerModal, type PickerOption } from '../src/components/PickerModal'
 import { TerminalShortcutSettings } from '../src/components/TerminalShortcutSettings'
 import { setTerminalAutoRestoreFitMsForHost } from '../src/terminal/terminal-auto-restore-fit-state'
 import { terminalSettingsScreenStyles as styles } from '../src/terminal/terminal-settings-screen-styles'
+import { setTerminalSettingsScrollEnabled } from '../src/terminal/terminal-settings-scroll-lock'
 import {
   loadTerminalAutocompleteEnabled,
   loadTerminalTextScale,
@@ -245,7 +246,7 @@ export default function TerminalSettingsScreen() {
   // is active would rebuild the row gestures and could cancel the drag.
   const setScrollEnabled = useCallback(
     (enabled: boolean) => {
-      scrollRef.current?.setNativeProps({ scrollEnabled: enabled })
+      setTerminalSettingsScrollEnabled(scrollRef, enabled)
     },
     [scrollRef]
   )
@@ -278,7 +279,7 @@ export default function TerminalSettingsScreen() {
           While you&apos;re using a terminal on your phone, Orca shrinks it to fit your screen. When
           you close the app or switch away, this controls whether it stays at phone size (so
           interactive CLI tools don&apos;t reflow) or resizes back to your desktop. You can always
-          use Restore this terminal or Restore all terminals on the banner to resize manually.
+          use Restore on the desktop banner to resize manually.
         </Text>
 
         {hosts.length === 0 ? (

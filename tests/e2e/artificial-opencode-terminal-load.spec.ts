@@ -1,3 +1,4 @@
+import { presentTerminalPerfWindow } from './terminal-perf-presentation'
 import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { randomUUID } from 'node:crypto'
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
@@ -28,6 +29,11 @@ import type { HiddenPressureOutputMode } from './artificial-opencode-hidden-pres
 import { runMainPressureScenario } from './artificial-opencode-main-pressure-scenario'
 import { runRendererBackpressureRevisitScenario } from './artificial-opencode-revisit-pressure-scenario'
 import { startSyntheticOpenCodeInjection } from './artificial-opencode-synthetic-injection'
+
+test.beforeEach(async ({ electronApp, orcaPage }, testInfo) => {
+  await orcaPage.waitForLoadState('domcontentloaded')
+  await presentTerminalPerfWindow(electronApp, testInfo)
+})
 
 type TypingMeasurement = {
   latencies: number[]

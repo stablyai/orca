@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
 import type {
   AgentJournalMessageItem,
   AgentSessionJournalIdentity
@@ -13,9 +14,9 @@ import type { StructuredAgentSessionEventSink } from '../native-chat/agent-sessi
 import {
   CodexStructuredSessionAdapter,
   type CodexStructuredLaunch,
-  type CodexStructuredSessionAdapterDeps,
   type CodexStructuredSessionEvent
 } from './codex-structured-session-adapter'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const THREAD_ID = 'thread-abc'
 
@@ -25,7 +26,7 @@ function identityFor(sessionId: string): AgentSessionJournalIdentity {
     workspaceId: 'ws-1',
     hostId: 'host-1',
     agent: 'codex',
-    providerHandle: { kind: 'codex', threadId: THREAD_ID }
+    providerHandle: codexProviderHandle(THREAD_ID)
   }
 }
 
@@ -98,10 +99,7 @@ function fakeCodex(routes: Record<string, Route> = {}): {
 function adapterFor(
   codex: ReturnType<typeof fakeCodex>,
   launch: Partial<CodexStructuredLaunch> = {},
-  events: CodexStructuredSessionEvent[] = [],
-  processControl: Partial<
-    Pick<CodexStructuredSessionAdapterDeps, 'captureTurnProcesses' | 'terminateTurnProcesses'>
-  > = {}
+  events: CodexStructuredSessionEvent[] = []
 ): CodexStructuredSessionAdapter {
   let acquisitionGeneration = 0
   return new CodexStructuredSessionAdapter({
@@ -116,11 +114,8 @@ function adapterFor(
     onEvent: (event) => events.push(event),
     openConnection: codex.openConnection,
     readProcessStartTime: async () => 1_700_000_000_000,
-    captureTurnProcesses: async () => ({ platform: 'win32', identities: new Map() }),
-    terminateTurnProcesses: async () => true,
     now: () => 1_700_000_000_500,
-    mintAcquisitionGeneration: () => `generation-${++acquisitionGeneration}`,
-    ...processControl
+    mintAcquisitionGeneration: () => `generation-${++acquisitionGeneration}`
   })
 }
 
@@ -151,8 +146,9 @@ describe('CodexStructuredSessionAdapter lifecycle', () => {
         sessionId: 'session-2',
         itemId: 'codex-item-1',
         kind: 'approval',
-        optionId: 'accept',
-        fence: 1
+        response: { kind: 'option', optionId: 'accept' },
+        fence: 1,
+        commit: async () => undefined
       })
     ).rejects.toThrow('no longer waiting on')
 
@@ -179,9 +175,11 @@ describe('CodexStructuredSessionAdapter lifecycle', () => {
       type: 'ended',
       sessionId: 'session-1',
       reason: 'codex app-server connection ended',
+      failure: { kind: 'providerExited' },
       cause: 'unexpected-exit',
       fence: 7,
-      acquisitionGeneration: 'generation-1'
+      acquisitionGeneration: 'generation-1',
+      observedAt: expect.any(Number)
     })
     await expect(
       adapter.dispatch({
@@ -191,9 +189,7 @@ describe('CodexStructuredSessionAdapter lifecycle', () => {
         fence: 7
       })
     ).rejects.toThrow('no live codex app-server')
-    expect(await adapter.historyFilePath({ identity: identityFor('session-1') })).toBe(
-      '/rollouts/abc.jsonl'
-    )
+    expect(adapter.backgroundTaskStops('session-1')).toBeDefined()
     await expect(adapter.closeSession('session-1')).resolves.toBe(false)
     expect(events.filter((event) => event.type === 'ended')).toHaveLength(1)
   })
@@ -208,9 +204,30 @@ describe('CodexStructuredSessionAdapter lifecycle', () => {
     codex.connections[0].handlers.onExit?.(new Error('the superseded child died'))
 
     expect(events.filter((event) => event.type === 'ended')).toHaveLength(endedBeforeStaleExit)
-    expect(await adapter.historyFilePath({ identity: identityFor('session-1') })).toBe(
-      '/rollouts/abc.jsonl'
+    expect(adapter.backgroundTaskStops('session-1')).toBeDefined()
+  })
+
+  it('times turn and item boundaries at receipt, and nothing else', async () => {
+    const codex = fakeCodex()
+    const events: CodexStructuredSessionEvent[] = []
+    await acquired(codex, {}, events)
+    const connection = codex.connections[0]
+    const item = { type: 'reasoning', id: 'r-1', summary: [], content: [] }
+    connection.handlers.onNotification?.('item/started', { threadId: THREAD_ID, item })
+    connection.handlers.onNotification?.('item/reasoning/summaryTextDelta', {
+      threadId: THREAD_ID,
+      itemId: 'r-1',
+      delta: 'Planning'
+    })
+    connection.handlers.onNotification?.('item/completed', { threadId: THREAD_ID, item })
+    const timed = events.flatMap((event) =>
+      event.type === 'notification' ? [[event.method, event.observedAt]] : []
     )
+    expect(timed).toEqual([
+      ['item/started', 1_700_000_000_500],
+      ['item/reasoning/summaryTextDelta', undefined],
+      ['item/completed', 1_700_000_000_500]
+    ])
   })
 
   it('ignores Codex traffic that arrives after the session is gone', async () => {
@@ -232,11 +249,14 @@ describe('CodexStructuredSessionAdapter lifecycle', () => {
   it('flushes the final coalesced text before a graceful close', async () => {
     const codex = fakeCodex()
     const bodies: AgentJournalMessageItem[] = []
+    const lifecycles: unknown[] = []
     const tombstones: unknown[] = []
     const sink: StructuredAgentSessionEventSink = {
-      appendItem: (_identity, body) => {
+      appendItem: (identity, body) => {
         if (body.kind === 'message') {
           bodies.push(body)
+        } else if (readAgentJournalTurn(body)) {
+          lifecycles.push({ identity, turnLifecycle: readAgentJournalTurn(body) })
         }
       },
       appendTombstone: (identity) => {
@@ -266,11 +286,22 @@ describe('CodexStructuredSessionAdapter lifecycle', () => {
     await adapter.closeSession('session-1')
 
     expect(bodies.at(-1)?.blocks).toEqual([{ type: 'text', text: 'last words' }])
-    expect(tombstones).toContainEqual({
-      provider: 'legacy',
-      agent: 'codex',
-      sessionId: 'session-1',
-      recordId: 'turn-lifecycle:turn-1'
+    // A requested close interrupts the open turn; the row is revised, not removed.
+    expect(tombstones).toEqual([])
+    expect(lifecycles.at(-1)).toEqual({
+      identity: {
+        provider: 'legacy',
+        agent: 'codex',
+        sessionId: 'session-1',
+        recordId: 'turn-lifecycle:turn-1'
+      },
+      turnLifecycle: {
+        turnId: 'turn-1',
+        state: 'interrupted',
+        userItemId: `codex:${THREAD_ID}:turn-1:0`,
+        startedAt: expect.any(Number),
+        completedAt: expect.any(Number)
+      }
     })
   })
 })

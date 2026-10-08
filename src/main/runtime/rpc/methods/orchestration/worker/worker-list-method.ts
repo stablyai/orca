@@ -4,7 +4,7 @@ import type { OrchestrationDb } from '../../../../orchestration/db'
 import { WORKER_LIST_CURSOR_EXPIRED_MESSAGE } from '../../../../orchestration/db/worker-terminal/worker-terminal-listing'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import { defineMethod, type RpcMethod } from '../../../core'
+import { defineMethod } from '../../../core'
 import {
   applyFederatedFleetObservations,
   readFederatedFleetSnapshots
@@ -21,10 +21,11 @@ import {
   readWorkerListSnapshot
 } from './worker-list-snapshot-store'
 import { projectWorkerFleet, type WorkerListPageParams } from './worker-list-projection'
+import { chatAssigneeObserver } from './session-worker-observation'
 import { exposeWorkerTerminalResource } from './worker-release-completion'
 import { WORKER_TERMINAL_LIST_STATES, WorkerListParams } from './worker-release-schemas'
 
-export const ORCHESTRATION_WORKER_LIST_METHOD: RpcMethod = defineMethod({
+export const ORCHESTRATION_WORKER_LIST_METHOD = defineMethod({
   name: 'orchestration.workerList',
   params: WorkerListParams,
   handler: async (params, { runtime }) => {
@@ -158,7 +159,7 @@ function readSnapshotRows(
   return rows
 }
 
-async function projectWorkerListPage(args: {
+type WorkerListPageArgs = {
   runtime: OrcaRuntimeService
   params: WorkerListPageParams
   limit: number
@@ -166,7 +167,9 @@ async function projectWorkerListPage(args: {
   snapshotCursor: WorkerListCursor | null
   snapshot?: Exclude<WorkerListCursor, { version: 3 }>['snapshot']
   completeProjection?: boolean
-}) {
+}
+
+async function projectWorkerListPage(args: WorkerListPageArgs) {
   const pinnedSnapshot =
     args.snapshotCursor?.version === 3
       ? pinWorkerListSnapshot(args.runtime, args.snapshotCursor.snapshot.id, {
@@ -182,15 +185,7 @@ async function projectWorkerListPage(args: {
 }
 
 async function projectWorkerListPageWithFilteredSnapshot(
-  args: {
-    runtime: OrcaRuntimeService
-    params: WorkerListPageParams
-    limit: number
-    rows: ReturnType<OrchestrationDb['listWorkerTerminalResources']>
-    snapshotCursor: WorkerListCursor | null
-    snapshot?: Exclude<WorkerListCursor, { version: 3 }>['snapshot']
-    completeProjection?: boolean
-  },
+  args: WorkerListPageArgs,
   filteredSnapshot: ReturnType<typeof readWorkerListSnapshot> | null
 ) {
   const { runtime, params, limit, rows, snapshotCursor } = args
@@ -209,7 +204,8 @@ async function projectWorkerListPageWithFilteredSnapshot(
     statuses,
     limit,
     now: authorityNow,
-    completeProjection: args.completeProjection
+    completeProjection: args.completeProjection,
+    observeChat: await chatAssigneeObserver(runtime, db, pageRows)
   })
   const federated = params.includeRemote
     ? await readFederatedFleetSnapshots({
@@ -300,6 +296,14 @@ async function projectWorkerListPageWithFilteredSnapshot(
     workers,
     counts,
     page: fleet.page,
+    // `page.hasMore` alone reads as complete to a caller that scans rows; say the page truncated.
+    ...(hasMore
+      ? {
+          warnings: [
+            `Showing ${pageRows.length} of ${inventory.total} Dispatches, newest first; more are on later pages. Follow page.nextCursor with --cursor.`
+          ]
+        }
+      : {}),
     ...(federated?.errors.length ? { partialHostErrors: federated.errors } : {})
   }
 }

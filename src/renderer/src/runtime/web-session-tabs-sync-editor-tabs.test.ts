@@ -410,4 +410,109 @@ describe('applyWebSessionTabsSnapshot', () => {
     expect(patch.activeTabType).toBeUndefined()
     expect(patch.activeTabTypeByWorktree).toBeUndefined()
   })
+
+  describe('client dirtiness across a host republish (#21392)', () => {
+    const notesPath = '/repo/NOTES.md'
+    const mirroredNotes = (isDirty: boolean): OpenFile => ({
+      id: notesPath,
+      filePath: notesPath,
+      relativePath: 'NOTES.md',
+      worktreeId: WT,
+      language: 'markdown',
+      isDirty,
+      runtimeEnvironmentId: ENV,
+      mode: 'edit',
+      mirroredFromRuntimeSession: true
+    })
+    const notesUnifiedTab: Tab = {
+      id: 'host-notes-unified',
+      entityId: notesPath,
+      groupId: 'host-group-1',
+      worktreeId: WT,
+      contentType: 'editor',
+      label: 'NOTES.md',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: NOW - 10,
+      isPreview: false,
+      isPinned: false
+    }
+    // The host republishes the same tab with its own store's flag: not dirty.
+    const hostCleanSnapshot = () =>
+      makeSnapshot(
+        [
+          {
+            type: 'markdown',
+            id: 'host-notes-unified',
+            title: 'NOTES.md',
+            filePath: notesPath,
+            relativePath: 'NOTES.md',
+            language: 'markdown',
+            mode: 'edit',
+            isDirty: false,
+            isActive: true,
+            sourceFileId: notesPath,
+            sourceFilePath: notesPath,
+            sourceRelativePath: 'NOTES.md',
+            documentVersion: `file:${notesPath}`,
+            color: null,
+            isPinned: false
+          }
+        ],
+        { activeTabId: 'host-notes-unified', activeTabType: 'markdown' }
+      )
+
+    it('keeps a client-dirty mirrored file dirty when the host republishes isDirty: false', () => {
+      // Why: the host never learns about client edits, so its flag would otherwise erase the
+      // client's, and the tab strip would close the tab with no prompt while the draft lives.
+      const patch = applyWebSessionTabsSnapshot(
+        makeState({
+          openFiles: [mirroredNotes(true)],
+          editorDrafts: { [notesPath]: '# unsaved client edits' },
+          unifiedTabsByWorktree: { [WT]: [notesUnifiedTab] }
+        }),
+        hostCleanSnapshot(),
+        ENV,
+        NOW
+      )
+
+      // No open-file change means the dirty flag survived exactly as it was.
+      expect(patch.openFiles).toBeUndefined()
+    })
+
+    it('follows a host-side save when the client holds no draft', () => {
+      // Why: a dirty flag with no client draft came from an earlier host snapshot; keeping it
+      // would strand the tab as dirty after the host saved.
+      const patch = applyWebSessionTabsSnapshot(
+        makeState({
+          openFiles: [mirroredNotes(true)],
+          editorDrafts: {},
+          unifiedTabsByWorktree: { [WT]: [notesUnifiedTab] }
+        }),
+        hostCleanSnapshot(),
+        ENV,
+        NOW
+      )
+
+      expect(patch.openFiles).toMatchObject([{ id: notesPath, isDirty: false }])
+    })
+
+    it('does not invent dirtiness from a draft the client already reverted', () => {
+      // Why: a lingering draft with isDirty false means the user typed and undid; the tab is
+      // clean and must not start prompting on close.
+      const patch = applyWebSessionTabsSnapshot(
+        makeState({
+          openFiles: [mirroredNotes(false)],
+          editorDrafts: { [notesPath]: 'same as disk' },
+          unifiedTabsByWorktree: { [WT]: [notesUnifiedTab] }
+        }),
+        hostCleanSnapshot(),
+        ENV,
+        NOW
+      )
+
+      expect(patch.openFiles).toBeUndefined()
+    })
+  })
 })

@@ -65,21 +65,28 @@ type CodexHookListing = {
   trustStatus: string
 }
 
-function collectHookListings(result: unknown): CodexHookListing[] {
+/** A hooks/list entry; a Codex with no hook approvals (before 0.129) reports no hash or status. */
+export type CodexListedHook = {
+  key: string
+  command: string | null
+  currentHash: string | null
+  trustStatus: string | null
+  /** Whether Codex will run the hook; null when this Codex does not report it. */
+  enabled: boolean | null
+}
+
+/** Every hook a hooks/list result names, each key once. */
+export function collectListedHooks(result: unknown): CodexListedHook[] {
   const data =
     result && typeof result === 'object' && Array.isArray((result as { data?: unknown }).data)
       ? ((result as { data: unknown[] }).data as { hooks?: unknown }[])
       : []
-  const listings: CodexHookListing[] = []
+  const listings: CodexListedHook[] = []
   const seenKeys = new Set<string>()
   for (const entry of data) {
     const hooks = Array.isArray(entry?.hooks) ? entry.hooks : []
     for (const hook of hooks as Record<string, unknown>[]) {
-      if (
-        typeof hook?.key !== 'string' ||
-        typeof hook.currentHash !== 'string' ||
-        typeof hook.trustStatus !== 'string'
-      ) {
+      if (typeof hook?.key !== 'string') {
         continue
       }
       // Why: hooks/list repeats user-scope hooks per requested cwd; grants
@@ -91,12 +98,20 @@ function collectHookListings(result: unknown): CodexHookListing[] {
       listings.push({
         key: hook.key,
         command: typeof hook.command === 'string' ? hook.command : null,
-        currentHash: hook.currentHash,
-        trustStatus: hook.trustStatus
+        currentHash: typeof hook.currentHash === 'string' ? hook.currentHash : null,
+        trustStatus: typeof hook.trustStatus === 'string' ? hook.trustStatus : null,
+        enabled: typeof hook.enabled === 'boolean' ? hook.enabled : null
       })
     }
   }
   return listings
+}
+
+// Why only hashed listings: a grant writes Codex's hash, so a listing without one cannot be granted.
+function collectHookListings(result: unknown): CodexHookListing[] {
+  return collectListedHooks(result).flatMap(({ key, command, currentHash, trustStatus }) =>
+    currentHash !== null && trustStatus !== null ? [{ key, command, currentHash, trustStatus }] : []
+  )
 }
 
 /**

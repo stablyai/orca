@@ -6,11 +6,22 @@ import {
   type UsagePercentageDisplay
 } from '../../../../shared/usage-percentage-display'
 import type { StatusBarUsageMode } from '../../../../shared/status-bar-usage-mode'
-import { ProviderIcon, clampUsedPercent, getProviderUsageStatusLabel } from './tooltip'
-import { getTightestUsageSection } from './UsageRosterPanel'
+import { formatCurrencyAmount } from '../../../../shared/currency-format'
+import { formatCreditCount } from '../../../../shared/credit-count-format'
+import {
+  ProviderIcon,
+  USAGE_URGENT_PERCENT,
+  USAGE_WARNING_PERCENT,
+  clampUsedPercent,
+  getProviderDisplayName,
+  getProviderUsageStatusLabel
+} from './tooltip'
+import { isClaudeUsageWaitingForClaude } from './usage-error-copy'
+import { getTightestUsageSection, getUsageHeadlineSection } from './UsageRosterPanel'
 import { formatRateLimitWindowChipLabel } from '@/lib/window-label-formatter'
 import { formatUsagePercentageLabel } from './usage-percentage-label'
 import { translate } from '@/i18n/i18n'
+import { isCursorUsageBucket } from '../../../../shared/cursor-usage-buckets'
 
 function MiniBar({
   usedPct,
@@ -66,6 +77,65 @@ export function ProviderLetterBadge({ p }: { p: ProviderRateLimits }): React.JSX
   )
 }
 
+export type UsageTone = 'urgent' | 'warning' | 'normal'
+
+/** Urgency by consumption, matching the usage bar colors, whatever % display the user chose. */
+export function getUsageTone(p: ProviderRateLimits): UsageTone {
+  const tightest = getTightestUsageSection(p)
+  const used = tightest ? clampUsedPercent(tightest.window.usedPercent) : 0
+  return used >= USAGE_URGENT_PERCENT
+    ? 'urgent'
+    : used >= USAGE_WARNING_PERCENT
+      ? 'warning'
+      : 'normal'
+}
+
+/**
+ * Stands in for usage chips a narrow bar can't fit. Always rendered at the collapsing
+ * density so its width is known before anything collapses; out of the row while empty.
+ */
+export function UsageOverflowChip({
+  hidden,
+  display
+}: {
+  hidden: readonly ProviderRateLimits[]
+  display: UsagePercentageDisplay
+}): React.JSX.Element {
+  const tones = hidden.map(getUsageTone)
+  const tone = tones.includes('urgent')
+    ? 'urgent'
+    : tones.includes('warning')
+      ? 'warning'
+      : 'normal'
+  const names = hidden
+    .map((p) => {
+      const tightest = getTightestUsageSection(p)
+      const name = getProviderDisplayName(p.provider)
+      return tightest
+        ? `${name} ${formatUsagePercentageLabel(tightest.window.usedPercent, display)}`
+        : name
+    })
+    .join(', ')
+  return (
+    <span
+      data-usage-more
+      data-usage-collapsed={hidden.length === 0}
+      data-tone={tone}
+      aria-hidden={hidden.length === 0}
+      title={translate(
+        'auto.components.status.bar.StatusBar.hiddenUsageProviders',
+        'Also: {{value0}}',
+        {
+          value0: names
+        }
+      )}
+      className="inline-flex h-4 items-center rounded-full border border-border px-1.5 text-[11px] font-medium tabular-nums text-foreground data-[tone=urgent]:border-destructive/40 data-[tone=urgent]:text-destructive data-[tone=warning]:border-status-warning-border data-[tone=warning]:text-status-warning data-[usage-collapsed=true]:invisible data-[usage-collapsed=true]:absolute"
+    >
+      +{Math.max(1, hidden.length)}
+    </span>
+  )
+}
+
 function getProviderLetter(provider: ProviderRateLimits['provider']): string {
   switch (provider) {
     case 'claude':
@@ -82,6 +152,10 @@ function getProviderLetter(provider: ProviderRateLimits['provider']): string {
       return 'M'
     case 'grok':
       return 'R'
+    case 'cursor':
+      return 'U'
+    case 'zcode':
+      return 'Z'
     case 'codex':
       return 'X'
   }
@@ -94,6 +168,19 @@ function getProviderLetter(provider: ProviderRateLimits['provider']): string {
 // Why: Gemini exposes extra experimental buckets that made the pre-existing verbose footer noisy.
 const STATUS_BAR_BUCKET_NAMES = new Set(['Flash', 'Pro', '1.5 Pro'])
 
+/**
+ * Why Antigravity is matched by provider and not by name: its pools are one per model group, and the
+ * group names come from the account's own tier ("Gemini Models", "Claude and GPT models" today), so
+ * there is no list to allow. Cursor stays name-matched on purpose — a pool Orca does not recognise
+ * is filtered so the segment can fall back to the plan total instead of showing an unlabelled row.
+ */
+function isVisibleStatusBarBucket(name: string, provider: ProviderRateLimits['provider']): boolean {
+  if (provider === 'antigravity') {
+    return true
+  }
+  return STATUS_BAR_BUCKET_NAMES.has(name) || isCursorUsageBucket(name)
+}
+
 function VerboseProviderUsage({
   p,
   display
@@ -102,7 +189,15 @@ function VerboseProviderUsage({
   display: UsagePercentageDisplay
 }): React.JSX.Element {
   if (p.buckets && p.buckets.length > 0) {
-    const visibleBuckets = p.buckets.filter((bucket) => STATUS_BAR_BUCKET_NAMES.has(bucket.name))
+    const visibleBuckets = p.buckets.filter((bucket) =>
+      isVisibleStatusBarBucket(bucket.name, p.provider)
+    )
+    // Why: a provider whose buckets are all filtered out still has a headline
+    // window worth showing rather than rendering an empty segment.
+    // Why weekly is in the chain: a tier metered weekly only (Antigravity reports no 5h pool on
+    // some tiers) has no session window, and omitting weekly rendered an empty segment for an
+    // account that does have a limit worth showing.
+    const fallbackWindow = p.session ?? p.monthly ?? p.weekly ?? null
     return (
       <>
         {visibleBuckets.map((bucket, index) => (
@@ -113,10 +208,10 @@ function VerboseProviderUsage({
             </span>
           </React.Fragment>
         ))}
-        {visibleBuckets.length === 0 && p.session ? (
+        {visibleBuckets.length === 0 && fallbackWindow ? (
           <WindowLabel
-            w={p.session}
-            label={formatRateLimitWindowChipLabel(p.session)}
+            w={fallbackWindow}
+            label={formatRateLimitWindowChipLabel(fallbackWindow)}
             display={display}
           />
         ) : null}
@@ -170,6 +265,43 @@ function VerboseProviderUsage({
   )
 }
 
+// A plan spends into its overage balance only once an included window is
+// exhausted. Treat ~100% as capped to tolerate provider rounding.
+const CAP_THRESHOLD_PERCENT = 99.5
+
+// Why: only reveal the compact balance once a capped window can spend it.
+function isExtraUsageActive(p: ProviderRateLimits): boolean {
+  if (
+    !p.extraUsage ||
+    !p.extraUsage.enabled ||
+    (p.extraUsage.unit === 'currency' &&
+      (p.extraUsage.balance === null || p.extraUsage.balance <= 0))
+  ) {
+    return false
+  }
+  return [p.session, p.weekly, p.monthly, p.fableWeekly].some(
+    (w) => w != null && clampUsedPercent(w.usedPercent) >= CAP_THRESHOLD_PERCENT
+  )
+}
+
+function formatCompactExtraUsage(balance: ProviderRateLimits['extraUsage']): string {
+  if (!balance) {
+    return ''
+  }
+  if (balance.unit === 'credits') {
+    return balance.unlimited
+      ? translate('auto.components.status.bar.StatusBar.4025a6f62f', 'Unlimited')
+      : translate('auto.components.status.bar.StatusBar.a95969101f', '{{value0}} credits', {
+          value0: formatCreditCount(balance.balance)
+        })
+  }
+  return balance.balance === null
+    ? ''
+    : translate('auto.components.status.bar.StatusBar.4fba7dc1e7', '{{value0}} bal', {
+        value0: formatCurrencyAmount(balance.balance, balance.currencyCode)
+      })
+}
+
 export function ProviderSegment({
   p,
   compact,
@@ -183,6 +315,8 @@ export function ProviderSegment({
 }): React.JSX.Element {
   const provider = p?.provider ?? 'claude'
   const statusLabel = p ? getProviderUsageStatusLabel(p) : ''
+  // Why: not a problem; Claude updates its own login the next time it runs.
+  const calm = p ? isClaudeUsageWaitingForClaude(p) : false
 
   // Idle / initial load
   if (!p || p.status === 'idle') {
@@ -194,7 +328,7 @@ export function ProviderSegment({
     )
   }
 
-  const tightest = getTightestUsageSection(p)
+  const tightest = mode === 'compact' ? getUsageHeadlineSection(p) : getTightestUsageSection(p)
 
   // Fetching with no prior data
   if (p.status === 'fetching' && !tightest) {
@@ -220,14 +354,15 @@ export function ProviderSegment({
     return (
       <span className="inline-flex items-center gap-1 text-muted-foreground">
         <ProviderIcon provider={provider} />
-        <AlertTriangle size={11} className="text-muted-foreground/80" />
+        {!calm && <AlertTriangle size={11} className="text-muted-foreground/80" />}
         {!compact && <span className="text-[11px] font-medium">{statusLabel}</span>}
       </span>
     )
   }
 
   // Has data (ok, fetching with stale data, or error with stale data)
-  const isStale = p.status === 'error'
+  const isStale = p.status === 'error' && !calm
+  const showBalance = isExtraUsageActive(p)
 
   return (
     <span className="inline-flex items-center gap-1.5">
@@ -246,6 +381,12 @@ export function ProviderSegment({
           display={display}
           showLabel={!compact}
         />
+      ) : null}
+      {showBalance && p.extraUsage ? (
+        <>
+          <span className="text-muted-foreground">·</span>
+          <span className="tabular-nums">{formatCompactExtraUsage(p.extraUsage)}</span>
+        </>
       ) : null}
       {isStale && <AlertTriangle size={11} className="text-muted-foreground/80" />}
     </span>

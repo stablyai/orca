@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   MARKDOWN_PREVIEW_LOCAL_IMAGE_PREWARM_CONCURRENCY,
   MARKDOWN_PREVIEW_LOCAL_IMAGE_PREWARM_LIMIT,
@@ -245,5 +245,23 @@ describe('prewarmMarkdownPreviewLocalImages', () => {
     await prewarm.done
 
     expect(started).toHaveLength(2)
+  })
+})
+
+describe('prewarming preview images', () => {
+  it('reads each image as a resource of the document that references it', async () => {
+    const readFile = vi.fn().mockResolvedValue({ content: '', isBinary: false })
+    vi.stubGlobal('window', { api: { fs: { readFile } } })
+    try {
+      await prewarmMarkdownPreviewLocalImages('![Logo](./logo.png)', '/notes/readme.md').done
+
+      expect(readFile).toHaveBeenCalledWith({
+        filePath: '/notes/logo.png',
+        connectionId: undefined,
+        access: { kind: 'document-resource', documentPath: '/notes/readme.md' }
+      })
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 })

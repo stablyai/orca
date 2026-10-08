@@ -87,7 +87,10 @@ export function dispatchManualSimulatorLaunchFailed(worktreeId: string, message:
   })
 }
 
-function dispatchManualSimulatorLaunchEvent(type: string, detail: object): void {
+function dispatchManualSimulatorLaunchEvent(
+  type: string,
+  detail: { worktreeId: string; message?: string }
+): void {
   if (typeof window === 'undefined') {
     return
   }

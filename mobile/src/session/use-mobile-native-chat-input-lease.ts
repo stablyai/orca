@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { NATIVE_CHAT_TURN_STATUS_COPY } from '../../../src/shared/native-chat-turn-status'
 import type { MobileNativeChatInputLockReason } from './MobileNativeChatView'
 
 export function useMobileNativeChatInputLease(args: {
@@ -71,4 +72,45 @@ export function useMobileNativeChatInputLease(args: {
     markReady,
     clear
   }
+}
+
+const INPUT_LOCK_SETTLE_MS = 600
+
+/** A dead PTY emits subscribed→end; settle both edges so its false lease cannot
+ *  flash the composer enabled. */
+export function useSettledMobileNativeChatInputLock(
+  reason: MobileNativeChatInputLockReason | null | undefined
+): MobileNativeChatInputLockReason | null {
+  const rawLockReason = reason ?? null
+  const rawLockHeld = rawLockReason !== null
+  const [lockHeld, setLockHeld] = useState(false)
+  useEffect(() => {
+    if (rawLockHeld === lockHeld) {
+      return
+    }
+    const timer = setTimeout(() => setLockHeld(rawLockHeld), INPUT_LOCK_SETTLE_MS)
+    return () => clearTimeout(timer)
+  }, [lockHeld, rawLockHeld])
+  return lockHeld ? (rawLockReason ?? 'waiting') : null
+}
+
+/** What the composer says while the input lease blocks it, else that a message sent now runs
+ *  after a Stop the chat reads as stopping, else its normal prompt. */
+export function mobileNativeChatComposerPlaceholder(
+  lockReason: MobileNativeChatInputLockReason | null,
+  /** While stopping: whether a message sent now is queued, or sent for the host to hold. */
+  afterStop?: 'queue' | 'send'
+): string {
+  if (lockReason === 'disconnected') {
+    return 'Reconnecting…'
+  }
+  if (lockReason === 'waiting') {
+    return 'Waiting for terminal…'
+  }
+  if (afterStop) {
+    return afterStop === 'queue'
+      ? NATIVE_CHAT_TURN_STATUS_COPY.queueAfterStop
+      : NATIVE_CHAT_TURN_STATUS_COPY.sendAfterStop
+  }
+  return 'Message, @files, /commands'
 }

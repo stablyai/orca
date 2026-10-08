@@ -1,45 +1,16 @@
-import { z } from 'zod'
-import { defineMethod, type RpcMethod } from '../core'
-import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
+import { defineMethod } from '../core'
 import { RepoSelector } from './github-repo-target-schemas'
+import {
+  IssuesList,
+  RateLimit,
+  WorkItem,
+  WorkItemByOwnerRepo,
+  WorkItemDetails,
+  WorkItemsCount,
+  WorkItemsList
+} from '../../../../shared/rpc-contract/github-repo-work-item-params'
 
-const WorkItemsList = RepoSelector.extend({
-  limit: OptionalFiniteNumber,
-  query: OptionalString,
-  page: z.number().int().positive().optional(),
-  noCache: z.boolean().optional()
-})
-
-const IssuesList = RepoSelector.extend({
-  limit: OptionalFiniteNumber
-})
-
-const WorkItem = RepoSelector.extend({
-  number: z.number().int().positive(),
-  type: z.enum(['issue', 'pr']).optional()
-})
-
-const WorkItemByOwnerRepo = RepoSelector.extend({
-  owner: requiredString('Missing owner'),
-  ownerRepo: requiredString('Missing repo'),
-  // Why: Enterprise host identity must survive RPC parsing; Zod strips
-  // undeclared fields before the runtime can host-qualify gh requests.
-  host: OptionalString,
-  number: z.number().int().positive(),
-  type: z.enum(['issue', 'pr'])
-})
-
-const WorkItemDetails = WorkItem
-
-const WorkItemsCount = RepoSelector.extend({
-  query: OptionalString
-})
-
-const RateLimit = z.object({
-  force: z.boolean().optional()
-})
-
-export const GITHUB_REPO_WORK_ITEM_METHODS: RpcMethod[] = [
+export const GITHUB_REPO_WORK_ITEM_METHODS = [
   defineMethod({
     name: 'github.repoSlug',
     params: RepoSelector,

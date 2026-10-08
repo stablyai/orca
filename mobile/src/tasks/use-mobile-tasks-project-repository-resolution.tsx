@@ -1,18 +1,13 @@
 import type { ProjectProjectionModel } from './use-mobile-tasks-project-projection'
-import {
-  type GitHubOwnerRepo,
-  githubProjectKey,
-  useEffect,
-  useMemo
-} from './mobile-tasks-dependencies'
+import { githubProjectKey, useEffect, useMemo } from './mobile-tasks-dependencies'
 import {
   GITHUB_REPO_CONCURRENCY,
   getGitHubReviewerSeedUsers,
-  isSuccess,
   mapWithConcurrency,
   mergeGitHubAssignableUsers,
   projectRowType
 } from './mobile-tasks-legacy-foundation'
+import { githubProjectRepoSlugRead } from './mobile-task-project-board-operations'
 
 export function useMobileTasksProjectRepositoryResolution(model: ProjectProjectionModel) {
   const {
@@ -59,15 +54,12 @@ export function useMobileTasksProjectRepositoryResolution(model: ProjectProjecti
     let cancelled = false
     void mapWithConcurrency(missing, GITHUB_REPO_CONCURRENCY, async (repo) => {
       try {
-        const response = await client.sendRequest(
-          'github.repoSlug',
+        const reply = await githubProjectRepoSlugRead.request(
+          client,
           { repo: `id:${repo.id}` },
           { timeoutMs: 30_000 }
         )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as GitHubOwnerRepo | null
+        const result = githubProjectRepoSlugRead.interpret(reply)
         return { repoId: repo.id, entry: { path: repo.path, repository: result } }
       } catch {
         // Cached so readiness settles; `failed` marks it for retry on refresh.

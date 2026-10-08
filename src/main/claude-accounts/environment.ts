@@ -1,4 +1,9 @@
 import type { ClaudeManagedAccount } from '../../shared/managed-account-types'
+import {
+  CLAUDE_INJECTED_CONFIG_DIR_ENV,
+  CLAUDE_PROFILE_POINTER_ENV,
+  CLAUDE_USER_CONFIG_DIR_ENV
+} from '../../shared/claude-profile-routing'
 
 export const CLAUDE_AUTH_ENV_VARS = [
   'ANTHROPIC_API_KEY',
@@ -8,6 +13,9 @@ export const CLAUDE_AUTH_ENV_VARS = [
 ] as const
 
 export type ClaudeEnvPatch = {
+  [CLAUDE_PROFILE_POINTER_ENV]?: string
+  [CLAUDE_INJECTED_CONFIG_DIR_ENV]?: string
+  [CLAUDE_USER_CONFIG_DIR_ENV]?: string
   CLAUDE_CONFIG_DIR?: string
   ANTHROPIC_CUSTOM_HEADERS?: string
 }
@@ -33,6 +41,16 @@ export function applyClaudeEnvPatch(
     }
   }
 
+  for (const key of [
+    CLAUDE_PROFILE_POINTER_ENV,
+    CLAUDE_INJECTED_CONFIG_DIR_ENV,
+    CLAUDE_USER_CONFIG_DIR_ENV
+  ] as const) {
+    const value = patch[key]
+    if (value) {
+      baseEnv[key] = value
+    }
+  }
   if (patch.CLAUDE_CONFIG_DIR) {
     baseEnv.CLAUDE_CONFIG_DIR = patch.CLAUDE_CONFIG_DIR
   }
@@ -47,9 +65,6 @@ export function applyClaudeEnvPatch(
  *  cannot drift into telling the user two different things about one refusal. */
 export const CLAUDE_AUTH_ENV_CONFLICT_MESSAGE =
   'This Claude launch defines explicit Anthropic auth environment variables. Remove those overrides before using a managed Claude account.'
-
-export const CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE =
-  'A Claude account switch is in progress. Try again after it finishes.'
 
 /**
  * Whether a launch on the host runtime must drop inherited Anthropic auth.
@@ -84,34 +99,6 @@ export function shouldStripClaudeAuthEnvForAccount(
  * authenticate nor beat the pinned account, while the strip removes the name regardless.
  * Refusing it would break a terminal launch that works today for no security gain.
  */
-/**
- * The inherited Anthropic auth a non-stripping launch has to carry forward explicitly.
- *
- * applyClaudeEnvPatch always strips the inherited half of a child env, and the
- * configured half is what overrides it — so a system-auth user's own key only survives
- * if the caller puts it back deliberately. Returns the exact keys present, so a
- * win32 `anthropic_api_key` is carried under the name the OS actually has.
- */
-export function claudeAuthEnvCarriedForward(
-  inherited: NodeJS.ProcessEnv,
-  platform: NodeJS.Platform = process.platform
-): Record<string, string> {
-  const carried: Record<string, string> = {}
-  for (const [key, value] of Object.entries(inherited)) {
-    if (value === undefined) {
-      continue
-    }
-    const normalized = platform === 'win32' ? key.toUpperCase() : key
-    if (
-      CLAUDE_AUTH_ENV_VARS.some((authKey) => authKey === normalized) ||
-      (normalized === 'ANTHROPIC_CUSTOM_HEADERS' && isAuthLikeCustomHeaders(value))
-    ) {
-      carried[key] = value
-    }
-  }
-  return carried
-}
-
 export function hasClaudeAuthEnvConflict(
   env: Record<string, string> | undefined,
   platform: NodeJS.Platform = process.platform
