@@ -1,15 +1,24 @@
-import { appendFileSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { ClaudeSessionContinuationTracker } from './claude-session-continuation'
 
 const OLD = '11111111-1111-4111-8111-111111111111'
 const FORK = '22222222-2222-4222-8222-222222222222'
 const SECOND_FORK = '33333333-3333-4333-8333-333333333333'
 
+const createdDirs: string[] = []
+
+afterEach(() => {
+  for (const dir of createdDirs.splice(0)) {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
 function makeProject(): { configDir: string; projectDir: string } {
   const configDir = mkdtempSync(join(tmpdir(), 'claude-continuation-'))
+  createdDirs.push(configDir)
   const projectDir = join(configDir, 'projects', '-work-repo')
   mkdirSync(projectDir, { recursive: true })
   return { configDir, projectDir }
