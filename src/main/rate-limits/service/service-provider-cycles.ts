@@ -77,6 +77,12 @@ export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFul
     })
   }
 
+  /**
+   * 계정별 서버 대기를 유지한 채 활성 Claude 사용량을 갱신한다.
+   * @param signal 취소 신호
+   * @param options 일반 갱신 간격의 강제 우회 여부
+   * @returns 갱신 완료
+   */
   protected async runFetchClaudeOnlyCycle(
     signal: AbortSignal,
     options?: { force?: boolean }
@@ -84,8 +90,11 @@ export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFul
     if (signal.aborted) {
       return
     }
-    // Why: skip automated Claude fetches while a Retry-After window is open or a live session feed is fresher than the OAuth poll would be.
-    if (!options?.force && this.shouldSkipAutomatedClaudeFetch(this.state.claude)) {
+    // 서버 대기는 강제 갱신에도 적용하고, 일반 갱신만 신선한 live feed로 생략한다.
+    if (
+      this.isRetryAfterActive(this.state.claude) ||
+      (!options?.force && this.shouldSkipAutomatedClaudeFetch(this.state.claude))
+    ) {
       return
     }
     const claudeTarget = this.claudeFetchTarget

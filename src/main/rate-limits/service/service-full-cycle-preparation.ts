@@ -55,6 +55,12 @@ export type FetchAllCyclePrepared = {
 }
 
 export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServiceFetchPolicy {
+  /**
+   * Claude의 서버 대기를 유지하면서 공급자별 조회를 준비한다.
+   * @param signal 취소 신호
+   * @param options 일반 갱신 간격의 강제 우회 여부
+   * @returns 취소 시 null, 그 외 조회 결과와 적용 문맥
+   */
   protected async prepareFetchAllCycle(
     signal: AbortSignal,
     options?: { force?: boolean }
@@ -210,9 +216,10 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       (reason) => ({ status: 'rejected', reason }) as const
     )
 
-    // Why: skip automated Claude fetches while a Retry-After window is open or a live session feed is fresher than the OAuth poll would be.
+    // 강제 갱신은 일반 간격만 우회하며 서버가 지정한 대기는 지킨다.
     const claudeFetchGated =
-      !options?.force && this.shouldSkipAutomatedClaudeFetch(previousState.claude)
+      this.isRetryAfterActive(previousState.claude) ||
+      (!options?.force && this.shouldSkipAutomatedClaudeFetch(previousState.claude))
 
     const [claudeResult, codexResult, geminiResult, opencodeGoResult, kimiResult, miniMaxResult] =
       await Promise.allSettled([
