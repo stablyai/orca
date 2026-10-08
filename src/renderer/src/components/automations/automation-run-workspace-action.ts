@@ -51,7 +51,7 @@ export function createAutomationRunWorkspaceAction({ store, list }: AutomationsP
       )
       if (activateAndRevealWorktree(run.workspaceId)) {
         appStore.setActiveTab(terminalTarget.tabId)
-        appStore.setActiveTabType('terminal')
+        appStore.setActiveTabType('terminal', run.workspaceId)
         return
       }
     }

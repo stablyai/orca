@@ -2,12 +2,16 @@ import { useCallback, useState } from 'react'
 import { toast } from 'sonner'
 import {
   buildAiVaultResumeCopyCommandForWorktree,
-  buildAiVaultResumeStartupForWorktree
+  buildAiVaultResumeStartupForWorktree,
+  type AiVaultResumeCommandSession
 } from '@/lib/ai-vault-resume-command'
 import { launchAiVaultSessionInNewTab } from '@/lib/launch-ai-vault-session'
 import { useAppStore } from '@/store'
 import type { AiVaultAgent, AiVaultSession } from '../../../../shared/ai-vault-types'
-import { prepareAiVaultSessionForResume } from '@/lib/ai-vault-session-resume-preparation'
+import {
+  dropDeletedSshResumeCwd,
+  prepareAiVaultSessionForResume
+} from '@/lib/ai-vault-session-resume-preparation'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { translate } from '@/i18n/i18n'
 import { agentLabel } from './ai-vault-session-filters'
@@ -16,6 +20,7 @@ import { prepareAiVaultSessionContinuation } from './ai-vault-session-continuati
 import type { AgentSessionContinuationRequest } from '@/lib/agent-session-continuation'
 import { activateAiVaultStructuredSession } from '@/lib/activate-ai-vault-structured-session'
 import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
+import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import {
   activateAiVaultResumeWorkspace,
   resumeAiVaultSessionInNewChat
@@ -52,7 +57,7 @@ export function useAiVaultSessionLaunchActions({
   )
 
   const buildResumeStartup = useCallback(
-    (session: AiVaultSession, worktreeId?: string | null) =>
+    (session: AiVaultResumeCommandSession, worktreeId?: string | null) =>
       buildAiVaultResumeStartupForWorktree({
         state: useAppStore.getState(),
         worktreeId: worktreeId ?? activeWorktreeId ?? activeWorktree?.id ?? null,
@@ -64,6 +69,9 @@ export function useAiVaultSessionLaunchActions({
 
   const copyResumeCommand = useCallback(
     async (session: AiVaultSession, worktreeId?: string | null): Promise<void> => {
+      if (session.structuredSession) {
+        return
+      }
       try {
         const preparedSession = await prepareAiVaultSessionForResume(session)
         await window.api.ui.writeClipboardText(buildResumeCommand(preparedSession, worktreeId))
@@ -107,6 +115,7 @@ export function useAiVaultSessionLaunchActions({
         )
       }
       void prepareAiVaultSessionForResume(session)
+        .then(dropDeletedSshResumeCwd)
         .then((preparedSession) => {
           const launchResult = launchAiVaultSessionInNewTab({
             agent: session.agent,
@@ -158,7 +167,12 @@ export function useAiVaultSessionLaunchActions({
         )
         return
       }
-      void resumeAiVaultSessionInNewChat(session, session.agent, worktreeId)
+      void resumeAiVaultSessionInNewChat(
+        session,
+        session.agent,
+        worktreeId,
+        newAgentLaunchRequestId()
+      )
     },
     [activeWorktree?.id, activeWorktreeId]
   )

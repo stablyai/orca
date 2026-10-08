@@ -9,10 +9,10 @@ import type {
 import {
   buildRemovedSshTargetCleanupPatch,
   collectSshTargetGenerations,
-  sshConnectionStatesEqual,
   sshTargetGenerationsEqual,
   sshTargetLabelsEqual
 } from './ssh-target-cleanup'
+import { sshConnectionStatesEqual } from './ssh-connection-state-equality'
 
 export type RemoteWorkspaceSyncStatus = {
   phase: 'idle' | 'pulling' | 'pushing' | 'synced' | 'conflict' | 'error' | 'offline'
@@ -22,6 +22,9 @@ export type RemoteWorkspaceSyncStatus = {
   hostObservationToken?: string
   lastSyncedAt?: number
   message?: string
+  /** Set only by an applied pull that ends in `conflict`: the host paths whose tabs this client
+   *  could not place. Every other worktree on the target holds the host's rows from that snapshot. */
+  unplacedTabWorktreePaths?: readonly string[]
 }
 
 export type SshCredentialRequest = {
@@ -29,6 +32,9 @@ export type SshCredentialRequest = {
   targetId: string
   kind: 'passphrase' | 'password' | 'keyboard-interactive'
   detail: string
+  /** RFC 4256 echo flag for keyboard-interactive prompts: when true the
+   * server allows the typed response to be shown. */
+  echo?: boolean
 }
 
 export type SshSlice = {
@@ -86,13 +92,27 @@ export type SshSlice = {
 }
 
 const targetConnectionGeneration = new Map<string, number>()
+const MAX_LOCAL_SSH_TARGET_GENERATIONS = 4096
+let targetConnectionGenerationSequence = 0
+let evictedTargetConnectionGeneration = 0
 
 export function getLocalSshTargetConnectionGeneration(targetId: string): number {
-  return targetConnectionGeneration.get(targetId) ?? 0
+  return targetConnectionGeneration.get(targetId) ?? evictedTargetConnectionGeneration
 }
 
 function advanceLocalSshTargetConnectionGeneration(targetId: string): void {
-  targetConnectionGeneration.set(targetId, getLocalSshTargetConnectionGeneration(targetId) + 1)
+  targetConnectionGeneration.set(targetId, ++targetConnectionGenerationSequence)
+  while (targetConnectionGeneration.size > MAX_LOCAL_SSH_TARGET_GENERATIONS) {
+    const oldest = targetConnectionGeneration.keys().next()
+    if (oldest.done) {
+      break
+    }
+    evictedTargetConnectionGeneration = Math.max(
+      evictedTargetConnectionGeneration,
+      targetConnectionGeneration.get(oldest.value) ?? 0
+    )
+    targetConnectionGeneration.delete(oldest.value)
+  }
 }
 
 export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) => ({

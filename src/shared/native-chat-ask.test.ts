@@ -168,6 +168,26 @@ describe('extractPendingAsk', () => {
 })
 
 describe('parseAskFromStatus', () => {
+  it('preserves OpenCode question envelope multiple selection on live status and replay', () => {
+    const input = {
+      id: 'question',
+      sessionID: 'session',
+      questions: [
+        {
+          header: 'Choice',
+          question: 'Pick both?',
+          multiple: true,
+          options: [
+            { label: 'One', description: 'first' },
+            { label: 'Two', description: 'second' }
+          ]
+        }
+      ]
+    }
+    const prompt = parseAskFromStatus(JSON.stringify(input), 'AskUserQuestion')
+    expect(prompt?.questions[0]).toMatchObject({ multiSelect: true, header: 'Choice' })
+    expect(extractPendingAsk([message('m1', [call('question', input)])])).toEqual(prompt)
+  })
   it('accepts the canonical shape from any tool name and rejects broken JSON', () => {
     expect(
       parseAskFromStatus(JSON.stringify(QUESTIONS_INPUT), 'SomeNewTool')?.questions

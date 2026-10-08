@@ -1,3 +1,4 @@
+import './unused-default-rpc-methods.test-fixture'
 // A lost mutation response must be answerable without mutating again: these cover
 // `orchestration.requestShow` reading the same durable receipt --retry-request replays.
 import { describe, expect, it, vi } from 'vitest'

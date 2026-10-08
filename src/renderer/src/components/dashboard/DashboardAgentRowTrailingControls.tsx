@@ -2,8 +2,12 @@ import React, { useCallback } from 'react'
 import { ChevronDown, Send, X } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
+import { DashboardAgentChildDisclosure } from './DashboardAgentChildDisclosure'
 
 type DashboardAgentRowTrailingControlsProps = {
+  childAgentCount?: number
+  childAgentsExpanded?: boolean
+  onToggleChildAgents?: () => void
   paneKey: string
   relativeTimestamp: string | null
   expanded: boolean
@@ -18,6 +22,9 @@ type DashboardAgentRowTrailingControlsProps = {
 }
 
 export function DashboardAgentRowTrailingControls({
+  childAgentCount,
+  childAgentsExpanded = false,
+  onToggleChildAgents,
   paneKey,
   relativeTimestamp,
   expanded,
@@ -64,8 +71,15 @@ export function DashboardAgentRowTrailingControls({
     [onSendTargetClick, paneKey, sendTargetStatus]
   )
 
+  const hasChildDisclosure = Boolean(childAgentCount && onToggleChildAgents)
+
   return (
-    <span className="relative ml-auto flex h-3.5 w-12 shrink-0 items-center justify-end">
+    <span
+      className={cn(
+        'relative ml-auto flex shrink-0 items-center justify-end',
+        hasChildDisclosure ? 'h-5 gap-1' : 'h-3.5 w-12'
+      )}
+    >
       {(sendTargetStatus === 'eligible' || sendTargetStatus === 'sending') && (
         <button
           type="button"
@@ -75,6 +89,7 @@ export function DashboardAgentRowTrailingControls({
           disabled={sendTargetStatus === 'sending'}
           className={cn(
             'worktree-agent-send-target-button absolute right-0 top-1/2 z-10 inline-flex h-5 -translate-y-1/2 items-center gap-1 rounded-md border px-1.5 text-[10px] font-medium leading-none transition-[background-color,border-color,color,opacity]',
+            hasChildDisclosure && 'static translate-y-0',
             sendTargetStatus === 'sending' && 'cursor-progress opacity-75'
           )}
           aria-label={translate(
@@ -90,7 +105,7 @@ export function DashboardAgentRowTrailingControls({
           <span>{translate('auto.components.dashboard.DashboardAgentRow.912e136cd9', 'Send')}</span>
         </button>
       )}
-      {!sendTargetStatus && hideDismiss && relativeTimestamp !== null && (
+      {!hasChildDisclosure && !sendTargetStatus && hideDismiss && relativeTimestamp !== null && (
         <span
           className="pointer-events-none shrink-0 text-[10px] leading-none text-muted-foreground/60"
           aria-hidden
@@ -100,7 +115,7 @@ export function DashboardAgentRowTrailingControls({
       )}
       {/* Why: timestamp and dismiss-X share one slot. On no-hover devices the X
           is visible by default, so the timestamp must yield there too. */}
-      {!sendTargetStatus && !hideDismiss && relativeTimestamp !== null && (
+      {!hasChildDisclosure && !sendTargetStatus && !hideDismiss && relativeTimestamp !== null && (
         <span className="relative grid grid-cols-1 grid-rows-1 shrink-0 items-center justify-items-end">
           <span
             className={cn(
@@ -132,7 +147,7 @@ export function DashboardAgentRowTrailingControls({
           </button>
         </span>
       )}
-      {!sendTargetStatus && !hideDismiss && relativeTimestamp === null && (
+      {!sendTargetStatus && !hideDismiss && (hasChildDisclosure || relativeTimestamp === null) && (
         <button
           type="button"
           onClick={handleDismiss}
@@ -151,6 +166,18 @@ export function DashboardAgentRowTrailingControls({
         >
           <X className="size-3.5" />
         </button>
+      )}
+      {hasChildDisclosure && (
+        <DashboardAgentChildDisclosure
+          childAgentCount={childAgentCount}
+          childAgentsExpanded={childAgentsExpanded}
+          onToggleChildAgents={onToggleChildAgents}
+          timestamp={
+            <span className="text-[10px] leading-none text-muted-foreground/60">
+              {relativeTimestamp}
+            </span>
+          }
+        />
       )}
       {!hideExpand && (
         <button

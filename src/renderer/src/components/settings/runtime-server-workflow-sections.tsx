@@ -3,6 +3,7 @@ import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import { Button } from '../ui/button'
 import { RuntimePairingUrlGenerator } from './RuntimePairingUrlGenerator'
+import { MachineNameField } from './MachineNameField'
 
 export type RemoteServerWorkflow = 'connect' | 'cloud-vm' | 'share'
 
@@ -120,6 +121,7 @@ export function RuntimeServerShareSection({
           )}
         </p>
       </div>
+      <MachineNameField id="runtime-share-machine-name" />
       <div className="overflow-hidden rounded-lg border border-border/50 bg-card/30">
         <div className="flex flex-wrap items-center justify-between gap-3 px-3 py-2.5">
           <div className="min-w-0 space-y-0.5">

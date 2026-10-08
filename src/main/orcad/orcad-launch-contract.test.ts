@@ -2,6 +2,9 @@
  * The two things a supervisor reads off a launch: what the arguments mean, and what an exit
  * code means. Both are part of the ops contract in docs/reference/orcad-operations.md.
  */
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import {
   ORCAD_EXIT_CONFIGURATION,
@@ -10,8 +13,14 @@ import {
   resolveOrcadExitCode
 } from './orcad-entry'
 import { startOrcadWithLifecycle } from './orcad-lifecycle'
+import {
+  beginAgentSessionRuntimeRecord,
+  readAgentSessionRuntimeEnds
+} from '../runtime/agent-session-runtime-end-record'
 import { OrcadBindAddressError } from './orcad-bind-address'
 import { OrcadInstanceLockError } from './orcad-instance-lock'
+import { ProfileStateAccessError } from '../persistence/profile-state/profile-state-access'
+import { OrcadBundledRuntimeError } from './orcad-bundled-runtime'
 
 describe('parseArgs', () => {
   it('accepts --bind and leaves it unset when absent', () => {
@@ -22,6 +31,25 @@ describe('parseArgs', () => {
       bind: '10.0.0.5',
       json: true
     })
+  })
+
+  it('takes the desktop serve flags orca serve forwards', () => {
+    expect(
+      parseArgs([
+        '--mobile-pairing',
+        '--recipe-json',
+        '--project-root',
+        '/work/app',
+        '--no-pairing'
+      ])
+    ).toEqual({
+      mobilePairing: true,
+      recipeJson: true,
+      projectRoot: '/work/app',
+      noPairing: true
+    })
+    expect(() => parseArgs(['--recipe-json'])).toThrow('--recipe-json requires --project-root')
+    expect(() => parseArgs(['--project-root'])).toThrow('--project-root expects a value')
   })
 
   it('rejects --bind with no value rather than silently binding the default', () => {
@@ -38,7 +66,13 @@ describe('resolveOrcadExitCode', () => {
       resolveOrcadExitCode(new OrcadInstanceLockError('orcad_instance_lock_held', 'held'))
     ).toBe(ORCAD_EXIT_CONFIGURATION)
     expect(resolveOrcadExitCode(new OrcadBindAddressError('bad'))).toBe(ORCAD_EXIT_CONFIGURATION)
+    expect(resolveOrcadExitCode(new ProfileStateAccessError('recovery interrupted'))).toBe(
+      ORCAD_EXIT_CONFIGURATION
+    )
     expect(resolveOrcadExitCode(new Error('port in use'))).toBe(ORCAD_EXIT_FAILED)
+    expect(resolveOrcadExitCode(new OrcadBundledRuntimeError('partial installation'))).toBe(
+      ORCAD_EXIT_CONFIGURATION
+    )
     expect(ORCAD_EXIT_CONFIGURATION).not.toBe(ORCAD_EXIT_FAILED)
   })
 })
@@ -57,7 +91,7 @@ describe('orcad lifecycle cleanup', () => {
     ).rejects.toThrow('startup failed')
 
     expect(cleanupRuntime).toHaveBeenCalledOnce()
-    expect(cleanupHost).toHaveBeenCalledOnce()
+    expect(cleanupHost).toHaveBeenCalledExactlyOnceWith(true)
   })
 
   it('preserves the startup error when rollback also fails', async () => {
@@ -95,5 +129,42 @@ describe('orcad lifecycle cleanup', () => {
 
     expect(cleanupRuntime).toHaveBeenCalledOnce()
     expect(cleanupHost).toHaveBeenCalledOnce()
+  })
+
+  it("records the runtime's end before its stop waits on anything", async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'orcad-runtime-end-'))
+    try {
+      beginAgentSessionRuntimeRecord(directory, 'orcad-runtime', 1)
+      let endSeenByCleanup: string | undefined
+      const handle = await startOrcadWithLifecycle(
+        async (registerCleanup) => {
+          registerCleanup(async () => {
+            endSeenByCleanup = readAgentSessionRuntimeEnds(directory)?.get('orcad-runtime')
+          })
+          return {}
+        },
+        vi.fn(async () => {})
+      )
+
+      await handle.stop()
+
+      // A chat whose agent dies with this stop reads as a restart, not a crash.
+      expect(endSeenByCleanup).toBe('quit')
+    } finally {
+      await rm(directory, { recursive: true, force: true })
+    }
+  })
+
+  it('keeps the host aware of failed runtime teardown so it cannot release profile admission', async () => {
+    const failure = new Error('profile writer still running')
+    const cleanupHost = vi.fn(async () => {})
+    const handle = await startOrcadWithLifecycle(async (registerCleanup) => {
+      registerCleanup(async () => {
+        throw failure
+      })
+      return {}
+    }, cleanupHost)
+    await expect(handle.stop()).rejects.toBe(failure)
+    expect(cleanupHost).toHaveBeenCalledExactlyOnceWith(false)
   })
 })

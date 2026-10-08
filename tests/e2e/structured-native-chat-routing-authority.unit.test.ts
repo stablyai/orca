@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { GlobalSettings } from '../../src/shared/global-settings-types'
 import type * as SharedLaunchRoute from '../../src/shared/structured-native-chat-launch-route'
 import { decideWorkerStartMode } from '../../src/main/runtime/rpc/methods/orchestration-worker-start-mode'
 import {
@@ -42,8 +43,7 @@ const placements = [
 const blockers: StructuredNativeChatBlocker[] = [
   'reused-terminal',
   'agent-without-structured-session',
-  'floating-workspace',
-  'tui-launch-customization',
+  'custom-start-directory',
   'remote-execution-host',
   'project-runtime',
   'runtime-capability',
@@ -51,40 +51,61 @@ const blockers: StructuredNativeChatBlocker[] = [
 ]
 
 describe('shared feasibility owns every caller decision', () => {
-  it.each(placements)('orchestration cannot override the shared verdict for %j', (placement) => {
-    for (const agent of ['claude', 'codex', 'grok', 'openclaude'] as const) {
-      for (const customized of [false, true]) {
-        const input = {
-          params: { agent, ...placement },
-          settings: {
+  it.each(placements.filter((placement) => !('on' in placement)))(
+    'orchestration cannot override the shared verdict for %j',
+    (placement) => {
+      for (const agent of ['claude', 'codex', 'grok', 'openclaude'] as const) {
+        for (const customized of [false, true]) {
+          // Arguments and environment are customized on BOTH passes and the launch command on one;
+          // none of them reaches the verdict. A caller that resumed reading any of them fails here.
+          const launchSettings: Partial<GlobalSettings> & typeof settings = {
             ...settings,
-            ...(customized ? { agentDefaultArgs: { [agent]: '--custom' } } : {})
+            agentDefaultArgs: { [agent]: '--custom' },
+            agentDefaultEnv: { [agent]: { ORCA_ROUTING_AUTHORITY: '1' } },
+            ...(customized ? { agentCmdOverrides: { [agent]: `${agent}-wrapper` } } : {})
           }
-        }
-        predicate.mockReturnValue({ supported: true })
-        expect(decideWorkerStartMode(input).mode).toBe('structured')
-        expect(predicate).toHaveBeenLastCalledWith(
-          expect.objectContaining({
-            agent,
-            executionHostId: placement.on ? `runtime:${placement.on}` : 'local',
-            reusesTerminal: Boolean(placement.terminal),
-            requiresTuiLaunchCustomization: customized
-          })
-        )
-        for (const blocker of blockers) {
-          predicate.mockReturnValue({ supported: false, blocker })
-          const receipt = decideWorkerStartMode(input)
-          expect(receipt).toMatchObject({ mode: 'terminal', preferred: 'structured' })
-          expect(receipt.reason).not.toBe('user_default')
-          expect(receipt.detail).toContain('Your default is a structured chat session')
-          if (blocker === 'runtime-capability-unknown') {
-            expect(receipt.reason).toBe('structured_support_unknown')
-            expect(receipt.detail).toContain('has not established')
+          const input = { params: { agent, ...placement }, settings: launchSettings }
+          predicate.mockReturnValue({ supported: true })
+          expect(decideWorkerStartMode(input).mode).toBe('structured')
+          expect(predicate).toHaveBeenLastCalledWith(
+            expect.objectContaining({
+              agent,
+              executionHostId: 'local',
+              reusesTerminal: Boolean(placement.terminal),
+              startsOutsideWorkspaceRoot: false
+            })
+          )
+          for (const blocker of blockers) {
+            predicate.mockReturnValue({ supported: false, blocker })
+            const receipt = decideWorkerStartMode(input)
+            expect(receipt).toMatchObject({ mode: 'terminal', preferred: 'structured' })
+            expect(receipt.reason).not.toBe('user_default')
+            expect(receipt.detail).toContain('Your default is a structured chat session')
+            if (blocker === 'runtime-capability-unknown') {
+              expect(receipt.reason).toBe('structured_support_unknown')
+              expect(receipt.detail).toContain('has not established')
+            }
           }
         }
       }
     }
-  })
+  )
+
+  // A worker placed on another runtime starts through federation, which creates terminal agents
+  // only, so that runtime is never asked; the shared verdict is not this host's to give for it.
+  it.each(placements.filter((placement) => 'on' in placement))(
+    'places a worker on another runtime as a terminal agent for %j',
+    (placement) => {
+      predicate.mockReturnValue({ supported: true })
+      const receipt = decideWorkerStartMode({ params: { agent: 'claude', ...placement }, settings })
+      expect(receipt).toMatchObject({
+        mode: 'terminal',
+        preferred: 'structured',
+        reason: 'remote_execution_host'
+      })
+      expect(predicate).not.toHaveBeenCalled()
+    }
+  )
 
   it('renderer presentation cannot override shared feasibility', () => {
     for (const agent of ['claude', 'codex', 'grok', 'openclaude'] as const) {
@@ -96,7 +117,7 @@ describe('shared feasibility owns every caller decision', () => {
             executionHostId,
             promptDelivery,
             hostCapabilities: RUNTIME_CAPABILITIES,
-            requiresTuiLaunchCustomization: true,
+            startsOutsideWorkspaceRoot: true,
             workspaceKind: 'folder',
             initialSessionOptions: { model: 'model-1', effort: 'high' }
           }
@@ -107,7 +128,7 @@ describe('shared feasibility owns every caller decision', () => {
             expect.objectContaining({
               agent,
               executionHostId,
-              requiresTuiLaunchCustomization: true,
+              startsOutsideWorkspaceRoot: true,
               workspaceKind: 'folder'
             })
           )

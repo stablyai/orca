@@ -162,20 +162,20 @@ describe('buildAgentRowLineageTree', () => {
     )
     const iterate = Set.prototype[Symbol.iterator]
     let visitedSetEntries = 0
-    const spy = vi
-      .spyOn(Set.prototype, Symbol.iterator)
-      .mockImplementation(function (this: Set<unknown>) {
-        const iterator = iterate.call(this)
-        const next = iterator.next.bind(iterator)
-        iterator.next = () => {
-          const result = next()
-          if (!result.done) {
-            visitedSetEntries += 1
-          }
-          return result
+    const spy = vi.spyOn(Set.prototype, Symbol.iterator).mockImplementation(function (
+      this: Set<unknown>
+    ) {
+      const iterator = iterate.call(this)
+      const next = iterator.next.bind(iterator)
+      iterator.next = () => {
+        const result = next()
+        if (!result.done) {
+          visitedSetEntries += 1
         }
-        return iterator
-      })
+        return result
+      }
+      return iterator
+    })
     let tree: ReturnType<typeof buildAgentRowLineageTree>
     try {
       tree = buildAgentRowLineageTree(rows)

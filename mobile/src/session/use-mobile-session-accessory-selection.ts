@@ -1,6 +1,6 @@
 import { useRef, useCallback } from 'react'
 import { Keyboard, Platform, type View } from 'react-native'
-import * as Clipboard from 'expo-clipboard'
+import { useClipboardReader, useClipboardWriter } from '../platform/clipboard'
 import { newTabRepoListRead, type MobileRuntimeRepoSummary } from './mobile-session-read-operations'
 import {
   triggerSelection,
@@ -8,9 +8,10 @@ import {
   triggerError,
   triggerEdgeBump
 } from '../platform/haptics'
-import type {
-  TerminalKeyboardAvoidanceMetrics,
-  TerminalModes
+import {
+  sameTerminalKeyboardAvoidanceMetrics,
+  type TerminalKeyboardAvoidanceMetrics,
+  type TerminalModes
 } from '../terminal/terminal-webview-contract'
 import type { createTerminalLiveAccessoryInput } from '../terminal/terminal-live-accessory-input'
 import { clearTerminalLiveInputFocusTimer } from '../terminal/terminal-live-input'
@@ -43,6 +44,8 @@ export function useMobileSessionAccessorySelection(scope: MobileSessionTerminalI
     handleAccessoryKey,
     clearSessionTabActionSheetKeyboardListener
   } = scope
+  const clipboard = useClipboardWriter()
+  const clipboardContents = useClipboardReader().contents
   const trimsGutterRef = useTerminalCopyTrimsGutter(client, connState)
   // Why: hold-to-repeat matches iOS cadence (400ms then 45ms); non-repeatable keys fire once (holding is destructive).
   const repeatTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -118,7 +121,7 @@ export function useMobileSessionAccessorySelection(scope: MobileSessionTerminalI
         return
       }
       try {
-        await Clipboard.setStringAsync(
+        await clipboard.writeText(
           trimsGutterRef.current ? stripTerminalSelectionGutter(text) : text
         )
         triggerSuccess()
@@ -138,7 +141,7 @@ export function useMobileSessionAccessorySelection(scope: MobileSessionTerminalI
         showToast("Couldn't copy", 1500)
       }
     },
-    [showToast]
+    [clipboard, showToast]
   )
 
   const handleSelectionEvicted = useCallback(
@@ -163,13 +166,7 @@ export function useMobileSessionAccessorySelection(scope: MobileSessionTerminalI
     (handle: string, metrics: TerminalKeyboardAvoidanceMetrics) => {
       setTerminalKeyboardMetrics((prev) => {
         const current = prev.get(handle)
-        if (
-          current &&
-          current.cursorY === metrics.cursorY &&
-          current.contentBottomRow === metrics.contentBottomRow &&
-          current.rows === metrics.rows &&
-          current.altScreen === metrics.altScreen
-        ) {
+        if (current && sameTerminalKeyboardAvoidanceMetrics(current, metrics)) {
           return prev
         }
         return new Map(prev).set(handle, metrics)
@@ -203,13 +200,10 @@ export function useMobileSessionAccessorySelection(scope: MobileSessionTerminalI
   }, [client, isFloatingWorkspaceRoute, worktreeId])
 
   const refreshCanPaste = useCallback(() => {
-    void Promise.all([
-      Clipboard.hasStringAsync().catch(() => false),
-      Clipboard.hasImageAsync().catch(() => false)
-    ]).then(([hasString, hasImage]) => {
-      setCanPaste(hasString || hasImage)
+    void clipboardContents().then(({ text, image }) => {
+      setCanPaste(text || image)
     })
-  }, [])
+  }, [clipboardContents, setCanPaste])
   return {
     repeatTimeoutRef,
     repeatIntervalRef,

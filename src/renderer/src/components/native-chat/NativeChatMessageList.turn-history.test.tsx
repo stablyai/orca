@@ -57,6 +57,7 @@ function session(items: AgentJournalRenderItem[]): NativeChatLiveSession {
     agent: 'codex',
     hasMore: false,
     loadingEarlier: false,
+    olderHistoryGeneration: 0,
     loadEarlier: vi.fn(),
     readPhase: 'ready'
   }
@@ -68,7 +69,6 @@ function view(items: AgentJournalRenderItem[], structured = true) {
       journalItems={structured ? items : undefined}
       isWorking={false}
       expandSignal={false}
-      fontScale={1}
     />
   )
 }
@@ -194,17 +194,17 @@ describe('turn history presentation', () => {
   it('reveals and scrolls to a folded diff card from a collapsed completed turn', () => {
     vi.spyOn(HTMLElement.prototype, 'scrollTo').mockImplementation(scrollTo)
     render(view([user, prose, diff()]))
-    expect(screen.queryByText('Edited file')).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Edited .*a\.ts(?:\s|$)/ })).toBeNull()
     const header = screen.getByRole('button', { name: /1 changed file/ })
     expect(header).toHaveAttribute('aria-expanded', 'false')
     fireEvent.click(header)
     fireEvent.click(screen.getByRole('button', { name: /src\/a.ts/ }))
-    expect(screen.getByText('Edited file')).toBeInTheDocument()
+    expect(screen.getByText('Edited')).toBeInTheDocument()
     expect(screen.getByText('after')).toBeInTheDocument()
     expect(screen.getByText('before')).toBeInTheDocument()
     expect(scrollTo).toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('button', { name: /1× Diff/ }))
-    expect(screen.queryByText('Edited file')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /Edited 1 file/ }))
+    expect(screen.queryByRole('button', { name: /^Edited .*a\.ts(?:\s|$)/ })).toBeNull()
     fireEvent.click(header)
     expect(header).toHaveAttribute('aria-expanded', 'false')
     fireEvent.click(header)

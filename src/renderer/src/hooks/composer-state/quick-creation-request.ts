@@ -41,7 +41,8 @@ export type QuickCreationRequestInput = {
   linkedGitLabIssue: number | null
   includeGitLabLinks: boolean
   startup: WorktreeCreationRequest['startup']
-  issueCommand: WorktreeCreationRequest['issueCommand']
+  issueCommand?: WorktreeCreationRequest['issueCommand']
+  hookPreparation?: WorktreeCreationRequest['hookPreparation']
   pendingFirstAgentMessageRename: boolean
   note: string
   startupPlan: AgentStartupPlan | null
@@ -103,6 +104,7 @@ export function buildQuickCreationRequest(
       ? { linkedGitLabIssue: input.linkedGitLabIssue }
       : {}),
     ...(input.startup ? { startup: input.startup } : {}),
+    ...(input.hookPreparation ? { hookPreparation: input.hookPreparation } : {}),
     ...(input.issueCommand ? { issueCommand: input.issueCommand } : {}),
     pendingFirstAgentMessageRename: input.pendingFirstAgentMessageRename,
     note: input.note,

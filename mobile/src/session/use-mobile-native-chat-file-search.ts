@@ -10,13 +10,6 @@ import {
 } from './mobile-session-read-operations'
 import { rankSuggestions } from './mobile-native-chat-autocomplete'
 
-function extractPaths(files: unknown): string[] {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-  return ((files as { relativePath?: string }[] | undefined) ?? [])
-    .map((file) => file.relativePath ?? '')
-    .filter((path): path is string => path.length > 0)
-}
-
 const FILE_SEARCH_DEBOUNCE_MS = 120
 const FILE_SEARCH_RESULT_LIMIT = 16
 const FILE_SEARCH_QUERY_CACHE_LIMIT = 20
@@ -40,6 +33,14 @@ export function useMobileNativeChatFileSearch(args: {
   const inventory = useRef(
     new GenerationScopedRequestOwner<WorkspaceInventoryParameters, string[]>()
   ).current
+
+  const mountedRef = useRef(true)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
 
   useEffect(() => {
     sequenceRef.current++
@@ -97,6 +98,9 @@ export function useMobileNativeChatFileSearch(args: {
           setNativeChatFilePaths(paths)
         }
         const loadLegacyPaths = async (): Promise<void> => {
+          if (!mountedRef.current) {
+            return
+          }
           // What retires the inventory: this host, this workspace, this logical authority. A
           // reconnect to the same host leaves the files on disk alone, so the physical session
           // epoch is deliberately not in it. Read once, so a cutover between the two calls below
@@ -114,7 +118,7 @@ export function useMobileNativeChatFileSearch(args: {
               worktree: `id:${worktreeId}`
             })
             const accepted = nativeChatFileInventoryRead.interpret(response)
-            return accepted.accepted ? extractPaths(accepted.value) : null
+            return accepted.accepted ? accepted.value : null
           })
           if (!loaded || inventory.commit(loaded.lease, loaded.value) !== 'committed') {
             return
@@ -134,7 +138,7 @@ export function useMobileNativeChatFileSearch(args: {
           const accepted = nativeChatFileSearchRead.interpret(response)
           if (accepted.accepted) {
             searchSupportedRef.current = true
-            applyPaths(extractPaths(accepted.value))
+            applyPaths(accepted.value)
             return
           }
           // Why the raw refusal: `method_not_found` is what makes the composer fall back to the

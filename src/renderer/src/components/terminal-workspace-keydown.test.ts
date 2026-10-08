@@ -35,7 +35,6 @@ vi.mock('@/lib/floating-workspace-terminal-actions', () => ({
   createFloatingWorkspaceMarkdownTab: vi.fn(),
   createFloatingWorkspaceTerminalTab: vi.fn(),
   handleEmptyFloatingWorkspacePanelCloseShortcut: () => false,
-  isEmptyFloatingWorkspacePanelVisible: () => false,
   isEventTargetInsideFloatingWorkspacePanel: () => mocks.targetInsideFloatingPanel,
   isFloatingWorkspacePanelFocused: () => mocks.floatingFocused,
   switchFloatingWorkspaceTab: vi.fn()

@@ -79,13 +79,13 @@ vi.mock('./pty-transport', () => ({
 }))
 
 describe('connectPanePty split cwd resolution', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks()
     transportFactoryQueue = []
     createdTransportOptions = []
     storeSubscribers = []
     mockStoreState = createInitialStoreState(() => mockStoreState)
-    installTerminalTestGlobals()
+    await installTerminalTestGlobals()
   })
 
   afterEach(async () => {

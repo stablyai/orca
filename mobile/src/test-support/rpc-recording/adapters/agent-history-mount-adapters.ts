@@ -46,7 +46,7 @@ function hostClientContext(client: MountContext['client'], effect: MountContext[
     getActivePath: () => 'lan',
     getPendingPath: () => null,
     isPairingRejected: () => false,
-    isHostSignedOut: () => false,
+    getRelayHostReachability: () => 'connecting',
     subscribeHostState: () => () => {},
     getAllClients: () => [{ hostId: HOST_ID, client }],
     subscribeAllHosts: () => () => {},

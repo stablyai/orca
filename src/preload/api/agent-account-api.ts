@@ -1,9 +1,11 @@
+import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protection'
 import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
 } from '../../shared/managed-account-types'
 import type { CodexConfigSyncStatus } from '../../shared/codex-config-sync-types'
-import type { GrokAccountStatus } from '../../shared/rate-limit-types'
+import type { CursorAccountStatus, GrokAccountStatus } from '../../shared/rate-limit-types'
+import type { ZcodePlanCredentialsStatus } from '../../shared/zcode-plan-sites'
 
 export type CodexAccountsApi = {
   list: () => Promise<CodexRateLimitAccountsState>
@@ -11,6 +13,10 @@ export type CodexAccountsApi = {
     runtime?: 'host' | 'wsl'
     wslDistro?: string | null
   }) => Promise<CodexRateLimitAccountsState>
+  cancelPendingLogin: () => Promise<boolean>
+  /** Sign-in link of the login waiting on a browser, or null when none is. */
+  getPendingLoginUrl: () => Promise<string | null>
+  onPendingLoginUrlChanged: (callback: (url: string | null) => void) => () => void
   reauthenticate: (args: {
     accountId: string
     /** Local-only: activate the re-authed account when its runtime lane had no selection. */
@@ -28,8 +34,6 @@ export type CodexAccountsApi = {
       ptyId: string
       launchAccountId: string | null
       activeAccountId: string | null
-      /** Optional for compatibility with a pre-reason main process. */
-      reason?: 'account-change' | 'home-route-change'
     }[]
   >
   /** The selection lane each PTY launched from, keyed by pty id; unrecorded panes are absent. */
@@ -58,6 +62,10 @@ export type GrokAccountsApi = {
   getStatus: () => Promise<GrokAccountStatus>
 }
 
+export type CursorAccountsApi = {
+  getStatus: () => Promise<CursorAccountStatus>
+}
+
 export type MinimaxCredentialsApi = {
   // Why: cookie + API key each live in their own safeStorage file, so the
   // status separates them. 'configured' stays as the OR so existing callers
@@ -66,11 +74,34 @@ export type MinimaxCredentialsApi = {
     configured: boolean
     cookieConfigured: boolean
     apiKeyConfigured: boolean
+    cookieProtection: SecretAtRestProtection | null
+    apiKeyProtection: SecretAtRestProtection | null
   }>
-  saveCookie: (cookie: string) => Promise<{ cookieConfigured: boolean }>
-  clearCookie: () => Promise<{ cookieConfigured: boolean }>
-  saveApiKey: (key: string) => Promise<{ apiKeyConfigured: boolean }>
-  clearApiKey: () => Promise<{ apiKeyConfigured: boolean }>
+  saveCookie: (cookie: string) => Promise<{
+    cookieConfigured: boolean
+    cookieProtection: SecretAtRestProtection | null
+  }>
+  clearCookie: () => Promise<{
+    cookieConfigured: boolean
+    cookieProtection: SecretAtRestProtection | null
+  }>
+  saveApiKey: (key: string) => Promise<{
+    apiKeyConfigured: boolean
+    apiKeyProtection: SecretAtRestProtection | null
+  }>
+  clearApiKey: () => Promise<{
+    apiKeyConfigured: boolean
+    apiKeyProtection: SecretAtRestProtection | null
+  }>
+}
+
+export type ZcodePlanCredentialsApi = {
+  // Why: the GLM Coding Plan key lives in its own safeStorage file and the
+  // ZCode CLI's config is read-only, so the status reports both sources'
+  // presence; neither credential value ever crosses the IPC boundary.
+  getStatus: () => Promise<ZcodePlanCredentialsStatus>
+  saveApiKey: (key: string) => Promise<ZcodePlanCredentialsStatus>
+  clearApiKey: () => Promise<ZcodePlanCredentialsStatus>
 }
 
 export type CodexConfigSyncApi = {

@@ -7,12 +7,14 @@ import type { RuntimeMobileDictationController } from './runtime-mobile-dictatio
 import type { RuntimeMobileNotificationController } from './runtime-mobile-notification-controller'
 import type { RuntimeMobileSpeechCatalog } from './runtime-mobile-speech-catalog'
 import type { RuntimeNativeChatDraftResolutions } from './runtime-native-chat-draft-resolutions'
+import type { RuntimeSessionSearchSettingsController } from './runtime-session-search-settings'
 import type { RuntimeSubscriptionRegistry } from './runtime-subscription-registry'
 
 export type RuntimeServiceCommandSurface = {
   listAiVaultSessions: RuntimeAiVaultCommands['list']
   resolveAiVaultSessionTitles: RuntimeAiVaultCommands['resolveTitles']
   prepareAiVaultSessionResume: RuntimeAiVaultCommands['prepare']
+  setSessionSearchEnabled: RuntimeSessionSearchSettingsController['setEnabled']
   onClientEvent: RuntimeClientEventBus['on']
   notifyNativeChatLaunchDraftResolved: RuntimeNativeChatDraftResolutions['notify']
   registerSubscriptionCleanup: RuntimeSubscriptionRegistry['register']
@@ -23,6 +25,8 @@ export type RuntimeServiceCommandSurface = {
   cleanupSubscriptionsByPrefix: RuntimeSubscriptionRegistry['cleanupByPrefix']
   cleanupSubscriptionsForConnection: RuntimeSubscriptionRegistry['cleanupForConnection']
   cleanupSubscriptionIfOwnedByConnection: RuntimeSubscriptionRegistry['cleanupIfOwnedByConnection']
+  getSubscriptionRegistrationVersion: RuntimeSubscriptionRegistry['getRegistrationVersion']
+  releaseSubscriptionByRequest: RuntimeSubscriptionRegistry['releaseByRequest']
   onNotificationDispatched: RuntimeMobileNotificationController['onDispatched']
   getMobileNotificationListenerCount: RuntimeMobileNotificationController['getListenerCount']
   dispatchMobileNotification: RuntimeMobileNotificationController['dispatch']
@@ -31,12 +35,15 @@ export type RuntimeServiceCommandSurface = {
   reconcileDismissedPushes: RuntimeMobileNotificationController['reconcileDismissedPushes']
   getMobileNotificationEpoch: RuntimeMobileNotificationController['getEpoch']
   dismissMobileNotification: RuntimeMobileNotificationController['dismiss']
+  retireStructuredAttention: RuntimeMobileNotificationController['retireStructuredAttention']
+  reconcileStructuredPromptAttention: RuntimeMobileNotificationController['reconcileStructuredPromptAttention']
   dispatchPluginNotification: RuntimeMobileNotificationController['dispatchPlugin']
   setMobilePushRegistrar: RuntimeMobileNotificationController['setPushRegistrar']
   testMobilePushDevice: RuntimeMobileNotificationController['testPushDevice']
   registerMobilePushDevice: RuntimeMobileNotificationController['registerPushDevice']
   unregisterMobilePushDevice: RuntimeMobileNotificationController['unregisterPushDevice']
   setAccountServices: RuntimeAccountController['setServices']
+  getDataAccountsSnapshot: RuntimeAccountController['dataAccountsSnapshot']
   setCommitMessageAgentEnvironmentResolvers: RuntimeAccountController['setCommitMessageAgentEnvironment']
   getCommitMessageAgentEnvironmentResolvers: RuntimeAccountController['getCommitMessageAgentEnvironment']
   getAccountsSnapshot: RuntimeAccountController['getSnapshot']
@@ -47,9 +54,14 @@ export type RuntimeServiceCommandSurface = {
   selectCodexAccountForTarget: RuntimeAccountController['selectCodexForTarget']
   consumeCodexRateLimitResetCredit: RuntimeAccountController['consumeCodexResetCredit']
   removeClaudeAccount: RuntimeAccountController['removeClaude']
-  addClaudeAccountFromConfigDir: RuntimeAccountController['addClaudeFromConfigDir']
+  beginClaudeSignIn: RuntimeAccountController['beginClaudeSignIn']
+  finishClaudeSignIn: RuntimeAccountController['finishClaudeSignIn']
+  cancelClaudeSignIn: RuntimeAccountController['cancelClaudeSignIn']
   removeCodexAccount: RuntimeAccountController['removeCodex']
   addCodexAccountFromHome: RuntimeAccountController['addCodexFromHome']
+  addDataAccountFromHome: RuntimeAccountController['addDataFromHome']
+  selectDataAccount: RuntimeAccountController['selectData']
+  removeDataAccount: RuntimeAccountController['removeData']
   onAccountsChanged: RuntimeAccountController['onChanged']
   listMobileSpeechModels: RuntimeMobileSpeechCatalog['list']
   downloadMobileSpeechModel: RuntimeMobileSpeechCatalog['download']
@@ -69,6 +81,7 @@ export type RuntimeServiceCommandSurface = {
 
 type RuntimeServiceCommandOwners = {
   aiVault: RuntimeAiVaultCommands
+  sessionSearchSettings: RuntimeSessionSearchSettingsController
   clientEvents: RuntimeClientEventBus
   nativeChatDraftResolutions: RuntimeNativeChatDraftResolutions
   subscriptions: RuntimeSubscriptionRegistry
@@ -85,6 +98,7 @@ export function installRuntimeServiceCommandSurface(
   owners: RuntimeServiceCommandOwners
 ): void {
   const vault = owners.aiVault
+  const sessionSearchSettings = owners.sessionSearchSettings
   const events = owners.clientEvents
   const drafts = owners.nativeChatDraftResolutions
   const subscriptions = owners.subscriptions
@@ -98,6 +112,7 @@ export function installRuntimeServiceCommandSurface(
     listAiVaultSessions: vault.list.bind(vault),
     resolveAiVaultSessionTitles: vault.resolveTitles.bind(vault),
     prepareAiVaultSessionResume: vault.prepare.bind(vault),
+    setSessionSearchEnabled: sessionSearchSettings.setEnabled.bind(sessionSearchSettings),
     onClientEvent: events.on.bind(events),
     notifyNativeChatLaunchDraftResolved: drafts.notify.bind(drafts),
     registerSubscriptionCleanup: subscriptions.register.bind(subscriptions),
@@ -109,6 +124,8 @@ export function installRuntimeServiceCommandSurface(
     cleanupSubscriptionsForConnection: subscriptions.cleanupForConnection.bind(subscriptions),
     cleanupSubscriptionIfOwnedByConnection:
       subscriptions.cleanupIfOwnedByConnection.bind(subscriptions),
+    getSubscriptionRegistrationVersion: subscriptions.getRegistrationVersion.bind(subscriptions),
+    releaseSubscriptionByRequest: subscriptions.releaseByRequest.bind(subscriptions),
     onNotificationDispatched: notifications.onDispatched.bind(notifications),
     getMobileNotificationListenerCount: notifications.getListenerCount.bind(notifications),
     dispatchMobileNotification: notifications.dispatch.bind(notifications),
@@ -117,12 +134,16 @@ export function installRuntimeServiceCommandSurface(
     reconcileDismissedPushes: notifications.reconcileDismissedPushes.bind(notifications),
     getMobileNotificationEpoch: notifications.getEpoch.bind(notifications),
     dismissMobileNotification: notifications.dismiss.bind(notifications),
+    retireStructuredAttention: notifications.retireStructuredAttention.bind(notifications),
+    reconcileStructuredPromptAttention:
+      notifications.reconcileStructuredPromptAttention.bind(notifications),
     dispatchPluginNotification: notifications.dispatchPlugin.bind(notifications),
     setMobilePushRegistrar: notifications.setPushRegistrar.bind(notifications),
     testMobilePushDevice: notifications.testPushDevice.bind(notifications),
     registerMobilePushDevice: notifications.registerPushDevice.bind(notifications),
     unregisterMobilePushDevice: notifications.unregisterPushDevice.bind(notifications),
     setAccountServices: accounts.setServices.bind(accounts),
+    getDataAccountsSnapshot: accounts.dataAccountsSnapshot.bind(accounts),
     setCommitMessageAgentEnvironmentResolvers:
       accounts.setCommitMessageAgentEnvironment.bind(accounts),
     getCommitMessageAgentEnvironmentResolvers:
@@ -135,9 +156,14 @@ export function installRuntimeServiceCommandSurface(
     selectCodexAccountForTarget: accounts.selectCodexForTarget.bind(accounts),
     consumeCodexRateLimitResetCredit: accounts.consumeCodexResetCredit.bind(accounts),
     removeClaudeAccount: accounts.removeClaude.bind(accounts),
-    addClaudeAccountFromConfigDir: accounts.addClaudeFromConfigDir.bind(accounts),
+    beginClaudeSignIn: accounts.beginClaudeSignIn.bind(accounts),
+    finishClaudeSignIn: accounts.finishClaudeSignIn.bind(accounts),
+    cancelClaudeSignIn: accounts.cancelClaudeSignIn.bind(accounts),
     removeCodexAccount: accounts.removeCodex.bind(accounts),
     addCodexAccountFromHome: accounts.addCodexFromHome.bind(accounts),
+    addDataAccountFromHome: accounts.addDataFromHome.bind(accounts),
+    selectDataAccount: accounts.selectData.bind(accounts),
+    removeDataAccount: accounts.removeData.bind(accounts),
     onAccountsChanged: accounts.onChanged.bind(accounts),
     listMobileSpeechModels: speech.list.bind(speech),
     downloadMobileSpeechModel: speech.download.bind(speech),

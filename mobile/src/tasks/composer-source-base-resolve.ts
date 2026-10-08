@@ -9,8 +9,6 @@ export type ComposerHostedBase = Pick<
   'baseBranch' | 'compareBaseRef' | 'pushTarget' | 'branchNameOverride' | 'maintainerCanModify'
 >
 
-type HostedBaseResult = ComposerHostedBase | { error: string }
-
 // Resolves a GitHub PR's base via worktree.resolvePrBase, mirroring desktop's
 // select-time resolution. The runtime returns a soft { error } payload rather
 // than an RPC error for provider failures.
@@ -34,12 +32,12 @@ export async function resolveComposerPrBase(args: {
     },
     { timeoutMs: 30_000 }
   )
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-  const result = worktreePrBaseResolve.interpret(reply) as GitHubPrStartPoint | { error: string }
+  const result = worktreePrBaseResolve.interpret(reply)
   if ('error' in result) {
     throw new Error(result.error)
   }
-  return result
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolved arm requires `baseBranch`; `compareBaseRef`, `pushTarget`, `branchNameOverride` and `maintainerCanModify` are optional on GitHubPrStartPoint and stay optional here, and unknown members pass through to the create.
+  return result as GitHubPrStartPoint
 }
 
 // Resolves a GitLab MR's base via worktree.resolveMrBase.
@@ -63,10 +61,10 @@ export async function resolveComposerMrBase(args: {
     },
     { timeoutMs: 30_000 }
   )
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-  const result = worktreeMrBaseResolve.interpret(reply) as HostedBaseResult
+  const result = worktreeMrBaseResolve.interpret(reply)
   if ('error' in result) {
     throw new Error(result.error)
   }
-  return result
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: as the PR resolver above.
+  return result as ComposerHostedBase
 }

@@ -1,7 +1,11 @@
+import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { agentSessionLeaseAdmitsWriter } from '../../shared/agent-session-lease-adjudication'
-import type { AiVaultListResult, AiVaultSession } from '../../shared/ai-vault-types'
+import { defaultAgentChatLabel } from '../../shared/agent-session-chat-label'
+import type { AiVaultListResult } from '../../shared/ai-vault-types'
+import type { AiVaultSearchResponse } from '../../shared/ai-vault-search-types'
 import type { AiVaultPrepareSessionResumeArgs } from '../../shared/ai-vault-resume-preparation'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
+import { ensureStructuredAgentSessionHostUnlessRefused } from '../runtime/structured-agent-session-host-refusal'
 import {
   listStructuredProviderSessionOwnership,
   type StructuredProviderSessionOwnership
@@ -11,32 +15,87 @@ export function projectStructuredAiVaultSessions(
   result: AiVaultListResult,
   structuredSupported: boolean
 ): AiVaultListResult {
-  const host = getStructuredAgentSessionHost()
-  if (!host) {
+  const owner = ownershipLookup()
+  if (!owner) {
     return result
   }
   const sessions = result.sessions.flatMap((session) => {
-    const ownership = findSessionOwnership(session)
+    const ownership = session.executionHostId === LOCAL_EXECUTION_HOST_ID ? owner(session) : null
     if (!ownership) {
       return [session]
     }
     if (!structuredSupported) {
       return []
     }
-    return [
-      {
-        ...session,
-        structuredSession: {
-          sessionId: ownership.sessionId,
-          workspaceId: ownership.workspaceId
-        }
-      }
-    ]
+    return [{ ...session, ...ownedTitle(ownership) }]
   })
   return sessions.length === result.sessions.length &&
     sessions.every((row, index) => row === result.sessions[index])
     ? result
     : { ...result, sessions }
+}
+
+/** Indexed hits name and own a native chat exactly as list rows do; only this host's index can. */
+export function projectStructuredAiVaultSearchResponse(
+  response: AiVaultSearchResponse
+): AiVaultSearchResponse {
+  const owner = response.kind === 'results' ? ownershipLookup() : null
+  if (!owner || response.kind !== 'results') {
+    return response
+  }
+  return {
+    ...response,
+    hits: response.hits.map((hit) => {
+      const ownership = owner(hit)
+      return ownership ? { ...hit, ...ownedTitle(ownership) } : hit
+    })
+  }
+}
+
+/** The hits once the chat host is installed; plain hits if it will not install, since owning and
+ *  naming them must never cost the user the search. */
+export async function searchWithStructuredOwners(
+  search: Promise<AiVaultSearchResponse>,
+  ensureHost?: () => Promise<unknown>
+): Promise<AiVaultSearchResponse> {
+  const hostReady = ensureHost
+    ? ensureStructuredAgentSessionHostUnlessRefused(ensureHost).then(
+        () => true,
+        (error: unknown) => {
+          console.warn('[ai-vault-search] returning hits without native chat owners', error)
+          return false
+        }
+      )
+    : true
+  const response = await search
+  return (await hostReady) ? projectStructuredAiVaultSearchResponse(response) : response
+}
+
+function ownedTitle(ownership: StructuredProviderSessionOwnership) {
+  return {
+    title: ownership.conversationName ?? defaultAgentChatLabel(ownership.provider),
+    structuredSession: { sessionId: ownership.sessionId, workspaceId: ownership.workspaceId }
+  }
+}
+
+/** One index per projection: a list holds hundreds of rows, each once searched every record. */
+function ownershipLookup():
+  | ((row: { agent: string; sessionId: string }) => StructuredProviderSessionOwnership | null)
+  | null {
+  if (!getStructuredAgentSessionHost()) {
+    return null
+  }
+  const byProviderSession = new Map<string, StructuredProviderSessionOwnership>()
+  for (const ownership of listOwnership()) {
+    const key = `${ownership.provider}\0${ownership.providerSessionId}`
+    if (!byProviderSession.has(key)) {
+      byProviderSession.set(key, ownership)
+    }
+  }
+  return (row) =>
+    row.agent === 'codex' || row.agent === 'claude'
+      ? (byProviderSession.get(`${row.agent}\0${row.sessionId}`) ?? null)
+      : null
 }
 
 export function assertLegacyAiVaultResumeAllowed(args: AiVaultPrepareSessionResumeArgs): void {
@@ -53,7 +112,8 @@ export async function assertLegacyAiVaultResumeCommandAllowed(
   if (!isPotentialStructuredResumeCommand(command)) {
     return
   }
-  await ensureHost()
+  // A terminal command is not a chat: with chats refused here there is no ownership to check.
+  await ensureStructuredAgentSessionHostUnlessRefused(ensureHost)
   const host = getStructuredAgentSessionHost()
   if (!host) {
     return
@@ -67,13 +127,6 @@ export async function assertLegacyAiVaultResumeCommandAllowed(
 
 function isPotentialStructuredResumeCommand(command: string): boolean {
   return parseResumeInvocation(command) !== null
-}
-
-function findSessionOwnership(session: AiVaultSession): StructuredProviderSessionOwnership | null {
-  if (session.agent !== 'codex' && session.agent !== 'claude') {
-    return null
-  }
-  return findOwnership(session.agent, session.sessionId)
 }
 
 function findResumeOwnership(

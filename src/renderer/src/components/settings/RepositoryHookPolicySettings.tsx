@@ -141,19 +141,13 @@ export function RepositorySetupPolicySetting({
         />
       </div>
       <div className="flex items-start justify-between gap-4 border-t border-border/60 pt-4">
-        <div className="min-w-0 space-y-1">
+        <div className="min-w-0">
           <h5 className="text-sm font-semibold">
             {translate(
               'auto.components.settings.RepositoryHooksSection.waitForSetupBeforeAgent',
               'Wait for setup to complete before starting agent'
             )}
           </h5>
-          <p className="text-xs text-muted-foreground">
-            {translate(
-              'auto.components.settings.RepositoryHooksSection.waitForSetupBeforeAgentHelp',
-              'Turn this on when setup installs dependencies, MCP servers, or config files the agent needs during startup.'
-            )}
-          </p>
         </div>
         <SettingsSwitch
           checked={setupAgentStartupPolicy === 'wait-for-setup'}

@@ -11,6 +11,7 @@ import {
   resolveCreateReviewDefaultBaseRef,
   stripBaseRef
 } from './create-pull-request-base-ref-normalization'
+import { resolveCreateReviewSeedText } from './create-review-draft-title'
 import {
   createInitialPullRequestFieldRevisions,
   type GenerationSeed,
@@ -75,6 +76,7 @@ export function useCreatePullRequestDialogFields({
   const hasExternalGeneration = Boolean(generation)
   const currentEligibilityKey =
     open && eligibility ? `${repoId}:${worktreeId ?? worktreePath}:${branch}` : null
+  const seedText = resolveCreateReviewSeedText({ branch, eligibility })
   const resolvedDefaultBaseRef = resolveCreateReviewDefaultBaseRef({
     currentBaseRef,
     eligibilityDefaultBaseRef: eligibility?.defaultBaseRef
@@ -243,6 +245,7 @@ export function useCreatePullRequestDialogFields({
     setBody: setUserBody,
     draft,
     setDraft: setUserDraft,
+    fieldsAreSeedPlaceholders: title === seedText.title && body === seedText.body,
     stackedCreationSupported: eligibility?.stackedCreationSupported === true,
     repoDefaultBaseRef,
     fieldRevisions: fieldRevisionsRef.current,

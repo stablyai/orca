@@ -8,6 +8,7 @@ import { stopMissingWorktreeTerminals } from './missing-worktree-terminal-reconc
 import type { RuntimeCommandSurfaceHost } from './orca-runtime-core'
 import type { WorktreeVisibilitySourceMatcher } from '../../shared/worktree/visibility-sources'
 import type { RuntimeStore } from './runtime-store-contract'
+import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
 import type {
   WorkspacePortKillRequest,
   WorkspacePortKillResult,
@@ -118,12 +119,28 @@ export class OrcaRuntimeWithListManagedWorktrees extends OrcaRuntimeWithRestoreS
     return await this.resolveWorktreeSelector(worktreeSelector)
   }
 
+  /**
+   * The git worktree record behind a terminal workspace. Refuses the floating sentinel, which has
+   * no such record — callers that only need to address the workspace want the scope below instead.
+   */
   async showManagedTerminalWorkspace(worktreeSelector: string) {
     const target = await this.resolveTerminalWorkspaceLaunchTarget(worktreeSelector)
     if (!target.managedWorktree) {
       throw new Error('selector_not_found')
     }
     return target.managedWorktree
+  }
+
+  /**
+   * Where a terminal workspace is, for every kind one can be: a git worktree, a folder workspace,
+   * or the floating sentinel. This is the general answer — `id` and `path` are resolved the same
+   * way for all three — so a caller that reads only those must ask for this rather than demand a
+   * worktree record it never reads and lose the floating workspace to a `selector_not_found`.
+   */
+  async showTerminalWorkspaceLaunchScope(
+    worktreeSelector: string
+  ): Promise<TerminalWorkspaceLaunchScope> {
+    return await this.resolveTerminalWorkspaceLaunchScope(worktreeSelector)
   }
 
   async scanWorkspacePorts(repoId?: string): Promise<WorkspacePortScanResult> {

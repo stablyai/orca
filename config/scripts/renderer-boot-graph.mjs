@@ -37,6 +37,10 @@ export function readRendererBootGraph(rendererDir) {
 export function bootGraphForbiddenPayloads(root = process.cwd()) {
   return [
     { label: '@xterm/addon-webgl', signature: 'WebGL2 not supported' },
+    {
+      label: '@xterm/addon-image',
+      signature: 'invalid storageLimit, should be at least 0.5 MB and not exceed 1G'
+    },
     { label: 'i18n/locales/en.json', signature: prunedAwayEnglishSignature(root) }
     // Not zod: six other shared modules on the boot path (runtime environments,
     // closed-tab tombstones, the browser page protocol, shared/constants…)

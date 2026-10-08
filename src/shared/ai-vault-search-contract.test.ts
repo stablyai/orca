@@ -57,6 +57,20 @@ describe('session search public contract', () => {
       }).success
     ).toBe(false)
   })
+  it('accepts future agent names only in optional capability lists', () => {
+    const supportedAgents = ['codex', 'jcode', 'future-agent']
+    expect(
+      AiVaultSearchRequestSchema.parse({ query: 'q', supportedAgents }).supportedAgents
+    ).toEqual(supportedAgents)
+    expect(
+      AiVaultSearchStatusSchema.parse({ ...unavailableSessionSearchStatus(), supportedAgents })
+        .supportedAgents
+    ).toEqual(supportedAgents)
+    expect(
+      AiVaultSearchRequestSchema.safeParse({ query: 'q', filters: { agents: ['future-agent'] } })
+        .success
+    ).toBe(false)
+  })
   it('never accepts resume commands for an unverified or missing source', () => {
     for (const presence of ['unverifiable', 'missing'] as const) {
       const response = searchResults()

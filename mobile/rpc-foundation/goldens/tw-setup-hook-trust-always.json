@@ -1,23 +1,15 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "tasks.setup-hook-trust",
   "family": "worktree.setup-hook-trust",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "69ad18bdf962600dd2f14ea3d12299a7006a46c26c32d2a9b3cc74d569a72e2c",
-  "adapterSha256": "343b97826782820b7aecaddd13a4c8cdbbbca057c83021863d577a677934f3a3",
-  "scenarioSha256": "0d2e3f48aadf45abbf6927b72ed5fef4caa8e3eb2efd1046339a3fbfab6f9f18",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "229c35d1a4ba": {
       "trust": "unapproved"
     },
-    "2fde86b1acca": {
+    "b6a1b1ed0a08": {
       "name": "ui.set#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -56,10 +48,10 @@
         }
       }
     },
-    "4ebca8a81063": {
+    "f35a1e7f7cdb": {
       "name": "ui.set#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"ui.set\",\"params\":{\"trustedOrcaHooks\":{\"repo-1\":{\"all\":{\"approvedAt\":1767225600000}}}}}",
-      "sent": 1
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"ui.set\",\"params\":{\"trustedOrcaHooks\":{\"repo-1\":{\"all\":{\"approvedAt\":1767225600000}}}}}"
     },
     "f3b516f62081": {
       "status": "rejected",
@@ -78,8 +70,8 @@
       {
         "id": "refused-empty-message",
         "observation": {
-          "sender": ["2fde86b1acca"],
-          "payloads": ["4ebca8a81063"],
+          "sender": ["b6a1b1ed0a08"],
+          "payloads": ["f35a1e7f7cdb"],
           "settlements": {
             "approve": "f3b516f62081"
           },

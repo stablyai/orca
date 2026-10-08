@@ -17,8 +17,14 @@
  * records; every other surface says "chat session" / "terminal agent".
  */
 
-import type { GlobalSettings } from '../../shared/global-settings-types'
+import { requestsCwdOutsideWorkspaceRoot } from '../../shared/terminal-startup-cwd'
+import type {
+  AgentLaunchMode,
+  AgentLaunchModeReason,
+  AgentLaunchModeReceipt
+} from '../../shared/agent-launch-intent'
 import { RUNTIME_CAPABILITIES } from '../../shared/protocol-version'
+import { STRUCTURED_AGENT_RUNTIME_REGISTRATIONS } from '../runtime/structured-agent-runtime-registrations'
 import {
   prefersStructuredNativeChatByDefault,
   resolveStructuredNativeChatSupport,
@@ -26,32 +32,12 @@ import {
   type StructuredNativeChatBlocker
 } from '../../shared/structured-native-chat-launch-route'
 import type { TuiAgent } from '../../shared/tui-agent'
-import { hasExplicitTuiLaunchCustomization } from '../../shared/tui-agent-launch-customization'
+import type { WorkspaceLaunchKind } from '../../shared/workspace-launch-kind'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 
-export type AgentLaunchMode = 'structured' | 'terminal'
-
-export type AgentLaunchModeReason =
-  | 'user_default'
-  | 'remote_execution_host'
-  | 'reused_terminal'
-  | 'agent_without_structured_session'
-  | 'tui_launch_customization'
-  | 'structured_sessions_unavailable'
-  | 'structured_support_unknown'
-  | 'wsl_execution_runtime'
-  | 'codex_on_windows'
-  | 'structured_unsupported_on_host'
-
-export type AgentLaunchModeReceipt = {
-  /** The mode the launch actually ran in. */
-  mode: AgentLaunchMode
-  /** The user's settings default for a new agent tab. */
-  preferred: AgentLaunchMode
-  reason: AgentLaunchModeReason
-  /** One sentence, always present, so a fallback is never silent. */
-  detail: string
-}
+// The receipt is part of the launch contract, so it is declared with the rest of it; re-exported
+// here because this module is where the decision that fills it lives.
+export type { AgentLaunchMode, AgentLaunchModeReason, AgentLaunchModeReceipt }
 
 /** What this caller calls the thing it is starting, so one decision serves every surface without
  *  a receipt reading "worker" on a phone. */
@@ -70,10 +56,7 @@ export const DEFAULT_LAUNCH_VOCABULARY: AgentLaunchModeVocabulary = {
   terminal: 'a terminal agent'
 }
 
-export type AgentLaunchModeSettings = Partial<
-  NativeChatDefaultSettings &
-    Pick<GlobalSettings, 'agentCmdOverrides' | 'agentDefaultArgs' | 'agentDefaultEnv'>
->
+export type AgentLaunchModeSettings = Partial<NativeChatDefaultSettings>
 
 /** The placement facts the decision reads. `worktree`, `model` and `effort` are deliberately not
  *  here: a structured launch honours all three, and a placement flag must never imply a mode. */
@@ -83,14 +66,32 @@ export type AgentLaunchModePlacement = {
   on?: string
   /** An existing terminal being reused. */
   terminal?: string
+  /** Which kind of workspace the launch lands in, derived by the host from the workspace it
+   *  resolved — never accepted from a caller, which would let one route around this decision.
+   *  Absent means the kind was never established, and is not read as any particular kind. */
+  workspaceKind?: WorkspaceLaunchKind
+  /** A requested start directory. It belongs here, unlike `model` or `effort`, because a structured
+   *  session has no way to apply one — it runs in its workspace — so honouring it and honouring the
+   *  chat preference are mutually exclusive rather than merely awkward. Read against
+   *  `workspacePath`: a cwd that names the root asks for nothing and decides nothing. */
+  cwd?: string
+  /** The root of the workspace the launch lands in, when the host has resolved it. Without it a
+   *  requested `cwd` cannot be proven to name the root and is read as custom. */
+  workspacePath?: string
+  /** False when the client asking for the launch cannot show this agent's chat; absent for the
+   *  host's own callers, which can. */
+  callerRendersStructured?: boolean
 }
+
+const REGISTERED_STRUCTURED_AGENTS: readonly string[] = STRUCTURED_AGENT_RUNTIME_REGISTRATIONS.map(
+  ({ definition }) => definition.agent
+)
 
 const DOWNGRADE_DETAIL: Record<Exclude<AgentLaunchModeReason, 'user_default'>, string> = {
   remote_execution_host: 'this launch runs on a remote execution host',
   reused_terminal: 'it reuses a running terminal agent',
   agent_without_structured_session: 'this agent has no structured session',
-  tui_launch_customization:
-    'this agent has a custom launch command, arguments or environment that only a terminal applies',
+  tui_launch_command: 'it asks to start in a folder other than its workspace',
   structured_sessions_unavailable: 'this runtime does not support structured agent sessions',
   structured_support_unknown: 'the execution host has not established structured session support',
   wsl_execution_runtime: 'this workspace runs under WSL',
@@ -104,12 +105,12 @@ const BLOCKER_REASON: Record<
 > = {
   'reused-terminal': 'reused_terminal',
   'agent-without-structured-session': 'agent_without_structured_session',
-  'floating-workspace': 'structured_unsupported_on_host',
-  'tui-launch-customization': 'tui_launch_customization',
+  'custom-start-directory': 'tui_launch_command',
   'remote-execution-host': 'remote_execution_host',
   'project-runtime': 'wsl_execution_runtime',
   'runtime-capability': 'structured_sessions_unavailable',
-  'runtime-capability-unknown': 'structured_support_unknown'
+  'runtime-capability-unknown': 'structured_support_unknown',
+  'client-capability': 'structured_sessions_unavailable'
 }
 
 /** The host's own create-support verdict (`agentSession.createSupport`) in this vocabulary. */
@@ -130,6 +131,9 @@ export function decideAgentLaunchMode(args: {
   placement: AgentLaunchModePlacement
   settings: AgentLaunchModeSettings | null | undefined
   vocabulary?: AgentLaunchModeVocabulary
+  /** Registered agents (beyond Claude and Codex) this surface can open as structured; defaults to
+   *  every agent this host registers. */
+  registeredStructuredAgents?: readonly string[]
 }): AgentLaunchModeReceipt {
   const { placement, settings } = args
   const vocabulary = args.vocabulary ?? DEFAULT_LAUNCH_VOCABULARY
@@ -141,20 +145,36 @@ export function decideAgentLaunchMode(args: {
       detail: `Started ${vocabulary.terminal}, the default for new agent tabs in your settings.`
     }
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: an unrecognized agent name is handled rather than trusted; isAgentSessionHandleProvider rejects it and the launch downgrades to a terminal.
+  // A worker placed on another runtime starts through federation, which creates terminal agents
+  // only; this host cannot answer for that runtime's structured support.
+  if (placement.on) {
+    return downgraded('remote_execution_host', vocabulary)
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: an unrecognized agent name is handled rather than trusted; the registered-agent check rejects it and the launch downgrades to a terminal.
   const agent = placement.agent as TuiAgent
   const support = resolveStructuredNativeChatSupport({
     agent,
-    executionHostId: placement.on ? `runtime:${placement.on}` : 'local',
+    executionHostId: 'local',
     reusesTerminal: Boolean(placement.terminal),
     hostCapabilities: RUNTIME_CAPABILITIES,
-    // A resolved managed worktree or folder workspace is never a floating terminal. WSL is left to
-    // the executing host's own create-support probe, which reads the resolved workspace rather
-    // than guessing from a client-side project runtime.
-    requiresTuiLaunchCustomization: hasExplicitTuiLaunchCustomization(settings, agent)
+    // This host is the one that will run the agent, so its own registrations answer.
+    hostStructuredAgents: args.registeredStructuredAgents ?? REGISTERED_STRUCTURED_AGENTS,
+    // The host resolves the floating workspace to its configured directory; create-support still
+    // answers for the resolved workspace, including whether it uses WSL.
+    ...(placement.workspaceKind ? { workspaceKind: placement.workspaceKind } : {}),
+    // Mirrors the renderer's own route input (`agent-launch-route-input.ts`): a cwd is terminal-only
+    // when it names somewhere other than the workspace root, by the same shared rule.
+    startsOutsideWorkspaceRoot: requestsCwdOutsideWorkspaceRoot(
+      placement.workspacePath,
+      placement.cwd
+    )
   })
   if (!support.supported) {
     return downgraded(BLOCKER_REASON[support.blocker], vocabulary)
+  }
+  // A chat its caller can neither show nor close is no launch; that caller gets the terminal.
+  if (placement.callerRendersStructured === false) {
+    return downgraded(BLOCKER_REASON['client-capability'], vocabulary)
   }
   return {
     mode: 'structured',
@@ -192,7 +212,7 @@ async function readStructuredCreateSupport(
   worktreeId: string,
   agent: TuiAgent | undefined
 ): Promise<{ supported: boolean; reason?: 'agent' | 'remote' | 'wsl' } | null> {
-  if (agent !== 'claude' && agent !== 'codex') {
+  if (!agent || !REGISTERED_STRUCTURED_AGENTS.includes(agent)) {
     return { supported: false, reason: 'agent' }
   }
   try {
@@ -204,7 +224,7 @@ async function readStructuredCreateSupport(
 
 /**
  * Applies the executing host's `agentSession.createSupport` answer, which is the authority on WSL,
- * remoteness and the Windows process-start-time gate for the resolved workspace.
+ * remoteness and per-agent support for the resolved workspace.
  */
 export function downgradeAgentLaunchModeForHost(
   receipt: AgentLaunchModeReceipt,
@@ -233,6 +253,16 @@ function downgraded(
     preferred: 'structured',
     reason,
     detail: `Your default is a structured chat session, but ${why}; started ${vocabulary.terminal} instead.`
+  }
+}
+
+/** One main-log line when a launch the user's default asked to be a chat opened a terminal. */
+export function warnStructuredLaunchDowngrade(
+  agent: string,
+  receipt: AgentLaunchModeReceipt
+): void {
+  if (receipt.mode === 'terminal' && receipt.preferred === 'structured') {
+    console.warn(`[agent-launch] ${agent} opened a terminal: ${receipt.reason}`)
   }
 }
 

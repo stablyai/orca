@@ -1,3 +1,4 @@
+import { withDurableRuntimeStore } from '../runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import {
   OrcaRuntimeService,
@@ -74,11 +75,13 @@ describe('OrcaRuntimeService', () => {
     }
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
     const runtime = new OrcaRuntimeService(
-      { ...runtimeStore, flushOrThrow: vi.fn() } as never,
+      withDurableRuntimeStore({ ...runtimeStore, flushOrThrow: vi.fn() }),
       undefined,
       { canRecoverPersistentLocalPtys: () => true }
     )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This isolated recovery path reaches only the supplied planner and missing-terminal settlement methods.
     runtime.setOrchestrationDb({
+      reconcileMissingWorkerTerminal: vi.fn(),
       listLegacyWorkerTerminalRecoveryRows: () =>
         cases.map(({ name, leafId, terminalHandle }) => ({
           dispatch_id: `dispatch-${name}`,
@@ -133,10 +136,11 @@ describe('OrcaRuntimeService', () => {
         worktreeId: TEST_WORKTREE_ID
       }
     ])
+    const getForegroundProcess = vi.fn(async () => null)
     runtime.setPtyController({
       write: vi.fn(() => true),
       kill: vi.fn(() => true),
-      getForegroundProcess: async () => null,
+      getForegroundProcess,
       hasPty: (candidate) => candidate === 'pty-folder-legacy',
       listProcesses
     })
@@ -148,6 +152,9 @@ describe('OrcaRuntimeService', () => {
     })
     expect(listProcesses).toHaveBeenCalledOnce()
     expect(listProcesses).toHaveBeenCalledWith(null, LIST_PROVIDER_DEADLINE)
+    expect(getForegroundProcess).not.toHaveBeenCalled()
+    await runtime.refreshPtyForegroundAgentFromController('pty-ambiguous')
+    expect(getForegroundProcess).toHaveBeenCalledExactlyOnceWith('pty-ambiguous')
     for (const { name, leafId } of cases.slice(0, 2)) {
       expect(
         getSession().sleepingAgentSessionsByPaneKey?.[`legacy-${name}:${leafId}`]
@@ -187,12 +194,12 @@ describe('OrcaRuntimeService', () => {
     const folderWorkspace = makeFolderWorkspace({ folderPath })
     const projectGroup = makeFolderProjectGroup({ parentPath: folderPath })
     const runtime = new OrcaRuntimeService(
-      {
+      withDurableRuntimeStore({
         ...runtimeStore,
         getFolderWorkspaces: () => [folderWorkspace],
         getProjectGroups: () => [projectGroup],
         flushOrThrow: vi.fn()
-      } as never,
+      }),
       undefined,
       { canRecoverPersistentLocalPtys: () => true }
     )
@@ -313,14 +320,14 @@ describe('OrcaRuntimeService', () => {
     const folderWorkspace = makeFolderWorkspace({ folderPath, connectionId })
     const projectGroup = makeFolderProjectGroup({ parentPath: folderPath })
     const runtime = new OrcaRuntimeService(
-      {
+      withDurableRuntimeStore({
         ...runtimeStore,
         getFolderWorkspaces: () => [folderWorkspace],
         getProjectGroups: () => [projectGroup],
         getWorkspaceSession,
         setWorkspaceSession,
         flushOrThrow: vi.fn()
-      } as never,
+      }),
       undefined,
       { canRecoverPersistentLocalPtys: () => true }
     )

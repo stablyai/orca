@@ -201,7 +201,8 @@ describe('registerPtyHandlers', () => {
   it('lists sessions from both local and SSH providers', async () => {
     registerPtyHandlers(mainWindow as never)
     const sshListProcesses = vi.fn(async () => [
-      { id: 'remote-pty', cwd: '/remote', title: 'ssh-shell' }
+      { id: 'remote-pty', cwd: '/remote', title: 'ssh-shell' },
+      { id: 'closing-pty', cwd: '/remote', title: 'ssh-shell', exiting: true as const }
     ])
     const sshShutdown = vi.fn(async () => undefined)
     registerSshPtyProvider('ssh-1', {
@@ -234,9 +235,11 @@ describe('registerPtyHandlers', () => {
     expect(sshListProcesses).toHaveBeenCalled()
     expect(sessions).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ cwd: '/remote', id: 'remote-pty', title: 'ssh-shell' })
+        expect.objectContaining({ cwd: '/remote', id: 'remote-pty', title: 'ssh-shell' }),
+        expect.objectContaining({ id: 'closing-pty', exiting: true })
       ])
     )
+    expect(sessions.find((session) => session.id === 'remote-pty')).not.toHaveProperty('exiting')
 
     await handlers.get('pty:kill')!(null, { id: 'remote-pty' })
     expect(sshShutdown).toHaveBeenCalledWith('remote-pty', {

@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useEffectEvent, useState } from 'react'
 import { resolveImageAbsolutePath } from './markdown-preview-links'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 import { readLocalImagePreview } from './local-image-src-reader'
+import type { LocalFileAccess } from '../../../../shared/local-file-access'
 import {
   blobUrlCache,
   cacheLocalImageBlob,
@@ -20,7 +21,10 @@ import {
 export function getLocalImageCacheKey(
   absolutePath: string,
   connectionId?: string | null,
-  runtimeContext?: Omit<RuntimeFileOperationArgs, 'connectionId'> & { connectionId?: string | null }
+  runtimeContext?: Omit<RuntimeFileOperationArgs, 'connectionId'> & {
+    connectionId?: string | null
+  },
+  access?: LocalFileAccess
 ): string {
   const runtimeEnvironmentId =
     runtimeContext?.settings?.activeRuntimeEnvironmentId?.trim() ?? 'client'
@@ -33,6 +37,9 @@ export function getLocalImageCacheKey(
     runtimeContext?.expectedExternalSshTargetId ?? '',
     runtimeContext?.worktreeId ?? 'unknown-worktree',
     runtimeContext?.worktreePath ?? '',
+    // Why: an image read under one access kind must never answer a request made under another.
+    access?.kind ?? 'roots',
+    access?.kind === 'document-resource' ? access.documentPath : '',
     absolutePath
   ].join('\0')
 }
@@ -55,6 +62,27 @@ function isExternalUrl(src: string): boolean {
   return /^(?:https?|data|blob):/i.test(src)
 }
 
+type LocalImageRuntimeContext = Omit<RuntimeFileOperationArgs, 'connectionId'> & {
+  connectionId?: string | null
+}
+
+/** The cache identity of a local image, or null when it is external or has no owner yet. */
+export function getLocalImageSrcCacheKey(
+  rawSrc: string | undefined,
+  filePath: string,
+  connectionId?: string | null,
+  runtimeContext?: LocalImageRuntimeContext | null,
+  access?: LocalFileAccess
+): string | null {
+  if (!rawSrc || isExternalUrl(rawSrc) || runtimeContext === null) {
+    return null
+  }
+  const absolutePath = resolveImageAbsolutePath(rawSrc, filePath)
+  return absolutePath
+    ? getLocalImageCacheKey(absolutePath, connectionId, runtimeContext, access)
+    : null
+}
+
 /**
  * Resolves a raw markdown image src to a displayable URL. For local images,
  * reads the file via IPC and returns a blob URL. For http/https/data URLs,
@@ -65,63 +93,52 @@ export function useLocalImageSrc(
   rawSrc: string | undefined,
   filePath: string,
   connectionId?: string | null,
-  runtimeContext?:
-    | (Omit<RuntimeFileOperationArgs, 'connectionId'> & { connectionId?: string | null })
-    | null
+  runtimeContext?: LocalImageRuntimeContext | null,
+  access?: LocalFileAccess
 ): string | undefined {
   const [generation, setGeneration] = useState(getLocalImageCacheGeneration())
+  const externalSrc =
+    rawSrc && runtimeContext !== null && isExternalUrl(rawSrc) ? rawSrc : undefined
+  // Why key effects on the cache key: callers rebuild equal context objects on unrelated store
+  // updates, and re-leasing on each one revoked the URL an <img> was still showing.
+  const cacheKey = getLocalImageSrcCacheKey(rawSrc, filePath, connectionId, runtimeContext, access)
+  const readImage = useEffectEvent((): Promise<string | null> => {
+    const absolutePath = rawSrc ? resolveImageAbsolutePath(rawSrc, filePath) : null
+    return absolutePath
+      ? loadLocalImageAbsolutePath(absolutePath, connectionId, runtimeContext, access)
+      : Promise.resolve(null)
+  })
 
   useEffect(() => {
-    return acquireLocalImageSrcLease(rawSrc, filePath, connectionId, runtimeContext)
-  }, [rawSrc, filePath, connectionId, runtimeContext])
+    if (!cacheKey) {
+      return
+    }
+    pinLocalImageCache(cacheKey)
+    return () => unpinLocalImageCache(cacheKey)
+  }, [cacheKey])
 
   useEffect(() => {
     return onImageCacheInvalidated(() => setGeneration(getLocalImageCacheGeneration()))
   }, [])
 
-  const [displaySrc, setDisplaySrc] = useState<string | undefined>(() => {
-    if (!rawSrc || runtimeContext === null) {
-      return undefined
-    }
-    if (isExternalUrl(rawSrc)) {
-      return rawSrc
-    }
-    const absolutePath = resolveImageAbsolutePath(rawSrc, filePath)
-    if (absolutePath) {
-      const cacheKey = getLocalImageCacheKey(absolutePath, connectionId, runtimeContext)
-      if (blobUrlCache.has(cacheKey)) {
-        return blobUrlCache.get(cacheKey)
-      }
-    }
-    return undefined
-  })
+  const [displaySrc, setDisplaySrc] = useState<string | undefined>(
+    () => externalSrc ?? (cacheKey ? blobUrlCache.get(cacheKey) : undefined)
+  )
 
   useEffect(() => {
-    if (!rawSrc || runtimeContext === null) {
-      setDisplaySrc(undefined)
+    if (externalSrc || !cacheKey) {
+      setDisplaySrc(externalSrc)
       return
     }
-
-    if (isExternalUrl(rawSrc)) {
-      setDisplaySrc(rawSrc)
-      return
-    }
-
-    const absolutePath = resolveImageAbsolutePath(rawSrc, filePath)
-    if (!absolutePath) {
-      setDisplaySrc(undefined)
-      return
-    }
-
-    const cacheKey = getLocalImageCacheKey(absolutePath, connectionId, runtimeContext)
-    if (blobUrlCache.has(cacheKey)) {
-      setDisplaySrc(blobUrlCache.get(cacheKey))
+    const cached = blobUrlCache.get(cacheKey)
+    if (cached) {
+      setDisplaySrc(cached)
       return
     }
 
     let cancelled = false
     const effectGeneration = generation
-    loadLocalImageAbsolutePath(absolutePath, connectionId, runtimeContext)
+    readImage()
       .then((url) => {
         if (cancelled) {
           return
@@ -137,7 +154,7 @@ export function useLocalImageSrc(
     return () => {
       cancelled = true
     }
-  }, [rawSrc, filePath, generation, connectionId, runtimeContext])
+  }, [cacheKey, externalSrc, generation])
 
   return displaySrc
 }
@@ -153,7 +170,8 @@ export async function loadLocalImageSrc(
   connectionId?: string | null,
   runtimeContext?:
     | (Omit<RuntimeFileOperationArgs, 'connectionId'> & { connectionId?: string | null })
-    | null
+    | null,
+  access?: LocalFileAccess
 ): Promise<string | null> {
   if (isExternalUrl(rawSrc)) {
     return rawSrc
@@ -167,13 +185,13 @@ export async function loadLocalImageSrc(
     return null
   }
 
-  const cacheKey = getLocalImageCacheKey(absolutePath, connectionId, runtimeContext)
+  const cacheKey = getLocalImageCacheKey(absolutePath, connectionId, runtimeContext, access)
   const cached = blobUrlCache.get(cacheKey)
   if (cached) {
     return cached
   }
 
-  return loadLocalImageAbsolutePath(absolutePath, connectionId, runtimeContext)
+  return loadLocalImageAbsolutePath(absolutePath, connectionId, runtimeContext, access)
 }
 
 export function loadLocalImageAbsolutePath(
@@ -181,12 +199,13 @@ export function loadLocalImageAbsolutePath(
   connectionId?: string | null,
   runtimeContext?:
     | (Omit<RuntimeFileOperationArgs, 'connectionId'> & { connectionId?: string | null })
-    | null
+    | null,
+  access?: LocalFileAccess
 ): Promise<string | null> {
   if (runtimeContext === null) {
     return Promise.resolve(null)
   }
-  const cacheKey = getLocalImageCacheKey(absolutePath, connectionId, runtimeContext)
+  const cacheKey = getLocalImageCacheKey(absolutePath, connectionId, runtimeContext, access)
   const cached = blobUrlCache.get(cacheKey)
   if (cached) {
     return Promise.resolve(cached)
@@ -199,7 +218,7 @@ export function loadLocalImageAbsolutePath(
 
   const readGeneration = getLocalImageCacheGeneration()
   const readLeaseVersion = getLocalImageCacheKeyVersion(cacheKey)
-  const loadPromise = readLocalImagePreview(absolutePath, connectionId, runtimeContext)
+  const loadPromise = readLocalImagePreview(absolutePath, connectionId, runtimeContext, access)
     .then((result) => {
       if (
         !result.isBinary ||
@@ -238,38 +257,16 @@ export function acquireLocalImageSrcLease(
   rawSrc: string | undefined,
   filePath: string,
   connectionId?: string | null,
-  runtimeContext?:
-    | (Omit<RuntimeFileOperationArgs, 'connectionId'> & { connectionId?: string | null })
-    | null
+  runtimeContext?: LocalImageRuntimeContext | null,
+  access?: LocalFileAccess
 ): (() => void) | undefined {
-  if (!rawSrc || isExternalUrl(rawSrc) || runtimeContext === null) {
+  const key = getLocalImageSrcCacheKey(rawSrc, filePath, connectionId, runtimeContext, access)
+  if (!key) {
     return undefined
   }
-  const absolutePath = resolveImageAbsolutePath(rawSrc, filePath)
-  if (!absolutePath) {
-    return undefined
-  }
-  const key = getLocalImageCacheKey(absolutePath, connectionId, runtimeContext)
   pinLocalImageCache(key)
   return () => unpinLocalImageCache(key)
 }
 
-/** Evict one no-longer-visible transcript preview immediately. */
-export function releaseLocalImageSrc(
-  rawSrc: string,
-  filePath: string,
-  connectionId?: string | null,
-  runtimeContext?:
-    | (Omit<RuntimeFileOperationArgs, 'connectionId'> & { connectionId?: string | null })
-    | null
-): void {
-  if (!rawSrc || isExternalUrl(rawSrc) || runtimeContext === null) {
-    return
-  }
-  const absolutePath = resolveImageAbsolutePath(rawSrc, filePath)
-  if (!absolutePath) {
-    return
-  }
-  const key = getLocalImageCacheKey(absolutePath, connectionId, runtimeContext)
-  releaseLocalImageBlob(key)
-}
+/** Evict the image cached under a `getLocalImageSrcCacheKey` key unless a preview pins it. */
+export const releaseLocalImageSrcByKey = releaseLocalImageBlob

@@ -1,4 +1,3 @@
-import { isAgentSessionPtyWriteRefusedError } from '../../../../../shared/agent-session-pty-write-admission'
 import { assertLegacyAiVaultResumeCommandAllowed } from '../../../../ai-vault/structured-session-ownership'
 import { InvalidArgumentError, defineMethod } from '../../core'
 import { isTerminalQueryReply } from '../../../../../shared/terminal-query-reply'
@@ -211,6 +210,7 @@ export const TERMINAL_SEND_METHODS = [
       try {
         result = useSettledAgentPrompt
           ? await runtime.sendTerminalAgentPrompt(params.terminal, params.text!, {
+              inputKind: 'driving',
               beforeWrite,
               signal,
               ...(orchestrationMutation
@@ -235,6 +235,9 @@ export const TERMINAL_SEND_METHODS = [
               {
                 beforeWrite,
                 signal,
+                // Why: a wire write carries no provenance beyond a client's own query reply.
+                inputKind: params.inputKind === 'query-reply' ? 'query-reply' : 'driving',
+                ...(params.requireWriteSettlement ? { requireWriteSettlement: true as const } : {}),
                 ...(reserveWrite ? { reserveWrite } : {}),
                 ...(params.inputKind !== 'query-reply' && mobileFloorClientId
                   ? { afterWrite: () => commitMobileInputFloorClaim(mobileFloorClaim) }
@@ -243,18 +246,6 @@ export const TERMINAL_SEND_METHODS = [
             )
       } catch (error) {
         mobileFloorClaim.current?.rollback()
-        if (isAgentSessionPtyWriteRefusedError(error)) {
-          // Why: name the owner and the stage instead of a bare not-writable, so a client can say
-          // who holds the session rather than retrying into a lease it will never win.
-          return {
-            send: {
-              handle: params.terminal,
-              accepted: false,
-              bytesWritten: 0,
-              agentSessionRefusal: error.refusal
-            }
-          }
-        }
         if (acceptedPromptCheckpoint) {
           return acceptedPromptCheckpoint
         }

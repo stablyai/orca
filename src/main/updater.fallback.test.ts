@@ -101,6 +101,7 @@ describe('statusesEqual', () => {
 
     expect(statusesEqual(error, { ...error, version: '1.0.62' })).toBe(false)
     expect(statusesEqual(error, { ...error, retryable: true })).toBe(false)
+    expect(statusesEqual(error, { ...error, retryAction: 'install' })).toBe(false)
     expect(statusesEqual(error, { ...error })).toBe(true)
   })
 })

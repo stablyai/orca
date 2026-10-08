@@ -18,10 +18,7 @@ import {
 import { RelayControlRequests } from './relay-control-requests'
 import type { DeviceCredentialInstallAuthorization } from './relay-control-requests'
 import { answerRelayHostChallenge } from './relay-host-proof'
-import {
-  RELAY_CONTROL_SILENCE_LIMIT_MS,
-  RelayControlSilenceWatchdog
-} from './relay-control-silence-watchdog'
+import { RelayControlLiveness } from './relay-control-liveness'
 import { closeRelayControlSocket } from './relay-control-socket-close'
 import { controlWebSocketUrl } from './relay-control-url'
 
@@ -34,23 +31,28 @@ export class RelayControlClient {
   private readonly relayOrigin: string
   private readonly controlUrl: string
   private readonly createSocket: NonNullable<RelayControlClientOptions['createSocket']>
+  private readonly liveness: RelayControlLiveness
   private readonly requests: RelayControlRequests
   private socket: WebSocket | null = null
   private state: RelayControlState = 'idle'
   private connectResolve: ((ack: RelayHostHelloAckMessage) => void) | null = null
   private connectReject: ((error: Error) => void) | null = null
   private connectTimer: ReturnType<typeof setTimeout> | null = null
-  private readonly silenceWatchdog: RelayControlSilenceWatchdog
 
   constructor(options: RelayControlClientOptions) {
     this.options = options
-    this.requests = new RelayControlRequests(options.onPendingChanged)
     const endpoint = controlWebSocketUrl(options.cellUrl)
     this.relayOrigin = endpoint.origin
     this.controlUrl = endpoint.url
-    this.silenceWatchdog = new RelayControlSilenceWatchdog(
-      options.silenceLimitMs ?? RELAY_CONTROL_SILENCE_LIMIT_MS,
-      () => this.socket?.terminate()
+    this.liveness = new RelayControlLiveness({
+      cellUrl: this.relayOrigin,
+      ping: () => this.socket?.ping(),
+      isLive: () => this.isLive(),
+      terminate: () => this.socket?.terminate(),
+      random: options.livenessRandom
+    })
+    this.requests = new RelayControlRequests(options.onPendingChanged, (timeout) =>
+      this.liveness.noteRequestTimeout(timeout)
     )
     this.createSocket =
       options.createSocket ??
@@ -70,8 +72,9 @@ export class RelayControlClient {
     const socket = this.createSocket(this.controlUrl, this.options.relayJwt)
     this.socket = socket
     socket.once('open', () => this.sendHostHello())
+    socket.on('pong', () => this.liveness.notePong())
     socket.on('message', (raw, isBinary) => {
-      this.silenceWatchdog.noteInbound()
+      this.liveness.noteInbound()
       if (isBinary) {
         this.failProtocol('binary control message')
         return
@@ -86,6 +89,9 @@ export class RelayControlClient {
     })
     socket.once('close', (code) => this.handleClose(code))
     // Recovery cannot advance while an upgrade/proof promise remains pending forever.
+    // Armed in the same tick as the socket and expiring from 'opening' as well as
+    // 'proving', so it also bounds a black-holed connect that never opens; a
+    // transport-level handshakeTimeout here would be a second bound on that phase.
     this.connectTimer = setTimeout(
       () => this.expireConnect(),
       this.options.connectDeadlineMs ?? RELAY_CONTROL_CONNECT_DEADLINE_MS
@@ -154,7 +160,7 @@ export class RelayControlClient {
   closeNow(hostCloseReason?: RelayHostCloseReason): void {
     const wasConnecting = this.state === 'opening' || this.state === 'proving'
     this.state = 'closed'
-    this.silenceWatchdog.stop()
+    this.liveness.stop()
     if (wasConnecting) {
       this.connectReject?.(new Error('relay_control_closed'))
       this.clearConnectPromise()
@@ -264,7 +270,7 @@ export class RelayControlClient {
       return
     }
     this.state = 'active'
-    this.silenceWatchdog.start()
+    this.liveness.start()
     this.connectResolve?.(ack.data)
     this.clearConnectPromise()
   }
@@ -285,7 +291,7 @@ export class RelayControlClient {
   private handleClose(code: number): void {
     const wasConnecting = this.state === 'opening' || this.state === 'proving'
     this.state = 'closed'
-    this.silenceWatchdog.stop()
+    this.liveness.stop()
     if (wasConnecting) {
       this.connectReject?.(new Error(`relay_control_closed_${code}`))
       this.clearConnectPromise()

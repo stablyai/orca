@@ -5,6 +5,7 @@ import { OptionalGitAdmissionTier } from './git-admission-tier-params'
 export const HostedReviewForBranch = z.object({
   repo: requiredString('Missing repo selector'),
   branch: requiredString('Missing branch'),
+  force: z.boolean().optional(),
   admissionTier: OptionalGitAdmissionTier,
   currentHeadOid: z.string().nullable().optional(),
   // Only the caller's selected worktree; the host caps how many earn the fast tier.
@@ -37,7 +38,11 @@ export const HostedReviewCreationEligibility = z.object({
 export const HostedReviewCreate = z.object({
   repo: requiredString('Missing repo selector'),
   worktree: z.string().min(1, 'Missing worktree selector').optional(),
-  provider: z.enum(['github', 'gitlab', 'bitbucket', 'azure-devops', 'gitea', 'unsupported']),
+  // Open on purpose: the provider token is the host's own, and a client repeats back what a
+  // newer host named in its eligibility reply. A closed enum rejects that create outright, so the
+  // client would have to narrow to 'unsupported' before sending and make the host refuse its own
+  // provider. The handler answers `unsupported_provider` for a token this build cannot create with.
+  provider: z.string(),
   base: requiredString('Missing base branch'),
   head: z.string().optional(),
   title: requiredString('Missing title'),

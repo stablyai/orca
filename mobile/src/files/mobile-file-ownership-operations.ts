@@ -1,9 +1,15 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import { rpcUncheckedMemberReader } from '../transport/rpc-reader-payload'
+import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+import {
+  fileOwnershipSshStateSchema,
+  fileOwnershipWorktreeSchema
+} from './file-ownership-reply-schema'
 
 // The three reads that pin which execution host owns a workspace before a file mutation is sent.
 // All three share one acceptance because the capture is all-or-nothing: any refusal aborts the
-// mutation with the host's own message rather than letting a write land on the wrong host.
+// mutation with the host's own message rather than letting a write land on the wrong host. An
+// unreadable reply now aborts it the same way, with the method named, where main read a member off
+// the cast payload and either threw a raw TypeError or captured an owner it had not checked.
 
 // The runtime status this gate needs is the one the Tasks screen already asks for, field for
 // field. A second operation would only be a second name for the same wire.
@@ -16,7 +22,7 @@ export const fileOwnershipWorktreeRead = bindDeferredRpcOperation(
     method: 'worktree.show',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedMemberReader('worktree-summary', 'worktree')
+    read: rpcResultVariant('worktree-summary', fileOwnershipWorktreeSchema)
   })
 )
 
@@ -27,7 +33,7 @@ export const fileOwnershipSshStateRead = bindDeferredRpcOperation(
     method: 'ssh.getState',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedMemberReader('ssh-connection-state', 'state')
+    read: rpcResultVariant('ssh-connection-state', fileOwnershipSshStateSchema)
   })
 )
 

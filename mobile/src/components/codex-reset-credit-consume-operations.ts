@@ -1,5 +1,6 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import { rpcUncheckedPayloadReader } from '../transport/rpc-reader-payload'
+import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+import { codexResetCreditReplySchema } from './codex-reset-credit-reply-schema'
 
 /**
  * Redeeming an earned Codex rate-limit reset credit.
@@ -19,7 +20,7 @@ export const codexResetCreditConsume = bindDeferredRpcOperation(
     method: 'accounts.consumeCodexResetCredit',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('codex-reset-credit')
+    read: rpcResultVariant('codex-reset-credit', codexResetCreditReplySchema)
   })
 )
 

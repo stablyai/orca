@@ -1,10 +1,11 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { defaultAgentChatLabel } from '../../shared/agent-session-chat-label'
-import { OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript } from './orca-runtime-resolve-recovered-structured-tui-transcript'
+import { OrcaRuntimeWithGetStructuredAgentSessionCreateSupport } from './orca-runtime-get-structured-agent-session-create-support'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { replaceConversationInSnapshot } from './structured-conversation-tab-replacement'
 import type { ConversationReplacement } from '../native-chat/agent-session-wire/structured-conversation-command'
 import { collectSavedStructuredAgentSessionIds } from './saved-structured-agent-session-restoration'
+import { seedStructuredAgentSessionTabIndex } from './structured-agent-session-tab-index-seed'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import type {
   RuntimeMobileSessionAgentTab,
@@ -16,8 +17,9 @@ import { DEFAULT_REPO_SEARCH_REFS_LIMIT } from './orca-runtime-postlude'
 import type { Repo } from '../../shared/repo-types'
 import type { GitAdmissionTier } from '../git/command-runner/git-exec-options'
 import {
-  getLocalProjectWorktreeGitOptions,
-  resolveLocalProjectRuntimeForRepo
+  getLocalProjectGhExecOptions,
+  resolveLocalProjectRuntimeForRepo,
+  type LocalProjectGhExecOptions
 } from '../project-runtime-git-options'
 import { getAgentLaunchPlatformForRepo } from './runtime-agent-launch-resolution'
 import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
@@ -25,9 +27,12 @@ import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 import { isWslUncPath } from '../../shared/wsl-paths'
 import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
 import type { PtyProcessInspection } from '../providers/pty-process-inspection'
+import type { StructuredAgentId } from '../../shared/agent-session-provider-handle'
 
-export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript {
-  async replaceStructuredAgentSessionTab(replacement: ConversationReplacement): Promise<void> {
+export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRuntimeWithGetStructuredAgentSessionCreateSupport {
+  /** Projects only: a replacement's chat already has its tab in the store, which the /clear commit
+   *  moved in the same write. */
+  replaceStructuredAgentSessionTab(replacement: ConversationReplacement): void {
     const prior = this.mobileSessionTabsByWorktree.get(replacement.workspaceId)
     const next = prior ? replaceConversationInSnapshot(prior, replacement) : null
     if (next && next !== prior) {
@@ -38,7 +43,7 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
         (tab) => tab.type === 'agent-session' && tab.sessionId === replacement.sessionId
       )
     ) {
-      await this.publishStructuredAgentSessionTab({
+      this.projectStructuredAgentSessionTab({
         ...replacement,
         replacesSessionId: replacement.sourceSessionId,
         activate: false
@@ -56,9 +61,8 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
     const profileIds = collectSavedStructuredAgentSessionIds(
       this.store?.getWorkspaceSession?.(LOCAL_EXECUTION_HOST_ID) ?? null
     )
-    await host?.restoreReadableSessions(
-      persistedVisibleIndex.present ? persistedVisibleIndex.sessionIds : profileIds
-    )
+    const targets = persistedVisibleIndex.present ? persistedVisibleIndex.sessionIds : profileIds
+    await host?.restoreReadableSessions(targets)
     for (const worktreeId of this.getKnownWorkspaceSessionWorktreeIds()) {
       this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId, {
         allowAttachedWindow: true,
@@ -66,39 +70,72 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
       })
     }
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession()
-    for (const replacement of host?.conversationReplacements?.() ?? []) {
-      await this.replaceStructuredAgentSessionTab(replacement)
-    }
-    for (const session of host?.listSessionTabs() ?? []) {
-      if (session.agent !== 'codex' && session.agent !== 'claude') {
-        continue
-      }
+    // Every session here is of an agent this host registered: its store holds no other agent's records.
+    const restored = (host?.listSessionTabs() ?? []).flatMap((session) => {
       let sessionId = session.sessionId
       while (sessionId.startsWith('agent-session:')) {
         sessionId = sessionId.slice('agent-session:'.length)
       }
-      await this.publishStructuredAgentSessionTab({
-        ...session,
-        agent: session.agent,
-        sessionId,
-        activate: false,
-        notify: false
-      })
+      return [{ ...session, agent: session.agent, sessionId }]
+    })
+    await seedStructuredAgentSessionTabIndex(
+      host,
+      targets,
+      restored.map((session) => session.sessionId)
+    )
+    // Past the seed, projecting records nothing.
+    for (const replacement of host?.conversationReplacements?.() ?? []) {
+      this.replaceStructuredAgentSessionTab(replacement)
+    }
+    for (const session of restored) {
+      this.projectStructuredAgentSessionTab({ ...session, activate: false, notify: false })
+    }
+    const wasUnverifiable = this.structuredAgentSessionInventoryUnverifiable
+    // No host means no one can say which chats exist; with none on disk, empty is the answer.
+    this.structuredAgentSessionInventoryUnverifiable =
+      !host && this.hasPersistedStructuredAgentSessionStore()
+    // This restore published quietly; subscribers still hold the frames that said "cannot tell".
+    if (wasUnverifiable && !this.structuredAgentSessionInventoryUnverifiable) {
+      this.notifyMobileSessionTabSnapshots()
     }
   }
 
   async publishStructuredAgentSessionTab(input: {
     workspaceId: string
     sessionId: string
-    agent: 'claude' | 'codex'
+    agent: StructuredAgentId
     activate: boolean
     notify?: boolean
     replacesSessionId?: string
+    /** The host tab id a create reserved; a session that already has a tab keeps its own. */
+    tabId?: string
   }): Promise<void> {
     const host = getStructuredAgentSessionHost()
     if (typeof host?.setSessionTabVisibility === 'function') {
-      await host.setSessionTabVisibility(input.sessionId, true)
+      // The restore index is bookkeeping: one that cannot be written (a newer Orca's records, a
+      // failing disk) is reported, and the tab still opens.
+      await host
+        .setSessionTabVisibility(input.sessionId, true, ...(input.tabId ? [input.tabId] : []))
+        .catch((error: unknown) => {
+          host.deps.logger.warn('recording an opened chat tab failed', {
+            scope: 'tab-visibility-open',
+            sessionId: input.sessionId,
+            error
+          })
+        })
     }
+    this.projectStructuredAgentSessionTab(input)
+  }
+
+  /** The runtime's own snapshot of a chat tab. Records nothing: the caller owns the store write. */
+  projectStructuredAgentSessionTab(input: {
+    workspaceId: string
+    sessionId: string
+    agent: StructuredAgentId
+    activate: boolean
+    notify?: boolean
+    replacesSessionId?: string
+  }): void {
     const existing = this.mobileSessionTabsByWorktree.get(input.workspaceId)
     const id = `agent-session:${input.sessionId}`
     if (existing?.tabs.some((tab) => tab.id === id)) {
@@ -214,9 +251,10 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
   async searchRepoRefs(
     repoSelector: string,
     query: string,
-    limit = DEFAULT_REPO_SEARCH_REFS_LIMIT
+    limit = DEFAULT_REPO_SEARCH_REFS_LIMIT,
+    includeQualifiedRefs = true
   ): Promise<RuntimeRepoSearchRefs> {
-    return this.repositoryRefQueries.search(repoSelector, query, limit)
+    return this.repositoryRefQueries.search(repoSelector, query, limit, includeQualifiedRefs)
   }
 
   protected async resolveHostedReviewTarget(args: {
@@ -239,12 +277,7 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
     repo: Repo,
     admissionTier?: GitAdmissionTier
   ):
-    | {
-        localGitExecOptions: {
-          wslDistro?: string
-          admissionTier?: GitAdmissionTier
-        }
-      }
+    | { localGitExecOptions: LocalProjectGhExecOptions & { admissionTier?: GitAdmissionTier } }
     | undefined {
     const localGitOptions = {
       ...this.getLocalGitExecutionOptionArgs(repo)[0],
@@ -255,8 +288,8 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
       : undefined
   }
 
-  protected getLocalGitExecutionOptionArgs(repo: Repo): [] | [{ wslDistro?: string }] {
-    const localGitOptions = getLocalProjectWorktreeGitOptions(this.requireStore(), repo)
+  protected getLocalGitExecutionOptionArgs(repo: Repo): [] | [LocalProjectGhExecOptions] {
+    const localGitOptions = getLocalProjectGhExecOptions(this.requireStore(), repo)
     return Object.keys(localGitOptions).length > 0 ? [localGitOptions] : []
   }
 

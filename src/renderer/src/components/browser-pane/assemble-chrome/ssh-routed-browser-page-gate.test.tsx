@@ -28,7 +28,7 @@ const settle = () =>
 
 describe('SshRoutedBrowserPageGate', () => {
   beforeEach(() => {
-    mocks.prepare.mockReset()
+    mocks.prepare.mockReset().mockResolvedValue({ partition: 'persist:orca-browser-v1-routed' })
     mocks.destroyPersistentWebview.mockReset()
     Object.defineProperty(window, 'api', {
       configurable: true,

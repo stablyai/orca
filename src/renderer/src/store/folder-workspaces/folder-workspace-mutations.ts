@@ -28,6 +28,10 @@ import {
   getFolderWorkspaceUpdateIdentity,
   reconcileFailedFolderWorkspaceUpdate
 } from './folder-workspace-catalog'
+import {
+  captureWorkspaceChatDraftKeys,
+  deleteWorkspaceChatDrafts
+} from '../slices/worktrees/teardown/removed-worktree-chat-drafts'
 
 export type FolderWorkspaceUpdateField = keyof FolderWorkspaceUpdates
 
@@ -230,6 +234,11 @@ export function createFolderWorkspaceMutationActions(
         folderWorkspaceId,
         executionHostId
       )
+      const workspaceKey = folderWorkspaceKey(folderWorkspaceId)
+      // Why before the host call: its announcement can start a refresh that drops these tabs.
+      const chatDraftKeys = captureWorkspaceChatDraftKeys(state, [
+        { workspaceId: workspaceKey, executionHostId: ownerHostId }
+      ])
       try {
         // Why: deletion targets the folder's owner; focus may be on a different host.
         const target = getActiveRuntimeTarget({ activeRuntimeEnvironmentId: runtimeEnvironmentId })
@@ -247,7 +256,6 @@ export function createFolderWorkspaceMutationActions(
         if (!deleted) {
           return false
         }
-        const workspaceKey = folderWorkspaceKey(folderWorkspaceId)
         set((s) => ({
           folderWorkspaces: s.folderWorkspaces.filter(
             (workspace) =>
@@ -261,6 +269,7 @@ export function createFolderWorkspaceMutationActions(
           // tear down Chromium guests before purging the remaining renderer state.
           await get().shutdownWorktreeBrowsers(workspaceKey)
           get().purgeWorktreeTerminalState([workspaceKey])
+          deleteWorkspaceChatDrafts(chatDraftKeys)
         }
         return true
       } catch (err) {

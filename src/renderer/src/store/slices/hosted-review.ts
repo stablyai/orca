@@ -8,6 +8,7 @@ import type {
 } from '../../../../shared/hosted-review'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import type { AppState } from '../types'
+import { nextLookupGeneration } from '../lookup-generation-sequence'
 import {
   getHostedReviewCacheKey,
   linkedReviewHintKey,
@@ -18,6 +19,7 @@ import {
   findHostedReviewRepoForFetch,
   hasNewerHostedReviewCacheEntry,
   hostedReviewOwnerIpcArgs,
+  hostedReviewBranchLookupArgs,
   isFreshHostedReview,
   isStaleMergedGitHubReviewForHead,
   settingsForHostedReviewActionOwner,
@@ -186,27 +188,13 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
 
     const inflightRequest = inflightHostedReviewRequests.get(requestKey)
     const startRequest = (): Promise<HostedReviewInfo | null> => {
-      const generation = (requestGenerations.get(cacheKey) ?? 0) + 1
+      const generation = nextLookupGeneration()
       const requestStartedAt = Date.now()
       const requestStartedEntry = get().hostedReviewCache[cacheKey]
       requestGenerations.set(cacheKey, generation)
       const request = (async () => {
         try {
-          const fallbackGitHubPR =
-            options?.linkedGitHubPR == null ? (options?.fallbackGitHubPR ?? null) : null
-          const args = {
-            branch,
-            ...(options?.admissionTier ? { admissionTier: options.admissionTier } : {}),
-            ...(options?.repoId !== undefined ? { repoId: options.repoId } : {}),
-            currentHeadOid: options?.currentHeadOid ?? null,
-            ...(options?.active === true ? { active: true } : {}),
-            linkedGitHubPR: options?.linkedGitHubPR ?? null,
-            ...(fallbackGitHubPR !== null ? { fallbackGitHubPR } : {}),
-            linkedGitLabMR: options?.linkedGitLabMR ?? null,
-            linkedBitbucketPR: options?.linkedBitbucketPR ?? null,
-            linkedAzureDevOpsPR: options?.linkedAzureDevOpsPR ?? null,
-            linkedGiteaPR: options?.linkedGiteaPR ?? null
-          }
+          const args = hostedReviewBranchLookupArgs(branch, options)
           const review =
             target.kind === 'environment'
               ? await callRuntimeRpc<HostedReviewInfo | null>(

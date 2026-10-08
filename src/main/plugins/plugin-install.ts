@@ -278,6 +278,10 @@ export async function removeInstalledPlugin(input: {
     if (!isQualifiedPluginKey(input.pluginKey)) {
       throw new Error(`invalid qualified plugin key: ${input.pluginKey}`)
     }
+    const lock = await readPluginLockfile(input.pluginsDir)
+    if (lock.plugins[input.pluginKey]?.source.kind === 'bundled') {
+      throw new Error(`cannot remove protected plugin ${input.pluginKey}`)
+    }
     await removeResolvedPluginDirectory(input.pluginsDir, input.pluginKey)
     await removeResolvedPluginDirectory(input.pluginsDataDir, input.pluginKey)
     await writePluginLockfile(

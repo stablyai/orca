@@ -1,11 +1,18 @@
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import {
+  markStructuredAgentSessionLaunchesPublished,
+  publishedStructuredSessions
+} from '@/lib/structured-agent-session-launch-publication'
+import {
   hasStructuredAgentSessionLaunchCancellationTombstone,
   markStructuredAgentSessionLaunchCancelled
 } from '@/lib/structured-agent-session-launch-registry'
-import { discardStructuredAgentSessionLaunchOutbox } from '@/components/native-chat/structured-agent-session-outbox-storage'
+import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
+import { discardStructuredAgentSessionChatSends } from '@/lib/structured-agent-session-launch-prompt'
+import { stopStructuredAgentSessionSends } from '@/components/native-chat/structured-agent-session-message-sender'
 import { closeStructuredAgentSession } from './structured-agent-session-close'
 import { withLocalSessionTabCloseOwner } from './local-session-tab-close-owner'
+import { executionHostIdForStructuredTarget } from './structured-agent-session-owner'
 import { callRuntimeRpc, type RuntimeClientTarget } from './runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 
@@ -19,7 +26,6 @@ function retirementKey(target: RuntimeClientTarget, worktreeId: string, sessionI
 export function retireStructuredAgentSessionTab(args: {
   target: RuntimeClientTarget
   worktreeId: string
-  tabId: string
   sessionId: string
   onError?: (error: unknown) => void
 }): void {
@@ -28,11 +34,13 @@ export function retireStructuredAgentSessionTab(args: {
   if (existing) {
     return
   }
+  const hostTabId = `agent-session:${args.sessionId}`
+  // Why: main echoes the host tab id it was asked to close, never this window's tab id.
   const closeHostTab = () =>
-    withLocalSessionTabCloseOwner(args.worktreeId, args.tabId, () =>
+    withLocalSessionTabCloseOwner(args.worktreeId, hostTabId, () =>
       callRuntimeRpc(args.target, 'session.tabs.close', {
         worktree: toRuntimeWorktreeSelector(args.worktreeId),
-        tabId: `agent-session:${args.sessionId}`,
+        tabId: hostTabId,
         reason: 'user'
       })
     )
@@ -58,16 +66,42 @@ export function retireStructuredAgentSessionTab(args: {
 export function beginStructuredAgentSessionTabClose(args: {
   target: RuntimeClientTarget
   worktreeId: string
-  tabId: string
   sessionId: string
   provisional: boolean
   onError?: (error: unknown) => void
 }): void {
   if (args.provisional) {
-    markStructuredAgentSessionLaunchCancelled(args.worktreeId, args.sessionId)
+    markStructuredAgentSessionLaunchCancelled(
+      args.worktreeId,
+      args.sessionId,
+      executionHostIdForStructuredTarget(args.target)
+    )
+    discardStructuredAgentSessionChatSends(args.sessionId)
+  } else {
+    // Nothing more goes out, and nothing is dropped: one on its way settles from its answer, and
+    // the rest goes back to the conversation's draft.
+    stopStructuredAgentSessionSends(args.sessionId)
   }
-  discardStructuredAgentSessionLaunchOutbox(args.sessionId)
   retireStructuredAgentSessionTab(args)
+}
+
+/**
+ * A paired host's frame, as this client may apply it: chats cancelled before their create landed
+ * are retired on that host, and the rest settle any launch still waiting to learn they exist.
+ */
+export function acceptPairedHostStructuredSessions(
+  frame: RuntimeMobileSessionTabsResult,
+  environmentId: string
+): RuntimeMobileSessionTabsResult {
+  const snapshot = suppressCancelledStructuredSessionTabs(frame, {
+    kind: 'environment',
+    environmentId
+  })
+  markStructuredAgentSessionLaunchesPublished(
+    toRuntimeExecutionHostId(environmentId),
+    publishedStructuredSessions([snapshot])
+  )
+  return snapshot
 }
 
 /** A host snapshot containing a cancelled session is suppressed and retired again idempotently. */
@@ -92,7 +126,6 @@ export function suppressCancelledStructuredSessionTabs(
     retireStructuredAgentSessionTab({
       target,
       worktreeId: snapshot.worktree,
-      tabId: `agent-session:${sessionId}`,
       sessionId,
       onError
     })

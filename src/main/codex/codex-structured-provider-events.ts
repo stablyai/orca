@@ -4,29 +4,34 @@ import type { CodexJournalTranslationAdmission } from './codex-structured-journa
 import * as codexRewind from './codex-structured-rewind'
 import type { CodexSession, CodexStructuredSessionEvent } from './codex-structured-session-state'
 import { readCodexThreadId } from './codex-structured-thread-facts'
-import type { CodexStructuredTurnCancellation } from './codex-structured-turn-cancellation'
 
 type EmitCodexEvent = (
   session: CodexSession,
   event: CodexStructuredSessionEvent
 ) => CodexJournalTranslationAdmission
 
-/** One live notification's journal entry: rewind bookkeeping, cancellation deferral, delivery. */
+/** One live notification's journal entry: rewind bookkeeping, delivery. */
 export function translateCodexNotification(input: {
   sessionId: string
   session: CodexSession
   method: string
   params: unknown
   observedAt?: number
-  turnCancellation: Pick<CodexStructuredTurnCancellation, 'handleNotification'>
+  dispatchSequenceAtReceipt?: number
   emit: EmitCodexEvent
 }): CodexJournalTranslationAdmission {
-  const { sessionId, session, method, params, observedAt } = input
+  const { sessionId, session, method, params, observedAt, dispatchSequenceAtReceipt } = input
   codexRewind.observeCodexRewindActivity(session, method, params)
-  if (input.turnCancellation.handleNotification(sessionId, session, method, params, observedAt)) {
-    return { accepted: true }
-  }
-  return deliverCodexNotification(sessionId, session, method, params, input.emit, observedAt)
+  session.turnOpenWaits.observe(session.threadId, method, params)
+  return deliverCodexNotification(
+    sessionId,
+    session,
+    method,
+    params,
+    input.emit,
+    observedAt,
+    dispatchSequenceAtReceipt
+  )
 }
 
 export function deliverCodexNotification(
@@ -35,7 +40,8 @@ export function deliverCodexNotification(
   method: string,
   params: unknown,
   emit: EmitCodexEvent,
-  observedAt?: number
+  observedAt?: number,
+  dispatchSequenceAtReceipt?: number
 ): CodexJournalTranslationAdmission {
   if (!session) {
     return { accepted: true }
@@ -49,7 +55,8 @@ export function deliverCodexNotification(
     threadId,
     method,
     params,
-    ...(observedAt !== undefined ? { observedAt } : {})
+    ...(observedAt !== undefined ? { observedAt } : {}),
+    ...(dispatchSequenceAtReceipt !== undefined ? { dispatchSequenceAtReceipt } : {})
   })
 }
 

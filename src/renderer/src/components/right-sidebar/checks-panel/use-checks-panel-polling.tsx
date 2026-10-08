@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef } from 'react'
-import { installWindowVisibilityTimeoutPoller } from '@/lib/window-visibility-timeout-poller'
+import { useChecksDetailTimer } from './use-checks-detail-timer'
+import { ChecksDetailPollingPolicy } from './checks-detail-polling-policy'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { gitLabPipelineJobsToPRChecks } from '../../../../../shared/gitlab-pipeline-checks'
 import {
   checksPanelAsyncResultKey,
@@ -10,7 +11,7 @@ import type { ChecksPanelControllerState } from './use-checks-panel-controller-s
 import type { ChecksPanelComposerState } from './use-checks-panel-composer-state'
 import { fetchGitLabMRDetailsForChecks, gitLabMRCommentsToPRComments } from './gitlab-review-client'
 
-type ChecksPanelPollingInput = Pick<
+export type ChecksPanelPollingInput = Pick<
   ChecksPanelContextState,
   'activeGitLabReview' | 'hostedReviewCacheKey' | 'pr' | 'prCacheKey' | 'prNumber'
 > &
@@ -34,28 +35,28 @@ type ChecksPanelPollingInput = Pick<
   Pick<ChecksPanelComposerState, 'isCurrentAsyncResult'>
 
 export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
-  const {
-    activeWorktree,
-    activeGitLabReview,
-    asyncResultKeyRef,
+  const modelRef = useRef(model)
+  const [policy] = useState(() => new ChecksDetailPollingPolicy())
+  const policyRef = useRef(policy)
+  useEffect(() => {
+    modelRef.current = model
+  })
+  const { activeGitLabReview, pr, prNumber, prCacheKey, branch, repo, hostedReviewCacheKey } = model
+  const requestIdentity = JSON.stringify([
+    repo?.id,
+    repo?.path,
+    repo?.executionHostId,
+    repo?.connectionId,
+    model.activeWorktree?.hostId,
     branch,
-    fetchPRChecks,
-    hostedReviewCacheKey,
-    isCurrentAsyncResult,
-    isPanelVisible,
-    pollIntervalRef,
-    pr,
-    prCacheKey,
-    prNumber,
-    prevChecksRef,
-    repo,
-    settings,
-    setChecks,
-    setChecksLoading,
-    setComments,
-    setCommentsLoading,
-    gitLabProjectRefRef
-  } = model
+    activeGitLabReview ? 'gitlab' : 'github',
+    activeGitLabReview?.number ?? prNumber,
+    activeGitLabReview?.headSha ?? pr?.headSha,
+    pr?.prRepo?.owner,
+    pr?.prRepo?.repo,
+    pr?.prRepo?.host,
+    activeGitLabReview ? hostedReviewCacheKey : prCacheKey
+  ])
   const gitLabDetailsLoadingGenerationRef = useRef(0)
   // Fetch checks via cached store method
   const fetchChecks = useCallback(
@@ -63,6 +64,19 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
       force = false,
       prNumberOverride
     }: { force?: boolean; prNumberOverride?: number | null } = {}) => {
+      const {
+        repo,
+        prNumber,
+        branch,
+        pr,
+        prCacheKey,
+        fetchPRChecks,
+        isCurrentAsyncResult,
+        setChecksLoading,
+        setChecks,
+        pollIntervalRef,
+        prevChecksRef
+      } = modelRef.current
       const targetPRNumber = prNumberOverride ?? prNumber
       if (!repo || !targetPRNumber) {
         return
@@ -84,6 +98,7 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
           pr?.prRepo,
           {
             force,
+            throwOnError: true,
             repoId: repo.id
           }
         )
@@ -92,12 +107,12 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
         }
         setChecks(result)
 
-        // Exponential backoff: unchanged checks double the interval (cap 120s), changes reset to 30s.
-        const signature = JSON.stringify(result.map((c) => `${c.name}:${c.status}:${c.conclusion}`))
+        // Unchanged details back off; a changed result restores the selected cadence.
+        const signature = policyRef.current.accept(result)
         pollIntervalRef.current =
           signature === prevChecksRef.current
             ? Math.min(pollIntervalRef.current * 2, 120_000)
-            : 30_000
+            : 60_000
         prevChecksRef.current = signature
       } catch (err) {
         if (
@@ -108,7 +123,8 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
           return
         }
         console.warn('Failed to fetch PR checks:', err)
-        setChecks([])
+        policyRef.current.fail()
+        pollIntervalRef.current = Math.min(Math.max(60_000, pollIntervalRef.current * 2), 900_000)
       } finally {
         if (
           isCurrentAsyncResult(
@@ -119,20 +135,7 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
         }
       }
     },
-    [
-      repo,
-      prNumber,
-      branch,
-      pr?.headSha,
-      pr?.prRepo,
-      prCacheKey,
-      fetchPRChecks,
-      isCurrentAsyncResult,
-      prevChecksRef,
-      setChecksLoading,
-      pollIntervalRef,
-      setChecks
-    ]
+    []
   )
 
   const fetchGitLabDetails = useCallback(
@@ -149,6 +152,23 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
       settingsOverride?: ChecksPanelControllerState['settings']
       isRequestCurrent?: () => boolean
     } = {}) => {
+      const {
+        activeGitLabReview,
+        repo,
+        branch,
+        hostedReviewCacheKey,
+        asyncResultKeyRef,
+        settings,
+        activeWorktree,
+        isCurrentAsyncResult,
+        gitLabProjectRefRef,
+        setChecks,
+        setChecksLoading,
+        setComments,
+        setCommentsLoading,
+        pollIntervalRef,
+        prevChecksRef
+      } = modelRef.current
       const targetMRNumber = mrNumberOverride ?? activeGitLabReview?.number ?? null
       const targetHeadSha =
         headShaOverride === undefined ? (activeGitLabReview?.headSha ?? null) : headShaOverride
@@ -183,23 +203,26 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
         if (isRequestCurrent?.() === false || !isCurrentAsyncResult(requestKey)) {
           return
         }
-        gitLabProjectRefRef.current = details?.item.projectRef ?? null
+        if (details === null) {
+          throw new Error('GitLab MR details are unavailable')
+        }
+        gitLabProjectRefRef.current = details.item.projectRef ?? null
         const result = gitLabPipelineJobsToPRChecks(details?.pipelineJobs ?? [])
         setChecks(result)
         setComments(gitLabMRCommentsToPRComments(details?.comments))
-        const signature = JSON.stringify(result.map((c) => `${c.name}:${c.status}:${c.conclusion}`))
+        const signature = policyRef.current.accept(result)
         pollIntervalRef.current =
           signature === prevChecksRef.current
             ? Math.min(pollIntervalRef.current * 2, 120_000)
-            : 30_000
+            : 60_000
         prevChecksRef.current = signature
       } catch (err) {
         if (isRequestCurrent?.() === false || !isCurrentAsyncResult(requestKey)) {
           return
         }
         console.warn('Failed to fetch GitLab MR checks:', err)
-        setChecks([])
-        setComments([])
+        policyRef.current.fail()
+        pollIntervalRef.current = Math.min(Math.max(60_000, pollIntervalRef.current * 2), 900_000)
       } finally {
         if (
           gitLabDetailsLoadingGenerationRef.current === loadingGeneration &&
@@ -210,66 +233,18 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
         }
       }
     },
-    [
-      activeGitLabReview?.headSha,
-      activeGitLabReview?.number,
-      activeWorktree?.hostId,
-      branch,
-      hostedReviewCacheKey,
-      isCurrentAsyncResult,
-      repo,
-      settings,
-      asyncResultKeyRef,
-      setChecksLoading,
-      prevChecksRef,
-      pollIntervalRef,
-      setCommentsLoading,
-      setChecks,
-      setComments,
-      gitLabProjectRefRef
-    ]
+    []
   )
 
-  // Fetch checks on mount + poll with exponential backoff
-  useEffect(() => {
-    if (activeGitLabReview) {
-      return
-    }
-    if (!prNumber || !isPanelVisible) {
-      setChecks([])
-      return
-    }
-
-    // Reset backoff state on PR change
-    pollIntervalRef.current = 30_000
-    prevChecksRef.current = ''
-    // Why: check status is user-visible; keep visible unfocused windows fresh but stop timers/API work while hidden.
-    return installWindowVisibilityTimeoutPoller({
-      run: () => fetchChecks(),
-      getDelayMs: () => pollIntervalRef.current
-    })
-  }, [
-    activeGitLabReview,
+  useChecksDetailTimer({
+    model,
+    modelRef,
+    policyRef,
+    requestIdentity,
     fetchChecks,
-    isPanelVisible,
-    prNumber,
-    pollIntervalRef,
-    prevChecksRef,
-    setChecks
-  ])
+    fetchGitLabDetails
+  })
 
-  useEffect(() => {
-    if (!activeGitLabReview || !isPanelVisible) {
-      return
-    }
-
-    pollIntervalRef.current = 30_000
-    prevChecksRef.current = ''
-    return installWindowVisibilityTimeoutPoller({
-      run: () => fetchGitLabDetails(),
-      getDelayMs: () => pollIntervalRef.current
-    })
-  }, [activeGitLabReview, fetchGitLabDetails, isPanelVisible, pollIntervalRef, prevChecksRef])
   return { fetchChecks, fetchGitLabDetails }
 }
 

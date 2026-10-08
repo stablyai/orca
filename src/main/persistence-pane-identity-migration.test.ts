@@ -1,10 +1,18 @@
+import {
+  closeTestStores,
+  testState,
+  createStore,
+  writeDataFile,
+  readDataFile
+} from './persistence-test-harness'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { writeFileSync, rmSync, mkdtempSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { PersistedState } from '../shared/persisted-state-types'
 import { isTerminalLeafId, makePaneKey } from '../shared/stable-pane-id'
-import { testState, createStore, writeDataFile, readDataFile } from './persistence-test-harness'
+import { agentHookServer } from './agent-hooks/server'
+
 import {
   TEST_LEAF_1,
   TEST_LEAF_2,
@@ -59,7 +67,9 @@ describe('Store', () => {
     getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 2 })
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    agentHookServer.stop()
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
   it('hydrates split-pane legacy numeric agent status rows onto the matching remapped leaves', async () => {

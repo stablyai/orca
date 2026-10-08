@@ -21,6 +21,7 @@ import {
   nextReviewIndexAfterMarkReviewed,
   reviewDescriptorFromItem
 } from './mobile-diff-review-screen-model'
+import type { ReviewSheetIntents } from './mobile-diff-review-sheets'
 
 type CommentActionsInput = {
   client: RpcClient | null
@@ -36,10 +37,9 @@ type CommentActionsInput = {
   composerBody: string
   setScreenState: Dispatch<SetStateAction<ReviewScreenState>>
   setCurrentIndex: Dispatch<SetStateAction<number>>
-  setComposer: Dispatch<SetStateAction<ComposerState | null>>
   setComposerBody: Dispatch<SetStateAction<string>>
   setActionError: Dispatch<SetStateAction<string | null>>
-  setShowCompletion: Dispatch<SetStateAction<boolean>>
+  sheets: Pick<ReviewSheetIntents, 'openSheet' | 'openSheetWhenIdle' | 'closeSheet'>
 }
 
 export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
@@ -57,11 +57,11 @@ export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
     composerBody,
     setScreenState,
     setCurrentIndex,
-    setComposer,
     setComposerBody,
     setActionError,
-    setShowCompletion
+    sheets
   } = input
+  const { openSheet, openSheetWhenIdle, closeSheet } = sheets
 
   const persistMetadata = useCallback(
     async (comments: readonly DiffComment[], reviewState: MobileDiffReviewState) => {
@@ -109,24 +109,24 @@ export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
 
   const openComposer = useCallback(
     (lineNumber: number) => {
-      setComposer({ mode: 'create', lineNumber })
+      openSheet({ kind: 'composer', composer: { mode: 'create', lineNumber } })
       setComposerBody('')
     },
-    [setComposer, setComposerBody]
+    [openSheet, setComposerBody]
   )
 
   const openEditComposer = useCallback(
     (comment: DiffComment) => {
-      setComposer({ mode: 'edit', comment })
+      openSheet({ kind: 'composer', composer: { mode: 'edit', comment } })
       setComposerBody(comment.body)
     },
-    [setComposer, setComposerBody]
+    [openSheet, setComposerBody]
   )
 
   const closeComposer = useCallback(() => {
-    setComposer(null)
+    closeSheet('composer')
     setComposerBody('')
-  }, [setComposer, setComposerBody])
+  }, [closeSheet, setComposerBody])
 
   const saveComposer = useCallback(async () => {
     if (!composer || !currentItem || screenState.kind !== 'ready') {
@@ -201,18 +201,19 @@ export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
     if (nextIndex !== null) {
       setCurrentIndex(nextIndex)
     } else {
-      setShowCompletion(true)
+      // Why: the save can outlast a sheet the user opened meanwhile; never stack on or close it.
+      openSheetWhenIdle({ kind: 'completion' })
     }
   }, [
     currentIndex,
     currentItem,
     filter,
     filteredQueue,
+    openSheetWhenIdle,
     queue,
     saveCommentsAndReviewState,
     screenState,
-    setCurrentIndex,
-    setShowCompletion
+    setCurrentIndex
   ])
 
   const markUnreviewed = useCallback(async () => {

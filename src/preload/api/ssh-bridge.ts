@@ -18,6 +18,7 @@ import {
   admitSshDetectedPorts
 } from '../../shared/ssh-retained-payload-admission'
 import type { FilesystemPathFlavor } from '../../shared/filesystem-entry-types'
+import type { SshManagedServerMoveResult } from '../../shared/ssh-managed-server-move'
 import type { PreloadApi } from '../api-types'
 
 export const sshApi = {
@@ -52,8 +53,13 @@ export const sshApi = {
   disconnect: (args: { targetId: string }): Promise<void> =>
     ipcRenderer.invoke('ssh:disconnect', args),
 
-  terminateSessions: (args: { targetId: string }): Promise<SshTerminateSessionsResult> =>
-    ipcRenderer.invoke('ssh:terminateSessions', args),
+  terminateSessions: (args: {
+    targetId: string
+    forRemoval?: boolean
+  }): Promise<SshTerminateSessionsResult> => ipcRenderer.invoke('ssh:terminateSessions', args),
+
+  moveToManagedServer: (args: { targetId: string }): Promise<SshManagedServerMoveResult> =>
+    ipcRenderer.invoke('ssh:moveToManagedServer', args),
 
   resetRelay: (args: { targetId: string }): Promise<void> =>
     ipcRenderer.invoke('ssh:resetRelay', args),
@@ -158,6 +164,7 @@ export const sshApi = {
       targetId: string
       kind: 'passphrase' | 'password' | 'keyboard-interactive'
       detail: string
+      echo?: boolean
     }) => void
   ): (() => void) => {
     const listener = (
@@ -167,6 +174,7 @@ export const sshApi = {
         targetId: string
         kind: 'passphrase' | 'password' | 'keyboard-interactive'
         detail: string
+        echo?: boolean
       }
     ) => callback(data)
     ipcRenderer.on('ssh:credential-request', listener)

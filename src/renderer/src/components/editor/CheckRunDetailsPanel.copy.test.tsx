@@ -9,6 +9,7 @@ import { CheckRunDetailsPanel } from './CheckRunDetailsPanel'
 const writeClipboardText = vi.fn<(text: string) => Promise<void>>()
 
 vi.mock('@/i18n/i18n', () => ({
+  i18n: { language: 'en' },
   translate: (_key: string, fallback: string) => fallback
 }))
 

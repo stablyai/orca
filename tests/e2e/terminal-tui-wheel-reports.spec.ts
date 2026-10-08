@@ -47,8 +47,6 @@ async function probeSmallMouseWheelReports(
       const reports: string[] = []
       const disposable = pane.terminal.onData((data) => reports.push(data))
       try {
-        await new Promise<void>((resolve) => pane.terminal.write('\x1b[?1003h\x1b[?1006h', resolve))
-        await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)))
         if (!pane.terminal.element.classList.contains('enable-mouse-events')) {
           throw new Error('Mouse reporting mode did not activate')
         }
@@ -139,8 +137,6 @@ async function probeTimedSmallMouseWheelReports(
       const reports: string[] = []
       const disposable = pane.terminal.onData((data) => reports.push(data))
       try {
-        await new Promise<void>((resolve) => pane.terminal.write('\x1b[?1003h\x1b[?1006h', resolve))
-        await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)))
         if (!pane.terminal.element.classList.contains('enable-mouse-events')) {
           throw new Error('Mouse reporting mode did not activate')
         }
@@ -284,6 +280,18 @@ async function dispatchTuiWheel(
   }, options)
 }
 
+// Let a running TUI own mouse mode; late shell startup output can reset injected modes.
+async function startTuiFixture(page: Page): Promise<void> {
+  const ptyId = await waitForActivePanePtyId(page)
+  await execInTerminal(page, ptyId, `node ${JSON.stringify(VISIBLE_TUI_FIXTURE_PATH)}`)
+  await expect
+    .poll(() => readVisibleTuiOffset(page), {
+      timeout: 10_000,
+      message: 'fullscreen TUI did not render numbered rows'
+    })
+    .toBe(0)
+}
+
 test.describe('terminal TUI wheel reports', () => {
   test('notched mouse wheel ticks produce immediate mouse-reporting TUI scroll reports', async ({
     orcaPage
@@ -296,6 +304,7 @@ test.describe('terminal TUI wheel reports', () => {
       window.__store?.getState().updateSettings({ terminalTuiScrollSensitivity: 1 })
     )
 
+    await startTuiFixture(orcaPage)
     const samples = await probeSmallMouseWheelReports(orcaPage, 4)
 
     expect(
@@ -338,15 +347,7 @@ test.describe('terminal TUI wheel reports', () => {
       window.__store?.getState().updateSettings({ terminalTuiScrollSensitivity: 1 })
     )
 
-    const ptyId = await waitForActivePanePtyId(orcaPage)
-    await execInTerminal(orcaPage, ptyId, `node ${JSON.stringify(VISIBLE_TUI_FIXTURE_PATH)}`)
-
-    await expect
-      .poll(() => readVisibleTuiOffset(orcaPage), {
-        timeout: 10_000,
-        message: 'visible fullscreen TUI did not render numbered rows'
-      })
-      .toBe(0)
+    await startTuiFixture(orcaPage)
 
     await dispatchTuiWheel(orcaPage, {
       deltaY: 10,
@@ -399,6 +400,7 @@ test.describe('terminal TUI wheel reports', () => {
       window.__store?.getState().updateSettings({ terminalTuiScrollSensitivity: 5 })
     )
 
+    await startTuiFixture(orcaPage)
     const slow = await probeTimedSmallMouseWheelReports(orcaPage, {
       drainWaitMs: 120,
       intervalMs: 220,

@@ -1,23 +1,13 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import type { RpcCompatibleReader } from '../transport/rpc-operation-contract'
-import { rpcReadUnchecked, rpcUncheckedPayloadReader } from '../transport/rpc-reader-payload'
-import { isTerminalSendResultAccepted } from './terminal-send-rpc-response'
-import type { TerminalViewportUpdateOutcome } from './terminal-viewport-refit-state'
+import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+import {
+  terminalSendAcceptedSchema,
+  terminalViewportUpdatedSchema,
+  terminalWriteUnreadReplySchema
+} from './terminal-reply-schema'
 
-// Terminal input and the in-place viewport update. The `subscribe` and `sendUnsubscribe` ports
-// these files also reach are a separate boundary and are untouched.
-
-/**
- * Whether the runtime took the bytes, which is the whole of what a terminal send means to mobile:
- * a refusal, a non-object result and an unaccepted one are all "not delivered". `object-result-or-
- * null` is what makes those three the same answer, because it is the only policy that turns a
- * result the reader cannot read into null rather than a throw.
- */
-const terminalSendAcceptanceReader: RpcCompatibleReader<
-  Record<string, unknown>,
-  'terminal-send-accepted',
-  boolean
-> = (raw) => rpcReadUnchecked('terminal-send-accepted', isTerminalSendResultAccepted(raw))
+// Terminal input, the in-place viewport update and the buffer clear. The `subscribe` and
+// `sendUnsubscribe` ports these files also reach are a separate boundary and are untouched.
 
 /**
  * Five call sites send terminal input this way and all agree on acceptance, differing only in the
@@ -33,19 +23,9 @@ export const terminalInputSend = bindDeferredRpcOperation(
     method: 'terminal.send',
     acceptance: 'object-result-or-null',
     barrier: 'after-caller-barrier',
-    read: terminalSendAcceptanceReader
+    read: rpcResultVariant('terminal-send-accepted', terminalSendAcceptedSchema)
   })
 )
-
-const terminalViewportUpdateReader: RpcCompatibleReader<
-  Record<string, unknown>,
-  'terminal-viewport-updated',
-  TerminalViewportUpdateOutcome
-> = (raw) =>
-  rpcReadUnchecked('terminal-viewport-updated', {
-    updated: raw.updated === true,
-    applied: raw.applied === true
-  })
 
 /**
  * The refit's in-place viewport update. Its capability verdict still comes off the raw reply: the
@@ -57,7 +37,7 @@ export const terminalViewportUpdate = bindDeferredRpcOperation(
     method: 'terminal.updateViewport',
     acceptance: 'object-result-or-null',
     barrier: 'after-caller-barrier',
-    read: terminalViewportUpdateReader
+    read: rpcResultVariant('terminal-viewport-updated', terminalViewportUpdatedSchema)
   })
 )
 
@@ -72,6 +52,22 @@ export const workerTerminalTakeoverReport = bindDeferredRpcOperation(
     method: 'orchestration.workerTerminalUserInput',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('worker-terminal-input-reported')
+    read: rpcResultVariant('worker-terminal-input-reported', terminalWriteUnreadReplySchema)
+  })
+)
+
+/**
+ * The terminal menu's buffer clear. A skip rather than a throw because main never looked at the
+ * envelope: it reported success on any fulfilled reply and only a transport rejection reached the
+ * failure toast, so a refusal telling the user the buffer was cleared is behaviour this preserves
+ * rather than repairs.
+ */
+export const terminalBufferClear = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'terminal.clear-buffer-or-skip',
+    method: 'terminal.clearBuffer',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('terminal-buffer-cleared', terminalWriteUnreadReplySchema)
   })
 )

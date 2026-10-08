@@ -21,6 +21,7 @@ import {
   type RemoteBrowserPaneNotice,
   type RemoteBrowserStreamBridge
 } from './remote-browser-page-input-model'
+import { subscribeRuntimeEnvironment } from '@/runtime/runtime-environment-pairing-refresh'
 
 export function useRemoteBrowserPageLifecycle({
   browserTab,
@@ -88,8 +89,7 @@ export function useRemoteBrowserPageLifecycle({
         browserPageExists
       },
       callRpc: callRuntimeRpc,
-      subscribeScreencast: (args, callbacks) =>
-        window.api.runtimeEnvironments.subscribe(args, callbacks),
+      subscribeScreencast: (args, callbacks) => subscribeRuntimeEnvironment(args, callbacks),
       getWorktreeSelector: () => runtimeWorktreeRef.current,
       getCurrentUrl: () => currentBrowserTabUrlRef.current,
       readStoredHandle: () =>

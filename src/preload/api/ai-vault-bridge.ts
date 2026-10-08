@@ -1,6 +1,6 @@
 import { createSessionSearchClient } from '../../shared/ai-vault-search-client'
-import type { AiVaultSearchRequest } from '../../shared/ai-vault-search-types'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
+import type { AiVaultSearchRequest, AiVaultSearchStatus } from '../../shared/ai-vault-search-types'
+import type { ExecutionHostId, ExecutionHostScope } from '../../shared/execution-host'
 import { ipcRenderer } from 'electron'
 import type {
   AiVaultDeleteSessionArgs,
@@ -16,23 +16,29 @@ import type { AiVaultPrepareSessionResumeArgs } from '../../shared/ai-vault-resu
 import type { PreloadApi } from '../api-types'
 
 function searchClient(
-  executionHostScope?: ExecutionHostId
+  executionHostScope?: ExecutionHostScope
 ): ReturnType<typeof createSessionSearchClient> {
-  const remote = executionHostScope !== undefined && executionHostScope !== LOCAL_EXECUTION_HOST_ID
+  // Main negotiates and redacts every remote leg before answering this same-build IPC boundary.
   return createSessionSearchClient(
     (method, params) =>
       method === 'aiVault.searchSessions'
         ? ipcRenderer.invoke('aiVault:searchSessions', params, executionHostScope)
         : ipcRenderer.invoke('aiVault:searchStatus', executionHostScope),
-    remote ? 'relay' : 'ipc'
+    'ipc'
   )
 }
 
 export const aiVaultApi = {
-  searchSessions: (request: AiVaultSearchRequest, executionHostScope?: ExecutionHostId) =>
+  searchSessions: (request: AiVaultSearchRequest, executionHostScope?: ExecutionHostScope) =>
     searchClient(executionHostScope).searchSessions(request),
   searchStatus: (executionHostScope?: ExecutionHostId) =>
     searchClient(executionHostScope).searchStatus(),
+  setSearchEnabled: (
+    executionHostId: ExecutionHostId,
+    enabled: boolean
+  ): Promise<AiVaultSearchStatus> =>
+    ipcRenderer.invoke('aiVault:setSearchEnabled', executionHostId, enabled),
+  clearSearchIndex: (): Promise<void> => ipcRenderer.invoke('aiVault:clearSearchIndex'),
   listSessions: (args?: AiVaultListArgs) => ipcRenderer.invoke('aiVault:listSessions', args),
   resolveSessionTitles: (args: AiVaultSessionTitlesArgs) =>
     ipcRenderer.invoke('aiVault:resolveSessionTitles', args),

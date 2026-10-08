@@ -51,9 +51,12 @@ function Harness(props: HarnessProps): React.JSX.Element {
       return true
     },
     insertTypedText: () => true,
+    appendText: () => {},
+    acceptsText: () => true,
     handlePasteEvent: () => {},
-    pasteFromClipboard: () => {}
-  } as NativeChatComposerHandle
+    pasteFromClipboard: () => {},
+    contains: () => false
+  }
   useNativeChatComposerRevealFocus({
     rootRef,
     composerRef,
@@ -252,6 +255,23 @@ describe('useNativeChatComposerRevealFocus', () => {
     render({ isVisible: true, isFocusedGroup: true, composerReady: true })
     drainFrames()
     expect(focusCalls).toBe(1)
+  })
+
+  it('re-arms when a prompt replaces an already focused composer', () => {
+    render({ isVisible: true, isFocusedGroup: true, composerReady: true })
+    drainFrames()
+    expect(focusCalls).toBe(1)
+
+    render({ isVisible: true, isFocusedGroup: true, composerReady: false })
+    drainFrames()
+    act(() => {
+      ;(document.activeElement as HTMLElement | null)?.blur()
+    })
+    render({ isVisible: true, isFocusedGroup: true, composerReady: true })
+    drainFrames()
+
+    expect(focusCalls).toBe(2)
+    expect(container.querySelector('textarea')).toBe(document.activeElement)
   })
 
   it('leaves focus alone when it is already inside the pane', () => {

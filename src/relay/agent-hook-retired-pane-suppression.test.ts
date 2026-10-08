@@ -9,6 +9,7 @@ import type { AgentHookRelayEnvelope } from '../shared/agent-hook-relay'
 import { makePaneKey } from '../shared/stable-pane-id'
 import type { PtyHandler, PtySurfaceRetiredListener } from './pty-handler'
 import type { RelayDispatcher } from './dispatcher'
+import type { ClaudeTerminalEvidence } from '../shared/claude-terminal-interrupt'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const PANE_KEY = makePaneKey('tab-1', LEAF_ID)
@@ -162,9 +163,15 @@ describe('RelayAgentHookRuntime wiring', () => {
   it('routes hook admission through the PTY handler and drops the cache on retirement', async () => {
     const retired = new RetiredPaneSurfaceRegistry()
     const surfaceRetiredListeners: PtySurfaceRetiredListener[] = []
+    const setClaudeTerminalEvidenceListener =
+      vi.fn<(listener: (paneKey: string, evidence: ClaudeTerminalEvidence) => void) => void>()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this stand-in implements every PtyHandler member the hook runtime registers or reads.
     const ptyHandler = {
       addEnvAugmenter: vi.fn(),
+      setAgentPresenceTrigger: vi.fn(),
+      setClaudeTerminalEvidenceListener,
       setExitListener: vi.fn(),
+      getAgentLaunchToken: () => undefined,
       setSurfaceRetiredListener: vi.fn((listener: PtySurfaceRetiredListener | null) => {
         if (listener) {
           surfaceRetiredListeners.push(listener)
@@ -189,6 +196,21 @@ describe('RelayAgentHookRuntime wiring', () => {
       const server = (runtime as unknown as { hookServer: RelayAgentHookServer }).hookServer
       expect(await postHook(server, PANE_KEY)).toBe(204)
       expect(cachedPaneKeys(server)).toEqual([PANE_KEY])
+
+      expect(setClaudeTerminalEvidenceListener).toHaveBeenCalledOnce()
+      const observe = setClaudeTerminalEvidenceListener.mock.calls[0]?.[0]
+      if (!observe) {
+        throw new Error('Terminal evidence listener was not registered')
+      }
+      observe(PANE_KEY, { kind: 'title', title: '◐ Task' })
+      observe(PANE_KEY, { kind: 'input', data: '\x1b[27u' })
+      observe(PANE_KEY, { kind: 'title', title: '✳ Task' })
+      expect(
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the server owns this pane-status map, as checked by cachedPaneKeys above.
+        (server as unknown as CachedPanes).state.lastStatusByPaneKey.get(PANE_KEY)
+      ).toMatchObject({
+        payload: { state: 'done', mainAgent: { outcome: 'cancellation' } }
+      })
 
       // The PTY handler retires the surface: the runtime must drop the cached status immediately,
       // rather than waiting for a process exit a surviving shell never produces.

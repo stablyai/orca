@@ -7,7 +7,13 @@
  * consumer, so only the scan envelope is shared.
  */
 
-export type UsageProviderId = 'claude' | 'codex' | 'opencode' | `plugin:${string}`
+export type UsageProviderId =
+  | 'claude'
+  | 'codex'
+  | 'devin'
+  | 'opencode'
+  | 'muse'
+  | `plugin:${string}`
 
 /** Scan input. Distinct from `UsageWorktreeRef` in usage-worktree-metadata, which lacks `repoId`. */
 export type UsageScanWorktreeRef = {

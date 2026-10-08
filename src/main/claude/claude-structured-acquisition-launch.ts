@@ -1,11 +1,16 @@
+import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 import {
   AgentSessionAcquisitionExitUnprovenError,
   AgentSessionPreSpawnError,
   type StructuredAgentSessionAcquireInput
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import { stopAgentSessionProviderRoot } from '../native-chat/agent-session-wire/structured-agent-session-provider-exit-proof'
 import { withAgentSessionCreatePhase } from '../observability/agent-session-instrumentation'
-import type { ClaudeRewindAttempt } from './claude-structured-rewind'
 import type { ClaudeStructuredLaunch } from './claude-structured-launch-resolution'
+import {
+  claudeStructuredSpawnOptions,
+  type ClaudeStructuredSpawnOptions
+} from './claude-structured-spawn-options'
 import {
   cancelClaudeAcquisitionAttempt,
   type ClaudeAcquisitionAttempt,
@@ -20,6 +25,11 @@ import {
   closeClaudePublishedSessionForDeps
 } from './claude-structured-session-close'
 
+/** The launch with the chat's saved options in its spawn options. */
+export type ClaudeAcquisitionLaunch = ClaudeStructuredLaunch & {
+  savedOptions: Omit<ClaudeStructuredSpawnOptions, 'sdkOptions'>
+}
+
 export async function resolveClaudeAcquisitionLaunch(args: {
   input: StructuredAgentSessionAcquireInput
   deps: ClaudeStructuredSessionAdapterDeps
@@ -29,9 +39,8 @@ export async function resolveClaudeAcquisitionLaunch(args: {
   callbacks: ClaudeAcquireCallbacks
   previous: ClaudeAcquisitionAttempt | undefined
   attempt: ClaudeAcquisitionAttempt
-  rewind: ClaudeRewindAttempt
-}): Promise<ClaudeStructuredLaunch> {
-  const { input, deps, sessions, acquisitions, exits, callbacks, previous, attempt, rewind } = args
+}): Promise<ClaudeAcquisitionLaunch> {
+  const { input, deps, sessions, acquisitions, exits, callbacks, previous, attempt } = args
   const sessionId = input.identity.sessionId
   return withAgentSessionCreatePhase('auth_settle', input.recordPhase, async () => {
     if (previous && !(await cancelClaudeAcquisitionAttempt(previous))) {
@@ -42,7 +51,10 @@ export async function resolveClaudeAcquisitionLaunch(args: {
     }
     acquisitions.assertCurrent(sessionId, attempt)
     let resumeSession = sessions.get(sessionId)
-    if (!(await closeClaudePublishedSessionForDeps(sessions, sessionId, deps))) {
+    const closed = await stopAgentSessionProviderRoot(() =>
+      closeClaudePublishedSessionForDeps(sessions, sessionId, deps)
+    )
+    if (!closed) {
       throw new AgentSessionAcquisitionExitUnprovenError(
         new Error(`claude session ${sessionId} could not be stopped`)
       )
@@ -52,7 +64,15 @@ export async function resolveClaudeAcquisitionLaunch(args: {
       const firstProof = retainedExit.closePromise ? await retainedExit.closePromise : false
       const proven = firstProof || (await retainedExit.connection.close().catch(() => false))
       if (!proven) {
-        throw claudeAcquisitionCleanupError(retainedExit.connection, retainedExit.error)
+        const cleanupError = claudeAcquisitionCleanupError(
+          retainedExit.connection,
+          retainedExit.error
+        )
+        // A proven root exit is what released the lease, so it cannot also refuse the next root;
+        // only an exit this host cannot vouch for still blocks the start.
+        if (cleanupError instanceof AgentSessionAcquisitionExitUnprovenError) {
+          throw cleanupError
+        }
       }
       // The superseded child must settle before its durable resume identity is reused.
       await callbacks.settleExit(sessionId, retainedExit)
@@ -62,11 +82,10 @@ export async function resolveClaudeAcquisitionLaunch(args: {
     const launchIdentity = resumeSession
       ? {
           ...input.identity,
-          providerHandle: {
-            kind: 'claude' as const,
-            sessionId: resumeSession.providerSessionId,
-            leafUuid: resumeSession.leafUuid
-          }
+          providerHandle: claudeProviderHandle(
+            resumeSession.providerSessionId,
+            resumeSession.turnEndLeafUuid
+          )
         }
       : input.identity
     const launch = await deps
@@ -76,8 +95,16 @@ export async function resolveClaudeAcquisitionLaunch(args: {
           ? error
           : new AgentSessionPreSpawnError(error)
       })
-    rewind.applyLaunch(launch, deps)
     acquisitions.assertCurrent(sessionId, attempt)
-    return launch
+    const spawn = claudeStructuredSpawnOptions({ launch, saved: input.options })
+    return {
+      ...launch,
+      options: spawn.sdkOptions,
+      savedOptions: {
+        options: spawn.options,
+        skipped: spawn.skipped,
+        fastModeAtStart: spawn.fastModeAtStart
+      }
+    }
   })
 }

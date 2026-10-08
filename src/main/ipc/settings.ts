@@ -12,6 +12,7 @@ import { SETTINGS_CHANGED_WHITELIST, type SettingsChangedKey } from '../../share
 import type { AgentAwakeService } from '../agent-awake-service'
 import { sanitizeFloatingWorkspaceDirectorySetting } from './floating-workspace-directory'
 import { applyAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
+import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-status-hooks-setting'
 import { recordManagedHookInstallFailure } from '../agent-hooks/install-telemetry'
 import { applyElectronProxySettings } from '../network/proxy-settings'
 import { applyBrowserSessionProxies } from '../browser/browser-session-proxy'
@@ -27,6 +28,7 @@ import { prepareLocalWorktreeRootsForRepos } from '../worktree-root-preparation'
 import { scheduleCurrentWorktreeBaseDirectoryWatcherSync } from './worktree-base-directory-watcher'
 import { applyPRBotAuthorOverride } from '../../shared/pr-bot-author-overrides'
 import { resolveEnvironment } from '../../shared/runtime-environment-store'
+import { readSettingsWithRuntimeEnvironmentPreference } from './runtime-environment-preference'
 import { haveSameDisabledTuiAgents } from '../../shared/tui-agent-selection'
 import {
   normalizeMobilePairingCustomAddress,
@@ -97,7 +99,7 @@ export function registerSettingsHandlers(
   })
 
   ipcMain.handle('settings:get', () => {
-    return store.getSettings()
+    return readSettingsWithRuntimeEnvironmentPreference(store, app.getPath('userData'))
   })
 
   ipcMain.handle(
@@ -119,7 +121,7 @@ export function registerSettingsHandlers(
   // synchronously or pre-hydration bindings would always pick main authority
   // (terminal-side-effect-authority.md, migration switch).
   ipcMain.on('settings:get-sync', (event) => {
-    event.returnValue = store.getSettings()
+    event.returnValue = readSettingsWithRuntimeEnvironmentPreference(store, app.getPath('userData'))
   })
 
   ipcMain.handle('settings:set', async (event, args: Partial<GlobalSettings>) => {
@@ -242,13 +244,7 @@ export function registerSettingsHandlers(
           userInitiated: true,
           shouldHydrateShellPath: app.isPackaged,
           onInstallError: recordManagedHookInstallFailure,
-          shouldContinue: (agent) => {
-            const settings = store.getSettings()
-            return (
-              settings.agentStatusHooksEnabled !== false &&
-              !settings.disabledTuiAgents.includes(agent)
-            )
-          }
+          shouldContinue: (agent) => isAgentStatusHooksEnabledForAgent(store.getSettings(), agent)
         })
       } catch (error) {
         console.warn('[settings] failed to reconcile managed agent hooks:', error)

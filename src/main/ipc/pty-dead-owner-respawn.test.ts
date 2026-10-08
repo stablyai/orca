@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { withDurableRuntimeStore } from '../runtime/runtime-durable-store-fixture'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { SessionNotFoundError } from '../daemon/daemon-errors'
 import { makePaneKey } from '../../shared/stable-pane-id'
@@ -102,7 +103,7 @@ describe('registerPtyHandlers', () => {
       },
       terminalPtyIncarnationsByPaneKey: { [paneKey]: 'inc-proven-absent-owner' }
     }
-    const store = {
+    const store = withDurableRuntimeStore({
       getWorkspaceSession: vi.fn(() => session),
       setWorkspaceSession: vi.fn((next) => {
         session = next
@@ -113,7 +114,7 @@ describe('registerPtyHandlers', () => {
       getFolderWorkspaces: vi.fn(() => []),
       getProjectGroups: vi.fn(() => []),
       getRepos: vi.fn(() => [])
-    }
+    })
     const runtime = {
       setPtyController: vi.fn(),
       resolveTerminalPane: vi.fn(() => {
@@ -226,7 +227,7 @@ describe('registerPtyHandlers', () => {
       },
       terminalPtyIncarnationsByPaneKey: { [paneKey]: 'inc-probe-blip-owner' }
     }
-    const store = {
+    const store = withDurableRuntimeStore({
       getWorkspaceSession: vi.fn(() => session),
       setWorkspaceSession: vi.fn((next) => {
         session = next
@@ -237,7 +238,7 @@ describe('registerPtyHandlers', () => {
       getFolderWorkspaces: vi.fn(() => []),
       getProjectGroups: vi.fn(() => []),
       getRepos: vi.fn(() => [])
-    }
+    })
     const runtime = {
       setPtyController: vi.fn(),
       resolveTerminalPane: vi.fn(() => {
@@ -350,7 +351,7 @@ describe('registerPtyHandlers', () => {
       },
       terminalPtyIncarnationsByPaneKey: {}
     }
-    const store = {
+    const store = withDurableRuntimeStore({
       getWorkspaceSession: vi.fn(() => session),
       setWorkspaceSession: vi.fn((next) => {
         session = next
@@ -361,7 +362,7 @@ describe('registerPtyHandlers', () => {
       getFolderWorkspaces: vi.fn(() => []),
       getProjectGroups: vi.fn(() => []),
       getRepos: vi.fn(() => [])
-    }
+    })
     let runtimeOwnsPane = true
     const runtime = {
       setPtyController: vi.fn(),
