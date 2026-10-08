@@ -9,6 +9,10 @@ import type {
   PairingProvisionRelayParams
 } from '../../../shared/mobile-relay-credential-contract'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
+import type {
+  DelegatedPhone,
+  DelegatedMobileDeviceSyncResult
+} from '../../../shared/delegated-mobile-device-contract'
 import type { OrchestrationCompatibilityEvidence } from '../../../shared/orchestration-compatibility-evidence'
 import type { OrchestrationSessionCaller } from '../orchestration/orchestration-caller-identity'
 import type { RpcCallerIdentity } from './rpc-caller-identity'
@@ -111,6 +115,10 @@ export type RpcContext = {
   // Why: federation pins the authenticated saved-environment caller without exposing its token to handlers or storage.
   authenticatedCallerFingerprint?: string
   pairing?: PairingRpcContext
+  // Why: set only for an authenticated runtime-scope device and bound to it, so it manages only its own phones.
+  delegatedMobileDevices?: {
+    sync(phones: readonly DelegatedPhone[]): DelegatedMobileDeviceSyncResult
+  }
   // Why: mobile terminal traffic bypasses JSON streaming; undefined on Unix/socket and non-E2EE WebSocket paths.
   sendBinary?: (bytes: Uint8Array<ArrayBufferLike>) => boolean | void
   // Why: binary terminal frames arrive outside JSON-RPC once a stream is established; handlers register only the stream IDs they created.

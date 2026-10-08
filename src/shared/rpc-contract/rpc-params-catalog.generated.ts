@@ -18,6 +18,7 @@ import {
   BrowserNetworkTunnelAttachParams
 } from '../browser-client-host-protocol'
 import { BrowserClientPageMetadataParams } from '../browser-client-page-metadata-protocol'
+import { DelegatedMobileDeviceSyncParamsSchema } from '../delegated-mobile-device-contract'
 import {
   PairingGetEndpointsParamsSchema,
   PairingProvisionRelayParamsSchema
@@ -1090,6 +1091,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.workerStart': WorkerStartParams,
   'orchestration.workerStop': WorkerDispatchParamsOfOrchestrationWorkerStopParams,
   'orchestration.workerTerminalUserInput': OrchestrationWorkerTerminalUserInputParams,
+  'pairing.delegatedMobileDevice.sync': DelegatedMobileDeviceSyncParamsSchema,
   'pairing.getEndpoints': PairingGetEndpointsParamsSchema,
   'pairing.provisionRelay': PairingProvisionRelayParamsSchema,
   'plugins.consent': pluginConsentRequestSchema,

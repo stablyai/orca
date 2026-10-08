@@ -2,7 +2,6 @@
 // (mobile) connections. Each paired device gets its own revocable token so
 // compromising one device doesn't expose others. The registry is a simple
 // JSON file with hardened permissions matching the runtime metadata pattern.
-import { randomBytes, randomUUID } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
@@ -13,9 +12,15 @@ import {
 import type { DeviceScope } from '../../shared/runtime-types'
 import { removeStaleDurableWriteTempFiles } from '../durable-file-write'
 import { DEVICE_REGISTRY_FILENAME } from './mobile-pairing-files'
+import { mintDeviceCredential } from './device-credential'
 import type { RelayDeviceBinding } from './relay/relay-revoke-outbox'
 import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
 import type { RuntimePairingReach } from '../../shared/runtime-pairing-reach'
+import type { DelegatedPhone } from '../../shared/delegated-mobile-device-contract'
+import {
+  planDelegatedMobileDevices,
+  type DelegatedMobileDeviceEntry
+} from './delegated-mobile-devices'
 import {
   parseMobilePushRegistration,
   type MobilePushRegistration
@@ -38,6 +43,9 @@ export type DeviceEntry = {
   // Why: survives a desktop restart so the host can keep pushing without the phone
   // re-registering. Absent on every registry written before background push existed.
   pushRegistration?: MobilePushRegistration
+  // Why: a phone relayed by a paired desktop is that desktop's child; it dies with the parent's grant.
+  parentDeviceId?: string
+  phoneKey?: string
 }
 
 function validRelayBinding(value: unknown, deviceId: string): RelayDeviceBinding | undefined {
@@ -95,9 +103,8 @@ export class DeviceRegistry {
     pairingReach: RuntimePairingReach
   ): DeviceEntry {
     const entry: DeviceEntry = {
-      deviceId: randomUUID(),
+      ...mintDeviceCredential(),
       name,
-      token: randomBytes(24).toString('hex'),
       scope,
       pairedAt: Date.now(),
       lastSeenAt: 0,
@@ -155,8 +162,26 @@ export class DeviceRegistry {
     scope: DeviceScope = 'mobile',
     pairingReach: RuntimePairingReach = 'network'
   ): DeviceEntry {
+    // Why: a pending runtime device has no delegated children — its first auth sets lastSeenAt before any sync.
     const retainedDevices = this.devices.filter((d) => d.lastSeenAt !== 0 || d.scope !== scope)
     return this.createAndPersistDevice(retainedDevices, name, scope, pairingReach)
+  }
+
+  listDelegatedMobileDevices(parentDeviceId: string): DeviceEntry[] {
+    return this.devices.filter((device) => device.parentDeviceId === parentDeviceId)
+  }
+
+  /** Create-or-return one mobile child per phoneKey under `parent`, in `phones` order. */
+  upsertDelegatedMobileDevices(
+    parent: DeviceEntry,
+    phones: readonly DelegatedPhone[]
+  ): DelegatedMobileDeviceEntry[] {
+    const { nextDevices, entries } = planDelegatedMobileDevices(this.devices, parent, phones)
+    if (nextDevices !== this.devices) {
+      this.save(nextDevices)
+      this.devices = nextDevices
+    }
+    return entries
   }
 
   removeDevice(deviceId: string): boolean {
@@ -333,7 +358,10 @@ export class DeviceRegistry {
         pairingReach: device.pairingReach === 'this-computer' ? 'this-computer' : 'network',
         // Why: a malformed row must degrade to "no background push", never fail the load
         // and strand every paired device.
-        pushRegistration: parseMobilePushRegistration(device.pushRegistration)
+        pushRegistration: parseMobilePushRegistration(device.pushRegistration),
+        parentDeviceId:
+          typeof device.parentDeviceId === 'string' ? device.parentDeviceId : undefined,
+        phoneKey: typeof device.phoneKey === 'string' ? device.phoneKey : undefined
       }))
       this.registryUnreadable = false
     } catch (error) {
