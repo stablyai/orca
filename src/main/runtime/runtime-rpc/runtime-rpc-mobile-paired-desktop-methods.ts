@@ -95,11 +95,5 @@ export const PAIRED_DESKTOP_METHODS = [
   'settings.update',
   'settings.updateTerminalQuickCommands',
   'terminal.getAutoRestoreFit',
-  'terminal.setAutoRestoreFit',
-  // SSH targets are configured on the Mac.
-  'ssh.connect',
-  'ssh.getState',
-  'ssh.listRemovedTargetLabels',
-  'ssh.listTargetSummaries',
-  'ssh.listTargets'
+  'terminal.setAutoRestoreFit'
 ] as const

@@ -464,6 +464,20 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
     expect(server.capabilities).toEqual(host.runtime.getStatus().capabilities)
   })
 
+  it("answers a targeted SSH state from the server, which holds a server workspace's SSH targets", async () => {
+    const { desktop } = await startTopology()
+    const phone = await connectPhone(desktop.server, 'iPhone')
+    const answeredByServer = (id: string) =>
+      passthroughOpens.hostReplies.some((frame) => JSON.parse(frame).id === id)
+
+    phone.send('ssh:server', 'ssh.getState', { targetId: 'devbox' })
+    phone.send('ssh:desktop', 'ssh.getState', { targetId: 'devbox' }, null)
+    expect(isOk(await phone.next('ssh:server'))).toBe(true)
+    expect(isOk(await phone.next('ssh:desktop'))).toBe(true)
+    expect(answeredByServer('ssh:server')).toBe(true)
+    expect(answeredByServer('ssh:desktop')).toBe(false)
+  })
+
   it('refuses binary-frame methods and unknown servers without running anything on the desktop', async () => {
     const { desktop, desktopSpawns } = await startTopology()
     const phone = await connectPhone(desktop.server, 'iPhone')
