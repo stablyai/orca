@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { defineConfig } from 'vitest/config'
 import baseConfig from './vitest.config'
+import { nodeRuntimePool } from './scripts/vitest-node-runtime-pool'
 
 const contracts = [
   'src/main/sqlite/sync-database.test.ts',
@@ -27,6 +28,9 @@ export default defineConfig({
   ...baseConfig,
   test: {
     ...baseConfig.test,
+    // Project-level includes otherwise override this contract-only selection.
+    projects: undefined,
+    ...(process.versions.bun ? { pool: 'node-runtime', poolRunner: nodeRuntimePool } : {}),
     include: contracts,
     fileParallelism: false,
     retry: 0

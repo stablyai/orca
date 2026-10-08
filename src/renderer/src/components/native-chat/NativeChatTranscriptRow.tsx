@@ -92,7 +92,8 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
     />
   ) : null
   return (
-    <div className={cn('flex flex-col gap-5', sectionClassName)}>
+    // The negative margin shortens the measured row, which is what moves the next one up.
+    <div className={cn('flex flex-col gap-5', slot.continuesTurn && '-mb-3', sectionClassName)}>
       {/* A turn with no user bubble carries its bar above its first row. */}
       {slot.statusAbove ? statusRow : null}
       {!slot.drawsMessage ? null : receipt ? (
@@ -110,6 +111,7 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
           expandSignal={context.expandSignal}
           activeTurnIsWorking={slot.activeTurnIsWorking}
           trailingRun={slot.trailingRun}
+          continuesTurn={slot.continuesTurn}
           onScrollMessageToTop={context.onScrollMessageToTop}
           onLinkClick={context.onLinkClick}
           allowFileUriLinks={context.allowFileUriLinks}

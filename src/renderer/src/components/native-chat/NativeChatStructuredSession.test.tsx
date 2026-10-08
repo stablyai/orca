@@ -745,6 +745,34 @@ describe('NativeChatStructuredSession', () => {
     })
   })
 
+  it('gives a question card the keyboard, holds it while its answer is with the host, and frees it on a refusal', async () => {
+    mocks.promptItems = legacySingleQuestionPromptItems
+    render(
+      <NativeChatStructuredSession
+        isVisible
+        isFocusedGroup
+        tabId="structured-tab-hold"
+        sessionId="session-hold"
+        target={{ kind: 'local' }}
+        agent="claude"
+      />
+    )
+    let refuse: (result: null) => void = () => {}
+    mocks.respond.mockReturnValueOnce(
+      new Promise<null>((resolve) => {
+        refuse = resolve
+      })
+    )
+
+    // The card owns this pane's keyboard, which is what turns its number keys on.
+    expect(mocks.questionCardProps?.shouldFocus).toBe(true)
+    act(() => mocks.questionCardProps?.onAnswer([{ indices: [1], other: '' }]))
+    expect(mocks.questionCardProps?.isSubmitting).toBe(true)
+    await act(async () => refuse(null))
+
+    expect(mocks.questionCardProps?.isSubmitting).toBe(false)
+  })
+
   // The reader may have scrolled far up; what they just did has to come into view.
   it('brings the latest into view at the press for the submits this pane makes', async () => {
     mocks.promptItems = legacySingleQuestionPromptItems

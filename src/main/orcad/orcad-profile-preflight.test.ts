@@ -80,7 +80,7 @@ describe('bundled Orca startup readiness', () => {
       expect(fixture.run).toHaveBeenCalledOnce()
       expect(fixture.run).toHaveBeenCalledWith({
         program: process.execPath,
-        args: [join('/slot', 'orcad.js'), ORCAD_STARTUP_PREFLIGHT_FLAG, expect.any(String)],
+        args: [join('/slot', 'orcad-server.js'), ORCAD_STARTUP_PREFLIGHT_FLAG, expect.any(String)],
         env: expect.objectContaining({ ORCA_BACKGROUND_LAUNCH: '1' }),
         timeoutMs: 90_000,
         maxOutputBytes: 64 * 1024,

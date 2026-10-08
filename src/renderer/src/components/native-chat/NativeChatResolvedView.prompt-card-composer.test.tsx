@@ -51,6 +51,8 @@ vi.mock('./NativeChatComposer', async () => {
             return true
           },
           insertTypedText: composer.typed,
+          acceptsText: () => true,
+          appendText: () => {},
           handlePasteEvent: () => {},
           pasteFromClipboard: () => {},
           contains: () => false

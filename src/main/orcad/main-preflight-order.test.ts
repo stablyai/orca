@@ -18,7 +18,7 @@ const { order, profileProbe } = vi.hoisted(() => {
   return { order, profileProbe: vi.fn(async () => {}) }
 })
 
-vi.mock('./orcad-bundled-runtime', () => ({ handoffToBundledOrcad: () => false }))
+vi.mock('./orcad-bundled-runtime', () => ({ assertOrcadServerRuntime: () => {} }))
 vi.mock('./orcad-profile-preflight', () => ({
   preflightBundledOrcadStartup: async () => {
     order.push('profile-admission')

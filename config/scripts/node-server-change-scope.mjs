@@ -65,10 +65,18 @@ export function discoverNodeServerTests(root = ROOT) {
 }
 
 export async function collectNodeServerInputs({ root = ROOT, entryPoints } = {}) {
-  const [{ build }, { externalNativeAddons, ORCAD_CHILD_ENTRY_POINTS, ORCAD_ENTRY_POINT }] =
-    await Promise.all([import('esbuild'), import('./orcad-entry-build.mjs')])
+  const [
+    { build },
+    {
+      externalNativeAddons,
+      ORCAD_CHILD_ENTRY_POINTS,
+      ORCAD_ENTRY_POINT,
+      ORCAD_LAUNCHER_ENTRY_POINT
+    }
+  ] = await Promise.all([import('esbuild'), import('./orcad-entry-build.mjs')])
   const entries = entryPoints ?? [
     ORCAD_ENTRY_POINT,
+    ORCAD_LAUNCHER_ENTRY_POINT,
     ...Object.values(ORCAD_CHILD_ENTRY_POINTS),
     ...BUILD_SCRIPTS,
     ...discoverNodeServerTests(root)

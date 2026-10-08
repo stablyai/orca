@@ -316,6 +316,7 @@ function renderRevealingController(sessionId = 'session-1', fence: number | null
         showsTailRow: false,
         isVisible,
         alignToViewportTop: vi.fn(),
+        isAlignPending: () => false,
         scrollToEnd,
         restoreScrollOffset,
         consumeProgrammaticScroll: () => false,

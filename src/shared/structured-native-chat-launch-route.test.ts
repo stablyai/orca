@@ -121,11 +121,14 @@ describe('agents beyond Claude and Codex', () => {
     STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
   ]
 
-  it('are offered only by a host that advertises and lists them', () => {
-    expect(
-      support({ agent: 'grok', hostCapabilities: REGISTERED, hostStructuredAgents: ['grok'] })
-    ).toEqual({ supported: true })
-  })
+  it.each(['grok', 'pi'] as const)(
+    '%s is offered only by a host that advertises and lists it',
+    (agent) => {
+      expect(
+        support({ agent, hostCapabilities: REGISTERED, hostStructuredAgents: [agent] })
+      ).toEqual({ supported: true })
+    }
+  )
 
   it('are not offered by a host that does not advertise its registered agents', () => {
     expect(support({ agent: 'grok', hostStructuredAgents: ['grok'] })).toEqual({

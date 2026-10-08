@@ -12,6 +12,8 @@ import { DAEMON_PROTOCOL_SOURCE_PATH, parseDaemonProtocolFacts } from './daemon-
 export const RUNTIME_LAUNCHER_PATHS = [
   // orcad handoff to its bundled runtime, and the pinned runtimes it can hand off to.
   'src/main/orcad/orcad-bundled-runtime.ts',
+  'src/main/orcad/launcher.ts',
+  'config/scripts/orcad-entry-build.mjs',
   'src/shared/node-runtime-pin.ts',
   'src/main/ssh/pinned-runtime-materializer.ts',
   'src/main/ssh/runtime-archive-download.ts',

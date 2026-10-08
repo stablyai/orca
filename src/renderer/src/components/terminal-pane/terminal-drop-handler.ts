@@ -16,11 +16,11 @@ import { resolveTerminalDropWorktreePath } from './terminal-drop-worktree-path'
 import {
   handleNativeTerminalFileDrop as handleTerminalFileDrop,
   type NativeTerminalFileDropArgs
-} from './terminal-native-file-drop'
+} from './terminal-native-file-drop-destination'
 
 export { handleTerminalFileDrop }
 
-type InternalArgs = Omit<NativeTerminalFileDropArgs, 'data'> & {
+type InternalArgs = Omit<NativeTerminalFileDropArgs, 'paths' | 'pane'> & {
   dataTransfer: Pick<DataTransfer, 'getData'>
   dropTarget?: EventTarget | null
   paneLeafId?: string

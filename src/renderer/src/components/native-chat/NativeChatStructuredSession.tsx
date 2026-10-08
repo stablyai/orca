@@ -13,7 +13,8 @@ import { NativeChatEmptyState } from './NativeChatEmptyState'
 import { NativeChatLoadingCue } from './NativeChatLoadingCue'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import { useStructuredNativeChatSubmitReveal } from './use-structured-native-chat-submit-reveal'
-import { NativeChatQuestionCard } from './NativeChatQuestionCard'
+import { useStructuredPromptResponseHold } from './use-structured-prompt-response-hold'
+import { NativeChatStructuredQuestionCard } from './NativeChatStructuredQuestionCard'
 import { selectNativeChatViewState, structuredChatHistoryPhase } from './native-chat-view-state'
 import { useNativeChatComposerRevealFocus } from './use-native-chat-composer-reveal-focus'
 import { useNativeChatFontSize } from './use-native-chat-font-size'
@@ -51,6 +52,12 @@ import { useStructuredAgentSessionDeliveryNotices } from './use-structured-agent
 import { useNativeChatHostOutage } from './use-native-chat-host-outage'
 import { useNativeChatHostOutageNotice } from './use-native-chat-host-outage-notice'
 import { pendingPromptsAllUnanswerableHere } from '../../../../shared/agent-session-approval-subject'
+import { useStructuredAgentSessionStartFailureFacts } from './use-structured-agent-session-start-failure-facts'
+import {
+  isClaudeSignInFailureKind,
+  NativeChatClaudeSignInContext,
+  useNativeChatClaudeSignIn
+} from './native-chat-claude-sign-in'
 
 export function NativeChatStructuredSession(
   props: Omit<NativeChatStructuredViewProps, 'mode'>
@@ -118,6 +125,7 @@ export function NativeChatStructuredSession(
   )
   const submits = useStructuredNativeChatSubmitReveal(controller, provisionalLaunch.retry)
   const { revealLatest } = submits
+  const promptResponse = useStructuredPromptResponseHold(submits.respond)
   const agentLabel = structuredAgentLabel(props.agent)
   const continuation = useNativeChatInterruptedContinuation({
     target: props.target,
@@ -127,6 +135,10 @@ export function NativeChatStructuredSession(
     isWorking: controller.isWorking,
     composer: { clearError: () => reportComposerError(null) }
   })
+  const startFailures = useStructuredAgentSessionStartFailureFacts(
+    controller.journalItems,
+    props.agent === 'claude'
+  )
   const deliveryNotices = useStructuredAgentSessionDeliveryNotices({
     pending: controller.pending,
     submissions: controller.submissions,
@@ -162,8 +174,8 @@ export function NativeChatStructuredSession(
   const composerShown = (prompt === null || promptsUnanswerable) && !readFailedFinally
   const approval = prompt?.body.kind === 'approval' ? chatApprovalFromJournal(prompt.body) : null
   const cancelPrompt = () => {
-    if (controller.turnId && prompt) {
-      void controller.cancel(controller.turnId, {
+    if (prompt && (controller.turnId || props.agent === 'pi')) {
+      void controller.cancel(controller.turnId ?? undefined, {
         itemId: prompt.itemId,
         expectedRevision: prompt.revision
       })
@@ -195,11 +207,18 @@ export function NativeChatStructuredSession(
   const sessionError =
     viewState.kind === 'error' || !readFailure ? controller.error : readFailure.text
   const launch = { ...provisionalLaunch, retry: submits.retryLaunch }
+  const claudeSignIn = useNativeChatClaudeSignIn({
+    agent: props.agent,
+    target: props.target,
+    failure: provisionalLaunch.failure,
+    failureRows: startFailures.filter((fact) => isClaudeSignInFailureKind(fact.kind)).length
+  })
   const notices = structuredSessionNotices({
     launch,
     agentLabel,
     sessionError,
-    composerError: composerError ?? continuation.continueError
+    composerError: composerError ?? continuation.continueError,
+    claudeSignIn
   })
   if (hostNotice) {
     notices.push(hostNotice)
@@ -234,29 +253,31 @@ export function NativeChatStructuredSession(
         ) : (
           <NativeChatRewindContext.Provider value={controller.rewind.surface}>
             <NativeChatOrcaStopContext.Provider value={continuation.view}>
-              <NativeChatMessageList
-                // A rewind replaces the conversation; nothing the old transcript held carries over.
-                key={controller.epoch ?? undefined}
-                ref={submits.messageListRef}
-                session={session}
-                journalItems={controller.journalItems}
-                journalSubmissions={controller.submissions}
-                journalLatestTurn={controller.latestTurn}
-                subagentRoster={controller.subagentRoster}
-                railOutline={controller.railOutline}
-                isVisible={props.isVisible}
-                isWorking={controller.isWorking}
-                expandSignal={false}
-                workingStartedAt={controller.workingStartedAt}
-                settledTurns={controller.settledTurns}
-                awaitingInput={prompt === null ? null : 'shown'}
-                turnActivity={controller.turnActivity}
-                stopping={stopControls.stopping}
-                onLinkClick={onLinkClick}
-                allowFileUriLinks={onLinkClick !== undefined}
-                runtimeContext={imageRuntimeContext}
-                deliveryNotices={deliveryNotices}
-              />
+              <NativeChatClaudeSignInContext.Provider value={claudeSignIn}>
+                <NativeChatMessageList
+                  // A rewind replaces the conversation; nothing the old transcript held carries over.
+                  key={controller.epoch ?? undefined}
+                  ref={submits.messageListRef}
+                  session={session}
+                  journalItems={controller.journalItems}
+                  journalSubmissions={controller.submissions}
+                  journalLatestTurn={controller.latestTurn}
+                  subagentRoster={controller.subagentRoster}
+                  railOutline={controller.railOutline}
+                  isVisible={props.isVisible}
+                  isWorking={controller.isWorking}
+                  expandSignal={false}
+                  workingStartedAt={controller.workingStartedAt}
+                  settledTurns={controller.settledTurns}
+                  awaitingInput={prompt === null ? null : 'shown'}
+                  turnActivity={controller.turnActivity}
+                  stopping={stopControls.stopping}
+                  onLinkClick={onLinkClick}
+                  allowFileUriLinks={onLinkClick !== undefined}
+                  runtimeContext={imageRuntimeContext}
+                  deliveryNotices={deliveryNotices}
+                />
+              </NativeChatClaudeSignInContext.Provider>
             </NativeChatOrcaStopContext.Provider>
           </NativeChatRewindContext.Provider>
         )}
@@ -297,7 +318,10 @@ export function NativeChatStructuredSession(
             <NativeChatApprovalCard
               key={`${prompt.itemId}:${prompt.revision}`}
               approval={approval}
-              onChoose={(optionId) => void submits.respond(prompt, { kind: 'option', optionId })}
+              onChoose={(optionId) =>
+                void promptResponse.respond(prompt, { kind: 'option', optionId })
+              }
+              isSubmitting={promptResponse.holds(prompt)}
               onCancel={cancelPrompt}
               shouldFocus={!promptsUnanswerable && props.isVisible && props.isFocusedGroup}
               onLinkClick={onLinkClick}
@@ -305,35 +329,13 @@ export function NativeChatStructuredSession(
             />
           ) : null}
           {prompt && questionBody ? (
-            <NativeChatQuestionCard
+            <NativeChatStructuredQuestionCard
               key={`${prompt.itemId}:${prompt.revision}`}
-              prompt={{
-                questions: questions.map((question) => ({
-                  question: question.question,
-                  ...(question.header ? { header: question.header } : {}),
-                  multiSelect: question.multiSelect,
-                  options: question.options.map((option) => ({
-                    label: option.label,
-                    ...(option.description ? { description: option.description } : {})
-                  }))
-                }))
-              }}
-              allowOther={questions.map((question) => Boolean(question.freeTextQuestionId))}
-              onAnswer={(answers) => {
-                const chosen = questions.map((question, questionIndex) => {
-                  const answer = answers[questionIndex]
-                  const other = answer?.other?.trim()
-                  const optionIds = (answer?.indices ?? []).flatMap((optionIndex) => {
-                    const optionId = question.options[optionIndex]?.id
-                    return optionId ? [optionId] : []
-                  })
-                  return { questionId: question.id, optionIds, ...(other ? { other } : {}) }
-                })
-                if (chosen.every((answer) => answer.optionIds.length > 0 || answer.other)) {
-                  void submits.respond(prompt, { kind: 'answers', answers: chosen })
-                }
-              }}
+              questions={questions}
+              onAnswer={(response) => void promptResponse.respond(prompt, response)}
+              isSubmitting={promptResponse.holds(prompt)}
               onCancel={cancelPrompt}
+              shouldFocus={!promptsUnanswerable && props.isVisible && props.isFocusedGroup}
               answerInputRef={questionAnswerInputRef}
             />
           ) : null}

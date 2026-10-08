@@ -36,10 +36,30 @@ function CollapsibleTrigger({
   )
 }
 
+const collapsibleContentVariants = cva('', {
+  variants: {
+    animation: {
+      none: '',
+      // Grows and shrinks with its content, so what follows moves with it instead of jumping.
+      height: 'collapsible-height-content'
+    }
+  },
+  defaultVariants: { animation: 'none' }
+})
+
 function CollapsibleContent({
+  className,
+  animation,
   ...props
-}: React.ComponentProps<typeof CollapsiblePrimitive.Content>): React.JSX.Element {
-  return <CollapsiblePrimitive.Content data-slot="collapsible-content" {...props} />
+}: React.ComponentProps<typeof CollapsiblePrimitive.Content> &
+  VariantProps<typeof collapsibleContentVariants>): React.JSX.Element {
+  return (
+    <CollapsiblePrimitive.Content
+      data-slot="collapsible-content"
+      className={cn(collapsibleContentVariants({ animation }), className)}
+      {...props}
+    />
+  )
 }
 
 export { Collapsible, CollapsibleTrigger, CollapsibleContent }

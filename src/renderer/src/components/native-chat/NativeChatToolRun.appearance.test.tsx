@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { NativeChatBlock } from '../../../../shared/native-chat-types'
 import { NativeChatToolRun } from './NativeChatToolRun'
 import { nativeChatAppearanceStyle } from './native-chat-appearance-style'
+import { openToolRunMembers } from './native-chat-tool-run-members-test-support'
 
 afterEach(cleanup)
 
@@ -64,6 +65,7 @@ describe('tool-run summary in a matching chat', () => {
     expect(container.querySelector('pre')).toBeNull()
 
     fireEvent.click(screen.getByRole('button'))
+    openToolRunMembers()
 
     expect(container.querySelector('pre')).toHaveTextContent(command)
   })
@@ -93,7 +95,7 @@ describe('tool-run summary in a matching chat', () => {
     expect(summary).toHaveClass('min-w-0', 'line-clamp-2')
 
     const slots = Array.from(header.children).filter((child) => child !== summary)
-    expect(slots.length).toBeGreaterThanOrEqual(3)
+    expect(slots.length).toBeGreaterThanOrEqual(2)
     for (const slot of slots) {
       expect(slot).toHaveClass('flex', 'h-[1lh]', 'items-center')
     }
@@ -101,6 +103,7 @@ describe('tool-run summary in a matching chat', () => {
     expect(header.firstElementChild?.querySelector('svg')).toBeInTheDocument()
     expect(header.children[1]).toBe(summary)
     expect(header.querySelector('.lucide-check')?.parentElement).toHaveClass('h-[1lh]')
-    expect(header.querySelector('.lucide-chevron-right')?.parentElement).toHaveClass('h-[1lh]')
+    // The header carries no caret: the whole line is the toggle.
+    expect(header.querySelector('.lucide-chevron-right')).toBeNull()
   })
 })

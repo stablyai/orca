@@ -16,7 +16,9 @@ export const STRUCTURED_AGENT_SESSION_CONVERSATION_OUTLINE_METHODS = [
     params: OptionsParams,
     handler: async (params, ctx) =>
       readAgentSessionConversationOutline(
-        await (await requireInstalledStructuredHost(ctx)).journalSnapshot(params.sessionId)
+        await (
+          await requireInstalledStructuredHost(ctx, params.sessionId)
+        ).journalSnapshot(params.sessionId)
       )
   })
 ]

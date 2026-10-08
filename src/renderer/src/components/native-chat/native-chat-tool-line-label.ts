@@ -23,7 +23,8 @@ export function nativeChatToolLineLabel(
   title: string
   command: boolean
   filePath: string | null
-  commandDetail?: string | null
+  /** The whole command, when the row had to shorten it. */
+  commandDetail: string | null
 } {
   const display = createToolInputDisplay(call.input)
   const category = nativeChatToolCategory(call.name, call.mcpIdentity)
@@ -34,7 +35,7 @@ export function nativeChatToolLineLabel(
     !result?.isError &&
     (call.state === 'completed' || result !== undefined)
   const failed = call.state === 'failed' || result?.isError === true
-  let commandDetail: string | null | undefined
+  let commandDetail: string | null = null
   let verb: string | null = null
   let target = display.label
   let title = display.filePath ?? target

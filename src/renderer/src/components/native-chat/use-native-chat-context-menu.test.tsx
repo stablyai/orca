@@ -79,6 +79,8 @@ vi.mock('@/lib/image-blob-png', async (importOriginal) => ({
   convertImageBlobToPng: imageCopy.convertImageBlobToPng
 }))
 
+vi.mock('./NativeChatSelectionQuote', () => ({ NativeChatSelectionQuote: () => null }))
+
 vi.mock('@/components/tab-bar/TabWorkspaceLayoutMenuSection', () => ({
   TabWorkspaceLayoutMenuSection: () => 'Move Tab to Split'
 }))
@@ -108,6 +110,7 @@ function Harness({
   const rootRef = createRef<HTMLDivElement>()
   const { menu } = useNativeChatContextMenu({
     rootRef,
+    composerRef: createRef(),
     onSwitchToTerminal,
     showTerminalPaneActions: !structured,
     workspaceLayout: structured ? { unifiedTabId: 'chat-tab', groupId: 'group-1' } : undefined,
@@ -130,6 +133,7 @@ function ImageHarness({
   const rootRef = createRef<HTMLDivElement>()
   const { menu, onContextMenuCapture, onPointerDownCapture } = useNativeChatContextMenu({
     rootRef,
+    composerRef: createRef(),
     enabled,
     actions: { ...emptyNativeChatContextMenuActions, onPaste: vi.fn() }
   })
