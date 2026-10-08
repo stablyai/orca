@@ -15,6 +15,7 @@ import { callRuntimeResult, getRemoteRuntimeStatus } from './web-runtime-calls'
 import { requireActiveEnvironmentOrNull } from './web-runtime-session'
 import { getBrowserPlatform } from './web-storage'
 
+/** Web-client preflight bridge that forwards to the active runtime environment over RPC. */
 export function createPreflightApi(): NonNullable<Partial<PreloadApi>['preflight']> {
   const fallbackStatus: PreflightStatus = {
     git: { installed: false },
@@ -79,10 +80,11 @@ export function createPreflightApi(): NonNullable<Partial<PreloadApi>['preflight
             .then((result) => result as RefreshAgentsResult)
             .catch(() => fallbackRefreshAgents)
         : Promise.resolve(fallbackRefreshAgents),
+    /** Null, not [], without a runtime or on failure, so callers can report the host unreachable. */
     detectRemoteAgents: async (args) =>
       requireActiveEnvironmentOrNull()
-        ? callRuntimeResult<string[]>('preflight.detectRemoteAgents', args).catch(() => [])
-        : [],
+        ? callRuntimeResult<string[]>('preflight.detectRemoteAgents', args).catch(() => null)
+        : null,
     detectRemoteWindowsTerminalCapabilities: async (args) =>
       requireActiveEnvironmentOrNull()
         ? callRuntimeResult<WindowsTerminalCapabilityBridgeResult>(

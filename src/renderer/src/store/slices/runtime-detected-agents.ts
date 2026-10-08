@@ -31,6 +31,18 @@ function isRuntimeMethodNotFoundError(error: unknown): boolean {
   return error instanceof RuntimeRpcCallError && error.code === 'method_not_found'
 }
 
+/** Drops a cached [] after a failed probe so the UI reports unreachable; a non-empty list stays. */
+function withoutEmptyRuntimeAgents(
+  agents: Record<string, TuiAgent[] | null>,
+  environmentId: string
+): Pick<RuntimeDetectedAgentsSlice, 'runtimeDetectedAgentIds'> | null {
+  if (agents[environmentId]?.length !== 0) {
+    return null
+  }
+  const { [environmentId]: _, ...runtimeDetectedAgentIds } = agents
+  return { runtimeDetectedAgentIds }
+}
+
 export function _getRuntimeDetectPromiseCountForTest(): number {
   return runtimeDetectPromises.size
 }
@@ -92,6 +104,7 @@ export const createRuntimeDetectedAgentsSlice: StateCreator<
         // started detect's spinner).
         if (runtimeDetectPromises.get(environmentId) === pending) {
           set((s) => ({
+            ...withoutEmptyRuntimeAgents(s.runtimeDetectedAgentIds, environmentId),
             isDetectingRuntimeAgents: { ...s.isDetectingRuntimeAgents, [environmentId]: false }
           }))
         }
@@ -154,9 +167,10 @@ export const createRuntimeDetectedAgentsSlice: StateCreator<
       })
       .catch(() => {
         // Why: a disconnected runtime must keep Refresh retryable and must not
-        // wipe the last known agent list.
+        // wipe a non-empty last known agent list.
         if (runtimeRefreshPromises.get(environmentId) === pending) {
           set((s) => ({
+            ...withoutEmptyRuntimeAgents(s.runtimeDetectedAgentIds, environmentId),
             isDetectingRuntimeAgents: {
               ...s.isDetectingRuntimeAgents,
               [environmentId]: false

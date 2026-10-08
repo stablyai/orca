@@ -101,6 +101,7 @@ async function waitForTerminalPty(tabId: string, timeoutMs: number): Promise<boo
   return getTerminalLaunchState(tabId).hasPty
 }
 
+/** Agent launch menu items, with a placeholder that tells pending, unreachable and empty apart. */
 function QuickLaunchAgentMenuItemsInner({
   worktreeId,
   groupId,
@@ -117,7 +118,7 @@ function QuickLaunchAgentMenuItemsInner({
   // instead of the remote server's. Use the same ssh/runtime/local owner
   // resolution as the rest of the tab bar.
   const agentDetectionTarget = useAgentDetectionTargetForWorktree(worktreeId)
-  const { detectedIds } = useDetectedAgents(agentDetectionTarget)
+  const { detectedIds, detectionFailed } = useDetectedAgents(agentDetectionTarget)
   const defaultAgent = useAppStore((s) => s.settings?.defaultTuiAgent)
   const disabledAgents = useAppStore(
     (s) => s.settings?.disabledTuiAgents ?? DEFAULT_DISABLED_TUI_AGENTS
@@ -229,12 +230,25 @@ function QuickLaunchAgentMenuItemsInner({
           disabled
           className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 text-muted-foreground"
         >
-          {detectedIds && detectedIds.length > 0
-            ? translate('auto.components.tab.bar.QuickLaunchButton.8dea9b5cdf', 'No enabled agents')
-            : translate(
-                'auto.components.tab.bar.QuickLaunchButton.e518f544b1',
-                'No agents detected'
-              )}
+          {detectedIds === null
+            ? detectionFailed
+              ? translate(
+                  'components.tab.bar.QuickLaunchButton.hostUnreachable',
+                  'Could not reach this host to detect agents'
+                )
+              : translate(
+                  'components.tab.bar.QuickLaunchButton.detectingAgents',
+                  'Detecting agents…'
+                )
+            : detectedIds.length > 0
+              ? translate(
+                  'auto.components.tab.bar.QuickLaunchButton.8dea9b5cdf',
+                  'No enabled agents'
+                )
+              : translate(
+                  'auto.components.tab.bar.QuickLaunchButton.e518f544b1',
+                  'No agents detected'
+                )}
         </DropdownMenuItem>
       ) : null}
       {agents.map((agent) => {

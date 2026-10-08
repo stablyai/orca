@@ -218,12 +218,12 @@ export async function refreshShellPathAndDetectAgents(
   }
 }
 
-export async function detectRemoteAgents(args: { connectionId: string }): Promise<string[]> {
+/** Null when the SSH host cannot be asked; [] only when it answered with none. */
+export async function detectRemoteAgents(args: { connectionId: string }): Promise<string[] | null> {
   const mux = getActiveMultiplexer(args.connectionId)
   if (!mux || mux.isDisposed()) {
-    // Why: remote agent detection is passive UI polling. A disconnected host has
-    // no detectable agents until reconnect, but should not spam IPC errors.
-    return []
+    // Why: passive UI polling must not spam IPC errors, but [] would claim the host has no agents.
+    return null
   }
   const result = (await mux.request('preflight.detectAgents', {
     commands: KNOWN_TUI_AGENT_DETECTION_COMMANDS

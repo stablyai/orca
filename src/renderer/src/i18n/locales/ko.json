@@ -18485,6 +18485,10 @@
         "EditorFileTabContextMenu": {
           "closeOthers": "다른 탭 닫기",
           "closeTabsToLeft": "왼쪽으로 탭 닫기"
+        },
+        "QuickLaunchButton": {
+          "hostUnreachable": "agents를 감지하기 위해 이 호스트에 연결할 수 없습니다.",
+          "detectingAgents": "agents 감지 중…"
         }
       }
     },

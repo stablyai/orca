@@ -18450,6 +18450,10 @@
         "EditorFileTabContextMenu": {
           "closeOthers": "关闭其他",
           "closeTabsToLeft": "关闭左侧的选项卡"
+        },
+        "QuickLaunchButton": {
+          "hostUnreachable": "无法连接到此主机以检测智能体",
+          "detectingAgents": "正在检测智能体…"
         }
       }
     },

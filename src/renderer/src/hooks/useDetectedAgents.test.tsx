@@ -253,6 +253,27 @@ describe('useDetectedAgents (ssh call site)', () => {
     await flushEffects()
     expect(detectRemoteAgents).toHaveBeenCalledTimes(1)
   })
+
+  it('reports an unreachable SSH host as failed detection, not as no agents', async () => {
+    detectRemoteAgents.mockResolvedValue(null)
+
+    await renderProbe({ kind: 'ssh', connectionId: 'ssh-1' })
+
+    expect(latestHookResult?.detectedIds).toBeNull()
+    expect(latestHookResult?.detectionFailed).toBe(true)
+    expect(detectRemoteAgents).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports unreachable when a host that answered no agents stops responding', async () => {
+    useAppStore.setState({ remoteDetectedAgentIds: { 'ssh-1': [] } })
+    detectRemoteAgents.mockResolvedValue(null)
+
+    await renderProbe({ kind: 'ssh', connectionId: 'ssh-1' })
+
+    expect(latestHookResult?.detectedIds).toBeNull()
+    expect(latestHookResult?.detectionFailed).toBe(true)
+    expect(detectRemoteAgents).toHaveBeenCalledTimes(1)
+  })
 })
 
 describe('useDetectedAgents (unresolved target)', () => {

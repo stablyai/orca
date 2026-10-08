@@ -41,6 +41,7 @@ type StartupEnvironment = {
   launchSource?: string
 }
 
+/** Agent and startup launch for a linked draft; null when the draft is empty or shell-only. */
 export async function buildWorktreeStartupForDraft(
   environment: StartupEnvironment & { draft: string; requestedAgent?: TuiAgent }
 ): Promise<{
@@ -70,7 +71,7 @@ export async function buildWorktreeStartupForDraft(
     try {
       // Why: startup-draft fallback can run from sparse runtime launch envs too.
       detected = sshConnectionId
-        ? await detectRemoteAgents({ connectionId: sshConnectionId })
+        ? ((await detectRemoteAgents({ connectionId: sshConnectionId })) ?? [])
         : await detectInstalledAgentsWithShellPathHydration()
     } catch {
       detected = []

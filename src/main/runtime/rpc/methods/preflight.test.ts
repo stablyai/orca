@@ -86,6 +86,18 @@ describe('preflight RPC methods', () => {
     expect(response).toMatchObject({ ok: true, result: ['claude'] })
   })
 
+  it('fails remote agent detection for an unreachable SSH host instead of answering []', async () => {
+    detectRemoteAgentsMock.mockResolvedValueOnce(null)
+    const runtime = { getRuntimeId: () => 'test-runtime' } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: PREFLIGHT_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('preflight.detectRemoteAgents', { connectionId: 'ssh-1' })
+    )
+
+    expect(response).toMatchObject({ ok: false })
+  })
+
   it('detects remote Windows terminal capabilities through runtime RPC', async () => {
     detectRemoteWindowsTerminalCapabilitiesMock.mockResolvedValueOnce({
       wslAvailable: true,

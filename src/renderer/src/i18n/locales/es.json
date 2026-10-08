@@ -18450,6 +18450,10 @@
         "EditorFileTabContextMenu": {
           "closeOthers": "Cerrar otras",
           "closeTabsToLeft": "Cerrar pestañas a la izquierda"
+        },
+        "QuickLaunchButton": {
+          "hostUnreachable": "No se pudo contactar con este host para detectar agentes",
+          "detectingAgents": "Detectando agentes…"
         }
       }
     },

@@ -18485,6 +18485,10 @@
         "EditorFileTabContextMenu": {
           "closeOthers": "その他を閉じる",
           "closeTabsToLeft": "左側のタブを閉じる"
+        },
+        "QuickLaunchButton": {
+          "hostUnreachable": "Agent を検出するためにこのホストに接続できませんでした",
+          "detectingAgents": "Agent を検出中…"
         }
       }
     },

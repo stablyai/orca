@@ -28,6 +28,7 @@ export function _getRemoteDetectPromiseCountForTest(): number {
   return remoteDetectPromises.size
 }
 
+/** Detected-agent cache for local, SSH and runtime hosts, with in-flight probe dedupe. */
 export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedAgentsSlice> = (
   set,
   get,
@@ -37,6 +38,7 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
   remoteDetectedAgentIds: {},
   isDetectingRemoteAgents: {},
 
+  /** Cached SSH agents or a fresh probe; on failure, the last known ids, dropping a cached []. */
   ensureRemoteDetectedAgents: (connectionId: string, options?: { force?: boolean }) => {
     const existing = get().remoteDetectedAgentIds[connectionId]
     // Why: an empty result ([]) is truthy, so a prior "no agents found" detection
@@ -57,6 +59,10 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
     const pending = window.api.preflight
       .detectRemoteAgents({ connectionId })
       .then((ids) => {
+        if (ids === null) {
+          // Why: unreachable is not "no agents"; leave the cache unknown so the UI can say so.
+          throw new Error(`SSH connection ${connectionId} is not reachable`)
+        }
         const typed = ids as TuiAgent[]
         if (remoteDetectPromises.get(connectionId) === pending) {
           set((s) => ({
@@ -66,14 +72,21 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
         }
         return typed
       })
-      .catch(() => {
+      .catch((): TuiAgent[] => {
         // Why: allow retry on next call (SSH may reconnect). Do not cache failure.
         if (remoteDetectPromises.get(connectionId) === pending) {
-          set((s) => ({
-            isDetectingRemoteAgents: { ...s.isDetectingRemoteAgents, [connectionId]: false }
-          }))
+          set((s) => {
+            const isDetectingRemoteAgents = { ...s.isDetectingRemoteAgents, [connectionId]: false }
+            // Why: a cached [] is re-probed on every call, so a failed probe outranks it;
+            // drop it so the UI reports unreachable. A non-empty list stays as last known.
+            if (s.remoteDetectedAgentIds[connectionId]?.length === 0) {
+              const { [connectionId]: _, ...remoteDetectedAgentIds } = s.remoteDetectedAgentIds
+              return { remoteDetectedAgentIds, isDetectingRemoteAgents }
+            }
+            return { isDetectingRemoteAgents }
+          })
         }
-        return [] as TuiAgent[]
+        return get().remoteDetectedAgentIds[connectionId] ?? []
       })
       .finally(() => {
         // Why: this map is only for in-flight dedupe. Successful results live

@@ -29,7 +29,14 @@ export const PREFLIGHT_METHODS = [
     name: 'preflight.detectRemoteAgents',
     permission: 'workspace',
     params: PreflightDetectRemoteAgents,
-    handler: async (params) => detectRemoteAgents(params)
+    handler: async (params) => {
+      const agents = await detectRemoteAgents(params)
+      if (agents === null) {
+        // Why: older clients expect string[]; an error keeps them on their existing failure path.
+        throw new Error(`SSH connection ${params.connectionId} is not connected`)
+      }
+      return agents
+    }
   }),
   defineMethod({
     name: 'preflight.detectRemoteWindowsTerminalCapabilities',

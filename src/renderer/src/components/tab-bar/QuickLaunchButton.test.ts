@@ -23,7 +23,11 @@ const {
   },
   openSettingsPageMock: vi.fn(),
   openSettingsTargetMock: vi.fn(),
-  useDetectedAgentsMock: vi.fn(() => ({ detectedIds: ['claude', 'codex', 'gemini'] }))
+  useDetectedAgentsMock: vi.fn(
+    (): { detectedIds: string[] | null; isLoading?: boolean; detectionFailed?: boolean } => ({
+      detectedIds: ['claude', 'codex', 'gemini']
+    })
+  )
 }))
 
 vi.mock('@/hooks/useDetectedAgents', () => ({
@@ -195,6 +199,21 @@ describe('QuickLaunchAgentMenuItems', () => {
       kind: 'ssh',
       connectionId: 'ssh-target-1'
     })
+  })
+
+  it('does not claim no agents are installed while detection is pending or the host is unreachable', () => {
+    useDetectedAgentsMock.mockReturnValueOnce({ detectedIds: null, isLoading: true })
+    const pending = renderAgentMenuItems()
+    expect(pending).toContain('Detecting agents…')
+    expect(pending).not.toContain('No agents detected')
+
+    useDetectedAgentsMock.mockReturnValueOnce({ detectedIds: null, detectionFailed: true })
+    const unreachable = renderAgentMenuItems()
+    expect(unreachable).toContain('Could not reach this host to detect agents')
+    expect(unreachable).not.toContain('No agents detected')
+
+    useDetectedAgentsMock.mockReturnValueOnce({ detectedIds: [] })
+    expect(renderAgentMenuItems()).toContain('No agents detected')
   })
 
   it('does not label an auto-picked or blank default as configured', () => {

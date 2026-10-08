@@ -18551,6 +18551,10 @@
         "EditorFileTabContextMenu": {
           "closeOthers": "Fermer les autres",
           "closeTabsToLeft": "Fermer les onglets à gauche"
+        },
+        "QuickLaunchButton": {
+          "hostUnreachable": "Impossible de joindre cet hôte pour détecter les agents",
+          "detectingAgents": "Détection des agents…"
         }
       }
     },

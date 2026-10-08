@@ -50,7 +50,8 @@ export type PreflightApi = {
   /** Whether the installed `zcode` can open a session; cached in main per run. */
   zcodeInteractiveCapability: () => Promise<ZCodeInteractiveCapability>
   refreshAgents: (args?: PreflightRuntimeContext) => Promise<RefreshAgentsResult>
-  detectRemoteAgents: (args: { connectionId: string }) => Promise<string[]>
+  /** Null when the SSH host is unreachable, distinct from [] (reached, none installed). */
+  detectRemoteAgents: (args: { connectionId: string }) => Promise<string[] | null>
   detectRemoteWindowsTerminalCapabilities: (args: { connectionId: string }) => Promise<{
     wslAvailable: boolean
     wslDistros: string[]

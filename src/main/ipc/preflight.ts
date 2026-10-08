@@ -18,6 +18,7 @@ import type {
 export * from '../preflight/agent-detection'
 import { readZCodeInteractiveCapability } from '../zcode/interactive-capability'
 
+/** Registers the preflight IPC handlers: checks, agent detection and remote host capabilities. */
 export function registerPreflightHandlers(): void {
   ipcMain.handle(
     'preflight:check',
@@ -49,7 +50,7 @@ export function registerPreflightHandlers(): void {
   // the remote host so native Windows OpenSSH does not require a POSIX shell.
   ipcMain.handle(
     'preflight:detectRemoteAgents',
-    async (_event, args: { connectionId: string }): Promise<string[]> => {
+    async (_event, args: { connectionId: string }): Promise<string[] | null> => {
       return detectRemoteAgents(args)
     }
   )

@@ -18677,6 +18677,10 @@
         "EditorFileTabContextMenu": {
           "closeOthers": "Close Others",
           "closeTabsToLeft": "Close Tabs To The Left"
+        },
+        "QuickLaunchButton": {
+          "hostUnreachable": "Could not reach this host to detect agents",
+          "detectingAgents": "Detecting agents…"
         }
       }
     },
