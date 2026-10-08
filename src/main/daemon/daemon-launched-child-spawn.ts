@@ -1,6 +1,11 @@
 import { forkProcess, type ForkSpec } from '../../shared/child-process/fork-process'
 import { spawnProcess, type SpawnedProcess } from '../../shared/child-process/run-process'
 import { getAppEnvironment } from '../../shared/app-environment'
+import {
+  appImageDaemonIdentityPath,
+  buildAppImageDaemonCommand,
+  type AppImageDaemonLaunch
+} from './daemon-appimage-launch'
 import { buildDurableDaemonScopeCommand } from './daemon-cgroup-scope'
 import { daemonLogArgs } from './daemon-launch-paths'
 
@@ -8,6 +13,8 @@ export type DaemonChildSpawnOptions = {
   entryPath: string
   forkEntryPath: string
   relocatedExecPath?: string
+  /** Linux AppImage: exec the AppImage file so the daemon owns its mount. */
+  appImage?: AppImageDaemonLaunch
   userDataPath: string
   socketPath: string
   tokenPath: string
@@ -19,7 +26,15 @@ export type DaemonChildSpawnOptions = {
 }
 
 function buildDaemonScriptArgs(options: DaemonChildSpawnOptions): string[] {
-  const { socketPath, tokenPath, pidPath, launchNonce, entryPath, macosLoginSessionWatch } = options
+  const {
+    socketPath,
+    tokenPath,
+    pidPath,
+    launchNonce,
+    entryPath,
+    appImage,
+    macosLoginSessionWatch
+  } = options
   return [
     '--socket',
     socketPath,
@@ -30,7 +45,7 @@ function buildDaemonScriptArgs(options: DaemonChildSpawnOptions): string[] {
     '--launch-nonce',
     launchNonce,
     '--entry-path',
-    entryPath,
+    appImage ? appImageDaemonIdentityPath(appImage) : entryPath,
     '--app-version',
     getAppEnvironment().getVersion(),
     '--spawner-exec-path',
@@ -57,7 +72,7 @@ export function spawnDaemonChildProcess(
   options: DaemonChildSpawnOptions,
   useDurableScope: boolean
 ): SpawnedProcess {
-  const { forkEntryPath, relocatedExecPath, userDataPath, launchNonce } = options
+  const { forkEntryPath, relocatedExecPath, appImage, userDataPath, launchNonce } = options
   const scriptArgs = buildDaemonScriptArgs(options)
   // Why: run as plain Node so Electron's GPU/display init can't interfere with node-pty's posix_spawn of the spawn-helper.
   const daemonEnv = {
@@ -73,7 +88,7 @@ export function spawnDaemonChildProcess(
     detached: true,
     stdio: ['ignore', 'ignore', 'pipe', 'ipc']
   }
-  if (!useDurableScope) {
+  if (!useDurableScope && !appImage) {
     return forkProcess({
       ...childOptions,
       modulePath: forkEntryPath,
@@ -83,12 +98,17 @@ export function spawnDaemonChildProcess(
       env: daemonEnv
     })
   }
-  const scoped = buildDurableDaemonScopeCommand(
-    relocatedExecPath ?? process.execPath,
-    [forkEntryPath, ...scriptArgs, '--fresh-daemon-scope'],
-    launchNonce,
-    daemonEnv
-  )
+  const scopeArgs = useDurableScope ? ['--fresh-daemon-scope'] : []
+  const direct = appImage
+    ? buildAppImageDaemonCommand(appImage, [...scriptArgs, ...scopeArgs], daemonEnv)
+    : {
+        command: relocatedExecPath ?? process.execPath,
+        args: [forkEntryPath, ...scriptArgs, ...scopeArgs],
+        env: daemonEnv
+      }
+  const scoped = useDurableScope
+    ? buildDurableDaemonScopeCommand(direct.command, direct.args, launchNonce, direct.env)
+    : direct
   return spawnProcess({
     ...childOptions,
     program: scoped.command,

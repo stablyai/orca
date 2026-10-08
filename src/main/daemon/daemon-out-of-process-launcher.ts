@@ -14,6 +14,7 @@ import {
 } from './daemon-launched-child'
 import { getDaemonEntryPath, probeDaemonSocket as probeSocket } from './daemon-launch-paths'
 import { materializeRelocatedDaemonHost } from './daemon-host-relocation'
+import { appImageDaemonIdentityPath, resolveAppImageDaemonLaunch } from './daemon-appimage-launch'
 import { DAEMON_RECOVERY_BUDGET_MS, daemonRecoveryProbeTimeoutMs } from './daemon-recovery-budget'
 import { cleanupDaemonForProtocol } from './daemon-protocol-cleanup'
 import {
@@ -103,11 +104,18 @@ export function createOutOfProcessLauncher(
       )
     }
     try {
+      const environment = getAppEnvironment()
+      const appImage = resolveAppImageDaemonLaunch({
+        entryPath,
+        appPath: environment.getAppPath(),
+        appVersion: environment.getVersion()
+      })
       const preservedHandle = await prepareDaemonReplacement({
         runtimeDir,
         socketPath,
         tokenPath,
-        entryPath,
+        // Why: must equal the identity the own-mount daemon records, or a survivor never matches.
+        entryPath: appImage ? appImageDaemonIdentityPath(appImage) : entryPath,
         recoveryDeadlineMs,
         attributedReason,
         releaseAdoptionClient,
@@ -118,7 +126,7 @@ export function createOutOfProcessLauncher(
         return preservedHandle
       }
 
-      const userDataPath = getAppEnvironment().getPath('userData')
+      const userDataPath = environment.getPath('userData')
       // Why: on win32 packaged, stage a daemon-host copy in userData so its image escapes the NSIS updater's kill zone; lazy so it's off first-paint. Fail-open: null → in-dir host.
       const relocatedHost = materializeRelocatedDaemonHost()
       // Fork the relocated entry when available; otherwise the install-dir entry.
@@ -129,6 +137,7 @@ export function createOutOfProcessLauncher(
           entryPath,
           forkEntryPath,
           relocatedExecPath: relocatedHost?.execPath,
+          appImage: relocatedHost ? undefined : (appImage ?? undefined),
           userDataPath,
           socketPath,
           tokenPath,
@@ -175,7 +184,7 @@ export function createOutOfProcessLauncher(
       } catch (error) {
         if (error instanceof DaemonEndpointOwnershipError) {
           await terminateLaunchedDaemonChild(launched.child)
-          unlinkOwnedDaemonPidFile(pidPath, launched.identity.pid, launchNonce)
+          unlinkOwnedDaemonPidFile(pidPath, launched.identity.pid, launched.identity.launchNonce)
           throw error
         }
         // Why: another client may have adopted this live process; keep its pid record until exit, but remove one published after an early exit.
@@ -185,7 +194,7 @@ export function createOutOfProcessLauncher(
             return
           }
           pidRecordRemoved = true
-          unlinkOwnedDaemonPidFile(pidPath, launched.identity.pid, launchNonce)
+          unlinkOwnedDaemonPidFile(pidPath, launched.identity.pid, launched.identity.launchNonce)
         }
         launched.child.once('exit', removeExitedPidRecord)
         if (
