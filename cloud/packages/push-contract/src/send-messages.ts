@@ -27,7 +27,13 @@ export const PushNotificationSchema = z
     title: z.string().min(1).max(PUSH_LIMITS.titleMaxChars),
     body: z.string().max(PUSH_LIMITS.bodyMaxChars),
     worktreeId: z.string().min(1).max(2048).optional(),
-    paneKey: z.string().min(1).max(2048).optional()
+    paneKey: z.string().min(1).max(2048).optional(),
+    // The workspace's server; mirrors the app's runtime host id (cannot import src/shared).
+    executionHost: z
+      .string()
+      .max(2048)
+      .regex(/^runtime:[^|\s]+$/)
+      .optional()
   })
   .strict()
   .refine(

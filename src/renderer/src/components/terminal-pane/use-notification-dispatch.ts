@@ -2,7 +2,10 @@ import {
   resolveTerminalNotificationOwner,
   type TerminalNotificationBinding
 } from '@/attention/notification-subject-owner'
-import { notificationSourceForOwner } from '../../../../shared/notification-source'
+import {
+  notificationExecutionHostForOwner,
+  notificationSourceForOwner
+} from '../../../../shared/notification-source'
 import { useCallback } from 'react'
 import { useAppStore } from '@/store'
 import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
@@ -167,17 +170,17 @@ export function dispatchTerminalNotification(
       : null
 
   const requestDelivery = (request: AgentAttentionDeliveryRequest): void => {
+    const owner = resolveTerminalNotificationOwner(state, worktreeId, event)
+    const executionHost = notificationExecutionHostForOwner(owner)
     deliverAgentAttentionNotification(
       {
         source: event.source,
         ...(notificationId ? { notificationId } : {}),
         worktreeId: request.workspaceId,
+        ...(executionHost ? { executionHost } : {}),
         paneKey: request.subjectKey ?? undefined,
         ...getNotificationWorkspaceLabels(state, request.workspaceId, event.terminalTitle),
-        notificationSourceId: notificationSourceForOwner(
-          resolveTerminalNotificationOwner(state, worktreeId, event),
-          state
-        ),
+        notificationSourceId: notificationSourceForOwner(owner, state),
         terminalTitle: event.terminalTitle,
         isActiveWorktree: request.workspaceIsActive,
         ...agentSnapshot

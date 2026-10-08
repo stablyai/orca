@@ -241,6 +241,29 @@ describe('dispatchTerminalNotification', () => {
     expect(window.api.notifications.dispatch).toHaveBeenCalled()
   })
 
+  it('names the server running the workspace so a phone opens it there, and none for local work', () => {
+    for (const workspaceOwner of [
+      { executionHostId: 'local' as const, runtimeEnvironmentId: null },
+      // A server's own SSH target still runs behind that server.
+      { executionHostId: 'ssh:qa' as const, runtimeEnvironmentId: 'env-1' },
+      // A tab stamped with the server before its environment is known.
+      { executionHostId: 'runtime:env-2' as const, runtimeEnvironmentId: null }
+    ]) {
+      dispatchTerminalNotification('wt-primary', {
+        source: 'agent-task-complete',
+        terminalTitle: 'codex',
+        paneKey,
+        workspaceOwner
+      })
+    }
+    const calls = vi.mocked(window.api.notifications.dispatch).mock.calls
+    expect(calls.map(([request]) => request.executionHost)).toEqual([
+      undefined,
+      'runtime:env-1',
+      'runtime:env-2'
+    ])
+  })
+
   it('writes unread with the completion reason while the agent-complete banner toggle is off', () => {
     // Why: the renderer never reads the desktop banner gate — main applies it after unread
     // and mobile delivery, so a disabled banner must still leave unread + tray attention.

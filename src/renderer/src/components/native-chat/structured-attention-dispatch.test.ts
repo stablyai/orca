@@ -198,6 +198,8 @@ describe('dispatchStructuredTurnCompletionAttention', () => {
       environmentId: 'env-1'
     })
     expect(dispatched.map((request) => request.mobileDeliveredByHost)).toEqual([true, undefined])
+    // A phone opens the server's workspace on that server, and a local one on the desktop.
+    expect(dispatched.map((request) => request.executionHost)).toEqual([undefined, 'runtime:env-1'])
     expect(dispatched.map((request) => request.attentionKey)).toEqual([
       agentSessionAttentionKey({ type: 'completion', completion: completion() }),
       agentSessionAttentionKey({ type: 'completion', completion: completion({ turnId: 'turn-2' }) })

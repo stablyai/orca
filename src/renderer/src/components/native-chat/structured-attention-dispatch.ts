@@ -25,7 +25,10 @@
  * Prompt news already covered by an actual read is quiet, even when its attention frame arrives
  * later. Unread and delivery otherwise share the existing `resolveAgentAttention` decision.
  */
-import { notificationSourceForOwner } from '../../../../shared/notification-source'
+import {
+  notificationExecutionHostForOwner,
+  notificationSourceForOwner
+} from '../../../../shared/notification-source'
 import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
 import { resolveNotificationTabOwner } from '@/attention/notification-subject-owner'
 import type {
@@ -135,6 +138,12 @@ function dispatchStructuredAttention(
       if (promptWasRead()) {
         return
       }
+      // The receiving subscription identifies the paired source even when tab ownership is ambiguous.
+      const owner =
+        subscriptionTarget?.kind === 'environment'
+          ? { executionHostId: null, runtimeEnvironmentId: subscriptionTarget.environmentId }
+          : resolveNotificationTabOwner(state, tab)
+      const executionHost = notificationExecutionHostForOwner(owner)
       deliverAgentAttentionNotification(
         {
           source: 'agent-task-complete',
@@ -147,15 +156,10 @@ function dispatchStructuredAttention(
           // A local session's host is this app's own main, which already pushed its phones.
           ...(subscriptionTarget?.kind === 'local' ? { mobileDeliveredByHost: true } : {}),
           worktreeId: request.workspaceId,
+          ...(executionHost ? { executionHost } : {}),
           paneKey: request.subjectKey ?? undefined,
           ...getNotificationWorkspaceLabels(state, request.workspaceId, tab.label),
-          notificationSourceId: notificationSourceForOwner(
-            // The receiving subscription identifies the paired source even when tab ownership is ambiguous.
-            subscriptionTarget?.kind === 'environment'
-              ? { executionHostId: null, runtimeEnvironmentId: subscriptionTarget.environmentId }
-              : resolveNotificationTabOwner(state, tab),
-            state
-          ),
+          notificationSourceId: notificationSourceForOwner(owner, state),
           terminalTitle: tab.label,
           isActiveWorktree: request.workspaceIsActive,
           ...(row?.agentType ? { agentType: row.agentType } : {}),

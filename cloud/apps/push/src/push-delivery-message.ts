@@ -6,6 +6,7 @@ export type PushOrcaData = {
   hostFingerprint: string
   worktreeId?: string
   paneKey?: string
+  executionHost?: string
   notificationId?: string
   notificationSeq: number
   notificationEpoch: string
@@ -54,6 +55,9 @@ export function buildPushDelivery(input: {
       hostFingerprint,
       ...(notification.paneKey === undefined ? {} : { paneKey: notification.paneKey }),
       ...(notification.worktreeId === undefined ? {} : { worktreeId: notification.worktreeId }),
+      ...(notification.executionHost === undefined
+        ? {}
+        : { executionHost: notification.executionHost }),
       ...(notification.notificationId === undefined
         ? {}
         : { notificationId: notification.notificationId }),

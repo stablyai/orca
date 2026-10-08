@@ -45,15 +45,19 @@ Notifications.setNotificationHandler({
 export default function RootLayout() {
   const router = useRouter()
   const pathname = usePathname()
-  const { hostId, worktreeId } = useGlobalSearchParams<{ hostId?: string; worktreeId?: string }>()
+  const { hostId, worktreeId, executionHost } = useGlobalSearchParams<{
+    hostId?: string
+    worktreeId?: string
+    executionHost?: string
+  }>()
   useEffect(() => {
     setNotificationViewingWorkspace(
       pathname.includes('/session/') && typeof hostId === 'string' && typeof worktreeId === 'string'
-        ? { hostId, worktreeId }
+        ? { hostId, worktreeId, ...(typeof executionHost === 'string' ? { executionHost } : {}) }
         : null
     )
     return () => setNotificationViewingWorkspace(null)
-  }, [pathname, hostId, worktreeId])
+  }, [pathname, hostId, worktreeId, executionHost])
   const openNotificationRoute = useOpenNotificationRoute()
   const handledNotificationIdsRef = useRef<Set<string>>(new Set())
 

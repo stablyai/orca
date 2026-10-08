@@ -40,6 +40,8 @@ export type NotificationDispatchRequest = {
   worktreeId?: string
   /** Configured notification source; independent of physical execution location. */
   notificationSourceId?: NotificationSourceId
+  /** The server the workspace runs on, so a paired phone opens it there; absent for this desktop's own work. */
+  executionHost?: `runtime:${string}`
   /** Stable `${tabId}:${leafId}` terminal pane key for click-to-focus routing. */
   paneKey?: string
   repoLabel?: string
