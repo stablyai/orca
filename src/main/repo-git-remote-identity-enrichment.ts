@@ -97,7 +97,11 @@ function shouldWriteProbedIdentity(current: Repo, probed: Repo['gitRemoteIdentit
   // Why: a resolved identity is replaced only by a probe that found a genuinely different repo.
   // Failures and no-remote answers must never clear it — consumers read an absent identity as
   // "unknown" and gate permissively, so losing one is worse than carrying a stale one.
-  return !!probed && probed.canonicalKey !== existing.canonicalKey
+  return (
+    !!probed &&
+    (probed.canonicalKey !== existing.canonicalKey ||
+      (probed.originRemoteUrl !== undefined && probed.originRemoteUrl !== existing.originRemoteUrl))
+  )
 }
 
 function getAutomaticGitHubIconRefresh(
@@ -141,6 +145,18 @@ function writeIdentity(
     return false
   }
   const writeRemote = shouldWriteProbedIdentity(current, gitRemoteIdentity)
+  const existingIdentity = current.gitRemoteIdentity
+  const identityToWrite =
+    gitRemoteIdentity &&
+    existingIdentity &&
+    gitRemoteIdentity.canonicalKey === existingIdentity.canonicalKey
+      ? {
+          ...existingIdentity,
+          ...(gitRemoteIdentity.originRemoteUrl !== undefined
+            ? { originRemoteUrl: gitRemoteIdentity.originRemoteUrl }
+            : {})
+        }
+      : gitRemoteIdentity
   const icon = gitRemoteIdentity
     ? getAutomaticGitHubIconRefresh(current, gitRemoteIdentity)
     : undefined
@@ -151,9 +167,12 @@ function writeIdentity(
     return store.updateRepo(snapshot.id, updates, storeHostId)
   }
   if (icon) {
-    return !!update({ ...(writeRemote ? { gitRemoteIdentity } : {}), repoIcon: icon })
+    return !!update({
+      ...(writeRemote ? { gitRemoteIdentity: identityToWrite } : {}),
+      repoIcon: icon
+    })
   }
-  return writeRemote && !!update({ gitRemoteIdentity })
+  return writeRemote && !!update({ gitRemoteIdentity: identityToWrite })
 }
 
 async function enrichRepoGitRemoteIdentity(store: RepoIdentityStore, repo: Repo): Promise<boolean> {

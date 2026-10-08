@@ -206,6 +206,7 @@ async function renderMenu(
     onActivate?: () => void
     onOpenRenameInput?: () => void
     repoConnectionId?: string | null
+    githubFileUrl?: string | null
     runtimeEnvironmentId?: string | null
     externalSshTargetId?: string
     mode?: 'edit' | 'check-details'
@@ -216,6 +217,7 @@ async function renderMenu(
   return module.EditorFileTabContextMenu({
     open: true,
     menuPoint: { x: 0, y: 0 },
+    githubFileUrl: null,
     file: {
       id: 'file-1',
       tabId: 'tab-1',
@@ -360,6 +362,49 @@ describe('EditorFileTabContextMenu close-all shortcut', () => {
     expect(closeAllItem).toBeTruthy()
     expect(findElementsByType(closeAllItem, 'DropdownMenuShortcut')).toHaveLength(0)
     expect(findElementsByType(tree, 'DropdownMenuShortcut')).toHaveLength(0)
+  })
+})
+
+describe('EditorFileTabContextMenu GitHub path', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    shortcutLabelMock.mockReturnValue(null)
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('copies the precomputed current-branch GitHub URL', async () => {
+    const writeClipboardText = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('window', { api: { ui: { writeClipboardText } } })
+    const tree = expandNode(
+      await renderMenu({
+        githubFileUrl: 'https://github.com/acme/repo/blob/feature/fix/src/file.ts'
+      })
+    )
+    const item = findElementsByType(tree, 'DropdownMenuItem').find((entry) =>
+      extractText(entry.props.children).includes('Copy Github Path')
+    )
+
+    expect(item).toBeTruthy()
+    const onSelect = item?.props.onSelect
+    if (typeof onSelect !== 'function') {
+      throw new Error('GitHub path item has no select handler')
+    }
+    onSelect()
+    expect(writeClipboardText).toHaveBeenCalledWith(
+      'https://github.com/acme/repo/blob/feature/fix/src/file.ts'
+    )
+  })
+
+  it('omits GitHub path for non-GitHub remotes', async () => {
+    const tree = expandNode(await renderMenu({ githubFileUrl: null }))
+    expect(
+      findElementsByType(tree, 'DropdownMenuItem').some((entry) =>
+        extractText(entry.props.children).includes('Copy Github Path')
+      )
+    ).toBe(false)
   })
 })
 

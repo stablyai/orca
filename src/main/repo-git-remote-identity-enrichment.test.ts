@@ -339,6 +339,50 @@ describe('enrichMissingRepoGitRemoteIdentities', () => {
     expect(onChanged).toHaveBeenCalledTimes(1)
   })
 
+  it('backfills a missing origin URL on a same-key re-probe while preserving remote selection', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    const existingIdentity: GitRemoteIdentity = {
+      ...remoteIdentity,
+      remoteName: 'upstream',
+      remoteUrl: 'git@git.company.test:platform/sample-app.git'
+    }
+    const probedIdentity: GitRemoteIdentity = {
+      ...remoteIdentity,
+      remoteName: 'origin',
+      remoteUrl: 'https://git.company.test/fork/sample-app.git',
+      originRemoteUrl: 'https://github.com/fork/sample-app'
+    }
+    vi.mocked(probeGitRemoteIdentity).mockResolvedValue({
+      status: 'resolved',
+      identity: probedIdentity
+    })
+    const repo = makeRepo({ gitRemoteIdentity: existingIdentity })
+    const store = makeStore(repo)
+    const onChanged = vi.fn()
+
+    await sweep(store)
+    vi.setSystemTime(1_000 + REFRESH_STARTUP_DELAY_MS + 1)
+    enrichMissingRepoGitRemoteIdentities(store, { onChanged })
+    await drainEnrichmentSweep()
+
+    expect(store.updateRepo).toHaveBeenCalledWith(
+      'repo-1',
+      {
+        gitRemoteIdentity: {
+          ...existingIdentity,
+          originRemoteUrl: probedIdentity.originRemoteUrl
+        }
+      },
+      'local'
+    )
+    expect(repo.gitRemoteIdentity).toEqual({
+      ...existingIdentity,
+      originRemoteUrl: probedIdentity.originRemoteUrl
+    })
+    expect(onChanged).toHaveBeenCalledTimes(1)
+  })
+
   it('writes nothing when the re-probe returns the same canonical key', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)

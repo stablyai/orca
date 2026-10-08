@@ -469,20 +469,31 @@ describe('Store', () => {
     const updated = store.updateRepo('r1', {
       gitRemoteIdentity: {
         canonicalKey: 'gitlab.example.com/team/orca',
-        remoteName: 'origin',
-        remoteUrl: 'git@gitlab.example.com:team/orca.git'
+        remoteName: 'upstream',
+        remoteUrl: 'git@gitlab.example.com:team/orca.git',
+        originRemoteUrl: 'git@gitlab.com:fork/orca.git'
       }
     })
     expect(updated!.gitRemoteIdentity).toEqual({
       canonicalKey: 'gitlab.example.com/team/orca',
-      remoteName: 'origin',
-      remoteUrl: 'git@gitlab.example.com:team/orca.git'
+      remoteName: 'upstream',
+      remoteUrl: 'git@gitlab.example.com:team/orca.git',
+      originRemoteUrl: 'git@gitlab.com:fork/orca.git'
     })
 
-    store.updateRepo('r1', { gitRemoteIdentity: null })
     store.flush()
     const reloaded = await createStore()
-    expect(reloaded.getRepo('r1')!.gitRemoteIdentity).toBeNull()
+    expect(reloaded.getRepo('r1')!.gitRemoteIdentity).toEqual({
+      canonicalKey: 'gitlab.example.com/team/orca',
+      remoteName: 'upstream',
+      remoteUrl: 'git@gitlab.example.com:team/orca.git',
+      originRemoteUrl: 'git@gitlab.com:fork/orca.git'
+    })
+
+    reloaded.updateRepo('r1', { gitRemoteIdentity: null })
+    reloaded.flush()
+    const cleared = await createStore()
+    expect(cleared.getRepo('r1')!.gitRemoteIdentity).toBeNull()
   })
 
   it('getRepo does not expose invalid persisted repo upstream metadata', async () => {

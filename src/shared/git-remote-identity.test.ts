@@ -65,7 +65,8 @@ describe('deriveGitRemoteIdentity', () => {
       ).toEqual({
         canonicalKey: 'github.com/stablyai/orca',
         remoteName: 'origin',
-        remoteUrl: 'https://github.com/stablyai/orca.git'
+        remoteUrl: 'https://github.com/stablyai/orca.git',
+        originRemoteUrl: 'https://github.com/stablyai/orca.git'
       })
     }
   )
@@ -83,7 +84,8 @@ describe('deriveGitRemoteIdentity', () => {
     ).toEqual({
       canonicalKey: 'git.company.test/team/sample-app',
       remoteName: 'upstream',
-      remoteUrl: 'https://git.company.test/team/sample-app.git'
+      remoteUrl: 'https://git.company.test/team/sample-app.git',
+      originRemoteUrl: 'git@git.company.test:forks/sample-app.git'
     })
 
     expect(

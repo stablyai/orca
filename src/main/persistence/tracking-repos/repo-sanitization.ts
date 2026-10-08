@@ -43,17 +43,24 @@ export function sanitizeGitRemoteIdentity(value: unknown): GitRemoteIdentity | n
   if (!value || typeof value !== 'object') {
     return undefined
   }
-  const candidate = value as {
-    canonicalKey?: unknown
-    remoteName?: unknown
-    remoteUrl?: unknown
-  }
+  const candidate = new Map(Object.entries(value))
   const canonicalKey =
-    typeof candidate.canonicalKey === 'string' ? candidate.canonicalKey.trim() : ''
-  const remoteName = typeof candidate.remoteName === 'string' ? candidate.remoteName.trim() : ''
-  const remoteUrl = typeof candidate.remoteUrl === 'string' ? candidate.remoteUrl.trim() : ''
+    typeof candidate.get('canonicalKey') === 'string' ? candidate.get('canonicalKey').trim() : ''
+  const remoteName =
+    typeof candidate.get('remoteName') === 'string' ? candidate.get('remoteName').trim() : ''
+  const remoteUrl =
+    typeof candidate.get('remoteUrl') === 'string' ? candidate.get('remoteUrl').trim() : ''
+  const originRemoteUrl =
+    typeof candidate.get('originRemoteUrl') === 'string'
+      ? candidate.get('originRemoteUrl').trim()
+      : ''
   return canonicalKey && remoteName && remoteUrl
-    ? { canonicalKey, remoteName, remoteUrl }
+    ? {
+        canonicalKey,
+        remoteName,
+        remoteUrl,
+        ...(originRemoteUrl ? { originRemoteUrl } : {})
+      }
     : undefined
 }
 
