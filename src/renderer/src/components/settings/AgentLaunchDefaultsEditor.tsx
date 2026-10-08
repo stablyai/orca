@@ -72,11 +72,14 @@ export function AgentCommandOverrideInput({
 export function AgentDefaultArgsInput({
   defaultArgs,
   argsOverride,
-  onSaveArgs
+  onSaveArgs,
+  description
 }: {
   defaultArgs: string
   argsOverride: string
   onSaveArgs: (value: string) => void
+  /** Where these Arguments apply, for an agent whose chats don't use them. */
+  description?: string
 }): React.JSX.Element {
   const [argsDraft, setArgsDraft] = useState(argsOverride)
   const commitArgs = (): void => onSaveArgs(argsDraft.trim())
@@ -123,6 +126,7 @@ export function AgentDefaultArgsInput({
           </Button>
         )}
       </div>
+      {description && <p className="text-[11px] text-muted-foreground">{description}</p>}
     </div>
   )
 }

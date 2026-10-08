@@ -1,5 +1,4 @@
 import { isAgentSessionRewindRecord, type AgentSessionRewindRecord } from './agent-session-rewind'
-import { isAgentSessionLaunchArgs } from './agent-session-launch-args'
 import { isAgentSessionConversationName } from './agent-session-conversation-name'
 import {
   isPersistedAgentSessionHandoffStage,
@@ -55,9 +54,6 @@ export type AgentSessionExecutionLocation = {
 
 /** Provider launch environment captured by the host when the session is created. */
 export type AgentSessionLaunchEnv = Record<string, string>
-
-/** Provider CLI arguments captured by the host when the session is created. */
-export type AgentSessionLaunchArgs = string[]
 
 /** Still persisted because older builds read it. The removed terminal handoff's `tui` is mapped
  *  away at decode (agent-session-legacy-handoff-lease). */
@@ -159,7 +155,6 @@ export type AgentSessionRecord = {
   conversationCommand?: AgentSessionConversationCommandRecord
   /** The name Orca gave this conversation, so a later acquisition need not name it again. */
   conversationName?: string
-  launchArgs?: AgentSessionLaunchArgs
   lease: AgentSessionLease
   createdAt: number
   updatedAt: number
@@ -363,7 +358,6 @@ export function isPersistedAgentSessionRecord(
       isAgentSessionConversationCommandRecord(record.conversationCommand)) &&
     (record.conversationName === undefined ||
       isAgentSessionConversationName(record.conversationName)) &&
-    (record.launchArgs === undefined || isAgentSessionLaunchArgs(record.launchArgs)) &&
     !Object.hasOwn(record, 'launchEnv') &&
     isPersistedAgentSessionLease(record.lease) &&
     record.lease.sessionId === record.sessionId &&

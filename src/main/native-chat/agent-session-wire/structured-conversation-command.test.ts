@@ -295,38 +295,6 @@ describe('/clear starts nothing', () => {
     expect(adapter.dispatch).not.toHaveBeenCalled()
   })
 
-  it('copies the launch arguments the source was pinned to', async () => {
-    const pinned = 'session-pinned'
-    expect(
-      await host.attach(
-        caller,
-        hostTestAttachParams(null, {
-          envelope: {
-            sessionId: pinned,
-            clientOperationId: hostTestOperationId(),
-            expectedRuntimeFence: null,
-            payloadFingerprint: ''
-          },
-          launchArgs: ['--flag']
-        })
-      )
-    ).toMatchObject({ ok: true })
-    const clear = { ...commandParams('clear') }
-    clear.envelope = {
-      sessionId: pinned,
-      clientOperationId: hostTestOperationId(),
-      expectedRuntimeFence: store.getRecord(pinned)!.lease.runtimeFence,
-      payloadFingerprint: computeAgentSessionPayloadFingerprint({
-        method: 'agentSession.conversationCommand',
-        sessionId: pinned,
-        fields: { command: 'clear' }
-      })
-    }
-    notFromAClear.add(pinned)
-    const replacement = await clearCommits(clear)
-    expect(store.getRecord(replacement)?.launchArgs).toEqual(['--flag'])
-  })
-
   it("does not start an at-rest source's agent", async () => {
     await sourceAtRest()
     const starts = vi.mocked(adapter.acquire).mock.calls.length

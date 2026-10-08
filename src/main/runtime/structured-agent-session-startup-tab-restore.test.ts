@@ -185,7 +185,6 @@ function startupRuntime(options: { afterInstall?: () => void; profileChats?: str
       claimKeyId: 'key-1',
       resolveWorkspacePath: async () => root,
       resolveEnvironment: async () => ({}),
-      resolveLaunchArgs: () => [],
       resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true })
     })
     options.afterInstall?.()

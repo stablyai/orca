@@ -31,7 +31,6 @@ const IDENTITY: AgentSessionJournalIdentity = {
 function launch(options: {
   prepareVisuals?: (sessionId: string) => Promise<NativeChatVisualsLaunch | null>
   supports?: (flag: ClaudeCliFlag, launch: unknown, budgetMs?: number) => Promise<boolean>
-  launchArgs?: string[]
   env?: Record<string, string>
   attachmentDirectory?: string
 }) {
@@ -40,7 +39,6 @@ function launch(options: {
     resolveWorkspacePath: async (id) => `/repos/${id}`,
     resolveCommand: () => '/usr/local/bin/claude',
     resolveAuthPolicy: () => ({ stripAuthEnv: false }),
-    resolveLaunchArgs: () => options.launchArgs ?? [],
     resolveEnv: () => options.env ?? {},
     hasTranscript: async () => false,
     ...(options.attachmentDirectory ? { attachmentDirectory: options.attachmentDirectory } : {}),
@@ -50,16 +48,15 @@ function launch(options: {
 }
 
 describe('a Claude chat launch with inline visuals', () => {
-  it('loads the skill plugin, grants the chat folder beside the user directories, and names it', async () => {
+  it('loads the skill plugin, grants the chat folder, and names it', async () => {
     const prepareVisuals = vi.fn(async () => VISUALS)
     const resolved = await launch({
       prepareVisuals,
-      supports: async (flag) => flag === CLAUDE_PLUGIN_DIR_FLAG,
-      launchArgs: ['--add-dir', '/shared/notes']
+      supports: async (flag) => flag === CLAUDE_PLUGIN_DIR_FLAG
     })
     expect(prepareVisuals).toHaveBeenCalledWith(SESSION_ID)
     expect(resolved.options.plugins).toEqual([{ type: 'local', path: VISUALS.skill.pluginDir }])
-    expect(resolved.options.additionalDirectories).toEqual(['/shared/notes', VISUALS.folder])
+    expect(resolved.options.additionalDirectories).toEqual([VISUALS.folder])
     expect(resolved.env?.[NATIVE_CHAT_VISUALS_DIR_ENV]).toBe(VISUALS.folder)
   })
 
@@ -67,18 +64,17 @@ describe('a Claude chat launch with inline visuals', () => {
     {
       name: 'prepared visuals',
       visuals: VISUALS,
-      directories: ['/shared/notes', '/state/agent-session-attachments', VISUALS.folder]
+      directories: ['/state/agent-session-attachments', VISUALS.folder]
     },
     {
       name: 'unavailable visuals',
       visuals: null,
-      directories: ['/shared/notes', '/state/agent-session-attachments']
+      directories: ['/state/agent-session-attachments']
     }
-  ])('keeps user folders and attachment access with $name', async ({ visuals, directories }) => {
+  ])('keeps attachment access with $name', async ({ visuals, directories }) => {
     const resolved = await launch({
       prepareVisuals: async () => visuals,
       supports: async (flag) => flag === CLAUDE_PLUGIN_DIR_FLAG,
-      launchArgs: ['--add-dir', '/shared/notes'],
       attachmentDirectory: '/state/agent-session-attachments'
     })
     expect(resolved.options.additionalDirectories).toEqual(directories)

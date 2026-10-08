@@ -54,27 +54,24 @@ function resolverFor(
   value: AgentSessionRecord | null,
   resolveWorkspacePath: (workspaceId: string) => Promise<string> = async (id) => `/repos/${id}`,
   resolveRollout: () => Promise<string | null> = async () => null,
-  agentDefaultArgs: Record<string, string> = { codex: '' },
-  resolveLaunchArgs?: () => string[]
+  agentDefaultArgs: Record<string, string> = { codex: '' }
 ) {
   return createCodexStructuredLaunchResolver({
     store: { getRecord: () => value, pinLaunchDirectory: vi.fn() },
     resolveWorkspacePath,
     resolveCommand: () => '/usr/local/bin/codex',
     resolveRollout,
-    resolveLaunchArgs: resolveLaunchArgs ?? (() => value?.launchArgs ?? []),
     resolvePermissionPolicy: () => codexStructuredPermissionPolicyForSettings({ agentDefaultArgs })
   })
 }
 
 describe('codex structured launch resolution', () => {
+  // Saved Arguments are for terminal launches: only the Agent Permissions posture is read from them.
   it.each(['start', 'resume'] as const)(
-    're-reads saved Arguments after a refusal on %s',
+    'runs plain app-server on %s whatever Arguments are saved',
     async (mode) => {
-      let args = ['--remote', 'wss://host']
-      const resolve = resolverFor(
+      const launch = await resolverFor(
         record({
-          launchArgs: ['--enable', 'stale'],
           providerHandleChain:
             mode === 'resume'
               ? [
@@ -90,18 +87,16 @@ describe('codex structured launch resolution', () => {
         }),
         undefined,
         undefined,
-        { codex: '' },
-        () => args
-      )
-      await expect(resolve({ identity: IDENTITY })).rejects.toThrow(/Arguments/)
-      args = ['--enable', 'unified_exec']
-      expect((await resolve({ identity: IDENTITY })).args).toEqual([
-        '--enable',
-        'unified_exec',
-        'app-server'
-      ])
-      args = []
-      expect((await resolve({ identity: IDENTITY })).args).toEqual(['app-server'])
+        {
+          codex:
+            '--dangerously-bypass-approvals-and-sandbox -c model_reasoning_effort=high --profile review'
+        }
+      )({ identity: IDENTITY })
+      expect(launch.args).toEqual(['app-server'])
+      expect(launch.permissionPolicy).toEqual({
+        approvalPolicy: 'never',
+        sandbox: 'danger-full-access'
+      })
     }
   )
 
@@ -129,7 +124,6 @@ describe('codex structured launch resolution', () => {
           }),
         pinLaunchDirectory
       },
-      resolveLaunchArgs: () => [],
       resolveWorkspacePath: async () => '/floating/start-folder',
       resolveCommand: () => '/usr/local/bin/codex'
     })
@@ -159,7 +153,6 @@ describe('codex structured launch resolution', () => {
 
     await withPlatform('win32', async () => {
       const resolveLaunch = createCodexStructuredLaunchResolver({
-        resolveLaunchArgs: () => [],
         store: { getRecord: () => record(), pinLaunchDirectory: vi.fn() },
         resolveWorkspacePath: async () => String.raw`C:\workspaces\orca`,
         resolveCommand: () => command
@@ -176,7 +169,6 @@ describe('codex structured launch resolution', () => {
     isWindowsProcessStartTimeAvailable.mockReturnValue(false)
     await withPlatform('win32', async () => {
       const resolveLaunch = createCodexStructuredLaunchResolver({
-        resolveLaunchArgs: () => [],
         store: { getRecord: () => record(), pinLaunchDirectory: vi.fn() },
         resolveWorkspacePath: async () => String.raw`C:\workspaces\orca`,
         resolveCommand: () => 'codex.exe'
@@ -277,35 +269,11 @@ describe('codex structured launch resolution', () => {
     expect(launch.model).toBe('gpt-chosen')
   })
 
-  it('uses saved arguments before app-server on a fresh launch', async () => {
-    const launch = await resolverFor(
-      record({
-        launchArgs: [
-          '--profile',
-          'review',
-          '-c',
-          'model_reasoning_effort=high',
-          '--model',
-          'gpt-5.6-sol'
-        ]
-      })
-    )({ identity: IDENTITY })
-
-    expect(launch.args).toEqual([
-      '-c',
-      'model_reasoning_effort=high',
-      '--model',
-      'gpt-5.6-sol',
-      'app-server'
-    ])
-  })
-
   it('pins resume to the rollout file that proved the durable thread', async () => {
     const resolveRollout = vi.fn(async () => '/home/work/.codex/sessions/rollout.jsonl')
     const launch = await resolverFor(
       record({
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolver reads only each link's handle, so the link's other fields stay unset.
-        launchArgs: ['--enable', 'unified_exec', '-c', 'model_reasoning_effort=high'],
         providerHandleChain: [
           { handle: codexProviderHandle('thread-current') }
         ] as AgentSessionRecord['providerHandleChain']
@@ -316,13 +284,7 @@ describe('codex structured launch resolution', () => {
 
     expect(resolveRollout).toHaveBeenCalledWith('/home/work/.codex', 'thread-current')
     expect(launch.resumePath).toBe('/home/work/.codex/sessions/rollout.jsonl')
-    expect(launch.args).toEqual([
-      '--enable',
-      'unified_exec',
-      '-c',
-      'model_reasoning_effort=high',
-      'app-server'
-    ])
+    expect(launch.args).toEqual(['app-server'])
   })
 
   it('refuses a session pinned to another host rather than starting a second writer here', async () => {

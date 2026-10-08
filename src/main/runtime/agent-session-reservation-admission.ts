@@ -30,11 +30,9 @@ import {
   isAgentSessionOptions,
   type AgentSessionAccountHome,
   type AgentSessionExecutionLocation,
-  type AgentSessionLaunchArgs,
   type AgentSessionLaunchEnv,
   type AgentSessionRecord
 } from '../../shared/agent-session-record'
-import { isAgentSessionLaunchArgs } from '../../shared/agent-session-launch-args'
 import { isAgentSessionSurfaceTabId } from '../../shared/agent-session-surface-tab-id'
 import {
   agentSessionProviderHandleRoot,
@@ -56,8 +54,6 @@ export type AgentSessionReserveRequest = {
   location: AgentSessionExecutionLocation
   provider: StructuredAgentId
   accountHome: AgentSessionAccountHome
-  /** Arguments pinned on first reservation so owner replacement repeats the same launch. */
-  launchArgs?: AgentSessionLaunchArgs
   /** Current launch input validated here but never written to the durable record. */
   launchEnv?: AgentSessionLaunchEnv
   /** Initial provider options persisted before the first process is acquired. */
@@ -154,9 +150,6 @@ export function applyAgentSessionReservation(
   if (request.launchEnv && !isAgentSessionLaunchEnv(request.launchEnv)) {
     throw new Error('agent_session_launch_env_invalid')
   }
-  if (request.launchArgs && !isAgentSessionLaunchArgs(request.launchArgs)) {
-    throw new Error('agent_session_launch_args_invalid')
-  }
   if (request.options && !isAgentSessionOptions(request.options)) {
     throw new Error('agent_session_options_invalid')
   }
@@ -202,13 +195,8 @@ export function applyAgentSessionReservation(
     throw agentSessionRefusalError('agent_session_conflict', { reason: 'sessionExists' })
   }
   assertReservedTabUnheld(state, request)
-  const pinned = {
-    ...existing,
-    ...(!existing.launchArgs && request.launchArgs ? { launchArgs: [...request.launchArgs] } : {}),
-    ...(!existing.launchArgs && request.launchArgs ? { updatedAt: request.now } : {})
-  }
   return reserveAgentSessionOwner({
-    record: pinned,
+    record: existing,
     expectedFence: request.expectedFence ?? existing.lease.runtimeFence,
     probe: request.probe,
     reservation

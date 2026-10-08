@@ -17,10 +17,7 @@ import type {
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
 import { performAttach, type AttachFlowInput } from './structured-agent-session-attach-flow'
 import { stampFailedCreateOwnerVerdict } from './structured-agent-session-failed-create-refusal'
-import {
-  pinnedAgentSessionLaunchArgs,
-  pinnedAgentSessionLaunchEnv
-} from './structured-agent-session-launch-env'
+import { pinnedAgentSessionLaunchEnv } from './structured-agent-session-launch-env'
 import { refuseAgentSessionMutation } from './structured-agent-session-mutation-admission'
 import { settleStaleStructuredAgentSessionState } from './structured-agent-session-dead-generation-settlement'
 import { structuredAgentSessionFailureWordsContext } from './structured-agent-session-send-preparation'
@@ -185,7 +182,6 @@ async function runAttachUnderAbort(
         claimKeyId: context.deps.claimKeyId,
         handoffOperationId: params.envelope.clientOperationId,
         probe,
-        ...(await pinnedAgentSessionLaunchArgs(context.deps.resolveLaunchArgs, params)),
         ...(await pinnedAgentSessionLaunchEnv(context.deps.resolveLaunchEnv, params))
       },
       callerKey,

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createCodexModelCatalogProbe } from './codex-model-catalog-probe'
+import { CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS } from '../codex-cli/codex-read-only-app-server-args'
 import { resolveCodexStructuredInvocation } from './codex-structured-launch-resolution'
 import { runCodexAppServerSession, type CodexAppServerInvocation } from './codex-app-server-session'
 import { resolveStructuredAgentCommand } from '../native-chat/structured-agent-command-resolution'
@@ -64,6 +65,8 @@ describe('codex model catalog probe', () => {
       })
       // A short-lived probe must not start plugin marketplace clones that outlive its teardown.
       expect(invocations[0]!.args.join(' ')).toContain('features.plugins=false')
+      // Exactly Orca's own probe arguments: saved Arguments are for terminal launches.
+      expect(invocations[0]!.args).toEqual([...CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS])
     }
   )
 

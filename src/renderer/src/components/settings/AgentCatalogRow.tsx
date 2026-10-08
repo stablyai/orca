@@ -9,6 +9,7 @@ import { SettingsBadge, SettingsSegmentedControl } from './SettingsFormControls'
 import type { AgentSessionSourceHomeControl } from './codex-session-source-home-control'
 import { AgentSessionSourceHomeInput } from './codex-session-source-home-control'
 import { stringifyAgentDefaultEnvDraft } from './agent-default-env-draft'
+import { agentArgumentsDescription } from './agent-arguments-description'
 import {
   AgentCommandOverrideInput,
   AgentDefaultArgsInput,
@@ -214,6 +215,7 @@ export function AgentCatalogRow({
               defaultArgs={defaultArgs}
               argsOverride={argsOverride}
               onSaveArgs={onSaveArgs}
+              description={agentArgumentsDescription(agentId)}
             />
           </div>
           {(defaultEnvSummary || envSummary) && (

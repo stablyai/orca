@@ -19,7 +19,7 @@ vi.mock('electron', () => ({
 import { OrcaRuntimeService } from './orca-runtime'
 
 describe('execution host structured launch settings wiring', () => {
-  it('reads saved Command and Arguments from the host settings and rereads changes', async () => {
+  it('reads the saved Command from the host settings and rereads changes', async () => {
     installed.mockClear()
     const settings: Partial<GlobalSettings> = {
       agentCmdOverrides: { claude: `"${process.execPath}"`, codex: `"${process.execPath}"` },
@@ -32,11 +32,8 @@ describe('execution host structured launch settings wiring', () => {
     expect(deps).toBeDefined()
     expect(deps?.resolveClaudeCommand?.()).toBe(process.execPath)
     expect(deps?.resolveCodexCommand?.()).toBe(process.execPath)
-    expect(await deps?.resolveLaunchArgs?.('claude')).toEqual(['--model', 'model one'])
-    expect(await deps?.resolveLaunchArgs?.('codex')).toEqual(['-c', 'model_reasoning_effort=high'])
-    settings.agentDefaultArgs = { claude: '--model second', codex: '' }
-    expect(await deps?.resolveLaunchArgs?.('claude')).toEqual(['--model', 'second'])
-    expect(await deps?.resolveLaunchArgs?.('codex')).toEqual([])
+    // Saved Arguments are for terminal launches; the chat host is given no reader for them.
+    expect(deps).not.toHaveProperty('resolveLaunchArgs')
     const notRunnable = expect.objectContaining({ reason: 'agentCommandNotRunnable' })
     settings.agentCmdOverrides = { claude: 'wrapper --arg' }
     expect(() => deps?.resolveClaudeCommand?.()).toThrow(notRunnable)

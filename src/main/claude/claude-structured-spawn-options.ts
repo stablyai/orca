@@ -45,19 +45,6 @@ function claudeStructuredOptionsWithPermissionMode(
   return { ...options, permissionMode: mode, extraArgs }
 }
 
-/** The saved value stands in for the agent Arguments' own flag for it: the chat's pick wins, and
- *  the CLI is never handed the flag twice. */
-function withoutConfiguredFlag(
-  options: ClaudeStructuredSdkOptions,
-  flag: string
-): ClaudeStructuredSdkOptions {
-  if (!options.extraArgs || !Object.hasOwn(options.extraArgs, flag)) {
-    return options
-  }
-  const { [flag]: _configured, ...extraArgs } = options.extraArgs
-  return { ...options, extraArgs }
-}
-
 function isEffortLevel(value: string): value is EffortLevel {
   return EFFORT_LEVELS.has(value)
 }
@@ -93,13 +80,13 @@ export function claudeStructuredSpawnOptions(input: {
   const model = saved.get('model')
   if (model !== undefined) {
     options.set('model', model)
-    sdkOptions = { ...withoutConfiguredFlag(sdkOptions, 'model'), model }
+    sdkOptions = { ...sdkOptions, model }
   }
   const effort = saved.get('effort')
   if (effort !== undefined) {
     if (isEffortLevel(effort)) {
       options.set('effort', effort)
-      sdkOptions = { ...withoutConfiguredFlag(sdkOptions, 'effort'), effort }
+      sdkOptions = { ...sdkOptions, effort }
     } else {
       skipped.push('effort')
     }
@@ -111,13 +98,9 @@ export function claudeStructuredSpawnOptions(input: {
       skipped.push('fastMode')
     } else {
       options.set('fastMode', fastMode)
-      // A new CLI session may opt in to Fast per session, which only its settings say, and the
-      // agent Arguments' own `--settings` would be replaced by one carrying Fast: either way the
-      // start applies the saved Fast once it has read them (`applyClaudeStartFastMode`).
-      if (
-        (!decoded || input.launch.resumesTranscript) &&
-        !Object.hasOwn(sdkOptions.extraArgs ?? {}, 'settings')
-      ) {
+      // A new CLI session may opt in to Fast per session, which only its settings say: the start
+      // applies the saved Fast once it has read them (`applyClaudeStartFastMode`).
+      if (!decoded || input.launch.resumesTranscript) {
         sdkOptions.settings = { fastMode: decoded }
       } else {
         fastModeAtStart = true

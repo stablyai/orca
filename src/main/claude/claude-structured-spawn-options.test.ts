@@ -91,43 +91,6 @@ describe('a Claude chat launched with its saved options', () => {
     expect(spawn.fastModeAtStart).toBe(false)
   })
 
-  // The SDK writes the agent Arguments after its own options, so left in, the Arguments' flag would
-  // reach the CLI as a second `--model` after the chat's pick.
-  it("replaces the agent Arguments' model and effort with the chat's saved ones", () => {
-    const base = {
-      ...CLAUDE_STRUCTURED_BASE_OPTIONS,
-      extraArgs: { ...CLAUDE_STRUCTURED_BASE_OPTIONS.extraArgs, model: 'opus', effort: 'max' }
-    }
-
-    expect(launched({ model: 'sonnet', effort: 'low' }, { base }).sdkOptions).toMatchObject({
-      model: 'sonnet',
-      effort: 'low',
-      extraArgs: { 'replay-user-messages': null }
-    })
-    expect(launched({ model: 'sonnet', effort: 'low' }, { base }).sdkOptions.extraArgs).toEqual({
-      'replay-user-messages': null
-    })
-    // With nothing saved, the Arguments decide.
-    expect(launched({}, { base }).sdkOptions.extraArgs).toEqual(base.extraArgs)
-  })
-
-  // One `--settings` reaches the CLI: the Arguments' file is kept, and the start applies Fast.
-  it.each(['true', 'false'])(
-    "keeps the agent Arguments' settings and leaves a saved Fast %s to the start",
-    (fastMode) => {
-      const base = {
-        ...CLAUDE_STRUCTURED_BASE_OPTIONS,
-        extraArgs: { ...CLAUDE_STRUCTURED_BASE_OPTIONS.extraArgs, settings: '/repo/claude.json' }
-      }
-      const spawn = launched({ fastMode }, { base })
-
-      expect(spawn.sdkOptions).not.toHaveProperty('settings')
-      expect(spawn.sdkOptions.extraArgs).toEqual(base.extraArgs)
-      expect(spawn.options.get('fastMode')).toBe(fastMode)
-      expect(spawn.fastModeAtStart).toBe(true)
-    }
-  )
-
   it('launches a saved bypass under an Agent Permissions bypass with the owned bypass flag', () => {
     const spawn = launched({ permissionMode: 'bypassPermissions' }, { base: BYPASS_LAUNCH })
 

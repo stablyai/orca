@@ -213,7 +213,6 @@ export async function openStructuredCodexRpcHarness(
     claimKeyId: 'key-1',
     resolveWorkspacePath: async (workspaceId) => `/repos/${workspaceId}`,
     resolveCodexCommand: () => '/usr/local/bin/codex',
-    resolveLaunchArgs: () => [],
     resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
     resolveEnvironment: async () => ({
       PATH: '/shell/bin:/usr/bin',

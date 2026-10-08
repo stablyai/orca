@@ -13,7 +13,6 @@
 import type { PiRpcSessionDeps } from '../pi/rpc-session'
 import type { PermissionMode } from '@anthropic-ai/claude-agent-sdk'
 import { existsSync } from 'node:fs'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import type { AgentSessionResumeTrigger } from '../../shared/agent-session-resume-marker'
 import type { StructuredAttentionMobileDelivery } from './structured-agent-session-mobile-attention'
 import {
@@ -115,8 +114,6 @@ export type StructuredAgentSessionRuntimeDeps = {
   openClaudeConnection?: ClaudeStructuredSessionAdapterDeps['openConnection']
   /** Scripted app-servers carry fake pids the real start-time read cannot answer for. */
   readProcessStartTime?: CodexStructuredSessionAdapterDeps['readProcessStartTime']
-  /** Required, and asserted at install time — saved Arguments must never be silently omitted. */
-  resolveLaunchArgs: (provider: AgentSessionRecord['provider']) => Promise<string[]> | string[]
   resolveLaunchEnv?: () => Promise<NodeJS.ProcessEnv>
   resolveLaunchEnvOverlay?: () => Promise<Record<string, string>> | Record<string, string>
   resolveClaudeLaunchEnv?: () => Promise<Record<string, string>> | Record<string, string>
@@ -160,9 +157,6 @@ let installing: Promise<InstalledRuntime> | null = null
 /** Thrown when the host is installed without a Claude auth policy resolver. */
 export const CLAUDE_STRUCTURED_AUTH_POLICY_REQUIRED =
   'structured agent-session host requires a Claude auth policy resolver'
-
-export const STRUCTURED_AGENT_LAUNCH_ARGS_REQUIRED =
-  'structured agent-session host requires a launch arguments resolver'
 
 /** Thrown when the host is installed without a logger: every failure it carries on past would
  *  otherwise reach nobody. */
@@ -251,9 +245,6 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
   // policy is the silent under-strip this assertion exists to prevent.
   if (typeof deps.resolveClaudeAuthPolicy !== 'function') {
     throw new Error(CLAUDE_STRUCTURED_AUTH_POLICY_REQUIRED)
-  }
-  if (typeof deps.resolveLaunchArgs !== 'function') {
-    throw new Error(STRUCTURED_AGENT_LAUNCH_ARGS_REQUIRED)
   }
   const declared: Partial<StructuredAgentSessionLogger> | undefined = deps.logger
   if (typeof declared?.warn !== 'function' || typeof declared.error !== 'function') {

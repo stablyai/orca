@@ -25,7 +25,6 @@ import type { PrepareNativeChatVisuals } from '../native-chat/native-chat-visual
 export type StructuredClaudeRuntimeAdapterDeps = {
   store: AgentSessionRecordStore
   resolveWorkspacePath: (workspaceId: string) => Promise<string>
-  resolveClaudeLaunchArgs: () => Promise<string[]> | string[]
   resolveClaudeCommand?: () => string
   /** Which version-gated flags a Claude CLI takes; absent never passes one. */
   claudeCliFlags?: ClaudeCliFlagSupport
@@ -105,7 +104,6 @@ export function createStructuredClaudeRuntimeAdapter(
     resolveLaunch: createClaudeStructuredLaunchResolver({
       store,
       resolveWorkspacePath: deps.resolveWorkspacePath,
-      resolveLaunchArgs: deps.resolveClaudeLaunchArgs,
       resolveCommand: deps.resolveClaudeCommand ?? resolveClaudeCommand,
       ...(deps.resolveClaudeLaunchEnv ? { resolveEnv: deps.resolveClaudeLaunchEnv } : {}),
       ...(deps.resolveClaudeInheritedEnv

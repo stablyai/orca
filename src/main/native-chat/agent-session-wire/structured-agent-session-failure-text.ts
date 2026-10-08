@@ -4,7 +4,6 @@
 import {
   agentSessionFailureFact,
   providerDiagnosticOf,
-  type AgentSessionArgumentProblem,
   type SubmissionRejectionFact,
   type AgentSessionFailureKind,
   type ProviderDiagnostic
@@ -20,7 +19,6 @@ import {
   type AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire-refusals'
 import { AgentSessionAcquisitionRefusal } from './structured-agent-session-adapter'
-import { argumentProblemOf } from '../structured-agent-arguments-error'
 
 /** Start refusals whose situation is itself what the person reads, with its own next step. */
 const TYPED_START_REFUSALS = [
@@ -78,7 +76,7 @@ export function providerStartupFailureFact(cause?: unknown): SubmissionRejection
   }
   return agentSessionFailureFact(
     providerExitObserved(cause) ? 'providerStartFailed' : 'startFailed',
-    { detail: providerDiagnosticOf(cause), argumentProblem: argumentProblemOf(cause) }
+    { detail: providerDiagnosticOf(cause) }
   )
 }
 
@@ -99,7 +97,7 @@ function startupFailureFromExit(
 function refusedStartFailureFact(
   cause: Extract<StructuredAgentSessionStartFailureCause, { refusal: unknown }>
 ): SubmissionRejectionFact {
-  const { refusal, diagnostic, argumentProblem } = cause
+  const { refusal, diagnostic } = cause
   const reason = refusal.details?.reason
   const typed = typedStartRefusal(reason)
   if (typed) {
@@ -110,7 +108,6 @@ function refusedStartFailureFact(
   }
   return agentSessionFailureFact(cause.newSession ? 'startFailed' : 'restartFailed', {
     detail: diagnostic,
-    argumentProblem,
     refusal: agentSessionRefusalReference(refusal)
   })
 }
@@ -122,7 +119,6 @@ export type StructuredAgentSessionStartFailureCause =
   | {
       refusal: AgentSessionWireRefusal
       diagnostic?: ProviderDiagnostic
-      argumentProblem?: AgentSessionArgumentProblem
       newSession?: true
     }
   /** A start that threw, or an adapter's own startup failure; any diagnostic it carries. */

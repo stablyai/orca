@@ -265,10 +265,7 @@ export class StructuredAgentSessionDeliveryLoop {
   }
 
   /** A start the session refused, as the failure every queued message it was for is rejected with. */
-  private refusedStart(
-    sessionId: string,
-    { refusal, diagnostic, argumentProblem }: RefusedStart
-  ): StartFailure {
+  private refusedStart(sessionId: string, { refusal, diagnostic }: RefusedStart): StartFailure {
     // A conversation no agent ever ran, such as a cleared chat's, failed to start, not restart.
     const newSession = this.deps.record(sessionId)?.providerHandleChain.length === 0
     return {
@@ -276,7 +273,6 @@ export class StructuredAgentSessionDeliveryLoop {
       cause: {
         refusal,
         ...(diagnostic ? { diagnostic } : {}),
-        ...(argumentProblem ? { argumentProblem } : {}),
         ...(newSession ? { newSession: true as const } : {})
       }
     }

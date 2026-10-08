@@ -6985,6 +6985,13 @@
           "agentPermissions": "Agent Permissions",
           "agentPermissionsInfo": "Agent permissions info",
           "agentPermissionsTooltip": "Doesn't apply to agents where you've overridden launch arguments.",
+          "argumentsUse": {
+            "claude": "Used in terminal tabs and terminal chats. The updated native chat doesn't use these; put its settings in ~/.claude/settings.json.",
+            "codex": "Used in terminal tabs and terminal chats. The updated native chat doesn't use these; put its settings in ~/.codex/config.toml.",
+            "grok": "Used in terminal tabs and terminal chats. The updated native chat doesn't use these; put its settings in ~/.grok/config.toml.",
+            "opencode": "Used in terminal tabs and terminal chats. The updated native chat doesn't use these; put its settings in ~/.config/opencode/opencode.json.",
+            "omp": "Used in terminal tabs and terminal chats. The updated native chat doesn't use these."
+          },
           "agentPermissionsDescription": "Choose whether Orca launches agents with fewer permission prompts or with manual checks.",
           "agentPermissionsYolo": "Yolo",
           "agentPermissionsManual": "Manual",

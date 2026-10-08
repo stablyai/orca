@@ -49,7 +49,6 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
         store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
         resolveWorkspacePath: async () => cwd,
         resolveCommand: () => realClaudeCommand,
-        resolveLaunchArgs: () => [],
         resolveEnv: () => realClaudeLaunchHome().env,
         resolveAuthPolicy: () => ({ stripAuthEnv: false }),
         hasTranscript: async () => false,

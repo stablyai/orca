@@ -6,13 +6,7 @@ import {
 /** Who a conversation's agent is and how it launches: the same whether it is created or founded. */
 export type AgentSessionRecordIdentity = Pick<
   AgentSessionRecord,
-  | 'sessionId'
-  | 'location'
-  | 'provider'
-  | 'accountHome'
-  | 'options'
-  | 'launchArgs'
-  | 'launchDirectory'
+  'sessionId' | 'location' | 'provider' | 'accountHome' | 'options' | 'launchDirectory'
 >
 
 export function agentSessionRecordIdentityFields(
@@ -26,7 +20,6 @@ export function agentSessionRecordIdentityFields(
     provider: identity.provider,
     accountHome: identity.accountHome,
     ...(identity.options ? { options: { ...identity.options } } : {}),
-    ...(identity.launchArgs ? { launchArgs: [...identity.launchArgs] } : {}),
     // A /clear continues in the same tab, so it stays in the folder the chat ran in.
     ...(identity.launchDirectory ? { launchDirectory: identity.launchDirectory } : {}),
     createdAt: now,

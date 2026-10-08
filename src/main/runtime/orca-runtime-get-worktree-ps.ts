@@ -43,7 +43,6 @@ import { claudeStructuredPermissionModeForSettings } from '../claude/claude-stru
 import { codexStructuredPermissionPolicyForSettings } from '../codex/codex-structured-permission-policy'
 import { claudeStructuredAuthPolicyForSettings } from '../claude-accounts/claude-structured-auth-policy'
 import { resolveStructuredAgentCommand } from '../native-chat/structured-agent-command-resolution'
-import { structuredAgentConfiguredArgs } from '../native-chat/structured-agent-configured-args'
 import { claudeCliFlagSupport } from '../claude/claude-cli-flag-support'
 import {
   createNativeChatVisualsWorkspaceVerdicts,
@@ -220,8 +219,6 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStartTuiIdleVis
         resolveStructuredAgentCommand('claude', this.requireStore().getSettings()),
       resolveCodexCommand: (options) =>
         resolveStructuredAgentCommand('codex', this.requireStore().getSettings(), options),
-      resolveLaunchArgs: (agent) =>
-        structuredAgentConfiguredArgs(agent, this.requireStore().getSettings()),
       resolveLaunchEnvOverlay: () =>
         resolveTuiAgentLaunchEnv('codex', this.requireStore().getSettings().agentDefaultEnv),
       resolveClaudeLaunchEnv: () =>

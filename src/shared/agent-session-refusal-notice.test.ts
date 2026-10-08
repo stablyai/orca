@@ -702,6 +702,7 @@ describe('agentSessionRefusalCauseParts', () => {
   })
 })
 
+// Chats no longer read saved Arguments, but an older host still sends these refusals.
 describe('saved Arguments refusals', () => {
   it('keeps generic launch copy when an older reader drops the new detail', () => {
     const wire = JSON.parse(

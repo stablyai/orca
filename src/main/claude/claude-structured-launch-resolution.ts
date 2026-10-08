@@ -25,7 +25,6 @@ import {
   type ClaudeChildEnvSources,
   type ClaudeEnvDeps
 } from './claude-structured-child-env'
-import { claudeStructuredLaunchArgs } from './claude-structured-launch-args'
 import type { ClaudeCliFlagSupport } from './claude-cli-flag-support'
 import { resolveClaudeLaunchFlags } from './claude-structured-launch-flags'
 import {
@@ -112,7 +111,6 @@ export type ClaudeStructuredLaunch = {
 
 export type ClaudeStructuredLaunchResolverDeps = {
   store: Pick<AgentSessionRecordStore, 'getRecord' | 'pinLaunchDirectory'>
-  resolveLaunchArgs: () => Promise<string[]> | string[]
   resolveWorkspacePath: (workspaceId: string) => Promise<string>
   resolveCommand?: () => string
   resolveEnv?: () =>
@@ -218,10 +216,8 @@ export function createClaudeStructuredLaunchResolver(
     // Asked as soon as the spawn's cwd and PATH are known, so it overlaps what is left to resolve.
     const probeLaunch = { command: sources.command, cwd, env: claudeProbeEnv(sources) }
     const launchFlags = resolveClaudeLaunchFlags(deps, record.sessionId, probeLaunch)
-    const configured = claudeStructuredLaunchArgs(await deps.resolveLaunchArgs())
     const { thinkingDisplayArgs, visuals } = await launchFlags
     const additionalDirectories = [
-      ...configured.additionalDirectories,
       ...(deps.attachmentDirectory ? [deps.attachmentDirectory] : []),
       ...(visuals ? [visuals.visuals.folder] : [])
     ]
@@ -266,7 +262,6 @@ export function createClaudeStructuredLaunchResolver(
         ...(additionalDirectories.length ? { additionalDirectories } : {}),
         ...(visuals?.pluginDir ? { plugins: [{ type: 'local', path: visuals.pluginDir }] } : {}),
         extraArgs: {
-          ...configured.extraArgs,
           ...CLAUDE_STRUCTURED_BASE_OPTIONS.extraArgs,
           ...permission.extraArgs,
           ...thinkingDisplayArgs

@@ -21,7 +21,6 @@ import { codexProviderHandleLink } from '../../codex/codex-structured-owner-iden
 import type {
   AgentSessionAccountHome,
   AgentSessionExecutionLocation,
-  AgentSessionLaunchArgs,
   AgentSessionLaunchEnv,
   AgentSessionRecord
 } from '../../../shared/agent-session-record'
@@ -66,7 +65,6 @@ export type AgentSessionAttachParams = {
   /** The tab id a create reserves for this chat, taken when its tab is published. Never on the
    *  attach fingerprint: which tab shows the chat is not which conversation it attaches to. */
   surfaceTabId?: string
-  launchArgs?: string[]
   /** Omitted only for create-by-intent; the adapter proves the durable handle. In the wire's
    *  form, because the attach fingerprint covers it as the client sent it. */
   providerHandle?: AgentSessionWireProviderHandle
@@ -92,7 +90,6 @@ export type AgentSessionAttachAuthority = {
   claimKeyId: string
   handoffOperationId: string | null
   probe: AgentSessionOwnerProbe
-  launchArgs?: AgentSessionLaunchArgs
   launchEnv?: AgentSessionLaunchEnv
 }
 
@@ -318,7 +315,6 @@ export function reserveRequestFor(input: {
     ...(params.envelope.expectedRuntimeFence === null && params.surfaceTabId
       ? { surfaceTabId: params.surfaceTabId }
       : {}),
-    ...(authority.launchArgs ? { launchArgs: authority.launchArgs } : {}),
     ...(authority.launchEnv ? { launchEnv: authority.launchEnv } : {}),
     ...(authority.launchDirectory ? { launchDirectory: authority.launchDirectory } : {}),
     ...(params.adopt

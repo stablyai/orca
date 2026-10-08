@@ -9,12 +9,8 @@ import {
   refuse,
   refuseUnclassified
 } from '../../../shared/agent-session-wire-refusals'
-import {
-  AgentSessionAcquisitionRefusal,
-  AgentSessionPreSpawnError
-} from './structured-agent-session-adapter'
+import { AgentSessionAcquisitionRefusal } from './structured-agent-session-adapter'
 import { MAX_UNEXPECTED_EXIT_REASON_CHARS } from './structured-agent-session-dead-generation-settlement'
-import { StructuredAgentArgumentsError } from '../structured-agent-arguments-error'
 import {
   structuredAgentSessionStartFailure,
   withObservedProviderExit
@@ -25,36 +21,6 @@ const ORCA_INTERNAL =
   /agent_session_|execution_owner|provider_[a-z_]+|[0-9a-f]{8}-[0-9a-f]{4}-|[/\\][\w.-]+[/\\]|Error:|ENOENT/
 
 describe('structuredAgentSessionStartFailure', () => {
-  it('names a saved Arguments option in start and restart failures without exposing its value', () => {
-    const error = new StructuredAgentArgumentsError(
-      'Codex',
-      '--unknown=private',
-      'unsupportedOption'
-    )
-    const wrapped = new AgentSessionPreSpawnError(error)
-    const argumentProblem = {
-      agent: 'Codex',
-      option: '--unknown',
-      problem: 'unsupportedOption'
-    } as const
-    expect(structuredAgentSessionStartFailure({ error: wrapped }, { agentName: 'Codex' })).toEqual({
-      reason:
-        "Codex couldn't start. Saved Arguments contain an unsupported option (--unknown). Edit them in Settings > Agents > Arguments. Send your message to try again.",
-      rejection: { kind: 'startFailed', argumentProblem }
-    })
-    const refusal = refuseUnclassified('agent_session_operation_invalid', 'generic start failure')
-    expect(
-      structuredAgentSessionStartFailure({ refusal, argumentProblem }, { agentName: 'Codex' })
-    ).toEqual({
-      reason:
-        "Codex couldn't restart. Saved Arguments contain an unsupported option (--unknown). Edit them in Settings > Agents > Arguments. Send your message to try again.",
-      rejection: {
-        kind: 'restartFailed',
-        argumentProblem,
-        refusal: { code: 'agent_session_operation_invalid' }
-      }
-    })
-  })
   it('keeps a provider diagnostic only when the error carried one', () => {
     const carried = withProviderDiagnostic(
       new Error('claude stream-json exited (code 1): boom'),

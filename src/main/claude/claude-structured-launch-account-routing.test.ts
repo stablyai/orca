@@ -45,7 +45,6 @@ it('launches each acquisition under the current selection, not the account it wa
   }
   const resolve = createClaudeStructuredLaunchResolver({
     store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
-    resolveLaunchArgs: () => [],
     resolveWorkspacePath: async (id) => `/repos/${id}`,
     resolveCommand: () => '/usr/local/bin/claude',
     resolveInheritedEnv: async () => ({ PATH: '/usr/bin' }),
@@ -111,7 +110,6 @@ function routedResumeFixture() {
   const transcriptHomes = new Set<string>()
   const resolve = createClaudeStructuredLaunchResolver({
     store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
-    resolveLaunchArgs: () => [],
     resolveWorkspacePath: async (id) => `/repos/${id}`,
     resolveCommand: () => '/usr/local/bin/claude',
     resolveInheritedEnv: async () => ({ PATH: '/usr/bin' }),
