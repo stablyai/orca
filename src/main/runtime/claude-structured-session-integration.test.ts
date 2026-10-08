@@ -227,7 +227,7 @@ beforeEach(async () => {
   hookServer = new AgentHookServer()
   const runtime = {
     getRuntimeId: () => 'runtime-1',
-    getClientSettings: () => ({ experimentalStructuredNativeChat: true }),
+    getClientSettings: () => ({ experimentalNativeChat: true }),
     getStructuredAgentSessionCreateSupport: async () => ({ supported: true }),
     resolveStructuredAgentSessionCreateIntent: async (input: { envelope: unknown }) => ({
       ...ensureParams(1),

@@ -312,7 +312,7 @@ describe('capability gating', () => {
 
   it('serves a capable mobile client whatever the host structured-chat setting says', async () => {
     const response = await call('agentSession.send', sendParams(), STRUCTURED_MOBILE_CLIENT, {
-      getClientSettings: () => ({ experimentalStructuredNativeChat: false })
+      getClientSettings: () => ({ experimentalNativeChat: false })
     })
     expect(response).toMatchObject({ ok: true })
     expect(hostCalls.send).toHaveBeenCalledTimes(1)

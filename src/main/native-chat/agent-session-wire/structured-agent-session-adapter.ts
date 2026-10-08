@@ -47,7 +47,7 @@ export type {
 import type { AgentJournalDispatchRejection } from '../../../shared/agent-session-failure-words'
 import type { AgentSessionPromptResponse } from '../../../shared/agent-session-question-answer'
 import type { ProviderHistoryWindow } from '../agent-session-journal/journal-submission-reconciler'
-import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
+import type { StructuredAgentSessionStartupAttempt } from './structured-agent-session-startup-attempt-contract'
 import type { AgentSessionCreatePhaseRecorder } from '../../observability/agent-session-instrumentation'
 
 export class AgentSessionAcquisitionRefusal extends Error {
@@ -124,7 +124,9 @@ export type AgentSessionAcquisition = {
   /** Host-local identity for this exact provider child, distinct even when the durable fence is
    *  reused by a superseding acquisition. */
   acquisitionGeneration?: string
-  /** Absent means `ready`: the adapter proved startup before answering. */
+  /** `starting`: published at spawn, proven later by a `started` event. Absent means `ready`, an
+   *  acquire that ran the whole handshake before answering; that bridge ends once every adapter
+   *  publishes at spawn. Either way the host holds input until the child is `ready`. */
   providerChildPhase?: StructuredAgentSessionProviderChildPhase
 }
 
@@ -136,8 +138,6 @@ export type AgentSessionPreSpawnReason = Extract<
   | 'managedAccountUnsupported'
   | 'launchFolderMissing'
   | 'historyInOtherAccount'
-  | 'claudeAccountFolderMissing'
-  | 'claudeAccountSetupFailed'
   | 'agentCommandNotRunnable'
 >
 
@@ -229,6 +229,9 @@ export type StructuredAgentSessionStartedEvent = {
   restoreSkippedOptions: readonly string[]
   /** Values the child showed it cannot run: a report naming the same value is not persisted. */
   retiredOptions?: Readonly<Record<string, string>>
+  /** The attempt's `optionRevision()` as the read behind this report began: a pick the host took
+   *  since makes it out of date. An earlier report never does, whenever the host took it. */
+  optionRevision: number
 }
 
 /** A running child showed saved options it cannot run, as a model the provider reports missing.
@@ -242,32 +245,36 @@ export type StructuredAgentSessionOptionsSkippedEvent = {
   options: Readonly<Record<string, string>>
 }
 
+/** What a child that already proved its start reports later, such as an optional read that came
+ *  after `started`: persisted as the start's report is. Never delays a start. */
+export type StructuredAgentSessionOptionsReportedEvent = Omit<
+  StructuredAgentSessionStartedEvent,
+  'type'
+> & { type: 'options-reported' }
+
 export type StructuredAgentSessionLifecycleEvent =
   | StructuredAgentSessionEndedEvent
   | StructuredAgentSessionStartedEvent
+  | StructuredAgentSessionOptionsReportedEvent
   | StructuredAgentSessionOptionsSkippedEvent
 
 /** Whether the provider child behind an acquisition has proven its start. A publish-first
- *  acquire hands over a `starting` child, which already takes input, and the `started` lifecycle
- *  event flips it. */
+ *  acquire hands over a `starting` child, which the host gives no input until the `started`
+ *  lifecycle event flips it. */
 export type StructuredAgentSessionProviderChildPhase = 'starting' | 'ready'
 
-export type StructuredAgentSessionAcquireInput = {
-  identity: AgentSessionJournalIdentity
-  fence: number
-  spawnToken: string
-  options?: Readonly<Record<string, string>>
-  /** Provider events may begin before acquisition returns. */
-  events?: StructuredAgentSessionEventSink
-  recordPhase?: AgentSessionCreatePhaseRecorder
-  /** Durably records the child's identity the moment it exists, before any handshake, so a crash
-   *  mid-start leaves an owner recovery can stop. The acquisition's `process` must match it. */
-  onSpawned?: (process: AgentSessionProcessIdentity) => Promise<void>
-  /** Aborted by a close, or by a Stop admitted now, that must not wait behind this acquire: the
-   *  adapter stops what it started and the acquire fails. An adapter whose acquire never waits on
-   *  the provider's handshake may ignore it. */
-  signal?: AbortSignal
-}
+/** The host's startup attempt (`structured-agent-session-startup-attempt`), which the host always
+ *  passes whole. Only the fields every caller has are required, so an adapter test may pass less. */
+export type StructuredAgentSessionAcquireInput = Pick<
+  StructuredAgentSessionStartupAttempt,
+  'identity' | 'fence' | 'spawnToken'
+> &
+  Partial<Omit<StructuredAgentSessionStartupAttempt, 'identity' | 'fence' | 'spawnToken'>> & {
+    recordPhase?: AgentSessionCreatePhaseRecorder
+    /** Durably records the child's identity the moment it exists, before any handshake, so a crash
+     *  mid-start leaves an owner recovery can stop. The acquisition's `process` must match it. */
+    onSpawned?: (process: AgentSessionProcessIdentity) => Promise<void>
+  }
 
 export type StructuredAgentSessionSetOptionInput = {
   sessionId: string

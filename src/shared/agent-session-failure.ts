@@ -34,8 +34,6 @@ export const AGENT_SESSION_FAILURE_KINDS = [
   'managedAccountUnsupported',
   'launchFolderMissing',
   'historyInOtherAccount',
-  'claudeAccountFolderMissing',
-  'claudeAccountSetupFailed',
   'agentCommandNotRunnable',
   'providerExited',
   'restartFailed',

@@ -15,9 +15,7 @@ import type { AgentLaunchIntent, AgentLaunchResult } from '../../shared/agent-la
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 
 const STRUCTURED_PREFERENCE = {
-  experimentalNativeChat: true,
-  experimentalStructuredNativeChat: true,
-  openAgentTabsInChatByDefault: true
+  experimentalNativeChat: true
 }
 
 function harness(options: {
@@ -732,7 +730,7 @@ describe('the surface is published as the launch stands, before its prompt is de
 describe('a new local worktree whose startup terminal did not come up', () => {
   it('opens its agent in the view a local workspace allows, as an existing one would', async () => {
     const h = harness({
-      settings: { experimentalNativeChat: true, openAgentTabsInChatByDefault: true }
+      settings: { experimentalNativeChat: true }
     })
     h.createWorktree.mockImplementationOnce(async () => ({
       worktreeId: 'wt-new',
@@ -742,8 +740,7 @@ describe('a new local worktree whose startup terminal did not come up', () => {
 
     await h.run({ ...CREATE_INTENT, agent: 'opencode' })
 
-    expect(h.createTerminalAgent).toHaveBeenCalledWith(
-      expect.objectContaining({ viewMode: 'chat' })
-    )
+    expect(h.createStructuredSession).toHaveBeenCalled()
+    expect(h.createTerminalAgent).not.toHaveBeenCalled()
   })
 })

@@ -211,7 +211,7 @@ export function createResumeModalFixture(rpc: Mock<RestartRpc>, statusStream: Re
     vi.mocked(toast).mockClear()
     useAppStore.setState(useAppStore.getInitialState(), true)
     useAppStore.setState({
-      settings: { ...getDefaultSettings(''), experimentalStructuredNativeChat: true },
+      settings: { ...getDefaultSettings(''), experimentalNativeChat: true },
       updateSettings: async (changes) => {
         useAppStore.setState((state) => ({
           settings: { ...getDefaultSettings(''), ...state.settings, ...changes }

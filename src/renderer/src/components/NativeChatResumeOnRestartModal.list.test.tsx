@@ -48,7 +48,7 @@ beforeEach(() => {
   consumeNativeChatResumeOnRestartDialogRequest()
   useAppStore.setState(useAppStore.getInitialState(), true)
   useAppStore.setState({
-    settings: { ...getDefaultSettings(''), experimentalStructuredNativeChat: true }
+    settings: { ...getDefaultSettings(''), experimentalNativeChat: true }
   })
   container = document.createElement('div')
   document.body.append(container)

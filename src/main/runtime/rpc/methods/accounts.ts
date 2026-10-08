@@ -4,8 +4,6 @@ import {
   SelectDataAccountParams,
   RemoveDataAccountParams,
   AccountsUnsubscribeParams,
-  BeginClaudeSignInParams,
-  FinishClaudeSignInParams,
   AddClaudeFromConfigDirParams,
   AddCodexFromHomeParams,
   ConsumeCodexResetCreditParams,
@@ -21,42 +19,15 @@ import {
 // registerSubscriptionCleanup's existing-key eviction path.
 let accountsSubscriptionSeq = 0
 
+// Why: bridges the desktop ClaudeAccountService / CodexAccountService /
+// RateLimitService into the WebSocket / local-socket RPC. Read + switch +
+// remove for all clients; interactive add/re-auth flows spawn `claude login`
+// / `codex login` PTYs that need a desktop browser, so they intentionally
+// remain desktop-only. `accounts.addClaudeFromConfigDir` is the exception: it
+// captures an already-authenticated CLAUDE_CONFIG_DIR (no PTY) so the local
+// `orca account add` CLI can register accounts on a headless host; it is gated
+// to the local runtime connection, never a mobile device token. See #1438.
 export const ACCOUNT_METHODS = [
-  // Why local only: sign-in runs `claude auth login` in a terminal on the execution host.
-  defineMethod({
-    name: 'accounts.beginClaudeSignIn',
-    permission: 'accounts-admin',
-    params: BeginClaudeSignInParams,
-    handler: async (params, { runtime, clientKind }) => {
-      if (clientKind !== undefined) {
-        throw new Error('Sign in on the Orca execution host.')
-      }
-      return runtime.beginClaudeSignIn(params)
-    }
-  }),
-  defineMethod({
-    name: 'accounts.finishClaudeSignIn',
-    permission: 'accounts-admin',
-    params: FinishClaudeSignInParams,
-    handler: async (params, { runtime, clientKind }) => {
-      if (clientKind !== undefined) {
-        throw new Error('Sign in on the Orca execution host.')
-      }
-      return runtime.finishClaudeSignIn(params)
-    }
-  }),
-  defineMethod({
-    name: 'accounts.cancelClaudeSignIn',
-    permission: 'accounts-admin',
-    params: FinishClaudeSignInParams,
-    handler: async (params, { runtime, clientKind }) => {
-      if (clientKind !== undefined) {
-        throw new Error('Sign in on the Orca execution host.')
-      }
-      await runtime.cancelClaudeSignIn(params)
-      return {}
-    }
-  }),
   defineMethod({
     name: 'accounts.listData',
     permission: 'workspace',
@@ -147,10 +118,17 @@ export const ACCOUNT_METHODS = [
     name: 'accounts.addClaudeFromConfigDir',
     permission: 'accounts-admin',
     params: AddClaudeFromConfigDirParams,
-    handler: async () => {
-      throw new Error(
-        'Update the Orca CLI to add accounts. Importing Claude logins is no longer supported.'
-      )
+    handler: async (params, { runtime, clientKind }) => {
+      // Why: capturing a host filesystem path is local-socket-only; paired
+      // mobile and remote-runtime tokens must never read host credential paths.
+      if (clientKind !== undefined) {
+        throw new Error('Adding Claude accounts is only available on the Orca host runtime.')
+      }
+      return runtime.addClaudeAccountFromConfigDir(params.configDir, {
+        runtime: params.runtime,
+        wslDistro: params.wslDistro ?? null,
+        previousLegacyCredentialsSha256: params.previousLegacyCredentialsSha256
+      })
     }
   }),
   defineMethod({

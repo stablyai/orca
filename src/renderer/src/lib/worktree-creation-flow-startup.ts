@@ -25,7 +25,6 @@ export function buildWorktreeCreationStartupOpt(
     ...(plan.draftPrompt ? { draftPrompt: plan.draftPrompt } : {}),
     // Why: view-mode only. An argv-prefill plan sets no draftPrompt, so this is
     // the sole signal that this launch starts with unsent context in the TUI.
-    ...(request.launchDraftPrompt ? { launchDraftText: request.launchDraftPrompt } : {}),
     ...(plan.startupCommandDelivery ? { startupCommandDelivery: plan.startupCommandDelivery } : {}),
     // Why: command-code shows its prompt in the tab status before the first
     // hook fires, so the prompt is threaded through here.

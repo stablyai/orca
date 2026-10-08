@@ -308,7 +308,7 @@ describe('resolveWindowsShellLaunchArgs', () => {
     expect(result.startupCommandDeliveredInShellArgs).toBeUndefined()
   })
 
-  it('gives a plain Git Bash tab the same rcfile as one with a startup command', () => {
+  it('keeps a plain Git Bash tab a login shell and wraps one with a startup command', () => {
     const plain = resolveWindowsShellLaunchArgs(
       'C:\\Program Files\\Git\\bin\\bash.exe',
       'C:\\Users\\alice',
@@ -322,12 +322,14 @@ describe('resolveWindowsShellLaunchArgs', () => {
       "codex 'fix the bug'"
     )
 
-    expect(plain.shellArgs).toEqual(launched.shellArgs)
-    // Why: only the rcfile carries the account-following claude function and codex --no-daemon wrapper.
-    const rcfile = readFileSync(getGitBashRcfilePath(plain.shellArgs[1]), 'utf8')
-    expect(rcfile).toContain('function claude {')
-    expect(rcfile).toContain('set -- --no-daemon "$@"')
-    expect(rcfile).toContain('source "$HOME/.bash_profile"')
+    expect(plain.shellArgs).toEqual([
+      '-c',
+      'chcp.com 65001 >/dev/null 2>&1; exec "$BASH" --login -i'
+    ])
+    // Why: without a preflight, only the rcfile carries the codex --no-daemon wrapper.
+    expect(readFileSync(getGitBashRcfilePath(launched.shellArgs[1]), 'utf8')).toContain(
+      'set -- --no-daemon "$@"'
+    )
     expect(launched.startupCommandDeliveredInShellArgs).toBeUndefined()
   })
 

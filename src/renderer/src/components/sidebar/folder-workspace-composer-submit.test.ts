@@ -11,8 +11,6 @@ const mocks = vi.hoisted(() => ({
   ensureAgentStartupInTerminal: vi.fn()
 }))
 
-// Why: importOriginal keeps the real resolveStartupLaunchDraftText, so the
-// invariant test below exercises the shipped gate instead of a copy of it.
 vi.mock('@/lib/worktree-activation', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
   return { ...actual, activateAndRevealFolderWorkspace: mocks.activateAndRevealFolderWorkspace }
@@ -27,8 +25,6 @@ vi.mock('@/lib/new-workspace', async (importOriginal) => {
 })
 
 import { useAppStore } from '@/store'
-import { decideInitialAgentTabViewMode } from '@/lib/native-chat-initial-view-mode'
-import { resolveStartupLaunchDraftText } from '@/lib/worktree-startup-payload'
 import {
   getFolderWorkspaceAgentLaunchPlatform,
   submitFolderWorkspaceCreate
@@ -804,9 +800,8 @@ describe('folder-workspace draft: seeded set == chat-opening set', () => {
     vi.restoreAllMocks()
   })
 
-  // Why: `claude` takes its draft on argv, so `startupPlan.draftPrompt` stays
-  // undefined; `codex` gets a startup paste and sets it. Both must reach the
-  // view-mode gate, and both must agree with what the composer actually holds.
+  // Claude takes its draft on argv; Codex receives a startup paste. Both keep
+  // the draft available for an explicit switch to terminal chat.
   it.each([
     ['argv-prefill', 'claude' as const, '', true],
     ['argv-prefill multi-line', 'claude' as const, 'Reproduce on Windows first', true],
@@ -828,20 +823,8 @@ describe('folder-workspace draft: seeded set == chat-opening set', () => {
 
     const startup = mocks.activateAndRevealFolderWorkspace.mock.calls[0]?.[1]?.startup
     const seeded = useAppStore.getState().nativeChatLaunchDraftByTabId['tab-1'] != null
-    const draftText = resolveStartupLaunchDraftText(startup)
-    const opensInChat =
-      decideInitialAgentTabViewMode({
-        experimentalNativeChat: true,
-        openAgentTabsInChatByDefault: true,
-        agent: quickAgent,
-        ...(draftText != null
-          ? { promptDelivery: 'draft' as const, launchDraftText: draftText }
-          : {})
-      }) === 'chat'
-
     // The draft always reaches the TUI, whichever way it is delivered.
     expect(`${startup?.command ?? ''}${startup?.draftPrompt ?? ''}`).toContain(ISSUE_URL)
     expect(seeded).toBe(expectMirrored)
-    expect(opensInChat).toBe(expectMirrored)
   })
 })

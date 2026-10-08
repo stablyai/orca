@@ -236,7 +236,8 @@ describe('provider usage error copy', () => {
       error:
         'Claude usage refresh is waiting for the live Claude terminal to rotate its credentials.',
       usageMetadata: {
-        failureKind: 'deferred-by-live-session'
+        failureKind: 'deferred-by-live-session',
+        deferredByLiveClaudeSession: true
       }
     })
 
@@ -255,47 +256,9 @@ describe('provider usage error copy', () => {
       }
     })
 
-    expect(getProviderUsageStatusLabel(p)).toBe('Sign-in expired')
-    expect(getProviderUsageErrorMessage(p)).toBe(
-      'Claude usage has expired. Start Claude in this account to refresh it.'
-    )
-  })
-
-  it('tells a System Default user calmly that usage updates when Claude next runs', () => {
-    const p = provider({
-      error: 'Invalid OAuth token.',
-      usageMetadata: {
-        failureKind: 'stale-token',
-        attemptedSources: ['oauth'],
-        authProvenance: 'system'
-      }
-    })
-
-    expect(getProviderUsageStatusLabel(p)).toBe('Updates when Claude runs')
-    expect(getProviderUsageErrorMessage(p)).toBe('Claude usage updates the next time Claude runs.')
-  })
-
-  it('keeps refresh copy for failure kinds only a refreshing older host reports', () => {
-    const p = provider({
-      error: 'Claude OAuth access token unavailable',
-      usageMetadata: { failureKind: 'refreshable-credentials-without-token' }
-    })
-
     expect(getProviderUsageStatusLabel(p)).toBe('Refreshing sign-in')
     expect(getProviderUsageErrorMessage(p)).toBe(
       'Claude sign-in is being refreshed. Agent sessions may still be signed in.'
-    )
-  })
-
-  it('tells the user a selected Claude account needs signing in again', () => {
-    const p = provider({
-      error: 'Sign in again to use this account.',
-      usageMetadata: { failureKind: 'missing-credentials' }
-    })
-
-    expect(getProviderUsageStatusLabel(p)).toBe('Sign in again')
-    expect(getProviderUsageErrorMessage(p)).toBe(
-      'The selected Claude account needs you to sign in again. Open Settings > AI Provider Accounts, or choose System default.'
     )
   })
 

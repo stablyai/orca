@@ -89,7 +89,6 @@ export type AgentSessionMutationRequest<TValue> = {
     record: AgentSessionRecord
   ) => Promise<AgentSessionMutationSessionPreparation>
   publish: (journal: AgentSessionJournal) => void
-  providerChildPhase?: AgentSessionTurnContext['providerChildPhase']
   now: () => number
 }
 

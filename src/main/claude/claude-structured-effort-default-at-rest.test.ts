@@ -131,8 +131,6 @@ function restingRecord(options: Record<string, string>): AgentSessionRecord {
     provider: 'claude',
     accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: ACCOUNT_HOME },
     location: { wslDistro: null },
-    // Why released: a chat at rest has no live claim, so its next start reads the current account.
-    lease: { claimStatus: 'released' },
     options
   } as unknown as AgentSessionRecord
 }

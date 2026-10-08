@@ -1,19 +1,24 @@
+import { claudeProfileRoutingEnabled } from './claude-profile-routing'
 const authHeaderWords = 'authorization|x-api-key|api-key|bearer'
 const posixAuthHeaderPattern = authHeaderWords
   .split('|')
   .map((word) => `*${word.replace(/[a-z]/g, (letter) => `[${letter}${letter.toUpperCase()}]`)}*`)
   .join('|')
+const OVERRIDE_NOTE =
+  'Orca: CLAUDE_CONFIG_DIR is set in this shell, so the Claude account selected in Orca is not used here.'
+const MISSING_NOTE =
+  "Orca: the selected Claude account's folder is missing. Sign in to it again or choose another account."
 
 /**
  * `claude` re-reads the which-account file on every launch, so a switch reaches open terminals
  * (superset's wrapper rule). Defined only in a pane Orca routed (pointer env set) where `claude` is
- * a real executable. A missing or empty file is System default, which restores the user's own value
- * Orca's replaced; a CLAUDE_CONFIG_DIR the user set, as opposed to Orca's twin-marked value, wins.
- * Prints nothing: an account folder with no login is created, and Claude's own first run signs in
- * there. A pointer that names no absolute folder (never written by Orca) runs nothing, since any
- * fallback would be another account.
+ * a real executable. A missing or empty file is System default; a CLAUDE_CONFIG_DIR the user set,
+ * as opposed to Orca's twin-marked value, wins.
  */
 export function getPosixClaudeShellFunction(): string {
+  if (!claudeProfileRoutingEnabled()) {
+    return ''
+  }
   return `__orca_claude_binary="$(unalias claude 2>/dev/null || :; command -v claude 2>/dev/null || :)"
 if [[ -n "\${ORCA_CLAUDE_PROFILE_POINTER:-}" && -n "\${__orca_claude_binary:-}" && -x "\${__orca_claude_binary}" ]]; then
   function claude {
@@ -22,18 +27,13 @@ if [[ -n "\${ORCA_CLAUDE_PROFILE_POINTER:-}" && -n "\${__orca_claude_binary:-}" 
     case "$__orca_claude_pointer" in '~/'*) __orca_claude_pointer="\${HOME:-}/\${__orca_claude_pointer#??}" ;; esac
     __orca_claude_home="$(cat "$__orca_claude_pointer" 2>/dev/null || :)"
     if [ -n "\${CLAUDE_CONFIG_DIR:-}" ] && [ "$CLAUDE_CONFIG_DIR" != "\${ORCA_CLAUDE_INJECTED_CONFIG_DIR:-}" ]; then
+      [ -z "$__orca_claude_home" ] || [ "$__orca_claude_home" = "$CLAUDE_CONFIG_DIR" ] || printf '%s\\n' '${OVERRIDE_NOTE}' >&2
       command claude "$@"; return
-    fi
-    # Why: Orca's value replaced the user's own at spawn, so System default restores theirs.
-    if [ -z "$__orca_claude_home" ] && [ -n "\${CLAUDE_CONFIG_DIR:-}" ] && [ -n "\${ORCA_CLAUDE_USER_CONFIG_DIR:-}" ]; then
-      ( unset ORCA_CLAUDE_INJECTED_CONFIG_DIR; export CLAUDE_CONFIG_DIR="$ORCA_CLAUDE_USER_CONFIG_DIR"; command claude "$@" ); return
     fi
     if [ -z "$__orca_claude_home" ]; then
       ( unset CLAUDE_CONFIG_DIR ORCA_CLAUDE_INJECTED_CONFIG_DIR; command claude "$@" ); return
     fi
-    case "$__orca_claude_home" in /*|[A-Za-z]:*) ;; *) return 1 ;; esac
-    # Why -m 700: matches the folder Orca's setup creates; a credentials folder stays private.
-    [ -d "$__orca_claude_home" ] || mkdir -p -m 700 -- "$__orca_claude_home" 2>/dev/null
+    if [ ! -d "$__orca_claude_home" ]; then printf '%s\\n' "${MISSING_NOTE}" >&2; return 1; fi
     ( unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN CLAUDE_CODE_OAUTH_TOKEN AWS_BEARER_TOKEN_BEDROCK; case "\${ANTHROPIC_CUSTOM_HEADERS:-}" in ${posixAuthHeaderPattern}) unset ANTHROPIC_CUSTOM_HEADERS ;; esac; export CLAUDE_CONFIG_DIR="$__orca_claude_home" ORCA_CLAUDE_INJECTED_CONFIG_DIR="$__orca_claude_home"; command claude "$@" )
   }
 fi
@@ -43,6 +43,9 @@ unset __orca_claude_binary
 
 /** Leading newline: the codex fragment it follows ends without one. */
 export function getFishClaudeShellFunction(): string {
+  if (!claudeProfileRoutingEnabled()) {
+    return ''
+  }
   return `
 set -l __orca_claude_type (type -t claude 2>/dev/null)
 if test -n "$ORCA_CLAUDE_PROFILE_POINTER"; and test "$__orca_claude_type" = file
@@ -51,21 +54,19 @@ if test -n "$ORCA_CLAUDE_PROFILE_POINTER"; and test "$__orca_claude_type" = file
     set -l pointer (string replace -r '^~/' "$HOME/" -- "$ORCA_CLAUDE_PROFILE_POINTER")
     set -l profile (cat "$pointer" 2>/dev/null)
     if test -n "$CLAUDE_CONFIG_DIR"; and test "$CLAUDE_CONFIG_DIR" != "$ORCA_CLAUDE_INJECTED_CONFIG_DIR"
+      if test -n "$profile"; and test "$profile" != "$CLAUDE_CONFIG_DIR"
+        echo '${OVERRIDE_NOTE}' >&2
+      end
       command claude $argv
-      return $status
-    end
-    if test -z "$profile"; and test -n "$CLAUDE_CONFIG_DIR"; and test -n "$ORCA_CLAUDE_USER_CONFIG_DIR"
-      env -u ORCA_CLAUDE_INJECTED_CONFIG_DIR CLAUDE_CONFIG_DIR="$ORCA_CLAUDE_USER_CONFIG_DIR" claude $argv
       return $status
     end
     if test -z "$profile"
       env -u CLAUDE_CONFIG_DIR -u ORCA_CLAUDE_INJECTED_CONFIG_DIR claude $argv
       return $status
     end
-    if not string match -qr '^(/|[A-Za-z]:)' -- "$profile"
-      return 1
+    if not test -d "$profile"
+      echo "${MISSING_NOTE}" >&2; return 1
     end
-    test -d "$profile"; or mkdir -p -m 700 -- "$profile" 2>/dev/null
     set -l headers
     if string match -irq '${authHeaderWords}' -- "$ANTHROPIC_CUSTOM_HEADERS"
       set headers -u ANTHROPIC_CUSTOM_HEADERS
@@ -79,6 +80,9 @@ set -e __orca_claude_type
 
 /** Leading newline: the codex fragment it follows ends without one. */
 export function getPowerShellClaudeShellFunction(): string {
+  if (!claudeProfileRoutingEnabled()) {
+    return ''
+  }
   return `
 $orcaClaudeCommand = Get-Command claude -ErrorAction SilentlyContinue | Select-Object -First 1
 if ($env:ORCA_CLAUDE_PROFILE_POINTER -and $orcaClaudeCommand -and
@@ -93,16 +97,12 @@ function Global:claude {
             $orcaClaudeHome = [IO.File]::ReadAllText($env:ORCA_CLAUDE_PROFILE_POINTER).TrimEnd()
         }
         if ($env:CLAUDE_CONFIG_DIR -and $env:CLAUDE_CONFIG_DIR -ne $env:ORCA_CLAUDE_INJECTED_CONFIG_DIR) {
-            # The user's own value wins.
+            if ($orcaClaudeHome -and $orcaClaudeHome -ne $env:CLAUDE_CONFIG_DIR) { [Console]::Error.WriteLine('${OVERRIDE_NOTE}') }
         } elseif (-not $orcaClaudeHome) {
-            Remove-Item Env:ORCA_CLAUDE_INJECTED_CONFIG_DIR -ErrorAction SilentlyContinue
-            if ($env:CLAUDE_CONFIG_DIR -and $env:ORCA_CLAUDE_USER_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR = $env:ORCA_CLAUDE_USER_CONFIG_DIR }
-            else { Remove-Item Env:CLAUDE_CONFIG_DIR -ErrorAction SilentlyContinue }
-        } elseif (-not [IO.Path]::IsPathRooted($orcaClaudeHome)) {
-            $global:LASTEXITCODE = 1
-            return
+            Remove-Item Env:CLAUDE_CONFIG_DIR, Env:ORCA_CLAUDE_INJECTED_CONFIG_DIR -ErrorAction SilentlyContinue
+        } elseif (-not [IO.Directory]::Exists($orcaClaudeHome)) {
+            throw "${MISSING_NOTE}"
         } else {
-            if (-not [IO.Directory]::Exists($orcaClaudeHome)) { $null = New-Item -ItemType Directory -Path $orcaClaudeHome -Force -ErrorAction SilentlyContinue }
             foreach ($name in $names) {
                 if ($name -ne 'ANTHROPIC_CUSTOM_HEADERS' -or $env:ANTHROPIC_CUSTOM_HEADERS -match '${authHeaderWords}') { Remove-Item -LiteralPath "Env:$name" -ErrorAction SilentlyContinue }
             }

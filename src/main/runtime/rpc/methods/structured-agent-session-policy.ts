@@ -6,12 +6,13 @@ import {
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   type RuntimeCapability
 } from '../../../../shared/protocol-version'
+import { isNativeChatEnabled } from '../../../../shared/structured-native-chat-launch-route'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcContext } from '../core'
 
 /**
  * One rule for every caller: can this client read structured sessions? The host's own
- * `experimentalStructuredNativeChat` is not consulted. It is the host user's launch preference,
+ * The host's Chat UI setting is not consulted. It is the host user's launch preference,
  * and whether a new agent is a chat is decided by whoever launches it, so a paired client's
  * sessions stay reachable whatever the host's setting says. The negotiated capability is a wire
  * term, asked of remote clients only: in-process callers are the host's own build.
@@ -91,7 +92,7 @@ export function isStructuredNativeChatEnabled(
   runtime: Pick<OrcaRuntimeService, 'getClientSettings'>
 ): boolean {
   try {
-    return runtime.getClientSettings().experimentalStructuredNativeChat === true
+    return isNativeChatEnabled(runtime.getClientSettings())
   } catch {
     return false
   }

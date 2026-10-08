@@ -1704,7 +1704,10 @@
             "d23ae13990": "worktree",
             "f082788cfe": "links",
             "fa72e71f05": "agents",
-            "fe5688b761": "sidebar"
+            "fe5688b761": "sidebar",
+            "nativeChat": {
+              "description": "Open supported new agents in Chat UI."
+            }
           }
         },
         "general": {
@@ -2878,8 +2881,6 @@
         "chooseClaudeAccount": "Choose or add one in Claude Accounts settings.",
         "chooseClaudeAccountThenRunCommand": "Choose or add one in Claude Accounts settings, then run /{{command}} again.",
         "chooseClaudeAccountThenSend": "Choose or add one in Claude Accounts settings, then send your message again.",
-        "claudeAccountFolderMissing": "The selected Claude account's folder is missing. Sign in to it again or choose another account.",
-        "claudeAccountSetupFailed": "The selected Claude account could not be set up. Try again or choose another account.",
         "claudeManagedNotSignedIn": "This Claude account isn't signed in. Sign in again in Claude Accounts settings.",
         "claudeSystemNotSignedIn": "Claude isn't signed in. Run `{{loginCommand}}`, or choose an account in Claude Accounts settings.",
         "cliMissing": "{{agent}} wasn't found on the computer running this chat. Install it, or check its Command in Settings → Agents.",

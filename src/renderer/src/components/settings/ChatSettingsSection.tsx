@@ -34,7 +34,7 @@ export function ChatSettingsSection({
   isMounted: boolean
 }): React.JSX.Element | null {
   const query = useAppStore((state) => state.settingsSearchQuery)
-  if (settings.experimentalStructuredNativeChat !== true) {
+  if (settings.experimentalNativeChat !== true) {
     return null
   }
   const title = translate('settings.appearance.chat.title', 'Chat')

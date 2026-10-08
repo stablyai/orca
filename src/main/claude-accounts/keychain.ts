@@ -2,23 +2,98 @@ import { createHash } from 'node:crypto'
 import { lstatSync, realpathSync } from 'node:fs'
 import { userInfo } from 'node:os'
 import { basename, dirname, join } from 'node:path'
-import { readKeychainPassword } from '../macos-keychain/generic-password'
+import {
+  deleteKeychainPassword,
+  readKeychainPassword,
+  writeKeychainPassword
+} from '../macos-keychain/generic-password'
 
 const ACTIVE_CLAUDE_SERVICE = 'Claude Code-credentials'
-export async function readActiveClaudeKeychainCredentialsStrict(
+const ORCA_CLAUDE_SERVICE = 'Orca Claude Code Managed Credentials'
+export async function readActiveClaudeKeychainCredentials(
   configDir?: string
 ): Promise<string | null> {
-  if (!configDir) {
-    return readKeychainPassword(claudeKeychainService(), getKeychainUser())
-  }
-  // Keep both lexical and canonical profile aliases scoped; never try System Default.
-  for (const dir of claudeConfigDirKeychainAliases(configDir)) {
-    const credentials = await readKeychainPassword(claudeKeychainService(dir), getKeychainUser())
+  for (const service of getActiveClaudeServices(configDir)) {
+    const credentials = await readKeychainPassword(service, getKeychainUser())
     if (credentials) {
       return credentials
     }
   }
   return null
+}
+
+export async function readActiveClaudeKeychainCredentialsStrict(
+  configDir?: string
+): Promise<string | null> {
+  if (!configDir) {
+    return readKeychainPassword(getActiveClaudeService(), getKeychainUser())
+  }
+  // Why: macOS tmp is /var → /private/var. Claude hashes the realpath; a
+  // mkdtemp login dir would miss the Keychain item if we only hashed the raw path.
+  for (const dir of claudeConfigDirKeychainAliases(configDir)) {
+    const credentials = await readKeychainPassword(getActiveClaudeService(dir), getKeychainUser())
+    if (credentials) {
+      return credentials
+    }
+  }
+  return null
+}
+
+export async function writeActiveClaudeKeychainCredentials(
+  contents: string,
+  configDir?: string
+): Promise<void> {
+  await writeKeychainPassword(getActiveClaudeService(configDir), getKeychainUser(), contents)
+}
+
+export async function writeActiveClaudeKeychainCredentialsForRuntime(
+  contents: string,
+  configDir: string
+): Promise<void> {
+  const user = getKeychainUser()
+  const scopedService = getActiveClaudeService(configDir)
+  await writeKeychainPassword(scopedService, user, contents)
+  if (scopedService !== ACTIVE_CLAUDE_SERVICE) {
+    await writeKeychainPassword(ACTIVE_CLAUDE_SERVICE, user, contents)
+  }
+}
+
+export async function deleteActiveClaudeKeychainCredentials(configDir?: string): Promise<void> {
+  for (const service of getActiveClaudeServices(configDir)) {
+    for (const account of getKeychainUsersForCleanup()) {
+      await deleteKeychainPassword(service, account)
+    }
+  }
+}
+
+export async function deleteActiveClaudeKeychainCredentialsStrict(
+  configDir?: string
+): Promise<void> {
+  const dirs = configDir ? claudeConfigDirKeychainAliases(configDir) : [undefined]
+  for (const dir of dirs) {
+    for (const account of getKeychainUsersForCleanup()) {
+      await deleteKeychainPassword(getActiveClaudeService(dir), account, {
+        failOnAccessError: true
+      })
+    }
+  }
+}
+
+export async function readManagedClaudeKeychainCredentials(
+  accountId: string
+): Promise<string | null> {
+  return readKeychainPassword(ORCA_CLAUDE_SERVICE, accountId)
+}
+
+export async function writeManagedClaudeKeychainCredentials(
+  accountId: string,
+  contents: string
+): Promise<void> {
+  await writeKeychainPassword(ORCA_CLAUDE_SERVICE, accountId, contents)
+}
+
+export async function deleteManagedClaudeKeychainCredentials(accountId: string): Promise<void> {
+  await deleteKeychainPassword(ORCA_CLAUDE_SERVICE, accountId)
 }
 
 const KEYCHAIN_ACCOUNT_PATTERN = /^[a-zA-Z0-9._-]+$/
@@ -36,7 +111,13 @@ function getKeychainUser(): string {
   return KEYCHAIN_ACCOUNT_PATTERN.test(user) ? user : CLAUDE_CODE_FALLBACK_USER
 }
 
-export function claudeKeychainService(configDir?: string): string {
+function getKeychainUsersForCleanup(): string[] {
+  const derived = getKeychainUser()
+  const raw = process.env.USER || process.env.USERNAME
+  return raw && raw !== derived ? [derived, raw] : [derived]
+}
+
+function getActiveClaudeService(configDir?: string): string {
   if (!configDir) {
     return ACTIVE_CLAUDE_SERVICE
   }
@@ -92,16 +173,10 @@ export function claudeConfigDirKeychainAliases(configDir: string): string[] {
   return aliases
 }
 
-/** Every spelling of a folder Claude may have hashed into its Keychain item name (superset U/profiles.ts). */
-export function claudeConfigDirSpellings(configDir: string, userHome: string): string[] {
-  const spellings = new Set<string>()
-  for (const dir of claudeConfigDirKeychainAliases(configDir)) {
-    const trimmed = dir.replace(/[\\/]+$/, '')
-    const rest = trimmed.startsWith(`${userHome}/`) ? trimmed.slice(userHome.length) : null
-    for (const spelling of [trimmed, ...(rest ? [`~${rest}`, `$HOME${rest}`] : [])]) {
-      spellings.add(spelling)
-      spellings.add(`${spelling}/`)
-    }
+function getActiveClaudeServices(configDir?: string): string[] {
+  if (!configDir) {
+    return [ACTIVE_CLAUDE_SERVICE]
   }
-  return [...spellings]
+  const scoped = claudeConfigDirKeychainAliases(configDir).map((dir) => getActiveClaudeService(dir))
+  return [...new Set([...scoped, ACTIVE_CLAUDE_SERVICE])]
 }

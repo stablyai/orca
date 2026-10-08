@@ -91,7 +91,7 @@ describe('agent.launch with the real floating workspace resolver', () => {
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the launch reads only these preferences and optional agentCmdOverrides; no other settings consumer runs because terminal creation is stubbed.
         {
           ...STRUCTURED_PREFERENCE,
-          openAgentTabsInChatByDefault: structuredPreference
+          experimentalNativeChat: structuredPreference
         } as ReturnType<OrcaRuntimeService['getClientSettings']>
       )
       const scope = vi.spyOn(runtime, 'showTerminalWorkspaceLaunchScope')

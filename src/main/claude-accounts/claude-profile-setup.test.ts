@@ -48,7 +48,7 @@ function fixture() {
       installHooks,
       platform: 'linux'
     })
-  return { root, defaultHome, dataRoot, service, installHooks, setup }
+  return { root, defaultHome, dataRoot, service, setup }
 }
 
 // Why: setup runs as 'linux', so it creates real symlinks, which Windows needs privilege for.
@@ -82,24 +82,6 @@ describe('Claude account profile setup', () => {
     expect(realpathSync(join(home, 'projects'))).toBe(realpathSync(join(f.defaultHome, 'projects')))
     expect(existsSync(join(home, '.credentials.json'))).toBe(false)
     expect((await f.setup()).warnings).toEqual([])
-  })
-  itLinks('marks the folder set up only after its last step', async () => {
-    const f = fixture()
-    const marker = join(f.dataRoot, 'claude-profiles/a/profile.json')
-    let markedDuringHooks: boolean | undefined
-    const report = await provisionClaudeAccountProfile({
-      dataRoot: f.dataRoot,
-      profile: describeClaudeProfile(f.dataRoot, 'a', local),
-      userHome: state.home,
-      installHooks: (target) => {
-        markedDuringHooks = existsSync(marker)
-        return f.installHooks(target)
-      },
-      platform: 'linux'
-    })
-    expect(report.outcome).toBe('prepared')
-    expect(markedDuringHooks).toBe(false)
-    expect(existsSync(marker)).toBe(true)
   })
   itLinks("brings the user's later hooks into an account set up while they had none", async () => {
     const f = fixture()

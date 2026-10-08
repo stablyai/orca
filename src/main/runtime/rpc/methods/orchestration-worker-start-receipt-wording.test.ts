@@ -21,9 +21,7 @@ import {
 } from './orchestration-worker-start-mode'
 
 const STRUCTURED_PREFERENCE = {
-  experimentalNativeChat: true,
-  experimentalStructuredNativeChat: true,
-  openAgentTabsInChatByDefault: true
+  experimentalNativeChat: true
 } as const
 
 function structuredReceipt(): WorkerStartModeReceipt {

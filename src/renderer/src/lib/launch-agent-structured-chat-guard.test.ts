@@ -82,8 +82,6 @@ const store = {
     agentDefaultEnv: {},
     activeRuntimeEnvironmentId: null,
     experimentalNativeChat: true,
-    experimentalStructuredNativeChat: true,
-    openAgentTabsInChatByDefault: true,
     nativeChatSessionOptions: undefined as
       | Record<
           string,
@@ -178,9 +176,8 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
       : mockCallStructuredAgentSession(target, method, params)
 }))
 
-/** Structured adoption creates the tab in terminal mode and flips it to chat once
- *  Codex is ready; the bridge stamps `viewMode: 'chat'` on the tab up front. That
- *  difference is the only observable signal that the availability guard ran. */
+/** Structured adoption creates a terminal tab and flips it to chat once Codex is ready.
+ *  The absence of an initial chat mode shows that the availability guard ran. */
 describe('structured chat adoption guard on the launch path', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -247,7 +244,7 @@ describe('structured chat adoption guard on the launch path', () => {
     mockCreateSupport.mockResolvedValue({ supported: true })
     mockToastError.mockReset()
     hostCapabilities = STRUCTURED_HOST_CAPABILITIES
-    store.settings.openAgentTabsInChatByDefault = true
+    store.settings.experimentalNativeChat = true
     store.settings.nativeChatSessionOptions = undefined
   })
 
@@ -409,7 +406,7 @@ describe('structured chat adoption guard on the launch path', () => {
   /** The toggle is hidden under Terminal chat but its persisted value survives, so the launch
    *  path must re-check the default view rather than trust a stale opt-in. */
   it('ignores a stale structured opt-in while the default view is Terminal chat', async () => {
-    store.settings.openAgentTabsInChatByDefault = false
+    store.settings.experimentalNativeChat = false
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     const result = launchAgentInNewTab({
@@ -675,10 +672,13 @@ describe('structured chat adoption guard on the launch path', () => {
 
     launchAgentInNewTab({ requestId: 'request-18', agent: 'codex', worktreeId: 'wt-1' })
 
-    expect(mockCreateTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
-      launchAgent: 'codex',
-      viewMode: 'chat'
-    })
+    expect(mockCreateTab).toHaveBeenCalledWith(
+      'wt-1',
+      undefined,
+      undefined,
+      expect.objectContaining({ launchAgent: 'codex' })
+    )
+    expect(mockCreateTab.mock.calls[0]?.[3]).not.toHaveProperty('viewMode')
     expect(mockWaitForAgentReady).not.toHaveBeenCalled()
   })
 
@@ -688,10 +688,13 @@ describe('structured chat adoption guard on the launch path', () => {
 
     launchAgentInNewTab({ requestId: 'request-19', agent: 'codex', worktreeId: 'wt-1' })
 
-    expect(mockCreateTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
-      launchAgent: 'codex',
-      viewMode: 'chat'
-    })
+    expect(mockCreateTab).toHaveBeenCalledWith(
+      'wt-1',
+      undefined,
+      undefined,
+      expect.objectContaining({ launchAgent: 'codex' })
+    )
+    expect(mockCreateTab.mock.calls[0]?.[3]).not.toHaveProperty('viewMode')
     expect(mockWaitForAgentReady).not.toHaveBeenCalled()
   })
 })

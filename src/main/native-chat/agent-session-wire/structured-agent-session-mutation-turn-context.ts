@@ -32,7 +32,6 @@ export function mutationTurnContext<TValue>(
         .then(() => undefined),
     resolvedBy: request.callerKey,
     publish: () => request.publish(journal),
-    ...(request.providerChildPhase ? { providerChildPhase: request.providerChildPhase } : {}),
     now: () => request.now()
   }
 }

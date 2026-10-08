@@ -96,7 +96,6 @@ describe('runtime pty spawn preflight: Claude account routing in a WSL pane', ()
       new ClaudeProfileRouter({
         getSettings: () => getDefaultSettings('/tmp'),
         dataRoot: '/data/orca',
-        env: {},
         runSetup
       })
     )

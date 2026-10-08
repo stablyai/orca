@@ -22,7 +22,7 @@ import { createAgentSessionOperationId } from '@/runtime/agent-session-operation
 import { isAgentLaunchResult } from '../../../shared/agent-launch-intent'
 import { AGENT_LAUNCH_TAB_CLOSED_CODE } from '../../../shared/agent-launch-tab-closed'
 import { makePaneKey } from '../../../shared/stable-pane-id'
-import { prefersStructuredNativeChatByDefault } from '../../../shared/structured-native-chat-launch-route'
+import { isNativeChatEnabled } from '../../../shared/structured-native-chat-launch-route'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { LaunchSource } from '../../../shared/telemetry-events'
 import type { Tab } from '../../../shared/tab-types'
@@ -139,7 +139,7 @@ async function settleLaunch(
 /** Where the host could turn a launch into a chat (chat is the default), this window's paste has no
  *  terminal to go to, so such a launch keeps main's own path. */
 export function windowMakesHostLaunchTab(): boolean {
-  return !prefersStructuredNativeChatByDefault(useAppStore.getState().settings)
+  return !isNativeChatEnabled(useAppStore.getState().settings)
 }
 
 export function launchAgentThroughHost(args: HostAgentLaunchArgs): {

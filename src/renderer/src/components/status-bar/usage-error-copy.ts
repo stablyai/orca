@@ -81,15 +81,6 @@ function getDelegatedCliRefreshProvider(
   return p.provider === 'grok' || p.provider === 'kimi' ? p.provider : null
 }
 
-/** System Default's login expired on the server: Claude refreshes it the next time it runs. */
-export function isClaudeUsageWaitingForClaude(p: ProviderRateLimits): boolean {
-  return (
-    p.provider === 'claude' &&
-    p.usageMetadata?.failureKind === 'stale-token' &&
-    p.usageMetadata.authProvenance === 'system'
-  )
-}
-
 export function getProviderUsageStatusLabel(p: ProviderRateLimits): string {
   const delegatedCliProvider = getDelegatedCliRefreshProvider(p)
   if (delegatedCliProvider === 'grok') {
@@ -100,20 +91,12 @@ export function getProviderUsageStatusLabel(p: ProviderRateLimits): string {
   }
   if (p.provider === 'claude') {
     switch (p.usageMetadata?.failureKind) {
-      // Why: only an older host, which still defers a refresh for a live session, reports this.
       case 'deferred-by-live-session':
         return translate(
           'auto.components.status.bar.tooltip.0d8d7cfe15',
           'Waiting for Claude session'
         )
-      // Why: Orca never refreshes a Claude login; only an older host that still does reports the other kinds.
       case 'stale-token':
-        return isClaudeUsageWaitingForClaude(p)
-          ? translate(
-              'auto.components.status.bar.tooltip.claude.waiting.label',
-              'Updates when Claude runs'
-            )
-          : translate('auto.components.status.bar.tooltip.claude.expired.label', 'Sign-in expired')
       case 'refreshable-credentials-without-token':
       case 'delegated-refresh-required':
         return translate('auto.components.status.bar.tooltip.1804cd8c3f', 'Refreshing sign-in')
@@ -124,9 +107,7 @@ export function getProviderUsageStatusLabel(p: ProviderRateLimits): string {
       case 'cli-unavailable':
       case 'usage-unavailable':
         return translate('auto.components.status.bar.tooltip.f8b8dbed85', 'Usage unavailable')
-      // Why: the host reports this only for a selected account whose own profile has no login.
       case 'missing-credentials':
-        return translate('accounts.claude.usageSignInLabel', 'Sign in again')
       case 'missing-scope':
       case 'no-subscription':
       case 'parse':
@@ -190,22 +171,12 @@ export function getProviderUsageErrorMessage(p: ProviderRateLimits): string {
   }
   if (p.provider === 'claude') {
     switch (p.usageMetadata?.failureKind) {
-      // Why: only an older host, which still defers a refresh for a live session, reports this.
       case 'deferred-by-live-session':
         return translate(
           'auto.components.status.bar.tooltip.3d3c9c0c1f',
           'Claude usage will refresh after the live Claude terminal rotates its credentials.'
         )
       case 'stale-token':
-        return isClaudeUsageWaitingForClaude(p)
-          ? translate(
-              'auto.components.status.bar.tooltip.claude.waiting.message',
-              'Claude usage updates the next time Claude runs.'
-            )
-          : translate(
-              'auto.components.status.bar.tooltip.claude.expired.message',
-              'Claude usage has expired. Start Claude in this account to refresh it.'
-            )
       case 'refreshable-credentials-without-token':
       case 'delegated-refresh-required':
         return translate(
@@ -224,11 +195,6 @@ export function getProviderUsageErrorMessage(p: ProviderRateLimits): string {
           'auto.components.status.bar.tooltip.cabdc2a9e0',
           'Claude sign-in credentials could not be read.'
         )
-      case 'missing-credentials':
-        return translate(
-          'accounts.claude.usageSignInMessage',
-          'The selected Claude account needs you to sign in again. Open Settings > AI Provider Accounts, or choose System default.'
-        )
       case 'server':
       case 'parse':
       case 'usage-unavailable':
@@ -237,6 +203,7 @@ export function getProviderUsageErrorMessage(p: ProviderRateLimits): string {
           'auto.components.status.bar.tooltip.a7517cccb6',
           'Claude usage is unavailable right now.'
         )
+      case 'missing-credentials':
       case 'no-subscription':
       case 'rate-limited':
       case 'unknown':

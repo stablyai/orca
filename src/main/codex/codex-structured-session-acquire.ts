@@ -158,6 +158,7 @@ export async function acquireCodexStructuredSession(input: {
             Buffer.byteLength(JSON.stringify(payload ?? null), 'utf8')
           ),
         onSpawned: spawnIdentity.onSpawned,
+        ...(acquireInput.onOutput ? { onOutput: acquireInput.onOutput } : {}),
         onExit: (error, exit) => {
           try {
             handleCodexSessionExit({

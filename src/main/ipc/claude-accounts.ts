@@ -1,10 +1,10 @@
 import { ipcMain } from 'electron'
-import type { ClaudeAccountService } from '../claude-accounts/service'
+import type { ClaudeAccountAddTarget, ClaudeAccountService } from '../claude-accounts/service'
 import type { ClaudeAccountSelectionTarget } from '../claude-accounts/runtime-selection'
 
 export function registerClaudeAccountHandlers(claudeAccounts: ClaudeAccountService): void {
   ipcMain.handle('claudeAccounts:list', () => claudeAccounts.listAccounts())
-  ipcMain.handle('claudeAccounts:add', (_event, args?: ClaudeAccountSelectionTarget) =>
+  ipcMain.handle('claudeAccounts:add', (_event, args?: ClaudeAccountAddTarget) =>
     claudeAccounts.addAccount(args)
   )
   ipcMain.handle('claudeAccounts:cancelPendingLogin', () => claudeAccounts.cancelPendingLogin())
@@ -16,9 +16,11 @@ export function registerClaudeAccountHandlers(claudeAccounts: ClaudeAccountServi
   )
   ipcMain.handle(
     'claudeAccounts:select',
-    (_event, args: { accountId: string | null } & ClaudeAccountSelectionTarget) =>
-      args.runtime
-        ? claudeAccounts.selectAccountForTarget(args.accountId, args)
-        : claudeAccounts.selectAccount(args.accountId)
+    (_event, args: { accountId: string | null } & ClaudeAccountSelectionTarget) => {
+      if (!args.runtime) {
+        return claudeAccounts.selectAccount(args.accountId)
+      }
+      return claudeAccounts.selectAccountForTarget(args.accountId, args)
+    }
   )
 }

@@ -104,8 +104,11 @@ export class StructuredAgentSessionHost {
       (sessionId) => this.lifetime.conversation(sessionId),
       this.clientDelivery.readChildWork
     )
-    this.runtimeState = new StructuredAgentSessionHostRuntimeState(deps, this.sessions, (id, e) =>
-      this.eventRecovery.recoverAfterSinkFailure(id, e)
+    this.runtimeState = new StructuredAgentSessionHostRuntimeState(
+      deps,
+      this.sessions,
+      (id, e) => this.eventRecovery.recoverAfterSinkFailure(id, e),
+      (expired) => this.lifetime.expireStartup(expired)
     )
     this.reconcileLeases = createRestartReconciler({
       store: deps.store,
@@ -213,13 +216,7 @@ export class StructuredAgentSessionHost {
   /** Every agent this runtime registered: what `agentSession.agents` publishes. */
   agentDefinitions = () => this.deps.agents.definitions()
 
-  /** Saved chats can outlive their registration; both vocabularies bound a client's audience. */
-  knownAgentIds = (): readonly string[] => [
-    ...new Set([
-      ...this.deps.agents.definitions().map(({ agent }) => agent),
-      ...this.deps.store.listRecords().map(({ provider }) => provider)
-    ])
-  ]
+  knownAgentIds = (): readonly string[] => providerSupport.knownAgentIds(this.deps)
 
   private readonly tabs = sessionTabs.createStructuredAgentSessionTabSurface(
     this,
@@ -294,6 +291,7 @@ export class StructuredAgentSessionHost {
       stopAgent: (sessionId, ending) => this.lifetime.stopAgent(sessionId, ending),
       wakeQueuedDrain: (sessionId) => this.queued.drain.schedule(sessionId),
       acquireAborts: this.runtimeState.acquireAborts,
+      optionRevisions: this.runtimeState.optionRevisions,
       now: () => this.now()
     }
   }

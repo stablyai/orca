@@ -116,16 +116,6 @@ const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopy
         'components.native-chat.failureWords.historyInOtherAccount',
         COPY.historyInOtherAccount
       ),
-    claudeAccountFolderMissing: () =>
-      translate(
-        'components.native-chat.failureWords.claudeAccountFolderMissing',
-        COPY.claudeAccountFolderMissing
-      ),
-    claudeAccountSetupFailed: () =>
-      translate(
-        'components.native-chat.failureWords.claudeAccountSetupFailed',
-        COPY.claudeAccountSetupFailed
-      ),
     agentCommandNotRunnable: (values) =>
       translate(
         'components.native-chat.failureWords.agentCommandNotRunnable',

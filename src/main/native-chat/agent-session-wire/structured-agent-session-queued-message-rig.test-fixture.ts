@@ -169,11 +169,17 @@ export async function createQueuedMessageTestRig(
     }))
   }
 
-  /** A first send that keeps the session working until the test settles it. */
+  /** A first send that keeps the session working until the test settles it. A starting child
+   *  proves its start first, as the host hands it nothing before. */
   async function workingSend(): Promise<string> {
     const { id, result } = send('work on this')
     await result
-    await eventually(async () => expect((await submission(id))?.handedOverAt).toBeDefined())
+    await eventually(async () => {
+      if (host.collaboratorsForTests().sessions.get(SESSION)?.child?.phase === 'starting') {
+        await emitStarted()
+      }
+      expect((await submission(id))?.handedOverAt).toBeDefined()
+    })
     return id
   }
 
@@ -241,6 +247,27 @@ export async function createQueuedMessageTestRig(
     })
   }
 
+  /** The starting child proves its start, as a publish-first provider's `started` event does: the
+   *  host hands it what it held. */
+  async function proveStart(): Promise<void> {
+    await eventually(() =>
+      expect(host.collaboratorsForTests().sessions.get(SESSION)?.child?.phase).toBe('starting')
+    )
+    await emitStarted()
+  }
+
+  function emitStarted(): Promise<void> {
+    return host.handleAdapterEvent({
+      type: 'started',
+      sessionId: SESSION,
+      fence: store.getRecord(SESSION)!.lease.runtimeFence,
+      acquisitionGeneration: 'generation-1',
+      reportedOptions: { model: 'default' },
+      restoreSkippedOptions: [],
+      optionRevision: host.collaboratorsForTests().runtimeState.optionRevisions.current(SESSION)
+    })
+  }
+
   async function dispose(): Promise<void> {
     await host.flushAllStreamedEvents()
     await rm(root, { recursive: true, force: true })
@@ -278,6 +305,7 @@ export async function createQueuedMessageTestRig(
     queuePause,
     restartOffers,
     resume,
+    proveStart,
     dispose
   }
 }
