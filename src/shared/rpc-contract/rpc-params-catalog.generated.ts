@@ -23,7 +23,10 @@ import {
   PairingGetEndpointsParamsSchema,
   PairingProvisionRelayParamsSchema
 } from '../mobile-relay-credential-contract'
-import { MobileRelayHostWorktreesParamsSchema } from '../mobile-relay-hosts-contract'
+import {
+  MobileRelayHostWorktreeParamsSchema,
+  MobileRelayHostWorktreesParamsSchema
+} from '../mobile-relay-hosts-contract'
 import { MobileWebBundleChunkParamsSchema } from '../mobile-web-bundle/bundle-rpc-contract'
 import { OrcadMigrationSnapshotChunkRequestSchema } from '../orcad-migration-scrollback'
 import { OrcadTerminalCensusParamsSchema } from '../orcad-terminal-census'
@@ -1032,6 +1035,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'markdown.readTab': ActivateTab,
   'markdown.saveTab': SaveMarkdownTab,
   'mobileRelay.hosts.list': null,
+  'mobileRelay.hosts.sleepWorktree': MobileRelayHostWorktreeParamsSchema,
+  'mobileRelay.hosts.wakeSleepingAgents': MobileRelayHostWorktreeParamsSchema,
   'mobileRelay.hosts.worktrees': MobileRelayHostWorktreesParamsSchema,
   'mobileWeb.bundle.chunk': MobileWebBundleChunkParamsSchema,
   'mobileWeb.bundle.manifest': null,

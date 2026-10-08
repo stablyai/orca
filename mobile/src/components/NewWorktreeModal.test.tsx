@@ -44,6 +44,7 @@ vi.mock('./MobileAgentIcon', () => ({ MobileAgentIcon: 'MobileAgentIcon' }))
 vi.mock('./TaskProviderLogo', () => ({ TaskProviderLogo: 'TaskProviderLogo' }))
 
 import { setCachedRepos } from '../cache/repo-cache'
+import { recordHostDescriptor } from '../transport/host-descriptor-store'
 import { getLocalExecutionHostLabel } from '../../../src/shared/execution-host'
 import { NewWorktreeModal } from './NewWorktreeModal'
 
@@ -73,6 +74,15 @@ function sourceInputs(renderer: ReactTestRenderer) {
     (node) =>
       node.type === 'TextInput' && node.props.placeholder === 'Type a name or search a source'
   )
+}
+
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the modal only sends requests.
+const requestsOnly = (sendRequest: unknown) => ({ sendRequest }) as unknown as RpcClient
+
+function runTargetPicker(renderer: ReactTestRenderer) {
+  return renderer.root
+    .findAll((node) => node.type === 'PickerListDrawer')
+    .find((node) => node.props.title === 'Run on')!
 }
 
 async function flushUpdates(): Promise<void> {
@@ -304,6 +314,128 @@ describe('NewWorktreeModal project targets', () => {
     expect(renderer.root.findAll((node) => node.props.label === 'Workspace name')).toHaveLength(1)
     expect(sendRequest).toHaveBeenCalledWith('preflight.detectAgents')
     expect(sendRequest).not.toHaveBeenCalledWith('ssh.getState', expect.anything())
+  })
+
+  it("creates a server repo's workspace on that server and names it for the route", async () => {
+    const serverRepo = { ...repos[0]!, id: 'server-repo', path: '/srv/orca' }
+    const serverSshRepo = { ...serverRepo, id: 'server-ssh', connectionId: 'its-own-ssh' }
+    const reply = (method: string, listed: unknown[], hostPlatform: string) => {
+      if (method === 'repo.list') {
+        return Promise.resolve({ ok: true, result: { repos: listed } })
+      }
+      if (method === 'status.get') {
+        return Promise.resolve({ ok: true, result: { hostPlatform } })
+      }
+      if (method === 'worktree.create') {
+        return Promise.resolve({
+          ok: true,
+          result: { worktree: { id: 'srv-wt', displayName: 'srv-wt', path: '/srv/orca-wt' } }
+        })
+      }
+      if (method === 'settings.get') {
+        return Promise.resolve({ ok: true, result: { settings: {} } })
+      }
+      return Promise.resolve({ ok: true, result: {} })
+    }
+    const desktop = vi.fn((method: string) => reply(method, repos, 'darwin'))
+    const server = vi.fn((method: string) => reply(method, [serverRepo, serverSshRepo], 'linux'))
+    const onCreated = vi.fn()
+    recordHostDescriptor('host-1', { machineName: null, platform: 'darwin' })
+
+    await act(async () => {
+      renderer = create(
+        createElement(NewWorktreeModal, {
+          visible: true,
+          client: requestsOnly(desktop),
+          serverClients: new Map([['runtime:env-1', requestsOnly(server)]]),
+          hostId: 'host-1',
+          onCreated,
+          onClose: () => {}
+        })
+      )
+    })
+    await flushUpdates()
+
+    const runTargets = pickerItems(renderer, 'Run on')
+    expect(runTargets.map((item) => item.detail)).toEqual(['/src/orca', '/srv/orca'])
+    const serverTarget = runTargetPicker(renderer)
+    await act(async () => serverTarget.props.onSelect(serverTarget.props.items[1]))
+    await flushUpdates()
+    expect(pickerItems(renderer, 'Run on')[0]?.label).toBe(LOCAL_HOST_LABEL)
+    act(() => sourceInputs(renderer)[0]!.props.onChangeText('srv-wt'))
+    const form = renderer.root.find((node) => typeof node.props.onCreate === 'function')
+    await act(async () => form.props.onCreate())
+    await flushUpdates()
+
+    expect(server).toHaveBeenCalledWith(
+      'worktree.create',
+      expect.objectContaining({ repo: 'id:server-repo' }),
+      expect.anything()
+    )
+    expect(desktop).not.toHaveBeenCalledWith(
+      'worktree.create',
+      expect.anything(),
+      expect.anything()
+    )
+    expect(onCreated).toHaveBeenCalledWith('srv-wt', expect.any(String), undefined, 'runtime:env-1')
+  })
+
+  it("lists the desktop's repos at once while a server has not answered", async () => {
+    const desktop = vi.fn((method: string) =>
+      method === 'repo.list'
+        ? Promise.resolve({ ok: true, result: { repos } })
+        : new Promise(() => {})
+    )
+    const hungServer = vi.fn(() => new Promise(() => {}))
+
+    await act(async () => {
+      renderer = create(
+        createElement(NewWorktreeModal, {
+          visible: true,
+          client: requestsOnly(desktop),
+          serverClients: new Map([['runtime:env-1', requestsOnly(hungServer)]]),
+          hostId: 'host-cold',
+          onCreated: () => {},
+          onClose: () => {}
+        })
+      )
+    })
+    await flushUpdates()
+
+    expect(hungServer).toHaveBeenCalledWith('repo.list')
+    expect(pickerItems(renderer, 'Run on').map((item) => item.detail)).toEqual(['/src/orca'])
+  })
+
+  it('keeps a server repo picked when the desktop lists a repo with the same id', async () => {
+    const serverRepo = { ...repos[0]!, path: '/srv/orca' }
+    const listing = (listed: unknown[]) =>
+      vi.fn((method: string) =>
+        method === 'repo.list'
+          ? Promise.resolve({ ok: true, result: { repos: listed } })
+          : new Promise(() => {})
+      )
+
+    await act(async () => {
+      renderer = create(
+        createElement(NewWorktreeModal, {
+          visible: true,
+          client: requestsOnly(listing(repos)),
+          serverClients: new Map([['runtime:env-1', requestsOnly(listing([serverRepo]))]]),
+          hostId: 'host-1',
+          onCreated: () => {},
+          onClose: () => {}
+        })
+      )
+    })
+    await flushUpdates()
+    const picker = runTargetPicker(renderer)
+    await act(async () => picker.props.onSelect(picker.props.items[1]))
+    await flushUpdates()
+
+    expect(runTargetPicker(renderer).props.selectedId).toBe('runtime:env-1')
+    expect(
+      renderer.root.find((node) => node.props.runTarget !== undefined).props.runTarget.detail
+    ).toBe('/srv/orca')
   })
 
   it('ignores a stale repo list after the client changes', async () => {

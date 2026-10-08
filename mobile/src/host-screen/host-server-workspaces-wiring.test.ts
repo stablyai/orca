@@ -97,6 +97,8 @@ type Screen = {
   notice: () => string | null
   catalogError: () => string | null
   pin: (worktreeId: string) => void
+  sleep: (worktreeId: string) => void
+  slept: () => ReadonlySet<string> | undefined
   serverWorkspaces: () => unknown
   swapClient: (next: FakeSession) => Promise<void>
   navigations: string[]
@@ -172,6 +174,11 @@ async function mountScreen(first: FakeSession, hostCapabilities: string[]): Prom
       act(() => {
         held.actions?.togglePin(held.rows.find((entry) => entry.worktreeId === worktreeId)!)
       }),
+    sleep: (worktreeId) =>
+      act(() => {
+        held.actions?.sleepWorktree(held.rows.find((entry) => entry.worktreeId === worktreeId)!)
+      }),
+    slept: () => held.state?.sleptIds,
     serverWorkspaces: () => held.state?.serverWorkspaces,
     swapClient: async (next) => {
       client = next
@@ -310,6 +317,43 @@ describe("a desktop's server workspaces on the phone", () => {
       { executionHost: 'runtime:vm' }
     )
     expect(screen.rows().find((entry) => entry.worktreeId === 'runtime:vm-wt')?.isPinned).toBe(true)
+  })
+
+  it('sleeps a server workspace through the desktop, whose renderer runs the sleep', async () => {
+    const client = desktop()
+    const screen = await mountScreen(client, RELAYS)
+    screen.sleep('runtime:vm-wt')
+    screen.sleep('mac-wt')
+    const sleeps = client.sendRequest.mock.calls.filter(([method]) => method.includes('leep'))
+    expect(sleeps.map(([method, params]) => [method, params])).toEqual([
+      ['mobileRelay.hosts.sleepWorktree', { hostId: 'runtime:vm', worktreeId: 'runtime:vm-wt' }],
+      ['worktree.sleep', { worktree: 'id:mac-wt' }]
+    ])
+  })
+
+  it('shows a server workspace slept until the server itself reports it so', async () => {
+    let live = 2
+    const client = desktop({
+      hostWorktrees: (hostId) => ({
+        worktrees: [{ ...row(`${hostId}-wt`, hostId), liveTerminalCount: live }],
+        stale: false,
+        fetchedAt: 1
+      })
+    })
+    const screen = await mountScreen(client, RELAYS)
+    const serverRow = () => screen.rows().find((entry) => entry.worktreeId === 'runtime:vm-wt')
+    expect(serverRow()?.liveTerminalCount).toBe(2)
+
+    screen.sleep('runtime:vm-wt')
+    await screen.poll()
+    // The desktop's own list never carries the server's row, so it cannot confirm or undo the sleep.
+    expect(serverRow()?.liveTerminalCount).toBe(0)
+    expect(screen.slept()?.size).toBe(1)
+
+    live = 0
+    await screen.poll()
+    expect(screen.slept()?.size).toBe(0)
+    expect(serverRow()?.liveTerminalCount).toBe(0)
   })
 
   it('reads a replaced client\u2019s servers at once, and keeps an unchanged poll\u2019s list', async () => {

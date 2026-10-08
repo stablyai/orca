@@ -82,8 +82,11 @@ export function applyServerWorkspaces(
     (host, index) =>
       fetched.rows[index] ?? previous.worktrees.filter((row) => row.hostId === host.hostId)
   )
-  const unchanged =
-    JSON.stringify(fetched.hosts) === JSON.stringify(previous.hosts) &&
-    areWorktreeListsEqual(worktrees, previous.worktrees)
-  return unchanged ? previous : { hosts: fetched.hosts, worktrees }
+  // Why kept: screens key per-server clients on `hosts`, which rows changing must not rebuild.
+  const hosts =
+    JSON.stringify(fetched.hosts) === JSON.stringify(previous.hosts)
+      ? previous.hosts
+      : fetched.hosts
+  const unchanged = hosts === previous.hosts && areWorktreeListsEqual(worktrees, previous.worktrees)
+  return unchanged ? previous : { hosts, worktrees }
 }

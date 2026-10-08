@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { worktreeActivate } from '../host-screen/host-screen-operations'
 import { headlessActivationNeedsHostRenderer } from '../worktree/worktree-activation-result'
+import { relayHostSleepingAgentWake } from '../worktree/server-workspace-operations'
 import { createInitialSessionAutoCreateState } from './use-initial-session-terminal-autocreate'
 import type { MobileSessionKeyboardStateModel } from './use-mobile-session-keyboard-state'
 import type { RpcResponse } from '../transport/types'
@@ -13,6 +14,8 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
     isFloatingWorkspaceRoute,
     connState,
     client,
+    desktopClient,
+    executionHost,
     setTerminals,
     terminalsRef,
     setSessionTabs,
@@ -115,17 +118,21 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
       timers.push(setTimeout(fn, ms))
     }
     void (async () => {
+      // Once per open: a server workspace hears from its server and from the desktop.
+      let headlessWakeShown = false
+      const reportHeadlessWake = (result: unknown): void => {
+        if (!disposed && !headlessWakeShown && headlessActivationNeedsHostRenderer(result)) {
+          headlessWakeShown = true
+          showToast('Open Orca on the host to wake sleeping agents.', 3000)
+        }
+      }
       // Why the reply rather than a verdict: both activations report through here, and only one of
       // them can fail to get a reply at all. Interpreting inside keeps the absent case spelled
       // `null` instead of a hand-built refusal that has to stay in step with the operation.
       const reportActivationOutcome = (response: RpcResponse | null): void => {
         const activation = response === null ? null : worktreeActivate.interpret(response)
-        if (
-          !disposed &&
-          activation?.accepted === true &&
-          headlessActivationNeedsHostRenderer(activation.value)
-        ) {
-          showToast('Open Orca on the host to wake sleeping agents.', 3000)
+        if (activation?.accepted === true) {
+          reportHeadlessWake(activation.value)
         }
       }
       if (client && created !== '1' && !isFloatingWorkspaceRoute) {
@@ -138,6 +145,18 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
           })
           .then(reportActivationOutcome)
           .catch(() => null)
+        // Why: the desktop's renderer holds a server workspace's slept agents, as it does its own.
+        if (executionHost && desktopClient) {
+          void relayHostSleepingAgentWake
+            .request(desktopClient, { hostId: executionHost, worktreeId })
+            .then((response) => {
+              const wake = relayHostSleepingAgentWake.interpret(response)
+              if (wake.accepted) {
+                reportHeadlessWake(wake.value)
+              }
+            })
+            .catch(() => null)
+        }
       }
       if (disposed) {
         return
@@ -185,6 +204,8 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
     client,
     connState,
     created,
+    desktopClient,
+    executionHost,
     fetchTerminals,
     ensureSessionTabs,
     isFloatingWorkspaceRoute,

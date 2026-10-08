@@ -179,6 +179,8 @@ export const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'markdown.readTab',
   'markdown.saveTab',
   'mobileRelay.hosts.list',
+  'mobileRelay.hosts.sleepWorktree',
+  'mobileRelay.hosts.wakeSleepingAgents',
   'mobileRelay.hosts.worktrees',
   'mobileWeb.bundle.chunk',
   'mobileWeb.bundle.manifest',

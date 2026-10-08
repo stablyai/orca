@@ -1,4 +1,5 @@
 import { View } from 'react-native'
+import { getRepoExecutionHostId } from '../../../src/shared/execution-host'
 import { Monitor } from 'lucide-react-native'
 import type { SmartModeAvailabilityInput } from '../tasks/mobile-smart-source-modes'
 import type { PasteRepoCandidate } from '../tasks/smart-source-paste-intent'
@@ -27,6 +28,7 @@ export function NewWorktreeModalDrawers(props: {
   composer: Composer
   sourceAvailability: SmartModeAvailabilityInput
   selectedRepo: MobileWorkspaceRepo | null
+  /** The picked repo's host's repos: a source can switch repos only within that host. */
   repos: MobileWorkspaceRepo[]
   pasteRepos: PasteRepoCandidate[]
   sshReady: boolean
@@ -85,7 +87,7 @@ export function NewWorktreeModalDrawers(props: {
         visible={props.visible && props.drawerView === 'runTarget'}
         title="Run on"
         items={props.runTargetPickerItems}
-        selectedId={props.selectedRepo?.id ?? ''}
+        selectedId={props.selectedRepo ? getRepoExecutionHostId(props.selectedRepo) : ''}
         onSelect={(item) => props.onRepoChange(item.repo)}
         onClose={props.onTransitionToForm}
         renderIcon={() => <Monitor size={16} color={colors.textMuted} />}

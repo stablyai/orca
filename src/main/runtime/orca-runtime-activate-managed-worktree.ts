@@ -104,31 +104,33 @@ export class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListM
       await this.refreshMobileSessionPtyRecords()
       this.notifyMobileSessionTabsChanged(worktree.id)
       // Why: a phone open must also wake the worktree's slept agents (experimental
-      // agent sleep). Only the host renderer holds the sleeping records + wake
-      // authority, so fire-and-forget ask it — mobile-scoped so web/desktop are
-      // unaffected. Headless serve has no renderer to wake anything, so report
-      // that explicitly instead of letting mobile assume the agents resumed.
+      // agent sleep) — mobile-scoped so web/desktop are unaffected.
       if (opts.clientKind === 'mobile') {
-        if (this.getAvailableAuthoritativeWindow()) {
-          this.notifier?.resumeSleepingAgents?.(worktree.id)
-          sleepingAgentWake = 'requested'
-        } else if (
-          // Why: sleeping records are partitioned by execution host; reading
-          // only the local partition would miss slept agents on SSH-host
-          // worktrees and skip the headless warning for them.
-          Object.values(
-            this.store?.getWorkspaceSession?.(getRepoExecutionHostId(repo))
-              .sleepingAgentSessionsByPaneKey ?? {}
-          ).some((record) => record.worktreeId === worktree.id)
-        ) {
-          // Why: headless is only degraded when this worktree actually has a
-          // persisted resume record. Ordinary mobile activation must not show
-          // an unsupported warning merely because no desktop window is open.
-          sleepingAgentWake = 'unsupported-headless'
-        }
+        sleepingAgentWake = this.requestSleepingAgentWake(worktree.id, getRepoExecutionHostId(repo))
       }
     }
     return { repoId: repo.id, worktreeId: worktree.id, activated: true, sleepingAgentWake }
+  }
+
+  /**
+   * Wakes a worktree's slept agents for a phone. Only the host renderer holds the sleeping records
+   * and wake authority, so this asks it; with no renderer (headless serve, or the window closed)
+   * a worktree that has a persisted record reports that nothing could wake it.
+   */
+  requestSleepingAgentWake(
+    worktreeId: string,
+    executionHostId: string
+  ): 'requested' | 'unsupported-headless' | 'not-applicable' {
+    if (this.getAvailableAuthoritativeWindow()) {
+      this.notifier?.resumeSleepingAgents?.(worktreeId)
+      return 'requested'
+    }
+    // Why the host's partition: sleeping records are partitioned by execution host.
+    const records =
+      this.store?.getWorkspaceSession?.(executionHostId).sleepingAgentSessionsByPaneKey ?? {}
+    return Object.values(records).some((record) => record.worktreeId === worktreeId)
+      ? 'unsupported-headless'
+      : 'not-applicable'
   }
 
   protected async buildStartupForDraft(

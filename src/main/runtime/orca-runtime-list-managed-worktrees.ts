@@ -176,7 +176,12 @@ export class OrcaRuntimeWithListManagedWorktrees extends OrcaRuntimeWithRestoreS
     // Why: sleep is renderer-initiated on desktop (it tears down tab state
     // before killing PTYs). The notifier tells the renderer to run its own
     // sleep flow so all cleanup happens in the correct order.
-    this.notifier?.sleepWorktree(worktree.id)
-    return { worktreeId: worktree.id }
+    return this.requestWorktreeSleep(worktree.id)
+  }
+
+  /** Asks the renderer to sleep a worktree it shows, from any host, through its own sleep flow. */
+  requestWorktreeSleep(worktreeId: string): { worktreeId: string } {
+    this.notifier?.sleepWorktree(worktreeId)
+    return { worktreeId }
   }
 }

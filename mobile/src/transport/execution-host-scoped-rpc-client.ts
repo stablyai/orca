@@ -85,3 +85,21 @@ export function rpcClientForExecutionHost(
   }
   return routeHost && scopeRpcClientToExecutionHost(client, routeHost)
 }
+
+/** A scoped client for each of the desktop's servers this phone can reach now, by host. */
+export function reachableServerClients(
+  client: RpcClient | null,
+  hostCapabilities: readonly string[],
+  hosts: readonly { hostId: `runtime:${string}`; relay: string }[]
+): ReadonlyMap<ExecutionHostId, RpcClient> {
+  const clients = new Map<ExecutionHostId, RpcClient>()
+  if (!client || !relaysToServers(client, hostCapabilities)) {
+    return clients
+  }
+  for (const host of hosts) {
+    if (host.relay === 'ready') {
+      clients.set(host.hostId, scopeRpcClientToExecutionHost(client, host.hostId))
+    }
+  }
+  return clients
+}

@@ -1,7 +1,10 @@
+import { useMemo } from 'react'
 import { openExternalLink } from '../platform/external-link'
 import { Pressable, Text, View } from 'react-native'
 import { Check, Moon } from 'lucide-react-native'
 import { buildWorktreeNavigationActions } from '../agent-history/worktree-navigation-actions'
+import { workspaceRouteHref } from '../navigation/workspace-execution-host'
+import { reachableServerClients } from '../transport/execution-host-scoped-rpc-client'
 import { useWorkspaceServer } from '../transport/workspace-server'
 import { ActionSheetContent } from '../components/ActionSheetModal'
 import { BottomDrawer } from '../components/BottomDrawer'
@@ -10,7 +13,6 @@ import { NewWorktreeModalController } from '../components/NewWorktreeModalContro
 import { PickerModal } from '../components/PickerModal'
 import { colors } from '../theme/mobile-theme'
 import { hostNewWorktreeSessionRoute } from '../host-route-action-state'
-import { getWorktreeRowIdentity } from '../worktree/worktree-host-row-identity'
 import {
   WORKSPACE_GROUP_OPTIONS as GROUP_OPTIONS,
   WORKSPACE_SORT_OPTIONS as SORT_OPTIONS,
@@ -41,6 +43,10 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
     desktopCapabilities: hostCapabilities,
     executionHost: actionTarget?.hostId
   })
+  const serverClients = useMemo(
+    () => reachableServerClients(client, hostCapabilities, state.serverWorkspaces.hosts),
+    [client, hostCapabilities, state.serverWorkspaces.hosts]
+  )
 
   return (
     <>
@@ -183,16 +189,7 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
                       label: 'Sleep',
                       icon: Moon,
                       onPress: () => {
-                        if (client) {
-                          state.setSleptIds((prev) =>
-                            new Set(prev).add(getWorktreeRowIdentity(actionTarget))
-                          )
-                          void client
-                            .sendRequest('worktree.sleep', {
-                              worktree: `id:${actionTarget.worktreeId}`
-                            })
-                            .catch(() => null)
-                        }
+                        actions.sleepWorktree(actionTarget)
                         state.setActionTarget(null)
                       }
                     },
@@ -230,6 +227,7 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
         ref={state.newWorktreeModalRef}
         routeVisible={showNewWorktree}
         client={client}
+        serverClients={serverClients}
         hostId={hostId}
         existingWorktreePaths={existingWorktreePaths}
         existingWorktrees={state.worktrees}
@@ -239,10 +237,13 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
         onVisibleChange={(visible) => {
           state.newWorktreeModalVisibleRef.current = visible
         }}
-        onCreated={(worktreeId, worktreeName, warning) => {
+        onCreated={(worktreeId, worktreeName, warning, executionHost) => {
           void catalog.fetchWorktrees({ allowDuringModal: true })
           actions.navigateFromHostList(
-            hostNewWorktreeSessionRoute(hostId, worktreeId, worktreeName, warning)
+            workspaceRouteHref(
+              hostNewWorktreeSessionRoute(hostId, worktreeId, worktreeName, warning),
+              executionHost
+            )
           )
         }}
         onRouteVisibleChange={actions.setShowNewWorktreeVisible}

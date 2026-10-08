@@ -12,8 +12,11 @@ export const PAIRED_DESKTOP_METHODS = [
   'notifications.unsubscribe',
   'pairing.getEndpoints',
   'pairing.provisionRelay',
-  // The configured servers the desktop shows, and their workspace lists as it last fetched them.
+  // The configured servers the desktop shows, their workspace lists as it last fetched them, and
+  // the sleep and slept-agent wake its renderer owns for them.
   'mobileRelay.hosts.list',
+  'mobileRelay.hosts.sleepWorktree',
+  'mobileRelay.hosts.wakeSleepingAgents',
   'mobileRelay.hosts.worktrees',
   'speech.dictation.cancel',
   'speech.dictation.chunk',

@@ -2,6 +2,8 @@ import { z } from 'zod'
 import type { ExecutionHostHealth } from '../../../src/shared/execution-host-health'
 import { parseExecutionHostId } from '../../../src/shared/execution-host'
 import {
+  MOBILE_RELAY_HOST_SLEEP_WORKTREE_METHOD,
+  MOBILE_RELAY_HOST_WAKE_SLEEPING_AGENTS_METHOD,
   MOBILE_RELAY_HOST_WORKTREES_METHOD,
   MOBILE_RELAY_HOSTS_LIST_METHOD,
   type MobileRelayHost,
@@ -69,5 +71,30 @@ export const relayHostWorktreesRead = bindDeferredRpcOperation(
         stale: z.boolean().optional()
       })
     )
+  })
+)
+
+/** Sleeping a server's workspace on the desktop, whose renderer runs the sleep. Fire and forget. */
+export const relayHostWorktreeSleep = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'mobileRelay.host-sleep-worktree-or-skip',
+    method: MOBILE_RELAY_HOST_SLEEP_WORKTREE_METHOD,
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('relay-host-worktree-slept', z.unknown())
+  })
+)
+
+/**
+ * Waking a server workspace's slept agents on the desktop that holds them. Read like
+ * `worktree.activate`'s reply: only a headless verdict is looked at, by a total guard.
+ */
+export const relayHostSleepingAgentWake = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'mobileRelay.host-wake-sleeping-agents-or-skip',
+    method: MOBILE_RELAY_HOST_WAKE_SLEEPING_AGENTS_METHOD,
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('relay-host-sleeping-agents-woken', z.unknown())
   })
 )

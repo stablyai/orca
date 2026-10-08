@@ -87,8 +87,12 @@ describe('new workspace project targets', () => {
     const projectId = buildNewWorkspaceProjectOptions(repos)[0]?.id ?? null
 
     expect(buildNewWorkspaceRunTargetOptions(repos, projectId, 'darwin')).toEqual([
-      expect.objectContaining({ id: 'local-a', label: LOCAL_HOST_LABEL, detail: '/src/orca-a' }),
-      expect.objectContaining({ id: 'ssh', label: 'SSH · build-server', detail: '/home/dev/orca' })
+      expect.objectContaining({ id: 'local', label: LOCAL_HOST_LABEL, detail: '/src/orca-a' }),
+      expect.objectContaining({
+        id: 'ssh:build-server',
+        label: 'SSH · build-server',
+        detail: '/home/dev/orca'
+      })
     ])
   })
 })

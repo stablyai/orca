@@ -95,8 +95,9 @@ export function buildNewWorkspaceRunTargetOptions<TRepo extends WorkspaceRepo>(
     }
     const hostId = getRepoExecutionHostId(repo)
     if (!options.has(hostId)) {
+      // Keyed by host: a repo id names one repo per host, so two hosts can share one.
       options.set(hostId, {
-        id: repo.id,
+        id: hostId,
         ...getNewWorkspaceRunTarget(repo, localPlatform),
         repo
       })

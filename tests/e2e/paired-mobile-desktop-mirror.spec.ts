@@ -6,6 +6,7 @@
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
+import type { Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { launchPhoneMirrorTopology } from './helpers/phone-mirror-topology'
 import { openPairedSocket, type PairedMobileSocket } from './helpers/paired-mobile-client'
@@ -19,6 +20,14 @@ const WorktreeListSchema = z.object({
   worktrees: z.array(z.looseObject({ worktreeId: z.string(), path: z.string() }))
 })
 const CreatedTerminalSchema = z.object({ tab: z.looseObject({ terminal: z.string().nullable() }) })
+const CreatedTabSchema = z.object({ tab: z.looseObject({ id: z.string(), terminal: z.string() }) })
+const ReposSchema = z.object({
+  repos: z.array(z.looseObject({ id: z.string(), path: z.string() }))
+})
+const ServerTerminalsSchema = z.looseObject({
+  terminals: z.array(z.looseObject({ handle: z.string() }))
+})
+const ServerTabsSchema = z.looseObject({ tabs: z.array(z.looseObject({ id: z.string() })) })
 const SubscribedSchema = z.looseObject({ type: z.literal('subscribed'), streamId: z.number() })
 const HostsSchema = z.object({
   hosts: z.array(z.looseObject({ hostId: z.string(), relay: z.string() }))
@@ -299,6 +308,152 @@ test('phone paired with a desktop lists, opens and types into a workspace on its
       WorktreeListSchema
     )
     expect(reopened.worktrees.map((row) => row.path)).toContain(serverFolder)
+  } finally {
+    await dispose()
+  }
+})
+
+/** The terminal handles the desktop window shows for a workspace (its remote pty ids end in one). */
+function desktopTerminalHandles(desktop: { page: Page }, worktreeId: string): Promise<string[]> {
+  return desktop.page.evaluate(
+    (id) =>
+      (window.__store?.getState().tabsByWorktree[id] ?? []).map(
+        (tab) => tab.ptyId?.split('@@').at(-1) ?? ''
+      ),
+    worktreeId
+  )
+}
+
+test('phone tab, workspace and sleep actions on a server show on the server and the desktop', async (// oxlint-disable-next-line no-empty-pattern -- this test owns its topology launch.
+{}, testInfo) => {
+  test.setTimeout(180_000)
+  const serverFolder = testInfo.outputPath('server-folder')
+  mkdirSync(serverFolder, { recursive: true })
+  const serverRepo = testInfo.outputPath('server-repo')
+  mkdirSync(serverRepo, { recursive: true })
+  writeFileSync(path.join(serverRepo, 'README.md'), 'server repo\n')
+  const git = (...args: string[]) => execFileSync('git', args, { cwd: serverRepo, stdio: 'pipe' })
+  git('init', '-b', 'main')
+  git('add', 'README.md')
+  git('-c', 'user.name=E2E', '-c', 'user.email=e2e@test.local', 'commit', '-m', 'init')
+  const { host, desktop, phone, dispose } = await launchPhoneMirrorTopology(
+    { phoneTo: 'desktop' },
+    testInfo
+  )
+  try {
+    await host.client.call('repo.add', { path: serverFolder, kind: 'folder' })
+    await host.client.call('repo.add', { path: serverRepo, kind: 'git' })
+    const socket = await phone.openSocket()
+    const { hosts } = await call(
+      socket,
+      { id: 'hosts', method: 'mobileRelay.hosts.list', params: {} },
+      HostsSchema
+    )
+    const serverHostId = hosts[0]?.hostId ?? ''
+    // The new-workspace sheet lists the server's repos there and creates on it.
+    const { repos } = await call(
+      socket,
+      { id: 'repos', method: 'repo.list', params: {}, executionHost: serverHostId },
+      ReposSchema
+    )
+    const repoId = repos.find((repo) => repo.path === serverRepo)?.id ?? ''
+    expect(repoId, 'the server lists its own repo for the phone').not.toBe('')
+    await call(
+      socket,
+      {
+        id: 'create-workspace',
+        method: 'worktree.create',
+        params: { repo: `id:${repoId}`, name: 'from-phone', setupDecision: 'skip' },
+        executionHost: serverHostId
+      },
+      z.unknown()
+    )
+    await expect
+      .poll(async () =>
+        (await hostWorktrees(socket, serverHostId))?.worktrees.some((row) =>
+          row.path.endsWith('from-phone')
+        )
+      )
+      .toBe(true)
+    let worktreeId = ''
+    await expect
+      .poll(async () => {
+        const listed = await hostWorktrees(socket, serverHostId)
+        worktreeId = listed?.worktrees.find((row) => row.path === serverFolder)?.worktreeId ?? ''
+        return worktreeId
+      })
+      .not.toBe('')
+    const worktree = `id:${worktreeId}`
+    const serverTabs = async () =>
+      ServerTabsSchema.parse((await host.client.call('session.tabs.list', { worktree })).result)
+        .tabs
+    const serverTerminals = async () =>
+      ServerTerminalsSchema.parse(
+        (await host.client.call('terminal.list', { worktree })).result
+      ).terminals.map((terminal) => terminal.handle)
+    const create = (id: string) =>
+      call(
+        socket,
+        {
+          id,
+          method: 'session.tabs.createTerminal',
+          params: { worktree, activate: false, select: false, navigation: 'caller' },
+          executionHost: serverHostId
+        },
+        CreatedTabSchema
+      )
+    const { tab: kept } = await create('create-kept')
+    const { tab: closed } = await create('create-closed')
+    expect((await serverTabs()).map((tab) => tab.id)).toEqual(
+      expect.arrayContaining([kept.id, closed.id])
+    )
+    await expect
+      .poll(() => desktopTerminalHandles(desktop, worktreeId), { timeout: 30_000 })
+      .toEqual(expect.arrayContaining([kept.terminal, closed.terminal]))
+
+    await call(
+      socket,
+      {
+        id: 'close',
+        method: 'session.tabs.close',
+        params: { worktree, tabId: closed.id, reason: 'user' },
+        executionHost: serverHostId
+      },
+      z.unknown()
+    )
+    await expect
+      .poll(async () => (await serverTabs()).map((tab) => tab.id), { timeout: 30_000 })
+      .toEqual([kept.id])
+    await expect
+      .poll(() => desktopTerminalHandles(desktop, worktreeId), { timeout: 30_000 })
+      .toEqual([kept.terminal])
+
+    // Waking and sleeping are the desktop renderer's. The wake check proves delivery to it, not an
+    // agent resuming (none is slept here).
+    await desktop.page.evaluate(() => {
+      const woken: string[] = []
+      Object.assign(window, { __wokenWorktrees: woken })
+      window.api.ui.onResumeSleepingAgents(({ worktreeId }) => woken.push(worktreeId))
+    })
+    const target = { hostId: serverHostId, worktreeId }
+    const wake = await call(
+      socket,
+      { id: 'wake', method: 'mobileRelay.hosts.wakeSleepingAgents', params: target },
+      z.looseObject({ sleepingAgentWake: z.string() })
+    )
+    expect(wake.sleepingAgentWake).toBe('requested')
+    await expect
+      .poll(() => desktop.page.evaluate(() => Reflect.get(window, '__wokenWorktrees')))
+      .toEqual([worktreeId])
+    expect(await serverTerminals()).toEqual([kept.terminal])
+    await call(
+      socket,
+      { id: 'sleep', method: 'mobileRelay.hosts.sleepWorktree', params: target },
+      z.unknown()
+    )
+    // The desktop's sleep releases the workspace's processes on the server and keeps its tabs.
+    await expect.poll(serverTerminals, { timeout: 30_000 }).toEqual([])
+    expect(await desktopTerminalHandles(desktop, worktreeId)).toEqual([kept.terminal])
   } finally {
     await dispose()
   }

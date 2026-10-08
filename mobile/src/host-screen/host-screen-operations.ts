@@ -92,6 +92,17 @@ export const worktreePinWrite = bindDeferredRpcOperation(
   })
 )
 
+/** Sleeping a row. Fire and forget: the row shows slept at once, and nothing reads the reply. */
+export const worktreeSleep = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'worktree.sleep-or-skip',
+    method: 'worktree.sleep',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('worktree-slept', hostScreenUnreadReplySchema)
+  })
+)
+
 /** Deleting a row. Only acceptance is read: a refusal is what puts the row back. */
 export const worktreeRemove = bindDeferredRpcOperation(
   defineRpcOperation({

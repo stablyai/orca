@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { MOBILE_DESKTOP_RELAY_RUNTIME_CAPABILITY } from '../../../src/shared/mobile-desktop-relay-contract'
 import {
+  reachableServerClients,
   scopeRpcClientToExecutionHost,
   workspaceRouteExecutionHost
 } from './execution-host-scoped-rpc-client'
@@ -206,5 +207,20 @@ describe('scopeRpcClientToExecutionHost', () => {
     expect(workspaceRouteExecutionHost(fakeClient(), relays, 'local')).toBeUndefined()
     expect(workspaceRouteExecutionHost(fakeClient(), relays, 'ssh:box')).toBeUndefined()
     expect(workspaceRouteExecutionHost(fakeClient(), relays, undefined)).toBeUndefined()
+  })
+
+  it('offers only the servers the desktop can relay to now, each as its scoped view', () => {
+    const client = fakeClient()
+    const relays = [MOBILE_DESKTOP_RELAY_RUNTIME_CAPABILITY]
+    const hosts = [
+      { hostId: SERVER, relay: 'ready' },
+      { hostId: 'runtime:old', relay: 'update-needed' },
+      { hostId: 'runtime:down', relay: 'unavailable' }
+    ] as const
+    const clients = reachableServerClients(client, relays, hosts)
+    expect([...clients.keys()]).toEqual([SERVER])
+    expect(clients.get(SERVER)).toBe(scopeRpcClientToExecutionHost(client, SERVER))
+    expect(reachableServerClients(client, [], hosts).size).toBe(0)
+    expect(reachableServerClients(fakeClient(false), relays, hosts).size).toBe(0)
   })
 })

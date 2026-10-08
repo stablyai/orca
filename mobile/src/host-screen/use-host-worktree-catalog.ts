@@ -16,11 +16,16 @@ import { savePinnedIds } from '../storage/preferences'
 import type { FetchHostRepoMetadata } from './use-host-repo-metadata'
 import type { HostScreenState } from './use-host-screen-state'
 import { relaysToServers } from '../transport/execution-host-scoped-rpc-client'
+import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import {
   applyServerWorkspaces,
   fetchServerWorkspaces,
   NO_SERVER_WORKSPACES
 } from '../worktree/server-workspaces'
+
+function isServerHost(host: ExecutionHostId | undefined): boolean {
+  return host?.startsWith('runtime:') === true
+}
 
 export function useHostWorktreeCatalog(args: {
   client: RpcClient | null
@@ -77,6 +82,16 @@ export function useHostWorktreeCatalog(args: {
         const fetched = await fetchServerWorkspaces(requestClient)
         if (fetched && clientRef.current === requestClient) {
           setServerWorkspaces((previous) => applyServerWorkspaces(previous, fetched))
+          const read = new Set<ExecutionHostId>(
+            fetched.hosts.filter((_host, index) => fetched.rows[index]).map((host) => host.hostId)
+          )
+          setSleptIds((prev) =>
+            retainLiveSleptWorktreeIdentities(
+              prev,
+              fetched.rows.flatMap((rows) => rows ?? []),
+              (host) => host !== undefined && read.has(host)
+            )
+          )
         }
       } catch {
         // Keeps the rows shown; the next poll retries.
@@ -86,7 +101,7 @@ export function useHostWorktreeCatalog(args: {
         }
       }
     },
-    [hostCapabilities]
+    [hostCapabilities, setSleptIds]
   )
 
   const fetchWorktrees = useCallback(
@@ -149,7 +164,9 @@ export function useHostWorktreeCatalog(args: {
           )
 
           // Clear optimistic sleep overrides once the server confirms inactive (liveTerminalCount === 0).
-          setSleptIds((prev) => retainLiveSleptWorktreeIdentities(prev, confirmed))
+          setSleptIds((prev) =>
+            retainLiveSleptWorktreeIdentities(prev, confirmed, (host) => !isServerHost(host))
+          )
 
           // Sync pin state from server so desktop-initiated pins reflect without relying on stale AsyncStorage.
           const serverPinned = new Set(confirmed.filter((w) => w.isPinned).map((w) => w.worktreeId))
