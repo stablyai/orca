@@ -9,6 +9,10 @@ import {
 import type { RuntimeRpcResponse } from '../../../src/shared/runtime-rpc-envelope'
 import { openRemoteRuntimePassthroughSocket } from '../../../src/shared/remote-runtime-passthrough-socket'
 import {
+  decodeBrowserScreencastFrame,
+  type BrowserScreencastFrame
+} from '../../../src/shared/browser-screencast-protocol'
+import {
   decodeTerminalStreamFrame,
   decodeTerminalStreamText,
   TerminalStreamOpcode
@@ -50,6 +54,8 @@ export type PairedMobileSocket = {
   frames: { id?: string; ok?: boolean; result?: unknown; error?: { code: string } }[]
   /** Terminal output text per stream id, decoded from binary frames. */
   output: Map<number, string>
+  /** Browser screencast frames, decoded from binary frames, in order. */
+  screencastFrames: BrowserScreencastFrame[]
   send: (id: string, method: string, params: unknown, executionHost?: string) => void
   /** Resolves the moment `text` appears in the stream's output, so callers can time an echo. */
   waitForOutput: (streamId: number, text: string, timeoutMs: number) => Promise<void>
@@ -116,6 +122,7 @@ export function pairMobileClient(offer: RuntimeDesktopPairingOffer): PairedMobil
 export async function openPairedSocket(pairing: PairingOffer): Promise<PairedMobileSocket> {
   const frames: PairedMobileSocket['frames'] = []
   const output = new Map<number, string>()
+  const screencastFrames: BrowserScreencastFrame[] = []
   const waiters = new Set<() => void>()
   const socket = await openRemoteRuntimePassthroughSocket(
     pairing,
@@ -123,6 +130,11 @@ export async function openPairedSocket(pairing: PairingOffer): Promise<PairedMob
     {
       onText: (plaintext) => frames.push(JSON.parse(plaintext)),
       onBinary: (bytes) => {
+        const screencast = decodeBrowserScreencastFrame(bytes)
+        if (screencast) {
+          screencastFrames.push(screencast)
+          return
+        }
         const frame = decodeTerminalStreamFrame(bytes)
         if (frame?.opcode === TerminalStreamOpcode.Output) {
           const text = decodeTerminalStreamText(frame.payload)
@@ -140,6 +152,7 @@ export async function openPairedSocket(pairing: PairingOffer): Promise<PairedMob
     token: pairing.deviceToken,
     frames,
     output,
+    screencastFrames,
     send: (id, method, params, executionHost) =>
       void socket.send(
         JSON.stringify({ id, deviceToken: pairing.deviceToken, method, params, executionHost })
