@@ -123,6 +123,32 @@ export const getShowPinnedWorktreesInGroupsEntry = createLocalizedCatalog(
   })
 )
 
+export const getCompactProjectRowsEntry = createLocalizedCatalog((): SettingsSearchEntry => ({
+  title: translate(
+    'auto.components.settings.appearance.search.compactProjectRows.title',
+    'One row per project'
+  ),
+  description: translate(
+    'auto.components.settings.appearance.search.compactProjectRows.description',
+    'When grouped by project, every project is one row with its most urgent agent status. Only the project of the active workspace unfolds to show its workspaces and agents; click a project to open it.'
+  ),
+  keywords: [
+    ...translateSearchKeyword('auto.components.settings.appearance.search.5bff6a2ef0', 'sidebar'),
+    ...translateSearchKeyword(
+      'auto.components.settings.appearance.search.showPinnedWorktreesInGroups.project',
+      'project'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.appearance.search.compactProjectRows.compact',
+      'compact'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.appearance.search.compactProjectRows.attention',
+      'attention'
+    )
+  ]
+}))
+
 export const getSidebarEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   {
     title: translate('auto.components.settings.appearance.search.155a1e7438', 'Show Tasks Button'),
@@ -189,5 +215,6 @@ export const getSidebarEntries = createLocalizedCatalog((): SettingsSearchEntry[
   },
   getWorkspaceCardLayoutEntry(),
   getLeftSidebarAppearanceEntry(),
-  getShowPinnedWorktreesInGroupsEntry()
+  getShowPinnedWorktreesInGroupsEntry(),
+  getCompactProjectRowsEntry()
 ])

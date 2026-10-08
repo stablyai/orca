@@ -225,3 +225,16 @@ export function getLineageChildrenInlineStyle(offset: number | string): {
     width: `calc(100% - ${inlineOffset})`
   }
 }
+
+// Why: a compact project row stands in for its project header, so content starts on the header anchor.
+export function getCompactProjectRowGeometry(groupDepth: number): {
+  surfaceInset: number
+  cardContentIndent: number
+} {
+  const surfaceInset =
+    Math.min(clampDepth(groupDepth), MAX_PROJECT_GROUP_HEADER_DEPTH) * PROJECT_GROUP_HEADER_INDENT
+  return {
+    surfaceInset,
+    cardContentIndent: getProjectGroupHeaderPaddingLeft(groupDepth) - surfaceInset
+  }
+}

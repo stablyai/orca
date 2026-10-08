@@ -135,6 +135,12 @@ export type WorktreeSlice = {
   /** sortEpoch after the settle window; the sidebar sort reads this (see store/settled-sort-epoch.ts). */
   settledSortEpoch: number
   /**
+   * Bumped when an active-worktree pane title changes activity classification. sortEpoch
+   * skips those (the worktree sort must not re-rank under the cursor), but the Attention
+   * project order still needs them; see use-project-attention.ts.
+   */
+  activeTitleAttentionEpoch: number
+  /**
    * Worktree IDs that have been activated at least once during this app
    * session. The first activation of a worktree is special: its
    * TerminalPane mounts for the first time, tabs reattach or fresh-spawn

@@ -20,7 +20,11 @@ import { deferHostSectionCollapse, scopeHostSectionCollapse } from '../../host-s
 import { addHostSectionRows } from '../../host-section-rows'
 import { orderHostSectionOptions } from '../../host-section-order'
 import { buildSidebarHostOptions } from '../../sidebar-host-options'
-import { selectPendingWorktreeCreationKeys } from './pending-worktree-creation-keys'
+import {
+  parsePendingWorktreeCreationKey,
+  selectPendingWorktreeCreationKeys
+} from './pending-worktree-creation-keys'
+import { useProjectAttentionByWorktree } from './use-project-attention'
 
 type SectionRowsArgs = {
   groupBy: WorktreeGroupBy
@@ -102,14 +106,7 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
     useShallow((s) => selectPendingWorktreeCreationKeys(s.pendingWorktreeCreations))
   )
   const pendingCreations = useMemo(
-    () =>
-      pendingCreationKeys.map((key) => {
-        const separator = key.indexOf(' ')
-        return {
-          creationId: key.slice(0, separator),
-          repoId: key.slice(separator + 1)
-        }
-      }),
+    () => pendingCreationKeys.map(parsePendingWorktreeCreationKey),
     [pendingCreationKeys]
   )
   const hostLabelOverrides = useMemo(
@@ -153,6 +150,14 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
     [effectiveCollapsedGroups, hostScopedGroups]
   )
 
+  const projectAttentionByWorktree = useProjectAttentionByWorktree(
+    args.groupBy === 'repo' && args.projectOrderBy === 'attention',
+    worktrees
+  )
+  // Why gated: only compact project rows expand by the active workspace, so other modes don't rebuild rows on every switch.
+  const compactActiveWorktreeId = useAppStore((s) =>
+    args.groupBy === 'repo' && s.settings?.compactProjectRows === true ? s.activeWorktreeId : null
+  )
   const rows: Row[] = useMemo(
     () =>
       buildRows(
@@ -177,7 +182,9 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
         args.visibleFolderWorkspacesForRows,
         hostLabelById,
         defaultHostId,
-        args.pinnedDisplayPolicy
+        args.pinnedDisplayPolicy,
+        projectAttentionByWorktree,
+        compactActiveWorktreeId
       ),
     [
       args.groupBy,
@@ -200,7 +207,9 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
       args.newExternalWorktreesInboxByRepo,
       pendingCreations,
       hostLabelById,
-      args.pinnedDisplayPolicy
+      args.pinnedDisplayPolicy,
+      projectAttentionByWorktree,
+      compactActiveWorktreeId
     ]
   )
   const orderedHostOptions = useMemo(

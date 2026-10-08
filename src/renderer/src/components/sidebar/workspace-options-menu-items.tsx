@@ -1,6 +1,7 @@
 import { useMemo, type JSX } from 'react'
 import { useAppStore } from '@/store'
 import {
+  DropdownMenuCheckboxItem,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
@@ -17,7 +18,8 @@ import SidebarWorkspaceFilterSection from './SidebarWorkspaceFilterSection'
 import { getSidebarHostVisibilityLabel, shouldShowHostScopeControls } from './sidebar-host-options'
 import { useSidebarHostScopeOptions } from './use-sidebar-host-scope-options'
 import { SidebarHostScopeMenuSection } from './SidebarHostScopeMenuSection'
-import { PROJECT_ORDER_OPTIONS, SORT_OPTIONS } from './sidebar-workspace-option-items'
+import { SORT_OPTIONS } from './sidebar-workspace-option-items'
+import { getCompactProjectRowsLabel, PROJECT_ORDER_OPTIONS } from './sidebar-project-order-options'
 import { WorktreeCardDisplayMenuSection } from './WorktreeCardDisplayMenuSection'
 import { translate } from '@/i18n/i18n'
 import { SidebarGroupByToggle } from './SidebarGroupByToggle'
@@ -99,6 +101,8 @@ export function WorkspaceOptionsMenuItems({
   const setGroupBy = useAppStore((s) => s.setGroupBy)
   const projectOrderBy = useAppStore((s) => s.projectOrderBy)
   const setProjectOrderBy = useAppStore((s) => s.setProjectOrderBy)
+  const compactProjectRows = useAppStore((s) => s.settings?.compactProjectRows === true)
+  const setCompactProjectRows = useAppStore((s) => s.setCompactProjectRows)
   const { hostOptions } = useSidebarHostScopeOptions()
   const showHostScopeControls = shouldShowHostScopeControls(hostOptions)
   const sortLabel = SORT_OPTIONS.find((opt) => opt.id === sortBy)?.label ?? 'Sort'
@@ -193,44 +197,53 @@ export function WorkspaceOptionsMenuItems({
       {/* Why: project order only has a visible effect when grouping by
           project; hide it in none/status/PR modes to avoid a dead control. */}
       {groupBy === 'repo' && (
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger>
-            <span className="flex flex-1 items-center justify-between">
-              <span>
-                {translate(
-                  'auto.components.sidebar.SidebarWorkspaceOptionsMenu.09faabd875',
-                  'Project order'
-                )}
+        <>
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              <span className="flex flex-1 items-center justify-between">
+                <span>
+                  {translate(
+                    'auto.components.sidebar.SidebarWorkspaceOptionsMenu.09faabd875',
+                    'Project order'
+                  )}
+                </span>
+                <span className="text-[11px] font-medium text-muted-foreground">
+                  {projectOrderLabel}
+                </span>
               </span>
-              <span className="text-[11px] font-medium text-muted-foreground">
-                {projectOrderLabel}
-              </span>
-            </span>
-          </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className="w-44" data-workspace-board-preserve-open={boardAttr}>
-            <DropdownMenuRadioGroup
-              value={projectOrderBy}
-              onValueChange={(v) => setProjectOrderBy(v as typeof projectOrderBy)}
-            >
-              {PROJECT_ORDER_OPTIONS.map((opt) => (
-                <Tooltip key={opt.id}>
-                  <TooltipTrigger asChild>
-                    <DropdownMenuRadioItem
-                      value={opt.id}
-                      // Keep the menu open so people can compare order modes.
-                      onSelect={(e) => e.preventDefault()}
-                    >
-                      {opt.label}
-                    </DropdownMenuRadioItem>
-                  </TooltipTrigger>
-                  <TooltipContent side="right" sideOffset={6}>
-                    {opt.description}
-                  </TooltipContent>
-                </Tooltip>
-              ))}
-            </DropdownMenuRadioGroup>
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent className="w-44" data-workspace-board-preserve-open={boardAttr}>
+              <DropdownMenuRadioGroup
+                value={projectOrderBy}
+                onValueChange={(v) => setProjectOrderBy(v as typeof projectOrderBy)}
+              >
+                {PROJECT_ORDER_OPTIONS.map((opt) => (
+                  <Tooltip key={opt.id}>
+                    <TooltipTrigger asChild>
+                      <DropdownMenuRadioItem
+                        value={opt.id}
+                        // Keep the menu open so people can compare order modes.
+                        onSelect={(e) => e.preventDefault()}
+                      >
+                        {opt.label}
+                      </DropdownMenuRadioItem>
+                    </TooltipTrigger>
+                    <TooltipContent side="right" sideOffset={6}>
+                      {opt.description}
+                    </TooltipContent>
+                  </Tooltip>
+                ))}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+          <DropdownMenuCheckboxItem
+            checked={compactProjectRows}
+            onCheckedChange={(checked) => setCompactProjectRows(checked === true)}
+            onSelect={(e) => e.preventDefault()}
+          >
+            {getCompactProjectRowsLabel()}
+          </DropdownMenuCheckboxItem>
+        </>
       )}
 
       <WorktreeCardDisplayMenuSection preserveWorkspaceBoardOpen={preserveWorkspaceBoardOpen} />

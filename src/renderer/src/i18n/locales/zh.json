@@ -5378,7 +5378,9 @@
           "a30e34eb5c": "关闭工作区板",
           "spaces": "空间",
           "views": "侧边栏视图",
-          "addProject": "添加项目"
+          "addProject": "添加项目",
+          "restoreProjectList": "恢复之前的项目列表",
+          "compactProjectsByAttention": "紧凑项目，按关注度排序"
         },
         "SidebarNav": {
           "80611a8b10": "搜索",
@@ -5504,7 +5506,10 @@
           "automation": "自动化",
           "folderPathIdentity": "分支 / 文件夹路径",
           "cli": "Orca CLI",
-          "workspaceOptions": "工作区选项"
+          "workspaceOptions": "工作区选项",
+          "projectOrderAttention": "按关注度",
+          "projectOrderAttentionDescription": "先显示有代理需要你处理的项目，然后是已完成，再然后是进行中",
+          "compactProjectRows": "每个项目一行"
         },
         "SshTargetRow": {
           "4677394048": "正在连接…",
@@ -9330,7 +9335,13 @@
             "zcodeUsageDescription": "在状态栏中显示 ZCode 编码计划配额使用情况。",
             "zcode": "零码",
             "zai": "在",
-            "glm": "格鲁姆"
+            "glm": "格鲁姆",
+            "compactProjectRows": {
+              "title": "每个项目一行",
+              "description": "按项目分组时，每个项目显示为一行，并带有最紧急的代理状态。只有当前工作区所在的项目会展开，显示其工作区和代理；点击项目即可打开。",
+              "compact": "紧凑",
+              "attention": "关注"
+            }
           }
         },
         "auto": {

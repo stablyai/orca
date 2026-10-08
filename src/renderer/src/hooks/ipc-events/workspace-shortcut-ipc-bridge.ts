@@ -3,6 +3,7 @@ import { TOGGLE_WORKSPACE_BOARD_EVENT } from '@/components/sidebar/useWorkspaceB
 import { activateTabNumberShortcut } from '@/lib/tab-number-shortcuts'
 import { emitCmdJRowIndexJump } from '@/lib/cmd-j-row-index-jump'
 import { getVisibleWorktreeShortcutTargets } from '@/components/sidebar/visible-worktrees'
+import { resolveCompactProjectWorktree } from '@/components/sidebar/compact-project-activation'
 import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
 import { deleteHoveredWorkspaceImmediately } from '@/components/sidebar/hovered-workspace-delete'
 import { isFloatingWorkspacePanelFocused } from '@/lib/floating-workspace-terminal-actions'
@@ -91,7 +92,11 @@ export function registerWorkspaceShortcutIpcBridge(unsubs: (() => void)[]): void
         return
       }
       const visibleTargets = getVisibleWorktreeShortcutTargets()
-      const target = visibleTargets[index]
+      const slot = visibleTargets[index]
+      // Why: a folded compact project slot opens the workspace a click on its row would.
+      const target = slot?.projectWorktreeIds
+        ? resolveCompactProjectWorktree(slot.projectWorktreeIds)
+        : slot
       if (target) {
         activateAndRevealWorkspace(target.id, {
           navigationIntent: 'user-open',

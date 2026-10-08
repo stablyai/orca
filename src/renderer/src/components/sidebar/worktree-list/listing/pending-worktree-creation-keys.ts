@@ -37,3 +37,12 @@ export function selectPendingWorktreeCreationKeys(
   keysBySource.set(pendingWorktreeCreations, keys)
   return keys
 }
+
+/** Inverse of a key from selectPendingWorktreeCreationKeys. */
+export function parsePendingWorktreeCreationKey(key: string): {
+  creationId: string
+  repoId: string
+} {
+  const separator = key.indexOf(' ')
+  return { creationId: key.slice(0, separator), repoId: key.slice(separator + 1) }
+}

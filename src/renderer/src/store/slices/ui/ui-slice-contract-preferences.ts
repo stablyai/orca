@@ -22,6 +22,7 @@ import type { ChangelogData, UpdateStatus } from '../../../../../shared/update-s
 import type { StatusBarUsageMode } from '../../../../../shared/status-bar-usage-mode'
 import type { PersistedUIWriteBaseline } from '../persisted-ui-write-baseline'
 import type { UISliceCore } from './ui-slice-contract-core'
+import type { AttentionProjectOrderRestore } from './attention-project-order-toggle'
 
 export type UISlicePreferences = {
   /** Which list the sidebar body shows. Navigator-only; does not change the active view. */
@@ -33,6 +34,10 @@ export type UISlicePreferences = {
   setSortBy: (s: UISlicePreferences['sortBy']) => void
   projectOrderBy: ProjectOrderBy
   setProjectOrderBy: (p: ProjectOrderBy) => void
+  attentionProjectOrderRestore: AttentionProjectOrderRestore | null
+  /** Header toggle: attention order + one row per project, or back to the previous choice. */
+  toggleAttentionProjectOrder: () => void
+  setCompactProjectRows: (enabled: boolean) => void
   showActiveOnly: boolean
   setShowActiveOnly: (v: boolean) => void
   showSleepingWorkspaces: boolean

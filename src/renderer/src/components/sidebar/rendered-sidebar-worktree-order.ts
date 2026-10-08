@@ -14,7 +14,15 @@ import { orderHostSectionOptions } from './host-section-order'
 import { buildSidebarHostOptions } from './sidebar-host-options'
 import { getLogicalRepoOrderRankById } from './project-header-drop'
 import { getRenderedWorktreesInSidebarOrder } from './worktree-sidebar-row-preference'
+import {
+  buildProjectAttentionFromState,
+  hasLiveSmartAttentionSignal
+} from './project-attention-order'
 import { selectWorktreeListReviewCacheInputs } from './worktree-list/listing/review-cache-inputs'
+import {
+  parsePendingWorktreeCreationKey,
+  selectPendingWorktreeCreationKeys
+} from './worktree-list/listing/pending-worktree-creation-keys'
 import {
   filterFolderWorkspacesForVisibleHosts,
   filterProjectGroupsForVisibleHosts,
@@ -24,7 +32,6 @@ import {
 const EMPTY_REPO_ID_SET: ReadonlySet<string> = Object.freeze(new Set<string>())
 const EMPTY_IMPORTED_BY_REPO = Object.freeze(new Map()) as never
 const EMPTY_INBOX_BY_REPO = Object.freeze(new Map()) as never
-const EMPTY_PENDING_CREATIONS = Object.freeze([]) as never
 
 /**
  * Orders already-filtered worktrees the way the sidebar would render them, for
@@ -78,11 +85,14 @@ export function computeRenderedSidebarRows(
     true,
     state.settings,
     filterProjectGroupsForVisibleHosts(projectGroups, visibleHostIdSet, defaultHostId),
-    // Why empty: placeholder/imported/inbox/pending inputs never emit item or folder-workspace rows, the only two the order reads.
+    // Why empty: placeholder/imported/inbox inputs never emit item or folder-workspace rows.
+    // Pending creates can: in compact project mode they keep their project's section open.
     EMPTY_REPO_ID_SET,
     EMPTY_IMPORTED_BY_REPO,
     EMPTY_INBOX_BY_REPO,
-    EMPTY_PENDING_CREATIONS,
+    selectPendingWorktreeCreationKeys(state.pendingWorktreeCreations).map(
+      parsePendingWorktreeCreationKey
+    ),
     { projects: projection.projects, projectHostSetups: projection.setups },
     filterFolderWorkspacesForVisibleHosts(
       state.folderWorkspaces,
@@ -93,7 +103,13 @@ export function computeRenderedSidebarRows(
     // Why no hostLabelById: it only feeds display-only host context labels, never row order.
     undefined,
     defaultHostId,
-    pinnedDisplayPolicy
+    pinnedDisplayPolicy,
+    state.groupBy === 'repo' &&
+      state.projectOrderBy === 'attention' &&
+      hasLiveSmartAttentionSignal(state)
+      ? buildProjectAttentionFromState(state, visibleWorktrees)
+      : undefined,
+    state.activeWorktreeId
   )
 
   // Why lazy: with no host filter, addHostSectionRows is a pass-through, so skip building the whole host registry on a keystroke.

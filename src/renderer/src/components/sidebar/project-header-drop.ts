@@ -4,6 +4,7 @@ import {
   type WorktreeSidebarHeaderDropPreview
 } from './worktree-sidebar-header-drop-preview'
 import type { Row } from './worktree-list/grouping/row-types'
+import type { RenderRow } from './worktree-list/listing/render-row'
 import type { Repo } from '../../../../shared/repo-types'
 
 export type ProjectHeaderDragBucketKey = string
@@ -28,17 +29,26 @@ export function getProjectHeaderDragBucketKey(
   return repo.projectGroupId ? `group:${repo.projectGroupId}` : 'ungrouped'
 }
 
+/** The project a row stands for: a repo header, or a compact row that folded its header in. */
+export function getRowProjectHeaderRepo(row: RenderRow): Repo | undefined {
+  if (row.type === 'header') {
+    return row.repo
+  }
+  return row.type === 'item' ? row.compactProjectHeader?.repo : undefined
+}
+
 export function getSidebarOrderedRepoHeaderIdsByBucket(
   rows: readonly Row[]
 ): Map<ProjectHeaderDragBucketKey, string[]> {
   const buckets = new Map<ProjectHeaderDragBucketKey, string[]>()
   for (const row of rows) {
-    if (row.type !== 'header' || !row.repo) {
+    const repo = getRowProjectHeaderRepo(row)
+    if (!repo) {
       continue
     }
-    const bucketKey = getProjectHeaderDragBucketKey(row.repo)
+    const bucketKey = getProjectHeaderDragBucketKey(repo)
     const list = buckets.get(bucketKey) ?? []
-    list.push(row.repo.id)
+    list.push(repo.id)
     buckets.set(bucketKey, list)
   }
   return buckets

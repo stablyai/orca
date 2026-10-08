@@ -5623,7 +5623,9 @@
           "5c9c7c16aa": "Add a project to create workspaces",
           "a30e34eb5c": "Close workspace board",
           "views": "Sidebar view",
-          "addProject": "Add project"
+          "addProject": "Add project",
+          "restoreProjectList": "Restore previous project list",
+          "compactProjectsByAttention": "Compact projects, sorted by attention"
         },
         "SidebarNav": {
           "80611a8b10": "Search",
@@ -5757,7 +5759,10 @@
           "219ebf1961": "Branch name",
           "folderPathIdentity": "Branch / folder path",
           "cli": "Orca CLI",
-          "workspaceOptions": "Workspace options"
+          "workspaceOptions": "Workspace options",
+          "projectOrderAttention": "Attention",
+          "projectOrderAttentionDescription": "Projects with agents that need you first, then done, then working",
+          "compactProjectRows": "One row per project"
         },
         "SshTargetRow": {
           "4677394048": "Connecting…",
@@ -9603,6 +9608,12 @@
               "kw": {
                 "cursor": "cursor"
               }
+            },
+            "compactProjectRows": {
+              "title": "One row per project",
+              "description": "When grouped by project, every project is one row with its most urgent agent status. Only the project of the active workspace unfolds to show its workspaces and agents; click a project to open it.",
+              "compact": "compact",
+              "attention": "attention"
             }
           }
         },

@@ -15,6 +15,8 @@ import type { WorktreeSidebarHeaderDrag } from '../drag/use-header-drag'
 import type { WorktreeListVirtualizer } from './use-virtualizer'
 import type { VirtualizedWorktreeViewportProps } from './viewport-props'
 import type { WorktreeVirtualRowContext } from '../rows/virtual-row-dispatch'
+import type { RepoHeaderProjectActions } from '../rows/repo-header-project-actions'
+import { activateCompactProject } from '../../compact-project-activation'
 import { getRepoOwnerWorktreeVisibilityDefaults } from '../../../../store/worktree-visibility-defaults-by-host'
 
 type BuildArgs = {
@@ -51,6 +53,21 @@ type BuildArgs = {
 // is either a prop, a memoised hook result, or a stable callback.
 export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtualRowContext {
   const { props, runtime, session, statusDrag, headerDrag, primaryActive, reveal } = args
+  const projectActions: RepoHeaderProjectActions = {
+    getWorktreeVisibilityDefaults: (repo) =>
+      getRepoOwnerWorktreeVisibilityDefaults(
+        repo,
+        args.settings,
+        args.worktreeVisibilityDefaultsByHost
+      ),
+    onOpenRepoSettings: props.handleOpenRepoSettings,
+    onOpenWorktreeVisibility: props.handleOpenWorktreeVisibility,
+    onCreateGroupFromRepo: props.handleCreateGroupFromRepo,
+    onMoveProjectToGroup: props.handleMoveProjectToGroup,
+    onRemoveProjectFromGroup: props.handleRemoveProjectFromGroup,
+    onRemoveProject: props.handleRemoveProject,
+    onCreateForRepo: props.handleCreateForRepo
+  }
   return {
     renderRows: args.renderRows,
     firstHeaderIndex: args.firstHeaderIndex,
@@ -85,21 +102,7 @@ export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtual
       headerDrag,
       getCachedFolderWorkspacePathStatus: args.getCachedFolderWorkspacePathStatus,
       toggleGroupWithScrollAnchor: args.toggleGroupWithScrollAnchor,
-      projectActions: {
-        getWorktreeVisibilityDefaults: (repo) =>
-          getRepoOwnerWorktreeVisibilityDefaults(
-            repo,
-            args.settings,
-            args.worktreeVisibilityDefaultsByHost
-          ),
-        onOpenRepoSettings: props.handleOpenRepoSettings,
-        onOpenWorktreeVisibility: props.handleOpenWorktreeVisibility,
-        onCreateGroupFromRepo: props.handleCreateGroupFromRepo,
-        onMoveProjectToGroup: props.handleMoveProjectToGroup,
-        onRemoveProjectFromGroup: props.handleRemoveProjectFromGroup,
-        onRemoveProject: props.handleRemoveProject,
-        onCreateForRepo: props.handleCreateForRepo
-      },
+      projectActions,
       onRenameProjectGroup: props.handleRenameProjectGroup,
       onDeleteProjectGroup: props.handleDeleteProjectGroup,
       onCreateFolderWorkspace: props.handleCreateFolderWorkspace,
@@ -107,7 +110,11 @@ export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtual
       onWorkspaceStatusDragLeave: statusDrag.handleWorkspaceStatusDragLeave,
       onWorkspacePinDragOver: statusDrag.handleWorkspacePinDragOver,
       onWorkspacePinDragLeave: statusDrag.handleWorkspacePinDragLeave,
-      onWorkspaceStatusDrop: statusDrag.handleWorkspaceStatusDrop
+      onWorkspaceStatusDrop: statusDrag.handleWorkspaceStatusDrop,
+      onCompactProjectActivate: (worktreeIds) => {
+        props.onWorktreeCardClick?.()
+        activateCompactProject(worktreeIds)
+      }
     },
     item: {
       settings: args.settings,
@@ -133,7 +140,13 @@ export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtual
       onRowClickCapture: args.onRowClickCapture,
       onRowPointerDown: args.onRowPointerDown,
       onCardDragStart: args.nativeDrag.handleWorktreeCardDragStart,
-      onCardDragEnd: runtime.clearWorktreeDrag
+      onCardDragEnd: runtime.clearWorktreeDrag,
+      compactProject: {
+        projectGroups: args.projectGroups,
+        sshConnectionStates: args.sshConnectionStates,
+        projectActions,
+        headerDrag
+      }
     },
     folderWorkspace: {
       groupBy: props.groupBy,

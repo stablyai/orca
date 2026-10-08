@@ -12,6 +12,7 @@ import { PINNED_GROUP_KEY } from '../grouping/group-keys'
 import type { WorktreeGroupBy } from '../grouping/row-types'
 import {
   getFolderBackedRepoWorktreeCardContentIndent,
+  getCompactProjectRowGeometry,
   getFolderBackedRepoWorktreeCardSurfaceInset,
   getLineageChildrenInlineStyle,
   getLineageNestedRowGeometry,
@@ -24,6 +25,11 @@ import { stopNestedWorktreeCardBubble } from './header-event-guards'
 import type { WorktreeItemRow } from '../listing/renderable-rows'
 import { getWorktreeOptionId } from './option-dom'
 import type { WorktreeRowDragState } from '../drag/row-state'
+import {
+  CompactProjectRowActions,
+  getCompactProjectRowDrag,
+  type CompactProjectRowContext
+} from './compact-project-row-actions'
 
 export type WorktreeItemRowContext = {
   settings: AppState['settings']
@@ -61,6 +67,7 @@ export type WorktreeItemRowContext = {
     draggedIds: readonly string[]
   ) => void
   onCardDragEnd: () => void
+  compactProject?: CompactProjectRowContext
 }
 
 // Geometry differs three ways: a plain grouped row, a lineage child inheriting its parent's
@@ -70,6 +77,9 @@ function getWorktreeItemRowGeometry(
   itemRow: WorktreeItemRow,
   nested: boolean
 ): { surfaceInset: number; cardContentIndent: number; lineageChildrenInlineOffset?: number } {
+  if (itemRow.compactProjectHeader && !nested) {
+    return getCompactProjectRowGeometry(itemRow.groupDepth)
+  }
   const projectGroupId = itemRow.repo?.projectGroupId
   const isFolderBackedRepoChild =
     ctx.groupBy === 'repo' &&
@@ -141,6 +151,8 @@ export function renderWorktreeItemRow(
     ctx.worktreeDragState.draggingWorktreeId &&
     (ctx.worktreeDragState.lineageDropTargetId === itemRow.worktree.id ||
       ctx.nativeLineageDropTargetId === itemRow.worktree.id)
+  const compactProjectHeader = nested ? undefined : itemRow.compactProjectHeader
+  const compactProjectDrag = getCompactProjectRowDrag(ctx.compactProject, compactProjectHeader)
   const isActiveWorktree =
     ctx.activeWorktreeId === itemRow.worktree.id &&
     (!ctx.activeWorkspaceExecutionHostId ||
@@ -160,9 +172,11 @@ export function renderWorktreeItemRow(
       data-worktree-drag-id={worktreeDragGroupKey ? itemRow.worktree.id : undefined}
       data-worktree-drag-group-key={worktreeDragGroupKey}
       data-worktree-drag-group-index={ctx.groupIndexByRowKey.get(itemRow.rowKey)}
+      {...compactProjectDrag.attributes}
       className={cn(
         // Why: don't transition 'transform' — it lags/flashes when TanStack Virtual repositions adjacent rows.
         'relative transition-[opacity,filter] duration-150 ease-out',
+        compactProjectHeader && 'group',
         ctx.worktreeDragState.draggingWorktreeId === itemRow.worktree.id &&
           // Why: the fixed drag preview is the affordance; a translucent source row would bleed through sticky headers/footers.
           'pointer-events-none opacity-0'
@@ -178,6 +192,10 @@ export function renderWorktreeItemRow(
       onPointerDown={(event) => {
         if (nested) {
           event.stopPropagation()
+        }
+        if (compactProjectDrag.onPointerDown) {
+          compactProjectDrag.onPointerDown(event)
+          return
         }
         ctx.onRowPointerDown(event, itemRow.worktree, itemRow.rowKey)
       }}
@@ -224,7 +242,19 @@ export function renderWorktreeItemRow(
         onLineageToggle={
           itemRow.lineageGroupKey ? ctx.getLineageToggleHandler(itemRow.lineageGroupKey) : undefined
         }
+        projectRowLabel={compactProjectHeader?.label}
+        forceInlineAgents={
+          compactProjectHeader?.compactProjectActive === true ||
+          itemRow.inExpandedCompactProject === true
+        }
       />
+      {compactProjectHeader && ctx.compactProject ? (
+        <CompactProjectRowActions
+          ctx={ctx.compactProject}
+          header={compactProjectHeader}
+          expanded={compactProjectHeader.compactProjectActive === true}
+        />
+      ) : null}
     </div>
   )
 }

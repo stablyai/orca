@@ -746,4 +746,29 @@ describe('Store', () => {
     store.updateUI({ projectOrderBy: 'manual' })
     expect(store.getUI().projectOrderBy).toBe('manual')
   })
+
+  it('preserves and round-trips an attention projectOrderBy', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      ui: { projectOrderBy: 'attention' }
+    })
+    const store = await createStore()
+    expect(store.getUI().projectOrderBy).toBe('attention')
+
+    store.updateUI({ projectOrderBy: 'recent' })
+    expect(store.getUI().projectOrderBy).toBe('recent')
+    store.updateUI({ projectOrderBy: 'attention' })
+    expect(store.getUI().projectOrderBy).toBe('attention')
+  })
+
+  it('defaults compactProjectRows off and persists it', async () => {
+    writeDataFile({ schemaVersion: 1 })
+    const store = await createStore()
+    expect(store.getSettings().compactProjectRows).toBe(false)
+
+    store.updateSettings({ compactProjectRows: true })
+    store.flush()
+    const reloaded = await createStore()
+    expect(reloaded.getSettings().compactProjectRows).toBe(true)
+  })
 })

@@ -53,7 +53,11 @@ export function normalizeSortBy(sortBy: unknown): PersistedState['ui']['sortBy']
 export function normalizeProjectOrderBy(
   projectOrderBy: unknown
 ): PersistedState['ui']['projectOrderBy'] {
-  if (projectOrderBy === 'manual' || projectOrderBy === 'recent') {
+  if (
+    projectOrderBy === 'manual' ||
+    projectOrderBy === 'recent' ||
+    projectOrderBy === 'attention'
+  ) {
     return projectOrderBy
   }
   return getDefaultUIState().projectOrderBy

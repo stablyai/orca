@@ -79,6 +79,7 @@ export function WorktreeCardHeader({
     handleWorkspaceQuickAction
   } = card
   const {
+    isProjectRow,
     showPinnedRepoIcon,
     showInlineRepoBadge,
     showHeaderActions,
@@ -155,6 +156,17 @@ export function WorktreeCardHeader({
           </Tooltip>
         )}
 
+        {isProjectRow && repo ? (
+          <span className="flex size-4 shrink-0 items-center justify-center rounded-[4px] text-muted-foreground">
+            <RepoIconGlyph
+              repoIcon={repo.repoIcon}
+              color={resolveRepoHeaderColor(repo.badgeColor)}
+              className="size-4"
+              iconClassName="size-3.5"
+            />
+          </span>
+        ) : null}
+
         {showInlineRepoBadge && (
           <RepoIdentityChip repo={repo!}>
             <RepoIconGlyph
@@ -169,10 +181,11 @@ export function WorktreeCardHeader({
         {/* Why: unread alert lives in the left status lane; title-row contrast comes from weight and dimmed read titles. */}
         <WorktreeTitleInlineRename
           displayName={visibleCardTitle}
-          disabled={isDeleting || affiliateListMode}
+          // Why: a project row is titled by the project, so renaming it would rename the workspace by surprise.
+          disabled={isDeleting || affiliateListMode || isProjectRow}
           showUnreadEmphasis={showUnreadEmphasis}
           dimReadTitle={newCardStyle}
-          className="text-[13px] leading-5"
+          className={cn('text-[13px] leading-5', isProjectRow && 'font-semibold')}
           editingClassName="flex-1"
           titleWrapper={titleWrapper}
           onEditingChange={affiliateListMode ? undefined : setTitleRenaming}
@@ -214,7 +227,7 @@ export function WorktreeCardHeader({
             </TooltipContent>
           </Tooltip>
         ) : null}
-        {!compactCards && worktree.isMainWorktree && !isFolder && (
+        {!compactCards && !isProjectRow && worktree.isMainWorktree && !isFolder && (
           <Tooltip>
             <TooltipTrigger asChild>
               <Badge

@@ -1,5 +1,6 @@
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import { createAgentsViewPreferenceActions } from './ui-slice-agents-view-preference-actions'
+import { createAttentionProjectOrderActions } from './ui-slice-attention-project-order-actions'
 import {
   DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE,
   DEFAULT_SHOW_SLEEPING_WORKSPACES,
@@ -53,7 +54,8 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
 
     // Why: bare set — persists only via the debounced window.api.ui.set writer in App.tsx, not on its own.
     projectOrderBy: 'manual',
-    setProjectOrderBy: (p) => set({ projectOrderBy: p }),
+    // Why clear the restore point: a direct choice supersedes what the header toggle would put back.
+    setProjectOrderBy: (p) => set({ projectOrderBy: p, attentionProjectOrderRestore: null }),
 
     showActiveOnly: false,
     setShowActiveOnly: (v) => set({ showActiveOnly: v }),
@@ -159,6 +161,7 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
     setFilterRepoIds: (ids) => set({ filterRepoIds: ids }),
 
     ...createAgentsViewPreferenceActions(set),
+    ...createAttentionProjectOrderActions(set, get),
 
     collapsedGroups: new Set<string>(),
     toggleCollapsedGroup: (key) =>

@@ -8,6 +8,7 @@ import { getRenderedWorktreesInSidebarOrder } from '../../worktree-sidebar-row-p
 import { setVisibleWorktreeIds, setVisibleWorktreeShortcutTargets } from '../../visible-worktrees'
 import { useListMultiSelection } from '@/hooks/use-list-multi-selection'
 import { useReusedArrayIdentity } from '../listing/use-reused-array-identity'
+import { getSidebarShortcutTargets } from '../../sidebar-shortcut-targets'
 
 const getSidebarContainer = (): Element | null =>
   document.querySelector('[data-worktree-sidebar-container]')
@@ -45,29 +46,14 @@ export function useSidebarWorktreeSelection(args: {
 
   // Why layout effect: the Cmd/Ctrl+1–9 handler can fire right after commit; publishing after paint would leave the shortcut cache stale.
   useLayoutEffect(() => {
-    const chipKeysByIdentity = new Map<string, string>()
-    for (const row of sectionRows) {
-      if (row.type === 'item' && row.lineageGroupKey && row.lineageChildCount > 0) {
-        chipKeysByIdentity.set(getWorktreeHostIdentity(row.worktree), row.lineageGroupKey)
-      }
-    }
     setVisibleWorktreeIds(renderedWorktreeIds)
-    setVisibleWorktreeShortcutTargets(
-      renderedWorktrees.map((worktree) => {
-        const lineageGroupKey = chipKeysByIdentity.get(getWorktreeHostIdentity(worktree))
-        return {
-          id: worktree.id,
-          ...(worktree.hostId ? { executionHostId: worktree.hostId } : {}),
-          ...(lineageGroupKey ? { lineageGroupKey } : {})
-        }
-      })
-    )
+    setVisibleWorktreeShortcutTargets(getSidebarShortcutTargets(sectionRows, pinnedDisplayPolicy))
     // Why null, not []: [] is a real rendered order (all collapsed/filtered); null tells shortcuts the list is unmounted.
     return () => {
       setVisibleWorktreeIds(null)
       setVisibleWorktreeShortcutTargets(null)
     }
-  }, [renderedWorktreeIds, renderedWorktrees, sectionRows])
+  }, [pinnedDisplayPolicy, renderedWorktreeIds, sectionRows])
 
   return {
     renderedWorktreeIds,

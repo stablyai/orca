@@ -1,4 +1,5 @@
 import React, { useCallback } from 'react'
+import { shouldShowInlineAgentList } from './worktree-card-inline-agents'
 import { toast } from 'sonner'
 
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
@@ -42,6 +43,7 @@ export function useWorktreeCardSecondaryDetails({
   newCardStyle,
   compactCards,
   agentActivityDisplayMode,
+  forceInlineAgents = false,
   workspacePorts,
   openTaskPage,
   updateWorktreeMeta,
@@ -72,6 +74,7 @@ export function useWorktreeCardSecondaryDetails({
     showCli: boolean
     showComment: boolean
     showPorts: boolean
+    forceInlineAgents?: boolean
   }) {
   // Why: unread lives in the left status lane, so the Status toggle owns both the dot/PR slot and unread emphasis.
   const showUnreadEmphasis = showStatus && worktree.isUnread
@@ -88,7 +91,12 @@ export function useWorktreeCardSecondaryDetails({
   const metaAutomationProvenance = showAutomation ? worktree.automationProvenance : null
   const metaCliProvenance = showCli ? worktree.cliProvenance : null
   const metaComment = showComment ? hoverComment : null
-  const showInlineAgentList = cardProps.includes('inline-agents') && (newCardStyle || !compactCards)
+  const showInlineAgentList = shouldShowInlineAgentList({
+    forceInlineAgents,
+    cardProps,
+    newCardStyle,
+    compactCards
+  })
   const compactInlineAgentRows = useWorktreeAgentRows(
     worktree.id,
     showInlineAgentList && agentActivityDisplayMode === 'compact'

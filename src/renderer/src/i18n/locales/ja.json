@@ -5378,7 +5378,9 @@
           "a30e34eb5c": "ワークスペースボードを閉じる",
           "spaces": "スペース",
           "views": "サイドバービュー",
-          "addProject": "プロジェクトを追加"
+          "addProject": "プロジェクトを追加",
+          "restoreProjectList": "以前のプロジェクト一覧に戻す",
+          "compactProjectsByAttention": "プロジェクトをコンパクト表示、要対応順に並べ替え"
         },
         "SidebarNav": {
           "80611a8b10": "検索",
@@ -5504,7 +5506,10 @@
           "automation": "オートメーション",
           "folderPathIdentity": "ブランチ / フォルダーパス",
           "cli": "Orca CLI",
-          "workspaceOptions": "ワークスペースのオプション"
+          "workspaceOptions": "ワークスペースのオプション",
+          "projectOrderAttention": "要対応順",
+          "projectOrderAttentionDescription": "対応が必要な Agent のプロジェクトを先頭に、次に完了、次に作業中",
+          "compactProjectRows": "プロジェクトごとに1行"
         },
         "SshTargetRow": {
           "4677394048": "接続中…",
@@ -9367,7 +9372,13 @@
             "zcodeUsageDescription": "ZCode コーディングプランのクォータの使用状況をステータスバーに表示します。",
             "zcode": "zコード",
             "zai": "ザイ",
-            "glm": "グルム"
+            "glm": "グルム",
+            "compactProjectRows": {
+              "title": "プロジェクトごとに1行",
+              "description": "プロジェクトでグループ化すると、各プロジェクトは最も緊急な Agent の状態とともに1行で表示されます。アクティブなワークスペースのプロジェクトだけが展開され、ワークスペースと Agent を表示します。プロジェクトをクリックすると開きます。",
+              "compact": "コンパクト",
+              "attention": "要対応"
+            }
           }
         },
         "auto": {

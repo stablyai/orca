@@ -66,15 +66,24 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
     canUnlinkReview,
     handleUnlinkReview,
     detailsHoverControl,
-    showDeleteQuickAction
+    showDeleteQuickAction: cardShowsDeleteQuickAction,
+    projectRowLabel
   } = card
+  const isProjectRow = projectRowLabel !== undefined
+  // Why: a project row's title line belongs to the project actions (… and +); details stay on hover.
+  const showDeleteQuickAction = !isProjectRow && cardShowsDeleteQuickAction
 
   // Why: pinned trees mix repos, so the repo icon shows regardless of groupBy's hideRepoBadge.
   const showPinnedRepoIcon = inPinnedSection && !!repo
   // Why: new card style retired the Compact/Detailed switch; repo identity uses the compact chip, not a lower pill.
   const showRepoIdentityInTitle = newCardStyle || compactCards
   const showInlineRepoBadge =
-    showRepoIdentityInTitle && !!repo && !hideRepoBadge && !isFolder && !showPinnedRepoIcon
+    !isProjectRow &&
+    showRepoIdentityInTitle &&
+    !!repo &&
+    !hideRepoBadge &&
+    !isFolder &&
+    !showPinnedRepoIcon
   const showRepoBadgeInMetaRow =
     !showRepoIdentityInTitle && !!repo && !hideRepoBadge && !showPinnedRepoIcon
   const showHostContextBadge = !compactCards && !!hostContextLabel && cardProps.includes('host')
@@ -91,9 +100,10 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
   const showUnreadQuickAction = !affiliateListMode && showStatus && !newCardStyle
   // Why: the slot owns the unread/status lane; legacy keeps the bell toggle, the new card keeps the glyph passive.
   const showCombinedStatusSlot = showStatus
-  const showTitleRowPrimary = compactCards && worktree.isMainWorktree && !isFolder
+  const showTitleRowPrimary = !isProjectRow && compactCards && worktree.isMainWorktree && !isFolder
   const showMetaRowDetails = !newCardStyle && !compactCards && (hasDetails || hasPorts)
-  const showTitleRowIndicators = (newCardStyle || compactCards) && (hasDetails || hasPorts)
+  const showTitleRowIndicators =
+    !isProjectRow && (newCardStyle || compactCards) && (hasDetails || hasPorts)
   // Why: grouped views can hide the repo badge; don't reserve a blank metadata lane unless there's real content.
   const hasDetailedMetaRowContent = Boolean(
     (showRepoBadgeInMetaRow && repo) ||
@@ -106,9 +116,12 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
     cacheStartedAt != null ||
     showMetaRowDetails
   )
-  const hasMetaRow = compactCards
-    ? hasMetadataBadge || cacheStartedAt != null
-    : hasDetailedMetaRowContent
+  // Why: a project row is one line by design; its details stay in the hover card.
+  const hasMetaRow = isProjectRow
+    ? false
+    : compactCards
+      ? hasMetadataBadge || cacheStartedAt != null
+      : hasDetailedMetaRowContent
   const showHeaderActions = showTitleRowPrimary || showDeleteQuickAction
   // Why: normalize the title once so title/branch de-dupe and identity-only hover eligibility stay in sync.
   const trimmedVisibleCardTitle = visibleCardTitle.trim()
@@ -262,6 +275,7 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
   const titleOnlyCard = !hasSecondaryCardContent
 
   return {
+    isProjectRow,
     showPinnedRepoIcon,
     showInlineRepoBadge,
     showRepoBadgeInMetaRow,

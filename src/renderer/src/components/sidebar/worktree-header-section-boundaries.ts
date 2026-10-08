@@ -1,6 +1,7 @@
 import { estimateRenderRowSize } from './worktree-list/viewport/virtual-rows'
 import type { RenderRow } from './worktree-list/listing/render-row'
 import type { GroupHeaderRow } from './worktree-list/grouping/row-types'
+import { getRowProjectHeaderRepo } from './project-header-drop'
 
 function getEstimatedRenderRowStarts(
   rows: readonly RenderRow[],
@@ -54,7 +55,11 @@ function indexBucketSuccessors(
 function findNextHeaderRenderRowIndex(rows: readonly RenderRow[], startIndex: number): number {
   for (let index = startIndex; index < rows.length; index++) {
     const row = rows[index]
-    if (row?.type === 'header' || row?.type === 'host-header') {
+    if (
+      row?.type === 'header' ||
+      row?.type === 'host-header' ||
+      (row?.type === 'item' && row.compactProjectHeader)
+    ) {
       return index
     }
   }
@@ -92,12 +97,19 @@ export function getRepoHeaderSectionEndByRepoId(args: {
   repoHeaderBucketByRepoId: ReadonlyMap<string, string>
 }): Map<string, number> {
   const rowStarts = getEstimatedRenderRowStarts(args.rows, args.firstHeaderIndex)
-  const repoHeaderIndexByRepoId = indexHeaderRenderRows(args.rows, (row) => row.repo?.id)
+  // Why: a compact row stands in for its folded project header, so it bounds sections too.
+  const repoHeaderIndexByRepoId = new Map<string, number>()
+  args.rows.forEach((row, index) => {
+    const repoId = getRowProjectHeaderRepo(row)?.id
+    if (repoId && !repoHeaderIndexByRepoId.has(repoId)) {
+      repoHeaderIndexByRepoId.set(repoId, index)
+    }
+  })
   const repoSuccessorsByBucket = indexBucketSuccessors(args.sidebarRepoHeaderIdsByBucket)
   const sectionEndByRepoId = new Map<string, number>()
   for (let index = 0; index < args.rows.length; index++) {
     const row = args.rows[index]
-    const repoId = row?.type === 'header' ? row.repo?.id : undefined
+    const repoId = row ? getRowProjectHeaderRepo(row)?.id : undefined
     if (!repoId) {
       continue
     }

@@ -1459,6 +1459,27 @@ html.native-shell .app-layout {
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--sidebar-ring) 18%, transparent);
 }
 
+/* Why: compact project actions sit over the card's title line; paint the card's own
+   hover/active wash over the sidebar so the pill reads as part of the row, not a patch. */
+[data-compact-project-row]:hover [data-compact-project-actions] {
+  background: color-mix(in srgb, var(--sidebar-foreground) 4%, var(--worktree-sidebar));
+}
+
+.dark [data-compact-project-row]:hover [data-compact-project-actions] {
+  background: color-mix(in srgb, var(--sidebar-accent) 40%, var(--worktree-sidebar));
+}
+
+[data-compact-project-row]:has([data-worktree-card-active='primary'])
+  [data-compact-project-actions] {
+  background: color-mix(in srgb, var(--worktree-sidebar-foreground) 8%, var(--worktree-sidebar));
+}
+
+.dark
+  [data-compact-project-row]:has([data-worktree-card-active='primary'])
+  [data-compact-project-actions] {
+  background: color-mix(in srgb, var(--worktree-sidebar-foreground) 10%, var(--worktree-sidebar));
+}
+
 /* Why: a sleeping card dims by mixing the theme's own text tokens toward the
    sidebar surface in oklab, not by painting opacity over whatever is behind it.
    An opacity step shrinks as the surface lightens, so the cue faded on lighter

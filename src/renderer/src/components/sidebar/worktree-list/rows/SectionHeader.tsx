@@ -6,7 +6,6 @@ import type { AppState } from '@/store/types'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
 import { RepoForkIndicator } from '@/components/repo/repo-fork-indicator'
 import type { FolderWorkspacePathStatus } from '../../../../../../shared/folder-workspace-path-status'
-import { isConfirmedStaleFolderPathStatus } from '../../../../../../shared/folder-workspace-path-status'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { getProjectGroupHostId } from '@/store/slices/project-group-owner-routing'
@@ -42,6 +41,12 @@ import {
 } from './header-event-guards'
 import type { WorktreeSidebarHeaderDrag } from '../drag/use-header-drag'
 import { getWorktreeOptionId } from './option-dom'
+import { ProjectAttentionStatusIndicator } from './ProjectAttentionStatusIndicator'
+import {
+  activateSectionHeader,
+  getSectionHeaderExpansion,
+  isFolderWorkspaceCreateDisabled
+} from './section-header-state'
 
 export type SectionHeaderRowContext = {
   groupBy: WorktreeGroupBy
@@ -67,14 +72,7 @@ export type SectionHeaderRowContext = {
   onWorkspacePinDragOver: (event: React.DragEvent) => void
   onWorkspacePinDragLeave: (event: React.DragEvent) => void
   onWorkspaceStatusDrop: (event: React.DragEvent, status: WorkspaceStatus) => void
-}
-
-// The folder-scan project group whose parent path is gone can't create new workspaces.
-function isFolderWorkspaceCreateDisabled(status: FolderWorkspacePathStatus | null): boolean {
-  return (
-    status?.exists === false &&
-    (isConfirmedStaleFolderPathStatus(status) || status.reason === 'ambiguous-connection')
-  )
+  onCompactProjectActivate: (worktreeIds: readonly string[]) => void
 }
 
 export function renderWorktreeSectionHeaderRow(args: {
@@ -173,10 +171,20 @@ export function renderWorktreeSectionHeaderRow(args: {
     : null
   const collapseKey = row.collapseKey ?? row.key
   const isHeaderCollapsed = ctx.collapsedGroups.has(collapseKey)
-  // Why: repo/project/status/pinned share compact section chrome; flat "All" stays a simple label.
-  const showHeaderCollapseAffordance =
-    row.count > 0 &&
-    (isRepoHeader || isProjectGroupHeader || headerWorkspaceStatus !== null || isPinnedHeader)
+  const { showCollapseAffordance: showHeaderCollapseAffordance, ariaExpanded } =
+    getSectionHeaderExpansion({
+      row,
+      isCollapsed: isHeaderCollapsed,
+      collapsible:
+        isRepoHeader || isProjectGroupHeader || headerWorkspaceStatus !== null || isPinnedHeader
+    })
+  const activateHeader = (): void =>
+    activateSectionHeader({
+      row,
+      isCollapsed: isHeaderCollapsed,
+      toggle: () => ctx.toggleGroupWithScrollAnchor(collapseKey),
+      activateCompactProject: ctx.onCompactProjectActivate
+    })
   return (
     <div
       key={vItem.key}
@@ -206,7 +214,7 @@ export function renderWorktreeSectionHeaderRow(args: {
         id={getWorktreeOptionId(row.key)}
         role="button"
         tabIndex={0}
-        aria-expanded={showHeaderCollapseAffordance ? !isHeaderCollapsed : undefined}
+        aria-expanded={ariaExpanded}
         data-repo-header-id={projectIdForHeader}
         data-repo-header-index={repoHeaderIndex}
         data-repo-header-bucket={repoHeaderBucketKey}
@@ -285,7 +293,7 @@ export function renderWorktreeSectionHeaderRow(args: {
           if (shouldIgnoreRepoHeaderToggle(event)) {
             return
           }
-          ctx.toggleGroupWithScrollAnchor(collapseKey)
+          activateHeader()
         }}
         onKeyDown={(e) => {
           if (shouldIgnoreRepoHeaderToggle(e)) {
@@ -293,7 +301,7 @@ export function renderWorktreeSectionHeaderRow(args: {
           }
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault()
-            ctx.toggleGroupWithScrollAnchor(collapseKey)
+            activateHeader()
           }
         }}
       >
@@ -309,6 +317,9 @@ export function renderWorktreeSectionHeaderRow(args: {
               'cursor-grab active:cursor-grabbing'
           )}
         >
+          {row.projectWorktreeIds ? (
+            <ProjectAttentionStatusIndicator worktreeIds={row.projectWorktreeIds} />
+          ) : null}
           {row.icon ? (
             <div
               className={cn(

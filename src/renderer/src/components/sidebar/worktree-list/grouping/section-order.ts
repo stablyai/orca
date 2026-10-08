@@ -11,6 +11,11 @@ import type {
 } from './project-grouping'
 import type { WorktreeGroupBy } from './row-types'
 import { getGroupKeyForWorktree } from './worktree-group-keys'
+import {
+  compareProjectAttentionRank,
+  createProjectAttentionRankLookup,
+  type ProjectAttentionByWorktree
+} from './project-attention-rank'
 
 export function getRenderedNaturalAnchorRepoIds({
   groupBy,
@@ -187,13 +192,27 @@ export function getManualOrderAnchorRepo(
  * Order project header entries by the user's project-order preference. Manual
  * follows the canonical repoOrder; Recent follows each project's most recent
  * visible workspace activity (descending), with empty/imported-only projects
- * sorting after active ones, then by manual rank, then label.
+ * sorting after active ones, then by manual rank, then label. Attention ranks
+ * by each project's most urgent Smart class (see project-attention-rank.ts).
  */
 export function sortProjectEntries(
   entries: OrderedGroupEntry[],
   projectOrderBy: ProjectOrderBy,
-  repoOrder: Map<string, number> | undefined
+  repoOrder: Map<string, number> | undefined,
+  attentionByWorktree?: ProjectAttentionByWorktree
 ): OrderedGroupEntry[] {
+  if (projectOrderBy === 'attention') {
+    if (entries.length < 2) {
+      return [...entries]
+    }
+    const getAttentionRank = createProjectAttentionRankLookup(attentionByWorktree)
+    return [...entries].sort(
+      (a, b) =>
+        compareProjectAttentionRank(getAttentionRank(a), getAttentionRank(b)) ||
+        manualRankForEntry(a, repoOrder) - manualRankForEntry(b, repoOrder) ||
+        a[1].label.localeCompare(b[1].label)
+    )
+  }
   if (projectOrderBy === 'recent') {
     if (entries.length < 2) {
       return [...entries]

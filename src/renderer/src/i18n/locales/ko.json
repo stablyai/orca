@@ -5378,7 +5378,9 @@
           "a30e34eb5c": "워크스페이스 보드 닫기",
           "spaces": "스페이스",
           "views": "사이드바 보기",
-          "addProject": "프로젝트 추가"
+          "addProject": "프로젝트 추가",
+          "restoreProjectList": "이전 프로젝트 목록으로 복원",
+          "compactProjectsByAttention": "간결한 프로젝트, 주의 필요 순 정렬"
         },
         "SidebarNav": {
           "80611a8b10": "검색",
@@ -5504,7 +5506,10 @@
           "automation": "자동화",
           "folderPathIdentity": "브랜치 / 폴더 경로",
           "cli": "Orca CLI",
-          "workspaceOptions": "워크스페이스 옵션"
+          "workspaceOptions": "워크스페이스 옵션",
+          "projectOrderAttention": "주의 필요 순",
+          "projectOrderAttentionDescription": "사용자가 필요한 에이전트의 프로젝트를 먼저, 그다음 완료, 그다음 작업 중",
+          "compactProjectRows": "프로젝트당 한 줄"
         },
         "SshTargetRow": {
           "4677394048": "연결 중…",
@@ -9330,7 +9335,13 @@
             "zcodeUsageDescription": "상태 표시줄에 ZCode 코딩 계획 할당량 사용을 표시합니다.",
             "zcode": "zcode",
             "zai": "zai",
-            "glm": "glm"
+            "glm": "glm",
+            "compactProjectRows": {
+              "title": "프로젝트당 한 줄",
+              "description": "프로젝트별로 그룹화하면 각 프로젝트는 가장 긴급한 에이전트 상태와 함께 한 줄로 표시됩니다. 활성 워크스페이스의 프로젝트만 펼쳐져 워크스페이스와 에이전트를 보여 줍니다. 프로젝트를 클릭하면 열립니다.",
+              "compact": "간결",
+              "attention": "주의"
+            }
           }
         },
         "auto": {
