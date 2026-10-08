@@ -34,6 +34,7 @@ export function WorktreeCardParentContent({
     hoverIssue,
     hoverLinearIssue,
     hoverJiraIssue,
+    hoverIssueUrl,
     hoverReview,
     hoverComment,
     metaAutomationProvenance,
@@ -80,6 +81,7 @@ export function WorktreeCardParentContent({
         issue={hoverIssue}
         linearIssue={hoverLinearIssue}
         jiraIssue={hoverJiraIssue}
+        issueUrl={hoverIssueUrl}
         review={hoverReview}
         comment={hoverComment}
         automationProvenance={metaAutomationProvenance}

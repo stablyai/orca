@@ -335,6 +335,35 @@ describe('WorktreeCardDetailsHover', () => {
     expect(hoverMarkup).toContain('https://company.atlassian.net/browse/KAN-1')
   })
 
+  it('shows a link badge and host for an issue URL from another tracker', () => {
+    const issueUrl = 'https://tickets.example.com/browse/TICKET-1'
+    const badgeMarkup = renderToStaticMarkup(
+      <WorktreeCardMetaBadges
+        issue={null}
+        linearIssue={null}
+        issueUrl={issueUrl}
+        review={null}
+        comment={null}
+      />
+    )
+    const hoverMarkup = renderToStaticMarkup(
+      <WorktreeCardDetailsHover
+        issue={null}
+        linearIssue={null}
+        issueUrl={issueUrl}
+        review={null}
+        comment={null}
+      >
+        <span>INC0012345</span>
+      </WorktreeCardDetailsHover>
+    )
+
+    expect(badgeMarkup).toContain('Linked issue on tickets.example.com')
+    expect(hoverMarkup).toContain('tickets.example.com')
+    expect(hoverMarkup).toContain('Open link')
+    expect(hoverMarkup).toContain('href="https://tickets.example.com/browse/TICKET-1"')
+  })
+
   it('shows identifier when Linear issue URL is unavailable', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCardDetailsHover

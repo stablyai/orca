@@ -609,7 +609,8 @@
                     "pr": {
                       "suppression": "Update the remote runtime to unlink GitHub pull requests"
                     }
-                  }
+                  },
+                  "issueUrl": "Update the remote runtime to link issue URLs"
                 }
               }
             }
@@ -5898,7 +5899,9 @@
           "cliCreated": "Created by Orca CLI",
           "jiraIssue": "Jira {{value0}}",
           "viewOnJira": "View on Jira",
-          "linkedJira": "Linked Jira {{value0}}"
+          "linkedJira": "Linked Jira {{value0}}",
+          "openIssueUrl": "Open link",
+          "linkedIssueUrl": "Linked issue on {{value0}}"
         },
         "WorktreeCardMetadataStatusBadges": {
           "fe188062a1": "State: Open",
@@ -6536,7 +6539,10 @@
           "f047887705": "Paste a GitHub or Linear URL, or enter a number. Leave blank to remove the link.",
           "ad78f9bee2": "Issue",
           "662ae142f8": "Issue #, or a GitHub or Linear URL",
-          "929c98d05a": "Issue provider"
+          "929c98d05a": "Issue provider",
+          "otherProvider": "Other",
+          "otherInvalid": "Not an http(s) URL.",
+          "otherHelper": "Paste a link to any tracker. Leave blank to remove the link."
         },
         "worktreeIssueDisplacement": {
           "3f61c0a8d2": "Linear {{value}}",

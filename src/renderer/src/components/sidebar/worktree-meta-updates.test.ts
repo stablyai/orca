@@ -396,4 +396,92 @@ describe('buildWorktreeMetaUpdates', () => {
   it('clears a comment with empty string, never a present-undefined key', () => {
     expect(buildUpdates({ commentInput: '  ' }, { comment: 'old note' }).comment).toBe('')
   })
+
+  describe('other provider', () => {
+    const URL = 'https://tickets.example.com/browse/TICKET-1?view=full'
+
+    it('writes the URL as-is and displaces GitHub and Linear issue links', () => {
+      expect(
+        buildUpdates(
+          { issueInput: `  ${URL}  `, issueProvider: 'other' },
+          {},
+          {
+            linkedIssue: 12,
+            linkedLinearIssue: 'STA-335',
+            linkedWorkItemProvider: 'linear',
+            linkedWorkItemType: 'issue'
+          }
+        )
+      ).toEqual({
+        linkedIssue: null,
+        linkedLinearIssue: null,
+        linkedLinearIssueWorkspaceId: null,
+        linkedLinearIssueOrganizationUrlKey: null,
+        linkedIssueUrl: URL,
+        linkedWorkItem: null,
+        linkedTaskSourceContext: null
+      })
+    })
+
+    it('clears the stored URL when a GitHub issue is saved', () => {
+      expect(
+        buildUpdates(
+          { issueInput: '12' },
+          { issueInput: URL, issueProvider: 'other' },
+          {
+            linkedIssueUrl: URL
+          }
+        )
+      ).toEqual({ linkedIssue: 12, linkedIssueUrl: null })
+    })
+
+    it('clears the stored URL when a Linear issue is saved', () => {
+      expect(
+        buildUpdates(
+          { issueInput: 'STA-335', issueProvider: 'linear' },
+          { issueInput: URL, issueProvider: 'other' },
+          { linkedIssueUrl: URL }
+        )
+      ).toMatchObject({ linkedLinearIssue: 'STA-335', linkedIssueUrl: null })
+    })
+
+    it('clears the stored URL when the field is emptied', () => {
+      expect(
+        buildUpdates(
+          { issueInput: '' },
+          { issueInput: URL, issueProvider: 'other' },
+          {
+            linkedIssueUrl: URL
+          }
+        )
+      ).toEqual({ linkedIssue: null, linkedIssueUrl: null })
+    })
+
+    // The remote capability gate keys off presence, like the Linear clear.
+    it('emits no URL clear when the workspace holds no URL', () => {
+      expect(buildUpdates({ issueInput: '12' })).not.toHaveProperty('linkedIssueUrl')
+    })
+
+    it('emits nothing when the stored URL is unchanged', () => {
+      expect(
+        buildUpdates(
+          { issueInput: URL, issueProvider: 'other' },
+          { issueInput: URL, issueProvider: 'other' },
+          { linkedIssueUrl: URL }
+        )
+      ).toEqual({})
+    })
+
+    it('leaves links untouched for a non-http URL', () => {
+      expect(
+        buildUpdates(
+          { issueInput: 'javascript:alert(1)', issueProvider: 'other' },
+          {},
+          {
+            linkedIssue: 12
+          }
+        )
+      ).toEqual({})
+    })
+  })
 })

@@ -15,6 +15,7 @@ import { WorkspaceAttachmentsSchema } from '../workspace-attachment-schema'
 import { DiffCommentSchema, MobileDiffReviewSchema } from '../diff-comment-schema'
 import { TaskSourceContextSchema } from '../task-source-context-schema'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../workspace-linked-item-source-context'
+import { parseIssueUrl } from '../issue-link-input'
 
 export const OptionalExecutionHostId = z
   .string()
@@ -125,6 +126,13 @@ export const WorktreeSet = WorktreeSelector.extend({
   linkedLinearIssue: z.union([z.string(), z.null()]).optional(),
   linkedLinearIssueWorkspaceId: z.union([z.string(), z.null()]).optional(),
   linkedLinearIssueOrganizationUrlKey: z.union([z.string(), z.null()]).optional(),
+  // Why: the card opens this in the browser, so only http(s) may be stored.
+  linkedIssueUrl: z
+    .union([
+      z.string().refine((value) => parseIssueUrl(value) !== null, 'Invalid issue URL'),
+      z.null()
+    ])
+    .optional(),
   linkedGitLabMR: TriStateLinkedIssue,
   linkedGitLabIssue: TriStateLinkedIssue,
   linkedBitbucketPR: TriStateLinkedIssue,

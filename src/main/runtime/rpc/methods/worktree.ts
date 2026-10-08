@@ -140,6 +140,7 @@ export const WORKTREE_METHODS = [
     name: 'worktree.set',
     params: WorktreeSet,
     handler: async (params, { runtime }) => ({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every field but diffComments and mobileDiffReview is schema-typed; those two are z.unknown and persisted as the client wrote them.
       worktree: await runtime.updateManagedWorktreeMeta(params.worktree, {
         displayName: params.displayName,
         ...(params.displayName !== undefined
@@ -151,6 +152,7 @@ export const WORKTREE_METHODS = [
         linkedLinearIssue: params.linkedLinearIssue,
         linkedLinearIssueWorkspaceId: params.linkedLinearIssueWorkspaceId,
         linkedLinearIssueOrganizationUrlKey: params.linkedLinearIssueOrganizationUrlKey,
+        linkedIssueUrl: params.linkedIssueUrl,
         linkedGitLabMR: params.linkedGitLabMR,
         linkedGitLabIssue: params.linkedGitLabIssue,
         linkedBitbucketPR: params.linkedBitbucketPR,

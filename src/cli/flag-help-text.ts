@@ -34,6 +34,7 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
     '--gitlab-mr <number|url|null> Linked GitLab merge request number or URL; null clears on set',
   'linear-issue':
     '--linear-issue <id|url|null> Linked Linear issue identifier or URL; null clears on set',
+  'issue-url': '--issue-url <url|null> Linked issue URL for any other tracker; null clears it',
   json: '--json                 Emit machine-readable JSON',
   key: '--key <key>            Key argument for this command',
   limit: '--limit <n>            Maximum number of rows to return',

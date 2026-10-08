@@ -39,6 +39,8 @@ export type WorktreeMeta = {
   linkedLinearIssue: string | null
   linkedLinearIssueWorkspaceId?: string | null
   linkedLinearIssueOrganizationUrlKey?: string | null
+  /** Optional for backward compatibility — see Worktree.linkedIssueUrl. */
+  linkedIssueUrl?: string | null
   /** Optional for backward compatibility — see Worktree.linkedGitLabMR. */
   linkedGitLabMR?: number | null
   /** Optional for backward compatibility — see Worktree.linkedGitLabIssue. */

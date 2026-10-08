@@ -356,6 +356,90 @@ describe('orca cli worktree awareness', () => {
     process.exitCode = priorExitCode
   })
 
+  it('passes an issue URL through worktree.set', async () => {
+    const issueUrl = 'https://tickets.example.com/browse/TICKET-1'
+    queueFixtures(
+      callMock,
+      okFixture('req_set_issue_url', {
+        worktree: { ...buildWorktree('/tmp/repo/child', 'feature/child'), linkedIssueUrl: issueUrl }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'worktree',
+        'set',
+        '--worktree',
+        'id:repo::/tmp/repo/child',
+        '--issue-url',
+        issueUrl,
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith(
+      'worktree.set',
+      expect.objectContaining({ linkedIssueUrl: issueUrl })
+    )
+  })
+
+  it('clears the issue URL through worktree.set', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_clear_issue_url', {
+        worktree: { ...buildWorktree('/tmp/repo/child', 'feature/child'), linkedIssueUrl: null }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'worktree',
+        'set',
+        '--worktree',
+        'id:repo::/tmp/repo/child',
+        '--issue-url',
+        'null',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith(
+      'worktree.set',
+      expect.objectContaining({ linkedIssueUrl: null })
+    )
+  })
+
+  it('rejects non-http issue URLs on worktree.set before RPC', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      [
+        'worktree',
+        'set',
+        '--worktree',
+        'id:repo::/tmp/repo/child',
+        '--issue-url',
+        'javascript:alert(1)',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'Pass an http(s) issue URL'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
   it('passes workspace status through worktree.set', async () => {
     queueFixtures(
       callMock,

@@ -79,6 +79,7 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
     worktree,
     linkedIssue,
     linkedLinearIssue,
+    linkedIssueUrl,
     currentIssue,
     currentProvider,
     isFolderWorkspace,
@@ -214,9 +215,10 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
         snapshot,
         isFolderWorkspace,
         linkedIssue,
-        linkedLinearIssue
+        linkedLinearIssue,
+        linkedIssueUrl
       }),
-    [draft, snapshot, isFolderWorkspace, linkedIssue, linkedLinearIssue]
+    [draft, snapshot, isFolderWorkspace, linkedIssue, linkedLinearIssue, linkedIssueUrl]
   )
 
   const handleOpenChange = useCallback(

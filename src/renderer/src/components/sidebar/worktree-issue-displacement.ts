@@ -1,5 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import type { IssueLinkProvider } from '../../../../shared/issue-link-input'
+import { getIssueUrlHostname, type IssueLinkProvider } from '../../../../shared/issue-link-input'
 import {
   isIssueFieldDirty,
   type WorktreeMetaDraft,
@@ -7,6 +7,9 @@ import {
 } from './worktree-meta-updates'
 
 function formatLinkLabel(provider: IssueLinkProvider, value: string): string {
+  if (provider === 'other') {
+    return getIssueUrlHostname(value)
+  }
   return provider === 'linear'
     ? translate(
         'auto.components.sidebar.worktreeIssueDisplacement.3f61c0a8d2',
@@ -30,8 +33,10 @@ export function getDisplacedLinkLabels(args: {
   isFolderWorkspace: boolean
   linkedIssue: number | null
   linkedLinearIssue: string | null
+  linkedIssueUrl?: string | null
 }): string[] | null {
-  const { draft, snapshot, isFolderWorkspace, linkedIssue, linkedLinearIssue } = args
+  const { draft, snapshot, isFolderWorkspace, linkedIssue, linkedLinearIssue, linkedIssueUrl } =
+    args
   if (isFolderWorkspace || !isIssueFieldDirty(draft, snapshot)) {
     return null
   }
@@ -43,6 +48,9 @@ export function getDisplacedLinkLabels(args: {
   }
   if (keeping !== 'github' && typeof linkedIssue === 'number') {
     displaced.push(formatLinkLabel('github', String(linkedIssue)))
+  }
+  if (keeping !== 'other' && linkedIssueUrl) {
+    displaced.push(formatLinkLabel('other', linkedIssueUrl))
   }
   return displaced.length > 0 ? displaced : null
 }

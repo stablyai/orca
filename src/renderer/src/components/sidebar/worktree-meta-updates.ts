@@ -49,6 +49,7 @@ export type WorktreeMetaLiveLinks = {
   linkedIssue?: number | null
   linkedLinearIssue?: string | null
   linkedLinearIssueOrganizationUrlKey?: string | null
+  linkedIssueUrl?: string | null
   linkedWorkItemProvider?: WorkspaceSourceProvider | null
   /** `linkedWorkItem` also describes PRs and MRs, which this row does not own. */
   linkedWorkItemType?: WorkspaceLinkedItem['type'] | null
@@ -145,6 +146,9 @@ function issueLinkIdentity(
   if (parsed.provider === 'github') {
     return `github:${parsed.number}`
   }
+  if (parsed.provider === 'other') {
+    return `other:${parsed.url}`
+  }
   const organizationUrlKey = parsed.organizationUrlKey ?? storedLinearOrganizationUrlKey ?? ''
   return `linear:${parsed.identifier}:${organizationUrlKey.trim().toLowerCase()}`
 }
@@ -180,6 +184,9 @@ function keepsLinkedWorkItem(
   }
   if (parsed.provider === 'github') {
     return live.linkedWorkItemProvider === 'github' && parsed.number === live.linkedIssue
+  }
+  if (parsed.provider === 'other') {
+    return false
   }
   if (
     live.linkedWorkItemProvider !== 'linear' ||
@@ -234,11 +241,17 @@ function buildIssueLinkUpdates(
   const displacedLinear: Partial<WorktreeMeta> = live.linkedLinearIssue
     ? LINEAR_ISSUE_LINK_CLEARED
     : {}
+  // Why: same key-presence gate as Linear — the issue-URL capability is only
+  // required of runtimes that already hold one.
+  const displacedIssueUrl: Partial<WorktreeMeta> = live.linkedIssueUrl
+    ? { linkedIssueUrl: null }
+    : {}
 
   if (trimmed === '') {
     return {
       linkedIssue: null,
       ...displacedLinear,
+      ...displacedIssueUrl,
       ...displacedWorkItem
     }
   }
@@ -254,12 +267,24 @@ function buildIssueLinkUpdates(
     return {
       linkedIssue: parsed.number,
       ...displacedLinear,
+      ...displacedIssueUrl,
+      ...displacedWorkItem
+    }
+  }
+
+  if (parsed.provider === 'other') {
+    return {
+      linkedIssue: null,
+      ...displacedLinear,
+      linkedIssueUrl: parsed.url,
       ...displacedWorkItem
     }
   }
 
   const linearUpdates = buildLinearIssueLinkUpdates(trimmed)
-  return linearUpdates ? { linkedIssue: null, ...linearUpdates, ...displacedWorkItem } : {}
+  return linearUpdates
+    ? { linkedIssue: null, ...linearUpdates, ...displacedIssueUrl, ...displacedWorkItem }
+    : {}
 }
 
 function buildReviewLinkUpdate(

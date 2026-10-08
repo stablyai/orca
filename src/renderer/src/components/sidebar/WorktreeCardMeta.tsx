@@ -1,7 +1,7 @@
 import React from 'react'
 import { Badge } from '@/components/ui/badge'
 import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card'
-import { ExternalLink, MonitorUp, Pencil, StickyNote } from 'lucide-react'
+import { ExternalLink, Link, MonitorUp, Pencil, StickyNote } from 'lucide-react'
 import { toast } from 'sonner'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { JiraIcon } from '@/components/icons/JiraIcon'
@@ -25,6 +25,7 @@ import type {
   WorktreeCardDetailsHoverProps
 } from './worktree-card-meta-types'
 import { translate } from '@/i18n/i18n'
+import { getIssueUrlHostname } from '../../../../shared/issue-link-input'
 import { WorktreeCardReviewDetailSection } from './WorktreeCardReviewDetailSection'
 import { WorktreeCardAutomationDetailSection } from './WorktreeCardAutomationDetailSection'
 import { WorktreeCardCliDetailSection } from './WorktreeCardCliDetailSection'
@@ -56,6 +57,7 @@ export function WorktreeCardDetailsHover({
   issue,
   linearIssue,
   jiraIssue,
+  issueUrl,
   review,
   comment,
   automationProvenance,
@@ -169,6 +171,7 @@ export function WorktreeCardDetailsHover({
       issue,
       linearIssue,
       jiraIssue,
+      issueUrl,
       review,
       comment,
       automationProvenance,
@@ -313,6 +316,31 @@ export function WorktreeCardDetailsHover({
               <WorktreeCardDetailSectionContent>
                 <div className="text-[13px] font-semibold leading-snug text-foreground break-words">
                   {jiraIssue.title}
+                </div>
+              </WorktreeCardDetailSectionContent>
+            </WorktreeCardDetailSection>
+          )}
+
+          {issueUrl && (
+            <WorktreeCardDetailSection>
+              <DetailHeader
+                icon={<Link className="size-3 text-muted-foreground" />}
+                label={getIssueUrlHostname(issueUrl)}
+                actions={
+                  <MetadataActionIcon
+                    label={translate(
+                      'auto.components.sidebar.WorktreeCardMeta.openIssueUrl',
+                      'Open link'
+                    )}
+                    href={issueUrl}
+                  >
+                    <ExternalLink className="size-3" />
+                  </MetadataActionIcon>
+                }
+              />
+              <WorktreeCardDetailSectionContent>
+                <div className="text-[11.5px] leading-snug text-muted-foreground break-all">
+                  {issueUrl}
                 </div>
               </WorktreeCardDetailSectionContent>
             </WorktreeCardDetailSection>

@@ -78,12 +78,14 @@ export function useWorktreeCardSecondaryDetails({
   const hoverIssue = issueDisplay
   const hoverLinearIssue = linearIssueDisplay
   const hoverJiraIssue = jiraIssueDisplay
+  const hoverIssueUrl = worktree.linkedIssueUrl ?? null
   const hoverReview = prDisplay
   const statusLaneReview = statusPrDisplay ?? hoverReview
   const hoverComment = worktree.comment
   const metaIssue = showIssue ? hoverIssue : null
   const metaLinearIssue = showLinearIssue ? hoverLinearIssue : null
   const metaJiraIssue = showJiraIssue ? hoverJiraIssue : null
+  const metaIssueUrl = showIssue ? hoverIssueUrl : null
   const metaReview = showPR ? hoverReview : null
   const metaAutomationProvenance = showAutomation ? worktree.automationProvenance : null
   const metaCliProvenance = showCli ? worktree.cliProvenance : null
@@ -231,6 +233,7 @@ export function useWorktreeCardSecondaryDetails({
     issue: metaIssue,
     linearIssue: metaLinearIssue,
     jiraIssue: metaJiraIssue,
+    issueUrl: metaIssueUrl,
     review: newCardStyle ? null : metaReview,
     comment: metaComment,
     automationProvenance: metaAutomationProvenance,
@@ -247,12 +250,14 @@ export function useWorktreeCardSecondaryDetails({
     hoverIssue,
     hoverLinearIssue,
     hoverJiraIssue,
+    hoverIssueUrl,
     hoverReview,
     statusLaneReview,
     hoverComment,
     metaIssue,
     metaLinearIssue,
     metaJiraIssue,
+    metaIssueUrl,
     metaReview,
     metaAutomationProvenance,
     metaCliProvenance,

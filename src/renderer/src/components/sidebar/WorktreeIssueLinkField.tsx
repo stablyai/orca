@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { LinearIcon } from '@/components/icons/LinearIcon'
-import { ChevronDown, ExternalLink, Github, LoaderCircle } from 'lucide-react'
+import { ChevronDown, ExternalLink, Github, Link, LoaderCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import {
@@ -32,6 +32,9 @@ export function issueAdornmentReserve(providerLabel: string): string {
 }
 
 function providerLabel(provider: IssueLinkProvider): string {
+  if (provider === 'other') {
+    return translate('auto.components.sidebar.WorktreeIssueLinkField.otherProvider', 'Other')
+  }
   return provider === 'linear'
     ? translate('auto.components.sidebar.WorktreeIssueLinkField.25852bfc59', 'Linear')
     : translate('auto.components.sidebar.WorktreeIssueLinkField.5b440069e6', 'GitHub')
@@ -44,7 +47,9 @@ function ProviderIcon({
   provider: IssueLinkProvider
   className?: string
 }): React.JSX.Element {
-  return provider === 'linear' ? (
+  return provider === 'other' ? (
+    <Link className={className} />
+  ) : provider === 'linear' ? (
     <LinearIcon className={className} />
   ) : (
     <Github className={className} />
@@ -115,6 +120,12 @@ export function WorktreeIssueLinkField(props: WorktreeIssueLinkFieldProps): Reac
       )
     }
     if (isInvalid) {
+      if (provider === 'other') {
+        return translate(
+          'auto.components.sidebar.WorktreeIssueLinkField.otherInvalid',
+          'Not an http(s) URL.'
+        )
+      }
       return provider === 'linear'
         ? translate(
             'auto.components.sidebar.WorktreeIssueLinkField.964d9bc00a',
@@ -152,6 +163,12 @@ export function WorktreeIssueLinkField(props: WorktreeIssueLinkFieldProps): Reac
         'auto.components.sidebar.WorktreeIssueLinkField.2c245ac134',
         'Saving unlinks {{link}} — a workspace tracks one issue.',
         { link: displacedLinkLabels[0] }
+      )
+    }
+    if (provider === 'other') {
+      return translate(
+        'auto.components.sidebar.WorktreeIssueLinkField.otherHelper',
+        'Paste a link to any tracker. Leave blank to remove the link.'
       )
     }
     return translate(

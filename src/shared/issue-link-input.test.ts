@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { getIssueLinkProviderFromUrl, parseIssueLinkInput } from './issue-link-input'
+import {
+  getIssueLinkProviderFromUrl,
+  getIssueUrlHostname,
+  parseIssueLinkInput
+} from './issue-link-input'
 
 describe('getIssueLinkProviderFromUrl', () => {
   it('detects GitHub issue URLs', () => {
@@ -23,7 +27,17 @@ describe('getIssueLinkProviderFromUrl', () => {
   })
 
   it('rejects hosts that merely contain linear.app', () => {
-    expect(getIssueLinkProviderFromUrl('https://linear.app.evil.com/acme/issue/STA-335')).toBeNull()
+    expect(getIssueLinkProviderFromUrl('https://linear.app.evil.com/acme/issue/STA-335')).toBe(
+      'other'
+    )
+  })
+
+  it('switches to other for URLs from any other tracker', () => {
+    expect(getIssueLinkProviderFromUrl('https://tickets.example.com/browse/TICKET-1')).toBe('other')
+  })
+
+  it('does not flip to other for non-http URLs', () => {
+    expect(getIssueLinkProviderFromUrl('ftp://tickets.example.com/ticket/1')).toBeNull()
   })
 
   // Linear and Jira issue-key shapes are byte-identical, so a bare key must
@@ -114,5 +128,31 @@ describe('parseIssueLinkInput', () => {
       expect(parseIssueLinkInput('not an issue', 'linear')).toBeNull()
       expect(parseIssueLinkInput('   ', 'linear')).toBeNull()
     })
+  })
+
+  describe('other provider', () => {
+    it('accepts http(s) URLs as-is, trimmed', () => {
+      expect(
+        parseIssueLinkInput('  https://tickets.example.com/browse/TICKET-1  ', 'other')
+      ).toEqual({ provider: 'other', url: 'https://tickets.example.com/browse/TICKET-1' })
+      expect(parseIssueLinkInput('http://tickets.local/42', 'other')).toEqual({
+        provider: 'other',
+        url: 'http://tickets.local/42'
+      })
+    })
+
+    it('rejects non-http schemes, bare keys and oversized input', () => {
+      expect(parseIssueLinkInput('javascript:alert(1)', 'other')).toBeNull()
+      expect(parseIssueLinkInput('file:///etc/passwd', 'other')).toBeNull()
+      expect(parseIssueLinkInput('INC0012345', 'other')).toBeNull()
+      expect(parseIssueLinkInput(`https://a.com/${'x'.repeat(3000)}`, 'other')).toBeNull()
+    })
+  })
+})
+
+describe('getIssueUrlHostname', () => {
+  it('returns the host, or the raw value when unparseable', () => {
+    expect(getIssueUrlHostname('https://tickets.example.com/x')).toBe('tickets.example.com')
+    expect(getIssueUrlHostname('not a url')).toBe('not a url')
   })
 })

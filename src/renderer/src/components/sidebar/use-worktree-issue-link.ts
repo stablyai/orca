@@ -5,7 +5,7 @@ import { issueCacheKey as getIssueCacheKey } from '@/store/github/cache-identity
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { findIndexedWorktreeOwner } from '@/lib/worktree-runtime-owner-index'
 import { buildLinearIssueUrl, parseLinearIssueInput } from '../../../../shared/linear/links'
-import type { IssueLinkProvider } from '../../../../shared/issue-link-input'
+import { parseIssueUrl, type IssueLinkProvider } from '../../../../shared/issue-link-input'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import { parseExplicitGitHubIssueUrl } from './worktree-meta-updates'
 import { isWorkItemLinkQueryTooLarge } from '../../../../shared/new-workspace/work-item-link-query-bounds'
@@ -70,6 +70,7 @@ export function useWorktreeIssueLink(args: {
     linearSourceContext
   } = args
   const isLinear = issueProvider === 'linear'
+  const isOther = issueProvider === 'other'
   const fetchIssue = useAppStore((s) => s.fetchIssue)
   const fetchLinearIssue = useAppStore((s) => s.fetchLinearIssue)
   const [openingIssue, setOpeningIssue] = useState(false)
@@ -98,6 +99,10 @@ export function useWorktreeIssueLink(args: {
   const issueUrlFromInput = useMemo(
     () => (isLinear ? null : parseExplicitGitHubIssueUrl(boundedInput)),
     [isLinear, boundedInput]
+  )
+  const otherIssueUrl = useMemo(
+    () => (isOther ? parseIssueUrl(boundedInput) : null),
+    [isOther, boundedInput]
   )
   const issueInputLooksLikeUrl = useMemo(
     () => /^https?:\/\//i.test(boundedInput.trim()),
@@ -149,14 +154,22 @@ export function useWorktreeIssueLink(args: {
       ]?.data?.url ?? null
     )
   })
-  const canOpenIssue = isLinear
-    ? Boolean(parsedLinearIssue)
-    : issueInputLooksLikeUrl
-      ? Boolean(issueUrlFromInput)
-      : Boolean(cachedIssueUrl || (issueRepo && issueNumber))
+  const canOpenIssue = isOther
+    ? Boolean(otherIssueUrl)
+    : isLinear
+      ? Boolean(parsedLinearIssue)
+      : issueInputLooksLikeUrl
+        ? Boolean(issueUrlFromInput)
+        : Boolean(cachedIssueUrl || (issueRepo && issueNumber))
 
   const handleOpenIssue = useCallback(async () => {
     if (openingIssue) {
+      return
+    }
+    if (isOther) {
+      if (otherIssueUrl) {
+        void window.api.shell.openUrl(otherIssueUrl)
+      }
       return
     }
     setFailedIssueInput(null)
@@ -247,6 +260,7 @@ export function useWorktreeIssueLink(args: {
     fetchIssue,
     fetchLinearIssue,
     isLinear,
+    isOther,
     issueInput,
     issueInputLooksLikeUrl,
     issueNumber,
@@ -256,6 +270,7 @@ export function useWorktreeIssueLink(args: {
     linearSourceContext,
     mountedRef,
     openingIssue,
+    otherIssueUrl,
     parsedLinearIssue
   ])
 

@@ -1,5 +1,5 @@
 import React from 'react'
-import { CalendarClock, CircleDot, SquareTerminal, StickyNote } from 'lucide-react'
+import { CalendarClock, CircleDot, Link, SquareTerminal, StickyNote } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { JiraIcon } from '@/components/icons/JiraIcon'
@@ -10,6 +10,7 @@ import type {
   WorktreeCardMetaBadgesRootProps
 } from './worktree-card-meta-types'
 import { translate } from '@/i18n/i18n'
+import { getIssueUrlHostname } from '../../../../shared/issue-link-input'
 
 function hasComment(comment: string | null): boolean {
   return (comment ?? '').trim().length > 0
@@ -19,6 +20,7 @@ export function hasWorktreeCardDetails({
   issue,
   linearIssue,
   jiraIssue,
+  issueUrl,
   review,
   comment,
   automationProvenance,
@@ -28,6 +30,7 @@ export function hasWorktreeCardDetails({
     issue ||
     linearIssue ||
     jiraIssue ||
+    issueUrl ||
     review ||
     hasComment(comment) ||
     automationProvenance ||
@@ -43,6 +46,7 @@ export const WorktreeCardMetaBadges = React.forwardRef<
     issue,
     linearIssue,
     jiraIssue,
+    issueUrl,
     review,
     comment,
     automationProvenance,
@@ -57,6 +61,7 @@ export const WorktreeCardMetaBadges = React.forwardRef<
       issue,
       linearIssue,
       jiraIssue,
+      issueUrl,
       review,
       comment,
       automationProvenance,
@@ -139,6 +144,17 @@ export const WorktreeCardMetaBadges = React.forwardRef<
           )}
         >
           <JiraIcon className="text-muted-foreground" />
+        </MetaIconBadge>
+      )}
+      {issueUrl && (
+        <MetaIconBadge
+          label={translate(
+            'auto.components.sidebar.WorktreeCardMeta.linkedIssueUrl',
+            'Linked issue on {{value0}}',
+            { value0: getIssueUrlHostname(issueUrl) }
+          )}
+        >
+          <Link className="text-muted-foreground" />
         </MetaIconBadge>
       )}
       {review && (

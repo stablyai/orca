@@ -20,6 +20,7 @@ export function useWorktreeMetaWorkspace(args: {
   worktree: Worktree | undefined
   linkedIssue: number | null
   linkedLinearIssue: string | null
+  linkedIssueUrl: string | null
   /** The persisted value and its provider, from one source so they cannot drift. */
   currentIssue: string
   currentProvider: IssueLinkProvider
@@ -62,16 +63,25 @@ export function useWorktreeMetaWorkspace(args: {
   )
   const linkedIssue = worktree?.linkedIssue ?? null
   const linkedLinearIssue = worktree?.linkedLinearIssue ?? null
+  const linkedIssueUrl = worktree?.linkedIssueUrl ?? null
   // Why: `typeof` rather than a null check — an unhydrated projection can leave
   // linkedIssue undefined, which `!== null` would read as a GitHub link.
   const currentProvider: IssueLinkProvider =
-    typeof linkedIssue === 'number' ? 'github' : linkedLinearIssue ? 'linear' : 'github'
+    typeof linkedIssue === 'number'
+      ? 'github'
+      : linkedLinearIssue
+        ? 'linear'
+        : linkedIssueUrl
+          ? 'other'
+          : 'github'
   const currentIssue =
     currentProvider === 'linear'
       ? (linkedLinearIssue ?? '')
-      : typeof linkedIssue === 'number'
-        ? String(linkedIssue)
-        : ''
+      : currentProvider === 'other'
+        ? (linkedIssueUrl ?? '')
+        : typeof linkedIssue === 'number'
+          ? String(linkedIssue)
+          : ''
   // Why: displacement is decided against live state, not the frozen snapshot —
   // the dialog's warning reads the same values, so a link added by the CLI while
   // the dialog was open cannot outlive a save that promised to displace it.
@@ -81,12 +91,14 @@ export function useWorktreeMetaWorkspace(args: {
       linkedIssue,
       linkedLinearIssue,
       linkedLinearIssueOrganizationUrlKey: worktree?.linkedLinearIssueOrganizationUrlKey ?? null,
+      linkedIssueUrl,
       linkedWorkItemProvider: worktree?.linkedWorkItem?.provider ?? null,
       linkedWorkItemType: worktree?.linkedWorkItem?.type ?? null
     }),
     [
       linkedIssue,
       linkedLinearIssue,
+      linkedIssueUrl,
       worktree?.linkedPR,
       worktree?.linkedLinearIssueOrganizationUrlKey,
       worktree?.linkedWorkItem
@@ -97,6 +109,7 @@ export function useWorktreeMetaWorkspace(args: {
     worktree,
     linkedIssue,
     linkedLinearIssue,
+    linkedIssueUrl,
     currentIssue,
     currentProvider,
     // Why: folder workspaces persist links only through their creation-time
