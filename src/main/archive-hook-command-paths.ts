@@ -2,9 +2,16 @@ import { statSync } from 'node:fs'
 import path from 'node:path'
 import { isWindowsAbsolutePathLike } from '../shared/cross-platform-path'
 import { parseWslUncPath, toWindowsWslDrivePath, toWindowsWslUncPath } from '../shared/wsl-paths'
-import { quotePosixShell } from '../shared/wsl-login-shell-command'
+import {
+  archiveHookHeredocClosed,
+  archiveHookHeredocDelimiter,
+  archiveHookRedirectsNextWord,
+  quoteArchiveHookShell,
+  scanArchiveHookWords,
+  type ArchiveHookShell
+} from './archive-hook-shell-lex'
 
-export type ArchiveHookShell = 'posix' | 'cmd'
+export type { ArchiveHookShell }
 
 export type ArchiveHookPathLookup = {
   /** Checkout that supplied the archive command (`orca.yaml`'s directory). */
@@ -15,27 +22,10 @@ export type ArchiveHookPathLookup = {
   isFile(absolutePath: string): boolean
 }
 
-type Word = { start: number; end: number; text: string; unsafe: boolean }
-
 type Hit = { start: number; end: number; yamlAbs: string; cwdAbs: string }
 
 function pathApi(root: string): path.PlatformPath {
   return isWindowsAbsolutePathLike(root) ? path.win32 : path.posix
-}
-
-/**
- * cmd sees this unquoted. Node's local shell wrap and the relay's argv quoting each add one
- * pair that `/s` strips, and an inner quote is turned into a backslash on that relay hop.
- */
-function quoteForCmd(value: string): string {
-  return value.replace(/[ \t&|()<>^]/g, (char) => `^${char}`)
-}
-
-function quoteForShell(value: string, shell: ArchiveHookShell): string {
-  if (shell === 'cmd') {
-    return quoteForCmd(value)
-  }
-  return quotePosixShell(value)
 }
 
 function isCandidate(text: string, api: path.PlatformPath): boolean {
@@ -56,120 +46,19 @@ function staysInside(root: string, absolute: string, api: path.PlatformPath): bo
   return relative !== '' && !relative.startsWith('..') && !api.isAbsolute(relative)
 }
 
-type Heredoc = { delimiter: string; stripTabs: boolean }
-
-/** POSIX heredoc opener. The body is the worktree's data, not a path to retarget. */
-function heredocDelimiter(line: string): Heredoc | null {
-  const match = line.match(/<<(-)?\s*(?:'([^']*)'|"([^"]*)"|\\?([A-Za-z0-9_]+))/)
-  if (!match) {
-    return null
-  }
-  const delimiter = match[2] ?? match[3] ?? match[4]
-  if (delimiter == null) {
-    return null
-  }
-  return { delimiter, stripTabs: match[1] === '-' }
-}
-
-function heredocClosed(line: string, heredoc: Heredoc): boolean {
-  const closer = heredoc.stripTabs ? line.replace(/^\t+/, '') : line
-  return closer === heredoc.delimiter
-}
-
-function scanWords(line: string, shell: ArchiveHookShell): Word[] {
-  const words: Word[] = []
-  let index = 0
-  while (index < line.length) {
-    while (index < line.length && /\s/.test(line[index])) {
-      index += 1
-    }
-    if (index >= line.length) {
-      break
-    }
-    if (shell === 'posix' && line[index] === '#') {
-      break
-    }
-    const start = index
-    let text = ''
-    let unsafe = false
-    let quote: '"' | "'" | null = null
-    while (index < line.length) {
-      const char = line[index]
-      if (quote === "'") {
-        if (char === "'") {
-          quote = null
-          index += 1
-          continue
-        }
-        text += char
-        index += 1
-        continue
-      }
-      if (quote === '"') {
-        if (char === '\\' && index + 1 < line.length) {
-          const next = line[index + 1]
-          if (next === '$' || next === '`' || next === '"' || next === '\\') {
-            if (next === '$' || next === '`') {
-              unsafe = true
-            }
-            text += next
-            index += 2
-            continue
-          }
-        }
-        if (char === '"') {
-          quote = null
-          index += 1
-          continue
-        }
-        if (char === '$' || char === '`') {
-          unsafe = true
-        }
-        text += char
-        index += 1
-        continue
-      }
-      if (shell === 'posix' && char === '\\' && index + 1 < line.length) {
-        text += line[index + 1]
-        index += 2
-        continue
-      }
-      if (char === "'" || char === '"') {
-        quote = char
-        index += 1
-        continue
-      }
-      if (/\s/.test(char)) {
-        break
-      }
-      if (
-        char === '$' ||
-        char === '`' ||
-        char === '*' ||
-        char === '?' ||
-        char === '[' ||
-        char === '~'
-      ) {
-        unsafe = true
-      }
-      text += char
-      index += 1
-    }
-    if (quote) {
-      unsafe = true
-    }
-    words.push({ start, end: index, text, unsafe })
-  }
-  return words
-}
-
 function hitsOnLine(
   line: string,
   lookup: Omit<ArchiveHookPathLookup, 'isFile'>,
   api: path.PlatformPath
 ): Hit[] {
   const hits: Hit[] = []
-  for (const word of scanWords(line, lookup.shell)) {
+  let previous: string | undefined
+  for (const word of scanArchiveHookWords(line, lookup.shell)) {
+    if (previous !== undefined && archiveHookRedirectsNextWord(previous)) {
+      previous = word.text
+      continue
+    }
+    previous = word.text
     if (word.unsafe || !isCandidate(word.text, api)) {
       continue
     }
@@ -193,7 +82,7 @@ function rewriteLine(line: string, lookup: ArchiveHookPathLookup, api: path.Plat
   )
   let next = line
   for (const hit of hits.sort((left, right) => right.start - left.start)) {
-    next = `${next.slice(0, hit.start)}${quoteForShell(hit.yamlAbs, lookup.shell)}${next.slice(hit.end)}`
+    next = `${next.slice(0, hit.start)}${quoteArchiveHookShell(hit.yamlAbs, lookup.shell)}${next.slice(hit.end)}`
   }
   return next
 }
@@ -211,21 +100,21 @@ function walkLines(
   if (samePlace(lookup.yamlRoot, lookup.cwd, api)) {
     return script
   }
-  let heredoc: Heredoc | null = null
+  let heredoc: ReturnType<typeof archiveHookHeredocDelimiter> = null
   return script
     .split('\n')
     .map((rawLine) => {
       const cr = rawLine.endsWith('\r')
       const line = cr ? rawLine.slice(0, -1) : rawLine
       if (heredoc) {
-        if (heredocClosed(line, heredoc)) {
+        if (archiveHookHeredocClosed(line, heredoc)) {
           heredoc = null
         }
         return rawLine
       }
       const rewritten = onLine(line, api)
       if (lookup.shell === 'posix') {
-        heredoc = heredocDelimiter(line)
+        heredoc = archiveHookHeredocDelimiter(line)
       }
       return cr ? `${rewritten}\r` : rewritten
     })

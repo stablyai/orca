@@ -95,6 +95,38 @@ describe('resolveArchiveHookCommandPaths', () => {
     )
   })
 
+  it('does not let a comment or a quote open a heredoc', () => {
+    const isFile = files(['/repo/main/scripts/a.sh'])
+    expect(
+      resolveArchiveHookCommandPaths('# example: cat <<EOF\nbash scripts/a.sh\n', {
+        ...POSIX,
+        isFile
+      })
+    ).toBe("# example: cat <<EOF\nbash '/repo/main/scripts/a.sh'\n")
+    expect(
+      resolveArchiveHookCommandPaths('echo "cat <<EOF"\nbash scripts/a.sh\n', { ...POSIX, isFile })
+    ).toBe("echo \"cat <<EOF\"\nbash '/repo/main/scripts/a.sh'\n")
+    expect(
+      resolveArchiveHookCommandPaths("echo 'cat <<EOF'\nbash scripts/a.sh\n", { ...POSIX, isFile })
+    ).toBe("echo 'cat <<EOF'\nbash '/repo/main/scripts/a.sh'\n")
+  })
+
+  it('leaves a redirection operand in the worktree', () => {
+    const isFile = files(['/repo/main/scripts/a.sh'])
+    expect(resolveArchiveHookCommandPaths('echo done > scripts/a.sh', { ...POSIX, isFile })).toBe(
+      'echo done > scripts/a.sh'
+    )
+    expect(
+      resolveArchiveHookCommandPaths('bash scripts/a.sh > scripts/a.sh', { ...POSIX, isFile })
+    ).toBe("bash '/repo/main/scripts/a.sh' > scripts/a.sh")
+    expect(
+      resolveArchiveHookCommandPaths('bash scripts/a.sh 2>> scripts/a.sh', { ...POSIX, isFile })
+    ).toBe("bash '/repo/main/scripts/a.sh' 2>> scripts/a.sh")
+    expect(resolveArchiveHookCommandPaths('echo> scripts/a.sh', { ...POSIX, isFile })).toBe(
+      'echo> scripts/a.sh'
+    )
+  })
+
   it('escapes a Windows path for cmd.exe without wrapping quotes', () => {
     const escape = (yamlRoot: string) =>
       resolveArchiveHookCommandPaths('bash scripts/a.sh', {
@@ -107,6 +139,7 @@ describe('resolveArchiveHookCommandPaths', () => {
     expect(escape('C:\\repo dir')).toBe('bash C:\\repo^ dir\\scripts\\a.sh')
     expect(escape('C:\\repo\\a&b')).toBe('bash C:\\repo\\a^&b\\scripts\\a.sh')
     expect(escape('C:\\repo\\a^b')).toBe('bash C:\\repo\\a^^b\\scripts\\a.sh')
+    expect(escape('C:\\%USERNAME%\\repo')).toBe('bash C:\\^%USERNAME^%\\repo\\scripts\\a.sh')
   })
 
   it('maps a WSL worktree beside the checkout back to a path Windows can stat', () => {
