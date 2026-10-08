@@ -472,12 +472,12 @@ describe('a send with no live owner', () => {
     expect(acquire).toHaveBeenCalledTimes(1)
     expect(await errorStatuses()).toHaveLength(1)
 
-    // The outbox's Retry rotates the id: a fresh attempt, with its own row.
+    // The outbox's Retry rotates the id: a fresh attempt. It failed alike, so the run's row says why.
     expect(await settled(await accept(sendParams('while signed out')))).toMatchObject({
       dispatchState: 'rejected'
     })
     expect(acquire).toHaveBeenCalledTimes(2)
-    expect(await errorStatuses()).toHaveLength(2)
+    expect(await errorStatuses()).toHaveLength(1)
     expect(dispatch).not.toHaveBeenCalled()
   })
 

@@ -3,7 +3,7 @@
 import { structuredAgentSessionSendOpeningTurn } from '../../../shared/structured-agent-session-opening-send'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
-import { oldestQueuedSubmission } from './structured-agent-session-start-failure-row'
+import { oldestQueuedSubmission } from './structured-agent-session-start-failure-settlement'
 
 /** Whether a send this child (`fence`) was handed is still opening its turn
  *  (`structuredAgentSessionSendOpeningTurn`), read off the journal's fold without a snapshot. */

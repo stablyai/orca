@@ -452,6 +452,21 @@ it('rejects a message whose start meets a close still unverifiable, and starts n
   expect(scopes()).toContain('provider-close-unproven')
 })
 
+it('fails only the message its refused step was for: one queued behind it starts once the close proves', async () => {
+  const connection = await stopWithUnprovenClose(2)
+
+  // Both accepted before the first's start step runs.
+  const [first, second] = await Promise.all([send('First.'), send('Second.')])
+
+  await eventually(async () => expect((await submission(first))?.dispatchState).toBe('rejected'))
+  expect((await submission(first))?.rejection).toMatchObject({
+    refusal: { details: { reason: 'previousExitUnverifiable' } }
+  })
+  // Its own start joins the close again, which proves this time, and goes to a resumed child.
+  await resumedWith(connection, 'Second.')
+  expect((await submission(second))?.dispatchState).not.toBe('rejected')
+})
+
 it('refuses an option change while the close stays unverifiable, never writing to the old child', async () => {
   const connection = await stopWithUnprovenClose(2)
 

@@ -219,7 +219,7 @@ export function NativeChatStructuredSession(
     agent: props.agent,
     target: props.target,
     failure: provisionalLaunch.failure,
-    failureRows: startFailures.filter((fact) => isClaudeSignInFailureKind(fact.kind)).length
+    failureRows: startFailures.filter(({ fact }) => isClaudeSignInFailureKind(fact.kind)).length
   })
   const notices = structuredSessionNotices({
     launch,

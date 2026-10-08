@@ -1,6 +1,9 @@
 // What a gone child generation left unfinished in the journal, and whether its exit interrupted it.
 
-import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
+import type {
+  AgentJournalRenderItem,
+  AgentJournalSubmission
+} from '../../../shared/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import { requiresTerminalSettlement } from '../agent-session-journal/journal-terminal-settlement'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -10,7 +13,13 @@ import {
 } from './structured-agent-session-stale-turn-verdict'
 import type { UnopenedSendJournal } from './structured-agent-session-unopened-send-withdrawal'
 
-export type DeadGenerationJournal = UnopenedSendJournal & {
+type DeadGenerationSubmission = ReturnType<
+  NonNullable<UnopenedSendJournal['submissions']>
+>[number] &
+  Partial<Pick<AgentJournalSubmission, 'fence' | 'reason' | 'rejection'>>
+
+export type DeadGenerationJournal = Omit<UnopenedSendJournal, 'submissions'> & {
+  submissions?: () => DeadGenerationSubmission[]
   appendLifecycleBatch: AgentSessionJournal['appendLifecycleBatch']
   markPendingSubmissionsUnknown: AgentSessionJournal['markPendingSubmissionsUnknown']
   rejectPendingSubmissions: AgentSessionJournal['rejectPendingSubmissions']

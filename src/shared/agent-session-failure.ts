@@ -295,6 +295,26 @@ export function readWholeAgentSessionFailureFact(
   return fact && structuralValuesEqualIgnoringUndefined(fact, value) ? fact : undefined
 }
 
+/** Whether two facts are one failure, compared by their fields, never Orca's words: a start's row
+ *  and the messages it rejected share one, and the host writes one row for a run of them. A log
+ *  diagnostic's text is not compared: a CLI's stderr can carry a timestamp per attempt. */
+export function sameAgentSessionFailureFact(
+  a: AgentSessionFailureFact,
+  b: AgentSessionFailureFact
+): boolean {
+  return (
+    a.kind === b.kind &&
+    a.detail?.audience === b.detail?.audience &&
+    (a.detail?.audience !== 'person' || a.detail.text === b.detail?.text) &&
+    a.refusal?.code === b.refusal?.code &&
+    a.refusal?.details?.reason === b.refusal?.details?.reason &&
+    a.attachment?.reason === b.attachment?.reason &&
+    a.attachment?.limit === b.attachment?.limit &&
+    a.retry?.error === b.retry?.error &&
+    a.retry?.status === b.retry?.status
+  )
+}
+
 /** The provider-authored diagnostic an error carries, set only where it was composed. Follows the
  *  `cause` chain, since wrappers such as the acquisition errors keep the original as their cause. */
 export function providerDiagnosticOf(error: unknown): ProviderDiagnostic | undefined {

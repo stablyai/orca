@@ -3,14 +3,14 @@ import {
   type AgentSessionConversationCommand,
   type AgentSessionConversationCommandResult
 } from '../../../../shared/agent-session-conversation-command'
-import {
-  readWholeAgentSessionFailureFact,
-  type AgentSessionFailureFact
-} from '../../../../shared/agent-session-failure'
+import { readWholeAgentSessionFailureFact } from '../../../../shared/agent-session-failure'
 import { agentSessionFailureSentence } from '../../../../shared/agent-session-failure-words'
 import { translate } from '@/i18n/i18n'
 import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
-import { agentSessionFailureStatedByStartRow } from './structured-agent-session-delivery-notices'
+import {
+  agentSessionFailureStatedByStartRow,
+  type StatedStartFailure
+} from './structured-agent-session-delivery-notices'
 import type { StructuredAgentSessionWriteOutcome } from './use-structured-agent-session-mutate'
 
 export async function sendStructuredConversationCommand(input: {
@@ -20,7 +20,7 @@ export async function sendStructuredConversationCommand(input: {
   pending: { current: boolean }
   blocked: boolean
   /** What the chat's loaded start-failure rows state, read when the reply lands. */
-  startFailures: () => readonly AgentSessionFailureFact[]
+  startFailures: () => readonly StatedStartFailure[]
   send: (
     command: AgentSessionConversationCommand
   ) => Promise<StructuredAgentSessionWriteOutcome<AgentSessionConversationCommandResult>>

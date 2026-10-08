@@ -161,13 +161,17 @@ afterEach(async () => {
 describe('an open chat receives every row its journal commits', () => {
   it('shows a failed start whose lease could not be handed back', async () => {
     const held = await send('hello')
+    // Handed to the starting child, so that child's failed start is this message's.
+    await vi.waitFor(async () =>
+      expect((await host.journalSnapshot(SESSION)).submissions[0]?.handedOverAt).toBeDefined()
+    )
     const pane = await liveReader()
     // The exit settles the journal, then fails to release the lease: nothing moves the fence.
     vi.spyOn(store, 'transitionHandoff').mockRejectedValueOnce(new Error('record store busy'))
 
     await exitBeforeProof()
 
-    // The exit ends the child; the delivery loop, which reads why, rejects what it had queued.
+    // The exit ends the child and rejects what it was handed.
     await vi.waitFor(() =>
       expect(pane.received().submissions).toContainEqual(
         expect.objectContaining({ clientMessageId: held, dispatchState: 'rejected' })

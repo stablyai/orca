@@ -17,7 +17,10 @@ import {
 } from '../../../../shared/structured-agent-session-message-projection'
 import type { StructuredAgentSessionOptimisticMessage } from '../../../../shared/structured-agent-session-message-projection'
 import { structuredAgentSessionSendBody } from '../../../../shared/structured-agent-session-send-mutation'
-import { structuredAgentSessionDeliveryNotices } from './structured-agent-session-delivery-notices'
+import {
+  structuredAgentSessionDeliveryNotices,
+  type StatedStartFailure
+} from './structured-agent-session-delivery-notices'
 import { projectStructuredAgentSessionMessages } from './structured-agent-session-message-projection'
 
 function optimisticMessage(args: {
@@ -36,7 +39,7 @@ function optimisticMessage(args: {
 
 function deliveryNotices(
   submissions: readonly AgentJournalSubmission[],
-  startFailures: { kind: 'notSignedIn' }[] = [],
+  startFailures: StatedStartFailure[] = [],
   commandItemIds?: ReadonlySet<string>
 ) {
   return structuredAgentSessionDeliveryNotices({
@@ -193,7 +196,11 @@ describe('a message the host accepted and then rejected, on the desktop', () => 
       reason: 'Claude is not signed in.',
       rejection: { kind: 'notSignedIn' }
     })
-    const notices = deliveryNotices([failedStart], [{ kind: 'notSignedIn' }])
+    const notices = deliveryNotices(
+      [failedStart],
+      // The start's row, keyed by the message it failed.
+      [{ itemId: 'orca:start-failure%3Afirst', fact: { kind: 'notSignedIn' }, ofCommand: false }]
+    )
 
     expect(notices.get(agentJournalSubmissionKey('first'))).toEqual({
       text: 'Your message was not sent.'

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import {
   agentSessionLeaseFixture,
@@ -170,5 +171,138 @@ describe('a provider that ends before it finished starting', () => {
         mutations: [expect.objectContaining({ body: expect.objectContaining({ text }) })]
       })
     )
+  })
+})
+
+describe('the one row a failed start leaves', () => {
+  type Submission = Pick<AgentJournalSubmission, 'clientMessageId' | 'dispatchState'> &
+    Partial<AgentJournalSubmission>
+
+  function startingSession(submissions: Submission[], rejectedHere: string[] = []) {
+    const base = startedSession()
+    return {
+      ...base,
+      child: { generation: GENERATION, fence: 7, phase: 'starting' as const },
+      journal: {
+        ...base.journal,
+        submissions: () => submissions,
+        rejectPendingSubmissions: vi.fn(async () => rejectedHere)
+      }
+    }
+  }
+
+  function rowsWritten(session: ReturnType<typeof startedSession>): unknown[] {
+    return session.journal.appendLifecycleBatch.mock.calls.flatMap((call) => {
+      const [batch] = call
+      // The mock records whatever batch it was given; each names its mutations.
+      const mutations: { body?: { kind?: string } }[] = batch.mutations
+      return mutations.filter((mutation) => mutation.body?.kind === 'status')
+    })
+  }
+
+  it("is the exit's for the messages it rejected, keyed by the one its words are for", async () => {
+    const session = startingSession(
+      [{ clientMessageId: 'handed-1', dispatchState: 'pending', handedOverAt: 1, fence: 7 }],
+      ['handed-1']
+    )
+
+    await settleStructuredAgentSessionChildExit(contextFor(session), ended)
+
+    expect(rowsWritten(session)).toEqual([
+      expect.objectContaining({
+        identity: { provider: 'orca', clientMessageId: 'start-failure:handed-1' }
+      })
+    ])
+  })
+
+  // Keyed by the /compact, it is a command's row: it never speaks for a later message's failure.
+  it('is keyed by the /compact it rejected when its words name the command', async () => {
+    const base = startingSession(
+      [{ clientMessageId: 'compact-1', dispatchState: 'pending', handedOverAt: 1, fence: 7 }],
+      ['compact-1']
+    )
+    const session = {
+      ...base,
+      journal: { ...base.journal, itemBody: () => structuredAgentSessionCompactBody() }
+    }
+
+    await settleStructuredAgentSessionChildExit(contextFor(session), ended)
+
+    expect(rowsWritten(session)).toEqual([
+      expect.objectContaining({
+        identity: { provider: 'orca', clientMessageId: 'start-failure:compact-1' },
+        body: expect.objectContaining({
+          text: 'Claude stopped before it finished starting. Run /compact again.'
+        })
+      })
+    ])
+  })
+
+  const QUEUED: Submission = {
+    clientMessageId: 'queued-1',
+    dispatchState: 'pending',
+    handoverRecorded: true
+  }
+
+  function startedFor(session: ReturnType<typeof startingSession>, clientMessageId: string) {
+    return { ...session, child: { ...session.child, startedFor: clientMessageId } }
+  }
+
+  it('is not written again beside the queued message the start was for: the loop rejects it with its own', async () => {
+    const session = startedFor(startingSession([QUEUED]), 'queued-1')
+
+    await settleStructuredAgentSessionChildExit(contextFor(session), ended)
+
+    expect(rowsWritten(session)).toEqual([])
+  })
+
+  // The /compact waits for a start of its own, which writes its own row if it fails too.
+  it('is not worded for a /compact still queued behind the start', async () => {
+    const base = startingSession([
+      { clientMessageId: 'compact-1', dispatchState: 'pending', handoverRecorded: true }
+    ])
+    const session = {
+      ...base,
+      journal: { ...base.journal, itemBody: () => structuredAgentSessionCompactBody() }
+    }
+
+    await settleStructuredAgentSessionChildExit(contextFor(session), ended)
+
+    expect(rowsWritten(session)).toEqual([
+      expect.objectContaining({
+        identity: { provider: 'orca', clientMessageId: `start-failure:${GENERATION}` },
+        body: expect.objectContaining({ text: STARTUP_TEXT })
+      })
+    ])
+  })
+
+  it("is not written again beside a message already rejected as this start, with its writer's row", async () => {
+    const session = startingSession([
+      {
+        clientMessageId: 'rejected-1',
+        dispatchState: 'rejected',
+        fence: 7,
+        reason: STARTUP_TEXT,
+        rejection: { kind: 'providerStartFailed' }
+      }
+    ])
+
+    await settleStructuredAgentSessionChildExit(contextFor(session), ended)
+
+    expect(rowsWritten(session)).toEqual([])
+  })
+
+  // A message queued but neither started for nor waited on is no message the loop charges with this
+  // start: it starts afresh, so this start's failure has only this row.
+  it('is written beside a queued message no pass charges with this start', async () => {
+    const session = startingSession([QUEUED])
+
+    await settleStructuredAgentSessionChildExit(contextFor(session), ended)
+
+    expect(rowsWritten(session)).toEqual([
+      expect.objectContaining({
+        identity: { provider: 'orca', clientMessageId: `start-failure:${GENERATION}` }
+      })
+    ])
   })
 })

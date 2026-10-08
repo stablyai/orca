@@ -113,6 +113,7 @@ export function acceptSubmissionFromProviderItem(
   submission.fence = row.fence
   submission.dispatchState = 'accepted'
   noteTurnAccepted(state, submission)
+  state.latestAcceptedSequence = Math.max(state.latestAcceptedSequence, row.seq)
   submission.providerItemId = providerItemId
   submission.reason = null
   submission.resolvedAt = row.ts

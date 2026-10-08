@@ -217,7 +217,8 @@ describe('a send into a published session whose child ended before startup', () 
     await exitBeforeProof()
 
     // The child never proved its start, so it accepted nothing: the exit rejects the message this
-    // host admitted, so nothing pins the session and Retry stays offered, and one row names the cause.
+    // host admitted, so nothing pins the session and Retry stays offered. The first start failed
+    // alike with nothing delivered since, so its row names the cause for this one too.
     expect(await submission(held)).toMatchObject({
       dispatchState: 'rejected',
       reason: 'Codex stopped before it finished starting. Send your message to try again.',
@@ -227,13 +228,11 @@ describe('a send into a published session whose child ended before startup', () 
     expect(
       (await host.journalSnapshot(SESSION)).submissions.filter((e) => e.dispatchState === 'pending')
     ).toEqual([])
-    expect((await journalStatuses()).slice(rowsBefore)).toEqual([
-      'Codex stopped before it finished starting. Send your message to try again.'
-    ])
-    // Accepted before the restart it needed, so the chat draws it above the row naming the cause.
+    expect((await journalStatuses()).slice(rowsBefore)).toEqual([])
+    // Rejected after the run's row, so the chat draws it below the row naming the cause.
     const snapshot = await host.journalSnapshot(SESSION)
     const causeRow = snapshot.items.findLast((item) => item.body.kind === 'status')?.itemId
-    const shown = [agentJournalSubmissionKey(held), causeRow]
+    const shown = [causeRow, agentJournalSubmissionKey(held)]
     expect(
       hostTestDrawnRowIds(snapshot, [
         { clientMessageId: held, text: 'still not signed in' }
@@ -249,7 +248,7 @@ describe('a send into a published session whose child ended before startup', () 
     await send('signed in now')
     expect(acquire).toHaveBeenCalledTimes(3)
     expect(dispatch).toHaveBeenCalledTimes(2)
-    expect((await journalStatuses()).slice(rowsBefore)).toHaveLength(1)
+    expect((await journalStatuses()).slice(rowsBefore)).toEqual([])
   })
 })
 

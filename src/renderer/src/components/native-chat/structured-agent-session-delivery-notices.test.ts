@@ -13,7 +13,8 @@ import {
 import { structuredAgentSessionStartFailureRowIdentity } from '../../../../shared/structured-agent-session-start-failure-row-key'
 import {
   structuredAgentSessionDeliveryNotices,
-  structuredAgentSessionStartFailureFacts
+  structuredAgentSessionStartFailureFacts,
+  type StatedStartFailure
 } from './structured-agent-session-delivery-notices'
 import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
 
@@ -59,7 +60,7 @@ function row(
 function notices(args: {
   pending?: StructuredAgentSessionPendingSend[]
   submissions?: AgentJournalSubmission[]
-  startFailures?: AgentSessionFailureFact[]
+  startFailures?: StatedStartFailure[]
 }) {
   return structuredAgentSessionDeliveryNotices({
     pending: args.pending ?? [],
@@ -133,7 +134,7 @@ describe('the line under each of the chat own messages', () => {
           statusRow(startRowKey, startFailed),
           statusRow(agentJournalSubmissionKey('exit-row'), { kind: 'providerExited' })
         ])
-      ).toEqual([startFailed])
+      ).toEqual([{ itemId: startRowKey, fact: startFailed, ofCommand: false }])
     })
 
     it('says only that it was not sent, and words a rejection no row states in full', () => {

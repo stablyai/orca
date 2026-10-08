@@ -1,5 +1,6 @@
-// A failed start's row and the queued messages it failed land in ONE append, the messages first:
-// no reader meets one without the other, and the messages sit above the row that says why.
+// A failed start's row and the queued message it failed land in ONE append, the message first: no
+// reader meets one without the other, the message sits above the row that says why, and a message
+// queued behind it is left for its own start.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -13,7 +14,9 @@ import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 import type { AgentSessionJournal } from './journal-store'
+import { MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS } from './journal-row-schema'
 import {
   closeTestJournalHostDatabases,
   createTrackedJournalOpener
@@ -30,7 +33,7 @@ const IDENTITY: AgentSessionJournalIdentity = {
 const START_FAILED = agentSessionFailureWords(agentSessionFailureFact('providerStartFailed'), {
   surface: 'rejection'
 })
-const ERROR_ROW = { provider: 'orca', clientMessageId: 'start-failure:gen-1' } as const
+const ERROR_ROW = { provider: 'orca', clientMessageId: 'start-failure:first' } as const
 
 let root: string
 let clock = 1_000
@@ -66,7 +69,7 @@ async function openWithQueued(...ids: string[]): Promise<AgentSessionJournal> {
 
 function startFailureBatch(mutations = 1) {
   return {
-    settlementId: 'start-failure:gen-1',
+    settlementId: 'start-failure:first',
     fence: 0,
     recovered: true as const,
     mutations: Array.from({ length: mutations }, () => ({
@@ -75,44 +78,55 @@ function startFailureBatch(mutations = 1) {
       body: { kind: 'status' as const, tone: 'error' as const, text: 'Claude did not start.' },
       turnScope: AGENT_JOURNAL_THREAD_SCOPE
     })),
-    rejectsQueued: START_FAILED
+    rejects: { ...START_FAILED, clientMessageId: 'first', which: isQueuedAgentJournalSubmission }
   }
 }
 
-it('writes the rejections first and the row after them, and draws the messages above it', async () => {
+it('writes the rejection first and the row right after it, leaving the message behind it queued', async () => {
   const journal = await openWithQueued('first', 'second')
   const before = journal.cursor().sequence
 
   await journal.appendLifecycleBatch(startFailureBatch())
 
-  expect(journal.cursor().sequence).toBe(before + 3)
-  expect(journal.submissions().map((entry) => entry.dispatchState)).toEqual([
-    'rejected',
-    'rejected'
-  ])
-  const order = journal.snapshot().items.map((item) => item.itemId)
-  expect(order).toEqual([
-    agentJournalSubmissionKey('first'),
-    agentJournalSubmissionKey('second'),
-    'orca:start-failure%3Agen-1'
-  ])
+  expect(journal.cursor().sequence).toBe(before + 2)
+  expect(journal.submissions().map((entry) => entry.dispatchState)).toEqual(['rejected', 'pending'])
+  const placed = new Map(journal.snapshot().items.map((item) => [item.itemId, item]))
+  const message = placed.get(agentJournalSubmissionKey('first'))
+  const row = placed.get('orca:start-failure%3Afirst')
+  // One write: the row is the next row after the rejection, at the same instant.
+  expect(row?.sequence).toBe((message?.sequence ?? 0) + 1)
+  expect(row?.observedAt).toBe(message?.observedAt)
 })
 
 it('writes neither when the row cannot be written', async () => {
   const journal = await openWithQueued('first')
   const before = journal.cursor().sequence
 
-  // An empty batch breaks the row's bound, so the transaction rolls back as a whole.
-  await expect(journal.appendLifecycleBatch(startFailureBatch(0))).rejects.toThrow(
-    'journal_lifecycle_batch_mutation_bound_exceeded'
-  )
+  // A batch over the row's bound fails to build, so the transaction rolls back as a whole.
+  await expect(
+    journal.appendLifecycleBatch(startFailureBatch(MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS + 1))
+  ).rejects.toThrow('journal_lifecycle_batch_mutation_bound_exceeded')
 
   expect(journal.cursor().sequence).toBe(before)
   expect(journal.submissions().map((entry) => entry.dispatchState)).toEqual(['pending'])
 })
 
+// A start failing as its run's row already says rejects its message and writes no row.
+it('writes only the rejection when the batch carries no row', async () => {
+  const journal = await openWithQueued('first', 'second')
+  const before = journal.cursor().sequence
+
+  await journal.appendLifecycleBatch(startFailureBatch(0))
+
+  expect(journal.cursor().sequence).toBe(before + 1)
+  expect(journal.submissions().map((entry) => entry.dispatchState)).toEqual(['rejected', 'pending'])
+  expect(journal.snapshot().items.map((item) => item.itemId)).not.toContain(
+    'orca:start-failure%3Afirst'
+  )
+})
+
 // A Stop that reaches the lane first takes the message back; the failed start then failed no one.
-it('writes nothing when a Stop withdrew every queued message first', async () => {
+it('writes nothing when a Stop withdrew the message first', async () => {
   const journal = await openWithQueued('first')
   const withdrawal = agentSessionFailureWords(agentSessionFailureFact('cancelled'), {
     surface: 'rejection'

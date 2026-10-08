@@ -153,7 +153,8 @@ describe('a send whose restarted Claude child dies before it proves its start', 
         rejection: { kind: 'providerStartFailed' }
       })
     )
-    expect(await statusRows(host)).toEqual([STARTUP_TEXT, STARTUP_TEXT])
+    // The open's row already says why: a start failing alike writes no second.
+    expect(await statusRows(host)).toEqual([STARTUP_TEXT])
     expect(fence(host)).toBe(releasedFence + 2)
     expect(claude.children(SESSION)).toHaveLength(2)
 
@@ -163,13 +164,13 @@ describe('a send whose restarted Claude child dies before it proves its start', 
     await eventually(() => expect(claude.children(SESSION)).toHaveLength(3))
     await eventually(() => expect(claude.child(SESSION).calls).toContain('send'))
     expect(claude.child(SESSION).calls.filter((call) => call === 'send')).toHaveLength(1)
-    expect(await statusRows(host)).toHaveLength(2)
+    expect(await statusRows(host)).toHaveLength(1)
   })
 
-  // A restart refused because its child died before it was handed over leaves one row, from the
-  // delivery, in the words any failed start uses, and rejects the message with them.
+  // A restart refused because its child died before it was handed over rejects the message in the
+  // words any failed start uses; the open's row already says them, so it adds no row.
   it.each(['spawn', 'start-time-read'] as const)(
-    'leaves one row for a restart whose child exits at %s',
+    'adds no row to the run for a restart whose child exits at %s',
     async (at) => {
       claude.behave(SESSION, { initHangs: true })
       const host = await claude.install()
@@ -189,7 +190,7 @@ describe('a send whose restarted Claude child dies before it proves its start', 
       )
       await waitForStructuredAgentSessionRecovery()
 
-      expect(await statusRows(host)).toEqual([STARTUP_TEXT, STARTUP_TEXT])
+      expect(await statusRows(host)).toEqual([STARTUP_TEXT])
     }
   )
 
@@ -246,7 +247,7 @@ describe('a chat whose Claude CLI keeps failing to start, seen by a subscriber o
     return rows
   }
 
-  it('shows one row naming the cause per failed attempt, however the start died, and none once the CLI is fixed', async () => {
+  it('shows one row naming the cause for a run of failed attempts, however the start died, and none once the CLI is fixed', async () => {
     claude.behave(SESSION, { initHangs: true })
     const host = await claude.install()
     const events: AgentSessionSubscribeEvent[] = []
@@ -273,12 +274,12 @@ describe('a chat whose Claude CLI keeps failing to start, seen by a subscriber o
           reason: STARTUP_FAILURE
         })
       )
-      await eventually(() =>
-        expect([...shownRows(events).values()]).toEqual([STARTUP_FAILURE, STARTUP_FAILURE])
-      )
+      // Failed alike, with nothing delivered since the open's row: that row says why for it too.
+      await waitForStructuredAgentSessionRecovery()
+      expect([...shownRows(events).values()]).toEqual([STARTUP_FAILURE])
 
       // Retry while still broken: this restart dies before its child is handed over, so the
-      // delivery's start is refused. Still one row, saying the same thing, on the rejected message.
+      // delivery's start is refused. It failed alike, so the run's one row still says why.
       claude.behave(SESSION, {
         exitsDuringSpawn: {
           diagnostic: 'claude stream-json exited (code 1): claude: not signed in (rig)',
@@ -293,19 +294,13 @@ describe('a chat whose Claude CLI keeps failing to start, seen by a subscriber o
         })
       )
       await waitForStructuredAgentSessionRecovery()
-      await eventually(() =>
-        expect([...shownRows(events).values()]).toEqual([
-          STARTUP_FAILURE,
-          STARTUP_FAILURE,
-          STARTUP_FAILURE
-        ])
-      )
+      expect([...shownRows(events).values()]).toEqual([STARTUP_FAILURE])
 
       // The CLI is fixed: Retry delivers and adds no row.
       claude.behave(SESSION, {})
       await expect(attempt(host, 'hello?')).resolves.toMatchObject({ ok: true })
       await eventually(() => expect(claude.child(SESSION).calls).toContain('send'))
-      expect(shownRows(events).size).toBe(3)
+      expect(shownRows(events).size).toBe(1)
     } finally {
       unsubscribe()
     }

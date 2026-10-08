@@ -8,7 +8,6 @@ import {
   parseAgentJournalItemKey
 } from '../../../shared/agent-session-journal-item-key'
 import { STALE_SESSION_ROW_PREFIX } from '../../../shared/agent-session-stop-row-identity'
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalItemBody,
@@ -27,10 +26,8 @@ import {
   type AgentSessionFailureWordsContext
 } from '../../../shared/agent-session-failure-words'
 import { structuredAgentSessionStartFailure } from './structured-agent-session-failure-text'
-import {
-  hasStructuredAgentSessionStartFailureRow,
-  structuredAgentSessionStartFailureRow
-} from './structured-agent-session-start-failure-row'
+import { exitStartFailureRow } from './structured-agent-session-start-failure-settlement'
+import { structuredAgentSessionAwaitedMessage } from './structured-agent-session-command-turn'
 import type { AgentSessionDeathEvidence } from '../../../shared/agent-session-record'
 import {
   endedByPersonsStop,
@@ -77,8 +74,9 @@ export async function settleStructuredAgentSessionDeadGeneration(input: {
   /** Who a failed start's sentence names. */
   failureTextContext?: AgentSessionFailureWordsContext
   /** The provider never finished starting: the start that failed, keyed by the child's
-   *  generation. Its row is the one the delivery loop writes for the same start. */
-  exitedDuringStartup?: { generation: string | null }
+   *  generation, for the row a start no message carries leaves; `startedFor`, the message it was
+   *  started for, which the delivery loop rejects with its own row while it is still queued. */
+  exitedDuringStartup?: { generation: string | null; startedFor?: string }
   /** The exit, watched: what that child's own translator could only end `unverifiable` (its stream
    *  closed before the exit was proven) is revised in this batch. */
   exit?: StructuredAgentSessionWatchedExit
@@ -104,23 +102,25 @@ export async function settleStructuredAgentSessionDeadGeneration(input: {
     if (!unrun) {
       await withdrawCodexSendsNoTurnOpenedFor(input.journal, input.fence)
     }
-    await (unrun
+    // Read before it is rejected: the message a failed start's words are for.
+    const wordedFor = structuredAgentSessionAwaitedMessage(input.journal)
+    const settled = await (unrun
       ? input.journal.rejectPendingSubmissions(input.fence, unrun)
       : input.journal.markPendingSubmissionsUnknown(input.fence, input.pendingSubmissionReason))
     const items = input.journal.snapshot().items
     const proven = watchedExitRevisions(items, input.exit, input.journal)
     const mutations: JournalLifecycleMutationInput[] = []
     if (showUnexpectedExitOutcome && input.exitedDuringStartup && startupFailure) {
-      const startKey = input.exitedDuringStartup.generation ?? input.settlementId
-      // A start a message waited on is the delivery loop's to record, before or after this exit,
-      // in the words it rejected the message with; this row is for a command, goal or rewind start.
-      // A row already written stays: rejected is terminal, so its words are not reworded.
-      const recordedByDeliveryLoop =
-        input.journal.submissions?.().some(isQueuedAgentJournalSubmission) ||
-        hasStructuredAgentSessionStartFailureRow(items, startKey)
-      if (!recordedByDeliveryLoop) {
-        mutations.push(structuredAgentSessionStartFailureRow(startKey, startupFailure))
-      }
+      mutations.push(
+        ...exitStartFailureRow(input.journal, {
+          startKey: input.exitedDuringStartup.generation ?? input.settlementId,
+          wordedFor,
+          fence: input.fence,
+          rejected: settled,
+          startedFor: input.exitedDuringStartup.startedFor,
+          words: startupFailure
+        })
+      )
     } else if (showUnexpectedExitOutcome) {
       // The turn the exit ended, and an error so no fold ever hides why it stopped.
       mutations.push({

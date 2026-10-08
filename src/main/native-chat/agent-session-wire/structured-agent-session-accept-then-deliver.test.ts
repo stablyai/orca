@@ -3,12 +3,12 @@ import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journa
 // session's delivery loop starts a provider child for it and hands it over. Against the real host,
 // store and journal; each assertion reads what an open chat or the journal's next reader sees.
 
-import type { AgentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
+import { projectStructuredAgentSessionMessages } from '../../../shared/structured-agent-session-message-projection'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
 import type {
@@ -37,7 +37,6 @@ import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD,
   hostTestAttachParams,
-  hostTestDrawnRowIds,
   hostTestMessage,
   hostTestOperationId,
   resetHostTestOperationIds
@@ -186,12 +185,6 @@ async function reopened(id: string): Promise<AgentJournalSubmission | undefined>
 async function errorRows(): Promise<string[]> {
   return (await host.journalSnapshot(SESSION)).items.flatMap((item) =>
     item.body.kind === 'status' && item.body.tone === 'error' ? [item.body.text] : []
-  )
-}
-
-async function errorFailures(): Promise<(AgentSessionFailureFact | undefined)[]> {
-  return (await host.journalSnapshot(SESSION)).items.flatMap((item) =>
-    item.body.kind === 'status' && item.body.tone === 'error' ? [item.body.failure] : []
   )
 }
 
@@ -348,71 +341,74 @@ describe('a start the chat needed and did not get', () => {
     expect(JSON.stringify(await host.journalSnapshot(SESSION))).not.toContain('private')
   })
 
-  it('writes one error row and rejects every queued message with it; the next send starts (W3)', async () => {
+  it('rejects only the message whose start failed; the one behind it starts and is delivered (W3)', async () => {
     await host.close(SESSION, 'evict')
     acquire.mockRejectedValueOnce(new Error('spawn codex ENOENT'))
     const first = await accept('first')
     const second = await accept('second')
 
-    await eventually(async () => expect((await submission(second))?.dispatchState).toBe('rejected'))
-    const rows = await errorRows()
-    expect(rows).toHaveLength(1)
-    // Orca's spawn error goes to the log; the row and every message say what failed, typed. The
-    // child is gone, but no exit was observed, so nothing blames the provider.
-    expect(rows[0]).toBe("Codex couldn't restart. Send your message to try again.")
-    const failure = {
-      kind: 'restartFailed',
-      refusal: { code: 'agent_session_operation_invalid', details: { ownerVerdict: 'exited' } }
-    }
-    expect(await errorFailures()).toEqual([failure])
-    for (const id of [first, second]) {
-      expect(await submission(id)).toMatchObject({
-        dispatchState: 'rejected',
-        reason: rows[0],
-        rejection: failure
-      })
-    }
-
-    const next = await accept('after the fix')
-    await eventually(async () => expect((await submission(next))?.dispatchState).toBe('accepted'))
-    expect(await errorRows()).toHaveLength(1)
+    await eventually(async () => expect((await submission(second))?.dispatchState).toBe('accepted'))
+    // Orca's spawn error goes to the log; the message says what failed, typed. The child is gone,
+    // but no exit was observed, so nothing blames the provider.
+    expect(await submission(first)).toMatchObject({
+      dispatchState: 'rejected',
+      reason: "Codex couldn't restart. Send your message to try again.",
+      rejection: {
+        kind: 'restartFailed',
+        refusal: { code: 'agent_session_operation_invalid', details: { ownerVerdict: 'exited' } }
+      }
+    })
+    // The failed start's one row, which a client that hides rejected messages still shows.
+    expect(await errorRows()).toEqual(["Codex couldn't restart. Send your message to try again."])
+    expect(dispatch.mock.calls.map(([input]) => input.clientMessageId)).toEqual([second])
   })
 
-  it('draws the messages it failed above the error row, since they were accepted first', async () => {
+  // A client that hides rejected messages — a released desktop, any phone — still reads why.
+  it('leaves the failure in the transcript of a client that hides a rejected message sent elsewhere', async () => {
     await host.close(SESSION, 'evict')
     acquire.mockRejectedValueOnce(new Error('spawn codex ENOENT'))
-    const first = await accept('first')
-    const second = await accept('second')
-    await eventually(async () => expect((await submission(second))?.dispatchState).toBe('rejected'))
+    const id = await accept('from another device')
+    await eventually(async () => expect((await submission(id))?.dispatchState).toBe('rejected'))
 
     const snapshot = await host.journalSnapshot(SESSION)
-    const errorRow = snapshot.items.find(
-      (item) => item.body.kind === 'status' && item.body.tone === 'error'
-    )?.itemId
-    const shown = [agentJournalSubmissionKey(first), agentJournalSubmissionKey(second), errorRow]
-    const drawn = hostTestDrawnRowIds(snapshot, [
-      { clientMessageId: first, text: 'first' },
-      { clientMessageId: second, text: 'second' }
-    ])
-    expect(drawn.filter((id) => shown.includes(id))).toEqual(shown)
+    const drawn = projectStructuredAgentSessionMessages(snapshot.items, [], snapshot.submissions, {
+      rejectedInPlace: false
+    })
+    expect(drawn.map((message) => message.id)).not.toContain(agentJournalSubmissionKey(id))
+    expect(drawn.flatMap((message) => message.blocks)).toContainEqual(
+      expect.objectContaining({ text: "Codex couldn't restart. Send your message to try again." })
+    )
   })
 
-  it('notifies failed once for the queued messages one start failure refused', async () => {
+  // Messages sent straight to the chat, not queued as cards: each makes its own start, and the
+  // session announces once, when it owes nothing more.
+  it('notifies once, for the last, when sent messages whose starts all fail alike are each rejected', async () => {
     await host.close(SESSION, 'evict')
-    acquire.mockRejectedValueOnce(new Error('spawn codex ENOENT'))
+    acquire.mockRejectedValue(new Error('spawn codex ENOENT'))
     const completions: AgentSessionTurnCompletionEvent[] = []
     host.subscribeTurnCompletions({ id: 'dot-1', emit: (event) => completions.push(event) })
-    await accept('first')
+    const first = await accept('first')
     const second = await accept('second')
+    const third = await accept('third')
 
-    await eventually(async () => expect((await submission(second))?.dispatchState).toBe('rejected'))
+    await eventually(async () => expect((await submission(third))?.dispatchState).toBe('rejected'))
+    // Each message made its own start.
+    for (const id of [first, second, third]) {
+      expect(await submission(id)).toMatchObject({
+        dispatchState: 'rejected',
+        rejection: { kind: 'restartFailed' }
+      })
+    }
+    expect(acquire.mock.calls.length).toBeGreaterThanOrEqual(4)
+    // One row for the run: the starts all failed alike, with nothing delivered between.
+    expect(await errorRows()).toHaveLength(1)
     await host.flushAllStreamedEvents()
     expect(completions).toEqual([
       {
         type: 'completion',
         completion: expect.objectContaining({
           sessionId: SESSION,
-          turnId: agentJournalSubmissionKey(second),
+          turnId: agentJournalSubmissionKey(third),
           outcome: 'failure'
         })
       }
@@ -462,28 +458,34 @@ describe('a start the chat needed and did not get', () => {
         }
       }
     ]
-  ])('writes one row a live chat sees for a %s refusal (W14)', async (_source, arrange, row) => {
-    await host.close(SESSION, 'evict')
-    arrange()
-    await host.flushAllStreamedEvents()
-    await startHost()
-    const id = await accept('hello')
-    const events = await subscribe()
+  ])(
+    "tells a live chat a %s refusal on the message it failed, beside the start's one row (W14)",
+    async (_source, arrange, expected) => {
+      await host.close(SESSION, 'evict')
+      arrange()
+      await host.flushAllStreamedEvents()
+      await startHost()
+      const id = await accept('hello')
+      const events = await subscribe()
 
-    await eventually(async () => expect((await submission(id))?.dispatchState).toBe('rejected'))
-    expect(await errorRows()).toEqual([row.text])
-    expect(await errorFailures()).toEqual([row.failure])
-    const framedRows = events.flatMap((event) =>
-      event.type === 'batch' || event.type === 'snapshot'
-        ? (event.type === 'batch' ? event.batch.items : event.page.items).filter(
-            (item) => item.body.kind === 'status' && item.body.tone === 'error'
-          )
-        : []
-    )
-    expect(framedRows.length).toBeGreaterThan(0)
-  })
+      const told = () =>
+        events.flatMap((event) =>
+          event.type === 'batch'
+            ? event.batch.submissions.filter((entry) => entry.clientMessageId === id)
+            : []
+        )
+      await eventually(() =>
+        expect(told().at(-1)).toMatchObject({
+          dispatchState: 'rejected',
+          reason: expected.text,
+          rejection: expected.failure
+        })
+      )
+      expect(await errorRows()).toEqual([expected.text])
+    }
+  )
 
-  it('names the start failure on queued messages when the attach fails after acquiring (W4′a)', async () => {
+  it('names the start failure on the queued message when the attach fails after acquiring (W4′a)', async () => {
     await host.close(SESSION, 'evict')
     const id = await accept('hello')
     // The attach's own success record is the post-acquisition step that fails.
@@ -507,7 +509,7 @@ describe('a start the chat needed and did not get', () => {
     // the store's own error, which is Orca's and goes to the log.
     expect(settled).toMatchObject({
       dispatchState: 'rejected',
-      rejection: (await errorFailures())[0]
+      rejection: { kind: 'restartFailed' }
     })
     expect(settled?.reason).not.toContain('record store write failed')
     expect(await errorRows()).toEqual([settled?.reason])
@@ -625,7 +627,7 @@ describe('a child that exits before its message is handed over', () => {
 })
 
 describe('a start that fails after it was handed messages', () => {
-  it('keeps one row in the words its rejected messages carry', async () => {
+  it('keeps one row in the words its rejected messages carry, each from its own start', async () => {
     // A starting child takes the first at once; the second waits until that turn opens, which it
     // never does. Neither is answered.
     dispatch.mockImplementation(async () => ({ state: 'admitted' as const }))
@@ -635,35 +637,41 @@ describe('a start that fails after it was handed messages', () => {
     }))
     await host.close(SESSION, 'evict')
     await startHost()
+    // The latest child exits before it proves its start, with the CLI's own words for why.
+    const exitDuringStart = () =>
+      host.handleAdapterEvent({
+        type: 'ended',
+        sessionId: SESSION,
+        fence: store.getRecord(SESSION)!.lease.runtimeFence,
+        acquisitionGeneration: `generation-${acquire.mock.calls.length}`,
+        reason: 'codex app-server exited with code 1',
+        failure: agentSessionFailureFact('providerStartFailed', {
+          detail: { text: 'codex: config.toml is invalid', audience: 'person' }
+        }),
+        cause: 'unexpected-exit',
+        startupUnproven: true
+      })
 
     const first = await accept('first')
     const second = await accept('second')
     await eventually(() => expect(dispatch).toHaveBeenCalledTimes(1))
-    await host.handleAdapterEvent({
-      type: 'ended',
-      sessionId: SESSION,
-      fence: store.getRecord(SESSION)!.lease.runtimeFence,
-      acquisitionGeneration: `generation-${acquire.mock.calls.length}`,
-      reason: 'codex app-server exited with code 1',
-      failure: agentSessionFailureFact('providerStartFailed', {
-        detail: { text: 'codex: config.toml is invalid', audience: 'person' }
-      }),
-      cause: 'unexpected-exit',
-      startupUnproven: true
-    })
-    await host.flushStreamedEvents(SESSION)
+    // The second's pass found nothing to hand over yet, so it waits on no start.
+    await eventually(() => expect(host['conversationDelivery'].loop.isRunning(SESSION)).toBe(false))
+    await exitDuringStart()
 
-    // The held message is rejected by the delivery loop's next step, after the start's own.
+    // The held message was never handed to that child: it gets a start of its own, which fails alike.
+    await eventually(() => expect(dispatch).toHaveBeenCalledTimes(2))
+    expect((await submission(second))?.dispatchState).toBe('pending')
+    await exitDuringStart()
     await eventually(async () => expect((await submission(second))?.dispatchState).toBe('rejected'))
     const rows = (await host.journalSnapshot(SESSION)).items.filter((item) =>
       item.itemId.includes('start-failure')
     )
+    // Both starts failed alike with nothing delivered between: one row, worded from the exit's own
+    // diagnostic, as is every message it speaks for.
     expect(rows).toHaveLength(1)
-    // Worded once, from the exit's own diagnostic, for the row and every message sent to that start.
     const row = rows[0].body
-    expect(row).toMatchObject({
-      failure: { kind: 'providerStartFailed', detail: { text: 'codex: config.toml is invalid' } }
-    })
+    expect(row).toMatchObject({ failure: { detail: { text: 'codex: config.toml is invalid' } } })
     for (const id of [first, second]) {
       expect(await submission(id)).toMatchObject({
         dispatchState: 'rejected',

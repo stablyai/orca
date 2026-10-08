@@ -213,7 +213,12 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
           )),
       ...(startFailure ? { exitFailure: startFailure } : {}),
       ...(startFailed && child.generation
-        ? { exitedDuringStartup: { generation: child.generation } }
+        ? {
+            exitedDuringStartup: {
+              generation: child.generation,
+              startedFor: child.startedFor
+            }
+          }
         : {}),
       exit: watched,
       ...(unrunRejection ? { unrunRejection } : {})

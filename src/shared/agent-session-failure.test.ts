@@ -7,6 +7,7 @@ import {
   readAgentSessionFailureFact,
   readProviderRetry,
   readWholeAgentSessionFailureFact,
+  sameAgentSessionFailureFact,
   withProviderDiagnostic
 } from './agent-session-failure'
 import { AgentSessionFailureFactSchema } from './agent-session-failure-fact-schema'
@@ -192,5 +193,33 @@ describe('reading all of a failure fact', () => {
     ]) {
       expect(readWholeAgentSessionFailureFact(value)).toBeUndefined()
     }
+  })
+})
+
+describe('one failure', () => {
+  const exited = (text: string, audience: 'log' | 'person') =>
+    agentSessionFailureFact('providerStartFailed', { detail: { text, audience } })
+
+  it('ignores the text of a log diagnostic, which can carry a timestamp per attempt', () => {
+    expect(
+      sameAgentSessionFailureFact(
+        exited('01:02:03 ERROR x', 'log'),
+        exited('01:02:09 ERROR x', 'log')
+      )
+    ).toBe(true)
+  })
+
+  it('compares words for a person, and the audience either way', () => {
+    expect(sameAgentSessionFailureFact(exited('t-1', 'person'), exited('t-2', 'person'))).toBe(
+      false
+    )
+    expect(sameAgentSessionFailureFact(exited('t-1', 'person'), exited('t-1', 'person'))).toBe(true)
+    expect(sameAgentSessionFailureFact(exited('t-1', 'person'), exited('t-1', 'log'))).toBe(false)
+    expect(
+      sameAgentSessionFailureFact(
+        exited('t-1', 'log'),
+        agentSessionFailureFact('providerStartFailed')
+      )
+    ).toBe(false)
   })
 })

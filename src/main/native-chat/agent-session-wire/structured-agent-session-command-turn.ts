@@ -6,6 +6,7 @@
 // and a child that ends first is settled with it. The host writes a command's end only when the
 // provider never took it. While the turn runs it takes no input, so the loop hands nothing over.
 
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 import {
   agentSessionFailureFact,
   type AgentSessionFailureFact,
@@ -60,7 +61,7 @@ export function structuredAgentSessionCompactBody(): AgentJournalMessageItem {
 
 type AwaitedSubmission = Pick<
   AgentJournalSubmission,
-  'clientMessageId' | 'dispatchState' | 'acceptedSequence'
+  'clientMessageId' | 'dispatchState' | 'acceptedSequence' | 'handoverRecorded' | 'handedOverAt'
 >
 
 /** Optional `submissions` as the dead-generation journal reads it. */
@@ -69,21 +70,40 @@ export type StructuredAgentSessionAwaitedCommandJournal = {
   itemBody: AgentSessionJournal['itemBody']
 }
 
-/** The command the oldest message still waiting on the provider names: a start that fails now
- *  fails that message first, so its next step is to run the command again. */
-export function structuredAgentSessionAwaitedCommand(
-  journal: StructuredAgentSessionAwaitedCommandJournal
-): AgentSessionConversationCommand | undefined {
+/** The oldest message handed to the provider and not yet answered: a start that fails now fails it
+ *  first. A queued one gets a start of its own. */
+export function structuredAgentSessionAwaitedMessage(
+  journal: Pick<StructuredAgentSessionAwaitedCommandJournal, 'submissions'>
+): string | undefined {
   let oldest: AwaitedSubmission | undefined
   for (const submission of journal.submissions?.() ?? []) {
     if (
       submission.dispatchState === 'pending' &&
+      !isQueuedAgentJournalSubmission(submission) &&
       (oldest === undefined || (submission.acceptedSequence ?? 0) < (oldest.acceptedSequence ?? 0))
     ) {
       oldest = submission
     }
   }
-  const body = oldest && journal.itemBody(agentJournalSubmissionKey(oldest.clientMessageId))
+  return oldest?.clientMessageId
+}
+
+/** The command the oldest message handed to the provider names: its next step is to run the command
+ *  again. */
+export function structuredAgentSessionAwaitedCommand(
+  journal: StructuredAgentSessionAwaitedCommandJournal
+): AgentSessionConversationCommand | undefined {
+  const awaited = structuredAgentSessionAwaitedMessage(journal)
+  return awaited === undefined ? undefined : structuredAgentSessionMessageCommand(journal, awaited)
+}
+
+/** The command a message's own body sends: a start that fails it leaves that command to run again,
+ *  not a message to send. */
+export function structuredAgentSessionMessageCommand(
+  journal: Pick<AgentSessionJournal, 'itemBody'>,
+  clientMessageId: string
+): AgentSessionConversationCommand | undefined {
+  const body = journal.itemBody(agentJournalSubmissionKey(clientMessageId))
   return body?.kind === 'message' && body.command?.name === STRUCTURED_AGENT_SESSION_COMPACT_COMMAND
     ? STRUCTURED_AGENT_SESSION_COMPACT_COMMAND
     : undefined

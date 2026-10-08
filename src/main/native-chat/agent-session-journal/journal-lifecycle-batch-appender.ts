@@ -11,9 +11,11 @@ import type {
   JournalResolvedLifecycleBatchInput
 } from './journal-store-contracts'
 import type { JournalRow } from './journal-row-schema'
-import { journalQueuedRejectionRowBuilders } from './journal-pending-submission-recovery'
+import { journalBatchRejectionRowBuilders } from './journal-pending-submission-recovery'
+import { withoutRestatedStartFailureRows } from './journal-start-failure-run'
 
 const SETTLEMENT_ALREADY_APPLIED = new Error('journal_settlement_already_applied')
+const NOTHING_LEFT_TO_WRITE = new Error('journal_lifecycle_batch_nothing_left')
 
 export class JournalLifecycleBatchAppender {
   constructor(
@@ -28,25 +30,25 @@ export class JournalLifecycleBatchAppender {
   ) {}
 
   append(input: JournalLifecycleBatchInput): Promise<AgentJournalCursor> {
-    const { rejectsQueued } = input
-    if (rejectsQueued) {
-      // Planned on the lane: the sends queued then, and this batch unless it already landed. With
-      // none left (a Stop withdrew them first) it failed no one, so nothing is written.
+    const { rejects } = input
+    if (rejects) {
+      // Planned on the lane: the send if it is still `which` then, and this batch unless it already
+      // landed or nothing is left once its run's row is counted. With the send settled meanwhile it
+      // failed no one, so nothing is written.
       return this.deps
         .enqueueRows(() => {
-          const rejections = journalQueuedRejectionRowBuilders(
-            this.deps.state,
-            input.fence,
-            rejectsQueued
-          )
-          return rejections.length === 0 || this.wasApplied(input.settlementId)
+          const rejections = journalBatchRejectionRowBuilders(this.deps.state, input.fence, rejects)
+          const mutations = withoutRestatedStartFailureRows(this.deps.state(), input.mutations)
+          return rejections.length === 0 ||
+            mutations.length === 0 ||
+            this.wasApplied(input.settlementId)
             ? rejections
             : [
                 ...rejections,
                 journalLifecycleBatchRowBuilder(
                   this.deps.state,
                   input.settlementId,
-                  input.mutations,
+                  mutations,
                   input
                 )
               ]
@@ -56,22 +58,26 @@ export class JournalLifecycleBatchAppender {
     if (this.wasApplied(input.settlementId)) {
       return Promise.resolve(this.deps.cursor())
     }
-    const build = journalLifecycleBatchRowBuilder(
-      this.deps.state,
-      input.settlementId,
-      input.mutations,
-      input
-    )
     return this.deps
       .enqueue((seq, ts) => {
         if (this.wasApplied(input.settlementId)) {
           throw SETTLEMENT_ALREADY_APPLIED
         }
-        return build(seq, ts)
+        const mutations = withoutRestatedStartFailureRows(this.deps.state(), input.mutations)
+        // Its only row restated its run's: nothing to write. An empty batch still fails its bound.
+        if (mutations.length === 0 && input.mutations.length > 0) {
+          throw NOTHING_LEFT_TO_WRITE
+        }
+        return journalLifecycleBatchRowBuilder(
+          this.deps.state,
+          input.settlementId,
+          mutations,
+          input
+        )(seq, ts)
       })
       .then((row) => ({ epoch: row.epoch, sequence: row.seq }))
       .catch((error: unknown) => {
-        if (error === SETTLEMENT_ALREADY_APPLIED) {
+        if (error === SETTLEMENT_ALREADY_APPLIED || error === NOTHING_LEFT_TO_WRITE) {
           return this.deps.cursor()
         }
         throw error

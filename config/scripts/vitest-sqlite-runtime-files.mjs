@@ -126,6 +126,7 @@ export const SQLITE_RUNTIME_INCLUDE = [
   'src/main/native-chat/agent-session-wire/structured-agent-session-settled-attach-retry.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-shutdown-cut-row.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-stale-turn-verdict.test.ts',
+  'src/main/native-chat/agent-session-wire/structured-agent-session-start-failure-run-lane.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-start-failure-writer.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-startup-reconcile-failure.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-status-feed-child-work.test.ts',

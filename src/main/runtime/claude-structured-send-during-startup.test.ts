@@ -100,7 +100,7 @@ describe('a send into a Claude chat whose CLI keeps failing at startup', () => {
     )
     await failLatestStart(host, 2)
 
-    // Rejected with the cause, not left in doubt; one row for this attempt names it.
+    // Rejected with the cause, not left in doubt; the open's row already names it, so no second.
     await vi.waitFor(async () =>
       expect(await submission(host, held)).toMatchObject({
         dispatchState: 'rejected',
@@ -109,7 +109,7 @@ describe('a send into a Claude chat whose CLI keeps failing at startup', () => {
         rejection: { kind: 'providerStartFailed' }
       })
     )
-    expect(await statusRows(host)).toEqual([STARTUP_TEXT, STARTUP_TEXT])
+    expect(await statusRows(host)).toEqual([STARTUP_TEXT])
     // The restart moved the fence twice: its acquisition, and the exit that released it.
     expect(fence(host)).toBe(releasedFence + 2)
     expect(claude.children(SESSION)).toHaveLength(2)
@@ -123,7 +123,7 @@ describe('a send into a Claude chat whose CLI keeps failing at startup', () => {
     await vi.waitFor(() =>
       expect(host.deps.store.getRecord(SESSION)?.lease.claimStatus).toBe('live')
     )
-    expect(await statusRows(host)).toHaveLength(2)
+    expect(await statusRows(host)).toHaveLength(1)
   })
 })
 

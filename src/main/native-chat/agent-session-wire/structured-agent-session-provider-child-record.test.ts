@@ -21,6 +21,8 @@ import {
 } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
+import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { structuredAgentSessionStartFailureRowIdentity } from '../../../shared/structured-agent-session-start-failure-row-key'
 import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
@@ -184,6 +186,11 @@ async function submission(id: string): Promise<AgentJournalSubmission | undefine
   )
 }
 
+/** The row a failed start leaves for the message it was for. */
+function startRowKey(clientMessageId: string): string {
+  return agentJournalItemKey(structuredAgentSessionStartFailureRowIdentity(clientMessageId))
+}
+
 async function statusRows(): Promise<
   {
     itemId: string
@@ -227,6 +234,7 @@ function exit(child: ReturnType<typeof currentChild>, reason: string, startupUnp
   })
 }
 
+/** Whether a subscriber was told the message was rejected. */
 function rejectedIn(events: AgentSessionSubscribeEvent[], id: string): boolean {
   return events.some(
     (event) =>
@@ -235,6 +243,10 @@ function rejectedIn(events: AgentSessionSubscribeEvent[], id: string): boolean {
         (entry) => entry.clientMessageId === id && entry.dispatchState === 'rejected'
       )
   )
+}
+
+async function rejected(id: string): Promise<void> {
+  await eventually(async () => expect((await submission(id))?.dispatchState).toBe('rejected'))
 }
 
 function conversation() {
@@ -383,7 +395,7 @@ describe('a published child that dies while it proves its start', () => {
   const EXIT = START_EXIT
   const TEXT = START_TEXT
 
-  it('leaves one error row keyed by the start, and every message it was handed rejected with it (R2)', async () => {
+  it('fails the message it was handed, under one row keyed by it, and the one behind starts afresh (R2)', async () => {
     await restartHost()
     acquire.mockImplementation(spawnStartingChild)
     // The first is written to the starting child at once; it never answers, so its turn never
@@ -393,28 +405,22 @@ describe('a published child that dies while it proves its start', () => {
     const events = await subscribe()
     const second = await accept('second')
     await eventually(() => expect(dispatch).toHaveBeenCalledTimes(1))
+    await settleLoop()
     const child = currentChild()
 
     await exit(child, EXIT, true)
 
-    await eventually(async () => expect((await submission(second))?.dispatchState).toBe('rejected'))
+    await rejected(first)
+    // The second was never that child's: it is handed to a start of its own.
+    await eventually(() => expect(dispatch).toHaveBeenCalledTimes(2))
+    expect(await submission(first)).toMatchObject({ reason: TEXT, rejection: START_FAILURE })
+    expect(await submission(second)).toMatchObject({ dispatchState: 'pending' })
+    expect(rejectedIn(events, first)).toBe(true)
+    expect(rejectedIn(events, second)).toBe(false)
     expect(await statusRows()).toEqual([
-      {
-        itemId: `orca:${encodeURIComponent(`start-failure:${child.acquisitionGeneration}`)}`,
-        text: TEXT,
-        tone: 'error',
-        failure: START_FAILURE
-      }
+      { itemId: startRowKey(first), text: TEXT, tone: 'error', failure: START_FAILURE }
     ])
-    for (const id of [first, second]) {
-      expect(await submission(id)).toMatchObject({
-        dispatchState: 'rejected',
-        reason: TEXT,
-        rejection: START_FAILURE
-      })
-    }
-    expect(rejectedIn(events, second)).toBe(true)
-    expect(acquire).toHaveBeenCalledTimes(2)
+    expect(acquire).toHaveBeenCalledTimes(3)
   })
 })
 
@@ -429,9 +435,11 @@ describe('a start another operation made that dies while a sent message waits on
   const EXIT = START_EXIT
   const TEXT = START_TEXT
 
-  it("is the message's own failed start: one error row, the message rejected, no second start (R2)", async () => {
+  // The exit lands between the message's accept and its first step: that start was for no message,
+  // so its exit's row is the only place its failure is said, and the message makes its own start.
+  it("is not the message's: its exit's row says why, and the message starts afresh (R2)", async () => {
     await restartHost()
-    acquire.mockImplementation(spawnStartingChild)
+    acquire.mockImplementationOnce(spawnStartingChild)
     // An operation that needs the agent starts a child that has not proven its start.
     await startForOperation()
     const operationChild = currentChild()
@@ -448,21 +456,15 @@ describe('a start another operation made that dies while a sent message waits on
     await exited
     const id = params.envelope.clientOperationId
 
-    await eventually(async () => expect((await submission(id))?.dispatchState).toBe('rejected'))
+    await eventually(async () => expect((await submission(id))?.dispatchState).toBe('accepted'))
     await settleLoop()
-    expect((await submission(id))?.reason).toBe(TEXT)
-    expect(await statusRows()).toEqual([
-      {
-        itemId: `orca:${encodeURIComponent(`start-failure:${operationChild.acquisitionGeneration}`)}`,
-        text: TEXT,
-        tone: 'error',
-        failure: START_FAILURE
-      }
+    expect(rejectedIn(events, id)).toBe(false)
+    // The setup's child, the operation's, and the message's own.
+    expect(acquire).toHaveBeenCalledTimes(3)
+    expect(dispatch.mock.calls.map(([input]) => input.clientMessageId)).toEqual([id])
+    expect((await statusRows()).map((row) => row.itemId)).toEqual([
+      startRowKey(operationChild.acquisitionGeneration)
     ])
-    expect(rejectedIn(events, id)).toBe(true)
-    // The setup's child and the operation's: nothing started again into the same failure.
-    expect(acquire).toHaveBeenCalledTimes(2)
-    expect(dispatch).not.toHaveBeenCalled()
   })
 
   it('leaves a message sent after that start failed to a fresh start (R2)', async () => {
@@ -470,7 +472,10 @@ describe('a start another operation made that dies while a sent message waits on
     acquire.mockImplementationOnce(spawnStartingChild)
     await startForOperation()
     await exit(currentChild(), EXIT, true)
-    expect(await statusRows()).toHaveLength(1)
+    // A start for no message says why it failed in its exit's row.
+    expect(await statusRows()).toEqual([
+      expect.objectContaining({ text: TEXT, tone: 'error', failure: START_FAILURE })
+    ])
 
     const id = await accept('after the failure')
 
@@ -543,18 +548,22 @@ describe('a child that ends before its message is handed over', () => {
     const id = await accept('hello')
     const events = await subscribe()
 
-    await eventually(async () => expect((await submission(id))?.dispatchState).toBe('rejected'))
+    await rejected(id)
     // The exit's stderr rides beside the sentence, never in it.
-    const failure = {
-      kind: 'providerExited',
-      detail: { text: 'codex app-server crashed', audience: 'log' }
-    }
     expect(await submission(id)).toMatchObject({
+      dispatchState: 'rejected',
       reason: 'Codex stopped before this message was sent.',
-      rejection: failure
+      rejection: {
+        kind: 'providerExited',
+        detail: { text: 'codex app-server crashed', audience: 'log' }
+      }
     })
     expect(await statusRows()).toEqual([
-      { itemId: expect.any(String), text: (await submission(id))?.reason, tone: 'error', failure }
+      expect.objectContaining({
+        itemId: startRowKey(id),
+        text: 'Codex stopped before this message was sent.',
+        tone: 'error'
+      })
     ])
     expect(rejectedIn(events, id)).toBe(true)
     await eventually(() => expect(host['conversationDelivery'].loop.isRunning(SESSION)).toBe(false))
@@ -670,19 +679,20 @@ describe('a quit with a message still queued', () => {
 })
 
 describe('a send whose start failed, sent again with the same operation id', () => {
-  it('replays the recorded rejection and starts no second agent (R2)', async () => {
+  it('replays the recorded answer and starts no second agent (R2)', async () => {
     acquire.mockRejectedValueOnce(new Error('spawn claude ENOENT'))
     const fenceBefore = store.getRecord(SESSION)!.lease.runtimeFence
     const params = sendParams('hello')
-    // A failed start is a rejected message, never a refused send.
+    // A failed start rejects the accepted message, never the send.
     expect(await host.send(CALLER, params)).toMatchObject({
       ok: true,
       value: { submission: { dispatchState: 'pending' } }
     })
     const id = params.envelope.clientOperationId
-    await eventually(async () => expect((await submission(id))?.dispatchState).toBe('rejected'))
+    await rejected(id)
     // The start moved the fence while the message was out.
     expect(store.getRecord(SESSION)!.lease.runtimeFence).toBeGreaterThan(fenceBefore)
+    await settleLoop()
     const starts = acquire.mock.calls.length
 
     const replay = await host.send(CALLER, params)
@@ -690,7 +700,13 @@ describe('a send whose start failed, sent again with the same operation id', () 
     expect(replay).toMatchObject({
       ok: true,
       replayed: true,
-      value: { submission: { clientMessageId: id, dispatchState: 'rejected' } }
+      value: {
+        submission: {
+          clientMessageId: id,
+          dispatchState: 'rejected',
+          rejection: { kind: 'restartFailed' }
+        }
+      }
     })
     await settleLoop()
     expect(acquire).toHaveBeenCalledTimes(starts)

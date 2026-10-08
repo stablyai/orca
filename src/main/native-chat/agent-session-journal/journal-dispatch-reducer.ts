@@ -61,6 +61,7 @@ export function applyJournalDispatchRow(
   }
   if (row.state === 'accepted') {
     noteTurnAccepted(state, submission)
+    state.latestAcceptedSequence = Math.max(state.latestAcceptedSequence, row.seq)
   }
   if (row.state !== 'accepted' || !row.providerItemId) {
     return

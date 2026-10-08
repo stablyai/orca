@@ -154,7 +154,7 @@ describe('a fresh chat whose Claude start fails', () => {
     ['after the create already died', false],
     ['while the create is still starting', true]
   ] as const)(
-    'starts once for the open and once for a send, one row each, when the view binds %s',
+    'starts once for the open and once for a send, under one row, when the view binds %s',
     async (_when, createStillStarting) => {
       // Released only once the views bound, so no runner is slow enough to let the create die first.
       let releaseCreate = (): void => {}
@@ -203,16 +203,16 @@ describe('a fresh chat whose Claude start fails', () => {
         ).toMatchObject({ dispatchState: 'rejected', reason: startFailure })
       )
       await settleExits()
-      // The send's own start, once, and one row for it below the message.
+      // The send's own start, once. It failed alike with nothing delivered since: no second row.
       expect(claude.connections).toHaveLength(2)
-      expect(await timeline()).toEqual([startFailure, 'message', startFailure])
+      expect(await timeline()).toEqual([startFailure, 'message'])
 
       // Switching away and back re-subscribes; it starts nothing and adds no row.
       unsubscribe()
       await view(SURFACE)
       await settleExits()
       expect(claude.connections).toHaveLength(2)
-      expect(await timeline()).toEqual([startFailure, 'message', startFailure])
+      expect(await timeline()).toEqual([startFailure, 'message'])
     }
   )
 })

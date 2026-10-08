@@ -180,6 +180,21 @@ export function classifyDispatchRejection(
   return { category: KIND_CATEGORY[kind], verdict: KIND_VERDICT[kind], kind }
 }
 
+/** Rejected because the agent it waited on never took it — a failed start, Orca stopping a start
+ *  that hung, the agent ending first — or Orca's own fault on the way: the message never reached an
+ *  agent, and its record says why. */
+export function isFailedStartOrHostFault(
+  submission: Pick<AgentJournalSubmission, 'reason'> & { rejection?: unknown }
+): boolean {
+  const { category, kind } = classifyDispatchRejection(submission)
+  return (
+    category === 'startFailed' ||
+    kind === 'hostStopped' ||
+    kind === 'providerExited' ||
+    kind === 'hostFault'
+  )
+}
+
 /** A Stop withdrew it before it ran: it will not land, and only a person can send it again. */
 export function dispatchWasWithdrawn(
   submission: Pick<AgentJournalSubmission, 'dispatchState' | 'reason' | 'rejection'> | undefined

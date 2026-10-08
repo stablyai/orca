@@ -41,17 +41,28 @@ const START_FAILED: AgentSessionFailureFact = { kind: 'providerStartFailed' }
 const START_FAILED_REASON =
   'Claude stopped before it finished starting. Send your message to try again.'
 
-function startFailureRow(fact: AgentSessionFailureFact): AgentJournalRenderItem {
+function startFailureRow(fact: AgentSessionFailureFact, sequence = 1): AgentJournalRenderItem {
   return {
     itemId: agentJournalItemKey(structuredAgentSessionStartFailureRowIdentity('generation-1')),
     revision: 1,
-    sequence: 1,
-    observedAt: 1,
+    sequence,
+    observedAt: sequence,
     body: {
       kind: 'status',
       tone: 'error',
       ...agentSessionFailureWords(fact, { agentName: 'Claude', surface: 'row' })
     }
+  }
+}
+
+/** A rejected message where the journal placed it: where it was rejected. */
+function rejectedAt(clientMessageId: string, sequence: number): AgentJournalRenderItem {
+  return {
+    itemId: agentJournalSubmissionKey(clientMessageId),
+    revision: 0,
+    sequence,
+    observedAt: sequence,
+    body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: clientMessageId }] }
   }
 }
 
@@ -116,7 +127,12 @@ async function notice(clientMessageId: string): Promise<HTMLElement> {
 // The start's own row says why, so its rejected messages say only that they were not sent. Sending
 // one again is a new message, so none offers a Retry.
 it("says only 'not sent', with no Retry, on each message the failed start's row explains", async () => {
-  mocks.journalItems = [startFailureRow(START_FAILED)]
+  // The start rejected both, then wrote its row after them.
+  mocks.journalItems = [
+    rejectedAt('first', 1),
+    rejectedAt('second', 2),
+    startFailureRow(START_FAILED, 3)
+  ]
 
   renderPane([
     rejected('first', START_FAILED_REASON, START_FAILED),
@@ -132,7 +148,11 @@ it("says only 'not sent', with no Retry, on each message the failed start's row 
 })
 
 it('keeps the full notice on a message rejected for a reason no start-failure row states', async () => {
-  mocks.journalItems = [startFailureRow(START_FAILED)]
+  mocks.journalItems = [
+    rejectedAt('stated', 1),
+    rejectedAt('other', 2),
+    startFailureRow(START_FAILED, 3)
+  ]
   const providerRejected: AgentSessionFailureFact = {
     kind: 'providerRejected',
     detail: { text: 'Image type .bmp', audience: 'person' }

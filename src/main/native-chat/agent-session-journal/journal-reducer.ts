@@ -63,6 +63,9 @@ export type JournalReducerState = {
   /** The submission row of the latest turn the provider accepted, whoever sent it; 0 when none.
    *  Kept as it folds so the queue's pause reads it in O(1). */
   latestAcceptedTurnSequence: number
+  /** The row at which the provider last accepted a send, with or without an item of its own; 0
+   *  when none. Kept as it folds; it ends a run of failed starts. */
+  latestAcceptedSequence: number
   /** The latest person's Stop event and Resume, what the queue's pause is derived from. */
   queuePauseMarks: JournalQueuePauseMarks
 }
@@ -84,6 +87,7 @@ export function createJournalReducerState(sessionId: string, epoch: string): Jou
     appliedSettlementIds: new Set(),
     derivedTurnScope: new JournalDerivedTurnScope(),
     latestAcceptedTurnSequence: 0,
+    latestAcceptedSequence: 0,
     queuePauseMarks: createJournalQueuePauseMarks()
   }
 }
