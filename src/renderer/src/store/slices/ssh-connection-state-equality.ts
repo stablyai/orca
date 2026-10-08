@@ -13,6 +13,7 @@ export function sshConnectionStatesEqual(
     a?.connectionGeneration === b.connectionGeneration &&
     a?.supportsFolderDownload === b.supportsFolderDownload &&
     a?.remotePlatform === b.remotePlatform &&
+    a?.hostNodeRuntime === b.hostNodeRuntime &&
     // Why: a connect can end on the same status and epoch it set up under, changing only these.
     JSON.stringify(a?.managedServer ?? null) === JSON.stringify(b.managedServer ?? null) &&
     JSON.stringify(a?.plainSsh ?? null) === JSON.stringify(b.plainSsh ?? null)

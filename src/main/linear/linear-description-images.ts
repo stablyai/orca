@@ -8,7 +8,8 @@ const DESCRIPTION_QUERY = `query OrcaLinearDescriptionImages($id: String!) {
 export async function getDescriptionImageUrls(
   entry: LinearClientForWorkspace,
   issueId: string,
-  description: string | undefined
+  description: string | undefined,
+  signal?: AbortSignal
 ): Promise<Record<string, string> | undefined> {
   const uploads = extractLinearInlineMedia(description, 'description').filter(
     (media) => media.linearUpload
@@ -18,7 +19,7 @@ export async function getDescriptionImageUrls(
   }
 
   try {
-    const result = await getPublicFileUrlClient(entry).client.rawRequest<
+    const result = await getPublicFileUrlClient(entry, signal).client.rawRequest<
       { issue?: { description?: string | null } | null },
       Record<string, unknown>
     >(DESCRIPTION_QUERY, { id: issueId })
@@ -34,6 +35,7 @@ export async function getDescriptionImageUrls(
       })
     )
   } catch (error) {
+    signal?.throwIfAborted()
     if (isAuthError(error)) {
       throw error
     }

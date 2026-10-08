@@ -9,6 +9,7 @@ import {
 import { rungBCompatRuntimeFor, type RelayRuntimeStep } from './ssh-relay-runtime-ladder'
 import type { RelayRuntimeLadderRun } from './ssh-relay-runtime-resolution'
 import type { RemoteHostPlatform } from './ssh-remote-platform'
+import { RemoteNodeNotFoundError, resolveRemoteNodePath } from './ssh-remote-node-resolution'
 import type { OrcadDeploymentTargetFacts } from './orcad-deployment-target'
 
 type StepPlanOptions = {
@@ -37,6 +38,22 @@ async function ladderTargetFacts(options: StepPlanOptions): Promise<OrcadDeploym
   return facts
 }
 
+/** Why strict: only an answered "no Node here" settles D; a lost probe stays a retryable failure. */
+async function proveHostNodeForFallback(
+  conn: SshConnection,
+  host: RemoteHostPlatform,
+  signal?: AbortSignal
+): Promise<string> {
+  try {
+    return await resolveRemoteNodePath(conn, host, { signal, strict: true })
+  } catch (error) {
+    if (error instanceof RemoteNodeNotFoundError) {
+      throw new PinnedRelayFallbackError('host_node_missing', 'no host Node.js 18+ with npm')
+    }
+    throw error
+  }
+}
+
 /** Undefined for the host-npm path; throws `PinnedRelayFallbackError` when a rung cannot run. */
 export async function planRelayRuntimeStep(
   options: StepPlanOptions
@@ -45,6 +62,9 @@ export async function planRelayRuntimeStep(
   run.host = host
   switch (step) {
     case 'legacy':
+      if (run.laddered) {
+        run.hostNodePath = await proveHostNodeForFallback(conn, host, signal)
+      }
       return undefined
     case 'A': {
       const facts = await ladderTargetFacts(options)

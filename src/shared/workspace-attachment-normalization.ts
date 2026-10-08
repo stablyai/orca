@@ -154,7 +154,27 @@ export function normalizeWorkspaceAttachments(value: unknown): WorkspaceAttachme
         : {})
     })
   }
-  let normalized = [...items.values()]
+  const normalized = [...items.values()]
+  const groups = new Map<string, WorkspaceAttachment[]>()
+  for (const item of normalized) {
+    const identity = attachmentIdentity(item)
+    const group = groups.get(identity)
+    if (group) {
+      group.push(item)
+    } else {
+      groups.set(identity, [item])
+    }
+  }
+  const retained = new Set<WorkspaceAttachment>()
+  for (const group of groups.values()) {
+    for (const item of group.length === 1 ? group : collapseAttachmentIdentityGroup(group)) {
+      retained.add(item)
+    }
+  }
+  return normalized.filter((item) => retained.has(item))
+}
+
+function collapseAttachmentIdentityGroup(normalized: WorkspaceAttachment[]): WorkspaceAttachment[] {
   while (true) {
     const retained = normalized.filter((item) => {
       const richer = normalized.filter(

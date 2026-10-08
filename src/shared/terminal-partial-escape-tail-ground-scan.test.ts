@@ -30,15 +30,18 @@ describe('partial escape scanning between sequences', () => {
     ['\x1bPqpayload', '\x1b\\'],
     ['\x1bPqpayload\x1b', '\\', '\x1b'],
     ['\x1b(', 'B']
-  ])('preserves %j through every split after ordinary text', (pending, completion, expected = pending) => {
-    const prefix = `\x1b[32m${'build output '.repeat(128)}\x1b[0m`
-    for (let split = 0; split <= pending.length; split += 1) {
-      const first = advancePartialEscapeTail('', prefix + pending.slice(0, split))
-      const continued = advancePartialEscapeTail(first, pending.slice(split))
-      expect(continued).toBe(expected)
-      expect(advancePartialEscapeTail(continued, `${completion}ready`)).toBe('')
+  ])(
+    'preserves %j through every split after ordinary text',
+    (pending, completion, expected = pending) => {
+      const prefix = `\x1b[32m${'build output '.repeat(128)}\x1b[0m`
+      for (let split = 0; split <= pending.length; split += 1) {
+        const first = advancePartialEscapeTail('', prefix + pending.slice(0, split))
+        const continued = advancePartialEscapeTail(first, pending.slice(split))
+        expect(continued).toBe(expected)
+        expect(advancePartialEscapeTail(continued, `${completion}ready`)).toBe('')
+      }
     }
-  })
+  )
 
   it('handles aborts before returning to ordinary text', () => {
     const text = 'ordinary text '.repeat(128)

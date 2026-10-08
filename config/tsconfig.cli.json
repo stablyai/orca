@@ -116,6 +116,7 @@
     "../src/main/startup/http1-compatibility-marker.ts",
     "../src/main/startup/http1-compatibility-profile-state.ts",
     "../src/main/agent-hooks/windows-direct-cmd-hook-command.ts",
+    "../src/main/agent-hooks/windows-hook-command.ts",
     "../src/main/agent-hooks/windows-powershell-hook-launcher.ts",
     "../src/main/amp/agent-status-plugin-source.ts",
     "../src/main/amp/hook-service.ts",

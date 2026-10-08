@@ -51,9 +51,10 @@ it.each([
     updatedAt: '2026-01-01'
   }
   const pending = Promise.withResolvers<HostedReviewInfo | null>()
+  const branchLookup = vi.fn(() => pending.promise)
   Object.defineProperty(window.api, 'hostedReview', {
     configurable: true,
-    value: { forBranch: vi.fn(() => pending.promise) }
+    value: { forBranch: branchLookup }
   })
   store.setState({ repos: [repo], worktreesByRepo: { repo: [workspace] } })
   store.getState().observeTerminalGitHubPullRequestLink(workspace.id, {
@@ -61,6 +62,10 @@ it.each([
     url: review.url,
     slug: { owner: 'acme', repo: 'orca' }
   })
+  for (let i = 0; i < 20; i++) {
+    await Promise.resolve()
+  }
+  expect(branchLookup).toHaveBeenCalledTimes(1)
   store.setState({
     repos:
       change === 'removed'

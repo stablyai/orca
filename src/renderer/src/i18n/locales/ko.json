@@ -164,6 +164,7 @@
     "reportCrash": "크래시 신고...",
     "file": "파일",
     "exit": "종료",
+    "quitApp": "{{appName}} 종료",
     "edit": "편집",
     "appearance": "외관",
     "toggleLeftSidebar": "왼쪽 사이드바 표시/숨기기",
@@ -13653,7 +13654,9 @@
             "sessionDeleteFailed": "세션을 삭제하지 못했습니다",
             "resumeInChatConflict": "다른 채팅에서 이미 이 대화를 진행 중입니다.",
             "resumeInChatTranscriptMissing": "이 대화 기록을 로드할 수 없어 채팅에서 재개할 수 없습니다.",
-            "resumeInChatFailed": "새 채팅에서 이 세션을 재개할 수 없습니다."
+            "resumeInChatFailed": "새 채팅에서 이 세션을 재개할 수 없습니다.",
+            "resumeInNewCliUnavailable": "이 세션은 CLI에서 열 수 없습니다.",
+            "resumeInNewCliHostTooOld": "이 채팅을 새 CLI에서 재개하려면 채팅을 실행하는 호스트의 Orca를 업데이트하세요."
           },
           "AiVaultPanelControls": {
             "scanningSessions": "세션 스캔 중",
@@ -13789,7 +13792,10 @@
             "deleteReasonNonLocalHost": "이 기기에 있는 세션만 삭제할 수 있습니다.",
             "deleteReasonSyntheticPath": "이 세션은 Orca에서 삭제할 수 없습니다.",
             "deleteReasonUnsupportedAgent": "{{value0}} 세션은 Orca에서 삭제할 수 없습니다.",
-            "resumeInNewChat": "새 채팅에서 재개"
+            "resumeInNewNativeChat": "새 기본 채팅에서 재개",
+            "resumeInNewCli": "새 CLI에서 재개",
+            "resumeInNewCliTooltipFork": "이 대화를 새 CLI 세션으로 포크합니다.",
+            "resumeInNewCliTooltipChat": "기본 채팅은 그대로 유지됩니다."
           },
           "AiVaultSessionDeleteDialog": {
             "title": "이 세션을 삭제할까요?",

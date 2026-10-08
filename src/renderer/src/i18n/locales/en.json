@@ -332,6 +332,7 @@
     "reportCrash": "Report Crash...",
     "file": "File",
     "exit": "Exit",
+    "quitApp": "Quit {{appName}}",
     "edit": "Edit",
     "appearance": "Appearance",
     "toggleLeftSidebar": "Toggle Left Sidebar",
@@ -8817,7 +8818,9 @@
           "c77f1abfe3": "Ending remote terminals",
           "18968ede9e": "Error",
           "f0871e6bfb": "connect",
-          "47e94bd6ba": "connected"
+          "47e94bd6ba": "connected",
+          "hostNodeFallback": "Unsupported configuration: Orca-managed Node isn’t available for this connection, so Orca runs on this host’s Node.js with terminal support installed by npm on the host.",
+          "hostNodeUnsupported": "Unsupported configuration: Orca runs on this host’s Node.js with terminal support installed by npm on the host. Set Runtime to Auto in this host’s SSH settings to use Orca-managed Node."
         },
         "SshTargetDestructiveActions": {
           "7e66942808": "This will stop active terminal sessions on this SSH target. Reconnecting will not restore them.",
@@ -8865,6 +8868,8 @@
           "remoteRuntimeAuto": "Auto",
           "remoteRuntimePinnedNode": "Orca-managed Node",
           "remoteRuntimeHostNode": "Host Node",
+          "allowRemoteCliControl": "Allow this host's orca CLI to control Orca",
+          "allowRemoteCliControlHelp": "When off, orca commands run on this host reach only its own terminals. Turn on to let them reach other hosts, orchestration, files, and integrations on this computer.",
           "editTitle": "Edit SSH host",
           "addTitle": "Add SSH host",
           "editDescription": "Update connection details for this machine. Changes apply on next connect.",
@@ -13887,7 +13892,9 @@
             "sessionDeleteFailed": "Couldn't delete the session",
             "resumeInChatConflict": "Another chat is already holding this conversation.",
             "resumeInChatTranscriptMissing": "This conversation's history could not be loaded, so it cannot be resumed in chat.",
-            "resumeInChatFailed": "Could not resume this session in a new chat."
+            "resumeInChatFailed": "Could not resume this session in a new chat.",
+            "resumeInNewCliUnavailable": "This session cannot be opened in the CLI.",
+            "resumeInNewCliHostTooOld": "Update Orca on the host that runs this chat to resume it in a new CLI."
           },
           "AiVaultPanelControls": {
             "scanningSessions": "Scanning sessions",
@@ -14023,7 +14030,10 @@
             "deleteReasonNonLocalHost": "Only sessions on this device can be deleted.",
             "deleteReasonSyntheticPath": "This session can't be deleted from Orca.",
             "deleteReasonUnsupportedAgent": "{{value0}} sessions can't be deleted from Orca.",
-            "resumeInNewChat": "Resume in New Chat"
+            "resumeInNewNativeChat": "Resume in New Native Chat",
+            "resumeInNewCli": "Resume in New CLI",
+            "resumeInNewCliTooltipFork": "Forks this conversation into a new CLI session.",
+            "resumeInNewCliTooltipChat": "The native chat stays as it is."
           },
           "AiVaultSessionDeleteDialog": {
             "title": "Delete this session?",

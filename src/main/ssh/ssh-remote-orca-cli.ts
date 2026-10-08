@@ -104,7 +104,11 @@ async function runLegacyRemoteOrcaCli(
   json: boolean,
   passthroughFailure: HostCliUnavailableError
 ): Promise<RemoteOrcaCliResult> {
-  const dispatcher = new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS })
+  const dispatcher = new RpcDispatcher({
+    runtime,
+    methods: ALL_RPC_METHODS,
+    callerScope: request.callerScope
+  })
   const help = getRemoteLinearHelp(parsed)
   if (help) {
     return { stdout: `${help}\n`, stderr: '', exitCode: 0 }

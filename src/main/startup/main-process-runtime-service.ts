@@ -13,6 +13,7 @@ import { browserManager } from '../browser/browser-manager'
 import { loadAgentSessionClaimSigner } from '../runtime/agent-session-claim-identity'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { prepareCodexAiVaultSessionResume } from '../codex/codex-ai-vault-session-resume'
+import { prepareCodexPinnedLaunchHome } from './codex-session-resume-launch'
 import { resolveHostCodexSessionSourceHome } from '../codex/codex-session-source-home'
 import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
 import { getDaemonProvider } from '../daemon/daemon-init'
@@ -139,7 +140,8 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     prepareAiVaultSessionResume: (args) =>
       prepareCodexAiVaultSessionResume(args, {
         runtimeHome: state.codexRuntimeHome,
-        systemCodexHomePath: resolveHostCodexSessionSourceHome(store.getSettings())
+        systemCodexHomePath: resolveHostCodexSessionSourceHome(store.getSettings()),
+        preparePinnedLaunchHome: (home) => prepareCodexPinnedLaunchHome(home)
       }),
     prepareCodexStructuredLaunch: ({ launchEnv }) =>
       prepareCodexRuntimeHomeForLaunch(undefined, launchEnv),

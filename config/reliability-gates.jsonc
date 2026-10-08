@@ -13744,7 +13744,7 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/remote-workspace-snapshot-arrival-coordinator.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/remote-workspace-target-sync.test.ts src/renderer/src/app-shell/remote-workspace-unplaced-upload-suppression.test.tsx --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/remote-workspace-cache.test.ts src/main/ipc/remote-workspace.test.ts src/main/ipc/remote-workspace-patch-queue.test.ts --reporter=dot",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/repos-remote.test.ts src/main/ipc/ssh.test.ts src/main/ipc/worktrees-ssh-repo-owner-resolution.test.ts src/main/ipc/worktrees-lineage-hydration.test.ts src/main/runtime/public-ssh-state.test.ts src/main/ssh/ssh-connection-manager.test.ts src/main/ssh/ssh-connection.test.ts src/main/ssh/ssh-provider-authority.test.ts src/preload/ssh-authority-forwarding.test.ts src/renderer/src/runtime/runtime-client-events.test.ts src/renderer/src/runtime/runtime-environment-ssh-state.test.ts src/shared/ssh-retained-payload-admission.test.ts src/shared/ssh-types.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/repos-remote.test.ts src/main/ipc/ssh.test.ts src/main/ipc/worktrees-ssh-repo-owner-resolution.test.ts src/main/ipc/worktrees-lineage-hydration.test.ts src/main/runtime/public-ssh-state.test.ts src/main/ssh/ssh-connection-manager.test.ts src/main/ssh/ssh-connection.test.ts src/main/ssh/ssh-provider-authority.test.ts src/preload/ssh-authority-forwarding.test.ts src/renderer/src/runtime/runtime-client-events.test.ts src/renderer/src/runtime/runtime-environment-ssh-state.test.ts src/shared/ssh-retained-payload-admission.test.ts --reporter=dot",
         "pnpm exec electron-vite build --mode e2e",
         "pnpm run build:web-from-renderer",
         "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-remote-terminal-materialization-reconnect.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
@@ -13814,7 +13814,6 @@
         "src/renderer/src/runtime/runtime-client-events.test.ts",
         "src/renderer/src/runtime/runtime-environment-ssh-state.test.ts",
         "src/shared/ssh-retained-payload-admission.test.ts",
-        "src/shared/ssh-types.test.ts",
         "tests/e2e/terminal-cold-activation-deferral.spec.ts",
         "tests/e2e/ssh-cold-activation-restore.spec.ts",
         "tests/e2e/ssh-docker-relay-perf.spec.ts"
@@ -14084,12 +14083,6 @@
           ]
         },
         {
-          "file": "src/shared/ssh-types.test.ts",
-          "assertions": [
-            "SSH connection state carries the provider epoch and connection generation authority pair"
-          ]
-        },
-        {
           "file": "src/renderer/src/store/slices/terminals-hydration.test.ts",
           "assertions": [
             "target-scoped hydration and reconnect preserve sibling SSH and runtime tabs, PTY indexes, runtime ownership, and active selection",
@@ -14311,15 +14304,6 @@
           "result": "passed",
           "durationSeconds": 1.48,
           "summary": "All 90 transport tests passed, including pre-publication admission rejection, handler-complete non-destructive detach for obsolete SSH reattach transports, settled retirement of rejected or destroyed fresh fallbacks, and reported shutdown refusal."
-        },
-        {
-          "date": "2026-07-28",
-          "runner": "local",
-          "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/repos-remote.test.ts src/main/ipc/ssh.test.ts src/main/ipc/worktrees-ssh-repo-owner-resolution.test.ts src/main/ipc/worktrees-lineage-hydration.test.ts src/main/runtime/public-ssh-state.test.ts src/main/ssh/ssh-connection-manager.test.ts src/main/ssh/ssh-connection.test.ts src/main/ssh/ssh-provider-authority.test.ts src/preload/ssh-authority-forwarding.test.ts src/renderer/src/runtime/runtime-client-events.test.ts src/renderer/src/runtime/runtime-environment-ssh-state.test.ts src/shared/ssh-retained-payload-admission.test.ts src/shared/ssh-types.test.ts --reporter=dot",
-          "result": "passed",
-          "durationSeconds": 2.55,
-          "summary": "Twelve main, preload, runtime, and shared authority files and 513 tests passed, including fail-closed pre/post-await repo ownership provenance, production retained-payload admission, fenced stale-transport replacement, failure-safe target lifecycle barriers, and real ssh2 late-ready/error rejection."
         },
         {
           "date": "2026-07-28",

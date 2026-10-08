@@ -380,19 +380,23 @@ describe('host-published recovery snapshot onto a live alt screen', () => {
   // alt and show the host's normal screen.
   it('repaints from the normal buffer once the host TUI has exited', async () => {
     const { data, meta } = await publishHostRecovery(AGENT_EXIT)
+    // The ACK-overflow recovery is screen-only and says so.
+    expect(meta.keepsLocalScrollback).toBe(true)
     expect(meta.terminalOwner).toBe('shell')
     expect(meta.alternateScreen).toBe(false)
     const client = await render([LIVE_PANE, ...(await drainOntoLiveAltScreen(data, meta))])
     const host = await render([LIVE_PANE, AGENT_EXIT])
-    const fresh = await render([data])
     try {
       expect(client.buffer.active.type).toBe('normal')
       expect(viewport(client, 'normal')).toEqual(viewport(host, 'normal'))
-      expect(bufferLines(client, 'normal')).toEqual(bufferLines(fresh, 'normal'))
+      // A screen-only image keeps the pane's history (#14593); the one row the missed output
+      // scrolled off the host's screen is the only thing it cannot restore.
+      expect(bufferLines(client, 'normal')).toEqual(
+        bufferLines(host, 'normal').filter((line) => line !== 'SETUP-OUTPUT-5')
+      )
     } finally {
       client.dispose()
       host.dispose()
-      fresh.dispose()
     }
   })
 })

@@ -21,6 +21,7 @@ export type ServeOrcaAppArgs = {
   pairingAddress?: string | null
   noPairing?: boolean
   mobilePairing?: boolean
+  grantDesktopControl?: boolean
   recipeJson?: boolean
   projectRoot?: string | null
 }
@@ -128,6 +129,7 @@ export function orcadServeArgs(args: ServeOrcaAppArgs): string[] {
     ...(args.pairingAddress ? ['--pairing-address', args.pairingAddress] : []),
     ...(args.noPairing ? ['--no-pairing'] : []),
     ...(args.mobilePairing ? ['--mobile-pairing'] : []),
+    ...(args.grantDesktopControl ? ['--grant-desktop-control'] : []),
     ...(args.recipeJson && args.projectRoot
       ? ['--recipe-json', '--project-root', args.projectRoot]
       : [])

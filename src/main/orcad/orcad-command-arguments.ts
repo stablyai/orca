@@ -23,6 +23,8 @@ export function parseArgs(argv: string[]): OrcadOptions {
       options.noPairing = true
     } else if (arg === '--mobile-pairing') {
       options.mobilePairing = true
+    } else if (arg === '--grant-desktop-control') {
+      options.grantDesktopControl = true
     } else if (arg === '--recipe-json') {
       options.recipeJson = true
     } else if (arg === '--project-root') {
@@ -49,6 +51,9 @@ export function parseArgs(argv: string[]): OrcadOptions {
     } else {
       throw new Error(`Unknown argument: ${arg}`)
     }
+  }
+  if (options.grantDesktopControl && (options.noPairing || options.mobilePairing)) {
+    throw new Error('--grant-desktop-control applies only to the default runtime pairing offer')
   }
   if (options.recipeJson && !options.projectRoot) {
     throw new Error('--recipe-json requires --project-root')

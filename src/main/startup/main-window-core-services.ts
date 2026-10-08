@@ -13,7 +13,10 @@ import {
   handlePtyExit
 } from './main-process-pty-startup'
 import { prepareCodexRuntimeHomeForLaunch } from './codex-launch-preparation'
-import { prepareCodexSessionResumeForLaunch } from './codex-session-resume-launch'
+import {
+  prepareCodexPinnedLaunchHome,
+  prepareCodexSessionResumeForLaunch
+} from './codex-session-resume-launch'
 import { isRecoveryReloadInFlight } from './main-window-lifecycle-flags'
 import { RELAY_HOST_CLOSE_REASON } from '../../shared/relay-host-close-reason'
 
@@ -82,7 +85,8 @@ export function attachMainWindowCoreServices(
       prepareAiVaultSessionResume: (args) =>
         prepareCodexAiVaultSessionResume(args, {
           runtimeHome: codexRuntimeHome,
-          systemCodexHomePath: resolveHostCodexSessionSourceHome(store.getSettings())
+          systemCodexHomePath: resolveHostCodexSessionSourceHome(store.getSettings()),
+          preparePinnedLaunchHome: (home) => prepareCodexPinnedLaunchHome(home)
         }),
       onBeforeRelaunch: async () => {
         state.isQuitting = true

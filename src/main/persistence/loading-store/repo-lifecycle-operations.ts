@@ -62,33 +62,6 @@ export class RepoLifecycleOperations {
     return getRepoOrderOperations(this).reorderReposForHost(orderedIds, hostId)
   }
 
-  removeProject(id: string): void {
-    const repoRemoved = this[repoLifecycleOperationsContext].runtime.state.repos.some(
-      (repo) => repo.id === id
-    )
-    this[repoLifecycleOperationsContext].runtime.state.repos = this[
-      repoLifecycleOperationsContext
-    ].runtime.state.repos.filter((r) => r.id !== id)
-    if (repoRemoved) {
-      retireLocalWorktreeScanGeneration(id)
-    }
-    syncProjectHostSetupCompatibilityState(this)
-    delete this[repoLifecycleOperationsContext].runtime.state.sparsePresetsByRepo[id]
-    delete this[repoLifecycleOperationsContext].runtime.state.retiredWorktreeNamesByRepo?.[id]
-    pruneWorktreeStateForRepo(this, id, null)
-    this[repoLifecycleOperationsContext].runtime.state.workspaceSession =
-      removeRepoFromWorkspaceSession(
-        this[repoLifecycleOperationsContext].runtime.state.workspaceSession,
-        id
-      )
-    this[repoLifecycleOperationsContext].runtime.state.workspaceSessionsByHostId =
-      removeRepoFromHostWorkspaceSessions(
-        this[repoLifecycleOperationsContext].runtime.state.workspaceSessionsByHostId,
-        id
-      )
-    scheduleSave(this[repoLifecycleOperationsContext].scheduling)
-  }
-
   removeProjectForHost(id: string, hostId: ExecutionHostId): void {
     const repoRemoved = this[repoLifecycleOperationsContext].runtime.state.repos.some(
       (repo) => repo.id === id && getRepoExecutionHostId(repo) === hostId

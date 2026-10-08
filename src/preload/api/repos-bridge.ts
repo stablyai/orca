@@ -24,8 +24,6 @@ export const reposApi = {
   getDefaultCreateProjectParent: (): Promise<string> =>
     ipcRenderer.invoke('repos:getDefaultCreateProjectParent'),
 
-  remove: (args) => ipcRenderer.invoke('repos:remove', args),
-
   removeForHost: (args) => ipcRenderer.invoke('repos:removeForHost', args),
 
   reorder: (args) => ipcRenderer.invoke('repos:reorder', args),

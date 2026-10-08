@@ -25,6 +25,7 @@ export const ACCOUNT_METHODS = [
   // Why local only: sign-in runs `claude auth login` in a terminal on the execution host.
   defineMethod({
     name: 'accounts.beginClaudeSignIn',
+    permission: 'accounts-admin',
     params: BeginClaudeSignInParams,
     handler: async (params, { runtime, clientKind }) => {
       if (clientKind !== undefined) {
@@ -35,6 +36,7 @@ export const ACCOUNT_METHODS = [
   }),
   defineMethod({
     name: 'accounts.finishClaudeSignIn',
+    permission: 'accounts-admin',
     params: FinishClaudeSignInParams,
     handler: async (params, { runtime, clientKind }) => {
       if (clientKind !== undefined) {
@@ -45,6 +47,7 @@ export const ACCOUNT_METHODS = [
   }),
   defineMethod({
     name: 'accounts.cancelClaudeSignIn',
+    permission: 'accounts-admin',
     params: FinishClaudeSignInParams,
     handler: async (params, { runtime, clientKind }) => {
       if (clientKind !== undefined) {
@@ -56,11 +59,13 @@ export const ACCOUNT_METHODS = [
   }),
   defineMethod({
     name: 'accounts.listData',
+    permission: 'workspace',
     params: null,
     handler: async (_, { runtime }) => runtime.getDataAccountsSnapshot()
   }),
   defineMethod({
     name: 'accounts.addDataFromHome',
+    permission: 'accounts-admin',
     params: AddDataAccountParams,
     handler: async (params, { runtime, clientKind }) => {
       if (clientKind !== undefined) {
@@ -71,18 +76,21 @@ export const ACCOUNT_METHODS = [
   }),
   defineMethod({
     name: 'accounts.selectData',
+    permission: 'accounts-admin',
     params: SelectDataAccountParams,
     handler: async (params, { runtime }) =>
       runtime.selectDataAccount(params.provider, params.accountId)
   }),
   defineMethod({
     name: 'accounts.removeData',
+    permission: 'accounts-admin',
     params: RemoveDataAccountParams,
     handler: async (params, { runtime }) =>
       runtime.removeDataAccount(params.provider, params.accountId)
   }),
   defineMethod({
     name: 'accounts.list',
+    permission: 'workspace',
     params: ListAccountsParams,
     handler: async (params, { runtime }) => {
       // Why: ensure the snapshot reflects the latest provider state before
@@ -97,11 +105,13 @@ export const ACCOUNT_METHODS = [
   }),
   defineMethod({
     name: 'accounts.selectClaude',
+    permission: 'accounts-admin',
     params: SelectAccountParams,
     handler: async (params, { runtime }) => runtime.selectClaudeAccount(params.accountId)
   }),
   defineMethod({
     name: 'accounts.selectCodex',
+    permission: 'accounts-admin',
     params: SelectAccountParams,
     handler: async (params, { runtime }) => runtime.selectCodexAccount(params.accountId)
   }),
@@ -109,28 +119,33 @@ export const ACCOUNT_METHODS = [
     // Why: old hosts silently strip unknown target fields from selectCodex.
     // A distinct RPC makes version skew fail before it can clear the host slot.
     name: 'accounts.selectCodexForTarget',
+    permission: 'accounts-admin',
     params: SelectCodexAccountForTargetParams,
     handler: async (params, { runtime }) =>
       runtime.selectCodexAccountForTarget(params.accountId, params.target)
   }),
   defineMethod({
     name: 'accounts.consumeCodexResetCredit',
+    permission: 'accounts-admin',
     params: ConsumeCodexResetCreditParams,
     handler: async (params, { runtime }) =>
       runtime.consumeCodexRateLimitResetCredit(params.idempotencyKey, params.expectedScope)
   }),
   defineMethod({
     name: 'accounts.removeClaude',
+    permission: 'accounts-admin',
     params: RemoveAccountParams,
     handler: async (params, { runtime }) => runtime.removeClaudeAccount(params.accountId)
   }),
   defineMethod({
     name: 'accounts.removeCodex',
+    permission: 'accounts-admin',
     params: RemoveAccountParams,
     handler: async (params, { runtime }) => runtime.removeCodexAccount(params.accountId)
   }),
   defineMethod({
     name: 'accounts.addClaudeFromConfigDir',
+    permission: 'accounts-admin',
     params: AddClaudeFromConfigDirParams,
     handler: async () => {
       throw new Error(
@@ -140,6 +155,7 @@ export const ACCOUNT_METHODS = [
   }),
   defineMethod({
     name: 'accounts.addCodexFromHome',
+    permission: 'accounts-admin',
     params: AddCodexFromHomeParams,
     handler: async (params, { runtime, clientKind }) => {
       if (clientKind !== undefined) {
@@ -156,6 +172,7 @@ export const ACCOUNT_METHODS = [
   // accounts on either side. Mirrors the notifications.subscribe pattern.
   defineStreamingMethod({
     name: 'accounts.subscribe',
+    permission: 'workspace',
     params: null,
     handler: async (_params, { runtime, connectionId }, emit) => {
       await new Promise<void>((resolve) => {
@@ -191,6 +208,7 @@ export const ACCOUNT_METHODS = [
   }),
   defineMethod({
     name: 'accounts.unsubscribe',
+    permission: 'workspace',
     params: AccountsUnsubscribeParams,
     handler: async (params, { runtime }) => {
       runtime.cleanupSubscription(params.subscriptionId)

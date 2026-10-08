@@ -114,6 +114,7 @@ import {
   SshOwnerAdmissionBlockedError
 } from './ssh-owner-admission-blocked-error'
 import { runRemoteOrcaCli } from './ssh-remote-orca-cli'
+import type { SshBridgeCallerScope } from '../runtime/rpc/ssh-bridge-credentials'
 import {
   acknowledgeRemoteOrcaCliPostOutput,
   parseRemoteOrcaCliPostOutput
@@ -1581,6 +1582,15 @@ export class SshRelaySession {
     }
   }
 
+  // Why: read per invocation so turning the per-host opt-in off takes effect on the next command.
+  private remoteCliCallerScope(): SshBridgeCallerScope {
+    return {
+      kind: 'ssh-bridge',
+      targetId: this.targetId,
+      remoteCliControl: this.store.getSshTarget(this.targetId)?.allowRemoteCliControl === true
+    }
+  }
+
   private wireUpRemoteOrcaCli(mux: SshChannelMultiplexer, connectionIncarnation: string): void {
     mux.onRequest('orca.cli', async (params) => {
       if (!this.runtime) {
@@ -1614,7 +1624,8 @@ export class SshRelaySession {
           env,
           ...(stdin !== undefined ? { stdin } : {}),
           ...(artifactInput ? { artifactInput } : {}),
-          runtimeAuthority
+          runtimeAuthority,
+          callerScope: this.remoteCliCallerScope()
         })
       } finally {
         this.activeCompatibilityAttachmentIds.delete(runtimeAuthority.attachmentId)
@@ -1644,7 +1655,8 @@ export class SshRelaySession {
         await acknowledgeRemoteOrcaCliPostOutput(this.runtime, {
           postOutput: parseRemoteOrcaCliPostOutput(params.postOutput),
           env,
-          runtimeAuthority
+          runtimeAuthority,
+          callerScope: this.remoteCliCallerScope()
         })
         return { acknowledged: true }
       } finally {
