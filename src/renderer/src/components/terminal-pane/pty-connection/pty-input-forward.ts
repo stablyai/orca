@@ -19,7 +19,7 @@ import {
 } from '@/lib/pane-manager/pane-pty-resize-hold'
 
 import { FOREGROUND_GRID_DRIFT_CHECK_MIN_MS } from './foreground-output-budgets'
-import { TERMINAL_FOCUS_IN_SEQUENCE, TERMINAL_FOCUS_OUT_SEQUENCE } from './foreground-output-scan'
+import { claimViewportForTerminalInput, isTerminalFocusReport } from './terminal-focus-report'
 import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
 import { isCodexPaneStale } from './codex-pane-stale'
 import { installTerminalSelectionFitGuard } from '../terminal-selection-fit-guard'
@@ -77,7 +77,7 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
     if (
       session.isNativeWindowsConpty &&
       session.suppressNativeWindowsIdleCodexFocusReports &&
-      (data === TERMINAL_FOCUS_IN_SEQUENCE || data === TERMINAL_FOCUS_OUT_SEQUENCE)
+      isTerminalFocusReport(data)
     ) {
       // Why: Codex can leave focus reporting armed after a Windows turn, but
       // disabling the mode would permanently silence focus events on resume.
@@ -156,7 +156,7 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
       session.clearPendingTerminalInputIntent()
       return
     }
-    session.claimViewportForUserActivity()
+    claimViewportForTerminalInput(session, data)
     if (session.transport.sendInput(data, inputKind)) {
       session.markAcceptedTerminalInputSent()
       session.observeAcceptedShellCommandInput(data)
