@@ -261,7 +261,7 @@ export function useMobileStructuredAgentSession(args: {
       hasMore: state.hasOlder,
       loadingEarlier: loadingOlder,
       loadEarlier
-    } as MobileNativeChatSession,
+    } satisfies MobileNativeChatSession,
     isWorking,
     turnId,
     turnIndicator,
