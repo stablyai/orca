@@ -14,12 +14,7 @@ import {
 } from '../terminal-pane/terminal-link-click-behavior'
 
 type BrowserTerminalLinkActionsSettingProps = {
-  settings: Pick<
-    GlobalSettings,
-    | 'terminalLinkActionPopoverEnabled'
-    | 'terminalLinkClickBehavior'
-    | 'terminalUrlMiddleClickBehavior'
-  >
+  settings: Pick<GlobalSettings, 'terminalLinkClickBehavior' | 'terminalUrlMiddleClickBehavior'>
   isMac: boolean
   updateSettings: (updates: Partial<GlobalSettings>) => void
 }

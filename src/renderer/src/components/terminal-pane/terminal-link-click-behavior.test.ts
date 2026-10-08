@@ -1,20 +1,23 @@
 import { describe, expect, it } from 'vitest'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { terminalLinkClickBehaviorFor } from './terminal-link-click-behavior'
 
 describe('terminalLinkClickBehaviorFor', () => {
-  it('defaults to actions and preserves legacy profiles', () => {
+  it('defaults to actions before settings load', () => {
     expect(terminalLinkClickBehaviorFor(undefined)).toBe('actions')
-    expect(terminalLinkClickBehaviorFor({ terminalLinkActionPopoverEnabled: true })).toBe('actions')
-    expect(terminalLinkClickBehaviorFor({ terminalLinkActionPopoverEnabled: false })).toBe('none')
+    expect(terminalLinkClickBehaviorFor({})).toBe('actions')
   })
 
-  it('prefers the explicit behavior for new profiles', () => {
-    expect(
-      terminalLinkClickBehaviorFor({
-        terminalLinkActionPopoverEnabled: false,
-        terminalLinkClickBehavior: 'open'
-      })
-    ).toBe('open')
+  it('returns the stored behavior', () => {
+    expect(terminalLinkClickBehaviorFor({ terminalLinkClickBehavior: 'open' })).toBe('open')
     expect(terminalLinkClickBehaviorFor({ terminalLinkClickBehavior: 'none' })).toBe('none')
+  })
+
+  it('honors re-enabled actions even when the legacy opt-out is still stored', () => {
+    const settings: Partial<GlobalSettings> = {
+      terminalLinkActionPopoverEnabled: false,
+      terminalLinkClickBehavior: 'actions'
+    }
+    expect(terminalLinkClickBehaviorFor(settings)).toBe('actions')
   })
 })

@@ -16,6 +16,7 @@ import {
   osc52ClipboardDefaultOnOverridesPersistedOff
 } from '../../../shared/osc52-clipboard-settings'
 import {
+  migrateTerminalLinkClickBehavior,
   migrateTerminalScrollbackRows,
   migrateTerminalTuiScrollSensitivityDefault
 } from '../applying-settings/terminal-settings-migrations'
@@ -40,6 +41,7 @@ export type PreparedLoadedTerminalSettings = {
     needsSave: boolean
   }
   migratedSourceControlAi: NonNullable<GlobalSettings['sourceControlAi']>
+  migratedTerminalLinkClickBehavior: ReturnType<typeof migrateTerminalLinkClickBehavior>['settings']
   migratedOptionAsAlt: GlobalSettings['terminalMacOptionAsAlt']
   migratedFloatingTerminalEnabled: GlobalSettings['floatingTerminalEnabled']
   migratedOsc52Clipboard: Pick<
@@ -80,6 +82,10 @@ export function prepareLoadedTerminalSettings(
     parsed.settings
   )
   if (migratedTerminalTuiScrollSensitivity.needsSave) {
+    markNeedsSave()
+  }
+  const migratedTerminalLinkClickBehavior = migrateTerminalLinkClickBehavior(parsed.settings)
+  if (migratedTerminalLinkClickBehavior.needsSave) {
     markNeedsSave()
   }
   const rawSourceControlAi = parsed.settings?.sourceControlAi
@@ -162,6 +168,7 @@ export function prepareLoadedTerminalSettings(
     migratedTerminalScrollback,
     migratedTerminalTuiScrollSensitivity,
     migratedSourceControlAi,
+    migratedTerminalLinkClickBehavior: migratedTerminalLinkClickBehavior.settings,
     migratedOptionAsAlt,
     migratedFloatingTerminalEnabled,
     migratedOsc52Clipboard,

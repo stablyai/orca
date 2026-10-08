@@ -6,15 +6,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { useNativeChatLinkActions } from './use-native-chat-link-actions'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
-const mocks = vi.hoisted(() => ({
-  openHttpLink: vi.fn(),
-  openFileLink: vi.fn(),
-  settings: { openLinksInApp: true, terminalLinkActionPopoverEnabled: true } as {
-    openLinksInApp?: boolean
-    terminalLinkActionPopoverEnabled?: boolean
-  }
-}))
+type LinkSettings = Pick<GlobalSettings, 'openLinksInApp' | 'terminalLinkClickBehavior'>
+
+const mocks = vi.hoisted(() => {
+  const settings: LinkSettings = { openLinksInApp: true, terminalLinkClickBehavior: 'actions' }
+  return { openHttpLink: vi.fn(), openFileLink: vi.fn(), settings }
+})
 
 vi.mock('@/lib/http-link-routing', () => ({ openHttpLink: mocks.openHttpLink }))
 
@@ -83,7 +82,7 @@ function Transcript({
 afterEach(() => {
   cleanup()
   vi.clearAllMocks()
-  mocks.settings = { openLinksInApp: true, terminalLinkActionPopoverEnabled: true }
+  mocks.settings = { openLinksInApp: true, terminalLinkClickBehavior: 'actions' }
 })
 
 describe('native chat transcript links', () => {
@@ -160,8 +159,8 @@ describe('native chat transcript links', () => {
     )
   })
 
-  it('opens the routed destination outright when link actions are off', async () => {
-    mocks.settings = { openLinksInApp: true, terminalLinkActionPopoverEnabled: false }
+  it('opens the routed destination outright when plain click is set to open', async () => {
+    mocks.settings = { openLinksInApp: true, terminalLinkClickBehavior: 'open' }
     render(<Transcript markdown="See [the PR](https://github.com/o/r/pull/1)." />)
 
     fireEvent.click(await screen.findByRole('link', { name: 'the PR' }))

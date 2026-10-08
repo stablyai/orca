@@ -27,6 +27,7 @@ export function normalizeLoadedGlobalSettings(
     migratedTerminalScrollback,
     migratedTerminalTuiScrollSensitivity,
     migratedSourceControlAi,
+    migratedTerminalLinkClickBehavior,
     migratedOptionAsAlt,
     migratedFloatingTerminalEnabled,
     migratedOsc52Clipboard,
@@ -89,6 +90,7 @@ export function normalizeLoadedGlobalSettings(
         : defaults.settings.terminalRightClickToPaste,
     terminalRightClickToPasteDefaultedForPlatform: true,
     ...migratedTerminalTuiScrollSensitivity.settings,
+    ...migratedTerminalLinkClickBehavior,
     experimentalActivity: migratedExperimentalActivity,
     experimentalActivityDefaultedOffForAllUsers: true,
     // Preserve the legacy opt-in so the one-time introduction copy can target existing users.

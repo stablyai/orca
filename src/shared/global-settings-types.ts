@@ -210,10 +210,12 @@ export type GlobalSettings = NativeChatGlobalSettings & {
   openLinksInAppPreferencePrompted: boolean
   /** Opt-in: Shift+modifier click inverts openLinksInApp instead of always forcing the system browser. Off keeps the historical one-way escape hatch. */
   openLinksInAppModifierInverts?: boolean
-  /** Show link actions on plain click in the terminal and chat; off restores modifier-click-only terminal links. */
+  /** Legacy plain-click toggle; only seeds terminalLinkClickBehavior once, kept for rollback builds. */
   terminalLinkActionPopoverEnabled?: boolean
-  /** Plain-click behavior for terminal links; optional for profiles saved before this setting existed. */
+  /** Plain-click behavior for terminal and chat links; the sole source of truth once migrated. */
   terminalLinkClickBehavior?: 'actions' | 'open' | 'none'
+  /** One-shot migration flag: set once terminalLinkClickBehavior absorbed the legacy toggle. */
+  terminalLinkClickBehaviorMigrated?: boolean
   /** Middle mouse URL behavior; defaults to opening the primary routed destination. */
   terminalUrlMiddleClickBehavior?: 'open' | 'actions' | 'none'
   /** Opt-in: open new coding-agent tabs in native chat instead of the raw terminal; optional for legacy settings. */

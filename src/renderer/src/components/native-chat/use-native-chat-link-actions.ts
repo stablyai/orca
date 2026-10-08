@@ -62,12 +62,7 @@ export function useNativeChatLinkActions(
       // Read at click time: settings and workspace ownership must not re-render the transcript.
       const state = useAppStore.getState()
       const sourceOwner = resolveNativeChatHttpLinkSourceOwner(state, context.worktreeId)
-      const plainClickBehavior =
-        state.settings?.terminalLinkClickBehavior === undefined
-          ? state.settings?.terminalLinkActionPopoverEnabled === false
-            ? 'open'
-            : 'actions'
-          : terminalLinkClickBehaviorFor(state.settings)
+      const plainClickBehavior = terminalLinkClickBehaviorFor(state.settings)
       const anchor = event.currentTarget
       handleNativeChatWebLink(event, route.url, {
         worktreeId: context.worktreeId,

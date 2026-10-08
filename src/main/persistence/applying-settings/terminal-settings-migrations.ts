@@ -125,6 +125,40 @@ export function migrateTerminalTuiScrollSensitivityDefault(settings: GlobalSetti
   }
 }
 
+const TERMINAL_LINK_CLICK_BEHAVIORS: readonly NonNullable<
+  GlobalSettings['terminalLinkClickBehavior']
+>[] = ['actions', 'open', 'none']
+
+export function migrateTerminalLinkClickBehavior(settings: Partial<GlobalSettings> | undefined): {
+  settings: Pick<GlobalSettings, 'terminalLinkClickBehavior' | 'terminalLinkClickBehaviorMigrated'>
+  needsSave: boolean
+} {
+  const stored = TERMINAL_LINK_CLICK_BEHAVIORS.find(
+    (behavior) => behavior === settings?.terminalLinkClickBehavior
+  )
+  if (settings?.terminalLinkClickBehaviorMigrated === true) {
+    return {
+      settings: {
+        terminalLinkClickBehavior: stored ?? 'actions',
+        terminalLinkClickBehaviorMigrated: true
+      },
+      needsSave: false
+    }
+  }
+  // Why: earlier loads filled the `actions` default into legacy profiles, so a stored
+  // `actions` is indistinguishable from that default; only the legacy opt-out is a real choice.
+  const terminalLinkClickBehavior =
+    stored === 'open' || stored === 'none'
+      ? stored
+      : settings?.terminalLinkActionPopoverEnabled === false
+        ? 'none'
+        : 'actions'
+  return {
+    settings: { terminalLinkClickBehavior, terminalLinkClickBehaviorMigrated: true },
+    needsSave: true
+  }
+}
+
 export function getWorkspaceLayoutHistoryKey(layout: OrcaWorkspaceLayout): string {
   return `${normalizeRuntimePathForComparison(layout.path)}:${layout.nestWorkspaces}`
 }
