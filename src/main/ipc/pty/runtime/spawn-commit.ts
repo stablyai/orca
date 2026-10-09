@@ -241,7 +241,7 @@ async function commitReservedRuntimePtySpawn(ctx: RuntimePtySpawnState) {
     ctx.deps.runtime?.noteTerminalSpawnCommand?.(ctx.result.id, ctx.launchCommand ?? null)
   }
   if (ctx.isClaudeLaunch && !ctx.stablePaneOwner) {
-    markClaudePtySpawned(ctx.result.id)
+    markClaudePtySpawned(ctx.result.id, ctx.claudeAuth?.provenance)
   }
   if (args.telemetry && !ctx.stablePaneOwner) {
     recordPtySpawnTelemetry(args.telemetry)
