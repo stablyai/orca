@@ -1,5 +1,12 @@
+import type { TerminalLeafOwner } from './terminal-owner-invariants'
 import type { ExecutionHostId } from '../execution-host'
 import type { WorkspaceSessionState } from '../workspace-session-state-types'
+
+/** A pane as the pane rules see it, from the disk format or the model. */
+export type PaneOwner = Pick<
+  TerminalLeafOwner,
+  'hostId' | 'worktreeId' | 'leafId' | 'ptyId' | 'incarnationId'
+> & { tab: { id: string } }
 
 export type WorkspaceLayoutPartition = { hostId: ExecutionHostId; session: WorkspaceSessionState }
 
@@ -12,6 +19,9 @@ export type WorkspaceLayoutRule =
   | 'tab_in_two_places'
   | 'tab_bar_missing'
   | 'tab_without_group'
+  | 'group_empty'
+  | 'group_tree_mismatch'
+  | 'leaf_without_pane'
   | 'tab_in_two_groups'
   | 'tab_group_mismatch'
   | 'group_lists_missing_tab'

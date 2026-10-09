@@ -59,7 +59,7 @@ const IDENTITY_SOURCES = new Set<LayoutSource>([
   'group.id',
   'file.filePath',
   'browserTab.id',
-  'sleeping.$key'
+  'leaf.$key'
 ])
 
 const WRITTEN_BY_FIELD = new Map<string, DiskFieldWritten>(
@@ -74,7 +74,7 @@ const WRITTEN_BY_FIELD = new Map<string, DiskFieldWritten>(
 // Rows and tab-bar entries are written in the one tab order; groups in the workspace's group list.
 const TAB_LIST_ORDER: DiskFieldWritten = {
   from: 'group.tabOrder',
-  via: ['group.id', 'workspace.keepsEmptyTerminalRows']
+  via: ['group.id', 'legacy.terminalRowOwners']
 }
 const GROUP_LIST_ORDER: DiskFieldWritten = { from: 'group.id' }
 
@@ -129,7 +129,7 @@ function populate(loaded: LoadedWorkspaceLayout): LoadedWorkspaceLayout {
   // A focused and an expanded pane that is not the first, so a fallback is visible.
   fill(loaded, 'viewPane.activeLeafId', leaf(2), (holder) => holder.activeLeafId === leaf(1))
   fill(loaded, 'viewPane.expandedLeafId', leaf(2), (holder) => holder.activeLeafId === leaf(2))
-  fill(loaded, 'scrollback.buffersByLeafId', { [leaf(1)]: 'buffer' })
+  fill(loaded, 'scrollback.buffer', 'buffer')
   fill(loaded, 'browserTab.sessionProfileId', 'profile-1')
   fill(loaded, 'browserTab.sessionPartition', 'persist:p')
   fill(loaded, 'browserTab.pageIds', ['page-1', 'page-2'])
@@ -157,7 +157,7 @@ function populate(loaded: LoadedWorkspaceLayout): LoadedWorkspaceLayout {
     env: ['page-1', 'page-2']
   })
   const sleeping = (field: keyof LayoutSleepingRecord, value: unknown) =>
-    fill(loaded, `sleeping.${field}` as const, value)
+    fill(loaded, `leaf.sleeping.${field}` as const, value)
   sleeping('terminalTitle', 'claude')
   sleeping('lastAssistantMessage', 'done')
   sleeping('interrupted', true)
@@ -168,6 +168,7 @@ function populate(loaded: LoadedWorkspaceLayout): LoadedWorkspaceLayout {
   fill(loaded, 'carried.unplacedSleepingRecords', {
     'tab-elsewhere:x': { paneKey: 'tab-elsewhere:x', worktreeId: 'repo-9::/gone', prompt: 'p' }
   })
+  fill(loaded, 'carried.unplacedIncarnations', { 'tab-elsewhere:x': 'inc-elsewhere' })
   fill(loaded, 'carried.unplacedClosedTabs', {
     'tab-elsewhere': { closedAt: 1, worktreeId: 'repo-9::/gone', reason: 'user' }
   })
@@ -196,9 +197,11 @@ function holdersOf(loaded: LoadedWorkspaceLayout, prefix: string): Holder[] {
   const terminals = tabs.flatMap((entry) => (entry.kind === 'terminal' ? [entry] : []))
   const nested = <Value extends Holder>(record: Record<string, Record<string, Value>>) =>
     Object.values(record).flatMap((inner) => Object.values(inner))
+  const leaves = workspaces.flatMap((workspace) => Object.values(workspace.leaves ?? {}))
   const holders: Record<PrefixOf<LayoutSource>, Holder[]> = {
     model: [layout],
     records: [layout.records],
+    legacy: [layout.legacy],
     workspace: workspaces,
     tab: tabs,
     'tab.terminal': terminals.map((entry) => entry.terminal),
@@ -206,7 +209,8 @@ function holdersOf(loaded: LoadedWorkspaceLayout, prefix: string): Holder[] {
     group: workspaces.flatMap((workspace) => workspace.groups),
     file: workspaces.flatMap((workspace) => workspace.editorFiles ?? []),
     browserTab: workspaces.flatMap((workspace) => workspace.browserTabs ?? []),
-    sleeping: workspaces.flatMap((workspace) => Object.values(workspace.sleepingByPaneKey ?? {})),
+    leaf: leaves,
+    'leaf.sleeping': leaves.flatMap((entry) => entry.sleeping ?? []),
     closedTab: workspaces.flatMap((workspace) => Object.values(workspace.closedTerminalTabs ?? {})),
     view: [view],
     viewGroup: nested(view.groups),

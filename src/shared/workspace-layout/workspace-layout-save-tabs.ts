@@ -7,7 +7,12 @@ import type { TerminalLayoutSnapshot, TerminalTab } from '../terminal-tab-types'
 import { pickStoredFields } from './stored-record-fields'
 import { collectLayoutLeafIdsInOrder } from './terminal-pane-tree'
 import type { DesktopLayoutView, LayoutContentFacts } from './workspace-layout-beside'
-import type { LayoutEditorFile, LayoutTab, LayoutTerminalTab } from './workspace-layout-model'
+import type {
+  LayoutEditorFile,
+  LayoutLeaf,
+  LayoutTab,
+  LayoutTerminalTab
+} from './workspace-layout-model'
 import { tabExecutionHostId } from './workspace-layout-tab-host'
 
 const SHARED_OPTIONAL_FIELDS = [
@@ -23,21 +28,19 @@ export type WorkspaceSaveScope = {
   worktreeId: string
   hostId: ExecutionHostId
   editorFiles: readonly LayoutEditorFile[] | undefined
+  leaves: Readonly<Record<string, LayoutLeaf>>
   facts: LayoutContentFacts
   view: DesktopLayoutView
 }
 
 /** The row's terminal: the focused pane's, else the first bound pane's, else none. */
-function rowPtyId(tab: LayoutTerminalTab, view: DesktopLayoutView): string | null {
-  const bindings = tab.panes.ptyIdsByLeafId ?? {}
-  const focused = view.panes[tab.entityId]?.activeLeafId
-  if (focused && bindings[focused] !== undefined) {
-    return bindings[focused]
-  }
-  const firstBound = collectLayoutLeafIdsInOrder(tab.panes.root).find(
-    (leafId) => bindings[leafId] !== undefined
+function rowPtyId(tab: LayoutTerminalTab, scope: WorkspaceSaveScope): string | null {
+  const leafIds = collectLayoutLeafIdsInOrder(tab.panes.root)
+  const focused = scope.view.panes[tab.entityId]?.activeLeafId
+  const bound = [...(focused && leafIds.includes(focused) ? [focused] : []), ...leafIds].find(
+    (leafId) => scope.leaves[leafId]?.ptyId !== undefined
   )
-  return firstBound === undefined ? null : bindings[firstBound]!
+  return bound === undefined ? null : scope.leaves[bound]!.ptyId!
 }
 
 /** The one live title, written as both the row title and the tab-bar label. */
@@ -55,7 +58,7 @@ export function saveTerminalRow(
   const row = scope.facts.terminalRows[tab.entityId]
   return {
     id: tab.entityId,
-    ptyId: rowPtyId(tab, scope.view),
+    ptyId: rowPtyId(tab, scope),
     title: terminalTitle(tab, scope.facts),
     ...pickStoredFields(tab.terminal, ['defaultTitle']),
     worktreeId: scope.worktreeId,
@@ -106,27 +109,48 @@ export function saveTabBarEntry(
   }
 }
 
+/** Each pane's leaf-keyed values, as a layout's per-leaf map. */
+function byLeaf(
+  leafIds: readonly string[],
+  value: (leafId: string) => string | undefined
+): Record<string, string> {
+  return Object.fromEntries(
+    leafIds.flatMap((leafId) => {
+      const entry = value(leafId)
+      return entry === undefined ? [] : [[leafId, entry]]
+    })
+  )
+}
+
 /** A focused or expanded pane that no longer exists falls back as today's writer does. */
 export function saveTerminalLayout(
-  tab: LayoutTerminalTab & { panes: NonNullable<LayoutTerminalTab['panes']> },
-  facts: LayoutContentFacts,
-  view: DesktopLayoutView
+  tab: LayoutTerminalTab,
+  scope: Pick<WorkspaceSaveScope, 'leaves' | 'facts' | 'view'>
 ): TerminalLayoutSnapshot {
   const { panes } = tab
+  const { leaves, facts } = scope
   const leafIds = collectLayoutLeafIdsInOrder(panes.root)
-  const selection = view.panes[tab.entityId]
+  const selection = scope.view.panes[tab.entityId]
   const activeLeafId = selection?.activeLeafId
   const expandedLeafId = selection?.expandedLeafId
-  const scrollback = facts.scrollback[tab.entityId] ?? {}
-  return {
+  const layout: TerminalLayoutSnapshot = {
     root: panes.root,
     activeLeafId:
       activeLeafId !== undefined && (activeLeafId === null || leafIds.includes(activeLeafId))
         ? activeLeafId
         : (leafIds[0] ?? null),
     expandedLeafId: expandedLeafId && leafIds.includes(expandedLeafId) ? expandedLeafId : null,
-    ...pickStoredFields(panes, ['chatLeafId', 'ptyIdsByLeafId']),
-    ...pickStoredFields(scrollback, ['buffersByLeafId', 'scrollbackRefsByLeafId']),
-    ...pickStoredFields(panes, ['titlesByLeafId'])
+    ...pickStoredFields(panes, ['chatLeafId']),
+    ptyIdsByLeafId: byLeaf(leafIds, (leafId) => leaves[leafId]?.ptyId),
+    buffersByLeafId: byLeaf(leafIds, (leafId) => facts.scrollback[leafId]?.buffer),
+    scrollbackRefsByLeafId: byLeaf(leafIds, (leafId) => facts.scrollback[leafId]?.scrollbackRef),
+    titlesByLeafId: byLeaf(leafIds, (leafId) => leaves[leafId]?.title)
   }
+  // Today's writers always write the bindings, even empty, and the other maps only when filled.
+  for (const field of ['buffersByLeafId', 'scrollbackRefsByLeafId', 'titlesByLeafId'] as const) {
+    if (Object.keys(layout[field] ?? {}).length === 0) {
+      delete layout[field]
+    }
+  }
+  return layout
 }

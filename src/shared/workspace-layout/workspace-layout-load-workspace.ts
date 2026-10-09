@@ -65,21 +65,9 @@ function loadPanes(
   args: WorkspaceLoadArgs
 ): LayoutTerminalTab {
   const layout = session.terminalLayoutsByTabId?.[tab.entityId] ?? legacyLayout(session, row, args)
-  args.view.panes[tab.entityId] = {
-    activeLeafId: layout.activeLeafId,
-    expandedLeafId: layout.expandedLeafId
-  }
-  const scrollback = pickStoredFields(layout, ['buffersByLeafId', 'scrollbackRefsByLeafId'])
-  if (Object.keys(scrollback).length > 0) {
-    args.facts.scrollback[tab.entityId] = scrollback
-  }
-  return {
-    ...tab,
-    panes: {
-      root: layout.root,
-      ...pickStoredFields(layout, ['chatLeafId', 'titlesByLeafId', 'ptyIdsByLeafId'])
-    }
-  }
+  // Each pane's data is loaded once every tab is placed (loadLeaves).
+  args.layouts.set(tab.entityId, layout)
+  return { ...tab, panes: { root: layout.root, ...pickStoredFields(layout, ['chatLeafId']) } }
 }
 
 function loadTabs(args: WorkspaceLoadArgs): { tabs: LayoutTab[]; candidates: OrderCandidate[] } {
@@ -158,12 +146,7 @@ export function loadWorkspace(args: WorkspaceLoadArgs): WorkspaceLayout {
     }
   }
   const groups = resolveGroupOrder({ storedGroups, candidates, mintId: args.context.mintId })
-  const workspace: WorkspaceLayout = {
-    worktreeId,
-    tabs,
-    groups,
-    keepsEmptyTerminalRows: Object.hasOwn(session.tabsByWorktree ?? {}, key)
-  }
+  const workspace: WorkspaceLayout = { worktreeId, tabs, groups }
   const groupLayout = pruneGroupLayout(
     session.tabGroupLayouts?.[key],
     new Set(groups.map((group) => group.id))

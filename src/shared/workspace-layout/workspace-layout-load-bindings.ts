@@ -1,131 +1,155 @@
-// Loader rules for panes and bindings that stored data repeats across tabs.
+// Loader rules for each pane's data. Stored data keys it by leaf within a tab (layouts) and by pane
+// key (records); the model keys it by leaf id alone, so a leaf id repeated in the partition gets a
+// new id first and every record lands on the pane it named.
 
+import type { SleepingAgentSessionRecord } from '../agent-session-resume'
+import type { TerminalLayoutSnapshot } from '../terminal-tab-types'
 import type { WorkspaceSessionState } from '../workspace-session-state-types'
-import { withoutKey } from './stored-record-fields'
-import type { DesktopLayoutView, LayoutContentFacts } from './workspace-layout-beside'
-import { rekeyPaneRecords } from './workspace-layout-pane-records'
+import { omitStoredFields } from './stored-record-fields'
+import type {
+  CarriedSessionFields,
+  DesktopLayoutView,
+  LayoutContentFacts
+} from './workspace-layout-beside'
 import { isSameTerminal } from './terminal-owner-invariants'
 import { collectLayoutLeafIdsInOrder } from './terminal-pane-tree'
+import { updateLegacyPersistence } from './workspace-layout-legacy-persistence'
 import type { WorkspaceLayoutLoadContext } from './workspace-layout-load-types'
 import {
   paneKeyOf,
   tabsInOrder,
+  type LayoutLeaf,
   type LayoutTerminalPanes,
   type WorkspaceLayoutModel
 } from './workspace-layout-model'
-import { advanceTopologyRevision, retireExitedSurface } from './workspace-layout-removal'
+import { retireExitedSurface } from './workspace-layout-removal'
 
 function terminalTabsInOrder(model: WorkspaceLayoutModel) {
-  return Object.entries(model.workspaces).flatMap(([workspaceKey, workspace]) =>
-    tabsInOrder(workspace).flatMap((tab) =>
-      tab.kind === 'terminal' ? [{ workspaceKey, tab, panes: tab.panes }] : []
-    )
+  return Object.values(model.workspaces).flatMap((workspace) =>
+    tabsInOrder(workspace).flatMap((tab) => (tab.kind === 'terminal' ? [{ workspace, tab }] : []))
   )
 }
 
-function renameLeaf(panes: LayoutTerminalPanes, from: string, to: string): LayoutTerminalPanes {
-  const rename = (node: LayoutTerminalPanes['root']): LayoutTerminalPanes['root'] => {
-    if (!node) {
-      return node
-    }
-    if (node.type === 'leaf') {
-      return node.leafId === from ? { type: 'leaf', leafId: to } : node
-    }
-    return { ...node, first: rename(node.first)!, second: rename(node.second)! }
+/** The tree with every leaf id already `seen` replaced; `renamed` maps a stored id to its first pane. */
+function remintRepeatedLeaves(
+  root: LayoutTerminalPanes['root'],
+  seen: Set<string>,
+  renamed: Map<string, string>,
+  context: WorkspaceLayoutLoadContext
+): LayoutTerminalPanes['root'] {
+  if (!root) {
+    return root
   }
-  const title = panes.titlesByLeafId?.[from]
-  const next: LayoutTerminalPanes = {
-    ...panes,
-    root: rename(panes.root),
-    ptyIdsByLeafId: withoutKey(panes.ptyIdsByLeafId, from),
-    titlesByLeafId: withoutKey(panes.titlesByLeafId, from)
+  if (root.type === 'split') {
+    const first = remintRepeatedLeaves(root.first, seen, renamed, context)!
+    return { ...root, first, second: remintRepeatedLeaves(root.second, seen, renamed, context)! }
   }
-  if (title !== undefined) {
-    next.titlesByLeafId = { ...next.titlesByLeafId, [to]: title }
+  const leafId = seen.has(root.leafId) ? context.mintLeafId() : root.leafId
+  seen.add(leafId)
+  if (!renamed.has(root.leafId)) {
+    renamed.set(root.leafId, leafId)
   }
-  if (panes.chatLeafId === from) {
-    next.chatLeafId = to
-  }
-  return next
+  return leafId === root.leafId ? root : { type: 'leaf', leafId }
 }
 
-/** Moves what the view and side data key by the old leaf to the new one. */
-function rekeyLeafBeside(
-  tabId: string,
-  from: string,
-  to: string,
-  beside: { view: DesktopLayoutView; facts: LayoutContentFacts }
-): void {
-  const selection = beside.view.panes[tabId]
-  if (selection?.activeLeafId === from) {
-    selection.activeLeafId = to
+type PaneRecords = {
+  sleeping: Record<string, SleepingAgentSessionRecord>
+  incarnations: Record<string, string>
+}
+
+function loadLeaf(
+  stored: TerminalLayoutSnapshot,
+  leafId: string,
+  paneKey: string,
+  records: PaneRecords
+) {
+  const sleeping = records.sleeping[paneKey]
+  const leaf: LayoutLeaf = {
+    ...(stored.ptyIdsByLeafId?.[leafId] !== undefined
+      ? { ptyId: stored.ptyIdsByLeafId[leafId] }
+      : {}),
+    ...(records.incarnations[paneKey] !== undefined
+      ? { incarnationId: records.incarnations[paneKey] }
+      : {}),
+    ...(stored.titlesByLeafId?.[leafId] !== undefined
+      ? { title: stored.titlesByLeafId[leafId] }
+      : {}),
+    ...(sleeping
+      ? { sleeping: omitStoredFields(sleeping, ['paneKey', 'tabId', 'worktreeId']) }
+      : {})
   }
-  if (selection?.expandedLeafId === from) {
-    selection.expandedLeafId = to
-  }
-  const scrollback = beside.facts.scrollback[tabId]
-  for (const field of ['buffersByLeafId', 'scrollbackRefsByLeafId'] as const) {
-    const byLeaf = scrollback?.[field]
-    if (scrollback && byLeaf && Object.hasOwn(byLeaf, from)) {
-      scrollback[field] = { ...withoutKey(byLeaf, from), [to]: byLeaf[from]! }
-    }
-  }
+  delete records.sleeping[paneKey]
+  delete records.incarnations[paneKey]
+  return leaf
 }
 
 /**
- * One pane id in two tabs: the tab first in tab order keeps it; the other gets a new, unbound
- * pane in the same place, and its records follow it. Kept apart so the owner's choice of which
- * tab keeps it is one edit.
+ * Builds each pane's data from its tab's stored layout and the records its pane key names. One
+ * leaf id in two places: the first in tab order keeps it (kept apart so the owner's choice is one
+ * edit); the other pane gets a new id and its data. Records naming no pane are carried as stored.
  */
-export function reassignPanesInTwoTabs(
+export function loadLeaves(
   model: WorkspaceLayoutModel,
-  beside: { view: DesktopLayoutView; facts: LayoutContentFacts },
+  stored: { session: WorkspaceSessionState; layouts: ReadonlyMap<string, TerminalLayoutSnapshot> },
+  beside: { view: DesktopLayoutView; facts: LayoutContentFacts; carried: CarriedSessionFields },
   context: WorkspaceLayoutLoadContext
-): WorkspaceLayoutModel {
-  let next = model
-  const owners = new Map<string, string>()
-  for (const { workspaceKey, tab, panes } of terminalTabsInOrder(model)) {
-    let tabPanes = panes
-    for (const leafId of collectLayoutLeafIdsInOrder(panes.root)) {
-      const owner = owners.get(leafId)
-      if (owner === undefined || owner === tab.entityId) {
-        owners.set(leafId, tab.entityId)
-        continue
-      }
-      const fresh = context.mintLeafId()
-      tabPanes = renameLeaf(tabPanes, leafId, fresh)
-      next = rekeyPaneRecords(
-        next,
-        workspaceKey,
-        paneKeyOf(tab.entityId, leafId),
-        paneKeyOf(tab.entityId, fresh)
-      )
-      rekeyLeafBeside(tab.entityId, leafId, fresh, beside)
-      owners.set(fresh, tab.entityId)
-    }
-    // Loaded objects are fresh copies, so replacing panes in place touches no stored data.
-    tab.panes = tabPanes
+): void {
+  const records: PaneRecords = {
+    sleeping: { ...stored.session.sleepingAgentSessionsByPaneKey },
+    incarnations: { ...stored.session.terminalPtyIncarnationsByPaneKey }
   }
-  return next
+  const seen = new Set<string>()
+  for (const { workspace, tab } of terminalTabsInOrder(model)) {
+    const layout = stored.layouts.get(tab.entityId)!
+    const renamed = new Map<string, string>()
+    // Loaded objects are fresh copies, so editing them in place touches no stored data.
+    tab.panes.root = remintRepeatedLeaves(tab.panes.root, seen, renamed, context)
+    const modelId = (leafId: string) => renamed.get(leafId) ?? leafId
+    if (tab.panes.chatLeafId !== undefined) {
+      tab.panes.chatLeafId = modelId(tab.panes.chatLeafId)
+    }
+    beside.view.panes[tab.entityId] = {
+      activeLeafId: layout.activeLeafId === null ? null : modelId(layout.activeLeafId),
+      expandedLeafId: layout.expandedLeafId === null ? null : modelId(layout.expandedLeafId)
+    }
+    for (const [storedId, leafId] of renamed) {
+      const leaf = loadLeaf(layout, storedId, paneKeyOf(tab.entityId, storedId), records)
+      if (leafId !== storedId) {
+        // A pane given a new id starts unbound: its terminal was started for the old one.
+        delete leaf.ptyId
+      }
+      if (Object.keys(leaf).length > 0) {
+        workspace.leaves = { ...workspace.leaves, [leafId]: leaf }
+      }
+      const scrollback = {
+        ...(layout.buffersByLeafId?.[storedId] !== undefined
+          ? { buffer: layout.buffersByLeafId[storedId] }
+          : {}),
+        ...(layout.scrollbackRefsByLeafId?.[storedId] !== undefined
+          ? { scrollbackRef: layout.scrollbackRefsByLeafId[storedId] }
+          : {})
+      }
+      if (Object.keys(scrollback).length > 0) {
+        beside.facts.scrollback[leafId] = scrollback
+      }
+    }
+  }
+  beside.carried.unplacedSleepingRecords = records.sleeping
+  beside.carried.unplacedIncarnations = records.incarnations
 }
 
 /** One terminal bound in two panes: the first pane in tab order keeps it, the other is unbound. */
 export function unbindDuplicateTerminals(model: WorkspaceLayoutModel): void {
   const owners: { ptyId: string; incarnationId?: string }[] = []
-  for (const { tab, panes } of terminalTabsInOrder(model)) {
-    const bindings = panes.ptyIdsByLeafId
-    if (!bindings) {
-      continue
-    }
-    for (const leafId of collectLayoutLeafIdsInOrder(panes.root)) {
-      const ptyId = bindings[leafId]
-      if (ptyId === undefined) {
+  for (const { workspace, tab } of terminalTabsInOrder(model)) {
+    for (const leafId of collectLayoutLeafIdsInOrder(tab.panes.root)) {
+      const leaf = workspace.leaves?.[leafId]
+      if (leaf?.ptyId === undefined) {
         continue
       }
-      const incarnationId = model.records.incarnationsByPaneKey?.[paneKeyOf(tab.entityId, leafId)]
-      const binding = { ptyId, incarnationId }
+      const binding = { ptyId: leaf.ptyId, incarnationId: leaf.incarnationId }
       if (owners.some((candidate) => isSameTerminal(candidate, binding))) {
-        delete bindings[leafId]
+        delete leaf.ptyId
       } else {
         owners.push(binding)
       }
@@ -136,13 +160,26 @@ export function unbindDuplicateTerminals(model: WorkspaceLayoutModel): void {
 /** Legacy per-surface tombstones: applied as today's retirement would, then never written again. */
 export function applyLegacySurfaceTombstones(
   model: WorkspaceLayoutModel,
-  session: WorkspaceSessionState
+  session: WorkspaceSessionState,
+  carried: CarriedSessionFields
 ): WorkspaceLayoutModel {
   let next = model
-  for (const tombstone of Object.values(session.terminalSurfaceTombstonesByPaneKey ?? {})) {
-    // Clearing a tombstone must not drop the authority it gave older builds' save merge.
-    next = { ...next, records: advanceTopologyRevision(next.records, tombstone.worktreeId) }
-    next = retireExitedSurface(next, { ...tombstone, terminalTabId: tombstone.parentTabId }).model
+  const tombstones = Object.values(session.terminalSurfaceTombstonesByPaneKey ?? {})
+  for (const tombstone of tombstones) {
+    const retired = retireExitedSurface(next, {
+      ...tombstone,
+      terminalTabId: tombstone.parentTabId
+    })
+    if (retired === next) {
+      // Its pane is already gone: only a record naming it remains.
+      delete carried.unplacedIncarnations[paneKeyOf(tombstone.parentTabId, tombstone.leafId)]
+    }
+    next = retired ?? next
   }
-  return next
+  // Clearing a tombstone must not drop the authority it gave older builds' save merge.
+  return updateLegacyPersistence(
+    model,
+    next,
+    tombstones.map((tombstone) => tombstone.worktreeId)
+  )
 }

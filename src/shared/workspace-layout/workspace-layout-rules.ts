@@ -7,34 +7,34 @@ import { collectLayoutLeafIdsInOrder } from './terminal-pane-tree'
 import {
   collectTerminalLeafOwners,
   isSameTerminal,
-  isTerminalOwnerPartition,
-  type TerminalLeafOwner
+  isTerminalOwnerPartition
 } from './terminal-owner-invariants'
 import { checkWorkspaceLayoutIdStability } from './workspace-layout-id-stability'
 import type {
+  PaneOwner,
   WorkspaceLayoutPartition,
   WorkspaceLayoutViolation
 } from './workspace-layout-rule-types'
 
 export type * from './workspace-layout-rule-types'
 
-function describeOwner(owner: TerminalLeafOwner): string {
+function describeOwner(owner: PaneOwner): string {
   return `${owner.hostId} ${owner.worktreeId} ${owner.tab.id}:${owner.leafId} → ${owner.ptyId ?? 'unbound'}`
 }
 
 /** Owner partitions share PTY ids (relay rows left in `local`); a `runtime:` mirror is checked alone. */
-function ownerGroups(partitions: readonly WorkspaceLayoutPartition[]): TerminalLeafOwner[][] {
+export function paneOwnerGroups<Partition extends { hostId: ExecutionHostId }>(
+  partitions: readonly Partition[],
+  collect: (partition: Partition) => PaneOwner[]
+): PaneOwner[][] {
   const shared = partitions.filter((partition) => isTerminalOwnerPartition(partition.hostId))
   const mirrors = partitions.filter((partition) => !isTerminalOwnerPartition(partition.hostId))
-  return [
-    shared.flatMap((partition) => collectTerminalLeafOwners(partition)),
-    ...mirrors.map((partition) => collectTerminalLeafOwners(partition))
-  ]
+  return [shared.flatMap(collect), ...mirrors.map(collect)]
 }
 
-function checkPanes(partitions: readonly WorkspaceLayoutPartition[]): WorkspaceLayoutViolation[] {
+export function checkPaneOwners(groups: readonly PaneOwner[][]): WorkspaceLayoutViolation[] {
   const violations: WorkspaceLayoutViolation[] = []
-  for (const owners of ownerGroups(partitions)) {
+  for (const owners of groups) {
     for (const [index, left] of owners.entries()) {
       for (const right of owners.slice(index + 1)) {
         const base = { hostId: left.hostId, worktreeId: left.worktreeId }
@@ -243,7 +243,7 @@ export function checkWorkspaceLayoutRules(
   previous?: readonly WorkspaceLayoutPartition[]
 ): WorkspaceLayoutViolation[] {
   const violations = [
-    ...checkPanes(partitions),
+    ...checkPaneOwners(paneOwnerGroups(partitions, collectTerminalLeafOwners)),
     ...partitions.flatMap(checkTabRows),
     ...partitions.flatMap(checkTabBar)
   ]

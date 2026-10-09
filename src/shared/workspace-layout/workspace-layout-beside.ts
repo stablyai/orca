@@ -118,17 +118,16 @@ export const BLANK_BROWSER_TAB_STATE: BrowserTabLiveState = {
 /** The row's last terminal is not a fact here: the Serializer derives it from the pane bindings. */
 export type TerminalRowFacts = Pick<TerminalTab, 'title' | 'generation'>
 
+export type PaneScrollback = { buffer?: string; scrollbackRef?: string }
+
 /** Facts views or the PTY host report; the runtime keeps them beside the layout. */
 export type LayoutContentFacts = Pick<WorkspaceSessionState, FactSessionField> & {
   /** Workspace key → tab id → tab-bar label of a non-terminal tab (a terminal's is its title). */
   tabLabels: Record<string, Record<string, string>>
   /** Terminal tab id → live title (written as row title and tab-bar label) and remount generation. */
   terminalRows: Record<string, TerminalRowFacts>
-  /** Terminal tab id → saved scrollback. */
-  scrollback: Record<
-    string,
-    Pick<TerminalLayoutSnapshot, 'buffersByLeafId' | 'scrollbackRefsByLeafId'>
-  >
+  /** Leaf id → the pane's saved scrollback. */
+  scrollback: Record<string, PaneScrollback>
   /** Workspace key → browser tab id → live page state. */
   browserTabs: Record<string, Record<string, BrowserTabLiveState>>
 }
@@ -136,7 +135,8 @@ export type LayoutContentFacts = Pick<WorkspaceSessionState, FactSessionField> &
 export type CarriedSessionFields = Pick<WorkspaceSessionState, CarriedSessionField> & {
   /** Pane layouts with no terminal tab; kept as stored so the rules check still reports them. */
   unownedTerminalLayouts: Record<string, TerminalLayoutSnapshot>
-  /** Records naming no loaded workspace, kept as stored. */
+  /** Records naming no loaded pane (or, for closed tabs, workspace), kept as stored. */
   unplacedSleepingRecords: Record<string, SleepingAgentSessionRecord>
+  unplacedIncarnations: Record<string, string>
   unplacedClosedTabs: ClosedTerminalTabTombstonesByTabId
 }

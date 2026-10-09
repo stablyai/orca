@@ -1,9 +1,7 @@
-import {
-  collectTerminalLeafOwners,
-  isSameTerminal,
-  type TerminalLeafOwner
-} from './terminal-owner-invariants'
+import type { ExecutionHostId } from '../execution-host'
+import { collectTerminalLeafOwners, isSameTerminal } from './terminal-owner-invariants'
 import type {
+  PaneOwner,
   WorkspaceLayoutPartition,
   WorkspaceLayoutViolation
 } from './workspace-layout-rule-types'
@@ -11,25 +9,28 @@ import type {
 // An update must keep the id of every pane, tab and group it did not create or remove; a new id
 // for the same entity remounts its view.
 
+/** A partition's panes and groups, from the disk format or the model. */
+export type LayoutEntities = {
+  owners: PaneOwner[]
+  groups: readonly { id: string; tabOrder: readonly string[] }[]
+}
+
 type EntityIndex = {
-  leafByTerminal: TerminalLeafOwner[]
+  leafByTerminal: PaneOwner[]
   leavesByTab: Map<string, Set<string>>
   tabsByGroup: Map<string, Set<string>>
 }
 
-function indexEntities(partition: WorkspaceLayoutPartition): EntityIndex {
-  const leafByTerminal = collectTerminalLeafOwners(partition)
+function indexEntities({ owners, groups }: LayoutEntities): EntityIndex {
   const leavesByTab = new Map<string, Set<string>>()
-  for (const owner of leafByTerminal) {
+  for (const owner of owners) {
     leavesByTab.set(owner.tab.id, (leavesByTab.get(owner.tab.id) ?? new Set()).add(owner.leafId))
   }
   const tabsByGroup = new Map<string, Set<string>>()
-  for (const groups of Object.values(partition.session.tabGroups ?? {})) {
-    for (const group of groups) {
-      tabsByGroup.set(group.id, new Set(group.tabOrder))
-    }
+  for (const group of groups) {
+    tabsByGroup.set(group.id, new Set(group.tabOrder))
   }
-  return { leafByTerminal, leavesByTab, tabsByGroup }
+  return { leafByTerminal: owners, leavesByTab, tabsByGroup }
 }
 
 function sameSet(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean {
@@ -59,7 +60,18 @@ export function checkWorkspaceLayoutIdStability(
   previous: WorkspaceLayoutPartition,
   next: WorkspaceLayoutPartition
 ): WorkspaceLayoutViolation[] {
-  const { hostId } = next
+  const entities = (partition: WorkspaceLayoutPartition): LayoutEntities => ({
+    owners: collectTerminalLeafOwners(partition),
+    groups: Object.values(partition.session.tabGroups ?? {}).flat()
+  })
+  return checkLayoutIdStability(next.hostId, entities(previous), entities(next))
+}
+
+export function checkLayoutIdStability(
+  hostId: ExecutionHostId,
+  previous: LayoutEntities,
+  next: LayoutEntities
+): WorkspaceLayoutViolation[] {
   const before = indexEntities(previous)
   const after = indexEntities(next)
   const violations: WorkspaceLayoutViolation[] = []

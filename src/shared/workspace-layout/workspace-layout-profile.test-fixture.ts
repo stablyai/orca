@@ -55,7 +55,9 @@ export function localDesktopSession(): WorkspaceSessionState {
           }
         },
         {
+          // Its tab-bar id and terminal id differ, as for a tab adopted from another window.
           id: 'tab-agent',
+          entityId: 'term-agent',
           leaves: [[leaf(3), `${GIT_KEY}@@aaaa0003`]],
           title: 'claude',
           row: {
@@ -167,7 +169,7 @@ export function localDesktopSession(): WorkspaceSessionState {
     activeRepoId: 'repo-1',
     activeWorktreeId: GIT_KEY,
     activeWorkspaceKey: `worktree:${GIT_KEY}`,
-    activeTabId: 'tab-agent',
+    activeTabId: 'term-agent',
     activeWorktreeIdsOnShutdown: [GIT_KEY, FOLDER_KEY],
     localOnlyScrollbackByTabId: { 'tab-shell': { [leaf(2)]: 'last screen' } },
     lastVisitedAtByWorktreeId: {
@@ -176,11 +178,11 @@ export function localDesktopSession(): WorkspaceSessionState {
     },
     workspaceDocHistory: [],
     sleepingAgentSessionsByPaneKey: {
-      [`tab-agent:${leaf(3)}`]: sleepingRecord(GIT_KEY, 'tab-agent', leaf(3))
+      [`term-agent:${leaf(3)}`]: sleepingRecord(GIT_KEY, 'term-agent', leaf(3))
     },
     terminalPtyIncarnationsByPaneKey: {
       [`tab-shell:${leaf(1)}`]: 'inc-1',
-      [`tab-agent:${leaf(3)}`]: 'inc-3'
+      [`term-agent:${leaf(3)}`]: 'inc-3'
     },
     terminalTopologyRevisionByRepoId: { 'repo-1': 7 },
     defaultTerminalTabsAppliedByWorktreeId: { [GIT_KEY]: true },

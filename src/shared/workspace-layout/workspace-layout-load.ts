@@ -4,6 +4,7 @@
 // itself is resolved by fixed precedence; nothing is merged.
 
 import type { ExecutionHostId } from '../execution-host'
+import type { TerminalLayoutSnapshot } from '../terminal-tab-types'
 import type { WorkspaceSessionState } from '../workspace-session-state-types'
 import {
   CARRIED_SESSION_FIELDS,
@@ -16,7 +17,7 @@ import {
 import { omitStoredFields, pickStoredFields } from './stored-record-fields'
 import {
   applyLegacySurfaceTombstones,
-  reassignPanesInTwoTabs,
+  loadLeaves,
   unbindDuplicateTerminals
 } from './workspace-layout-load-bindings'
 import { diffStoredSession } from './workspace-layout-load-report'
@@ -26,10 +27,11 @@ import type {
 } from './workspace-layout-load-types'
 import { saveWorkspaceLayout } from './workspace-layout-save'
 import { loadWorkspace } from './workspace-layout-load-workspace'
-import {
-  tabIdOfPaneKey,
-  type WorkspaceLayoutModel,
-  type WorkspaceLayoutRecords
+import type {
+  LegacyLayoutPersistence,
+  WorkspaceLayout,
+  WorkspaceLayoutModel,
+  WorkspaceLayoutRecords
 } from './workspace-layout-model'
 
 function workspaceKeys(session: WorkspaceSessionState): string[] {
@@ -68,52 +70,41 @@ function resolveTerminalHomes(session: WorkspaceSessionState): Map<string, strin
 
 function loadRecords(session: WorkspaceSessionState): WorkspaceLayoutRecords {
   return {
-    ...(session.terminalPtyIncarnationsByPaneKey
-      ? { incarnationsByPaneKey: session.terminalPtyIncarnationsByPaneKey }
-      : {}),
     ...(session.defaultTerminalTabsAppliedByWorktreeId
       ? { defaultTabsAppliedByWorkspace: session.defaultTerminalTabsAppliedByWorktreeId }
       : {}),
     ...(session.clientHostedBrowserPagesByWorktree
       ? { clientHostedBrowserPagesByWorkspace: session.clientHostedBrowserPagesByWorktree }
-      : {}),
+      : {})
+  }
+}
+
+function loadLegacy(session: WorkspaceSessionState): LegacyLayoutPersistence {
+  return {
+    terminalRowOwners: Object.fromEntries(
+      Object.keys(session.tabsByWorktree ?? {}).map((key) => [key, true as const])
+    ),
     ...(session.terminalTopologyRevisionByRepoId
       ? { topologyRevisionByRepoId: session.terminalTopologyRevisionByRepoId }
       : {})
   }
 }
 
-/**
- * Sleeping and closed-tab records go to their workspace: a sleeping record to its pane's tab's
- * workspace, else (like a closed tab) to the workspace its worktree id names, else carried.
- */
-function placeWorkspaceRecords(
+/** A closed tab's record goes to the workspace its worktree id names, else it is carried. */
+function placeClosedTabs(
   session: WorkspaceSessionState,
   layout: WorkspaceLayoutModel,
   carried: CarriedSessionFields
 ): void {
-  const byTab = new Map<string, string>()
-  const byWorktree = new Map<string, string>()
-  for (const [key, workspace] of Object.entries(layout.workspaces)) {
-    byWorktree.set(workspace.worktreeId, byWorktree.get(workspace.worktreeId) ?? key)
-    workspace.tabs.forEach((tab) => tab.kind === 'terminal' && byTab.set(tab.entityId, key))
-  }
-  for (const [paneKey, record] of Object.entries(session.sleepingAgentSessionsByPaneKey ?? {})) {
-    const key = byTab.get(tabIdOfPaneKey(paneKey)) ?? byWorktree.get(record.worktreeId)
-    if (key === undefined) {
-      carried.unplacedSleepingRecords[paneKey] = record
-    } else {
-      const workspace = layout.workspaces[key]!
-      const entry = omitStoredFields(record, ['paneKey', 'tabId', 'worktreeId'])
-      workspace.sleepingByPaneKey = { ...workspace.sleepingByPaneKey, [paneKey]: entry }
-    }
+  const byWorktree = new Map<string, WorkspaceLayout>()
+  for (const workspace of Object.values(layout.workspaces)) {
+    byWorktree.set(workspace.worktreeId, byWorktree.get(workspace.worktreeId) ?? workspace)
   }
   for (const [tabId, record] of Object.entries(session.closedTerminalTabTombstonesByTabId ?? {})) {
-    const key = byWorktree.get(record.worktreeId)
-    if (key === undefined) {
+    const workspace = byWorktree.get(record.worktreeId)
+    if (workspace === undefined) {
       carried.unplacedClosedTabs[tabId] = record
     } else {
-      const workspace = layout.workspaces[key]!
       const entry = omitStoredFields(record, ['worktreeId'])
       workspace.closedTerminalTabs = { ...workspace.closedTerminalTabs, [tabId]: entry }
     }
@@ -148,8 +139,14 @@ export function loadWorkspaceLayout(
     scrollback: {},
     browserTabs: {}
   }
-  let layout: WorkspaceLayoutModel = { hostId, workspaces: {}, records: loadRecords(session) }
+  let layout: WorkspaceLayoutModel = {
+    hostId,
+    workspaces: {},
+    records: loadRecords(session),
+    legacy: loadLegacy(session)
+  }
   const terminalHomes = resolveTerminalHomes(session)
+  const layouts = new Map<string, TerminalLayoutSnapshot>()
   for (const key of workspaceKeys(session)) {
     layout.workspaces[key] = loadWorkspace({
       session,
@@ -158,7 +155,8 @@ export function loadWorkspaceLayout(
       terminalHomes,
       context,
       view: desktopView,
-      facts
+      facts,
+      layouts
     })
   }
   const carried: CarriedSessionFields = {
@@ -169,12 +167,13 @@ export function loadWorkspaceLayout(
       )
     ),
     unplacedSleepingRecords: {},
+    unplacedIncarnations: {},
     unplacedClosedTabs: {}
   }
-  placeWorkspaceRecords(session, layout, carried)
-  layout = reassignPanesInTwoTabs(layout, { view: desktopView, facts }, context)
+  placeClosedTabs(session, layout, carried)
+  loadLeaves(layout, { session, layouts }, { view: desktopView, facts, carried }, context)
   unbindDuplicateTerminals(layout)
-  layout = applyLegacySurfaceTombstones(layout, session)
+  layout = applyLegacySurfaceTombstones(layout, session, carried)
   const loaded = { layout, desktopView, facts, carried }
   return { ...loaded, changes: diffStoredSession(stored, saveWorkspaceLayout(loaded)) }
 }

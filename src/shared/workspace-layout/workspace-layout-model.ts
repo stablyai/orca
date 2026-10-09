@@ -17,10 +17,6 @@ import type { BrowserWorkspace } from '../browser-workspace-types'
 export type LayoutTerminalPanes = {
   root: TerminalPaneLayoutNode | null
   chatLeafId?: string
-  /** User pane titles. */
-  titlesByLeafId?: Record<string, string>
-  /** Which terminal each pane shows; a pane missing here is unbound. */
-  ptyIdsByLeafId?: Record<string, string>
 }
 
 type LayoutTabFields = {
@@ -83,6 +79,16 @@ export type LayoutSleepingRecord = Omit<
 /** A closed terminal tab record minus its workspace. */
 export type LayoutClosedTab = Omit<ClosedTerminalTabTombstone, 'worktreeId'>
 
+/** One pane's own data. Kept by leaf id (unique in the partition), so a moved pane moves nothing. */
+export type LayoutLeaf = {
+  /** The terminal it shows; absent while unbound. */
+  ptyId?: string
+  incarnationId?: string
+  /** User pane title. */
+  title?: string
+  sleeping?: LayoutSleepingRecord
+}
+
 export type WorkspaceLayout = {
   /** The worktree or folder id every record of this workspace names on disk. */
   worktreeId: string
@@ -93,19 +99,25 @@ export type WorkspaceLayout = {
   groupLayout?: TabGroupLayoutNode
   editorFiles?: LayoutEditorFile[]
   browserTabs?: LayoutBrowserTab[]
-  /** A row list, even empty, marks this partition as the workspace's owner (partitionOwnsWorktreeTabs). */
-  keepsEmptyTerminalRows: boolean
-  /** Pane key → sleeping agent of a pane in this workspace, open or since closed. */
-  sleepingByPaneKey?: Record<string, LayoutSleepingRecord>
+  /** Leaf id → the data of a pane of one of this workspace's terminal tabs. */
+  leaves?: Record<string, LayoutLeaf>
   /** Tab id → a terminal tab closed in this workspace. */
   closedTerminalTabs?: Record<string, LayoutClosedTab>
 }
 
 export type WorkspaceLayoutRecords = {
-  incarnationsByPaneKey?: Record<string, string>
   defaultTabsAppliedByWorkspace?: Record<string, true>
   clientHostedBrowserPagesByWorkspace?: Record<string, PersistedClientHostedBrowserPage[]>
-  /** Advanced on every membership change so an older build's save merge defers to this layout. */
+}
+
+/** What only older builds read from today's documents; the layout never reads it back. */
+export type LegacyLayoutPersistence = {
+  /**
+   * Workspace key → this partition owns the workspace's terminal rows, saved as a row list even
+   * when empty (partitionOwnsWorktreeTabs). Absent is not empty: another partition may own them.
+   */
+  terminalRowOwners: Record<string, true>
+  /** Advanced when terminal panes change so an older build's save merge defers to this layout. */
   topologyRevisionByRepoId?: Record<string, number>
 }
 
@@ -114,15 +126,12 @@ export type WorkspaceLayoutModel = {
   /** Keyed by the session key as stored (legacy worktree id or workspace key). */
   workspaces: Record<string, WorkspaceLayout>
   records: WorkspaceLayoutRecords
+  legacy: LegacyLayoutPersistence
 }
 
-// Record key only: legacy leaf ids are not UUIDs, so makePaneKey would throw on them.
+// Disk and wire key only: legacy leaf ids are not UUIDs, so makePaneKey would throw on them.
 export function paneKeyOf(terminalTabId: string, leafId: string): string {
   return `${terminalTabId}:${leafId}`
-}
-
-export function tabIdOfPaneKey(paneKey: string): string {
-  return paneKey.slice(0, paneKey.lastIndexOf(':'))
 }
 
 /** The workspace's tabs in the one tab order. */
