@@ -19,8 +19,8 @@ import {
 } from '../../src/renderer/src/lib/project-host-workspace-target'
 import { buildLocalWorktreeCreateArgs } from '../../src/renderer/src/store/slices/worktrees/create/worktree-create-payload'
 
-import { WorktreeCreate } from '../../src/shared/rpc-contract/worktree-create-params'
-import { buildManagedWorktreeCreateArgs } from '../../src/main/runtime/rpc/methods/worktree-create-args'
+import { RpcDispatcher } from '../../src/main/runtime/rpc/dispatcher'
+import { WORKTREE_METHODS } from '../../src/main/runtime/rpc/methods/worktree'
 import { repoWithFetchedOwner } from '../../src/renderer/src/store/repos/owner-routing'
 import { setupWithFetchedOwner } from '../../src/renderer/src/store/projects/project-host-routing'
 import { getProjectHostSetupOwnerKey } from '../../src/renderer/src/store/projects/project-compatibility-core'
@@ -362,35 +362,44 @@ describe('host-qualified setup publication to the full renderer catalog', () => 
     expect(remote).not.toHaveBeenCalled()
   })
 
-  it.each([false, true])(
-    'creates on the captured private SSH row through the paired runtime (old peer: %s)',
-    async (oldPeer) => {
+  it.each([
+    { oldPeer: false, sshFirst: false },
+    { oldPeer: false, sshFirst: true },
+    { oldPeer: true, sshFirst: false },
+    { oldPeer: true, sshFirst: true }
+  ])(
+    'creates on the captured private SSH row through the dispatcher (old peer: $oldPeer, B first: $sshFirst)',
+    async ({ oldPeer, sshFirst }) => {
       const store = createStore()
-      store.addRepo({
-        ...makeRepo('ssh:target-a'),
-        executionHostId: 'ssh:private-a',
-        path: '/receiver/a'
-      })
-      store.addRepo({
-        ...makeRepo('ssh:target-a'),
-        executionHostId: 'ssh:private-b',
-        path: '/receiver/b'
-      })
+      for (const suffix of sshFirst ? ['b', 'a'] : ['a', 'b']) {
+        store.addRepo({
+          ...makeRepo('ssh:target-a'),
+          executionHostId: `ssh:private-${suffix}`,
+          path: `/receiver/${suffix}`
+        })
+      }
       const target = { kind: 'environment', environmentId: 'paired' } as const
       const repos = store.getRepos().map((repo) => repoWithFetchedOwner(repo, target))
       const setups = store
         .getProjectHostSetups()
         .map((setup) => setupWithFetchedOwner(setup, target))
+      const selectedSetup = setups.find(
+        (setup) => setup.authoritativeExecutionHostId === 'ssh:private-b'
+      )
+      if (!selectedSetup) {
+        throw new Error('Missing private setup B')
+      }
       const selected = resolveWorkspaceCreationTarget({
         eligibleRepos: repos,
         projectHostSetups: setups,
         projects: store.getProjects(),
-        projectHostSetupId: getProjectHostSetupOwnerKey(setups[1])
+        projectHostSetupId: getProjectHostSetupOwnerKey(selectedSetup)
       })
       if (selected.status !== 'ready') {
         throw new Error('Selected private setup was lost')
       }
       const runtime = new OrcaRuntimeService(store)
+      const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
       const mutation = vi.fn()
       vi.stubGlobal('window', {
         api: {
@@ -398,18 +407,23 @@ describe('host-qualified setup publication to the full renderer catalog', () => 
             call: async (args: RuntimeEnvironmentCallRequest) => {
               if (args.method === 'status.get') {
                 const response = createCompatibleRuntimeStatusResponse()
+                if (!response.ok) {
+                  throw new Error('Compatibility fixture failed')
+                }
                 if (oldPeer) {
-                  response.result.capabilities = response.result.capabilities.filter(
+                  response.result.capabilities = response.result.capabilities?.filter(
                     (cap) => cap !== 'worktree.create.execution-host.v1'
                   )
                 }
                 return response
               }
               mutation(args)
-              const result = await runtime.createManagedWorktree(
-                buildManagedWorktreeCreateArgs(WorktreeCreate.parse(args.params), {})
-              )
-              return { id: 'create', ok: true, result }
+              return dispatcher.dispatch({
+                id: 'create',
+                authToken: 'test',
+                method: args.method,
+                params: args.params
+              })
             }
           }
         }

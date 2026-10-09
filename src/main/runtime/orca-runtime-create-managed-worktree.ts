@@ -15,8 +15,6 @@ import { startRuntimeLocalWorktreeTerminals } from './runtime-local-worktree-ter
 import { trackRuntimeWorkspaceCreate } from '../workspace-create-telemetry'
 import { assertOpenCodeModelLaunchPreferencesAbsent } from '../opencode/opencode-model-startup-plan'
 import { resolveWorktreeCreateAgentStartup } from './runtime-worktree-agent-startup'
-import { getRepoExecutionHostId } from '../../shared/execution-host'
-import { findExactRepoOwner } from '../ipc/worktrees/listing/worktree-host-ownership'
 import type { RuntimeWorkspaceCreateEvents } from '../workspace-create-telemetry'
 
 export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWorktreeTerminalProvisioningHost {
@@ -48,21 +46,7 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
       args.startupLaunchPreferences
     )
 
-    const candidates =
-      args.executionHostId === undefined
-        ? []
-        : this.selectReposBySelector(args.repoSelector).filter(
-            (candidate) => getRepoExecutionHostId(candidate) === args.executionHostId
-          )
-    const repo =
-      args.executionHostId === undefined
-        ? await this.resolveRepoSelector(args.repoSelector)
-        : candidates.length === 1
-          ? findExactRepoOwner(this.store, candidates[0].id, args.executionHostId)
-          : undefined
-    if (!repo) {
-      throw new Error('repo_not_found')
-    }
+    const repo = await this.resolveRepoSelector(args.repoSelector, args.executionHostId)
     const createSettings = this.store.getSettings()
     const requestedAgent = args.startupAgent ?? args.createdWithAgent
     const requestedAgentEnabled =

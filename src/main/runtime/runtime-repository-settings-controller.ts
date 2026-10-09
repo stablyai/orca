@@ -1,4 +1,5 @@
 import { getRepoExecutionHostId } from '../../shared/execution-host'
+import type { ExecutionHostId } from '../../shared/execution-host'
 import { isFolderRepo } from '../../shared/repo-kind'
 import type { Repo } from '../../shared/repo-types'
 import type { GhAccountBinding } from '../../shared/github/account-binding'
@@ -8,7 +9,7 @@ import type { RuntimeStore } from './runtime-store-contract'
 
 type RuntimeRepositorySettingsDependencies = {
   getStore: () => RuntimeStore | null
-  resolveRepo: (selector: string) => Promise<Repo>
+  resolveRepo: (selector: string, executionHostId?: ExecutionHostId) => Promise<Repo>
   forgetTerminalTopology: (repoId: string) => void
   invalidateResolvedWorktrees: () => void
   invalidateWorktreeScan: (repoId: string) => void
@@ -52,8 +53,8 @@ function omitUndefined<T extends Record<string, unknown>>(value: T): Partial<T> 
 export class RuntimeRepositorySettingsController {
   constructor(private readonly deps: RuntimeRepositorySettingsDependencies) {}
 
-  async show(repoSelector: string): Promise<Repo> {
-    return await this.deps.resolveRepo(repoSelector)
+  async show(repoSelector: string, executionHostId?: ExecutionHostId): Promise<Repo> {
+    return await this.deps.resolveRepo(repoSelector, executionHostId)
   }
 
   async setBaseRef(repoSelector: string, baseRef: string): Promise<Repo> {

@@ -75,4 +75,17 @@ describe('OrcaRuntimeService.dedupeWorktreeCreate', () => {
     await runtime.dedupeWorktreeCreate('id:a', undefined, factory)
     expect(calls).toBe(4)
   })
+
+  it('separates qualified owners and unqualified callers while retaining same-owner retries', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    let calls = 0
+    const factory = vi.fn(async () => ({ n: (calls += 1) }))
+    const unqualified = await runtime.dedupeWorktreeCreate('id:r', 'key-1', factory)
+    const a = await runtime.dedupeWorktreeCreate('id:r', 'key-1', factory, 'ssh:a')
+    const b = await runtime.dedupeWorktreeCreate('id:r', 'key-1', factory, 'ssh:b')
+    expect(await runtime.dedupeWorktreeCreate('id:r', 'key-1', factory)).toBe(unqualified)
+    expect(await runtime.dedupeWorktreeCreate('id:r', 'key-1', factory, 'ssh:a')).toBe(a)
+    expect(await runtime.dedupeWorktreeCreate('id:r', 'key-1', factory, 'ssh:b')).toBe(b)
+    expect(factory).toHaveBeenCalledTimes(3)
+  })
 })

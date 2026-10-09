@@ -4,6 +4,8 @@ import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import { splitWorktreeIdForFilesystem, worktreeIdComparisonKey } from '../../shared/worktree/id'
 import { branchSelectorMatches, runtimePathsEqual } from './runtime-worktree-path-identity'
 import { getRepoExecutionHostId, getWorktreeExecutionHostId } from '../../shared/execution-host'
+import type { ExecutionHostId } from '../../shared/execution-host'
+import { findExactRepoOwner } from '../ipc/worktrees/listing/worktree-host-ownership'
 import type {
   WorktreeLineageInput,
   WorktreeLineageResolution
@@ -156,11 +158,28 @@ export class OrcaRuntimeWithResolveWorktreeSelector extends OrcaRuntimeWithResol
     )
   }
 
-  protected async resolveRepoSelector(selector: string): Promise<Repo> {
+  protected async resolveRepoSelector(
+    selector: string,
+    executionHostId?: ExecutionHostId
+  ): Promise<Repo> {
     if (!this.store) {
       throw new Error('repo_not_found')
     }
     const candidates = this.selectReposBySelector(selector)
+
+    if (executionHostId !== undefined) {
+      const matching = candidates.filter(
+        (candidate) => getRepoExecutionHostId(candidate) === executionHostId
+      )
+      const repo =
+        matching.length === 1
+          ? findExactRepoOwner(this.store, matching[0].id, executionHostId)
+          : undefined
+      if (!repo) {
+        throw new Error('repo_not_found')
+      }
+      return repo
+    }
 
     if (candidates.length === 1) {
       return candidates[0]
