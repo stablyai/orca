@@ -2,6 +2,7 @@ import { app, session } from 'electron'
 import { electronApp, is } from '@electron-toolkit/utils'
 import { applyBackgroundActivationPolicy } from '../window/foreground-activation-policy'
 import { applyElectronProxySettings } from '../network/proxy-settings'
+import { setRelayAndCloudUseProxy } from '../network/relay-cloud-proxy-route'
 import { installElectronProxyRequestGuard } from '../network/electron-proxy-request-guard'
 import { handleElectronProxyLogin } from '../network/electron-proxy-credentials'
 import { installMainThreadHangWatchdog } from '../hang-watchdog/main-thread-hang-watchdog'
@@ -205,7 +206,13 @@ export async function initializeReadyFoundation(): Promise<void> {
   )
   // Why: apply initial fallback WSL distro from store settings for global git/CLI calls.
   setDefaultWslDistroOverride(store.getSettings().terminalWindowsWslDistro ?? null)
+  setRelayAndCloudUseProxy(store.getSettings().relayAndCloudUseProxy === true)
   store.onSettingsChanged((updates, settings) => {
+    if (setRelayAndCloudUseProxy(settings.relayAndCloudUseProxy === true)) {
+      // Why: reopen the relay so its sockets take the new route now, not at the next drop.
+      state.desktopRelayService?.fenceAndCloseNow()
+      state.desktopRelayService?.authMutated()
+    }
     if ('electronHttp1CompatibilityMode' in updates) {
       writeHttp1CompatibilityMarker(
         canonicalUserDataPath,

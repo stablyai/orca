@@ -7286,7 +7286,9 @@
           "823e0f15b1": "用于 Orca 网络请求和本地终端子进程的代理 URL。",
           "d93c7cd531": "配置应用程序级网络路由。",
           "c46cdbbd4e": "网络",
-          "configureProxy": "配置代理"
+          "configureProxy": "配置代理",
+          "relayAndCloudProxy": "为 Orca Relay 和 Orca Cloud 使用代理",
+          "relayAndCloudProxyDescription": "通过 HTTP 代理设置（为空时使用系统代理）发送 Orca Relay 和 Orca 账户流量。中继连接支持 HTTP 和 HTTPS 代理。如果代理阻止了中继，请关闭此项。"
         },
         "GeneralPane": {
           "d58fccfd84": "导航",
@@ -9873,7 +9875,8 @@
             "command": "命令",
             "confirm": "确认",
             "close": "关闭",
-            "omp": "OMP"
+            "omp": "OMP",
+            "relayProxy": "中继"
           }
         },
         "git": {

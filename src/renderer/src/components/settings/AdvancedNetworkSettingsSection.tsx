@@ -10,6 +10,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/colla
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { Textarea } from '../ui/textarea'
+import { SettingsSwitch } from './SettingsFormControls'
 import { getAdvancedNetworkSearchEntries } from './advanced-network-search'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch, normalizeSettingsSearchQuery } from './settings-search'
@@ -216,7 +217,8 @@ export function AdvancedNetworkSettingsSection({
         'no_proxy',
         'network',
         'bypass',
-        'localhost'
+        'localhost',
+        'relay'
       ]}
       className="space-y-3"
     >
@@ -235,6 +237,32 @@ export function AdvancedNetworkSettingsSection({
             )}
           </p>
         </div>
+      </div>
+
+      <div className="flex items-center justify-between gap-4">
+        <div className="min-w-0 space-y-0.5">
+          <Label id="settings-relay-cloud-proxy-label">
+            {translate(
+              'auto.components.settings.AdvancedNetworkSettingsSection.relayAndCloudProxy',
+              'Use proxy for Orca Relay and Orca Cloud'
+            )}
+          </Label>
+          <p className="text-xs text-muted-foreground">
+            {translate(
+              'auto.components.settings.AdvancedNetworkSettingsSection.relayAndCloudProxyDescription',
+              'Send Orca Relay and Orca account traffic through the HTTP proxy setting, or the system proxy when it is empty. The relay connection works with HTTP and HTTPS proxies. Turn off if your proxy blocks the relay.'
+            )}
+          </p>
+        </div>
+        <SettingsSwitch
+          checked={settings.relayAndCloudUseProxy === true}
+          onChange={() =>
+            updateSettings({
+              relayAndCloudUseProxy: settings.relayAndCloudUseProxy !== true
+            })
+          }
+          ariaLabelledBy="settings-relay-cloud-proxy-label"
+        />
       </div>
 
       <Collapsible open={proxyConfigExpanded} onOpenChange={setProxyConfigOpen}>

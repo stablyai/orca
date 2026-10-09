@@ -1,6 +1,7 @@
 import type { RelayControlClientOptions } from './relay-control-client-options'
 import { randomUUID } from 'node:crypto'
 import WebSocket, { type RawData } from 'ws'
+import { relayWebSocketAgent } from '../../network/relay-cloud-proxy-route'
 import { MOBILE_RELAY_CLOSE_CODE } from '../../../shared/mobile-relay-close-codes'
 import type { RelayHostCloseReason } from '../../../shared/relay-host-close-reason'
 import {
@@ -59,6 +60,7 @@ export class RelayControlClient {
       ((url, token) =>
         new WebSocket(url, {
           headers: { authorization: `Bearer ${token}`, ...RELAY_HOST_CAPABILITY_HEADERS },
+          agent: relayWebSocketAgent(url),
           perMessageDeflate: false,
           maxPayload: 64 * 1024
         }))

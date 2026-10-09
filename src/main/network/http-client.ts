@@ -1,4 +1,4 @@
-import type { Session } from 'electron'
+import type { ProxySession } from './electron-default-proxy-session'
 
 /**
  * Outbound HTTP for main-process integrations.
@@ -22,7 +22,7 @@ import type { Session } from 'electron'
 export type MainHttpClient = {
   fetch(url: string, init?: RequestInit): Promise<Response>
   /** The Chromium session whose proxy state applies, or null on a host without one. */
-  proxySession(): Session | null
+  proxySession(): ProxySession | null
 }
 
 const nodeHttpClient: MainHttpClient = {

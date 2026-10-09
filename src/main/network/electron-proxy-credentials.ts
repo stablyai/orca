@@ -102,14 +102,21 @@ export function handleElectronProxyLogin(
   if (!proxySession) {
     return
   }
-  const credentials = proxyCredentialsBySession.get(proxySession)
-  if (
-    !credentials ||
-    credentials.host !== normalizeProxyHost(authInfo.host) ||
-    credentials.port !== authInfo.port
-  ) {
+  const credentials = electronProxyCredentialsFor(proxySession, authInfo.host, authInfo.port)
+  if (!credentials) {
     return
   }
   event.preventDefault()
   callback(credentials.username, credentials.password)
+}
+
+export function electronProxyCredentialsFor(
+  proxySession: ProxySession,
+  host: string,
+  port: number
+): ElectronProxyCredentials | null {
+  const credentials = proxyCredentialsBySession.get(proxySession)
+  return credentials && credentials.host === normalizeProxyHost(host) && credentials.port === port
+    ? credentials
+    : null
 }

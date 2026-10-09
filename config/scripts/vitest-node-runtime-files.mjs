@@ -89,6 +89,9 @@ export const NODE_RUNTIME_INCLUDE = [
   'src/main/runtime/structured-agent-session-startup-tab-restore.test.ts',
   'src/shared/remote-runtime-shared-control-connection.test.ts',
   'src/main/runtime/relay/relay-control-client.test.ts',
+  // Bun's built-in ws ignores the `agent` option that Electron's Node honours.
+  'src/main/network/session-proxy-agent.test.ts',
+  'src/main/runtime/relay/relay-websocket-proxy-agent.test.ts',
   'src/main/ipc/filesystem-watcher-ignore-real.test.ts',
   'src/main/ipc/runtime-environment-preference.test.ts',
   'src/main/ipc/runtime-environment-transport-routing-tailscale-hint.test.ts',

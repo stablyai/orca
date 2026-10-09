@@ -7286,7 +7286,9 @@
           "823e0f15b1": "Orca ネットワークリクエストとローカルターミナルの子のプロキシ URL。",
           "d93c7cd531": "アプリレベルのネットワークルーティングを構成します。",
           "c46cdbbd4e": "ネットワーク",
-          "configureProxy": "プロキシを設定"
+          "configureProxy": "プロキシを設定",
+          "relayAndCloudProxy": "Orca Relay と Orca Cloud にプロキシを使用",
+          "relayAndCloudProxyDescription": "Orca Relay と Orca アカウントの通信を HTTP プロキシ設定（空の場合はシステムプロキシ）経由で送信します。リレー接続は HTTP および HTTPS プロキシに対応しています。プロキシがリレーをブロックする場合はオフにしてください。"
         },
         "GeneralPane": {
           "d58fccfd84": "ナビゲーション",
@@ -9910,7 +9912,8 @@
             "command": "コマンド",
             "confirm": "確認",
             "close": "近い",
-            "omp": "OMP"
+            "omp": "OMP",
+            "relayProxy": "リレー"
           }
         },
         "git": {

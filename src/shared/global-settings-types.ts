@@ -200,6 +200,8 @@ export type GlobalSettings = NativeChatGlobalSettings & {
   httpProxyUrl?: string
   /** Optional semicolon/comma/newline-separated bypass rules for httpProxyUrl. */
   httpProxyBypassRules?: string
+  /** Orca Relay and Orca Cloud follow the app/system proxy. Off unless the user turns it on. */
+  relayAndCloudUseProxy?: boolean
   /** Why: corporate TLS-intercepting proxies can break HTTP/2 downloads; opt-in Chromium process-wide HTTP/1.1 switch. */
   electronHttp1CompatibilityMode?: boolean
   /** Opt-in in-app browsing (isolated guest surface); default keeps links opening in the system browser. */

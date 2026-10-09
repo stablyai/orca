@@ -7407,7 +7407,9 @@
           "823e0f15b1": "URL de proxy pour les requêtes réseau d'Orca et les processus enfants des terminaux locaux.",
           "d93c7cd531": "Configure le routage réseau au niveau de l'application.",
           "c46cdbbd4e": "Réseau",
-          "configureProxy": "Configurer le proxy"
+          "configureProxy": "Configurer le proxy",
+          "relayAndCloudProxy": "Utiliser le proxy pour Orca Relay et Orca Cloud",
+          "relayAndCloudProxyDescription": "Fait passer le trafic d'Orca Relay et du compte Orca par le proxy HTTP configuré, ou par le proxy système s'il est vide. La connexion du relais fonctionne avec les proxys HTTP et HTTPS. Désactivez-le si votre proxy bloque le relais."
         },
         "GeneralPane": {
           "d58fccfd84": "Navigation",
@@ -10036,7 +10038,8 @@
             "command": "commande",
             "confirm": "confirmer",
             "close": "fermer",
-            "omp": "OMP"
+            "omp": "OMP",
+            "relayProxy": "relais"
           }
         },
         "git": {

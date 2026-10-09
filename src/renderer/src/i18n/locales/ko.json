@@ -7286,7 +7286,9 @@
           "823e0f15b1": "Orca 네트워크 요청 및 로컬 terminal 하위 항목에 대한 프록시 URL입니다.",
           "d93c7cd531": "앱 수준 네트워크 라우팅을 구성합니다.",
           "c46cdbbd4e": "네트워크",
-          "configureProxy": "프록시 구성"
+          "configureProxy": "프록시 구성",
+          "relayAndCloudProxy": "Orca Relay 및 Orca Cloud에 프록시 사용",
+          "relayAndCloudProxyDescription": "Orca Relay와 Orca 계정 트래픽을 HTTP 프록시 설정(비어 있으면 시스템 프록시)을 통해 보냅니다. 릴레이 연결은 HTTP 및 HTTPS 프록시를 지원합니다. 프록시가 릴레이를 차단하면 끄세요."
         },
         "GeneralPane": {
           "d58fccfd84": "탐색",
@@ -9873,7 +9875,8 @@
             "command": "명령",
             "confirm": "확인",
             "close": "닫다",
-            "omp": "OMP"
+            "omp": "OMP",
+            "relayProxy": "릴레이"
           }
         },
         "git": {

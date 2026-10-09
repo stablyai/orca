@@ -7539,7 +7539,9 @@
           "823e0f15b1": "Proxy URL for Orca network requests and local terminal children.",
           "d93c7cd531": "Configure app-level network routing.",
           "c46cdbbd4e": "Network",
-          "configureProxy": "Configure proxy"
+          "configureProxy": "Configure proxy",
+          "relayAndCloudProxy": "Use proxy for Orca Relay and Orca Cloud",
+          "relayAndCloudProxyDescription": "Send Orca Relay and Orca account traffic through the HTTP proxy setting, or the system proxy when it is empty. The relay connection works with HTTP and HTTPS proxies. Turn off if your proxy blocks the relay."
         },
         "GeneralPane": {
           "editor_preview_tabs": "Reuse a preview tab when browsing files",
@@ -10178,7 +10180,8 @@
             "command": "command",
             "confirm": "confirm",
             "close": "close",
-            "omp": "OMP"
+            "omp": "OMP",
+            "relayProxy": "relay"
           }
         },
         "git": {

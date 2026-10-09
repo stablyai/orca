@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
+import { relayAndCloudFetch } from '../../network/relay-cloud-proxy-route'
 import type { E2EEKeypair } from '../e2ee-keypair'
 import { cancelUnreadResponseBody } from '../../lib/unread-response-body'
 import { parseRelayRetryAfterMs } from '../../../shared/relay-retry-after-header'
@@ -111,7 +112,7 @@ export async function exchangeRelayAuthorization(input: {
   requestDeadlineMs?: number
 }): Promise<RelayAuthorization> {
   const relayHostId = deriveRelayHostId(input.keypair.publicKey)
-  const response = await (input.fetch ?? globalThis.fetch)(input.endpoint, {
+  const response = await (input.fetch ?? relayAndCloudFetch)(input.endpoint, {
     method: 'POST',
     headers: {
       authorization: `Bearer ${input.accessToken}`,
@@ -182,7 +183,7 @@ async function sendRelayAssignment(
   if (input.isCurrent && !input.isCurrent()) {
     throw new RelayAssignAbortedError()
   }
-  const response = await (input.fetch ?? globalThis.fetch)(`${input.directorUrl}/v1/assign`, {
+  const response = await (input.fetch ?? relayAndCloudFetch)(`${input.directorUrl}/v1/assign`, {
     method: 'POST',
     headers: {
       authorization: `Bearer ${input.relayToken}`,
