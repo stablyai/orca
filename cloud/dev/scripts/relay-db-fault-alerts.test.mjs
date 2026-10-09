@@ -68,6 +68,7 @@ test('the lease shadow metrics extract every class the cell writes', () => {
     assert.match(terraform, new RegExp(`field = "classes\\.${field}"`), field)
   }
   assert.match(terraform, /field = "dbReadMs\.p99"/)
+  assert.match(terraform, /field = "dbRefused"/)
   const metric = block('google_logging_metric', 'relay_assignment_lease_shadow')
   assert.ok(metric.includes('jsonPayload.event=\\"orca_relay_assignment_lease_shadow\\"'))
   const alert = block('google_monitoring_alert_policy', 'relay_assignment_lease_bad_signature')
