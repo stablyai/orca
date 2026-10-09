@@ -117,8 +117,10 @@ describe('runtime project setup deletion and cache ownership', () => {
     store.addRepo(fixtureRepo(oldPath))
     const runtime = new CatalogRuntime(store)
     expect(
-      (await runtime.listManagedWorktrees('id:repo-cache')).worktrees.map((row) => row.path)
-    ).toContain(oldPath)
+      (await runtime.listManagedWorktrees('id:repo-cache')).worktrees.map((row) =>
+        row.path.replaceAll('\\', '/')
+      )
+    ).toContain(oldPath.replaceAll('\\', '/'))
     const warmed = runtime.cachedCatalog()
     expect(warmed.resolved).not.toBeNull()
     expect(warmed.scanKeys).toEqual(['repo-cache\0local'])
@@ -140,9 +142,13 @@ describe('runtime project setup deletion and cache ownership', () => {
 
       store.addRepo(fixtureRepo(newPath))
       const managed = await runtime.listManagedWorktrees('id:repo-cache')
-      expect(managed.worktrees.map((row) => row.path)).toEqual([newPath])
+      expect(managed.worktrees.map((row) => row.path.replaceAll('\\', '/'))).toEqual([
+        newPath.replaceAll('\\', '/')
+      ])
       const detected = await runtime.listDetectedManagedWorktrees('id:repo-cache')
-      expect(detected.worktrees.map((row) => row.path)).toEqual([newPath])
+      expect(detected.worktrees.map((row) => row.path.replaceAll('\\', '/'))).toEqual([
+        newPath.replaceAll('\\', '/')
+      ])
     } finally {
       unsub()
     }
