@@ -126,6 +126,17 @@ describe('assignment lease shadow', () => {
       cellId: CELL_ID,
       windowMs: 60_000,
       counts: { 'agree:db-valid': 2, 'disagree:db-refused': 1, 'absent:db-valid': 1 },
+      classes: {
+        agree: 2,
+        disagree: 1,
+        absent: 1,
+        expired: 0,
+        badSignature: 0,
+        wrongHost: 0,
+        wrongCell: 0,
+        epochBehind: 0,
+        epochAhead: 0
+      },
       dbReadMs: { samples: 4, p50: 4, p99: 8, max: 8 }
     })
   })
