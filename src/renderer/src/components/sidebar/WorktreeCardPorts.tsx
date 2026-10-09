@@ -16,6 +16,8 @@ import {
 import { useLocalhostLabelRouteForPort } from '@/lib/workspace-port-localhost-label-selector'
 import { addressForPort } from '@/lib/workspace-port-urls'
 import type { WorkspacePort } from '../../../../shared/workspace-ports'
+import type { Worktree } from '../../../../shared/worktree/types'
+import { WorkspaceUrlRow } from '../workspace-url-row'
 import {
   WorktreeCardDetailSection,
   WorktreeCardDetailSectionContent
@@ -24,14 +26,17 @@ import { translate } from '@/i18n/i18n'
 
 type WorktreeCardPortsProps = {
   ports: WorkspacePort[]
+  /** Supplies the saved workspace link, shown even when no port is live. */
+  worktree?: Pick<Worktree, 'id' | 'workspaceUrl'>
 }
 
 export function WorktreeCardPortsTrigger({
-  ports
+  ports,
+  worktree
 }: WorktreeCardPortsProps): React.JSX.Element | null {
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
 
-  if (ports.length === 0) {
+  if (ports.length === 0 && !worktree?.workspaceUrl) {
     return null
   }
 
@@ -285,9 +290,10 @@ function WorktreePortRow({ port }: { port: WorkspacePort }): React.JSX.Element {
 }
 
 export function WorktreeCardPortsDetails({
-  ports
+  ports,
+  worktree
 }: WorktreeCardPortsProps): React.JSX.Element | null {
-  if (ports.length === 0) {
+  if (ports.length === 0 && !worktree?.workspaceUrl) {
     return null
   }
 
@@ -305,6 +311,9 @@ export function WorktreeCardPortsDetails({
         </span>
       </div>
       <WorktreeCardDetailSectionContent className="space-y-0.5">
+        {worktree?.workspaceUrl && (
+          <WorkspaceUrlRow worktreeId={worktree.id} url={worktree.workspaceUrl} />
+        )}
         {ports.map((port) => (
           <WorktreePortRow key={port.id} port={port} />
         ))}
