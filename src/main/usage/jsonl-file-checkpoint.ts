@@ -1,13 +1,20 @@
-import { createReadStream, type ReadStream, type Stats } from 'node:fs'
-import { open, stat, type FileHandle } from 'node:fs/promises'
-import { createHash, type Hash } from 'node:crypto'
-import { rejectUnchangedJsonlFileRead, sameJsonlFileSnapshot } from './jsonl-file-snapshot'
+import { createReadStream } from 'node:fs'
+import { open, type FileHandle } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import {
+  readJsonlFileSnapshot,
+  readJsonlHandleSnapshot,
+  readJsonlSnapshotRange,
+  releaseJsonlReadStream,
+  sameJsonlFileSnapshot,
+  verifyJsonlSnapshotContents,
+  type JsonlFileSnapshot
+} from './jsonl-file-snapshot'
 
-const BOUNDARY_WINDOW_BYTES = 4096
-const HEAD_WINDOW_BYTES = 4096
+const CHECKPOINT_WINDOW_BYTES = 4096
 
 // Below this measured crossover, verifying the prefix costs more than rereading it.
-export const MIN_RESUMABLE_PREFIX_BYTES = 3 * BOUNDARY_WINDOW_BYTES
+export const MIN_RESUMABLE_PREFIX_BYTES = 3 * CHECKPOINT_WINDOW_BYTES
 
 export type JsonlFileCheckpoint = {
   parsedBytes: number
@@ -19,23 +26,14 @@ export type JsonlFileCheckpoint = {
 export type JsonlFileReader = {
   path: string
   handle: FileHandle
-  stats: Stats
+  stats: JsonlFileSnapshot
   snapshotCheckpoint: JsonlFileCheckpoint | null
-  snapshotHash: Hash | null
+  snapshotChunks: Buffer[] | null
   snapshotBytes: number
   streamStartOffset: number
   streamBytes: number
   onChunk: (chunk: Buffer) => void
   prepareRead: (startOffset: number) => Promise<void>
-}
-
-export async function releaseJsonlReadStream(stream: ReadStream): Promise<void> {
-  if (!stream.closed) {
-    await new Promise<void>((resolve) => {
-      stream.once('close', resolve)
-      stream.destroy()
-    })
-  }
 }
 
 export function isResumablePrefixLength(parsedBytes: number): boolean {
@@ -55,22 +53,18 @@ async function readWindowDigest(
     return `0:${hash.digest('hex')}`
   }
   if (reader) {
-    const buffer = Buffer.allocUnsafe(expectedBytes)
-    while (readBytes < expectedBytes) {
-      const read = await reader.handle.read(
-        buffer,
-        readBytes,
-        expectedBytes - readBytes,
-        start + readBytes
-      )
-      if (read.bytesRead === 0) {
-        await rejectUnchangedJsonlFileRead(filePath, reader.handle, reader.stats)
-        return null
-      }
-      readBytes += read.bytesRead
+    const buffer = await readJsonlSnapshotRange(
+      filePath,
+      reader.handle,
+      reader.stats,
+      start,
+      endExclusive
+    )
+    if (!buffer) {
+      return null
     }
     hash.update(buffer)
-    return `${readBytes}:${hash.digest('hex')}`
+    return `${buffer.length}:${hash.digest('hex')}`
   }
   const range = { start, end: endExclusive - 1 }
   const stream = createReadStream(filePath, range)
@@ -92,7 +86,7 @@ async function readPrefixDigests(
   carriedHeadDigest: string | null = null,
   reader?: JsonlFileReader
 ): Promise<{ headDigest: string; boundaryDigest: string } | null> {
-  const headBytes = Math.min(HEAD_WINDOW_BYTES, parsedBytes)
+  const headBytes = Math.min(CHECKPOINT_WINDOW_BYTES, parsedBytes)
   const headDigest = carriedHeadDigest?.startsWith(`${headBytes}:`)
     ? carriedHeadDigest
     : await readWindowDigest(filePath, 0, headBytes, reader)
@@ -101,15 +95,18 @@ async function readPrefixDigests(
   }
   const boundaryDigest = await readWindowDigest(
     filePath,
-    Math.max(0, parsedBytes - BOUNDARY_WINDOW_BYTES),
+    Math.max(0, parsedBytes - CHECKPOINT_WINDOW_BYTES),
     parsedBytes,
     reader
   )
   return boundaryDigest === null ? null : { headDigest, boundaryDigest }
 }
 
-export function jsonlPhysicalFileId(stats: Pick<Stats, 'dev' | 'ino'>): string | null {
-  return stats.ino === 0 ? null : `${stats.dev}:${stats.ino}`
+export function jsonlPhysicalFileId(stats: {
+  dev: number | bigint
+  ino: number | bigint
+}): string | null {
+  return stats.ino === 0 || stats.ino === 0n ? null : `${stats.dev}:${stats.ino}`
 }
 
 export async function openJsonlFileReader(filePath: string): Promise<JsonlFileReader> {
@@ -117,45 +114,40 @@ export async function openJsonlFileReader(filePath: string): Promise<JsonlFileRe
     const handle = await open(filePath, 'r')
     let retained = false
     try {
-      const stats = await handle.stat()
+      const stats = await readJsonlHandleSnapshot(handle)
       const reader: JsonlFileReader = {
         path: filePath,
         handle,
         stats,
         snapshotCheckpoint: null,
-        snapshotHash: isResumablePrefixLength(stats.size) ? null : createHash('sha256'),
+        snapshotChunks: isResumablePrefixLength(stats.size) ? null : [],
         snapshotBytes: 0,
         streamStartOffset: 0,
         streamBytes: 0,
         onChunk: (chunk) => {
           reader.streamBytes += chunk.length
-          if (reader.snapshotHash) {
-            reader.snapshotHash.update(chunk)
+          if (reader.snapshotChunks) {
+            reader.snapshotChunks.push(chunk)
             reader.snapshotBytes += chunk.length
           }
         },
         prepareRead: async (startOffset) => {
           reader.streamStartOffset = Math.min(startOffset, stats.size)
-          if (!reader.snapshotHash || reader.snapshotBytes !== 0 || startOffset <= 0) {
+          if (!reader.snapshotChunks || reader.snapshotBytes !== 0 || startOffset <= 0) {
             return
           }
-          const skipped = Buffer.allocUnsafe(Math.min(startOffset, stats.size))
-          let consumed = 0
-          while (consumed < skipped.length) {
-            const { bytesRead } = await handle.read(
-              skipped,
-              consumed,
-              skipped.length - consumed,
-              consumed
-            )
-            if (bytesRead === 0) {
-              await rejectUnchangedJsonlFileRead(filePath, handle, stats)
-              break
-            }
-            consumed += bytesRead
+          const skipped = await readJsonlSnapshotRange(
+            filePath,
+            handle,
+            stats,
+            0,
+            Math.min(startOffset, stats.size)
+          )
+          if (!skipped) {
+            return
           }
-          reader.snapshotHash.update(skipped.subarray(0, consumed))
-          reader.snapshotBytes += consumed
+          reader.snapshotChunks.push(skipped)
+          reader.snapshotBytes += skipped.length
         }
       }
       if (!isResumablePrefixLength(stats.size)) {
@@ -183,7 +175,7 @@ export async function openJsonlFileReader(filePath: string): Promise<JsonlFileRe
 
 async function readPhysicalFileId(filePath: string): Promise<string | null> {
   try {
-    const fileStat = await stat(filePath)
+    const fileStat = await readJsonlFileSnapshot(filePath)
     return jsonlPhysicalFileId(fileStat)
   } catch {
     return null
@@ -227,7 +219,7 @@ export async function resolveJsonlFileCheckpoint(
 ): Promise<JsonlFileCheckpoint | null> {
   if (
     !checkpoint ||
-    !Number.isInteger(checkpoint.parsedBytes) ||
+    !Number.isSafeInteger(checkpoint.parsedBytes) ||
     !isResumablePrefixLength(checkpoint.parsedBytes) ||
     (reader && checkpoint.parsedBytes > reader.stats.size) ||
     typeof checkpoint.boundaryDigest !== 'string' ||
@@ -261,8 +253,10 @@ export async function validateJsonlFileReader(
   reader: JsonlFileReader,
   originalCheckpoint?: JsonlFileCheckpoint | null
 ): Promise<boolean> {
-  const current = await reader.handle.stat()
-  const pathStats = await stat(reader.path)
+  const [current, pathStats] = await Promise.all([
+    readJsonlHandleSnapshot(reader.handle),
+    readJsonlFileSnapshot(reader.path)
+  ])
   if (reader.streamBytes !== reader.stats.size - reader.streamStartOffset) {
     if (
       sameJsonlFileSnapshot(reader.stats, current) &&
@@ -285,12 +279,12 @@ export async function validateJsonlFileReader(
   }
   const snapshot = reader.snapshotCheckpoint
   if (!snapshot) {
-    if (!reader.snapshotHash || reader.snapshotBytes !== reader.stats.size) {
+    if (!reader.snapshotChunks || reader.snapshotBytes !== reader.stats.size) {
       return false
     }
-    const digest = `${reader.snapshotBytes}:${reader.snapshotHash.digest('hex')}`
-    reader.snapshotHash = null
-    return digest === (await readWindowDigest(reader.path, 0, reader.stats.size, reader))
+    const chunks = reader.snapshotChunks
+    reader.snapshotChunks = null
+    return verifyJsonlSnapshotContents(reader.path, reader.handle, reader.stats, chunks)
   }
   const snapshotDigests = await readPrefixDigests(reader.path, snapshot.parsedBytes, null, reader)
   if (
@@ -304,7 +298,7 @@ export async function validateJsonlFileReader(
   }
   const originalBoundary = await readWindowDigest(
     reader.path,
-    Math.max(0, originalCheckpoint.parsedBytes - BOUNDARY_WINDOW_BYTES),
+    Math.max(0, originalCheckpoint.parsedBytes - CHECKPOINT_WINDOW_BYTES),
     originalCheckpoint.parsedBytes,
     reader
   )

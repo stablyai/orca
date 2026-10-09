@@ -22,7 +22,7 @@ ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/codex-usage src/main/usage
 ORCA_BACKGROUND_LAUNCH=1 node config/scripts/codex-usage-parser-memory-benchmark.mjs --baseline-ref 51e7181850b022bae2d41091fe1229accef4bd50 --events 100000 --pairs 2 --sample-ms 35 --output docs/bug-reproductions/usage-scan-append/codex-parser-memory.json
 ```
 
-The final [memory comparison](./codex-parser-memory.json) bundles the full parser
+The original [memory comparison](./codex-parser-memory.json) bundles the full parser
 dependency graph from the named baseline and current worktree. Two counterbalanced
 rounds use fresh Node workers and record source/tool hashes and raw forced-GC
 snapshots. Every arm preserves identical projections, owned keys and token totals.
@@ -49,3 +49,27 @@ a full verification reread; unchanged files read no transcript bytes.
 The companion Claude PR adopts this reader. The original integrated validation
 and benchmarks were recorded from a combined worktree; production source remains
 identical when split into PRs.
+
+## Adversarial hardening
+
+Tiny files now use bounded descriptor reads and exact byte comparison for both
+passes. This avoids creating a stream without reducing verification. Exact bigint
+device/inode values prevent large Windows file IDs from colliding after numeric
+rounding; unsafe persisted offsets fall back to a complete parse.
+
+Discovery distinguishes a directory that disappeared from one that cannot be
+read. Missing children leave readable siblings available. Permission and I/O
+errors abort the refresh, retaining the previous verified totals and showing the
+existing error state rather than publishing incomplete totals.
+
+A [counterbalanced ten-round comparison](./shared-reader-small-files.json) of the published reader and hardened
+reader over 1,000 tiny files measured median scanner cold time 85.024 → 80.529 ms
+and changed time 91.512 → 84.092 ms. Both arms read the same bytes twice; streams
+fell from 1,000 to zero. Unchanged scans read zero bytes in both arms and measured
+7.808 → 8.241 ms. These page-cache-warm macOS timings are observations, not CI
+thresholds or a claim about the original pre-verification reader.
+
+Regression contracts exercise short reads, exact comparison, unsafe offsets,
+large file identities, fractional timestamps, and discovery failures. The
+original retained-heap artifact above predates this hardening; its source hashes
+describe that earlier measurement, rather than the final reader.

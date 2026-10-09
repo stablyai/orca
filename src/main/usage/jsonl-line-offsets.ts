@@ -5,7 +5,8 @@
  * CRLF transcript would otherwise drift one byte per line.
  */
 import { createReadStream } from 'node:fs'
-import { releaseJsonlReadStream, type JsonlFileReader } from './jsonl-file-checkpoint'
+import { isResumablePrefixLength, type JsonlFileReader } from './jsonl-file-checkpoint'
+import { readJsonlSnapshotRange, releaseJsonlReadStream } from './jsonl-file-snapshot'
 
 const LINE_FEED = 0x0a
 const CARRIAGE_RETURN = 0x0d
@@ -24,6 +25,43 @@ function decodeLine(pieces: Buffer[]): string {
   return raw.toString('utf-8', 0, end)
 }
 
+async function* readJsonlChunks(
+  filePath: string,
+  startOffset: number,
+  reader?: Pick<JsonlFileReader, 'handle' | 'stats'>
+): AsyncGenerator<Buffer> {
+  if (reader && !isResumablePrefixLength(reader.stats.size)) {
+    // Tiny snapshots avoid stream setup while keeping the same pinned-range proof.
+    const chunk = await readJsonlSnapshotRange(
+      filePath,
+      reader.handle,
+      reader.stats,
+      startOffset,
+      reader.stats.size
+    )
+    if (chunk) {
+      yield chunk
+    }
+    return
+  }
+  const stream = reader
+    ? reader.handle.createReadStream({
+        start: startOffset,
+        end: reader.stats.size - 1,
+        autoClose: false
+      })
+    : createReadStream(filePath, { start: startOffset })
+  try {
+    for await (const chunk of stream) {
+      yield Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+    }
+  } finally {
+    if (!reader) {
+      await releaseJsonlReadStream(stream)
+    }
+  }
+}
+
 export async function* readJsonlLinesFromOffset(
   filePath: string,
   startOffset: number,
@@ -36,50 +74,36 @@ export async function* readJsonlLinesFromOffset(
   if (reader && reader.stats.size <= startOffset) {
     return
   }
-  const stream = reader
-    ? reader.handle.createReadStream({
-        start: startOffset,
-        end: reader.stats.size - 1,
-        autoClose: false
-      })
-    : createReadStream(filePath, { start: startOffset })
   const pending: Buffer[] = []
   let pendingBytes = 0
   let endOffset = startOffset
 
-  try {
-    for await (const rawChunk of stream) {
-      const chunk = Buffer.isBuffer(rawChunk) ? rawChunk : Buffer.from(rawChunk)
-      reader?.onChunk?.(chunk)
-      let searchFrom = 0
-      for (;;) {
-        const lineFeedIndex = chunk.indexOf(LINE_FEED, searchFrom)
-        if (lineFeedIndex === -1) {
-          break
-        }
-        const segment = chunk.subarray(searchFrom, lineFeedIndex)
-        pending.push(segment)
-        pendingBytes += segment.length
-        endOffset += pendingBytes + 1
-        const line = decodeLine(pending)
-        pending.length = 0
-        pendingBytes = 0
-        searchFrom = lineFeedIndex + 1
-        yield { line, endOffset, terminated: true }
+  for await (const chunk of readJsonlChunks(filePath, startOffset, reader)) {
+    reader?.onChunk?.(chunk)
+    let searchFrom = 0
+    for (;;) {
+      const lineFeedIndex = chunk.indexOf(LINE_FEED, searchFrom)
+      if (lineFeedIndex === -1) {
+        break
       }
-      if (searchFrom < chunk.length) {
-        const remainder = chunk.subarray(searchFrom)
-        pending.push(remainder)
-        pendingBytes += remainder.length
-      }
+      const segment = chunk.subarray(searchFrom, lineFeedIndex)
+      pending.push(segment)
+      pendingBytes += segment.length
+      endOffset += pendingBytes + 1
+      const line = decodeLine(pending)
+      pending.length = 0
+      pendingBytes = 0
+      searchFrom = lineFeedIndex + 1
+      yield { line, endOffset, terminated: true }
     }
+    if (searchFrom < chunk.length) {
+      const remainder = chunk.subarray(searchFrom)
+      pending.push(remainder)
+      pendingBytes += remainder.length
+    }
+  }
 
-    if (pendingBytes > 0) {
-      yield { line: decodeLine(pending), endOffset: endOffset + pendingBytes, terminated: false }
-    }
-  } finally {
-    if (!reader) {
-      await releaseJsonlReadStream(stream)
-    }
+  if (pendingBytes > 0) {
+    yield { line: decodeLine(pending), endOffset: endOffset + pendingBytes, terminated: false }
   }
 }

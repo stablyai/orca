@@ -1,6 +1,5 @@
 import { basename } from 'node:path'
-import { stat } from 'node:fs/promises'
-import type { Stats } from 'node:fs'
+import { readJsonlFileSnapshot, type JsonlFileSnapshot } from '../usage/jsonl-file-snapshot'
 import { readJsonlLinesFromOffset } from '../usage/jsonl-line-offsets'
 import {
   openJsonlFileReader,
@@ -36,11 +35,11 @@ export type CodexRolloutParseOptions = {
 }
 
 export async function getProcessedFileInfo(filePath: string): Promise<CodexUsageProcessedFile> {
-  const fileStat = await stat(filePath)
+  const fileStat = await readJsonlFileSnapshot(filePath)
   return processedFileInfo(filePath, fileStat)
 }
 
-function processedFileInfo(filePath: string, fileStat: Stats): CodexUsageProcessedFile {
+function processedFileInfo(filePath: string, fileStat: JsonlFileSnapshot): CodexUsageProcessedFile {
   return {
     path: filePath,
     mtimeMs: fileStat.mtimeMs,

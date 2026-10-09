@@ -67,14 +67,21 @@ vi.mock('node:fs/promises', async () => {
       const handle = await actual.open(...args)
       const createStream = handle.createReadStream.bind(handle)
       const readWindow = handle.read.bind(handle)
+      let streamActive = false
       vi.spyOn(handle, 'read').mockImplementation(async (...readArgs) => {
+        if (streamActive) {
+          return readWindow(...readArgs)
+        }
+        const filePath = String(args[0])
+        const digest = !parsingPaths.has(filePath)
+        onStreamOpen.current?.(filePath, digest)
         const result = await readWindow(...readArgs)
         const position = readArgs.at(-1)
         streamReads.push({
-          path: String(args[0]),
+          path: filePath,
           bytes: result.bytesRead,
           start: typeof position === 'number' ? position : 0,
-          digest: true
+          digest
         })
         return result
       })
@@ -88,7 +95,13 @@ vi.mock('node:fs/promises', async () => {
         }
         streamReads.push(read)
         onStreamOpen.current?.(filePath, read.digest)
+        streamActive = true
         const stream = createStream(options)
+        const finish = (): void => {
+          streamActive = false
+        }
+        stream.once('end', finish)
+        stream.once('close', finish)
         stream.on('data', (chunk: string | Buffer) => {
           read.bytes += typeof chunk === 'string' ? Buffer.byteLength(chunk) : chunk.length
         })
@@ -120,7 +133,7 @@ import { mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync, appendFileSync
 import { scanCodexUsageFiles } from './scanner'
 import type { CodexUsagePersistedFile } from './types'
 
-/** Mirrors BOUNDARY_WINDOW_BYTES in jsonl-file-checkpoint.ts. */
+/** Mirrors the checkpoint window in jsonl-file-checkpoint.ts. */
 const BOUNDARY_WINDOW_BYTES = 4096
 
 /** Enough records (~377 B each) to put a prefix past MIN_RESUMABLE_PREFIX_BYTES.
