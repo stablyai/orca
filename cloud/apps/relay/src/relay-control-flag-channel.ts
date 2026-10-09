@@ -1,6 +1,6 @@
-// Runtime switches in one Cloud Storage object per process kind (cells/<cellId>.json,
-// directors.json) in the `<project-id>-relay-control` bucket. The bucket name comes from the
-// metadata server, so the image needs no env or startup-script change.
+// Runtime switches in one Cloud Storage object per cell (cells/<cellId>.json) in the
+// `<project-id>-relay-control` bucket. The bucket name comes from the metadata server, so the
+// image needs no env or startup-script change.
 //
 // Rules: boot runs on defaults until the first good read; losing contact (404, 5xx,
 // timeout, malformed body) keeps the applied values; a generation below the applied one is
