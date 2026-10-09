@@ -61,7 +61,7 @@ describe('MessageRow control visibility', () => {
       />
     )
 
-    expect(screen.getByText('ts')).toBeInTheDocument()
+    expect(screen.getByText('TypeScript')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Copy code' }))
 
     await waitFor(() => {
