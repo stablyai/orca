@@ -29,6 +29,7 @@ import {
   codexStructuredLaunchHomeResolvers,
   prepareCodexRuntimeHomeForLaunch
 } from './codex-launch-preparation'
+import { resolveHostAgentBaseEnvironment } from '../runtime/structured-agent-shell-environment'
 import type { RuntimeDesktopWindowStatus } from '../../shared/runtime-types'
 import { ArtifactCloudService } from '../artifacts/artifact-cloud-service'
 import { SkillCloudService } from '../skills/skill-cloud-service'
@@ -205,6 +206,7 @@ export function configureRuntimeServices(runtime: OrcaRuntimeService): void {
   runtime.setCommitMessageAgentEnvironmentResolvers({
     // Why: Codex hooks/auth live in Orca's managed runtime home even for the default path, so every launch must resolve CODEX_HOME via runtime-home.
     prepareForCodexLaunch: prepareCodexRuntimeHomeForLaunch,
-    prepareForClaudeLaunch: (target) => state.claudeRuntimeAuth!.prepareForClaudeLaunch(target)
+    prepareForClaudeLaunch: (target) => state.claudeRuntimeAuth!.prepareForClaudeLaunch(target),
+    resolveBaseEnvironment: () => resolveHostAgentBaseEnvironment(store.getSettings())
   })
 }

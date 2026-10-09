@@ -378,7 +378,7 @@ describe('per-job path classification', () => {
       'src/main/runtime/agent-session-record-store.ts',
       'src/main/runtime/rpc/dispatcher.ts',
       'src/main/runtime/rpc/methods/ai-vault.ts',
-      'src/main/runtime/rpc/methods/browser-tab-create-schema.ts',
+      'src/shared/rpc-contract/browser-tab-create-params.ts',
       'src/main/runtime/rpc/methods/session-tabs.ts',
       'src/main/runtime/rpc/methods/structured-agent-session.ts',
       'src/main/runtime/rpc/methods/structured-agent-session-gate.ts',

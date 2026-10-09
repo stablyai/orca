@@ -19,7 +19,7 @@ import {
   type WorkspaceLayoutPartition,
   type WorkspaceLayoutRule,
   type WorkspaceLayoutViolation
-} from './workspace-layout-rules'
+} from '../../../shared/workspace-layout/workspace-layout-rules'
 import { closeLeafOrTab } from './terminal-topology-commit'
 import {
   emptyTerminalSessionProfile,

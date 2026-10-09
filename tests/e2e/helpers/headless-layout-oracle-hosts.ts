@@ -4,7 +4,7 @@
  * and a headless runtime's saved profile is the runtime layout the oracle checks.
  */
 
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer, type AddressInfo } from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
@@ -224,7 +224,8 @@ export async function addRepoWorktree(
   host: HeadlessOracleHost,
   client: RuntimeClient
 ): Promise<string> {
-  const repoPath = mkdtempSync(path.join(os.tmpdir(), 'layout-oracle-repo-'))
+  // The runtime lists a worktree by its real path; macOS's temp dir is behind a symlink.
+  const repoPath = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'layout-oracle-repo-')))
   host.cleanups.push(() => rmSync(repoPath, PROFILE_REMOVAL))
   writeFileSync(path.join(repoPath, 'README.md'), 'layout oracle\n')
   await git(repoPath, ['init', '-q'])

@@ -216,7 +216,7 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/shared/orchestration-rpc-contract.ts',
   'src/main/runtime/rpc/methods/agent-launch',
   'src/main/runtime/rpc/methods/ai-vault.ts',
-  'src/main/runtime/rpc/methods/browser-tab-create-schema',
+  'src/shared/rpc-contract/browser-tab-create-params',
   'src/main/runtime/rpc/methods/session-tabs.ts',
   'src/main/runtime/rpc/methods/structured-agent-session',
   'src/main/runtime/rpc/methods/terminal',

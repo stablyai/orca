@@ -10,7 +10,7 @@ import type { DirCache, FileExplorerOperationOwner, TreeNode } from './file-expl
 import type { FileExplorerRowProjection } from './file-explorer-row-projection'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 import { getFileExplorerOperationExecutionHostId } from './file-explorer-operation-owner'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { WorkspaceFileDragSource } from '@/lib/workspace-file-drag'
 
 type FileExplorerVirtualRowsProps = {
   virtualizer: Virtualizer<HTMLDivElement, Element>
@@ -83,22 +83,27 @@ function getDraggedPathOperationOwner(
 
 /** Null unless every dragged row came from one host: a mixed-owner drag has no
  *  single source to stamp, so it must fail closed at the drop target. */
-function resolveDragSourceExecutionHostId(
+function resolveDragSourceOwner(
   rowProjection: FileExplorerRowProjection,
   dirCache: Record<string, DirCache> | undefined,
   paths: readonly string[]
-): ExecutionHostId | null {
-  let sourceExecutionHostId: ExecutionHostId | null = null
+): Omit<WorkspaceFileDragSource, 'workspaceId'> | null {
+  let sourceOwner: Omit<WorkspaceFileDragSource, 'workspaceId'> | null = null
   for (const path of paths) {
-    const executionHostId = getFileExplorerOperationExecutionHostId(
-      getDraggedPathOperationOwner(rowProjection, dirCache, path)
-    )
-    if (!executionHostId || (sourceExecutionHostId && executionHostId !== sourceExecutionHostId)) {
+    const owner = getDraggedPathOperationOwner(rowProjection, dirCache, path)
+    const executionHostId = getFileExplorerOperationExecutionHostId(owner)
+    const runtimeEnvironmentId = owner?.kind === 'runtime' ? owner.environmentId : undefined
+    if (
+      !executionHostId ||
+      (sourceOwner &&
+        (executionHostId !== sourceOwner.executionHostId ||
+          runtimeEnvironmentId !== sourceOwner.runtimeEnvironmentId))
+    ) {
       return null
     }
-    sourceExecutionHostId = executionHostId
+    sourceOwner = { executionHostId, ...(runtimeEnvironmentId ? { runtimeEnvironmentId } : {}) }
   }
-  return sourceExecutionHostId
+  return sourceOwner
 }
 
 /** Renders virtual and inline-input rows using display-relative indentation but worktree-relative operation paths. */
@@ -155,8 +160,8 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
   const visibleSelectionCount = rowProjection.countVisiblePaths(selectedPaths)
   // Resolved at dragstart, not per render: the virtualizer re-renders on every
   // scroll frame and only a drag ever reads this.
-  const resolveDragSourceHostId = (paths: readonly string[]): ExecutionHostId | null =>
-    resolveDragSourceExecutionHostId(rowProjection, dirCache, paths)
+  const resolveSourceOwner = (paths: readonly string[]) =>
+    resolveDragSourceOwner(rowProjection, dirCache, paths)
 
   return (
     <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>
@@ -237,7 +242,7 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
               deleteShortcutLabel={deleteShortcutLabel}
               connectionId={connectionId}
               sourceWorkspaceId={sourceWorkspaceId}
-              resolveDragSourceHostId={resolveDragSourceHostId}
+              resolveDragSourceOwner={resolveSourceOwner}
               runtimeDownloadContext={runtimeDownloadContext}
               supportsFolderDownload={supportsFolderDownload}
               canOpenInOrcaBrowser={canOpenInOrcaBrowser(n.path)}

@@ -1,13 +1,6 @@
-import type {
-  TerminalMultiplexCleanupStage,
-  TerminalMultiplexConnection,
-  TerminalMultiplexFlowControlStage
-} from './terminal-multiplex-connection'
+import type { TerminalMultiplexConnection } from './terminal-multiplex-connection'
 
-export function installMultiplexCleanup(
-  build: TerminalMultiplexFlowControlStage
-): asserts build is TerminalMultiplexCleanupStage {
-  const state = build as TerminalMultiplexConnection
+export function installMultiplexCleanup(state: TerminalMultiplexConnection): void {
   const { runtime, streams, pendingPtyWaitControllers, emit, signal } = state
   state.detachStream = (streamId: number, endVerdict, releaseRemoteDesktopDriver = true): void => {
     const stream = streams.get(streamId)
