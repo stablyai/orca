@@ -4,6 +4,7 @@ import type { PastedImage } from '../types'
 import { fitRow, imageNumbers, pngSize } from './layout'
 
 const POLL_MS = 200
+const RETRY_MS = 1000
 const MAX_IMAGES = 4
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024
 let images: PastedImage[] = []
@@ -12,7 +13,7 @@ let directory: string | undefined
 let tmpRoot: string | null | undefined
 let shownKey: string | undefined
 let checking = false
-const cache = new Map<number, PastedImage>()
+const cache = new Map<number, { image: PastedImage; retryAt: number }>()
 
 function join(root: string, ...parts: string[]): string {
   const separator = root.includes('\\') ? '\\' : '/'
@@ -63,14 +64,16 @@ async function describe(
     return unavailable
   }
   const cached = cache.get(n)
-  if (cached) {
-    return cached
+  const now = await $.clock.now()
+  if (cached && (cached.image.png !== null || now < cached.retryAt)) {
+    return cached.image
   }
+  // Failed reads expire so a partially written or temporarily inaccessible PNG can recover.
+  cache.set(n, { image: unavailable, retryAt: now + RETRY_MS })
   try {
     const path = join(dir, `${n}.png`)
     const stat = await $.fs.stat(path)
     if (stat.kind !== 'file' || stat.isLink || stat.size > MAX_IMAGE_BYTES) {
-      cache.set(n, unavailable)
       return unavailable
     }
     const { base64 } = await $.fs.read(path, { as: 'bytes' })
@@ -81,7 +84,7 @@ async function describe(
     const size = pngSize(base64)
     const image =
       size && size.width * size.height <= 8_000_000 ? { n, png: base64, size } : unavailable
-    cache.set(n, image)
+    cache.set(n, { image, retryAt: now + RETRY_MS })
     return image
   } catch {
     return unavailable

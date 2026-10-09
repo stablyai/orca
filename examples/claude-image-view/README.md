@@ -24,7 +24,7 @@ For SSH or WSL, place this directory on the execution host and pass its **host-s
 
 - Previews cover the first four distinct image tags, with PNGs limited to 2 MiB each and 8 million pixels. Large, unreadable, invalid, or missing PNGs show `no preview`; the original attachment is unaffected.
 - Narrow or short prompt bands show only the tiles that fit. Other attachments still reach Claude normally.
-- The draft is checked every 200 ms because image paste does not reliably emit a prompt edit event. Successfully read PNGs are cached only while their tags remain in the current session's draft. Session changes discard the cache even when image numbers are reused.
+- The draft is checked every 200 ms because image paste does not reliably emit a prompt edit event. Failed previews retry at most once per second so a PNG can finish writing or become readable. Successfully read PNGs are cached only while their tags remain in the current session's draft. Removing a tag or changing sessions discards both cached bytes and retry delays, even when image numbers are reused.
 - The mod reads only the active session's numbered PNG cache entries. It refuses symlink image files, makes no network requests, writes no files, and does not modify the prompt. On macOS/Linux it runs `id -u` to locate the default cache root if `CLAUDE_CODE_TMPDIR` is absent.
 - Claude Desktop is unaffected. Other agents and Orca's native chat composer retain their existing behavior.
 

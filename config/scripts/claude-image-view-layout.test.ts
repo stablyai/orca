@@ -31,4 +31,12 @@ describe('Orca image-view draft and layout boundaries', () => {
     expect(pngSize(btoa(String.fromCharCode(...bytes)))).toBeNull()
     expect(pngSize('invalid base64')).toBeNull()
   })
+
+  it('waits for the PNG end chunk even when the dimensions are already readable', () => {
+    const png =
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4AWPQ0PjwHwAD/AJA63QQFQAAAABJRU5ErkJggg=='
+    expect(pngSize(png)).toEqual({ width: 1, height: 1 })
+    expect(pngSize(png.slice(0, 48))).toBeNull()
+    expect(pngSize(png.slice(0, 40) + '!'.repeat(24))).toBeNull()
+  })
 })

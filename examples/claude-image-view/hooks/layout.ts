@@ -26,7 +26,7 @@ export function imageNumbers(draft: string): number[] {
   return [...seen]
 }
 
-/** Width and height from a PNG's IHDR chunk, or null when the bytes aren't a PNG. */
+/** Width and height from a PNG's IHDR chunk, or null for invalid or incomplete bytes. */
 export function pngSize(base64: string): Size | null {
   // 24 bytes cover the signature and IHDR's width and height; 32 base64 chars decode to exactly 24.
   const prefix = base64.slice(0, 32)
@@ -39,6 +39,17 @@ export function pngSize(base64: string): Size | null {
     return null
   }
   if (head[12] !== 73 || head[13] !== 72 || head[14] !== 68 || head[15] !== 82) {
+    return null
+  }
+  // A complete PNG ends with an empty IEND chunk, even when its IHDR was written earlier.
+  let end: string
+  try {
+    end = atob(base64.slice(-24)).slice(-12)
+  } catch {
+    return null
+  }
+  const iend = [0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130]
+  if (iend.some((byte, i) => end.charCodeAt(i) !== byte)) {
     return null
   }
   const view = new DataView(head.buffer, head.byteOffset, head.byteLength)
