@@ -1,5 +1,4 @@
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
-import { capturePassiveWorktreeMetaOwner } from '@/store/slices/worktrees/listing/worktree-owner-settings'
 import { captureNotificationTransportOwner } from '@/attention/notification-subject-owner'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { useAppStore } from '@/store'
@@ -20,14 +19,6 @@ import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
 /** PTY visibility reporting, active-PTY binding, and the spawn/rebind/bell handlers that follow it. */
 export function installPanePtyVisibilityBind(session: ConnectPanePtySession): void {
-  const workspaceOwner = captureNotificationTransportOwner(session.transport)
-  const metadataOwner = workspaceOwner
-    ? capturePassiveWorktreeMetaOwner(
-        useAppStore.getState(),
-        session.deps.worktreeId,
-        workspaceOwner
-      )
-    : undefined
   session.observeTerminalGitHubPRLink = createTerminalGitHubPRLinkDetector()
   session.reportPanePtyVisibility = (ptyId: string | null | undefined, visible: boolean): void => {
     if (!ptyId || isRemoteRuntimePtyId(ptyId)) {
@@ -238,7 +229,7 @@ export function installPanePtyVisibilityBind(session: ConnectPanePtySession): vo
     // did not just forward focus/control input. Treat the BEL as authoritative
     // PTY output here; any product-side suppression should be an explicit UX
     // decision higher up, not a transport-layer guess.
-    session.deps.markWorktreeUnread(session.deps.worktreeId, metadataOwner ?? null)
+    session.deps.markWorktreeUnread(session.deps.worktreeId, session.worktreeMetadataOwner)
     session.deps.markTerminalTabUnread(session.deps.tabId, 'terminal-bell')
     if (useAppStore.getState().settings?.experimentalTerminalAttention === true) {
       session.deps.markTerminalPaneUnread(session.cacheKey, 'terminal-bell')

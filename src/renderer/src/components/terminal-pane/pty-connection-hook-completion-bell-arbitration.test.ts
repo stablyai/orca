@@ -1,5 +1,6 @@
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import {
   AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS,
@@ -133,6 +134,36 @@ vi.mock('./pty-dispatcher', async (importOriginal) => {
 
 function createDeps(overrides: Record<string, unknown> = {}) {
   return buildPaneConnectionDeps(() => mockStoreState, overrides)
+}
+
+const KEYDOWN_WORKTREE_ID = 'repo1::/tmp/wt-1'
+const KEYDOWN_METADATA_OWNER = {
+  executionHostId: 'local',
+  runtimeEnvironmentId: null,
+  expectedInstanceId: 'keydown-instance'
+} as const
+
+function createOwnedKeydownTransport() {
+  mockStoreState.activeWorktreeId = KEYDOWN_WORKTREE_ID
+  mockStoreState.tabsByWorktree = {
+    [KEYDOWN_WORKTREE_ID]: mockStoreState.tabsByWorktree['wt-1']
+  }
+  mockStoreState.worktreesByRepo = {
+    repo1: [
+      makeWorktree({
+        id: KEYDOWN_WORKTREE_ID,
+        repoId: 'repo1',
+        path: '/tmp/wt-1',
+        hostId: 'local',
+        instanceId: KEYDOWN_METADATA_OWNER.expectedInstanceId
+      })
+    ]
+  }
+  return {
+    ...createMockTransport(),
+    getExecutionHostId: vi.fn(() => 'local'),
+    getRuntimeEnvironmentId: vi.fn(() => null)
+  }
 }
 
 // Why: activeRuntimeEnvironmentId exercises the remote-runtime path where the renderer still owns OSC 9999 status.
@@ -449,13 +480,13 @@ describe('connectPanePty', () => {
   // Why: a DOM keydown signals "user is here"; raw xterm onData is lower-level (can include terminal replies/control bytes).
   it('clears tab and worktree unread on real keydown', async () => {
     const { connectPanePty } = await import('./pty-connection')
-    const transport = createMockTransport()
+    const transport = createOwnedKeydownTransport()
     transportFactoryQueue.push(transport)
 
     const pane = createPane(1)
     pane.terminal.element = createPaneContainer()
     const manager = createManager(1)
-    const deps = createDeps()
+    const deps = createDeps({ worktreeId: KEYDOWN_WORKTREE_ID })
 
     connectPanePty(pane as never, manager as never, deps as never)
 
@@ -469,20 +500,23 @@ describe('connectPanePty', () => {
 
     expect(deps.clearTerminalTabUnread).toHaveBeenCalledWith('tab-1')
     expect(deps.clearTerminalPaneUnread).toHaveBeenCalledWith(makePaneKey('tab-1', LEAF_1))
-    expect(deps.clearWorktreeUnread).toHaveBeenCalledWith('wt-1')
+    expect(deps.clearWorktreeUnread).toHaveBeenCalledWith(
+      KEYDOWN_WORKTREE_ID,
+      KEYDOWN_METADATA_OWNER
+    )
     expect(transport.sendInput).not.toHaveBeenCalled()
   })
 
   it('clears tab, pane, and worktree unread on plain Escape keydown', async () => {
     // Why: plain Escape is real input (\x1b) — a genuine "user is here" signal; the interrupt-intent early return must not skip the unread clears.
     const { connectPanePty } = await import('./pty-connection')
-    const transport = createMockTransport()
+    const transport = createOwnedKeydownTransport()
     transportFactoryQueue.push(transport)
 
     const pane = createPane(1)
     pane.terminal.element = createPaneContainer()
     const manager = createManager(1)
-    const deps = createDeps()
+    const deps = createDeps({ worktreeId: KEYDOWN_WORKTREE_ID })
 
     connectPanePty(pane as never, manager as never, deps as never)
 
@@ -497,7 +531,92 @@ describe('connectPanePty', () => {
 
     expect(deps.clearTerminalTabUnread).toHaveBeenCalledWith('tab-1')
     expect(deps.clearTerminalPaneUnread).toHaveBeenCalledWith(makePaneKey('tab-1', LEAF_1))
-    expect(deps.clearWorktreeUnread).toHaveBeenCalledWith('wt-1')
+    expect(deps.clearWorktreeUnread).toHaveBeenCalledWith(
+      KEYDOWN_WORKTREE_ID,
+      KEYDOWN_METADATA_OWNER
+    )
+  })
+
+  it('keeps bell and keydown metadata tied to the occupant captured before connect', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const { createTestStore } = await import('@/store/slices/store-test-helpers')
+    const transport = createOwnedKeydownTransport()
+    transportFactoryQueue.push(transport)
+    const store = createTestStore()
+    const row = makeWorktree({
+      id: KEYDOWN_WORKTREE_ID,
+      repoId: 'repo1',
+      hostId: 'local',
+      instanceId: KEYDOWN_METADATA_OWNER.expectedInstanceId
+    })
+    store.setState({ worktreesByRepo: { repo1: [row] } })
+    const updateMeta = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(window.api, 'worktrees', { value: { updateMeta }, configurable: true })
+    const pane = createPane(1)
+    pane.terminal.element = createPaneContainer()
+    const deps = createDeps({
+      worktreeId: KEYDOWN_WORKTREE_ID,
+      markWorktreeUnread: vi.fn(store.getState().markWorktreeUnread),
+      clearWorktreeUnread: vi.fn(store.getState().clearWorktreeUnread)
+    })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: These fixtures supply the terminal, manager and action fields read by this binding; rendering is not invoked.
+    connectPanePty(pane as never, createManager(1) as never, deps as never)
+    const bellHandler = createdTransportOptions[0]?.onBell
+    if (typeof bellHandler !== 'function') {
+      throw new Error('Expected a bell handler')
+    }
+    const keydown = new Event('keydown')
+    Object.defineProperties(keydown, {
+      key: { value: 'a' },
+      repeat: { value: false },
+      ctrlKey: { value: false },
+      metaKey: { value: false },
+      shiftKey: { value: false }
+    })
+    const keyTarget = pane.terminal.element
+    if (!(keyTarget instanceof EventTarget)) {
+      throw new Error('Expected a terminal key target')
+    }
+
+    bellHandler()
+    expect(store.getState().worktreesByRepo.repo1[0].isUnread).toBe(true)
+    expect(deps.markWorktreeUnread).toHaveBeenLastCalledWith(
+      KEYDOWN_WORKTREE_ID,
+      KEYDOWN_METADATA_OWNER
+    )
+    keyTarget.dispatchEvent(keydown)
+    expect(store.getState().worktreesByRepo.repo1[0].isUnread).toBe(false)
+    expect(updateMeta).toHaveBeenCalledTimes(2)
+    expect(updateMeta).toHaveBeenLastCalledWith({
+      worktreeId: KEYDOWN_WORKTREE_ID,
+      executionHostId: 'local',
+      expectedInstanceId: KEYDOWN_METADATA_OWNER.expectedInstanceId,
+      updates: { isUnread: false }
+    })
+
+    const replacement = { ...row, instanceId: 'replacement-instance', isUnread: true }
+    store.setState({ worktreesByRepo: { repo1: [replacement] } })
+    mockStoreState.worktreesByRepo = { repo1: [replacement] }
+    keyTarget.dispatchEvent(keydown)
+    expect(store.getState().worktreesByRepo.repo1[0].isUnread).toBe(true)
+    expect(deps.clearWorktreeUnread).toHaveBeenLastCalledWith(
+      KEYDOWN_WORKTREE_ID,
+      KEYDOWN_METADATA_OWNER
+    )
+
+    const readReplacement = { ...replacement, isUnread: false }
+    store.setState({ worktreesByRepo: { repo1: [readReplacement] } })
+    mockStoreState.worktreesByRepo = { repo1: [readReplacement] }
+    bellHandler()
+    expect(store.getState().worktreesByRepo.repo1[0].isUnread).toBe(false)
+    expect(deps.markWorktreeUnread).toHaveBeenLastCalledWith(
+      KEYDOWN_WORKTREE_ID,
+      KEYDOWN_METADATA_OWNER
+    )
+    expect(updateMeta).toHaveBeenCalledTimes(2)
+    expect(deps.clearTerminalTabUnread).toHaveBeenCalledWith('tab-1')
+    expect(deps.clearTerminalPaneUnread).toHaveBeenCalledWith(makePaneKey('tab-1', LEAF_1))
+    expect(deps.markTerminalTabUnread).toHaveBeenCalledWith('tab-1', 'terminal-bell')
   })
 
   it('does not clear pane attention from raw onData after a bell', async () => {

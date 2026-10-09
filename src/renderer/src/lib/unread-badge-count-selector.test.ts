@@ -7,6 +7,7 @@ import {
   TEST_REPO
 } from '@/store/slices/store-test-helpers'
 import { makeFolderWorkspace } from '@/store/slices/worktrees-slice-test-fixtures'
+import { capturePassiveWorktreeMetaOwner } from '@/store/slices/worktrees/listing/worktree-owner-settings'
 import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
@@ -253,18 +254,59 @@ describe('Dock unread count against the sidebar (#23363)', () => {
       const store = createTestStore()
       const selectCount = createUnreadBadgeCountSelector()
       store.setState({
-        repos: [{ ...TEST_REPO, executionHostId: 'local' }],
+        repos: [
+          { ...TEST_REPO, executionHostId: 'local' },
+          { ...TEST_REPO, executionHostId: 'ssh:ssh-1', connectionId: 'ssh-1' }
+        ],
         worktreesByRepo: {
           repo1: [
-            makeWorktree({ id: BELL_WORKTREE, repoId: 'repo1', hostId: 'local' }),
-            makeWorktree({ id: BELL_WORKTREE, repoId: 'repo1', hostId: 'ssh:ssh-1' })
+            makeWorktree({
+              id: BELL_WORKTREE,
+              repoId: 'repo1',
+              hostId: 'local',
+              instanceId: 'local-instance'
+            }),
+            makeWorktree({
+              id: BELL_WORKTREE,
+              repoId: 'repo1',
+              hostId: 'ssh:ssh-1',
+              instanceId: 'ssh-instance'
+            })
           ]
         }
       })
       store.getState().markWorktreeUnread(BELL_WORKTREE)
+      expect(store.getState().worktreesByRepo.repo1.map((row) => row.isUnread)).toEqual([
+        false,
+        false
+      ])
+      expect(selectCount(store.getState())).toBe(0)
+
+      const localOwner = capturePassiveWorktreeMetaOwner(store.getState(), BELL_WORKTREE, {
+        executionHostId: 'local',
+        runtimeEnvironmentId: null
+      })
+      const sshOwner = capturePassiveWorktreeMetaOwner(store.getState(), BELL_WORKTREE, {
+        executionHostId: 'ssh:ssh-1',
+        runtimeEnvironmentId: null
+      })
+      expect(localOwner.expectedInstanceId).toBe('local-instance')
+      expect(sshOwner.expectedInstanceId).toBe('ssh-instance')
+      store.getState().markWorktreeUnread(BELL_WORKTREE, localOwner)
+      expect(store.getState().worktreesByRepo.repo1.map((row) => row.isUnread)).toEqual([
+        true,
+        false
+      ])
+      store.getState().markWorktreeUnread(BELL_WORKTREE, sshOwner)
+      expect(store.getState().worktreesByRepo.repo1.map((row) => row.isUnread)).toEqual([
+        true,
+        true
+      ])
       expect(selectCount(store.getState())).toBe(1)
 
       store.getState().setVisibleWorkspaceHostIds(['local'])
+      expect(selectCount(store.getState())).toBe(1)
+      store.getState().setVisibleWorkspaceHostIds(['ssh:ssh-1'])
       expect(selectCount(store.getState())).toBe(1)
     })
   })
