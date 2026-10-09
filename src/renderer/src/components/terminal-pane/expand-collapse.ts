@@ -167,6 +167,19 @@ export function createExpandCollapseActions(state: ExpandCollapseState) {
     applyExpandedLayoutTo(paneId, state)
   }
 
+  const readUnexpandedLayout = (find: () => number | null): number | null => {
+    const paneId = state.expandedPaneIdRef.current
+    if (paneId === null) {
+      return find()
+    }
+    restoreExpandedLayout()
+    try {
+      return find()
+    } finally {
+      applyExpandedLayoutTo(paneId, state)
+    }
+  }
+
   const toggleExpandPane = (paneId: number): void => {
     const manager = state.managerRef.current
     if (!manager) {
@@ -201,6 +214,7 @@ export function createExpandCollapseActions(state: ExpandCollapseState) {
   return {
     setExpandedPane,
     restoreExpandedLayout,
+    readUnexpandedLayout,
     refreshPaneSizes,
     syncExpandedLayout,
     toggleExpandPane

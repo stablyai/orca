@@ -61,6 +61,7 @@ export function createTerminalKeyboardEventHandlers(context: EventContext) {
     expandedPaneIdRef,
     setExpandedPane,
     restoreExpandedLayout,
+    readUnexpandedLayout,
     refreshPaneSizes,
     persistLayoutSnapshot,
     toggleExpandPane,
@@ -296,12 +297,16 @@ export function createTerminalKeyboardEventHandlers(context: EventContext) {
     }
 
     dispatchTerminalShortcutAction(action, e, manager, {
+      shortcutPlatform,
+      keybindings,
+      terminalShortcutPolicy,
       tabId,
       worktreeId,
       fallbackCwd,
       expandedPaneIdRef,
       setExpandedPane,
       restoreExpandedLayout,
+      readUnexpandedLayout,
       refreshPaneSizes,
       persistLayoutSnapshot,
       toggleExpandPane,

@@ -85,6 +85,7 @@ function createHarness(bindings?: Map<number, ShortcutBinding>): {
     expandedPaneIdRef: { current: null },
     setExpandedPane: vi.fn(),
     restoreExpandedLayout: vi.fn(),
+    readUnexpandedLayout: (find: () => number | null) => find(),
     refreshPaneSizes: vi.fn(),
     persistLayoutSnapshot: vi.fn(),
     toggleExpandPane: vi.fn(),
@@ -441,6 +442,7 @@ describe('Windows IME keyboard ownership', () => {
         ...harness.deps,
         setExpandedPane: actions.setExpandedPane,
         restoreExpandedLayout: actions.restoreExpandedLayout,
+        readUnexpandedLayout: actions.readUnexpandedLayout,
         refreshPaneSizes: actions.refreshPaneSizes,
         toggleExpandPane: actions.toggleExpandPane
       })

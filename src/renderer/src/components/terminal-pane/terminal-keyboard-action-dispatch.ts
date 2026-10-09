@@ -8,11 +8,27 @@ import {
   markTerminalPinnedViewport,
   syncTerminalScrollIntentFromViewport
 } from '@/lib/pane-manager/terminal-scroll-intent'
+import {
+  claimSpatialPaneFocusOrWorktreeHistory,
+  isSpatialFocusDirection
+} from '@/lib/pane-manager/pane-spatial-focus'
+import { dispatchAppCommand } from '@/lib/app-command-dispatch'
+import {
+  keybindingMatchesAction,
+  type KeybindingOverrides,
+  type KeybindingPlatform,
+  type TerminalShortcutPolicy
+} from '../../../../shared/keybindings'
+import { resolveWorktreeHistoryShortcut } from '../../../../shared/spatial-pane-shortcut-policy'
 import type { resolveTerminalKeyboardShortcutAction } from './terminal-keyboard-shortcut-matching'
 
 type TerminalShortcutAction = NonNullable<ReturnType<typeof resolveTerminalKeyboardShortcutAction>>
 
 type ActionDispatchContext = {
+  shortcutPlatform: KeybindingPlatform
+  keybindings?: KeybindingOverrides
+  terminalShortcutPolicy?: TerminalShortcutPolicy
+  readUnexpandedLayout: (find: () => number | null) => number | null
   tabId: string
   worktreeId: string
   fallbackCwd: string
@@ -135,6 +151,44 @@ export function dispatchTerminalShortcutAction(
     return
   }
   if (action.type === 'focusPane') {
+    if (isSpatialFocusDirection(action.direction)) {
+      if (event.defaultPrevented) {
+        return
+      }
+      claimSpatialPaneFocusOrWorktreeHistory(
+        event,
+        manager,
+        action.direction,
+        () => {
+          const historyAction = resolveWorktreeHistoryShortcut((actionId) =>
+            keybindingMatchesAction(
+              actionId,
+              event,
+              context.shortcutPlatform,
+              context.keybindings,
+              {
+                context: 'terminal',
+                terminalShortcutPolicy: context.terminalShortcutPolicy
+              }
+            )
+          )
+          return historyAction !== null && dispatchAppCommand(historyAction, 'terminal-keybinding')
+        },
+        {
+          maxSharedBorderGap: manager.getPaneDividerHitSize() + 6,
+          readLayout: context.readUnexpandedLayout,
+          beforeFocus: () => {
+            if (expandedPaneIdRef.current === null) {
+              return
+            }
+            restoreExpandedLayout()
+            setExpandedPane(null)
+            refreshPaneSizes(false)
+          }
+        }
+      )
+      return
+    }
     const panes = manager.getPanes()
     if (panes.length < 2) {
       return

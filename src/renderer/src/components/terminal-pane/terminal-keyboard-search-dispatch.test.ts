@@ -9,12 +9,14 @@ function createContext(searchOpen: boolean) {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Search dispatch does not access the manager; an unexpected access must fail the test.
   const manager = {} as PaneManager
   const context: Parameters<typeof dispatchTerminalShortcutAction>[3] = {
+    shortcutPlatform: 'linux' as const,
     tabId: 'tab-1',
     worktreeId: 'folder-1',
     fallbackCwd: '',
     expandedPaneIdRef: { current: null },
     setExpandedPane: vi.fn(),
     restoreExpandedLayout: vi.fn(),
+    readUnexpandedLayout: (find: () => number | null) => find(),
     refreshPaneSizes: vi.fn(),
     persistLayoutSnapshot: vi.fn(),
     toggleExpandPane: vi.fn(),
