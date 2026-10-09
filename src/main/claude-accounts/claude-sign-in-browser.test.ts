@@ -1,9 +1,9 @@
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { prepareClaudeSignInBrowser } from './claude-sign-in-browser'
+import { isClaudeLocalSignInLink, prepareClaudeSignInBrowser } from './claude-sign-in-browser'
 
 const LINK =
   'https://claude.com/cai/oauth/authorize?code=true&redirect_uri=http%3A%2F%2Flocalhost%3A5000%2Fcallback&state=s'
@@ -41,20 +41,6 @@ describe('prepareClaudeSignInBrowser', () => {
     }
   )
 
-  it.skipIf(process.platform === 'win32')(
-    'refuses a link that is not a localhost sign-in',
-    async () => {
-      const home = folder()
-      const browser = await prepareClaudeSignInBrowser({
-        windowsPath: home,
-        linuxPath: null,
-        wslDistro: null
-      })
-      writeFileSync(`${browser!.path}.link`, 'https://evil.test/oauth/authorize')
-      await expect(browser!.nextLink(new AbortController().signal)).resolves.toBeNull()
-    }
-  )
-
   it.skipIf(process.platform === 'win32')('stops waiting once the sign-in ends', async () => {
     const home = folder()
     const browser = await prepareClaudeSignInBrowser({
@@ -80,12 +66,45 @@ describe('prepareClaudeSignInBrowser', () => {
     expect(existsSync(join(home, '.orca-sign-in-browser'))).toBe(true)
   })
 
-  it('leaves a Windows host login to open the browser itself', async () => {
+  it('refuses to catch a Windows host login, whose Claude cannot run the stand-in', async () => {
     Object.defineProperty(process, 'platform', { value: 'win32' })
     const home = folder()
     await expect(
       prepareClaudeSignInBrowser({ windowsPath: home, linuxPath: null, wslDistro: null })
-    ).resolves.toBeNull()
+    ).rejects.toThrow('Claude sign-in failed. Please try again.')
     expect(readdirSync(home)).toEqual([])
+  })
+})
+
+describe('isClaudeLocalSignInLink', () => {
+  const link = (base: string, redirect: string): string =>
+    `${base}?redirect_uri=${encodeURIComponent(redirect)}&state=s`
+
+  it('accepts the link Claude hands BROWSER', () => {
+    expect(isClaudeLocalSignInLink(LINK)).toBe(true)
+    expect(
+      isClaudeLocalSignInLink(
+        link('https://claude.ai/oauth/authorize', 'http://127.0.0.1:1/callback')
+      )
+    ).toBe(true)
+  })
+
+  it('refuses the printed pasted-code link and anything not from Claude', () => {
+    const authorize = 'https://claude.com/cai/oauth/authorize'
+    expect(
+      isClaudeLocalSignInLink(link(authorize, 'https://platform.claude.com/oauth/code/callback'))
+    ).toBe(false)
+    expect(isClaudeLocalSignInLink(link(authorize, 'http://attacker.test/callback'))).toBe(false)
+    expect(
+      isClaudeLocalSignInLink(
+        link('https://claude.com.evil.test/oauth/authorize', 'http://localhost:1/callback')
+      )
+    ).toBe(false)
+    expect(
+      isClaudeLocalSignInLink(
+        link('http://claude.com/cai/oauth/authorize', 'http://localhost:1/callback')
+      )
+    ).toBe(false)
+    expect(isClaudeLocalSignInLink('not a url')).toBe(false)
   })
 })

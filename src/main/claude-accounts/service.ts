@@ -1,7 +1,6 @@
 import type {
   ClaudeAccountSignIn,
   ClaudeRateLimitAccountsState,
-  ClaudeSignInOptions,
   ClaudeSignInRequest
 } from '../../shared/managed-account-types'
 import { ClaudeAccountRegistration } from './claude-account-registration'
@@ -46,16 +45,16 @@ export class ClaudeAccountService {
   /** A hidden `claude auth login` opens the browser and writes into the new account's folder. */
   addAccount(
     target: ClaudeAccountSelectionTarget = {},
-    options: ClaudeSignInOptions = {}
+    copyLink = false
   ): Promise<ClaudeRateLimitAccountsState> {
-    return this.signInHidden({ runtime: target.runtime, wslDistro: target.wslDistro }, options)
+    return this.signInHidden({ runtime: target.runtime, wslDistro: target.wslDistro }, copyLink)
   }
 
   reauthenticateAccount(
     accountId: string,
-    options: ClaudeSignInOptions = {}
+    copyLink = false
   ): Promise<ClaudeRateLimitAccountsState> {
-    return this.signInHidden({ accountId }, options)
+    return this.signInHidden({ accountId }, copyLink)
   }
 
   /** The latest hidden sign-in's link once Claude hands it over; null if it ends without one. */
@@ -106,15 +105,12 @@ export class ClaudeAccountService {
 
   private signInHidden(
     request: ClaudeSignInRequest,
-    options: ClaudeSignInOptions
+    copyLink: boolean
   ): Promise<ClaudeRateLimitAccountsState> {
     this.supersedePendingLogin()
-    let settleLink: (signInLink: string | null) => void = () => {}
     // Why set before queueing: the renderer asks for the link right after starting the sign-in.
-    const signInLink = new Promise<string | null>((resolve) => {
-      settleLink = resolve
-    })
-    this.pendingSignInLink = signInLink
+    const signInLink = copyLink ? Promise.withResolvers<string | null>() : null
+    this.pendingSignInLink = signInLink?.promise ?? null
     return this.serializeMutation(async () => {
       try {
         return await this.registration.signIn(request, (folder) =>
@@ -126,13 +122,12 @@ export class ClaudeAccountService {
                 this.cancelPendingClaudeLogin = cancel
               }
             },
-            options.copyLink ? settleLink : undefined
+            signInLink?.resolve
           )
         )
       } finally {
-        // Why here too: a sign-in that fails before Claude starts never reaches the session.
-        settleLink(null)
-        if (this.pendingSignInLink === signInLink) {
+        signInLink?.resolve(null)
+        if (signInLink && this.pendingSignInLink === signInLink.promise) {
           this.pendingSignInLink = null
         }
       }

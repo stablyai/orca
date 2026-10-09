@@ -90,16 +90,7 @@ function fixture(accounts: ClaudeManagedAccount[] = [account('a'), account('b')]
     runtimeAuth,
     runLogin
   )
-  return {
-    root,
-    home,
-    service,
-    runtimeAuth,
-    runLogin,
-    signIn,
-    covered,
-    settings: () => settings
-  }
+  return { root, home, service, runtimeAuth, runLogin, signIn, covered, settings: () => settings }
 }
 
 // The id the last sign-in prepared a folder for.
@@ -246,7 +237,7 @@ describe('ClaudeAccountService', () => {
         f.signIn(newId(f), 'new@example.test')
         return ''
       })
-      const adding = f.service.addAccount({ runtime: 'host' }, { copyLink: true })
+      const adding = f.service.addAccount({ runtime: 'host' }, true)
       copied = await f.service.waitForSignInLink()
       await adding
       expect(existsSync(join(f.home(newId(f)), '.orca-sign-in-browser'))).toBe(false)
@@ -261,16 +252,35 @@ describe('ClaudeAccountService', () => {
       configDir: join(f.root, id, 'missing'),
       readPath: join(f.root, id, 'missing')
     }))
-    const adding = f.service.addAccount({ runtime: 'host' }, { copyLink: true })
+    const adding = f.service.addAccount({ runtime: 'host' }, true)
     await expect(f.service.waitForSignInLink()).resolves.toBeNull()
     await expect(adding).rejects.toThrow('Claude sign-in failed. Please try again.')
     expect(f.runLogin).not.toHaveBeenCalled()
   })
 
+  it.skipIf(process.platform === 'win32')(
+    'ends a copy-link sign-in when Claude hands BROWSER something other than a sign-in link',
+    async () => {
+      const f = fixture()
+      f.runLogin.mockImplementationOnce(
+        (_args, _config, _timeoutMs, options) =>
+          new Promise((_resolve, reject) => {
+            writeFileSync(`${options!.browser}.link`, 'https://example.test/not-a-sign-in')
+            options?.signal?.addEventListener('abort', () =>
+              reject(new Error('Claude sign-in was cancelled.'))
+            )
+          })
+      )
+      const adding = f.service.addAccount({ runtime: 'host' }, true)
+      await expect(f.service.waitForSignInLink()).resolves.toBeNull()
+      await expect(adding).rejects.toThrow('Claude sign-in failed. Please try again.')
+    }
+  )
+
   it('reports no link when a copy-link sign-in ends before Claude hands one over', async () => {
     const f = fixture()
     f.runLogin.mockRejectedValueOnce(new Error('Claude sign-in was cancelled.'))
-    const adding = f.service.reauthenticateAccount('b', { copyLink: true })
+    const adding = f.service.reauthenticateAccount('b', true)
     await expect(f.service.waitForSignInLink()).resolves.toBeNull()
     await expect(adding).rejects.toThrow('cancelled')
   })
