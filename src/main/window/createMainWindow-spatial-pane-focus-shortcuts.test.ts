@@ -100,7 +100,8 @@ describe('createMainWindow spatial pane focus shortcuts', () => {
       .mocked(ipcMain.on)
       .mock.calls.find(([channel]) => channel === 'ui:setTerminalInputFocused')?.[1]
     expect(setFocusedListener).toBeTypeOf('function')
-    setFocusedListener?.({ sender: webContents }, true)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the focus listener only reads sender identity from this mocked IPC event.
+    setFocusedListener?.({ sender: webContents } as unknown as Electron.IpcMainEvent, true)
 
     const preventDefault = vi.fn()
     emitBeforeInput(windowHandlers['before-input-event'], preventDefault, historyBackInput())
