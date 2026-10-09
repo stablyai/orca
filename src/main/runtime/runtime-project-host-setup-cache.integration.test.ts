@@ -23,6 +23,7 @@ import type { RuntimeWorktreeScanCache, RuntimeWorktreeScanRefresh } from './orc
 import { OrcaRuntimeService } from './orca-runtime'
 import { PROJECT_RUNTIME_METHODS } from './rpc/methods/project-runtime-rpc-methods'
 import { RuntimeProjectHostSetupController } from './runtime-project-host-setup-controller'
+import type { ResolvedWorktreeSnapshot } from './runtime-resolved-worktree-cache'
 import {
   __resetDetectedWorktreeScanCacheForTests,
   listDetectedGitWorktrees
@@ -53,6 +54,14 @@ vi.mock('electron', () => ({
 }))
 
 class CatalogRuntime extends OrcaRuntimeService {
+  readonly completedSnapshots: ResolvedWorktreeSnapshot[] = []
+
+  protected override async computeResolvedWorktrees() {
+    const snapshot = await super.computeResolvedWorktrees()
+    this.completedSnapshots.push(snapshot)
+    return snapshot
+  }
+
   buildCatalogForTest() {
     return this.computeResolvedWorktrees()
   }
@@ -634,6 +643,59 @@ describe('runtime project setup deletion and cache ownership', () => {
       unsub()
     }
   })
+
+  it.each(['folder-first', 'git-first'])(
+    'rejects completed folder rows at fleet admission while a sibling scan waits: %s',
+    async (order) => {
+      const { store, directory } = openStore()
+      const path = join(directory, 'folder')
+      const linked = join(directory, 'linked')
+      const siblingPath = join(directory, 'sibling')
+      await createGitRepo(path)
+      await createLinkedWorktree(path, linked)
+      await createGitRepo(siblingPath)
+      const folder = fixtureRepo(path, { kind: 'folder', externalWorktreeVisibility: 'show' })
+      const sibling = fixtureRepo(siblingPath, { id: 'repo-sibling' })
+      for (const repo of order === 'folder-first' ? [folder, sibling] : [sibling, folder]) {
+        store.addRepo(repo)
+      }
+      const runtime = new PausedCatalogRuntime(store)
+      const gate = runtime.pauseNextScan()
+      const event = vi.fn()
+      const unsubscribe = runtime.onClientEvent(event)
+      const pending = runtime.listManagedWorktrees()
+      try {
+        await gate.entered
+        const siblingBefore = structuredClone(store.getRepo(sibling.id))
+        expect(updateSetup(runtime, { kind: 'git' }).repo?.kind).toBe('git')
+        expect(store.getRepo(sibling.id)).toEqual(siblingBefore)
+        const freshRuntime = new CatalogRuntime(store)
+        const current = await freshRuntime.listManagedWorktrees()
+        expect(catalogPaths(current.worktrees.filter((row) => row.repoId === folder.id))).toEqual(
+          catalogPaths([{ path }, { path: linked }])
+        )
+        expect(catalogPaths(current.worktrees.filter((row) => row.repoId === sibling.id))).toEqual(
+          catalogPaths([{ path: siblingPath }])
+        )
+        const cached = freshRuntime.cachedCatalog().resolved
+        const stored = storedWorkspaceState(store)
+        gate.release()
+        const old = await pending
+        expect(old.worktrees.filter((row) => row.repoId === folder.id)).toEqual([])
+        expect(catalogPaths(old.worktrees)).toEqual(catalogPaths([{ path: siblingPath }]))
+        expect(runtime.completedSnapshots.at(-1)?.platformByRepoId.has(folder.id)).toBe(false)
+        expect(runtime.completedSnapshots.at(-1)?.platformByRepoId.has(sibling.id)).toBe(true)
+        expect(runtime.cachedCatalog().resolved).toBeNull()
+        expect(freshRuntime.cachedCatalog().resolved).toBe(cached)
+        expect(storedWorkspaceState(store)).toEqual(stored)
+        expect(event.mock.calls).toEqual([[{ type: 'reposChanged' }]])
+      } finally {
+        gate.release()
+        await pending
+        unsubscribe()
+      }
+    }
+  )
 
   it.each(['kind change', 'replacement'])(
     'rejects an old runtime Git completion after a setup %s',

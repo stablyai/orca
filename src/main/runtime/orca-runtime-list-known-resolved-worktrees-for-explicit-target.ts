@@ -115,33 +115,34 @@ export class OrcaRuntimeWithListKnownResolvedWorktreesForExplicitTarget extends 
       return { worktrees: [], platformByRepoId: new Map() }
     }
     const metaById = this.store.getAllWorktreeMeta() ?? {}
-    const repos = this.store.getRepos()
+    const repos = this.store.getRepos().map((repo) => ({ ...repo }))
     const projectRuntimeByRepoId = resolveLocalProjectRuntimesForRepos(this.requireStore(), repos)
-    const platformByRepoId = new Map(
-      repos.map((repo) => [
-        repo.id,
-        getAgentLaunchPlatformForRepo(repo, projectRuntimeByRepoId.get(repo.id))
-      ])
-    )
     const ownerCounts = new Map<string, number>()
     for (const repo of repos) {
       ownerCounts.set(repo.id, (ownerCounts.get(repo.id) ?? 0) + 1)
     }
     const deps = this.repoWorktreeRowDeps(repos)
     const perRepoWorktrees = await Promise.all(
-      repos.map(
-        async (repo) =>
-          await resolveRepoWorktreeRows(
-            deps,
-            repo,
-            metaById,
-            projectRuntimeByRepoId,
-            ownerCounts.get(repo.id) ?? 0
-          )
-      )
+      repos.map(async (repo) => ({
+        repo,
+        worktrees: await resolveRepoWorktreeRows(
+          deps,
+          repo,
+          metaById,
+          projectRuntimeByRepoId,
+          ownerCounts.get(repo.id) ?? 0
+        )
+      }))
+    )
+    const currentRepoWorktrees = perRepoWorktrees.filter(({ repo }) => deps.isRepoCurrent?.(repo))
+    const platformByRepoId = new Map(
+      currentRepoWorktrees.map(({ repo }) => [
+        repo.id,
+        getAgentLaunchPlatformForRepo(repo, projectRuntimeByRepoId.get(repo.id))
+      ])
     )
     const lineageById = this.store?.getAllWorktreeLineage?.() ?? {}
-    const worktrees = perRepoWorktrees.flatMap((rows) =>
+    const worktrees = currentRepoWorktrees.flatMap(({ worktrees: rows }) =>
       projectResolvedWorktreeLineage(rows, lineageById)
     )
     return { worktrees, platformByRepoId }

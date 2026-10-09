@@ -58,7 +58,7 @@ export function registerWorktreeCatalogHandlers(context: Pick<WorktreeIpcContext
   const { store } = context
 
   ipcMain.handle('worktrees:listAll', async () => {
-    const repos = store.getRepos()
+    const repos = store.getRepos().map((repo) => ({ ...repo }))
     const isRepoCurrent = createCapturedRepoCurrentGuard(store, repos)
     const legacyMetadata =
       typeof store.getAllWorktreeMetaForHost === 'function' ? undefined : store.getAllWorktreeMeta()
@@ -92,8 +92,7 @@ export function registerWorktreeCatalogHandlers(context: Pick<WorktreeIpcContext
     }
 
     // Why: each local repo listing can spawn `git worktree list`; cap fan-out so large fleets don't start unbounded subprocesses.
-    const results = await mapWithConcurrency(repos, WORKTREE_LIST_ALL_CONCURRENCY, async (row) => {
-      const repo = { ...row }
+    const results = await mapWithConcurrency(repos, WORKTREE_LIST_ALL_CONCURRENCY, async (repo) => {
       const connectionId = getSshTargetIdForExecutionHost(getRepoExecutionHostId(repo))
       const isCurrent = () => isRepoCurrent(repo, getRepoExecutionHostId(repo))
       if (!isCurrent()) {
@@ -189,7 +188,9 @@ export function registerWorktreeCatalogHandlers(context: Pick<WorktreeIpcContext
       }
     })
 
-    return results.flat()
+    return results.flatMap((rows, index) =>
+      isRepoCurrent(repos[index], getRepoExecutionHostId(repos[index])) ? rows : []
+    )
   })
 
   ipcMain.handle('worktrees:listRetiredNames', async (_event, args: { repoId: string }) => {

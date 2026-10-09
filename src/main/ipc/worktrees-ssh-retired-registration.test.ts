@@ -52,11 +52,30 @@ function remoteRepo(overrides: Partial<Repo> = {}): Repo {
   }
 }
 
-function fixture(channel: 'worktrees:list' | 'worktrees:listAll') {
+function fixture(
+  channel: 'worktrees:list' | 'worktrees:listAll',
+  folderOrder?: 'folder-first' | 'git-first'
+) {
   const directory = realpathSync(mkdtempSync(join(tmpdir(), 'orca-ssh-registration-')))
   directories.push(directory)
   const store = createSqliteTestStore(Store, { dataFile: join(directory, 'orca-data.json') })
-  store.addRepo(remoteRepo())
+  const folder = folderOrder
+    ? remoteRepo({
+        id: 'folder-repo',
+        path: join(directory, 'folder'),
+        kind: 'folder',
+        executionHostId: 'local',
+        connectionId: undefined
+      })
+    : undefined
+  const repos = folder
+    ? folderOrder === 'folder-first'
+      ? [folder, remoteRepo()]
+      : [remoteRepo(), folder]
+    : [remoteRepo()]
+  for (const repo of repos) {
+    store.addRepo(repo)
+  }
   const oldWorktreeId = 'ssh-repo::/srv/old-worktree'
   store.setWorktreeMeta(oldWorktreeId, { hostId: 'ssh:target', displayName: 'Retained remote row' })
   const mux = createMockMux()
@@ -71,7 +90,7 @@ function fixture(channel: 'worktrees:list' | 'worktrees:listAll') {
   if (!handler) {
     throw new Error('missing_registered_listing_handler')
   }
-  return { store, mux, oldWorktreeId, list: () => handler({}, { repoId: 'ssh-repo' }) }
+  return { store, mux, folder, oldWorktreeId, list: () => handler({}, { repoId: 'ssh-repo' }) }
 }
 
 function metadataSnapshot(store: Store) {
@@ -135,5 +154,59 @@ describe.each(['worktrees:list', 'worktrees:listAll'] as const)(
         })
       ])
     })
+  }
+)
+
+describe.each(['folder-first', 'git-first'] as const)(
+  'registered fleet admission while a sibling SSH listing waits: %s',
+  (order) => {
+    it.each(['kind-changed', 'unchanged', 'rejected'] as const)(
+      'admits only current completed folder rows after a %s mutation',
+      async (mutation) => {
+        const { store, mux, folder, oldWorktreeId, list } = fixture('worktrees:listAll', order)
+        if (!folder) {
+          throw new Error('missing_folder_fixture')
+        }
+        const entered = Promise.withResolvers<void>()
+        const reply = Promise.withResolvers<never>()
+        mux.request.mockImplementationOnce(() => {
+          entered.resolve()
+          return reply.promise
+        })
+        const pending = list()
+        try {
+          await entered.promise
+          const sibling = structuredClone(store.getRepo('ssh-repo'))
+          if (mutation === 'rejected') {
+            expect(() =>
+              store.updateProjectHostSetup({
+                setupId: folder.id,
+                updates: { kind: 'git', path: join(folder.path, 'replacement') }
+              })
+            ).toThrow('paths must be changed by re-importing')
+          } else {
+            expect(
+              store.updateRepo(
+                folder.id,
+                { kind: mutation === 'kind-changed' ? 'git' : 'folder' },
+                'local'
+              )?.kind
+            ).toBe(mutation === 'kind-changed' ? 'git' : 'folder')
+          }
+          const selectedMetadata = structuredClone(store.getAllWorktreeMetaForHost('local'))
+          reply.reject(new Error('SSH listing request failed'))
+          const listed = await pending
+          expect(listed).toHaveLength(mutation === 'kind-changed' ? 1 : 2)
+          expect(listed).toEqual(
+            expect.arrayContaining([expect.objectContaining({ id: oldWorktreeId })])
+          )
+          expect(store.getRepo('ssh-repo')).toEqual(sibling)
+          expect(store.getAllWorktreeMetaForHost('local')).toEqual(selectedMetadata)
+        } finally {
+          reply.reject(new Error('fixture cleanup'))
+          await pending
+        }
+      }
+    )
   }
 )
