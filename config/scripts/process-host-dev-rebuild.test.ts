@@ -10,12 +10,14 @@ import {
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { createRequire } from 'node:module'
+import { pathToFileURL } from 'node:url'
 import { runProcessSync } from '@orca/process-host'
 import { rolldown, watch } from 'rolldown'
 import type { Plugin, RolldownWatcher } from 'rolldown'
 import { afterEach, describe, expect, it } from 'vitest'
 import { createProcessHostDevRebuildPlugin } from '../build-plugins/process-host-dev-rebuild'
 
+const realPackageDir = resolve('src/packages/process-host')
 const temporaryRoots: string[] = []
 const watchers: RolldownWatcher[] = []
 
@@ -32,9 +34,21 @@ function fixture(): { root: string; packageDir: string; main: string } {
   const packageDir = join(root, 'src', 'packages', 'process-host')
   const sourceDir = join(packageDir, 'src')
   mkdirSync(sourceDir, { recursive: true })
+  mkdirSync(join(packageDir, 'scripts'))
+  // Runs the real package build against this fixture package.
+  writeFileSync(
+    join(packageDir, 'scripts', 'build-dist.mjs'),
+    `const { buildPackageDist } = await import(${JSON.stringify(pathToFileURL(resolve(realPackageDir, 'scripts', 'build-dist.mjs')).href)})\nawait buildPackageDist(${JSON.stringify(packageDir)})\n`
+  )
   mkdirSync(join(root, 'node_modules', '@orca'), { recursive: true })
-  const compiler = dirname(createRequire(import.meta.url).resolve('typescript/package.json'))
-  symlinkSync(compiler, join(root, 'node_modules', 'typescript'), 'junction')
+  const packageRequire = createRequire(join(realPackageDir, 'package.json'))
+  for (const tool of ['typescript', 'tsx']) {
+    symlinkSync(
+      dirname(packageRequire.resolve(`${tool}/package.json`)),
+      join(root, 'node_modules', tool),
+      'junction'
+    )
+  }
   symlinkSync(packageDir, join(root, 'node_modules', '@orca', 'process-host'), 'junction')
   writeFileSync(join(root, 'pnpm-workspace.yaml'), 'packages:\n  - src/packages/*\n')
   writeFileSync(
@@ -212,5 +226,12 @@ describe('External process-host development rebuilds', () => {
     } finally {
       await bundle.close()
     }
+  })
+
+  it('leaves pnpm dev in no-watch mode unless the caller passes --watch', () => {
+    // Watch mode restarts Electron on every main-process save, so it stays opt-in.
+    const launcher = readFileSync(resolve('config/scripts/run-electron-vite-dev.mjs'), 'utf8')
+    expect(launcher).toContain("const forwardedArgs = ['dev', ...forwardedRaw, ...forwardedExtras]")
+    expect(launcher).not.toMatch(/['"](?:--watch|-w)['"]/)
   })
 })

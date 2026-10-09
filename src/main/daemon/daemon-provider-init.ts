@@ -1,7 +1,11 @@
 import { getLocalPtyProvider, rebindLocalProviderListeners } from '../ipc/pty'
 import { isStartupDiagnosticsEnabled, logStartupDiagnostic } from '../startup/startup-diagnostics'
 import { checkDaemonHealth } from './daemon-health'
-import { collectPinnedDaemonVersions, pruneOldDaemonHosts } from './daemon-host-relocation'
+import {
+  collectPinnedDaemonVersions,
+  pruneDaemonHostsBeforeLaunch,
+  pruneOldDaemonHosts
+} from './daemon-host-relocation'
 import {
   cleanupFailedDaemonAdoption,
   releaseDaemonAdoptionLease,
@@ -58,6 +62,8 @@ export async function initDaemonPtyProvider(
     launcher: createOutOfProcessLauncher(runtimeDir, options)
   })
 
+  // Prune before a replacement's live pid record pins every same-version mirror.
+  pruneDaemonHostsBeforeLaunch(runtimeDir)
   // Why: assign the module-level spawner/adapter only after both succeed, so a failed ensureRunning() leaves no stale spawner.
   const info = await newSpawner.ensureRunning()
   // Why: reclaim superseded daemon-host copies on EVERY launch (spawns are rare), keeping current + live-daemon-pinned versions.

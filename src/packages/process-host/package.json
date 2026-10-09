@@ -92,12 +92,14 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsx --conditions=orca-source scripts/build-dist.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json",
     "test": "vitest run --config vitest.config.ts"
   },
   "devDependencies": {
     "@types/node": "^25.6.0",
+    "proper-lockfile": "4.1.2",
+    "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vitest": "5.0.3"
   },

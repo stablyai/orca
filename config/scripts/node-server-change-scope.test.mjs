@@ -115,6 +115,16 @@ it('tracks workspace source and manifest closures without trusting dist or widen
   ).toBe(false)
 })
 
+it.each([
+  'src/packages/process-host/.gitignore',
+  'src/packages/process-host/scripts/build-dist.mjs',
+  'src/packages/process-host/tsconfig.json'
+])('runs for a change to the process-host build input %s', async (file) => {
+  const result = await classifyNodeServerChanges([file], async () => new Set())
+  expect(result.shouldRun).toBe(true)
+  expect(result.reason).toBe(`Build or CI input changed: ${file}`)
+})
+
 it.each(['@orca/unknown', '@orca/process-host/private'])(
   'retains qualification for an unresolved internal package export: %s',
   async (specifier) => {

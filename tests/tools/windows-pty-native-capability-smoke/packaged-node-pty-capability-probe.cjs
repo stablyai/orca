@@ -73,10 +73,13 @@ function buildGrandchildLaunch(channel, fixtureToken) {
   }
 }
 
+// The public package staged by extraResources; packaged main no longer emits a private copy under out/.
+function packagedProcessHostPath(resourcesDir) {
+  return path.join(resourcesDir, 'node_modules', '@orca', 'process-host')
+}
+
 function startGrandchildAfterLauncherExit(channel, fixtureToken, resourcesDir) {
-  const { spawnProcess } = require(
-    path.join(resourcesDir, 'app.asar.unpacked', 'out', 'shared', 'child-process', 'run-process.js')
-  )
+  const { spawnProcess } = require(packagedProcessHostPath(resourcesDir))
   const launch = buildGrandchildLaunch(channel, fixtureToken)
   const child = spawnProcess({
     ...launch,
@@ -429,6 +432,7 @@ module.exports = {
   buildGrandchildLaunch,
   createFixtureServer,
   isOneShotMode,
+  packagedProcessHostPath,
   reportFixtureObservation
 }
 

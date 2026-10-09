@@ -1,6 +1,6 @@
-import { randomBytes } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync } from 'node:fs'
-import { join, win32 as winPath } from 'node:path'
+import { dirname, join, win32 as winPath } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-environment'
 import {
   buildDaemonHostManifest,
@@ -18,6 +18,11 @@ import {
   writeDaemonHostBuildMarker
 } from './daemon-host-build-inventory'
 import type { ProcessLivenessVerdict } from './daemon-incarnation-evidence-types'
+import {
+  daemonHostStagingName,
+  reclaimCurrentVersionDaemonHostLeftovers,
+  reclaimUnownedDaemonHostDir
+} from './daemon-host-reclaim'
 import { parseDaemonPidFile } from './daemon-pid-file-parse'
 import { quarantineCorruptDaemonPidRecord } from './daemon-pid-record-quarantine'
 import { inspectProcessLiveness, mergeProcessLivenessVerdict } from './daemon-process-inspection'
@@ -126,14 +131,30 @@ function missingProcessTreeFiles(packageDir: string): boolean {
   )
 }
 
-function hostRootDir(): string {
+// Sibling of the legacy shared HOST_SUBDIR, whose older pruners delete every unpinned child dir.
+const PROFILE_HOST_SUBDIR = 'daemon-host-profiles'
+
+// Profiles (--user-data-dir, E2E) share LOCALAPPDATA but not pid records, so one profile's
+// listing cannot prove another's mirror unowned; each profile owns only its own root.
+function userDataProfileKey(userDataPath: string): string {
+  const normalized = winPath.resolve(userDataPath).toLowerCase()
+  return createHash('sha256').update(normalized).digest('hex').slice(0, 16)
+}
+
+/** This profile's mirror root; the only tree its prune may reclaim. */
+export function getDaemonHostRootDir(): string {
+  const userDataPath = getAppEnvironment().getPath('userData')
   // Prefer LOCAL appData (see LOCAL_HOST_ROOT_NAME); fall back to userData only if LOCALAPPDATA is unset.
   const localAppData = process.env.LOCALAPPDATA
-  const base =
-    typeof localAppData === 'string' && localAppData.length > 0
-      ? join(localAppData, LOCAL_HOST_ROOT_NAME)
-      : getAppEnvironment().getPath('userData')
-  return join(base, HOST_SUBDIR)
+  if (typeof localAppData === 'string' && localAppData.length > 0) {
+    return join(
+      localAppData,
+      LOCAL_HOST_ROOT_NAME,
+      PROFILE_HOST_SUBDIR,
+      userDataProfileKey(userDataPath)
+    )
+  }
+  return join(userDataPath, HOST_SUBDIR)
 }
 
 /**
@@ -160,7 +181,7 @@ function findRelocatedDaemonHost(
     return null
   }
   const version = getAppEnvironment().getVersion()
-  const versionRoot = join(hostRootDir(), version)
+  const versionRoot = join(getDaemonHostRootDir(), version)
   let builds
   try {
     builds = readdirSync(versionRoot, { withFileTypes: true })
@@ -224,11 +245,11 @@ export function materializeRelocatedDaemonHost(): RelocatedDaemonHost | null {
     return null
   }
   const version = getAppEnvironment().getVersion()
-  const root = hostRootDir()
+  const root = getDaemonHostRootDir()
   const versionRoot = join(root, version)
   const nonce = randomBytes(6).toString('hex')
   const dest = join(versionRoot, `build-${inventory.fingerprint}-${nonce}`)
-  const staging = join(versionRoot, `.staging-${nonce}`)
+  const staging = join(versionRoot, daemonHostStagingName(process.pid, nonce))
   try {
     mkdirSync(versionRoot, { recursive: true })
     executeManifest(buildDaemonHostManifest(sources), staging)
@@ -245,6 +266,8 @@ export function materializeRelocatedDaemonHost(): RelocatedDaemonHost | null {
   }
   return findRelocatedDaemonHost(sources, inventory.fingerprint)
 }
+
+export { reclaimUnownedDaemonHostDir } from './daemon-host-reclaim'
 
 export type PinnedDaemonVersionsEvidence =
   | { status: 'complete'; versionLiveness: ReadonlyMap<string, ProcessLivenessVerdict> }
@@ -304,25 +327,15 @@ export function collectPinnedDaemonVersions(runtimeDir: string): PinnedDaemonVer
   return { status: 'complete', versionLiveness }
 }
 
-// Why: deletion is the destructive direction and this is a statement position the compiler does
-// not police for exhaustiveness — reclaim must be opted into by a positively matched 'exited',
-// so any future unhandled verdict status preserves the host dir instead of deleting it.
-export function reclaimUnownedDaemonHostDir(
-  verdict: ProcessLivenessVerdict,
-  hostDir: string
-): void {
-  if (verdict.status !== 'exited') {
-    return
-  }
-  try {
-    rmSync(hostDir, { recursive: true, force: true })
-  } catch {
-    // Still locked or already gone — retry on a future launch.
-  }
+// The build this process forks from; null when its build is unknown or has no usable mirror.
+function selectedDaemonHostBuildDir(): string | null {
+  const host = getRelocatedDaemonHost()
+  return host ? dirname(host.execPath) : null
 }
 
 /**
- * Reclaim daemon-host/<ver> dirs that are neither the current version nor pinned by a live daemon.
+ * Reclaim daemon-host/<ver> dirs that are neither the current version nor pinned by a live daemon,
+ * plus current-version leftovers (see reclaimCurrentVersionDaemonHostLeftovers).
  * Best-effort — never throws; a locked/staging dir is retried on a future launch.
  */
 export function pruneOldDaemonHosts(evidence: PinnedDaemonVersionsEvidence): void {
@@ -334,7 +347,7 @@ export function pruneOldDaemonHosts(evidence: PinnedDaemonVersionsEvidence): voi
     return
   }
   const version = getAppEnvironment().getVersion()
-  const root = hostRootDir()
+  const root = getDaemonHostRootDir()
   let entries
   try {
     entries = readdirSync(root, { withFileTypes: true })
@@ -342,11 +355,31 @@ export function pruneOldDaemonHosts(evidence: PinnedDaemonVersionsEvidence): voi
     return
   }
   for (const entry of entries) {
-    if (!entry.isDirectory() || entry.name === version) {
+    if (!entry.isDirectory()) {
+      continue
+    }
+    if (entry.name === version) {
+      // A complete listing with no current-version record is positive evidence, as below.
+      const currentVerdict = evidence.versionLiveness.get(version) ?? { status: 'exited' }
+      reclaimCurrentVersionDaemonHostLeftovers(
+        join(root, version),
+        currentVerdict,
+        currentVerdict.status === 'exited' ? selectedDaemonHostBuildDir() : null
+      )
       continue
     }
     // A complete runtime-dir listing with no pid record for this version proves it is unowned.
     const verdict = evidence.versionLiveness.get(entry.name) ?? { status: 'exited' }
     reclaimUnownedDaemonHostDir(verdict, join(root, entry.name))
+  }
+}
+
+/**
+ * Prune before this launch forks or adopts a daemon: a dead current-version daemon then proves no
+ * image runs from superseded builds, which a freshly launched replacement would otherwise pin.
+ */
+export function pruneDaemonHostsBeforeLaunch(runtimeDir: string): void {
+  if (isPackagedElectronWin32()) {
+    pruneOldDaemonHosts(collectPinnedDaemonVersions(runtimeDir))
   }
 }

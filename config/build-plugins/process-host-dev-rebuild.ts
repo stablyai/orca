@@ -1,3 +1,4 @@
+import { createRequire } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
 import { runProcessSync } from '@orca/process-host'
 import ts from 'typescript-api'
@@ -47,10 +48,15 @@ export function createProcessHostDevRebuildPlugin(root = process.cwd()): Plugin 
       for (const file of inputs.files) {
         this.addWatchFile(file)
       }
-      // The external package must finish emitting before electron-vite restarts the app.
+      // The external package must finish emitting before electron-vite restarts the app. The
+      // package's own build keeps its compiler and atomic dist sync identical to build:packages.
       const result = runProcessSync({
         program: process.execPath,
-        args: [join(root, 'node_modules', 'typescript', 'bin', 'tsc'), '-p', 'tsconfig.json'],
+        args: [
+          createRequire(join(inputs.directory, 'package.json')).resolve('tsx/cli'),
+          '--conditions=orca-source',
+          join(inputs.directory, 'scripts', 'build-dist.mjs')
+        ],
         cwd: inputs.directory,
         timeoutMs: 60_000
       })

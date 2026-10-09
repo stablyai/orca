@@ -220,6 +220,50 @@ function createPackagedRuntimeNodeModuleResources(electronPlatformName = process
   }))
 }
 
+function listProcessHostModules(directory, extension, prefix = '') {
+  if (!existsSync(directory)) {
+    return []
+  }
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const relativePath = `${prefix}${entry.name}`
+    if (entry.isDirectory()) {
+      return entry.name === '__fixtures__'
+        ? []
+        : listProcessHostModules(join(directory, entry.name), extension, `${relativePath}/`)
+    }
+    return entry.name.endsWith(extension) && !entry.name.endsWith(`.test${extension}`)
+      ? [relativePath.slice(0, -extension.length)]
+      : []
+  })
+}
+
+// Why: the resource filter copies whatever dist holds, so a missing, partial, or stale build
+// would ship a package main cannot load. Mirrors the package tsconfig include/exclude.
+function assertProcessHostOutputBuilt(packageDir = readPackage('@orca/process-host').packageDir) {
+  const manifest = JSON.parse(readFileSync(join(packageDir, 'package.json'), 'utf8'))
+  const publicTargets = [
+    manifest.main,
+    ...Object.values(manifest.exports ?? {}).map((target) =>
+      typeof target === 'string' ? target : target?.default
+    )
+  ].filter((target) => typeof target === 'string')
+  const sources = listProcessHostModules(join(packageDir, 'src'), '.ts')
+  const sourceSet = new Set(sources)
+  const missing = [
+    ...new Set([...publicTargets, ...sources.map((module) => `./dist/${module}.js`)])
+  ].filter((target) => !existsSync(join(packageDir, target)))
+  const stale = listProcessHostModules(join(packageDir, 'dist'), '.js')
+    .filter((module) => !sourceSet.has(module))
+    .map((module) => `./dist/${module}.js`)
+  if (missing.length > 0 || stale.length > 0) {
+    throw new Error(
+      `@orca/process-host output in ${packageDir} does not match its source ` +
+        `(missing: ${missing.join(', ') || 'none'}; stale: ${stale.join(', ') || 'none'}). ` +
+        'Run `pnpm build:packages` before packaging.'
+    )
+  }
+}
+
 function normalizeAsarEntryPath(entry) {
   return entry.replace(/\\/g, '/').replace(/^\/+/, '')
 }
@@ -619,6 +663,7 @@ function pruneMatchingFiles(directory, shouldPrune) {
 module.exports = {
   PACKAGED_RUNTIME_PACKAGE_ROOTS,
   assertPackagedNativeVariantsInstalled,
+  assertProcessHostOutputBuilt,
   createPackagedRuntimeNodeModuleResources,
   findAsarEntry,
   isPackagedExternalSpecifier,

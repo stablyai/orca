@@ -15,7 +15,11 @@ import { runProcessSync } from '@orca/process-host'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { setAppEnvironment } from '../../shared/app-environment'
 import { buildInstallFixture } from './daemon-host-relocation.test-fixture'
-import { getRelocatedDaemonHost, materializeRelocatedDaemonHost } from './daemon-host-relocation'
+import {
+  getDaemonHostRootDir,
+  getRelocatedDaemonHost,
+  materializeRelocatedDaemonHost
+} from './daemon-host-relocation'
 
 const originalPlatform = process.platform
 const originalExecPath = process.execPath
@@ -44,7 +48,6 @@ beforeEach(() => {
   installDir = join(tempDir, 'app')
   buildInstallFixture(installDir)
   process.env.LOCALAPPDATA = join(tempDir, 'localAppData')
-  hostRoot = join(process.env.LOCALAPPDATA, 'Orca', 'daemon-host', '9.9.9')
   setAppEnvironment({
     getPath: () => join(tempDir, 'userData'),
     getAppPath: () => join(installDir, 'resources', 'app.asar'),
@@ -57,6 +60,7 @@ beforeEach(() => {
   setProcessProp('platform', 'win32')
   setProcessProp('execPath', join(installDir, 'Orca.exe'))
   setProcessProp('resourcesPath', join(installDir, 'resources'))
+  hostRoot = join(getDaemonHostRootDir(), '9.9.9')
 })
 
 afterEach(() => {

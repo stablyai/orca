@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { join, win32 as winPath } from 'node:path'
+import { hashDaemonHostFile } from './daemon-host-file-hash-cache'
 import {
   buildDaemonHostManifest,
   daemonHostExeName,
@@ -31,17 +32,13 @@ function runtimeVersion(): string {
   return `${process.versions.electron ?? `node-${process.versions.node}`}:${process.arch}`
 }
 
-function hashFile(path: string): string {
-  return createHash('sha256').update(readFileSync(path)).digest('hex')
-}
-
 function fingerprintInventory(inventory: Omit<DaemonHostBuildInventory, 'fingerprint'>): string {
   return createHash('sha256').update(JSON.stringify(inventory)).digest('hex')
 }
 
 function collectCodeFiles(sourcePath: string, destRel: string): DaemonHostBuildFile[] {
   if (statSync(sourcePath).isFile()) {
-    return [{ path: destRel, sha256: hashFile(sourcePath) }]
+    return [{ path: destRel, sha256: hashDaemonHostFile(sourcePath) }]
   }
   return readdirSync(sourcePath)
     .sort()
@@ -87,7 +84,7 @@ function processHostExportsExist(packageDir: string): boolean {
   )
 }
 
-/** Hash code and its file list, without rereading the 260MB Electron image on each daemon launch. */
+/** Hash code and its file list, without rereading the 260MB Electron image; unchanged files reuse cached hashes. */
 export function collectDaemonHostBuildInventory(
   sources: DaemonHostSources
 ): DaemonHostBuildInventory | null {
@@ -177,7 +174,9 @@ export function daemonHostBuildInventoryMatches(
   inventory: DaemonHostBuildInventory
 ): boolean {
   try {
-    return inventory.files.every((file) => hashFile(destPath(root, file.path)) === file.sha256)
+    return inventory.files.every(
+      (file) => hashDaemonHostFile(destPath(root, file.path)) === file.sha256
+    )
   } catch {
     return false
   }

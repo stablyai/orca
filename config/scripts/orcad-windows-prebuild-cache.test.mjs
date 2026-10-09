@@ -230,7 +230,9 @@ describe('Windows server prebuild cache inputs', () => {
     )
     expect(WINDOWS_PREBUILD_CACHE_INPUTS).toEqual(
       expect.arrayContaining([
+        'src/packages/process-host/.gitignore',
         'src/packages/process-host/package.json',
+        'src/packages/process-host/scripts/build-dist.mjs',
         'src/packages/process-host/tsconfig.json'
       ])
     )

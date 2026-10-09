@@ -35,7 +35,11 @@ const ALWAYS_FILES = new Set([
   'config/scripts/workspace-source-exports.test.mjs',
   'config/scripts/headless-detector-compiler-cache.mjs',
   'config/scripts/node-server-qualification.mjs',
-  'config/scripts/node-server-qualification.test.mjs'
+  'config/scripts/node-server-qualification.test.mjs',
+  // The source graph sees process-host source, not the build that emits the dist servers load.
+  'src/packages/process-host/.gitignore',
+  'src/packages/process-host/scripts/build-dist.mjs',
+  'src/packages/process-host/tsconfig.json'
 ])
 const ALWAYS_PREFIXES = [
   '.github/actions/install-node-dependencies/',

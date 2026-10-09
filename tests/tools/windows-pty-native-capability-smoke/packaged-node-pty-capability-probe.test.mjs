@@ -1,9 +1,11 @@
+import { realpathSync } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { runProcess } from '@orca/process-host'
+import { stagePackagedProcessHost } from '../../../config/scripts/packaged-process-host-fixture.mjs'
 
 const require = createRequire(import.meta.url)
 const probePath = require.resolve('./packaged-node-pty-capability-probe.cjs')
@@ -11,6 +13,7 @@ const {
   buildGrandchildLaunch,
   createFixtureServer,
   isOneShotMode,
+  packagedProcessHostPath,
   reportFixtureObservation
 } = require(probePath)
 const originalSystemRoot = process.env.SystemRoot
@@ -57,6 +60,19 @@ describe('packaged node-pty launcher-surviving grandchild', () => {
       'target-grandchild'
     ])
     expect(JSON.stringify(launch)).not.toMatch(/cmd\.exe|start "" \/b/i)
+  })
+
+  it('loads spawnProcess from the packaged public process-host output', async () => {
+    const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-pty-capability-resources-'))
+    try {
+      const packageDir = await stagePackagedProcessHost(resourcesDir)
+      const entry = packagedProcessHostPath(resourcesDir)
+
+      expect(require.resolve(entry)).toBe(realpathSync(join(packageDir, 'dist', 'run-process.js')))
+      expect(typeof require(entry).spawnProcess).toBe('function')
+    } finally {
+      await rm(resourcesDir, { recursive: true, force: true })
+    }
   })
 
   it('closes one-shot fixture observations before server teardown', async () => {
