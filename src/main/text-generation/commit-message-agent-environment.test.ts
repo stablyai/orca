@@ -287,6 +287,18 @@ describe('prepareLocalCommitMessageAgentEnv', () => {
       ).resolves.toEqual({ ok: true, env: shellBase })
     })
 
+    it("prefers the login shell's config dir over Orca's inherited one", async () => {
+      makeHome()
+      process.env.OPENCODE_CONFIG_DIR = '/old/opencode'
+      delete process.env.ORCA_OPENCODE_SOURCE_CONFIG_DIR
+
+      const result = await prepareLocalCommitMessageAgentEnv('opencode', {
+        resolveBaseEnvironment: async () => ({ ...shellBase, OPENCODE_CONFIG_DIR: '/new/opencode' })
+      })
+
+      expect(envOf(result)?.OPENCODE_CONFIG_DIR).toBe('/new/opencode')
+    })
+
     it('keeps Orca env for WSL-local generation instead of the host shell', async () => {
       delete process.env.ANTHROPIC_BASE_URL
       const resolveBaseEnvironment = vi.fn(async () => shellBase)

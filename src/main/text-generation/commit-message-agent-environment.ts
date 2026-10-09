@@ -43,9 +43,15 @@ function withoutOrcaCodexHomeOverride(base: Record<string, string>): Record<stri
   return env
 }
 
-function readInheritedOrShellEnvVar(name: string, sourceName?: string): string | undefined {
+function readInheritedOrShellEnvVar(
+  name: string,
+  sourceName: string | undefined,
+  base: Record<string, string> | undefined
+): string | undefined {
+  // Why: the login-shell base is what chats use, so it beats Orca's own inherited value.
   return (
     (sourceName ? process.env[sourceName] : undefined) ??
+    base?.[name] ??
     process.env[name] ??
     readShellStartupEnvVar(name, process.env.HOME, process.env.SHELL)
   )
@@ -79,7 +85,7 @@ function prepareShellConfigDirEnv(
           ? 'ORCA_OMP_SOURCE_AGENT_DIR'
           : undefined
 
-  const value = readInheritedOrShellEnvVar(configVar, sourceVar)
+  const value = readInheritedOrShellEnvVar(configVar, sourceVar, base)
   if (!value) {
     return base ? { ok: true, env: base } : { ok: true }
   }
