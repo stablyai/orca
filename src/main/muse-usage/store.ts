@@ -39,7 +39,12 @@ export class MuseUsageStore extends UsageProviderStoreLifecycle<
   MuseUsagePersistedState,
   'hasAnyMuseData'
 > {
-  constructor(store: Pick<Store, 'getRepos' | 'getAllWorktreeMeta'>) {
+  constructor(
+    store: Pick<
+      Store,
+      'getRepos' | 'getAllWorktreeMeta' | 'getFolderWorkspaces' | 'getProjectGroups'
+    >
+  ) {
     super(store, {
       logTag: '[muse-usage]',
       resolveCacheFile: getMuseUsageFile,

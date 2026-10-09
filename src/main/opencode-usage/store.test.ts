@@ -54,7 +54,9 @@ function getDefaultState(): OpenCodeUsagePersistedState {
 function createStoreWithState(state: Partial<OpenCodeUsagePersistedState>): OpenCodeUsageStore {
   const store = new OpenCodeUsageStore({
     getRepos: () => [],
-    getAllWorktreeMeta: () => ({})
+    getAllWorktreeMeta: () => ({}),
+    getFolderWorkspaces: () => [],
+    getProjectGroups: () => []
   })
 
   ;(store as unknown as { state: OpenCodeUsagePersistedState }).state = {
