@@ -18,7 +18,11 @@ const subscriptionState = vi.hoisted(() => ({
   disposeEventHandler: vi.fn(),
   handleFsChanged: vi.fn(),
   contacts: new Map<string, () => void>(),
-  unsubscribeContact: vi.fn()
+  unsubscribeContact: vi.fn(),
+  captureBaseline: vi.fn(async () => new Map<string, string>()),
+  collectCatchUpEvents: vi.fn(async (): Promise<unknown[]> => []),
+  releaseAutosave: vi.fn(),
+  holdAutosave: vi.fn()
 }))
 
 vi.mock('@/store', () => ({
@@ -53,6 +57,11 @@ vi.mock('./editor-external-watch-event-reconciliation', () => ({
 }))
 vi.mock('./editor-external-watch-disk-verification', () => ({
   verifyLatchedEditorMoveDestinations: vi.fn()
+}))
+vi.mock('./editor-external-watch-catch-up', () => ({
+  captureEditorWatchDiskBaseline: subscriptionState.captureBaseline,
+  collectEditorWatchCatchUpEvents: subscriptionState.collectCatchUpEvents,
+  holdEditorAutosaveDuringCatchUp: subscriptionState.holdAutosave
 }))
 
 import { useEditorExternalWatch } from './useEditorExternalWatch'
@@ -91,7 +100,9 @@ describe('useEditorExternalWatch subscriptions', () => {
   let unsubscribeFsEvents: ReturnType<typeof vi.fn>
 
   beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     vi.clearAllMocks()
+    subscriptionState.holdAutosave.mockReturnValue(subscriptionState.releaseAutosave)
     subscriptionState.contacts.clear()
     subscriptionState.subscribeRuntimeFileChanges.mockReset()
     subscriptionState.snapshot = { targets: [], targetsKey: '' }
@@ -114,6 +125,7 @@ describe('useEditorExternalWatch subscriptions', () => {
     await act(async () => root.unmount())
     container.remove()
     ;(window as unknown as { api?: unknown }).api = previousApi
+    vi.useRealTimers()
   })
 
   it('unsubscribes an SSH watch and the shared event listener exactly once on unmount', async () => {
@@ -179,6 +191,7 @@ describe('useEditorExternalWatch subscriptions', () => {
 
     subscriptionState.snapshot = { targets: [], targetsKey: 'no-runtime-watch' }
     await act(async () => root.render(createElement(WatchProbe)))
+    await act(async () => vi.advanceTimersByTimeAsync(2_000))
     subscriptionState.snapshot = {
       targets: [runtimeTarget()],
       targetsKey: 'runtime-watch-2'
@@ -234,5 +247,66 @@ describe('useEditorExternalWatch subscriptions', () => {
     expect(subscriptionState.unsubscribeContact).toHaveBeenCalledOnce()
     subscriptionState.contacts.get('runtime-1')?.()
     expect(subscriptionState.subscribeRuntimeFileChanges).toHaveBeenCalledTimes(2)
+  })
+
+  describe('dropping and regaining a watch', () => {
+    const localTarget: TestWatchTarget = {
+      worktreeId: 'wt-local',
+      worktreePath: '/repo/local',
+      connectionId: undefined,
+      runtimeEnvironmentId: null
+    }
+    const watchLocal = async (targetsKey: string): Promise<void> => {
+      subscriptionState.snapshot = { targets: [localTarget], targetsKey }
+      await act(async () => root.render(createElement(WatchProbe)))
+    }
+    const dropLocal = async (): Promise<void> => {
+      subscriptionState.snapshot = { targets: [], targetsKey: 'none' }
+      await act(async () => root.render(createElement(WatchProbe)))
+    }
+
+    it('stamps open files and stays subscribed until the baseline settles', async () => {
+      await watchLocal('local-1')
+      await dropLocal()
+
+      expect(subscriptionState.captureBaseline).toHaveBeenCalledWith(localTarget)
+      expect(unwatchWorktree).not.toHaveBeenCalled()
+      await act(async () => vi.advanceTimersByTimeAsync(2_000))
+      expect(unwatchWorktree).toHaveBeenCalledOnce()
+    })
+
+    it('keeps the watch without a catch-up when the worktree returns mid-drain', async () => {
+      await watchLocal('local-1')
+      await dropLocal()
+      await watchLocal('local-2')
+      await act(async () => vi.advanceTimersByTimeAsync(2_000))
+
+      expect(unwatchWorktree).not.toHaveBeenCalled()
+      expect(watchWorktree).toHaveBeenCalledOnce()
+      expect(subscriptionState.collectCatchUpEvents).not.toHaveBeenCalled()
+    })
+
+    it('replays missed changes through the live event path once the watch is regained', async () => {
+      const baseline = new Map([['/repo/local/a.ts', '1:1']])
+      const missed = [{ kind: 'update', absolutePath: '/repo/local/a.ts' }]
+      subscriptionState.captureBaseline.mockResolvedValueOnce(baseline)
+      subscriptionState.collectCatchUpEvents.mockResolvedValueOnce(missed)
+      await watchLocal('local-1')
+      await dropLocal()
+      await act(async () => vi.advanceTimersByTimeAsync(2_000))
+      await watchLocal('local-2')
+
+      expect(watchWorktree).toHaveBeenCalledTimes(2)
+      expect(subscriptionState.collectCatchUpEvents).toHaveBeenCalledWith(localTarget, baseline)
+      expect(subscriptionState.handleFsChanged).toHaveBeenCalledWith(
+        { worktreePath: '/repo/local', events: missed },
+        null
+      )
+      expect(subscriptionState.holdAutosave).toHaveBeenCalledWith(localTarget, baseline)
+      expect(subscriptionState.releaseAutosave).toHaveBeenCalledOnce()
+      expect(subscriptionState.releaseAutosave.mock.invocationCallOrder[0]).toBeGreaterThan(
+        subscriptionState.handleFsChanged.mock.invocationCallOrder[0]
+      )
+    })
   })
 })

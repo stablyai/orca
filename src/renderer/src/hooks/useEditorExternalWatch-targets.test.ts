@@ -67,7 +67,9 @@ describe('getEditorExternalWatchTargets', () => {
     openFiles: args.openFiles ?? [],
     worktreesByRepo: { [args.repo.id]: [args.worktree] },
     repos: [args.repo],
-    activeWorktreeId: args.activeWorktreeId ?? null,
+    // Open tabs are watched only in the active or a dirty worktree.
+    activeWorktreeId:
+      args.activeWorktreeId === undefined ? args.worktree.id : args.activeWorktreeId,
     rightSidebarOpen: args.rightSidebarOpen ?? false,
     rightSidebarTab: args.rightSidebarTab ?? 'explorer',
     rightSidebarExplorerView: args.rightSidebarExplorerView ?? 'files',
@@ -192,7 +194,8 @@ describe('getEditorExternalWatchTargets', () => {
     const state = makeState({
       repo,
       worktree,
-      openFiles: [makeOpenFile(workspaceKey)]
+      openFiles: [makeOpenFile(workspaceKey)],
+      activeWorktreeId: workspaceKey
     })
     state.folderWorkspaces = [
       {
@@ -234,7 +237,8 @@ describe('getEditorExternalWatchTargets', () => {
       const state = makeState({
         repo,
         worktree,
-        openFiles: [makeOpenFile(workspaceKey)]
+        openFiles: [makeOpenFile(workspaceKey)],
+        activeWorktreeId: workspaceKey
       })
       state.folderWorkspaces = [
         {
@@ -522,5 +526,37 @@ describe('getEditorExternalWatchTargets', () => {
         runtimeEnvironmentId: 'env-1'
       }
     ])
+  })
+
+  describe('background worktrees', () => {
+    const repo = makeRepo('repo-bg')
+    const active = makeWorktree(repo.id, 'wt-active')
+    const background = { ...makeWorktree(repo.id, 'wt-background'), path: '/repo-bg/background' }
+    const targetsFor = (
+      openFiles: EditorExternalWatchTargetState['openFiles'],
+      activeWorktreeId: string
+    ): string[] => {
+      const state = makeState({ repo, worktree: active, openFiles, activeWorktreeId })
+      state.worktreesByRepo = { [repo.id]: [active, background] }
+      return getEditorExternalWatchTargets(state).targets.map((target) => target.worktreeId)
+    }
+
+    it('does not watch a background worktree that only holds clean restored tabs', () => {
+      expect(targetsFor([makeOpenFile(active.id), makeOpenFile(background.id)], active.id)).toEqual(
+        ['wt-active']
+      )
+    })
+
+    it('watches a background worktree once it becomes active', () => {
+      expect(
+        targetsFor([makeOpenFile(active.id), makeOpenFile(background.id)], background.id)
+      ).toEqual(['wt-background'])
+    })
+
+    it('keeps watching a background worktree that holds an unsaved draft', () => {
+      expect(
+        targetsFor([makeOpenFile(active.id), makeOpenFile(background.id, true)], active.id)
+      ).toEqual(['wt-active', 'wt-background'])
+    })
   })
 })

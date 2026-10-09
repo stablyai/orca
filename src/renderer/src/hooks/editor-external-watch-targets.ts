@@ -185,11 +185,16 @@ export function selectEditorExternalWatchTargets(
   }
 
   const consumersByWorktreeId = new Map<string, Map<string, WatchConsumer>>()
+  const activeWorktreeId = state.activeWorktreeId
   // Why: watcher ownership is scoped by worktree + execution host — the same workspace id can be open locally, over SSH and in a runtime, and reads/saves already route per host.
   for (const file of state.openFiles) {
+    // Why: one recursive watch per worktree with restored tabs overloads the OS watcher; hidden clean tabs catch up from disk on return,
+    // while a dirty draft stays watched so autosave or quit-save cannot overwrite an unseen external change.
+    if (file.worktreeId !== activeWorktreeId && !file.isDirty) {
+      continue
+    }
     addWatchConsumer(consumersByWorktreeId, file.worktreeId, getOpenFileWatchConsumer(file))
   }
-  const activeWorktreeId = state.activeWorktreeId
   const activeWorktree = activeWorktreeId
     ? findWorktreeById(state.worktreesByRepo, activeWorktreeId)
     : undefined
