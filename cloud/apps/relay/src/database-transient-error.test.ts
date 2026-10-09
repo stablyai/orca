@@ -17,7 +17,7 @@ async function failedAcquire(message: string): Promise<unknown> {
 }
 
 describe('relay database transient errors', () => {
-  it.each(['40P01', '40001', '55P03', '57014', '53300', '57P03', '08001', '08006'])(
+  it.each(['40P01', '40001', '55P03', '57014', '53300', '57P03', '08001', '08006', '25P03'])(
     'classifies PostgreSQL code %s as retryable overload',
     (code) => {
       expect(isRelayDatabaseTransientError({ code })).toBe(true)

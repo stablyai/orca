@@ -28,6 +28,7 @@ import { runRelayBackgroundOperation } from './relay-background-operation.js'
 import { readPostgresLockWaitSample } from './postgres-lock-wait-sample.js'
 import { jitteredSweepIntervalMs } from './relay-sweep-schedule.js'
 import { observedRelayRequests } from './relay-observability.js'
+import { handleRelayUnhandledRejection } from './relay-database-rejection-fence.js'
 import { startRegionalRehomeWorker } from './regional-rehome-worker.js'
 import { createRelayServer } from './relay-server.js'
 import { readSeatFeedCells, startShadowSeatPoller } from './shadow-seat-directory.js'
@@ -36,6 +37,8 @@ import {
   readRegisteredMigrationInventory
 } from './registered-migration-inventory.js'
 
+// Before anything can start a database promise.
+process.on('unhandledRejection', handleRelayUnhandledRejection)
 const config = loadRelayConfig()
 const database = await openRelayDatabaseAtBoot({
   databaseUrl: config.databaseUrl,
