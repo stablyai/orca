@@ -7,6 +7,7 @@ import type { RelayDatabase } from './database.js'
 import type { AppliedControlFlags } from './relay-control-flag-channel.js'
 import { createRelayLocalReadiness } from './relay-local-readiness.js'
 import { createRelayServer } from './relay-server.js'
+import { createRelayApp } from './app.js'
 
 describe('local readiness verdict', () => {
   it('is not ready before the server listens', () => {
@@ -160,3 +161,31 @@ function cellConfig(jwksUrl: string): RelayConfig {
     dataDir: './data'
   }
 }
+
+describe('one host-token key set per process', () => {
+  it('verifies HTTP relay tokens with the key set the server shares', async () => {
+    const keys = vi.fn(async () => {
+      throw new Error('no key in this test')
+    })
+    const app = createRelayApp(
+      { ...cellConfig('https://auth.example.test/jwks'), role: 'director', cellId: 'director' },
+      {
+        store: {} as never,
+        assignments: {} as never,
+        drain: vi.fn(),
+        ready: vi.fn(async () => true),
+        // SAFETY: jwtVerify only calls the key set; the jwks/reload members are unused here.
+        relayJwks: keys as never
+      }
+    )
+    const encode = (value: object) => Buffer.from(JSON.stringify(value)).toString('base64url')
+    const token = `${encode({ alg: 'ES256' })}.${encode({ sub: 'user-1' })}.c2ln`
+    const response = await app.request('/v1/assign', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ v: 1, relayHostId: 'abcdefghijklmnop' })
+    })
+    expect(response.status).toBe(401)
+    expect(keys).toHaveBeenCalledTimes(1)
+  })
+})

@@ -17,7 +17,7 @@ import {
   type RelayRegion
 } from '@orca-cloud/relay-contract'
 import { Hono, type Context } from 'hono'
-import { SignJWT } from 'jose'
+import { SignJWT, type createRemoteJWKSet } from 'jose'
 import { z } from 'zod'
 import {
   createAdminTokenVerifier,
@@ -127,6 +127,7 @@ export function createRelayApp(
     // Both only on cells; the switch is the per-cell `readinessLocal` flag, off by default.
     readinessLocal?: () => boolean
     localReadiness?: () => RelayLocalReadinessVerdict
+    relayJwks?: ReturnType<typeof createRemoteJWKSet>
     recordAssignmentAdmission?: (outcome: AssignmentAdmissionOutcome) => void
     recordAssignmentRejectionReason?: (
       lane: AssignmentAdmissionLane,
@@ -165,7 +166,8 @@ export function createRelayApp(
       regionCatalogRefresh = undefined
     }
   }
-  const verifyRelayToken = createRelayTokenVerifier(config)
+  // Shared with the host-control upgrade and local readiness: one cached key set per process.
+  const verifyRelayToken = createRelayTokenVerifier(config, operations.relayJwks)
   const verifyAdminToken = createAdminTokenVerifier(config)
   const verifyReadOnlyAdminToken = createReadOnlyAdminTokenVerifier(config)
   const verifyRegionalRehomeControlApplyToken =
