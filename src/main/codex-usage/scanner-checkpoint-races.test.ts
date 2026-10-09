@@ -100,13 +100,14 @@ import { scanCodexUsageFiles } from './scanner'
 
 let root: string
 let rolloutPath: string
-const originalCodexHome = process.env.CODEX_HOME
 
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'orca-codex-checkpoint-races-'))
   homedirMock.mockReturnValue(root)
   getPathMock.mockReturnValue(join(root, 'user-data'))
-  process.env.CODEX_HOME = join(root, '.codex')
+  vi.stubEnv('ORCA_USER_DATA_PATH', join(root, 'user-data'))
+  vi.stubEnv('XDG_CONFIG_HOME', join(root, '.config'))
+  vi.stubEnv('CODEX_HOME', join(root, '.codex'))
   const sessions = join(root, '.codex', 'sessions')
   mkdirSync(sessions, { recursive: true })
   rolloutPath = join(sessions, 'rollout.jsonl')
@@ -121,11 +122,7 @@ beforeEach(() => {
 
 afterEach(() => {
   rmSync(root, { recursive: true, force: true })
-  if (originalCodexHome === undefined) {
-    delete process.env.CODEX_HOME
-  } else {
-    process.env.CODEX_HOME = originalCodexHome
-  }
+  vi.unstubAllEnvs()
   expect(handles.closed).toBe(handles.opened)
 })
 
