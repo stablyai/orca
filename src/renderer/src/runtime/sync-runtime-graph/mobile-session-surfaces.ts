@@ -82,6 +82,10 @@ export function isMobileFileDiffSource(
 }
 
 export function isMobilePublishableOpenFile(file: AppState['openFiles'][number]): boolean {
+  // A received host tab must not become this client's own publication.
+  if (file.mirroredFromRuntimeSession === true) {
+    return false
+  }
   // Combined diff tabs use display labels as paths and need the desktop renderer.
   return !(
     file.diffSource === 'combined-all' ||

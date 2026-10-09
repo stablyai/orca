@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { z } from 'zod'
 
 import { parseWorkspaceSession, workspaceSessionStateSchema } from './workspace-session-schema'
+import { parseWorkspaceSessionSalvaging } from './workspace-session-salvage'
 import type { WorkspaceSessionState } from './workspace-session-state-types'
 
 /**
@@ -66,6 +67,29 @@ const MINIMAL_SESSION = {
 }
 
 describe('workspaceSessionStateSchema field coverage', () => {
+  it('preserves true editor mirror markers and drops false-marked rows on load', () => {
+    const file = {
+      filePath: '/repo/app.ts',
+      relativePath: 'app.ts',
+      worktreeId: 'wt',
+      language: 'typescript',
+      runtimeEnvironmentId: 'peer'
+    }
+    const mirrored = { ...file, mirroredFromRuntimeSession: true }
+    const parsed = parseWorkspaceSessionSalvaging({
+      ...MINIMAL_SESSION,
+      openFilesByWorktree: {
+        wt: [mirrored, { ...file, mirroredFromRuntimeSession: false }, file]
+      }
+    })
+    if (!parsed.ok) {
+      throw new Error(parsed.error)
+    }
+    expect(parsed.value.openFilesByWorktree?.wt).toEqual([mirrored, file])
+    expect(parsed.droppedCount).toBe(1)
+    expect(parsed.droppedPaths).toEqual(['openFilesByWorktree.wt.1'])
+  })
+
   it('parses every field declared on WorkspaceSessionState', () => {
     // The runtime half. `satisfies` above already makes a forgotten field a compile error; this
     // reports it by name, and catches the reverse case where the list is updated but the schema

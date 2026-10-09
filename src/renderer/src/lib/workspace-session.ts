@@ -139,6 +139,7 @@ export function buildEditorSessionData(
       language: f.language,
       isPreview: f.isPreview || undefined,
       runtimeEnvironmentId: f.runtimeEnvironmentId,
+      ...(f.mirroredFromRuntimeSession === true ? { mirroredFromRuntimeSession: true } : {}),
       externalSshTargetId: f.externalSshTargetId,
       // Why: persist readOnly only when true; absence is the writable default on restore.
       ...(f.readOnly === true ? { readOnly: true } : {}),

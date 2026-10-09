@@ -1,5 +1,5 @@
 import { connectSshTestTarget } from './helpers/ssh-test-target-connection'
-import os from 'node:os'
+import { readLocalhostSshTarget } from './helpers/localhost-ssh-target'
 import { createSeededTestRepo } from './helpers/seeded-test-repo'
 import { cleanupTestRepository } from './global-teardown'
 
@@ -14,52 +14,11 @@ import {
   waitForTerminalOutput
 } from './helpers/terminal'
 
-type LocalhostSshTarget = {
-  label: string
-  host: string
-  port: number
-  username: string
-  configHost?: string
-  identityFile?: string
-}
-
 const RUN_LOCALHOST_SSH = process.env.ORCA_E2E_SSH_LOCALHOST === '1'
 const RUN_REMOTE_HOOKS =
   process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS === undefined ||
   (process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS.trim() !== '' &&
     process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS.trim() !== '0')
-
-function parsePort(value: string | undefined): number {
-  const parsed = Number(value ?? '22')
-  if (Number.isInteger(parsed) && parsed > 0 && parsed <= 65535) {
-    return parsed
-  }
-  throw new Error(`Invalid ORCA_E2E_SSH_PORT: ${value}`)
-}
-
-function currentUsername(): string {
-  return (
-    process.env.ORCA_E2E_SSH_USER ??
-    process.env.USER ??
-    process.env.USERNAME ??
-    os.userInfo().username
-  )
-}
-
-function readLocalhostSshTarget(): LocalhostSshTarget {
-  const configHost = process.env.ORCA_E2E_SSH_CONFIG_HOST?.trim()
-  const host = process.env.ORCA_E2E_SSH_HOST?.trim() ?? (configHost ? '' : '127.0.0.1')
-  const identityFile = process.env.ORCA_E2E_SSH_IDENTITY_FILE?.trim()
-
-  return {
-    label: `Localhost SSH E2E ${Date.now()}`,
-    host,
-    port: parsePort(process.env.ORCA_E2E_SSH_PORT),
-    username: currentUsername(),
-    ...(configHost ? { configHost } : {}),
-    ...(identityFile ? { identityFile } : {})
-  }
-}
 
 function shellQuote(value: string): string {
   return `'${value.replaceAll("'", "'\\''")}'`
@@ -163,7 +122,7 @@ test.describe('Localhost SSH', () => {
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
 
-    const target = readLocalhostSshTarget()
+    const target = readLocalhostSshTarget(`Localhost SSH E2E ${Date.now()}`)
     const remote = await connectSshTestTarget(
       orcaPage,
       // Limit orphan relay lifetime if the test app exits before cleanup.

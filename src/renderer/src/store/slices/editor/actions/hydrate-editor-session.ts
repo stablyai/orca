@@ -89,6 +89,7 @@ export function createHydrateEditorSession(
               isDirty: !isReadOnly && pf.dirtyDraftContent !== undefined,
               isPreview: pf.isPreview,
               runtimeEnvironmentId: pf.runtimeEnvironmentId,
+              mirroredFromRuntimeSession: pf.mirroredFromRuntimeSession,
               externalSshTargetId: pf.externalSshTargetId,
               ...(isReadOnly ? { readOnly: true } : {}),
               ...(isReadOnly && pf.liveTail === true ? { liveTail: true } : {}),

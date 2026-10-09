@@ -19,6 +19,7 @@ export type PersistedOpenFile = {
   language: string
   isPreview?: boolean
   runtimeEnvironmentId?: string | null
+  mirroredFromRuntimeSession?: true
   /** SSH target that owns an absolute path outside the worktree. */
   externalSshTargetId?: string
   /** Unsaved editor buffer captured for hot exit; presence restores the tab dirty. */

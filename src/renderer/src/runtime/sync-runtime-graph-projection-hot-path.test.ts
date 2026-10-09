@@ -59,6 +59,7 @@ function referenceOpenFilesProjection(openFiles: AppState['openFiles']): string 
       mode: file.mode,
       diffSource: file.diffSource,
       isDirty: file.isDirty,
+      mirroredFromRuntimeSession: file.mirroredFromRuntimeSession,
       isUntitled: file.isUntitled,
       deleteUntouchedOnClose: file.deleteUntouchedOnClose,
       markdownPreviewSourceFileId: file.markdownPreviewSourceFileId
@@ -413,6 +414,7 @@ describe('open-files and browser projections', () => {
     const openFileCases: AppState['openFiles'][] = [
       [] as unknown as AppState['openFiles'],
       [makeOpenFile(0)] as unknown as AppState['openFiles'],
+      [makeOpenFile(0, { mirroredFromRuntimeSession: true })],
       [makeOpenFile(0, { isDirty: true })] as unknown as AppState['openFiles'],
       [
         makeOpenFile(0, { isDirty: true, diffSource: 'working' }),
