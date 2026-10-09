@@ -185,6 +185,7 @@ describe('workspace session write observers are inert', () => {
     ])
     const ssh = pushes.filter((event) => event.key === 'repo-ssh::/remote/wt')
     expect(ssh).toEqual([expect.objectContaining({ type: 'workspace' })])
-    expect(ssh[0]?.type === 'workspace' && ssh[0].layout.partition).toBe(SSH_HOST)
+    // Published from the SSH partition that owns it: its tabs run on that host.
+    expect(ssh[0]?.type === 'workspace' && ssh[0].layout.tabs[0]?.executionHostId).toBe(SSH_HOST)
   })
 })

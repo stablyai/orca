@@ -62,9 +62,8 @@ export type PublishedBrowserTab = {
   pageIds?: string[]
 }
 
+/** Addressed by its workspace key alone; which partition owns it stays the host's routing. */
 export type PublishedWorkspaceLayout = {
-  /** The partition that owns the workspace: the only one whose copy is published. */
-  partition: ExecutionHostId
   worktreeId: string
   /** In the one tab order. */
   groups: { id: string; tabIds: string[] }[]
@@ -118,7 +117,6 @@ export function publishWorkspaceLayout(
   partition: ExecutionHostId
 ): PublishedWorkspaceLayout {
   return {
-    partition,
     worktreeId: workspace.worktreeId,
     groups: workspace.groups.map((group) => ({ id: group.id, tabIds: [...group.tabOrder] })),
     ...(workspace.groupLayout ? { groupLayout: workspace.groupLayout } : {}),

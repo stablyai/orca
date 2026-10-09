@@ -1,12 +1,14 @@
-// The shadow self-check: what today's writers store must load and save to a fixed point. A first
-// load may change what older writers left (the Loader's fixed precedence), but only in the kinds
-// of change those rules produce; a second load must change nothing.
+// The shadow self-check. Its assertion is idempotence: what today's writers store must load and
+// save to a fixed point, so a second load changes nothing. A first load may change what older
+// writers left (the Loader's fixed precedence); the known-kinds list below is broad, so it only
+// catches a field no rule touches. The first load's change counts per kind are returned for
+// logging, so a new kind of change shows up even when it is in the list.
 
 import type { ExecutionHostId } from '../execution-host'
 import type { WorkspaceSessionState } from '../workspace-session-state-types'
 import { loadWorkspaceLayout } from './workspace-layout-load'
+import { nameBasedLoadContext } from './workspace-layout-minted-ids'
 import { stableJson } from './workspace-layout-load-report'
-import type { WorkspaceLayoutLoadContext } from './workspace-layout-load-types'
 import { saveWorkspaceLayout } from './workspace-layout-save'
 
 const ORDER = ['sortOrder', '$order']
@@ -88,32 +90,33 @@ export type LayoutRoundTripFinding =
   | { kind: 'not_idempotent'; change: string }
   | { kind: 'threw'; message: string }
 
-/** Ids the Loader mints are numbered in load order, so reloading the same data mints the same ids. */
-export function deterministicLoadContext(): WorkspaceLayoutLoadContext {
-  let next = 0
-  const mint = () => ++next
-  return {
-    mintId: () => `layout-minted-${mint()}`,
-    mintLeafId: () => `00000000-0000-4000-8000-${String(mint()).padStart(12, '0')}`
-  }
-}
-
 const kinds = (changes: readonly { table: string; field: string }[]) => [
   ...new Set(changes.map((change) => `${change.table}.${change.field}`))
 ]
+
+export type LayoutRoundTripResult = {
+  findings: LayoutRoundTripFinding[]
+  /** `table.field` → how many values the first load changed. */
+  firstLoadChanges: Record<string, number>
+}
 
 /** Loader then Serializer, twice: names and kinds only, never values. */
 export function checkLayoutRoundTrip(
   hostId: ExecutionHostId,
   session: WorkspaceSessionState
-): LayoutRoundTripFinding[] {
+): LayoutRoundTripResult {
+  const firstLoadChanges: Record<string, number> = {}
   try {
-    const first = loadWorkspaceLayout(hostId, session, deterministicLoadContext())
+    const first = loadWorkspaceLayout(hostId, session, nameBasedLoadContext())
+    for (const change of first.changes) {
+      const kind = `${change.table}.${change.field}`
+      firstLoadChanges[kind] = (firstLoadChanges[kind] ?? 0) + 1
+    }
     const findings: LayoutRoundTripFinding[] = kinds(first.changes)
       .filter((change) => !KNOWN_LOAD_CHANGES.has(change))
       .map((change) => ({ kind: 'unknown_change', change }))
     const saved = saveWorkspaceLayout(first)
-    const second = loadWorkspaceLayout(hostId, saved, deterministicLoadContext())
+    const second = loadWorkspaceLayout(hostId, saved, nameBasedLoadContext())
     findings.push(
       ...kinds(second.changes).map((change): LayoutRoundTripFinding => ({
         kind: 'not_idempotent',
@@ -126,8 +129,9 @@ export function checkLayoutRoundTrip(
     ) {
       findings.push({ kind: 'not_idempotent', change: 'saved document' })
     }
-    return findings
+    return { findings, firstLoadChanges }
   } catch (error) {
-    return [{ kind: 'threw', message: error instanceof Error ? error.message : String(error) }]
+    const message = error instanceof Error ? error.message : String(error)
+    return { findings: [{ kind: 'threw', message }], firstLoadChanges }
   }
 }

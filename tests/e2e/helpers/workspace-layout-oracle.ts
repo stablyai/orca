@@ -197,7 +197,7 @@ export class LayoutOracle {
       'roundTrip',
       label,
       partitions.flatMap(({ hostId, session }) =>
-        checkLayoutRoundTrip(hostId, session).map(
+        checkLayoutRoundTrip(hostId, session).findings.map(
           (finding) => `${hostId} ${JSON.stringify(finding)}`
         )
       )

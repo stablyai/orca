@@ -6,6 +6,7 @@ import {
   relaySshSession
 } from '../../shared/workspace-layout/workspace-layout-profile.test-fixture'
 import {
+  emptySession,
   FOLDER_KEY,
   GIT_KEY,
   SSH_KEY
@@ -70,7 +71,9 @@ describe('WorkspaceLayoutStream', () => {
   it('snapshots each workspace from its owning partition only', () => {
     const { stream, homes } = setup()
     const { snapshot } = stream.subscribe(() => {})
-    expect(snapshot.map((entry) => [entry.key, entry.layout.partition])).toEqual([
+    // Each workspace's tabs run on the partition that published it.
+    const hostOf = (entry: (typeof snapshot)[number]) => entry.layout.tabs[0]?.executionHostId
+    expect(snapshot.map((entry) => [entry.key, hostOf(entry)])).toEqual([
       [GIT_KEY, LOCAL_EXECUTION_HOST_ID],
       [FOLDER_KEY, LOCAL_EXECUTION_HOST_ID],
       [SSH_KEY, SSH_HOST]
@@ -125,5 +128,74 @@ describe('WorkspaceLayoutStream', () => {
     await flush()
     expect(warn).toHaveBeenCalledTimes(1)
     warn.mockRestore()
+  })
+
+  it('keeps delivering to every listener when one throws', async () => {
+    const { stream, write } = setup()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const events: WorkspaceLayoutEvent[] = []
+    stream.subscribe(() => {
+      throw new Error('listener failed')
+    })
+    stream.subscribe((event) => events.push(event))
+    const session = localDesktopSession()
+    session.tabGroups![GIT_KEY]![0]!.tabOrder.reverse()
+    write(LOCAL_EXECUTION_HOST_ID, session)
+    await flush()
+    expect(events.map((event) => [event.type, event.key])).toEqual([['workspace', GIT_KEY]])
+    write(LOCAL_EXECUTION_HOST_ID, structuredClone(session))
+    await flush()
+    expect(events).toHaveLength(1)
+    warn.mockRestore()
+  })
+
+  it('keeps every invented id when an earlier workspace or tab goes away', async () => {
+    // Rows a headless host saved with no tab bar or pane layout: their groups and panes are invented.
+    const rowsOnly = (keys: string[], tabs: string[]): WorkspaceSessionState => {
+      const session = emptySession()
+      for (const key of keys) {
+        session.tabsByWorktree[key] = tabs.map((tab, index) => ({
+          id: `${key}-${tab}`,
+          ptyId: null,
+          worktreeId: key,
+          title: tab,
+          customTitle: null,
+          color: null,
+          sortOrder: index,
+          createdAt: Number(tab.slice(1))
+        }))
+      }
+      return session
+    }
+    const keys = ['repo-1::/a', 'repo-1::/b', 'repo-1::/c']
+    const fake = fakeStore(new Map([[LOCAL_EXECUTION_HOST_ID, rowsOnly(keys, ['t1', 't2'])]]))
+    const stream = new WorkspaceLayoutStream({
+      store: () => fake.store,
+      homeHostId: () => LOCAL_EXECUTION_HOST_ID
+    })
+    const events: WorkspaceLayoutEvent[] = []
+    const before = new Map(
+      stream
+        .subscribe((event) => events.push(event))
+        .snapshot.map((entry) => [entry.key, JSON.stringify(entry.layout)])
+    )
+    fake.write(LOCAL_EXECUTION_HOST_ID, rowsOnly(keys.slice(1), ['t1', 't2']))
+    await flush()
+    expect(events).toEqual([{ type: 'removed', key: 'repo-1::/a' }])
+
+    const withoutFirstTab = rowsOnly(keys.slice(1), ['t2'])
+    fake.write(LOCAL_EXECUTION_HOST_ID, withoutFirstTab)
+    await flush()
+    const after = new Map(
+      events.flatMap((event) => (event.type === 'workspace' ? [[event.key, event.layout]] : []))
+    )
+    for (const key of keys.slice(1)) {
+      const earlier = JSON.parse(before.get(key)!)
+      const later = after.get(key)!
+      expect(later.groups.map((group) => group.id)).toEqual(
+        earlier.groups.map((group: { id: string }) => group.id)
+      )
+      expect(JSON.stringify(later.tabs)).toBe(JSON.stringify(earlier.tabs.slice(1)))
+    }
   })
 })

@@ -9,7 +9,7 @@ import {
   publishWorkspaceLayout,
   type PublishedWorkspaceLayout
 } from '../../shared/workspace-layout/workspace-layout-published'
-import { deterministicLoadContext } from '../../shared/workspace-layout/workspace-layout-round-trip-check'
+import { nameBasedLoadContext } from '../../shared/workspace-layout/workspace-layout-minted-ids'
 import type { RuntimeStore } from './runtime-store-contract'
 
 export type WorkspaceLayoutEvent =
@@ -87,10 +87,14 @@ export class WorkspaceLayoutStream {
     try {
       this.reconcile()
     } catch (error) {
-      if (!this.failureLogged) {
-        this.failureLogged = true
-        console.warn('[workspace-layout] layout stream projection failed:', error)
-      }
+      this.logFailure('projection', error)
+    }
+  }
+
+  private logFailure(what: string, error: unknown): void {
+    if (!this.failureLogged) {
+      this.failureLogged = true
+      console.warn(`[workspace-layout] layout stream ${what} failed:`, error)
     }
   }
 
@@ -102,7 +106,7 @@ export class WorkspaceLayoutStream {
       if (!session) {
         continue
       }
-      const { layout } = loadWorkspaceLayout(hostId, session, deterministicLoadContext())
+      const { layout } = loadWorkspaceLayout(hostId, session, nameBasedLoadContext())
       for (const [key, workspace] of Object.entries(layout.workspaces)) {
         // Only the owning partition's copy is published; a stray copy elsewhere is not shown.
         if (this.deps.homeHostId(key) === hostId) {
@@ -130,7 +134,12 @@ export class WorkspaceLayoutStream {
     this.published = next
     for (const event of events) {
       for (const listener of this.listeners) {
-        listener(event)
+        // One failing listener must not cost the others an event the stream has now published.
+        try {
+          listener(event)
+        } catch (error) {
+          this.logFailure('listener', error)
+        }
       }
     }
   }

@@ -23,7 +23,7 @@ const onDisk = (session: WorkspaceSessionState): WorkspaceSessionState =>
 
 function load(session: WorkspaceSessionState) {
   // Each rule's changes are kinds the shadow self-check knows, and its output is a fixed point.
-  expect(checkLayoutRoundTrip(LOCAL_EXECUTION_HOST_ID, session)).toEqual([])
+  expect(checkLayoutRoundTrip(LOCAL_EXECUTION_HOST_ID, session).findings).toEqual([])
   let next = 0
   return loadWorkspaceLayout(LOCAL_EXECUTION_HOST_ID, session, {
     mintId: () => `minted-${++next}`,
