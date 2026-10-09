@@ -31,7 +31,7 @@ const NON_RUNTIME_DIR = new Set(['node_modules', 'locales', '__tests__', '__snap
 const NON_RUNTIME_FILE = /\.(test|spec)\./
 // A catalog key never looks like a word; require a dot and a reasonable length so
 // the literal scan does not drown in ordinary strings.
-const KEY_SHAPED = /^[A-Za-z][A-Za-z0-9._-]*\.[A-Za-z0-9._-]+$/
+const CATALOG_KEY_PATTERN = /^[A-Za-z][A-Za-z0-9._-]*\.[A-Za-z0-9._-]+$/
 // i18next appends a CLDR category to the base key and resolves it at runtime, so
 // `…count_one` never appears in a source file even though `…count` does. Judge
 // the base key instead, or the prune eats every plural variant in the catalog.
@@ -88,7 +88,7 @@ async function collectSourceFiles(root) {
 export function collectLiteralKeys(text, found = new Set()) {
   const literal = /['"`]([A-Za-z][A-Za-z0-9._-]{6,})['"`]/g
   for (const match of text.matchAll(literal)) {
-    if (KEY_SHAPED.test(match[1])) {
+    if (CATALOG_KEY_PATTERN.test(match[1])) {
       found.add(match[1])
     }
   }
