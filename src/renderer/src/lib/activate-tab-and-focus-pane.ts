@@ -18,6 +18,7 @@ export function activateTabAndFocusPane(
     ackPaneKeyOnSuccess?: string
     flashFocusedPane?: boolean
     scrollToBottomIfOutputSinceLastView?: boolean
+    collapseExpandedPane?: boolean
   }
 ): void {
   const { setActiveTab, setActiveTabType, tabsByWorktree, activeWorktreeId } =
@@ -44,6 +45,7 @@ export function activateTabAndFocusPane(
       leafId,
       ...(opts?.ackPaneKeyOnSuccess ? { ackPaneKeyOnSuccess: opts.ackPaneKeyOnSuccess } : {}),
       ...(opts?.flashFocusedPane ? { flashFocusedPane: true } : {}),
+      ...(opts?.collapseExpandedPane ? { collapseExpandedPane: true } : {}),
       ...(opts?.scrollToBottomIfOutputSinceLastView
         ? { scrollToBottomIfOutputSinceLastView: true }
         : {})

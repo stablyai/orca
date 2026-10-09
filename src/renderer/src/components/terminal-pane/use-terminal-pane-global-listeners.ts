@@ -18,6 +18,7 @@ import type { TerminalPaneCloseController } from './use-terminal-pane-close-acti
 export function useTerminalPaneGlobalListeners(controller: TerminalPaneCloseController): void {
   const {
     clearPaneScrollback,
+    collapseExpandedPane,
     containerRef,
     cwd,
     expandedPaneIdRef,
@@ -104,7 +105,8 @@ export function useTerminalPaneGlobalListeners(controller: TerminalPaneCloseCont
     panePtyBindingsRef,
     isActiveRef,
     isVisibleRef,
-    toggleExpandPane
+    toggleExpandPane,
+    collapseExpandedPane
   })
 
   useEffect(() => {

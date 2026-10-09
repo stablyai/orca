@@ -77,6 +77,16 @@ For repos on a WSL filesystem (`\\wsl.localhost\...`), Orca launches through `ws
 - `Cmd-\` — split right.
 - `Cmd-Shift-\` — split down.
 
+### Cycling panes across terminal tabs
+
+Settings → Shortcuts includes **Focus next pane across terminal tabs** and **Focus previous pane across terminal tabs**. Both actions start unassigned, so you can bind them without changing existing shortcuts.
+
+These actions follow the split layout's pane order. At the last pane, next moves to the next terminal tab and focuses its first pane; at the first pane, previous moves to the previous terminal tab and focuses its last pane. The cycle wraps across the terminal tabs in the active tab group, using the order shown in the tab strip, including after tab reordering.
+
+Editor, browser, emulator, and structured-chat tabs are skipped. A mixed native-chat/terminal tab still contributes its uncovered terminal panes. An expanded destination pane is collapsed to reveal the pane being focused. With one terminal tab, the actions cycle its panes in layout order.
+
+The existing **Focus next pane** and **Focus previous pane** actions keep their current in-tab behavior.
+
 ## Native key bindings
 
 Orca advertises the kitty keyboard protocol, so terminal apps see real `Shift+Enter`, `Ctrl+Enter`, and other modifier-aware keystrokes — the bindings work the same in Orca as they do in Ghostty, WezTerm, or your native terminal.

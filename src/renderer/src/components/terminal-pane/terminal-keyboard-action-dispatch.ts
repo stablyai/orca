@@ -9,6 +9,7 @@ import {
   syncTerminalScrollIntentFromViewport
 } from '@/lib/pane-manager/terminal-scroll-intent'
 import type { resolveTerminalKeyboardShortcutAction } from './terminal-keyboard-shortcut-matching'
+import { focusTerminalPaneAcrossTabs } from './terminal-pane-tab-navigation'
 
 type TerminalShortcutAction = NonNullable<ReturnType<typeof resolveTerminalKeyboardShortcutAction>>
 
@@ -132,6 +133,21 @@ export function dispatchTerminalShortcutAction(
       pane.terminal.scrollToBottom()
     }
     syncTerminalScrollIntentFromViewport(pane.terminal)
+    return
+  }
+  if (action.type === 'focusPaneAcrossTabs') {
+    if (manager.getPaneCount() === 0) {
+      return
+    }
+    event.preventDefault()
+    event.stopImmediatePropagation()
+    if (expandedPaneIdRef.current !== null) {
+      setExpandedPane(null)
+      restoreExpandedLayout()
+      refreshPaneSizes(false)
+      persistLayoutSnapshot()
+    }
+    focusTerminalPaneAcrossTabs(manager, worktreeId, tabId, action.direction)
     return
   }
   if (action.type === 'focusPane') {

@@ -147,6 +147,16 @@ export function createExpandCollapseActions(state: ExpandCollapseState) {
     })
   }
 
+  const collapseExpandedPane = (): void => {
+    if (state.expandedPaneIdRef.current === null) {
+      return
+    }
+    setExpandedPane(null)
+    restoreExpandedLayout()
+    refreshPaneSizes(false)
+    state.persistLayoutSnapshot()
+  }
+
   const syncExpandedLayout = (): void => {
     const paneId = state.expandedPaneIdRef.current
     if (paneId === null) {
@@ -200,6 +210,7 @@ export function createExpandCollapseActions(state: ExpandCollapseState) {
 
   return {
     setExpandedPane,
+    collapseExpandedPane,
     restoreExpandedLayout,
     refreshPaneSizes,
     syncExpandedLayout,
