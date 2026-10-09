@@ -167,6 +167,48 @@ describe('control flag channel', () => {
     }
   })
 
+  it('releases every reply it does not read, and stops reading past 64 KiB', async () => {
+    let cancelled = 0
+    const streamed = (body: string, status = 200, generation = 5) =>
+      new Response(
+        new ReadableStream<Uint8Array>({
+          pull(controller) {
+            controller.enqueue(new TextEncoder().encode(body))
+          },
+          cancel() {
+            cancelled += 1
+          }
+        }),
+        { status, headers: { 'x-goog-generation': String(generation) } }
+      )
+    let next: () => Response = () => streamed('', 404)
+    const google = fakeGoogle()
+    const fetchImpl: typeof fetch = async (target, init) =>
+      new URL(String(target)).hostname === 'metadata.google.internal'
+        ? await google.fetchImpl(target, init)
+        : next()
+    const channel = cellChannel(fetchImpl)
+    for (const status of [404, 503]) {
+      next = () => streamed('', status)
+      await channel.poll()
+    }
+    expect(cancelled).toBe(2)
+    // An endless body: the pull source never closes, so only the bound ends the read.
+    next = () => streamed('x'.repeat(16 * 1024), 200, 5)
+    await channel.poll()
+    expect(cancelled).toBe(3)
+    expect(channel.applied().generation).toBe(0)
+    next = () =>
+      new Response(JSON.stringify({ v: 1, cellId: CELL_ID, flags: { readinessLocal: true } }), {
+        headers: { 'x-goog-generation': '9' }
+      })
+    await channel.poll()
+    expect(channel.applied().generation).toBe(9)
+    next = () => streamed('{}', 200, 8)
+    await channel.poll()
+    expect(cancelled).toBe(4)
+  })
+
   it('reads one at a time and on a jittered 5 s cadence', async () => {
     vi.useFakeTimers()
     const google = fakeGoogle(cellObject(5, { readinessLocal: true }))

@@ -59,6 +59,7 @@ export function startControlFlagChannel<Flags>(input: {
   const readProjectId = async (): Promise<string> => {
     if (projectId) return projectId
     const response = await metadata('project/project-id')
+    if (!response.ok) void response.body?.cancel().catch(() => undefined)
     const value = response.ok ? (await response.text()).trim() : ''
     if (!/^[a-z][a-z0-9-]{4,62}$/.test(value)) throw new ControlFlagPollError('metadata')
     projectId = value
@@ -68,7 +69,10 @@ export function startControlFlagChannel<Flags>(input: {
   const readAccessToken = async (): Promise<string> => {
     if (accessToken && Date.now() < accessToken.refreshAt) return accessToken.value
     const response = await metadata('instance/service-accounts/default/token')
-    if (!response.ok) throw new ControlFlagPollError('metadata')
+    if (!response.ok) {
+      void response.body?.cancel().catch(() => undefined)
+      throw new ControlFlagPollError('metadata')
+    }
     const body: unknown = await response.json().catch(() => null)
     if (
       typeof body !== 'object' ||
@@ -101,17 +105,29 @@ export function startControlFlagChannel<Flags>(input: {
       throw new ControlFlagPollError('network')
     })
     if (response.status === 304) return
+    // Every early exit releases the body, so an unread reply never pins its socket.
+    const discard = (): void => void response.body?.cancel().catch(() => undefined)
     if (response.status === 401) accessToken = null
-    if (response.status === 404) throw new ControlFlagPollError('not-found')
-    if (!response.ok) throw new ControlFlagPollError('http')
+    if (response.status === 404) {
+      discard()
+      throw new ControlFlagPollError('not-found')
+    }
+    if (!response.ok) {
+      discard()
+      throw new ControlFlagPollError('http')
+    }
     const generation = Number(response.headers.get('x-goog-generation'))
     if (!Number.isSafeInteger(generation) || generation <= 0) {
+      discard()
       throw new ControlFlagPollError('malformed')
     }
-    if (generation <= applied.generation) return
-    const text = await response.text()
+    if (generation <= applied.generation) {
+      discard()
+      return
+    }
     seenGeneration = generation
-    if (text.length > MAX_OBJECT_BYTES) throw new ControlFlagPollError('malformed')
+    const text = await readBounded(response, MAX_OBJECT_BYTES)
+    if (text === null) throw new ControlFlagPollError('malformed')
     let body: unknown
     try {
       body = JSON.parse(text)
@@ -166,6 +182,25 @@ export function startControlFlagChannel<Flags>(input: {
       if (timer) clearTimeout(timer)
     }
   }
+}
+
+// Stops reading, and cancels the stream, at the first byte past the bound.
+async function readBounded(response: Response, maxBytes: number): Promise<string | null> {
+  if (!response.body) return ''
+  const reader = response.body.getReader()
+  const chunks: Uint8Array[] = []
+  let total = 0
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    total += value.byteLength
+    if (total > maxBytes) {
+      await reader.cancel().catch(() => undefined)
+      return null
+    }
+    chunks.push(value)
+  }
+  return Buffer.concat(chunks).toString('utf8')
 }
 
 class ControlFlagPollError extends Error {
