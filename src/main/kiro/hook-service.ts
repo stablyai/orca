@@ -217,7 +217,11 @@ export class KiroHookService {
       for (const fileName of fileNames) {
         const path = pathPosix.join(agentsDir, fileName)
         const text = await readTextFileRemote(sftp, path)
-        const file = parseAgentConfig(fileName, text ?? '')
+        // Deleted after the listing: same status as the local unreadable-file path.
+        const file: AgentFileRead =
+          text === null
+            ? { fileName, error: 'could not be read' }
+            : parseAgentConfig(fileName, text)
         if ('error' in file) {
           files.push(file)
           continue

@@ -169,6 +169,28 @@ describe('KiroHookService', () => {
     expect(readAgent('default').hooks).toBeDefined()
   })
 
+  it('reports a remote agent deleted after the listing as unreadable, not invalid JSON', async () => {
+    writeAgent('kept', { name: 'kept' })
+    writeAgent('gone', { name: 'gone' })
+    const sftp = createManagedHookLocalFilesystem()
+    const readFile = sftp.readFile
+    Object.assign(sftp, {
+      readFile: (path: string, ...rest: unknown[]) => {
+        if (path.endsWith('gone.json')) {
+          rmSync(path)
+        }
+        return Reflect.apply(readFile, sftp, [path, ...rest])
+      }
+    })
+
+    const result = await new KiroHookService().installRemote(sftp, home)
+
+    expect(result.state).toBe('partial')
+    expect(result.detail).toContain('gone.json is could not be read')
+    expect(result.detail).not.toContain('not valid JSON')
+    expect(readAgent('kept').hooks).toBeDefined()
+  })
+
   it('ignores non-JSON files such as the shipped example config', () => {
     mkdirSync(agentsDir(), { recursive: true })
     writeFileSync(join(agentsDir(), 'agent_config.json.example'), '{}')
