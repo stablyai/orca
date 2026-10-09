@@ -7,6 +7,7 @@ import type { WorkspaceSessionState } from '../workspace-session-state-types'
 import { loadWorkspaceLayout } from './workspace-layout-load'
 import { checkWorkspaceLayoutModelRules } from './workspace-layout-model-rules'
 import { checkWorkspaceLayoutRules } from './workspace-layout-rules'
+import { checkLayoutRoundTrip } from './workspace-layout-round-trip-check'
 import { saveWorkspaceLayout } from './workspace-layout-save'
 import {
   addWorkspace,
@@ -21,6 +22,8 @@ const onDisk = (session: WorkspaceSessionState): WorkspaceSessionState =>
   JSON.parse(JSON.stringify(session))
 
 function load(session: WorkspaceSessionState) {
+  // Each rule's changes are kinds the shadow self-check knows, and its output is a fixed point.
+  expect(checkLayoutRoundTrip(LOCAL_EXECUTION_HOST_ID, session)).toEqual([])
   let next = 0
   return loadWorkspaceLayout(LOCAL_EXECUTION_HOST_ID, session, {
     mintId: () => `minted-${++next}`,
