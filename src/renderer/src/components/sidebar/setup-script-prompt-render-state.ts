@@ -23,16 +23,18 @@ export function findSetupScriptPromptRepo(input: {
   if (!activeRepoId) {
     return null
   }
-  // Why: runtime-relayed SSH worktrees expose their transport host separately from the repo catalog owner.
-  const runtimeOwnerEnvironmentId = activeWorktree?.runtimeOwnerEnvironmentId?.trim()
-  const activeWorktreeHostId =
-    activeWorktree?.repoId === activeRepoId
-      ? runtimeOwnerEnvironmentId
-        ? toRuntimeExecutionHostId(runtimeOwnerEnvironmentId)
-        : activeWorktree.hostId
-      : undefined
+  const matchingWorktree = activeWorktree?.repoId === activeRepoId ? activeWorktree : null
+  const runtimeOwnerEnvironmentId = matchingWorktree?.runtimeOwnerEnvironmentId?.trim()
+  const publisherHostId = runtimeOwnerEnvironmentId
+    ? toRuntimeExecutionHostId(runtimeOwnerEnvironmentId)
+    : undefined
+  const activeWorktreeHostId = publisherHostId ?? matchingWorktree?.hostId
+  const rawHostId =
+    matchingWorktree?.hostId !== publisherHostId ? matchingWorktree?.hostId : undefined
   return findRepoForHost(repos, activeRepoId, {
     settings,
+    ...(rawHostId ? { authoritativeExecutionHostId: rawHostId } : {}),
+    ...(publisherHostId ? { catalogOwnerHostId: publisherHostId } : {}),
     ...(activeWorktreeHostId ? { hostId: activeWorktreeHostId } : {})
   })
 }
