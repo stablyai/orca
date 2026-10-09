@@ -193,7 +193,8 @@ function defaultAiVaultResumeCommandBase(agent: AiVaultAgent): string {
   if (agent === 'hermes') {
     return 'hermes'
   }
-  if (agent === 'rovo' || agent === 'opencode2') {
+  // Preserve launch subcommands and mode flags when resuming.
+  if (agent === 'rovo' || agent === 'opencode2' || agent === 'kiro') {
     return TUI_AGENT_CONFIG[agent].launchCmd
   }
   return TUI_AGENT_CONFIG[agent].detectCmd
@@ -248,6 +249,8 @@ function buildAgentResumeInvocation(
       return `${baseCommand} --resume ${sessionArg}`
     case 'antigravity':
       return `${baseCommand} --conversation ${sessionArg}`
+    case 'kiro':
+      return `${baseCommand} --resume-id ${sessionArg}`
   }
 }
 

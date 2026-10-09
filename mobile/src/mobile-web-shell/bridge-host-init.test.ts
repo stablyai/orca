@@ -53,7 +53,8 @@ describe('init and state', () => {
           'native.media.release',
           'native.audio.start',
           'native.audio.read',
-          'native.audio.stop'
+          'native.audio.stop',
+          'native.storage.read'
         ]
       },
       route: ROUTE,

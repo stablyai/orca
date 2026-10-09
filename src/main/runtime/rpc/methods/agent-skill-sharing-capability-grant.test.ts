@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { OrcaRuntimeService } from '../../orca-runtime'
-import { SettingsUpdate } from './client-settings-schemas'
+import { SettingsUpdate } from '../../../../shared/rpc-contract/client-settings-params'
 
 vi.mock('electron', () => ({
   app: { getPath: () => '/orca-state', isPackaged: true }

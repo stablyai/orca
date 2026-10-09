@@ -36,10 +36,16 @@ export function createManagedHookLocalFilesystem(): SFTPWrapper {
     stat(path: string, callback: Callback<{ mode: number }>): void {
       stat(path, (error, stats) => finish(callback, error, stats))
     },
-    readdir(path: string, callback: Callback<[]>): void {
-      // Why: installers use readdir only as an existence check; names and
-      // attrs would allocate work that no caller consumes.
-      readdir(path, (error) => finish(callback, error, []))
+    readdir(path: string, callback: Callback<{ filename: string }[]>): void {
+      // Why names only: Kiro lists its agent configs by name; attrs have no consumer,
+      // matching the WSL adapter's `{ filename }` entries.
+      readdir(path, (error, names) =>
+        finish(
+          callback,
+          error,
+          names?.map((filename) => ({ filename }))
+        )
+      )
     },
     mkdir(path: string, callback: Callback): void {
       mkdir(path, (error) => finish(callback, error))

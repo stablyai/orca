@@ -6,7 +6,7 @@
  * What blocks is what cannot move: another owner, live terminal leases, and dependent state the
  * manifest cannot carry. Read-only: building the manifest here exports nothing.
  */
-import { isLiveSshPtyLease } from '../../shared/ssh-pty-lease-liveness'
+import { isLiveSshPtyLease } from '../../shared/ssh-types'
 import type { Store } from '../persistence'
 import type {
   OrcadMigrationBlocker,

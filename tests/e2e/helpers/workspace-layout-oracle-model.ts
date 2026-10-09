@@ -11,7 +11,7 @@ import {
   checkWorkspaceLayoutRules,
   type WorkspaceLayoutPartition,
   type WorkspaceLayoutViolation
-} from '../../../src/main/persistence/terminal-topology/workspace-layout-rules'
+} from '../../../src/shared/workspace-layout/workspace-layout-rules'
 
 export type OraclePane = { leafId: string; ptyId: string | null }
 export type OracleTerminalTab = { id: string; customTitle: string | null; panes: OraclePane[] }

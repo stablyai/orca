@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
-import { Animated, BackHandler, Text, useWindowDimensions, View } from 'react-native'
+import { Animated, BackHandler, Text, View, type LayoutChangeEvent } from 'react-native'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { OrcaLogo } from '../src/components/OrcaLogo'
@@ -46,7 +46,9 @@ function MobileOnboardingFlow({
 }) {
   const router = useRouter()
   const steps = useMemo(() => parseMobileOnboardingSteps(rawSteps), [rawSteps])
-  const { width } = useWindowDimensions()
+  // Why: an iPad modal is a centred sheet narrower than the window, so slides must
+  // follow the viewport; null holds the pager back until the first measurement.
+  const [width, setWidth] = useState<number | null>(null)
   const [activeIndex, setActiveIndex] = useState(0)
   const [busyChoice, setBusyChoice] = useState<MobileOnboardingBusyChoice>(null)
   const [error, setError] = useState<string | null>(null)
@@ -132,7 +134,17 @@ function MobileOnboardingFlow({
     [advanceOrContinue]
   )
 
-  const translateX = useMemo(() => Animated.multiply(slideProgress, -width), [slideProgress, width])
+  const translateX = useMemo(
+    () => Animated.multiply(slideProgress, -(width ?? 0)),
+    [slideProgress, width]
+  )
+  const onViewportLayout = useCallback((event: LayoutChangeEvent) => {
+    const measured = event.nativeEvent.layout.width
+    // Why: a transient zero-width pass must not collapse the slides to nothing.
+    if (measured > 0) {
+      setWidth(measured)
+    }
+  }, [])
 
   return (
     <SafeAreaView style={styles.container}>
@@ -157,26 +169,28 @@ function MobileOnboardingFlow({
         ) : null}
       </View>
 
-      <View style={styles.carouselViewport}>
-        <Animated.View
-          style={[
-            styles.carouselTrack,
-            { width: width * steps.length, transform: [{ translateX }] }
-          ]}
-        >
-          {steps.map((step, index) => (
-            <MobileOnboardingPage
-              key={step}
-              step={step}
-              width={width}
-              active={index === activeIndex}
-              busyChoice={busyChoice}
-              error={error}
-              onSessionChoice={(view) => void chooseSessionView(view)}
-              onNotificationChoice={(choice) => void chooseNotifications(choice)}
-            />
-          ))}
-        </Animated.View>
+      <View style={styles.carouselViewport} onLayout={onViewportLayout}>
+        {width === null ? null : (
+          <Animated.View
+            style={[
+              styles.carouselTrack,
+              { width: width * steps.length, transform: [{ translateX }] }
+            ]}
+          >
+            {steps.map((step, index) => (
+              <MobileOnboardingPage
+                key={step}
+                step={step}
+                width={width}
+                active={index === activeIndex}
+                busyChoice={busyChoice}
+                error={error}
+                onSessionChoice={(view) => void chooseSessionView(view)}
+                onNotificationChoice={(choice) => void chooseNotifications(choice)}
+              />
+            ))}
+          </Animated.View>
+        )}
       </View>
     </SafeAreaView>
   )

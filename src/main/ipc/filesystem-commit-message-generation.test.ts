@@ -439,6 +439,51 @@ describe('registerFilesystemHandlers', () => {
     }
   })
 
+  it('starts local generation from the login-shell environment', async () => {
+    const previousBaseUrl = process.env.ANTHROPIC_BASE_URL
+    delete process.env.ANTHROPIC_BASE_URL
+    const context = {
+      branch: 'feature/ai',
+      stagedSummary: 'M\tREADME.md',
+      stagedPatch: '+hello'
+    }
+    const params = { agentId: 'claude', model: 'haiku' }
+    resolveCommitMessageSettingsMock.mockReturnValue({ ok: true, params })
+    getStagedCommitContextMock.mockResolvedValue(context)
+    generateCommitMessageFromContextMock.mockResolvedValue({
+      success: true,
+      message: 'Update README'
+    })
+
+    try {
+      registerFilesystemHandlers(store as never, {
+        resolveBaseEnvironment: async () => ({ ANTHROPIC_BASE_URL: 'https://proxy.example' }),
+        prepareForClaudeLaunch: async () => ({
+          configDir: '/home/me/.claude',
+          envPatch: {},
+          provenance: 'system'
+        })
+      })
+
+      await handlers.get('git:generateCommitMessage')!(null, {
+        worktreePath: WORKTREE_FEATURE_PATH
+      })
+
+      expect(generateCommitMessageFromContextMock).toHaveBeenCalledWith(
+        context,
+        params,
+        expect.objectContaining({
+          kind: 'local',
+          env: { ANTHROPIC_BASE_URL: 'https://proxy.example' }
+        })
+      )
+    } finally {
+      if (previousBaseUrl !== undefined) {
+        process.env.ANTHROPIC_BASE_URL = previousBaseUrl
+      }
+    }
+  })
+
   it('generates an SSH commit message using remote staged context and relay execution', async () => {
     const context = {
       branch: 'main',
@@ -459,9 +504,11 @@ describe('registerFilesystemHandlers', () => {
       message: 'Add remote file'
     })
 
+    const resolveBaseEnvironment = vi.fn(async () => ({}))
     registerFilesystemHandlers(store as never, {
       prepareForCodexLaunch,
-      prepareForClaudeLaunch
+      prepareForClaudeLaunch,
+      resolveBaseEnvironment
     })
 
     await expect(
@@ -495,6 +542,7 @@ describe('registerFilesystemHandlers', () => {
     )
     expect(prepareForCodexLaunch).not.toHaveBeenCalled()
     expect(prepareForClaudeLaunch).not.toHaveBeenCalled()
+    expect(resolveBaseEnvironment).not.toHaveBeenCalled()
   })
 
   it('routes SSH generation cancellations to separate provider operations', async () => {
