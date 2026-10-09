@@ -20,6 +20,12 @@ import { mergeFetchedWorktrees } from './fetched-worktree-merge'
 import { notifyRuntimeScopeForbiddenIfNeeded } from './runtime-scope-forbidden-toast'
 import { mapReposForWorktreeRefresh } from './worktree-refresh-pool'
 import { settingsForKnownRepoOwner } from './worktree-owner-settings'
+import {
+  captureRepoRegistrationContext,
+  repoRegistrationContextIsCurrent,
+  type RepoRegistrationContext
+} from './repo-registration-context'
+import { teardownAfterAdmittedWorktreeListing } from '../teardown/admitted-worktree-terminal-teardown'
 
 export function createFetchAllWorktrees(
   set: WorktreeSliceSet,
@@ -43,6 +49,11 @@ export function createFetchAllWorktrees(
           const requestStartedState = get()
           const requestStartedWorktrees = requestStartedState.worktreesByRepo[r.id]
           const hostId = getRepoExecutionHostId(r)
+          const registrationContext = captureRepoRegistrationContext([r], r.id, hostId)
+          if (!repoRegistrationContextIsCurrent(requestStartedState.repos, registrationContext)) {
+            return
+          }
+          const knownWorktreeIds = getKnownWorktreeIdsForPurge(requestStartedState, r.id, hostId)
           const setup = getProjectHostSetupForRepoHost(requestStartedState, r.id, hostId)
           const settings = settingsForKnownRepoOwner(requestStartedState.settings, r)
           const parsedHost = parseExecutionHostId(hostId)
@@ -51,22 +62,19 @@ export function createFetchAllWorktrees(
               ? (getCurrentDirectSshAuthority(requestStartedState, hostId) ?? undefined)
               : undefined
           if (parsedHost?.kind === 'ssh' && !directSshAuthority) {
-            await fetchKnownSshWorktreesForRepo(set, r.id, parsedHost.id)
+            await fetchKnownSshWorktreesForRepo(set, r.id, parsedHost.id, registrationContext)
             return
           }
           const refresh = await listDetectedWorktreesForRepoCoalesced(settings, r.id, {
             executionHostId: hostId,
+            registrationContext,
             reuseRecentCompatibilityFailure: true,
-            directSshAuthority,
-            connectionId: r.connectionId,
-            knownWorktreeIds: getKnownWorktreeIdsForPurge(requestStartedState, r.id, hostId),
-            isStaleCatalogPublication: (result) =>
-              isStaleWorktreeCatalogPublication(get(), r.id, hostId, result.catalogVersion)
+            directSshAuthority
           })
           if (refresh.status !== 'admitted') {
             return
           }
-          mergeFetchedWorktrees(set, {
+          const outcome = mergeFetchedWorktrees(set, {
             repoId: r.id,
             hostId,
             ownerWasMissingAtStart: false,
@@ -74,6 +82,16 @@ export function createFetchAllWorktrees(
             setup,
             refresh
           })
+          if (outcome === 'applied') {
+            await teardownAfterAdmittedWorktreeListing(get, {
+              settings,
+              repoId: r.id,
+              refresh,
+              connectionId: r.connectionId,
+              knownWorktreeIds,
+              ownerMayBeMissing: false
+            })
+          }
         } catch (err) {
           if (notifyRuntimeScopeForbiddenIfNeeded(err)) {
             return
@@ -96,6 +114,7 @@ export function createFetchAllWorktrees(
             hostId: ExecutionHostId
             ok: boolean
             detected: DetectedWorktreeListResult
+            registrationContext: RepoRegistrationContext
           }
         | { repoId: string; ok: false }
       > => {
@@ -103,6 +122,12 @@ export function createFetchAllWorktrees(
           const requestStartedState = get()
           const requestStartedWorktrees = requestStartedState.worktreesByRepo[r.id]
           const hostId = getRepoExecutionHostId(r)
+          const registrationContext = captureRepoRegistrationContext([r], r.id, hostId)
+          if (!repoRegistrationContextIsCurrent(requestStartedState.repos, registrationContext)) {
+            return { repoId: r.id, ok: false as const }
+          }
+          const settings = settingsForKnownRepoOwner(requestStartedState.settings, r)
+          const knownWorktreeIds = getKnownWorktreeIdsForPurge(requestStartedState, r.id, hostId)
           const setup = getProjectHostSetupForRepoHost(requestStartedState, r.id, hostId)
           const parsedHost = parseExecutionHostId(hostId)
           const directSshAuthority =
@@ -110,22 +135,15 @@ export function createFetchAllWorktrees(
               ? (getCurrentDirectSshAuthority(requestStartedState, hostId) ?? undefined)
               : undefined
           if (parsedHost?.kind === 'ssh' && !directSshAuthority) {
-            await fetchKnownSshWorktreesForRepo(set, r.id, parsedHost.id)
+            await fetchKnownSshWorktreesForRepo(set, r.id, parsedHost.id, registrationContext)
             return { repoId: r.id, ok: false as const }
           }
-          const refresh = await listDetectedWorktreesForRepoCoalesced(
-            settingsForKnownRepoOwner(requestStartedState.settings, r),
-            r.id,
-            {
-              executionHostId: hostId,
-              reuseRecentCompatibilityFailure: true,
-              directSshAuthority,
-              connectionId: r.connectionId,
-              knownWorktreeIds: getKnownWorktreeIdsForPurge(requestStartedState, r.id, hostId),
-              isStaleCatalogPublication: (result) =>
-                isStaleWorktreeCatalogPublication(get(), r.id, hostId, result.catalogVersion)
-            }
-          )
+          const refresh = await listDetectedWorktreesForRepoCoalesced(settings, r.id, {
+            executionHostId: hostId,
+            registrationContext,
+            reuseRecentCompatibilityFailure: true,
+            directSshAuthority
+          })
           if (refresh.status !== 'admitted') {
             return { repoId: r.id, ok: false as const }
           }
@@ -142,11 +160,20 @@ export function createFetchAllWorktrees(
           if (outcome !== 'applied') {
             return { repoId: r.id, ok: false as const }
           }
+          await teardownAfterAdmittedWorktreeListing(get, {
+            settings,
+            repoId: r.id,
+            refresh,
+            connectionId: r.connectionId,
+            knownWorktreeIds,
+            ownerMayBeMissing: false
+          })
           return {
             repoId: r.id,
             hostId,
             ok: refresh.result.authoritative,
-            detected: refresh.result
+            detected: refresh.result,
+            registrationContext
           }
         } catch (err) {
           if (!notifyRuntimeScopeForbiddenIfNeeded(err)) {
@@ -178,12 +205,13 @@ export function createFetchAllWorktrees(
     const listingSuperseded = results.some(
       (result) =>
         'detected' in result &&
-        isStaleWorktreeCatalogPublication(
-          get(),
-          result.repoId,
-          result.hostId,
-          result.detected.catalogVersion
-        )
+        (!repoRegistrationContextIsCurrent(get().repos, result.registrationContext) ||
+          isStaleWorktreeCatalogPublication(
+            get(),
+            result.repoId,
+            result.hostId,
+            result.detected.catalogVersion
+          ))
     )
     if (listingSuperseded) {
       return

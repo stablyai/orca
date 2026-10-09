@@ -1,8 +1,5 @@
 import type { WorktreeSlice } from '../../worktree-helpers'
-import {
-  appliedWorktreeCatalogVersionPatch,
-  isStaleWorktreeCatalogPublication
-} from './worktree-catalog-version-state'
+import { appliedWorktreeCatalogVersionPatch } from './worktree-catalog-version-state'
 import type { WorktreeSliceGet, WorktreeSliceSet } from './worktree-slice-types'
 import { parseExecutionHostId } from '../../../../../../shared/execution-host'
 import { findRepoForHost } from '../../repo-host-identity'
@@ -20,6 +17,8 @@ import {
 import { fetchKnownSshWorktreesForRepo } from './known-ssh-worktree-fetch'
 import { notifyRuntimeScopeForbiddenIfNeeded } from './runtime-scope-forbidden-toast'
 import { settingsForRepoOwner } from './worktree-owner-settings'
+import { captureRepoRegistrationContext } from './repo-registration-context'
+import { teardownAfterAdmittedWorktreeListing } from '../teardown/admitted-worktree-terminal-teardown'
 
 export function createFetchDetectedWorktrees(
   set: WorktreeSliceSet,
@@ -29,6 +28,9 @@ export function createFetchDetectedWorktrees(
     try {
       const ownerState = get()
       const hostId = repoHostId(ownerState, repoId)
+      const registrationContext = captureRepoRegistrationContext(ownerState.repos, repoId, hostId)
+      const knownWorktreeIds = getKnownWorktreeIdsForPurge(ownerState, repoId, hostId)
+      const settings = settingsForRepoOwner(ownerState, repoId, hostId)
       const ownerWasMissingAtStart = !ownerState.repos.some((repo) => repo.id === repoId)
       const setup = getProjectHostSetupForRepoHost(ownerState, repoId, hostId)
       const repoOwner = findRepoForHost(ownerState.repos, repoId, {
@@ -43,21 +45,14 @@ export function createFetchDetectedWorktrees(
       if (parsedHost?.kind === 'ssh' && !directSshAuthority) {
         // Why: this function's contract is detected-only. The fallback runs for its store side effect, but
         // callers keep seeing null as they did before the metadata path existed.
-        await fetchKnownSshWorktreesForRepo(set, repoId, parsedHost.id)
+        await fetchKnownSshWorktreesForRepo(set, repoId, parsedHost.id, registrationContext)
         return null
       }
-      const refresh = await listDetectedWorktreesForRepoCoalesced(
-        settingsForRepoOwner(ownerState, repoId, hostId),
-        repoId,
-        {
-          executionHostId: hostId,
-          directSshAuthority,
-          connectionId: repoOwner?.connectionId,
-          knownWorktreeIds: getKnownWorktreeIdsForPurge(ownerState, repoId, hostId),
-          isStaleCatalogPublication: (result) =>
-            isStaleWorktreeCatalogPublication(get(), repoId, hostId, result.catalogVersion)
-        }
-      )
+      const refresh = await listDetectedWorktreesForRepoCoalesced(settings, repoId, {
+        executionHostId: hostId,
+        registrationContext,
+        directSshAuthority
+      })
       if (refresh.status !== 'admitted') {
         return null
       }
@@ -101,6 +96,16 @@ export function createFetchDetectedWorktrees(
               }
             }
       })
+      if (admitted) {
+        await teardownAfterAdmittedWorktreeListing(get, {
+          settings,
+          repoId,
+          refresh,
+          connectionId: repoOwner?.connectionId,
+          knownWorktreeIds,
+          ownerMayBeMissing: ownerWasMissingAtStart && !directSshAuthority
+        })
+      }
       return admitted ? refresh.result : null
     } catch (err) {
       if (notifyRuntimeScopeForbiddenIfNeeded(err)) {

@@ -203,7 +203,7 @@ describe('fetchWorktrees', () => {
     expect(hasDismissedHugeRepoWarning(beginHugeRepoWarningProbe(hidden))).toBe(false)
   })
 
-  it('awaits missing-worktree terminal teardown before purging renderer state', async () => {
+  it('admits the listing before terminal teardown and waits for teardown to finish', async () => {
     const store = createTestStore()
     const deleted = makeWorktree({
       id: 'repo1::/path/deleted',
@@ -250,19 +250,29 @@ describe('fetchWorktrees', () => {
       }
     } as unknown as Partial<AppState>)
 
-    const refresh = store.getState().fetchWorktrees('repo1')
+    let refreshFinished = false
+    const refresh = store
+      .getState()
+      .fetchWorktrees('repo1')
+      .then((result) => {
+        refreshFinished = true
+        return result
+      })
     await vi.waitFor(() => expect(mockApi.runtime.call).toHaveBeenCalledTimes(1))
 
     expect(mockApi.runtime.call).toHaveBeenCalledWith({
       method: 'worktree.teardownMissingTerminals',
       params: { repo: 'repo1', worktreeIds: [deleted.id], connectionId: 'ssh-1' }
     })
-    expect(store.getState().tabsByWorktree[deleted.id]).toBeDefined()
+    expect(store.getState().tabsByWorktree[deleted.id]).toBeUndefined()
+    expect(store.getState().worktreesByRepo.repo1?.map(({ id }) => id)).toEqual([surviving.id])
+    expect(refreshFinished).toBe(false)
 
     finishTeardown()
     await refresh
 
     expect(store.getState().tabsByWorktree[deleted.id]).toBeUndefined()
+    expect(refreshFinished).toBe(true)
   })
 
   it('clears a hidden dismissal across hydrated fetch-all delete and recreation', async () => {

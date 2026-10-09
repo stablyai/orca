@@ -4,7 +4,6 @@ import type {
   WorktreeSlice
 } from '../../worktree-helpers'
 import type { HostQualifiedDetectedWorktreeResult } from '../../../../../../shared/detected-worktree-provider-contract'
-import { isStaleWorktreeCatalogPublication } from './worktree-catalog-version-state'
 import type { WorktreeSliceGet, WorktreeSliceSet } from './worktree-slice-types'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -25,6 +24,8 @@ import { mergeFetchedWorktrees } from './fetched-worktree-merge'
 import { notifyRuntimeScopeForbiddenIfNeeded } from './runtime-scope-forbidden-toast'
 import { refreshRemoteWorktreeLineageBestEffort } from '../metadata/worktree-lineage-refresh'
 import { settingsForRepoOwner } from './worktree-owner-settings'
+import { captureRepoRegistrationContext } from './repo-registration-context'
+import { teardownAfterAdmittedWorktreeListing } from '../teardown/admitted-worktree-terminal-teardown'
 
 export function createFetchWorktrees(
   set: WorktreeSliceSet,
@@ -66,6 +67,10 @@ export function createFetchWorktrees(
         ? LOCAL_EXECUTION_HOST_ID
         : repoHostId(ownerState, repoId, options?.executionHostId)
       const setup = getProjectHostSetupForRepoHost(ownerState, repoId, hostId)
+      const registrationContext = captureRepoRegistrationContext(ownerState.repos, repoId, hostId)
+      const knownWorktreeIds = options?.presentationOnly
+        ? undefined
+        : getKnownWorktreeIdsForPurge(ownerState, repoId, hostId)
       const repoOwner = findRepoForHost(ownerState.repos, repoId, {
         hostId,
         settings: ownerState.settings
@@ -89,18 +94,15 @@ export function createFetchWorktrees(
         // Why: requireAuthoritative callers asked for authoritative-or-nothing, so writing non-authoritative
         // rows as a side effect before returning false would silently weaken that contract.
         if (!options?.requireAuthoritative) {
-          await fetchKnownSshWorktreesForRepo(set, repoId, parsedHost.id)
+          await fetchKnownSshWorktreesForRepo(set, repoId, parsedHost.id, registrationContext)
         }
         return false
       }
       const refresh = await listDetectedWorktreesForRepoCoalesced(settings, repoId, {
         executionHostId: hostId,
+        registrationContext,
         requireAuthoritative: options?.requireAuthoritative,
-        directSshAuthority,
-        connectionId: repoOwner?.connectionId,
-        knownWorktreeIds: getKnownWorktreeIdsForPurge(ownerState, repoId, hostId),
-        isStaleCatalogPublication: (result) =>
-          isStaleWorktreeCatalogPublication(get(), repoId, hostId, result.catalogVersion)
+        directSshAuthority
       })
       if (refresh.status !== 'admitted') {
         return directCallerAuthority ? refresh.providerResult : false
@@ -137,6 +139,14 @@ export function createFetchWorktrees(
             ? (staleDetectedWorktreeProviderResult(refresh) ?? false)
             : false
       }
+      await teardownAfterAdmittedWorktreeListing(get, {
+        settings,
+        repoId,
+        refresh,
+        connectionId: repoOwner?.connectionId,
+        knownWorktreeIds,
+        ownerMayBeMissing: ownerWasMissingAtStart && !directSshAuthority
+      })
       // Direct SSH lineage requires its own qualified authority result.
       // Bulk runtime callers apply one final host-wide snapshot after all repo merges.
       if (!directSshAuthority && !options?.suppressRemoteLineageRefresh) {

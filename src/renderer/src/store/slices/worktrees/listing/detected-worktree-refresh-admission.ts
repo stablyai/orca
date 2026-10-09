@@ -7,6 +7,7 @@ import type { AdmittedDetectedWorktreeRefresh } from './worktree-slice-types'
 import { directSshAuthoritiesEqual, getCurrentDirectSshAuthority } from './direct-ssh-authority'
 import { isStaleWorktreeCatalogPublication } from './worktree-catalog-version-state'
 import { repoHasExactlyOneExecutionHostOwner } from './worktree-host-ownership'
+import { repoRegistrationContextIsCurrent } from './repo-registration-context'
 
 /**
  * Why a listing was not applied. `not-current`: the connection or repo owner it was listed under
@@ -46,6 +47,8 @@ export function worktreeListingRefusal(
 ): WorktreeListingRefusal | null {
   if (
     !isCurrentDetectedWorktreeRefresh(state, refresh) ||
+    (refresh.registrationContext &&
+      !repoRegistrationContextIsCurrent(state.repos, refresh.registrationContext)) ||
     !repoHasExactlyOneExecutionHostOwner(state, repoId, hostId, ownerMayBeMissing)
   ) {
     return 'not-current'

@@ -30,6 +30,9 @@ import {
 } from '../../src/renderer/src/runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '../../src/renderer/src/runtime/runtime-rpc-client'
 import { RuntimeProjectHostSetupController } from '../../src/main/runtime/runtime-project-host-setup-controller'
+import { registerDetectedWorktreeHandlers } from '../../src/main/ipc/worktrees/listing/register-detected-worktree-handlers'
+import { gitExecFileAsync } from '../../src/main/git/runner'
+import { isDetectedWorktreeListResult } from '../../src/renderer/src/store/slices/worktrees/listing/detected-worktree-provider-request'
 
 const { ipcHandlers, rendererGetState, dispatchRepoChanged, registerRemoteRepo } = vi.hoisted(
   () => ({
@@ -146,6 +149,136 @@ function createSelectedWorkspace(
 }
 
 describe('host-qualified setup publication to the full renderer catalog', () => {
+  it.each(['git', 'folder'] as const)(
+    'fences a queued actual %s listing after a successful kind change',
+    async (kind) => {
+      const path = join(testState.dir, 'native-repo')
+      await gitExecFileAsync(['init', '--quiet', path], { cwd: testState.dir })
+      await gitExecFileAsync(['symbolic-ref', 'HEAD', 'refs/heads/main'], { cwd: path })
+      await gitExecFileAsync(
+        [
+          '-c',
+          'user.name=Test',
+          '-c',
+          'user.email=test@example.com',
+          'commit',
+          '--allow-empty',
+          '-qm',
+          'fixture'
+        ],
+        { cwd: path }
+      )
+      const store = createStore()
+      store.addRepo({ ...makeRepo('local'), path, kind })
+      const renderer = createTestStore()
+      rendererGetState.mockImplementation(renderer.getState)
+      let releaseOld: (() => void) | undefined
+      const paused = new Promise<void>((resolve) => {
+        releaseOld = resolve
+      })
+      let oldReadCompleted = false
+      let freshReply: unknown
+      const listDetected = vi.fn(async (args: unknown) => {
+        const reply = await invoke('worktrees:listDetected', args)
+        if (!oldReadCompleted) {
+          oldReadCompleted = true
+          await paused
+        } else {
+          freshReply = reply
+        }
+        return reply
+      })
+      vi.stubGlobal('window', {
+        api: {
+          repos: {
+            list: async () => structuredClone(store.getRepos()),
+            onChanged: (callback: () => void) => {
+              dispatchRepoChanged.mockImplementation(callback)
+              return () => {}
+            }
+          },
+          projects: {
+            list: async () => structuredClone(store.getProjects()),
+            listHostSetups: async () => structuredClone(store.getProjectHostSetups())
+          },
+          projectGroups: { list: async () => [] },
+          folderWorkspaces: { list: async () => [] },
+          worktrees: {
+            listDetected,
+            onChanged: () => () => {},
+            onBaseStatus: () => () => {},
+            onRemoteBranchConflict: () => () => {}
+          }
+        }
+      })
+      renderer.setState({
+        fetchProjectGroups: async () => {},
+        fetchFolderWorkspaces: async () => {}
+      })
+      const unsubs: (() => void)[] = []
+      registerProjectCatalogIpcBridge(
+        unsubs,
+        { enqueue: () => {}, dispose: () => {} },
+        () => false,
+        () => {}
+      )
+      registerProjectHostSetupHandlers(new BrowserWindow({ show: false }), store)
+      registerDetectedWorktreeHandlers({
+        store,
+        runtime: new OrcaRuntimeService(store),
+        mainWindow: new BrowserWindow({ show: false }),
+        detectedWorktreeCancellations: createSenderScopedRequestCancellations(),
+        worktreeRemovalsInFlight: new Map()
+      })
+      await renderer.getState().fetchRepos()
+      const capturedRepos = renderer.getState().repos
+      const options = {
+        executionHostId: 'local',
+        presentationOnly: true,
+        requireAuthoritative: true,
+        suppressRemoteLineageRefresh: true
+      } as const
+      const oldRequest = renderer.getState().fetchWorktrees('shared-id', options)
+      let newRequest: Promise<boolean> | undefined
+      try {
+        await vi.waitFor(() => expect(oldReadCompleted).toBe(true))
+        const nextKind = kind === 'git' ? 'folder' : 'git'
+        invoke(
+          'projectHostSetups:update',
+          ProjectHostSetupUpdate.parse({
+            setupId: 'shared-id',
+            executionHostId: 'local',
+            updates: { kind: nextKind }
+          })
+        )
+        expect(store.getRepos()[0].kind).toBe(nextKind)
+        await vi.waitFor(() => expect(renderer.getState().repos[0]?.kind).toBe(nextKind))
+        expect(renderer.getState().repos).not.toBe(capturedRepos)
+        newRequest = renderer.getState().fetchWorktrees('shared-id', options)
+        await vi.waitFor(() => expect(listDetected).toHaveBeenCalledTimes(2))
+        await expect(newRequest).resolves.toBe(true)
+        if (
+          !freshReply ||
+          typeof freshReply !== 'object' ||
+          !('result' in freshReply) ||
+          !isDetectedWorktreeListResult(freshReply.result)
+        ) {
+          throw new Error('Missing current registered listing')
+        }
+        const admitted = renderer.getState().worktreesByRepo['shared-id']
+        expect(admitted?.map((row) => row.id)).toEqual(
+          freshReply.result.worktrees.filter((row) => row.visible).map((row) => row.id)
+        )
+        releaseOld?.()
+        await expect(oldRequest).resolves.toBe(false)
+        expect(renderer.getState().worktreesByRepo['shared-id']).toBe(admitted)
+      } finally {
+        releaseOld?.()
+        await Promise.allSettled([oldRequest, ...(newRequest ? [newRequest] : [])])
+        unsubs.forEach((unsubscribe) => unsubscribe())
+      }
+    }
+  )
   it.each([
     [false, false, false],
     [true, false, false],

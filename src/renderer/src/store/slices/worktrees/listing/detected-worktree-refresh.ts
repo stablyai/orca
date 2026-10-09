@@ -21,7 +21,6 @@ import type {
   DetectedWorktreeRefreshOptions,
   DetectedWorktreeRefreshOutcome
 } from './worktree-slice-types'
-import { teardownMissingWorktreeTerminalsBestEffort } from '../teardown/missing-worktree-terminal-teardown'
 import { directSshAuthorityIsComplete } from './direct-ssh-authority'
 import {
   detectedWorktreeRefreshKey,
@@ -168,24 +167,11 @@ async function listDetectedWorktreesForRuntimeRepoOnce(
     ) {
       throw new Error(STALE_RUNTIME_GENERATION_ERROR)
     }
-    // Why (#10562): the scan coalesces, but teardown must not — each caller carries
-    // its own known-id snapshot and purges its own state, so a caller that joined
-    // an in-flight scan would otherwise purge without ever stopping those terminals.
-    // Why gated: a listing older than an applied create or remove is not applied, so it must
-    // not stop terminals either.
-    if (!options.isStaleCatalogPublication?.(result)) {
-      await teardownMissingWorktreeTerminalsBestEffort(
-        settings,
-        repoId,
-        options.connectionId,
-        options.knownWorktreeIds,
-        result
-      )
-    }
     return {
       status: 'admitted',
       result,
       executionHostId: options.executionHostId,
+      registrationContext: options.registrationContext,
       runtimeAuthority: {
         environmentId,
         connectionGeneration,
@@ -256,20 +242,12 @@ export async function listDetectedWorktreesForRepoCoalesced(
       directSshAuthority: options.directSshAuthority
     }
   }
-  if (!options.isStaleCatalogPublication?.(providerResult.result)) {
-    await teardownMissingWorktreeTerminalsBestEffort(
-      settings,
-      repoId,
-      options.connectionId,
-      options.knownWorktreeIds,
-      providerResult.result
-    )
-  }
   return {
     status: 'admitted',
     result: providerResult.result,
     providerResult,
     executionHostId: options.executionHostId,
+    registrationContext: options.registrationContext,
     directSshAuthority: options.directSshAuthority
   }
 }

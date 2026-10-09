@@ -36,6 +36,12 @@ import type {
   WorktreeHostMatchOptions
 } from './worktree-slice-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import {
+  captureRepoRegistrationContext,
+  repoRegistrationContextIsCurrent,
+  repoRegistrationContextKey,
+  type RepoRegistrationContext
+} from './repo-registration-context'
 
 export function appendMissingWorktreesForHost<
   T extends { id: string; hostId?: ExecutionHostId; runtimeOwnerEnvironmentId?: string }
@@ -90,14 +96,20 @@ const inflightKnownSshWorktreeFetches = new Map<
 export async function fetchKnownSshWorktreesForRepo(
   set: Parameters<StateCreator<AppState, [], [], WorktreeSlice>>[0],
   repoId: string,
-  executionHostId: SshExecutionHostId
+  executionHostId: SshExecutionHostId,
+  registrationContext: RepoRegistrationContext
 ): Promise<DetectedWorktreeListResult | null> {
-  const coalesceKey = `${repoId}\0${executionHostId}`
+  const coalesceKey = repoRegistrationContextKey(registrationContext)
   const inflight = inflightKnownSshWorktreeFetches.get(coalesceKey)
   if (inflight) {
     return await inflight
   }
-  const request = runKnownSshWorktreeFetch(set, repoId, executionHostId).finally(() => {
+  const request = runKnownSshWorktreeFetch(
+    set,
+    repoId,
+    executionHostId,
+    registrationContext
+  ).finally(() => {
     inflightKnownSshWorktreeFetches.delete(coalesceKey)
   })
   inflightKnownSshWorktreeFetches.set(coalesceKey, request)
@@ -107,7 +119,8 @@ export async function fetchKnownSshWorktreesForRepo(
 export async function runKnownSshWorktreeFetch(
   set: Parameters<StateCreator<AppState, [], [], WorktreeSlice>>[0],
   repoId: string,
-  executionHostId: SshExecutionHostId
+  executionHostId: SshExecutionHostId,
+  registrationContext: RepoRegistrationContext
 ): Promise<DetectedWorktreeListResult | null> {
   // Why: reads the local store only, so a runtime-hub session (whose repo ids live on the hub) always gets 'rejected' and keeps the pre-existing no-op.
   const listKnown = window.api.worktrees.listKnownForExecutionHost
@@ -132,6 +145,7 @@ export async function runKnownSshWorktreeFetch(
     // Why: the provider can connect during the await; authoritative rows already replaced this host, so appending stale metadata would resurrect purged worktrees.
     if (
       getCurrentDirectSshAuthority(state, executionHostId) ||
+      !repoRegistrationContextIsCurrent(state.repos, registrationContext) ||
       !repoHasExactlyOneExecutionHostOwner(state, repoId, executionHostId, false)
     ) {
       return state
@@ -217,6 +231,11 @@ export function acquireDirectSshDetectedWorktreeRefresh(
   )
   const options: DetectedWorktreeRefreshOptions = {
     executionHostId: request.executionHostId,
+    registrationContext: captureRepoRegistrationContext(
+      requestStartedState.repos,
+      request.repoId,
+      request.executionHostId
+    ),
     directSshAuthority: request.authority,
     requireAuthoritative: request.requireAuthoritative
   }
@@ -256,6 +275,7 @@ export function acquireDirectSshDetectedWorktreeRefresh(
         result: providerResult.result,
         providerResult,
         executionHostId: request.executionHostId,
+        registrationContext: options.registrationContext,
         directSshAuthority: request.authority
       }
       const outcome = mergeFetchedWorktrees(
