@@ -7,10 +7,14 @@ import type {
 import type { PreloadApi } from '../api-types'
 
 export const shellApi = {
-  openPath: (path: string): Promise<void> => ipcRenderer.invoke('shell:openPath', path),
+  openPath: (path: string, runtimeEnvironmentId?: string | null): Promise<void> =>
+    ipcRenderer.invoke('shell:openPath', path, runtimeEnvironmentId),
 
-  openInFileManager: (path: string): Promise<ShellOpenLocalPathResult> =>
-    ipcRenderer.invoke('shell:openInFileManager', path),
+  openInFileManager: (
+    path: string,
+    runtimeEnvironmentId?: string | null
+  ): Promise<ShellOpenLocalPathResult> =>
+    ipcRenderer.invoke('shell:openInFileManager', path, runtimeEnvironmentId),
 
   openInExternalEditor: (
     request: ShellOpenExternalEditorRequest

@@ -2,6 +2,7 @@ import { toast } from 'sonner'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { translate } from '@/i18n/i18n'
 import { getLocalFileManager } from './local-file-manager-label'
+import { settingsForRuntimeOwner } from '@/runtime/runtime-client-target'
 import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from './local-path-open-guard'
 
 /** Menu label for showing a path in the OS file manager, as each platform names it. */
@@ -26,22 +27,25 @@ export function getRevealInFileManagerLabel(): string {
 }
 
 /**
- * Whether the OS file manager cannot show a file: another host owns it, or a remote runtime is
- * focused, which makes the main process refuse every reveal.
+ * Whether the OS file manager cannot show a file because another host owns it. The runtime owner
+ * is null for this client; omitting it falls back to the focused runtime, as the main process does.
  */
 export function isRevealInFileManagerBlocked(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
   owner: { connectionId?: string | null; runtimeEnvironmentId?: string | null }
 ): boolean {
-  return (
-    isLocalPathOpenBlocked(settings, { connectionId: owner.connectionId }) ||
-    Boolean(owner.runtimeEnvironmentId?.trim())
-  )
+  // Why: global runtime focus is not ownership; a local workspace's files stay revealable.
+  return isLocalPathOpenBlocked(settingsForRuntimeOwner(settings, owner.runtimeEnvironmentId), {
+    connectionId: owner.connectionId
+  })
 }
 
 /** Shows a client-local path selected in the OS file manager, and says why when it cannot. */
-export async function revealInFileManager(path: string): Promise<void> {
-  const result = await window.api.shell.openInFileManager(path)
+export async function revealInFileManager(
+  path: string,
+  runtimeEnvironmentId?: string | null
+): Promise<void> {
+  const result = await window.api.shell.openInFileManager(path, runtimeEnvironmentId)
   if (result.ok) {
     return
   }

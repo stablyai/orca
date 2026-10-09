@@ -36,7 +36,7 @@ vi.mock('./terminal-remote-file-download-open', () => ({
 
 import { handleTerminalFileLink } from './terminal-file-link-actions'
 
-const deps = { worktreeId: 'wt-1', worktreePath: '/repo' }
+const deps = { worktreeId: 'wt-1', worktreePath: '/repo', runtimeEnvironmentId: null }
 
 function plainEvent(): MouseEvent {
   return {
@@ -194,7 +194,7 @@ describe('terminal file link actions', () => {
       // Marked external so the popover draws the same icon as every other Reveal item.
       expect(row).toMatchObject({ external: true })
       await row.run()
-      expect(shellApi.openInFileManager).toHaveBeenCalledWith('/repo/src/main.ts')
+      expect(shellApi.openInFileManager).toHaveBeenCalledWith('/repo/src/main.ts', null)
       expect(mocks.openDetectedFilePath).not.toHaveBeenCalled()
     })
 
@@ -211,7 +211,7 @@ describe('terminal file link actions', () => {
       )
 
       await revealRow(request).run()
-      expect(shellApi.openInFileManager).toHaveBeenCalledWith('/repo/build/Orca.app')
+      expect(shellApi.openInFileManager).toHaveBeenCalledWith('/repo/build/Orca.app', null)
       expect(shellApi.openFilePath).not.toHaveBeenCalled()
       expect(fsApi.stat).not.toHaveBeenCalled()
       expect(mocks.openDetectedFilePath).not.toHaveBeenCalled()
@@ -265,23 +265,27 @@ describe('terminal file link actions', () => {
       expect(request.mock.calls[0][0]).not.toHaveProperty('secondaryActions')
     })
 
-    it('omits the row while a remote runtime is focused, or for a runtime-owned link', () => {
-      mocks.settings = { activeRuntimeEnvironmentId: 'env-1' }
-      const focused = vi.fn()
-      handleTerminalFileLink('/repo/src/main.ts', null, null, plainEvent(), deps, context(focused))
-      expect(focused.mock.calls[0][0]).not.toHaveProperty('secondaryActions')
-
-      mocks.settings = { activeRuntimeEnvironmentId: null }
-      const owned = vi.fn()
+    it('omits the row for a runtime-owned link', () => {
+      const request = vi.fn()
       handleTerminalFileLink(
         '/repo/src/main.ts',
         null,
         null,
         plainEvent(),
         { ...deps, runtimeEnvironmentId: 'env-1' },
-        context(owned)
+        context(request)
       )
-      expect(owned.mock.calls[0][0]).not.toHaveProperty('secondaryActions')
+      expect(request.mock.calls[0][0]).not.toHaveProperty('secondaryActions')
+    })
+
+    it('reveals a local pane link while a remote runtime is focused', async () => {
+      // Why: global runtime focus used to hide the row even for a local pane.
+      mocks.settings = { activeRuntimeEnvironmentId: 'env-1' }
+      const request = vi.fn()
+      handleTerminalFileLink('/repo/src/main.ts', null, null, plainEvent(), deps, context(request))
+
+      await revealRow(request).run()
+      expect(shellApi.openInFileManager).toHaveBeenCalledWith('/repo/src/main.ts', null)
     })
 
     it('reveals nothing until the row is clicked', () => {

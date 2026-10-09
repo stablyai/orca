@@ -46,15 +46,25 @@ async function validateLocalPathTarget(
   return { ok: true, path: normalizedPath }
 }
 
-function hasActiveRuntime(store: Store): boolean {
-  return Boolean(store.getSettings().activeRuntimeEnvironmentId?.trim())
+function isRuntimeOwnedPath(
+  store: Store,
+  runtimeEnvironmentId: string | null | undefined
+): boolean {
+  // Why: global runtime focus is not ownership; only owner-less legacy callers fall back to it.
+  if (runtimeEnvironmentId === null) {
+    return false
+  }
+  return Boolean(
+    runtimeEnvironmentId?.trim() || store.getSettings().activeRuntimeEnvironmentId?.trim()
+  )
 }
 
 async function openInFileManager(
   store: Store,
-  pathValue: string
+  pathValue: string,
+  runtimeEnvironmentId?: string | null
 ): Promise<ShellOpenLocalPathResult> {
-  if (hasActiveRuntime(store)) {
+  if (isRuntimeOwnedPath(store, runtimeEnvironmentId)) {
     return { ok: false, reason: 'remote-runtime-unsupported' }
   }
   const target = await validateLocalPathTarget(pathValue)
@@ -75,7 +85,7 @@ async function openInExternalEditor(
   store: Store,
   request: ShellOpenExternalEditorRequest
 ): Promise<ShellOpenExternalEditorResult> {
-  if (hasActiveRuntime(store)) {
+  if (isRuntimeOwnedPath(store, request.runtimeEnvironmentId)) {
     return { ok: false, reason: 'remote-runtime-unsupported' }
   }
 
@@ -137,15 +147,22 @@ async function openWithSystemDefault(pathValue: string): Promise<boolean> {
 }
 
 export function registerShellHandlers(store: Store): void {
-  ipcMain.handle('shell:openPath', async (_event, path: string): Promise<void> => {
-    // Why: keep the legacy fire-and-forget renderer contract while reusing the
-    // same absolute/existing path validation as the explicit file-manager API.
-    void (await openInFileManager(store, path))
-  })
+  ipcMain.handle(
+    'shell:openPath',
+    async (_event, path: string, runtimeEnvironmentId?: string | null): Promise<void> => {
+      // Why: keep the legacy fire-and-forget renderer contract while reusing the
+      // same absolute/existing path validation as the explicit file-manager API.
+      void (await openInFileManager(store, path, runtimeEnvironmentId))
+    }
+  )
 
   ipcMain.handle(
     'shell:openInFileManager',
-    (_event, path: string): Promise<ShellOpenLocalPathResult> => openInFileManager(store, path)
+    (
+      _event,
+      path: string,
+      runtimeEnvironmentId?: string | null
+    ): Promise<ShellOpenLocalPathResult> => openInFileManager(store, path, runtimeEnvironmentId)
   )
 
   ipcMain.handle(

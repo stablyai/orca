@@ -20,6 +20,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useAppStore } from '@/store'
+import { getConnectionIdFromState } from '@/lib/connection-context'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import type { OpenFile } from '../../store/slices/editor'
 import { translate } from '@/i18n/i18n'
@@ -46,7 +47,6 @@ type EditorFileTabContextMenuProps = {
   canRename: boolean
   canShowMarkdownPreview: boolean
   resolvedLanguage: string
-  repoConnectionId: string | null
   skipMenuFocusRestoreRef: React.MutableRefObject<boolean>
   onOpenChange: (open: boolean) => void
   onActivate: () => void
@@ -83,7 +83,6 @@ export function EditorFileTabContextMenu({
   canRename,
   canShowMarkdownPreview,
   resolvedLanguage,
-  repoConnectionId,
   skipMenuFocusRestoreRef,
   onOpenChange,
   onActivate,
@@ -99,12 +98,18 @@ export function EditorFileTabContextMenu({
   const renameShortcut = useOptionalShortcutLabel('tab.rename')
   const closeShortcut = useOptionalShortcutLabel('tab.close')
   const closeAllShortcut = useOptionalShortcutLabel('tab.closeAll')
-  const revealBlocked = useAppStore((s) =>
-    isRevealInFileManagerBlocked(s.settings, {
-      connectionId: file.externalSshTargetId ?? repoConnectionId,
-      runtimeEnvironmentId: file.runtimeEnvironmentId
-    })
-  )
+  // Why: matches the editor header; a folder workspace's synthetic repo has no connectionId.
+  const revealBlocked = useAppStore((s) => {
+    const connectionId = file.externalSshTargetId ?? getConnectionIdFromState(s, file.worktreeId)
+    // Why: an undeterminable host must not read as local (#17799).
+    return (
+      connectionId === undefined ||
+      isRevealInFileManagerBlocked(s.settings, {
+        connectionId,
+        runtimeEnvironmentId: file.runtimeEnvironmentId
+      })
+    )
+  })
 
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange} modal={false}>
@@ -240,7 +245,7 @@ export function EditorFileTabContextMenu({
             <DropdownMenuSeparator />
             <DropdownMenuItem
               disabled={revealBlocked}
-              onSelect={() => void revealInFileManager(file.filePath)}
+              onSelect={() => void revealInFileManager(file.filePath, file.runtimeEnvironmentId)}
             >
               <ExternalLink className="size-3.5" />
               {getRevealInFileManagerLabel()}

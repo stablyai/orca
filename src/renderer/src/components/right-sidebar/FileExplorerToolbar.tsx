@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils'
 
 type FileExplorerToolbarProps = {
   repoName: string
+  worktreeId: string | null
   worktreePath: string
   connectionId?: string | null
   refresh: {
@@ -35,6 +36,7 @@ type FileExplorerToolbarProps = {
 /** Shares repository actions across explorer views. */
 export function FileExplorerToolbar({
   repoName,
+  worktreeId,
   worktreePath,
   connectionId,
   refresh,
@@ -172,6 +174,7 @@ export function FileExplorerToolbar({
           ) : null}
           <DropdownMenuSeparator />
           <WorktreeOpenInMenuItems
+            worktreeId={worktreeId}
             worktreePath={worktreePath}
             connectionId={connectionId}
             labelPrefix="Open in "

@@ -107,6 +107,8 @@ const useAppStoreMock = Object.assign(
       settings: Record<string, unknown>
       unifiedTabsByWorktree: Record<string, unknown[]>
       groupsByWorktree: Record<string, unknown[]>
+      folderWorkspaces: { id: string; executionHostId: string }[]
+      repos: { id: string; executionHostId: string }[]
     }) => unknown
   ) =>
     selector({
@@ -116,7 +118,12 @@ const useAppStoreMock = Object.assign(
       },
       groupsByWorktree: {
         'wt-1': [{ id: 'group-1', tabOrder: ['tab-1', 'tab-2'] }]
-      }
+      },
+      folderWorkspaces: [{ id: 'fw-1', executionHostId: 'ssh:ssh-1' }],
+      repos: [
+        { id: 'wt-1', executionHostId: 'local' },
+        { id: 'repo-ssh', executionHostId: 'ssh:ssh-1' }
+      ]
     }),
   {
     getState: () => ({
@@ -205,13 +212,19 @@ async function renderMenu(
   overrides: {
     onActivate?: () => void
     onOpenRenameInput?: () => void
-    repoConnectionId?: string | null
     runtimeEnvironmentId?: string | null
     externalSshTargetId?: string
     mode?: 'edit' | 'check-details'
+    worktreeId?: string
   } = {}
 ): Promise<unknown> {
-  const { runtimeEnvironmentId, externalSshTargetId, mode = 'edit', ...props } = overrides
+  const {
+    runtimeEnvironmentId,
+    externalSshTargetId,
+    mode = 'edit',
+    worktreeId = 'wt-1',
+    ...props
+  } = overrides
   const module = await import('./EditorFileTabContextMenu')
   return module.EditorFileTabContextMenu({
     open: true,
@@ -221,7 +234,7 @@ async function renderMenu(
       tabId: 'tab-1',
       filePath: '/repo/foo.ts',
       relativePath: 'foo.ts',
-      worktreeId: 'wt-1',
+      worktreeId,
       language: 'typescript',
       isDirty: false,
       mode,
@@ -238,7 +251,6 @@ async function renderMenu(
     canRename: true,
     canShowMarkdownPreview: false,
     resolvedLanguage: 'typescript',
-    repoConnectionId: null,
     skipMenuFocusRestoreRef: { current: false },
     onOpenChange: vi.fn(),
     onActivate: vi.fn(),
@@ -377,7 +389,7 @@ describe('EditorFileTabContextMenu reveal in file manager', () => {
   })
 
   it('reveals a local file through the shared reveal action', async () => {
-    const reveal = await renderRevealItem()
+    const reveal = await renderRevealItem({ runtimeEnvironmentId: null })
 
     expect(reveal.props.disabled).toBe(false)
     expect(extractText(reveal.props.children)).not.toContain('Local only')
@@ -386,13 +398,29 @@ describe('EditorFileTabContextMenu reveal in file manager', () => {
       throw new Error('Reveal item has no select handler')
     }
     onSelect()
-    expect(revealInFileManager).toHaveBeenCalledWith('/repo/foo.ts')
+    expect(revealInFileManager).toHaveBeenCalledWith('/repo/foo.ts', null)
+  })
+
+  it('reveals a local file while a remote runtime is focused', async () => {
+    // Why: global runtime focus used to block reveal even for a local file.
+    storeSettings.activeRuntimeEnvironmentId = 'env-1'
+
+    const reveal = await renderRevealItem({ runtimeEnvironmentId: null })
+
+    expect(reveal.props.disabled).toBe(false)
+    expect(extractText(reveal.props.children)).not.toContain('Local only')
   })
 
   it.each([
-    ['on an SSH host', { repoConnectionId: 'ssh-1' }],
+    ['on an SSH host', { worktreeId: 'repo-ssh' }],
     ['owned by a remote runtime', { runtimeEnvironmentId: 'env-1' }],
-    ['opened from an SSH host outside the workspace', { externalSshTargetId: 'ssh-1' }]
+    ['opened from an SSH host outside the workspace', { externalSshTargetId: 'ssh-1' }],
+    // Why: a folder workspace's synthetic repo has no connectionId, and SSH is not a runtime.
+    ['in an SSH folder workspace', { worktreeId: 'folder:fw-1', runtimeEnvironmentId: null }],
+    [
+      'in a folder workspace whose host cannot be determined',
+      { worktreeId: 'folder:fw-unknown', runtimeEnvironmentId: null }
+    ]
   ])('disables reveal as local-only for a file %s', async (_owner, overrides) => {
     const reveal = await renderRevealItem(overrides)
 

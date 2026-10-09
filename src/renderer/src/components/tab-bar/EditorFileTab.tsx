@@ -9,7 +9,7 @@ import { renameFileOnDisk } from '@/lib/rename-file'
 import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { detectLanguage } from '@/lib/language-detect'
 import { getFileTypeIcon } from '@/lib/file-type-icons'
-import { useRepoById, useWorktreeById } from '@/store/selectors'
+import { useWorktreeById } from '@/store/selectors'
 import { useAppStore } from '@/store'
 import { STATUS_COLORS, STATUS_LABELS } from '../right-sidebar/status-display'
 import type { GitFileStatus } from '../../../../shared/git-status-types'
@@ -74,7 +74,6 @@ export default function EditorFileTab({
   includeTopTabBorder?: boolean
 }): React.JSX.Element {
   const worktree = useWorktreeById(file.worktreeId)
-  const repo = useRepoById(worktree?.repoId ?? null)
   const FileIcon = getFileTypeIcon(file.filePath)
   // Why: no transform/transition/isDragging styling — the drag design is
   // that tabs stay visually anchored; only the blue insertion bar moves.
@@ -425,7 +424,6 @@ export default function EditorFileTab({
         canRename={canRename}
         canShowMarkdownPreview={canShowMarkdownPreview}
         resolvedLanguage={resolvedLanguage}
-        repoConnectionId={repo?.connectionId ?? null}
         skipMenuFocusRestoreRef={skipMenuFocusRestoreRef}
         onOpenChange={setMenuOpen}
         onActivate={onActivate}

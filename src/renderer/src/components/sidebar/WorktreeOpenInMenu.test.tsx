@@ -7,6 +7,7 @@ import {
   getLocalFileManagerLabel,
   openOpenInAppsSettings,
   openWorktreePath,
+  WorktreeOpenInMenuItems,
   WorktreeOpenInSubMenu
 } from './WorktreeOpenInMenu'
 
@@ -14,6 +15,19 @@ type ReactElementLike = {
   type: unknown
   props: Record<string, unknown>
 }
+
+const owner = vi.hoisted(
+  (): { runtimeEnvironmentId: string | null; connectionId: string | null } => ({
+    runtimeEnvironmentId: null,
+    connectionId: null
+  })
+)
+
+vi.mock(import('@/lib/worktree-runtime-owner'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  getLocalOpenRuntimeOwnerForWorktree: () => owner.runtimeEnvironmentId,
+  getLocalOpenSshOwnerForWorktree: () => owner.connectionId
+}))
 
 const {
   mockState,
@@ -88,6 +102,8 @@ function findByType(node: unknown, type: unknown): ReactElementLike {
 describe('WorktreeOpenInMenu', () => {
   beforeEach(() => {
     mockState.settings = { activeRuntimeEnvironmentId: null, openInApplications: [] }
+    owner.runtimeEnvironmentId = null
+    owner.connectionId = null
     toastErrorMock.mockReset()
     openInFileManagerMock.mockReset()
     openInExternalEditorMock.mockReset()
@@ -116,6 +132,7 @@ describe('WorktreeOpenInMenu', () => {
 
   it('disables the Open in submenu while deleting', () => {
     const tree = WorktreeOpenInSubMenu({
+      worktreeId: 'worktree-1',
       worktreePath: '/tmp/workspace',
       connectionId: null,
       disabled: true
@@ -126,6 +143,7 @@ describe('WorktreeOpenInMenu', () => {
 
   it('stops menu item click propagation', () => {
     const tree = WorktreeOpenInSubMenu({
+      worktreeId: 'worktree-1',
       worktreePath: '/tmp/workspace',
       connectionId: null
     })
@@ -151,6 +169,56 @@ describe('WorktreeOpenInMenu', () => {
     )
     expect(openInFileManagerMock).not.toHaveBeenCalled()
     expect(openInExternalEditorMock).not.toHaveBeenCalled()
+  })
+
+  it('opens a local workspace while a remote runtime is focused', async () => {
+    // Why: global runtime focus is not ownership; the workspace's own owner decides.
+    mockState.settings = { activeRuntimeEnvironmentId: 'runtime-1', openInApplications: [] }
+    const [vsCode, fileManager] = getWorktreeOpenInEntries(
+      [{ id: 'vscode', label: 'VS Code', command: 'code' }],
+      'Finder'
+    )
+
+    expect(getOpenInEntryAvailability(vsCode, mockState.settings, null, null)).toEqual({
+      disabled: false
+    })
+    expect(getOpenInEntryAvailability(fileManager, mockState.settings, null, null)).toEqual({
+      disabled: false
+    })
+    await openWorktreePath({
+      target: 'file-manager',
+      worktreePath: '/tmp/workspace',
+      connectionId: null,
+      runtimeEnvironmentId: null
+    })
+
+    expect(openInFileManagerMock).toHaveBeenCalledWith('/tmp/workspace', null)
+    expect(toastErrorMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps a runtime-owned workspace local-only when no runtime is focused', async () => {
+    const [vsCode, entry] = getWorktreeOpenInEntries(
+      [{ id: 'vscode', label: 'VS Code', command: 'code' }],
+      'Finder'
+    )
+
+    expect(getOpenInEntryAvailability(entry, mockState.settings, null, 'runtime-1')).toEqual({
+      disabled: true,
+      metadata: 'Local only'
+    })
+    // Why: an unresolved host arrives as a runtime owner, never as a Remote SSH target.
+    expect(
+      getOpenInEntryAvailability(vsCode, mockState.settings, null, 'unresolved-owner')
+    ).toEqual({ disabled: true, metadata: 'Local only' })
+    await openWorktreePath({
+      target: 'file-manager',
+      worktreePath: '/tmp/workspace',
+      connectionId: null,
+      runtimeEnvironmentId: 'runtime-1'
+    })
+
+    expect(openInFileManagerMock).not.toHaveBeenCalled()
+    expect(toastErrorMock).toHaveBeenCalledTimes(1)
   })
 
   it('shows an actionable toast when the host launcher fails', async () => {
@@ -268,6 +336,60 @@ describe('WorktreeOpenInMenu', () => {
       command: 'code',
       connectionId: 'ssh-1'
     })
+  })
+
+  it('treats an SSH folder workspace as SSH even though its repo prop has no connection', () => {
+    // Why: a folder workspace's synthetic repo has no connectionId; an SSH route has no runtime.
+    mockState.settings = {
+      activeRuntimeEnvironmentId: 'runtime-1',
+      openInApplications: [{ id: 'vscode', label: 'VS Code', command: 'code' }]
+    }
+    owner.connectionId = 'ssh-1'
+
+    const [vsCode, fileManager] = WorktreeOpenInMenuItems({
+      worktreeId: 'folder:fw-1',
+      worktreePath: '/home/ada/project',
+      connectionId: null
+    }).props.children
+
+    expect(fileManager.props.disabled).toBe(true)
+    expect(vsCode.props.disabled).toBe(false)
+    vsCode.props.onSelect()
+    expect(openInExternalEditorMock).toHaveBeenCalledWith({
+      path: '/home/ada/project',
+      command: 'code',
+      connectionId: 'ssh-1',
+      runtimeEnvironmentId: null
+    })
+  })
+
+  it('trusts a host-qualified local route over a host-blind SSH repo prop', () => {
+    // Why: a repo id shared with an SSH host must not turn this host's local workspace remote.
+    mockState.settings = {
+      activeRuntimeEnvironmentId: null,
+      openInApplications: [{ id: 'vscode', label: 'VS Code', command: 'code' }]
+    }
+    const props = {
+      worktreeId: 'repo-1::/tmp/workspace',
+      worktreePath: '/tmp/workspace',
+      connectionId: 'ssh-1'
+    }
+
+    const [vsCode, fileManager] = WorktreeOpenInMenuItems({
+      ...props,
+      executionHostId: 'local'
+    }).props.children
+
+    expect(fileManager.props.disabled).toBe(false)
+    vsCode.props.onSelect()
+    expect(openInExternalEditorMock).toHaveBeenCalledWith({
+      path: '/tmp/workspace',
+      command: 'code',
+      connectionId: null,
+      runtimeEnvironmentId: null
+    })
+    // Why: callers that name no host, like the File Explorer toolbar, still rely on the prop.
+    expect(WorktreeOpenInMenuItems(props).props.children[1].props.disabled).toBe(true)
   })
 
   it('blocks SSH local-only launchers before IPC with actionable copy', async () => {

@@ -19,7 +19,10 @@ import {
   isRevealInFileManagerBlocked,
   revealInFileManager
 } from '@/lib/reveal-in-file-manager'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import {
+  getLocalOpenRuntimeOwnerForWorktree,
+  getLocalOpenSshOwnerForWorktree
+} from '@/lib/worktree-runtime-owner'
 import { NO_OPEN_IN_APPLICATIONS } from '@/lib/open-in-application-selection'
 import {
   getOpenInEntryAvailability,
@@ -45,7 +48,7 @@ export function SourceControlEntryContextMenu({
   absolutePath,
   relativePath,
   hasWorkingTreeFile,
-  connectionId,
+  connectionId: repoConnectionId,
   onView,
   onRevealInExplorer,
   onOpenChange,
@@ -58,8 +61,11 @@ export function SourceControlEntryContextMenu({
   // Why: a repo can belong to a runtime other than the focused one, and the OS reveal
   // cannot tell that host's path from a local one of the same name.
   const runtimeEnvironmentId = useAppStore((s) =>
-    getRuntimeEnvironmentIdForWorktree(s, currentWorktreeId)
+    getLocalOpenRuntimeOwnerForWorktree(s, currentWorktreeId)
   )
+  // Why: the repo prop is host-blind when ids repeat across hosts; the route names one host.
+  const connectionId =
+    useAppStore((s) => getLocalOpenSshOwnerForWorktree(s, currentWorktreeId)) ?? repoConnectionId
   const revealBlocked = isRevealInFileManagerBlocked(settings, {
     connectionId,
     runtimeEnvironmentId
@@ -88,9 +94,9 @@ export function SourceControlEntryContextMenu({
 
   const handleRevealInFileManager = useCallback(() => {
     if (absolutePath) {
-      void revealInFileManager(absolutePath)
+      void revealInFileManager(absolutePath, runtimeEnvironmentId)
     }
-  }, [absolutePath])
+  }, [absolutePath, runtimeEnvironmentId])
 
   const handleOpenInApplication = useCallback(
     (command: string) => {
@@ -101,10 +107,11 @@ export function SourceControlEntryContextMenu({
         target: 'external-editor',
         worktreePath: absolutePath,
         connectionId,
+        runtimeEnvironmentId,
         command
       })
     },
-    [absolutePath, connectionId]
+    [absolutePath, connectionId, runtimeEnvironmentId]
   )
 
   return (
@@ -141,7 +148,8 @@ export function SourceControlEntryContextMenu({
               const availability = getOpenInEntryAvailability(
                 { ...application, target: 'external-editor' },
                 settings,
-                connectionId
+                connectionId,
+                runtimeEnvironmentId
               )
               return (
                 <ContextMenuItem
