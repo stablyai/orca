@@ -1445,49 +1445,48 @@ resource "google_logging_metric" "relay_assignment_lease_shadow" {
   }
 }
 
+# Directors only: a cell's fatal rejection ends in a container exit, which
+# relay_cell_process_exit already pages on, so paging here too would double every cell incident.
+# The counter still includes cells, for diagnosis.
 resource "google_monitoring_alert_policy" "relay_process_fatal" {
   project               = var.project_id
-  display_name          = "Orca Relay: fatal unhandled rejection"
+  display_name          = "Orca Relay: fatal unhandled rejection on a director"
   combiner              = "OR"
   enabled               = true
   notification_channels = var.relay_alert_notification_channels
 
-  dynamic "conditions" {
-    for_each = {
-      "Cloud Run" = "cloud_run_revision"
-      "GCE cell"  = "gce_instance"
-    }
-    content {
-      display_name = "Fatal unhandled rejection (${conditions.key})"
+  conditions {
+    display_name = "Fatal unhandled rejection (Cloud Run)"
 
-      condition_threshold {
-        filter          = "resource.type=\"${conditions.value}\" AND metric.type=\"logging.googleapis.com/user/orca_relay_process_fatal\""
-        comparison      = "COMPARISON_GT"
-        threshold_value = 0
-        duration        = "0s"
+    condition_threshold {
+      filter          = "resource.type=\"cloud_run_revision\" AND metric.type=\"logging.googleapis.com/user/orca_relay_process_fatal\""
+      comparison      = "COMPARISON_GT"
+      threshold_value = 0
+      duration        = "0s"
 
-        aggregations {
-          alignment_period     = "300s"
-          per_series_aligner   = "ALIGN_SUM"
-          cross_series_reducer = "REDUCE_SUM"
-          group_by_fields      = [conditions.value == "gce_instance" ? "resource.label.\"instance_id\"" : "resource.label.\"service_name\""]
-        }
+      aggregations {
+        alignment_period     = "300s"
+        per_series_aligner   = "ALIGN_SUM"
+        cross_series_reducer = "REDUCE_SUM"
+        group_by_fields      = ["resource.label.\"service_name\""]
+      }
 
-        trigger {
-          count = 1
-        }
+      trigger {
+        count = 1
       }
     }
   }
 
   documentation {
-    content   = "A relay process logged `orca_relay_process_fatal` and exited: an unhandled rejection that is not a database fault (a programming error, a schema error, or a bare socket errno). On a cell it drops every host. Read the line's `code` and `message`, then the container stderr stack. During a cell roll this is an abort signal for the canary."
+    content   = "A director logged `orca_relay_process_fatal` and its instance exited: an unhandled rejection that is not a database fault (a programming error, a schema error, or a bare socket errno). Read the line's `code` and `message`, then the instance stderr stack. Cells log the same line before exiting; the `cell process exits` alert pages for them."
     mime_type = "text/markdown"
   }
 
   depends_on = [google_logging_metric.relay_incident]
 }
 
+# Summed across every process: one database fault reaches every cell and director at once, and
+# per-instance series would open ~30 incidents for one cause.
 resource "google_monitoring_alert_policy" "relay_database_rejection_fenced" {
   project               = var.project_id
   display_name          = "Orca Relay: database rejection survived without a handler"
@@ -1495,50 +1494,43 @@ resource "google_monitoring_alert_policy" "relay_database_rejection_fenced" {
   enabled               = true
   notification_channels = var.relay_alert_notification_channels
 
-  dynamic "conditions" {
-    for_each = {
-      "Cloud Run" = "cloud_run_revision"
-      "GCE cell"  = "gce_instance"
-    }
-    content {
-      display_name = "Fenced database rejection (${conditions.key})"
+  conditions {
+    display_name = "Fenced database rejections, fleet-wide"
 
-      condition_threshold {
-        filter          = "resource.type=\"${conditions.value}\" AND metric.type=\"logging.googleapis.com/user/orca_relay_database_rejection_fenced\""
-        comparison      = "COMPARISON_GT"
-        threshold_value = 0
-        duration        = "0s"
+    condition_threshold {
+      filter          = "(resource.type=\"cloud_run_revision\" OR resource.type=\"gce_instance\") AND metric.type=\"logging.googleapis.com/user/orca_relay_database_rejection_fenced\""
+      comparison      = "COMPARISON_GT"
+      threshold_value = 0
+      duration        = "0s"
 
-        aggregations {
-          alignment_period     = "300s"
-          per_series_aligner   = "ALIGN_SUM"
-          cross_series_reducer = "REDUCE_SUM"
-          group_by_fields      = [conditions.value == "gce_instance" ? "resource.label.\"instance_id\"" : "resource.label.\"service_name\""]
-        }
+      aggregations {
+        alignment_period     = "300s"
+        per_series_aligner   = "ALIGN_SUM"
+        cross_series_reducer = "REDUCE_SUM"
+      }
 
-        trigger {
-          count = 1
-        }
+      trigger {
+        count = 1
       }
     }
   }
 
   documentation {
-    content   = "A database fault reached `unhandledRejection` and the process survived it (`orca_relay_database_rejection_fenced`). Nothing crashed, but some caller started a database promise without awaiting it: find it from the line's `code`, `message` and timing, and fix it. Before the fence, this was a process exit."
+    content   = "A database fault reached `unhandledRejection` and the process survived it (`orca_relay_database_rejection_fenced`). Nothing crashed, but some caller started a database promise without awaiting it. Group the lines by `code`, `message` and instance to find it, and fix it. Before the fence, this was a process exit."
     mime_type = "text/markdown"
   }
 
   depends_on = [google_logging_metric.relay_incident]
 }
 
-# A bad signature is a key or key-id mismatch between directors and cells, not a stale lease;
-# it is the one shadow class with no benign source.
+# Console only: a single desktop sending a damaged lease can hold this up, so it is a lead to
+# check, never a page. A fleet-wide key or key-id mismatch reads as every cell at once.
 resource "google_monitoring_alert_policy" "relay_assignment_lease_bad_signature" {
   project               = var.project_id
   display_name          = "Orca Relay: assignment lease shadow sees bad signatures"
   combiner              = "OR"
   enabled               = true
-  notification_channels = var.relay_alert_notification_channels
+  notification_channels = []
 
   conditions {
     display_name = "Bad lease signatures on a cell for 15 minutes"
@@ -1551,7 +1543,7 @@ resource "google_monitoring_alert_policy" "relay_assignment_lease_bad_signature"
   }
 
   documentation {
-    content   = "A cell with `ticketCheck: shadow` keeps seeing assignment leases that fail verification. The database still decides every admission, so no desktop is affected; but a mismatch between the directors' and the cell's signing key (or key id) would block `ticketCheck: enforce`. Compare the lease `kid` the directors issue with `k1-<sha256(key)[0:8]>` on the cell."
+    content   = "A cell with `ticketCheck: shadow` kept seeing assignment leases that fail verification for 15 minutes. The database still decides every admission, so no desktop is affected. One misbehaving client can cause this on one cell; many cells at once points to a key or key-id mismatch between directors and cells, which would block `ticketCheck: enforce`. Compare the `kid` the directors issue with `k1-<sha256(key)[0:8]>` on the cell."
     mime_type = "text/markdown"
   }
 
