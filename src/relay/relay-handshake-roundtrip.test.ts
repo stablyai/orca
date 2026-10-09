@@ -7,7 +7,9 @@ import { join } from 'node:path'
 import {
   setupDaemonHandshake,
   runConnectHandshake,
-  EXIT_CODE_VERSION_MISMATCH
+  formatHandshakeAccepted,
+  EXIT_CODE_VERSION_MISMATCH,
+  type ConnectHandshakeAccepted
 } from './relay-handshake'
 import {
   encodeHandshakeFrame,
@@ -123,6 +125,39 @@ describe('handshake round-trip over a real Socket pair', () => {
     expect(acceptedCb.mock.calls[0][0].length).toBe(0)
 
     bridgeSock.destroy()
+  })
+
+  // Why: the `orca` CLI on an SSH host shares this handshake, and its stderr is what agents read.
+  it('hands the accepted version to the caller instead of printing it', async () => {
+    const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
+    try {
+      await startDaemon('0.1.0+match')
+      const bridgeSock = connect(sockPath)
+      await new Promise<void>((r) => bridgeSock.once('connect', () => r()))
+
+      const acceptedCb = vi.fn<(leftover: Buffer, accepted: ConnectHandshakeAccepted) => void>()
+      runConnectHandshake(bridgeSock, '0.1.0+match', { onAccepted: acceptedCb })
+
+      await vi.waitFor(() => expect(acceptedCb).toHaveBeenCalledTimes(1))
+      expect(acceptedCb.mock.calls[0][1].version).toBe('0.1.0+match')
+      const written = stderr.mock.calls.map(([chunk]) => String(chunk)).join('')
+      expect(written).not.toContain('[relay-connect]')
+      bridgeSock.destroy()
+    } finally {
+      stderr.mockRestore()
+    }
+  })
+
+  it('keeps the bridge success line format', () => {
+    expect(
+      formatHandshakeAccepted({
+        version: '1.2.3',
+        runtime: { kind: 'pinned-node', version: '24.1.0' }
+      })
+    ).toBe('[relay-connect] Handshake OK at version=1.2.3 runtime=pinned-node/24.1.0\n')
+    expect(formatHandshakeAccepted({ version: '1.2.3' })).toBe(
+      '[relay-connect] Handshake OK at version=1.2.3\n'
+    )
   })
 
   it('rejects a same-build socket that lacks the detached endpoint credential', async () => {

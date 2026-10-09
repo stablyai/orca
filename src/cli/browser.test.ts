@@ -183,6 +183,41 @@ describe('orca cli browser page targeting', () => {
     )
   })
 
+  it('takes the tab create URL as a positional', async () => {
+    queueFixtures(callMock, okFixture('req_create', { browserPageId: 'page-4' }))
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['tab', 'create', 'https://example.com', '--worktree', 'all', '--json'],
+      '/tmp/not-an-orca-worktree'
+    )
+
+    expect(callMock).toHaveBeenCalledWith(
+      'browser.tabCreate',
+      { url: 'https://example.com', worktree: undefined, profileId: undefined },
+      { timeoutMs: 60_000 }
+    )
+  })
+
+  it('takes the goto URL as a positional', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_goto', { url: 'https://example.com/', title: 'Example Domain' })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['goto', 'https://example.com', '--page', 'page-1', '--json'],
+      '/tmp/not-an-orca-worktree'
+    )
+
+    expect(callMock).toHaveBeenCalledWith(
+      'browser.goto',
+      { url: 'https://example.com', page: 'page-1' },
+      { timeoutMs: 60_000 }
+    )
+  })
+
   it('opens browser-launch URLs on the client hosting the current worktree', async () => {
     queueFixtures(
       callMock,

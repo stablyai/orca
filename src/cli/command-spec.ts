@@ -6,6 +6,9 @@ export type CommandSpec = {
   // Why: typo recovery must never steer a benign mistake into destructive state changes.
   destructive?: boolean
   hidden?: boolean
+  // Why: browser page commands are top-level (`orca goto`), yet agents look for them under
+  // `orca browser`; membership lists them in that group's help and recovers `orca browser goto`.
+  group?: string
   summary: string
   usage: string
   allowedFlags: string[]
@@ -24,4 +27,8 @@ export type IdentityFlag = 'from' | 'terminal'
 
 export function specPaths(spec: CommandSpec): string[][] {
   return spec.aliases ? [spec.path, ...spec.aliases] : [spec.path]
+}
+
+export function inCommandGroup(group: string, specs: CommandSpec[]): CommandSpec[] {
+  return specs.map((spec) => (spec.path[0] === group ? spec : { ...spec, group }))
 }

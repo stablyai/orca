@@ -1,7 +1,8 @@
 import type { CommandSpec } from '../args'
 import { GLOBAL_FLAGS } from '../args'
+import { inCommandGroup } from '../command-spec'
 
-export const BROWSER_BASIC_COMMAND_SPECS: CommandSpec[] = [
+export const BROWSER_BASIC_COMMAND_SPECS: CommandSpec[] = inCommandGroup('browser', [
   {
     path: ['browser', 'identity', 'get'],
     summary: 'Show the browser identity configured on this Orca host',
@@ -66,8 +67,10 @@ export const BROWSER_BASIC_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['goto'],
     summary: 'Navigate the active browser tab to a URL',
-    usage: 'orca goto --url <url> [--worktree <selector>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'url', 'worktree']
+    usage: 'orca goto <url> [--worktree <selector>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'url', 'worktree'],
+    positionalArgs: ['url'],
+    examples: ['orca goto https://example.com', 'orca goto --url http://localhost:3000']
   },
   {
     path: ['back'],
@@ -196,9 +199,11 @@ export const BROWSER_BASIC_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['tab', 'create'],
-    summary: 'Create a new browser tab in the current worktree',
-    usage: 'orca tab create [--url <url>] [--worktree <selector>] [--profile <id>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'url', 'worktree', 'profile']
+    summary: 'Create a new browser tab in the current worktree, optionally opening a URL',
+    usage: 'orca tab create [<url>] [--worktree <selector>] [--profile <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'url', 'worktree', 'profile'],
+    positionalArgs: ['url'],
+    examples: ['orca tab create https://example.com', 'orca tab create --url http://localhost:3000']
   },
   {
     path: ['tab', 'profile', 'list'],
@@ -255,4 +260,4 @@ export const BROWSER_BASIC_COMMAND_SPECS: CommandSpec[] = [
     usage: 'orca exec --command "<agent-browser command>" [--worktree <selector>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'command', 'worktree']
   }
-]
+])

@@ -9,7 +9,8 @@ import {
   FrameDecoder,
   encodeHandshakeFrame,
   parseHandshakeMessage,
-  type DecodedFrame
+  type DecodedFrame,
+  type RelayHandshakeRuntime
 } from './protocol'
 import { relayLogLine } from './relay-diagnostic-log'
 import { describeRelayRuntime } from './relay-runtime-identity'
@@ -164,9 +165,17 @@ function handleDaemonHandshakeFrame(
 
 // ── --connect side ──────────────────────────────────────────────────
 
+export type ConnectHandshakeAccepted = { version: string; runtime?: RelayHandshakeRuntime }
+
 export type ConnectHandshakeCallbacks = {
   // leftover: bytes buffered after handshake-ok; caller must forward to stdout before attaching the bridge or they're dropped.
-  onAccepted: (leftover: Buffer) => void
+  onAccepted: (leftover: Buffer, accepted: ConnectHandshakeAccepted) => void
+}
+
+// Why: only the SSH bridge logs success; its stderr is diagnostics, while the `orca` CLI's is the user's.
+export function formatHandshakeAccepted({ version, runtime }: ConnectHandshakeAccepted): string {
+  const runtimeSuffix = runtime ? ` runtime=${runtime.kind}/${runtime.version}` : ''
+  return `[relay-connect] Handshake OK at version=${version}${runtimeSuffix}\n`
 }
 
 // Why: defense-in-depth prevents a bad .version from pairing incompatible bridge and daemon versions.
@@ -201,12 +210,10 @@ export function runConnectHandshake(
         process.exit(1)
       }
       if (msg.type === 'orca-relay-handshake-ok') {
-        const runtime = msg.runtime ? ` runtime=${msg.runtime.kind}/${msg.runtime.version}` : ''
-        process.stderr.write(`[relay-connect] Handshake OK at version=${msg.version}${runtime}\n`)
         handshakeDone = true
         const leftover = decoder.drain()
         sock.removeAllListeners('data')
-        cb.onAccepted(leftover)
+        cb.onAccepted(leftover, { version: msg.version, runtime: msg.runtime })
         return
       }
       if (msg.type === 'orca-relay-handshake-mismatch') {

@@ -107,6 +107,60 @@ describe('suggestCommands', () => {
   it('does not suggest hidden compatibility commands', () => {
     expect(suggestCommands(specs, ['terminal', 'stp'])).not.toContain('terminal stop')
   })
+
+  it('still recovers a near miss when operands follow it', () => {
+    expect(suggestCommands(specs, ['terminal', 'sen', 'hello'])).toEqual(['terminal send'])
+  })
+
+  it('judges destructive intent at the verb, not at a trailing operand', () => {
+    expect(suggestCommands(specs, ['worktree', 'remov', 'feature'])).toContain('worktree rm')
+    expect(suggestCommands(specs, ['worktree', 'move', 'remove'])).not.toContain('worktree rm')
+  })
+})
+
+describe('suggestCommands for grouped top-level commands', () => {
+  const grouped: CommandSpec[] = [
+    { path: ['page', 'identity'], summary: '', usage: '', allowedFlags: [] },
+    { path: ['goto'], group: 'page', summary: '', usage: '', allowedFlags: [] },
+    { path: ['tab', 'create'], group: 'page', summary: '', usage: '', allowedFlags: [] },
+    {
+      path: ['cookie', 'delete'],
+      group: 'page',
+      destructive: true,
+      summary: '',
+      usage: '',
+      allowedFlags: []
+    },
+    { path: ['worktree', 'list'], summary: '', usage: '', allowedFlags: [] }
+  ]
+
+  it('recovers a group-prefixed guess to the top-level command', () => {
+    expect(suggestCommands(grouped, ['page', 'goto', 'https://example.com'])).toEqual(['goto'])
+    expect(suggestCommands(grouped, ['page', 'tab', 'creat'])).toEqual(['tab create'])
+  })
+
+  it('maps an open/navigate rename to the real verb', () => {
+    expect(suggestCommands(grouped, ['page', 'open', 'https://example.com'])).toEqual([
+      'tab create'
+    ])
+    expect(suggestCommands(grouped, ['navigate', 'https://example.com'])).toEqual(['goto'])
+  })
+
+  it('keeps the destructive guard on group-prefixed candidates', () => {
+    expect(suggestCommands(grouped, ['page', 'cookie', 'delete'])).toEqual(['cookie delete'])
+    expect(suggestCommands(grouped, ['page', 'cookie', 'select'])).not.toContain('cookie delete')
+  })
+
+  it('does not offer group members under an unrelated group', () => {
+    expect(suggestCommands(grouped, ['worktree', 'goto'])).toEqual([])
+  })
+
+  it('adds the group-help pointer only under a group with top-level members', () => {
+    expect(unknownCommandData(grouped, ['page', 'zzzzzz']).nextSteps).toEqual([
+      "Orca's page commands run at the top level (orca <command>, not orca page <command>); list them with: orca page --help"
+    ])
+    expect(unknownCommandData(grouped, ['worktree', 'zzzzzz']).nextSteps).toEqual([])
+  })
 })
 
 describe('unknownCommandData', () => {

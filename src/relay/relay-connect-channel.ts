@@ -1,7 +1,7 @@
 import { createConnection } from 'node:net'
 import { DispatcherClientWriter } from './dispatcher-client-writer'
 import { RELAY_SENTINEL } from './protocol'
-import { readLaunchVersion, runConnectHandshake } from './relay-handshake'
+import { formatHandshakeAccepted, readLaunchVersion, runConnectHandshake } from './relay-handshake'
 
 const CONNECT_TIMEOUT_MS = 5_000
 
@@ -41,7 +41,8 @@ export function runRelayConnectChannel(sockPath: string, endpointCredential?: st
       sock,
       myVersion,
       {
-        onAccepted: (leftover: Buffer) => {
+        onAccepted: (leftover, accepted) => {
+          process.stderr.write(formatHandshakeAccepted(accepted))
           stdoutWriter.enqueue('control', () => Buffer.from(RELAY_SENTINEL), RELAY_SENTINEL.length)
           if (leftover.length > 0) {
             stdoutWriter.enqueue('control', () => leftover, leftover.length)

@@ -1,7 +1,8 @@
 import type { CommandSpec } from '../args'
 import { GLOBAL_FLAGS } from '../args'
+import { inCommandGroup } from '../command-spec'
 
-export const BROWSER_ADVANCED_COMMAND_SPECS: CommandSpec[] = [
+export const BROWSER_ADVANCED_COMMAND_SPECS: CommandSpec[] = inCommandGroup('browser', [
   // ── Cookie management ──
   {
     path: ['cookie', 'get'],
@@ -279,4 +280,4 @@ export const BROWSER_ADVANCED_COMMAND_SPECS: CommandSpec[] = [
     usage: 'orca highlight --selector <ref> [--worktree <selector>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'selector', 'worktree']
   }
-]
+])

@@ -76,7 +76,22 @@ export function formatGroupHelp(specs: CommandSpec[], groupPath: string[]): stri
     lines.push(`  ${spec.path.slice(groupPath.length).join(' ').padEnd(18)} ${spec.summary}`)
   }
   lines.push('', `Run \`orca ${group} <command> --help\` for command-specific usage.`)
+  const members = groupPath.length === 1 ? groupMembers(specs, group) : []
+  if (members.length > 0) {
+    lines.push(
+      '',
+      `Top-level ${group} commands (run as \`orca <command>\`, not \`orca ${group} <command>\`):`
+    )
+    for (const spec of members) {
+      lines.push(`  ${spec.path.join(' ').padEnd(18)} ${spec.summary}`)
+    }
+    lines.push('', 'Run `orca <command> --help` for command-specific usage.')
+  }
   return lines.join('\n')
+}
+
+function groupMembers(specs: CommandSpec[], group: string): CommandSpec[] {
+  return specs.filter((spec) => spec.group === group && spec.hidden !== true)
 }
 
 function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
