@@ -3387,6 +3387,7 @@
                 "ce8248b835": "Chemin du worktree indisponible.",
                 "internalTooManyPaths": "Le contenu déposé contient trop de chemins pour un collage sûr dans le terminal.",
                 "internalPathsTooLarge": "La liste de chemins déposée est trop volumineuse pour un collage sûr dans le terminal.",
+                "internalHostMismatch": "Déposez des fichiers provenant du même hôte que ce terminal.",
                 "b4cf68e889": "Ignoré : {{value0}} {{value1}}.",
                 "writeTimeout": "Glisser-déposer de fichiers annulé : le terminal n'a pas accepté le chemin avant le délai de sécurité.",
                 "writeRejected": "Glisser-déposer de fichiers annulé : le terminal n'a pas pu accepter le chemin."

@@ -3263,6 +3263,7 @@
                 "ce8248b835": "工作树路径不可用。",
                 "internalTooManyPaths": "拖放的路径过多，无法安全粘贴到终端。",
                 "internalPathsTooLarge": "拖放的路径列表过大，无法安全粘贴到终端。",
+                "internalHostMismatch": "请拖放与此终端位于同一主机的文件。",
                 "b4cf68e889": "已跳过 {{value0}} {{value1}}。",
                 "writeTimeout": "文件拖放已取消：终端在安全超时前未接受路径。",
                 "writeRejected": "文件拖放已取消：终端无法接受路径。"
