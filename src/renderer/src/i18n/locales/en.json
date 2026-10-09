@@ -19547,12 +19547,7 @@
       "signInAgain": "Sign in again",
       "usageSignInLabel": "Sign in again",
       "usageSignInMessage": "The selected Claude account needs you to sign in again. Open Settings > AI Provider Accounts, or choose System default.",
-      "signIn": "Sign in",
-      "signInNotice": {
-        "title": "Finish setting up your Claude accounts",
-        "description": "Sign in to each saved account once and you're ready to switch anytime.",
-        "action": "Sign in to {{value0}}"
-      }
+      "signIn": "Sign in"
     },
     "managedData": {
       "description": "Add accounts by running this command in a terminal on the Orca host. Selection applies to new explicit agent launches on that host; direct SSH relay and Windows-hosted WSL launches use their own credentials.",

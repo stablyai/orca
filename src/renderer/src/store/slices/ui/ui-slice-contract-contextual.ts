@@ -123,6 +123,4 @@ export type UISliceContextual = {
   markCodexTerminalServerIsolationNoticeSeen: () => void
   codexSharedSettingsNoticeSeen: boolean
   markCodexSharedSettingsNoticeSeen: () => void
-  claudeAccountSignInNoticeSeen: boolean
-  markClaudeAccountSignInNoticeSeen: () => void
 }

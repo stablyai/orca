@@ -181,7 +181,7 @@ export type PersistedUIState = {
   codexTerminalServerIsolationNoticeSeen?: boolean
   /** Windows one-shot toast for Codex moving onto ~/.codex; set when shown, so absent means not yet seen. */
   codexSharedSettingsNoticeSeen?: boolean
-  /** One-shot toast asking for one sign-in to each Claude account saved before per-account folders. */
+  /** Retired one-shot Claude sign-in toast; kept because a paired client from that build still sends it. */
   claudeAccountSignInNoticeSeen?: boolean
   /** URL for new browser tabs; null = blank tab. */
   browserDefaultUrl?: string | null

@@ -33,7 +33,8 @@ const fsAllowances: Record<string, readonly string[]> = {
     'mkdirSync',
     'renameSync',
     'rmdirSync',
-    'symlinkSync'
+    'symlinkSync',
+    'unlinkSync'
   ],
   'claude-accounts/claude-profile-paths.ts': ['mkdirSync', 'writeFileAtomically'],
   // The which-account file.
@@ -51,7 +52,11 @@ const fsAllowances: Record<string, readonly string[]> = {
     'writeFileSync',
     'writeFileAtomically'
   ],
-  'claude-accounts/claude-profile-provisioning.ts': ['mkdirSync', 'rmSync', 'writeFileAtomically'],
+  'claude-accounts/claude-profile-provisioning.ts': [
+    'publishFileWithoutOverwrite',
+    'rmSync',
+    'writeFileSync'
+  ],
   'claude-accounts/claude-profile-sharing.ts': [
     'mkdirSync',
     'rmdirSync',

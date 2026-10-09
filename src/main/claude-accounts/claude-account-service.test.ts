@@ -44,6 +44,7 @@ function fixture(accounts: ClaudeManagedAccount[] = [account('a'), account('b')]
       JSON.stringify({ oauthAccount: { emailAddress: email } })
     )
   }
+  const covered = new Set<string>()
   let settings: GlobalSettings = {
     ...getDefaultSettings('/tmp'),
     claudeManagedAccounts: accounts,
@@ -54,7 +55,8 @@ function fixture(accounts: ClaudeManagedAccount[] = [account('a'), account('b')]
     router: {
       accountHome: home,
       userConfigDir: () => join(root, 'personal'),
-      copiedLoginIntoSystemDefault: () => existsSync(join(root, 'claude-runtime-auth'))
+      copiedLoginIntoSystemDefault: () => existsSync(join(root, 'claude-runtime-auth')),
+      coveredBySystemDefault: (id: string) => covered.has(id)
     },
     syncForCurrentSelection: vi.fn(async (_target?: ClaudeAccountSelectionTarget) => {}),
     publishAll: vi.fn(async () => {}),
@@ -88,7 +90,7 @@ function fixture(accounts: ClaudeManagedAccount[] = [account('a'), account('b')]
     runtimeAuth,
     runLogin
   )
-  return { root, home, service, runtimeAuth, runLogin, signIn, settings: () => settings }
+  return { root, home, service, runtimeAuth, runLogin, signIn, covered, settings: () => settings }
 }
 
 // The id the last sign-in prepared a folder for.
@@ -119,6 +121,15 @@ describe('ClaudeAccountService', () => {
     expect(byId.get('b')).toMatchObject({ email: 'b@example.test', needsSignIn: true })
     expect(byId.get('old-wsl')).toMatchObject({ needsSignIn: true })
     expect(byId.get('new-wsl')?.needsSignIn).toBeUndefined()
+  })
+
+  it('asks no sign-in of an account System default runs, and lets it be selected', async () => {
+    const f = fixture()
+    f.covered.add('b')
+    expect(f.service.listAccounts().accounts.find((row) => row.id === 'b')?.needsSignIn).toBe(
+      undefined
+    )
+    await expect(f.service.selectAccount('b')).resolves.toMatchObject({ activeAccountId: 'b' })
   })
 
   it("reports System default's login from the user's own folder", () => {

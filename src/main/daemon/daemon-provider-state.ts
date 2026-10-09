@@ -83,14 +83,14 @@ export function getDaemonProvider(): DaemonProvider | null {
   return adapter
 }
 
-/** True for a terminal on a daemon kept alive from before `protocolVersion`; never for an SSH pane. */
-export function isTerminalFromBeforeDaemonProtocol(
+/** True for a terminal on a kept-alive older daemon whose protocol matches; never for an SSH pane. */
+export function isTerminalOnLegacyDaemon(
   ptyId: string,
-  protocolVersion: number
+  matches: (protocolVersion: number) => boolean
 ): boolean {
   return adapter
     ? getLegacyDaemonAdapters(adapter).some(
-        (legacy) => legacy.protocolVersion < protocolVersion && legacy.hasPty(ptyId)
+        (legacy) => matches(legacy.protocolVersion) && legacy.hasPty(ptyId)
       )
     : false
 }

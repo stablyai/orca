@@ -4,7 +4,8 @@
 // the #25130/#24636 shell-wrapper changes and the wider agent list into a fresh daemon; older owners
 // stay attachable.
 export const PROTOCOL_VERSION = 44
-export const CLAUDE_ACCOUNT_FUNCTION_DAEMON_PROTOCOL_VERSION = 44
+export const CLAUDE_ACCOUNT_FUNCTION_DAEMON_PROTOCOL_VERSION = 42
+export const CLAUDE_ACCOUNT_FUNCTION_REVERTED_DAEMON_PROTOCOL_VERSION = 43
 // v39 gives plain fish panes Orca's codex function through XDG_DATA_DIRS.
 export const CODEX_FISH_SHELL_FUNCTION_DAEMON_PROTOCOL_VERSION = 39
 // Why: older daemons reject `setColorQueryReplyColors` as an unknown request type.

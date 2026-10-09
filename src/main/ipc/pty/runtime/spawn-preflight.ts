@@ -24,10 +24,6 @@ import {
 import { stripRemotePaneEnvWhenHooksDisabled } from '../provider/liveness'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import {
-  CLAUDE_AUTH_ENV_CONFLICT_MESSAGE,
-  hasClaudeAuthEnvConflict
-} from '../../../claude-accounts/environment'
-import {
   isSafePtySessionId,
   mintPtySessionId,
   ptySessionIdForAgentCreateOperation
@@ -146,9 +142,6 @@ export async function prepareRuntimePtySpawn(
     ctx.isClaudeLaunch && ctx.deps.prepareClaudeAuth
       ? await ctx.deps.prepareClaudeAuth(ctx.codexSelectionTarget)
       : null
-  if (ctx.claudeAuth?.stripAuthEnv && hasClaudeAuthEnvConflict(args.env)) {
-    throw new Error(CLAUDE_AUTH_ENV_CONFLICT_MESSAGE)
-  }
 
   ctx.shouldPersistHostSessionBinding = args.persistHostSessionBinding === true
   if (ctx.shouldPersistHostSessionBinding) {

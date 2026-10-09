@@ -10,12 +10,7 @@ import { agentSessionProviderHandleRoot } from '../../shared/agent-session-provi
 import { claudeProviderHandleLeafUuid } from '../../shared/agent-session-provider-handle-encoding'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { structuredSessionChildIdentityEnv } from '../runtime/structured-session-child-identity-env'
-import {
-  CLAUDE_AUTH_ENV_CONFLICT_MESSAGE,
-  hasClaudeAuthEnvConflict
-} from '../claude-accounts/environment'
 import type { ClaudeStructuredAuthPolicy } from '../claude-accounts/claude-structured-auth-policy'
-import { AgentSessionPreSpawnError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import {
   claudeChildEnv,
   claudeProbeEnv,
@@ -120,12 +115,8 @@ export type ClaudeStructuredLaunchResolverDeps = {
     | undefined
   /** The env the child inherits before auth stripping; absent inherits Orca's own process env. */
   resolveInheritedEnv?: () => Promise<Record<string, string>>
-  /**
-   * Required, and deliberately not defaulted. `stripAuthEnv` used to be a literal
-   * `true` here, so a missing dependency could not under-strip. Now it can, and the
-   * failure is silent — so every caller states the account's policy rather than
-   * inherit a guess. Build it with claudeStructuredAuthPolicyForSettings.
-   */
+  /** Required, so every caller states which login a failed sign-in names rather than inherit a
+   *  guess. Build it with claudeStructuredAuthPolicyForSettings. */
   resolveAuthPolicy: () => Promise<ClaudeStructuredAuthPolicy> | ClaudeStructuredAuthPolicy
   /** The user's Agent Permissions setting, re-read per acquisition. Absent means prompting. */
   resolvePermissionMode?: () => Promise<PermissionMode> | PermissionMode
@@ -164,17 +155,11 @@ export async function resolveClaudeStructuredInvocation(
 ): Promise<ClaudeStructuredInvocation> {
   const sources = resolvedSources ?? (await resolveClaudeChildEnvSources(deps))
   const auth = await deps.resolveAuthPolicy()
-  // Under a managed account the pinned credential is the only auth this launch may
-  // use, so an explicit override is refused rather than silently beating the pin.
-  if (auth.stripAuthEnv && hasClaudeAuthEnvConflict(sources.overlay)) {
-    throw new AgentSessionPreSpawnError(new Error(CLAUDE_AUTH_ENV_CONFLICT_MESSAGE), {
-      reason: 'managedAccountEnvOverride'
-    })
-  }
+  // Why never strip: a shell proxy's key must travel with its ANTHROPIC_BASE_URL, on every account.
   return {
     command: sources.command,
-    env: claudeChildEnv(sources, auth.stripAuthEnv, decorateEnv),
-    account: auth.stripAuthEnv ? 'managed' : 'system'
+    env: claudeChildEnv(sources, decorateEnv),
+    account: auth.account
   }
 }
 
