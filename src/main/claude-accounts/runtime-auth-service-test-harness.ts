@@ -39,10 +39,33 @@ export function createElectronMock() {
 // network OAuth refresh (covered by oauth-refresh.test.ts). Default the token
 // to "not expiring" so the proactive switch-in refresh never fires here and
 // existing expectations hold; individual tests can override these mocks.
+function readMockOauthString(
+  credentialsJson: string,
+  field: 'accessToken' | 'refreshToken'
+): string | null {
+  try {
+    const parsed = JSON.parse(credentialsJson) as {
+      claudeAiOauth?: { accessToken?: unknown; refreshToken?: unknown }
+    }
+    const token = parsed.claudeAiOauth?.[field]
+    return typeof token === 'string' && token.trim() !== '' ? token.trim() : null
+  } catch {
+    return null
+  }
+}
+
 export function createOauthRefreshMock() {
   return {
     isOauthTokenExpiring: vi.fn(() => false),
-    refreshClaudeOauthCredentials: vi.fn(async () => null)
+    refreshClaudeOauthCredentials: vi.fn(async () => null),
+    // Why: selection compares the stored refresh token inside the shared
+    // rotation queue. Leaving this off the mock makes that comparison throw.
+    readRefreshToken(credentialsJson: string): string | null {
+      return readMockOauthString(credentialsJson, 'refreshToken')
+    },
+    readAccessToken(credentialsJson: string): string | null {
+      return readMockOauthString(credentialsJson, 'accessToken')
+    }
   }
 }
 

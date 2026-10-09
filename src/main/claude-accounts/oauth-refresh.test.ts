@@ -144,7 +144,7 @@ describe('refreshClaudeOauthCredentials', () => {
     expect(netFetchMock).not.toHaveBeenCalled()
   })
 
-  it('posts a form-urlencoded refresh grant and persists the rotation', async () => {
+  it('posts a JSON refresh grant with Claude Code scopes and persists the rotation', async () => {
     netFetchMock.mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -160,15 +160,107 @@ describe('refreshClaudeOauthCredentials', () => {
     const [url, init] = netFetchMock.mock.calls[0]
     expect(url).toBe('https://platform.claude.com/v1/oauth/token')
     expect(init.method).toBe('POST')
-    expect(init.headers['Content-Type']).toBe('application/x-www-form-urlencoded')
-    const body = new URLSearchParams(init.body)
-    expect(body.get('grant_type')).toBe('refresh_token')
-    expect(body.get('refresh_token')).toBe('old-refresh')
-    expect(body.get('client_id')).toBe('9d1c250a-e61b-44d9-88ed-5944d1962f5e')
+    expect(init.headers['Content-Type']).toBe('application/json')
+    expect(JSON.parse(init.body)).toEqual({
+      grant_type: 'refresh_token',
+      refresh_token: 'old-refresh',
+      client_id: '9d1c250a-e61b-44d9-88ed-5944d1962f5e',
+      scope:
+        'user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload user:plugins'
+    })
 
     const oauth = parseClaudeOauthBlob(result!)!
     expect(oauth.accessToken).toBe('fresh-access')
     expect(oauth.refreshToken).toBe('fresh-refresh')
+  })
+
+  it('retries once with the stored scopes when the expanded scope list is rejected', async () => {
+    netFetchMock
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        json: async () => ({ error: 'invalid_scope' })
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          access_token: 'fresh-access',
+          expires_in: 3600,
+          refresh_token: 'fresh-refresh'
+        })
+      })
+
+    const result = await refreshClaudeOauthCredentials(
+      credentials({ scopes: ['user:inference', 'user:profile', 'user:projects:read'] }),
+      NOW
+    )
+
+    expect(netFetchMock).toHaveBeenCalledTimes(2)
+    expect(JSON.parse(netFetchMock.mock.calls[0][1].body).scope).toBe(
+      'user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload user:plugins user:projects:read'
+    )
+    expect(JSON.parse(netFetchMock.mock.calls[1][1].body).scope).toBe(
+      'user:inference user:profile user:projects:read'
+    )
+    expect(parseClaudeOauthBlob(result!)!.accessToken).toBe('fresh-access')
+  })
+
+  it('keeps a stored client id and does not expand its scopes', async () => {
+    netFetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ access_token: 'fresh-access', expires_in: 3600 })
+    })
+
+    await refreshClaudeOauthCredentials(
+      credentials({ clientId: 'third-party-client', scopes: ['user:inference'] }),
+      NOW
+    )
+
+    const body = JSON.parse(netFetchMock.mock.calls[0][1].body)
+    expect(body.client_id).toBe('third-party-client')
+    expect(body.scope).toBe('user:inference')
+    expect(netFetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('omits scope for a third-party client that stored none', async () => {
+    netFetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ access_token: 'fresh-access', expires_in: 3600 })
+    })
+
+    await refreshClaudeOauthCredentials(
+      credentials({ clientId: 'third-party-client', scopes: [] }),
+      NOW
+    )
+
+    const body = JSON.parse(netFetchMock.mock.calls[0][1].body)
+    expect(body.client_id).toBe('third-party-client')
+    expect(body).not.toHaveProperty('scope')
+    expect(netFetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('retries a subscription login with its stored scopes when the expanded list is rejected', async () => {
+    netFetchMock
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        json: async () => ({ error: 'invalid_scope' })
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ access_token: 'fresh-access', expires_in: 3600 })
+      })
+
+    await refreshClaudeOauthCredentials(
+      credentials({
+        scopes: ['user:profile'],
+        subscriptionType: 'pro'
+      }),
+      NOW
+    )
+
+    expect(netFetchMock).toHaveBeenCalledTimes(2)
+    expect(JSON.parse(netFetchMock.mock.calls[1][1].body).scope).toBe('user:profile')
   })
 
   it('returns null on a non-ok response and logs the status for diagnosability', async () => {

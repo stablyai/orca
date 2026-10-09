@@ -33,6 +33,7 @@ import {
 } from './status-bar-claude-accounts'
 import { AccountRuntimeToggle } from './StatusBarAccountControls'
 import { InlineUsageBars, InlineUsageSkeleton } from './InlineProviderUsage'
+import { previewAccountRowUsage } from './usage-roster-row-state'
 import { ProviderDetailsMenu } from './ProviderDetailsMenu'
 import { getClaudeAccountSyncKey } from './provider-account-sync-key'
 
@@ -258,6 +259,14 @@ export function ClaudeSwitcherMenu({
               const inactiveUsage = target.id
                 ? inactiveClaudeAccounts.find((a) => a.accountId === target.id)
                 : null
+              const rowPreview = previewAccountRowUsage({
+                active: target.active,
+                activeLimits: claude,
+                inactive: inactiveUsage
+              })
+              const rowFetching = target.active
+                ? claude.status === 'fetching'
+                : Boolean(inactiveUsage?.isFetching)
 
               return (
                 <DropdownMenuItem
@@ -279,13 +288,16 @@ export function ClaudeSwitcherMenu({
                         </span>
                       ) : null}
                     </div>
-                    {inactiveUsage?.isFetching && !inactiveUsage.rateLimits ? (
+                    {rowPreview.kind === 'loading' ? (
                       <InlineUsageSkeleton />
-                    ) : inactiveUsage?.rateLimits ? (
-                      <InlineUsageBars
-                        limits={inactiveUsage.rateLimits}
-                        isFetching={inactiveUsage.isFetching}
-                      />
+                    ) : rowPreview.kind === 'usage' ? (
+                      <InlineUsageBars limits={rowPreview.limits} isFetching={rowFetching} />
+                    ) : rowPreview.kind === 'sign-in' || rowPreview.kind === 'message' ? (
+                      <span
+                        className={`text-[10px] text-muted-foreground ${rowFetching ? 'animate-pulse' : ''}`}
+                      >
+                        {rowPreview.label}
+                      </span>
                     ) : null}
                   </div>
                 </DropdownMenuItem>

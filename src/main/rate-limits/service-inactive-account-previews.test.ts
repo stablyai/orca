@@ -245,6 +245,33 @@ describe('RateLimitService', () => {
     await firstFetch
   })
 
+  it('keeps a visible error when an inactive Claude preview throws and retries on the next open', async () => {
+    const service = new RateLimitService()
+    const account = { id: 'account-1', managedAuthPath: '/tmp/account-1/auth' }
+    service.setInactiveClaudeAccountsResolver(() => [account])
+    vi.mocked(fetchManagedAccountUsage)
+      .mockRejectedValueOnce(new Error('OAuth API returned 401'))
+      .mockResolvedValueOnce(okProvider('claude', 18, Date.now()))
+
+    await service.fetchInactiveClaudeAccountsOnOpen()
+
+    expect(service.getState().inactiveClaudeAccounts).toEqual([
+      expect.objectContaining({
+        accountId: 'account-1',
+        isFetching: false,
+        rateLimits: expect.objectContaining({
+          status: 'error',
+          error: 'OAuth API returned 401'
+        })
+      })
+    ])
+
+    await service.fetchInactiveClaudeAccountsOnOpen()
+
+    expect(fetchManagedAccountUsage).toHaveBeenCalledTimes(2)
+    expect(service.getState().inactiveClaudeAccounts[0]?.rateLimits?.session?.usedPercent).toBe(18)
+  })
+
   it('does not start overlapping inactive Codex preview fetches', async () => {
     const service = new RateLimitService()
     const accountFetch = deferred<ProviderRateLimits>()
