@@ -55,10 +55,13 @@ export class LoadedCohortMigrationOperations {
       if (!settings || !Object.hasOwn(settings, 'openAgentTabsInChatByDefault')) {
         return { version: 1, membership: 'excluded', basis: 'chat-ui-on-unproven' }
       }
-      // Why: load turns their Chat UI off, so a tip about chat would describe a view they never get.
-      return savedChatUiWithTerminalDefaultView(settings)
-        ? { version: 1, membership: 'excluded', basis: 'chat-ui-on-terminal-default' }
-        : { version: 1, membership: 'eligible', basis: 'chat-ui-on' }
+      return {
+        version: 1,
+        membership: 'eligible',
+        basis: savedChatUiWithTerminalDefaultView(settings)
+          ? 'chat-ui-on-terminal-default'
+          : 'chat-ui-on'
+      }
     }
     return {
       version: 1,

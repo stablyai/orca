@@ -19117,6 +19117,9 @@
     "nativeChatUpgrade": {
       "eyebrow": "新機能",
       "title": "ネイティブチャットを刷新",
+      "chatModeNote": "新しい Agent タブは、これまでどおりターミナルで開きます。",
+      "chatModeLabel": "チャットモードをオンにする",
+      "chatModeHint": "新しい Agent タブをチャットで開きます。",
       "intro": "対応 Agent の新しいチャットはアップグレード版のチャットビューで開きます。チャットと CLI の切り替えは右サイドバーの{{panel}}から:",
       "resumeInNativeChat": "{{action}}: 対応する CLI の会話をネイティブチャットで開きます。",
       "resumeInCli": "{{action}}: Claude/Codex のチャットを新しい CLI セッションに複製します。元のチャットは残ります。",

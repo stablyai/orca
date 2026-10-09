@@ -19089,6 +19089,9 @@
     "nativeChatUpgrade": {
       "eyebrow": "Nuevo",
       "title": "El chat nativo mejora",
+      "chatModeNote": "Las pestañas de agente nuevas siguen abriéndose en la terminal, como antes.",
+      "chatModeLabel": "Activar el modo chat",
+      "chatModeHint": "Las pestañas de agente nuevas se abren como chat.",
       "intro": "Los chats nuevos de agentes compatibles usan la vista de chat mejorada. Para alternar entre chat y CLI, abre {{panel}} (barra lateral derecha):",
       "resumeInNativeChat": "{{action}} abre una conversación de CLI compatible en el chat nativo.",
       "resumeInCli": "{{action}} copia un chat de Claude/Codex a una CLI nueva sin tocar el original.",

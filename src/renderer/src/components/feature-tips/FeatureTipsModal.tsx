@@ -300,8 +300,10 @@ export default function FeatureTipsModal(): JSX.Element | null {
         open={isOpen}
         tip={currentTip}
         primaryBusy={primaryBusy}
+        chatModeOn={settings?.experimentalNativeChat === true}
         onOpenChange={handleOpenChange}
         onPrimaryAction={() => void handlePrimaryAction()}
+        onChatModeChange={(on) => void updateSettings({ experimentalNativeChat: on })}
         onSettingsClick={openNativeChatSettings}
       />
     )

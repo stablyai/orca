@@ -63,7 +63,7 @@ describe('native chat upgrade tip audience', () => {
     [
       'Chat UI on but new tabs opening in the terminal',
       preUpgradeSettings(true, false),
-      'excluded',
+      'eligible',
       'chat-ui-on-terminal-default'
     ],
     ['Chat UI off', preUpgradeSettings(false), 'excluded', 'chat-ui-off'],
