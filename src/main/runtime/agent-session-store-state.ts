@@ -5,11 +5,13 @@ import type { AgentSessionOperationRow } from '../../shared/agent-session-operat
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import type { AgentSessionOrcaStopCause } from '../../shared/agent-session-orca-stop'
 import type { AgentSessionTabTable } from './agent-session-tab-table'
+import type { AgentSessionClosedOwner } from './agent-session-closed-owner'
 
 export type RetiredAgentSessionClaimKey = { keyId: string; retiredAt: number }
 
 export type AgentSessionStoreState = {
   records: Map<string, AgentSessionRecord>
+  closedOwners: Map<string, AgentSessionClosedOwner>
   operations: Map<string, AgentSessionOperationRow>
   retiredClaimKeys: RetiredAgentSessionClaimKey[]
   /** Rows this build cannot validate, kept with a durable refusal reason. */

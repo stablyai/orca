@@ -144,7 +144,8 @@ describe('structured session acquisition options', () => {
             handle: codexProviderHandle('legacy-thread'),
             origin,
             mintedAtFence: input.fence,
-            observedAt: NOW
+            // Before the crashed send: journal rows are stamped on the real clock, not NOW.
+            observedAt: 0
           }
         }
       })

@@ -26,6 +26,7 @@ import {
   draftAgentSessionStoreState,
   type AgentSessionStoreRowWrites
 } from './agent-session-store-draft'
+import { captureAgentSessionClosedOwners } from './agent-session-closed-owner-history'
 
 // Why: rows are diffed by identity, so a row changed in place would never be written. Tests and
 // development builds make that a TypeError; packaged builds skip the walk.
@@ -55,6 +56,12 @@ function freezeRows(
   const operations = writes ? writes.operations.upsert.map(([key]) => key) : state.operations.keys()
   for (const key of operations) {
     deepFreeze(state.operations.get(key))
+  }
+  const closedOwners = writes
+    ? writes.closedOwners.upsert.map(([key]) => key)
+    : state.closedOwners.keys()
+  for (const key of closedOwners) {
+    deepFreeze(state.closedOwners.get(key))
   }
   if (!writes || writes.retiredClaimKeys) {
     state.retiredClaimKeys.forEach(deepFreeze)
@@ -134,7 +141,7 @@ export class AgentSessionStoreTransactions {
         if (this.journalDatabase.readOnly) {
           throw readOnlyStoreRefusal()
         }
-        staged = this.stage(apply)
+        staged = this.stage(apply, true)
         const writes = staged.writes
         if (writes) {
           writeAgentSessionStoreRows(db, writes)
@@ -152,7 +159,7 @@ export class AgentSessionStoreTransactions {
     if (readOnly && !inMemoryWhenReadOnly) {
       throw readOnlyStoreRefusal()
     }
-    const staged = this.stage(apply)
+    const staged = this.stage(apply, !readOnly)
     const writes = staged.writes
     if (writes && !readOnly) {
       this.journalDatabase.transaction((db) => writeAgentSessionStoreRows(db, writes))
@@ -161,11 +168,18 @@ export class AgentSessionStoreTransactions {
     return staged.result
   }
 
-  private stage<T>(apply: (draft: AgentSessionStoreState) => T): StagedStoreTransaction<T> {
+  /** Only a write that lands records closed owners: a read-only verdict lives in memory only. */
+  private stage<T>(
+    apply: (draft: AgentSessionStoreState) => T,
+    persisted: boolean
+  ): StagedStoreTransaction<T> {
     const published = this.published
     const draft = draftAgentSessionStoreState(published)
     const result = apply(draft)
     attributeAgentSessionRuntime(published, draft)
+    if (persisted) {
+      captureAgentSessionClosedOwners(published, draft)
+    }
     const writes = agentSessionStoreDraftRowWrites(published, draft)
     return {
       result,

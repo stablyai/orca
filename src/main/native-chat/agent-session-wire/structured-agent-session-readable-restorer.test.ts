@@ -39,6 +39,7 @@ describe('StructuredAgentSessionReadableRestorer', () => {
         journalDatabase: openTestJournalHostDatabase(stateDirectory),
         logger: recordingStructuredAgentSessionLogger().logger
       },
+      reconcileAll: async () => true,
       reconcile: async () => true,
       resolveRecovery: async () => true,
       serialize: async (_sessionId, task) => task(),

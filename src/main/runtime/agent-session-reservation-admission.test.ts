@@ -68,6 +68,7 @@ function reserveRequest(
 function storeState(records: readonly AgentSessionRecord[] = []): AgentSessionStoreState {
   return {
     records: new Map(records.map((record) => [record.sessionId, record])),
+    closedOwners: new Map(),
     operations: new Map(),
     retiredClaimKeys: [],
     unreadableRecords: new Map(),

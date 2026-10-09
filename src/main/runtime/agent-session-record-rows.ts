@@ -21,6 +21,10 @@ import {
   isReadableRetiredAgentSessionClaimKey
 } from './agent-session-store-row-rules'
 import { AgentSessionTabTable, type PersistedAgentSessionTab } from './agent-session-tab-table'
+import {
+  loadAgentSessionClosedOwnerRows,
+  writeAgentSessionClosedOwnerRows
+} from './agent-session-closed-owner-rows'
 
 /** "Never recorded" and "recorded, now empty" differ, and #17439's legacy fallback needs the first;
  *  no row count can say which. */
@@ -81,6 +85,7 @@ function unreadableRecordReason(value: unknown): string {
 export function loadAgentSessionStoreRows(db: Database.Database): AgentSessionStoreState {
   const state: AgentSessionStoreState = {
     records: new Map(),
+    closedOwners: loadAgentSessionClosedOwnerRows(db),
     operations: new Map(),
     retiredClaimKeys: [],
     unreadableRecords: new Map(),
@@ -192,6 +197,7 @@ export function writeAgentSessionStoreRows(
   for (const sessionId of writes.records.remove) {
     db.prepare('DELETE FROM agent_session_records WHERE session_id = ?').run(sessionId)
   }
+  writeAgentSessionClosedOwnerRows(db, writes.closedOwners)
   const upsertOperation = db.prepare(
     'INSERT INTO agent_session_operations (operation_key, row_json) VALUES (?, ?) ON CONFLICT(operation_key) DO UPDATE SET row_json = excluded.row_json'
   )

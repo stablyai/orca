@@ -145,6 +145,7 @@ async function runAttachUnderAbort(
   await withAgentSessionCreatePhase('resolve_recovery', recordPhase, () =>
     context.runtimeState.resolveRecovery(sessionId)
   )
+  const probedOwner = context.deps.store.getRecord(sessionId)?.lease.ownerProcess ?? null
   const probe = await withAgentSessionCreatePhase('probe_owner', recordPhase, () =>
     context.runtimeState.probeOwner(sessionId)
   )
@@ -190,6 +191,7 @@ async function runAttachUnderAbort(
         claimKeyId: context.deps.claimKeyId,
         handoffOperationId: params.envelope.clientOperationId,
         probe,
+        probedOwner,
         ...(await pinnedAgentSessionLaunchArgs(context.deps.resolveLaunchArgs, params)),
         ...(await pinnedAgentSessionLaunchEnv(context.deps.resolveLaunchEnv, params))
       },

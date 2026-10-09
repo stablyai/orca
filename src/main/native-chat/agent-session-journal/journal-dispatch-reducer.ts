@@ -50,6 +50,8 @@ export function applyJournalDispatchRow(
   submission.resolvedAt = row.state === 'pending' ? null : row.ts
   if (row.state === 'pending') {
     submission.handedOverAt = row.ts
+    // The first handover: what it delivered may sit before anything a later one did.
+    submission.firstHandover ??= { fence: row.fence, at: row.ts }
     placeHandedOverMessage(state, submission, row)
   } else if (row.state === 'rejected') {
     placeRejectedMessage(state, submission, row)

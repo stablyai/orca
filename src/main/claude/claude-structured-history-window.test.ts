@@ -327,7 +327,7 @@ describe('a crash between Claude saving a prompt and Orca recording its echo', (
     expect(window.items.map((item) => item.providerItemId)).toEqual(['bravo'])
 
     const [verdict] = reconcileSubmissions({
-      history: window,
+      history: { ...window, start: { fence: 1, movedAt: 0 } },
       submissions: [
         {
           clientMessageId: 'bravo-send',

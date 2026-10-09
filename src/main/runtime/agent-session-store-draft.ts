@@ -15,12 +15,14 @@ import {
   isReadableRetiredAgentSessionClaimKey
 } from './agent-session-store-row-rules'
 import type { PersistedAgentSessionTab } from './agent-session-tab-table'
+import { isReadableAgentSessionClosedOwner } from './agent-session-closed-owner'
 
 /** Unreadable rows are derived at load and never written, so the draft shares them. */
 export function draftAgentSessionStoreState(state: AgentSessionStoreState): AgentSessionStoreState {
   return {
     ...state,
     records: new Map(state.records),
+    closedOwners: new Map(state.closedOwners),
     operations: new Map(state.operations),
     retiredClaimKeys: [...state.retiredClaimKeys],
     sessionTabs: state.sessionTabs?.clone() ?? null
@@ -32,6 +34,7 @@ type KeyedRowWrites = { upsert: [key: string, json: string][]; remove: string[] 
 /** Exactly the rows a draft changed, each serialized as it will be stored. */
 export type AgentSessionStoreRowWrites = {
   records: KeyedRowWrites
+  closedOwners: KeyedRowWrites
   operations: KeyedRowWrites
   /** The whole list when it changed, else null. */
   retiredClaimKeys: RetiredAgentSessionClaimKey[] | null
@@ -96,6 +99,11 @@ export function agentSessionStoreDraftRowWrites(
   const operations = serializeChangedRows(published.operations, draft.operations, (key, written) =>
     isReadableAgentSessionStoreOperation(key, written)
   )
+  const closedOwners = serializeChangedRows(
+    published.closedOwners,
+    draft.closedOwners,
+    isReadableAgentSessionClosedOwner
+  )
   const retiredClaimKeys = retiredClaimKeysChanged(
     published.retiredClaimKeys,
     draft.retiredClaimKeys
@@ -124,6 +132,8 @@ export function agentSessionStoreDraftRowWrites(
   const changed =
     records.upsert.length > 0 ||
     records.remove.length > 0 ||
+    closedOwners.upsert.length > 0 ||
+    closedOwners.remove.length > 0 ||
     operations.upsert.length > 0 ||
     operations.remove.length > 0 ||
     retiredClaimKeys !== null ||
@@ -133,6 +143,7 @@ export function agentSessionStoreDraftRowWrites(
   }
   return {
     records,
+    closedOwners,
     operations,
     retiredClaimKeys,
     sessionTabs: tabsChanged ? { recorded: draft.sessionTabs !== null, tabs } : null

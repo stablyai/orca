@@ -45,8 +45,8 @@ import {
   withAgentSessionCreatePhase,
   type AgentSessionCreatePhaseRecorder
 } from '../../observability/agent-session-instrumentation'
-import type { ProviderHistoryWindow } from '../agent-session-journal/journal-submission-reconciler'
-import { readProviderHistoryWindow } from './structured-agent-session-provider-history-window'
+import type { PlacedProviderHistoryWindow } from '../agent-session-journal/journal-submission-reconciler'
+import { sampleProviderHistoryWindow } from './structured-agent-session-history-sample'
 import type { StructuredAgentSessionStartupAttempt } from './structured-agent-session-startup-attempt-contract'
 import type { StructuredAgentSessionStartupProgress } from './structured-agent-session-startup-attempt'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -133,7 +133,7 @@ export async function performAttach(
   let reservedRecord: AgentSessionRecord | null = null
   let unsupportedReservationSettlementAttempted = false
   let replayed = false
-  let providerHistoryWindow: ProviderHistoryWindow | null = null
+  let providerHistoryWindow: PlacedProviderHistoryWindow | null = null
   const preparedTranscript = store.getRecord(sessionId)
     ? { ok: true as const, items: null }
     : await prepareAdoptedTranscript(params)
@@ -187,10 +187,10 @@ export async function performAttach(
     // Sample provider history before a new child is acquired. Once acquireOwner
     // starts the child, the adapter's liveness signal intentionally becomes
     // conservative and an absent prompt can no longer prove non-delivery.
-    providerHistoryWindow = await readProviderHistoryWindow({
+    providerHistoryWindow = await sampleProviderHistoryWindow({
       adapter: input.adapter,
       identity: journalIdentityFor(record, params),
-      accountHome: record.accountHome,
+      record,
       ownerAlreadyAdmitted: agentSessionLeaseAdmitsWriter(record.lease)
     })
     if (!agentSessionLeaseAdmitsWriter(record.lease)) {
@@ -255,9 +255,8 @@ export async function performAttach(
     await input.beforeJournalOpen?.()
     attached = await attachJournal({
       record,
-      params,
-      adapter: input.adapter,
       openConversation: input.openConversation,
+      logger: input.logger,
       providerHistoryWindow
     })
     await importAdoptedTranscript(params, attached, record, preparedTranscript.items)

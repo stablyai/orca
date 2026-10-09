@@ -32,6 +32,7 @@ import {
   type AgentSessionExecutionLocation,
   type AgentSessionLaunchArgs,
   type AgentSessionLaunchEnv,
+  type AgentSessionProcessIdentity,
   type AgentSessionRecord
 } from '../../shared/agent-session-record'
 import { isAgentSessionLaunchArgs } from '../../shared/agent-session-launch-args'
@@ -48,6 +49,8 @@ import {
 import type { AgentSessionStoreState } from './agent-session-store-state'
 import { agentSessionRecordIdentityFields } from './agent-session-record-founding'
 import { agentSessionAccountHomesEqual } from '../../shared/agent-session-account-home'
+import { retainAgentSessionReservationClosure } from './agent-session-closed-owner-history'
+import { assertAgentSessionProbedOwner } from './agent-session-reconciliation-target'
 
 export type AgentSessionReserveRequest = {
   /** Host-resolved floating directory committed with the first owner reservation. */
@@ -75,6 +78,8 @@ export type AgentSessionReserveRequest = {
   claimKeyId: string
   handoffOperationId: string | null
   probe: AgentSessionOwnerProbe
+  /** Host-only snapshot taken before the asynchronous owner probe. */
+  probedOwner?: AgentSessionProcessIdentity | null
   operation: { callerKey: string; operationId: string; fingerprint: string }
   now: number
   leaseTtlMs?: number
@@ -202,17 +207,22 @@ export function applyAgentSessionReservation(
     throw agentSessionRefusalError('agent_session_conflict', { reason: 'sessionExists' })
   }
   assertReservedTabUnheld(state, request)
+  assertAgentSessionProbedOwner(existing, request.probedOwner)
   const pinned = {
     ...existing,
     ...(!existing.launchArgs && request.launchArgs ? { launchArgs: [...request.launchArgs] } : {}),
     ...(!existing.launchArgs && request.launchArgs ? { updatedAt: request.now } : {})
   }
-  return reserveAgentSessionOwner({
+  const result = reserveAgentSessionOwner({
     record: pinned,
     expectedFence: request.expectedFence ?? existing.lease.runtimeFence,
     probe: request.probe,
     reservation
   })
+  if (result.disposition === 'reserved') {
+    retainAgentSessionReservationClosure(state, existing, request.probe, request.now)
+  }
+  return result
 }
 
 /**

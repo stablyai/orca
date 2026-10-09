@@ -82,6 +82,7 @@ export async function resolveStructuredSessionRecovery(
           sessionId,
           expectedFence: record.lease.runtimeFence,
           probe,
+          probedOwner: record.lease.ownerProcess,
           now: deps.now()
         }))
     return 'resolved'
