@@ -15,24 +15,31 @@ export type WslProcessGroupTermination = ProcessTerminationBarrier & {
 export function createWslProcessGroupTermination(distro: string): WslProcessGroupTermination {
   const marker = `__ORCA_WSL_PROCESS_GROUP_${randomUUID()}__=`
   let processGroupId: number | null = null
+  let processStartTime: string | null = null
   let stderrTail = ''
 
   const observeStderr = (chunk: Buffer | string): void => {
     const combined = `${stderrTail}${chunk.toString()}`
-    const match = combined.match(new RegExp(`${marker}(\\d+)\\r?\\n`))
+    const match = combined.match(new RegExp(`${marker}(\\d+):(\\d+)\\r?\\n`))
     stderrTail = combined.slice(-512)
     const parsed = match ? Number(match[1]) : 0
     if (Number.isSafeInteger(parsed) && parsed > 1) {
       processGroupId = parsed
+      processStartTime = match?.[2] ?? null
     }
   }
 
   const terminate = async (signal: 'TERM' | 'KILL'): Promise<boolean> => {
-    if (processGroupId === null) {
+    if (processGroupId === null || processStartTime === null) {
       return false
     }
     const script = [
       '_orca_group=$1',
+      '_orca_start=$2',
+      '_orca_stat=$(cat "/proc/$_orca_group/stat" 2>/dev/null) || exit 1',
+      '_orca_stat=${_orca_stat##*) }',
+      'set -- $_orca_stat',
+      '[ "$3" = "$_orca_group" ] && [ "$4" = "$_orca_group" ] && [ "${20}" = "$_orca_start" ] || exit 1',
       `kill -${signal} "-$_orca_group" 2>/dev/null || :`,
       '_orca_attempt=0',
       'while kill -0 "-$_orca_group" 2>/dev/null; do',
@@ -45,7 +52,7 @@ export function createWslProcessGroupTermination(distro: string): WslProcessGrou
     // PATH, so a login probe would only add latency to a kill.
     const result = await runWslProcess({
       script,
-      args: [String(processGroupId)],
+      args: [String(processGroupId), processStartTime],
       distro,
       loginPath: 'none',
       timeoutMs: GUEST_TERMINATION_COMMAND_TIMEOUT_MS,
@@ -60,7 +67,14 @@ export function createWslProcessGroupTermination(distro: string): WslProcessGrou
     force: () => terminate('KILL'),
     wrapGuestArgs: (args) => {
       const reportGroup = [
-        `printf '%s%s\\n' ${quotePosixShell(marker)} "$$" >&2`,
+        '_orca_start_time() {',
+        '  _orca_stat=$(cat "/proc/$$/stat") || return 1',
+        '  _orca_stat=${_orca_stat##*) }',
+        '  set -- $_orca_stat',
+        '  printf \'%s\' "${20}"',
+        '}',
+        '_orca_start=$(_orca_start_time) || exit 1',
+        `printf '%s%s:%s\\n' ${quotePosixShell(marker)} "$$" "$_orca_start" >&2`,
         'exec "$@"'
       ].join('\n')
       // Why probe rather than assume: BusyBox `setsid` has no `--wait`, so there
@@ -75,6 +89,7 @@ export function createWslProcessGroupTermination(distro: string): WslProcessGrou
       ].join('\n')
       return ['sh', '-c', script, 'orca-wsl-process-group', ...args]
     },
-    stripControlOutput: (stderr) => stderr.replace(new RegExp(`${marker}\\d+\\r?\\n?`, 'g'), '')
+    stripControlOutput: (stderr) =>
+      stderr.replace(new RegExp(`${marker}\\d+:\\d+\\r?\\n?`, 'g'), '')
   }
 }

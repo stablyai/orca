@@ -54,6 +54,8 @@ export type ProcessSpec = {
   serialization?: NodeSpawnOptions['serialization']
   /** Kill the whole process tree and do not settle until termination is verified. */
   terminationBarrier?: boolean | ProcessTerminationBarrier
+  /** Force read-only filter trees down before their root can lose ownership. */
+  forceTerminationOnStop?: boolean
   /** Called once when the child exits or tree termination is verified. */
   onChildTerminated?: () => void
 }

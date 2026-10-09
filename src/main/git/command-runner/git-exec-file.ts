@@ -13,6 +13,7 @@ import { resolveCommand, type ResolvedCommand } from './wsl-command-resolution'
 import { annotateWslHostFailure } from './wsl-host-failure'
 import type { GitAdmissionTier, GitExecOptions } from './git-exec-options'
 import { execFileCapture, execFileCaptureToTermination } from './exec-file-capture'
+import { readCapturedGitBuffer, readCapturedGitString } from './git-captured-output'
 import {
   pendingWslDirectGitReadEnvironment,
   directWslGitExitCode,
@@ -25,7 +26,11 @@ import { prepareWindowsHostGitEnvironment } from './windows-host-git-environment
 import { buildNetworkSshPolicyEnv } from './git-ssh-policy-env'
 import { nonInteractiveGitEnv, untranslatedGitOutputEnv } from './git-process-env'
 import { acquireGitAdmission } from './git-subprocess-admission'
-import { GitCommandTimeoutError, gitCommandTimeoutMs } from './git-command-timeout'
+import {
+  GIT_READ_TIMEOUT_MS,
+  GitCommandTimeoutError,
+  gitCommandTimeoutMs
+} from './git-command-timeout'
 import { classifyGitCommand } from '../../../shared/git-command-classification'
 import { createAbortError } from './abort-error'
 
@@ -197,32 +202,41 @@ export async function gitExecFileAsyncBuffer(
     maxBuffer?: number
     timeout?: number
     timeoutMsForTest?: number
+    stdin?: string
+    signal?: AbortSignal
     env?: NodeJS.ProcessEnv
     wslDistro?: string
     preferWslDirectGit?: boolean
     admissionTier?: GitAdmissionTier
-    signal?: AbortSignal
   }
 ): Promise<{ stdout: Buffer }> {
   return withGitSpan({ args, cwd: options.cwd }, async (span) => {
+    const filteredRead =
+      args.includes('--filters') || (args.includes('lfs') && args.includes('smudge'))
+    // smudge may fetch LFS objects and needs the WSL profile's SSH agent and proxy environment
+    const effectiveOptions = filteredRead
+      ? {
+          ...options,
+          wslDistro: options.wslDistro ?? resolveGitCommand(args, options).wsl?.distro,
+          useConfiguredSshCommandForNetwork: true,
+          terminationBarrier: true
+        }
+      : options
     if (isWslLinkedWorktreeGitRoutingCandidate(options.cwd, options.wslDistro)) {
       await prepareWslLinkedWorktreeGitRouting(options.cwd, options.wslDistro, {
         signal: options.signal
       })
     }
-    const readEnvironmentReady = pendingWslDirectGitReadEnvironment(args, options)
-    if (readEnvironmentReady) {
-      await readEnvironmentReady
-    }
+    await pendingWslDirectGitReadEnvironment(args, effectiveOptions)
     // `git show` is a read, so this normally runs with no shell at all. The fence
     // still matters for the login-shell fallback: these are raw blob bytes going
     // straight to the diff/blob viewer, where a banner becomes file content.
-    let resolved = resolveGitCommand(args, options, false, true)
-    const environmentReady = prepareWindowsHostGitEnvironment(resolved, undefined, options.signal)
-    if (environmentReady) {
-      await environmentReady
-    }
-    resolved = resolveGitCommand(args, options, false, true)
+    let resolved = resolveGitCommand(args, effectiveOptions, false, true)
+    await prepareWindowsHostGitEnvironment(resolved, undefined, options.signal)
+    resolved = resolveGitCommand(args, effectiveOptions, false, true)
+    const env = filteredRead
+      ? (await buildNetworkSshPolicyEnv(effectiveOptions, args)).env
+      : untranslatedGitOutputEnv(options.env)
     const grant = await acquireGitAdmission({
       args,
       cwd: options.cwd,
@@ -231,28 +245,39 @@ export async function gitExecFileAsyncBuffer(
       signal: options.signal
     })
     span?.setAttribute('git.queue_wait_ms', grant.queueWaitMs)
-    const timeoutMs = gitCommandTimeoutMs(args, options.timeout, options.timeoutMsForTest)
+    const timeoutMs =
+      gitCommandTimeoutMs(args, options.timeout, options.timeoutMsForTest) ??
+      (filteredRead ? (options.timeoutMsForTest ?? GIT_READ_TIMEOUT_MS) : undefined)
     let termination: Promise<void> | null = null
     try {
       let reportTerminated: () => void = () => {}
       termination = new Promise<void>((resolve) => {
         reportTerminated = resolve
       })
-      const { stdout } = await execFileCapture(resolved.binary, resolved.args, {
+      const captureOptions = {
         cwd: resolved.cwd,
-        encoding: 'buffer',
-        signal: options.signal,
+        encoding: 'buffer' as const,
         maxBuffer: options.maxBuffer,
         timeout: timeoutMs,
-        env: untranslatedGitOutputEnv(options.env),
+        stdin: options.stdin,
+        env,
+        signal: options.signal,
         admissionTier: options.admissionTier,
         onChildTerminated: reportTerminated,
         ...(timeoutMs === undefined
           ? {}
           : { createTimeoutError: () => new GitCommandTimeoutError(timeoutMs) })
-      })
+      }
+      const { stdout } = await (filteredRead
+        ? execFileCaptureToTermination(
+            resolved.binary,
+            resolved.args,
+            captureOptions,
+            resolved.termination
+          )
+        : execFileCapture(resolved.binary, resolved.args, captureOptions))
       if (!Buffer.isBuffer(stdout)) {
-        throw new Error('Git buffer capture returned text instead of bytes')
+        throw new Error('Git blob output is not a buffer')
       }
       return { stdout: readCapturedGitBuffer(stdout, resolved) }
     } finally {
@@ -263,41 +288,6 @@ export async function gitExecFileAsyncBuffer(
       }
     }
   })
-}
-
-/**
- * Slice a fenced payload out of raw bytes.
- *
- * Why bytes: blob content may be binary, so decoding to a string to find the
- * fence would corrupt it. Returns the buffer untouched when the command was not
- * fenced or the fence is absent.
- */
-function readCapturedGitBuffer(stdout: Buffer, resolved: ResolvedCommand): Buffer {
-  const captured = resolved.captured
-  if (!captured) {
-    return stdout
-  }
-  const beginIndex = stdout.lastIndexOf(captured.beginMarker, undefined, 'utf8')
-  if (beginIndex === -1) {
-    return stdout
-  }
-  const payloadStart = beginIndex + Buffer.byteLength(captured.beginMarker, 'utf8')
-  const endIndex = stdout.indexOf(captured.endMarker, payloadStart, 'utf8')
-  return endIndex === -1 ? stdout.subarray(payloadStart) : stdout.subarray(payloadStart, endIndex)
-}
-
-function readCapturedGitString(stdout: string, resolved: ResolvedCommand): string {
-  const captured = resolved.captured
-  if (!captured) {
-    return stdout
-  }
-  const beginIndex = stdout.lastIndexOf(captured.beginMarker)
-  if (beginIndex === -1) {
-    return stdout
-  }
-  const payloadStart = beginIndex + captured.beginMarker.length
-  const endIndex = stdout.indexOf(captured.endMarker, payloadStart)
-  return endIndex === -1 ? stdout.slice(payloadStart) : stdout.slice(payloadStart, endIndex)
 }
 
 // Why: sync git blocks the main thread; a dead network drive can hang git for minutes without a timeout (issue #7225's 127s freeze).

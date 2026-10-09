@@ -51,6 +51,22 @@ describe('runProcess termination failure', () => {
     expect(onChildTerminated).toHaveBeenCalledOnce()
   })
 
+  it('verifies forced read-only shutdown before the root loses group ownership', async () => {
+    const child = mockChild()
+    spawnMock.mockReturnValue(child)
+    forceTerminateProcessTreeMock.mockResolvedValue(true)
+    const pending = runProcess({
+      program: 'git',
+      timeoutMs: 10,
+      terminationBarrier: true,
+      forceTerminationOnStop: true
+    })
+    await vi.advanceTimersByTimeAsync(10)
+    await expect(pending).resolves.toMatchObject({ timedOut: true })
+    expect(forceTerminateProcessTreeMock).toHaveBeenCalledWith(child)
+    expect(signalProcessTreeMock).not.toHaveBeenCalled()
+  })
+
   it('does not report a live-child error before its eventual close', async () => {
     const child = mockChild()
     const onChildTerminated = vi.fn()

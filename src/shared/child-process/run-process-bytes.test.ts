@@ -20,6 +20,7 @@ describe('process byte capture', () => {
       args: ['-e', 'process.stdout.write(Buffer.alloc(1000)); setInterval(() => {}, 1000)'],
       captureStdoutAsBytes: true,
       killOnOutputLimit: true,
+      forceTerminationOnStop: true,
       maxOutputBytes: 50,
       terminationBarrier: true,
       timeoutMs: 10_000

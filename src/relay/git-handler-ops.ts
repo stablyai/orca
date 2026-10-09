@@ -6,11 +6,10 @@
  * remain decoupled from the GitHandler class.
  */
 import * as path from 'node:path'
-import { isMissingGitBlobPath } from '../shared/git-blob-absence'
-import { bufferToBlob } from './git-handler-utils'
+import { readBlobAtOid, readBlobAtIndex, readUnstagedLeft } from './git-blob-read'
 import { parseGitChangeList } from '../shared/git-change-list'
+import { isGitReadInterruptedError } from './git-buffer-overflow'
 import { buildDiffResult } from './git-diff-result'
-import { isGitBufferOverflowError, isGitReadInterruptedError } from './git-buffer-overflow'
 import { readWorkingDiffFile } from './git-working-file-read'
 
 // ─── Executor types ──────────────────────────────────────────────────
@@ -27,64 +26,15 @@ export type GitExec = (
   }
 ) => Promise<{ stdout: string; stderr: string }>
 
-export type GitBufferExec = (args: string[], cwd: string) => Promise<Buffer>
+export type GitBufferExec = (
+  args: string[],
+  cwd: string,
+  opts?: { stdin?: string; signal?: AbortSignal; timeout?: number; maxBuffer?: number }
+) => Promise<Buffer>
 
 // ─── Blob reading ────────────────────────────────────────────────────
 
-export async function readBlobAtOid(
-  gitBuffer: GitBufferExec,
-  cwd: string,
-  oid: string,
-  filePath: string
-): Promise<{ content: string; isBinary: boolean }> {
-  // Why: Git's `<oid>:<path>` syntax expects forward slashes even on Windows.
-  const gitPath = filePath.replace(/\\/g, '/')
-  try {
-    const buf = await gitBuffer(['show', '--end-of-options', `${oid}:${gitPath}`], cwd)
-    return bufferToBlob(buf, filePath)
-  } catch (error) {
-    if (isGitReadInterruptedError(error)) {
-      throw error
-    }
-    if (isGitBufferOverflowError(error)) {
-      return { content: '', isBinary: true }
-    }
-    return { content: '', isBinary: false }
-  }
-}
-
-export async function readBlobAtIndex(
-  gitBuffer: GitBufferExec,
-  cwd: string,
-  filePath: string
-): Promise<{ content: string; isBinary: boolean; missing: boolean }> {
-  // Why: Git's `:<path>` syntax expects forward slashes even on Windows.
-  const gitPath = filePath.replace(/\\/g, '/')
-  try {
-    const buf = await gitBuffer(['show', '--end-of-options', `:${gitPath}`], cwd)
-    return { ...bufferToBlob(buf, filePath), missing: false }
-  } catch (error) {
-    if (isGitReadInterruptedError(error)) {
-      throw error
-    }
-    if (isGitBufferOverflowError(error)) {
-      return { content: '', isBinary: true, missing: false }
-    }
-    return { content: '', isBinary: false, missing: isMissingGitBlobPath(error, gitPath) }
-  }
-}
-
-export async function readUnstagedLeft(
-  gitBuffer: GitBufferExec,
-  cwd: string,
-  filePath: string
-): Promise<{ content: string; isBinary: boolean }> {
-  const index = await readBlobAtIndex(gitBuffer, cwd, filePath)
-  if (!index.missing) {
-    return index
-  }
-  return readBlobAtOid(gitBuffer, cwd, 'HEAD', filePath)
-}
+export { readBlobAtOid, readBlobAtIndex, readUnstagedLeft } from './git-blob-read'
 
 // ─── Diff ────────────────────────────────────────────────────────────
 

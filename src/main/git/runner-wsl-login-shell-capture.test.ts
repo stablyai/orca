@@ -24,6 +24,7 @@ afterEach(() => _resetGitAdmissionForTests())
 import { resetWslGitReadEnvironmentForTests } from './wsl-git-read-environment'
 
 const DISTRO = 'Ubuntu'
+const originalPlatform = process.platform
 const WSL_CWD = String.raw`\\wsl.localhost\Ubuntu\home\alice\repo`
 const BANNER = 'To run a command as administrator (user "root"), use "sudo <command>".\n\n'
 
@@ -63,7 +64,7 @@ describe('WSL login-shell reads are fenced', () => {
   })
 
   afterEach(() => {
-    Object.defineProperty(process, 'platform', { configurable: true, value: process.platform })
+    Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
     resetWslGitReadEnvironmentForTests()
   })
 
@@ -89,6 +90,44 @@ describe('WSL login-shell reads are fenced', () => {
     })
 
     expect(Buffer.compare(stdout, binary)).toBe(0)
+  })
+
+  it('reads filtered binary bytes through the owned WSL group with SSH policy', async () => {
+    const bytes = Buffer.from([0, 0xff, 0x89, 0xc3, 0x80])
+    respondToSshPolicyProbe('')
+    spawnMock.mockImplementation((_command, args) => {
+      const child = Object.assign(createMockChild(), {
+        stdin: Object.assign(new EventEmitter(), { end: vi.fn() })
+      })
+      const script = String(args.at(-1))
+      const nonce = /__ORCA_WSL_CAPTURE_BEGIN_([^_]+)__/.exec(script)?.[1] ?? ''
+      queueMicrotask(() => {
+        child.stdout.emit(
+          'data',
+          Buffer.concat([
+            Buffer.from(`${BANNER}__ORCA_WSL_CAPTURE_BEGIN_${nonce}__`),
+            bytes,
+            Buffer.from(`__ORCA_WSL_CAPTURE_END_${nonce}__`)
+          ])
+        )
+        child.emit('close', 0, null)
+      })
+      return child
+    })
+    const { stdout } = await gitExecFileAsyncBuffer(['cat-file', '--filters', '--', ':image.png'], {
+      cwd: WSL_CWD,
+      wslDistro: DISTRO,
+      preferWslDirectGit: true
+    })
+    expect(stdout).toEqual(bytes)
+    expect(spawnMock).toHaveBeenCalledWith(
+      'wsl.exe',
+      expect.arrayContaining(['--exec']),
+      expect.objectContaining({
+        env: expect.objectContaining({ GIT_SSH_COMMAND: 'ssh -o BatchMode=yes' })
+      })
+    )
+    expect(spawnMock.mock.calls[0]?.[1]?.join(' ')).toContain('setsid --wait')
   })
 
   /** Answer the core.sshCommand probe with `configured`, and any other command with ok. */

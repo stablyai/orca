@@ -3,6 +3,45 @@ import { createGitHandlerRelay } from './git-handler-test-harness'
 import type { GitHandlerOperationHost } from './git-handler-operation-context'
 
 describe('relay diff request cancellation', () => {
+  it('forwards pointer stdin and the shared cancellation signal to historical LFS reads', async () => {
+    const { handler, dispatcher } = createGitHandlerRelay()
+    const pointer = `version https://git-lfs.github.com/spec/v1\noid sha256:${'a'.repeat(64)}\nsize 4\n`
+    const image = Buffer.from([0, 255, 137, 128])
+    const signals: AbortSignal[] = []
+    const gitBuffer = vi.fn<GitHandlerOperationHost['gitBuffer']>(async (args, _cwd, options) => {
+      expect(options?.signal).toBeInstanceOf(AbortSignal)
+      if (options?.signal) {
+        signals.push(options.signal)
+      }
+      if (args.includes('smudge')) {
+        expect(options?.stdin).toBe(pointer)
+        return image
+      }
+      return Buffer.from(pointer)
+    })
+    Object.assign(handler, { gitBuffer, git: async () => ({ stdout: '', stderr: '' }) })
+    try {
+      const result = await dispatcher.callRequest(
+        'git.diff',
+        {
+          worktreePath: '/repo',
+          filePath: 'image.png',
+          staged: true
+        },
+        { isStale: () => false, signal: new AbortController().signal }
+      )
+      expect(result).toMatchObject({
+        kind: 'binary',
+        originalContent: image.toString('base64'),
+        modifiedContent: image.toString('base64')
+      })
+      expect(gitBuffer).toHaveBeenCalledTimes(4)
+      expect(signals.every((signal) => signal === signals[0] && !signal.aborted)).toBe(true)
+    } finally {
+      handler.dispose()
+    }
+  })
+
   it('lets one client cancel without stopping another client sharing the same read', async () => {
     const { handler, dispatcher } = createGitHandlerRelay()
     let finish!: () => void

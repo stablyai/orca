@@ -23,6 +23,7 @@ import { createGitHandlerOperationSet } from './git-handler-operation-set'
 import { registerGitHandlers } from './git-handler-registration'
 import { resolveGitFetchHeadCommand, runWithGitFetchHeadLock } from '../shared/git-fetch-head-lock'
 import { MAX_GIT_BUFFER, runGitToTermination } from './git-handler-command-termination'
+import { gitCredentialPromptGuardEnv } from '../shared/git-credential-prompt-env'
 import { classifyGitCommand, findGitSubcommandIndex } from '../shared/git-command-classification'
 import {
   GIT_SSH_CONFIG_ARGS,
@@ -188,17 +189,19 @@ export class GitHandler {
     cwd: string,
     opts?: GitHandlerCommandOptions
   ): Promise<Buffer> {
+    const filteredRead =
+      args.includes('--filters') || (args.includes('lfs') && args.includes('smudge'))
     const result = await runGitToTermination(
       args,
       {
         cwd: expandTilde(cwd),
-        env: buildRelayGitEnv(),
+        env: filteredRead ? gitCredentialPromptGuardEnv(buildRelayGitEnv()) : buildRelayGitEnv(),
         captureStdoutAsBytes: true,
         signal: opts?.signal,
-        timeout: opts?.timeout,
+        timeout: opts?.timeout ?? 120_000,
         maxBuffer: opts?.maxBuffer
       },
-      undefined
+      opts?.stdin
     )
     if (!result.stdoutBytes) {
       throw new Error('Git byte capture returned no bytes.')

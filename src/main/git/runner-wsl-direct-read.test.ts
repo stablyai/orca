@@ -315,7 +315,7 @@ describe('WSL direct Git reads', () => {
             const marker = String(args?.join(' ')).match(
               /(__ORCA_WSL_PROCESS_GROUP_[0-9a-f-]+__=)/
             )?.[1]
-            command.stderr.emit('data', Buffer.from(`${marker}4321\n`))
+            command.stderr.emit('data', Buffer.from(`${marker}4321:123456\n`))
           })
           return command
         }
@@ -340,6 +340,7 @@ describe('WSL direct Git reads', () => {
       expect(command.kill).not.toHaveBeenCalled()
       expect(spawnMock.mock.calls[1]?.[1]?.join(' ')).toContain('kill -TERM')
       expect(spawnMock.mock.calls[1]?.[1]).toContain('4321')
+      expect(spawnMock.mock.calls[1]?.[1]).toContain('123456')
     })
   })
 

@@ -48,6 +48,7 @@ export async function runGitToTermination(
       timeoutMs: gitCommandTimeoutMs(args, options.timeout) ?? null,
       maxOutputBytes: options.maxBuffer ?? MAX_GIT_BUFFER,
       captureStdoutAsBytes: options.captureStdoutAsBytes,
+      forceTerminationOnStop: options.captureStdoutAsBytes,
       killOnOutputLimit: options.outputCapture !== 'tail',
       signal: options.signal,
       terminationBarrier: options.observeStderr

@@ -205,8 +205,10 @@ export function runProcess(
     const stopAndSettle = (): void => {
       if (spec.terminationBarrier) {
         barrierStopping = true
-        initialBarrierTermination ??= signalBarrierTree()
-        if (process.platform === 'win32') {
+        initialBarrierTermination ??= spec.forceTerminationOnStop
+          ? forceBarrierTree()
+          : signalBarrierTree()
+        if (process.platform === 'win32' || spec.forceTerminationOnStop) {
           void initialBarrierTermination.then((terminated) => {
             if (!terminated) {
               return

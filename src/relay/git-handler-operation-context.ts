@@ -89,7 +89,8 @@ export abstract class GitHandlerOperationContext {
 
   protected gitBufferForSignal(signal?: AbortSignal) {
     return signal
-      ? (args: string[], cwd: string) => this.gitBuffer(args, cwd, { signal })
+      ? (args: string[], cwd: string, opts?: GitHandlerCommandOptions) =>
+          this.gitBuffer(args, cwd, { ...opts, signal })
       : this.gitBuffer.bind(this)
   }
 

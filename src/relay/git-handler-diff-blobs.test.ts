@@ -93,6 +93,20 @@ describe('relay diff blob reads', () => {
 })
 
 describe('independent relay blob reads', () => {
+  it.each(['file.txt', 'image.png'])(
+    'rejects a timed-out staged read of %s instead of reporting deletion',
+    async (filePath) => {
+      const timeout = Object.assign(new Error('Synthetic blob read timeout'), { timedOut: true })
+      const gitBuffer = vi.fn<GitBufferExec>(async (args) => {
+        if (args.at(-1)?.startsWith(':')) {
+          throw timeout
+        }
+        return Buffer.from('original\n')
+      })
+      await expect(computeDiff(gitBuffer, '/repo', filePath, true)).rejects.toBe(timeout)
+    }
+  )
+
   function deferredBlobs() {
     const releases: (() => void)[] = []
     const gitBuffer = vi.fn<GitBufferExec>(

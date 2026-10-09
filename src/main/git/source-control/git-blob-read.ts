@@ -1,6 +1,8 @@
 import { readFile, stat } from 'node:fs/promises'
 import * as path from 'node:path'
 import { isBinaryBuffer } from '../../../shared/binary-buffer'
+import { resolveGitLfsPreview } from '../../../shared/git-lfs-preview'
+import { probeGitBlobPresence } from '../../../shared/git-blob-presence'
 import { isMissingGitBlobPath } from '../../../shared/git-blob-absence'
 import type { GitRuntimeOptions } from '../git-runtime-options'
 import { gitReadOptionsForWorktree } from '../git-runtime-options'
@@ -13,12 +15,32 @@ export type GitBlobReadResult = {
   content: string
   isBinary: boolean
   exists: boolean
+  unmerged?: boolean
   /**
-   * The read did not complete: the blob is neither known-present nor proven
-   * absent. Callers must not persist a diff built on one, because the empty side
-   * it produces is indistinguishable from a genuinely new file.
+   * Content could not be read, even if the blob exists; callers must not cache this diff.
    */
   failed?: boolean
+}
+
+async function readFilteredBlobFailure(
+  worktreePath: string,
+  gitPath: string,
+  options: GitRuntimeOptions,
+  oid?: string
+): Promise<GitBlobReadResult> {
+  const present = await probeGitBlobPresence(
+    async (args) =>
+      (await gitExecFileAsyncBuffer(args, gitReadOptionsForWorktree(worktreePath, options))).stdout,
+    gitPath,
+    oid
+  )
+  return {
+    content: '',
+    isBinary: present !== false,
+    exists: present !== false,
+    failed: present !== false,
+    ...(present === 'unmerged' ? { unmerged: true } : {})
+  }
 }
 
 export async function readUnstagedLeftBlob(
@@ -27,11 +49,12 @@ export async function readUnstagedLeftBlob(
   options: GitRuntimeOptions = {}
 ): Promise<GitBlobReadResult> {
   const indexBlob = await readGitBlobAtIndexPath(worktreePath, filePath, options)
-  if (indexBlob.exists || indexBlob.failed) {
+  if (!indexBlob.unmerged && (indexBlob.exists || indexBlob.failed)) {
     return indexBlob
   }
 
-  return readGitBlobAtOidPath(worktreePath, 'HEAD', filePath, options)
+  const headBlob = await readGitBlobAtOidPath(worktreePath, 'HEAD', filePath, options)
+  return indexBlob.failed ? { ...headBlob, failed: true } : headBlob
 }
 
 export async function readGitBlobAtIndexPath(
@@ -41,16 +64,37 @@ export async function readGitBlobAtIndexPath(
 ): Promise<GitBlobReadResult> {
   // Why: Git's `:<path>` syntax expects forward slashes even on Windows.
   const gitPath = filePath.replace(/\\/g, '/')
+  // preview bytes must resolve LFS pointers using the host's smudge filter
+  const command = PREVIEWABLE_BINARY_MIME_TYPES[path.extname(filePath).toLowerCase()]
+    ? ['cat-file', '--filters', '--']
+    : ['show']
   try {
-    const { stdout } = await gitExecFileAsyncBuffer(['show', `:${gitPath}`], {
+    const { stdout } = await gitExecFileAsyncBuffer([...command, `:${gitPath}`], {
       ...gitReadOptionsForWorktree(worktreePath, options),
       maxBuffer: MAX_GIT_SHOW_BYTES
     })
 
-    return { ...bufferToBlob(stdout, filePath), exists: true }
+    const content = PREVIEWABLE_BINARY_MIME_TYPES[path.extname(filePath).toLowerCase()]
+      ? await resolveGitLfsPreview(
+          stdout,
+          gitPath,
+          async (args, stdin) =>
+            (
+              await gitExecFileAsyncBuffer(args, {
+                ...gitReadOptionsForWorktree(worktreePath, options),
+                maxBuffer: MAX_GIT_SHOW_BYTES,
+                stdin
+              })
+            ).stdout
+        )
+      : stdout
+    return { ...bufferToBlob(content, filePath), exists: true }
   } catch (error) {
     if (isMaxBufferOverflowError(error)) {
       return { content: '', isBinary: true, exists: true }
+    }
+    if (PREVIEWABLE_BINARY_MIME_TYPES[path.extname(filePath).toLowerCase()]) {
+      return readFilteredBlobFailure(worktreePath, gitPath, options)
     }
     return {
       content: '',
@@ -69,19 +113,37 @@ export async function readGitBlobAtOidPath(
 ): Promise<GitBlobReadResult> {
   // Why: Git's `<oid>:<path>` syntax expects forward slashes even on Windows.
   const gitPath = filePath.replace(/\\/g, '/')
+  // preview bytes must resolve LFS pointers using the host's smudge filter
+  const command = PREVIEWABLE_BINARY_MIME_TYPES[path.extname(filePath).toLowerCase()]
+    ? ['cat-file', '--filters', '--']
+    : ['show', '--end-of-options']
   try {
-    const { stdout } = await gitExecFileAsyncBuffer(
-      ['show', '--end-of-options', `${oid}:${gitPath}`],
-      {
-        ...gitReadOptionsForWorktree(worktreePath, options),
-        maxBuffer: MAX_GIT_SHOW_BYTES
-      }
-    )
+    const { stdout } = await gitExecFileAsyncBuffer([...command, `${oid}:${gitPath}`], {
+      ...gitReadOptionsForWorktree(worktreePath, options),
+      maxBuffer: MAX_GIT_SHOW_BYTES
+    })
 
-    return { ...bufferToBlob(stdout, filePath), exists: true }
+    const content = PREVIEWABLE_BINARY_MIME_TYPES[path.extname(filePath).toLowerCase()]
+      ? await resolveGitLfsPreview(
+          stdout,
+          gitPath,
+          async (args, stdin) =>
+            (
+              await gitExecFileAsyncBuffer(args, {
+                ...gitReadOptionsForWorktree(worktreePath, options),
+                maxBuffer: MAX_GIT_SHOW_BYTES,
+                stdin
+              })
+            ).stdout
+        )
+      : stdout
+    return { ...bufferToBlob(content, filePath), exists: true }
   } catch (error) {
     if (isMaxBufferOverflowError(error)) {
       return { content: '', isBinary: true, exists: true }
+    }
+    if (PREVIEWABLE_BINARY_MIME_TYPES[path.extname(filePath).toLowerCase()]) {
+      return readFilteredBlobFailure(worktreePath, gitPath, options, oid)
     }
     return {
       content: '',

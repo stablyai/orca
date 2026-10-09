@@ -42,11 +42,17 @@ export async function execFileCaptureToTermination(
     maxOutputBytes: options.maxBuffer ?? DEFAULT_GIT_MAX_BUFFER,
     signal: options.signal,
     terminationBarrier: termination ?? true,
+    ...(options.encoding === 'buffer'
+      ? { captureStdoutAsBytes: true, killOnOutputLimit: true, forceTerminationOnStop: true }
+      : {}),
     onChildTerminated: options.onChildTerminated,
     ...(options.stdin === undefined ? {} : { input: options.stdin })
   })
   const result = await pending
-  const stdout = options.encoding === 'buffer' ? Buffer.from(result.stdout) : result.stdout
+  const stdout = options.encoding === 'buffer' ? result.stdoutBytes : result.stdout
+  if (stdout === undefined) {
+    throw new Error('Binary command output is unavailable')
+  }
   const cleanStderr = termination?.stripControlOutput(result.stderr) ?? result.stderr
   const stderr = options.encoding === 'buffer' ? Buffer.from(cleanStderr) : cleanStderr
   if (
@@ -76,7 +82,7 @@ export async function execFileCaptureToTermination(
     error.name = 'AbortError'
   }
   throw Object.assign(error, {
-    code: result.code,
+    code: result.outputTruncated ? 'ENOBUFS' : result.code,
     killed: result.timedOut || result.signal !== null || options.signal?.aborted === true,
     signal: result.signal,
     stdout,
