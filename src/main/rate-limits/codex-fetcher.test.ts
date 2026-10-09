@@ -111,6 +111,11 @@ function respondToRpcRateLimitRead(
   })
 }
 
+async function advanceRpcResponseTimers(): Promise<void> {
+  await vi.advanceTimersByTimeAsync(1)
+  await vi.advanceTimersByTimeAsync(1)
+}
+
 function mockBackendUsage(): void {
   readFileMock.mockResolvedValue(
     JSON.stringify({ tokens: { access_token: 'access-token', account_id: 'account-id' } })
@@ -294,6 +299,44 @@ describe('fetchCodexRateLimits', () => {
     expect(ptySpawnMock).not.toHaveBeenCalled()
   })
 
+  it('rejects empty non-unlimited RPC usage when the HTTP fallback is unavailable', async () => {
+    const rpcChild = makeRpcChild()
+    childSpawnMock.mockReturnValue(rpcChild)
+    respondToRpcRateLimitRead(rpcChild, { planType: 'plus' })
+
+    const resultPromise = fetchCodexRateLimits()
+    await advanceRpcResponseTimers()
+
+    await expect(resultPromise).resolves.toMatchObject({
+      provider: 'codex',
+      session: null,
+      weekly: null,
+      status: 'error',
+      error: 'RPC response did not include rate-limit windows'
+    })
+    expect(rpcChild.stdin.listenerCount('error')).toBe(0)
+    expect(fetch).not.toHaveBeenCalled()
+    expect(ptySpawnMock).not.toHaveBeenCalled()
+  })
+
+  it('recovers empty non-unlimited RPC usage through the HTTP fallback', async () => {
+    const rpcChild = makeRpcChild()
+    childSpawnMock.mockReturnValue(rpcChild)
+    respondToRpcRateLimitRead(rpcChild, { planType: 'plus' })
+    mockBackendUsage()
+
+    const resultPromise = fetchCodexRateLimits()
+    await advanceRpcResponseTimers()
+
+    await expect(resultPromise).resolves.toMatchObject({
+      session: { usedPercent: 7, windowMinutes: 300 },
+      weekly: { usedPercent: 12, windowMinutes: 10080 },
+      status: 'ok',
+      error: null
+    })
+    expect(ptySpawnMock).not.toHaveBeenCalled()
+  })
+
   it('shows the RPC exit reason when the HTTP fallback is rejected', async () => {
     const rpcChild = makeRpcChild()
     childSpawnMock.mockReturnValue(rpcChild)
@@ -347,12 +390,23 @@ describe('fetchCodexRateLimits', () => {
     })
 
     const resultPromise = fetchCodexRateLimits()
-    await vi.advanceTimersByTimeAsync(1)
-    await vi.advanceTimersByTimeAsync(1)
+    await advanceRpcResponseTimers()
     const result = await resultPromise
 
     expect(result.session?.windowMinutes).toBe(300)
     expect(result.weekly?.windowMinutes).toBe(10080)
+  })
+
+  it('maps an unlimited Codex account without falling back to HTTP', async () => {
+    const rpcChild = makeRpcChild()
+    childSpawnMock.mockReturnValue(rpcChild)
+    respondToRpcRateLimitRead(rpcChild, { credits: { unlimited: true }, planType: ' business ' })
+    const resultPromise = fetchCodexRateLimits()
+    await vi.advanceTimersByTimeAsync(2)
+    const result = await resultPromise
+    expect(result).toMatchObject({ status: 'ok', planType: 'business', isUnlimited: true })
+    expect(fetch).not.toHaveBeenCalled()
+    expect(ptySpawnMock).not.toHaveBeenCalled()
   })
 
   it('keeps a weekly-only Codex primary window out of the 5-hour slot', async () => {
@@ -364,8 +418,7 @@ describe('fetchCodexRateLimits', () => {
     })
 
     const resultPromise = fetchCodexRateLimits()
-    await vi.advanceTimersByTimeAsync(1)
-    await vi.advanceTimersByTimeAsync(1)
+    await advanceRpcResponseTimers()
 
     await expect(resultPromise).resolves.toMatchObject({
       session: null,
@@ -409,8 +462,7 @@ describe('fetchCodexRateLimits', () => {
     } as Response)
 
     const resultPromise = fetchCodexRateLimits()
-    await vi.advanceTimersByTimeAsync(1)
-    await vi.advanceTimersByTimeAsync(1)
+    await advanceRpcResponseTimers()
 
     await expect(resultPromise).resolves.toMatchObject({
       session: { usedPercent: 7, windowMinutes: 300, resetsAt: 1_800_000_000_000 },
@@ -429,8 +481,7 @@ describe('fetchCodexRateLimits', () => {
     })
 
     const resultPromise = fetchCodexRateLimits()
-    await vi.advanceTimersByTimeAsync(1)
-    await vi.advanceTimersByTimeAsync(1)
+    await advanceRpcResponseTimers()
 
     await expect(resultPromise).resolves.toMatchObject({
       session: { usedPercent: 11, windowMinutes: 300 },
@@ -505,8 +556,7 @@ describe('fetchCodexRateLimits', () => {
     })
 
     const resultPromise = fetchCodexRateLimits({ codexHomePath: '/managed/codex-home' })
-    await vi.advanceTimersByTimeAsync(1)
-    await vi.advanceTimersByTimeAsync(1)
+    await advanceRpcResponseTimers()
     const result = await resultPromise
 
     expect(result.rateLimitResetCredits).toEqual({
@@ -588,8 +638,7 @@ describe('fetchCodexRateLimits', () => {
     })
 
     const resultPromise = fetchCodexRateLimits()
-    await vi.advanceTimersByTimeAsync(1)
-    await vi.advanceTimersByTimeAsync(1)
+    await advanceRpcResponseTimers()
     const result = await resultPromise
 
     expect(result.rateLimitResetCredits).toEqual({
@@ -645,8 +694,7 @@ describe('fetchCodexRateLimits', () => {
       const resultPromise = fetchCodexRateLimits({
         codexHomePath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.local\\share\\orca\\account\\home'
       })
-      await vi.advanceTimersByTimeAsync(1)
-      await vi.advanceTimersByTimeAsync(1)
+      await advanceRpcResponseTimers()
       await resultPromise
 
       const [spawnFile, spawnArgs, spawnOptions] = childSpawnMock.mock.calls[0]
@@ -722,8 +770,7 @@ describe('fetchCodexRateLimits', () => {
 
     try {
       const resultPromise = fetchCodexRateLimits({ codexHomePath: 'C:\\Users\\alice\\.codex' })
-      await vi.advanceTimersByTimeAsync(1)
-      await vi.advanceTimersByTimeAsync(1)
+      await advanceRpcResponseTimers()
       await resultPromise
 
       const [spawnFile, spawnArgs, spawnOptions] = childSpawnMock.mock.calls[0]
