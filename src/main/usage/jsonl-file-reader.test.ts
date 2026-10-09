@@ -216,11 +216,12 @@ describe('pinned small JSONL reader', () => {
     expect(await validateJsonlFileReader(active)).toBe(false)
   })
 
-  it('keeps the pinned handle but rejects atomic replacement at the path', async () => {
+  it('keeps the pinned handle but rejects path rotation', async () => {
     const original = 'one\n'
     const active = await openFixture(original)
     const replacement = join(directory, 'replacement.jsonl')
     await writeFile(replacement, 'two\n')
+    await rename(filePath, join(directory, 'rotated.jsonl'))
     await rename(replacement, filePath)
 
     expect(await collect(active)).toEqual([{ line: 'one', endOffset: 4, terminated: true }])
