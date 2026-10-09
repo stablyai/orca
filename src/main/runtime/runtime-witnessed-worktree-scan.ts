@@ -9,6 +9,8 @@ import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-option
 import type { Store } from '../persistence'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'
+import { isCapturedRepoCurrent } from '../ipc/worktrees/listing/worktree-host-ownership'
+import { getRepoExecutionHostId } from '../../shared/execution-host'
 
 export type WitnessedRuntimeWorktreeScan = RuntimeWorktreeScanResult & {
   /** A worktree change landed while this scan ran; its rows describe a catalog that is gone. */
@@ -73,11 +75,12 @@ async function scanRuntimeWorktreesWithMutationWitness(
 export function scanRuntimeWorktreesUntilNotOvertaken(
   store: RuntimeStore,
   repo: Repo,
-  scanRepo: (repo: Repo) => Promise<RuntimeWorktreeScanResult>
+  scanRepo: (repo: Repo) => Promise<RuntimeWorktreeScanResult>,
+  isCurrent = () => isCapturedRepoCurrent(store, repo, getRepoExecutionHostId(repo))
 ): Promise<WitnessedRuntimeWorktreeScan> {
   return scanUntilNotOvertaken(
     repo.id,
     () => scanRuntimeWorktreesWithMutationWitness(store, repo, scanRepo),
-    () => true
+    isCurrent
   )
 }

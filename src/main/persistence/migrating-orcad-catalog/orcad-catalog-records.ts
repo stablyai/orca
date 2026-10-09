@@ -24,6 +24,7 @@ import {
   type PreparedOrcadMigrationDormantState
 } from './orcad-dormant-state-records'
 import { sameOrcadRepositoryConfiguration, selectNewRows } from './orcad-catalog-row-identity'
+import { bumpLocalWorktreeScanGeneration } from '../../local-worktree-scan-generation'
 
 export type PreparedOrcadMigrationCatalog = {
   repositories: Repo[]
@@ -99,6 +100,9 @@ export function applyPreparedOrcadMigrationCatalog(
   applyPreparedOrcadMigrationDormantState(prepared.dormantState, state)
   if (prepared.newRepositories.length > 0) {
     syncProjectHostSetupCompatibilityState(repos)
+    for (const repo of prepared.newRepositories) {
+      bumpLocalWorktreeScanGeneration(repo.id)
+    }
   }
 }
 

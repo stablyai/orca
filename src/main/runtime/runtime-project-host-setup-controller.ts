@@ -13,6 +13,7 @@ import type {
   ProjectUpdateArgs
 } from '../../shared/project-types'
 import type { Repo } from '../../shared/repo-types'
+import { getRepoKind } from '../../shared/repo-kind'
 import {
   getRepoExecutionHostId,
   getSshTargetIdForExecutionHost,
@@ -23,6 +24,7 @@ import { getProjectIdForProviderIdentity } from '../../shared/project-host-setup
 import { getProjectHostSetupForRepo } from '../../shared/project-host-setup-lookup'
 import { invalidateAuthorizedRootsCache } from '../ipc/filesystem-auth'
 import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
+import { invalidateDetectedWorktreeScanCache } from '../ipc/worktrees/listing/detected-worktree-scan-cache'
 import type { RuntimeStore } from './runtime-store-contract'
 
 type RuntimeProjectHostSetupDependencies = {
@@ -132,13 +134,28 @@ export class RuntimeProjectHostSetupController {
     if (!store?.updateProjectHostSetup) {
       throw new Error('runtime_unavailable')
     }
+    const previousSetups = args.updates.kind
+      ? this.listSetups().map(({ id, hostId, kind }) => ({ id, hostId, kind }))
+      : []
     const result = store.updateProjectHostSetup(args)
     if (!result) {
       throw new Error(`Project host setup not found: ${args.setupId}`)
     }
+    const previousKind = previousSetups.find(
+      (setup) => setup.id === result.setup.id && setup.hostId === result.setup.hostId
+    )?.kind
+    const kindChanged =
+      result.repo !== undefined &&
+      args.updates.kind !== undefined &&
+      getRepoKind({ kind: previousKind }) !== getRepoKind(result.repo)
     if ('worktreeBasePath' in args.updates && result.repo) {
       void prepareLocalWorktreeRootForRepo(store, result.repo)
-      invalidateAuthorizedRootsCache()
+      if (!kindChanged) {
+        invalidateAuthorizedRootsCache()
+      }
+    }
+    if (kindChanged && result.repo) {
+      this.invalidateRepoCatalog(result.repo.id)
     }
     this.deps.notifyReposChanged()
     return result
@@ -154,10 +171,9 @@ export class RuntimeProjectHostSetupController {
       throw new Error(`Project host setup not found: ${args.setupId}`)
     }
     if (result.repo) {
-      this.forgetRemovedRepo(result.repo.id)
-    } else {
-      this.deps.notifyReposChanged()
+      this.invalidateRepoCatalog(result.repo.id)
     }
+    this.deps.notifyReposChanged()
     return result
   }
 
@@ -174,18 +190,19 @@ export class RuntimeProjectHostSetupController {
         this.deps
           .getStore()
           ?.removeProjectForHost?.(initialRepo.id, getRepoExecutionHostId(initialRepo))
-        this.forgetRemovedRepo(initialRepo.id)
+        this.invalidateRepoCatalog(initialRepo.id)
+        this.deps.notifyReposChanged()
       }
       throw error
     }
   }
 
-  // Why: removed registrations must leave resolution, authorization, and open clients' catalogs.
-  private forgetRemovedRepo(repoId: string): void {
+  // Kind changes and removed registrations retire the same cached Git graph.
+  private invalidateRepoCatalog(repoId: string): void {
     this.deps.invalidateResolvedWorktrees()
     this.deps.invalidateWorktreeScan(repoId)
+    invalidateDetectedWorktreeScanCache(repoId)
     invalidateAuthorizedRootsCache()
-    this.deps.notifyReposChanged()
   }
 
   private linkRepo(

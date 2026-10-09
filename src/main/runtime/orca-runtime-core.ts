@@ -1,5 +1,6 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'
+import type { Repo } from '../../shared/repo-types'
 import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import type { RuntimeLeafRecord } from './runtime-terminal-state-records'
@@ -25,6 +26,7 @@ export type PtyIncarnationHandleRecord = {
 }
 
 export type RuntimeWorktreeScanCache = {
+  repo: Repo
   generation: number
   runtimeKey: string
   result: RuntimeWorktreeScanResult
@@ -34,6 +36,7 @@ export type RuntimeWorktreeScanCache = {
 }
 
 export type RuntimeWorktreeScanInFlight = {
+  repo: Repo
   generation: number
   runtimeKey: string
   promise: Promise<RuntimeWorktreeScanRefresh>

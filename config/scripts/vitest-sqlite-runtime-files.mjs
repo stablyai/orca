@@ -3,6 +3,7 @@ import { SQLITE_DATABASE_RUNTIME_INCLUDE } from './vitest-sqlite-database-runtim
 // Real SQLite fixtures keep Node publication and close semantics.
 export const SQLITE_RUNTIME_INCLUDE = [
   ...SQLITE_DATABASE_RUNTIME_INCLUDE,
+  'src/main/ipc/worktrees-ssh-retired-registration.test.ts',
   'src/main/acp/acp-structured-host-live-listing.test.ts',
   'src/main/acp/acp-structured-host-configured-default.test.ts',
   'src/main/acp/acp-structured-omp-recordings.test.ts',
@@ -213,6 +214,7 @@ export const SQLITE_RUNTIME_INCLUDE = [
   'src/main/runtime/rpc/methods/structured-agent-session-restart-unregistered-agent.test.ts',
   'src/main/runtime/rpc/methods/structured-chat-tab-table.test.ts',
   'src/main/runtime/runtime-managed-worktree-metadata-sweep.test.ts',
+  'src/main/runtime/runtime-project-host-setup-cache.integration.test.ts',
   'src/main/runtime/runtime-orchestration-sender-names.test.ts',
   'src/main/runtime/runtime-worktree-agent-rows-verdict.test.ts',
   'src/main/runtime/runtime-worktree-structured-agent-rows-liveness.test.ts',
@@ -247,6 +249,7 @@ export const SQLITE_RUNTIME_INCLUDE = [
   'tests/e2e/cross-version-wire/cross-version-agent-session-wire.unit.test.ts',
   'tests/e2e/cross-version-wire/submission-positions-downgrade.unit.test.ts',
   'tests/e2e/folder-upgrade-identity-persistence.unit.test.ts',
+  'tests/e2e/runtime-project-host-setup-publication.unit.test.ts',
   'tests/e2e/structured-agent-session-read-owner.unit.test.ts',
   'tests/e2e/structured-chat-owner-status-activation.unit.test.ts'
 ]

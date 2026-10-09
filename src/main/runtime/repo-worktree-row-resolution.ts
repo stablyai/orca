@@ -24,6 +24,7 @@ import { pruneLineageForMissingRepoWorktrees } from '../worktree-lineage-pruning
 import { getRepoOwnedWorktreeMeta } from '../worktree-metadata-ownership'
 import { resolveLocalProjectRuntimesForRepos } from '../project-runtime-git-options'
 import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'
+import { isCapturedRepoCurrent } from '../ipc/worktrees/listing/worktree-host-ownership'
 
 /**
  * Per-repo budget for one resolution pass. Why: mobile startup shares this path, so one slow repo
@@ -48,6 +49,7 @@ export type RepoWorktreeRow = Worktree & {
 
 export type RepoWorktreeRowDeps = {
   store: Store
+  isRepoCurrent?: (repo: Repo) => boolean
   /** The cache-aware per-repo scan. Injected so this module never owns scan-cache state. */
   scanRepo: (
     repo: Repo,
@@ -104,6 +106,13 @@ export async function resolveRepoWorktreeRows(
   repoOwnerCount = deps.store.getRepos().filter((candidate) => candidate.id === repo.id).length
 ): Promise<RepoWorktreeRow[]> {
   const { store } = deps
+  const capturedRepo = { ...repo }
+  const isCurrent = () =>
+    deps.isRepoCurrent?.(capturedRepo) ??
+    isCapturedRepoCurrent(store, capturedRepo, getRepoExecutionHostId(capturedRepo))
+  if (!isCurrent()) {
+    return []
+  }
   if (isFolderRepo(repo)) {
     return deps.listFolderWorkspaces(repo, repoOwnerCount).map((worktree) => ({
       ...worktree,
@@ -133,6 +142,9 @@ export async function resolveRepoWorktreeRows(
     RESOLVED_WORKTREE_REPO_TIMEOUT_MS,
     null
   )) ?? { ok: false, worktrees: listStoredWorktreeRowsForRepo(store, repo, repoOwnerCount) }
+  if (!isCurrent()) {
+    return []
+  }
   const gitWorktrees = preserveFolderUpgradeWorktreePath(repo, scan.worktrees)
   if (scan.ok) {
     pruneLineageForMissingRepoWorktrees(store, repo, gitWorktrees)
