@@ -34,7 +34,9 @@ function toolTurn(n: number): unknown[] {
       timestamp: `2026-08-20T10:00:${String(n).padStart(2, '0')}.000Z`,
       message: {
         role: 'assistant',
-        content: [{ type: 'tool_use', name: 'Bash', input: { command: `echo ${n}` } }]
+        content: [
+          { type: 'tool_use', id: `toolu_${n}`, name: 'Bash', input: { command: `echo ${n}` } }
+        ]
       }
     },
     {

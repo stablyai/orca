@@ -4,9 +4,7 @@ import {
   isToolCallBlock,
   isToolResultBlock,
   type NativeChatBlock,
-  type NativeChatMessage,
-  type NativeChatToolCallBlock,
-  type NativeChatToolResultBlock
+  type NativeChatMessage
 } from './native-chat-types'
 import { isKnownHarnessInjectedUserTurnText } from './harness-injected-user-turns'
 import { isNoiseMessage } from './native-chat-noise'
@@ -14,6 +12,9 @@ import {
   CODEX_PLAN_UPDATED_FRAME_KIND,
   isWordlessProviderFrameMessage
 } from './native-chat-provider-frame-summary'
+import { unpairedToolResultIndices } from './native-chat-tool-pairs'
+
+export { pairToolBlocks, type NativeChatToolPair } from './native-chat-tool-pairs'
 
 function isToolOnlyMessage(message: NativeChatMessage): boolean {
   return (
@@ -75,24 +76,14 @@ function isInterruptionBoundary(message: NativeChatMessage): boolean {
 
 /** Drop tool results the renderer cannot pair within their folded message. */
 function dropUnattributableToolResults(message: NativeChatMessage): NativeChatMessage | null {
-  let blocks: NativeChatBlock[] | undefined
-  let unansweredCalls = 0
-  for (let index = 0; index < message.blocks.length; index++) {
-    const block = message.blocks[index]
-    if (isToolCallBlock(block)) {
-      unansweredCalls += 1
-    } else if (isToolResultBlock(block)) {
-      if (unansweredCalls === 0) {
-        blocks ??= message.blocks.slice(0, index)
-        continue
-      }
-      unansweredCalls -= 1
-    }
-    blocks?.push(block)
-  }
-  if (!blocks) {
+  if (!message.blocks.some(isToolResultBlock)) {
     return message
   }
+  const unpaired = unpairedToolResultIndices(message.blocks)
+  if (unpaired.size === 0) {
+    return message
+  }
+  const blocks = message.blocks.filter((_block, index) => !unpaired.has(index))
   return blocks.length > 0 ? { ...message, blocks } : null
 }
 
@@ -164,59 +155,6 @@ export function foldToolMessages(messages: readonly NativeChatMessage[]): Native
     }
   }
   return attributedOutput
-}
-
-export type NativeChatToolPair = {
-  call?: NativeChatToolCallBlock
-  result?: NativeChatToolResultBlock
-}
-
-/** Where in `unanswered` (oldest first) the call `result` answers is, or -1 for none. */
-function answeredToolCallIndex<T>(
-  unanswered: readonly T[],
-  result: NativeChatToolResultBlock,
-  callIdOf: (entry: T) => string | undefined
-): number {
-  if (result.callId === undefined) {
-    return unanswered.length > 0 ? 0 : -1
-  }
-  return unanswered.findIndex((entry) => callIdOf(entry) === result.callId)
-}
-
-/** Pair results to calls by `answeredToolCallIndex`. Every reader of a run pairs through this
- *  (`pairNativeChatToolResults` included), so they all agree on who owns an output. */
-export function pairToolBlocks(
-  blocks: readonly NativeChatBlock[],
-  limit = Infinity
-): NativeChatToolPair[] {
-  const pairs: NativeChatToolPair[] = []
-  /** Slots of retained calls not yet answered, oldest first. */
-  const callSlots: number[] = []
-  for (const block of blocks) {
-    if (pairs.length >= limit && callSlots.length === 0) {
-      break
-    }
-    if (block.type === 'tool-call') {
-      if (pairs.length < limit) {
-        callSlots.push(pairs.length)
-        pairs.push({ call: block })
-      }
-      continue
-    }
-    if (block.type !== 'tool-result') {
-      continue
-    }
-    const answered = answeredToolCallIndex(callSlots, block, (slot) => pairs[slot]?.call?.callId)
-    const [slot] = answered === -1 ? [] : callSlots.splice(answered, 1)
-    if (slot === undefined) {
-      if (pairs.length < limit) {
-        pairs.push({ result: block })
-      }
-    } else {
-      pairs[slot]!.result = block
-    }
-  }
-  return pairs
 }
 
 export function splitNativeChatBlocks(blocks: readonly NativeChatBlock[]): {
