@@ -1,8 +1,8 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithPersistHeadlessTerminalTitle } from './orca-runtime-persist-headless-terminal-title'
 import {
+  getConnectionExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
-  toSshExecutionHostId,
   type ExecutionHostId
 } from '../../shared/execution-host'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
@@ -57,9 +57,7 @@ export class OrcaRuntimeWithResolveKnownWorkspaceFileTarget extends OrcaRuntimeW
         const worktree = this.folderWorkspaceToResolvedWorktree(folderWorkspace)
         const target = {
           worktree,
-          executionHostId: candidateConnectionId
-            ? toSshExecutionHostId(candidateConnectionId)
-            : LOCAL_EXECUTION_HOST_ID
+          executionHostId: getConnectionExecutionHostId(candidateConnectionId)
         }
         targets.set(`${target.executionHostId}\0${worktree.id}`, target)
       } catch {

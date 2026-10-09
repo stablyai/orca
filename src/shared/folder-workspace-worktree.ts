@@ -1,7 +1,11 @@
 import type { FolderWorkspace } from './folder-workspace-types'
 import type { Worktree } from './worktree/types'
 import { folderWorkspaceKey } from './workspace-scope'
-import { parseExecutionHostId, toSshExecutionHostId, type ExecutionHostId } from './execution-host'
+import {
+  getConnectionExecutionHostId,
+  parseExecutionHostId,
+  type ExecutionHostId
+} from './execution-host'
 import { composeWorktreeHostIdentity } from './worktree/host-qualified-identity'
 import { normalizeWorkspaceCreatorProvenance } from './workspace-creator-provenance'
 import { getWorkspaceAttachments } from './workspace-attachments'
@@ -32,10 +36,7 @@ export function projectGroupIdFromRepoId(repoId: string | null | undefined): str
 function getFolderWorkspaceWorktreeHostId(
   workspace: Pick<FolderWorkspace, 'executionHostId' | 'connectionId'>
 ): ExecutionHostId {
-  return (
-    workspace.executionHostId ??
-    (workspace.connectionId ? toSshExecutionHostId(workspace.connectionId) : 'local')
-  )
+  return workspace.executionHostId ?? getConnectionExecutionHostId(workspace.connectionId)
 }
 
 export function getFolderWorkspaceHostIdentity(
