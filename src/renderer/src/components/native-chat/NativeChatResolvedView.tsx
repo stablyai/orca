@@ -176,13 +176,6 @@ export function NativeChatResolvedView({
     }
     clearNativeChatLaunchPrompt(terminalTabId)
   }, [clearNativeChatLaunchPrompt, paneLaunchPrompt, session.messages, terminalTabId])
-  const onOptimisticSend = useCallback(
-    (text: string, imagePaths?: string[]) => {
-      setWorkingInterrupted(false)
-      return record(text, imagePaths)
-    },
-    [record]
-  )
   const onSlashCommand = useCallback(
     (command: string, output?: string) => {
       setCommandMarkers(appendCommandMarkerCache(commandMarkerScope, command, Date.now(), output))
@@ -245,8 +238,7 @@ export function NativeChatResolvedView({
     composerReady: shownPromptCard === null && targetPtyId !== null && canSend
   })
 
-  // The streaming preview bubble (if any) sits after the transcript but before
-  // the optimistic user echoes — same order mobile uses.
+  // Active pending echoes above stream; queued follow-ups wait after it via rank.
   const pendingMessages = useMemo(
     () => pendingSendsAsMessages(pending, sessionAfterCommandBoundaries.messages),
     [pending, sessionAfterCommandBoundaries.messages]
@@ -277,11 +269,20 @@ export function NativeChatResolvedView({
       messages: [
         ...sessionAfterCommandBoundaries.messages,
         ...commandMarkersAsMessages(commandMarkers),
-        ...(streamingText ? [nativeChatStreamingMessage(streamingText)] : []),
-        ...pendingMessages
+        ...pendingMessages,
+        ...(streamingText ? [nativeChatStreamingMessage(streamingText)] : [])
       ]
     }
   }, [sessionAfterCommandBoundaries, pending, pendingMessages, commandMarkers, streamingText])
+  const onOptimisticSend = useCallback(
+    (text: string, imagePaths?: string[]) => {
+      setWorkingInterrupted(false)
+      // Mid-turn follow-ups queue behind the live reply; the turn's first prompt does not.
+      const queued = Boolean(liveWorking || streamingText)
+      return record(text, imagePaths, { queued })
+    },
+    [liveWorking, record, streamingText]
+  )
   // Derive the view state from the pending-augmented session so a send into an
   // otherwise-empty conversation flips to the list (showing the queued bubble)
   // instead of staying on the empty state.

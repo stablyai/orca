@@ -13,7 +13,6 @@ import {
   isImageSourceUserTurn,
   normalizeImageTranscriptMessages
 } from '../../../../shared/native-chat-image-transcript-markers'
-import { isLaunchPromptMessageId, isPendingMessageId } from './native-chat-pending'
 
 /** Messages grouped by source. Higher-priority sources (transcript > hook >
  *  scrape) supersede lower ones when they describe the same turn. */
@@ -92,15 +91,16 @@ function supersedes(candidate: NativeChatMessage, existing: NativeChatMessage): 
 }
 
 // Why: the tail bubbles form fixed tiers that timestamps alone can't express.
-// The streaming preview (null timestamp) must follow real content but sit ahead
-// of the optimistic composer echoes and queued sends, which carry finite timestamps
-// that would otherwise sort past it. Rank first, then timestamp within a tier.
+// Host-queued rows (`queued: true`, accepted but not yet handed to the agent) wait
+// after the live turn. The streaming preview is the in-progress reply. Everything
+// else — including the optimistic echo for the prompt that triggered that reply —
+// sorts with ordinary transcript order so the prompt stays above its answer.
 function messageSortRank(message: NativeChatMessage): number {
+  if (message.queued) {
+    return 2
+  }
   if (message.id === NATIVE_CHAT_STREAMING_ID) {
     return 1
-  }
-  if (message.queued || isPendingMessageId(message.id) || isLaunchPromptMessageId(message.id)) {
-    return 2
   }
   return 0
 }

@@ -436,6 +436,17 @@ describe('pendingSendsAsMessages', () => {
     ])
   })
 
+  it('projects entry.queued onto the optimistic message so follow-ups rank after streaming', () => {
+    const messages = pendingSendsAsMessages([
+      { id: 'p1', text: 'trigger', sentAt: 10 },
+      { id: 'p2', text: 'follow-up', sentAt: 20, queued: true }
+    ])
+    expect(messages.map((message) => ({ id: message.id, queued: message.queued }))).toEqual([
+      { id: 'pending:p1', queued: undefined },
+      { id: 'pending:p2', queued: true }
+    ])
+  })
+
   it('includes image refs for pending attachment sends', () => {
     const messages = pendingSendsAsMessages([
       { id: 'p1', text: 'what do you see?', imagePaths: ['/tmp/shot.png'], sentAt: 42 }

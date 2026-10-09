@@ -12,6 +12,10 @@ import {
 } from './native-chat-pending'
 import type { NativeChatDeliveryNotice } from './NativeChatMessageRow'
 
+export type NativeChatRecordPendingOptions = {
+  queued?: boolean
+}
+
 /** How long a send whose write acknowledgment was lost waits for its row; the phone's hold matches. */
 export const NATIVE_CHAT_UNCONFIRMED_SEND_HOLD_MS = 20_000
 
@@ -42,16 +46,18 @@ export function useNativeChatPendingDelivery(args: {
     save((entries) => prunePendingSends(entries, messages))
   }, [messages, save])
   const record = useCallback(
-    (text: string, imagePaths?: string[]) => {
+    (text: string, imagePaths?: string[], options?: NativeChatRecordPendingOptions | boolean) => {
       const sentAt = Date.now()
       const boundary = messages.at(-1)
+      const isQueued = typeof options === 'boolean' ? options : options?.queued
       const entry: NativeChatPendingSend = {
         id: nextNativeChatPendingSendId(sentAt),
         text,
         sentAt,
         afterMessageId: boundary?.id ?? null,
         afterMessageTimestamp: boundary?.timestamp ?? null,
-        ...(imagePaths ? { imagePaths } : {})
+        ...(imagePaths ? { imagePaths } : {}),
+        ...(isQueued ? { queued: true } : {})
       }
       setPending(appendPendingSendCache(scope, entry))
       return entry.id

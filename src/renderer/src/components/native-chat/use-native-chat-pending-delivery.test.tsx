@@ -46,6 +46,11 @@ describe('terminal Chat pending delivery', () => {
     expect(result.current.notices.size).toBe(0)
     expect(result.current.pending[0]?.delivery).toBeUndefined()
   })
+  it('records a pending send with queued true when options.queued is true', () => {
+    const { result } = render()
+    act(() => result.current.record('queued prompt', undefined, { queued: true }))
+    expect(result.current.pending[0]?.queued).toBe(true)
+  })
   it('marks a refused write as not sent, keeps its text, and dismisses it', () => {
     const { result } = render()
     act(() => {
