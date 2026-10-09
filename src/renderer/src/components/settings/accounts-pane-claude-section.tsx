@@ -5,12 +5,14 @@ import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'
 import { ClaudeIcon } from '../status-bar/icons'
+import { InlineUsageBars, InlineUsageSkeleton } from '../status-bar/InlineProviderUsage'
 import { SearchableSetting } from './SearchableSetting'
 import {
   getProviderAccountRuntime,
   providerAccountIsActiveInView
 } from './provider-account-visibility'
 import { formatAccountTimestamp, getClaudeAccountRuntimeLabel } from './accounts-pane-runtime'
+import { resolveClaudeRowUsage } from './claude-account-usage'
 import type { AccountsPaneSectionModel } from './accounts-pane-types'
 
 export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): React.JSX.Element {
@@ -21,6 +23,11 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
     accountVisibilityOptions,
     claudeAccounts,
     claudeAction,
+    claudeRateLimits,
+    claudeUsageFetchSettled,
+    claudeUsageTargetMatches,
+    claudeUsageVisible,
+    inactiveClaudeAccounts,
     isRemoteAccountScope,
     remoteAccountScopeNotice,
     runClaudeAccountAction,
@@ -183,6 +190,15 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
               )
               const isReauthing = claudeAction === `reauth:${account.id}`
               const isBusy = claudeAction !== 'idle' || accountRuntimeUnavailable
+              const usage = resolveClaudeRowUsage({
+                accountId: account.id,
+                isActive,
+                visible: claudeUsageVisible,
+                targetMatchesRuntime: claudeUsageTargetMatches,
+                activeLimits: claudeRateLimits,
+                inactiveAccounts: inactiveClaudeAccounts,
+                inactiveFetchSettled: claudeUsageFetchSettled
+              })
 
               return (
                 <div
@@ -194,49 +210,67 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
                   }`}
                 >
                   <div className="flex w-full items-center justify-between gap-3 max-md:flex-col max-md:items-start">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const accountRuntimeView = getProviderAccountRuntime(account)
-                        void runClaudeAccountAction(
-                          `select:${account.id}`,
-                          () =>
-                            selectClaudeProviderAccount(settings, {
-                              accountId: account.id,
-                              ...accountRuntimeView
-                            }),
-                          accountRuntimeView
-                        )
-                      }}
-                      disabled={isBusy}
-                      className="flex min-w-0 flex-1 flex-col gap-0.5 text-left disabled:cursor-default"
-                    >
-                      <div className="flex min-w-0 items-center gap-2">
-                        <span className="truncate text-sm font-medium">{account.email}</span>
-                        <Badge
-                          variant="outline"
-                          className="h-4 shrink-0 rounded px-1.5 text-[10px] font-medium leading-none text-foreground/70"
-                        >
-                          {getClaudeAccountRuntimeLabel(account, accountRuntime.label)}
-                        </Badge>
-                        {isActive ? (
+                    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const accountRuntimeView = getProviderAccountRuntime(account)
+                          void runClaudeAccountAction(
+                            `select:${account.id}`,
+                            () =>
+                              selectClaudeProviderAccount(settings, {
+                                accountId: account.id,
+                                ...accountRuntimeView
+                              }),
+                            accountRuntimeView
+                          )
+                        }}
+                        disabled={isBusy}
+                        className="flex min-w-0 flex-col gap-0.5 text-left disabled:cursor-default"
+                      >
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span className="truncate text-sm font-medium">{account.email}</span>
                           <Badge
                             variant="outline"
-                            className="h-4 shrink-0 rounded px-1.5 text-[10px] font-medium leading-none text-foreground/80"
+                            className="h-4 shrink-0 rounded px-1.5 text-[10px] font-medium leading-none text-foreground/70"
                           >
-                            {translate(
-                              'auto.components.settings.AccountsPane.e74831fb6b',
-                              'Active'
-                            )}
+                            {getClaudeAccountRuntimeLabel(account, accountRuntime.label)}
                           </Badge>
-                        ) : null}
-                      </div>
-                      <span className="truncate text-[11px] text-muted-foreground">
-                        {account.organizationName
-                          ? `${account.organizationName} · ${formatAccountTimestamp(account.lastAuthenticatedAt)}`
-                          : formatAccountTimestamp(account.lastAuthenticatedAt)}
-                      </span>
-                    </button>
+                          {isActive ? (
+                            <Badge
+                              variant="outline"
+                              className="h-4 shrink-0 rounded px-1.5 text-[10px] font-medium leading-none text-foreground/80"
+                            >
+                              {translate(
+                                'auto.components.settings.AccountsPane.e74831fb6b',
+                                'Active'
+                              )}
+                            </Badge>
+                          ) : null}
+                        </div>
+                        <span className="truncate text-[11px] text-muted-foreground">
+                          {account.organizationName
+                            ? `${account.organizationName} · ${formatAccountTimestamp(account.lastAuthenticatedAt)}`
+                            : formatAccountTimestamp(account.lastAuthenticatedAt)}
+                        </span>
+                      </button>
+                      {usage.kind === 'hidden' ? null : (
+                        <div className="mt-1 w-full max-w-xs">
+                          {usage.kind === 'ready' ? (
+                            <InlineUsageBars limits={usage.limits} isFetching={usage.isFetching} />
+                          ) : usage.kind === 'loading' ? (
+                            <InlineUsageSkeleton />
+                          ) : (
+                            <span className="text-[10px] text-muted-foreground">
+                              {translate(
+                                'auto.components.settings.AccountsPane.3f6c8d220e',
+                                'Usage unavailable'
+                              )}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
                     <div className="flex shrink-0 items-center justify-end gap-1 max-md:w-full max-md:flex-wrap">
                       <Button
                         variant="ghost"

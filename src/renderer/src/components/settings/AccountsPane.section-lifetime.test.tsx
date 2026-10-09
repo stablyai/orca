@@ -6,6 +6,7 @@ import { AccountsPane } from './AccountsPane'
 
 const fake = vi.hoisted(() => ({
   query: '',
+  fetchInactiveClaude: vi.fn(() => Promise.resolve()),
   cursorStatus: vi.fn(async () => ({
     signedIn: false,
     email: null,
@@ -46,12 +47,16 @@ vi.mock('@/store', () => ({
       rateLimits: {
         codex: null,
         codexTarget: { runtime: 'host', wslDistro: null },
+        claude: null,
+        claudeTarget: { runtime: 'host', wslDistro: null },
+        inactiveClaudeAccounts: [],
         minimax: null,
         cursor: fake.cursorUsage,
         grok: fake.grokUsage
       },
       runtimeEnvironments: [],
       refreshRateLimits: fake.cursorRefresh,
+      fetchInactiveClaudeAccountUsage: fake.fetchInactiveClaude,
       refreshGrokRateLimits: fake.refresh,
       recordFeatureInteraction: fake.write,
       fetchSettings: fake.write
