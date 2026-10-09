@@ -1,6 +1,7 @@
 import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers/types'
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
 import { DaemonSessionOwnerResolver } from './daemon-session-owner-resolution'
+import { withoutExitedDaemons } from './legacy-daemon-exit-evidence'
 
 export class DegradedDaemonOwnerRecovery {
   private readonly attachResolver: DaemonSessionOwnerResolver<IPtyProvider>
@@ -34,7 +35,7 @@ export class DegradedDaemonOwnerRecovery {
     const alive: string[] = []
     const killed: string[] = []
     const aliveProviders = new Map<string, Set<DaemonPtyAdapter>>()
-    for (const adapter of this.daemonAdapters) {
+    for (const adapter of withoutExitedDaemons(this.daemonAdapters)) {
       const result = await adapter.reconcileOnStartup(validWorktreeIds)
       for (const id of result.alive) {
         alive.push(id)
@@ -68,15 +69,23 @@ export class DegradedDaemonOwnerRecovery {
   }
 
   subscribeIdentityChanges(): (() => void)[] {
-    return this.daemonAdapters.flatMap((adapter) =>
-      typeof adapter.onDaemonIdentityChanged === 'function'
+    return this.daemonAdapters.flatMap((adapter) => [
+      ...(typeof adapter.onDaemonIdentityChanged === 'function'
         ? [
             adapter.onDaemonIdentityChanged(() => {
               this.attachResolver.invalidateProvider(adapter)
               this.livenessResolver.invalidateProvider(adapter)
             })
           ]
-        : []
-    )
+        : []),
+      ...(typeof adapter.onDaemonExited === 'function'
+        ? [
+            adapter.onDaemonExited(() => {
+              this.attachResolver.forgetProvider(adapter)
+              this.livenessResolver.forgetProvider(adapter)
+            })
+          ]
+        : [])
+    ])
   }
 }

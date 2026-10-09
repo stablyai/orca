@@ -21,6 +21,30 @@ function provider(
 }
 
 describe('DaemonSessionOwnerResolver', () => {
+  it('ignores an answer from a provider whose daemon exited while the lookup was in flight', async () => {
+    let releaseCurrent!: (processes: PtyProcessInfo[]) => void
+    const currentGate = new Promise<PtyProcessInfo[]>((resolve) => {
+      releaseCurrent = resolve
+    })
+    let exited = false
+    const current = provider(() => currentGate)
+    const legacy: IPtyProvider = {
+      ...provider(async () => [{ id: 'pane', cwd: '', title: 'shell' }]),
+      hasDaemonExited: () => exited
+    }
+    const routes = new Map<string, IPtyProvider>()
+    const resolver = new DaemonSessionOwnerResolver([current, legacy], routes)
+
+    const resolution = resolver.resolve('pane')
+    await vi.waitFor(() => expect(legacy.listProcesses).toHaveBeenCalled())
+    exited = true
+    resolver.forgetProvider(legacy)
+    releaseCurrent([])
+
+    await expect(resolution).resolves.toEqual({ kind: 'absent' })
+    expect(routes.has('pane')).toBe(false)
+  })
+
   it('coalesces complete multi-provider absence without dispatching an attach', async () => {
     let releaseFallback!: (processes: PtyProcessInfo[]) => void
     let releaseCurrent!: (processes: PtyProcessInfo[]) => void

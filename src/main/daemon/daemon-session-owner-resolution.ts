@@ -5,6 +5,7 @@ import type {
   PtySpawnResult
 } from '../providers/types'
 import { SessionNotFoundError, TerminalSessionOwnerUnverifiedError } from './daemon-errors'
+import { isExitedDaemonProvider, withoutExitedDaemons } from './legacy-daemon-exit-evidence'
 
 export type DaemonSessionOwnerResolution<T extends IPtyProvider> =
   | { kind: 'owner'; provider: T }
@@ -37,15 +38,25 @@ export class DaemonSessionOwnerResolver<T extends IPtyProvider> {
   private epoch = 0
 
   constructor(
-    private readonly providers: readonly T[],
+    private readonly candidateProviders: readonly T[],
     private readonly routes: Map<string, IPtyProvider>
   ) {}
+
+  // Why: an exited daemon is absent, not unreachable, so it must not leave inventories incomplete.
+  private get providers(): readonly T[] {
+    return withoutExitedDaemons(this.candidateProviders)
+  }
 
   invalidateProvider(provider: T): void {
     this.epoch += 1
     this.inventoryInFlight = null
-    this.cachedInventory = null
     this.failedProviderCooldowns.clear()
+    this.forgetProvider(provider)
+  }
+
+  // Why no epoch bump (daemon exit): indexing already skips a provider whose daemon exited mid-lookup.
+  forgetProvider(provider: T): void {
+    this.cachedInventory = null
     for (const [sessionId, routed] of this.routes) {
       if (routed === provider) {
         this.routes.delete(sessionId)
@@ -82,10 +93,11 @@ export class DaemonSessionOwnerResolver<T extends IPtyProvider> {
         }
         return result
       } catch (error) {
-        if (!(error instanceof SessionNotFoundError)) {
+        // Why: a provider whose daemon exited during the attempt owns nothing, like a not-found reply.
+        if (!(error instanceof SessionNotFoundError) && !isExitedDaemonProvider(direct)) {
           throw error
         }
-        if (this.providers.length === 1) {
+        if (this.providers.length === 1 && !isExitedDaemonProvider(direct)) {
           throw error
         }
         if (routed && this.routes.get(opts.sessionId) === routed) {
@@ -118,6 +130,10 @@ export class DaemonSessionOwnerResolver<T extends IPtyProvider> {
       }
       return result
     } catch (error) {
+      // Why: the owner's daemon exited between lookup and spawn, so the session is gone, not unverified.
+      if (isExitedDaemonProvider(resolution.provider)) {
+        throw new SessionNotFoundError(opts.sessionId)
+      }
       if (error instanceof SessionNotFoundError && this.providers.length > 1) {
         throw new TerminalSessionOwnerUnverifiedError(opts.sessionId)
       }
@@ -279,6 +295,10 @@ export class DaemonSessionOwnerResolver<T extends IPtyProvider> {
     const candidatesBySessionId = new Map<string, { provider: T; process: PtyProcessInfo }[]>()
     let complete = true
     for (const entry of entries) {
+      // Why: a provider whose daemon exited mid-lookup owns nothing, whatever it answered.
+      if (isExitedDaemonProvider(entry.provider)) {
+        continue
+      }
       if (!entry.processes) {
         complete = false
         continue

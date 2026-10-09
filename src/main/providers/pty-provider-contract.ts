@@ -146,6 +146,8 @@ export type IPtyProvider = {
   hasPty?: (id: string) => boolean
   /** Exact provider readback: false only when the provider answered that the PTY is absent. */
   probePtyLiveness?: (id: string) => Promise<boolean | null>
+  /** True once the provider has proven it owns no session and never will; holders drop it. */
+  hasDaemonExited?: () => boolean
   write(id: string, data: string): boolean | void
   /** Three-valued settlement for writes whose delivery a durable claim depends on.
    *  Required: a provider that answers this from its own fire-and-forget `write` is

@@ -21,8 +21,7 @@ export function isDaemonGoneError(err: unknown): boolean {
   if (err instanceof DaemonConnectionLostError) {
     return true
   }
-  const errno = err as NodeJS.ErrnoException
-  if ((errno.code === 'ENOENT' || errno.code === 'ECONNREFUSED') && errno.syscall === 'connect') {
+  if (isDaemonEndpointRefusedError(err)) {
     return true
   }
   const msg = err.message
@@ -33,6 +32,14 @@ export function isDaemonGoneError(err: unknown): boolean {
     msg === DAEMON_UNAVAILABLE_RECONNECT_MESSAGE ||
     msg === DAEMON_ENDPOINT_LOST_MESSAGE
   )
+}
+
+/** Only a refused or missing endpoint proves nothing serves it; a timeout proves nothing. */
+export function isDaemonEndpointRefusedError(err: unknown): boolean {
+  if (!(err instanceof Error) || !('code' in err) || !('syscall' in err)) {
+    return false
+  }
+  return (err.code === 'ENOENT' || err.code === 'ECONNREFUSED') && err.syscall === 'connect'
 }
 
 export function isMissingWindowsNamedPipeError(err: unknown): boolean {

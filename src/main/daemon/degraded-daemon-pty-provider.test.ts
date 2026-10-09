@@ -670,7 +670,7 @@ describe('DegradedDaemonPtyProvider', () => {
     expect(provider.hasPty('legacy-session')).toBe(true)
   })
 
-  it('keeps an exited legacy daemon poisoning listProcesses after construction', async () => {
+  it('still fails listProcesses while a legacy adapter cannot list its sessions', async () => {
     const current = createDaemonAdapter('daemon', ['current-session'])
     const legacy = createDaemonAdapter('legacy', ['legacy-session'])
     const fallback = createProvider('fallback', ['fallback-session'])

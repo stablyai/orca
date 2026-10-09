@@ -31,6 +31,10 @@ export abstract class DaemonPtyConnectionLifecycle extends DaemonPtyEventSubscri
       await (deadlineMs !== undefined
         ? this.client.ensureConnectedWithin(Math.max(1, deadlineMs - Date.now()))
         : this.client.ensureConnected())
+    } catch (error) {
+      // Why here: every operation connects first, so an exited legacy daemon is noticed on first contact.
+      this.markLegacyDaemonExitedIfProven(error)
+      throw error
     } finally {
       // Why: a respawn launcher holds a temporary pair until this adapter's permanent reconnect, preventing both gaps and leaks.
       this.releasePendingRespawnAdoptionLease()
