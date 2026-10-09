@@ -6,6 +6,7 @@ import {
   AGENT_SESSION_QWEN_CODE_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_CODEBUDDY_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_DSH_RESUME_RUNTIME_CAPABILITY,
+  AGENT_SESSION_JUNIE_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_CURSOR_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_MUSE_RESUME_RUNTIME_CAPABILITY,
@@ -42,6 +43,17 @@ describe('agentResumeHostAuthorityCapability', () => {
     expect(agentResumeHostAuthorityCapability(undefined)).toBeUndefined()
   })
 
+  it('gates Junie resume behind its own capability', () => {
+    expect(agentResumeHostAuthorityCapability('junie')).toBe(
+      AGENT_SESSION_JUNIE_RESUME_RUNTIME_CAPABILITY
+    )
+  })
+
+  it('advertises the Kimi and Junie resume capabilities from the host', () => {
+    expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY)
+    expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_JUNIE_RESUME_RUNTIME_CAPABILITY)
+  })
+
   it('pins the gate for every resumable agent so a new member is a deliberate decision', () => {
     // Why: silently defaulting a newly resumable agent to the generic probe is the exact skew
     // failure this module exists to prevent — the mapping must be reviewed, not inherited.
@@ -72,7 +84,9 @@ describe('agentResumeHostAuthorityCapability', () => {
       muse: AGENT_SESSION_MUSE_RESUME_RUNTIME_CAPABILITY,
       omp: AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
       kimi: AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY,
-      dsh: AGENT_SESSION_DSH_RESUME_RUNTIME_CAPABILITY
+      dsh: AGENT_SESSION_DSH_RESUME_RUNTIME_CAPABILITY,
+      jcode: undefined,
+      junie: AGENT_SESSION_JUNIE_RESUME_RUNTIME_CAPABILITY
     })
   })
 })

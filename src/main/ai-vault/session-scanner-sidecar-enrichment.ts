@@ -3,6 +3,10 @@ import { buildAiVaultResumeCommand } from '../../shared/ai-vault-resume-command'
 import { generatedSessionTitle } from './session-scanner-accumulator'
 import { readCursorChatMeta, wasCursorChatMetaRefused } from './session-scanner-cursor-chat-meta'
 import { devinSessionsIndexForSidecar } from './session-scanner-devin-db'
+import {
+  junieSessionIndexPathFromEventsPath,
+  readJunieSummaryBySessionId
+} from './session-scanner-junie-paths'
 import type { SessionSidecarObservation } from './session-sidecar-stat'
 import type { SessionFileCandidate } from './session-scanner-types'
 
@@ -25,7 +29,7 @@ export type SidecarEnrichment = {
 
 /** True when the sibling only adds metadata, so a change to it needs no re-parse. */
 export function sidecarEnrichesWithoutReparse(candidate: SessionFileCandidate): boolean {
-  return candidate.agent === 'cursor' || candidate.agent === 'devin'
+  return candidate.agent === 'cursor' || candidate.agent === 'devin' || candidate.agent === 'junie'
 }
 
 export async function enrichSessionFromSidecar(
@@ -35,6 +39,9 @@ export async function enrichSessionFromSidecar(
 ): Promise<SidecarEnrichment> {
   if (candidate.agent === 'devin') {
     return enrichDevinSessionFromDb(candidate.file.sidecar, foldSession, platform)
+  }
+  if (candidate.agent === 'junie') {
+    return enrichJunieSessionFromIndex(candidate, foldSession, platform)
   }
   if (candidate.agent !== 'cursor' || !foldSession) {
     return { session: foldSession, refused: false }
@@ -50,6 +57,97 @@ export async function enrichSessionFromSidecar(
     session: mergeCursorChatMeta(foldSession, meta, platform),
     refused: false
   }
+}
+
+async function enrichJunieSessionFromIndex(
+  candidate: SessionFileCandidate,
+  foldSession: AiVaultSession | null,
+  platform: NodeJS.Platform
+): Promise<SidecarEnrichment> {
+  if (!foldSession) {
+    return { session: foldSession, refused: false }
+  }
+  const summary = (
+    await readJunieSummaryBySessionId(junieSessionIndexPathFromEventsPath(candidate.file.path))
+  ).get(foldSession.sessionId)
+  if (!summary) {
+    return { session: foldSession, refused: false }
+  }
+  const merged = mergeJunieSummary(foldSession, summary, platform)
+  return { session: merged, refused: false }
+}
+
+function mergeJunieSummary(
+  session: AiVaultSession,
+  summary: {
+    taskName: string | null
+    projectDir: string | null
+    createdAt: number | null
+    updatedAt: number | null
+  },
+  platform: NodeJS.Platform
+): AiVaultSession {
+  const cwd = summary.projectDir ?? session.cwd
+  const merged: AiVaultSession = {
+    ...session,
+    title: normalizeJunieTitle(summary.taskName) ?? session.title,
+    cwd,
+    createdAt: mergeJunieTimestamp(
+      session.createdAt,
+      toIsoDate(summary.createdAt),
+      (sidecar, session) => sidecar < session
+    ),
+    updatedAt: mergeJunieTimestamp(
+      session.updatedAt,
+      toIsoDate(summary.updatedAt),
+      (sidecar, session) => sidecar > session
+    )
+  }
+  if (cwd === session.cwd) {
+    return merged
+  }
+  return {
+    ...merged,
+    resumeCommand: buildAiVaultResumeCommand({
+      agent: merged.agent,
+      sessionId: merged.sessionId,
+      resumeFilePath: merged.filePath,
+      cwd,
+      platform
+    })
+  }
+}
+
+function normalizeJunieTitle(value: string | null): string | null {
+  const title = value?.trim()
+  return title ? title : null
+}
+
+function mergeJunieTimestamp(
+  sessionValue: string | null,
+  sidecarValue: string | null,
+  shouldUseSidecar: (sidecarTime: number, sessionTime: number) => boolean
+): string | null {
+  if (!sidecarValue || !sessionValue) {
+    return sidecarValue ?? sessionValue
+  }
+  const sessionTime = Date.parse(sessionValue)
+  const sidecarTime = Date.parse(sidecarValue)
+  if (!Number.isFinite(sidecarTime)) {
+    return sessionValue
+  }
+  if (!Number.isFinite(sessionTime)) {
+    return sidecarValue
+  }
+  return shouldUseSidecar(sidecarTime, sessionTime) ? sidecarValue : sessionValue
+}
+
+function toIsoDate(value: number | null): string | null {
+  if (value === null || !Number.isFinite(value)) {
+    return null
+  }
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? null : date.toISOString()
 }
 
 /** Fills only what the transcript never recorded; its own records always win. */

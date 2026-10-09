@@ -398,7 +398,7 @@ describe('scanAiVaultSessions', () => {
   it('indexes every supported agent transcript format with native resume commands', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-all-agents-'))
     tempRoots.push(root)
-    const { roots, antigravitySessionId, ompSessionFile, primeAgentSessionFile } =
+    const { roots, antigravitySessionId, ompSessionFile, primeAgentSessionFile, junieSessionId } =
       await writeEveryAgentVault(root)
 
     // Why the headroom: the limit is a newest-first cap, so a limit equal to the
@@ -463,6 +463,15 @@ describe('scanAiVaultSessions', () => {
     expect(commandByAgent.get('jcode')).toBe(
       "cd '/tmp/jcode' && jcode --resume 'session_jcode-session'"
     )
+
+    // Pinned by id: bare `--resume` would reopen the globally most-recent session.
+    expect(commandByAgent.get('junie')).toBe(
+      `cd '/tmp/junie' && junie --resume --session-id '${junieSessionId}'`
+    )
+
+    const junieSession = result.sessions.find((session) => session.agent === 'junie')
+    expect(junieSession?.title).toBe('Junie vault title')
+    expect(junieSession?.cwd).toBe('/tmp/junie')
 
     const ompSession = result.sessions.find((session) => session.agent === 'omp')
     expect(ompSession?.model).toBe('gpt-5.4-mini')

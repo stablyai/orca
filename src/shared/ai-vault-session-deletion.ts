@@ -23,9 +23,10 @@ export type AiVaultDeleteSessionResult =
 //
 // The rest are excluded, recorded here because the UI deliberately won't say
 // why (a provider's storage layout is Orca's problem, not the reader's):
-// - antigravity, kimi: a separate registry (history.jsonl / session_index.jsonl)
-//   would keep a dangling entry. Antigravity's carries no conversation id, so
-//   which line to drop can't be determined at all.
+// - antigravity, kimi, junie: a separate registry (history.jsonl /
+//   session_index.jsonl / sessions/index.jsonl) would keep a dangling entry.
+//   Antigravity's carries no conversation id, so which line to drop can't be
+//   determined at all.
 // - codex: session_index.jsonl plus hardlink aliases between the Orca-managed
 //   home and ~/.codex, so a one-sided delete reappears on the next scan.
 // - opencode 1.17.x: a SQLite row, not a file.

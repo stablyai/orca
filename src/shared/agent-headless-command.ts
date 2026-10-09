@@ -5,16 +5,17 @@ import { isDshNonInteractiveCommand } from './dsh-launch-command'
 import { isMuseHeadlessOneShotCommand } from './muse-headless-command'
 import { isDsbHeadlessOneShotCommand } from './dsb-headless-command'
 import { isZCodeHeadlessOneShotCommand } from './zcode-headless-command'
+import { isJunieHeadlessOneShotCommand } from './junie-headless-command'
 import { isPrimeAgentHeadlessOneShotCommand } from './prime-agent-headless-command'
 import { isPrintModeHeadlessOneShotCommand } from './print-mode-headless-command'
 import type { TerminalAgent } from './terminal-agent'
 
 // Why: a table (not an if-chain) so adding an agent is one entry; Claude and Trae share
 // the same `--print` one-shot contract, Ante's `--prompt` form, Prime Agent's
-// `--mode` forms, Muse's `exec` subcommand, and ZCode's `--prompt`/`--target` forms need
-// their own matchers. DSH's entry is wider than a one-shot: `dsh` also boots a web server
-// and JSON-RPC stdio profiles, and none of those can answer a prompt in the pane either,
-// which is what this table gates.
+// `--mode` forms, Muse's `exec`, ZCode's `--prompt`/`--target`, and Junie's
+// positional/`--task` batch runs need their own matchers. DSH's entry is wider than a
+// one-shot: `dsh` also boots a web server and JSON-RPC stdio profiles, and none of those
+// can answer a prompt in the pane either, which is what this table gates.
 const HEADLESS_ONE_SHOT_MATCHERS: Partial<
   Record<TerminalAgent, (tokens: readonly string[]) => boolean>
 > = {
@@ -28,7 +29,8 @@ const HEADLESS_ONE_SHOT_MATCHERS: Partial<
   muse: isMuseHeadlessOneShotCommand,
   zcode: isZCodeHeadlessOneShotCommand,
   dsh: isDshNonInteractiveCommand,
-  dsb: isDsbHeadlessOneShotCommand
+  dsb: isDsbHeadlessOneShotCommand,
+  junie: isJunieHeadlessOneShotCommand
 }
 
 export function isHeadlessOneShotAgentCommand(
