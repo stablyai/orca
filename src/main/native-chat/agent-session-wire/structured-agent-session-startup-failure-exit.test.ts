@@ -29,6 +29,7 @@ function startedSession(): StructuredAgentSessionChildExitSession & {
       // Nothing ran: the start failed before any response or acknowledged prompt.
       snapshot: () => ({ items: [] }),
       appendLifecycleBatch: vi.fn(async () => ({ epoch: 'epoch-1', sequence: 1 })),
+      appendItem: vi.fn(),
       markPendingSubmissionsUnknown: vi.fn(async () => []),
       rejectPendingSubmissions: vi.fn(async () => [])
     }

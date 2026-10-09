@@ -11,6 +11,7 @@ import {
   providerDiagnostic
 } from '../../../shared/agent-session-failure'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import { MAX_JOURNAL_LIFECYCLE_BATCH_BYTES } from '../agent-session-journal/journal-row-schema'
 import { settleStructuredAgentSessionDeadGeneration } from './structured-agent-session-dead-generation-settlement'
 import {
   captureUnfinishedStructuredAgentSessionWork,
@@ -170,6 +171,46 @@ describe('dead structured-session generation settlement', () => {
     expect(tool?.body).toMatchObject({ state: 'failed', endedAs: 'interrupted' })
   })
 
+  it('ends an item larger than any batch row, and adds no row twice on a re-run', async () => {
+    await seedUnfinishedWork()
+    // Defensive: no provider writes an item this large in normal use.
+    await journal.appendItem(
+      { provider: 'orca', clientMessageId: 'claude-tool:s:toolu-big' },
+      {
+        kind: 'tool-call',
+        name: 'Write',
+        input: {
+          file_path: '/repo/big.txt',
+          content: 'x'.repeat(MAX_JOURNAL_LIFECYCLE_BATCH_BYTES)
+        },
+        callId: 'toolu-big',
+        state: 'running'
+      },
+      { fence: 7, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    )
+    const input = {
+      journal,
+      sessionId: SESSION,
+      fence: 7,
+      settlementId: `provider-exit:${SESSION}:7:generation-1`,
+      pendingSubmissionReason: 'provider_exited_before_acknowledgement',
+      verdict: { state: 'interrupted' as const, completedAt: 1_000 },
+      showUnexpectedExitOutcome: true
+    }
+
+    await expect(settleStructuredAgentSessionDeadGeneration(input)).resolves.toEqual({ ok: true })
+    const settledIds = journal.snapshot().items.map((item) => item.itemId)
+    await expect(settleStructuredAgentSessionDeadGeneration(input)).resolves.toEqual({ ok: true })
+
+    expect(journal.snapshot().items.map((item) => item.itemId)).toEqual(settledIds)
+    expect(journal.activeTurnId()).toBeNull()
+    const calls = journal.snapshot().items.filter((item) => item.body.kind === 'tool-call')
+    expect(calls.map((item) => item.body)).toEqual([
+      expect.objectContaining({ state: 'failed', endedAs: 'interrupted' }),
+      expect.objectContaining({ name: 'Write', state: 'failed', endedAs: 'interrupted' })
+    ])
+  })
+
   it('keeps a stderr wall out of the sentence, as a bounded detail for a log', async () => {
     await seedUnfinishedWork()
 
@@ -248,6 +289,7 @@ describe('dead structured-session generation settlement', () => {
       | 'rejectPendingSubmissions'
       | 'rejectQueuedSubmissions'
       | 'appendLifecycleBatch'
+      | 'appendItem'
       | 'itemFence'
     > = {
       itemFence: () => undefined,
@@ -266,6 +308,9 @@ describe('dead structured-session generation settlement', () => {
         throw new Error('journal_closed')
       },
       appendLifecycleBatch: async () => {
+        throw new Error('journal_closed')
+      },
+      appendItem: async () => {
         throw new Error('journal_closed')
       }
     }

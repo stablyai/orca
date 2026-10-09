@@ -14,7 +14,10 @@ import {
   type AgentJournalItemBody,
   type AgentJournalRenderItem
 } from '../../../shared/agent-session-journal-types'
-import { partitionJournalLifecycleMutations } from '../agent-session-journal/journal-lifecycle-batch-partition'
+import {
+  journalLifecycleMutationFitsOneBatch,
+  partitionJournalLifecycleMutations
+} from '../agent-session-journal/journal-lifecycle-batch-partition'
 import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
 import {
   endedUnseenMessageBody,
@@ -157,15 +160,12 @@ export async function settleStructuredAgentSessionDeadGeneration(input: {
       }
     }
     mutations.push(...runningTurnLifecycleRevisions(items, input.verdict), ...proven)
-    const batchId = `dead-generation:${input.settlementId}`
-    for (const chunk of partitionJournalLifecycleMutations(batchId, mutations)) {
-      await input.journal.appendLifecycleBatch({
-        settlementId: chunk.settlementId,
-        fence: input.fence,
-        recovered: true,
-        mutations: chunk.mutations
-      })
-    }
+    await appendSettlementMutations(
+      input.journal,
+      `dead-generation:${input.settlementId}`,
+      input.fence,
+      mutations
+    )
     return { ok: true }
   } catch (error) {
     // Returned rather than logged: each caller logs it under its own scope.
@@ -248,15 +248,41 @@ export async function settleStaleStructuredAgentSessionState(input: {
       turnScope: settledRootTurnScope(items, turnEnds)
     })
   }
+  await appendSettlementMutations(journal, settlementId, input.fence, mutations)
+  return mutations.length
+}
+
+/** A settlement in as many batch rows as it needs. An item larger than any batch row goes in an
+ *  item row: no current provider writes one in normal use, but the settle would otherwise fail
+ *  every time it met one. A re-run re-derives from the fold and rewrites no settled item. */
+async function appendSettlementMutations(
+  journal: Pick<AgentSessionJournal, 'appendLifecycleBatch' | 'appendItem'>,
+  settlementId: string,
+  fence: number,
+  mutations: readonly JournalLifecycleMutationInput[]
+): Promise<void> {
   for (const chunk of partitionJournalLifecycleMutations(settlementId, mutations)) {
+    const [only] = chunk.mutations
+    if (
+      chunk.mutations.length === 1 &&
+      only?.kind === 'item' &&
+      !journalLifecycleMutationFitsOneBatch(chunk.settlementId, only, { recovered: true })
+    ) {
+      await journal.appendItem(only.identity, only.body, {
+        ...only.linkage,
+        turnScope: only.turnScope,
+        fence,
+        recovered: true
+      })
+      continue
+    }
     await journal.appendLifecycleBatch({
       settlementId: chunk.settlementId,
-      fence: input.fence,
+      fence,
       recovered: true,
       mutations: chunk.mutations
     })
   }
-  return mutations.length
 }
 
 function withRevisions(

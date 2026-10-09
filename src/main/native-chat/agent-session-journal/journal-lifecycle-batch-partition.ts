@@ -40,8 +40,8 @@ export function partitionJournalLifecycleMutations(
     return bytes
   }
   for (const mutation of mutations) {
-    const bytes = Buffer.byteLength(JSON.stringify(toLifecycleMutationRow(mutation)), 'utf8')
-    const version = journalRowSchemaVersion(mutation.kind === 'item' ? [mutation.body] : [])
+    const bytes = lifecycleMutationBytes(mutation)
+    const version = mutationSchemaVersion(mutation)
     const candidateVersion = Math.max(pendingVersion, version)
     const candidateBytes = pendingBytes + bytes + (pending.length > 0 ? 1 : 0)
     if (
@@ -73,11 +73,38 @@ export function partitionJournalLifecycleMutations(
   }))
 }
 
+/** Whether a batch row holding only this mutation fits the batch byte bound. One that does not
+ *  (an item revision as large as the row it revises) can never be written as a batch. */
+export function journalLifecycleMutationFitsOneBatch(
+  settlementId: string,
+  mutation: JournalLifecycleMutationInput,
+  options: { recovered?: true } = {}
+): boolean {
+  const overhead = serializedLifecycleBatchOverhead(
+    settlementId,
+    mutationSchemaVersion(mutation),
+    options.recovered
+  )
+  return lifecycleMutationBytes(mutation) + overhead <= MAX_JOURNAL_LIFECYCLE_BATCH_BYTES
+}
+
+function lifecycleMutationBytes(mutation: JournalLifecycleMutationInput): number {
+  return Buffer.byteLength(JSON.stringify(toLifecycleMutationRow(mutation)), 'utf8')
+}
+
+function mutationSchemaVersion(mutation: JournalLifecycleMutationInput): number {
+  return journalRowSchemaVersion(mutation.kind === 'item' ? [mutation.body] : [])
+}
+
 function chunkSettlementId(settlementId: string, index: number, total: number): string {
   return `${settlementId}:${index + 1}/${total}`
 }
 
-function serializedLifecycleBatchOverhead(settlementId: string, version: number): number {
+function serializedLifecycleBatchOverhead(
+  settlementId: string,
+  version: number,
+  recovered?: true
+): number {
   const row: JournalLifecycleBatchRow = {
     v: version,
     kind: 'lifecycle-batch',
@@ -86,7 +113,8 @@ function serializedLifecycleBatchOverhead(settlementId: string, version: number)
     fence: Number.MAX_SAFE_INTEGER,
     ts: Number.MAX_SAFE_INTEGER,
     settlementId,
-    mutations: []
+    mutations: [],
+    ...(recovered ? { recovered } : {})
   }
   return Buffer.byteLength(JSON.stringify(row), 'utf8') + 1
 }

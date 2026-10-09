@@ -294,6 +294,7 @@ describe('provider-exit settlement', () => {
           itemFence: () => undefined,
           snapshot: () => ({ items }),
           appendLifecycleBatch,
+          appendItem: vi.fn(),
           markPendingSubmissionsUnknown: vi.fn(async () => []),
           rejectPendingSubmissions: vi.fn(async () => [])
         }
@@ -354,6 +355,7 @@ describe('provider-exit settlement', () => {
         itemFence: () => undefined,
         snapshot: () => ({ items: [] }),
         appendLifecycleBatch: vi.fn(async () => ({ epoch: 'epoch-1', sequence: 1 })),
+        appendItem: vi.fn(),
         markPendingSubmissionsUnknown,
         rejectPendingSubmissions: vi.fn(async () => []),
         submissions: () => [{ clientMessageId: 'client-1', dispatchState: 'pending' }]
@@ -413,7 +415,8 @@ describe('provider-exit settlement', () => {
         }),
         appendLifecycleBatch: vi.fn(async () => {
           throw new Error('journal still unavailable')
-        })
+        }),
+        appendItem: vi.fn()
       }
     }
     const log = recordingStructuredAgentSessionLogger()
