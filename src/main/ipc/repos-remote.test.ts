@@ -59,7 +59,6 @@ describe('repos:addRemote', () => {
     captureHandlers(handleMock)
     mockStore.getRepos.mockReset().mockReturnValue([])
     mockStore.addRepo.mockReset()
-    mockStore.removeProject.mockReset()
     mockStore.getSshTarget.mockReset()
     mockStore.updateRepo.mockReset()
     mockGitProvider.isGitRepoAsync.mockReset()

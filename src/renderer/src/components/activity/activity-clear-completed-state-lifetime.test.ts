@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import { makeOpenFile } from '@/store/slices/store-test-helpers'
+import { makeOpenFile } from '../../store/slices/store-session-test-harness'
 import { makeRetainedDoneEntry, makeTab, makeWorktree } from './ActivityPrototypePage-test-fixtures'
 import type { AgentPaneThread } from './activity-thread-types'
 

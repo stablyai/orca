@@ -6,7 +6,10 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { CLAUDE_STRUCTURED_BASE_OPTIONS } from '../claude/claude-structured-launch-resolution'
 import { fakeClaude } from '../claude/claude-structured-session-test-support'
-import { createClaudeThinkingDisplaySupport } from '../claude/claude-thinking-display-support'
+import {
+  CLAUDE_THINKING_DISPLAY_FLAG,
+  createClaudeCliFlagSupport
+} from '../claude/claude-cli-flag-support'
 import { openClaudeConnectionOf } from './structured-claude-runtime-adapter'
 
 const FAKE_CLI = join(
@@ -31,14 +34,20 @@ async function startRefusing(stderr: string) {
   writeFileSync(scenarioPath, JSON.stringify({ steps: [{ stderr }, { exit: 1 }] }))
   const env = { PATH: process.env.PATH ?? '', ORCA_SDK_CONTRACT_SCENARIO_PATH: scenarioPath }
   const probe = vi.fn(async () => '2.1.280')
-  const support = createClaudeThinkingDisplaySupport({
+  const support = createClaudeCliFlagSupport({
     probe,
     keyOf: async (command, cwd) => `${command}\n${cwd}`,
     budgetMs: 1_000,
     now: () => performance.now()
   })
-  const flag = await support.argsFor({ command: FAKE_CLI, cwd: dir, env })
-  const { openConnection } = openClaudeConnectionOf({ claudeThinkingDisplay: support })
+  const flag = (await support.supports(CLAUDE_THINKING_DISPLAY_FLAG, {
+    command: FAKE_CLI,
+    cwd: dir,
+    env
+  }))
+    ? { 'thinking-display': 'summarized' }
+    : null
+  const { openConnection } = openClaudeConnectionOf({ claudeCliFlags: support })
   let exited: Error | null = null
   const connection = await openConnection!(
     {
@@ -63,20 +72,22 @@ describe('a Claude CLI that refuses the thinking-display flag', () => {
       "error: unknown option '--thinking-display'\n"
     )
     expect(flag).toEqual({ 'thinking-display': 'summarized' })
-    await vi.waitFor(async () => expect(await support.argsFor(launch)).toEqual({}))
+    await vi.waitFor(async () =>
+      expect(await support.supports(CLAUDE_THINKING_DISPLAY_FLAG, launch)).toBe(false)
+    )
     expect(probe).toHaveBeenCalledTimes(1)
   })
 
   it('hands the session whether its close was the one Orca began', async () => {
     const claude = fakeClaude()
-    const support = createClaudeThinkingDisplaySupport({
+    const support = createClaudeCliFlagSupport({
       probe: async () => '2.1.280',
       keyOf: async () => null,
       budgetMs: 1_000,
       now: () => performance.now()
     })
     const { openConnection } = openClaudeConnectionOf({
-      claudeThinkingDisplay: support,
+      claudeCliFlags: support,
       openClaudeConnection: claude.openConnection
     })
     const onExit = vi.fn()
@@ -92,6 +103,6 @@ describe('a Claude CLI that refuses the thinking-display flag', () => {
 
   it('records nothing when the start failed for another reason', async () => {
     const { support, launch } = await startRefusing('claude: not signed in\n')
-    await expect(support.argsFor(launch)).resolves.toEqual({ 'thinking-display': 'summarized' })
+    await expect(support.supports(CLAUDE_THINKING_DISPLAY_FLAG, launch)).resolves.toBe(true)
   })
 })

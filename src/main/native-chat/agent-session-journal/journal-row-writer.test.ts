@@ -71,8 +71,8 @@ describe('journal row writer', () => {
       highestFence: () => 0,
       nextSequence: () => sequence,
       commit: (committed) => {
-        committedRows.push(committed)
-        sequence = committed.seq + 1
+        committedRows.push(...committed)
+        sequence = committed.at(-1)!.seq + 1
       }
     })
     return { writer, committedRows }

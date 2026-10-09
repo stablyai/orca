@@ -1,3 +1,4 @@
+import type { AgentSessionUnavailable } from '../../shared/agent-session-availability'
 import type { spawnProcess } from '../../shared/child-process/run-process'
 import type { AgentGenerationFailureOutput } from './agent-failure-output'
 import type {
@@ -18,7 +19,7 @@ export type DiscoverCommitMessageModelsResult =
       defaultModelId: string
       catalogOrigin: 'probe' | 'spec'
     }
-  | { success: false; error: string }
+  | { success: false; error: string; unavailable?: AgentSessionUnavailable }
 
 export type GeneratePullRequestFieldsResult<TFields> =
   | {

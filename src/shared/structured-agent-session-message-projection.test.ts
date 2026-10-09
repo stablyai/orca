@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentJournalRenderItem, AgentJournalSubmission } from './agent-session-journal-types'
 import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
-import { createStructuredAgentSessionOutboxEntry } from './structured-agent-session-outbox'
+import { structuredAgentSessionSendBody } from './structured-agent-session-send-mutation'
 import { projectStructuredAgentSessionMessages } from './structured-agent-session-message-projection'
 
 const KEPT_ID = 'client-kept'
@@ -36,16 +36,11 @@ function userItem(id: string, text: string, sequence: number): AgentJournalRende
   }
 }
 
-/** The sending desktop's own copy, still marked not sent. */
+/** The sending desktop's own bubble, had it not settled yet. */
 const lingeringCopy = {
-  ...createStructuredAgentSessionOutboxEntry({
-    clientMessageId: KEPT_ID,
-    sessionId: 'session-1',
-    text: 'the kept words',
-    attachments: [],
-    queuedAt: 1
-  }),
-  state: 'rejected' as const
+  clientMessageId: KEPT_ID,
+  body: structuredAgentSessionSendBody('the kept words', []),
+  queuedAt: 1
 }
 
 describe('a send kept as a card', () => {
@@ -55,7 +50,7 @@ describe('a send kept as a card', () => {
     expect(projectStructuredAgentSessionMessages(items, [lingeringCopy], [kept], DESKTOP)).toEqual(
       []
     )
-    // A rejection with no card keeps its local copy, marked not sent.
+    // A rejection with no card is drawn from the host's row, marked not sent.
     expect(
       projectStructuredAgentSessionMessages(items, [lingeringCopy], [rejected()], DESKTOP)
     ).toEqual([expect.objectContaining({ id: agentJournalSubmissionKey(KEPT_ID), unsent: true })])

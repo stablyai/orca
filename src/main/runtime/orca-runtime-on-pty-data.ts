@@ -86,11 +86,13 @@ export class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecution
         }
       : null
     let ptyTailAfter: ReturnType<typeof appendNormalizedToTailBuffer> | null = null
+    let ptyNormalized: ReturnType<typeof normalizeTerminalChunk> | null = null
     if (pty) {
       pty.connected = true
       pty.disconnectedAt = null
       pty.lastOutputAt = at
       const normalized = normalizeTerminalChunk(data, pty.tailPendingAnsi)
+      ptyNormalized = normalized
       pty.tailPendingAnsi = normalized.pendingAnsi
       observeTerminalCommandPaint(pty, data, normalized.text)
       const nextTail = appendNormalizedToTailBuffer(
@@ -162,7 +164,11 @@ export class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecution
         // mismatch branch below recomputes an exact state on its next chunk.
         leaf.tailWaitState = pty.tailWaitState
       } else {
-        const normalized = normalizeTerminalChunk(data, leaf.tailPendingAnsi)
+        // Why: the same carried escape prefix normalizes the same chunk identically.
+        const normalized =
+          ptyNormalized && ptyTailBefore?.pendingAnsi === leaf.tailPendingAnsi
+            ? ptyNormalized
+            : normalizeTerminalChunk(data, leaf.tailPendingAnsi)
         leaf.tailPendingAnsi = normalized.pendingAnsi
         const previousWaitState =
           leaf.tailWaitState?.fromTail === true

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  AGENT_SESSION_OUTLINE_PREVIEW_MAX_CHARS,
+  nativeChatTurnReplyPreviews,
   projectAgentSessionConversationOutline,
   truncateOutlinePreview
 } from '../../../../shared/agent-session-conversation-outline'
@@ -11,9 +13,15 @@ import type {
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session-journal-item-key'
 import { DISPATCH_REJECTED_CANCELLED } from '../../../../shared/structured-agent-session-dispatch-rejection'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import { buildNativeChatRailItems } from './native-chat-message-rail-items'
+import { nativeChatRowsInDrawOrder } from '../../../../shared/native-chat-turn-grouping'
+import { nativeChatTurnMembership } from '../../../../shared/native-chat-turn-membership'
+import {
+  buildNativeChatRailItems,
+  nativeChatRailReplyPreview
+} from './native-chat-message-rail-items'
 import { createNativeChatMessageListProjection } from './native-chat-message-list-projection'
 import type { NativeChatResolvedPrompt } from './native-chat-resolution-receipt'
+import { nativeChatSubagentSections } from './native-chat-subagent-sections'
 import { projectNativeChatTaskListFrames } from './native-chat-task-list-frames'
 import { omitNativeChatThreadGoalRows } from './native-chat-thread-goal-rows'
 import { buildNativeChatTranscriptSlots } from './native-chat-transcript-slots'
@@ -66,31 +74,53 @@ const JOURNAL: AgentJournalRenderItem[] = [
   { ...user(12, [{ type: 'text', text: 'Observed earlier' }]), observedAt: 1_009.5 }
 ]
 
-/** The renderer's own path from journal items to rail items, as the list runs it. */
-function loadedRailItems(items: AgentJournalRenderItem[], submissions: AgentJournalSubmission[]) {
-  const projected = createNativeChatMessageListProjection()(
+/** The renderer's own path from journal items to slots, as the list runs it.
+ *  `openSections`: the subagent sections the reader has expanded. */
+function loadedSlots(
+  items: AgentJournalRenderItem[],
+  submissions: AgentJournalSubmission[],
+  openSections: readonly string[] = []
+) {
+  const projection = createNativeChatMessageListProjection()(
     projectStructuredAgentSessionMessages(items, [], submissions)
-  ).conversation
-  const messages = omitNativeChatThreadGoalRows(projectNativeChatTaskListFrames(projected))
-  let turn: string | undefined
-  const turnKeys = messages.map((message) => {
-    if (message.role === 'user') {
-      turn = message.id
-    }
-    return turn
-  })
+  )
+  const messages = omitNativeChatThreadGoalRows(
+    projectNativeChatTaskListFrames(projection.conversation)
+  )
+  const membership = nativeChatTurnMembership(messages, { items, submissions })
+  const rows = {
+    messages: nativeChatRowsInDrawOrder(messages, membership.drawOrder),
+    turnKeys: nativeChatRowsInDrawOrder(membership.turnKeys, membership.drawOrder)
+  }
   const slots = buildNativeChatTranscriptSlots({
-    messages,
-    turnKeys,
-    liveTurnKey: turn,
+    ...rows,
+    liveTurnKey: membership.liveTurnKey,
     receipts: new Map<string, NativeChatResolvedPrompt>(),
     turnStatuses: { active: null, completedByTurn: {} },
     turnDiffs: new Map<string, NativeChatTurnDiff>(),
     expandedTurnKeys: new Set<string>(),
     isWorking: false,
-    lifecycleWorking: false
+    lifecycleWorking: false,
+    subagentSections: nativeChatSubagentSections(messages, projection.subagentRows),
+    subagentChoices: {
+      sections: new Map(openSections.map((agentId) => [agentId, true])),
+      rosters: new Map()
+    }
   })
-  return buildNativeChatRailItems(slots)
+  return { rows, slots }
+}
+
+function loadedRailItems(
+  items: AgentJournalRenderItem[],
+  submissions: AgentJournalSubmission[],
+  openSections?: readonly string[]
+) {
+  const { rows, slots } = loadedSlots(items, submissions, openSections)
+  const railItems = buildNativeChatRailItems(slots)
+  return railItems.map((item) => ({
+    ...item,
+    reply: nativeChatRailReplyPreview(rows, railItems, item.id)
+  }))
 }
 
 describe('conversation outline parity with the loaded rail', () => {
@@ -108,9 +138,10 @@ describe('conversation outline parity with the loaded rail', () => {
       outline.map((entry) => ({
         id: entry.itemId,
         text: entry.preview,
-        hasImages: entry.imageCount > 0
+        hasImages: entry.imageCount > 0,
+        reply: entry.reply ?? ''
       }))
-    ).toEqual(loaded.map(({ id, text, hasImages }) => ({ id, text, hasImages })))
+    ).toEqual(loaded.map(({ id, text, hasImages, reply }) => ({ id, text, hasImages, reply })))
     // Anti-vacuous: the folded tool result, the refused send, the harness turn and the empty
     // prompt were all dropped, and the recovered row sits where it was journalled.
     expect(outline.map((entry) => entry.itemId)).toEqual([
@@ -151,15 +182,150 @@ describe('conversation outline parity with the loaded rail', () => {
     ).toContain(agentJournalSubmissionKey('client-stopped'))
   })
 
-  it('carries each entry its creation sequence and image count', () => {
+  // An imported tool result rides a user row mid-turn; it must not end the turn's reply.
+  it('reads a reply past a tool result folded into the turn, loaded or outlined', () => {
+    const journal = [
+      user(1, [{ type: 'text', text: 'Fix it' }]),
+      row(2, { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Looking.' }] }),
+      row(3, { kind: 'tool-call', name: 'Read', state: 'completed', input: { file_path: 'a.ts' } }),
+      user(4, [{ type: 'tool-result', output: 'file body' }]),
+      row(5, { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Fixed.' }] })
+    ]
+    expect(projectAgentSessionConversationOutline(journal, []).map((entry) => entry.reply)).toEqual(
+      ['Fixed.']
+    )
+    expect(loadedRailItems(journal, []).map((item) => item.reply)).toEqual(['Fixed.'])
+  })
+
+  // A subagent's rows are its own, not the conversation's: its prompt is no tick and
+  // its prose is no reply, whether or not its section is open.
+  it('never reads a subagent into the rail, as a tick or as a reply', () => {
+    const journal = [
+      user(1, [{ type: 'text', text: 'Fix it' }]),
+      row(2, { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Fixed.' }] }),
+      { ...user(3, [{ type: 'text', text: 'Child task' }]), agentId: 'sub-1' },
+      {
+        ...row(4, {
+          kind: 'message',
+          role: 'assistant',
+          blocks: [{ type: 'text', text: 'Child done.' }]
+        }),
+        agentId: 'sub-1'
+      }
+    ]
+    const outline = projectAgentSessionConversationOutline(journal, [])
+    expect(outline.map(({ itemId, reply }) => ({ id: itemId, reply }))).toEqual([
+      { id: 'item-1', reply: 'Fixed.' }
+    ])
+    // Anti-vacuous: with its section open, the child's prompt is a drawn row.
+    const open = loadedSlots(journal, [], ['sub-1']).slots
+    expect(open.some((slot) => slot.kind === 'message' && slot.message.id === 'item-3')).toBe(true)
+    for (const sections of [[], ['sub-1']]) {
+      expect(
+        loadedRailItems(journal, [], sections).map(({ id, reply }) => ({ id, reply }))
+      ).toEqual([{ id: 'item-1', reply: 'Fixed.' }])
+    }
+  })
+
+  // A steer joins the running turn, so the host names that turn for it: a client
+  // that has not loaded the steer cannot otherwise tell whose reply it shares.
+  it("names the turn of a steer, and gives it that turn's reply", () => {
+    const inTurn = { turnScope: { kind: 'turn' as const, turnItemId: 'turn-1' } }
+    const journal: AgentJournalRenderItem[] = [
+      { ...user(1, [{ type: 'text', text: 'Fix it' }]), ...inTurn },
+      row(
+        2,
+        { kind: 'turn', turnId: 'turn-1', state: 'completed', userItemId: 'item-1', startedAt: 0 },
+        'turn-1'
+      ),
+      {
+        ...row(3, {
+          kind: 'message',
+          role: 'assistant',
+          blocks: [{ type: 'text', text: 'Looking.' }]
+        }),
+        ...inTurn
+      },
+      { ...user(4, [{ type: 'text', text: 'Also the tests' }]), ...inTurn },
+      {
+        ...row(5, {
+          kind: 'message',
+          role: 'assistant',
+          blocks: [{ type: 'text', text: 'Done.' }]
+        }),
+        ...inTurn
+      }
+    ]
+    expect(
+      projectAgentSessionConversationOutline(journal, []).map(({ itemId, turnKey, reply }) => ({
+        itemId,
+        turnKey,
+        reply
+      }))
+    ).toEqual([
+      { itemId: 'item-1', turnKey: undefined, reply: 'Done.' },
+      { itemId: 'item-4', turnKey: 'item-1', reply: 'Done.' }
+    ])
+  })
+
+  it('carries each entry its creation sequence, image count and the reply to it', () => {
     const outline = projectAgentSessionConversationOutline(JOURNAL, [REJECTED])
     expect(outline).toEqual([
-      { itemId: 'item-1', sequence: 1, preview: 'Fix the parser', imageCount: 0 },
+      { itemId: 'item-1', sequence: 1, preview: 'Fix the parser', imageCount: 0, reply: 'On it.' },
       { itemId: 'item-5', sequence: 5, preview: '', imageCount: 1 },
-      { itemId: 'item-9', sequence: 9, preview: 'Compare these', imageCount: 2 },
+      {
+        itemId: 'item-9',
+        sequence: 9,
+        preview: 'Compare these',
+        imageCount: 2,
+        reply: 'Done.'
+      },
       { itemId: 'item-11', sequence: 11, preview: 'Thanks', imageCount: 0 },
       { itemId: 'item-12', sequence: 12, preview: 'Observed earlier', imageCount: 0 }
     ])
+  })
+})
+
+describe('reply preview', () => {
+  const says = (text: string): Pick<NativeChatMessage, 'role' | 'blocks'> => ({
+    role: 'assistant',
+    blocks: [{ type: 'text', text }]
+  })
+  const asks: Pick<NativeChatMessage, 'role' | 'blocks'> = {
+    role: 'user',
+    blocks: [{ type: 'text', text: 'prompt' }]
+  }
+
+  it("is the turn's last assistant prose, as plain text, whatever sits between", () => {
+    const fixed =
+      '## Fixed\n\n```ts\nconst hidden = 1\n```\n\n- The **parser** now reads `a.ts`.\n---'
+    expect(
+      nativeChatTurnReplyPreviews(
+        // A steer and a prompt queued for the next turn both land mid-turn.
+        [asks, says('Let me look.'), asks, asks, says(fixed), says('A later turn.')],
+        ['t1', 't1', 't1', 't2', 't1', 't2']
+      )
+    ).toEqual(
+      new Map([
+        ['t1', 'Fixed The parser now reads a.ts.'],
+        ['t2', 'A later turn.']
+      ])
+    )
+  })
+
+  it('keeps earlier prose when the last message is only code, and skips a turn with none', () => {
+    expect(
+      nativeChatTurnReplyPreviews(
+        [says('Here it is:'), says('```\ncode\n```'), asks],
+        ['t1', 't1', 't2']
+      )
+    ).toEqual(new Map([['t1', 'Here it is:']]))
+  })
+
+  it('is cut to the preview cap', () => {
+    expect(nativeChatTurnReplyPreviews([says('word '.repeat(200))], ['t1']).get('t1')).toHaveLength(
+      AGENT_SESSION_OUTLINE_PREVIEW_MAX_CHARS - 1
+    )
   })
 })
 

@@ -5,7 +5,6 @@ import type { Repo } from '../../../../shared/repo-types'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { getRepoHostIdentity } from '../slices/repo-host-identity'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
-import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
 import { translate } from '@/i18n/i18n'
 import {
@@ -194,10 +193,7 @@ export function createRepoAddActions(
             store: get(),
             onboarding,
             hasExistingProject: hadProjectBeforeAdd,
-            executionHostId: executionHostId ?? LOCAL_EXECUTION_HOST_ID,
-            nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
-              repo.connectionId
-            )
+            executionHostId: executionHostId ?? LOCAL_EXECUTION_HOST_ID
           })
           await revealOnboardingFolderWithAgentLaunch({
             worktreeId: folderWorktree.id,

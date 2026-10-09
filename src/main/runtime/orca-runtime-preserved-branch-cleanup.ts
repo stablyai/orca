@@ -1,5 +1,6 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithTerminalDrivers } from './orca-runtime-terminal-drivers'
+import { confirmRunTerminalShellAlone, readRunTerminalClientUse } from './run-terminal-client-use'
 import { ALL_EXECUTION_HOSTS_SCOPE, type ExecutionHostScope } from '../../shared/execution-host'
 import { RuntimePreservedBranchCleanup } from './runtime-preserved-branch-cleanup'
 import type { IPtyProvider } from '../providers/types'
@@ -31,7 +32,6 @@ import { RuntimeMobileSpeechCatalog } from './runtime-mobile-speech-catalog'
 import { RuntimeMobileDictationController } from './runtime-mobile-dictation-controller'
 import { RuntimeProjectHostSetupController } from './runtime-project-host-setup-controller'
 import { addRemoteRepoFromPath } from '../ipc/repos/remote-repo-registration'
-import type { Store } from '../persistence'
 import { RuntimeProjectGroupController } from './runtime-project-group-controller'
 import { RuntimeNestedRepoImport } from './runtime-nested-repo-import'
 import { RuntimeRepositoryRegistrationController } from './runtime-repository-registration-controller'
@@ -85,6 +85,30 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
     | ((paneKey: string) => AgentStatusIpcPayload[])
     | null
 
+  /** See run-terminal-client-use.ts. */
+  readTerminalClientUse(ptyId: string): 'used' | 'unused' | 'unknown' {
+    return readRunTerminalClientUse(this, ptyId)
+  }
+
+  confirmTerminalShellAlone(ptyId: string): Promise<boolean> {
+    return confirmRunTerminalShellAlone(this.ptyController, ptyId)
+  }
+
+  /** The PTY a terminal handle drives now; a restarted pane answers with its new PTY. */
+  getTerminalPtyIdForHandle(handle: string): string | null {
+    return this.getLivePtyForHandle(handle)?.pty.ptyId ?? null
+  }
+
+  /** Every provider-session row this host holds, resume-identity-only rows included. */
+  getAgentProviderSessionRows(): AgentStatusIpcPayload[] {
+    return this.getAgentProviderSessionSnapshotFn?.() ?? []
+  }
+
+  /** Agent status rows this host holds for a pane, from hooks, OSC and titles alike. */
+  getAgentStatusRowsForPane(paneKey: string): AgentStatusIpcPayload[] {
+    return this.getAgentProviderSessionRowsForPaneFn?.(paneKey) ?? []
+  }
+
   protected readonly attestAgentHookCompatibilityAuthorityFn:
     | ((candidate: {
         paneKey: string
@@ -127,6 +151,8 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
   protected readonly resolveCodexStructuredLaunchHomeFn:
     | ((input: { launchEnv: NodeJS.ProcessEnv }) => string | null | Promise<string | null>)
     | null
+
+  protected readonly prepareCodexCatalogProbeHomeFn: ((homePath: string) => void) | null
 
   protected readonly agentSessionClaimSigner: AgentSessionClaimSigner
 
@@ -226,7 +252,7 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
       (this as RuntimeCommandSurfaceHost<this>).addRepo(path, kind, hostId),
     addRemoteRepo: async (remote) => {
       // The same registration the desktop IPC handler uses, so both surfaces agree on SSH hosts.
-      const result = await addRemoteRepoFromPath(this.requireStore() as unknown as Store, remote)
+      const result = await addRemoteRepoFromPath(this.requireStore(), remote)
       if ('error' in result) {
         throw new Error(result.error)
       }

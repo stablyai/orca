@@ -33,7 +33,8 @@ import {
 export type ProviderTimelineTurnEnd =
   | {
       state: 'completed' | 'interrupted'
-      completedAt: number
+      /** Absent when the end is proven but its time is not. */
+      completedAt?: number
       outcome?: AgentJournalTurnLifecycle['outcome']
       durationMs?: number
     }
@@ -59,7 +60,7 @@ export function endedProviderTimelineTurn(
     state: end.state,
     ...(end.outcome !== undefined ? { outcome: end.outcome } : {}),
     ...opened,
-    completedAt: end.completedAt,
+    ...(end.completedAt !== undefined ? { completedAt: end.completedAt } : {}),
     ...(end.durationMs !== undefined ? { durationMs: end.durationMs } : {})
   }
 }

@@ -1,7 +1,7 @@
 import { createElement, type ReactNode } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createBridgeRpcClient } from '../mobile-web-shell/bridge/bridge-rpc-client'
+import { createFakeBridgePortPair } from '../mobile-web-shell/bridge/bridge-port-pair-test-harness'
 import { RpcClientProvider } from '../transport/client-context.web'
 import type { MobileSessionController } from '../session/use-mobile-session-controller'
 import { MobileSessionHeader } from '../session/MobileSessionHeader'
@@ -70,6 +70,10 @@ vi.mock('../transport/host-client-hooks', () => ({
   useRefreshHostClient: vi.fn()
 }))
 vi.mock('../transport/client-context', async () => import('../transport/client-context.web'))
+vi.mock(
+  '../mobile-web-shell/page-owns-host-area',
+  async () => import('../mobile-web-shell/page-owns-host-area.web')
+)
 
 function headerController(): MobileSessionController {
   const controller: Partial<MobileSessionController> = {
@@ -90,13 +94,10 @@ function headerController(): MobileSessionController {
 
 describe('host sidebar reveal in the session header', () => {
   let renderer: ReactTestRenderer | null = null
-  let bridge: ReturnType<typeof createBridgeRpcClient> | null = null
 
   afterEach(() => {
     act(() => renderer?.unmount())
-    bridge?.close()
     renderer = null
-    bridge = null
   })
 
   function tree(): ReactTestRenderer {
@@ -106,14 +107,18 @@ describe('host sidebar reveal in the session header', () => {
     return renderer
   }
 
-  async function mount(inHybridPage: boolean): Promise<void> {
-    const layout = createElement(HostGroupLayout)
-    if (inHybridPage) {
-      bridge = createBridgeRpcClient({ send: vi.fn(), onMessage: () => () => {} })
-    }
+  async function mountPage(ownsHostArea: boolean): Promise<void> {
+    const pair = createFakeBridgePortPair({
+      route: { pathname: '/h/host/session/workspace' },
+      ownsHostArea
+    })
+    await pair.flush()
+    const client = pair.client
     await act(async () => {
       renderer = create(
-        bridge ? <RpcClientProvider client={bridge}>{layout}</RpcClientProvider> : layout
+        <RpcClientProvider client={client}>
+          <HostGroupLayout />
+        </RpcClientProvider>
       )
     })
   }
@@ -122,17 +127,16 @@ describe('host sidebar reveal in the session header', () => {
     return tree().root.findAllByProps({ accessibilityLabel: label })
   }
 
-  it('hides the unsupported reveal control inside the hybrid page bridge', async () => {
-    await mount(true)
-    await act(async () => buttons('Hide sidebar')[0]?.props.onPress())
+  it('offers no reveal in a page beside the native sidebar, which it does not draw', async () => {
+    await mountPage(false)
 
     expect(buttons('Hide sidebar')).toHaveLength(0)
     expect(buttons('Show sidebar')).toHaveLength(0)
     expect(buttons('Back to worktrees')).toHaveLength(1)
   })
 
-  it('reveals the local sidebar outside the hybrid bridge, including standalone web', async () => {
-    await mount(false)
+  it('reveals the sidebar a page draws when it owns the host area', async () => {
+    await mountPage(true)
     expect(buttons('Show sidebar')).toHaveLength(0)
     await act(async () => buttons('Hide sidebar')[0]?.props.onPress())
 

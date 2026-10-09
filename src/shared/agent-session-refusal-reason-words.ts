@@ -66,6 +66,7 @@ const REASON_WORDS = {
     // Settled under that id, so the control's retry goes out under a new one.
     operationRefusedEarlier: codeWords('retry'),
     journalWriteFailed: causeWords('recordFailed', 'retry'),
+    attachmentExpired: causeWords('attachmentExpired', 'actFirst', 'reattachFile'),
     conversationCleared: causeWords(
       'conversationCleared',
       'goElsewhere',
@@ -82,6 +83,7 @@ const REASON_WORDS = {
     promptPending: causeWords('promptPending', 'actFirst', 'answerFirst'),
     backgroundTasksRunning: causeWords('backgroundTasksRunning', 'wait', 'waitForBackgroundTasks'),
     messagesUnsettled: causeWords('messagesUnsettled', 'actFirst', 'settleEarlierMessage'),
+    queueTooLarge: causeWords('queueTooLarge', 'actFirst', 'shrinkQueue'),
     // The rewind control words its own refusals; anywhere else says only that it did not happen.
     rewindRefused: codeWords('hostFinding'),
     rewindUnconfirmed: codeWords('hostFinding'),
@@ -92,12 +94,15 @@ const REASON_WORDS = {
     providerRejected: causeWords('agentRefused', 'retry'),
     providerStartFailed: { fact: 'providerStartFailed', action: 'retry' },
     notSignedIn: { fact: 'notSignedIn', action: 'actFirst' },
+    cliMissing: { fact: 'cliMissing', action: 'actFirst' },
     historyTooLarge: { fact: 'historyTooLarge', action: 'goElsewhere' },
     managedAccountEnvOverride: { fact: 'managedAccountEnvOverride', action: 'actFirst' },
     accountSwitchInProgress: { fact: 'accountSwitchInProgress', action: 'wait' },
     managedAccountUnsupported: { fact: 'managedAccountUnsupported', action: 'actFirst' },
     launchFolderMissing: { fact: 'launchFolderMissing', action: 'actFirst' },
     historyInOtherAccount: { fact: 'historyInOtherAccount', action: 'actFirst' },
+    claudeAccountFolderMissing: { fact: 'claudeAccountFolderMissing', action: 'actFirst' },
+    claudeAccountSetupFailed: { fact: 'claudeAccountSetupFailed', action: 'retry' },
     agentCommandNotRunnable: { fact: 'agentCommandNotRunnable', action: 'actFirst' },
     attachFailed: codeWords('retry')
   },
@@ -146,7 +151,7 @@ const REASON_WORDS = {
     handoffInFlight: codeWords('retry')
   },
   agent_session_operation_expired: { operationExpired: codeWords('retry') },
-  agent_session_operation_capacity: { operationCapacity: codeWords('wait') },
+  agent_session_operation_capacity: { operationCapacity: codeWords('updateOrca') },
   agent_session_operation_unknown: {
     outcomeUnknown: codeWords('checkChat'),
     resultLost: codeWords('checkChat'),

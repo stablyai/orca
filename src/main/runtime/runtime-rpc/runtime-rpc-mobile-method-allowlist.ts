@@ -52,6 +52,7 @@ export const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'files.readTerminalArtifactPreview',
   'files.resolveTerminalPath',
   'files.searchPaths',
+  'files.stat',
   'files.writeTerminalArtifact',
   'folderWorkspace.list',
   'git.abortMerge',

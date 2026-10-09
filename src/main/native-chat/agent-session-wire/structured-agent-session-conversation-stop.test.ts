@@ -252,6 +252,123 @@ describe('a Stop that names no turn', () => {
     pending.resolve({ data: [], nextCursor: null })
   })
 
+  // Codex can abort a turn before it starts: it answers the interrupt, then ends the turn it never
+  // started. That turn ran nothing, so it draws no turn of its own, whichever of the two is read first.
+  it.each([
+    ['its end follows the answer', 'after'],
+    ['its end is read before the answer', 'before'],
+    ['no end comes', 'none']
+  ])('withdraws a send whose turn Codex never started when it takes a Stop: %s', async (_, end) => {
+    const codex = fakeCodex()
+    codex.routes['turn/start'] = () => ({ turn: { id: 'turn-1' } })
+    const ended = () =>
+      codex.connections[0].handlers.onNotification?.('turn/completed', {
+        threadId: THREAD_ID,
+        turn: { id: 'turn-1', status: 'interrupted' }
+      })
+    codex.routes['turn/interrupt'] = () => {
+      if (end === 'before') {
+        ended()
+      } else if (end === 'after') {
+        setTimeout(ended)
+      }
+      return {}
+    }
+    const adapter = adapterFor(codex, { codexHome: '/codex/home' })
+    await adapter.acquire({
+      identity: identityFor(SESSION),
+      fence: 1,
+      spawnToken: 'spawn-unstarted',
+      events: hostEvents()
+    })
+    dispatch.mockImplementation((input) => adapter.dispatch(input))
+    cancelTurn.mockImplementation((input) => adapter.cancelTurn(input))
+    const first = send('first send')
+    await first.result
+    await eventually(async () => expect((await submission(first.id))?.handedOverAt).toBeDefined())
+
+    expect(await stop()).toMatchObject({ ok: true, value: { cancelled: true } })
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    await host.flushStreamedEvents(SESSION)
+
+    expect(await submission(first.id)).toMatchObject({
+      dispatchState: 'rejected',
+      reason: DISPATCH_REJECTED_CANCELLED
+    })
+    const { items } = await host.journalSnapshot(SESSION)
+    expect(items.filter((item) => item.body.kind === 'turn')).toEqual([])
+    expect(await statusRows()).toEqual([])
+  })
+
+  it('keeps the record of a turn Codex never started when something of it was read', async () => {
+    const codex = fakeCodex()
+    codex.routes['turn/start'] = () => ({ turn: { id: 'turn-1' } })
+    codex.routes['turn/interrupt'] = () => {
+      const notify = codex.connections[0].handlers.onNotification
+      notify?.('item/completed', {
+        threadId: THREAD_ID,
+        turnId: 'turn-1',
+        item: { type: 'agentMessage', id: 'message-1', text: 'partial' }
+      })
+      notify?.('turn/completed', {
+        threadId: THREAD_ID,
+        turn: { id: 'turn-1', status: 'interrupted' }
+      })
+      return {}
+    }
+    const adapter = adapterFor(codex, { codexHome: '/codex/home' })
+    await adapter.acquire({
+      identity: identityFor(SESSION),
+      fence: 1,
+      spawnToken: 'spawn-unstarted-item',
+      events: hostEvents()
+    })
+    dispatch.mockImplementation((input) => adapter.dispatch(input))
+    cancelTurn.mockImplementation((input) => adapter.cancelTurn(input))
+    const first = send('first send')
+    await first.result
+    await eventually(async () => expect((await submission(first.id))?.handedOverAt).toBeDefined())
+
+    expect(await stop()).toMatchObject({ ok: true, value: { cancelled: true } })
+    await host.flushStreamedEvents(SESSION)
+
+    const { items } = await host.journalSnapshot(SESSION)
+    expect(items.filter((item) => item.body.kind === 'turn').map((item) => item.body)).toEqual([
+      expect.objectContaining({ turnId: 'turn-1', state: 'interrupted' })
+    ])
+    // Something of it ran, so it is never taken back as unrun. Codex sends no item before a turn's
+    // start, so this order only guards the record; the send's own end is not this test's.
+    expect((await submission(first.id))?.dispatchState).not.toBe('rejected')
+  })
+
+  // Only an interrupted end ran nothing for certain: a failure keeps its record, which carries why.
+  it('keeps the record of a turn Codex failed without starting it', async () => {
+    const codex = fakeCodex()
+    codex.routes['turn/start'] = () => ({ turn: { id: 'turn-1' } })
+    const adapter = adapterFor(codex, { codexHome: '/codex/home' })
+    await adapter.acquire({
+      identity: identityFor(SESSION),
+      fence: 1,
+      spawnToken: 'spawn-unstarted-failed',
+      events: hostEvents()
+    })
+    dispatch.mockImplementation((input) => adapter.dispatch(input))
+    const first = send('first send')
+    await first.result
+    await eventually(async () => expect((await submission(first.id))?.handedOverAt).toBeDefined())
+
+    codex.connections[0].handlers.onNotification?.('turn/completed', {
+      threadId: THREAD_ID,
+      turn: { id: 'turn-1', status: 'failed', error: { message: 'model overloaded' } }
+    })
+    await host.flushStreamedEvents(SESSION)
+
+    const { items } = await host.journalSnapshot(SESSION)
+    expect(items.filter((item) => item.body.kind === 'turn').map((item) => item.body)).toEqual([
+      expect.objectContaining({ turnId: 'turn-1' })
+    ])
+  })
+
   it('fails a turn Codex refuses for a model picked before the list, then sends again', async () => {
     const pending = Promise.withResolvers<unknown>()
     const codex = fakeCodex({ 'model/list': () => pending.promise })
@@ -301,12 +418,20 @@ describe('a Stop that names no turn', () => {
     pending.resolve({ data: [], nextCursor: null })
   })
 
+  // The provider took the Stop on the turn it named and never opened it: no turn-ended event will
+  // come, so the Stop's answer settles the send, and its own row says it never started.
   it('delivers a newly accepted message after Stop withdraws the prior send', async () => {
     const first = send('first send')
     await first.result
     await eventually(() => expect(dispatch).toHaveBeenCalledOnce())
+    cancelTurn.mockResolvedValueOnce({ cancelled: true, turnId: 'turn-never-opened' })
 
     expect(await stop()).toMatchObject({ ok: true, value: { cancelled: true } })
+    expect(await submission(first.id)).toMatchObject({
+      dispatchState: 'rejected',
+      reason: DISPATCH_REJECTED_CANCELLED
+    })
+    expect(await statusRows()).toEqual([])
     const replacement = send('replacement send')
     await replacement.result
 
@@ -336,6 +461,69 @@ describe('a Stop that names no turn', () => {
     const note = items.find((item) => isStructuredAgentSessionStopNote(item.itemId))
     expect(note?.sequence).toBeGreaterThan(record?.sequence ?? Infinity)
     expect(note?.turnScope).toEqual({ kind: 'turn', turnItemId: record?.itemId })
+  })
+
+  // Codex's own shape: the turn's start is read before the interrupt's answer, so the turn has a
+  // record, which the Stop ends; the send opened it and stays as it is.
+  it('ends the turn the provider opened before answering, and withdraws nothing', async () => {
+    const first = send('first send')
+    await first.result
+    await eventually(() => expect(dispatch).toHaveBeenCalledOnce())
+    cancelTurn.mockImplementationOnce(async () => {
+      hostEvents().appendItem(
+        { provider: 'legacy', agent: 'codex', sessionId: SESSION, recordId: 'turn:turn-1' },
+        { kind: 'turn', turnId: 'turn-1', state: 'running' },
+        { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+      )
+      return { cancelled: true, turnId: 'turn-1' }
+    })
+
+    expect(await stop()).toMatchObject({ ok: true, value: { cancelled: true } })
+
+    expect((await submission(first.id))?.dispatchState).toBe('pending')
+    const turn = (await host.journalSnapshot(SESSION)).items.find(
+      (item) => item.body.kind === 'turn'
+    )
+    expect(turn?.body).toMatchObject({ state: 'interrupted' })
+    expect(await statusRows()).toEqual(['Cancellation requested.'])
+  })
+
+  it('withdraws nothing on a refusal, even one that names the turn', async () => {
+    const first = send('first send')
+    await first.result
+    await eventually(async () => expect((await submission(first.id))?.handedOverAt).toBeDefined())
+    cancelTurn.mockResolvedValueOnce({
+      cancelled: false,
+      turnId: 'turn-never-opened',
+      refusal: {
+        detail: { text: 'no active turn to interrupt', audience: 'person' },
+        turnNotRunning: true
+      }
+    })
+
+    expect(await stop()).toMatchObject({ ok: true, value: { cancelled: false } })
+
+    expect((await submission(first.id))?.dispatchState).toBe('pending')
+  })
+
+  it('answers the Stop when settling the send it took fails, and reports the failure', async () => {
+    const first = send('first send')
+    await first.result
+    await eventually(() => expect(dispatch).toHaveBeenCalledOnce())
+    const journal = host.collaboratorsForTests().sessions.get(SESSION)?.journal
+    if (!journal) {
+      throw new Error('expected the conversation open')
+    }
+    vi.spyOn(journal, 'resolveDispatch').mockRejectedValueOnce(new Error('the journal threw'))
+    cancelTurn.mockResolvedValueOnce({ cancelled: true, turnId: 'turn-never-opened' })
+
+    expect(await stop()).toMatchObject({ ok: true, value: { cancelled: true } })
+
+    expect(log.entries).toContainEqual(
+      expect.objectContaining({
+        fields: expect.objectContaining({ scope: 'stop-settle', sessionId: SESSION })
+      })
+    )
   })
 
   it('is a valid cancel, and only a plain Stop may omit the turn', () => {

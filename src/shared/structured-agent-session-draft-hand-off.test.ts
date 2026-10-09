@@ -3,31 +3,12 @@
 
 import { describe, expect, it } from 'vitest'
 import type { AgentJournalSubmission } from './agent-session-journal-types'
-import {
-  createStructuredAgentSessionOutboxEntry,
-  type StructuredAgentSessionOutboxEntry
-} from './structured-agent-session-outbox'
-import { reconcileStructuredAgentSessionOutboxWithQueue } from './structured-agent-session-draft-hand-off'
-import {
-  disposeStructuredAgentSessionSendResult,
-  journalAnswersInFlightSend
-} from './structured-agent-session-send-disposition'
-import { hasUnsentStructuredAgentSessionOutboxEntry } from './structured-agent-session-outbox-stop-withdrawal'
+import { handedOffQueuedMessageIds } from './structured-agent-session-draft-hand-off'
 
-const entry: StructuredAgentSessionOutboxEntry = {
-  ...createStructuredAgentSessionOutboxEntry({
-    clientMessageId: 'draft',
-    sessionId: 'session-1',
-    text: 'hello',
-    attachments: [],
-    queuedAt: 1
-  }),
-  sentDelivery: 'queue-if-active',
-  state: 'unconfirmed',
-  lastAttemptAt: 5
-}
-
-function handOff(dispatchState: AgentJournalSubmission['dispatchState']): AgentJournalSubmission {
+function handOff(
+  dispatchState: AgentJournalSubmission['dispatchState'],
+  queuedMessageId?: string
+): AgentJournalSubmission {
   return {
     clientMessageId: 'hand-off',
     fence: 1,
@@ -37,38 +18,20 @@ function handOff(dispatchState: AgentJournalSubmission['dispatchState']): AgentJ
     reason: dispatchState === 'rejected' ? 'refused' : null,
     submittedAt: 10,
     resolvedAt: null,
-    queuedMessageId: 'draft'
+    ...(queuedMessageId !== undefined ? { queuedMessageId } : {})
   }
 }
 
 describe('a queued draft handed off under a fresh submission id', () => {
-  it('takes the outbox entry off the client, in every dispatch state', () => {
+  it('is handed off in every dispatch state', () => {
     for (const state of ['pending', 'accepted', 'rejected', 'unknown'] as const) {
-      expect(reconcileStructuredAgentSessionOutboxWithQueue([entry], [handOff(state)], [])).toEqual(
-        []
-      )
+      expect(handedOffQueuedMessageIds([handOff(state, 'draft')])).toEqual(new Set(['draft']))
     }
   })
 
-  it('answers the send in flight and leaves nothing a Stop would withdraw', () => {
-    expect(journalAnswersInFlightSend([handOff('pending')], 'draft')).toBe(true)
-    expect(journalAnswersInFlightSend([handOff('pending')], null)).toBe(false)
-    expect(hasUnsentStructuredAgentSessionOutboxEntry([entry], [handOff('pending')])).toBe(false)
-  })
-
-  it('settles a replayed send answered with the hand-off, with no notice', () => {
-    const disposition = disposeStructuredAgentSessionSendResult({
-      entries: [entry],
-      entry,
-      createOperationId: () => 'rotated',
-      result: {
-        ok: true,
-        replayed: true,
-        fence: 1,
-        cursor: { epoch: 'epoch-1', sequence: 10 },
-        value: { clientMessageId: 'hand-off', submission: handOff('rejected') }
-      }
-    })
-    expect(disposition).toEqual({ entries: [], error: null })
+  it('is never matched by the submission id itself', () => {
+    const ids = handedOffQueuedMessageIds([handOff('pending', 'draft'), handOff('accepted')])
+    expect(ids.has('hand-off')).toBe(false)
+    expect([...ids]).toEqual(['draft'])
   })
 })

@@ -26,11 +26,15 @@ export function isRunningStructuredAgentSessionToolAction(
   return action.kind === 'tool-call' && action.state === 'running'
 }
 
+/** `itemId`: the journal row's, the call's id when the provider gave none. A call and its result
+ *  are one row, so the result names its call by it; without an id a result pairs with the oldest
+ *  unanswered call, which in a run of several rows can be another row's. */
 export function structuredAgentSessionToolCallBlock(
-  action: StructuredAgentSessionToolAction
+  action: StructuredAgentSessionToolAction,
+  itemId: string
 ): NativeChatToolCallBlock {
   if (action.kind === 'diff') {
-    return { type: 'tool-call', name: 'Diff', input: { path: action.path } }
+    return { type: 'tool-call', name: 'Diff', input: { path: action.path }, callId: itemId }
   }
   return {
     type: 'tool-call',
@@ -38,7 +42,7 @@ export function structuredAgentSessionToolCallBlock(
     input: action.input,
     state: action.state,
     ...(action.endedAs !== undefined ? { endedAs: action.endedAs } : {}),
-    ...(action.callId !== undefined ? { callId: action.callId } : {}),
+    callId: action.callId ?? itemId,
     ...(action.mcpIdentity !== undefined ? { mcpIdentity: action.mcpIdentity } : {}),
     ...(action.exitCode !== undefined ? { exitCode: action.exitCode } : {}),
     ...(action.durationMs !== undefined ? { durationMs: action.durationMs } : {}),

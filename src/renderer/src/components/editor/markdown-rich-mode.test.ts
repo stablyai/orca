@@ -112,15 +112,41 @@ describe('getMarkdownRichModeUnsupportedMessage', () => {
     expect(getMarkdownRichModeUnsupportedMessage(content)).toBeNull()
   })
 
-  it('still blocks large documents with actual html or jsx', () => {
+  it('allows large documents with source-preserving html without creating an editor', () => {
     const prefix = 'a'.repeat(50_001)
+    const roundTripSpy = vi.spyOn(roundTrip, 'getRichMarkdownRoundTripOutput')
 
-    expect(getMarkdownRichModeUnsupportedMessage(`${prefix}\n<span>text</span>\n`)).not.toBeNull()
-    expect(getMarkdownRichModeUnsupportedMessage(`${prefix}\n<id>text</id>\n`)).not.toBeNull()
-    expect(getMarkdownRichModeUnsupportedMessage(`${prefix}\n<Widget />\n`)).not.toBeNull()
-    expect(
-      getMarkdownRichModeUnsupportedMessage(`${prefix}\n<project-id value="1">\n`)
-    ).not.toBeNull()
+    expect(getMarkdownRichModeUnsupportedMessage(`${prefix}\n<span>text</span>\n`)).toBeNull()
+    expect(getMarkdownRichModeUnsupportedMessage(`${prefix}\n<id>text</id>\n`)).toBeNull()
+    expect(getMarkdownRichModeUnsupportedMessage(`${prefix}\n<Widget />\n`)).toBeNull()
+    expect(getMarkdownRichModeUnsupportedMessage(`${prefix}\n<project-id value="1">\n`)).toBeNull()
+    expect(roundTripSpy).not.toHaveBeenCalled()
+  })
+
+  it('allows a large anchored document after its size limit is explicitly overridden', () => {
+    const content = `${'a'.repeat(RICH_MARKDOWN_MAX_SIZE_BYTES)}\n\n<a id="section"></a>\n\n## Section\n`
+
+    expect(getMarkdownRichModeEligibility({ content, sizeOverridden: false })).toEqual({
+      exceedsSizeLimit: true,
+      unsupportedMessage: null
+    })
+    expect(getMarkdownRichModeEligibility({ content, sizeOverridden: true })).toEqual({
+      exceedsSizeLimit: false,
+      unsupportedMessage: null
+    })
+  })
+
+  it('still blocks large editable html that requires a round trip', () => {
+    const content = `${'a'.repeat(50_001)}\n\n<details>\n<summary>Toggle</summary>\n\nBody\n\n</details>\n`
+    const roundTripSpy = vi.spyOn(roundTrip, 'getRichMarkdownRoundTripOutput')
+
+    expect(getMarkdownRichModeUnsupportedMessage(content)).not.toBeNull()
+    expect(roundTripSpy).not.toHaveBeenCalled()
+  })
+
+  it('falls back safely when large markup cannot be encoded', () => {
+    const content = `${'a'.repeat(50_001)}\n<span title="\ud800">text</span>`
+    expect(getMarkdownRichModeUnsupportedMessage(content)).not.toBeNull()
   })
 
   it('allows block html and mdx-like tags by preserving them as passthrough nodes', () => {
@@ -169,7 +195,7 @@ describe('getMarkdownRichModeUnsupportedMessage', () => {
   })
 
   it('keeps unsupported content blocked when it also exceeds the size limit', () => {
-    const content = `${'a'.repeat(RICH_MARKDOWN_MAX_SIZE_BYTES + 1)}<Widget />`
+    const content = `${'a'.repeat(RICH_MARKDOWN_MAX_SIZE_BYTES + 1)}\n\n[ref]: https://example.com\n`
 
     expect(getMarkdownRichModeEligibility({ content, sizeOverridden: false })).toEqual({
       exceedsSizeLimit: true,

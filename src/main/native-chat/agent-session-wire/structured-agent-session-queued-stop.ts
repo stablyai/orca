@@ -19,7 +19,7 @@ import {
   structuredAgentSessionStoppedTurnId
 } from './structured-agent-session-turn-stop-notes'
 
-/** The one unsettled-card predicate /clear's carry and the budget share:
+/** The one unsettled-card predicate /clear's carry and the published-bytes bound share:
  *  waiting or returned. Pending/unknown/accepted deliveries stay outside it. */
 export function unsettledQueuedMessages(journal: AgentSessionJournal): QueuedMessageRow[] {
   return journal.queuedMessages.list().filter(isUnsettledQueuedMessage)

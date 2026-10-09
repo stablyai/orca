@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
   AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY,
+  AGENT_SESSION_QUEUED_COMMANDS_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY,
   AGENT_SESSION_REWIND_RECOVERY_CAPABILITY,
   type RuntimeCapability
@@ -108,13 +109,21 @@ export function useStructuredAgentSessionHostQueuesMessages(target: RuntimeClien
   return useStructuredAgentSessionHostQueuesMessagesState(target) === 'supported'
 }
 
-/** Three-state, for the outbox: only `supported` lets a first attempt ask to be queued, and only
- *  `unsupported` drops the field from a replay; `unknown` holds nothing back. */
+/** Three-state: only `supported` lets a send ask to be queued; `unknown` holds nothing back. */
 export function useStructuredAgentSessionHostQueuesMessagesState(
   target: RuntimeClientTarget
 ): StructuredAgentSessionHostCapabilityState {
   return useStructuredAgentSessionHostCapabilityState(
     target,
     AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY
+  )
+}
+
+/** Whether the host holds a /compact sent while the agent works as a queued card: only then may
+ *  a client send the command's `delivery`, and only where it also renders the queue's cards. */
+export function useStructuredAgentSessionHostQueuesCommands(target: RuntimeClientTarget): boolean {
+  return useStructuredAgentSessionHostCapability(
+    target,
+    AGENT_SESSION_QUEUED_COMMANDS_RUNTIME_CAPABILITY
   )
 }

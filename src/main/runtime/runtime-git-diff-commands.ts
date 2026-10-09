@@ -4,21 +4,15 @@ import type {
   GitDiffResult
 } from '../../shared/git-diff-compare-types'
 import { assertGitDiffWithinTransportBudget } from '../../shared/git-diff-transport-budget'
-import { getRemoteCommitUrl, getRemoteFileUrl } from '../git/repo'
-import {
-  getBranchCompare,
-  getBranchDiff,
-  getCommitCompare,
-  getCommitDiff,
-  getDiff
-} from '../git/status'
-import { awaitWindowsHostGitEnvironmentReady } from '../git/runner'
+import { getBranchDiff } from '../git/status'
 import type { GitAdmissionTier } from '../git/command-runner/git-exec-options'
 import { normalizeRuntimeRelativePath } from './runtime-relative-paths'
 import {
   localGitOptionsForTarget,
   normalizeRuntimeGitRelativePath,
   requireRuntimeGitProvider,
+  requireSshRuntimeGitProvider,
+  runtimeGitRouteForTarget,
   type RuntimeGitCommandHost
 } from './runtime-git-command-target'
 
@@ -35,18 +29,13 @@ export class RuntimeGitDiffCommands {
   ): Promise<GitDiffResult> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const relativePath = normalizeRuntimeGitRelativePath(filePath)
-    const provider = requireRuntimeGitProvider(target)
-    if (provider) {
-      return assertGitDiffWithinTransportBudget(
-        await provider.getDiff(target.worktree.path, relativePath, staged, compareAgainstHead),
-        maxContentBytes
-      )
-    }
     return assertGitDiffWithinTransportBudget(
-      await getDiff(target.worktree.path, relativePath, staged, compareAgainstHead, {
-        ...localGitOptionsForTarget(target),
-        admissionTier: 'interactive'
-      }),
+      await requireRuntimeGitProvider(target).getDiff(
+        target.worktree.path,
+        relativePath,
+        staged,
+        compareAgainstHead
+      ),
       maxContentBytes
     )
   }
@@ -57,12 +46,7 @@ export class RuntimeGitDiffCommands {
     admissionTier: GitAdmissionTier = 'interactive'
   ): Promise<GitBranchCompareResult> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    const provider = requireRuntimeGitProvider(target)
-    if (provider) {
-      return provider.getBranchCompare(target.worktree.path, baseRef, { admissionTier })
-    }
-    return getBranchCompare(target.worktree.path, baseRef, {
-      ...localGitOptionsForTarget(target),
+    return requireRuntimeGitProvider(target).getBranchCompare(target.worktree.path, baseRef, {
       admissionTier
     })
   }
@@ -72,14 +56,7 @@ export class RuntimeGitDiffCommands {
     commitId: string
   ): Promise<GitCommitCompareResult> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    const provider = requireRuntimeGitProvider(target)
-    if (provider) {
-      return provider.getCommitCompare(target.worktree.path, commitId)
-    }
-    return getCommitCompare(target.worktree.path, commitId, {
-      ...localGitOptionsForTarget(target),
-      admissionTier: 'interactive'
-    })
+    return requireRuntimeGitProvider(target).getCommitCompare(target.worktree.path, commitId)
   }
 
   async getRuntimeGitBranchDiff(
@@ -92,8 +69,9 @@ export class RuntimeGitDiffCommands {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const relativePath = normalizeRuntimeGitRelativePath(filePath)
     const oldRelativePath = oldPath ? normalizeRuntimeGitRelativePath(oldPath) : undefined
-    const provider = requireRuntimeGitProvider(target)
-    if (provider) {
+    const route = runtimeGitRouteForTarget(target)
+    if (route.kind === 'ssh') {
+      const provider = requireSshRuntimeGitProvider(route)
       const results = await provider.getBranchDiff(target.worktree.path, compare.mergeBase, {
         includePatch: true,
         headOid: compare.headOid,
@@ -137,32 +115,13 @@ export class RuntimeGitDiffCommands {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const relativePath = normalizeRuntimeRelativePath(args.filePath)
     const oldRelativePath = args.oldPath ? normalizeRuntimeRelativePath(args.oldPath) : undefined
-    const provider = requireRuntimeGitProvider(target)
-    if (provider) {
-      return assertGitDiffWithinTransportBudget(
-        await provider.getCommitDiff(target.worktree.path, {
-          commitOid: args.commitOid,
-          parentOid: args.parentOid,
-          filePath: relativePath,
-          oldPath: oldRelativePath
-        }),
-        maxContentBytes
-      )
-    }
     return assertGitDiffWithinTransportBudget(
-      await getCommitDiff(
-        target.worktree.path,
-        {
-          commitOid: args.commitOid,
-          parentOid: args.parentOid,
-          filePath: relativePath,
-          oldPath: oldRelativePath
-        },
-        {
-          ...localGitOptionsForTarget(target),
-          admissionTier: 'interactive'
-        }
-      ),
+      await requireRuntimeGitProvider(target).getCommitDiff(target.worktree.path, {
+        commitOid: args.commitOid,
+        parentOid: args.parentOid,
+        filePath: relativePath,
+        oldPath: oldRelativePath
+      }),
       maxContentBytes
     )
   }
@@ -174,12 +133,11 @@ export class RuntimeGitDiffCommands {
   ): Promise<string | null> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const normalizedRelativePath = normalizeRuntimeGitRelativePath(relativePath)
-    const provider = requireRuntimeGitProvider(target)
-    if (provider) {
-      return provider.getRemoteFileUrl(target.worktree.path, normalizedRelativePath, line)
-    }
-    await awaitWindowsHostGitEnvironmentReady({ cwd: target.worktree.path })
-    return getRemoteFileUrl(target.worktree.path, normalizedRelativePath, line)
+    return requireRuntimeGitProvider(target).getRemoteFileUrl(
+      target.worktree.path,
+      normalizedRelativePath,
+      line
+    )
   }
 
   async getRuntimeGitRemoteCommitUrl(
@@ -187,11 +145,6 @@ export class RuntimeGitDiffCommands {
     sha: string
   ): Promise<string | null> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    const provider = requireRuntimeGitProvider(target)
-    if (provider) {
-      return provider.getRemoteCommitUrl(target.worktree.path, sha)
-    }
-    await awaitWindowsHostGitEnvironmentReady({ cwd: target.worktree.path })
-    return getRemoteCommitUrl(target.worktree.path, sha)
+    return requireRuntimeGitProvider(target).getRemoteCommitUrl(target.worktree.path, sha)
   }
 }

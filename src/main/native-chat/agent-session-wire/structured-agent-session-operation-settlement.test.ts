@@ -164,3 +164,33 @@ it('refuses a superseded send at acceptance, recording and dispatching nothing',
   expect(hostTestState().dispatch).not.toHaveBeenCalled()
   expect(vi.getTimerCount()).toBe(0)
 })
+
+it('keeps the original refusal reason and message in its settled receipt', async () => {
+  const ctx = await context()
+  const { store } = hostTestState()
+  const writes = vi.spyOn(store, 'recordOperationOutcome').mockResolvedValue()
+  const body = hostTestMessage('message')
+  const operation = envelope('agentSession.send', { body })
+  const refusal = {
+    code: 'agent_session_operation_invalid' as const,
+    details: { reason: 'journalWriteFailed' as const },
+    message: 'The message could not be saved.'
+  }
+  expect(
+    await runSettledAgentSessionMutation({
+      store,
+      operationCallerKey: 'test',
+      envelope: operation,
+      context: ctx,
+      plan: {
+        ...sendPlan({ envelope: operation, body }),
+        run: async () => ({ ok: false, refusal })
+      }
+    })
+  ).toMatchObject({ ok: false, refusal })
+  expect(writes).toHaveBeenCalledWith({
+    callerKey: 'test',
+    operationId: operation.clientOperationId,
+    outcome: { status: 'failed', ...refusal }
+  })
+})

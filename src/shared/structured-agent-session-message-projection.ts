@@ -1,4 +1,8 @@
-import type { AgentJournalRenderItem, AgentJournalSubmission } from './agent-session-journal-types'
+import type {
+  AgentJournalMessageItem,
+  AgentJournalRenderItem,
+  AgentJournalSubmission
+} from './agent-session-journal-types'
 import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
 import { isQueuedAgentJournalSubmission } from './agent-session-queued-submission'
 import { collapseProviderRetryRuns } from './native-chat-provider-retry-runs'
@@ -10,11 +14,20 @@ import {
 import { compareNativeChatTranscriptMessages } from './native-chat-transcript-projection'
 import type { NativeChatMessage } from './native-chat-types'
 import { dispatchWasWithdrawn } from './structured-agent-session-dispatch-rejection'
-import type { StructuredAgentSessionOutboxEntry } from './structured-agent-session-outbox'
-import { structuredAgentSessionEntryHeldForRetry } from './structured-agent-session-outbox-admission'
-import { reconcileStructuredAgentSessionOutboxWithQueue } from './structured-agent-session-draft-hand-off'
-import { awaitsStructuredAgentSessionRetry } from './structured-agent-session-outbox-stop-withdrawal'
 import { projectStructuredItemsToNativeChat } from './structured-agent-session-projection'
+import {
+  agentSessionContextSequenceFor,
+  isAgentSessionContextClear
+} from './agent-session-context-clear'
+
+/** A message this client sent that the host has not drawn yet: its bubble until the row lands. */
+export type StructuredAgentSessionOptimisticMessage = {
+  clientMessageId: string
+  body: AgentJournalMessageItem
+  queuedAt: number
+  /** Sent while the chat read Stopping: drawn after the turn being stopped. */
+  sentWhileStopping?: true
+}
 
 export type StructuredAgentSessionMessageProjectionOptions = {
   /** Draw a message the host accepted and then rejected where the host recorded it, as not sent.
@@ -41,19 +54,25 @@ export function structuredAgentSessionCommandItemIds(
  */
 export function structuredAgentSessionRejectedShownInPlace(
   submissions: readonly AgentJournalSubmission[],
-  commandItemIds: ReadonlySet<string>
+  commandItemIds: ReadonlySet<string>,
+  clearSequences: readonly number[] = []
 ): Set<string> {
   // Each body's copies, as positions in submission order. A withdrawn one is no failed copy, so it
   // supersedes nothing.
   const copies = new Map<string, { index: number; submittedAt: number }[]>()
+  const scopeKey = (submission: AgentJournalSubmission) =>
+    JSON.stringify([
+      agentSessionContextSequenceFor(submission.acceptedSequence ?? 0, clearSequences),
+      submission.payloadFingerprint
+    ])
   for (const [index, submission] of submissions.entries()) {
     if (!dispatchWasWithdrawn(submission)) {
       const copy = { index, submittedAt: submission.submittedAt }
-      const same = copies.get(submission.payloadFingerprint)
+      const same = copies.get(scopeKey(submission))
       if (same) {
         same.push(copy)
       } else {
-        copies.set(submission.payloadFingerprint, [copy])
+        copies.set(scopeKey(submission), [copy])
       }
     }
   }
@@ -71,7 +90,7 @@ export function structuredAgentSessionRejectedShownInPlace(
       // host re-delivers its own messages under new ids. Only a later copy sent once the rejection
       // was known counts, so a repeat sent before it is kept.
       (resolvedAt !== null &&
-        (copies.get(submission.payloadFingerprint) ?? []).some(
+        (copies.get(scopeKey(submission)) ?? []).some(
           (copy) => copy.index > index && copy.submittedAt >= resolvedAt
         ))
     ) {
@@ -84,12 +103,11 @@ export function structuredAgentSessionRejectedShownInPlace(
 
 export function projectStructuredAgentSessionMessages(
   items: readonly AgentJournalRenderItem[],
-  outbox: readonly StructuredAgentSessionOutboxEntry[],
+  optimistic: readonly StructuredAgentSessionOptimisticMessage[],
   submissions: readonly AgentJournalSubmission[],
   options: StructuredAgentSessionMessageProjectionOptions,
   projectItems = projectStructuredItemsToNativeChat
 ): NativeChatMessage[] {
-  const optimistic = reconcileStructuredAgentSessionOutboxWithQueue(outbox, submissions, items)
   // A send a Stop took back before the agent started it stays where it was sent, as the
   // conversation's own history. A queued card's hand-off is left out: the card holds its text.
   const stoppedBeforeStart = new Map(
@@ -113,7 +131,8 @@ export function projectStructuredAgentSessionMessages(
   const inPlace = options.rejectedInPlace
     ? structuredAgentSessionRejectedShownInPlace(
         submissions,
-        structuredAgentSessionCommandItemIds(items)
+        structuredAgentSessionCommandItemIds(items),
+        items.filter((item) => isAgentSessionContextClear(item.body)).map((item) => item.sequence)
       )
     : new Set<string>()
   const visibleItems: AgentJournalRenderItem[] = []
@@ -168,22 +187,22 @@ export function projectStructuredAgentSessionMessages(
       ? withStopRowsAfterStoppedSends(conversation, shownStopped)
       : conversation),
     ...held,
-    // In no turn, like the outbox's not-sent rows; the journal position keeps their place.
+    // In no turn; the journal position keeps their place.
     ...projectItems(unsentItems).map((message) => ({ ...message, unsent: true as const })),
+    // The host's row draws a message once it has one, under its own id or the provider's.
     ...optimistic
-      .filter((entry) => !journalled.has(agentJournalSubmissionKey(entry.clientMessageId)))
+      .filter(
+        (entry) =>
+          !journalled.has(agentJournalSubmissionKey(entry.clientMessageId)) &&
+          !submissions.some((submission) => submission.clientMessageId === entry.clientMessageId)
+      )
       .map((entry): NativeChatMessage => ({
         id: agentJournalSubmissionKey(entry.clientMessageId),
         role: 'user',
         source: 'transcript',
         timestamp: entry.queuedAt,
         blocks: entry.body.blocks,
-        ...(entry.state === 'rejected' || structuredAgentSessionEntryHeldForRetry(entry)
-          ? { unsent: true as const }
-          : entry.sentWhileStopping
-            ? { sentWhileStopping: true as const }
-            : {}),
-        ...(awaitsStructuredAgentSessionRetry(entry) ? { awaitsRetry: true as const } : {})
+        ...(entry.sentWhileStopping ? { sentWhileStopping: true as const } : {})
       }))
   ]
 }

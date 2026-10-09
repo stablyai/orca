@@ -69,6 +69,8 @@ export type NativeChatComposerDraftChange = {
   images?: readonly NativeChatComposerDraftImage[]
   /** Text shown but never saved while the draft still holds exactly it. */
   unsavedText?: string
+  /** A new draft's owner when its chat may no longer be open to name it: the one it was begun in. */
+  owner?: NativeChatComposerDraftOwner
 }
 
 const EMPTY_DRAFT: DraftRecord = { text: '', images: [], savedAt: 0 }
@@ -80,6 +82,13 @@ export function setNativeChatComposerDraftOwnerResolver(
   resolver: (scopeKey: string) => NativeChatComposerDraftOwner | undefined
 ): void {
   resolveOwner = resolver
+}
+
+/** The owner a new draft in this scope would record now. */
+export function resolveNativeChatComposerDraftOwner(
+  scopeKey: string
+): NativeChatComposerDraftOwner | undefined {
+  return resolveOwner?.(scopeKey)
 }
 
 /** Composers render from the store; this tells one that its pane's draft changed. */
@@ -156,7 +165,7 @@ export function updateNativeChatComposerDraft(
     return
   }
   // Why stamped once: a conversation never moves to another workspace, so its owner stays true.
-  const owner = current.owner ?? resolveOwner?.(scopeKey)
+  const owner = current.owner ?? change.owner ?? resolveOwner?.(scopeKey)
   const record: DraftRecord = {
     text,
     ...(document ? { document } : {}),
@@ -180,7 +189,7 @@ function withAddition<T extends NativeChatComposerDraft>(
   options: { once?: boolean } = {}
 ): T {
   const next = withNativeChatComposerDraftAddition(draft, addition, options)
-  return { ...draft, ...next, ...(next.text === draft.text ? {} : { document: undefined }) }
+  return { ...draft, ...next }
 }
 
 /**
@@ -192,14 +201,20 @@ function withAddition<T extends NativeChatComposerDraft>(
  */
 export function appendToNativeChatComposerDraft(
   scopeKey: string,
-  addition: NativeChatComposerDraftAddition
+  addition: NativeChatComposerDraftAddition,
+  owner?: NativeChatComposerDraftOwner
 ): boolean {
   const before = records.get(scopeKey)
   const current = readNativeChatComposerDraft(scopeKey)
-  const { text, images } = withAddition(current, addition)
+  const { text, images, document } = withAddition(current, addition)
   updateNativeChatComposerDraft(
     scopeKey,
-    { text, images, ...(text === current.text ? {} : { document: undefined }) },
+    {
+      text,
+      images,
+      document,
+      ...(owner ? { owner } : {})
+    },
     'immediate',
     (loaded) => withAddition(loaded, addition, { once: true })
   )

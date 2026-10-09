@@ -2,7 +2,10 @@
 import { join, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { globSync, readFileSync } from 'node:fs'
-import { ORCAD_VERSION_FILENAME } from '../../src/shared/orcad-artifacts.ts'
+import {
+  ORCAD_SERVER_ENTRY_FILENAME,
+  ORCAD_VERSION_FILENAME
+} from '../../src/shared/orcad-artifacts.ts'
 import { NODE_RUNTIME_PIN } from '../../src/shared/node-runtime-pin.ts'
 import {
   ORCAD_PROFILE_PREFLIGHT_FLAG,
@@ -60,7 +63,7 @@ if (artifact) {
   const nonce = randomUUID()
   const result = runProcessSync({
     program: runtimePath,
-    args: [join(packageDir, 'orcad.js'), ORCAD_PROFILE_PREFLIGHT_FLAG, nonce],
+    args: [join(packageDir, ORCAD_SERVER_ENTRY_FILENAME), ORCAD_PROFILE_PREFLIGHT_FLAG, nonce],
     cwd: root,
     env,
     timeoutMs: 90_000

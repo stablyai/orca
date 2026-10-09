@@ -1,7 +1,7 @@
 import type { z } from 'zod'
 import { resolveRuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import type { WorktreeCreate } from './worktree-create-schemas'
+import type { WorktreeCreate } from '../../../../shared/rpc-contract/worktree-create-params'
 
 type WorktreeCreateParams = z.infer<typeof WorktreeCreate>
 type ManagedWorktreeCreateArgs = Parameters<OrcaRuntimeService['createManagedWorktree']>[0]
@@ -36,6 +36,7 @@ export function buildManagedWorktreeCreateArgs(
     linkedAzureDevOpsPR: params.linkedAzureDevOpsPR,
     linkedGiteaPR: params.linkedGiteaPR,
     linkedWorkItem: params.linkedWorkItem,
+    linkedItems: params.linkedItems,
     linkedTaskSourceContext: params.linkedTaskSourceContext,
     comment: params.comment,
     displayName: params.displayName,

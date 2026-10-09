@@ -9,13 +9,12 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { translate } from '@/i18n/i18n'
 import { UsageRosterPanel } from './UsageRosterPanel'
-import { getUsageProviderAccountsSectionId } from './usage-provider-settings-target'
 import {
   STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS,
   shouldOpenStatusBarContextMenu
 } from './status-bar-context-menu-policy'
 import { StatusBarUsageEmptyCta } from './StatusBarUsageEmptyCta'
-import { UsagePercentageDisplayChangeNotice } from './UsagePercentageDisplayChangeNotice'
+import { StatusBarUsageChangeNotices } from './StatusBarUsageChangeNotices'
 import { UpdateStatusSegment } from './UpdateStatusSegment'
 import { SkillUpdateStatusSegment } from './SkillUpdateStatusSegment'
 import { NativeChatResumeStatusSegment } from './NativeChatResumeStatusSegment'
@@ -62,6 +61,7 @@ export function StatusBarSurface({
     anyFetching,
     anyVisible,
     barRef,
+    canSignInFromUsageRow,
     collapseUsage,
     collapsedUsageProviders,
     compact,
@@ -126,7 +126,7 @@ export function StatusBarSurface({
             ) : null
           ) : hasVisibleUsageMeters ? (
             // Consolidated roster pill → opens the all-agents Usage popover (mock parity).
-            <UsagePercentageDisplayChangeNotice hasVisibleUsageMeters={hasVisibleUsageMeters}>
+            <StatusBarUsageChangeNotices hasVisibleUsageMeters={hasVisibleUsageMeters}>
               <DropdownMenu
                 open={usageMenuOpen}
                 onOpenChange={handleUsageMenuOpenChange}
@@ -161,6 +161,7 @@ export function StatusBarSurface({
                     ))}
                     {collapseUsage ? (
                       <UsageOverflowChip
+                        providerCount={rosterProviders.length}
                         hidden={rosterProviders.filter((p) =>
                           collapsedUsageProviders.includes(p.provider)
                         )}
@@ -190,7 +191,7 @@ export function StatusBarSurface({
                     onRefresh={handleRefresh}
                     onOpenProvider={handleOpenProviderAccounts}
                     onSignIn={handleOpenProviderAccounts}
-                    canSignIn={(provider) => getUsageProviderAccountsSectionId(provider) !== null}
+                    canSignIn={canSignInFromUsageRow}
                     onManageAccounts={handleManageAccounts}
                     onUsageDetails={handleUsageDetails}
                     renderRow={(p, rowNode) => {
@@ -236,7 +237,7 @@ export function StatusBarSurface({
                   />
                 </DropdownMenuContent>
               </DropdownMenu>
-            </UsagePercentageDisplayChangeNotice>
+            </StatusBarUsageChangeNotices>
           ) : null}
           {anyVisible && !isEmptyUsageState && (
             <Tooltip>

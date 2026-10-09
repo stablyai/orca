@@ -82,6 +82,11 @@ it('activates only the actual compiler packages and preserves import graph behav
       join(root, 'config', 'scripts', `${name}.mjs`)
     )
   }
+  mkdirSync(join(root, 'src', 'shared'), { recursive: true })
+  cpSync(
+    new URL('../../src/shared/orcad-artifacts.ts', import.meta.url),
+    join(root, 'src', 'shared', 'orcad-artifacts.ts')
+  )
   writeFileSync(
     join(root, 'entry.ts'),
     "import './first'; export * from './exports'; import('./dynamic'); require('./required'); import 'external-package'; import './native.node'"

@@ -66,19 +66,15 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 }))
 
 import { StructuredAgentSessionAttentionBridge } from './StructuredAgentSessionAttentionBridge'
-import { applyWebSessionTabsSnapshot } from '@/runtime/web-session-tabs-sync'
+import { applyWebSessionTabsSnapshot } from '@/runtime/web-session-tabs-sync/snapshot-api'
 import { resolveNotificationTabOwner } from '@/attention/notification-subject-owner'
 import { resetStructuredAgentSessionTurnCompletionFeedsForTests } from '@/runtime/structured-agent-session-turn-completion-feed'
 import {
   getStructuredAgentSessionStatusFeed,
   resetStructuredAgentSessionStatusFeedsForTests
 } from '@/runtime/structured-agent-session-status-feed'
-import {
-  makeTabGroup,
-  makeUnifiedTab,
-  makeWorktree,
-  TEST_REPO
-} from '@/store/slices/store-test-helpers'
+import { makeTabGroup, makeUnifiedTab } from '../../store/slices/store-session-test-harness'
+import { makeWorktree, TEST_REPO } from '../../store/slices/worktrees-slice-test-fixtures'
 
 // Worktree ids encode their repo (`repoId::path`); the unread reducer buckets by that prefix.
 const WORKSPACE = 'repo1::/tmp/wt'

@@ -31,6 +31,8 @@ import { acceptSubmissionFromProviderItem, applyJournalSubmission } from './jour
 import { applyJournalDispatchRow } from './journal-dispatch-reducer'
 import { isWriteFailureSubmission } from '../../../shared/structured-agent-session-dispatch-rejection'
 import { projectJournalStopNote } from './journal-stop-note-projection'
+import { retireRewoundJournalSubmission } from './journal-rewind-submission-retirement'
+import { latestAgentSessionContextClearSequence } from '../../../shared/agent-session-context-clear'
 import {
   createJournalQueuePauseMarks,
   foldJournalQueuePauseMark,
@@ -60,8 +62,7 @@ export type JournalReducerState = {
   appliedSettlementIds: Set<string>
   /** Scope for rows stored without one; rebuilt by replay, never persisted. */
   derivedTurnScope: JournalDerivedTurnScope
-  /** The submission row of the latest turn the provider accepted, whoever sent it; 0 when none.
-   *  Kept as it folds so the queue's pause reads it in O(1). */
+  /** Latest actual acceptance in this epoch, even when its message is rewound away; 0 when none. */
   latestAcceptedTurnSequence: number
   /** The latest person's Stop event and Resume, what the queue's pause is derived from. */
   queuePauseMarks: JournalQueuePauseMarks
@@ -116,6 +117,9 @@ export function applyJournalRow(state: JournalReducerState, row: JournalRow): vo
   }
   if (row.kind === 'tombstone') {
     removeJournalItem(state, resolveItemId(state, row.itemId), row.revision)
+    if (row.retireSubmission === true) {
+      retireRewoundJournalSubmission(state, row.itemId)
+    }
     return
   }
   if (row.kind === 'lifecycle-batch') {
@@ -204,6 +208,7 @@ export function journalEchoClaimant(
     return null
   }
   const fingerprint = agentSessionSendBodyFingerprint(state.sessionId, body)
+  const contextSequence = latestAgentSessionContextClearSequence(state.items.values())
   // Exact payload plus queue order preserves repeated identical sends one-for-one.
   // A submission an echo may not claim is one that says the message never reached
   // the provider, so an item resembling it is somebody else's. That is `rejected`
@@ -214,6 +219,7 @@ export function journalEchoClaimant(
     .sort((left, right) => left.submittedAt - right.submittedAt)
     .find(
       (candidate) =>
+        (contextSequence === 0 || (candidate.acceptedSequence ?? 0) > contextSequence) &&
         candidate.dispatchState !== 'rejected' &&
         !isWriteFailureSubmission(candidate) &&
         candidate.payloadFingerprint === fingerprint &&

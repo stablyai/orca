@@ -47,8 +47,7 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
       selectUnifiedTerminalTabFields(store.unifiedTabsByWorktree, worktreeId, tabId)
     )
   )
-  const nativeChatEnabled = useAppStore((store) => store.settings?.experimentalNativeChat === true)
-  const effectiveChatViewMode = nativeChatEnabled && isChatViewMode
+  const effectiveChatViewMode = isChatViewMode
   const runtimePaneTitlesByPaneId = useAppStore(
     useShallow((store) => store.runtimePaneTitlesByTabId[tabId] ?? {})
   )
@@ -129,7 +128,6 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
         leafIds: getNativeChatLeafIds()
       })
       return canToggleNativeChat({
-        experimentalNativeChatEnabled: nativeChatEnabled,
         contentType: 'terminal',
         launchAgent: detectedAgent ? null : launchAgent,
         detectedAgent,
@@ -139,7 +137,6 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
     },
     [
       tabAgentTypeByLeaf,
-      nativeChatEnabled,
       nativeChatTranscriptIsLocalReadable,
       terminalTab?.launchAgent,
       getNativeChatLeafIds,
@@ -208,9 +205,9 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
     (leafId: string | null): boolean => {
       // Scope the "always allow toggling back" rule to the leaf showing chat; must not make an unsupported sibling look eligible.
       const isChatViewForLeaf = effectiveChatViewMode && leafId !== null && chatLeafId === leafId
-      return (nativeChatEnabled && isChatViewForLeaf) || isChatEligibleForLeaf(leafId)
+      return isChatViewForLeaf || isChatEligibleForLeaf(leafId)
     },
-    [chatLeafId, effectiveChatViewMode, isChatEligibleForLeaf, nativeChatEnabled]
+    [chatLeafId, effectiveChatViewMode, isChatEligibleForLeaf]
   )
   const toggleNativeChatForLeaf = useCallback(
     (leafId: string) => {
@@ -261,7 +258,6 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
     clearCodexRestartNotice,
     unifiedTabId,
     isChatViewMode,
-    nativeChatEnabled,
     effectiveChatViewMode,
     unifiedTabLabel,
     isTabPinned,

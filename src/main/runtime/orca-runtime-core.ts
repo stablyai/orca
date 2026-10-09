@@ -58,10 +58,6 @@ export function isCursorAgentOrchestrationTarget(
   return [leaf.lastOscTitle, leaf.paneTitle, tabTitle].some(isCursorAgentTitle)
 }
 
-export const AGENT_SESSION_OPERATION_PER_CLIENT_LIMIT = 512
-
-export const AGENT_SESSION_OPERATION_GLOBAL_LIMIT = 4_096
-
 // Why: long enough for a phone to reconnect and retry a create whose response
 // was lost, short enough that an intentional later re-resume forks fresh.
 export const MOBILE_TERMINAL_CREATE_RESULT_TTL_MS = 60_000

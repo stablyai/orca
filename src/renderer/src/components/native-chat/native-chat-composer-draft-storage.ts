@@ -1,5 +1,5 @@
 // The stored form of composer drafts and the storage they live in. Drafts are kept in their own
-// store (IndexedDB), not localStorage, so they never compete with the send outbox for its quota
+// store (IndexedDB), not localStorage, so they never compete with other saved state for its quota
 // and need no budget: every draft comes back.
 
 import type { JSONContent } from '@tiptap/react'

@@ -9,6 +9,7 @@ import type { StructuredAgentSessionLaunchIntent } from '@/lib/launch-structured
 const mocks = vi.hoisted(() => ({
   abandonIntent: vi.fn(),
   callStructuredAgentSession: vi.fn(),
+  callRuntimeRpc: vi.fn(),
   createIntent: vi.fn(),
   retryIntent: vi.fn(),
   restoreIntent: vi.fn(),
@@ -50,7 +51,16 @@ vi.mock('@/runtime/local-structured-session-tabs-sync', () => ({
 }))
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: mocks.callStructuredAgentSession
+  // Sends reach the runtime RPC through this wrapper, as in the app; reads stay on this mock.
+  callStructuredAgentSession: (target: unknown, method: string, params?: unknown) =>
+    method === 'agentSession.send'
+      ? mocks.callRuntimeRpc(target, method, params)
+      : mocks.callStructuredAgentSession(target, method, params)
+}))
+
+vi.mock('@/runtime/runtime-rpc-client', () => ({
+  callRuntimeRpc: mocks.callRuntimeRpc,
+  ensureRuntimeEnvironmentCompatible: vi.fn(async () => undefined)
 }))
 
 vi.mock('@/store', () => ({
@@ -91,7 +101,13 @@ import {
   retryStructuredAgentSessionLaunch,
   startStructuredAgentLaunch
 } from './structured-agent-session-launch'
-import { readOutbox } from '@/components/native-chat/structured-agent-session-outbox-storage'
+import { resetStructuredAgentSessionSendsForTests } from '@/components/native-chat/structured-agent-session-message-sender'
+import {
+  clearNativeChatDraftCacheForTests,
+  readNativeChatDraftCache
+} from '@/components/native-chat/native-chat-draft-cache'
+import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/native-chat-composer-draft-store'
+import { hasStagedStructuredLaunchPrompt } from './structured-agent-session-launch-prompt'
 import { resetStructuredAgentLaunchPersistenceForTests } from './structured-agent-session-launch-persistence'
 import { resetStructuredAgentLaunchRegistryForTests } from './structured-agent-session-launch-registry'
 import { getStructuredAgentSessionLaunchSelection } from './structured-agent-session-launch-options'
@@ -140,6 +156,14 @@ function publishedSnapshot(worktreeId: string, sessionId: string): RuntimeMobile
   }
 }
 
+function sends(): unknown[][] {
+  return mocks.callRuntimeRpc.mock.calls.filter((call) => call[1] === 'agentSession.send')
+}
+
+function composerDraft(sessionId: string): string {
+  return readNativeChatDraftCache(structuredAgentSessionDraftScopeKey(sessionId))
+}
+
 async function flushLaunchSettlement(): Promise<void> {
   for (let i = 0; i < 20; i += 1) {
     await Promise.resolve()
@@ -152,6 +176,8 @@ describe('startStructuredAgentLaunch', () => {
     localStorage.clear()
     resetStructuredAgentLaunchPersistenceForTests()
     resetStructuredAgentLaunchRegistryForTests()
+    resetStructuredAgentSessionSendsForTests()
+    clearNativeChatDraftCacheForTests()
     mocks.rendererTabs = {}
     mocks.listeners.clear()
     mocks.createIntent.mockImplementation((worktreeId: string, agent: 'claude' | 'codex') => {
@@ -171,6 +197,10 @@ describe('startStructuredAgentLaunch', () => {
     mocks.callStructuredAgentSession.mockResolvedValue({
       ok: true,
       page: { fence: 1 }
+    })
+    mocks.callRuntimeRpc.mockResolvedValue({
+      ok: true,
+      value: { submission: { dispatchState: 'accepted' } }
     })
   })
 
@@ -196,11 +226,9 @@ describe('startStructuredAgentLaunch', () => {
       text: 'PR #19423 — review this change',
       createdAt: expect.any(Number)
     })
-    expect(readOutbox(intent.sessionId)).toEqual([])
+    expect(hasStagedStructuredLaunchPrompt(intent.sessionId)).toBe(false)
     expect(launch.promptDeliveryResult).toBeUndefined()
-    expect(
-      mocks.callStructuredAgentSession.mock.calls.some((call) => call[1] === 'agentSession.send')
-    ).toBe(false)
+    expect(sends()).toHaveLength(0)
   })
 
   it('seeds a draft longer than the terminal mirror cap under the projected tab id', async () => {
@@ -226,7 +254,7 @@ describe('startStructuredAgentLaunch', () => {
       text: sixtyLineDraft,
       createdAt: expect.any(Number)
     })
-    expect(readOutbox(intent.sessionId)).toEqual([])
+    expect(hasStagedStructuredLaunchPrompt(intent.sessionId)).toBe(false)
   })
 
   it('preserves the draft seed when the launch is definitively refused', async () => {
@@ -445,10 +473,6 @@ describe('startStructuredAgentLaunch', () => {
       publishedSnapshot(worktreeId, intent.sessionId)
     ])
 
-    mocks.callStructuredAgentSession.mockResolvedValue({
-      ok: true,
-      value: { submission: { dispatchState: 'accepted' } }
-    })
     const first = startStructuredAgentLaunch(worktreeId, 'codex', {
       requestId: 'double-click',
       prompt: 'second prompt'
@@ -468,11 +492,9 @@ describe('startStructuredAgentLaunch', () => {
     await flushLaunchSettlement()
 
     expect(second.sessionId).toBe(first.sessionId)
-    expect(
-      mocks.callStructuredAgentSession.mock.calls.filter((call) => call[1] === 'agentSession.send')
-    ).toHaveLength(1)
+    expect(sends()).toHaveLength(1)
 
-    expect(mocks.callStructuredAgentSession).toHaveBeenCalledWith(
+    expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
       { kind: 'local' },
       'agentSession.send',
       expect.objectContaining({
@@ -494,7 +516,7 @@ describe('startStructuredAgentLaunch', () => {
       publishedSnapshot(worktreeId, intent.sessionId)
     ])
     // Every send waits, so a second send of the repeated text would show up below.
-    mocks.callStructuredAgentSession.mockImplementation(
+    mocks.callRuntimeRpc.mockImplementation(
       () => new Promise((resolve) => pendingSends.push(resolve))
     )
 
@@ -507,7 +529,7 @@ describe('startStructuredAgentLaunch', () => {
       prompt: 'second prompt'
     })
     resolveLaunch({ sessionId: intent.sessionId, fence: 1 })
-    await vi.waitFor(() => expect(mocks.callStructuredAgentSession).toHaveBeenCalledOnce())
+    await vi.waitFor(() => expect(mocks.callRuntimeRpc).toHaveBeenCalledOnce())
 
     const whileSending = startStructuredAgentLaunch(worktreeId, 'codex', {
       requestId: 'double-click',
@@ -526,7 +548,7 @@ describe('startStructuredAgentLaunch', () => {
         failureNotified: false
       })
     }
-    expect(mocks.callStructuredAgentSession).toHaveBeenCalledOnce()
+    expect(mocks.callRuntimeRpc).toHaveBeenCalledOnce()
   })
 
   it('opens a new chat for a new start while an earlier outcome is unknown', async () => {
@@ -549,11 +571,10 @@ describe('startStructuredAgentLaunch', () => {
 
     expect(mocks.createIntent).toHaveBeenCalledTimes(2)
     expect(second.sessionId).not.toBe(intent.sessionId)
-    expect(readOutbox(second.sessionId)).toEqual([
-      expect.objectContaining({
-        body: expect.objectContaining({ blocks: [{ type: 'text', text: 'second prompt' }] })
-      })
-    ])
+    await expect(second.launchResult).rejects.toThrow('offline')
+    // Each start's text waits in its own chat's composer.
+    expect(composerDraft(second.sessionId)).toBe('second prompt')
+    expect(composerDraft(intent.sessionId)).toBe('first prompt')
   })
 
   it('reconciles a host commit when the create reply is lost', async () => {
@@ -640,7 +661,7 @@ describe('startStructuredAgentLaunch', () => {
     expect(toast.error).not.toHaveBeenCalled()
   })
 
-  it('reuses the queued prompt without a second delivery after unknown recovery', async () => {
+  it("keeps the prompt in the chat's composer, unsent, through an unknown outcome's recovery", async () => {
     const worktreeId = 'wt-unknown-prompt-retry'
     const intent = launchIntent(worktreeId)
     mocks.createIntent.mockReturnValueOnce(intent)
@@ -662,16 +683,8 @@ describe('startStructuredAgentLaunch', () => {
     await flushLaunchSettlement()
     expect(getStructuredAgentSessionLaunchLifecycle(worktreeId, intent.sessionId)).toBeNull()
 
-    expect(readOutbox(intent.sessionId)).toEqual([
-      expect.objectContaining({
-        body: expect.objectContaining({ blocks: [{ type: 'text', text: 'only once' }] })
-      })
-    ])
-    expect(mocks.callStructuredAgentSession).not.toHaveBeenCalledWith(
-      { kind: 'local' },
-      'agentSession.send',
-      expect.anything()
-    )
+    expect(composerDraft(intent.sessionId)).toBe('only once')
+    expect(sends()).toHaveLength(0)
   })
 
   it('keeps a post-attach unknown outcome reserved for reconciliation', async () => {
@@ -783,32 +796,6 @@ describe('startStructuredAgentLaunch', () => {
     expect(mocks.retryIntent).toHaveBeenCalledWith(intent)
   })
 
-  it('preserves the launch identity when durable prompt staging refuses', async () => {
-    const worktreeId = 'wt-stage-refused'
-    const intent = launchIntent(worktreeId)
-    mocks.createIntent.mockReturnValueOnce(intent)
-    const storageFailure = vi.spyOn(localStorage, 'setItem').mockImplementationOnce(() => {
-      throw new Error('storage unavailable')
-    })
-
-    const result = startStructuredAgentLaunch(worktreeId, 'codex', {
-      requestId: 'request-30',
-      prompt: 'start this task'
-    })
-
-    await expect(result.launchResult).rejects.toBeInstanceOf(
-      StructuredAgentSessionCreateRefusalError
-    )
-    await expect(result.promptDeliveryResult).resolves.toEqual({
-      delivered: false,
-      failureNotified: true
-    })
-    expect(mocks.launch).not.toHaveBeenCalled()
-    expect(mocks.abandonIntent).not.toHaveBeenCalled()
-    expect(getStructuredAgentSessionLaunchLifecycle(worktreeId, intent.sessionId)).toBe('failed')
-    storageFailure.mockRestore()
-  })
-
   it("reports a repeated request's prompt as undelivered to both callers after refusal", async () => {
     const worktreeId = 'wt-refused-coalesced-prompts'
     const intent = launchIntent(worktreeId)
@@ -826,7 +813,7 @@ describe('startStructuredAgentLaunch', () => {
       requestId: 'double-click',
       prompt: 'first prompt'
     })
-    expect(readOutbox(intent.sessionId)).toHaveLength(1)
+    expect(hasStagedStructuredLaunchPrompt(intent.sessionId)).toBe(true)
 
     rejectLaunch(new StructuredAgentSessionCreateRefusalError('unsupported'))
     await expect(first.launchResult).rejects.toBeInstanceOf(
@@ -840,7 +827,9 @@ describe('startStructuredAgentLaunch', () => {
       delivered: false,
       failureNotified: true
     })
-    expect(readOutbox(intent.sessionId)).toHaveLength(1)
+    // The one staged text goes back to the chat's composer once.
+    expect(composerDraft(intent.sessionId)).toBe('first prompt')
+    expect(hasStagedStructuredLaunchPrompt(intent.sessionId)).toBe(false)
   })
 
   it('keeps a drafted chat out of a second action that sends the same text', async () => {
@@ -855,10 +844,6 @@ describe('startStructuredAgentLaunch', () => {
       publishedSnapshot(worktreeId, drafted.sessionId),
       publishedSnapshot(worktreeId, sent.sessionId)
     ])
-    mocks.callStructuredAgentSession.mockResolvedValue({
-      ok: true,
-      value: { submission: { dispatchState: 'accepted' } }
-    })
 
     startStructuredAgentLaunch(worktreeId, 'codex', {
       requestId: 'continue-click',
@@ -877,7 +862,10 @@ describe('startStructuredAgentLaunch', () => {
       delivered: true,
       failureNotified: false
     })
-    expect(readOutbox(drafted.sessionId)).toEqual([])
+    expect(hasStagedStructuredLaunchPrompt(drafted.sessionId)).toBe(false)
+    expect(sends().map((call) => call[2])).toEqual([
+      expect.objectContaining({ envelope: expect.objectContaining({ sessionId: sent.sessionId }) })
+    ])
     expect(mocks.seedDraft).toHaveBeenCalledOnce()
     expect(mocks.seedDraft).toHaveBeenCalledWith(
       expect.objectContaining({

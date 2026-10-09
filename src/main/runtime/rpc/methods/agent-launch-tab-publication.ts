@@ -43,9 +43,8 @@ import {
   decideAgentLaunchMode,
   readAgentLaunchModeSettings
 } from '../../../agent-launch/agent-launch-mode'
-import { deriveAgentLaunchTerminalViewMode } from '../../../agent-launch/agent-launch-view-mode'
 import type { RpcContext } from '../core'
-import type { AgentLaunchParams } from './agent-launch-schemas'
+import type { AgentLaunchParams } from '../../../../shared/rpc-contract/agent-launch-params'
 import { agentLaunchOperationCallerKey } from './agent-launch-replay'
 
 /** Whether a launch may move the host window at all: a paired device's launch moves only its own
@@ -199,12 +198,7 @@ export async function publishAgentLaunchTabEarly(
       tabId: pane.tabId,
       leafId: pane.leafId,
       launchAgent: params.agent,
-      viewMode: deriveAgentLaunchTerminalViewMode({
-        settings,
-        agent: params.agent,
-        ...(params.prompt ? { prompt: params.prompt } : {}),
-        connectionId: workspace.connectionId
-      }),
+      viewMode: 'terminal',
       ...(params.placement ? { placement: params.placement } : {}),
       viewer: agentLaunchTabViewerRule(context, params.presentation),
       ...(params.prompt?.text ? { prompt: params.prompt.text } : {}),

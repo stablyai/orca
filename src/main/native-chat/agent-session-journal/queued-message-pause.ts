@@ -3,14 +3,15 @@
 //   - 'stopped': the latest Stop event is a person's (reason `user-stop`), with no later Resume row
 //     and no turn sent after it and accepted. A later Stop of any reason supersedes it; only a
 //     person's pauses.
-//   - 'cleared': a card /clear carried into this conversation waits, and no turn or Resume has
-//     happened here since.
-//   - 'restarted': a waiting card with no hold of its own was written by another host process,
-//     and no turn has started since this conversation opened. Never published: after a restart
-//     nothing sends by itself, and the next turn (the carry-on or the person's own message) runs
-//     first.
+//   - 'cleared': a card named by the latest clear mark waits, with no later accepted turn or Resume.
+//   - 'restarted': a card queued before this conversation last opened waits — Orca quit or
+//     crashed, or the chat closed, while it waited — and no turn or Resume has happened since the
+//     open. The open marks itself with a row when it finds waiting cards (`queueReopen`), so a card
+//     queued after it is never mistaken for one from before. Never published: nothing sends by
+//     itself, and the next turn (the carry-on or the person's own message) runs first.
 // Any accepted turn lifts them, whoever sent it: a person, Orca's own messages, or the queue.
-// A card held on its own (`hold_reason`) is outside every pause: only an action on it releases it.
+// A card held on its own (`hold_reason`, a failed conversion) is outside every pause: only an
+// action on it releases it.
 
 import type {
   AgentJournalCursor,
@@ -33,29 +34,33 @@ export type JournalStopSettle = {
 
 export type JournalStopFailedOn = { turnId: string } | { openedAfter: number }
 
-/** The latest Stop event, whatever its reason, and the latest Resume row, folded by the reducer. */
+/** The latest Stop event, whatever its reason, the latest Resume row and the latest reopen mark,
+ *  folded by the reducer. */
 export type JournalQueuePauseMarks = {
+  cleared?: { sequence: number; operationId: string; messageIds: readonly string[]; lifted?: true }
   latestStop: { sequence: number; event: JournalStopEvent; settle?: JournalStopSettle } | null
   /** 0 when none. */
   resumedSequence: number
+  /** 0 when none. */
+  reopenedSequence: number
 }
 
 export type DerivedQueuePause = {
   reason: QueuePauseReason
-  /** Where a Stop's pause began: a card queued at or after it is newer. Null for the others. */
+  /** Where the pause began; clear holds its exact recorded message IDs. */
   since: AgentJournalCursor | null
+  messageIds?: readonly string[]
 }
 
 type QueueCard = {
+  messageId?: string
   state: string
   holdReason: string | null
-  hostInstance: string
-  carriedFrom: string | null
   queuedAt: AgentJournalCursor | null
 }
 
 export function createJournalQueuePauseMarks(): JournalQueuePauseMarks {
-  return { latestStop: null, resumedSequence: 0 }
+  return { latestStop: null, resumedSequence: 0, reopenedSequence: 0 }
 }
 
 /** The keys are read from disk unchecked: a value no build writes (a corrupt row) is ignored. */
@@ -79,7 +84,30 @@ export function foldJournalQueuePauseMark(
     marks.latestStop = { sequence: row.seq, event: row.stopEvent }
   } else if (row.queueResume === true) {
     marks.resumedSequence = row.seq
+  } else if (row.queueReopen === true) {
+    // Never earlier than a mark before it: a late mark of one send narrows no wider one.
+    const since = row.queueReopenSince
+    const start = typeof since === 'number' && since > 0 && since <= row.seq ? since : row.seq
+    marks.reopenedSequence = Math.max(marks.reopenedSequence, start)
+  } else if (isReadableQueueClear(row.queueClear)) {
+    marks.cleared = { ...row.queueClear, sequence: row.seq }
   }
+}
+
+function isReadableQueueClear(
+  value: unknown
+): value is NonNullable<JournalTombstoneRow['queueClear']> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'operationId' in value &&
+    typeof value.operationId === 'string' &&
+    value.operationId.length > 0 &&
+    'messageIds' in value &&
+    Array.isArray(value.messageIds) &&
+    value.messageIds.every((id: unknown) => typeof id === 'string' && id.length > 0) &&
+    (!('lifted' in value) || value.lifted === true)
+  )
 }
 
 /** A person's Stop still pauses: it is the latest Stop, and no turn accepted since, and no
@@ -103,20 +131,36 @@ export function journalUserStopInForce(
 }
 
 /** What a rewind's new epoch restates so its pauses read as they did: a lift of /clear's pause (a
- *  turn or a Resume happened), then the Stop still in force, in that order so the lift
- *  never ends the Stop. */
+ *  turn or a Resume happened), then the Stop still in force, then the reopen's pause still holding
+ *  a card, in that order so the lift never ends either. */
 export type JournalQueuePauseRestatement = {
   lifted: boolean
   liveStop: JournalStopEvent | null
+  reopened: boolean
+  cleared?: { operationId: string; messageIds: string[]; lifted?: true }
 }
 
 export function journalQueuePauseRestatement(
   marks: JournalQueuePauseMarks,
-  latestAcceptedTurnSequence: number
+  latestAcceptedTurnSequence: number,
+  pauses: readonly DerivedQueuePause[]
 ): JournalQueuePauseRestatement {
   return {
     lifted: latestAcceptedTurnSequence > 0 || marks.resumedSequence > 0,
-    liveStop: journalUserStopInForce(marks, latestAcceptedTurnSequence)?.event ?? null
+    liveStop: journalUserStopInForce(marks, latestAcceptedTurnSequence)?.event ?? null,
+    reopened: pauses.some((pause) => pause.reason === 'restarted'),
+    ...(marks.cleared
+      ? {
+          cleared: {
+            operationId: marks.cleared.operationId,
+            messageIds: [...(pauses.find((pause) => pause.reason === 'cleared')?.messageIds ?? [])],
+            ...(marks.cleared.lifted ||
+            Math.max(latestAcceptedTurnSequence, marks.resumedSequence) >= marks.cleared.sequence
+              ? { lifted: true as const }
+              : {})
+          }
+        }
+      : {})
   }
 }
 
@@ -127,9 +171,8 @@ export function deriveQueuePauses(input: {
   marks: JournalQueuePauseMarks
   latestAcceptedTurnSequence: number
   cards: readonly QueueCard[]
-  hostInstance: string
-  /** A turn started since this conversation opened. */
-  restartEnded: boolean
+  /** Where the reopen's pause begins when this handle could not mark it; null otherwise. */
+  reopenFloor: AgentJournalCursor | null
 }): DerivedQueuePause[] {
   const { epoch, marks, latestAcceptedTurnSequence } = input
   const pauses: DerivedQueuePause[] = []
@@ -138,27 +181,56 @@ export function deriveQueuePauses(input: {
     pauses.push({ reason: 'stopped', since: { epoch, sequence: stop.sequence } })
   }
   const waiting = input.cards.filter((card) => card.state === 'waiting')
-  const carried = waiting.filter((card) => card.carriedFrom !== null)
-  if (carried.length > 0 && latestAcceptedTurnSequence === 0 && marks.resumedSequence === 0) {
-    pauses.push({ reason: 'cleared', since: null })
+  const cleared = marks.cleared
+  if (
+    cleared &&
+    !cleared.lifted &&
+    cleared.sequence > Math.max(latestAcceptedTurnSequence, marks.resumedSequence)
+  ) {
+    const membership = new Set(cleared.messageIds)
+    const messageIds = waiting.flatMap((card) =>
+      card.messageId && membership.has(card.messageId) ? [card.messageId] : []
+    )
+    if (messageIds.length > 0) {
+      pauses.push({ reason: 'cleared', since: { epoch, sequence: cleared.sequence }, messageIds })
+    }
   }
-  // A card held on its own waits for its own Send whoever wrote it, so it pauses nothing else.
-  const foreign = waiting.some(
-    (card) => card.holdReason === null && card.hostInstance !== input.hostInstance
-  )
-  if (!input.restartEnded && foreign) {
-    // The process that wrote a card is gone: every card waits, whenever it was written.
-    pauses.push({ reason: 'restarted', since: null })
+  const reopened = reopenPause(input)
+  if (
+    reopened &&
+    waiting.some((card) => card.holdReason === null && queuedBefore(reopened, card))
+  ) {
+    pauses.push(reopened)
   }
   return pauses
 }
 
-/** Queued before the pause began: for /clear, a card it carried; for a restart, every card. For a
- *  Stop, a card queued before its row; one from another epoch (before a rewind) or from a build
- *  that recorded no position counts as before. A withdrawn steer keeps its position, so is held. */
-function queuedBeforePause(pause: DerivedQueuePause, card: QueueCard): boolean {
+/** Where the latest reopen began: its mark, or, when this handle could not write one, the open
+ *  itself, so a failed write holds a little more and never sends anything by itself. A floor from
+ *  another epoch is not this one's (a rewind restates the mark). Null once a turn or a Resume came
+ *  after it. */
+function reopenPause(input: {
+  epoch: string
+  marks: JournalQueuePauseMarks
+  latestAcceptedTurnSequence: number
+  reopenFloor: AgentJournalCursor | null
+}): DerivedQueuePause | null {
+  const { epoch, marks, reopenFloor } = input
+  const floor = reopenFloor?.epoch === epoch ? reopenFloor.sequence : 0
+  const sequence = Math.max(marks.reopenedSequence, floor)
+  if (sequence === 0) {
+    return null
+  }
+  if (Math.max(input.latestAcceptedTurnSequence, marks.resumedSequence) >= sequence) {
+    return null
+  }
+  return { reason: 'restarted', since: { epoch, sequence } }
+}
+
+/** Clear holds recorded IDs; other pauses compare queued positions within the journal epoch. */
+function queuedBefore(pause: DerivedQueuePause, card: QueueCard): boolean {
   if (pause.reason === 'cleared') {
-    return card.carriedFrom !== null
+    return pause.messageIds?.includes(card.messageId ?? '') ?? false
   }
   const { since } = pause
   return (
@@ -180,7 +252,7 @@ export function queuePauseHolding(
     return undefined
   }
   // A card queued AFTER a Stop is a new instruction and is not held; it still waits behind a held one.
-  return pauses.find((pause) => queuedBeforePause(pause, card))
+  return pauses.find((pause) => queuedBefore(pause, card))
 }
 
 /** The card the queue sends next: the oldest waiting one with no hold of its own, unless a

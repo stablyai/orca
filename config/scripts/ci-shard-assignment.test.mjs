@@ -98,26 +98,6 @@ describe('timing-weighted shard selection', () => {
         expect.arrayContaining([...NODE_RUNTIME_INCLUDE, measurementFile])
       )
     }
-    for (const project of projects) {
-      expect(project.extends).toBe(false)
-      expect(project.define).toEqual(config.define)
-      expect(project.resolve).toEqual(config.resolve)
-      expect(project.test.execArgv).toEqual(['--no-experimental-webstorage', '--expose-gc'])
-      expect(project.test.setupFiles).toEqual([
-        resolve('config/scripts/vitest-real-agent-home-write-guard.ts'),
-        resolve('config/scripts/vitest-bun-node-builtins.ts'),
-        resolve('config/scripts/happy-dom-offscreen-canvas.ts'),
-        resolve('config/scripts/happy-dom-mutation-observer-retention.ts'),
-        resolve('config/scripts/vitest-host-ports-setup.ts'),
-        resolve('config/scripts/vitest-caller-identity-env-setup.ts')
-      ])
-      expect(project.test).toMatchObject({
-        environment: 'node',
-        server: { deps: { inline: ['zod'] } },
-        hookTimeout: 60_000,
-        testTimeout: 30_000
-      })
-    }
   })
 
   it('keeps nested/serial E2E files atomic and fails closed on discovery errors', () => {

@@ -31,9 +31,8 @@ export function getAgentResumeArgv(
     case 'opencode':
       return providerSession.key === 'session_id' ? ['opencode', '--session', id] : null
     case 'opencode2':
-      return providerSession.key === 'session_id'
-        ? ['opencode2', '--standalone', '--session', id]
-        : null
+      // Why: the launch command owns standalone/shared mode, including user overrides.
+      return providerSession.key === 'session_id' ? ['opencode2', '--session', id] : null
     case 'pi':
       return providerSession.key === 'session_id' && providerSession.transcriptPath
         ? ['pi', '--session', providerSession.transcriptPath]
@@ -76,5 +75,22 @@ export function getAgentResumeArgv(
       return providerSession.key === 'session_id' ? ['dsh-tui', '--resume', id] : null
     case 'jcode':
       return providerSession.key === 'session_id' ? ['jcode', '--resume', id] : null
+    case 'kiro':
+      return providerSession.key === 'session_id' ? ['kiro-cli', '--resume-id', id] : null
   }
+}
+
+/** Opens a copy of the conversation under a new id, leaving the original untouched. Only the two
+ *  agents native chat can own a conversation for, which is the only case that needs a fork. */
+export function getAgentForkArgv(
+  agent: ResumableTuiAgent,
+  providerSession: AgentProviderSessionMetadata
+): string[] | null {
+  if (providerSession.key !== 'session_id') {
+    return null
+  }
+  if (agent === 'claude') {
+    return ['claude', '--resume', providerSession.id, '--fork-session']
+  }
+  return agent === 'codex' ? ['codex', 'fork', providerSession.id] : null
 }

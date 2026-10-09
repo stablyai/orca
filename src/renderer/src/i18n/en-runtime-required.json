@@ -1704,7 +1704,10 @@
             "d23ae13990": "worktree",
             "f082788cfe": "links",
             "fa72e71f05": "agents",
-            "fe5688b761": "sidebar"
+            "fe5688b761": "sidebar",
+            "nativeChat": {
+              "description": "Open supported new agents in Chat UI."
+            }
           }
         },
         "general": {
@@ -1807,6 +1810,12 @@
             "62826efbe9": "Add a new remote SSH target.",
             "74c6d90d78": "Manage remote SSH targets."
           }
+        },
+        "sshHostServer": {
+          "terminalsElsewhere_one": "Runs the relay while {{count}} terminal another Orca desktop or session opened on this host is running.",
+          "terminalsElsewhere_other": "Runs the relay while {{count}} terminals another Orca desktop or session opened on this host are running.",
+          "terminalsLive_one": "Runs the relay until its {{count}} open terminal is closed, then moves to a managed server.",
+          "terminalsLive_other": "Runs the relay until its {{count}} open terminals are closed, then moves to a managed server."
         },
         "terminal": {
           "windows": {
@@ -1989,6 +1998,22 @@
           "34f733dda2": "Go to Worktree",
           "3e5f66564e": "Workspace unavailable"
         },
+        "WorktreeIssueLinkField": {
+          "0a7a2c6efd": "Not a GitHub issue number or issue URL.",
+          "161b2d053a": "Open linked issue",
+          "25852bfc59": "Linear",
+          "269198eeda": "Couldn't open that issue. Check the number and your GitHub connection.",
+          "2c245ac134": "Saving unlinks {{link}} — a workspace tracks one issue.",
+          "5b440069e6": "GitHub",
+          "662ae142f8": "Issue #, or a GitHub or Linear URL",
+          "72486800ff": "Saving unlinks {{first}} and {{second}} — a workspace tracks one issue.",
+          "929c98d05a": "Issue provider",
+          "964d9bc00a": "Not a Linear issue key or linear.app issue URL.",
+          "ad78f9bee2": "Issue",
+          "d4785f9954": "Issue links are set when a folder workspace is created and can't be changed here yet.",
+          "d8c8a30d1f": "Couldn't open that issue. Check the identifier and your Linear connection.",
+          "f047887705": "Paste a GitHub or Linear URL, or enter a number. Leave blank to remove the link."
+        },
         "WorktreeList": {
           "2ca6e29a3c": "repo",
           "45fbfe0335": "rename",
@@ -1999,10 +2024,23 @@
         },
         "WorktreeMetaDialog": {
           "029ea5ec57": "Open GitHub issue",
+          "077a4f7b5c": "PR # or GitHub URL",
+          "1b91db7e14": "GH PR",
+          "382fd11a3e": "Edit Worktree Details",
+          "459ad7f650": "Only changes the name shown in the sidebar — the folder on disk stays the same. Leave blank to use the branch or folder name.",
+          "5ae06f40fd": "Paste a pull request URL, or enter a number. Leave blank to remove the link.",
           "645fa4a0fd": "GH Issue",
           "65770ad0f0": "Edit GitHub links and notes for this workspace.",
           "741279e7b7": "Issue # or GitHub URL",
-          "7c454be4c5": "Paste an issue URL, or enter a number. Leave blank to remove the link."
+          "7c454be4c5": "Paste an issue URL, or enter a number. Leave blank to remove the link.",
+          "7f0be5e9a6": "Supports **markdown** — bold, lists, `code`, links. Press Enter or",
+          "9c1d1e9b71": "Comment",
+          "a0d191b7a7": "Edit issue links, pull request links, and notes for this workspace.",
+          "b48c271d39": "to save, Shift+Enter for a new line.",
+          "gitlabDescription": "Edit issue links, merge request links, and notes for this workspace.",
+          "gitlabHelp": "Paste a merge request URL, or enter a number. Leave blank to remove the link.",
+          "gitlabMR": "GitLab MR",
+          "gitlabPlaceholder": "MR ! or GitLab URL"
         },
         "WorktreeOpenInMenu": {
           "3ec372b664": "file-manager"
@@ -2055,6 +2093,10 @@
               }
             }
           }
+        },
+        "worktreeIssueDisplacement": {
+          "3f61c0a8d2": "Linear {{value}}",
+          "9c4b7e1f60": "GitHub #{{value}}"
         }
       },
       "skills": {
@@ -2529,9 +2571,6 @@
             "ptyAllocationLimit": "Your system cannot allocate any more pty devices. Close some terminals you are not using, in Orca or another program, then try again.",
             "terminalProcessLimit": "Your system cannot start another terminal process. Close unused terminals or quit unused processes, then try again."
           },
-          "TerminalRemoteRuntimeReconnectBanner": {
-            "retryingBody": "Orca will retry for up to one minute. This terminal will resume if the connection returns."
-          },
           "TerminalSessionStateSaveFailureDialog": {
             "678c780a2c": "Disk space is unavailable",
             "e2fcf07c0d": "Orca could not save this terminal session because local storage is full or not writable. Open the disk space analyzer to find workspace storage you can clean up."
@@ -2712,16 +2751,28 @@
         "timedOut": "Timed out loading check details."
       }
     },
+    "ssh": {
+      "managedServerMove": {
+        "offer_one": "Move {{host}} to a managed Orca server for more reliable connections. Its {{count}} open terminal will restart.",
+        "offer_other": "Move {{host}} to a managed Orca server for more reliable connections. Its {{count}} open terminals will restart.",
+        "refusedLive_one": "Not moved: {{count}} terminal on {{host}} is still running.",
+        "refusedLive_other": "Not moved: {{count}} terminals on {{host}} are still running.",
+        "refusedUnverifiable_one": "Not moved: Orca couldn’t confirm that {{count}} terminal on {{host}} stopped.",
+        "refusedUnverifiable_other": "Not moved: Orca couldn’t confirm that {{count}} terminals on {{host}} stopped."
+      }
+    },
     "store": {
       "slices": {
         "settings": {
           "faa8fb83dd": "Save or close unsaved editor tabs before switching servers."
         },
         "worktrees": {
+          "19db0085fb": "Local branch deleted",
           "2b0afc7f14": "Could not keep local {{value0}} up to date",
           "34a03a6565": "Keep {{value0}} up to date",
           "4a18052018": "Local {{value0}} is behind {{value1}}",
           "4e6496f3d2": "{{value0}} deleted, branch kept",
+          "5a58e03a26": "Deleted \"{{value0}}\".",
           "670864ab52": "Keeping local {{value0}} up to date",
           "889487d8bb": "Dismiss",
           "d1d78a7baa": "Git could not safely delete branch \"{{value0}}\"{{value1}}, so Orca kept it to avoid losing local commits.",
@@ -2750,12 +2801,60 @@
         "awaitingUnnamed": "Awaiting user input",
         "questionCount": "{{value0}} questions"
       },
+      "backgroundTasks": {
+        "agent": "Background agent",
+        "command": "Background command",
+        "countAgentsMany": "{{value0}} agents",
+        "countAgentsOne": "1 agent",
+        "countMonitorsMany": "{{value0}} monitors",
+        "countMonitorsOne": "1 monitor",
+        "countShellCommandOne": "1 shell command",
+        "countShellMany": "{{value0}} shells",
+        "countShellOne": "1 shell",
+        "countTasksMany": "{{value0}} tasks",
+        "countTasksOne": "1 task",
+        "countWorkflowsMany": "{{value0}} workflows",
+        "countWorkflowsOne": "1 workflow",
+        "detailsUnavailable": "Task details are unavailable for this session.",
+        "groupAgents": "Agents",
+        "groupMonitors": "Monitors",
+        "groupShell": "Shell",
+        "groupTasks": "Tasks",
+        "groupWorkflows": "Workflows",
+        "headerTotal": "{{value0}} background tasks",
+        "monitor": "Background monitor",
+        "monitoring": "Monitoring background tasks",
+        "reasonBlocked": "failed",
+        "reasonWaiting": "needs approval",
+        "stateBlocked": "blocked",
+        "stateBlockedCount": "{{value0}} blocked",
+        "stateDone": "done",
+        "stateDoneCount": "{{value0}} done",
+        "stateIdle": "stopped",
+        "stateIdleCount": "{{value0}} stopped",
+        "stateMonitoring": "monitoring",
+        "stateMonitoringCount": "{{value0}} monitoring",
+        "stateUnverifiable": "status unavailable",
+        "stateUnverifiableCount": "{{value0}} with status unavailable",
+        "stateWaiting": "waiting",
+        "stateWaitingCount": "{{value0}} waiting",
+        "stateWorking": "working",
+        "stateWorkingCount": "{{value0}} working",
+        "stop": "Stop",
+        "stopAll": "Stop background tasks",
+        "stopTask": "Stop {{value0}}",
+        "task": "Background task",
+        "workflow": "Background workflow"
+      },
       "composer": {
         "effort": "Effort",
         "imageUnsupported": "Image paste is not supported for this agent."
       },
       "failureWords": {
         "accountSwitchInProgress": "A Claude account switch is in progress. Try again after it finishes.",
+        "agentCommandNotRunnable": "{{agent}}'s Command in Settings → Agents must be a program path or name Orca can find, with no arguments or variables. Change it or reset it.",
+        "agentCommandNotSignedIn": "Sign in to {{agent}} with `{{loginCommand}}` on the computer running this chat.",
+        "agentNotSignedIn": "Sign in to {{agent}}.",
         "answerUnconfirmed": "Your answer was recorded but the agent did not confirm it.",
         "argumentsMissingValue": "Saved Arguments need a value for {{option}}.",
         "argumentsMultipleValues": "Saved Arguments give {{option}} more than one value.",
@@ -2779,6 +2878,14 @@
         "chooseClaudeAccount": "Choose or add one in Claude Accounts settings.",
         "chooseClaudeAccountThenRunCommand": "Choose or add one in Claude Accounts settings, then run /{{command}} again.",
         "chooseClaudeAccountThenSend": "Choose or add one in Claude Accounts settings, then send your message again.",
+        "claudeAccountFolderMissing": "The selected Claude account's folder is missing. Sign in to it again or choose another account.",
+        "claudeAccountSetupFailed": "The selected Claude account could not be set up. Try again or choose another account.",
+        "claudeManagedNotSignedIn": "This Claude account isn't signed in. Sign in again in Claude Accounts settings.",
+        "claudeSystemNotSignedIn": "Claude isn't signed in. Run `{{loginCommand}}`, or choose an account in Claude Accounts settings.",
+        "cliMissing": "{{agent}} wasn't found on the computer running this chat. Install it, or check its Command in Settings → Agents.",
+        "codexManagedNotSignedIn": "This Codex account isn't signed in. Sign in again in Codex Accounts settings.",
+        "codexSystemNotSignedIn": "Codex isn't signed in. Run `{{loginCommand}}`.",
+        "commandAfterAnswer": "Answer the agent's question or approval, then run /{{command}}.",
         "commandRefused": "This command didn't run.",
         "commandRefusedTryAgain": "This command didn't run. Try it again.",
         "compactionFailed": "Compaction failed.",
@@ -2788,43 +2895,45 @@
         "couldNotStart": "{{agent}} couldn't start.",
         "editSavedArguments": "Edit them in Settings > Agents > Arguments.",
         "emptyMessage": "This message is empty, so it was not sent.",
+        "historyInOtherAccount": "This chat's history is in another Claude account. Switch back to that account to continue it.",
         "historyTooLarge": "This conversation's history is too large to restore here.",
         "hostFault": "Orca ran into a problem, so this didn't go through.",
         "hostFaultTryAgain": "Orca ran into a problem, so this didn't go through. Try again.",
         "hostRestarted": "Orca restarted before this message was sent.",
         "hostStopped": "{{agent}} never finished starting, so Orca stopped it.",
+        "interactiveAgentNotSignedIn": "Sign in to {{agent}} by running `{{loginCommand}}` and using `{{slashCommand}}` on the computer running this chat.",
+        "launchFolderMissing": "The folder this chat ran in no longer exists. Restore it to continue this chat.",
         "managedAccountEnvOverride": "This Claude launch sets its own Anthropic sign-in variables. Remove them to use a managed Claude account.",
         "managedAccountUnsupported": "While a Claude account is added in WSL, Claude chats need a Windows Claude account.",
-        "launchFolderMissing": "The folder this chat ran in no longer exists. Restore it to continue this chat.",
-        "historyInOtherAccount": "This chat's history is in another Claude account. Switch back to that account to continue it.",
-        "agentCommandNotRunnable": "{{agent}}'s Command in Settings → Agents must be a program path or name Orca can find, with no arguments or variables. Change it or reset it.",
         "noTurnToStop": "{{agent}} had no turn running to stop.",
         "notDelivered": "This message was not delivered.",
         "notDeliveredSendAgain": "This message was not delivered. Send it again to continue.",
-        "notSignedIn": "{{agent}} is not signed in for the selected account.",
+        "notSignedIn": "{{agent}} is not signed in.",
         "previousExitUnverifiable": "Couldn't stop {{agent}} from before.",
-        "sessionNotRestored": "{{agent}} couldn't reopen its earlier session, so this chat continues in a new one. {{agent}} doesn't remember the earlier messages.",
         "providerExitedRejection": "{{agent}} stopped before this message was sent.",
         "providerExitedRow": "{{agent}} stopped while this response was in progress. You can continue in this conversation.",
         "providerRateLimited": "{{agent}} is rate-limited and retrying.",
         "providerRejected": "The provider did not accept this message.",
         "providerRejectedQuoted": "The provider did not accept this message: {{detail}}.",
-        "providerRetrying": "{{agent}} hit a temporary problem and is retrying.",
-        "providerRetryingQuoted": "{{agent}} is retrying: {{detail}}.",
+        "providerRetryLastError": "Last error: {{detail}}.",
         "providerRetryNumber": "Retry {{attempt}}.",
         "providerRetryNumberOf": "Retry {{attempt}} of {{maxRetries}}.",
-        "providerRetryLastError": "Last error: {{detail}}.",
+        "providerRetrying": "{{agent}} hit a temporary problem and is retrying.",
+        "providerRetryingQuoted": "{{agent}} is retrying: {{detail}}.",
         "providerStartFailed": "{{agent}} stopped before it finished starting.",
         "queueFull": "Too many messages were waiting for the agent, so this one was not sent.",
         "runCommandAgain": "Run /{{command}} again.",
+        "runCommandWhenDone": "Run /{{command}} when it's done.",
         "sendAgainToTryOnceMore": "Send your message again to try once more.",
         "sendToTryAgain": "Send your message to try again.",
+        "sessionNotRestored": "{{agent}} couldn't reopen its earlier session, so this chat continues in a new one. {{agent}} doesn't remember the earlier messages.",
         "signInFirst": "Sign in first.",
         "signInThenRunCommand": "Sign in, then run /{{command}} again.",
         "signInThenSend": "Sign in, then send your message again.",
         "stopRefused": "{{agent}} didn't stop.",
         "stopRefusedQuoted": "{{agent}} didn't stop: {{detail}}.",
         "theAgent": "The agent",
+        "thenSendAgain": "Then send your message again.",
         "writeFailed": "Orca couldn't hand this message to the agent, so it was not sent."
       },
       "notices": {
@@ -2866,6 +2975,26 @@
         "workedFor": "Worked for {{value0}}",
         "workingFor": "Working for {{value0}}"
       },
+      "subagents": {
+        "ranN": "Ran {{value0}} subagents",
+        "ranOne": "Ran 1 subagent",
+        "startedN": "Kicked off {{value0}} subagents",
+        "startedOne": "Kicked off 1 subagent",
+        "state": {
+          "completed": "completed",
+          "failed": "failed",
+          "failedCount": "{{value0}} failed",
+          "idle": "idle",
+          "idleCount": "{{value0}} idle",
+          "stopped": "stopped",
+          "stoppedCount": "{{value0}} stopped",
+          "unverifiable": "status unavailable",
+          "unverifiableCount": "{{value0}} with status unavailable",
+          "working": "working",
+          "workingCount": "{{value0}} working"
+        },
+        "tokens": "{{value0}} tokens"
+      },
       "tool": {
         "countN": "{{value0}} tool calls",
         "countOne": "1 tool call",
@@ -2889,13 +3018,22 @@
       "writeNotice": {
         "agentRefused": "The agent turned this down.",
         "agentStarting": "The agent is still starting.",
+        "agentStillWorking": "The agent is still working.",
         "answerFirst": "Answer the question or approval first.",
+        "attachmentExpired": "This attachment expired.",
         "backgroundTasksRunning": "Background tasks are still running.",
-        "capacity": "Orca has received too many requests in the last day.",
+        "cannotRunHere": "Orca can't run this agent in a chat here.",
+        "capacity": "Orca on the computer running this chat has hit a request limit. Update Orca there, then try again.",
         "chatNotFound": "Orca can't find this chat.",
         "chatSavedByNewerOrca": "This chat was saved by a newer Orca.",
+        "clearAfterAnswer": "Answer the agent's question or approval, then run /clear.",
+        "clearAfterRetry": "Retry your earlier message, then run /clear.",
+        "clearAfterSending": "Your earlier message is still being sent. Run /clear once it has gone.",
         "clearUnfinished": "The last /clear didn't finish.",
         "commandRunning": "A /compact or /clear is still running.",
+        "compactAfterAnswer": "Answer the agent's question or approval, then run /compact.",
+        "compactAfterRetry": "Retry your earlier message, then run /compact.",
+        "compactAfterSending": "Your earlier message is still being sent. Run /compact once it has gone.",
         "conversationCleared": "This conversation has been cleared.",
         "goalsUnsupported": "This agent doesn't support goals.",
         "historyUnavailable": "Orca couldn't open this chat's history right now.",
@@ -2905,7 +3043,6 @@
         "messageNotSaved": "Couldn't save your message.",
         "messagesUnsettled": "A message you sent earlier isn't confirmed yet.",
         "notAvailable": "This isn't available in this chat.",
-        "cannotRunHere": "Orca can't run this agent in a chat here.",
         "notDoneAnswer": "Your answer was not sent.",
         "notDoneCommand": "The command didn't run.",
         "notDoneGoal": "The goal wasn't changed.",
@@ -2921,14 +3058,19 @@
         "ownerUnproven": "The previous agent in this chat may still be running.",
         "promptPending": "The agent is waiting for an answer to a question or approval.",
         "questionChanged": "This question was already answered or has changed.",
+        "queueTooLarge": "Too much text is waiting in the queue.",
         "quitTerminalAgent": "Quit that agent to continue the chat here.",
+        "reattachFile": "Remove it and attach it again.",
         "recordFailed": "Orca couldn't save this to the chat's history.",
         "recordUnreadable": "Orca couldn't read this chat's saved state.",
         "reopenChat": "Reopen the chat to check again.",
         "restartFailed": "The agent couldn't restart.",
+        "runClearWhenDone": "Run /clear when it's done.",
+        "runCompactWhenDone": "Run /compact when it's done.",
         "savedByNewerOrca": "Chats were saved by a newer Orca.",
         "sendOutcomeLost": "Orca couldn't confirm your message reached the agent. Check the chat, then send it again if needed.",
         "settleEarlierMessage": "Wait for your earlier message to go through, or retry it.",
+        "shrinkQueue": "Delete a queued message, or wait for one to go through, then try again.",
         "startNewChat": "Start a new chat to continue.",
         "terminalAgentHoldsChat": "This chat is still open in a terminal agent.",
         "tryAgain": "Try again.",
@@ -3008,6 +3150,9 @@
       "viewOnly": "Sparse checkout · View changes do not change checked-out files.",
       "viewing": "Viewing: {{path}}"
     }
+  },
+  "menu": {
+    "quitApp": "Quit {{appName}}"
   },
   "runtimeRpc": {
     "startupFailure": {

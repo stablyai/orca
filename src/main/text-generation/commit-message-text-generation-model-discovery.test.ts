@@ -392,7 +392,12 @@ describe('discoverCommitMessageModelsLocal on the Windows direct-child path', ()
       )
       child.emit('close', 127)
 
-      await expect(pending).resolves.toEqual({ success: false, error })
+      await expect(pending).resolves.toEqual({
+        success: false,
+        error,
+        // A missing binary is typed so the catalog can say the CLI is not installed.
+        ...(errno === 'ENOENT' ? { unavailable: { reason: 'cliMissing' } } : {})
+      })
     }
   )
 
@@ -406,7 +411,11 @@ describe('discoverCommitMessageModelsLocal on the Windows direct-child path', ()
     const pending = discoverCommitMessageModelsLocal('claude', undefined)
     child.emit('error', spawnError(errno))
 
-    await expect(pending).resolves.toEqual({ success: false, error })
+    await expect(pending).resolves.toEqual({
+      success: false,
+      error,
+      ...(errno === 'ENOENT' ? { unavailable: { reason: 'cliMissing' } } : {})
+    })
   })
 
   it('settles and detaches model discovery when timeout kill is ignored', async () => {

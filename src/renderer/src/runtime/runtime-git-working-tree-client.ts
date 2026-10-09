@@ -1,3 +1,7 @@
+import {
+  requireGitStageWorktreeScopeReceipt,
+  type GitStageWorktreeScope
+} from '../../../shared/git-stage-worktree-scope'
 import { resolveLocalWorktreePath, type RuntimeGitContext } from './runtime-git-client-context'
 import { callRuntimeRpc, getActiveRuntimeTarget } from './runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
@@ -42,6 +46,31 @@ export async function bulkStageRuntimeGitPaths(
     { worktree: toRuntimeWorktreeSelector(context.worktreeId), filePaths },
     { timeoutMs: 15_000 }
   )
+}
+
+/** Stage every change the host sees, for a capped listing that cannot name them all. */
+export async function stageRuntimeGitWorktreeScope(
+  context: RuntimeGitContext,
+  scope: GitStageWorktreeScope
+): Promise<void> {
+  const target = getActiveRuntimeTarget(context.settings)
+  // Why no paths: an older host strips `scope` and stages `filePaths`, so an empty list makes that a no-op.
+  if (target.kind === 'local' || !context.worktreeId) {
+    await window.api.git.bulkStage({
+      worktreePath: resolveLocalWorktreePath(context),
+      filePaths: [],
+      connectionId: context.connectionId,
+      scope
+    })
+    return
+  }
+  const reply = await callRuntimeRpc<unknown>(
+    target,
+    'git.bulkStage',
+    { worktree: toRuntimeWorktreeSelector(context.worktreeId), filePaths: [], scope },
+    { timeoutMs: 15_000 }
+  )
+  requireGitStageWorktreeScopeReceipt(reply, scope)
 }
 
 export async function unstageRuntimeGitPath(

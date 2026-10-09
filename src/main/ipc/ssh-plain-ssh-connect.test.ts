@@ -9,6 +9,7 @@ vi.mock('../ssh/ssh-config-host-picker', () => mocks.sshConfigHostPicker)
 vi.mock('electron', () => mocks.electron)
 vi.mock('./ssh-pty-output-intake-registry', () => mocks.sshPtyOutputIntakeRegistry)
 vi.mock('../ssh/ssh-connection-store', () => mocks.sshConnectionStore)
+vi.mock('./ssh-host-server-connect', () => mocks.hostServerConnect)
 vi.mock('../ssh/ssh-connection-manager', () => mocks.sshConnectionManager)
 vi.mock('../ssh/ssh-relay-deploy', () => mocks.sshRelayDeploy)
 vi.mock('../ssh/ssh-relay-reset', () => mocks.sshRelayReset)
@@ -32,9 +33,9 @@ import { createSshIpcHarness } from './ssh-ipc-test-harness'
 const { mockSshStore, mockConnectionManager, mockDeployAndLaunchRelay } = mocks
 
 function noexecHome(): RemoteRuntimeUnavailableError {
-  const run = new RelayRuntimeLadderRun('ssh-1', null)
+  const run = new RelayRuntimeLadderRun('ssh-1', null, true)
   run.refused('A', 'noexec')
-  return new RemoteRuntimeUnavailableError('home_noexec', run)
+  return new RemoteRuntimeUnavailableError(run)
 }
 
 function connectedStates(send: ReturnType<typeof vi.fn>): SshConnectionState[] {

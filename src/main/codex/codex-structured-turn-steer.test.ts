@@ -214,9 +214,9 @@ describe('a Codex send made after Codex answered an earlier one, before it opene
     const sending = rig.send('client-2')
     expect(await settledWithin(sending)).toBe('held')
     const methods = () =>
-      rig.codex.connections[0]!.calls
-        .map(({ method }) => method)
-        .filter((method) => method !== 'model/list' && method !== 'config/read')
+      rig.codex.connections[0]!.calls.map(({ method }) => method).filter(
+        (method) => method !== 'model/list' && method !== 'config/read'
+      )
     expect(methods()).toEqual(['thread/start', 'turn/start'])
     return { ...rig, sending, methods }
   }

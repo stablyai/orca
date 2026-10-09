@@ -3,6 +3,7 @@
 // does a Stop of a start that never landed; a card it held, which Resume releases, and anything
 // sent after it end as their own. Turn rows name the send that opened them, as Codex writes them.
 
+import { structuredQueuePauses } from './structured-agent-session-queued-pause'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 import {
@@ -107,7 +108,7 @@ async function queuedDraft(text: string): Promise<string> {
  *  behind the start, which the Stop holds. */
 async function stopOfStart(options: { held?: true } = {}): Promise<string | undefined> {
   rig = await createQueuedMessageTestRig({ starting: true, restartable: true })
-  // Handed over at once to a child that never proves its start; nothing echoes it.
+  // Held for a child that never proves its start, so it is never handed over.
   rig.send('work on this')
   await eventually(() => expect(childPhase()).toBe('starting'))
   const held = options.held ? await queuedDraft('queued behind the start') : undefined
@@ -123,11 +124,19 @@ async function mailTurn(): Promise<void> {
   const handedOver = rig.dispatch.mock.calls.length
   const mail = rig.send('mail for the worker')
   await mail.result
+  await rig.proveStart()
   await eventually(() => expect(rig.dispatch).toHaveBeenCalledTimes(handedOver + 1))
   await turnOpenedBy(mail.id)
 }
 
 /** The host evicts the chat; the Stop events as its provider close finds them. */
+/** The person's Stop still pauses the reopened chat. The close hides its row, as every close of a
+ *  chat does: nothing runs there until its next turn. */
+async function stillStopped(): Promise<boolean> {
+  expect(await rig.queuePause()).toBeNull()
+  return structuredQueuePauses(journal()).some((pause) => pause.reason === 'stopped')
+}
+
 async function evictedAt(): Promise<string[]> {
   let atClose: JournalStopEvent[] = []
   rig.closeSession.mockImplementationOnce(async () => {
@@ -371,7 +380,7 @@ describe('a host stop with no turn running after a Stop that named none', () => 
       expect(journal().stopMarks.latest()?.event).not.toHaveProperty('turnId')
 
       expect(await evictedAt()).toEqual(['user-stop'])
-      expect(await rig.queuePause()).toMatchObject({ reason: 'stopped' })
+      expect(await stillStopped()).toBe(true)
       expect(await rig.handoff(card)).toBeUndefined()
     }
   )
@@ -386,7 +395,7 @@ describe('a host stop with no turn running after a Stop that named none', () => 
     expect(await rig.stop()).toMatchObject({ ok: true, value: { cancelled: false } })
 
     expect(await evictedAt()).toEqual(['user-stop'])
-    expect(await rig.queuePause()).toMatchObject({ reason: 'stopped' })
+    expect(await stillStopped()).toBe(true)
     expect(await rig.handoff(card)).toBeUndefined()
   })
 

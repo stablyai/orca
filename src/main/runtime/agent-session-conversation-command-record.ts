@@ -1,7 +1,7 @@
 import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
+import { createHash } from 'node:crypto'
+import { agentSessionOperationKey } from '../../shared/agent-session-operation-ledger'
 import type { AgentSessionStoreState } from './agent-session-store-state'
-import { AgentSessionTabTable } from './agent-session-tab-table'
-import { foundAgentSessionRecord } from './agent-session-record-founding'
 import type { AgentSessionConversationCommandRecord } from '../../shared/agent-session-conversation-command'
 
 export function commitConversationCommandRecord(
@@ -15,44 +15,47 @@ export function commitConversationCommandRecord(
     throw agentSessionRefusalError('agent_session_checkpoint_stale', { reason: 'leaseMoved' })
   }
   state.records.set(sessionId, { ...record, conversationCommand: command })
-  if (
-    command.command === 'clear' &&
-    command.phase === 'committed' &&
-    command.replacementSessionId
-  ) {
-    if (!state.records.has(command.replacementSessionId)) {
-      throw agentSessionRefusalError('agent_session_identity_required', { reason: 'recordMissing' })
-    }
-    state.sessionTabs ??= new AgentSessionTabTable()
-    state.sessionTabs.move(sessionId, command.replacementSessionId)
-  }
 }
 
 export type AgentSessionConversationClear = {
   sessionId: string
   fence: number
-  command: AgentSessionConversationCommandRecord & { replacementSessionId: string }
-  claimKeyId: string
+  command: AgentSessionConversationCommandRecord & {
+    command: 'clear'
+    phase: 'committed'
+    state: 'completed'
+  }
   now: number
 }
 
-/** A /clear as one write: the conversation it continues in, founded from the source's identity,
- *  and the marker pointing there. Neither can land without the other. */
+export function providerContextBoundaryForClear(clear: AgentSessionConversationClear) {
+  return {
+    operationId: createHash('sha256')
+      .update(agentSessionOperationKey(clear.command.callerKey, clear.command.operationId))
+      .digest('hex'),
+    afterFence: clear.fence,
+    clearedAt: clear.now
+  }
+}
+
+/** The record owns the provider boundary; the journal transaction publishes its divider. */
 export function commitConversationClearRecord(
   state: AgentSessionStoreState,
   clear: AgentSessionConversationClear
 ): void {
   const source = state.records.get(clear.sessionId)
-  const replacementId = clear.command.replacementSessionId
-  if (!source) {
+  if (!source || source.lease.runtimeFence !== clear.fence) {
     throw agentSessionRefusalError('agent_session_checkpoint_stale', { reason: 'leaseMoved' })
   }
-  if (state.records.has(replacementId) || state.unreadableRecords.has(replacementId)) {
-    throw agentSessionRefusalError('agent_session_conflict', { reason: 'sessionExists' })
+  if (source.lease.ownerProcess !== null || source.lease.claimStatus !== 'released') {
+    throw agentSessionRefusalError('agent_session_ownership_unknown', { reason: 'leaseMoved' })
   }
-  state.records.set(
-    replacementId,
-    foundAgentSessionRecord({ ...source, sessionId: replacementId }, clear)
-  )
-  commitConversationCommandRecord(state, clear.sessionId, clear.fence, clear.command)
+  state.records.set(clear.sessionId, {
+    ...source,
+    providerHandleChain: [],
+    lease: { ...source.lease, provenHandleLinkId: null },
+    conversationCommand: clear.command,
+    providerContextBoundary: providerContextBoundaryForClear(clear),
+    updatedAt: clear.now
+  })
 }

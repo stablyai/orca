@@ -61,6 +61,7 @@ describe('useIpcEvents updater integration', () => {
       clearRemoteDetectedAgents: vi.fn(),
       clearRemovedSshTargetState,
       clearDirectSshTargetPtyBindings,
+      sshConnectionStates: new Map(),
       repos: [{ id: 'repo-1', connectionId: 'conn-1' }],
       worktreesByRepo: {
         'repo-1': [{ id: 'wt-1', repoId: 'repo-1' }]
@@ -74,8 +75,7 @@ describe('useIpcEvents updater integration', () => {
       sshTargetLabels: new Map<string, string>([['conn-1', 'Remote']]),
       settings: {
         terminalFontSize: 13,
-        experimentalNativeChat: false,
-        openAgentTabsInChatByDefault: false
+        experimentalNativeChat: false
       }
     }
     vi.doMock('react', async () => {

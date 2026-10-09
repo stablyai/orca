@@ -432,6 +432,8 @@ jobs:
           PREFLIGHT_PHASE_SELECTED: ${{ needs.code_paths.outputs.typecheck == 'true' }}
           PREFLIGHT_PRIOR_SUCCESS: ${{ job.status == 'success' }}
           ORCA_UNIT_SELECTION_MODE: ${{ vars.ORCA_UNIT_SELECTION_MODE || 'shadow' }}
+          # Five shards use fewer runner minutes; the repository variable can still request ten.
+          ORCA_UNIT_FULL_SHARD_COUNT: ${{ vars.ORCA_UNIT_FULL_SHARD_COUNT || '5' }}
         run: |
           if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
           node config/scripts/ci-unit-plan.mjs
@@ -1085,7 +1087,15 @@ jobs:
       - name: Install Linux package tooling
         id: linux-package-tools
         background: true
-        run: sudo apt-get update && sudo apt-get install -y cpio rpm
+        run: |
+          # Use the shell lane's bounded refresh; required tooling installation stays fatal.
+          sudo tee /etc/apt/apt.conf.d/99-orca-package-tools >/dev/null <<'APTCONF'
+          Acquire::http::Timeout "15";
+          Acquire::https::Timeout "15";
+          Acquire::Retries "1";
+          APTCONF
+          timeout 120 sudo apt-get update || true
+          timeout 300 sudo apt-get install -y cpio rpm
 
       - name: Build package inputs
         run: |
@@ -1248,6 +1258,9 @@ jobs:
           src/main/agent-hooks/windows-hook-payload-delivery.test.ts
           src/main/jcode/hook-gate-script.test.ts
           src/main/agent-hooks/windows-direct-cmd-hook-command.test.ts
+          src/main/agent-hooks/windows-cmd-hook-command-unicode.test.ts
+          src/main/agent-hooks/windows-batch-hook-launcher.test.ts
+          src/main/agent-hooks/windows-powershell-hook-launcher.test.ts
           src/main/codex/windows-hook-command.test.ts
           src/main/codex/windows-hook-upgrade.test.ts
           src/main/codex/hook-service-managed-install.test.ts
@@ -1262,6 +1275,7 @@ jobs:
           src/main/wsl/wsl-runner.test.ts
           src/main/wsl/wsl-guest-environment.test.ts
           src/main/wsl/wsl-executable-path.win32.test.ts
+          src/main/claude-accounts/claude-profile-history-windows.test.ts
           src/main/wsl/wsl-w1-w3-contract.test.ts
           src/shared/source-scan/source-tree-scan.test.ts
           src/main/cli/wsl-cli-powershell-boundary.test.ts
@@ -1269,6 +1283,7 @@ jobs:
           src/main/cursor/hook-service.test.ts
           src/main/orca-profiles/profile-index-store.test.ts
           src/main/startup/windows-install-dir-acl-repair.win32.test.ts
+          src/main/startup/windows-app-data-path.test.ts
           src/main/runtime/repo-worktree-admin-fingerprint.test.ts
           src/main/runtime/worktree-scan-admin-fingerprint-gate.test.ts
           src/shared/secure-file-fsync-flags.test.ts
@@ -1281,6 +1296,7 @@ jobs:
           src/relay/windows-port-scan.win32.test.ts
           src/main/ssh/ssh-relay-upload-stage-windows-identity.test.ts
           src/main/ssh/remote-node-runtime-store-windows.test.ts
+          config/scripts/node-pty-windows-pty-teardown-patch.test.mjs
 
       # Why the :parallel variant: identical to build:release except the three
       # electron-vite targets overlap instead of running back to back. The Linux package

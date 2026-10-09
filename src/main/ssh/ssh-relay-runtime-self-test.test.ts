@@ -47,6 +47,13 @@ function report(nonce: string, fields: Record<string, unknown>): string {
   })}`
 }
 
+const NIXOS_STUB_LD_OUTPUT = [
+  'Could not start dynamically linked executable: /home/u/.orca-remote/runtimes/node-x/bin/node',
+  'NixOS cannot run dynamically linked executables intended for generic',
+  'linux environments out of the box. For more information, see:',
+  'https://nix.dev/permalink/stub-ld'
+].join('\n')
+
 describe('pinned runtime refusal classification', () => {
   it.each([
     [132, '', 'illegal_instruction'],
@@ -108,6 +115,13 @@ describe('pinned runtime refusal classification', () => {
 
   it('leaves an unrecognized failure unclassified', () => {
     expect(classifyPinnedRuntimeFailure(1, 'TypeError: something else')).toBeNull()
+  })
+
+  it("classifies NixOS's stub loader refusing a generic Linux binary as wrong_libc", () => {
+    expect(classifyPinnedRuntimeFailure(127, NIXOS_STUB_LD_OUTPUT)).toBe('wrong_libc')
+    // Only the loader's own exit; an unrelated 127 stays unclassified.
+    expect(classifyPinnedRuntimeFailure(1, NIXOS_STUB_LD_OUTPUT)).toBeNull()
+    expect(classifyPinnedRuntimeFailure(127, 'relay.js exited')).toBeNull()
   })
 })
 

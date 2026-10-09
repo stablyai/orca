@@ -10,10 +10,12 @@ import {
 } from './agent-launch-caller-profiles-test-harness'
 import {
   createLaunchFunnelStore,
+  hostLaunchRequest,
   queuedStartupCommand,
   queuedStartupPayload,
   resetLaunchFunnelStore
 } from './agent-launch-funnel-test-harness'
+import { newTabPromptLaunchesThroughHost } from './launch-agent-new-tab-host-route'
 
 const store = createLaunchFunnelStore()
 
@@ -45,6 +47,31 @@ vi.mock('@/lib/agent-ready-wait', () => ({
 vi.mock('@/runtime/local-runtime-capabilities', () => ({
   readLocalRuntimeCapabilitiesOrUnknown: () => []
 }))
+// A launch the host delivers waits on its reply; these tests read only what was sent.
+const callRuntimeRpc = vi.hoisted(() => vi.fn(() => new Promise(() => {})))
+vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc, RuntimeRpcCallError: Error }))
+
+function launchesThroughHost(profile: AgentLaunchCallerProfile): boolean {
+  return newTabPromptLaunchesThroughHost({
+    promptDelivery: profile.args.promptDelivery ?? 'auto-submit',
+    pastesPrompt: (profile.args.prompt?.trim() ?? '').length > 0
+  })
+}
+
+/**
+ * A call site whose prompt the host delivers states its arguments in the request, and the host
+ * builds the command from them by the same rule (its startup plan inputs); absent means the
+ * setting, shipped bypass default included.
+ */
+function expectHostRequestArguments(profile: AgentLaunchCallerProfile): void {
+  const request = hostLaunchRequest(callRuntimeRpc)
+  expect(queuedStartupCommand(store)).toBeUndefined()
+  if (profile.args.agentArgs === undefined) {
+    expect(request).not.toHaveProperty('agentArgs')
+  } else {
+    expect(request?.agentArgs).toBe(profile.args.agentArgs)
+  }
+}
 
 const CODEX_BYPASS = '--dangerously-bypass-approvals-and-sandbox'
 
@@ -73,6 +100,10 @@ describe('agent launch caller arguments and permission bypass', () => {
 
   it.each(cases)('puts %s on the command line its own arguments describe', async (_id, profile) => {
     await launch(profile)
+    if (launchesThroughHost(profile)) {
+      expectHostRequestArguments(profile)
+      return
+    }
 
     const command = queuedStartupCommand(store)
     expect(command).toBeDefined()
@@ -87,6 +118,10 @@ describe('agent launch caller arguments and permission bypass', () => {
 
   it.each(cases)('keeps %s on the bypass posture its arguments encode', async (_id, profile) => {
     await launch(profile)
+    if (launchesThroughHost(profile)) {
+      expectHostRequestArguments(profile)
+      return
+    }
 
     const command = queuedStartupCommand(store) ?? ''
     // Why: the three recipe-driven call sites hand in saved arguments, which REPLACE the shipped
@@ -99,6 +134,10 @@ describe('agent launch caller arguments and permission bypass', () => {
     'forwards an explicit argument override from %s to the tab',
     async (_id, profile) => {
       await launch(profile)
+      if (launchesThroughHost(profile)) {
+        expectHostRequestArguments(profile)
+        return
+      }
 
       const payload = queuedStartupPayload(store)
       if (profile.args.agentArgs === undefined) {
@@ -204,49 +243,41 @@ describe('agent launch caller arguments and permission bypass', () => {
     })
   })
 
-  it('applies a remembered model and effort to the launch command', async () => {
-    store.settings = {
-      ...store.settings,
-      experimentalNativeChat: true,
-      openAgentTabsInChatByDefault: true,
-      nativeChatSessionOptions: {
-        codex: { model: 'gpt-5.2-codex', valuesByModel: { 'gpt-5.2-codex': { effort: 'medium' } } }
+  // Why: chat composer picks seed only structured creates (launch-structured-agent-session.test.ts,
+  // orca-runtime-structured-agent-session-create-intent.test.ts); a terminal fallback never gets them.
+  it.each([
+    [true, undefined, CODEX_BYPASS],
+    [false, undefined, CODEX_BYPASS],
+    [true, '--search', '--search'],
+    [false, '--search', '--search']
+  ])(
+    'keeps remembered model and effort off a terminal fallback (Chat UI %s, stored args %s)',
+    async (chatUi, storedArgs, expectedArgs) => {
+      store.settings = {
+        ...store.settings,
+        experimentalNativeChat: chatUi,
+        ...(storedArgs === undefined ? {} : { agentDefaultArgs: { codex: storedArgs } }),
+        nativeChatSessionOptions: {
+          codex: {
+            model: 'gpt-5.2-codex',
+            valuesByModel: { 'gpt-5.2-codex': { effort: 'medium' } }
+          }
+        }
       }
+      const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+      const result = launchAgentInNewTab({
+        requestId: 'request-9',
+        agent: 'codex',
+        worktreeId: 'wt-1'
+      })
+
+      // No local structured capability, so even with Chat UI on this is the terminal fallback.
+      expect(result?.startupPlan?.sessionOptions).toBeUndefined()
+      const command = queuedStartupCommand(store)
+      expect(command).not.toContain("'-m'")
+      expect(command).not.toContain('model_reasoning_effort')
+      expect(command).toBe(`codex '${expectedArgs}'`)
     }
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-
-    const result = launchAgentInNewTab({
-      requestId: 'request-9',
-      agent: 'codex',
-      worktreeId: 'wt-1'
-    })
-
-    expect(result?.startupPlan.sessionOptions).toEqual({
-      model: 'gpt-5.2-codex',
-      effort: 'medium'
-    })
-    expect(queuedStartupCommand(store)).toContain("'-m' 'gpt-5.2-codex'")
-    expect(queuedStartupCommand(store)).toContain("'-c' 'model_reasoning_effort=medium'")
-    // The remembered options ride beside the bypass default rather than replacing it.
-    expect(queuedStartupCommand(store)).toContain(CODEX_BYPASS)
-  })
-
-  it('keeps remembered session options out of a plain terminal launch', async () => {
-    store.settings = {
-      ...store.settings,
-      nativeChatSessionOptions: {
-        codex: { model: 'gpt-5.2-codex', valuesByModel: { 'gpt-5.2-codex': { effort: 'medium' } } }
-      }
-    }
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-
-    const result = launchAgentInNewTab({
-      requestId: 'request-10',
-      agent: 'codex',
-      worktreeId: 'wt-1'
-    })
-
-    expect(result?.startupPlan.sessionOptions).toBeUndefined()
-    expect(queuedStartupCommand(store)).not.toContain("'-m'")
-  })
+  )
 })

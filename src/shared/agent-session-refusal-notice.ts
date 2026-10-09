@@ -46,7 +46,26 @@ const NOT_DONE: Record<AgentSessionWriteKind, AgentSessionWriteNoticeSentence> =
   answer: 'notDoneAnswer',
   option: 'notDoneOption',
   command: 'notDoneCommand',
+  clear: 'notDoneCommand',
+  compact: 'notDoneCommand',
   goal: 'notDoneGoal'
+}
+
+/** A /clear or /compact refused because the agent is working: one plain sentence for every
+ *  reason that is, saying only what the person sees and can do. */
+const COMMAND_WHILE_WORKING: Partial<
+  Record<AgentSessionWriteKind, Partial<Record<string, AgentSessionWriteNoticeSentence[]>>>
+> = {
+  clear: {
+    turnActive: ['agentStillWorking', 'runClearWhenDone'],
+    messagesUnsettled: ['agentStillWorking', 'runClearWhenDone'],
+    promptPending: ['clearAfterAnswer']
+  },
+  compact: {
+    turnActive: ['agentStillWorking', 'runCompactWhenDone'],
+    messagesUnsettled: ['agentStillWorking', 'runCompactWhenDone'],
+    promptPending: ['compactAfterAnswer']
+  }
 }
 
 /** That the write did not happen, for one that a second attempt can carry out. Only the phone says
@@ -94,13 +113,34 @@ function reasonParts(
       }
     ]
   }
+  const commandWhileWorking =
+    failure.code === 'agent_session_operation_invalid'
+      ? COMMAND_WHILE_WORKING[write]?.[failure.details?.reason ?? '']
+      : undefined
+  if (commandWhileWorking) {
+    return commandWhileWorking
+  }
   const words = agentSessionRefusalReasonWords(failure)
   if (!words || 'words' in words) {
     return undefined
   }
   if ('fact' in words) {
     return write === 'send' || write === 'composer-send'
-      ? [NOT_DONE[write], { failure: { kind: words.fact }, surface: 'rejection', context }]
+      ? [
+          NOT_DONE[write],
+          {
+            failure: {
+              kind: words.fact,
+              ...(words.fact === 'notSignedIn' &&
+              failure.code === 'agent_session_operation_invalid' &&
+              failure.details?.account
+                ? { account: failure.details.account }
+                : {})
+            },
+            surface: 'rejection',
+            context
+          }
+        ]
       : undefined
   }
   const { cause, step } = write === 'read-history' && words.history ? words.history : words
@@ -153,10 +193,10 @@ export function agentSessionWriteNoticeParts(
     case 'agent_session_ownership_unknown':
     case 'execution_owner_reconciling':
       return agentSessionWriteNotDoneParts(write)
-    // Counted across every chat and freed only as a day's requests age out, so trying again now
-    // would likely be refused again.
+    // Only an older Orca host (one that capped its operation records) refuses this way; updating
+    // it is the fix, since retrying soon would be refused again.
     case 'agent_session_operation_capacity':
-      return ['capacity', notDone]
+      return [notDone, 'capacity']
     // The phone resends under the same id, which the host refuses the same way again. The rest
     // stand for reasons the code does not name (a cleared conversation, a pending question, a
     // provider's own rejection...), so any cause or next step could be false.
@@ -179,6 +219,19 @@ export function agentSessionWriteNoticeParts(
   }
   // A newer host can send a code this client has never heard of.
   return [notDone]
+}
+
+/** A send nobody can confirm: the host's own reason first when it gave one, never "not sent". */
+export function agentSessionUnconfirmedSendParts(
+  thrownRefusal: AgentSessionWriteFailure | null | undefined
+): AgentSessionWriteNoticePart[] {
+  const cause = thrownRefusal
+    ? agentSessionWriteNoticeParts(thrownRefusal, 'composer-send').filter(
+        (part) =>
+          part !== 'notDoneSend' && part !== 'tryAgainComposerSend' && part !== 'outcomeUnknown'
+      )
+    : []
+  return [...cause, 'sendOutcomeLost']
 }
 
 export function agentSessionWriteNoticeEnglish(

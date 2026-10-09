@@ -4,7 +4,6 @@
 // streams from re-sending it. They ride together: a client never sees one without the others.
 
 import {
-  QUEUED_MESSAGE_PAUSED_KEPT,
   QUEUED_MESSAGE_PAUSED_SEND_FAILED,
   type AgentSessionQueuedMessage,
   type AgentSessionQueuedMessagePausedReason,
@@ -42,9 +41,8 @@ export function structuredQueueSendGate(
   })
 }
 
-/** Waiting and returned rows only. `paused` is a per-card hold (a failed
- *  conversion, or a send the host kept); a Stop or a /clear pauses the queue, published once
- *  beside it. */
+/** Waiting and returned rows only. `paused` is a per-card hold (a failed conversion); a person's
+ *  Stop pauses the queue, published once beside it. */
 function computePublishedQueuedMessages(journal: AgentSessionJournal): AgentSessionQueuedMessage[] {
   const published: AgentSessionQueuedMessage[] = []
   for (const row of journal.queuedMessages.list()) {
@@ -72,7 +70,7 @@ function computePublishedQueuedMessages(journal: AgentSessionJournal): AgentSess
 function isPublishedPausedReason(
   reason: string | null
 ): reason is AgentSessionQueuedMessagePausedReason {
-  return reason === QUEUED_MESSAGE_PAUSED_SEND_FAILED || reason === QUEUED_MESSAGE_PAUSED_KEPT
+  return reason === QUEUED_MESSAGE_PAUSED_SEND_FAILED
 }
 
 type ListMemo = { key: string; serialized: string; list: AgentSessionQueuedMessage[] }
@@ -114,18 +112,29 @@ export function readQueuePublication(
   gate: QueueSendGate
 ): QueuePublication {
   const queuedMessages = readPublishedQueuedMessages(journal)
-  // Read per emit: the pause also turns on submissions (a turn starting). Shown only over a card
-  // Resume would send, so its header never offers to send nothing; deleting a blocking returned
-  // card shows it again. After a restart nothing is shown, a Stop's or /clear's included: the
-  // chat's next turn lifts every pause, and the cards read as plain waiting cards until then.
+  // Read per emit: the pause also turns on submissions (a turn starting). Only a person's Stop is
+  // shown, and only over a card Resume would send, so its header never offers to send nothing;
+  // deleting a blocking returned card shows it again. After a /clear, a restart or a close nothing
+  // is shown, a Stop's from before it included: nothing runs in the chat, its next turn lifts every
+  // pause, and the cards read as plain waiting cards until then. A Stop the person makes after the
+  // reopen shows.
   const pauses = structuredQueuePauses(journal)
-  const restarted = pauses.some((pause) => pause.reason === 'restarted')
-  const resumable = restarted ? null : resumableQueuePause(pauses, journal.queuedMessages.list())
+  const stop = pauses.find((pause) => pause.reason === 'stopped')?.since
+  const silent = pauses.some(
+    (pause) =>
+      pause.reason === 'cleared' ||
+      (pause.reason === 'restarted' &&
+        (!stop ||
+          !pause.since ||
+          stop.epoch !== pause.since.epoch ||
+          stop.sequence < pause.since.sequence))
+  )
+  const resumable = silent ? null : resumableQueuePause(pauses, journal.queuedMessages.list())
   // The submissions are read only while a pause would show, never while the queue runs freely.
   const pause =
     resumable && !queuePauseLiftOnItsWay(resumable, journal.submissions()) ? resumable : null
-  // `restarted` is already excluded above; the test narrows the type.
-  const queuePause = pause && pause.reason !== 'restarted' ? { reason: pause.reason } : null
+  // The test narrows the type.
+  const queuePause = pause?.reason === 'stopped' ? { reason: pause.reason } : null
   const nextQueuedMessageId = nextStructuredQueuedMessage({ journal, ...gate() })?.messageId ?? null
   const previous = publications.get(journal)
   if (

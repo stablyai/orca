@@ -64,8 +64,7 @@ import { selectLinuxKeyringBackend } from './select-linux-keyring-backend'
 import { setPtyHostBindings } from '../ipc/pty-host-bindings'
 import { electronRuntimeDesktopSurface } from '../host/electron-runtime-desktop-surface'
 import { setRuntimeDesktopSurface } from '../runtime/runtime-desktop-surface'
-import { electronRuntimeBrowserCommandsFactory } from '../host/electron-browser-commands'
-import { setRuntimeBrowserCommandsFactory } from '../runtime/runtime-browser-commands-factory'
+import { installElectronBrowserCommands } from '../host/electron-browser-commands'
 import { electronHttpClient } from '../host/electron-http-client'
 import { setMainHttpClient } from '../network/http-client'
 import { electronSpeechServiceFactories } from '../host/electron-speech-services'
@@ -85,25 +84,32 @@ import { initCodexUsagePath } from '../codex-usage/store'
 import { initOpenCodeUsagePath } from '../opencode-usage/store'
 import { initMuseUsagePath } from '../muse-usage/store'
 import { registerDocPreviewSchemePrivileges } from '../browser/doc-preview-protocol'
+import { MEDIA_PREVIEW_CUSTOM_SCHEME } from '../media/media-preview-protocol'
 import { startCrashpadCapture } from '../crash-reporting/crashpad-capture'
 import { CrashReportStore } from '../crash-reporting/crash-report-store'
 import { recordCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
-import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
-import { GpuCrashDiagnosticsRecorder } from '../crash-reporting/gpu-crash-diagnostics'
 import { getMainProcessLifecycleIdentity } from '../crash-reporting/main-process-lifecycle-identity'
 import {
   ensureVirtualDisplayForHeadlessServe,
   hasUsableLinuxDisplay,
   MISSING_LINUX_DISPLAY_MESSAGE
 } from './ensure-virtual-display'
-import { maybeApplyGpuFallbackForThisLaunch, registerGpuLifecycleHandlers } from './gpu-lifecycle'
+import {
+  createGpuCrashDiagnosticsRecorder,
+  maybeApplyGpuFallbackForThisLaunch,
+  registerGpuLifecycleHandlers
+} from './gpu-lifecycle'
 import { mainProcessState as state } from './main-process-state'
 import { initializeSyntheticTitleRuntime } from './synthetic-title-runtime'
 import { initializeBrowserProcessUserAgent } from '../browser/browser-process-user-agent'
 import { initializeBrowserIdentityModeStore } from '../browser/browser-identity-mode-store'
 import { acquireProfileStateRuntimeAdmission } from '../persistence/profile-state/profile-state-access'
 import { getActiveProfileStateLocation } from '../persistence/profile-state/profile-state-active-location'
-import { handleMainProcessPreflightFailure } from './main-process-preflight-failure'
+import {
+  acquireDesktopProfileLockOrExplain,
+  handleMainProcessPreflightFailure
+} from './main-process-preflight-failure'
+import { ensureWindowsAppDataPath } from './windows-app-data-path'
 
 export type MainProcessPreflightOptions = {
   focusExistingWindow: () => void
@@ -122,6 +128,8 @@ export function runMainProcessPreflight(options: MainProcessPreflightOptions): b
 }
 
 function initializeMainProcessPreflight(options: MainProcessPreflightOptions): boolean {
+  // Why first: every step below, recovery and the instance lock included, may resolve userData.
+  ensureWindowsAppDataPath(app)
   if (runProfileStateRecoveryPreflight()) {
     return false
   }
@@ -268,6 +276,10 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
     app.exit(SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE)
     return false
   }
+  // Why after Electron's lock: that one fences other desktops; this one fences orcad `orca serve`.
+  if (!skip && !bypass && !acquireDesktopProfileLockOrExplain(getCanonicalUserDataPath())) {
+    return false
+  }
   state.profileStateAdmission = acquireProfileStateRuntimeAdmission(getCanonicalUserDataPath())
   // Renderer and worker defaults must be fixed before any session exists.
   initializeBrowserProcessUserAgent(
@@ -297,7 +309,7 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
   // Why here: constructing RuntimeBrowserCommands is what pulls the Chromium browser
   // cluster into the graph. The desktop installs it; a Node host installs none and every
   // browser RPC rejects, which capability filtering already tells clients about.
-  setRuntimeBrowserCommandsFactory(electronRuntimeBrowserCommandsFactory)
+  installElectronBrowserCommands()
   // Why here: proxy-settings only needed electron for `session.defaultSession`. The
   // desktop supplies it; a Node host has no Chromium proxy config to consult, so the
   // environment variables are the whole answer there.
@@ -346,21 +358,12 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
   initMuseUsagePath()
   // Why: Electron freezes the privileged scheme table at ready, so the doc-preview
   // scheme must be declared here or its webview loses fetch/secure-origin privileges.
-  registerDocPreviewSchemePrivileges()
+  registerDocPreviewSchemePrivileges([MEDIA_PREVIEW_CUSTOM_SCHEME])
   // Why: must precede app.whenReady() so Crashpad is installed before the
   // first renderer spawns; a CHECK before this point is still exit-code-only.
   startCrashpadCapture()
   state.crashReports = CrashReportStore.fromUserData()
-  state.gpuCrashDiagnostics =
-    process.platform === 'win32'
-      ? new GpuCrashDiagnosticsRecorder({
-          provider: {
-            getGPUInfo: (infoType) => app.getGPUInfo(infoType),
-            getGPUFeatureStatus: () => app.getGPUFeatureStatus()
-          },
-          recordBreadcrumb: (data) => recordDurableCrashBreadcrumb('gpu_crash_hardware', data)
-        })
-      : null
+  state.gpuCrashDiagnostics = createGpuCrashDiagnosticsRecorder()
   recordCrashBreadcrumb('app_started', {
     packaged: app.isPackaged,
     platform: process.platform,

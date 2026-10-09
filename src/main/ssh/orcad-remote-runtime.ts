@@ -1,5 +1,7 @@
 import {
   ORCAD_BUILD_TARGET_FILENAME,
+  ORCAD_LAUNCHER_FILENAME,
+  ORCAD_SERVER_ENTRY_FILENAME,
   ORCAD_NODE_RUNTIME_DIR_PREFIX,
   ORCAD_NODE_RUNTIME_MARKER_FILENAME,
   ORCAD_NODE_RUNTIME_POSIX_EXECUTABLE,
@@ -9,6 +11,14 @@ import {
 import { assertPosixOrcadHost } from './orcad-remote-host-support'
 import { shellEscape } from './ssh-connection-utils'
 import { joinRemotePath, remoteDirname, type RemoteHostPlatform } from './ssh-remote-platform'
+
+/** New slots start the server directly; rollback still accepts older single-entry slots. */
+export function selectOrcadSlotEntryCommand(host: RemoteHostPlatform, directory: string): string {
+  assertPosixOrcadHost(host)
+  const server = shellEscape(joinRemotePath(host, directory, ORCAD_SERVER_ENTRY_FILENAME))
+  const launcher = shellEscape(joinRemotePath(host, directory, ORCAD_LAUNCHER_FILENAME))
+  return `if [ -f ${server} ]; then orcad_entry=${server}; else orcad_entry=${launcher}; fi`
+}
 
 /**
  * Sets `$orcad_runtime` to the pinned Node a slot's `.runtime-node` names, or exits 78.

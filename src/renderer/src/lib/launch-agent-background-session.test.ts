@@ -129,7 +129,8 @@ describe('launchAgentBackgroundSession', () => {
         }),
         connectionId: null,
         worktreeId: 'wt-1',
-        tabId
+        tabId,
+        placement: { kind: 'new-tab', row: { customTitle: 'Nightly audit' } }
       })
     )
     const paneKey = expectStableAgentBackgroundPaneSpawn(mockSpawn)

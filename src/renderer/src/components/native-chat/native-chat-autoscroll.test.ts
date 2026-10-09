@@ -63,7 +63,8 @@ describe('nextFollowingEnd', () => {
     following: true,
     programmatic: false,
     geometry: parkedAbove(0),
-    previousDistanceFromEnd: 400
+    previousDistanceFromEnd: 400,
+    settling: false
   }
 
   it('follows when the reader reaches the end', () => {
@@ -89,7 +90,8 @@ describe('nextFollowingEnd', () => {
           following: false,
           programmatic: true,
           geometry: parkedAbove(distance),
-          previousDistanceFromEnd: 400
+          previousDistanceFromEnd: 400,
+          settling: false
         })
       ).toBe(false)
     }
@@ -108,7 +110,8 @@ describe('nextFollowingEnd', () => {
     const detached = {
       following: false,
       programmatic: false,
-      previousDistanceFromEnd: 400
+      previousDistanceFromEnd: 400,
+      settling: false
     }
     expect(
       nextFollowingEnd({ ...detached, geometry: parkedAbove(NATIVE_CHAT_FOLLOW_REARM_PX) })
@@ -122,7 +125,12 @@ describe('nextFollowingEnd', () => {
   // move a pixel or two and are unmarked: read as the reader arriving, they
   // re-armed follow and the next frame rebased the view, cancelling the scroll.
   it('does not reattach a detached reader who is moving away from the end', () => {
-    const leaving = { following: false, programmatic: false, previousDistanceFromEnd: 0 }
+    const leaving = {
+      following: false,
+      programmatic: false,
+      previousDistanceFromEnd: 0,
+      settling: false
+    }
     expect(nextFollowingEnd({ ...leaving, geometry: parkedAbove(0.3) })).toBe(false)
     expect(nextFollowingEnd({ ...leaving, geometry: parkedAbove(2) })).toBe(false)
     // Arriving from above still reattaches, and standing still at the end does too.
@@ -130,6 +138,18 @@ describe('nextFollowingEnd', () => {
       nextFollowingEnd({ ...leaving, previousDistanceFromEnd: 52, geometry: parkedAbove(2) })
     ).toBe(true)
     expect(nextFollowingEnd({ ...leaving, geometry: parkedAbove(0) })).toBe(true)
+  })
+
+  it('does not reattach a jump still travelling when shrinking content clamps it onto the end', () => {
+    const clamped = {
+      following: false,
+      programmatic: false,
+      previousDistanceFromEnd: 35,
+      geometry: parkedAbove(0)
+    }
+    expect(nextFollowingEnd({ ...clamped, settling: true })).toBe(false)
+    // Anti-vacuous: the same offset reattaches a reader with no jump under way.
+    expect(nextFollowingEnd({ ...clamped, settling: false })).toBe(true)
   })
 
   it('keeps a following reader through a small move up inside the band', () => {

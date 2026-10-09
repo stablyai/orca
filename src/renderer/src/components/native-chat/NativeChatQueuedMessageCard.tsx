@@ -1,5 +1,7 @@
+import { useId, useState } from 'react'
 import {
   AlertCircle,
+  ChevronDown,
   CornerDownRight,
   ListEnd,
   MoreHorizontal,
@@ -15,29 +17,38 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { cn } from '@/lib/utils'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { translate } from '@/i18n/i18n'
-import { structuredAgentSessionAttemptFailureParts } from '../../../../shared/structured-agent-session-send-disposition'
+import { structuredAgentSessionAttemptFailureParts } from '../../../../shared/structured-agent-session-rejection-words'
 import { classifyDispatchRejection } from '../../../../shared/structured-agent-session-dispatch-rejection'
 import { readWholeAgentSessionFailureFact } from '../../../../shared/agent-session-failure'
 import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
-import {
-  QUEUED_MESSAGE_PAUSED_KEPT,
-  QUEUED_MESSAGE_PAUSED_SEND_FAILED
-} from '../../../../shared/agent-session-wire'
+import { QUEUED_MESSAGE_PAUSED_SEND_FAILED } from '../../../../shared/agent-session-wire'
 import { isMacPlatform } from './native-chat-shortcut'
 import {
   queuedMessageCardSteers,
   type QueuedMessageCard
 } from './structured-agent-session-queued-cards'
-import { queuedCardSenderLine } from './native-chat-agent-message-sender-label'
+import { NativeChatAgentMessageSenders } from './NativeChatAgentMessageSenders'
+import { useNativeChatClippedLine } from './use-native-chat-clipped-line'
+import { agentSessionFailureStatedByStartRow } from './structured-agent-session-delivery-notices'
+import type { AgentSessionFailureFact } from '../../../../shared/agent-session-failure'
+import { agentSessionWriteNotDoneParts } from '../../../../shared/agent-session-refusal-notice'
 
 /** The visible caption under the text; the default waiting hold needs none. */
-export function queuedMessageCardCaption(card: QueuedMessageCard): string | null {
+export function queuedMessageCardCaption(
+  card: QueuedMessageCard,
+  agentName?: string,
+  statedFailures: readonly AgentSessionFailureFact[] = []
+): string | null {
   switch (card.hold) {
     case 'returned': {
       // Read exactly as a rejected submission: the typed fact decides, the reason is the fallback.
       const reason = card.returnedReason ?? null
+      if (agentSessionFailureStatedByStartRow(card.returnedRejection, statedFailures)) {
+        return agentSessionWriteNoticeText(agentSessionWriteNotDoneParts('send'))
+      }
       // A consumed draft whose submission a Stop withdrew is not a failure of the
       // message — say what happened rather than "not sent".
       if (
@@ -53,7 +64,7 @@ export function queuedMessageCardCaption(card: QueuedMessageCard): string | null
         structuredAgentSessionAttemptFailureParts(
           { kind: 'rejected', reason },
           // The card's own Send is the retry, so the words leave out sending again.
-          { retryControl: true },
+          { agentName, retryControl: true },
           readWholeAgentSessionFailureFact(card.returnedRejection)
         )
       )
@@ -62,16 +73,16 @@ export function queuedMessageCardCaption(card: QueuedMessageCard): string | null
       // A card's own hold; the queue's pause is the list's header. Markers localize, and an absent
       // or unknown one (newer host) is a plain pause, never shown raw.
       if (card.pausedReason === QUEUED_MESSAGE_PAUSED_SEND_FAILED) {
-        return translate(
-          'components.native-chat.queuedMessages.pausedSendFailed',
-          "Couldn't send — press Send to retry."
-        )
-      }
-      if (card.pausedReason === QUEUED_MESSAGE_PAUSED_KEPT) {
-        return translate(
-          'components.native-chat.queuedMessages.pausedKept',
-          'Not sent yet — press Send to send it.'
-        )
+        // Its Send shows only while the agent is idle; the words match what is on the card.
+        return card.waitsForAgent
+          ? translate(
+              'components.native-chat.queuedMessages.pausedSendFailedWaiting',
+              "Couldn't send — press Send to retry once the agent finishes."
+            )
+          : translate(
+              'components.native-chat.queuedMessages.pausedSendFailed',
+              "Couldn't send — press Send to retry."
+            )
       }
       return translate('components.native-chat.queuedMessages.paused', 'Paused')
     case 'behind-returned':
@@ -84,6 +95,8 @@ export function queuedMessageCardCaption(card: QueuedMessageCard): string | null
         'components.native-chat.queuedMessages.awaitingAnswerHold',
         'Waiting for your answer'
       )
+    case 'sending':
+      return translate('components.native-chat.messageSending', 'Sending…')
     case 'turn':
     case 'queue-paused':
       // Plainly queued; a paused queue's header row carries the why.
@@ -117,6 +130,9 @@ export function queuedMessageCardSendNow(card: QueuedMessageCard): {
 
 export function NativeChatQueuedMessageCard({
   card,
+  chatWorktreeId,
+  agentName,
+  statedFailures,
   showsSteerShortcut,
   steerHeld = false,
   onSteer,
@@ -125,6 +141,10 @@ export function NativeChatQueuedMessageCard({
   onTurnOffQueueing
 }: {
   card: QueuedMessageCard
+  /** The chat's worktree, whose host its sender is found on; null shows the sender unlinked. */
+  chatWorktreeId: string | null
+  agentName?: string
+  statedFailures?: readonly AgentSessionFailureFact[]
   /** Only the newest card answers Cmd/Ctrl+Enter; only it may show the chord. */
   showsSteerShortcut: boolean
   /** The chat reads Stopping: the card waits for the stop (`NativeChatQueuedMessageList`). */
@@ -135,103 +155,186 @@ export function NativeChatQueuedMessageCard({
   /** Absent when the host does not queue sends, so there is nothing to turn off. */
   onTurnOffQueueing?: () => void
 }): React.JSX.Element {
-  const caption = queuedMessageCardCaption(card)
+  const caption = queuedMessageCardCaption(card, agentName, statedFailures)
   const returned = card.state === 'returned'
   const sendNow = queuedMessageCardSendNow(card)
   const isMac = isMacPlatform()
+  // A clipped line opens below the row, at the card's full width: a card can hold text the person
+  // never typed (another agent's message), and Steer or Delete must not be a blind choice.
+  const [expanded, setExpanded] = useState(false)
+  const [clipped, measureLine] = useNativeChatClippedLine(false)
+  const textId = useId()
   return (
     <li
       data-queued-message-id={card.messageId}
       data-queued-message-state={card.state}
-      className="flex items-center gap-2 px-2.5 py-1.5"
+      className="px-2.5 py-1.5"
     >
-      {returned || card.pausedReason === QUEUED_MESSAGE_PAUSED_SEND_FAILED ? (
-        <AlertCircle className="size-3.5 shrink-0 text-destructive" aria-hidden />
-      ) : (
-        <ListEnd className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-      )}
-      <div className="min-w-0 flex-1">
-        {card.from ? (
-          <p className="truncate text-xs text-muted-foreground">
-            {queuedCardSenderLine(card.from)}
-          </p>
+      <div className="flex items-center gap-2">
+        {returned || card.pausedReason === QUEUED_MESSAGE_PAUSED_SEND_FAILED ? (
+          <AlertCircle className="size-3.5 shrink-0 text-destructive" aria-hidden />
+        ) : (
+          <ListEnd className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+        )}
+        <div className="min-w-0 flex-1">
+          {card.from ? (
+            <NativeChatAgentMessageSenders
+              from={card.from}
+              chatWorktreeId={chatWorktreeId}
+              queued
+            />
+          ) : null}
+          {expanded ? null : (
+            <p ref={measureLine} className="truncate text-sm" title={card.text}>
+              {card.text}
+            </p>
+          )}
+          {caption ? (
+            <p
+              className={
+                returned
+                  ? 'truncate text-xs text-destructive'
+                  : 'truncate text-xs text-muted-foreground'
+              }
+            >
+              {caption}
+            </p>
+          ) : null}
+        </div>
+        {expanded || clipped ? (
+          <QueuedMessageExpandToggle
+            expanded={expanded}
+            controls={expanded ? textId : undefined}
+            onToggle={() => setExpanded(!expanded)}
+          />
         ) : null}
-        <p className="truncate text-sm" title={card.text}>
+        {/* Nothing acts on a send still on its way: the host holds no card for it yet. */}
+        {card.hold === 'sending' ? null : (
+          <>
+            {/* A command never steers: its Send shows only while the agent is idle. */}
+            {card.waitsForAgent ? null : (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="xs"
+                    onClick={onSteer}
+                    disabled={steerHeld}
+                  >
+                    {sendNow.steers ? (
+                      <CornerDownRight className="size-3" />
+                    ) : (
+                      <Send className="size-3" />
+                    )}
+                    {sendNow.label}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top" sideOffset={4}>
+                  <span className="flex items-center gap-2">
+                    <span>{sendNow.hint}</span>
+                    {showsSteerShortcut ? (
+                      <ShortcutKeyCombo keys={[isMac ? '⌘' : 'Ctrl', isMac ? '⏎' : 'Enter']} />
+                    ) : null}
+                  </span>
+                </TooltipContent>
+              </Tooltip>
+            )}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={translate('components.native-chat.queuedMessages.delete', 'Delete')}
+                  onClick={onDelete}
+                >
+                  <Trash2 className="size-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={4}>
+                {translate('components.native-chat.queuedMessages.delete', 'Delete')}
+              </TooltipContent>
+            </Tooltip>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={translate(
+                    'components.native-chat.queuedMessages.moreActions',
+                    'More actions'
+                  )}
+                >
+                  <MoreHorizontal className="size-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {/* A command's text is not a draft: edited, it would become a message. */}
+                {card.command ? null : (
+                  <DropdownMenuItem onSelect={onEdit}>
+                    <Pencil />
+                    {translate('components.native-chat.queuedMessages.editMessage', 'Edit message')}
+                  </DropdownMenuItem>
+                )}
+                {onTurnOffQueueing ? (
+                  <DropdownMenuItem onSelect={onTurnOffQueueing}>
+                    {translate(
+                      'components.native-chat.queuedMessages.turnOffQueueing',
+                      'Turn off queueing'
+                    )}
+                  </DropdownMenuItem>
+                ) : null}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </>
+        )}
+      </div>
+      {expanded ? (
+        // Indented to the text, past the icon slot and its gap.
+        <p
+          id={textId}
+          className="scrollbar-sleek mt-1 max-h-60 overflow-y-auto whitespace-pre-wrap break-words pl-5.5 text-sm"
+        >
           {card.text}
         </p>
-        {caption ? (
-          <p
-            className={
-              returned
-                ? 'truncate text-xs text-destructive'
-                : 'truncate text-xs text-muted-foreground'
-            }
-          >
-            {caption}
-          </p>
-        ) : null}
-      </div>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button type="button" variant="ghost" size="xs" onClick={onSteer} disabled={steerHeld}>
-            {sendNow.steers ? <CornerDownRight className="size-3" /> : <Send className="size-3" />}
-            {sendNow.label}
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="top" sideOffset={4}>
-          <span className="flex items-center gap-2">
-            <span>{sendNow.hint}</span>
-            {showsSteerShortcut ? (
-              <ShortcutKeyCombo keys={[isMac ? '⌘' : 'Ctrl', isMac ? '⏎' : 'Enter']} />
-            ) : null}
-          </span>
-        </TooltipContent>
-      </Tooltip>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            aria-label={translate('components.native-chat.queuedMessages.delete', 'Delete')}
-            onClick={onDelete}
-          >
-            <Trash2 className="size-3.5" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="top" sideOffset={4}>
-          {translate('components.native-chat.queuedMessages.delete', 'Delete')}
-        </TooltipContent>
-      </Tooltip>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            aria-label={translate(
-              'components.native-chat.queuedMessages.moreActions',
-              'More actions'
-            )}
-          >
-            <MoreHorizontal className="size-3.5" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem onSelect={onEdit}>
-            <Pencil />
-            {translate('components.native-chat.queuedMessages.editMessage', 'Edit message')}
-          </DropdownMenuItem>
-          {onTurnOffQueueing ? (
-            <DropdownMenuItem onSelect={onTurnOffQueueing}>
-              {translate(
-                'components.native-chat.queuedMessages.turnOffQueueing',
-                'Turn off queueing'
-              )}
-            </DropdownMenuItem>
-          ) : null}
-        </DropdownMenuContent>
-      </DropdownMenu>
+      ) : null}
     </li>
+  )
+}
+
+function QueuedMessageExpandToggle({
+  expanded,
+  controls,
+  onToggle
+}: {
+  expanded: boolean
+  /** The opened text element; absent while folded, when no such element exists. */
+  controls: string | undefined
+  onToggle: () => void
+}): React.JSX.Element {
+  const label = expanded
+    ? translate('components.native-chat.queuedMessages.showLess', 'Show less')
+    : translate('components.native-chat.queuedMessages.showFullMessage', 'Show full message')
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          aria-label={label}
+          aria-expanded={expanded}
+          aria-controls={controls}
+          onClick={onToggle}
+        >
+          <ChevronDown className={cn('size-3.5 transition-transform', expanded && 'rotate-180')} />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="top" sideOffset={4}>
+        {label}
+      </TooltipContent>
+    </Tooltip>
   )
 }

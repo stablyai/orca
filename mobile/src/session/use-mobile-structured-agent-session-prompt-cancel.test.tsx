@@ -34,9 +34,6 @@ vi.mock('./use-mobile-structured-agent-options', () => ({
 vi.mock('./use-mobile-structured-prompt-responses', () => ({
   useMobileStructuredPromptResponses: mocks.promptResponses
 }))
-vi.mock('./use-mobile-structured-send-operation-reconciliation', () => ({
-  useMobileStructuredSendOperationReconciliation: vi.fn()
-}))
 
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
 
@@ -125,6 +122,7 @@ function Harness({
       promptCancel: promptCancelSupported,
       questionAnswers: questionAnswersSupported,
       queuedMessages: false,
+      queuedCommands: false,
       statusFeed: false,
       quietRepeatedStop: false
     },

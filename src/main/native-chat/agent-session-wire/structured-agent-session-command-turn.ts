@@ -17,8 +17,8 @@ import {
   type AgentSessionFailureWordsContext
 } from '../../../shared/agent-session-failure-words'
 import {
-  agentJournalItemKey,
-  agentJournalSubmissionKey
+  agentJournalSubmissionKey,
+  parseAgentJournalItemKey
 } from '../../../shared/agent-session-journal-item-key'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
@@ -35,19 +35,17 @@ import {
   readAgentJournalTurn
 } from '../../../shared/agent-session-turn-record'
 import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
-import {
-  isStructuredAgentSessionStopNote,
-  structuredAgentSessionStopNoteIdentity
-} from '../../../shared/structured-agent-session-stop-note-key'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type {
   AgentSessionCommandAdmission,
-  StructuredAgentSessionAdapter,
-  StructuredAgentSessionProviderChildPhase
+  StructuredAgentSessionAdapter
 } from './structured-agent-session-adapter'
 import type { StructuredAgentRegistry } from './structured-agent-registry'
-import { structuredAgentSessionStartFailure } from './structured-agent-session-failure-text'
 import { conversationCommandBlocked } from './structured-conversation-command-admission'
+import { structuredAgentSessionCommandTurn } from '../../../shared/structured-agent-session-command-turn-identity'
+import { refuseQueuedCommand } from './structured-agent-session-queued-command-refusal'
+
+export { structuredAgentSessionCommandTurn } from '../../../shared/structured-agent-session-command-turn-identity'
 
 export const STRUCTURED_AGENT_SESSION_COMPACT_COMMAND = 'compact'
 
@@ -92,24 +90,6 @@ export function structuredAgentSessionAwaitedCommand(
     : undefined
 }
 
-/** The command's turn: its record and the `turnId` a Stop names. The `compact:` prefix is how the
- *  host's Stop and delivery gate tell a command's turn from any other. */
-export function structuredAgentSessionCommandTurn(clientMessageId: string): {
-  identity: AgentJournalItemIdentity
-  itemId: string
-  turnId: string
-  /** The command's one result row, inside its turn. */
-  resultIdentity: AgentJournalItemIdentity
-} {
-  const identity = { provider: 'orca' as const, clientMessageId: `command-turn:${clientMessageId}` }
-  return {
-    identity,
-    itemId: agentJournalItemKey(identity),
-    turnId: `compact:${clientMessageId}`,
-    resultIdentity: { provider: 'orca', clientMessageId: `command-result:${clientMessageId}` }
-  }
-}
-
 /** Whether the journal's running turn is a command's, which takes no input while it runs. */
 export function structuredAgentSessionCommandRunning(
   journal: Pick<AgentSessionJournal, 'activeTurnId'>
@@ -122,7 +102,18 @@ export function isStructuredAgentSessionCommandTurnId(turnId: string): boolean {
   return turnId.startsWith('compact:')
 }
 
-export { isStructuredAgentSessionStopNote, structuredAgentSessionStopNoteIdentity }
+const STOP_NOTE_PREFIX = 'stop:'
+
+/** A Stop's note, keyed by the turn it stopped (or, with no turn, by its operation). */
+export function structuredAgentSessionStopNoteIdentity(stopKey: string): AgentJournalItemIdentity {
+  return { provider: 'orca', clientMessageId: `${STOP_NOTE_PREFIX}${stopKey}` }
+}
+
+/** Whether a journal row is a Stop's note. */
+export function isStructuredAgentSessionStopNote(itemId: string): boolean {
+  const identity = parseAgentJournalItemKey(itemId)
+  return identity?.provider === 'orca' && identity.clientMessageId.startsWith(STOP_NOTE_PREFIX)
+}
 
 /** Whether an earlier Stop already asked the running command `turnId` names to end. Read from the
  *  journal, so nothing is held that could outlive the command. */
@@ -147,7 +138,6 @@ export type StructuredAgentSessionCommandHandoverContext = {
   fence: number
   adapter: StructuredAgentSessionAdapter
   agents: StructuredAgentRegistry
-  providerChildPhase?: () => StructuredAgentSessionProviderChildPhase | undefined
   /** Who a failure the handover meets names, as the start's own row does. */
   failureTextContext?: AgentSessionFailureWordsContext
   record: () => AgentSessionRecord | null
@@ -166,14 +156,65 @@ export async function handOverStructuredAgentSessionCommand(
   // Provider frames already received decide whether a turn is running: each landed at its call.
   const blocked = commandBlocked(ctx, body)
   if (blocked) {
-    await ctx.journal.resolveDispatch({
-      clientMessageId,
-      state: 'rejected',
-      ...agentSessionFailureWords(blocked, { ...ctx.failureTextContext, surface: 'rejection' }),
-      fence: ctx.fence
+    const refused = {
+      state: 'rejected' as const,
+      ...agentSessionFailureWords(blocked, {
+        ...ctx.failureTextContext,
+        command: STRUCTURED_AGENT_SESSION_COMPACT_COMMAND,
+        surface: 'rejection'
+      })
+    }
+    if (submission.queuedMessageId === undefined) {
+      // The command RPC that sent it is still waiting, and its answer says why.
+      await ctx.journal.resolveDispatch({ clientMessageId, ...refused, fence: ctx.fence })
+      return
+    }
+    // A queued card's refusal has nobody waiting on it: its turn's one row says why.
+    await refuseQueuedCommand(
+      ctx,
+      submission,
+      blocked,
+      refused,
+      STRUCTURED_AGENT_SESSION_COMPACT_COMMAND
+    )
+    return
+  }
+  const { turn, running } = await openCommandTurn(ctx, submission)
+  let admission: AgentSessionCommandAdmission
+  try {
+    admission = await ctx.adapter.compact!({
+      sessionId: ctx.sessionId,
+      fence: ctx.fence,
+      command: { clientMessageId, ...turn, running }
+    })
+  } catch (error) {
+    // Handed over only to a child that proved its start, so a throw is a lost reply: it may have run.
+    await settleUnsentCommand(ctx, clientMessageId, {
+      state: 'unknown',
+      reason: error instanceof Error ? error.message : String(error)
     })
     return
   }
+  if (admission.state === 'rejected') {
+    // The provider refused the compaction itself: its row reads as the compaction failing.
+    await settleUnsentCommand(
+      ctx,
+      clientMessageId,
+      admission,
+      agentSessionFailureFact('compactionFailed', { detail: admission.rejection.detail })
+    )
+  } else if (admission.state !== 'admitted') {
+    // An unknown write leaves the turn to the provider's end or the child's: it may have run.
+    await ctx.journal.resolveDispatch({ clientMessageId, ...admission, fence: ctx.fence })
+  }
+}
+
+/** Hands the command over and opens its own turn. */
+async function openCommandTurn(
+  ctx: StructuredAgentSessionCommandHandoverContext,
+  submission: AgentJournalSubmission
+) {
+  const { clientMessageId } = submission
   const turn = structuredAgentSessionCommandTurn(clientMessageId)
   await ctx.journal.resolveDispatch({
     clientMessageId,
@@ -194,41 +235,7 @@ export async function handOverStructuredAgentSessionCommand(
     observedAt: startedAt,
     turnScope: AGENT_JOURNAL_THREAD_SCOPE
   })
-  let admission: AgentSessionCommandAdmission
-  try {
-    admission = await ctx.adapter.compact!({
-      sessionId: ctx.sessionId,
-      fence: ctx.fence,
-      command: { clientMessageId, ...turn, running }
-    })
-  } catch (error) {
-    // A child still starting throws only for a start that failed before the write, so the command
-    // provably did not run. Any other throw is a lost reply: the command may have run.
-    const unsent =
-      ctx.providerChildPhase?.() === 'starting'
-        ? {
-            state: 'rejected' as const,
-            ...structuredAgentSessionStartFailure({ error }, ctx.failureTextContext)
-          }
-        : {
-            state: 'unknown' as const,
-            reason: error instanceof Error ? error.message : String(error)
-          }
-    await settleUnsentCommand(ctx, clientMessageId, unsent)
-    return
-  }
-  if (admission.state === 'rejected') {
-    // The provider refused the compaction itself: its row reads as the compaction failing.
-    await settleUnsentCommand(
-      ctx,
-      clientMessageId,
-      admission,
-      agentSessionFailureFact('compactionFailed', { detail: admission.rejection.detail })
-    )
-  } else if (admission.state !== 'admitted') {
-    // An unknown write leaves the turn to the provider's end or the child's: it may have run.
-    await ctx.journal.resolveDispatch({ clientMessageId, ...admission, fence: ctx.fence })
-  }
+  return { turn, running }
 }
 
 /** Where the turn a handed-over submission runs in starts counting: its handover, so time spent

@@ -28,10 +28,8 @@ import type { AgentSessionJournal } from '../agent-session-journal/journal-store
 import type { JournalOperationReceipt } from '../agent-session-journal/journal-row-writer'
 import type {
   AgentSessionDispatchOutcome,
-  StructuredAgentSessionAdapter,
-  StructuredAgentSessionProviderChildPhase
+  StructuredAgentSessionAdapter
 } from './structured-agent-session-adapter'
-import { structuredAgentSessionStartFailure } from './structured-agent-session-failure-text'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 import {
   handOverStructuredAgentSessionCommand,
@@ -44,6 +42,7 @@ import {
   journalOpenRefusal
 } from '../agent-session-journal/journal-open-failure'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { isAgentSessionAttachmentExpiredError } from '../agent-session-attachments/agent-session-attachment-claims'
 import type { StructuredAgentRegistry } from './structured-agent-registry'
 export { performSetOption } from './structured-agent-session-turns-options'
 export { performPrompt } from './structured-agent-session-turns-prompt'
@@ -66,8 +65,6 @@ export type AgentSessionTurnContext = {
   /** Republishes state kept outside the journal, such as the record's options or rewind phase.
    *  Journal appends reach readers on their own. */
   publish: () => void
-  /** What the host holds about the child this dispatch is for, read at the moment it is needed. */
-  providerChildPhase?: () => StructuredAgentSessionProviderChildPhase | undefined
   /** Who a Stop's refusal row names. */
   failureTextContext?: AgentSessionFailureWordsContext
   /** The operation's success, committed with the row that accepts it (`MutationPlan.settlesWithWrite`). */
@@ -86,10 +83,21 @@ function invalid(
   return { ok: false, refusal: refuse('agent_session_operation_invalid', { reason }, message) }
 }
 
-/** A thrown adapter error is indistinguishable from a lost reply, so it settles as `unknown`
- *  rather than as a rejection — unless the child had not proven its start. A dispatch to such a
- *  child throws only when the start failed before the write (a write's own failure is an outcome,
- *  not a throw), so it is provably unwritten and is rejected with the cause the adapter gave. */
+/** A message naming an attachment this host no longer stores is refused whole, before delivery. */
+export function agentSessionAttachmentExpiredRefusal(): {
+  ok: false
+  refusal: AgentSessionWireRefusal
+} {
+  return invalid(
+    'attachmentExpired',
+    'A chat attachment in this message is no longer stored on the host, so it was not sent.'
+  )
+}
+
+/** A thrown adapter error is indistinguishable from a lost reply, so it settles as `unknown`, never
+ *  replayed. Only a child that proved its start is handed anything, so a start that fails leaves its
+ *  messages unsent instead (the delivery loop's barrier); an adapter that knows a write never
+ *  happened answers `rejected`. */
 async function dispatchSafely(
   ctx: AgentSessionHandoverContext,
   clientMessageId: string,
@@ -105,12 +113,6 @@ async function dispatchSafely(
       requestedAt
     })
   } catch (error) {
-    if (ctx.providerChildPhase?.() === 'starting') {
-      return {
-        state: 'rejected',
-        ...structuredAgentSessionStartFailure({ error }, ctx.failureTextContext)
-      }
-    }
     return { state: 'unknown', reason: error instanceof Error ? error.message : String(error) }
   }
 }
@@ -159,6 +161,9 @@ export async function performSend(
       ctx.operationReceipt
     )
   } catch (error) {
+    if (isAgentSessionAttachmentExpiredError(error)) {
+      return agentSessionAttachmentExpiredRefusal()
+    }
     // Damage SQLite proves is the chat's, and no retry writes past it: say so, as an open does. So
     // does a chat holding a newer Orca's rows, which only an update writes past, and a refusal the
     // journal already classified (a failed transaction that will not roll back).

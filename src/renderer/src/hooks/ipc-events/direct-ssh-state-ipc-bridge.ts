@@ -10,6 +10,7 @@ import {
 } from '../direct-ssh-state-routing'
 import type { DirectSshBridgeRuntime } from './direct-ssh-bridge-runtime'
 import { hydrateDirectSshInitialState } from './direct-ssh-initial-state-hydration'
+import { applySshManagedServerTransition } from './ssh-managed-server-state-effects'
 export function registerDirectSshStateIpcBridge(
   unsubs: (() => void)[],
   runtime: DirectSshBridgeRuntime
@@ -154,7 +155,9 @@ export function registerDirectSshStateIpcBridge(
     origin: DirectSshConnectedStateOrigin
   ): void => {
     const store = useAppStore.getState()
+    const previousManagedServer = store.sshConnectionStates.get(targetId)?.managedServer
     store.setSshConnectionState(targetId, state)
+    applySshManagedServerTransition(targetId, previousManagedServer, state.managedServer)
 
     if (canConnectSshStatus(state.status)) {
       routedAuthorityByTarget.delete(targetId)

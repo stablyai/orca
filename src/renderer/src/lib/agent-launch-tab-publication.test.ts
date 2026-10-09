@@ -122,6 +122,27 @@ describe('publishing a launch tab before its agent exists', () => {
     expect(launchPane()).toEqual({ leafId: LEAF_ID, operationId: 'op-2' })
   })
 
+  it('hands a tab this window made for the launch to the host, as the launch to take back', async () => {
+    const { holdAgentLaunchPaneSpawn, agentLaunchPaneSpawnHold } =
+      await import('./agent-launch-pane-spawn-hold')
+    holdAgentLaunchPaneSpawn(TAB_ID, LEAF_ID)
+    store.getState().createTab(WT, undefined, undefined, {
+      id: TAB_ID,
+      initialLeafId: LEAF_ID,
+      agentLaunchPane: { leafId: LEAF_ID }
+    })
+    const held = agentLaunchPaneSpawnHold(TAB_ID, LEAF_ID)
+
+    const published = publishAgentLaunchTab(request())
+
+    // The host now owns the pane, so a refused launch takes the tab back rather than leaving a shell.
+    expect(published).toMatchObject({ tabId: TAB_ID, created: true })
+    await expect(held).resolves.toBeUndefined()
+    expect(agentLaunchPaneSpawnHold(TAB_ID, LEAF_ID)).toBeNull()
+    // A retry finds no hold: the tab is no longer only this launch's.
+    expect(publishAgentLaunchTab(request({ requestId: 'request-2' })).created).toBe(false)
+  })
+
   it("remounts a pane that showed an earlier launch's outcome, so it spawns for the new launch", () => {
     const generation = () =>
       store.getState().tabsByWorktree[WT]?.find((tab) => tab.id === TAB_ID)?.generation ?? 0

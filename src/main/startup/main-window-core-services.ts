@@ -13,7 +13,11 @@ import {
   handlePtyExit
 } from './main-process-pty-startup'
 import { prepareCodexRuntimeHomeForLaunch } from './codex-launch-preparation'
-import { prepareCodexSessionResumeForLaunch } from './codex-session-resume-launch'
+import { resolveHostAgentBaseEnvironment } from '../runtime/structured-agent-shell-environment'
+import {
+  prepareCodexPinnedLaunchHome,
+  prepareCodexSessionResumeForLaunch
+} from './codex-session-resume-launch'
 import { isRecoveryReloadInFlight } from './main-window-lifecycle-flags'
 import { RELAY_HOST_CLOSE_REASON } from '../../shared/relay-host-close-reason'
 
@@ -71,7 +75,8 @@ export function attachMainWindowCoreServices(
     automations,
     {
       prepareForCodexLaunch: prepareCodexRuntimeHomeForLaunch,
-      prepareForClaudeLaunch: (target) => claudeRuntimeAuth.prepareForClaudeLaunch(target)
+      prepareForClaudeLaunch: (target) => claudeRuntimeAuth.prepareForClaudeLaunch(target),
+      resolveBaseEnvironment: () => resolveHostAgentBaseEnvironment(store.getSettings())
     },
     state.agentAwakeService ?? undefined,
     state.crashReports ?? undefined,
@@ -82,16 +87,13 @@ export function attachMainWindowCoreServices(
       prepareAiVaultSessionResume: (args) =>
         prepareCodexAiVaultSessionResume(args, {
           runtimeHome: codexRuntimeHome,
-          systemCodexHomePath: resolveHostCodexSessionSourceHome(store.getSettings())
+          systemCodexHomePath: resolveHostCodexSessionSourceHome(store.getSettings()),
+          preparePinnedLaunchHome: (home) => prepareCodexPinnedLaunchHome(home)
         }),
       onBeforeRelaunch: async () => {
         state.isQuitting = true
         state.desktopRelayService?.fenceAndCloseNow()
-        await preserveAgentAuthBeforeRestart({
-          codexRuntimeHome,
-          claudeRuntimeAuth,
-          store
-        })
+        await preserveAgentAuthBeforeRestart({ codexRuntimeHome, store })
       },
       onOrcaProfileAuthMutation: () => state.desktopRelayService?.authMutated(),
       // Sign-out is the one fence a paired phone can be told about; quit and
@@ -127,7 +129,7 @@ export function attachMainWindowCoreServices(
       onCodexHomePtySpawned: handleCodexHomePtySpawned,
       onPtyExit: handlePtyExit,
       onBeforeUpdateQuit: async () => {
-        await preserveAgentAuthBeforeRestart({ codexRuntimeHome, claudeRuntimeAuth, store })
+        await preserveAgentAuthBeforeRestart({ codexRuntimeHome, store })
         await store.flushPendingOrThrowAsync({ fullCheckpoint: true })
       },
       onBeforeUpdateQuitFailure: 'abort',

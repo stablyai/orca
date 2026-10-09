@@ -34,6 +34,7 @@ export type StructuredAgentSessionRestartResumeSurfaces = {
   ) => Promise<{ value: AgentSessionSendResult } | undefined>
   /** The session's child records, the host's one read of them. */
   readChildWork: (sessionId: string) => readonly AgentChildWorkView[] | undefined
+  publishStatus?: (sessionId: string) => void
   now: () => number
 }
 

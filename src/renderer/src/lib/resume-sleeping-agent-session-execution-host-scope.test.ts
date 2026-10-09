@@ -17,7 +17,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { useAppStore } from '@/store'
-import { makeWorktree, TEST_REPO } from '@/store/slices/store-test-helpers'
+import { makeWorktree, TEST_REPO } from '../store/slices/worktrees-slice-test-fixtures'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
 import {
   agentResumeOriginNamesAnotherExecutionHost,

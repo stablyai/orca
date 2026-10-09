@@ -11,10 +11,6 @@ import {
   parseAgentSessionOperationTimestamp
 } from '../../shared/agent-session-host-authority'
 import { createHash } from 'node:crypto'
-import {
-  AGENT_SESSION_OPERATION_GLOBAL_LIMIT,
-  AGENT_SESSION_OPERATION_PER_CLIENT_LIMIT
-} from './orca-runtime-core'
 import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
 import { resolveAgentStartupPlanInputs } from '../../shared/agent-startup-plan-inputs'
 import { buildExecutionHostAgentStartupPlan } from '../opencode/opencode-model-startup-plan'
@@ -89,21 +85,6 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
       // Why: once a tombstone could have expired, an unseen replay must never
       // be reinterpreted as permission to start another fresh agent.
       throw new Error('agent_session_operation_expired')
-    }
-    let callerOperationCount = 0
-    const callerPrefix = `${callerKey}\0`
-    for (const key of this.agentSessionCreateOperations.keys()) {
-      if (key.startsWith(callerPrefix)) {
-        callerOperationCount += 1
-      }
-    }
-    if (
-      callerOperationCount >= AGENT_SESSION_OPERATION_PER_CLIENT_LIMIT ||
-      this.agentSessionCreateOperations.size >= AGENT_SESSION_OPERATION_GLOBAL_LIMIT
-    ) {
-      // Why: tombstones cannot be evicted early without making an old replay
-      // capable of spawning again; reject new IDs until retained entries age out.
-      throw new Error('agent_session_operation_capacity')
     }
     let retainReplayFence = false
     const reclaim: AgentSessionCreateOperation['reclaim'] = {}

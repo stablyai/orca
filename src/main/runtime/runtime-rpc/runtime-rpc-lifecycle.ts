@@ -19,6 +19,7 @@ import {
   createRuntimeTransportMetadata,
   sweepOrphanedRuntimeSockets
 } from './runtime-rpc-socket-metadata'
+import { errorMessage } from '../../../shared/error-message'
 
 export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
   async start(): Promise<void> {
@@ -46,12 +47,12 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
 
     // Why: the `.catch` guarantees reply() always fires so a throw can't strand the client or leak the AbortController.
     socketTransport.onMessage((msg, reply, context) => {
-      void this.handleMessage(msg, context)
+      void this.trackClientRequest(() => this.handleMessage(msg, context))
         .then((response) => {
           reply(JSON.stringify(response))
         })
         .catch((error) => {
-          const message = error instanceof Error ? error.message : String(error)
+          const message = errorMessage(error)
           // Why: best-effort id recovery so the client can correlate the error frame to its pending request.
           let id = 'unknown'
           try {
@@ -216,17 +217,22 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
       deviceRegistry,
       e2eeKeypair,
       onText: (socket, plaintext, reply, sendBinary) => {
-        void this.handleWebSocketMessage(
-          plaintext,
-          reply,
-          sendBinary,
-          undefined,
-          socket.ws,
-          socket.device.deviceToken,
-          socket
+        void this.trackClientRequest(() =>
+          this.handleWebSocketMessage(
+            plaintext,
+            reply,
+            sendBinary,
+            undefined,
+            socket.ws,
+            socket.device.deviceToken,
+            socket
+          )
         )
       },
-      onBinary: (socket, bytes) => this.handleWebSocketBinaryMessage(bytes, socket.ws),
+      onBinary: (socket, bytes) => {
+        this.lastClientRequestAt = Date.now()
+        this.handleWebSocketBinaryMessage(bytes, socket.ws)
+      },
       onReady: (socket) => {
         // Why: first authenticated mobile/remote client (direct WS and
         // cloud relay both attach here) starts path-candidate tracking.

@@ -2,10 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { agentSessionFailureFact } from '../../../src/shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../src/shared/agent-session-failure-words'
 import { DISPATCH_REJECTED_HOST_RESTARTED } from '../../../src/shared/structured-agent-session-dispatch-rejection'
-import {
-  QUEUED_MESSAGE_PAUSED_KEPT,
-  QUEUED_MESSAGE_PAUSED_SEND_FAILED
-} from '../../../src/shared/agent-session-wire'
+import { QUEUED_MESSAGE_PAUSED_SEND_FAILED } from '../../../src/shared/agent-session-wire'
 import type { AgentSessionQueuedMessage } from '../../../src/shared/agent-session-wire'
 import {
   mobileQueueHasResumableCard,
@@ -33,6 +30,99 @@ function draft(overrides: Partial<AgentSessionQueuedMessage> & { messageId: stri
 }
 
 describe('mobileQueuedMessageCards', () => {
+  it.each([
+    ['Claude', 'claude auth login'],
+    ['Codex', 'codex login'],
+    ['Grok', 'grok login'],
+    ['OpenCode', 'opencode auth login'],
+    ['Pi', '/login'],
+    ['OMP', 'Sign in to OMP.']
+  ])('keeps %s identity and its sign-in action on returned cards', (agentName, guidance) => {
+    const [card] = mobileQueuedMessageCards(
+      [draft({ messageId: 'auth', ...returnedAs(agentSessionFailureFact('notSignedIn')) })],
+      [],
+      { pendingPrompt: false, agentName }
+    )
+    expect(card?.caption).toContain(agentName)
+    expect(card?.caption).toContain(guidance)
+    expect(card?.caption).not.toContain('send your message again')
+    expect(card?.needsAttention).toBe(true)
+  })
+
+  it.each(['Claude', 'Codex'])(
+    'keeps %s managed guidance unless a row already explains it',
+    (agentName) => {
+      const fact = agentSessionFailureFact('notSignedIn', { account: 'managed' })
+      const drafts = [draft({ messageId: 'auth', ...returnedAs(fact) })]
+      const [card] = mobileQueuedMessageCards(drafts, [], { pendingPrompt: false, agentName })
+      expect(card?.caption).toBe(
+        `This ${agentName} account isn't signed in. Sign in again in ${agentName} Accounts settings.`
+      )
+      const [stated] = mobileQueuedMessageCards(drafts, [], {
+        pendingPrompt: false,
+        agentName,
+        statedFailures: [fact]
+      })
+      expect(stated?.caption).toBe('Your message was not sent.')
+    }
+  )
+
+  it('marks a /compact card as a command, its text as typed', () => {
+    const [card] = mobileQueuedMessageCards(
+      [
+        draft({
+          messageId: 'c',
+          body: {
+            kind: 'message',
+            role: 'user',
+            blocks: [{ type: 'text', text: '/compact' }],
+            command: { name: 'compact' }
+          }
+        })
+      ],
+      [],
+      { pendingPrompt: false }
+    )
+    expect(card).toMatchObject({ text: '/compact', command: true, caption: null })
+    expect(card).not.toHaveProperty('waitsForAgent')
+    expect(
+      mobileQueuedMessageCards([draft({ messageId: 'a' })], [], { pendingPrompt: false })[0]
+    ).not.toHaveProperty('command')
+    const compact = draft({
+      messageId: 'c',
+      body: {
+        kind: 'message',
+        role: 'user',
+        blocks: [{ type: 'text', text: '/compact' }],
+        command: { name: 'compact' }
+      }
+    })
+    expect(
+      mobileQueuedMessageCards([compact], [], { pendingPrompt: false, agentWorking: true })[0]
+    ).toMatchObject({ command: true, waitsForAgent: true })
+  })
+
+  it("a send-failed command card's caption names Send only when Send is there", () => {
+    const failed = draft({
+      messageId: 'c',
+      paused: true,
+      pausedReason: QUEUED_MESSAGE_PAUSED_SEND_FAILED,
+      body: {
+        kind: 'message',
+        role: 'user',
+        blocks: [{ type: 'text', text: '/compact' }],
+        command: { name: 'compact' }
+      }
+    })
+    expect(
+      mobileQueuedMessageCards([failed], [], { pendingPrompt: false, agentWorking: true })[0]
+        ?.caption
+    ).toBe("Couldn't send — tap Send to retry once the agent finishes")
+    expect(mobileQueuedMessageCards([failed], [], { pendingPrompt: false })[0]?.caption).toBe(
+      "Couldn't send — tap Send to retry"
+    )
+  })
+
   it('renders nothing without a published list', () => {
     expect(mobileQueuedMessageCards(null, [], { pendingPrompt: false })).toEqual([])
     expect(mobileQueuedMessageCards([], [], { pendingPrompt: false })).toEqual([])
@@ -103,34 +193,11 @@ describe('mobileQueuedMessageCards', () => {
     expect(resumable([failed])).toBe(false)
     expect(resumable([failed, waiting])).toBe(true)
     expect(resumable([waiting, { ...returned, position: 3 }])).toBe(true)
-    // A kept card is held on its own, like a failed one: the drain goes past it.
-    const kept = draft({ messageId: 'k', paused: true, pausedReason: QUEUED_MESSAGE_PAUSED_KEPT })
-    expect(resumable([kept])).toBe(false)
-    expect(resumable([kept, waiting])).toBe(true)
-  })
-
-  // The host kept it unsent across a restart or a close; the cards behind it are not held by it.
-  it('captions a kept card as not sent yet, and leaves the cards behind it plainly queued', () => {
-    const cards = mobileQueuedMessageCards(
-      [
-        draft({ messageId: 'k', paused: true, pausedReason: QUEUED_MESSAGE_PAUSED_KEPT }),
-        draft({ messageId: 'b', position: 2 })
-      ],
-      [],
-      { pendingPrompt: false }
-    )
-    expect(cards.map(({ caption, needsAttention }) => ({ caption, needsAttention }))).toEqual([
-      { caption: 'Not sent yet — tap Send to send it', needsAttention: false },
-      { caption: null, needsAttention: false }
-    ])
   })
 
   it('words the paused queue by reason, and one this build does not know as a plain pause', () => {
     expect(mobileQueuePauseLabel({ reason: 'stopped' })).toBe(
       'Queue paused because you interrupted'
-    )
-    expect(mobileQueuePauseLabel({ reason: 'cleared' })).toBe(
-      'Queue paused after you cleared the conversation'
     )
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a reason newer than this build's union, as a newer host would send it.
     const newer = { reason: 'later_reason' } as never

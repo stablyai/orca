@@ -1,3 +1,4 @@
+import type { AgentSessionProviderContextBoundary } from './agent-session-provider-context'
 // ─── Native chat conversation model (cross-process, IPC-serializable) ────────
 // The single renderer-facing conversation contract for the native chat view.
 // Assembled from layered sources in priority order: on-disk JSONL transcripts,
@@ -11,6 +12,7 @@ import type {
   AgentSessionBackgroundTaskRunState
 } from './agent-session-background-task-wire'
 import type { AgentSessionTokenUsage } from './agent-session-context-usage'
+import type { AgentSessionOrcaStop } from './agent-session-orca-stop'
 import type { AgentSessionFailureFact } from './agent-session-failure'
 import type {
   AgentJournalMessageSendMode,
@@ -49,6 +51,7 @@ export type NativeChatTextBlock = {
   text: string
   /** Optional journal display hints; readers narrow only the values they know. */
   presentation?: string
+  contextClear?: AgentSessionProviderContextBoundary
   tone?: string
   /** Optional structured detail for an otherwise ordinary fallback line. */
   providerFrame?: {
@@ -63,6 +66,8 @@ export type NativeChatTextBlock = {
   }
   /** On a status line that reports a failure: what failed, typed. */
   failure?: AgentSessionFailureFact
+  /** On the line about a reply Orca's own stop cut off: why, and the turn it cut. */
+  orcaStop?: AgentSessionOrcaStop & { turnItemId?: string }
 }
 
 /** A tool invocation by the agent. `input` is the (already-serialized) tool

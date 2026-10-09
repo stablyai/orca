@@ -2,14 +2,18 @@ import { OrcaRuntimeWithGetRuntimeId } from './orca-runtime-get-runtime-id'
 import type { RuntimeDegradation, RuntimeStatus } from '../../shared/runtime-types'
 import {
   runtimeBrowserCommandsFactoryIsHeadless,
+  runtimeBrowserCommandsFactorySupportsClientHosting,
   runtimeBrowserUnavailableCause
 } from './runtime-browser-commands-factory'
 import { isBrowserIdentityModeStoreInitialized } from '../browser/browser-identity-mode-store'
 import type { RuntimeCapability } from '../../shared/protocol-version'
 import {
   BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY,
+  BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
   BROWSER_HEADLESS_RUNTIME_CAPABILITY,
   BROWSER_IDENTITY_RUNTIME_CAPABILITY,
+  BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY,
+  MANAGED_SERVER_RUNTIME_CAPABILITY,
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY,
   RUNTIME_CAPABILITIES,
@@ -38,6 +42,7 @@ import { parsePaneKey } from '../../shared/stable-pane-id'
 import { wakeFolderRepoGitUpgradeWatch } from '../ipc/folder-repo-git-upgrade-wake'
 import { runWorktreeChangeInvalidators } from '../ipc/worktree-change-invalidators'
 import { MACHINE_NAME_PUBLISH_WAIT_MS } from './runtime-machine-name'
+import { getManagedServerActions } from './managed-server-actions-registry'
 
 type RuntimeStatusHost = {
   getAvailableAuthoritativeWindow(): unknown
@@ -75,6 +80,7 @@ export class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
     const hasOffscreen = !hasRenderer && Boolean(this.offscreenBrowserBackend)
     const hasHeadlessCommands = runtimeBrowserCommandsFactoryIsHeadless()
     const canBrowse = hasRenderer || hasOffscreen
+    const canHostClientPages = runtimeBrowserCommandsFactorySupportsClientHosting()
     // TEMPORARY: nothing on this host reads it any more. Clients older than this build keep
     // re-probing their WSL capabilities until it is true, so it is published for one
     // compatibility window and then removed.
@@ -83,6 +89,11 @@ export class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
     const capabilities: RuntimeCapability[] = RUNTIME_CAPABILITIES.filter(
       (capability) =>
         (capability !== 'browser.screencast.v1' || canBrowse) &&
+        (capability !== BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY || canHostClientPages) &&
+        (capability !== BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY ||
+          canBrowse ||
+          hasHeadlessCommands ||
+          canHostClientPages) &&
         // Why: the nested-runtime E2E needs a real legacy transport without maintaining an old binary fixture.
         (process.env.ORCA_E2E_DISABLE_RUNTIME_SHARED_CONTROL !== '1' ||
           capability !== REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY) &&
@@ -107,6 +118,9 @@ export class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
     // can host a page so remote clients can surface Proceed Anyway (Unsafe).
     if (canBrowse) {
       capabilities.push(BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY)
+    }
+    if (getManagedServerActions()) {
+      capabilities.push(MANAGED_SERVER_RUNTIME_CAPABILITY)
     }
     // Why not a static capability: dev trees and `orca serve` installs may carry no
     // out/mobile-web, and advertising a bundle this install cannot produce would promise a

@@ -131,3 +131,24 @@ export function removeWorkspaceSessionOwners(
   )
   return next
 }
+
+export function removeWorkspaceSessionOwnersEverywhere(
+  state: Pick<PersistedState, 'workspaceSession' | 'workspaceSessionsByHostId'>,
+  ownerKeys: ReadonlySet<string>
+): void {
+  if (ownerKeys.size === 0) {
+    return
+  }
+  state.workspaceSession = removeWorkspaceSessionOwners(state.workspaceSession, ownerKeys)!
+  const partitions = state.workspaceSessionsByHostId
+  if (!partitions) {
+    return
+  }
+  const next: Record<string, WorkspaceSessionState> = {}
+  for (const [hostId, partition] of Object.entries(partitions)) {
+    if (partition) {
+      next[hostId] = removeWorkspaceSessionOwners(partition, ownerKeys)!
+    }
+  }
+  state.workspaceSessionsByHostId = next
+}

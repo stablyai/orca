@@ -195,7 +195,6 @@ describe('host-answered /context in the composer', () => {
       answerCommandLocally,
       sessionOptionsSurface: liveSurface(DISCOVERED),
       trackPendingSend: vi.fn(),
-      setHistory: vi.fn(),
       setDraft: vi.fn(),
       setCaret: vi.fn(),
       clearSkillOrigin: vi.fn(),
@@ -256,6 +255,5 @@ describe('host-answered /context in the composer', () => {
     expect(args.onSlashCommand).toHaveBeenCalledWith('/context', 'Context: 450k / 1M tokens (45%)')
     expect(mocks.sendNativeChatMessage).not.toHaveBeenCalled()
     expect(args.clearImageAttachments).not.toHaveBeenCalled()
-    expect(args.setHistory).toHaveBeenCalled()
   })
 })

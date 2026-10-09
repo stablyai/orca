@@ -14,7 +14,7 @@
 // `item.start - scrollMargin` inside a sizer sitting `scrollMargin` down), which is
 // the same coordinate space as `scrollTop`.
 
-import { NATIVE_CHAT_BOTTOM_THRESHOLD_PX } from './native-chat-autoscroll'
+import { NATIVE_CHAT_FOLLOW_REARM_PX } from './native-chat-autoscroll'
 
 /** The virtualizer's item, restated so this module needs nothing from the lib. */
 export type NativeChatRailVirtualItem = {
@@ -55,7 +55,9 @@ export function findActiveNativeChatRailItem({
 
   // Pinned to the bottom the newest turn is what is being read, whatever happens
   // to sit at the top edge — a short last turn would otherwise light its predecessor.
-  const atBottom = scrollHeight - clientHeight - scrollTop <= NATIVE_CHAT_BOTTOM_THRESHOLD_PX
+  // The follow band, not the wider jump-affordance one: a message jumped to near
+  // the end sits at the top edge a few pixels short of it, and is what is being read.
+  const atBottom = scrollHeight - clientHeight - scrollTop <= NATIVE_CHAT_FOLLOW_REARM_PX
   if (atBottom) {
     const last = virtualItems.at(-1)
     return last === undefined ? previousActiveId : railTickOf(slots[last.index])

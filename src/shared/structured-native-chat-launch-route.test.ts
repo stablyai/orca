@@ -9,17 +9,12 @@ import {
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from './protocol-version'
 import {
-  agentTabsDefaultToNativeChat,
-  prefersStructuredNativeChatByDefault,
+  isNativeChatEnabled,
   resolveStructuredNativeChatSupport,
   type StructuredNativeChatSupportInput
 } from './structured-native-chat-launch-route'
 
-const ON = {
-  experimentalNativeChat: true,
-  openAgentTabsInChatByDefault: true,
-  experimentalStructuredNativeChat: true
-}
+const ON = { experimentalNativeChat: true }
 
 function support(overrides: Partial<StructuredNativeChatSupportInput> = {}) {
   return resolveStructuredNativeChatSupport({
@@ -31,26 +26,16 @@ function support(overrides: Partial<StructuredNativeChatSupportInput> = {}) {
   })
 }
 
-describe('the settings default', () => {
-  it('needs all three toggles for structured, and the first two for native chat', () => {
-    expect(prefersStructuredNativeChatByDefault(ON)).toBe(true)
-    expect(prefersStructuredNativeChatByDefault({ ...ON, experimentalNativeChat: false })).toBe(
-      false
-    )
-    expect(
-      prefersStructuredNativeChatByDefault({ ...ON, openAgentTabsInChatByDefault: false })
-    ).toBe(false)
-    expect(
-      prefersStructuredNativeChatByDefault({ ...ON, experimentalStructuredNativeChat: false })
-    ).toBe(false)
-    expect(agentTabsDefaultToNativeChat({ ...ON, experimentalStructuredNativeChat: false })).toBe(
-      true
-    )
+describe('the Chat UI switch', () => {
+  it('selects structured chat from the one persisted setting', () => {
+    const oldSelectorOff = { experimentalNativeChat: true, openAgentTabsInChatByDefault: false }
+    expect(isNativeChatEnabled(ON)).toBe(true)
+    expect(isNativeChatEnabled({ experimentalNativeChat: false })).toBe(false)
+    expect(isNativeChatEnabled(oldSelectorOff)).toBe(true)
   })
 
   it.each([null, undefined, {}])('reads %s as no preference', (settings) => {
-    expect(prefersStructuredNativeChatByDefault(settings)).toBe(false)
-    expect(agentTabsDefaultToNativeChat(settings)).toBe(false)
+    expect(isNativeChatEnabled(settings)).toBe(false)
   })
 })
 
@@ -121,11 +106,14 @@ describe('agents beyond Claude and Codex', () => {
     STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
   ]
 
-  it('are offered only by a host that advertises and lists them', () => {
-    expect(
-      support({ agent: 'grok', hostCapabilities: REGISTERED, hostStructuredAgents: ['grok'] })
-    ).toEqual({ supported: true })
-  })
+  it.each(['grok', 'pi'] as const)(
+    '%s is offered only by a host that advertises and lists it',
+    (agent) => {
+      expect(
+        support({ agent, hostCapabilities: REGISTERED, hostStructuredAgents: [agent] })
+      ).toEqual({ supported: true })
+    }
+  )
 
   it('are not offered by a host that does not advertise its registered agents', () => {
     expect(support({ agent: 'grok', hostStructuredAgents: ['grok'] })).toEqual({

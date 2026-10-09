@@ -237,6 +237,18 @@ describe('connectPanePty', () => {
     expect(retain()).toBe(false)
   })
 
+  it('carries the pane placement onto its transport', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    transportFactoryQueue.push(createMockTransport())
+    const placement = { kind: 'new-tab' } as const
+    const deps = createDeps({ tabId: 'tab-placement', placement })
+
+    connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks()
+
+    expect(createdTransportOptions[0]).toMatchObject({ placement })
+  })
+
   it('fresh-spawns normally when the pane worktree is not being deleted', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()
@@ -419,7 +431,8 @@ describe('connectPanePty', () => {
         url: 'https://github.com/acme/orca/pull/42',
         slug: { owner: 'acme', repo: 'orca', host: 'github.com' },
         number: 42
-      })
+      }),
+      expect.objectContaining({ tabId: 'tab-1' })
     )
   })
 

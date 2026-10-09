@@ -3,7 +3,7 @@ import type { EditorSlice } from '../types/editor-slice'
 import type { EditorTabSelection, OpenFile } from '../types/open-file'
 import { resolveEditorOpenTargetGroupId } from './editor-open-target-group'
 import { areEditorPreviewTabsEnabled } from './editor-preview-tab-setting'
-import { isEditorTabContentType } from './editor-tab-content-type'
+import { isEditorTabContentType, type EditorTabContentType } from './editor-tab-content-type'
 import { getOpenFileExecutionHostId } from '@/lib/unified-tab-host-ownership'
 
 export function openWorkspaceEditorItem(
@@ -11,7 +11,7 @@ export function openWorkspaceEditorItem(
   fileId: string,
   worktreeId: string,
   label: string,
-  contentType: 'editor' | 'diff' | 'conflict-review' | 'check-details',
+  contentType: EditorTabContentType,
   isPreview?: boolean,
   targetGroupId?: string,
   selection: EditorTabSelection = 'focus'

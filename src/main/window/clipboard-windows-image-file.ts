@@ -84,6 +84,15 @@ export function readWindowsCopiedFilePath({
   return hasAtMostOneShellItem(shellIdListArray) ? decodeFileNameW(fileNameW) : null
 }
 
+export function readWindowsCopiedImageFilePath(
+  formats: WindowsClipboardFileFormats
+): string | null {
+  const filePath = readWindowsCopiedFilePath(formats)
+  return filePath && IMAGE_FILE_EXTENSION_SET.has(win32.extname(filePath).toLowerCase())
+    ? filePath
+    : null
+}
+
 function readPngDimensions(source: Buffer): { height: number; width: number } | null {
   if (
     source.byteLength < 24 ||
@@ -164,8 +173,8 @@ export async function readWindowsClipboardImageFileAsPng(
   formats: WindowsClipboardFileFormats,
   { createImageFromBuffer, openFile }: WindowsClipboardImageFileDeps
 ): Promise<Buffer | null> {
-  const filePath = readWindowsCopiedFilePath(formats)
-  if (!filePath || !IMAGE_FILE_EXTENSION_SET.has(win32.extname(filePath).toLowerCase())) {
+  const filePath = readWindowsCopiedImageFilePath(formats)
+  if (!filePath) {
     return null
   }
 

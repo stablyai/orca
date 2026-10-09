@@ -5,9 +5,11 @@ import type {
   AgentSessionJournalIdentity
 } from '../../shared/agent-session-journal-types'
 import type { AgentJournalDispatchRejection } from '../../shared/agent-session-failure-words'
+import type { JournalLoad } from '../native-chat/agent-session-journal/journal-open'
 import type { AcpLaunchSpec } from './acp-launch-specs'
 import type { ConnectAcpAgent } from './acp-structured-connection'
 import type { AcpStructuredLaunch } from './acp-structured-launch-resolution'
+import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
 
 /** How long a Stop, counted from its cancel, lets the agent end its turn before the child goes. */
 export const ACP_STOP_GRACE_MS = 4_000
@@ -17,11 +19,14 @@ export const ACP_OPTION_WRITE_TIMEOUT_MS = 30_000
 export type AcpStructuredSessionAdapterDeps = {
   spec: AcpLaunchSpec
   resolveLaunch: (input: { identity: AgentSessionJournalIdentity }) => Promise<AcpStructuredLaunch>
+  /** The chat's journal as it stands, read without opening it; null when it has none. */
+  readJournal?: (sessionId: string) => JournalLoad | null
   /** Starts the agent's process and owns its protocol: `createAcpAgentConnection` in production. */
   connect: ConnectAcpAgent
   readProcessStartTime?: (pid: number) => Promise<number | null>
   /** Every exit, expected or not: the host ends that child's record. */
   onEvent?: (event: StructuredAgentSessionLifecycleEvent) => void
+  onChildWorkEvidence?: (sessionId: string, evidence: AgentChildWorkEvidence[]) => void
   /** A send this adapter admitted, settled once the agent answered for it. */
   onDispatchSettledLate?: (
     settlement: { sessionId: string; clientMessageId: string } & (

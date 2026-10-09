@@ -19,7 +19,7 @@ vi.mock('@/store', () => ({
 }))
 
 vi.mock('./terminal-file-open-routing', () => ({
-  getTerminalFileContext: () => ({}),
+  getTerminalFileContext: () => ({ sourceHostResolved: true }),
   mapTerminalFilePath: (filePath: string) => filePath,
   openDetectedFilePath: mocks.openDetectedFilePath,
   shouldOpenTerminalFileWithSystemDefault: () => mocks.canOpenWithSystemDefault,
@@ -140,7 +140,10 @@ describe('terminal file link actions', () => {
     expect(actionRequest.alternate.label).toBe('Download & open with default app')
 
     actionRequest.alternate.run()
-    expect(mocks.downloadAndOpen).toHaveBeenCalledWith({}, '/repo/docs/report.html')
+    expect(mocks.downloadAndOpen).toHaveBeenCalledWith(
+      { sourceHostResolved: true },
+      '/repo/docs/report.html'
+    )
     expect(mocks.openDetectedFilePath).not.toHaveBeenCalled()
   })
 

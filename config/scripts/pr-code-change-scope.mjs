@@ -164,7 +164,9 @@ const MOBILE_WEB_APP_PREFIXES = [
   'mobile/packages/',
   'mobile/package.json',
   'mobile/pnpm-lock.yaml',
-  'mobile/modules/orca-mobile-web-shell/'
+  'mobile/modules/orca-mobile-web-shell/',
+  // Chat visuals on both mobile surfaces are built from it; their in-page links check runs here.
+  'src/shared/native-chat-visual-shell'
 ]
 
 function changesMobileWebApp(changedFiles) {
@@ -193,7 +195,6 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   // fingerprint the host's ledger and journal re-derive.
   'src/shared/structured-agent-session-mutation.ts',
   'src/shared/structured-agent-session-send-mutation.ts',
-  'src/shared/structured-agent-session-outbox.ts',
   'src/shared/agent-session-record',
   'src/shared/agent-session-provider-handle',
   'src/shared/agent-session-journal-',
@@ -215,7 +216,7 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/shared/orchestration-rpc-contract.ts',
   'src/main/runtime/rpc/methods/agent-launch',
   'src/main/runtime/rpc/methods/ai-vault.ts',
-  'src/main/runtime/rpc/methods/browser-tab-create-schema',
+  'src/shared/rpc-contract/browser-tab-create-params',
   'src/main/runtime/rpc/methods/session-tabs.ts',
   'src/main/runtime/rpc/methods/structured-agent-session',
   'src/main/runtime/rpc/methods/terminal',
@@ -351,7 +352,8 @@ const LINUX_PACKAGE_TESTS = [
   'src/main/browser/browser-route-tcp-egress.electron.test.ts',
   'src/main/browser/browser-route-webrtc-egress.electron.test.ts',
   'src/main/browser/browser-route-h3-egress.electron.test.ts',
-  'src/main/browser/browser-route-dns-prefetch.electron.test.ts'
+  'src/main/browser/browser-route-dns-prefetch.electron.test.ts',
+  'src/main/persistence/profile-state/profile-state-writer-stall.electron.test.ts'
 ]
 
 const WINDOWS_PACKAGE_TESTS = [
@@ -373,6 +375,9 @@ const WINDOWS_PACKAGE_TESTS = [
   'src/main/agent-hooks/windows-hook-payload-delivery.test.ts',
   'src/main/jcode/hook-gate-script.test.ts',
   'src/main/agent-hooks/windows-direct-cmd-hook-command.test.ts',
+  'src/main/agent-hooks/windows-cmd-hook-command-unicode.test.ts',
+  'src/main/agent-hooks/windows-batch-hook-launcher.test.ts',
+  'src/main/agent-hooks/windows-powershell-hook-launcher.test.ts',
   'src/main/codex/windows-hook-command.test.ts',
   'src/main/codex/windows-hook-upgrade.test.ts',
   'src/main/codex/hook-service-managed-install.test.ts',
@@ -562,8 +567,17 @@ function isProductBundlePath(file, extraPrefixes) {
   return matchesPrefix(file, extraPrefixes)
 }
 
+// This shared fixture is consumed only by unit suites and their placement rig.
+export function isUnitTestSupportSource(file) {
+  return file === 'src/renderer/src/runtime/web-session-tabs-sync-test-harness.ts'
+}
+
 function isTestFile(file) {
-  return /\.(?:test|spec)\.(?:js|cjs|mjs|ts|tsx)$/.test(file) || file.includes('/__tests__/')
+  return (
+    isUnitTestSupportSource(file) ||
+    /\.(?:test|spec)\.(?:js|cjs|mjs|ts|tsx)$/.test(file) ||
+    file.includes('/__tests__/')
+  )
 }
 
 function isDesktopIrrelevantPath(file) {

@@ -7,6 +7,7 @@ import type {
 } from '../../../shared/agent-session-wire'
 import { getRuntimeEnvironmentRevision } from './runtime-environment-revision'
 import type { AgentSessionConversationOutline } from '../../../shared/agent-session-conversation-outline'
+import { AGENT_SESSION_CONVERSATION_COMMAND_TIMEOUT_MS } from '../../../shared/agent-session-conversation-command'
 import {
   AGENT_SESSION_ATTENTION_ACK_RUNTIME_CAPABILITY,
   AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY,
@@ -16,6 +17,7 @@ import {
   AGENT_SESSION_REPEATED_STOP_RUNTIME_CAPABILITY,
   type RuntimeCapability
 } from '../../../shared/protocol-version'
+import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../shared/agent-session-create-capabilities'
 import {
   callRuntimeRpc,
   runtimeEnvironmentSupportsCapability,
@@ -25,6 +27,7 @@ import {
   ensureLocalRuntimeCapabilities,
   readLocalRuntimeCapabilitiesOrUnknown
 } from './local-runtime-capabilities'
+import { subscribeRuntimeEnvironment } from './runtime-environment-pairing-refresh'
 /** Read a capability through the runtime's existing status cache. A failed/unknown
  *  probe is treated as legacy so a newer call is never made before the host has
  *  proved it understands it. */
@@ -48,6 +51,12 @@ export function supportsStructuredAgentSessionPromptCancel(
   target: RuntimeClientTarget
 ): Promise<boolean> {
   return structuredAgentSessionHostSupports(target, AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY)
+}
+
+export function supportsStructuredAgentSessionCreateMessage(
+  target: RuntimeClientTarget
+): Promise<boolean> {
+  return structuredAgentSessionHostSupports(target, AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY)
 }
 
 /** Whether the host writes no row for a Stop that stopped nothing, so a repeated Stop is quiet. */
@@ -88,7 +97,7 @@ export async function readStructuredAgentSessionConversationOutline(
 }
 
 const STRUCTURED_AGENT_SESSION_METHOD_TIMEOUT_MS: ReadonlyMap<string, number> = new Map([
-  ['agentSession.conversationCommand', 195_000],
+  ['agentSession.conversationCommand', AGENT_SESSION_CONVERSATION_COMMAND_TIMEOUT_MS],
   // The host may start an agent at rest before rewinding it, as it does for a command.
   ['agentSession.rewind', 195_000],
   // A waiting catalog read lasts as long as the host's listing: Claude's is 60 s, after up to 15 s
@@ -99,7 +108,9 @@ const STRUCTURED_AGENT_SESSION_METHOD_TIMEOUT_MS: ReadonlyMap<string, number> = 
 export async function callStructuredAgentSession<TResult>(
   target: RuntimeClientTarget,
   method: string,
-  params?: unknown
+  params?: unknown,
+  /** For a caller that checked the remote host's compatibility itself, just before. */
+  options: { skipCompatibilityCheck?: true } = {}
 ): Promise<TResult> {
   if (
     method === 'agentSession.rewind' &&
@@ -112,9 +123,12 @@ export async function callStructuredAgentSession<TResult>(
     throw new Error('Rewinding requires a newer Orca server. Update the server and try again.')
   }
   const timeoutMs = STRUCTURED_AGENT_SESSION_METHOD_TIMEOUT_MS.get(method)
-  return timeoutMs === undefined
+  return timeoutMs === undefined && !options.skipCompatibilityCheck
     ? callRuntimeRpc<TResult>(target, method, params)
-    : callRuntimeRpc<TResult>(target, method, params, { timeoutMs })
+    : callRuntimeRpc<TResult>(target, method, params, {
+        ...(timeoutMs === undefined ? {} : { timeoutMs }),
+        ...options
+      })
 }
 
 async function subscribeStructuredAgentSessionMethod<TEvent>(
@@ -135,7 +149,7 @@ async function subscribeStructuredAgentSessionMethod<TEvent>(
   if (target.kind === 'local') {
     return window.api.runtime.subscribe({ method, params }, onResponse)
   }
-  return window.api.runtimeEnvironments.subscribe(
+  return subscribeRuntimeEnvironment(
     {
       selector: target.environmentId,
       method,

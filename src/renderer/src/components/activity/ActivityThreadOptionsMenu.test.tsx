@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
-import { ActivityThreadOptionsMenu } from './ActivityPrototypePage'
+import { ActivityThreadOptionsMenu } from './activity-thread-controls'
 import type { ActivityGroupBy } from './activity-thread-types'
 import { makeRepo } from './ActivityPrototypePage-test-fixtures'
 

@@ -29,7 +29,8 @@ async function syncDirectory(directory: string): Promise<void> {
   }
 }
 
-function syncDirectorySync(directory: string): void {
+/** Sync variant of the best-effort directory fsync, for callers that publish by rename or link. */
+export function syncDirectoryDurablySync(directory: string): void {
   let fd: number | null = null
   try {
     fd = openSync(directory, 'r')
@@ -50,7 +51,7 @@ function syncDirectorySync(directory: string): void {
 /** Rename an already-fsynced file and make the containing directory durable. */
 export function renameDurableSync(tmpPath: string, finalPath: string): void {
   renameFileWithWindowsRetry(tmpPath, finalPath)
-  syncDirectorySync(dirname(finalPath))
+  syncDirectoryDurablySync(dirname(finalPath))
 }
 
 /** Publish an already-fsynced file without replacing a concurrently created destination. */
@@ -58,7 +59,7 @@ export function publishFileDurableSync(tmpPath: string, finalPath: string): bool
   if (!publishFileWithoutOverwrite(tmpPath, finalPath)) {
     return false
   }
-  syncDirectorySync(dirname(finalPath))
+  syncDirectoryDurablySync(dirname(finalPath))
   rmSync(tmpPath)
   return true
 }
@@ -209,12 +210,14 @@ export async function removeStaleDurableWriteTempFiles(
 export function writeFileDurableSync(
   tmpPath: string,
   finalPath: string,
-  payload: string | Uint8Array
+  payload: string | Uint8Array,
+  /** Creation mode for a new file, e.g. 0o600 for state other users must not read. */
+  mode?: number
 ): void {
   let renamed = false
   try {
     // A Uint8Array payload is written verbatim; a string still defaults to UTF-8.
-    writeFileSync(tmpPath, payload)
+    writeFileSync(tmpPath, payload, mode === undefined ? undefined : { mode })
     const fd = openSync(tmpPath, 'r+')
     try {
       fsyncSync(fd)

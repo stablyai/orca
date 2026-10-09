@@ -1,6 +1,6 @@
 import type { StoreRuntimeState } from '../loading-store/store-runtime-state'
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { SshRemotePtyLease } from '../../../shared/ssh-types'
+import { isLiveSshPtyLease, type SshRemotePtyLease } from '../../../shared/ssh-types'
 import { isTerminalLeafId } from '../../../shared/stable-pane-id'
 import { invalidateLocalWorktreeMetadataPruneInputs } from '../../local-worktree-metadata-prune-gate'
 import { pruneRetiredSshRemotePtyLeaseTombstones } from './ssh-pty-lease-tombstone-retention'
@@ -77,7 +77,7 @@ export function upsertSshRemotePtyLease(
   // A relay renumbers from `pty-1` on every start, so `existing` can be a RECYCLED id. Route
   // retirement belongs to the shell that lost, never to whatever claims the id next — drop both
   // marks the moment this id is claimed live again, and let supersession re-derive them below.
-  if (next.state === 'attached' || next.state === 'detached') {
+  if (isLiveSshPtyLease(next)) {
     delete next.supersededBy
     delete next.relayIdRecycled
   }

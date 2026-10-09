@@ -118,7 +118,7 @@ beforeEach(async () => {
     resolveWorkspacePath: async (id) => `/repos/${id}`,
     resolveClaudeCommand: () => '/usr/local/bin/claude',
     resolveClaudeLaunchArgs: () => [],
-    resolveClaudeAuthPolicy: () => ({ stripAuthEnv: false }),
+    resolveClaudeAuthPolicy: () => ({ account: 'system' }),
     openClaudeConnection: claude.openConnection,
     readProcessStartTime: async () => HOST_TEST_NOW,
     onLifecycleEvent: () => {}
@@ -147,9 +147,13 @@ afterEach(async () => {
 })
 
 describe('Claude rewind is unsupported', () => {
-  it('refuses a rewind RPC before writing any rewind record', async () => {
+  it('keeps ordinary unsupported refusal ahead of stale epoch without writing a rewind record', async () => {
     expect(CLAUDE_STRUCTURED_AGENT.capabilities.rewind).toBe(false)
-    expect(await host.rewind(caller, rewindParams(fence()))).toMatchObject({
+    const request = rewindParams(fence())
+    expect((await host.journalSnapshot(HOST_TEST_SESSION)).cursor.epoch).not.toBe(
+      request.expectedEpoch
+    )
+    expect(await host.rewind(caller, request)).toMatchObject({
       ok: false,
       refusal: { rewindReason: 'unsupported' }
     })

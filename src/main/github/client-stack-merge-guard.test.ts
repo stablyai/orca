@@ -26,7 +26,8 @@ vi.mock('./github-api-repository', async (importOriginal) =>
   )
 )
 
-import { getPRForBranch, mergePR } from './client'
+import { getPRForBranch } from './client/lookup/get-pr-for-branch'
+import { mergePR } from './client/merge/merge-pr'
 import { resetGraphQLRateLimitGuardMocks } from './client-test-harness'
 
 const { ghExecFileAsyncMock, getOwnerRepoMock, acquireMock, releaseMock } = clientMocks

@@ -6,12 +6,13 @@ import { build } from 'esbuild'
 import { describe, expect, it } from 'vitest'
 
 describe('ACP structured lane', () => {
-  it('reaches no Electron import from the adapter or its launch resolution', async () => {
+  it('reaches no Electron import from the adapter, its launch resolution or any agent row', async () => {
     const result = await build({
       entryPoints: [
         resolve(__dirname, 'acp-structured-session-adapter.ts'),
         resolve(__dirname, 'acp-structured-launch-resolution.ts'),
-        resolve(__dirname, 'acp-agent-connection.ts')
+        resolve(__dirname, 'acp-agent-connection.ts'),
+        resolve(__dirname, 'acp-launch-specs.ts')
       ],
       bundle: true,
       write: false,

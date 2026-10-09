@@ -172,6 +172,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  vi.useRealTimers()
   vi.clearAllMocks()
   vi.restoreAllMocks()
   vi.unstubAllEnvs()
@@ -202,6 +203,7 @@ describe('reconcileCodexHooks', () => {
   })
 
   it('asks Codex and converts an older build only once PATH is hydrated, with launches waiting on it', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     writeHooks({ Stop: [olderBuildStop()] })
     let hydrate!: () => void
     const started = start(
@@ -211,7 +213,7 @@ describe('reconcileCodexHooks', () => {
     )
     const launch = reconcileCodexHooksForLaunch()
     // Why past the reconcile's 500 ms answer wait: an early run would write its stopgap by then.
-    await new Promise((resolve) => setTimeout(resolve, 600))
+    await vi.advanceTimersByTimeAsync(600)
     expect(mocks.probeCodexVersion).not.toHaveBeenCalled()
     expect(mocks.realHomeRuns).toBe(0)
 
@@ -572,14 +574,17 @@ describe('an app start whose lookup has not answered within its wait', () => {
     await start()
     const settled = snapshot(codexHome())
     // A restart: in-process answers gone, the saved one kept, and `codex --version` slow.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     _internals.resetForTesting()
     lookupInternals.resetForTesting()
     mocks.probeCodexVersion.mockImplementation(
       () => new Promise((resolve) => setTimeout(() => resolve('codex-cli 0.149.0'), 900))
     )
 
-    await start()
-    await new Promise((resolve) => setTimeout(resolve, 1_000))
+    const restarted = start()
+    await vi.advanceTimersByTimeAsync(500)
+    await restarted
+    await vi.advanceTimersByTimeAsync(1_000)
     await _internals.settledForTesting()
 
     expect(snapshot(codexHome())).toEqual(settled)

@@ -5,7 +5,9 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   assertCompatSlotHost,
+  COMPAT_SLOT_ADDONS,
   COMPAT_SLOTS,
+  findCompatAddonGaps,
   findPostBaselineNodeApiNames,
   findSharedCxxRuntimeNeeds,
   findSlotProblems,
@@ -19,7 +21,10 @@ import {
   SLOT_NAPI_VERSION,
   windowsConptyRuntimeDir
 } from './orcad-prebuild-slot-contents.mjs'
-import { ORCAD_ADDON_NAPI_VERSION } from '../../src/shared/orcad-artifacts.ts'
+import {
+  ORCAD_ADDON_NAPI_VERSION,
+  orcadTemplateTargetFilenames
+} from '../../src/shared/orcad-artifacts.ts'
 
 const floors = createRequire(import.meta.url)('./verify-linux-glibc-floor.cjs')
 const dirs = []
@@ -52,7 +57,7 @@ const next = (slot, overrides = {}) => ({
 })
 
 describe('N-API pinning', () => {
-  it('pins N-API 8 so a host Node 18 (rung C) can load every slot', () => {
+  it('keeps the N-API 8 addon ABI stable across runtime upgrades', () => {
     expect(SLOT_NAPI_VERSION).toBe(8)
     // The client's rung C host-Node gate must ask for exactly what the slots are built against.
     expect(ORCAD_ADDON_NAPI_VERSION).toBe(SLOT_NAPI_VERSION)
@@ -231,5 +236,38 @@ describe('findSlotProblems', () => {
     expect(findSlotProblems(null, dir, ['darwin-arm64'])).toEqual([
       'manifest.json is missing or not schema 2'
     ])
+  })
+
+  it('refuses a compat slot missing one of its own addons', () => {
+    const dir = temp()
+    const slot = 'linux-x64-glibc217'
+    mkdirSync(join(dir, slot))
+    writeFileSync(join(dir, slot, 'pty.node'), 'binary')
+    const manifest = mergeManifest(
+      null,
+      next(slot, { entry: entry({ 'pty.node': sha256Of(join(dir, slot, 'pty.node')) }) })
+    )
+    expect(findSlotProblems(manifest, dir, [slot])).toEqual([
+      `${slot}/parcel-watcher/watcher.node: not built`
+    ])
+  })
+})
+
+describe('compat addon coverage', () => {
+  const nodePtySources = (target) =>
+    orcadTemplateTargetFilenames(target).filter((file) => file.includes('node-pty/build/Release/'))
+
+  it('gives every native addon a compat target ships a compat build', () => {
+    for (const compat of Object.keys(COMPAT_SLOTS)) {
+      const sources = new Set([...nodePtySources(compat), ...Object.values(COMPAT_SLOT_ADDONS)])
+      expect(findCompatAddonGaps(orcadTemplateTargetFilenames(compat), sources)).toEqual([])
+    }
+  })
+
+  it('names a native file that would ship as the base target build', () => {
+    const target = 'linux-x64-glibc217'
+    expect(
+      findCompatAddonGaps(orcadTemplateTargetFilenames(target), new Set(nodePtySources(target)))
+    ).toEqual(['node_modules/@parcel/watcher/watcher.node'])
   })
 })

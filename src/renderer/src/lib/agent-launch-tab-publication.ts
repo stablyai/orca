@@ -20,6 +20,7 @@ import { useAppStore } from '../store'
 import { resolveUnifiedTabCreatePlacement } from '../store/slices/tabs/tabs-create-placement'
 import { insertUnifiedTabAfterAnchor } from './unified-tab-anchor-insertion'
 import { rememberAgentLaunchPanePrompt } from './agent-launch-pane-prompt'
+import { releaseAgentLaunchPaneSpawn } from './agent-launch-pane-spawn-hold'
 
 function landedGroupId(worktreeId: string, tabId: string): string | undefined {
   return useAppStore
@@ -79,7 +80,9 @@ export function publishAgentLaunchTab(
         remount: kept?.leafId === leafId && kept.outcome !== undefined
       })
     }
-    return { tabId, created: false, placement: { groupId } }
+    // A tab this window made for this launch is the launch's to take back if it never runs.
+    const madeForThisLaunch = releaseAgentLaunchPaneSpawn(tabId, leafId)
+    return { tabId, created: madeForThisLaunch, placement: { groupId } }
   }
 
   const placement = resolveUnifiedTabCreatePlacement({

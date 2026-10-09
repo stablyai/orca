@@ -25,6 +25,7 @@ export type ClaudeResultJournalContext = Pick<
   | 'providerFallback'
   | 'corrections'
   | 'turn'
+  | 'authenticationFailures'
 > & {
   prompts: ClaudeJournalPrompts
   context: ClaudeContextFacts
@@ -40,7 +41,8 @@ export function journalClaudeResult(
     corrections,
     turn,
     prompts,
-    context
+    context,
+    authenticationFailures
   }: ClaudeResultJournalContext,
   message: Record<string, unknown>,
   observedAt: number
@@ -75,7 +77,8 @@ export function journalClaudeResult(
   }
   const kind = claudeProviderFrameKind(message)
   const failure = claudeResultFailure(message, leftToStop)
-  if (failure || !isSettledClaudeResultKind(kind)) {
+  const alreadyShown = authenticationFailures.resultAlreadyShown(message)
+  if ((failure || !isSettledClaudeResultKind(kind)) && !alreadyShown) {
     providerFallback.append(
       kind,
       message,

@@ -1,17 +1,16 @@
 import { useLocalSearchParams } from 'expo-router'
 import { MobileAgentSessionHistoryPanel } from '../../../../src/agent-history/MobileAgentSessionHistoryPanel'
 import { MobileWebShellScreen } from '../../../../src/mobile-web-shell/MobileWebShellScreen'
-import { ShellSwitchPendingScreen } from '../../../../src/mobile-web-shell/ShellSwitchPendingScreen'
 import { shellScreenRoute } from '../../../../src/mobile-web-shell/shell-screen-route'
-import { useShellSwitchDecision } from '../../../../src/mobile-web-shell/shell-switch-decision'
+import { shellSwitchDecision } from '../../../../src/mobile-web-shell/shell-switch-decision'
 import { firstParam } from '../../../../src/navigation/route-param-reader'
 
 /**
  * Agent session history, from the desktop's bundle or from this app.
  *
  * The switch is `index.tsx`'s, for its reasons: the shell renders the page only for a route the
- * bundle lists with grants this app implements, `fallback` is what a negotiation that said no
- * falls back to, and a flag read still settling paints neither renderer.
+ * bundle lists with grants this app implements, and `fallback` is what a negotiation that said no
+ * falls back to.
  *
  * Two dynamic segments rather than one, so both are encoded: `useLocalSearchParams` answers the
  * decoded value, and a worktree id or a deep-linked host id carrying `/`, `?`, `#` or whitespace
@@ -42,8 +41,6 @@ export default function MobileAgentSessionHistoryScreen() {
     <MobileAgentSessionHistoryPanel hostId={hostId} worktreeId={worktreeId} name={name} />
   )
 
-  // Built before the decision rather than after it, as every switch does now: the decision needs
-  // to know whether the shell is a possible outcome before it can say a neutral frame is owed.
   const route =
     hostId && worktreeId
       ? shellScreenRoute({
@@ -53,11 +50,8 @@ export default function MobileAgentSessionHistoryScreen() {
           ...(name === '' ? {} : { params: { name } })
         })
       : null
-  const decision = useShellSwitchDecision(route)
+  const decision = shellSwitchDecision(route)
 
-  if (decision.kind === 'pending') {
-    return <ShellSwitchPendingScreen />
-  }
   if (decision.kind === 'native') {
     return panel
   }

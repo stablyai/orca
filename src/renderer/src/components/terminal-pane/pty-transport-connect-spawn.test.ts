@@ -100,6 +100,34 @@ describe('createIpcPtyTransport', () => {
     expect(spawn).not.toHaveBeenCalled()
   })
 
+  it("spawns a launch pane this window made only once the host has taken it, and never once it's gone", async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const { holdAgentLaunchPaneSpawn, releaseAgentLaunchPaneSpawn } =
+      await import('@/lib/agent-launch-pane-spawn-hold')
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+    const pane = { worktreeId: 'wt', tabId: 'tab-held', leafId: 'leaf-held' }
+
+    holdAgentLaunchPaneSpawn(pane.tabId, pane.leafId)
+    const transport = createIpcPtyTransport(pane)
+    const connecting = transport.connect({ url: '', callbacks: {} })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(spawn).not.toHaveBeenCalled()
+
+    releaseAgentLaunchPaneSpawn(pane.tabId, pane.leafId)
+    await connecting
+    expect(spawn).toHaveBeenCalledWith(expect.objectContaining({ tabId: 'tab-held' }))
+    transport.disconnect()
+
+    spawn.mockClear()
+    const release = holdAgentLaunchPaneSpawn(pane.tabId, pane.leafId)
+    const closed = createIpcPtyTransport(pane)
+    const abandoned = closed.connect({ url: '', callbacks: {} })
+    closed.destroy?.()
+    release()
+    await expect(abandoned).resolves.toBeUndefined()
+    expect(spawn).not.toHaveBeenCalled()
+  })
+
   it('keeps the recovery hint and raw diagnostic from a wrapped spawn error', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     vi.mocked(window.api.pty.spawn).mockRejectedValueOnce(
@@ -276,6 +304,26 @@ describe('createIpcPtyTransport', () => {
 
     expect(spawn).toHaveBeenCalledWith(expect.not.objectContaining({ cwdFallback: 'worktree' }))
     transport.disconnect()
+  })
+
+  it('sends placement on a fresh spawn but not on a session reattach', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+    const placement = {
+      kind: 'split',
+      parentLeafId: '11111111-1111-4111-8111-111111111111',
+      direction: 'horizontal'
+    } as const
+
+    const fresh = createIpcPtyTransport({ placement })
+    await fresh.connect({ url: '', callbacks: {} })
+    expect(spawn).toHaveBeenLastCalledWith(expect.objectContaining({ placement }))
+    fresh.disconnect()
+
+    const reattach = createIpcPtyTransport({ placement })
+    await reattach.connect({ url: '', callbacks: {}, sessionId: 'session-1' })
+    expect(spawn).toHaveBeenLastCalledWith(expect.not.objectContaining({ placement }))
+    reattach.disconnect()
   })
 
   it('returns startup cwd fallback metadata to the connection layer', async () => {

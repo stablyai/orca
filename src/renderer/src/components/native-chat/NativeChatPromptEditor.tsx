@@ -222,6 +222,24 @@ export function NativeChatPromptEditor({
               editor.view.dom.focus()
             },
             contains: (node) => editor.view.dom.contains(node),
+            isCaretOnVisualEdge: (edge) => {
+              const { selection, doc } = editor.state
+              if (!selection.empty) {
+                return false
+              }
+              const { text } = promptTextMap(doc)
+              // An empty composer has one line: no layout read on the path every recall starts from.
+              if (text === '') {
+                return true
+              }
+              const caret = promptTextOffset(doc, selection.from)
+              const beyond = edge === 'start' ? text.slice(0, caret) : text.slice(caret)
+              // Why both: the text check covers other paragraphs, the view covers soft wraps.
+              return (
+                !beyond.includes('\n') &&
+                editor.view.endOfTextblock(edge === 'start' ? 'up' : 'down')
+              )
+            },
             select: () => {
               editor.commands.selectAll()
             },

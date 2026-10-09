@@ -41,8 +41,10 @@ export const CLI_MAIN_ENTRY_NAMES = [
 const PLAIN_NODE_ENTRY_NAMES = [
   'daemon-entry',
   'parcel-watcher-process-entry',
+  'session-scanner-service-entry',
   'computer-sidecar',
   'wsl-transcript-fs-process-entry',
+  'orcad/orcad-local-serve-selection-entry',
   ...CLI_MAIN_ENTRY_NAMES
 ] as const
 

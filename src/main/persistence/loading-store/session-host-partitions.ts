@@ -80,6 +80,21 @@ export class SessionHostPartitionOperations {
     return [...hostIds]
   }
 
+  /** Drops a removed host's whole session partition; local's session is never dropped. */
+  removeWorkspaceSessionHost(hostId: ExecutionHostId): void {
+    const runtime = this[sessionHostPartitionOperationsContext].runtime
+    const partitions = runtime.state.workspaceSessionsByHostId
+    if (hostId === LOCAL_EXECUTION_HOST_ID || partitions?.[hostId] === undefined) {
+      return
+    }
+    const { [hostId]: _removed, ...remaining } = partitions
+    runtime.state.workspaceSessionsByHostId = remaining
+    invalidateLocalWorktreeMetadataPruneInputs()
+    scheduleSave(this[sessionHostPartitionOperationsContext].scheduling, [
+      'workspaceSessionsByHostId'
+    ])
+  }
+
   readTerminalScrollbackSnapshot(ref: string): string | null {
     return readTerminalScrollbackSnapshotSync(
       ref,
@@ -207,18 +222,23 @@ export function setHostWorkspaceSession(
   )
   owner[sessionHostPartitionOperationsContext].runtime.state.workspaceSessionsByHostId = {
     ...owner[sessionHostPartitionOperationsContext].runtime.state.workspaceSessionsByHostId,
-    [hostId]: pruned
+    [hostId]: withRequiredWorkspaceSessionMaps(pruned)
   }
   scheduleSave(owner[sessionHostPartitionOperationsContext].scheduling, [
     'workspaceSessionsByHostId'
   ])
 }
 
-export function installSessionHostPartitionOperationsContext(
-  target: SessionHostPartitionOperations,
-  source: SessionHostPartitionOperations
-): void {
-  Object.defineProperty(target, sessionHostPartitionOperationsContext, {
-    value: source[sessionHostPartitionOperationsContext]
-  })
+/**
+ * The renderer splits a full snapshot per host and leaves out maps a host has no rows in, so a
+ * host partition written as sent lacks maps the type requires and every reader iterates.
+ */
+export function withRequiredWorkspaceSessionMaps(
+  session: WorkspaceSessionState
+): WorkspaceSessionState {
+  return {
+    ...session,
+    tabsByWorktree: session.tabsByWorktree ?? {},
+    terminalLayoutsByTabId: session.terminalLayoutsByTabId ?? {}
+  }
 }

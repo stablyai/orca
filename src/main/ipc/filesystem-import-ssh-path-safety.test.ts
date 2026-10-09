@@ -1,6 +1,7 @@
 import path from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FileUploadSession, IFilesystemProvider } from '../providers/types'
+import type * as SshTargetRegistry from '../ssh/ssh-target-registry'
 
 const { getConnMgrMock, lstatMock, providerMock, readdirMock, realpathMock } = vi.hoisted(() => ({
   getConnMgrMock: vi.fn(),
@@ -18,7 +19,10 @@ vi.mock('node:fs/promises', () => ({
 vi.mock('./filesystem-path-containment', () => ({
   isENOENT: (error: NodeJS.ErrnoException) => error.code === 'ENOENT'
 }))
-vi.mock('./ssh', () => ({ getSshConnectionManager: getConnMgrMock }))
+vi.mock('../ssh/ssh-target-registry', async () => {
+  const actual = await vi.importActual<typeof SshTargetRegistry>('../ssh/ssh-target-registry')
+  return { ...actual, getSshConnectionManager: getConnMgrMock }
+})
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   requireSshFilesystemProvider: providerMock
 }))
