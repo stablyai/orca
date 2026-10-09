@@ -102,6 +102,7 @@ export type TerminalActions = {
   ) => void
   reorderTabs: (worktreeId: string, tabIds: string[]) => void
   setTabBarOrder: (worktreeId: string, order: string[]) => void
+  moveTerminalTabToWorktree: (tabId: string, destWorktreeId: string) => boolean
   setActiveTab: (tabId: string) => void
   setActiveTabForWorktree: (worktreeId: string, tabId: string) => void
   /** Resolve the canonical legacy terminal-tab owner key for renderer lifecycle guards. */

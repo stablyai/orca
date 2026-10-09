@@ -3,6 +3,7 @@ import { isTerminalLeafId } from '../../../shared/stable-pane-id'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import type { TerminalSessionPartition } from '../terminal-topology/terminal-owner-invariants'
 import { layoutContainsLeafId } from '../restoring-sessions/terminal-layout-normalization'
+import { worktreeIdsEqual } from '../../../shared/worktree/id'
 import type { PtyBindingSourceExpectation } from './store'
 
 export type PtyBindingRefusalRequest = {
@@ -50,7 +51,8 @@ export function ptyBindingIsRefused(
   }
   if (args.expectedBinding) {
     const tab = session.tabsByWorktree?.[bindingWorktreeId]?.find(
-      (candidate) => candidate.id === args.tabId && candidate.worktreeId === bindingWorktreeId
+      (candidate) =>
+        candidate.id === args.tabId && worktreeIdsEqual(candidate.worktreeId, bindingWorktreeId)
     )
     const boundPtyId = session.terminalLayoutsByTabId?.[args.tabId]?.ptyIdsByLeafId?.[args.leafId]
     if (

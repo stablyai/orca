@@ -5,6 +5,10 @@ import type {
 } from '../../../shared/workspace-session-state-types'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 import { pruneWorkspaceSessionBrowserHistory } from '../../../shared/workspace-session-browser-history'
+import {
+  dedupeGhostTerminalTabRows,
+  restoreDroppedTerminalTabChrome
+} from '../../../shared/workspace-session-terminal-chrome-repair'
 
 import { workspaceSessionPatchNeedsFullNormalization } from './terminal-session-cleanup'
 
@@ -95,6 +99,14 @@ export class SessionSnapshotOperations {
     }
     if (Object.hasOwn(patch, 'browserUrlHistory')) {
       next = pruneWorkspaceSessionBrowserHistory(next)
+    }
+    // Why: a chrome-only patch can omit a live terminal's tab chrome while its
+    // PTY-bound row survives in the unpatched slices; restore from the pre-patch
+    // state and keep one owner per tab id.
+    const previous = this[sessionSnapshotOperationsContext].sessions.getWorkspaceSession(resolved)
+    if (previous) {
+      next = restoreDroppedTerminalTabChrome(next, previous)
+      next = dedupeGhostTerminalTabRows(next, previous)
     }
     this.publishSession(next, resolved)
   }

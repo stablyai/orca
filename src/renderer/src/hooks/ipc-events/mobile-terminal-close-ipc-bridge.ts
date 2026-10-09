@@ -121,6 +121,30 @@ export function registerMobileAndTerminalCloseIpcBridge(
     )
   }
 
+  if (window.api.ui.onTerminalTabMoveRequest) {
+    unsubs.push(
+      window.api.ui.onTerminalTabMoveRequest(({ requestId, tabId, destWorktreeId }) => {
+        const respond = window.api.ui.respondTerminalTabMove
+        if (!respond) {
+          return
+        }
+        try {
+          const moved = useAppStore.getState().moveTerminalTabToWorktree(tabId, destWorktreeId)
+          if (!moved) {
+            respond({ requestId, error: 'tab_not_found' })
+            return
+          }
+          respond({ requestId })
+        } catch (error) {
+          respond({
+            requestId,
+            error: error instanceof Error ? error.message : 'terminal_tab_move_failed'
+          })
+        }
+      })
+    )
+  }
+
   unsubs.push(
     window.api.ui.onSleepWorktree(({ worktreeId }) => {
       void runSleepWorktree(worktreeId)

@@ -43,6 +43,7 @@ import {
   getTerminalHandle
 } from '../selectors'
 import { terminalCloseHandler } from './terminal-close'
+import { terminalMoveHandler } from './terminal-move'
 import { terminalSendHandler } from './terminal-send'
 
 // Why: terminal wait legitimately needs to outlive the CLI's default RPC
@@ -205,6 +206,7 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
   // `focus` resolves to this canonical path via CommandSpec.aliases before dispatch.
   'terminal switch': terminalFocusHandler,
   'terminal close': terminalCloseHandler,
+  'terminal move': terminalMoveHandler,
   'terminal split': async ({ flags, client, cwd, json }) => {
     const directionFlag = getOptionalStringFlag(flags, 'direction')
     if (

@@ -1,6 +1,22 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ComponentProps } from 'react'
 import { describe, expect, it, vi } from 'vitest'
+
+vi.mock('@/store', () => ({
+  useAppStore: (
+    selector: (state: {
+      worktreesByRepo: Record<string, never>
+      tabsByWorktree: Record<string, never>
+    }) => unknown
+  ) =>
+    selector({
+      worktreesByRepo: {},
+      folderWorkspaces: [],
+      tabsByWorktree: { 'wt-1': [] },
+      settings: {},
+      moveTerminalTabToWorktree: vi.fn()
+    } as never)
+}))
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { TooltipProvider } from '../ui/tooltip'

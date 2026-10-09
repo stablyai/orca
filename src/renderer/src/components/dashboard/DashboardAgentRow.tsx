@@ -24,6 +24,17 @@ import {
   agentChildRowMessageLine,
   agentChildRowNoUpdateLabel
 } from '@/components/agent-child-row-text'
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuTrigger
+} from '@/components/ui/context-menu'
+import { WORKTREE_NATIVE_CONTEXT_MENU_ATTR } from '@/components/sidebar/WorktreeContextMenu'
+import {
+  MoveTerminalToWorktreeContextSection,
+  useTerminalMoveDestinations
+} from '@/components/tab-bar/MoveTerminalToWorktreeMenuSection'
+import { TAB_CONTEXT_MENU_CONTENT_CLASS } from '@/components/tab-bar/tab-context-menu-sizing'
 
 function formatTimeAgo(ts: number, now: number): string {
   const delta = now - ts
@@ -99,6 +110,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   sendTargetDisabledReason,
   onSendTargetClick
 }: Props) {
+  const destinations = useTerminalMoveDestinations(agent.tab.worktreeId)
   const hasChildDisclosure =
     typeof childAgentCount === 'number' &&
     childAgentCount > 0 &&
@@ -194,7 +206,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
 
   const titleParts = sendTargetDisabledReason ? [sendTargetDisabledReason, ...tsParts] : tsParts
 
-  return (
+  const row = (
     // Why: no role="button" — nested interactive children (buttons, tooltip triggers) would violate ARIA nesting rules.
     <div
       onClickCapture={handleSendTargetClickCapture}
@@ -325,6 +337,24 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
         lastAssistantMessage={lastAssistantMessage}
       />
     </div>
+  )
+
+  if (agent.rowSource === 'subagent' || destinations.length === 0) {
+    return row
+  }
+
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild {...{ [WORKTREE_NATIVE_CONTEXT_MENU_ATTR]: '' }}>
+        {row}
+      </ContextMenuTrigger>
+      <ContextMenuContent className={TAB_CONTEXT_MENU_CONTENT_CLASS}>
+        <MoveTerminalToWorktreeContextSection
+          tabId={agent.tab.id}
+          sourceWorktreeId={agent.tab.worktreeId}
+        />
+      </ContextMenuContent>
+    </ContextMenu>
   )
 })
 

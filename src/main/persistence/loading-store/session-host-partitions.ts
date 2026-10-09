@@ -2,6 +2,10 @@ import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { sanitizeWorkspaceSessionTerminalRetirements } from '../../runtime/mobile-session-terminal-persistence-retirement'
 import {
+  dedupeGhostTerminalTabRows,
+  restoreDroppedTerminalTabChrome
+} from '../../../shared/workspace-session-terminal-chrome-repair'
+import {
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId,
   type ExecutionHostId
@@ -200,6 +204,12 @@ export function setHostWorkspaceSession(
   session = preserveRuntimeAuthoredWorkspaceSessionFields(session, prior)
   // Why: each partition owns its topology fence; renderer writes omit it and must rebase locally.
   session = sanitizeWorkspaceSessionTerminalRetirements(session, prior)
+  // Why: a stale save can drop a live terminal's tab chrome or re-mint its row
+  // in the spawn worktree after a move; repair both against the prior save.
+  if (prior) {
+    session = restoreDroppedTerminalTabChrome(session, prior)
+  }
+  session = dedupeGhostTerminalTabRows(session, prior)
   session = preserveMissingWorkspaceSessionTerminalBindings(
     session,
     prior,

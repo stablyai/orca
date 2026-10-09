@@ -24,6 +24,7 @@ import {
   clearPtyState,
   pendingLocalPtySpawns,
   ptyProcesses,
+  ptyWorktreeId,
   resetLoadGeneration,
   type DataCallback,
   type ExitCallback
@@ -175,6 +176,14 @@ export class LocalPtyProvider implements IPtyProvider {
   }
   async revive(_state: string): Promise<void> {
     /* re-spawning handles local revival */
+  }
+
+  setWorktreeId(id: string, worktreeId: string): boolean {
+    if (!ptyProcesses.has(id) || worktreeId.length === 0) {
+      return false
+    }
+    ptyWorktreeId.set(id, worktreeId)
+    return true
   }
 
   listProcesses(): Promise<PtyProcessInfo[]> {

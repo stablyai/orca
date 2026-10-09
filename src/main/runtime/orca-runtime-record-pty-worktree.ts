@@ -6,6 +6,7 @@ import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { cloneAgentSessionOwnerBinding } from '../../shared/claimed-agent-pty-owner-snapshot'
 import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
+import { updateRegisteredPtyWorktree } from '../memory/pty-registry'
 import { maxTimestamp } from './runtime-worktree-status-projection'
 import type { RuntimeSyncedLeaf } from '../../shared/runtime-types'
 import { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
@@ -114,6 +115,8 @@ export class OrcaRuntimeWithRecordPtyWorktree extends OrcaRuntimeWithRefreshRepo
       }
       // Why: restored/controller-discovered PTYs learn their worktree here without registerPty(), so URL enrichment must bind at this source.
       advertisedUrlWatcher.bindPty(ptyId, worktreeId)
+      this.ptyController?.setWorktreeId?.(ptyId, worktreeId)
+      updateRegisteredPtyWorktree(ptyId, worktreeId)
       return pty
     }
 
@@ -185,6 +188,8 @@ export class OrcaRuntimeWithRecordPtyWorktree extends OrcaRuntimeWithRefreshRepo
     }
     // Why: recordPtyWorktree is the common lifecycle point for every path that resolves a PTY's worktree (renderer restore, controller list).
     advertisedUrlWatcher.bindPty(ptyId, worktreeId)
+    this.ptyController?.setWorktreeId?.(ptyId, worktreeId)
+    updateRegisteredPtyWorktree(ptyId, worktreeId)
     return pty
   }
 

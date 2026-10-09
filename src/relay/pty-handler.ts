@@ -1284,6 +1284,7 @@ export class PtyHandler {
     this.dispatcher.onNotification('pty.setColorQueryReplyColors', (p) =>
       setPtyOwnerHostColors(p.colors)
     )
+    this.dispatcher.onNotification('pty.setWorktreeId', (p) => this.setWorktreeId(p))
   }
 
   private isLikelyInteractiveRedraw(data: string): boolean {
@@ -2482,6 +2483,16 @@ export class PtyHandler {
         `[pty-handler] resize failed for PTY ${id} whose process is still live or unverifiable: ${err instanceof Error ? err.message : String(err)}\n`
       )
     }
+  }
+
+  private setWorktreeId(params: Record<string, unknown>): void {
+    const id = typeof params.id === 'string' ? params.id : ''
+    const worktreeId = typeof params.worktreeId === 'string' ? params.worktreeId : ''
+    const managed = this.ptys.get(id)
+    if (!managed || managed.disposed || worktreeId.length === 0) {
+      return
+    }
+    managed.worktreeId = worktreeId
   }
 
   private async getSize(

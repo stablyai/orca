@@ -2,6 +2,8 @@ import { resolveActiveTabOwnerWorktreeId } from '../slices/active-tab-owner-work
 import { getTerminalTabOwnerWorktreeId } from '../slices/terminal-tab-owner-index'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import { ownsGlobalSelection } from '../global-selection-owner'
+import { moveTerminalTabToWorktreeInStore } from '../slices/move-terminal-tab-to-worktree'
+import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 
 export function createTerminalTabNavigationActions(
   set: TerminalStoreSet,
@@ -10,6 +12,7 @@ export function createTerminalTabNavigationActions(
   TerminalSlice,
   | 'reorderTabs'
   | 'setTabBarOrder'
+  | 'moveTerminalTabToWorktree'
   | 'setActiveTab'
   | 'setActiveTabForWorktree'
   | 'getTerminalTabOwnerWorktreeId'
@@ -53,6 +56,21 @@ export function createTerminalTabNavigationActions(
           tabsByWorktree: { ...s.tabsByWorktree, [worktreeId]: updatedTabs }
         }
       })
+    },
+    moveTerminalTabToWorktree: (tabId, destWorktreeId) => {
+      let moved = false
+      set((s) => {
+        const result = moveTerminalTabToWorktreeInStore(s, tabId, destWorktreeId)
+        if (!result) {
+          return {}
+        }
+        moved = true
+        return result.patch
+      })
+      if (moved) {
+        scheduleRuntimeGraphSync()
+      }
+      return moved
     },
     setActiveTab: (tabId) => {
       let tabOwnerWorktreeId: string | null = null

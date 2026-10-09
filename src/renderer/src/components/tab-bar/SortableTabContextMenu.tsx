@@ -22,6 +22,7 @@ import { formatShortcutLabel, useOptionalShortcutLabel } from '@/hooks/useShortc
 import { translate } from '@/i18n/i18n'
 import { TerminalTabSplitMenuSection } from './TerminalTabSplitMenuSection'
 import { TabSessionSurfaceSwitchMenuItems } from './TabSessionSurfaceSwitchMenuItems'
+import { MoveTerminalToWorktreeDropdownSection } from './MoveTerminalToWorktreeMenuSection'
 import { TAB_CONTEXT_MENU_CONTENT_CLASS } from './tab-context-menu-sizing'
 
 const TAB_COLORS = [
@@ -178,6 +179,7 @@ export function SortableTabContextMenu({
           splitDownShortcut={splitDownShortcut}
           showTerminalSplit={canSplitTerminal}
         />
+        <MoveTerminalToWorktreeDropdownSection tabId={tab.id} sourceWorktreeId={tab.worktreeId} />
         {showTerminalViewSwitch ? (
           <>
             <DropdownMenuSeparator />

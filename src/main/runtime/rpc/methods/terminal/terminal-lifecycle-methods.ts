@@ -11,6 +11,7 @@ import {
   TerminalCreateParams,
   TerminalFocus,
   TerminalHandle,
+  TerminalMove,
   TerminalSleep,
   TerminalSplit,
   TerminalStop,
@@ -188,6 +189,16 @@ export const TERMINAL_LIFECYCLE_METHODS = [
         params.terminal,
         () => context.runtime.closeTerminalTab(params.terminal)
       )
+    })
+  }),
+  defineMethod({
+    name: 'terminal.move',
+    permission: 'workspace',
+    params: TerminalMove,
+    handler: async (params, { runtime }) => ({
+      move: await runtime.moveTerminalToWorktree(params.terminal, params.worktree, {
+        tab: params.tab === true
+      })
     })
   }),
   defineMethod({

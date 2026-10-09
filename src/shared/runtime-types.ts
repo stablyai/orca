@@ -206,3 +206,12 @@ export type {
   RuntimeMarkdownReadTabResult,
   RuntimeMarkdownSaveTabResult
 } from './mobile-markdown-document'
+export type RuntimeTerminalMove = {
+  handle: string
+  tabId: string
+  sourceWorktreeId: string
+  destWorktreeId: string
+  ptyIds: string[]
+}
+
+

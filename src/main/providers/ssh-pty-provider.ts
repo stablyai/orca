@@ -2,7 +2,7 @@ import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from './types'
 import type { WriteSettlement } from '../../shared/pty-write-settlement'
 import type { TerminalOscColorQueryReplyColors } from '../../shared/terminal-osc-color-reply'
-import { toAppSshPtyId, toRelaySshPtyId } from './ssh-pty-id'
+import { parseAppSshPtyId, toAppSshPtyId, toRelaySshPtyId } from './ssh-pty-id'
 import { createSshPtyAppliedSizeReader } from './ssh-pty-applied-size'
 import type {
   RemoteCliBridgeEnv,
@@ -41,6 +41,7 @@ export class SshPtyProvider implements IPtyProvider {
   private mux: SshChannelMultiplexer
   private connectionId: string
   private livePtyIds = new Set<string>()
+  private worktreeIdByPtyId = new Map<string, string>()
   getAppliedSize: NonNullable<IPtyProvider['getAppliedSize']>
   listProcesses: IPtyProvider['listProcesses']
   private readonly agentSessionCapabilities: SshAgentSessionCapabilities
@@ -110,6 +111,7 @@ export class SshPtyProvider implements IPtyProvider {
       mux,
       connectionId,
       livePtyIds: this.livePtyIds,
+      worktreeIdByPtyId: this.worktreeIdByPtyId,
       outputState: this.outputState
     })
   }
@@ -117,6 +119,7 @@ export class SshPtyProvider implements IPtyProvider {
   dispose(): void {
     this.outputState.dispose()
     this.livePtyIds.clear()
+    this.worktreeIdByPtyId.clear()
   }
 
   getConnectionId = (): string => this.connectionId
@@ -286,6 +289,27 @@ export class SshPtyProvider implements IPtyProvider {
     this.livePtyIds.delete(id)
   }
 
+  setWorktreeId(id: string, worktreeId: string): boolean {
+    if (worktreeId.length === 0) {
+      return false
+    }
+    const parsed = parseAppSshPtyId(id)
+    if (parsed && parsed.connectionId !== this.connectionId) {
+      return false
+    }
+    if (!this.livePtyIds.has(id) && !parsed) {
+      return false
+    }
+    this.livePtyIds.add(id)
+    this.worktreeIdByPtyId.set(id, worktreeId)
+    try {
+      this.mux.notify('pty.setWorktreeId', { id: this.toRelayPtyId(id), worktreeId })
+    } catch {
+      this.worktreeIdByPtyId.delete(id)
+      return false
+    }
+    return true
+  }
   hasPty = (id: string): boolean => this.livePtyIds.has(id)
 
   onData = (callback: SshPtyDataCallback): (() => void) => this.outputState.onData(callback)

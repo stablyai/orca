@@ -93,6 +93,7 @@ describe('PtyHandler', () => {
     // register a no-op here, which survived only because the consumer session adapter was
     // constructed later and overwrote it (STA-4571).
     expect(notifMethods).not.toContain('pty.ackData')
+    expect(notifMethods).toContain('pty.setWorktreeId')
   })
 
   it('rescans the process table for a close decision but not for a poll', async () => {

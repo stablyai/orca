@@ -18,6 +18,11 @@ export const TerminalFocus = TerminalHandle.extend({
   navigation: z.enum(['caller', 'host']).optional()
 })
 
+export const TerminalMove = TerminalHandle.extend({
+  worktree: requiredString('Missing worktree selector'),
+  tab: z.boolean().optional()
+})
+
 /**
  * `terminal.inspectProcess` carries one member the sibling handle methods must not: whether the
  * caller's answer decides something once, which is what licenses the host to pay for a process-table

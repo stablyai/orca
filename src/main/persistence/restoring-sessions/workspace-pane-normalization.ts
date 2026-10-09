@@ -16,6 +16,10 @@ import {
   collectLegacyPaneKeyAliasesForTab,
   type PaneAliasNormalizationOptions
 } from './pane-identity-migration'
+import {
+  dedupeGhostTerminalTabRows,
+  mintMissingTerminalTabChrome
+} from '../../../shared/workspace-session-terminal-chrome-repair'
 import { normalizeTerminalLayoutSnapshotForPersistence } from './terminal-layout-normalization'
 import {
   legacyMigrationUnsupportedRowsToAliasEntries,
@@ -192,6 +196,13 @@ export function normalizePersistedPaneIdentityState(
       skipAliasTabIds: crossHostTabIds
     }
   )
+  // Why: files damaged by older builds lost tab chrome for live terminals or
+  // carry ghost rows re-minted in a spawn worktree; repair before anything reads
+  // the session so the agent stays clickable and owns exactly one row.
+  const repairedSession = mintMissingTerminalTabChrome(
+    dedupeGhostTerminalTabRows(normalizedSession.session, undefined)
+  )
+  const sessionOwnershipRepaired = repairedSession !== normalizedSession.session
   let acknowledgementLeafIdByInputLeafIdByTabId = normalizedSession.leafIdByInputLeafIdByTabId
   const remapsByHostId = new Map<ExecutionHostId, WorkspaceSessionPaneIdentityRemap>([
     [LOCAL_EXECUTION_HOST_ID, normalizedSession]
@@ -220,6 +231,12 @@ export function normalizePersistedPaneIdentityState(
         }
       )
       normalizedHostSessions[hostId] = normalizedHostSession.session
+      const repairedHostSession = mintMissingTerminalTabChrome(
+        dedupeGhostTerminalTabRows(normalizedHostSession.session, undefined)
+      )
+      normalizedHostSessions[hostId] = repairedHostSession
+      hostSessionsChanged ||=
+        normalizedHostSession.changed || repairedHostSession !== normalizedHostSession.session
       remapsByHostId.set(hostId, normalizedHostSession)
       acknowledgementLeafIdByInputLeafIdByTabId = mergeAcknowledgementLeafIdMapsByTabId(
         acknowledgementLeafIdByInputLeafIdByTabId,
@@ -228,7 +245,6 @@ export function normalizePersistedPaneIdentityState(
       for (const entry of normalizedHostSession.legacyPaneKeyAliasEntries) {
         hostSessionLegacyPaneKeyAliasEntries.push(entry)
       }
-      hostSessionsChanged ||= normalizedHostSession.changed
     }
   }
   const remappedLeases = remapSshRemotePtyLeaseLeafIds(
@@ -265,6 +281,7 @@ export function normalizePersistedPaneIdentityState(
   )
   if (
     !normalizedSession.changed &&
+    !sessionOwnershipRepaired &&
     !hostSessionsChanged &&
     !remappedLeases.changed &&
     !migrationUnsupportedChanged &&
@@ -283,7 +300,7 @@ export function normalizePersistedPaneIdentityState(
   return {
     state: {
       ...state,
-      workspaceSession: normalizedSession.session,
+      workspaceSession: repairedSession,
       ...(normalizedHostSessions ? { workspaceSessionsByHostId: normalizedHostSessions } : {}),
       sshRemotePtyLeases: remappedLeases.leases,
       migrationUnsupportedPtyEntries: mergedMigrationUnsupportedEntries,

@@ -68,6 +68,7 @@ export const ROOT_HELP_TEXT_SECONDARY = [
   '  orca terminal split [--terminal <handle>] [--direction horizontal|vertical] [--json]',
   '  orca terminal switch [--terminal <handle>] [--json]',
   '  orca terminal close ([--terminal <handle>] [--tab] | --worktree <selector> --all) [--json]',
+  '  orca terminal move --worktree <selector> [--terminal <handle>] [--tab] [--json]',
   '  orca project list [--json]',
   '  orca project setups [--project <id>] [--host <host-id>] [--json]',
   '  orca project setup-existing-folder --project <id> --host <host-id> --path <path> [--kind git|folder] [--display-name <name>] [--json]',

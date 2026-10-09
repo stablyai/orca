@@ -6,7 +6,8 @@ import {
   getWorktreePathBasenameFromId,
   splitWorktreeId,
   splitWorktreeIdForFilesystem,
-  worktreeIdComparisonKey
+  worktreeIdComparisonKey,
+  worktreeIdsEqual
 } from './id'
 
 describe('WORKTREE_ID_SEPARATOR', () => {
@@ -194,5 +195,29 @@ describe('worktreeIdComparisonKey path-spelling parity for id: selectors (#16243
     expect(key('repo-a')).toBeNull()
     expect(key('repo-a::')).toBeNull()
     expect(key('/srv/workspaces/plugin')).toBeNull()
+  })
+})
+
+describe('worktreeIdsEqual', () => {
+  it('folds path spelling differences into one worktree', () => {
+    expect(worktreeIdsEqual('repo-123::/abs/path', 'repo-123::/abs/path/')).toBe(true)
+    expect(worktreeIdsEqual('repo-123::/abs//path', 'repo-123::/abs/path')).toBe(true)
+  })
+
+  it('keeps different repos, paths, and folder-workspace instances distinct', () => {
+    expect(worktreeIdsEqual('repo-123::/abs/path', 'repo-456::/abs/path')).toBe(false)
+    expect(worktreeIdsEqual('repo-123::/abs/path', 'repo-123::/abs/other')).toBe(false)
+    expect(
+      worktreeIdsEqual(
+        'repo-123::/abs/path',
+        'repo-123::/abs/path::workspace:123e4567-e89b-12d3-a456-426614174000'
+      )
+    ).toBe(false)
+  })
+
+  it('falls back to exact equality for malformed ids', () => {
+    expect(worktreeIdsEqual('bare', 'bare')).toBe(true)
+    expect(worktreeIdsEqual('bare', 'other')).toBe(false)
+    expect(worktreeIdComparisonKey('bare')).toBeNull()
   })
 })

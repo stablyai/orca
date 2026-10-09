@@ -38,6 +38,19 @@ export function unregisterPty(ptyId: string): void {
   registry.delete(ptyId)
 }
 
+/**
+ * Why: a terminal moved to another worktree keeps its spawn-time session id but
+ * changes ownership; teardown sweeps key off this row, so it must follow the
+ * move or deleting the spawn worktree would kill a terminal that lives elsewhere.
+ */
+export function updateRegisteredPtyWorktree(ptyId: string, worktreeId: string | null): void {
+  const entry = registry.get(ptyId)
+  if (!entry || entry.worktreeId === worktreeId) {
+    return
+  }
+  registry.set(ptyId, { ...entry, worktreeId })
+}
+
 /** Snapshot of currently-registered local PTYs for the collector to walk. */
 export function listRegisteredPtys(): PtyRegistration[] {
   return [...registry.values()]

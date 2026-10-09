@@ -183,6 +183,65 @@ describe('Store', () => {
     expect(session.tabsByWorktree.wt1[0].ptyId).toBe('remote-pty')
   })
 
+  it('binds a moved tab in the worktree that holds it instead of its spawn prefix', async () => {
+    const store = await createStore()
+    const spawn = 'repo::/spawn'
+    const dest = 'repo::/dest'
+    store.setWorkspaceSession({
+      activeRepoId: 'repo',
+      activeWorktreeId: dest,
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        [dest]: [
+          {
+            id: 'tab1',
+            worktreeId: dest,
+            title: 'Terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            ptyId: `${spawn}@@moved`
+          }
+        ],
+        [spawn]: [
+          {
+            id: 'tab-keep',
+            worktreeId: spawn,
+            title: 'Other',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            ptyId: 'pty-keep'
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [TEST_LEAF_1]: `${spawn}@@moved` }
+        }
+      }
+    })
+
+    // Why: a stale writer still addresses the moved tab by its spawn-time worktree.
+    const persisted = store.persistPtyBinding({
+      worktreeId: spawn,
+      tabId: 'tab1',
+      leafId: TEST_LEAF_1,
+      ptyId: `${spawn}@@moved`
+    })
+
+    expect(persisted).toBe(true)
+    const session = store.getWorkspaceSession()
+    expect(session.tabsByWorktree[spawn]?.map((tab) => tab.id)).toEqual(['tab-keep'])
+    expect(session.tabsByWorktree[dest]?.map((tab) => tab.id)).toEqual(['tab1'])
+    expect(session.tabsByWorktree[dest][0].ptyId).toBe(`${spawn}@@moved`)
+  })
+
   it('promotes an empty tab layout to a durable UUID root when persisting the first PTY binding', async () => {
     const store = await createStore()
     store.setWorkspaceSession({

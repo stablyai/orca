@@ -95,6 +95,7 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   '  terminal switch           Bring a terminal tab to the foreground',
   '  terminal focus            Alias for terminal switch',
   '  terminal close            Close one terminal, its whole tab with --tab, or all in a worktree',
+  '  terminal move             Move a live terminal tab to another worktree',
   '',
   'Orchestration:',
   '  orchestration run-create  Create and bind a lightweight orchestration Run',

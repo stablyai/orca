@@ -7,7 +7,7 @@ import type { SshPtyProviderOutputState } from './ssh-pty-provider-output-state'
 export function createSshPtyProcessLister(
   args: Pick<
     Parameters<typeof listSshPtyProcesses>[0],
-    'mux' | 'connectionId' | 'livePtyIds' | 'outputState'
+    'mux' | 'connectionId' | 'livePtyIds' | 'worktreeIdByPtyId' | 'outputState'
   >
 ): IPtyProvider['listProcesses'] {
   return (options) =>
@@ -23,6 +23,8 @@ export async function listSshPtyProcesses(
     mux: SshChannelMultiplexer
     connectionId: string
     livePtyIds: Set<string>
+    /** Overrides from setWorktreeId rebinds the relay does not report back yet. */
+    worktreeIdByPtyId?: Map<string, string>
     outputState: SshPtyProviderOutputState
     includeForegroundProcessEvidence?: boolean
     deadlineMs?: number
@@ -43,6 +45,10 @@ export async function listSshPtyProcesses(
   )
   for (const process of processes) {
     args.livePtyIds.add(process.id)
+    const remappedWorktreeId = args.worktreeIdByPtyId?.get(process.id)
+    if (remappedWorktreeId) {
+      process.worktreeId = remappedWorktreeId
+    }
     args.outputState.rememberPtyIncarnation(
       toRelaySshPtyId(args.connectionId, process.id),
       process.incarnationId

@@ -5,6 +5,7 @@ import type {
   RuntimeTerminalClose,
   RuntimeTerminalCreate,
   RuntimeTerminalFocus,
+  RuntimeTerminalMove,
   RuntimeTerminalListResult,
   RuntimeTerminalVisualLayout,
   RuntimeTerminalVisualLayoutNode,
@@ -257,6 +258,10 @@ function describePtyStop(close: RuntimeTerminalClose): string {
     return ` ${describeUnconfirmedCloseStop(close)}`
   }
   return ''
+}
+
+export function formatTerminalMove(result: { move: RuntimeTerminalMove }): string {
+  return `Moved terminal ${result.move.handle} (tab ${result.move.tabId}) from ${result.move.sourceWorktreeId} to ${result.move.destWorktreeId}.`
 }
 
 export function formatTerminalClose(result: { close: RuntimeTerminalClose }): string {

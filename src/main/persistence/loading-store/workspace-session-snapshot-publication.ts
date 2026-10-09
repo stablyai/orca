@@ -1,6 +1,10 @@
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { sanitizeWorkspaceSessionTerminalRetirements } from '../../runtime/mobile-session-terminal-persistence-retirement'
+import {
+  dedupeGhostTerminalTabRows,
+  restoreDroppedTerminalTabChrome
+} from '../../../shared/workspace-session-terminal-chrome-repair'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 import { setMigrationUnsupportedPty } from '../../agent-hooks/migration-unsupported-pty-state'
 import { pruneLocalTerminalScrollbackBuffers } from '../../../shared/workspace-session-terminal-buffers'
@@ -39,6 +43,12 @@ export function setLocalWorkspaceSession(
   // straight through, so a per-caller guard leaves the quit write erasing runtime-authored rows.
   session = preserveRuntimeAuthoredWorkspaceSessionFields(session, prior)
   session = sanitizeWorkspaceSessionTerminalRetirements(session, prior)
+  // Why: a stale save can drop a live terminal's tab chrome or re-mint its row
+  // in the spawn worktree after a move; repair both against the prior save.
+  if (prior) {
+    session = restoreDroppedTerminalTabChrome(session, prior)
+  }
+  session = dedupeGhostTerminalTabRows(session, prior)
   session = pruneWorkspaceSessionBrowserHistory(
     pruneLocalTerminalScrollbackBuffers(session, context.runtime.state.repos)
   )

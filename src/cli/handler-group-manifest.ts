@@ -102,6 +102,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
       'terminal create',
       'terminal switch',
       'terminal close',
+      'terminal move',
       'terminal split'
     ],
     load: async () => (await import('./handlers/terminal.js')).TERMINAL_HANDLERS

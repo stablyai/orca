@@ -13,6 +13,7 @@ import {
   canRestorePairedParkedTerminal,
   isSessionOwnedByWorktree
 } from './paired-parked-terminal-restore'
+import { collectPtyIdsOwnedByOtherWorktrees } from './deferred-reattach-ownership'
 import { startDeferredSessionReattach } from './deferred-session-reattach-connect'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
@@ -68,6 +69,19 @@ export function runDeferredSessionReattachChoice(session: ConnectPanePtySession)
     restoredSessionId && restoredSessionId !== detachedLivePtyId
       ? restoredSessionId
       : detachedLivePtyId
+  // Why: a moved terminal keeps a session id whose prefix names its spawn
+  // worktree, so the ownership check rejects it and this pane fresh-spawns a
+  // blank shell while the real process goes orphaned. Accept the session when
+  // this pane's own persisted layout binds it and no tab in another worktree
+  // claims it — a stale cross-worktree mapping always has a competing claimant
+  // or no layout binding.
+  const layoutBoundMovedSession = Boolean(
+    candidateReattachSessionId &&
+      restoredSessionId === candidateReattachSessionId &&
+      !collectPtyIdsOwnedByOtherWorktrees(storeSnapshot, session.deps.worktreeId).has(
+        candidateReattachSessionId
+      )
+  )
   const runtimeHostPtyWakeHint =
     session.runtimeEnvironmentId &&
     candidateReattachSessionId &&
@@ -110,7 +124,8 @@ export function runDeferredSessionReattachChoice(session: ConnectPanePtySession)
     (candidateReattachSessionId &&
     !isRemoteRuntimePtyId(candidateReattachSessionId) &&
     !candidateHasEagerBuffer &&
-    isSessionOwnedByWorktree(candidateReattachSessionId, session.deps.worktreeId)
+    (isSessionOwnedByWorktree(candidateReattachSessionId, session.deps.worktreeId) ||
+      layoutBoundMovedSession)
       ? candidateReattachSessionId
       : null)
   recordPtyConnectDiagnostic(

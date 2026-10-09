@@ -16,6 +16,7 @@ import { evaluatePtyBindingFastLane } from './pty-binding-fast-lane'
 import { ptyBindingIsRefused } from './pty-binding-refusals'
 import { startPtyBindingSpan, type PtyBindingOrigin, type PtyBindingSpan } from './pty-binding-span'
 import { applyPtyBinding } from './pty-binding-session-update'
+import { findTabRowOwnerWorktree } from '../../../shared/workspace-session-terminal-chrome-repair'
 import type { TerminalPanePlacement } from '../../../shared/terminal-pane-placement'
 import { terminalPanePlacementAgreement } from '../terminal-topology/terminal-pane-placement-agreement'
 import type {
@@ -157,10 +158,16 @@ export class PtyBindingPersistenceOperations {
         const paneKey = `${args.tabId}:${args.leafId}`
         const bindingWorktreeId = args.expectedSourceBinding?.worktreeId ?? args.worktreeId
         const session = sessions.getWorkspaceSession(resolvedHostId)
+        // Why: a moved tab's session id still names its spawn worktree, so binding to
+        // the prefix worktree re-mints a ghost copy of the row there. Bind to the
+        // worktree that already holds the tab unless a source expectation pins one.
+        const ownerWorktreeId = args.expectedSourceBinding
+          ? bindingWorktreeId
+          : (findTabRowOwnerWorktree(session, args.tabId) ?? bindingWorktreeId)
         const partitions = sessions
           .getWorkspaceSessionHostIds()
           .map((hostId) => ({ hostId, session: sessions.getWorkspaceSession(hostId) }))
-        if (ptyBindingIsRefused(args, session, bindingWorktreeId, paneKey, partitions)) {
+        if (ptyBindingIsRefused(args, session, ownerWorktreeId, paneKey, partitions)) {
           outcome = 'refused'
           return { value: false, persist: false }
         }
@@ -170,7 +177,7 @@ export class PtyBindingPersistenceOperations {
             terminalPanePlacementAgreement(
               args.placement,
               session,
-              bindingWorktreeId,
+              ownerWorktreeId,
               args.tabId,
               args.leafId
             )
@@ -181,7 +188,7 @@ export class PtyBindingPersistenceOperations {
         const verdict = evaluatePtyBindingFastLane(
           args,
           session,
-          bindingWorktreeId,
+          ownerWorktreeId,
           !runtime.quitFlushStarted && runtime.lastDurableWriteGeneration >= runtime.writeGeneration
         )
         span.setEligibility(verdict)
@@ -201,7 +208,7 @@ export class PtyBindingPersistenceOperations {
         }
         return {
           value: true,
-          rollback: writePtyBinding(this, args, session, resolvedHostId, bindingWorktreeId, paneKey)
+          rollback: writePtyBinding(this, args, session, resolvedHostId, ownerWorktreeId, paneKey)
         }
       })
       span?.finish(outcome)

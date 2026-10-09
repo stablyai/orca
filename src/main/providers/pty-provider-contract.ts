@@ -248,6 +248,8 @@ export type IPtyProvider = {
     deadlineMs?: number
     includeForegroundProcessEvidence?: boolean
   }): Promise<PtyProcessInfo[]>
+  /** Rebind a live PTY's worktree map without killing or respawning it. */
+  setWorktreeId?(id: string, worktreeId: string): boolean
   getDefaultShell(): Promise<string>
   getProfiles(): Promise<{ name: string; path: string }[]>
   onData(callback: (payload: PtyDataEvent) => void): () => void

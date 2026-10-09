@@ -281,6 +281,47 @@ describe('killAllProcessesForWorktree', () => {
     expect(result).toEqual({ runtimeStopped: 0, providerStopped: 1, registryStopped: 0 })
   })
 
+  it('skips PTYs whose authoritative ownership moved away from the deleted worktree', async () => {
+    // Why: a moved terminal keeps its spawn-time `${worktreeId}@@` session id while
+    // its authoritative ownership (provider record + registry) points at the
+    // destination worktree — deleting the spawn worktree must not kill it.
+    const localProvider = createProviderStub(async () => [
+      { id: 'w1@@moved1234', worktreeId: 'w9', cwd: '/tmp/w9', title: 'moved' },
+      { id: 'w1@@home2345', worktreeId: 'w1', cwd: '/tmp/w1', title: 'home' },
+      { id: 'w1@@fresh678', cwd: '/tmp/w1', title: 'undeclared' }
+    ])
+    listRegisteredPtysMock.mockReturnValue([
+      { ptyId: 'w1-registry-moved', worktreeId: 'w9', sessionId: null, paneKey: null, pid: 102 },
+      { ptyId: 'w1-registry-kept', worktreeId: 'w1', sessionId: null, paneKey: null, pid: 103 }
+    ])
+    const onPtyStopped = vi.fn()
+
+    const result = await killAllProcessesForWorktree('w1', { localProvider, onPtyStopped })
+
+    expect(result.providerStopped).toBe(2)
+    expect(result.registryStopped).toBe(1)
+    expect(localProvider.shutdown).not.toHaveBeenCalledWith('w1@@moved1234', expect.anything())
+    expect(localProvider.shutdown).not.toHaveBeenCalledWith('w1-registry-moved', expect.anything())
+    expect(onPtyStopped).not.toHaveBeenCalledWith('w1@@moved1234')
+    expect(onPtyStopped).not.toHaveBeenCalledWith('w1-registry-moved')
+    expect(localProvider.shutdown).toHaveBeenCalledWith('w1@@home2345', expect.anything())
+    expect(localProvider.shutdown).toHaveBeenCalledWith('w1@@fresh678', expect.anything())
+    expect(onPtyStopped).toHaveBeenCalledWith('w1-registry-kept')
+  })
+
+  it('reaches registry rows whose worktree id only differs in path spelling', async () => {
+    const localProvider = createProviderStub(async () => [])
+    listRegisteredPtysMock.mockReturnValue([
+      { ptyId: 'reg-slash', worktreeId: 'repo::/w1/', sessionId: null, paneKey: null, pid: 104 }
+    ])
+    const onPtyStopped = vi.fn()
+
+    const result = await killAllProcessesForWorktree('repo::/w1', { localProvider, onPtyStopped })
+
+    expect(result.registryStopped).toBe(1)
+    expect(onPtyStopped).toHaveBeenCalledWith('reg-slash')
+  })
+
   it('best-effort: swallows errors from listProcesses and shutdown', async () => {
     const localProvider = createProviderStub(() => Promise.reject(new Error('boom')))
     listRegisteredPtysMock.mockReturnValue([

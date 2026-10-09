@@ -135,6 +135,8 @@ export type RuntimePtyController = {
   resize?(ptyId: string, cols: number, rows: number): boolean
   // Why: exact-id mobile polls should not enumerate every local and SSH PTY.
   hasPty?(ptyId: string): boolean | null
+  /** Rebind a live PTY's worktree map without killing or respawning it. */
+  setWorktreeId?(ptyId: string, worktreeId: string): boolean
   listProcesses?(
     connectionId?: string | null,
     opts?: { deadlineMs?: number; includeForegroundProcessEvidence?: boolean }

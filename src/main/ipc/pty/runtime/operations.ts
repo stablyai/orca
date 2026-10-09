@@ -260,6 +260,24 @@ export function hasPtyFromRuntimeController(
   }
 }
 
+export function setPtyWorktreeIdFromRuntimeController(
+  ptyId: string,
+  worktreeId: string
+): boolean {
+  // Why: a remote PTY must never fall through to the local map; lookup or
+  // missing rebind support has to fail closed so callers can refuse persist.
+  let provider: IPtyProvider
+  try {
+    provider = getProviderForPty(ptyId)
+  } catch {
+    return false
+  }
+  if (!provider.setWorktreeId) {
+    return false
+  }
+  return provider.setWorktreeId(ptyId, worktreeId)
+}
+
 export function resizePtyFromRuntimeController(ptyId: string, cols: number, rows: number): boolean {
   try {
     getProviderForPty(ptyId).resize(ptyId, cols, rows)

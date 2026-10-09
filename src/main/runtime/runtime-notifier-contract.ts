@@ -110,6 +110,7 @@ export type RuntimeNotifier = {
   focusEditorTab?(tabId: string, worktreeId: string): void
   closeSessionTab?(tabId: string, worktreeId: string): void | Promise<void>
   moveSessionTab?(worktreeId: string, move: RuntimeMobileSessionTabMove): void
+  moveTerminalToWorktree?(tabId: string, destWorktreeId: string): Promise<void>
   /**
    * Acts only on the host's own window: 'host'/'all' move it, 'caller'/'clients' open without moving
    * it, absent keeps the original switch. Paired clients are never navigated (intended; 'all' == 'host').

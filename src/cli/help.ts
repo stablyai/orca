@@ -88,6 +88,9 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   if (command === 'terminal close' && flag === 'tab') {
     return '--tab                  Close the whole tab and wait for durable persistence'
   }
+  if (command === 'terminal move' && flag === 'tab') {
+    return '--tab                  Move the whole tab when --terminal names a pane'
+  }
   if (command === 'linear issue' && flag === 'id') {
     return '--id <id>             Linear issue key, id, or URL'
   }
