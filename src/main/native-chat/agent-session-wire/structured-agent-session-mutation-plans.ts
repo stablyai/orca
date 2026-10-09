@@ -49,6 +49,7 @@ import { queuedSendAnswer } from './structured-agent-session-queued-send-answer'
 import type { JournalOperationReceipt } from '../agent-session-journal/journal-row-writer'
 import type { CommandReceiptResult } from '../agent-session-journal/command-receipt-schema'
 import type { JournalRow } from '../agent-session-journal/journal-row-schema'
+import { refusingNewerOrcaJournal } from '../agent-session-journal/journal-open-failure'
 
 export type MutationPlan<TValue> = {
   method: string
@@ -328,7 +329,7 @@ export function promptPlan(
       result: (row) => promptAnswerReceipt(promptRowAnswer(row)),
       unwritten: (value) => promptAnswerReceipt(value)
     },
-    run: (ctx) => performPrompt(ctx, params),
+    run: (ctx) => refusingNewerOrcaJournal(performPrompt(ctx, params)),
     replay: (_ctx, _outcome, receipt) => acceptedPromptAnswer(receipt)
   }
 }

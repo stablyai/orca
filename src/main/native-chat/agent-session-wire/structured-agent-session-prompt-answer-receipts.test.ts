@@ -10,7 +10,10 @@ import {
 } from '../../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  openTestJournalHostDatabase,
+  SAVED_BY_NEWER_ORCA
+} from '../agent-session-journal/journal-host-database-test-support'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import type { StructuredAgentSessionHost } from './structured-agent-session-host'
 import {
@@ -234,6 +237,17 @@ describe('a prompt answer', () => {
     })
     expect(answerPrompt).not.toHaveBeenCalled()
     expect(await resolution(prompt.itemId)).toBe('pending')
+  })
+
+  it("refuses with the update words when a newer Orca's journal holds the chat", async () => {
+    const prompt = await seeded()
+    const id = opId()
+    Object.defineProperty(openTestJournalHostDatabase(root), 'readOnly', { value: true })
+    expect(await host.respondToPrompt(CALLER, answer(prompt, id))).toMatchObject({
+      ok: false,
+      ...SAVED_BY_NEWER_ORCA
+    })
+    expect(receipt(id)).toEqual({ verdict: 'absent' })
   })
 
   it('records nothing for a refusal before acceptance', async () => {
