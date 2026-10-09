@@ -586,7 +586,8 @@ export function resolveMobileWebPageRoutes(routeKeys, declared = MOBILE_WEB_PAGE
     grants: [...route.grants],
     ...(route.optionalGrants === undefined || route.optionalGrants.length === 0
       ? {}
-      : { optionalGrants: [...route.optionalGrants] })
+      : { optionalGrants: [...route.optionalGrants] }),
+    ...(route.canOwnHostArea === true ? { canOwnHostArea: true } : {})
   }))
 }
 
@@ -618,7 +619,7 @@ export async function buildMobileWebAppBundle({
 
   // Root-absolute, unlike the Phase A bootstrap's bare relative src: this document is served at
   // every route depth (/h/<hostId>/tasks), where a relative href resolves against the route and
-  // 404s. A <base> tag would be the other fix, but the shell's CSP sets base-uri 'none'.
+  // 404s. A <base> tag would be the other fix, but the shell's CSP admits only an about: base.
   // type="module", because the entry is esm and reaches its routes through import(). Same-origin
   // module and chunk both load under the shell's script-src 'self'; the policy is unchanged.
   const html =

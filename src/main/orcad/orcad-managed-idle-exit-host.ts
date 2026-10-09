@@ -1,4 +1,5 @@
 /** Binds managed idle exit to this orcad's RPC server, PTY provider and terminal daemon. */
+import { getAppEnvironment } from '../../shared/app-environment'
 import type { RuntimeRpcClientActivity } from '../runtime/runtime-rpc/runtime-rpc-shutdown'
 import type { OrcadIdleExitEvidence } from './orcad-idle-exit-monitor'
 import {
@@ -47,7 +48,7 @@ export function beginOrcadIdleExit(userDataPath: string): {
   if (previousIdleStop) {
     console.error(`[orcad] the previous run stopped idle at ${previousIdleStop.stoppedAt}`)
   }
-  const version = process.env.ORCA_VERSION ?? '0.0.0-orcad'
+  const version = getAppEnvironment().getVersion()
   return {
     previousIdleStop,
     start: (ports) => startOrcadManagedIdleExit({ ...ports, config, userDataPath, version })

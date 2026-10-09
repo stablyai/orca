@@ -3263,6 +3263,7 @@
                 "ce8248b835": "작업 트리 경로를 사용할 수 없습니다.",
                 "internalTooManyPaths": "터미널에 안전하게 붙여넣기에는 드롭된 경로가 너무 많습니다.",
                 "internalPathsTooLarge": "터미널에 안전하게 붙여넣기에는 경로 목록이 너무 큽니다.",
+                "internalHostMismatch": "이 터미널과 같은 호스트의 파일을 드롭하세요.",
                 "b4cf68e889": "{{value0}} {{value1}}을(를) 건너뛰었습니다.",
                 "writeTimeout": "파일 드롭이 취소되었습니다. 안전 시간 제한 전에 터미널이 경로를 받지 않았습니다.",
                 "writeRejected": "파일 드롭이 취소되었습니다. 터미널이 경로를 받을 수 없습니다."
@@ -3742,7 +3743,6 @@
             "54e8d6bb2d": "Fable",
             "d79c3362c4": "5h",
             "a79c64f87e": "Fable",
-            "8295903d17": "전환 후 이전 대화를 계속하려면 활성 Claude terminal을 다시 시작하세요.",
             "c98ea88392": "다른 계정 없음",
             "9332ba8684": "다음으로 전환",
             "d450654fa2": "Claude 계정",
@@ -6497,7 +6497,6 @@
         "AccountsPane": {
           "c2d2751587": "계정 삭제",
           "dbb9626ed1": "취소",
-          "854ebbcc45": "Orca는 저장된 계정에 대해 관리되는 Claude 인증을 삭제합니다. 현재 활성화된 경우 Orca는 시스템 기본 Claude 로그인으로 대체됩니다.",
           "63843e37e2": "Claude 계정을 삭제하시겠습니까?",
           "380a7736cc": "이 계정을 제거하면 관리되는 Codex 홈과 그 안에 저장된 모든 Codex 세션 기록 및 MCP 로그인이 영구적으로 삭제됩니다. 이 작업은 실행 취소할 수 없습니다. 계정이 현재 활성 상태인 경우 Orca는 시스템 기본 Codex 로그인으로 전환됩니다.",
           "0d47394635": "Codex 계정을 제거하시겠습니까?",
@@ -6545,12 +6544,10 @@
           "3fe7862418": "{{value0}}에 대한 관리된 Claude 계정이 없습니다. Orca는 여기에 추가할 때까지 해당 환경의 시스템 기본 Claude 로그인을 사용합니다.",
           "3455cf43fa": "Claude 로그인.",
           "fcc4093fc1": "현재 {{value0}} Codex 로그인을 사용하세요.",
-          "79e484c3b2": "공유 Claude 인증 파일에 대한 선택적 계정 전환기입니다.",
           "8bbfd74556": "Claude 계정",
           "72b36ea174": "선택 사항. Orca는 일반적인 Claude 로그인을 사용할 수 있습니다. 채팅 세션을 이동하지 않고 빠르게 전환하려는 경우에만 계정을 추가하세요.",
           "26ef4b55be": "Claude",
           "2743cdc0af": "Claude 계정 업데이트에 실패했습니다.",
-          "b15ce90870": "{{value0}} -> {{value1}}. 이전 세션을 계속하기 전에 실행 중인 Claude terminals을 다시 시작하세요.",
           "f921d32606": "Claude 계정이 업데이트되었습니다.",
           "5bf8764953": "Codex 계정 업데이트에 실패했습니다.",
           "9baf45d071": "이 기기",
@@ -12311,7 +12308,11 @@
             "confirmRestore": "스냅샷 복원 및 다시 시작",
             "keepState": "상태 유지",
             "statusUnknown": "상태 알 수 없음",
-            "checking": "확인 중…"
+            "checking": "확인 중…",
+            "forget": "잊기…",
+            "confirmForget": "이 데스크톱에서 잊기",
+            "keepLinked": "연결 유지",
+            "forgetDescription": "호스트에 연결하지 않고 여기서 이 서버의 연결을 해제합니다. 호스트가 다시 살아나면 서버가 그곳에서 계속 실행 중일 수 있습니다."
           },
           "title": "관리형 서버",
           "description": "Orca는 빈 SSH 호스트에 서버를 설치하고 실행하며 최신 상태로 유지합니다.",
@@ -14897,7 +14898,6 @@
                 "d90d2e1f6d": "세션 및 주간 사용량을 추적합니다.",
                 "8919321417": "Codex 로그인에 실패했습니다.",
                 "c7b90c140b": "Codex 계정이 추가되었습니다.",
-                "4e71d72912": "Claude 로그인에 실패했습니다.",
                 "9ddeb558f9": "Claude 계정이 추가되었습니다.",
                 "29d0653961": "로그인",
                 "945865332e": "로그인 중",
@@ -17842,6 +17842,8 @@
         "managedAccountUnsupported": "WSL에 Claude 계정이 추가되어 있는 동안에는 Claude 채팅에 Windows Claude 계정이 필요합니다.",
         "launchFolderMissing": "이 채팅이 실행되던 폴더가 더 이상 존재하지 않습니다. 이 채팅을 계속하려면 폴더를 복원하세요.",
         "historyInOtherAccount": "이 채팅의 기록은 다른 Claude 계정에 있습니다. 계속하려면 해당 계정으로 다시 전환하세요.",
+        "claudeAccountFolderMissing": "선택한 Claude 계정의 폴더가 없습니다. 다시 로그인하거나 다른 계정을 선택하세요.",
+        "claudeAccountSetupFailed": "선택한 Claude 계정을 설정할 수 없습니다. 다시 시도하거나 다른 계정을 선택하세요.",
         "agentCommandNotRunnable": "{{agent}}의 설정 → 에이전트 → 명령은 Orca가 찾을 수 있는 프로그램 경로나 이름이어야 하며, 인수나 변수를 포함할 수 없습니다. 변경하거나 재설정하세요.",
         "chooseClaudeAccount": "Claude 계정 설정에서 선택하거나 추가하세요.",
         "chooseClaudeAccountThenRunCommand": "Claude 계정 설정에서 선택하거나 추가한 다음 /{{command}}을(를) 다시 실행하세요.",
@@ -18485,8 +18487,7 @@
       },
       "visualUnavailable": "시각화를 사용할 수 없습니다",
       "visualLoading": "시각화 로드 중",
-      "visualOpenInSidebar": "사이드바에서 열기",
-      "visualClose": "시각화 닫기"
+      "visualOpenInNewTab": "새 탭에서 열기"
     },
     "tab": {
       "bar": {
@@ -19114,6 +19115,9 @@
     "nativeChatUpgrade": {
       "eyebrow": "새 기능",
       "title": "기본 채팅이 업그레이드되었습니다",
+      "chatModeNote": "새 Agent 탭은 이전처럼 터미널에서 열립니다.",
+      "chatModeLabel": "채팅 모드 켜기",
+      "chatModeHint": "새 Agent 탭을 채팅으로 엽니다.",
       "intro": "이제 지원되는 Agent의 새 채팅은 업그레이드된 채팅 보기에서 열립니다. 채팅과 CLI 사이를 오가려면 오른쪽 사이드바에서 {{panel}}을 여세요:",
       "resumeInNativeChat": "{{action}}: 지원되는 CLI 대화를 기본 채팅에서 엽니다.",
       "resumeInCli": "{{action}}: Claude 또는 Codex 채팅을 새 CLI 세션으로 복사합니다. 원래 채팅은 그대로 유지됩니다.",
@@ -19440,9 +19444,6 @@
       "oldTerminalDialogRisk": "서버를 공유하는 Codex 세션은 함께 종료될 수 있으며 에이전트 상태가 잘못될 수 있습니다.",
       "oldTerminalDialogCause": "이전 터미널은 여전히 Codex 서버를 공유합니다. 새 터미널을 열어 별도의 서버에서 Codex를 실행합니다.",
       "fix": "자물쇠",
-      "openNewTerminal": "새 터미널 열기",
-      "dontShowAgain": "다시 보지 않기",
-      "dismiss": "닫기",
       "dialogTitle": "각 Codex 탭에 자체 서버를 제공합니다",
       "dialogDescription": "Codex 세션은 터미널 공유 백그라운드 서버에서 직접 시작되었습니다. ORCA는 시작되는 Codex 세션을 별도로 유지합니다. 세션이 서버를 공유할 때 서버를 닫으면 다른 세션이 종료될 수 있으며 에이전트 상태가 잘못될 수 있습니다.",
       "copy": "복사",
@@ -19453,7 +19454,6 @@
       "step2Title": "실행 중인 공유 서버 중지",
       "undo": "되돌리려면 codex features enable daemon_auto_start를 실행하세요.",
       "step2Warning": "서버를 공유하는 열려 있는 Codex 세션을 닫습니다.",
-      "learnMore": "자세히 알아보기",
       "turnOff": "끄기",
       "turningOff": "끄는 중...",
       "turnedOff": "껐어요",
@@ -19469,6 +19469,12 @@
     },
     "paneMove": {
       "failed": "분할 창을 새 탭으로 이동할 수 없습니다."
+    },
+    "paneTopBanner": {
+      "openNewTerminal": "새 터미널 열기",
+      "learnMore": "자세히 알아보기",
+      "dontShowAgain": "다시 보지 않기",
+      "dismiss": "닫기"
     }
   },
   "fileSearch": {

@@ -1,4 +1,4 @@
-import { memo, useMemo, useRef, useState } from 'react'
+import { memo, useMemo, useState } from 'react'
 import {
   Dimensions,
   type LayoutChangeEvent,
@@ -36,6 +36,10 @@ import { AGENT_WORKING_COLOR, AgentStateDot } from '../components/AgentStateDot'
 import { useNow } from '../hooks/use-now'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import type { MobileStructuredBackgroundTasks } from './use-mobile-structured-background-tasks'
+import {
+  useMobileBackgroundTaskStops,
+  type MobileBackgroundTaskStopping as Stopping
+} from './use-mobile-background-task-stops'
 import { mobileAgentChildRowName, mobileAgentChildRowText } from './mobile-agent-child-row-text'
 
 type TaskKind = AgentSessionBackgroundTask['kind']
@@ -63,9 +67,6 @@ const NARROW_STRIP_WIDTH = NARROW_BACKGROUND_TASKS_STRIP_REM * 16
 function kindIconColor(kind: TaskKind): string {
   return kind === 'monitor' ? AGENT_WORKING_COLOR : colors.textMuted
 }
-
-type Stopping = { taskIds: ReadonlySet<string>; all: boolean }
-const NOT_STOPPING: Stopping = { taskIds: new Set(), all: false }
 
 function TaskRow({
   row,
@@ -149,14 +150,13 @@ function MobileNativeChatBackgroundTasksImpl({
 }: {
   tasks: MobileStructuredBackgroundTasks
 }): React.JSX.Element | null {
-  const { view, rowContext, stop } = tasks
+  const { view, rowContext } = tasks
   const [expanded, setExpanded] = useState(false)
   // Before the first layout, the window less the strip's own margins, so it opens in its final form.
   const [narrow, setNarrow] = useState(
     () => Dimensions.get('window').width - 2 * spacing.lg < NARROW_STRIP_WIDTH
   )
-  const [stopping, setStopping] = useState<Stopping>(NOT_STOPPING)
-  const stoppingRef = useRef(NOT_STOPPING)
+  const { stopping, onStop } = useMobileBackgroundTaskStops(tasks)
   const groups = useMemo(
     () =>
       view.children !== undefined
@@ -172,29 +172,6 @@ function MobileNativeChatBackgroundTasksImpl({
   const hostNow = now - rowContext.hostClockOffsetMs
   const header = backgroundTasksHeaderContent(groups, { narrow, now: hostNow }, say)
 
-  const updateStopping = (next: Stopping): void => {
-    stoppingRef.current = next
-    setStopping(next)
-  }
-  // A press already on its way holds its button; the ref closes the same-frame double tap.
-  const onStop = (taskId?: string): void => {
-    const current = stoppingRef.current
-    if (taskId ? current.taskIds.has(taskId) : current.all) {
-      return
-    }
-    updateStopping({
-      taskIds: taskId ? new Set([...current.taskIds, taskId]) : current.taskIds,
-      all: taskId ? current.all : true
-    })
-    void stop(taskId).finally(() => {
-      const latest = stoppingRef.current
-      const taskIds = new Set(latest.taskIds)
-      if (taskId) {
-        taskIds.delete(taskId)
-      }
-      updateStopping({ taskIds, all: taskId ? latest.all : false })
-    })
-  }
   const onLayout = (event: LayoutChangeEvent): void => {
     setNarrow(event.nativeEvent.layout.width < NARROW_STRIP_WIDTH)
   }

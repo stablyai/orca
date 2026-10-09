@@ -82,6 +82,17 @@ export function rejectPendingSnapshotRequest(
   request.reject(new Error(message))
 }
 
+export function disposeRemoteTerminalStreamState(
+  stream: RemoteRuntimeMultiplexedTerminalState,
+  message: string
+): void {
+  discardOutputAcknowledgements(stream)
+  stream.watchdog.dispose()
+  clearSnapshot(stream)
+  clearResyncTimer(stream)
+  rejectPendingSnapshotRequest(stream, message)
+}
+
 export function decodeSnapshotInfo(
   payload: Uint8Array<ArrayBufferLike>
 ): RemoteRuntimeSnapshotInfo | null {
@@ -128,16 +139,6 @@ export function decodeSnapshotInfo(
   }
 }
 
-/**
- * Whether a pushed (initial or recovery) image leaves the pane's history alone.
- * Absent counts as none: hosts that predate the field pushed desktop images screen-only (#14593).
- */
-export function pushedSnapshotKeepsLocalScrollback(
-  info: RemoteRuntimeSnapshotInfo | null
-): boolean {
-  return (info?.scrollbackRows ?? 0) === 0
-}
-
 export function retryWorthySnapshotOutcome(
   cause: RemoteRuntimeSnapshotRetryCause
 ): RemoteRuntimeSnapshotOutcome {
@@ -170,10 +171,9 @@ export function isTerminalDriverState(
   if (!value || typeof value !== 'object' || !('kind' in value)) {
     return false
   }
-  const driver = value as { kind?: unknown; clientId?: unknown }
   return (
-    driver.kind === 'idle' ||
-    driver.kind === 'desktop' ||
-    (driver.kind === 'mobile' && typeof driver.clientId === 'string')
+    value.kind === 'idle' ||
+    value.kind === 'desktop' ||
+    (value.kind === 'mobile' && 'clientId' in value && typeof value.clientId === 'string')
   )
 }

@@ -16,6 +16,7 @@ import {
   getProviderDisplayName,
   getProviderUsageStatusLabel
 } from './tooltip'
+import { isClaudeUsageWaitingForClaude } from './usage-error-copy'
 import { getTightestUsageSection, getUsageHeadlineSection } from './UsageRosterPanel'
 import { formatRateLimitWindowChipLabel } from '@/lib/window-label-formatter'
 import { formatUsagePercentageLabel } from './usage-percentage-label'
@@ -95,9 +96,11 @@ export function getUsageTone(p: ProviderRateLimits): UsageTone {
  */
 export function UsageOverflowChip({
   hidden,
+  providerCount,
   display
 }: {
   hidden: readonly ProviderRateLimits[]
+  providerCount: number
   display: UsagePercentageDisplay
 }): React.JSX.Element {
   const tones = hidden.map(getUsageTone)
@@ -128,9 +131,13 @@ export function UsageOverflowChip({
           value0: names
         }
       )}
-      className="inline-flex h-4 items-center rounded-full border border-border px-1.5 text-[11px] font-medium tabular-nums text-foreground data-[tone=urgent]:border-destructive/40 data-[tone=urgent]:text-destructive data-[tone=warning]:border-status-warning-border data-[tone=warning]:text-status-warning data-[usage-collapsed=true]:invisible data-[usage-collapsed=true]:absolute"
+      className="inline-grid h-4 items-center justify-items-center rounded-full border border-border px-1.5 text-[11px] font-medium tabular-nums text-foreground data-[tone=urgent]:border-destructive/40 data-[tone=urgent]:text-destructive data-[tone=warning]:border-status-warning-border data-[tone=warning]:text-status-warning data-[usage-collapsed=true]:invisible data-[usage-collapsed=true]:absolute"
     >
-      +{Math.max(1, hidden.length)}
+      {/* Why: count changes must not invalidate density measurements and restart probing. */}
+      <span aria-hidden="true" className="invisible col-start-1 row-start-1">
+        +{providerCount}
+      </span>
+      <span className="col-start-1 row-start-1">+{Math.max(1, hidden.length)}</span>
     </span>
   )
 }
@@ -314,6 +321,8 @@ export function ProviderSegment({
 }): React.JSX.Element {
   const provider = p?.provider ?? 'claude'
   const statusLabel = p ? getProviderUsageStatusLabel(p) : ''
+  // Why: not a problem; Claude updates its own login the next time it runs.
+  const calm = p ? isClaudeUsageWaitingForClaude(p) : false
 
   // Idle / initial load
   if (!p || p.status === 'idle') {
@@ -351,14 +360,14 @@ export function ProviderSegment({
     return (
       <span className="inline-flex items-center gap-1 text-muted-foreground">
         <ProviderIcon provider={provider} />
-        <AlertTriangle size={11} className="text-muted-foreground/80" />
+        {!calm && <AlertTriangle size={11} className="text-muted-foreground/80" />}
         {!compact && <span className="text-[11px] font-medium">{statusLabel}</span>}
       </span>
     )
   }
 
   // Has data (ok, fetching with stale data, or error with stale data)
-  const isStale = p.status === 'error'
+  const isStale = p.status === 'error' && !calm
   const showBalance = isExtraUsageActive(p)
 
   return (

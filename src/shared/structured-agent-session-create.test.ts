@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest'
+import { NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES, RUNTIME_CAPABILITIES } from './protocol-version'
 import {
   AGENT_SESSION_CREATE_TAB_ID_RUNTIME_CAPABILITY,
-  RUNTIME_CAPABILITIES
-} from './protocol-version'
-import { structuredAgentSessionCreateParams } from './structured-agent-session-create'
+  AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY
+} from './agent-session-create-capabilities'
+import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from './electron-remote-runtime-client-capabilities'
+import {
+  structuredAgentSessionCreateParams,
+  type StructuredAgentSessionFirstMessage
+} from './structured-agent-session-create'
 import {
   structuredAgentSessionCreateFingerprint,
   structuredAgentSessionPayloadFingerprint
@@ -20,7 +25,12 @@ function nextUuid(): string {
 }
 
 function createParams(
-  overrides: { resumeFrom?: { providerSessionId: string }; tabId?: string } = {}
+  overrides: {
+    resumeFrom?: { providerSessionId: string }
+    tabId?: string
+    firstMessage?: StructuredAgentSessionFirstMessage
+    options?: Record<string, string>
+  } = {}
 ) {
   return structuredAgentSessionCreateParams({
     sessionId: SESSION_ID,
@@ -33,6 +43,45 @@ function createParams(
 }
 
 describe('structured agent session create params', () => {
+  it('advertises create-message support only on clients using the new flow', () => {
+    expect(ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES).toContain(
+      AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY
+    )
+    expect(NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES).not.toContain(
+      AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY
+    )
+  })
+  it('fingerprints the first message identity, content and opening option picks', () => {
+    const firstMessage: StructuredAgentSessionFirstMessage = {
+      clientMessageId: 'message-1',
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'opening text' }] }
+    }
+    const first = createParams({ firstMessage, options: { model: 'picked-model' } })
+    expect(first.firstMessage).toEqual(firstMessage)
+    expect(first.options).toEqual({ model: 'picked-model' })
+    expect(first.envelope.payloadFingerprint).toBe(
+      createParams({ firstMessage, options: { model: 'picked-model' } }).envelope.payloadFingerprint
+    )
+    for (const changed of [
+      createParams(),
+      createParams({
+        firstMessage: { ...firstMessage, clientMessageId: 'message-2' },
+        options: { model: 'picked-model' }
+      }),
+      createParams({
+        firstMessage: {
+          ...firstMessage,
+          body: { ...firstMessage.body, blocks: [{ type: 'text', text: 'different text' }] }
+        },
+        options: { model: 'picked-model' }
+      }),
+      createParams({ firstMessage, options: { model: 'other-model' } })
+    ]) {
+      expect(changed.envelope.payloadFingerprint).not.toBe(first.envelope.payloadFingerprint)
+    }
+    expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY)
+    expect(AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY).toBe('agentSession.create.message.v1')
+  })
   it('carries resumeFrom only when the create adopts a conversation', () => {
     expect(createParams()).not.toHaveProperty('resumeFrom')
     expect(createParams({ resumeFrom: RESUME })).toMatchObject({ resumeFrom: RESUME })

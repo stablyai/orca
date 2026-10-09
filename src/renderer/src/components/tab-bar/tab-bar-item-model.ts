@@ -6,6 +6,7 @@ import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution
 import type { OpenFile } from '../../store/slices/editor'
 import { getEditorDisplayLabel } from '@/components/editor/editor-labels'
 import { normalizeRelativePath } from '@/lib/path'
+import { isVirtualEditorFile } from '@/store/slices/editor/tabs/editor-tab-content-type'
 import { getBrowserTabLabel } from './BrowserTab'
 import type { DropIndicator } from './drop-indicator'
 import { reconcileTabOrder } from './reconcile-order'
@@ -58,13 +59,14 @@ export function resolveTerminalItemTab(
 }
 
 export function resolveEditorTabGitStatus(
-  relativePath: string,
+  file: Pick<OpenFile, 'mode' | 'relativePath'>,
   statusByRelativePath: Map<string, GitFileStatus>
 ): GitFileStatus | null {
-  if (relativePath === 'All Changes') {
+  // Why: a virtual tab's relativePath is its title, which can collide with a real file's path.
+  if (file.relativePath === 'All Changes' || isVirtualEditorFile(file)) {
     return null
   }
-  return statusByRelativePath.get(normalizeRelativePath(relativePath)) ?? null
+  return statusByRelativePath.get(normalizeRelativePath(file.relativePath)) ?? null
 }
 
 export function getTabDragLabel(item: TabBarItem, generatedTitlesEnabled: boolean): string {

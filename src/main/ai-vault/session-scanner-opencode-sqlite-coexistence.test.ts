@@ -60,6 +60,7 @@ function isolatedScanRoots(root: string) {
     zcodeDbPath: join(root, 'zcode-db.sqlite'),
     ompSessionsDir: join(root, 'omp-sessions'),
     jcodeSessionsDir: join(root, 'jcode-sessions'),
+    kiroSessionsDir: join(root, 'kiro-sessions'),
     primeAgentSessionsDir: join(root, 'prime-agent-sessions')
   }
 }

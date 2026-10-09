@@ -11,7 +11,10 @@ import {
   structuredAgentSessionOptionSnapshot
 } from '../../shared/structured-agent-session-options'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
-import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
+import {
+  HOST_TEST_SESSION as SESSION,
+  hostTestMessage
+} from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { createAgentModelCatalogService } from '../native-chat/agent-model-catalog/agent-model-catalog-service'
 import { AgentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import {
@@ -24,6 +27,8 @@ import { AcpScriptedAgent } from './acp-scripted-agent.test-support'
 import { AcpSessionRuntime } from './acp-session-runtime'
 import { GROK, GROK_CONFIG_OPTIONS } from './acp-structured-adapter.test-support'
 import { CALLER } from '../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
+import { createTestParams } from '../native-chat/agent-session-wire/structured-agent-session-create-test-fixture'
+import type { StructuredAgentSessionFirstMessage } from '../../shared/structured-agent-session-create'
 import { attachParams, launch, openHostRig } from './acp-structured-host.test-support'
 
 const GROK_HOME = { variable: 'GROK_HOME', path: '/grok' }
@@ -95,8 +100,9 @@ function firstFrame(answer: AgentSessionModelCatalogResult) {
   return { model: select('model'), effort: select('effort') }
 }
 
-/** A Grok chat opened with no model pick, whose own session runs `runs`. */
-async function openGrokHost(runs: string) {
+/** A Grok chat opened with no model pick, whose own session runs `runs`; `create` founds it
+ *  with its first message, so only delivery starts the agent. */
+async function openGrokHost(runs: string, create?: StructuredAgentSessionFirstMessage) {
   const records: { store: AgentSessionRecordStore | null } = { store: null }
   const discovery = GROK.modelDiscovery
   const catalog = createAgentModelCatalogService({
@@ -125,7 +131,10 @@ async function openGrokHost(runs: string) {
     deps: { resolveLaunch: launch(() => false) }
   })
   records.store = rig.store
-  expect(await rig.host.attach(CALLER, attachParams())).toMatchObject({ ok: true })
+  const opening = create
+    ? rig.host.create(CALLER, createTestParams(create, attachParams()), { firstMessage: create })
+    : rig.host.attach(CALLER, attachParams())
+  expect(await opening).toMatchObject({ ok: true })
   return { ...rig, catalog }
 }
 
@@ -148,6 +157,22 @@ describe('Grok’s default comes from what a chat with no pick runs', () => {
       listingNamesConfiguredModel: true,
       defaultHoldsInEveryWorkspace: true
     })
+    expect(firstFrame(answer)).toEqual({ model: 'grok-4.6', effort: 'high' })
+  })
+
+  it('learns 4.6 from a chat created with its first message and no pick', async () => {
+    const { catalog, host, rig } = await openGrokHost('grok-4.6', {
+      clientMessageId: 'opening',
+      body: hostTestMessage('hello')
+    })
+    await catalog.read({ agent: 'grok', waitForListing: true })
+    // Delivery started the agent and handed it the opening message; nothing picked a model.
+    const prompt = await rig.frame('session/prompt')
+    rig.child().agent.reply(prompt, { stopReason: 'end_turn' })
+
+    expect((await host.readOptions(SESSION)).current).toMatchObject({ model: 'grok-4.6' })
+    const answer = await catalog.read({ agent: 'grok', workspacePath: '/elsewhere' })
+    expect(answer).toMatchObject({ listingNamesConfiguredModel: true })
     expect(firstFrame(answer)).toEqual({ model: 'grok-4.6', effort: 'high' })
   })
 })

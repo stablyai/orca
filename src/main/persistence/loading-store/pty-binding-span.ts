@@ -1,7 +1,7 @@
 import { startSpan } from '../../observability/tracer'
 import type { PtyBindingFastLaneMiss } from './pty-binding-fast-lane'
 import type { TerminalPanePlacementAgreement } from '../terminal-topology/terminal-pane-placement-agreement'
-import type { TerminalOwnerConflictReason } from '../terminal-topology/terminal-owner-invariants'
+import type { TerminalOwnerConflictReason } from '../../../shared/workspace-layout/terminal-owner-invariants'
 
 export type PtyBindingSpanOutcome = 'fast_lane' | 'flushed' | 'refused' | 'threw'
 

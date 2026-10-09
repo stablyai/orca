@@ -24,6 +24,7 @@ type ManagedServerAction =
   | 'restoreSnapshot'
   | 'stop'
   | 'cancelStop'
+  | 'forget'
 
 type ManagedServerRowProps = {
   api: ManagedOrcadPreloadApi
@@ -66,6 +67,7 @@ export function ManagedServerRow({
   const [statusError, setStatusError] = useState<string | null>(null)
   const [busy, setBusy] = useState<ManagedServerAction | 'status' | null>(null)
   const [confirmingStop, setConfirmingStop] = useState(false)
+  const [confirmingForget, setConfirmingForget] = useState(false)
   const [confirmingRestore, setConfirmingRestore] = useState(false)
 
   const loadStatus = useCallback(async () => {
@@ -107,7 +109,9 @@ export function ManagedServerRow({
                 })
               : action === 'stop'
                 ? await api.stop(selector)
-                : await api.cancelStop(selector)
+                : action === 'forget'
+                  ? await api.forget(selector)
+                  : await api.cancelStop(selector)
       const message = outcomeMessage(result)
       if (message) {
         toast.message(message)
@@ -161,6 +165,14 @@ export function ManagedServerRow({
         </Button>
       </div>
       {statusError ? <p className="text-xs text-destructive">{statusError}</p> : null}
+      {statusError && confirmingForget ? (
+        <p className="text-xs text-muted-foreground">
+          {translate(
+            'auto.components.settings.managedServers.row.forgetDescription',
+            'Unlinks this server here without contacting its host. If the host comes back, the server may still be running there.'
+          )}
+        </p>
+      ) : null}
       {status ? (
         <div className="space-y-0.5 text-xs text-muted-foreground">
           <p>{terminalCensusLabel(status.terminals)}</p>
@@ -294,6 +306,44 @@ export function ManagedServerRow({
             {translate('auto.components.settings.managedServers.row.stop', 'Stop…')}
           </Button>
         )}
+        {/* Only once the host failed to answer: a reachable host is stopped, not forgotten. */}
+        {statusError && confirmingForget ? (
+          <>
+            <Button
+              type="button"
+              size="xs"
+              variant="destructive"
+              disabled={disabled}
+              onClick={() => {
+                setConfirmingForget(false)
+                void run('forget')
+              }}
+            >
+              {translate(
+                'auto.components.settings.managedServers.row.confirmForget',
+                'Forget on this desktop'
+              )}
+            </Button>
+            <Button
+              type="button"
+              size="xs"
+              variant="ghost"
+              onClick={() => setConfirmingForget(false)}
+            >
+              {translate('auto.components.settings.managedServers.row.keepLinked', 'Keep linked')}
+            </Button>
+          </>
+        ) : statusError ? (
+          <Button
+            type="button"
+            size="xs"
+            variant="ghost"
+            disabled={disabled}
+            onClick={() => setConfirmingForget(true)}
+          >
+            {translate('auto.components.settings.managedServers.row.forget', 'Forget…')}
+          </Button>
+        ) : null}
       </div>
     </div>
   )

@@ -5,10 +5,17 @@ import type {
   SshTarget
 } from '../../shared/ssh-types'
 import { managedServerUpdateDeps } from '../ssh/managed-server-update-deps'
-import { ensureOrcadManagedTunnel } from '../ssh/orcad-managed-tunnel'
+import { ensureOrcadManagedTunnel, rebuildOrcadManagedTunnel } from '../ssh/orcad-managed-tunnel'
 import { verifyOrcadManagedServing } from '../ssh/orcad-managed-serving-verify'
-import { setManagedOrcadStartListener } from '../ssh/orcad-managed-serving'
-import { updateManagedOrcadOnRestore } from '../ssh/orcad-managed-update-on-restore'
+import {
+  MANAGED_ORCAD_NOT_ACTIVATED_DETAIL,
+  setManagedOrcadStartListener,
+  type OrcadManagedServing
+} from '../ssh/orcad-managed-serving'
+import {
+  redeployStoppedManagedOrcad,
+  updateManagedOrcadOnRestore
+} from '../ssh/orcad-managed-update-on-restore'
 import { getSshHostServerStatus, setSshHostServerStatus } from '../ssh/ssh-host-server-status'
 import { getSshTargetRegistryStore } from '../ssh/ssh-target-registry'
 import { connectionManager, getCurrentMainWindow } from './ssh-ipc-context'
@@ -21,17 +28,30 @@ export async function resolveManagedRuntimeEnvironment(
   const environment = resolveEnvironment(userDataPath, selector)
   await ensureOrcadManagedTunnel(userDataPath, environment.id)
   // Why: a server that stopped (idle, killed, host rebooted) starts before the call that needs it.
-  await verifyOrcadManagedServing(userDataPath, environment.id)
-  // Why here: an auto-restored host may never see an SSH connect, so it would never update.
-  void updateManagedOrcadOnRestore(environment.id, () => ({
+  const serving = await verifyOrcadManagedServing(userDataPath, environment.id)
+  const createDeps = () => ({
     ...managedServerUpdateDeps(userDataPath),
     target: () => {
       const targetId = environment.orcadDeployment?.sshTargetId
       return targetId ? (getSshTargetRegistryStore()?.getTarget(targetId) ?? null) : null
     },
     publish: publishRestoreUpdate
-  }))
+  })
+  if (isStoppedElsewhere(serving)) {
+    // Why awaited: this call needs the server, and another desktop's stop can land mid-session.
+    if (await redeployStoppedManagedOrcad(environment.id, createDeps)) {
+      // Why rebuild: the redeployed server may bind another port than the reused forward targets.
+      await rebuildOrcadManagedTunnel(userDataPath, environment.id)
+    }
+  } else {
+    // Why here: an auto-restored host may never see an SSH connect, so it would never update.
+    void updateManagedOrcadOnRestore(environment.id, createDeps)
+  }
   return resolveEnvironment(userDataPath, environment.id)
+}
+
+function isStoppedElsewhere(serving: OrcadManagedServing): boolean {
+  return serving.state === 'unverifiable' && serving.detail === MANAGED_ORCAD_NOT_ACTIVATED_DETAIL
 }
 
 function publishRestoreUpdate(

@@ -43,7 +43,7 @@ export function signalProcessTree(child: ChildProcess, signal?: NodeJS.Signals):
     // `true` here would release the git admission grant on root exit instead of
     // on `close`, admitting the next git command while a descendant that
     // inherited the pipes still holds the repo.
-    if (hasExited(child)) {
+    if (childProcessHasExited(child)) {
       killRoot(child, signal)
       return Promise.resolve(false)
     }
@@ -81,7 +81,7 @@ export async function forceTerminateProcessTree(child: ChildProcess): Promise<bo
 }
 
 /** A stubbed child leaves both undefined; only a real code or signal proves exit. */
-function hasExited(child: ChildProcess): boolean {
+export function childProcessHasExited(child: ChildProcess): boolean {
   return (child.exitCode ?? null) !== null || (child.signalCode ?? null) !== null
 }
 

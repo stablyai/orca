@@ -63,6 +63,35 @@ export type AgentModelCatalogConfiguredDefault = {
   at: number
 }
 
+/** What a session that resolves its agent's own config reports as that scope's configured default:
+ *  only a new session that restored no model pick and was sent none runs it. Undefined when the
+ *  session can't say (it listed or runs no model); null when it runs a model it didn't list. */
+export function unpickedSessionConfiguredChoice(session: {
+  resolvesConfig: boolean
+  picked: ReadonlySet<string>
+  models: readonly { id: string }[]
+  current: { model?: string; effort?: string }
+}): AgentModelCatalogConfiguredChoice | null | undefined {
+  const { models, current } = session
+  // An empty listing (a signed-out agent) is doubt, not a catalog.
+  if (
+    !session.resolvesConfig ||
+    session.picked.has('model') ||
+    !current.model ||
+    models.length === 0
+  ) {
+    return undefined
+  }
+  if (!models.some((model) => model.id === current.model)) {
+    return null
+  }
+  return {
+    modelId: current.model,
+    // An effort this session picked is its own and says nothing of the config's.
+    ...(session.picked.has('effort') ? {} : { effort: current.effort ?? null })
+  }
+}
+
 /** A live options answer whose model rows are the account's listing as the child reported it,
  *  with what its no-pick launch resolved when the session can say. */
 export function withLiveCatalogListing<
@@ -109,13 +138,18 @@ function mergedModels(
   return (newer?.models ?? []).map((model) => {
     const listed = discovered?.models.find((entry) => entry.id === model.id)
     const reported = live?.models.find((entry) => entry.id === model.id)
-    const efforts =
-      model.efforts.length > 0
-        ? model.efforts
-        : (older?.models.find((entry) => entry.id === model.id)?.efforts ?? [])
+    const olderEfforts = older?.models.find((entry) => entry.id === model.id)?.efforts ?? []
     const runsConfigured =
       configured?.modelId === model.id || configured?.sameModelIds?.includes(model.id) === true
     const configuredEffort = runsConfigured ? configured?.effort : undefined
+    const offersConfigured = (menu: AgentSessionModelOption['efforts']): boolean =>
+      menu.some((choice) => choice.value === configuredEffort)
+    // A coarser newer menu (Pi's listing stops at high) must not drop the effort a chat ran.
+    const efforts =
+      model.efforts.length > 0 &&
+      (offersConfigured(model.efforts) || !offersConfigured(olderEfforts))
+        ? model.efforts
+        : olderEfforts
     const defaultEffort = [configuredEffort, listed?.defaultEffort, reported?.defaultEffort].find(
       (effort) => effort !== undefined && efforts.some((choice) => choice.value === effort)
     )
