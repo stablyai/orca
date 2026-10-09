@@ -41,13 +41,17 @@ type SystemSshWriteBufferOptions = SystemSshOperationOptions & {
 
 type SystemSshUploadFileOptions = SystemSshOperationOptions & {
   exclusive?: boolean
+  onRemoteCreated?: () => void
+  onBytesTransferred?: (bytes: number) => void
 }
+
+const REMOTE_CREATED_MARKER = 'ORCA_REMOTE_CREATED'
 
 export async function downloadFileViaSystemSsh(
   target: SshTarget,
   remotePath: string,
   localPath: string,
-  options?: SystemSshOperationOptions
+  options?: SystemSshOperationOptions & { onBytesTransferred?: (bytes: number) => void }
 ): Promise<void> {
   throwIfAborted(options?.signal)
   const isWindows = options?.hostPlatform && isWindowsRemoteHost(options.hostPlatform)
@@ -59,6 +63,10 @@ export async function downloadFileViaSystemSsh(
     ...getSystemSshBuildArgsFromOperationOptions(options)
   })
   const output = createWriteStream(localPath, { flags: 'wx' })
+  const onBytesTransferred = options?.onBytesTransferred
+  if (onBytesTransferred) {
+    channel.on('data', (chunk: Buffer) => onBytesTransferred(chunk.length))
+  }
   try {
     await awaitWithSystemSshAbort(
       options?.signal,
@@ -149,21 +157,45 @@ export async function uploadFileViaSystemSsh(
         readChunk: async (offset, maxBytes) => {
           const buffer = Buffer.allocUnsafe(Math.min(maxBytes, openedStat.size - offset))
           const { bytesRead } = await handle.read(buffer, 0, buffer.length, offset)
+          options?.onBytesTransferred?.(bytesRead)
           return buffer.subarray(0, bytesRead)
         },
         // The verified local file is already exactly the payload, so sftp sends it as is.
         withLocalFile: (send) => send(localPath)
       }
       await writeWindowsRemoteFile(target, remotePath, source, options ?? {})
+      // Why: an exclusive publish is a Move that fails if the name exists, so a completed one
+      // proves the file is ours; a cancel landing before the import settles may then undo it.
+      if (options?.exclusive) {
+        options.onRemoteCreated?.()
+      }
       return
     }
 
+    const onRemoteCreated = options?.exclusive ? options.onRemoteCreated : undefined
     const channel = spawnSystemSshCommand(
       target,
-      makePosixWriteFileCommand(remotePath, options),
+      onRemoteCreated
+        ? makePosixExclusiveCreateThenAppendCommand(remotePath)
+        : makePosixWriteFileCommand(remotePath, options),
       getSystemSshBuildArgsFromOperationOptions(options)
     )
+    if (onRemoteCreated) {
+      let stdout = ''
+      const onStdout = (chunk: Buffer | string): void => {
+        stdout += chunk.toString()
+        if (stdout.includes(REMOTE_CREATED_MARKER)) {
+          channel.off('data', onStdout)
+          onRemoteCreated()
+        }
+      }
+      channel.on('data', onStdout)
+    }
     const input = handle.createReadStream({ autoClose: false })
+    const onBytesTransferred = options?.onBytesTransferred
+    if (onBytesTransferred) {
+      input.on('data', (chunk: Buffer | string) => onBytesTransferred(chunk.length))
+    }
     try {
       await awaitWithSystemSshAbort(
         options?.signal,
@@ -244,6 +276,21 @@ export function makePosixWriteFileCommand(
   const redirection = options?.append ? '>>' : '>'
   const noclobber = !options?.append && options?.exclusive ? 'set -C; ' : ''
   return `${noclobber}cat ${redirection} ${shellEscape(remotePath)}`
+}
+
+/**
+ * Opens the file once under noclobber as fd 3, reports that on stdout, then streams into that fd.
+ * One open means a path swapped for a symlink mid-upload is never reopened; an existing file
+ * fails the create before the marker, so a cancel can tell its own partial file apart.
+ */
+export function makePosixExclusiveCreateThenAppendCommand(remotePath: string): string {
+  const path = shellEscape(remotePath)
+  // Why: noclobber still opens an existing FIFO (blocking with no reader), device or symlink.
+  // The pre-check keeps us from ever opening one; the post-check closes the race between
+  // them, so only a regular file we just made reports the marker a cancel may delete.
+  const exists = `[ ! -e ${path} ] && [ ! -L ${path} ]`
+  const regular = `[ -f ${path} ] && [ ! -L ${path} ]`
+  return `set -C; ${exists} && exec 3> ${path} && ${regular} && printf '%s\\n' ${REMOTE_CREATED_MARKER} && exec cat >&3`
 }
 
 function makeWindowsReadFileCommand(remotePath: string): string {

@@ -11,17 +11,34 @@ import {
 import { directoryNode, fileNode } from './file-explorer-tree-node-test-fixtures'
 import type * as RuntimeFileClient from '@/runtime/runtime-file-client'
 
-const { downloadRuntimeFileMock, toastErrorMock, toastSuccessMock } = vi.hoisted(() => ({
-  downloadRuntimeFileMock: vi.fn(),
-  toastErrorMock: vi.fn(),
-  toastSuccessMock: vi.fn()
-}))
+const { downloadRuntimeFileMock, toastErrorMock, toastSuccessMock, testTransfer } = vi.hoisted(
+  () => ({
+    downloadRuntimeFileMock: vi.fn(),
+    toastErrorMock: vi.fn(),
+    toastSuccessMock: vi.fn(),
+    testTransfer: {
+      downloadId: 'download-1',
+      signal: new AbortController().signal,
+      trackLocalProgress: () => ({
+        setTotalBytes: () => {},
+        addBytes: () => {},
+        completeFile: () => {},
+        flush: () => {}
+      })
+    }
+  })
+)
 
 vi.mock('sonner', () => ({
   toast: {
     error: toastErrorMock,
     success: toastSuccessMock
   }
+}))
+
+vi.mock('@/components/transfer-progress/download-progress-panel', () => ({
+  runRemoteDownloadWithProgress: (_item: unknown, run: (transfer: unknown) => Promise<unknown>) =>
+    run(testTransfer)
 }))
 
 vi.mock('@/runtime/runtime-file-client', async (importOriginal) => {
@@ -218,7 +235,8 @@ describe('FileExplorerRow collapse folder action', () => {
 
     expect(downloadFile).toHaveBeenCalledWith({
       filePath: '/repo/src/index.ts',
-      connectionId: 'ssh-1'
+      connectionId: 'ssh-1',
+      downloadId: 'download-1'
     })
     expect(toastSuccessMock).toHaveBeenCalledTimes(1)
     expect(toastSuccessMock).toHaveBeenCalledWith("Downloaded 'renamed\\entry.ts'", {
@@ -277,7 +295,8 @@ describe('FileExplorerRow collapse folder action', () => {
 
     expect(downloadFolder).toHaveBeenCalledWith({
       dirPath: '/repo/src',
-      connectionId: 'ssh-1'
+      connectionId: 'ssh-1',
+      downloadId: 'download-1'
     })
     expect(toastSuccessMock).toHaveBeenCalledWith("Downloaded folder 'src'", {
       action: {
@@ -315,7 +334,8 @@ describe('FileExplorerRow collapse folder action', () => {
     expect(downloadRuntimeFileMock).toHaveBeenCalledWith(
       runtimeContext,
       '/repo/src/index.ts',
-      'index.ts'
+      'index.ts',
+      testTransfer
     )
     expect(toastSuccessMock).toHaveBeenCalledWith("Downloaded 'index.ts'", {
       action: {

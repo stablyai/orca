@@ -7,17 +7,21 @@ import {
   isWindowsAbsolutePathLike,
   normalizeRuntimePathSeparators
 } from '../../shared/cross-platform-path'
+import type { RemoteDownloadTransferObserver } from '../../shared/remote-download-progress'
 import { sanitizeLocalDownloadFilename } from '../local-download-filename'
 import {
   fastGetViaSftp,
   readDirectoryEntriesViaSftp,
   statViaSftp
 } from './ssh-filesystem-provider-sftp'
+import type { SshRawTransferOptions } from './ssh-filesystem-file-upload'
 
 export type SftpFactory = (options?: { signal?: AbortSignal }) => Promise<SFTPWrapper>
 
 /** When known, windowsRemotePaths drives remote path joining; omit uses path-shape heuristics. */
-export type FolderDownloadOptions = { signal?: AbortSignal; windowsRemotePaths?: boolean }
+export type FolderDownloadOptions = RemoteDownloadTransferObserver & {
+  windowsRemotePaths?: boolean
+}
 
 const DOWNLOAD_UNAVAILABLE_MESSAGE =
   'Remote folder download is unavailable. Reconnect the SSH target and retry.'
@@ -83,15 +87,38 @@ function classifySftpEntry(entry: FileEntryWithStats): 'directory' | 'file' {
   throw new Error(`Cannot download unsupported remote entry '${entry.filename}'`)
 }
 
+/** Size-only walk (one running sum, no file list), run alongside the download. */
+async function measureRemoteTree(
+  sftp: SFTPWrapper,
+  sourceDir: string,
+  options: FolderDownloadOptions
+): Promise<number> {
+  const { signal, windowsRemotePaths } = options
+  signal?.throwIfAborted()
+  let total = 0
+  for await (const entry of readDirectoryEntriesViaSftp(sftp, sourceDir, { signal })) {
+    if (entry.attrs.isSymbolicLink()) {
+      continue
+    }
+    if (entry.attrs.isDirectory()) {
+      const childDir = joinSftpChildPath(sourceDir, entry.filename, windowsRemotePaths)
+      total += await measureRemoteTree(sftp, childDir, options)
+    } else if (entry.attrs.isFile()) {
+      total += entry.attrs.size
+    }
+  }
+  return total
+}
+
 async function downloadDirectoryTree(
   sftp: SFTPWrapper,
   sourceDir: string,
   destinationDir: string,
-  signal?: AbortSignal,
-  windowsRemotePaths?: boolean,
+  options: FolderDownloadOptions,
   budget = new DirectoryTransferBudget(),
   depth = 0
 ): Promise<void> {
+  const { signal, windowsRemotePaths } = options
   signal?.throwIfAborted()
   const usedLocalNames = new Set<string>()
   const plannedEntries: {
@@ -125,21 +152,17 @@ async function downloadDirectoryTree(
       const remotePath = joinSftpChildPath(sourceDir, remoteName, windowsRemotePaths)
       const localPath = join(destinationDir, localName)
       if (kind === 'directory') {
-        await downloadDirectoryTree(
-          sftp,
-          remotePath,
-          localPath,
-          signal,
-          windowsRemotePaths,
-          budget,
-          depth + 1
-        )
+        await downloadDirectoryTree(sftp, remotePath, localPath, options, budget, depth + 1)
         continue
       }
       // Why: filesystem semantics belong to the selected volume, not the host OS;
       // an exclusive placeholder prevents case/Unicode aliases from overwriting.
       await reserveLocalFile(localPath, localName)
-      await fastGetViaSftp(sftp, remotePath, localPath, { signal })
+      await fastGetViaSftp(sftp, remotePath, localPath, {
+        signal,
+        onBytesTransferred: options.onBytesTransferred
+      })
+      options.onFileCompleted?.()
     }
     signal?.throwIfAborted()
   } finally {
@@ -150,16 +173,54 @@ async function downloadDirectoryTree(
 export async function downloadFileViaSftp(
   createSftp: SftpFactory | undefined,
   sourcePath: string,
-  destinationPath: string
+  destinationPath: string,
+  options?: RemoteDownloadTransferObserver
 ): Promise<void> {
   if (!createSftp) {
     throw new Error('Remote file download is unavailable. Reconnect the SSH target and retry.')
   }
-  const sftp = await createSftp()
+  const signal = options?.signal
+  signal?.throwIfAborted()
+  const sftp = await createSftp(signal ? { signal } : undefined)
+  const endSftp = createSftpCloser(sftp)
+  // Why: closing the channel is what stops an in-flight fastGet.
+  signal?.addEventListener('abort', endSftp, { once: true })
   try {
-    await fastGetViaSftp(sftp, sourcePath, destinationPath)
+    await fastGetViaSftp(sftp, sourcePath, destinationPath, {
+      signal,
+      onBytesTransferred: options?.onBytesTransferred
+    })
   } finally {
-    sftp.end()
+    signal?.removeEventListener('abort', endSftp)
+    endSftp()
+  }
+}
+
+export function downloadFileViaSshTransport(
+  rawTransfer: SshRawTransferOptions | undefined,
+  createSftp: SftpFactory | undefined,
+  sourcePath: string,
+  destinationPath: string,
+  options?: RemoteDownloadTransferObserver
+): Promise<void> {
+  // Why: system SSH targets cannot open an ssh2-owned SFTP channel.
+  if (rawTransfer?.downloadFile) {
+    return rawTransfer.downloadFile(sourcePath, destinationPath, options)
+  }
+  return downloadFileViaSftp(createSftp, sourcePath, destinationPath, options)
+}
+
+function createSftpCloser(sftp: SFTPWrapper): () => void {
+  let ended = false
+  return () => {
+    if (!ended) {
+      ended = true
+      try {
+        sftp.end()
+      } catch {
+        // Why: cleanup is best-effort and must not mask the transfer or abort error.
+      }
+    }
   }
 }
 
@@ -175,32 +236,32 @@ export async function downloadFolderViaSftp(
   const signal = options?.signal
   signal?.throwIfAborted()
   const sftp = await createSftp({ signal })
-  let ended = false
-  const endSftp = (): void => {
-    if (!ended) {
-      ended = true
-      try {
-        sftp.end()
-      } catch {
-        // Why: cleanup is best-effort and must not mask the transfer or abort error.
-      }
-    }
-  }
+  const endSftp = createSftpCloser(sftp)
+  // Why: a walk that finishes after the download must not report a total for a finished transfer.
+  let settled = false
   signal?.addEventListener('abort', endSftp, { once: true })
   try {
     const rootStats = await statViaSftp(sftp, sourcePath, { signal })
     if (!rootStats.isDirectory()) {
       throw new Error('Cannot download a file as a folder')
     }
-    await downloadDirectoryTree(
-      sftp,
-      sourcePath,
-      destinationPath,
-      signal,
-      options?.windowsRemotePaths
-    )
+    const onTotalBytes = options?.onTotalBytes
+    if (onTotalBytes) {
+      // Why: a timed-out walk left big trees, the ones that need a bar, with none; walking
+      // alongside the download costs no wait and supplies the total whenever it finishes.
+      void measureRemoteTree(sftp, sourcePath, options)
+        .then((total) => {
+          if (!settled) {
+            onTotalBytes(total)
+          }
+        })
+        // A failed walk or observer only means the total stays unknown; never fail the download.
+        .catch(() => {})
+    }
+    await downloadDirectoryTree(sftp, sourcePath, destinationPath, options ?? {})
     signal?.throwIfAborted()
   } finally {
+    settled = true
     signal?.removeEventListener('abort', endSftp)
     endSftp()
   }

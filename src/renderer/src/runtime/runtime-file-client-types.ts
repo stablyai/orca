@@ -1,3 +1,4 @@
+import type { RemoteDownloadProgressTracker } from '../../../shared/remote-download-progress'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { LocalFileAccess } from '../../../shared/local-file-access'
 
@@ -36,3 +37,10 @@ export type RuntimeFileOperationArgs = {
 export type RuntimeFileDownloadResult =
   | { canceled: true }
   | { canceled: false; destinationPath: string }
+
+/** Lets a download report progress and be canceled; main-process transfers key off downloadId. */
+export type RuntimeFileDownloadTransfer = {
+  downloadId: string
+  signal: AbortSignal
+  trackLocalProgress: (totalBytes: number | null) => RemoteDownloadProgressTracker
+}

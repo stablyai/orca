@@ -243,7 +243,11 @@ describe('SshFilesystemProvider', () => {
 
       await provider.downloadFile('/home/user/archive.zip', '/tmp/archive.zip')
 
-      expect(downloadFile).toHaveBeenCalledWith('/home/user/archive.zip', '/tmp/archive.zip')
+      expect(downloadFile).toHaveBeenCalledWith(
+        '/home/user/archive.zip',
+        '/tmp/archive.zip',
+        undefined
+      )
     })
 
     it('downloads raw bytes through SFTP and closes the session', async () => {

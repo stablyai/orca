@@ -89,6 +89,7 @@ import {
   shouldUseSystemSshTransport
 } from './ssh-transport-selection'
 import type { FileUploadSession } from '../providers/types'
+import type { RemoteDownloadTransferObserver } from '../../shared/remote-download-progress'
 import { openSshSessionChannelWithRetry, waitForSshChannelOpen } from './ssh-channel-open'
 import { tagSftpHandshakeCorruption } from './sftp-handshake-corruption'
 import { withTimeout } from '../../shared/promise-timeout-fallback'
@@ -364,7 +365,7 @@ export class SshConnection {
   downloadFile(
     remotePath: string,
     localPath: string,
-    options?: SshRemoteFileOptions
+    options?: SshRemoteFileOptions & RemoteDownloadTransferObserver
   ): Promise<void> {
     return this.runAdmitted(() =>
       downloadSshFile(this.fileTransferHost(), remotePath, localPath, options)
@@ -375,8 +376,12 @@ export class SshConnection {
     const session = await this.runAdmitted(() =>
       createSshFileUploadSession(this.fileTransferHost(), options)
     )
+    const removeCreatedEntry = session.removeCreatedEntry
     return {
       uploadFile: (...args) => this.runAdmitted(() => session.uploadFile(...args)),
+      ...(removeCreatedEntry
+        ? { removeCreatedEntry: (...args) => this.runAdmitted(() => removeCreatedEntry(...args)) }
+        : {}),
       close: () => session.close()
     }
   }

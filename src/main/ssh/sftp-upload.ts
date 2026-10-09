@@ -1,5 +1,4 @@
-import { constants } from 'node:fs'
-import type { ReadStream } from 'node:fs'
+import { constants, type ReadStream } from 'node:fs'
 import { lstat, open, readdir, realpath } from 'node:fs/promises'
 import { isAbsolute, join as pathJoin, relative, sep } from 'node:path'
 import { finished } from 'node:stream/promises'
@@ -9,6 +8,7 @@ import {
   latchLateSftpStreamErrors,
   type SftpStreamErrorLatch
 } from './sftp-stream-late-error'
+import { observeSftpUpload, type SftpUploadObservers } from './sftp-upload-observers'
 
 export function mkdirSftp(
   sftp: SFTPWrapper,
@@ -30,11 +30,16 @@ export function mkdirSftp(
   })
 }
 
+export type SftpUploadFileOptions = {
+  exclusive?: boolean
+  signal?: AbortSignal
+} & SftpUploadObservers
+
 export function uploadFile(
   sftp: SFTPWrapper,
   localPath: string,
   remotePath: string,
-  options?: { exclusive?: boolean; signal?: AbortSignal }
+  options?: SftpUploadFileOptions
 ): Promise<void> {
   return uploadFileAndJoinTeardown(sftp, localPath, remotePath, options)
 }
@@ -43,7 +48,7 @@ async function uploadFileAndJoinTeardown(
   sftp: SFTPWrapper,
   localPath: string,
   remotePath: string,
-  options?: { exclusive?: boolean; signal?: AbortSignal }
+  options?: SftpUploadFileOptions
 ): Promise<void> {
   const handle = await open(localPath, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
   let handleClose: Promise<void> | undefined
@@ -77,6 +82,7 @@ async function uploadFileAndJoinTeardown(
     // outlives it, ssh2 throws it synchronously into the socket handler (#15479).
     writeStreamErrors = latchLateSftpStreamErrors(writeStream, remotePath)
     readStream = handle.createReadStream({ autoClose: false })
+    observeSftpUpload(writeStream, readStream, options)
     // Why: `finished` drops its listeners once the read ends; an abort (a quit's disconnect) that
     // destroys the ended stream with the signal's reason would then emit an unhandled 'error' that
     // takes main down mid-shutdown. The transfer's outcome is read from `finished`, not from here.

@@ -9,7 +9,9 @@ import {
   createLinkedSshFileTransferSignal,
   raceSftpFileTransferWithAbort
 } from './ssh-file-transfer-abort'
-import type { RemoteHostPlatform } from './ssh-remote-platform'
+import { isWindowsRemoteHost, type RemoteHostPlatform } from './ssh-remote-platform'
+import { removeCreatedEntryViaSystemSsh } from './system-ssh-remote-remove'
+import type { RemoteDownloadTransferObserver } from '../../shared/remote-download-progress'
 import {
   downloadFileViaSystemSsh,
   uploadDirectoryViaSystemSsh,
@@ -58,23 +60,36 @@ export async function downloadSshFile(
   host: SshFileTransferHost,
   remotePath: string,
   localPath: string,
-  options?: SshRemoteFileOptions
+  options?: SshRemoteFileOptions & RemoteDownloadTransferObserver
 ): Promise<void> {
   if (!host.usesSystemSshTransport()) {
-    const sftp = await host.sftp()
-    try {
-      const { fastGetViaSftp } = await import('../providers/ssh-filesystem-provider-sftp')
-      await fastGetViaSftp(sftp, remotePath, localPath)
-    } finally {
-      sftp.end()
-    }
+    const { downloadFileViaSftp } = await import('../providers/ssh-filesystem-download')
+    await downloadFileViaSftp(
+      (sftpOptions) => host.sftp(sftpOptions?.signal),
+      remotePath,
+      localPath,
+      {
+        signal: options?.signal,
+        onBytesTransferred: options?.onBytesTransferred
+      }
+    )
     return
   }
-  await downloadFileViaSystemSsh(host.target, remotePath, localPath, {
-    signal: host.systemOperationSignal(),
-    hostPlatform: options?.hostPlatform,
-    ...host.systemSshBuildArgsOptions()
-  })
+  const linkedSignal = createLinkedSshFileTransferSignal(
+    [host.systemOperationSignal(), options?.signal].filter(
+      (signal): signal is AbortSignal => signal !== undefined
+    )
+  )
+  try {
+    await downloadFileViaSystemSsh(host.target, remotePath, localPath, {
+      signal: linkedSignal.signal,
+      onBytesTransferred: options?.onBytesTransferred,
+      hostPlatform: options?.hostPlatform,
+      ...host.systemSshBuildArgsOptions()
+    })
+  } finally {
+    linkedSignal.dispose()
+  }
 }
 
 export async function createSshFileUploadSession(
@@ -84,9 +99,11 @@ export async function createSshFileUploadSession(
   if (!host.usesSystemSshTransport()) {
     const sftp = await host.sftp()
     const { uploadFile } = await import('./sftp-upload')
+    const { removeCreatedSftpEntry } = await import('./sftp-remove-created-entry')
     return {
       uploadFile: (localPath, remotePath, uploadOptions) =>
         uploadFile(sftp, localPath, remotePath, uploadOptions),
+      removeCreatedEntry: (remotePath, kind) => removeCreatedSftpEntry(sftp, remotePath, kind),
       close: () => sftp.end()
     }
   }
@@ -94,13 +111,34 @@ export async function createSshFileUploadSession(
   const signal = host.systemOperationSignal()
   const buildArgsOptions = host.systemSshBuildArgsOptions()
   return {
-    uploadFile: (localPath, remotePath, uploadOptions) =>
-      uploadFileViaSystemSsh(host.target, localPath, remotePath, {
-        signal,
-        hostPlatform: options?.hostPlatform,
-        exclusive: uploadOptions?.exclusive,
-        ...buildArgsOptions
-      }),
+    uploadFile: async (localPath, remotePath, uploadOptions) => {
+      const linkedSignal = createLinkedSshFileTransferSignal(
+        [signal, uploadOptions?.signal].filter((s): s is AbortSignal => s !== undefined)
+      )
+      try {
+        await uploadFileViaSystemSsh(host.target, localPath, remotePath, {
+          signal: linkedSignal.signal,
+          hostPlatform: options?.hostPlatform,
+          exclusive: uploadOptions?.exclusive,
+          onRemoteCreated: uploadOptions?.onRemoteCreated,
+          onBytesTransferred: uploadOptions?.onBytesTransferred,
+          ...buildArgsOptions
+        })
+      } finally {
+        linkedSignal.dispose()
+      }
+    },
+    // Why: a Windows host has no POSIX rmdir/rm; the ledger keeps folders and deletes
+    // files by path after its identity check.
+    ...(options?.hostPlatform && isWindowsRemoteHost(options.hostPlatform)
+      ? {}
+      : {
+          removeCreatedEntry: (remotePath: string, kind: 'file' | 'directory') =>
+            removeCreatedEntryViaSystemSsh(host.target, remotePath, kind, {
+              signal,
+              ...buildArgsOptions
+            })
+        }),
     close: () => {}
   }
 }

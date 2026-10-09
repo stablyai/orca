@@ -13,6 +13,11 @@ import {
   preScanSshImportDirectory,
   uploadSshImportDirectory
 } from './filesystem-import-ssh-directory'
+import {
+  importSshSourceWithProgress,
+  registerSshImportCancellations,
+  type SshImportProgressTarget
+} from './filesystem-import-ssh-progress'
 
 // Why: the SSH import path uses SshFilesystemProvider instead of direct SFTP so
 // system-SSH transports (ProxyCommand/ProxyJump/FIDO2) get the same workflows.
@@ -20,7 +25,11 @@ export async function importExternalPathsSsh(
   sourcePaths: string[],
   destDir: string,
   connectionId: string,
-  options?: { ensureDir?: boolean; assertCurrent?: () => void }
+  options?: {
+    ensureDir?: boolean
+    assertCurrent?: () => void
+    progress?: SshImportProgressTarget
+  }
 ): Promise<{ results: ImportItemResult[] }> {
   if (sourcePaths.length === 0) {
     return { results: [] }
@@ -56,20 +65,31 @@ export async function importExternalPathsSsh(
   }
   options?.assertCurrent?.()
   const uploadSession = await provider.openFileUploadSession()
+  const cancellations = registerSshImportCancellations(options?.progress)
   // Why: filename legality follows the remote filesystem, not the client's OS.
   const remotePathFlavor: RemotePathFlavor = isWindowsAbsolutePathLike(destDir)
     ? 'windows'
     : 'posix'
   try {
     for (const sourcePath of sourcePaths) {
-      const result = await importOneSourceSsh(
+      const result = await importSshSourceWithProgress(
+        options?.progress,
+        cancellations,
+        sourcePath,
         provider,
         uploadSession,
-        sourcePath,
-        destDir,
-        reservedNames,
-        remotePathFlavor,
-        options?.assertCurrent
+        options?.assertCurrent,
+        (session, trackedProvider, onFailure) =>
+          importOneSourceSsh(
+            trackedProvider,
+            session,
+            sourcePath,
+            destDir,
+            reservedNames,
+            remotePathFlavor,
+            options?.assertCurrent,
+            onFailure
+          )
       )
       results.push(result)
       if (result.status === 'imported') {
@@ -81,6 +101,7 @@ export async function importExternalPathsSsh(
     }
   } finally {
     uploadSession.close()
+    cancellations.release()
   }
 
   return { results }
@@ -93,7 +114,9 @@ async function importOneSourceSsh(
   destDir: string,
   reservedNames: Set<string>,
   remotePathFlavor: RemotePathFlavor,
-  assertCurrent?: () => void
+  assertCurrent?: () => void,
+  // Why: runs before any cleanup, so a cancel during that cleanup cannot pass the failure off as its own.
+  onFailure?: () => void
 ): Promise<ImportItemResult> {
   const resolvedSource = resolve(sourcePath)
 
@@ -185,6 +208,7 @@ async function importOneSourceSsh(
       renamed
     }
   } catch (error) {
+    onFailure?.()
     if (createdDestDir) {
       // Why: local directory imports roll back partial output; SSH imports
       // should not leave the no-clobber root after a nested upload failure.

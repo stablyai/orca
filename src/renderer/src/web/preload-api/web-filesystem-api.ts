@@ -80,6 +80,8 @@ export function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
     cancelDownloadedFile: async () => {
       throw new Error('Remote file download is unavailable in paired web clients.')
     },
+    cancelDownload: async () => ({ ok: true, canceled: false }),
+    onDownloadProgress: () => noopUnsubscribe,
     listMarkdownDocuments: async ({ rootPath }) => {
       const file = await resolveRuntimeFilePath(rootPath)
       return callRuntimeResult('files.listMarkdownDocuments', {
@@ -167,6 +169,9 @@ export function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
     uploadExternalFileToRuntime: async () => {
       throw new Error('Uploading local files is not supported in the web client')
     },
+    onUploadProgress: () => noopUnsubscribe,
+    cancelRuntimeUpload: async () => {},
+    releaseRuntimeUpload: async () => {},
     resolveDroppedPathsForAgent: async () => ({ resolvedPaths: [], skipped: [], failed: [] }),
     uploadPathsToAgentSessionAttachments: async () => ({ uploaded: [], skipped: [], failed: [] }),
     watchWorktree: () => Promise.resolve(),

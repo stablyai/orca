@@ -3184,6 +3184,22 @@
     "finishEditing": "Save or cancel the preset to continue creating your workspace.",
     "pathHelp": "One repository-relative directory per line. Spaces within a path are preserved."
   },
+  "transferProgress": {
+    "heading": {
+      "download": {
+        "active_one": "Downloading {{count}} item",
+        "active_other": "Downloading {{count}} items",
+        "done_one": "Downloaded {{count}} item",
+        "done_other": "Downloaded {{count}} items"
+      },
+      "upload": {
+        "active_one": "Uploading {{count}} item",
+        "active_other": "Uploading {{count}} items",
+        "done_one": "Uploaded {{count}} item",
+        "done_other": "Uploaded {{count}} items"
+      }
+    }
+  },
   "worktreeJumpPalette": {
     "filter": {
       "chipOverflow": "+{{value0}}",

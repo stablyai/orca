@@ -5,6 +5,7 @@ import type {
   DocPreviewFileAccessResult
 } from '../../shared/doc-preview-file-access'
 import type { DirEntry, FsChangeEvent, MarkdownDocument } from '../../shared/filesystem-entry-types'
+import type { RemoteDownloadTransferObserver } from '../../shared/remote-download-progress'
 import type { WorkspaceSpaceDirectoryScanResult } from '../../shared/workspace-space-types'
 
 export type FileStat = {
@@ -75,8 +76,16 @@ export type IFilesystemProvider = {
     filePath: string,
     options: TerminalArtifactAccessOptions
   ): Promise<FileReadResult>
-  downloadFile?(sourcePath: string, destinationPath: string): Promise<void>
-  downloadFolder?: (src: string, dest: string, options?: { signal?: AbortSignal }) => Promise<void>
+  downloadFile?(
+    sourcePath: string,
+    destinationPath: string,
+    options?: RemoteDownloadTransferObserver
+  ): Promise<void>
+  downloadFolder?: (
+    src: string,
+    dest: string,
+    options?: RemoteDownloadTransferObserver
+  ) => Promise<void>
   openFileUploadSession?(): Promise<FileUploadSession>
   getTempDir?(): Promise<string>
   writeFile(filePath: string, content: string): Promise<void>
@@ -135,8 +144,19 @@ export type FileUploadSession = {
   uploadFile(
     sourcePath: string,
     destinationPath: string,
-    options?: { exclusive?: boolean }
+    options?: {
+      exclusive?: boolean
+      signal?: AbortSignal
+      /** Fires once the destination exists because this upload created it. */
+      onRemoteCreated?: () => void
+      onBytesTransferred?: (bytes: number) => void
+    }
   ): Promise<void>
+  /**
+   * Removes one entry this session's upload created, never recursively: a directory
+   * that is not empty stays. Absent where the transport cannot do that safely.
+   */
+  removeCreatedEntry?(path: string, kind: 'file' | 'directory'): Promise<void>
   close(): void
 }
 

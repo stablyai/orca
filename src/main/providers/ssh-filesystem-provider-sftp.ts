@@ -88,10 +88,25 @@ export function fastGetViaSftp(
   sftp: SFTPWrapper,
   sourcePath: string,
   destinationPath: string,
-  options?: { signal?: AbortSignal }
+  options?: { signal?: AbortSignal; onBytesTransferred?: (bytes: number) => void }
 ): Promise<void> {
+  const onBytesTransferred = options?.onBytesTransferred
+  if (!onBytesTransferred) {
+    return waitForSftpCallback<void>(
+      (callback) => sftp.fastGet(sourcePath, destinationPath, callback),
+      options
+    )
+  }
+  let reported = 0
+  // Why: ssh2 reports a running total per file; observers take per-chunk deltas.
+  const step = (totalTransferred: number): void => {
+    if (totalTransferred > reported) {
+      onBytesTransferred(totalTransferred - reported)
+      reported = totalTransferred
+    }
+  }
   return waitForSftpCallback<void>(
-    (callback) => sftp.fastGet(sourcePath, destinationPath, callback),
+    (callback) => sftp.fastGet(sourcePath, destinationPath, { step }, callback),
     options
   )
 }

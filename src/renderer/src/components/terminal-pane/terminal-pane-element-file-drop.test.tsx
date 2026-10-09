@@ -49,7 +49,7 @@ vi.mock('electron', () => ({
 vi.mock('@/store', () => ({
   useAppStore: Object.assign(
     <T,>(selector: (state: typeof mocks.state) => T) => selector(mocks.state),
-    { getState: () => mocks.state }
+    { getState: () => mocks.state, subscribe: () => () => {} }
   )
 }))
 vi.mock('@/runtime/runtime-file-client', () => ({
@@ -57,7 +57,13 @@ vi.mock('@/runtime/runtime-file-client', () => ({
 }))
 vi.mock('@/lib/new-workspace', () => ({ CLIENT_PLATFORM: 'win32' }))
 vi.mock('sonner', () => ({
-  toast: { error: mocks.toastError, loading: vi.fn(), dismiss: vi.fn(), message: vi.fn() }
+  toast: {
+    error: mocks.toastError,
+    loading: vi.fn(),
+    custom: vi.fn(),
+    dismiss: vi.fn(),
+    message: vi.fn()
+  }
 }))
 vi.mock('./terminal-input-activity', () => ({ recordTerminalUserInputForLeaf: vi.fn() }))
 vi.mock('@/components/ui/tooltip', () => ({
@@ -267,7 +273,9 @@ beforeEach(() => {
     fs: {
       getPathForFile: (file: File) => `/client/${file.name}`,
       prepareDroppedPaths: mocks.prepare,
-      resolveDroppedPathsForAgent: mocks.resolvePaths
+      resolveDroppedPathsForAgent: mocks.resolvePaths,
+      onUploadProgress: () => () => {},
+      releaseRuntimeUpload: vi.fn().mockResolvedValue(undefined)
     }
   })
 })
@@ -465,7 +473,7 @@ describe('terminal element file drops', () => {
       }),
       ['/client/file.txt'],
       '/owner/workspace/.orca/drops',
-      { assertCurrent: expect.any(Function) }
+      { assertCurrent: expect.any(Function), progress: expect.any(Object) }
     )
     expect(fixture.sends[0]).toHaveBeenCalledExactlyOnceWith(
       '/owner/workspace/.orca/drops/file.txt ',
@@ -485,7 +493,8 @@ describe('terminal element file drops', () => {
       connectionId: 'target',
       expectedExecutionHostId: 'ssh:target',
       expectedSshTargetId: 'target',
-      expectedSshConnectionGeneration: 4
+      expectedSshConnectionGeneration: 4,
+      uploadIds: expect.any(Object)
     })
     expect(fixture.sends[0]).toHaveBeenCalledExactlyOnceWith('/host/file.txt ', 'driving')
   })
