@@ -1302,7 +1302,9 @@
         "automationsDescription": "Schedule agent work and choose whether Automations appears in the sidebar.",
         "shareSkillsTitle": "Share Skills",
         "shareSkillsDescription": "Share your skills with an unlisted link. Anyone who has it can install them.",
-        "floatingWorkspaceWebDescription": "Global terminal and markdown tabs."
+        "floatingWorkspaceWebDescription": "Global terminal and markdown tabs.",
+        "backupRestore": "Backup & Restore",
+        "backupRestoreDescription": "Move your settings to another computer and undo imports."
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "Paste is too large."
@@ -8618,7 +8620,9 @@
           "devDescription": "Dev-only tools for exercising UI states.",
           "linearTitle": "Linear",
           "linearDescription": "How Linear works in Orca, setup checklist, agent skill, and example prompts.",
-          "tasksDescription": "Connect providers, install the Linear skill, and choose what appears in Tasks."
+          "tasksDescription": "Connect providers, install the Linear skill, and choose what appears in Tasks.",
+          "backupRestore": "Backup & Restore",
+          "backupRestoreDescription": "Move your settings to another computer and undo imports."
         },
         "SettingsFormControls": {
           "42a4d15a30": "No matching fonts.",
@@ -12672,6 +12676,69 @@
           "offCount": "{{count}} off",
           "machines": "Machines",
           "machinesDescription": "Choose which machines can show notifications on this computer. A paired server’s switch also covers work reached through it."
+        },
+        "BackupRestorePane": {
+          "exportTitle": "Export settings",
+          "exportSearchDescription": "Save your preferences to a file for another computer.",
+          "keywordBackup": "backup",
+          "keywordExport": "export",
+          "keywordSync": "sync",
+          "keywordMigrate": "new computer",
+          "importTitle": "Import settings",
+          "importSearchDescription": "Review and apply settings from a backup file.",
+          "keywordImport": "import",
+          "keywordRestore": "restore",
+          "recoveryTitle": "Recovery points",
+          "recoverySearchDescription": "Undo an import by restoring earlier settings.",
+          "keywordUndo": "undo",
+          "keywordRollback": "rollback",
+          "exportSavedWithExclusions": "Saved {{value0}} settings to {{value1}}. {{value2}} values that looked like credentials were left out.",
+          "exportSaved": "Saved {{value0}} settings to {{value1}}.",
+          "importApplied": "Imported {{value0}} settings. A recovery point was saved, so you can undo this below.",
+          "importExpired": "This review expired. Import the file again.",
+          "importRolledBack": "The import failed and your previous settings were restored.",
+          "importFailed": "The import failed. Check your settings, or restore a recovery point below.",
+          "restoreDone": "Restored {{value0}} settings.",
+          "restoreFailed": "The recovery point could not be restored.",
+          "exportDescription": "Save your preferences to a file you can import on another computer. Passwords, API keys, tokens, signed-in accounts and granted permissions are never included.",
+          "exportButton": "Export…",
+          "importDescription": "Choose a backup file to see what would change. Nothing is applied until you confirm, and a recovery point is saved first.",
+          "importButton": "Import…",
+          "recoveryDescription": "Orca keeps the last 10 states from before an import or restore on this computer.",
+          "recoveryEmpty": "No recovery points yet.",
+          "recoveryBeforeImport": "Before import · {{value0}} settings",
+          "recoveryBeforeRestore": "Before restore · {{value0}} settings",
+          "restoreButton": "Restore",
+          "exportFailed": "The backup file could not be saved.",
+          "sectionAppearance": "Appearance",
+          "sectionTerminal": "Terminal",
+          "sectionEditor": "Editor & files",
+          "sectionGit": "Git & source control",
+          "sectionAgents": "Agents & AI",
+          "sectionBrowser": "Browser",
+          "sectionNotifications": "Notifications",
+          "sectionGeneral": "General",
+          "sectionExperimental": "Experimental features",
+          "sectionDevice": "This device (paths, shells, runtimes)",
+          "skipOtherPlatform": "Made on another operating system; check before applying",
+          "skipSecret": "Looks like a credential, so it is never imported",
+          "skipUnsupported": "Not supported by this version of Orca",
+          "skipProtected": "Accounts, secrets and permissions must be set up on each device",
+          "skipInvalid": "The value in the backup is not valid for this setting",
+          "invalidUnreadable": "The file could not be read.",
+          "invalidTooLarge": "The file is too large to be an Orca settings backup.",
+          "invalidFormat": "The file is not an Orca settings backup.",
+          "invalidNewer": "The backup was made by a newer version of Orca. Update Orca and try again.",
+          "invalidIntegrity": "The backup is damaged or was edited after it was created. Your settings were not changed.",
+          "reviewTitle": "Review import",
+          "reviewDescription": "{{value0}} · created {{value1}} with Orca {{value2}} on {{value3}}",
+          "newerVersionNotice": "This backup came from a newer version of Orca. Settings this version does not know are skipped.",
+          "otherPlatformNotice": "Device settings from another operating system are not selected. Paths and shells usually differ between systems.",
+          "nothingToImport": "Nothing to import. Your settings already match this backup.",
+          "notImported": "Not imported",
+          "unchangedCount": "{{value0}} settings already match and are left as they are.",
+          "cancel": "Cancel",
+          "applySelected": "Apply {{value0}} selected"
         }
       },
       "right": {
@@ -19648,6 +19715,13 @@
     "attachments": {
       "updateRuntime": "Update the remote runtime to change workspace links",
       "updateRuntimeSafely": "Update the remote runtime to safely change workspace links"
+    }
+  },
+  "settingsBackup": {
+    "dialog": {
+      "fileFilter": "Orca settings backup",
+      "exportTitle": "Export Orca settings",
+      "importTitle": "Import Orca settings"
     }
   }
 }

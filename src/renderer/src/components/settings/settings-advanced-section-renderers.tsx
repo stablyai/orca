@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react'
 import { AdvancedPane } from './AdvancedPane'
+import { BackupRestorePane } from './BackupRestorePane'
 import { ExperimentalPane } from './ExperimentalPane'
 import { PluginsSettingsSection } from './PluginsSettingsSection'
 import { SettingsSection } from './SettingsSection'
@@ -9,6 +10,25 @@ import type { SettingsRenderContext } from './settings-render-context'
 const DevToolsPane = import.meta.env.DEV
   ? lazy(() => import('./DevToolsPane').then((module) => ({ default: module.DevToolsPane })))
   : null
+
+export function renderBackupRestoreSettingsSection(
+  context: SettingsRenderContext
+): React.JSX.Element | null {
+  const { model, navigation, view } = context
+  return model.showDesktopOnlySettings ? (
+    <SettingsSection
+      id="backup-restore"
+      title={translate('auto.components.settings.Settings.backupRestore', 'Backup & Restore')}
+      description={translate(
+        'auto.components.settings.Settings.backupRestoreDescription',
+        'Move your settings to another computer and undo imports.'
+      )}
+      searchEntries={navigation.getSectionSearchEntries('backup-restore')}
+    >
+      {view.isSectionMounted('backup-restore') ? <BackupRestorePane /> : null}
+    </SettingsSection>
+  ) : null
+}
 
 export function renderAdvancedSettingsSection(
   context: SettingsRenderContext
