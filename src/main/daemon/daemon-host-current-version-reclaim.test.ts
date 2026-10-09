@@ -219,7 +219,7 @@ describe('current-version daemon-host reclaim', () => {
     writeFileSync(record, JSON.stringify({ pid: DEAD_WRITER_PID, appVersion: '9.9.9' }))
     const secondStale = join(versionRoot, 'build-stale-111111111111')
 
-    pruneDaemonHostsBeforeLaunch(runtimeDir)
+    pruneDaemonHostsBeforeLaunch(runtimeDir, materializeRelocatedDaemonHost())
     expect(existsSync(staleBuild)).toBe(false)
     expect(existsSync(join(selected, 'Orca.exe'))).toBe(true)
 
@@ -235,7 +235,7 @@ describe('current-version daemon-host reclaim', () => {
     const { staleBuild } = seedLeftovers()
     setProcessProp('platform', 'linux')
 
-    pruneDaemonHostsBeforeLaunch(join(tempDir, 'userData', 'daemon'))
+    pruneDaemonHostsBeforeLaunch(join(tempDir, 'userData', 'daemon'), null)
 
     expect(existsSync(staleBuild)).toBe(true)
   })

@@ -49,7 +49,7 @@ export function createProcessHostDevRebuildPlugin(root = process.cwd()): Plugin 
         this.addWatchFile(file)
       }
       // The external package must finish emitting before electron-vite restarts the app. The
-      // package's own build keeps its compiler and atomic dist sync identical to build:packages.
+      // package's own build keeps its compiler and per-file atomic dist sync identical to build:packages.
       const result = runProcessSync({
         program: process.execPath,
         args: [

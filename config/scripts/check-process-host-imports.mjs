@@ -2,8 +2,10 @@ import { globSync, readFileSync } from 'node:fs'
 import { isBuiltin } from 'node:module'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
-import ts from 'typescript-api'
+import { collectModuleSpecifiers } from './static-module-specifiers.mjs'
 import { isTestOnlySourcePath } from './test-only-source-path.mjs'
+
+export { collectModuleSpecifiers }
 
 const ROOT = path.resolve(import.meta.dirname, '..', '..')
 const PACKAGE_NAME = '@orca/process-host'
@@ -19,46 +21,6 @@ const SOURCE_PATTERNS = [
 
 function normalized(file) {
   return file.split(path.sep).join('/')
-}
-
-export function collectModuleSpecifiers(file, contents) {
-  const source = ts.createSourceFile(file, contents, ts.ScriptTarget.Latest, true)
-  if (source.parseDiagnostics.length > 0) {
-    throw new Error(`Cannot parse ${file}; the process-host import check must not skip it.`)
-  }
-  const specifiers = new Set()
-  function literal(node) {
-    if (node && (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node))) {
-      specifiers.add(node.text)
-    }
-  }
-  function visit(node) {
-    if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
-      literal(node.moduleSpecifier)
-    } else if (
-      ts.isImportEqualsDeclaration(node) &&
-      ts.isExternalModuleReference(node.moduleReference)
-    ) {
-      literal(node.moduleReference.expression)
-    } else if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument)) {
-      literal(node.argument.literal)
-    } else if (ts.isCallExpression(node)) {
-      const callee = node.expression
-      if (
-        callee.kind === ts.SyntaxKind.ImportKeyword ||
-        (ts.isIdentifier(callee) && callee.text === 'require') ||
-        (ts.isPropertyAccessExpression(callee) &&
-          ts.isIdentifier(callee.expression) &&
-          callee.expression.text === 'require' &&
-          callee.name.text === 'resolve')
-      ) {
-        literal(node.arguments[0])
-      }
-    }
-    ts.forEachChild(node, visit)
-  }
-  visit(source)
-  return [...specifiers]
 }
 
 function packageName(specifier) {

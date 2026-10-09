@@ -19,3 +19,11 @@ it.each([
 it('keeps unrelated host packages out of the mobile web build checks', () => {
   expect(classifyPrJobs(['src/packages/unrelated/src/index.ts']).mobile_web_app).toBe(false)
 })
+
+it.each([
+  'src/packages/process-host/src/run-process.ts',
+  'config/scripts/smoke-process-host-node18.mjs',
+  'config/scripts/packaged-process-host-fixture.mjs'
+])('qualifies the Node 18 package floor for %s', (file) => {
+  expect(classifyPrJobs([file]).managed_hook_node18).toBe(true)
+})

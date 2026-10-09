@@ -14,7 +14,10 @@ import {
   terminateLaunchedDaemonChild
 } from './daemon-launched-child'
 import { getDaemonEntryPath, probeDaemonSocket as probeSocket } from './daemon-launch-paths'
-import { materializeRelocatedDaemonHost } from './daemon-host-relocation'
+import {
+  materializeRelocatedDaemonHost,
+  pruneDaemonHostsBeforeLaunch
+} from './daemon-host-relocation'
 import { DAEMON_RECOVERY_BUDGET_MS, daemonRecoveryProbeTimeoutMs } from './daemon-recovery-budget'
 import { cleanupDaemonForProtocol } from './daemon-protocol-cleanup'
 import {
@@ -123,6 +126,9 @@ export function createOutOfProcessLauncher(
       const userDataPath = getAppEnvironment().getPath('userData')
       // Why: on win32 packaged, stage a daemon-host copy in userData so its image escapes the NSIS updater's kill zone; lazy so it's off first-paint. Fail-open: null → in-dir host.
       const relocatedHost = materializeRelocatedDaemonHost()
+      // Why here: preflight has retired any stale daemon and the build is chosen; once the child
+      // publishes its live pid record, every same-version mirror is pinned again.
+      pruneDaemonHostsBeforeLaunch(runtimeDir, relocatedHost)
       // Fork the relocated entry when available; otherwise the install-dir entry.
       const forkEntryPath = relocatedHost ? relocatedHost.entryPath : entryPath
       let launched

@@ -132,6 +132,9 @@ function missingProcessTreeFiles(packageDir: string): boolean {
 }
 
 // Sibling of the legacy shared HOST_SUBDIR, whose older pruners delete every unpinned child dir.
+// That legacy root is never reclaimed here: profile-scoped pid evidence can't prove another
+// profile's daemon gone, and new code never writes there, so its cost is a finite one-time
+// copy (~260MB) per pre-upgrade mirror until a genuine uninstall removes it.
 const PROFILE_HOST_SUBDIR = 'daemon-host-profiles'
 
 // Profiles (--user-data-dir, E2E) share LOCALAPPDATA but not pid records, so one profile's
@@ -327,9 +330,9 @@ export function collectPinnedDaemonVersions(runtimeDir: string): PinnedDaemonVer
   return { status: 'complete', versionLiveness }
 }
 
-// The build this process forks from; null when its build is unknown or has no usable mirror.
-function selectedDaemonHostBuildDir(): string | null {
-  const host = getRelocatedDaemonHost()
+// The build this process forks from (looked up when not given); null when unknown or unusable.
+function selectedBuildDir(selectedHost: RelocatedDaemonHost | null | undefined): string | null {
+  const host = selectedHost === undefined ? getRelocatedDaemonHost() : selectedHost
   return host ? dirname(host.execPath) : null
 }
 
@@ -338,7 +341,10 @@ function selectedDaemonHostBuildDir(): string | null {
  * plus current-version leftovers (see reclaimCurrentVersionDaemonHostLeftovers).
  * Best-effort — never throws; a locked/staging dir is retried on a future launch.
  */
-export function pruneOldDaemonHosts(evidence: PinnedDaemonVersionsEvidence): void {
+export function pruneOldDaemonHosts(
+  evidence: PinnedDaemonVersionsEvidence,
+  selectedHost?: RelocatedDaemonHost | null
+): void {
   if (!isPackagedElectronWin32()) {
     return
   }
@@ -364,7 +370,7 @@ export function pruneOldDaemonHosts(evidence: PinnedDaemonVersionsEvidence): voi
       reclaimCurrentVersionDaemonHostLeftovers(
         join(root, version),
         currentVerdict,
-        currentVerdict.status === 'exited' ? selectedDaemonHostBuildDir() : null
+        currentVerdict.status === 'exited' ? selectedBuildDir(selectedHost) : null
       )
       continue
     }
@@ -375,11 +381,14 @@ export function pruneOldDaemonHosts(evidence: PinnedDaemonVersionsEvidence): voi
 }
 
 /**
- * Prune before this launch forks or adopts a daemon: a dead current-version daemon then proves no
- * image runs from superseded builds, which a freshly launched replacement would otherwise pin.
+ * Prune once the replacement preflight has retired any stale daemon and this launch has selected
+ * its build, but before the new daemon's live pid record pins every same-version mirror.
  */
-export function pruneDaemonHostsBeforeLaunch(runtimeDir: string): void {
+export function pruneDaemonHostsBeforeLaunch(
+  runtimeDir: string,
+  selectedHost: RelocatedDaemonHost | null
+): void {
   if (isPackagedElectronWin32()) {
-    pruneOldDaemonHosts(collectPinnedDaemonVersions(runtimeDir))
+    pruneOldDaemonHosts(collectPinnedDaemonVersions(runtimeDir), selectedHost)
   }
 }

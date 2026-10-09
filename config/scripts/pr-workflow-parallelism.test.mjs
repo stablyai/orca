@@ -302,9 +302,14 @@ describe('PR workflow parallelism', () => {
       (step) => step.run === 'node config/scripts/smoke-managed-hook-runtime-node18.mjs'
     )
 
+    const processHostIndex = steps.findIndex(
+      (step) => step.run === 'node config/scripts/smoke-process-host-node18.mjs'
+    )
+
     expect(installIndex).toBeLessThan(buildIndex)
     expect(buildIndex).toBeLessThan(node18Index)
     expect(node18Index).toBeLessThan(smokeIndex)
+    expect(node18Index).toBeLessThan(processHostIndex)
   })
 
   it('restores the pnpm store before dependency installation', () => {

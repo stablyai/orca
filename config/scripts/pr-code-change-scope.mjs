@@ -246,6 +246,9 @@ const CROSS_VERSION_WIRE_PREFIXES = [
 
 const MANAGED_HOOK_PREFIXES = [
   'config/scripts/smoke-managed-hook-runtime-node18',
+  'config/scripts/smoke-process-host-node18',
+  'config/scripts/packaged-process-host-fixture',
+  'src/packages/process-host/',
   'config/scripts/build-relay',
   'src/relay/',
   'src/shared/agent-hook',

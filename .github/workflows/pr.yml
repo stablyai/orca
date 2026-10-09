@@ -1011,6 +1011,10 @@ jobs:
       - name: Smoke managed-hook companions
         run: node config/scripts/smoke-managed-hook-runtime-node18.mjs
 
+      # The process-host package declares engines >=18; load its staged public output on Node 18.
+      - name: Smoke process-host package
+        run: node config/scripts/smoke-process-host-node18.mjs
+
   package:
     name: package
     needs: [code_paths, preflight]

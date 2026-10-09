@@ -126,7 +126,7 @@ describe('daemon-host profile isolation under a shared LOCALAPPDATA', () => {
     // Profile B's runtime dir holds no records: positive exit evidence for B alone.
     const runtimeDirB = join(tempDir, 'profile-b', 'daemon')
     mkdirSync(runtimeDirB, { recursive: true })
-    pruneDaemonHostsBeforeLaunch(runtimeDirB)
+    pruneDaemonHostsBeforeLaunch(runtimeDirB, materializeRelocatedDaemonHost())
     pruneOldDaemonHosts({ status: 'complete', versionLiveness: new Map() })
 
     for (const [dir, exe] of [
