@@ -209,4 +209,12 @@ describe('MobileOnboardingScreen', () => {
     expect(pages().map((page) => page.props.width)).toEqual([700, 700])
     expect(track.props.style[1]).toEqual({ width: 1400, transform: [{ translateX: -700 }] })
   })
+
+  it('keeps the pager unrendered until the viewport reports a real width', async () => {
+    await renderScreen(0)
+    expect(pages()).toHaveLength(0)
+
+    await layoutViewport(540)
+    expect(pages().map((page) => page.props.width)).toEqual([540, 540])
+  })
 })

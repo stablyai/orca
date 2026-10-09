@@ -139,7 +139,11 @@ function MobileOnboardingFlow({
     [slideProgress, width]
   )
   const onViewportLayout = useCallback((event: LayoutChangeEvent) => {
-    setWidth(event.nativeEvent.layout.width)
+    const measured = event.nativeEvent.layout.width
+    // Why: a transient zero-width pass must not collapse the slides to nothing.
+    if (measured > 0) {
+      setWidth(measured)
+    }
   }, [])
 
   return (
