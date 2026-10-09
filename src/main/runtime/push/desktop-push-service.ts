@@ -13,7 +13,8 @@ import type { DeviceRegistry } from '../device-registry'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import type { OrcaRuntimeRpcServer } from '../runtime-rpc'
 import { PushDispatcher } from './push-dispatcher'
-import { PushGatewayClient } from './push-gateway-client'
+import { sealPushNotification } from './push-e2e-seal'
+import { PushGatewayClient, type PushSendNotification } from './push-gateway-client'
 import { PushRegisterThrottle } from './push-register-throttle'
 import type { PushUnregisterOutbox } from './push-unregister-outbox'
 
@@ -117,19 +118,23 @@ export class DesktopPushService {
       return { accepted: false, reason: 'unavailable' }
     }
     // Explicit tests target only the caller and bypass automatic activity filters.
+    const notification: PushSendNotification = {
+      source: 'terminal-bell',
+      agentState: null,
+      title: 'Test notification',
+      body: '',
+      notificationId: randomUUID(),
+      notificationEpoch: randomUUID(),
+      notificationSeq: 0,
+      expiresAt: Date.now() + 300_000,
+      sound: registration.filter.sound !== false
+    }
     const result = await this.client.send({
       registrationIds: [registration.registrationId],
-      notification: {
-        source: 'terminal-bell',
-        agentState: null,
-        title: 'Test notification',
-        body: '',
-        notificationId: randomUUID(),
-        notificationEpoch: randomUUID(),
-        notificationSeq: 0,
-        expiresAt: Date.now() + 300_000,
-        sound: registration.filter.sound !== false
-      }
+      // Sealed like every real push to this phone, so the test proves it can open them.
+      notification: registration.sealedContent
+        ? sealPushNotification(notification, device.token)
+        : notification
     })
     if (!result.ok) {
       return {
@@ -263,7 +268,8 @@ export class DesktopPushService {
       const stored = this.registry.setPushRegistration(input.deviceId, {
         registrationId,
         filter: input.filter,
-        expiresAt: Date.now() + 7 * 24 * 60 * 60_000
+        expiresAt: Date.now() + 7 * 24 * 60 * 60_000,
+        ...(input.sealedContent ? { sealedContent: input.sealedContent } : {})
       })
       // False means the device was removed or left mobile scope while the gateway
       // call was in flight.

@@ -16,6 +16,7 @@ import {
   type RemotePushHostRegistrations
 } from '../storage/preferences'
 import { addPushTokenListener, getDevicePushToken, type MobilePushToken } from './push-token'
+import { NOTIFICATIONS_REMOTE_PUSH_SEALED_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
 import {
   NOTIFICATIONS_REMOTE_PUSH_CAPABILITY,
   attachPushRegistration,
@@ -156,6 +157,32 @@ describe('push registration capability gating', () => {
     const register = sent.find((request) => request.method === 'notifications.registerPush')
     expect(register?.params).toMatchObject({ platform: 'android', token: 'fcm-token' })
     expect(register?.params).not.toHaveProperty('apnsEnvironment')
+    expect(register?.params).not.toHaveProperty('sealedContent')
+  })
+
+  it('asks for sealed pushes only from a host that can seal them, and only on Android', async () => {
+    const both = [
+      NOTIFICATIONS_REMOTE_PUSH_CAPABILITY,
+      NOTIFICATIONS_REMOTE_PUSH_SEALED_RUNTIME_CAPABILITY
+    ]
+    await setRemotePushEnabled(true)
+    const registerParams = async (hostId: string, capabilities: readonly string[]) => {
+      const { client, sent } = makeClient(capabilities)
+      attachPushRegistration(hostId, client)
+      await flush()
+      return sent.find((request) => request.method === 'notifications.registerPush')?.params
+    }
+
+    vi.mocked(getDevicePushToken).mockResolvedValue({ platform: 'android', token: 'fcm-token' })
+    expect(await registerParams('host-new', both)).toMatchObject({ sealedContent: 'e2e1' })
+    const old = await registerParams('host-old', [NOTIFICATIONS_REMOTE_PUSH_CAPABILITY])
+    expect(old).toMatchObject({ platform: 'android' })
+    expect(old).not.toHaveProperty('sealedContent')
+    resetPushRegistrationForTests()
+    vi.mocked(getDevicePushToken).mockResolvedValue(IOS_TOKEN)
+    const ios = await registerParams('host-ios', both)
+    expect(ios).toMatchObject({ platform: 'ios' })
+    expect(ios).not.toHaveProperty('sealedContent')
   })
 
   it('registers nothing when the device has no push token at all', async () => {

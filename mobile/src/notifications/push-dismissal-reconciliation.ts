@@ -4,6 +4,7 @@ import { loadHostCatalog } from '../transport/host-store'
 import { resolveHostIdForFingerprint } from './push-host-fingerprint'
 import { readNativeNotificationData } from './native-notification-data'
 import { readOrcaPushPayload, type OrcaPushPayload } from './push-payload'
+import { readablePushData } from './push-sealed-payload'
 import { dismissRememberedPushNotifications } from './push-tray-dismissal'
 import { rememberPushDismissal } from './push-dismissal-watermarks'
 import {
@@ -21,7 +22,10 @@ async function readDelivered(hostId: string): Promise<Map<string, OrcaPushPayloa
       loadHostCatalog()
     ])
     for (const notification of presented) {
-      const payload = readOrcaPushPayload(readNativeNotificationData(notification.request))
+      // An unreplaced sealed placeholder carries opaque ids the host cannot match.
+      const payload = readOrcaPushPayload(
+        await readablePushData(readNativeNotificationData(notification.request))
+      )
       if (!payload || resolveHostIdForFingerprint(payload.hostFingerprint, hosts) !== hostId) {
         continue
       }

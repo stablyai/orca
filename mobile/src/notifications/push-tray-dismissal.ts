@@ -2,6 +2,7 @@ import { readNativeNotificationData } from './native-notification-data'
 import * as Notifications from 'expo-notifications'
 import { readOrcaPushPayload, type OrcaPushPayload } from './push-payload'
 import { rememberPushDismissal, wasPushDismissed } from './push-dismissal-watermarks'
+import { readablePushData } from './push-sealed-payload'
 
 async function dismissMatchingPresentedPushes(
   matches: (payload: OrcaPushPayload) => boolean | Promise<boolean>
@@ -9,7 +10,10 @@ async function dismissMatchingPresentedPushes(
   const presented = await Notifications.getPresentedNotificationsAsync()
   await Promise.all(
     presented.map(async (notification) => {
-      const payload = readOrcaPushPayload(readNativeNotificationData(notification.request))
+      // A sealed placeholder the app never replaced still names the real id inside.
+      const payload = readOrcaPushPayload(
+        await readablePushData(readNativeNotificationData(notification.request))
+      )
       if (payload && (await matches(payload))) {
         await Notifications.dismissNotificationAsync(notification.request.identifier)
       }

@@ -1,6 +1,7 @@
 import { startAndroidForegroundPushPresentation } from '../src/notifications/android-foreground-push'
 import { registerPushDismissalTask } from '../src/notifications/push-background-dismissal'
 import { readNativeNotificationData } from '../src/notifications/native-notification-data'
+import { readablePushData } from '../src/notifications/push-sealed-payload'
 import { setNotificationViewingWorkspace } from '../src/notifications/notification-viewing-policy'
 import { useCallback, useEffect, useRef } from 'react'
 import { View, StyleSheet } from 'react-native'
@@ -122,7 +123,8 @@ export default function RootLayout() {
 
     async function getNavigationTarget(notification: Notifications.Notification) {
       const hosts = await loadHostCatalog().catch(() => null)
-      const data = readNativeNotificationData(notification.request)
+      // A sealed placeholder Orca never replaced still routes to its worktree.
+      const data = await readablePushData(readNativeNotificationData(notification.request))
       // A gateway push names its host by key fingerprint, not by this device's hostId.
       // With no catalog to resolve against, such a push stays unrouted instead of
       // falling back to whatever hostId its raw data carries.

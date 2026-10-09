@@ -19,3 +19,12 @@ it('retains valid preferences while ignoring unknown fields', () => {
     })?.filter
   ).toEqual({ onlyWhenDesktopAway: true, sound: false })
 })
+
+it('keeps a known sealed-content format and degrades an unknown one to readable pushes', () => {
+  const stored = { registrationId: 'r', expiresAt: 123, filter: {} }
+  expect(parseMobilePushRegistration({ ...stored, sealedContent: 'e2e1' })?.sealedContent).toBe(
+    'e2e1'
+  )
+  const unknown = parseMobilePushRegistration({ ...stored, sealedContent: 'e2e9' })
+  expect(unknown).toEqual(stored)
+})

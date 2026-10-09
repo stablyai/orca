@@ -1,5 +1,9 @@
 import { z } from 'zod'
-import { MOBILE_PUSH_APNS_ENVIRONMENTS, MOBILE_PUSH_PLATFORMS } from '../mobile-push-contract'
+import {
+  MOBILE_PUSH_APNS_ENVIRONMENTS,
+  MOBILE_PUSH_PLATFORMS,
+  MOBILE_PUSH_SEALED_CONTENT_VERSIONS
+} from '../mobile-push-contract'
 
 export const NotificationUnsubscribeParams = z.object({
   subscriptionId: z
@@ -45,7 +49,10 @@ export const NotificationRegisterPushParams = z
     platform: z.enum(MOBILE_PUSH_PLATFORMS),
     token: z.string().min(1).max(4096),
     apnsEnvironment: z.enum(MOBILE_PUSH_APNS_ENVIRONMENTS).optional(),
-    filter: NotificationPushFilterParams
+    filter: NotificationPushFilterParams,
+    // Sent only to hosts advertising NOTIFICATIONS_REMOTE_PUSH_SEALED_RUNTIME_CAPABILITY,
+    // because older hosts reject unknown keys here.
+    sealedContent: z.enum(MOBILE_PUSH_SEALED_CONTENT_VERSIONS).optional()
   })
   // Why strict: the device identity is added by the handler, so a caller-supplied
   // `deviceId` must be an error, not a key silently dropped.
@@ -54,6 +61,10 @@ export const NotificationRegisterPushParams = z
   // so a missing environment must fail loudly rather than default to production.
   .refine((params) => params.platform !== 'ios' || params.apnsEnvironment !== undefined, {
     message: 'apnsEnvironment is required for ios'
+  })
+  // Why: iOS shows the alert natively, so a sealed push would stay a generic placeholder.
+  .refine((params) => params.platform !== 'ios' || params.sealedContent === undefined, {
+    message: 'sealedContent is not supported for ios'
   })
 
 export const NotificationsSubscribeParams = z

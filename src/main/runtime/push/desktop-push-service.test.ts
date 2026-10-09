@@ -8,6 +8,7 @@ import { DesktopPushService } from './desktop-push-service'
 import { PushRegisterThrottle } from './push-register-throttle'
 import { PushUnregisterOutbox } from './push-unregister-outbox'
 import { createPushHostKeypair } from './push-host-challenge-fixtures'
+import { openSealedPushNotification } from './push-e2e-seal.test-fixture'
 
 const REGISTER_INPUT = {
   platform: 'android' as const,
@@ -331,6 +332,35 @@ it('sends an explicit test only to the requesting registered phone and awaits ga
       sound: false,
       title: 'Test notification'
     })
+  })
+})
+
+it('keeps a phone that asked for sealed pushes sealed, test push included', async () => {
+  const { service, registry, deviceId, send, dispatch } = createService()
+  await service.register({ ...REGISTER_INPUT, deviceId, sealedContent: 'e2e1' })
+  expect(registry.getDevice(deviceId)?.pushRegistration?.sealedContent).toBe('e2e1')
+  const token = registry.getDevice(deviceId)!.token
+
+  send.mockResolvedValue({ ok: true, results: [{ registrationId: 'reg-1', status: 'queued' }] })
+  await expect(service.test(deviceId)).resolves.toEqual({ accepted: true })
+  dispatch({
+    type: 'notification',
+    source: 'agent-task-complete',
+    title: 'feat/x - Claude finished',
+    body: 'Done.',
+    notificationSeq: 3,
+    notificationEpoch: 'epoch-1',
+    agentState: 'done'
+  })
+  await new Promise((resolve) => setImmediate(resolve))
+
+  const [testPush, agentPush] = send.mock.calls.map((call) => call[0].notification)
+  expect(testPush).toMatchObject({ title: 'Orca', paneKey: expect.stringMatching(/^e2e1:/) })
+  expect(openSealedPushNotification(testPush, token).title).toBe('Test notification')
+  expect(agentPush).toMatchObject({ title: 'Agent finished', body: '' })
+  expect(openSealedPushNotification(agentPush, token)).toMatchObject({
+    title: 'feat/x - Claude finished',
+    body: 'Done.'
   })
 })
 

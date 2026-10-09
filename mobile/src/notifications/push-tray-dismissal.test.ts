@@ -6,6 +6,8 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
   default: { getItem: vi.fn(async () => null), setItem: vi.fn(async () => {}) }
 }))
 
+vi.mock('../transport/host-store', () => ({ loadHosts: vi.fn(async () => []) }))
+
 vi.mock('expo-notifications', () => ({
   getPresentedNotificationsAsync: vi.fn(),
   dismissNotificationAsync: vi.fn()

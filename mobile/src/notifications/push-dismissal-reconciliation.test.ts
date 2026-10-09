@@ -3,7 +3,11 @@ import * as Notifications from 'expo-notifications'
 import { loadHostCatalog } from '../transport/host-store'
 import { deriveHostFingerprint } from './push-host-fingerprint'
 import { requestNotificationCatchup } from './push-dismissal-reconciliation'
-vi.mock('../transport/host-store', () => ({ loadHostCatalog: vi.fn() }))
+import { SEALED_VECTOR, sealedVectorHost } from './push-sealed-payload.test-fixture'
+vi.mock('../transport/host-store', () => ({
+  loadHostCatalog: vi.fn(),
+  loadHosts: vi.fn(async () => [sealedVectorHost()])
+}))
 vi.mock('expo-notifications', () => ({
   getPresentedNotificationsAsync: vi.fn(),
   dismissNotificationAsync: vi.fn()
@@ -143,3 +147,24 @@ it.each(['failure', 'disconnect'])(
     expect(Notifications.dismissNotificationAsync).not.toHaveBeenCalledWith('paged-256')
   }
 )
+
+it('reports the real identity of a sealed alert Orca never replaced', async () => {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reader uses only id and publicKeyB64 from catalog entries.
+  vi.mocked(loadHostCatalog).mockResolvedValue([sealedVectorHost()] as never)
+  vi.mocked(Notifications.getPresentedNotificationsAsync).mockResolvedValue(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reader uses only request.identifier and content.data.
+    [presented('sealed', { ...SEALED_VECTOR.fcmData })] as never
+  )
+  const sendRequest = vi.fn(async () => ({
+    ok: true,
+    result: { notifications: [], dismissedPushes: [] }
+  }))
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: catch-up calls only sendRequest.
+  await requestNotificationCatchup({ sendRequest } as never, 'host-1', () => false)
+  expect(sendRequest).toHaveBeenCalledWith('notifications.getMissedSince', {
+    lastSeenSeq: Number.MAX_SAFE_INTEGER,
+    deliveredPushes: [
+      { notificationId: 'agent:wt:pane:1', notificationEpoch: 'epoch-1', notificationSeq: 1 }
+    ]
+  })
+})

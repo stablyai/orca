@@ -20,6 +20,12 @@ function readSeq(value: unknown): number | undefined {
   return Number.isFinite(raw) ? raw : undefined
 }
 
+// A sealed envelope (push-sealed-payload.ts) rides in paneKey; it never names a pane.
+function readPaneKey(value: unknown): string | undefined {
+  const paneKey = readString(value)
+  return paneKey?.startsWith('e2e1:') ? undefined : paneKey
+}
+
 export function readOrcaPushPayload(data: unknown): OrcaPushPayload | null {
   if (!data || typeof data !== 'object') {
     return null
@@ -37,7 +43,7 @@ export function readOrcaPushPayload(data: unknown): OrcaPushPayload | null {
     notificationId: readString(record.notificationId),
     notificationSeq: readSeq(record.notificationSeq),
     notificationEpoch: readString(record.notificationEpoch),
-    paneKey: readString(record.paneKey),
+    paneKey: readPaneKey(record.paneKey),
     worktreeId: readString(record.worktreeId)
   }
 }

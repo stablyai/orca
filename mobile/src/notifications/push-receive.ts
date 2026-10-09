@@ -8,6 +8,7 @@ import { readOrcaPushPayload, type OrcaPushPayload } from './push-payload'
 import type { Notification, NotificationBehavior } from 'expo-notifications'
 import { readNativeNotificationData } from './native-notification-data'
 import { loadNotificationDeliveryPreferences } from './notification-delivery-preferences'
+import { readablePushData } from './push-sealed-payload'
 
 const RECENT_FOREGROUND_PUSH_CAP = 512
 const recentForegroundPushes = new Set<string>()
@@ -48,7 +49,7 @@ export function resetForegroundPushClaimsForTests(): void {
 export async function foregroundNotificationBehavior(
   notification: Pick<Notification, 'request'>
 ): Promise<NotificationBehavior> {
-  const data = readNativeNotificationData(notification.request)
+  const data = await readablePushData(readNativeNotificationData(notification.request))
   const payload = readOrcaPushPayload(data)
   const preferences = await loadNotificationDeliveryPreferences()
   // Unrecognized notifications retain normal behavior; recognized pushes fail closed

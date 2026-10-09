@@ -11,6 +11,7 @@ import {
 import type { MobileNotificationEvent } from '../runtime-mobile-notification-controller'
 import type { PushGatewayClient, PushSendNotification } from './push-gateway-client'
 import { PushOutcomeCounters } from './push-outcome-counters'
+import { sealPushNotification } from './push-e2e-seal'
 
 const PUSH_RETRY_DELAY_MS = 2_000
 // The gateway rejects a whole request above this, so a host with more paired
@@ -20,7 +21,11 @@ const PUSH_TITLE_MAX_LENGTH = 80
 const PUSH_BODY_MAX_LENGTH = 180
 
 export type PushDispatcherRegistry = {
-  listDevices(): readonly { deviceId: string; pushRegistration?: MobilePushRegistration }[]
+  listDevices(): readonly {
+    deviceId: string
+    token: string
+    pushRegistration?: MobilePushRegistration
+  }[]
   setPushRegistration(deviceId: string, registration: MobilePushRegistration | null): boolean
 }
 
@@ -31,7 +36,7 @@ type PushDispatcherOptions = {
   scheduleRetry?: (run: () => void, delayMs: number) => void
 }
 
-type PushTarget = { deviceId: string; registration: MobilePushRegistration }
+type PushTarget = { deviceId: string; token: string; registration: MobilePushRegistration }
 
 function clip(value: string, maxLength: number): string {
   const normalized = value.replace(/\s+/g, ' ').trim()
@@ -101,7 +106,9 @@ export class PushDispatcher {
       }
       for (const sound of [true, false]) {
         const targets = plan.targets.filter(
-          (target) => (target.registration.filter.sound !== false) === sound
+          (target) =>
+            !target.registration.sealedContent &&
+            (target.registration.filter.sound !== false) === sound
         )
         for (let start = 0; start < targets.length; start += MAX_REGISTRATIONS_PER_SEND) {
           void this.deliver(
@@ -110,6 +117,22 @@ export class PushDispatcher {
             0
           )
         }
+      }
+      // One send per sealed phone: its payload is encrypted with that phone's own key.
+      for (const target of plan.targets) {
+        // Fail closed: a phone that asked for sealed pushes never gets readable text.
+        if (!target.registration.sealedContent || !target.token) {
+          continue
+        }
+        const sound = target.registration.filter.sound !== false
+        void this.deliver(
+          [target],
+          sealPushNotification(
+            { ...plan.notification, ...(!sound ? { sound: false } : {}) },
+            target.token
+          ),
+          0
+        )
       }
     } catch (error) {
       console.warn('[push] Failed to prepare a push notification:', error)
@@ -126,8 +149,10 @@ export class PushDispatcher {
       }
       const targets = this.registry
         .listDevices()
-        .flatMap(({ deviceId, pushRegistration: registration }) =>
-          registration && registration.expiresAt > Date.now() ? [{ deviceId, registration }] : []
+        .flatMap(({ deviceId, token, pushRegistration: registration }) =>
+          registration && registration.expiresAt > Date.now()
+            ? [{ deviceId, token, registration }]
+            : []
         )
       return {
         targets,
@@ -173,7 +198,7 @@ export class PushDispatcher {
       ) {
         return []
       }
-      return [{ deviceId: device.deviceId, registration }]
+      return [{ deviceId: device.deviceId, token: device.token, registration }]
     })
     if (targets.length === 0) {
       return null
