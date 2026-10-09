@@ -4,6 +4,9 @@ import type {
   AgentJournalItemIdentity
 } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionTurnActivity } from '../../../shared/agent-session-wire'
+import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
+import { CAPTURED_AUTO_COMPACT_BEFORE_ECHO } from '../../claude/claude-captured-auto-compact-frames.test-fixture'
+import { CAPTURED_COMPACT_SESSION_ID } from '../../claude/claude-captured-compact-frames.test-fixture'
 import { createClaudeJournalTranslator } from '../../claude/claude-structured-journal-translation'
 import { createCodexJournalTranslator } from '../../codex/codex-structured-journal-translation'
 import type { CodexStructuredSessionEvent } from '../../codex/codex-structured-session-state'
@@ -265,5 +268,57 @@ describe('provider turn activity routing', () => {
     expect(state.activities.at(-1)).toBeNull()
     expect(state.tombstones).toHaveLength(0)
     expect(state.rows.at(-1)).toMatchObject({ kind: 'turn', turnId: TURN_ID, state: 'completed' })
+  })
+
+  it("routes Claude's compaction ahead of a send's echo to the turn that send opens", () => {
+    const state = recordingSink()
+    // The session's started-but-unechoed send; it settles that send before delivering the echo.
+    let startedSend: string | null = null
+    const translator = createClaudeJournalTranslator({
+      sink: state.sink,
+      startedSendUuid: () => startedSend
+    })
+    let activityAtEcho: AgentSessionTurnActivity | null | undefined
+    for (const event of CAPTURED_AUTO_COMPACT_BEFORE_ECHO) {
+      if (!('frame' in event)) {
+        continue
+      }
+      const { frame } = event
+      const echo = frame.type === 'user' && frame.isReplay === true
+      if (frame.type === 'command_lifecycle' && frame.state === 'started') {
+        startedSend = String(frame.command_uuid)
+      } else if (echo) {
+        startedSend = null
+        activityAtEcho = state.activities.at(-1)
+      }
+      translator.handle({
+        ...claudeMessage({ session_id: CAPTURED_COMPACT_SESSION_ID, ...frame }),
+        ...(echo ? { startsTurn: true } : {})
+      })
+    }
+
+    const sent = CAPTURED_AUTO_COMPACT_BEFORE_ECHO.flatMap((event) =>
+      'sent' in event ? [event.sent.uuid] : []
+    )
+    expect(state.activities.filter((activity) => activity !== null)).toEqual([
+      { turnId: sent[0], text: 'Compacting the conversation', beforeTurnOpens: true }
+    ])
+    // Compaction's own end cleared the line before the echo opened the turn.
+    expect(activityAtEcho).toBeNull()
+    expect(state.rows.map((row) => readAgentJournalTurn(row)?.turnId).filter(Boolean)).toContain(
+      sent[0]
+    )
+  })
+
+  it('publishes no activity for a cycle with neither an open turn nor a started send', () => {
+    const state = recordingSink()
+    const translator = createClaudeJournalTranslator({
+      sink: state.sink,
+      startedSendUuid: () => null
+    })
+
+    translator.handle(claudeMessage({ type: 'system', subtype: 'status', status: 'compacting' }))
+
+    expect(state.activities).toEqual([])
   })
 })

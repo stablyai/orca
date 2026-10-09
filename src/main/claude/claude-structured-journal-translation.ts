@@ -47,6 +47,8 @@ export type ClaudeJournalTranslatorDeps = {
   fallbackIdPrefix?: string
   onBackgroundTaskJournalFailure?: (error: Error) => void
   account?: () => AgentSessionAccountKind | undefined
+  /** The send the CLI started and has not echoed yet; its echo opens the turn under this uuid. */
+  startedSendUuid?: () => string | null
 }
 
 export function createClaudeJournalTranslator(
@@ -135,13 +137,17 @@ export function createClaudeJournalTranslator(
   }
 
   const publishActivity = (kind: string, payload: unknown): void => {
-    const turnId = turn.id
+    // Claude compacts before it echoes the send that opens the turn.
+    const beforeTurnOpens = turn.id === null
+    const turnId = turn.id ?? deps.startedSendUuid?.() ?? null
     if (turnId === null) {
       return
     }
     const text = claudeProviderFrameActivity(kind, payload)
     if (text !== undefined) {
-      deps.sink.setActivity?.(text ? { turnId, text } : null)
+      deps.sink.setActivity?.(
+        text ? { turnId, text, ...(beforeTurnOpens ? { beforeTurnOpens: true } : {}) } : null
+      )
     }
   }
 

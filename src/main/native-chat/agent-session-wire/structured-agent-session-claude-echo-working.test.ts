@@ -1,6 +1,7 @@
 // Claude's echo of a sent message both answers the send and opens its turn. Whatever order the
 // host publishes those in, a chat reading its frames one at a time must read working throughout:
-// Stop and every session list's Working come from that one rule.
+// Stop and every session list's Working come from that one rule. Claude may compact before that
+// echo, and the chat's live line says so meanwhile.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -8,7 +9,14 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
+import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
+import { selectStructuredAgentTurnActivity } from '../../../shared/native-chat-turn-activity'
+import { runningStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-live-turn'
 import { isStructuredAgentSessionMainAgentWorking } from '../../../shared/structured-agent-session-main-agent-working'
+import {
+  EMPTY_STRUCTURED_AGENT_SESSION,
+  reduceStructuredAgentSession
+} from '../../../shared/structured-agent-session-reducer'
 import { ClaudeStructuredSessionAdapter } from '../../claude/claude-structured-session-adapter'
 import {
   fakeClaude,
@@ -171,3 +179,64 @@ it('reads working at every published frame from the send through the echo that o
 
 it('keeps the settlement behind the turn its echo opens when the previous result arrives in the same read', () =>
   expectWorkingThroughEcho(true))
+
+/** What a chat subscribed to the session reads: its running turn, Working, and the live line. */
+function liveLine(events: readonly AgentSessionSubscribeEvent[]) {
+  const state = events.reduce(
+    (current, event, index) =>
+      reduceStructuredAgentSession(current, {
+        type: 'event',
+        event,
+        opensSubscription: index === 0
+      }),
+    EMPTY_STRUCTURED_AGENT_SESSION
+  )
+  const turnId = runningStructuredAgentSessionTurnId(state)
+  return {
+    turnId,
+    working: isStructuredAgentSessionMainAgentWorking(turnId, state.submissions, state.fence),
+    activity: selectStructuredAgentTurnActivity(state.items, turnId, state.activity)?.text ?? null
+  }
+}
+
+it('reads compacting while Claude compacts ahead of the echo that opens the turn', async () => {
+  const events: AgentSessionSubscribeEvent[] = []
+  await host.subscribe({ id: 'chat-1', sessionId: SESSION, emit: (event) => events.push(event) })
+  const body = hostTestMessage('hi')
+  await host.send(CALLER, {
+    envelope: {
+      sessionId: SESSION,
+      clientOperationId: hostTestOperationId(),
+      expectedRuntimeFence: store.getRecord(SESSION)!.lease.runtimeFence,
+      payloadFingerprint: computeAgentSessionPayloadFingerprint({
+        method: 'agentSession.send',
+        sessionId: SESSION,
+        fields: { body }
+      })
+    },
+    body
+  })
+  await settled()
+  const connection = claude.current.connections[0]!
+  const sent = connection.sent.at(-1)!
+  const sentUuid = String(sent.uuid)
+  const frame = (fields: Record<string, unknown>) =>
+    connection.handlers.onMessage?.({ session_id: PROVIDER_SESSION_ID, ...fields })
+
+  frame({ type: 'command_lifecycle', command_uuid: sentUuid, state: 'started', uuid: 'lc-1' })
+  frame({ type: 'system', subtype: 'status', status: 'compacting', uuid: 'status-1' })
+  await settled()
+  expect(liveLine(events)).toEqual({
+    turnId: null,
+    working: true,
+    activity: 'Compacting the conversation'
+  })
+
+  frame({ type: 'system', subtype: 'status', status: null, compact_result: 'success', uuid: 's-2' })
+  await settled()
+  expect(liveLine(events)).toEqual({ turnId: null, working: true, activity: null })
+
+  connection.handlers.onMessage?.({ ...sent, isReplay: true })
+  await settled()
+  expect(liveLine(events)).toEqual({ turnId: sentUuid, working: true, activity: null })
+})

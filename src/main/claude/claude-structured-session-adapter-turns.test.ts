@@ -4,10 +4,15 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ClaudeControlRequestError } from './claude-stream-json-connection'
 import { claudeUnwrittenUserMessageError } from './claude-agent-sdk-user-message-queue'
+import type { AgentSessionTurnActivity } from '../../shared/agent-session-wire'
 import {
   acquired,
+  adapterFor,
+  claudeFrame,
   fakeClaude,
+  identityFor,
   PROVIDER_SESSION_ID,
+  recordingJournalSink,
   USER_MESSAGE
 } from './claude-structured-session-test-support'
 
@@ -39,6 +44,43 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
       message: { role: 'user', content: [{ type: 'text', text: 'ship it' }] },
       session_id: PROVIDER_SESSION_ID
     })
+  })
+
+  it("reports compaction before a send's echo against the turn that send opens", async () => {
+    const claude = fakeClaude({ replayUuid: null })
+    const activities: (AgentSessionTurnActivity | null)[] = []
+    const adapter = adapterFor(claude)
+    await adapter.acquire({
+      identity: identityFor(),
+      fence: 7,
+      spawnToken: 'spawn-9',
+      events: { ...recordingJournalSink(), setActivity: (activity) => activities.push(activity) }
+    })
+    await adapter.dispatch({
+      sessionId: 'session-1',
+      clientMessageId: 'client-1',
+      body: USER_MESSAGE,
+      fence: 7
+    })
+    const connection = claude.connections[0]!
+    const sentUuid = String(connection.sent.at(-1)!.uuid)
+
+    claudeFrame(connection, {
+      type: 'command_lifecycle',
+      command_uuid: sentUuid,
+      state: 'started',
+      uuid: 'lifecycle-1'
+    })
+    claudeFrame(connection, {
+      type: 'system',
+      subtype: 'status',
+      status: 'compacting',
+      uuid: 'status-1'
+    })
+
+    expect(activities).toEqual([
+      { turnId: sentUuid, text: 'Compacting the conversation', beforeTurnOpens: true }
+    ])
   })
 
   it('does not put delivery in doubt while no replay uuid has arrived', async () => {

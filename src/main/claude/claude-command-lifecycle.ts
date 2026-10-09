@@ -71,6 +71,16 @@ export function claudeHoldsDispatch(session: ClaudeSession): boolean {
   return session.dispatchWaiters.some((waiter) => waiter.commandLifecycle !== undefined)
 }
 
+/** The send the CLI started and has not echoed yet; its echo opens the turn under this uuid. */
+export function claudeStartedDispatchUuid(
+  session: Pick<ClaudeSession, 'dispatchWaiters'>
+): string | null {
+  return (
+    session.dispatchWaiters.find((waiter) => waiter.commandLifecycle === 'started')?.sentUuid ??
+    null
+  )
+}
+
 /**
  * At idle, only a `started` send still unanswered is doubt: a turn that threw leaves it with no
  * terminal state. A `queued` one may still start: 2.1.280's code idles before re-reading its queue.

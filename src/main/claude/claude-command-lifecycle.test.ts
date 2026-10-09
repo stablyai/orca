@@ -16,9 +16,13 @@ import {
 } from '../native-chat/agent-session-journal/journal-dispatch-doubt-reasons'
 import { agentSessionFailureFact } from '../../shared/agent-session-failure'
 import { ClaudeControlRequestError } from './claude-agent-sdk-control-requests'
+import { claudeStartedDispatchUuid } from './claude-command-lifecycle'
 import { claudeDispatchRejection } from './claude-structured-dispatch-content'
 import { ClaudeStructuredSessionAdapter } from './claude-structured-session-adapter'
-import type { ClaudeLateDispatchOutcome } from './claude-structured-session-state'
+import type {
+  ClaudeDispatchWaiter,
+  ClaudeLateDispatchOutcome
+} from './claude-structured-session-state'
 import {
   fakeClaude,
   identityFor,
@@ -645,5 +649,29 @@ describe('the CLI reporting its session idle', () => {
     })
 
     expect(replay.idles).toEqual(['session-1'])
+  })
+})
+
+describe('the send the CLI started and has not echoed', () => {
+  const waiter = (
+    sentUuid: string,
+    commandLifecycle?: ClaudeDispatchWaiter['commandLifecycle']
+  ): ClaudeDispatchWaiter => ({
+    resolve: () => {},
+    acceptsResult: false,
+    clientMessageId: null,
+    sentUuid,
+    dispatchSequence: 1,
+    requestedAt: null,
+    replayContentKey: '',
+    ...(commandLifecycle ? { commandLifecycle } : {})
+  })
+
+  it.each([
+    ['no send', [], null],
+    ['sends it has not started', [waiter('send-1'), waiter('send-2', 'queued')], null],
+    ['a started send', [waiter('send-1', 'queued'), waiter('send-2', 'started')], 'send-2']
+  ])('is read from %s', (_name, dispatchWaiters, expected) => {
+    expect(claudeStartedDispatchUuid({ dispatchWaiters })).toBe(expected)
   })
 })

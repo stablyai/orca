@@ -15,12 +15,14 @@ import type {
 export function createClaudeSessionJournalTranslator(
   sink: StructuredAgentSessionEventSink | undefined,
   fallbackIdPrefix: string,
-  failure: Parameters<typeof createClaudeJournalFailureHandler>[0]
+  failure: Parameters<typeof createClaudeJournalFailureHandler>[0],
+  startedSendUuid: () => string | null
 ): ClaudeJournalTranslator | null {
   const { attempt } = failure
   return sink
     ? createClaudeJournalTranslator({
         sink,
+        startedSendUuid,
         account: () => attempt.account,
         fallbackIdPrefix,
         onBackgroundTaskJournalFailure: createClaudeJournalFailureHandler(failure),
