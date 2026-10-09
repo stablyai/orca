@@ -99,6 +99,7 @@ describe('setActiveWorktree', () => {
     expect(worktree.lastActivityAt).toBe(lastActivityAt)
     expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
       worktreeId,
+      executionHostId: 'local',
       updates: { isUnread: false }
     })
   })
