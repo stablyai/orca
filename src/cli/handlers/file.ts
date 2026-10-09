@@ -8,6 +8,7 @@ import { getOptionalStringFlag, getRequiredStringFlag } from '../flags'
 import { printResult } from '../format'
 import { RuntimeClientError } from '../runtime-client'
 import { getOptionalWorktreeSelector, resolveCurrentWorktreeSelector } from '../selectors'
+import { getFileOpenPosition } from './file-open-position'
 
 type FileOpenMode = 'edit' | 'diff'
 type OpenChangedMode = FileOpenMode | 'both'
@@ -213,12 +214,14 @@ function formatFileDiff(result: RuntimeFileOpenResult): string {
 export const FILE_HANDLERS: Record<string, CommandHandler> = {
   'file open': async (ctx) => {
     const path = getRequiredStringFlag(ctx.flags, 'path')
+    const position = getFileOpenPosition(ctx.flags)
     const worktree = await getFileWorktreeSelector(ctx)
     const relativePath = await resolveFilePath(ctx, worktree, path)
     const result = await ctx.client.call<RuntimeFileOpenResult>('files.open', {
       worktree,
       relativePath,
-      navigation: getFileOpenNavigation(ctx.flags)
+      navigation: getFileOpenNavigation(ctx.flags),
+      ...position
     })
     requireOpened(result.result, relativePath)
     printResult(result, ctx.json, formatFileOpen)

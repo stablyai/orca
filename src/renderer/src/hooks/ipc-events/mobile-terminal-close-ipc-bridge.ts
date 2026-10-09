@@ -4,9 +4,11 @@ import { detectLanguage } from '@/lib/language-detect'
 import { runSleepWorktree } from '@/components/sidebar/sleep-worktree-flow'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
 import { persistWorkspaceSessionByHost } from '@/lib/workspace-session-host-persistence'
+import { scheduleEditorLineReveal } from '@/store/slices/editor/focus/editor-focus-reveal'
 import { useAppStore } from '../../store'
 import type { AppState } from '../../store/types'
 import type { EditorTabSelection } from '../../store/slices/editor/types/open-file'
+import type { RuntimeFileOpenPosition } from '../../../../shared/runtime-types'
 import {
   navigationTargetsHost,
   type RuntimeNavigationTarget
@@ -33,28 +35,46 @@ function openRuntimeEditorTab(
   store.revealWorktreeInSidebar(worktreeId)
 }
 
+// Why: lands like Quick Open's `path:line`; a markdown file switches to source, where lines exist.
+function revealRuntimeFilePosition(
+  store: AppState,
+  fileId: string,
+  filePath: string,
+  language: string,
+  position: RuntimeFileOpenPosition
+): void {
+  if (language === 'markdown') {
+    store.setMarkdownViewMode(fileId, 'source')
+  }
+  scheduleEditorLineReveal(useAppStore.getState, filePath, position.line, position.column, fileId)
+}
+
 export function registerMobileAndTerminalCloseIpcBridge(
   unsubs: (() => void)[],
   requestSleepingAgentWake: (worktreeId: string) => void
 ): void {
   unsubs.push(
     window.api.ui.onOpenFileFromMobile(
-      ({ worktreeId, filePath, relativePath, runtimeEnvironmentId, navigation }) => {
+      ({ worktreeId, filePath, relativePath, runtimeEnvironmentId, navigation, position }) => {
         const basename = relativePath.split(/[\\/]/).pop() || relativePath
-        openRuntimeEditorTab(worktreeId, navigation, (store, selection) =>
+        const language = detectLanguage(basename)
+        openRuntimeEditorTab(worktreeId, navigation, (store, selection) => {
           // Why: renderer owns tab creation so grouped order and markdown bridges share the desktop File Explorer's store path.
-          store.openFile(
+          const fileId = store.openFile(
             {
               filePath,
               relativePath,
               worktreeId,
-              language: detectLanguage(basename),
+              language,
               runtimeEnvironmentId,
               mode: 'edit'
             },
             { selection }
           )
-        )
+          if (position) {
+            revealRuntimeFilePosition(store, fileId, filePath, language, position)
+          }
+        })
       }
     )
   )

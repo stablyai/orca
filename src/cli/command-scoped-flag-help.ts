@@ -26,7 +26,9 @@ const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
     yes: '--yes                  Confirm stopping the server and unlinking it from this machine'
   },
   'file open': {
-    focus: FILE_OPEN_FOCUS_HELP
+    focus: FILE_OPEN_FOCUS_HELP,
+    line: '--line <n>             Put the cursor on this line (1-based)',
+    column: '--column <n>           Put the cursor on this column of --line (1-based)'
   },
   'file diff': {
     focus: FILE_OPEN_FOCUS_HELP

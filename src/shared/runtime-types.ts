@@ -83,6 +83,7 @@ export type {
 export type {
   RuntimeFileListEntry,
   RuntimeFileListResult,
+  RuntimeFileOpenPosition,
   RuntimeFileOpenResult,
   RuntimeFilePreviewResult,
   RuntimeFileReadChunkResult,

@@ -6,15 +6,18 @@ export const FILE_COMMAND_SPECS: CommandSpec[] = [
     path: ['file', 'open'],
     summary:
       'Open a file as a tab in its worktree without changing your view; --focus brings you to it',
-    usage: 'orca file open <path> [--worktree <selector>] [--focus] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'path', 'worktree', 'focus'],
+    usage:
+      'orca file open <path> [--line <n> [--column <n>]] [--worktree <selector>] [--focus] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'path', 'line', 'column', 'worktree', 'focus'],
     positionalArgs: ['path'],
     notes: [
       'The file opens as a tab in that worktree without changing what you are looking at, even in the worktree on screen. --focus brings you to it; agents should pass --focus only when the user asked to see the file.',
-      'The path may be relative to the selected worktree or an absolute path inside that worktree. When --worktree is omitted, local CLI calls infer the current Orca worktree from cwd.'
+      'The path may be relative to the selected worktree or an absolute path inside that worktree. When --worktree is omitted, local CLI calls infer the current Orca worktree from cwd.',
+      '--line and --column are 1-based, as in path:line:column, and put the cursor there; a Markdown file opens in source view. An Orca app older than these flags opens the file at the top.'
     ],
     examples: [
       'orca file open src/App.tsx',
+      'orca file open src/App.tsx --line 42 --column 7 --focus',
       'orca file open --path docs/readme.md --worktree active --focus'
     ]
   },

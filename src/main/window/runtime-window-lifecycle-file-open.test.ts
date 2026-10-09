@@ -84,4 +84,18 @@ describe('runtime window file-open notifications', () => {
       expect.objectContaining({ navigation: 'caller' })
     )
   })
+
+  it('forwards a cursor position, and sends none when the caller asked for none', () => {
+    const { notifier, send } = attachNotifier()
+
+    notifier.openFile?.('wt-1', '/repo/a.ts', 'a.ts', undefined, 'all', { line: 12, column: 5 })
+    notifier.openFile?.('wt-1', '/repo/b.ts', 'b.ts', undefined, 'all')
+
+    expect(send).toHaveBeenNthCalledWith(
+      1,
+      'ui:openFileFromMobile',
+      expect.objectContaining({ relativePath: 'a.ts', position: { line: 12, column: 5 } })
+    )
+    expect(send.mock.calls[1]?.[1]).not.toHaveProperty('position')
+  })
 })

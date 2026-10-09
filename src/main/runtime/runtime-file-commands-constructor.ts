@@ -14,7 +14,11 @@ import {
   isSafeMobileRelativePath
 } from './runtime-file-command-host'
 import { basenameFromRelativePath } from './runtime-file-paths'
-import type { RuntimeFileListResult, RuntimeFileOpenResult } from '../../shared/runtime-types'
+import type {
+  RuntimeFileListResult,
+  RuntimeFileOpenPosition,
+  RuntimeFileOpenResult
+} from '../../shared/runtime-types'
 import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
 import { listQuickOpenFiles } from '../ipc/filesystem-list-files'
 import {
@@ -192,7 +196,8 @@ export class RuntimeFileCommandsWithConstructor extends RuntimeFileCommandsWithA
   async openMobileFile(
     worktreeSelector: string,
     relativePath: string,
-    navigation?: RuntimeNavigationTarget
+    navigation?: RuntimeNavigationTarget,
+    position?: RuntimeFileOpenPosition
   ): Promise<RuntimeFileOpenResult> {
     const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
     const { worktree } = target
@@ -211,7 +216,7 @@ export class RuntimeFileCommandsWithConstructor extends RuntimeFileCommandsWithA
     // Why: CLI/agents treat opened:true as success; stat first so missing paths and directories fail the RPC instead of opening a ghost tab.
     await this.assertOpenTargetIsFile(filePath, target)
     // Why: the internal runtimeId isn't a valid env selector; pass undefined so openFile falls back to activeRuntimeEnvironmentId.
-    this.host.openFile(worktree.id, filePath, relativePath, undefined, navigation)
+    this.host.openFile(worktree.id, filePath, relativePath, undefined, navigation, position)
     return { worktree: worktree.id, relativePath, kind, opened: true }
   }
 

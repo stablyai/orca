@@ -173,11 +173,12 @@ For long output, use cursor reads. Save `nextCursor` from one stream read, then 
 
 ```bash
 orca file open src/App.tsx --worktree active --json
+orca file open src/App.tsx --line 42 --column 7 --worktree active --json
 orca file diff src/App.tsx --staged --worktree active --json
 orca file open-changed --mode both --worktree active --json
 ```
 
-Paths are relative to the selected worktree. `open-changed` reads git status and opens changed files in edit, diff, or both modes. Tabs open without changing what you are looking at; pass `--focus` to be brought to them.
+Paths are relative to the selected worktree. `--line` and `--column` (1-based) put the cursor at that spot when the file opens. `open-changed` reads git status and opens changed files in edit, diff, or both modes. Tabs open without changing what you are looking at; pass `--focus` to be brought to them.
 
 ## Built-in browser
 

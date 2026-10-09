@@ -27,6 +27,7 @@ import type {
 } from '../../shared/agent-session-resume'
 import type { TerminalPaneSplitSource } from '../../shared/feature-education-telemetry'
 import type {
+  RuntimeFileOpenPosition,
   RuntimeMobileSessionTabMove,
   RuntimeTerminalCreateRequestPayload,
   RuntimeTerminalPresentation
@@ -234,6 +235,7 @@ export type UiCommandEventApi = {
       relativePath: string
       runtimeEnvironmentId?: string
       navigation?: RuntimeNavigationTarget
+      position?: RuntimeFileOpenPosition
     }) => void
   ) => () => void
   onOpenDiffFromMobile: (

@@ -46,11 +46,17 @@ export const ResolveTerminalPath = WorktreeSelector.extend({
 })
 
 // Why: absent `navigation` (phones, older CLIs) keeps the original host switch; 'caller'/'clients' open without moving it.
-export const FileOpenTab = FileOpen.extend({
+const FileOpenTarget = FileOpen.extend({
   navigation: z.enum(RUNTIME_NAVIGATION_TARGETS).optional()
 })
 
-export const FileOpenDiff = FileOpenTab.extend({
+// Why: 1-based like `path:line:column`; an older host strips both and opens at the top instead of failing.
+export const FileOpenTab = FileOpenTarget.extend({
+  line: z.number().int().positive().optional(),
+  column: z.number().int().positive().optional()
+})
+
+export const FileOpenDiff = FileOpenTarget.extend({
   staged: z.boolean().optional()
 })
 

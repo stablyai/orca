@@ -60,6 +60,47 @@ describe('file open RPC navigation', () => {
     expect(runtime.openMobileDiff).toHaveBeenCalledWith('id:wt-1', 'a.ts', true, undefined)
   })
 
+  it('passes a line and column through as the cursor position', async () => {
+    const { runtime, dispatcher } = createDispatcher()
+
+    await dispatcher.dispatch(
+      makeRequest('files.open', { worktree: 'id:wt-1', relativePath: 'a.ts', line: 12, column: 5 })
+    )
+    await dispatcher.dispatch(
+      makeRequest('files.open', { worktree: 'id:wt-1', relativePath: 'b.ts', line: 3 })
+    )
+
+    expect(runtime.openMobileFile).toHaveBeenNthCalledWith(1, 'id:wt-1', 'a.ts', undefined, {
+      line: 12,
+      column: 5
+    })
+    expect(runtime.openMobileFile).toHaveBeenNthCalledWith(2, 'id:wt-1', 'b.ts', undefined, {
+      line: 3,
+      column: undefined
+    })
+  })
+
+  it('ignores a column that arrives without a line', async () => {
+    const { runtime, dispatcher } = createDispatcher()
+
+    await dispatcher.dispatch(
+      makeRequest('files.open', { worktree: 'id:wt-1', relativePath: 'a.ts', column: 5 })
+    )
+
+    expect(runtime.openMobileFile).toHaveBeenCalledWith('id:wt-1', 'a.ts', undefined)
+  })
+
+  it.each([0, -1, 1.5, '12'])('rejects %j as a line', async (line) => {
+    const { runtime, dispatcher } = createDispatcher()
+
+    const response = await dispatcher.dispatch(
+      makeRequest('files.open', { worktree: 'id:wt-1', relativePath: 'a.ts', line })
+    )
+
+    expect(response).toMatchObject({ ok: false })
+    expect(runtime.openMobileFile).not.toHaveBeenCalled()
+  })
+
   it('rejects an unknown navigation target on file opens', async () => {
     const { runtime, dispatcher } = createDispatcher()
 

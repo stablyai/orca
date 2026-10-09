@@ -43,6 +43,7 @@ type OpenFilePayload = {
   relativePath: string
   runtimeEnvironmentId?: string
   navigation?: RuntimeNavigationTarget
+  position?: { line: number; column?: number }
 }
 type OpenDiffPayload = OpenFilePayload & { staged: boolean }
 type TestStore = ReturnType<typeof createTestStore>
@@ -400,5 +401,83 @@ describe('runtime file opens on the host desktop', () => {
     expect(state.activeWorktreeId).toBe(BACKGROUND)
     expect(state.openFiles.find((file) => file.id === state.activeFileId)?.mode).toBe('diff')
     expect(state.pendingRevealWorktree?.worktreeId).toBe(BACKGROUND)
+  })
+})
+
+describe('runtime file opens at a cursor position', () => {
+  const frames: FrameRequestCallback[] = []
+
+  function flushFrames(): void {
+    while (frames.length > 0) {
+      frames.shift()?.(0)
+    }
+  }
+
+  beforeEach(() => {
+    frames.length = 0
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) =>
+      frames.push(callback)
+    )
+  })
+
+  it('puts the cursor where the caller asked once the editor can take it', () => {
+    const { openFile, store } = setup('editor')
+
+    openFile({
+      worktreeId: VIEWED,
+      ...VIEWED_APP_TS,
+      navigation: 'all',
+      position: { line: 12, column: 5 }
+    })
+    // Why: the reveal waits for Monaco to remount on the new tab, as Quick Open's does.
+    expect(store.getState().pendingEditorReveal).toBeNull()
+    flushFrames()
+
+    expect(store.getState().pendingEditorReveal).toEqual({
+      filePath: VIEWED_APP_TS.filePath,
+      fileId: VIEWED_APP_TS.filePath,
+      line: 12,
+      column: 5,
+      matchLength: 0
+    })
+  })
+
+  it('starts a line without a column at its first character', () => {
+    const { openFile, store } = setup('editor')
+
+    openFile({ worktreeId: VIEWED, ...VIEWED_APP_TS, navigation: 'all', position: { line: 3 } })
+    flushFrames()
+
+    expect(store.getState().pendingEditorReveal).toMatchObject({ line: 3, column: 1 })
+  })
+
+  it('opens a markdown file in source view, where its lines exist', () => {
+    const { openFile, store } = setup('terminal')
+
+    openFile({
+      worktreeId: BACKGROUND,
+      filePath: '/repo1/background/docs/guide.md',
+      relativePath: 'docs/guide.md',
+      navigation: 'all',
+      position: { line: 8 }
+    })
+    flushFrames()
+
+    const state = store.getState()
+    expect(state.markdownViewMode['/repo1/background/docs/guide.md']).toBe('source')
+    expect(state.pendingEditorReveal).toMatchObject({
+      filePath: '/repo1/background/docs/guide.md',
+      line: 8
+    })
+  })
+
+  it('keeps the cursor where it was when the caller sent no position', () => {
+    const { openFile, store } = setup('editor')
+
+    openFile({ worktreeId: VIEWED, ...VIEWED_APP_TS, navigation: 'all' })
+    flushFrames()
+
+    expect(store.getState().pendingEditorReveal).toBeNull()
+    expect(store.getState().markdownViewMode[VIEWED_APP_TS.filePath]).toBeUndefined()
   })
 })

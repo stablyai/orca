@@ -164,6 +164,53 @@ describe('orca file CLI handlers', () => {
     process.exitCode = undefined
   })
 
+  it('asks for the cursor at --line and --column', async () => {
+    const opened = { worktree: 'wt-1', relativePath: 'src/App.tsx', kind: 'text', opened: true }
+    queueFixtures(callMock, okFixture('req_open', opened), okFixture('req_open_line', opened))
+
+    await main(
+      ['file', 'open', 'src/App.tsx', '--worktree', 'id:wt-1', '--line', '42', '--column', '7'],
+      '/tmp/elsewhere'
+    )
+    await main(
+      ['file', 'open', 'src/App.tsx', '--worktree', 'id:wt-1', '--line', '3'],
+      '/tmp/elsewhere'
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(1, 'files.open', {
+      worktree: 'id:wt-1',
+      relativePath: 'src/App.tsx',
+      navigation: 'caller',
+      line: 42,
+      column: 7
+    })
+    expect(callMock).toHaveBeenNthCalledWith(2, 'files.open', {
+      worktree: 'id:wt-1',
+      relativePath: 'src/App.tsx',
+      navigation: 'caller',
+      line: 3
+    })
+  })
+
+  it.each([
+    [['--column', '7'], '--column needs --line.'],
+    [['--line='], 'Missing value for --line.'],
+    [['--line', '2', '--column='], 'Missing value for --column.'],
+    [['--line', '0'], 'Invalid positive integer for --line'],
+    [['--line', '4.5'], 'Invalid positive integer for --line'],
+    [['--line', '2', '--column', 'x'], '--column']
+  ])('refuses %j before any RPC call', async (flags, message) => {
+    const priorExitCode = process.exitCode
+
+    await main(['file', 'open', 'src/App.tsx', '--worktree', 'id:wt-1', ...flags], '/tmp/elsewhere')
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect(vi.mocked(console.error).mock.calls[0][0]).toContain(message)
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
   it('rejects --worktree without a value before cwd inference or RPC calls', async () => {
     const priorExitCode = process.exitCode
 

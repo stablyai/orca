@@ -121,6 +121,7 @@ describe('RuntimeFileCommands', () => {
       '/repo/docs/readme.md',
       'docs/readme.md',
       undefined,
+      undefined,
       undefined
     )
     expect(result).toEqual({
@@ -144,6 +145,7 @@ describe('RuntimeFileCommands', () => {
       '/repo/assets/logo.png',
       'assets/logo.png',
       undefined,
+      undefined,
       undefined
     )
     expect(result).toEqual({
@@ -152,6 +154,24 @@ describe('RuntimeFileCommands', () => {
       kind: 'image',
       opened: true
     })
+  })
+
+  it('passes the cursor position to the renderer host', async () => {
+    const openFile = vi.fn()
+    const { commands } = createRuntimeFileCommands({ openFile, openDiff: vi.fn() })
+    resolveAuthorizedPathMock.mockResolvedValue('/repo/src/app.ts')
+    statMock.mockResolvedValue({ isDirectory: () => false })
+
+    await commands.openMobileFile('id:wt-1', 'src/app.ts', 'all', { line: 12, column: 5 })
+
+    expect(openFile).toHaveBeenCalledWith(
+      'wt-1',
+      '/repo/src/app.ts',
+      'src/app.ts',
+      undefined,
+      'all',
+      { line: 12, column: 5 }
+    )
   })
 
   it('passes the caller navigation target to the renderer host', async () => {
@@ -169,7 +189,8 @@ describe('RuntimeFileCommands', () => {
       '/repo/docs/readme.md',
       'docs/readme.md',
       undefined,
-      'all'
+      'all',
+      undefined
     )
     expect(openDiff).toHaveBeenCalledWith(
       'wt-1',
@@ -195,6 +216,7 @@ describe('RuntimeFileCommands', () => {
         'wt-1',
         `/repo/${relativePath}`,
         relativePath,
+        undefined,
         undefined,
         undefined
       )

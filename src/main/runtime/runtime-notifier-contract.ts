@@ -17,6 +17,7 @@ import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import type {
   RuntimeBrowserDriverState,
+  RuntimeFileOpenPosition,
   RuntimeMarkdownReadTabResult,
   RuntimeMarkdownSaveTabResult,
   RuntimeMobileSessionTabMove,
@@ -119,7 +120,8 @@ export type RuntimeNotifier = {
     filePath: string,
     relativePath: string,
     runtimeEnvironmentId?: string | null,
-    navigation?: RuntimeNavigationTarget
+    navigation?: RuntimeNavigationTarget,
+    position?: RuntimeFileOpenPosition
   ): void
   openDiff?(
     worktreeId: string,

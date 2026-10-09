@@ -13,6 +13,7 @@ import type {
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
 import type {
+  RuntimeFileOpenPosition,
   RuntimeMobileSessionTabMove,
   RuntimeTerminalCreateRequestPayload,
   RuntimeTerminalPresentation
@@ -229,6 +230,7 @@ export const uiTerminalAndSessionTabsApi = {
       relativePath: string
       runtimeEnvironmentId?: string
       navigation?: RuntimeNavigationTarget
+      position?: RuntimeFileOpenPosition
     }) => void
   ): (() => void) => {
     const listener = (
@@ -239,6 +241,7 @@ export const uiTerminalAndSessionTabsApi = {
         relativePath: string
         runtimeEnvironmentId?: string
         navigation?: RuntimeNavigationTarget
+        position?: RuntimeFileOpenPosition
       }
     ) => callback(data)
     ipcRenderer.on('ui:openFileFromMobile', listener)

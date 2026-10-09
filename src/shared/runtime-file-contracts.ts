@@ -22,6 +22,12 @@ export type RuntimeFileOpenResult = {
   opened: boolean
 }
 
+/** 1-based cursor target for a file open, as in a `path:line:column` reference. */
+export type RuntimeFileOpenPosition = {
+  line: number
+  column?: number
+}
+
 export type RuntimeFileReadResult = {
   worktree: string
   relativePath: string
