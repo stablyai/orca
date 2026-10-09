@@ -71,12 +71,24 @@ async function getResolvedHostId(
 // Why: the setup paths keep the unresolved id on purpose. The runtime rejects every `ssh:` host
 // for those operations regardless of whether it exists, so resolving first would answer "no such
 // target" and imply the command would have worked with the right id.
-function getRequiredHostId(flags: Map<string, string | boolean>): ExecutionHostId {
+async function getRequiredHostId(
+  flags: Map<string, string | boolean>,
+  client: HandlerContext['client']
+): Promise<ExecutionHostId> {
   const host = parseHostFlag(flags)
   if (!host) {
     throw new RuntimeClientError('invalid_argument', 'Missing required --host')
   }
-  return host.id
+  if (host.kind !== 'alias') {
+    return host.id
+  }
+  // A bare alias has no unresolved spelling to forward — naming the machine is the lookup — so
+  // this one case resolves even on the paths that otherwise pass the id through untouched.
+  const resolved = await resolveHostFlagTarget(flags, client)
+  if (!resolved) {
+    throw new RuntimeClientError('invalid_argument', 'Missing required --host')
+  }
+  return resolved.id
 }
 
 function getOptionalRepoKind(flags: Map<string, string | boolean>): RepoKind | undefined {
@@ -111,7 +123,7 @@ export const PROJECT_HANDLERS: Record<string, CommandHandler> = {
   },
   'project setup-existing-folder': async ({ flags, client, cwd, json }) => {
     const rawPath = getRequiredStringFlag(flags, 'path')
-    const hostId = getRequiredHostId(flags)
+    const hostId = await getRequiredHostId(flags, client)
     // An SSH host's filesystem is not the CLI's, so resolving a relative path against the client
     // cwd would register a path that names the wrong machine.
     const pathIsOffClient = client.isRemote || getSshTargetIdForExecutionHost(hostId) !== null
@@ -133,7 +145,7 @@ export const PROJECT_HANDLERS: Record<string, CommandHandler> = {
     const rawDestination = getRequiredStringFlag(flags, 'destination')
     const args: ProjectHostSetupCloneArgs = {
       projectId: getRequiredStringFlag(flags, 'project'),
-      hostId: getRequiredHostId(flags),
+      hostId: await getRequiredHostId(flags, client),
       url: getRequiredStringFlag(flags, 'url'),
       destination: resolveRepoPathArgument(
         rawDestination,
