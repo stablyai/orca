@@ -30,10 +30,14 @@ import { translate } from '@/i18n/i18n'
 import { getRepoHostIdentity } from '@/store/slices/repo-host-identity'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { useWorktreeById } from '@/store/selectors'
+import type { Repo } from '../../../../shared/repo-types'
+import { getProjectHostSetupForRepo } from '../../../../shared/project-host-setup-lookup'
+import { getProjectHostSetupOwnerKey } from '@/store/projects/project-compatibility-core'
 
 function SetupScriptPromptCard(): React.JSX.Element | null {
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
   const repos = useAppStore((s) => s.repos)
+  const projectHostSetups = useAppStore((s) => s.projectHostSetups)
   const activeRepoId = useAppStore((s) => s.activeRepoId)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const activeWorktree = useWorktreeById(activeWorktreeId)
@@ -100,15 +104,16 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
   }, [activeRepo, inspectionRetryKey, isDismissed, settings, sidebarOpen])
 
   const openLocalCommandSettings = useCallback(
-    (repoId: string, hostId: ReturnType<typeof getRepoExecutionHostId>) =>
+    (repo: Repo) =>
       openSetupScriptSettings({
-        repoId,
-        hostId,
+        repoId: repo.id,
+        hostId: getRepoExecutionHostId(repo),
+        setupId: getProjectHostSetupOwnerKey(getProjectHostSetupForRepo(projectHostSetups, repo)),
         setSettingsSearchQuery,
         openSettingsTarget,
         openSettingsPage
       }),
-    [openSettingsPage, openSettingsTarget, setSettingsSearchQuery]
+    [openSettingsPage, openSettingsTarget, projectHostSetups, setSettingsSearchQuery]
   )
 
   const handleRetryInspection = useCallback(() => {
@@ -164,7 +169,7 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
         })
       )
     }
-    openLocalCommandSettings(activeRepo.id, getRepoExecutionHostId(activeRepo))
+    openLocalCommandSettings(activeRepo)
   }, [activeRepo, activeRepoHostIdentity, openLocalCommandSettings, promptState])
 
   const handleDismiss = useCallback(() => {
@@ -203,7 +208,6 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
       const importedHostId = getRepoExecutionHostId(activeRepo)
       setImportingRepoHostIdentity(importedRepoHostIdentity)
       try {
-        const importedRepoId = activeRepo.id
         const nextSettings = buildImportedHookSettings(activeRepo, candidate, hasSharedHooks)
         const didUpdate = await updateRepo(
           activeRepo.id,
@@ -251,7 +255,7 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
               markSetupScriptPromptSaved(current, importedRepoHostIdentity)
             )
             showSavedInProjectSettingsToast({
-              onOpenSettings: () => openLocalCommandSettings(importedRepoId, importedHostId),
+              onOpenSettings: () => openLocalCommandSettings(activeRepo),
               description: translate(
                 'auto.components.sidebar.SetupScriptPromptCard.a49196d538',
                 'Runs when Orca creates a new worktree.'
@@ -264,7 +268,7 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
           setPromptState((current) => markSetupScriptPromptSaved(current, importedRepoHostIdentity))
           const skippedCount = candidate.unsupportedFields?.length ?? 0
           showSavedInProjectSettingsToast({
-            onOpenSettings: () => openLocalCommandSettings(importedRepoId, importedHostId),
+            onOpenSettings: () => openLocalCommandSettings(activeRepo),
             description:
               skippedCount > 0
                 ? `${skippedCount} unsupported field${skippedCount === 1 ? '' : 's'} skipped. Saved the setup command.`
