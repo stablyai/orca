@@ -48,17 +48,24 @@ describe('RuntimeProjectGroupController.deleteFolderWorkspace', () => {
     expect(deps.notifyReposChanged).toHaveBeenCalledTimes(1)
   })
 
-  it('still deletes when the folder host is ambiguous, skipping only the PTY sweep', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    const deps = createController(() => {
-      throw new Error('folder_workspace_connection_ambiguous')
-    })
+  it('sweeps PTYs on the recorded host when the folder host inference is ambiguous', async () => {
+    // Ambiguity now resolves to the record authority instead of throwing, so the
+    // sweep targets the host the workspace was actually recorded on.
+    const deps = createController(() => 'ssh-recorded')
 
     await expect(deps.controller.deleteFolderWorkspace('ws-1')).resolves.toEqual({ deleted: true })
 
-    expect(deps.teardownFolderWorkspacePtys).not.toHaveBeenCalled()
+    expect(deps.teardownFolderWorkspacePtys).toHaveBeenCalledWith('folder:ws-1', 'ssh-recorded')
     expect(deps.cleanupRemovedFolderWorkspaceState).toHaveBeenCalledWith('folder:ws-1')
     expect(deps.removeFolderWorkspace).toHaveBeenCalledWith('ws-1')
-    warn.mockRestore()
+  })
+
+  it('sweeps local PTYs when an ambiguous workspace has no recorded connection', async () => {
+    const deps = createController(() => null)
+
+    await expect(deps.controller.deleteFolderWorkspace('ws-1')).resolves.toEqual({ deleted: true })
+
+    expect(deps.teardownFolderWorkspacePtys).toHaveBeenCalledWith('folder:ws-1', null)
+    expect(deps.removeFolderWorkspace).toHaveBeenCalledWith('ws-1')
   })
 })
