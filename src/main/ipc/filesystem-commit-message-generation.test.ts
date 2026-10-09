@@ -393,7 +393,7 @@ describe('registerFilesystemHandlers', () => {
 
   it('prepares the selected Claude auth environment before local generation', async () => {
     const previousAnthropicApiKey = process.env.ANTHROPIC_API_KEY
-    process.env.ANTHROPIC_API_KEY = 'do-not-leak-managed-auth-conflict'
+    process.env.ANTHROPIC_API_KEY = 'shell-proxy-key'
     const context = {
       branch: 'feature/ai',
       stagedSummary: 'M\tREADME.md',
@@ -412,7 +412,6 @@ describe('registerFilesystemHandlers', () => {
         prepareForClaudeLaunch: async () => ({
           configDir: '/managed/claude',
           envPatch: { CLAUDE_CONFIG_DIR: '/managed/claude' },
-          stripAuthEnv: true,
           provenance: 'managed:account-1'
         })
       })
@@ -429,7 +428,8 @@ describe('registerFilesystemHandlers', () => {
           CLAUDE_CONFIG_DIR: '/managed/claude'
         })
       )
-      expect(target?.env?.ANTHROPIC_API_KEY).toBeUndefined()
+      // The shell's own key stays with the account, as on System default.
+      expect(target?.env?.ANTHROPIC_API_KEY).toBe('shell-proxy-key')
     } finally {
       if (previousAnthropicApiKey === undefined) {
         delete process.env.ANTHROPIC_API_KEY
@@ -461,7 +461,6 @@ describe('registerFilesystemHandlers', () => {
         prepareForClaudeLaunch: async () => ({
           configDir: '/home/me/.claude',
           envPatch: {},
-          stripAuthEnv: false,
           provenance: 'system'
         })
       })

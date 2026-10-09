@@ -4,7 +4,13 @@ import {
   buildWindowsHostInteractiveLoginSpawn,
   type WindowsHostInteractiveLoginSpawn
 } from '../../shared/windows-interactive-login-spawn'
+import {
+  buildWslExecArgs,
+  buildWslLoginShellCommand,
+  quotePosixShell
+} from '../../shared/wsl-login-shell-command'
 import { resolveClaudeCommand } from '../codex-cli/command'
+import { resolveWslExecutablePath } from '../wsl/wsl-executable-path'
 import { buildWindowsCommandInvocation } from './windows-command-invocation'
 import { terminateClaudeProcess } from './claude-login-process-termination'
 
@@ -19,13 +25,8 @@ export type ClaudeCommandConfig = {
 }
 
 export type ClaudeCommandOptions = {
-  allowFailure?: boolean
   signal?: AbortSignal
   keepStdinOpen?: boolean
-}
-
-function shellQuote(value: string): string {
-  return `'${value.replace(/'/g, "'\\''")}'`
 }
 
 export function runClaudeCommandProcess(
@@ -149,7 +150,7 @@ export function runClaudeCommandProcess(
         return
       }
       settle(() => {
-        if (code === 0 || options?.allowFailure) {
+        if (code === 0) {
           resolvePromise(output)
           return
         }
@@ -188,12 +189,9 @@ type ClaudeSpawnConfig = {
   windowsVerbatimArguments: boolean
 }
 
+// Why only this variable: account terminals set just CLAUDE_CONFIG_DIR, so Claude keys the login the same way.
 function claudeConfigDirEnv(configDir: string): NodeJS.ProcessEnv {
-  return {
-    CLAUDE_CONFIG_DIR: configDir,
-    // Why: Claude Code 2.1.220+ hashes this for the Keychain service name.
-    CLAUDE_SECURESTORAGE_CONFIG_DIR: configDir
-  }
+  return { CLAUDE_CONFIG_DIR: configDir }
 }
 
 function resolveClaudeInvocation(
@@ -214,15 +212,15 @@ function resolveClaudeInvocation(
       }
     : configDir.linuxPath && configDir.wslDistro
       ? {
-          command: 'wsl.exe',
-          args: [
-            '-d',
-            configDir.wslDistro,
-            '--exec',
-            'bash',
-            '-lc',
-            `export CLAUDE_CONFIG_DIR=${shellQuote(configDir.linuxPath)}; export CLAUDE_SECURESTORAGE_CONFIG_DIR=${shellQuote(configDir.linuxPath)}; exec claude ${args.map(shellQuote).join(' ')}`
-          ],
+          // Same login as the CLI's WSL sign-in: the distro's login shell finds an nvm/mise claude.
+          command: resolveWslExecutablePath(),
+          args: buildWslExecArgs(configDir.wslDistro, [
+            '/bin/sh',
+            '-c',
+            buildWslLoginShellCommand(
+              `exec env CLAUDE_CONFIG_DIR=${quotePosixShell(configDir.linuxPath)} claude ${args.map(quotePosixShell).join(' ')}`
+            )
+          ]),
           env: process.env,
           windowsVerbatimArguments: false
         }

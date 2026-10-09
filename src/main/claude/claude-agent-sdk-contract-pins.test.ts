@@ -150,7 +150,7 @@ function resolvedLaunch(permissionMode: PermissionMode, launchArgs: string[] = [
     store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
     resolveWorkspacePath: async () => '/repos/workspace-1',
     resolveCommand: () => FAKE_CLI,
-    resolveAuthPolicy: () => ({ stripAuthEnv: true }),
+    resolveAuthPolicy: () => ({ account: 'managed' }),
     resolvePermissionMode: () => permissionMode
   })({ identity: { sessionId: record.sessionId } as never })
 }
