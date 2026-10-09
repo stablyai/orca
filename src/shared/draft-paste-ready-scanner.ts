@@ -1,3 +1,4 @@
+import { BOB_COMPOSER_PLACEHOLDER_PREFIX } from './bob-composer-placeholder'
 import type { DraftPasteReadySignal, TuiAgentConfig } from './tui-agent-config'
 import { createOpenCodeAgentRowScanner } from './opencode-agent-row-scanner'
 import { createCodexComposerReadyScanner } from './codex-composer-ready-scanner'
@@ -96,6 +97,14 @@ const DRAFT_PASTE_READY_SIGNALS: Record<SingleSignal, DraftPasteReadySignalSpec>
     // its own — but keep it armed as the floor for a build that renders inline and never
     // switches to the alternate screen, where the marker anchor would never arm.
     quietAnchor: DECSET_BRACKETED_PASTE
+  },
+  // Why: Bob emits neither bracketed-paste nor alternate-screen bytes before first input,
+  // so its capture-proven, shell-specific composer prefix must stand on its own.
+  'bob-composer-prompt': {
+    markerAnchor: null,
+    markerAnchorEnd: null,
+    marker: BOB_COMPOSER_PLACEHOLDER_PREFIX,
+    quietAnchor: null
   },
   'render-quiet-after-bracketed-paste': {
     markerAnchor: null,
@@ -272,7 +281,11 @@ function createSingleSignalScanner(readySignal: SingleSignal): {
       if (!sawQuietAnchor && quietAnchor !== null && combined.includes(quietAnchor)) {
         sawQuietAnchor = true
       }
-      if (signalMarker !== null && markerAnchor !== null) {
+      if (signalMarker !== null && markerAnchor === null) {
+        if (combined.includes(signalMarker)) {
+          return { ready: true, armQuietTimer: false }
+        }
+      } else if (signalMarker !== null && markerAnchor !== null) {
         if (markerAnchorEnd !== null) {
           // Why: carry only the bytes an anchor could straddle, so already-scanned
           // output is never re-walked into a second enter/leave transition.
