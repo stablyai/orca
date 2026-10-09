@@ -542,7 +542,10 @@ describe('restored editor owner reparent', () => {
         onFsChanged: vi.fn(() => vi.fn())
       }
     }
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     const oldId = openRestoredSource()
+    // Why: the destination is a background worktree, which stays watched only while it holds a draft.
+    useAppStore.getState().markFileDirty(oldId, true)
     const container = document.body.appendChild(document.createElement('div'))
     const root = createRoot(container)
     await act(async () => root.render(createElement(WatchProbe)))
@@ -555,6 +558,8 @@ describe('restored editor owner reparent', () => {
     await act(async () => {
       expect(reparent(oldId).ok).toBe(true)
     })
+    // The dropped source watch drains (baseline stamp + settle) before it unsubscribes.
+    await act(async () => vi.advanceTimersByTimeAsync(2_000))
     await vi.waitFor(() => {
       expect(unwatchWorktree).toHaveBeenCalledTimes(1)
       expect(watchWorktree).toHaveBeenCalledTimes(2)
