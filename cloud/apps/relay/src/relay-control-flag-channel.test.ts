@@ -88,7 +88,7 @@ describe('control flag channel', () => {
     expect(google.state.authorizations[0]).toBe(`Bearer ${ACCESS_TOKEN}`)
     expect(channel.applied()).toEqual({
       generation: 5,
-      flags: { readinessLocal: true, ticketCheck: 'off' }
+      flags: { ...CELL_FLAG_DEFAULTS, readinessLocal: true }
     })
   })
 
@@ -106,7 +106,7 @@ describe('control flag channel', () => {
       {
         event: CELL_FLAGS_APPLIED_EVENT,
         generation: 5,
-        flags: { readinessLocal: true, ticketCheck: 'shadow' }
+        flags: { ...CELL_FLAG_DEFAULTS, readinessLocal: true, ticketCheck: 'shadow' }
       },
       { event: CELL_FLAGS_APPLIED_EVENT, generation: 7, flags: CELL_FLAG_DEFAULTS }
     ])
@@ -134,6 +134,20 @@ describe('control flag channel', () => {
     expect(output).not.toContain(ACCESS_TOKEN)
   })
 
+  it('applies the step-5 switches: admit mode, intake rate and enforced tickets', async () => {
+    const google = fakeGoogle(
+      cellObject(5, { admitMode: 'reserve', intakePerSec: 3.5, ticketCheck: 'enforce' })
+    )
+    const channel = cellChannel(google.fetchImpl)
+    await channel.poll()
+    expect(channel.applied().flags).toEqual({
+      ...CELL_FLAG_DEFAULTS,
+      admitMode: 'reserve',
+      intakePerSec: 3.5,
+      ticketCheck: 'enforce'
+    })
+  })
+
   it('ignores a generation below the applied one', async () => {
     const google = fakeGoogle(cellObject(9, { readinessLocal: true }))
     const channel = cellChannel(google.fetchImpl)
@@ -142,19 +156,21 @@ describe('control flag channel', () => {
     await channel.poll()
     expect(channel.applied()).toEqual({
       generation: 9,
-      flags: { readinessLocal: true, ticketCheck: 'off' }
+      flags: { ...CELL_FLAG_DEFAULTS, readinessLocal: true }
     })
   })
 
   it('ignores unknown keys but voids the object on a bad known value or another cell', async () => {
-    const google = fakeGoogle(cellObject(5, { readinessLocal: true, admitMode: 'memory' }))
+    const google = fakeGoogle(cellObject(5, { readinessLocal: true, placer: 'memory' }))
     const channel = cellChannel(google.fetchImpl)
     await channel.poll()
-    expect(channel.applied().flags).toEqual({ readinessLocal: true, ticketCheck: 'off' })
+    expect(channel.applied().flags).toEqual({ ...CELL_FLAG_DEFAULTS, readinessLocal: true })
     for (const [generation, object] of [
-      [6, cellObject(6, { readinessLocal: false, ticketCheck: 'enforce' })],
-      [7, cellObject(7, { readinessLocal: 'no' })],
-      [8, cellObject(8, { readinessLocal: false }, 'production-gce-c8')]
+      [6, cellObject(6, { readinessLocal: false, ticketCheck: 'strict' })],
+      [7, cellObject(7, { readinessLocal: false, admitMode: 'memory' })],
+      [8, cellObject(8, { readinessLocal: false, intakePerSec: -1 })],
+      [9, cellObject(9, { readinessLocal: 'no' })],
+      [10, cellObject(10, { readinessLocal: false }, 'production-gce-c8')]
     ] as const) {
       google.state.object = object
       await channel.poll()

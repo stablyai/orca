@@ -104,4 +104,22 @@ describe('cell seat cursor', () => {
     expect(parseCellSeatCursor('a:-1')).toBe('invalid')
     expect(parseCellSeatCursor('a b:1')).toBe('invalid')
   })
+
+  it('never seats a booking, and remembers leavers for ten minutes for the full snapshot', () => {
+    let now = 0
+    const log = new CellSeatLog(64, () => now)
+    const host = { userId: 'user-1', relayHostId: 'abcdefghijklmnop' }
+    log.append({ kind: 'reserve', ...host, epoch: 4, generation: 0, reservedBy: 'd1', at: now })
+    expect(log.seatCount()).toBe(0)
+    log.append({ kind: 'join', ...host, epoch: 4, generation: 1, reservedBy: 'd1', at: now })
+    expect(log.seatOf(host.userId, host.relayHostId)).toMatchObject({ epoch: 4, state: 'active' })
+    now = 1_000
+    log.append({ kind: 'leave', ...host, epoch: 4, generation: 1, closeCode: 1006, at: now })
+    expect(log.recentlyLeftOf(host.userId, host.relayHostId)).toEqual({ ...host, epoch: 4, closeCode: 1006, at: 1_000 })
+    const page = log.read(null)
+    expect('full' in page && page.recentlyLeft).toEqual([{ ...host, epoch: 4, closeCode: 1006, at: 1_000 }])
+    now = 1_000 + 10 * 60_000
+    expect(log.recentlyLeftOf(host.userId, host.relayHostId)).toBeUndefined()
+  })
 })
+

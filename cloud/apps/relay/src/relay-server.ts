@@ -9,7 +9,8 @@ import {
   RELAY_CLOSE_CODE,
   RELAY_DEFAULT_REGION,
   RELAY_PROTOCOL_LIMITS,
-  RelayAuthSchema
+  RelayAuthSchema,
+  cellPlacementCeiling
 } from '@orca-cloud/relay-contract'
 import type { IncomingMessage } from 'node:http'
 import { randomUUID } from 'node:crypto'
@@ -19,7 +20,10 @@ import { WebSocketServer } from 'ws'
 import type WebSocket from 'ws'
 import type { RawData } from 'ws'
 import { createRelayApp } from './app.js'
-import type { CellFlags } from './cell-flags.js'
+import { classifyAssignmentLease } from './assignment-lease.js'
+import { defaultIntakePerSec, type CellFlags } from './cell-flags.js'
+import { CellReserveBook } from './cell-reserve-book.js'
+import type { DemoteRequest, ReserveRequest } from './cell-reserve-contract.js'
 import { AssignmentLeaseShadow } from './assignment-lease-shadow.js'
 import { RelayAssignmentStore } from './assignment-store.js'
 import type { RelayConfig } from './config.js'
@@ -60,6 +64,8 @@ function decodePathSegment(value: string): string | null {
 // tripping it. On 10-07 every window that met both also logged SQL failures.
 export const HOST_HELLO_SHED_OLDEST_WAIT_MS = 1_000
 const HOST_HELLO_SHED_RETRY_AFTER_SECONDS = 2
+// Shipped desktops ignore it; it is for the ones that learn to read it.
+const CELL_FULL_RETRY_AFTER_SECONDS = 2
 
 function rejectUpgrade(
   socket: NodeJS.WritableStream,
@@ -165,6 +171,37 @@ export function createRelayServer(
   const shadowCompare = shadowSeatPoller
     ? new ShadowDirectoryCompare(shadowSeatPoller.directory, options.now)
     : undefined
+  const configuredConnectionLimits =
+    config.connectionHardCap === undefined
+      ? null
+      : (options.connectionLedgerLimits ?? {
+          hardCap: config.connectionHardCap,
+          controlReserve: RELAY_ADMISSION_BUDGETS.reservedHostControls
+        })
+  const connectionLedger =
+    configuredConnectionLimits === null
+      ? null
+      : new RelayConnectionLedger(
+          configuredConnectionLimits.hardCap,
+          configuredConnectionLimits.controlReserve
+        )
+  // Step 5: a booking may fill the cell only to the ceiling the directors place against.
+  const placementCeiling =
+    config.connectionHardCap === undefined || config.connectionUnobservedBound === undefined
+      ? null
+      : cellPlacementCeiling(config.connectionHardCap, config.connectionUnobservedBound)
+  const reserveBook =
+    config.role === 'cell' && connectionLedger && placementCeiling !== null
+      ? new CellReserveBook(
+          {
+            tryReserve: () => connectionLedger.tryReserveBooking(placementCeiling),
+            canReserve: () => connectionLedger.canReserveBooking(placementCeiling)
+          },
+          () =>
+            options.cellFlags?.().flags.intakePerSec ?? defaultIntakePerSec(config.region),
+          options.now
+        )
+      : null
   const queuedBytes = new ProcessQueuedByteBudget()
   const sessions = new HostSessionRegistry(
     config,
@@ -180,8 +217,24 @@ export function createRelayServer(
       enabled: () => options.cellFlags?.().flags.ticketCheck === 'shadow',
       key: config.assignmentSigningKey,
       cellId: config.cellId
-    })
+    }),
+    reserveBook
+      ? {
+          mode: () => options.cellFlags?.().flags.admitMode ?? 'db',
+          ticketEnforce: () => options.cellFlags?.().flags.ticketCheck === 'enforce',
+          book: reserveBook,
+          verifyLease: (input) =>
+            classifyAssignmentLease({
+              ...input,
+              key: config.assignmentSigningKey,
+              cellId: config.cellId
+            })
+        }
+      : undefined
   )
+  // Expired bookings give their units back even while no director is reserving.
+  const reserveSweepTimer = reserveBook ? setInterval(() => reserveBook.sweep(), 1_000) : null
+  reserveSweepTimer?.unref()
   const app = createRelayApp(config, {
     store,
     assignments,
@@ -204,6 +257,14 @@ export function createRelayServer(
     cellIncarnation,
     cellSeatFeed: (sinceSeq) => sessions.seatFeed(sinceSeq),
     cellFlags: options.cellFlags,
+    ...(reserveBook && placementCeiling !== null
+      ? {
+          cellReserve: (request: ReserveRequest) => sessions.reserve(request),
+          cellDemote: (request: DemoteRequest) => sessions.demote(request),
+          cellReserveCounts: () => sessions.reserveCounts(),
+          cellPlacementCeiling: placementCeiling
+        }
+      : {}),
     isDraining: () => sessions.isDraining(),
     runtimeCounts: () => runtimeCounts(),
     regionalRehomeSafetySnapshot: () => ({
@@ -258,20 +319,6 @@ export function createRelayServer(
   })
   let preAuthConnections = 0
   let totalConnections = 0
-  const configuredConnectionLimits =
-    config.connectionHardCap === undefined
-      ? null
-      : (options.connectionLedgerLimits ?? {
-          hardCap: config.connectionHardCap,
-          controlReserve: RELAY_ADMISSION_BUDGETS.reservedHostControls
-        })
-  const connectionLedger =
-    configuredConnectionLimits === null
-      ? null
-      : new RelayConnectionLedger(
-          configuredConnectionLimits.hardCap,
-          configuredConnectionLimits.controlReserve
-        )
   const preAuthBySource = new Map<string, number>()
   const preAuthAttemptsBySource = new Map<string, { windowStartedAt: number; count: number }>()
 
@@ -567,6 +614,11 @@ export function createRelayServer(
         userId: identity.sub,
         relayHostId: identity.relayHostId
       })
+      // Null outside reserve mode, so today's path is untouched there.
+      const reserveAdmission = sessions.reserveAdmissionFor({
+        userId: identity.sub,
+        relayHostId: identity.relayHostId
+      })
       // A hello costs several pooled queries, each failing after a 2 s wait. Shed
       // only while the pool is already timing them out: the refused desktop gets
       // the same connect error and backoff a timed-out hello gives it today, 2 s
@@ -574,6 +626,7 @@ export function createRelayServer(
       // is a lease rotation, not a reconnect, so it is never refused here.
       if (
         !isRebind &&
+        reserveAdmission === null &&
         readRelayDatabasePoolPressure(database).databasePoolWaiting >= config.databasePoolMax &&
         readRelayDatabasePoolOldestWaitMs(database) >= HOST_HELLO_SHED_OLDEST_WAIT_MS
       ) {
@@ -581,7 +634,10 @@ export function createRelayServer(
         rejectUpgrade(socket, 503, 'Service Unavailable', HOST_HELLO_SHED_RETRY_AFTER_SECONDS)
         return
       }
-      const controlUpgrade = connectionLedger?.tryReserveControl(isRebind) ?? null
+      // A booked host's unit is already counted under the placement ceiling; its upgrade may
+      // rise to the hard cap until the hello hands the booking's unit back.
+      const controlUpgrade =
+        connectionLedger?.tryReserveControl(isRebind || reserveAdmission === 'booked') ?? null
       if (
         (connectionLedger && !controlUpgrade) ||
         (!connectionLedger && totalConnections >= RELAY_ADMISSION_BUDGETS.cloudRunConcurrency)
@@ -589,7 +645,8 @@ export function createRelayServer(
         rejectUpgrade(
           socket,
           connectionLedger ? 503 : 429,
-          connectionLedger ? 'Service Unavailable' : 'Too Many Requests'
+          connectionLedger ? 'Service Unavailable' : 'Too Many Requests',
+          connectionLedger && sessions.inReserveMode() ? CELL_FULL_RETRY_AFTER_SECONDS : undefined
         )
         return
       }

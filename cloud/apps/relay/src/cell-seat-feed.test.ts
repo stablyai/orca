@@ -67,7 +67,11 @@ const SeatFeedReplySchema = z.object({
   flagsApplied: z
     .object({
       generation: z.number(),
-      flags: z.object({ readinessLocal: z.boolean(), ticketCheck: z.enum(['off', 'shadow']) })
+      flags: z.object({
+        readinessLocal: z.boolean(),
+        ticketCheck: z.enum(['off', 'shadow', 'enforce']),
+        admitMode: z.enum(['db', 'reserve'])
+      })
     })
     .optional(),
   seq: z.number(),
@@ -333,7 +337,7 @@ describe('cell seat feed', () => {
     let applied: AppliedControlFlags<CellFlags> = { generation: 0, flags: CELL_FLAG_DEFAULTS }
     const { read, app } = createCell(config(), () => applied)
     expect((await read()).flagsApplied).toEqual({ generation: 0, flags: CELL_FLAG_DEFAULTS })
-    applied = { generation: 12, flags: { readinessLocal: true, ticketCheck: 'shadow' } }
+    applied = { generation: 12, flags: { ...CELL_FLAG_DEFAULTS, readinessLocal: true, ticketCheck: 'shadow' } }
     expect((await read()).flagsApplied).toEqual(applied)
     const runtime = await app.request('/v1/admin/runtime-status', {
       method: 'POST',

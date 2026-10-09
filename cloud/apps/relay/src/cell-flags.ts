@@ -5,16 +5,32 @@ import type { ControlFlagParse } from './relay-control-flag-channel.js'
 // keys are dropped; a known key with a bad value voids the object.
 export type CellFlags = {
   readinessLocal: boolean
-  ticketCheck: 'off' | 'shadow'
+  // `enforce` admits a hello on a valid lease alone; only reserve mode reads it.
+  ticketCheck: 'off' | 'shadow' | 'enforce'
+  // Step 5: `reserve` admits booked and recently seated hosts without the database.
+  admitMode: 'db' | 'reserve'
+  // Bookings per second this cell accepts; absent means its region's default.
+  intakePerSec?: number
 }
 
-export const CELL_FLAG_DEFAULTS: CellFlags = { readinessLocal: false, ticketCheck: 'off' }
+export const CELL_FLAG_DEFAULTS: CellFlags = {
+  readinessLocal: false,
+  ticketCheck: 'off',
+  admitMode: 'db'
+}
+
+// Until E-pre measures each cell's accept rate (S3 §4.2).
+export function defaultIntakePerSec(region: string | undefined): number {
+  return region === 'asia-east2' ? 2 : 5
+}
 
 export const CELL_FLAGS_APPLIED_EVENT = 'orca_relay_cell_flags_applied'
 
 const CellFlagsSchema = z.object({
   readinessLocal: z.boolean().default(CELL_FLAG_DEFAULTS.readinessLocal),
-  ticketCheck: z.enum(['off', 'shadow']).default(CELL_FLAG_DEFAULTS.ticketCheck)
+  ticketCheck: z.enum(['off', 'shadow', 'enforce']).default(CELL_FLAG_DEFAULTS.ticketCheck),
+  admitMode: z.enum(['db', 'reserve']).default(CELL_FLAG_DEFAULTS.admitMode),
+  intakePerSec: z.number().positive().max(1_000).optional()
 })
 
 export function cellFlagObjectName(cellId: string): string {
