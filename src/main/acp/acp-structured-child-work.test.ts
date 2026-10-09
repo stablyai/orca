@@ -312,8 +312,10 @@ describe('Grok roster evidence through the existing host child store', () => {
     const childWork = acpChildWorkStatusSink()
     const hosted = await openHostRig({
       statusSink: childWork.sink,
-      script: (agent) =>
+      script: (agent) => {
         agent.on('_x.ai/subagent/cancel', (frame) => agent.fail(frame, -32601, 'Method not found'))
+        agent.on('_x.ai/task/kill', (frame) => agent.fail(frame, -32601, 'Method not found'))
+      }
     })
     cleanup.push(() => hosted.host.close(SESSION, 'user-close'))
     expect(await hosted.host.attach(CALLER, attachParams())).toMatchObject({ ok: true })
