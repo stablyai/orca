@@ -2,7 +2,6 @@
 // RPC path for the local runtime and a remote server. It holds no layout; frames go to the caller's
 // read-only cache. Unused until the switch.
 
-import { withReconnectJitter } from '../../../shared/reconnect-jitter'
 import { hasRuntimeRpcErrorCode } from '../../../shared/runtime-rpc-error-code'
 import {
   readWorkspaceLayoutStreamFrame,
@@ -10,24 +9,18 @@ import {
   type WorkspaceLayoutStreamFrame
 } from '../../../shared/workspace-layout/workspace-layout-stream-frames'
 import type { RuntimeClientTarget } from './runtime-client-target'
-import { onRuntimeEnvironmentsRetired } from './runtime-environment-revision'
 import { subscribeRuntimeRpc } from './runtime-rpc-subscribe'
 
-/**
- * `retrying`: waiting to reopen a lost stream. `refused`: this stream can never be served again
- * (the host refused it, or the server was removed or replaced), so the client stopped; a new
- * pairing needs a new subscription.
- */
+/** `retrying`: waiting to reopen a lost stream. `refused`: the host answered that it will never
+ *  serve this stream, so the client stopped. */
 export type RuntimeLayoutStreamStatus =
   | { state: 'connecting' | 'live' | 'retrying' | 'closed' }
   | { state: 'refused'; code: string }
 
 const RETRY_BASE_MS = 250
 const RETRY_MAX_MS = 5000
-// An older host without the method, a scope that denies it, or a host that no longer accepts this
-// pairing: a retry gets the same answer.
-const REFUSAL_CODES = ['method_not_found', 'forbidden', 'unauthorized'] as const
-const RETIRED: RuntimeLayoutStreamStatus = { state: 'refused', code: 'runtime_environment_retired' }
+// An older host without the method, or a caller scope denied it: a retry gets the same answer.
+const REFUSAL_CODES = ['method_not_found', 'forbidden'] as const
 
 /**
  * Opens the stream and keeps it open: after a lost stream it resubscribes, and the new snapshot
@@ -63,18 +56,8 @@ export function subscribeRuntimeLayout(
       clearTimeout(retryTimer)
       retryTimer = null
     }
-    stopRetirement()
     setStatus(status)
   }
-
-  const stopRetirement =
-    target.kind === 'environment'
-      ? onRuntimeEnvironmentsRetired((ids) => {
-          if (ids.includes(target.environmentId)) {
-            stop(RETIRED)
-          }
-        })
-      : () => {}
 
   const lose = (streamGeneration: number, error?: unknown): void => {
     if (streamGeneration !== generation) {
@@ -90,7 +73,7 @@ export function subscribeRuntimeLayout(
     }
     release()
     setStatus({ state: 'retrying' })
-    const delay = withReconnectJitter(Math.min(RETRY_BASE_MS * 2 ** failures, RETRY_MAX_MS))
+    const delay = Math.min(RETRY_BASE_MS * 2 ** failures, RETRY_MAX_MS)
     failures += 1
     retryTimer = setTimeout(() => {
       retryTimer = null
@@ -98,17 +81,9 @@ export function subscribeRuntimeLayout(
     }, delay)
   }
 
-  const receive = (
-    streamGeneration: number,
-    frame: WorkspaceLayoutStreamFrame | 'unknown' | 'malformed'
-  ): void => {
-    if (streamGeneration !== generation || frame === 'unknown') {
-      return
-    }
-    if (frame === 'malformed' || (frame.type !== 'snapshot' && state !== 'live')) {
-      // A frame the cache cannot apply, or a change before the snapshot: the cache would drift
-      // from the host, so a fresh snapshot replaces it.
-      lose(streamGeneration, new Error('Layout stream out of order or malformed'))
+  const receive = (streamGeneration: number, frame: WorkspaceLayoutStreamFrame | null): void => {
+    // Null: a newer host's frame type or an unreadable frame; neither may change the cache.
+    if (streamGeneration !== generation || !frame) {
       return
     }
     if (frame.type === 'end') {
@@ -117,6 +92,9 @@ export function subscribeRuntimeLayout(
     }
     if (frame.type === 'snapshot') {
       setStatus({ state: 'live' })
+    } else if (state !== 'live') {
+      // The host sends the snapshot first; a change before it has nothing to replace.
+      return
     } else {
       // A change after the snapshot proves the stream stays up, unlike a snapshot then a drop.
       failures = 0

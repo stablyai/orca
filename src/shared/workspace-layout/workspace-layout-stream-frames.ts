@@ -42,30 +42,25 @@ function isSnapshotEntry(value: unknown): value is WorkspaceLayoutSnapshotEntry 
   return isRecord(value) && isKey(value.key) && isPublishedWorkspaceLayout(value.layout)
 }
 
-/**
- * `unknown`: a frame type this build does not know (a newer host's), safe to skip.
- * `malformed`: a known type with the wrong shape, so the stream can no longer be trusted.
- */
-export function readWorkspaceLayoutStreamFrame(
-  value: unknown
-): WorkspaceLayoutStreamFrame | 'unknown' | 'malformed' {
-  if (!isRecord(value) || typeof value.type !== 'string') {
-    return 'malformed'
+/** Null for a malformed frame or a frame type this build does not know (a newer host's). */
+export function readWorkspaceLayoutStreamFrame(value: unknown): WorkspaceLayoutStreamFrame | null {
+  if (!isRecord(value)) {
+    return null
   }
   switch (value.type) {
     case 'snapshot':
       return Array.isArray(value.workspaces) && value.workspaces.every(isSnapshotEntry)
         ? { type: 'snapshot', workspaces: value.workspaces }
-        : 'malformed'
+        : null
     case 'workspace':
       return isKey(value.key) && isPublishedWorkspaceLayout(value.layout)
         ? { type: 'workspace', key: value.key, layout: value.layout }
-        : 'malformed'
+        : null
     case 'removed':
-      return isKey(value.key) ? { type: 'removed', key: value.key } : 'malformed'
+      return isKey(value.key) ? { type: 'removed', key: value.key } : null
     case 'end':
       return { type: 'end' }
     default:
-      return 'unknown'
+      return null
   }
 }

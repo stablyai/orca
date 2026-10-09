@@ -6,7 +6,6 @@ import {
   type WorkspaceLayoutCache
 } from '../store/workspace-layout-cache'
 import type { RuntimeClientTarget } from './runtime-client-target'
-import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
 import { subscribeRuntimeLayout, type RuntimeLayoutStreamStatus } from './runtime-layout-client'
 
 type FakeStream = {
@@ -111,17 +110,13 @@ describe.each(targets)('runtime layout client over the %s transport', (_name, ta
 
   beforeEach(() => {
     vi.useFakeTimers()
-    // No jitter unless a test asks for it, so delays read as the backoff ladder.
-    vi.spyOn(Math, 'random').mockReturnValue(0)
     vi.spyOn(console, 'warn').mockImplementation(() => {})
-    replaceRuntimeEnvironmentRevisions([{ id: 'env-1', createdAt: 1 }])
     host = installFakeHost(target)
     cache = EMPTY_WORKSPACE_LAYOUT_CACHE
     status = null
   })
 
   afterEach(() => {
-    replaceRuntimeEnvironmentRevisions([])
     vi.useRealTimers()
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
@@ -180,34 +175,15 @@ describe.each(targets)('runtime layout client over the %s transport', (_name, ta
     expect(stream.unsubscribed).toBe(false)
   })
 
-  it.each([
-    ['a malformed snapshot', { type: 'snapshot', workspaces: [{ key: 'a' }] }],
-    ['a malformed workspace', { type: 'workspace', key: 'a', layout: { worktreeId: 'a' } }],
-    ['a malformed removed', { type: 'removed', key: '' }],
-    ['a frame with no type', { key: 'a' }]
-  ])('resubscribes for a fresh snapshot after %s', async (_label, frame) => {
+  it('ignores a change before the snapshot, unknown frame types and malformed frames', async () => {
     subscribe()
-    const first = await opened(1)
-    first.send(snapshot([{ key: 'a', layout: layout('a') }]))
-    first.send(frame)
-    expect(first.unsubscribed).toBe(true)
-    const second = await expectRetryAfter(250)
-    second.send(snapshot([{ key: 'b', layout: layout('b') }]))
-    expect(cache).toEqual({ b: layout('b') })
-  })
-
-  it('resubscribes when a malformed snapshot or a change arrives before the snapshot', async () => {
-    subscribe()
-    const first = await opened(1)
-    first.send({ type: 'workspace', key: 'a', layout: layout('a') })
-    expect(first.unsubscribed).toBe(true)
-    const second = await expectRetryAfter(250)
-    second.send({ type: 'snapshot', workspaces: 'all' })
-    expect(second.unsubscribed).toBe(true)
-    const third = await expectRetryAfter(500)
-    third.send(snapshot([{ key: 'a', layout: layout('a') }]))
-    expect(cache).toEqual({ a: layout('a') })
-    expect(status).toEqual({ state: 'live' })
+    const stream = await opened(1)
+    stream.send({ type: 'workspace', key: 'a', layout: layout('a') })
+    stream.send(snapshot())
+    stream.send({ type: 'navigate', request: { focusTab: 't1' } })
+    stream.send({ type: 'workspace', key: 'a', layout: { worktreeId: 'a' } })
+    expect(cache).toEqual({})
+    expect(stream.unsubscribed).toBe(false)
   })
 
   it('after a lost stream, resubscribes and the new snapshot replaces the cache', async () => {
@@ -253,21 +229,12 @@ describe.each(targets)('runtime layout client over the %s transport', (_name, ta
     await expectRetryAfter(250)
   })
 
-  it('adds jitter to the retry delay so a shared outage does not resubscribe in lockstep', async () => {
-    vi.spyOn(Math, 'random').mockReturnValue(0.5)
-    subscribe()
-    const first = await opened(1)
-    first.drop()
-    await expectRetryAfter(275)
-  })
-
   it.each([
     [
       'method_not_found',
       (stream: FakeStream) => stream.fail('no layout stream', 'method_not_found')
     ],
-    ['forbidden', (stream: FakeStream) => stream.fail('scope denied', 'forbidden')],
-    ['unauthorized', (stream: FakeStream) => stream.fail('pair again', 'unauthorized')]
+    ['forbidden', (stream: FakeStream) => stream.fail('scope denied', 'forbidden')]
   ])('stops for good when the host refuses the stream (%s)', async (code, refuse) => {
     const subscription = subscribe()
     const stream = await opened(1)
@@ -321,58 +288,5 @@ describe.each(targets)('runtime layout client over the %s transport', (_name, ta
     subscription.close()
     const stream = await opened(1)
     await vi.waitFor(() => expect(stream.unsubscribed).toBe(true))
-  })
-})
-
-describe('runtime layout client for a server that is removed or replaced', () => {
-  afterEach(() => {
-    replaceRuntimeEnvironmentRevisions([])
-    vi.useRealTimers()
-    vi.restoreAllMocks()
-    vi.unstubAllGlobals()
-  })
-
-  it('stops for good, whether the stream is live or waiting to retry', async () => {
-    vi.useFakeTimers()
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const target: RuntimeClientTarget = { kind: 'environment', environmentId: 'env-1' }
-    replaceRuntimeEnvironmentRevisions([{ id: 'env-1', createdAt: 1 }])
-    const host = installFakeHost(target)
-    let status: RuntimeLayoutStreamStatus | null = null
-    const latest = (): RuntimeLayoutStreamStatus | null => status
-    subscribeRuntimeLayout(
-      target,
-      {},
-      () => {},
-      (next) => {
-        status = next
-      }
-    )
-    await vi.waitFor(() => expect(host.streams).toHaveLength(1))
-    await vi.advanceTimersByTimeAsync(0)
-    const live = host.streams[0]!
-    replaceRuntimeEnvironmentRevisions([])
-    expect(live.unsubscribed).toBe(true)
-    expect(latest()).toMatchObject({ state: 'refused', code: 'runtime_environment_retired' })
-    await vi.advanceTimersByTimeAsync(60_000)
-    expect(host.streams).toHaveLength(1)
-
-    replaceRuntimeEnvironmentRevisions([{ id: 'env-1', createdAt: 1 }])
-    subscribeRuntimeLayout(
-      target,
-      {},
-      () => {},
-      (next) => {
-        status = next
-      }
-    )
-    await vi.waitFor(() => expect(host.streams).toHaveLength(2))
-    await vi.advanceTimersByTimeAsync(0)
-    host.streams[1]!.drop()
-    expect(latest()).toEqual({ state: 'retrying' })
-    replaceRuntimeEnvironmentRevisions([])
-    expect(latest()).toMatchObject({ state: 'refused', code: 'runtime_environment_retired' })
-    await vi.advanceTimersByTimeAsync(60_000)
-    expect(host.streams).toHaveLength(2)
   })
 })

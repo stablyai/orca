@@ -37,18 +37,17 @@ describe('readWorkspaceLayoutStreamFrame', () => {
     ).toEqual({ type: 'snapshot', workspaces: [{ key: GIT_KEY, layout }] })
   })
 
-  it('tells a newer host’s frame type apart from a malformed known frame', () => {
+  it('returns null for a newer host’s frame type and for malformed frames', () => {
     const layout = publishedLayout()
-    expect(readWorkspaceLayoutStreamFrame({ type: 'navigate', request: {} })).toBe('unknown')
-    for (const malformed of [
+    for (const unreadable of [
+      { type: 'navigate', request: {} },
       null,
-      { key: 'a' },
       { type: 'workspace', key: '', layout },
       { type: 'workspace', key: 'a', layout: {} },
       { type: 'removed' },
       { type: 'snapshot', workspaces: [{ key: 'a', layout: { worktreeId: 'a' } }] }
     ]) {
-      expect(readWorkspaceLayoutStreamFrame(malformed)).toBe('malformed')
+      expect(readWorkspaceLayoutStreamFrame(unreadable)).toBeNull()
     }
   })
 })
