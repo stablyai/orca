@@ -18664,7 +18664,6 @@
         "save": "Save",
         "editingMessage": "Editing message",
         "cancelEditing": "Cancel editing",
-        "editKeysHint": "Enter to save · {{newline}} for a new line",
         "editChanged": "This message changed while you were editing. Your edit is in the chat box.",
         "editChangedPrompt": "This message changed while you were editing. Your edit will be in the chat box after you answer the agent.",
         "editFailed": "This message can't be edited.",

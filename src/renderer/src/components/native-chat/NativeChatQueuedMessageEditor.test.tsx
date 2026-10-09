@@ -176,14 +176,15 @@ describe('queued card textarea', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     expect(edit.save).toHaveBeenCalledOnce()
   })
-  it('the key hint names the platform newline chord', () => {
-    for (const [platform, chord] of [
-      ['Macintosh', '⇧ Enter'],
-      ['Windows', 'Shift+Enter']
-    ] as const) {
+  it('Save carries a decorative Enter badge and no key hint text', () => {
+    for (const platform of ['Macintosh', 'Windows']) {
       vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(platform)
-      const { unmount } = render(<NativeChatQueuedMessageEditor editor={editor()} />)
-      expect(screen.getByText(`Enter to save · ${chord} for a new line`)).toBeTruthy()
+      const { container, unmount } = render(<NativeChatQueuedMessageEditor editor={editor()} />)
+      const save = screen.getByRole('button', { name: 'Save' })
+      const badge = save.querySelector('[aria-hidden="true"]')
+      expect(badge?.querySelector('svg')).toBeTruthy()
+      expect(badge?.textContent).toBe('')
+      expect(container.textContent).not.toMatch(/Shift|⇧|new line/)
       unmount()
     }
     vi.restoreAllMocks()

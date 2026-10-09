@@ -18446,7 +18446,6 @@
         "save": "保存",
         "editingMessage": "メッセージを編集中",
         "cancelEditing": "編集をキャンセル",
-        "editKeysHint": "Enter で保存 · {{newline}} で改行",
         "editChanged": "編集中にこのメッセージが変更されました。編集したテキストはチャット入力欄にあります。",
         "editChangedPrompt": "編集中にこのメッセージが変更されました。Agent に回答すると、編集したテキストがチャット入力欄に表示されます。",
         "editFailed": "このメッセージは編集できません。",

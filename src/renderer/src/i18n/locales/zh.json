@@ -18411,7 +18411,6 @@
         "save": "保存",
         "editingMessage": "正在编辑消息",
         "cancelEditing": "取消编辑",
-        "editKeysHint": "按 Enter 保存 · 按 {{newline}} 换行",
         "editChanged": "你编辑时此消息已更改。你编辑的内容已放入聊天输入框。",
         "editChangedPrompt": "你编辑时此消息已更改。回答智能体后，你编辑的内容会出现在聊天输入框中。",
         "editFailed": "此消息无法编辑。",

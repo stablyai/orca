@@ -18274,7 +18274,6 @@
         "save": "Guardar",
         "editingMessage": "Editando mensaje",
         "cancelEditing": "Cancelar edición",
-        "editKeysHint": "Enter para guardar · {{newline}} para una nueva línea",
         "editChanged": "Este mensaje cambió mientras lo editabas. Tu edición está en el cuadro de chat.",
         "editChangedPrompt": "Este mensaje cambió mientras lo editabas. Tu edición estará en el cuadro de chat cuando respondas al agente.",
         "editFailed": "Este mensaje no se puede editar.",

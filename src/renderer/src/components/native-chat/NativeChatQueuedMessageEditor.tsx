@@ -3,6 +3,7 @@ import { Pencil, X } from 'lucide-react'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
+import { ButtonKeyHint } from '@/components/ButtonKeyHint'
 import { isMacPlatform } from './native-chat-shortcut'
 import type { QueuedMessageInlineEditor } from './use-structured-agent-session-queued-edit'
 
@@ -16,7 +17,6 @@ export function NativeChatQueuedMessageEditor({
   /** The card's "From <name>" line, kept beside the label. */
   sender?: ReactNode
 }): React.JSX.Element {
-  const isMac = isMacPlatform()
   const field = useRef<HTMLTextAreaElement>(null)
   useLayoutEffect(() => {
     if (editor.acquiring) {
@@ -93,14 +93,7 @@ export function NativeChatQueuedMessageEditor({
           }
         }}
       />
-      <div className="mt-1.5 flex items-center gap-2">
-        <p className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-          {translate(
-            'components.native-chat.queuedMessages.editKeysHint',
-            'Enter to save · {{newline}} for a new line',
-            { newline: isMac ? '⇧ Enter' : 'Shift+Enter' }
-          )}
-        </p>
+      <div className="mt-1.5 flex justify-end">
         <Button
           type="button"
           size="xs"
@@ -108,6 +101,7 @@ export function NativeChatQueuedMessageEditor({
           onClick={editor.save}
         >
           {translate('components.native-chat.queuedMessages.save', 'Save')}
+          <ButtonKeyHint />
         </Button>
       </div>
     </div>
