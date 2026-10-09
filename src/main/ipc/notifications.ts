@@ -15,6 +15,7 @@ import { setTrayAttention } from '../tray/system-tray'
 import { isMainWindowVisible } from '../window/main-window-visibility'
 import { activeNotificationsById } from './native-notification-lifecycle'
 import { deliverNativeNotification } from './native-notification-delivery'
+import { removeDeliveredNotifications } from './native-notification-identity'
 import { createNotificationDeliveryService } from '../notifications/notification-delivery-service'
 import { createAnnouncedNotificationRegistry } from '../notifications/announced-notification-registry'
 import { registerNotificationSoundHandlers } from './notification-sound-ipc'
@@ -139,6 +140,14 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
           runtime?.dismissMobileNotification(id)
         }
       }
+      // Why: close() only reaches objects still held in memory (released after five minutes, gone
+      // after a restart); macOS removes delivered notifications by identifier instead.
+      removeDeliveredNotifications(
+        uniqueIds,
+        (Array.isArray(paneKeys) ? paneKeys : []).filter(
+          (paneKey): paneKey is string => typeof paneKey === 'string' && paneKey.length > 0
+        )
+      )
       return { dismissed }
     }
   )

@@ -24,6 +24,8 @@ export const notificationCtorMock: NotificationSpy = vi.fn(function () {
   }
 })
 export const notificationIsSupportedMock = vi.fn(() => true)
+export const notificationRemoveMock: NotificationSpy = vi.fn()
+export const notificationRemoveGroupMock: NotificationSpy = vi.fn()
 export const getAllWindowsMock = vi.fn(() => [])
 export const getTrustedUIRendererWindowMock: NotificationSpy = vi.fn()
 export const shellOpenExternalMock: NotificationSpy = vi.fn()
@@ -40,7 +42,9 @@ export function createElectronModuleMock(): Record<string, unknown> {
       handle: handleMock
     },
     Notification: Object.assign(notificationCtorMock, {
-      isSupported: notificationIsSupportedMock
+      isSupported: notificationIsSupportedMock,
+      remove: notificationRemoveMock,
+      removeGroup: notificationRemoveGroupMock
     }),
     BrowserWindow: {
       getAllWindows: getAllWindowsMock
@@ -79,6 +83,8 @@ export function resetNotificationDispatchMocks(): void {
   notificationOnceMock.mockClear()
   notificationRemoveListenerMock.mockClear()
   notificationIsSupportedMock.mockReset()
+  notificationRemoveMock.mockClear()
+  notificationRemoveGroupMock.mockClear()
   notificationIsSupportedMock.mockReturnValue(true)
   readAuthorizationStatusMock.mockReset()
   readAuthorizationStatusMock.mockResolvedValue(null)
