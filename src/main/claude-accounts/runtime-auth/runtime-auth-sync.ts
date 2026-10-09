@@ -7,7 +7,7 @@ import {
   type ClaudeAccountSelectionTarget
 } from '../runtime-selection'
 import { hasLiveClaudePtys } from '../live-pty-gate'
-import { isOauthTokenExpiring } from '../oauth-refresh'
+import { isOauthTokenExpiredPastGrace, isOauthTokenExpiring } from '../oauth-refresh'
 import { writeActiveClaudeKeychainCredentialsForRuntime } from '../keychain'
 import { ClaudeRuntimeAuthPreparationService } from './runtime-auth-preparation'
 
@@ -242,17 +242,35 @@ export class ClaudeRuntimeAuthSync extends ClaudeRuntimeAuthPreparationService {
     }
 
     // Why: rotate+persist the single-use token to managed storage before materializing (else runtime gets a stale token that fails invalid_grant); skip while a live PTY owns the creds since refreshing would double-rotate it (invalidating one copy) — read-back preserves its refresh instead.
+    // Why: stop deferring once the token is dead past the grace window — a live Claude using this store would have rotated it by now (read-back adopts that), so it runs on another config dir and the wait never ends.
     const liveClaudePtys = hasLiveClaudePtys()
-    if (liveClaudePtys && isOauthTokenExpiring(credentialsJson)) {
+    const deferToLiveClaude = liveClaudePtys && !isOauthTokenExpiredPastGrace(credentialsJson)
+    if (deferToLiveClaude && isOauthTokenExpiring(credentialsJson)) {
       this.managedRefreshDeferredByLivePtyAccountId = activeAccount.id
     }
-    if (!liveClaudePtys) {
+    if (!deferToLiveClaude) {
       const refreshed = await this.refreshManagedAccountTokenIfNeeded(
         activeAccount,
         credentialsJson
       )
       if (refreshed) {
         credentialsJson = refreshed
+      } else if (liveClaudePtys && this.lastSyncedAccountId === activeAccount.id) {
+        // Why: a live Claude may have rotated the runtime token while our refresh was in flight (even on the first sync, before lastWrittenCredentialsJson exists); adopt it or leave it rather than rewrite the stale blob over it. Only a wiped runtime, a rotation read-back filed under another account, or a first sync with nothing to compare against falls through to materialize.
+        const readBackResult = await this.readBackRefreshedTokens(credentialsJson, {
+          updateLastWrittenCredentialsJson: true
+        })
+        if (
+          (readBackResult.status === 'persisted' &&
+            (await this.readManagedCredentials(activeAccount)) !== credentialsJson) ||
+          (readBackResult.status === 'rejected' &&
+            readBackResult.hasValidChangedRuntimeCredentials) ||
+          (readBackResult.status === 'unchanged' &&
+            credentialsJson === this.lastWrittenCredentialsJson)
+        ) {
+          this.hasMaterializedRuntimeAuth = true
+          return
+        }
       }
     }
 
