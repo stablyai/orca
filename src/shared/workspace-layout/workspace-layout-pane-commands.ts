@@ -1,9 +1,7 @@
-// Commands on the panes of one terminal tab. Pane ids never change; a moved pane keeps its id
-// and its terminal.
+// Commands on the panes of one terminal tab. Pane ids never change; a moved pane keeps its id,
+// and so its data and scrollback, which are keyed by it.
 
-import { withoutKey } from './stored-record-fields'
 import { getNextTerminalOrdinal } from './terminal-tab-ordinal'
-import { rekeyPaneRecords } from './workspace-layout-pane-records'
 import {
   equalizeLayout,
   insertLeafBeside,
@@ -17,6 +15,7 @@ import {
   leafIdsOf,
   placeNewTab,
   refuse,
+  setLeaf,
   updateTab,
   type Applied
 } from './workspace-layout-command-steps'
@@ -26,11 +25,7 @@ import {
   type LayoutTerminalTab,
   type WorkspaceLayoutModel
 } from './workspace-layout-model'
-import {
-  advanceTopologyRevision,
-  retireTerminalPane,
-  withWorkspace
-} from './workspace-layout-removal'
+import { retireTerminalPane, withWorkspace } from './workspace-layout-removal'
 
 type PaneCommand = { workspace: string; tabId: string }
 
@@ -59,17 +54,7 @@ export function splitPane(
     return next
   }
   const paneKey = paneKeyOf(tab.entityId, leafId)
-  return applied(
-    {
-      ...next.model,
-      records: advanceTopologyRevision(
-        next.model.records,
-        model.workspaces[command.workspace]!.worktreeId
-      )
-    },
-    { leafId, paneKey },
-    { startPaneKeys: [paneKey] }
-  )
+  return applied(next.model, { leafId, paneKey }, { startPaneKeys: [paneKey] })
 }
 
 /** Closing a pane that is already gone succeeds; the last pane closes its tab. */
@@ -78,23 +63,16 @@ export function closePane(model: WorkspaceLayoutModel, command: CommandOf<'close
   if (!tab || !layoutContainsLeafId(tab.panes.root, command.leafId)) {
     return applied(model, { alreadyClosed: true })
   }
-  const ptyId = tab.panes.ptyIdsByLeafId?.[command.leafId]
+  const ptyId = model.workspaces[command.workspace]!.leaves?.[command.leafId]?.ptyId
   const retired = retireTerminalPane(
     model,
     { workspaceKey: command.workspace, tab },
     command.leafId
   )
-  const workspace = retired.workspaces[command.workspace]!
-  const tabClosed = !workspace.tabs.some((entry) => entry.id === tab.id)
-  const sleepingByPaneKey = withoutKey(
-    workspace.sleepingByPaneKey,
-    paneKeyOf(tab.entityId, command.leafId)
+  const tabClosed = !retired.workspaces[command.workspace]!.tabs.some(
+    (entry) => entry.id === tab.id
   )
-  return applied(
-    withWorkspace(retired, command.workspace, { ...workspace, sleepingByPaneKey }),
-    { tabClosed },
-    { stopPtyIds: ptyId ? [ptyId] : [] }
-  )
+  return applied(retired, { tabClosed }, { stopPtyIds: ptyId ? [ptyId] : [] })
 }
 
 export function movePane(model: WorkspaceLayoutModel, command: CommandOf<'movePane'>): Applied {
@@ -157,13 +135,23 @@ export function renamePane(model: WorkspaceLayoutModel, command: CommandOf<'rena
   if (!layoutContainsLeafId(tab.panes.root, command.leafId)) {
     return refuse('pane_not_found')
   }
-  const titles = withoutKey(tab.panes.titlesByLeafId, command.leafId) ?? {}
-  const titlesByLeafId =
-    command.title === null ? titles : { ...titles, [command.leafId]: command.title }
-  return updateTab(model, command.workspace, { ...tab, panes: { ...tab.panes, titlesByLeafId } })
+  const workspace = model.workspaces[command.workspace]!
+  const leaf = { ...workspace.leaves?.[command.leafId] }
+  delete leaf.title
+  return applied(
+    withWorkspace(
+      model,
+      command.workspace,
+      setLeaf(
+        workspace,
+        command.leafId,
+        command.title === null ? leaf : { ...leaf, title: command.title }
+      )
+    )
+  )
 }
 
-/** Drag-out (#25380): the pane keeps its id and terminal; only the tab half of its key changes. */
+/** Drag-out (#25380): only the tree moves; the pane's data and scrollback are keyed by its id. */
 export function movePaneToNewTab(
   model: WorkspaceLayoutModel,
   command: CommandOf<'movePaneToNewTab'>,
@@ -181,8 +169,6 @@ export function movePaneToNewTab(
   }
   const { leafId } = command
   const workspace = model.workspaces[command.workspace]!
-  const ptyId = tab.panes.ptyIdsByLeafId?.[leafId]
-  const title = tab.panes.titlesByLeafId?.[leafId]
   const id = context.mintId()
   const terminals = workspace.tabs.flatMap((entry) => (entry.kind === 'terminal' ? [entry] : []))
   const ordinal = getNextTerminalOrdinal(
@@ -202,19 +188,12 @@ export function movePaneToNewTab(
     },
     panes: {
       root: { type: 'leaf', leafId },
-      ...(ptyId ? { ptyIdsByLeafId: { [leafId]: ptyId } } : {}),
-      ...(title ? { titlesByLeafId: { [leafId]: title } } : {}),
       ...(tab.panes.chatLeafId === leafId ? { chatLeafId: leafId } : {})
     }
   }
   const source: LayoutTerminalTab = {
     ...tab,
-    panes: {
-      ...tab.panes,
-      root: removeLayoutLeaf(tab.panes.root, leafId),
-      ptyIdsByLeafId: withoutKey(tab.panes.ptyIdsByLeafId, leafId),
-      titlesByLeafId: withoutKey(tab.panes.titlesByLeafId, leafId)
-    }
+    panes: { ...tab.panes, root: removeLayoutLeaf(tab.panes.root, leafId) }
   }
   if (source.panes.chatLeafId === leafId) {
     delete source.panes.chatLeafId
@@ -234,14 +213,5 @@ export function movePaneToNewTab(
     },
     context
   )
-  const next = rekeyPaneRecords(
-    withWorkspace(model, command.workspace, placed),
-    command.workspace,
-    paneKeyOf(tab.entityId, leafId),
-    paneKeyOf(id, leafId)
-  )
-  return applied(
-    { ...next, records: advanceTopologyRevision(next.records, workspace.worktreeId) },
-    { tabId: id }
-  )
+  return applied(withWorkspace(model, command.workspace, placed), { tabId: id })
 }

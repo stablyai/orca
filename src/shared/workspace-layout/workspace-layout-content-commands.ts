@@ -37,14 +37,15 @@ export function openEditorTab(
     entityId: command.fileId,
     ...(command.preview ? { isPreview: true } : {})
   })
-  let next = placeContentTab(model, key, tab, command.groupId, context)
+  const placed = placeContentTab(model, key, tab, command, context)
+  let next = placed.model
   const file = command.file
   if (file) {
     const workspace = next.workspaces[key]!
     const files = (workspace.editorFiles ?? []).filter((entry) => entry.filePath !== file.filePath)
     next = withWorkspace(next, key, { ...workspace, editorFiles: [...files, file] })
   }
-  return applied(next, { tabId: tab.id })
+  return applied(next, { tabId: tab.id, refused: placed.refused })
 }
 
 export function openBrowserTab(
@@ -61,7 +62,7 @@ export function openBrowserTab(
     id: browserTabId,
     entityId: browserTabId
   })
-  const next = placeContentTab(model, key, tab, command.groupId, context)
+  const next = placeContentTab(model, key, tab, command, context).model
   const workspace = next.workspaces[key]!
   const browserTab = {
     id: browserTabId,
@@ -88,7 +89,7 @@ export function openAgentSessionTab(
     entityId: command.sessionId,
     agentSessionAgent: command.agent
   })
-  return applied(placeContentTab(model, command.workspace, tab, command.groupId, context), {
+  return applied(placeContentTab(model, command.workspace, tab, command, context).model, {
     tabId: tab.id
   })
 }

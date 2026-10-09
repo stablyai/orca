@@ -1,13 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { applyLayoutCommand } from './workspace-layout-commands'
 import type { LayoutCommand, LayoutContext } from './workspace-layout-command-types'
-import {
-  build,
-  terminalTab,
-  testContext,
-  WS,
-  asLoaded
-} from './workspace-layout-command.test-fixture'
+import { collectLayoutLeafIdsInOrder } from './terminal-pane-tree'
+import { build, terminalTab, testContext, WS } from './workspace-layout-command.test-fixture'
 import type { WorkspaceLayoutModel } from './workspace-layout-model'
 import { checkWorkspaceLayoutModelRules } from './workspace-layout-model-rules'
 import { applyLayoutTransition, type LayoutTransition } from './workspace-layout-transitions'
@@ -41,16 +36,27 @@ function setup() {
   }
 }
 
-const leavesOf = (model: WorkspaceLayoutModel, tabId: string) =>
-  model.workspaces[WS]!.tabs.some((tab) => tab.id === tabId)
-    ? terminalTab(model, tabId).panes?.ptyIdsByLeafId
-    : 'closed'
+/** Each pane of the tab and the terminal it shows. */
+const leavesOf = (model: WorkspaceLayoutModel, tabId: string) => {
+  if (!model.workspaces[WS]!.tabs.some((tab) => tab.id === tabId)) {
+    return 'closed'
+  }
+  const leaves = model.workspaces[WS]!.leaves ?? {}
+  return Object.fromEntries(
+    collectLayoutLeafIdsInOrder(terminalTab(model, tabId).panes.root).flatMap((leafId) =>
+      leaves[leafId]?.ptyId ? [[leafId, leaves[leafId].ptyId]] : []
+    )
+  )
+}
+
+const incarnationOf = (model: WorkspaceLayoutModel, leafId: string) =>
+  model.workspaces[WS]?.leaves?.[leafId]?.incarnationId
 
 describe('layout transitions', () => {
   it('binds a started terminal once and refuses binding it to a second pane', () => {
     const { model, tabId, leafId, leaf2 } = setup()
     expect(leavesOf(model, tabId)).toEqual({ [leafId]: 'pty-1' })
-    expect(model.records.incarnationsByPaneKey).toEqual({ [`${tabId}:${leafId}`]: 'inc-1' })
+    expect(incarnationOf(model, leafId)).toBe('inc-1')
     const twice = applyLayoutTransition(model, {
       type: 'processStarted',
       workspace: WS,
@@ -87,7 +93,7 @@ describe('layout transitions', () => {
       type: 'processExited',
       surface: { ...surface, incarnationId: 'inc-1' }
     })
-    expect(exited.ok && exited.model.records.incarnationsByPaneKey).toEqual({})
+    expect(exited.ok && incarnationOf(exited.model, leafId)).toBeUndefined()
     expect(exited.ok && terminalTab(exited.model, tabId).panes!.root).toEqual({
       type: 'leaf',
       leafId: expect.any(String)
@@ -140,7 +146,7 @@ describe('layout transitions', () => {
     ).toEqual({ ok: false, code: 'workspace_exists' })
     const removed = applyLayoutTransition(model, { type: 'ownerRemoved', workspaces: [WS] })
     expect(removed.ok && removed.model.workspaces).toEqual({})
-    expect(removed.ok && removed.model.records.incarnationsByPaneKey).toEqual({})
+    expect(removed.ok && removed.model.legacy.terminalRowOwners).toEqual({})
   })
 })
 
@@ -158,9 +164,7 @@ describe('concurrent commands, both orders', () => {
           : applyLayoutTransition(next, step.transition)
       codes.push(result.ok ? 'ok' : result.code)
       if (result.ok) {
-        expect(checkWorkspaceLayoutModelRules([asLoaded(result.model)], [asLoaded(next)])).toEqual(
-          []
-        )
+        expect(checkWorkspaceLayoutModelRules([result.model], [next])).toEqual([])
         next = result.model
       }
     }
@@ -189,7 +193,7 @@ describe('concurrent commands, both orders', () => {
     // The close found nothing in the old tab: the dragged pane keeps running in its new tab.
     expect(
       dragFirst.model.workspaces[WS]!.tabs.some(
-        (tab) => tab.kind === 'terminal' && tab.panes?.ptyIdsByLeafId?.[leafId] === 'pty-1'
+        (tab) => tab.kind === 'terminal' && leavesOf(dragFirst.model, tab.id)[leafId] === 'pty-1'
       )
     ).toBe(true)
   })

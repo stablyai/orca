@@ -9,6 +9,7 @@ import {
   openEditorTab
 } from './workspace-layout-content-commands'
 import { moveTab, setGroupRatios, splitGroup } from './workspace-layout-group-commands'
+import { updateLegacyPersistence } from './workspace-layout-legacy-persistence'
 import type { WorkspaceLayoutModel } from './workspace-layout-model'
 import {
   closePane,
@@ -37,6 +38,15 @@ const CREATES_WORKSPACE = new Set<LayoutCommand['type']>([
 ])
 
 export function applyLayoutCommand(
+  model: WorkspaceLayoutModel,
+  command: LayoutCommand,
+  context: LayoutContext
+): Applied {
+  const result = applyCommand(model, command, context)
+  return result.ok ? { ...result, model: updateLegacyPersistence(model, result.model) } : result
+}
+
+function applyCommand(
   model: WorkspaceLayoutModel,
   command: LayoutCommand,
   context: LayoutContext

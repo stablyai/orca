@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { applyLayoutCommand } from './workspace-layout-commands'
 import type { LayoutCommand } from './workspace-layout-command-types'
 import {
+  asLoaded,
   build,
   emptyModel,
   terminalTab,
@@ -9,6 +10,7 @@ import {
   WS
 } from './workspace-layout-command.test-fixture'
 import type { WorkspaceLayoutModel } from './workspace-layout-model'
+import { saveWorkspaceLayout } from './workspace-layout-save'
 
 const context = testContext()
 
@@ -348,20 +350,34 @@ describe('layout command effects', () => {
     expect(terminalTab(created.model, tabId).terminal.defaultTitle).toBe('Terminal 1')
   })
 
-  it('moves a pane to a new tab keeping its id, terminal and records under the new pane key', () => {
+  it('moves a pane to a new tab keeping its id, so its data and scrollback move by structure', () => {
     const { model, tabA, leafA2, ctx } = setup()
-    const withRecords: WorkspaceLayoutModel = {
+    const workspace = model.workspaces[WS]!
+    const paneData = { ptyId: 'pty-2', incarnationId: 'inc', title: 'logs' }
+    const withData: WorkspaceLayoutModel = {
       ...model,
-      records: { incarnationsByPaneKey: { [`${tabA}:${leafA2}`]: 'inc' } }
+      workspaces: {
+        [WS]: { ...workspace, leaves: { ...workspace.leaves, [leafA2]: paneData } }
+      }
     }
     const moved = build(
       ctx,
       [{ type: 'movePaneToNewTab', workspace: WS, tabId: tabA, leafId: leafA2 }],
-      withRecords
+      withData
     )
     const newTabId = moved.results[0]!.tabId!
-    expect(terminalTab(moved.model, newTabId).panes!.root).toEqual({ type: 'leaf', leafId: leafA2 })
-    expect(moved.model.records.incarnationsByPaneKey).toEqual({ [`${newTabId}:${leafA2}`]: 'inc' })
+    expect(terminalTab(moved.model, newTabId).panes.root).toEqual({ type: 'leaf', leafId: leafA2 })
+    expect(moved.model.workspaces[WS]!.leaves).toEqual(withData.workspaces[WS]!.leaves)
+    const loaded = asLoaded(moved.model)
+    loaded.facts.scrollback[leafA2] = { buffer: 'scrollback' }
+    const saved = saveWorkspaceLayout(loaded)
+    expect(saved.terminalLayoutsByTabId[newTabId]).toMatchObject({
+      ptyIdsByLeafId: { [leafA2]: 'pty-2' },
+      titlesByLeafId: { [leafA2]: 'logs' },
+      buffersByLeafId: { [leafA2]: 'scrollback' }
+    })
+    expect(saved.terminalLayoutsByTabId[tabA]!.buffersByLeafId).toBeUndefined()
+    expect(saved.terminalPtyIncarnationsByPaneKey).toEqual({ [`${newTabId}:${leafA2}`]: 'inc' })
     expect(groupOrder(moved.model)[0]!.indexOf(newTabId)).toBe(
       groupOrder(moved.model)[0]!.indexOf(tabA) + 1
     )

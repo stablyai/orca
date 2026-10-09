@@ -10,7 +10,7 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../constants'
 import { collectLayoutLeafIdsInOrder } from './terminal-pane-tree'
 import { applyLayoutCommand } from './workspace-layout-commands'
 import type { LayoutCommand, LayoutContext } from './workspace-layout-command-types'
-import { emptyModel, testContext, asLoaded } from './workspace-layout-command.test-fixture'
+import { emptyModel, testContext } from './workspace-layout-command.test-fixture'
 import { loadWorkspaceLayout } from './workspace-layout-load'
 import type { WorkspaceLayoutModel } from './workspace-layout-model'
 import { checkWorkspaceLayoutModelRules, emptyLayoutBeside } from './workspace-layout-model-rules'
@@ -36,9 +36,9 @@ function project(model: WorkspaceLayoutModel) {
               [
                 tab.entityId,
                 Object.fromEntries(
-                  collectLayoutLeafIdsInOrder(tab.panes?.root).map((leafId) => [
+                  collectLayoutLeafIdsInOrder(tab.panes.root).map((leafId) => [
                     leafId,
-                    tab.panes?.ptyIdsByLeafId?.[leafId]
+                    model.workspaces[key]!.leaves?.[leafId]?.ptyId
                   ])
                 )
               ]
@@ -84,7 +84,7 @@ class Harness {
     this.log.push(`${step.label} → ${result.ok ? 'ok' : result.code}`)
     if (result.ok) {
       expect(
-        checkWorkspaceLayoutModelRules([asLoaded(result.model)], [asLoaded(this.model)]),
+        checkWorkspaceLayoutModelRules([result.model], [this.model]),
         this.log.join('\n')
       ).toEqual([])
       this.model = result.model

@@ -11,6 +11,7 @@ import type {
 } from './workspace-layout-command-types'
 import {
   paneKeyOf,
+  type LayoutLeaf,
   type LayoutTab,
   type LayoutTerminalTab,
   type WorkspaceLayout,
@@ -37,14 +38,7 @@ export function applied(
 
 /** A workspace's first tab creates its entry; its worktree id is its key unless the runtime opened it first. */
 export function workspaceOrEmpty(model: WorkspaceLayoutModel, key: string): WorkspaceLayout {
-  return (
-    model.workspaces[key] ?? {
-      worktreeId: key,
-      tabs: [],
-      groups: [],
-      keepsEmptyTerminalRows: false
-    }
-  )
+  return model.workspaces[key] ?? { worktreeId: key, tabs: [], groups: [] }
 }
 
 export function findTab(workspace: WorkspaceLayout, tabId: string): LayoutTab | undefined {
@@ -76,8 +70,23 @@ export function leafIdsOf(tab: LayoutTerminalTab): string[] {
   return collectLayoutLeafIdsInOrder(tab.panes.root)
 }
 
-export function boundPtyIds(tab: LayoutTab): string[] {
-  return tab.kind === 'terminal' ? Object.values(tab.panes.ptyIdsByLeafId ?? {}) : []
+export function boundPtyIds(workspace: WorkspaceLayout, tab: LayoutTab): string[] {
+  return tab.kind === 'terminal'
+    ? leafIdsOf(tab).flatMap((leafId) => workspace.leaves?.[leafId]?.ptyId ?? [])
+    : []
+}
+
+/** The workspace with one pane's data replaced; a pane with no data keeps no record. */
+export function setLeaf(
+  workspace: WorkspaceLayout,
+  leafId: string,
+  leaf: LayoutLeaf
+): WorkspaceLayout {
+  const leaves = { ...workspace.leaves, [leafId]: leaf }
+  if (Object.keys(leaf).length === 0) {
+    delete leaves[leafId]
+  }
+  return { ...workspace, leaves }
 }
 
 export function paneKeysOf(tab: LayoutTerminalTab): string[] {

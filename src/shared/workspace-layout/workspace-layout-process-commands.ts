@@ -1,34 +1,40 @@
 // Commands that start, restart, sleep or wake terminals. Their layout effect is small (bindings
 // and sleeping records); the runtime runs the returned effects after replying.
 
-import { filterRecord, omitStoredFields } from './stored-record-fields'
+import { omitStoredFields } from './stored-record-fields'
 import {
   applied,
+  leafIdsOf,
   locatePane,
-  paneKeysOf,
   refuse,
-  updateTab,
+  setLeaf,
   type Applied
 } from './workspace-layout-command-steps'
 import type { CommandOf } from './workspace-layout-command-types'
-import type { WorkspaceLayout, WorkspaceLayoutModel } from './workspace-layout-model'
+import {
+  paneKeyOf,
+  type WorkspaceLayout,
+  type WorkspaceLayoutModel
+} from './workspace-layout-model'
 import { withWorkspace } from './workspace-layout-removal'
 
-function workspacePaneKeys(workspace: WorkspaceLayout): string[] {
-  return workspace.tabs.flatMap((tab) => (tab.kind === 'terminal' ? paneKeysOf(tab) : []))
-}
-
-function boundPty(workspace: WorkspaceLayout, paneKey: string): string | undefined {
-  const pane = locatePane(workspace, paneKey)
-  return pane?.tab.panes.ptyIdsByLeafId?.[pane.leafId]
+/** Every pane of the workspace: its key (what commands name) and its leaf (what keys its data). */
+function workspacePanes(workspace: WorkspaceLayout): { paneKey: string; leafId: string }[] {
+  return workspace.tabs.flatMap((tab) =>
+    tab.kind === 'terminal'
+      ? leafIdsOf(tab).map((leafId) => ({ paneKey: paneKeyOf(tab.entityId, leafId), leafId }))
+      : []
+  )
 }
 
 /** Idempotent: starts or restores a pane that has no live terminal. */
 export function startPane(model: WorkspaceLayoutModel, command: CommandOf<'startPane'>): Applied {
-  if (!locatePane(model.workspaces[command.workspace]!, command.paneKey)) {
+  const workspace = model.workspaces[command.workspace]!
+  const pane = locatePane(workspace, command.paneKey)
+  if (!pane) {
     return refuse('pane_not_found')
   }
-  if (model.workspaces[command.workspace]!.sleepingByPaneKey?.[command.paneKey]) {
+  if (workspace.leaves?.[pane.leafId]?.sleeping) {
     return refuse('pane_sleeping')
   }
   return applied(model, {}, { startPaneKeys: [command.paneKey] })
@@ -39,68 +45,63 @@ export function restartPane(
   model: WorkspaceLayoutModel,
   command: CommandOf<'restartPane'>
 ): Applied {
-  const pane = locatePane(model.workspaces[command.workspace]!, command.paneKey)
+  const workspace = model.workspaces[command.workspace]!
+  const pane = locatePane(workspace, command.paneKey)
   if (!pane) {
     return refuse('pane_not_found')
   }
-  const { tab, leafId } = pane
-  const ptyId = tab.panes.ptyIdsByLeafId?.[leafId]
-  const ptyIdsByLeafId = { ...tab.panes.ptyIdsByLeafId }
-  delete ptyIdsByLeafId[leafId]
-  const updated = updateTab(model, command.workspace, {
-    ...tab,
-    panes: { ...tab.panes, ptyIdsByLeafId }
-  })
-  if (!updated.ok) {
-    return updated
-  }
-  const incarnations = { ...updated.model.records.incarnationsByPaneKey }
-  delete incarnations[command.paneKey]
-  const records = updated.model.records.incarnationsByPaneKey
-    ? { ...updated.model.records, incarnationsByPaneKey: incarnations }
-    : updated.model.records
+  const leaf = workspace.leaves?.[pane.leafId] ?? {}
   return applied(
-    { ...updated.model, records },
+    withWorkspace(
+      model,
+      command.workspace,
+      setLeaf(workspace, pane.leafId, omitStoredFields(leaf, ['ptyId', 'incarnationId']))
+    ),
     {},
-    { stopPtyIds: ptyId ? [ptyId] : [], startPaneKeys: [command.paneKey] }
+    { stopPtyIds: leaf.ptyId ? [leaf.ptyId] : [], startPaneKeys: [command.paneKey] }
   )
 }
 
 /** Stops the terminals and records how to resume each agent; panes and bindings stay. */
 export function sleep(model: WorkspaceLayoutModel, command: CommandOf<'sleep'>): Applied {
-  const workspace = model.workspaces[command.workspace]!
-  const panes = workspacePaneKeys(workspace)
-  const targets = command.paneKeys ? panes.filter((key) => command.paneKeys!.includes(key)) : panes
-  const recorded = Object.fromEntries(
-    command.records
-      .filter((record) => targets.includes(record.paneKey))
-      .map((record) => [
-        record.paneKey,
-        omitStoredFields(record, ['paneKey', 'tabId', 'worktreeId'])
-      ])
-  )
-  const stopPtyIds = targets.flatMap((paneKey) => boundPty(workspace, paneKey) ?? [])
+  let workspace = model.workspaces[command.workspace]!
+  const panes = workspacePanes(workspace)
+  const targets = command.paneKeys
+    ? panes.filter((pane) => command.paneKeys!.includes(pane.paneKey))
+    : panes
+  const stopPtyIds = targets.flatMap((pane) => workspace.leaves?.[pane.leafId]?.ptyId ?? [])
+  for (const { paneKey, leafId } of targets) {
+    const record = command.records.find((entry) => entry.paneKey === paneKey)
+    if (record) {
+      const sleeping = omitStoredFields(record, ['paneKey', 'tabId', 'worktreeId'])
+      workspace = setLeaf(workspace, leafId, { ...workspace.leaves?.[leafId], sleeping })
+    }
+  }
   return applied(
-    withWorkspace(model, command.workspace, {
-      ...workspace,
-      sleepingByPaneKey: { ...workspace.sleepingByPaneKey, ...recorded }
-    }),
-    { slept: targets },
+    withWorkspace(model, command.workspace, workspace),
+    { slept: targets.map((pane) => pane.paneKey) },
     { stopPtyIds }
   )
 }
 
 export function wake(model: WorkspaceLayoutModel, command: CommandOf<'wake'>): Applied {
-  const workspace = model.workspaces[command.workspace]!
-  const sleeping = workspace.sleepingByPaneKey ?? {}
-  const panes = workspacePaneKeys(workspace)
-  const woken = (command.paneKeys ?? panes).filter(
-    (paneKey) => panes.includes(paneKey) && Object.hasOwn(sleeping, paneKey)
+  let workspace = model.workspaces[command.workspace]!
+  const woken = workspacePanes(workspace).filter(
+    (pane) =>
+      (!command.paneKeys || command.paneKeys.includes(pane.paneKey)) &&
+      workspace.leaves?.[pane.leafId]?.sleeping
   )
-  const sleepingByPaneKey = filterRecord(sleeping, (key) => !woken.includes(key))
+  for (const { leafId } of woken) {
+    workspace = setLeaf(
+      workspace,
+      leafId,
+      omitStoredFields(workspace.leaves![leafId]!, ['sleeping'])
+    )
+  }
+  const paneKeys = woken.map((pane) => pane.paneKey)
   return applied(
-    withWorkspace(model, command.workspace, { ...workspace, sleepingByPaneKey }),
-    { woken },
-    { startPaneKeys: woken }
+    withWorkspace(model, command.workspace, workspace),
+    { woken: paneKeys },
+    { startPaneKeys: paneKeys }
   )
 }

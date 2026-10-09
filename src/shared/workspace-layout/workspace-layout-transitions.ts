@@ -4,15 +4,17 @@
 // launch verdicts, sleep capture, partition moves) ship with that producer's PR.
 
 import { isSameTerminal } from './terminal-owner-invariants'
+import { omitStoredFields } from './stored-record-fields'
 import {
   applied,
   locatePane,
   refuse,
-  updateTab,
+  setLeaf,
   type Applied
 } from './workspace-layout-command-steps'
-import { paneKeyOf, type WorkspaceLayoutModel } from './workspace-layout-model'
-import { retireExitedSurface, type ExitedSurface } from './workspace-layout-removal'
+import { updateLegacyPersistence } from './workspace-layout-legacy-persistence'
+import type { WorkspaceLayoutModel } from './workspace-layout-model'
+import { retireExitedSurface, withWorkspace, type ExitedSurface } from './workspace-layout-removal'
 import { removeWorkspaces, renameWorkspace } from './workspace-layout-owner-transitions'
 
 export type LayoutTransition =
@@ -30,18 +32,14 @@ export type LayoutTransition =
 
 function boundElsewhere(
   model: WorkspaceLayoutModel,
-  paneKey: string,
+  leafId: string,
   binding: { ptyId: string; incarnationId?: string }
 ): boolean {
   return Object.values(model.workspaces).some((workspace) =>
-    workspace.tabs.some(
-      (tab) =>
-        tab.kind === 'terminal' &&
-        Object.entries(tab.panes.ptyIdsByLeafId ?? {}).some(([leafId, ptyId]) => {
-          const key = paneKeyOf(tab.entityId, leafId)
-          const incarnationId = model.records.incarnationsByPaneKey?.[key]
-          return key !== paneKey && isSameTerminal({ ptyId, incarnationId }, binding)
-        })
+    Object.entries(workspace.leaves ?? {}).some(
+      ([otherId, leaf]) =>
+        otherId !== leafId &&
+        isSameTerminal({ ptyId: leaf.ptyId, incarnationId: leaf.incarnationId }, binding)
     )
   )
 }
@@ -56,59 +54,38 @@ function processStarted(
   if (!pane) {
     return refuse('pane_not_found')
   }
-  if (boundElsewhere(model, transition.paneKey, transition)) {
+  if (boundElsewhere(model, pane.leafId, transition)) {
     return refuse('pane_already_bound')
   }
-  const { tab, leafId } = pane
-  const bound = updateTab(model, transition.workspace, {
-    ...tab,
-    panes: {
-      ...tab.panes,
-      ptyIdsByLeafId: { ...tab.panes.ptyIdsByLeafId, [leafId]: transition.ptyId }
-    }
-  })
-  if (!bound.ok || transition.incarnationId === undefined) {
-    return bound
+  const leaf = { ...workspace.leaves?.[pane.leafId], ptyId: transition.ptyId }
+  if (transition.incarnationId !== undefined) {
+    leaf.incarnationId = transition.incarnationId
   }
-  const incarnationsByPaneKey = {
-    ...model.records.incarnationsByPaneKey,
-    [transition.paneKey]: transition.incarnationId
-  }
-  return applied({ ...bound.model, records: { ...bound.model.records, incarnationsByPaneKey } })
+  return applied(withWorkspace(model, transition.workspace, setLeaf(workspace, pane.leafId, leaf)))
 }
 
 /** Loss of an SSH lease unbinds its panes; it is not evidence the remote process exited. */
 function sshLeaseTerminated(model: WorkspaceLayoutModel, ptyIds: readonly string[]): Applied {
   let next = model
   for (const [key, workspace] of Object.entries(model.workspaces)) {
-    for (const tab of workspace.tabs) {
-      if (tab.kind !== 'terminal' || !tab.panes.ptyIdsByLeafId) {
-        continue
+    let updated = workspace
+    for (const [leafId, leaf] of Object.entries(workspace.leaves ?? {})) {
+      if (leaf.ptyId !== undefined && ptyIds.includes(leaf.ptyId)) {
+        updated = setLeaf(updated, leafId, omitStoredFields(leaf, ['ptyId']))
       }
-      const bindings = Object.entries(tab.panes.ptyIdsByLeafId)
-      if (!bindings.some(([, ptyId]) => ptyIds.includes(ptyId))) {
-        continue
-      }
-      const kept = Object.fromEntries(bindings.filter(([, ptyId]) => !ptyIds.includes(ptyId)))
-      const updated = updateTab(next, key, {
-        ...tab,
-        panes: { ...tab.panes, ptyIdsByLeafId: kept }
-      })
-      next = updated.ok ? updated.model : next
     }
+    next = updated === workspace ? next : withWorkspace(next, key, updated)
   }
   return applied(next)
 }
 
-export function applyLayoutTransition(
+function applyTransition(
   model: WorkspaceLayoutModel,
-  transition: LayoutTransition
+  transition: Exclude<LayoutTransition, { type: 'processExited' }>
 ): Applied {
   switch (transition.type) {
     case 'processStarted':
       return processStarted(model, transition)
-    case 'processExited':
-      return applied(retireExitedSurface(model, transition.surface).model)
     case 'sshLeaseTerminated':
       return sshLeaseTerminated(model, transition.ptyIds)
     case 'ownerRemoved':
@@ -118,4 +95,19 @@ export function applyLayoutTransition(
       return renamedModel ? applied(renamedModel) : refuse('workspace_exists')
     }
   }
+}
+
+export function applyLayoutTransition(
+  model: WorkspaceLayoutModel,
+  transition: LayoutTransition
+): Applied {
+  if (transition.type === 'processExited') {
+    const retired = retireExitedSurface(model, transition.surface)
+    // An accepted exit advances the revision even when its pane was already gone, as today.
+    return applied(
+      retired ? updateLegacyPersistence(model, retired, [transition.surface.worktreeId]) : model
+    )
+  }
+  const result = applyTransition(model, transition)
+  return result.ok ? { ...result, model: updateLegacyPersistence(model, result.model) } : result
 }

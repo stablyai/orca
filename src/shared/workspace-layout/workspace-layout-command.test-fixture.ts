@@ -19,7 +19,12 @@ export function testContext(): LayoutContext {
 }
 
 export function emptyModel(): WorkspaceLayoutModel {
-  return { hostId: LOCAL_EXECUTION_HOST_ID, workspaces: {}, records: {} }
+  return {
+    hostId: LOCAL_EXECUTION_HOST_ID,
+    workspaces: {},
+    records: {},
+    legacy: { terminalRowOwners: {} }
+  }
 }
 
 /** Applies commands that must succeed and keep every structural rule. */
@@ -30,7 +35,7 @@ export function build(context: LayoutContext, commands: LayoutCommand[], model =
     if (!applied.ok) {
       throw new Error(`${command.type} refused: ${applied.code}`)
     }
-    const violations = checkWorkspaceLayoutModelRules([asLoaded(applied.model)], [asLoaded(next)])
+    const violations = checkWorkspaceLayoutModelRules([applied.model], [next])
     if (violations.length > 0) {
       throw new Error(
         `${command.type} broke ${violations.map((violation) => violation.rule).join(', ')}`

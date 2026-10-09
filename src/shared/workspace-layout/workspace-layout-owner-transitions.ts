@@ -1,8 +1,7 @@
-// Transitions that remove or rename a whole workspace with every record that names it. Sleeping
+// Transitions that remove or rename a whole workspace with every record that names it. Pane data
 // and closed-tab records live in their workspace, so they follow without being touched.
 
 import { filterRecord } from './stored-record-fields'
-import { paneKeysOf } from './workspace-layout-command-steps'
 import type { WorkspaceLayoutModel } from './workspace-layout-model'
 
 type KeyedRecord<T> = Record<string, T> | undefined
@@ -12,13 +11,6 @@ export function removeWorkspaces(
   model: WorkspaceLayoutModel,
   keys: readonly string[]
 ): WorkspaceLayoutModel {
-  const paneKeys = new Set(
-    keys.flatMap((key) =>
-      (model.workspaces[key]?.tabs ?? []).flatMap((tab) =>
-        tab.kind === 'terminal' ? paneKeysOf(tab) : []
-      )
-    )
-  )
   const workspaces = { ...model.workspaces }
   for (const key of keys) {
     delete workspaces[key]
@@ -29,10 +21,6 @@ export function removeWorkspaces(
     workspaces,
     records: {
       ...records,
-      incarnationsByPaneKey: filterRecord(
-        records.incarnationsByPaneKey,
-        (key) => !paneKeys.has(key)
-      ),
       defaultTabsAppliedByWorkspace: filterRecord(
         records.defaultTabsAppliedByWorkspace,
         (key) => !keys.includes(key)
@@ -80,6 +68,7 @@ export function renameWorkspace(
       ...model.records,
       defaultTabsAppliedByWorkspace: rekey(model.records.defaultTabsAppliedByWorkspace),
       clientHostedBrowserPagesByWorkspace: rekey(model.records.clientHostedBrowserPagesByWorkspace)
-    }
+    },
+    legacy: { ...model.legacy, terminalRowOwners: rekey(model.legacy.terminalRowOwners)! }
   }
 }

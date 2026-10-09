@@ -8,7 +8,7 @@ import {
   workspaceOrEmpty,
   findTab,
   findTerminal,
-  paneKeysOf,
+  leafIdsOf,
   placeNewTab,
   refuse,
   updateTab,
@@ -26,11 +26,7 @@ import {
   type WorkspaceLayout,
   type WorkspaceLayoutModel
 } from './workspace-layout-model'
-import {
-  advanceTopologyRevision,
-  removeTabFromWorkspace,
-  withWorkspace
-} from './workspace-layout-removal'
+import { removeTabFromWorkspace, withWorkspace } from './workspace-layout-removal'
 
 type RefusedClose = NonNullable<LayoutCommandResult['refused']>[number]
 
@@ -59,15 +55,14 @@ export function createTerminalTab(
   }
   const placed = placeNewTab(workspace, tab, command, context)
   const paneKey = paneKeyOf(id, leafId)
-  const next = withWorkspace(model, command.workspace, placed)
   return applied(
-    { ...next, records: advanceTopologyRevision(next.records, placed.worktreeId) },
+    withWorkspace(model, command.workspace, placed),
     { tabId: id, leafId, paneKey },
     { startPaneKeys: [paneKey] }
   )
 }
 
-/** Removes a tab and its content record; a terminal tab's pane records go with it. */
+/** Removes a tab and its content record; a terminal tab's pane data goes with it. */
 export function closeTab(
   model: WorkspaceLayoutModel,
   key: string,
@@ -76,15 +71,9 @@ export function closeTab(
   const workspace = model.workspaces[key]!
   const tab = findTab(workspace, tabId)!
   let next: WorkspaceLayout = removeTabFromWorkspace(workspace, tabId)
-  const paneKeys = tab.kind === 'terminal' ? paneKeysOf(tab) : []
-  if (next.sleepingByPaneKey) {
-    next = {
-      ...next,
-      sleepingByPaneKey: filterRecord(
-        next.sleepingByPaneKey,
-        (paneKey) => !paneKeys.includes(paneKey)
-      )
-    }
+  if (tab.kind === 'terminal' && next.leaves) {
+    const leafIds = leafIdsOf(tab)
+    next = { ...next, leaves: filterRecord(next.leaves, (leafId) => !leafIds.includes(leafId)) }
   }
   if (
     tab.kind === 'editor' &&
@@ -99,18 +88,7 @@ export function closeTab(
   if (tab.kind === 'browser' && next.browserTabs) {
     next = { ...next, browserTabs: next.browserTabs.filter((entry) => entry.id !== tab.entityId) }
   }
-  const updated = withWorkspace(model, key, next)
-  if (tab.kind !== 'terminal') {
-    return updated
-  }
-  const records = {
-    ...updated.records,
-    incarnationsByPaneKey: filterRecord(
-      updated.records.incarnationsByPaneKey,
-      (paneKey) => !paneKeys.includes(paneKey)
-    )
-  }
-  return { ...updated, records: advanceTopologyRevision(records, workspace.worktreeId) }
+  return withWorkspace(model, key, next)
 }
 
 export function closeTabs(model: WorkspaceLayoutModel, command: CommandOf<'closeTabs'>): Applied {
@@ -132,7 +110,7 @@ export function closeTabs(model: WorkspaceLayoutModel, command: CommandOf<'close
       refused.push({ tabId, code: 'editor_tab_has_unsaved_draft' })
       continue
     }
-    stopPtyIds.push(...boundPtyIds(tab))
+    stopPtyIds.push(...boundPtyIds(next.workspaces[command.workspace]!, tab))
     next = closeTab(next, command.workspace, tabId)
     closed.push(tabId)
   }
@@ -220,16 +198,20 @@ export function promotePreviewTab(
   return updateTab(model, command.workspace, promoted)
 }
 
-/** A new tab replaces the group's preview tab of a compatible kind, as a single click does today. */
+/**
+ * A new tab replaces the group's preview tab of a compatible kind, as a single click does today,
+ * unless closing it is refused like any close (an unsaved draft): then both stay.
+ */
 export function placeContentTab(
   model: WorkspaceLayoutModel,
   key: string,
   tab: LayoutContentTab,
-  groupId: string | undefined,
+  placement: { groupId?: string; dirtyTabIds?: string[] },
   context: LayoutContext
-): WorkspaceLayoutModel {
+): { model: WorkspaceLayoutModel; refused: RefusedClose[] } {
   let workspace = workspaceOrEmpty(model, key)
-  const group = workspace.groups.find((entry) => entry.id === groupId) ?? workspace.groups[0]
+  const group =
+    workspace.groups.find((entry) => entry.id === placement.groupId) ?? workspace.groups[0]
   const preview = tab.isPreview
     ? workspace.tabs.find(
         (entry) =>
@@ -238,8 +220,21 @@ export function placeContentTab(
           canReplacePreviewContentType(tab.kind, entry.kind)
       )
     : undefined
+  let refused: RefusedClose[] = []
   if (preview) {
-    workspace = closeTab(withWorkspace(model, key, workspace), key, preview.id).workspaces[key]!
+    const closing = closeTabs(withWorkspace(model, key, workspace), {
+      type: 'closeTabs',
+      workspace: key,
+      tabIds: [preview.id],
+      dirtyTabIds: placement.dirtyTabIds
+    })
+    if (closing.ok) {
+      workspace = closing.model.workspaces[key]!
+      refused = closing.result.refused ?? []
+    }
   }
-  return withWorkspace(model, key, placeNewTab(workspace, tab, { groupId: group?.id }, context))
+  return {
+    model: withWorkspace(model, key, placeNewTab(workspace, tab, { groupId: group?.id }, context)),
+    refused
+  }
 }

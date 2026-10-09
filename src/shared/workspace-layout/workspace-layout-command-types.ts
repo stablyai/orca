@@ -74,6 +74,8 @@ export type LayoutCommand =
       file?: LayoutEditorFile
       groupId?: string
       preview?: boolean
+      /** Editor tabs whose view reported an unsaved draft: a preview among them is not replaced. */
+      dirtyTabIds?: string[]
     })
   | (On & { type: 'promotePreviewTab'; tabId: string })
   | (On & { type: 'openBrowserTab'; profileId?: string | null; groupId?: string })
