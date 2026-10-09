@@ -4,11 +4,15 @@ import { printResult } from '../format'
 import { rejectRemoteSelectionFlags } from '../remote-selection-flag-rejection'
 import {
   RuntimeClientError,
+  RuntimeRpcFailureError,
   type RuntimeClient,
   type RuntimeRpcSuccess,
   getDefaultUserDataPath
 } from '../runtime-client'
-import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
+import type {
+  AgentHookInstallStatus,
+  RemoteAgentHookInstallReport
+} from '../../shared/agent-hook-types'
 import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../shared/orca-profiles'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { ProfileStateOfflineLocation } from '../../main/persistence/profile-state/profile-state-offline-settings'
@@ -18,6 +22,8 @@ type AgentHookCommandResult = {
   settingsPath: string
   appliedBy: 'runtime' | 'offline'
   statuses: AgentHookInstallStatus[]
+  remotes?: RemoteAgentHookInstallReport[] | null
+  remotesUnavailableReason?: string
 }
 
 // Covers managed-home verification, WSL identity, trust grant, and bounded app-server reap.
@@ -147,14 +153,31 @@ function formatAgentHookCommandResult(result: AgentHookCommandResult): string {
         `${status.agent}: ${status.state}${status.configPath ? ` (${status.configPath})` : ''}`
     )
     .join('\n')
-  return [
+  const lines = [
     `agentStatusHooksEnabled: ${result.enabled}`,
     `appliedBy: ${result.appliedBy}`,
     `settingsPath: ${result.settingsPath}`,
     statusSummary
-  ]
-    .filter(Boolean)
-    .join('\n')
+  ].filter(Boolean)
+  if (result.remotes === null) {
+    lines.push(
+      `ssh: unavailable — ${result.remotesUnavailableReason ?? 'runtime is not reachable'}`
+    )
+  }
+  for (const remote of result.remotes ?? []) {
+    lines.push(formatRemoteReport(remote))
+  }
+  return lines.join('\n')
+}
+
+/** Formats one remote host's managed-hook install report for human CLI output. */
+function formatRemoteReport(remote: RemoteAgentHookInstallReport): string {
+  const header = `ssh:${remote.targetId}: ${remote.state}${remote.detail ? ` — ${remote.detail}` : ''}`
+  const agentLines = remote.statuses.map((status) => {
+    const detail = status.state !== 'installed' && status.detail ? ` — ${status.detail}` : ''
+    return `  ${status.agent}: ${status.state}${detail}`
+  })
+  return [header, ...agentLines].join('\n')
 }
 
 async function setAgentHooksEnabled(
@@ -174,6 +197,34 @@ async function setAgentHooksEnabled(
     settingsPath,
     appliedBy: updatedRuntime ? 'runtime' : 'offline',
     statuses
+  }
+}
+
+// Only method absence permits local diagnostics; transport failures remain errors.
+async function fetchRuntimeHookStatuses(client: RuntimeClient): Promise<{
+  local: AgentHookInstallStatus[] | null
+  remotes: RemoteAgentHookInstallReport[] | null
+  remotesUnavailableReason?: string
+}> {
+  const status = await client.getCliStatus()
+  if (!status.result.runtime.reachable) {
+    return { local: null, remotes: null, remotesUnavailableReason: 'runtime is not reachable' }
+  }
+  try {
+    const response = await client.call<{
+      local: AgentHookInstallStatus[]
+      remotes: RemoteAgentHookInstallReport[]
+    }>('agentHooks.status', undefined, { timeoutMs: 10_000 })
+    return response.result
+  } catch (error) {
+    if (error instanceof RuntimeRpcFailureError && error.code === 'method_not_found') {
+      return {
+        local: null,
+        remotes: null,
+        remotesUnavailableReason: 'runtime does not support SSH hook status'
+      }
+    }
+    throw error
   }
 }
 
@@ -198,15 +249,20 @@ export const AGENT_HOOK_HANDLERS: Record<string, CommandHandler> = {
       // Best effort: old or unavailable runtimes must not block Codex launch.
     }
   },
-  'agent hooks status': async ({ json, flags }) => {
+  'agent hooks status': async ({ client, json, flags }) => {
     rejectRemoteHookSelection(flags)
+    const runtimeStatuses = await fetchRuntimeHookStatuses(client)
     const { getManagedAgentHookStatuses } =
       await import('../../main/agent-hooks/managed-agent-hook-controls.js')
     const result: AgentHookCommandResult = {
       enabled: (await readHookSettingsFromDisk()).agentStatusHooksEnabled,
       settingsPath: await getDataPath(),
-      appliedBy: 'offline',
-      statuses: getManagedAgentHookStatuses()
+      appliedBy: runtimeStatuses.local ? 'runtime' : 'offline',
+      statuses: runtimeStatuses.local ?? getManagedAgentHookStatuses(),
+      remotes: runtimeStatuses.remotes,
+      ...(runtimeStatuses.remotesUnavailableReason
+        ? { remotesUnavailableReason: runtimeStatuses.remotesUnavailableReason }
+        : {})
     }
     printResult(localSuccess(result), json, formatAgentHookCommandResult)
   },
