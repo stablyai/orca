@@ -88,7 +88,7 @@ function pairingTranscript(sessionId: string): string {
   })}${records.map((record) => JSON.stringify(record)).join('\n')}\n`
 }
 
-test('keeps reverse completions on their named calls and preserves the accepted task list', async ({
+test('keeps named output owners and accepted tasks while retaining a standalone orphan', async ({
   electronApp,
   orcaPage
 }, testInfo) => {
@@ -132,11 +132,12 @@ test('keeps reverse completions on their named calls and preserves the accepted 
 
     const chat = orcaPage.locator('[data-native-chat-root="true"]')
     await expect(chat).toBeVisible({ timeout: 15_000 })
-    const run = chat.locator('[data-native-chat-tool-run-state]')
-    await expect(run).toHaveCount(1, { timeout: 30_000 })
+    const runs = chat.locator('[data-native-chat-tool-run-state]')
+    await expect(runs).toHaveCount(2, { timeout: 30_000 })
+    const run = runs.first()
     await run.click()
     await expect(run).toHaveAttribute('aria-expanded', 'true')
-    const members = chat.locator('[data-native-chat-tool-run-members]')
+    const members = chat.locator('[data-native-chat-tool-run-members]').first()
     await expect(members).toBeVisible()
 
     const silent = members.getByRole('button', { name: /printf silent_0$/ })
@@ -179,6 +180,36 @@ test('keeps reverse completions on their named calls and preserves the accepted 
     await orcaPage.screenshot({ path: tasksScreenshot })
     await testInfo.attach('accepted-task-list', {
       path: tasksScreenshot,
+      contentType: 'image/png'
+    })
+
+    const orphanRun = runs.nth(1)
+    await expect(orphanRun).toContainText('Result')
+    await expect(orphanRun).not.toContainText('tool call')
+    await orphanRun.click()
+    await expect(orphanRun).toHaveAttribute('aria-expanded', 'true')
+    const orphanMembers = chat.locator('[data-native-chat-tool-run-members]').nth(1)
+    const orphan = orphanMembers.getByRole('button', { name: /^Result\b/ })
+    await expect(orphan).toHaveCount(1)
+    await orphan.click()
+    await expect(orphan.locator('..').locator('pre[data-native-chat-code-content]')).toHaveText(
+      'UNATTRIBUTED_OUTPUT'
+    )
+    for (const output of OUTPUTS) {
+      await expect(orphanMembers.getByText(output, { exact: true })).toHaveCount(0)
+    }
+    await orphanMembers.evaluate(async (element) => {
+      await Promise.all(
+        element
+          .getAnimations({ subtree: true })
+          .filter((animation) => animation.effect?.getComputedTiming().iterations !== Infinity)
+          .map((animation) => animation.finished.catch(() => undefined))
+      )
+    })
+    const orphanScreenshot = testInfo.outputPath('orphan-result-and-retained-tasks.png')
+    await orcaPage.screenshot({ path: orphanScreenshot })
+    await testInfo.attach('orphan-result-and-retained-tasks', {
+      path: orphanScreenshot,
       contentType: 'image/png'
     })
     expect(

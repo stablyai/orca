@@ -694,9 +694,10 @@ describe('NativeChatToolRun', () => {
   it('leaves an unpaired result row without a category glyph', () => {
     const blocks: NativeChatBlock[] = [{ type: 'tool-result', output: 'first line' }]
 
-    render(<NativeChatToolRun blocks={blocks} expandSignal />)
+    const { container } = render(<NativeChatToolRun blocks={blocks} expandSignal />)
 
-    const resultRow = screen.getByText('Result').closest('button')
+    expect(runHeader(container)).toHaveAccessibleName('Result')
+    const resultRow = screen.getByRole('button', { name: 'Result first line' })
     // Keying a category off 'Result' would resolve a different glyph per locale.
     expect(
       [...(resultRow?.querySelectorAll('svg') ?? [])].map(
@@ -804,16 +805,25 @@ describe('NativeChatToolRun', () => {
       expect(leadingGlyphs(container)).toEqual(['lucide-search', 'lucide-search'])
     })
 
-    it('leaves a run with no tool calls headed by no category glyph', () => {
-      const blocks: NativeChatBlock[] = [{ type: 'tool-result', output: 'first line' }]
+    it.each([1, 3])('labels a run of %s unpaired results without inventing tool calls', (count) => {
+      const blocks: NativeChatBlock[] = Array.from({ length: count }, (_, index) => ({
+        type: 'tool-result',
+        output: `first line ${index}`
+      }))
 
       const { container } = render(
         <NativeChatToolRun blocks={blocks} expandSignal activeTurnIsWorking={false} />
       )
 
+      expect(runHeader(container)).toHaveAccessibleName('Result')
+      expect(runHeader(container)).not.toHaveTextContent(/tool calls?/)
+
       // Only the trailing check and the chevron; a wrench here would claim a
       // tool category for a run holding no tool call.
-      expect(leadingGlyphs(container)).toEqual(['lucide-check', 'lucide-chevron-right'])
+      expect(leadingGlyphs(container)).toEqual([
+        'lucide-check',
+        ...blocks.map(() => 'lucide-chevron-right')
+      ])
     })
 
     it('holds the run glyph across live and settled', () => {

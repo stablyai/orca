@@ -91,6 +91,9 @@ function countQueueMovement(
     deleteCount?: number,
     ...items: unknown[]
   ) {
+    if (arguments.length === 0) {
+      return originalSplice.call(this, 0, 0)
+    }
     const requestedStart = Math.trunc(requestedIndex) || 0
     const start =
       requestedStart < 0
@@ -103,7 +106,7 @@ function countQueueMovement(
     if (removed !== items.length) {
       movedSlots += this.length - start - removed
     }
-    return Reflect.apply(originalSplice, this, arguments)
+    return originalSplice.call(this, requestedIndex, removed, ...items)
   }
   Array.prototype.shift = function (this: unknown[]) {
     movedSlots += Math.max(0, this.length - 1)

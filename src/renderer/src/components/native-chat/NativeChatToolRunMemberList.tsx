@@ -10,17 +10,28 @@ import { buildNativeChatTaskListRows } from './native-chat-task-list-history'
 import type { NativeChatDiffReveal } from './native-chat-turn-diffs'
 import type { NativeChatToolRunAsides } from './NativeChatToolRun'
 
-/** A row's identity when its provider gave none: what it says, and which repeat of that it is. */
-function contentIdentity(block: NativeChatBlock, seen: Map<string, number>): string {
+/** Repeated provider IDs share a FIFO stream, so each rendered occurrence needs its own identity. */
+function toolLineIdentity(block: NativeChatBlock, seen: Map<string, number>): string {
+  const providerCallId =
+    block.type === 'tool-call' && block.callId !== undefined && block.callId.trim().length > 0
+      ? block.callId
+      : undefined
   const signature =
-    block.type === 'tool-call'
-      ? `${block.type}:${block.name}:${JSON.stringify(block.input)}`
-      : block.type === 'tool-result'
-        ? `${block.type}:${block.output}`
-        : `${block.type}`
+    providerCallId !== undefined
+      ? `call:${providerCallId}`
+      : block.type === 'tool-call'
+        ? `${block.type}:${block.name}:${JSON.stringify(block.input)}`
+        : block.type === 'tool-result'
+          ? `${block.type}:${block.output}`
+          : `${block.type}`
   const occurrence = seen.get(signature) ?? 0
   seen.set(signature, occurrence + 1)
-  return `${signature}:${occurrence}`
+  if (providerCallId === undefined) {
+    return `${signature}:${occurrence}`
+  }
+  return occurrence === 0
+    ? signature
+    : `call-occurrence:${JSON.stringify([providerCallId, occurrence])}`
 }
 
 /** An opened run's members in order, each one line until opened. Mounted only while the
@@ -100,12 +111,7 @@ export function NativeChatToolRunMemberList({
     if (consumedResults.has(block) || pairedResults.has(block)) {
       return null
     }
-    const providerCallId =
-      block.type === 'tool-call' && block.callId !== undefined && block.callId.trim().length > 0
-        ? block.callId
-        : undefined
-    const lineIdentity =
-      providerCallId !== undefined ? `call:${providerCallId}` : contentIdentity(block, seen)
+    const lineIdentity = toolLineIdentity(block, seen)
     return (
       <NativeChatToolLine
         key={lineIdentity}
