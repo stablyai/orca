@@ -173,29 +173,36 @@ export function NativeChatQueuedMessageCard({
   const [expanded, setExpanded] = useState(false)
   const [clipped, measureLine] = useNativeChatClippedLine(false)
   const textId = useId()
+  const sender = card.from ? (
+    <NativeChatAgentMessageSenders from={card.from} chatWorktreeId={chatWorktreeId} queued />
+  ) : null
+  if (editor) {
+    // The editor's own header stands in for the icon, the actions and the caption.
+    return (
+      <li
+        data-queued-message-id={card.messageId}
+        data-queued-message-state={card.state}
+        className="px-2.5 py-1.5"
+      >
+        <NativeChatQueuedMessageEditor editor={editor} sender={sender} />
+      </li>
+    )
+  }
   return (
     <li
       data-queued-message-id={card.messageId}
       data-queued-message-state={card.state}
       className="px-2.5 py-1.5"
     >
-      <div className={editor ? 'flex items-start gap-2' : 'flex items-center gap-2'}>
+      <div className="flex items-center gap-2">
         {returned || card.pausedReason === QUEUED_MESSAGE_PAUSED_SEND_FAILED ? (
           <AlertCircle className="size-3.5 shrink-0 text-destructive" aria-hidden />
         ) : (
           <ListEnd className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
         )}
         <div className="min-w-0 flex-1">
-          {card.from ? (
-            <NativeChatAgentMessageSenders
-              from={card.from}
-              chatWorktreeId={chatWorktreeId}
-              queued
-            />
-          ) : null}
-          {editor ? (
-            <NativeChatQueuedMessageEditor editor={editor} />
-          ) : expanded ? null : (
+          {sender}
+          {expanded ? null : (
             <p ref={measureLine} className="truncate text-sm" title={card.text}>
               {card.text}
             </p>
@@ -212,7 +219,7 @@ export function NativeChatQueuedMessageCard({
             </p>
           ) : null}
         </div>
-        {!editor && (expanded || clipped) ? (
+        {expanded || clipped ? (
           <QueuedMessageExpandToggle
             expanded={expanded}
             controls={expanded ? textId : undefined}
@@ -220,7 +227,7 @@ export function NativeChatQueuedMessageCard({
           />
         ) : null}
         {/* Nothing acts on a send still on its way: the host holds no card for it yet. */}
-        {card.hold === 'sending' || editor ? null : (
+        {card.hold === 'sending' ? null : (
           <>
             {/* A command never steers: its Send shows only while the agent is idle. */}
             {card.waitsForAgent ? null : (
@@ -307,7 +314,7 @@ export function NativeChatQueuedMessageCard({
           </>
         )}
       </div>
-      {expanded && !editor ? (
+      {expanded ? (
         // Indented to the text, past the icon slot and its gap.
         <p
           id={textId}

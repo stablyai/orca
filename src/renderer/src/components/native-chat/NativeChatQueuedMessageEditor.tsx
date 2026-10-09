@@ -1,17 +1,22 @@
-import { useLayoutEffect, useRef } from 'react'
+import { useLayoutEffect, useRef, type ReactNode } from 'react'
+import { Pencil, X } from 'lucide-react'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { isMacPlatform } from './native-chat-shortcut'
 import type { QueuedMessageInlineEditor } from './use-structured-agent-session-queued-edit'
 
-/** The inline editor that replaces a queued card's text while it is edited. It lives in the card,
+/** The inline editor that replaces a queued card's row while it is edited. It lives in the card,
  *  not the composer, so it stays usable while a question or approval holds the composer's slot. */
 export function NativeChatQueuedMessageEditor({
-  editor
+  editor,
+  sender
 }: {
   editor: QueuedMessageInlineEditor
+  /** The card's "From <name>" line, kept beside the label. */
+  sender?: ReactNode
 }): React.JSX.Element {
+  const isMac = isMacPlatform()
   const field = useRef<HTMLTextAreaElement>(null)
   useLayoutEffect(() => {
     if (editor.acquiring) {
@@ -32,7 +37,32 @@ export function NativeChatQueuedMessageEditor({
     }
   }, [editor.acquiring])
   return (
-    <div data-queued-message-editor className="space-y-2">
+    <div data-queued-message-editor>
+      <div className="flex min-h-7 items-center gap-1.5 text-xs text-muted-foreground">
+        <Pencil className="size-3.5 shrink-0" aria-hidden />
+        <span className="shrink-0">
+          {translate('components.native-chat.queuedMessages.editingMessage', 'Editing message')}
+        </span>
+        {sender ? (
+          <>
+            <span aria-hidden>·</span>
+            <div className="min-w-0">{sender}</div>
+          </>
+        ) : null}
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          className="ml-auto"
+          aria-label={translate(
+            'components.native-chat.queuedMessages.cancelEditing',
+            'Cancel editing'
+          )}
+          onClick={editor.cancel}
+        >
+          <X className="size-3.5" />
+        </Button>
+      </div>
       <Textarea
         ref={field}
         aria-label={translate('components.native-chat.queuedMessages.editMessage', 'Edit message')}
@@ -63,7 +93,14 @@ export function NativeChatQueuedMessageEditor({
           }
         }}
       />
-      <div className="flex gap-2">
+      <div className="mt-1.5 flex items-center gap-2">
+        <p className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+          {translate(
+            'components.native-chat.queuedMessages.editKeysHint',
+            'Enter to save · {{newline}} for a new line',
+            { newline: isMac ? '⇧ Enter' : 'Shift+Enter' }
+          )}
+        </p>
         <Button
           type="button"
           size="xs"
@@ -71,9 +108,6 @@ export function NativeChatQueuedMessageEditor({
           onClick={editor.save}
         >
           {translate('components.native-chat.queuedMessages.save', 'Save')}
-        </Button>
-        <Button type="button" variant="ghost" size="xs" onClick={editor.cancel}>
-          {translate('components.native-chat.queuedMessages.cancel', 'Cancel')}
         </Button>
       </div>
     </div>

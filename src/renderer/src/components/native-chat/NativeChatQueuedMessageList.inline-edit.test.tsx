@@ -8,7 +8,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 // A card's sender line opens and names agents through modules this test does not exercise.
-vi.mock('@/lib/open-agent-message-sender', () => ({ openAgentMessageSender: vi.fn() }))
+vi.mock('@/lib/open-agent-message-sender', () => ({
+  openAgentMessageSender: vi.fn()
+}))
 vi.mock('@/runtime/structured-conversation-name', () => ({
   useStructuredChatTabConversationName: () => null
 }))
@@ -102,6 +104,46 @@ describe('NativeChatQueuedMessageList inline edit', () => {
     fireEvent.pointerDown(within(other!).getByRole('button', { name: 'More actions' }))
     const item = await screen.findByRole('menuitem', { name: 'Edit message' })
     expect(item.getAttribute('aria-disabled')).toBe('true')
+  })
+
+  it('an edited card shows the editing header with its sender and hides its caption until editing ends', () => {
+    const editor = {
+      messageId: 'mail',
+      text: 'editing',
+      acquiring: false,
+      saving: false,
+      canSave: true,
+      change: vi.fn(),
+      save: vi.fn(),
+      cancel: vi.fn()
+    }
+    const cards = [
+      card({
+        messageId: 'mail',
+        hold: 'awaiting-answer',
+        from: { kind: 'agent', senders: [], orchestration: null }
+      })
+    ]
+    const { rerender } = renderList(controller(cards, null, true, { editCapable: true, editor }))
+    const row = screen.getByRole('listitem')
+    expect(within(row).getByText('Editing message')).toBeTruthy()
+    expect(within(row).getByText('From')).toBeTruthy()
+    expect(within(row).queryByText('Waiting for your answer')).toBeNull()
+    fireEvent.click(within(row).getByRole('button', { name: 'Cancel editing' }))
+    expect(editor.cancel).toHaveBeenCalledOnce()
+    rerender(
+      <TooltipProvider delayDuration={0}>
+        <NativeChatQueuedMessageList
+          chatWorktreeId={null}
+          controller={controller(cards, null, true, {
+            editCapable: true,
+            editor: undefined
+          })}
+        />
+      </TooltipProvider>
+    )
+    expect(screen.getByText('Waiting for your answer')).toBeTruthy()
+    expect(screen.queryByText('Editing message')).toBeNull()
   })
 
   it.each([

@@ -6,7 +6,10 @@ import { NativeChatApprovalCard } from './NativeChatApprovalCard'
 import { NativeChatQuestionCard } from './NativeChatQuestionCard'
 import type { QueuedMessageInlineEditor } from './use-structured-agent-session-queued-edit'
 
-vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
+vi.mock('@/i18n/i18n', () => ({
+  translate: (_key: string, fallback: string, values?: Record<string, string>) =>
+    fallback.replace(/\{\{(\w+)\}\}/g, (_match, name: string) => values?.[name] ?? '')
+}))
 afterEach(cleanup)
 function editor(): QueuedMessageInlineEditor {
   return {
@@ -35,7 +38,10 @@ function view(
       </ul>
       {prompt === 'approval' ? (
         <NativeChatApprovalCard
-          approval={{ title: 'Allow command?', options: [{ label: 'Allow', send: 'allow' }] }}
+          approval={{
+            title: 'Allow command?',
+            options: [{ label: 'Allow', send: 'allow' }]
+          }}
           onChoose={answer}
           onCancel={promptCancel}
           shouldFocus
@@ -44,7 +50,13 @@ function view(
       {prompt === 'question' ? (
         <NativeChatQuestionCard
           prompt={{
-            questions: [{ question: 'Which?', options: [{ label: 'One' }], multiSelect: false }]
+            questions: [
+              {
+                question: 'Which?',
+                options: [{ label: 'One' }],
+                multiSelect: false
+              }
+            ]
           }}
           onAnswer={answer}
           onCancel={promptCancel}
@@ -56,7 +68,7 @@ function view(
 }
 describe('queued card textarea', () => {
   it.each(['question', 'approval'] as const)(
-    'stays mounted and focused when a %s opens, with separate Save/Cancel',
+    'stays mounted and focused when a %s opens, its keys apart from the prompt',
     (prompt) => {
       const edit = editor()
       const answer = vi.fn()
@@ -128,12 +140,52 @@ describe('queued card textarea', () => {
     expect(edit.cancel).not.toHaveBeenCalled()
     expect(parent).not.toHaveBeenCalled()
   })
-  it('acquisition seeds a read-only field with Cancel always usable', () => {
+  it('acquisition seeds a read-only field with the X always usable', () => {
     const edit = { ...editor(), acquiring: true }
     render(<NativeChatQueuedMessageEditor editor={edit} />)
     expect(screen.getByRole('textbox').getAttribute('readonly')).not.toBeNull()
     expect(screen.getByRole('button', { name: 'Save' }).hasAttribute('disabled')).toBe(true)
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel editing' }))
     expect(edit.cancel).toHaveBeenCalledOnce()
+  })
+  it('the header X cancels and saves nothing; Save is the only footer action', () => {
+    const edit = editor()
+    render(<NativeChatQueuedMessageEditor editor={edit} />)
+    expect(screen.getByText('Editing message')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel editing' }))
+    expect(edit.cancel).toHaveBeenCalledOnce()
+    expect(edit.save).not.toHaveBeenCalled()
+    expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull()
+    expect(
+      screen
+        .getAllByRole('button')
+        .map((button) => button.getAttribute('aria-label') ?? button.textContent)
+    ).toEqual(['Cancel editing', 'Save'])
+  })
+  it.each([
+    { state: 'saving', edit: { saving: true } },
+    { state: 'unchanged', edit: { canSave: false } }
+  ])('Save is disabled while $state and enabled otherwise', ({ edit: overrides }) => {
+    const edit = { ...editor(), ...overrides }
+    const { rerender } = render(<NativeChatQueuedMessageEditor editor={edit} />)
+    const save = screen.getByRole('button', { name: 'Save' })
+    expect(save.hasAttribute('disabled')).toBe(true)
+    fireEvent.click(save)
+    expect(edit.save).not.toHaveBeenCalled()
+    rerender(<NativeChatQueuedMessageEditor editor={{ ...edit, saving: false, canSave: true }} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(edit.save).toHaveBeenCalledOnce()
+  })
+  it('the key hint names the platform newline chord', () => {
+    for (const [platform, chord] of [
+      ['Macintosh', '⇧ Enter'],
+      ['Windows', 'Shift+Enter']
+    ] as const) {
+      vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(platform)
+      const { unmount } = render(<NativeChatQueuedMessageEditor editor={editor()} />)
+      expect(screen.getByText(`Enter to save · ${chord} for a new line`)).toBeTruthy()
+      unmount()
+    }
+    vi.restoreAllMocks()
   })
 })
