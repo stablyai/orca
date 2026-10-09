@@ -55,6 +55,10 @@ import {
 } from './public-assignment-admission.js'
 import { relayHostLogDigest } from './relay-host-log-digest.js'
 import type { RelayLocalReadinessVerdict } from './relay-local-readiness.js'
+import type {
+  ShadowCompareDatabaseAnswer,
+  ShadowCompareRoute
+} from './shadow-directory-compare.js'
 import type { RelayReadinessDependency } from './relay-readiness.js'
 import type {
   AssignmentAdmissionLane,
@@ -137,6 +141,12 @@ export function createRelayApp(
     recordAdmissionServiceMs?: (lane: 'sticky' | 'drain-return', durationMs: number) => void
     recordAssignmentUnavailable?: (cause: AssignmentUnavailableCause) => void
     recordRegionRequest?: (region: RelayRegion | undefined) => void
+    // Step 3 shadow directory; absent unless the director polls seat feeds.
+    compareShadowSeats?: (
+      route: ShadowCompareRoute,
+      identity: { userId: string; relayHostId: string },
+      answer: ShadowCompareDatabaseAnswer
+    ) => void
     recordRegionSelection?: (input: {
       targetRegion: RelayRegion
       selectedRegion?: RelayRegion
@@ -199,6 +209,24 @@ export function createRelayApp(
     minIntervalMs: config.publicAssignmentRetryAfterSeconds * 1_000,
     onRejected: (reason) => operations.recordAssignmentRejectionReason?.('placement', reason)
   })
+  // Runs after the database answer and never changes or fails the response.
+  const compareShadowSeats: NonNullable<typeof operations.compareShadowSeats> = (
+    route,
+    identity,
+    answer
+  ) => {
+    try {
+      operations.compareShadowSeats?.(route, identity, answer)
+    } catch (error) {
+      console.warn(
+        JSON.stringify({
+          event: 'orca_relay_shadow_compare_failed',
+          route,
+          reason: error instanceof Error ? error.message : 'unknown'
+        })
+      )
+    }
+  }
   const rejectPublicAssignment = (context: Context): Response => {
     context.header('Retry-After', String(config.publicAssignmentRetryAfterSeconds))
     return context.json({ error: 'assignments_temporarily_unavailable' }, 503)
@@ -407,6 +435,7 @@ export function createRelayApp(
         }
         throw error
       }
+      compareShadowSeats('sticky-verify', identity, verified)
       if (verified?.homeCellRollIsolated && drainReturnConcurrency > 0) {
         // The sticky slot covered only the verification read; the re-placement
         // that follows is the drain lane's work, not the sticky lane's.
@@ -599,9 +628,9 @@ export function createRelayApp(
         relayHostId: body.data.relayHostId
       }
       // This also migrates credentials created by the staging-only combined service.
-      const assignment =
-        (await operations.assignments.resolve(identity)) ??
-        (await operations.assignments.assign(identity))
+      const resolvedAssignment = await operations.assignments.resolve(identity)
+      compareShadowSeats('resolve', identity, resolvedAssignment)
+      const assignment = resolvedAssignment ?? (await operations.assignments.assign(identity))
       return context.json({
         v: 1,
         cellUrl: assignment.cellUrl,

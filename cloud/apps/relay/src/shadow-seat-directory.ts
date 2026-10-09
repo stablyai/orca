@@ -115,6 +115,8 @@ export type SeatFeedCellState = {
 
 type CellCursor = SeatFeedCellState & { seats: Map<string, ShadowSeat> }
 
+export type HeartbeatSnapshot = { readAt: number; expiresAt: ReadonlyMap<string, number> }
+
 function hostKey(userId: string, relayHostId: string): string {
   return `${userId}\u0000${relayHostId}`
 }
@@ -125,12 +127,21 @@ export class ShadowSeatDirectory {
   // Insertion order is age order: a touched host is re-inserted at the end.
   private readonly recentlyLeft = new Map<string, RecentlyLeftSeat[]>()
   private required = new Set<string>()
+  // Absent: every listed cell is live (callers without a database view).
+  private heartbeats: HeartbeatSnapshot | undefined
+  // Per host, the newest database epoch seen and when: stands in for the grant time.
+  private readonly databaseEpochs = new Map<string, { epoch: number; firstSeenAt: number }>()
 
   // Cells no longer listed are forgotten with their seats; new ones start pending.
   // `required` defaults to every listed cell.
-  setCells(cellIds: readonly string[], required: Iterable<string> = cellIds): void {
+  setCells(
+    cellIds: readonly string[],
+    required: Iterable<string> = cellIds,
+    heartbeats?: HeartbeatSnapshot
+  ): void {
     const wanted = new Set(cellIds)
     this.required = new Set([...required].filter((cellId) => wanted.has(cellId)))
+    this.heartbeats = heartbeats
     for (const [cellId, cursor] of this.cells) {
       if (wanted.has(cellId)) continue
       for (const key of cursor.seats.keys()) this.unindex(key, cellId)
@@ -211,6 +222,36 @@ export class ShadowSeatDirectory {
       if (this.cells.get(cellId)?.lastAnsweredAt === undefined) return false
     }
     return true
+  }
+
+  // What the database's resolve would call this cell now, from a cell-list read up to
+  // 30 s old. `unknown`: its heartbeat ran out after that read, and the next read decides.
+  cellLiveness(cellId: string, now: number): 'live' | 'unlive' | 'unknown' {
+    if (!this.heartbeats) return this.cells.has(cellId) ? 'live' : 'unlive'
+    const expiresAt = this.heartbeats.expiresAt.get(cellId)
+    if (expiresAt === undefined) return 'unlive'
+    if (expiresAt > now) return 'live'
+    return expiresAt > this.heartbeats.readAt ? 'unknown' : 'unlive'
+  }
+
+  // When this director first saw the host at this database epoch, if it has.
+  databaseEpochFirstSeen(userId: string, relayHostId: string, epoch: number): number | undefined {
+    const known = this.databaseEpochs.get(hostKey(userId, relayHostId))
+    return known && known.epoch >= epoch ? known.firstSeenAt : undefined
+  }
+
+  // Records a sighting; returns when this director first saw the host at this epoch.
+  observeDatabaseEpoch(userId: string, relayHostId: string, epoch: number, now: number): number {
+    const key = hostKey(userId, relayHostId)
+    const known = this.databaseEpochs.get(key)
+    if (known && known.epoch >= epoch) return known.firstSeenAt
+    this.databaseEpochs.delete(key)
+    this.databaseEpochs.set(key, { epoch, firstSeenAt: now })
+    if (this.databaseEpochs.size > SHADOW_SEAT_RECENTLY_LEFT_MAX_HOSTS) {
+      const oldest = this.databaseEpochs.keys().next().value
+      if (oldest !== undefined) this.databaseEpochs.delete(oldest)
+    }
+    return now
   }
 
   seatsOf(userId: string, relayHostId: string): ShadowSeat[] {
@@ -446,12 +487,21 @@ export function startShadowSeatPoller(
     if (now() < cellListRetryAt) return
     cellListInFlight = true
     try {
+      const readAt = now()
       const listed = await options.listCells()
       cells =
         selection === 'all' ? listed : listed.filter((cell) => selection.includes(cell.cellId))
       directory.setCells(
         cells.map((cell) => cell.cellId),
-        cells.filter((cell) => cell.requiredForComplete).map((cell) => cell.cellId)
+        cells.filter((cell) => cell.requiredForComplete).map((cell) => cell.cellId),
+        {
+          readAt,
+          expiresAt: new Map(
+            cells.flatMap((cell) =>
+              cell.heartbeatExpiresAt === null ? [] : [[cell.cellId, cell.heartbeatExpiresAt]]
+            )
+          )
+        }
       )
       cellsReadAt = now()
       cellListFailures = 0
