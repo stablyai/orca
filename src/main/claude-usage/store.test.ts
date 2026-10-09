@@ -693,7 +693,7 @@ describe('ClaudeUsageStore', () => {
     expect(usage.unavailableReason).toBe('scan_failed')
   })
 
-  it('adapts Claude scans to pretty-printed cache persistence', async () => {
+  it('adapts Claude scans to durable cache persistence', async () => {
     const store = createStoreWithState({
       schemaVersion: 5,
       scanState: {
@@ -707,7 +707,14 @@ describe('ClaudeUsageStore', () => {
     await store.refresh(true)
 
     expect(scanClaudeUsageFilesViaWorker).toHaveBeenCalledWith([], [])
-    expect(readFileSync(join(tempUserData, 'orca-claude-usage.json'), 'utf-8')).toContain('\n')
+    expect(
+      JSON.parse(readFileSync(join(tempUserData, 'orca-claude-usage.json'), 'utf-8'))
+    ).toMatchObject({
+      processedFiles: [],
+      sessions: [],
+      dailyAggregates: [],
+      scanState: { enabled: true, lastScanError: null }
+    })
   })
 
   it('joins a scan that is already in flight when the run finished before it started', async () => {

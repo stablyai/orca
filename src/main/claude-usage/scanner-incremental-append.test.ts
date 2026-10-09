@@ -46,30 +46,36 @@ vi.mock('node:fs/promises', async () => {
     ...actual,
     open: async (...args: Parameters<typeof actual.open>) => {
       const handle = await actual.open(...args)
-      return new Proxy(handle, {
-        get(target, property) {
-          if (property === 'createReadStream') {
-            return (options?: Parameters<typeof handle.createReadStream>[0]) => {
-              const read = { path: String(args[0]), start: options?.start ?? 0, bytes: 0 }
-              streamReads.push(read)
-              const stream = target.createReadStream(options)
-              stream.on('data', (chunk: string | Buffer) => {
-                read.bytes += typeof chunk === 'string' ? Buffer.byteLength(chunk) : chunk.length
-              })
-              return stream
-            }
-          }
-          if (property === 'read') {
-            return async (buffer: Buffer, offset: number, length: number, position: number) => {
-              const result = await target.read(buffer, offset, length, position)
-              streamReads.push({ path: String(args[0]), start: position, bytes: result.bytesRead })
-              return result
-            }
-          }
-          const value = Reflect.get(target, property)
-          return typeof value === 'function' ? value.bind(target) : value
-        }
+      const createStream = handle.createReadStream.bind(handle)
+      const readWindow = handle.read.bind(handle)
+      let streaming = false
+      vi.spyOn(handle, 'createReadStream').mockImplementation((options) => {
+        const read = { path: String(args[0]), start: options?.start ?? 0, bytes: 0 }
+        streamReads.push(read)
+        const stream = createStream(options)
+        streaming = true
+        stream.once('end', () => (streaming = false))
+        stream.once('close', () => (streaming = false))
+        stream.on('data', (chunk: string | Buffer) => {
+          read.bytes += typeof chunk === 'string' ? Buffer.byteLength(chunk) : chunk.length
+        })
+        return stream
       })
+      vi.spyOn(handle, 'read').mockImplementation(async (...readArgs) => {
+        const streamRead = streaming
+        const result = await readWindow(...readArgs)
+        if (streamRead) {
+          return result
+        }
+        const position = readArgs.at(-1)
+        streamReads.push({
+          path: String(args[0]),
+          start: typeof position === 'number' ? position : 0,
+          bytes: result.bytesRead
+        })
+        return result
+      })
+      return handle
     }
   }
 })

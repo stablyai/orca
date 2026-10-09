@@ -1,4 +1,5 @@
 import type { ClaudeUsageParseResumeState, ClaudeUsagePersistedFile } from './types'
+import { buildClaudeUsageProjectionIntegrity } from './transcript-projection-integrity'
 
 export function hasClaudeUsageResumeProjection(
   previous: ClaudeUsagePersistedFile
@@ -6,13 +7,17 @@ export function hasClaudeUsageResumeProjection(
   const state = previous.parseResumeState
   if (
     !state ||
+    !Array.isArray(previous.ownedDedupeKeys) ||
+    !Array.isArray(previous.sessions) ||
+    !Array.isArray(previous.dailyAggregates) ||
     !Number.isInteger(state.lineCount) ||
     state.lineCount < 0 ||
     state.lineCount > previous.lineCount ||
     state.parsedBytes > previous.size ||
     !Array.isArray(state.ownedTokenMaxima) ||
     !Array.isArray(state.projections) ||
-    !Array.isArray(state.encounterOrder)
+    !Array.isArray(state.encounterOrder) ||
+    typeof state.projectionIntegrity !== 'string'
   ) {
     return false
   }
@@ -21,6 +26,10 @@ export function hasClaudeUsageResumeProjection(
     expectedKeys.size !== previous.ownedDedupeKeys.length ||
     state.ownedTokenMaxima.length !== expectedKeys.size
   ) {
+    return false
+  }
+  // Bind ownership, maxima and rollups together; valid shapes alone cannot reject drift.
+  if (state.projectionIntegrity !== buildClaudeUsageProjectionIntegrity(previous)) {
     return false
   }
   const sessions = new Map(previous.sessions.map((session) => [session.sessionId, session]))

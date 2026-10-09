@@ -1,5 +1,5 @@
 import { basename } from 'node:path'
-import { stat } from 'node:fs/promises'
+import { readJsonlFileSnapshot } from '../usage/jsonl-file-snapshot'
 import { createReadStream } from 'node:fs'
 import { createInterface } from 'node:readline'
 import type {
@@ -275,7 +275,7 @@ export async function readClaudeUsageScanFile(
 export async function getClaudeUsageProcessedFileStat(
   filePath: string
 ): Promise<Omit<ClaudeUsageProcessedFile, 'lineCount'> & { physicalFileId: string | null }> {
-  const fileStat = await stat(filePath)
+  const fileStat = await readJsonlFileSnapshot(filePath)
   return {
     path: filePath,
     mtimeMs: fileStat.mtimeMs,

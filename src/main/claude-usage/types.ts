@@ -136,4 +136,5 @@ export type ClaudeUsageParseResumeState = JsonlFileCheckpoint & {
   ownedTokenMaxima: ClaudeUsageTokenMaxima[]
   projections: ClaudeUsageTurnProjection[]
   encounterOrder: { sessionId: string; projectKeys: string[] }[]
+  projectionIntegrity?: string
 }

@@ -19,6 +19,7 @@ import {
   encodeClaudeUsageTokenCheckpoint,
   hydrateClaudeUsageOwnedTurns
 } from './transcript-token-checkpoint'
+import { buildClaudeUsageProjectionIntegrity } from './transcript-projection-integrity'
 
 function tokenTotals(turn: ClaudeUsageTokenTotals): ClaudeUsageTokenTotals {
   return {
@@ -182,7 +183,7 @@ export async function projectClaudeUsageScanFile(
   mergeClaudeSessions(sessions, appended.sessions)
   mergeClaudeDailyAggregates(daily, appended.dailyAggregates)
   retainEncounterOrder(order, attributed)
-  return {
+  const projected: ClaudeUsagePersistedFile = {
     ...read.processedFile,
     sessions: finalizeClaudeSessions(restoreEncounterOrder(sessions, order)),
     dailyAggregates: [...daily.values()].sort((a, b) =>
@@ -199,4 +200,8 @@ export async function projectClaudeUsageScanFile(
         }
       : null
   }
+  if (projected.parseResumeState) {
+    projected.parseResumeState.projectionIntegrity = buildClaudeUsageProjectionIntegrity(projected)
+  }
+  return projected
 }

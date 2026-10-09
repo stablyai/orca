@@ -49,71 +49,70 @@ vi.mock('node:fs/promises', async () => {
       const handle = await actual.open(...args)
       const observedHandle = { path: String(args[0]), closes: 0, closed: false }
       reads.handles.push(observedHandle)
-      return new Proxy(handle, {
-        get(target, property) {
-          if (property === 'stat') {
-            return async () => {
-              const snapshot = await target.stat()
-              const mutate = reads.afterStat
-              reads.afterStat = undefined
-              await mutate?.()
-              return snapshot
-            }
-          }
-          if (property === 'close') {
-            return async () => {
-              await target.close()
-              observedHandle.closes++
-              observedHandle.closed = target.fd === -1
-            }
-          }
-          if (property === 'createReadStream') {
-            return (options?: Parameters<typeof handle.createReadStream>[0]) => {
-              const read = {
-                path: String(args[0]),
-                start: options?.start ?? 0,
-                end: options?.end,
-                bytes: 0
-              }
-              reads.streams.push(read)
-              const end = reads.streamEndOverride ?? options?.end
-              reads.streamEndOverride = undefined
-              const stream = target.createReadStream({
-                ...options,
-                end,
-                highWaterMark: reads.chunkBytes
-              })
-              stream.on('data', (chunk: Buffer) => {
-                read.bytes += chunk.length
-              })
-              return stream
-            }
-          }
-          if (property === 'read') {
-            return async (buffer: Buffer, offset: number, length: number, position: number) => {
-              const scheduled =
-                reads.readFailureAtCall === undefined ||
-                reads.readFailureAtCall === reads.windows.length + 1
-              const failure = scheduled ? reads.readFailure : undefined
-              if (scheduled) {
-                reads.readFailure = undefined
-                reads.readFailureAtCall = undefined
-              }
-              if (failure && failure !== 'eof') {
-                throw failure
-              }
-              const read =
-                failure === 'eof'
-                  ? { bytesRead: 0, buffer }
-                  : await target.read(buffer, offset, length, position)
-              reads.windows.push({ path: String(args[0]), start: position, bytes: read.bytesRead })
-              return read
-            }
-          }
-          const value = Reflect.get(target, property)
-          return typeof value === 'function' ? value.bind(target) : value
-        }
+      const statHandle = handle.stat.bind(handle)
+      const closeHandle = handle.close.bind(handle)
+      const createStream = handle.createReadStream.bind(handle)
+      const readWindow = handle.read.bind(handle)
+      let streaming = false
+      vi.spyOn(handle, 'stat').mockImplementation(async (options) => {
+        const snapshot = await statHandle(options)
+        const mutate = reads.afterStat
+        reads.afterStat = undefined
+        await mutate?.()
+        return snapshot
       })
+      vi.spyOn(handle, 'close').mockImplementation(async () => {
+        await closeHandle()
+        if (!observedHandle.closed && handle.fd === -1) {
+          observedHandle.closes++
+        }
+        observedHandle.closed = handle.fd === -1
+      })
+      vi.spyOn(handle, 'createReadStream').mockImplementation((options) => {
+        const read = {
+          path: String(args[0]),
+          start: options?.start ?? 0,
+          end: options?.end,
+          bytes: 0
+        }
+        reads.streams.push(read)
+        const end = reads.streamEndOverride ?? options?.end
+        reads.streamEndOverride = undefined
+        const stream = createStream({ ...options, end, highWaterMark: reads.chunkBytes })
+        streaming = true
+        stream.once('end', () => (streaming = false))
+        stream.once('close', () => (streaming = false))
+        stream.on('data', (chunk: Buffer) => {
+          read.bytes += chunk.length
+        })
+        return stream
+      })
+      vi.spyOn(handle, 'read').mockImplementation(async (...readArgs) => {
+        if (streaming) {
+          return readWindow(...readArgs)
+        }
+        const scheduled =
+          reads.readFailureAtCall === undefined ||
+          reads.readFailureAtCall === reads.windows.length + 1
+        const failure = scheduled ? reads.readFailure : undefined
+        if (scheduled) {
+          reads.readFailure = undefined
+          reads.readFailureAtCall = undefined
+        }
+        if (failure && failure !== 'eof') {
+          throw failure
+        }
+        const result = await readWindow(...readArgs)
+        const read = failure === 'eof' ? { ...result, bytesRead: 0 } : result
+        const position = readArgs.at(-1)
+        reads.windows.push({
+          path: String(args[0]),
+          start: typeof position === 'number' ? position : 0,
+          bytes: read.bytesRead
+        })
+        return read
+      })
+      return handle
     }
   }
 })
@@ -178,6 +177,14 @@ function onlyFile(result: ScanResult): ClaudeUsagePersistedFile {
 }
 
 function expectParseRange(start: number, size: number): void {
+  if (size <= 3 * 4096) {
+    expect(reads.streams).toHaveLength(0)
+    expect(reads.windows.slice(-2)).toEqual([
+      { path: transcriptPath, start, bytes: size - start },
+      { path: transcriptPath, start: 0, bytes: size }
+    ])
+    return
+  }
   expect(reads.streams.filter((read) => read.path === transcriptPath)).toEqual([
     { path: transcriptPath, start, end: size - 1, bytes: size - start }
   ])

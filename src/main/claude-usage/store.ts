@@ -20,6 +20,7 @@ import { buildBreakdown, buildDaily, buildSummary } from './claude-usage-report-
 import { buildRecentSessions } from './claude-usage-session-rows'
 import type { AutomationUsageLookupInput } from './claude-usage-automation-attribution'
 import { resolveAutomationRunUsage } from './claude-usage-automation-attribution'
+import { validatePersistedClaudeUsageProjections } from './persisted-projection-validation'
 
 // Why: v5 widens Claude ownership keys (message-id / uuid fallbacks). Older
 // caches either lack ownership or used narrower keys and can under/over-count
@@ -49,7 +50,7 @@ function getDefaultState(): ClaudeUsagePersistedState {
 
 function normalizePersistedState(state: ClaudeUsagePersistedState): ClaudeUsagePersistedState {
   if (state.schemaVersion === SCHEMA_VERSION) {
-    return state
+    return validatePersistedClaudeUsageProjections(state)
   }
   // Scanner changes invalidate totals, but preserving enabled keeps existing tracking on.
   const defaults = getDefaultState()
@@ -90,7 +91,6 @@ export class ClaudeUsageStore extends UsageProviderStoreLifecycle<
       normalizeState: normalizePersistedState,
       sourceKey: 'processedFiles',
       dataPresenceKey: 'hasAnyClaudeData',
-      jsonIndent: 2,
       scan: scanClaudeUsageFilesViaWorker
     })
   }
