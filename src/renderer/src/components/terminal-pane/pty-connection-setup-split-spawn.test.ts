@@ -649,4 +649,44 @@ describe('connectPanePty', () => {
     expect(transport.claimViewport).toHaveBeenCalledTimes(2)
     setFitOverride('pty-live', 'desktop-fit', 0, 0)
   })
+
+  it('forwards xterm focus reports without claiming the viewport', async () => {
+    // Regression: a TUI re-arms DECSET 1004 after each resize and xterm answers with a focus
+    // report. Claiming on it made a host and a paired remote of different sizes take the PTY
+    // from each other several times a second, so the parked mirror flickered without end.
+    const { connectPanePty } = await import('./pty-connection')
+
+    const transport = createMockTransport('pty-live')
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] }
+    }
+
+    const pane = createPane(1)
+    const registered: { onData?: (data: string) => void } = {}
+    pane.terminal.onData.mockImplementation((handler: (data: string) => void) => {
+      registered.onData = handler
+      return { dispose: vi.fn() }
+    })
+    const { setFitOverride } = await import('@/lib/pane-manager/mobile-fit-overrides')
+
+    connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+    const emit = registered.onData
+    if (!emit) {
+      throw new Error('expected onData handler to be registered')
+    }
+
+    setFitOverride('pty-live', 'remote-desktop-fit', 80, 24)
+    transport.claimViewport.mockClear()
+    emit('\x1b[I')
+    emit('\x1b[O')
+    expect(transport.sendInput).toHaveBeenCalledWith('\x1b[I', 'query-reply')
+    expect(transport.sendInput).toHaveBeenCalledWith('\x1b[O', 'query-reply')
+    expect(transport.claimViewport).not.toHaveBeenCalled()
+
+    emit('a')
+    expect(transport.claimViewport).toHaveBeenCalledTimes(1)
+    setFitOverride('pty-live', 'desktop-fit', 0, 0)
+  })
 })
