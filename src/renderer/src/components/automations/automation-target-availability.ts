@@ -1,5 +1,5 @@
 import type { Automation } from '../../../../shared/automations-types'
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../shared/execution-host'
 import {
   describeRuntimeCompatBlock,
   evaluateRuntimeCompat
@@ -9,6 +9,7 @@ import {
   RUNTIME_PROTOCOL_VERSION
 } from '../../../../shared/protocol-version'
 import type { AutomationHostTarget } from './automation-host-client'
+import { repoHostMatchesRunContext, setupHostMatchesRunContext } from './automation-run-context'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
@@ -146,40 +147,6 @@ export function getAutomationTargetAvailability({
     case 'error':
       return unavailable('ssh-unavailable', 'Connect this SSH host before running manually.')
   }
-}
-
-function getRuntimeTargetHostId(target: AutomationHostTarget | null | undefined): string | null {
-  return target?.kind === 'environment'
-    ? `runtime:${encodeURIComponent(target.environmentId)}`
-    : null
-}
-
-function setupHostMatchesRunContext(
-  setupHostId: string,
-  runHostId: string,
-  target: AutomationHostTarget | null | undefined
-): boolean {
-  if (setupHostId === runHostId) {
-    return true
-  }
-  const targetHostId = getRuntimeTargetHostId(target)
-  // Why: remote-runtime project lists project the server-local host as runtime:<env>,
-  // while CLI-created automations can preserve the server's durable local run host.
-  return targetHostId !== null && setupHostId === targetHostId && runHostId === 'local'
-}
-
-function repoHostMatchesRunContext(
-  repo: Repo,
-  runHostId: string,
-  target: AutomationHostTarget | null | undefined
-): boolean {
-  if (runHostId === getRepoExecutionHostId(repo)) {
-    return true
-  }
-  const targetHostId = getRuntimeTargetHostId(target)
-  // Why: repos fetched from a remote runtime are owned by runtime:<env> in the
-  // renderer, but saved automations still target the host setup that runs there.
-  return targetHostId !== null && getRepoExecutionHostId(repo) === targetHostId
 }
 
 function getAutomationSourceAvailability(
