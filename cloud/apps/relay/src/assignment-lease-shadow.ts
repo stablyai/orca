@@ -8,10 +8,23 @@ export type AssignmentLeaseShadowClass = Exclude<AssignmentLeaseClass, 'valid'> 
 
 export const ASSIGNMENT_LEASE_SHADOW_EVENT = 'orca_relay_assignment_lease_shadow'
 const WINDOW_MS = 60_000
+// Flat per-class totals under `classes`, so a log-based metric can extract each by path.
+const CLASS_FIELDS: ReadonlyArray<readonly [AssignmentLeaseShadowClass, string]> = [
+  ['agree', 'agree'],
+  ['disagree', 'disagree'],
+  ['absent', 'absent'],
+  ['expired', 'expired'],
+  ['bad-signature', 'badSignature'],
+  ['wrong-host', 'wrongHost'],
+  ['wrong-cell', 'wrongCell'],
+  ['epoch-behind', 'epochBehind'],
+  ['epoch-ahead', 'epochAhead']
+]
 const MAX_DB_READ_SAMPLES = 2_000
 
 export class AssignmentLeaseShadow {
   private counts = new Map<string, number>()
+  private classes = new Map<AssignmentLeaseShadowClass, number>()
   private dbReadMs: number[] = []
   private windowStartedAt: number
 
@@ -45,6 +58,7 @@ export class AssignmentLeaseShadow {
           leaseClass === 'valid' ? (dbValid ? 'agree' : 'disagree') : leaseClass
         const key = `${shadowClass}:${dbValid ? 'db-valid' : 'db-refused'}`
         this.counts.set(key, (this.counts.get(key) ?? 0) + 1)
+        this.classes.set(shadowClass, (this.classes.get(shadowClass) ?? 0) + 1)
         if (this.dbReadMs.length < MAX_DB_READ_SAMPLES) this.dbReadMs.push(dbReadMs)
         this.flushIfDue()
       })
@@ -61,6 +75,9 @@ export class AssignmentLeaseShadow {
         cellId: this.input.cellId,
         windowMs: now - this.windowStartedAt,
         counts: Object.fromEntries(this.counts),
+        classes: Object.fromEntries(
+          CLASS_FIELDS.map(([shadowClass, field]) => [field, this.classes.get(shadowClass) ?? 0])
+        ),
         // The hello's database read, which a lease-admitted hello would skip (E-pre).
         dbReadMs: {
           samples: this.dbReadMs.length,
@@ -71,6 +88,7 @@ export class AssignmentLeaseShadow {
       })
     )
     this.counts = new Map()
+    this.classes = new Map()
     this.dbReadMs = []
     this.windowStartedAt = now
   }
