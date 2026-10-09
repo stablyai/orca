@@ -20,7 +20,7 @@ import {
   NodeFileReadTooLargeError,
   readNodeFileWithinLimit
 } from '../../shared/node-bounded-file-reader'
-import { isBinaryBuffer } from './runtime-file-command-host'
+import { isBinaryBuffer } from '../../shared/binary-buffer'
 import type {
   DocPreviewFileAccessRequest,
   DocPreviewFileAccessResult

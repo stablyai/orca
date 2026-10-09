@@ -10,10 +10,7 @@ import type { TerminalAgent } from '../../shared/terminal-agent'
 import { selectRuntimeHookAgentRowForPane } from './runtime-mobile-agent-status-projection'
 import { isTuiAgent } from '../../shared/tui-agent-config'
 import { resolvePublishedPaneAgentIdentity } from '../../shared/published-pane-agent-identity'
-import type { RuntimeTerminalSummary, RuntimeWorktreePsSummary } from '../../shared/runtime-types'
-import type { RuntimeWorktreeSummaryPathIndex } from './runtime-worktree-summary-paths'
-import { parseRuntimeWorktreeId } from './runtime-worktree-path-identity'
-import { findRuntimeWorktreeSummaryByPath } from './runtime-worktree-summary-paths'
+import type { RuntimeTerminalSummary } from '../../shared/runtime-types'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import { getLatestLeafTitle } from './runtime-worktree-status-projection'
 import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
@@ -106,38 +103,6 @@ export class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRuntimeWith
       title
     })
     return agentIdentity ? { agentIdentity } : {}
-  }
-
-  protected getSummaryForRuntimeWorktreeId(
-    summaries: Map<string, RuntimeWorktreePsSummary>,
-    runtimeWorktreeSummaryPathIndex: RuntimeWorktreeSummaryPathIndex,
-    missingRuntimeWorktreeIds: Set<string>,
-    runtimeWorktreeId: string
-  ): RuntimeWorktreePsSummary | null {
-    const exact = summaries.get(runtimeWorktreeId)
-    if (exact) {
-      return exact
-    }
-    if (missingRuntimeWorktreeIds.has(runtimeWorktreeId)) {
-      return null
-    }
-    const parsed = parseRuntimeWorktreeId(runtimeWorktreeId)
-    if (!parsed) {
-      return null
-    }
-    const comparisonPlatform =
-      runtimeWorktreeSummaryPathIndex.platformByRepoId.get(parsed.repoId) ?? process.platform
-    const indexed = findRuntimeWorktreeSummaryByPath(
-      runtimeWorktreeSummaryPathIndex,
-      parsed.repoId,
-      parsed.worktreePath,
-      comparisonPlatform
-    )
-    if (indexed) {
-      return indexed
-    }
-    missingRuntimeWorktreeIds.add(runtimeWorktreeId)
-    return null
   }
 
   protected buildTerminalSummary(
