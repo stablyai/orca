@@ -69,6 +69,36 @@ describe('RateLimitService', () => {
     resetRateLimitProviderMocks()
   })
 
+  it.each([
+    [
+      'account-change refresh',
+      (service: RateLimitService) => service.refreshForCodexAccountChange(null, { runtime: 'host' })
+    ],
+    [
+      'target refresh',
+      (service: RateLimitService) => service.refreshCodexForTarget({ runtime: 'host' })
+    ]
+  ])('passes execution-host proxy settings through %s', async (_label, refresh) => {
+    const service = new RateLimitService()
+    const networkProxySettings = { httpProxyUrl: 'http://proxy.fixture.invalid:8080' }
+    service.setCodexHomePathResolver(() => ({
+      kind: 'ready',
+      codexHomePath: '/managed/synthetic-home'
+    }))
+    service.setNetworkProxySettingsResolver(() => networkProxySettings)
+    vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 20, Date.now()))
+
+    await refresh(service)
+
+    expect(fetchCodexRateLimits).toHaveBeenCalledWith(
+      expect.objectContaining({
+        codexHomePath: '/managed/synthetic-home',
+        networkProxySettings,
+        signal: expect.any(AbortSignal)
+      })
+    )
+  })
+
   it('passes the selected WSL Codex home into active account rate-limit fetches', async () => {
     const service = new RateLimitService()
     const wslCodexHome =
@@ -144,6 +174,8 @@ describe('RateLimitService', () => {
 
   it('reuses a caller-provided idempotency key when consuming a Codex reset credit', async () => {
     const service = new RateLimitService()
+    const networkProxySettings = { httpProxyUrl: 'http://proxy.fixture.invalid:8080' }
+    service.setNetworkProxySettingsResolver(() => networkProxySettings)
     const idempotencyKey = '11111111-1111-4111-8111-111111111111'
     service.setCodexHomePathResolver(() => ({ kind: 'ready', codexHomePath: '/tmp/codex-home' }))
     vi.mocked(consumeCodexRateLimitResetCredit).mockResolvedValueOnce('reset')
@@ -160,6 +192,13 @@ describe('RateLimitService', () => {
       codexHomePath: '/tmp/codex-home',
       idempotencyKey
     })
+    expect(fetchCodexRateLimits).toHaveBeenCalledWith(
+      expect.objectContaining({
+        codexHomePath: '/tmp/codex-home',
+        networkProxySettings,
+        signal: expect.any(AbortSignal)
+      })
+    )
   })
 
   it('retries the post-reset usage read when the first response still shows the old quota', async () => {
