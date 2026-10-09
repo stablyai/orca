@@ -84,8 +84,8 @@ export function reportedCodexThreadOptions(
   }
 }
 
-/** A picked tier the model does not list falls back to standard. A tier Codex reports for the
- *  thread is Codex's to judge (it accepts unlisted ones such as `flex`), so it is never rewritten. */
+/** A picked tier the model does not list falls back to standard. The thread's reported tier, picked
+ *  or not, is Codex's to judge (it accepts unlisted ones such as `flex`), so it is never rewritten. */
 export function dropUnlistedCodexServiceTier(
   session: CodexSession,
   model: Pick<AgentSessionModelOption, 'serviceTiers'> | undefined
@@ -94,6 +94,7 @@ export function dropUnlistedCodexServiceTier(
   if (
     tier !== undefined &&
     tier !== CODEX_DEFAULT_SERVICE_TIER &&
+    tier !== session.reportedOptions.serviceTier &&
     model?.serviceTiers &&
     !model.serviceTiers.some((choice) => choice.value === tier)
   ) {

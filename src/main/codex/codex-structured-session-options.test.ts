@@ -620,8 +620,14 @@ describe('Codex reported tier', () => {
     ).resolves.toEqual({ model: 'gpt-6-luna' })
   })
 
-  it('lets the reported Flex be picked again after another tier', async () => {
-    const session = optionSession(vi.fn(async () => listing))
+  it('keeps a re-picked reported Flex through a read, a model switch, and the next message', async () => {
+    const requests: { method: string; params?: Record<string, unknown> }[] = []
+    const session = optionSession(
+      vi.fn(async (method: string, params?: Record<string, unknown>) => {
+        requests.push({ method, params })
+        return method === 'model/list' ? listing : { turn: { id: 'turn-flex' } }
+      })
+    )
     session.reportedOptions = { model: 'gpt-6.1-sol', serviceTier: 'flex', serviceTierKnown: true }
     await primePicker(session)
 
@@ -629,6 +635,19 @@ describe('Codex reported tier', () => {
     await expect(
       applyCodexStructuredSessionOption(session, 'serviceTier', 'flex')
     ).resolves.toEqual({ serviceTier: 'flex' })
+    await expect(readLiveCodexSessionOptions(session, undefined)).resolves.toMatchObject({
+      current: { serviceTier: 'flex' }
+    })
+    await expect(
+      applyCodexStructuredSessionOption(session, 'model', 'gpt-6-luna')
+    ).resolves.toEqual({ model: 'gpt-6-luna', serviceTier: 'flex' })
+    await startCodexTurn(session, {
+      clientMessageId: 'message-flex',
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'go' }] }
+    })
+    expect(requests.find((entry) => entry.method === 'turn/start')?.params).toMatchObject({
+      serviceTier: 'flex'
+    })
   })
 
   it('resets a reported tier the old model listed when the new model does not', async () => {
