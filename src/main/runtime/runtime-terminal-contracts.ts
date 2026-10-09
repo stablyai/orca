@@ -238,4 +238,6 @@ export type RuntimeAgentPromptWriteOptions = Omit<RuntimeTerminalWriteOptions, '
   observationTimeoutMs?: number
   requestId?: string
   onInputAccepted?: (send: RuntimeTerminalSend) => void
+  /** Append to unsent composer text instead of refusing with AgentPromptPendingInputError. */
+  allowPendingInput?: boolean
 }

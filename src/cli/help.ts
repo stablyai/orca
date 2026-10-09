@@ -183,6 +183,11 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   if (command.startsWith('account ') && flag === 'agent') {
     return '--agent <id>           Account provider: opencode or devin'
   }
+  // Why: the shared --force help describes worktree removal; here it overrides the
+  // pending-input refusal that protects a user's unsent composer draft.
+  if (command === 'terminal send' && flag === 'force') {
+    return '--force                Append to unsent Claude Code/Codex composer input instead of refusing (pending-input)'
+  }
   if (flag === 'key' && command === 'computer hotkey') {
     return '--key <key-combo>      Modifier chord with one key, e.g. CmdOrCtrl+A'
   }
