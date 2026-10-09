@@ -1,5 +1,5 @@
-# Runtime switch files: cells/<cellId>.json read by each cell, directors.json read by the
-# directors, written only by the one-cell flag workflow. The cell image derives the name from
+# Runtime switch files: cells/<cellId>.json read by each cell, written only by the one-cell
+# flag workflow. The cell image derives the name from
 # the metadata server's project id, so it must stay "<project_id>-relay-control".
 #
 # Apply only with the targeted command in the PR that added this file; a root plan rolls the
@@ -48,12 +48,6 @@ resource "google_storage_bucket_iam_member" "relay_control_cell_reader" {
   member = google_service_account.relay_runtime.member
 }
 
-resource "google_storage_bucket_iam_member" "relay_control_director_reader" {
-  bucket = google_storage_bucket.relay_control.name
-  role   = "roles/storage.objectViewer"
-  member = google_service_account.relay_director_runtime.member
-}
-
 # Overwrite and nothing more: no list, no ACL or bucket permissions. GCS needs delete to
 # replace a live object even with versioning on.
 resource "google_project_iam_custom_role" "relay_control_writer" {
@@ -67,7 +61,7 @@ resource "google_project_iam_custom_role" "relay_control_writer" {
 }
 
 # The flag workflow's identity, the only writer. The deploy account is shared with every relay
-# deploy workflow, so the grant reaches only the per-cell objects, not directors.json.
+# deploy workflow, so the grant reaches only the per-cell objects.
 resource "google_storage_bucket_iam_member" "relay_control_workflow_writer" {
   count = local.relay_create_github_deploy_identity ? 1 : 0
 

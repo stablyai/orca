@@ -263,7 +263,6 @@
     "google_storage_bucket_iam_member.github_staging_relay_deploy_state",
     "google_storage_bucket_iam_member.github_staging_relay_deploy_state_list",
     "google_storage_bucket_iam_member.relay_control_cell_reader",
-    "google_storage_bucket_iam_member.relay_control_director_reader",
     "google_storage_bucket_iam_member.relay_control_workflow_writer",
     "google_storage_bucket_iam_member.relay_fence_broker_bucket_reader",
     "google_storage_bucket_iam_member.relay_fence_broker_state_objects",
