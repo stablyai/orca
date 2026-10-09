@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto'
 import { findTransport, type RuntimeMetadata } from '../../shared/runtime-bootstrap'
 import type { RuntimeOrchestrationEnvelope } from '../../shared/runtime-rpc-envelope'
 import { isKeepaliveFrame, RuntimeRpcEnvelopeSchema } from './envelope-schema'
-import { RuntimeClientError, type RuntimeRpcResponse } from './types'
+import { RuntimeClientError, RuntimeRequestNotSentError, type RuntimeRpcResponse } from './types'
 import { MAX_TIMER_DELAY_MS, isSafeTimerDelayMs } from '../../shared/timer-delay'
 import { runtimeAccessDeniedError } from './runtime-access-denied'
 
@@ -35,6 +35,7 @@ export async function sendRequest<TResult>(
     const socket = createConnection(transport.endpoint)
     let lineSegments: string[] = []
     let settled = false
+    let connected = false
     const requestId = randomUUID()
 
     const timeout = setTimeout(() => {
@@ -76,7 +77,7 @@ export async function sendRequest<TResult>(
         // Why: a sandbox denying the socket/pipe is not a dead app, so restart advice would mislead.
         error:
           runtimeAccessDeniedError(error, metadata.pid) ??
-          new RuntimeClientError(
+          new (connected ? RuntimeClientError : RuntimeRequestNotSentError)(
             'runtime_unavailable',
             'Could not connect to the running Orca app. Restart Orca and try again.'
           )
@@ -194,6 +195,7 @@ export async function sendRequest<TResult>(
       }
     })
     socket.on('connect', () => {
+      connected = true
       socket.write(
         `${JSON.stringify({
           id: requestId,

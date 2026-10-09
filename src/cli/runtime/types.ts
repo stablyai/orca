@@ -20,6 +20,9 @@ export class RuntimeClientError extends Error {
   }
 }
 
+/** The connection failed before it opened, so the request provably never reached the runtime. */
+export class RuntimeRequestNotSentError extends RuntimeClientError {}
+
 export class RuntimeRpcFailureError extends RuntimeClientError {
   readonly response: RuntimeRpcFailure
 

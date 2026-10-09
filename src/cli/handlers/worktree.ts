@@ -2,11 +2,11 @@ import type {
   RuntimeWorktreeListResult,
   RuntimeWorktreePsResult,
   RuntimeWorktreeRecord,
-  RuntimeWorktreeCreateResult,
-  RuntimeWorktreeRemoveResult
+  RuntimeWorktreeCreateResult
 } from '../../shared/runtime-types'
 import type { CommandHandler } from '../dispatch'
 import { printHookWarning, printPreservedBranchWarning } from './worktree-removal-warnings'
+import { formatWorktreeRemoval, removeWorktreeAndWait } from './worktree-removal-outcome'
 import { formatWorktreeList, formatWorktreePs, formatWorktreeShow, printResult } from '../format'
 import {
   annotateOmittedHostScope,
@@ -293,8 +293,9 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
         '--allow-failed-archive-hook waives a FAILED archive hook, but without --run-hooks no hook runs at all. Pass --run-hooks too, or drop the waiver.'
       )
     }
-    const result = await client.call<RuntimeWorktreeRemoveResult>('worktree.rm', {
+    const result = await removeWorktreeAndWait(client, {
       worktree,
+      worktreeId: resolved.result.worktree.id,
       hostId,
       force: flags.get('force') === true,
       // Why (#11960): --force is explicit here, so it may also waive PTY-stop proof.
@@ -306,10 +307,6 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     })
     printHookWarning(result.result, json)
     printPreservedBranchWarning(result.result, json)
-    printResult(result, json, (value) =>
-      value.removing
-        ? `removed: ${value.removed}\nOrca is still deleting the checkout in the background.`
-        : `removed: ${value.removed}`
-    )
+    printResult(result, json, formatWorktreeRemoval)
   }
 }

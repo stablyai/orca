@@ -183,6 +183,16 @@ export const WorktreeRemove = WorktreeSelector.extend({
   allowFailedArchiveHook: OptionalBoolean
 })
 
+// Why an id, not a selector: the removed workspace no longer resolves, so the caller names the id
+// it resolved before asking for the removal.
+export const WorktreeRemovalStateParams = z.object({
+  worktreeId: z
+    .unknown()
+    .transform((v) => (typeof v === 'string' ? v : ''))
+    .pipe(z.string().min(1, 'Missing worktree id')),
+  hostId: OptionalExecutionHostId
+})
+
 export const WorktreeForceDeleteBranch = WorktreeSelector.extend({
   hostId: OptionalExecutionHostId,
   branchName: z

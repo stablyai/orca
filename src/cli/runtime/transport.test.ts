@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { RuntimeMetadata } from '../../shared/runtime-bootstrap'
 import { MAX_TIMER_DELAY_MS } from '../../shared/timer-delay'
 import { sendRequest } from './transport'
+import { RuntimeRequestNotSentError } from './types'
 
 const servers = new Set<ReturnType<typeof createServer>>()
 const sockets = new Set<Socket>()
@@ -137,5 +138,45 @@ describe.skipIf(process.platform === 'win32')('runtime transport', () => {
         'The Orca runtime closed the connection before responding. Restart Orca and try again.'
     })
     expect(Date.now() - start).toBeLessThan(5000)
+  })
+})
+
+// Why: a caller may resend only a request that provably never reached the runtime.
+describe.skipIf(process.platform === 'win32')('whether a failed request was sent', () => {
+  const metadataFor = (endpoint: string): RuntimeMetadata => ({
+    runtimeId: 'runtime-1',
+    pid: 123,
+    transports: [{ kind: 'unix', endpoint }],
+    authToken: 'token',
+    startedAt: 1
+  })
+
+  it('marks a connection that never opened as not sent', async () => {
+    const endpoint = join(mkdtempSync(join(tmpdir(), 'orca-runtime-transport-')), 'absent.sock')
+
+    const error = await sendRequest(metadataFor(endpoint), 'worktree.rm', {}, 1_000).catch(
+      (reason: unknown) => reason
+    )
+
+    expect(error).toBeInstanceOf(RuntimeRequestNotSentError)
+    expect(error).toMatchObject({ code: 'runtime_unavailable' })
+  })
+
+  it('does not mark a connection closed after the request was written', async () => {
+    const endpoint = join(mkdtempSync(join(tmpdir(), 'orca-runtime-transport-')), 'runtime.sock')
+    const server = createServer((socket) => {
+      sockets.add(socket)
+      socket.once('close', () => sockets.delete(socket))
+      socket.once('data', () => socket.destroy())
+    })
+    servers.add(server)
+    await new Promise<void>((resolve) => server.listen(endpoint, resolve))
+
+    const error = await sendRequest(metadataFor(endpoint), 'worktree.rm', {}, 1_000).catch(
+      (reason: unknown) => reason
+    )
+
+    expect(error).toMatchObject({ code: 'runtime_unavailable' })
+    expect(error).not.toBeInstanceOf(RuntimeRequestNotSentError)
   })
 })

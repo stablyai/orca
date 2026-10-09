@@ -1,5 +1,6 @@
 import type {
   ForceDeleteWorktreeBranchResult,
+  PreservedWorktreeBranch,
   RemoveWorktreeResult
 } from '../../shared/worktree/create-types'
 import type { GitPushTarget } from '../../shared/worktree/types'
@@ -55,6 +56,12 @@ export class RuntimePreservedBranchCleanup {
       return
     }
     this.delete(worktreeId, hostId)
+  }
+
+  /** The branch the workspace's last finished delete kept, while force-delete is still offered. */
+  find(worktreeId: string, hostId?: ExecutionHostId): PreservedWorktreeBranch | undefined {
+    const target = this.targets.get(preservedBranchCleanupScopeKey({ worktreeId, hostId }))
+    return target ? { branchName: target.branchName, head: target.head } : undefined
   }
 
   delete(worktreeId: string, hostId?: ExecutionHostId): void {

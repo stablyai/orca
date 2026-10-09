@@ -199,6 +199,7 @@ export type {
   RuntimeWorktreePsSummary,
   RuntimeWorktreePsUnchangedResult,
   RuntimeWorktreeRecord,
+  RuntimeWorktreeRemovalState,
   RuntimeWorktreeRemoveResult,
   RuntimeWorktreeStatus
 } from './runtime-worktree-contracts'

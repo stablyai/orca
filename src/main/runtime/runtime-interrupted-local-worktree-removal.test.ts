@@ -103,6 +103,7 @@ async function finishAfterRestart(options: { repoGone?: boolean; head?: string }
   outcome: FinishOutcome
   purged: string[]
   remember: ReturnType<typeof vi.fn>
+  records: WorktreeRemovalRecord[]
 }> {
   const record: WorktreeRemovalRecord = {
     worktreeId: `repo-1::${worktreePath}`,
@@ -156,11 +157,16 @@ async function finishAfterRestart(options: { repoGone?: boolean; head?: string }
     (error: unknown) => ({ status: 'failed' as const, error: String(error) })
   )
   await _settlePendingWorktreeRemovalsForTests()
-  expect(await readWorktreeRemovalRecords(recordsDir)).toEqual([])
+  const records = await readWorktreeRemovalRecords(recordsDir)
+  // Never left pending; only a refused finish keeps a record, carrying Git's reason.
+  expect(records.filter((left) => !left.failure)).toEqual([])
+  if (outcome.status === 'removed') {
+    expect(records).toEqual([])
+  }
   expect(waitForPendingWorktreeRemoval(record.worktreeId)).toBeUndefined()
   // Released on every outcome, including a finish that ended before taking its own gate.
   beginTerminalInstall(worktreePath)()
-  return { outcome, purged, remember }
+  return { outcome, purged, remember, records }
 }
 
 describe('finishing an interrupted worktree removal after a restart', () => {
@@ -238,12 +244,14 @@ describe('finishing an interrupted worktree removal after a restart', () => {
     await git(['worktree', 'add', '-q', worktreePath, '-b', 'other'])
     await writeFile(join(worktreePath, 'unsaved.txt'), 'work\n')
 
-    const { outcome, purged } = await finishAfterRestart({ head })
+    const { outcome, purged, records } = await finishAfterRestart({ head })
 
     expect(outcome).toMatchObject({ status: 'failed' })
     expect(existsSync(join(worktreePath, 'unsaved.txt'))).toBe(true)
     expect(await isRegistered(worktreePath)).toBe(true)
     expect(purged).toEqual([])
+    // Not this removal's checkout: no record of it.
+    expect(records).toEqual([])
   })
 
   it('leaves a repository created at the path after Git unregistered the checkout', async () => {
@@ -253,12 +261,14 @@ describe('finishing an interrupted worktree removal after a restart', () => {
     await git(['init', '-q'], worktreePath)
     await writeFile(join(worktreePath, 'unsaved.txt'), 'work\n')
 
-    const { outcome, purged } = await finishAfterRestart()
+    const { outcome, purged, records } = await finishAfterRestart()
 
     expect(outcome).toMatchObject({ status: 'failed' })
     expect(existsSync(join(worktreePath, 'unsaved.txt'))).toBe(true)
     expect(removeHostTree).not.toHaveBeenCalled()
     expect(purged).toEqual([])
+    // Not this removal's checkout: no record of it.
+    expect(records).toEqual([])
   })
 
   it('leaves the same branch checked out again at a new head', async () => {
@@ -270,11 +280,13 @@ describe('finishing an interrupted worktree removal after a restart', () => {
     await git(['add', '-A'], worktreePath)
     await git(['commit', '-qm', 'work'], worktreePath)
 
-    const { outcome, purged } = await finishAfterRestart({ head })
+    const { outcome, purged, records } = await finishAfterRestart({ head })
 
     expect(outcome).toMatchObject({ status: 'failed' })
     expect(existsSync(join(worktreePath, 'work.txt'))).toBe(true)
     expect(purged).toEqual([])
+    // Not this removal's checkout: no record of it.
+    expect(records).toEqual([])
   })
 
   it('leaves a locked checkout alone even when its .git file is gone', async () => {
@@ -282,11 +294,15 @@ describe('finishing an interrupted worktree removal after a restart', () => {
     await git(['worktree', 'lock', worktreePath])
     await unlink(join(worktreePath, '.git'))
 
-    const { outcome, purged } = await finishAfterRestart()
+    const { outcome, purged, records } = await finishAfterRestart()
 
     expect(outcome).toMatchObject({ status: 'failed' })
     expect(existsSync(join(worktreePath, 'seed.txt'))).toBe(true)
     expect(purged).toEqual([])
+    // Git refused and still registers it: the record keeps Git's reason for a caller polling.
+    expect(records).toEqual([
+      expect.objectContaining({ failure: expect.objectContaining({ message: expect.any(String) }) })
+    ])
   })
 
   it('deletes the branch when Git finished the checkout but the quit came before the branch', async () => {
@@ -341,12 +357,16 @@ describe('finishing an interrupted worktree removal after a restart', () => {
     // Another Git client locked it while Orca was not running.
     await git(['worktree', 'lock', worktreePath])
 
-    const { outcome, purged } = await finishAfterRestart()
+    const { outcome, purged, records } = await finishAfterRestart()
 
     expect(outcome).toMatchObject({ status: 'failed' })
     expect(existsSync(worktreePath)).toBe(true)
     expect(await isRegistered(worktreePath)).toBe(true)
     expect(purged).toEqual([])
+    // Git refused and still registers it: the record keeps Git's reason for a caller polling.
+    expect(records).toEqual([
+      expect.objectContaining({ failure: expect.objectContaining({ message: expect.any(String) }) })
+    ])
   })
 
   it('drops a record whose repo Orca no longer has', async () => {

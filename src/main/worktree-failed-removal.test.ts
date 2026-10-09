@@ -1,5 +1,6 @@
 // A delete that fails after Git dropped the checkout's registration: the leftover stays listed with
-// the error until Delete retries it, the checkout disappears, or its repo leaves Orca. Git is mocked
+// the error until Delete retries it, the checkout disappears, or its repo leaves Orca. One Git
+// refused while keeping the registration keeps only its reason, until the next Delete. Git is mocked
 // here so this runs on every platform; the real-Git version is in
 // runtime/runtime-failed-local-worktree-removal.test.ts.
 import { mkdir, mkdtemp, readdir, realpath, rm, writeFile } from 'node:fs/promises'
@@ -25,6 +26,7 @@ import {
   withUnregisteredRemovalCheckouts
 } from './worktree-removal-listing'
 import { readWorktreeRemovalRecords } from './worktree-removal-records'
+import { retryFailedRemovalUnlessRegistered } from './worktree-removal-table'
 import { loadWorktreeRemovalRecordsForStore } from './startup/worktree-removal-records-load'
 
 vi.mock('./git/worktree', () => ({ listWorktreesStrict: vi.fn(async () => []) }))
@@ -126,14 +128,27 @@ describe('a delete that fails after Git dropped the registration', () => {
     expect(invalidated).toHaveBeenCalledWith('repo-1')
   })
 
-  it('clears the record as before when Git still registers the checkout', async () => {
-    vi.mocked(listWorktreesStrict).mockResolvedValue([
-      mainWorktree,
-      { ...leftoverRow(), removalError: undefined }
-    ])
+  it("keeps Git's reason when Git still registers the checkout, without a second row", async () => {
+    const registered = { ...leftoverRow(), removalError: undefined }
+    vi.mocked(listWorktreesStrict).mockResolvedValue([mainWorktree, registered])
     await failRemoval()
 
-    expect(await readWorktreeRemovalRecords(join(directory, 'profile'))).toEqual([])
+    const [record] = await readWorktreeRemovalRecords(join(directory, 'profile'))
+    expect(record).toMatchObject({ worktreeId, failure: { message: GIT_ERROR } })
+    // Git lists the checkout as usual; the record only answers a caller polling the outcome.
+    expect(await withUnregisteredRemovalCheckouts('repo-1', [mainWorktree, registered])).toEqual([
+      mainWorktree,
+      registered
+    ])
+    // The next Delete drops it and runs the normal delete of the registered checkout.
+    const retry = vi.fn()
+    expect(retryFailedRemovalUnlessRegistered(worktreeId, checkout, [registered], retry)).toBe(
+      false
+    )
+    expect(retry).not.toHaveBeenCalled()
+    await vi.waitFor(async () =>
+      expect(await readWorktreeRemovalRecords(join(directory, 'profile'))).toEqual([])
+    )
   })
 
   it('clears the record as before when the checkout is gone', async () => {

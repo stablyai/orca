@@ -7,6 +7,7 @@ export {
   WorktreeForceDeleteBranch,
   WorktreeListParams,
   WorktreePsParams,
+  WorktreeRemovalStateParams,
   WorktreeRemove,
   WorktreeResolveMrBase,
   WorktreeResolvePrBase,

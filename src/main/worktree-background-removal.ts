@@ -7,6 +7,7 @@ import { runWorktreeChangeInvalidators } from './ipc/worktree-change-invalidator
 import { parseWslPath } from './wsl'
 import { readWorktreeRemovalRecords, type WorktreeRemovalRecord } from './worktree-removal-records'
 import {
+  DifferentCheckoutAtPathError,
   differentCheckoutAtPathError,
   isCheckoutRegistered,
   isUnregisteredRemovalLeftover
@@ -261,7 +262,9 @@ async function settleBackgroundWorktreeRemoval(
     settle = (settlement) => settlement.reject(error)
     // Why: Git drops the registration even when it fails to delete the checkout, and Orca lists
     // workspaces from Git, so without the record the leftover would vanish with no way to retry.
-    if (await isCheckoutLeftUnregistered(record)) {
+    // A refusal that keeps the registration is recorded too, so a caller polling the outcome
+    // gets Git's reason; Git still lists that checkout, and the next Delete drops the record.
+    if (await isCheckoutLeftBehind(record, error)) {
       failure = {
         message: error instanceof Error ? error.message : String(error),
         failedAt: Date.now()
@@ -296,18 +299,22 @@ async function settleBackgroundWorktreeRemoval(
   }
 }
 
-async function isCheckoutLeftUnregistered(record: WorktreeRemovalRecord): Promise<boolean> {
+async function isCheckoutLeftBehind(
+  record: WorktreeRemovalRecord,
+  error: unknown
+): Promise<boolean> {
   if (!(await worktreeCheckoutExists(record.worktreePath))) {
     return false
   }
   try {
-    return (
-      !(await isCheckoutRegistered(record)) &&
-      (await isUnregisteredRemovalLeftover(record.repoPath, record.worktreePath))
-    )
-  } catch (error) {
+    if (await isCheckoutRegistered(record)) {
+      // A retry that found a newer checkout at the path refused that one, not this removal's.
+      return !(error instanceof DifferentCheckoutAtPathError)
+    }
+    return await isUnregisteredRemovalLeftover(record.repoPath, record.worktreePath)
+  } catch (listError) {
     // Unknowable: the row stays however Git lists it, as before this record existed.
-    console.warn(`[worktrees] could not list worktrees of ${record.repoPath}`, error)
+    console.warn(`[worktrees] could not list worktrees of ${record.repoPath}`, listError)
     return false
   }
 }

@@ -7,9 +7,10 @@ import type { GitWorktreeInfo } from '../shared/worktree/types'
 
 // The accepted removals, mirrored to disk on every change; listings and joins read only this.
 export const pendingWorktreeRemovals = new Map<string, WorktreeRemovalRecord>()
-// Deletes that failed after Git dropped the registration: listed with their error until Delete
-// retries them, the checkout disappears or is replaced, or the repo leaves Orca. Never retried
-// unasked.
+// Deletes that failed with the checkout still on disk. One Git no longer registers is listed with
+// its error until Delete retries it, the checkout disappears or is replaced, or the repo leaves
+// Orca; one Git still registers only answers `worktree.removalState` until the next Delete drops
+// it. Never retried unasked.
 export const failedWorktreeRemovals = new Map<string, WorktreeRemovalRecord>()
 // Why weak: a listing that read Git before a delete finished holds the record until it replies.
 export const finishedWorktreeRemovals = new WeakSet<WorktreeRemovalRecord>()

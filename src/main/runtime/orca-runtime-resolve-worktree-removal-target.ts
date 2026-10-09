@@ -1,6 +1,8 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithRemoveManagedWorktree } from './orca-runtime-remove-managed-worktree'
 import type { ExecutionHostId } from '../../shared/execution-host'
+import type { RuntimeWorktreeRemovalState } from '../../shared/runtime-worktree-contracts'
+import { readWorktreeRemovalState } from '../worktree-removal-state'
 import type {
   RemoveManagedWorktreeOptions,
   RuntimeWorktreeRemovalTarget
@@ -204,6 +206,24 @@ export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWith
       expectedHead,
       hostId
     )
+  }
+
+  /** What became of a removal this host accepted; read by a caller that polls for its outcome. */
+  async readWorktreeRemovalState(
+    worktreeId: string,
+    hostId?: string
+  ): Promise<RuntimeWorktreeRemovalState> {
+    const parsedHostId = parseExecutionHostId(hostId)?.id
+    return readWorktreeRemovalState(worktreeId, parsedHostId, {
+      isListed: async () =>
+        (await this.resolveExplicitWorktreeIdScoped(worktreeId, parsedHostId)) !== null,
+      // Why both keys: a retried or resumed local delete records its kept branch without a host.
+      preservedBranch: () =>
+        this.preservedBranchCleanup.find(worktreeId, parsedHostId) ??
+        (parsedHostId === LOCAL_EXECUTION_HOST_ID
+          ? this.preservedBranchCleanup.find(worktreeId)
+          : undefined)
+    })
   }
 
   async renameTerminal(handle: string, title: string | null): Promise<RuntimeTerminalRename> {

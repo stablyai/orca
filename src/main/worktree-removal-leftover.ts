@@ -28,8 +28,11 @@ export async function isUnregisteredRemovalLeftover(
 }
 
 /** The refusal when the path no longer holds the removed checkout's own leftover. */
+/** A retry found a checkout at the path that is not the one its removal was for. */
+export class DifferentCheckoutAtPathError extends Error {}
+
 export function differentCheckoutAtPathError(worktreePath: string): Error {
-  return new Error(
+  return new DifferentCheckoutAtPathError(
     `A different checkout is now at ${worktreePath}; Orca left it in place. Delete it again to remove it.`
   )
 }

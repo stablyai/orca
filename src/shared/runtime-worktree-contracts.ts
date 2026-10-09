@@ -1,7 +1,11 @@
 import type { AgentStatusState, AgentType, AgentWorkingMode } from './agent-status-types'
 import type { AgentMainAgentStatus } from './main-agent-status'
 import type { BaseRefSearchResult, Repo } from './repo-types'
-import type { CreateWorktreeResult, RemoveWorktreeResult } from './worktree/create-types'
+import type {
+  CreateWorktreeResult,
+  PreservedWorktreeBranch,
+  RemoveWorktreeResult
+} from './worktree/create-types'
 import type {
   WorkspaceLineage,
   WorktreeLineage,
@@ -138,6 +142,16 @@ export type RuntimeWorktreeRemoveResult = RemoveWorktreeResult & {
   removed: boolean
   warning?: string
 }
+
+/**
+ * What became of a removal the host accepted (`removing: true`), read by a caller that polls for
+ * its outcome. `present`: no delete is running and the workspace is still there.
+ */
+export type RuntimeWorktreeRemovalState =
+  | { state: 'removing' }
+  | { state: 'removed'; preservedBranch?: PreservedWorktreeBranch }
+  | { state: 'failed'; message: string }
+  | { state: 'present' }
 
 export type RuntimeWorktreePsResult = {
   worktrees: RuntimeWorktreePsSummary[]

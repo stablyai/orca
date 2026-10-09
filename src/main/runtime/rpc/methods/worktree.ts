@@ -27,10 +27,12 @@ import {
   WorktreeTeardownMissingTerminalsParams
 } from './worktree-schemas'
 import { WORKTREE_CATALOG_METHODS } from './worktree-catalog-methods'
+import { WORKTREE_REMOVAL_STATE_METHODS } from './worktree-removal-state-method'
 import { readsWorktreeRemovalMarker } from '../worktree-removal-marker-projection'
 
 export const WORKTREE_METHODS = [
   ...WORKTREE_CATALOG_METHODS,
+  ...WORKTREE_REMOVAL_STATE_METHODS,
   defineMethod({
     name: 'worktree.teardownMissingTerminals',
     permission: 'workspace',
