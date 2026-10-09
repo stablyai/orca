@@ -4,8 +4,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { providerDiagnosticOf } from '../../shared/agent-session-failure'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { spawnProcess, type SpawnedProcess } from '@orca/process-host'
-import type { ProcessSpec } from '@orca/process-host/process-spec'
+import { spawnProcess } from '@orca/process-host'
+import type { SpawnedProcess, ProcessSpec } from '@orca/process-host/process-spec'
+
 import { query, type CanUseTool, type Options } from '@anthropic-ai/claude-agent-sdk'
 import {
   openClaudeStreamJsonConnection,

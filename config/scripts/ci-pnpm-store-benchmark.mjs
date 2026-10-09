@@ -14,7 +14,7 @@ import { dirname, join, resolve } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { parseArgs } from 'node:util'
 import { resolvePnpmCliInvocation } from './pnpm-cli-invocation.mjs'
-import { runProcessSync } from './script-child-process.mjs'
+import { runProcessSync } from '@orca/process-host'
 import { workspacePackageManifests } from './workspace-source-exports.mjs'
 
 const { values } = parseArgs({

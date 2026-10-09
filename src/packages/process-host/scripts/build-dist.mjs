@@ -82,7 +82,13 @@ async function syncCompiledOutput(stagingDir, distDir, assertLockHeld) {
   const stagedSet = new Set(staged)
   const result = { written: 0, removed: 0, unchanged: 0 }
   mkdirSync(distDir, { recursive: true })
-  for (const file of staged) {
+  const existing = new Set(listFiles(distDir))
+  // New dependencies must exist before any replacement can import them.
+  const publicationOrder = [
+    ...staged.filter((file) => !existing.has(file)),
+    ...staged.filter((file) => existing.has(file))
+  ]
+  for (const file of publicationOrder) {
     const source = join(stagingDir, file)
     const target = join(distDir, file)
     if (existsSync(target) && readFileSync(source).equals(readFileSync(target))) {

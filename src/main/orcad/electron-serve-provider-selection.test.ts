@@ -1,3 +1,4 @@
+import type { ProcessSpec } from '@orca/process-host/process-spec'
 import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -59,7 +60,7 @@ beforeEach(async () => {
 
   const actual = await vi.importActual<typeof RunProcessModule>('@orca/process-host')
   spawnProcessMock.mockReset()
-  spawnProcessMock.mockImplementation((spec: RunProcessModule.ProcessSpec) =>
+  spawnProcessMock.mockImplementation((spec: ProcessSpec) =>
     actual.spawnProcess({
       ...spec,
       program: process.execPath,
@@ -72,7 +73,7 @@ beforeEach(async () => {
     })
   )
   runProcessMock.mockReset()
-  runProcessMock.mockImplementation(async (spec: RunProcessModule.ProcessSpec) => {
+  runProcessMock.mockImplementation(async (spec: ProcessSpec) => {
     const command = commandFromArgs(spec.args ?? [])
     if (command[0] === 'open') {
       return agentBrowserSuccess({ url: 'about:blank', title: '' })

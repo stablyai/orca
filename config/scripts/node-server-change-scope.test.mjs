@@ -11,7 +11,7 @@ import {
 import { nodeServerTestPaths } from './node-server-test-paths.mjs'
 import { ORCAD_CHILD_ENTRY_POINTS } from './orcad-entry-build.mjs'
 import { NODE_RUNTIME_PIN } from '../../src/shared/node-runtime-pin.ts'
-import { runProcessSync } from './script-child-process.mjs'
+import { runProcessSync } from '@orca/process-host'
 import { NODE_SERVER_RUNNERS } from './node-server-qualification.mjs'
 
 const temporaryDirs = []

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { runProcess, type ProcessResult } from '@orca/process-host'
+import { runProcess } from '@orca/process-host'
+import type { ProcessResult } from '@orca/process-host/process-spec'
 import { encodeAntigravityKeychainValue } from './native-credential-codec'
 import {
   readAntigravityMacOSCredential,

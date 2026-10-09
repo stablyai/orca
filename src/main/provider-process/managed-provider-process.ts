@@ -1,3 +1,4 @@
+import type { PipedChildProcess, PipedProcessSpawner } from '@orca/process-host/process-spec'
 import { spawnProcess } from '@orca/process-host'
 import { RetryableProcessExitProof } from '@orca/process-host/retryable-process-exit-proof'
 import type { ProviderProcessLaunch } from './provider-process-launch'
@@ -34,7 +35,7 @@ type ManagedProviderProcessOptions = {
   site: string
   /** Defaults to the root-only policy; only a provider with its own reaper overrides it. */
   policy?: (supervised: boolean) => ProviderProcessClosePolicy
-  spawnImpl?: typeof spawnProcess
+  spawnImpl?: PipedProcessSpawner
   platform?: NodeJS.Platform
   inheritedEnv?: NodeJS.ProcessEnv
   /** Defaults to "the root is gone". */
@@ -46,7 +47,7 @@ type ManagedProviderProcessOptions = {
 }
 
 export type ManagedProviderProcess = {
-  child: ReturnType<typeof spawnProcess>
+  child: PipedChildProcess
   supervised: boolean
   /** The spawn failed before a process existed: absence is proven, but no exit was observed. */
   readonly processless: boolean

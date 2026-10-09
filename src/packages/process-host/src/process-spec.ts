@@ -1,27 +1,15 @@
-// The public contract for Orca's single child-process entry point. Split from
-// run-process.ts so the runner stays under its line cap; import the runtime
-// functions from run-process, which re-exports everything here.
-import type { ChildProcess, SpawnOptions as NodeSpawnOptions } from 'node:child_process'
+import type {
+  ChildProcess,
+  ChildProcessWithoutNullStreams,
+  SpawnOptions as NodeSpawnOptions,
+  StdioOptions
+} from 'node:child_process'
 
 export type ChildProcessHandle = ChildProcess
 
 export type SpawnedProcess = ChildProcess
 
-/**
- * The single place Orca starts a child process.
- *
- * Why one place: six decisions have to be made every time a child is spawned,
- * POSIX forgives all six, and Windows punishes each of them differently —
- * console visibility, argument quoting, `.cmd` interpretation, binary
- * resolution, timeout policy, and how the tree is later terminated. Made
- * per-call-site, they were right in some files and wrong in others, and the
- * wrong ones reached users as stolen keyboard focus, mangled agent prompts and
- * orphaned process trees.
- *
- * Callers outside this directory must not import `node:child_process`; a guard
- * test enforces that against a shrinking allowlist.
- */
-
+/** Centralizes host execution settings so argument encoding and tree ownership stay consistent. */
 export type ProcessSpec = {
   /**
    * Program to run. On Windows this should already be an absolute path —
@@ -52,11 +40,19 @@ export type ProcessSpec = {
   stdio?: NodeSpawnOptions['stdio']
   /** Bun and Node require JSON for an IPC channel shared between the two runtimes. */
   serialization?: NodeSpawnOptions['serialization']
-  /** Kill the whole process tree and do not settle until termination is verified. */
+  /** Await tree termination or observed root exit, then settle at the final deadline if unverified. */
   terminationBarrier?: boolean | ProcessTerminationBarrier
   /** Called once when the child exits or tree termination is verified. */
   onChildTerminated?: () => void
 }
+
+export type PipedChildProcess = ChildProcessWithoutNullStreams
+
+export type PipedProcessSpec = Omit<ProcessSpec, 'stdio'> & {
+  stdio?: 'pipe' | ['pipe', 'pipe', 'pipe', ...Exclude<StdioOptions, string>]
+}
+
+export type PipedProcessSpawner = (spec: PipedProcessSpec) => PipedChildProcess
 
 export type ProcessTerminationBarrier = {
   observeStderr?: (chunk: Buffer | string) => void

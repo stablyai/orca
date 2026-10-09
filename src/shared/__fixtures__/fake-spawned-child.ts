@@ -1,5 +1,7 @@
 import { EventEmitter } from 'node:events'
 import type { ChildProcess } from 'node:child_process'
+import { PassThrough } from 'node:stream'
+import type { PipedChildProcess } from '@orca/process-host/process-spec'
 import { vi } from 'vitest'
 
 /**
@@ -17,6 +19,20 @@ export function createFakeSpawnedChild(pid = 4321): ChildProcess {
   child.stdout = new EventEmitter()
   child.stderr = new EventEmitter()
   return child as unknown as ChildProcess
+}
+
+export function createFakePipedChild(pid = 4321) {
+  const stdin = new PassThrough()
+  const stdout = new PassThrough()
+  const stderr = new PassThrough()
+  return Object.assign(createFakeSpawnedChild(pid), {
+    pid,
+    stdin,
+    stdout,
+    stderr,
+    stdio: [stdin, stdout, stderr, null, null] satisfies PipedChildProcess['stdio'],
+    kill: vi.fn((_signal?: NodeJS.Signals | number) => true)
+  })
 }
 
 /** Emit output and a clean exit, the way a CLI that answered would. */

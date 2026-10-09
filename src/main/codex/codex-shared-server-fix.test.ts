@@ -2,7 +2,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ProcessResult, ProcessSpec } from '@orca/process-host'
+
+import type { ProcessResult, ProcessSpec } from '@orca/process-host/process-spec'
 
 const mocks = vi.hoisted(() => ({
   runProcess: vi.fn<(spec: ProcessSpec) => Promise<ProcessResult>>(),

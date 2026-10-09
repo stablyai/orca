@@ -1,14 +1,5 @@
 import { expect, it } from 'vitest'
-import {
-  runProcessSync as packageRunProcessSync,
-  spawnProcess as packageSpawnProcess
-} from '@orca/process-host'
-import { describeProcessFailure, runProcessSync, spawnProcess } from './script-child-process.mjs'
-
-it('uses the same process implementation as package consumers', () => {
-  expect(runProcessSync).toBe(packageRunProcessSync)
-  expect(spawnProcess).toBe(packageSpawnProcess)
-})
+import { describeProcessFailure } from './process-failure-message.mjs'
 
 it('names a timeout and both streams when stderr is empty', () => {
   expect(

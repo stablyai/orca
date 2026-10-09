@@ -8,7 +8,7 @@ import {
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 import { createRequire } from 'node:module'
 import { pathToFileURL } from 'node:url'
 import { runProcessSync } from '@orca/process-host'
@@ -214,6 +214,66 @@ describe('External process-host development rebuilds', () => {
 
     writeFileSync(join(packageDir, 'src', 'internal.ts'), 'export const version = 4\n')
     await expect.poll(() => loadedVersions.at(-1), { timeout: 15_000 }).toBe(4)
+  })
+
+  it('recovers when a missing import is created in a new source directory', async () => {
+    const { root, packageDir, main } = fixture()
+    const loadedVersions: number[] = []
+    const watchSignals = new Set<string>()
+    const watcher = watch({
+      input: main,
+      external: ['@orca/process-host'],
+      plugins: [
+        createProcessHostDevRebuildPlugin(root),
+        {
+          name: 'fake-electron-reload',
+          closeBundle() {
+            loadedVersions.push(readEmittedVersion(root))
+          }
+        }
+      ],
+      output: { file: join(root, 'out', 'main.cjs'), format: 'cjs' }
+    })
+    watcher.on('change', (file) => {
+      if (basename(file) === 'source-directory-change') {
+        watchSignals.add(file)
+      }
+    })
+    watchers.push(watcher)
+    closeSuccessfulBundles(watcher)
+    await nextEvent(watcher, 'END')
+
+    const failed = nextEvent(watcher, 'ERROR')
+    writeFileSync(
+      join(packageDir, 'src', 'internal.ts'),
+      "export { version } from './features/new-feature'\n"
+    )
+    await failed
+    expect(loadedVersions.at(-1)).toBe(1)
+    expect(readEmittedVersion(root)).toBe(1)
+
+    mkdirSync(join(packageDir, 'src', 'features'))
+    writeFileSync(
+      join(packageDir, 'src', 'features', 'new-feature.ts'),
+      'export const version = 5\n'
+    )
+    await expect.poll(() => loadedVersions.at(-1), { timeout: 15_000 }).toBe(5)
+    expect(existsSync(join(packageDir, 'dist', 'features', 'new-feature.js'))).toBe(true)
+    expect(watchSignals.size).toBe(1)
+
+    const failedAgain = nextEvent(watcher, 'ERROR')
+    writeFileSync(
+      join(packageDir, 'src', 'internal.ts'),
+      "export { version } from './features/still-missing'\n"
+    )
+    await failedAgain
+    expect(readEmittedVersion(root)).toBe(5)
+
+    await watcher.close()
+    watchers.splice(watchers.indexOf(watcher), 1)
+    for (const signal of watchSignals) {
+      expect(existsSync(dirname(signal))).toBe(false)
+    }
   })
 
   it('leaves non-watch release compilation to the build:packages prerequisite', async () => {

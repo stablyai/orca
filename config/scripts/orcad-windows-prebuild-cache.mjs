@@ -31,7 +31,6 @@ export const WINDOWS_PREBUILD_CACHE_INPUTS = [
   'config/scripts/windows-pe-machine.cjs',
   'config/scripts/pinned-node-downloads.mjs',
   'config/scripts/update-node-runtime-pin.mjs',
-  'config/scripts/script-child-process.mjs',
   'src/packages/process-host/.gitignore',
   'src/packages/process-host/package.json',
   'src/packages/process-host/scripts/build-dist.mjs',

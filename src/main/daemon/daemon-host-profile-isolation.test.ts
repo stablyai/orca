@@ -8,7 +8,7 @@ import { buildInstallFixture } from './daemon-host-relocation.test-fixture'
 import {
   getDaemonHostRootDir,
   materializeRelocatedDaemonHost,
-  pruneDaemonHostsBeforeLaunch,
+  pruneDaemonHostStaging,
   pruneOldDaemonHosts
 } from './daemon-host-relocation'
 
@@ -123,10 +123,7 @@ describe('daemon-host profile isolation under a shared LOCALAPPDATA', () => {
     )
     const oldVersionB = seedDir(join(dirname(versionRootB), '1.0.0'), 'b-old')
 
-    // Profile B's runtime dir holds no records: positive exit evidence for B alone.
-    const runtimeDirB = join(tempDir, 'profile-b', 'daemon')
-    mkdirSync(runtimeDirB, { recursive: true })
-    pruneDaemonHostsBeforeLaunch(runtimeDirB, materializeRelocatedDaemonHost())
+    pruneDaemonHostStaging()
     pruneOldDaemonHosts({ status: 'complete', versionLiveness: new Map() })
 
     for (const [dir, exe] of [
@@ -142,7 +139,7 @@ describe('daemon-host profile isolation under a shared LOCALAPPDATA', () => {
     }
     expect(existsSync(join(buildB, 'Orca.exe'))).toBe(true)
     expect(existsSync(join(liveStagingB, 'Orca.exe'))).toBe(true)
-    expect(existsSync(staleB)).toBe(false)
+    expect(existsSync(staleB)).toBe(true)
     expect(existsSync(deadStagingB)).toBe(false)
     expect(existsSync(oldVersionB)).toBe(false)
   })

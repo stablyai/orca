@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ProcessResult } from '@orca/process-host'
+
+import type { ProcessResult } from '@orca/process-host/process-spec'
 
 const { recordSelfInitiatedTreeKillMock, runProcessMock, runProcessSyncMock } = vi.hoisted(() => ({
   recordSelfInitiatedTreeKillMock: vi.fn(),

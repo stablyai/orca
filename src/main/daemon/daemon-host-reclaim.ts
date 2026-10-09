@@ -35,12 +35,8 @@ export function reclaimUnownedDaemonHostDir(
   }
 }
 
-/** Reclaim abandoned copies and superseded mirrors while preserving every possible live owner. */
-export function reclaimCurrentVersionDaemonHostLeftovers(
-  versionRoot: string,
-  versionVerdict: ProcessLivenessVerdict,
-  selectedBuildDir: string | null
-): void {
+/** Daemons never run from staging; only its copying process can keep it live. */
+export function reclaimAbandonedDaemonHostStaging(versionRoot: string): void {
   let entries
   try {
     entries = readdirSync(versionRoot, { withFileTypes: true })
@@ -53,15 +49,7 @@ export function reclaimCurrentVersionDaemonHostLeftovers(
     }
     const dir = join(versionRoot, entry.name)
     if (entry.name.startsWith(STAGING_PREFIX)) {
-      // Daemons never run from staging; its only owner is the copying Orca process.
       reclaimUnownedDaemonHostDir(stagingWriterVerdict(entry.name), dir)
-    } else if (
-      entry.name.startsWith('build-') &&
-      selectedBuildDir !== null &&
-      dir !== selectedBuildDir
-    ) {
-      // Without the pid record naming its build, a live or unverifiable daemon pins every build.
-      reclaimUnownedDaemonHostDir(versionVerdict, dir)
     }
   }
 }

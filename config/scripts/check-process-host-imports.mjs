@@ -20,7 +20,7 @@ const SOURCE_PATTERNS = [
 ]
 
 function normalized(file) {
-  return file.split(path.sep).join('/')
+  return file.replaceAll('\\', '/')
 }
 
 function packageName(specifier) {
@@ -51,22 +51,29 @@ export function assessProcessHostImports(sources, manifest, baseline) {
   ])
   for (const [file, contents] of sources) {
     const ownSource = file.startsWith(PACKAGE_SOURCE)
-    for (const specifier of collectModuleSpecifiers(file, contents)) {
+    for (const sourceSpecifier of collectModuleSpecifiers(file, contents)) {
+      const specifier = normalized(sourceSpecifier)
       const local = packageRelativeImport(file, specifier)
       const selfImport = specifier === PACKAGE_NAME || specifier.startsWith(`${PACKAGE_NAME}/`)
       const testCorpusImport =
         isTestOnlySourcePath(file) && local?.startsWith(`${PACKAGE_SOURCE}__fixtures__/`)
       if (selfImport && !publicEntry(specifier, manifest)) {
-        violations.push(`${file}: ${specifier} is not a public process-host export`)
+        violations.push(`${file}: ${sourceSpecifier} is not a public process-host export`)
       }
       if (!ownSource && !testCorpusImport && local?.startsWith(`${PACKAGE_DIRECTORY}/`)) {
-        violations.push(`${file}: import process-host through ${PACKAGE_NAME}, not ${specifier}`)
+        violations.push(
+          `${file}: import process-host through ${PACKAGE_NAME}, not ${sourceSpecifier}`
+        )
       }
       if (ownSource) {
         if (local !== null && !local.startsWith(PACKAGE_SOURCE)) {
-          violations.push(`${file}: process-host cannot import outside its source: ${specifier}`)
-        } else if (path.isAbsolute(specifier)) {
-          violations.push(`${file}: process-host cannot import an absolute path: ${specifier}`)
+          violations.push(
+            `${file}: process-host cannot import outside its source: ${sourceSpecifier}`
+          )
+        } else if (path.posix.isAbsolute(specifier) || path.win32.isAbsolute(specifier)) {
+          violations.push(
+            `${file}: process-host cannot import an absolute path: ${sourceSpecifier}`
+          )
         } else if (
           local === null &&
           !selfImport &&
@@ -77,7 +84,7 @@ export function assessProcessHostImports(sources, manifest, baseline) {
             Object.hasOwn(manifest.devDependencies ?? {}, packageName(specifier))
           )
         ) {
-          violations.push(`${file}: undeclared process-host dependency: ${specifier}`)
+          violations.push(`${file}: undeclared process-host dependency: ${sourceSpecifier}`)
         }
       } else if (
         file.startsWith('src/') &&

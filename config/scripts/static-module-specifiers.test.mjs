@@ -29,8 +29,20 @@ describe('static module specifiers', () => {
       "import Module from 'module'\nconst load = Module.createRequire(__filename)\nload('child_process')"
     ],
     [
+      'an import-equals createRequire',
+      "import Module = require('node:module')\nconst load = Module.createRequire(__filename)\nload('node:child_process')"
+    ],
+    [
+      'a literal-property createRequire',
+      "import * as Module from 'node:module'\nModule['createRequire'](__filename)('child_process')"
+    ],
+    [
       'a required createRequire',
       "const { createRequire: make } = require('node:module')\nmake(__filename)('child_process')"
+    ],
+    [
+      'a quoted destructured createRequire',
+      "const { 'createRequire': make } = require('node:module')\nmake(__filename)('child_process')"
     ],
     [
       'a chained module alias',
@@ -42,15 +54,35 @@ describe('static module specifiers', () => {
     ],
     ['a reassigned require', "const load = require\nload('child_process')"],
     ['module.require', "module.require('child_process')"],
+    ['a literal-property module.require', "module['require']('child_process')"],
+    ['a literal-property require.resolve', "require['resolve']('child_process')"],
     ['process.getBuiltinModule', "process.getBuiltinModule('node:child_process')"],
+    ['a literal-property getBuiltinModule', "process['getBuiltinModule']('node:child_process')"],
+    ['a template-property getBuiltinModule', 'process[`getBuiltinModule`]("child_process")'],
     ['globalThis.process.getBuiltinModule', "globalThis.process.getBuiltinModule('child_process')"],
+    [
+      'literal properties on globalThis.process',
+      "globalThis['process']['getBuiltinModule']('child_process')"
+    ],
     [
       'an imported process',
       "import nodeProcess from 'node:process'\nnodeProcess.getBuiltinModule('child_process')"
     ],
     [
+      'an import-equals process',
+      "import nodeProcess = require('node:process')\nnodeProcess.getBuiltinModule('child_process')"
+    ],
+    [
       'a destructured getBuiltinModule',
       "const { getBuiltinModule } = process\ngetBuiltinModule('child_process')"
+    ],
+    [
+      'a quoted destructured getBuiltinModule',
+      "const { 'getBuiltinModule': load } = process\nload('child_process')"
+    ],
+    [
+      'a builtin module with a literal-property factory',
+      "process['getBuiltinModule']('node:module')['createRequire'](__filename)('child_process')"
     ],
     [
       'an imported getBuiltinModule',
@@ -70,13 +102,17 @@ describe('static module specifiers', () => {
     ).toHaveLength(1)
   })
 
-  it('ignores calls on unrelated objects and non-constant specifiers', () => {
+  it('ignores unrelated objects, computed property values, and non-constant specifiers', () => {
     expect(
       specifiers(
         [
           'const registry = { getBuiltinModule: (name) => name, createRequire: () => () => null }',
           "registry.getBuiltinModule('child_process')",
           "registry.createRequire(__filename)('child_process')",
+          "registry['getBuiltinModule']('child_process')",
+          "registry['createRequire'](__filename)('child_process')",
+          "const method = 'getBuiltinModule'",
+          "process[method]('child_process')",
           "let mutable = 'child_process'",
           'require(mutable)',
           "require('child' + '_process')",
@@ -95,23 +131,27 @@ describe('static module specifiers', () => {
             'src/main/bypass.ts',
             "import { createRequire } from 'node:module'\nconst load = createRequire(import.meta.url)\nload('child_process')"
           ],
-          ['src/main/builtin.ts', "process.getBuiltinModule('node:child_process')"]
+          ['src/main/builtin.ts', "process['getBuiltinModule']('node:child_process')"],
+          [
+            'src/main/import-equals.ts',
+            "import Module = require('node:module')\nconst load = Module.createRequire(__filename)\nload('node:child_process')"
+          ]
         ]),
         { exports: {} },
         []
       ).added
-    ).toEqual(['src/main/builtin.ts', 'src/main/bypass.ts'])
+    ).toEqual(['src/main/builtin.ts', 'src/main/bypass.ts', 'src/main/import-equals.ts'])
   })
 
-  it('applies package dependency rules to dynamically loaded specifiers', () => {
+  it.each([
+    "import { createRequire } from 'node:module'\nconst ELECTRON = 'electron'\ncreateRequire(__filename)(ELECTRON)",
+    "import Module = require('node:module')\nModule.createRequire(__filename)('electron')",
+    "import * as Module from 'node:module'\nModule['createRequire'](__filename)('electron')",
+    "const { 'createRequire': make } = require('node:module')\nmake(__filename)('electron')"
+  ])('applies package dependency rules to dynamically loaded specifiers: %s', (contents) => {
     expect(
       assessProcessHostImports(
-        new Map([
-          [
-            'src/packages/process-host/src/runner.ts',
-            "import { createRequire } from 'node:module'\nconst ELECTRON = 'electron'\ncreateRequire(__filename)(ELECTRON)"
-          ]
-        ]),
+        new Map([['src/packages/process-host/src/runner.ts', contents]]),
         { exports: {} },
         []
       ).violations

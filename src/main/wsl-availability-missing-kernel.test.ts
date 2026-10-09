@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { execFile, execFileSync } from 'node:child_process'
-import { runProcess, runProcessSync, type ProcessResult } from '@orca/process-host'
+import { runProcess, runProcessSync } from '@orca/process-host'
+import type { ProcessResult } from '@orca/process-host/process-spec'
 import {
   _resetWslAvailabilityCacheForTests,
   isWslAvailable,

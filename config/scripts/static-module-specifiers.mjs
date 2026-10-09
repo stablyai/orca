@@ -22,8 +22,18 @@ function isNamed(node, name) {
   return ts.isIdentifier(node) && node.text === name
 }
 
+function literalString(node) {
+  node = unwrap(node)
+  return node && (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node))
+    ? node.text
+    : null
+}
+
 function propertyName(node) {
-  return ts.isPropertyAccessExpression(node) ? node.name.text : null
+  if (ts.isPropertyAccessExpression(node)) {
+    return node.name.text
+  }
+  return ts.isElementAccessExpression(node) ? literalString(node.argumentExpression) : null
 }
 
 function isConstDeclaration(node) {
@@ -40,22 +50,27 @@ function collectBindings(source) {
       const initializer = unwrap(node.initializer)
       if (ts.isIdentifier(node.name)) {
         declarations.push({ name: node.name.text, initializer })
-        if (
-          isConstDeclaration(node) &&
-          (ts.isStringLiteral(initializer) || ts.isNoSubstitutionTemplateLiteral(initializer))
-        ) {
-          strings.set(node.name.text, [...(strings.get(node.name.text) ?? []), initializer.text])
+        const value = literalString(initializer)
+        if (isConstDeclaration(node) && value !== null) {
+          strings.set(node.name.text, [...(strings.get(node.name.text) ?? []), value])
         }
       } else if (ts.isObjectBindingPattern(node.name)) {
         for (const element of node.name.elements) {
           const key = element.propertyName ?? element.name
-          if (ts.isIdentifier(element.name) && ts.isIdentifier(key)) {
-            destructures.push({ name: element.name.text, key: key.text, initializer })
+          const name = ts.isIdentifier(key) ? key.text : literalString(key)
+          if (ts.isIdentifier(element.name) && name !== null) {
+            destructures.push({ name: element.name.text, key: name, initializer })
           }
         }
       }
     } else if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
       imports.push({ module: node.moduleSpecifier.text, clause: node.importClause })
+    } else if (
+      ts.isImportEqualsDeclaration(node) &&
+      ts.isExternalModuleReference(node.moduleReference) &&
+      ts.isStringLiteral(node.moduleReference.expression)
+    ) {
+      imports.push({ module: node.moduleReference.expression.text, namespace: node.name })
     }
     ts.forEachChild(node, visit)
   }
@@ -67,9 +82,10 @@ function collectBindings(source) {
  * Specifiers a file statically loads: imports, re-exports, `import()`, `require`/`require.resolve`,
  * `module.require`, `createRequire(...)` loaders and their aliases, and `process.getBuiltinModule`.
  * A specifier argument may be a literal or a file-level `const` string. Name bindings are
- * file-wide, not scope-aware. Computed specifiers (concatenation, templates with substitutions,
- * parameters, values imported from other files), loaders stored in objects or passed as
- * arguments, and `eval`/`Function` are not resolved.
+ * file-wide, not scope-aware. Literal property keys are resolved; computed key values are not.
+ * Computed specifiers (concatenation, templates with substitutions, parameters, values imported
+ * from other files), loaders stored in objects or passed as arguments, and `eval`/`Function`
+ * are not resolved.
  */
 export function collectModuleSpecifiers(file, contents) {
   const source = ts.createSourceFile(file, contents, ts.ScriptTarget.Latest, true)
@@ -85,8 +101,9 @@ export function collectModuleSpecifiers(file, contents) {
 
   function specifierValues(node) {
     node = unwrap(node)
-    if (node && (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node))) {
-      return [node.text]
+    const value = literalString(node)
+    if (value !== null) {
+      return [value]
     }
     return node && ts.isIdentifier(node) ? (strings.get(node.text) ?? []) : []
   }
@@ -136,9 +153,13 @@ export function collectModuleSpecifiers(file, contents) {
     )
   }
 
-  for (const { module, clause } of imports) {
+  for (const { module, clause, namespace } of imports) {
     const named = clause?.namedBindings
-    const local = [clause?.name, named && ts.isNamespaceImport(named) ? named.name : null]
+    const local = [
+      namespace,
+      clause?.name,
+      named && ts.isNamespaceImport(named) ? named.name : null
+    ]
     for (const name of local.filter(Boolean)) {
       if (MODULE_BUILTINS.has(module)) {
         moduleNamespaces.add(name.text)

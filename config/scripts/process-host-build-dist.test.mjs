@@ -15,6 +15,7 @@ import {
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { runProcess } from '@orca/process-host'
 import { afterEach, describe, expect, it } from 'vitest'
 
@@ -23,6 +24,7 @@ const buildScript = join(realPackageDir, 'scripts', 'build-dist.mjs')
 const packageRequire = createRequire(join(realPackageDir, 'package.json'))
 const tsxCli = packageRequire.resolve('tsx/cli')
 const realCompilerDir = dirname(packageRequire.resolve('typescript/package.json'))
+const nodeExecutable = process.env.ORCA_TEST_NODE_EXECUTABLE ?? process.execPath
 const temporaryRoots = []
 
 afterEach(() => {
@@ -63,7 +65,7 @@ function fixture() {
 
 function runBuild(packageDir, { script = buildScript, cwd = realPackageDir } = {}) {
   const args = [tsxCli, '--conditions=orca-source', script, ...(packageDir ? [packageDir] : [])]
-  return runProcess({ program: process.execPath, args, cwd, timeoutMs: 120_000 })
+  return runProcess({ program: nodeExecutable, args, cwd, timeoutMs: 120_000 })
 }
 
 // Emits replacement output, then takes over or deletes the build lock as a competing build would.
@@ -178,6 +180,49 @@ describe('process-host dist build', () => {
     expect(leftovers(packageDir)).toEqual([])
   })
 
+  it('publishes new dependencies before replacing their importer and removes stale output last', async () => {
+    const packageDir = fixture()
+    await build(packageDir)
+    renameSync(join(packageDir, 'src', 'internal.ts'), join(packageDir, 'src', 'z-new.ts'))
+    writeFileSync(join(packageDir, 'src', 'z-new.ts'), 'export const value = 2\n')
+    writeFileSync(join(packageDir, 'src', 'entry.ts'), "export { value } from './z-new'\n")
+    const script = join(packageDir, 'read-during-publication.mjs')
+    const observation = join(packageDir, 'publication-read.json')
+    const entry = join(packageDir, 'dist', 'entry.js')
+    const oldDependency = join(packageDir, 'dist', 'internal.js')
+    // Pause immediately after replacing the importer; the owned reader exits before publication resumes.
+    writeFileSync(
+      script,
+      `import fs from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { syncBuiltinESMExports } from 'node:module'
+const rename = fs.renameSync
+fs.renameSync = (source, target) => {
+  const result = rename(source, target)
+  if (target === ${JSON.stringify(entry)}) {
+    const reader = spawnSync(process.execPath, ['-e', ${JSON.stringify(
+      `console.log(JSON.stringify({ value: require(${JSON.stringify(entry)}).value, oldDependencyExists: require('node:fs').existsSync(${JSON.stringify(oldDependency)}) }))`
+    )}], { encoding: 'utf8', timeout: 10_000 })
+    fs.writeFileSync(${JSON.stringify(observation)}, JSON.stringify({ code: reader.status, stdout: reader.stdout, stderr: reader.stderr }))
+  }
+  return result
+}
+syncBuiltinESMExports()
+const { buildPackageDist } = await import(${JSON.stringify(pathToFileURL(buildScript).href)})
+await buildPackageDist(process.argv[2])
+`
+    )
+
+    const result = await runBuild(packageDir, { script })
+
+    expect(result).toMatchObject({ code: 0, stderr: '' })
+    const reader = JSON.parse(readFileSync(observation, 'utf8'))
+    expect(reader).toMatchObject({ code: 0, stderr: '' })
+    expect(JSON.parse(reader.stdout)).toEqual({ value: 2, oldDependencyExists: true })
+    expect(existsSync(oldDependency)).toBe(false)
+    expect(leftovers(packageDir)).toEqual([])
+  })
+
   it('keeps dist loadable while concurrent builds and a reader run', async () => {
     const packageDir = fixture()
     await build(packageDir)
@@ -188,7 +233,7 @@ describe('process-host dist build', () => {
     const entry = join(packageDir, 'dist', 'entry.js')
     const finished = join(packageDir, 'builds-finished')
     const reader = runProcess({
-      program: process.execPath,
+      program: nodeExecutable,
       args: [
         '-e',
         `const { existsSync } = require('node:fs')
@@ -202,9 +247,14 @@ while (!existsSync(${JSON.stringify(finished)}) || reads === 0) {
       timeoutMs: 60_000
     })
 
-    const builds = await Promise.all([1, 2, 3].map(() => runBuild(packageDir)))
-    writeFileSync(finished, '')
-    const read = await reader
+    let builds
+    let read
+    try {
+      builds = await Promise.all([1, 2, 3].map(() => runBuild(packageDir)))
+    } finally {
+      writeFileSync(finished, '')
+      read = await reader
+    }
 
     expect(builds.map((result) => [result.code, result.stderr])).toEqual(builds.map(() => [0, '']))
     expect(read).toMatchObject({ code: 0, stderr: '' })

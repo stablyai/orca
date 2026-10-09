@@ -4,6 +4,7 @@ import os from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setAppEnvironment } from '../../shared/app-environment'
+import { daemonHostStagingName } from './daemon-host-reclaim'
 import { buildInstallFixture } from './daemon-host-relocation.test-fixture'
 import {
   collectPinnedDaemonVersions,
@@ -155,9 +156,8 @@ afterEach(() => {
   rmSync(tempDir, { recursive: true, force: true })
 })
 
-describe('out-of-process launcher: same-version daemon-host reclaim', () => {
-  // Old mirror on disk, a changed source fingerprint with no mirror yet, and a stale
-  // same-version daemon whose live record pins every build until preflight retires it.
+describe('out-of-process launcher: published daemon-host retention', () => {
+  // A changed fingerprint selects a new mirror without deleting a previous daemon's code.
   function seedSupersededLaunch(): string {
     const oldBuild = materializedBuild()
     writePidRecord(STALE_DAEMON_PID)
@@ -165,7 +165,7 @@ describe('out-of-process launcher: same-version daemon-host reclaim', () => {
     return oldBuild
   }
 
-  it('reclaims the superseded build after preflight retires the stale daemon and before fork', async () => {
+  it('retains a superseded current-version build after its previous daemon exits', async () => {
     const oldBuild = seedSupersededLaunch()
     harness.prepareDaemonReplacement.mockImplementation(async () => {
       staleDaemon = 'exited'
@@ -175,11 +175,45 @@ describe('out-of-process launcher: same-version daemon-host reclaim', () => {
 
     await launch()
 
-    expect(seen.oldBuildPresent).toBe(false)
+    expect(seen.oldBuildPresent).toBe(true)
     expect(seen.forkEntryPath).toBeDefined()
     expect(seen.forkEntryPath?.startsWith(oldBuild)).toBe(false)
     expect(existsSync(seen.forkEntryPath ?? '')).toBe(true)
-    expect(existsSync(join(oldBuild, 'Orca.exe'))).toBe(false)
+    expect(existsSync(join(oldBuild, 'Orca.exe'))).toBe(true)
+  })
+
+  it('keeps a published build when another daemon can still be starting before pid publication', async () => {
+    const startingBuild = materializedBuild()
+    expect(existsSync(getDaemonPidPath(runtimeDir))).toBe(false)
+    const abandonedStage = join(
+      dirname(startingBuild),
+      daemonHostStagingName(STALE_DAEMON_PID, '0123456789ab')
+    )
+    mkdirSync(abandonedStage, { recursive: true })
+    writeFileSync(join(abandonedStage, 'Orca.exe'), 'abandoned-copy')
+    staleDaemon = 'exited'
+    writeFileSync(harness.entryPath, 'entry-rebuilt-same-version')
+    harness.prepareDaemonReplacement.mockResolvedValue(null)
+    const seen = recordLaunch(startingBuild)
+    const fork = harness.launchDaemonChild.getMockImplementation()
+    let stagingPresentAtFork: boolean | undefined
+    harness.launchDaemonChild.mockImplementation(async (options) => {
+      stagingPresentAtFork = existsSync(abandonedStage)
+      expect(existsSync(getDaemonPidPath(runtimeDir))).toBe(false)
+      return fork?.(options)
+    })
+
+    await launch()
+
+    expect(seen.oldBuildPresent).toBe(true)
+    expect(stagingPresentAtFork).toBe(false)
+    expect(
+      existsSync(
+        join(startingBuild, 'resources', 'app.asar.unpacked', 'out', 'main', 'daemon-entry.js')
+      )
+    ).toBe(true)
+    expect(seen.forkEntryPath?.startsWith(startingBuild)).toBe(false)
+    expect(existsSync(seen.forkEntryPath ?? '')).toBe(true)
   })
 
   it.each([
@@ -223,7 +257,7 @@ describe('out-of-process launcher: same-version daemon-host reclaim', () => {
 
     await launch()
 
-    expect(seen.oldBuildPresent).toBe(false)
+    expect(seen.oldBuildPresent).toBe(true)
     expect(supersededPresentAtFork).toBe(true)
     expect(existsSync(join(supersededVersion, 'Orca.exe'))).toBe(true)
 

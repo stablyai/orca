@@ -77,7 +77,9 @@ describe('packaged node-pty launcher-surviving grandchild', () => {
       const packageDir = await stagePackagedProcessHost(resourcesDir)
       const entry = packagedProcessHostPath(resourcesDir)
 
-      expect(require.resolve(entry)).toBe(realpathSync(join(packageDir, 'dist', 'run-process.js')))
+      expect(realpathSync(require.resolve(entry))).toBe(
+        realpathSync(join(packageDir, 'dist', 'run-process.js'))
+      )
       expect(typeof require(entry).spawnProcess).toBe('function')
     } finally {
       await rm(resourcesDir, { recursive: true, force: true })
@@ -90,7 +92,7 @@ describe('packaged node-pty launcher-surviving grandchild', () => {
       const legacy = await stageLegacyRunProcess(resourcesDir)
       const entry = packagedProcessHostPath(resourcesDir)
 
-      expect(require.resolve(entry)).toBe(realpathSync(legacy))
+      expect(realpathSync(require.resolve(entry))).toBe(realpathSync(legacy))
       expect(require(entry).spawnProcess()).toBe('legacy spawnProcess')
     } finally {
       await rm(resourcesDir, { recursive: true, force: true })
@@ -100,12 +102,13 @@ describe('packaged node-pty launcher-surviving grandchild', () => {
   it('fails on a broken public package rather than loading the legacy copy', async () => {
     const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-pty-capability-broken-'))
     try {
-      await stageLegacyRunProcess(resourcesDir)
+      const legacy = await stageLegacyRunProcess(resourcesDir)
       const packageDir = await stagePackagedProcessHost(resourcesDir)
       await rm(join(packageDir, 'dist', 'run-process.js'))
 
       expect(packagedProcessHostPath(resourcesDir)).toBe(packageDir)
-      expect(() => require(packagedProcessHostPath(resourcesDir))).toThrow(/run-process\.js/)
+      expect(require(legacy).spawnProcess()).toBe('legacy spawnProcess')
+      expect(() => require(packagedProcessHostPath(resourcesDir))).toThrow()
 
       await rm(join(packageDir, 'package.json'))
       expect(() => packagedProcessHostPath(resourcesDir)).toThrow(

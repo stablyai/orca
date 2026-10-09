@@ -150,6 +150,9 @@ describe.skipIf(skip)('real pinned-Node launcher lifecycle', () => {
       stdio: ['ignore', 'pipe', 'pipe', 'ipc']
     })
     children.add(child)
+    if (!child.stdout || !child.stderr) {
+      throw new Error('The launcher fixture requires stdout and stderr pipes')
+    }
     child.once('spawn', () => record('spawn'))
     let closed = false
     child.once('close', () => {

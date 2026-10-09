@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync } from 'node:fs'
-import { dirname, join, win32 as winPath } from 'node:path'
+import { join, win32 as winPath } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-environment'
 import {
   buildDaemonHostManifest,
@@ -20,7 +20,7 @@ import {
 import type { ProcessLivenessVerdict } from './daemon-incarnation-evidence-types'
 import {
   daemonHostStagingName,
-  reclaimCurrentVersionDaemonHostLeftovers,
+  reclaimAbandonedDaemonHostStaging,
   reclaimUnownedDaemonHostDir
 } from './daemon-host-reclaim'
 import { parseDaemonPidFile } from './daemon-pid-file-parse'
@@ -330,32 +330,15 @@ export function collectPinnedDaemonVersions(runtimeDir: string): PinnedDaemonVer
   return { status: 'complete', versionLiveness }
 }
 
-// The build this process forks from (looked up when not given); null when unknown or unusable.
-function selectedBuildDir(selectedHost: RelocatedDaemonHost | null | undefined): string | null {
-  const host = selectedHost === undefined ? getRelocatedDaemonHost() : selectedHost
-  return host ? dirname(host.execPath) : null
-}
-
-function reclaimCurrentVersionHostLeftovers(
-  versionLiveness: ReadonlyMap<string, ProcessLivenessVerdict>,
-  selectedHost?: RelocatedDaemonHost | null
-): void {
-  const version = getAppEnvironment().getVersion()
-  // A complete listing with no current-version record is positive exit evidence.
-  const verdict = versionLiveness.get(version) ?? { status: 'exited' }
-  const buildDir = verdict.status === 'exited' ? selectedBuildDir(selectedHost) : null
-  reclaimCurrentVersionDaemonHostLeftovers(join(getDaemonHostRootDir(), version), verdict, buildDir)
-}
-
 /**
- * Reclaim daemon-host/<ver> dirs that are neither the current version nor pinned by a live daemon,
- * plus current-version leftovers (see reclaimCurrentVersionDaemonHostLeftovers).
+ * Reclaim daemon-host/<ver> dirs that are neither the current version nor pinned by a live daemon.
  * Best-effort — never throws; a locked/staging dir is retried on a future launch.
  */
 export function pruneOldDaemonHosts(evidence: PinnedDaemonVersionsEvidence): void {
   if (!isPackagedElectronWin32()) {
     return
   }
+  pruneDaemonHostStaging()
   if (evidence.status === 'unverifiable') {
     console.warn(`[daemon] Skipping daemon-host prune: ${evidence.reason}`)
     return
@@ -369,11 +352,8 @@ export function pruneOldDaemonHosts(evidence: PinnedDaemonVersionsEvidence): voi
     return
   }
   for (const entry of entries) {
-    if (!entry.isDirectory()) {
-      continue
-    }
-    if (entry.name === version) {
-      reclaimCurrentVersionHostLeftovers(evidence.versionLiveness)
+    // A published current-version build can belong to a daemon that has not written its pid yet.
+    if (!entry.isDirectory() || entry.name === version) {
       continue
     }
     // A complete runtime-dir listing with no pid record for this version proves it is unowned.
@@ -382,18 +362,11 @@ export function pruneOldDaemonHosts(evidence: PinnedDaemonVersionsEvidence): voi
   }
 }
 
-/**
- * Reclaim current-version leftovers once preflight has retired any stale daemon and this launch has
- * selected its build, before the new daemon's live pid record pins every same-version mirror.
- * Superseded versions aren't pinned by it, so their deletion waits for the post-launch prune.
- */
-export function pruneDaemonHostsBeforeLaunch(
-  runtimeDir: string,
-  selectedHost: RelocatedDaemonHost | null
-): void {
-  const evidence = isPackagedElectronWin32() ? collectPinnedDaemonVersions(runtimeDir) : null
-  // Unverifiable evidence is reported by the post-launch prune at init; respawns skip silently.
-  if (evidence?.status === 'complete') {
-    reclaimCurrentVersionHostLeftovers(evidence.versionLiveness, selectedHost)
+/** Reclaim only copies whose writer positively exited, independently of daemon pid publication. */
+export function pruneDaemonHostStaging(): void {
+  if (isPackagedElectronWin32()) {
+    reclaimAbandonedDaemonHostStaging(
+      join(getDaemonHostRootDir(), getAppEnvironment().getVersion())
+    )
   }
 }

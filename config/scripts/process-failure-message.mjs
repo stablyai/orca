@@ -1,5 +1,3 @@
-export { runProcessSync, spawnProcess } from '@orca/process-host'
-
 /** Why a failed child failed, for CI logs where an empty stderr alone says nothing. */
 export function describeProcessFailure(result) {
   const detail = [

@@ -150,7 +150,6 @@ const ORCAD_BROWSER_PREFIXES = [
 const MOBILE_WEB_APP_PREFIXES = [
   'config/scripts/build-mobile-web-app',
   'config/scripts/run-mobile-web-app-checks',
-  'config/scripts/script-child-process.mjs',
   'src/packages/process-host/',
   'config/scripts/verify-mobile-web-app-bundle',
   'config/scripts/mobile-web-app-',
@@ -324,7 +323,7 @@ const SHARED_PACKAGE_PREFIXES = [
 const LINUX_PACKAGE_PREFIXES = [
   ...SHARED_PACKAGE_PREFIXES,
   'config/scripts/package-linux-formats',
-  'config/scripts/script-child-process.mjs',
+  'config/scripts/process-failure-message.mjs',
   'config/scripts/space-sharing-copy.mjs',
   '.github/actions/prepare-linux-package-fixture/',
   'config/docker/cli-launch-contract/',

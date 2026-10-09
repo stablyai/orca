@@ -1,3 +1,4 @@
+import type { ProcessResult } from '@orca/process-host/process-spec'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as RunProcessModule from '@orca/process-host'
 import type * as FsHandlerGitFallback from './fs-handler-git-fallback'
@@ -155,7 +156,7 @@ describe('relay direct ripgrep admission', () => {
   it.each([0, 128])('lets cancellation during the Git probe win its exit (%s)', async (code) => {
     const controller = new AbortController()
     const cancellation = new FileListingCancelledError('superseded')
-    const probe = Promise.withResolvers<RunProcessModule.ProcessResult>()
+    const probe = Promise.withResolvers<ProcessResult>()
     listFilesWithRgMock.mockRejectedValueOnce(new RipgrepUnavailableError())
     runProcessMock.mockReturnValueOnce(probe.promise)
 

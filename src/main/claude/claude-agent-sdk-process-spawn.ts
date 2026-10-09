@@ -1,3 +1,4 @@
+import type { PipedChildProcess, PipedProcessSpawner } from '@orca/process-host/process-spec'
 import type { SpawnOptions as ClaudeAgentSdkSpawnOptions } from '@anthropic-ai/claude-agent-sdk'
 import { spawnProcess } from '@orca/process-host'
 import {
@@ -7,7 +8,7 @@ import {
 import { claudeChildClosePolicy, claudeChildCloseProven } from './claude-child-exit-proof-ladder'
 
 /** Derived rather than imported: only @orca/process-host may name node:child_process. */
-type ClaudeCodeChild = ReturnType<typeof spawnProcess>
+type ClaudeCodeChild = PipedChildProcess
 
 export type ClaudeCodeProcessSpawn = {
   /** Pass as the SDK's `spawnClaudeCodeProcess`; the SDK never learns the pid because it never owns it. */
@@ -45,7 +46,7 @@ function definedEnv(env: Record<string, string | undefined>): Record<string, str
  * nobody watching. Windows has no supervisor and spawns Claude directly.
  */
 export function createClaudeCodeProcessSpawn(
-  spawnImpl: typeof spawnProcess = spawnProcess,
+  spawnImpl: PipedProcessSpawner = spawnProcess,
   platform: NodeJS.Platform = process.platform,
   onOutput?: () => void
 ): ClaudeCodeProcessSpawn {

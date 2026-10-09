@@ -47,7 +47,7 @@ describe('process-host import boundary', () => {
         `
           // import { spawn } from 'node:child_process'
           const script = "require('node:child_process')"
-          import type { ProcessSpec } from '@orca/process-host'
+          import type { ProcessSpec } from '@orca/process-host/process-spec'
           export { forkProcess } from '@orca/process-host/fork-process'
           type Child = import('child_process').ChildProcess
           import legacy = require('legacy-package')
@@ -95,6 +95,16 @@ describe('process-host import boundary', () => {
     expect(assess({ [file]: `import '${specifier}'` }).violations).toHaveLength(1)
   })
 
+  it.each([
+    ['src/main/consumer.ts', '..\\packages\\process-host\\src\\run-process'],
+    ['src/main/consumer.ts', '..\\packages\\process-host\\dist\\run-process.js'],
+    ['config/scripts/consumer.mjs', '..\\..\\src\\packages\\process-host\\src\\run-process'],
+    ['src/main/consumer.ts', '@orca\\process-host\\src\\run-process'],
+    ['src/main/consumer.ts', '@orca/process-host\\private-process-state']
+  ])('rejects Windows private package access in %s through %s', (file, specifier) => {
+    expect(assess({ [file]: `require(${JSON.stringify(specifier)})` }).violations).toHaveLength(1)
+  })
+
   it('shares fixture corpora only with test-only importers, keeping implementation imports public', () => {
     const corpus = '../packages/process-host/src/__fixtures__/windows-argument-corpus'
     expect(assess({ 'src/main/consumer.test.ts': `import '${corpus}'` }).violations).toEqual([])
@@ -120,6 +130,35 @@ describe('process-host import boundary', () => {
     expect(
       assess({ [`${PACKAGE_SOURCE}runner.ts`]: `import '${specifier}'` }).violations[0]
     ).toContain(reason)
+  })
+
+  it.each([
+    ['..\\..\\..\\main\\runtime', 'cannot import outside'],
+    ['.\\..\\..\\..\\main\\runtime', 'cannot import outside'],
+    ['C:\\repo\\src\\main\\runtime.ts', 'absolute path'],
+    ['\\\\server\\repo\\src\\main\\runtime.ts', 'absolute path'],
+    ['@renderer\\store', 'undeclared']
+  ])('rejects package dependence on Windows specifier %s', (specifier, reason) => {
+    expect(
+      assess({ [`${PACKAGE_SOURCE}runner.ts`]: `require(${JSON.stringify(specifier)})` })
+        .violations[0]
+    ).toContain(reason)
+  })
+
+  it('permits Windows relative imports within package source and test fixture corpora', () => {
+    const corpus = '..\\packages\\process-host\\src\\__fixtures__\\windows-argument-corpus'
+    const traversal = '..\\packages\\process-host\\src\\__fixtures__\\..\\run-process'
+    expect(
+      assess({
+        [`${PACKAGE_SOURCE}runner.ts`]: `require(${JSON.stringify('.\\process-spec')})`,
+        'src/main/consumer.test.ts': `require(${JSON.stringify(corpus)})`
+      }).violations
+    ).toEqual([])
+    expect(
+      assess({
+        'src/main/consumer.test.ts': `require(${JSON.stringify(traversal)})`
+      }).violations
+    ).toHaveLength(1)
   })
 
   it('allows only declared runtime dependencies in production package source', () => {

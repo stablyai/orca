@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import * as path from 'node:path'
-import { resolveSpawn, runProcess, runProcessSync } from './run-process'
+import { runProcess, runProcessSync } from './run-process'
+import { resolveSpawn } from './spawn-resolution'
 import { WINDOWS_ARGUMENT_CORPUS } from './__fixtures__/windows-argument-corpus'
 
 const SPEC = { program: 'C:\\bin\\agent.cmd', args: ['--prompt', 'hi'] }

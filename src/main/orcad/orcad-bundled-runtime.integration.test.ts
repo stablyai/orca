@@ -99,6 +99,9 @@ function launch(
     detached: true
   })
   children.add(child)
+  if (!child.stdout || !child.stderr) {
+    throw new Error('The runtime fixture requires stdout and stderr pipes')
+  }
   let output = ''
   child.stdout.on('data', (data: Buffer) => {
     output += data.toString()

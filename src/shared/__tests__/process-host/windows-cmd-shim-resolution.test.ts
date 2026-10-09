@@ -1,13 +1,14 @@
 import { mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import type * as ChildProcessModule from 'node:child_process'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { removeTreeSync } from '../../windows-transient-lock-removal'
 import {
   parseWindowsCmdShim,
   resolveWindowsCmdShim
 } from '@orca/process-host/windows-cmd-shim-resolution'
-import { resolveSpawn } from '@orca/process-host'
+import { spawnProcess } from '@orca/process-host'
 import {
   REAL_AGENT_BROWSER_CMD,
   REAL_CODEX_CMD,
@@ -20,6 +21,16 @@ import {
   npmProgNodeShim,
   pnpmBranchedNodeShim
 } from '../../../packages/process-host/src/__fixtures__/windows-cmd-shim-bodies'
+
+const { nodeSpawn } = vi.hoisted(() => ({ nodeSpawn: vi.fn<typeof ChildProcessModule.spawn>() }))
+
+vi.mock('node:child_process', async (importOriginal) => {
+  const original = await importOriginal<typeof ChildProcessModule>()
+  return {
+    ...original,
+    spawn: nodeSpawn.mockImplementation(() => new original.ChildProcess())
+  }
+})
 
 describe('parseWindowsCmdShim', () => {
   it('reads the npm node shim MDE flagged (codex.cmd)', () => {
@@ -333,47 +344,47 @@ describeOnWindows('resolveWindowsCmdShim', () => {
   })
 
   it('keeps cmd.exe out of the spawn for a recognised shim', () => {
-    const resolved = resolveSpawn(
-      {
-        program: write('spawned.cmd', npmProgNodeShim('cli.js')),
-        args: ['a b', 'c"d'],
-        env
-      },
-      'win32'
-    )
-    expect(resolved.file.toLowerCase()).not.toContain('cmd.exe')
-    expect(resolved.args).toEqual([join(dir, 'cli.js'), 'a b', 'c"d'])
+    spawnProcess({
+      program: write('spawned.cmd', npmProgNodeShim('cli.js')),
+      args: ['a b', 'c"d'],
+      env
+    })
     // Node's own quoting is CommandLineToArgvW-correct; the verbatim line is
     // only needed for the cmd hop we just removed.
-    expect(resolved.options.windowsVerbatimArguments).toBeUndefined()
+    expect(nodeSpawn).toHaveBeenLastCalledWith(
+      expect.stringMatching(/node\.exe$/i),
+      [join(dir, 'cli.js'), 'a b', 'c"d'],
+      expect.objectContaining({ windowsVerbatimArguments: undefined })
+    )
   })
 
   it('clears a caller-set windowsVerbatimArguments on the resolved path', () => {
     // The flag means "I built the whole command line, hand it through". There
     // is no such line here, so honouring it would make Node join
     // `[script, ...args]` unquoted and shred every argument with a space.
-    const resolved = resolveSpawn(
-      {
-        program: write('verbatim.cmd', npmProgNodeShim('cli.js')),
-        args: ['a b'],
-        env,
-        windowsVerbatimArguments: true
-      },
-      'win32'
+    spawnProcess({
+      program: write('verbatim.cmd', npmProgNodeShim('cli.js')),
+      args: ['a b'],
+      env,
+      windowsVerbatimArguments: true
+    })
+    expect(nodeSpawn).toHaveBeenLastCalledWith(
+      expect.stringMatching(/node\.exe$/i),
+      [join(dir, 'cli.js'), 'a b'],
+      expect.objectContaining({ windowsVerbatimArguments: undefined })
     )
-    expect(resolved.options.windowsVerbatimArguments).toBeUndefined()
   })
 
   it('still routes an unrecognised .cmd through cmd.exe', () => {
-    const resolved = resolveSpawn(
-      {
-        program: write('plain.cmd', REAL_PN_CMD),
-        args: ['x'],
-        env: { ComSpec: 'C:\\W\\cmd.exe' }
-      },
-      'win32'
+    spawnProcess({
+      program: write('plain.cmd', REAL_PN_CMD),
+      args: ['x'],
+      env: { ComSpec: 'C:\\W\\cmd.exe' }
+    })
+    expect(nodeSpawn).toHaveBeenLastCalledWith(
+      'C:\\W\\cmd.exe',
+      [expect.stringContaining('/d /v:off /s /c')],
+      expect.objectContaining({ windowsVerbatimArguments: true })
     )
-    expect(resolved.file).toBe('C:\\W\\cmd.exe')
-    expect(resolved.args[0]).toContain('/d /v:off /s /c')
   })
 })

@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path'
 import { runInNewContext } from 'node:vm'
 import { parse } from 'yaml'
 import { expect, it } from 'vitest'
-import { runProcessSync } from './script-child-process.mjs'
+import { runProcessSync } from '@orca/process-host'
 
 const workflow = parse(readFileSync('.github/workflows/terminal-perf.yml', 'utf8'))
 const steps = workflow.jobs['terminal-perf'].steps

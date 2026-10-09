@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ProcessResult } from '@orca/process-host'
+
+import type { ProcessResult } from '@orca/process-host/process-spec'
 
 const { runProcessMock } = vi.hoisted(() => ({ runProcessMock: vi.fn() }))
 vi.mock('@orca/process-host', () => ({ runProcess: runProcessMock }))

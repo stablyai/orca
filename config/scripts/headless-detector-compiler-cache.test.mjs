@@ -20,7 +20,7 @@ import {
   packCompilerCache
 } from './headless-detector-compiler-cache.mjs'
 import { collectNodeServerInputs } from './node-server-change-scope.mjs'
-import { runProcessSync } from './script-child-process.mjs'
+import { runProcessSync } from '@orca/process-host'
 
 const temporary = []
 afterEach(() => {
