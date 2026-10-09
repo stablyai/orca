@@ -13,6 +13,7 @@ type UseGitStatusPushSignalRefreshParams = {
   activeWorktreePath: string | null
   enabled: boolean
   fetchStatus: () => void
+  /** Keep stable: it re-subscribes the push signals when it changes. */
   getRepoWorktreePaths: (repoId: string) => readonly string[]
 }
 
@@ -31,8 +32,6 @@ export function useGitStatusPushSignalRefresh({
 }: UseGitStatusPushSignalRefreshParams): void {
   const fetchStatusRef = useRef(fetchStatus)
   fetchStatusRef.current = fetchStatus
-  const getRepoWorktreePathsRef = useRef(getRepoWorktreePaths)
-  getRepoWorktreePathsRef.current = getRepoWorktreePaths
 
   useEffect(() => {
     if (!enabled || !activeRepoId) {
@@ -53,7 +52,7 @@ export function useGitStatusPushSignalRefresh({
     }
     // Why: sibling-worktree index churn must not re-run this checkout's status.
     const handleGitStatusSignal = (signal: GitStatusMetadataChangedEvent): void => {
-      const paths = getRepoWorktreePathsRef.current(signal.repoId)
+      const paths = getRepoWorktreePaths(signal.repoId)
       if (isGitStatusSignalForWorktree(signal, activeWorktreePath, paths)) {
         handleRepoSignal(signal)
       }
@@ -69,7 +68,7 @@ export function useGitStatusPushSignalRefresh({
         unsubscribe()
       }
     }
-  }, [enabled, activeRepoId, activeWorktreePath])
+  }, [enabled, activeRepoId, activeWorktreePath, getRepoWorktreePaths])
 
   useEffect(() => {
     if (!enabled || !activeWorktreeId) {
