@@ -422,7 +422,15 @@ export function RemoteBrowserPagePane({
         onReload={() => void runRemoteNavigation('browser.reload')}
         onGoto={(url) => void runRemoteNavigation('browser.goto', url)}
         onReconnect={reconnectRemoteStream}
-        handleRemotePointerDown={handleRemotePointerDown}
+        handleRemotePointerDown={(event) => {
+          if (event.button !== 3 && event.button !== 4) {
+            handleRemotePointerDown(event)
+            return
+          }
+          // Why: cancelling pointerdown suppresses the mouseup that would otherwise switch workspace.
+          event.preventDefault()
+          void runRemoteNavigation(event.button === 3 ? 'browser.back' : 'browser.forward')
+        }}
         handleRemotePointerUp={handleRemotePointerUp}
         handleRemoteContextMenu={handleRemoteContextMenu}
         handleRemoteScreenshotKeyDown={handleRemoteScreenshotKeyDown}

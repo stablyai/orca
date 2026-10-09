@@ -122,6 +122,11 @@ export function installBrowserClickedLinkRouting(
   // link; capture-phase interception breaks SPA routing and analytics handlers.
   window.addEventListener('click', state.listener, false)
   window.addEventListener('auxclick', state.listener, false)
+  window.addEventListener('mouseup', (event) => {
+    if (event.isTrusted && !event.defaultPrevented && (event.button === 3 || event.button === 4)) {
+      history.go(event.button === 3 ? -1 : 1)
+    }
+  })
 }
 
 /**

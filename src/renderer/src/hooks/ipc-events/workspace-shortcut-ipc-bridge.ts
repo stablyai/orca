@@ -113,20 +113,27 @@ export function registerWorkspaceShortcutIpcBridge(unsubs: (() => void)[]): void
     })
   )
 
-  unsubs.push(
-    window.api.ui.onWorktreeHistoryNavigate((direction) => {
-      const store = useAppStore.getState()
-      // Why: mirror button visibility — worktree history nav is only meaningful in the terminal view, so no-op elsewhere.
-      if (store.activeView !== 'terminal') {
-        return
-      }
-      if (direction === 'back') {
-        store.goBackWorktree()
-      } else {
-        store.goForwardWorktree()
-      }
-    })
-  )
+  const navigateWorktreeHistory = (direction: string) => {
+    const store = useAppStore.getState()
+    // Why: mirror button visibility — worktree history nav is only meaningful in the terminal view, so no-op elsewhere.
+    if (store.activeView !== 'terminal') {
+      return
+    }
+    if (direction === 'back') {
+      store.goBackWorktree()
+    } else {
+      store.goForwardWorktree()
+    }
+  }
+  unsubs.push(window.api.ui.onWorktreeHistoryNavigate(navigateWorktreeHistory))
+
+  const onMouseSideButton = (event: MouseEvent) => {
+    if (event.button === 3 || event.button === 4) {
+      navigateWorktreeHistory(event.button === 3 ? 'back' : 'forward')
+    }
+  }
+  window.addEventListener('mouseup', onMouseSideButton, true)
+  unsubs.push(() => window.removeEventListener('mouseup', onMouseSideButton, true))
 
   unsubs.push(
     window.api.ui.onToggleStatusBar(() => {
