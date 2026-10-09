@@ -191,7 +191,7 @@ export class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyInc
    */
   protected isAgentSettledForDelivery(leaf: { tabId: string; leafId: string }): boolean {
     const live = this.leaves.get(this.getLeafKey(leaf.tabId, leaf.leafId))
-    if (!live) {
+    if (!live || (live.ptyId && this.isPtyAwaitingUserInput(live.ptyId))) {
       return false
     }
     const evidence = leafTuiIdleEvidence(this.tuiIdleEvidenceSource, live, () =>
@@ -201,6 +201,15 @@ export class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyInc
     // would spin, so delivery keeps its own, blocked-blind, reading of the same ranking.
     return isTuiIdleReadyVerdict(
       evaluateTuiIdle({ ...evidence, readTailBlockedReason: () => null })
+    )
+  }
+
+  // Claude keeps its `✳` rest title under AskUserQuestion, so only the hook row shows the dialog.
+  protected isPtyAwaitingUserInput(ptyId: string): boolean {
+    const agent = this.tuiIdleEvidenceSource.getPaneAgent(ptyId)
+    return (
+      agent !== null &&
+      this.tuiIdleEvidenceSource.getHookTurn?.(ptyId, agent)?.state === 'permission'
     )
   }
 
