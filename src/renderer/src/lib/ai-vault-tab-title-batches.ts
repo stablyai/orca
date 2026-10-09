@@ -5,13 +5,15 @@ import type { AiVaultTitleRequest } from './ai-vault-tab-title-requests'
 export function batchAiVaultTitleRequests(
   requests: AiVaultTitleRequest[]
 ): AiVaultTitleRequest[][] {
-  const byHost = new Map<ExecutionHostId, AiVaultTitleRequest[]>()
+  const byHost = new Map<string, AiVaultTitleRequest[]>()
   for (const request of requests) {
-    const hostRequests = byHost.get(request.executionHostId)
+    // Why: hosts that predate Rovo titles reject the whole batch, so Rovo goes alone.
+    const key = `${request.executionHostId}\0${request.agent === 'rovo' ? 'rovo' : 'transcript'}`
+    const hostRequests = byHost.get(key)
     if (hostRequests) {
       hostRequests.push(request)
     } else {
-      byHost.set(request.executionHostId, [request])
+      byHost.set(key, [request])
     }
   }
   const batches: AiVaultTitleRequest[][] = []

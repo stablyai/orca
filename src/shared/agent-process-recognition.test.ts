@@ -628,4 +628,13 @@ describe('agent process recognition', () => {
       processName: 'muse'
     })
   })
+
+  it('recognizes the standalone Rovo CLI binary, including Linux comm truncation', () => {
+    expect(recognizeAgentProcess('atlassian_cli_rovodev')?.agent).toBe('rovo')
+    expect(recognizeAgentProcess('atlassian_cli_r')?.agent).toBe('rovo')
+    expect(recognizeAgentProcess('atlassian_cli')).toBeNull()
+    expect(isExpectedAgentProcess('atlassian_cli_r', 'atlassian_cli_rovodev')).toBe(true)
+    expect(isExpectedAgentProcess('rovo', 'atlassian_cli_rovodev')).toBe(true)
+    expect(isExpectedAgentProcess('atlassian_cli', 'atlassian_cli_rovodev')).toBe(false)
+  })
 })

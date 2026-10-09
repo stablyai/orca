@@ -15,7 +15,10 @@ import { normalizeDisabledTuiAgents } from '../../../shared/tui-agent-selection'
 import { hasUnsupportedTuiAgentArgs } from '../../../shared/tui-agent-launch-defaults'
 import { normalizeTerminalCursorStyleDefault } from '../../../shared/terminal-cursor-style-settings'
 import { normalizeTerminalLineHeight } from '../../../shared/terminal-line-height-settings'
-import { migrateAgentYoloDefaults } from '../applying-settings/terminal-settings-migrations'
+import {
+  migrateAgentYoloDefaults,
+  migrateRetiredAgentCmdOverrides
+} from '../applying-settings/terminal-settings-migrations'
 import {
   normalizeLoadedOnboardingState,
   normalizeNotificationSettings,
@@ -40,6 +43,7 @@ export type PreparedLoadedProfileSettings = {
   migratePrimarySelectionPlatformDefault: boolean
   stampPrimarySelectionTerminalDefaults: boolean
   migratedDisabledTuiAgents: GlobalSettings['disabledTuiAgents']
+  migratedAgentCmdOverrides: GlobalSettings['agentCmdOverrides'] | undefined
   migratedAgentYoloDefaults: Pick<
     GlobalSettings,
     'agentDefaultArgs' | 'agentDefaultEnv' | 'agentYoloDefaultsMigrated'
@@ -133,7 +137,17 @@ export function prepareLoadedProfileSettings(
     markNeedsSave()
   }
   const migratedDisabledTuiAgents = normalizeDisabledTuiAgents(parsed.settings?.disabledTuiAgents)
-  const migratedAgentYoloDefaults = migrateAgentYoloDefaults(parsed.settings)
+  const retiredCmdOverrides = migrateRetiredAgentCmdOverrides(parsed.settings)
+  if (retiredCmdOverrides.changed) {
+    markNeedsSave()
+  }
+  // Why: a retired override counts as customised and would block Rovo's yolo default.
+  const migratedAgentYoloDefaults = migrateAgentYoloDefaults(
+    parsed.settings && {
+      ...parsed.settings,
+      agentCmdOverrides: retiredCmdOverrides.agentCmdOverrides ?? {}
+    }
+  )
   if (
     parsed.settings?.agentYoloDefaultsMigrated !== true ||
     parsed.settings?.agentDefaultArgs?.devin !==
@@ -243,6 +257,7 @@ export function prepareLoadedProfileSettings(
     migratePrimarySelectionPlatformDefault,
     stampPrimarySelectionTerminalDefaults,
     migratedDisabledTuiAgents,
+    migratedAgentCmdOverrides: retiredCmdOverrides.agentCmdOverrides,
     migratedAgentYoloDefaults,
     migratedWindowsRuntimeDefault,
     migratedLocalAccountRuntime,

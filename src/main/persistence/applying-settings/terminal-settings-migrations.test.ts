@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { migrateAgentYoloDefaults } from './terminal-settings-migrations'
+import {
+  migrateAgentYoloDefaults,
+  migrateRetiredAgentCmdOverrides
+} from './terminal-settings-migrations'
 
 describe('migrateAgentYoloDefaults', () => {
   it('keeps newly added agent defaults manual for already migrated profiles', () => {
@@ -24,5 +27,25 @@ describe('migrateAgentYoloDefaults', () => {
     expect(migrated.agentDefaultArgs?.devin).toBe(
       '--permission-mode bypass --respect-workspace-trust false'
     )
+  })
+})
+
+describe('migrateRetiredAgentCmdOverrides', () => {
+  it('drops the retired acli Rovo seed so the standalone rovo default applies', () => {
+    const migrated = migrateRetiredAgentCmdOverrides({
+      agentCmdOverrides: { rovo: ' acli rovodev run ', claude: 'claude --verbose' }
+    })
+
+    expect(migrated).toEqual({
+      agentCmdOverrides: { claude: 'claude --verbose' },
+      changed: true
+    })
+  })
+
+  it('keeps customised Rovo overrides', () => {
+    const overrides = { rovo: '/opt/acli/acli rovodev run --verbose' }
+    const migrated = migrateRetiredAgentCmdOverrides({ agentCmdOverrides: overrides })
+
+    expect(migrated).toEqual({ agentCmdOverrides: overrides, changed: false })
   })
 })

@@ -1,3 +1,5 @@
+import type { AiVaultSessionTitleRequest } from './ai-vault-session-title'
+
 export const SSH_AI_VAULT_LIST_SESSIONS_METHOD = 'aiVault.listSessions' as const
 export const SSH_AI_VAULT_RESOLVE_SESSION_TITLES_METHOD = 'aiVault.resolveSessionTitles' as const
 export const SSH_AI_VAULT_LIST_SESSIONS_TIMEOUT_MS = 130_000
@@ -15,9 +17,5 @@ export type SshAiVaultRelayListParams = {
 }
 
 export type SshAiVaultRelayTitleParams = {
-  requests: {
-    agent: 'claude' | 'codex'
-    sessionId: string
-    transcriptPath?: string
-  }[]
+  requests: AiVaultSessionTitleRequest[]
 }

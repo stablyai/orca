@@ -29,6 +29,7 @@ import { normalizeMuseEvent } from './providers/muse-events'
 import { normalizeDshEvent } from './providers/dsh-events'
 import { normalizeZCodeEvent } from './providers/zcode-events'
 import { normalizeJcodeEvent } from './providers/jcode-events'
+import { normalizeRovoEvent, readRovoUserPrompt } from './providers/rovo-events'
 
 export type ProviderDispatchResult = {
   payload: ParsedAgentStatusPayload | null
@@ -206,7 +207,12 @@ export function normalizeProviderEvent(input: {
         resolvedPromptText = promptText
       }
       payload = normalizeJcodeEvent(state, eventName, resolvedPromptText, paneKey, hookPayload)
+      break
     }
+    case 'rovo':
+      resolvedPromptText = readRovoUserPrompt(eventName, hookPayload) ?? promptText
+      payload = normalizeRovoEvent(state, eventName, resolvedPromptText, paneKey, hookPayload)
+      break
   }
 
   return { payload, resolvedPromptText, promptInteractionKey, hasTranscriptPromptEvidence }

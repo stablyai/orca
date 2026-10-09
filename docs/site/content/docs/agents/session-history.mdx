@@ -27,7 +27,7 @@ Remote workspaces can browse local history, but resume actions only run from loc
 
 The view-options menu (next to the search box) controls which agents are scanned, plus sort and grouping:
 
-- **Agents** — toggle individual CLIs on or off (Claude, Codex, Hermes, Pi, OMP, Prime Agent, Cursor, Gemini, Antigravity, Rovo Dev, Copilot, OpenCode, Grok, OpenClaw, Devin, Droid, Kimi, Muse). Disabled agents are skipped during the scan. Use **Select all** / **Clear** in the Agents header to flip every agent at once — **Clear** leaves none selected so you can turn on only the CLI you care about without unchecking a long list. An empty selection shows **No agents selected** instead of the usual empty-filter message.
+- **Agents** — toggle individual CLIs on or off (Claude, Codex, Hermes, Pi, OMP, Prime Agent, Cursor, Gemini, Antigravity, Rovo, Copilot, OpenCode, Grok, OpenClaw, Devin, Droid, Kimi, Muse). Disabled agents are skipped during the scan. Use **Select all** / **Clear** in the Agents header to flip every agent at once — **Clear** leaves none selected so you can turn on only the CLI you care about without unchecking a long list. An empty selection shows **No agents selected** instead of the usual empty-filter message.
 - **Sort** — `Last updated` or `Created`.
 - **Group** — `Project`, `Folder` (one heading per `cwd`), or `Agent` (one heading per CLI).
 - **Hide empty sessions** — drop sessions with zero recorded messages.
@@ -36,7 +36,7 @@ The view-options menu (next to the search box) controls which agents are scanned
 
 Click a session row to open its details: working directory, branch, model, message count, **First prompt**, and the latest conversation turns. **First prompt** loads the untruncated first user message from the transcript when you expand details (list rows only keep a short preview for search). Use **Copy** on that card to put the full ask on the clipboard — useful for reusing a long prompt without reopening the log. You can also drag an enabled session row into the workspace to resume it. From the row's actions you can:
 
-- **Resume** — opens a new terminal in the session's `cwd` and runs the agent's resume command (e.g. `claude --resume <id>`, `codex resume <id>`, `pi --session <session_file>`, `prime-agent --resume <path>`, `cursor-agent --resume <id>`, `acli rovodev run --restore <id>`). Codex sessions also re-export `CODEX_HOME` when the original session set one.
+- **Resume** — opens a new terminal in the session's `cwd` and runs the agent's resume command (e.g. `claude --resume <id>`, `codex resume <id>`, `pi --session <session_file>`, `prime-agent --resume <path>`, `cursor-agent --resume <id>`, `rovo --restore <id>`). Codex sessions also re-export `CODEX_HOME` when the original session set one.
 
 Pi resumes from the on-disk session file reported by its hooks (`--session <path>`), not from a bare session id. If that file is missing, Resume is unavailable for that row even when a session id exists.
 

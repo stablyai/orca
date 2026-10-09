@@ -27,7 +27,8 @@ export const RESUMABLE_TUI_AGENTS = [
   'muse',
   'zcode',
   'dsh',
-  'jcode'
+  'jcode',
+  'rovo'
 ] as const satisfies readonly TuiAgent[]
 
 export type ResumableTuiAgent = (typeof RESUMABLE_TUI_AGENTS)[number]
@@ -261,6 +262,12 @@ export function extractAgentProviderSession(
     }
     case 'jcode': {
       const id = readSessionId(payload, ['session_id', 'sessionId'])
+      return id ? { key: 'session_id', id } : null
+    }
+    // Why: Rovo's `transcript_path` is a per-turn temp `message_history.json`, so only the id
+    // (its `~/.rovo/sessions/<id>/` directory) is durable.
+    case 'rovo': {
+      const id = readSessionId(payload, ['session_id'])
       return id ? { key: 'session_id', id } : null
     }
     // OMP keeps id-based resume while optionally locating its native-chat transcript.

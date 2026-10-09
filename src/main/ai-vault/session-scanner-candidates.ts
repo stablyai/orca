@@ -1,6 +1,7 @@
 import { prioritizeAntigravityTranscriptCandidates } from './antigravity-transcript-candidates'
 import { readCodexRolloutSessionMetaId } from '../codex/codex-rollout-session-meta'
 import { codexRolloutHardlinkIdentity, dedupeCodexRolloutAliases } from './codex-session-root-dedup'
+import { dedupeRovoLegacySessionCopies } from './rovo-session-root-dedup'
 import { antigravityHistoryPathForBrainDir } from './session-scanner-antigravity-paths'
 import { codexHomeForSessionsDir } from './session-scanner-codex-paths'
 import { DEFAULT_CODEX_HOME_DIR } from './session-scanner-source-discovery'
@@ -45,7 +46,7 @@ export async function sessionCandidatesFromDiscoveries(
     options.signal
   )
   return prioritizeAntigravityTranscriptCandidates(
-    candidates,
+    dedupeRovoLegacySessionCopies(candidates),
     (candidate) => candidate.agent === 'antigravity'
   )
 }

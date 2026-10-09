@@ -1,5 +1,8 @@
 import type { AgentProviderSessionMetadata } from '../../../shared/agent-session-resume'
-import { isAiVaultTitleAgent } from '../../../shared/ai-vault-session-title'
+import {
+  isAiVaultTitleAgent,
+  refreshesAiVaultTitleOnTurnEnd
+} from '../../../shared/ai-vault-session-title'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import type { AppState } from '@/store/types'
@@ -57,7 +60,9 @@ function agentRecordsEqual(current: AppState, previous: AppState): boolean {
       left.paneKey === right.paneKey &&
       left.tabId === right.tabId &&
       left.worktreeId === right.worktreeId &&
-      providerSessionEqual(left.providerSession, right.providerSession)
+      providerSessionEqual(left.providerSession, right.providerSession) &&
+      (!refreshesAiVaultTitleOnTurnEnd(left.agentType) ||
+        (left.state === 'done') === (right.state === 'done'))
   )
   if (!statusEqual) {
     return false

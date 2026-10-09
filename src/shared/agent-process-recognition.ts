@@ -93,6 +93,9 @@ function agentForNormalizedProcess(normalized: string): TerminalAgent | undefine
   if (normalized.startsWith('muse-bin-')) {
     return PROCESS_TO_AGENT.get('muse')
   }
+  if (isRovoProcess(normalized)) {
+    return PROCESS_TO_AGENT.get(ROVO_PROCESS)
+  }
   return undefined
 }
 
@@ -153,6 +156,17 @@ function recognizePythonEntrypoint(
   return recognizeAgentProcess(entrypoint) ?? recognizePythonScriptEntrypoint(entrypoint)
 }
 
+const ROVO_PROCESS = 'atlassian_cli_rovodev'
+
+// Why: the `rovo` launcher execs a bundled `rovo` or `atlassian_cli_rovodev` binary, and Linux
+// truncates comm to 15 chars (`atlassian_cli_r`).
+function isRovoProcess(normalizedProcess: string): boolean {
+  return (
+    normalizedProcess === 'rovo' ||
+    (normalizedProcess.length >= 15 && ROVO_PROCESS.startsWith(normalizedProcess))
+  )
+}
+
 // Why: `muse` execs a versioned `muse-bin-<version>` binary (see above), so the
 // exact-name check never matches and readiness/follow-up delivery would stall.
 // Scoped to muse: a generic `-suffix` rule would misclassify short agent names
@@ -173,7 +187,8 @@ export function isExpectedAgentProcess(
       /^(?:qoderclicn|qodercn)(?:-\d.*)?$/.test(normalizedProcess)) ||
     (['qoder', 'qodercli'].includes(normalizedExpected) &&
       /^(?:qoder|qodercli(?:-\d.*)?)$/.test(normalizedProcess)) ||
-    (normalizedExpected === 'muse' && normalizedProcess.startsWith('muse-bin-'))
+    (normalizedExpected === 'muse' && normalizedProcess.startsWith('muse-bin-')) ||
+    (normalizedExpected === ROVO_PROCESS && isRovoProcess(normalizedProcess))
   )
 }
 

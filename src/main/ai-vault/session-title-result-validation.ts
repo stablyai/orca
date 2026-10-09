@@ -1,5 +1,6 @@
 import {
   AI_VAULT_SESSION_TITLE_REQUEST_MAX_COUNT,
+  isAiVaultTitleAgent,
   type AiVaultSessionTitle,
   type AiVaultSessionTitlesResult
 } from '../../shared/ai-vault-session-title'
@@ -21,7 +22,7 @@ function parseTitle(value: unknown): AiVaultSessionTitle {
   }
   const record = value as Record<string, unknown>
   if (
-    (record.agent !== 'claude' && record.agent !== 'codex') ||
+    !isAiVaultTitleAgent(record.agent) ||
     typeof record.sessionId !== 'string' ||
     !record.sessionId.trim() ||
     record.sessionId.length > 512 ||

@@ -384,6 +384,27 @@ describe('AI Vault tab title sync', () => {
     expect(groups[1]).toHaveLength(1)
   })
 
+  it('keeps Rovo identities out of transcript batches so older hosts reject only Rovo', () => {
+    const request = (agent: AiVaultTitleRequest['agent'], index: number): AiVaultTitleRequest => ({
+      agent,
+      executionHostId: 'ssh:dev-box',
+      providerSession: { key: 'session_id', id: `session-${index}` },
+      refresh: true,
+      tabId: `tab-${index}`,
+      worktreeId: `worktree-${index}`
+    })
+    const groups = batchAiVaultTitleRequests([
+      request('codex', 0),
+      request('rovo', 1),
+      request('claude', 2)
+    ])
+
+    expect(groups.map((group) => group.map((entry) => entry.agent))).toEqual([
+      ['codex', 'claude'],
+      ['rovo']
+    ])
+  })
+
   it('runs hosts concurrently while serializing each host wire', async () => {
     const request = (executionHostId: AiVaultTitleRequest['executionHostId'], index: number) => ({
       agent: 'codex' as const,

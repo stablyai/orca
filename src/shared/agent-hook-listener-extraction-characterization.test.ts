@@ -33,7 +33,8 @@ const ROUTES = {
   '/hook/hermes': 'hermes',
   '/hook/devin': 'devin',
   '/hook/kimi': 'kimi',
-  '/hook/jcode': 'jcode'
+  '/hook/jcode': 'jcode',
+  '/hook/rovo': 'rovo'
 } as const
 function normalizeProviderState(
   source: (typeof ROUTES)[keyof typeof ROUTES],

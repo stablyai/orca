@@ -1,5 +1,5 @@
 import { requestSessionSearchRoots } from './session-scanner-service-root-request'
-import type { AiVaultSessionTitle } from '../../shared/ai-vault-session-title'
+import { isAiVaultTitleAgent, type AiVaultSessionTitle } from '../../shared/ai-vault-session-title'
 import { readAiVaultFirstUserPrompt } from './session-first-user-prompt-read'
 import {
   flushSessionParseCachePersist,
@@ -92,7 +92,7 @@ async function executeRequest(request: AiVaultServiceRequest): Promise<AiVaultSe
     const startedAt = performance.now()
     const result = await scanAiVaultSessions({ ...request.options, signal: controller.signal })
     for (const session of result.sessions) {
-      if ((session.agent === 'claude' || session.agent === 'codex') && session.title.trim()) {
+      if (isAiVaultTitleAgent(session.agent) && session.title.trim()) {
         cacheServiceTitle(titleIndex, {
           agent: session.agent,
           sessionId: session.sessionId,

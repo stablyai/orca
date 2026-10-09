@@ -45,6 +45,7 @@ export function normalizeLoadedGlobalSettings(
     migratePrimarySelectionPlatformDefault,
     stampPrimarySelectionTerminalDefaults,
     migratedDisabledTuiAgents,
+    migratedAgentCmdOverrides,
     migratedAgentYoloDefaults,
     migratedWindowsRuntimeDefault,
     migratedLocalAccountRuntime,
@@ -133,6 +134,7 @@ export function normalizeLoadedGlobalSettings(
       parsed.settings?.terminalShortcutPolicy
     ),
     disabledTuiAgents: migratedDisabledTuiAgents,
+    ...(migratedAgentCmdOverrides ? { agentCmdOverrides: migratedAgentCmdOverrides } : {}),
     ...migratedAgentYoloDefaults,
     claudeAgentTeamsDefaultDisabledMigrated: true,
     openInApplications: normalizeOpenInApplications(parsed.settings?.openInApplications, {

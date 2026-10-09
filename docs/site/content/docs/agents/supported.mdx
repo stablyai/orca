@@ -16,7 +16,7 @@ Orca works with **any CLI agent** — the agent combobox just launches a process
 
 ## Permissions default
 
-For new launches, Orca pre-fills each supported CLI's permission-bypass flag — `--dangerously-skip-permissions` for Claude, `--dangerously-bypass-approvals-and-sandbox` for Codex, `--yolo` for Gemini / Cursor / Crush / Kimi / Muse / Rovo Dev / Hermes / GitHub Copilot / Command Code, `--mode yolo` for ZCode, plus the equivalent flag for every other agent that exposes one. These flags allow an agent to act without confirming every shell command; review the trust boundary before using them.
+For new launches, Orca pre-fills each supported CLI's permission-bypass flag — `--dangerously-skip-permissions` for Claude, `--dangerously-bypass-approvals-and-sandbox` for Codex, `--yolo` for Gemini / Cursor / Crush / Kimi / Muse / Rovo / Hermes / GitHub Copilot / Command Code, `--mode yolo` for ZCode, plus the equivalent flag for every other agent that exposes one. These flags allow an agent to act without confirming every shell command; review the trust boundary before using them.
 
 Use **Settings → Agents → Agent Permissions** when you want to switch all uncustomized agents between **Yolo** and **Manual** launches. If you already overrode a specific agent's launch arguments or environment, Orca leaves that agent alone so the global switch doesn't erase your custom command.
 
@@ -60,7 +60,7 @@ To restore prompts for one agent only, edit that agent's default arguments or en
 | Mistral Vibe       | Auto-setup                                                                                                                 | [Mistral](https://github.com/mistralai/mistral-vibe)                                              |
 | MiniMax            | Auto-setup, usage tracking, rate-limit tracking                                                                            | [MiniMax](https://www.minimax.chat)                                                               |
 | Qwen Code          | Auto-setup via the installed `qwen` executable                                                                             | [Qwen](https://github.com/QwenLM/qwen-code)                                                       |
-| Rovo Dev           | Auto-setup                                                                                                                 | [Atlassian](https://support.atlassian.com/rovo/docs/install-and-run-rovo-dev-cli-on-your-device/) |
+| Rovo               | Auto-setup                                                                                                                 | [Atlassian](https://support.atlassian.com/rovo/docs/install-and-run-rovo-dev-cli-on-your-device/) |
 | Hermes             | Auto-setup                                                                                                                 | [Nous](https://hermes-agent.nousresearch.com/docs/)                                               |
 | OpenClaw           | Auto-setup                                                                                                                 | [OpenClaw](https://github.com/openclaw/openclaw)                                                  |
 | Trae               | Auto-setup via `traecli` (TRAE CN CLI)                                                                                     | [Trae](https://www.trae.ai/)                                                                      |

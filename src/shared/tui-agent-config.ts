@@ -278,9 +278,10 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     submitRetryDelayMs: 1200
   },
   rovo: {
-    // Why: Rovo Dev is an `acli` subcommand with no binary of its own on PATH; `acli rovodev run [instruction]` is one-shot.
-    detectCmd: 'acli',
-    launchCmd: 'acli rovodev run',
+    // Why: the standalone Rovo CLI replaces the deprecated `acli rovodev run`; `rovo [instruction]` is one-shot.
+    detectCmd: 'rovo',
+    // Why: the `rovo` launcher script execs its bundled `atlassian_cli_rovodev` binary.
+    expectedProcess: 'atlassian_cli_rovodev',
     promptInjectionMode: 'stdin-after-start'
   },
   hermes: {

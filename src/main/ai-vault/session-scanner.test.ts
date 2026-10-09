@@ -440,9 +440,7 @@ describe('scanAiVaultSessions', () => {
     expect(commandByAgent.get('hermes')).toBe(
       "cd '/tmp/hermes' && hermes --resume 'hermes-session'"
     )
-    expect(commandByAgent.get('rovo')).toBe(
-      "cd '/tmp/rovo' && acli rovodev run --restore 'rovo-session'"
-    )
+    expect(commandByAgent.get('rovo')).toBe("cd '/tmp/rovo' && rovo --restore 'rovo-session'")
     expect(commandByAgent.get('openclaw')).toBe(
       "cd '/tmp/openclaw' && openclaw --resume 'openclaw-session'"
     )

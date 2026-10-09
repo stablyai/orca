@@ -5,6 +5,7 @@ import { normalizeLoadedGlobalSettings } from './normalize-loaded-global-setting
 import { prepareLoadedTerminalSettings } from './prepare-loaded-terminal-settings'
 import { prepareLoadedProfileSettings } from './prepare-loaded-profile-settings'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
+import { DEFAULT_TUI_AGENT_ARGS } from '../../../shared/tui-agent-launch-defaults'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 
 // Simulates a profile created before the dedicated Experimental switch was persisted.
@@ -112,5 +113,18 @@ describe('chat appearance settings', () => {
         nativeChatAppearance: { fontSize: 14, codeFontSize: 12, width: 'comfortable' }
       }).nativeChatAppearance
     ).toBeUndefined()
+  })
+})
+
+describe('retired Rovo launch command', () => {
+  it('drops acli rovodev run before yolo-default migration so Rovo keeps its default args', () => {
+    const normalized = normalizeLegacyProfile({
+      agentCmdOverrides: { rovo: 'acli rovodev run' },
+      agentDefaultArgs: {},
+      agentYoloDefaultsMigrated: undefined
+    })
+
+    expect(normalized.agentCmdOverrides?.rovo).toBeUndefined()
+    expect(normalized.agentDefaultArgs?.rovo).toBe(DEFAULT_TUI_AGENT_ARGS.rovo)
   })
 })

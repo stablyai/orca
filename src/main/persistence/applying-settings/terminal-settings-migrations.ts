@@ -135,6 +135,24 @@ export function getWorkspaceLayoutHistoryKey(layout: OrcaWorkspaceLayout): strin
   return `${normalizeRuntimePathForComparison(layout.path)}:${layout.nestWorkspaces}`
 }
 
+// Why: the catalog once seeded Rovo's override with the now-deprecated `acli rovodev run`; only that exact seed is dropped.
+const RETIRED_ROVO_COMMAND_OVERRIDE = /^acli\s+rovodev\s+run$/
+
+export function migrateRetiredAgentCmdOverrides(
+  settings: Pick<GlobalSettings, 'agentCmdOverrides'> | undefined
+): {
+  agentCmdOverrides: GlobalSettings['agentCmdOverrides'] | undefined
+  changed: boolean
+} {
+  const overrides = settings?.agentCmdOverrides
+  const rovo = overrides?.rovo
+  if (!overrides || typeof rovo !== 'string' || !RETIRED_ROVO_COMMAND_OVERRIDE.test(rovo.trim())) {
+    return { agentCmdOverrides: overrides, changed: false }
+  }
+  const { rovo: _retired, ...rest } = overrides
+  return { agentCmdOverrides: rest, changed: true }
+}
+
 export function migrateAgentYoloDefaults(
   settings: GlobalSettings | undefined
 ): Pick<GlobalSettings, 'agentDefaultArgs' | 'agentDefaultEnv' | 'agentYoloDefaultsMigrated'> {

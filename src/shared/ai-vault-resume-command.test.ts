@@ -164,7 +164,7 @@ describe('buildAiVaultResumeCommand', () => {
     ).toBe("cd '/Users/ada/repo' && prime-agent --resume 'dddddddd-eeee-4fff-8aaa-111111111111'")
   })
 
-  it('resumes Rovo Dev through its acli launch command', () => {
+  it('resumes Rovo through the standalone rovo CLI', () => {
     expect(
       buildAiVaultResumeCommand({
         agent: 'rovo',
@@ -172,10 +172,10 @@ describe('buildAiVaultResumeCommand', () => {
         cwd: '/Users/ada/repo',
         platform: 'darwin'
       })
-    ).toBe("cd '/Users/ada/repo' && acli rovodev run --restore 'rovo-session'")
+    ).toBe("cd '/Users/ada/repo' && rovo --restore 'rovo-session'")
   })
 
-  it('appends the Rovo Dev restore flag to a full-command settings override', () => {
+  it('appends the Rovo restore flag to a full-command settings override', () => {
     expect(
       buildAiVaultResumeCommand({
         agent: 'rovo',

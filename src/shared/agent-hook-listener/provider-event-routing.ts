@@ -20,6 +20,7 @@ import { isGrokEvent } from './provider-event-names'
 import { extractGrokToolFields } from './providers/grok-tool-fields'
 import { extractHermesToolFields } from './providers/hermes-tool-fields'
 import { extractJcodeToolFields } from './providers/jcode-tool-fields'
+import { extractRovoToolFields } from './providers/rovo-tool-fields'
 
 /** The per-provider answer to "is this event a user-initiated new turn?". Exported so the
  *  observation stamp reuses it instead of minting a second list of event-name literals. */
@@ -87,6 +88,8 @@ export function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boo
       // prompt before the model generates — its real turn boundary. session_start
       // returns early in normalizeJcodeEvent and clears the cache itself.
       return eventName === 'turn_start'
+    case 'rovo':
+      return eventName === 'on_user_prompt'
   }
 }
 
@@ -124,6 +127,10 @@ export function hasExplicitUserPrompt(
   ) {
     // Why: jcode hooks carry no prompt field; only the journal-backed prompt counts as explicit user text.
     return true
+  }
+  if (source === 'rovo') {
+    // Why: Rovo nests the prompt under `attributes.user_prompt`, which only the rovo dispatch case reads.
+    return eventName === 'on_user_prompt' && resolvedPromptText.trim().length > 0
   }
   if (extractedPrompt.source === 'role_user_text') {
     return (
@@ -210,5 +217,7 @@ export function extractToolFields(
       return extractClaudeToolFields(eventName, hookPayload)
     case 'jcode':
       return extractJcodeToolFields(eventName, hookPayload)
+    case 'rovo':
+      return extractRovoToolFields(eventName, hookPayload)
   }
 }

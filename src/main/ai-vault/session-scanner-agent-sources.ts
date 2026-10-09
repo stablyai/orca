@@ -37,7 +37,9 @@ const COPILOT_SESSIONS_DIR = join(
 const CURSOR_PROJECTS_DIR = join(homedir(), '.cursor', 'projects')
 const CODEBUDDY_PROJECTS_DIR = join(homedir(), '.codebuddy', 'projects')
 const HERMES_SESSIONS_DIR = join(homedir(), '.hermes', 'sessions')
-const ROVO_SESSIONS_DIR = join(homedir(), '.rovodev', 'sessions')
+const ROVO_SESSIONS_DIR = join(homedir(), '.rovo', 'sessions')
+// Why: sessions from the deprecated `acli rovodev` CLI stay listed; copies in both roots dedupe.
+const LEGACY_ROVODEV_SESSIONS_DIR = join(homedir(), '.rovodev', 'sessions')
 const OPENCLAW_STATE_DIR = resolveAbsoluteDirOverride(
   process.env.OPENCLAW_STATE_DIR,
   join(homedir(), '.openclaw')
@@ -230,10 +232,12 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
   },
   rovo: {
     rootDirs: (options, wslHomeDirs) =>
-      sessionRootDirs(options.rovoSessionsDir ?? ROVO_SESSIONS_DIR, wslHomeDirs, [
-        '.rovodev',
-        'sessions'
-      ]),
+      options.rovoSessionsDir
+        ? sessionRootDirs(options.rovoSessionsDir, wslHomeDirs, ['.rovo', 'sessions'])
+        : [
+            ...sessionRootDirs(ROVO_SESSIONS_DIR, wslHomeDirs, ['.rovo', 'sessions']),
+            ...sessionRootDirs(LEGACY_ROVODEV_SESSIONS_DIR, wslHomeDirs, ['.rovodev', 'sessions'])
+          ],
     extensions: ['.json'],
     filePredicate: (filePath) => basename(filePath) === 'metadata.json'
   },

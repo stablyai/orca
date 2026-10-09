@@ -354,6 +354,29 @@ describe('AiVaultHandler', () => {
     }
   })
 
+  it('forwards Rovo title requests without a transcript path and drops unknown agents', async () => {
+    const dispatcher = createMockDispatcher()
+    const resolveSessionTitles = vi.fn(() => Promise.resolve({ titles: [] }))
+    new AiVaultHandler(dispatcher.value, {
+      remoteHome: '/home/ada',
+      hostPlatform: getRemoteHostPlatform('linux-x64'),
+      service: { listSessions: () => Promise.resolve(emptyResult()), resolveSessionTitles }
+    })
+
+    await dispatcher.call(SSH_AI_VAULT_RESOLVE_SESSION_TITLES_METHOD, {
+      requests: [
+        { agent: 'rovo', sessionId: ' rovo-session ', transcriptPath: '/tmp/ignored.json' },
+        { agent: 'codex', sessionId: 'no-path' },
+        { agent: 'gemini', sessionId: 'unknown', transcriptPath: '/home/ada/g.jsonl' }
+      ]
+    })
+
+    expect(resolveSessionTitles).toHaveBeenCalledWith(
+      [{ agent: 'rovo', sessionId: 'rovo-session' }],
+      undefined
+    )
+  })
+
   it('propagates title cancellation instead of degrading it', async () => {
     const dispatcher = createMockDispatcher()
     new AiVaultHandler(dispatcher.value, {

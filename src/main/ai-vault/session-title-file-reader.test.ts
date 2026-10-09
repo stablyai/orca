@@ -4,8 +4,10 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const parseAgentSessionFileCached = vi.hoisted(() => vi.fn())
+const readRovoSessionTitle = vi.hoisted(() => vi.fn())
 
 vi.mock('./session-scanner-parse-cache', () => ({ parseAgentSessionFileCached }))
+vi.mock('./rovo-session-title-reader', () => ({ readRovoSessionTitle }))
 
 const { readAiVaultSessionTitlesFromFiles } = await import('./session-title-file-reader')
 const { resolveHostReadableAiVaultTitleRequests } = await import('./session-title-request-paths')
@@ -14,6 +16,7 @@ let temporaryRoots: string[] = []
 
 beforeEach(() => {
   parseAgentSessionFileCached.mockReset()
+  readRovoSessionTitle.mockReset()
 })
 
 afterEach(async () => {
@@ -110,5 +113,34 @@ describe('readAiVaultSessionTitlesFromFiles', () => {
     )
 
     expect(parseAgentSessionFileCached).toHaveBeenCalledTimes(64)
+  })
+
+  it('reads Rovo titles by session id and caches them', async () => {
+    readRovoSessionTitle.mockResolvedValue('Day of the Week Check')
+    const cache = { get: vi.fn(() => null), set: vi.fn() }
+
+    await expect(
+      readAiVaultSessionTitlesFromFiles([{ agent: 'rovo', sessionId: 'rovo-1' }], { cache })
+    ).resolves.toEqual({
+      titles: [{ agent: 'rovo', sessionId: 'rovo-1', title: 'Day of the Week Check' }]
+    })
+    expect(readRovoSessionTitle).toHaveBeenCalledWith('rovo-1', expect.anything())
+    expect(parseAgentSessionFileCached).not.toHaveBeenCalled()
+    expect(cache.set).toHaveBeenCalledWith({
+      agent: 'rovo',
+      sessionId: 'rovo-1',
+      title: 'Day of the Week Check'
+    })
+  })
+
+  it('falls back to the cached Rovo title while metadata has none', async () => {
+    readRovoSessionTitle.mockResolvedValue(null)
+    const cached = { agent: 'rovo' as const, sessionId: 'rovo-1', title: 'Scanned title' }
+
+    await expect(
+      readAiVaultSessionTitlesFromFiles([{ agent: 'rovo', sessionId: 'rovo-1' }], {
+        cache: { get: () => cached, set: vi.fn() }
+      })
+    ).resolves.toEqual({ titles: [cached] })
   })
 })

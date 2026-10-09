@@ -76,6 +76,8 @@ export function getAgentResumeArgv(
       return providerSession.key === 'session_id' ? ['dsh-tui', '--resume', id] : null
     case 'jcode':
       return providerSession.key === 'session_id' ? ['jcode', '--resume', id] : null
+    case 'rovo':
+      return providerSession.key === 'session_id' ? ['rovo', '--restore', id] : null
   }
 }
 

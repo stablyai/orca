@@ -249,4 +249,36 @@ describe('AI Vault title subscription inputs', () => {
       )
     ).toBe(true)
   })
+
+  it('rereads Rovo titles when a live turn ends but not on Codex turn ends', () => {
+    const withLiveEntry = (
+      state: AppState,
+      patch: Partial<AppState['agentStatusByPaneKey'][string]>
+    ): AppState => {
+      const paneKey = Object.keys(state.agentStatusByPaneKey)[0]
+      return {
+        ...state,
+        agentStatusByPaneKey: {
+          ...state.agentStatusByPaneKey,
+          [paneKey]: { ...state.agentStatusByPaneKey[paneKey], ...patch }
+        }
+      }
+    }
+    const base = makeState()
+    const rovoWorking = withLiveEntry(base, { agentType: 'rovo', state: 'working' })
+    const codexWorking = withLiveEntry(base, { state: 'working' })
+
+    expect(
+      aiVaultTitleSyncInputsChanged(withLiveEntry(rovoWorking, { state: 'done' }), rovoWorking)
+    ).toBe(true)
+    expect(
+      aiVaultTitleSyncInputsChanged(
+        withLiveEntry(rovoWorking, { updatedAt: 2, prompt: 'next tool' }),
+        rovoWorking
+      )
+    ).toBe(false)
+    expect(
+      aiVaultTitleSyncInputsChanged(withLiveEntry(codexWorking, { state: 'done' }), codexWorking)
+    ).toBe(false)
+  })
 })

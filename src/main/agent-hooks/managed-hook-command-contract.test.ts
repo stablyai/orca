@@ -25,6 +25,7 @@ import { getMuseManagedCommand, getMuseRemoteManagedCommand } from '../muse/hook
 import { getDshManagedCommand, getDshRemoteManagedCommand } from '../dsh/hook-settings'
 import { getZCodeManagedCommand, getZCodeRemoteManagedCommand } from '../zcode/hook-settings'
 import { getJcodeManagedCommand, getJcodeRemoteManagedCommand } from '../jcode/hook-settings'
+import { getRovoManagedCommand } from '../rovo/hook-settings'
 import {
   wrapPosixHookCommand,
   wrapWindowsCmdHookCommand,
@@ -226,6 +227,13 @@ const buildersByAgent = new Map<string, CommandBuilders>([
     {
       local: (path) => [getJcodeManagedCommand(path)],
       remote: (path) => [getJcodeRemoteManagedCommand(path)]
+    }
+  ],
+  [
+    'rovo',
+    {
+      local: (path) => [getRovoManagedCommand(path)],
+      remote: (path) => [getRovoManagedCommand(path)]
     }
   ]
 ])

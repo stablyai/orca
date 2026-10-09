@@ -176,7 +176,8 @@ describe('managed hook script refresh', () => {
       }
       // Why: the reverse direction — a refresher naming an agent that writes nothing is a
       // stale registry entry, likely a renamed script file.
-      for (const agent of refresherAgents) {
+      // Why: Rovo's Windows hook shell is unverified, so its install writes nothing on win32.
+      for (const agent of refresherAgents.filter((name) => name !== 'rovo')) {
         expect(
           files.some((file) => file.startsWith(`${agent}-`)),
           `refresher for ${agent} matches no installed script`

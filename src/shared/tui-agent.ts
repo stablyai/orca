@@ -33,7 +33,7 @@ export type TuiAgent =
   | 'kimi' // Kimi
   | 'mistral-vibe' // Mistral Vibe
   | 'qwen-code' // Qwen Code
-  | 'rovo' // Rovo Dev
+  | 'rovo' // Rovo
   | 'hermes' // Hermes Agent
   | 'openclaw' // OpenClaw
   | 'copilot' // GitHub Copilot CLI

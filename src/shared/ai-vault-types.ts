@@ -64,7 +64,7 @@ export const AI_VAULT_AGENT_LABELS = {
   cursor: 'Cursor',
   gemini: 'Gemini',
   antigravity: 'Antigravity',
-  rovo: 'Rovo Dev',
+  rovo: 'Rovo',
   copilot: 'GitHub Copilot',
   opencode: 'OpenCode',
   opencode2: 'OpenCode 2',

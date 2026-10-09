@@ -5,6 +5,7 @@ import {
   type AiVaultSessionTitleRequest,
   type AiVaultSessionTitlesResult
 } from '../../shared/ai-vault-session-title'
+import { readRovoSessionTitle } from './rovo-session-title-reader'
 import { parseAgentSessionFileCached } from './session-scanner-parse-cache'
 
 const TITLE_PARSE_CONCURRENCY = 4
@@ -21,6 +22,9 @@ async function readOneTitle(
 ): Promise<AiVaultSessionTitle | null> {
   if (signal?.aborted) {
     return null
+  }
+  if (request.agent === 'rovo') {
+    return readRovoTitle(request.sessionId, signal, cache)
   }
   const transcriptPath = request.transcriptPath?.trim()
   if (!transcriptPath) {
@@ -65,6 +69,23 @@ async function readOneTitle(
   } catch {
     return null
   }
+}
+
+async function readRovoTitle(
+  sessionId: string,
+  signal: AbortSignal | undefined,
+  cache?: AiVaultSessionTitleCache
+): Promise<AiVaultSessionTitle | null> {
+  const title = await readRovoSessionTitle(sessionId, { signal })
+  if (signal?.aborted) {
+    return null
+  }
+  if (!title) {
+    return cache?.get({ agent: 'rovo', sessionId }) ?? null
+  }
+  const resolved: AiVaultSessionTitle = { agent: 'rovo', sessionId, title }
+  cache?.set(resolved)
+  return resolved
 }
 
 export async function readAiVaultSessionTitlesFromFiles(

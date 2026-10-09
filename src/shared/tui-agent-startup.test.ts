@@ -748,8 +748,8 @@ describe('tui agent startup plans', () => {
     ).toBeNull()
   })
 
-  it('launches Rovo Dev as an acli subcommand and types the prompt after start', () => {
-    // `acli rovodev run <instruction>` is one-shot, so the prompt must not ride argv.
+  it('launches the standalone Rovo CLI and types the prompt after start', () => {
+    // `rovo <instruction>` is one-shot, so the prompt must not ride argv.
     const plan = buildAgentStartupPlan({
       agent: 'rovo',
       prompt: 'fix it',
@@ -758,8 +758,8 @@ describe('tui agent startup plans', () => {
       platform: 'linux'
     })
     expect(plan).toMatchObject({
-      launchCommand: "acli rovodev run '--yolo'",
-      expectedProcess: 'acli',
+      launchCommand: "rovo '--yolo'",
+      expectedProcess: 'atlassian_cli_rovodev',
       followupPrompt: 'fix it'
     })
   })

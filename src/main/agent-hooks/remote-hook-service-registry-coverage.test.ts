@@ -27,6 +27,7 @@ import { qwenCodeHookService } from '../qwen-code/hook-service'
 import { qoderCnHookService, qoderHookService } from '../qoder/hook-service'
 import { zcodeHookService } from '../zcode/hook-service'
 import { jcodeHookService } from '../jcode/hook-service'
+import { rovoHookService } from '../rovo/hook-service'
 import { MANAGED_AGENT_HOOK_INSTALLERS } from './managed-agent-hook-controls'
 import { REMOTE_MANAGED_HOOK_INSTALLER_AGENTS } from './remote-managed-hook-installers'
 
@@ -61,7 +62,8 @@ describe('remote hook service registry coverage', () => {
       ['codebuddy', codebuddyHookService],
       ['zcode', zcodeHookService],
       ['dsh', dshHookService],
-      ['jcode', jcodeHookService]
+      ['jcode', jcodeHookService],
+      ['rovo', rovoHookService]
     ])
 
     // Guard against a service silently missing from the map above as new agents land.

@@ -19,6 +19,7 @@ import { hermesHookService } from '../hermes/hook-service'
 import { jcodeHookService } from '../jcode/hook-service'
 import { kimiHookService } from '../kimi/hook-service'
 import { museHookService } from '../muse/hook-service'
+import { rovoHookService } from '../rovo/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
 import { zcodeHookService } from '../zcode/hook-service'
 
@@ -65,7 +66,8 @@ export const MANAGED_AGENT_HOOK_INSTALLERS: readonly ManagedAgentHookInstaller[]
   ['muse', () => museHookService.install()],
   ['zcode', () => zcodeHookService.install()],
   ['dsh', () => dshHookService.install()],
-  ['jcode', () => jcodeHookService.install()]
+  ['jcode', () => jcodeHookService.install()],
+  ['rovo', () => rovoHookService.install()]
 ]
 
 // Why: covers the shared launcher/statusline scripts under ~/.orca/agent-hooks — the files a
@@ -94,7 +96,8 @@ export const MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS: readonly ManagedAgentHookScri
   ['muse', () => museHookService.refreshManagedScripts()],
   ['zcode', () => zcodeHookService.refreshManagedScripts()],
   ['dsh', () => dshHookService.refreshManagedScripts()],
-  ['jcode', () => jcodeHookService.refreshManagedScripts()]
+  ['jcode', () => jcodeHookService.refreshManagedScripts()],
+  ['rovo', () => rovoHookService.refreshManagedScripts()]
 ]
 
 export const MANAGED_AGENT_HOOK_REMOVERS: readonly ManagedAgentHookRemover[] = [
@@ -119,7 +122,8 @@ export const MANAGED_AGENT_HOOK_REMOVERS: readonly ManagedAgentHookRemover[] = [
   ['muse', () => museHookService.remove()],
   ['zcode', () => zcodeHookService.remove()],
   ['dsh', () => dshHookService.remove()],
-  ['jcode', () => jcodeHookService.remove()]
+  ['jcode', () => jcodeHookService.remove()],
+  ['rovo', () => rovoHookService.remove()]
 ]
 
 export const MANAGED_AGENT_HOOK_ASYNC_REMOVERS: readonly ManagedAgentHookAsyncRemover[] = [
@@ -148,5 +152,6 @@ export const MANAGED_AGENT_HOOK_STATUS_READERS: readonly ManagedAgentHookStatusR
   ['muse', () => museHookService.getStatus()],
   ['zcode', () => zcodeHookService.getStatus()],
   ['dsh', () => dshHookService.getStatus()],
-  ['jcode', () => jcodeHookService.getStatus()]
+  ['jcode', () => jcodeHookService.getStatus()],
+  ['rovo', () => rovoHookService.getStatus()]
 ]

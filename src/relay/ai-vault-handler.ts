@@ -7,6 +7,7 @@ import { AI_VAULT_SCOPE_PATHS_MAX_COUNT, type AiVaultListResult } from '../share
 import { LOCAL_EXECUTION_HOST_ID } from '../shared/execution-host'
 import {
   AI_VAULT_SESSION_TITLE_REQUEST_MAX_COUNT,
+  isAiVaultTitleAgent,
   type AiVaultSessionTitleRequest,
   type AiVaultSessionTitlesResult
 } from '../shared/ai-vault-session-title'
@@ -158,13 +159,15 @@ function normalizeTitleRequests(raw: unknown): AiVaultSessionTitleRequest[] {
     const sessionId = typeof record.sessionId === 'string' ? record.sessionId.trim() : ''
     const transcriptPath =
       typeof record.transcriptPath === 'string' ? record.transcriptPath.trim() : ''
-    if (
-      (agent !== 'claude' && agent !== 'codex') ||
-      !sessionId ||
-      sessionId.length > 512 ||
-      !transcriptPath ||
-      transcriptPath.length > 32_768
-    ) {
+    if (!isAiVaultTitleAgent(agent) || !sessionId || sessionId.length > 512) {
+      continue
+    }
+    // Why: Rovo titles are looked up by session id under the host's own sessions roots.
+    if (agent === 'rovo') {
+      requests.push({ agent, sessionId })
+      continue
+    }
+    if (!transcriptPath || transcriptPath.length > 32_768) {
       continue
     }
     requests.push({ agent, sessionId, transcriptPath })

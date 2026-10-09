@@ -68,7 +68,7 @@ export const NEVER_TRANSLATE_VALUES = new Set([
   'Pi',
   'PostHog',
   'Qwen Code',
-  'Rovo Dev',
+  'Rovo',
   'Markdown',
   'VS Code',
   'Warp',
