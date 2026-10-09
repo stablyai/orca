@@ -72,6 +72,7 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['orchestration', 'worker-stop'],
+    destructive: true,
     summary: 'Fence one Dispatch and stop its supervised agent terminal',
     usage:
       'orca orchestration worker-stop --dispatch <dispatch_id> [--retry-request <id>] [--json]',
@@ -91,6 +92,7 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['orchestration', 'worker-release'],
+    destructive: true,
     summary: 'Release the terminal of one settled supervised worker',
     usage:
       'orca orchestration worker-release --dispatch <dispatch_id> [--retry-request <id>] [--json]',
