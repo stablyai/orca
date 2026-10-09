@@ -11,10 +11,7 @@ import type { ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { useAppStore } from '../../store'
 import { getProjectHostSetupProjectionFromState } from '../../store/selectors'
-import {
-  getProjectHostSetupOwnerKey,
-  getProjectHostSetupExecutionOwnerKey
-} from '../../store/projects/project-compatibility-core'
+import { getProjectHostSetupOwnerKey } from '../../store/projects/project-compatibility-core'
 import { getProjectHostSetupForRepo } from '../../../../shared/project-host-setup-lookup'
 import { cn } from '../../lib/utils'
 import { Button } from '../ui/button'
@@ -25,7 +22,11 @@ import { SettingsBadge } from './SettingsFormControls'
 import { matchesSettingsSearch } from './settings-search'
 import type { SettingsSearchEntry } from './settings-search'
 import { translate } from '@/i18n/i18n'
-import { buildSetupHostOptions, getSetupStateLabel } from './repository-host-setup-options'
+import {
+  buildSetupHostOptions,
+  getSetupStateLabel,
+  setupsByOwnedExecutionHost
+} from './repository-host-setup-options'
 import { RepositoryHostSetupActions } from './RepositoryHostSetupActions'
 import {
   selectRuntimeAwareSshStatus,
@@ -44,20 +45,6 @@ type RepositoryHostSetupsSectionProps = {
   forceVisible: boolean
   searchQuery: string
   searchEntries: SettingsSearchEntry[]
-}
-
-function setupsByOwnedExecutionHost(
-  setups: readonly ProjectHostSetup[],
-  selectedSetupId: string
-): ProjectHostSetup[] {
-  const byHost = new Map<string, ProjectHostSetup>()
-  for (const setup of setups) {
-    const key = getProjectHostSetupExecutionOwnerKey(setup)
-    if (!byHost.has(key) || getProjectHostSetupOwnerKey(setup) === selectedSetupId) {
-      byHost.set(key, setup)
-    }
-  }
-  return [...byHost.values()]
 }
 
 export function RepositoryHostSetupsSection({
