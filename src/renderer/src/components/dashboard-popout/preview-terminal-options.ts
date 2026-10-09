@@ -31,6 +31,7 @@ export function buildPreviewAppearanceOptions(
     cursorStyle,
     cursorInactiveStyle: resolveTerminalCursorInactiveStyle(cursorStyle),
     cursorBlink: settings?.terminalCursorBlink ?? true,
+    linkUnderlines: settings?.terminalLinkUnderlines === 'always',
     scrollSensitivity: normalizeTerminalScrollSensitivity(settings?.terminalScrollSensitivity),
     fastScrollSensitivity: normalizeTerminalFastScrollSensitivity(
       settings?.terminalFastScrollSensitivity
