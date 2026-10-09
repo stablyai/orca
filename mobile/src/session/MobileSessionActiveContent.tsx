@@ -79,6 +79,7 @@ export function MobileSessionActiveContent({
     keyboardLift,
     activeTerminalKeyboardLift,
     toastAnimatedStyle,
+    terminalToastAnimatedStyle,
     createTabBusy
   } = controller
   const content = showLoadingState ? (
@@ -241,7 +242,7 @@ export function MobileSessionActiveContent({
         keyboardInset={keyboardLift}
       />
       {toastMessage && (
-        <Animated.View pointerEvents="none" style={[styles.toast, toastAnimatedStyle]}>
+        <Animated.View pointerEvents="none" style={[styles.toast, terminalToastAnimatedStyle]}>
           <Text style={styles.toastText}>{toastMessage}</Text>
         </Animated.View>
       )}

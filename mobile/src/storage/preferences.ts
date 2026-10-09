@@ -179,6 +179,21 @@ export async function saveMobileWebShellEnabled(enabled: boolean): Promise<void>
   await AsyncStorage.setItem(MOBILE_WEB_SHELL_KEY, String(enabled))
 }
 
+const TERMINAL_KEYBOARD_RESIZE_KEY = 'orca:terminalKeyboardResizeEnabled'
+
+export async function loadTerminalKeyboardResizeEnabled(): Promise<boolean> {
+  try {
+    const raw = await AsyncStorage.getItem(TERMINAL_KEYBOARD_RESIZE_KEY)
+    return raw === 'true'
+  } catch {
+    return false
+  }
+}
+
+export async function saveTerminalKeyboardResizeEnabled(enabled: boolean): Promise<void> {
+  await AsyncStorage.setItem(TERMINAL_KEYBOARD_RESIZE_KEY, String(enabled))
+}
+
 const TERMINAL_LIVE_INPUT_DISABLED_PREFIX = 'orca:terminalLiveInputDisabled:'
 
 export type DisabledTerminalLiveInputHandlesPreference = {

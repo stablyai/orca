@@ -32,6 +32,7 @@ export type MobileSessionKeyboardScope = Pick<
   | 'tabStripRef'
   | 'tabStripViewportWidthRef'
   | 'terminalFrameRef'
+  | 'terminalKeyboardResizeEnabled'
   | 'terminalRefs'
   | 'terminals'
   | 'terminalTextScale'
@@ -49,6 +50,7 @@ export function useMobileSessionKeyboardState(scope: MobileSessionKeyboardScope)
     connState,
     terminals,
     terminalTextScale,
+    terminalKeyboardResizeEnabled,
     activeSessionTabId,
     tabStripRef,
     tabStripOffsetRef,
@@ -90,6 +92,7 @@ export function useMobileSessionKeyboardState(scope: MobileSessionKeyboardScope)
     connState,
     tabStripVisible: terminals.length > 1,
     textScale: terminalTextScale,
+    resizeForKeyboard: terminalKeyboardResizeEnabled,
     unsubscribeTerminal,
     subscribeToTerminal
   })

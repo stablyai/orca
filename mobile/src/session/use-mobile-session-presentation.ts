@@ -1,7 +1,10 @@
 import { classifyConnection, verdictDisplayLabel } from '../transport/connection-health'
 import { computeActiveTerminalKeyboardLift } from '../terminal/terminal-keyboard-avoidance-lift'
 import { useInitialSessionTerminalAutoCreate } from './use-initial-session-terminal-autocreate'
-import { MOBILE_SESSION_STATUS_LABELS } from './mobile-session-route-helpers'
+import {
+  isTerminalPhoneDisplayMode,
+  MOBILE_SESSION_STATUS_LABELS
+} from './mobile-session-route-helpers'
 import type { MobileSessionBulkCloseModel } from './use-mobile-session-bulk-close'
 import { hostOs } from '../platform/host-os'
 
@@ -21,13 +24,16 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
     creatingBrowser,
     creatingMarkdown,
     keyboardHeight,
+    terminalKeyboardResizeEnabled,
     terminalKeyboardMetrics,
+    terminalModes,
     toastOpacityRef,
     hostEndpoint,
     initialSessionAutoCreateRef,
     terminalFrameRef,
     handleCreateTerminal,
     visibleTabs,
+    showNativeChat,
     forceReconnectHost
   } = scope
   const showLoadingState = connState === 'connected' && !terminalsLoaded && visibleTabs.length === 0
@@ -81,14 +87,26 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
         ? Math.max(0, keyboardHeight - insets.bottom)
         : keyboardHeight
       : 0
-  const activeTerminalKeyboardLift = computeActiveTerminalKeyboardLift({
-    keyboardLift,
-    metrics: activeHandle ? terminalKeyboardMetrics.get(activeHandle) : undefined,
-    terminalFrameHeight: terminalFrameRef.current?.height ?? 0
-  })
+  // Why: while the desktop holds this terminal's dims the host records the viewport but does
+  // not resize the PTY; shrinking the frame there would only clip rows, so the lift stays.
+  const terminalKeyboardResizeActive =
+    terminalKeyboardResizeEnabled && isTerminalPhoneDisplayMode(activeHandle, terminalModes)
+  const activeTerminalKeyboardLift = terminalKeyboardResizeActive
+    ? 0
+    : computeActiveTerminalKeyboardLift({
+        keyboardLift,
+        metrics: activeHandle ? terminalKeyboardMetrics.get(activeHandle) : undefined,
+        terminalFrameHeight: terminalFrameRef?.current?.height ?? 0
+      })
   const toastAnimatedStyle = {
     opacity: toastOpacityRef.current,
     transform: [{ translateY: -keyboardLift }]
+  }
+  // Why: with keyboard resize the dock's padding already lifts the terminal frame's bottom above the IME; native chat hides that dock.
+  const terminalToastLift = terminalKeyboardResizeActive && !showNativeChat ? 0 : keyboardLift
+  const terminalToastAnimatedStyle = {
+    opacity: toastOpacityRef.current,
+    transform: [{ translateY: -terminalToastLift }]
   }
   return {
     showLoadingState,
@@ -98,7 +116,8 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
     terminalSummary,
     keyboardLift,
     activeTerminalKeyboardLift,
-    toastAnimatedStyle
+    toastAnimatedStyle,
+    terminalToastAnimatedStyle
   }
 }
 

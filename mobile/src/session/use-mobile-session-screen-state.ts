@@ -43,6 +43,8 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   const [terminalTextScale, setTerminalTextScale] = useState(1)
   // Why: terminal command-bar autocomplete opt-in, reloaded on focus so a Settings → Terminal toggle takes effect on return.
   const [autocompleteEnabled, setAutocompleteEnabled] = useState(false)
+  // Why: Android-only opt-in to shrink the terminal and refit PTY rows while the IME is open; reloaded on focus like autocomplete.
+  const [terminalKeyboardResizeEnabled, setTerminalKeyboardResizeEnabled] = useState(false)
   const [terminalLinkOpenMode, setTerminalLinkOpenMode] =
     useState<MobileTerminalLinkOpenMode>('orca-browser')
   const [liveInputCapture, setLiveInputCapture] = useState('')
@@ -109,7 +111,7 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     () => getVisibleTerminalAccessoryKeys(visibleBuiltInIds),
     [visibleBuiltInIds]
   )
-  // Why: Expo SDK 55 edge-to-edge doesn't resize the window on IME open, so track keyboard height ourselves and lift the input without resizing the desktop PTY.
+  // Why: Expo SDK 55 edge-to-edge doesn't resize the window on IME open, so track keyboard height ourselves and lift the input without resizing the desktop PTY (unless keyboard resize is on).
   const [keyboardHeight, setKeyboardHeight] = useState(0)
   // Why: server-authoritative display mode per terminal, populated from subscribe responses.
   const [terminalModes, setTerminalModes] = useState<Map<string, MobileDisplayMode>>(new Map())
@@ -145,6 +147,8 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     setTerminalTextScale,
     autocompleteEnabled,
     setAutocompleteEnabled,
+    terminalKeyboardResizeEnabled,
+    setTerminalKeyboardResizeEnabled,
     terminalLinkOpenMode,
     setTerminalLinkOpenMode,
     liveInputCapture,

@@ -41,7 +41,7 @@ export function MobileSessionContentRow({ controller }: { controller: MobileSess
           </View>
         ) : null}
         <MobileSessionActiveContent controller={controller} />
-        {/* Why: translate instead of resize so keyboard toggles don't trigger a server-side PTY viewport change. */}
+        {/* Why: translate instead of resize so keyboard toggles don't trigger a server-side PTY viewport change, unless the user opted into keyboard resize. */}
         <MobileSessionCommandDock controller={controller} />
       </View>
       {canDockPanel && activePanel !== null && (

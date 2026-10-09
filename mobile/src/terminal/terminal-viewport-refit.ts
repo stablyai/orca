@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, type RefObject } from 'react'
-import { AppState, Platform, useWindowDimensions, type AppStateStatus } from 'react-native'
+import { useWindowDimensions } from 'react-native'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import type { TerminalWebViewHandle } from './TerminalWebView'
 import type { TerminalFrame } from './terminal-webview-messages'
-import { shouldRecoverTerminalOnAppStateChange } from './terminal-foreground-recovery'
+import { useTerminalViewportReassertion } from './terminal-viewport-reassertion'
 import { terminalViewportUpdate } from './mobile-terminal-operations'
 import {
   isTerminalViewportRefitTargetCurrent,
@@ -33,6 +33,8 @@ type TerminalViewportRefitOptions = {
   tabStripVisible: boolean
   // Why: text size (font scale); changing it changes cell size, so the PTY must be re-fitted to a new column count.
   textScale: number
+  // Why: Android opt-in; when set, keyboard-driven frame-height changes refit the PTY instead of waiting for the keyboard to close.
+  resizeForKeyboard: boolean
   unsubscribeTerminal: (handle: string) => void
   subscribeToTerminal: (handle: string) => void
 }
@@ -52,6 +54,7 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions) 
     connState,
     tabStripVisible,
     textScale,
+    resizeForKeyboard,
     unsubscribeTerminal,
     subscribeToTerminal
   } = options
@@ -79,9 +82,11 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions) 
         // Why: a height refit can fire after the keyboard reopened within the debounce; re-check so we never reflow the PTY mid-keystroke.
         if (heightOriginatedRefitRef.current) {
           heightOriginatedRefitRef.current = false
-          const decision = reduceTerminalFrameHeightRefit(frameHeightRefitStateRef.current, {
-            type: 'refit-committed'
-          })
+          const decision = reduceTerminalFrameHeightRefit(
+            frameHeightRefitStateRef.current,
+            { type: 'refit-committed' },
+            resizeForKeyboard
+          )
           frameHeightRefitStateRef.current = decision.state
           if (!decision.shouldRefit) {
             return
@@ -176,6 +181,7 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions) 
       clientRef,
       deviceTokenRef,
       initializedHandlesRef,
+      resizeForKeyboard,
       unsubscribeTerminal,
       subscribeToTerminal
     ]
@@ -205,13 +211,30 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions) 
       return
     }
     prevWindowDimsRef.current = { width: windowWidth, height: windowHeight }
-    // Why: adjustResize can change only window height while the IME is open; the frame-height notifier corrects once it closes.
-    if (prev.width === windowWidth && frameHeightRefitStateRef.current.keyboardVisible) {
+    // Why: adjustResize can change only window height while the IME is open; defer it unless the user opted into keyboard resizing.
+    if (
+      !resizeForKeyboard &&
+      prev.width === windowWidth &&
+      frameHeightRefitStateRef.current.keyboardVisible
+    ) {
       return
     }
     viewportMeasuredRef.current = false
     scheduleViewportRefit()
-  }, [windowWidth, windowHeight, viewportMeasuredRef, scheduleViewportRefit])
+  }, [windowWidth, windowHeight, resizeForKeyboard, viewportMeasuredRef, scheduleViewportRefit])
+
+  // Why: a height-only window change suppressed while the option was off stays suppressed when it flips
+  // mid-keyboard, leaving the PTY at stale dims; toggling the option resends it.
+  const prevResizeForKeyboardRef = useRef(resizeForKeyboard)
+  useEffect(() => {
+    const was = prevResizeForKeyboardRef.current
+    prevResizeForKeyboardRef.current = resizeForKeyboard
+    if (was === resizeForKeyboard || !frameHeightRefitStateRef.current.keyboardVisible) {
+      return
+    }
+    viewportMeasuredRef.current = false
+    scheduleViewportRefit()
+  }, [resizeForKeyboard, viewportMeasuredRef, scheduleViewportRefit])
 
   // Why: on text-size change the refit's 150ms debounce lets the WebView apply the new fontSize before we re-measure cell metrics.
   const prevTextScaleRef = useRef(textScale)
@@ -247,7 +270,11 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions) 
 
   const notifyFrameHeightRefitEvent = useCallback(
     (event: TerminalFrameHeightRefitEvent) => {
-      const transition = reduceTerminalFrameHeightRefit(frameHeightRefitStateRef.current, event)
+      const transition = reduceTerminalFrameHeightRefit(
+        frameHeightRefitStateRef.current,
+        event,
+        resizeForKeyboard
+      )
       frameHeightRefitStateRef.current = transition.state
       if (!transition.shouldRefit) {
         return
@@ -255,7 +282,7 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions) 
       viewportMeasuredRef.current = false
       scheduleViewportRefit({ heightOriginated: true })
     },
-    [viewportMeasuredRef, scheduleViewportRefit]
+    [resizeForKeyboard, viewportMeasuredRef, scheduleViewportRefit]
   )
   // Why: notify imperatively so layout churn doesn't rerender the full session.
   const notifyTerminalFrameHeight = useCallback(
@@ -279,41 +306,12 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions) 
     [activeHandleRef, viewportMeasuredRef, scheduleViewportRefit]
   )
 
-  useEffect(() => {
-    if (Platform.OS !== 'ios') {
-      return
-    }
-    let previousAppState: AppStateStatus | null = AppState.currentState
-    const sub = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
-      const shouldRefit = shouldRecoverTerminalOnAppStateChange(
-        previousAppState,
-        nextAppState,
-        Platform.OS
-      )
-      previousAppState = nextAppState
-      if (!shouldRefit) {
-        return
-      }
-      // Why: cached grid can match while the host PTY changed in background; reassert equal dims to converge after iOS resume.
-      viewportMeasuredRef.current = false
-      scheduleForcedViewportRefit()
-    })
-    return () => sub.remove()
-  }, [viewportMeasuredRef, scheduleForcedViewportRefit])
-
-  const previousConnStateRef = useRef(connState)
-  useEffect(() => {
-    const previous = previousConnStateRef.current
-    previousConnStateRef.current = connState
-    if (previous === 'connected' || connState !== 'connected') {
-      return
-    }
-    // Why: an in-place desktop upgrade may add updateViewport; reconnect is where the cached method_not_found goes stale.
-    updateViewportCapabilityRef.current = 'unknown'
-    // Why: reconnect can restore a PTY resized while the socket was down, so equal cached dims still need reassertion.
-    viewportMeasuredRef.current = false
-    scheduleForcedViewportRefit()
-  }, [connState, viewportMeasuredRef, scheduleForcedViewportRefit])
+  useTerminalViewportReassertion({
+    connState,
+    viewportMeasuredRef,
+    updateViewportCapabilityRef,
+    scheduleForcedViewportRefit
+  })
 
   useEffect(() => {
     disposedRef.current = false
