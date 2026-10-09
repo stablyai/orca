@@ -49,6 +49,35 @@ describe('buildParcelWatcherIgnoreOptions', () => {
     expect(regex.test('packages/app/xcache/file.js')).toBe(false)
   })
 
+  it.each(['darwin', 'linux', 'win32'] as const)(
+    'excludes nested worktrees on %s without excluding similar source paths',
+    (platform) => {
+      setPlatform(platform)
+      const options = buildParcelWatcherIgnoreOptions(WATCHER_IGNORE_DIRS)
+      const regex = new RegExp(options.ignoreGlobs?.[0] ?? '(?!)')
+      for (const path of [
+        '.worktrees',
+        '.worktrees/task/src/source.ts',
+        'packages/app/.worktrees',
+        'packages/app/.worktrees/task/src/source.ts'
+      ]) {
+        expect(regex.test(path)).toBe(true)
+        expect(regex.test(path.replaceAll('/', '\\'))).toBe(
+          platform === 'win32' || !path.includes('/')
+        )
+      }
+      for (const path of [
+        'src/source.ts',
+        '.worktrees.ts',
+        'packages/app/.worktrees-cache/source.ts',
+        'packages/app/xworktrees/source.ts'
+      ]) {
+        expect(regex.test(path)).toBe(false)
+        expect(regex.test(path.replaceAll('/', '\\'))).toBe(false)
+      }
+    }
+  )
+
   it('keeps an empty ignore list empty', () => {
     for (const platform of ['darwin', 'linux', 'win32'] as const) {
       setPlatform(platform)
