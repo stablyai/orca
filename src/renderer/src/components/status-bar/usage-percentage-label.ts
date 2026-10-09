@@ -9,11 +9,14 @@ export function formatUsagePercentageLabel(
   display: UsagePercentageDisplay
 ): string {
   const percentage = getDisplayedUsagePercentage(usedPercent, display)
-  return display === 'used'
-    ? translate('auto.components.status.bar.usagePercentageLabel.used', '{{value0}}% used', {
-        value0: String(percentage)
-      })
-    : translate('auto.components.status.bar.usagePercentageLabel.remaining', '{{value0}}% left', {
-        value0: String(percentage)
-      })
+  // Why: bar fill and urgency color give consumption context, so bare % is shown in both modes.
+  return translate(
+    display === 'used'
+      ? 'auto.components.status.bar.usagePercentageLabel.used'
+      : 'auto.components.status.bar.usagePercentageLabel.remaining',
+    '{{value0}}%',
+    {
+      value0: String(percentage)
+    }
+  )
 }

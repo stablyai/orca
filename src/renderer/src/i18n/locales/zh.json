@@ -3975,8 +3975,8 @@
             "sshHost": "SSH 主机"
           },
           "usagePercentageLabel": {
-            "used": "已用 {{value0}}%",
-            "remaining": "剩余 {{value0}}%"
+            "used": "{{value0}}%",
+            "remaining": "{{value0}}%"
           },
           "StatusBarUsageChangeNotices": {
             "compactTitle": "用量显示现已精简",

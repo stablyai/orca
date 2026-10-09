@@ -17,7 +17,10 @@ import {
   getProviderUsageStatusLabel
 } from './tooltip'
 import { getTightestUsageSection, getUsageHeadlineSection } from './UsageRosterPanel'
-import { formatRateLimitWindowChipLabel } from '@/lib/window-label-formatter'
+import {
+  formatRateLimitWindowChipLabel,
+  formatUsagePoolChipLabel
+} from '@/lib/window-label-formatter'
 import { formatUsagePercentageLabel } from './usage-percentage-label'
 import { translate } from '@/i18n/i18n'
 import { isCursorUsageBucket } from '../../../../shared/cursor-usage-buckets'
@@ -56,7 +59,7 @@ function WindowLabel({
   return (
     <span className="tabular-nums">
       {formatUsagePercentageLabel(w.usedPercent, display)}
-      {showLabel ? ` ${label}` : ''}
+      {showLabel && label ? ` ${label}` : ''}
     </span>
   )
 }
@@ -197,14 +200,21 @@ function VerboseProviderUsage({
     // some tiers) has no session window, and omitting weekly rendered an empty segment for an
     // account that does have a limit worth showing.
     const fallbackWindow = p.session ?? p.monthly ?? p.weekly ?? null
+    // Why: Antigravity pool names are long tier-provided group names ("Claude and GPT models")
+    // that crowd the footer; show them like Claude/Codex windows and leave names to the popover.
+    const poolsAsWindows = p.provider === 'antigravity'
     return (
       <>
         {visibleBuckets.map((bucket, index) => (
           <React.Fragment key={bucket.name}>
             {index > 0 ? <span className="text-muted-foreground">·</span> : null}
-            <span className="tabular-nums">
-              {bucket.name} {formatUsagePercentageLabel(bucket.usedPercent, display)}
-            </span>
+            {poolsAsWindows ? (
+              <WindowLabel w={bucket} label={formatUsagePoolChipLabel(bucket)} display={display} />
+            ) : (
+              <span className="tabular-nums">
+                {bucket.name} {formatUsagePercentageLabel(bucket.usedPercent, display)}
+              </span>
+            )}
           </React.Fragment>
         ))}
         {visibleBuckets.length === 0 && fallbackWindow ? (

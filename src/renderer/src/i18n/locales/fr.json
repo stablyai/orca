@@ -4088,8 +4088,8 @@
             "sshHost": "Hôte SSH"
           },
           "usagePercentageLabel": {
-            "used": "{{value0}} % utilisé",
-            "remaining": "{{value0}} % restants"
+            "used": "{{value0}} %",
+            "remaining": "{{value0}} %"
           },
           "StatusBarUsageChangeNotices": {
             "compactTitle": "L’affichage de l’utilisation est désormais compact",
