@@ -1,6 +1,7 @@
 import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../shared/tab-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import type { WorkspaceSessionSnapshot } from './workspace-session'
+import { normalizeTabGroupClusters } from '../store/slices/tabs/tab-cluster-model'
 
 type PersistedUnifiedTabSessionData = Pick<
   WorkspaceSessionState,
@@ -29,7 +30,7 @@ function prunePersistedLayoutForGroups(
 }
 
 function buildPersistedGroupsForWorktree(tabs: Tab[], groups: TabGroup[]): TabGroup[] {
-  const validTabIds = new Set(tabs.map((tab) => tab.id))
+  const pinnedTabIds = new Set(tabs.filter((tab) => tab.isPinned).map((tab) => tab.id))
   const tabIdsByGroup = new Map<string, string[]>()
   for (const tab of tabs) {
     const groupTabs = tabIdsByGroup.get(tab.groupId) ?? []
@@ -39,19 +40,23 @@ function buildPersistedGroupsForWorktree(tabs: Tab[], groups: TabGroup[]): TabGr
 
   return groups
     .map((group) => {
+      const ownedTabIds = new Set(tabIdsByGroup.get(group.id) ?? [])
       const orderedTabIds = new Set([
-        ...group.tabOrder.filter((tabId) => validTabIds.has(tabId)),
+        ...group.tabOrder.filter((tabId) => ownedTabIds.has(tabId)),
         ...(tabIdsByGroup.get(group.id) ?? [])
       ])
       const tabOrder = Array.from(orderedTabIds)
       const activeTabId =
         group.activeTabId && orderedTabIds.has(group.activeTabId) ? group.activeTabId : null
-      return {
-        ...group,
-        activeTabId,
-        tabOrder,
-        recentTabIds: group.recentTabIds?.filter((tabId) => orderedTabIds.has(tabId))
-      }
+      return normalizeTabGroupClusters(
+        {
+          ...group,
+          activeTabId,
+          tabOrder,
+          recentTabIds: group.recentTabIds?.filter((tabId) => orderedTabIds.has(tabId))
+        },
+        pinnedTabIds
+      )
     })
     .filter((group) => group.tabOrder.length > 0)
 }

@@ -114,14 +114,6 @@ export function sanitizeRecentTabIds(recent: string[] | undefined, tabOrder: str
   return reversed.toReversed()
 }
 
-export function pushRecentTabId(recent: string[] | undefined, tabId: string): string[] {
-  const base = recent ?? []
-  if (base.length > 0 && base.at(-1) === tabId) {
-    return base
-  }
-  return [...base.filter((id) => id !== tabId), tabId]
-}
-
 export function writableWebSessionTabsRecord<K extends WebSessionTabsBatchRecordKey>(
   state: WebSessionTabsSyncState,
   recordKey: K,

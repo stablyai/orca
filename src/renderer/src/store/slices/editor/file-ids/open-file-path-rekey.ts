@@ -1,7 +1,9 @@
 import type { AppState } from '../../../types'
 import type { TabGroup } from '../../../../../../shared/tab-types'
+import { pushRecentTabId } from '../../../../../../shared/tab-group-history'
 import { pruneTabGroupLayoutForGroups } from '../../tabs-hydration'
 import { sanitizeRecentTabIds } from '../../tab-group-state'
+import { pickTabCloseSuccessor } from '../../../../../../shared/tab-close-successor'
 
 export function rekeyFileIdRecord<T>(
   record: Record<string, T>,
@@ -21,36 +23,53 @@ export function rekeyFileIdRecord<T>(
   return changed ? next : record
 }
 
-export function nextActiveIdAfterRemoval(
-  ids: readonly string[],
-  recentIds: readonly string[] | undefined,
-  removedIds: ReadonlySet<string>
-): string | null {
-  const recent = (recentIds ?? []).toReversed().find((id) => !removedIds.has(id))
-  return recent ?? ids.find((id) => !removedIds.has(id)) ?? null
-}
-
-/** Strip `removedIds` from a group's order, MRU stack and active id; returns the
- * same object when the group never referenced them. */
+/** Removed tabs cannot retain membership in the pane's clusters. */
 export function removeTabIdsFromGroup(group: TabGroup, removedIds: ReadonlySet<string>): TabGroup {
   const recentTabIds = group.recentTabIds ?? []
+  const removesClusterMembers =
+    group.tabClusters?.some((cluster) => cluster.tabIds.some((id) => removedIds.has(id))) ?? false
   const references =
     group.tabOrder.some((id) => removedIds.has(id)) ||
     recentTabIds.some((id) => removedIds.has(id)) ||
-    (group.activeTabId !== null && removedIds.has(group.activeTabId))
+    (group.activeTabId !== null && removedIds.has(group.activeTabId)) ||
+    removesClusterMembers
   if (!references) {
     return group
   }
   const tabOrder = group.tabOrder.filter((id) => !removedIds.has(id))
-  return {
+  const nextActiveTabId =
+    group.activeTabId !== null && removedIds.has(group.activeTabId)
+      ? pickTabCloseSuccessor(
+          group,
+          group.tabOrder.filter((id) => !removedIds.has(id) || id === group.activeTabId),
+          group.activeTabId
+        )
+      : group.activeTabId
+  const sanitizedRecent = sanitizeRecentTabIds(recentTabIds, tabOrder)
+  const nextRecentTabIds =
+    nextActiveTabId && nextActiveTabId !== group.activeTabId
+      ? pushRecentTabId(sanitizedRecent, nextActiveTabId)
+      : sanitizedRecent
+  const tabClusters = removesClusterMembers
+    ? group.tabClusters?.flatMap((cluster) => {
+        const tabIds = cluster.tabIds.filter((id) => !removedIds.has(id))
+        return tabIds.length > 0
+          ? [tabIds.length === cluster.tabIds.length ? cluster : { ...cluster, tabIds }]
+          : []
+      })
+    : group.tabClusters
+  const nextGroup = {
     ...group,
-    activeTabId:
-      group.activeTabId !== null && removedIds.has(group.activeTabId)
-        ? nextActiveIdAfterRemoval(group.tabOrder, recentTabIds, removedIds)
-        : group.activeTabId,
+    activeTabId: nextActiveTabId,
     tabOrder,
-    recentTabIds: sanitizeRecentTabIds(recentTabIds, tabOrder)
+    recentTabIds: nextRecentTabIds
   }
+  if (tabClusters?.length) {
+    nextGroup.tabClusters = tabClusters
+  } else {
+    delete nextGroup.tabClusters
+  }
+  return nextGroup
 }
 
 export function removeEmptyEditorGroups(

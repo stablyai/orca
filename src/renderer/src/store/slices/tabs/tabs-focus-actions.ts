@@ -1,8 +1,8 @@
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
+import { pushRecentTabId } from '../../../../../shared/tab-group-history'
 import {
   findTabAndWorktree,
   findTabByEntityInGroup,
-  pushRecentTabId,
   sanitizeRecentTabIds
 } from '../tab-group-state'
 

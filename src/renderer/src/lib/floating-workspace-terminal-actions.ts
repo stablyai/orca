@@ -1,6 +1,6 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import type { BrowserTab } from '../../../shared/browser-workspace-types'
-import type { TabGroup } from '../../../shared/tab-types'
+import { getHiddenClusterTabIds, type TabGroup } from '../../../shared/tab-types'
 import { getGroupVisibleTabOrder } from '@/components/tab-bar/group-tab-order'
 import {
   getNextTabAcrossAllTypes,
@@ -271,7 +271,11 @@ export function switchFloatingWorkspaceTab(
   if (!group) {
     return false
   }
-  const visibleTabs = getFloatingWorkspaceVisibleTabs(store, group)
+  const navTabs = getFloatingWorkspaceVisibleTabs(store, group)
+  const hiddenTabIds = getHiddenClusterTabIds(group)
+  const visibleTabs = hiddenTabIds.size
+    ? navTabs.filter((entry) => !hiddenTabIds.has(entry.tabId ?? entry.id))
+    : navTabs
   if (visibleTabs.length <= 1) {
     return false
   }

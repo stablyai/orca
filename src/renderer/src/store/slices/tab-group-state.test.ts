@@ -1,12 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
+import { pushRecentTabId } from '../../../../shared/tab-group-history'
 import {
   findTabAndWorktree,
   findGroupForTab,
   ensureGroup,
   pickNeighbor,
-  pickNextActiveTab,
-  pushRecentTabId,
   sanitizeRecentTabIds,
   updateGroup,
   patchTab
@@ -127,25 +126,6 @@ describe('sanitizeRecentTabIds', () => {
   it('returns empty for undefined or empty input', () => {
     expect(sanitizeRecentTabIds(undefined, ['a'])).toEqual([])
     expect(sanitizeRecentTabIds([], ['a'])).toEqual([])
-  })
-})
-
-describe('pickNextActiveTab', () => {
-  it('returns the most-recent non-closing id', () => {
-    expect(pickNextActiveTab(['a', 'b', 'c'], ['a', 'c', 'b'], 'b')).toBe('c')
-  })
-
-  it('skips the closing id if it appears in MRU', () => {
-    expect(pickNextActiveTab(['a', 'b', 'c'], ['a', 'b', 'c'], 'c')).toBe('b')
-  })
-
-  it('falls back to visual neighbor when MRU is empty or has only the closing id', () => {
-    expect(pickNextActiveTab(['a', 'b', 'c'], [], 'b')).toBe('c')
-    expect(pickNextActiveTab(['a', 'b', 'c'], ['b'], 'b')).toBe('c')
-  })
-
-  it('falls back to left neighbor when closing the rightmost and MRU is empty', () => {
-    expect(pickNextActiveTab(['a', 'b', 'c'], undefined, 'c')).toBe('b')
   })
 })
 

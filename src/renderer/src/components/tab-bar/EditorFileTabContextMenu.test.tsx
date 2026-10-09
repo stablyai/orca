@@ -1,8 +1,24 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as React from 'react'
 
 const shortcutLabelMock = vi.hoisted(() => vi.fn())
 const revealInFileManager = vi.hoisted(() => vi.fn())
 const storeSettings = vi.hoisted((): { activeRuntimeEnvironmentId?: string } => ({}))
+
+// Why: This headless tree harness calls components directly rather than through a React renderer.
+vi.mock('react', async () => {
+  const actual = await vi.importActual<typeof React>('react')
+  return {
+    ...actual,
+    useRef<T>(value: T) {
+      return { current: value }
+    },
+    useCallback<T extends (...args: never[]) => unknown>(callback: T) {
+      return callback
+    },
+    useEffect() {}
+  }
+})
 
 vi.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenu: function DropdownMenu(props: { children?: unknown }) {
@@ -38,6 +54,10 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
 }))
 
 vi.mock('lucide-react', () => ({
+  Folder: () => null,
+  FolderInput: () => null,
+  FolderMinus: () => null,
+  FolderPlus: () => null,
   ArrowDown: function ArrowDown(props: Record<string, unknown>) {
     return { type: 'ArrowDown', props }
   },
@@ -107,10 +127,12 @@ const useAppStoreMock = Object.assign(
       settings: Record<string, unknown>
       unifiedTabsByWorktree: Record<string, unknown[]>
       groupsByWorktree: Record<string, unknown[]>
+      tabSelectionByGroupId: Record<string, never>
     }) => unknown
   ) =>
     selector({
       settings: storeSettings,
+      tabSelectionByGroupId: {},
       unifiedTabsByWorktree: {
         'wt-1': [{ id: 'tab-1', groupId: 'group-1' }]
       },
@@ -121,6 +143,7 @@ const useAppStoreMock = Object.assign(
   {
     getState: () => ({
       settings: storeSettings,
+      tabSelectionByGroupId: {},
       unifiedTabsByWorktree: {
         'wt-1': [{ id: 'tab-1', groupId: 'group-1' }]
       },

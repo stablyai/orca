@@ -1,6 +1,7 @@
 import { warnIfZCodeCannotOpenSession } from '@/components/terminal-pane/zcode-missing-tui-notice'
 import { clearWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import { pushRecentTabId } from '../../../../shared/tab-group-history'
 import { isValidHostTerminalTabId } from '../../../../shared/terminal-tab-id'
 import { emptyLayoutSnapshot, singlePaneLayoutSnapshot } from '../slices/terminal-helpers'
 import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
@@ -12,7 +13,6 @@ import {
   dedupeTabOrder,
   ensureGroup,
   findTabByEntityInGroup,
-  pushRecentTabId,
   sanitizeRecentTabIds,
   updateGroup
 } from '../slices/tab-group-state'

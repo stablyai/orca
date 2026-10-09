@@ -4,7 +4,6 @@ import { parseExecutionHostId } from '../../../../../../shared/execution-host'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { sanitizeRecentTabIds } from '../../tab-group-state'
 import {
-  nextActiveIdAfterRemoval,
   removeEmptyEditorGroups,
   removeTabIdsFromGroup,
   rekeyFileIdRecord
@@ -14,6 +13,7 @@ import type {
   RestoredEditorOwnerResult
 } from '../types/restored-editor-owner'
 import { resolveRestoredEditorOwnerDestination } from './restored-editor-owner-destination'
+import { carryRestoredEditorTabClusters } from './restored-editor-tab-clusters'
 import { rekeyRestoredEditorTabsInPlace } from './restored-editor-owner-in-place'
 
 export function buildRestoredEditorOwnerTransition(
@@ -38,9 +38,17 @@ export function buildRestoredEditorOwnerTransition(
     const movedFileIds = new Set(migrations.keys())
     const sourceWorktreeId = source.worktreeId
     const targetWorktreeId = args.targetWorktreeId
-    const movedTabs = (s.unifiedTabsByWorktree[sourceWorktreeId] ?? []).filter((tab) =>
-      movedFileIds.has(tab.entityId)
+    const previousSourceGroups = s.groupsByWorktree[sourceWorktreeId] ?? []
+    const sourceOrderByTabId = new Map(
+      previousSourceGroups.flatMap((group) => group.tabOrder).map((tabId, index) => [tabId, index])
     )
+    const movedTabs = (s.unifiedTabsByWorktree[sourceWorktreeId] ?? [])
+      .filter((tab) => movedFileIds.has(tab.entityId))
+      .sort(
+        (a, b) =>
+          (sourceOrderByTabId.get(a.id) ?? Number.MAX_SAFE_INTEGER) -
+          (sourceOrderByTabId.get(b.id) ?? Number.MAX_SAFE_INTEGER)
+      )
     const movedTabIds = new Set(movedTabs.map((tab) => tab.id))
     const tabIdMigration = new Map(
       movedTabs.map((tab) => [tab.id, migrations.get(tab.id) ?? tab.id])
@@ -60,23 +68,9 @@ export function buildRestoredEditorOwnerTransition(
       tabOrder: []
     }
 
-    const previousSourceGroups = s.groupsByWorktree[sourceWorktreeId] ?? []
-    const updatedSourceGroups = previousSourceGroups.map((group) => {
-      const tabOrder = group.tabOrder.filter((id) => !movedTabIds.has(id))
-      const activeTabId =
-        group.activeTabId && movedTabIds.has(group.activeTabId)
-          ? nextActiveIdAfterRemoval(group.tabOrder, group.recentTabIds, movedTabIds)
-          : group.activeTabId
-      return {
-        ...group,
-        activeTabId,
-        tabOrder,
-        recentTabIds: sanitizeRecentTabIds(
-          (group.recentTabIds ?? []).filter((id) => !movedTabIds.has(id)),
-          tabOrder
-        )
-      }
-    })
+    const updatedSourceGroups = previousSourceGroups.map((group) =>
+      removeTabIdsFromGroup(group, movedTabIds)
+    )
     const sourceGroupState = removeEmptyEditorGroups(
       previousSourceGroups,
       updatedSourceGroups,
@@ -84,7 +78,7 @@ export function buildRestoredEditorOwnerTransition(
       s.layoutByWorktree[sourceWorktreeId]
     )
     const destinationOrder = [
-      ...targetGroup.tabOrder.filter((id) => !mappedMovedTabIds.includes(id)),
+      ...targetGroup.tabOrder.filter((id) => !mappedMovedTabIdSet.has(id) && !movedTabIds.has(id)),
       ...mappedMovedTabIds
     ]
     const updatedTargetGroup: TabGroup = {
@@ -94,17 +88,30 @@ export function buildRestoredEditorOwnerTransition(
       recentTabIds: sanitizeRecentTabIds(
         [...(targetGroup.recentTabIds ?? []), ...mappedMovedTabIds],
         destinationOrder
+      ),
+      tabClusters: carryRestoredEditorTabClusters(
+        targetGroup,
+        previousSourceGroups,
+        movedTabIds,
+        tabIdMigration
       )
     }
+    if (!updatedTargetGroup.tabClusters) {
+      delete updatedTargetGroup.tabClusters
+    }
     // Why: the migrated ids land in targetGroup only, so any sibling group holding the same id is left dangling.
+    const removedTargetTabIds =
+      sourceWorktreeId === targetWorktreeId
+        ? new Set([...movedTabIds, ...mappedMovedTabIdSet])
+        : mappedMovedTabIdSet
     const nextTargetGroups = targetGroups.some((group) => group.id === targetGroupId)
       ? targetGroups.map((group) =>
           group.id === targetGroupId
             ? updatedTargetGroup
-            : removeTabIdsFromGroup(group, mappedMovedTabIdSet)
+            : removeTabIdsFromGroup(group, removedTargetTabIds)
         )
       : [
-          ...targetGroups.map((group) => removeTabIdsFromGroup(group, mappedMovedTabIdSet)),
+          ...targetGroups.map((group) => removeTabIdsFromGroup(group, removedTargetTabIds)),
           updatedTargetGroup
         ]
 
@@ -121,6 +128,7 @@ export function buildRestoredEditorOwnerTransition(
         ...tab,
         id: tabIdMigration.get(tab.id) ?? tab.id,
         entityId: migrations.get(tab.entityId) ?? tab.entityId,
+        worktreeId: targetWorktreeId,
         groupId: targetGroupId
       }))
     ]

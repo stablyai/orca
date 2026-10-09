@@ -3,7 +3,7 @@ import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { dedupeTabOrder } from '@/store/slices/tab-group-state'
-import type { Tab } from '../../../shared/tab-types'
+import { getHiddenClusterTabIds, type Tab } from '../../../shared/tab-types'
 import {
   activateWebRuntimeSessionTab,
   isWebRuntimeSessionActive
@@ -50,8 +50,12 @@ export function resolveTabNumberShortcutTarget(
     ...group.tabOrder.filter((tabId) => tabById.has(tabId)),
     ...groupTabs.map((tab) => tab.id)
   ])
+  const hiddenTabIds = getHiddenClusterTabIds(group)
+  const visibleIds = hiddenTabIds.size
+    ? orderedIds.filter((tabId) => !hiddenTabIds.has(tabId))
+    : orderedIds
 
-  return tabById.get(orderedIds[index] ?? '') ?? null
+  return tabById.get(visibleIds[index] ?? '') ?? null
 }
 
 export function activateTabNumberShortcut(index: number): boolean {

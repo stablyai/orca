@@ -328,6 +328,37 @@ describe('FloatingTerminalPanel close behavior', () => {
     expect(onOpenChange).not.toHaveBeenCalled()
   })
 
+  it('bulk-closes every hidden cluster member through the shared titlebar commands', async () => {
+    setFloatingTabs([makeTab({ id: 'tab-1' }), makeTab({ id: 'tab-2' }), makeTab({ id: 'tab-3' })])
+    // Why: a static store import initializes its async mock before the React hook harness.
+    const { useAppStore } = await import('@/store')
+    const state = useAppStore.getState()
+    const group = state.groupsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]?.[0]
+    if (!group) {
+      throw new Error('Expected floating group')
+    }
+    const members = ['tab-1', 'tab-2']
+    group.activeTabId = 'tab-3'
+    group.tabClusters = [
+      { id: 'cluster', name: 'Build', color: 'blue', collapsed: true, tabIds: members }
+    ]
+
+    const element = await renderPanel(true)
+    const onCloseTabs = findByTypeName(element, 'TabBar').props.onCloseTabs
+    if (typeof onCloseTabs !== 'function') {
+      throw new Error('Expected shared bulk close handler')
+    }
+    onCloseTabs(members)
+
+    expect(mocks.closeTerminalTab.mock.calls).toEqual([
+      ['tab-1', { skipRunningProcessConfirm: true }],
+      ['tab-2', { skipRunningProcessConfirm: true }]
+    ])
+    expect(state.tabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]?.map((tab) => tab.id)).toEqual([
+      'tab-3'
+    ])
+  })
+
   it('renders and closes simulator tabs in the floating workspace', async () => {
     const tab = setFloatingSimulatorTab()
 

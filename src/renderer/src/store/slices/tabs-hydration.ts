@@ -1,7 +1,7 @@
 import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../../shared/tab-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { hydrateLegacyTabState } from './tabs-legacy-hydration'
 import {
   adoptGrouplessTabs,
   appendOwnedTabIdsToGroups,
@@ -16,8 +16,9 @@ import {
   sanitizeRecentTabIds,
   selectHydratedActiveGroupId
 } from './tab-group-state'
+import { normalizeTabGroupClusters, rekeyTabClusterMembers } from './tabs/tab-cluster-model'
 
-type HydratedTabState = {
+export type HydratedTabState = {
   unifiedTabsByWorktree: Record<string, Tab[]>
   groupsByWorktree: Record<string, TabGroup[]>
   activeGroupIdByWorktree: Record<string, string>
@@ -157,6 +158,9 @@ function hydrateUnifiedFormat(
     }
 
     const hydratedTabsForWorktree = tabsByWorktree[worktreeId] ?? []
+    const pinnedTabIds = new Set(
+      hydratedTabsForWorktree.filter((tab) => tab.isPinned).map((tab) => tab.id)
+    )
     const tabIdAliasesByGroup = tabIdAliasesByWorktree[worktreeId]
     const tabOwners = resolveTabGroupOwners(hydratedTabsForWorktree, groups, tabIdAliasesByGroup)
     const validatedGroups = appendOwnedTabIdsToGroups(groups, tabOwners).map((g) => {
@@ -182,12 +186,18 @@ function hydrateUnifiedFormat(
         activeTabId && sanitizedRecent.at(-1) !== activeTabId
           ? [...sanitizedRecent.filter((id) => id !== activeTabId), activeTabId]
           : sanitizedRecent
-      return {
-        ...g,
-        tabOrder,
-        activeTabId,
-        recentTabIds
-      }
+      return normalizeTabGroupClusters(
+        {
+          ...g,
+          tabOrder,
+          activeTabId,
+          recentTabIds,
+          tabClusters: tabIdAliases
+            ? rekeyTabClusterMembers(g.tabClusters, tabIdAliases)
+            : g.tabClusters
+        },
+        pinnedTabIds
+      )
     })
     const hydratedGroups = validatedGroups.filter((group, index) => {
       const hadTabsBeforeHydration = groups[index]?.tabOrder.length > 0
@@ -232,112 +242,6 @@ function hydrateUnifiedFormat(
   }
 }
 
-function hydrateLegacyFormat(
-  session: WorkspaceSessionState,
-  validWorktreeIds: Set<string>
-): HydratedTabState {
-  const tabsByWorktree: Record<string, Tab[]> = {}
-  const groupsByWorktree: Record<string, TabGroup[]> = {}
-  const activeGroupIdByWorktree: Record<string, string> = {}
-  const layoutByWorktree: Record<string, TabGroupLayoutNode> = {}
-
-  for (const worktreeId of validWorktreeIds) {
-    const terminalTabs = (session.tabsByWorktree[worktreeId] ?? []).filter((tab) =>
-      isValidTerminalTabId(tab.id)
-    )
-    const editorFiles = session.openFilesByWorktree?.[worktreeId] ?? []
-
-    if (terminalTabs.length === 0 && editorFiles.length === 0) {
-      continue
-    }
-
-    const groupId = createBrowserUuid()
-    const tabs: Tab[] = []
-    const tabOrder: string[] = []
-
-    for (const tt of terminalTabs) {
-      tabs.push({
-        id: tt.id,
-        entityId: tt.id,
-        groupId,
-        worktreeId,
-        contentType: 'terminal',
-        label: tt.title,
-        ...(tt.quickCommandLabel?.trim() ? { quickCommandLabel: tt.quickCommandLabel.trim() } : {}),
-        ...(tt.generatedTitle?.trim() ? { generatedLabel: tt.generatedTitle.trim() } : {}),
-        customLabel: tt.customTitle,
-        color: tt.color,
-        sortOrder: tt.sortOrder,
-        createdAt: tt.createdAt,
-        isPreview: false,
-        isPinned: false
-      })
-      tabOrder.push(tt.id)
-    }
-
-    for (const ef of editorFiles) {
-      tabs.push({
-        id: ef.filePath,
-        entityId: ef.filePath,
-        groupId,
-        worktreeId,
-        contentType: 'editor',
-        label: ef.relativePath,
-        customLabel: null,
-        color: null,
-        sortOrder: tabs.length,
-        createdAt: Date.now(),
-        isPreview: ef.isPreview,
-        isPinned: false
-      })
-      tabOrder.push(ef.filePath)
-    }
-
-    const activeTabType = session.activeTabTypeByWorktree?.[worktreeId] ?? 'terminal'
-    let activeTabId: string | null = null
-    if (activeTabType === 'editor') {
-      activeTabId = session.activeFileIdByWorktree?.[worktreeId] ?? null
-    } else {
-      // Why: honor this worktree's own remembered terminal before the global
-      // active tab. The global session.activeTabId only names the last-focused
-      // worktree's tab, so using it here reset every other worktree to its
-      // first terminal on restart.
-      const rememberedTabId = session.activeTabIdByWorktree?.[worktreeId]
-      if (rememberedTabId && terminalTabs.some((t) => t.id === rememberedTabId)) {
-        activeTabId = rememberedTabId
-      } else if (session.activeTabId && terminalTabs.some((t) => t.id === session.activeTabId)) {
-        activeTabId = session.activeTabId
-      }
-    }
-    if (activeTabId && !tabs.some((t) => t.id === activeTabId)) {
-      activeTabId = tabs[0]?.id ?? null
-    }
-
-    tabsByWorktree[worktreeId] = tabs
-    groupsByWorktree[worktreeId] = [
-      {
-        id: groupId,
-        worktreeId,
-        activeTabId,
-        tabOrder,
-        // Why: legacy sessions don't persist MRU; seed with the active tab so
-        // the first close after a legacy restore still behaves MRU-ish (falls
-        // back to neighbor selection if only one tab is in the stack).
-        recentTabIds: activeTabId ? [activeTabId] : []
-      }
-    ]
-    activeGroupIdByWorktree[worktreeId] = groupId
-    layoutByWorktree[worktreeId] = { type: 'leaf', groupId }
-  }
-
-  return {
-    unifiedTabsByWorktree: tabsByWorktree,
-    groupsByWorktree,
-    activeGroupIdByWorktree,
-    layoutByWorktree
-  }
-}
-
 export function buildHydratedTabState(
   session: WorkspaceSessionState,
   validWorktreeIds: Set<string>
@@ -345,5 +249,5 @@ export function buildHydratedTabState(
   if (session.unifiedTabs && session.tabGroups) {
     return hydrateUnifiedFormat(session, validWorktreeIds)
   }
-  return hydrateLegacyFormat(session, validWorktreeIds)
+  return hydrateLegacyTabState(session, validWorktreeIds)
 }

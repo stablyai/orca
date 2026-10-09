@@ -482,6 +482,61 @@ describe('FloatingTerminalPanel close behavior', () => {
     expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('tab-3')
   })
 
+  it.each([
+    { label: 'hidden members', activeId: 'c', index: 1, target: 'c' },
+    { label: 'hidden members past the visible count', activeId: 'c', index: 2, target: null },
+    { label: 'the shown member', activeId: 'c', shownTabId: 'b', index: 1, target: 'b' },
+    { label: 'tabs after the shown member', activeId: 'c', shownTabId: 'b', index: 2, target: 'c' },
+    { label: 'the active member', activeId: 'b', index: 1, target: 'b' },
+    { label: 'tabs after the active member', activeId: 'b', index: 2, target: 'c' }
+  ])(
+    'uses the visible order for floating Select Tab $index with $label',
+    async ({ activeId, shownTabId, index, target }) => {
+      setFloatingTabs(['a', 'b', 'c'].map((id) => makeTab({ id })))
+      // Why: a static store import initializes its async mock before the React hook harness.
+      const { useAppStore } = await import('@/store')
+      const state = useAppStore.getState()
+      const group = state.groupsByWorktree[FLOATING_TERMINAL_WORKTREE_ID][0]
+      const unifiedTabs = state.unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]
+      for (const tab of unifiedTabs) {
+        tab.id = `unified-${tab.entityId}`
+      }
+      group.tabOrder = unifiedTabs.map((tab) => tab.id)
+      group.activeTabId = `unified-${activeId}`
+      group.tabClusters = [
+        {
+          id: 'cluster',
+          name: 'Work',
+          color: 'blue',
+          collapsed: true,
+          tabIds: ['unified-a', 'unified-b'],
+          ...(shownTabId ? { shownTabId: `unified-${shownTabId}` } : {})
+        }
+      ]
+      state.activeTabIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID] = activeId
+      const element = await renderPanel(true)
+      const { keydownListener, panelElement } = bindFocusedFloatingPanelKeydown(element)
+      mocks.focusTerminalTabSurface.mockClear()
+      const preventDefault = vi.fn()
+
+      keydownListener(
+        makeFocusedPanelKeyEvent({
+          code: `Digit${index}`,
+          ctrlKey: true,
+          key: String(index),
+          preventDefault,
+          target: panelElement
+        })
+      )
+
+      expect(preventDefault).toHaveBeenCalledWith()
+      expect(mocks.activateTab.mock.calls).toEqual(target ? [[`unified-${target}`]] : [])
+      expect(mocks.setActiveTab.mock.calls).toEqual(target ? [[target]] : [])
+      expect(mocks.focusTerminalTabSurface.mock.calls).toEqual(target ? [[target]] : [])
+      expect(group.tabClusters?.[0].collapsed).toBe(true)
+    }
+  )
+
   it('routes focused floating tab index shortcuts across mixed visible tab types', async () => {
     const state = storeBox.state as FloatingPanelStoreState
     const groupId = 'floating-group'

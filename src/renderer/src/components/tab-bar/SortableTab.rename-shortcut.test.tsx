@@ -19,6 +19,9 @@ const storeState = vi.hoisted(
     terminalLayoutsByTabId: Record<string, unknown>
     worktreesByRepo: Record<string, unknown>
     unreadTerminalTabs: Record<string, boolean>
+    groupsByWorktree: Record<string, never[]>
+    unifiedTabsByWorktree: Record<string, never[]>
+    tabSelectionByGroupId: Record<string, never>
   } => ({
     agentStatusByPaneKey: {},
     clearTabLaunchAgent: vi.fn(),
@@ -28,6 +31,9 @@ const storeState = vi.hoisted(
     repos: [],
     terminalLayoutsByTabId: {},
     worktreesByRepo: {},
+    groupsByWorktree: {},
+    unifiedTabsByWorktree: {},
+    tabSelectionByGroupId: {},
     unreadTerminalTabs: {} as Record<string, boolean>
   })
 )
@@ -38,6 +44,9 @@ vi.mock('react', async () => {
     ...actual,
     useCallback<T>(callback: T) {
       return callback
+    },
+    useMemo<T>(factory: () => T) {
+      return factory()
     },
     useEffect(effect: () => void | (() => void)) {
       effect()
@@ -336,7 +345,8 @@ function pressInputKey(
       isComposing: options?.isComposing ?? false,
       keyCode: options?.keyCode ?? 13
     },
-    preventDefault: vi.fn()
+    preventDefault: vi.fn(),
+    stopPropagation: vi.fn()
   }
   ;(input.props.onKeyDown as (nextEvent: typeof event) => void)(event)
   return event

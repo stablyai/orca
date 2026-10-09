@@ -1,5 +1,7 @@
 import { vi } from 'vitest'
 import type { WindowsTerminalCapabilities } from '@/lib/windows-terminal-capabilities'
+import type { TabGroup } from '../../../../shared/tab-types'
+import type { TabStripSelection } from '@/store/slices/tabs/tabs-slice-contract'
 
 /**
  * Shared rig for the tab-strip worktree-write gate tests. The platform check in
@@ -13,6 +15,9 @@ export type TabBarProbeState = {
   gitStatusByWorktree: Record<string, never[]>
   unifiedTabsByWorktree: Record<string, never[]>
   activeGroupIdByWorktree: Record<string, string>
+  groupsByWorktree: Record<string, TabGroup[]>
+  tabSelectionByGroupId: Record<string, TabStripSelection>
+  setTabSelection: (groupId: string, selection: TabStripSelection | null) => void
   activeRepoId: string | null
   activeWorktreeId: string | null
   projects: unknown[]
@@ -45,6 +50,9 @@ export async function createTabBarProbeStore(): Promise<TabBarProbeStore> {
       gitStatusByWorktree: {},
       unifiedTabsByWorktree: {},
       activeGroupIdByWorktree: {},
+      groupsByWorktree: {},
+      tabSelectionByGroupId: {},
+      setTabSelection: noop,
       activeRepoId: null,
       activeWorktreeId: null,
       projects: [],
@@ -85,6 +93,7 @@ const RUNTIME_TARGET = Object.freeze({ kind: 'local' })
 const CREATE_MENU = Object.freeze({})
 const ITEM_PROJECTION = Object.freeze({
   orderedItems: Object.freeze([]),
+  visibleItems: Object.freeze([]),
   activeVisibleTabId: null,
   tabStripLayoutKey: 'probe'
 })

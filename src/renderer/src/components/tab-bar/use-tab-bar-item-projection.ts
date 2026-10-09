@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { GitFileStatus } from '../../../../shared/git-status-types'
-import type { Tab } from '../../../../shared/tab-types'
+import type { Tab, TabCluster, TabGroup } from '../../../../shared/tab-types'
 import type { TabBarProps } from './tab-bar-props'
 import {
   buildOrderedTabItems,
@@ -10,10 +10,14 @@ import {
   type TabBarItem
 } from './tab-bar-item-model'
 import type { DropIndicator } from './drop-indicator'
+import { buildTabBarStripItems, type TabBarStripItem } from './tab-bar-cluster-items'
 import { sameStringArray } from '@/runtime/web-session-tabs-sync/state-equality-core'
 
 export type TabBarItemProjection = {
   orderedItems: TabBarItem[]
+  stripItems: TabBarStripItem[]
+  visibleItems: TabBarItem[]
+  clusterByUnifiedTabId: Map<string, TabCluster>
   sortableIds: string[]
   dropIndicatorByVisibleId: Map<string, DropIndicator>
   activeVisibleTabId: string | null
@@ -26,7 +30,8 @@ export function useTabBarItemProjection({
   unifiedTabs,
   unifiedTabByVisibleId,
   generatedTabTitlesEnabled,
-  statusByRelativePath
+  statusByRelativePath,
+  group = null
 }: {
   props: TabBarProps
   resolvedGroupId: string
@@ -34,6 +39,7 @@ export function useTabBarItemProjection({
   unifiedTabByVisibleId: Map<string, Tab>
   generatedTabTitlesEnabled: boolean
   statusByRelativePath: Map<string, GitFileStatus>
+  group?: TabGroup | null
 }): TabBarItemProjection {
   const {
     tabs,
@@ -108,21 +114,38 @@ export function useTabBarItemProjection({
       unifiedTabByVisibleId
     ]
   )
-  const orderedIds = useMemo(() => orderedItems.map((item) => item.id), [orderedItems])
+  const clusterByUnifiedTabId = useMemo(() => {
+    const lookup = new Map<string, TabCluster>()
+    for (const cluster of group?.tabClusters ?? []) {
+      for (const tabId of cluster.tabIds) {
+        lookup.set(tabId, cluster)
+      }
+    }
+    return lookup
+  }, [group?.tabClusters])
+  const stripItems = useMemo(
+    () => buildTabBarStripItems(orderedItems, group, clusterByUnifiedTabId),
+    [orderedItems, group, clusterByUnifiedTabId]
+  )
+  const visibleItems = useMemo(
+    () => stripItems.filter((item): item is TabBarItem => item.type !== 'cluster'),
+    [stripItems]
+  )
+  const stripIds = useMemo(() => stripItems.map((item) => item.id), [stripItems])
   // Why: dnd-kit re-renders every tab when this array's identity changes, and the items rebuild on any tab write.
-  const [sortableIds, setSortableIds] = useState(orderedIds)
-  if (!sameStringArray(sortableIds, orderedIds)) {
-    setSortableIds(orderedIds)
+  const [sortableIds, setSortableIds] = useState(stripIds)
+  if (!sameStringArray(sortableIds, stripIds)) {
+    setSortableIds(stripIds)
   }
   const activeIndicator =
     hoveredTabInsertion?.groupId === resolvedGroupId ? hoveredTabInsertion : null
   const dropIndicatorByVisibleId = useMemo(
-    () => buildTabDropIndicators(orderedItems, activeIndicator),
-    [activeIndicator, orderedItems]
+    () => buildTabDropIndicators(stripItems, activeIndicator),
+    [activeIndicator, stripItems]
   )
   const activeVisibleTabId = useMemo(
     () =>
-      findActiveVisibleTabId(orderedItems, {
+      findActiveVisibleTabId(visibleItems, {
         activeTabId,
         activeFileId,
         activeBrowserTabId,
@@ -135,22 +158,32 @@ export function useTabBarItemProjection({
       activeSimulatorTabId,
       activeTabId,
       activeTabType,
-      orderedItems
+      visibleItems
     ]
   )
   const tabStripLayoutKey = useMemo(
     () =>
       buildTabStripLayoutKey(
-        orderedItems,
+        visibleItems,
         generatedTabTitlesEnabled,
         expandedPaneByTabId,
         statusByRelativePath
-      ),
-    [expandedPaneByTabId, generatedTabTitlesEnabled, orderedItems, statusByRelativePath]
+      ) +
+      stripItems
+        .filter((item) => item.type === 'cluster')
+        .map(
+          (item) =>
+            `${item.id}:${item.data.name}:${item.data.color}:${item.data.collapsed}:${item.data.tabIds.length}`
+        )
+        .join('\u001f'),
+    [expandedPaneByTabId, generatedTabTitlesEnabled, visibleItems, stripItems, statusByRelativePath]
   )
 
   return {
     orderedItems,
+    stripItems,
+    visibleItems,
+    clusterByUnifiedTabId,
     sortableIds,
     dropIndicatorByVisibleId,
     activeVisibleTabId,

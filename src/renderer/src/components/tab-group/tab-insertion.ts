@@ -1,6 +1,15 @@
 import { useCallback, useState } from 'react'
 import type { DragEndEvent, DragMoveEvent, DragOverEvent } from '@dnd-kit/core'
-import type { TabDragItemData } from './tab-drag-data'
+import { getHiddenClusterTabIds, type TabGroup } from '../../../../shared/tab-types'
+import { useAppStore } from '../../store'
+import { getTabClusterForTab } from '../../store/slices/tabs/tab-cluster-model'
+import {
+  getTabClusterSortableId,
+  isTabClusterDragData,
+  type TabDragItemData,
+  type TabStripDragItemData
+} from './tab-drag-data'
+import { resolveTabClusterDropTarget } from './tab-cluster-drop-target'
 
 // Why: when a tab is dragged over another tab's sortable rect, we compute
 // which side of the hovered tab the drop will land on (before vs. after).
@@ -24,16 +33,30 @@ export function resolveTabInsertion(
   getDragCenter: (event: DragMoveEvent | DragOverEvent | DragEndEvent) => {
     x: number
     y: number
-  } | null
+  } | null,
+  targetGroup?: TabGroup
 ): HoveredTabInsertion | null {
   const overData = event.over?.data.current
   const activeData = event.active.data.current
-  if (!event.over || !isTabDragData(activeData) || !isTabDragData(overData)) {
+  const activeIsTab = isTabDragData(activeData)
+  const overIsTab = isTabDragData(overData)
+  if (
+    !event.over ||
+    (!activeIsTab && !isTabClusterDragData(activeData)) ||
+    (!overIsTab && !isTabClusterDragData(overData)) ||
+    activeData.worktreeId !== overData.worktreeId
+  ) {
     return null
   }
   // Why: dropping a tab onto itself is a no-op — suppress the indicator there
   // so users don't see a false positive target.
-  if (activeData.unifiedTabId === overData.unifiedTabId) {
+  if (
+    (activeIsTab && overIsTab && activeData.unifiedTabId === overData.unifiedTabId) ||
+    (isTabClusterDragData(activeData) &&
+      isTabClusterDragData(overData) &&
+      activeData.groupId === overData.groupId &&
+      activeData.clusterId === overData.clusterId)
+  ) {
     return null
   }
   const center = getDragCenter(event)
@@ -41,11 +64,68 @@ export function resolveTabInsertion(
     return null
   }
   const midpoint = event.over.rect.left + event.over.rect.width / 2
-  return {
+  const insertion: HoveredTabInsertion = {
     groupId: overData.groupId,
-    visibleTabId: overData.visibleTabId,
+    visibleTabId: overIsTab
+      ? overData.visibleTabId
+      : getTabClusterSortableId(overData.groupId, overData.clusterId),
     side: center.x < midpoint ? 'left' : 'right'
   }
+  return targetGroup
+    ? resolveClusterIndicator(insertion, targetGroup, activeData, overData)
+    : insertion
+}
+
+function resolveClusterIndicator(
+  insertion: HoveredTabInsertion,
+  targetGroup: TabGroup,
+  activeDrag: TabStripDragItemData,
+  overData: TabStripDragItemData
+): HoveredTabInsertion | null {
+  const target = resolveTabClusterDropTarget({
+    activeDrag,
+    overData,
+    targetGroup,
+    side: insertion.side
+  })
+  if (!target) {
+    return null
+  }
+  const cluster = isTabClusterDragData(overData)
+    ? targetGroup.tabClusters?.find((item) => item.id === overData.clusterId)
+    : getTabClusterForTab(targetGroup.tabClusters, overData.unifiedTabId)
+  if (!cluster) {
+    return insertion
+  }
+  if (activeDrag.kind === 'tab' && overData.kind === 'tab') {
+    if (
+      insertion.side === 'left' &&
+      overData.unifiedTabId === cluster.tabIds[0] &&
+      target.clusterId !== cluster.id
+    ) {
+      return { ...insertion, visibleTabId: getTabClusterSortableId(targetGroup.id, cluster.id) }
+    }
+    return insertion
+  }
+  const side = isTabClusterDragData(activeDrag) ? insertion.side : 'right'
+  if (side === 'left') {
+    return { ...insertion, visibleTabId: getTabClusterSortableId(targetGroup.id, cluster.id), side }
+  }
+  const hidden = getHiddenClusterTabIds(targetGroup)
+  const lastVisibleMember = cluster.tabIds.findLast((id) => !hidden.has(id))
+  const lastVisibleTab = lastVisibleMember
+    ? useAppStore
+        .getState()
+        .unifiedTabsByWorktree[targetGroup.worktreeId]?.find((tab) => tab.id === lastVisibleMember)
+    : null
+  const visibleTabId = lastVisibleTab
+    ? lastVisibleTab.contentType === 'terminal' ||
+      lastVisibleTab.contentType === 'browser' ||
+      lastVisibleTab.contentType === 'agent-session'
+      ? lastVisibleTab.entityId
+      : lastVisibleTab.id
+    : (lastVisibleMember ?? getTabClusterSortableId(targetGroup.id, cluster.id))
+  return { ...insertion, visibleTabId, side }
 }
 
 export function resolveTabIndicatorEdges(
@@ -92,7 +172,14 @@ export function useHoveredTabInsertion(
   const [hoveredTabInsertion, setHoveredTabInsertion] = useState<HoveredTabInsertion | null>(null)
   const update = useCallback(
     (event: DragMoveEvent | DragOverEvent) => {
-      const next = resolveTabInsertion(event, isTabDragData, getDragCenter)
+      const overData = event.over?.data.current
+      const targetGroup =
+        isTabDragData(overData) || isTabClusterDragData(overData)
+          ? useAppStore
+              .getState()
+              .groupsByWorktree[overData.worktreeId]?.find((group) => group.id === overData.groupId)
+          : undefined
+      const next = resolveTabInsertion(event, isTabDragData, getDragCenter, targetGroup)
       setHoveredTabInsertion((prev) => (equal(prev, next) ? prev : next))
     },
     [isTabDragData, getDragCenter]

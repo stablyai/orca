@@ -26,7 +26,12 @@ import {
   captureTabGroupPanelGeometrySnapshot,
   type TabGroupPanelGeometrySnapshot
 } from './tab-group-panel-split-target'
-import { canDropTabIntoPaneBody, isTabDragData, type TabDragItemData } from './tab-drag-data'
+import {
+  canDropTabIntoPaneBody,
+  isTabDragData,
+  isTabStripDragData,
+  type TabStripDragItemData
+} from './tab-drag-data'
 import { useTabDragGestureLifecycle } from './tab-drag-gesture-lifecycle'
 import { useTabDragHoverPreview, type HoveredTabDropTarget } from './tab-drag-hover-preview'
 import { commitTabDragDrop } from './tab-drag-drop-commit'
@@ -37,6 +42,10 @@ export {
   canDropTabIntoPaneBody,
   isPaneDropData,
   isTabDragData,
+  isTabClusterDragData,
+  isTabStripDragData,
+  type TabClusterDragItemData,
+  type TabStripDragItemData,
   type TabDragItemData,
   type TabDropZone,
   type TabPaneDropData
@@ -47,7 +56,7 @@ export {
 export const TAB_DRAG_ACTIVATION_DISTANCE_PX = 12
 
 export function canDropTabForPaneColumnSplit(args: {
-  activeDrag: TabDragItemData | null
+  activeDrag: TabStripDragItemData | null
   groupsByWorktree: Record<string, TabGroup[]>
   targetGroupId: string
   worktreeId: string
@@ -86,7 +95,7 @@ export function useTabDragSplit({
    *  simultaneous DndContext instances with active sensors can interfere. */
   enabled?: boolean
 }): {
-  activeDrag: TabDragItemData | null
+  activeDrag: TabStripDragItemData | null
   collisionDetection: CollisionDetection
   hoveredDropTarget: HoveredTabDropTarget | null
   hoveredTabInsertion: HoveredTabInsertion | null
@@ -99,9 +108,11 @@ export function useTabDragSplit({
   sensors: ReturnType<typeof useSensors>
   setDragRootNode: (node: HTMLDivElement | null) => void
 } {
-  const reorderUnifiedTabs = useAppStore((state) => state.reorderUnifiedTabs)
+  const moveTabsInStrip = useAppStore((state) => state.moveTabsInStrip)
+  const moveTabCluster = useAppStore((state) => state.moveTabCluster)
   const dropUnifiedTab = useAppStore((state) => state.dropUnifiedTab)
-  const [activeDrag, setActiveDrag] = useState<TabDragItemData | null>(null)
+  const [activeDrag, setActiveDrag] = useState<TabStripDragItemData | null>(null)
+  const movedTabIdsRef = useRef<readonly string[]>([])
   const preDragActivationSnapshotRef = useRef<TabDragActivationSnapshot | null>(null)
   const tabDragActiveRef = useRef(false)
   const dragGeometryRef = useRef<TabGroupPanelGeometrySnapshot | null>(null)
@@ -148,6 +159,7 @@ export function useTabDragSplit({
     clearHoveredDropTarget()
     tabInsertion.clear()
     preDragActivationSnapshotRef.current = null
+    movedTabIdsRef.current = []
     dragGeometryRef.current = null
   }, [
     clearHoveredDropTarget,
@@ -166,7 +178,7 @@ export function useTabDragSplit({
   }, [worktreeId])
 
   const restoreSourceGroupAfterCrossGroupDrop = useCallback(
-    (activeData: TabDragItemData) => {
+    (activeData: TabStripDragItemData) => {
       const snapshot = preDragActivationSnapshotRef.current
       if (!snapshot) {
         return
@@ -175,14 +187,14 @@ export function useTabDragSplit({
         worktreeId,
         snapshot,
         sourceGroupId: activeData.groupId,
-        movedTabId: activeData.unifiedTabId
+        movedTabIds: movedTabIdsRef.current
       })
     },
     [worktreeId]
   )
 
   const finishDrag = useCallback(
-    (restoreSnapshot: boolean, activeData?: TabDragItemData) => {
+    (restoreSnapshot: boolean, activeData?: TabStripDragItemData) => {
       if (restoreSnapshot) {
         restorePreDragActivation()
       } else if (activeData) {
@@ -196,11 +208,22 @@ export function useTabDragSplit({
   const onDragStart = useCallback(
     (event: DragStartEvent) => {
       const dragData = event.active.data.current
-      if (!isTabDragData(dragData) || dragData.worktreeId !== worktreeId) {
+      if (!isTabStripDragData(dragData) || dragData.worktreeId !== worktreeId) {
         clearDragState()
         return
       }
 
+      const state = useAppStore.getState()
+      const movedTabIds = isTabDragData(dragData)
+        ? [dragData.unifiedTabId]
+        : state.groupsByWorktree[worktreeId]
+            ?.find((group) => group.id === dragData.groupId)
+            ?.tabClusters?.find((cluster) => cluster.id === dragData.clusterId)?.tabIds
+      if (!movedTabIds?.length) {
+        clearDragState()
+        return
+      }
+      movedTabIdsRef.current = movedTabIds
       setActiveDrag(dragData)
       tabDragActiveRef.current = true
       installMissedEndFallback()
@@ -238,11 +261,12 @@ export function useTabDragSplit({
         worktreeId,
         dragGeometryRef,
         dropUnifiedTab,
-        reorderUnifiedTabs,
+        moveTabsInStrip,
+        moveTabCluster,
         finishDrag
       })
     },
-    [dragGeometryRef, dropUnifiedTab, finishDrag, reorderUnifiedTabs, worktreeId]
+    [dragGeometryRef, dropUnifiedTab, finishDrag, moveTabsInStrip, moveTabCluster, worktreeId]
   )
 
   // Why: dnd-kit fires onDragCancel (not onDragEnd) when the user presses

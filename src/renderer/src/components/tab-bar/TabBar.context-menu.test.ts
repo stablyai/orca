@@ -30,6 +30,9 @@ const useAppStoreMock = vi.fn(
       worktreesByRepo: Record<string, never[]>
       unifiedTabsByWorktree: Record<string, unknown[]>
       activeGroupIdByWorktree: Record<string, string>
+      groupsByWorktree: Record<string, never[]>
+      tabSelectionByGroupId: Record<string, never>
+      setTabSelection: () => void
       pinTab: typeof pinTabMock
       unpinTab: typeof unpinTabMock
       settings: {
@@ -46,6 +49,9 @@ const useAppStoreMock = vi.fn(
       worktreesByRepo: {},
       unifiedTabsByWorktree: appStoreSnapshot.unifiedTabsByWorktree,
       activeGroupIdByWorktree: appStoreSnapshot.activeGroupIdByWorktree,
+      groupsByWorktree: {},
+      tabSelectionByGroupId: {},
+      setTabSelection: vi.fn(),
       pinTab: pinTabMock,
       unpinTab: unpinTabMock,
       settings: {
@@ -90,6 +96,9 @@ useAppStoreExport.getState = vi.fn(() => ({
   worktreesByRepo: {},
   unifiedTabsByWorktree: appStoreSnapshot.unifiedTabsByWorktree,
   activeGroupIdByWorktree: appStoreSnapshot.activeGroupIdByWorktree,
+  groupsByWorktree: {},
+  tabSelectionByGroupId: {},
+  setTabSelection: vi.fn(),
   pinTab: pinTabMock,
   unpinTab: unpinTabMock,
   settings: {

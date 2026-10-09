@@ -9,6 +9,7 @@ import {
 } from './tab-bar-item-model'
 import type { TabBarProps } from './tab-bar-props'
 import type { TabBarRuntimeModel } from './use-tab-bar-runtime-model'
+import type { TabCluster } from '../../../../shared/tab-types'
 import type { TabBarItemActions } from './use-tab-bar-item-actions'
 import TabBarItemRow from './TabBarItemRow'
 
@@ -37,6 +38,9 @@ export type TabBarItemSurfaceRuntime = Pick<
 
 export function renderTabBarItems({
   items,
+  allItems = items,
+  clusterByUnifiedTabId,
+  highlightedTabIds,
   props,
   runtime,
   actions,
@@ -45,6 +49,9 @@ export function renderTabBarItems({
   activeClientHostedBrowserRowId
 }: {
   items: TabBarItem[]
+  allItems?: readonly TabBarItem[]
+  clusterByUnifiedTabId?: ReadonlyMap<string, TabCluster>
+  highlightedTabIds?: ReadonlySet<string>
   props: TabBarItemSurfaceProps
   runtime: TabBarItemSurfaceRuntime
   actions: TabBarItemActions
@@ -97,7 +104,10 @@ export function renderTabBarItems({
     return (activeTabType === 'editor' || activeTabType === 'simulator') && activeFileId === item.id
   }
 
-  return items.map((item, index) => {
+  // Why: hidden members of collapsed groups still count as neighbors for the close-scope menu items.
+  const canonicalIndexByVisibleId = new Map(allItems.map((item, index) => [item.id, index]))
+  return items.map((item) => {
+    const index = canonicalIndexByVisibleId.get(item.id) ?? 0
     let canToggleViewMode = false
     let isChatView = false
     let viewModeTabId: string | undefined
@@ -130,11 +140,13 @@ export function renderTabBarItems({
         worktreeId={worktreeId}
         groupId={resolvedGroupId}
         generatedTabTitlesEnabled={generatedTabTitlesEnabled}
-        tabCount={items.length}
+        tabCount={allItems.length}
         hasTabsToLeft={index > 0}
-        hasTabsToRight={index < items.length - 1}
+        hasTabsToRight={index < allItems.length - 1}
         isActive={isActiveItem(item)}
         isExpanded={item.type === 'terminal' && expandedPaneByTabId[item.id] === true}
+        clusterColor={clusterByUnifiedTabId?.get(item.unifiedTabId)?.color}
+        isHighlighted={highlightedTabIds?.has(item.unifiedTabId) ?? false}
         dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}
         includeTopTabBorder={includeTopTabBorder}
         canToggleViewMode={canToggleViewMode}

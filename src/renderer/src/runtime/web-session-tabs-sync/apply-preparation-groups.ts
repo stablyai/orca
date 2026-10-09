@@ -1,4 +1,5 @@
 import type { TabGroup } from '../../../../shared/tab-types'
+import { pushRecentTabId } from '../../../../shared/tab-group-history'
 import type { prepareWebSessionTabsSnapshotUnified } from './apply-preparation-unified'
 import { toWebTerminalSurfaceTabId } from '../web-runtime-session'
 import {
@@ -8,7 +9,7 @@ import {
 import { peekWebSessionTerminalPlacementGroup } from '../web-session-terminal-placement'
 import { reconcileClientOwnedTabPlacement } from '../web-session-client-owned-tab-placement'
 import { buildMirroredHostGroups, retainClientPlacedMirroredTabs } from './layout-groups'
-import { sanitizeRecentTabIds, pushRecentTabId } from './state-equality-core'
+import { sanitizeRecentTabIds } from './state-equality-core'
 
 export function prepareWebSessionTabsSnapshotGroups(
   base: ReturnType<typeof prepareWebSessionTabsSnapshotUnified>

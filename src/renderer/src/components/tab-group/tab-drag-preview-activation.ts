@@ -203,24 +203,27 @@ export function restoreSourceGroupActiveTabAfterCrossGroupDrop({
   worktreeId,
   snapshot,
   sourceGroupId,
-  movedTabId
+  movedTabIds
 }: {
   worktreeId: string
   snapshot: TabDragActivationSnapshot
   sourceGroupId: string
-  movedTabId: string
+  movedTabIds: readonly string[]
 }): void {
   const preDragActiveTabId = snapshot.activeTabIdByGroup[sourceGroupId] ?? null
-  // Why: dropUnifiedTab already picks the next active tab when the moved tab
-  // was the source group's selection; only preview contamination needs undo.
-  if (preDragActiveTabId === movedTabId) {
+  // Why: the move already chooses a source fallback when its active tab leaves with the drag.
+  if (preDragActiveTabId && movedTabIds.includes(preDragActiveTabId)) {
     return
   }
 
   useAppStore.setState((state): Partial<AppState> => {
     const groups = state.groupsByWorktree[worktreeId] ?? []
     const sourceGroup = groups.find((group) => group.id === sourceGroupId)
-    if (!sourceGroup || sourceGroup.activeTabId === preDragActiveTabId) {
+    if (
+      !sourceGroup ||
+      sourceGroup.activeTabId === preDragActiveTabId ||
+      (preDragActiveTabId !== null && !sourceGroup.tabOrder.includes(preDragActiveTabId))
+    ) {
       return state
     }
     return {

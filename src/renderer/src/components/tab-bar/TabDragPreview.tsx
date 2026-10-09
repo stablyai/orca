@@ -1,8 +1,10 @@
 import { createElement } from 'react'
-import { Globe, Terminal as TerminalIcon } from 'lucide-react'
+import { ChevronDown, ChevronRight, Globe, Terminal as TerminalIcon } from 'lucide-react'
 import { getFileTypeIcon } from '@/lib/file-type-icons'
 import { AgentIcon } from '@/lib/agent-catalog'
-import type { TabDragItemData } from '../tab-group/useTabDragSplit'
+import { cn } from '@/lib/utils'
+import type { TabDragItemData, TabStripDragItemData } from '../tab-group/tab-drag-data'
+import { TAB_CLUSTER_COLOR_CLASSES } from './tab-cluster-colors'
 
 // Why: a terminal tab running an agent leads with the provider glyph so the
 // ghost matches the resting tab; plain terminals keep the generic icon.
@@ -26,16 +28,36 @@ function LeadingIcon({ drag }: { drag: TabDragItemData }): React.JSX.Element {
 // element's rect; `h-full w-full` on this chip fills that wrapper so the
 // ghost lines up with the cursor instead of rendering as a tiny pill in
 // the wrapper's top-left.
-export default function TabDragPreview({ drag }: { drag: TabDragItemData }): React.JSX.Element {
+export default function TabDragPreview({
+  drag
+}: {
+  drag: TabStripDragItemData
+}): React.JSX.Element {
+  const CollapseIcon = drag.kind === 'tab-cluster' && drag.collapsed ? ChevronRight : ChevronDown
   return (
-    <div className="pointer-events-none flex h-full w-full items-center gap-1.5 rounded-sm border border-border bg-accent px-2 text-xs text-foreground shadow-md">
-      <span className="inline-flex shrink-0">
-        <LeadingIcon drag={drag} />
-      </span>
-      <span className="truncate">{drag.label}</span>
-      {drag.color ? (
-        <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: drag.color }} />
-      ) : null}
+    <div className="pointer-events-none flex h-full w-full items-center gap-1.5 rounded-sm border border-border bg-accent px-2 text-xs text-foreground shadow-floating">
+      {drag.kind === 'tab-cluster' ? (
+        <>
+          <span
+            className={cn('size-2 shrink-0 rounded-full', TAB_CLUSTER_COLOR_CLASSES[drag.color])}
+          />
+          {drag.name ? <span className="truncate">{drag.name}</span> : null}
+          <CollapseIcon className="size-3.5 shrink-0" />
+        </>
+      ) : (
+        <>
+          <span className="inline-flex shrink-0">
+            <LeadingIcon drag={drag} />
+          </span>
+          <span className="truncate">{drag.label}</span>
+          {drag.color ? (
+            <span
+              className="size-2 shrink-0 rounded-full"
+              style={{ backgroundColor: drag.color }}
+            />
+          ) : null}
+        </>
+      )}
     </div>
   )
 }

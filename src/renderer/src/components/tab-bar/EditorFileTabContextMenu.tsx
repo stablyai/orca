@@ -31,6 +31,8 @@ import {
 } from '@/lib/reveal-in-file-manager'
 import { TabWorkspaceLayoutMenuSection } from './TabWorkspaceLayoutMenuSection'
 import { TAB_CONTEXT_MENU_CONTENT_CLASS } from './tab-context-menu-sizing'
+import { TabClusterMenuSection } from './TabClusterMenuSection'
+import { useTabClusterMenuCloseAction } from './use-tab-cluster-menu-close-action'
 
 type EditorFileTabContextMenuProps = {
   open: boolean
@@ -99,6 +101,7 @@ export function EditorFileTabContextMenu({
   const renameShortcut = useOptionalShortcutLabel('tab.rename')
   const closeShortcut = useOptionalShortcutLabel('tab.close')
   const closeAllShortcut = useOptionalShortcutLabel('tab.closeAll')
+  const clusterMenuAction = useTabClusterMenuCloseAction()
   const revealBlocked = useAppStore((s) =>
     isRevealInFileManagerBlocked(s.settings, {
       connectionId: file.externalSshTargetId ?? repoConnectionId,
@@ -121,6 +124,9 @@ export function EditorFileTabContextMenu({
         sideOffset={0}
         align="start"
         onCloseAutoFocus={(event) => {
+          if (clusterMenuAction.runAfterClose(event)) {
+            return
+          }
           if (!skipMenuFocusRestoreRef.current) {
             return
           }
@@ -154,6 +160,15 @@ export function EditorFileTabContextMenu({
             ? translate('auto.components.tab.bar.EditorFileTabContextMenu.8e9d603a09', 'Unpin Tab')
             : translate('auto.components.tab.bar.EditorFileTabContextMenu.fdd29eb669', 'Pin Tab')}
         </DropdownMenuItem>
+        {open ? (
+          <TabClusterMenuSection
+            worktreeId={file.worktreeId}
+            groupId={groupId}
+            tabId={unifiedTabId}
+            isPinned={isPinned}
+            onQueueNewCluster={clusterMenuAction.queueAfterClose}
+          />
+        ) : null}
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => !isPinned && onClose()} disabled={isPinned}>
           <X className="size-3.5" />

@@ -117,40 +117,6 @@ export function sanitizeRecentTabIds(recent: string[] | undefined, tabOrder: str
   return reversed.toReversed()
 }
 
-/** Push `tabId` to the tail of the MRU stack (most-recently-active) after
- *  removing any prior occurrence. Returns a new array. */
-export function pushRecentTabId(recent: string[] | undefined, tabId: string): string[] {
-  const base = recent ?? []
-  if (base.length > 0 && base.at(-1) === tabId) {
-    return base
-  }
-  const filtered = base.filter((id) => id !== tabId)
-  filtered.push(tabId)
-  return filtered
-}
-
-/** Choose the tab to activate when `closingTabId` closes. Prefers the most-
- *  recently-active tab before it (MRU behavior); falls back to the nearest
- *  visual neighbor when the MRU stack is empty (e.g. newly hydrated groups
- *  where only the current active tab has been recorded). */
-export function pickNextActiveTab(
-  tabOrder: string[],
-  recentTabIds: string[] | undefined,
-  closingTabId: string
-): string | null {
-  const sanitized = sanitizeRecentTabIds(recentTabIds, tabOrder)
-  // The closing tab is typically at the tail (it's the active tab). Walk back
-  // from the tail looking for the most-recent *other* tab still present.
-  for (let i = sanitized.length - 1; i >= 0; i--) {
-    if (sanitized[i] !== closingTabId) {
-      return sanitized[i]
-    }
-  }
-  // No prior tab has been visited in this group — fall back to neighbor
-  // selection so the user still lands somewhere sensible.
-  return pickNeighbor(tabOrder, closingTabId)
-}
-
 export function updateGroup(groups: TabGroup[], updated: TabGroup): TabGroup[] {
   return groups.map((g) => (g.id === updated.id ? updated : g))
 }

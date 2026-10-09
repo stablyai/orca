@@ -157,4 +157,18 @@ describe('useTabStripPointerActivation', () => {
     expect(onActivate).not.toHaveBeenCalled()
     guest.remove()
   })
+  it('keeps the press modifiers when the modifier is released before pointer-up', () => {
+    const onActivate = vi.fn()
+    const { result } = renderHook(() => useTabStripPointerActivation({ onActivate }))
+    act(() =>
+      result.current.onPointerDown({
+        ...pointerDownEvent(10, 10),
+        metaKey: true,
+        ctrlKey: false,
+        shiftKey: true
+      })
+    )
+    firePointer('pointerup', 10, 10)
+    expect(onActivate).toHaveBeenCalledWith({ metaKey: true, ctrlKey: false, shiftKey: true })
+  })
 })

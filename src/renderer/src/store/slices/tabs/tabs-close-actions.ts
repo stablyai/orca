@@ -1,10 +1,10 @@
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
+import { pushRecentTabId } from '../../../../../shared/tab-group-history'
 import { collapseGroupLayout } from './tabs-layout'
 import {
   dedupeTabOrder,
   findGroupForTab,
   findTabAndWorktree,
-  pickNextActiveTab,
   sanitizeRecentTabIds
 } from '../tab-group-state'
 import { buildActiveSurfacePatch } from './tabs-surface'
@@ -15,6 +15,7 @@ import {
 } from '@/lib/structured-agent-session-launch-registry'
 import { structuredAgentSessionTabId } from '../../../../../shared/structured-agent-session-projection'
 import { clearWebSessionFocusIntentIfMatches } from '@/runtime/web-session-focus-intent'
+import { pickTabCloseSuccessor } from '../../../../../shared/tab-close-successor'
 import { ownsGlobalSelection } from '../../global-selection-owner'
 import {
   structuredAgentSessionFocusOwner,
@@ -76,17 +77,15 @@ export function createTabsCloseActions(
         get().clearNativeChatLaunchDraft(structuredAgentSessionTabId(tab.entityId))
         // The unsent draft stays: it belongs to the conversation, which can be reopened from history.
       }
-      // Why: on closing the active tab, walk the MRU stack to the previously-active tab; pickNextActiveTab falls back to the neighbor.
       const nextActiveTabId =
         group.activeTabId === tabId
-          ? wasLastTab
-            ? null
-            : pickNextActiveTab(dedupedGroupOrder, group.recentTabIds, tabId)
+          ? pickTabCloseSuccessor(group, dedupedGroupOrder, tabId)
           : group.activeTabId
-      const nextRecentTabIds = sanitizeRecentTabIds(
-        (group.recentTabIds ?? []).filter((id) => id !== tabId),
-        remainingOrder
-      )
+      const sanitizedRecent = sanitizeRecentTabIds(group.recentTabIds, remainingOrder)
+      const nextRecentTabIds =
+        nextActiveTabId && nextActiveTabId !== group.activeTabId
+          ? pushRecentTabId(sanitizedRecent, nextActiveTabId)
+          : sanitizedRecent
       const terminalEntityId = tab.contentType === 'terminal' ? tab.entityId : null
 
       set((current) => {

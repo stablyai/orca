@@ -194,6 +194,60 @@ describe('closeTerminalTabInWorkspaceSession', () => {
     expect(result.session.activeWorktreeId).toBe(WORKTREE_ID)
   })
 
+  it('chooses a visible survivor of a collapsed cluster and records it as most recent', () => {
+    const current = session({
+      activeTabId: 'a',
+      activeTabIdByWorktree: { [WORKTREE_ID]: 'a' },
+      tabsByWorktree: {
+        [WORKTREE_ID]: [
+          terminalTab('a', 'pty-a'),
+          terminalTab('b', 'pty-b'),
+          terminalTab('c', 'pty-c')
+        ]
+      },
+      terminalLayoutsByTabId: {},
+      unifiedTabs: {
+        [WORKTREE_ID]: [
+          unifiedTab('a', 'a', 'terminal'),
+          unifiedTab('b', 'b', 'terminal'),
+          unifiedTab('c', 'c', 'terminal')
+        ]
+      },
+      tabGroups: {
+        [WORKTREE_ID]: [
+          {
+            id: 'group-1',
+            worktreeId: WORKTREE_ID,
+            activeTabId: 'a',
+            tabOrder: ['a', 'b', 'c'],
+            recentTabIds: ['c', 'b', 'a'],
+            tabClusters: [
+              {
+                id: 'cluster-1',
+                name: '',
+                color: 'blue',
+                collapsed: true,
+                tabIds: ['a', 'b'],
+                shownTabId: 'a'
+              }
+            ]
+          }
+        ]
+      }
+    })
+
+    const result = closeTerminalTabInWorkspaceSession(current, WORKTREE_ID, 'a')
+
+    expect(result.closed).toBe(true)
+    expect(result.session.tabGroups?.[WORKTREE_ID]?.[0]).toMatchObject({
+      activeTabId: 'c',
+      tabOrder: ['b', 'c'],
+      recentTabIds: ['b', 'c']
+    })
+    expect(result.session.activeTabId).toBe('c')
+    expect(result.session.activeTabIdByWorktree?.[WORKTREE_ID]).toBe('c')
+  })
+
   it('rejects pinned tabs without mutating the session', () => {
     const current = session({
       tabsByWorktree: { [WORKTREE_ID]: [terminalTab('terminal-1', 'pty-left', true)] }
@@ -259,7 +313,7 @@ describe('closeTerminalTabInWorkspaceSession', () => {
     const result = closeTerminalTabInWorkspaceSession(initial, WORKTREE_ID, 'terminal-1')
     expect(result.session.tabGroups![WORKTREE_ID][0].activeTabId).toBe('b')
     expect(result.session.tabGroups![WORKTREE_ID][0].tabOrder).toEqual(['a', 'a', 'b'])
-    expect(result.session.tabGroups![WORKTREE_ID][0].recentTabIds).toEqual([])
+    expect(result.session.tabGroups![WORKTREE_ID][0].recentTabIds).toEqual(['b'])
   })
   // Preserve the pre-index selection as an independent oracle: which tab takes focus after a
   // close is directly user-visible, so the indexed form must agree on every shape.

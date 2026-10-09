@@ -8,14 +8,15 @@ import { REQUEST_ACTIVE_TERMINAL_PANE_SPLIT_EVENT } from '@/constants/terminal'
 import { requestActiveTerminalPaneSplit } from './request-active-terminal-pane-split'
 import { SortableTabContextMenu } from './SortableTabContextMenu'
 
-const storeMock = vi.hoisted(() => ({
-  dropUnifiedTab: vi.fn(),
-  state: {
+const storeMock = vi.hoisted(() => {
+  const state: Record<string, unknown> = {
     keybindings: {},
     unifiedTabsByWorktree: {},
-    groupsByWorktree: {}
-  } as Record<string, unknown>
-}))
+    groupsByWorktree: {},
+    tabSelectionByGroupId: {}
+  }
+  return { dropUnifiedTab: vi.fn(), state }
+})
 
 vi.mock('@/hooks/useShortcutLabel', () => ({
   formatShortcutLabel: () => '⌘D',
@@ -50,6 +51,10 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
 }))
 
 vi.mock('lucide-react', () => ({
+  Folder: () => null,
+  FolderInput: () => null,
+  FolderMinus: () => null,
+  FolderPlus: () => null,
   ArrowDown: () => null,
   ArrowLeft: () => null,
   ArrowRight: () => null,
@@ -183,6 +188,7 @@ beforeEach(() => {
   storeMock.state = {
     keybindings: {},
     dropUnifiedTab: storeMock.dropUnifiedTab,
+    tabSelectionByGroupId: {},
     groupsByWorktree: {
       'wt-1': [
         {

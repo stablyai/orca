@@ -1,4 +1,4 @@
-import { create } from 'zustand'
+import { create, type StoreApi, type UseBoundStore } from 'zustand'
 import type { AppState } from '../types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { createRepoSlice } from './repos'
@@ -59,9 +59,12 @@ export {
   makeUnifiedTab,
   makeTabGroup
 } from './store-session-test-harness'
+import { installTabClusterInvariant } from './tabs/tab-cluster-invariant'
 
-export function createTestStore() {
-  return create<AppState>()((...a) => ({
+export type TestStore = UseBoundStore<StoreApi<AppState>>
+
+export function createTestStore(): TestStore {
+  const store = create<AppState>()((...a) => ({
     ...createRepoSlice(...a),
     ...createSparsePresetsSlice(...a),
     ...createWorktreeSlice(...a),
@@ -109,12 +112,11 @@ export function createTestStore() {
     ...createTerminalQuickCommandHostsSlice(...a),
     ...createStructuredSessionLaunchDirectorySlice(...a)
   }))
+  installTabClusterInvariant(store)
+  return store
 }
 
-export function seedStore(
-  store: ReturnType<typeof createTestStore>,
-  state: Partial<AppState>
-): void {
+export function seedStore(store: TestStore, state: Partial<AppState>): void {
   // The cascade tests intentionally centralize the default repo fixture here
   // so the test files can stay under the enforced max-lines limit without
   // disabling the lint rule and hiding further growth.

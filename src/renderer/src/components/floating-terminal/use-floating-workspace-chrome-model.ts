@@ -5,6 +5,7 @@ import { useAppStore } from '@/store'
 import { useTabGroupWorkspaceModel } from '@/components/tab-group/useTabGroupWorkspaceModel'
 import { resolveGroupTabFromVisibleId } from '@/components/tab-group/tab-group-visible-id'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { getHiddenClusterTabIds } from '../../../../shared/tab-types'
 import { resolveFloatingWorkspaceSurfaceModel } from './floating-workspace-surface-model'
 
 const EMPTY_TERMINAL_TABS: readonly TerminalTab[] = []
@@ -62,28 +63,26 @@ export function useFloatingWorkspaceChromeModel() {
 
   const hasVisibleFloatingTabs = surface.kind === 'workspace'
 
-  // Visible-id order for tab-cycling shortcuts: strip order restricted to entries whose entity
-  // still resolves, so a shortcut never lands on a tab the strip is not showing.
-  const visibleFloatingTabOrder = useMemo(
-    () =>
-      model.tabBarOrder.filter((visibleId) => {
-        const tab = resolveGroupTabFromVisibleId(groupTabs, visibleId)
-        if (!tab) {
-          return false
-        }
-        if (tab.contentType === 'terminal') {
-          return terminalItems.some((item) => item.unifiedTabId === tab.id)
-        }
-        if (tab.contentType === 'browser') {
-          return model.browserItems.some((item) => item.tabId === tab.id)
-        }
-        if (tab.contentType === 'simulator' || tab.contentType === 'agent-session') {
-          return true
-        }
-        return model.editorItems.some((item) => item.tabId === tab.id)
-      }),
-    [groupTabs, model.browserItems, model.editorItems, model.tabBarOrder, terminalItems]
-  )
+  // Why: numbered shortcuts follow the strip's visible members, not hidden collapsed tabs.
+  const visibleFloatingTabOrder = useMemo(() => {
+    const hiddenTabIds = group ? getHiddenClusterTabIds(group) : null
+    return model.tabBarOrder.filter((visibleId) => {
+      const tab = resolveGroupTabFromVisibleId(groupTabs, visibleId)
+      if (!tab || hiddenTabIds?.has(tab.id)) {
+        return false
+      }
+      if (tab.contentType === 'terminal') {
+        return terminalItems.some((item) => item.unifiedTabId === tab.id)
+      }
+      if (tab.contentType === 'browser') {
+        return model.browserItems.some((item) => item.tabId === tab.id)
+      }
+      if (tab.contentType === 'simulator' || tab.contentType === 'agent-session') {
+        return true
+      }
+      return model.editorItems.some((item) => item.tabId === tab.id)
+    })
+  }, [group, groupTabs, model.browserItems, model.editorItems, model.tabBarOrder, terminalItems])
   const activeClosableTab =
     activeTab &&
     visibleFloatingTabOrder.includes(

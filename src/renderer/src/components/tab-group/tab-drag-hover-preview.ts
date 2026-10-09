@@ -10,7 +10,14 @@ import {
   type ActivePaneColumnSplitTarget,
   type TabGroupPanelGeometrySnapshot
 } from './tab-group-panel-split-target'
-import { isTabDragData, type TabDragItemData, type TabDropZone } from './tab-drag-data'
+import {
+  isTabDragData,
+  isTabClusterDragData,
+  isTabStripDragData,
+  type TabStripDragItemData,
+  type TabDropZone
+} from './tab-drag-data'
+import { getTabClusterSplitBlocker } from './tab-cluster-split-availability'
 
 export type HoveredTabDropTarget = {
   groupId: string
@@ -41,14 +48,17 @@ export function useTabDragHoverPreview({
   const lastHoveredTabPreviewRef = useRef<{ groupId: string; tabId: string } | null>(null)
 
   const updateDragPreviewActivation = useCallback(
-    (event: DragMoveEvent | DragOverEvent, activeData: TabDragItemData) => {
+    (event: DragMoveEvent | DragOverEvent, activeData: TabStripDragItemData) => {
       const snapshot = preDragActivationSnapshotRef.current
       if (!snapshot) {
         return
       }
 
       const overData = event.over?.data.current
-      if (isTabDragData(overData) && overData.unifiedTabId !== activeData.unifiedTabId) {
+      if (
+        isTabDragData(overData) &&
+        (!isTabDragData(activeData) || overData.unifiedTabId !== activeData.unifiedTabId)
+      ) {
         lastHoveredTabPreviewRef.current = {
           groupId: overData.groupId,
           tabId: overData.unifiedTabId
@@ -99,7 +109,7 @@ export function useTabDragHoverPreview({
   const handleDragUpdate = useCallback(
     (event: DragMoveEvent | DragOverEvent) => {
       const activeData = event.active.data.current
-      if (isTabDragData(activeData) && activeData.worktreeId === worktreeId) {
+      if (isTabStripDragData(activeData) && activeData.worktreeId === worktreeId) {
         updateDragPreviewActivation(event, activeData)
       }
 
@@ -112,7 +122,9 @@ export function useTabDragHoverPreview({
         getDragPointer,
         geometry: dragGeometryRef.current
       })
-      updateHoveredDropTargetFromSplit(splitTarget)
+      const blockedClusterSplit =
+        isTabClusterDragData(activeData) && getTabClusterSplitBlocker(state, worktreeId) !== null
+      updateHoveredDropTargetFromSplit(blockedClusterSplit ? null : splitTarget)
       if (splitTarget) {
         tabInsertion.clear()
       } else {

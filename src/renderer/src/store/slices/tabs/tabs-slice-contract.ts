@@ -2,6 +2,7 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type {
   Tab,
+  TabClusterColor,
   TabContentType,
   TabGroup,
   TabGroupLayoutNode
@@ -10,6 +11,14 @@ import type { WorkspaceSessionState } from '../../../../../shared/workspace-sess
 import type { WorkspaceSessionHydrationOptions } from '@/lib/workspace-session-hydration-keys'
 
 export type TabSplitDirection = 'left' | 'right' | 'up' | 'down'
+
+/** Transient (never persisted) highlighted tabs of one pane strip. */
+export type TabStripSelection = {
+  /** Highlighted unified tab ids of the pane. */
+  tabIds: string[]
+  /** Shift-click range origin. */
+  anchorTabId: string | null
+}
 
 export type TabsSlice = {
   unifiedTabsByWorktree: Record<string, Tab[]>
@@ -126,7 +135,11 @@ export type TabsSlice = {
   moveUnifiedTabToGroup: (
     tabId: string,
     targetGroupId: string,
-    opts?: { index?: number; activate?: boolean; recordInteraction?: boolean }
+    opts?: {
+      index?: number
+      activate?: boolean
+      recordInteraction?: boolean
+    }
   ) => boolean
   dropUnifiedTab: (
     tabId: string,
@@ -134,6 +147,8 @@ export type TabsSlice = {
       groupId: string
       index?: number
       splitDirection?: TabSplitDirection
+      /** Destination membership; ignored when creating a split. */
+      clusterId?: string | null
     }
   ) => boolean
   copyUnifiedTabToGroup: (
@@ -161,6 +176,40 @@ export type TabsSlice = {
   }
   /** Reconciles many workspaces through one store write instead of one per workspace. */
   reconcileWorktreeTabModels: (worktreeIds: readonly string[]) => void
+  /** Keyed by pane (TabGroup) id. */
+  tabSelectionByGroupId: Record<string, TabStripSelection>
+  /** null clears the pane's selection. */
+  setTabSelection: (groupId: string, selection: TabStripSelection | null) => void
+  /** Cluster whose chip opens its rename field once mounted; the chip clears it on consume. Not persisted. */
+  renamingTabCluster: { groupId: string; clusterId: string } | null
+  setRenamingTabCluster: (request: { groupId: string; clusterId: string } | null) => void
+  /** Preserves untouched source groups when gathering selected tabs. Returns the new cluster id. */
+  createTabCluster: (
+    groupId: string,
+    tabIds: string[],
+    init?: { name?: string; color?: TabClusterColor }
+  ) => string | null
+  /** Moves the tabs to the cluster's end and joins them. */
+  addTabsToCluster: (groupId: string, clusterId: string, tabIds: string[]) => boolean
+  /** Moves members just past their cluster's end and drops their membership. */
+  removeTabsFromCluster: (groupId: string, tabIds: string[]) => void
+  renameTabCluster: (groupId: string, clusterId: string, name: string) => void
+  setTabClusterColor: (groupId: string, clusterId: string, color: TabClusterColor) => void
+  setTabClusterCollapsed: (groupId: string, clusterId: string, collapsed: boolean) => void
+  /** Drops the cluster; its tabs stay open in place. */
+  ungroupTabCluster: (groupId: string, clusterId: string) => void
+  /** Atomic same-pane reorder that also sets membership (null = ungrouped) of the moved tabs. */
+  moveTabsInStrip: (
+    groupId: string,
+    tabIds: string[],
+    target: { index: number; clusterId: string | null }
+  ) => void
+  /** Moves every member and its cluster record to another pane or a new split. */
+  moveTabCluster: (
+    sourceGroupId: string,
+    clusterId: string,
+    target: { groupId: string; index?: number; splitDirection?: TabSplitDirection }
+  ) => boolean
   hydrateTabsSession: (
     session: WorkspaceSessionState,
     options?: WorkspaceSessionHydrationOptions

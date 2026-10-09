@@ -1,12 +1,23 @@
 import { create } from 'zustand'
 import type { CloseTerminalDialogCopyKind } from '@/components/terminal-pane/CloseTerminalDialog'
 
-/** A pending confirmation for closing a terminal tab whose shell still has a
- *  running child process. `onConfirm` performs the original close. */
-export type RunningTerminalCloseConfirmRequest = {
+/** One busy terminal listed inside a group close prompt. */
+export type RunningTerminalCloseSubject = {
   terminalTabId: string
   tabLabel: string
   copyKind: CloseTerminalDialogCopyKind
+}
+
+/** A pending confirmation for closing a terminal tab whose shell still has a
+ *  running child process. `onConfirm` performs the original close. */
+export type RunningTerminalCloseConfirmRequest = {
+  /** For a group close this is the group's subject key, not a real terminal tab id. */
+  terminalTabId: string
+  /** For a group close this is the group's display name. */
+  tabLabel: string
+  copyKind: CloseTerminalDialogCopyKind
+  /** Present when one prompt covers closing a tab group: only its busy terminals, in strip order. */
+  groupTerminals?: RunningTerminalCloseSubject[]
   onConfirm: () => void
   onCancel?: () => void
 }

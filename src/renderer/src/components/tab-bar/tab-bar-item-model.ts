@@ -216,7 +216,7 @@ export function buildOrderedTabItems({
 }
 
 export function buildTabDropIndicators(
-  items: readonly TabBarItem[],
+  items: readonly Pick<TabBarItem, 'id'>[],
   insertion: HoveredTabInsertion | null
 ): Map<string, DropIndicator> {
   const indicators = new Map<string, DropIndicator>()

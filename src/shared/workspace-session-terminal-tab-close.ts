@@ -1,3 +1,5 @@
+import { pickTabCloseSuccessor } from './tab-close-successor'
+import { pushRecentTabId } from './tab-group-history'
 import type { Tab, TabGroup, TabGroupLayoutNode, WorkspaceVisibleTabType } from './tab-types'
 import type { WorkspaceSessionState } from './workspace-session-state-types'
 
@@ -6,31 +8,6 @@ export type WorkspaceSessionTerminalTabCloseResult = {
   ptyIdsToKill: string[]
   closed: boolean
   pinned: boolean
-}
-
-function pickNextActiveTab(
-  group: TabGroup,
-  closingIds: ReadonlySet<string>,
-  remaining: readonly string[],
-  remainingIds: ReadonlySet<string>
-): string | null {
-  for (let index = (group.recentTabIds?.length ?? 0) - 1; index >= 0; index -= 1) {
-    const id = group.recentTabIds![index]
-    if (remainingIds.has(id)) {
-      return id
-    }
-  }
-  const firstIndices = new Map<string, number>()
-  group.tabOrder.forEach((id, index) => {
-    if (!firstIndices.has(id)) {
-      firstIndices.set(id, index)
-    }
-  })
-  const closingIndex = group.tabOrder.findIndex((id) => closingIds.has(id))
-  // -1 matches the pre-index `indexOf` miss, so an id outside `group.tabOrder` never wins.
-  return (
-    remaining.find((id) => (firstIndices.get(id) ?? -1) > closingIndex) ?? remaining.at(-1) ?? null
-  )
 }
 
 function pruneGroupLayout(
@@ -198,16 +175,25 @@ export function closeTerminalTabInWorkspaceSession(
     .map((group) => {
       const tabOrder = group.tabOrder.filter((id) => !closedVisibleIds.has(id))
       const remainingIds = new Set(tabOrder)
-      const activeTabId = closedVisibleIds.has(group.activeTabId ?? '')
-        ? pickNextActiveTab(group, closedVisibleIds, tabOrder, remainingIds)
-        : group.activeTabId && remainingIds.has(group.activeTabId)
-          ? group.activeTabId
-          : (tabOrder[0] ?? null)
+      const activeTabId =
+        group.activeTabId !== null && closedVisibleIds.has(group.activeTabId)
+          ? pickTabCloseSuccessor(
+              group,
+              group.tabOrder.filter((id) => !closedVisibleIds.has(id) || id === group.activeTabId),
+              group.activeTabId
+            )
+          : group.activeTabId && remainingIds.has(group.activeTabId)
+            ? group.activeTabId
+            : (tabOrder[0] ?? null)
+      const recentTabIds = group.recentTabIds?.filter((id) => remainingIds.has(id))
       return {
         ...group,
         tabOrder,
         activeTabId,
-        recentTabIds: group.recentTabIds?.filter((id) => remainingIds.has(id))
+        recentTabIds:
+          activeTabId && activeTabId !== group.activeTabId
+            ? pushRecentTabId(recentTabIds, activeTabId)
+            : recentTabIds
       }
     })
     .filter((group) => group.tabOrder.length > 0)

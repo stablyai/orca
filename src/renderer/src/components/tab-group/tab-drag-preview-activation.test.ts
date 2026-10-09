@@ -76,7 +76,7 @@ describe('restoreTabDragActivationSnapshot', () => {
         worktreeId: WT,
         snapshot,
         sourceGroupId: 'group-1',
-        movedTabId: 'tab-2'
+        movedTabIds: ['tab-2']
       })
       expect(subscriber).not.toHaveBeenCalled()
     } finally {
@@ -104,5 +104,45 @@ describe('restoreTabDragActivationSnapshot', () => {
     expect(state.activeTabType).toBe('terminal')
     expect(state.activeTabId).toBe('terminal-1')
     expect(state.activeTabIdByWorktree[WT]).toBe('terminal-1')
+  })
+
+  it('restores an unmoved source tab after a cluster drag preview', () => {
+    const snapshot = captureTabDragActivationSnapshot(WT)
+    applyDragPreviewTab({
+      worktreeId: WT,
+      groupId: 'group-1',
+      tabId: 'tab-2',
+      activeGroupId: 'group-1'
+    })
+    restoreSourceGroupActiveTabAfterCrossGroupDrop({
+      worktreeId: WT,
+      snapshot,
+      sourceGroupId: 'group-1',
+      movedTabIds: ['cluster-tab-1', 'cluster-tab-2']
+    })
+    expect(useAppStore.getState().groupsByWorktree[WT][0].activeTabId).toBe('tab-1')
+  })
+
+  it('keeps the source fallback when its prior active tab left with a cluster', () => {
+    const snapshot = captureTabDragActivationSnapshot(WT)
+    useAppStore.setState({
+      groupsByWorktree: {
+        [WT]: [
+          {
+            id: 'group-1',
+            worktreeId: WT,
+            activeTabId: 'remaining',
+            tabOrder: ['remaining']
+          }
+        ]
+      }
+    })
+    restoreSourceGroupActiveTabAfterCrossGroupDrop({
+      worktreeId: WT,
+      snapshot,
+      sourceGroupId: 'group-1',
+      movedTabIds: ['tab-1', 'tab-2']
+    })
+    expect(useAppStore.getState().groupsByWorktree[WT][0].activeTabId).toBe('remaining')
   })
 })

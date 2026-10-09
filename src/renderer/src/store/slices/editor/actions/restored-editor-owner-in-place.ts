@@ -1,5 +1,6 @@
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { AppState } from '../../../types'
+import { rekeyTabClusterMembers } from '../../tabs/tab-cluster-model'
 
 type InPlaceTabState = Pick<
   AppState,
@@ -40,7 +41,10 @@ export function rekeyRestoredEditorTabsInPlace(
         ...group,
         activeTabId: group.activeTabId ? tabId(group.activeTabId) : group.activeTabId,
         tabOrder: group.tabOrder.map(tabId),
-        ...(group.recentTabIds ? { recentTabIds: group.recentTabIds.map(tabId) } : {})
+        ...(group.recentTabIds ? { recentTabIds: group.recentTabIds.map(tabId) } : {}),
+        ...(group.tabClusters
+          ? { tabClusters: rekeyTabClusterMembers(group.tabClusters, tabIdMigrations) }
+          : {})
       }))
     },
     unifiedTabsByWorktree: {

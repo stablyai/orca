@@ -3317,7 +3317,12 @@
             "stop_command_description": "Closing this terminal will stop the command running inside it.",
             "dont_ask_again": "Don't ask again for running terminals",
             "stop_agent_confirm": "Stop Agent",
-            "stop_command_confirm": "Stop and Close"
+            "stop_command_confirm": "Stop and Close",
+            "stop_agents_title": "Stop these agents?",
+            "stop_group_description": "Closing this group will stop {{count}} running terminals.",
+            "stop_group_description_one": "Closing this group will stop {{count}} running terminal.",
+            "stop_group_description_other": "Closing this group will stop {{count}} running terminals.",
+            "stop_commands_title": "Stop running commands?"
           },
           "MobileDriverOverlay": {
             "c6460cf584": "Take back",
@@ -3559,6 +3564,14 @@
           },
           "TerminalRestoringPlaceholder": {
             "restoring": "Restoring terminal…"
+          },
+          "CloseTerminalGroupList": {
+            "hide_terminals": "Hide running terminals",
+            "show_terminals": "Show {{count}} running terminals",
+            "show_terminals_one": "Show {{count}} running terminal",
+            "show_terminals_other": "Show {{count}} running terminals",
+            "running_terminals": "Running terminals",
+            "agent": "Agent"
           },
           "AgentLaunchPaneNotice": {
             "commandNotFound": "Its command wasn't found on this machine.",
@@ -19028,6 +19041,36 @@
     },
     "agentChildRow": {
       "ended": "Ended"
+    },
+    "tabCluster": {
+      "unnamed": "Unnamed group",
+      "rename": "Rename Group",
+      "color": "Group Color",
+      "expand": "Expand Group",
+      "collapse": "Collapse Group",
+      "moveToSplit": "Move Group to New Split",
+      "splitRight": "Right",
+      "splitLeft": "Left",
+      "splitDown": "Down",
+      "splitUp": "Up",
+      "ungroup": "Ungroup",
+      "close": "Close Group",
+      "addNewMany": "Add {{count}} Tabs to New Group",
+      "addNew": "Add Tab to New Group",
+      "addToExisting": "Add to Group",
+      "remove": "Remove from Group",
+      "colors": {
+        "grey": "Grey",
+        "blue": "Blue",
+        "red": "Red",
+        "yellow": "Yellow",
+        "green": "Green",
+        "pink": "Pink",
+        "purple": "Purple",
+        "cyan": "Cyan",
+        "orange": "Orange"
+      },
+      "moveToSplitUnavailableRemote": "Not available for workspaces on a remote Orca server. Drag the group into an existing split instead."
     },
     "markdown-callout": {
       "note": "Note",
