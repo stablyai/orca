@@ -1,6 +1,8 @@
 import type { WorktreeDragGroup } from './worktree-manual-order'
 import { ALL_GROUP_KEY, PINNED_GROUP_KEY } from './worktree-list/grouping/group-keys'
+import { getFolderWorkspaceDragGroupKey } from './worktree-list/drag/groups'
 import { getNaturalWorktreeIds } from './natural-worktree-ids'
+import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 
 export type WorktreeDragUnitGroup = WorktreeDragGroup & {
   units: { worktreeId: string; worktreeIds: string[] }[]
@@ -13,18 +15,20 @@ type WorktreeDragUnitRow =
   | { type: 'imported-worktrees-card' }
   | { type: 'new-external-worktrees-inbox' }
   | { type: 'pending-creation' }
-  | { type: 'folder-workspace' }
+  | { type: 'folder-workspace'; folderWorkspace: { id: string } }
 
 export function getWorktreeDragUnitGroups(
   rows: readonly WorktreeDragUnitRow[]
 ): WorktreeDragUnitGroup[] {
   const groups: WorktreeDragUnitGroup[] = []
   let current: { key: string; units: WorktreeDragUnitGroup['units'] } | null = null
+  let currentFolderUnits: WorktreeDragUnitGroup['units'] | null = null
   const naturalWorktreeIds = getNaturalWorktreeIds(rows)
 
   for (const row of rows) {
     if (row.type === 'header') {
       current = { key: row.key, units: [] }
+      currentFolderUnits = null
       groups.push({
         key: current.key,
         units: current.units,
@@ -32,12 +36,24 @@ export function getWorktreeDragUnitGroups(
       })
       continue
     }
+    if (row.type === 'folder-workspace') {
+      if (!currentFolderUnits) {
+        currentFolderUnits = []
+        groups.push({
+          key: getFolderWorkspaceDragGroupKey(current?.key ?? ALL_GROUP_KEY),
+          units: currentFolderUnits,
+          worktreeIds: []
+        })
+      }
+      const worktreeId = folderWorkspaceKey(row.folderWorkspace.id)
+      currentFolderUnits.push({ worktreeId, worktreeIds: [worktreeId] })
+      continue
+    }
     if (
       row.type === 'host-header' ||
       row.type === 'imported-worktrees-card' ||
       row.type === 'new-external-worktrees-inbox' ||
-      row.type === 'pending-creation' ||
-      row.type === 'folder-workspace'
+      row.type === 'pending-creation'
     ) {
       continue
     }

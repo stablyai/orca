@@ -20,6 +20,7 @@ import type { WorktreeDragSession } from './use-session'
 import { useWorktreePointerDragAutoscroll } from './use-pointer-autoscroll'
 import { useWorktreePointerDragWindowEvents } from './use-pointer-window-events'
 import { flushWorktreePointerDragFrame } from './pointer-flush'
+import { isFolderWorkspaceDragGroupKey } from './groups'
 import { EMPTY_WORKTREE_DRAG_PREVIEW_OFFSETS, type WorktreePointerDrag } from './row-state'
 
 export function useWorktreePointerDrag(args: {
@@ -173,10 +174,11 @@ export function useWorktreePointerDrag(args: {
       const canPreviewWorkspaceBoardOnDrag =
         !workspaceBoardOpen &&
         onWorkspaceBoardDragPreviewStart !== NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK
+      // A lone folder workspace has no slot to move to, and the board doesn't take folders.
       if (
         rects.length <= 1 &&
-        !hasWorkspaceKanbanSidebarDropBoard() &&
-        !canPreviewWorkspaceBoardOnDrag
+        (isFolderWorkspaceDragGroupKey(sourceGroupKey) ||
+          (!hasWorkspaceKanbanSidebarDropBoard() && !canPreviewWorkspaceBoardOnDrag))
       ) {
         return
       }

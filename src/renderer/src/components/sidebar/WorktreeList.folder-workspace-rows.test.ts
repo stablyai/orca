@@ -169,6 +169,20 @@ describe('WorktreeList lineage child card renderer', () => {
     )
   })
 
+  it('marks folder workspace rows as manual-sort drag slots', async () => {
+    setFolderWorkspaceFixtureState()
+    const markup = await renderWorktreeListMarkup()
+    const optionOpeningTag =
+      markup.match(/<div[^>]*id="worktree-list-option-folder%3Afolder-workspace-1"[^>]*>/)?.[0] ??
+      ''
+
+    expect(optionOpeningTag).toContain(
+      `data-worktree-drag-id="${folderWorkspaceKey('folder-workspace-1')}"`
+    )
+    expect(optionOpeningTag).toMatch(/data-worktree-drag-group-key="[^"]+"/)
+    expect(optionOpeningTag).toContain('data-worktree-drag-group-index="0"')
+  })
+
   it('keeps folder workspace cards one compact step under their group header', async () => {
     setFolderWorkspaceFixtureState()
     const markup = await renderWorktreeListMarkup()

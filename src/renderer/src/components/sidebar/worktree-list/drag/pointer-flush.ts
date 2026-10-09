@@ -9,6 +9,7 @@ import {
 import { updateSidebarDragPreviewPosition } from '../../worktree-sidebar-pointer-drag-dom'
 import { getPointerDropStatusTarget, shouldPreferSidebarStatusDropTarget } from './status-target'
 import type { WorktreeDropCommitContext } from './drop-commit-context'
+import { isFolderWorkspaceDragGroupKey } from './groups'
 import {
   applyWorktreeDropPreview,
   applyWorktreeLineageDropPreview,
@@ -98,6 +99,10 @@ export function flushWorktreePointerDragFrame(args: WorktreePointerDragFrameArgs
     ctx.clearWorktreeDrag()
     return
   }
+  if (isFolderWorkspaceDragGroupKey(drag.sourceGroupKey)) {
+    flushWorktreeReorderFrame(args, NO_WORKTREE_SIDEBAR_DROP_TARGET)
+    return
+  }
   // Why: show the board preview as soon as a card drag begins so the drop target is visible up front, not only at the sidebar edge.
   if (
     !drag.workspaceBoardDragPreviewRequested &&
@@ -173,7 +178,15 @@ export function flushWorktreePointerDragFrame(args: WorktreePointerDragFrameArgs
     showStatusHoverWithoutInsertionLine(args, preferredStatusTarget)
     return
   }
+  flushWorktreeReorderFrame(args, preferredStatusTarget)
+}
 
+// Show the reorder slot under the pointer, or the hovered status/pin section when there is none.
+function flushWorktreeReorderFrame(
+  args: WorktreePointerDragFrameArgs,
+  preferredStatusTarget: WorktreeSidebarLineageDropTarget
+): void {
+  const { drag, ctx } = args
   const drop = ctx.computeWorktreeDrop(drag.currentY)
   if (!drop) {
     drag.reorderIntent = null

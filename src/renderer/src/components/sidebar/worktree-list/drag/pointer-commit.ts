@@ -8,6 +8,7 @@ import { resolveWorkspaceKanbanCardDropCommitTarget } from '../../workspace-kanb
 import { getFullDropIndexForWorktreeDragUnit } from '../../worktree-drag-units'
 import { resolveWorktreeSidebarStatusDropCommitTarget } from '../../worktree-sidebar-drop-preview'
 import { getPointerDropStatusTarget, shouldPreferSidebarStatusDropTarget } from './status-target'
+import { isFolderWorkspaceDragGroupKey } from './groups'
 import type {
   WorktreeDropCommitContext,
   WorktreeStatusDropAtIndexArgs
@@ -48,11 +49,42 @@ function commitStatusOrPinDrop(
   })
 }
 
+function commitReorderDrop(args: PointerDropCommitArgs): boolean {
+  const { event, drag, ctx } = args
+  const drop = ctx.computeWorktreeDrop(event.clientY)
+  if (!drop) {
+    return false
+  }
+  // Why: only the source group moves, so selected rows elsewhere must keep their rank.
+  const sourceGroup = ctx.worktreeDragGroups.find((group) => group.key === drag.sourceGroupKey)
+  const sourceIds = new Set(sourceGroup?.worktreeIds)
+  ctx.onReorderWorktrees({
+    groups: ctx.worktreeDragGroups,
+    sourceGroupKey: drag.sourceGroupKey,
+    draggedIds: drag.reorderDraggedIds.filter((id) => sourceIds.has(id)),
+    dropIndex: getFullDropIndexForWorktreeDragUnit({
+      groups: ctx.worktreeDragUnitGroups,
+      sourceGroupKey: drag.sourceGroupKey,
+      dropIndex: drop.dropIndex
+    })
+  })
+  ctx.clearReorderedWorktreeParents({
+    draggedIds: drag.draggedIds,
+    sourceGroupKey: drag.sourceGroupKey
+  })
+  return true
+}
+
 // Resolve where a released pointer drag lands: workspace board lane, lineage parent,
 // status/pin section, or a reorder slot inside the source group.
 export function commitWorktreePointerDrop(args: PointerDropCommitArgs): void {
   const { event, drag, ctx } = args
   if (!ctx.refreshWorktreeDragSession()) {
+    ctx.clearWorktreeDrag()
+    return
+  }
+  if (isFolderWorkspaceDragGroupKey(drag.sourceGroupKey)) {
+    commitReorderDrop(args)
     ctx.clearWorktreeDrag()
     return
   }
@@ -113,23 +145,7 @@ export function commitWorktreePointerDrop(args: PointerDropCommitArgs): void {
       ctx.clearWorktreeDrag()
       return
     }
-    const drop = ctx.computeWorktreeDrop(event.clientY)
-    if (drop) {
-      ctx.onReorderWorktrees({
-        groups: ctx.worktreeDragGroups,
-        sourceGroupKey: drag.sourceGroupKey,
-        draggedIds: drag.reorderDraggedIds,
-        dropIndex: getFullDropIndexForWorktreeDragUnit({
-          groups: ctx.worktreeDragUnitGroups,
-          sourceGroupKey: drag.sourceGroupKey,
-          dropIndex: drop.dropIndex
-        })
-      })
-      ctx.clearReorderedWorktreeParents({
-        draggedIds: drag.draggedIds,
-        sourceGroupKey: drag.sourceGroupKey
-      })
-    } else if (ctx.scrollRef.current) {
+    if (!commitReorderDrop(args) && ctx.scrollRef.current) {
       const currentPreview = preferredStatusTarget.status
         ? ctx.computeWorktreeStatusDrop({
             pointerY: event.clientY,
