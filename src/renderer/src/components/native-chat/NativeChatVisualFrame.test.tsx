@@ -21,6 +21,7 @@ vi.mock('@/lib/http-link-routing', () => ({
 }))
 
 import { NativeChatVisualFrame } from './NativeChatVisualFrame'
+import { acquireWebviewsDragPassthrough } from '../browser-pane/host-guest/webview-drag-passthrough'
 
 const visual = { revision: 'r1', html: '<p>chart</p>' }
 
@@ -117,6 +118,21 @@ afterEach(() => {
 })
 
 describe('NativeChatVisualFrame', () => {
+  it('lets a dragged tab pass over the frame while a tab drag holds pointer passthrough', () => {
+    const { container } = render(<Harness layout="panel" />)
+    const frame = frameOf(container)
+    expect(frame.style.pointerEvents).toBe('')
+
+    let release = (): void => {}
+    act(() => {
+      release = acquireWebviewsDragPassthrough()
+    })
+    expect(frame.style.pointerEvents).toBe('none')
+
+    act(() => release())
+    expect(frame.style.pointerEvents).toBe('')
+  })
+
   it('runs the visual in a scripts-only sandbox, named for host registration, with its CSP first', () => {
     const { container } = render(<Harness />)
     const frame = frameOf(container)

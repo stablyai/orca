@@ -1,3 +1,4 @@
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 import { getPtyIpc } from '../../pty-host-bindings'
 import { parseAppSshPtyId } from '../../../providers/ssh-pty-id'
 import { inspectPtyProviderProcessForRenderer } from '../../../providers/pty-process-inspection'
@@ -104,7 +105,7 @@ export function installPtyInspectIpcHandlers(deps: {
           typeof value !== 'string' ||
           value.length === 0 ||
           value.length > 512 ||
-          value.startsWith('remote:') ||
+          isRemoteRuntimePtyId(value) ||
           parseAppSshPtyId(value)
         ) {
           return false
@@ -144,7 +145,7 @@ export function installPtyInspectIpcHandlers(deps: {
   )
 
   ipcMain.handle('pty:hasPty', async (_event, args: { id: string }): Promise<boolean | null> => {
-    if (typeof args?.id !== 'string' || args.id.startsWith('remote:')) {
+    if (typeof args?.id !== 'string' || isRemoteRuntimePtyId(args.id)) {
       // Why: same routing hazard pty:kill guards against — ptyOwnership never holds
       // a runtime terminal handle and parseAppSshPtyId ignores it, so the lookup
       // falls through to the local provider and its "not in my table" reads as an
@@ -203,7 +204,7 @@ export function installPtyInspectIpcHandlers(deps: {
       }
     ) => {
       // Why: same routing hazard as pty:hasPty — an unroutable id must read as client-only unverifiable, not as a local-provider answer or a raised IPC error.
-      if (typeof args?.id !== 'string' || !args.id || args.id.startsWith('remote:')) {
+      if (typeof args?.id !== 'string' || !args.id || isRemoteRuntimePtyId(args.id)) {
         return clientOnlyUnverifiableInspection('terminal_gone')
       }
       // Why: the pre-swap LocalPtyProvider does not own restored daemon ids, so
@@ -309,7 +310,7 @@ export function installPtyInspectIpcHandlers(deps: {
     async (_event, args: { ptyId?: unknown }): Promise<void> => {
       if (
         typeof args?.ptyId !== 'string' ||
-        !args.ptyId.startsWith('remote:') ||
+        !isRemoteRuntimePtyId(args.ptyId) ||
         args.ptyId.length > 512
       ) {
         return

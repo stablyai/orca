@@ -32,7 +32,6 @@ import { RuntimeMobileSpeechCatalog } from './runtime-mobile-speech-catalog'
 import { RuntimeMobileDictationController } from './runtime-mobile-dictation-controller'
 import { RuntimeProjectHostSetupController } from './runtime-project-host-setup-controller'
 import { addRemoteRepoFromPath } from '../ipc/repos/remote-repo-registration'
-import type { Store } from '../persistence'
 import { RuntimeProjectGroupController } from './runtime-project-group-controller'
 import { RuntimeNestedRepoImport } from './runtime-nested-repo-import'
 import { RuntimeRepositoryRegistrationController } from './runtime-repository-registration-controller'
@@ -253,7 +252,7 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
       (this as RuntimeCommandSurfaceHost<this>).addRepo(path, kind, hostId),
     addRemoteRepo: async (remote) => {
       // The same registration the desktop IPC handler uses, so both surfaces agree on SSH hosts.
-      const result = await addRemoteRepoFromPath(this.requireStore() as unknown as Store, remote)
+      const result = await addRemoteRepoFromPath(this.requireStore(), remote)
       if ('error' in result) {
         throw new Error(result.error)
       }

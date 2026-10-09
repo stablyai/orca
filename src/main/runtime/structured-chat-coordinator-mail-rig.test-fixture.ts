@@ -255,7 +255,7 @@ beforeEach(async () => {
     resolveWorkspacePath: async (workspaceId) => `/repos/${workspaceId}`,
     resolveCodexCommand: () => '/usr/local/bin/codex',
     resolveLaunchArgs: () => [],
-    resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
+    resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
     resolveEnvironment: async () => ({ PATH: '/usr/bin' }),
     openCodexConnection: codex.openConnection,
     readProcessStartTime: async () => 1_700_000_000_000,

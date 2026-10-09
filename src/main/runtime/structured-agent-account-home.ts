@@ -25,7 +25,7 @@ export function resolveStructuredClaudeAccountHomePath(
   deps: StructuredClaudeAccountHomeDeps
 ): string {
   // Why only an account: System default keeps the launch-env and configured homes below.
-  const accountHome = deps.wslDistro ? null : getClaudeProfileRouter()?.selectedHome()
+  const accountHome = deps.wslDistro ? null : getClaudeProfileRouter()?.routedHome()
   if (accountHome) {
     return accountHome
   }

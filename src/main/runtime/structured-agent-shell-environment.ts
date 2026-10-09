@@ -1,4 +1,5 @@
 import { resolveLoginShellEnvironment } from '../startup/login-shell-environment'
+import type { GlobalSettings } from '../../shared/global-settings-types'
 import {
   nativeChatShellEnvironmentPolicy,
   type NativeChatShellEnvironmentPolicy
@@ -71,6 +72,19 @@ export function structuredAgentBaseEnvironment(input: {
     pickShellVariables(input.shellEnv, input.policy.names, platform),
     platform
   )
+}
+
+/** The base env every local agent launch on this host starts from, read from current settings. */
+export async function resolveHostAgentBaseEnvironment(
+  settings: Pick<
+    GlobalSettings,
+    'nativeChatInheritShellEnvironment' | 'nativeChatShellEnvironmentVariables'
+  >
+): Promise<Record<string, string>> {
+  return structuredAgentBaseEnvironment({
+    shellEnv: await resolveLoginShellEnvironment(),
+    policy: nativeChatShellEnvironmentPolicy(settings)
+  })
 }
 
 export type StructuredAgentEnvironmentSources = {

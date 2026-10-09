@@ -42,6 +42,7 @@ import {
 import { dispatchWebRuntimeInitialTerminalBootstrap } from '../web-runtime-initial-terminal-bootstrap-dispatch'
 import { toRuntimeWorktreeSelector } from '../runtime-worktree-selector'
 import type { SessionTabsStreamEvent } from './state'
+import type { SessionTabsSnapshotHandler } from './visibility-resume-types'
 import { subscribeRuntimeEnvironment } from '../runtime-environment-pairing-refresh'
 
 type Ref<T> = { current: T }
@@ -52,30 +53,9 @@ export type ActiveSubscriptionArgs = {
   activeWorktreeRuntimeConnectionGeneration: number
   activeWorktreeRuntimePairingRevision: number | undefined
   workspaceSessionReady: boolean
-  visibilitySnapshotReceipt: Ref<
-    (
-      environmentId: string,
-      snapshot: RuntimeMobileSessionTabsResult,
-      receivedFrame: number,
-      runtimeId?: string
-    ) => void
-  >
-  visibilitySnapshotApply: Ref<
-    (
-      environmentId: string,
-      snapshot: RuntimeMobileSessionTabsResult,
-      receivedFrame: number,
-      runtimeId?: string
-    ) => boolean
-  >
-  visibilitySnapshotAccepted: Ref<
-    (
-      environmentId: string,
-      snapshot: RuntimeMobileSessionTabsResult,
-      receivedFrame: number,
-      runtimeId?: string
-    ) => void
-  >
+  visibilitySnapshotReceipt: Ref<SessionTabsSnapshotHandler<void>>
+  visibilitySnapshotApply: Ref<SessionTabsSnapshotHandler<boolean>>
+  visibilitySnapshotAccepted: Ref<SessionTabsSnapshotHandler<void>>
 }
 
 /** Install the selected-worktree stream, which resumes immediately on visibility changes. */
