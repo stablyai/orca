@@ -11,10 +11,8 @@ import {
   agentJournalSubmissionKey
 } from '../../../../shared/agent-session-journal-item-key'
 import { structuredAgentSessionStartFailureRowIdentity } from '../../../../shared/structured-agent-session-start-failure-row-key'
-import {
-  structuredAgentSessionDeliveryNotices,
-  structuredAgentSessionStartFailureFacts
-} from './structured-agent-session-delivery-notices'
+import { structuredAgentSessionDeliveryNotices } from './structured-agent-session-delivery-notices'
+import { structuredAgentSessionStartFailureFacts } from '../../../../shared/structured-agent-session-start-failure-facts'
 import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
 
 const SENDING = 'Sending…'
@@ -134,6 +132,15 @@ describe('the line under each of the chat own messages', () => {
           statusRow(agentJournalSubmissionKey('exit-row'), { kind: 'providerExited' })
         ])
       ).toEqual([startFailed])
+    })
+
+    it("skips a subagent's sign-in row, which the conversation does not show", () => {
+      const notSignedIn: AgentSessionFailureFact = { kind: 'notSignedIn' }
+      const root = statusRow('root-auth', notSignedIn)
+      expect(
+        structuredAgentSessionStartFailureFacts([{ ...root, itemId: 'child-auth', agentId: 'c1' }])
+      ).toEqual([])
+      expect(structuredAgentSessionStartFailureFacts([root])).toEqual([notSignedIn])
     })
 
     it('says only that it was not sent, and words a rejection no row states in full', () => {

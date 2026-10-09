@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
 import {
   closeProviderTimelineRigs,
@@ -9,6 +9,7 @@ import { openAcpFixtureRig } from './acp-timeline-fixture.test-support'
 import { AcpAgentError } from './acp-errors'
 
 afterEach(closeProviderTimelineRigs)
+afterEach(() => vi.restoreAllMocks())
 
 // The shape Grok sends for a prompt its API refused, with the reason scrubbed to a placeholder.
 const REASON = 'API error (status 400 Bad Request): invalid_request_error: placeholder reason'
@@ -40,6 +41,28 @@ const promptComplete = (promptId: string, stopReason: string, agentResult: strin
   agentResult
 })
 const rpcError = new AcpAgentError(-32603, 'Internal error', { message: REASON })
+// Grok's API record for a usage limit, with a constructed tail.
+const LIMIT_REASON =
+  'API error (status 429 Too Many Requests): rate_limit_exceeded: You have reached your usage limit.'
+const details = (text: string) => ({
+  provider: 'grok',
+  kind: 'turn:failed',
+  payload: expect.objectContaining({ head: text, truncated: false })
+})
+// The reason is an API record, so the row names Grok and keeps the reason on its fact and Details.
+const FAILED_ROW = {
+  kind: 'status',
+  tone: 'error',
+  text: 'Grok ran into a problem. Check the chat before trying again.',
+  failure: { kind: 'providerError', detail: { text: REASON, audience: 'person' } },
+  providerFrame: details(REASON)
+}
+const LIMIT_ROW = {
+  kind: 'status',
+  tone: 'error',
+  text: 'Grok usage limit reached.',
+  providerFrame: details(LIMIT_REASON)
+}
 
 function statusRows(rows: AgentJournalRenderItem[]) {
   return rows.flatMap((row) => (row.body.kind === 'status' ? [{ row, body: row.body }] : []))
@@ -55,7 +78,7 @@ describe('a failed ACP turn says why', () => {
     f.apply(
       lane.notification('_x.ai/session_notification', ended(prompt.promptId, 'error', REASON), 1003)
     )
-    expect(statusRows(await f.rig.rows())[0]?.body.text).toBe(REASON)
+    expect(statusRows(await f.rig.rows())[0]?.body).toEqual(FAILED_ROW)
     f.apply(
       lane.notification(
         '_x.ai/session/prompt_complete',
@@ -82,8 +105,8 @@ describe('a failed ACP turn says why', () => {
     const rows = await f.rig.rows()
     const failures = statusRows(rows)
     expect(failures).toHaveLength(1)
-    // The turn ran, so the row reads as Codex's turn-ending error does: no refusal sentence or fact.
-    expect(failures[0]?.body).toEqual({ kind: 'status', tone: 'error', text: REASON })
+    // The turn ran, so the row reads as Codex's turn-ending error does: no refusal sentence.
+    expect(failures[0]?.body).toEqual(FAILED_ROW)
     const turns = await f.rig.turns()
     expect(turns.map((turn) => [turn.state, turn.outcome])).toEqual([
       ['completed', 'failure'],
@@ -113,7 +136,7 @@ describe('a failed ACP turn says why', () => {
     f.apply(lane.promptFailed('c1', rpcError, 1004))
     const failures = statusRows(await f.rig.rows())
     expect(failures).toHaveLength(1)
-    expect(failures[0]?.body).toEqual({ kind: 'status', tone: 'error', text: REASON })
+    expect(failures[0]?.body).toEqual(FAILED_ROW)
   })
 
   it.each(['retry_state', 'turn_completed', 'prompt_complete', 'prompt error answer'] as const)(
@@ -149,7 +172,7 @@ describe('a failed ACP turn says why', () => {
         )
       )
       const failures = statusRows(await f.rig.rows())
-      expect(failures.map((failure) => failure.body.text)).toEqual([REASON])
+      expect(failures.map((failure) => failure.body)).toEqual([FAILED_ROW])
     }
   )
 
@@ -162,7 +185,7 @@ describe('a failed ACP turn says why', () => {
     f.apply(lane.notification('_x.ai/session_notification', ended(prompt.promptId, 'error'), 1003))
     f.apply(lane.promptFailed('c1', new AcpAgentError(-32603, 'Internal error'), 1004))
     const failures = statusRows(await f.rig.rows())
-    expect(failures.map((failure) => failure.body.text)).toEqual([REASON])
+    expect(failures.map((failure) => failure.body)).toEqual([FAILED_ROW])
   })
 
   it('names a rate-limited turn the provider gave no words for, without inventing a reason', async () => {
@@ -185,6 +208,112 @@ describe('a failed ACP turn says why', () => {
       { kind: 'status', tone: 'error', text: 'Grok usage limit reached.' }
     ])
     expect((await f.rig.turns())[0]?.outcome).toBe('failure')
+  })
+
+  it('quotes a reason a person can read, and keeps it in Details', async () => {
+    const f = await openAcpFixtureRig()
+    const lane = f.lane()
+    const prompt = lane.openPrompt('c1', 1000)
+    const readable = 'The prompt is too long for this model.'
+    f.apply(lane.notification('_x.ai/queue/changed', queued(prompt.promptId), 1001))
+    f.apply(
+      lane.notification(
+        '_x.ai/session_notification',
+        ended(prompt.promptId, 'error', readable),
+        1002
+      )
+    )
+    expect(statusRows(await f.rig.rows()).map((failure) => failure.body)).toEqual([
+      {
+        kind: 'status',
+        tone: 'error',
+        text: `Grok ran into a problem: ${readable} Check the chat before trying again.`,
+        failure: { kind: 'providerError', detail: { text: readable, audience: 'person' } },
+        providerFrame: details(readable)
+      }
+    ])
+  })
+
+  it('logs each reason once, however many copies Grok sends', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const f = await openAcpFixtureRig()
+    const lane = f.lane()
+    const prompt = lane.openPrompt('c1', 1000)
+    f.apply(lane.notification('_x.ai/queue/changed', queued(prompt.promptId), 1001))
+    f.apply(lane.notification('_x.ai/session_notification', retryFailed, 1002))
+    f.apply(
+      lane.notification('_x.ai/session_notification', ended(prompt.promptId, 'error', REASON), 1003)
+    )
+    f.apply(lane.promptFailed('c1', rpcError, 1004))
+    expect(warn).toHaveBeenCalledTimes(1)
+    expect(warn.mock.calls[0]).toContain(REASON)
+  })
+
+  it('leads with the usage limit when Grok words it as an API record', async () => {
+    const f = await openAcpFixtureRig()
+    const lane = f.lane()
+    const prompt = lane.openPrompt('c1', 1000)
+    f.apply(lane.notification('_x.ai/queue/changed', queued(prompt.promptId), 1001))
+    f.apply(
+      lane.notification(
+        '_x.ai/session_notification',
+        ended(prompt.promptId, 'rate_limit', LIMIT_REASON),
+        1002
+      )
+    )
+    f.apply(
+      lane.notification(
+        '_x.ai/session/prompt_complete',
+        promptComplete(prompt.promptId, 'rate_limit', LIMIT_REASON),
+        1003
+      )
+    )
+    expect(statusRows(await f.rig.rows()).map((failure) => failure.body)).toEqual([LIMIT_ROW])
+  })
+
+  it('keeps the usage limit lead when a later copy of the reason arrives as an error', async () => {
+    const f = await openAcpFixtureRig()
+    const lane = f.lane()
+    const prompt = lane.openPrompt('c1', 1000)
+    f.apply(lane.notification('_x.ai/queue/changed', queued(prompt.promptId), 1001))
+    f.apply(
+      lane.notification('_x.ai/session_notification', ended(prompt.promptId, 'rate_limit'), 1002)
+    )
+    f.apply(
+      lane.promptFailed(
+        'c1',
+        new AcpAgentError(-32603, 'Internal error', { message: LIMIT_REASON }),
+        1003
+      )
+    )
+    expect(statusRows(await f.rig.rows()).map((failure) => failure.body)).toEqual([LIMIT_ROW])
+  })
+
+  it('turns an earlier error row into the usage limit when the end says so', async () => {
+    const f = await openAcpFixtureRig()
+    const lane = f.lane()
+    const prompt = lane.openPrompt('c1', 1000)
+    f.apply(lane.notification('_x.ai/queue/changed', queued(prompt.promptId), 1001))
+    f.apply(
+      lane.notification(
+        '_x.ai/session_notification',
+        grokUpdate({
+          sessionUpdate: 'retry_state',
+          type: 'failed',
+          error_type: 'api',
+          message: LIMIT_REASON
+        }),
+        1002
+      )
+    )
+    f.apply(
+      lane.notification(
+        '_x.ai/session_notification',
+        ended(prompt.promptId, 'rate_limit', LIMIT_REASON),
+        1003
+      )
+    )
+    expect(statusRows(await f.rig.rows()).map((failure) => failure.body)).toEqual([LIMIT_ROW])
   })
 
   it('writes no failure row for a turn the provider ended on purpose', async () => {

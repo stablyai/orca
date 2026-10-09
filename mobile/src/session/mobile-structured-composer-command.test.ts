@@ -50,6 +50,30 @@ describe('mobile structured conversation commands', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
+  it.each(['turnActive', 'messagesUnsettled', 'promptPending'] as const)(
+    'names the agent when the host refuses a command for %s',
+    async (reason) => {
+      const { input, sendRequest } = setup()
+      sendRequest.mockResolvedValueOnce({
+        ok: true,
+        result: {
+          ok: false,
+          refusal: {
+            code: 'agent_session_operation_invalid',
+            message: 'raw host diagnostic',
+            details: { reason }
+          }
+        }
+      })
+      expect(await dispatchMobileStructuredCommand(input)).toBe('rejected')
+      expect(input.onError).toHaveBeenCalledWith(
+        reason === 'promptPending'
+          ? "Answer Codex's question or approval, then run /compact."
+          : "Codex is still working. Run /compact when it's done.",
+        undefined
+      )
+    }
+  )
   it.each(['/clear', '/compact'])(
     'uses the command RPC for %s without an ordinary send',
     async (text) => {
@@ -148,19 +172,19 @@ describe('mobile structured conversation commands', () => {
     input.busy = () => 'working'
     expect(await dispatchMobileStructuredCommand({ ...input, text: '/clear' })).toBe('rejected')
     expect(input.onError).toHaveBeenLastCalledWith(
-      "The agent is still working. Run /clear when it's done.",
+      "Codex is still working. Run /clear when it's done.",
       { refusedWhile: 'working' }
     )
     input.busy = () => 'prompt'
     expect(await dispatchMobileStructuredCommand({ ...input, text: '/clear' })).toBe('rejected')
     expect(input.onError).toHaveBeenLastCalledWith(
-      "Answer the agent's question or approval, then run /clear.",
+      "Answer Codex's question or approval, then run /clear.",
       { refusedWhile: 'prompt' }
     )
     input.busy = () => 'working'
     expect(await dispatchMobileStructuredCommand(input)).toBe('rejected')
     expect(input.onError).toHaveBeenLastCalledWith(
-      "The agent is still working. Run /compact when it's done.",
+      "Codex is still working. Run /compact when it's done.",
       { refusedWhile: 'working' }
     )
     expect(sendRequest).not.toHaveBeenCalled()
@@ -174,7 +198,7 @@ describe('mobile structured conversation commands', () => {
         value: {
           command: 'compact',
           state: 'completed',
-          error: "The agent is still working. Run /compact when it's done.",
+          error: "Codex is still working. Run /compact when it's done.",
           failure: {
             kind: 'commandRefused',
             refusal: { code: 'agent_session_operation_invalid', details: { reason: 'turnActive' } }
@@ -187,14 +211,14 @@ describe('mobile structured conversation commands', () => {
     input.busy = () => 'working'
     expect(await dispatchMobileStructuredCommand(input)).toBe('rejected')
     expect(input.onError).toHaveBeenLastCalledWith(
-      "The agent is still working. Run /compact when it's done.",
+      "Codex is still working. Run /compact when it's done.",
       { refusedWhile: 'working' }
     )
     // Ahead of the phone: said as any failure, so it can't go before it is read.
     input.busy = () => null
     expect(await dispatchMobileStructuredCommand(input)).toBe('rejected')
     expect(input.onError).toHaveBeenLastCalledWith(
-      "The agent is still working. Run /compact when it's done.",
+      "Codex is still working. Run /compact when it's done.",
       undefined
     )
   })

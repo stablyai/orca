@@ -658,7 +658,14 @@ describe('codex journal translation', () => {
 
     const bodies = tap.rows.map((row) => row.body)
     expect(bodies.filter((body) => body.kind === 'status')).toEqual([
-      expect.objectContaining({ text: 'Selected model is at capacity.', tone: 'error' })
+      expect.objectContaining({
+        text: 'Codex ran into a problem. Check the chat before trying again.',
+        tone: 'error',
+        failure: {
+          kind: 'providerError',
+          detail: { text: 'Selected model is at capacity.', audience: 'log' }
+        }
+      })
     ])
     expect(bodies.at(-1)).toMatchObject({
       kind: 'turn',

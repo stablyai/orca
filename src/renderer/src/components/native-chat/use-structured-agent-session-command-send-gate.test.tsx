@@ -129,7 +129,7 @@ describe('a /clear refused for something the chat shows', () => {
     const { result, rerender } = renderSession()
     expect(await clear(result)).toEqual({
       accepted: false,
-      error: "The agent is still working. Run /clear when it's done.",
+      error: "Codex is still working. Run /clear when it's done.",
       refusedWhile: 'working'
     })
     expect(result.current.commandRefusalCauses.working).toBe(true)

@@ -10,6 +10,8 @@ import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import {
   findLandedUnconfirmedSends,
   findQueuedUnconfirmedSends,
+  NO_STRUCTURED_SENDS,
+  type MobileStructuredSendReachedHost,
   type UnconfirmedSend
 } from './mobile-native-chat-draft-reconcile'
 import type { MobileNativeChatSendOrigin } from './mobile-native-chat-pending-echo'
@@ -22,9 +24,10 @@ type QueuedCardText = { messageId: string; text: string }
 function settledUnconfirmedSends(
   messages: readonly NativeChatMessage[],
   queuedCards: readonly QueuedCardText[],
-  entries: readonly UnconfirmedSend[]
+  entries: readonly UnconfirmedSend[],
+  reachedHost: MobileStructuredSendReachedHost
 ): UnconfirmedSend[] {
-  const landed = findLandedUnconfirmedSends(messages, entries)
+  const landed = findLandedUnconfirmedSends(messages, entries, reachedHost)
   const landedSet = new Set(landed)
   return [
     ...landed,
@@ -41,29 +44,47 @@ export function useMobileNativeChatUnconfirmedSends(args: {
   messages: readonly NativeChatMessage[]
   /** The active pane's queued-draft cards; a send the host holds as one is delivered. */
   queuedCards?: readonly QueuedCardText[]
+  /** Structured lane: whether the journal holds the send made under an id. */
+  reachedHost?: MobileStructuredSendReachedHost
 }): {
   holdUnconfirmedSend: (
     origin: MobileNativeChatSendOrigin,
     text: string,
-    onUnconfirmed: () => void
+    onUnconfirmed: () => void,
+    /** Structured lane: the id the send went out under; the journal's record of it, or its own
+     *  card, settles the hold. */
+    clientMessageId?: string
   ) => void
 } {
-  const { draftKey, pendingKey, messages, queuedCards = NO_QUEUED_CARDS } = args
+  const {
+    draftKey,
+    pendingKey,
+    messages,
+    queuedCards = NO_QUEUED_CARDS,
+    reachedHost = NO_STRUCTURED_SENDS
+  } = args
   const messagesRef = useRef(messages)
   const queuedCardsRef = useRef(queuedCards)
+  const reachedHostRef = useRef(reachedHost)
   const activeDraftKeyRef = useRef(draftKey)
   const activePendingKeyRef = useRef(pendingKey)
   // Read only by the post-send hold, which runs after the commit that set them.
   useLayoutEffect(() => {
     messagesRef.current = messages
     queuedCardsRef.current = queuedCards
+    reachedHostRef.current = reachedHost
     activeDraftKeyRef.current = draftKey
     activePendingKeyRef.current = pendingKey
-  }, [draftKey, messages, pendingKey, queuedCards])
+  }, [draftKey, messages, pendingKey, queuedCards, reachedHost])
   const mountedRef = useRef(false)
   const unconfirmedRef = useRef<UnconfirmedSend[]>([])
   const holdUnconfirmedSend = useCallback(
-    (origin: MobileNativeChatSendOrigin, text: string, onUnconfirmed: () => void) => {
+    (
+      origin: MobileNativeChatSendOrigin,
+      text: string,
+      onUnconfirmed: () => void,
+      clientMessageId?: string
+    ) => {
       if (!mountedRef.current) {
         return
       }
@@ -79,12 +100,18 @@ export function useMobileNativeChatUnconfirmedSends(args: {
         ...(origin.baselineQueuedMessageIds
           ? { baselineQueuedMessageIds: origin.baselineQueuedMessageIds }
           : {}),
+        ...(clientMessageId !== undefined ? { clientMessageId } : {}),
         deadline: null
       }
       // Why: the transcript event (or the card) can beat the lost RPC acknowledgement.
       if (
         isActiveTranscript &&
-        settledUnconfirmedSends(messagesRef.current, queuedCardsRef.current, [entry]).length > 0
+        settledUnconfirmedSends(
+          messagesRef.current,
+          queuedCardsRef.current,
+          [entry],
+          reachedHostRef.current
+        ).length > 0
       ) {
         return
       }
@@ -106,7 +133,7 @@ export function useMobileNativeChatUnconfirmedSends(args: {
         entry.draftKey === draftKey &&
         (entry.pendingKey === null || entry.pendingKey === pendingKey)
     )
-    const landed = settledUnconfirmedSends(messages, queuedCards, relevant)
+    const landed = settledUnconfirmedSends(messages, queuedCards, relevant, reachedHost)
     if (landed.length === 0) {
       return
     }
@@ -115,7 +142,7 @@ export function useMobileNativeChatUnconfirmedSends(args: {
     for (const entry of landed) {
       clearTimeout(entry.deadline ?? undefined)
     }
-  }, [messages, queuedCards, draftKey, pendingKey])
+  }, [messages, queuedCards, draftKey, pendingKey, reachedHost])
 
   useEffect(() => {
     mountedRef.current = true

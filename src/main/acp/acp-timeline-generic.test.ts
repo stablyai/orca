@@ -169,11 +169,11 @@ describe('generic ACP translation', () => {
   )
 
   it.each([
-    [undefined, 'The agent ended this turn with an error.'],
-    ['Agent X', 'Agent X ended this turn with an error.']
+    [undefined, 'The agent'],
+    ['Agent X', 'Agent X']
   ])(
     "writes a failed turn row in the agent's words, or names the agent (%s) without any",
-    async (agentName, fallback) => {
+    async (agentName, named) => {
       const { rig, translator, apply } = await genericRig(agentName ? { agentName } : {})
       apply(translator.openPrompt('send-1', 1000).events)
       apply(translator.promptResult('send-1', { stopReason: 'end_turn' }, 1100))
@@ -181,13 +181,39 @@ describe('generic ACP translation', () => {
       apply(translator.promptFailed('send-2', new AcpAgentError(-32603, 'Upstream failed'), 1300))
       apply(translator.openPrompt('send-3', 1400).events)
       apply(translator.promptFailed('send-3', new AcpAgentError(-32603, ''), 1500))
+      apply(translator.openPrompt('send-4', 1600).events)
+      const technical = 'provider_write_failed: write EPIPE'
+      apply(translator.promptFailed('send-4', new AcpAgentError(-32603, technical), 1700))
       const rows = (await rig.rows()).filter((row) => row.body.kind === 'status')
+      const details = (text: string) => ({
+        provider: 'acp',
+        kind: 'turn:failed',
+        payload: expect.objectContaining({ head: text, truncated: false })
+      })
       expect(rows.map((row) => row.body)).toEqual([
-        { kind: 'status', tone: 'error', text: 'Upstream failed' },
-        { kind: 'status', tone: 'error', text: fallback }
+        {
+          kind: 'status',
+          tone: 'error',
+          text: `${named} ran into a problem: Upstream failed. Check the chat before trying again.`,
+          failure: {
+            kind: 'providerError',
+            detail: { text: 'Upstream failed', audience: 'person' }
+          },
+          providerFrame: details('Upstream failed')
+        },
+        { kind: 'status', tone: 'error', text: `${named} ended this turn with an error.` },
+        {
+          kind: 'status',
+          tone: 'error',
+          text: `${named} ran into a problem. Check the chat before trying again.`,
+          failure: { kind: 'providerError', detail: { text: technical, audience: 'person' } },
+          // Hidden from the line, the technical reason stays readable behind Details.
+          providerFrame: details(technical)
+        }
       ])
       expect((await rig.turns()).map((turn) => turn.outcome)).toEqual([
         'success',
+        'failure',
         'failure',
         'failure'
       ])

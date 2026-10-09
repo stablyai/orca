@@ -424,7 +424,7 @@ describe('a send with no live owner', () => {
     expect(await errorStatuses()).toEqual([cause])
   })
 
-  it("keeps Codex's own words behind a refused resume without saying the provider stopped", async () => {
+  it('keeps resume diagnostics in Details without claiming Codex stopped', async () => {
     await loseOwner()
     const said = `no rollout found for thread id ${THREAD}`
     acquire.mockRejectedValue(
@@ -432,10 +432,10 @@ describe('a send with no live owner', () => {
     )
     const id = await accept(sendParams('after the thread went away'))
 
-    // The sentence names no cause and quotes nothing; Codex's words ride in the fact for Details.
+    // Resume diagnostics stay in Details, outside the plain failure sentence.
     const rejection = {
       kind: 'restartFailed',
-      detail: { text: said, audience: 'person' },
+      detail: { text: said, audience: 'log' },
       refusal: { code: 'agent_session_operation_invalid', details: { ownerVerdict: 'exited' } }
     }
     expect(await settled(id)).toMatchObject({

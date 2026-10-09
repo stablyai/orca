@@ -91,6 +91,7 @@ vi.mock('./use-mobile-structured-agent-session', () => ({
     session: structuredSessionState,
     ...structuredActivity,
     queued: { cards: [], send: vi.fn(), delete: vi.fn(), edit: vi.fn() },
+    submissions: [{ clientMessageId: 'op-1' }],
     sendWithOutcome: structuredSendWithOutcome,
     cancel: structuredCancel,
     cancelPrompt: structuredCancelPrompt,
@@ -221,7 +222,7 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     })
     resetMobileNativeChatStaleInputForTests()
     captureSendOrigin.mockReturnValue(ORIGIN)
-    structuredSendWithOutcome.mockResolvedValue('accepted')
+    structuredSendWithOutcome.mockResolvedValue({ outcome: 'accepted', clientMessageId: 'op-1' })
     act(() => {
       renderer = create(createElement(Harness))
     })
@@ -606,7 +607,7 @@ describe('useMobileNativeChatController launch-draft wiring', () => {
     sessionState.transcriptLoading = true
     render(chatTab)
 
-    expect(draftsArgs.at(-1)).toMatchObject({ transcriptLoading: true })
+    expect(draftsArgs.at(-1)).toMatchObject({ transcriptLoading: true, submissions: [{}] })
   })
 
   it('forwards a null draft for a tab that publishes none', () => {

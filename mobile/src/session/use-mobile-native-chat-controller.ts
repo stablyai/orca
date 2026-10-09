@@ -133,7 +133,8 @@ export function useMobileNativeChatController(args: {
     chatActive: showNativeChat,
     transcriptLoading: nativeChatSession.transcriptLoading,
     transcriptSettled: nativeChatSession.status === 'ready',
-    queuedCards: structuredNativeChat.queued.cards
+    queuedCards: structuredNativeChat.queued.cards,
+    submissions: structuredNativeChat.submissions
   })
 
   // Deliberately not gated on the chat view being visible: the streaming gate

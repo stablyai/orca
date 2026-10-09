@@ -54,6 +54,7 @@ describe('useMobileNativeChatDrafts', () => {
     transcriptSettled?: boolean
   }): null {
     state = useMobileNativeChatDrafts({
+      submissions: [],
       hostId: 'host',
       worktreeId: 'worktree',
       tabId,

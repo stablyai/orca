@@ -30,6 +30,7 @@ import {
   readCodexTurnStatus
 } from './codex-structured-thread-facts'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../shared/tui-agent-display-names'
+import { providerDispatchRejectionFact } from '../../shared/structured-agent-session-dispatch-rejection'
 import { codexAuthenticationFailure } from './codex-authentication-failure'
 
 /** A message Codex rejected, in the words that name Codex and its legacy markers. */
@@ -56,7 +57,7 @@ export type CodexTurnEndSettlement = {
 
 function errorDetail(params: unknown): ProviderDiagnostic | undefined {
   const message = readCodexTurnErrorMessage(params)
-  return message ? providerDiagnostic(message, 'person') : undefined
+  return message ? providerDiagnostic(message, 'log') : undefined
 }
 
 /** A final `error` naming a turn Codex never opened: before 0.148 that is the only end such a
@@ -76,7 +77,7 @@ function unopenedTurnFailure(
   }
   const message = readCodexJournalRecord(readCodexJournalRecord(params).error).message
   const detail =
-    typeof message === 'string' && message ? providerDiagnostic(message, 'person') : undefined
+    typeof message === 'string' && message ? providerDiagnostic(message, 'log') : undefined
   const auth = codexAuthenticationFailure(params)
   return {
     status: 'failed',
@@ -116,10 +117,10 @@ export function codexTurnEndRejection(
   }
   if (end.status === 'failed') {
     return codexDispatchRejection(
-      agentSessionFailureFact(end.notSignedIn ? 'notSignedIn' : 'providerRejected', {
-        ...(end.detail ? { detail: end.detail } : {}),
-        ...(account ? { account } : {})
-      })
+      end.notSignedIn
+        ? agentSessionFailureFact('notSignedIn', { detail: end.detail })
+        : providerDispatchRejectionFact(end.detail),
+      account
     )
   }
   return null

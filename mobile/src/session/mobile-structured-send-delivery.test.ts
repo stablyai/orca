@@ -14,7 +14,7 @@ function accepted(
 }
 
 describe('mobileStructuredSendDelivery', () => {
-  it('keeps the typed auth fact beside guidance until the transcript can explain it', () => {
+  it('leaves a recorded auth rejection and its guidance in the transcript', () => {
     const result = structuredSendResultFixture('rejected', 'Sign in to Grok with `grok login`.')
     if (!('submission' in result)) {
       throw new Error('expected submission')
@@ -25,14 +25,15 @@ describe('mobileStructuredSendDelivery', () => {
     }
     result.submission.rejection = fact
     expect(mobileStructuredSendDelivery({ status: 'accepted', value: result })).toEqual({
+      outcome: 'recorded-unsent',
+      error: null
+    })
+    result.submission.queuedMessageId = 'earlier-card'
+    expect(mobileStructuredSendDelivery({ status: 'accepted', value: result })).toEqual({
       outcome: 'rejected',
       error: 'Sign in to Grok with `grok login`.',
       failure: fact
     })
-    result.submission.rejection = { kind: 'providerRejected' }
-    expect(mobileStructuredSendDelivery({ status: 'accepted', value: result }).error).toContain(
-      'Sign in'
-    )
   })
   it('reports transport and host uncertainty on this send', () => {
     expect(mobileStructuredSendDelivery({ status: 'unknown' })).toEqual({
@@ -106,14 +107,15 @@ describe('mobileStructuredSendDelivery', () => {
     })
   })
 
-  it('withholds internal provider write reasons', () => {
-    expect(
-      mobileStructuredSendDelivery(accepted('rejected', 'provider_write_failed: broken pipe'))
-    ).toEqual({
-      outcome: 'rejected',
-      error: "Orca couldn't reach the agent. Your message was not sent. Send it again."
-    })
-  })
+  it.each(['provider_write_failed: broken pipe', 'Claude does not support .bmp'])(
+    'leaves a recorded rejection to its row without a banner: %s',
+    (reason) => {
+      expect(mobileStructuredSendDelivery(accepted('rejected', reason))).toEqual({
+        outcome: 'recorded-unsent',
+        error: null
+      })
+    }
+  )
 
   it('lets a kept queued card hold the text after a provider rejection', () => {
     const value = structuredSendResultFixture('rejected', 'Orca restarted before this was sent.')
@@ -139,12 +141,6 @@ describe('mobileStructuredSendDelivery', () => {
       outcome: 'accepted',
       error: null
     })
-  })
-
-  it('shows an actionable content rejection', () => {
-    expect(
-      mobileStructuredSendDelivery(accepted('rejected', 'Claude does not support .bmp'))
-    ).toEqual({ outcome: 'rejected', error: 'Claude does not support .bmp' })
   })
 
   it.each([

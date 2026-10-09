@@ -53,7 +53,7 @@ function apply(
 }
 
 /** The rows the phone's transcript reads, as its session hook builds them: the journal plus the
- *  notice a cut turn gets, projected with no other rejected send drawn in place. */
+ *  notice a cut turn gets, with a recorded, rejected send drawn in place as not sent. */
 function phoneTranscript(state: StructuredAgentSessionState) {
   const items = withNativeChatCutTurnNotices(state.items, {
     agentName: TUI_AGENT_DISPLAY_NAMES.codex
@@ -61,7 +61,7 @@ function phoneTranscript(state: StructuredAgentSessionState) {
   return {
     items,
     messages: projectStructuredAgentSessionMessages(items, [], state.submissions, {
-      rejectedInPlace: false
+      rejectedInPlace: true
     })
   }
 }

@@ -339,8 +339,8 @@ describe('openCodexAppServerConnection', () => {
 
     expect(isCodexAppServerRequestError(refusal)).toBe(true)
     expect((refusal as Error).message).toContain('bad params')
-    // Codex's own words, apart from Orca's prefix, for a person to read.
-    expect(providerDiagnosticOf(refusal)).toEqual({ text: 'bad params', audience: 'person' })
+    // Protocol errors are kept for Details, apart from Orca's prefix.
+    expect(providerDiagnosticOf(refusal)).toEqual({ text: 'bad params', audience: 'log' })
     expect(providerDiagnosticOf(missing)).toBeUndefined()
     expect(isCodexAppServerUnsupportedError(missing)).toBe(true)
     expect(isCodexAppServerRequestError(missing)).toBe(false)

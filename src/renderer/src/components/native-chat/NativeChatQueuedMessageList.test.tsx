@@ -269,9 +269,13 @@ describe('NativeChatQueuedMessageList', () => {
       ])
     )
     expect(
-      screen.getByText("Couldn't send — press Send to retry once the agent finishes.")
+      screen.getByText(
+        "The agent couldn't receive this message. Use Send to try again once The agent finishes."
+      )
     ).toBeTruthy()
-    expect(screen.getByText("Couldn't send — press Send to retry.")).toBeTruthy()
+    expect(
+      screen.getByText("The agent couldn't receive this message. Use Send to try again.")
+    ).toBeTruthy()
     expect(screen.getAllByRole('button', { name: 'Send' })).toHaveLength(1)
   })
 
@@ -586,7 +590,9 @@ describe('NativeChatQueuedMessageList', () => {
       expect(row.className.split(' ')).not.toContain('rounded-md')
     }
     // Captions still render on their own rows.
-    expect(rows[2]?.textContent).toContain("Couldn't send — press Send to retry.")
+    expect(rows[2]?.textContent).toContain(
+      "The agent couldn't receive this message. Use Send to try again."
+    )
   })
 
   it('without a pause the box holds only the list, one card or many', () => {
@@ -665,7 +671,9 @@ describe('NativeChatQueuedMessageList', () => {
       ])
     )
     const rows = screen.getAllByRole('listitem')
-    expect(rows[0]?.textContent).toContain("Couldn't send — press Send to retry.")
+    expect(rows[0]?.textContent).toContain(
+      "The agent couldn't receive this message. Use Send to try again."
+    )
     expect(rows[0]?.textContent).not.toContain('send_failed')
     expect(rows[1]?.textContent).toContain('Stopped before it was sent')
     // Still a normal returned card: Send and Delete stay offered.

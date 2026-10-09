@@ -26,6 +26,7 @@ describe('useMobileNativeChatDrafts unconfirmed hold with queued cards', () => {
 
   function Harness({ queuedCards }: { queuedCards: QueuedCard[] }): null {
     state = useMobileNativeChatDrafts({
+      submissions: [],
       hostId: 'host',
       worktreeId: 'worktree',
       tabId: 'a',

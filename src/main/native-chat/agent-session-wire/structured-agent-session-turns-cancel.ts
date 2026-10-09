@@ -83,7 +83,10 @@ function stopRefusedNote(
   const detail = refusal?.detail
   const fact = refusal?.turnMayOpen
     ? agentSessionFailureFact('cancelUnconfirmed')
-    : agentSessionFailureFact('stopRefused', detail ? { detail } : {})
+    : agentSessionFailureFact('stopRefused', {
+        ...(detail ? { detail } : {}),
+        ...(refusal?.turnNotRunning ? { turnNotRunning: true } : {})
+      })
   return {
     kind: 'status',
     ...agentSessionFailureWords(fact, { ...ctx.failureTextContext, surface: 'row' })
@@ -242,7 +245,10 @@ async function cancelAndNote(
     // The adapter's error is Orca's; the row says only that the stop is unconfirmed.
     note = {
       kind: 'status',
-      ...agentSessionFailureWords(agentSessionFailureFact('cancelUnconfirmed'), { surface: 'row' })
+      ...agentSessionFailureWords(agentSessionFailureFact('cancelUnconfirmed'), {
+        ...ctx.failureTextContext,
+        surface: 'row'
+      })
     }
   }
   // Keyed by the turn it stopped, as the provider names it, so another Stop of that turn rewrites

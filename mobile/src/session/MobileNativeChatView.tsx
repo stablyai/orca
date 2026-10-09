@@ -21,6 +21,7 @@ import type { NativeChatTurnJournal } from '../../../src/shared/native-chat-turn
 import { colors } from '../theme/mobile-theme'
 import { styles } from './mobile-native-chat-view-styles'
 import { mobileNativeChatListFooter } from './mobile-native-chat-list-footer'
+import { mobileNativeChatListHeader } from './mobile-native-chat-list-header'
 import {
   buildMobileNativeChatTransientData,
   mobileNativeChatEmptyState,
@@ -44,6 +45,7 @@ import type { MobileChatPermission } from './mobile-native-chat-permission'
 import type { MobileChatQuestion } from './mobile-native-chat-question'
 import type { MobileNativeChatSessionOptionPickersProps } from './MobileNativeChatSessionOptionPickers'
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
+import { mobileNativeChatUnsentNotices } from './mobile-native-chat-unsent-notices'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
 
 /** Why the composer input is locked: the transport is disconnected, or the
@@ -297,6 +299,10 @@ export function MobileNativeChatView({
     scopeKey: sendSurfaceId
   })
 
+  const unsentNotices = useMemo(
+    () => mobileNativeChatUnsentNotices(turnJournal, agent ?? null),
+    [turnJournal, agent]
+  )
   const renderItem = useCallback(
     ({ item, index }: { item: NativeChatMessage; index: number }) => (
       <MobileNativeChatMessage
@@ -306,10 +312,11 @@ export function MobileNativeChatView({
         onOpenFile={onOpenFile}
         structuredActivityUi={structuredActivityUi}
         onToggleTurn={turns.onToggleTurn}
+        unsentNotice={item.unsent === true ? unsentNotices.get(item.id) : undefined}
         {...turns.resolveRow(index, item)}
       />
     ),
-    [toolsExpanded, fontScale, onOpenFile, structuredActivityUi, turns]
+    [toolsExpanded, fontScale, onOpenFile, structuredActivityUi, turns, unsentNotices]
   )
 
   const liveStatus = turns.liveLine ? (
@@ -368,21 +375,7 @@ export function MobileNativeChatView({
               scrollEventThrottle={32}
               onContentSizeChange={pinToTailAfterContentResize}
               onLayout={pinToTail}
-              ListHeaderComponent={
-                hasMore ? (
-                  <Pressable
-                    style={styles.loadEarlier}
-                    onPress={loadEarlier}
-                    disabled={loadingEarlier}
-                  >
-                    {loadingEarlier ? (
-                      <ActivityIndicator size="small" color={colors.textMuted} />
-                    ) : (
-                      <Text style={styles.loadEarlierText}>Load earlier messages</Text>
-                    )}
-                  </Pressable>
-                ) : null
-              }
+              ListHeaderComponent={mobileNativeChatListHeader(hasMore, loadingEarlier, loadEarlier)}
               ListFooterComponent={mobileNativeChatListFooter(
                 liveStatus,
                 turns.waitingRows,

@@ -194,10 +194,10 @@ describe('a Codex turn a conversation command claims', () => {
     expect(resultRows(writes).map((write) => write.body)).toEqual([
       {
         kind: 'status',
-        text: 'Compaction failed: Unavailable.',
+        text: "Codex couldn't shorten this chat's history.",
         failure: {
           kind: 'compactionFailed',
-          detail: { text: 'Unavailable', audience: 'person' }
+          detail: { text: 'Unavailable', audience: 'log' }
         },
         tone: 'error'
       }
@@ -214,7 +214,7 @@ describe('a Codex turn a conversation command claims', () => {
     expect(resultRows(writes).map((write) => write.body)).toEqual([
       {
         kind: 'status',
-        text: 'Compaction failed.',
+        text: "Codex couldn't shorten this chat's history.",
         failure: { kind: 'compactionFailed' },
         tone: 'error'
       }
@@ -231,7 +231,7 @@ describe('a Codex turn a conversation command claims', () => {
     expect(resultRows(writes).map((write) => write.body)).toEqual([
       {
         kind: 'status',
-        text: 'Compaction completion is unconfirmed.',
+        text: "Codex hasn't confirmed that this chat's history was shortened. Check the chat before running /compact again.",
         failure: { kind: 'compactionUnconfirmed' },
         tone: 'error'
       }
@@ -268,7 +268,12 @@ describe('a Codex turn a conversation command claims', () => {
     // Codex's own error row, in the command's turn; the completion adds none.
     expect(resultRows(writes)).toEqual([
       expect.objectContaining({
-        body: expect.objectContaining({ kind: 'status', text: 'Unavailable', tone: 'error' }),
+        body: expect.objectContaining({
+          kind: 'status',
+          text: 'Codex ran into a problem. Check the chat before trying again.',
+          tone: 'error',
+          failure: { kind: 'providerError', detail: { text: 'Unavailable', audience: 'log' } }
+        }),
         turnScope: { kind: 'turn', turnItemId: COMMAND_TURN_KEY }
       })
     ])

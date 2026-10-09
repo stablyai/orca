@@ -28,47 +28,60 @@ describe('startup sign-in rows from host to renderer', () => {
     ],
     ['OMP', 'Connectez-vous à OMP.']
   ])(
-    'translates an actual %s startup row with its diagnostic and resend advice',
+    'translates an actual %s startup row with plain detail and resend advice, hiding technical detail',
     async (agentName, guidance) => {
       await i18n.changeLanguage('fr')
-      const detail = 'Provider diagnostic: {{agent}} must remain literal.'
-      const startup = structuredAgentSessionStartFailure(
-        {
-          failure: {
-            kind: 'notSignedIn',
-            account: 'system',
-            detail: { text: detail, audience: 'person' }
-          }
-        },
-        { agentName }
-      )
-      const mutation = structuredAgentSessionStartFailureRow('generation', startup)
-      if (mutation.kind !== 'item' || mutation.body.kind !== 'status') {
-        throw new Error('Expected the startup writer to produce a status row')
-      }
-      expect(mutation.body.text).toContain('Then send your message again.')
-      const [message] = projectStructuredItemsToNativeChat([
-        {
-          itemId: agentJournalItemKey(mutation.identity),
-          sequence: 1,
-          revision: 1,
-          observedAt: 1,
-          body: mutation.body,
-          turnScope: mutation.turnScope
-        }
-      ])
-      render(
-        createElement(MessageRow, {
-          message,
-          agentName,
-          expandSignal: false,
-          onScrollMessageToTop: vi.fn()
-        })
-      )
+      renderStartupRow(agentName, 'Sign-in note: {{agent}} must remain literal.')
       expect(
-        screen.getByText(`${guidance} ${detail} Puis envoyez à nouveau votre message.`)
+        screen.getByText(
+          `${guidance} Sign-in note: {{agent}} must remain literal. Puis envoyez à nouveau votre message.`
+        )
       ).toBeInTheDocument()
-      expect(screen.queryByText(mutation.body.text)).toBeNull()
+      cleanup()
+
+      // Technical detail stays off the row; the agent-named sign-in step and resend advice remain.
+      renderStartupRow(agentName, 'Provider diagnostic: {{agent}} must remain literal.')
+      expect(
+        screen.getByText(`${guidance} Puis envoyez à nouveau votre message.`)
+      ).toBeInTheDocument()
+      expect(screen.queryByText(/provider|diagnostic/i)).toBeNull()
     }
   )
 })
+
+function renderStartupRow(agentName, detail) {
+  const startup = structuredAgentSessionStartFailure(
+    {
+      failure: {
+        kind: 'notSignedIn',
+        account: 'system',
+        detail: { text: detail, audience: 'person' }
+      }
+    },
+    { agentName }
+  )
+  const mutation = structuredAgentSessionStartFailureRow('generation', startup)
+  if (mutation.kind !== 'item' || mutation.body.kind !== 'status') {
+    throw new Error('Expected the startup writer to produce a status row')
+  }
+  expect(mutation.body.text).toContain('Then send your message again.')
+  const [message] = projectStructuredItemsToNativeChat([
+    {
+      itemId: agentJournalItemKey(mutation.identity),
+      sequence: 1,
+      revision: 1,
+      observedAt: 1,
+      body: mutation.body,
+      turnScope: mutation.turnScope
+    }
+  ])
+  render(
+    createElement(MessageRow, {
+      message,
+      agentName,
+      expandSignal: false,
+      onScrollMessageToTop: vi.fn()
+    })
+  )
+  expect(screen.queryByText(mutation.body.text)).toBeNull()
+}

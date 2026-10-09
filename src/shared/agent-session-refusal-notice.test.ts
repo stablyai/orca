@@ -160,8 +160,7 @@ describe('the notice for every failure and write', () => {
     }
   })
 
-  // The control that sent the write is how to try again; only the phone's composer has none.
-  it('says how to try again only to update Orca, or on the phone where a resend can work', () => {
+  it('says how to try again only where that can help', () => {
     for (const { failure, write, parts, english, cell } of cells) {
       const phoneResend = write === 'composer-send' && RESEND_CAN_WORK.has(codeOf(failure))
       expect(parts.includes('tryAgainComposerSend'), cell).toBe(phoneResend)
@@ -171,10 +170,15 @@ describe('the notice for every failure and write', () => {
           codeOf(failure) === 'agent_session_operation_capacity'
       )
     }
-    for (const reason of [null, DISPATCH_REJECTED_WRITE_FAILED, DISPATCH_REJECTED_QUEUE_FULL]) {
-      expect(
-        agentSessionWriteNoticeEnglish(structuredAgentSessionRejectionParts(reason, 'send'))
-      ).not.toMatch(/again/i)
+    for (const [reason, canSendAgain] of [
+      [null, false],
+      [DISPATCH_REJECTED_WRITE_FAILED, true],
+      [DISPATCH_REJECTED_QUEUE_FULL, false]
+    ] as const) {
+      const english = agentSessionWriteNoticeEnglish(
+        structuredAgentSessionRejectionParts(reason, 'send')
+      )
+      expect(/again/i.test(english)).toBe(canSendAgain)
     }
   })
 
@@ -405,7 +409,13 @@ describe('the notice for every reason a host names', () => {
       if (words && 'cause' in words) {
         const retried = words.action === 'retry' ? words.step : undefined
         expect(agentSessionWriteNoticeParts(failure, write, beside), cell).toEqual(
-          parts.filter((part) => part !== retried)
+          parts
+            .filter((part) => part !== retried)
+            .map((part) =>
+              typeof part === 'string' || 'text' in part
+                ? part
+                : { ...part, context: { ...part.context, ...beside } }
+            )
         )
       }
     }
@@ -458,14 +468,13 @@ describe('the notice for every reason a host names', () => {
       const saysNotDone =
         write === 'read-history' && failure.code === 'agent_session_journal_unreadable'
       // "Run /clear when it's done" already says the command has yet to happen.
-      const clearWhileWorking = (
-        [
-          'runClearWhenDone',
-          'clearAfterAnswer',
-          'runCompactWhenDone',
-          'compactAfterAnswer'
-        ] as const
-      ).some((sentence) => parts.includes(sentence))
+      const clearWhileWorking = parts.some(
+        (part) =>
+          typeof part !== 'string' &&
+          'failure' in part &&
+          part.failure.kind === 'commandRefused' &&
+          part.context.command !== undefined
+      )
       expect(notDone, cell).toEqual(
         answeredAway || unsupported || saysNotDone || clearWhileWorking ? [] : [NOT_DONE[write]]
       )
@@ -633,6 +642,21 @@ describe('a chat whose history the host could not open', () => {
 describe('a /clear or /compact refused while the agent works', () => {
   const refused = (reason: 'turnActive' | 'messagesUnsettled' | 'promptPending') =>
     ({ kind: 'refused', code: 'agent_session_operation_invalid', details: { reason } }) as const
+
+  it.each(['clear', 'compact'] as const)('names the chat agent for /%s', (command) => {
+    for (const reason of ['turnActive', 'messagesUnsettled'] as const) {
+      expect(
+        agentSessionWriteNoticeEnglish(
+          agentSessionWriteNoticeParts(refused(reason), command, { agentName: 'Codex' })
+        )
+      ).toBe(`Codex is still working. Run /${command} when it's done.`)
+    }
+    expect(
+      agentSessionWriteNoticeEnglish(
+        agentSessionWriteNoticeParts(refused('promptPending'), command, { agentName: 'Codex' })
+      )
+    ).toBe(`Answer Codex's question or approval, then run /${command}.`)
+  })
 
   it('says one plain sentence of what the person sees and can do, whichever reason', () => {
     for (const reason of ['turnActive', 'messagesUnsettled'] as const) {

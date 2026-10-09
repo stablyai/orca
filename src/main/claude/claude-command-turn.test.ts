@@ -174,7 +174,7 @@ describe('a captured /compact as the open Claude turn', () => {
       expect.objectContaining({
         body: {
           kind: 'status',
-          text: 'Compaction failed: API Error: Request was aborted.',
+          text: "Claude couldn't shorten this chat's history.",
           failure: {
             kind: 'compactionFailed',
             detail: { text: 'API Error: Request was aborted.', audience: 'person' }
@@ -303,7 +303,7 @@ describe('the command turn at each point the ordinary result path threads throug
     expect(worded.drawn().map((row) => row.body)).toEqual([
       {
         kind: 'status',
-        text: 'Compaction failed: Not enough messages to compact.',
+        text: "Claude couldn't shorten this chat's history: Not enough messages to compact.",
         failure: {
           kind: 'compactionFailed',
           detail: { text: 'Not enough messages to compact.', audience: 'person' }
@@ -319,7 +319,7 @@ describe('the command turn at each point the ordinary result path threads throug
     expect(unworded.drawn().map((row) => row.body)).toEqual([
       {
         kind: 'status',
-        text: 'Compaction failed.',
+        text: "Claude couldn't shorten this chat's history.",
         failure: { kind: 'compactionFailed' },
         tone: 'error'
       }
@@ -334,7 +334,7 @@ describe('the command turn at each point the ordinary result path threads throug
     expect(drawn().map((row) => row.body)).toEqual([
       {
         kind: 'status',
-        text: 'Compaction completion is unconfirmed.',
+        text: "Claude hasn't confirmed that this chat's history was shortened. Check the chat before running /compact again.",
         failure: { kind: 'compactionUnconfirmed' },
         tone: 'error'
       }

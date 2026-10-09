@@ -168,7 +168,7 @@ describe('MobileNativeChatQueuedMessages', () => {
 
   it("lets a returned card's reason wrap whole, in the destructive color, beside an alert", async () => {
     const reason =
-      'The provider did not accept this message: Claude does not support the image type .bmp in a steering message.'
+      "Claude didn't accept this message: Claude does not support the image type .bmp in a steering message."
     const mounted = await mount({
       cards: [
         card({ messageId: 'r', state: 'returned', needsAttention: true, caption: reason }),

@@ -130,7 +130,7 @@ export async function interruptOpeningCodexTurn(
   }
   if (!stillOpening()) {
     // It ended: the Stop found no turn running.
-    return { cancelled: false }
+    return { cancelled: false, refusal: { turnNotRunning: true } }
   }
   return { cancelled: false, refusal: { turnMayOpen: true } }
 }

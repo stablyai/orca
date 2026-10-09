@@ -191,7 +191,8 @@ async function mountPhone(): Promise<Phone> {
       tabId: 'tab',
       sessionId: STOP_JOURNAL_SESSION,
       messages: session.session.messages,
-      transcriptSettled: session.session.status === 'ready'
+      transcriptSettled: session.session.status === 'ready',
+      submissions: session.submissions
     })
     latest = drafts
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every member the list's rows, bars and footer read comes from the two hooks above, as the controller passes them; showNativeChat, nativeChatAgent, nativeChatCanStop, nativeChatStructured and the scope key are constants; the overlay's other members stay undefined: the composer's and Stop's handlers, files and options never reach the list, the streaming text is undefined on a structured tab too, and the prompts, which would hide the live status, are absent in this flow.

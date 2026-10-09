@@ -8,13 +8,14 @@ import {
   type AgentSessionFailureFact
 } from '../../../../shared/agent-session-failure'
 import { agentSessionFailureSentence } from '../../../../shared/agent-session-failure-words'
-import { translate } from '@/i18n/i18n'
 import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
-import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
 import {
-  agentSessionFailureStatedByStartRow,
-  structuredAgentSessionStartFailureFacts
-} from './structured-agent-session-delivery-notices'
+  agentSessionWriteNoticeText,
+  agentSessionWriteFailureText,
+  sayAgentSessionWriteNoticeTranslated
+} from './agent-session-write-notice-text'
+import { agentSessionFailureStatedByStartRow } from '../../../../shared/structured-agent-session-start-failure-facts'
+import { structuredAgentSessionStartFailureFacts } from './structured-agent-session-delivery-notices'
 import { pendingPromptsAllUnanswerableHere } from '../../../../shared/agent-session-approval-subject'
 import type { StructuredPromptItem } from './structured-agent-session-message-projection'
 import type {
@@ -80,26 +81,28 @@ export type StructuredConversationCommandCauses = Readonly<
 /** The line a command refused here gets: what the person sees and can do, as the host says it. */
 function heldCommandText(
   command: AgentSessionConversationCommand,
-  hold: Exclude<StructuredConversationCommandHold, 'ahead'>
+  hold: Exclude<StructuredConversationCommandHold, 'ahead'>,
+  agentName: string
 ): string {
-  const clear = command === 'clear'
-  switch (hold) {
-    case 'prompt':
-      return agentSessionWriteNoticeText([clear ? 'clearAfterAnswer' : 'compactAfterAnswer'])
-    case 'working':
-      return agentSessionWriteNoticeText([
-        'agentStillWorking',
-        clear ? 'runClearWhenDone' : 'runCompactWhenDone'
-      ])
-    case 'sending':
-      return agentSessionWriteNoticeText([clear ? 'clearAfterSending' : 'compactAfterSending'])
-    case 'background':
-      break
+  if (hold === 'sending' || hold === 'background') {
+    return sayAgentSessionFailureTranslated(
+      hold === 'sending' ? 'commandAfterSending' : 'commandWaitForPendingWork',
+      { agent: agentName, command }
+    )
   }
-  return translate(
-    'components.native-chat.conversationCommand.pendingWork',
-    'Wait for pending work and messages to finish before using this command.'
-  )
+  return agentSessionWriteNoticeText([
+    {
+      failure: {
+        kind: 'commandRefused',
+        refusal: {
+          code: 'agent_session_operation_invalid',
+          details: { reason: hold === 'prompt' ? 'promptPending' : 'turnActive' }
+        }
+      },
+      surface: 'row',
+      context: { agentName, command }
+    }
+  ])
 }
 
 export async function sendStructuredConversationCommand(input: {
@@ -128,7 +131,7 @@ export async function sendStructuredConversationCommand(input: {
   })
   // A command on its way is the agent's work in flight.
   if (input.pending.current) {
-    return { accepted: false, error: heldCommandText(input.command, 'working') }
+    return { accepted: false, error: heldCommandText(input.command, 'working', input.agentName) }
   }
   // The message ahead reads as sending, and Send is busy until the host has it; nothing is armed.
   if (input.hold === 'ahead') {
@@ -136,13 +139,18 @@ export async function sendStructuredConversationCommand(input: {
   }
   if (input.hold !== null) {
     // Each hold here is named for the cause it waits on.
-    return refused(heldCommandText(input.command, input.hold), input.hold)
+    return refused(heldCommandText(input.command, input.hold, input.agentName), input.hold)
   }
   input.pending.current = true
   try {
     const outcome = await input.send(input.command)
     if (outcome.kind === 'not-done') {
-      return { accepted: false, error: outcome.notice }
+      return {
+        accepted: false,
+        error: agentSessionWriteFailureText(outcome.failure, input.command, {
+          agentName: input.agentName
+        })
+      }
     }
     // The pane stopped waiting on this reply (closed, left the chat, or sent a newer command).
     if (outcome.kind === 'dropped') {
@@ -259,6 +267,7 @@ function conversationCommandFailureText(
     fact,
     'row',
     { agentName, command: result.command },
-    sayAgentSessionFailureTranslated
+    sayAgentSessionFailureTranslated,
+    sayAgentSessionWriteNoticeTranslated
   )
 }

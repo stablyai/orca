@@ -238,7 +238,7 @@ describe('a Codex Stop whose interrupt failed', () => {
     expect(stopped).toMatchObject({ ok: true, value: { cancelled: false } })
     expect(disposeSession).toHaveBeenCalledExactlyOnceWith(SESSION)
     expect((await journalRows()).statuses).toEqual([
-      "Codex didn't stop: failed to interrupt turn: channel closed."
+      "Codex didn't stop. Check the chat before trying again."
     ])
   })
 

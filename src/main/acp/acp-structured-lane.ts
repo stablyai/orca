@@ -59,6 +59,7 @@ export class AcpStructuredLane {
     this.logger = neverThrowingStructuredAgentSessionLogger(deps.logger)
     this.translator = new AcpTimelineTranslator({
       sessionId: deps.providerSessionId,
+      agent: deps.agent,
       dialect: deps.dialect,
       agentName: deps.agentName,
       onTextDropped: (drop) => this.reportTextDrop(drop)

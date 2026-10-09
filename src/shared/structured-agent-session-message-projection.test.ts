@@ -6,6 +6,8 @@ import type { AgentJournalRenderItem, AgentJournalSubmission } from './agent-ses
 import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
 import { structuredAgentSessionSendBody } from './structured-agent-session-send-mutation'
 import { projectStructuredAgentSessionMessages } from './structured-agent-session-message-projection'
+import { DISPATCH_REJECTED_CANCELLED } from './structured-agent-session-dispatch-rejection'
+import { projectStructuredItemsToNativeChat } from './structured-agent-session-projection'
 
 const KEPT_ID = 'client-kept'
 // The desktop draws a rejected send in place, as not sent, unless the host kept it as a card.
@@ -76,5 +78,98 @@ describe('a send kept as a card', () => {
     expect(shown).toHaveLength(1)
     expect(shown[0]).toMatchObject({ blocks: [{ text: 'the edited words' }] })
     expect(shown[0]).not.toHaveProperty('unsent')
+  })
+})
+
+// The phone draws this list as it comes, so the projection itself must place a not-sent row.
+describe('a send the host recorded and then rejected', () => {
+  it('stays where the host placed it, above what came after, and above a held send', () => {
+    const answer: AgentJournalRenderItem = {
+      itemId: 'answer-3',
+      revision: 1,
+      sequence: 3,
+      observedAt: 3,
+      body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Yes' }] }
+    }
+    const later: AgentJournalSubmission = {
+      ...rejected({ clientMessageId: 'client-later', payloadFingerprint: 'fingerprint-later' }),
+      dispatchState: 'accepted',
+      providerItemId: 'provider-later',
+      reason: null
+    }
+    delete later.rejection
+    const held: AgentJournalSubmission = {
+      ...later,
+      clientMessageId: 'client-held',
+      payloadFingerprint: 'fingerprint-held',
+      dispatchState: 'pending',
+      providerItemId: null,
+      handoverRecorded: true
+    }
+    const shown = projectStructuredAgentSessionMessages(
+      [
+        userItem(KEPT_ID, 'hello', 1),
+        userItem('client-later', 'are you there?', 2),
+        answer,
+        userItem('client-held', 'next', 4)
+      ],
+      [],
+      [rejected(), later, held],
+      DESKTOP
+    )
+    expect(shown.map((message) => [message.id, message.unsent ?? message.queued ?? false])).toEqual(
+      [
+        [agentJournalSubmissionKey(KEPT_ID), true],
+        [agentJournalSubmissionKey('client-later'), false],
+        ['answer-3', false],
+        [agentJournalSubmissionKey('client-held'), true]
+      ]
+    )
+  })
+})
+
+// A not-sent row joins the conversation after the stop rows are placed, so the rows a run of
+// stopped sends ends with stay as they were without it.
+describe('a not-sent row between two stopped sends', () => {
+  const items = [
+    userItem('client-s1', 'a', 3),
+    userItem(KEPT_ID, 'b', 4),
+    userItem('client-s2', 'c', 5)
+  ]
+  const stopped = (clientMessageId: string): AgentJournalSubmission => ({
+    ...rejected({ clientMessageId, payloadFingerprint: `fingerprint-${clientMessageId}` }),
+    reason: DISPATCH_REJECTED_CANCELLED,
+    rejection: { kind: 'cancelled' }
+  })
+  const submissions = [stopped('client-s1'), rejected(), stopped('client-s2')]
+  const drawnOrder = (messages: readonly { id: string; unsent?: true }[]) =>
+    messages.map((message) => `${message.id}${message.unsent ? ' (not sent)' : ''}`)
+
+  it('sits at its journal place without splitting the run: one stop row, after the last', () => {
+    expect(
+      drawnOrder(projectStructuredAgentSessionMessages(items, [], submissions, DESKTOP))
+    ).toEqual([
+      agentJournalSubmissionKey('client-s1'),
+      `${agentJournalSubmissionKey(KEPT_ID)} (not sent)`,
+      agentJournalSubmissionKey('client-s2'),
+      `stopped-before-start:${agentJournalSubmissionKey('client-s2')}`
+    ])
+  })
+
+  it('keeps a stop row whose send has no journal place right after that send', () => {
+    const unplaced = (input: readonly AgentJournalRenderItem[]) =>
+      projectStructuredItemsToNativeChat(input).map((message) =>
+        message.id === agentJournalSubmissionKey(KEPT_ID)
+          ? message
+          : { ...message, journalPosition: undefined }
+      )
+    expect(
+      drawnOrder(projectStructuredAgentSessionMessages(items, [], submissions, DESKTOP, unplaced))
+    ).toEqual([
+      agentJournalSubmissionKey('client-s1'),
+      agentJournalSubmissionKey('client-s2'),
+      `stopped-before-start:${agentJournalSubmissionKey('client-s2')}`,
+      `${agentJournalSubmissionKey(KEPT_ID)} (not sent)`
+    ])
   })
 })

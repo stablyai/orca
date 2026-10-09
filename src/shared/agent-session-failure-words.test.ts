@@ -61,6 +61,79 @@ function factsFor(kind: AgentSessionFailureKind): AgentSessionFailureFact[] {
 }
 
 describe('the words written beside a failure fact', () => {
+  it('names the agent and offers another send only for a provably undelivered write', () => {
+    expect(
+      agentSessionFailureSentence({ kind: 'writeFailed' }, 'rejection', {
+        agentName: 'Codex'
+      })
+    ).toBe("Codex couldn't receive this message. Send it again.")
+    expect(
+      agentSessionFailureSentence({ kind: 'writeFailed' }, 'rejection', {
+        agentName: 'Claude',
+        retryControl: true
+      })
+    ).toBe("Claude couldn't receive this message.")
+    expect(
+      agentSessionFailureSentence({ kind: 'providerRejected' }, 'rejection', {
+        agentName: 'Claude'
+      })
+    ).toBe("Claude didn't accept this message.")
+  })
+
+  it.each([
+    'provider_write_failed: stand-in rejected the turn.',
+    'The provider did not accept this message: provider_write_failed: stand-in rejected the turn.',
+    '{"type":"error","message":"failed"}',
+    'API Error: Request was aborted.',
+    'stream disconnected before completion: error sending request for url (http://127.0.0.1:9/v1/responses)',
+    'Error: failed\n    at send (/app/send.ts:1:2)'
+  ])('never quotes technical detail labelled person: %s', (text) => {
+    for (const kind of AGENT_SESSION_FAILURE_KINDS) {
+      for (const surface of SURFACES) {
+        expect(
+          agentSessionFailureSentence(
+            {
+              kind,
+              detail: { text, audience: 'person' },
+              retry: { cause: text }
+            },
+            surface,
+            { agentName: 'Codex' }
+          )
+        ).not.toContain(text)
+      }
+    }
+  })
+
+  it.each([
+    'Claude does not support the image type .bmp',
+    'Claude does not support the image my_photo.bmp. Please use a PNG image'
+  ])('keeps a readable content explanation without an unconditional resend: %s', (text) => {
+    expect(
+      agentSessionFailureSentence(
+        {
+          kind: 'providerRejected',
+          detail: { text, audience: 'person' }
+        },
+        'rejection',
+        { agentName: 'Claude' }
+      )
+    ).toBe(`Claude didn't accept this message: ${text}.`)
+  })
+
+  it('withholds a quoted explanation that talks about a provider', () => {
+    expect(
+      agentSessionFailureSentence(
+        {
+          kind: 'providerRejected',
+          detail: { text: 'The provider did not accept this message.', audience: 'person' }
+        },
+        'rejection',
+        { agentName: 'Codex' }
+      )
+    ).toBe("Codex didn't accept this message.")
+  })
+
   describe.each(SURFACES)('on the %s surface', (surface) => {
     it.each(AGENT_SESSION_FAILURE_KINDS)('for %s are one sentence a person can read', (kind) => {
       for (const fact of factsFor(kind)) {
@@ -210,14 +283,16 @@ describe('the words written beside a failure fact', () => {
         { kind: 'stopRefused', ...(detail ? { detail } : {}) },
         { surface: 'row', agentName }
       ).text
-    expect(refused(undefined, 'Codex')).toBe('Codex had no turn running to stop.')
-    expect(refused()).toBe('The agent had no turn running to stop.')
+    expect(refused(undefined, 'Codex')).toBe(
+      "Codex didn't stop. Check the chat before trying again."
+    )
+    expect(refused()).toBe("The agent didn't stop. Check the chat before trying again.")
     expect(refused({ text: 'no active turn to interrupt.', audience: 'person' }, 'Codex')).toBe(
-      "Codex didn't stop: no active turn to interrupt."
+      "Codex didn't stop: no active turn to interrupt. Check the chat before trying again."
     )
     // Words Codex wrote for the log are never quoted to a person.
     expect(refused({ text: 'rpc -32600', audience: 'log' }, 'Codex')).toBe(
-      'Codex had no turn running to stop.'
+      "Codex didn't stop. Check the chat before trying again."
     )
   })
 
@@ -249,7 +324,7 @@ describe('the words written beside a failure fact', () => {
         detail: { text: '{"type":"system","subtype":"api_retry"}', audience: 'log' },
         retry: { error: 'rate_limit', status: 429 }
       })
-    ).toBe('Codex is rate-limited and retrying.\nLast error: HTTP 429 rate limit.')
+    ).toBe('Codex reached a request limit and is retrying.')
     expect(retrying({})).toBe('Codex hit a temporary problem and is retrying.')
   })
 
@@ -263,26 +338,26 @@ describe('the words written beside a failure fact', () => {
         detail: { text: 'Reconnecting... 2/5', audience: 'person' },
         retry: { cause: 'stream disconnected before completion' }
       })
-    ).toBe('Codex is retrying: Reconnecting... 2/5.\nstream disconnected before completion')
+    ).toBe('Codex is retrying: Reconnecting... 2/5.')
     expect(retrying({ retry: { status: 429, cause: 'Too many requests' } })).toBe(
-      'Codex is rate-limited and retrying.\nToo many requests'
+      'Codex reached a request limit and is retrying.\nToo many requests'
     )
   })
 
-  it("says which retry it is, and the provider's codes when it wrote no account", () => {
+  it('says which retry it is without displaying protocol codes', () => {
     const retrying = (retry: AgentSessionFailureFact['retry']) =>
       agentSessionFailureSentence({ kind: 'providerRetrying', retry }, 'row', {
         agentName: 'Claude'
       })
     expect(retrying({ error: 'server_error', status: 502, attempt: 3, maxRetries: 10 })).toBe(
-      'Claude hit a temporary problem and is retrying. Retry 3 of 10.\nLast error: HTTP 502 server error.'
+      'Claude hit a temporary problem and is retrying. Retry 3 of 10.'
     )
     expect(retrying({ status: 502, attempt: 3 })).toBe(
-      'Claude hit a temporary problem and is retrying. Retry 3.\nLast error: HTTP 502.'
+      'Claude hit a temporary problem and is retrying. Retry 3.'
     )
     // The provider's own account outranks its codes.
     expect(retrying({ status: 429, cause: 'Too many requests', attempt: 2, maxRetries: 5 })).toBe(
-      'Claude is rate-limited and retrying. Retry 2 of 5.\nToo many requests'
+      'Claude reached a request limit and is retrying. Retry 2 of 5.\nToo many requests'
     )
     // A provider that words its own progress is quoted alone, never counted twice.
     expect(

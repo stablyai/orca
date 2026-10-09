@@ -103,10 +103,10 @@ it.each([
     'No model selected.\n\nUse /login, set an API key environment variable, or create /host/agent.db\n\nThen use /model to select a model.',
     'notSignedIn'
   ],
-  ['No model selected', undefined],
-  ['Rate limit exceeded', undefined],
-  ['Network connection failed', undefined],
-  ['No API key found elsewhere', undefined]
+  ['No model selected', 'providerError'],
+  ['Rate limit exceeded', 'providerError'],
+  ['Network connection failed', 'providerError'],
+  ['No API key found elsewhere', 'providerError']
 ] as const)('reads OMP internal-error detail without guessing auth: %s', async (detail, kind) => {
   const spec = ACP_LAUNCH_SPECS.find((entry) => entry.agent === 'omp')
   if (!spec) {

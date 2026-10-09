@@ -44,6 +44,29 @@ function lifecycleRecorder(): {
 }
 
 describe('codex dispatch admission', () => {
+  it('classifies a marked RPC refusal as an unwritten send, with diagnostic text kept off screen', async () => {
+    const { CodexAppServerRequestError } = await import('./codex-app-server-connection')
+    const detail = 'provider_write_failed: stand-in rejected the turn.'
+    const error = new CodexAppServerRequestError('turn/start', -32603, detail, detail)
+    expect(error.providerDiagnostic).toEqual({ text: detail, audience: 'log' })
+    const codex = fakeCodexAppServer({
+      'turn/start': () => {
+        throw error
+      }
+    })
+    const settlements: LateSettlement[] = []
+    const adapter = await acquiredCodexAdapter({ codex, settlements })
+    expect(await send(adapter, 'client-1')).toEqual({
+      state: 'rejected',
+      reason: 'provider_write_failed',
+      rejection: { kind: 'writeFailed', detail: { text: detail, audience: 'log' } }
+    })
+    const connection = codex.connections[0]!
+    startTurn(connection, 'turn-1')
+    echoUserMessage(connection, { turnId: 'turn-1', itemId: 'item-u1', clientId: 'client-1' })
+    expect(settlements).toEqual([])
+  })
+
   it('admits a send queued behind a running turn and settles it when Codex echoes it', async () => {
     // A send while a turn runs is steered into it: that turn's id back, no second
     // `turn/started`, and the user message echoed only once the running turn reaches it.
@@ -152,13 +175,13 @@ describe('codex dispatch admission', () => {
     const adapter = await acquiredCodexAdapter({ codex, settlements })
     const connection = codex.connections[0]!
 
-    // Codex's own words reach the sentence and the fact; Orca's prefix reaches neither.
+    // Protocol refusals remain in the fact for Details, outside the person-facing sentence.
     expect(await send(adapter, 'client-1')).toEqual({
       state: 'rejected',
-      reason: 'The provider did not accept this message: thread not found.',
+      reason: "Codex didn't accept this message.",
       rejection: {
         kind: 'providerRejected',
-        detail: { text: 'thread not found', audience: 'person' }
+        detail: { text: 'thread not found', audience: 'log' }
       }
     })
 

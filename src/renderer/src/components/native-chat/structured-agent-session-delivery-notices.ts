@@ -1,14 +1,10 @@
 // What each of the structured chat's own messages says under it about its delivery. Derived from
 // the sender's in-memory sends and the host's rows on every render, never stored.
 
-import {
-  readWholeAgentSessionFailureFact,
-  type AgentSessionFailureFact
-} from '../../../../shared/agent-session-failure'
+import type { AgentSessionFailureFact } from '../../../../shared/agent-session-failure'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session-journal-item-key'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
-import { agentSessionWriteNotDoneParts } from '../../../../shared/agent-session-refusal-notice'
-import { structuredAgentSessionRejectionParts } from '../../../../shared/structured-agent-session-rejection-words'
+import { structuredAgentSessionRecordedRejectionParts } from '../../../../shared/structured-agent-session-rejection-words'
 import { structuredAgentSessionRejectedShownInPlace } from '../../../../shared/structured-agent-session-message-projection'
 import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
 import type { NativeChatDeliveryNotice } from './NativeChatMessageRow'
@@ -23,26 +19,6 @@ export {
   agentSessionFailureStatedByRow as agentSessionFailureStatedByStartRow,
   sameAgentSessionFailureFact
 } from '../../../../shared/agent-session-visible-failures'
-import { agentSessionFailureStatedByRow as agentSessionFailureStatedByStartRow } from '../../../../shared/agent-session-visible-failures'
-
-function hostRejectionNoticeText(
-  submission: AgentJournalSubmission,
-  agentName: string,
-  startFailures: readonly AgentSessionFailureFact[]
-): string {
-  if (agentSessionFailureStatedByStartRow(submission.rejection, startFailures)) {
-    return agentSessionWriteNoticeText(agentSessionWriteNotDoneParts('send'))
-  }
-  return agentSessionWriteNoticeText(
-    structuredAgentSessionRejectionParts(
-      submission.reason,
-      'send',
-      readWholeAgentSessionFailureFact(submission.rejection),
-      { agentName }
-    )
-  )
-}
-
 /**
  * Keyed by the message id the transcript renders each message under; `agentName` is the chat's
  * agent, for the words. A message on its way says so quietly, and one the host rejected is worded
@@ -78,7 +54,13 @@ export function structuredAgentSessionDeliveryNotices(args: {
     const id = agentJournalSubmissionKey(submission.clientMessageId)
     if (submission.dispatchState === 'rejected' && shown.has(id)) {
       notices.set(id, {
-        text: hostRejectionNoticeText(submission, agentName, args.startFailures)
+        text: agentSessionWriteNoticeText(
+          structuredAgentSessionRecordedRejectionParts(
+            submission,
+            { agentName },
+            args.startFailures
+          )
+        )
       })
     }
   }

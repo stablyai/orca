@@ -568,7 +568,7 @@ describe('CodexStructuredSessionAdapter.dispatch', () => {
     ).toEqual({
       // Built without Codex's own words, so nothing is quoted and no detail is invented.
       state: 'rejected',
-      reason: 'The provider did not accept this message.',
+      reason: "Codex didn't accept this message.",
       rejection: { kind: 'providerRejected' }
     })
   })

@@ -1,12 +1,12 @@
-// The row a Codex stream error it is about to retry writes: Codex's own progress sentence, what
-// failed on the line under it, and a `providerRetrying` fact. Every attempt is its own row; the
-// transcript draws only the latest of a run.
+// Codex error notifications keep diagnostics in Details and state whether another attempt follows.
 
 import {
   agentSessionFailureFact,
   providerDiagnostic,
   readProviderRetry
 } from '../../shared/agent-session-failure'
+import { codexAuthenticationFailure } from './codex-authentication-failure'
+import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
 import { agentSessionFailureWords } from '../../shared/agent-session-failure-words'
 import type { AgentJournalStatusItem } from '../../shared/agent-session-journal-types'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../shared/tui-agent-display-names'
@@ -16,7 +16,6 @@ import {
 } from '../native-chat/agent-session-journal/journal-payload-bounds'
 import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
 import {
-  readCodexErrorAdditionalDetails,
   readCodexErrorInfo,
   readCodexErrorMessage,
   readCodexErrorWillRetry
@@ -32,26 +31,38 @@ export function isCodexProviderRetryFrame(event: CodexStructuredSessionEvent): b
 }
 
 export function codexProviderRetryRowBody(payload: unknown): AgentJournalStatusItem {
+  return codexProviderErrorRowBody(payload, 'providerRetrying')
+}
+
+export function codexProviderFinalErrorRowBody(
+  payload: unknown,
+  account?: AgentSessionAccountKind
+): AgentJournalStatusItem {
+  return codexProviderErrorRowBody(payload, 'providerError', account)
+}
+
+function codexProviderErrorRowBody(
+  payload: unknown,
+  kind: 'providerRetrying' | 'providerError',
+  account?: AgentSessionAccountKind
+): AgentJournalStatusItem {
   const message = readCodexErrorMessage(payload)
-  const detail = message ? providerDiagnostic(message, 'person') : undefined
-  const additionalDetails = readCodexErrorAdditionalDetails(payload)
-  const retry = readProviderRetry({
-    ...readCodexErrorInfo(payload),
-    // Details that only repeat the message would print the same words twice.
-    ...(additionalDetails && additionalDetails.trim() !== message?.trim()
-      ? { cause: additionalDetails }
-      : {})
-  })
+  const info = readCodexErrorInfo(payload)
+  // A final capacity refusal explains how to continue; transport and retry details stay in Details.
+  const audience = kind === 'providerError' && info?.error === 'serverOverloaded' ? 'person' : 'log'
+  const detail = message ? providerDiagnostic(message, audience) : undefined
+  const retry = kind === 'providerRetrying' ? readProviderRetry(info) : undefined
   const words = agentSessionFailureWords(
-    agentSessionFailureFact('providerRetrying', {
-      ...(detail ? { detail } : {}),
-      ...(retry ? { retry } : {})
-    }),
+    (kind === 'providerError' ? codexAuthenticationFailure(payload, account) : null) ??
+      agentSessionFailureFact(kind, {
+        ...(detail ? { detail } : {}),
+        ...(retry ? { retry } : {})
+      }),
     { surface: 'row', agentName: TUI_AGENT_DISPLAY_NAMES.codex }
   )
   return {
     kind: 'status',
-    tone: 'warning',
+    tone: kind === 'providerRetrying' ? 'warning' : 'error',
     ...words,
     providerFrame: {
       provider: 'codex',

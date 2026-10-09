@@ -20,6 +20,7 @@ import {
   type AgentSessionQueuePause
 } from '../../../src/shared/agent-session-wire'
 import { readAgentMessageSource } from '../../../src/shared/agent-session-message-source'
+import { sayAgentSessionFailureEnglish } from '../../../src/shared/agent-session-failure-copy'
 import { agentMessageAttribution } from './mobile-agent-message-attribution'
 
 export type MobileQueuedMessageCard = {
@@ -69,11 +70,20 @@ function returnedCaption(
 }
 
 /** One card's own hold: a failed conversion; the queue's pause is the list's first row. */
-function pausedCaption(reason: string | undefined, waitsForAgent: boolean): string {
+function pausedCaption(
+  reason: string | undefined,
+  waitsForAgent: boolean,
+  agentName?: string
+): string {
   if (reason === QUEUED_MESSAGE_PAUSED_SEND_FAILED) {
-    return waitsForAgent
-      ? "Couldn't send — tap Send to retry once the agent finishes"
-      : "Couldn't send — tap Send to retry"
+    const values = { agent: agentName ?? sayAgentSessionFailureEnglish('theAgent') }
+    return [
+      sayAgentSessionFailureEnglish('writeFailed', values),
+      sayAgentSessionFailureEnglish(
+        waitsForAgent ? 'queueSendRetryWhenDone' : 'queueSendRetry',
+        values
+      )
+    ].join(' ')
   }
   // Absent or unknown (newer host) marker: a plain pause, promising no release rule.
   return 'Paused'
@@ -142,7 +152,8 @@ export function mobileQueuedMessageCards(
         : paused
           ? pausedCaption(
               draft.pausedReason,
-              draft.body.command !== undefined && facts.agentWorking === true
+              draft.body.command !== undefined && facts.agentWorking === true,
+              facts.agentName
             )
           : behindReturned
             ? 'Waiting — a message ahead needs attention'

@@ -1,49 +1,76 @@
-// A conversation command refused for a reason the person can act on: said as that refusal is
-// everywhere, so a command's row names what to wait for rather than "try it again".
-
 import type { AgentSessionFailureFact } from './agent-session-failure'
-import type { AgentSessionFailureSay } from './agent-session-failure-copy'
-import type { AgentSessionConversationCommand } from './agent-session-conversation-command'
+import type {
+  AgentSessionFailureCopyId,
+  AgentSessionFailureSay
+} from './agent-session-failure-copy'
+import type { AgentSessionFailureWordsContext } from './agent-session-failure-words'
+import { agentSessionRefusalReasonWords } from './agent-session-refusal-reason-words'
+import type { AgentSessionWriteNoticeSentence } from './agent-session-write-notice-copy'
 import { joinSentences } from './sentence-joining'
 
-type ReasonWords = (
-  say: AgentSessionFailureSay,
-  command: AgentSessionConversationCommand | undefined
-) => string | undefined
-
-const STILL_WORKING: ReasonWords = (say, command) =>
-  command
-    ? joinSentences([say('agentStillWorking'), say('runCommandWhenDone', { command })])
-    : undefined
-
-/** A wait the person ends: nothing runs the command after it, so they run it again. */
-const WAIT_THEN_RUN_AGAIN =
-  (
-    cause: 'backgroundTasksRunning' | 'agentStarting',
-    wait: 'waitForBackgroundTasks' | 'waitForStart'
-  ): ReasonWords =>
-  (say, command) =>
-    joinSentences([
-      say(cause),
-      say(wait),
-      ...(command ? [say('runCommandAgain', { command })] : [])
-    ])
-
-const WORDS_BY_REASON: Partial<Record<string, ReasonWords>> = {
-  backgroundTasksRunning: WAIT_THEN_RUN_AGAIN('backgroundTasksRunning', 'waitForBackgroundTasks'),
-  handoffInFlight: WAIT_THEN_RUN_AGAIN('agentStarting', 'waitForStart'),
-  turnActive: STILL_WORKING,
-  messagesUnsettled: STILL_WORKING,
-  promptPending: (say, command) => (command ? say('commandAfterAnswer', { command }) : undefined)
+const NAMED_CAUSES: Partial<Record<AgentSessionWriteNoticeSentence, AgentSessionFailureCopyId>> = {
+  agentStarting: 'commandAgentStarting',
+  waitForStart: 'commandWaitForStart',
+  turnActive: 'commandTurnActive',
+  waitForTurn: 'commandWaitForTurn',
+  promptPending: 'commandPromptPending',
+  agentRefused: 'commandAgentRefused',
+  ownerUnproven: 'commandOwnerUnproven',
+  goalsUnsupported: 'commandGoalsUnsupported',
+  optionRejected: 'commandOptionRejected',
+  backgroundTasksRunning: 'commandBackgroundTasksRunning'
 }
 
-/** Undefined for a reason with no words of its own: the command's generic sentence says it. */
-export function commandRefusedByReason(
+/** A refused command keeps the refusal's action; repeating it cannot clear every refusal. */
+export function agentSessionCommandRefusalWords(
+  fact: AgentSessionFailureFact,
+  context: AgentSessionFailureWordsContext,
   say: AgentSessionFailureSay,
-  { command }: { command?: AgentSessionConversationCommand },
-  fact: AgentSessionFailureFact
-): string | undefined {
-  const details = fact.refusal?.details
-  const reason = details && 'reason' in details ? details.reason : undefined
-  return reason === undefined ? undefined : WORDS_BY_REASON[reason]?.(say, command)
+  sayNotice: (id: AgentSessionWriteNoticeSentence) => string
+): string {
+  const agent = { agent: context.agentName ?? say('theAgent') }
+  const notice = (id: AgentSessionWriteNoticeSentence): string => {
+    const named = NAMED_CAUSES[id]
+    return named ? say(named, agent) : sayNotice(id)
+  }
+  if (fact.refusal?.code === 'structured_agent_session_unsupported') {
+    return say('commandUnsupported', agent)
+  }
+  const lead = say('commandRefused', agent)
+  const reason = fact.refusal?.details?.reason
+  if (context.command) {
+    const values = { ...agent, command: context.command }
+    if (reason === 'turnActive' || reason === 'messagesUnsettled') {
+      return joinSentences([say('commandStillWorking', agent), say('runCommandWhenDone', values)])
+    }
+    if (reason === 'promptPending') {
+      if (!context.agentName) {
+        return sayNotice(context.command === 'clear' ? 'clearAfterAnswer' : 'compactAfterAnswer')
+      }
+      return say('commandAfterAnswer', values)
+    }
+    if (reason === 'backgroundTasksRunning' || reason === 'handoffInFlight') {
+      return joinSentences([
+        notice(reason === 'handoffInFlight' ? 'agentStarting' : 'backgroundTasksRunning'),
+        notice(reason === 'handoffInFlight' ? 'waitForStart' : 'waitForBackgroundTasks'),
+        say('runCommandAgain', values)
+      ])
+    }
+  }
+  const words = fact.refusal
+    ? agentSessionRefusalReasonWords({ kind: 'refused', ...fact.refusal })
+    : undefined
+  if (!words || 'fact' in words) {
+    return lead
+  }
+  const retry = words.action === 'retry' && !context.retryControl
+  return joinSentences([
+    lead,
+    ...('cause' in words ? [notice(words.cause)] : []),
+    ...('step' in words && words.step && (words.action !== 'retry' || retry)
+      ? [notice(words.step)]
+      : retry
+        ? [sayNotice('tryAgain')]
+        : [])
+  ])
 }

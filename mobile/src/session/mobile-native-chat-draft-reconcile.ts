@@ -1,3 +1,4 @@
+import { agentJournalSubmissionKey } from '../../../src/shared/agent-session-journal-item-key'
 import { isImageRefBlock, type NativeChatMessage } from '../../../src/shared/native-chat-types'
 import {
   hasImagePromptMarker,
@@ -7,6 +8,12 @@ import {
   normalizedNativeChatUserMessageText
 } from './mobile-native-chat-image-transcript-markers'
 export { normalizeNativeChatUserText as normalizeReconcileText } from './mobile-native-chat-image-transcript-markers'
+
+/** Whether the host's journal holds the structured send made under this id: a submission recorded
+ *  under it, in any state, or one its queued draft went out as. Its own row may be hidden. */
+export type MobileStructuredSendReachedHost = (clientMessageId: string) => boolean
+
+export const NO_STRUCTURED_SENDS: MobileStructuredSendReachedHost = () => false
 
 /** An ack-lost ('unknown' outcome) send held until its transcript echo lands or
  *  the deadline surfaces the uncertainty. */
@@ -18,6 +25,8 @@ export type UnconfirmedSend = {
   baselineTailMessageId: string | null
   /** Queued-draft cards on screen at send time; see `findQueuedUnconfirmedSends`. */
   baselineQueuedMessageIds?: readonly string[]
+  /** Structured lane: settled by the journal's record of it or by its own card, never by text. */
+  clientMessageId?: string
   deadline: ReturnType<typeof setTimeout> | null
 }
 
@@ -63,6 +72,7 @@ export type PendingImagePreviewEcho = {
   images?: string[]
   expectedOccurrence: number
   baselineTailMessageId: string | null
+  clientMessageId?: string
 }
 
 export type LandedImagePreviewEcho = {
@@ -176,6 +186,13 @@ export function findLandedImagePreviewEchoes(
     if (!entry.images?.length) {
       continue
     }
+    if (entry.clientMessageId !== undefined) {
+      const ownId = agentJournalSubmissionKey(entry.clientMessageId)
+      if (messages.some((message) => message.id === ownId)) {
+        landed.push({ pendingId: entry.id, messageId: ownId, images: entry.images })
+      }
+      continue
+    }
     const targetText = normalizeNativeChatUserText(entry.text)
     const candidates = normalized.filter((message) => {
       if (message.role !== 'user') {
@@ -234,11 +251,12 @@ export function findQueuedUnconfirmedSends(
   const claimed = new Set<string>()
   const held: UnconfirmedSend[] = []
   for (const entry of entries) {
-    const card = cards.find(
-      (candidate) =>
-        !claimed.has(candidate.messageId) &&
-        !(entry.baselineQueuedMessageIds ?? []).includes(candidate.messageId) &&
-        normalizeNativeChatUserText(candidate.text) === entry.normalizedText
+    const card = cards.find((candidate) =>
+      entry.clientMessageId !== undefined
+        ? candidate.messageId === entry.clientMessageId
+        : !claimed.has(candidate.messageId) &&
+          !(entry.baselineQueuedMessageIds ?? []).includes(candidate.messageId) &&
+          normalizeNativeChatUserText(candidate.text) === entry.normalizedText
     )
     if (card) {
       claimed.add(card.messageId)
@@ -250,7 +268,8 @@ export function findQueuedUnconfirmedSends(
 
 export function findLandedUnconfirmedSends(
   messages: readonly NativeChatMessage[],
-  entries: readonly UnconfirmedSend[]
+  entries: readonly UnconfirmedSend[],
+  reachedHost: MobileStructuredSendReachedHost = NO_STRUCTURED_SENDS
 ): UnconfirmedSend[] {
   // Why: pagination prepends old equal text; only unclaimed matches after each
   // captured tail prove new echoes. User turns are keyed by text; an image echo
@@ -272,6 +291,12 @@ export function findLandedUnconfirmedSends(
   const claimedMessageIds = new Set<string>()
   const landed: UnconfirmedSend[] = []
   for (const entry of entries) {
+    if (entry.clientMessageId !== undefined) {
+      if (reachedHost(entry.clientMessageId)) {
+        landed.push(entry)
+      }
+      continue
+    }
     const tailIndex = entry.baselineTailMessageId
       ? messageIndexById.get(entry.baselineTailMessageId)
       : -1

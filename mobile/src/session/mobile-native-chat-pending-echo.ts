@@ -12,6 +12,10 @@ export type MobileNativeChatPendingMessage = {
    *  and rebased onto the first authoritative read instead of reconciling
    *  against rows that may belong to another tab. */
   baselineResolved: boolean
+  /** Structured lane: the id the host records the send under. The journal's record of it, or of
+   *  its card's hand-off, settles it, whether or not its row is drawn; text and position are not
+   *  consulted. */
+  clientMessageId?: string
 }
 
 export type MobileNativeChatSendOrigin = {
@@ -46,7 +50,8 @@ export function appendMobileNativeChatPending(
   id: string,
   origin: MobileNativeChatSendOrigin,
   text: string,
-  images?: string[]
+  images?: string[],
+  clientMessageId?: string
 ): PendingByKey {
   const current = previous[key] ?? []
   // Count outstanding repeats with the same normalized key.
@@ -73,7 +78,8 @@ export function appendMobileNativeChatPending(
             : origin.baselineOccurrences + earlierOutstanding + 1,
         baselineTailMessageId: origin.baselineTailMessageId,
         baselineResolved: origin.baselineResolved,
-        ...(images?.length ? { images } : {})
+        ...(images?.length ? { images } : {}),
+        ...(clientMessageId !== undefined ? { clientMessageId } : {})
       }
     ]
   }

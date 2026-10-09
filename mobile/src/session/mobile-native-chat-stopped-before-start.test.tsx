@@ -151,7 +151,7 @@ describe('a send a Stop took back before the agent started it, on the phone', ()
 
   it('stays where it was sent, with the stop row after it and no turn status of its own', () => {
     const messages = projectStructuredAgentSessionMessages(items, [], submissions, {
-      rejectedInPlace: false
+      rejectedInPlace: true
     })
     expect(messages.map((message) => message.id)).toEqual([
       agentJournalSubmissionKey('warm-up'),

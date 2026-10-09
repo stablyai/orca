@@ -7,6 +7,7 @@ import type {
 } from './agent-session-failure-words'
 import { joinSentences } from './sentence-joining'
 import { agentSessionSignInFor } from './agent-session-sign-in'
+import { isProviderDiagnosticPersonText } from './provider-diagnostic-person-text'
 
 const SENTENCE_END = /[.!?。！？][\p{Pe}\p{Pf}"']*\s*$/u
 
@@ -38,7 +39,10 @@ export function notSignedInSentence(
           signIn?.agent !== 'codex'
         ? say(signIn ? 'thenSendAgain' : 'signInThenSend')
         : undefined
-  const detail = fact.detail?.audience === 'person' ? fact.detail.text : undefined
+  const detail =
+    fact.detail?.audience === 'person' && isProviderDiagnosticPersonText(fact.detail.text)
+      ? fact.detail.text
+      : undefined
   const detailSentence =
     detail && next && !SENTENCE_END.test(detail) ? `${detail.trimEnd()}.` : detail
   return joinSentences(

@@ -2,7 +2,10 @@
 // shared English as its fallback so desktop and mobile never say it differently.
 
 import { translate } from '@/i18n/i18n'
-import { agentSessionFailureSentence } from '../../../../shared/agent-session-failure-words'
+import {
+  agentSessionFailureSentence,
+  type AgentSessionFailureWordsContext
+} from '../../../../shared/agent-session-failure-words'
 import { agentSessionWriteNoticeParts } from '../../../../shared/agent-session-refusal-notice'
 import {
   AGENT_SESSION_WRITE_NOTICE_COPY as COPY,
@@ -159,6 +162,10 @@ const SENTENCES: Record<AgentSessionWriteNoticeSentence, () => string> = {
   tryAgain: () => translate('components.native-chat.writeNotice.tryAgain', COPY.tryAgain)
 }
 
+export function sayAgentSessionWriteNoticeTranslated(id: AgentSessionWriteNoticeSentence): string {
+  return SENTENCES[id]()
+}
+
 export function agentSessionWriteNoticeText(parts: readonly AgentSessionWriteNoticePart[]): string {
   return joinSentences(
     parts.map((part) =>
@@ -170,7 +177,8 @@ export function agentSessionWriteNoticeText(parts: readonly AgentSessionWriteNot
               part.failure,
               part.surface,
               part.context,
-              sayAgentSessionFailureTranslated
+              sayAgentSessionFailureTranslated,
+              sayAgentSessionWriteNoticeTranslated
             )
     )
   )
@@ -178,7 +186,8 @@ export function agentSessionWriteNoticeText(parts: readonly AgentSessionWriteNot
 
 export function agentSessionWriteFailureText(
   failure: AgentSessionWriteFailure,
-  write: AgentSessionWriteKind
+  write: AgentSessionWriteKind,
+  context: AgentSessionFailureWordsContext = {}
 ): string {
-  return agentSessionWriteNoticeText(agentSessionWriteNoticeParts(failure, write))
+  return agentSessionWriteNoticeText(agentSessionWriteNoticeParts(failure, write, context))
 }

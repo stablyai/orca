@@ -140,18 +140,12 @@ it('keeps the full notice on a message rejected for a reason no start-failure ro
 
   renderPane([
     rejected('stated', START_FAILED_REASON, START_FAILED),
-    rejected(
-      'other',
-      'The provider did not accept this message: Image type .bmp.',
-      providerRejected
-    )
+    rejected('other', "Claude didn't accept this message: Image type .bmp.", providerRejected)
   ])
 
   expect(within(await notice('stated')).getByText('Your message was not sent.')).toBeTruthy()
   expect(
-    within(await notice('other')).getByText(
-      'The provider did not accept this message: Image type .bmp.'
-    )
+    within(await notice('other')).getByText("Claude didn't accept this message: Image type .bmp.")
   ).toBeTruthy()
 })
 

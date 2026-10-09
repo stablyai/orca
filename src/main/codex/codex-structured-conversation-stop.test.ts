@@ -52,7 +52,7 @@ describe('a Codex Stop that names no turn', () => {
       refusal: {
         detail: {
           text: 'expected active turn id turn-journal but found turn-1',
-          audience: 'person'
+          audience: 'log'
         },
         // An invalid-request refusal: the named turn is not the one Codex is running.
         turnNotRunning: true

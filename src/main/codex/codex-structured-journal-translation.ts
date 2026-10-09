@@ -14,7 +14,11 @@ import {
 import { CodexJournalTurnBoundaries } from './codex-structured-journal-translation-turn-boundaries'
 import { createCodexJournalTranslatorWriters } from './codex-structured-journal-translation-writers'
 import { publishCodexTurnLifecycle } from './codex-structured-journal-translation-turns'
-import { codexProviderRetryRowBody, isCodexProviderRetryFrame } from './codex-provider-retry-row'
+import {
+  codexProviderFinalErrorRowBody,
+  codexProviderRetryRowBody,
+  isCodexProviderRetryFrame
+} from './codex-provider-retry-row'
 import { createCodexThreadItemRouter } from './codex-structured-journal-thread-item-routing'
 import { codexThreadStoppedRunning, readCodexTurnId } from './codex-structured-thread-facts'
 import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
@@ -249,16 +253,20 @@ export function createCodexJournalTranslator(
           return publishActivity(event, routed)
         }
       }
-      if (isCodexProviderRetryFrame(event)) {
+      if (event.method === 'error') {
         // Always journaled, like any error frame: each attempt is evidence, and its publish is
         // the activity the idle sweep reads.
-        return publishActivity(
-          event,
-          genericFrames.appendFrameRow(event.threadId, event.params, {
-            body: codexProviderRetryRowBody(event.params),
-            classification: 'error-surface'
-          })
-        )
+        const retrying = isCodexProviderRetryFrame(event)
+        const admission = genericFrames.appendFrameRow(event.threadId, event.params, {
+          body: retrying
+            ? codexProviderRetryRowBody(event.params)
+            : codexProviderFinalErrorRowBody(event.params, deps.account?.()),
+          classification: 'error-surface'
+        })
+        if (admission.accepted && !retrying) {
+          commands.errorShown(event.params)
+        }
+        return publishActivity(event, admission)
       }
       // A thread that stopped running settles no open turn: Codex clears `running`
       // on every error, and an open turn ends on its `turn/completed`. It releases
@@ -280,9 +288,6 @@ export function createCodexJournalTranslator(
         event.threadId,
         { coveredByTypedTranslator: event.method === 'thread/status/changed' }
       )
-      if (unhandled.accepted && event.method === 'error') {
-        commands.errorShown(event.params)
-      }
       return publishActivity(event, unhandled)
     },
     beginCommand: (command) => commands.begin(command),

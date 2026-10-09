@@ -25,7 +25,7 @@ function capture(name: string) {
 }
 const disposals: (() => void)[] = []
 
-it('separates resend advice from the captured Pi 1.0.4 missing-key detail', () => {
+it('gives only the sign-in step for the captured Pi 1.0.4 missing-key detail', () => {
   const reply = capture('signed-out').find(
     ({ dir, frame }) => dir === 'out' && frame.command === 'prompt' && frame.success === false
   )?.frame
@@ -36,8 +36,9 @@ it('separates resend advice from the captured Pi 1.0.4 missing-key detail', () =
   const fact = piRpcFailureFact(reply.error)
   expect(fact.kind).toBe('notSignedIn')
   expect(fact.detail?.text).toBe(reply.error)
-  expect(agentSessionFailureSentence(fact, 'rejection', { agentName: 'Pi' })).toContain(
-    `${reply.error}. Then send your message again.`
+  // Pi's words name a "provider" and local doc paths, so the row keeps only Pi's sign-in step.
+  expect(agentSessionFailureSentence(fact, 'rejection', { agentName: 'Pi' })).toBe(
+    'Sign in to Pi by running `pi` and using `/login` on the computer running this chat. Then send your message again.'
   )
 })
 

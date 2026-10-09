@@ -10,8 +10,11 @@
 // a retry rotates the client message id, which is a new message and cannot duplicate.
 
 import {
+  agentSessionFailureFact,
   isSubmissionRejectionKind,
   readAgentSessionFailureFact,
+  type ProviderDiagnostic,
+  type SubmissionRejectionFact,
   type SubmissionRejectionKind
 } from './agent-session-failure'
 import type { AgentJournalSubmission } from './agent-session-journal-types'
@@ -48,6 +51,17 @@ function dispatchRejectionWasTransportWriteFailure(reason: string | null | undef
     reason === DISPATCH_REJECTED_WRITE_FAILED ||
     reason?.startsWith(`${DISPATCH_REJECTED_WRITE_FAILED}: `) === true
   )
+}
+
+/** A provider's explicit refusal can report a known unwritten send instead of a content problem. */
+export function providerDispatchRejectionFact(
+  detail: ProviderDiagnostic | undefined
+): SubmissionRejectionFact {
+  return dispatchRejectionWasTransportWriteFailure(detail?.text)
+    ? agentSessionFailureFact('writeFailed', {
+        detail: detail ? { ...detail, audience: 'log' } : undefined
+      })
+    : agentSessionFailureFact('providerRejected', { detail })
 }
 
 /**

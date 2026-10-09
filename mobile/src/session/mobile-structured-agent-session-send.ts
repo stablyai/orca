@@ -9,8 +9,20 @@ import {
   requestStructuredAgentSessionMutation,
   timeoutForDeadline
 } from './mobile-structured-agent-session-rpc'
+import { structuredSessionOperationId } from './structured-session-operation-id'
 import { mobileStructuredSendDelivery } from './mobile-structured-send-delivery'
 import type { MobileNativeChatSendErrorReporter } from './use-mobile-native-chat-send-error'
+
+/** The current Send's id lets temporary text/photo rows settle against the host record. */
+export type MobileStructuredSendResult = {
+  outcome: MobileNativeChatSendOutcome
+  clientMessageId: string | null
+}
+
+export const MOBILE_STRUCTURED_SEND_NOT_SENT: MobileStructuredSendResult = {
+  outcome: 'rejected',
+  clientMessageId: null
+}
 
 export async function sendMobileStructuredAgentSessionMessage(input: {
   client: RpcClient
@@ -22,13 +34,14 @@ export async function sendMobileStructuredAgentSessionMessage(input: {
   delivery?: 'queue-if-active'
   deadline?: number
   onError: MobileNativeChatSendErrorReporter
-}): Promise<MobileNativeChatSendOutcome> {
+}): Promise<MobileStructuredSendResult> {
   const timeoutMs = timeoutForDeadline(input.deadline)
   if (timeoutMs === null) {
     input.onError('Message not sent')
-    return 'rejected'
+    return MOBILE_STRUCTURED_SEND_NOT_SENT
   }
-  // Each Send is a new action; the shared mutation sender mints its operation id once.
+  // Each Send owns one fresh id, also returned when its answer is unknown.
+  const clientMessageId = structuredSessionOperationId()
   const result = await requestStructuredAgentSessionMutation<AgentSessionSendResult>({
     client: input.client,
     method: 'agentSession.send',
@@ -39,6 +52,7 @@ export async function sendMobileStructuredAgentSessionMessage(input: {
       body: structuredAgentSessionSendBody(input.text, input.attachments),
       ...(input.delivery ? { delivery: input.delivery } : {})
     },
+    clientOperationId: clientMessageId,
     timeoutMs
   })
   const outcome = mobileStructuredSendDelivery(result)
@@ -49,5 +63,5 @@ export async function sendMobileStructuredAgentSessionMessage(input: {
       input.onError(outcome.error)
     }
   }
-  return outcome.outcome
+  return { outcome: outcome.outcome, clientMessageId }
 }

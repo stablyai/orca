@@ -2,16 +2,18 @@ import {
   readWholeAgentSessionFailureFact,
   type AgentSessionFailureFact
 } from './agent-session-failure'
+import { isRootAgentJournalItem } from './agent-session-journal-producer'
 import type { AgentJournalRenderItem } from './agent-session-journal-types'
 import { isStructuredAgentSessionStartFailureRow } from './structured-agent-session-start-failure-row-key'
 
-/** Loaded startup causes and authentication explanations already visible in the transcript. */
+/** Loaded startup causes and authentication explanations already visible in the transcript.
+ *  Only the session's own rows count: a subagent's rows are folded away or collapsed. */
 export function agentSessionVisibleFailureFacts(
   items: readonly AgentJournalRenderItem[]
 ): AgentSessionFailureFact[] {
   const facts: AgentSessionFailureFact[] = []
   for (const item of items) {
-    if (item.body.kind === 'status') {
+    if (item.body.kind === 'status' && isRootAgentJournalItem(item)) {
       const fact = readWholeAgentSessionFailureFact(item.body.failure)
       if (
         fact &&

@@ -8,7 +8,10 @@ import {
   type StructuredAgentSessionComposerOptions
 } from '../../../src/shared/structured-agent-session-composer'
 import { structuredAgentSessionCommandHostRefusalCause } from '../../../src/shared/structured-agent-session-command-refusal-cause'
-import { agentSessionWriteNoticeEnglish } from '../../../src/shared/agent-session-refusal-notice'
+import { sayAgentSessionFailureEnglish } from '../../../src/shared/agent-session-failure-copy'
+import { agentSessionFailureSentence } from '../../../src/shared/agent-session-failure-words'
+import { readWholeAgentSessionFailureFact } from '../../../src/shared/agent-session-failure'
+import { tuiAgentDisplayName } from '../../../src/shared/tui-agent-display-names'
 import type { RpcClient } from '../transport/rpc-client'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import { requestStructuredAgentSessionMutation } from './mobile-structured-agent-session-rpc'
@@ -17,18 +20,25 @@ import type { MobileNativeChatSendErrorReporter } from './use-mobile-native-chat
 /** What the person sees and can do, in the words the desktop uses. */
 function busyCommandText(
   command: AgentSessionConversationCommand,
-  busy: 'working' | 'prompt'
+  busy: 'working' | 'prompt',
+  agentName: string
 ): string {
-  const clear = command === 'clear'
-  return agentSessionWriteNoticeEnglish(
-    busy === 'prompt'
-      ? [clear ? 'clearAfterAnswer' : 'compactAfterAnswer']
-      : ['agentStillWorking', clear ? 'runClearWhenDone' : 'runCompactWhenDone']
+  return agentSessionFailureSentence(
+    {
+      kind: 'commandRefused',
+      refusal: {
+        code: 'agent_session_operation_invalid',
+        details: { reason: busy === 'prompt' ? 'promptPending' : 'turnActive' }
+      }
+    },
+    'row',
+    { agentName, command }
   )
 }
 
 export async function dispatchMobileStructuredCommand(input: {
   text: string
+  agentName?: string
   hasAttachments: boolean
   client: RpcClient
   sessionId: string
@@ -53,6 +63,11 @@ export async function dispatchMobileStructuredCommand(input: {
     input.onError('Remove attachments before using a chat-session command.')
     return 'rejected'
   }
+  const agentName =
+    input.agentName ??
+    (input.controller.agent
+      ? (tuiAgentDisplayName(input.controller.agent) ?? input.controller.agent)
+      : sayAgentSessionFailureEnglish('theAgent'))
   let unknown = false
   const outcome = await dispatchStructuredAgentSessionComposerCommand(input.text, {
     ...input.controller,
@@ -61,7 +76,11 @@ export async function dispatchMobileStructuredCommand(input: {
       const waitsInLine = input.waitsInLine(command)
       const busy = waitsInLine ? null : shown
       if (busy) {
-        return { accepted: false, error: busyCommandText(command, busy), refusedWhile: busy }
+        return {
+          accepted: false,
+          error: busyCommandText(command, busy, agentName),
+          refusedWhile: busy
+        }
       }
       input.pending.current = true
       try {
@@ -73,6 +92,7 @@ export async function dispatchMobileStructuredCommand(input: {
             method: 'agentSession.conversationCommand',
             fingerprintMethod: 'agentSession.conversationCommand',
             fields: waitsInLine ? { command, delivery: 'queue-if-active' } : { command },
+            agentName,
             timeoutMs: Math.max(input.timeoutMs, 195_000)
           })
         if (
@@ -90,12 +110,14 @@ export async function dispatchMobileStructuredCommand(input: {
         }
         // A refusal names its cause only when the phone showed it, as on desktop.
         const cause = structuredAgentSessionCommandHostRefusalCause(result.value)
+        const fact = readWholeAgentSessionFailureFact(result.value.failure)
+        const error = fact
+          ? agentSessionFailureSentence(fact, 'row', { agentName, command })
+          : (result.value.error ?? null)
         return {
-          accepted: !result.value.error,
-          error: result.value.error ?? null,
-          ...(result.value.error && cause !== undefined && cause === shown
-            ? { refusedWhile: cause }
-            : {})
+          accepted: !error,
+          error,
+          ...(error && cause !== undefined && cause === shown ? { refusedWhile: cause } : {})
         }
       } finally {
         input.pending.current = false

@@ -52,7 +52,7 @@ export const AGENT_SESSION_FAILURE_KINDS = [
   'compactionFailed',
   'compactionUnconfirmed',
   'cancelUnconfirmed',
-  /** A Stop naming no turn reached the agent, which ended nothing while the chat read working. */
+  /** The agent declined a Stop; this alone says nothing about whether a turn was running. */
   'stopRefused',
   'answerUnconfirmed',
   'hostFault',
@@ -60,6 +60,8 @@ export const AGENT_SESSION_FAILURE_KINDS = [
   'hostStopped',
   /** The provider is retrying a request its API refused; not a failure yet. */
   'providerRetrying',
+  /** A final provider error notification; it does not prove whether a message was delivered. */
+  'providerError',
   /** A child a Stop could not prove gone: its exit is unverifiable. Kept for rows hosts wrote. */
   'previousExitUnverifiable',
   /** The agent could not reopen the chat's saved session, so a fresh one without its memory continues it. */
@@ -79,6 +81,7 @@ const STATUS_ROW_ONLY_FAILURE_KINDS = [
   'stopRefused',
   'answerUnconfirmed',
   'providerRetrying',
+  'providerError',
   'previousExitUnverifiable',
   'sessionNotRestored'
 ] as const satisfies readonly AgentSessionFailureKind[]
@@ -156,6 +159,8 @@ export type AgentSessionFailureFact = {
   retry?: AgentSessionProviderRetry
   /** A safe option name from Orca's saved Arguments parser, never an error message. */
   argumentProblem?: AgentSessionArgumentProblem
+  /** On `stopRefused`: the agent positively reported no running turn, never inferred from detail. */
+  turnNotRunning?: true
 }
 
 /** A fact as a row stores it: its kind may be one a newer host added, so only
@@ -189,6 +194,7 @@ export function agentSessionFailureFact<TKind extends AgentSessionFailureKind>(
     attachment?: AgentSessionAttachmentProblem
     retry?: AgentSessionProviderRetry
     argumentProblem?: AgentSessionArgumentProblem
+    turnNotRunning?: true
   } = {}
 ): AgentSessionFailureFact & { kind: TKind } {
   // Re-bounded here, so no writer can store more than the cap however it built the detail.
@@ -202,7 +208,8 @@ export function agentSessionFailureFact<TKind extends AgentSessionFailureKind>(
     ...(extra.refusal ? { refusal: extra.refusal } : {}),
     ...(extra.attachment ? { attachment: extra.attachment } : {}),
     ...(extra.retry ? { retry: extra.retry } : {}),
-    ...(extra.argumentProblem ? { argumentProblem: extra.argumentProblem } : {})
+    ...(extra.argumentProblem ? { argumentProblem: extra.argumentProblem } : {}),
+    ...(extra.turnNotRunning ? { turnNotRunning: true } : {})
   }
 }
 
@@ -279,7 +286,8 @@ export function readAgentSessionFailureFact(value: unknown): AgentSessionFailure
     ...(refusal ? { refusal } : {}),
     ...(attachment ? { attachment } : {}),
     ...(retry ? { retry } : {}),
-    ...(argumentProblem ? { argumentProblem } : {})
+    ...(argumentProblem ? { argumentProblem } : {}),
+    ...(value.turnNotRunning === true ? { turnNotRunning: true } : {})
   })
 }
 

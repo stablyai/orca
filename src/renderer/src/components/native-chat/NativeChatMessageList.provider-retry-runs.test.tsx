@@ -59,13 +59,11 @@ function transcript(items: AgentJournalRenderItem[]) {
 }
 
 describe('a Codex retrying a dropped stream', () => {
-  it('draws one warning for the run, with what failed on its second line', () => {
+  it('draws one warning for the run without a technical transport cause', () => {
     render(transcript([retry(1, 1), retry(2, 2), retry(3, 3)]))
 
     const rows = screen.getAllByText(/Codex is retrying/)
     expect(rows).toHaveLength(1)
-    expect(rows[0]?.textContent).toBe(
-      'Codex is retrying: Reconnecting... 3/5.\nstream disconnected before completion'
-    )
+    expect(rows[0]?.textContent).toBe('Codex is retrying: Reconnecting... 3/5.')
   })
 })

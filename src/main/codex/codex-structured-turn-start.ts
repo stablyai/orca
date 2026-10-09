@@ -1,5 +1,6 @@
 import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
 import { agentSessionFailureFact, providerDiagnosticOf } from '../../shared/agent-session-failure'
+import { providerDispatchRejectionFact } from '../../shared/structured-agent-session-dispatch-rejection'
 import type {
   AgentJournalMessageItem,
   AgentJournalTurnJoin
@@ -211,9 +212,7 @@ export async function dispatchCodexTurn(
       // Codex's own words, when it gave any, are the one part of the error a person can use.
       return {
         state: 'rejected',
-        ...codexDispatchRejection(
-          agentSessionFailureFact('providerRejected', { detail: providerDiagnosticOf(error) })
-        )
+        ...codexDispatchRejection(providerDispatchRejectionFact(providerDiagnosticOf(error)))
       }
     }
     // A timeout or transport failure can happen after the frame was written.

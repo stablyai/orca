@@ -45,9 +45,12 @@ export function mobileStructuredSendDelivery(
     if (submission.keptAsQueuedMessageId !== undefined) {
       return { outcome: 'queued', error: null }
     }
-    if (submission.queuedMessageId === undefined && dispatchWasWithdrawn(submission)) {
-      // The host transcript already owns this send's stopped row.
-      return { outcome: 'accepted', error: null }
+    if (submission.queuedMessageId === undefined) {
+      // The host row holds recorded failures and withdrawals; neither returns text or a banner.
+      return {
+        outcome: dispatchWasWithdrawn(submission) ? 'accepted' : 'recorded-unsent',
+        error: null
+      }
     }
     const failure = readWholeAgentSessionFailureFact(submission.rejection)
     return {

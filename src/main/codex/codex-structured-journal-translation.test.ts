@@ -345,7 +345,7 @@ describe('codex journal translation', () => {
       expect(reduced(tap.rows).map((row) => row.body)).toContainEqual(
         expect.objectContaining({
           kind: 'status',
-          text: 'Selected model is at capacity. Please try a different model.',
+          text: 'Codex ran into a problem. Check the chat before trying again.',
           tone: 'error'
         })
       )

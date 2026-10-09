@@ -100,7 +100,7 @@ export class CodexJournalCommandTurn {
       return []
     }
     const { command } = carried
-    const detail = ended.error === null ? undefined : providerDiagnostic(ended.error, 'person')
+    const detail = ended.error === null ? undefined : providerDiagnostic(ended.error, 'log')
     const verdict = structuredCompactionOutcome({
       compacted: carried.compacted,
       // Codex reports the user's stop as the turn's own status.

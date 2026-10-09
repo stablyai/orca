@@ -117,7 +117,7 @@ describe('the line under the composer after a conversation command failed', () =
       "Claude n'a pas pu démarrer. Relancez /clear."
     )
     expect((await sent(hostResult('compact', COMPACTION_FAILED))).error).toBe(
-      'La compaction a échoué : Context is too short.'
+      "Claude n'a pas pu raccourcir l'historique de cette conversation : Context is too short."
     )
     expect((await sent(hostResult('compact', { kind: 'restartFailed' }))).error).toBe(
       "Claude n'a pas pu redémarrer. Relancez /compact."
@@ -131,6 +131,24 @@ describe('the line under the composer after a conversation command failed', () =
     )
     expect((await sent(hostResult('compact', { kind: 'notSignedIn' }))).error).toBe(
       'Claude にサインインしていません。`claude auth login` を実行するか、Claude アカウント設定でアカウントを選択してください。/compact をもう一度実行してください。'
+    )
+  })
+
+  it('translates the recorded refusal and its action alongside the named command failure', async () => {
+    await i18n.changeLanguage('fr')
+    const result = hostResult(
+      'compact',
+      {
+        kind: 'commandRefused',
+        refusal: {
+          code: 'agent_session_operation_invalid',
+          details: { reason: 'conversationCleared' }
+        }
+      },
+      'codex'
+    )
+    expect((await sent(result, 'codex')).error).toBe(
+      'Codex n’a pas exécuté cette commande. Cette conversation a été effacée. Ouvrez la conversation actuelle pour continuer.'
     )
   })
 
@@ -272,7 +290,7 @@ describe('a command held here', () => {
     const { send, result } = held('clear', null, { current: true })
     expect(await result).toEqual({
       accepted: false,
-      error: "The agent is still working. Run /clear when it's done."
+      error: "Claude is still working. Run /clear when it's done."
     })
     expect(send).not.toHaveBeenCalled()
   })
@@ -280,29 +298,29 @@ describe('a command held here', () => {
   it('behind a message still being sent after a Stop, says so, naming no Retry', async () => {
     expect(await held('clear', 'sending').result).toEqual({
       accepted: false,
-      error: 'Your earlier message is still being sent. Run /clear once it has gone.'
+      error: 'Your earlier message to Claude is still being sent. Run /clear once it has gone.'
     })
   })
 
   it('a /clear while the agent works says so in plain words, once', async () => {
     expect(await held('clear', 'working').result).toEqual({
       accepted: false,
-      error: "The agent is still working. Run /clear when it's done."
+      error: "Claude is still working. Run /clear when it's done."
     })
     expect(await held('clear', 'prompt').result).toEqual({
       accepted: false,
-      error: "Answer the agent's question or approval, then run /clear."
+      error: "Answer Claude's question or approval, then run /clear."
     })
   })
 
   it('a /compact a host without the queue refuses reads the same way', async () => {
     expect(await held('compact', 'working').result).toEqual({
       accepted: false,
-      error: "The agent is still working. Run /compact when it's done."
+      error: "Claude is still working. Run /compact when it's done."
     })
     expect(await held('compact', 'prompt').result).toEqual({
       accepted: false,
-      error: "Answer the agent's question or approval, then run /compact."
+      error: "Answer Claude's question or approval, then run /compact."
     })
   })
 })
@@ -370,7 +388,7 @@ describe('a refusal names what it waits on only while the chat shows it', () => 
     expect(background).toEqual({
       accepted: false,
       error:
-        'Background tasks are still running. Wait for the background tasks to finish. Run /clear again.',
+        'Claude still has background tasks running. Wait for the background tasks to finish. Run /clear again.',
       refusedWhile: 'background'
     })
     // Ahead of the chat, or a reason that names nothing it shows: said as any failure.

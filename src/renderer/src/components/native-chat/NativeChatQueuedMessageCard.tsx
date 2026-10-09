@@ -23,6 +23,7 @@ import { translate } from '@/i18n/i18n'
 import { structuredAgentSessionAttemptFailureParts } from '../../../../shared/structured-agent-session-rejection-words'
 import { classifyDispatchRejection } from '../../../../shared/structured-agent-session-dispatch-rejection'
 import { readWholeAgentSessionFailureFact } from '../../../../shared/agent-session-failure'
+import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
 import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
 import { QUEUED_MESSAGE_PAUSED_SEND_FAILED } from '../../../../shared/agent-session-wire'
 import { isMacPlatform } from './native-chat-shortcut'
@@ -73,16 +74,14 @@ export function queuedMessageCardCaption(
       // A card's own hold; the queue's pause is the list's header. Markers localize, and an absent
       // or unknown one (newer host) is a plain pause, never shown raw.
       if (card.pausedReason === QUEUED_MESSAGE_PAUSED_SEND_FAILED) {
-        // Its Send shows only while the agent is idle; the words match what is on the card.
-        return card.waitsForAgent
-          ? translate(
-              'components.native-chat.queuedMessages.pausedSendFailedWaiting',
-              "Couldn't send — press Send to retry once the agent finishes."
-            )
-          : translate(
-              'components.native-chat.queuedMessages.pausedSendFailed',
-              "Couldn't send — press Send to retry."
-            )
+        const values = { agent: agentName ?? sayAgentSessionFailureTranslated('theAgent') }
+        return [
+          sayAgentSessionFailureTranslated('writeFailed', values),
+          sayAgentSessionFailureTranslated(
+            card.waitsForAgent ? 'queueSendRetryWhenDone' : 'queueSendRetry',
+            values
+          )
+        ].join(' ')
       }
       return translate('components.native-chat.queuedMessages.paused', 'Paused')
     case 'behind-returned':

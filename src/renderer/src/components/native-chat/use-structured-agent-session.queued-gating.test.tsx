@@ -575,7 +575,7 @@ describe('a /compact against a host that holds commands in line', () => {
     })
     expect(outcome).toEqual({
       accepted: false,
-      error: 'Your earlier message is still being sent. Run /clear once it has gone.',
+      error: 'Your earlier message to Claude is still being sent. Run /clear once it has gone.',
       refusedWhile: 'sending'
     })
   })
@@ -590,7 +590,7 @@ describe('a /compact against a host that holds commands in line', () => {
     })
     expect(outcome).toEqual({
       accepted: false,
-      error: 'Your earlier message is still being sent. Run /clear once it has gone.',
+      error: 'Your earlier message to Claude is still being sent. Run /clear once it has gone.',
       refusedWhile: 'sending'
     })
     expect(commandCalls()).toHaveLength(0)
@@ -643,7 +643,7 @@ describe('a /compact against a host that holds commands in line', () => {
       })
       expect(outcome).toEqual({
         accepted: false,
-        error: 'Wait for pending work and messages to finish before using this command.'
+        error: `Wait for pending work and messages with Claude to finish before running /${command}.`
       })
     }
     expect(commandCalls()).toHaveLength(0)
@@ -719,7 +719,7 @@ describe('a /compact against a host that holds commands but has its queue dark',
     })
     expect(outcome).toEqual({
       accepted: false,
-      error: "The agent is still working. Run /compact when it's done.",
+      error: "Claude is still working. Run /compact when it's done.",
       refusedWhile: 'working'
     })
     expect(commandCalls()).toHaveLength(0)

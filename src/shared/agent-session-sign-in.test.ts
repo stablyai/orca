@@ -50,7 +50,7 @@ describe('agent-specific sign-in guidance', () => {
     (agentName, command) => {
       const fact = {
         kind: 'notSignedIn',
-        detail: { text: 'The configured provider has no API key.', audience: 'person' }
+        detail: { text: 'No API key is configured.', audience: 'person' }
       } as const
       const row = agentSessionFailureSentence(fact, 'row', { agentName })
       const rejection = agentSessionFailureSentence(fact, 'rejection', { agentName })
@@ -65,6 +65,20 @@ describe('agent-specific sign-in guidance', () => {
       }
     }
   )
+  it.each([
+    'The configured provider has no API key.',
+    'provider_auth_failed: missing credentials',
+    'HTTP 401 Unauthorized'
+  ])('withholds internal or technical detail %j but keeps the sign-in step', (text) => {
+    const fact = { kind: 'notSignedIn', detail: { text, audience: 'person' } } as const
+    for (const surface of ['row', 'rejection'] as const) {
+      const sentence = agentSessionFailureSentence(fact, surface, { agentName: 'Codex' })
+      expect(sentence).toContain('codex login')
+      expect(sentence).not.toContain(text)
+      expect(sentence).not.toMatch(/provider/i)
+    }
+  })
+
   it('keeps diagnostic text literal and keeps log-only detail off the visible sentence', () => {
     const detail = 'No API key found for {{agent}} $t(fake.key)'
     expect(

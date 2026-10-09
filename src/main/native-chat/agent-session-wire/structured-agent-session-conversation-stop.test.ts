@@ -396,7 +396,7 @@ describe('a Stop that names no turn', () => {
     await eventually(async () =>
       expect(await submission(refused.id)).toMatchObject({
         dispatchState: 'rejected',
-        reason: expect.stringContaining('unknown model gpt-missing'),
+        reason: "Codex didn't accept this message.",
         rejection: { kind: 'providerRejected' }
       })
     )
@@ -615,7 +615,7 @@ describe('a Stop that names no turn', () => {
     expect(await statusRows()).toEqual([])
   })
 
-  it('says the agent did not stop, in its words, when it refused because its turn is not running', async () => {
+  it('reports a refused Stop without exposing its technical no-turn reason', async () => {
     const { id, result } = send('hello')
     await result
     await eventually(async () => expect((await submission(id))?.handedOverAt).toBeDefined())
@@ -630,7 +630,7 @@ describe('a Stop that names no turn', () => {
     expect(await stop()).toMatchObject({ ok: true, value: { cancelled: false } })
 
     expect(closeSession).not.toHaveBeenCalled()
-    expect(await statusRows()).toEqual(["Codex didn't stop: no active turn to interrupt."])
+    expect(await statusRows()).toEqual(["Codex didn't stop. Check the chat before trying again."])
   })
 
   it('ends the child when the provider never answered the interrupt', async () => {
@@ -666,7 +666,9 @@ describe('a Stop that names no turn', () => {
         fields: expect.objectContaining({ scope: 'stop-child', sessionId: SESSION })
       })
     )
-    expect(await statusRows()).toEqual(["Codex didn't stop: failed to interrupt turn."])
+    expect(await statusRows()).toEqual([
+      "Codex didn't stop: failed to interrupt turn. Check the chat before trying again."
+    ])
   })
 
   it('counts as stopped when the child exit was proven and only a later cleanup step failed', async () => {
@@ -700,18 +702,20 @@ describe('a Stop that names no turn', () => {
 
     expect(await stop()).toMatchObject({ ok: true, value: { cancelled: false } })
 
-    expect(await statusRows()).toEqual(['Cancellation was not confirmed.'])
+    expect(await statusRows()).toEqual([
+      "Codex hasn't confirmed that it stopped. Check the chat before trying again."
+    ])
   })
 
-  it('says the agent had no turn to stop when it had none', async () => {
+  it('reports a no-turn refusal without inferring that the agent is idle', async () => {
     const { id, result } = send('hello')
     await result
     await eventually(async () => expect((await submission(id))?.handedOverAt).toBeDefined())
-    cancelTurn.mockResolvedValueOnce({ cancelled: false })
+    cancelTurn.mockResolvedValueOnce({ cancelled: false, refusal: { turnNotRunning: true } })
 
     expect(await stop()).toMatchObject({ ok: true, value: { cancelled: false } })
 
-    expect(await statusRows()).toEqual(['Codex had no turn running to stop.'])
+    expect(await statusRows()).toEqual(["Codex didn't stop. Check the chat before trying again."])
   })
 
   it('stops nothing when it reuses the id of a Stop the host already ran', async () => {

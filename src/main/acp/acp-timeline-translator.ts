@@ -14,7 +14,8 @@ import { AcpToolTimeline } from './acp-tool-timeline'
 import {
   AcpTurnFailures,
   acpAuthenticationRequired,
-  acpPromptErrorDetail
+  acpPromptErrorDetail,
+  type AcpTurnFailureSource
 } from './acp-turn-failures'
 import { acpNamedTextKey, AcpTurnMessages, type AcpTextDrop } from './acp-turn-messages'
 import type { PromptResponse } from './generated/acp-protocol.generated'
@@ -32,11 +33,8 @@ const SUBSTANTIVE_UPDATES = [
   'plan'
 ]
 
-export type AcpTimelineTranslatorOptions = {
-  sessionId: string
+export type AcpTimelineTranslatorOptions = AcpTurnFailureSource & {
   dialect?: AcpDialect
-  /** The agent's display name, for a failed turn the provider gave no words for. */
-  agentName?: string
   onTextDropped?: (drop: AcpTextDrop) => void
 }
 
@@ -57,7 +55,7 @@ export class AcpTimelineTranslator {
 
   constructor(private readonly options: AcpTimelineTranslatorOptions) {
     this.dialect = options.dialect ?? GENERIC_ACP_DIALECT
-    this.failures = new AcpTurnFailures(options.sessionId, this.dialect, options.agentName)
+    this.failures = new AcpTurnFailures(this.dialect, options)
     this.backgroundTasks = new AcpBackgroundTaskTimeline((callId) => this.tools.turn(callId))
     this.prompts = new AcpPromptTurns(
       options.sessionId,

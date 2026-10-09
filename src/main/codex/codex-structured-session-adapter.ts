@@ -2,6 +2,7 @@ import * as codexRewind from './codex-structured-rewind'
 import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
 import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session-wire'
 import { isCodexAppServerRequestError } from './codex-app-server-connection'
+import { providerDispatchRejectionFact } from '../../shared/structured-agent-session-dispatch-rejection'
 import type {
   AgentSessionAcquisition,
   AgentSessionDispatchOutcome,
@@ -11,7 +12,7 @@ import type {
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { CodexJournalTranslationAdmission } from './codex-structured-journal-translation'
 import { dispatchCodexTurn, isCodexTurnOptionKey } from './codex-structured-turn-start'
-import { agentSessionFailureFact, providerDiagnosticOf } from '../../shared/agent-session-failure'
+import { providerDiagnosticOf } from '../../shared/agent-session-failure'
 import { supportsCodexStructuredLocation } from './codex-structured-location-support'
 import { CodexStructuredSessionTeardown } from './codex-structured-session-teardown'
 import {
@@ -257,9 +258,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
         // Codex's own words, when it gave any, are the one part of the error a person can use.
         return {
           state: 'rejected',
-          ...codexDispatchRejection(
-            agentSessionFailureFact('providerRejected', { detail: providerDiagnosticOf(error) })
-          )
+          ...codexDispatchRejection(providerDispatchRejectionFact(providerDiagnosticOf(error)))
         }
       }
       throw error

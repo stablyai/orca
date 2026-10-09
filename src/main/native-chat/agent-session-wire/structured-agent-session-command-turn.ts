@@ -312,7 +312,7 @@ function commandBlocked(
   body: AgentJournalMessageItem
 ): SubmissionRejectionFact | null {
   if (body.command?.name !== STRUCTURED_AGENT_SESSION_COMPACT_COMMAND) {
-    return agentSessionFailureFact('commandRefused')
+    return unsupportedCommand()
   }
   const record = ctx.record()
   if (!record) {
@@ -320,10 +320,19 @@ function commandBlocked(
   }
   // The declaration admits it, as it does the advertised command list; a client may send it anyway.
   if (!ctx.agents.capabilities(record.provider)?.compact) {
-    return agentSessionFailureFact('commandRefused')
+    return unsupportedCommand()
   }
   const refusal = conversationCommandBlocked(ctx, record, ctx.childWork(), 'handover')
   return refusal
     ? agentSessionFailureFact('commandRefused', { refusal: agentSessionRefusalReference(refusal) })
     : null
+}
+
+function unsupportedCommand(): SubmissionRejectionFact {
+  return agentSessionFailureFact('commandRefused', {
+    refusal: {
+      code: 'structured_agent_session_unsupported',
+      details: { reason: 'hostUnsupported' }
+    }
+  })
 }

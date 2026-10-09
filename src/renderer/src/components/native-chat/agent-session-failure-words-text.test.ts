@@ -34,16 +34,12 @@ const IDS = Object.keys(AGENT_SESSION_FAILURE_COPY).filter(
   (id): id is AgentSessionFailureCopyId => id in AGENT_SESSION_FAILURE_COPY
 )
 // Said by a refusal notice too, so they keep the notice's keys.
-const NOTICE_PIECES: readonly AgentSessionFailureCopyId[] = [
-  'terminalAgentHoldsChat',
-  'quitTerminalAgent',
-  'startNewChat',
-  'backgroundTasksRunning',
-  'waitForBackgroundTasks',
-  'agentStarting',
-  'waitForStart',
-  'agentStillWorking'
-]
+const NOTICE_KEYS: Partial<Record<AgentSessionFailureCopyId, string>> = {
+  terminalAgentHoldsChat: 'terminalAgentHoldsChat',
+  quitTerminalAgent: 'quitTerminalAgent',
+  startNewChat: 'startNewChat',
+  sendItAgain: 'tryAgainComposerSend'
+}
 // Kana, and kanji whose simplified Chinese form differs (続 is 续, 読 is 读, ...).
 const JAPANESE_ONLY = /[\u3040-\u30ff続読変済図気帰戻検択転権単圧応対発処実証覧関専]/u
 const VALUES = {
@@ -124,23 +120,29 @@ describe('desktop words for a failure fact', () => {
     for (const id of IDS) {
       vi.mocked(translate).mockClear()
       sayAgentSessionFailureTranslated(id, VALUES)
-      const section = NOTICE_PIECES.includes(id) ? 'writeNotice' : 'failureWords'
+      const section = NOTICE_KEYS[id] ? 'writeNotice' : 'failureWords'
       expect(vi.mocked(translate).mock.calls.map(([key, fallback]) => [key, fallback])).toEqual([
-        [`components.native-chat.${section}.${id}`, AGENT_SESSION_FAILURE_COPY[id]]
+        [
+          `components.native-chat.${section}.${NOTICE_KEYS[id] ?? id}`,
+          AGENT_SESSION_FAILURE_COPY[id]
+        ]
       ])
     }
   })
 
   it('keeps the English catalog in step with the shared copy', () => {
     const own = Object.fromEntries(
-      IDS.filter((id) => !NOTICE_PIECES.includes(id)).map((id) => [
-        id,
-        AGENT_SESSION_FAILURE_COPY[id]
-      ])
+      IDS.filter((id) => !NOTICE_KEYS[id]).map((id) => [id, AGENT_SESSION_FAILURE_COPY[id]])
     )
     expect(en.components['native-chat'].failureWords).toEqual(own)
-    for (const id of NOTICE_PIECES) {
-      expect(AGENT_SESSION_WRITE_NOTICE_COPY).toHaveProperty(id, AGENT_SESSION_FAILURE_COPY[id])
+    for (const id of IDS) {
+      const noticeKey = NOTICE_KEYS[id]
+      if (noticeKey) {
+        expect(AGENT_SESSION_WRITE_NOTICE_COPY).toHaveProperty(
+          noticeKey,
+          AGENT_SESSION_FAILURE_COPY[id]
+        )
+      }
     }
   })
 
@@ -180,7 +182,7 @@ describe('desktop words for a failure fact', () => {
     )
     // The provider's own words stay as written: placeholders, nesting and markup are not read.
     expect(agentSessionWriteNoticeText(rejected)).toBe(
-      `Le fournisseur n'a pas accepté ce message : ${detail}.`
+      `Codex n'a pas accepté ce message : ${detail}.`
     )
     expect(
       agentSessionWriteNoticeText(
@@ -222,16 +224,18 @@ describe('desktop words for a failure fact', () => {
         { agentName: 'Codex' },
         sayAgentSessionFailureTranslated
       )
-    expect(sentence({ kind: 'commandRefused' })).toBe(
-      "Cette commande n'a pas été exécutée. Réessayez."
+    expect(sentence({ kind: 'commandRefused' })).toBe('Codex n’a pas exécuté cette commande.')
+    expect(sentence({ kind: 'stopRefused' })).toBe(
+      'Codex ne s’est pas arrêté. Vérifiez le chat avant de réessayer.'
     )
-    expect(sentence({ kind: 'stopRefused' })).toBe("Codex n'avait aucun tour en cours à arrêter.")
     expect(
       sentence({
         kind: 'stopRefused',
         detail: { text: 'no active turn to interrupt.', audience: 'person' }
       })
-    ).toBe("Codex ne s'est pas arrêté : no active turn to interrupt.")
+    ).toBe(
+      'Codex ne s’est pas arrêté : no active turn to interrupt. Vérifiez le chat avant de réessayer.'
+    )
   })
 
   it("says an image's size limit in the reader's unit", async () => {

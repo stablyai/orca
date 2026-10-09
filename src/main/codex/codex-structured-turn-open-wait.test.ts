@@ -16,6 +16,7 @@ type Rig = Awaited<ReturnType<typeof codexTurnLifecycleRig>>
 
 const ADMITTED = { state: 'admitted' }
 const REFUSED = { cancelled: false }
+const NO_RUNNING_TURN = { cancelled: false, refusal: { turnNotRunning: true } }
 const MAY_OPEN = { cancelled: false, refusal: { turnMayOpen: true } }
 
 const stop = (rig: Rig) => rig.adapter.cancelTurn({ sessionId: 'session-1', fence: 7 })
@@ -114,7 +115,7 @@ describe("a no-turn Stop in the window between Codex's answer and its turn openi
 
     rig.turns.end('interrupted')
 
-    expect(await settledWithin(stopping)).toEqual(REFUSED)
+    expect(await settledWithin(stopping)).toEqual(NO_RUNNING_TURN)
     expect(interruptedTurns(rig)).toEqual(['turn-1'])
   })
 
@@ -128,7 +129,7 @@ describe("a no-turn Stop in the window between Codex's answer and its turn openi
       return interrupt(params)
     }
 
-    expect(await settledWithin(stop(rig))).toEqual(REFUSED)
+    expect(await settledWithin(stop(rig))).toEqual(NO_RUNNING_TURN)
     expect(interruptedTurns(rig)).toEqual(['turn-1'])
   })
 

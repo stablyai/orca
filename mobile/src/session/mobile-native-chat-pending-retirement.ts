@@ -1,8 +1,11 @@
+import { agentJournalSubmissionKey } from '../../../src/shared/agent-session-journal-item-key'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import {
   countImageSourceTurnsAfter,
   normalizeReconcileText,
-  normalizedUserText
+  normalizedUserText,
+  NO_STRUCTURED_SENDS,
+  type MobileStructuredSendReachedHost
 } from './mobile-native-chat-draft-reconcile'
 import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
 
@@ -52,7 +55,9 @@ export function selectGluedPendingIds(
     // unbound it stays a barrier: retiring it early would drop the phone-local photo,
     // which the transcript's host path cannot render.
     const unboundImage = Boolean(item.images?.length) && !reboundImagePendingIds.has(item.id)
+    // A structured send is settled by its own row and never glued onto another.
     return excludedPendingIds.has(item.id) ||
+      item.clientMessageId !== undefined ||
       !item.baselineResolved ||
       unboundImage ||
       text === '' ||
@@ -144,10 +149,13 @@ function matchGluedRun(
 export function retireLandedMobileNativeChatPending(
   messages: readonly NativeChatMessage[],
   current: MobileNativeChatPendingMessage[],
-  landedImagePendingIds: ReadonlySet<string>
+  landedImagePendingIds: ReadonlySet<string>,
+  reachedHost: MobileStructuredSendReachedHost = NO_STRUCTURED_SENDS
 ): MobileNativeChatPendingMessage[] {
   const landedCounts = new Map<string, number>()
+  const messageIds = new Set<string>()
   for (const message of messages) {
+    messageIds.add(message.id)
     const text = normalizedUserText(message)
     if (text) {
       landedCounts.set(text, (landedCounts.get(text) ?? 0) + 1)
@@ -161,6 +169,17 @@ export function retireLandedMobileNativeChatPending(
   for (const item of current) {
     if (landedImagePendingIds.has(item.id)) {
       landedPendingIds.add(item.id)
+      continue
+    }
+    if (item.clientMessageId !== undefined) {
+      // A photo whose own row is drawn waits to bind to it above; one the chat hides retires unbound.
+      const photoWaitsForRow =
+        Boolean(item.images?.length) &&
+        messageIds.has(agentJournalSubmissionKey(item.clientMessageId))
+      if (reachedHost(item.clientMessageId) && !photoWaitsForRow) {
+        landedPendingIds.add(item.id)
+        exactLandedIds.add(item.id)
+      }
       continue
     }
     // Keep image echoes until their local preview reaches the authoritative message.

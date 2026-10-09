@@ -51,23 +51,6 @@ const NOT_DONE: Record<AgentSessionWriteKind, AgentSessionWriteNoticeSentence> =
   goal: 'notDoneGoal'
 }
 
-/** A /clear or /compact refused because the agent is working: one plain sentence for every
- *  reason that is, saying only what the person sees and can do. */
-const COMMAND_WHILE_WORKING: Partial<
-  Record<AgentSessionWriteKind, Partial<Record<string, AgentSessionWriteNoticeSentence[]>>>
-> = {
-  clear: {
-    turnActive: ['agentStillWorking', 'runClearWhenDone'],
-    messagesUnsettled: ['agentStillWorking', 'runClearWhenDone'],
-    promptPending: ['clearAfterAnswer']
-  },
-  compact: {
-    turnActive: ['agentStillWorking', 'runCompactWhenDone'],
-    messagesUnsettled: ['agentStillWorking', 'runCompactWhenDone'],
-    promptPending: ['compactAfterAnswer']
-  }
-}
-
 /** That the write did not happen, for one that a second attempt can carry out. Only the phone says
  *  how: its message goes back to the composer and it has no Retry control. Everywhere else the
  *  control that sent the write is the way to try again. */
@@ -113,12 +96,23 @@ function reasonParts(
       }
     ]
   }
-  const commandWhileWorking =
-    failure.code === 'agent_session_operation_invalid'
-      ? COMMAND_WHILE_WORKING[write]?.[failure.details?.reason ?? '']
-      : undefined
-  if (commandWhileWorking) {
-    return commandWhileWorking
+  if (
+    failure.code === 'agent_session_operation_invalid' &&
+    (write === 'clear' || write === 'compact') &&
+    (failure.details?.reason === 'turnActive' ||
+      failure.details?.reason === 'messagesUnsettled' ||
+      failure.details?.reason === 'promptPending')
+  ) {
+    return [
+      {
+        failure: {
+          kind: 'commandRefused',
+          refusal: { code: failure.code, details: failure.details }
+        },
+        surface: 'row',
+        context: { ...context, command: write }
+      }
+    ]
   }
   const words = agentSessionRefusalReasonWords(failure)
   if (!words || 'words' in words) {
@@ -252,10 +246,11 @@ export function agentSessionWriteNoticeEnglish(
  *  message is not read. */
 export function agentSessionRefusalNotice(
   refusal: Pick<AgentSessionWireRefusal, 'code' | 'message' | 'details'>,
-  write: AgentSessionWriteKind
+  write: AgentSessionWriteKind,
+  context: AgentSessionFailureWordsContext = {}
 ): string {
   return agentSessionWriteNoticeEnglish(
-    agentSessionWriteNoticeParts(agentSessionRefusalFailure(refusal), write)
+    agentSessionWriteNoticeParts(agentSessionRefusalFailure(refusal), write, context)
   )
 }
 

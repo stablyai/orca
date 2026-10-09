@@ -6,9 +6,15 @@ import {
   agentSessionWriteNotDoneParts
 } from './agent-session-refusal-notice'
 import type { AgentSessionWriteNoticePart } from './agent-session-write-notice-copy'
-import type { AgentSessionFailureFact } from './agent-session-failure'
+import {
+  readWholeAgentSessionFailureFact,
+  type AgentSessionFailureFact
+} from './agent-session-failure'
+import type { AgentJournalSubmission } from './agent-session-journal-types'
+import { agentSessionFailureStatedByStartRow } from './structured-agent-session-start-failure-facts'
 import type { AgentSessionFailureWordsContext } from './agent-session-failure-words'
 import { classifyDispatchRejection } from './structured-agent-session-dispatch-rejection'
+import { isProviderDiagnosticPersonText } from './provider-diagnostic-person-text'
 
 /**
  * What to put on screen for a rejection.
@@ -49,11 +55,19 @@ export function structuredAgentSessionRejectionParts(
   }
   const rejection = classifyDispatchRejection({ reason })
   if (rejection.kind === 'writeFailed') {
-    return ['unreachable', ...agentSessionWriteNotDoneParts(write)]
+    return rejectionFactParts(write, { kind: 'writeFailed' }, context)
   }
-  // A legacy marker is an internal cause with no user-facing meaning; any other reason is a
-  // sentence written to be read — the provider's, or the host's own.
-  return rejection.kind ? agentSessionWriteNotDoneParts(write) : [{ text: reason }]
+  if (rejection.kind) {
+    return agentSessionWriteNotDoneParts(write)
+  }
+  // A reason-only row cannot identify its author or recover its cause; use a named neutral lead.
+  const parts = rejectionFactParts(write, { kind: 'providerRejected' }, context)
+  if (!isProviderDiagnosticPersonText(reason)) {
+    return parts
+  }
+  const alreadyNamed =
+    !context.agentName || reason.toLowerCase().includes(context.agentName.toLowerCase())
+  return alreadyNamed ? [{ text: reason }] : [...parts, { text: reason }]
 }
 
 function rejectionFactParts(
@@ -62,9 +76,6 @@ function rejectionFactParts(
   context: AgentSessionFailureWordsContext
 ): AgentSessionWriteNoticePart[] {
   const { kind } = classifyDispatchRejection({ reason: null, rejection: fact })
-  if (kind === 'writeFailed') {
-    return ['unreachable', ...agentSessionWriteNotDoneParts(write)]
-  }
   // A fact this build cannot place proves only that the message did not happen.
   return kind
     ? [{ failure: { ...fact, kind }, surface: 'rejection', context }]
@@ -79,4 +90,22 @@ export function structuredAgentSessionAttemptFailureParts(
   recorded?: AgentSessionFailureFact
 ): AgentSessionWriteNoticePart[] {
   return structuredAgentSessionRejectionParts(failure.reason, 'send', recorded, context)
+}
+
+/** The line under a message the host recorded and then rejected, in the host's terms. A failed
+ *  start's loaded row already says why, so then it says only that the message was not sent. */
+export function structuredAgentSessionRecordedRejectionParts(
+  submission: AgentJournalSubmission,
+  context: AgentSessionFailureWordsContext,
+  startFailures: readonly AgentSessionFailureFact[]
+): AgentSessionWriteNoticePart[] {
+  if (agentSessionFailureStatedByStartRow(submission.rejection, startFailures)) {
+    return agentSessionWriteNotDoneParts('send')
+  }
+  return structuredAgentSessionRejectionParts(
+    submission.reason,
+    'send',
+    readWholeAgentSessionFailureFact(submission.rejection),
+    context
+  )
 }

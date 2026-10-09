@@ -84,6 +84,7 @@ describe('MobileNativeChatMessage', () => {
       } | null
       onToggleTurn?: () => void
       reasoningIsLive?: boolean
+      unsentNotice?: string
     } = {}
   ): ReactTestRenderer {
     act(() => {
@@ -168,6 +169,28 @@ describe('MobileNativeChatMessage', () => {
     expect(rows.some((row) => row.props.style.includes(styles.rowUser))).toBe(false)
   })
 
+  // As on the desktop: an orchestration task the host recorded and rejected reads as not sent too.
+  it("says under another agent's message the host never delivered that it was not sent", () => {
+    const tree = render(
+      {
+        ...userMessage([{ type: 'text', text: 'Fix the parser.' }]),
+        unsent: true,
+        from: {
+          kind: 'agent',
+          senders: [
+            {
+              party: { address: 'term_a', terminalHandle: 'term_a', orcaSessionId: null },
+              name: 'Coder'
+            }
+          ],
+          orchestration: null
+        }
+      },
+      { unsentNotice: "Claude couldn't start." }
+    )
+    expect(textIn(tree.root)).toContain("Claude couldn't start.")
+  })
+
   it('preserves an ordinary assistant answer without interpreting its text as a host notice', () => {
     const tree = render(toolMessage([{ type: 'text', text: 'provider fallback' }]))
     expect(tree.root.find((node) => String(node.type) === 'MobileMarkdown').props.content).toBe(
@@ -199,6 +222,36 @@ describe('MobileNativeChatMessage', () => {
       .findAllByType('Text' as never)
       .map((node) => String(node.children.join('')))
     expect(texts.some((text) => text.includes('/tmp/host.png'))).toBe(true)
+  })
+
+  it('says under a message the host recorded but never delivered why it was not sent', () => {
+    const tree = render(
+      { ...userMessage([{ type: 'text', text: 'hello' }]), unsent: true },
+      { unsentNotice: "Claude couldn't receive this message. Send it again." }
+    )
+    expect(textIn(tree.root)).toEqual([
+      'hello',
+      "Claude couldn't receive this message. Send it again."
+    ])
+  })
+
+  it('still says it was not sent when no words for it are loaded', () => {
+    const tree = render({ ...userMessage([{ type: 'text', text: 'hello' }]), unsent: true })
+    expect(textIn(tree.root)).toEqual(['hello', 'Your message was not sent.'])
+  })
+
+  it('says it was not sent as a muted label, not an error', () => {
+    const tree = render({ ...userMessage([{ type: 'text', text: 'hello' }]), unsent: true })
+    const [label] = tree.root.findAll(
+      (node) =>
+        node.props.style !== undefined && node.children.join('') === 'Your message was not sent.'
+    )
+    expect(label?.props.style).toMatchObject({ color: colors.textMuted })
+  })
+
+  it('says nothing more under a delivered message', () => {
+    const tree = render(userMessage([{ type: 'text', text: 'hello' }]))
+    expect(textIn(tree.root)).toEqual(['hello'])
   })
 
   it('makes user message text selectable', () => {

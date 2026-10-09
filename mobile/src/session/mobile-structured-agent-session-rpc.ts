@@ -127,6 +127,7 @@ export async function requestStructuredAgentSessionMutation<TValue>(args: {
   fields: Record<string, unknown>
   clientOperationId?: string
   timeoutMs?: number
+  agentName?: string
 }): Promise<StructuredAgentSessionMutationCallResult<TValue>> {
   const {
     client,
@@ -136,7 +137,8 @@ export async function requestStructuredAgentSessionMutation<TValue>(args: {
     expectedRuntimeFence,
     fields,
     clientOperationId,
-    timeoutMs
+    timeoutMs,
+    agentName
   } = args
   try {
     const result = await callAgentSession<AgentSessionMutationResult<TValue>>(
@@ -171,7 +173,8 @@ export async function requestStructuredAgentSessionMutation<TValue>(args: {
           code: result.refusal.code,
           message: agentSessionRefusalNotice(
             result.refusal,
-            phoneWriteKind(fingerprintMethod, fields)
+            phoneWriteKind(fingerprintMethod, fields),
+            { agentName }
           )
         }
   } catch (error) {
@@ -184,7 +187,9 @@ export async function requestStructuredAgentSessionMutation<TValue>(args: {
       return {
         status: 'failed',
         message: agentSessionWriteNoticeEnglish(
-          agentSessionWriteNoticeParts(answered, phoneWriteKind(fingerprintMethod, fields))
+          agentSessionWriteNoticeParts(answered, phoneWriteKind(fingerprintMethod, fields), {
+            agentName
+          })
         )
       }
     }

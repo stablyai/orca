@@ -32,11 +32,22 @@ type MobileNativeChatSendArgs = {
  *  desktop (ack loss after a write, or a cutover that cannot tell whether the
  *  frame was written) — callers must not present it as a definite send failure.
  *  'queued' = structured lane only: the host holds the message as a queued
- *  draft, so it shows as a card above the composer, never a transcript echo. */
-export type MobileNativeChatSendOutcome = 'accepted' | 'rejected' | 'unknown' | 'queued'
+ *  draft, so it shows as a card above the composer, never a transcript echo.
+ *  'recorded-unsent' = structured lane only: the host recorded the message and
+ *  did not deliver it; its row in the chat holds the text and says it was not
+ *  sent, so nothing is handed back. */
+export type MobileNativeChatSendOutcome =
+  | 'accepted'
+  | 'rejected'
+  | 'unknown'
+  | 'queued'
+  | 'recorded-unsent'
 
-/** What a terminal write can answer: the PTY lane has no draft queue. */
-export type MobileNativeChatWriteOutcome = Exclude<MobileNativeChatSendOutcome, 'queued'>
+/** What a terminal write can answer: the PTY lane has no draft queue and no recorded rows. */
+export type MobileNativeChatWriteOutcome = Exclude<
+  MobileNativeChatSendOutcome,
+  'queued' | 'recorded-unsent'
+>
 
 /** Without an explicit timeout `sendRequest` waits for reconnect indefinitely, and
  *  the composer holds `sending` (send arrow dimmed, no error) for as long as it

@@ -185,7 +185,7 @@ describe('mobile structured queued messages', () => {
       })
       await mountSession(CAPABLE)
       await act(async () => {
-        expect(await hook!.sendWithOutcome('queue me')).toBe('queued')
+        expect((await hook!.sendWithOutcome('queue me')).outcome).toBe('queued')
       })
       const { params, envelope } = requestOf('agentSession.send')
       expect(params.delivery).toBe('queue-if-active')
@@ -220,7 +220,7 @@ describe('mobile structured queued messages', () => {
       })
       await mountSession(LEGACY)
       await act(async () => {
-        expect(await hook!.sendWithOutcome('plain send')).toBe('accepted')
+        expect((await hook!.sendWithOutcome('plain send')).outcome).toBe('accepted')
       })
       const { params, envelope } = requestOf('agentSession.send')
       expect('delivery' in params).toBe(false)
@@ -247,12 +247,12 @@ describe('mobile structured queued messages', () => {
       })
       await mountSession(CAPABLE)
       await act(async () => {
-        expect(await hook!.sendWithOutcome('again')).toBe('unknown')
+        expect((await hook!.sendWithOutcome('again')).outcome).toBe('unknown')
       })
       unmountSession()
       await mountSession(LEGACY)
       await act(async () => {
-        expect(await hook!.sendWithOutcome('again')).toBe('accepted')
+        expect((await hook!.sendWithOutcome('again')).outcome).toBe('accepted')
       })
       const first = requestOf('agentSession.send', 0)
       const second = requestOf('agentSession.send', 1)
@@ -279,12 +279,12 @@ describe('mobile structured queued messages', () => {
     })
     await mountSession(CAPABLE, snapshotEvent({ runningTurn: true }))
     await act(async () => {
-      expect(await hook!.sendWithOutcome('held')).toBe('unknown')
+      expect((await hook!.sendWithOutcome('held')).outcome).toBe('unknown')
     })
     const firstId = String(requestOf('agentSession.send').envelope.clientOperationId)
     act(() => listener?.(batchEvent([queuedDraft({ messageId: firstId })])))
     await act(async () => {
-      expect(await hook!.sendWithOutcome('held')).toBe('queued')
+      expect((await hook!.sendWithOutcome('held')).outcome).toBe('queued')
     })
     expect(attempts).toBe(2)
     expect(requestOf('agentSession.send', 1).envelope.clientOperationId).not.toBe(firstId)

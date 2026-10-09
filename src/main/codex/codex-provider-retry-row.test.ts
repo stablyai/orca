@@ -84,18 +84,18 @@ describe('a Codex stream error it is about to retry', () => {
     expect(written).toHaveLength(3)
     expect(new Set(written.map((row) => row.key)).size).toBe(3)
     expect(written.map((row) => row.body.kind === 'status' && row.body.text)).toEqual([
-      'Codex is retrying: Reconnecting... 1/5.\nstream disconnected',
-      'Codex is retrying: Reconnecting... 2/5.\nstream disconnected',
-      'Codex is retrying: Reconnecting... 3/5.\nstream disconnected'
+      'Codex hit a temporary problem and is retrying.',
+      'Codex hit a temporary problem and is retrying.',
+      'Codex hit a temporary problem and is retrying.'
     ])
     expect(written[2]?.body).toEqual({
       kind: 'status',
       tone: 'warning',
-      text: 'Codex is retrying: Reconnecting... 3/5.\nstream disconnected',
+      text: 'Codex hit a temporary problem and is retrying.',
       failure: {
         kind: 'providerRetrying',
-        detail: { text: 'Reconnecting... 3/5', audience: 'person' },
-        retry: { error: 'responseStreamDisconnected', status: 502, cause: 'stream disconnected' }
+        detail: { text: 'Reconnecting... 3/5', audience: 'log' },
+        retry: { error: 'responseStreamDisconnected', status: 502 }
       },
       providerFrame: {
         provider: 'codex',
@@ -116,8 +116,8 @@ describe('a Codex stream error it is about to retry', () => {
     translator.handle(retrying('Reconnecting... 2/5', 'Reconnecting... 2/5'))
 
     expect(retryRows(rows).map((row) => row.body.kind === 'status' && row.body.text)).toEqual([
-      'Codex is retrying: Reconnecting... 1/5.',
-      'Codex is retrying: Reconnecting... 2/5.'
+      'Codex hit a temporary problem and is retrying.',
+      'Codex hit a temporary problem and is retrying.'
     ])
   })
 
@@ -155,9 +155,9 @@ describe('a Codex stream error it is about to retry', () => {
 
     // Each write is a new row: nothing the first connection wrote is revised.
     expect(retryRows(rows).map((row) => row.body.kind === 'status' && row.body.text)).toEqual([
-      'Codex is retrying: Reconnecting... 1/5.',
-      'Codex is retrying: Reconnecting... 2/5.',
-      'Codex is retrying: Reconnecting... 1/5.'
+      'Codex hit a temporary problem and is retrying.',
+      'Codex hit a temporary problem and is retrying.',
+      'Codex hit a temporary problem and is retrying.'
     ])
   })
 
@@ -222,10 +222,20 @@ describe('a Codex stream error it is about to retry', () => {
         : []
     )
     expect(errorFrameRows).toEqual([
-      { tone: 'warning', text: `Codex is retrying: Reconnecting... 1/2.\n${cause}` },
-      { tone: 'warning', text: `Codex is retrying: Reconnecting... 2/2.\n${cause}` },
-      { tone: 'error', text: cause }
+      { tone: 'warning', text: 'Codex hit a temporary problem and is retrying.' },
+      { tone: 'warning', text: 'Codex hit a temporary problem and is retrying.' },
+      {
+        tone: 'error',
+        text: 'Codex ran into a problem. Check the chat before trying again.'
+      }
     ])
+    const finalError = reduced(rows).find(
+      (row) => row.body.kind === 'status' && row.body.failure?.kind === 'providerError'
+    )
+    expect(finalError?.body).toMatchObject({
+      failure: { kind: 'providerError', detail: { text: cause, audience: 'log' } },
+      providerFrame: { payload: { head: expect.stringContaining(cause) } }
+    })
     expect(reduced(rows).map((row) => row.body)).toContainEqual(
       expect.objectContaining({ kind: 'turn', state: 'completed', outcome: 'failure' })
     )

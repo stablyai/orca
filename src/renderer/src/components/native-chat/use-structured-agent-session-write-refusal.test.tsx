@@ -256,7 +256,7 @@ describe('a chat write the host refused', () => {
       await expect(result.current.cancel('turn-1')).resolves.toBeNull()
       await expect(result.current.runConversationCommand('compact')).resolves.toEqual({
         accepted: false,
-        error: "The agent is still working. Run /compact when it's done."
+        error: "Claude is still working. Run /compact when it's done."
       })
     })
 

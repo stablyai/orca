@@ -12,8 +12,32 @@ import {
   DISPATCH_REJECTED_HOST_RESTARTED,
   DISPATCH_REJECTED_PROVIDER_CLOSED,
   DISPATCH_REJECTED_QUEUE_FULL,
-  isWriteFailureSubmission
+  isWriteFailureSubmission,
+  providerDispatchRejectionFact
 } from './structured-agent-session-dispatch-rejection'
+
+describe('provider dispatch refusal facts', () => {
+  it('records an explicit write-failure marker as transport, keeping its detail for the log', () => {
+    const text = 'provider_write_failed: stand-in rejected the turn.'
+    const fact = providerDispatchRejectionFact({ text, audience: 'person' })
+    expect(fact).toEqual({ kind: 'writeFailed', detail: { text, audience: 'log' } })
+    expect(classifyDispatchRejection({ reason: null, rejection: fact })).toEqual({
+      category: 'transport',
+      verdict: 'failure',
+      kind: 'writeFailed'
+    })
+  })
+
+  it('preserves content explanations and never guesses transport from an unfamiliar code', () => {
+    for (const text of ['Claude does not support .bmp images', 'future_failure: refused']) {
+      expect(providerDispatchRejectionFact({ text, audience: 'person' })).toEqual({
+        kind: 'providerRejected',
+        detail: { text, audience: 'person' }
+      })
+    }
+    expect(providerDispatchRejectionFact(undefined)).toEqual({ kind: 'providerRejected' })
+  })
+})
 
 describe('classifyDispatchRejection', () => {
   it.each([

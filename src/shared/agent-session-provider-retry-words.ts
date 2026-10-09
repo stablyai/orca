@@ -7,10 +7,11 @@ import type {
   AgentSessionFailureSay
 } from './agent-session-failure-copy'
 import { joinSentences } from './sentence-joining'
+import { isProviderDiagnosticPersonText } from './provider-diagnostic-person-text'
 
 /** The provider's account of what failed goes on the line under the sentence, as it wrote it. */
 export function withRetryCause(sentence: string, cause: string | undefined): string {
-  return cause ? `${sentence}\n${cause}` : sentence
+  return cause && isProviderDiagnosticPersonText(cause) ? `${sentence}\n${cause}` : sentence
 }
 
 export function providerRetryWords(
@@ -28,7 +29,7 @@ export function providerRetryWords(
       ),
       ...retryNumber(say, retry)
     ]),
-    retry?.cause ?? retryLastError(say, retry)
+    retry?.cause
   )
 }
 
@@ -45,16 +46,4 @@ function retryNumber(
       ? say('providerRetryNumberOf', { attempt, maxRetries: String(retry.maxRetries) })
       : say('providerRetryNumber', { attempt })
   ]
-}
-
-/** The provider's own codes for what failed, when it wrote no account of it for a person. */
-function retryLastError(
-  say: AgentSessionFailureSay,
-  retry: AgentSessionProviderRetry | undefined
-): string | undefined {
-  // `server_error` reads as words once its separators are spaces.
-  const codes = [retry?.status ? `HTTP ${retry.status}` : '', retry?.error?.replace(/_+/g, ' ')]
-    .filter(Boolean)
-    .join(' ')
-  return codes ? say('providerRetryLastError', { detail: codes }) : undefined
 }

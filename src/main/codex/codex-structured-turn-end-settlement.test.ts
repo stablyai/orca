@@ -105,7 +105,7 @@ describe('a Codex send its turn ended without echoing', () => {
         state: 'rejected',
         rejection: {
           kind: 'providerRejected',
-          detail: { text: 'usage limit reached', audience: 'person' }
+          detail: { text: 'usage limit reached', audience: 'log' }
         }
       })
     ])
@@ -245,7 +245,7 @@ describe('a Codex send its turn ended without echoing', () => {
       state: 'rejected',
       rejection: {
         kind: 'providerRejected',
-        detail: { text: 'usage limit reached', audience: 'person' }
+        detail: { text: 'usage limit reached', audience: 'log' }
       }
     })
     // Settled once, by the answer: a late echo is no longer owed anything.

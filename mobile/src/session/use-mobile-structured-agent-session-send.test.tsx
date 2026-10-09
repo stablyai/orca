@@ -7,6 +7,7 @@ import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-sessi
 import type { RpcClient } from '../transport/rpc-client'
 import { fieldsOf, ok } from './use-mobile-structured-agent-session-queued.test-fixture'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
+import { agentJournalSubmissionKey } from '../../../src/shared/agent-session-journal-item-key'
 import { structuredSendResultFixture } from './structured-agent-send-result.test-fixture'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
 import { agentSessionFailureWords } from '../../../src/shared/agent-session-failure-words'
@@ -150,6 +151,65 @@ describe('mobile structured send actions', () => {
     listener = null
   })
 
+  // The host's row is where a recorded, rejected message lives on the phone, as on the desktop.
+  it('shows a message the host recorded and then rejected as not sent, in place', async () => {
+    await mountSession()
+    const event = snapshotEvent()
+    if (event.type !== 'snapshot') {
+      throw new Error('expected a snapshot')
+    }
+    const itemId = agentJournalSubmissionKey('rejected-1')
+    act(() =>
+      listener?.({
+        ...event,
+        page: {
+          ...event.page,
+          items: [
+            {
+              itemId,
+              revision: 1,
+              sequence: 1,
+              observedAt: 10,
+              body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'lost' }] }
+            }
+          ],
+          submissions: [
+            {
+              clientMessageId: 'rejected-1',
+              fence: 3,
+              payloadFingerprint: 'fingerprint',
+              dispatchState: 'rejected',
+              providerItemId: null,
+              reason: 'provider_write_failed: broken pipe',
+              submittedAt: 10,
+              resolvedAt: 10
+            }
+          ]
+        }
+      })
+    )
+    expect(hook!.session.messages).toEqual([expect.objectContaining({ id: itemId, unsent: true })])
+  })
+
+  // The transcript owns a message the host recorded, so the composer never gets it back.
+  it('answers a recorded, rejected send as not sent in the chat: no banner and no hand-back', async () => {
+    sendRequest.mockImplementation(async (method) =>
+      method === 'agentSession.send'
+        ? sendResult('rejected', 'provider_write_failed: broken pipe')
+        : method === 'agentSession.options'
+          ? ok({ models: [], current: {} })
+          : ok({})
+    )
+    await mountSession()
+
+    await act(async () => {
+      expect((await hook!.sendWithOutcome('recorded, then rejected')).outcome).toBe(
+        'recorded-unsent'
+      )
+    })
+    expect(onSendError).not.toHaveBeenCalled()
+  })
+
   it.each(['unknown', 'pending', 'accepted'] as const)(
     'a later Send owns a new id even when the earlier host answer was %s',
     async (state) => {
@@ -159,8 +219,8 @@ describe('mobile structured send actions', () => {
       await mountSession()
       await act(async () => {
         const outcome = state === 'unknown' ? 'unknown' : 'accepted'
-        expect(await hook!.sendWithOutcome('same text')).toBe(outcome)
-        expect(await hook!.sendWithOutcome('same text')).toBe(outcome)
+        expect((await hook!.sendWithOutcome('same text')).outcome).toBe(outcome)
+        expect((await hook!.sendWithOutcome('same text')).outcome).toBe(outcome)
       })
       expect(new Set(sentIds()).size).toBe(2)
     }
@@ -190,7 +250,7 @@ describe('mobile structured send actions', () => {
     const messages = hook!.session.messages
     expect(messages).toHaveLength(1)
     await act(async () => {
-      expect(await hook!.sendWithOutcome('same text')).toBe('accepted')
+      expect((await hook!.sendWithOutcome('same text')).outcome).toBe('accepted')
     })
     expect(hook!.session.messages).toEqual(messages)
     expect(event.page.submissions[0]?.dispatchState).toBe('unknown')
@@ -237,16 +297,16 @@ describe('mobile structured send actions', () => {
       })
       await mountSession()
       await act(async () => {
-        expect(await hook!.sendWithOutcome('my message')).toBe('rejected')
+        expect((await hook!.sendWithOutcome('my message')).outcome).toBe('recorded-unsent')
       })
-      expect(onSendError).toHaveBeenCalledExactlyOnceWith(words.text, { failure: fact })
+      expect(onSendError).not.toHaveBeenCalled()
       if (order === 'reply-before-row') {
-        expect(renderer!.root.findByType('span').children.join('')).toBe(words.text)
+        expect(renderer!.root.findByType('span').children).toEqual([])
         act(() => listener?.(event))
       }
-      expect(renderer!.root.findByType('span').children.join('')).toBe('Your message was not sent.')
+      expect(renderer!.root.findByType('span').children).toEqual([])
       expect(JSON.stringify(hook!.session.messages)).toContain(words.text)
-      expect(onSendError).toHaveBeenCalledTimes(1)
+      expect(onSendError).not.toHaveBeenCalled()
     }
   )
 
@@ -259,14 +319,14 @@ describe('mobile structured send actions', () => {
     })
     await mountSession()
     await act(async () => {
-      expect(await hook!.sendWithOutcome('survive remount')).toBe('unknown')
+      expect((await hook!.sendWithOutcome('survive remount')).outcome).toBe('unknown')
     })
     act(() => renderer?.unmount())
     renderer = null
     listener = null
     await mountSession()
     await act(async () => {
-      expect(await hook!.sendWithOutcome('survive remount')).toBe('unknown')
+      expect((await hook!.sendWithOutcome('survive remount')).outcome).toBe('unknown')
     })
     expect(new Set(sentIds()).size).toBe(2)
   })
@@ -279,12 +339,14 @@ describe('mobile structured send actions', () => {
     await act(async () => {
       for (const path of ['/tmp/original.png', '/tmp/reuploaded.png']) {
         expect(
-          await hook!.sendWithOutcome('describe', undefined, undefined, [
-            {
-              path,
-              previewUri: 'file:///photo.jpg'
-            }
-          ])
+          (
+            await hook!.sendWithOutcome('describe', undefined, undefined, [
+              {
+                path,
+                previewUri: 'file:///photo.jpg'
+              }
+            ])
+          ).outcome
         ).toBe('unknown')
       }
     })
@@ -304,8 +366,8 @@ describe('mobile structured send actions', () => {
     )
     await mountSession()
     await act(async () => {
-      expect(await hook!.sendWithOutcome('stopped')).toBe('accepted')
-      expect(await hook!.sendWithOutcome('stopped')).toBe('accepted')
+      expect((await hook!.sendWithOutcome('stopped')).outcome).toBe('accepted')
+      expect((await hook!.sendWithOutcome('stopped')).outcome).toBe('accepted')
     })
     expect(calls()).toHaveLength(2)
     expect(new Set(sentIds()).size).toBe(2)
@@ -330,8 +392,8 @@ describe('mobile structured send actions', () => {
       })
       await mountSession()
       await act(async () => {
-        expect(await hook!.sendWithOutcome('again')).toBe('rejected')
-        expect(await hook!.sendWithOutcome('again')).toBe('accepted')
+        expect((await hook!.sendWithOutcome('again')).outcome).toBe('rejected')
+        expect((await hook!.sendWithOutcome('again')).outcome).toBe('accepted')
       })
       expect(new Set(sentIds()).size).toBe(2)
     }
@@ -356,8 +418,8 @@ describe('mobile structured send actions', () => {
     })
     await mountSession()
     await act(async () => {
-      expect(await hook!.sendWithOutcome('again')).toBe('rejected')
-      expect(await hook!.sendWithOutcome('again')).toBe('accepted')
+      expect((await hook!.sendWithOutcome('again')).outcome).toBe('rejected')
+      expect((await hook!.sendWithOutcome('again')).outcome).toBe('accepted')
     })
     expect(new Set(sentIds()).size).toBe(2)
   })
@@ -370,7 +432,7 @@ describe('mobile structured send actions', () => {
     )
     await mountSession()
     await act(async () => {
-      expect(await hook!.sendWithOutcome('new action')).toBe('accepted')
+      expect((await hook!.sendWithOutcome('new action')).outcome).toBe('accepted')
     })
     expect(asyncStorage.getItem).not.toHaveBeenCalled()
     expect(asyncStorage.setItem).not.toHaveBeenCalled()
@@ -380,7 +442,9 @@ describe('mobile structured send actions', () => {
   it('sends nothing once the action budget expires', async () => {
     await mountSession()
     await act(async () => {
-      expect(await hook!.sendWithOutcome('never attempted', undefined, 0)).toBe('rejected')
+      expect((await hook!.sendWithOutcome('never attempted', undefined, 0)).outcome).toBe(
+        'rejected'
+      )
     })
     expect(calls()).toHaveLength(0)
   })

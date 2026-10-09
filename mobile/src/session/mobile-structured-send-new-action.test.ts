@@ -73,8 +73,6 @@ describe('a new phone send after an acknowledgement was lost', () => {
       const onError = vi.fn()
       const message = {
         sessionId: 'session',
-        sessionKey: 'remote-host:folder:session',
-        callerIdentity: 'phone',
         expectedRuntimeFence: 3,
         text: 'please continue',
         attachments: [],
@@ -82,11 +80,15 @@ describe('a new phone send after an acknowledgement was lost', () => {
       }
       const send = () => sendMobileStructuredAgentSessionMessage({ ...message, client })
 
-      expect(await send()).toBe('unknown')
+      const first = await send()
+      expect(first.outcome).toBe('unknown')
+      expect(first.clientMessageId).toBe(ids[0])
       if (relaunch) {
         client = clientFor()
       }
-      expect(await send()).toBe('accepted')
+      const second = await send()
+      expect(second.outcome).toBe('accepted')
+      expect(second.clientMessageId).toBe(ids[1])
       expect(delivered).toHaveLength(2)
       expect(new Set(ids).size).toBe(2)
       expect(onError).not.toHaveBeenCalled()

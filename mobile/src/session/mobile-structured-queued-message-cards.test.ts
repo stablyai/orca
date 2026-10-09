@@ -31,6 +31,30 @@ function draft(overrides: Partial<AgentSessionQueuedMessage> & { messageId: stri
 
 describe('mobileQueuedMessageCards', () => {
   it.each([
+    'The provider did not accept this message: provider_write_failed: stand-in rejected the turn.',
+    'The provider stopped before it finished starting.',
+    'The provider did not accept this message.'
+  ])('names the agent on a reason-only legacy card: %s', (returnedReason) => {
+    const [card] = mobileQueuedMessageCards(
+      [draft({ messageId: 'a', state: 'returned', returnedReason })],
+      [],
+      { pendingPrompt: false, agentName: 'Codex' }
+    )
+    expect(card?.caption).toBe("Codex didn't accept this message.")
+  })
+  it.each(['Codex', 'Claude'])(
+    'names %s on a returned write failure without duplicating Send',
+    (agentName) => {
+      const [card] = mobileQueuedMessageCards(
+        [draft({ messageId: 'a', ...returnedAs(agentSessionFailureFact('writeFailed')) })],
+        [],
+        { pendingPrompt: false, agentName }
+      )
+      expect(card?.caption).toBe(`${agentName} couldn't receive this message.`)
+    }
+  )
+
+  it.each([
     ['Claude', 'claude auth login'],
     ['Codex', 'codex login'],
     ['Grok', 'grok login'],
@@ -117,9 +141,11 @@ describe('mobileQueuedMessageCards', () => {
     expect(
       mobileQueuedMessageCards([failed], [], { pendingPrompt: false, agentWorking: true })[0]
         ?.caption
-    ).toBe("Couldn't send — tap Send to retry once the agent finishes")
+    ).toBe(
+      "The agent couldn't receive this message. Use Send to try again once The agent finishes."
+    )
     expect(mobileQueuedMessageCards([failed], [], { pendingPrompt: false })[0]?.caption).toBe(
-      "Couldn't send — tap Send to retry"
+      "The agent couldn't receive this message. Use Send to try again."
     )
   })
 
@@ -169,7 +195,10 @@ describe('mobileQueuedMessageCards', () => {
       [],
       { pendingPrompt: true, queuePaused: true }
     )
-    expect(cards.map((card) => card.caption)).toEqual(["Couldn't send — tap Send to retry", null])
+    expect(cards.map((card) => card.caption)).toEqual([
+      "The agent couldn't receive this message. Use Send to try again.",
+      null
+    ])
     expect(cards[0]?.paused).toBe(true)
   })
 
@@ -361,7 +390,7 @@ describe('mobileQueuedMessageCards', () => {
       { pendingPrompt: false }
     )
     expect(cards.map((card) => card.caption)).toEqual([
-      "Couldn't send — tap Send to retry",
+      "The agent couldn't receive this message. Use Send to try again.",
       'Paused'
     ])
     // Only a failed send alerts; a plain pause is not the card's fault.

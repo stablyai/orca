@@ -203,7 +203,7 @@ describe('notice rows', () => {
     'rewords known %s auth facts for %s and keeps literal diagnostics',
     async (locale, agentName, guidance) => {
       await i18n.changeLanguage(locale)
-      const detail = 'Provider diagnostic: {{agent}} must remain literal.'
+      const detail = 'Sign-in note: {{agent}} must remain literal.'
       const words = agentSessionFailureWords(
         { kind: 'notSignedIn', detail: { text: detail, audience: 'person' } },
         { agentName, surface: 'row' }

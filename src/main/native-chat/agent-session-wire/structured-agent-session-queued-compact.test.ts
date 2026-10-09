@@ -323,7 +323,7 @@ describe('a /compact that waits in line', () => {
     expect(failures).toHaveLength(1)
     // The reason, as the direct path says it, not a bare "try it again".
     expect(failures[0]!.body).toMatchObject({
-      text: 'Background tasks are still running. Wait for the background tasks to finish. Run /compact again.'
+      text: 'Codex still has background tasks running. Wait for the background tasks to finish. Run /compact again.'
     })
     expect(cards).toEqual([])
   })
@@ -354,7 +354,7 @@ describe('a /compact that waits in line', () => {
     const { failures } = await failureRowsAndCards()
     expect(failures.map((row) => row.body)).toContainEqual(
       expect.objectContaining({
-        text: 'Background tasks are still running. Wait for the background tasks to finish. Run /compact again.'
+        text: 'Codex still has background tasks running. Wait for the background tasks to finish. Run /compact again.'
       })
     )
     expect((await rig.handoff(compactId))?.handedOverAt).toBeUndefined()

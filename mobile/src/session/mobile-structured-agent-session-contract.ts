@@ -1,4 +1,5 @@
-import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
+import type { MobileStructuredSendResult } from './mobile-structured-agent-session-send'
+import type { AgentJournalSubmission } from '../../../src/shared/agent-session-journal-types'
 import type { MobileNativeChatVisualSource } from './mobile-native-chat-visual-read'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
 import type { MobileChatQuestion } from './mobile-native-chat-question'
@@ -18,12 +19,14 @@ export type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgent
     turnId: string | null
     /** What labels the live turn's one indicator row. */
     turnIndicator: NativeChatLiveTurnIndicator
+    /** The journal records that settle this phone's own sends. */
+    submissions: readonly AgentJournalSubmission[]
     sendWithOutcome: (
       text: string,
       images?: string[],
       deadline?: number,
       attachments?: readonly StructuredMobileSendAttachment[]
-    ) => Promise<MobileNativeChatSendOutcome>
+    ) => Promise<MobileStructuredSendResult>
     cancel: () => void
     permission: MobileChatPermission | null
     question: MobileChatQuestion | null

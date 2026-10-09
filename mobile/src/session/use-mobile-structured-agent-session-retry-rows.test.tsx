@@ -69,7 +69,7 @@ afterEach(() => {
   listener = null
 })
 
-it('draws one row for a run of provider retries, with what failed on its second line', async () => {
+it('draws one row for provider retries without a technical transport cause', async () => {
   const client: RpcClient = {
     sendRequest: async () => ({
       id: 'request-1',
@@ -113,7 +113,7 @@ it('draws one row for a run of provider retries, with what failed on its second 
     [
       expect.objectContaining({
         type: 'text',
-        text: 'Codex is retrying: Reconnecting... 3/5.\nstream disconnected before completion'
+        text: 'Codex is retrying: Reconnecting... 3/5.'
       })
     ]
   ])
