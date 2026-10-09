@@ -220,6 +220,8 @@ export function relaySshSession(targetId: string): WorkspaceSessionState {
     ...session,
     remoteSessionIdsByTabId: { 'tab-ssh-1': pty(1), 'tab-ssh-2': pty(3) },
     terminalPtyIncarnationsByPaneKey: { [`tab-ssh-1:${leaf(6)}`]: 'relay-inc-1' },
+    // Today's writers keep an empty revision map once created.
+    terminalTopologyRevisionByRepoId: {},
     activeConnectionIdsAtShutdown: [targetId]
   }
 }
