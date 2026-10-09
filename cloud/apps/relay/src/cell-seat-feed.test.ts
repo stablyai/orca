@@ -329,12 +329,18 @@ describe('cell seat feed', () => {
     expect((await poll('not a cursor')).status).toBe(400)
   })
 
-  it('reports the applied cell flags, so a flip can be read back through the feed', async () => {
+  it('reports the applied cell flags, so a flip can be read back through the feed and runtime status', async () => {
     let applied: AppliedControlFlags<CellFlags> = { generation: 0, flags: CELL_FLAG_DEFAULTS }
-    const { read } = createCell(config(), () => applied)
+    const { read, app } = createCell(config(), () => applied)
     expect((await read()).flagsApplied).toEqual({ generation: 0, flags: CELL_FLAG_DEFAULTS })
     applied = { generation: 12, flags: { readinessLocal: true, ticketCheck: 'shadow' } }
     expect((await read()).flagsApplied).toEqual(applied)
+    const runtime = await app.request('/v1/admin/runtime-status', {
+      method: 'POST',
+      headers: { authorization: 'Bearer deploy-token', 'content-type': 'application/json' },
+      body: JSON.stringify({ v: 1 })
+    })
+    expect(await runtime.json()).toMatchObject({ flagsApplied: applied })
   })
 
   it('accepts only the directors rehome identity, verified once per poll', async () => {
