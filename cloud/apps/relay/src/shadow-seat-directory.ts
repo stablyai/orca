@@ -258,6 +258,18 @@ export class ShadowSeatDirectory {
     return [...(this.hosts.get(hostKey(userId, relayHostId))?.values() ?? [])]
   }
 
+  // Users the map has seen with this host id; a linear scan, for admin reads only.
+  userIdsOf(relayHostId: string): string[] {
+    const suffix = `\u0000${relayHostId}`
+    const userIds = new Set<string>()
+    for (const keys of [this.hosts.keys(), this.recentlyLeft.keys()]) {
+      for (const key of keys) {
+        if (key.endsWith(suffix)) userIds.add(key.slice(0, -suffix.length))
+      }
+    }
+    return [...userIds].sort()
+  }
+
   recentlyLeftOf(userId: string, relayHostId: string, now: number): RecentlyLeftSeat[] {
     return (this.recentlyLeft.get(hostKey(userId, relayHostId)) ?? []).filter(
       (entry) => entry.at > now - SHADOW_SEAT_RECENTLY_LEFT_TTL_MS

@@ -227,6 +227,7 @@ export function createRelayServer(
       observability.recordAdmissionServiceMs?.(lane, durationMs),
     recordAssignmentUnavailable: (cause) => observability.recordAssignmentUnavailable?.(cause),
     recordRegionRequest: (region) => observability.recordRegionRequest?.(region),
+    shadowSeats: shadowSeatPoller?.directory,
     compareShadowSeats: shadowCompare
       ? (route, identity, answer) => {
           shadowCompare.compare(route, identity, answer)

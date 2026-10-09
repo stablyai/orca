@@ -152,6 +152,20 @@ export type RelayAssignment = AssignmentIdentity & {
 // a roll right now: its next assign re-places it rather than re-granting the pin.
 export type ResolvedRelayAssignment = RelayAssignment & { homeCellRollIsolated?: true }
 
+export type HostWhereaboutsRow = {
+  cellId: string
+  assignmentEpoch: number
+  leaseExpiresAt: number
+  openMigration: {
+    sourceCellId: string
+    targetCellId: string
+    previousEpoch: number
+    assignmentEpoch: number
+    expiresAt: number
+    targetRegisteredAt: number | null
+  } | null
+}
+
 export type RelayRegionCatalogEntry = {
   region: RelayRegion
   probeOrigins: string[]
@@ -7859,6 +7873,42 @@ export class RelayAssignmentStore {
           optionalInteger(row, 'roll_isolated_at') === undefined
       }
     })
+  }
+
+  // On-call "where is host X: primary-key reads only, no liveness filter.
+  async hostWhereabouts(identity: AssignmentIdentity): Promise<HostWhereaboutsRow | null> {
+    const row = (
+      await this.database.query(
+        `SELECT cell_id, assignment_epoch, lease_expires_at FROM relay_assignments
+         WHERE user_id = ? AND relay_host_id = ?`,
+        [identity.userId, identity.relayHostId]
+      )
+    )[0]
+    if (!row) return null
+    const migrations = await this.database.query(
+      `SELECT source_cell_id, target_cell_id, previous_epoch, assignment_epoch, expires_at,
+              target_registered_at
+       FROM relay_assignment_migrations
+       WHERE user_id = ? AND relay_host_id = ? AND completed_at IS NULL AND aborted_at IS NULL
+       ORDER BY assignment_epoch DESC LIMIT 1`,
+      [identity.userId, identity.relayHostId]
+    )
+    const migration = migrations[0]
+    return {
+      cellId: text(row, 'cell_id'),
+      assignmentEpoch: integer(row, 'assignment_epoch'),
+      leaseExpiresAt: integer(row, 'lease_expires_at'),
+      openMigration: migration
+        ? {
+            sourceCellId: text(migration, 'source_cell_id'),
+            targetCellId: text(migration, 'target_cell_id'),
+            previousEpoch: integer(migration, 'previous_epoch'),
+            assignmentEpoch: integer(migration, 'assignment_epoch'),
+            expiresAt: integer(migration, 'expires_at'),
+            targetRegisteredAt: optionalInteger(migration, 'target_registered_at') ?? null
+          }
+        : null
+    }
   }
 
   async regionCatalog(): Promise<RelayRegionCatalogEntry[]> {
