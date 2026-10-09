@@ -14,6 +14,7 @@ import { createAgentModelCatalogService } from '../native-chat/agent-model-catal
 import { AgentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { agentModelCatalogFingerprintForRecord } from '../native-chat/agent-model-catalog/agent-model-catalog-fingerprint'
 import { ClaudeStructuredSessionAdapter } from './claude-structured-session-adapter'
+import type { ClaudeStructuredSessionEvent } from './claude-structured-session-state'
 import {
   PROVIDER_SESSION_ID,
   fakeClaude,
@@ -50,11 +51,13 @@ const CATALOG = [
   }
 ]
 
-/** The user's settings pick Sonnet over the listing's recommended Opus; the CLI applies Sonnet. */
-async function liveListing(
+/** The user's settings pick Sonnet over the listing's recommended Opus; the CLI applies Sonnet.
+ *  `listing` is what the start's settings readback hands the host; `read` is a later options read. */
+async function startedChat(
   options?: Record<string, string>,
   applied: string | null = 'claude-sonnet-5'
 ) {
+  const events: ClaudeStructuredSessionEvent[] = []
   const claude = fakeClaude({
     initProof: 'session-start',
     initModel: applied ?? 'claude-opus-5-5',
@@ -80,7 +83,8 @@ async function liveListing(
     openConnection: claude.openConnection,
     readProcessStartTime: async () => 1_700_000_000_000,
     now: () => 1_700_000_000_500,
-    persistHandle: async () => {}
+    persistHandle: async () => {},
+    onEvent: (event) => events.push(event)
   })
   await adapter.acquire({
     identity: identityFor(SESSION),
@@ -90,7 +94,15 @@ async function liveListing(
     ...(options ? { options } : {})
   })
   await claudeStartupSettled(adapter, SESSION)
-  return (await adapter.readOptions({ sessionId: SESSION, fence: 7 })).catalogListing
+  const reported = events.find((event) => event.type === 'options-reported')
+  return {
+    listing: reported && 'catalogListing' in reported ? reported.catalogListing : undefined,
+    read: async () => (await adapter.readOptions({ sessionId: SESSION, fence: 7 })).catalogListing
+  }
+}
+
+async function liveListing(options?: Record<string, string>, applied?: string | null) {
+  return (await startedChat(options, applied)).listing
 }
 
 function record(): AgentSessionRecord {
@@ -229,5 +241,27 @@ describe('Claude configured default', () => {
       workspaceMayOverrideDefaultModel: async () => true
     }).read({ agent: 'claude', workspacePath: '/work/repo' })
     expect(answer).toMatchObject({ listingNamesConfiguredModel: false })
+  })
+
+  it('a chat’s later reads teach nothing: a newer chat’s default stands', async () => {
+    const store = new AgentModelCatalogStore()
+    const fingerprint = agentModelCatalogFingerprintForRecord(record())
+    const first = await startedChat()
+    service(store, false).recordLiveListing(SESSION, first.listing!)
+    await vi.waitFor(() => expect(store.get(fingerprint)?.configured?.modelId).toBe('sonnet'))
+
+    // The user's settings now pick Opus: a newer chat with nothing picked starts on it.
+    const newer = (await liveListing(undefined, 'claude-opus-5-5'))!
+    const opus = newer.configuredDefault?.modelId
+    expect(opus).not.toBe('sonnet')
+    service(store, false).recordLiveListing(SESSION, newer)
+    await vi.waitFor(() => expect(store.get(fingerprint)?.configured?.modelId).toBe(opus))
+
+    // The first chat keeps running and reads its options again, as every turn does.
+    const later = await first.read()
+    expect(later).not.toHaveProperty('configuredDefault')
+    service(store, false).recordLiveListing(SESSION, later!)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(store.get(fingerprint)?.configured?.modelId).toBe(opus)
   })
 })

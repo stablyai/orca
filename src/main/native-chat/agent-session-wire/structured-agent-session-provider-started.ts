@@ -97,7 +97,17 @@ export function settleStructuredAgentSessionOptionsReported(
   context: StructuredAgentSessionProviderStartedContext,
   event: StructuredAgentSessionOptionsReportedEvent
 ): Promise<void> {
-  return persistReportedOptions(context, event, admitReportedOptions(context, event))
+  const admitted = admitReportedOptions(context, event)
+  const child = context.sessions.get(event.sessionId)?.child
+  // A start's late readback (Claude's settings) says once what the config resolved.
+  if (
+    event.catalogListing &&
+    child &&
+    sameProviderChild(child, { generation: event.acquisitionGeneration, fence: event.fence })
+  ) {
+    context.deps.modelCatalog?.recordLiveListing(event.sessionId, event.catalogListing)
+  }
+  return persistReportedOptions(context, event, admitted)
 }
 
 function admitReportedOptions(
