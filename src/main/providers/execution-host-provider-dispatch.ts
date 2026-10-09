@@ -13,29 +13,21 @@
  * `getWorktreeExecutionHostId` / `resolveWorktreeExecutionHost` are the resolution layer that feeds
  * it; the last one already answers `unresolved` as a distinct verdict rather than "local".
  *
- * Why a route union rather than a uniform `getGitProviderForHost(): IGitProvider`, which is the
- * VS Code shape (`registerProvider(Schemas.file, …)` symmetric with `Schemas.vscodeRemote`, and
- * `ENOPRO` when nothing matches). Two properties of this process, not style preferences:
+ * Why a route union rather than a uniform `getGitProviderForHost(): IGitProvider`:
  *
  *   - `local` git and filesystem work takes per-worktree execution options (`wslDistro`,
  *     `sharedLinkPaths`, admission tier). A registered stateless provider would silently drop WSL
  *     routing, so the local git route carries a factory that is built per call.
- *   - `runtime:<env>` is not executed in this process *at all*. It is forwarded over the
- *     environment's transport (`runtimeEnvironments:call`) and the receiving server normalizes it to
- *     its own `local`. A repo row on a runtime host carries the server's *nested* SSH target in
- *     `connectionId`; that id is addressable only as the pair (environmentId, targetId). Handing it
- *     to this client's SSH table would dial a same-named target in the wrong namespace — turning a
- *     silent-local bug into a silent-wrong-host bug. `host-repo-catalog-snapshot` and
- *     `host-qualified-worktree-listing` already reject runtime hosts for the same reason.
+ *   - `runtime:<env>` is never executed in this process; it is forwarded to that server, which
+ *     treats it as its own `local`. A runtime repo's `connectionId` names the *server's* SSH target,
+ *     so handing it to this client's SSH table would dial a same-named target on the wrong host.
  *
- * So the answer is Zed's shape — an enum on the owner (`Local { fs }` vs `Remote { … }`) — and the
- * three kinds are symmetric variants of it. Callers switch exhaustively, so `runtime` can no longer
- * collapse into `local` by omission.
+ * So each host kind is its own variant and callers switch exhaustively; `runtime` cannot collapse
+ * into `local` by omission.
  *
- * Note the deliberate second distinction inside the `ssh` variant: `provider: null` means "this host
- * is remote and currently unreachable", which is not the same answer as "this host is local" and can
- * no longer be spelled the same way. That mirrors the `live` / `unverifiable` / `exited` rule in
- * docs/reference/ssh-execution-boundary.md — loss of contact is never evidence of locality.
+ * Inside the `ssh` variant, `provider: null` means "remote and currently unreachable", never
+ * "local" — loss of contact is never evidence of locality (the `live` / `unverifiable` / `exited`
+ * rule in AGENTS.md).
  */
 
 import {

@@ -134,16 +134,16 @@ export function tryGetProviderForAgentSessionOwner(ptyId: string): IPtyProvider 
 export function registerSshPtyProvider(connectionId: string, provider: IPtyProvider): void {
   sshProviders.set(connectionId, provider)
   pushColorQueryReplyColors(provider)
-  const generation = (provider as { providerGeneration?: number }).providerGeneration
-  if (Number.isSafeInteger(generation) && generation! > 0) {
-    sshProvidersByGeneration.set(generation!, provider)
+  const generation = provider.providerGeneration
+  if (generation !== undefined && Number.isSafeInteger(generation) && generation > 0) {
+    sshProvidersByGeneration.set(generation, provider)
   }
 }
 
 /** Remove an SSH PTY provider when a connection is closed. */
 export function unregisterSshPtyProvider(connectionId: string): void {
   const provider = sshProviders.get(connectionId)
-  const generation = (provider as { providerGeneration?: number } | undefined)?.providerGeneration
+  const generation = provider?.providerGeneration
   if (generation !== undefined && sshProvidersByGeneration.get(generation) === provider) {
     sshProvidersByGeneration.delete(generation)
   }
