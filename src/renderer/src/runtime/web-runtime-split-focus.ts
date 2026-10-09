@@ -10,6 +10,7 @@ import {
 } from './web-session-focus-intent'
 import { toHostSessionTabId, toWebTerminalSurfaceTabId } from './web-terminal-surface-id'
 import type { RuntimeTerminalSplit } from '../../../shared/runtime-types'
+import { worktreeSelectionOwnerKey } from '../lib/worktree-selection-owner'
 
 export type WebRuntimeSplitSource = { worktreeId: string; tabId: string; leafId: string }
 
@@ -20,6 +21,7 @@ type WebRuntimeSplitFocusTarget = {
   sourcePtyId: string
   expectedActiveWorktreeId: string | null
   expectedExecutionHostId: string | null
+  expectedOwnerKey: string
   expectedCurrentLocalTabId: string | null
   expectedCurrentLocalLeafId: string | null
 }
@@ -80,6 +82,7 @@ export function captureWebRuntimeSplitFocusTarget(
     sourcePtyId: ptyId,
     expectedActiveWorktreeId,
     expectedExecutionHostId: state.activeWorkspaceExecutionHostId ?? null,
+    expectedOwnerKey: worktreeSelectionOwnerKey(state.activeWorkspaceOwner),
     expectedCurrentLocalTabId,
     expectedCurrentLocalLeafId: expectedCurrentLocalTabId
       ? (state.terminalLayoutsByTabId?.[expectedCurrentLocalTabId]?.activeLeafId ?? null)
@@ -99,7 +102,8 @@ function matchesWebRuntimeSplitFocusTarget(
     state.terminalLayoutsByTabId?.[target.sourceTabId]?.ptyIdsByLeafId?.[target.sourceLeafId] !==
       target.sourcePtyId ||
     (state.activeWorktreeId ?? null) !== target.expectedActiveWorktreeId ||
-    (state.activeWorkspaceExecutionHostId ?? null) !== target.expectedExecutionHostId
+    (state.activeWorkspaceExecutionHostId ?? null) !== target.expectedExecutionHostId ||
+    worktreeSelectionOwnerKey(state.activeWorkspaceOwner) !== target.expectedOwnerKey
   ) {
     return false
   }

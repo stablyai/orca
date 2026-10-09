@@ -43,6 +43,7 @@ export function createSetActiveFolderWorkspace(
         activeWorktreeId: workspaceKey,
         activeWorkspaceKey: workspaceKey,
         activeWorkspaceExecutionHostId: executionHostId ?? null,
+        activeWorkspaceOwner: null,
         activePendingCreationId: null,
         activeFileId,
         activeBrowserTabId,

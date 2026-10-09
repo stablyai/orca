@@ -28,6 +28,7 @@ import type {
 import type { WorktreeRemovalTarget } from '../../../../shared/worktree/removal'
 import type { TerminalGitHubPRLink } from '../../../../shared/terminal-github-pr-link-detector'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { WorktreeSelectionOwner } from '../../../../shared/worktree-selection-owner'
 import type { TerminalPaneRecoveryOutcome } from '../../../../shared/terminal-tab-types'
 import type {
   TerminalRecoveryRemountRequest,
@@ -106,6 +107,7 @@ export type WorktreeSlice = {
   activeWorktreeId: string | null
   activeWorkspaceKey: WorkspaceKey | null
   activeWorkspaceExecutionHostId: ExecutionHostId | null
+  activeWorkspaceOwner?: WorktreeSelectionOwner | null
   /**
    * In-flight / failed background worktree creations, keyed by a renderer
    * `creationId`. Kept separate from `worktreesByRepo` on purpose — a real
@@ -319,6 +321,7 @@ export type WorktreeSlice = {
     worktreeId: string | null,
     executionHostId?: ExecutionHostId,
     options?: {
+      owner?: WorktreeSelectionOwner
       stateTransition?: ActiveWorktreeStateTransition
       /** Tabs the caller just created there: their first spawn is new work, not a wake. */
       createdTabIds?: readonly string[]
@@ -352,7 +355,8 @@ export type WorktreeSlice = {
   allWorktrees: () => Worktree[]
   getKnownWorktreeById: (
     worktreeId: string,
-    executionHostId?: ExecutionHostId
+    executionHostId?: ExecutionHostId,
+    owner?: WorktreeSelectionOwner
   ) => Worktree | DetectedWorktree | undefined
   /**
    * Wipes every terminal- and worktree-scoped map entry for each given id.

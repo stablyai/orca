@@ -8,6 +8,7 @@ describe('SESSION_RELEVANT_FIELDS', () => {
     activeRepoId: true,
     activeWorkspaceKey: true,
     activeWorkspaceExecutionHostId: true,
+    activeWorkspaceOwner: true,
     activeWorktreeId: true,
     activeTabId: true,
     tabsByWorktree: true,

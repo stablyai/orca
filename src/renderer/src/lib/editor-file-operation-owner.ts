@@ -27,6 +27,7 @@ type EditorOwnerState = Pick<
   | 'settings'
   | 'activeWorktreeId'
   | 'activeWorkspaceExecutionHostId'
+  | 'activeWorkspaceOwner'
   | 'repos'
   | 'worktreesByRepo'
   | 'detectedWorktreesByRepo'
@@ -87,7 +88,12 @@ function resolveEditorOwnerRoute(
   capturedHostId?: ExecutionHostId | null
 ): WorktreeOperationRoute | null {
   // Workspace focus cannot replace a file's catalog owner.
-  const ownerState = { ...state, activeWorktreeId: null, activeWorkspaceExecutionHostId: null }
+  const ownerState = {
+    ...state,
+    activeWorktreeId: null,
+    activeWorkspaceExecutionHostId: null,
+    activeWorkspaceOwner: null
+  }
   const route = resolveWorktreeOperationRoute(ownerState, worktreeId)
   const scope = parseWorkspaceKey(worktreeId)
   const hostId =

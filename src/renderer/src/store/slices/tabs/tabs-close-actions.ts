@@ -150,6 +150,7 @@ export function createTabsCloseActions(
                 activeWorktreeId: null,
                 activeWorkspaceKey: null,
                 activeWorkspaceExecutionHostId: null,
+                activeWorkspaceOwner: null,
                 activeTabId: null,
                 activeBrowserTabId: null,
                 activeFileId: null,

@@ -1,3 +1,4 @@
+import { activeWorkspaceOwnerSchema, executionHostIdSchema } from './workspace-selection-schema'
 /* Why: the workspace session JSON is written to disk by older builds and read
  * back by newer ones. A field type flip (e.g. ptyId going from string to an
  * object) or a truncated write could poison Zustand state and crash the
@@ -21,7 +22,6 @@ import type { TuiAgent } from './tui-agent'
 import type { WorkspaceSessionState } from './workspace-session-state-types'
 import { terminalTabIdSchema } from './terminal-tab-id-schema'
 import { terminalSurfaceTombstoneSchema } from './terminal-surface-tombstone-schema'
-import { parseExecutionHostId, type ExecutionHostId } from './execution-host'
 import { isTuiAgent } from './tui-agent-config'
 import { isWorkspaceKey } from './workspace-scope'
 import {
@@ -126,10 +126,6 @@ export const terminalTabSchema = z.object({
 
 // ─── Unified tab model ──────────────────────────────────────────────
 
-const executionHostIdSchema = z.custom<ExecutionHostId>(
-  (value) => typeof value === 'string' && Boolean(parseExecutionHostId(value))
-)
-
 const tabSchema = z.object({
   id: z.string(),
   entityId: z.string(),
@@ -202,7 +198,6 @@ const tabGroupLayoutNodeSchema: z.ZodType<TabGroupLayoutNode> = z.lazy(() =>
 // ─── Workspace session ──────────────────────────────────────────────
 
 const worktreeIdSchema = z.string()
-
 export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.object({
   activeRepoId: salvagedField('activeRepoId', z.string().nullable(), () => null),
   activeWorkspaceKey: salvagedOptional('activeWorkspaceKey', workspaceKeySchema.nullable()),
@@ -210,6 +205,7 @@ export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.o
     'activeWorkspaceExecutionHostId',
     executionHostIdSchema.nullable()
   ),
+  activeWorkspaceOwner: activeWorkspaceOwnerSchema,
   activeWorktreeId: salvagedField('activeWorktreeId', z.string().nullable(), () => null),
   activeTabId: salvagedField('activeTabId', z.string().nullable(), () => null),
   tabsByWorktree: salvagedField(

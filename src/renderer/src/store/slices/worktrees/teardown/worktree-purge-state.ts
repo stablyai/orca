@@ -263,6 +263,7 @@ export function buildWorktreePurgeState(
     ),
     activeWorktreeId: removedActive ? null : s.activeWorktreeId,
     activeWorkspaceExecutionHostId: removedActive ? null : s.activeWorkspaceExecutionHostId,
+    activeWorkspaceOwner: removedActive ? null : s.activeWorkspaceOwner,
     activeWorkspaceKey: (() => {
       if (s.activeWorkspaceKey && worktreeIdSet.has(s.activeWorkspaceKey)) {
         return null

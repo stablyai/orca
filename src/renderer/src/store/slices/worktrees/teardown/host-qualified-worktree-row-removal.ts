@@ -128,7 +128,8 @@ export function dropConfirmedHostRow(
       ...(removedActiveHost
         ? {
             activeWorktreeId: survivingHostId ? worktreeId : null,
-            activeWorkspaceExecutionHostId: survivingHostId
+            activeWorkspaceExecutionHostId: survivingHostId,
+            activeWorkspaceOwner: null
           }
         : {}),
       sortEpoch: state.sortEpoch + 1

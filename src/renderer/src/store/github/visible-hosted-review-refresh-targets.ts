@@ -20,6 +20,8 @@ import { getGitHubRepoLookupIndex } from '../slices/github-repo-lookup-index'
 import { getPRRefreshRuntimeRepoTarget } from './repository-routing'
 import type { VisibleHostedReviewRefreshTarget } from './visible-hosted-review-refresh-scheduler'
 import { shouldCoordinateVisibleGitHubReview } from './visible-hosted-review-refresh-ownership'
+import { findWorktreeForSelectionOwner } from '@/lib/worktree-selection-owner'
+import { getRepoCatalogOwnerHostId } from '../projects/project-catalog-owner'
 
 export function* getVisibleHostedReviewWorkspaces(
   state: AppState,
@@ -30,8 +32,25 @@ export function* getVisibleHostedReviewWorkspaces(
     (state.workspaceHostScope && state.workspaceHostScope !== 'all'
       ? [state.workspaceHostScope]
       : null)
+  const selectedOwner = state.activeWorkspaceOwner
+  const selectedWorktree = selectedOwner
+    ? findWorktreeForSelectionOwner(state, selectedOwner)
+    : null
+  const selectedRepos =
+    selectedOwner && selectedWorktree
+      ? state.repos.filter(
+          (repo) =>
+            repo.id === selectedWorktree.repoId &&
+            getRepoCatalogOwnerHostId(repo) === selectedOwner.publisherHostId &&
+            (repo.authoritativeExecutionHostId ?? getRepoExecutionHostId(repo)) ===
+              selectedOwner.executionHostId
+        )
+      : []
   for (const id of state.visibleReviewWorktreeIds) {
     const owners = new Set(getWorktreeLookupIndex(state).byId.get(id)?.owners)
+    if (selectedWorktree?.id === id) {
+      owners.add(selectedWorktree)
+    }
     for (const detected of findIndexedDetectedWorktrees(state.detectedWorktreesByRepo, id)) {
       const workspace = findKnownWorktreeById(state, id, detected.hostId ?? 'local')
       if (workspace) {
@@ -42,10 +61,15 @@ export function* getVisibleHostedReviewWorkspaces(
       if (worktree.isArchived || worktree.isBare) {
         continue
       }
-      const repo = findRepoForHost(state.repos, worktree.repoId, {
-        hostId: worktree.hostId,
-        settings: state.settings
-      })
+      const repo =
+        worktree === selectedWorktree
+          ? selectedRepos.length === 1
+            ? selectedRepos[0]
+            : null
+          : findRepoForHost(state.repos, worktree.repoId, {
+              hostId: worktree.hostId,
+              settings: state.settings
+            })
       if (!repo) {
         continue
       }
@@ -59,11 +83,12 @@ export function* getVisibleHostedReviewWorkspaces(
       }
       const hostId = getRepoExecutionHostId(repo)
       const activeHost = state.activeWorkspaceExecutionHostId
-      const selected =
-        id === state.activeWorktreeId &&
-        (activeHost
-          ? hostId === activeHost
-          : owners.size === 1 || hostId === getSettingsFocusedExecutionHostId(state.settings))
+      const selected = selectedOwner
+        ? id === state.activeWorktreeId && worktree === selectedWorktree
+        : id === state.activeWorktreeId &&
+          (activeHost
+            ? hostId === activeHost
+            : owners.size === 1 || hostId === getSettingsFocusedExecutionHostId(state.settings))
       if (
         (options?.selectedOnly && !selected) ||
         (!selected && visibleHosts && !visibleHosts.includes(hostId))
@@ -207,6 +232,7 @@ export function visibleHostedReviewRefreshInputsChanged(
     state.visibleReviewWorktreeIds !== previous.visibleReviewWorktreeIds ||
     state.activeWorktreeId !== previous.activeWorktreeId ||
     state.activeWorkspaceExecutionHostId !== previous.activeWorkspaceExecutionHostId ||
+    state.activeWorkspaceOwner !== previous.activeWorkspaceOwner ||
     state.visibleWorkspaceHostIds !== previous.visibleWorkspaceHostIds ||
     state.workspaceHostScope !== previous.workspaceHostScope ||
     state.worktreesByRepo !== previous.worktreesByRepo ||

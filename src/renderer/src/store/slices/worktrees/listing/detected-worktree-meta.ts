@@ -17,7 +17,9 @@ import {
 } from '../../../../../../shared/floating-workspace-worktree'
 import {
   findIndexedDetectedWorktrees,
-  findIndexedWorktreeOwnerForHost
+  hasIndexedDetectedWorktree,
+  findIndexedWorktreeOwnerForHost,
+  resolveIndexedWorktreeOwner
 } from '@/lib/worktree-runtime-owner-index'
 import { findWorktreeById, withoutErasedRequiredWorktreeFields } from '../../worktree-helpers'
 import { worktreeMatchesHost } from './worktree-host-ownership'
@@ -30,6 +32,10 @@ let floatingWorkspaceWorktreeCache: { path: string; worktree: Worktree } | null 
 import { worktreeRowMatchesMetaHost } from './worktree-meta-host-match'
 import { branchName } from '@/lib/git-utils'
 import { normalizeWorkspaceAttachmentUpdate } from '../../../../../../shared/workspace-attachments'
+import {
+  findWorktreeForSelectionOwner,
+  type WorktreeSelectionOwner
+} from '@/lib/worktree-selection-owner'
 
 export function applyDetectedWorktreeUpdates(
   detectedWorktreesByRepo: AppState['detectedWorktreesByRepo'],
@@ -82,10 +88,20 @@ export function findKnownWorktreeById(
   state: Pick<
     AppState,
     'worktreesByRepo' | 'detectedWorktreesByRepo' | 'folderWorkspaces' | 'floatingWorkspacePath'
-  >,
+  > &
+    Partial<Pick<AppState, 'repos'>>,
   worktreeId: string,
-  executionHostId?: ExecutionHostId
+  executionHostId?: ExecutionHostId,
+  owner?: WorktreeSelectionOwner
 ): Worktree | DetectedWorktreeListResult['worktrees'][number] | undefined {
+  if (owner) {
+    return owner.worktreeId === worktreeId &&
+      (!executionHostId ||
+        executionHostId === owner.executionHostId ||
+        executionHostId === owner.publisherHostId)
+      ? (findWorktreeForSelectionOwner(state, owner) ?? undefined)
+      : undefined
+  }
   if (isFloatingWorkspaceId(worktreeId)) {
     // The floating workspace has no repo/folder row; mint the same synthetic row the host resolves
     // with, from the host-resolved directory. Before resolution there is no path to answer with.
@@ -116,6 +132,12 @@ export function findKnownWorktreeById(
     folderWorkspaceWorktreeCache.set(folderWorkspace, worktree)
     return worktree
   }
+  if (
+    resolveIndexedWorktreeOwner(state.worktreesByRepo, worktreeId, executionHostId).kind ===
+    'ambiguous'
+  ) {
+    return undefined
+  }
   const visible = executionHostId
     ? (findIndexedWorktreeOwnerForHost(
         state.worktreesByRepo,
@@ -133,18 +155,24 @@ export function findKnownWorktreeById(
   const detectedCandidates = findIndexedDetectedWorktrees(
     state.detectedWorktreesByRepo,
     worktreeId
-  ) as DetectedWorktreeListResult['worktrees']
-  for (const detected of detectedCandidates) {
-    if (
+  ).filter(
+    (detected) =>
       !executionHostId ||
       worktreeMatchesHost(detected, executionHostId, {
         unhostedWorktreesMatchHost: executionHostId === LOCAL_EXECUTION_HOST_ID
       })
-    ) {
-      return detected
-    }
-  }
-  return undefined
+  )
+  return detectedCandidates.length === 1 ? detectedCandidates[0] : undefined
+}
+
+export function hasCatalogWorktreeById(
+  state: Pick<AppState, 'worktreesByRepo' | 'detectedWorktreesByRepo'>,
+  worktreeId: string
+): boolean {
+  return (
+    resolveIndexedWorktreeOwner(state.worktreesByRepo, worktreeId).kind !== 'missing' ||
+    hasIndexedDetectedWorktree(state.detectedWorktreesByRepo, worktreeId)
+  )
 }
 
 export function getFolderWorkspaceMetaUpdates(

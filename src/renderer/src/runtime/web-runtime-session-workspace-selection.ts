@@ -18,7 +18,8 @@ export function readActiveWorkspaceSelection(): WebRuntimeSessionWorkspaceSelect
   const state = useAppStore.getState()
   return {
     worktreeId: state.activeWorktreeId ?? null,
-    executionHostId: state.activeWorkspaceExecutionHostId ?? null
+    executionHostId: state.activeWorkspaceExecutionHostId ?? null,
+    ...(state.activeWorkspaceOwner ? { owner: state.activeWorkspaceOwner } : {})
   }
 }
 
@@ -35,7 +36,11 @@ export function restoreActiveWorkspaceSelection(
   }
   useAppStore
     .getState()
-    .setActiveWorktree(rollback.previous.worktreeId, rollback.previous.executionHostId ?? undefined)
+    .setActiveWorktree(
+      rollback.previous.worktreeId,
+      rollback.previous.executionHostId ?? undefined,
+      ...(rollback.previous.owner ? ([{ owner: rollback.previous.owner }] as const) : ([] as const))
+    )
 }
 
 export function selectWebRuntimeSessionBrowserWorktree(

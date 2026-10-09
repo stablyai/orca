@@ -23,6 +23,7 @@ let state: Pick<
   AppState,
   | 'activeWorktreeId'
   | 'activeWorkspaceExecutionHostId'
+  | 'activeWorkspaceOwner'
   | 'activeView'
   | 'activeTabType'
   | 'activeTabId'
@@ -47,6 +48,7 @@ beforeEach(() => {
   state = {
     activeWorktreeId: 'wt-1',
     activeWorkspaceExecutionHostId: null,
+    activeWorkspaceOwner: null,
     activeView: 'terminal',
     activeTabType: 'terminal',
     activeTabId: 'tab-1',
@@ -138,6 +140,59 @@ describe('workspace activation focus', () => {
     notifyMount()
     flushFrame()
     expect(mocks.focus).not.toHaveBeenCalled()
+    expect(unsubscribe).toHaveBeenCalledOnce()
+  })
+
+  it.each([false, true])(
+    'cancels a publisher switch with the same workspace and raw host after initial attempt=%s',
+    (attemptBeforeSwitch) => {
+      const owner = {
+        worktreeId: 'wt-1',
+        publisherHostId: 'runtime:first-publisher' as const,
+        executionHostId: 'ssh:private-host' as const,
+        instanceId: 'same-instance'
+      }
+      state.activeWorkspaceExecutionHostId = owner.executionHostId
+      state.activeWorkspaceOwner = owner
+      queueWorkspaceActivationTerminalFocus('wt-1', { primaryTabId: 'tab-1' })
+      if (attemptBeforeSwitch) {
+        flushFrame()
+        mocks.focus.mockClear()
+      }
+
+      state.activeWorkspaceOwner = { ...owner, publisherHostId: 'runtime:second-publisher' }
+      mocks.focus.mockReturnValue(true)
+      notifyStore()
+      flushFrame()
+      notifyMount()
+      flushFrame()
+
+      expect(state.activeWorktreeId).toBe('wt-1')
+      expect(state.activeWorkspaceExecutionHostId).toBe(owner.executionHostId)
+      expect(mocks.focus).not.toHaveBeenCalled()
+      expect(unsubscribe).toHaveBeenCalledOnce()
+      expect(disconnect).toHaveBeenCalledOnce()
+      expect(vi.getTimerCount()).toBe(0)
+    }
+  )
+
+  it('keeps the focus request when the exact selected owner is copied', () => {
+    const owner = {
+      worktreeId: 'wt-1',
+      publisherHostId: 'runtime:first-publisher' as const,
+      executionHostId: 'ssh:private-host' as const,
+      instanceId: 'same-instance'
+    }
+    state.activeWorkspaceExecutionHostId = owner.executionHostId
+    state.activeWorkspaceOwner = owner
+    queueWorkspaceActivationTerminalFocus('wt-1', { primaryTabId: 'tab-1' })
+
+    state.activeWorkspaceOwner = { ...owner }
+    mocks.focus.mockReturnValue(true)
+    notifyStore()
+    flushFrame()
+
+    expect(mocks.focus).toHaveBeenCalledWith('tab-1', null, 'wt-1')
     expect(unsubscribe).toHaveBeenCalledOnce()
   })
 

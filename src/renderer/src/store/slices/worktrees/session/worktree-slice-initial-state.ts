@@ -10,6 +10,7 @@ export const worktreeSliceInitialState: Pick<
   | 'activeWorktreeId'
   | 'activeWorkspaceKey'
   | 'activeWorkspaceExecutionHostId'
+  | 'activeWorkspaceOwner'
   | 'pendingWorktreeCreations'
   | 'activePendingCreationId'
   | 'renamingWorktreeId'
@@ -31,6 +32,7 @@ export const worktreeSliceInitialState: Pick<
   activeWorktreeId: null,
   activeWorkspaceKey: null,
   activeWorkspaceExecutionHostId: null,
+  activeWorkspaceOwner: null,
   pendingWorktreeCreations: {},
   activePendingCreationId: null,
   renamingWorktreeId: null,

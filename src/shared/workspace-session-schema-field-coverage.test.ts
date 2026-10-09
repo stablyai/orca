@@ -24,6 +24,7 @@ const PERSISTED_WORKSPACE_SESSION_FIELDS = {
   activeRepoId: true,
   activeWorkspaceKey: true,
   activeWorkspaceExecutionHostId: true,
+  activeWorkspaceOwner: true,
   activeWorktreeId: true,
   activeTabId: true,
   tabsByWorktree: true,

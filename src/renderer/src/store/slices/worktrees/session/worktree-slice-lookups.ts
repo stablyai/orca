@@ -3,6 +3,7 @@ import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-sli
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
 import { getTerminalActivationSpawnSuppression } from '../../terminal-activation-spawn-suppression'
 import { findKnownWorktreeById } from '../listing/detected-worktree-meta'
+import { getActiveWorktreeOwner } from '@/lib/worktree-selection-owner'
 import { buildWorktreePurgeState } from '../teardown/worktree-purge-state'
 import { locateTerminalTab } from '../../../terminals/terminal-tab-location'
 import {
@@ -135,7 +136,18 @@ export function createGetKnownWorktreeById(
   _set: WorktreeSliceSet,
   get: WorktreeSliceGet
 ): WorktreeSlice['getKnownWorktreeById'] {
-  return (worktreeId, executionHostId) => findKnownWorktreeById(get(), worktreeId, executionHostId)
+  return (worktreeId, executionHostId, owner) => {
+    const state = get()
+    const activeOwner = getActiveWorktreeOwner(state, worktreeId)
+    const selectedOwner =
+      owner ??
+      (!executionHostId ||
+      executionHostId === activeOwner?.executionHostId ||
+      executionHostId === activeOwner?.publisherHostId
+        ? activeOwner
+        : undefined)
+    return findKnownWorktreeById(state, worktreeId, executionHostId, selectedOwner)
+  }
 }
 
 export function createPurgeWorktreeTerminalState(
