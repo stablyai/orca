@@ -8,25 +8,23 @@
  * Whether its provider process runs is a separate fact, `observeStructuredWorker`, and routing
  * never reads it — an agent at rest still receives mail, which starts it.
  *
- * A worker is addressed by the session minted for it, its conversation id; a `/clear` continues the
- * conversation in a successor session. Every worker-level answer here resolves the session RUNNING
- * the worker now through `structuredWorkerSession`; only per-session callers name one directly.
+ * Provider contexts can change while the worker's conversation and authority stay the same.
  */
 
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
-import { isOrcaSessionId, type OrcaSessionId } from '../../shared/orca-session-address'
+import type { OrcaSessionId } from '../../shared/orca-session-address'
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../shared/orchestration-session-caller-codes'
 import type { RuntimeTerminalState } from '../../shared/runtime-types'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
-import { canonicalOrcaSessionId } from './orchestration/canonical-orca-session-id'
 import type { OrchestrationDb } from './orchestration/db'
 import { OrchestrationError } from './orchestration/orchestration-error'
 import {
   readAgentSessionRecordStore,
-  resolveLineageRunningSession,
-  type LineageRunningSession,
-  type RunningStructuredSession
-} from './orchestration/structured-session-lineage'
+  readStructuredAgentSessionRecord,
+  locateStructuredSessionRecord,
+  type LocatedStructuredSessionRecord,
+  type StructuredSessionRecord
+} from './orchestration/structured-session-records'
 import {
   structuredSessionTabRetired,
   structuredWorkerAddressable
@@ -40,10 +38,10 @@ import {
   type StructuredWorkerIdentity
 } from './structured-worker-identity'
 
-/** A worker this runtime holds, with the session running it now (a `/clear` may have moved it). */
+/** A worker this runtime holds, with its durable conversation record. */
 export type StructuredWorkerAuthority = {
   identity: StructuredWorkerIdentity
-  running: RunningStructuredSession
+  running: StructuredSessionRecord
 }
 
 /**
@@ -61,14 +59,6 @@ export type StructuredWorkerHold =
       refusal: OrchestrationError
     }
 
-export function readStructuredAgentSessionRecord(sessionId: string): AgentSessionRecord | null {
-  try {
-    return getStructuredAgentSessionHost()?.deps.store.getRecord(sessionId) ?? null
-  } catch {
-    return null
-  }
-}
-
 /** Registry entry for a handle, rehydrated from the durable row when this process restarted. */
 export function resolveStructuredWorkerIdentity(
   handle: string,
@@ -85,29 +75,17 @@ export function resolveStructuredWorkerIdentity(
   return row ? structuredWorkerIdentities.rehydrate(row) : null
 }
 
-/** The worker a session runs for: minted for it, or one a `/clear` continued into it. */
+/** The worker assigned to this conversation, rehydrated from its durable row after restart. */
 export function resolveStructuredWorkerIdentityForSession(
   sessionId: string,
   db: OrchestrationDb | null | undefined
 ): StructuredWorkerIdentity | null {
-  const exact = structuredWorkerIdentities.getBySessionId(sessionId)
-  if (exact || !isOrcaSessionId(sessionId)) {
-    return exact ?? resolveStructuredWorkerIdentityForRoot(sessionId, db)
-  }
-  return resolveStructuredWorkerIdentityForRoot(canonicalOrcaSessionId(sessionId), db)
-}
-
-/** The worker minted for a lineage root session, rehydrated from its durable row after a restart. */
-export function resolveStructuredWorkerIdentityForRoot(
-  rootSessionId: string,
-  db: OrchestrationDb | null | undefined
-): StructuredWorkerIdentity | null {
-  const known = structuredWorkerIdentities.getBySessionId(rootSessionId)
+  const known = structuredWorkerIdentities.getBySessionId(sessionId)
   if (known) {
     return known
   }
   const row = db?.getWorkerTerminalResourceByProcessIncarnation?.(
-    structuredWorkerProcessIncarnation(rootSessionId)
+    structuredWorkerProcessIncarnation(sessionId)
   )
   return row ? structuredWorkerIdentities.rehydrate(row) : null
 }
@@ -130,17 +108,17 @@ export function isRecordedStructuredWorkerSession(
   )
 }
 
-/** The session running this worker now: the one minted for it, or its `/clear` successor. */
+/** The worker's conversation record and execution host. */
 export function structuredWorkerSession(
   identity: Pick<StructuredWorkerIdentity, 'sessionId'>
-): LineageRunningSession {
-  return resolveLineageRunningSession(readAgentSessionRecordStore(), identity.sessionId)
+): LocatedStructuredSessionRecord {
+  return locateStructuredSessionRecord(readAgentSessionRecordStore(), identity.sessionId)
 }
 
 /** The worker's running session on this host, or the typed refusal an actor answers instead. */
 function locateStructuredWorker(
   identity: Pick<StructuredWorkerIdentity, 'sessionId'>
-): { running: RunningStructuredSession } | { reason: string; refusal: OrchestrationError } {
+): { running: StructuredSessionRecord } | { reason: string; refusal: OrchestrationError } {
   const located = structuredWorkerSession(identity)
   if (located.kind === 'here') {
     return { running: located }
@@ -168,7 +146,7 @@ function locateStructuredWorker(
 /** The worker's running session on this host; throws the typed refusal before anything is done. */
 export function requireRunningStructuredWorker(
   identity: Pick<StructuredWorkerIdentity, 'sessionId'>
-): RunningStructuredSession {
+): StructuredSessionRecord {
   const located = locateStructuredWorker(identity)
   if ('refusal' in located) {
     throw located.refusal
@@ -176,7 +154,7 @@ export function requireRunningStructuredWorker(
   return located.running
 }
 
-/** Custody judged on the session running the worker, never on the one it was minted under. */
+/** Custody is independent of whether the conversation's provider is running. */
 export function holdStructuredWorker(
   identity: StructuredWorkerIdentity,
   db: OrchestrationDb | null | undefined,
@@ -246,7 +224,8 @@ export function structuredSessionCloseSettled(sessionId: string): boolean {
   return (
     status === 'exited' ||
     (status === 'unverifiable' &&
-      readStructuredAgentSessionRecord(sessionId)?.lease.claimStatus === 'released')
+      readStructuredAgentSessionRecord(readAgentSessionRecordStore(), sessionId)?.lease
+        .claimStatus === 'released')
   )
 }
 
@@ -316,8 +295,7 @@ export function observeStructuredSession(sessionId: string): StructuredWorkerObs
     return { status: 'exited' }
   }
   if (structuredSessionNeverStarted(record) && structuredSessionTabRetired(host, sessionId)) {
-    // Why: no close writes death evidence for an agent that never ran (a `/clear` successor at
-    // rest), and with its chat gone nothing can start one; `unverifiable` would hold it forever.
+    // With its chat gone, an agent that never ran cannot acquire a process later.
     // Not `hasSession`: that says the conversation is open, which any history read makes it.
     return { status: 'exited' }
   }

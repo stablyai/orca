@@ -1,6 +1,5 @@
 import { parseOrcaSessionAddress, type OrcaSessionId } from '../../../shared/orca-session-address'
 import { structuredWorkerOrcaSessionIdForIncarnation } from '../structured-worker-identity'
-import { canonicalOrcaSessionId } from './canonical-orca-session-id'
 
 /**
  * The Orca session id a Dispatch row stores for its assignee: the structured worker its process
@@ -10,8 +9,8 @@ export function dispatchAssigneeOrcaSessionId(assignee: {
   handle: string
   processIncarnation: string | null | undefined
 }): OrcaSessionId | null {
-  const orcaSessionId =
+  return (
     structuredWorkerOrcaSessionIdForIncarnation(assignee.processIncarnation) ??
     parseOrcaSessionAddress(assignee.handle)
-  return orcaSessionId === null ? null : canonicalOrcaSessionId(orcaSessionId)
+  )
 }

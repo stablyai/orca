@@ -47,7 +47,7 @@ export type RunRow = {
   home_database: string
   coordinator_handle: string | null
   coordinator_pane_key: string | null
-  /** Bare Orca session id the coordinator is addressed by, when it has one (today only structured sessions); a `/clear`ed chat's lineage root. */
+  /** The coordinator's bare Orca conversation ID, when it has one. */
   coordinator_orca_session_id: OrcaSessionId | null
   /** The consumer_generation the id was written at; see currentRunCoordinatorOrcaSessionId. */
   coordinator_orca_session_id_generation: number | null
@@ -284,7 +284,7 @@ export type DispatchContextRow = {
   launch_token_hash: string | null
   assignee_handle: string | null
   assignee_pane_key: string | null
-  /** Bare Orca session id the assignee is addressed by, when it has one (today only structured sessions); a `/clear`ed chat's lineage root. */
+  /** The assignee's bare Orca conversation ID, when it has one. */
   assignee_orca_session_id: OrcaSessionId | null
   /** Written only by hosts that minted a per-Dispatch capability; never read for authority. */
   capability_hash: string | null
@@ -297,7 +297,7 @@ export type DispatchContextRow = {
   /** Creator identity; equal to the assignee means a self-dispatch, which adds no nesting depth. */
   creator_handle: string | null
   creator_pane_key: string | null
-  /** Bare Orca session id the creator is addressed by, when it has one (today only structured sessions); a `/clear`ed chat's lineage root. */
+  /** The creator's bare Orca conversation ID, when it has one. */
   creator_orca_session_id: OrcaSessionId | null
   host_scope: string | null
   status: DispatchStatus

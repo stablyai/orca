@@ -1,6 +1,6 @@
 /**
- * A chat as a Dispatch assignee. Its Dispatch row names it by its `/clear` root address,
- * `orca_session_id:<root>`, and holds no pane or process: whether it can still work is read off the
+ * A chat as a Dispatch assignee. Its Dispatch row names its conversation address and holds no
+ * pane or process: whether it can still work is read off the
  * session records the same way mail to it is, so the two can never disagree.
  */
 
@@ -15,10 +15,10 @@ import { DISPATCH_CONTEXT_COLUMN_LIST } from './db/row-column-lists'
 import type { DispatchContextRow } from './types'
 import { structuredSessionMailReach } from './structured-session-mail-address'
 import {
-  lineageLiveSession,
+  readStructuredAgentSessionRecord,
   readAgentSessionRecordStore,
   type AgentSessionRecordReader
-} from './structured-session-lineage'
+} from './structured-session-records'
 
 /** The chat a Dispatch assignee handle names; null for a terminal or a structured worker. */
 export function chatAssigneeSessionId(
@@ -28,7 +28,7 @@ export function chatAssigneeSessionId(
 }
 
 export type ChatAssigneeObservation =
-  /** `session` is the conversation's live session: its `/clear` successor, if it has one. */
+  /** The durable conversation record. */
   | { status: 'live'; session: AgentSessionRecord }
   | { status: 'exited'; reason: string }
   | { status: 'unverifiable'; reason: string }
@@ -48,7 +48,7 @@ export function observeChatAssignee(
       reason: 'The agent-session host is not installed in this runtime generation.'
     }
   }
-  const record = store.getRecord(sessionId)
+  const record = readStructuredAgentSessionRecord(store, sessionId)
   if (!record) {
     return { status: 'unverifiable', reason: 'No durable record backs this chat.' }
   }
@@ -61,7 +61,7 @@ export function observeChatAssignee(
     case 'unverifiable':
       return {
         status: 'unverifiable',
-        reason: `The session continuing this chat after a /clear cannot be verified: ${reach.reason}`
+        reason: `The chat cannot be verified: ${reach.reason}`
       }
     case 'ended':
       switch (reach.reason) {
@@ -71,8 +71,7 @@ export function observeChatAssignee(
           // Not reachable for a chat today (its Dispatch records no worker incarnation); still no exit.
           return {
             status: 'unverifiable',
-            reason:
-              'The session that continues this chat is a worker whose identity this host lost.'
+            reason: 'The chat is a worker whose identity this host lost.'
           }
       }
   }
@@ -88,22 +87,16 @@ export function exitedChatDispatchesForSession(
   db: OrchestrationDb,
   store: AgentSessionRecordReader | null = readAgentSessionRecordStore()
 ): DispatchContextRow[] {
-  if (!store) {
+  const chat = parseOrcaSessionAddress(`${ORCA_SESSION_ADDRESS_PREFIX}${hiddenSessionId}`)
+  if (!store || !chat || observeChatAssignee(chat, db, store).status !== 'exited') {
     return []
   }
   const rows = db.db
     .prepare(
       `SELECT ${DISPATCH_CONTEXT_COLUMN_LIST} FROM dispatch_contexts
-        WHERE status IN ('pending', 'dispatched') AND substr(assignee_handle, 1, ?) = ?`
+        WHERE status IN ('pending', 'dispatched') AND assignee_handle = ?`
     )
-    .all(ORCA_SESSION_ADDRESS_PREFIX.length, ORCA_SESSION_ADDRESS_PREFIX)
+    .all(`${ORCA_SESSION_ADDRESS_PREFIX}${chat}`)
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The schema-pinned complete Dispatch projection returns Dispatch rows; the adapter exposes unknown.
-  return (rows as DispatchContextRow[]).filter((dispatch) => {
-    const chat = chatAssigneeSessionId(dispatch.assignee_handle)
-    return (
-      chat !== null &&
-      lineageLiveSession(store, chat)?.sessionId === hiddenSessionId &&
-      observeChatAssignee(chat, db, store).status === 'exited'
-    )
-  })
+  return rows as DispatchContextRow[]
 }

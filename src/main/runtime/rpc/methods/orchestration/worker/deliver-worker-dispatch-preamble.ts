@@ -5,7 +5,6 @@ import {
   formatOrcaSessionAddress,
   isOrcaSessionId
 } from '../../../../../../shared/orca-session-address'
-import { canonicalOrcaSessionId } from '../../../../orchestration/canonical-orca-session-id'
 import { orcaSessionIdOrHandle } from '../../../../orchestration/orchestration-party'
 import { buildDispatchPreamble } from '../../../../orchestration/preamble'
 import { sendAgentTurn } from '../../../../orchestration/send-agent-turn'
@@ -63,7 +62,7 @@ export async function deliverWorkerDispatchPreamble(args: {
     // Its mailbox stays keyed by the handle; its commands name its Orca session ID, which binds to it.
     workerHandle:
       structuredSession && isOrcaSessionId(structuredSession.identity.sessionId)
-        ? formatOrcaSessionAddress(canonicalOrcaSessionId(structuredSession.identity.sessionId))
+        ? formatOrcaSessionAddress(structuredSession.identity.sessionId)
         : terminalHandle,
     devMode: args.devMode,
     cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle)

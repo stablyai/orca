@@ -28,7 +28,7 @@ import {
 } from '../structured-worker-identity'
 import type { OrchestrationDb } from './db'
 import { readStructuredSessionGateFacts } from './structured-mailbox-pointer-host'
-import type { RunningStructuredSession } from './structured-session-lineage'
+import type { StructuredSessionRecord } from './structured-session-records'
 
 /** The only facts group addressing reads off a recipient. */
 export type OrchestrationAddressableAgent = {
@@ -89,7 +89,7 @@ export async function structuredWorkerHandleAgentStatus(
  * into it.
  */
 export async function structuredWorkerAgentStatus(
-  running: RunningStructuredSession
+  running: StructuredSessionRecord
 ): Promise<string | null> {
   const facts = await readStructuredSessionGateFacts(running.sessionId)
   if (!facts) {

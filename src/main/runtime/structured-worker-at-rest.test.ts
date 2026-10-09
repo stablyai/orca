@@ -4,7 +4,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
-import type { RunningStructuredSession } from './orchestration/structured-session-lineage'
+import type { StructuredSessionRecord } from './orchestration/structured-session-records'
 import { OrchestrationDb } from './orchestration/db'
 
 const hostRef: { current: unknown } = { current: null }
@@ -49,8 +49,8 @@ function record(lease: Partial<AgentSessionRecord['lease']>): AgentSessionRecord
 }
 
 /** The installed session as the resolved running session the custody reads take. */
-function running(current: AgentSessionRecord): RunningStructuredSession {
-  return { sessionId: SESSION, record: current, lineage: [SESSION] }
+function running(current: AgentSessionRecord): StructuredSessionRecord {
+  return { sessionId: SESSION, record: current }
 }
 
 function installHost(current: AgentSessionRecord | null, tabs: string[]) {

@@ -8,7 +8,10 @@ import { formatAgentTypeLabel } from '../../../shared/agent-type-label'
 import type { Tab } from '../../../shared/tab-types'
 import type { OrchestrationDb } from './db'
 import type { DispatchContextRow } from './types'
-import { lineageLiveSession, type AgentSessionRecordReader } from './structured-session-lineage'
+import {
+  readStructuredAgentSessionRecord,
+  type AgentSessionRecordReader
+} from './structured-session-records'
 
 export type TerminalSenderNaming = {
   /** The tab's stored title: a rename, by the person or through the CLI. Never its live title. */
@@ -42,7 +45,9 @@ export function orchestrationSenderName(
     return task
   }
   if (party.orcaSessionId) {
-    const record = sources.records ? lineageLiveSession(sources.records, party.orcaSessionId) : null
+    const record = sources.records
+      ? readStructuredAgentSessionRecord(sources.records, party.orcaSessionId)
+      : null
     if (record) {
       const tab = sources.chatTab(record.location.workspaceId, record.sessionId)
       return tab?.customLabel?.trim() || tab?.label.trim() || defaultAgentChatLabel(record.provider)

@@ -1,7 +1,6 @@
 /**
- * A structured worker the user `/clear`ed carries on in a successor session. Every worker-level
- * reader and actor must reach the session running it now, read the whole conversation, and say
- * `unverifiable` — never `exited` — when it cannot find that session.
+ * Clearing a worker changes provider context while its conversation and orchestration identity
+ * stay the same. Missing execution-host evidence remains unverifiable.
  */
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -34,7 +33,7 @@ const { inspectWorkerTerminal } =
   await import('./rpc/methods/orchestration/worker/worker-observation')
 const { listAddressableStructuredWorkers } =
   await import('./orchestration/structured-worker-group-addressing')
-const { readStructuredLineageJournalPage, STRUCTURED_JOURNAL_PAGE_LIMIT } =
+const { readStructuredJournalPage, STRUCTURED_JOURNAL_PAGE_LIMIT } =
   await import('./orchestration/structured-worker-journal-page')
 const { structuredSessionChildIdentityEnv } =
   await import('./structured-session-child-identity-env')
@@ -45,8 +44,8 @@ const { openTestAgentSessionRecordStore } =
   await import('./agent-session-record-store-test-harness')
 const { OrcaRuntimeService } = await import('./orca-runtime')
 const { OrchestrationDb } = await import('./orchestration/db')
-const { ORCHESTRATION_METHODS } = await import('./rpc/methods/orchestration')
-const { eraseRpcMethods } = await import('./rpc/core')
+const { LOCAL_SCOPE, RuntimeProbe, startWorkerDispatch, rpcRuntime } =
+  await import('./structured-worker-orchestration-test-fixture')
 const { structuredWorkerOwesWork } = await import('./structured-worker-custody')
 const { AGENT_SESSION_NOT_ATTACHED } =
   await import('../native-chat/agent-session-wire/structured-agent-session-mutation-admission')
@@ -58,24 +57,9 @@ const {
 } = await import('./structured-worker-identity')
 
 type Db = InstanceType<typeof OrchestrationDb>
-type Runtime = InstanceType<typeof OrcaRuntimeService>
 
 const MINTED = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'
-const SUCCESSOR = 'clear-a1b2c3d4e5f60718293a4b5c6d7e8f9012345678'
-const SECOND = 'clear-ffeeddccbbaa99887766554433221100ffeeddcc'
-const LOCAL_SCOPE = { kind: 'local', hostId: 'local' } as const
-
-/** Opens the protected mail resolver and the orchestration database a real runtime holds. */
-class RuntimeProbe extends OrcaRuntimeService {
-  withDb(db: Db | null): this {
-    this._orchestrationDb = db
-    return this
-  }
-
-  mailTarget(mailboxHandle: string): unknown {
-    return this.resolveStructuredMailboxTarget(mailboxHandle)
-  }
-}
+const UNSTARTED = 'clear-a1b2c3d4e5f60718293a4b5c6d7e8f9012345678'
 
 function message(id: string, text: string): AgentJournalRenderItem {
   return {
@@ -96,30 +80,41 @@ function liveRecord(sessionId: string): AgentSessionRecord {
   return located(agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId })))
 }
 
-/** What the clear leaves on the source: its agent stopped with evidence, pointing at `next`. */
-function clearedRecord(sessionId: string, next: string): AgentSessionRecord {
-  const base = liveRecord(sessionId)
+/** Clear releases provider ownership while retaining the conversation. */
+function clearedRecord(sessionId: string, operationId = 'clear-1'): AgentSessionRecord {
+  const base = records.get(sessionId) ?? liveRecord(sessionId)
   return {
     ...base,
+    providerHandleChain: [],
     lease: {
       ...base.lease,
+      provenHandleLinkId: null,
       claimStatus: 'released',
       ownerProcess: null,
-      deathEvidence: { kind: 'exit-observed', detail: 'user-close', observedAt: 2, ownerFence: 7 }
+      deathEvidence: {
+        kind: 'exit-observed',
+        detail: 'context-clear',
+        observedAt: 2,
+        ownerFence: 7
+      }
+    },
+    providerContextBoundary: {
+      operationId,
+      afterFence: base.lease.runtimeFence,
+      clearedAt: 2
     },
     conversationCommand: {
       command: 'clear',
-      runtimeFence: 8,
-      operationId: `op-clear-${sessionId}`,
+      runtimeFence: base.lease.runtimeFence,
+      operationId,
       callerKey: 'renderer',
       phase: 'committed',
-      state: 'completed',
-      replacementSessionId: next
+      state: 'completed'
     }
   }
 }
 
-/** What the clear founds: a conversation no agent has run yet, at rest. */
+/** A separate never-started conversation for lifecycle-proof controls. */
 function foundedRecord(sessionId: string): AgentSessionRecord {
   return foundAgentSessionRecord(
     { ...liveRecord(sessionId), sessionId },
@@ -145,13 +140,20 @@ const closed: string[] = []
 const historyAsked: string[] = []
 const journalAsked: string[] = []
 
-/** The clear of the minted session as the host commits it: stop with evidence, found, move tab. */
+/** Clear retains the journal, tab and conversation identity. */
 function commitClear(): void {
   children.delete(MINTED)
-  records.set(MINTED, clearedRecord(MINTED, SUCCESSOR))
-  records.set(SUCCESSOR, foundedRecord(SUCCESSOR))
-  // A source with no tab (the stop already hid it) still shows its successor.
-  visibleTabs = [...visibleTabs.filter((id) => id !== MINTED), SUCCESSOR]
+  const rows = journals.get(MINTED) ?? [message('i-pre', 'PRE-CLEAR (dispatch work)')]
+  const operationId = `clear-${rows.length}`
+  records.set(MINTED, clearedRecord(MINTED, operationId))
+  rows.push({
+    itemId: operationId,
+    revision: 1,
+    observedAt: 2,
+    sequence: rows.length + 1,
+    body: { kind: 'status', text: 'Context cleared', presentation: 'context-cleared' }
+  })
+  journals.set(MINTED, rows)
 }
 
 /** Installs exactly these sessions and tabs; those in `running` have an attached child. */
@@ -168,14 +170,16 @@ function installSessions(
   installHost()
 }
 
-/** As `/clear` leaves a worker: its old session stopped and pointing on, its tab renamed. */
-function installClearedWorker(successor: 'live' | 'at-rest' = 'live'): void {
-  const live = successor === 'live'
-  installSessions(
-    [clearedRecord(MINTED, SUCCESSOR), live ? liveRecord(SUCCESSOR) : foundedRecord(SUCCESSOR)],
-    [SUCCESSOR],
-    live ? [SUCCESSOR] : []
-  )
+/** After clear, the next provider may be running or the conversation may remain at rest. */
+function installClearedWorker(context: 'live' | 'at-rest' = 'live'): void {
+  installUnclearedWorker()
+  commitClear()
+  if (context === 'live') {
+    const record = records.get(MINTED)!
+    records.set(MINTED, { ...record, lease: liveRecord(MINTED).lease })
+    children.add(MINTED)
+  }
+  journals.get(MINTED)!.push(message('i-post', 'POST-CLEAR (live work)'))
 }
 
 /** A worker running in the session it was minted under, before any clear. */
@@ -256,72 +260,16 @@ function installHost(): void {
   }
 }
 
-function registerWorker() {
+function registerWorker(sessionId = MINTED) {
   return structuredWorkerIdentities.register({
     handle: mintStructuredWorkerHandle(),
-    sessionId: MINTED,
+    sessionId,
     agent: 'claude',
-    paneKey: mintStructuredWorkerPaneKey(MINTED),
-    processIncarnation: structuredWorkerProcessIncarnation(MINTED),
+    paneKey: mintStructuredWorkerPaneKey(sessionId),
+    processIncarnation: structuredWorkerProcessIncarnation(sessionId),
     worktreeId: 'wt_1',
     hostScope: LOCAL_SCOPE
   })
-}
-
-/** A ready worker Dispatch owning the worker's terminal resource, as worker-start leaves it. */
-function startWorkerDispatch(
-  db: Db,
-  identity: ReturnType<typeof registerWorker>,
-  runtimeEpoch?: string
-): string {
-  const runId = db.createRun({
-    objective: 'cleared worker',
-    coordinatorHandle: null,
-    coordinatorPaneKey: null
-  }).id
-  const task = db.createTask({ runId, spec: 'work' })
-  const { dispatch } = db.createStartingWorkerDispatch({
-    taskId: task.id,
-    startOptions: {},
-    creator: { kind: 'system' },
-    maxDepth: 9,
-    ...(runtimeEpoch ? { runtimeEpoch } : {})
-  })
-  db.prepareStartingWorkerAuthority({
-    dispatchId: dispatch.id,
-    handle: identity.handle,
-    paneKey: identity.paneKey,
-    processIncarnation: identity.processIncarnation,
-    worktreeId: 'wt_1',
-    effects: [],
-    setupState: 'not_configured',
-    hostScope: JSON.stringify(LOCAL_SCOPE),
-    terminalOwnership: 'created'
-  })
-  db.markWorkerDispatchReady(dispatch.id)
-  return dispatch.id
-}
-
-/** A real runtime over `db` with the orchestration RPCs, as a coordinator calls them. */
-function rpcRuntime(db: Db): {
-  runtime: Runtime
-  call: (name: string, params: Record<string, unknown>) => Promise<unknown>
-} {
-  const runtime = new OrcaRuntimeService()
-  runtime.setOrchestrationDb(db)
-  vi.spyOn(runtime, 'ensureStructuredAgentSessionHost').mockResolvedValue(undefined)
-  return {
-    runtime,
-    call: async (name, params) => {
-      const method = eraseRpcMethods(ORCHESTRATION_METHODS).find(
-        (candidate) => candidate.name === name
-      )
-      if (!method?.params) {
-        throw new Error(`Method not found: ${name}`)
-      }
-      return method.handler(method.params.parse(params), { runtime })
-    }
-  }
 }
 
 /** The coordinator releases a worker whose Dispatch succeeded. */
@@ -351,6 +299,7 @@ let db: Db
 
 beforeEach(() => {
   structuredWorkerIdentities.clear()
+  records.clear()
   closed.length = 0
   historyAsked.length = 0
   journalAsked.length = 0
@@ -370,20 +319,20 @@ afterEach(() => {
 })
 
 describe.each(['live', 'at-rest'] as const)(
-  'a /clear-ed structured worker whose successor is %s',
-  (successor) => {
-    beforeEach(() => installClearedWorker(successor))
+  'a worker cleared in place with provider context %s',
+  (context) => {
+    beforeEach(() => installClearedWorker(context))
 
-    it('keeps its authority, judged on and naming the successor', () => {
+    it('keeps authority on the same conversation', () => {
       const identity = registerWorker()
       expect(resolveStructuredWorkerAuthority(identity.handle, null)?.running.sessionId).toBe(
-        SUCCESSOR
+        MINTED
       )
     })
 
-    it('is observed on the successor, never as the exited minted session', () => {
+    it('reports provider liveness separately from conversation custody', () => {
       const identity = registerWorker()
-      const expected = successor === 'live' ? 'live' : 'unverifiable'
+      const expected = context === 'live' ? 'live' : 'exited'
       expect(observeStructuredWorker(identity).status).toBe(expected)
       // The settlement probe holds only the incarnation, and no registry entry.
       structuredWorkerIdentities.clear()
@@ -395,16 +344,16 @@ describe.each(['live', 'at-rest'] as const)(
       ).resolves.toBe(expected)
     })
 
-    it("serves terminal read from the whole conversation, the successor's last", async () => {
+    it('serves terminal read from the same complete journal', async () => {
       const identity = registerWorker()
       const read = await readStructuredWorkerTerminal({ handle: identity.handle, db: null })
-      expect(historyAsked).toEqual([SUCCESSOR, MINTED])
+      expect(historyAsked).toEqual([MINTED])
       const lines = JSON.stringify(read)
       expect(lines.indexOf('PRE-CLEAR')).toBeGreaterThan(-1)
       expect(lines.indexOf('POST-CLEAR')).toBeGreaterThan(lines.indexOf('PRE-CLEAR'))
     })
 
-    it('serves worker-read from the whole conversation, oldest session first', async () => {
+    it('serves worker-read with both contexts in journal order', async () => {
       const read = await readJournal(registerWorker())
       const transcript = texts(read.transcript?.messages)
       expect(transcript.indexOf('PRE-CLEAR')).toBeGreaterThan(-1)
@@ -419,32 +368,30 @@ describe.each(['live', 'at-rest'] as const)(
       expect(frozen.indexOf('POST-CLEAR')).toBeGreaterThan(frozen.indexOf('PRE-CLEAR'))
     })
 
-    it("retains the worker when the successor's journal cannot be read", async () => {
-      unreadable.add(SUCCESSOR)
+    it('retains the worker when its journal cannot be read', async () => {
+      unreadable.add(MINTED)
       await expect(
         captureStructuredWorkerArchive(registerWorker(), 'claude')
       ).rejects.toMatchObject({ code: 'archive_failed' })
-      expect(historyAsked).toEqual([SUCCESSOR])
+      expect(historyAsked).toEqual([MINTED])
     })
 
-    it('shows the worker through the successor in worker-show', async () => {
+    it('shows the same worker conversation in worker-show', async () => {
       const identity = registerWorker()
       const dispatchId = startWorkerDispatch(db, identity)
       const shown = await inspectWorkerTerminal(new OrcaRuntimeService(), db, dispatchId)
       expect(shown).toMatchObject({
         exact: true,
-        status: successor === 'live' ? 'live' : 'unverifiable',
+        status: context === 'live' ? 'live' : 'exited',
         addressable: true
       })
     })
 
-    it('stops the worker by closing the successor, and can then release it', async () => {
+    it('closes the same conversation and then proves the provider exited', async () => {
       const identity = registerWorker()
       const stop = await stopStructuredWorker(identity, 'ctx_1')
-      expect(closed).toEqual([SUCCESSOR])
+      expect(closed).toEqual([MINTED])
       expect(stop.stopped).toBe(true)
-      // Release settles a stopped worker only on the probe's `exited`: a successor no agent ever
-      // ran gets no death evidence from its close, and must not read `unverifiable` forever.
       structuredWorkerIdentities.clear()
       await expect(
         new OrcaRuntimeService().inspectTerminalProcessIncarnationLiveness(
@@ -454,12 +401,12 @@ describe.each(['live', 'at-rest'] as const)(
       ).resolves.toBe('exited')
     })
 
-    it("reports the successor's status to @idle", async () => {
+    it('reports the current conversation status to @idle', async () => {
       const identity = registerWorker()
       await expect(new OrcaRuntimeService().getAgentStatusForHandle(identity.handle)).resolves.toBe(
         'idle'
       )
-      expect(journalAsked).toEqual([SUCCESSOR])
+      expect(journalAsked).toEqual([MINTED])
     })
 
     it('stays a group-address recipient', () => {
@@ -470,54 +417,52 @@ describe.each(['live', 'at-rest'] as const)(
       ])
     })
 
-    it('routes direct and Dispatch mail to the successor', () => {
+    it('routes direct and Dispatch mail to the same conversation', () => {
       const identity = registerWorker()
       const dispatchId = startWorkerDispatch(db, identity)
       const runtime = new RuntimeProbe().withDb(db)
-      expect(runtime.mailTarget(identity.handle)).toEqual({ sessionId: SUCCESSOR, dispatchId })
+      expect(runtime.mailTarget(identity.handle)).toEqual({ sessionId: MINTED, dispatchId })
       expect(runtime.mailTarget(`dispatch:${dispatchId}`)).toEqual({
-        sessionId: SUCCESSOR,
+        sessionId: MINTED,
         dispatchId
       })
     })
 
-    it("re-derives the worker's Dispatch mailbox on the successor's idle edge", () => {
+    it("re-derives the worker's Dispatch mailbox on the same idle edge", () => {
       const identity = registerWorker()
       const dispatchId = startWorkerDispatch(db, identity)
-      expect(structuredSessionOwnedMailboxes(SUCCESSOR, db)).toContain(`dispatch:${dispatchId}`)
+      expect(structuredSessionOwnedMailboxes(MINTED, db)).toContain(`dispatch:${dispatchId}`)
     })
 
-    it("gives the successor's child the worker's handle", () => {
+    it('gives the next provider the unchanged worker handle', () => {
       const identity = registerWorker()
-      expect(structuredSessionChildIdentityEnv(SUCCESSOR, {}).ORCA_TERMINAL_HANDLE).toBe(
+      expect(structuredSessionChildIdentityEnv(MINTED, {}).ORCA_TERMINAL_HANDLE).toBe(
         identity.handle
       )
     })
 
-    it("records the user's takeover when they type into the successor", () => {
+    it('records takeover when the user types after clear', () => {
       const identity = registerWorker()
-      expect(new RuntimeProbe().withDb(db).getStructuredWorkerPaneKeyForSession(SUCCESSOR)).toBe(
+      expect(new RuntimeProbe().withDb(db).getStructuredWorkerPaneKeyForSession(MINTED)).toBe(
         identity.paneKey
       )
     })
 
-    it("keeps the successor running for the worker's open Dispatch", () => {
+    it("keeps the current provider running for the worker's open Dispatch", () => {
       startWorkerDispatch(db, registerWorker())
-      const successorRecord = records.get(SUCCESSOR)
-      expect(successorRecord && structuredWorkerOwesWork(db, successorRecord)).toBe(true)
+      const currentRecord = records.get(MINTED)
+      expect(currentRecord && structuredWorkerOwesWork(db, currentRecord)).toBe(true)
     })
 
     it('finds the worker from its durable row after a restart', () => {
       const identity = registerWorker()
       startWorkerDispatch(db, identity)
       structuredWorkerIdentities.clear()
-      expect(new RuntimeProbe().withDb(db).getStructuredWorkerPaneKeyForSession(SUCCESSOR)).toBe(
+      expect(new RuntimeProbe().withDb(db).getStructuredWorkerPaneKeyForSession(MINTED)).toBe(
         identity.paneKey
       )
       structuredWorkerIdentities.clear()
-      expect(resolveStructuredWorkerAuthority(identity.handle, db)?.running.sessionId).toBe(
-        SUCCESSOR
-      )
+      expect(resolveStructuredWorkerAuthority(identity.handle, db)?.running.sessionId).toBe(MINTED)
     })
   }
 )
@@ -537,13 +482,13 @@ describe("a /clear typed into the worker's chat", () => {
     })
   })
 
-  it('and so is typing after the clear, reported by the successor session', async () => {
+  it('and so is typing after clear, reported by the same conversation', async () => {
     installClearedWorker('live')
     const identity = registerWorker()
     const dispatchId = startWorkerDispatch(db, identity)
     const { call } = rpcRuntime(db)
     await expect(
-      call('orchestration.workerTerminalUserInput', { sessionId: SUCCESSOR })
+      call('orchestration.workerTerminalUserInput', { sessionId: MINTED })
     ).resolves.toEqual({ changed: 1 })
     expect(db.getWorkerTerminalResourceByOwner(dispatchId)).toMatchObject({
       ownership_state: 'user_owned'
@@ -551,20 +496,20 @@ describe("a /clear typed into the worker's chat", () => {
   })
 })
 
-describe('a successor no agent ever ran', () => {
-  beforeEach(() => installClearedWorker('at-rest'))
+describe('a separate conversation no agent ever ran', () => {
+  beforeEach(() => installSessions([foundedRecord(UNSTARTED)], [UNSTARTED]))
 
-  it('reads unverifiable while its chat is listed, and exited once the chat is gone', () => {
-    const identity = registerWorker()
+  it('is unverifiable while listed and exited once its chat is gone', () => {
+    const identity = registerWorker(UNSTARTED)
     expect(observeStructuredWorker(identity).status).toBe('unverifiable')
     visibleTabs = []
     expect(observeStructuredWorker(identity).status).toBe('exited')
   })
 
   it.each([false, true])(
-    'lets a stopped worker be released (output read in between, reopening the chat: %s)',
+    'releases after a stop even if history reopened it: %s',
     async (readBetween) => {
-      const identity = registerWorker()
+      const identity = registerWorker(UNSTARTED)
       const { runtime, call } = rpcRuntime(db)
       const dispatchId = startWorkerDispatch(db, identity, runtime.getRuntimeId())
       await expect(
@@ -572,7 +517,7 @@ describe('a successor no agent ever ran', () => {
       ).resolves.toMatchObject({ state: 'stopped' })
       if (readBetween) {
         await readJournal(identity)
-        expect(open.has(SUCCESSOR)).toBe(true)
+        expect(open.has(UNSTARTED)).toBe(true)
       }
       structuredWorkerIdentities.clear()
       await expect(
@@ -581,17 +526,17 @@ describe('a successor no agent ever ran', () => {
     }
   )
 
-  it('stays unverifiable when the tab index cannot be read', () => {
+  it('stays unverifiable when its tab index cannot be read', () => {
     visibleTabs = []
     tabIndexPresent = false
-    expect(observeStructuredSession(SUCCESSOR).status).toBe('unverifiable')
+    expect(observeStructuredSession(UNSTARTED).status).toBe('unverifiable')
   })
 
-  it('stays unverifiable when restored from a backup that may have lost a reservation', () => {
+  it('stays unverifiable if restored from a backup that may have lost a reservation', () => {
     visibleTabs = []
-    const founded = foundedRecord(SUCCESSOR)
-    records.set(SUCCESSOR, { ...founded, lease: { ...founded.lease, minimumNextFence: 3 } })
-    expect(observeStructuredSession(SUCCESSOR).status).toBe('unverifiable')
+    const founded = foundedRecord(UNSTARTED)
+    records.set(UNSTARTED, { ...founded, lease: { ...founded.lease, minimumNextFence: 3 } })
+    expect(observeStructuredSession(UNSTARTED).status).toBe('unverifiable')
   })
 })
 
@@ -599,8 +544,8 @@ describe('a released session whose start was attempted stays unverifiable withou
   let directory: string
 
   beforeEach(async () => {
-    directory = await mkdtemp(join(tmpdir(), 'orca-cleared-successor-'))
-    installClearedWorker('at-rest')
+    directory = await mkdtemp(join(tmpdir(), 'orca-unstarted-worker-'))
+    installSessions([foundedRecord(UNSTARTED)], [])
     visibleTabs = []
   })
 
@@ -608,11 +553,11 @@ describe('a released session whose start was attempted stays unverifiable withou
     await rm(directory, { recursive: true, force: true })
   })
 
-  async function reserveSuccessor(operationId: string) {
+  async function reserveUnstarted(operationId: string) {
     const store = await openTestAgentSessionRecordStore(directory)
     const reserved = await store.reserveOwner({
-      sessionId: SUCCESSOR,
-      location: liveRecord(SUCCESSOR).location,
+      sessionId: UNSTARTED,
+      location: liveRecord(UNSTARTED).location,
       provider: 'claude',
       accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/home/dev/.claude' },
       expectedFence: null,
@@ -630,21 +575,21 @@ describe('a released session whose start was attempted stays unverifiable withou
   const OPERATION_ID = `${NOW}-${'1'.padStart(32, '0')}`
 
   it('after a restart released a reservation whose child was never ruled out', async () => {
-    const { reserved } = await reserveSuccessor(OPERATION_ID)
+    const { reserved } = await reserveUnstarted(OPERATION_ID)
     const recovered = applyAgentSessionRestartAdjudication({
       record: reserved,
       probe: { outcome: 'indeterminate', reason: 'no answer' },
       now: NOW + 1
     })
     expect(recovered.lease).toMatchObject({ claimStatus: 'released', deathEvidence: null })
-    records.set(SUCCESSOR, recovered)
-    expect(observeStructuredSession(SUCCESSOR).status).toBe('unverifiable')
+    records.set(UNSTARTED, recovered)
+    expect(observeStructuredSession(UNSTARTED).status).toBe('unverifiable')
   })
 
   it('after a failed first start whose exit was not proven', async () => {
-    const { store, reserved } = await reserveSuccessor(OPERATION_ID)
+    const { store, reserved } = await reserveUnstarted(OPERATION_ID)
     const settled = await store.settleFailedAcquisition({
-      sessionId: SUCCESSOR,
+      sessionId: UNSTARTED,
       fence: reserved.lease.runtimeFence,
       spawnToken: 'spawn-a',
       callerKey: 'client-1',
@@ -654,8 +599,8 @@ describe('a released session whose start was attempted stays unverifiable withou
       now: NOW + 1
     })
     expect(settled.lease).toMatchObject({ claimStatus: 'released', deathEvidence: null })
-    records.set(SUCCESSOR, settled)
-    expect(observeStructuredSession(SUCCESSOR).status).toBe('unverifiable')
+    records.set(UNSTARTED, settled)
+    expect(observeStructuredSession(UNSTARTED).status).toBe('unverifiable')
   })
 })
 
@@ -665,23 +610,23 @@ describe('stopping a worker while a /clear commits', () => {
     clearDuringClose = true
   })
 
-  it('closes the successor the clear handed the worker to', async () => {
+  it('closes the same conversation once after the queued clear', async () => {
     const stop = await stopStructuredWorker(registerWorker(), 'ctx_1')
-    expect(closed).toEqual([MINTED, SUCCESSOR])
+    expect(closed).toEqual([MINTED])
     expect(stop.stopped).toBe(true)
   })
 
-  it('keeps an earlier close on the receipt when a later one fails', async () => {
-    failHideOf = SUCCESSOR
+  it('claims no close when tab hiding fails before the queued clear', async () => {
+    failHideOf = MINTED
     const stop = await stopStructuredWorker(registerWorker(), 'ctx_1')
-    expect(closed).toEqual([MINTED])
-    expect(stop).toMatchObject({ stopped: false, closeAttempted: true })
+    expect(closed).toEqual([])
+    expect(stop).toMatchObject({ stopped: false, closeAttempted: false })
   })
 
   it('stops through worker-stop when the old session already reads exited mid-clear', async () => {
-    // Paused between the clear's stop of the old agent and its commit: exited, no pointer yet.
+    // The old provider exited before the clear transaction committed.
     children.delete(MINTED)
-    const base = clearedRecord(MINTED, SUCCESSOR)
+    const base = clearedRecord(MINTED)
     const { conversationCommand: _uncommitted, ...stoppedForClear } = base
     records.set(MINTED, stoppedForClear)
     const identity = registerWorker()
@@ -690,13 +635,13 @@ describe('stopping a worker while a /clear commits', () => {
     await expect(call('orchestration.workerStop', { dispatch: dispatchId })).resolves.toMatchObject(
       { state: 'stopped', processAction: 'closed_agent_terminal' }
     )
-    expect(closed).toEqual([MINTED, SUCCESSOR])
+    expect(closed).toEqual([MINTED])
   })
 })
 
 describe('worker-stop on a structured worker that reads exited without any /clear', () => {
   it("closes and hides the crashed agent's still-listed chat, and settles stopped", async () => {
-    const { conversationCommand: _none, ...crashed } = clearedRecord(MINTED, SUCCESSOR)
+    const { conversationCommand: _none, ...crashed } = clearedRecord(MINTED)
     installSessions([crashed], [MINTED])
     const identity = registerWorker()
     const { runtime, call } = rpcRuntime(db)
@@ -709,95 +654,95 @@ describe('worker-stop on a structured worker that reads exited without any /clea
   })
 })
 
-describe.each([
-  { clears: 1, warning: /latest session .* could not be preserved; earlier sessions were/ },
-  { clears: 2, warning: /latest 2 sessions .* could not be preserved; earlier sessions were/ }
-])('a retired lineage of $clears clear(s) whose later sessions cannot be read', (lineage) => {
-  beforeEach(() => {
-    // The user closed the cleared chat, and every journal after the first is gone.
-    const later = lineage.clears === 1 ? [SUCCESSOR] : [SUCCESSOR, SECOND]
-    const newest = later.at(-1) ?? SUCCESSOR
-    const chain = lineage.clears === 1 ? [] : [clearedRecord(SUCCESSOR, SECOND)]
-    installSessions([clearedRecord(MINTED, SUCCESSOR), ...chain, foundedRecord(newest)], [])
-    later.forEach((sessionId) => unreadable.add(sessionId))
-  })
+describe.each([1, 2])(
+  'a retired conversation cleared %s times with an unreadable journal',
+  (clears) => {
+    beforeEach(() => {
+      installUnclearedWorker()
+      for (let index = 0; index < clears; index += 1) {
+        commitClear()
+      }
+      visibleTabs = []
+      unreadable.add(MINTED)
+    })
 
-  it('archives the readable earliest session and says how many later ones were lost', async () => {
-    const archive = await captureStructuredWorkerArchive(registerWorker(), 'claude')
-    expect(texts(archive.messages)).toContain('PRE-CLEAR')
-    expect(archive.warnings.join(' ')).toMatch(lineage.warning)
-  })
+    it('keeps an empty archive with the existing singular closed-session warning', async () => {
+      const archive = await captureStructuredWorkerArchive(registerWorker(), 'claude')
+      expect(archive.messages).toEqual([])
+      expect(archive.warnings).toEqual([
+        'The structured session was already closed, so its journal could not be preserved.'
+      ])
+      expect(historyAsked).toEqual([MINTED])
+    })
 
-  it('commits that archive when the worker is released', async () => {
-    const dispatchId = startWorkerDispatch(db, registerWorker())
-    await expect(releaseSucceeded(dispatchId)).resolves.toMatchObject({ state: 'released' })
-    expect(db.getWorkerTerminalArchive(dispatchId)?.content).toContain('PRE-CLEAR')
-  })
-})
+    it('commits that archive on release without reading another conversation', async () => {
+      const dispatchId = startWorkerDispatch(db, registerWorker())
+      await expect(releaseSucceeded(dispatchId)).resolves.toMatchObject({ state: 'released' })
+      const content = db.getWorkerTerminalArchive(dispatchId)?.content ?? ''
+      expect(content).toContain('"messages":[]')
+      expect(content).toContain('already closed')
+      expect(historyAsked).toEqual([MINTED])
+    })
+  }
+)
 
 describe('the worker-read cursor across a /clear', () => {
-  it('stays valid: what the caller already read did not change, the successor follows it', async () => {
+  it('stays valid when the clear divider and next-context messages append after its prefix', async () => {
     installUnclearedWorker()
     journals.set(MINTED, [message('i1', 'PRE-CLEAR (dispatch work)')])
     const identity = registerWorker()
     const before = await readJournal(identity)
     expect(before.transcript?.returnedMessageCount).toBe(1)
     commitClear()
-    journals.set(SUCCESSOR, [message('i1', 'POST-CLEAR (live work)')])
+    journals.get(MINTED)!.push(message('i2', 'POST-CLEAR (live work)'))
     const after = await readJournal(identity, before.cursor ?? undefined)
     expect(texts(after.transcript?.messages)).toContain('POST-CLEAR')
     expect(texts(after.transcript?.messages)).not.toContain('PRE-CLEAR')
   })
 })
 
-describe('the lineage journal page', () => {
+describe('the cleared conversation journal page', () => {
   beforeEach(() => installClearedWorker('live'))
 
-  it('fills one page limit newest first and says older history was left out', async () => {
-    const many = (sessionId: string) =>
-      Array.from({ length: 150 }, (_, index) => message(`${sessionId}-${index}`, `${index}`))
-    journals.set(MINTED, many(MINTED))
-    journals.set(SUCCESSOR, many(SUCCESSOR))
-    const page = await readStructuredLineageJournalPage([MINTED, SUCCESSOR])
+  it('keeps one newest page across retained contexts and reports older omitted history', async () => {
+    const rows = Array.from({ length: 300 }, (_, index) => message(`i-${index}`, `${index}`))
+    journals.set(MINTED, rows)
+    const page = await readStructuredJournalPage(MINTED)
     expect(page?.items).toHaveLength(STRUCTURED_JOURNAL_PAGE_LIMIT)
-    expect(page?.items[0]?.itemId).toBe(`${MINTED}-100`)
-    expect(page?.items.at(-1)?.itemId).toBe(`${SUCCESSOR}-149`)
-    expect(page?.sessionIds.filter((id) => id === MINTED)).toHaveLength(50)
+    expect(page?.items[0]?.itemId).toBe('i-100')
+    expect(page?.items.at(-1)?.itemId).toBe('i-299')
     expect(page?.hasOlder).toBe(true)
+    expect(historyAsked).toEqual([MINTED])
   })
 
-  it('ends at an earlier session it cannot read, and says older history was left out', async () => {
+  it('refuses an unreadable actual journal instead of substituting other output', async () => {
     unreadable.add(MINTED)
-    const read = await readJournal(registerWorker())
-    expect(texts(read.transcript?.messages)).toContain('POST-CLEAR')
-    expect(read.warnings).toContain('Older journal items were omitted from this page.')
+    await expect(readJournal(registerWorker())).rejects.toMatchObject({
+      code: 'transcript_required'
+    })
+    expect(historyAsked).toEqual([MINTED])
   })
 })
 
 describe('a worker cleared twice', () => {
   beforeEach(() => {
-    const chain = [clearedRecord(MINTED, SUCCESSOR), clearedRecord(SUCCESSOR, SECOND)]
-    installSessions([...chain, liveRecord(SECOND)], [SECOND], [SECOND])
+    installClearedWorker('live')
+    commitClear()
   })
 
-  it('is read across all three sessions and stopped through the newest', async () => {
+  it('reads and closes the same conversation once', async () => {
     const identity = registerWorker()
-    expect(resolveStructuredWorkerAuthority(identity.handle, null)?.running.sessionId).toBe(SECOND)
+    expect(resolveStructuredWorkerAuthority(identity.handle, null)?.running.sessionId).toBe(MINTED)
     await readJournal(identity)
-    expect(historyAsked).toEqual([SECOND, SUCCESSOR, MINTED])
+    expect(historyAsked).toEqual([MINTED])
     await stopStructuredWorker(identity, 'ctx_1')
-    expect(closed).toEqual([SECOND])
+    expect(closed).toEqual([MINTED])
   })
 
-  it('forgets parked mail on every session of the lineage at settlement, binding or not', () => {
+  it('forgets only the actual conversation mail after restart', () => {
     const forgetStructuredSessionMail = vi.fn()
-    // No binding: what a restarted runtime holds when the worker settles.
     releaseStructuredWorkerSession('ctx_after_restart', { forgetStructuredSessionMail }, MINTED)
-    expect(forgetStructuredSessionMail.mock.calls.map(([sessionId]) => sessionId)).toEqual([
-      MINTED,
-      SUCCESSOR,
-      SECOND
-    ])
+    expect(forgetStructuredSessionMail.mock.calls).toEqual([[MINTED]])
   })
 })
 
@@ -844,12 +789,12 @@ describe('a running session that cannot be verified is refused, never declared e
     expect(closed).toEqual([])
   }
 
-  function installMissingSuccessor(): void {
-    installSessions([clearedRecord(MINTED, SUCCESSOR)], [SUCCESSOR])
+  function installMissingConversation(): void {
+    installSessions([], [MINTED])
   }
 
-  it('when the clear names a successor with no record', async () => {
-    installMissingSuccessor()
+  it('when the actual conversation has no record', async () => {
+    installMissingConversation()
     const identity = registerWorker()
     expect(observeStructuredWorker(identity).status).toBe('unverifiable')
     await expect(
@@ -862,7 +807,7 @@ describe('a running session that cannot be verified is refused, never declared e
   })
 
   it('and a release of it ends unknown, not requested forever', async () => {
-    installMissingSuccessor()
+    installMissingConversation()
     const dispatchId = startWorkerDispatch(db, registerWorker())
     await expect(releaseSucceeded(dispatchId)).resolves.toMatchObject({
       state: 'release_unknown',
@@ -871,20 +816,26 @@ describe('a running session that cannot be verified is refused, never declared e
     expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('unknown')
   })
 
-  it('when the lineage loops back on itself', async () => {
-    installSessions(
-      [clearedRecord(MINTED, SUCCESSOR), clearedRecord(SUCCESSOR, MINTED)],
-      [SUCCESSOR]
-    )
+  it('ignores a legacy self-pointer rather than declaring the actual record unverifiable', async () => {
+    const current = clearedRecord(MINTED)
+    const older = {
+      ...current,
+      conversationCommand: { ...current.conversationCommand!, replacementSessionId: MINTED }
+    }
+    installSessions([older], [MINTED])
     const identity = registerWorker()
-    expect(observeStructuredWorker(identity).status).toBe('unverifiable')
-    expect(structuredSessionMailTarget(MINTED, null)).toBeNull()
-    const mintedRecord = records.get(MINTED)
-    const store = { getRecord: (id: string) => records.get(id) ?? null, listRecords: () => [] }
-    expect(mintedRecord && structuredSessionMailReach(store, mintedRecord, null)).toMatchObject({
-      kind: 'unverifiable'
+    expect(observeStructuredWorker(identity).status).toBe('exited')
+    expect(structuredSessionMailTarget(MINTED, null)).toEqual({
+      sessionId: MINTED,
+      dispatchId: null
     })
-    await expectRefused(identity, 'session_caller_not_live')
+    const store = { getRecord: (id: string) => records.get(id) ?? null, listRecords: () => [] }
+    expect(structuredSessionMailReach(store, older, null)).toMatchObject({
+      kind: 'reachable',
+      session: older
+    })
+    await readJournal(identity)
+    expect(historyAsked).toEqual([MINTED])
   })
 
   it('when the structured host is not installed', async () => {
@@ -896,13 +847,13 @@ describe('a running session that cannot be verified is refused, never declared e
     })
   })
 
-  it('with the host-boundary refusal when the successor runs on another host', async () => {
+  it('with the host-boundary refusal when the actual conversation belongs to another host', async () => {
     installClearedWorker()
-    const successor = records.get(SUCCESSOR)
-    if (successor) {
-      records.set(SUCCESSOR, {
-        ...successor,
-        location: { ...successor.location, executionHostId: 'ssh:box' }
+    const current = records.get(MINTED)
+    if (current) {
+      records.set(MINTED, {
+        ...current,
+        location: { ...current.location, executionHostId: 'ssh:box' }
       })
     }
     const identity = registerWorker()

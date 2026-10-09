@@ -15,7 +15,7 @@ import {
 import { OrchestrationError } from '../../../orchestration/orchestration-error'
 import { resolveOrcaSessionParty } from '../../../orchestration/orchestration-party'
 import { locateOrchestrationParty } from '../../../orchestration/orchestration-party-location'
-import { readAgentSessionRecordStore } from '../../../orchestration/structured-session-lineage'
+import { readAgentSessionRecordStore } from '../../../orchestration/structured-session-records'
 import { defineMethod } from '../../core'
 
 export const ORCHESTRATION_CALLER_METHODS = [
@@ -35,7 +35,7 @@ export const ORCHESTRATION_CALLER_METHODS = [
     name: 'orchestration.sessionAddress',
     permission: 'workspace',
     params: SessionAddressParams,
-    // Why host-side: only the host's session records know a chat's `/clear` root.
+    // Only the execution host can resolve a conversation's worker identity.
     handler: (params, { runtime }): OrchestrationSessionAddressResult => {
       if (!isOrcaSessionId(params.sessionId)) {
         throw new OrchestrationError(
@@ -52,7 +52,7 @@ export const ORCHESTRATION_CALLER_METHODS = [
     name: 'orchestration.partyLocation',
     permission: 'workspace',
     params: PartyLocationParams,
-    // Why host-side: a chat sender's live session follows its `/clear` lineage on this host.
+    // The execution host owns the conversation and terminal locations.
     handler: (params, { runtime }): OrchestrationPartyLocationResult =>
       locateOrchestrationParty(
         params.address,

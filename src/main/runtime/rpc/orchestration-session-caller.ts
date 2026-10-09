@@ -27,7 +27,6 @@ import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../shar
 import type { OrcaRuntimeService } from '../orca-runtime'
 import type { OrchestrationSessionCaller } from '../orchestration/orchestration-caller-identity'
 import { OrchestrationError } from '../orchestration/orchestration-error'
-import { canonicalOrcaSessionId } from '../orchestration/canonical-orca-session-id'
 import type { OrchestrationDb } from '../orchestration/db'
 import {
   resolveDeclaredCallerParty,
@@ -35,7 +34,7 @@ import {
   resolveOrchestrationParty
 } from '../orchestration/orchestration-party'
 import { lookupOrcaAgentSession } from '../orchestration/structured-session-mail-address'
-import { readAgentSessionRecordStore } from '../orchestration/structured-session-lineage'
+import { readAgentSessionRecordStore } from '../orchestration/structured-session-records'
 import { structuredWorkerHostScope } from '../structured-worker-identity'
 import type { RpcRequest } from './core'
 
@@ -233,7 +232,7 @@ function declaredNamesCaller(
     return false
   }
   if (isOrcaSessionId(declared)) {
-    return canonicalOrcaSessionId(declared) === caller.orcaSessionId
+    return declared === caller.orcaSessionId
   }
   try {
     return resolveOrchestrationParty(declared, db).address === caller.address

@@ -127,7 +127,28 @@ describe('orchestration.callerShow: a session learns its Orca session ID from th
     expect(resultOf(response)).toEqual({ caller: null })
   })
 
-  it('gives the menu the Orca session ID each session of a cleared chat acts as', async () => {
+  it('keeps the menu and caller address on the same conversation after clear', async () => {
+    h.records.set(SESSION_X, {
+      ...sessionRecord(SESSION_X),
+      conversationCommand: {
+        command: 'clear',
+        state: 'completed',
+        operationId: 'same-conversation-clear',
+        callerKey: 'caller',
+        phase: 'committed'
+      }
+    })
+    const shown = resultOf(
+      await h.dispatch(
+        orchestrationRequest('orchestration.sessionAddress', { sessionId: SESSION_X })
+      )
+    )
+    const acting = resultOf(await h.dispatch(callerShow({ sessionId: SESSION_X })))
+    expect(shown.orcaSessionId).toBe(ADDRESS_X)
+    expect(acting.caller).toMatchObject({ orcaSessionId: ADDRESS_X })
+  })
+
+  it('gives each conversation its own menu and caller address beside an older clear pointer', async () => {
     const cleared = sessionRecord(SESSION_X)
     h.records.set(SESSION_X, {
       ...cleared,
@@ -141,13 +162,15 @@ describe('orchestration.callerShow: a session learns its Orca session ID from th
       }
     })
 
-    for (const sessionId of [SESSION_X, SESSION_Y]) {
+    for (const [sessionId, address] of [
+      [SESSION_X, ADDRESS_X],
+      [SESSION_Y, ADDRESS_Y]
+    ] as const) {
       const shown = resultOf(
         await h.dispatch(orchestrationRequest('orchestration.sessionAddress', { sessionId }))
       )
       const acting = resultOf(await h.dispatch(callerShow({ sessionId })))
-      // One derivation: the conversation's root, which the successor copies and acts as too.
-      expect(shown.orcaSessionId).toBe(ADDRESS_X)
+      expect(shown.orcaSessionId).toBe(address)
       expect(acting.caller).toMatchObject({ orcaSessionId: shown.orcaSessionId })
     }
   })

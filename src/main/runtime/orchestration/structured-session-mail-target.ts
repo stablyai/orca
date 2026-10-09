@@ -21,7 +21,7 @@ import {
 import {
   readAgentSessionRecordStore,
   type AgentSessionRecordReader
-} from './structured-session-lineage'
+} from './structured-session-records'
 import type { DispatchContextRow, RunRow } from './types'
 import { chatAssigneeSessionId } from './chat-assignee'
 
@@ -46,10 +46,7 @@ export function handleLessCoordinatorSessionId(
   return currentRunCoordinatorOrcaSessionId(run)
 }
 
-/**
- * The structured-lane target for `sessionId`'s conversation: its live session, whichever session of
- * the lineage was named; null when mail cannot reach it here.
- */
+/** This conversation's mail target; null when mail cannot reach it here. */
 export function structuredSessionMailTarget(
   sessionId: string,
   db: OrchestrationDb | null | undefined,
@@ -95,7 +92,7 @@ export function structuredSessionAddressTarget(
 
 /**
  * Every mailbox a session reads for itself: the Runs it coordinates, its own direct mail and its
- * active Dispatch, a worker's or a chat's; a `/clear` successor reads its root's. Re-derived from the database
+ * active Dispatch, a worker's or a chat's. Re-derived from the database
  * on each idle edge rather than remembered, so mail that arrived while the session could not take
  * it (mid-turn, closed) is found again.
  */
@@ -108,8 +105,7 @@ export function structuredSessionOwnedMailboxes(sessionId: string, db: Orchestra
   if (db.getUnreadDirectMessageTypes(party.address).length > 0) {
     mailboxes.push(party.address)
   }
-  // Why: Dispatch mail parked on a session a /clear or restart ended waits for an edge that never
-  // comes. A party's address is what its Dispatch names it by: a worker's handle, a chat's root.
+  // An idle edge redrives parked Dispatch mail after clear or restart.
   const dispatch = db.findActiveDispatchForAssignee(party.address, party.paneKey ?? undefined)
   if (dispatch) {
     mailboxes.push(`dispatch:${dispatch.id}`)

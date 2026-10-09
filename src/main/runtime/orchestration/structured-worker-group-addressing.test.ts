@@ -5,7 +5,7 @@ import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
 } from '../../../shared/agent-session-record.test-fixture'
-import type { RunningStructuredSession } from './structured-session-lineage'
+import type { StructuredSessionRecord } from './structured-session-records'
 
 const hostRef: { current: unknown } = { current: null }
 
@@ -26,10 +26,9 @@ const {
 
 const SESSION_ID = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'
 /** The worker's session as the resolved running session the status read takes. */
-const RUNNING: RunningStructuredSession = {
+const RUNNING: StructuredSessionRecord = {
   sessionId: SESSION_ID,
-  record: agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId: SESSION_ID })),
-  lineage: [SESSION_ID]
+  record: agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId: SESSION_ID }))
 }
 
 function idleTurn(): AgentJournalRenderItem {
@@ -67,7 +66,7 @@ function installHost(options: {
   hostRef.current = {
     deps: {
       store: {
-        // No committed /clear: each session is its own lineage's root.
+        // Each recipient names its own conversation.
         listRecords: () => [],
         getRecord: (sessionId: string) =>
           ({

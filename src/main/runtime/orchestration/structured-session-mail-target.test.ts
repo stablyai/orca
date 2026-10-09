@@ -66,6 +66,7 @@ function installStore(record: AgentSessionRecord | null, visible = true): Store 
     visible: { present: true, sessionIds: visible && record ? [record.sessionId] : [] }
   }
   hostRef.current = {
+    getPersistedVisibleSessionTabIndex: () => store.visible,
     deps: {
       store: {
         getRecord: (sessionId: string) => store.records.get(sessionId) ?? null,
@@ -121,7 +122,7 @@ describe('a Run whose coordinator is a chat (an Orca session id, no handle)', ()
     expect(probe().target(`run:${runId}`)).toEqual({ sessionId: CHAT, dispatchId: null })
   })
 
-  it('does not deliver to a chat that was closed, cleared into no known session, or runs on another host', () => {
+  it('does not deliver to a closed chat or another host, and ignores an old clear pointer', () => {
     const runId = chatCoordinatedRun()
     installStore(chatRecord(), false)
     expect(probe().target(`run:${runId}`)).toBeNull()
@@ -141,7 +142,7 @@ describe('a Run whose coordinator is a chat (an Orca session id, no handle)', ()
         }
       )
     )
-    expect(probe().target(`run:${runId}`)).toBeNull()
+    expect(probe().target(`run:${runId}`)).toEqual({ sessionId: CHAT, dispatchId: null })
 
     const remote = chatRecord()
     installStore({ ...remote, location: { ...remote.location, executionHostId: 'ssh:box' } })
@@ -309,50 +310,110 @@ describe('the idle edge after a restart, before any orchestration call', () => {
   })
 })
 
-describe('a coordinator chat continued by /clear', () => {
-  const MIDDLE = testOrcaSessionId('clear-fedcba9876543210fedcba9876543210fedcba98')
-  const SUCCESSOR = testOrcaSessionId('clear-0123456789abcdef0123456789abcdef01234567')
+function clearConversation(store: Store, sessionId: string, operationId: string): void {
+  const current = store.records.get(sessionId)
+  if (!current) {
+    throw new Error(`Missing test conversation ${sessionId}`)
+  }
+  store.records.set(sessionId, {
+    ...current,
+    providerHandleChain: [],
+    lease: {
+      ...current.lease,
+      provenHandleLinkId: null,
+      claimStatus: 'released',
+      ownerProcess: null
+    },
+    providerContextBoundary: {
+      operationId,
+      afterFence: current.lease.runtimeFence,
+      clearedAt: 1
+    },
+    conversationCommand: {
+      command: 'clear',
+      state: 'completed',
+      operationId,
+      callerKey: 'caller',
+      phase: 'committed'
+    }
+  })
+}
 
-  function sessionRecord(sessionId: string, clearedInto?: string): AgentSessionRecord {
-    const record = agentSessionRecordFixture(
-      agentSessionLeaseFixture({
-        sessionId,
-        runtimeKind: 'native',
-        ...(clearedInto ? { claimStatus: 'released' as const, ownerProcess: null } : {})
+describe('a coordinator chat cleared in place', () => {
+  it('keeps the Run binding and generation through repeated clears', () => {
+    const store = installStore(chatRecord())
+    const runId = chatCoordinatedRun()
+    const generation = db.getRunRaw(runId)!.consumer_generation
+    for (const operationId of ['clear-1', 'clear-2']) {
+      clearConversation(store, CHAT, operationId)
+      expect(probe().target(`run:${runId}`)).toEqual({ sessionId: CHAT, dispatchId: null })
+      expect(idleEdge(CHAT)).toContain(`run:${runId}`)
+      expect(db.getRunRaw(runId)).toMatchObject({
+        coordinator_orca_session_id: CHAT,
+        consumer_generation: generation
       })
-    )
-    return clearedInto
-      ? {
-          ...record,
+      expect(db.getCurrentRunForCoordinator(resolveOrcaSessionParty(CHAT, db))?.id).toBe(runId)
+    }
+  })
+
+  it('keeps direct mail at the same address and redrives its idle edge', () => {
+    const store = installStore(chatRecord())
+    const direct = db.insertMessage({
+      from: 'term_peer',
+      to: CHAT_ADDRESS,
+      subject: 'hi',
+      type: 'status'
+    })
+    clearConversation(store, CHAT, 'clear-1')
+    expect(resolveOrcaSessionParty(CHAT, db)).toMatchObject({
+      orcaSessionId: CHAT,
+      address: CHAT_ADDRESS
+    })
+    expect(probe().target(CHAT_ADDRESS)).toEqual({ sessionId: CHAT, dispatchId: null })
+    expect(idleEdge(CHAT)).toEqual([CHAT_ADDRESS])
+    expect(db.getMessageById(direct.id)).toMatchObject({ to_handle: CHAT_ADDRESS, read: 0 })
+  })
+})
+
+function idleEdge(sessionId: string): string[] {
+  const delivered: string[] = []
+  probe({
+    deliverPendingMessagesForHandle: (handle: string) => delivered.push(handle),
+    notifyStructuredSessionJournalActivity: vi.fn()
+  }).onStructuredSessionStatusForMail({ sessionId, status: 'idle' })
+  return delivered
+}
+
+describe('older replacement conversations after upgrade', () => {
+  const REPLACEMENT = testOrcaSessionId('clear-0123456789abcdef0123456789abcdef01234567')
+
+  function olderRecords(): Store {
+    const store = installStore(
+      chatRecord(
+        {},
+        {
           conversationCommand: {
             command: 'clear',
             state: 'completed',
-            replacementSessionId: clearedInto,
-            operationId: `op-${sessionId}`,
+            replacementSessionId: REPLACEMENT,
+            operationId: 'old-clear',
             callerKey: 'caller',
             phase: 'committed'
           }
         }
-      : record
-  }
-
-  /** CHAT cleared into each of `chain` in turn; the last one is live and its tab is open. */
-  function installLineage(...chain: string[]): void {
-    const lineage = [CHAT, ...chain]
-    const store = installStore(null)
-    lineage.forEach((sessionId, index) =>
-      store.records.set(sessionId, sessionRecord(sessionId, lineage[index + 1]))
+      )
     )
-    store.visible.sessionIds.push(lineage.at(-1)!)
-  }
-
-  function idleEdge(sessionId: string): string[] {
-    const delivered: string[] = []
-    probe({
-      deliverPendingMessagesForHandle: (handle: string) => delivered.push(handle),
-      notifyStructuredSessionJournalActivity: vi.fn()
-    }).onStructuredSessionStatusForMail({ sessionId, status: 'idle' })
-    return delivered
+    store.records.set(
+      REPLACEMENT,
+      agentSessionRecordFixture(
+        agentSessionLeaseFixture({
+          sessionId: REPLACEMENT,
+          runtimeKind: 'native'
+        })
+      )
+    )
+    store.visible.sessionIds.push(REPLACEMENT)
+    return store
   }
 
   function runCreatedBy(sessionId: OrcaSessionId): string {
@@ -364,125 +425,61 @@ describe('a coordinator chat continued by /clear', () => {
     }).id
   }
 
-  it('stores a Dispatch assignee by the lineage root of the session its incarnation names', () => {
-    installLineage(SUCCESSOR)
+  it('keeps older replacement conversations and their Run mailboxes independent', () => {
+    olderRecords()
+    const originalRun = runCreatedBy(CHAT)
+    const replacementRun = runCreatedBy(REPLACEMENT)
+    expect(resolveOrcaSessionParty(CHAT, db)).toMatchObject({ orcaSessionId: CHAT })
+    expect(resolveOrcaSessionParty(REPLACEMENT, db)).toMatchObject({ orcaSessionId: REPLACEMENT })
+    expect(probe().target(`run:${originalRun}`)).toEqual({ sessionId: CHAT, dispatchId: null })
+    expect(probe().target(`run:${replacementRun}`)).toEqual({
+      sessionId: REPLACEMENT,
+      dispatchId: null
+    })
+    expect(db.getCurrentRunForCoordinator(resolveOrcaSessionParty(CHAT, db))?.id).toBe(originalRun)
+    expect(db.getCurrentRunForCoordinator(resolveOrcaSessionParty(REPLACEMENT, db))?.id).toBe(
+      replacementRun
+    )
+  })
+
+  it('stores the actual assignee conversation rather than an older clear predecessor', () => {
+    olderRecords()
     const dispatch = db.createDispatchContext({
       taskId: db.createTask({ runId: chatCoordinatedRun(), spec: 'work' }).id,
       assigneeHandle: mintStructuredWorkerHandle(),
-      assigneePaneKey: mintStructuredWorkerPaneKey(SUCCESSOR),
-      processIncarnation: structuredWorkerProcessIncarnation(SUCCESSOR),
+      assigneePaneKey: mintStructuredWorkerPaneKey(REPLACEMENT),
+      processIncarnation: structuredWorkerProcessIncarnation(REPLACEMENT),
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER
     })
-    expect(db.getDispatchContextById(dispatch.id)?.assignee_orca_session_id).toBe(CHAT)
+    expect(db.getDispatchContextById(dispatch.id)?.assignee_orca_session_id).toBe(REPLACEMENT)
   })
 
-  it("never unbinds the successor's own Run", () => {
-    // The strand this pins: the successor's own run-create, then its idle edge rebinding the
-    // predecessor's Run through an exclusive bind, which unbound the Run the successor created.
-    installLineage(SUCCESSOR)
-    chatCoordinatedRun()
-    const ownRun = runCreatedBy(SUCCESSOR)
-    const generation = db.getRunRaw(ownRun)!.consumer_generation
-
-    expect(idleEdge(SUCCESSOR)).toContain(`run:${ownRun}`)
-    idleEdge(SUCCESSOR)
-
-    const successor = resolveOrcaSessionParty(SUCCESSOR, db)
-    expect(db.getRunRaw(ownRun)).toMatchObject({
-      coordinator_orca_session_id: successor.orcaSessionId,
-      consumer_generation: generation
+  it('does not redirect a closed original to an open replacement', () => {
+    const store = olderRecords()
+    store.visible.sessionIds = [REPLACEMENT]
+    expect(probe().target(CHAT_ADDRESS)).toBeNull()
+    expect(probe().target(formatOrcaSessionAddress(REPLACEMENT))).toEqual({
+      sessionId: REPLACEMENT,
+      dispatchId: null
     })
-    expect(db.getCurrentRunForCoordinator(successor)?.id).toBe(ownRun)
-  })
-
-  it('keeps a Run bound, unrewritten, across a chain of clears, and delivers it to the live end', () => {
-    installLineage(MIDDLE)
-    const runId = chatCoordinatedRun()
-    const generation = db.getRunRaw(runId)!.consumer_generation
-    idleEdge(MIDDLE)
-    installLineage(MIDDLE, SUCCESSOR)
-    expect(idleEdge(SUCCESSOR)).toContain(`run:${runId}`)
-
-    expect(db.getRunRaw(runId)).toMatchObject({
-      coordinator_orca_session_id: CHAT,
-      consumer_generation: generation
-    })
-    for (const member of [CHAT, MIDDLE, SUCCESSOR]) {
-      expect(db.getCurrentRunForCoordinator(resolveOrcaSessionParty(member, db))?.id).toBe(runId)
-    }
-    expect(probe().target(`run:${runId}`)).toEqual({ sessionId: SUCCESSOR, dispatchId: null })
-  })
-
-  it('keeps the Run a middle session created bound after the next clear', () => {
-    // The chain strand: adopting each predecessor's Run in turn unbound all but the last adopted.
-    installLineage(MIDDLE)
-    runCreatedBy(CHAT)
-    const middleRun = runCreatedBy(MIDDLE)
-    const generation = db.getRunRaw(middleRun)!.consumer_generation
-    installLineage(MIDDLE, SUCCESSOR)
-    idleEdge(SUCCESSOR)
-
-    const successor = resolveOrcaSessionParty(SUCCESSOR, db)
-    expect(db.getRunRaw(middleRun)).toMatchObject({
-      coordinator_orca_session_id: successor.orcaSessionId,
-      consumer_generation: generation
-    })
-    expect(db.getCurrentRunForCoordinator(successor)?.id).toBe(middleRun)
-  })
-
-  it('reaches the live session through any spelling of the conversation, and stores one', () => {
-    installLineage(MIDDLE, SUCCESSOR)
-    for (const member of [CHAT, MIDDLE, SUCCESSOR]) {
-      expect(resolveOrcaSessionParty(member, db)).toMatchObject({
-        orcaSessionId: CHAT,
-        address: CHAT_ADDRESS
-      })
-      expect(probe().target(`orca_session_id:${member}`)).toEqual({
-        sessionId: SUCCESSOR,
-        dispatchId: null
-      })
-    }
-    const direct = db.insertMessage({
-      from: 'term_peer',
-      to: CHAT_ADDRESS,
-      subject: 'hi',
-      type: 'status'
-    })
-    expect(idleEdge(SUCCESSOR)).toEqual([CHAT_ADDRESS])
-    expect(db.getMessageById(direct.id)).toMatchObject({ to_handle: CHAT_ADDRESS, read: 0 })
   })
 })
 
-describe('a structured worker continued by /clear', () => {
+describe('a structured worker cleared in place', () => {
   const WORKER = testOrcaSessionId('9c2e4a61-3f7b-4d8e-b105-6a2d8e4f1c93')
-  const WORKER_SUCCESSOR = testOrcaSessionId('clear-a1b2c3d4e5f60718293a4b5c6d7e8f9012345678')
 
   afterEach(() => {
     structuredWorkerIdentities.clear()
   })
 
-  /** A worker minted for WORKER, whose conversation `/clear` continued in WORKER_SUCCESSOR. */
   function clearedWorker(): { handle: string; paneKey: string } {
-    const store = installStore(null)
-    const minted = agentSessionRecordFixture(
-      agentSessionLeaseFixture({ sessionId: WORKER, runtimeKind: 'native' })
-    )
-    store.records.set(WORKER, {
-      ...minted,
-      conversationCommand: {
-        command: 'clear',
-        state: 'completed',
-        replacementSessionId: WORKER_SUCCESSOR,
-        operationId: 'op-worker',
-        callerKey: 'caller',
-        phase: 'committed'
-      }
-    })
-    store.records.set(
-      WORKER_SUCCESSOR,
+    const store = installStore(
       agentSessionRecordFixture(
-        agentSessionLeaseFixture({ sessionId: WORKER_SUCCESSOR, runtimeKind: 'native' })
+        agentSessionLeaseFixture({
+          sessionId: WORKER,
+          runtimeKind: 'native'
+        })
       )
     )
     const identity = structuredWorkerIdentities.register({
@@ -494,17 +491,16 @@ describe('a structured worker continued by /clear', () => {
       worktreeId: 'wt_1',
       hostScope: { kind: 'local', hostId: 'local' }
     })
+    clearConversation(store, WORKER, 'clear-worker')
     return { handle: identity.handle, paneKey: identity.paneKey }
   }
 
-  it("delivers mail at the worker's handle to the live successor, as a terminal keeps its handle", () => {
-    // The strand this pins: the handle resolved to the session minted for it, which `/clear`
-    // replaced, so the worker's own mail was pointed at a session that no longer runs its turns.
+  it('delivers peer mail through the unchanged worker handle', () => {
     const { handle } = clearedWorker()
-    expect(probe().target(handle)).toEqual({ sessionId: WORKER_SUCCESSOR, dispatchId: null })
+    expect(probe().target(handle)).toEqual({ sessionId: WORKER, dispatchId: null })
   })
 
-  it("delivers the worker's dispatch mailbox and a Run it coordinates to the live successor", () => {
+  it('keeps the dispatch and coordinator Run mailboxes on the same conversation', () => {
     const { handle, paneKey } = clearedWorker()
     const dispatch = db.createDispatchContext({
       taskId: db.createTask({ runId: chatCoordinatedRun(), spec: 'work' }).id,
@@ -515,7 +511,7 @@ describe('a structured worker continued by /clear', () => {
       maxDepth: Number.MAX_SAFE_INTEGER
     })
     expect(probe().target(`dispatch:${dispatch.id}`)).toEqual({
-      sessionId: WORKER_SUCCESSOR,
+      sessionId: WORKER,
       dispatchId: dispatch.id
     })
     const workerRun = db.createRun({
@@ -523,9 +519,6 @@ describe('a structured worker continued by /clear', () => {
       coordinatorHandle: handle,
       coordinatorPaneKey: paneKey
     }).id
-    expect(probe().target(`run:${workerRun}`)).toEqual({
-      sessionId: WORKER_SUCCESSOR,
-      dispatchId: null
-    })
+    expect(probe().target(`run:${workerRun}`)).toEqual({ sessionId: WORKER, dispatchId: null })
   })
 })

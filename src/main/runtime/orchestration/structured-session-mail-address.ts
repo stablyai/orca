@@ -3,8 +3,7 @@
  * told is its public address. Recipient routing and pointer delivery both read these rules off the
  * durable session record, so the two can never disagree about which sessions mail can reach.
  *
- * The address names a conversation, not one session of it: any session of a `/clear` lineage names
- * the lineage root's address (`canonicalOrcaSessionId`), and mail reaches the lineage's live session.
+ * The conversation address remains the same when its provider context is cleared.
  *
  * A released lease does not end a session: the host stops an idle chat's agent, and the send that
  * points its mail starts it again. For mail, a conversation has ended only when its chat was closed.
@@ -17,9 +16,9 @@ import type { OrchestrationDb } from './db'
 import { OrchestrationError } from './orchestration-error'
 import { resolveOrcaSessionParty, type OrchestrationSessionParty } from './orchestration-party'
 import {
-  resolveLineageRunningSession,
+  locateStructuredSessionRecord,
   type AgentSessionRecordReader
-} from './structured-session-lineage'
+} from './structured-session-records'
 
 export type OrcaAgentSessionLookup =
   | { kind: 'found'; record: AgentSessionRecord }
@@ -42,10 +41,10 @@ export function lookupOrcaAgentSession(
 }
 
 export type StructuredSessionMailReach =
-  /** `session` is the conversation's live session, the one its mail reaches now. */
+  /** The durable conversation record that receives the mail. */
   | { kind: 'reachable'; session: AgentSessionRecord }
   | { kind: 'other-host' }
-  /** The lineage names a session with no record, or loops: not being able to look, not an end. */
+  /** Not being able to read the conversation is not evidence it ended. */
   | { kind: 'unverifiable'; reason: string }
   | { kind: 'ended'; reason: 'closed' | 'worker-identity-lost' }
 
@@ -55,7 +54,7 @@ export function structuredSessionMailReach(
   record: AgentSessionRecord,
   db: OrchestrationDb | null | undefined
 ): StructuredSessionMailReach {
-  const running = resolveLineageRunningSession(store, record.sessionId)
+  const running = locateStructuredSessionRecord(store, record.sessionId)
   if (running.kind === 'unverifiable') {
     return { kind: 'unverifiable', reason: running.reason }
   }

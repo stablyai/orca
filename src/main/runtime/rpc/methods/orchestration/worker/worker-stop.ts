@@ -156,9 +156,8 @@ export const ORCHESTRATION_WORKER_STOP_METHODS = [
         // Why `unverifiable` still proceeds: losing contact is a reason to report
         // the outcome honestly, never a reason to stop trying to stop the worker.
         // Why a structured worker's `exited` also proceeds: it is not final — the worker is still
-        // addressable and the next mail or typed message restarts it (a crashed agent's chat, or
-        // an old session mid-`/clear` before its successor exists). Its stop closes and hides
-        // whichever session runs it, as for a live structured worker.
+        // addressable and the next mail or typed message restarts it. Stop closes and hides the
+        // conversation, as for a live structured worker.
         if (
           !observation.exact ||
           (observation.status !== 'live' &&

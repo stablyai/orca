@@ -21,21 +21,13 @@ import {
   type SessionCallerHarness
 } from './orchestration-session-caller-test-fixture'
 
-// A `/clear`ed member of X's lineage and of worker Y's, as a later lineage walk will map them.
-const ALIAS_X = testOrcaSessionId('5c7e2a94-1d3b-4f68-b9a0-e4c2d6f81b37')
-const ALIAS_Y = testOrcaSessionId('8a4d6f20-3e1c-4b79-a5d2-c0f7e9b3a164')
+// Other conversations must not inherit a registered worker's authority.
+const OTHER_X = testOrcaSessionId('5c7e2a94-1d3b-4f68-b9a0-e4c2d6f81b37')
+const OTHER_Y = testOrcaSessionId('8a4d6f20-3e1c-4b79-a5d2-c0f7e9b3a164')
 
 const hostRef = vi.hoisted((): { current: unknown } => ({ current: null }))
 vi.mock('../../native-chat/agent-session-wire/structured-agent-session-registry', () => ({
   getStructuredAgentSessionHost: () => hostRef.current
-}))
-vi.mock('../orchestration/canonical-orca-session-id', () => ({
-  canonicalOrcaSessionId: (id: string) =>
-    id === '5c7e2a94-1d3b-4f68-b9a0-e4c2d6f81b37'
-      ? '4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37'
-      : id === '8a4d6f20-3e1c-4b79-a5d2-c0f7e9b3a164'
-        ? '7e3b9d15-2c4a-4f86-a0b1-5c9e2d7f3b64'
-        : id
 }))
 
 type Row = Record<string, unknown>
@@ -46,8 +38,8 @@ let h: SessionCallerHarness
 
 beforeEach(() => {
   h = createSessionCallerHarness(hostRef)
-  h.records.set(ALIAS_X, sessionRecord(ALIAS_X))
-  h.records.set(ALIAS_Y, sessionRecord(ALIAS_Y))
+  h.records.set(OTHER_X, sessionRecord(OTHER_X))
+  h.records.set(OTHER_Y, sessionRecord(OTHER_Y))
 })
 
 afterEach(() => {
@@ -154,36 +146,45 @@ describe('the caller a session id resolves to and the recipient its address reso
   })
 })
 
-describe('every session-to-party step goes through the canonical session id', () => {
-  it('binds a claimed alias as its canonical session', async () => {
-    const { run } = await as(ALIAS_X, 'orchestration.runCreate', { objective: 'o' })
-    expect(h.db.getRunRaw(idOf(run))?.coordinator_orca_session_id).toBe(SESSION_X)
-    expect(await as(SESSION_X, 'orchestration.runCurrent', {})).toMatchObject({
+describe('different conversation addresses remain independent', () => {
+  it('binds a Run to the actual caller conversation', async () => {
+    const { run } = await as(OTHER_X, 'orchestration.runCreate', { objective: 'o' })
+    expect(h.db.getRunRaw(idOf(run))?.coordinator_orca_session_id).toBe(OTHER_X)
+    expect(await as(OTHER_X, 'orchestration.runCurrent', {})).toMatchObject({
       run: { id: idOf(run) }
     })
+    expect(await as(SESSION_X, 'orchestration.runCurrent', {})).toMatchObject({ run: null })
   })
 
-  it("delivers mail to an alias's address at the canonical session's mailbox", async () => {
+  it('stores mail at the address that was actually named', async () => {
     const { message } = await as(undefined, 'orchestration.send', {
       from: WORKER_HANDLE,
-      to: formatOrcaSessionAddress(ALIAS_X),
+      to: formatOrcaSessionAddress(OTHER_X),
       subject: 's'
     })
-    expect(message).toMatchObject({ to_handle: ADDRESS_X })
+    expect(message).toMatchObject({ to_handle: formatOrcaSessionAddress(OTHER_X) })
+    expect(await as(OTHER_X, 'orchestration.check', { peek: true })).toMatchObject({
+      messages: [{ subject: 's' }]
+    })
+    expect(await as(SESSION_X, 'orchestration.check', { peek: true })).toMatchObject({
+      messages: []
+    })
   })
 
-  it("resolves a worker alias's address to the worker's handle", async () => {
+  it('does not grant another conversation a registered worker handle', async () => {
     registerWorker()
-    const { message } = await as(undefined, 'orchestration.send', {
-      from: formatOrcaSessionAddress(ALIAS_Y),
+    const response = await call(undefined, 'orchestration.send', {
+      from: formatOrcaSessionAddress(OTHER_Y),
       to: ADDRESS_X,
       subject: 's'
     })
-    expect(message).toMatchObject({ from_handle: handle })
+    expect(response).toMatchObject({ ok: false, error: { code: CODES.chatNotDeclarable } })
+    const { message } = await as(OTHER_Y, 'orchestration.send', { to: ADDRESS_X, subject: 's' })
+    expect(message).toMatchObject({ from_handle: formatOrcaSessionAddress(OTHER_Y) })
   })
 
-  it.each([formatOrcaSessionAddress(ALIAS_X), ALIAS_X])(
-    'accepts the session declared as its alias %s',
+  it.each([formatOrcaSessionAddress(SESSION_X), SESSION_X])(
+    'accepts the actual caller declared as %s',
     async (declared) => {
       const { run } = await as(SESSION_X, 'orchestration.runCreate', {
         objective: 'o',
@@ -193,15 +194,26 @@ describe('every session-to-party step goes through the canonical session id', ()
     }
   )
 
-  it('refuses an alias of a chat declared on a request with no session id, naming the chat', async () => {
+  it.each([formatOrcaSessionAddress(OTHER_X), OTHER_X])(
+    'refuses another conversation declared as the caller: %s',
+    async (declared) => {
+      const response = await call(SESSION_X, 'orchestration.runCreate', {
+        objective: 'o',
+        from: declared
+      })
+      expect(response).toMatchObject({ ok: false, error: { code: 'consumer_fenced' } })
+    }
+  )
+
+  it('refuses a chat declared on a request with no session id, naming that chat', async () => {
     const response = await call(undefined, 'orchestration.send', {
-      from: formatOrcaSessionAddress(ALIAS_X),
+      from: formatOrcaSessionAddress(OTHER_X),
       to: WORKER_HANDLE,
       subject: 's'
     })
     expect(response).toMatchObject({
       ok: false,
-      error: { code: CODES.chatNotDeclarable, message: expect.stringContaining(SESSION_X) }
+      error: { code: CODES.chatNotDeclarable, message: expect.stringContaining(OTHER_X) }
     })
   })
 })

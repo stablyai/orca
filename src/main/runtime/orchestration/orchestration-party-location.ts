@@ -6,7 +6,10 @@ import type { OrchestrationDb } from './db'
 import { resolveOrchestrationParty } from './orchestration-party'
 import { OrchestrationError } from './orchestration-error'
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../shared/orchestration-session-caller-codes'
-import { lineageLiveSession, type AgentSessionRecordReader } from './structured-session-lineage'
+import {
+  readStructuredAgentSessionRecord,
+  type AgentSessionRecordReader
+} from './structured-session-records'
 
 type PartyLocationDeps = {
   db: OrchestrationDb | null
@@ -93,7 +96,7 @@ function locateSession(
   orcaSessionId: OrcaSessionId,
   records: AgentSessionRecordReader | null
 ): OrchestrationPartyLocationResult {
-  const record = records ? lineageLiveSession(records, orcaSessionId) : null
+  const record = records ? readStructuredAgentSessionRecord(records, orcaSessionId) : null
   return record
     ? {
         location: {

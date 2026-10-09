@@ -11,7 +11,7 @@ import {
   type TerminalSenderNaming
 } from './orchestration/orchestration-sender-name'
 import { agentMessageSender } from './orchestration/agent-message-sender'
-import { readAgentSessionRecordStore } from './orchestration/structured-session-lineage'
+import { readAgentSessionRecordStore } from './orchestration/structured-session-records'
 
 type RuntimeSenderNameDeps = {
   getDb: () => OrchestrationDb | null

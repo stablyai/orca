@@ -33,7 +33,7 @@ import { formatWorkerTranscriptMessage } from '../../shared/worker-transcript-te
 import { AGENT_SESSION_NOT_ATTACHED } from '../native-chat/agent-session-wire/structured-agent-session-mutation-admission'
 import type { OrchestrationDb } from './orchestration/db'
 import { boundStructuredJournalTail } from './orchestration/structured-worker-journal-archive'
-import { readStructuredLineageJournalPage } from './orchestration/structured-worker-journal-page'
+import { readStructuredJournalPage } from './orchestration/structured-worker-journal-page'
 import {
   holdStructuredWorker,
   observeStructuredSession,
@@ -48,7 +48,7 @@ import { readTerminalTail } from './terminal-tail-read'
  * Null is the "not mine" answer, so the PTY path keeps every handle it already owned. A handle that
  * IS a structured worker never falls through: an unreadable journal refuses rather than answering
  * an empty tail, which a caller cannot tell from a worker that has said nothing, and so does a
- * worker whose running session (a `/clear` may have moved it) cannot be verified.
+ * worker whose conversation cannot be verified.
  */
 export async function readStructuredWorkerTerminal(args: {
   handle: string
@@ -85,7 +85,7 @@ export async function readStructuredWorkerTerminal(args: {
         'A structured session has no durable line anchor to page from — nothing else does either.'
     )
   }
-  const page = await readStructuredLineageJournalPage(hold.running.lineage)
+  const page = await readStructuredJournalPage(hold.running.sessionId)
   if (!page) {
     // Honest refusal, and the same one the send lane reports: an empty tail would read as "this
     // worker has produced no output", which is a different and false claim.
@@ -106,8 +106,7 @@ export async function readStructuredWorkerTerminal(args: {
     completedLines: [],
     partialLine: '',
     completedLineCount: 0,
-    // Older items really were dropped, by the page limit, the byte bound or an earlier session that
-    // could not be read; `truncated` is how the PTY read already says exactly that.
+    // The page or byte bound omitted older output; the existing read contract reports truncation.
     bufferTruncated: page.hasOlder || bounded.limited,
     ...(args.limit === undefined ? {} : { limit: args.limit })
   })

@@ -41,6 +41,7 @@ export const SQLITE_DATABASE_RUNTIME_INCLUDE = [
   'src/main/runtime/orchestration-message-delivery-identity.test.ts',
   'src/main/runtime/orchestration-messages-fake-parity.test.ts',
   'src/main/runtime/orchestration/agent-facing-parity.test.ts',
+  'src/main/runtime/orchestration/chat-assignee.test.ts',
   'src/main/runtime/orchestration/coordinator-decision-gates.test.ts',
   'src/main/runtime/orchestration/coordinator-dispatch-unobserved-prompt.test.ts',
   'src/main/runtime/orchestration/coordinator-drift-probe-coalescing.test.ts',

@@ -283,11 +283,10 @@ describe('every target param resolves both spellings of a party to one canonical
   })
 })
 
-describe('a /clear-ed chat is shown the Orca session ID it had before the clear', () => {
+describe('older clear records keep their own conversation addresses', () => {
   const PROVIDER_ID_Z = 'd00dfeed-1122-4334-8556-778899aabbcc'
 
-  /** Z continued X after a /clear, so X's address is Z's. */
-  function clearXIntoZ(): void {
+  function installOlderClearRecords(): void {
     h.records.set(SESSION_X, {
       ...sessionRecord(SESSION_X),
       conversationCommand: {
@@ -302,8 +301,8 @@ describe('a /clear-ed chat is shown the Orca session ID it had before the clear'
     h.records.set(SESSION_Z, sessionRecord(SESSION_Z, { providerId: PROVIDER_ID_Z }))
   }
 
-  it('in a dispatch preview its own live Orca session ID would fill in', async () => {
-    clearXIntoZ()
+  it('names the actual coordinator conversation in its dispatch preview', async () => {
+    installOlderClearRecords()
     const runId = await chatRun(SESSION_Z)
     const task = h.db.createTask({ runId, spec: 'work' })
 
@@ -313,12 +312,12 @@ describe('a /clear-ed chat is shown the Orca session ID it had before the clear'
       from: ADDRESS_Z
     })
 
-    expect(preamble).toContain(`Your coordinator's Orca session ID is: ${ADDRESS_X}\n`)
-    expect(preamble).not.toContain(SESSION_Z)
+    expect(preamble).toContain(`Your coordinator's Orca session ID is: ${ADDRESS_Z}\n`)
+    expect(preamble).not.toContain(ADDRESS_X)
   })
 
   it("in the refusal that names it for its provider's id", async () => {
-    clearXIntoZ()
+    installOlderClearRecords()
     const response = await call(undefined, 'orchestration.send', {
       from: WORKER_HANDLE,
       to: PROVIDER_ID_Z,
@@ -329,7 +328,7 @@ describe('a /clear-ed chat is shown the Orca session ID it had before the clear'
       ok: false,
       error: {
         code: CODES.providerId,
-        message: expect.stringContaining(`This session's Orca session ID is ${ADDRESS_X};`)
+        message: expect.stringContaining(`This session's Orca session ID is ${ADDRESS_Z};`)
       }
     })
   })

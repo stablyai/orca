@@ -9,9 +9,8 @@ import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../shar
 import {
   isRecordedStructuredWorkerSession,
   resolveStructuredWorkerIdentity,
-  resolveStructuredWorkerIdentityForRoot
+  resolveStructuredWorkerIdentityForSession
 } from '../structured-worker-authority'
-import { canonicalOrcaSessionId } from './canonical-orca-session-id'
 import type { OrchestrationDb } from './db'
 import { mailboxAddressOf, type OrchestrationCallerIdentity } from './orchestration-caller-identity'
 import { OrchestrationError } from './orchestration-error'
@@ -43,8 +42,8 @@ export function resolveOrcaSessionParty(
   orcaSessionId: OrcaSessionId,
   db: OrchestrationDb | null | undefined
 ): OrchestrationSessionParty {
-  const id = canonicalOrcaSessionId(orcaSessionId)
-  const worker = resolveStructuredWorkerIdentityForRoot(id, db)
+  const id = orcaSessionId
+  const worker = resolveStructuredWorkerIdentityForSession(id, db)
   if (!worker && db && isRecordedStructuredWorkerSession(id, db)) {
     // Why: handle-less, it would split one worker into two parties and bind like a chat.
     throw new OrchestrationError(
@@ -75,12 +74,11 @@ export function resolveOrchestrationParty(
     address,
     terminalHandle: address,
     paneKey: worker?.paneKey ?? null,
-    orcaSessionId:
-      worker && isOrcaSessionId(worker.sessionId) ? canonicalOrcaSessionId(worker.sessionId) : null
+    orcaSessionId: worker && isOrcaSessionId(worker.sessionId) ? worker.sessionId : null
   }
 }
 
-/** How a preamble names a party: a session by its Orca session ID (its `/clear` root), else its handle. */
+/** How a preamble names a party: a conversation by its Orca session ID, else its handle. */
 export function orcaSessionIdOrHandle(
   address: string,
   db: OrchestrationDb | null | undefined
@@ -107,7 +105,7 @@ export function resolveDeclaredCallerParty(
 
 /**
  * A Dispatch assignee: a terminal, a structured worker, or a chat named by its Orca session ID. A
- * chat's party is its `/clear` root address, which its own session id resolves to when it reports.
+ * chat reports through the same conversation address stored on its Dispatch.
  */
 export function resolveDispatchAssigneeParty(
   address: string,

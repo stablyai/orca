@@ -10,7 +10,7 @@ import { observeChatAssignee } from '../../../orchestration/chat-assignee'
 import type { OrchestrationDb } from '../../../orchestration/db'
 import { OrchestrationError } from '../../../orchestration/orchestration-error'
 import type { OrchestrationParty } from '../../../orchestration/orchestration-party'
-import { readAgentSessionRecordStore } from '../../../orchestration/structured-session-lineage'
+import { readAgentSessionRecordStore } from '../../../orchestration/structured-session-records'
 import { refuseUndeliverableSessionRecipient } from './messaging/session-recipient'
 
 const NO_EFFECTS = 'No effects were applied.'

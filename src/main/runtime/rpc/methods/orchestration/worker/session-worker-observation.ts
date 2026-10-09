@@ -49,7 +49,7 @@ export async function inspectSessionWorker(
   if (!structured) {
     return null
   }
-  // Exactness is the recorded pane and lineage, which the runtime getters answer from the
+  // Exactness is the recorded pane and process incarnation, which the runtime getters answer from the
   // structured registry; there is no terminal to show.
   //
   // `agentWait` is deliberately ABSENT rather than null. Null is the contract's "Orca looked and
@@ -61,7 +61,7 @@ export async function inspectSessionWorker(
     paneKey: structured.paneKey,
     processIncarnation: structured.processIncarnation
   })
-  // One lineage walk, so status and `addressable` judge the same session even mid-`/clear`.
+  // Status and addressability judge the same conversation, including during clear.
   const hold = holdStructuredWorker(structured, db)
   const observation =
     hold.kind === 'unverifiable'
