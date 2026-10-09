@@ -9,7 +9,7 @@ import {
   type NormalizedClaudeAccountSelectionTarget,
   type ProviderRateLimits
 } from './service-types'
-import { mapClaudeUsageWindow } from '../claude-usage-window'
+import { isStaleClaudeUsageWindow, mapClaudeUsageWindow } from '../claude-usage-window'
 
 export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchTargets {
   protected getMiniMaxCredentialError(message: string): ProviderRateLimits {
@@ -115,19 +115,37 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
       })
       return
     }
-    const freshSession = mapClaudeUsageWindow(event.fiveHour ?? undefined, 300)
-    const freshWeekly = mapClaudeUsageWindow(event.sevenDay ?? undefined, 10080)
+    const previous = this.state.claude
+    const now = Date.now()
+    // Why: every session of the account posts its own last snapshot; an idle one must not roll a newer value back.
+    const keepIfNewer = (
+      incoming: ReturnType<typeof mapClaudeUsageWindow>,
+      current: ProviderRateLimits['session'] | undefined
+    ): ReturnType<typeof mapClaudeUsageWindow> =>
+      incoming && !isStaleClaudeUsageWindow(current, incoming, now) ? incoming : null
+    const incomingSession = mapClaudeUsageWindow(event.fiveHour ?? undefined, 300)
+    const incomingWeekly = mapClaudeUsageWindow(event.sevenDay ?? undefined, 10080)
+    const freshSession = keepIfNewer(incomingSession, previous?.session)
+    const freshWeekly = keepIfNewer(incomingWeekly, previous?.weekly)
     if (!freshSession && !freshWeekly) {
       return
     }
-    const previous = this.state.claude
     // Why: statusline payloads can carry a single window; an absent one means "no update", not "cleared" — keep the other bar populated.
     const session = freshSession ?? previous?.session ?? null
     const weekly = freshWeekly ?? previous?.weekly ?? null
+    // Why: a stale post whose other window merely repeats the current value is no progress and must not refresh the live-feed age.
+    const droppedStale = (incomingSession && !freshSession) || (incomingWeekly && !freshWeekly)
+    if (
+      droppedStale &&
+      isSameUsageWindow(previous?.session ?? null, session) &&
+      isSameUsageWindow(previous?.weekly ?? null, weekly)
+    ) {
+      return
+    }
     if (
       previous?.status === 'ok' &&
       previous.usageMetadata?.source === 'live-session' &&
-      Date.now() - previous.updatedAt < LIVE_CLAUDE_INGEST_DEDUPE_MS &&
+      now - previous.updatedAt < LIVE_CLAUDE_INGEST_DEDUPE_MS &&
       isSameUsageWindow(previous.session, session) &&
       isSameUsageWindow(previous.weekly, weekly)
     ) {
