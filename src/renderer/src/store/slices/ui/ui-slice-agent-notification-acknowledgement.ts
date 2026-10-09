@@ -45,8 +45,14 @@ export function usableTimestamp(value: unknown): number {
 export function latestAgentTurnTimestamp(entry: {
   stateStartedAt?: number
   stateHistory?: { startedAt?: number }[]
+  mainAgent?: { stateStartedAt?: number }
 }): number {
-  let latest = usableTimestamp(entry.stateStartedAt)
+  // Why mainAgent too: a main agent that finished under a background shell is unread past the
+  // row's own turn start, and an ack below it (host clock ahead) would never clear it.
+  let latest = Math.max(
+    usableTimestamp(entry.stateStartedAt),
+    usableTimestamp(entry.mainAgent?.stateStartedAt)
+  )
   // Why history too: Activity renders one event per stateHistory entry, each with its own unread check.
   for (const history of entry.stateHistory ?? []) {
     latest = Math.max(latest, usableTimestamp(history.startedAt))

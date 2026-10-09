@@ -3,6 +3,43 @@ import { platformBindings } from './definitions-support'
 
 export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
   {
+    id: 'agent.jumpToNextUnread',
+    title: 'Jump to Next Unread Agent',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: [
+      'shortcut',
+      'global',
+      'agent',
+      'agents',
+      'unread',
+      'attention',
+      'next',
+      'jump'
+    ],
+    // Why unbound: Alt+Shift+Arrow (the Slack/Discord chord) copies lines in VS Code-style editors.
+    defaultBindings: platformBindings([]),
+    allowInTerminal: true
+  },
+  {
+    id: 'agent.jumpToPreviousUnread',
+    title: 'Jump to Previous Unread Agent',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: [
+      'shortcut',
+      'global',
+      'agent',
+      'agents',
+      'unread',
+      'attention',
+      'previous',
+      'jump'
+    ],
+    defaultBindings: platformBindings([]),
+    allowInTerminal: true
+  },
+  {
     id: 'sidebar.childWorkspaces.toggle',
     title: 'Toggle Child Workspaces',
     group: 'Global',

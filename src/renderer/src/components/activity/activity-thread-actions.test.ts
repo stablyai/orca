@@ -3,6 +3,7 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
 import { makeRepo, makeTab, makeWorktree } from './ActivityPrototypePage-test-fixtures'
 import type { AgentPaneThread } from './activity-thread-types'
+import { jumpToFirstReachableUnreadAgent } from './activity-unread-agent-jump'
 
 const mocks = vi.hoisted(() => ({
   getState: vi.fn(),
@@ -23,7 +24,11 @@ vi.mock('@/lib/worktree-activation', () => ({
   activateAndRevealWorkspace: mocks.activateAndRevealWorkspace
 }))
 
-import { createActivityThreadActions, hasActivityThreadWorkspace } from './activity-thread-actions'
+import {
+  activateActivityThreadTarget,
+  createActivityThreadActions,
+  hasActivityThreadWorkspace
+} from './activity-thread-actions'
 
 const REMOTE_HOST = 'ssh:devbox' as const
 
@@ -71,6 +76,7 @@ describe('activity thread host routing', () => {
     getKnownWorktreeById.mockReturnValue(thread.worktree)
     state = {
       getKnownWorktreeById,
+      acknowledgeAgents,
       worktreesByRepo: { [thread.worktree.repoId]: [thread.worktree] },
       detectedWorktreesByRepo: {},
       folderWorkspaces: [],
@@ -166,6 +172,74 @@ describe('activity thread host routing', () => {
     expect(mocks.activateTabAndFocusPane).not.toHaveBeenCalled()
   })
 
+  it('skips a closed floating terminal and reaches the next unread agent', () => {
+    const floatingThread = makeFloatingThread()
+    floatingThread.paneKey = 'tab-closed:22222222-2222-4222-8222-222222222222'
+    floatingThread.tab = { ...floatingThread.tab, id: 'tab-closed' }
+
+    jumpToFirstReachableUnreadAgent([floatingThread, thread])
+
+    expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledExactlyOnceWith(thread.worktree.id, {
+      executionHostId: REMOTE_HOST,
+      revealInSidebar: false,
+      clearSidebarFilters: false
+    })
+    expect(mocks.dispatchEvent).not.toHaveBeenCalled()
+    expect(acknowledgeAgents).not.toHaveBeenCalled()
+    expect(mocks.activateTabAndFocusPane).toHaveBeenCalledExactlyOnceWith(
+      thread.tab.id,
+      '11111111-1111-4111-8111-111111111111',
+      {
+        ackPaneKeyOnSuccess: thread.paneKey,
+        flashFocusedPane: true,
+        scrollToBottomIfOutputSinceLastView: true
+      }
+    )
+  })
+
+  it('stops after reaching an open floating terminal', () => {
+    const floatingThread = makeFloatingThread()
+    state.settings = { floatingTerminalEnabled: true }
+    state.floatingWorkspacePanelOpen = false
+    state.tabsByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: [floatingThread.tab] }
+
+    jumpToFirstReachableUnreadAgent([floatingThread, thread])
+
+    expect(mocks.activateAndRevealWorkspace).not.toHaveBeenCalled()
+    expect(mocks.dispatchEvent).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ type: TOGGLE_FLOATING_TERMINAL_EVENT })
+    )
+    expect(acknowledgeAgents).not.toHaveBeenCalled()
+    expect(mocks.activateTabAndFocusPane).toHaveBeenCalledExactlyOnceWith(
+      floatingThread.tab.id,
+      '11111111-1111-4111-8111-111111111111',
+      {
+        ackPaneKeyOnSuccess: floatingThread.paneKey,
+        flashFocusedPane: true,
+        scrollToBottomIfOutputSinceLastView: true
+      }
+    )
+  })
+
+  it('waits for a cold remote workspace without acknowledging it or moving on', () => {
+    const nextThread: AgentPaneThread = {
+      ...thread,
+      worktree: { ...thread.worktree, id: 'wt-next' }
+    }
+    state.activeWorktreeId = 'wt-other'
+    state.tabsByWorktree = {}
+
+    jumpToFirstReachableUnreadAgent([thread, nextThread])
+
+    expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledExactlyOnceWith(thread.worktree.id, {
+      executionHostId: REMOTE_HOST,
+      revealInSidebar: false,
+      clearSidebarFilters: false
+    })
+    expect(acknowledgeAgents).not.toHaveBeenCalled()
+    expect(mocks.activateTabAndFocusPane).not.toHaveBeenCalled()
+  })
+
   it('routes the row click through the full activation sequence for the matching host', () => {
     makeActions().selectThread(thread)
 
@@ -243,6 +317,66 @@ describe('activity thread host routing', () => {
       worktreeId: thread.worktree.id,
       tabId: thread.tab.id
     })
+    expect(mocks.activateTabAndFocusPane).not.toHaveBeenCalled()
+  })
+
+  it('keeps an unread terminal pending until its exact pane is focused', () => {
+    expect(activateActivityThreadTarget(thread, true)).toBe('pane')
+
+    expect(acknowledgeAgents).not.toHaveBeenCalled()
+    expect(mocks.activateTabAndFocusPane).toHaveBeenCalledWith(
+      thread.tab.id,
+      '11111111-1111-4111-8111-111111111111',
+      {
+        ackPaneKeyOnSuccess: thread.paneKey,
+        flashFocusedPane: true,
+        scrollToBottomIfOutputSinceLastView: true
+      }
+    )
+  })
+
+  it('skips a closed split pane without focusing or acknowledging its sibling', () => {
+    const nextThread: AgentPaneThread = {
+      ...thread,
+      paneKey: 'tab-2:22222222-2222-4222-8222-222222222222',
+      tab: { ...thread.tab, id: 'tab-2' }
+    }
+    state.tabsByWorktree = { [thread.worktree.id]: [thread.tab, nextThread.tab] }
+    state.terminalLayoutsByTabId = {
+      [thread.tab.id]: {
+        root: { type: 'leaf', leafId: '33333333-3333-4333-8333-333333333333' },
+        activeLeafId: '33333333-3333-4333-8333-333333333333',
+        expandedLeafId: null
+      }
+    }
+
+    jumpToFirstReachableUnreadAgent([thread, nextThread])
+
+    expect(acknowledgeAgents).not.toHaveBeenCalled()
+    expect(mocks.activateTabAndFocusPane).toHaveBeenCalledExactlyOnceWith(
+      nextThread.tab.id,
+      '22222222-2222-4222-8222-222222222222',
+      {
+        ackPaneKeyOnSuccess: nextThread.paneKey,
+        flashFocusedPane: true,
+        scrollToBottomIfOutputSinceLastView: true
+      }
+    )
+  })
+
+  it('keeps a cold workspace unread when its terminal is not resident yet', () => {
+    state.tabsByWorktree = { [thread.worktree.id]: [] }
+
+    expect(activateActivityThreadTarget(thread, true)).toBe('workspace')
+    expect(acknowledgeAgents).not.toHaveBeenCalled()
+    expect(mocks.activateTabAndFocusPane).not.toHaveBeenCalled()
+  })
+
+  it('acknowledges only the reached structured agent session', () => {
+    mocks.activateStructuredAgentSessionTab.mockReturnValue(true)
+
+    expect(activateActivityThreadTarget(thread, true)).toBe('pane')
+    expect(acknowledgeAgents).toHaveBeenCalledExactlyOnceWith([thread.paneKey])
     expect(mocks.activateTabAndFocusPane).not.toHaveBeenCalled()
   })
 

@@ -11,6 +11,7 @@ import {
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { collectLeafIdsInOrder } from '../terminal-pane/terminal-layout-leaf-ids'
 import { findKnownWorktreeById } from '@/store/slices/worktrees/listing/detected-worktree-meta'
 import type { AppState } from '@/store/types'
 import type { AgentPaneThread } from './activity-thread-types'
@@ -45,6 +46,85 @@ export function hasActivityThreadWorkspace(
       getActivityThreadExecutionHostId(thread, catalog.defaultHostId)
     )
   )
+}
+
+/** How far a thread activation got: its pane, only its workspace, or nowhere. */
+export type ActivityThreadActivation = 'pane' | 'workspace' | 'none'
+
+export function hasActivityThreadTerminalPane(
+  thread: AgentPaneThread,
+  state: Pick<AppState, 'tabsByWorktree' | 'terminalLayoutsByTabId'> = useAppStore.getState()
+): boolean {
+  const parsed = parsePaneKey(thread.paneKey)
+  if (
+    !parsed ||
+    parsed.tabId !== thread.tab.id ||
+    !state.tabsByWorktree[thread.worktree.id]?.some((tab) => tab.id === thread.tab.id)
+  ) {
+    return false
+  }
+  // An unmounted layout is unknown; only a populated layout can prove the leaf was closed.
+  const root = state.terminalLayoutsByTabId?.[thread.tab.id]?.root
+  return !root || collectLeafIdsInOrder(root).includes(parsed.leafId)
+}
+
+/** Focuses a thread's pane the way an Activity row click does. */
+export function activateActivityThreadTarget(
+  thread: AgentPaneThread,
+  acknowledgeOnFocus = false
+): ActivityThreadActivation {
+  const isFloatingTerminal = thread.worktree.id === FLOATING_TERMINAL_WORKTREE_ID
+  const executionHostId = getActivityThreadExecutionHostId(
+    thread,
+    getSettingsFocusedExecutionHostId(useAppStore.getState().settings)
+  )
+  // Why the full sequence (not bare setActiveWorktree): a cold-parked thread — the normal
+  // state of an SSH session that was never revived — has no resident tab until
+  // resumeSleepingAgentSessionsForWorktree/ensureWorktreeHasInitialTerminal run inside here.
+  // Probing tab residency first is what made a remote row click a silent no-op (#16731).
+  if (
+    !isFloatingTerminal &&
+    activateAndRevealWorkspace(thread.worktree.id, {
+      executionHostId,
+      revealInSidebar: false,
+      clearSidebarFilters: false
+    }) === false
+  ) {
+    return 'none'
+  }
+  if (activateStructuredAgentSessionTab({ worktreeId: thread.worktree.id, tabId: thread.tab.id })) {
+    if (acknowledgeOnFocus) {
+      useAppStore.getState().acknowledgeAgents([thread.paneKey])
+    }
+    return 'pane'
+  }
+  // Read post-activation: the tab this thread points at may have only just been revived.
+  const activated = useAppStore.getState()
+  const liveTabs = activated.tabsByWorktree[thread.worktree.id] ?? []
+  if (!liveTabs.some((tab) => tab.id === thread.tab.id)) {
+    // Retained threads outlive their tab; the workspace is still activated, but there is
+    // no pane to focus and focusing a sibling would be worse than focusing nothing.
+    return 'workspace'
+  }
+  if (acknowledgeOnFocus && !hasActivityThreadTerminalPane(thread, activated)) {
+    return 'none'
+  }
+  // Floating tabs have no catalog workspace; reveal their panel without changing the main workspace.
+  if (isFloatingTerminal) {
+    revealFloatingWorkspacePanel(activated)
+  }
+  activated.setActiveTabType('terminal', thread.worktree.id)
+  const parsed = parsePaneKey(thread.paneKey)
+  activateTabAndFocusPane(
+    thread.tab.id,
+    parsed && parsed.tabId === thread.tab.id ? parsed.leafId : null,
+    {
+      ...(acknowledgeOnFocus ? { ackPaneKeyOnSuccess: thread.paneKey } : {}),
+      flashFocusedPane: true,
+      scrollToBottomIfOutputSinceLastView: true
+    }
+  )
+  return 'pane'
 }
 
 export function createActivityThreadActions({
@@ -86,55 +166,9 @@ export function createActivityThreadActions({
 
   const markThreadUnread = (thread: AgentPaneThread): void => markThreadsUnread([thread])
 
-  const activateThreadTarget = (thread: AgentPaneThread): void => {
-    const isFloatingTerminal = thread.worktree.id === FLOATING_TERMINAL_WORKTREE_ID
-    const executionHostId = getActivityThreadExecutionHostId(
-      thread,
-      getSettingsFocusedExecutionHostId(useAppStore.getState().settings)
-    )
-    // Why the full sequence (not bare setActiveWorktree): a cold-parked thread — the normal
-    // state of an SSH session that was never revived — has no resident tab until
-    // resumeSleepingAgentSessionsForWorktree/ensureWorktreeHasInitialTerminal run inside here.
-    // Probing tab residency first is what made a remote row click a silent no-op (#16731).
-    if (
-      !isFloatingTerminal &&
-      activateAndRevealWorkspace(thread.worktree.id, {
-        executionHostId,
-        revealInSidebar: false,
-        clearSidebarFilters: false
-      }) === false
-    ) {
-      return
-    }
-    if (
-      activateStructuredAgentSessionTab({ worktreeId: thread.worktree.id, tabId: thread.tab.id })
-    ) {
-      return
-    }
-    // Read post-activation: the tab this thread points at may have only just been revived.
-    const activated = useAppStore.getState()
-    const liveTabs = activated.tabsByWorktree[thread.worktree.id] ?? []
-    if (!liveTabs.some((tab) => tab.id === thread.tab.id)) {
-      // Retained threads outlive their tab; the workspace is still activated, but there is
-      // no pane to focus and focusing a sibling would be worse than focusing nothing.
-      return
-    }
-    // Floating tabs have no catalog workspace; reveal their panel without changing the main workspace.
-    if (isFloatingTerminal) {
-      revealFloatingWorkspacePanel(activated)
-    }
-    activated.setActiveTabType('terminal', thread.worktree.id)
-    const parsed = parsePaneKey(thread.paneKey)
-    activateTabAndFocusPane(
-      thread.tab.id,
-      parsed && parsed.tabId === thread.tab.id ? parsed.leafId : null,
-      { flashFocusedPane: true, scrollToBottomIfOutputSinceLastView: true }
-    )
-  }
-
   const selectThread = (thread: AgentPaneThread): void => {
     setSelectedPaneKey(thread.paneKey)
-    activateThreadTarget(thread)
+    activateActivityThreadTarget(thread)
   }
 
   const jumpToWorkspace = (thread: AgentPaneThread): void => {
