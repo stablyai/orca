@@ -1103,7 +1103,9 @@ export function isRelayDatabaseTransientError(error: unknown): boolean {
   ) {
     return true
   }
-  // A lost reply, answered 503 like 08006. Its write may have landed, so it is never retried here.
+  // A lost reply, answered 503 like 08006. Its write may have landed, so transaction() never
+  // retries it. The one startup retry that can see it, the director's cell reconcile
+  // (cell-admission-startup.ts), re-runs only upserts that converge on the same rows.
   if (isPostgresReadTimeout(error)) return true
   // A pool that cannot hand out a client reports no SQLSTATE at all, so the
   // acquire boundary owns that vocabulary.
