@@ -194,6 +194,8 @@ export function hostStub(): StructuredAgentSessionHost {
       models: [{ id: 'gpt-live', label: 'GPT Live', isDefault: true, efforts: [] }],
       current: { model: 'gpt-live' }
     })),
+    queuedMessagesPage: vi.fn(async () => ({ status: 'page', rows: [] })),
+    queuedMessageRead: vi.fn(async () => ({ status: 'gone' })),
     history: vi.fn(() => ({ ok: true, page: { items: [] } })),
     sessionAgent: vi.fn(() => null),
     journalSnapshot: vi.fn((sessionId: string) => ({
@@ -323,6 +325,4 @@ export function installStructuredHostStub(): void {
   setStructuredAgentSessionHost(hostStub())
 }
 
-export function clearStructuredHostStub(): void {
-  setStructuredAgentSessionHost(null)
-}
+export const clearStructuredHostStub = (): void => setStructuredAgentSessionHost(null)

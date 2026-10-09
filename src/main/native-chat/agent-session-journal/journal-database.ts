@@ -128,7 +128,7 @@ function migrateJournalSchema(db: Database.Database, stored: number): void {
 }
 
 /**
- * One IMMEDIATE transaction, its COMMIT inside the failure boundary: SQLite can leave a transaction
+ * One synchronous transaction, its COMMIT inside the failure boundary: SQLite can leave a transaction
  * open after a failed COMMIT, and on the shared connection every later BEGIN would then fail. The
  * caller gets the original error; a ROLLBACK that fails too goes to `onStranded`. `run` is
  * synchronous by contract: an await inside it would let another chat's statements land in this
@@ -137,9 +137,10 @@ function migrateJournalSchema(db: Database.Database, stored: number): void {
 export function runJournalTransaction<T>(
   db: Database.Database,
   run: (db: Database.Database) => T,
-  onStranded: () => void = () => undefined
+  onStranded: () => void = () => undefined,
+  mode: 'write' | 'read' = 'write'
 ): T {
-  db.exec('BEGIN IMMEDIATE')
+  db.exec(mode === 'read' ? 'BEGIN' : 'BEGIN IMMEDIATE')
   try {
     const result = run(db)
     if (result instanceof Promise) {

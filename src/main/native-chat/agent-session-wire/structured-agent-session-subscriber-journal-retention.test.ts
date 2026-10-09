@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import { MAX_TIMER_DELAY_MS } from '../../../shared/timer-delay'
+import type { AgentSessionQueueView } from '../../../shared/agent-session-queue-pages'
 import { codexItemBody } from '../../codex/codex-structured-item-translation'
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { RpcDispatcher } from '../../runtime/rpc/dispatcher'
@@ -110,7 +111,10 @@ async function seedFold() {
   return { journal: new WeakRef(journal), digest: digest.digest('hex') }
 }
 
-async function subscribeOverRpc(reader: ReturnType<typeof observer>): Promise<AbortController> {
+async function subscribeOverRpc(
+  reader: ReturnType<typeof observer>,
+  queueView?: AgentSessionQueueView
+): Promise<AbortController> {
   const controller = new AbortController()
   controllers.push(controller)
   const dispatcher = new RpcDispatcher({
@@ -122,7 +126,7 @@ async function subscribeOverRpc(reader: ReturnType<typeof observer>): Promise<Ab
       id: 'frame-1',
       authToken: 'token',
       method: 'agentSession.subscribe',
-      params: { sessionId: SESSION }
+      params: { sessionId: SESSION, ...(queueView ? { queueView } : {}) }
     },
     (raw) => {
       const frame: unknown = JSON.parse(raw)
@@ -205,58 +209,61 @@ afterEach(async () => {
 })
 
 describe('subscriber journal lifetime', () => {
-  it('releases an idle fold while its owned RPC reader stays live and resumes on the durable journal', async () => {
-    const seeded = await seedFold()
-    const reader = observer()
-    const controller = await subscribeOverRpc(reader)
-    expect(reader.state.sawSeed).toBe(true)
-    expect(subscriberCount()).toBe(1)
-    // Provider mock call history owns the event sink; remove that fixture root before GC.
-    vi.clearAllMocks()
-    rig.statusEvents.length = 0
-    await collect()
-    expect(seeded.journal.deref() !== undefined).toBe(true)
+  it.each([undefined, 'paged-v1'] as const)(
+    'releases an idle fold while its owned RPC reader (%s) stays live and resumes on the durable journal',
+    async (queueView) => {
+      const seeded = await seedFold()
+      const reader = observer()
+      const controller = await subscribeOverRpc(reader, queueView)
+      expect(reader.state.sawSeed).toBe(true)
+      expect(subscriberCount()).toBe(1)
+      // Provider mock call history owns the event sink; remove that fixture root before GC.
+      vi.clearAllMocks()
+      rig.statusEvents.length = 0
+      await collect()
+      expect(seeded.journal.deref() !== undefined).toBe(true)
 
-    rig.clock.now += IDLE_MS + 1
-    await sweepOnce(rig.host)
-    expect(rig.host.hasSession(SESSION)).toBe(false)
-    expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION)
-    expect(subscriberCount()).toBe(1)
-    expect(reader.state.types).not.toContain('end')
-    vi.clearAllMocks()
-    rig.statusEvents.length = 0
-    await collect()
-    const releasedWhileSubscribed = seeded.journal.deref() === undefined
+      rig.clock.now += IDLE_MS + 1
+      await sweepOnce(rig.host)
+      expect(rig.host.hasSession(SESSION)).toBe(false)
+      expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION)
+      expect(subscriberCount()).toBe(1)
+      expect(reader.state.types).not.toContain('end')
+      vi.clearAllMocks()
+      rig.statusEvents.length = 0
+      await collect()
+      const releasedWhileSubscribed = seeded.journal.deref() === undefined
 
-    await restoreDurableHistory(seeded.digest)
-    expect(rig.adapter.acquire).not.toHaveBeenCalled()
-    const sibling = observer()
-    const disposeSibling = await rig.host.subscribe({
-      id: 'new-reader',
-      sessionId: SESSION,
-      emit: sibling.emit
-    })
-    expect(sibling.state.sawSeed).toBe(true)
-    expect(subscriberCount()).toBe(2)
-    await publishAfterIdle('first-publication')
-    await vi.waitFor(() => expect(reader.state.sawFuture && sibling.state.sawFuture).toBe(true))
+      await restoreDurableHistory(seeded.digest)
+      expect(rig.adapter.acquire).not.toHaveBeenCalled()
+      const sibling = observer()
+      const disposeSibling = await rig.host.subscribe({
+        id: 'new-reader',
+        sessionId: SESSION,
+        emit: sibling.emit
+      })
+      expect(sibling.state.sawSeed).toBe(true)
+      expect(subscriberCount()).toBe(2)
+      await publishAfterIdle('first-publication')
+      await vi.waitFor(() => expect(reader.state.sawFuture && sibling.state.sawFuture).toBe(true))
 
-    controller.abort()
-    expect(subscriberCount()).toBe(1)
-    expect(reader.state.types.filter((type) => type === 'end')).toHaveLength(1)
-    const endedFrames = reader.state.types.length
-    const siblingFrames = sibling.state.types.length
-    await publishAfterIdle('second-publication')
-    await vi.waitFor(() => expect(sibling.state.types.length).toBeGreaterThan(siblingFrames))
-    expect(reader.state.types).toHaveLength(endedFrames)
-    disposeSibling()
-    disposeSibling()
-    expect(subscriberCount()).toBe(0)
-    expect(sibling.state.types.filter((type) => type === 'end')).toHaveLength(1)
-    await collect()
-    expect(seeded.journal.deref() === undefined).toBe(true)
-    expect(releasedWhileSubscribed).toBe(true)
-  })
+      controller.abort()
+      expect(subscriberCount()).toBe(1)
+      expect(reader.state.types.filter((type) => type === 'end')).toHaveLength(1)
+      const endedFrames = reader.state.types.length
+      const siblingFrames = sibling.state.types.length
+      await publishAfterIdle('second-publication')
+      await vi.waitFor(() => expect(sibling.state.types.length).toBeGreaterThan(siblingFrames))
+      expect(reader.state.types).toHaveLength(endedFrames)
+      disposeSibling()
+      disposeSibling()
+      expect(subscriberCount()).toBe(0)
+      expect(sibling.state.types.filter((type) => type === 'end')).toHaveLength(1)
+      await collect()
+      expect(seeded.journal.deref() === undefined).toBe(true)
+      expect(releasedWhileSubscribed).toBe(true)
+    }
+  )
 
   it('keeps direct cleanup tied to its original subscriber after the caller changes its input', async () => {
     const seeded = await seedFold()

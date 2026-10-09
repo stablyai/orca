@@ -27,6 +27,7 @@ import {
   AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY,
   AGENT_SESSION_REWIND_RUNTIME_CAPABILITY,
+  AGENT_SESSION_QUEUE_PAGES_RUNTIME_CAPABILITY,
   AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY,
   AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
@@ -257,6 +258,12 @@ describe('cross-version structured agent sessions', () => {
     })
 
     it('can detect the absence during negotiation instead of by calling', () => {
+      for (const build of [current, baseline]) {
+        expect(build.capabilities.includes(AGENT_SESSION_QUEUE_PAGES_RUNTIME_CAPABILITY)).toBe(
+          build.methodNames.includes('agentSession.queuedMessagesPage') &&
+            build.methodNames.includes('agentSession.queuedMessageRead')
+        )
+      }
       // The invariant that survives a release cut: each build's advertised list and
       // its registered methods agree. "The old build has neither" is only true
       // until a release ships the surface, and pinning it turns this red on the cut

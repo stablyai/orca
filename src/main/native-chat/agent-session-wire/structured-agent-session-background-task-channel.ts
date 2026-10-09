@@ -1,3 +1,7 @@
+import {
+  queuePublicationFields,
+  tryReadQueueSummary
+} from './structured-agent-session-queue-summary'
 import type {
   AgentSessionBackgroundTaskState,
   AgentSessionHistoryRequest,
@@ -52,10 +56,9 @@ export class StructuredAgentSessionBackgroundTaskChannel {
       scope
     })
     const backgroundTasks = this.read(request.sessionId)
-    const queue = tryReadQueuePublication(
-      journal,
-      structuredQueueSendGate(this.deps.store, request.sessionId)
-    )
+    const queue = (
+      request.queueView === 'paged-v1' ? tryReadQueueSummary : tryReadQueuePublication
+    )(journal, structuredQueueSendGate(this.deps.store, request.sessionId))
     const hostNow = this.deps.now?.() ?? Date.now()
     return {
       ...result,
@@ -64,13 +67,7 @@ export class StructuredAgentSessionBackgroundTaskChannel {
         hostNow,
         // A stale history answer never replaces newer live subscription state;
         // the client's reducer keeps live-over-history precedence.
-        ...(queue !== undefined
-          ? {
-              queuedMessages: queue.queuedMessages,
-              queuePause: queue.queuePause,
-              nextQueuedMessageId: queue.nextQueuedMessageId
-            }
-          : {}),
+        ...(queue !== undefined ? queuePublicationFields(queue) : {}),
         backgroundTasks
       }
     }

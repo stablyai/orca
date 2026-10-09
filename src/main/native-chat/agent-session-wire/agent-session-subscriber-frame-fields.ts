@@ -9,20 +9,28 @@ import type {
   AgentSessionSlashCommand,
   AgentSessionSubscribeEvent
 } from '../../../shared/agent-session-wire'
-import type { QueuePublication } from './structured-agent-session-queued-publication'
+import {
+  queuePublicationFields,
+  type ReaderQueuePublication
+} from './structured-agent-session-queue-summary'
+import type { AgentSessionQueueView } from '../../../shared/agent-session-queue-pages'
 
 export type SubscriberFieldState = {
+  queueView?: AgentSessionQueueView
   sessionId: string
   commands?: AgentSessionSlashCommand[] | null
   /** The last queue publication actually SENT. */
-  queuePublication?: QueuePublication
+  queuePublication?: ReaderQueuePublication
   /** Fingerprint of the roster last SENT; absent until this subscriber's first frame. */
   backgroundTasks?: string
 }
 
 export type SubscriberFieldHooks = {
   readCommands?: (sessionId: string) => AgentSessionSlashCommand[] | undefined
-  readQueuePublication?: (sessionId: string) => QueuePublication | undefined
+  readQueuePublication?: (
+    sessionId: string,
+    queueView?: AgentSessionQueueView
+  ) => ReaderQueuePublication | undefined
   /** Built from the host's child records, so it is read only when a frame owes it: never per token. */
   readBackgroundTasks?: (sessionId: string) => AgentSessionBackgroundTaskState | null
 }
@@ -31,7 +39,7 @@ export type SubscriberFrame = {
   frame: AgentSessionSubscribeEvent
   commands: AgentSessionSlashCommand[] | null
   attachedQueued: boolean
-  queued: QueuePublication | undefined
+  queued: ReaderQueuePublication | undefined
   /** The attached roster's fingerprint; undefined when the frame carries none. */
   backgroundTasks: string | undefined
 }
@@ -55,7 +63,9 @@ export function buildSubscriberFrame(
     (event.type !== 'batch' || commands !== subscriber.commands)
   // Withheld on intermediate catch-up pages (the caller says so), attached to
   // every hydrating frame, and to batches only when the list changed.
-  const queued = withholdQueued ? undefined : hooks.readQueuePublication?.(subscriber.sessionId)
+  const queued = withholdQueued
+    ? undefined
+    : hooks.readQueuePublication?.(subscriber.sessionId, subscriber.queueView)
   const attachedQueued =
     queued !== undefined &&
     event.type !== 'end' &&
@@ -65,13 +75,7 @@ export function buildSubscriberFrame(
     frame: {
       ...event,
       ...(includeCommands ? { commands: commands ?? null } : {}),
-      ...(attachedQueued && queued
-        ? {
-            queuedMessages: queued.queuedMessages,
-            queuePause: queued.queuePause,
-            nextQueuedMessageId: queued.nextQueuedMessageId
-          }
-        : {}),
+      ...(attachedQueued && queued ? queuePublicationFields(queued) : {}),
       ...(backgroundTasks !== undefined ? { backgroundTasks } : {})
     },
     commands,
@@ -110,6 +114,7 @@ export function subscriberQueuedMessagesChanged(
 ): boolean {
   return (
     hooks.readQueuePublication !== undefined &&
-    hooks.readQueuePublication(subscriber.sessionId) !== subscriber.queuePublication
+    hooks.readQueuePublication(subscriber.sessionId, subscriber.queueView) !==
+      subscriber.queuePublication
   )
 }

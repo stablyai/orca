@@ -223,6 +223,11 @@ export const QueuedMessageActionParams = z
  *  restart's) so the cards send again. Gated like the draft actions above. */
 export const QueuedMessagesResumeParams = z.object({ envelope: MutationEnvelope }).strict()
 
+export {
+  QueuedMessagesPageParams,
+  QueuedMessageReadParams
+} from './structured-agent-session-queue-page-params'
+
 export const RespondParams = z
   .object({
     envelope: MutationEnvelope,
@@ -355,18 +360,19 @@ export const RestartResumeParams = z
   .object({ sessionIds: z.array(SessionId).max(MAX_RESTART_RESUME_SESSIONS).optional() })
   .strict()
 
-export const HistoryParams = z
-  .object({
-    sessionId: SessionId,
-    direction: z.enum(AGENT_SESSION_HISTORY_DIRECTIONS),
-    cursor: JournalCursor.optional(),
-    limit: z.number().int().positive().max(AGENT_SESSION_HISTORY_MAX_LIMIT).optional()
-  })
-  .strict()
+export const HistoryParams = z.strictObject({
+  sessionId: SessionId,
+  direction: z.enum(AGENT_SESSION_HISTORY_DIRECTIONS),
+  cursor: JournalCursor.optional(),
+  limit: z.number().int().positive().max(AGENT_SESSION_HISTORY_MAX_LIMIT).optional(),
+  queueView: z.literal('paged-v1').optional()
+})
 
-export const SubscribeParams = z
-  .object({ sessionId: SessionId, cursor: JournalCursor.optional() })
-  .strict()
+export const SubscribeParams = z.strictObject({
+  sessionId: SessionId,
+  cursor: JournalCursor.optional(),
+  queueView: z.literal('paged-v1').optional()
+})
 
 // Not strict: an older host ignores these params entirely, and this host must ignore a newer client's.
 export const SubscribeTurnCompletionsParams = z.object({ includePrompts: z.boolean().optional() })

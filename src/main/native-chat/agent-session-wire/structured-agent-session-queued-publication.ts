@@ -112,6 +112,25 @@ export function readQueuePublication(
   gate: QueueSendGate
 ): QueuePublication {
   const queuedMessages = readPublishedQueuedMessages(journal)
+  const { queuePause, nextQueuedMessageId } = readQueuePublicationFacts(journal, gate)
+  const previous = publications.get(journal)
+  if (
+    previous &&
+    previous.queuedMessages === queuedMessages &&
+    sameQueuePause(previous.queuePause, queuePause) &&
+    previous.nextQueuedMessageId === nextQueuedMessageId
+  ) {
+    return previous
+  }
+  const publication = { queuedMessages, queuePause, nextQueuedMessageId }
+  publications.set(journal, publication)
+  return publication
+}
+
+export function readQueuePublicationFacts(
+  journal: AgentSessionJournal,
+  gate: QueueSendGate
+): Pick<QueuePublication, 'queuePause' | 'nextQueuedMessageId'> {
   // Read per emit: the pause also turns on submissions (a turn starting). Only a person's Stop is
   // shown, and only over a card Resume would send, so its header never offers to send nothing;
   // deleting a blocking returned card shows it again. After a /clear, a restart or a close nothing
@@ -138,18 +157,7 @@ export function readQueuePublication(
   // The test narrows the type.
   const queuePause = pause?.reason === 'stopped' ? { reason: pause.reason } : null
   const nextQueuedMessageId = nextStructuredQueuedMessage({ journal, ...gate() })?.messageId ?? null
-  const previous = publications.get(journal)
-  if (
-    previous &&
-    previous.queuedMessages === queuedMessages &&
-    sameQueuePause(previous.queuePause, queuePause) &&
-    previous.nextQueuedMessageId === nextQueuedMessageId
-  ) {
-    return previous
-  }
-  const publication = { queuedMessages, queuePause, nextQueuedMessageId }
-  publications.set(journal, publication)
-  return publication
+  return { queuePause, nextQueuedMessageId }
 }
 
 /** For readers that must never fail on drafts — a subscriber stream, a history

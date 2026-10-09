@@ -1,4 +1,6 @@
 import type { AgentSessionUnavailable } from './agent-session-availability'
+import type { AgentSessionQueueSummary, AgentSessionQueueView } from './agent-session-queue-pages'
+export * from './agent-session-queue-pages'
 import type {
   AgentSessionBackgroundTask,
   AgentSessionBackgroundTaskState
@@ -93,6 +95,7 @@ export type AgentSessionHistoryRequest = {
   /** Required for `before` and `after`; ignored for `tail`. */
   cursor?: AgentJournalCursor
   limit?: number
+  queueView?: AgentSessionQueueView
 }
 
 /** A subagent named by a roster row the page does not carry, while its own rows are on it. */
@@ -134,6 +137,7 @@ export type AgentSessionHistoryPage = {
   /** The host's queued drafts. Absent = no claim (older host); `[]`/null = empty.
    *  Live subscription state stays authoritative over a stale history answer. */
   queuedMessages?: AgentSessionQueuedMessage[] | null
+  queueSummary?: AgentSessionQueueSummary
   /** The queue's pause, published with the list: present whenever `queuedMessages` is, null
    *  when the queue sends on its own. */
   queuePause?: AgentSessionQueuePause | null

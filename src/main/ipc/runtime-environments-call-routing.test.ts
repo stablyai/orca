@@ -121,12 +121,29 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     rmSync(userDataPath, { recursive: true, force: true })
   })
 
-  it('proxies generic one-shot RPC calls to the saved remote runtime', async () => {
+  it.each([
+    { method: 'repo.list', params: undefined, result: { repos: [{ id: 'repo-1' }] } },
+    {
+      method: 'agentSession.history',
+      params: { sessionId: 'session-remote', direction: 'tail', queueView: 'paged-v1' },
+      result: { ok: true, page: { queueSummary: { total: 1 } } }
+    },
+    {
+      method: 'agentSession.queuedMessagesPage',
+      params: { sessionId: 'session-remote', source: 'person', aroundMessageId: 'draft' },
+      result: { status: 'page', rows: [{ messageId: 'draft' }] }
+    },
+    {
+      method: 'agentSession.queuedMessageRead',
+      params: { sessionId: 'session-remote', messageId: 'draft', cursor: 'opaque' },
+      result: { status: 'body', part: { offset: 0, json: '{}' } }
+    }
+  ])('proxies $method to the saved execution host', async ({ method, params, result }) => {
     registerRuntimeEnvironmentHandlers(store as never)
     sendRemoteRuntimeRequestMock.mockResolvedValue({
       id: 'rpc-2',
       ok: true,
-      result: { repos: [{ id: 'repo-1' }] },
+      result,
       _meta: { runtimeId: 'runtime-remote' }
     })
 
@@ -140,16 +157,14 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       { selector: string; method: string; params?: unknown; timeoutMs?: number },
       { ok: true; result: unknown }
     >('runtimeEnvironments:call')
-    expect(
-      await call(null, { selector: 'desk', method: 'repo.list', timeoutMs: 75 })
-    ).toMatchObject({
+    expect(await call(null, { selector: 'desk', method, params, timeoutMs: 75 })).toMatchObject({
       ok: true,
-      result: { repos: [{ id: 'repo-1' }] }
+      result
     })
     expect(sendRemoteRuntimeRequestMock).toHaveBeenCalledWith(
       expect.objectContaining({ endpoint: 'ws://127.0.0.1:6768' }),
-      'repo.list',
-      undefined,
+      method,
+      params,
       75,
       undefined,
       undefined,

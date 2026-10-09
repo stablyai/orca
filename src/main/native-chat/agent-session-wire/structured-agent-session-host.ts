@@ -1,3 +1,4 @@
+import { structuredAgentSessionHostReads } from './structured-agent-session-host-reads'
 import type { AgentSessionRewindParams } from '../../../shared/agent-session-rewind'
 import { rewindStructuredAgentSession } from './structured-agent-session-rewind'
 import { StructuredConversationCommandController } from './structured-conversation-command-controller'
@@ -6,16 +7,13 @@ import { StructuredConversationCommandController } from './structured-conversati
 // only through `conversation`, which opens it at rest; an agent is started only by work that needs
 // it, and the idle sweep is the one thing that puts it to rest.
 
-import type { AgentJournalSnapshot } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionExecutionLocation } from '../../../shared/agent-session-record'
 import type * as SessionWire from '../../../shared/agent-session-wire'
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
 import { createRestartReconciler } from './structured-agent-session-restart-reconcile'
-import type { AgentSessionSubscribeInput } from './structured-agent-session-subscribers'
 import { StructuredAgentSessionTaskQueue } from './structured-agent-session-task-queue'
 import * as providerSupport from './structured-agent-session-provider-support'
 import * as reveal from './structured-agent-session-reveal'
-import { structuredAgentSessionOwnerStatus } from './structured-agent-session-owner-status'
 import { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
 import { attachStructuredAgentSession } from './structured-agent-session-attach-orchestration'
 import type { StructuredAgentSessionLifetimeContext } from './structured-agent-session-host-lifetime'
@@ -79,7 +77,8 @@ export class StructuredAgentSessionHost {
     (sessionId) => this.queued.onJournalActivity(sessionId),
     (sessionId) => this.restartResume.onAgentStarted(sessionId),
     (sessionId) => this.backgroundTasks.publish(sessionId),
-    (sessionId) => this.backgroundTasks.read(sessionId)
+    (sessionId) => this.backgroundTasks.read(sessionId),
+    async (sessionId) => (await this.lifetime.conversation(sessionId)).journal
   )
   private readonly subscribers = this.clientDelivery.subscribers
   private readonly tasks = new StructuredAgentSessionTaskQueue()
@@ -244,13 +243,12 @@ export class StructuredAgentSessionHost {
 
   private serialize = this.tasks.serialize.bind(this.tasks)
 
-  attach(
+  attach = (
     caller: StructuredAgentSessionCaller,
     params: AgentSessionAttachParams,
     options?: Parameters<typeof attachStructuredAgentSession>[3]
-  ): Promise<SessionWire.AgentSessionMutationResult<SessionWire.AgentSessionAttachResult>> {
-    return attachStructuredAgentSession(this.attachContext(), caller.callerKey, params, options)
-  }
+  ): Promise<SessionWire.AgentSessionMutationResult<SessionWire.AgentSessionAttachResult>> =>
+    attachStructuredAgentSession(this.attachContext(), caller.callerKey, params, options)
 
   /** Test barrier: every write has landed by its call's return, so no production path needs it. */
   flushStreamedEvents = (id: string): Promise<void> => this.runtimeState.flushEventSink(id)
@@ -316,22 +314,19 @@ export class StructuredAgentSessionHost {
 
   conversationCommand = (...args: Parameters<StructuredConversationCommandController['run']>) =>
     this.conversationCommands.run(...args)
-  /** Undefined means unavailable; an empty array is an authoritative catalog. */
-  readCommands = (sessionId: string) => ({ commands: this.clientDelivery.readCommands(sessionId) })
-
-  /** From the record store, never the session map: an idle-released chat has no map entry. */
-  handoffStatus = (sessionId: string): SessionWire.AgentSessionHandoffStatus =>
-    structuredAgentSessionOwnerStatus(this.deps, sessionId)
-
-  history: StructuredAgentSessionBackgroundTaskChannel['history'] = (request, scope) =>
-    this.backgroundTasks.history(request, scope)
-
-  /** The fully reduced timeline, for readers that cannot tolerate a page's ambiguity — rows are
-   *  revised or tombstoned in place, so an item's ABSENCE from a bounded page proves nothing. */
-  journalSnapshot = async (sessionId: string): Promise<AgentJournalSnapshot> =>
-    (await this.lifetime.conversation(sessionId)).journal.snapshot()
-
-  subscribe = (input: AgentSessionSubscribeInput) => this.backgroundTasks.subscribe(input)
+  private readonly reads = structuredAgentSessionHostReads(() => ({
+    deps: this.deps,
+    conversation: this.lifetime.conversation,
+    backgroundTasks: this.backgroundTasks,
+    readCommands: (sessionId) => this.clientDelivery.readCommands(sessionId)
+  }))
+  readCommands = this.reads.readCommands
+  handoffStatus = this.reads.handoffStatus
+  history = this.reads.history
+  journalSnapshot = this.reads.journalSnapshot
+  subscribe = this.reads.subscribe
+  queuedMessagesPage = this.reads.queuedMessagesPage
+  queuedMessageRead = this.reads.queuedMessageRead
 
   settleLateDispatch = (input: Parameters<typeof settleStructuredAgentSessionLateDispatch>[1]) =>
     settleStructuredAgentSessionLateDispatch(this.mutationContext(), input)

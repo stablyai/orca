@@ -1,3 +1,4 @@
+import { tryReadQueueSummary } from './structured-agent-session-queue-summary'
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
 import { AgentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
@@ -40,7 +41,8 @@ export class StructuredAgentSessionClientDelivery {
     /** A session's child records changed; the chat strip republishes from them. */
     onChildWorkChanged: (sessionId: string) => void,
     // Required: an opening frame without the roster reads as "no tasks" to current clients.
-    readBackgroundTasks: NonNullable<SubscriberFieldHooks['readBackgroundTasks']>
+    readBackgroundTasks: NonNullable<SubscriberFieldHooks['readBackgroundTasks']>,
+    readJournal: (sessionId: string) => Promise<AgentSessionJournal>
   ) {
     this.statusFeed = createStructuredAgentSessionHostStatusFeed({
       sessions,
@@ -60,9 +62,10 @@ export class StructuredAgentSessionClientDelivery {
     )
     this.waitForSendSettlement = this.sendSettlement.wait
     this.subscribers = new AgentSessionSubscribers({
+      readJournal,
       readCommands: (sessionId) => this.readCommands(sessionId),
-      readQueuePublication: (sessionId) =>
-        tryReadQueuePublication(
+      readQueuePublication: (sessionId, queueView) =>
+        (queueView === 'paged-v1' ? tryReadQueueSummary : tryReadQueuePublication)(
           sessions.get(sessionId)?.journal,
           structuredQueueSendGate(this.deps().store, sessionId)
         ),

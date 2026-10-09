@@ -67,6 +67,18 @@ export class JournalHostDatabase {
     })
   }
 
+  /** A short read snapshot, without reserving the writer slot. */
+  readTransaction<T>(run: () => T): T {
+    return runJournalTransaction(
+      this.db,
+      run,
+      () => {
+        this.stranded = true
+      },
+      'read'
+    )
+  }
+
   /** Last, after every store has drained. A close that fails keeps the handle, so the retried
    *  teardown closes this same connection. */
   close(): void {

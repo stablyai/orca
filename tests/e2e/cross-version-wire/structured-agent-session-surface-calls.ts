@@ -42,6 +42,16 @@ export const STRUCTURED_CALLS: {
   },
   { method: 'agentSession.send', hostMethod: 'send', result: { ok: true, replayed: false } },
   { method: 'agentSession.cancel', hostMethod: 'cancel', result: { ok: true, replayed: false } },
+  {
+    method: 'agentSession.queuedMessagesPage',
+    hostMethod: 'queuedMessagesPage',
+    result: { status: 'page', rows: [] }
+  },
+  {
+    method: 'agentSession.queuedMessageRead',
+    hostMethod: 'queuedMessageRead',
+    result: { status: 'gone' }
+  },
   // Draft mutations for mid-turn queueing. Methods exist ahead of the
   // capability's advertisement; only capability-gated clients ever call them.
   {

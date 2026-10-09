@@ -20,6 +20,8 @@ export {
   OptionsParams,
   QueuedMessageActionParams,
   QueuedMessagesResumeParams,
+  QueuedMessagesPageParams,
+  QueuedMessageReadParams,
   RespondParams,
   RespondToQuestionParams,
   RestartResumableParams,

@@ -1,3 +1,5 @@
+import { emitSubscriberFrame, resumeSubscriberOutput } from './agent-session-subscriber-output'
+import { sameJournalCursor } from '../agent-session-journal/journal-cursor'
 // Per-subscriber cursors over one session's journal.
 //
 // Each subscriber advances independently: a client that connected two epochs
@@ -12,10 +14,10 @@ import type {
 } from '../../../shared/agent-session-wire'
 import {
   backgroundTaskFingerprint,
-  buildSubscriberFrame,
   type SubscriberFieldHooks
 } from './agent-session-subscriber-frame-fields'
-import type { QueuePublication } from './structured-agent-session-queued-publication'
+import type { ReaderQueuePublication } from './structured-agent-session-queue-summary'
+import type { AgentSessionQueueView } from '../../../shared/agent-session-queue-pages'
 import { deliverToSubscriber } from './agent-session-subscriber-catch-up'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { emptyAgentSessionBatch } from './agent-session-empty-batch'
@@ -29,9 +31,15 @@ export type AgentSessionSubscribeInput = {
   sessionId: string
   emit: AgentSessionSubscriberEmit
   cursor?: AgentJournalCursor
+  queueView?: AgentSessionQueueView
 }
 
 export type Subscriber = {
+  journal: WeakRef<AgentSessionJournal>
+  outputBlocked?: true
+  pendingOutput?: true
+  pendingSnapshot?: number
+  queueView?: AgentSessionQueueView
   id: string
   sessionId: string
   emit: AgentSessionSubscriberEmit
@@ -40,16 +48,20 @@ export type Subscriber = {
   commands?: AgentSessionSlashCommand[] | null
   /** The last draft list actually SENT — never advanced on a page that withheld
    *  it, or the final replacement would be suppressed by the identity dedup. */
-  queuePublication?: QueuePublication
+  queuePublication?: ReaderQueuePublication
   /** Fingerprint of the background-task roster last SENT. */
   backgroundTasks?: string
 }
 
 export type AgentSessionSubscribersHooks = {
+  readJournal?: (sessionId: string) => Promise<AgentSessionJournal>
   readCommands?: (sessionId: string) => AgentSessionSlashCommand[] | undefined
   /** Revision-stable per emit: an unchanged list keeps its reference, so token
    *  streams never re-serialize it; any draft-table write changes it. */
-  readQueuePublication?: (sessionId: string) => QueuePublication | undefined
+  readQueuePublication?: (
+    sessionId: string,
+    queueView?: AgentSessionQueueView
+  ) => ReaderQueuePublication | undefined
   readBackgroundTasks?: SubscriberFieldHooks['readBackgroundTasks']
   /** Fires after publications that can change journal content. */
   onJournalPublished?: (sessionId: string, journal: AgentSessionJournal) => void
@@ -77,14 +89,17 @@ export class AgentSessionSubscribers {
     fence: number
     emit: AgentSessionSubscriberEmit
     cursor?: AgentJournalCursor
+    queueView?: AgentSessionQueueView
   }): () => void {
     const liveCursor = input.journal.cursor()
     const subscriber: Subscriber = {
       id: input.id,
+      journal: new WeakRef(input.journal),
       sessionId: input.sessionId,
       emit: input.emit,
       cursor: input.cursor ?? { epoch: liveCursor.epoch, sequence: 0 },
-      fence: input.fence
+      fence: input.fence,
+      ...(input.queueView ? { queueView: input.queueView } : {})
     }
     const session = this.bySession.get(input.sessionId) ?? new Map<string, Subscriber>()
     session.set(input.id, subscriber)
@@ -114,8 +129,7 @@ export class AgentSessionSubscribers {
       })
       subscriber.cursor = page.liveCursor ?? page.window.nextCursor
     }
-    const { sessionId, id } = subscriber
-    return () => this.close(sessionId, id)
+    return () => this.close(subscriber.sessionId, subscriber.id)
   }
 
   close(sessionId: string, id: string): void {
@@ -158,6 +172,12 @@ export class AgentSessionSubscribers {
     const page = readAgentSessionHydrationPage(journal, fence)
     const hostNow = this.now()
     for (const subscriber of this.subscribers(sessionId)) {
+      subscriber.journal = new WeakRef(journal)
+      if (subscriber.outputBlocked) {
+        subscriber.pendingOutput = true
+        subscriber.pendingSnapshot = fence
+        continue
+      }
       this.emit(subscriber, {
         type: 'snapshot',
         sessionId,
@@ -226,18 +246,26 @@ export class AgentSessionSubscribers {
     emitCheckpoint = false,
     activity?: AgentSessionTurnActivity | null
   ): void {
+    subscriber.journal = new WeakRef(journal)
+    if (subscriber.outputBlocked) {
+      subscriber.pendingOutput = true
+      return
+    }
     deliverToSubscriber(
       {
         hooks: this.hooks,
         emit: (target, event, options) => this.emit(target, event, options),
-        isActive: (target) => this.isActive(target),
+        isActive: (target) => this.isActive(target) && !target.outputBlocked,
         activity: (sessionId) => this.activityField(sessionId).activity
       },
       { subscriber, journal, hostNow, emitCheckpoint, activity }
     )
+    if (subscriber.outputBlocked && !sameJournalCursor(subscriber.cursor, journal.cursor())) {
+      subscriber.pendingOutput = true
+    }
   }
 
-  private now = (): number => this.hooks.now?.() ?? Date.now()
+  private now = () => this.hooks.now?.() ?? Date.now()
 
   private isActive = (subscriber: Subscriber): boolean =>
     this.bySession.get(subscriber.sessionId)?.get(subscriber.id) === subscriber
@@ -249,23 +277,46 @@ export class AgentSessionSubscribers {
     event: AgentSessionSubscribeEvent,
     options?: { withholdQueued?: boolean }
   ): void {
-    try {
-      const built = buildSubscriberFrame(
-        this.hooks,
-        subscriber,
-        event,
-        options?.withholdQueued === true
-      )
-      subscriber.emit(built.frame)
-      subscriber.commands = built.commands
-      if (built.attachedQueued) {
-        subscriber.queuePublication = built.queued
-      }
-      if (built.backgroundTasks !== undefined) {
-        subscriber.backgroundTasks = built.backgroundTasks
-      }
-    } catch {
-      this.drop(subscriber)
+    emitSubscriberFrame({
+      hooks: this.hooks,
+      subscriber,
+      event,
+      withholdQueued: options?.withholdQueued === true,
+      active: () => this.isActive(subscriber),
+      ready: () =>
+        resumeSubscriberOutput({
+          subscriber,
+          readJournal: this.hooks.readJournal,
+          active: () => this.isActive(subscriber),
+          ready: (journal) => this.resumeOutput(subscriber, journal),
+          drop: () => this.drop(subscriber)
+        }),
+      drop: () => this.drop(subscriber)
+    })
+  }
+
+  private resumeOutput(subscriber: Subscriber, journal: AgentSessionJournal): void {
+    if (!subscriber.pendingOutput) {
+      return
+    }
+    subscriber.pendingOutput = undefined
+    const fence = subscriber.pendingSnapshot
+    subscriber.pendingSnapshot = undefined
+    if (fence !== undefined) {
+      const page = readAgentSessionHydrationPage(journal, fence)
+      this.emit(subscriber, {
+        type: 'snapshot',
+        sessionId: subscriber.sessionId,
+        page,
+        fence,
+        hostNow: this.now(),
+        ...this.activityField(subscriber.sessionId)
+      })
+      subscriber.cursor = page.liveCursor ?? page.window.nextCursor
+      subscriber.fence = fence
+    } else {
+      this.deliver(subscriber, journal, this.now(), true)
+      this.republishBackgroundTasks(subscriber.sessionId, subscriber.fence)
     }
   }
 

@@ -256,6 +256,9 @@ export const AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY =
 // the card is the only place the waiting command shows.
 export const AGENT_SESSION_QUEUED_COMMANDS_RUNTIME_CAPABILITY =
   'agent-session.queued-commands.v1' as const
+// Why: queue pages and lossless body parts are separate from typed queueing. History/subscribe
+// params are strict on old hosts: send queueView: 'paged-v1' only after this host capability.
+export const AGENT_SESSION_QUEUE_PAGES_RUNTIME_CAPABILITY = 'agent-session.queue-pages.v1' as const
 // Why: paired clients advertise Claude-structured support so the host can gate its agent-specific
 // journal and lifecycle surfaces independently from Codex support.
 export const CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY =
@@ -400,6 +403,7 @@ export const RUNTIME_CAPABILITIES = [
   AGENT_SESSION_REWIND_RUNTIME_CAPABILITY,
   AGENT_SESSION_REWIND_RECOVERY_CAPABILITY,
   AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY,
+  AGENT_SESSION_QUEUE_PAGES_RUNTIME_CAPABILITY,
   AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY,
   AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY,
   AGENT_SESSION_ATTACHMENTS_RUNTIME_CAPABILITY,

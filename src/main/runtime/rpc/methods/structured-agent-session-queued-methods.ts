@@ -5,14 +5,37 @@
 import { defineMethod } from '../core'
 import {
   requireStructuredSessionHost as requireSessionHost,
-  structuredCallerFor as callerFor
+  structuredCallerFor as callerFor,
+  requireInstalledStructuredHost
 } from './structured-agent-session-gate'
 import {
   QueuedMessageActionParams,
-  QueuedMessagesResumeParams
+  QueuedMessagesResumeParams,
+  QueuedMessagesPageParams,
+  QueuedMessageReadParams
 } from './structured-agent-session-schemas'
 
 export const STRUCTURED_AGENT_SESSION_QUEUED_METHODS = [
+  defineMethod({
+    name: 'agentSession.queuedMessagesPage',
+    permission: 'workspace',
+    params: QueuedMessagesPageParams,
+    handler: async (params, ctx) =>
+      (await requireInstalledStructuredHost(ctx, params.sessionId)).queuedMessagesPage(params, {
+        id: ctx.requestId ?? '',
+        runtimeId: ctx.runtime.getRuntimeId()
+      })
+  }),
+  defineMethod({
+    name: 'agentSession.queuedMessageRead',
+    permission: 'workspace',
+    params: QueuedMessageReadParams,
+    handler: async (params, ctx) =>
+      (await requireInstalledStructuredHost(ctx, params.sessionId)).queuedMessageRead(params, {
+        id: ctx.requestId ?? '',
+        runtimeId: ctx.runtime.getRuntimeId()
+      })
+  }),
   defineMethod({
     name: 'agentSession.queuedMessageSend',
     permission: 'workspace',

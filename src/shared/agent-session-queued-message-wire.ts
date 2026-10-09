@@ -3,6 +3,7 @@
 
 import type { UnreadAgentSessionFailureFact } from './agent-session-failure'
 import type { AgentJournalMessageItem } from './agent-session-journal-types'
+import type { AgentSessionQueueSummary } from './agent-session-queue-pages'
 
 /** The draft could not be converted into a send; an explicit Send retries it. */
 export const QUEUED_MESSAGE_PAUSED_SEND_FAILED = 'send_failed' as const
@@ -19,6 +20,8 @@ export type AgentSessionQueuePause = { reason: 'stopped' }
 
 /** What rides beside a frame's `queuedMessages`, published together with the list. */
 export type AgentSessionQueuePublicationFields = {
+  /** Only readers opting into paged-v1 receive this instead of queuedMessages. */
+  queueSummary?: AgentSessionQueueSummary
   /** Null when the queue sends on its own. */
   queuePause?: AgentSessionQueuePause | null
   /** The card the queue sends next once nothing runs, null while anything holds the queue.

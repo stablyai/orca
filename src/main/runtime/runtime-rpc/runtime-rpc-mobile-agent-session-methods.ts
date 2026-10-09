@@ -9,6 +9,8 @@ export const MOBILE_AGENT_SESSION_RPC_METHODS = [
   'agentSession.queuedMessageSend',
   'agentSession.queuedMessageDelete',
   'agentSession.queuedMessagesResume',
+  'agentSession.queuedMessagesPage',
+  'agentSession.queuedMessageRead',
   'agentSession.close',
   'agentSession.respondToApproval',
   'agentSession.respondToQuestion',
