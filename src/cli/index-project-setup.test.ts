@@ -350,6 +350,57 @@ describe('orca cli worktree awareness', () => {
     )
   })
 
+  it('accepts a bare environment-list id as project --host (#7810)', async () => {
+    pairRuntimeEnvironment(listEnvironmentsMock, 'env-uuid-1', 'awin')
+    queueFixtures(
+      callMock,
+      okFixture('req_project_setup_create', {
+        result: {
+          project: {
+            id: 'github:stablyai/orca',
+            displayName: 'Orca',
+            badgeColor: '#7c3aed',
+            sourceRepoIds: [],
+            createdAt: 1,
+            updatedAt: 1
+          },
+          setup: {
+            id: 'setup-awin',
+            projectId: 'github:stablyai/orca',
+            hostId: 'local',
+            repoId: '',
+            path: '',
+            displayName: 'awin',
+            setupState: 'setting-up',
+            setupMethod: 'provisioned',
+            createdAt: 1,
+            updatedAt: 2
+          }
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'project',
+        'setup-create',
+        '--project',
+        'github:stablyai/orca',
+        '--host',
+        'env-uuid-1',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(runtimeClientConstructorMock).toHaveBeenCalledWith(null, 'env-uuid-1')
+    expect(callMock).toHaveBeenCalledWith(
+      'projectHostSetup.create',
+      expect.objectContaining({ hostId: 'runtime:env-uuid-1' })
+    )
+  })
+
   it('rejects a malformed --host value before contacting any runtime', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
