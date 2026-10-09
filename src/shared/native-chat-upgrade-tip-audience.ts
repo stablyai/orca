@@ -5,6 +5,8 @@ export type NativeChatUpgradeTipMembership = (typeof NATIVE_CHAT_UPGRADE_TIP_MEM
 export const NATIVE_CHAT_UPGRADE_TIP_AUDIENCE_BASES = [
   'chat-ui-on',
   'chat-ui-on-unproven',
+  /** Chat UI was on with new tabs opening in the terminal; load turned Chat UI off. */
+  'chat-ui-on-terminal-default',
   'chat-ui-off',
   'chat-ui-unset',
   'new-profile',

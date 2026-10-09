@@ -28,8 +28,11 @@ afterEach(async () => {
 })
 
 // Every build before the chat upgrade saved the whole settings document, defaults included.
-const preUpgradeSettings = (experimentalNativeChat?: boolean): Record<string, unknown> => ({
-  openAgentTabsInChatByDefault: false,
+const preUpgradeSettings = (
+  experimentalNativeChat?: boolean,
+  openAgentTabsInChatByDefault = experimentalNativeChat === true
+): Record<string, unknown> => ({
+  openAgentTabsInChatByDefault,
   ...(experimentalNativeChat === undefined ? {} : { experimentalNativeChat })
 })
 
@@ -57,6 +60,12 @@ async function membershipAfterLaterOptIn(
 describe('native chat upgrade tip audience', () => {
   it.each([
     ['Chat UI on', preUpgradeSettings(true), 'eligible', 'chat-ui-on'],
+    [
+      'Chat UI on but new tabs opening in the terminal',
+      preUpgradeSettings(true, false),
+      'excluded',
+      'chat-ui-on-terminal-default'
+    ],
     ['Chat UI off', preUpgradeSettings(false), 'excluded', 'chat-ui-off'],
     ['Chat UI never set', preUpgradeSettings(), 'excluded', 'chat-ui-unset'],
     [
@@ -97,6 +106,23 @@ describe('native chat upgrade tip audience', () => {
       expect(await membershipAfterLaterOptIn(store)).toEqual([false, false, false])
     }
   )
+
+  it('turns Chat UI off for a profile whose new tabs opened in the terminal, once', async () => {
+    writeDataFile({ settings: preUpgradeSettings(true, false) })
+    const store = createStore()
+    expect(store.getSettings().experimentalNativeChat).toBe(false)
+    store.flush()
+    expect(readDataFile()).toHaveProperty('settings.experimentalNativeChat', false)
+    // Turning it back on later sticks: the saved Default view is gone after the first save.
+    store.updateSettings({ experimentalNativeChat: true })
+    store.flush()
+    expect((await reopen()).getSettings().experimentalNativeChat).toBe(true)
+  })
+
+  it('keeps Chat UI on for a profile whose new tabs opened in chat', () => {
+    writeDataFile({ settings: preUpgradeSettings(true) })
+    expect(createStore().getSettings().experimentalNativeChat).toBe(true)
+  })
 
   it('keeps an original member in the audience after turning Chat UI off', async () => {
     writeDataFile({ settings: preUpgradeSettings(true) })

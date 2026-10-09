@@ -305,7 +305,7 @@ describe('profile state Store authority factory', () => {
 
   it.each([
     [
-      { experimentalNativeChat: true, openAgentTabsInChatByDefault: false },
+      { experimentalNativeChat: true, openAgentTabsInChatByDefault: true },
       false,
       true,
       'chat-ui-on'
