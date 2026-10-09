@@ -19550,7 +19550,8 @@
       "signIn": "Sign in",
       "moreSignInOptions": "More sign-in options",
       "copySignInLink": "Copy sign-in link instead",
-      "signInLinkCopied": "Sign-in link copied. Open it in a private window to sign in with a different account."
+      "signInLinkCopied": "Sign-in link copied. Open it in a private window to sign in with a different account.",
+      "signInLinkCopyFailed": "Could not copy the link."
     },
     "managedData": {
       "description": "Add accounts by running this command in a terminal on the Orca host. Selection applies to new explicit agent launches on that host; direct SSH relay and Windows-hosted WSL launches use their own credentials.",

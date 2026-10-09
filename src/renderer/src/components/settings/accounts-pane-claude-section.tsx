@@ -16,7 +16,7 @@ import type { AccountsPaneSectionModel } from './accounts-pane-types'
 import {
   canOfferClaudeSignInLink,
   ClaudeSignInLinkMenu,
-  signInWithCopiedClaudeLink
+  withCopiedClaudeLink
 } from './claude-sign-in-link-menu'
 
 export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): React.JSX.Element {
@@ -56,15 +56,16 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
     wslCapabilitiesLoading ||
     accountRuntimeUnavailable
   const addClaudeAccount = (copyLink: boolean): Promise<void> =>
-    runClaudeAccountAction('adding', () => {
-      const add = (): ReturnType<typeof window.api.claudeAccounts.add> =>
+    runClaudeAccountAction('adding', () =>
+      withCopiedClaudeLink(
+        copyLink,
         window.api.claudeAccounts.add({
           runtime: accountRuntime.runtime,
           wslDistro: accountRuntime.wslDistro,
-          ...(copyLink ? { copyLink } : {})
+          copyLink
         })
-      return copyLink ? signInWithCopiedClaudeLink(add) : add()
-    })
+      )
+    )
   return (
     <section key="claude-accounts" id="accounts-claude" className="space-y-4 scroll-mt-6">
       <div className="space-y-1">
@@ -246,16 +247,11 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
               const reauthenticate = (copyLink: boolean): Promise<void> =>
                 runClaudeAccountAction(
                   `reauth:${account.id}`,
-                  () => {
-                    const signIn = (): ReturnType<
-                      typeof window.api.claudeAccounts.reauthenticate
-                    > =>
-                      window.api.claudeAccounts.reauthenticate({
-                        accountId: account.id,
-                        ...(copyLink ? { copyLink } : {})
-                      })
-                    return copyLink ? signInWithCopiedClaudeLink(signIn) : signIn()
-                  },
+                  () =>
+                    withCopiedClaudeLink(
+                      copyLink,
+                      window.api.claudeAccounts.reauthenticate({ accountId: account.id, copyLink })
+                    ),
                   accountRuntimeView
                 )
 

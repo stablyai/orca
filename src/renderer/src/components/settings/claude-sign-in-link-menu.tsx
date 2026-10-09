@@ -16,11 +16,14 @@ export function canOfferClaudeSignInLink(runtime: 'host' | 'wsl' | undefined): b
   return canCopyClaudeSignInLink(navigator.userAgent.includes('Windows'), runtime)
 }
 
-/** Starts a sign-in that opens no browser, and copies its link once Claude hands it over. */
-export function signInWithCopiedClaudeLink(
-  start: () => Promise<ClaudeRateLimitAccountsState>
+/** With `copyLink`, copies the just-started sign-in's link once Claude hands it over. */
+export function withCopiedClaudeLink(
+  copyLink: boolean,
+  signIn: Promise<ClaudeRateLimitAccountsState>
 ): Promise<ClaudeRateLimitAccountsState> {
-  const signIn = start()
+  if (!copyLink) {
+    return signIn
+  }
   void window.api.claudeAccounts
     .waitForSignInLink()
     .then(async (link) => {
@@ -37,12 +40,7 @@ export function signInWithCopiedClaudeLink(
     })
     .catch((error: unknown) => {
       console.warn('Could not copy the Claude sign-in link:', error)
-      toast.error(
-        translate(
-          'auto.components.settings.AccountsPane.codexLoginLinkCopyFailed',
-          'Could not copy the link.'
-        )
-      )
+      toast.error(translate('accounts.claude.signInLinkCopyFailed', 'Could not copy the link.'))
     })
   return signIn
 }
