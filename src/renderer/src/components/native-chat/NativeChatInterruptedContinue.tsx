@@ -117,27 +117,29 @@ export function NativeChatInterruptedContinue({
     'Continue, and the agent first checks whether its last step finished.'
   )
   return (
-    <div className="mx-auto flex w-full max-w-4xl items-center justify-end px-4 py-1">
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="xs"
-            aria-describedby={explanationId}
-            onClick={continuation.continueNow}
-          >
-            <Play className="size-3" />
-            {translate('components.native-chat.interruptedContinue.continue', 'Continue')}
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="top" sideOffset={4}>
+    <div className="px-3 py-1 sm:px-4">
+      <div className="mx-auto flex w-full max-w-(--chat-content-max-width) items-center justify-end">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              aria-describedby={explanationId}
+              onClick={continuation.continueNow}
+            >
+              <Play className="size-3" />
+              {translate('components.native-chat.interruptedContinue.continue', 'Continue')}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top" sideOffset={4}>
+            {explanation}
+          </TooltipContent>
+        </Tooltip>
+        <span id={explanationId} className="sr-only">
           {explanation}
-        </TooltipContent>
-      </Tooltip>
-      <span id={explanationId} className="sr-only">
-        {explanation}
-      </span>
+        </span>
+      </div>
     </div>
   )
 }

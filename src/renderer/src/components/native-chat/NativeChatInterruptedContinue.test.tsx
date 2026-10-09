@@ -136,6 +136,15 @@ describe('Continue on a reply an Orca stop cut off', () => {
     )
   })
 
+  it('sits in the chat column, so it lines up with the transcript and the message box', () => {
+    render(<Harness />)
+    expect(continueButton()!.parentElement).toHaveClass(
+      'mx-auto',
+      'w-full',
+      'max-w-(--chat-content-max-width)'
+    )
+  })
+
   it('is not offered by a host without the operation; the user continues by sending', () => {
     mocks.capability = 'unsupported'
     render(<Harness />)
