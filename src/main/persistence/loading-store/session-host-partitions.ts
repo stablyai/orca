@@ -229,15 +229,6 @@ export function setHostWorkspaceSession(
   ])
 }
 
-export function installSessionHostPartitionOperationsContext(
-  target: SessionHostPartitionOperations,
-  source: SessionHostPartitionOperations
-): void {
-  Object.defineProperty(target, sessionHostPartitionOperationsContext, {
-    value: source[sessionHostPartitionOperationsContext]
-  })
-}
-
 /**
  * The renderer splits a full snapshot per host and leaves out maps a host has no rows in, so a
  * host partition written as sent lacks maps the type requires and every reader iterates.

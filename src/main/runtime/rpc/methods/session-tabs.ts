@@ -5,7 +5,7 @@ import {
   CreateTerminalTab,
   SessionTabsUnsubscribe,
   WorktreeTabSelector
-} from './session-tabs-schemas'
+} from '../../../../shared/rpc-contract/session-tabs-schemas-params'
 import { SESSION_TAB_CLOSE_METHODS } from './session-tab-close-methods'
 import {
   listSessionTabsInventory,

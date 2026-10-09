@@ -12,7 +12,7 @@ import { CodexBackgroundCommandTracker } from './codex-background-command-tracke
 import { CodexChildWorkEvidence } from './codex-child-work-evidence'
 import type { CodexAbandonedCommand } from './codex-prompt-registry'
 import type { CodexStructuredSessionAdapterDeps } from './codex-structured-session-state'
-import { boundSubagentField } from './codex-subagent-group-body'
+import { boundSubagentField } from '../native-chat/agent-session-journal/journal-subagent-group-body'
 
 /** Where a session's child-work evidence goes, and the host clock that stamps it. */
 export type CodexChildWorkSink = {
@@ -30,12 +30,17 @@ export function codexChildWorkSink(
   }
 }
 
+/** What a probe learned: `unknown` when the app-server gave no answer, so the next chance asks again. */
+export type CodexTerminalStopSupport = 'supported' | 'unsupported' | 'unknown'
+
 /** Projects the same child execution facts the durable roster consumes. */
 export class CodexBackgroundTaskTracker {
   private publishedFingerprint = '[]'
   private publishedState: AgentSessionBackgroundTaskState | null = null
   private readonly commands: CodexBackgroundCommandTracker
   private readonly childWork: CodexChildWorkEvidence
+  /** Whether this app-server can terminate a background command, settled by its first answer. */
+  private terminalStops: CodexTerminalStopSupport | 'probing' = 'unknown'
 
   constructor(
     private readonly primaryThreadId: string,
@@ -43,9 +48,43 @@ export class CodexBackgroundTaskTracker {
     private readonly childWorkSink?: CodexChildWorkSink
   ) {
     this.commands = new CodexBackgroundCommandTracker(primaryThreadId)
-    this.childWork = new CodexChildWorkEvidence(primaryThreadId, executions, (threadId) =>
-      this.commands.threadCommands(threadId)
+    this.childWork = new CodexChildWorkEvidence(
+      primaryThreadId,
+      executions,
+      (threadId) => this.commands.threadCommands(threadId),
+      () => this.stopsTerminals
     )
+  }
+
+  get stopsTerminals(): boolean {
+    return this.terminalStops === 'supported'
+  }
+
+  /** True when a running command has a process a stop could name and the app-server has not
+   *  answered yet: the caller probes then, and settles the answer here. */
+  beginTerminalStopProbe(): boolean {
+    if (this.terminalStops !== 'unknown' || !this.commands.holdsProcess) {
+      return false
+    }
+    this.terminalStops = 'probing'
+    return true
+  }
+
+  /** On yes, restates every running command so its record says it can be stopped; callers publish
+   *  the child work after. */
+  settleTerminalStopProbe(support: CodexTerminalStopSupport): void {
+    if (this.terminalStops !== 'probing') {
+      return
+    }
+    this.terminalStops = support
+    if (support === 'supported') {
+      this.childWork.restateCommands(this.commands.liveCommands())
+    }
+  }
+
+  /** The processes behind the named tasks that a stop reaches. */
+  backgroundProcesses(taskIds: readonly string[]): { threadId: string; processId: string }[] {
+    return this.stopsTerminals ? this.commands.backgroundProcesses(taskIds) : []
   }
 
   get state(): AgentSessionBackgroundTaskState | null {

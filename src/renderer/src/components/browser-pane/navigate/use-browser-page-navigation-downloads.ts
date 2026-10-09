@@ -10,11 +10,15 @@ import {
   type SetStateAction
 } from 'react'
 import { translate } from '@/i18n/i18n'
-import { getWorkspaceFileBrowserOpenTarget } from '@/lib/file-preview'
+import {
+  getWorkspaceFileBrowserOpenTarget,
+  REMOTE_FILE_BROWSER_UNSUPPORTED_MESSAGE
+} from '@/lib/file-preview'
 import { routeWorkspaceDocAddressSubmission } from './workspace-doc-address-submission'
 import {
   getWorkspaceFileDragRejectionMessage,
   readWorkspaceFileDragPaths,
+  readWorkspaceFileDragSource,
   WORKSPACE_FILE_PATH_MIME
 } from '@/lib/workspace-file-drag'
 import type { BrowserLoadError } from '../../../../../shared/browser-workspace-types'
@@ -170,6 +174,13 @@ export function useBrowserPageNavigationDownloads({
       }
       const filePath = dragPaths.paths[0]
       if (!filePath) {
+        return
+      }
+
+      // A file URL reads this machine, regardless of which workspace owns the browser.
+      const source = readWorkspaceFileDragSource(event.dataTransfer)
+      if (source?.executionHostId !== 'local') {
+        setResourceNotice(REMOTE_FILE_BROWSER_UNSUPPORTED_MESSAGE)
         return
       }
 

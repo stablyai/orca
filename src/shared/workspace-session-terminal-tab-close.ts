@@ -33,7 +33,7 @@ function pickNextActiveTab(
   )
 }
 
-function pruneGroupLayout(
+export function pruneGroupLayout(
   node: TabGroupLayoutNode | undefined,
   validGroupIds: ReadonlySet<string>
 ): TabGroupLayoutNode | undefined {

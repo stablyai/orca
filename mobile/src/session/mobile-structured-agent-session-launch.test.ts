@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { createMobileStructuredAgentSession } from './mobile-structured-agent-session-launch'
+import { mobileCreatedStructuredSession } from './mobile-created-structured-sessions'
 
 function clientReturning(
   ...responses: unknown[]
@@ -115,6 +116,10 @@ describe('mobile structured agent-session launch', () => {
     expect(params.agent).toBe('claude')
     expect(params.envelope.sessionId).toMatch(/^claude_[A-Za-z0-9_]{8,128}$/)
     expect(params.envelope.payloadFingerprint).toMatch(/^[0-9a-f]{64}$/)
+    // Its picker treats it as a new chat, as the desktop does one its own view launched.
+    expect(mobileCreatedStructuredSession(params.envelope.sessionId)).toEqual({
+      worktree: 'id:workspace-1'
+    })
   })
 
   it('names the refusing agent in the failure copy rather than always saying Codex', async () => {

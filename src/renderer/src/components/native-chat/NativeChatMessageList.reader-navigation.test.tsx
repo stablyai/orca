@@ -189,6 +189,68 @@ describe('reader navigation', () => {
     expect(offersJumpToLatest()).toBe(true)
   })
 
+  it('stops following when find steps to a match above the end', () => {
+    const handle = createRef<NativeChatMessageListHandle>()
+    const view = (messages: NativeChatMessage[]) => (
+      <NativeChatMessageList
+        ref={handle}
+        session={session(messages)}
+        isWorking
+        expandSignal={false}
+      />
+    )
+    const { container, rerender } = render(view(transcript))
+    paint(container)
+    const scroller = scrollRoot(container)
+    expect(distanceFromBottom(container)).toBe(0)
+    const match = document.createRange()
+    match.selectNodeContents(scroller)
+    const viewTop = scroller.getBoundingClientRect().top
+    Object.defineProperty(match, 'getBoundingClientRect', {
+      value: () => DOMRect.fromRect({ y: viewTop - 2000, height: 20 })
+    })
+
+    act(() => handle.current?.revealFindMatch(match, null))
+    fireEvent.scroll(scroller)
+    const foundAt = scroller.scrollTop
+    expect(distanceFromBottom(container)).toBeGreaterThan(1000)
+    rerender(view([...transcript, marker(TRANSCRIPT_LENGTH)]))
+    paint(container)
+
+    expect(scroller.scrollTop).toBe(foundAt)
+    expect(offersJumpToLatest()).toBe(true)
+  })
+
+  it('keeps following when a find step cannot move the transcript', () => {
+    const handle = createRef<NativeChatMessageListHandle>()
+    const view = (messages: NativeChatMessage[]) => (
+      <NativeChatMessageList
+        ref={handle}
+        session={session(messages)}
+        isWorking
+        expandSignal={false}
+      />
+    )
+    const { container, rerender } = render(view(transcript))
+    paint(container)
+    const scroller = scrollRoot(container)
+    expect(distanceFromBottom(container)).toBe(0)
+    const match = document.createRange()
+    match.selectNodeContents(scroller)
+    const viewBottom = scroller.getBoundingClientRect().bottom
+    // Below the end: the clamped scroll is a no-op, so no scroll event would re-arm following.
+    Object.defineProperty(match, 'getBoundingClientRect', {
+      value: () => DOMRect.fromRect({ y: viewBottom + 2000, height: 20 })
+    })
+
+    act(() => handle.current?.revealFindMatch(match, null))
+    rerender(view([...transcript, marker(TRANSCRIPT_LENGTH)]))
+    paint(container)
+
+    expect(distanceFromBottom(container)).toBe(0)
+    expect(offersJumpToLatest()).toBe(false)
+  })
+
   it('leaves a reader who scrolled up in place when a message arrives from another device', () => {
     const { container, rerender } = render(liveList(transcript))
     paint(container)

@@ -27,7 +27,7 @@ vi.mock('./ssh-relay-versioned-install', async (importOriginal) => ({
 import { execCommand } from './ssh-relay-deploy-helpers'
 import { writeAtomicOrcadRemoteRecord } from './orcad-remote-record-file'
 import { gcOldRemoteInstallVersions } from './ssh-relay-versioned-install'
-import { decommissionRemoteOrcad } from './orcad-remote-stop'
+import { decommissionRemoteOrcad } from './orcad-remote-decommission'
 import { gcOldOrcadVersions } from './orcad-remote-gc'
 import { emptyOrcadActivationRecord, withActivatedVersion } from './orcad-activation-record'
 import { getRemoteHostPlatform } from './ssh-remote-platform'

@@ -36,7 +36,7 @@ export type JournalRowWriterDeps = {
   readOnly: () => boolean
   highestFence: () => number
   nextSequence: () => number
-  commit: (row: JournalRow) => void
+  commit: (rows: readonly JournalRow[]) => void
   /** Standing hook run for EVERY appended row — the queued-draft returned
    *  transition rides here so no rejection path can bypass it. Bookkeeping: it
    *  runs in its own savepoint, so its failure is reported and never vetoes the row. */
@@ -75,7 +75,7 @@ export class JournalRowWriter {
       // fail. Rejecting here instead would leave the next append reusing a
       // sequence the table already holds. The ledger first: it cannot throw, the fold can.
       receipt?.committed()
-      this.deps.commit(row)
+      this.deps.commit([row])
       return row
     })
   }
@@ -117,9 +117,7 @@ export class JournalRowWriter {
       throw error
     }
     receipt?.committed()
-    for (const row of rows) {
-      this.deps.commit(row)
-    }
+    this.deps.commit(rows)
     return rows
   }
 

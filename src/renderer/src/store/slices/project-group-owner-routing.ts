@@ -1,10 +1,9 @@
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import {
+  getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
-  normalizeExecutionHostId,
   parseExecutionHostId,
-  toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { findIndexedProjectGroupOwner } from '@/lib/worktree-runtime-owner-index'
@@ -21,12 +20,7 @@ type ProjectGroupOwnerRoutingState = {
 // Why: persisted rows predate host stamping and may carry padded/unparseable ids; normalize so
 // routing and catalog identity agree on the same owner host.
 export function getProjectGroupHostId(group: ProjectGroupHostParts): ExecutionHostId {
-  const executionHostId = normalizeExecutionHostId(group.executionHostId)
-  if (executionHostId) {
-    return executionHostId
-  }
-  const connectionId = group.connectionId?.trim()
-  return connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
+  return getRepoExecutionHostId(group)
 }
 
 export function catalogOwnsHost(catalogHostId: string, rowHostId: string): boolean {

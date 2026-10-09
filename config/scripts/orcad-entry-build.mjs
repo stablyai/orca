@@ -61,6 +61,21 @@ export function buildOrcadEntry(outfile) {
   })
 }
 
+export function buildOrcadCli(outfile) {
+  return build({
+    entryPoints: [join(root, 'src/cli/index.ts')],
+    bundle: true,
+    platform: 'node',
+    target: 'node18',
+    format: 'cjs',
+    outfile,
+    metafile: true,
+    minify: true,
+    sourcemap: false,
+    logLevel: 'error'
+  })
+}
+
 export function buildOrcadLauncher(outfile) {
   const serverSha256 = createHash('sha256')
     .update(readFileSync(join(dirname(outfile), ORCAD_SERVER_ENTRY_FILENAME)))

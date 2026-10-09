@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-type TabsByWorktree = Record<string, { contentType: string; entityId: string }[]>
+type TabsByWorktree = Record<
+  string,
+  { contentType: string; entityId: string; worktreeId?: string; executionHostId?: string }[]
+>
 
 const mocks = vi.hoisted(() => ({
   callRuntimeRpc: vi.fn(),
@@ -12,7 +15,8 @@ const mocks = vi.hoisted(() => ({
   hostCannotOpen: vi.fn(),
   unavailable: vi.fn(),
   toastError: vi.fn(),
-  tabs: new Map<string, TabsByWorktree>([['current', {}]])
+  tabs: new Map<string, TabsByWorktree>([['current', {}]]),
+  missingOwner: false
 }))
 
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
@@ -40,8 +44,10 @@ vi.mock('./activate-ai-vault-structured-session', () => ({
     unavailable: mocks.unavailable
   }
 }))
-vi.mock('./worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: () => 'env-host'
+vi.mock('./worktree-runtime-owner', async (original) => ({
+  ...(await original<Record<string, unknown>>()),
+  getKnownExecutionHostIdForWorktree: () => (mocks.missingOwner ? null : 'runtime:env-host'),
+  getExecutionHostIdForWorktree: () => 'runtime:env-host'
 }))
 vi.mock('@/store', () => ({
   useAppStore: { getState: () => ({ unifiedTabsByWorktree: mocks.tabs.get('current') }) }
@@ -102,6 +108,7 @@ const OLDER_HOST = AGENT_SESSION_WRITE_NOTICE_COPY.unsupported
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mocks.missingOwner = false
   mocks.tabs.set('current', {})
 })
 
@@ -167,9 +174,13 @@ describe("opening a message's sender", () => {
       location: { kind: 'chat', sessionId: 'live-session', worktreeId: 'wt-sender' }
     })
     await open(chat)
-    expect(mocks.activateChat).toHaveBeenCalledWith({
-      structuredSession: { workspaceId: 'wt-sender', sessionId: 'live-session' }
-    })
+    expect(mocks.activateChat).toHaveBeenCalledWith(
+      {
+        structuredSession: { workspaceId: 'wt-sender', sessionId: 'live-session' }
+      },
+      undefined,
+      HOST
+    )
   })
 
   it('names what the host lost, not how the sender was addressed', async () => {
@@ -204,9 +215,13 @@ describe("opening a message's sender", () => {
     mocks.callRuntimeRpc.mockRejectedValue(failure('method_not_found'))
     mocks.tabs.set('current', { 'wt-sender': [{ contentType: 'agent-session', entityId: ROOT }] })
     await open(chat)
-    expect(mocks.activateChat).toHaveBeenCalledWith({
-      structuredSession: { workspaceId: 'wt-sender', sessionId: ROOT }
-    })
+    expect(mocks.activateChat).toHaveBeenCalledWith(
+      {
+        structuredSession: { workspaceId: 'wt-sender', sessionId: ROOT }
+      },
+      undefined,
+      HOST
+    )
     mocks.focusRenderer.mockReturnValue(true)
     await open(terminal)
     expect(mocks.focusRenderer).toHaveBeenCalledWith('term_a', 'env-host')
@@ -243,5 +258,67 @@ describe("opening a message's sender", () => {
     answer({ location: null, lost: 'chat' })
     await Promise.all([first, second])
     expect(mocks.callRuntimeRpc).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps simultaneous opens of the same address on two known hosts separate', async () => {
+    let answer!: (value: unknown) => void
+    mocks.callRuntimeRpc.mockReturnValue(
+      new Promise((resolve) => {
+        answer = resolve
+      })
+    )
+    const source = sourceFor(chat)
+    const local = openAgentMessageSender(source, source.senders[0]!, 'wt-chat', { kind: 'local' })
+    const remote = openAgentMessageSender(source, source.senders[0]!, 'wt-chat', {
+      kind: 'environment',
+      environmentId: 'remote-2'
+    })
+    expect(mocks.callRuntimeRpc).toHaveBeenCalledTimes(2)
+    expect(mocks.callRuntimeRpc.mock.calls.map(([host]) => host)).toEqual([
+      { kind: 'local' },
+      { kind: 'environment', environmentId: 'remote-2' }
+    ])
+    answer({ location: null, lost: 'chat' })
+    await Promise.all([local, remote])
+  })
+
+  it('qualifies older-host root tabs by the known recipient host even when IDs repeat', async () => {
+    mocks.callRuntimeRpc.mockRejectedValue(failure('method_not_found'))
+    mocks.tabs.set('current', {
+      'wrong-workspace': [
+        {
+          contentType: 'agent-session',
+          entityId: ROOT,
+          worktreeId: 'wrong-workspace',
+          executionHostId: 'local'
+        }
+      ],
+      'right-workspace': [
+        {
+          contentType: 'agent-session',
+          entityId: ROOT,
+          worktreeId: 'right-workspace',
+          executionHostId: 'runtime:remote-2'
+        }
+      ]
+    })
+    const source = sourceFor(chat)
+    const target = { kind: 'environment', environmentId: 'remote-2' } as const
+    await openAgentMessageSender(source, source.senders[0]!, 'wt-chat', target)
+    expect(mocks.activateChat).toHaveBeenCalledWith(
+      {
+        structuredSession: { workspaceId: 'right-workspace', sessionId: ROOT }
+      },
+      undefined,
+      target
+    )
+  })
+
+  it('does not dispatch locally when legacy context has no known owner', async () => {
+    mocks.missingOwner = true
+    await open(chat)
+    expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
+    expect(mocks.activateChat).not.toHaveBeenCalled()
+    expect(mocks.toastError).toHaveBeenCalledWith(UNREACHABLE)
   })
 })

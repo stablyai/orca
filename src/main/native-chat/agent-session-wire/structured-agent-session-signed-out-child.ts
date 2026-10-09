@@ -1,6 +1,7 @@
 // A child that reported its agent is not signed in is replaced before the next send. Some agents
 // read their saved login only when they start, so a sign-in made since reaches a new child only.
 
+import type { AgentSessionUnavailable } from '../../../shared/agent-session-availability'
 import { readWholeAgentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { isRootAgentJournalItem } from '../../../shared/agent-session-journal-producer'
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
@@ -26,12 +27,19 @@ type SignedOutReading = Pick<StructuredAgentSessionHostSession, 'child'> & {
 const signedOut = (failure: unknown): boolean =>
   readWholeAgentSessionFailureFact(failure)?.kind === 'notSignedIn'
 
-/** The running child itself said it is not signed in: a send it rejected, or a row it wrote. Each
- *  child holds its own fence, so matching it scopes both to this child; a new one has nothing. */
-export function structuredAgentSessionChildReportedSignedOut(session: SignedOutReading): boolean {
+/** The running child itself said it is not signed in: its start, a send it rejected, or a row it
+ *  wrote. Each child holds its own fence, so matching it scopes both to this child; a new one has
+ *  nothing. `startUnavailable` is the adapter's read of that child's start. */
+export function structuredAgentSessionChildReportedSignedOut(
+  session: SignedOutReading,
+  startUnavailable?: AgentSessionUnavailable
+): boolean {
   const { child, journal } = session
   if (!child || child.phase === 'starting' || child.close) {
     return false
+  }
+  if (startUnavailable?.reason === 'notSignedIn') {
+    return true
   }
   if (
     journal
@@ -78,13 +86,14 @@ export async function retireSignedOutStructuredAgentSessionChild(
   session: SignedOutReading | undefined,
   deps: {
     work: StructuredAgentSessionChildWorkReads
+    startUnavailable?: () => AgentSessionUnavailable | undefined
     stopAgent: (sessionId: string) => Promise<void>
     logger: StructuredAgentSessionLogger
   }
 ): Promise<void> {
   if (
     !session ||
-    !structuredAgentSessionChildReportedSignedOut(session) ||
+    !structuredAgentSessionChildReportedSignedOut(session, deps.startUnavailable?.()) ||
     structuredAgentSessionChildHasOpenWork(session.journal, deps.work) ||
     owesWakeUp(session.journal, deps.work.childWork())
   ) {

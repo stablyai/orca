@@ -1,6 +1,22 @@
 import { useLayoutEffect, type RefObject } from 'react'
 import { NATIVE_CHAT_ROOT_SELECTOR } from '@/lib/native-chat-paste-request'
 
+/** A prompt card marks itself with this while it wants focus (`shouldFocus`). */
+const PROMPT_CARD_WANTS_FOCUS_SELECTOR = '[data-native-chat-prompt-card-focus]'
+
+/** Hands focus to the pane's shown prompt card that wants it, as the card would have taken it
+ *  had focus been free; false when there is none or `keep` is already a control inside it. */
+export function focusNativeChatPromptCard(root: Element, keep: Element | null): boolean {
+  const card = Array.from(
+    root.querySelectorAll<HTMLElement>(PROMPT_CARD_WANTS_FOCUS_SELECTOR)
+  ).find((candidate) => !candidate.closest('[hidden], [inert]'))
+  if (!card || card.contains(keep)) {
+    return false
+  }
+  card.focus()
+  return true
+}
+
 /** Whether `element` is nothing in particular (the body) or inside the chat pane holding `card`. */
 export function isInNativeChatPaneOf(card: HTMLElement | null, element: Element | null): boolean {
   return (
@@ -24,7 +40,13 @@ export function useNativeChatPromptCardFocus(
   useLayoutEffect(() => {
     const card = cardRef.current
     const active = document.activeElement
-    if (shouldFocus && isInNativeChatPaneOf(card, active) && !card?.contains(active)) {
+    // The pane's find bar is a surface of its own: a card arriving mid-query does not take its keys.
+    if (
+      shouldFocus &&
+      isInNativeChatPaneOf(card, active) &&
+      !card?.contains(active) &&
+      !active?.closest('[data-native-chat-find-bar]')
+    ) {
       card?.focus()
     }
   }, [cardRef, shouldFocus, step])

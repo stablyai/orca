@@ -200,12 +200,7 @@ export function AgentSessionContinuationDialog({
               agents={agents}
               value={selectedAgent}
               onValueChange={setSelectedAgent}
-              allowBlankTerminal={false}
               allowNarrowTrigger
-              emptyLabel={translate(
-                'components.agentSessionContinuation.selectAgent',
-                'Select an Agent'
-              )}
               triggerClassName="min-w-0 w-full"
             />
             {detecting ? (

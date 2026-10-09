@@ -43,4 +43,19 @@ describe('getExternalEditorOpenCapability', () => {
       )
     ).toEqual({ allowed: false, reason: 'remote-runtime' })
   })
+  it.each(['zed', 'code', 'code --reuse-window'])(
+    'rejects a managed owner while the desktop is focused: %s',
+    (command) => {
+      expect(
+        getExternalEditorOpenCapability(
+          { activeRuntimeEnvironmentId: null },
+          {
+            command,
+            connectionId: null,
+            runtimeEnvironmentId: 'managed-owner'
+          }
+        )
+      ).toEqual({ allowed: false, reason: 'remote-runtime' })
+    }
+  )
 })

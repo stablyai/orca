@@ -4,6 +4,7 @@ import type { WorkspaceAttachment } from './worktree/types'
 import { getWorkspaceAttachments } from './workspace-attachments'
 import {
   folderWorkspaceRepoId,
+  getFolderWorkspaceHostIdentity,
   folderWorkspaceToWorktree,
   projectGroupIdFromRepoId
 } from './folder-workspace-worktree'
@@ -30,6 +31,22 @@ function makeFolderWorkspace(overrides: Partial<FolderWorkspace> = {}): FolderWo
 }
 
 describe('folderWorkspaceToWorktree', () => {
+  it.each([
+    [{}, 'local|folder:folder-workspace-1'],
+    [{ connectionId: 'ssh host' }, 'ssh:ssh%20host|folder:folder-workspace-1'],
+    [
+      { executionHostId: 'runtime:host' as const, connectionId: 'ignored' },
+      'runtime:host|folder:folder-workspace-1'
+    ],
+    [
+      { executionHostId: 'local' as const, connectionId: 'ignored' },
+      'local|folder:folder-workspace-1'
+    ]
+  ])('keeps folder row identity on its explicit or legacy host %j', (fields, identity) => {
+    const workspace = makeFolderWorkspace(fields)
+    expect(getFolderWorkspaceHostIdentity(workspace)).toBe(identity)
+    expect(folderWorkspaceToWorktree(workspace).hostId).toBe(identity.split('|')[0])
+  })
   it('preserves multiple attachments and projects a bare Linear task without enabling review checks', () => {
     const linkedItems: WorkspaceAttachment[] = [
       { provider: 'github', type: 'pr', number: 7 },

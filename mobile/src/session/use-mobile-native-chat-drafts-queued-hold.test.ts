@@ -6,6 +6,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
+import { resetMobileNativeChatDraftStoreForTests } from './mobile-native-chat-draft-store'
 
 type QueuedCard = { messageId: string; text: string }
 
@@ -19,6 +20,7 @@ describe('useMobileNativeChatDrafts unconfirmed hold with queued cards', () => {
 
   afterEach(() => {
     act(() => renderer?.unmount())
+    resetMobileNativeChatDraftStoreForTests()
     renderer = null
     state = null
     vi.useRealTimers()

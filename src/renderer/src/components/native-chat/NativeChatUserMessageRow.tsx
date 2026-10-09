@@ -38,7 +38,11 @@ function UserMessageMeta({
     return null
   }
   return (
-    <div className={cn('flex select-none items-center gap-1', !sending && USER_META_REVEAL)}>
+    <div
+      // Hover-only once sent, so find skips it; "Sending…" stays on screen and stays findable.
+      data-native-chat-find-skip={sending ? undefined : true}
+      className={cn('flex select-none items-center gap-1', !sending && USER_META_REVEAL)}
+    >
       {markdown ? (
         <NativeChatCopyButton text={markdown} className={sending ? USER_META_REVEAL : undefined} />
       ) : null}

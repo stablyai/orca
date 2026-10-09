@@ -1,4 +1,7 @@
-import type { AgentSessionAccountKind } from '../../../shared/agent-session-availability'
+import type {
+  AgentSessionAccountKind,
+  AgentSessionUnavailable
+} from '../../../shared/agent-session-availability'
 import type {
   AgentSessionRewindReason,
   AgentSessionRewindSupport
@@ -49,6 +52,14 @@ import type { AgentSessionPromptResponse } from '../../../shared/agent-session-q
 import type { ProviderHistoryWindow } from '../agent-session-journal/journal-submission-reconciler'
 import type { StructuredAgentSessionStartupAttempt } from './structured-agent-session-startup-attempt-contract'
 import type { AgentSessionCreatePhaseRecorder } from '../../observability/agent-session-instrumentation'
+import type { AgentModelCatalogLiveListing } from '../agent-model-catalog/agent-model-catalog-entry'
+
+/** A live options read, plus what the child listed for its account's saved catalog. The host
+ *  saves that listing and strips it before answering; an adapter whose listing reaches the
+ *  catalog another way omits it. */
+export type StructuredAgentSessionLiveOptions = AgentSessionOptionsResult & {
+  catalogListing?: AgentModelCatalogLiveListing
+}
 
 export class AgentSessionAcquisitionRefusal extends Error {
   readonly code = 'agent_session_operation_invalid'
@@ -138,6 +149,8 @@ export type AgentSessionPreSpawnReason = Extract<
   | 'managedAccountUnsupported'
   | 'launchFolderMissing'
   | 'historyInOtherAccount'
+  | 'claudeAccountFolderMissing'
+  | 'claudeAccountSetupFailed'
   | 'agentCommandNotRunnable'
 >
 
@@ -229,6 +242,8 @@ export type StructuredAgentSessionStartedEvent = {
   restoreSkippedOptions: readonly string[]
   /** Values the child showed it cannot run: a report naming the same value is not persisted. */
   retiredOptions?: Readonly<Record<string, string>>
+  /** What the child listed at startup, saved as its account's catalog even if no view reads it. */
+  catalogListing?: AgentModelCatalogLiveListing
   /** The attempt's `optionRevision()` as the read behind this report began: a pick the host took
    *  since makes it out of date. An earlier report never does, whenever the host took it. */
   optionRevision: number
@@ -366,12 +381,14 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
      *  start a new goal rather than rewrite that one's objective in place. */
     replacesGoal: boolean
   }): Promise<{ ok: true } | { ok: false; rejected: string }>
-  /** Stops exactly the tasks `taskIds` names, which the host resolves from its child records. */
+  /** Stops exactly the tasks `taskIds` names, which the host resolves from its child records.
+   *  `stillRunning` is the provider's own answer that one survived its stop; a throw leaves the
+   *  effect unknown. */
   stopBackgroundTasks?(input: {
     sessionId: string
     fence: number
     taskIds: readonly string[]
-  }): Promise<{ cancelled: boolean }>
+  }): Promise<{ cancelled: boolean; stillRunning?: true }>
   /** The stops this provider honours for a live session's background work; undefined when the
    *  adapter holds no live session for it. */
   backgroundTaskStops?(sessionId: string): AgentSessionBackgroundTaskStops | undefined
@@ -381,6 +398,9 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   /** The adapter's own child for this exact acquisition has a pid and its root exit has not been
    *  seen: first-hand proof of life for lease renewal. Absent or false falls back to a PID probe. */
   holdsLiveProviderProcess?(sessionId: string, acquisitionGeneration: string): boolean
+  /** Why the session's running child can take no turn, as its own start found; undefined when
+   *  unknown or no child runs. Lives and dies with that child. */
+  startUnavailable?(sessionId: string): AgentSessionUnavailable | undefined
   /** The `/` surface the running provider reports for itself. Undefined when the
    *  provider never reports one, which is what keeps the client on its catalog. */
   readCommands?(sessionId: string): AgentSessionSlashCommand[] | undefined
@@ -410,7 +430,10 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     sessionId: string
     fence: number
   }): Promise<() => AgentSessionOptionsResult> | undefined
-  readOptions?(input: { sessionId: string; fence: number }): Promise<AgentSessionOptionsResult>
+  readOptions?(input: {
+    sessionId: string
+    fence: number
+  }): Promise<StructuredAgentSessionLiveOptions>
   /** Effective options already known after acquisition, without discovering picker choices. */
   readAcquisitionOptions?(input: {
     sessionId: string

@@ -7,7 +7,7 @@
 import { join } from 'node:path'
 import { existsSync, readFileSync } from 'node:fs'
 import type { SshConnection } from './ssh-connection'
-import { execCommand } from './ssh-relay-deploy-helpers'
+import { execHostCommand } from './ssh-relay-host-exec'
 import { isUnconfirmedSshCommandTermination } from './ssh-relay-exec-command'
 import { RELAY_INSTALL_LOCK_NAME } from './ssh-relay-install-lock'
 import { remoteInstallDirSegments } from './ssh-relay-install-namespace'
@@ -31,18 +31,6 @@ const DEFAULT_REMOTE_HOST = getRemoteHostPlatform('linux-x64')
 type RelayInstalledProbeOptions = {
   rethrowSessionLimitErrors?: boolean
   signal?: AbortSignal
-}
-
-function execHostCommand(
-  conn: SshConnection,
-  host: RemoteHostPlatform,
-  command: string,
-  options?: { signal?: AbortSignal }
-): Promise<string> {
-  return execCommand(conn, command, {
-    wrapCommand: host.commandDialect !== 'powershell',
-    signal: options?.signal
-  })
 }
 
 /**

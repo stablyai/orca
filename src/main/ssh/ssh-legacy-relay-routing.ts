@@ -14,7 +14,7 @@ const routersByTarget = new Map<string, SshLegacyRelayRouter>()
  */
 export async function listPreviousRelayPtyIds(targetId: string): Promise<string[] | null> {
   const census = await previousRelayCensus(targetId)
-  if (!census.complete) {
+  if (census.status !== 'complete') {
     return null
   }
   if (census.endpoints.length === 0) {
@@ -42,7 +42,7 @@ export function createSshLegacyRelayRouter(args: {
     },
     unreachableMayHold: async () => {
       const census = await previousRelayCensus(targetId)
-      return !census.complete || (!census.bridgeable && census.endpoints.length > 0)
+      return census.status !== 'complete' || (!census.bridgeable && census.endpoints.length > 0)
     },
     openRoute: async (sockPath) => {
       const census = await previousRelayCensus(targetId)

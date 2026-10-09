@@ -371,7 +371,7 @@ describe('deployAndLaunchRelay on the pinned Node runtime', () => {
     )
     vi.mocked(planPinnedNodeRelay)
       .mockResolvedValueOnce(pinnedPlan())
-      .mockResolvedValueOnce({ kind: 'host-node', fallbackReason: 'missing_lib' })
+      .mockRejectedValueOnce(new PinnedRelayFallbackError('missing_lib', 'refused'))
     answerHostNodeLaunchByCommand()
 
     const result = await deployAndLaunchRelay(conn, undefined, undefined, 'target-1')
@@ -396,10 +396,9 @@ describe('deployAndLaunchRelay on the pinned Node runtime', () => {
     vi.mocked(getSshTargetRegistryStore).mockReturnValue(registry as unknown as SshConnectionStore)
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     const missing = 'The packaged orcad deployment template is missing'
-    vi.mocked(planPinnedNodeRelay).mockResolvedValueOnce({
-      kind: 'host-node',
-      fallbackReason: 'artifacts_unavailable'
-    })
+    vi.mocked(planPinnedNodeRelay).mockRejectedValueOnce(
+      new PinnedRelayFallbackError('artifacts_unavailable', 'refused')
+    )
     vi.mocked(planHostNodeAddonRelay)
       .mockReset()
       .mockRejectedValueOnce(new PinnedRelayFallbackError('artifacts_unavailable', missing))
@@ -420,10 +419,9 @@ describe('deployAndLaunchRelay on the pinned Node runtime', () => {
 
   it('settles rung D after a client gap only once the host-Node fallback proves no Node', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
-    vi.mocked(planPinnedNodeRelay).mockResolvedValueOnce({
-      kind: 'host-node',
-      fallbackReason: 'artifacts_unavailable'
-    })
+    vi.mocked(planPinnedNodeRelay).mockRejectedValueOnce(
+      new PinnedRelayFallbackError('artifacts_unavailable', 'refused')
+    )
     vi.mocked(planHostNodeAddonRelay)
       .mockReset()
       .mockRejectedValueOnce(new PinnedRelayFallbackError('host_node_missing', 'no Node 18+'))
@@ -456,10 +454,9 @@ describe('deployAndLaunchRelay on the pinned Node runtime', () => {
 
   it('settles rung D with Windows wording when a Windows host has no Node to fall back to', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
-    vi.mocked(planPinnedNodeRelay).mockResolvedValueOnce({
-      kind: 'host-node',
-      fallbackReason: 'security_software'
-    })
+    vi.mocked(planPinnedNodeRelay).mockRejectedValueOnce(
+      new PinnedRelayFallbackError('security_software', 'refused')
+    )
     vi.mocked(resolveRemoteNodePath).mockRejectedValueOnce(
       new RemoteNodeNotFoundError('Node.js not found on remote host.')
     )
@@ -483,10 +480,9 @@ describe('deployAndLaunchRelay on the pinned Node runtime', () => {
 
   it('keeps an unanswered host-Node probe a retryable failure, not rung D', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
-    vi.mocked(planPinnedNodeRelay).mockResolvedValueOnce({
-      kind: 'host-node',
-      fallbackReason: 'security_software'
-    })
+    vi.mocked(planPinnedNodeRelay).mockRejectedValueOnce(
+      new PinnedRelayFallbackError('security_software', 'refused')
+    )
     const lost = new Error('channel closed')
     vi.mocked(resolveRemoteNodePath).mockRejectedValueOnce(lost)
 
@@ -509,10 +505,9 @@ describe('deployAndLaunchRelay on the pinned Node runtime', () => {
     vi.mocked(getSshTargetRegistryStore).mockReturnValue(registry as unknown as SshConnectionStore)
     vi.mocked(resolvePinnedRelayTargetFacts).mockResolvedValue({ target: 'win32-x64', glibc: null })
     vi.spyOn(console, 'warn').mockImplementation(() => {})
-    vi.mocked(planPinnedNodeRelay).mockResolvedValueOnce({
-      kind: 'host-node',
-      fallbackReason: 'security_software'
-    })
+    vi.mocked(planPinnedNodeRelay).mockRejectedValueOnce(
+      new PinnedRelayFallbackError('security_software', 'refused')
+    )
     vi.mocked(resolveRemoteNodePath).mockRejectedValueOnce(
       new RemoteNodeNotFoundError('Node.js not found on remote host.')
     )
@@ -543,10 +538,9 @@ describe('deployAndLaunchRelay on the pinned Node runtime', () => {
       vi.spyOn(console, 'warn').mockImplementation(() => {})
       const conn = makeConnection()
       Object.assign(conn, { writeFile: vi.fn().mockResolvedValue(undefined) })
-      vi.mocked(planPinnedNodeRelay).mockResolvedValueOnce({
-        kind: 'host-node',
-        fallbackReason: reason
-      })
+      vi.mocked(planPinnedNodeRelay).mockRejectedValueOnce(
+        new PinnedRelayFallbackError(reason, 'refused')
+      )
       vi.mocked(execCommand)
         .mockRejectedValueOnce(new Error('uname not found'))
         .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Windows X64')
@@ -576,7 +570,7 @@ describe('deployAndLaunchRelay on the pinned Node runtime', () => {
       glibc: oldGlibc
     })
     vi.mocked(planPinnedNodeRelay)
-      .mockResolvedValueOnce({ kind: 'host-node', fallbackReason: 'libc_floor' })
+      .mockRejectedValueOnce(new PinnedRelayFallbackError('libc_floor', 'refused'))
       .mockResolvedValueOnce({ ...pinnedPlan(), target: 'linux-x64-glibc217', glibc: oldGlibc })
     queueInstalledPinnedLaunch()
 
@@ -598,10 +592,9 @@ describe('deployAndLaunchRelay on the pinned Node runtime', () => {
   it('skips rung B on a current glibc when rung A refused for a reason B cannot answer', async () => {
     const conn = makeConnection('pinned-node')
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    vi.mocked(planPinnedNodeRelay).mockResolvedValueOnce({
-      kind: 'host-node',
-      fallbackReason: 'illegal_instruction'
-    })
+    vi.mocked(planPinnedNodeRelay).mockRejectedValueOnce(
+      new PinnedRelayFallbackError('illegal_instruction', 'refused')
+    )
     vi.mocked(execCommand).mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
     vi.mocked(resolveRemoteNodePath).mockRejectedValueOnce(
       new RemoteNodeNotFoundError('Node.js not found on remote host.')
@@ -693,10 +686,9 @@ describe('deployAndLaunchRelay on the pinned Node runtime', () => {
   it('runs rung C on the host Node with the prebuilt addons and no npm', async () => {
     const conn = makeConnection('pinned-node')
     vi.spyOn(console, 'warn').mockImplementation(() => {})
-    vi.mocked(planPinnedNodeRelay).mockResolvedValueOnce({
-      kind: 'host-node',
-      fallbackReason: 'artifacts_unavailable'
-    })
+    vi.mocked(planPinnedNodeRelay).mockRejectedValueOnce(
+      new PinnedRelayFallbackError('artifacts_unavailable', 'refused')
+    )
     const plan = hostNodePlan()
     vi.mocked(planHostNodeAddonRelay).mockReset().mockResolvedValueOnce(plan)
     queueInstalledPinnedLaunch()

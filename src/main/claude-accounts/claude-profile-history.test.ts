@@ -63,6 +63,23 @@ describe('Claude profile history sharing', () => {
       expect(fs.readFileSync(join(f.profileHome, 'projects/later.jsonl'), 'utf8')).toBe('later')
     }
   )
+  itLinks(
+    "keeps Claude's live sessions per folder and undoes an earlier build's link",
+    async () => {
+      const f = fixture()
+      fs.mkdirSync(join(f.defaultHome, 'sessions'))
+      fs.writeFileSync(join(f.defaultHome, 'sessions/123.json'), 'default daemon')
+      fs.symlinkSync(join(f.defaultHome, 'sessions'), join(f.profileHome, 'sessions'))
+      expect((await f.share()).surfaces.sessions).toBe('synced')
+      expect(fs.existsSync(join(f.profileHome, 'sessions'))).toBe(false)
+      expect(fs.readFileSync(join(f.defaultHome, 'sessions/123.json'), 'utf8')).toBe(
+        'default daemon'
+      )
+      fs.mkdirSync(join(f.profileHome, 'sessions'))
+      expect((await f.share()).surfaces.sessions).toBe('unchanged')
+      expect(fs.lstatSync(join(f.profileHome, 'sessions')).isSymbolicLink()).toBe(false)
+    }
+  )
   itLinks('recovers a directory swap interrupted before link publication', async () => {
     const f = fixture()
     fs.mkdirSync(join(f.profileHome, 'projects.orca-profile-merge'))

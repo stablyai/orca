@@ -19,7 +19,11 @@ import {
   isBackgroundTaskBlock,
   type NativeChatBackgroundTaskBlock
 } from '../../../shared/native-chat-types'
-import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabase,
+  createTrackedJournalOpener,
+  type TestJournalOptions
+} from '../agent-session-journal/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
   createDeferredStructuredAgentSessionEventSink,
@@ -199,6 +203,8 @@ export type ProviderTimelineRig = {
    *  sink; the rig's own assembler must then stay unused. */
   assemble(overrides?: Partial<ProviderTimelineAssemblerDeps>): ProviderTimelineAssembler
   rows(): Promise<AgentJournalRenderItem[]>
+  /** Closes the original journal and database, then reads the persisted chat through a new store. */
+  reopenJournal(): Promise<AgentSessionJournal>
   row(itemId: string): Promise<AgentJournalRenderItem | undefined>
   /** The turn row of provider turn `turnKey`, or the row whose turn id is `turnKey`. */
   turn(turnKey: string, namespace?: string): Promise<AgentJournalTurnLifecycle | undefined>
@@ -222,7 +228,7 @@ export async function openProviderTimelineRig(
   overrides: Partial<ProviderTimelineAssemblerDeps> = {}
 ): Promise<ProviderTimelineRig> {
   const root = await mkdtemp(join(tmpdir(), 'orca-provider-timeline-'))
-  const journal = await journals.open({
+  const journalOptions: TestJournalOptions = {
     identity: {
       sessionId: SESSION,
       workspaceId: 'workspace-1',
@@ -232,7 +238,8 @@ export async function openProviderTimelineRig(
     },
     stateDirectory: root,
     now: () => 1_000
-  })
+  }
+  const journal = await journals.open(journalOptions)
   const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
   deferred.bind({ journal, fence: 1, publish: () => {} })
   cleanups.push(async () => {
@@ -282,6 +289,12 @@ export async function openProviderTimelineRig(
     assembler: build(),
     sink,
     eventSink: deferred.sink,
+    reopenJournal: async () => {
+      await rows()
+      await journal.close()
+      closeTestJournalHostDatabase(root)
+      return journals.open(journalOptions)
+    },
     restart: async (more = {}) => {
       generations += 1
       const generation = more.generation ?? `gen-${generations}`

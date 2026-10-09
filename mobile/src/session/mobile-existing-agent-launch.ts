@@ -28,6 +28,7 @@ import {
   structuredSessionOperationId,
   structuredSessionRandomUuid
 } from './structured-session-operation-id'
+import { rememberMobileCreatedStructuredSession } from './mobile-created-structured-sessions'
 
 // Why: the host waits up to 60s for a terminal agent to become ready before pasting the prompt,
 // so a prompted launch must outlive that wait or the phone reports a launch that is still running.
@@ -122,6 +123,9 @@ export async function launchAgentInExistingWorkspace(args: {
         }
       : {})
   })
+  if (args.reservation?.sessionId) {
+    rememberMobileCreatedStructuredSession(args.reservation.sessionId, `id:${args.worktreeId}`)
+  }
   let sent
   try {
     sent = await sendReplayingAmbiguousDelivery(

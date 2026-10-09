@@ -3,10 +3,6 @@ import {
   MAX_PROVIDER_DIAGNOSTIC_CHARS,
   type SubmissionRejectionFact
 } from '../../../shared/agent-session-failure'
-import {
-  agentJournalItemKey,
-  parseAgentJournalItemKey
-} from '../../../shared/agent-session-journal-item-key'
 import { STALE_SESSION_ROW_PREFIX } from '../../../shared/agent-session-stop-row-identity'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 import {
@@ -14,8 +10,11 @@ import {
   type AgentJournalItemBody,
   type AgentJournalRenderItem
 } from '../../../shared/agent-session-journal-types'
-import { partitionJournalLifecycleMutations } from '../agent-session-journal/journal-lifecycle-batch-partition'
-import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
+import { journalPendingSubmissionResolutions } from '../agent-session-journal/journal-pending-submission-recovery'
+import {
+  journalLifecycleMutationItemId,
+  type JournalLifecycleMutationInput
+} from '../agent-session-journal/journal-row-builders'
 import {
   endedUnseenMessageBody,
   runningCallEnd,
@@ -53,7 +52,7 @@ import {
   isInProgressStructuredAgentSessionItem,
   type DeadGenerationJournal
 } from './structured-agent-session-unfinished-work'
-import { withdrawCodexSendsNoTurnOpenedFor } from './structured-agent-session-unopened-send-withdrawal'
+import { codexUnopenedSendResolutions } from './structured-agent-session-unopened-send-withdrawal'
 
 /** Bounds the exit reason the lease keeps as log evidence; a provider diagnostic is held to the
  *  same cap. */
@@ -101,12 +100,18 @@ export async function settleStructuredAgentSessionDeadGeneration(input: {
     const closed = input.unrunRejection
     const unrun =
       startupFailure ?? (closed && agentSessionFailureWords(closed, { surface: 'rejection' }))
-    if (!unrun) {
-      await withdrawCodexSendsNoTurnOpenedFor(input.journal, input.fence)
-    }
-    await (unrun
-      ? input.journal.rejectPendingSubmissions(input.fence, unrun)
-      : input.journal.markPendingSubmissionsUnknown(input.fence, input.pendingSubmissionReason))
+    const withdrawn = unrun ? [] : codexUnopenedSendResolutions(input.journal, input.fence)
+    const withdrawnIds = new Set(withdrawn.map((entry) => entry.clientMessageId))
+    const dispatches = [
+      ...withdrawn,
+      ...journalPendingSubmissionResolutions(
+        (input.journal.submissions?.() ?? input.journal.pendingSubmissions?.() ?? []).filter(
+          (entry) => !withdrawnIds.has(entry.clientMessageId)
+        ),
+        input.fence,
+        unrun ? { rejection: unrun } : { reason: input.pendingSubmissionReason }
+      )
+    ]
     const items = input.journal.snapshot().items
     const proven = watchedExitRevisions(items, input.exit, input.journal)
     const mutations: JournalLifecycleMutationInput[] = []
@@ -142,30 +147,27 @@ export async function settleStructuredAgentSessionDeadGeneration(input: {
     }
     const bodies = new Map(items.map((item) => [item.itemId, item.body]))
     for (const item of items) {
-      const identity = parseAgentJournalItemKey(item.itemId)
       // Ended as its turn is: a proven death cuts a running call short. An open reasoning row is
       // ended too, but is not unfinished work: its running turn already says so.
       const end = runningCallEnd(item.turnScope, (id) => bodies.get(id), input.verdict.state)
       const body = endedUnseenMessageBody(item.body) ?? terminalAgentJournalBody(item.body, end)
-      if (identity && body) {
+      if (body) {
         mutations.push({
           kind: 'item',
-          identity,
+          itemId: item.itemId,
           body,
           turnScope: item.turnScope ?? AGENT_JOURNAL_THREAD_SCOPE
         })
       }
     }
     mutations.push(...runningTurnLifecycleRevisions(items, input.verdict), ...proven)
-    const batchId = `dead-generation:${input.settlementId}`
-    for (const chunk of partitionJournalLifecycleMutations(batchId, mutations)) {
-      await input.journal.appendLifecycleBatch({
-        settlementId: chunk.settlementId,
-        fence: input.fence,
-        recovered: true,
-        mutations: chunk.mutations
-      })
-    }
+    await input.journal.appendLifecycleBatch({
+      settlementId: `dead-generation:${input.settlementId}`,
+      fence: input.fence,
+      recovered: true,
+      mutations,
+      dispatches
+    })
     return { ok: true }
   } catch (error) {
     // Returned rather than logged: each caller logs it under its own scope.
@@ -199,21 +201,20 @@ export async function settleStaleStructuredAgentSessionState(input: {
       journal.itemFence(item.itemId),
       stopFoundTurnLiveAt(journal, item)
     )
-  // Per attempt: a retry re-partitions only what is left, and a reused chunk id would skip it.
+  // A successful settlement leaves terminal items; a failed transaction leaves the same prefix.
   const generation = input.acquisitionGeneration ?? `seq-${journal.cursor().sequence}`
   const settlementId = `${STALE_SESSION_ROW_PREFIX}${input.sessionId}:${input.fence}:${generation}`
   // Calls an earlier settle closed with no proof, revised once a proof names their owner.
   const mutations = provenUnverifiedToolCallRevisions(items, input.deathEvidence, journal)
   for (const item of items) {
-    const identity = parseAgentJournalItemKey(item.itemId)
     // A turn already settled (a person's Stop) ends its calls as it ended; only a turn still running
     // leaves them to the evidence.
     const end = runningCallEnd(item.turnScope, (id) => journal.itemBody(id), verdictFor(item).state)
     const body = endedUnseenMessageBody(item.body) ?? terminalAgentJournalBody(item.body, end)
-    if (identity && body) {
+    if (body) {
       mutations.push({
         kind: 'item',
-        identity,
+        itemId: item.itemId,
         body,
         turnScope: item.turnScope ?? AGENT_JOURNAL_THREAD_SCOPE
       })
@@ -248,12 +249,12 @@ export async function settleStaleStructuredAgentSessionState(input: {
       turnScope: settledRootTurnScope(items, turnEnds)
     })
   }
-  for (const chunk of partitionJournalLifecycleMutations(settlementId, mutations)) {
+  if (mutations.length > 0) {
     await journal.appendLifecycleBatch({
-      settlementId: chunk.settlementId,
+      settlementId,
       fence: input.fence,
       recovered: true,
-      mutations: chunk.mutations
+      mutations
     })
   }
   return mutations.length
@@ -265,7 +266,7 @@ function withRevisions(
 ): AgentJournalRenderItem[] {
   const bodies = new Map(
     revisions.flatMap((revision): [string, AgentJournalItemBody][] =>
-      revision.kind === 'item' ? [[agentJournalItemKey(revision.identity), revision.body]] : []
+      revision.kind === 'item' ? [[journalLifecycleMutationItemId(revision), revision.body]] : []
     )
   )
   return items.map((item) => ({ ...item, body: bodies.get(item.itemId) ?? item.body }))

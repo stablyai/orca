@@ -59,6 +59,8 @@ export function orcadNodeRuntimeRelativePath(target: string, executableSha256: s
 export const ORCAD_ADDON_NAPI_VERSION = 8
 
 export const ORCAD_NODE_PTY_DIR = 'node_modules/node-pty'
+export const ORCAD_CLI_ENTRY_FILENAME = 'out/cli/index.js'
+export const ORCAD_CLI_PACKAGE_FILENAME = 'out/package.json'
 // Test files and sources stay out; these are every module the runtime path requires.
 export const ORCAD_NODE_PTY_JS_ARTIFACTS = [
   'package.json',
@@ -161,6 +163,8 @@ export type OrcadArtifact = {
 }
 
 export const ORCAD_ARTIFACTS: readonly OrcadArtifact[] = [
+  { filename: ORCAD_CLI_ENTRY_FILENAME },
+  { filename: ORCAD_CLI_PACKAGE_FILENAME },
   { filename: ORCAD_LAUNCHER_FILENAME },
   { filename: ORCAD_SERVER_ENTRY_FILENAME },
   // Forked so a native @parcel/watcher fault kills the child, not the server.

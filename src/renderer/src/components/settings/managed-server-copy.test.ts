@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ORCAD_MIGRATION_DEPENDENCY_KINDS } from '../../../../shared/orcad-migration-preflight'
-import { conversionBlockerLabel } from './managed-server-copy'
+import { conversionBlockerLabel, managedServerOutcomeLabel } from './managed-server-copy'
 import { dependencyKindLabel } from './managed-server-dependency-kinds'
 
 describe('managed server blocker copy', () => {
@@ -25,5 +25,33 @@ describe('managed server blocker copy', () => {
     for (const kind of ORCAD_MIGRATION_DEPENDENCY_KINDS) {
       expect(dependencyKindLabel(kind)).not.toBe(kind)
     }
+  })
+})
+
+describe('managed server action refusals', () => {
+  it('explains the active-server guard before interpreting its live verdict as terminals', () => {
+    expect(
+      managedServerOutcomeLabel({
+        outcome: 'refused',
+        code: 'orcad_stop_active_environment',
+        verdict: 'live'
+      })
+    ).toBe('Not done: choose another Active Server in Advanced before stopping this server.')
+  })
+
+  it.each([
+    { outcome: 'refused', code: 'orcad_stop_still_running', verdict: 'live' },
+    { outcome: 'deferred', code: 'orcad_update_terminals_running' },
+    { outcome: 'refused', code: 'future_terminal_guard', verdict: 'live' }
+  ])('keeps the running-terminal instruction for $code', (result) => {
+    expect(managedServerOutcomeLabel(result)).toBe(
+      'Not done: terminals on this server are still running. Close them and try again.'
+    )
+  })
+
+  it('keeps an unanswered census unverifiable', () => {
+    expect(managedServerOutcomeLabel({ outcome: 'refused', verdict: 'unverifiable' })).toContain(
+      'couldn’t confirm what is running'
+    )
   })
 })
