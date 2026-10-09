@@ -64,6 +64,23 @@ describe('WebSocketTransport static web client', () => {
     await expect(assetResponse.text()).resolves.toBe('console.log("prefixed")')
   })
 
+  it('serves the web app manifest with a manifest content type', async () => {
+    const staticRoot = mkdtempSync(join(tmpdir(), 'ws-transport-static-'))
+    mkdirSync(join(staticRoot, 'assets'))
+    writeFileSync(join(staticRoot, 'web-index.html'), '<html>web</html>')
+    writeFileSync(join(staticRoot, 'assets', 'app.webmanifest'), '{"name":"Orca"}')
+    const transport = createStaticTransport(staticRoot)
+
+    await transport.start()
+
+    const response = await fetch(
+      `http://127.0.0.1:${transport.resolvedPort}/assets/app.webmanifest`
+    )
+    expect(response.status).toBe(200)
+    expect(response.headers.get('content-type')).toBe('application/manifest+json')
+    await expect(response.text()).resolves.toBe('{"name":"Orca"}')
+  })
+
   it('does not expose arbitrary files from the static root', async () => {
     const staticRoot = mkdtempSync(join(tmpdir(), 'ws-transport-static-'))
     writeFileSync(join(staticRoot, 'package.json'), '{}')
