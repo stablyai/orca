@@ -74,10 +74,11 @@ async function readStructuredAgentSessionOptionsAtRest(
   const model =
     saved.model ??
     (catalog.origin === 'unknown' ? undefined : models.find((entry) => entry.isDefault)?.id)
-  // As a live child answers: the pick, else the model's default where the agent reports that.
+  // As a live child answers: the pick, else the model's default where the agent reports that. With
+  // no model pick, the catalog's default model runs at its default effort, as the first frame shows.
   const effort =
     saved.effort ??
-    (rules?.effortDefaultsToModel
+    (rules?.effortDefaultsToModel || saved.model === undefined
       ? models.find((entry) => entry.id === model)?.defaultEffort
       : undefined)
   return {
