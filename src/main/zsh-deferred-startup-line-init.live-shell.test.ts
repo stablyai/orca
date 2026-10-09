@@ -165,7 +165,6 @@ describe('zsh deferred startup after prompt-hook replacement', () => {
             ? ['source -- "$HOME/wrapper/.zshenv"', 'source -- "$HOME/wrapper/.zshenv"']
             : []),
           'O_LK=$(command -v orca-dev)',
-          'O_IR=${+functions[__orca_deferred_line_init]}',
           'O_SR=${+widgets[__orca_saved_line_init]}',
           ...(scheduleCleanup
             ? [
@@ -183,7 +182,6 @@ describe('zsh deferred startup after prompt-hook replacement', () => {
           'O_LK',
           'O_UC',
           'O_UN',
-          'O_IR',
           'O_SR',
           ...(scheduleCleanup ? ['O_SC', 'O_SE'] : []),
           ...(scheduledPrecmd ? ['O_EV', 'O_EO'] : []),
@@ -203,9 +201,6 @@ describe('zsh deferred startup after prompt-hook replacement', () => {
       expect(Number(result.values.O_UC)).toBeGreaterThan(0)
       if (!chainedLineInit) {
         expect(result.values.O_UN).toBe('zle-line-init')
-      }
-      if (!chainedLineInit && !chainedRedraw && !repeatSource) {
-        expect(result.values.O_IR).toBe('0')
       }
       expect(result.values.O_SR).toBe('0')
       if (repeatSource) {

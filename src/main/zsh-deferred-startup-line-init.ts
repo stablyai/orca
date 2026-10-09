@@ -44,13 +44,5 @@ export const ZSH_DEFERRED_LINE_INIT_RETIRE_BLOCK = `  if (( \${+widgets[__orca_s
     zle -D zle-line-init
   fi`
 
-// Why: add-zle-hook-widget can keep an alias of the bootstrap in its own chain.
-export const ZSH_DEFERRED_LINE_INIT_CLEANUP_BLOCK = `  (( $+__orca_deferred_sched_armed )) || builtin unfunction __orca_deferred_sched_init
-  local __orca_widget __orca_line_init_bound=0
-  for __orca_widget in "\${(v)widgets[@]}"; do
-    if [[ "$__orca_widget" == user:__orca_deferred_line_init ]]; then
-      __orca_line_init_bound=1
-      break
-    fi
-  done
-  (( __orca_line_init_bound )) || builtin unfunction __orca_deferred_line_init`
+// Plugins can call line-init by name; its guard makes it inert after startup.
+export const ZSH_DEFERRED_LINE_INIT_CLEANUP_BLOCK = `  (( $+__orca_deferred_sched_armed )) || builtin unfunction __orca_deferred_sched_init`
