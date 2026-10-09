@@ -7,6 +7,7 @@ import {
   resolveGitRouteForHost,
   UnresolvableExecutionHostError
 } from './execution-host-provider-dispatch'
+import { createLocalFilesystemProvider } from './local-filesystem-provider'
 import { createLocalGitProvider } from './local-git-provider'
 import { registerSshGitProvider, unregisterSshGitProvider } from './ssh-git-dispatch'
 import {
@@ -30,7 +31,11 @@ describe('execution host provider dispatch', () => {
       hostId: 'local',
       createProvider: createLocalGitProvider
     })
-    expect(resolveFilesystemRouteForHost('local')).toEqual({ kind: 'local', hostId: 'local' })
+    expect(resolveFilesystemRouteForHost('local')).toEqual({
+      kind: 'local',
+      hostId: 'local',
+      createProvider: createLocalFilesystemProvider
+    })
   })
 
   it('routes an ssh host to its registered provider', () => {

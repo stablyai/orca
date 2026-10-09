@@ -32,6 +32,7 @@ vi.mock('node:fs/promises', async (importOriginal) => ({
 }))
 
 import { RuntimeFileCommandsWithWriteFileExplorerFile } from './runtime-file-commands-write-file-explorer-file'
+import { createLocalFilesystemProvider } from '../providers/local-filesystem-provider'
 import { SshFilesystemProvider } from '../providers/ssh-filesystem-provider'
 
 function unexpectedHostCall(): never {
@@ -66,7 +67,12 @@ beforeEach(() => {
   vi.resetAllMocks()
   remote = false
   mocks.resolvePath.mockResolvedValue(target)
-  mocks.provider.mockReturnValue(null)
+  mocks.provider.mockImplementation((_target, host) =>
+    createLocalFilesystemProvider({
+      requireStore: () => host.requireStore(),
+      resolveAuthorizedPath: mocks.authorize
+    })
+  )
   mocks.authorize.mockResolvedValue(destination)
   mocks.requireStore.mockReturnValue({})
   mocks.mkdir.mockResolvedValue(undefined)
@@ -127,7 +133,7 @@ describe.each(['whole', 'first', 'append'] as const)('runtime %s base64 write', 
         decode.mock.calls.filter((args) => args.at(0) === base64 && args.at(1) === 'base64')
       ).toHaveLength(1)
       expect(mocks.expectation).toHaveBeenCalledWith('local', 'local', undefined, undefined)
-      expect(mocks.provider).toHaveBeenCalledWith(target)
+      expect(mocks.provider).toHaveBeenCalledWith(target, expect.anything())
       expect(mocks.authorize).toHaveBeenCalledWith(
         destination,
         mocks.requireStore.mock.results[0].value
