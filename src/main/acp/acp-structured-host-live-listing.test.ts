@@ -22,13 +22,16 @@ describe('a live Grok listing', () => {
     }
     const { host } = await openAttachedHostRig({}, undefined, modelCatalog)
 
+    // Its start was saved once as the chat attached; this read is saved too.
+    expect(modelCatalog.recordLiveListing).toHaveBeenCalledTimes(1)
     await host.readOptions(SESSION)
 
-    expect(modelCatalog.recordLiveListing).toHaveBeenCalledTimes(1)
-    const [sessionId, listing] = vi.mocked(modelCatalog.recordLiveListing).mock.calls[0]!
+    expect(modelCatalog.recordLiveListing).toHaveBeenCalledTimes(2)
+    const [sessionId, listing] = vi.mocked(modelCatalog.recordLiveListing).mock.calls[1]!
     expect(sessionId).toBe(SESSION)
     expect(listing.models.map((model) => model.id)).toEqual(['grok-4.7', 'grok-4.6'])
-    // The session's picks are no one's default.
+    // The session's picks are no one's default, and only its start says what its config resolved.
     expect(listing.models.every((model) => !model.isDefault)).toBe(true)
+    expect(listing).not.toHaveProperty('configuredDefault')
   })
 })

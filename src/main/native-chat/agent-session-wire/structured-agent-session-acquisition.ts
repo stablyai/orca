@@ -113,6 +113,9 @@ export async function acquireOwner(
       now: input.now(),
       ...(options ? { options } : {})
     })
+    if (providerChildPhase === 'ready' && acquired.catalogListing) {
+      input.onStartCatalogListing?.(acquired.catalogListing)
+    }
     return {
       record: proved,
       acquisitionGeneration: acquired.acquisitionGeneration ?? null,
