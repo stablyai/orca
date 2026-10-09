@@ -1,3 +1,4 @@
+import { runtimeMetadataMutationFixture } from './runtime-metadata-mutation.test-fixture'
 import { withDurableRuntimeStore } from './runtime-durable-store-fixture'
 import { expect, vi } from 'vitest'
 import { createHash } from 'node:crypto'
@@ -391,6 +392,7 @@ function createStaleRuntimeWorktreeStore(
 }
 
 const store = {
+  ...runtimeMetadataMutationFixture,
   getRepo: (id: string) => store.getRepos().find((repo) => repo.id === id),
   getRepos: () => [
     {

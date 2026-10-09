@@ -45,28 +45,11 @@ export class SshTargetOrcadClaims {
     targetId: string,
     owner?: { environmentId: string; recorded: boolean }
   ): OrcadMigrationPreflight {
-    const target = this.store.getSshTarget(targetId)
-    if (!target) {
-      return {
-        targetId,
-        targetLabel: null,
-        claimable: false,
-        blockers: [{ code: 'orcad_migration_target_not_found', category: 'registration' }]
-      }
+    const resolved = resolveOrcadPreflightTarget(this.store, targetId, owner)
+    if ('result' in resolved) {
+      return resolved.result
     }
-    const ownedBy = getManagedOrcadFenceEnvironmentId(target)
-    if (owner && ownedBy === owner.environmentId) {
-      return owner.recorded
-        ? { targetId, targetLabel: target.label, claimable: true, blockers: [] }
-        : {
-            targetId,
-            targetLabel: target.label,
-            claimable: false,
-            blockers: [
-              { code: 'orcad_migration_owner_unrecorded', category: 'exclusive-ownership' }
-            ]
-          }
-    }
+    const { target } = resolved
     const blockers = collectEmptyTargetBlockers(this.store, target)
     return { targetId, targetLabel: target.label, claimable: blockers.length === 0, blockers }
   }
@@ -167,6 +150,38 @@ export class SshTargetOrcadClaims {
       throw new Error(`SSH target "${targetId}" not found.`)
     }
     return target
+  }
+}
+
+/** Not-found and own-fence results shared by claim and export preflight; an owner without a durable record never passes. */
+export function resolveOrcadPreflightTarget(
+  store: Pick<Store, 'getSshTarget'>,
+  targetId: string,
+  owner?: { environmentId: string; recorded: boolean }
+): { result: OrcadMigrationPreflight } | { target: SshTarget } {
+  const target = store.getSshTarget(targetId)
+  if (!target) {
+    return {
+      result: {
+        targetId,
+        targetLabel: null,
+        claimable: false,
+        blockers: [{ code: 'orcad_migration_target_not_found', category: 'registration' }]
+      }
+    }
+  }
+  if (!owner || getManagedOrcadFenceEnvironmentId(target) !== owner.environmentId) {
+    return { target }
+  }
+  return {
+    result: owner.recorded
+      ? { targetId, targetLabel: target.label, claimable: true, blockers: [] }
+      : {
+          targetId,
+          targetLabel: target.label,
+          claimable: false,
+          blockers: [{ code: 'orcad_migration_owner_unrecorded', category: 'exclusive-ownership' }]
+        }
   }
 }
 

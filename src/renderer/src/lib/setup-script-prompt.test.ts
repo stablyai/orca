@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { SetupScriptImportCandidate } from '../../../shared/setup-script-imports'
 import type { Repo } from '../../../shared/repo-types'
-import { getRepoHostIdentityForParts } from '@/store/slices/repo-host-identity'
+import { getRepoHostIdentity, getRepoHostIdentityForParts } from '@/store/slices/repo-host-identity'
 import {
   buildImportedHookSettings,
   filterSetupScriptPromptDismissalsToValidRepos,
@@ -197,19 +197,14 @@ describe('setup script prompt inspection', () => {
           getSetupScriptPromptDismissalKey(localIdentity),
           getSetupScriptPromptDismissalKey(remoteIdentity)
         ],
-        new Set([localIdentity])
+        [makeRepo()]
       )
     ).toEqual([getSetupScriptPromptDismissalKey(localIdentity)])
   })
 
   it('reuses the input array when it is empty', () => {
     const input: string[] = []
-    expect(
-      filterSetupScriptPromptDismissalsToValidRepos(
-        input,
-        new Set([getRepoHostIdentityForParts('repo-1', 'local')])
-      )
-    ).toBe(input)
+    expect(filterSetupScriptPromptDismissalsToValidRepos(input, [makeRepo()])).toBe(input)
   })
 
   it('reuses the input array when every dismissal is already a valid host-identity key', () => {
@@ -220,14 +215,17 @@ describe('setup script prompt inspection', () => {
       getSetupScriptPromptDismissalKey(remoteIdentity)
     ]
     expect(
-      filterSetupScriptPromptDismissalsToValidRepos(input, new Set([localIdentity, remoteIdentity]))
+      filterSetupScriptPromptDismissalsToValidRepos(input, [
+        makeRepo(),
+        makeRepo({ id: 'repo-2', executionHostId: 'ssh:host-a' })
+      ])
     ).toBe(input)
   })
 
   it('allocates when a legacy repo-id dismissal is rewritten to a host identity', () => {
     const localIdentity = getRepoHostIdentityForParts('repo-1', 'local')
     const input = [getSetupScriptPromptDismissalKey('repo-1')]
-    const result = filterSetupScriptPromptDismissalsToValidRepos(input, new Set([localIdentity]))
+    const result = filterSetupScriptPromptDismissalsToValidRepos(input, [makeRepo()])
     expect(result).not.toBe(input)
     expect(result).toEqual([getSetupScriptPromptDismissalKey(localIdentity)])
   })
@@ -238,7 +236,7 @@ describe('setup script prompt inspection', () => {
       getSetupScriptPromptDismissalKey(localIdentity),
       getSetupScriptPromptDismissalKey(getRepoHostIdentityForParts('gone', 'local'))
     ]
-    const result = filterSetupScriptPromptDismissalsToValidRepos(input, new Set([localIdentity]))
+    const result = filterSetupScriptPromptDismissalsToValidRepos(input, [makeRepo()])
     expect(result).not.toBe(input)
     expect(result).toEqual([getSetupScriptPromptDismissalKey(localIdentity)])
   })
@@ -247,19 +245,16 @@ describe('setup script prompt inspection', () => {
     const localIdentity = getRepoHostIdentityForParts('repo-1', 'local')
     const key = getSetupScriptPromptDismissalKey(localIdentity)
     const input = [key, key]
-    const result = filterSetupScriptPromptDismissalsToValidRepos(input, new Set([localIdentity]))
+    const result = filterSetupScriptPromptDismissalsToValidRepos(input, [makeRepo()])
     expect(result).not.toBe(input)
     expect(result).toEqual([key])
   })
 
   it('drops a legacy repo-id dismissal when that id exists on multiple hosts', () => {
-    const localIdentity = getRepoHostIdentityForParts('repo-1', 'local')
-    const remoteIdentity = getRepoHostIdentityForParts('repo-1', 'runtime:windows')
-
     expect(
       filterSetupScriptPromptDismissalsToValidRepos(
         [getSetupScriptPromptDismissalKey('repo-1')],
-        new Set([localIdentity, remoteIdentity])
+        [makeRepo(), makeRepo({ executionHostId: 'runtime:windows' })]
       )
     ).toEqual([])
   })
@@ -273,6 +268,61 @@ describe('setup script prompt inspection', () => {
         getSetupScriptPromptDismissalKey(localIdentity)
       ])
     ).toBe(false)
+  })
+
+  it('migrates opaque repo IDs without parsing their punctuation or NULs', () => {
+    const repo = makeRepo({
+      id: 'opaque\0["repo", "identity"]',
+      executionHostId: 'runtime:env-1',
+      authoritativeExecutionHostId: 'local',
+      catalogOwnerHostId: 'runtime:env-1'
+    })
+    expect(
+      filterSetupScriptPromptDismissalsToValidRepos(
+        [
+          getSetupScriptPromptDismissalKey(getRepoHostIdentityForParts(repo.id, 'runtime:env-1')),
+          getSetupScriptPromptDismissalKey(repo.id)
+        ],
+        [repo]
+      )
+    ).toEqual([getSetupScriptPromptDismissalKey(getRepoHostIdentity(repo))])
+  })
+
+  it.each([false, true])(
+    'refuses a colliding legacy host key (raw stamp first: %s)',
+    (rawFirst) => {
+      const legacyRaw = makeRepo({ executionHostId: 'runtime:env-1' })
+      const paired = makeRepo({
+        executionHostId: 'runtime:env-1',
+        authoritativeExecutionHostId: 'ssh:private-b',
+        catalogOwnerHostId: 'runtime:env-1'
+      })
+      const exactKey = getSetupScriptPromptDismissalKey(getRepoHostIdentity(paired))
+      expect(
+        filterSetupScriptPromptDismissalsToValidRepos(
+          [getSetupScriptPromptDismissalKey(getRepoHostIdentity(legacyRaw)), exactKey],
+          rawFirst ? [legacyRaw, paired] : [paired, legacyRaw]
+        )
+      ).toEqual([exactKey])
+    }
+  )
+
+  it('retains exact new owner arrays on a no-op refresh with ambiguous legacy aliases', () => {
+    const owners = (['ssh:private-a', 'ssh:private-b'] as const).map((host) =>
+      makeRepo({
+        executionHostId: 'runtime:env-1',
+        authoritativeExecutionHostId: host,
+        catalogOwnerHostId: 'runtime:env-1'
+      })
+    )
+    const input = owners.map((repo) => getSetupScriptPromptDismissalKey(getRepoHostIdentity(repo)))
+    expect(filterSetupScriptPromptDismissalsToValidRepos(input, owners)).toBe(input)
+    expect(
+      filterSetupScriptPromptDismissalsToValidRepos(
+        [getSetupScriptPromptDismissalKey('repo-1')],
+        owners
+      )
+    ).toEqual([])
   })
 
   it('formats setup candidate provenance for sidebar review copy', () => {

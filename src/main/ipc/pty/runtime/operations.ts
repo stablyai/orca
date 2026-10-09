@@ -1,3 +1,4 @@
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 import type { IPtyProvider } from '../../../providers/types'
 import { LocalPtyProvider } from '../../../providers/local-pty-provider'
 import { parseAppSshPtyId } from '../../../providers/ssh-pty-id'
@@ -88,7 +89,7 @@ export async function probePtyLivenessFromRuntimeController(
   try {
     // Why: no locally routed provider can authoritatively answer for a
     // remote host's PTY, so remote-scoped ids stay unknown, never absent.
-    if (ptyId.startsWith('remote:')) {
+    if (isRemoteRuntimePtyId(ptyId)) {
       return null
     }
     const connectionId = ptyOwnership.get(ptyId) ?? parseAppSshPtyId(ptyId)?.connectionId
@@ -235,7 +236,7 @@ export function hasPtyFromRuntimeController(
   try {
     // Why: no locally routed provider can authoritatively answer for a
     // remote host's PTY, so remote-scoped ids stay unknown, never absent.
-    if (ptyId.startsWith('remote:')) {
+    if (isRemoteRuntimePtyId(ptyId)) {
       return null
     }
     const connectionId = ptyOwnership.get(ptyId) ?? parseAppSshPtyId(ptyId)?.connectionId

@@ -1,3 +1,4 @@
+import type { WorktreeMetaUpdateGuard } from './worktree-helpers'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -45,7 +46,8 @@ export function applyWorktreeUpdates(
   worktreesByRepo: Record<string, Worktree[]>,
   worktreeId: string,
   rawUpdates: Partial<WorktreeMeta>,
-  executionHostId?: ExecutionHostId
+  executionHostId?: ExecutionHostId,
+  guard?: WorktreeMetaUpdateGuard
 ): Record<string, Worktree[]> {
   const updates = withoutErasedRequiredWorktreeFields(rawUpdates)
   const repoId = getRepoIdFromWorktreeId(worktreeId)
@@ -56,7 +58,11 @@ export function applyWorktreeUpdates(
 
   let changed = false
   const nextWorktrees = worktrees.map((worktree) => {
-    if (worktree.id !== worktreeId || !worktreeRowMatchesMetaHost(worktree, executionHostId)) {
+    if (
+      worktree.id !== worktreeId ||
+      !worktreeRowMatchesMetaHost(worktree, executionHostId) ||
+      (guard && !guard(worktree))
+    ) {
       return worktree
     }
 

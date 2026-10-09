@@ -1,3 +1,4 @@
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
 import { captureNotificationTransportOwner } from '@/attention/notification-subject-owner'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { useAppStore } from '@/store'
@@ -12,7 +13,6 @@ import {
   isAgentTaskCompleteNotificationEnabled,
   isAgentTaskCompleteTrackingEnabled
 } from './agent-task-complete-settings'
-import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
 import { shouldIgnoreStalePanePtyLayoutBinding } from './pane-pty-layout-binding'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
@@ -229,7 +229,7 @@ export function installPanePtyVisibilityBind(session: ConnectPanePtySession): vo
     // did not just forward focus/control input. Treat the BEL as authoritative
     // PTY output here; any product-side suppression should be an explicit UX
     // decision higher up, not a transport-layer guess.
-    session.deps.markWorktreeUnread(session.deps.worktreeId)
+    session.deps.markWorktreeUnread(session.deps.worktreeId, session.worktreeMetadataOwner)
     session.deps.markTerminalTabUnread(session.deps.tabId, 'terminal-bell')
     if (useAppStore.getState().settings?.experimentalTerminalAttention === true) {
       session.deps.markTerminalPaneUnread(session.cacheKey, 'terminal-bell')

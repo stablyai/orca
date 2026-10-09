@@ -59,8 +59,6 @@ function attach(summaries: AgentSessionStatusSummary[]): RuntimeWorktreePsSummar
   const summariesById = new Map<string, RuntimeWorktreePsSummary>([[WORKTREE_ID, row]])
   attachRuntimeWorktreeAgentRows({
     summaries: summariesById,
-    pathIndex: { byPath: new Map(), byRealPath: new Map() } as never,
-    missingWorktreeIds: new Set(),
     workingTerminalEvidenceByWorktreeId: new Map(),
     rowSources: collectRuntimeWorktreeAgentSources({
       mirroredWorktreeIdByTabId: new Map(),
@@ -72,7 +70,7 @@ function attach(summaries: AgentSessionStatusSummary[]): RuntimeWorktreePsSummar
       hookSnapshots: store.getStatusSnapshot()
     }),
     orchestrationByPaneKey: null,
-    getSummary: (map, _p, _m, id) => map.get(id) ?? null
+    getSummary: (id) => summariesById.get(id) ?? null
   })
   return row
 }

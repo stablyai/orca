@@ -30,7 +30,12 @@ export const MOBILE_WEB_PAGE_ROUTES = [
   // `externalLink` for the one opener the census finds in this closure: `app/h/_layout.tsx` wraps
   // every `/h` route in `HostProtocolGate`, so without the grant the wall's Update Orca tap posts a
   // notify the shell refuses, with nothing on screen to say why.
-  { pathname: '/h/[hostId]', grants: ['navigate', 'storage', 'externalLink', 'haptics'] },
+  // `canOwnHostArea`: on wide layouts it draws the sidebar itself, given `ownsHostArea` in `init`.
+  {
+    pathname: '/h/[hostId]',
+    grants: ['navigate', 'storage', 'externalLink', 'haptics'],
+    canOwnHostArea: true
+  },
   // Agent session history. `navigate` because a resumed session opens the session screen, which is
   // native, and because the list above now reaches this one without leaving the page. `storage`
   // because the host layout above every page route reads the app's own sidebar width.

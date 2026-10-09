@@ -1,3 +1,4 @@
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 import type { StateCreator } from 'zustand'
 import { toast } from 'sonner'
 import type { AppState } from '../types'
@@ -151,7 +152,7 @@ export function createRepoRemovalActions(
           for (const tab of tabs) {
             killedTabIds.add(tab.id)
             for (const ptyId of get().ptyIdsByTabId[tab.id] ?? []) {
-              if (!ptyId.startsWith('remote:')) {
+              if (!isRemoteRuntimePtyId(ptyId)) {
                 window.api.pty.kill(ptyId)
               }
             }

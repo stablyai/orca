@@ -26,7 +26,6 @@ import {
   resolveCurrentWorktreeSelector
 } from '../selectors'
 import { isTuiAgent } from '../../shared/tui-agent-config'
-import { isWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import { printLineageSummary } from './worktree-lineage-summary'
 import { projectWorktreePsTerminalVerdict } from '../worktree-ps-terminal-verdict'
 import {
@@ -36,6 +35,7 @@ import {
 } from '../worktree-project-target'
 import {
   assertWorktreeParentFlagsCompatible,
+  getEnvParentWorkspace,
   resolveCreateParentSelector
 } from './worktree-create-parent-selector'
 import { getOptionalLinearIssueLinkFlag } from './worktree-linear-issue-link'
@@ -43,18 +43,6 @@ import { getOptionalWorktreeUnreadFlag } from './worktree-unread-flag'
 import { getReviewTargetLinkFlags } from './worktree-review-link-flags'
 import { withSetupDecisionRecovery } from './worktree-setup-decision-recovery'
 import { assertGitLabLinkFlagProjectsMatch } from './worktree-gitlab-link-context'
-
-function getEnvParentWorkspace(): string | undefined {
-  const workspaceId = process.env.ORCA_WORKSPACE_ID
-  if (typeof workspaceId === 'string' && isWorkspaceKey(workspaceId)) {
-    return workspaceId
-  }
-  const worktreeId = process.env.ORCA_WORKTREE_ID
-  if (typeof worktreeId === 'string' && worktreeId.length > 0) {
-    return isWorkspaceKey(worktreeId) ? worktreeId : worktreeWorkspaceKey(worktreeId)
-  }
-  return undefined
-}
 
 function getPresentStringFlag(
   flags: Map<string, string | boolean>,

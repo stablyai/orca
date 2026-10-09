@@ -4,6 +4,7 @@ import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type { Worktree } from '../../shared/worktree/types'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../shared/worktree/id'
 import { normalizeWorkspaceCreatorProvenance } from '../../shared/workspace-creator-provenance'
+import { createWorktreeIdentity } from '../../shared/worktree/identity'
 
 export function getRuntimeFolderWorkspaceRootId(repo: Repo): string {
   return `${repo.id}::${repo.path}`
@@ -29,6 +30,15 @@ export function mergeRuntimeFolderWorkspace(
   const creatorProvenance = normalizeWorkspaceCreatorProvenance(meta.creatorProvenance)
   return {
     id: worktreeId,
+    ...(meta.instanceId && meta.hostId
+      ? {
+          identity: createWorktreeIdentity({
+            worktreeId,
+            executionHostId: meta.hostId,
+            instanceId: meta.instanceId
+          })
+        }
+      : {}),
     ...(meta.instanceId !== undefined ? { instanceId: meta.instanceId } : {}),
     repoId: repo.id,
     ...(meta.projectId !== undefined ? { projectId: meta.projectId } : {}),

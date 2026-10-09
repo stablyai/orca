@@ -6,6 +6,8 @@ import type { Repo } from '../../../shared/repo-types'
 import type { HookCheckResult } from '@/runtime/runtime-hooks-client'
 import { isRuntimeScopeForbiddenError } from '@/runtime/runtime-rpc-result'
 import { hasEffectiveSetupCommand } from './setup-script-status'
+import { getRepoExecutionHostId } from '../../../shared/execution-host'
+import { getRepoHostIdentity, getRepoHostIdentityForParts } from '@/store/slices/repo-host-identity'
 
 const SETUP_SCRIPT_PROMPT_DISMISSAL_PREFIX = 'generation-v1:'
 
@@ -104,24 +106,32 @@ function isUnchangedDismissalList(
 
 export function filterSetupScriptPromptDismissalsToValidRepos(
   value: unknown,
-  validRepoHostIdentities: Set<string>
+  validRepos: readonly Repo[]
 ): readonly string[] {
-  const unambiguousIdentityByRepoId = new Map<string, string | null>()
-  for (const identity of validRepoHostIdentities) {
-    const separatorIndex = identity.indexOf('\0')
-    const repoId = separatorIndex !== -1 ? identity.slice(separatorIndex + 1) : identity
-    unambiguousIdentityByRepoId.set(
-      repoId,
-      unambiguousIdentityByRepoId.has(repoId) ? null : identity
-    )
+  const exactOwnerIdentities = new Set<string>()
+  const unambiguousIdentityByAlias = new Map<string, string | null>()
+  for (const repo of validRepos) {
+    const identity = getRepoHostIdentity(repo)
+    const legacyIdentity = getRepoHostIdentityForParts(repo.id, getRepoExecutionHostId(repo))
+    if (identity !== legacyIdentity) {
+      exactOwnerIdentities.add(identity)
+    }
+    for (const alias of [repo.id, legacyIdentity]) {
+      const previous = unambiguousIdentityByAlias.get(alias)
+      unambiguousIdentityByAlias.set(
+        alias,
+        previous === undefined || previous === identity ? identity : null
+      )
+    }
   }
 
   const next: string[] = []
   for (const entry of sanitizeSetupScriptPromptDismissals(value)) {
     const repoHostIdentity = entry.slice(SETUP_SCRIPT_PROMPT_DISMISSAL_PREFIX.length)
-    const validIdentity = validRepoHostIdentities.has(repoHostIdentity)
+    // A legacy display host can name several raw owners; only exact new keys bypass ambiguity.
+    const validIdentity = exactOwnerIdentities.has(repoHostIdentity)
       ? repoHostIdentity
-      : unambiguousIdentityByRepoId.get(repoHostIdentity)
+      : unambiguousIdentityByAlias.get(repoHostIdentity)
     if (validIdentity) {
       const validEntry = getSetupScriptPromptDismissalKey(validIdentity)
       if (!next.includes(validEntry)) {

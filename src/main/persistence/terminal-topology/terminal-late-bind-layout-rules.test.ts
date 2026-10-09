@@ -12,7 +12,7 @@ import {
   openTopologyStore
 } from './terminal-topology-profile-fixture'
 import { WindowSession, withoutLeaf } from './terminal-topology-window-session-fixture'
-import { checkWorkspaceLayoutRules } from './workspace-layout-rules'
+import { checkWorkspaceLayoutRules } from '../../../shared/workspace-layout/workspace-layout-rules'
 
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../ssh/ssh-config-parser', () => ({

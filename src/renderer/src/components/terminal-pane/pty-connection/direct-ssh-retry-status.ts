@@ -1,3 +1,4 @@
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
 import { reportWorkerTerminalUserInput } from '@/lib/worker-terminal-takeover-report'
 import { useAppStore } from '@/store'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
@@ -28,7 +29,6 @@ import {
 } from '../renderer-owned-agent-status-registry'
 
 import { DIRECT_SSH_PANE_RETRY_SETTLEMENT_TIMEOUT_MS } from './pty-connect-limits'
-import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
 import { resolveLatestAgentDoneStartedAt } from './agent-done-started-at'
 import { rendererAgentStatusObservations } from '@/lib/renderer-agent-status-observations'
 

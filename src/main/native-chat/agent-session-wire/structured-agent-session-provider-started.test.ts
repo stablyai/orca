@@ -5,7 +5,7 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentModelCatalogLiveListing } from '../agent-model-catalog/agent-model-catalog-store'
 import type { AgentSessionStatusEvent } from '../../../shared/agent-session-wire'
 import { ClaudeStructuredSessionAdapter } from '../../claude/claude-structured-session-adapter'
@@ -22,11 +22,13 @@ import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION,
   hostTestAttachParams,
+  hostTestMessage,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
+import { createTestParams } from './structured-agent-session-create-test-fixture'
 
 const CALLER = { callerKey: 'client-1' }
 const INIT_DELAY_MS = 40
@@ -54,6 +56,13 @@ beforeEach(async () => {
       applied: { model: 'claude-opus-9', effort: 'high', advisor: null, ultracode: false },
       effective: { model: 'claude-opus-9', effortLevel: 'high', env: {} },
       sources: {}
+    },
+    // What a chat's options read lists; startup lists from initialize, which names only Sonnet.
+    routes: {
+      list_models: () => [
+        { value: 'claude-sonnet', displayName: 'Sonnet' },
+        { value: 'claude-opus-9', displayName: 'Opus 9' }
+      ]
     }
   })
   adapter = new ClaudeStructuredSessionAdapter({
@@ -188,5 +197,32 @@ describe('a publish-first Claude create whose init is slow', () => {
         })
       }
     ])
+  })
+  it('reports the configured default from a chat created with its first message and no pick', async () => {
+    const first = { clientMessageId: 'opening', body: hostTestMessage('hello') }
+    await expect(
+      host.create(CALLER, createTestParams(first, claudeParams()), { firstMessage: first })
+    ).resolves.toMatchObject({ ok: true })
+
+    // Delivery, not create, starts the CLI. Its `started` event carries the account listing; the
+    // settings read after it (`options-reported`) is what resolves the configured model, so the
+    // chat's options read from then on names it, since nothing was picked.
+    await vi.waitFor(() => expect(savedListings).toHaveLength(1))
+    expect(savedListings[0]).toEqual({
+      sessionId: SESSION,
+      listing: expect.objectContaining({
+        models: [expect.objectContaining({ id: 'claude-sonnet' })]
+      })
+    })
+    await claudeStartupSettled(adapter, SESSION)
+    await Promise.all(lifecycle)
+    expect(store.getRecord(SESSION)?.options?.model).toBe('claude-opus-9')
+    await host.readOptions(SESSION)
+    expect(savedListings.at(-1)).toEqual({
+      sessionId: SESSION,
+      listing: expect.objectContaining({
+        configuredDefault: expect.objectContaining({ modelId: 'claude-opus-9' })
+      })
+    })
   })
 })

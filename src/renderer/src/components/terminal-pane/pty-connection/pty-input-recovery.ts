@@ -1,4 +1,7 @@
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
 import { useAppStore } from '@/store'
+import { captureNotificationTransportOwner } from '@/attention/notification-subject-owner'
+import { capturePassiveWorktreeMetaOwner } from '@/store/slices/worktrees/listing/worktree-owner-settings'
 import { createIpcPtyTransport } from '../pty-transport'
 import { createRemoteRuntimePtyTransport } from '../remote-runtime-pty-transport'
 import { toAgentLaunchPreferences } from '../../../../../shared/agent-launch-preferences'
@@ -19,7 +22,6 @@ import {
   installTerminalCapabilityReplyHandlers
 } from '../terminal-capability-replies'
 
-import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
 import { TRANSPORT_CONNECT_SETTLE_GRACE_MS } from './pty-connect-limits'
 import { buildPaneTransportOptions } from './pane-transport-options'
 import { buffersInputOnlyForSshReattach } from './ssh-reattach-input-buffering'
@@ -55,6 +57,15 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
       : session.runtimeEnvironmentId
         ? createRemoteRuntimePtyTransport(session.runtimeEnvironmentId, session.transportOptions)
         : createIpcPtyTransport(session.transportOptions)
+  // Capture after construction; callbacks must keep this checkout occupant.
+  const workspaceOwner = captureNotificationTransportOwner(session.transport)
+  session.worktreeMetadataOwner = workspaceOwner
+    ? capturePassiveWorktreeMetaOwner(
+        useAppStore.getState(),
+        session.deps.worktreeId,
+        workspaceOwner
+      )
+    : null
   session.canSendDesktopQueryReply = (): boolean => {
     const ptyId = session.transport.getPtyId()
     return !ptyId || !isPtyLocked(ptyId)

@@ -3,20 +3,14 @@ import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport'
 import { getConnectionId } from '@/lib/connection-context'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
-import {
-  executeTerminalPastePlan,
-  planTerminalPasteWithYield,
-  type TerminalPasteSource,
-  type TerminalPasteTextOptions
-} from './terminal-paste-coordinator'
+import type { TerminalPasteSource, TerminalPasteTextOptions } from './terminal-paste-coordinator'
 import { resolveTerminalPasteRuntime } from './terminal-paste-runtime'
 import { getTerminalPasteSshRemotePlatform } from './terminal-paste-ssh-platform'
 import {
   isTerminalPanePasteFocusCurrent,
   isTerminalPanePasteTargetCurrent
 } from './terminal-paste-target-state'
-import { pasteTerminalText } from './terminal-bracketed-paste'
-import { writeTerminalPastePtyInput } from './terminal-pty-paste-writer'
+import { pasteTextIntoTerminalPane } from './terminal-pane-paste-dispatch'
 import { formatTerminalPasteExecutionError } from './terminal-paste-errors'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
 import { scheduleImagePasteWebglAtlasRecovery } from './terminal-webgl-atlas-recovery'
@@ -69,31 +63,21 @@ export function createTerminalPanePasteExecution(
     const ptyId = transport?.getPtyId() ?? null
     const keyboardOwnedPaste =
       source === 'keyboard' || source === 'paste-event' || source === 'app-menu'
-    const plan = await planTerminalPasteWithYield({
+    const execution = await pasteTextIntoTerminalPane({
+      pane,
       text,
       source,
-      target: {
-        kind: 'terminal',
-        paneId: pane.id,
-        leafId: pane.leafId,
+      ptyId,
+      runtime: resolveTerminalPasteRuntime({
+        platform: shortcutPlatform,
         ptyId,
-        runtime: resolveTerminalPasteRuntime({
-          platform: shortcutPlatform,
-          ptyId,
-          connectionId,
-          remotePlatform: getTerminalPasteSshRemotePlatform(connectionId),
-          transport,
-          isWindowsConpty: forceBracketedMultilineTextPaste
-        })
-      },
-      forceBracketedPaste: options?.forceBracketedPaste,
-      forceBracketedPasteForMultiline: options?.forceBracketedPasteForMultiline,
-      terminalBracketedPasteMode: pane.terminal.modes.bracketedPasteMode
-    })
-    const execution = await executeTerminalPastePlan(plan, {
-      pasteText: (pasteText, pasteOptions) =>
-        pasteTerminalText(pane.terminal, pasteText, pasteOptions),
-      writePty: (data, signal) => writeTerminalPastePtyInput(transport, data, 'driving', signal),
+        connectionId,
+        remotePlatform: getTerminalPasteSshRemotePlatform(connectionId),
+        transport,
+        isWindowsConpty: forceBracketedMultilineTextPaste
+      }),
+      transport,
+      inputKind: 'driving',
       isTargetCurrent: () => {
         if (!isPanePasteTargetMounted(pane, transport, ptyId)) {
           return false
@@ -104,7 +88,8 @@ export function createTerminalPanePasteExecution(
           paneContainer: pane.container
         })
       },
-      canContinue: () => isPanePasteTargetMounted(pane, transport, ptyId)
+      canContinue: () => isPanePasteTargetMounted(pane, transport, ptyId),
+      planOptions: options
     })
     if (execution.status !== 'pasted') {
       setTerminalError(formatTerminalPasteExecutionError(execution.reason))

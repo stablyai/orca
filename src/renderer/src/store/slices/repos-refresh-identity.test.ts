@@ -230,12 +230,14 @@ describe('repo catalog refresh identity', () => {
     expect(store.getState().projectHostSetups).toHaveLength(1)
   })
 
-  it('keeps a project owned only through a repo on another host', async () => {
-    // Why: no setup row names this project, so the refreshing host can only be ruled out from the
-    // project's own source repos. Feeding the host-id resolvers anything but this project's repo
-    // slice prunes it on a local refresh.
-    const sshRepo: Repo = { ...secondRepo, executionHostId: 'ssh:host-a', connectionId: 'host-a' }
-    mockRepos(repo, sshRepo)
+  it('keeps a project owned only through a repo from another publisher', async () => {
+    const sshRepo: Repo = {
+      ...secondRepo,
+      executionHostId: 'runtime:remote',
+      authoritativeExecutionHostId: 'ssh:host-a',
+      catalogOwnerHostId: 'runtime:remote'
+    }
+    mockRepos(repo)
     const store = createTestStore()
     await store.getState().fetchRepos()
     const sshOwned: Project = {
@@ -247,6 +249,7 @@ describe('repo catalog refresh identity', () => {
       updatedAt: 1
     }
     store.setState({
+      repos: [...store.getState().repos, sshRepo],
       projects: [...store.getState().projects, sshOwned],
       projectHostSetups: []
     })
@@ -256,11 +259,14 @@ describe('repo catalog refresh identity', () => {
     expect(store.getState().projects.map((project) => project.id)).toContain('ssh-owned')
   })
 
-  it('keeps a project whose repo id is cloned onto a second host', async () => {
-    // Why: both rows share `repo.id`, so the project's repo slice must carry every duplicate —
-    // keeping only the first drops the remote host and the local refresh prunes the project.
-    const sshRepo: Repo = { ...repo, executionHostId: 'ssh:host-a', connectionId: 'host-a' }
-    mockRepos(repo, sshRepo)
+  it('keeps a project whose repo id is cloned into another publisher catalog', async () => {
+    const sshRepo: Repo = {
+      ...repo,
+      executionHostId: 'runtime:remote',
+      authoritativeExecutionHostId: 'ssh:host-a',
+      catalogOwnerHostId: 'runtime:remote'
+    }
+    mockRepos(repo)
     const store = createTestStore()
     await store.getState().fetchRepos()
     const dualHostOwned: Project = {
@@ -272,6 +278,7 @@ describe('repo catalog refresh identity', () => {
       updatedAt: 1
     }
     store.setState({
+      repos: [...store.getState().repos, sshRepo],
       projects: [...store.getState().projects, dualHostOwned],
       projectHostSetups: []
     })

@@ -42,7 +42,6 @@ import {
   sanitizeSetupScriptPromptDismissals
 } from '../../../lib/setup-script-prompt'
 import { isBundledPetId, DEFAULT_PET_ID } from '../../../components/pet/pet-models'
-import { getRepoHostIdentity } from '../repo-host-identity'
 import type { PersistedUIWriteBaseline } from '../persisted-ui-write-baseline'
 import {
   capturePersistedUIWriteBaseline,
@@ -75,7 +74,6 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
         const manualRepoOrder = normalizeManualRepoOrder(ui.manualRepoOrder)
         const orderedRepos = applyManualRepoOrder(s.repos, manualRepoOrder)
         const validRepoIds = new Set(s.repos.map((repo) => repo.id))
-        const validRepoHostIdentities = new Set(s.repos.map(getRepoHostIdentity))
         const persistedFilterRepoIds = sanitizePersistedRepoIds(ui.filterRepoIds)
         const persistedAgentsFilterRepoIds = sanitizePersistedRepoIds(ui.agentsFilterRepoIds)
         // Why: pre-rename builds used sidekick* keys; read as fallback only so new pet* writes win after upgrade.
@@ -222,11 +220,11 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
               : null,
           trustedOrcaHooks: hydrateTrustedOrcaHooks(ui.trustedOrcaHooks, validRepoIds),
           setupScriptPromptDismissedRepoIds:
-            validRepoHostIdentities.size === 0
+            s.repos.length === 0
               ? sanitizeSetupScriptPromptDismissals(ui.setupScriptPromptDismissedRepoIds)
               : filterSetupScriptPromptDismissalsToValidRepos(
                   ui.setupScriptPromptDismissedRepoIds,
-                  validRepoHostIdentities
+                  s.repos
                 ),
           setupGuideSidebarDismissed: ui.setupGuideSidebarDismissed === true,
           setupGuideBrowserMilestoneMigrated: ui.setupGuideBrowserMilestoneMigrated === true,

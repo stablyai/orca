@@ -12,7 +12,10 @@ import { omitSparsePresetsForRepos } from '../slices/sparse-presets'
 import { getRepoHostIdentity } from '../slices/repo-host-identity'
 import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
 import { getProjectHostSetupOwnerKey } from './project-compatibility-core'
-import { resolveProjectHostSetupMutation } from './project-host-setup-mutation'
+import {
+  resolveProjectHostSetupMutation,
+  upsertOwnedProjectHostSetup
+} from './project-host-setup-mutation'
 import { translate } from '@/i18n/i18n'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import type { RepoSlice } from '../repos/repo-state'
@@ -71,15 +74,7 @@ export function createProjectHostSetupActions(
           const nextProjects = s.projects.some((entry) => entry.id === project.id)
             ? s.projects.map((entry) => (entry.id === project.id ? project : entry))
             : [...s.projects, project]
-          const nextSetups = s.projectHostSetups.some(
-            (entry) => getProjectHostSetupOwnerKey(entry) === getProjectHostSetupOwnerKey(setup)
-          )
-            ? s.projectHostSetups.map((entry) =>
-                getProjectHostSetupOwnerKey(entry) === getProjectHostSetupOwnerKey(setup)
-                  ? setup
-                  : entry
-              )
-            : [...s.projectHostSetups, setup]
+          const nextSetups = upsertOwnedProjectHostSetup(s.projectHostSetups, setup)
           return {
             repos: nextRepos,
             projects: nextProjects,
@@ -122,15 +117,7 @@ export function createProjectHostSetupActions(
           projects: s.projects.some((entry) => entry.id === project.id)
             ? s.projects.map((entry) => (entry.id === project.id ? project : entry))
             : [...s.projects, project],
-          projectHostSetups: s.projectHostSetups.some(
-            (entry) => getProjectHostSetupOwnerKey(entry) === getProjectHostSetupOwnerKey(setup)
-          )
-            ? s.projectHostSetups.map((entry) =>
-                getProjectHostSetupOwnerKey(entry) === getProjectHostSetupOwnerKey(setup)
-                  ? setup
-                  : entry
-              )
-            : [...s.projectHostSetups, setup]
+          projectHostSetups: upsertOwnedProjectHostSetup(s.projectHostSetups, setup)
         }))
         return { project, setup }
       } catch (err) {
@@ -180,16 +167,7 @@ export function createProjectHostSetupActions(
           projects: s.projects.some((entry) => entry.id === project.id)
             ? s.projects.map((entry) => (entry.id === project.id ? project : entry))
             : [...s.projects, project],
-          projectHostSetups: s.projectHostSetups.some(
-            (entry) =>
-              getProjectHostSetupOwnerKey(entry) === getProjectHostSetupOwnerKey(currentSetup)
-          )
-            ? s.projectHostSetups.map((entry) =>
-                getProjectHostSetupOwnerKey(entry) === getProjectHostSetupOwnerKey(currentSetup)
-                  ? setup
-                  : entry
-              )
-            : [...s.projectHostSetups, setup]
+          projectHostSetups: upsertOwnedProjectHostSetup(s.projectHostSetups, setup, currentSetup)
         }))
         return { ...result, project, repo, setup }
       } catch (err) {

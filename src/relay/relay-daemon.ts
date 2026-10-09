@@ -15,6 +15,7 @@ import {
 } from './relay-endpoint-credential-publication'
 import { SKILL_RELAY_CAPABILITIES } from './skill-install-handler'
 import { publishRelayPid } from './relay-pid-publication'
+import { errorMessage } from '../shared/error-message'
 
 export async function runRelayDaemon(options: RelayLaunchOptions): Promise<void> {
   if (options.detached && options.logFile) {
@@ -30,9 +31,7 @@ export async function runRelayDaemon(options: RelayLaunchOptions): Promise<void>
     } catch (reapError) {
       // Why log rather than swallow: exit must still win, but this line is the only
       // forensic trace a crashed remote daemon leaves behind for an orphaned shell.
-      relayLogLine(
-        `[relay] Fatal PTY reap failed: ${reapError instanceof Error ? reapError.message : String(reapError)}`
-      )
+      relayLogLine(`[relay] Fatal PTY reap failed: ${errorMessage(reapError)}`)
     }
     socketOwnership.cleanup()
     process.exit(1)
@@ -112,9 +111,7 @@ export async function runRelayDaemon(options: RelayLaunchOptions): Promise<void>
     reconnectListener.setEndpointCredential(publishRelayEndpointCredential(options.credentialFile))
     agentHooks.publishEndpointFile()
   } catch (error) {
-    relayLogLine(
-      `[relay] Startup failed: ${error instanceof Error ? error.message : String(error)}`
-    )
+    relayLogLine(`[relay] Startup failed: ${errorMessage(error)}`)
     process.exit(1)
     return
   }

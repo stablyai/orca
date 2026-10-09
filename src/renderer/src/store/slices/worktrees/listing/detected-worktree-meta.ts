@@ -19,7 +19,11 @@ import {
   findIndexedDetectedWorktrees,
   findIndexedWorktreeOwnerForHost
 } from '@/lib/worktree-runtime-owner-index'
-import { findWorktreeById, withoutErasedRequiredWorktreeFields } from '../../worktree-helpers'
+import {
+  findWorktreeById,
+  withoutErasedRequiredWorktreeFields,
+  type WorktreeMetaUpdateGuard
+} from '../../worktree-helpers'
 import { worktreeMatchesHost } from './worktree-host-ownership'
 
 const folderWorkspaceWorktreeCache = new WeakMap<FolderWorkspace, Worktree>()
@@ -35,7 +39,8 @@ export function applyDetectedWorktreeUpdates(
   detectedWorktreesByRepo: AppState['detectedWorktreesByRepo'],
   worktreeId: string,
   rawUpdates: Partial<WorktreeMeta>,
-  executionHostId?: ExecutionHostId
+  executionHostId?: ExecutionHostId,
+  guard?: WorktreeMetaUpdateGuard
 ): AppState['detectedWorktreesByRepo'] {
   // Why: mirrors applyWorktreeUpdates — detected rows feed the same palette.
   const updates = withoutErasedRequiredWorktreeFields(rawUpdates)
@@ -45,7 +50,11 @@ export function applyDetectedWorktreeUpdates(
   for (const [repoId, result] of Object.entries(detectedWorktreesByRepo)) {
     let repoChanged = false
     const nextWorktrees = result.worktrees.map((worktree) => {
-      if (worktree.id !== worktreeId || !worktreeRowMatchesMetaHost(worktree, executionHostId)) {
+      if (
+        worktree.id !== worktreeId ||
+        !worktreeRowMatchesMetaHost(worktree, executionHostId) ||
+        (guard && !guard(worktree))
+      ) {
         return worktree
       }
       repoChanged = true

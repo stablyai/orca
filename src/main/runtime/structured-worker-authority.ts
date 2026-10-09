@@ -32,7 +32,8 @@ import {
   structuredWorkerAddressable
 } from './structured-worker-custody'
 import { AGENT_SESSION_FOUNDING_FENCE } from './agent-session-record-founding'
-import { isAgentSessionHandleProvider } from '../../shared/agent-session-provider-handle'
+import { isTuiAgent } from '../../shared/tui-agent-config'
+import type { TuiAgent } from '../../shared/tui-agent'
 import {
   isStructuredWorkerHandle,
   structuredWorkerIdentities,
@@ -218,17 +219,17 @@ export function resolveStructuredWorkerAuthority(
  * The registry carries it only for a session THIS process started; a rehydrated entry has null,
  * because the durable worker-terminal row does not record a provider. The durable agent-session
  * record does, and it is the only source that survives a restart — defaulting instead would
- * relabel every restarted Codex worker as Claude, permanently, because the startup release
+ * relabel every restarted non-Claude worker as Claude, permanently, because the startup release
  * reconciler stamps the frozen journal archive with whatever it is told here.
  */
-export function structuredWorkerAgent(identity: StructuredWorkerIdentity): 'claude' | 'codex' {
+export function structuredWorkerAgent(identity: StructuredWorkerIdentity): TuiAgent {
   if (identity.agent) {
     return identity.agent
   }
-  // Workers are Claude or Codex sessions only: dispatch refuses any other agent.
   const running = structuredWorkerSession(identity)
   const provider = running.kind === 'unverifiable' ? undefined : running.record.provider
-  return isAgentSessionHandleProvider(provider) ? provider : 'claude'
+  // An unreadable record or a provider this build doesn't know falls back to Claude.
+  return isTuiAgent(provider) ? provider : 'claude'
 }
 
 export type StructuredWorkerObservation = {

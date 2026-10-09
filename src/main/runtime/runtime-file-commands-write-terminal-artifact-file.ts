@@ -6,7 +6,8 @@ import {
   MOBILE_FILE_READ_MAX_BYTES,
   previewableBinaryByteLimit
 } from './runtime-file-commands-mobile-file-list-limit'
-import { isBinaryBuffer, isMobileBinaryPath } from './runtime-file-command-host'
+import { isBinaryBuffer } from '../../shared/binary-buffer'
+import { isMobileBinaryPath } from './runtime-file-command-host'
 import {
   assertTerminalArtifactContentUnchanged,
   assertTerminalFileGrantFresh,

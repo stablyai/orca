@@ -101,6 +101,8 @@ const REASON_WORDS = {
     managedAccountUnsupported: { fact: 'managedAccountUnsupported', action: 'actFirst' },
     launchFolderMissing: { fact: 'launchFolderMissing', action: 'actFirst' },
     historyInOtherAccount: { fact: 'historyInOtherAccount', action: 'actFirst' },
+    claudeAccountFolderMissing: { fact: 'claudeAccountFolderMissing', action: 'actFirst' },
+    claudeAccountSetupFailed: { fact: 'claudeAccountSetupFailed', action: 'retry' },
     agentCommandNotRunnable: { fact: 'agentCommandNotRunnable', action: 'actFirst' },
     attachFailed: codeWords('retry')
   },

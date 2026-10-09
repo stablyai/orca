@@ -8,7 +8,6 @@ import {
   mergeSshRepoReadoptions,
   reconcileReadoptedSshRepoRows
 } from '../slices/superseded-ssh-repo-rows'
-import { getRepoHostIdentity } from '../slices/repo-host-identity'
 import { getActiveRuntimeTarget, settingsForRuntimeOwner } from '../../runtime/runtime-rpc-client'
 import { filterSetupScriptPromptDismissalsToValidRepos } from '@/lib/setup-script-prompt'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
@@ -121,7 +120,6 @@ export function createRepoCatalogActions(
           const reconciliation = reconcileSupersededSshRepos(result.repos, s)
           const prunedRepos = applyManualRepoOrder(reconciliation.repos, s.manualRepoOrder)
           const validRepoIds = new Set(prunedRepos.map((repo) => repo.id))
-          const validRepoHostIdentities = new Set(prunedRepos.map(getRepoHostIdentity))
           const projectCompatibility = projectCompatibilityForReconciledRepos(
             prunedRepos,
             catalog.projectHostSetupCompatibility
@@ -155,7 +153,7 @@ export function createRepoCatalogActions(
             filterRepoIds: retainValidFilterRepoIds(s.filterRepoIds, validRepoIds),
             setupScriptPromptDismissedRepoIds: filterSetupScriptPromptDismissalsToValidRepos(
               s.setupScriptPromptDismissedRepoIds,
-              validRepoHostIdentities
+              prunedRepos
             )
           }
         })

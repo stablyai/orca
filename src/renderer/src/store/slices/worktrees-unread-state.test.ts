@@ -89,7 +89,7 @@ describe('worktree unread (show-until-interact)', () => {
     )
   })
 
-  it('keeps unread state local instead of throwing for genuinely ambiguous owners (#10634)', () => {
+  it('keeps ambiguous host rows unchanged without throwing (#10634)', () => {
     const store = createTestStore()
     const worktreeId = 'repo-shared::/same/path'
     store.setState({
@@ -114,7 +114,10 @@ describe('worktree unread (show-until-interact)', () => {
 
     expect(() => store.getState().markWorktreeUnread(worktreeId)).not.toThrow()
 
-    expect(store.getState().worktreesByRepo['repo-shared'][0].isUnread).toBe(true)
+    expect(store.getState().worktreesByRepo['repo-shared'].map((row) => row.isUnread)).toEqual([
+      false,
+      false
+    ])
     expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })

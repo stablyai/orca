@@ -12,7 +12,8 @@ import type { WorktreeSlice } from '../../worktree-helpers'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import { translate } from '@/i18n/i18n'
 import { isPositiveHostedReviewNumber } from '../../../../../../shared/hosted-review'
-import { displayNameUpdatePinsLabel } from '../../../../../../shared/worktree/display-name-provenance'
+import { displayNameUpdateMetadata } from '../../../../../../shared/worktree/display-name-provenance'
+import { getWorktreeInstanceId } from '../../../../../../shared/worktree/identity'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { applyWorktreeUpdates, getRepoIdFromWorktreeId } from '../../worktree-helpers'
 import { getHostedReviewCacheKey } from '../../hosted-review-cache-identity'
@@ -32,7 +33,10 @@ import {
   resolveGitHubReviewPushTarget
 } from './hosted-review-push-target'
 import { persistWorktreeMeta } from './worktree-meta-persist'
-import { isRuntimeSelectorNotFoundError } from '../listing/runtime-worktree-rpc-errors'
+import {
+  isRuntimeSelectorNotFoundError,
+  worktreeMetadataUnavailableResult
+} from '../listing/runtime-worktree-rpc-errors'
 import {
   settingsForWorktreeOwner,
   trySettingsForWorktreeOwner
@@ -114,6 +118,14 @@ export function createUpdateWorktreeMeta(
           )
         : undefined
     const worktreeForUpdate = get().getKnownWorktreeById(worktreeId, executionHostId)
+    const expectedInstanceId = getWorktreeInstanceId(existingWorktree)
+    if (
+      !worktreeForUpdate ||
+      (expectedInstanceId !== undefined &&
+        getWorktreeInstanceId(worktreeForUpdate) !== expectedInstanceId)
+    ) {
+      return worktreeMetadataUnavailableResult()
+    }
     if (shouldApplyUpdate && !shouldApplyUpdate(worktreeForUpdate)) {
       return { ok: true }
     }
@@ -149,23 +161,17 @@ export function createUpdateWorktreeMeta(
     // Why: bump lastActivityAt on comment edits so the time-decay sort doesn't drop a just-touched worktree.
     const displayNameProvenance =
       'displayName' in normalizedUpdates
-        ? { displayNameIsPinned: displayNameUpdatePinsLabel(normalizedUpdates.displayName) }
+        ? displayNameUpdateMetadata(normalizedUpdates.displayName)
         : {}
     const targetEnriched = currentResolvedPushTarget
       ? { ...normalizedUpdates, ...displayNameProvenance, pushTarget: currentResolvedPushTarget }
       : shouldClearStaleHostedReviewPushTarget
         ? { ...normalizedUpdates, ...displayNameProvenance, pushTarget: undefined }
         : { ...normalizedUpdates, ...displayNameProvenance }
-    const renameCleared =
-      'displayName' in targetEnriched
-        ? {
-            ...targetEnriched,
-            pendingFirstAgentMessageRename: false,
-            firstAgentMessageRenameError: null
-          }
-        : targetEnriched
     const enriched =
-      'comment' in renameCleared ? { ...renameCleared, lastActivityAt: Date.now() } : renameCleared
+      'comment' in targetEnriched
+        ? { ...targetEnriched, lastActivityAt: Date.now() }
+        : targetEnriched
 
     let didApply = false
     set((s) => {
@@ -274,8 +280,9 @@ export function createUpdateWorktreeMeta(
         settingsForWorktreeOwner(get(), worktreeId, executionHostId),
         worktreeId,
         getWorkspaceReviewPersistenceUpdates(mutationUpdates, enriched),
-        executionHostId ?? existingWorktree?.hostId,
-        worktreeForUpdate?.identity?.key
+        worktreeForUpdate.identity?.executionHostId ?? executionHostId ?? existingWorktree?.hostId,
+        worktreeForUpdate.identity?.key,
+        expectedInstanceId
       )
       if (
         !options?.suppressHostedReviewRefresh &&
@@ -294,13 +301,7 @@ export function createUpdateWorktreeMeta(
     } catch (err) {
       if (isRuntimeSelectorNotFoundError(err)) {
         void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
-        return {
-          ok: false,
-          error: translate(
-            'auto.store.slices.worktrees.c6cf133786',
-            'This workspace is no longer available.'
-          )
-        }
+        return worktreeMetadataUnavailableResult()
       }
       console.error('Failed to update worktree meta:', err)
       void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))

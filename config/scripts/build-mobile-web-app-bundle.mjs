@@ -586,7 +586,8 @@ export function resolveMobileWebPageRoutes(routeKeys, declared = MOBILE_WEB_PAGE
     grants: [...route.grants],
     ...(route.optionalGrants === undefined || route.optionalGrants.length === 0
       ? {}
-      : { optionalGrants: [...route.optionalGrants] })
+      : { optionalGrants: [...route.optionalGrants] }),
+    ...(route.canOwnHostArea === true ? { canOwnHostArea: true } : {})
   }))
 }
 

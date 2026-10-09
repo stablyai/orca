@@ -125,8 +125,9 @@ export type WorktreeApi = {
   updateMeta: (args: {
     worktreeId: string
     executionHostId?: ExecutionHostId
+    expectedInstanceId?: string
     updates: Partial<WorktreeMeta>
-  }) => Promise<Worktree>
+  }) => Promise<Worktree | null>
   listLineage: () => Promise<{
     lineage: Record<string, WorktreeLineage>
     workspaceLineage?: Record<string, WorkspaceLineage>

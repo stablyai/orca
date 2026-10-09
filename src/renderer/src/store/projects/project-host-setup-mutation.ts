@@ -2,6 +2,22 @@ import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { ProjectHostSetup, ProjectHostSetupDeleteArgs } from '../../../../shared/project-types'
 import { getProjectHostSetupOwnerKey } from './project-compatibility-core'
 
+export function upsertOwnedProjectHostSetup(
+  setups: readonly ProjectHostSetup[],
+  setup: ProjectHostSetup,
+  previousSetup = setup
+): ProjectHostSetup[] {
+  return setups.some(
+    (entry) => getProjectHostSetupOwnerKey(entry) === getProjectHostSetupOwnerKey(previousSetup)
+  )
+    ? setups.map((entry) =>
+        getProjectHostSetupOwnerKey(entry) === getProjectHostSetupOwnerKey(previousSetup)
+          ? setup
+          : entry
+      )
+    : [...setups, setup]
+}
+
 export function resolveProjectHostSetupMutation(
   setups: readonly ProjectHostSetup[],
   args: ProjectHostSetupDeleteArgs & { owner?: ProjectHostSetup; ownerHostId?: ExecutionHostId }

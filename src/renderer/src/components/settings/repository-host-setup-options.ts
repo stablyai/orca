@@ -1,12 +1,13 @@
 import { getExecutionHostLabel, type ExecutionHostId } from '../../../../shared/execution-host'
 import type { ExecutionHostRegistryEntry } from '../../../../shared/execution-host-registry'
-import {
-  PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
-  WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY
-} from '../../../../shared/protocol-version'
 import type { ProjectHostSetup, ProjectHostSetupState } from '../../../../shared/project-types'
 import { translate } from '@/i18n/i18n'
+import { getHostSetupUnavailableDetail } from '@/lib/project-host-setup-options'
 import { pickerExecutionHosts } from '../../../../shared/managed-orcad-execution-host'
+import {
+  getProjectHostSetupExecutionOwnerKey,
+  getProjectHostSetupOwnerKey
+} from '../../store/projects/project-compatibility-core'
 
 export type SetupHostOption = {
   id: ExecutionHostId
@@ -56,7 +57,7 @@ export function buildSetupHostOptions({
         !host.aliasHostIds?.some((aliasHostId) => setupHostIds.has(aliasHostId))
     )
     .map((host) => {
-      const availability = getHostSetupAvailability(host)
+      const unavailableDetail = getHostSetupUnavailableDetail(host)
       // Why: import and clone require live remote providers, while an offline
       // host can still be recorded as a placeholder for later setup.
       const canUsePathActions = host.health === 'local' || host.health === 'available'
@@ -64,57 +65,29 @@ export function buildSetupHostOptions({
         id: host.id,
         label: host.label || getExecutionHostLabel(host.id),
         detail:
-          availability.isAvailable && !canUsePathActions
-            ? translate(
+          unavailableDetail ??
+          (canUsePathActions
+            ? host.detail
+            : translate(
                 'auto.components.settings.RepositoryPane.hostSetupConnectionRequired',
                 'Connect this host before importing or cloning the project'
-              )
-            : availability.detail,
-        isAvailable: availability.isAvailable,
+              )),
+        isAvailable: unavailableDetail === null,
         canUsePathActions
       }
     })
 }
 
-function getHostSetupAvailability(host: ExecutionHostRegistryEntry): {
-  isAvailable: boolean
-  detail: string
-} {
-  if (host.health === 'blocked') {
-    return {
-      isAvailable: false,
-      detail: translate(
-        'auto.components.settings.RepositoryPane.hostSetupBlockedVersion',
-        'Orca server version is incompatible'
-      )
+export function setupsByOwnedExecutionHost(
+  setups: readonly ProjectHostSetup[],
+  selectedSetupId: string
+): ProjectHostSetup[] {
+  const byHost = new Map<string, ProjectHostSetup>()
+  for (const setup of setups) {
+    const key = getProjectHostSetupExecutionOwnerKey(setup)
+    if (!byHost.has(key) || getProjectHostSetupOwnerKey(setup) === selectedSetupId) {
+      byHost.set(key, setup)
     }
   }
-  if (host.kind === 'runtime') {
-    const capabilities = host.capabilities
-    if (!capabilities) {
-      return {
-        isAvailable: false,
-        detail: translate(
-          'auto.components.settings.RepositoryPane.hostSetupCheckingCapability',
-          'Checking host capabilities'
-        )
-      }
-    }
-    if (
-      !capabilities.includes(PROJECT_HOST_SETUP_RUNTIME_CAPABILITY) ||
-      !capabilities.includes(WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY)
-    ) {
-      return {
-        isAvailable: false,
-        detail: translate(
-          'auto.components.settings.RepositoryPane.hostSetupMissingCapability',
-          'Update Orca on this host to set up projects'
-        )
-      }
-    }
-  }
-  return {
-    isAvailable: true,
-    detail: host.detail
-  }
+  return [...byHost.values()]
 }
